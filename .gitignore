@@ -4,3 +4,6 @@
 # Work directories (ZIP extraction / ZIP storage)
 .tmp/
 _imports/
+
+# Procedure documents (local working copy, not part of repo)
+claude.mdの完全移行/
