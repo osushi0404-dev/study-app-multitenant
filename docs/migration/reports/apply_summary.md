@@ -19,6 +19,7 @@
 | `docs/runbooks/plan-writing-rules.md` | 計画書記述ルール |
 | `docs/runbooks/common-commands.md` | よく使うコマンド集 |
 | `scripts/claude/hooks/pretooluse_guard.py` | `.claude/settings.json` のPreToolUseフックが参照するガードスクリプト |
+| `.gitignore` | `settings.local.json`・`.tmp/`・`_imports/` をgit管理外に除外 |
 
 ## Allowlist外（未配置）
 
