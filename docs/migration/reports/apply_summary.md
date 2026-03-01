@@ -18,7 +18,7 @@
 | `docs/runbooks/danger-ops.md` | 危険操作ガード |
 | `docs/runbooks/plan-writing-rules.md` | 計画書記述ルール |
 | `docs/runbooks/common-commands.md` | よく使うコマンド集 |
-| `.github/workflows/plan-gate.yml` | plan-gate CI |
+| `scripts/claude/hooks/pretooluse_guard.py` | `.claude/settings.json` のPreToolUseフックが参照するガードスクリプト |
 
 ## Allowlist外（未配置）
 
@@ -31,7 +31,7 @@
 | `docs/plans/templates/` | PR2（Scaffold）で対応 |
 | `docs/tests/templates/` | PR2（Scaffold）で対応 |
 | `docs/reviews/templates/` | PR2（Scaffold）で対応 |
-| `scripts/claude/hooks/` | PR2（Scaffold）で対応 |
+| `.github/workflows/plan-gate.yml` | PATのworkflowスコープ不足のため除外（後で対応） |
 
 ## Allowlist外差分（作業用ファイル）
 - `claude.mdの完全移行/` — 手順書・ZIP置き場（git管理外）

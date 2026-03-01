@@ -1,0 +1,6 @@
+# Claude Code session artifacts
+.claude/settings.local.json
+
+# Work directories (ZIP extraction / ZIP storage)
+.tmp/
+_imports/
