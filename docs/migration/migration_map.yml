@@ -1,0 +1,129 @@
+# Migration Map
+# 原本 docs/migration/CLAUDE_original.md の見出し → 移植先ファイル の対応表
+# 作成: 2026-03-02 (PR3: chore/claude-migration-content)
+
+source: docs/migration/CLAUDE_original.md
+
+sections:
+  - legacy_section: "エラー調査手順"
+    lines: "8-13"
+    moved_to:
+      - docs/runbooks/common-commands.md
+
+  - legacy_section: "よく使用するコマンド"
+    lines: "15-39"
+    moved_to:
+      - docs/runbooks/common-commands.md
+
+  - legacy_section: "API エンドポイント"
+    lines: "41-44"
+    moved_to:
+      - docs/runbooks/common-commands.md
+
+  - legacy_section: "修正済みの問題"
+    lines: "46-52"
+    moved_to:
+      - docs/runbooks/common-commands.md
+
+  - legacy_section: "ディレクトリ構造"
+    lines: "54-60"
+    moved_to:
+      - docs/runbooks/common-commands.md
+
+  - legacy_section: "注意事項"
+    lines: "62-65"
+    moved_to:
+      - docs/runbooks/common-commands.md
+
+  - legacy_section: "Claude Code実行ルール"
+    lines: "67-75"
+    moved_to:
+      - docs/runbooks/workflow.md
+
+  - legacy_section: "作業実行前の確認ルール / 必須承認ワークフロー"
+    lines: "77-111"
+    moved_to:
+      - docs/runbooks/workflow.md
+
+  - legacy_section: "計画書と実装の一致性保証ルール（絶対遵守）"
+    lines: "112-314"
+    moved_to:
+      - docs/runbooks/plan-writing-rules.md
+
+  - legacy_section: "計画書作成ルール"
+    lines: "316-417"
+    moved_to:
+      - docs/runbooks/plan-writing-rules.md
+
+  - legacy_section: "承認記録ルール"
+    lines: "382-397"
+    moved_to:
+      - docs/runbooks/workflow.md
+
+  - legacy_section: "計画書完了時のルール"
+    lines: "399-417"
+    moved_to:
+      - docs/runbooks/plan-writing-rules.md
+
+  - legacy_section: "計画書作成例外の禁止ルール"
+    lines: "419-457"
+    moved_to:
+      - docs/runbooks/plan-writing-rules.md
+
+  - legacy_section: "UX重視の設計・実装ルール"
+    lines: "483-548"
+    moved_to:
+      - docs/runbooks/ux-rules.md
+
+  - legacy_section: "イシュー新規作成時の採番ルール"
+    lines: "550-565"
+    moved_to:
+      - docs/runbooks/issue-flow.md
+      - .claude/skills/issue-bootstrap/SKILL.md
+
+  - legacy_section: "ブランチ戦略とイシュー作成時の自動化ルール"
+    lines: "567-796"
+    moved_to:
+      - docs/runbooks/issue-flow.md
+      - docs/runbooks/workflow.md
+      - .claude/skills/issue-bootstrap/SKILL.md
+
+  - legacy_section: "イシュー対応時の必須ルール"
+    lines: "798-806"
+    moved_to:
+      - docs/runbooks/issue-flow.md
+
+  - legacy_section: "イシューフロー（統合ルール）"
+    lines: "807-1115"
+    moved_to:
+      - docs/runbooks/issue-flow.md
+
+  - legacy_section: "データベース・モデル整合性チェック必須ルール"
+    lines: "1116-1255"
+    moved_to:
+      - docs/runbooks/backend-check.md
+
+  - legacy_section: "バックエンド修正時のAPI統合テスト必須ルール"
+    lines: "1256-1486"
+    moved_to:
+      - docs/runbooks/backend-check.md
+
+  - legacy_section: "バックエンド修正時の要件適合性テスト必須ルール"
+    lines: "1487-1742"
+    moved_to:
+      - docs/runbooks/backend-check.md
+
+  - legacy_section: "文書間の関係性記載ルール"
+    lines: "1744-1934"
+    moved_to:
+      - docs/runbooks/review-rules.md
+
+  - legacy_section: "テンプレートファイル同期必須ルール"
+    lines: "1936-2025"
+    moved_to:
+      - docs/runbooks/template-sync.md
+
+  - legacy_section: "対応結果レビュー必須ルール"
+    lines: "2027-2147"
+    moved_to:
+      - docs/runbooks/review-rules.md
