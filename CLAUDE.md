@@ -1,4 +1,9 @@
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Claude Code 運用（プロジェクト憲法）
+
+## プロジェクト概要
+学習アプリ - Django REST Framework + React TypeScript
 
 このリポジトリでは Claude Code（Cursor 経由）に実装を委任します。
 安全性と再現性のため、作業は「イシュー → 計画 → 実装 → テスト → レビュー → マージ」の順でのみ進めます。
