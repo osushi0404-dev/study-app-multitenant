@@ -74,6 +74,30 @@ echo "- **承認内容**: OK/承認を確認" >> "$LATEST_PLAN"
 🚀 修正作業を開始します
 ```
 
+### TodoWrite連携ルール
+TodoWriteツール使用時は承認ステータスも管理：
+
+```javascript
+{
+  "content": "計画書の承認待ち",
+  "status": "in_progress",
+  "activeForm": "承認待ち中",
+  "approval_required": true,
+  "approval_status": "pending"
+}
+```
+
+承認後に修正タスクのステータスを更新：
+```javascript
+{
+  "content": "修正作業実施",
+  "status": "in_progress",
+  "activeForm": "修正作業中",
+  "approval_required": true,
+  "approval_status": "approved"
+}
+```
+
 ---
 
 ## ブランチ戦略

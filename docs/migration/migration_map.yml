@@ -70,6 +70,11 @@ sections:
     moved_to:
       - docs/runbooks/plan-writing-rules.md
 
+  - legacy_section: "TodoWrite連携ルール"
+    lines: "459-481"
+    moved_to:
+      - docs/runbooks/workflow.md
+
   - legacy_section: "UX重視の設計・実装ルール"
     lines: "483-548"
     moved_to:
