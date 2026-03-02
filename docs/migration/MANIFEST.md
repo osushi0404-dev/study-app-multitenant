@@ -1,13 +1,13 @@
 # Migration MANIFEST
 
-PR2（Scaffold）で追加したファイル一覧。
+PR1-PR3 で追加・更新したファイル一覧。
 
 ## ディレクトリ構造
 
 ```
 docs/
   runbooks/
-    legacy/            # PR0/PR3 で原本CLAUDE.mdを格納予定
+    legacy/            # PR3 で原本CLAUDE.mdを格納
   issues/
     templates/
       issue_template.md
@@ -23,6 +23,8 @@ docs/
       review_template.md
   migration/
     MANIFEST.md        # このファイル
+    CLAUDE_original.md # PR3 で固定（上書き禁止）
+    migration_map.yml  # PR3 で作成
     reports/
       apply_summary.md  # PR1 で生成済み
 scripts/
@@ -56,10 +58,23 @@ scripts/
 - `scripts/migration_verify/.gitkeep`
 - `docs/migration/MANIFEST.md`
 
-### PR3: chore/claude-migration-content（予定）
-- `docs/migration/CLAUDE_original.md`
-- `docs/migration/migration_map.yml`
-- runbooks/skills への本文移植
+### PR3: chore/claude-migration-content
+#### 新規追加
+- `docs/migration/CLAUDE_original.md`（原本固定・上書き禁止）
+- `docs/migration/migration_map.yml`（原本→移植先の対応表）
+- `docs/runbooks/legacy/CLAUDE.md.20260302`（原本のlegacyコピー）
+- `docs/runbooks/issue-flow.md`（NEW: イシューフロー・採番ルール・統合フロー）
+- `docs/runbooks/ux-rules.md`（NEW: UX重視の設計・実装ルール）
+- `docs/runbooks/backend-check.md`（NEW: DB整合性・API統合テスト・要件適合性）
+- `docs/runbooks/review-rules.md`（NEW: 文書間関係性・対応結果レビュー）
+- `docs/runbooks/template-sync.md`（NEW: テンプレートファイル同期必須ルール）
+
+#### 更新（内容拡充）
+- `CLAUDE.md`（短いインデックスへ置き換え・詳細はrunbooks/skills参照）
+- `docs/runbooks/workflow.md`（Claude Code実行ルール・承認ワークフロー・ブランチ戦略追記）
+- `docs/runbooks/plan-writing-rules.md`（計画書作成詳細・一致性保証ルール追記）
+- `docs/runbooks/common-commands.md`（エラー調査手順・API endpoints・注意事項追記）
+- `.claude/skills/issue-bootstrap/SKILL.md`（採番・ブランチ作成・GitHub登録の詳細フロー追記）
 
 ### PR4: chore/claude-migration-verify（予定）
 - `scripts/migration_verify/verify.sh` 他
