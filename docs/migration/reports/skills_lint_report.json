@@ -1,0 +1,71 @@
+{
+  "total": 5,
+  "errors": 0,
+  "skills": [
+    {
+      "file": ".claude/skills/close/SKILL.md",
+      "frontmatter": {
+        "name": "close",
+        "description": "Move docs open→closed and finalize PR description; request merge.",
+        "argument-hint": "\"I###\"",
+        "disable-model-invocation": "true",
+        "allowed-tools": "Read, Bash, Write, Edit, Glob, Grep"
+      },
+      "missing_fields": [],
+      "has_body": "# /close\n\n前提: ユーザー検証OK。\n\n1) docs/*/open の対象 I### ファイルを closed へ移動\n2) PR説明に「目的/変更点/テスト/ロールバック/参照パス」を揃える\n3) commit/push して PR を更新\n4) ユーザーへ GitHub 上で Approve & Merge を依頼",
+      "ok": "# /close\n\n前提: ユーザー検証OK。\n\n1) docs/*/open の対象 I### ファイルを closed へ移動\n2) PR説明に「目的/変更点/テスト/ロールバック/参照パス」を揃える\n3) commit/push して PR を更新\n4) ユーザーへ GitHub 上で Approve & Merge を依頼"
+    },
+    {
+      "file": ".claude/skills/fix-loop/SKILL.md",
+      "frontmatter": {
+        "name": "fix-loop",
+        "description": "When NG or tests fail: record facts, propose delta plan, get approval, fix, re-test.",
+        "argument-hint": "\"I###\"",
+        "disable-model-invocation": "true",
+        "allowed-tools": "Read, Bash, Write, Edit, Glob, Grep"
+      },
+      "missing_fields": [],
+      "has_body": "# /fix-loop\n\n1) NG内容を「再現手順/期待/実際/ログ」に分解して記録\n2) 差分計画を docs/plans/open/$ARGUMENTS_plan.md に追記（または更新）\n3) 承認待ちで停止\n4) 承認後に修正→再テスト→記録更新→再検証",
+      "ok": "# /fix-loop\n\n1) NG内容を「再現手順/期待/実際/ログ」に分解して記録\n2) 差分計画を docs/plans/open/$ARGUMENTS_plan.md に追記（または更新）\n3) 承認待ちで停止\n4) 承認後に修正→再テスト→記録更新→再検証"
+    },
+    {
+      "file": ".claude/skills/implement/SKILL.md",
+      "frontmatter": {
+        "name": "implement",
+        "description": "Implement an approved plan, run automated tests, update PR and docs.",
+        "argument-hint": "\"I###\"",
+        "disable-model-invocation": "true",
+        "allowed-tools": "Read, Bash, Write, Edit, Glob, Grep"
+      },
+      "missing_fields": [],
+      "has_body": "# /implement\n\n必読:\n- docs/plans/open/$ARGUMENTS_plan.md\n- docs/tests/open/$ARGUMENTS_auto_test.md\n- docs/tests/open/$ARGUMENTS_manual_test.md\n- docs/reviews/open/$ARGUMENTS_review.md\n\nルール:\n- 計画書に書いていない実装は禁止。必要なら停止→提案→承認→計画更新。\n- Danger Ops は danger-approved + DANGER_OK=1 が必須。\n\n手順:\n1) 計画どおり実装\n2) 自動テスト実行（失敗時は /fix-loop へ）\n3) docs/reviews と docs/tests に結果を記録\n4) commit/push して PR を更新\n5) 手動テスト要点を提示してユーザー検証（OK/NG）待ち",
+      "ok": "# /implement\n\n必読:\n- docs/plans/open/$ARGUMENTS_plan.md\n- docs/tests/open/$ARGUMENTS_auto_test.md\n- docs/tests/open/$ARGUMENTS_manual_test.md\n- docs/reviews/open/$ARGUMENTS_review.md\n\nルール:\n- 計画書に書いていない実装は禁止。必要なら停止→提案→承認→計画更新。\n- Danger Ops は danger-approved + DANGER_OK=1 が必須。\n\n手順:\n1) 計画どおり実装\n2) 自動テスト実行（失敗時は /fix-loop へ）\n3) docs/reviews と docs/tests に結果を記録\n4) commit/push して PR を更新\n5) 手動テスト要点を提示してユーザー検証（OK/NG）待ち"
+    },
+    {
+      "file": ".claude/skills/issue-bootstrap/SKILL.md",
+      "frontmatter": {
+        "name": "issue-bootstrap",
+        "description": "Create issue doc, create issue branch, create draft PR.",
+        "argument-hint": "\"[title]\"",
+        "disable-model-invocation": "true",
+        "allowed-tools": "Read, Bash, Write, Edit, Glob, Grep"
+      },
+      "missing_fields": [],
+      "has_body": "# /issue-bootstrap\n\n## 自動実行フロー（必須）\n\n### 1. リポジトリ確認\n```bash\ngit rev-parse --show-toplevel\ngit branch --show-current\n```\n\n### 2. イシュー番号の採番\nopen / in_progress / closed の全ディレクトリから最大番号を取得：\n```bash\nLAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\\+\\.md' | sed 's/\\.md//' | sort -n | tail -1)\nif [ -z \"$LAST_NUM\" ]; then\n  ISSUE_NUM=\"001\"\nelse\n  NEXT_NUM=$((LAST_NUM + 1))\n  ISSUE_NUM=$(printf \"%03d\" $NEXT_NUM)\nfi\necho \"次のイシュー番号: $ISSUE_NUM\"\n```\n\n**重要**: closedディレクトリも必ず確認すること。\n\n### 3. イシューファイル作成\n```bash\ncp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md\n# 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）\n```\n\n### 4. ブランチ作成（必須）\ndevelopブランチをベースにfeatureブランチを作成：\n```bash\ngit checkout develop\ngit pull origin develop  # リモートがある場合\ngit checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]\n```\n\n**ブランチ命名規則**:\n- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`\n- 例: `feature/I030-media-asset-models`\n\n**概要の英語化ルール**:\n- 日本語の概要をシンプルな英語に変換\n- スペースは`-`（ハイフン）に変換\n- 最大5単語程度に要約\n\n### 5. ドキュメントをコミット・プッシュ\n```bash\ngit add docs/issues/open/${ISSUE_NUM}.md\ngit commit -m \"docs: create issue I${ISSUE_NUM}\"\ngit push -u origin feature/I${ISSUE_NUM}-[概要]\n```\n\n### 6. GitHubイシューの登録（必須）\n```bash\ngh issue create \\\n  --title \"I${ISSUE_NUM}: [イシュータイトル]\" \\\n  --body \"$(cat docs/issues/open/${ISSUE_NUM}.md)\" \\\n  --label \"[種別に応じたラベル]\"\n```\n\n**ラベル設定**:\n- Bug → `bug`\n- Feature → `enhancement`\n- Documentation → `documentation`\n- Refactoring → `refactoring`\n\n### 7. Draft PR作成\n```bash\ngh pr create \\\n  --title \"feat: I${ISSUE_NUM} [イシュータイトル]\" \\\n  --body \"## 概要\\nI${ISSUE_NUM}: [概要]\\n\\n## 関連イシュー\\nCloses #[GitHubイシュー番号]\" \\\n  --draft \\\n  --base develop\n```\n\n### 8. ユーザーへの報告\n```\n✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]\n📂 ファイル: docs/issues/open/${ISSUE_NUM}.md\n🌿 ブランチ: feature/I${ISSUE_NUM}-[概要]\n🔗 GitHubイシュー: [GitHubイシューURL]\n📋 Draft PR: [PR URL]\n\nこのブランチで作業を開始します。\n次のステップ: /plan I${ISSUE_NUM} で計画書を作成してください。\n```\n\n## 詳細ルール\n詳細なイシュー作成フロー・ブランチ戦略・クローズ手順は以下を参照：\n- `docs/runbooks/issue-flow.md`\n- `docs/runbooks/workflow.md`",
+      "ok": "# /issue-bootstrap\n\n## 自動実行フロー（必須）\n\n### 1. リポジトリ確認\n```bash\ngit rev-parse --show-toplevel\ngit branch --show-current\n```\n\n### 2. イシュー番号の採番\nopen / in_progress / closed の全ディレクトリから最大番号を取得：\n```bash\nLAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\\+\\.md' | sed 's/\\.md//' | sort -n | tail -1)\nif [ -z \"$LAST_NUM\" ]; then\n  ISSUE_NUM=\"001\"\nelse\n  NEXT_NUM=$((LAST_NUM + 1))\n  ISSUE_NUM=$(printf \"%03d\" $NEXT_NUM)\nfi\necho \"次のイシュー番号: $ISSUE_NUM\"\n```\n\n**重要**: closedディレクトリも必ず確認すること。\n\n### 3. イシューファイル作成\n```bash\ncp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md\n# 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）\n```\n\n### 4. ブランチ作成（必須）\ndevelopブランチをベースにfeatureブランチを作成：\n```bash\ngit checkout develop\ngit pull origin develop  # リモートがある場合\ngit checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]\n```\n\n**ブランチ命名規則**:\n- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`\n- 例: `feature/I030-media-asset-models`\n\n**概要の英語化ルール**:\n- 日本語の概要をシンプルな英語に変換\n- スペースは`-`（ハイフン）に変換\n- 最大5単語程度に要約\n\n### 5. ドキュメントをコミット・プッシュ\n```bash\ngit add docs/issues/open/${ISSUE_NUM}.md\ngit commit -m \"docs: create issue I${ISSUE_NUM}\"\ngit push -u origin feature/I${ISSUE_NUM}-[概要]\n```\n\n### 6. GitHubイシューの登録（必須）\n```bash\ngh issue create \\\n  --title \"I${ISSUE_NUM}: [イシュータイトル]\" \\\n  --body \"$(cat docs/issues/open/${ISSUE_NUM}.md)\" \\\n  --label \"[種別に応じたラベル]\"\n```\n\n**ラベル設定**:\n- Bug → `bug`\n- Feature → `enhancement`\n- Documentation → `documentation`\n- Refactoring → `refactoring`\n\n### 7. Draft PR作成\n```bash\ngh pr create \\\n  --title \"feat: I${ISSUE_NUM} [イシュータイトル]\" \\\n  --body \"## 概要\\nI${ISSUE_NUM}: [概要]\\n\\n## 関連イシュー\\nCloses #[GitHubイシュー番号]\" \\\n  --draft \\\n  --base develop\n```\n\n### 8. ユーザーへの報告\n```\n✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]\n📂 ファイル: docs/issues/open/${ISSUE_NUM}.md\n🌿 ブランチ: feature/I${ISSUE_NUM}-[概要]\n🔗 GitHubイシュー: [GitHubイシューURL]\n📋 Draft PR: [PR URL]\n\nこのブランチで作業を開始します。\n次のステップ: /plan I${ISSUE_NUM} で計画書を作成してください。\n```\n\n## 詳細ルール\n詳細なイシュー作成フロー・ブランチ戦略・クローズ手順は以下を参照：\n- `docs/runbooks/issue-flow.md`\n- `docs/runbooks/workflow.md`"
+    },
+    {
+      "file": ".claude/skills/plan/SKILL.md",
+      "frontmatter": {
+        "name": "plan",
+        "description": "Create plan + tests + review docs for an issue. No code changes.",
+        "argument-hint": "\"I###\"",
+        "disable-model-invocation": "true",
+        "allowed-tools": "Read, Bash, Write, Edit, Glob, Grep"
+      },
+      "missing_fields": [],
+      "has_body": "# /plan\n\n必読:\n- docs/issues/open/$ARGUMENTS_*.md\n- docs/runbooks/plan-writing-rules.md\n- rules/ultimate_django_coding_standards.md\n- rules/react-coding-standards-integrated.md\n\n生成物:\n- docs/plans/open/$ARGUMENTS_plan.md\n- docs/tests/open/$ARGUMENTS_manual_test.md\n- docs/tests/open/$ARGUMENTS_auto_test.md\n- docs/reviews/open/$ARGUMENTS_review.md\n\n禁止:\n- コード変更（承認前のEdit/Write開始は禁止）\n\n完了したら「承認ポイント」を提示して停止する。",
+      "ok": "# /plan\n\n必読:\n- docs/issues/open/$ARGUMENTS_*.md\n- docs/runbooks/plan-writing-rules.md\n- rules/ultimate_django_coding_standards.md\n- rules/react-coding-standards-integrated.md\n\n生成物:\n- docs/plans/open/$ARGUMENTS_plan.md\n- docs/tests/open/$ARGUMENTS_manual_test.md\n- docs/tests/open/$ARGUMENTS_auto_test.md\n- docs/reviews/open/$ARGUMENTS_review.md\n\n禁止:\n- コード変更（承認前のEdit/Write開始は禁止）\n\n完了したら「承認ポイント」を提示して停止する。"
+    }
+  ]
+}
