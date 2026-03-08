@@ -1,17 +1,24 @@
 # Vibe Coding 運用フロー（安全寄り）
 
 ## ディレクトリ規約
-- docs/issues/open, docs/issues/in_progress, docs/issues/closed
-- docs/plans/open, docs/plans/closed
-- docs/tests/open, docs/tests/closed
-- docs/reviews/open, docs/reviews/in_progress, docs/reviews/closed
+
+```
+docs/work/
+  open/{github_issue_number}/   # 作業中 Work Item
+  closed/{github_issue_number}/ # 完了 Work Item
+  templates/                    # テンプレ集約
+docs/indices/                   # 索引（build_indices.py で自動生成）
+```
+
+旧ディレクトリ（`docs/issues/`, `docs/plans/`, `docs/tests/`, `docs/reviews/`）は廃止済み。
+参照のみ可。新規作成・更新は禁止。
 
 ## フロー（あなたの運用をそのまま型にする）
-1. /issue-bootstrap → ユーザーがイシューファイル確認（OK/NG）
-2. /plan I### → ユーザーが計画書確認（OK/NG）
-3. /implement I### → 実装＆自動検証 → ユーザー検証（OK/NG）
-4. NG の場合 /fix-loop I###（差分計画→承認→修正→再検証）
-5. OK の場合 /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
+1. /issue-bootstrap [title or number] → Work Item 作成 & ブランチ作成
+2. /plan {issue} → ユーザーが計画書確認（OK/NG）
+3. /implement {issue} → 実装＆自動検証 → ユーザー検証（OK/NG）
+4. NG の場合 /fix-loop {issue}（差分計画→承認→修正→再検証）
+5. OK の場合 /close {issue}（90_closeout.md 作成 → フォルダを closed/ へ移動 → マージ依頼）
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。
 
@@ -42,7 +49,7 @@
 
 1. **調査・分析**: 問題特定とログ確認
 2. **対応方針検討**: 調査結果に基づいて具体的な対応方針を検討
-3. **計画書作成**: `docs/plans/open/plan_[タイプ]_[概要]_[連番].md`に詳細記録
+3. **計画書作成**: `docs/work/open/{issue}/10_plan.md`に詳細記録
 4. **承認待ち宣言**: 以下のメッセージを必ず出力
    ```
    📋 計画書完了: [ファイルパス]
@@ -123,8 +130,8 @@ feature/Ixxx-xxx (各イシュー開発) ← イシューごとに作成
 ```
 
 **ブランチ命名規則**:
-- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
-- 例: `feature/I030-media-asset-models`
+- フォーマット: `feature/I{GitHub Issue番号}-{概要を英語化してケバブケース}`
+- 例: `feature/I8-docs-work-restructure`, `feature/I30-media-asset-models`
 
 ### 現在のブランチ確認
 作業開始前に必ず現在のブランチを確認：

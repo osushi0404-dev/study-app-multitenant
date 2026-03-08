@@ -1,6 +1,6 @@
 # 計画書の書き方（安全寄り）
 
-計画書（docs/plans/open/plan_[タイプ]_[概要]_[連番].md）に必ず含める:
+計画書（docs/work/open/{issue}/10_plan.md）に必ず含める:
 1) 背景/目的
 2) 受け入れ条件（何ができたらOKか）
 3) 影響範囲（Backend/Frontend/DB/Config）
@@ -48,29 +48,17 @@
   - まず「修正アプローチ」セクションで全体方針を日本語で説明
   - 各修正項目に「修正方針」を明記し、何を達成するかを言葉で説明
   - その後に具体的なコード例やファイル変更内容を記載
-- **計画書ファイル名ルール**: `plan_[タイプ]_[概要]_[連番].md` 形式でdocs/plans/open/に保存
-  - **タイプ**: `I[番号]`（イシュー対応）、`BUG`（バグ修正）、`FEAT`（機能追加）、`FIX`（一般修正）、`MAINT`（メンテナンス）、`PERF`（パフォーマンス改善）
-  - **概要**: 日本語可、スペースは`_`に変換
-  - **連番**: 初回は省略、2回目以降は`_2`、`_3`...を追加
-  - **例**:
-    - 初回: `plan_I010_科目サービス修正.md`
-    - 追加: `plan_I010_科目サービス修正_2.md`
-    - 他例: `plan_BUG_認証エラー対応.md`、`plan_FEAT_新機能実装.md`
-- **ファイル名生成手順**:
+- **計画書ファイル名ルール**: `docs/work/open/{issue}/10_plan.md` に保存
+  - 差分計画（NG対応）は**上書き禁止**で `10_plan_2.md`, `10_plan_3.md` ... と連番で新規作成
+  - **ファイル名生成手順**:
   ```bash
-  # 基本ファイル名構築
-  PLAN_TYPE="[タイプ]"
-  PLAN_SUMMARY="[概要]"
-  BASE_NAME="plan_${PLAN_TYPE}_${PLAN_SUMMARY}"
-  # 既存ファイル確認と連番決定
-  if [ -f "docs/plans/open/${BASE_NAME}.md" ]; then
-    COUNTER=2
-    while [ -f "docs/plans/open/${BASE_NAME}_${COUNTER}.md" ]; do
-      COUNTER=$((COUNTER + 1))
-    done
-    PLAN_FILE="docs/plans/open/${BASE_NAME}_${COUNTER}.md"
+  # 既存の計画書番号を確認して次の番号で作成
+  LAST=$(ls docs/work/open/$ISSUE/10_plan*.md 2>/dev/null | grep -o '[0-9]*\.md' | sort -n | tail -1 | tr -d '.md')
+  if [ -z "$LAST" ]; then
+    PLAN_FILE="docs/work/open/$ISSUE/10_plan.md"
   else
-    PLAN_FILE="docs/plans/open/${BASE_NAME}.md"
+    NEXT=$((LAST + 1))
+    PLAN_FILE="docs/work/open/$ISSUE/10_plan_${NEXT}.md"
   fi
   ```
 - **承認待ち宣言**: 計画書作成後は必ず以下を出力
@@ -86,7 +74,7 @@
 ### 計画書ヘッダー（文書間の関係性）
 ```markdown
 ## 基本情報
-- **計画書ID**: plan_[タイプ]_[概要]_[連番]
+- **計画書ID**: plan_I{issue}（または差分計画なら plan_I{issue}_2 ...）
 - **関連イシュー**: #XXX
 - **作成根拠資料**: reviewXXX_IXXX（問題分析と改善提案）
 - **実装後評価**: （未作成）
@@ -222,7 +210,7 @@ git diff --name-only
 
 # 2. 計画書に記載された修正対象ファイルと比較
 echo "計画書記載の修正対象:"
-grep -A 20 "修正対象" docs/plans/open/plan_*.md
+grep -A 20 "修正対象" docs/work/open/$ISSUE/10_plan*.md
 
 # 3. 差分確認
 echo "❓ 計画書に記載のないファイルを修正していませんか？"
@@ -340,4 +328,5 @@ echo "- **対応者**: Claude Code" >> "$PLAN_FILE"
 echo "- **レビュー結果**: OK" >> "$PLAN_FILE"
 ```
 
-注意: `completed/`ディレクトリは旧運用の名残です。新規の完了計画書は必ず`closed/`に移動してください。
+注意: 計画書の移動は `/close` スキルが `scripts/move_work_item.sh` 経由で Work Item フォルダごと行います。
+個別ファイルの移動は禁止です。

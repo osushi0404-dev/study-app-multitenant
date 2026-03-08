@@ -33,11 +33,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5) すべての作業は「記録（plan / tests / review）」が残る形で進める。
 
 ## 2. 使うスキル（/ で実行）
-- /issue-bootstrap [title] : 採番、イシューファイル作成、ブランチ作成、Draft PR 作成
-- /plan I### : 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
-- /implement I### : 承認済み計画に沿って実装 + 自動テスト + PR 更新（ユーザー検証待ち）
-- /fix-loop I### : NG/失敗時の原因整理→差分計画→承認→修正→再テスト
-- /close I### : open→closed へ整理、PR 説明整備、クローズ作業
+- /issue-bootstrap [title]  : 新規 GH Issue 作成 → Work Item フォルダ作成 → ブランチ・Draft PR 作成
+- /issue-bootstrap {number} : 既存 GH Issue（ブラウザ作成）を Work Item としてローカル化
+- /plan {issue}     : 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
+- /implement {issue}: 承認済み計画に沿って実装 + 自動テスト + PR 更新（ユーザー検証待ち）
+- /fix-loop {issue} : NG/失敗時の原因整理→差分計画→承認→修正→再テスト
+- /close {issue}    : 90_closeout.md 作成 → フォルダを closed/ へ移動 → 索引更新 → マージ依頼
+
+成果物の配置: docs/work/{open|closed}/{github_issue_number}/
 
 ## 3. 権限と二重ガード
 - 権限（allow/ask/deny）は .claude/settings.json

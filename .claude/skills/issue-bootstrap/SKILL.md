@@ -1,102 +1,155 @@
 ---
 name: issue-bootstrap
-description: Create issue doc, create issue branch, create draft PR.
-argument-hint: "[title]"
+description: Bootstrap a Work Item for a GitHub Issue. Supports two modes.
+argument-hint: "[title] or [github_issue_number]"
 disable-model-invocation: true
 allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /issue-bootstrap
 
-## 自動実行フロー（必須）
+## モード判定
 
-### 1. リポジトリ確認
-```bash
-git rev-parse --show-toplevel
-git branch --show-current
-```
+引数（`$ARGUMENTS`）が数字のみ → **Mode B**（既存 GH Issue のローカル化）
+引数がテキスト　　　　　　　　→ **Mode A**（新規 GH Issue 作成）
 
-### 2. イシュー番号の採番
-open / in_progress / closed の全ディレクトリから最大番号を取得：
 ```bash
-LAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-if [ -z "$LAST_NUM" ]; then
-  ISSUE_NUM="001"
+if [[ "$ARGUMENTS" =~ ^[0-9]+$ ]]; then
+  MODE="B"
+  ISSUE_NUM="$ARGUMENTS"
 else
-  NEXT_NUM=$((LAST_NUM + 1))
-  ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
+  MODE="A"
+  TITLE="$ARGUMENTS"
 fi
-echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-**重要**: closedディレクトリも必ず確認すること。
+---
 
-### 3. イシューファイル作成
+## Mode A: 新規 GH Issue を作成してブートストラップ
+
+### 1. GH Issue 作成（番号確定）
 ```bash
-cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
-# 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
+ISSUE_URL=$(gh issue create \
+  --title "$TITLE" \
+  --body "作業開始。詳細は 00_issue.md に記載します。" \
+  --label "enhancement")
+ISSUE_NUM=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
+echo "GH Issue #$ISSUE_NUM を作成しました"
 ```
 
-### 4. ブランチ作成（必須）
-developブランチをベースにfeatureブランチを作成：
+### 2. Work Item フォルダ作成 & 00_issue.md 生成
 ```bash
+mkdir -p docs/work/open/$ISSUE_NUM
+
+# GH Issue の内容を取得して 00_issue.md に書き込む
+gh issue view $ISSUE_NUM --json number,title,body \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(f'''---
+github_issue_number: {d['number']}
+title: \"{d['title']}\"
+state: open
+branch: feature/I{d['number']}-{slug}
+created_at: $(date +%Y-%m-%d)
+---
+
+# Issue #{d['number']}: {d['title']}
+
+{d['body']}
+''')
+" > docs/work/open/$ISSUE_NUM/00_issue.md
+```
+
+（`{slug}` はタイトルをケバブケース英語化したもの、最大 5 単語）
+
+### 3. ブランチ作成
+```bash
+SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
 git checkout develop
-git pull origin develop  # リモートがある場合
-git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
+git pull origin develop
+git checkout -b feature/I${ISSUE_NUM}-${SLUG}
 ```
 
-**ブランチ命名規則**:
-- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
-- 例: `feature/I030-media-asset-models`
-
-**概要の英語化ルール**:
-- 日本語の概要をシンプルな英語に変換
-- スペースは`-`（ハイフン）に変換
-- 最大5単語程度に要約
-
-### 5. ドキュメントをコミット・プッシュ
+### 4. コミット & プッシュ
 ```bash
-git add docs/issues/open/${ISSUE_NUM}.md
-git commit -m "docs: create issue I${ISSUE_NUM}"
-git push -u origin feature/I${ISSUE_NUM}-[概要]
+git add docs/work/open/$ISSUE_NUM/00_issue.md
+git commit -m "docs: bootstrap work item for issue #$ISSUE_NUM"
+git push -u origin feature/I${ISSUE_NUM}-${SLUG}
 ```
 
-### 6. GitHubイシューの登録（必須）
-```bash
-gh issue create \
-  --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/${ISSUE_NUM}.md)" \
-  --label "[種別に応じたラベル]"
-```
-
-**ラベル設定**:
-- Bug → `bug`
-- Feature → `enhancement`
-- Documentation → `documentation`
-- Refactoring → `refactoring`
-
-### 7. Draft PR作成
+### 5. Draft PR 作成
 ```bash
 gh pr create \
-  --title "feat: I${ISSUE_NUM} [イシュータイトル]" \
-  --body "## 概要\nI${ISSUE_NUM}: [概要]\n\n## 関連イシュー\nCloses #[GitHubイシュー番号]" \
+  --title "feat: I${ISSUE_NUM} ${TITLE}" \
+  --body "## 概要
+Issue #${ISSUE_NUM} の対応。
+
+## 関連イシュー
+Closes #${ISSUE_NUM}" \
   --draft \
   --base develop
 ```
 
-### 8. ユーザーへの報告
+### 6. 報告
 ```
-✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
-📂 ファイル: docs/issues/open/${ISSUE_NUM}.md
-🌿 ブランチ: feature/I${ISSUE_NUM}-[概要]
-🔗 GitHubイシュー: [GitHubイシューURL]
+✅ Work Item を作成しました: Issue #$ISSUE_NUM
+📂 フォルダ: docs/work/open/$ISSUE_NUM/
+🌿 ブランチ: feature/I$ISSUE_NUM-$SLUG
+🔗 GH Issue: $ISSUE_URL
 📋 Draft PR: [PR URL]
 
-このブランチで作業を開始します。
-次のステップ: /plan I${ISSUE_NUM} で計画書を作成してください。
+次のステップ: /plan $ISSUE_NUM
 ```
 
+---
+
+## Mode B: 既存 GH Issue をローカル化
+
+### 1. GH Issue 情報取得
+```bash
+gh issue view $ISSUE_NUM --json number,title,body,state
+```
+
+### 2. Work Item フォルダ作成 & 00_issue.md 生成
+```bash
+mkdir -p docs/work/open/$ISSUE_NUM
+# Mode A と同様に gh issue view の内容から 00_issue.md を生成
+```
+
+既にフォルダが存在する場合はエラーを出して停止する（上書き禁止）:
+```bash
+if [ -d "docs/work/open/$ISSUE_NUM" ] || [ -d "docs/work/closed/$ISSUE_NUM" ]; then
+  echo "ERROR: Work Item $ISSUE_NUM already exists. Aborting."
+  exit 1
+fi
+```
+
+### 3. ブランチ作成
+```bash
+# GH Issue のタイトルからスラッグを生成
+TITLE=$(gh issue view $ISSUE_NUM --json title -q .title)
+SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
+git checkout develop
+git pull origin develop
+git checkout -b feature/I${ISSUE_NUM}-${SLUG}
+```
+
+### 4. コミット & プッシュ & Draft PR 作成
+Mode A の Step 4〜5 と同様。
+
+### 5. 報告（Mode B）
+```
+✅ 既存イシュー #$ISSUE_NUM をローカル化しました
+📂 フォルダ: docs/work/open/$ISSUE_NUM/
+🌿 ブランチ: feature/I$ISSUE_NUM-$SLUG
+📋 Draft PR: [PR URL]
+
+次のステップ: /plan $ISSUE_NUM
+```
+
+---
+
 ## 詳細ルール
-詳細なイシュー作成フロー・ブランチ戦略・クローズ手順は以下を参照：
 - `docs/runbooks/issue-flow.md`
 - `docs/runbooks/workflow.md`
