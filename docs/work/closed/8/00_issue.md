@@ -38,7 +38,7 @@ created_at: 2026-03-03
 - [ ] `/plan` が `10_plan.md`, `20_test_auto.md`, `21_test_manual.md`, `30_review_*.md` を新構成に作成する
 - [ ] `/implement` が計画承認ゲートを守りつつ新構成に記録を残す
 - [ ] `/close` が `90_closeout.md` を完成させ、フォルダを `closed/` に移動できる
-- [ ] CI（plan-gate）が新構成の必須ファイルをチェックし、PRで失敗/成功が期待通りになる
+- [N/A] CI（plan-gate）— GitHub 無料プランのため Actions 未使用
 - [ ] `issue-bootstrap` が2モード対応している（タイトル指定 / GH Issue番号指定）
 - [ ] runbooks と CLAUDE.md の記述が新構成と矛盾しない
 
