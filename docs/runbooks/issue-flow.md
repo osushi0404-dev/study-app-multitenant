@@ -389,9 +389,6 @@ EOF
 )"
 
 git push origin develop
-
-# 作業完了ブランチを削除（任意）
-git branch -d feature/IXXX-[概要]
 ```
 
 **ステップ26: レビューファイルをclosedに移動**
