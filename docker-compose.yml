@@ -34,6 +34,7 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend:/app
       - ./docs:/app/docs
@@ -59,6 +60,7 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend:/app
     depends_on:
@@ -77,6 +79,7 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend:/app
     depends_on:
