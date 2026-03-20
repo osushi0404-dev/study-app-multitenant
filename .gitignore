@@ -78,3 +78,4 @@ wheels/
 push_to_github.sh
 .github_tokenbackup_migration.sql
 celerybeat-schedule
+backup_*.sql
