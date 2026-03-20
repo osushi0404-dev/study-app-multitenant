@@ -4,21 +4,33 @@
 `docs/runbooks/workflow.md` の「フロー」セクションも合わせて参照してください。
 
 ## イシュー新規作成時の採番ルール
-新しいイシューを作成する際は、必ず以下の手順で番号を採番：
+新しいイシューを作成する際は、**ローカルイシューファイルの最大番号** と **GitHubイシューの登録件数** の両方を考慮して採番する。
+
+### 採番ルール
+**新イシュー番号 = ローカル最大番号 + GitHub登録件数 + 1**
+
+例:
+- ローカル0件 + GitHub2件 → 0+2+1 = **003**
+- ローカル最大3 + GitHub1件 → 3+1+1 = **005**
+- ローカル最大5 + GitHub0件 → 5+0+1 = **006**
 
 ```bash
-# open, in_progress, closedの全ディレクトリから最大番号を取得
-LAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-if [ -z "$LAST_NUM" ]; then
-  ISSUE_NUM="001"
-else
-  NEXT_NUM=$((LAST_NUM + 1))
-  ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
-fi
+# ローカルイシューファイルの最大番号を取得（open/in_progress/closed 全て確認）
+LOCAL_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null \
+  | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
+LOCAL_MAX=${LOCAL_MAX:-0}
+
+# GitHubイシューの登録件数を取得（open + closed）
+GITHUB_COUNT=$(gh issue list --state all --limit 1000 --json number | jq 'length')
+GITHUB_COUNT=${GITHUB_COUNT:-0}
+
+# 新しいイシュー番号を採番
+NEXT_NUM=$((LOCAL_MAX + GITHUB_COUNT + 1))
+ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-**重要**: closedディレクトリも必ず確認すること。
+**重要**: closed ディレクトリも必ず確認すること。GitHub 件数取得には `gh` コマンドが必要（未認証の場合は `gh auth login` を実施）。
 
 ## イシュー作成時の自動実行フロー（必須）
 
@@ -26,14 +38,18 @@ echo "次のイシュー番号: $ISSUE_NUM"
 
 ### 1. イシュー番号の採番
 ```bash
-# 全ディレクトリから最大番号を取得
-LAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-if [ -z "$LAST_NUM" ]; then
-  ISSUE_NUM="001"
-else
-  NEXT_NUM=$((LAST_NUM + 1))
-  ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
-fi
+# ローカルイシューファイルの最大番号を取得（open/in_progress/closed 全て確認）
+LOCAL_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null \
+  | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
+LOCAL_MAX=${LOCAL_MAX:-0}
+
+# GitHubイシューの登録件数を取得（open + closed）
+GITHUB_COUNT=$(gh issue list --state all --limit 1000 --json number | jq 'length')
+GITHUB_COUNT=${GITHUB_COUNT:-0}
+
+# 新しいイシュー番号を採番（ローカル最大番号 + GitHub件数 + 1）
+NEXT_NUM=$((LOCAL_MAX + GITHUB_COUNT + 1))
+ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 ```
 
 ### 2. イシューファイル作成
@@ -184,14 +200,18 @@ gh issue create \
 - 命名規則: `XXX.md`（XXX: 3桁のイシュー番号）
 
 ```bash
-# イシュー番号の採番
-LAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-if [ -z "$LAST_NUM" ]; then
-  ISSUE_NUM="001"
-else
-  NEXT_NUM=$((LAST_NUM + 1))
-  ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
-fi
+# ローカルイシューファイルの最大番号を取得（open/in_progress/closed 全て確認）
+LOCAL_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null \
+  | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
+LOCAL_MAX=${LOCAL_MAX:-0}
+
+# GitHubイシューの登録件数を取得（open + closed）
+GITHUB_COUNT=$(gh issue list --state all --limit 1000 --json number | jq 'length')
+GITHUB_COUNT=${GITHUB_COUNT:-0}
+
+# 新しいイシュー番号を採番（ローカル最大番号 + GitHub件数 + 1）
+NEXT_NUM=$((LOCAL_MAX + GITHUB_COUNT + 1))
+ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 
 # テンプレートからコピー
 cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md

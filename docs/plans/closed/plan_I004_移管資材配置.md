@@ -145,3 +145,8 @@
   - `docker-compose.yml` の機密値を `${変数名}` 参照に変更、`env_file` ディレクティブを追加
   - `backend/.env` を新規作成（`.gitignore` 除外済み）
   - `db` サービスの `POSTGRES_PASSWORD` も変数参照に変更
+
+## 完了情報
+- **完了日時**: 2026-03-20
+- **対応者**: Claude Code
+- **レビュー結果**: OK
