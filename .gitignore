@@ -77,3 +77,4 @@ wheels/
 # GitHub push script (contains sensitive info)
 push_to_github.sh
 .github_tokenbackup_migration.sql
+celerybeat-schedule
