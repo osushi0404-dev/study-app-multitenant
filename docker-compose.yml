@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: learning_app
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -30,16 +30,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
     environment:
-      - DEBUG=True
-      - SECRET_KEY=django-insecure-dev-key-change-in-production
-      - DB_NAME=learning_app
-      - DB_USER=postgres
-      - DB_PASSWORD=password
       - DB_HOST=db
-      - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/0
-      - FRONTEND_URL=http://localhost:3000
     volumes:
       - ./backend:/app
       - ./docs:/app/docs
@@ -61,15 +55,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
     environment:
-      - DEBUG=True
-      - SECRET_KEY=django-insecure-dev-key-change-in-production
-      - DB_NAME=learning_app
-      - DB_USER=postgres
-      - DB_PASSWORD=password
       - DB_HOST=db
-      - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend:/app
     depends_on:
@@ -84,15 +73,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
     environment:
-      - DEBUG=True
-      - SECRET_KEY=django-insecure-dev-key-change-in-production
-      - DB_NAME=learning_app
-      - DB_USER=postgres
-      - DB_PASSWORD=password
       - DB_HOST=db
-      - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend:/app
     depends_on:
