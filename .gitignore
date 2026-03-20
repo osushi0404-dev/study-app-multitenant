@@ -1,9 +1,80 @@
-# Claude Code session artifacts
-.claude/settings.local.json
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+ENV/
+.env
+*.env
 
-# Work directories (ZIP extraction / ZIP storage)
-.tmp/
-_imports/
+# Django
+*.log
+db.sqlite3
+media/
+staticfiles/
+backend/logs/
+backend/media/
+backend/staticfiles/
 
-# Procedure documents (local working copy, not part of repo)
-claude.mdの完全移行/
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker volumes
+postgres_data/
+redis_data/
+backend_media/
+backend_static/
+frontend_node_modules/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# GitHub push script (contains sensitive info)
+push_to_github.sh
+.github_tokenbackup_migration.sql
+celerybeat-schedule
