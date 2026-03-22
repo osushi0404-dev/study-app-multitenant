@@ -21,10 +21,14 @@
 
 ## テスト結果
 - 自動:
-- 手動:
+  - ✅ `git ls-files backend/media/` → 6ファイル追跡確認
+  - ✅ `.gitignore` に `backend/media/` 除外エントリなし（0件）
+  - ✅ `.gitignore` に `!backend/media/` 否定エントリ存在（18行目）
+  - ⚠️ HTTP 200 確認・DBパス照合: Docker WSL2 未連携のため手動テストに委ねる
+- 手動: ユーザー検証待ち
 
 ## 計画との差分
-- （実装後に記入）
+- なし
 
 ## ロールバック
 - `.gitignore` を元に戻し `git rm -r --cached backend/media/` で管理外に戻せる

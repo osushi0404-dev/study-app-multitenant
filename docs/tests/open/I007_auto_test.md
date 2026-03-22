@@ -22,8 +22,8 @@ docker compose exec db psql -U postgres learning_app -c \
 ```
 
 結果:
-- git ls-files 件数:
-- backend/media/ 除外エントリ数（0 が OK）:
-- !backend/media/ エントリ:
-- HTTP ステータス:
-- DBパスとファイル一致:
+- git ls-files 件数: 6件 ✅
+- backend/media/ 除外エントリ数（0 が OK）: 0 ✅
+- !backend/media/ エントリ: 18行目に存在 ✅
+- HTTP ステータス: 未確認（Docker が WSL2 未連携のため手動テストに委ねる）
+- DBパスとファイル一致: 未確認（同上）
