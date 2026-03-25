@@ -25,6 +25,7 @@ export interface User {
   is_superuser?: boolean;
   created_at: string;
   last_login: string;
+  organization_name?: string;
 }
 
 export interface LoginRequest {
