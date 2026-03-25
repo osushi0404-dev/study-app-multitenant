@@ -20,6 +20,18 @@ from core.storage_service import StorageService
 from common.mixins import MultipartFormDataMixin
 
 
+class IsOrgAdmin(permissions.BasePermission):
+    """組織管理者（role='admin'）のみを許可するパーミッション"""
+    message = '管理者権限が必要です'
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == 'admin'
+        )
+
+
 class SubjectViewSet(viewsets.ModelViewSet):
     serializer_class = SubjectSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -74,11 +86,50 @@ class SubjectViewSet(viewsets.ModelViewSet):
 
         return Response(list(subjects))
 
+    def get_permissions(self):
+        """create は org admin のみ許可（update/destroy は別イシュー）"""
+        if self.action == 'create':
+            return [permissions.IsAuthenticated(), IsOrgAdmin()]
+        return [permissions.IsAuthenticated()]
+
     def perform_create(self, serializer):
-        # 組織IDを自動設定
-        serializer.save(organization_id=self.request.user.organization_id)
-        # キャッシュを無効化
-        subject_service.invalidate_cache(self.request.user.organization_id)
+        import os
+        import uuid as _uuid
+        from django.conf import settings
+        from django.db import transaction
+        from django.utils.text import slugify
+
+        name = serializer.validated_data.get('name', '')
+        slug = slugify(name)
+        if not slug:
+            slug = f"s-{str(_uuid.uuid4())[:8]}"
+
+        org_id = self.request.user.organization_id
+        base_slug, counter = slug, 2
+        while Subject.objects.filter(slug=slug, organization_id=org_id).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+
+        from django.db import IntegrityError
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
+        try:
+            with transaction.atomic():
+                subject = serializer.save(organization_id=org_id, slug=slug)
+                subject_service.invalidate_cache(org_id)
+
+                org_slug = subject.organization.slug
+                base = os.path.join(
+                    settings.MEDIA_ROOT, 'org', org_slug, 'subjects', slug
+                )
+                for folder in ('problem', 'explanation'):
+                    path = os.path.join(base, folder)
+                    os.makedirs(path, exist_ok=True)
+                    gitkeep = os.path.join(path, '.gitkeep')
+                    if not os.path.exists(gitkeep):
+                        open(gitkeep, 'w').close()
+        except IntegrityError:
+            raise DRFValidationError({'name': '同名の科目が既に存在します'})
 
     def perform_update(self, serializer):
         serializer.save()

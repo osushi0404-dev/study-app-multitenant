@@ -182,10 +182,22 @@ class UserLoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(
+        source='organization.name', read_only=True, default=None
+    )
+
     class Meta:
         model = User
-        fields = ('id', 'email', 'user_id', 'role', 'is_email_verified', 'is_staff', 'is_superuser', 'last_login', 'created_at')
-        read_only_fields = ('id', 'user_id', 'role', 'is_staff', 'is_superuser', 'last_login', 'created_at')
+        fields = (
+            'id', 'email', 'user_id', 'role',
+            'is_email_verified', 'is_staff', 'is_superuser',
+            'last_login', 'created_at',
+            'organization_name',
+        )
+        read_only_fields = (
+            'id', 'user_id', 'role', 'is_staff', 'is_superuser',
+            'last_login', 'created_at', 'organization_name',
+        )
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
