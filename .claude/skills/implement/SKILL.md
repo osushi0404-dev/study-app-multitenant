@@ -38,3 +38,8 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 4) docs/reviews と docs/tests に結果を記録
 5) commit/push して PR を更新
 6) 手動テスト要点を提示してユーザー検証（OK/NG）待ち
+   - ユーザーテスト OK の場合: 以下を提案して停止する
+     ```
+     ✅ ユーザーテスト完了。
+     👉 クローズ前に振り返りを行うことをお勧めします: `/retro $ARGUMENTS`
+     ```
