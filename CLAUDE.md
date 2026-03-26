@@ -37,6 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - /plan I### : 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
 - /implement I### : 承認済み計画に沿って実装 + 自動テスト + PR 更新（ユーザー検証待ち）
 - /fix-loop I### : NG/失敗時の原因整理→差分計画→承認→修正→再テスト
+- /retro I### : ユーザーテスト OK 後の振り返り（成果・プロセス・技術・スキル規約の改善点確認）
 - /close I### : open→closed へ整理、PR 説明整備、クローズ作業
 
 ## 3. 権限と二重ガード
