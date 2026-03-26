@@ -108,7 +108,7 @@ docker compose exec backend python manage.py createsuperuser
 
 ```
 /issue-bootstrap [タイトル]  # イシュー作成・ブランチ作成
-/plan I###                   # 計画書作成（承認待ち）
+/plan-issue I###             # 計画書作成（承認待ち）
 /implement I###              # 実装・テスト
 /fix-loop I###               # NG時の修正ループ
 /close I###                  # クローズ処理・PR整備
