@@ -19,6 +19,7 @@
 - 計画承認（OK）前にコード変更を開始しない
 - Danger Ops は明示承認（danger-approved + DANGER_OK=1）なしに実行しない
 - develop/main への直 push を禁止（PR経由）
+- イシューのスコープ・受け入れ条件が変更された場合は、docs/issues/open/[番号].md も必ず更新する
 
 ## スキル呼び出しルール（絶対厳守）
 
