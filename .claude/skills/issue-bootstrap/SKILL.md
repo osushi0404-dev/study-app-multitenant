@@ -17,10 +17,15 @@ git branch --show-current
 ```
 
 ### 2. イシュー番号の採番
-open / in_progress / closed の全ディレクトリから最大番号を取得：
+ファイルシステムと git 履歴の両方から最大番号を取得する：
 ```bash
-LAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-if [ -z "$LAST_NUM" ]; then
+# ファイルシステム上の番号
+FS_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
+# git 履歴上の番号（削除済みファイルも含む）
+GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
+# 大きい方を採用
+LAST_NUM=$(printf "%d\n%d\n" "${FS_MAX:-0}" "${GIT_MAX:-0}" | sort -n | tail -1)
+if [ "$LAST_NUM" -eq 0 ]; then
   ISSUE_NUM="001"
 else
   NEXT_NUM=$((LAST_NUM + 1))
@@ -29,7 +34,7 @@ fi
 echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-**重要**: closedディレクトリも必ず確認すること。
+**重要**: ファイルシステムだけでなく git 履歴も必ず確認すること（closed から削除されたイシューも番号として使用済み）。
 
 ### 3. イシューファイル作成
 ```bash
