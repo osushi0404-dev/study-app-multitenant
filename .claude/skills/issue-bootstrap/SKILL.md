@@ -37,7 +37,12 @@ echo "次のイシュー番号: $ISSUE_NUM"
 **重要**: ファイルシステムだけでなく git 履歴も必ず確認すること（closed から削除されたイシューも番号として使用済み）。
 
 ### 3. イシューファイル作成
+作成前に同名ファイルが存在しないことを確認する:
 ```bash
+if [ -f "docs/issues/open/${ISSUE_NUM}.md" ]; then
+  echo "⚠️ docs/issues/open/${ISSUE_NUM}.md が既に存在します。上書きしません。採番を再確認してください。"
+  exit 1
+fi
 cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
 # 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
 ```

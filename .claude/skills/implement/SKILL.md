@@ -27,6 +27,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    cd backend && pip show pytest 2>/dev/null || echo "pytest not found"
    ```
 3) 自動テスト実行
+   - 計画書に自動テストが定義されていない場合はこのステップをスキップし、手順 4) へ進む
    - 成功: 手順 4) へ
    - 失敗: 即 STOP。以下を報告してユーザー待機:
      - 失敗したテスト名
@@ -37,7 +38,13 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
      ```
 4) docs/reviews と docs/tests に結果を記録
 5) commit/push して PR を更新
-6) 手動テスト要点を提示してユーザー検証（OK/NG）待ち
+6) 手動テスト確認項目を以下の形式で提示してユーザー検証（OK/NG）待ち:
+   ```
+   ## 手動テスト確認項目
+   | # | 確認内容 | 操作手順 | 期待結果 | 結果(OK/NG) |
+   |---|---------|---------|---------|------------|
+   ```
+   各項目はテスト計画書（docs/tests/open/$ARGUMENTS_manual_test.md）の内容に基づいて記載する
    - ユーザーテスト OK の場合: 以下を提案して停止する
      ```
      ✅ ユーザーテスト完了。
