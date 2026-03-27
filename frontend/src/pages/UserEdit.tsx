@@ -107,13 +107,16 @@ const UserEdit: React.FC = () => {
     
     setFormData({
       ...formData,
+      // eslint-disable-next-line security/detect-object-injection
       [field]: value,
     });
-    
+
     // Clear error for this field
+    // eslint-disable-next-line security/detect-object-injection
     if (errors[field]) {
       setErrors({
         ...errors,
+        // eslint-disable-next-line security/detect-object-injection
         [field]: '',
       });
     }

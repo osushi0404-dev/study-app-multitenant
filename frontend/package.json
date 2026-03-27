@@ -54,7 +54,15 @@
     ],
     "plugins": [
       "security"
-    ]
+    ],
+    "rules": {
+      "no-restricted-imports": ["error", {
+        "paths": [{
+          "name": "vitest",
+          "message": "このプロジェクトは Jest を使用しています。vitest は使用禁止です。"
+        }]
+      }]
+    }
   },
   "browserslist": {
     "production": [

@@ -86,6 +86,7 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
   const handleSettingChange = (field: keyof GenerationSettings, value: any) => {
     setSettings(prev => ({
       ...prev,
+      // eslint-disable-next-line security/detect-object-injection
       [field]: value
     }));
   };
