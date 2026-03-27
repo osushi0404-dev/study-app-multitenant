@@ -37,14 +37,7 @@ import {
   Paper,
   Tooltip,
   TablePagination,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageUploadArea from '../components/ImageUploadArea';
 import {
   Add,
@@ -100,8 +93,6 @@ const QuizManagement: React.FC = () => {
 
   const [problems, setProblems] = useState<Problem[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [newSubjectName, setNewSubjectName] = useState('');
-  const [addingSubject, setAddingSubject] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterSubject, setFilterSubject] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState('');
@@ -324,25 +315,6 @@ const QuizManagement: React.FC = () => {
     }
   };
 
-  const handleAddSubject = async () => {
-    const name = newSubjectName.trim();
-    if (!name) {
-      toast.error('科目名を入力してください');
-      return;
-    }
-    setAddingSubject(true);
-    try {
-      await apiClient.post('/api/subjects/', { name });
-      toast.success('科目を追加しました');
-      setNewSubjectName('');
-      await fetchSubjects();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || '科目追加に失敗しました');
-    } finally {
-      setAddingSubject(false);
-    }
-  };
-
   const openEditDialog = (problem: Problem) => {
     setEditingProblem(problem);
     reset({
@@ -484,46 +456,6 @@ const QuizManagement: React.FC = () => {
           </Grid>
         </CardContent>
       </Card>
-
-      {/* Subject Management Accordion (org admin only) */}
-      {isOrgAdmin && (
-        <Box sx={{ mb: 3 }}>
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                科目管理 — {user?.organization_name ?? ''}
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <List dense>
-                {subjects.map(s => (
-                  <ListItem key={s.id}>
-                    <ListItemText primary={s.name} />
-                  </ListItem>
-                ))}
-              </List>
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <TextField
-                  size="small"
-                  label="科目名"
-                  value={newSubjectName}
-                  onChange={e => setNewSubjectName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddSubject()}
-                />
-                <Button
-                  variant="contained"
-                  size="small"
-                  disabled={addingSubject}
-                  onClick={handleAddSubject}
-                  startIcon={<Add />}
-                >
-                  追加
-                </Button>
-              </Box>
-            </AccordionDetails>
-          </Accordion>
-        </Box>
-      )}
 
       {/* Problems Table */}
       <TableContainer component={Paper} sx={{ mb: 3 }}>
