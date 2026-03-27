@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 from problems.models import Subject, Problem, Choice, QuizSession
-from accounts.models import Organization
+from accounts.models import Organization, OrganizationCategory
 
 User = get_user_model()
 
@@ -21,7 +21,8 @@ class TestQuizSessionViewSet:
     def setup_data(self):
         """テストデータのセットアップ"""
         # 組織とユーザーの作成
-        org = Organization.objects.create(name="Test Org", slug="test-org")
+        category = OrganizationCategory.objects.create(name="テスト", slug="test")
+        org = Organization.objects.create(name="Test Org", slug="test-org", category=category)
         user = User.objects.create_user(
             email="test@example.com",
             password="testpass123",

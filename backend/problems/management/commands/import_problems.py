@@ -444,4 +444,4 @@ class Command(BaseCommand):
 
     def _generate_question_hash(self, question: str) -> str:
         """問題文のハッシュを生成（重複チェック用）"""
-        return hashlib.md5(question.encode('utf-8')).hexdigest()
+        return hashlib.md5(question.encode('utf-8'), usedforsecurity=False).hexdigest()

@@ -45,7 +45,7 @@ class CacheService:
         # ハッシュ化してキーを短縮
         key_string = "_".join(key_parts)
         if len(key_string) > 200:  # Redis key length limit
-            key_hash = hashlib.md5(key_string.encode()).hexdigest()
+            key_hash = hashlib.md5(key_string.encode(), usedforsecurity=False).hexdigest()
             return f"{prefix}_{key_hash}"
 
         return key_string
