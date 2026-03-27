@@ -19,8 +19,8 @@ git branch --show-current
 ### 2. イシュー番号の採番
 ファイルシステムと git 履歴の両方から最大番号を取得する：
 ```bash
-# ファイルシステム上の番号
-FS_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
+# ファイルシステム上の番号（I###.md / ###.md 両方に対応）
+FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
 # 大きい方を採用
@@ -39,11 +39,11 @@ echo "次のイシュー番号: $ISSUE_NUM"
 ### 3. イシューファイル作成
 作成前に同名ファイルが存在しないことを確認する:
 ```bash
-if [ -f "docs/issues/open/${ISSUE_NUM}.md" ]; then
-  echo "⚠️ docs/issues/open/${ISSUE_NUM}.md が既に存在します。上書きしません。採番を再確認してください。"
+if [ -f "docs/issues/open/I${ISSUE_NUM}.md" ]; then
+  echo "⚠️ docs/issues/open/I${ISSUE_NUM}.md が既に存在します。上書きしません。採番を再確認してください。"
   exit 1
 fi
-cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
+cp docs/issues/templates/issue_template.md docs/issues/open/I${ISSUE_NUM}.md
 # 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
 ```
 
@@ -66,7 +66,7 @@ git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
 
 ### 5. ドキュメントをコミット・プッシュ
 ```bash
-git add docs/issues/open/${ISSUE_NUM}.md
+git add docs/issues/open/I${ISSUE_NUM}.md
 git commit -m "docs: create issue I${ISSUE_NUM}"
 git push -u origin feature/I${ISSUE_NUM}-[概要]
 ```
@@ -75,7 +75,7 @@ git push -u origin feature/I${ISSUE_NUM}-[概要]
 ```bash
 gh issue create \
   --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/${ISSUE_NUM}.md)" \
+  --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
   --label "[種別に応じたラベル]"
 ```
 
@@ -97,7 +97,7 @@ gh pr create \
 ### 8. ユーザーへの報告
 ```
 ✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
-📂 ファイル: docs/issues/open/${ISSUE_NUM}.md
+📂 ファイル: docs/issues/open/I${ISSUE_NUM}.md
 🌿 ブランチ: feature/I${ISSUE_NUM}-[概要]
 🔗 GitHubイシュー: [GitHubイシューURL]
 📋 Draft PR: [PR URL]
