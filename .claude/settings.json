@@ -6,6 +6,8 @@
       "Read(*)",
       "Grep(*)",
       "Glob(*)",
+      "Write(docs/**)",
+      "Edit(docs/**)",
       "Bash(pwd)",
       "Bash(ls *)",
       "Bash(find *)",
