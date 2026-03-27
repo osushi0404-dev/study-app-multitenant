@@ -59,7 +59,6 @@ import AIQuestionGenerator from '../components/AIQuestionGenerator';
 import ProblemPreview from '../components/ProblemPreview';
 import { Subject, Problem, Choice } from '../services/types';
 import apiClient from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
 
 
 const problemSchema = yup.object({
@@ -88,9 +87,6 @@ const problemSchema = yup.object({
 type ProblemFormData = yup.InferType<typeof problemSchema>;
 
 const QuizManagement: React.FC = () => {
-  const { user } = useAuth();
-  const isOrgAdmin = user?.role === 'admin';
-
   const [problems, setProblems] = useState<Problem[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);

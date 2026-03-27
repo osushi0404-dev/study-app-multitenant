@@ -72,11 +72,11 @@ const Layout: React.FC = () => {
   const menuItems = [
     { text: 'ダッシュボード', icon: <Dashboard />, path: '/dashboard' },
     { text: '問題管理', icon: <Quiz />, path: '/quiz-management' },
-    { text: '学習統計', icon: <BarChart />, path: '/statistics' },
-    { text: '設定', icon: <Settings />, path: '/settings' },
     ...(isOrgAdmin ? [
       { text: '科目管理', icon: <School />, path: '/subject-management' },
     ] : []),
+    { text: '学習統計', icon: <BarChart />, path: '/statistics' },
+    { text: '設定', icon: <Settings />, path: '/settings' },
     ...(user?.is_staff ? [
       { text: '監視', icon: <Speed />, path: '/monitoring' },
       { text: 'ユーザー管理', icon: <People />, path: '/admin/users' },
