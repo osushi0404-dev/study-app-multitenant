@@ -40,7 +40,7 @@ class TestProblemDisplaySerializer:
             question="テスト問題文",
             problem_type="single",
             difficulty=1,
-            points=10
+            explanation="テスト解説"
         )
 
         # 選択肢の作成

@@ -42,7 +42,7 @@ class TestQuizSessionViewSet:
                 question=f"テスト問題{i+1}",
                 problem_type="single",
                 difficulty=1,
-                points=10
+                explanation=f"テスト解説{i+1}"
             )
             Choice.objects.create(problem=problem, text=f"正解{i+1}", is_correct=True, order=1)
             Choice.objects.create(problem=problem, text=f"不正解{i+1}", is_correct=False, order=2)
