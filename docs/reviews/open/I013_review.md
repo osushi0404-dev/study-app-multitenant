@@ -20,11 +20,17 @@
 - Config/Infra: `.github/workflows/ci.yml` 追加
 
 ## テスト結果
-- 自動: GitHub Actions 全 jobs 通過確認（gh pr checks 結果）
+- 自動: GitHub Actions 全 5 jobs ✓ パス（run ID: 23637450816）
+  - ✓ Backend Lint & Security (flake8 0件, bandit High 0件)
+  - ✓ Backend Tests (25 passed)
+  - ✓ Frontend Type Check
+  - ✓ Frontend Lint & Security
+  - ✓ Frontend Tests (7 passed)
 - 手動:
 
 ## 計画との差分
-- なし / あり（理由）
+- 既存テスト修正が追加で必要だった（vitest→Jest 変換、Organization フィクスチャ修正、URL名修正、useQuizDisplayStats NaN バグ修正）
+- flake8 エラーが想定より多かったが全修正完了（1432件→0件）
 
 ## ロールバック
 - `ci.yml` 削除で CI 無効化。その他変更は git revert 可能。
