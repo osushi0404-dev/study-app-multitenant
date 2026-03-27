@@ -13,12 +13,6 @@ import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
 import NavigationLogger from './components/NavigationLogger';
 
-// PWA Components
-import PWAProvider from './components/PWA/PWAProvider';
-import InstallPrompt from './components/PWA/InstallPrompt';
-import OfflineIndicator from './components/PWA/OfflineIndicator';
-import UpdateNotifier from './components/PWA/UpdateNotifier';
-
 // Accessibility
 import AccessibilityProvider from './components/AccessibilityProvider';
 import './styles/accessibility.css';
@@ -53,8 +47,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <CustomThemeProvider>
         <AccessibilityProvider>
-          <PWAProvider>
-            <AuthProvider>
+          <AuthProvider>
               <NotificationProvider>
               <Router>
               <NavigationLogger />
@@ -69,11 +62,6 @@ function App() {
                   },
                 }}
               />
-              
-              {/* PWA Components */}
-              <OfflineIndicator />
-              <UpdateNotifier />
-              <InstallPrompt />
               
               <Routes>
               {/* Public Routes - 組織別登録URLを先に配置 */}
@@ -106,7 +94,6 @@ function App() {
               </Router>
               </NotificationProvider>
             </AuthProvider>
-          </PWAProvider>
         </AccessibilityProvider>
       </CustomThemeProvider>
     </QueryClientProvider>
