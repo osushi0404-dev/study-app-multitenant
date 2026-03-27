@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement an approved plan, run automated tests, update PR and docs.
+description: Implement an approved plan, run type checks, push to PR.
 argument-hint: "I###"
 disable-model-invocation: true
 allowed-tools: Read, Bash, Write, Edit, Glob, Grep
@@ -27,37 +27,9 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 手順:
 1) 計画どおり実装
 2) ビルド・型チェックを実行してクリーンを確認（未使用変数・import の残留がないこと）
-3) テスト実行前に環境確認:
-   ```bash
-   cd backend && pip show pytest 2>/dev/null || echo "pytest not found"
+3) commit/push して PR を更新
+4) 停止し以下を案内:
    ```
-4) 自動テスト実行
-   - 計画書に自動テストが定義されていない場合はこのステップをスキップし、手順 5) へ進む
-   - 成功: 手順 5) へ
-   - 失敗: 即 STOP。以下を報告してユーザー待機:
-     - 失敗したテスト名
-     - エラー内容（期待値 / 実際値 / ログ抜粋）
-     ```
-     ⛔ テストが失敗しました。修正作業は開始しません。
-     👉 続けるには `/fix-loop $ARGUMENTS` を入力してください。
-     ```
-5) docs/reviews と docs/tests に結果を記録
-6) commit/push して PR を更新
-6a) CI 確認（push 後に必ず実施）:
-   ```bash
-   gh pr checks [PR番号]
+   ✅ push 完了。
+   👉 `/code-review $ARGUMENTS` を実行してください。
    ```
-   - 全ジョブ pass: 手順 7) へ
-   - 失敗あり: 即 STOP。ログを確認して修正し、再 push してから再確認する。
-7) 手動テスト確認項目を以下の形式で提示してユーザー検証（OK/NG）待ち:
-   ```
-   ## 手動テスト確認項目
-   | # | 確認内容 | 操作手順 | 期待結果 | 結果(OK/NG) |
-   |---|---------|---------|---------|------------|
-   ```
-   各項目はテスト計画書（docs/tests/open/$ARGUMENTS_manual_test.md）の内容に基づいて記載する
-   - ユーザーテスト OK の場合: 以下を提案して停止する
-     ```
-     ✅ ユーザーテスト完了。
-     👉 クローズ前に振り返りを行うことをお勧めします: `/retro $ARGUMENTS`
-     ```
