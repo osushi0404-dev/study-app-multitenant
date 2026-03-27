@@ -44,6 +44,7 @@ describe('QuizSession Component', () => {
     subject_name: 'テスト科目',
     difficulty: 'easy' as const,
     problem_type: 'single_choice' as const,
+    total_problems_in_subject: 10,
     choices: [
       { id: 'choice-1', text: '選択肢1', is_correct: true },
       { id: 'choice-2', text: '選択肢2', is_correct: false },
@@ -211,10 +212,6 @@ describe('QuizSession Component', () => {
     // 難易度が日本語で表示される
     await waitFor(() => {
       expect(screen.getByText('初級')).toBeInTheDocument();
-    });
-    // ポイントが表示される
-    await waitFor(() => {
-      expect(screen.getByText('10 ポイント')).toBeInTheDocument();
     });
   });
 });

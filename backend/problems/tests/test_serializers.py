@@ -28,7 +28,7 @@ class TestProblemDisplaySerializer:
         user = User.objects.create_user(
             email="test@example.com",
             password="testpass123",
-            username="testuser",
+            user_id="testuser",
             organization=org
         )
 
@@ -96,7 +96,7 @@ class TestQuizSessionSerializer:
         user = User.objects.create_user(
             email="test@example.com",
             password="testpass123",
-            username="testuser",
+            user_id="testuser",
             organization=org
         )
 
