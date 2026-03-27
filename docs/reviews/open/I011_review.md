@@ -1,7 +1,7 @@
-# レビュー: I011 dev 環境で Service Worker を無効化
+# レビュー: I011 Service Worker・PWA コンポーネントを完全撤去
 
 ## 基本情報
-- **レビュー対象**: I011 dev 環境で Service Worker を無効化
+- **レビュー対象**: I011 Service Worker・PWA コンポーネントを完全撤去
 - **関連計画書**: docs/plans/open/I011_plan.md
 - **作成日**: 2026-03-27
 
@@ -10,15 +10,22 @@
 ## レビューチェックリスト
 
 ### 機能要件
-- [ ] dev 環境（`npm start`）で SW が登録されない
-- [ ] コンソールに skip メッセージが出力される
-- [ ] 本番ビルド（`npm run build`）がエラーなく完了する
-- [ ] 本番ビルドでは SW 登録コードが実行される（`NODE_ENV !== 'development'`）
+- [ ] dev 環境で SW が登録されない（DevTools 確認）
+- [ ] ソース変更がブラウザリロードで即時反映される
+- [ ] アプリが正常に起動する
+- [ ] 既存機能（ログイン・問題管理・科目管理等）に影響がない
+
+### 削除の完全性
+- [ ] `public/sw.js` が削除されている
+- [ ] `frontend/src/services/pwa.service.ts` が削除されている
+- [ ] `frontend/src/components/PWA/` 配下 4 ファイルが削除されている
+- [ ] `App.tsx` から PWA import・コンポーネントが完全に除去されている
+- [ ] `App.tsx` に不要な空行・コメントが残っていない
 
 ### コード品質
-- [ ] 変更箇所が `pwa.service.ts` の `registerServiceWorker()` 先頭 4 行のみ
 - [ ] TypeScript エラーなし
-- [ ] `process.env.NODE_ENV` の参照方法が CRA 標準に準拠している
+- [ ] `usePWA` フックへの参照が残っていない（`grep -r usePWA frontend/src`）
+- [ ] `pwaService` への参照が残っていない（`grep -r pwaService frontend/src`）
 
 ### テスト
 - [ ] 手動テスト（MT-01〜MT-05）がすべてパス
@@ -32,6 +39,7 @@
 | 項目 | 結果 | 備考 |
 |------|------|------|
 | 機能要件 | - | |
+| 削除の完全性 | - | |
 | コード品質 | - | |
 | テスト | - | |
 
