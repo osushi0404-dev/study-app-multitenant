@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 from rest_framework import serializers
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
@@ -186,15 +186,15 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
     def create(self, validated_data):
         choices_data = validated_data.pop('choices', [])
         problem = Problem.objects.create(**validated_data)
-        
+
         for choice_data in choices_data:
             Choice.objects.create(problem=problem, **choice_data)
-        
+
         return problem
 
     def update(self, instance, validated_data):
         choices_data = validated_data.pop('choices', None)
-        
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

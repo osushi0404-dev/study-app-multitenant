@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 from problems.models import Subject, Problem, Choice, QuizSession
-from accounts.models import Organization
+from accounts.models import Organization, OrganizationCategory
 
 User = get_user_model()
 
@@ -21,11 +21,12 @@ class TestQuizSessionViewSet:
     def setup_data(self):
         """テストデータのセットアップ"""
         # 組織とユーザーの作成
-        org = Organization.objects.create(name="Test Org", slug="test-org")
+        category = OrganizationCategory.objects.create(name="テスト", slug="test")
+        org = Organization.objects.create(name="Test Org", slug="test-org", category=category)
         user = User.objects.create_user(
             email="test@example.com",
             password="testpass123",
-            username="testuser",
+            user_id="testuser",
             organization=org
         )
 
@@ -41,7 +42,7 @@ class TestQuizSessionViewSet:
                 question=f"テスト問題{i+1}",
                 problem_type="single",
                 difficulty=1,
-                points=10
+                explanation=f"テスト解説{i+1}"
             )
             Choice.objects.create(problem=problem, text=f"正解{i+1}", is_correct=True, order=1)
             Choice.objects.create(problem=problem, text=f"不正解{i+1}", is_correct=False, order=2)
@@ -75,7 +76,7 @@ class TestQuizSessionViewSet:
         # 複数回問題を取得して、異なる問題が返されることを確認
         fetched_problems = []
         for _ in range(3):
-            url = reverse('quizsession-next-problem', kwargs={'pk': session.id})
+            url = reverse('quiz-next-problem', kwargs={'pk': session.id})
             response = client.get(url)
 
             assert response.status_code == status.HTTP_200_OK, \
@@ -85,7 +86,7 @@ class TestQuizSessionViewSet:
 
             # 回答を送信して次の問題へ
             if len(fetched_problems) < 3:
-                submit_url = reverse('quizsession-submit-answer', kwargs={'pk': session.id})
+                submit_url = reverse('quiz-submit-answer', kwargs={'pk': session.id})
                 choices = Choice.objects.filter(problem_id=response.data['id'], is_correct=True)
                 client.post(submit_url, {
                     'problem_id': response.data['id'],
@@ -111,7 +112,7 @@ class TestQuizSessionViewSet:
         )
 
         # 問題を取得
-        url = reverse('quizsession-next-problem', kwargs={'pk': session.id})
+        url = reverse('quiz-next-problem', kwargs={'pk': session.id})
         response = client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -133,7 +134,7 @@ class TestQuizSessionViewSet:
         )
 
         # セッション情報を取得
-        url = reverse('quizsession-detail', kwargs={'pk': session.id})
+        url = reverse('quiz-detail', kwargs={'pk': session.id})
         response = client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -155,7 +156,7 @@ class TestQuizSessionViewSet:
         )
 
         # 問題を取得
-        url = reverse('quizsession-next-problem', kwargs={'pk': session.id})
+        url = reverse('quiz-next-problem', kwargs={'pk': session.id})
         response = client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -176,7 +177,7 @@ class TestQuizSessionViewSet:
         )
 
         # 問題を取得
-        url = reverse('quizsession-next-problem', kwargs={'pk': session.id})
+        url = reverse('quiz-next-problem', kwargs={'pk': session.id})
         response = client.get(url)
 
         assert response.status_code == status.HTTP_200_OK

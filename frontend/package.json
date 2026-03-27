@@ -38,11 +38,31 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "jest": {
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(axios)/)"
+    ]
+  },
+  "devDependencies": {
+    "eslint-plugin-security": "^3.0.0"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
-      "react-app/jest"
-    ]
+      "react-app/jest",
+      "plugin:security/recommended-legacy"
+    ],
+    "plugins": [
+      "security"
+    ],
+    "rules": {
+      "no-restricted-imports": ["error", {
+        "paths": [{
+          "name": "vitest",
+          "message": "このプロジェクトは Jest を使用しています。vitest は使用禁止です。"
+        }]
+      }]
+    }
   },
   "browserslist": {
     "production": [

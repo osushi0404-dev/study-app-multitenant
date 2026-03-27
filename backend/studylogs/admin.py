@@ -4,7 +4,10 @@ from .models import StudyLog, DailyStudySummary, ProblemAttempt, StudyGoal
 
 @admin.register(StudyLog)
 class StudyLogAdmin(admin.ModelAdmin):
-    list_display = ['user', 'subject', 'started_at', 'ended_at', 'duration', 'problems_attempted', 'problems_correct', 'is_active']
+    list_display = [
+        'user', 'subject', 'started_at', 'ended_at',
+        'duration', 'problems_attempted', 'problems_correct', 'is_active',
+    ]
     list_filter = ['is_active', 'subject', 'started_at']
     search_fields = ['user__username', 'user__email', 'notes']
     readonly_fields = ['started_at', 'ended_at', 'duration', 'accuracy']

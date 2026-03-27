@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from django.utils import timezone
 from .models import (
     StudyLog, DailyStudySummary, ProblemAttempt, StudyGoal,
     SpacedRepetitionCard, SpacedRepetitionReview, LearningAnalytics,
@@ -114,7 +113,7 @@ class SpacedRepetitionCardSerializer(serializers.ModelSerializer):
     accuracy_rate = serializers.ReadOnlyField()
     is_due = serializers.ReadOnlyField()
     mastery_level = serializers.ReadOnlyField()
-    
+
     class Meta:
         model = SpacedRepetitionCard
         fields = [
@@ -131,7 +130,7 @@ class SpacedRepetitionCardSerializer(serializers.ModelSerializer):
 class SpacedRepetitionReviewSerializer(serializers.ModelSerializer):
     quality_score_display = serializers.CharField(source='get_quality_score_display', read_only=True)
     problem_question = serializers.CharField(source='problem.question', read_only=True)
-    
+
     class Meta:
         model = SpacedRepetitionReview
         fields = [
@@ -147,7 +146,7 @@ class SpacedRepetitionSubmissionSerializer(serializers.Serializer):
     quality_score = serializers.IntegerField(min_value=0, max_value=5)
     response_time_seconds = serializers.IntegerField(min_value=1)
     hint_used = serializers.BooleanField(default=False)
-    
+
     def validate_quality_score(self, value):
         if value not in range(6):  # 0-5
             raise serializers.ValidationError("Quality score must be between 0 and 5")
@@ -156,16 +155,16 @@ class SpacedRepetitionSubmissionSerializer(serializers.Serializer):
 
 class LearningAnalyticsSerializer(serializers.ModelSerializer):
     retention_rate_percentage = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = LearningAnalytics
         fields = [
             'date', 'total_cards', 'new_cards', 'due_cards', 'reviewed_cards',
-            'average_ease_factor', 'average_interval', 'retention_rate', 
+            'average_ease_factor', 'average_interval', 'retention_rate',
             'retention_rate_percentage', 'total_review_time', 'average_response_time',
             'easy_cards_count', 'medium_cards_count', 'hard_cards_count'
         ]
-    
+
     def get_retention_rate_percentage(self, obj):
         return round(obj.retention_rate * 100, 1)
 
@@ -205,7 +204,7 @@ class MistakePatternSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     error_rate = serializers.ReadOnlyField()
     severity_level = serializers.ReadOnlyField()
-    
+
     class Meta:
         model = MistakePattern
         fields = [
@@ -225,7 +224,7 @@ class LearningSuggestionSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     mistake_pattern_description = serializers.CharField(source='mistake_pattern.description', read_only=True)
     is_expired = serializers.ReadOnlyField()
-    
+
     class Meta:
         model = LearningSuggestion
         fields = [
@@ -244,7 +243,7 @@ class LearningWeaknessSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     severity_display = serializers.CharField(source='get_severity_display', read_only=True)
     error_rate = serializers.ReadOnlyField()
-    
+
     class Meta:
         model = LearningWeakness
         fields = [
@@ -270,7 +269,7 @@ class SuggestionFeedbackSerializer(serializers.Serializer):
     suggestion_id = serializers.IntegerField()
     effectiveness_rating = serializers.IntegerField(min_value=1, max_value=5)
     feedback_comment = serializers.CharField(required=False, allow_blank=True)
-    
+
     def validate_effectiveness_rating(self, value):
         if value not in range(1, 6):
             raise serializers.ValidationError("効果評価は1-5の範囲で入力してください")

@@ -1,11 +1,10 @@
 from rest_framework import views, permissions
 from rest_framework.response import Response
-from django.db.models import Sum, Count, Avg, Q, F
+from django.db.models import Sum, Avg, F
 from django.utils import timezone
-from datetime import datetime, timedelta
-from problems.models import Subject, Problem, QuizSession, QuizAnswer
+from datetime import timedelta
+from problems.models import Problem, QuizSession
 from studylogs.models import StudyLog, DailyStudySummary
-from accounts.models import User
 from core.subject_service import subject_service
 
 
@@ -16,7 +15,7 @@ class DashboardOverviewView(views.APIView):
         user = request.user
         now = timezone.now()
         today = now.date()
-        
+
         # Get today's study data
         today_study = StudyLog.objects.filter(
             user=user,
@@ -43,7 +42,7 @@ class DashboardOverviewView(views.APIView):
             accuracy = 0
             if quiz.completed_problems > 0:
                 accuracy = round((quiz.correct_answers / quiz.completed_problems) * 100, 2)
-            
+
             quiz_data.append({
                 'id': str(quiz.id),
                 'subject': quiz.subject.name if quiz.subject else 'All Subjects',
@@ -79,7 +78,9 @@ class DashboardOverviewView(views.APIView):
                 'study_time': today_study['total_time'] or 0,
                 'problems_attempted': today_study['total_problems'] or 0,
                 'problems_correct': today_study['total_correct'] or 0,
-                'accuracy': round((today_study['total_correct'] or 0) / max(today_study['total_problems'] or 1, 1) * 100, 2)
+                'accuracy': round(
+                    (today_study['total_correct'] or 0) / max(today_study['total_problems'] or 1, 1) * 100, 2
+                )
             },
             'active_session': {
                 'id': str(active_session.id) if active_session else None,
@@ -91,7 +92,9 @@ class DashboardOverviewView(views.APIView):
                 'total_time': weekly_summary['total_time'] or 0,
                 'total_problems': weekly_summary['total_problems'] or 0,
                 'total_correct': weekly_summary['total_correct'] or 0,
-                'accuracy': round((weekly_summary['total_correct'] or 0) / max(weekly_summary['total_problems'] or 1, 1) * 100, 2)
+                'accuracy': round(
+                    (weekly_summary['total_correct'] or 0) / max(weekly_summary['total_problems'] or 1, 1) * 100, 2
+                )
             },
             'recent_quizzes': quiz_data,
             'subject_progress': subject_progress,
@@ -158,7 +161,7 @@ class DashboardOverviewView(views.APIView):
 
     def _get_upcoming_goals(self, user):
         from studylogs.models import StudyGoal
-        
+
         goals = StudyGoal.objects.filter(user=user, is_active=True)
         upcoming = []
 
@@ -181,14 +184,14 @@ class DashboardAnalyticsView(views.APIView):
     def get(self, request):
         user = request.user
         days = int(request.query_params.get('days', 30))
-        
+
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=days)
 
         # Get daily study data
         daily_data = []
         current_date = start_date
-        
+
         while current_date <= end_date:
             summary = DailyStudySummary.objects.filter(
                 user=user,
@@ -202,7 +205,7 @@ class DashboardAnalyticsView(views.APIView):
                 'problems_correct': summary.total_problems_correct if summary else 0,
                 'accuracy': summary.accuracy if summary else 0
             })
-            
+
             current_date += timedelta(days=1)
 
         # Get subject distribution
@@ -216,7 +219,7 @@ class DashboardAnalyticsView(views.APIView):
 
         # Get performance trends
         performance_data = self._get_performance_trends(user, start_date, end_date)
-        
+
         # Get subject breakdown for dropdown
         subject_breakdown = subject_service.get_subjects_for_dropdown(user)
 
@@ -231,10 +234,10 @@ class DashboardAnalyticsView(views.APIView):
         # Get weekly averages for the period
         weeks = []
         current_week_start = start_date
-        
+
         while current_week_start <= end_date:
             week_end = min(current_week_start + timedelta(days=6), end_date)
-            
+
             week_summary = DailyStudySummary.objects.filter(
                 user=user,
                 date__range=[current_week_start, week_end]
@@ -252,7 +255,7 @@ class DashboardAnalyticsView(views.APIView):
                 'avg_problems': week_summary['avg_problems'] or 0,
                 'avg_accuracy': week_summary['avg_accuracy'] or 0
             })
-            
+
             current_week_start += timedelta(days=7)
 
         return weeks
@@ -263,10 +266,10 @@ class SubjectRecommendationView(views.APIView):
 
     def get(self, request):
         user = request.user
-        
+
         # Get subjects with low accuracy that need improvement
         week_ago = timezone.now().date() - timedelta(days=7)
-        
+
         subject_performance = StudyLog.objects.filter(
             user=user,
             started_at__date__gte=week_ago
@@ -277,7 +280,7 @@ class SubjectRecommendationView(views.APIView):
         ).filter(total_problems__gt=0).order_by('accuracy')
 
         recommendations = []
-        
+
         for subject in subject_performance[:3]:  # Top 3 subjects needing improvement
             if subject['accuracy'] < 70:  # Less than 70% accuracy
                 recommendations.append({
@@ -296,7 +299,7 @@ class SubjectRecommendationView(views.APIView):
             user=user,
             started_at__date__gte=week_ago
         ).values_list('subject_id', flat=True)
-        
+
         all_subjects = subject_service.get_user_subjects(user, use_cache=True).exclude(
             id__in=studied_subject_ids
         )

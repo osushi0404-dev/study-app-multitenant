@@ -13,7 +13,7 @@ urlpatterns = [
     path('monitoring/performance/', views.PerformanceMetricsView.as_view(), name='performance_metrics'),
     path('monitoring/activity/', views.ActivitySummaryView.as_view(), name='activity_summary'),
     path('monitoring/alerts/', views.AlertsView.as_view(), name='alerts'),
-    
+
     # キャッシュ管理
     path('cache/clear/', views.ClearCacheView.as_view(), name='clear_cache'),
     path('cache/stats/', views.CacheStatsView.as_view(), name='cache_stats'),

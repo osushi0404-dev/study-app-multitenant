@@ -1,6 +1,6 @@
 # backend/problems/services/quiz_service.py
 from typing import Optional, Tuple
-from django.db.models import QuerySet
+
 from problems.models import Problem, QuizSession
 
 

@@ -70,21 +70,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             })
 
         return attrs
-    
+
     def validate_email(self, value):
         if value and User.objects.filter(email=value).exists():
             raise serializers.ValidationError(
                 'このメールアドレスは既に使用されています'
             )
         return value
-    
+
     def validate_user_id(self, value):
         if User.objects.filter(user_id=value).exists():
             raise serializers.ValidationError(
                 'このユーザーIDは既に使用されています'
             )
         return value
-    
+
     def validate_organization_id(self, value):
         """組織IDの検証"""
         if not Organization.objects.filter(
@@ -136,48 +136,51 @@ class UserLoginSerializer(serializers.Serializer):
                     user = User.objects.get(email=email_or_user_id)
                 else:
                     user = User.objects.get(user_id=email_or_user_id)
-                
+
                 # Check if account is locked
                 if user.is_account_locked():
                     raise serializers.ValidationError(
                         f"アカウントがロックされています。{user.account_locked_until}まで待ってから再試行してください。"
                     )
-                
+
                 # Authenticate user
-                user = authenticate(request=self.context.get('request'),
-                                 username=email_or_user_id, password=password)
-                
+                user = authenticate(
+                    request=self.context.get('request'),
+                    username=email_or_user_id,
+                    password=password,
+                )
+
                 if not user:
                     # Handle failed login attempt - get the user again to update failed attempts
                     if '@' in email_or_user_id:
                         failed_user = User.objects.get(email=email_or_user_id)
                     else:
                         failed_user = User.objects.get(user_id=email_or_user_id)
-                    
+
                     failed_user.failed_login_attempts += 1
-                    
+
                     # Lock account after 5 failed attempts for 30 minutes
                     if failed_user.failed_login_attempts >= 5:
                         failed_user.account_locked_until = timezone.now() + timezone.timedelta(minutes=30)
-                    
+
                     failed_user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
                     raise serializers.ValidationError("ユーザーIDまたはパスワードが正しくありません。")
-                
+
                 if not user.is_active:
                     raise serializers.ValidationError("このアカウントは無効化されています。")
-                
+
                 # Reset failed login attempts on successful login
                 if user.failed_login_attempts > 0:
                     user.failed_login_attempts = 0
                     user.account_locked_until = None
                     user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
-                
+
                 attrs['user'] = user
                 return attrs
-                
+
             except User.DoesNotExist:
                 raise serializers.ValidationError("ユーザーIDまたはパスワードが正しくありません。")
-        
+
         raise serializers.ValidationError("ユーザーIDとパスワードを入力してください。")
 
 
@@ -203,7 +206,7 @@ class UserSerializer(serializers.ModelSerializer):
 class AdminUserSerializer(serializers.ModelSerializer):
     """管理者用の詳細なユーザーシリアライザー"""
     is_admin = serializers.BooleanField(source='is_staff', required=False)
-    
+
     class Meta:
         model = User
         fields = (

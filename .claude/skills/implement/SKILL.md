@@ -43,6 +43,12 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
      ```
 5) docs/reviews と docs/tests に結果を記録
 6) commit/push して PR を更新
+6a) CI 確認（push 後に必ず実施）:
+   ```bash
+   gh pr checks [PR番号]
+   ```
+   - 全ジョブ pass: 手順 7) へ
+   - 失敗あり: 即 STOP。ログを確認して修正し、再 push してから再確認する。
 7) 手動テスト確認項目を以下の形式で提示してユーザー検証（OK/NG）待ち:
    ```
    ## 手動テスト確認項目

@@ -43,9 +43,13 @@ export const useQuizDisplayStats = (
       ? session.correct_answers - 1
       : session.correct_answers;
 
-    // 周回カウンターの計算
-    const currentRound = Math.floor(displayAnsweredProblems / totalProblemsInSubject) + 1;
-    const problemInRound = (displayAnsweredProblems % totalProblemsInSubject) + 1;
+    // 周回カウンターの計算（totalProblemsInSubject が 0 の場合は NaN を防ぐ）
+    const currentRound = totalProblemsInSubject > 0
+      ? Math.floor(displayAnsweredProblems / totalProblemsInSubject) + 1
+      : 1;
+    const problemInRound = totalProblemsInSubject > 0
+      ? (displayAnsweredProblems % totalProblemsInSubject) + 1
+      : displayAnsweredProblems + 1;
 
     // プログレスバーの進捗率計算
     const progressPercentage = totalProblemsInSubject > 0

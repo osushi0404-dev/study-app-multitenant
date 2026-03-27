@@ -19,6 +19,40 @@
 
 ---
 
+## 計画書作成前の事前調査（必須）
+
+CI・lint・テスト・コード品質に関わるイシューでは、計画書作成前に以下を実施すること。
+
+### 既存テストの事前実行
+
+計画書作成前に既存テストを実行し、ベースラインを把握する。CI 導入・テスト追加・リファクタリング系イシューでは特に必須。
+
+```bash
+# Backend
+cd backend && python -m pytest --tb=short -q 2>&1 | tail -20
+# Frontend
+cd frontend && npm test -- --watchAll=false --passWithNoTests 2>&1 | tail -30
+```
+
+- 結果（pass/fail/エラー件数）を計画書の「調査結果」セクションに記載する
+- 既存テストが壊れている場合は、イシューの対象外でも修正コストを計画書に見積もること
+
+### lint エラー数の事前計測
+
+lint 修正を含むイシューでは、計画前にエラー件数を計測して計画書に記載する。
+
+```bash
+# Backend (flake8)
+cd backend && flake8 . 2>/dev/null | wc -l
+# Frontend (eslint)
+cd frontend && npx eslint src --format=compact 2>&1 | tail -1
+```
+
+- 計測結果（件数）を計画書の「調査結果」セクションに必ず記載する
+- 件数が想定より多い場合は、作業量を再見積もりして計画書に反映すること
+
+---
+
 ## 計画書作成ルール（詳細）
 
 ### 計画書作成ルール

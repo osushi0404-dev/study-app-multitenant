@@ -5,7 +5,7 @@ import functools
 import logging
 import time
 import uuid
-from typing import Any, Callable
+from typing import Callable
 from django.db import connection
 from django.conf import settings
 import json
@@ -22,16 +22,16 @@ def log_api_call(operation_name: str = None):
             # リクエストIDの生成
             request_id = getattr(request, 'request_id', str(uuid.uuid4()))
             request.request_id = request_id
-            
+
             # ロガーの取得
             logger = logging.getLogger('app')
-            
+
             # 操作名の決定
             op_name = operation_name or f"{func.__module__}.{func.__name__}"
-            
+
             # 開始時刻
             start_time = time.time()
-            
+
             # リクエスト情報をログ
             request_info = {
                 "request_id": request_id,
@@ -44,7 +44,7 @@ def log_api_call(operation_name: str = None):
                     "content_type": request.content_type,
                 }
             }
-            
+
             # POSTデータの記録（センシティブ情報を除外）
             if request.method in ['POST', 'PUT', 'PATCH']:
                 try:
@@ -52,26 +52,26 @@ def log_api_call(operation_name: str = None):
                         body_data = dict(request.data)
                     else:
                         body_data = json.loads(request.body) if request.body else {}
-                    
+
                     # センシティブフィールドをマスク
                     safe_body = mask_sensitive_data(body_data)
                     request_info["request"]["body"] = safe_body
                 except Exception:
                     request_info["request"]["body"] = "[Failed to parse body]"
-            
+
             logger.info(f"API Request Started: {op_name}", extra=request_info)
-            
+
             # DBクエリのトラッキング開始
             initial_queries = len(connection.queries) if settings.DEBUG else 0
-            
+
             try:
                 # 実際の処理を実行
                 response = func(request, *args, **kwargs)
-                
+
                 # 処理時間とDBクエリ数
                 duration = time.time() - start_time
                 query_count = len(connection.queries) - initial_queries if settings.DEBUG else 0
-                
+
                 # 成功レスポンスのログ
                 response_info = {
                     "request_id": request_id,
@@ -81,20 +81,20 @@ def log_api_call(operation_name: str = None):
                     "status_code": getattr(response, 'status_code', 200),
                     "db_queries": query_count,
                 }
-                
+
                 # デバッグモードでは実行されたクエリも記録
                 if settings.DEBUG and query_count > 0:
                     response_info["executed_queries"] = connection.queries[-query_count:]
-                
+
                 logger.info(f"API Request Completed: {op_name}", extra=response_info)
-                
+
                 return response
-                
+
             except Exception as e:
                 # エラー時の詳細情報
                 duration = time.time() - start_time
                 query_count = len(connection.queries) - initial_queries if settings.DEBUG else 0
-                
+
                 error_info = {
                     "request_id": request_id,
                     "user_id": getattr(request.user, 'id', 'anonymous'),
@@ -106,22 +106,22 @@ def log_api_call(operation_name: str = None):
                     "view_args": args,
                     "view_kwargs": kwargs,
                 }
-                
+
                 # デバッグモードでは追加情報を含める
                 if settings.DEBUG:
                     error_info["local_variables"] = {
-                        k: str(v)[:500] for k, v in locals().items() 
+                        k: str(v)[:500] for k, v in locals().items()
                         if k not in ['request', 'func', 'logger']
                     }
                     if query_count > 0:
                         error_info["executed_queries"] = connection.queries[-query_count:]
-                
+
                 logger.exception(
                     f"API Request Failed: {op_name}",
                     extra=error_info
                 )
                 raise
-                
+
         return wrapper
     return decorator
 
@@ -135,17 +135,17 @@ def log_db_operation(operation_name: str):
         def wrapper(*args, **kwargs):
             logger = logging.getLogger('app')
             start_time = time.time()
-            
+
             # DBクエリのトラッキング開始
             initial_queries = len(connection.queries) if settings.DEBUG else 0
-            
+
             try:
                 result = func(*args, **kwargs)
-                
+
                 # 成功時のログ
                 duration = time.time() - start_time
                 query_count = len(connection.queries) - initial_queries if settings.DEBUG else 0
-                
+
                 logger.debug(
                     f"DB Operation Completed: {operation_name}",
                     extra={
@@ -155,14 +155,14 @@ def log_db_operation(operation_name: str):
                         "queries": connection.queries[-query_count:] if settings.DEBUG and query_count > 0 else None
                     }
                 )
-                
+
                 return result
-                
+
             except Exception as e:
                 # エラー時の詳細ログ
                 duration = time.time() - start_time
                 query_count = len(connection.queries) - initial_queries if settings.DEBUG else 0
-                
+
                 logger.exception(
                     f"DB Operation Failed: {operation_name}",
                     extra={
@@ -176,7 +176,7 @@ def log_db_operation(operation_name: str):
                     }
                 )
                 raise
-                
+
         return wrapper
     return decorator
 
@@ -192,7 +192,7 @@ def log_celery_task(task_name: str = None):
             task_id = str(uuid.uuid4())
             actual_task_name = task_name or func.__name__
             start_time = time.time()
-            
+
             logger.info(
                 f"Celery Task Started: {actual_task_name}",
                 extra={
@@ -202,10 +202,10 @@ def log_celery_task(task_name: str = None):
                     "kwargs": str(kwargs)[:500],
                 }
             )
-            
+
             try:
                 result = func(*args, **kwargs)
-                
+
                 duration = time.time() - start_time
                 logger.info(
                     f"Celery Task Completed: {actual_task_name}",
@@ -216,9 +216,9 @@ def log_celery_task(task_name: str = None):
                         "result": str(result)[:500] if result else None,
                     }
                 )
-                
+
                 return result
-                
+
             except Exception as e:
                 duration = time.time() - start_time
                 logger.exception(
@@ -233,7 +233,7 @@ def log_celery_task(task_name: str = None):
                     }
                 )
                 raise
-                
+
         return wrapper
     return decorator
 
@@ -242,12 +242,12 @@ def mask_sensitive_data(data: dict) -> dict:
     """センシティブなデータをマスクする"""
     if not isinstance(data, dict):
         return data
-        
+
     sensitive_fields = [
         'password', 'token', 'secret', 'api_key', 'authorization',
         'credit_card', 'ssn', 'pin', 'cvv'
     ]
-    
+
     masked_data = {}
     for key, value in data.items():
         if any(field in key.lower() for field in sensitive_fields):
@@ -261,5 +261,5 @@ def mask_sensitive_data(data: dict) -> dict:
             ]
         else:
             masked_data[key] = value
-            
+
     return masked_data

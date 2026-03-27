@@ -2,7 +2,6 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.db.models import Count, Q
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 import uuid
@@ -11,7 +10,7 @@ from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsse
 from .serializers import (
     SubjectSerializer, ProblemSerializer, ProblemDisplaySerializer,
     QuizSessionSerializer, QuizSessionDetailSerializer,
-    QuizAnswerSerializer, SubmitAnswerSerializer, MediaAssetSerializer
+    SubmitAnswerSerializer, MediaAssetSerializer
 )
 from .services import QuizService
 from core.cache_service import cache_service
@@ -298,19 +297,19 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         """AI問題生成エンドポイント"""
         from .ai_generator import AIQuestionGenerator
         from core.monitoring import UserActivityMonitor
-        
+
         subject_id = request.data.get('subject_id')
         difficulty = request.data.get('difficulty', 'medium')
         problem_type = request.data.get('problem_type', 'multiple_choice')
         count = request.data.get('count', 1)
         topic = request.data.get('topic')
         save_to_db = request.data.get('save_to_db', True)
-        
+
         if not subject_id:
             return Response({
                 'error': '科目IDが必要です'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             # 科目の取得
             subject = Subject.objects.get(id=subject_id)
@@ -318,11 +317,11 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             return Response({
                 'error': '指定された科目が見つかりません'
             }, status=status.HTTP_404_NOT_FOUND)
-        
+
         try:
             # AI生成器の初期化
             generator = AIQuestionGenerator()
-            
+
             # ユーザーアクティビティログ
             UserActivityMonitor.log_user_activity(
                 user=request.user,
@@ -333,7 +332,7 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                     'count': count
                 }
             )
-            
+
             if count == 1:
                 # 単一問題生成
                 problem_data = generator.generate_problem(
@@ -342,7 +341,7 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                     problem_type=problem_type,
                     topic=topic
                 )
-                
+
                 if save_to_db:
                     problem = self._save_ai_problem_to_db(problem_data, request.user)
                     cache_service.invalidate_problems_cache(subject.id)
@@ -355,20 +354,20 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                         'success': True,
                         'problem_data': problem_data
                     })
-            
+
             else:
                 # 複数問題生成
                 problems_data = generator.generate_batch_problems(
                     subject=subject,
                     count=count
                 )
-                
+
                 if save_to_db:
                     saved_problems = []
                     for problem_data in problems_data:
                         problem = self._save_ai_problem_to_db(problem_data, request.user)
                         saved_problems.append(problem)
-                    
+
                     cache_service.invalidate_problems_cache(subject.id)
                     return Response({
                         'success': True,
@@ -381,15 +380,15 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                         'problems_data': problems_data,
                         'count': len(problems_data)
                     })
-        
+
         except Exception as e:
             return Response({
                 'error': f'AI問題生成に失敗しました: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     def _save_ai_problem_to_db(self, problem_data, user):
         """生成された問題をデータベースに保存"""
-        
+
         # Problemインスタンスの作成
         problem = Problem(
             title=problem_data['title'],
@@ -403,14 +402,14 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             created_at=timezone.now(),
             updated_at=timezone.now()
         )
-        
+
         problem.save()
-        
+
         # 問題形式別の追加データ（選択肢）
         if problem_data['problem_type'] == 'multiple_choice' and 'choices' in problem_data:
             choices_data = problem_data.get('choices', [])
             correct_answer = problem_data.get('correct_answer', '')
-            
+
             for i, choice_text in enumerate(choices_data):
                 choice = Choice(
                     problem=problem,
@@ -419,35 +418,33 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                     order=i
                 )
                 choice.save()
-        
+
         return problem
-    
+
     @action(detail=False, methods=['post'])
     def generate_adaptive(self, request):
         """適応的問題生成エンドポイント"""
         from .ai_generator import AIQuestionGenerator
         from core.monitoring import UserActivityMonitor
-        from django.db.models import Avg
-        from datetime import timedelta
-        
+
         subject_id = request.data.get('subject_id')
-        
+
         if not subject_id:
             return Response({
                 'error': '科目IDが必要です'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             subject = Subject.objects.get(id=subject_id)
         except Subject.DoesNotExist:
             return Response({
                 'error': '指定された科目が見つかりません'
             }, status=status.HTTP_404_NOT_FOUND)
-        
+
         try:
             # ユーザーの最近のパフォーマンス分析
             recent_performance = self._analyze_user_performance(request.user, subject)
-            
+
             # AI生成器による適応的問題生成
             generator = AIQuestionGenerator()
             problem_data = generator.generate_adaptive_problem(
@@ -455,11 +452,11 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                 subject=subject,
                 recent_performance=recent_performance
             )
-            
+
             # データベースに保存
             problem = self._save_ai_problem_to_db(problem_data, request.user)
             cache_service.invalidate_problems_cache(subject.id)
-            
+
             # ユーザーアクティビティログ
             UserActivityMonitor.log_user_activity(
                 user=request.user,
@@ -470,7 +467,7 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                     'performance_data': recent_performance
                 }
             )
-            
+
             return Response({
                 'success': True,
                 'problem': ProblemSerializer(problem).data,
@@ -480,51 +477,51 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                     'weak_areas_targeted': recent_performance.get('weak_topics', [])
                 }
             })
-        
+
         except Exception as e:
             return Response({
                 'error': f'適応的問題生成に失敗しました: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     def _analyze_user_performance(self, user, subject):
         """ユーザーの最近のパフォーマンスを分析"""
         from django.db.models import Avg, Count
         from datetime import timedelta
-        
+
         # 過去30日間のデータを分析
         recent_date = timezone.now() - timedelta(days=30)
-        
+
         # 科目別の回答履歴
         recent_answers = QuizAnswer.objects.filter(
             session__user=user,
             problem__subject=subject,
             created_at__gte=recent_date
         )
-        
+
         if not recent_answers.exists():
             return {
                 'accuracy': 0.7,  # デフォルト値
                 'weak_topics': [],
                 'total_attempts': 0
             }
-        
+
         # 正答率の計算
         accuracy = recent_answers.aggregate(
             accuracy=Avg('is_correct')
         )['accuracy'] or 0
-        
+
         # 弱点トピックの分析（正答率が低い問題のキーワード）
         weak_problems = recent_answers.filter(is_correct=False)
         weak_topics = []
-        
+
         # 簡易的な弱点分析（実際にはより詳細な分析が必要）
         weak_difficulties = weak_problems.values('problem__difficulty').annotate(
             count=Count('id')
         ).order_by('-count')
-        
+
         for item in weak_difficulties[:3]:
             weak_topics.append(item['problem__difficulty'])
-        
+
         return {
             'accuracy': float(accuracy),
             'weak_topics': weak_topics,
@@ -742,15 +739,15 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
     def create(self, request):
         # End any active sessions first
         QuizSession.objects.filter(
-            user=request.user, 
+            user=request.user,
             is_active=True
         ).update(is_active=False, ended_at=timezone.now())
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         session = serializer.save(user=request.user)
-        
+
         # Get total problem count for the subject (no limit)
         problems_queryset = Problem.objects.filter(is_deleted=False)
         if session.subject:
@@ -797,7 +794,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit_answer(self, request, pk=None):
         session = self.get_object()
-        
+
         if not session.is_active:
             return Response(
                 {'error': 'Session is not active'},
@@ -806,7 +803,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
 
         serializer = SubmitAnswerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         problem_id = serializer.validated_data['problem_id']
         selected_choice_ids = serializer.validated_data.get('selected_choice_ids', [])
         text_answer = serializer.validated_data.get('text_answer', '')
@@ -881,7 +878,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def end(self, request, pk=None):
         session = self.get_object()
-        
+
         if not session.is_active:
             return Response(
                 {'error': 'Session is already ended'},

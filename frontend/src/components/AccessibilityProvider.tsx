@@ -115,6 +115,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
     key: K, 
     value: AccessibilitySettings[K]
   ) => {
+    // eslint-disable-next-line security/detect-object-injection
     setSettings(prev => ({ ...prev, [key]: value }));
     
     // 変更時のアナウンス

@@ -7,7 +7,7 @@ from .models import User, EmailVerification, PasswordResetToken, UserSettings, S
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     list_display = (
-        'email', 'role', 'is_email_verified', 'is_active', 
+        'email', 'role', 'is_email_verified', 'is_active',
         'failed_login_attempts', 'account_status', 'created_at'
     )
     list_filter = (
@@ -16,7 +16,7 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ('email',)
     ordering = ('-created_at',)
     readonly_fields = ('id', 'created_at', 'updated_at', 'last_login')
-    
+
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('role', 'is_email_verified')}),
@@ -24,7 +24,7 @@ class UserAdmin(BaseUserAdmin):
         ('Security', {'fields': ('failed_login_attempts', 'account_locked_until')}),
         ('Important dates', {'fields': ('last_login', 'created_at', 'updated_at')}),
     )
-    
+
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
@@ -50,7 +50,7 @@ class EmailVerificationAdmin(admin.ModelAdmin):
     list_filter = ('is_used', 'created_at', 'expires_at')
     search_fields = ('user__email', 'token')
     readonly_fields = ('token', 'created_at')
-    
+
     def has_change_permission(self, request, obj=None):
         return False
 
@@ -61,7 +61,7 @@ class PasswordResetTokenAdmin(admin.ModelAdmin):
     list_filter = ('is_used', 'created_at', 'expires_at')
     search_fields = ('user__email', 'token')
     readonly_fields = ('token', 'created_at')
-    
+
     def has_change_permission(self, request, obj=None):
         return False
 
