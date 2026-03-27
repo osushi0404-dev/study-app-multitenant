@@ -11,9 +11,6 @@ from django.db import transaction
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
-
-logger = logging.getLogger(__name__)
-
 from problems.models import (
     Problem, Choice, MediaAsset, ProblemMediaAsset, Subject
 )
@@ -25,6 +22,8 @@ from problems.utils import (
     calculate_file_checksum,
     get_storage_path,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ProblemService:

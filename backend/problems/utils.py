@@ -8,7 +8,6 @@ import hashlib
 import unicodedata
 from pathlib import Path
 from typing import Tuple, Optional
-from django.core.exceptions import ValidationError
 from django.conf import settings
 from PIL import Image
 import magic
@@ -58,7 +57,7 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
     file_ext = Path(file.name).suffix.lower()
     allowed_extensions = [ext for exts in ALLOWED_IMAGE_FORMATS.values() for ext in exts]
     if file_ext not in allowed_extensions:
-        return False, f"非対応の画像形式です。対応形式: PNG, JPEG, WebP"
+        return False, "非対応の画像形式です。対応形式: PNG, JPEG, WebP"
 
     # 3. MIMEタイプ検証（拡張子偽装対策）
     try:

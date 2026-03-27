@@ -62,7 +62,7 @@ class Organization(models.Model):
         indexes = [
             models.Index(fields=['slug']),
         ]
-    
+
     def __str__(self):
         return self.name
 
@@ -100,7 +100,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, null=True, blank=True)
     user_id = models.CharField(
-        max_length=30, 
+        max_length=30,
         unique=True,
         null=True,  # Temporarily allow null for migration
         validators=[

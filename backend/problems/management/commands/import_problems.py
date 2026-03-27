@@ -7,7 +7,7 @@
 import re
 import os
 import hashlib
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 from django.core.management.base import BaseCommand, CommandError
@@ -392,7 +392,6 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     # 重複チェック
                     if skip_duplicates:
-                        question_hash = self._generate_question_hash(parsed_problem.question)
                         if Problem.objects.filter(
                             subject=subject,
                             question=parsed_problem.question

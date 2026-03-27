@@ -1,5 +1,4 @@
 import pytest
-import os
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 from problems.models import Subject

@@ -7,4 +7,4 @@ class ProblemsConfig(AppConfig):
 
     def ready(self):
         """シグナルを登録"""
-        import problems.signals
+        import problems.signals  # noqa: F401

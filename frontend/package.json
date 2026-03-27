@@ -38,10 +38,17 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "devDependencies": {
+    "eslint-plugin-security": "^3.0.0"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
-      "react-app/jest"
+      "react-app/jest",
+      "plugin:security/recommended-legacy"
+    ],
+    "plugins": [
+      "security"
     ]
   },
   "browserslist": {

@@ -6,8 +6,6 @@ Celery 設定
 
 import os
 from celery import Celery
-from django.conf import settings
-
 # Django設定モジュールを設定
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 
@@ -27,28 +25,28 @@ app.conf.beat_schedule = {
         'schedule': 30.0,  # 30秒ごと（開発環境用）
         # 'schedule': crontab(hour=2, minute=0),  # 本番環境では毎日午前2時
     },
-    
+
     # 毎日午前7時に学習リマインダーを送信
     'send-study-reminders': {
-        'task': 'studylogs.tasks.send_study_reminders_task', 
+        'task': 'studylogs.tasks.send_study_reminders_task',
         'schedule': 60.0,  # 1分ごと（開発環境用）
         # 'schedule': crontab(hour=7, minute=0),  # 本番環境では毎日午前7時
     },
-    
+
     # 週1回間違いパターンを分析
     'analyze-mistake-patterns': {
         'task': 'studylogs.tasks.analyze_mistake_patterns_task',
         'schedule': 300.0,  # 5分ごと（開発環境用）
         # 'schedule': crontab(day_of_week=1, hour=3, minute=0),  # 本番環境では毎週月曜午前3時
     },
-    
+
     # 期限切れの学習提案をクリーンアップ
     'cleanup-expired-suggestions': {
         'task': 'studylogs.tasks.cleanup_expired_suggestions_task',
         'schedule': 3600.0,  # 1時間ごと
         # 'schedule': crontab(minute=0),  # 本番環境では毎時0分
     },
-    
+
     # キャッシュのメンテナンス
     'cache-maintenance': {
         'task': 'core.tasks.cache_maintenance_task',
@@ -58,6 +56,7 @@ app.conf.beat_schedule = {
 }
 
 app.conf.timezone = 'Asia/Tokyo'
+
 
 @app.task(bind=True)
 def debug_task(self):

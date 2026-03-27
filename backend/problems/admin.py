@@ -15,7 +15,10 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Problem)
 class ProblemAdmin(admin.ModelAdmin):
-    list_display = ['question_preview', 'subject', 'difficulty', 'problem_type', 'is_deleted', 'created_by', 'created_at']
+    list_display = [
+        'question_preview', 'subject', 'difficulty', 'problem_type',
+        'is_deleted', 'created_by', 'created_at',
+    ]
     list_filter = ['subject', 'difficulty', 'problem_type', 'is_deleted', 'is_ai_generated']
     search_fields = ['question', 'explanation']
     inlines = [ChoiceInline]
@@ -28,7 +31,10 @@ class ProblemAdmin(admin.ModelAdmin):
 
 @admin.register(QuizSession)
 class QuizSessionAdmin(admin.ModelAdmin):
-    list_display = ['user', 'subject', 'total_problems', 'completed_problems', 'correct_answers', 'is_active', 'started_at']
+    list_display = [
+        'user', 'subject', 'total_problems', 'completed_problems',
+        'correct_answers', 'is_active', 'started_at',
+    ]
     list_filter = ['is_active', 'subject', 'started_at']
     search_fields = ['user__username', 'user__email']
     readonly_fields = ['started_at', 'ended_at']

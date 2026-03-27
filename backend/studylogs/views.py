@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Sum, Count, Avg, Q, F
+from django.db.models import Sum
 from django.utils import timezone
 from datetime import datetime, timedelta
 from .models import (
@@ -11,7 +11,7 @@ from .models import (
 )
 from .serializers import (
     StudyLogSerializer, StudyLogCreateSerializer, StudyLogEndSerializer,
-    DailyStudySummarySerializer, ProblemAttemptSerializer,
+    DailyStudySummarySerializer,
     StudyGoalSerializer, StudyStatisticsSerializer, SubjectStatisticsSerializer,
     SpacedRepetitionCardSerializer, SpacedRepetitionReviewSerializer,
     SpacedRepetitionSubmissionSerializer, LearningAnalyticsSerializer,
@@ -48,9 +48,9 @@ class StudyLogViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         study_log = serializer.save(user=request.user)
-        
+
         return Response(
             StudyLogSerializer(study_log).data,
             status=status.HTTP_201_CREATED
@@ -59,7 +59,7 @@ class StudyLogViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def end(self, request, pk=None):
         study_log = self.get_object()
-        
+
         if not study_log.is_active:
             return Response(
                 {'error': 'Study log is already ended'},
@@ -82,7 +82,7 @@ class StudyLogViewSet(viewsets.ModelViewSet):
 
     def _update_daily_summary(self, study_log):
         date = study_log.started_at.date()
-        
+
         summary, created = DailyStudySummary.objects.get_or_create(
             user=study_log.user,
             date=date
@@ -92,10 +92,10 @@ class StudyLogViewSet(viewsets.ModelViewSet):
         summary.total_problems_attempted += study_log.problems_attempted
         summary.total_problems_correct += study_log.problems_correct
         summary.total_points_earned += study_log.points_earned
-        
+
         if study_log.subject:
             summary.subjects_studied.add(study_log.subject)
-        
+
         summary.save()
 
 
@@ -106,10 +106,10 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
     def overview(self, request):
         user = request.user
         now = timezone.now()
-        
+
         # Get all study logs
         study_logs = StudyLog.objects.filter(user=user)
-        
+
         # Calculate total statistics
         totals = study_logs.aggregate(
             total_time=Sum('duration'),
@@ -131,7 +131,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
         # Calculate study days and streaks
         study_dates = study_logs.values_list('started_at__date', flat=True).distinct()
         study_days = len(set(study_dates))
-        
+
         current_streak = self._calculate_current_streak(user)
         longest_streak = self._calculate_longest_streak(user)
 
@@ -175,7 +175,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
     def by_subject(self, request):
         user = request.user
         subject_stats = self._get_subject_statistics(user)
-        
+
         serializer = SubjectStatisticsSerializer(subject_stats, many=True)
         return Response(serializer.data)
 
@@ -183,10 +183,10 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
     def daily_summary(self, request):
         user = request.user
         days = int(request.query_params.get('days', 30))
-        
+
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=days)
-        
+
         summaries = DailyStudySummary.objects.filter(
             user=user,
             date__range=[start_date, end_date]
@@ -234,7 +234,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
 
         longest = 1
         current = 1
-        
+
         for i in range(1, len(study_dates)):
             if study_dates[i] - study_dates[i-1] == timedelta(days=1):
                 current += 1
@@ -251,7 +251,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
 
         for subject in subjects:
             subject_logs = StudyLog.objects.filter(user=user, subject=subject)
-            
+
             if not subject_logs.exists():
                 continue
 
@@ -290,7 +290,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
     def _format_time(self, seconds):
         if seconds is None:
             return "0時間0分"
-        
+
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
         return f"{hours}時間{minutes}分"
@@ -354,10 +354,10 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         """復習が必要なカードを取得"""
         service = self.get_service()
         limit = int(request.query_params.get('limit', 20))
-        
+
         due_cards = service.get_due_cards(limit=limit)
         serializer = SpacedRepetitionCardSerializer(due_cards, many=True)
-        
+
         return Response({
             'cards': serializer.data,
             'count': len(due_cards),
@@ -369,10 +369,10 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         """1日の学習プランを取得"""
         service = self.get_service()
         available_time = int(request.query_params.get('available_time_minutes', 30))
-        
+
         plan = service.get_daily_study_plan(available_time_minutes=available_time)
         serializer = DailyStudyPlanSerializer(plan)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
@@ -381,22 +381,22 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         service = self.get_service()
         serializer = SpacedRepetitionSubmissionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         data = serializer.validated_data
-        
+
         try:
             # カードを取得
             card = SpacedRepetitionCard.objects.get(
                 id=data['card_id'],
                 user=request.user
             )
-            
+
             # 現在のアクティブなスタディログを取得（オプション）
             active_study_log = StudyLog.objects.filter(
                 user=request.user,
                 is_active=True
             ).first()
-            
+
             # 復習を記録
             review = service.review_card(
                 card=card,
@@ -405,19 +405,19 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
                 hint_used=data['hint_used'],
                 study_session=active_study_log
             )
-            
+
             # 学習分析データを更新
             service.update_daily_analytics()
-            
+
             review_serializer = SpacedRepetitionReviewSerializer(review)
             card_serializer = SpacedRepetitionCardSerializer(card)
-            
+
             return Response({
                 'review': review_serializer.data,
                 'updated_card': card_serializer.data,
                 'message': '復習を記録しました'
             }, status=status.HTTP_201_CREATED)
-            
+
         except SpacedRepetitionCard.DoesNotExist:
             return Response(
                 {'error': 'カードが見つかりません'},
@@ -434,26 +434,26 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         """新しい問題用のカードを作成"""
         service = self.get_service()
         problem_id = request.data.get('problem_id')
-        
+
         if not problem_id:
             return Response(
                 {'error': 'problem_idが必要です'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
             from problems.models import Problem
             problem = Problem.objects.get(id=problem_id, is_deleted=False)
-            
+
             # カードを作成
             card = service.create_card_for_problem(problem)
             serializer = SpacedRepetitionCardSerializer(card)
-            
+
             return Response({
                 'card': serializer.data,
                 'message': 'カードを作成しました'
             }, status=status.HTTP_201_CREATED)
-            
+
         except Problem.DoesNotExist:
             return Response(
                 {'error': '問題が見つかりません'},
@@ -466,7 +466,7 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         service = self.get_service()
         stats = service.get_user_statistics()
         serializer = UserStatisticsSerializer(stats)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
@@ -474,10 +474,10 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         """学習洞察を取得"""
         service = self.get_service()
         days = int(request.query_params.get('days', 7))
-        
+
         insights = service.get_learning_insights(days=days)
         serializer = LearningInsightsSerializer(insights)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
@@ -486,14 +486,14 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         days = int(request.query_params.get('days', 30))
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=days-1)
-        
+
         analytics = LearningAnalytics.objects.filter(
             user=request.user,
             date__range=[start_date, end_date]
         ).order_by('date')
-        
+
         serializer = LearningAnalyticsSerializer(analytics, many=True)
-        
+
         return Response({
             'analytics': serializer.data,
             'period': {
@@ -508,7 +508,7 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         """学習分析データを手動更新"""
         service = self.get_service()
         target_date_str = request.data.get('date')
-        
+
         if target_date_str:
             try:
                 target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
@@ -519,10 +519,10 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
                 )
         else:
             target_date = None
-        
+
         analytics = service.update_daily_analytics(target_date=target_date)
         serializer = LearningAnalyticsSerializer(analytics)
-        
+
         return Response({
             'analytics': serializer.data,
             'message': '分析データを更新しました'
@@ -538,26 +538,26 @@ class SpacedRepetitionCardViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = SpacedRepetitionCard.objects.filter(
             user=self.request.user
         ).select_related('problem', 'problem__subject')
-        
+
         # フィルタリングオプション
         is_due = self.request.query_params.get('is_due')
         mastery_level = self.request.query_params.get('mastery_level')
         subject_id = self.request.query_params.get('subject_id')
-        
+
         if is_due == 'true':
             queryset = queryset.filter(
                 next_review_date__lte=timezone.now(),
                 is_active=True
             )
-        
+
         if mastery_level:
             # カスタムフィルタリングが必要な場合
             cards = [card for card in queryset if card.mastery_level == mastery_level]
             return cards
-        
+
         if subject_id:
             queryset = queryset.filter(problem__subject_id=subject_id)
-        
+
         return queryset.order_by('next_review_date', '-ease_factor')
 
 
@@ -570,14 +570,14 @@ class SpacedRepetitionReviewViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = SpacedRepetitionReview.objects.filter(
             user=self.request.user
         ).select_related('card', 'problem', 'problem__subject')
-        
+
         # フィルタリングオプション
         card_id = self.request.query_params.get('card_id')
         days = self.request.query_params.get('days')
-        
+
         if card_id:
             queryset = queryset.filter(card_id=card_id)
-        
+
         if days:
             try:
                 days_int = int(days)
@@ -585,7 +585,7 @@ class SpacedRepetitionReviewViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset = queryset.filter(reviewed_at__gte=start_date)
             except ValueError:
                 pass
-        
+
         return queryset.order_by('-reviewed_at')
 
 
@@ -602,10 +602,10 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
         """包括的な間違い分析を実行"""
         service = self.get_service()
         days = int(request.query_params.get('days', 30))
-        
+
         analysis_result = service.analyze_mistakes(days=days)
         serializer = MistakeAnalysisSerializer(analysis_result)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
@@ -615,21 +615,21 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             user=request.user,
             is_active=True
         ).order_by('-occurrence_count', '-confidence_score')
-        
+
         # フィルタリングオプション
         pattern_type = request.query_params.get('pattern_type')
         subject_id = request.query_params.get('subject_id')
         severity = request.query_params.get('severity')
-        
+
         if pattern_type:
             patterns = patterns.filter(pattern_type=pattern_type)
-        
+
         if subject_id:
             patterns = patterns.filter(subject_id=subject_id)
-        
+
         if severity:
             patterns = [p for p in patterns if p.severity_level == severity]
-        
+
         serializer = MistakePatternSerializer(patterns, many=True)
         return Response(serializer.data)
 
@@ -640,48 +640,48 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             user=request.user,
             is_active=True
         )
-        
+
         # フィルタリングオプション
         unread_only = request.query_params.get('unread_only', 'false').lower() == 'true'
         priority = request.query_params.get('priority')
         suggestion_type = request.query_params.get('suggestion_type')
-        
+
         if unread_only:
             suggestions = suggestions.filter(is_read=False)
-        
+
         if priority:
             suggestions = suggestions.filter(priority=priority)
-        
+
         if suggestion_type:
             suggestions = suggestions.filter(suggestion_type=suggestion_type)
-        
+
         suggestions = suggestions.order_by('priority', '-created_at')
         serializer = LearningSuggestionSerializer(suggestions, many=True)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
     def mark_suggestion_read(self, request):
         """学習提案を既読にマーク"""
         suggestion_id = request.data.get('suggestion_id')
-        
+
         if not suggestion_id:
             return Response(
                 {'error': 'suggestion_idが必要です'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
             suggestion = LearningSuggestion.objects.get(
                 id=suggestion_id,
                 user=request.user
             )
-            
+
             suggestion.is_read = True
             suggestion.save()
-            
+
             return Response({'message': '提案を既読にしました'})
-            
+
         except LearningSuggestion.DoesNotExist:
             return Response(
                 {'error': '提案が見つかりません'},
@@ -693,16 +693,16 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
         """学習提案にフィードバックを提供"""
         serializer = SuggestionFeedbackSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         data = serializer.validated_data
         service = self.get_service()
-        
+
         success = service.provide_suggestion_feedback(
             suggestion_id=data['suggestion_id'],
             rating=data['effectiveness_rating'],
             comment=data.get('feedback_comment', '')
         )
-        
+
         if success:
             return Response({'message': 'フィードバックを記録しました'})
         else:
@@ -718,17 +718,17 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             user=request.user,
             is_resolved=False
         ).order_by('-severity', '-error_count')
-        
+
         # フィルタリングオプション
         subject_id = request.query_params.get('subject_id')
         severity = request.query_params.get('severity')
-        
+
         if subject_id:
             weaknesses = weaknesses.filter(subject_id=subject_id)
-        
+
         if severity:
             weaknesses = weaknesses.filter(severity=severity)
-        
+
         serializer = LearningWeaknessSerializer(weaknesses, many=True)
         return Response(serializer.data)
 
@@ -736,25 +736,25 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
     def resolve_weakness(self, request):
         """弱点を解決済みにマーク"""
         weakness_id = request.data.get('weakness_id')
-        
+
         if not weakness_id:
             return Response(
                 {'error': 'weakness_idが必要です'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
             weakness = LearningWeakness.objects.get(
                 id=weakness_id,
                 user=request.user
             )
-            
+
             weakness.is_resolved = True
             weakness.improvement_score = 1.0
             weakness.save()
-            
+
             return Response({'message': '弱点を解決済みにしました'})
-            
+
         except LearningWeakness.DoesNotExist:
             return Response(
                 {'error': '弱点が見つかりません'},
@@ -764,24 +764,23 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def improvement_trends(self, request):
         """改善トレンドを取得"""
-        service = self.get_service()
         days = int(request.query_params.get('days', 30))
-        
+
         # 期間別の正答率推移
         trends = []
         for i in range(days // 7):  # 週単位
             start_date = timezone.now() - timedelta(weeks=i+1)
             end_date = timezone.now() - timedelta(weeks=i)
-            
+
             attempts = ProblemAttempt.objects.filter(
                 user=request.user,
                 attempted_at__range=[start_date, end_date]
             )
-            
+
             if attempts.exists():
                 correct_count = attempts.filter(is_correct=True).count()
                 accuracy = (correct_count / attempts.count()) * 100
-                
+
                 trends.append({
                     'period': f"{i+1}週間前",
                     'start_date': start_date.date(),
@@ -790,7 +789,7 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
                     'total_attempts': attempts.count(),
                     'correct_attempts': correct_count
                 })
-        
+
         return Response({
             'trends': trends,
             'period_days': days
@@ -801,22 +800,22 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
         """分析データを手動で更新"""
         service = self.get_service()
         days = int(request.data.get('days', 30))
-        
+
         try:
             service.update_mistake_patterns(
                 start_date=timezone.now() - timedelta(days=days),
                 end_date=timezone.now()
             )
-            
+
             service.update_learning_weaknesses(
                 start_date=timezone.now() - timedelta(days=days),
                 end_date=timezone.now()
             )
-            
+
             service.generate_learning_suggestions()
-            
+
             return Response({'message': '分析データを更新しました'})
-            
+
         except Exception as e:
             return Response(
                 {'error': f'分析の更新に失敗しました: {str(e)}'},
@@ -837,7 +836,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
         """習熟度分析を取得"""
         selector = self.get_selector()
         subject_id = request.query_params.get('subject_id')
-        
+
         subject = None
         if subject_id:
             subject = subject_service.get_subject_by_id(subject_id, request.user)
@@ -846,10 +845,10 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                     {'error': '科目が見つかりません'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+
         proficiency_data = selector.analyze_user_proficiency(subject)
         serializer = ProficiencyAnalysisSerializer(proficiency_data)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
@@ -857,7 +856,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
         """個人化された学習推奨を取得"""
         selector = self.get_selector()
         subject_id = request.query_params.get('subject_id')
-        
+
         subject = None
         if subject_id:
             subject = subject_service.get_subject_by_id(subject_id, request.user)
@@ -866,10 +865,10 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                     {'error': '科目が見つかりません'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+
         recommendation = selector.get_personalized_recommendation(subject)
         serializer = PersonalizedRecommendationSerializer(recommendation)
-        
+
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
@@ -878,9 +877,9 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
         selector = self.get_selector()
         serializer = AdaptiveProblemSelectionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         data = serializer.validated_data
-        
+
         # 科目を取得
         subject = None
         if data.get('subject_id'):
@@ -890,7 +889,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                     {'error': '科目が見つかりません'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+
         try:
             # 問題を選択
             selected_problems = selector.select_optimal_problems(
@@ -899,17 +898,17 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                 difficulty_preference=data['difficulty_preference'],
                 learning_goal=data['learning_goal']
             )
-            
+
             # 習熟度サマリーを取得
             proficiency_summary = selector.analyze_user_proficiency(subject)
-            
+
             # 推奨事項を取得
             recommendation = selector.get_personalized_recommendation(subject)
-            
+
             # 問題データをシリアライズ
             from problems.serializers import ProblemSerializer
             problem_data = ProblemSerializer(selected_problems, many=True).data
-            
+
             result = {
                 'problems': problem_data,
                 'selection_criteria': {
@@ -925,10 +924,10 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                 },
                 'recommendation': recommendation
             }
-            
+
             result_serializer = SelectedProblemsSerializer(result)
             return Response(result_serializer.data)
-            
+
         except Exception as e:
             return Response(
                 {'error': f'問題選択に失敗しました: {str(e)}'},
@@ -940,7 +939,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
         """学習パスの推奨を取得"""
         selector = self.get_selector()
         subject_id = request.query_params.get('subject_id')
-        
+
         subject = None
         if subject_id:
             subject = subject_service.get_subject_by_id(subject_id, request.user)
@@ -949,22 +948,22 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                     {'error': '科目が見つかりません'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+
         # 習熟度分析
         proficiency_data = selector.analyze_user_proficiency(subject)
-        
+
         # 学習パスを生成
         learning_path = self._generate_learning_path(proficiency_data, subject, selector)
-        
+
         return Response(learning_path)
 
     def _generate_learning_path(self, proficiency_data: dict, subject, selector) -> dict:
         """学習パスを生成"""
         overall_accuracy = proficiency_data['overall_accuracy']
         difficulty_prof = proficiency_data['difficulty_proficiency']
-        
+
         path_steps = []
-        
+
         # ステップ1: 基礎固め
         if overall_accuracy < 0.6 or difficulty_prof.get('easy', {}).get('accuracy', 0) < 0.8:
             path_steps.append({
@@ -977,7 +976,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                 'success_criteria': '易しい問題で80%以上の正答率',
                 'recommended_problems_per_day': 15
             })
-        
+
         # ステップ2: スキル構築
         if difficulty_prof.get('medium', {}).get('accuracy', 0) < 0.7:
             path_steps.append({
@@ -990,7 +989,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                 'success_criteria': '中程度の問題で70%以上の正答率',
                 'recommended_problems_per_day': 12
             })
-        
+
         # ステップ3: 応用・挑戦
         if overall_accuracy >= 0.75:
             path_steps.append({
@@ -1003,7 +1002,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                 'success_criteria': '難しい問題で60%以上の正答率',
                 'recommended_problems_per_day': 8
             })
-        
+
         # 現在のステップを判定
         current_step = 1
         for i, step in enumerate(path_steps):
@@ -1011,9 +1010,9 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                 current_step = i + 2
             elif step['difficulty_focus'] == 'medium' and difficulty_prof.get('medium', {}).get('accuracy', 0) >= 0.7:
                 current_step = i + 2
-        
+
         current_step = min(current_step, len(path_steps))
-        
+
         return {
             'learning_path': path_steps,
             'current_step': current_step,
@@ -1041,7 +1040,7 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
         """現在の難易度分布の推奨を取得"""
         selector = self.get_selector()
         subject_id = request.query_params.get('subject_id')
-        
+
         subject = None
         if subject_id:
             subject = subject_service.get_subject_by_id(subject_id, request.user)
@@ -1050,19 +1049,19 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                     {'error': '科目が見つかりません'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+
         proficiency_data = selector.analyze_user_proficiency(subject)
-        
+
         # 最適な難易度分布を計算
         optimal_distribution = self._calculate_optimal_distribution(proficiency_data)
-        
+
         return Response(optimal_distribution)
 
     def _calculate_optimal_distribution(self, proficiency_data: dict) -> dict:
         """最適な難易度分布を計算"""
         overall_accuracy = proficiency_data['overall_accuracy']
         difficulty_prof = proficiency_data['difficulty_proficiency']
-        
+
         if overall_accuracy < 0.5:
             # 初心者：易しい問題中心
             distribution = {'easy': 60, 'medium': 30, 'hard': 10}
@@ -1075,12 +1074,12 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
         else:
             # エキスパート：挑戦的な問題中心
             distribution = {'easy': 10, 'medium': 30, 'hard': 60}
-        
+
         # 個別の難易度習熟度に基づく調整
         for difficulty in ['easy', 'medium', 'hard']:
             stats = difficulty_prof.get(difficulty, {})
             accuracy = stats.get('accuracy', 0.5)
-            
+
             if accuracy < 0.4:  # 特に苦手
                 distribution[difficulty] += 10
                 # 他から削る
@@ -1088,13 +1087,13 @@ class AdaptiveLearningViewSet(viewsets.ViewSet):
                     if other_diff != difficulty and distribution[other_diff] > 15:
                         distribution[other_diff] -= 5
                         break
-        
+
         # 合計が100になるように正規化
         total = sum(distribution.values())
         if total != 100:
             factor = 100 / total
             distribution = {k: round(v * factor) for k, v in distribution.items()}
-        
+
         return {
             'recommended_distribution': distribution,
             'current_performance': {

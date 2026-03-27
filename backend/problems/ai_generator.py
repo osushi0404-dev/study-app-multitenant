@@ -9,7 +9,7 @@ import openai
 from typing import Dict, Any, List, Optional
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from .models import Problem, Subject
+from .models import Subject
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -17,17 +17,18 @@ logger = logging.getLogger(__name__)
 # OpenAI APIキーの設定
 openai.api_key = getattr(settings, 'OPENAI_API_KEY', None)
 
+
 class AIQuestionGenerator:
     """AI問題生成クラス"""
-    
+
     def __init__(self):
         self.model = "gpt-3.5-turbo"
         self.max_tokens = 1000
         self.temperature = 0.7
-    
+
     def generate_problem(
-        self, 
-        subject: Subject, 
+        self,
+        subject: Subject,
         difficulty: str,
         problem_type: str = "multiple_choice",
         topic: Optional[str] = None,
@@ -35,21 +36,21 @@ class AIQuestionGenerator:
     ) -> Dict[str, Any]:
         """
         指定された条件で問題を生成
-        
+
         Args:
             subject: 科目
             difficulty: 難易度 (easy, medium, hard)
             problem_type: 問題形式 (multiple_choice, essay, true_false)
             topic: 特定のトピック
             user_weaknesses: ユーザーの弱点領域
-        
+
         Returns:
             生成された問題データ
         """
         try:
             if not openai.api_key:
                 raise ValueError("OpenAI API key not configured")
-            
+
             # プロンプトの構築
             prompt = self._build_prompt(
                 subject=subject,
@@ -58,7 +59,7 @@ class AIQuestionGenerator:
                 topic=topic,
                 user_weaknesses=user_weaknesses
             )
-            
+
             # OpenAI API呼び出し
             response = openai.ChatCompletion.create(
                 model=self.model,
@@ -76,35 +77,35 @@ class AIQuestionGenerator:
                 temperature=self.temperature,
                 response_format={"type": "json_object"}
             )
-            
+
             # レスポンスの解析
             content = response.choices[0].message.content
             problem_data = json.loads(content)
-            
+
             # データの検証と整形
             validated_data = self._validate_and_format_response(
-                problem_data, 
-                subject, 
-                difficulty, 
+                problem_data,
+                subject,
+                difficulty,
                 problem_type
             )
-            
+
             return validated_data
-            
+
         except Exception as e:
             logger.error(f"AI problem generation failed: {str(e)}")
             return self._get_fallback_problem(subject, difficulty, problem_type)
-    
+
     def _build_prompt(
-        self, 
-        subject: Subject, 
+        self,
+        subject: Subject,
         difficulty: str,
         problem_type: str,
         topic: Optional[str] = None,
         user_weaknesses: Optional[List[str]] = None
     ) -> str:
         """プロンプトを構築"""
-        
+
         # 基本プロンプト
         prompt = f"""
 以下の条件で学習問題を1つ生成してください：
@@ -114,15 +115,15 @@ class AIQuestionGenerator:
 **問題形式**: {problem_type}
 
 """
-        
+
         # トピック指定
         if topic:
             prompt += f"**特定トピック**: {topic}\n"
-        
+
         # 弱点領域への対応
         if user_weaknesses:
             prompt += f"**重点対策領域**: {', '.join(user_weaknesses)}\n"
-        
+
         # 問題形式別の指示
         if problem_type == "multiple_choice":
             prompt += """
@@ -148,7 +149,7 @@ class AIQuestionGenerator:
 - 明確な判断基準
 - 詳細な解説
 """
-        
+
         # JSON形式の指定
         prompt += """
 
@@ -177,30 +178,30 @@ class AIQuestionGenerator:
 }
 ```
 """
-        
+
         return prompt
-    
+
     def _validate_and_format_response(
-        self, 
-        problem_data: Dict[str, Any], 
+        self,
+        problem_data: Dict[str, Any],
         subject: Subject,
         difficulty: str,
         problem_type: str
     ) -> Dict[str, Any]:
         """AIレスポンスの検証と整形"""
-        
+
         # 必須フィールドの確認
         required_fields = ["question", "keywords", "estimated_time_minutes", "learning_objectives"]
-        
+
         if problem_type == "multiple_choice":
             required_fields.extend(["choices", "correct_answer", "explanation"])
         elif problem_type == "essay":
             required_fields.extend(["sample_answer", "evaluation_points"])
-        
+
         for field in required_fields:
             if field not in problem_data:
                 raise ValueError(f"Missing required field: {field}")
-        
+
         # データの整形
         formatted_data = {
             "title": f"{subject.name} - {difficulty.capitalize()} Level Problem",
@@ -218,7 +219,7 @@ class AIQuestionGenerator:
                 "generation_timestamp": None  # 保存時に設定
             }
         }
-        
+
         # 問題形式別のデータ追加
         if problem_type == "multiple_choice":
             formatted_data.update({
@@ -236,17 +237,17 @@ class AIQuestionGenerator:
                 "correct_answer": problem_data.get("correct_answer", "True"),
                 "explanation": problem_data.get("explanation", "")
             })
-        
+
         return formatted_data
-    
+
     def _get_fallback_problem(
-        self, 
-        subject: Subject, 
-        difficulty: str, 
+        self,
+        subject: Subject,
+        difficulty: str,
         problem_type: str
     ) -> Dict[str, Any]:
         """AI生成失敗時のフォールバック問題"""
-        
+
         fallback_problems = {
             "multiple_choice": {
                 "question": f"{subject.name}に関する基本的な問題です。",
@@ -266,9 +267,9 @@ class AIQuestionGenerator:
                 "learning_objectives": [f"{subject.name}の理解と表現力"]
             }
         }
-        
+
         base_data = fallback_problems.get(problem_type, fallback_problems["multiple_choice"])
-        
+
         return {
             "title": f"{subject.name} - フォールバック問題",
             "description": base_data["question"],
@@ -279,9 +280,9 @@ class AIQuestionGenerator:
             "fallback": True,
             **base_data
         }
-    
+
     def generate_batch_problems(
-        self, 
+        self,
         subject: Subject,
         count: int = 5,
         difficulty_distribution: Optional[Dict[str, int]] = None,
@@ -289,17 +290,17 @@ class AIQuestionGenerator:
     ) -> List[Dict[str, Any]]:
         """
         複数の問題を一括生成
-        
+
         Args:
             subject: 科目
             count: 生成する問題数
             difficulty_distribution: 難易度別の問題数 {"easy": 2, "medium": 2, "hard": 1}
             user_preferences: ユーザーの学習傾向
-        
+
         Returns:
             生成された問題のリスト
         """
-        
+
         if not difficulty_distribution:
             # デフォルトの難易度分布
             difficulty_distribution = {
@@ -307,9 +308,9 @@ class AIQuestionGenerator:
                 "medium": count // 3,
                 "hard": count - (2 * (count // 3))
             }
-        
+
         problems = []
-        
+
         for difficulty, num_problems in difficulty_distribution.items():
             for i in range(num_problems):
                 try:
@@ -320,37 +321,37 @@ class AIQuestionGenerator:
                         user_weaknesses=user_preferences.get("weaknesses", []) if user_preferences else None
                     )
                     problems.append(problem_data)
-                    
+
                 except Exception as e:
                     logger.error(f"Failed to generate problem {i+1} for {difficulty}: {str(e)}")
                     # フォールバック問題を追加
                     fallback = self._get_fallback_problem(subject, difficulty, "multiple_choice")
                     problems.append(fallback)
-        
+
         return problems
-    
+
     def generate_adaptive_problem(
-        self, 
+        self,
         user: User,
         subject: Subject,
         recent_performance: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         ユーザーの学習履歴に基づいてパーソナライズされた問題を生成
-        
+
         Args:
             user: ユーザー
             subject: 科目
             recent_performance: 最近のパフォーマンス分析
-        
+
         Returns:
             パーソナライズされた問題
         """
-        
+
         # ユーザーの弱点分析
         weaknesses = []
         difficulty = "medium"  # デフォルト
-        
+
         if recent_performance:
             # パフォーマンスに基づく難易度調整
             accuracy = recent_performance.get("accuracy", 0.7)
@@ -358,10 +359,10 @@ class AIQuestionGenerator:
                 difficulty = "hard"
             elif accuracy < 0.6:
                 difficulty = "easy"
-            
+
             # 弱点領域の特定
             weaknesses = recent_performance.get("weak_topics", [])
-        
+
         return self.generate_problem(
             subject=subject,
             difficulty=difficulty,

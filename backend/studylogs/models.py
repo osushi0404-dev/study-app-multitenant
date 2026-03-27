@@ -113,25 +113,25 @@ class SpacedRepetitionCard(models.Model):
     """間隔反復学習用のカードモデル"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sr_cards')
     problem = models.ForeignKey(Problem, on_delete=models.CASCADE, related_name='sr_cards')
-    
+
     # 間隔反復学習のパラメータ
     ease_factor = models.FloatField(default=2.5, help_text="難易度係数 (1.3以上)")
     interval_days = models.IntegerField(default=1, help_text="復習間隔（日）")
     repetition_count = models.IntegerField(default=0, help_text="復習回数")
-    
+
     # 日程管理
     next_review_date = models.DateTimeField(help_text="次回復習予定日")
     last_reviewed_at = models.DateTimeField(null=True, blank=True, help_text="前回復習日")
-    
+
     # 学習状況
     is_active = models.BooleanField(default=True)
     total_reviews = models.IntegerField(default=0, help_text="総復習回数")
     correct_reviews = models.IntegerField(default=0, help_text="正解した復習回数")
-    
+
     # メタデータ
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['user', 'problem']
         ordering = ['next_review_date', '-ease_factor']
@@ -139,23 +139,24 @@ class SpacedRepetitionCard(models.Model):
             models.Index(fields=['user', 'next_review_date', 'is_active']),
             models.Index(fields=['next_review_date', 'is_active']),
         ]
-    
+
     def __str__(self):
-        return f"{self.user.username} - {self.problem.question[:30]}... (次回: {self.next_review_date.strftime('%Y-%m-%d')})"
-    
+        next_date = self.next_review_date.strftime('%Y-%m-%d')
+        return f"{self.user.username} - {self.problem.question[:30]}... (次回: {next_date})"
+
     @property
     def accuracy_rate(self):
         """この問題の正答率"""
         if self.total_reviews > 0:
             return round((self.correct_reviews / self.total_reviews) * 100, 2)
         return 0
-    
+
     @property
     def is_due(self):
         """復習が必要かどうか"""
         from django.utils import timezone
         return self.next_review_date <= timezone.now() and self.is_active
-    
+
     @property
     def mastery_level(self):
         """習熟度レベル"""
@@ -179,32 +180,32 @@ class SpacedRepetitionReview(models.Model):
         (4, '正解（少し迷った）'),
         (5, '正解（簡単）'),
     ]
-    
+
     card = models.ForeignKey(SpacedRepetitionCard, on_delete=models.CASCADE, related_name='reviews')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sr_reviews')
     problem = models.ForeignKey(Problem, on_delete=models.CASCADE, related_name='sr_reviews')
-    
+
     # 復習結果
     quality_score = models.IntegerField(choices=QUALITY_CHOICES, help_text="学習品質スコア")
     response_time_seconds = models.IntegerField(help_text="回答時間（秒）")
     is_correct = models.BooleanField()
     hint_used = models.BooleanField(default=False)
-    
+
     # スケジューリング情報（復習前）
     previous_ease_factor = models.FloatField()
     previous_interval = models.IntegerField()
     previous_repetition_count = models.IntegerField()
-    
+
     # スケジューリング情報（復習後）
     new_ease_factor = models.FloatField()
     new_interval = models.IntegerField()
     new_repetition_count = models.IntegerField()
     next_review_date = models.DateTimeField()
-    
+
     # メタデータ
     reviewed_at = models.DateTimeField(auto_now_add=True)
     study_session = models.ForeignKey(StudyLog, on_delete=models.SET_NULL, null=True, blank=True)
-    
+
     class Meta:
         ordering = ['-reviewed_at']
         indexes = [
@@ -212,7 +213,7 @@ class SpacedRepetitionReview(models.Model):
             models.Index(fields=['user', '-reviewed_at']),
             models.Index(fields=['reviewed_at']),
         ]
-    
+
     def __str__(self):
         return f"{self.user.username} - {self.problem.question[:30]}... - スコア: {self.quality_score}"
 
@@ -221,34 +222,34 @@ class LearningAnalytics(models.Model):
     """学習分析データ"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='learning_analytics')
     date = models.DateField()
-    
+
     # 基本統計
     total_cards = models.IntegerField(default=0)
     new_cards = models.IntegerField(default=0)
     due_cards = models.IntegerField(default=0)
     reviewed_cards = models.IntegerField(default=0)
-    
+
     # パフォーマンス
     average_ease_factor = models.FloatField(default=0.0)
     average_interval = models.FloatField(default=0.0)
     retention_rate = models.FloatField(default=0.0, help_text="記憶定着率")
-    
+
     # 時間統計
     total_review_time = models.IntegerField(default=0, help_text="総復習時間（秒）")
     average_response_time = models.FloatField(default=0.0, help_text="平均回答時間（秒）")
-    
+
     # 難易度別統計
     easy_cards_count = models.IntegerField(default=0)
     medium_cards_count = models.IntegerField(default=0)
     hard_cards_count = models.IntegerField(default=0)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['user', 'date']
         ordering = ['-date']
-    
+
     def __str__(self):
         return f"{self.user.username} - {self.date} - 定着率: {self.retention_rate:.1%}"
 
@@ -264,42 +265,45 @@ class MistakePattern(models.Model):
         ('reading_comprehension', '読解力不足'),
         ('knowledge_gap', '知識不足'),
     ]
-    
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mistake_patterns')
     pattern_type = models.CharField(max_length=30, choices=PATTERN_TYPES)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True)
-    problem_difficulty = models.CharField(max_length=10, choices=[('easy', '易'), ('medium', '中'), ('hard', '難')], null=True, blank=True)
-    
+    problem_difficulty = models.CharField(
+        max_length=10, choices=[('easy', '易'), ('medium', '中'), ('hard', '難')],
+        null=True, blank=True,
+    )
+
     # 統計データ
     occurrence_count = models.IntegerField(default=1, help_text="このパターンが発生した回数")
     total_attempts = models.IntegerField(default=1, help_text="関連問題の総試行回数")
     last_occurrence = models.DateTimeField(auto_now=True)
-    
+
     # パターンの詳細
     description = models.TextField(help_text="間違いパターンの詳細説明")
     confidence_score = models.FloatField(default=0.0, help_text="パターン認識の信頼度 (0.0-1.0)")
-    
+
     # 改善状況
     improvement_rate = models.FloatField(default=0.0, help_text="改善率 (0.0-1.0)")
     is_active = models.BooleanField(default=True, help_text="このパターンがまだ問題となっているか")
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['user', 'pattern_type', 'subject', 'problem_difficulty']
         ordering = ['-occurrence_count', '-last_occurrence']
-    
+
     def __str__(self):
         return f"{self.user.username} - {self.get_pattern_type_display()} ({self.occurrence_count}回)"
-    
+
     @property
     def error_rate(self):
         """エラー率を計算"""
         if self.total_attempts > 0:
             return round((self.occurrence_count / self.total_attempts) * 100, 2)
         return 0
-    
+
     @property
     def severity_level(self):
         """深刻度レベルを判定"""
@@ -325,52 +329,59 @@ class LearningSuggestion(models.Model):
         ('advanced_practice', '応用練習'),
         ('exam_strategy', '試験戦略'),
     ]
-    
+
     PRIORITY_LEVELS = [
         ('urgent', '緊急'),
         ('high', '高'),
         ('medium', '中'),
         ('low', '低'),
     ]
-    
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='learning_suggestions')
-    mistake_pattern = models.ForeignKey(MistakePattern, on_delete=models.CASCADE, null=True, blank=True, related_name='suggestions')
-    
+    mistake_pattern = models.ForeignKey(
+        MistakePattern, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='suggestions',
+    )
+
     suggestion_type = models.CharField(max_length=20, choices=SUGGESTION_TYPES)
     priority = models.CharField(max_length=10, choices=PRIORITY_LEVELS, default='medium')
-    
+
     # 提案内容
     title = models.CharField(max_length=200, help_text="提案のタイトル")
     description = models.TextField(help_text="詳細な提案内容")
     action_steps = models.JSONField(default=list, help_text="具体的なアクションステップ")
-    
+
     # 関連データ
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True)
     estimated_time_minutes = models.IntegerField(null=True, blank=True, help_text="推定必要時間（分）")
-    difficulty_level = models.CharField(max_length=20, choices=[('beginner', '初級'), ('intermediate', '中級'), ('advanced', '上級')], default='intermediate')
-    
+    difficulty_level = models.CharField(
+        max_length=20,
+        choices=[('beginner', '初級'), ('intermediate', '中級'), ('advanced', '上級')],
+        default='intermediate',
+    )
+
     # 追跡データ
     is_read = models.BooleanField(default=False)
     is_applied = models.BooleanField(default=False)
     applied_at = models.DateTimeField(null=True, blank=True)
     effectiveness_rating = models.IntegerField(null=True, blank=True, help_text="効果評価 (1-5)")
-    
+
     # メタデータ
     is_active = models.BooleanField(default=True)
     expires_at = models.DateTimeField(null=True, blank=True, help_text="提案の有効期限")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-priority', '-created_at']
         indexes = [
             models.Index(fields=['user', 'is_active', 'priority']),
             models.Index(fields=['user', 'is_read']),
         ]
-    
+
     def __str__(self):
         return f"{self.user.username} - {self.title} ({self.get_priority_display()})"
-    
+
     @property
     def is_expired(self):
         """提案が期限切れかどうか"""
@@ -378,7 +389,7 @@ class LearningSuggestion(models.Model):
             from django.utils import timezone
             return timezone.now() > self.expires_at
         return False
-    
+
     def mark_as_applied(self):
         """提案を適用済みとしてマーク"""
         from django.utils import timezone
@@ -391,42 +402,42 @@ class LearningWeakness(models.Model):
     """学習の弱点分析モデル"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='learning_weaknesses')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
-    
+
     # 弱点データ
     concept_name = models.CharField(max_length=200, help_text="弱点のある概念名")
     problem_count = models.IntegerField(default=0, help_text="関連問題数")
     error_count = models.IntegerField(default=0, help_text="間違い数")
     last_error_date = models.DateTimeField(null=True, blank=True)
-    
+
     # 改善追跡
     improvement_score = models.FloatField(default=0.0, help_text="改善スコア (0.0-1.0)")
     practice_recommendations = models.JSONField(default=list, help_text="練習推奨事項")
-    
+
     # ステータス
     severity = models.CharField(
-        max_length=10, 
+        max_length=10,
         choices=[('low', '軽微'), ('medium', '中程度'), ('high', '深刻'), ('critical', '重要')],
         default='medium'
     )
     is_resolved = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['user', 'subject', 'concept_name']
         ordering = ['-severity', '-error_count', '-last_error_date']
-    
+
     def __str__(self):
         return f"{self.user.username} - {self.subject.name}: {self.concept_name} ({self.get_severity_display()})"
-    
+
     @property
     def error_rate(self):
         """エラー率を計算"""
         if self.problem_count > 0:
             return round((self.error_count / self.problem_count) * 100, 2)
         return 0
-    
+
     def update_severity(self):
         """深刻度を自動更新"""
         error_rate = self.error_rate
