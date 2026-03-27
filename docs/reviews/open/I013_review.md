@@ -26,7 +26,11 @@
   - ✓ Frontend Type Check
   - ✓ Frontend Lint & Security
   - ✓ Frontend Tests (7 passed)
-- 手動:
+- 手動: 全4項目 OK（2026-03-27）
+  1. PR に CI バッジ表示 ✓
+  2. push で CI 自動起動（約10秒）✓
+  3. PR Checks タブで全5ジョブ ✓
+  4. `gh pr checks 31` で pass 確認 ✓
 
 ## 計画との差分
 - 既存テスト修正が追加で必要だった（vitest→Jest 変換、Organization フィクスチャ修正、URL名修正、useQuizDisplayStats NaN バグ修正）
