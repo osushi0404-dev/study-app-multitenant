@@ -24,7 +24,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
         fix-loop 完了後は `/test $ARGUMENTS` に戻ってください。
      ```
 
-2) Frontend 自動テスト:
+2) Frontend 自動テスト（Jest）:
    ```bash
    cd frontend && npm test -- --watchAll=false
    ```
