@@ -1,12 +1,12 @@
 ---
-name: plan
+name: plan-issue
 description: Create plan + tests + review docs for an issue. No code changes.
 argument-hint: "I###"
 disable-model-invocation: true
 allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
-# /plan
+# /plan-issue
 
 必読:
 - docs/issues/open/$ARGUMENTS_*.md

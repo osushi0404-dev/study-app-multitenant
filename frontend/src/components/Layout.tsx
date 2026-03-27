@@ -30,6 +30,7 @@ import {
   AccountCircle,
   Speed,
   People,
+  School,
 } from '@mui/icons-material';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -66,9 +67,14 @@ const Layout: React.FC = () => {
     handleProfileMenuClose();
   };
 
+  const isOrgAdmin = user?.role === 'admin';
+
   const menuItems = [
     { text: 'ダッシュボード', icon: <Dashboard />, path: '/dashboard' },
     { text: '問題管理', icon: <Quiz />, path: '/quiz-management' },
+    ...(isOrgAdmin ? [
+      { text: '科目管理', icon: <School />, path: '/subject-management' },
+    ] : []),
     { text: '学習統計', icon: <BarChart />, path: '/statistics' },
     { text: '設定', icon: <Settings />, path: '/settings' },
     ...(user?.is_staff ? [

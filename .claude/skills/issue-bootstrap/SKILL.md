@@ -103,7 +103,7 @@ gh pr create \
 📋 Draft PR: [PR URL]
 
 このブランチで作業を開始します。
-次のステップ: /plan I${ISSUE_NUM} で計画書を作成してください。
+次のステップ: /plan-issue I${ISSUE_NUM} で計画書を作成してください。
 ```
 
 ## 詳細ルール
