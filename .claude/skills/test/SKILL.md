@@ -10,10 +10,24 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 前提: /code-review OK。
 
-1) Backend 自動テスト:
+0) 実行環境を確認する:
+   ```bash
+   # pytest がローカルで利用可能か確認
+   python -m pytest --version 2>/dev/null && echo "LOCAL" || echo "DOCKER"
+   ```
+   - LOCAL: 手順 1a) へ（ローカル直接実行）
+   - DOCKER: 手順 1b) へ（Docker コンテナ経由）
+
+1a) Backend 自動テスト（ローカル）:
    ```bash
    cd backend && python -m pytest --tb=short -q
    ```
+
+1b) Backend 自動テスト（Docker）:
+   ```bash
+   docker compose exec backend python -m pytest --tb=short -q
+   ```
+
    - 成功: 手順 2) へ
    - 失敗: 即 STOP。以下を報告してユーザー待機:
      - 失敗したテスト名
@@ -26,8 +40,12 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 2) Frontend 自動テスト（Jest）:
    ```bash
+   # ローカル
    cd frontend && npm test -- --watchAll=false
+   # Docker
+   docker compose exec frontend npm test -- --watchAll=false
    ```
+   手順 0) で確認した環境に応じて実行する。
    - 成功: 手順 3) へ
    - 失敗: 即 STOP。以下を報告してユーザー待機:
      - 失敗したテスト名

@@ -20,8 +20,14 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    ```bash
    ISSUE_NUM="###"  # 実際のイシュー番号（3桁）に置き換える
 
-   # イシューファイル
-   mv docs/issues/open/${ISSUE_NUM}.md docs/issues/closed/
+   # イシューファイル（I###.md 形式優先、旧 ###.md 形式にも対応）
+   if [ -f "docs/issues/open/I${ISSUE_NUM}.md" ]; then
+     mv docs/issues/open/I${ISSUE_NUM}.md docs/issues/closed/
+   elif [ -f "docs/issues/open/${ISSUE_NUM}.md" ]; then
+     mv docs/issues/open/${ISSUE_NUM}.md docs/issues/closed/
+   else
+     echo "⚠️ イシューファイルが見つかりません（I${ISSUE_NUM}.md / ${ISSUE_NUM}.md）"
+   fi
 
    # 計画書（複数ある場合もパターンで対応）
    for f in docs/plans/open/I${ISSUE_NUM}_*.md; do
