@@ -9,12 +9,14 @@
 ## フロー（あなたの運用をそのまま型にする）
 1. /issue-bootstrap → ユーザーがイシューファイル確認（OK/NG）
 2. /plan-issue I### → ユーザーが計画書確認（OK/NG）
-3. /implement I### → 実装・型チェック・push
-4. /code-review I### → CI 確認＋要件照合（OK/NG）
+3. /plan-issue-review I### → 計画書・テスト文書レビュー（OK/NG）
+   - NG の場合 計画書修正 → /plan-issue-review に戻る
+4. /implement I### → 実装・型チェック・push
+5. /code-review I### → CI 確認＋要件照合（OK/NG）
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /code-review に戻る
-5. /test I### → 自動テスト＋手動テスト確認（OK/NG）
+6. /test I### → 自動テスト＋手動テスト確認（OK/NG）
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /test に戻る
-6. OK の場合 /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
+7. OK の場合 /retro I###（任意）または /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。
 
@@ -26,7 +28,7 @@
 
 ## スキル呼び出しルール（絶対厳守）
 
-ワークフロースキル（`/issue-bootstrap` `/plan-issue` `/implement` `/code-review` `/test` `/fix-loop` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
+ワークフロースキル（`/issue-bootstrap` `/plan-issue` `/plan-issue-review` `/implement` `/code-review` `/test` `/fix-loop` `/retro` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
 
 **Claude は絶対に `Skill` ツールでこれらのスキルを自律呼び出ししてはならない。**
 
@@ -36,7 +38,9 @@
 |-----------|-----------------|
 | イシュー作成依頼を受けた後 | 「`/issue-bootstrap [タイトル]` を入力してください」と案内 |
 | イシュー承認後 | 「`/plan-issue I###` を入力してください」と案内 |
-| 計画書承認後 | 「`/implement I###` を入力してください」と案内 |
+| 計画書承認後 | 「`/plan-issue-review I###` を入力してください」と案内 |
+| plan-issue-review OK 後 | 「`/implement I###` を入力してください」と案内 |
+| plan-issue-review NG 後 | 「計画書・テスト文書を修正してから `/plan-issue-review I###` を再実行してください」と案内 |
 | implement 完了後 | 「`/code-review I###` を入力してください」と案内 |
 | code-review OK 後 | 「`/test I###` を入力してください」と案内 |
 | code-review NG 後 | 「`/fix-loop I###` を入力してください（fix-loop 完了後は `/code-review I###` に戻る）」と案内 |

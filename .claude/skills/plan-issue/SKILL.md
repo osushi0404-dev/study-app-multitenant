@@ -31,3 +31,5 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 「仮定で決めた」項目が1つでもある場合は、承認ポイントより先にユーザーへ確認する。
 
 完了したら「承認ポイント」を提示して停止する。
+
+承認後の次のステップ: `/plan-issue-review $ARGUMENTS` を実行して計画書・テスト文書をレビューしてください。

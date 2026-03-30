@@ -35,6 +35,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 2. 使うスキル（/ で実行）
 - /issue-bootstrap [title] : 採番、イシューファイル作成、ブランチ作成、Draft PR 作成
 - /plan-issue I### : 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
+- /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK なら /implement へ）
 - /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
 - /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
 - /test I### : 自動テスト（pytest + Jest）+ 手動テスト確認（OK なら /close へ）
