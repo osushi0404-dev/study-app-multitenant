@@ -23,8 +23,14 @@ git branch --show-current
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
-# 大きい方を採用
-LAST_NUM=$(printf "%d\n%d\n" "${FS_MAX:-0}" "${GIT_MAX:-0}" | sort -n | tail -1)
+# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
+FS_NUM=$((10#${FS_MAX:-0}))
+GIT_NUM=$((10#${GIT_MAX:-0}))
+if [ "$FS_NUM" -gt "$GIT_NUM" ]; then
+  LAST_NUM=$FS_NUM
+else
+  LAST_NUM=$GIT_NUM
+fi
 if [ "$LAST_NUM" -eq 0 ]; then
   ISSUE_NUM="001"
 else
