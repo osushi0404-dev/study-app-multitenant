@@ -57,6 +57,22 @@ ls docs/plans/closed/plan_I013_*.md && echo "OK" || echo "NG: I013 closed なし
 ls docs/plans/closed/plan_I015_*.md && echo "OK" || echo "NG: I015 closed なし"
 ```
 
+### AT-04: Claude Code BP セクションの存在チェック
+
+```bash
+# review-rules.md に BP セクションが追加されていること
+grep -n 'Claude Code ベストプラクティス' docs/runbooks/review-rules.md
+# → 1件以上
+
+# plan-issue-review/SKILL.md に BP 観点が追加されていること
+grep -n 'Claude Code ベストプラクティス' .claude/skills/plan-issue-review/SKILL.md
+# → 1件以上
+
+# plan-issue-review/SKILL.md に .claude/skills/ 限定の条件が記載されていること
+grep -n '\.claude/skills/' .claude/skills/plan-issue-review/SKILL.md
+# → 1件以上
+```
+
 ## 合否基準
 
 全コマンドが期待通りの出力 → OK

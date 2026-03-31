@@ -4,7 +4,9 @@
 - `.claude/skills/plan-issue/SKILL.md`
 - `.claude/skills/implement/SKILL.md`
 - `.claude/skills/close/SKILL.md`
+- `.claude/skills/plan-issue-review/SKILL.md`
 - `docs/runbooks/issue-flow.md`
+- `docs/runbooks/review-rules.md`
 
 ## テスト項目
 
@@ -44,6 +46,21 @@
 | `docs/plans/open/plan_I013_GitHub_Actions_CI導入.md` が存在しない | 削除済み | [ ] |
 | `docs/plans/open/plan_I015_スキルレビュー観点追加_採番バグ修正.md` が存在しない | 削除済み | [ ] |
 | 各ファイルは `docs/plans/closed/` に同内容が存在する | 存在する | [ ] |
+
+### MT-06: review-rules.md の Claude Code BP セクション確認
+
+| 確認項目 | 期待値 | 結果 |
+|----------|--------|------|
+| 「スキルファイル変更時の Claude Code ベストプラクティス準拠」セクションが追加されている | 存在する | [ ] |
+| チェックリスト（7項目）が記載されている | 存在する | [ ] |
+
+### MT-07: plan-issue-review/SKILL.md のレビュー観点確認
+
+| 確認項目 | 期待値 | 結果 |
+|----------|--------|------|
+| 「Claude Code ベストプラクティス」観点が追加されている | 存在する | [ ] |
+| `.claude/skills/` 変更を含む場合のみ適用と明記されている | 明記あり | [ ] |
+| 7項目のチェックリストが含まれている | 存在する | [ ] |
 
 ## 合否基準
 

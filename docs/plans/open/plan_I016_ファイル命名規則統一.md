@@ -50,6 +50,8 @@ I015 の調査で判明した、スキルファイル間・runbook 間のファ�
 - [ ] `close/SKILL.md` が `plan_I${ISSUE_NUM}_*.md` パターンで計画書を移動できる
 - [ ] `issue-flow.md` のテスト・レビュー命名記述が実態（`I###_manual_test.md` 等）と一致している
 - [ ] `docs/plans/open/` の残留ファイル（I013, I015）が削除されている
+- [ ] `docs/runbooks/review-rules.md` に Claude Code BP チェックリストが追加されている
+- [ ] `plan-issue-review/SKILL.md` のレビュー観点に Claude Code BP チェックが含まれている
 
 ---
 
@@ -59,8 +61,8 @@ I015 の調査で判明した、スキルファイル間・runbook 間のファ�
 - Frontend: なし
 - DB: なし
 - Config/Infra: なし
-- スキルファイル: `.claude/skills/plan-issue/SKILL.md`, `implement/SKILL.md`, `close/SKILL.md`
-- runbooks: `docs/runbooks/issue-flow.md`
+- スキルファイル: `.claude/skills/plan-issue/SKILL.md`, `implement/SKILL.md`, `close/SKILL.md`, `plan-issue-review/SKILL.md`
+- runbooks: `docs/runbooks/issue-flow.md`, `docs/runbooks/review-rules.md`
 - 既存ドキュメント: `docs/plans/open/` の残留 2 ファイル削除
 
 ---
@@ -122,6 +124,48 @@ for f in docs/plans/open/plan_I${ISSUE_NUM}_*.md; do
 - `docs/plans/open/plan_I013_GitHub_Actions_CI導入.md` → 削除（closed に同ファイルあり）
 - `docs/plans/open/plan_I015_スキルレビュー観点追加_採番バグ修正.md` → 削除（同上）
 
+### 6. `docs/runbooks/review-rules.md`
+
+**変更箇所**: 末尾に新セクションを追加
+
+```markdown
+## スキルファイル変更時の Claude Code ベストプラクティス準拠（必須）
+
+`.claude/skills/` 配下のファイルを変更するイシューでは、
+変更内容が以下の Claude Code 公式ベストプラクティスに準拠していることを確認する。
+
+### チェックリスト
+
+| # | チェック項目 | 観点 |
+|---|---|---|
+| 1 | `allowed-tools` で最小権限が設定されているか | セキュリティ |
+| 2 | 副作用のある操作（commit・push・デプロイ等）に `disable-model-invocation: true` が設定されているか | 安全性 |
+| 3 | `argument-hint` が記載されているか | 発見性 |
+| 4 | `description` に「いつ使うか」が含まれているか（250文字以内） | 発見性 |
+| 5 | 指示文に明確な停止条件・完了条件が記載されているか | 明確性 |
+| 6 | `$ARGUMENTS` 等の変数が一貫して使われているか | 一貫性 |
+| 7 | SKILL.md が 500行以内か（超える場合は supporting files への分割を推奨） | コンテキスト効率 |
+
+このチェックは `/plan-issue-review` のレビュー観点に組み込まれている。
+```
+
+### 7. `.claude/skills/plan-issue-review/SKILL.md`
+
+**変更箇所**: レビュー観点のセクションに「Claude Code ベストプラクティス」を追加
+
+```markdown
+**Claude Code ベストプラクティス（`.claude/skills/` 変更を含む場合のみ）:**
+変更対象に `.claude/skills/` が含まれる場合、以下を確認する:
+- [ ] `allowed-tools` で最小権限が設定されているか
+- [ ] 副作用のある操作に `disable-model-invocation: true` が設定されているか
+- [ ] `argument-hint` が記載されているか
+- [ ] `description` に「いつ使うか」が含まれているか（250文字以内）
+- [ ] 指示文に明確な停止条件・完了条件が記載されているか
+- [ ] `$ARGUMENTS` 等の変数が一貫して使われているか
+- [ ] SKILL.md が 500行以内か（超える場合は supporting files を推奨）
+問題がなければ「問題なし」と記載する。
+```
+
 ---
 
 ## 実装手順
@@ -130,8 +174,10 @@ for f in docs/plans/open/plan_I${ISSUE_NUM}_*.md; do
 2. `implement/SKILL.md` の必読セクションを修正
 3. `close/SKILL.md` の計画書移動パターンを修正
 4. `issue-flow.md` のテスト・レビュー命名記述を修正（4 箇所）
-5. `docs/plans/open/` の残留ファイル 2 件を削除
-6. 変更をコミット・push
+5. `docs/plans/open/` の残留ファイル 2 件を削除（事前に diff で同一性確認）
+6. `review-rules.md` に Claude Code BP セクションを追加
+7. `plan-issue-review/SKILL.md` にレビュー観点を追加
+8. 変更をコミット・push
 
 ---
 
