@@ -30,7 +30,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    fi
 
    # 計画書（複数ある場合もパターンで対応）
-   for f in docs/plans/open/I${ISSUE_NUM}_*.md; do
+   for f in docs/plans/open/plan_I${ISSUE_NUM}_*.md; do
      [ -f "$f" ] && mv "$f" docs/plans/closed/
    done
 

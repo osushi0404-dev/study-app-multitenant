@@ -304,3 +304,24 @@ mv docs/reviews/in_progress/reviewXXX_IYYY.md docs/reviews/closed/reviewXXX_IYYY
 - **継続的フォロー**: アクションアイテムの実施状況を追跡
 
 詳細な運用方法は `docs/reviews/README.md` を参照すること。
+
+---
+
+## スキルファイル変更時の Claude Code ベストプラクティス準拠（必須）
+
+`.claude/skills/` 配下のファイルを変更するイシューでは、
+変更内容が以下の Claude Code 公式ベストプラクティスに準拠していることを確認する。
+
+### チェックリスト
+
+| # | チェック項目 | 観点 |
+|---|---|---|
+| 1 | `allowed-tools` で最小権限が設定されているか | セキュリティ |
+| 2 | 副作用のある操作（commit・push・デプロイ等）に `disable-model-invocation: true` が設定されているか | 安全性 |
+| 3 | `argument-hint` が記載されているか | 発見性 |
+| 4 | `description` に「いつ使うか」が含まれているか（250文字以内） | 発見性 |
+| 5 | 指示文に明確な停止条件・完了条件が記載されているか | 明確性 |
+| 6 | `$ARGUMENTS` 等の変数が一貫して使われているか | 一貫性 |
+| 7 | SKILL.md が 500行以内か（超える場合は supporting files への分割を推奨） | コンテキスト効率 |
+
+このチェックは `/plan-issue-review` のレビュー観点に組み込まれている。

@@ -15,7 +15,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 - rules/react-coding-standards-integrated.md
 
 生成物:
-- docs/plans/open/$ARGUMENTS_plan.md
+- docs/plans/open/plan_$ARGUMENTS_{概要}.md（plan-writing-rules.md の命名規則に準拠）
 - docs/tests/open/$ARGUMENTS_manual_test.md
 - docs/tests/open/$ARGUMENTS_auto_test.md
 - docs/reviews/open/$ARGUMENTS_review.md
