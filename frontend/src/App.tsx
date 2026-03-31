@@ -32,6 +32,7 @@ import UserManagement from './pages/UserManagement';
 import UserCreate from './pages/UserCreate';
 import UserEdit from './pages/UserEdit';
 import SubjectManagement from './pages/SubjectManagement';
+import SubjectDetail from './pages/SubjectDetail';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,6 +82,7 @@ function App() {
                 <Route path="settings" element={<Settings />} />
                 <Route path="monitoring" element={<Monitoring />} />
                 <Route path="subject-management" element={<SubjectManagement />} />
+                <Route path="subject-management/:id" element={<SubjectDetail />} />
 
                 {/* Admin Routes */}
                 <Route path="admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
