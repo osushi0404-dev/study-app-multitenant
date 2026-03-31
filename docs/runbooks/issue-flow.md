@@ -144,8 +144,8 @@ gh issue create \
 6. 計画書作成
     ↓
 7. テストケース作成（2種類を別ファイルで作成）
-   - ユーザーテストケース（docs/tests/open/test_IXXX_manual.md）
-   - 自動テストケース（docs/tests/open/test_IXXX_auto.md）
+   - ユーザーテストケース（docs/tests/open/IXXX_manual_test.md）
+   - 自動テストケース（docs/tests/open/IXXX_auto_test.md）
     ↓
 8. レビューファイル作成（テンプレート：docs/reviews/templates/review_template.md）
    ※実装結果評価セクションは空欄のまま作成
@@ -255,8 +255,8 @@ gh issue create \
 
 | 種類 | ファイル名 | 内容 |
 |------|-----------|------|
-| ユーザーテスト | `test_IXXX_manual.md` | ユーザーしか実施できないテスト項目 |
-| 自動テスト | `test_IXXX_auto.md` | ユニットテスト、統合テスト等の自動テスト項目 |
+| ユーザーテスト | `IXXX_manual_test.md` | ユーザーしか実施できないテスト項目 |
+| 自動テスト | `IXXX_auto_test.md` | ユニットテスト、統合テスト等の自動テスト項目 |
 
 - テンプレート: `docs/tests/templates/test_record_template.md`
 - 保存先: `docs/tests/open/`
@@ -264,7 +264,7 @@ gh issue create \
 **ステップ8: レビューファイル作成**
 - テンプレート: `docs/reviews/templates/review_template.md`
 - 保存先: `docs/reviews/open/`
-- 命名規則: `reviewXXX_IYYY.md`（XXX: 通し番号、YYY: イシュー番号）
+- 命名規則: `IXXX_review.md`（XXX: イシュー番号3桁）
 - **重要**: 実装結果評価セクションは空欄のまま作成
 
 レビューファイルの記載タイミング：
@@ -289,7 +289,7 @@ gh issue create \
 - 計画書に基づいた実装作業を実施
 
 **ステップ12: 自動テスト実行**
-- `test_IXXX_auto.md`に記載された自動テストを実行
+- `IXXX_auto_test.md`に記載された自動テストを実行
 - 全テストが成功することを確認
 
 **ステップ13: レビューファイルに実装結果を記入**
@@ -297,7 +297,7 @@ gh issue create \
 - 品質評価、技術的評価を記入
 
 **ステップ14: ユーザーテスト**
-- `test_IXXX_manual.md`に基づいてユーザーがテストを実施
+- `IXXX_manual_test.md`に基づいてユーザーがテストを実施
 - 結果に応じてOK/NGに分岐
 
 #### ステップ15-19: NGの場合のエラー対応ループ
@@ -334,7 +334,7 @@ gh issue create \
 **ステップ21: テストケースをclosedに移動**
 ```bash
 # 完了情報を追記（両方のテストファイル）
-for TEST_FILE in docs/tests/open/test_IXXX_*.md; do
+for TEST_FILE in docs/tests/open/IXXX_*_test.md; do
   echo "## 完了情報" >> "$TEST_FILE"
   echo "- **完了日時**: $(date)" >> "$TEST_FILE"
   echo "- **結果**: OK" >> "$TEST_FILE"
@@ -373,8 +373,8 @@ cat >> docs/issues/open/XXX.md << 'EOF'
 - **実施内容の要約**: [実装内容を簡潔に記載]
 - **関連ファイル**:
   - 計画書: docs/plans/closed/plan_IXXX_*.md
-  - レビュー: docs/reviews/closed/reviewXXX_IXXX.md
-  - テスト: docs/tests/closed/test_IXXX_*.md
+  - レビュー: docs/reviews/closed/IXXX_review.md
+  - テスト: docs/tests/closed/IXXX_*_test.md
 EOF
 
 mv docs/issues/open/XXX.md docs/issues/closed/
