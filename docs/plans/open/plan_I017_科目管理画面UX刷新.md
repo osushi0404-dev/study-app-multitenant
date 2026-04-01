@@ -57,6 +57,7 @@
   - `frontend/src/pages/SubjectManagement.tsx`（全面刷新）
   - `frontend/src/pages/SubjectDetail.tsx`（新規作成）
   - `frontend/src/App.tsx`（ルート・インポート追加）
+  - `frontend/src/services/api.ts`（fix-loop: 400 グローバル toast 削除）
 - **DB**: なし
 - **Config/Infra**: なし
 
@@ -123,6 +124,12 @@ const schema = yup.object({
 - Delete（`<Delete />`、color="error"、`aria-label="削除"`）: disabled, Tooltip「この機能は近日対応予定です」
 
 **API**: `GET /api/organizations/subjects/`（既存エンドポイント）、`POST /api/subjects/`（既存）
+
+#### `frontend/src/services/api.ts`（fix-loop 修正）
+
+**変更方針**: `handleApiError` の 400 ケースを削除。4xx バリデーションエラーは業務ロジックであり、呼び出し元コンポーネントの catch で処理する。グローバルインターセプターは 5xx・ネットワークエラーのみ担当する。
+
+**修正背景**: 重複科目名登録時、バックエンドが `{name: ['同名の科目が既に存在します']}` を返しても、インターセプターが先に「リクエストが無効です」を表示してしまうバグ（fix-loop 2026-04-01）。
 
 #### `frontend/src/pages/SubjectDetail.tsx`（新規作成）
 

@@ -125,6 +125,28 @@ it('詳細ページの編集ボタンが disabled である', async () => {
 
 ---
 
+### AT-FE-06: 重複科目名登録時のエラーメッセージ確認（fix-loop 2026-04-01）
+
+```typescript
+it('重複科目名登録時に「同名の科目が既に存在します」が表示される', async () => {
+  // API モック: POST /api/subjects/ → 400 { name: ['同名の科目が既に存在します'] }
+  server.use(
+    rest.post('/api/subjects/', (_req, res, ctx) =>
+      res(ctx.status(400), ctx.json({ name: ['同名の科目が既に存在します'] }))
+    )
+  );
+
+  render(<SubjectManagement />);
+  userEvent.click(screen.getByText('科目を追加'));
+  userEvent.type(screen.getByLabelText('科目名'), '数学');
+  userEvent.click(screen.getByText('保存'));
+
+  expect(await screen.findByText('同名の科目が既に存在します')).toBeInTheDocument();
+  // グローバルインターセプターの「リクエストが無効です」が出ないこと
+  expect(screen.queryByText('リクエストが無効です')).not.toBeInTheDocument();
+});
+```
+
 ---
 
 ## fix-loop 再発防止記録（2026-04-01）
