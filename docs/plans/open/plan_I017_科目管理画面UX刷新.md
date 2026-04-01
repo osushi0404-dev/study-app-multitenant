@@ -58,6 +58,7 @@
   - `frontend/src/pages/SubjectDetail.tsx`（新規作成）
   - `frontend/src/App.tsx`（ルート・インポート追加）
   - `frontend/src/services/api.ts`（fix-loop: 400 グローバル toast 削除）
+  - `frontend/src/utils/apiError.ts`（fix-loop: 新規作成。バックエンドのカスタムエラー形式を解釈するユーティリティ）
 - **DB**: なし
 - **Config/Infra**: なし
 
@@ -145,6 +146,12 @@ raise DRFValidationError({'name': ['同名の科目が既に存在します']})
 ```
 
 **修正背景**: 文字列形式だとフロントエンドの `Array.isArray(data?.name)` が false になりフォールバックメッセージが表示されていた（fix-loop 2026-04-01）。
+
+#### `frontend/src/utils/apiError.ts`（fix-loop 新規作成）
+
+**変更方針**: `core/exceptions.py` のカスタム例外ハンドラーが返す統一エラー形式 `{error: {sub_message, main_message}}` からメッセージを抽出する `extractApiErrorMessage()` を作成。エラー形式の解釈知識を1ファイルに集約し、各コンポーネントの catch から参照する。
+
+**修正背景**: `SubjectManagement.tsx` の catch が `data.error`（文字列想定）・`data.main_message`・`data.name[0]` を直接参照していたが、実際のレスポンスは `data.error.sub_message` にメッセージが格納されており、全条件が false → フォールバックが表示されていた（fix-loop 2026-04-01）。
 
 #### `frontend/src/pages/SubjectDetail.tsx`（新規作成）
 

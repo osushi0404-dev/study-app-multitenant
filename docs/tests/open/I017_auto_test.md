@@ -129,10 +129,16 @@ it('詳細ページの編集ボタンが disabled である', async () => {
 
 ```typescript
 it('重複科目名登録時に「同名の科目が既に存在します」が表示される', async () => {
-  // API モック: POST /api/subjects/ → 400 { name: ['同名の科目が既に存在します'] }
+  // API モック: core/exceptions.py のカスタム例外ハンドラーが返す実際の形式
   server.use(
     rest.post('/api/subjects/', (_req, res, ctx) =>
-      res(ctx.status(400), ctx.json({ name: ['同名の科目が既に存在します'] }))
+      res(ctx.status(400), ctx.json({
+        error: {
+          main_message: '入力内容にエラーがあります',
+          sub_message: '同名の科目が既に存在します',
+          details: { name: ['同名の科目が既に存在します'] },
+        }
+      }))
     )
   );
 
