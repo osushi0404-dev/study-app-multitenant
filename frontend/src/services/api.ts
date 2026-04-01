@@ -171,8 +171,10 @@ class ApiClient {
       return;
     }
 
-    // Handle common error cases
     // 400 (validation/business errors) are handled by the calling component
+    if (status === 400) return;
+
+    // Handle common error cases
     switch (status) {
       case 403:
         toast.error('この操作を実行する権限がありません');

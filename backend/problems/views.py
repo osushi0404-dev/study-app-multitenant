@@ -122,7 +122,7 @@ class SubjectViewSet(viewsets.ModelViewSet):
                     if not os.path.exists(gitkeep):
                         open(gitkeep, 'w').close()
         except IntegrityError:
-            raise DRFValidationError({'name': '同名の科目が既に存在します'})
+            raise DRFValidationError({'name': ['同名の科目が既に存在します']})
 
     def perform_update(self, serializer):
         serializer.save()
