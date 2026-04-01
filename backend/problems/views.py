@@ -43,12 +43,6 @@ class SubjectViewSet(viewsets.ModelViewSet):
             annotate_count=True
         )
 
-    def list(self, request, *args, **kwargs):
-        # 問題管理画面用：組織の全科目を取得
-        queryset = self.get_queryset()
-        subjects = list(queryset.values('id', 'name').order_by('name'))
-        return Response(subjects)
-
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], url_path='public')
     def public(self, request):
         """
@@ -128,7 +122,7 @@ class SubjectViewSet(viewsets.ModelViewSet):
                     if not os.path.exists(gitkeep):
                         open(gitkeep, 'w').close()
         except IntegrityError:
-            raise DRFValidationError({'name': '同名の科目が既に存在します'})
+            raise DRFValidationError({'name': ['同名の科目が既に存在します']})
 
     def perform_update(self, serializer):
         serializer.save()
