@@ -105,7 +105,13 @@ const SubjectManagement: React.FC = () => {
       setModalOpen(false);
       await fetchSubjects();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || e?.response?.data?.name?.[0] || '科目追加に失敗しました');
+      const data = e?.response?.data;
+      const msg =
+        (typeof data?.error === 'string' && data.error) ||
+        (typeof data?.main_message === 'string' && data.main_message) ||
+        (Array.isArray(data?.name) && data.name[0]) ||
+        '科目追加に失敗しました';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
