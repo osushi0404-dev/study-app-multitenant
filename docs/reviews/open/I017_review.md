@@ -60,6 +60,11 @@
 - Backend: 25 passed ✅
 - Frontend: 7 passed ✅
 
+## 自動テスト結果（fix-loop 後 2026-04-01）
+
+- Backend: 25 passed ✅
+- Frontend: 7 passed ✅
+
 ## 回帰テスト結果
 
 - [ ] MT-06（回帰テスト）: 問題管理画面の科目ドロップダウンが正常に動作する
