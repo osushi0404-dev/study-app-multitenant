@@ -188,6 +188,25 @@ it('重複科目名登録時に「同名の科目が既に存在します」が�
 
 ---
 
+## fix-loop 再発防止記録3（2026-04-01）
+
+### 何が失敗したか
+重複科目名登録時に「同名の科目が既に存在します」ではなく「科目の追加に失敗しました」が表示された。
+
+### 根本原因
+`core/exceptions.py` のカスタム例外ハンドラーが全エラーを `{error: {main_message, sub_message, details}}` 形式に変換している。フロントエンドの catch は `data.error`（文字列想定）・`data.main_message`・`data.name[0]` を参照していたが、実際は `data.error.sub_message` にメッセージが格納されており、全条件が false → フォールバックが表示されていた。
+
+### 何を変えたか
+- `frontend/src/utils/apiError.ts` を新規作成し、`extractApiErrorMessage()` として `data.error.sub_message` / `data.error.main_message` を抽出するロジックを集約
+- `SubjectManagement.tsx` の個別エラー解析コードを `extractApiErrorMessage()` 呼び出しに置換
+
+### 次回どう防ぐか
+- POST/PUT/PATCH の catch では `extractApiErrorMessage(e?.response?.data, 'フォールバック')` を使う
+- バックエンドのエラー形式が変わった場合は `utils/apiError.ts` 1ファイルのみ修正すればよい
+- 新規コンポーネントでエラーハンドリングを書く際は `data.xxx` を直接参照せず必ずこの関数を使う
+
+---
+
 ## 実行コマンド
 
 ```bash
