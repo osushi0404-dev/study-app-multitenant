@@ -52,7 +52,7 @@
 
 ## 影響範囲
 
-- **Backend**: `backend/problems/views.py`（SubjectViewSet.list() 削除）
+- **Backend**: `backend/problems/views.py`（SubjectViewSet.list() 削除、fix-loop: ValidationError 配列形式に統一）
 - **Frontend**:
   - `frontend/src/pages/SubjectManagement.tsx`（全面刷新）
   - `frontend/src/pages/SubjectDetail.tsx`（新規作成）
@@ -130,6 +130,21 @@ const schema = yup.object({
 **変更方針**: `handleApiError` の 400 ケースを削除。4xx バリデーションエラーは業務ロジックであり、呼び出し元コンポーネントの catch で処理する。グローバルインターセプターは 5xx・ネットワークエラーのみ担当する。
 
 **修正背景**: 重複科目名登録時、バックエンドが `{name: ['同名の科目が既に存在します']}` を返しても、インターセプターが先に「リクエストが無効です」を表示してしまうバグ（fix-loop 2026-04-01）。
+
+fix-loop2では `case 400:` 削除後に 400 が `default:` にフォールスルーしていたため、`switch` 前に `if (status === 400) return;` を追加した（fix-loop 2026-04-01）。
+
+#### `backend/problems/views.py`（fix-loop 修正）
+
+**変更方針**: `DRFValidationError` のフィールドエラー値を文字列から配列に修正し DRF 標準形式に統一する。
+
+```python
+# 修正前
+raise DRFValidationError({'name': '同名の科目が既に存在します'})
+# 修正後
+raise DRFValidationError({'name': ['同名の科目が既に存在します']})
+```
+
+**修正背景**: 文字列形式だとフロントエンドの `Array.isArray(data?.name)` が false になりフォールバックメッセージが表示されていた（fix-loop 2026-04-01）。
 
 #### `frontend/src/pages/SubjectDetail.tsx`（新規作成）
 

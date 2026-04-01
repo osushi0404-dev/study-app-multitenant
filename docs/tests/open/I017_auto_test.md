@@ -142,8 +142,9 @@ it('重複科目名登録時に「同名の科目が既に存在します」が�
   userEvent.click(screen.getByText('保存'));
 
   expect(await screen.findByText('同名の科目が既に存在します')).toBeInTheDocument();
-  // グローバルインターセプターの「リクエストが無効です」が出ないこと
+  // グローバルインターセプターの誤ったメッセージが出ないこと
   expect(screen.queryByText('リクエストが無効です')).not.toBeInTheDocument();
+  expect(screen.queryByText('予期しないエラーが発生しました')).not.toBeInTheDocument();
 });
 ```
 
