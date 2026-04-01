@@ -29,6 +29,7 @@ import { toast } from 'react-hot-toast';
 import { Subject } from '../services/types';
 import apiClient from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { extractApiErrorMessage } from '../utils/apiError';
 
 const schema = yup.object({
   name: yup
@@ -105,13 +106,7 @@ const SubjectManagement: React.FC = () => {
       setModalOpen(false);
       await fetchSubjects();
     } catch (e: any) {
-      const data = e?.response?.data;
-      const msg =
-        (typeof data?.error === 'string' && data.error) ||
-        (typeof data?.main_message === 'string' && data.main_message) ||
-        (Array.isArray(data?.name) && data.name[0]) ||
-        '科目追加に失敗しました';
-      toast.error(msg);
+      toast.error(extractApiErrorMessage(e?.response?.data, '科目追加に失敗しました'));
     } finally {
       setSaving(false);
     }
