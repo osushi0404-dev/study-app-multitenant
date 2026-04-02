@@ -33,6 +33,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 - OWASP Top 10 関連リスク（XSS・SQLインジェクション・CSRF 等）への対策が含まれるか
 - フレームワーク推奨パターン（Django セキュリティ設定・React のセキュアコーディング）に準拠しているか
 - 追加・更新する依存ライブラリに既知脆弱性がないか（必要に応じて pip-audit / npm audit）
+- セキュリティスキャンツールの重大度基準を計画書に明記しているか（bandit: MEDIUM以上を修正対象・LOW は # nosec で抑制、npm audit: high/critical を修正対象）
 該当なし（バックエンド・フロントエンドのコード変更がない等）の場合は「セキュリティ影響なし」と明記する。
 
 **設計判断の明示チェック（必須）**
