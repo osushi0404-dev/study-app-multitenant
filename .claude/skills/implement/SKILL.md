@@ -26,7 +26,12 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 手順:
 1) 計画どおり実装
-2) ビルド・型チェックを実行してクリーンを確認（未使用変数・import の残留がないこと）
+   - セキュリティ・ベストプラクティス・モダン開発の観点で最適な実装を採用する
+   - より良い方法がある場合は plan-writing-rules.md の「改善提案フォーマット」に従い提案してから実装する
+2) ビルド・型チェック・リント・セキュリティスキャンを実行してクリーンを確認:
+   - Backend: flake8（全エラー修正）/ bandit（MEDIUM 以上を修正対象。LOW は # nosec で抑制・理由記載必須）/ 未使用変数・import の残留がないこと
+   - Frontend: react-scripts build（型チェック）/ ESLint（error を修正対象、warning は記録）/ npm audit（high/critical を修正対象、moderate は記録・期限設定）
+   - 修正対象の警告・エラーがある場合は修正してから次のステップへ
 3) commit/push して PR を更新
 4) 停止し以下を案内:
    ```
