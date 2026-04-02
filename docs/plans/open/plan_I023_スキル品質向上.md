@@ -78,9 +78,9 @@
 -   - 成功: 手順 7) へ
 -   - 失敗: 手順 1) に戻る（ループ）
 +6) 自動テスト・リント・セキュリティスキャンを実行:
-+   - Backend: pytest / flake8 / bandit
-+   - Frontend: Jest / ESLint（eslint-plugin-security 含む）/ npm audit
-+   - 成功（警告・エラーなし）: 手順 7) へ
++   - Backend: pytest / flake8（全エラー修正）/ bandit（MEDIUM 以上を修正対象。LOW は # nosec で抑制・理由記載必須）
++   - Frontend: Jest / ESLint（error を修正対象、warning は記録）/ npm audit（high/critical を修正対象、moderate は記録・期限設定）
++   - 成功（修正対象の警告・エラーなし）: 手順 7) へ
 +   - 失敗: 手順 1) に戻る（ループ）
 ```
 
@@ -132,9 +132,9 @@
 ```diff
 -2) ビルド・型チェックを実行してクリーンを確認（未使用変数・import の残留がないこと）
 +2) ビルド・型チェック・リント・セキュリティスキャンを実行してクリーンを確認:
-+   - Backend: flake8（リント）/ bandit（セキュリティスキャン）/ 未使用変数・import の残留がないこと
-+   - Frontend: react-scripts build（型チェック）/ ESLint（eslint-plugin-security 含む）/ npm audit
-+   - 警告・エラーがある場合は修正してから次のステップへ
++   - Backend: flake8（全エラー修正）/ bandit（MEDIUM 以上を修正対象。LOW は # nosec で抑制・理由記載必須）/ 未使用変数・import の残留がないこと
++   - Frontend: react-scripts build（型チェック）/ ESLint（error を修正対象、warning は記録）/ npm audit（high/critical を修正対象、moderate は記録・期限設定）
++   - 修正対象の警告・エラーがある場合は修正してから次のステップへ
 ```
 
 ---

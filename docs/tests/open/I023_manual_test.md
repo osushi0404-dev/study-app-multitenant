@@ -9,7 +9,7 @@
 
 - [ ] Step 2 に「セキュリティ観点も確認する（認証・認可の欠落、インジェクション、XSS、機密データ露出等に該当しないか）」が追加されている
 - [ ] Step 3 の評価軸に「セキュリティ影響（OWASP Top 10 関連リスクの有無…）」「ベストプラクティス適合」「保守性・拡張性」「リスク・副作用」が列挙されている
-- [ ] Step 6 に Backend（pytest / flake8 / bandit）・Frontend（Jest / ESLint / npm audit）のコマンドが明記されている
+- [ ] Step 6 に Backend（pytest / flake8 / bandit）・Frontend（Jest / ESLint / npm audit）のコマンドと重大度基準（bandit: MEDIUM以上、npm audit: high/critical）が明記されている
 - [ ] Step 7 の再発防止記録に「セキュリティ上の考慮点（該当する場合）」が追加されている
 - [ ] 既存の手順番号・フロー（1〜7、ループ構造）が壊れていない
 
@@ -25,7 +25,8 @@
 - [ ] Step 1 に「セキュリティ・ベストプラクティス・モダン開発の観点で最適な実装を採用する」が追加されている
 - [ ] Step 1 に「改善提案フォーマットに従い提案してから実装する」旨が記載されている
 - [ ] Step 2 に Backend（flake8 / bandit）・Frontend（react-scripts build / ESLint / npm audit）が明記されている
-- [ ] Step 2 に「警告・エラーがある場合は修正してから次のステップへ」が明記されている
+- [ ] Step 2 に重大度基準（bandit: MEDIUM以上、ESLint: error、npm audit: high/critical）が明記されている
+- [ ] Step 2 に「修正対象の警告・エラーがある場合は修正してから次のステップへ」が明記されている
 - [ ] 既存のルール（計画書外実装禁止・Danger Ops 承認等）が壊れていない
 
 ## 実施記録
