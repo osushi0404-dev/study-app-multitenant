@@ -113,7 +113,7 @@ const UserCreate: React.FC = () => {
     setLoading(true);
     
     try {
-      const response = await apiClient.post(
+      await apiClient.post(
         '/api/admin/users/',
         formData
       );
