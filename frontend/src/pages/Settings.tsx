@@ -112,41 +112,41 @@ const Settings: React.FC = () => {
   const settingsForm = useForm({
     resolver: yupResolver(settingsSchema),
   });
+  const { reset: resetSettingsForm } = settingsForm;
 
   const passwordForm = useForm<PasswordChangeData>({
     resolver: yupResolver(passwordSchema),
   });
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    const loadSettings = async () => {
+      try {
+        const userSettings = await dashboardService.getUserSettings();
 
-  const loadSettings = async () => {
-    try {
-      const userSettings = await dashboardService.getUserSettings();
-      
-      const settingsData: UserSettingsData = {
-        dailyStudyGoalMinutes: userSettings.daily_study_goal,
-        studyRemindersEnabled: userSettings.study_reminder_enabled,
-        reminderTime: userSettings.study_reminder_time || '09:00',
-        themePreference: userSettings.theme,
-        notificationSettings: {
-          email: userSettings.email_notifications,
-          push: userSettings.push_notifications,
-          achievements: true,
-          reminders: userSettings.study_reminder_enabled,
-        },
-      };
-      
-      setSettings(settingsData);
-      settingsForm.reset(settingsData);
-    } catch (error) {
-      console.error('Error loading settings:', error);
-      toast.error('設定の読み込みに失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
+        const settingsData: UserSettingsData = {
+          dailyStudyGoalMinutes: userSettings.daily_study_goal,
+          studyRemindersEnabled: userSettings.study_reminder_enabled,
+          reminderTime: userSettings.study_reminder_time || '09:00',
+          themePreference: userSettings.theme,
+          notificationSettings: {
+            email: userSettings.email_notifications,
+            push: userSettings.push_notifications,
+            achievements: true,
+            reminders: userSettings.study_reminder_enabled,
+          },
+        };
+
+        setSettings(settingsData);
+        resetSettingsForm(settingsData);
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        toast.error('設定の読み込みに失敗しました');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, [resetSettingsForm]);
 
   const onSettingsSubmit = async (data: UserSettingsData) => {
     setSaving(true);

@@ -85,26 +85,25 @@ const Statistics: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const loadStatistics = async () => {
+      try {
+        setLoading(true);
+        const filters: AnalyticsFilters = {
+          period,
+          subject: selectedSubject === 'all' ? undefined : selectedSubject || undefined,
+        };
+
+        const analyticsData = await dashboardService.getAnalytics(filters);
+        setData(analyticsData);
+      } catch (error) {
+        console.error('Error fetching analytics data:', error);
+        toast.error('統計データの取得に失敗しました');
+      } finally {
+        setLoading(false);
+      }
+    };
     loadStatistics();
   }, [period, selectedSubject]);
-
-  const loadStatistics = async () => {
-    try {
-      setLoading(true);
-      const filters: AnalyticsFilters = {
-        period,
-        subject: selectedSubject === 'all' ? undefined : selectedSubject || undefined,
-      };
-      
-      const analyticsData = await dashboardService.getAnalytics(filters);
-      setData(analyticsData);
-    } catch (error) {
-      console.error('Error fetching analytics data:', error);
-      toast.error('統計データの取得に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleExportData = () => {
     // Implement data export functionality

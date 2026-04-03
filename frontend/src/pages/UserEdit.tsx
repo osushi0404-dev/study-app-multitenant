@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Paper,
@@ -67,15 +67,11 @@ const UserEdit: React.FC = () => {
     severity: 'success' as 'success' | 'error' 
   });
 
-  useEffect(() => {
-    fetchUser();
-  }, [id]);
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get(`/api/admin/users/${id}/`);
-      
+
       const user = response.data;
       setUserData(user);
       setFormData({
@@ -88,15 +84,19 @@ const UserEdit: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      setSnackbar({ 
-        open: true, 
-        message: 'ユーザー情報の取得に失敗しました', 
-        severity: 'error' 
+      setSnackbar({
+        open: true,
+        message: 'ユーザー情報の取得に失敗しました',
+        severity: 'error',
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
 
   const handleChange = (field: keyof UserEditFormData) => (
     event: React.ChangeEvent<HTMLInputElement>

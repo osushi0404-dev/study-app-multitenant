@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import authService from '../services/auth.service';
 import apiClient from '../services/api';
 import { User } from '../services/types';
@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     // Clear auto-logout timers
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -81,13 +81,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (warningTimeoutRef.current) {
       clearTimeout(warningTimeoutRef.current);
     }
-    
+
     await authService.logout();
     setUser(null);
     apiClient.removeAuthToken();
-  };
+  }, []);
 
-  const resetAutoLogoutTimer = () => {
+  const resetAutoLogoutTimer = useCallback(() => {
     // Clear existing timers
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -146,7 +146,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await handleLogout();
       }
     }, timeoutMs);
-  };
+  }, [user, handleLogout]);
 
   const extendSession = () => {
     resetAutoLogoutTimer();
@@ -332,7 +332,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleWindowFocus);
-      
+
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
@@ -340,7 +340,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         clearTimeout(warningTimeoutRef.current);
       }
     };
-  }, [user]);
+  }, [user, resetAutoLogoutTimer]);
 
   return (
     <AuthContext.Provider value={{

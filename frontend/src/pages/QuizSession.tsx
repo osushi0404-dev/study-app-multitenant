@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -61,6 +61,8 @@ const QuizSessionPage: React.FC = () => {
   const [totalProblemsInSubject, setTotalProblemsInSubject] = useState<number>(0);  // 追加
   const [imageModalOpen, setImageModalOpen] = useState<string>('');  // 画像拡大表示用
   const [isReviewMode, setIsReviewMode] = useState<boolean>(false);  // 追加
+  const isReviewModeRef = useRef(isReviewMode);
+  useLayoutEffect(() => { isReviewModeRef.current = isReviewMode; }, [isReviewMode]);
 
   const { id } = useParams();
   const navigate = useNavigate();
@@ -70,29 +72,50 @@ const QuizSessionPage: React.FC = () => {
   // カスタムフック使用：表示用統計値を計算（React Hooksルールに従いトップレベルで呼び出す）
   const stats = useQuizDisplayStats(session, showResult, result, totalProblemsInSubject);
 
-  useEffect(() => {
-    if (id) {
-      // 既存のセッションを取得
-      loadSession(id);
-    } else {
-      // 新しいセッションを作成
-      createNewSession();
-    }
-  }, [id]);
+  const loadNextProblem = useCallback(async (sessionId: string) => {
+    try {
+      setLoading(true);
+      setShowResult(false);
+      setResult(null);
+      setSelectedChoices([]);
+      setTextAnswer('');
 
-  // 単一選択問題の即時回答機能（UX改善）
-  useEffect(() => {
-    if (
-      currentProblem?.problem_type === 'single_choice' &&
-      selectedChoices.length === 1 &&
-      !submitting &&
-      !showResult
-    ) {
-      handleSubmitAnswer();
-    }
-  }, [selectedChoices, currentProblem, submitting, showResult]);
+      const response = await apiClient.get(`/api/quiz/${sessionId}/next_problem/`);
 
-  const createNewSession = async () => {
+      if (response.data && response.data.id) {
+        setCurrentProblem(response.data);
+        setStartTime(Date.now());
+
+        // 科目の総問題数と復習モードフラグを設定
+        if (response.data.total_problems_in_subject) {
+          setTotalProblemsInSubject(response.data.total_problems_in_subject);
+        }
+        if (response.data.is_review_mode !== undefined) {
+          // 復習モード開始時にトースト通知
+          if (response.data.is_review_mode && !isReviewModeRef.current) {
+            toast.success('全問題を解き終えました。既出問題から再度出題しています。');
+          }
+          setIsReviewMode(response.data.is_review_mode);
+        }
+      } else {
+        console.error('Invalid problem data:', response.data);
+        toast.error('問題の読み込みに失敗しました');
+      }
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        // 問題が1問もない科目
+        toast.error('この科目には問題が登録されていません');
+        navigate('/dashboard');
+      } else {
+        console.error('Error loading problem:', error);
+        toast.error('問題の読み込みに失敗しました');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  const createNewSession = useCallback(async () => {
     try {
       setLoading(true);
       const sessionData: any = {};
@@ -114,14 +137,14 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [subjectId, navigate, loadNextProblem]);
 
-  const loadSession = async (sessionId: string) => {
+  const loadSession = useCallback(async (sessionId: string) => {
     try {
       setLoading(true);
       const response = await apiClient.get(`/api/quiz/${sessionId}/`);
       setSession(response.data);
-      
+
       if (response.data.is_active) {
         // アクティブなセッションの場合、次の問題を取得
         await loadNextProblem(sessionId);
@@ -136,50 +159,7 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadNextProblem = async (sessionId: string) => {
-    try {
-      setLoading(true);
-      setShowResult(false);
-      setResult(null);
-      setSelectedChoices([]);
-      setTextAnswer('');
-
-      const response = await apiClient.get(`/api/quiz/${sessionId}/next_problem/`);
-
-      if (response.data && response.data.id) {
-        setCurrentProblem(response.data);
-        setStartTime(Date.now());
-
-        // 科目の総問題数と復習モードフラグを設定
-        if (response.data.total_problems_in_subject) {
-          setTotalProblemsInSubject(response.data.total_problems_in_subject);
-        }
-        if (response.data.is_review_mode !== undefined) {
-          // 復習モード開始時にトースト通知
-          if (response.data.is_review_mode && !isReviewMode) {
-            toast.success('全問題を解き終えました。既出問題から再度出題しています。');
-          }
-          setIsReviewMode(response.data.is_review_mode);
-        }
-      } else {
-        console.error('Invalid problem data:', response.data);
-        toast.error('問題の読み込みに失敗しました');
-      }
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        // 問題が1問もない科目
-        toast.error('この科目には問題が登録されていません');
-        navigate('/dashboard');
-      } else {
-        console.error('Error loading problem:', error);
-        toast.error('問題の読み込みに失敗しました');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [navigate, loadNextProblem]);
 
   const completeSession = async (sessionId: string) => {
     try {
@@ -191,7 +171,7 @@ const QuizSessionPage: React.FC = () => {
     }
   };
 
-  const handleSubmitAnswer = async (): Promise<void> => {
+  const handleSubmitAnswer = useCallback(async (): Promise<void> => {
     if (!session || !currentProblem) return;
 
     // 回答のバリデーション
@@ -199,7 +179,7 @@ const QuizSessionPage: React.FC = () => {
       toast.error('回答を入力してください');
       return;
     }
-    
+
     if (currentProblem.problem_type !== 'text' && selectedChoices.length === 0) {
       toast.error('選択肢を選んでください');
       return;
@@ -227,7 +207,7 @@ const QuizSessionPage: React.FC = () => {
 
       setResult(response.data);
       setShowResult(true);
-      
+
       // セッション情報を更新
       if (response.data.session) {
         setSession(response.data.session);
@@ -238,7 +218,29 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [session, currentProblem, selectedChoices, textAnswer, startTime]);
+
+  useEffect(() => {
+    if (id) {
+      // 既存のセッションを取得
+      loadSession(id);
+    } else {
+      // 新しいセッションを作成
+      createNewSession();
+    }
+  }, [id, loadSession, createNewSession]);
+
+  // 単一選択問題の即時回答機能（UX改善）
+  useEffect(() => {
+    if (
+      currentProblem?.problem_type === 'single_choice' &&
+      selectedChoices.length === 1 &&
+      !submitting &&
+      !showResult
+    ) {
+      handleSubmitAnswer();
+    }
+  }, [selectedChoices, currentProblem, submitting, showResult, handleSubmitAnswer]);
 
   const handleNextQuestion = (): void => {
     if (session) {

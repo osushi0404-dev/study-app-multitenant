@@ -61,7 +61,8 @@
           "name": "vitest",
           "message": "このプロジェクトは Jest を使用しています。vitest は使用禁止です。"
         }]
-      }]
+      }],
+      "react-hooks/exhaustive-deps": "error"
     }
   },
   "browserslist": {

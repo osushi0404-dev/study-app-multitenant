@@ -31,24 +31,23 @@ const SubjectDetail: React.FC = () => {
       setLoading(false);
       return;
     }
+    const fetchSubject = async () => {
+      setLoading(true);
+      try {
+        const response = await apiClient.get(`/api/subjects/${id}/`);
+        setSubject(response.data);
+      } catch (e: any) {
+        if (e?.response?.status === 404) {
+          setNotFound(true);
+        } else {
+          toast.error('科目情報の取得に失敗しました');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchSubject();
   }, [id, isOrgAdmin]);
-
-  const fetchSubject = async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get(`/api/subjects/${id}/`);
-      setSubject(response.data);
-    } catch (e: any) {
-      if (e?.response?.status === 404) {
-        setNotFound(true);
-      } else {
-        toast.error('科目情報の取得に失敗しました');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!isOrgAdmin) {
     return (

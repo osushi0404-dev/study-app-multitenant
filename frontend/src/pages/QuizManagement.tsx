@@ -140,6 +140,8 @@ const QuizManagement: React.FC = () => {
   useEffect(() => {
     fetchProblems();
     fetchSubjects();
+  // fetchProblems・fetchSubjects はコンポーネント内関数のためマウント時のみ実行（deps に追加すると無限ループになる）
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // フィルタ変更時に問題を再取得し、ページをリセット
@@ -148,6 +150,8 @@ const QuizManagement: React.FC = () => {
       setPage(0);  // ページを1ページ目にリセット
       fetchProblems();
     }
+  // fetchProblems はコンポーネント内関数のためフィルタ値のみを deps に指定（追加すると無限ループになる）
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSubject, filterDifficulty]);
 
   const fetchProblems = async () => {
