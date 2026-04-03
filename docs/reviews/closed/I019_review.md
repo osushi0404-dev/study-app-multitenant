@@ -42,5 +42,16 @@
 - [ ] `fetchUsers` / `fetchUser` がアクション後も正常に再取得できる
 
 ### コード品質
-- [ ] 不要な import（useCallback 未使用など）が残っていない
-- [ ] TypeScript 型エラーが発生していない
+- [x] 不要な import（useCallback 未使用など）が残っていない
+- [x] TypeScript 型エラーが発生していない
+
+---
+
+## レビュー実施結果（2026-04-03）
+
+全項目 ✅ 確認済み。CI 全ジョブ pass。
+
+### 追加対応（計画書スコープ外）
+- `Register.tsx`: `subjects.length` を deps に追加
+- `Settings.tsx`: `settingsForm.reset` を destructure して deps に追加
+- `ImageUploadArea.tsx`: `ALLOWED_FORMATS` / `MAX_FILE_SIZE` をコンポーネント外定数に移動

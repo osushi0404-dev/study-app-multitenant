@@ -52,7 +52,16 @@ cd frontend && npx tsc --noEmit
 
 | チェック | 実施前 | 実施後 |
 |---------|--------|--------|
-| eslint exit code | （計測予定） | 0 |
-| eslint exhaustive-deps 警告件数 | （計測予定） | 0 |
-| フロントエンドテスト pass/fail | （計測予定） | 変化なし |
-| tsc --noEmit exit code | （計測予定） | 0 |
+| eslint exit code | 0（warn のため） | 0 |
+| eslint exhaustive-deps エラー件数 | 0（warn レベル、CI 通過） | 0（error レベルでも 0） |
+| フロントエンドテスト pass/fail | 7 passed | 7 passed（変化なし） |
+| tsc --noEmit exit code | 0 | 0 |
+
+## 実施結果（2026-04-03）
+
+| AT | 結果 | 備考 |
+|----|------|------|
+| AT-01 Frontend Lint | ✅ PASS | CI frontend-lint green、exhaustive-deps エラー 0 件 |
+| AT-02 Frontend テスト | ✅ PASS | 7 passed, 0 failed |
+| AT-03 TypeScript 型チェック | ✅ PASS | tsc --noEmit exit 0 |
+| Backend テスト | ✅ PASS | 25 passed, 3 warnings（既存） |
