@@ -70,9 +70,11 @@ CI の内容（全部 pass しないとマージ不可）:
 ─────────────────────────────────────────────
 /issue-bootstrap ──────────────→ Draft PR 作成
 /plan-issue      （計画書作成）
+/plan-issue-review（計画書レビュー）
 /implement ────────────────────→ push → CI 実行
 /code-review     （CI 結果確認）
 /test            （テスト確認）
+/retro           （振り返り・推奨）
 /close ────────────────────────→ PR 本文整備 → develop へマージ
                                   （main へは定期リリース時のみ）
 ```
@@ -98,10 +100,11 @@ feature/I###-xxx ← イシューごとに作成
 
 ```
 docs/
-├── issues/      open / closed / templates   # イシューファイル
-├── plans/       open / closed / templates   # 計画書
-├── tests/       open / closed / templates   # テスト文書（自動・手動）
-└── reviews/     open / closed / templates   # レビュー文書
+├── issues/      open / in_progress / closed / templates   # イシューファイル
+├── plans/       open / closed                             # 計画書
+├── proposals/                                             # 改善提案資料
+├── tests/       open / closed / templates                 # テスト文書（自動・手動）
+└── reviews/     open / closed / templates                 # レビュー文書
 ```
 
 ---
@@ -125,8 +128,13 @@ docs/
 ## 参照先
 
 - 運用フロー詳細: `docs/runbooks/workflow.md`
+- イシューフロー: `docs/runbooks/issue-flow.md`
 - 計画書の書き方: `docs/runbooks/plan-writing-rules.md`
+- レビュールール: `docs/runbooks/review-rules.md`
 - 危険操作: `docs/runbooks/danger-ops.md`
 - よく使うコマンド: `docs/runbooks/common-commands.md`
+- UX ルール: `docs/runbooks/ux-rules.md`
+- バックエンドチェック: `docs/runbooks/backend-check.md`
+- テンプレート同期: `docs/runbooks/template-sync.md`
 - コーディング規約（Backend）: `rules/ultimate_django_coding_standards.md`
 - コーディング規約（Frontend）: `rules/react-coding-standards-integrated.md`
