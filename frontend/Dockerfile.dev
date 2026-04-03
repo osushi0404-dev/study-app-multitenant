@@ -16,5 +16,9 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Start development server
-CMD ["npm", "start"]
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Start via entrypoint (clears webpack cache on every start)
+CMD ["/usr/local/bin/docker-entrypoint.sh"]

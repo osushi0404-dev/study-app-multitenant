@@ -51,6 +51,20 @@ nginx/         - Nginx設定
 - ログファイル: `backend/logs/django.log`
 - フロントエンドのURL変更時はキャッシュクリア必要
 
+## webpack キャッシュトラブル対処
+
+### 症状
+新規 `.ts`/`.tsx` ファイル追加後に `TS2307: Cannot find module '...'` が発生する。
+
+### 恒久対処（I024 実装済み）
+コンテナ起動時に自動でキャッシュクリアされます。`docker-compose restart frontend` で解消します。
+
+### 手動回避（緊急時）
+```bash
+docker-compose exec frontend rm -rf /app/node_modules/.cache
+docker-compose restart frontend
+```
+
 ## 修正済みの問題（履歴）
 1. psutil依存関係エラー - try-catchで処理済み
 2. Redis HiredisParserエラー - PARSER_CLASS削除で解決
