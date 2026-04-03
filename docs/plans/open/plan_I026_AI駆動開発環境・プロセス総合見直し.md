@@ -16,6 +16,7 @@
 | 2026-04-03 | `docs/runbooks/onboarding.md` の最新化を実施対象に追加 | ユーザー |
 | 2026-04-03 | 提案資料の各改善項目に「概要・メリットの詳細説明」を追記 | ユーザー |
 | 2026-04-03 | in_progress ディレクトリ関連の改善項目（F・E の一部）を削除 | ユーザー |
+| 2026-04-03 | GitHub 未活用機能（Dependabot・PR テンプレート・Branch protection・Projects）を改善候補に追加 | ユーザー |
 
 ---
 
@@ -133,6 +134,10 @@
 | Sequential Thinking / Web Search MCP 導入検討 | 中 | 中 |
 | issue-flow.md 採番ロジック修正 | 中 | 小 |
 | workflow.md /retro 推奨化 | 低 | 小 |
+| Dependabot 設定（pip・npm 自動更新 PR・セキュリティアラート） | 高 | 小 |
+| PR テンプレート追加（.github/pull_request_template.md） | 高 | 小 |
+| Branch protection rules 設定（ユーザー操作 + 手順書作成） | 中 | 小 |
+| GitHub Projects + Milestones 設定 | 中 | 小 |
 
 ---
 

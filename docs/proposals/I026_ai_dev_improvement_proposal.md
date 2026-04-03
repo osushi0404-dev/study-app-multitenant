@@ -11,14 +11,15 @@
 本プロジェクトは Claude Code + Django REST Framework + React TypeScript の構成で、  
 「イシュー → 計画 → 実装 → テスト → レビュー → マージ」の安全寄りワークフローで開発している。
 
-現状の運用は概ね機能しているが、以下の4領域に改善余地がある：
+現状の運用は概ね機能しているが、以下の5領域に改善余地がある：
 
 1. **Claude Code 設定**（`.claude/settings.json`）: 頻繁に使うコマンドが ask 扱いになっており作業が止まる
 2. **MCP サーバー**: 未導入。GitHub MCP 等を活用することで gh CLI の限界を超えた操作が可能になる
-3. **ワークフロー**: `/retro` の実施率が低い可能性
-4. **ドキュメント**: `onboarding.md` の情報が古く、`issue-flow.md` の採番ロジックがスキル実装と不一致
+3. **GitHub 未活用機能**: Dependabot・PR テンプレート・Branch protection rules・Projects 等が未設定
+4. **ワークフロー**: `/retro` の実施率が低い可能性
+5. **ドキュメント**: `onboarding.md` の情報が古く、`issue-flow.md` の採番ロジックがスキル実装と不一致
 
-優先度・期待効果に基づき、**settings.json 改善** と **GitHub MCP 導入** を最優先で実施することを推奨する。
+優先度・期待効果に基づき、**settings.json 改善**・**Dependabot**・**PR テンプレート** を最優先で実施することを推奨する。
 
 ---
 
@@ -76,6 +77,19 @@ Claude Code は MCP（Model Context Protocol）を通じて外部ツールと連
 |------|------|
 | `/retro` の実施率が不明 | 「任意」扱いのため振り返りを経由せず `/close` に進むケースがある可能性 |
 | `issue-bootstrap` と `issue-flow.md` の採番ロジック不一致 | スキル: FS最大値 と git履歴最大値の大きい方+1 ／ docs: ローカル最大 + GitHub件数 + 1 |
+
+---
+
+### 1-3b. GitHub 未活用機能
+
+**現状**: 以下の GitHub 機能が未設定。
+
+| 機能 | 現状 | 設定者 |
+|------|------|--------|
+| Dependabot | 未設定 | Claude（`.github/dependabot.yml` 追加のみ） |
+| PR テンプレート | 未設定 | Claude（`.github/pull_request_template.md` 追加のみ） |
+| Branch protection rules | 未設定（hooks で代替中） | ユーザー（Settings 画面操作）+ Claude（手順書作成） |
+| GitHub Projects / Milestones | 未設定 | Claude（gh CLI で作成可能） |
 
 ---
 
@@ -265,6 +279,107 @@ Claude の学習データのカットオフ（2025年8月）以降の情報も�
 
 ---
 
+### G: Dependabot 設定
+
+**優先度**: 高 ／ **概算規模**: 小（30分）
+
+#### 何をするか
+
+`.github/dependabot.yml` を追加し、pip（Backend）と npm（Frontend）の依存パッケージを自動監視する。
+
+**設定イメージ**:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+```
+
+#### なぜ必要か・どんなメリットがあるか
+
+- **セキュリティ脆弱性の自動検出**: 依存パッケージに既知の CVE が発見されると GitHub が自動アラートを出す
+- **自動更新 PR**: 週次で依存パッケージの更新 PR を自動作成してくれるため、手動で `pip list --outdated` や `npm outdated` を確認する手間がなくなる
+- **CI との連携**: 自動作成された PR にも CI が走るため、更新で壊れた場合にすぐ検知できる
+- **設定コストが極めて低い**: ファイル1つ追加するだけで有効化でき、メンテナンスも不要
+
+---
+
+### H: PR テンプレート追加
+
+**優先度**: 高 ／ **概算規模**: 小（15分）
+
+#### 何をするか
+
+`.github/pull_request_template.md` を追加し、PR 作成時に本文のひな形を自動挿入する。
+
+**テンプレート内容（案）**:
+- 概要（何をしたか）
+- 関連イシュー（Closes #XXX）
+- 変更点
+- テスト確認内容
+- ロールバック手順
+- 参照ドキュメント
+
+#### なぜ必要か・どんなメリットがあるか
+
+- **Claude の `/close` 品質向上**: 現状 Claude は PR 本文を毎回ゼロから書くが、テンプレートがあると「埋めるべき項目」が強制される
+- **レビュー効率向上**: 本文の構成が統一されることで、何が変わったのかをすぐに把握できる
+- **抜け漏れ防止**: ロールバック手順や関連イシュー番号の記載忘れを防げる
+
+---
+
+### I: Branch protection rules 設定
+
+**優先度**: 中 ／ **概算規模**: 小（手順書作成 30分 + ユーザー操作 5分）
+
+#### 何をするか
+
+GitHub リポジトリの Settings > Branches で `develop` と `main` に対して以下を設定する（ユーザーが Settings 画面で操作）。Claude が手順書を作成する。
+
+**設定内容（案）**:
+- Require a pull request before merging（直 push 禁止）
+- Require status checks to pass（CI 全 pass 必須）
+- Do not allow bypassing the above settings（管理者も対象）
+
+#### なぜ必要か・どんなメリットがあるか
+
+現状は `.claude/settings.json` の deny ルールと `pretooluse_guard.py` で直 push をブロックしているが、これらは **Claude Code 経由の操作のみ** を対象にしている。
+
+Branch protection rules を設定することで：
+- **GitHub Web UI・他のツール経由の push も防止**できる二重ガードになる
+- CI が通らない状態でのマージを GitHub 側で物理的に防止できる
+- 設定は Claude がコードを書かずユーザーが GUI で5分で完了できる
+
+---
+
+### J: GitHub Projects + Milestones 設定
+
+**優先度**: 中 ／ **概算規模**: 小（30分）
+
+#### 何をするか
+
+`gh` CLI を使い、改善イシュー A〜H を管理する GitHub Projects（カンバンボード）と Milestones（Phase 1〜3）を作成する。
+
+**Milestones（案）**:
+- Phase 1: settings.json・Dependabot・PR テンプレート（A・G・H）
+- Phase 2: GitHub MCP・採番ロジック修正・Branch protection・Projects（B・C・I・J）
+- Phase 3: Web Search MCP・/retro 推奨化（D・E）
+
+#### なぜ必要か・どんなメリットがあるか
+
+- **改善の進捗が一目でわかる**: カンバンボードで「未着手 / 進行中 / 完了」が可視化される
+- **Milestone でフェーズ管理**: Phase 1 完了率が何%かを GitHub 上で確認できる
+- **issue 起票との連動**: 各改善イシューを作成するときに Milestone を設定するだけでグルーピングできる
+
+---
+
 ## 3. 改善候補一覧（優先度サマリー）
 
 | # | 改善内容 | 優先度 | 期待効果 | 概算規模 |
@@ -274,29 +389,37 @@ Claude の学習データのカットオフ（2025年8月）以降の情報も�
 | C | issue-flow.md 採番ロジック修正 | 中 | docs とスキル実装の乖離解消・採番ミス防止 | 小（30分） |
 | D | Sequential Thinking / Web Search MCP 導入検討 | 中 | 計画立案品質の向上・最新情報のリアルタイム参照 | 中（半日） |
 | E | workflow.md /retro 推奨化 | 低 | 振り返りルーティン化による運用改善サイクルの確立 | 小（30分） |
+| G | Dependabot 設定（pip・npm 自動更新 PR・セキュリティアラート） | **高** | 依存パッケージの脆弱性を自動検出・更新 PR を自動作成 | 小（30分） |
+| H | PR テンプレート追加 | **高** | Claude が /close で書く PR 本文の品質・統一性向上 | 小（15分） |
+| I | Branch protection rules 設定 | 中 | hooks に加え GitHub 側でも直 push・CI 未通過マージを防止 | 小（手順書作成 30分 + ユーザー操作 5分） |
+| J | GitHub Projects + Milestones 設定 | 中 | 改善イシュー A〜H の進捗をカンバンで一元管理 | 小（30分） |
 
 ---
 
 ## 4. 推奨ロードマップ
 
 ```
-Phase 1（即実施・高効果）
-  └─ A: settings.json 改善
-  └─ B: GitHub MCP 導入
+Phase 1（即実施・高効果）         設定者
+  └─ A: settings.json 改善       Claude
+  └─ G: Dependabot 設定          Claude
+  └─ H: PR テンプレート追加       Claude
+  └─ B: GitHub MCP 導入          Claude
 
 Phase 2（中期・品質改善）
-  └─ C: issue-flow.md 採番ロジック修正
-  └─ D: Sequential Thinking / Web Search MCP 検討・導入
+  └─ C: issue-flow.md 採番ロジック修正          Claude
+  └─ I: Branch protection rules 設定           ユーザー（Claude が手順書作成）
+  └─ J: GitHub Projects + Milestones 設定      Claude
+  └─ D: Sequential Thinking / Web Search MCP  Claude
 
 Phase 3（長期・運用改善）
-  └─ E: workflow.md 記述改善
-  └─ F: in_progress 運用開始（スキル変更を伴う）
+  └─ E: workflow.md /retro 推奨化              Claude
 ```
 
 **実施順序の根拠**:
-- A・B は独立して実施可能かつ日常的な摩擦を直接解消するため最優先
-- C は A・B の実施後でも問題なく、規模が小さいため Phase 2 で吸収可能
-- F はスキル変更を伴うため、A〜E で運用が安定してから着手するのが安全
+- A・G・H は設定コストが極めて低く即効性が高いため最優先
+- B（GitHub MCP）は認証設定が必要なため Phase 1 の後半
+- I はユーザー操作が必要なため、Claude 側の準備（手順書）と合わせて Phase 2
+- E は他の改善が安定してから振り返りを強制する順序が自然
 
 ---
 
@@ -368,6 +491,58 @@ Phase 3（長期・運用改善）
 
 **スコープ（含まない）**:
 - スキル本体の変更
+
+---
+
+### G: Dependabot 設定
+
+**タイトル案**: `Dependabot 設定（pip・npm 依存パッケージ自動更新）`
+
+**スコープ（含む）**:
+- `.github/dependabot.yml` の作成（pip・npm 週次更新設定）
+- セキュリティアラートの有効確認
+
+**スコープ（含まない）**:
+- Dependabot が作成した PR のマージ（CI 通過後はユーザーが判断）
+
+---
+
+### H: PR テンプレート追加
+
+**タイトル案**: `PR テンプレート追加（.github/pull_request_template.md）`
+
+**スコープ（含む）**:
+- `.github/pull_request_template.md` の作成
+- `/close` スキルが参照するよう案内を追記（任意）
+
+**スコープ（含まない）**:
+- 既存 PR の遡及的な修正
+
+---
+
+### I: Branch protection rules 設定
+
+**タイトル案**: `GitHub Branch protection rules 設定手順書の作成と適用`
+
+**スコープ（含む）**:
+- `develop`・`main` への設定手順書を Claude が作成
+- ユーザーが Settings 画面で適用
+
+**スコープ（含まない）**:
+- main の保護ルール緩和（リリース時フローへの影響を別途確認）
+
+---
+
+### J: GitHub Projects + Milestones 設定
+
+**タイトル案**: `GitHub Projects カンバンと Milestones（Phase 1〜3）の設定`
+
+**スコープ（含む）**:
+- `gh` CLI で Milestones 3件（Phase 1〜3）を作成
+- GitHub Projects ボードを作成し各改善イシューを登録
+
+**スコープ（含まない）**:
+- Projects の自動化ルール設定（issue クローズ時の自動移動等）
 
 ---
 
