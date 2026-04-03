@@ -7,7 +7,6 @@ import {
   Button,
   Typography,
   Box,
-  Alert,
   CircularProgress,
   IconButton,
   InputAdornment,
@@ -16,7 +15,6 @@ import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import toast from 'react-hot-toast';
 
 import { useAuth } from '../contexts/AuthContext';
 

@@ -18,16 +18,12 @@ import {
   Select,
   MenuItem,
   Fab,
-  Alert,
   CircularProgress,
   FormControlLabel,
-  Switch,
   RadioGroup,
   Radio,
   Checkbox,
   FormLabel,
-  FormGroup,
-  Divider,
   Table,
   TableBody,
   TableCell,
@@ -44,10 +40,7 @@ import {
   Edit,
   Delete,
   Preview,
-  FilterList,
-  Close,
   Save,
-  SmartToy,
   AutoAwesome,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -57,7 +50,7 @@ import * as yup from 'yup';
 import { toast } from 'react-hot-toast';
 import AIQuestionGenerator from '../components/AIQuestionGenerator';
 import ProblemPreview from '../components/ProblemPreview';
-import { Subject, Problem, Choice } from '../services/types';
+import { Subject, Problem } from '../services/types';
 import apiClient from '../services/api';
 
 

@@ -164,7 +164,6 @@ class ApiClient {
 
   private handleApiError(error: AxiosError) {
     const status = error.response?.status;
-    const data = error.response?.data as any;
 
     // Don't show error for auth endpoints (handled by auth context)
     if (error.config?.url?.includes('/auth/')) {

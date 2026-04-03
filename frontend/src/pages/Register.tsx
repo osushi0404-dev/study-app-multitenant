@@ -187,7 +187,6 @@ const Register: React.FC = () => {
     register,
     handleSubmit,
     setError,
-    watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: yupResolver(schema),

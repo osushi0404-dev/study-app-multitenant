@@ -9,14 +9,9 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  FormControl,
   LinearProgress,
   Chip,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Checkbox,
   FormGroup,
   TextField,
@@ -29,20 +24,15 @@ import {
   NavigateNext,
   Home,
   Refresh,
-  Timer,
-  QuestionAnswer,
   School,
   CheckCircleOutline,  // 追加: 正解マーカー用
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import apiClient from '../services/api';
 import {
   QuizSession,
   Problem,
-  Choice,
   QuizResult,
-  SubmitAnswerData,
 } from '../types/quiz';
 import { useQuizDisplayStats } from '../hooks/useQuizDisplayStats';
 import ImageModal from '../components/ImageModal';
@@ -160,16 +150,6 @@ const QuizSessionPage: React.FC = () => {
       setLoading(false);
     }
   }, [navigate, loadNextProblem]);
-
-  const completeSession = async (sessionId: string) => {
-    try {
-      const response = await apiClient.post(`/api/quiz/${sessionId}/end/`);
-      setSession(response.data);
-      setSessionComplete(true);
-    } catch (error) {
-      console.error('Error completing session:', error);
-    }
-  };
 
   const handleSubmitAnswer = useCallback(async (): Promise<void> => {
     if (!session || !currentProblem) return;

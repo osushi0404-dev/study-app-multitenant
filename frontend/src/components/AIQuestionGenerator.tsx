@@ -26,7 +26,6 @@ import {
 import {
   AutoAwesome as AIIcon,
   Psychology as AdaptiveIcon,
-  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import apiService from '../services/api';

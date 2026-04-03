@@ -21,7 +21,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   LineChart,
   Line,
   PieChart,
@@ -29,7 +28,7 @@ import {
   Cell,
   ResponsiveContainer,
 } from 'recharts';
-import { Download, TrendingUp, Assessment } from '@mui/icons-material';
+import { Download } from '@mui/icons-material';
 import dashboardService from '../services/dashboard.service';
 import { AnalyticsData, AnalyticsFilters } from '../services/types';
 import { toast } from 'react-hot-toast';
@@ -47,29 +46,6 @@ const formatDate = (date: Date, formatStr: string) => {
   }
   return date.toLocaleDateString();
 };
-
-interface StatisticsData {
-  studyTimeData: Array<{
-    date: string;
-    minutes: number;
-    subject?: string;
-  }>;
-  accuracyTrend: Array<{
-    date: string;
-    accuracy: number;
-  }>;
-  subjectBreakdown: Array<{
-    subject: string;
-    timeSpent: number;
-    accuracy: number;
-    problemsSolved: number;
-  }>;
-  mistakePatterns: Array<{
-    pattern: string;
-    count: number;
-    improvement: number;
-  }>;
-}
 
 const Statistics: React.FC = () => {
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
