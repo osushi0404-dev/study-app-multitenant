@@ -5,7 +5,6 @@ import {
   LoginResponse,
   RegisterRequest,
   User,
-  TokenRefreshRequest,
   TokenRefreshResponse,
 } from './types';
 

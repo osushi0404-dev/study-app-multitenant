@@ -24,7 +24,6 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
-  Fab,
   Tooltip
 } from '@mui/material';
 import {
@@ -35,8 +34,6 @@ import {
   Computer as ComputerIcon,
   Storage as StorageIcon,
   Speed as SpeedIcon,
-  People as PeopleIcon,
-  Notifications as NotificationsIcon,
   ClearAll as ClearAllIcon
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
@@ -73,7 +70,7 @@ interface ErrorSummary {
   period_days: number;
 }
 
-interface Alert {
+interface MonitoringAlert {
   type: string;
   severity: 'warning' | 'critical';
   message: string;
@@ -83,7 +80,7 @@ interface Alert {
 const Monitoring: React.FC = () => {
   const [healthData, setHealthData] = useState<HealthData | null>(null);
   const [errorSummary, setErrorSummary] = useState<ErrorSummary | null>(null);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<MonitoringAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
