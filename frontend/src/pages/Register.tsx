@@ -181,7 +181,7 @@ const Register: React.FC = () => {
     };
 
     fetchSubjects();
-  }, [organizationSlug, isValidatingOrg, orgValidationError, currentStep]);
+  }, [organizationSlug, isValidatingOrg, orgValidationError, currentStep, subjects.length]);
 
   const {
     register,

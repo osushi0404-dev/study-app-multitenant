@@ -74,9 +74,92 @@ const Dashboard: React.FC = () => {
     setMountKey(Date.now());
   }, []);
 
+  const fetchDashboardData = useCallback(async () => {
+    // checkForAchievements は fetchDashboardData からのみ使用するためローカル関数として定義
+    const checkForAchievements = (data: DashboardData) => {
+      const { stats } = data;
+
+      // statsが存在しない場合は処理をスキップ
+      if (!stats) return;
+
+      // Check for streak milestones
+      if (stats.current_streak > 0 && stats.current_streak % 7 === 0) {
+        showStreakNotification(stats.current_streak);
+      }
+
+      // Check for problem count milestones
+      const milestones = [10, 50, 100, 250, 500, 1000];
+      milestones.forEach(milestone => {
+        if (stats.total_problems_solved === milestone) {
+          showAchievement(`${milestone}問解答達成！おめでとうございます！🎉`);
+        }
+      });
+
+      // Check for accuracy achievements
+      if (stats.accuracy_rate >= 0.95 && stats.total_problems_solved >= 20) {
+        const lastCheck = localStorage.getItem('lastHighAccuracyNotification');
+        const today = new Date().toDateString();
+
+        if (lastCheck !== today) {
+          showAchievement('素晴らしい正答率です！95%以上をキープしています！🎯');
+          localStorage.setItem('lastHighAccuracyNotification', today);
+        }
+      }
+
+      // Check for daily goal achievements
+      const dailyGoalMinutes = 60; // This should come from user settings
+      const todayStudyMinutes = Math.floor(stats.today_study_time / 60);
+
+      if (todayStudyMinutes >= dailyGoalMinutes) {
+        const lastCheck = localStorage.getItem('lastDailyGoalNotification');
+        const today = new Date().toDateString();
+
+        if (lastCheck !== today) {
+          showAchievement('今日の学習目標を達成しました！継続は力なり！💪');
+          localStorage.setItem('lastDailyGoalNotification', today);
+        }
+      }
+    };
+
+    try {
+      setLoading(true);
+      const params = selectedSubject && selectedSubject !== 'all'
+        ? { subject_id: selectedSubject }
+        : {};
+      const data = await dashboardService.getDashboardData(params);
+
+      // プロパティが存在しない場合はデフォルト値を設定
+      const dashboardDataWithDefaults = {
+        ...data,
+        stats: data?.stats || {
+          today_study_time: 0,
+          week_study_time: 0,
+          total_problems_solved: 0,
+          accuracy_rate: 0,
+          current_streak: 0,
+          longest_streak: 0
+        },
+        weekly_progress: Array.isArray(data?.weekly_progress) ? data.weekly_progress : [],
+        subject_progress: Array.isArray(data?.subject_progress) ? data.subject_progress : [],
+        recommendations: Array.isArray(data?.recommendations) ? data.recommendations : [],
+        recent_sessions: Array.isArray(data?.recent_sessions) ? data.recent_sessions : []
+      };
+
+      // Check for achievements and show notifications
+      checkForAchievements(dashboardDataWithDefaults);
+
+      setDashboardData(dashboardDataWithDefaults);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('ダッシュボードデータの取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedSubject, showAchievement, showStreakNotification]);
+
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedSubject]);
+  }, [selectedSubject, fetchDashboardData]);
 
   // 科目取得処理（データ取得のみに専念）
   useEffect(() => {
@@ -118,88 +201,6 @@ const Dashboard: React.FC = () => {
     setSubjectDialogOpen(false);
     navigate(`/quiz?subject=${subjectId}`);
   }, [navigate]);
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const params = selectedSubject && selectedSubject !== 'all'
-        ? { subject_id: selectedSubject }
-        : {};
-      const data = await dashboardService.getDashboardData(params);
-      
-      // プロパティが存在しない場合はデフォルト値を設定
-      const dashboardDataWithDefaults = {
-        ...data,
-        stats: data?.stats || {
-          today_study_time: 0,
-          week_study_time: 0,
-          total_problems_solved: 0,
-          accuracy_rate: 0,
-          current_streak: 0,
-          longest_streak: 0
-        },
-        weekly_progress: Array.isArray(data?.weekly_progress) ? data.weekly_progress : [],
-        subject_progress: Array.isArray(data?.subject_progress) ? data.subject_progress : [],
-        recommendations: Array.isArray(data?.recommendations) ? data.recommendations : [],
-        recent_sessions: Array.isArray(data?.recent_sessions) ? data.recent_sessions : []
-      };
-      
-      // Check for achievements and show notifications
-      checkForAchievements(dashboardDataWithDefaults);
-      
-      setDashboardData(dashboardDataWithDefaults);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      toast.error('ダッシュボードデータの取得に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkForAchievements = (data: DashboardData) => {
-    const { stats } = data;
-    
-    // statsが存在しない場合は処理をスキップ
-    if (!stats) return;
-    
-    // Check for streak milestones
-    if (stats.current_streak > 0 && stats.current_streak % 7 === 0) {
-      showStreakNotification(stats.current_streak);
-    }
-    
-    // Check for problem count milestones
-    const milestones = [10, 50, 100, 250, 500, 1000];
-    milestones.forEach(milestone => {
-      if (stats.total_problems_solved === milestone) {
-        showAchievement(`${milestone}問解答達成！おめでとうございます！🎉`);
-      }
-    });
-    
-    // Check for accuracy achievements
-    if (stats.accuracy_rate >= 0.95 && stats.total_problems_solved >= 20) {
-      const lastCheck = localStorage.getItem('lastHighAccuracyNotification');
-      const today = new Date().toDateString();
-      
-      if (lastCheck !== today) {
-        showAchievement('素晴らしい正答率です！95%以上をキープしています！🎯');
-        localStorage.setItem('lastHighAccuracyNotification', today);
-      }
-    }
-    
-    // Check for daily goal achievements
-    const dailyGoalMinutes = 60; // This should come from user settings
-    const todayStudyMinutes = Math.floor(stats.today_study_time / 60);
-    
-    if (todayStudyMinutes >= dailyGoalMinutes) {
-      const lastCheck = localStorage.getItem('lastDailyGoalNotification');
-      const today = new Date().toDateString();
-      
-      if (lastCheck !== today) {
-        showAchievement('今日の学習目標を達成しました！継続は力なり！💪');
-        localStorage.setItem('lastDailyGoalNotification', today);
-      }
-    }
-  };
 
   if (loading || !dashboardData) {
     return (

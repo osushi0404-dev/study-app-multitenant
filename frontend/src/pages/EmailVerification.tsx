@@ -26,36 +26,35 @@ const EmailVerification: React.FC = () => {
   const token = searchParams.get('token');
 
   useEffect(() => {
+    const handleVerification = async (verificationToken: string) => {
+      try {
+        setStatus('loading');
+        await verifyEmail(verificationToken);
+        setStatus('success');
+
+        // Redirect to login page after successful verification
+        setTimeout(() => {
+          navigate('/login', {
+            state: { message: 'メール認証が完了しました。ログインしてください。' }
+          });
+        }, 3000);
+      } catch (error: any) {
+        console.error('Email verification error:', error);
+
+        // Check if token is expired or invalid
+        if (error?.response?.status === 400) {
+          setStatus('expired');
+        } else {
+          setStatus('error');
+        }
+      }
+    };
     if (token) {
       handleVerification(token);
     } else {
       setStatus('resend');
     }
-  }, [token]);
-
-  const handleVerification = async (verificationToken: string) => {
-    try {
-      setStatus('loading');
-      await verifyEmail(verificationToken);
-      setStatus('success');
-      
-      // Redirect to login page after successful verification
-      setTimeout(() => {
-        navigate('/login', { 
-          state: { message: 'メール認証が完了しました。ログインしてください。' }
-        });
-      }, 3000);
-    } catch (error: any) {
-      console.error('Email verification error:', error);
-      
-      // Check if token is expired or invalid
-      if (error?.response?.status === 400) {
-        setStatus('expired');
-      } else {
-        setStatus('error');
-      }
-    }
-  };
+  }, [token, verifyEmail, navigate]);
 
   const handleResendVerification = async () => {
     if (!email.trim()) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -89,10 +89,10 @@ const Monitoring: React.FC = () => {
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
 
-  const fetchMonitoringData = async () => {
+  const fetchMonitoringData = useCallback(async () => {
     try {
       setRefreshing(true);
-      
+
       const [healthResponse, errorsResponse, alertsResponse] = await Promise.all([
         apiService.get('/health/'),
         apiService.get('/monitoring/errors/?days=7'),
@@ -102,7 +102,7 @@ const Monitoring: React.FC = () => {
       setHealthData(healthResponse.data);
       setErrorSummary(errorsResponse.data);
       setAlerts(alertsResponse.data.alerts || []);
-      
+
     } catch (error) {
       console.error('Failed to fetch monitoring data:', error);
       toast.error('監視データの取得に失敗しました');
@@ -110,7 +110,7 @@ const Monitoring: React.FC = () => {
       setRefreshing(false);
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleClearCache = async () => {
     try {
@@ -133,12 +133,12 @@ const Monitoring: React.FC = () => {
 
   useEffect(() => {
     fetchMonitoringData();
-    
+
     // 30秒ごとに自動更新
     const interval = setInterval(fetchMonitoringData, 30000);
-    
+
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchMonitoringData]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

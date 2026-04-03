@@ -44,6 +44,13 @@ interface ImageUploadAreaProps {
  * - 個別の画像削除
  * - クライアント側バリデーション（ファイル形式、サイズ、枚数）
  */
+// 対応画像形式
+const ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/webp'];
+const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+// ファイルサイズ制限（5MB）
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
 const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
   label,
   images,
@@ -54,13 +61,6 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  // 対応画像形式
-  const ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/webp'];
-  const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
-
-  // ファイルサイズ制限（5MB）
-  const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
   /**
    * ファイルのバリデーション（フロントエンド側）

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import notificationService, { NotificationPermission } from '../services/notification.service';
 import dashboardService from '../services/dashboard.service';
 import { UserSettings } from '../services/types';
@@ -27,11 +27,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [currentReminderId, setCurrentReminderId] = useState<string | null>(null);
   const [activeRemindersCount, setActiveRemindersCount] = useState(0);
 
+  const updateActiveRemindersCount = useCallback(() => {
+    const count = notificationService.getActiveRemindersCount();
+    setActiveRemindersCount(count);
+  }, []);
+
   useEffect(() => {
     // Initialize notification permission status
     const currentPermission = notificationService.getPermissionStatus();
     setPermission(currentPermission);
-    
+
     // Load user settings and schedule reminders if enabled
     loadUserSettingsAndScheduleReminders();
 
@@ -44,7 +49,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     return () => {
       clearInterval(interval);
     };
-  }, []);
+  // loadUserSettingsAndScheduleReminders は scheduleReminders チェーンが複雑で
+  // useCallback 化すると循環参照になるため mount-only として意図的に抑制
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateActiveRemindersCount]);
 
   const loadUserSettingsAndScheduleReminders = async () => {
     try {
@@ -55,11 +63,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     } catch (error) {
       console.error('Error loading user settings for notifications:', error);
     }
-  };
-
-  const updateActiveRemindersCount = () => {
-    const count = notificationService.getActiveRemindersCount();
-    setActiveRemindersCount(count);
   };
 
   const requestPermission = async (): Promise<NotificationPermission> => {
@@ -120,17 +123,17 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     notificationService.testNotification();
   };
 
-  const showAchievement = (message: string) => {
+  const showAchievement = useCallback((message: string) => {
     if (notificationService.isEnabled()) {
       notificationService.showAchievementNotification(message);
     }
-  };
+  }, []);
 
-  const showStreakNotification = (days: number) => {
+  const showStreakNotification = useCallback((days: number) => {
     if (notificationService.isEnabled()) {
       notificationService.showStreakNotification(days);
     }
-  };
+  }, []);
 
   const value: NotificationContextType = {
     permission,
