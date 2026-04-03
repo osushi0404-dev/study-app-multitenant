@@ -15,7 +15,7 @@
 
 1. **Claude Code 設定**（`.claude/settings.json`）: 頻繁に使うコマンドが ask 扱いになっており作業が止まる
 2. **MCP サーバー**: 未導入。GitHub MCP 等を活用することで gh CLI の限界を超えた操作が可能になる
-3. **ワークフロー**: `in_progress` ディレクトリが未活用、`/retro` の実施率が低い可能性
+3. **ワークフロー**: `/retro` の実施率が低い可能性
 4. **ドキュメント**: `onboarding.md` の情報が古く、`issue-flow.md` の採番ロジックがスキル実装と不一致
 
 優先度・期待効果に基づき、**settings.json 改善** と **GitHub MCP 導入** を最優先で実施することを推奨する。
@@ -74,7 +74,6 @@ Claude Code は MCP（Model Context Protocol）を通じて外部ツールと連
 
 | 問題 | 詳細 |
 |------|------|
-| `in_progress` ディレクトリ未活用 | `docs/issues/in_progress/` が定義済みだが、実装中のイシューは `open/` に留まったまま |
 | `/retro` の実施率が不明 | 「任意」扱いのため振り返りを経由せず `/close` に進むケースがある可能性 |
 | `issue-bootstrap` と `issue-flow.md` の採番ロジック不一致 | スキル: FS最大値 と git履歴最大値の大きい方+1 ／ docs: ローカル最大 + GitHub件数 + 1 |
 
@@ -245,20 +244,15 @@ Claude の学習データのカットオフ（2025年8月）以降の情報も�
 
 ---
 
-### E: workflow.md 記述改善（/retro 推奨化・in_progress 記述追加）
+### E: workflow.md /retro 推奨化
 
 **優先度**: 低 ／ **概算規模**: 小（30分）
 
 #### 何をするか
 
-`docs/runbooks/workflow.md` の以下2箇所を修正する：
-
-1. `/retro` の扱いを「任意」→「推奨（テスト OK 後は原則実施）」に変更
-2. `in_progress` ディレクトリを「将来の改善候補」として明記
+`docs/runbooks/workflow.md` の `/retro` の扱いを「任意」→「推奨（テスト OK 後は原則実施）」に変更する。
 
 #### なぜ必要か・どんなメリットがあるか
-
-**`/retro` の推奨化**:
 
 `/retro` スキルは「テスト OK 後の振り返り」を行うフェーズで、以下を確認する：
 - 実装中に気づいた runbooks・CLAUDE.md の改善点
@@ -268,37 +262,6 @@ Claude の学習データのカットオフ（2025年8月）以降の情報も�
 現状「任意」扱いのため省略されがちだが、**振り返りを実施しないと問題が蓄積され、同じ失敗が繰り返される**。推奨化することで：
 - 運用ルールの継続的改善サイクルが回る
 - CLAUDE.md・runbooks が実態に合い続ける
-
-**`in_progress` 記述追加**:
-
-現在、実装中のイシューも `open/` ディレクトリに置かれているため、「計画中」と「実装中」の区別がつかない。docs に状態の定義を明記することで、将来スキル対応（改善F）を行う際の基準が明確になる。
-
----
-
-### F: in_progress ディレクトリ運用開始
-
-**優先度**: 低 ／ **概算規模**: 小（1h）
-
-#### 何をするか
-
-`/implement` スキルの冒頭でイシューファイルを `docs/issues/open/` → `docs/issues/in_progress/` へ移動し、`/close` スキルで `in_progress/` → `closed/` へ移動するよう、各スキルを修正する。
-
-```
-open/I026.md
-  ↓ /implement 開始時
-in_progress/I026.md
-  ↓ /close 完了時
-closed/I026.md
-```
-
-#### なぜ必要か・どんなメリットがあるか
-
-現状、`docs/issues/open/` に「計画中」「実装待ち」「実装中」「レビュー中」のイシューが混在している。
-
-`in_progress/` を活用することで：
-- **実装中イシューが一目でわかる**: `ls docs/issues/in_progress/` で現在進行中の作業が把握できる
-- **並行作業時の状態管理**: 複数イシューを同時に進める場合（例：別ブランチでの作業）、どのイシューがどの状態か明確になる
-- **スタック検知**: `in_progress/` に長期間残っているイシューを見つけやすくなる（作業が止まっているサインとして使える）
 
 ---
 
@@ -310,8 +273,7 @@ closed/I026.md
 | B | GitHub MCP 導入・設定 | **高** | PR/issue の高度参照・差分分析・レビュー対応の自動化 | 中（半日） |
 | C | issue-flow.md 採番ロジック修正 | 中 | docs とスキル実装の乖離解消・採番ミス防止 | 小（30分） |
 | D | Sequential Thinking / Web Search MCP 導入検討 | 中 | 計画立案品質の向上・最新情報のリアルタイム参照 | 中（半日） |
-| E | workflow.md /retro 推奨・in_progress 記述追加 | 低 | 振り返りルーティン化による運用改善サイクルの確立 | 小（30分） |
-| F | in_progress ディレクトリの運用開始（スキル側変更） | 低 | 実装中イシューの可視化・並行作業時の状態管理 | 小（1h） |
+| E | workflow.md /retro 推奨化 | 低 | 振り返りルーティン化による運用改善サイクルの確立 | 小（30分） |
 
 ---
 
@@ -397,30 +359,15 @@ Phase 3（長期・運用改善）
 
 ---
 
-### E: workflow.md 記述改善
+### E: workflow.md /retro 推奨化
 
-**タイトル案**: `workflow.md の /retro 推奨化と in_progress ディレクトリ記述追加`
+**タイトル案**: `workflow.md の /retro 推奨化`
 
 **スコープ（含む）**:
 - `/retro` を「任意」→「推奨（テスト OK 後は原則実施）」に変更
-- `in_progress` ディレクトリの活用を「将来の改善候補」として明記
 
 **スコープ（含まない）**:
 - スキル本体の変更
-
----
-
-### F: in_progress ディレクトリ運用開始
-
-**タイトル案**: `/implement 開始時にイシューファイルを in_progress へ移動するフロー実装`
-
-**スコープ（含む）**:
-- `/implement` スキルの修正（open → in_progress 移動を追加）
-- `/close` スキルの修正（in_progress → closed 移動に対応）
-- `workflow.md` の更新
-
-**スコープ（含まない）**:
-- `in_progress` 状態での CI・通知連携
 
 ---
 

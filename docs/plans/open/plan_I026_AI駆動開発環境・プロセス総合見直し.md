@@ -15,6 +15,7 @@
 | 2026-04-03 | 実施対象を「runbooks修正」から「提案資料作成（案A）のみ」に変更 | ユーザー |
 | 2026-04-03 | `docs/runbooks/onboarding.md` の最新化を実施対象に追加 | ユーザー |
 | 2026-04-03 | 提案資料の各改善項目に「概要・メリットの詳細説明」を追記 | ユーザー |
+| 2026-04-03 | in_progress ディレクトリ関連の改善項目（F・E の一部）を削除 | ユーザー |
 
 ---
 
@@ -88,13 +89,11 @@
 
 **現状**:
 - 9スキル（issue-bootstrap, plan-issue, plan-issue-review, implement, code-review, test, fix-loop, retro, close）
-- `docs/issues/in_progress/` ディレクトリが定義されているが未活用
 - /retro スキルが「任意」扱いで実施率が低い可能性
 
 **識別した改善候補（別イシューへ）**:
-1. **in_progress ディレクトリの活用**: /implement 開始時にイシューファイルを open→in_progress へ移動するフローを明文化（スキル変更を伴う）
-2. **/retro の推奨度を上げる**: workflow.md で「任意」→「推奨」に変更
-3. **issue-bootstrap の採番ロジック不一致**: issue-bootstrap スキルは「FS + git 履歴の最大値」を使うが、issue-flow.md は「ローカル最大 + GitHub 件数」の別ロジックを定義 → 要統一
+1. **/retro の推奨度を上げる**: workflow.md で「任意」→「推奨」に変更
+2. **issue-bootstrap の採番ロジック不一致**: issue-bootstrap スキルは「FS + git 履歴の最大値」を使うが、issue-flow.md は「ローカル最大 + GitHub 件数」の別ロジックを定義 → 要統一
 
 ### 4-4. ドキュメント（CLAUDE.md・runbooks）
 
@@ -103,7 +102,7 @@
 | 対象ファイル | 問題 |
 |------------|------|
 | docs/runbooks/issue-flow.md | 採番ロジックが issue-bootstrap スキルと不一致 |
-| docs/runbooks/workflow.md | in_progress の扱いが未記述、/retro が「任意」表記 |
+| docs/runbooks/workflow.md | /retro が「任意」表記 |
 | CLAUDE.md | スキル一覧の説明文が概要のみ（トリガー条件の補足余地あり） |
 
 ---
@@ -122,7 +121,7 @@
 | 箇所 | 問題 | 修正内容 |
 |------|------|---------|
 | 「全体の流れ」図 | `/plan-issue-review` ステップが欠落 | `/plan-issue` の次に追加 |
-| `docs/` 構成 | `proposals/`・`issues/in_progress` が未記載 | 追記 |
+| `docs/` 構成 | `proposals/` が未記載 | 追記 |
 | 参照先 | `issue-flow.md`・`review-rules.md`・`ux-rules.md`・`backend-check.md`・`template-sync.md` が欠落 | 追記 |
 
 ### 5-2. 別イシューへ切り出す
@@ -133,8 +132,7 @@
 | GitHub MCP 導入・設定 | 高 | 中 |
 | Sequential Thinking / Web Search MCP 導入検討 | 中 | 中 |
 | issue-flow.md 採番ロジック修正 | 中 | 小 |
-| workflow.md /retro 推奨・in_progress 記述追加 | 低 | 小 |
-| in_progress ディレクトリの運用開始（スキル側変更） | 低 | 小 |
+| workflow.md /retro 推奨化 | 低 | 小 |
 
 ---
 
@@ -160,7 +158,7 @@ mkdir -p docs/proposals/
 
 **修正箇所**:
 1. 「全体の流れ」図：`/plan-issue` の次行に `/plan-issue-review` を追加
-2. `docs/` 構成：`proposals/` と `issues/in_progress` を追記
+2. `docs/` 構成：`proposals/` を追記
 3. 参照先：`issue-flow.md`・`review-rules.md`・`ux-rules.md`・`backend-check.md`・`template-sync.md` を追記
 
 ---
