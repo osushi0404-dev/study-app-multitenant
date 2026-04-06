@@ -10,7 +10,7 @@ cd frontend && npm test -- --watchAll=false --passWithNoTests
 cd backend && flake8 . --format='::error file=%(path)s,line=%(row)d,col=%(col)d::%(code)s %(text)s'
 
 # ESLint ローカル確認（formatter インストール後）
-cd frontend && npx eslint src/ --ext .ts,.tsx -f github
+cd frontend && npx eslint src/ --ext .ts,.tsx -f github-actions
 ```
 
 ## CI 確認項目
