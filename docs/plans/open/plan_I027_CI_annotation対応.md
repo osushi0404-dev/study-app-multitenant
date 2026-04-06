@@ -72,7 +72,7 @@ flake8 の `--format` は Python `%` 形式のフォーマット文字列を受�
 
 ### 5-2. ESLint annotation 対応
 
-**修正アプローチ**: `eslint-formatter-github` パッケージを devDependencies に追加し、ESLint の `-f` オプションで指定する。ESLint は `-f <name>` で `eslint-formatter-<name>` をフォーマッタとして使用する仕様。
+**修正アプローチ**: `eslint-formatter-github-actions` パッケージを devDependencies に追加し、ESLint の `-f` オプションで指定する。ESLint は `-f <name>` で `eslint-formatter-<name>` をフォーマッタとして使用する仕様。依存パッケージゼロで stdout に `::error`/`::warning` を出力する。
 
 **変更ファイル 1**: `frontend/package.json`
 
@@ -105,7 +105,7 @@ CI 上では `npm ci` でインストール済みになるため、追加の ins
 ## 6. 実装手順
 
 1. `.github/workflows/ci.yml` の `backend-lint` ジョブの flake8 コマンドを修正
-2. `frontend/package.json` の devDependencies に `eslint-formatter-github` を追加
+2. `frontend/package.json` の devDependencies に `eslint-formatter-github-actions` を追加
 3. `frontend/package-lock.json` を更新（`npm install` 実行）
 4. `.github/workflows/ci.yml` の `frontend-lint` ジョブの ESLint コマンドを修正
 5. push → CI が pass することを確認
@@ -122,7 +122,7 @@ CI 上では `npm ci` でインストール済みになるため、追加の ins
 ## 8. ロールバック
 
 - `.github/workflows/ci.yml` を変更前のコマンドに戻す（git revert または手動修正）
-- `frontend/package.json` から `eslint-formatter-github` を削除、`npm install` 実行
+- `frontend/package.json` から `eslint-formatter-github-actions` を削除、`npm install` 実行
 
 ---
 
@@ -131,7 +131,7 @@ CI 上では `npm ci` でインストール済みになるため、追加の ins
 | リスク | 回避策 |
 |---|---|
 | flake8 の `--format` で annotation が正しく出力されない | CI ログで確認。NG なら `flake8-github-annotations` パッケージに切り替え |
-| `eslint-formatter-github` の最新バージョンで動作しない | CI ログで確認。NG なら SARIF 方式（`@microsoft/eslint-formatter-sarif` + upload-sarif）に切り替え |
+| `eslint-formatter-github-actions` が動作しない | CI ログで確認。NG なら SARIF 方式（`@microsoft/eslint-formatter-sarif` + upload-sarif）に切り替え |
 | 既存 ESLint 12 warnings が annotation として表示される | 仕様通りの挙動。既存問題の可視化であり CI pass/fail には影響しない |
 
 ---
@@ -139,7 +139,7 @@ CI 上では `npm ci` でインストール済みになるため、追加の ins
 ## 10. セキュリティチェック
 
 バックエンド・フロントエンドのアプリケーションコードの変更なし。CI 設定とパッケージ追加のみ。
-追加する `eslint-formatter-github` はフォーマッタ専用パッケージでアプリへの影響なし。
+追加する `eslint-formatter-github-actions` は依存ゼロのフォーマッタ専用パッケージでアプリへの影響なし。
 
 **セキュリティ影響なし**
 
@@ -152,13 +152,13 @@ CI 上では `npm ci` でインストール済みになるため、追加の ins
 | 判断項目 | 根拠 |
 |---|---|
 | flake8 に `--format` フラグを使用（パッケージ不要） | イシューでは `flake8-github-annotations` を明記していたが、依存追加不要な方が優位として提案・承認済み |
-| ESLint に `eslint-formatter-github` を使用 | イシューに明記 |
+| ESLint に `eslint-formatter-github-actions` を使用 | 当初 `eslint-formatter-github`（API経由）を採用したが CI で HttpError が発生。依存ゼロ・stdout出力の `eslint-formatter-github-actions` に変更・承認済み |
 | SARIF 方式は採用しない | PR annotation が目的であり、セキュリティスキャン用途の SARIF はスコープ外として提案・承認済み |
 
 ### チェックリスト
 
 - [ ] flake8: `--format` フラグ方式（新パッケージなし）で進める
-- [ ] ESLint: `eslint-formatter-github` パッケージを追加して進める
+- [ ] ESLint: `eslint-formatter-github-actions` パッケージを追加して進める
 - [ ] 既存 ESLint 12 warnings が annotation 表示されることを許容する
 - [ ] `backend/requirements-dev.txt` は変更しない
 - [ ] ロールバック方法を把握している
