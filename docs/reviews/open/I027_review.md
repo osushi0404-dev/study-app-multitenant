@@ -15,8 +15,8 @@ CI の flake8 / ESLint 失敗を GitHub Actions annotation として PR の File
 - Config/Infra: `.github/workflows/ci.yml`
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: ✅ Backend 25 passed / Frontend 7 passed、全CI pass
+- 手動: ✅ flake8・ESLint アノテーション表示確認、違反修正後 CI pass 確認
 
 ## 計画との差分
 - なし
