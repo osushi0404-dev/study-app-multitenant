@@ -20,7 +20,7 @@ jobs:
       - name: Install dev dependencies
         run: pip install -r backend/requirements-dev.txt
       - name: flake8
-        run: flake8 .
+        run: flake8 . --format='::error file=%(path)s,line=%(row)d,col=%(col)d::%(code)s %(text)s'
         working-directory: backend
       - name: bandit
         run: bandit -r . -x ./\*/migrations/,./\*/tests/ -ll
@@ -96,7 +96,7 @@ jobs:
         run: npm ci
         working-directory: frontend
       - name: ESLint
-        run: npx eslint src/ --ext .ts,.tsx
+        run: npx eslint src/ --ext .ts,.tsx -f github-actions
         working-directory: frontend
 
   frontend-test:
