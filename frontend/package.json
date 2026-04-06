@@ -44,6 +44,7 @@
     ]
   },
   "devDependencies": {
+    "eslint-formatter-github": "^1.0.0",
     "eslint-plugin-security": "^3.0.0"
   },
   "eslintConfig": {
