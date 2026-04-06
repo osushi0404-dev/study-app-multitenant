@@ -78,8 +78,11 @@ flake8 の `--format` は Python `%` 形式のフォーマット文字列を受�
 
 devDependencies に追加:
 ```json
-"eslint-formatter-github": "^1.0.0"
+"eslint-formatter-github-actions": "^1.1.0"
 ```
+
+※当初 `eslint-formatter-github` を採用したが、GitHub API 経由でアノテーションを投稿する設計のため CI で `HttpError: Not Found` が発生。
+`eslint-formatter-github-actions`（依存パッケージゼロ・stdout `::error` 出力）に変更。
 
 **変更ファイル 2**: `.github/workflows/ci.yml`
 
@@ -91,7 +94,7 @@ devDependencies に追加:
 
 # 変更後
 - name: ESLint
-  run: npx eslint src/ --ext .ts,.tsx -f github
+  run: npx eslint src/ --ext .ts,.tsx -f github-actions
   working-directory: frontend
 ```
 

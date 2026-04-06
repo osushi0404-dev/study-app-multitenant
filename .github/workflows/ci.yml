@@ -96,7 +96,7 @@ jobs:
         run: npm ci
         working-directory: frontend
       - name: ESLint
-        run: npx eslint src/ --ext .ts,.tsx -f github
+        run: npx eslint src/ --ext .ts,.tsx -f github-actions
         working-directory: frontend
 
   frontend-test:
