@@ -21,6 +21,6 @@ cd frontend && npx eslint src/ --ext .ts,.tsx -f github-actions
 
 ## 結果
 
-- backend-lint:
-- frontend-lint:
-- frontend テスト:
+- backend-lint: ✅ pass（CI確認済み）
+- frontend-lint: ✅ pass（CI確認済み）
+- frontend テスト: ✅ 7 passed, 2 suites
