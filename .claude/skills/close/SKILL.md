@@ -48,7 +48,37 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    ```bash
    ls docs/issues/open/ docs/plans/open/ docs/tests/open/ docs/reviews/open/
    ```
-2) PR説明に「目的/変更点/テスト/ロールバック/参照パス」を揃える
+2) PR テンプレートを読み込み、各セクションを実装内容で埋めて PR 説明を更新する:
+   ```bash
+   # テンプレートを確認
+   cat .github/pull_request_template.md
+   ```
+   テンプレートの各セクション（概要・関連イシュー・変更点・テスト確認・ロールバック手順・参照ドキュメント）を
+   イシュー・計画書・テスト結果をもとに埋め、gh pr edit で PR 説明を更新する:
+   ```bash
+   gh pr edit <PR番号> --body "$(cat <<'EOF'
+   ## 概要
+   ...（実装内容を記載）
+
+   ## 関連イシュー
+   Closes #...
+
+   ## 変更点
+   ...
+
+   ## テスト確認
+   - [x] CI（自動テスト）pass 確認
+   - [x] 手動テスト確認
+
+   ## ロールバック手順
+   ...
+
+   ## 参照ドキュメント
+   ...
+   EOF
+   )"
+   ```
+   テンプレートが存在しない場合は「目的/変更点/テスト/ロールバック/参照パス」を手動で記載する。
 3) commit/push して PR を更新
 4) PR のベースブランチが `develop` であることを確認・修正:
    ```bash
