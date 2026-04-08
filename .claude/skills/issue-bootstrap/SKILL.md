@@ -1,6 +1,6 @@
 ---
 name: issue-bootstrap
-description: Create issue doc, create issue branch, create draft PR.
+description: Create issue doc and GitHub Issue only. Branch creation is handled by /plan-issue.
 argument-hint: "[title]"
 disable-model-invocation: true
 allowed-tools: Read, Bash, Write, Edit, Glob, Grep
@@ -53,31 +53,7 @@ cp docs/issues/templates/issue_template.md docs/issues/open/I${ISSUE_NUM}.md
 # 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
 ```
 
-### 4. ブランチ作成（必須）
-developブランチをベースにfeatureブランチを作成：
-```bash
-git checkout develop
-git pull origin develop  # リモートがある場合
-git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
-```
-
-**ブランチ命名規則**:
-- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
-- 例: `feature/I030-media-asset-models`
-
-**概要の英語化ルール**:
-- 日本語の概要をシンプルな英語に変換
-- スペースは`-`（ハイフン）に変換
-- 最大5単語程度に要約
-
-### 5. ドキュメントをコミット・プッシュ
-```bash
-git add docs/issues/open/I${ISSUE_NUM}.md
-git commit -m "docs: create issue I${ISSUE_NUM}"
-git push -u origin feature/I${ISSUE_NUM}-[概要]
-```
-
-### 6. GitHubイシューの登録（必須）
+### 4. GitHubイシューの登録（必須）
 ```bash
 gh issue create \
   --title "I${ISSUE_NUM}: [イシュータイトル]" \
@@ -91,25 +67,29 @@ gh issue create \
 - Documentation → `documentation`
 - Refactoring → `refactoring`
 
-### 7. Draft PR作成
+### 5. イシューファイルに GitHub Issue 番号を記録
+GitHub Issue 作成後、返却された Issue URL から番号を取得してイシューファイルに追記する:
 ```bash
-gh pr create \
-  --title "feat: I${ISSUE_NUM} [イシュータイトル]" \
-  --body "## 概要\nI${ISSUE_NUM}: [概要]\n\n## 関連イシュー\nCloses #[GitHubイシュー番号]" \
-  --draft \
-  --base develop
+# gh issue create の出力から番号を取得（例: https://github.com/org/repo/issues/62 → #62）
+GITHUB_ISSUE_NUM=$(gh issue list --state open --limit 1 --json number --jq '.[0].number')
+# イシューファイルの「## 関連資料」セクションに追記
+# 例: sed -i を使って「## 関連資料」の次の行に挿入するか、
+#     Edit ツールで直接 「- GitHub Issue: #XX」 を追記する
 ```
 
-### 8. ユーザーへの報告
+記録フォーマット（`## 関連資料` セクションに追記）:
+```
+- GitHub Issue: #XX
+```
+
+### 6. ユーザーへの報告
 ```
 ✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
 📂 ファイル: docs/issues/open/I${ISSUE_NUM}.md
-🌿 ブランチ: feature/I${ISSUE_NUM}-[概要]
 🔗 GitHubイシュー: [GitHubイシューURL]
-📋 Draft PR: [PR URL]
 
-このブランチで作業を開始します。
-次のステップ: /plan-issue I${ISSUE_NUM} で計画書を作成してください。
+⚠️ ブランチはまだ作成されていません。
+次のステップ: /plan-issue I${ISSUE_NUM} でブランチ作成・計画書作成を行ってください。
 ```
 
 ## 詳細ルール

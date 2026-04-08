@@ -33,8 +33,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5) すべての作業は「記録（plan / tests / review）」が残る形で進める。
 
 ## 2. 使うスキル（/ で実行）
-- /issue-bootstrap [title] : 採番、イシューファイル作成、ブランチ作成、Draft PR 作成
-- /plan-issue I### : 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
+- /issue-bootstrap [title] : 採番、イシューファイル作成、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
+- /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
 - /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK なら /implement へ）
 - /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
 - /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
