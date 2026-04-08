@@ -37,6 +37,15 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
      👉 続けるには `/fix-loop $ARGUMENTS` を入力してください。
         fix-loop 完了後は `/test $ARGUMENTS` に戻ってください。
      ```
+   - **実行不可**: 構造的・環境的な理由でテストを実行できない場合も即 STOP。
+     「ロジックは正しいから OK」と判断して進めることは禁止。
+     ```
+     ⛔ テスト「[ケース名]」が実行不可です。
+        理由: [実行できない具体的な理由]
+        ロジックの正しさ: [確認済みの内容を記載]
+     👉 `/fix-loop $ARGUMENTS` でテスト設計の見直しまたは許容判断を行ってください。
+        fix-loop 完了後は `/test $ARGUMENTS` に戻ってください。
+     ```
 
 2) Frontend 自動テスト（Jest）:
    ```bash

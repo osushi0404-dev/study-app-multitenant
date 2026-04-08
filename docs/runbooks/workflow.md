@@ -16,6 +16,7 @@
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /code-review に戻る
 6. /test I### → 自動テスト＋手動テスト確認（OK/NG）
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /test に戻る
+   - **実行不可の場合も NG 扱い**: 構造的・環境的な理由でテストを実行できない場合も NG として /fix-loop を経由する。「ロジックは正しいから OK」と Claude が独断で判断して進めることは禁止。許容するかどうかの判断はユーザーが行う。
 7. OK の場合 /retro I###（任意）または /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。
