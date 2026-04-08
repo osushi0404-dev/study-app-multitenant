@@ -23,6 +23,8 @@
 
 - [ ] deny ルールに `-u` 形式（develop・main）と `HEAD` 形式が明示追加されているか
 - [ ] guard.py に `subprocess` で HEAD を実ブランチ名に解決するロジックが追加されているか
+- [ ] guard.py の push 系チェック 3 箇所（force push・保護ブランチ・HEAD）が `re.match` に統一されているか
+- [ ] コミットメッセージ内に保護ブランチ名を含む場合に誤ブロックされないか（AT-2・MT-5 確認）
 - [ ] `python3 *`（過剰）でなく `python3 scripts/*` 等に絞られているか
 - [ ] pretooluse_guard.py の既存ガードが引き続き機能しているか（AT-2 確認）
 - [ ] posttooluse_check.py がファイル不在・読み取り不可時にゼロ終了するか（フック自体でブロックしない）
@@ -31,7 +33,8 @@
 
 - [ ] 変更ファイルが計画書記載の 3 ファイルのみか（`.claude/settings.json`・`posttooluse_check.py`・`pretooluse_guard.py`）
 - [ ] allow に追加したパターンが計画書の 6 件と一致するか
-- [ ] deny に追加したパターンが計画書の 2 件と一致するか
+- [ ] deny に追加したパターンが計画書の 3 件と一致するか（`-u origin develop`・`-u origin main`・`-u origin HEAD`）
+- [ ] guard.py の push チェックが `re.match` に統一されているか（force push・保護ブランチ・HEAD の 3 箇所）
 
 ### 4. コードレビュー（posttooluse_check.py）
 

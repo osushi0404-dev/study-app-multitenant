@@ -10,7 +10,7 @@
 本イシューの変更対象は以下の 3 ファイル（設定ファイル・スクリプトのみ）：
 - `.claude/settings.json`
 - `scripts/claude/hooks/posttooluse_check.py`（新規）
-- `scripts/claude/hooks/pretooluse_guard.py`（HEAD push 検出追加）
+- `scripts/claude/hooks/pretooluse_guard.py`（HEAD push 検出追加・push 系チェックを re.match に統一）
 
 Django/React のアプリケーションコードへの変更はないため、pytest / Jest によるテストは不要。
 各スクリプトの動作確認は以下のコマンドで手動実行する。
@@ -58,7 +58,7 @@ echo "exit: $?"   # 期待: 0
 
 ---
 
-## AT-2: pretooluse_guard.py の動作確認（既存 + HEAD push 検出）
+## AT-2: pretooluse_guard.py の動作確認（既存 + HEAD push 検出 + re.match 誤検知防止）
 
 ```bash
 # 正常なコマンド → ゼロ終了
@@ -82,4 +82,9 @@ echo "exit: $?"   # 期待: 2（develop 上のため）
 echo '{"tool_name": "Bash", "tool_input": {"command": "git push -u origin HEAD"}}' \
   | python3 scripts/claude/hooks/pretooluse_guard.py
 echo "exit: $?"   # 期待: 0（feature ブランチのためブロックされない）
+
+# re.match 誤検知防止: コミットメッセージ内に保護ブランチ名が含まれても通過する
+echo '{"tool_name": "Bash", "tool_input": {"command": "git commit -m \"fix: protect develop and main branches\""}}' \
+  | python3 scripts/claude/hooks/pretooluse_guard.py
+echo "exit: $?"   # 期待: 0（commit コマンドのためブロックされない）
 ```
