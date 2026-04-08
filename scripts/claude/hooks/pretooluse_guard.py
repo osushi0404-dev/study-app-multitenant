@@ -42,15 +42,15 @@ def main():
 
     if not danger_ok:
         # force push requires explicit ack
-        if re.search(r"\bgit\s+push\b.*--force", cmd, re.I):
+        if re.match(r"git\s+push\b.*--force", cmd, re.I):
             _block("force push requires DANGER_OK=1", raw)
 
         # push to protected branches is forbidden
-        if re.search(r"\bgit\s+push\b.*\borigin\b\s+(develop|main)\b", cmd, re.I):
+        if re.match(r"git\s+push\b.*\borigin\b\s+(develop|main)\b", cmd, re.I):
             _block("direct push to develop/main is forbidden", raw)
 
         # git push ... HEAD on develop/main is forbidden
-        if re.search(r"\bgit\s+push\b.*\bHEAD\b", cmd, re.I):
+        if re.match(r"git\s+push\b.*\bHEAD\b", cmd, re.I):
             try:
                 result = subprocess.run(
                     ["git", "rev-parse", "--abbrev-ref", "HEAD"],

@@ -108,13 +108,31 @@ allow を拡充してユーザーの介入を「本当に重要な判断」の�
 ```
 `tool_input.file_path` から対象ファイルパスを取得する。
 
-### 4-5. `scripts/claude/hooks/pretooluse_guard.py` — HEAD push 検出を追加
+### 4-5. `scripts/claude/hooks/pretooluse_guard.py` — HEAD push 検出追加・re.match 統一
 
-`import subprocess` をファイル先頭に追加し、`if not danger_ok:` ブロック内の push チェック直後に以下を追加する：
+`import subprocess` をファイル先頭に追加する。
+
+#### re.search → re.match への統一（push 系チェック全3箇所）
+
+`git commit -m "...git push origin develop..."` のようなコミットメッセージ内の文字列に誤反応しないよう、push 系チェックを `re.search`（文字列全体を検索）から `re.match`（先頭からマッチ）に変更する。
+
+```python
+# force push（変更前: re.search → 変更後: re.match）
+if re.match(r"git\s+push\b.*--force", cmd, re.I):
+
+# 保護ブランチ直接 push（変更前: re.search → 変更後: re.match）
+if re.match(r"git\s+push\b.*\borigin\b\s+(develop|main)\b", cmd, re.I):
+```
+
+**トレードオフ**: `re.match` は先頭マッチのため `cd /dir && git push origin develop` のようなチェーン形式を検出できなくなる。このプロジェクトでは Claude がそのような形式で push を実行するケースは想定されないため許容する。
+
+#### HEAD push 検出の追加
+
+`if not danger_ok:` ブロック内の保護ブランチチェック直後に追加する：
 
 ```python
 # git push ... HEAD を develop/main ブランチ上で実行した場合をブロック
-if re.search(r"\bgit\s+push\b.*\bHEAD\b", cmd, re.I):
+if re.match(r"git\s+push\b.*\bHEAD\b", cmd, re.I):
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -128,8 +146,6 @@ if re.search(r"\bgit\s+push\b.*\bHEAD\b", cmd, re.I):
     except Exception:
         pass  # git が利用できない環境ではスキップ
 ```
-
-**なぜこの実装か**: settings.json の deny パターンは文字列マッチのみのため、`HEAD` を含むコマンドが develop/main を指すかどうか判定できない。guard.py で `git rev-parse --abbrev-ref HEAD` を実行して実際のブランチ名を解決することで、確実にブロックできる。
 
 ---
 
