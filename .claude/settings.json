@@ -31,6 +31,12 @@
       "Bash(git commit *)",
       "Bash(git remote -v)",
       "Bash(git rev-parse --show-toplevel)",
+      "Bash(git rev-parse *)",
+      "Bash(git fetch *)",
+      "Bash(git push -u origin *)",
+      "Bash(python3 scripts/*)",
+      "Bash(python3 -m py_compile *)",
+      "Bash(python3 -m json.tool *)",
       "Bash(gh pr create *)",
       "Bash(gh pr view *)",
       "Bash(gh pr status *)",
@@ -92,6 +98,9 @@
       "Bash(rm -rf / *)",
       "Bash(git push origin develop)",
       "Bash(git push origin main)",
+      "Bash(git push -u origin develop)",
+      "Bash(git push -u origin main)",
+      "Bash(git push -u origin HEAD)",
       "Bash(git push * --force*)",
       "Read(./.env)",
       "Read(./.env.*)",
@@ -107,6 +116,17 @@
     ]
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/posttooluse_check.py"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",

@@ -382,17 +382,18 @@ Branch protection rules を設定することで：
 
 ## 3. 改善候補一覧（優先度サマリー）
 
-| # | 改善内容 | 優先度 | 期待効果 | 概算規模 |
-|---|---------|--------|---------|---------|
-| A | settings.json 改善（allow 追加・PostToolUse フック） | **高** | 日常作業の確認ダイアログを大幅削減・編集後の自動品質チェック | 小（1〜2h） |
-| B | GitHub MCP 導入・設定 | **高** | PR/issue の高度参照・差分分析・レビュー対応の自動化 | 中（半日） |
-| C | issue-flow.md 採番ロジック修正 | 中 | docs とスキル実装の乖離解消・採番ミス防止 | 小（30分） |
-| D | Sequential Thinking / Web Search MCP 導入検討 | 中 | 計画立案品質の向上・最新情報のリアルタイム参照 | 中（半日） |
-| E | workflow.md /retro 推奨化 | 低 | 振り返りルーティン化による運用改善サイクルの確立 | 小（30分） |
-| G | Dependabot 設定（pip・npm 自動更新 PR・セキュリティアラート） | **高** | 依存パッケージの脆弱性を自動検出・更新 PR を自動作成 | 小（30分） |
-| H | PR テンプレート追加 | **高** | Claude が /close で書く PR 本文の品質・統一性向上 | 小（15分） |
-| I | Branch protection rules 設定 | 中 | hooks に加え GitHub 側でも直 push・CI 未通過マージを防止 | 小（手順書作成 30分 + ユーザー操作 5分） |
-| J | GitHub Projects + Milestones 設定 | 中 | 改善イシュー A〜H の進捗をカンバンで一元管理 | 小（30分） |
+| # | 改善内容 | 優先度 | 期待効果 | 概算規模 | 状態 |
+|---|---------|--------|---------|---------|------|
+| A | settings.json 改善（allow 追加・PostToolUse フック） | **高** | 日常作業の確認ダイアログを大幅削減・編集後の自動品質チェック | 小（1〜2h） | 進行中（I029） |
+| B | GitHub MCP 導入・設定 | **高** | PR/issue の高度参照・差分分析・レビュー対応の自動化 | 中（半日） | イシュー作成済み（I030） |
+| C | issue-flow.md 採番ロジック修正 | 中 | docs とスキル実装の乖離解消・採番ミス防止 | 小（30分） | イシュー作成済み（I031） |
+| D | Sequential Thinking / Web Search MCP 導入検討 | 中 | 計画立案品質の向上・最新情報のリアルタイム参照 | 中（半日） | イシュー作成済み（I035） |
+| E | workflow.md /retro 推奨化 | 低 | 振り返りルーティン化による運用改善サイクルの確立 | 小（30分） | イシュー作成済み（I036） |
+| G | Dependabot 設定（pip・npm 自動更新 PR・セキュリティアラート） | **高** | 依存パッケージの脆弱性を自動検出・更新 PR を自動作成 | 小（30分） | ✅ 完了（I028） |
+| H | PR テンプレート追加 | **高** | Claude が /close で書く PR 本文の品質・統一性向上 | 小（15分） | ✅ 完了（I028） |
+| I | Branch protection rules 設定 | 中 | hooks に加え GitHub 側でも直 push・CI 未通過マージを防止 | 小（手順書作成 30分 + ユーザー操作 5分） | イシュー作成済み（I032） |
+| J | GitHub Projects + Milestones 設定 | 中 | 改善イシュー A〜H の進捗をカンバンで一元管理 | 小（30分） | イシュー作成済み（I033） |
+| K | pre-commit hooks 導入（シークレット検出・品質チェック） | 中 | コミット前のシークレット検出・基本品質チェック自動化 | 小（1h） | イシュー作成済み（I034） |
 
 ---
 
@@ -400,9 +401,9 @@ Branch protection rules を設定することで：
 
 ```
 Phase 1（即実施・高効果）         設定者
-  └─ A: settings.json 改善       Claude
-  └─ G: Dependabot 設定          Claude
-  └─ H: PR テンプレート追加       Claude
+  └─ A: settings.json 改善       Claude          ← 次はここ
+  └─ G: Dependabot 設定          Claude          ✅ 完了（I028）
+  └─ H: PR テンプレート追加       Claude          ✅ 完了（I028）
   └─ B: GitHub MCP 導入          Claude
 
 Phase 2（中期・品質改善）

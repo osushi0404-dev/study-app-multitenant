@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import re
+import subprocess
 import sys
 
 def _load():
@@ -41,12 +42,27 @@ def main():
 
     if not danger_ok:
         # force push requires explicit ack
-        if re.search(r"\bgit\s+push\b.*--force", cmd, re.I):
+        if re.match(r"git\s+push\b.*--force", cmd, re.I):
             _block("force push requires DANGER_OK=1", raw)
 
         # push to protected branches is forbidden
-        if re.search(r"\bgit\s+push\b.*\borigin\b\s+(develop|main)\b", cmd, re.I):
+        if re.match(r"git\s+push\b.*\borigin\b\s+(develop|main)\b", cmd, re.I):
             _block("direct push to develop/main is forbidden", raw)
+
+        # git push ... HEAD on develop/main is forbidden
+        if re.match(r"git\s+push\b.*\bHEAD\b", cmd, re.I):
+            try:
+                result = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    capture_output=True, text=True
+                )
+                if result.returncode == 0 and result.stdout.strip() in ("develop", "main"):
+                    _block(
+                        f"push via HEAD to protected branch '{result.stdout.strip()}' is forbidden",
+                        raw
+                    )
+            except Exception:
+                pass  # git が利用できない環境ではスキップ
 
         # reset --hard requires explicit ack
         if re.search(r"\bgit\s+reset\b.*--hard\b", cmd, re.I):
