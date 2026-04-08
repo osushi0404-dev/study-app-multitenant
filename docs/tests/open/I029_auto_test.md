@@ -56,6 +56,17 @@ echo '{"tool_name": "Edit", "tool_input": {"file_path": "/tmp/nonexistent.py"}, 
 echo "exit: $?"   # 期待: 0
 ```
 
+### AT-1 実行結果（2026-04-08）
+
+| ケース | 期待 | 結果 |
+|--------|------|------|
+| AT-1-1: 正常な .py | exit 0 | ✅ exit 0 |
+| AT-1-2: 構文エラーの .py | exit 1 | ✅ exit 1（SyntaxError フィードバックあり） |
+| AT-1-3: 正常な .json | exit 0 | ✅ exit 0 |
+| AT-1-4: 不正な .json | exit 1 | ✅ exit 1（JSON エラーフィードバックあり） |
+| AT-1-5: 対象外 .md | exit 0 | ✅ exit 0 |
+| AT-1-6: 存在しないファイル | exit 0 | ✅ exit 0（サイレント） |
+
 ---
 
 ## AT-2: pretooluse_guard.py の動作確認（既存 + HEAD push 検出 + re.match 誤検知防止）
@@ -88,3 +99,24 @@ echo '{"tool_name": "Bash", "tool_input": {"command": "git commit -m \"fix: prot
   | python3 scripts/claude/hooks/pretooluse_guard.py
 echo "exit: $?"   # 期待: 0（commit コマンドのためブロックされない）
 ```
+
+### AT-2 実行結果（2026-04-08）
+
+| ケース | 期待 | 結果 |
+|--------|------|------|
+| AT-2-1: 正常なコマンド | exit 0 | ✅ exit 0 |
+| AT-2-2: 既存 deny（git push origin develop） | exit 2 | ✅ exit 2 |
+| AT-2-3: HEAD push（feature ブランチ上） | exit 0 | ✅ exit 0 |
+| AT-2-4: 誤検知防止（commit メッセージに develop を含む） | exit 0 | ✅ exit 0 |
+| AT-2-5: HEAD push（develop ブランチ上） | exit 2 | ⚠️ 実行不可（下記参照） |
+
+**AT-2-5 について**
+
+`git checkout develop` すると `pretooluse_guard.py` 自体も develop 版（HEAD チェックなし）に切り替わるため、feature ブランチで追加したロジックをマージ前に統合テストすることは構造的に不可能。
+
+ロジックの正しさはインラインデバッグで確認済み：
+- `re.match(r"git\s+push\b.*\bHEAD\b", "git push -u origin HEAD")` → マッチ
+- `git rev-parse --abbrev-ref HEAD`（develop 上）→ `"develop"`
+- `"develop" in ("develop", "main")` → `True` → ブロック処理に到達
+
+**マージ後に develop 上で AT-2-5 を実行して最終確認すること。**
