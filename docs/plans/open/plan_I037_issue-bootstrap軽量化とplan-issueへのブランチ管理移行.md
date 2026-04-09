@@ -207,6 +207,8 @@ CLAUDE.md 自身に「このファイルは短く保つ」「詳細ルールは 
 | MT-4 | `/plan-issue` 実行後のブランチ確認 | `feature/I###-...` ブランチが作成されている |
 | MT-5 | `/plan-issue` 実行後のイシューファイル確認 | イシューファイルがコミット済み（`git log` で確認） |
 | MT-6 | `/plan-issue` 実行後の GitHub 確認 | Draft PR が存在する |
+| MT-7 | `CLAUDE.md` にスキル一覧が記載されていない | スキル一覧ではなく `workflow.md` への参照1行のみ |
+| MT-8 | `workflow.md` に全スキル一覧が記載されている | 全スキル（/issue-bootstrap〜/close）が一覧されており、`/issue-bootstrap` と `/plan-issue` の説明が新しい責務を反映している |
 
 ---
 
