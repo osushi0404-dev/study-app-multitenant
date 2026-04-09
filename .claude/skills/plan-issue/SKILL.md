@@ -1,6 +1,6 @@
 ---
 name: plan-issue
-description: Create plan + tests + review docs for an issue. No code changes.
+description: Create branch, push, draft PR, then plan + tests + review docs for an issue.
 argument-hint: "I###"
 disable-model-invocation: true
 allowed-tools: Read, Bash, Write, Edit, Glob, Grep
@@ -13,6 +13,54 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 - docs/runbooks/plan-writing-rules.md
 - rules/ultimate_django_coding_standards.md
 - rules/react-coding-standards-integrated.md
+
+### ブランチ作成・プッシュ・Draft PR（必須）
+イシューファイルを読んで GitHub Issue 番号を確認した後、以下を実行する。
+
+#### 1. ブランチ作成
+developブランチをベースにfeatureブランチを作成：
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
+```
+
+**ブランチ命名規則**:
+- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
+- 例: `feature/I030-media-asset-models`
+
+**概要の英語化ルール**:
+- 日本語の概要をシンプルな英語に変換
+- スペースは`-`（ハイフン）に変換
+- 最大5単語程度に要約
+
+#### 2. イシューファイルのコミット・プッシュ
+```bash
+git add docs/issues/open/I${ISSUE_NUM}.md
+git commit -m "docs: create issue I${ISSUE_NUM}"
+git push -u origin feature/I${ISSUE_NUM}-[概要]
+```
+
+#### 3. Draft PR 作成
+```bash
+gh pr create \
+  --title "feat: I${ISSUE_NUM} [イシュータイトル]" \
+  --body "$(cat <<'EOF'
+## 概要
+I${ISSUE_NUM}: [概要]
+
+## 関連イシュー
+Closes #[GitHubイシュー番号]
+EOF
+)" \
+  --draft \
+  --base develop
+```
+
+Draft PR 番号をイシューファイルの「## 関連資料」セクションに追記する:
+```
+- Draft PR: #XX
+```
 
 生成物:
 - docs/plans/open/plan_$ARGUMENTS_{概要}.md（plan-writing-rules.md の命名規則に準拠）
