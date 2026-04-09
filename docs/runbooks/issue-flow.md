@@ -59,38 +59,12 @@ cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
 # 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
 ```
 
-### 3. 作業用ブランチの自動作成（必須）
-```bash
-# developブランチから分岐してfeatureブランチを作成
-git checkout develop
-git pull origin develop  # 最新のdevelopを取得（リモートがある場合）
-git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
-```
-
-**重要**: 必ず**developブランチをベース**にfeatureブランチを作成すること。mainブランチからは作成しない。
-
-**ブランチ命名規則**:
-- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
-- 例:
-  - `feature/I030-media-asset-models`
-  - `feature/I031-dashboard-performance`
-  - `feature/I032-user-authentication-fix`
-
-**概要の英語化ルール**:
-- 日本語の概要をシンプルな英語に変換
-- スペースは`-`（ハイフン）に変換
-- 最大5単語程度に要約
-- 例:
-  - 「問題・解説画像の複数対応」→ `media-asset-models`
-  - 「ダッシュボードのパフォーマンス改善」→ `dashboard-performance`
-  - 「ユーザー認証のバグ修正」→ `user-authentication-fix`
-
-### 4. GitHubイシューの登録（必須）
+### 3. GitHubイシューの登録（必須）
 ```bash
 # ghコマンドでGitHubにイシューを登録
 gh issue create \
   --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/${ISSUE_NUM}.md)" \
+  --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
   --label "[種別に応じたラベル]"
 ```
 
@@ -105,16 +79,22 @@ gh issue create \
 - ローカルイシュー番号（例: I035）をタイトルに含めることで紐づけを明確にする
 - `gh auth login`で認証済みであることが前提
 
+### 4. イシューファイルに GitHub Issue 番号を記録
+GitHub Issue 作成後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
+```
+- GitHub Issue: #XX
+```
+
 ### 5. ユーザーへの報告
-ブランチ作成・GitHubイシュー登録後、必ず以下を報告：
+GitHubイシュー登録後、必ず以下を報告：
 
 ```
-✅ イシュー#XXX を作成しました: [タイトル]
-📂 ファイル: docs/issues/open/XXX.md
-🌿 ブランチ作成: feature/IXXX-[概要]
+✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
+📂 ファイル: docs/issues/open/I${ISSUE_NUM}.md
 🔗 GitHubイシュー: [GitHubイシューURL]
 
-このブランチで作業を開始します。
+⚠️ ブランチはまだ作成されていません。
+次のステップ: /plan-issue I${ISSUE_NUM} でブランチ作成・計画書作成を行ってください。
 ```
 
 ---
@@ -128,19 +108,19 @@ gh issue create \
 ```
 【イシューフロー】
 
-=== フェーズ1: イシュー準備 ===
+=== フェーズ1: イシュー準備（/issue-bootstrap） ===
 1. イシューファイル作成（テンプレート：docs/issues/templates/issue_template.md）
     ↓
-2. イシューブランチ作成（feature/IXXX-概要）
+2. GitHubイシュー登録・イシューファイルに Issue 番号を記録
     ↓
-3. GitHubイシュー登録
+3. ユーザーがイシューファイルを確認
     ↓
-4. ユーザーがイシューファイルを確認
-    ↓
-5. ユーザーがイシューファイルを承認
+4. ユーザーがイシューファイルを承認
     ↓
 
-=== フェーズ2: 計画・設計 ===
+=== フェーズ2: 計画・設計（/plan-issue） ===
+5. イシューブランチ作成（feature/IXXX-概要）・コミット・プッシュ・Draft PR 作成
+    ↓
 6. 計画書作成
     ↓
 7. テストケース作成（2種類を別ファイルで作成）
@@ -221,29 +201,41 @@ ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
 ```
 
-**ステップ2: イシューブランチ作成**
+**ステップ2: GitHubイシュー登録・Issue 番号の記録**
+```bash
+gh issue create \
+  --title "I${ISSUE_NUM}: [イシュータイトル]" \
+  --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
+  --label "[種別に応じたラベル]"
+```
+登録後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
+```
+- GitHub Issue: #XX
+```
+
+**ステップ3-4: ユーザー確認・承認**
+- ユーザーがイシューファイルの内容を確認
+- 承認後、フェーズ2に進む
+
+#### フェーズ2: 計画・設計（/plan-issue）
+
+**ステップ5: イシューブランチ作成・コミット・プッシュ・Draft PR 作成**
 - developブランチをベースにfeatureブランチを作成
 - 命名規則: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
 
 ```bash
 git checkout develop
-git pull origin develop  # 最新のdevelopを取得
+git pull origin develop
 git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
+git add docs/issues/open/I${ISSUE_NUM}.md
+git commit -m "docs: create issue I${ISSUE_NUM}"
+git push -u origin feature/I${ISSUE_NUM}-[概要]
+gh pr create \
+  --title "feat: I${ISSUE_NUM} [イシュータイトル]" \
+  --body "..." \
+  --draft \
+  --base develop
 ```
-
-**ステップ3: GitHubイシュー登録**
-```bash
-gh issue create \
-  --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/${ISSUE_NUM}.md)" \
-  --label "[種別に応じたラベル]"
-```
-
-**ステップ4-5: ユーザー確認・承認**
-- ユーザーがイシューファイルの内容を確認
-- 承認後、フェーズ2に進む
-
-#### フェーズ2: 計画・設計
 
 **ステップ6: 計画書作成**
 - テンプレート: `docs/plans/templates/plan_template.md`

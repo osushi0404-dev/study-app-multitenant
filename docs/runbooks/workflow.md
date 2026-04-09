@@ -1,5 +1,16 @@
 # Vibe Coding 運用フロー（安全寄り）
 
+## 使うスキル（/ で実行）
+- /issue-bootstrap [title] : 採番、イシューファイル作成、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
+- /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
+- /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK なら /implement へ）
+- /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
+- /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
+- /test I### : 自動テスト（pytest + Jest）+ 手動テスト確認（OK なら /close へ）
+- /fix-loop I### : NG/失敗時の原因整理→差分計画→承認→修正→再テスト
+- /retro I### : テスト OK 後の振り返り（成果・プロセス・技術・スキル規約の改善点確認）
+- /close I### : open→closed へ整理、PR 説明整備、クローズ作業
+
 ## ディレクトリ規約
 - docs/issues/open, docs/issues/in_progress, docs/issues/closed
 - docs/plans/open, docs/plans/closed
