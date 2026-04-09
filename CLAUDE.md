@@ -33,15 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5) すべての作業は「記録（plan / tests / review）」が残る形で進める。
 
 ## 2. 使うスキル（/ で実行）
-- /issue-bootstrap [title] : 採番、イシューファイル作成、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
-- /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
-- /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK なら /implement へ）
-- /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
-- /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
-- /test I### : 自動テスト（pytest + Jest）+ 手動テスト確認（OK なら /close へ）
-- /fix-loop I### : NG/失敗時の原因整理→差分計画→承認→修正→再テスト
-- /retro I### : テスト OK 後の振り返り（成果・プロセス・技術・スキル規約の改善点確認）
-- /close I### : open→closed へ整理、PR 説明整備、クローズ作業
+詳細は `docs/runbooks/workflow.md` の「使うスキル」セクションを参照。
 
 ## 3. 権限と二重ガード
 - 権限（allow/ask/deny）は .claude/settings.json
