@@ -29,6 +29,8 @@
 - [ ] `/plan-issue` を実行すると、イシューファイルがコミット・プッシュされる
 - [ ] `/plan-issue` を実行すると、Draft PR が作成される
 - [ ] `workflow.md`, `issue-flow.md` が新しい責務を反映している
+- [ ] スキル一覧が `CLAUDE.md` から `docs/runbooks/workflow.md` に移管されている
+- [ ] `CLAUDE.md` の `## 2. 使うスキル` は `workflow.md` への参照のみになっている
 
 ---
 
@@ -40,6 +42,7 @@
 - Config/Infra:
   - `.claude/skills/issue-bootstrap/SKILL.md`（変更）
   - `.claude/skills/plan-issue/SKILL.md`（変更）
+  - `CLAUDE.md`（変更）
   - `docs/runbooks/workflow.md`（変更）
   - `docs/runbooks/issue-flow.md`（変更）
 
