@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: なし（docs のみ）
 
 ## テスト結果
-- 自動: Backend 25 passed / Frontend 7 passed。旧キーワード grep 0件・I039残留なし を確認
-- 手動: OK（全8項目確認済み）
+- 自動: OK（Backend: 25 passed / Frontend: 7 passed / 自動チェック: 旧キーワード 0件・I039 残留なし）
+- 手動: OK（全8項目確認済み・2026-04-10）
 
 ## 計画との差分
 - なし
