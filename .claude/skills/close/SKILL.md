@@ -29,10 +29,8 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
      echo "⚠️ イシューファイルが見つかりません（I${ISSUE_NUM}.md / ${ISSUE_NUM}.md）"
    fi
 
-   # 計画書（複数ある場合もパターンで対応）
-   for f in docs/plans/open/plan_I${ISSUE_NUM}_*.md; do
-     [ -f "$f" ] && mv "$f" docs/plans/closed/
-   done
+   # 計画書
+   [ -f "docs/plans/open/plan_I${ISSUE_NUM}.md" ] && mv "docs/plans/open/plan_I${ISSUE_NUM}.md" docs/plans/closed/
 
    # テストケース
    for f in docs/tests/open/I${ISSUE_NUM}_*.md; do

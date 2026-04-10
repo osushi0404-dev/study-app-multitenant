@@ -20,7 +20,7 @@ allowed-tools: Read, Bash, Glob, Grep
 
 2) 計画書・イシューの受け入れ条件を読む:
    - docs/issues/open/$ARGUMENTS.md
-   - docs/plans/open/$ARGUMENTS_plan.md
+   - docs/plans/open/plan_$ARGUMENTS.md
 
 3) 実装差分を確認:
    ```bash
