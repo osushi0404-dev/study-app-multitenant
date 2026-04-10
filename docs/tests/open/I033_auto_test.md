@@ -27,7 +27,9 @@ gh api repos/$REPO/issues/60 --jq '.milestone.title'
 gh issue list --state all --limit 10 --json number,title | jq '.[] | select(.title | startswith("I03"))'
 ```
 
-結果:
-- Milestone 確認:
-- Projects 確認:
-- Issue 紐づき確認:
+結果（2026-04-11 実施）:
+- Milestone 確認: Phase 1 (#1) / Phase 2 (#2) / Phase 3 (#3) — 3件作成確認
+- Projects 確認: "AI Dev Improvement（Phase 1〜3）" (#1) — 1件作成確認
+- Issue 紐づき確認: #58→Phase1 / #76→Phase2 / #79→Phase3 — 各フェーズ正常
+- I034/I035/I036: #78 / #79 / #80 作成・.md ファイルに番号追記済み
+- Backend: 25 passed / Frontend: 7 passed

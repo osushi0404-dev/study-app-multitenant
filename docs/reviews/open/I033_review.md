@@ -20,11 +20,11 @@ GitHub リポジトリに Milestones 3件（Phase 1〜3）と Projects ボード
 - Config/Infra: GitHub リポジトリの Projects・Milestones
 
 ## テスト結果
-- 自動: （実施後に記入）
+- 自動: Backend 25 passed / Frontend 7 passed（2026-04-11）
 - 手動: （実施後に記入）
 
 ## 計画との差分
-- なし / あり（理由）
+- gh issue create に --json フラグが使用不可のため URL から番号を抽出する方式に変更。機能的に同等。より堅牢な gh api 方式を計画書に注記済み。
 
 ## ロールバック
 - Milestones 削除・Projects 削除・Issue の Milestone 解除（plan_I033.md §7 参照）
