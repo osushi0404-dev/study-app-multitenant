@@ -21,7 +21,8 @@
 1. /issue-bootstrap → ユーザーがイシューファイル確認（OK/NG）
 2. /plan-issue I### → ユーザーが計画書確認（OK/NG）
 3. /plan-issue-review I### → 計画書・テスト文書レビュー（OK/NG）
-   - NG の場合 計画書修正 → /plan-issue-review に戻る
+   - NG（Edit/Write で修正可能）: Claude が自分で修正 → /plan-issue-review に戻る
+   - NG（設計判断が必要）: 選択肢を提示してユーザー確認 → 承認後修正 → /plan-issue-review に戻る
 4. /implement I### → 実装・型チェック・push
 5. /code-review I### → CI 確認＋要件照合（OK/NG）
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /code-review に戻る
@@ -51,7 +52,7 @@
 | イシュー承認後 | 「`/plan-issue I###` を入力してください」と案内 |
 | 計画書承認後 | 「`/plan-issue-review I###` を入力してください」と案内 |
 | plan-issue-review OK 後 | 「`/implement I###` を入力してください」と案内 |
-| plan-issue-review NG 後 | 「計画書・テスト文書を修正してから `/plan-issue-review I###` を再実行してください」と案内 |
+| plan-issue-review NG 後 | Edit/Write で修正可能なものは自分で修正してレビューを再実行する。設計判断が必要な問題のみユーザーに選択肢を提示して確認する |
 | implement 完了後 | 「`/code-review I###` を入力してください」と案内 |
 | code-review OK 後 | 「`/test I###` を入力してください」と案内 |
 | code-review NG 後 | 「`/fix-loop I###` を入力してください（fix-loop 完了後は `/code-review I###` に戻る）」と案内 |
