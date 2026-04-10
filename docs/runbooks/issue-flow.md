@@ -4,33 +4,31 @@
 `docs/runbooks/workflow.md` の「フロー」セクションも合わせて参照してください。
 
 ## イシュー新規作成時の採番ルール
-新しいイシューを作成する際は、**ローカルイシューファイルの最大番号** と **GitHubイシューの登録件数** の両方を考慮して採番する。
+新しいイシューを作成する際は、**ファイルシステム上の最大番号** と **git 履歴上の最大番号** の大きい方を採用して採番する。
 
 ### 採番ルール
-**新イシュー番号 = ローカル最大番号 + GitHub登録件数 + 1**
+**新イシュー番号 = max(FS最大値, git履歴最大値) + 1**
 
 例:
-- ローカル0件 + GitHub2件 → 0+2+1 = **003**
-- ローカル最大3 + GitHub1件 → 3+1+1 = **005**
-- ローカル最大5 + GitHub0件 → 5+0+1 = **006**
+- FS最大 039、git履歴最大 039 → max(39, 39) + 1 = **040**
+- FS最大 005、git履歴最大 008（削除済み含む）→ max(5, 8) + 1 = **009**
+- FS最大 0、git履歴最大 0（初回）→ **001**
 
 ```bash
-# ローカルイシューファイルの最大番号を取得（open/in_progress/closed 全て確認）
-LOCAL_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null \
-  | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-LOCAL_MAX=${LOCAL_MAX:-0}
-
-# GitHubイシューの登録件数を取得（open + closed）
-GITHUB_COUNT=$(gh issue list --state all --limit 1000 --json number | jq 'length')
-GITHUB_COUNT=${GITHUB_COUNT:-0}
-
-# 新しいイシュー番号を採番
-NEXT_NUM=$((LOCAL_MAX + GITHUB_COUNT + 1))
+# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
+# git 履歴上の番号（削除済みファイルも含む）
+GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
+# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
+FS_NUM=$((10#${FS_MAX:-0}))
+GIT_NUM=$((10#${GIT_MAX:-0}))
+if [ "$FS_NUM" -gt "$GIT_NUM" ]; then LAST_NUM=$FS_NUM; else LAST_NUM=$GIT_NUM; fi
+NEXT_NUM=$((LAST_NUM + 1))
 ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-**重要**: closed ディレクトリも必ず確認すること。GitHub 件数取得には `gh` コマンドが必要（未認証の場合は `gh auth login` を実施）。
+**重要**: ファイルシステムだけでなく git 履歴も必ず確認すること（closed から削除されたイシューも番号として使用済み）。
 
 ## イシュー作成時の自動実行フロー（必須）
 
@@ -38,17 +36,15 @@ echo "次のイシュー番号: $ISSUE_NUM"
 
 ### 1. イシュー番号の採番
 ```bash
-# ローカルイシューファイルの最大番号を取得（open/in_progress/closed 全て確認）
-LOCAL_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null \
-  | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-LOCAL_MAX=${LOCAL_MAX:-0}
-
-# GitHubイシューの登録件数を取得（open + closed）
-GITHUB_COUNT=$(gh issue list --state all --limit 1000 --json number | jq 'length')
-GITHUB_COUNT=${GITHUB_COUNT:-0}
-
-# 新しいイシュー番号を採番（ローカル最大番号 + GitHub件数 + 1）
-NEXT_NUM=$((LOCAL_MAX + GITHUB_COUNT + 1))
+# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
+# git 履歴上の番号（削除済みファイルも含む）
+GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
+# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
+FS_NUM=$((10#${FS_MAX:-0}))
+GIT_NUM=$((10#${GIT_MAX:-0}))
+if [ "$FS_NUM" -gt "$GIT_NUM" ]; then LAST_NUM=$FS_NUM; else LAST_NUM=$GIT_NUM; fi
+NEXT_NUM=$((LAST_NUM + 1))
 ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 ```
 
@@ -184,17 +180,15 @@ GitHubイシュー登録後、必ず以下を報告：
 - 命名規則: `XXX.md`（XXX: 3桁のイシュー番号）
 
 ```bash
-# ローカルイシューファイルの最大番号を取得（open/in_progress/closed 全て確認）
-LOCAL_MAX=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md 2>/dev/null \
-  | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-LOCAL_MAX=${LOCAL_MAX:-0}
-
-# GitHubイシューの登録件数を取得（open + closed）
-GITHUB_COUNT=$(gh issue list --state all --limit 1000 --json number | jq 'length')
-GITHUB_COUNT=${GITHUB_COUNT:-0}
-
-# 新しいイシュー番号を採番（ローカル最大番号 + GitHub件数 + 1）
-NEXT_NUM=$((LOCAL_MAX + GITHUB_COUNT + 1))
+# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
+# git 履歴上の番号（削除済みファイルも含む）
+GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
+# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
+FS_NUM=$((10#${FS_MAX:-0}))
+GIT_NUM=$((10#${GIT_MAX:-0}))
+if [ "$FS_NUM" -gt "$GIT_NUM" ]; then LAST_NUM=$FS_NUM; else LAST_NUM=$GIT_NUM; fi
+NEXT_NUM=$((LAST_NUM + 1))
 ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
 
 # テンプレートからコピー
