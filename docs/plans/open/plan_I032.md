@@ -58,7 +58,7 @@ Branch protection rules を設定することで：
 | 設定項目 | develop | main |
 |---------|---------|------|
 | Require a pull request before merging | ON | ON |
-| Required number of approvals | 0 | **1** |
+| Require approvals（サブオプション） | **OFF**（チェックしない） | **ON・値 = 1** |
 | Dismiss stale reviews when new commits are pushed | OFF | ON |
 | Require status checks to pass before merging | ON | ON |
 | Require branches to be up to date | ON | ON |

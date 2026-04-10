@@ -24,7 +24,7 @@
 | 設定項目 | 値 |
 |---------|---|
 | Require a pull request before merging | **ON** |
-| Required number of approvals before merging | **0** |
+| Require approvals（サブオプション） | **OFF**（チェックしない） |
 | Dismiss stale pull request approvals when new commits are pushed | OFF |
 | Require status checks to pass before merging | **ON** |
 | Require branches to be up to date before merging | **ON** |
@@ -32,6 +32,10 @@
 | Do not allow bypassing the above settings | **ON** |
 | Allow force pushes | OFF |
 | Allow deletions | OFF |
+
+> **補足**: GitHub の UI では "Required approvals" の最小値は 1 です。
+> 承認不要（0 approvals）にするには "Require approvals" のサブチェックボックス自体をオンにしないでください。
+> "Require a pull request before merging" を ON にするだけで「PR は必須・承認不要」の状態になります。
 
 ### main ブランチ
 
@@ -95,7 +99,8 @@ Frontend Tests
 
 **Require a pull request before merging**:
 - チェックボックスをオン
-- **Required approvals**: develop は `0`、main は `1` に設定
+- **develop の場合**: "Require approvals" のサブチェックボックスは**オフのまま**にする（承認不要）
+- **main の場合**: "Require approvals" のサブチェックボックスを**オン**にし、数値を `1` に設定
 - main のみ: **Dismiss stale pull request approvals when new commits are pushed** をオン
 
 **Require status checks to pass before merging**:
