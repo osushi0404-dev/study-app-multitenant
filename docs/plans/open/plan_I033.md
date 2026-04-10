@@ -84,6 +84,8 @@ echo "I036: #$I036_NUM"
 
 作成後、返却された Issue 番号（`$I034_NUM` / `$I035_NUM` / `$I036_NUM`）を各 .md ファイルの `## 関連資料` に追記する。
 
+> **実装時の差分メモ**: `gh issue create` は `--json` フラグ非対応のため、実装では URL から `grep -oP '\d+$'` で番号を抽出した。より堅牢な方法は `gh api ... --method POST --jq '.number'` を使う形式（JSON から直接取得）。今後の類似作業ではそちらを推奨。
+
 ### ステップ 2: Milestones 3件の作成
 
 ```bash
