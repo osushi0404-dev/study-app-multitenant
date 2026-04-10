@@ -12,8 +12,8 @@
 
 ## CI チェック項目
 
-- [ ] Backend CI（pytest）pass（既存テストへの影響なしを確認）
-- [ ] Frontend CI（npm test）pass（既存テストへの影響なしを確認）
+- [x] Backend CI（pytest）pass（25 passed, 3 warnings — 既存テストへの影響なし）
+- [x] Frontend CI（npm test）pass（7 passed — 既存テストへの影響なし）
 
 ## JSON 形式チェック
 
@@ -23,7 +23,7 @@
 python3 -m json.tool .mcp.json > /dev/null && echo "JSON valid"
 ```
 
-- [ ] JSON バリデーション OK
+- [x] JSON バリデーション OK（`python3 -m json.tool .mcp.json` で確認済み）
 
 ## PAT 漏洩チェック
 
@@ -33,7 +33,7 @@ python3 -m json.tool .mcp.json > /dev/null && echo "JSON valid"
 git log -p --all | grep -E "ghp_|github_pat_" && echo "WARNING: PAT found!" || echo "OK: no PAT in git history"
 ```
 
-- [ ] git 履歴に PAT 値なし
+- [x] git 履歴に PAT 値なし（確認済み）
 
 ## 環境変数参照形式チェック
 
@@ -43,4 +43,4 @@ git log -p --all | grep -E "ghp_|github_pat_" && echo "WARNING: PAT found!" || e
 grep "ghp_\|github_pat_" .mcp.json && echo "WARNING: hardcoded PAT!" || echo "OK: no hardcoded PAT"
 ```
 
-- [ ] `.mcp.json` に PAT 値のハードコードなし
+- [x] `.mcp.json` に PAT 値のハードコードなし（確認済み）
