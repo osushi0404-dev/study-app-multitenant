@@ -9,7 +9,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 # /plan-issue
 
 必読:
-- docs/issues/open/$ARGUMENTS_*.md
+- docs/issues/open/$ARGUMENTS.md
 - docs/runbooks/plan-writing-rules.md
 - rules/ultimate_django_coding_standards.md
 - rules/react-coding-standards-integrated.md
@@ -63,7 +63,7 @@ Draft PR 番号をイシューファイルの「## 関連資料」セクショ�
 ```
 
 生成物:
-- docs/plans/open/plan_$ARGUMENTS_{概要}.md（plan-writing-rules.md の命名規則に準拠）
+- docs/plans/open/plan_$ARGUMENTS.md
 - docs/tests/open/$ARGUMENTS_manual_test.md
 - docs/tests/open/$ARGUMENTS_auto_test.md
 - docs/reviews/open/$ARGUMENTS_review.md

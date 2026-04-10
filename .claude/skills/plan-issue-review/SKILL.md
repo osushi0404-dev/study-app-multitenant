@@ -3,7 +3,7 @@ name: plan-issue-review
 description: Review plan and test docs for best practices, security, and modern web dev.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep
+allowed-tools: Read, Edit, Glob, Grep
 ---
 
 # /plan-issue-review
@@ -12,7 +12,7 @@ allowed-tools: Read, Glob, Grep
 
 1) 対象ドキュメントを読む:
    - docs/issues/open/$ARGUMENTS.md
-   - docs/plans/open/$ARGUMENTS_plan.md（または plan_$ARGUMENTS_*.md）
+   - docs/plans/open/plan_$ARGUMENTS.md
    - docs/tests/open/$ARGUMENTS_manual_test.md
    - docs/tests/open/$ARGUMENTS_auto_test.md
 

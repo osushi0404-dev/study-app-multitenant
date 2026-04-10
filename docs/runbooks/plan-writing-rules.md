@@ -1,6 +1,6 @@
 # 計画書の書き方（安全寄り）
 
-計画書（docs/plans/open/plan_[タイプ]_[概要]_[連番].md）に必ず含める:
+計画書（docs/plans/open/plan_I###.md）に必ず含める:
 1) 背景/目的
 2) 受け入れ条件（何ができたらOKか）
 3) 影響範囲（Backend/Frontend/DB/Config）
@@ -85,29 +85,21 @@ cd frontend && npx eslint src --format=compact 2>&1 | tail -1
   - まず「修正アプローチ」セクションで全体方針を日本語で説明
   - 各修正項目に「修正方針」を明記し、何を達成するかを言葉で説明
   - その後に具体的なコード例やファイル変更内容を記載
-- **計画書ファイル名ルール**: `plan_[タイプ]_[概要]_[連番].md` 形式でdocs/plans/open/に保存
-  - **タイプ**: `I[番号]`（イシュー対応）、`BUG`（バグ修正）、`FEAT`（機能追加）、`FIX`（一般修正）、`MAINT`（メンテナンス）、`PERF`（パフォーマンス改善）
-  - **概要**: 日本語可、スペースは`_`に変換
-  - **連番**: 初回は省略、2回目以降は`_2`、`_3`...を追加
+- **計画書ファイル名ルール**: `plan_I###.md` 形式でdocs/plans/open/に保存（`I###` はイシュー番号、概要・タイプ接尾辞は付けない）
   - **例**:
-    - 初回: `plan_I010_科目サービス修正.md`
-    - 追加: `plan_I010_科目サービス修正_2.md`
-    - 他例: `plan_BUG_認証エラー対応.md`、`plan_FEAT_新機能実装.md`
+    - 初回: `plan_I010.md`
+    - 再作成時: `plan_I010_2.md`、`plan_I010_3.md`...
 - **ファイル名生成手順**:
   ```bash
-  # 基本ファイル名構築
-  PLAN_TYPE="[タイプ]"
-  PLAN_SUMMARY="[概要]"
-  BASE_NAME="plan_${PLAN_TYPE}_${PLAN_SUMMARY}"
-  # 既存ファイル確認と連番決定
-  if [ -f "docs/plans/open/${BASE_NAME}.md" ]; then
+  # ファイル名構築（ARGUMENTS = "I###" 形式）
+  PLAN_FILE="docs/plans/open/plan_${ARGUMENTS}.md"
+  # 既存ファイルがある場合は連番を付ける
+  if [ -f "$PLAN_FILE" ]; then
     COUNTER=2
-    while [ -f "docs/plans/open/${BASE_NAME}_${COUNTER}.md" ]; do
+    while [ -f "docs/plans/open/plan_${ARGUMENTS}_${COUNTER}.md" ]; do
       COUNTER=$((COUNTER + 1))
     done
-    PLAN_FILE="docs/plans/open/${BASE_NAME}_${COUNTER}.md"
-  else
-    PLAN_FILE="docs/plans/open/${BASE_NAME}.md"
+    PLAN_FILE="docs/plans/open/plan_${ARGUMENTS}_${COUNTER}.md"
   fi
   ```
 - **承認待ち宣言**: 計画書作成後は必ず以下を出力
@@ -123,7 +115,7 @@ cd frontend && npx eslint src --format=compact 2>&1 | tail -1
 ### 計画書ヘッダー（文書間の関係性）
 ```markdown
 ## 基本情報
-- **計画書ID**: plan_[タイプ]_[概要]_[連番]
+- **計画書ID**: plan_I###
 - **関連イシュー**: #XXX
 - **作成根拠資料**: reviewXXX_IXXX（問題分析と改善提案）
 - **実装後評価**: （未作成）
