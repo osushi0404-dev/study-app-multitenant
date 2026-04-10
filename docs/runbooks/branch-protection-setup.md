@@ -87,7 +87,11 @@ Frontend Tests
 1. GitHub リポジトリのトップページを開く
 2. **Settings** タブをクリック
 3. 左サイドバーの **Code and automation** > **Branches** をクリック
-4. **Branch protection rules** セクションの **Add rule** ボタンをクリック
+4. **「Add classic branch rule」** ボタンをクリック
+
+> **注意**: GitHub の UI では「Add rule」「Add branch ruleset」「Add classic branch rule」の3種類が表示される場合があります。
+> 従来の Branch protection rules を設定するには **「Add classic branch rule」** を選んでください。
+> 「Add branch ruleset」は新しい Rulesets 機能で、設定項目が異なります。
 
 ### ステップ 2: ブランチ名パターンを入力
 
