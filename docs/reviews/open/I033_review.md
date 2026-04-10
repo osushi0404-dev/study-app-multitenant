@@ -21,7 +21,7 @@ GitHub リポジトリに Milestones 3件（Phase 1〜3）と Projects ボード
 
 ## テスト結果
 - 自動: Backend 25 passed / Frontend 7 passed（2026-04-11）
-- 手動: （実施後に記入）
+- 手動: 全 9項目 OK（2026-04-11）
 
 ## 計画との差分
 - gh issue create に --json フラグが使用不可のため URL から番号を抽出する方式に変更。機能的に同等。より堅牢な gh api 方式を計画書に注記済み。
