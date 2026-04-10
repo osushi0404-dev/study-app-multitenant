@@ -40,17 +40,36 @@ GitHub MCP サーバーを導入することで、Claude が GitHub API を直�
 
 発行したトークンを環境変数 `GITHUB_PERSONAL_ACCESS_TOKEN` に設定する。
 
+> ⚠️ **注意**: `echo 'export GITHUB_PERSONAL_ACCESS_TOKEN=token値' >> ~/.bashrc` のようなコマンドは使わないこと。コマンド全体がシェル履歴（`~/.bash_history`）に記録され、PAT が漏洩する。
+
 ### WSL2 / Linux / macOS（bash）
 
+テキストエディタで `~/.bashrc` を直接開き、末尾に追記する：
+
 ```bash
-echo 'export GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_ここにトークンを貼る' >> ~/.bashrc
+nano ~/.bashrc   # または vi / vim / code など好みのエディタ
+```
+
+追記する内容：
+```
+export GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_ここにトークンを貼る
+```
+
+保存して閉じ、設定を反映：
+
+```bash
 source ~/.bashrc
 ```
 
 ### zsh の場合
 
 ```bash
-echo 'export GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_ここにトークンを貼る' >> ~/.zshrc
+nano ~/.zshrc
+```
+
+同様に追記し、保存後：
+
+```bash
 source ~/.zshrc
 ```
 

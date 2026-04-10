@@ -83,7 +83,7 @@ GitHub は 2022 年に **Fine-grained PAT** を正式リリースした。クラ
   "mcpServers": {
     "github": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
@@ -148,6 +148,8 @@ GitHub は 2022 年に **Fine-grained PAT** を正式リリースした。クラ
 | リスク | 対策 |
 |--------|------|
 | PAT が git にコミットされる | `.mcp.json` の env 値は `${...}` 参照のみ。PAT 値を直接書かないことをレビューで確認 |
+| npx サプライチェーン攻撃 | バージョンを `@2025.4.8` に固定。侵害されたパッケージの自動取得を防ぐ |
+| PAT のシェル履歴漏洩 | `echo` コマンドでの設定を禁止。テキストエディタで `~/.bashrc` を直接編集する手順を runbook に明記 |
 | Fine-grained PAT の権限不足 | エラーメッセージで不足権限を確認し PAT を再発行。Issues+PRs+Contents で対応可能なはず |
 | npx パッケージ取得失敗 | 初回起動時に自動ダウンロード。ネットワーク接続が必要（WSL2 環境では通常問題なし） |
 | MCP サーバーが起動しない | `claude mcp list` でステータス確認。npx キャッシュ削除（`npx clear-npx-cache`）で再試行 |
