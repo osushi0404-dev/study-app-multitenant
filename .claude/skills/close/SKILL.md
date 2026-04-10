@@ -32,7 +32,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    # 計画書
    [ -f "docs/plans/open/plan_I${ISSUE_NUM}.md" ] && mv "docs/plans/open/plan_I${ISSUE_NUM}.md" docs/plans/closed/
 
-   # テストケース
+   # テストケース（auto_test・manual_test の両ファイルを一括移動）
    for f in docs/tests/open/I${ISSUE_NUM}_*.md; do
      [ -f "$f" ] && mv "$f" docs/tests/closed/
    done
