@@ -10,4 +10,4 @@ ls docs/runbooks/branch-protection-setup.md && echo "OK: 手順書存在" || ech
 ```
 
 結果:
-- 手順書存在確認:
+- 手順書存在確認: OK（docs/runbooks/branch-protection-setup.md 存在確認済み）
