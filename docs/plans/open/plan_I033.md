@@ -58,31 +58,31 @@
 
 ```bash
 # I034
-ISSUE_34=$(gh issue create \
+I034_NUM=$(gh issue create \
   --title "I034: pre-commit hooks の導入（シークレット検出・コード品質チェック）" \
   --body "$(cat docs/issues/open/I034.md)" \
   --label "enhancement" \
-  --json url --jq '.url')
-echo "I034: $ISSUE_34"
+  --json number --jq '.number')
+echo "I034: #$I034_NUM"
 
 # I035
-ISSUE_35=$(gh issue create \
+I035_NUM=$(gh issue create \
   --title "I035: Sequential Thinking・Web Search MCP の評価と導入" \
   --body "$(cat docs/issues/open/I035.md)" \
   --label "enhancement" \
-  --json url --jq '.url')
-echo "I035: $ISSUE_35"
+  --json number --jq '.number')
+echo "I035: #$I035_NUM"
 
 # I036
-ISSUE_36=$(gh issue create \
+I036_NUM=$(gh issue create \
   --title "I036: workflow.md の /retro 推奨化" \
   --body "$(cat docs/issues/open/I036.md)" \
   --label "documentation" \
-  --json url --jq '.url')
-echo "I036: $ISSUE_36"
+  --json number --jq '.number')
+echo "I036: #$I036_NUM"
 ```
 
-作成後、返却された Issue 番号を各 .md ファイルの `## 関連資料` に追記する。
+作成後、返却された Issue 番号（`$I034_NUM` / `$I035_NUM` / `$I036_NUM`）を各 .md ファイルの `## 関連資料` に追記する。
 
 ### ステップ 2: Milestones 3件の作成
 
@@ -141,10 +141,15 @@ done
 ### ステップ 4: GitHub Projects ボードの作成
 
 ```bash
-PROJECT_NUM=$(gh project create \
+gh project create \
   --owner osushi0404-dev \
-  --title "AI Dev Improvement（Phase 1〜3）" \
-  --format json | jq '.number')
+  --title "AI Dev Improvement（Phase 1〜3）"
+
+# 作成後、番号を取得
+PROJECT_NUM=$(gh project list \
+  --owner osushi0404-dev \
+  --format json \
+  --jq '.projects[] | select(.title == "AI Dev Improvement（Phase 1〜3）") | .number')
 echo "Project number: $PROJECT_NUM"
 ```
 
