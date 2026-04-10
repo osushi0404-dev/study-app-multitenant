@@ -96,6 +96,8 @@ GitHub は 2022 年に **Fine-grained PAT** を正式リリースした。クラ
 - `env.GITHUB_PERSONAL_ACCESS_TOKEN` は OS 環境変数を参照（PAT 値はファイルに書かない）
 - このファイルは git で追跡する（トークン値を含まないため安全）
 
+**注意（実装時確認必須）**: Claude Code が `.mcp.json` の `${...}` 形式を変数展開するかどうかは実装時に動作確認が必要。展開されない場合は `env` セクション自体を省略し、OS 環境変数 `GITHUB_PERSONAL_ACCESS_TOKEN` をプロセス起動時の自動継承に頼る形に切り替える（MCP サーバープロセスは親プロセスの環境変数を継承するため、`env` セクションなしでも機能する）。
+
 ### 2. `docs/runbooks/mcp-github-setup.md`（新規）
 
 以下を記載する：
