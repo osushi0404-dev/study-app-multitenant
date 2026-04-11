@@ -36,7 +36,7 @@ const schema = yup.object({
 const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
@@ -87,7 +87,7 @@ const Login: React.FC = () => {
           <Typography component="h1" variant="h4" gutterBottom>
             学習アプリ
           </Typography>
-          
+
           <Typography component="h2" variant="h5" gutterBottom>
             ログイン
           </Typography>
@@ -103,7 +103,7 @@ const Login: React.FC = () => {
               helperText={errors.emailOrUserId?.message || '登録時のユーザーIDまたはメールアドレスを入力'}
               {...register('emailOrUserId')}
             />
-            
+
             <TextField
               margin="normal"
               fullWidth
@@ -144,7 +144,7 @@ const Login: React.FC = () => {
                   パスワードを忘れた方はこちら
                 </Typography>
               </Link>
-              
+
               <Link to="/register" style={{ textDecoration: 'none' }}>
                 <Typography variant="body2" color="primary">
                   アカウントをお持ちでない方はこちら

@@ -30,7 +30,7 @@ class UserRegistrationView(generics.CreateAPIView):
 def create(self, request, *args, **kwargs):
     import logging
     logger = logging.getLogger('django')
-    
+
     logger.info(f"Registration attempt with data: {request.data}")
 ```
 - 親クラスの`create`メソッドをオーバーライド

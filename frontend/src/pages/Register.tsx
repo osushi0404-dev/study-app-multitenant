@@ -398,7 +398,7 @@ const Register: React.FC = () => {
             <Typography component="h1" variant="h5" color="error" gutterBottom>
               組織が見つかりません
             </Typography>
-            
+
             <Box sx={{ mt: 2, mb: 3, width: '100%' }}>
               <Alert severity="error" sx={{ mb: 2 }}>
                 {orgValidationError}
@@ -412,7 +412,7 @@ const Register: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 次のアクションをお選びください：
               </Typography>
-              
+
               <Button
                 fullWidth
                 variant="contained"
@@ -423,7 +423,7 @@ const Register: React.FC = () => {
               >
                 個人アカウントとして登録
               </Button>
-              
+
               <Button
                 fullWidth
                 variant="outlined"
@@ -434,7 +434,7 @@ const Register: React.FC = () => {
               >
                 前のページに戻る
               </Button>
-              
+
               <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
                 <Typography variant="body2" color="text.secondary" paragraph>
                   組織URLが正しいか確認してください。

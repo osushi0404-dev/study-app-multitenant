@@ -41,7 +41,7 @@ const drawerWidth = 240;
 const Layout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -130,7 +130,7 @@ const Layout: React.FC = () => {
           >
             <MenuIcon />
           </IconButton>
-          
+
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {menuItems.find(item => item.path === location.pathname)?.text || '学習アプリ'}
           </Typography>

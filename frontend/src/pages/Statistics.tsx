@@ -38,7 +38,7 @@ import { SubjectSelector } from '../components/SubjectSelector';
 const formatDate = (date: Date, formatStr: string) => {
   const month = date.getMonth() + 1;
   const day = date.getDate();
-  
+
   if (formatStr === 'M/d') {
     return `${month}/${day}`;
   } else if (formatStr === 'M月d日') {
@@ -102,14 +102,14 @@ const Statistics: React.FC = () => {
   const subjectBreakdown = data?.subject_breakdown || [];
   const mistakePatterns = data?.mistake_patterns || [];
 
-  const totalStudyTime = studyTimeTrend.length > 0 
+  const totalStudyTime = studyTimeTrend.length > 0
     ? studyTimeTrend.reduce((sum: number, item: any) => sum + (item.study_time || 0), 0)
     : 0;
-  
+
   const averageAccuracy = accuracyTrend.length > 0
     ? accuracyTrend.reduce((sum: number, item: any) => sum + (item.accuracy || 0), 0) / accuracyTrend.length
     : 0;
-  
+
   const totalProblems = subjectBreakdown.length > 0
     ? subjectBreakdown.reduce((sum: number, item: any) => sum + (item.problems_solved || 0), 0)
     : 0;

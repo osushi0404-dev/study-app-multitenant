@@ -96,45 +96,45 @@ const UserManagement: React.FC = () => {
         `/api/admin/users/${user.id}/toggle_active/`,
         {}
       );
-      
-      setSnackbar({ 
-        open: true, 
-        message: response.data.message, 
-        severity: 'success' 
+
+      setSnackbar({
+        open: true,
+        message: response.data.message,
+        severity: 'success'
       });
-      
+
       fetchUsers();
     } catch (error) {
       console.error('Failed to toggle user status:', error);
-      setSnackbar({ 
-        open: true, 
-        message: 'ステータスの変更に失敗しました', 
-        severity: 'error' 
+      setSnackbar({
+        open: true,
+        message: 'ステータスの変更に失敗しました',
+        severity: 'error'
       });
     }
   };
 
   const handleResetPassword = async () => {
     if (!selectedUser) return;
-    
+
     try {
       const response = await apiClient.post(
         `/api/admin/users/${selectedUser.id}/reset_password/`,
         {}
       );
-      
+
       setTemporaryPassword(response.data.temporary_password);
-      setSnackbar({ 
-        open: true, 
-        message: response.data.message, 
-        severity: 'success' 
+      setSnackbar({
+        open: true,
+        message: response.data.message,
+        severity: 'success'
       });
     } catch (error) {
       console.error('Failed to reset password:', error);
-      setSnackbar({ 
-        open: true, 
-        message: 'パスワードリセットに失敗しました', 
-        severity: 'error' 
+      setSnackbar({
+        open: true,
+        message: 'パスワードリセットに失敗しました',
+        severity: 'error'
       });
     }
   };
@@ -205,8 +205,8 @@ const UserManagement: React.FC = () => {
                 <TableCell>
                   {user.email}
                   {user.is_email_verified && (
-                    <CheckCircleIcon 
-                      sx={{ ml: 1, fontSize: 16, color: 'success.main', verticalAlign: 'middle' }} 
+                    <CheckCircleIcon
+                      sx={{ ml: 1, fontSize: 16, color: 'success.main', verticalAlign: 'middle' }}
                     />
                   )}
                 </TableCell>
@@ -336,8 +336,8 @@ const UserManagement: React.FC = () => {
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert 
-          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
           severity={snackbar.severity}
         >
           {snackbar.message}

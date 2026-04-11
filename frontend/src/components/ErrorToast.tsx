@@ -14,14 +14,14 @@ export const showErrorToast = (error: any) => {
   console.log('showErrorToast called with:', error);
   console.log('error.response:', error?.response);
   console.log('error.response.data:', error?.response?.data);
-  
+
   const errorData = error?.response?.data as ErrorData;
-  
+
   if (errorData?.error) {
     // 新しいエラー形式の場合
     const mainMessage = errorData.error.main_message || 'エラーが発生しました';
     const subMessage = errorData.error.sub_message;
-    
+
     toast.error((t) => (
       <div style={{ maxWidth: '300px' }}>
         <div style={{ fontWeight: 'bold', marginBottom: subMessage ? '4px' : '0' }}>
@@ -42,11 +42,11 @@ export const showErrorToast = (error: any) => {
     });
   } else {
     // 従来のエラー形式の場合（フォールバック）
-    const message = error?.response?.data?.detail || 
-                   error?.response?.data?.message || 
+    const message = error?.response?.data?.detail ||
+                   error?.response?.data?.message ||
                    error?.message ||
                    'エラーが発生しました';
-    
+
     toast.error(message, {
       duration: 5000,
     });

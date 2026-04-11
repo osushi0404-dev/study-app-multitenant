@@ -20,10 +20,10 @@ class AuthService {
   }
 
   async register(userData: RegisterRequest, organizationSlug?: string): Promise<{ message: string }> {
-    const endpoint = organizationSlug 
+    const endpoint = organizationSlug
       ? `${this.AUTH_BASE_URL}/register/${organizationSlug}/`
       : `${this.AUTH_BASE_URL}/register/`;
-    
+
     const response: AxiosResponse<{ message: string }> = await apiClient.post(
       endpoint,
       userData

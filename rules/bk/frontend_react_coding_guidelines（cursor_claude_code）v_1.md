@@ -350,4 +350,3 @@ trim_trailing_whitespace = true
 ---
 
 以上。
-

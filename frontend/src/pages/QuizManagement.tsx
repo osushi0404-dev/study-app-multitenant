@@ -352,7 +352,7 @@ const QuizManagement: React.FC = () => {
   const handleChoiceCorrectToggle = (index: number) => {
     const currentChoices = watch('choices');
     if (!currentChoices || !Array.isArray(currentChoices)) return;
-    
+
     if (problemType === 'single_choice') {
       // For single choice, uncheck all others
       const newChoices = currentChoices.map((choice, i) => ({
@@ -469,13 +469,13 @@ const QuizManagement: React.FC = () => {
               .map((problem) => (
               <TableRow
                 key={problem.id}
-                sx={{ 
+                sx={{
                   '&:hover': { backgroundColor: 'action.hover' }
                 }}
               >
                 <TableCell>
                   <Tooltip title={problem.question_text}>
-                    <Typography variant="body2" sx={{ 
+                    <Typography variant="body2" sx={{
                       maxWidth: 300,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -486,7 +486,7 @@ const QuizManagement: React.FC = () => {
                   </Tooltip>
                 </TableCell>
                 <TableCell>
-                  <Chip 
+                  <Chip
                     label={problem.subject_name || problem.subject}
                     size="small"
                     color="primary"

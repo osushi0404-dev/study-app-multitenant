@@ -30,7 +30,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Auto-logout functionality
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -42,15 +42,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      
+
       // Check if user data is stored
       const storedUser = authService.getStoredUser();
       const accessToken = authService.getAccessToken();
-      
+
       if (storedUser && accessToken) {
         setUser(storedUser);
         apiClient.setAuthToken(accessToken);
-        
+
         // Verify token is still valid by fetching current user
         try {
           const currentUser = await authService.getCurrentUser();
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           apiClient.removeAuthToken();
         }
       }
-      
+
       setLoading(false);
     };
 
@@ -156,17 +156,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     try {
       const loginResponse = await authService.login({ email, password });
-      
+
       localStorage.setItem('accessToken', loginResponse.access);
       localStorage.setItem('refreshToken', loginResponse.refresh);
       localStorage.setItem('user', JSON.stringify(loginResponse.user));
-      
+
       apiClient.setAuthToken(loginResponse.access);
       setUser(loginResponse.user);
-      
+
       // Start auto-logout timer
       setTimeout(() => resetAutoLogoutTimer(), 100);
-      
+
       showSuccessToast('ログインしました');
     } catch (error: any) {
       showErrorToast(error);

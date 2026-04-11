@@ -20,7 +20,7 @@
     },
     {
       "src": "/icon-96x96.png",
-      "sizes": "96x96", 
+      "sizes": "96x96",
       "type": "image/png",
       "purpose": "maskable any"
     },
@@ -77,12 +77,12 @@
     },
     {
       "name": "復習",
-      "short_name": "復習", 
+      "short_name": "復習",
       "description": "間隔反復学習で復習",
       "url": "/review",
       "icons": [
         {
-          "src": "/shortcut-review.png", 
+          "src": "/shortcut-review.png",
           "sizes": "96x96",
           "type": "image/png"
         }
@@ -96,7 +96,7 @@
       "icons": [
         {
           "src": "/shortcut-stats.png",
-          "sizes": "96x96", 
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]

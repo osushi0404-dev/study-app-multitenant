@@ -18,11 +18,11 @@ const EmailVerification: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { verifyEmail, resendEmailVerification } = useAuth();
-  
+
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'expired' | 'resend'>('loading');
   const [email, setEmail] = useState('');
   const [resending, setResending] = useState(false);
-  
+
   const token = searchParams.get('token');
 
   useEffect(() => {
@@ -173,7 +173,7 @@ const EmailVerification: React.FC = () => {
               確認メールを再送信いたします。<br />
               登録時に使用したメールアドレスを入力してください。
             </Typography>
-            
+
             <Box sx={{ mb: 3 }}>
               <TextField
                 fullWidth
@@ -245,7 +245,7 @@ const EmailVerification: React.FC = () => {
           <Typography component="h1" variant="h4" gutterBottom textAlign="center">
             学習アプリ
           </Typography>
-          
+
           {renderContent()}
         </Paper>
       </Box>

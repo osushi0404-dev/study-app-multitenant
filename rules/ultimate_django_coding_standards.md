@@ -1,7 +1,7 @@
 # Ultimate Django/Python バックエンドコーディング規約 v2.0
 
 > **バイブコーディング（Vibe Coding）最適化版** - Cursor & Claude Code併用開発の理想的規約
-> 
+>
 > 本規約は実践的な開発効率と最高品質を両立する、理想的なコーディングスタンダードです。
 
 ---
@@ -166,7 +166,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 class Article(models.Model):
     """記事モデル - ベストプラクティス実装例"""
-    
+
     # 主キーはUUID（可能ならv7）
     id = models.UUIDField(
         primary_key=True,
@@ -174,7 +174,7 @@ class Article(models.Model):
         editable=False,
         help_text="記事の一意識別子"
     )
-    
+
     # 基本フィールド
     title = models.CharField(
         max_length=200,
@@ -186,20 +186,20 @@ class Article(models.Model):
         max_length=255,
         help_text="URL用スラッグ"
     )
-    
+
     # TextChoicesを使用
     class Status(models.TextChoices):
         DRAFT = 'draft', '下書き'
         PUBLISHED = 'published', '公開'
         ARCHIVED = 'archived', 'アーカイブ'
-    
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.DRAFT,
         db_index=True
     )
-    
+
     # 金額はDecimalField
     price = models.DecimalField(
         max_digits=10,
@@ -207,7 +207,7 @@ class Article(models.Model):
         default=Decimal('0.00'),
         validators=[MinValueValidator(Decimal('0.00'))]
     )
-    
+
     # 関連
     author = models.ForeignKey(
         'users.User',
@@ -215,23 +215,23 @@ class Article(models.Model):
         related_name='articles',
         db_index=True
     )
-    
+
     # 多対多は中間モデル検討
     tags = models.ManyToManyField(
         'Tag',
         through='ArticleTag',
         related_name='articles'
     )
-    
+
     # メタデータ
     view_count = models.PositiveIntegerField(default=0)
     is_featured = models.BooleanField(default=False, db_index=True)
-    
+
     # タイムスタンプ
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     published_at = models.DateTimeField(null=True, blank=True, db_index=True)
-    
+
     class Meta:
         db_table = 'articles'
         ordering = ['-created_at']
@@ -247,17 +247,17 @@ class Article(models.Model):
                 name='price_non_negative'
             ),
         ]
-    
+
     def __str__(self) -> str:
         return self.title
-    
+
     def save(self, *args, **kwargs):
         # スラッグ自動生成
         if not self.slug:
             from django.utils.text import slugify
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
-    
+
     def clean(self):
         # モデルレベルバリデーション
         if self.status == self.Status.PUBLISHED and not self.published_at:
@@ -268,13 +268,13 @@ class Article(models.Model):
 ```python
 class PublishedManager(models.Manager):
     """公開済み記事専用マネージャー"""
-    
+
     def get_queryset(self):
         return super().get_queryset().filter(
             status=Article.Status.PUBLISHED,
             published_at__lte=timezone.now()
         )
-    
+
     def with_stats(self):
         """統計情報付きクエリセット"""
         return self.get_queryset().annotate(
@@ -315,11 +315,11 @@ class ArticleViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'content']
     ordering_fields = ['created_at', 'view_count', 'price']
     ordering = ['-created_at']
-    
+
     def get_queryset(self):
         """最適化されたクエリセット"""
         queryset = Article.objects.all()
-        
+
         # 関連データを事前取得（N+1回避）
         queryset = queryset.select_related('author')
         queryset = queryset.prefetch_related(
@@ -329,7 +329,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 queryset=Comment.objects.select_related('author')
             )
         )
-        
+
         # アノテーション
         queryset = queryset.annotate(
             comment_count=Count('comments'),
@@ -339,16 +339,16 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 output_field=BooleanField()
             )
         )
-        
+
         # ユーザーによるフィルタリング
         if not self.request.user.is_staff:
             queryset = queryset.filter(
                 Q(status=Article.Status.PUBLISHED) |
                 Q(author=self.request.user)
             )
-        
+
         return queryset
-    
+
     def get_serializer_class(self):
         """アクションに応じたシリアライザー切り替え"""
         if self.action == 'list':
@@ -358,7 +358,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if self.action == 'stats':
             return ArticleStatsSerializer
         return self.serializer_class
-    
+
     @extend_schema(
         summary="記事を公開",
         description="下書き記事を公開状態に変更",
@@ -368,20 +368,20 @@ class ArticleViewSet(viewsets.ModelViewSet):
     def publish(self, request, pk=None):
         """記事公開アクション"""
         article = self.get_object()
-        
+
         if article.status != Article.Status.DRAFT:
             return Response(
                 {'error': '下書き状態の記事のみ公開できます'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         article.status = Article.Status.PUBLISHED
         article.published_at = timezone.now()
         article.save(update_fields=['status', 'published_at', 'updated_at'])
-        
+
         serializer = self.get_serializer(article)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """統計情報取得"""
@@ -395,11 +395,11 @@ class ArticleViewSet(viewsets.ModelViewSet):
             )['avg']
         }
         return Response(stats)
-    
+
     def perform_create(self, serializer):
         """作成時の処理"""
         serializer.save(author=self.request.user)
-    
+
     def perform_update(self, serializer):
         """更新時の処理"""
         # 更新履歴を記録
@@ -416,12 +416,12 @@ class ArticleViewSet(viewsets.ModelViewSet):
 ```python
 class ArticleSerializer(serializers.ModelSerializer):
     """記事シリアライザー - 完全版"""
-    
+
     # 追加フィールド
     author_name = serializers.CharField(source='author.display_name', read_only=True)
     comment_count = serializers.IntegerField(read_only=True)
     is_editable = serializers.SerializerMethodField()
-    
+
     # ネストされたシリアライザー
     tags = TagSerializer(many=True, read_only=True)
     tag_ids = serializers.PrimaryKeyRelatedField(
@@ -430,7 +430,7 @@ class ArticleSerializer(serializers.ModelSerializer):
         write_only=True,
         source='tags'
     )
-    
+
     class Meta:
         model = Article
         fields = [
@@ -445,28 +445,28 @@ class ArticleSerializer(serializers.ModelSerializer):
             'content': {'help_text': 'Markdown形式で記述'},
             'price': {'min_value': 0, 'max_value': 99999.99}
         }
-    
+
     def get_is_editable(self, obj):
         """編集可能かどうかを判定"""
         request = self.context.get('request')
         if not request:
             return False
         return obj.author == request.user or request.user.is_staff
-    
+
     def validate_title(self, value):
         """タイトルのバリデーション"""
         if len(value) < 5:
             raise serializers.ValidationError("タイトルは5文字以上必要です")
-        
+
         # 重複チェック（更新時は自身を除外）
         qs = Article.objects.filter(title__iexact=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
             raise serializers.ValidationError("このタイトルは既に使用されています")
-        
+
         return value
-    
+
     def validate(self, attrs):
         """クロスフィールドバリデーション"""
         if attrs.get('status') == Article.Status.PUBLISHED:
@@ -475,18 +475,18 @@ class ArticleSerializer(serializers.ModelSerializer):
                     'content': '公開する記事には本文が必要です'
                 })
         return attrs
-    
+
     def create(self, validated_data):
         """トランザクション内で作成"""
         tags = validated_data.pop('tags', [])
-        
+
         with transaction.atomic():
             article = Article.objects.create(**validated_data)
             article.tags.set(tags)
-            
+
             # 作成通知を送信（非同期）
             notify_article_created.delay(article.id)
-            
+
         return article
 ```
 
@@ -503,12 +503,12 @@ from .models import Article
 
 class ArticleSelector:
     """記事の読み取り専用ロジック"""
-    
+
     @staticmethod
     def get_published_articles() -> QuerySet[Article]:
         """公開済み記事を取得"""
         return Article.published.select_related('author').prefetch_related('tags')
-    
+
     @staticmethod
     def search_articles(
         query: str,
@@ -516,22 +516,22 @@ class ArticleSelector:
     ) -> QuerySet[Article]:
         """記事を検索"""
         queryset = Article.objects.all()
-        
+
         if query:
             queryset = queryset.filter(
                 Q(title__icontains=query) |
                 Q(content__icontains=query) |
                 Q(tags__name__icontains=query)
             ).distinct()
-        
+
         if user and not user.is_staff:
             queryset = queryset.filter(
                 Q(status=Article.Status.PUBLISHED) |
                 Q(author=user)
             )
-        
+
         return queryset.select_related('author')
-    
+
     @staticmethod
     def get_article_stats(article_id: uuid.UUID) -> Dict[str, Any]:
         """記事の統計情報を取得"""
@@ -540,10 +540,10 @@ class ArticleSelector:
             avg_rating=Avg('ratings__score'),
             unique_viewers=Count('views__user', distinct=True)
         ).first()
-        
+
         if not article:
             return {}
-        
+
         return {
             'view_count': article.view_count,
             'comment_count': article.total_comments,
@@ -566,7 +566,7 @@ logger = logging.getLogger(__name__)
 
 class ArticleService:
     """記事の書き込み・業務ロジック"""
-    
+
     @staticmethod
     @transaction.atomic
     def create_article(
@@ -578,17 +578,17 @@ class ArticleService:
         **extra_fields
     ) -> Article:
         """記事を作成（冪等性考慮）"""
-        
+
         # 重複チェック（冪等性のため）
         existing = Article.objects.filter(
             title=title,
             author=author
         ).first()
-        
+
         if existing:
             logger.info(f"Article already exists: {existing.id}")
             return existing
-        
+
         try:
             article = Article.objects.create(
                 title=title,
@@ -596,10 +596,10 @@ class ArticleService:
                 author=author,
                 **extra_fields
             )
-            
+
             if tags:
                 article.tags.set(tags)
-            
+
             # 履歴記録
             ArticleHistory.objects.create(
                 article=article,
@@ -607,20 +607,20 @@ class ArticleService:
                 user=author,
                 data={'title': title}
             )
-            
+
             # 非同期通知
             send_notification.delay(
                 'article_created',
                 article_id=str(article.id)
             )
-            
+
             logger.info(f"Article created: {article.id}")
             return article
-            
+
         except Exception as e:
             logger.error(f"Failed to create article: {e}", exc_info=True)
             raise ValidationError(f"記事の作成に失敗しました: {str(e)}")
-    
+
     @staticmethod
     @transaction.atomic
     def publish_article(
@@ -628,37 +628,37 @@ class ArticleService:
         user: 'User'
     ) -> Article:
         """記事を公開"""
-        
+
         if article.status == Article.Status.PUBLISHED:
             return article  # 冪等性
-        
+
         if article.status != Article.Status.DRAFT:
             raise ValidationError("下書き状態の記事のみ公開できます")
-        
+
         if not article.content:
             raise ValidationError("本文が必要です")
-        
+
         article.status = Article.Status.PUBLISHED
         article.published_at = timezone.now()
         article.save(update_fields=['status', 'published_at', 'updated_at'])
-        
+
         # 履歴記録
         ArticleHistory.objects.create(
             article=article,
             action='published',
             user=user
         )
-        
+
         # 公開通知（非同期）
         send_notification.delay(
             'article_published',
             article_id=str(article.id),
             author_id=str(article.author_id)
         )
-        
+
         logger.info(f"Article published: {article.id}")
         return article
-    
+
     @staticmethod
     def bulk_update_status(
         article_ids: List[uuid.UUID],
@@ -666,7 +666,7 @@ class ArticleService:
         user: 'User'
     ) -> int:
         """複数記事のステータスを一括更新"""
-        
+
         with transaction.atomic():
             updated = Article.objects.filter(
                 id__in=article_ids
@@ -674,7 +674,7 @@ class ArticleService:
                 status=new_status,
                 updated_at=timezone.now()
             )
-            
+
             # 履歴を一括作成
             histories = [
                 ArticleHistory(
@@ -686,7 +686,7 @@ class ArticleService:
                 for article_id in article_ids
             ]
             ArticleHistory.objects.bulk_create(histories)
-            
+
             logger.info(f"Bulk updated {updated} articles to {new_status}")
             return updated
 ```
@@ -727,18 +727,18 @@ class OptimizedArticleViewSet(viewsets.ModelViewSet):
         latest_comment = Comment.objects.filter(
             article=OuterRef('pk')
         ).order_by('-created_at')
-        
+
         # Existsで効率的な存在チェック
         user_has_liked = Like.objects.filter(
             article=OuterRef('pk'),
             user=self.request.user if self.request.user.is_authenticated else None
         )
-        
+
         queryset = Article.objects.annotate(
             # カウント
             comment_count=Count('comments'),
             like_count=Count('likes'),
-            
+
             # 最新コメント情報
             latest_comment_date=Subquery(
                 latest_comment.values('created_at')[:1]
@@ -746,11 +746,11 @@ class OptimizedArticleViewSet(viewsets.ModelViewSet):
             latest_comment_author=Subquery(
                 latest_comment.values('author__name')[:1]
             ),
-            
+
             # ユーザー固有情報
             user_has_liked=Exists(user_has_liked)
         )
-        
+
         # 条件付きPrefetch
         queryset = queryset.prefetch_related(
             Prefetch(
@@ -761,7 +761,7 @@ class OptimizedArticleViewSet(viewsets.ModelViewSet):
                 to_attr='recent_comments'
             )
         )
-        
+
         return queryset
 ```
 
@@ -776,27 +776,27 @@ from django.contrib.auth import authenticate
 
 class AuthService:
     """認証サービス"""
-    
+
     @staticmethod
     def login(email: str, password: str) -> Dict[str, str]:
         """JWT認証"""
         user = authenticate(username=email, password=password)
-        
+
         if not user:
             raise ValidationError("認証に失敗しました")
-        
+
         if not user.is_active:
             raise ValidationError("アカウントが無効です")
-        
+
         refresh = RefreshToken.for_user(user)
-        
+
         return {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user_id': str(user.id),
             'email': user.email
         }
-    
+
     @staticmethod
     def verify_2fa(user: 'User', code: str) -> bool:
         """2要素認証の検証"""
@@ -811,24 +811,24 @@ from rest_framework import permissions
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """所有者のみ編集可能"""
-    
+
     def has_object_permission(self, request, view, obj):
         # 読み取りは全員OK
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         # 書き込みは所有者のみ
         return obj.owner == request.user
 
 class HasActiveSubscription(permissions.BasePermission):
     """有効なサブスクリプションが必要"""
-    
+
     message = "有効なサブスクリプションが必要です"
-    
+
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        
+
         return hasattr(request.user, 'subscription') and \
                request.user.subscription.is_active
 ```
@@ -960,20 +960,20 @@ def authenticated_client(api_client, user):
 @pytest.mark.django_db
 class TestArticleAPI:
     """記事APIのテストスイート"""
-    
+
     def test_list_articles(self, authenticated_client, article_factory):
         """記事一覧取得テスト"""
         # Arrange
         articles = article_factory.create_batch(3)
-        
+
         # Act
         response = authenticated_client.get('/api/articles/')
-        
+
         # Assert
         assert response.status_code == status.HTTP_200_OK
         assert response.data['count'] == 3
         assert len(response.data['results']) == 3
-    
+
     @freeze_time("2024-01-01 12:00:00")
     def test_create_article(self, authenticated_client, user):
         """記事作成テスト（時刻固定）"""
@@ -983,43 +983,43 @@ class TestArticleAPI:
             'content': 'テスト内容',
             'status': 'draft'
         }
-        
+
         # Act
         response = authenticated_client.post(
             '/api/articles/',
             data=data,
             format='json'
         )
-        
+
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['title'] == 'テスト記事'
         assert response.data['author'] == str(user.id)
         assert response.data['created_at'] == '2024-01-01T12:00:00Z'
-    
+
     @patch('apps.articles.tasks.send_notification.delay')
     def test_publish_article(self, mock_task, authenticated_client, article):
         """記事公開テスト（タスクモック）"""
         # Arrange
         article.status = 'draft'
         article.save()
-        
+
         # Act
         response = authenticated_client.post(
             f'/api/articles/{article.id}/publish/'
         )
-        
+
         # Assert
         assert response.status_code == status.HTTP_200_OK
         assert response.data['status'] == 'published'
-        
+
         # タスクが呼ばれたことを確認
         mock_task.assert_called_once_with(
             'article_published',
             article_id=str(article.id),
             author_id=str(article.author_id)
         )
-    
+
     @pytest.mark.parametrize("status_code,error_message", [
         (400, "タイトルは必須です"),
         (401, "認証が必要です"),
@@ -1035,20 +1035,20 @@ class TestArticleAPI:
         """エラーレスポンステスト（パラメータ化）"""
         # エラーケースごとのテスト実装
         pass
-    
+
     @pytest.mark.slow
     @pytest.mark.integration
     def test_bulk_operations(self, authenticated_client, article_factory):
         """大量データ操作テスト"""
         # 1000件の記事を作成
         articles = article_factory.create_batch(1000)
-        
+
         # パフォーマンス測定
         import time
         start = time.time()
         response = authenticated_client.get('/api/articles/')
         duration = time.time() - start
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert duration < 2.0  # 2秒以内
 ```
@@ -1065,7 +1065,7 @@ fake = Faker('ja_JP')
 class UserFactory(DjangoModelFactory):
     class Meta:
         model = 'users.User'
-    
+
     email = factory.LazyAttribute(lambda _: fake.email())
     display_name = factory.LazyAttribute(lambda _: fake.name())
     is_active = True
@@ -1073,17 +1073,17 @@ class UserFactory(DjangoModelFactory):
 class ArticleFactory(DjangoModelFactory):
     class Meta:
         model = 'articles.Article'
-    
+
     title = factory.LazyAttribute(lambda _: fake.sentence(nb_words=5))
     content = factory.LazyAttribute(lambda _: fake.text(max_nb_chars=1000))
     author = factory.SubFactory(UserFactory)
     status = 'draft'
-    
+
     @factory.post_generation
     def tags(self, create, extracted, **kwargs):
         if not create:
             return
-        
+
         if extracted:
             for tag in extracted:
                 self.tags.add(tag)
@@ -1116,44 +1116,44 @@ logger = get_task_logger(__name__)
 )
 def generate_report(self, report_id: str):
     """レポート生成タスク（冪等性・リトライ対応）"""
-    
+
     # 重複実行防止（分散ロック）
     lock_key = f"task:generate_report:{report_id}"
     lock = cache.add(lock_key, "locked", timeout=3600)
-    
+
     if not lock:
         logger.info(f"Task already running for report {report_id}")
         return
-    
+
     try:
         from apps.reports.models import Report
         report = Report.objects.get(id=report_id)
-        
+
         # 既に完了していれば何もしない（冪等性）
         if report.status == 'completed':
             logger.info(f"Report {report_id} already completed")
             return
-        
+
         report.status = 'processing'
         report.save(update_fields=['status'])
-        
+
         # 実際の処理
         logger.info(f"Generating report {report_id}")
         result = _generate_report_data(report)
-        
+
         report.result = result
         report.status = 'completed'
         report.save(update_fields=['result', 'status'])
-        
+
         logger.info(f"Report {report_id} completed successfully")
-        
+
     except Report.DoesNotExist:
         logger.error(f"Report {report_id} not found")
         raise self.retry(countdown=60)
-        
+
     except Exception as e:
         logger.error(f"Failed to generate report {report_id}: {e}")
-        
+
         # 失敗時の処理
         try:
             report.status = 'failed'
@@ -1161,9 +1161,9 @@ def generate_report(self, report_id: str):
             report.save(update_fields=['status', 'error_message'])
         except:
             pass
-        
+
         raise self.retry(exc=e)
-        
+
     finally:
         # ロック解除
         cache.delete(lock_key)
@@ -1173,14 +1173,14 @@ def cleanup_old_data():
     """定期的なデータクリーンアップ"""
     from datetime import timedelta
     from django.utils import timezone
-    
+
     cutoff_date = timezone.now() - timedelta(days=90)
-    
+
     # 古いログを削除
     deleted = LogEntry.objects.filter(
         created_at__lt=cutoff_date
     ).delete()
-    
+
     logger.info(f"Deleted {deleted[0]} old log entries")
 ```
 
@@ -1194,12 +1194,12 @@ from asgiref.sync import sync_to_async
 
 async def async_article_view(request, article_id):
     """非同期ビューの実装例"""
-    
+
     # 非同期でDBアクセス
     @sync_to_async
     def get_article():
         return Article.objects.select_related('author').get(id=article_id)
-    
+
     # 外部APIの非同期呼び出し
     async def fetch_external_data(article):
         async with aiohttp.ClientSession() as session:
@@ -1207,13 +1207,13 @@ async def async_article_view(request, article_id):
                 f'https://api.example.com/stats/{article.slug}'
             ) as response:
                 return await response.json()
-    
+
     # 並行処理
     article, external_data = await asyncio.gather(
         get_article(),
         fetch_external_data(article) if article else None
     )
-    
+
     return JsonResponse({
         'article': {
             'id': str(article.id),
@@ -1308,11 +1308,11 @@ logger = structlog.get_logger()
 
 class LoggingMixin:
     """ビューセット用ロギングミックスイン"""
-    
+
     def dispatch(self, request, *args, **kwargs):
         # リクエストIDを設定
         request.id = str(uuid.uuid4())
-        
+
         # 構造化ログコンテキスト
         log = logger.bind(
             request_id=request.id,
@@ -1320,9 +1320,9 @@ class LoggingMixin:
             path=request.path,
             user_id=str(request.user.id) if request.user.is_authenticated else None
         )
-        
+
         log.info("Request started")
-        
+
         try:
             response = super().dispatch(request, *args, **kwargs)
             log.info(
@@ -1330,7 +1330,7 @@ class LoggingMixin:
                 status_code=response.status_code
             )
             return response
-            
+
         except Exception as e:
             log.error(
                 "Request failed",
@@ -1357,46 +1357,46 @@ help:  ## ヘルプを表示
 
 fmt:  ## コードフォーマット
 	ruff format src/
-	
+
 lint:  ## Lintチェック
 	ruff check src/ --fix
-	
+
 type:  ## 型チェック
 	mypy src/
-	
+
 test:  ## テスト実行
 	pytest src/ -v --cov=src --cov-report=html
-	
+
 test-fast:  ## 高速テスト（単体テストのみ）
 	pytest src/ -v -m "not slow and not integration"
-	
+
 migrate:  ## マイグレーション実行
 	python manage.py migrate
-	
+
 makemigrations:  ## マイグレーション作成
 	python manage.py makemigrations
-	
+
 run:  ## 開発サーバー起動
 	python manage.py runserver 0.0.0.0:8000
-	
+
 celery:  ## Celeryワーカー起動
 	celery -A config worker -l info
-	
+
 shell:  ## Django shell起動
 	python manage.py shell_plus --ipython
-	
+
 check:  ## デプロイ前チェック
 	python manage.py check --deploy
 	python manage.py makemigrations --check
-	
+
 clean:  ## クリーンアップ
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "__pycache__" -delete
 	rm -rf htmlcov/ .coverage .pytest_cache/
-	
+
 build:  ## Dockerイメージビルド
 	docker build -f docker/app.Dockerfile -t myapp:latest .
-	
+
 deploy:  ## デプロイ
 	@echo "Deploying to production..."
 	python manage.py migrate --noinput
@@ -1418,7 +1418,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:14
@@ -1429,7 +1429,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
       redis:
         image: redis:7
         options: >-
@@ -1437,32 +1437,32 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install uv
           uv pip install -r requirements.txt
-      
+
       - name: Run formatters check
         run: ruff format --check src/
-      
+
       - name: Run linters
         run: ruff check src/
-      
+
       - name: Run type checking
         run: mypy src/
-      
+
       - name: Check migrations
         run: python manage.py makemigrations --check
-      
+
       - name: Run tests
         run: |
           pytest src/ \
@@ -1470,27 +1470,27 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=85
-      
+
       - name: Upload coverage
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
-      
+
       - name: Security check
         run: |
           pip-audit
           python manage.py check --deploy
-      
+
       - name: Build Docker image
         if: github.ref == 'refs/heads/main'
         run: |
           docker build -f docker/app.Dockerfile -t myapp:${{ github.sha }} .
-      
+
       - name: Deploy to staging
         if: github.ref == 'refs/heads/develop'
         run: |
           echo "Deploy to staging environment"
-      
+
       - name: Deploy to production
         if: github.ref == 'refs/heads/main'
         run: |
@@ -1529,7 +1529,7 @@ validation:
     - "ruff check"
     - "mypy"
     - "pytest -x"
-  
+
   post_generation:
     - "python manage.py check"
     - "python manage.py makemigrations --check"
@@ -1584,11 +1584,11 @@ def bad_function(items=[]):  # 可変デフォルト引数
         ...
     except:
         pass  # エラー握りつぶし
-    
+
     # グローバル変数
     global counter
     counter += 1
-    
+
     # 巨大な関数（100行以上）
     # ...
 
@@ -1596,7 +1596,7 @@ def bad_function(items=[]):  # 可変デフォルト引数
 def good_function(items: Optional[List] = None):
     if items is None:
         items = []
-    
+
     try:
         # 具体的な処理
         ...

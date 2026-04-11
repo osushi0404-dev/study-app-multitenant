@@ -61,10 +61,10 @@ const UserEdit: React.FC = () => {
   const [errors, setErrors] = useState<Partial<UserEditFormData>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [snackbar, setSnackbar] = useState({ 
-    open: false, 
-    message: '', 
-    severity: 'success' as 'success' | 'error' 
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' as 'success' | 'error'
   });
 
   const fetchUser = useCallback(async () => {
@@ -101,10 +101,10 @@ const UserEdit: React.FC = () => {
   const handleChange = (field: keyof UserEditFormData) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = event.target.type === 'checkbox' 
-      ? event.target.checked 
+    const value = event.target.type === 'checkbox'
+      ? event.target.checked
       : event.target.value;
-    
+
     setFormData({
       ...formData,
       // eslint-disable-next-line security/detect-object-injection
@@ -124,64 +124,64 @@ const UserEdit: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: Partial<UserEditFormData> = {};
-    
+
     if (!formData.email) {
       newErrors.email = 'メールアドレスは必須です';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = '有効なメールアドレスを入力してください';
     }
-    
+
     if (changePassword) {
       if (!formData.password) {
         newErrors.password = 'パスワードは必須です';
       } else if (formData.password.length < 8) {
         newErrors.password = 'パスワードは8文字以上で入力してください';
       }
-      
+
       if (formData.password !== formData.password_confirm) {
         newErrors.password_confirm = 'パスワードが一致しません';
       }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     setSaving(true);
-    
+
     try {
       const dataToSend = { ...formData };
-      
+
       // Remove password fields if not changing password
       if (!changePassword) {
         delete dataToSend.password;
         delete dataToSend.password_confirm;
       }
-      
+
       await apiClient.patch(
         `/api/admin/users/${id}/`,
         dataToSend
       );
-      
+
       setSnackbar({
         open: true,
         message: 'ユーザー情報を更新しました',
         severity: 'success',
       });
-      
+
       // Refresh user data
       fetchUser();
       setChangePassword(false);
     } catch (error: any) {
       console.error('Failed to update user:', error);
-      
+
       if (error.response?.data?.error) {
         setSnackbar({
           open: true,
@@ -222,7 +222,7 @@ const UserEdit: React.FC = () => {
         <Typography variant="h4" component="h1" gutterBottom>
           ユーザー編集
         </Typography>
-        
+
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle1" color="text.secondary" gutterBottom>
             ユーザーID: {userData.user_id}
@@ -243,7 +243,7 @@ const UserEdit: React.FC = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <Typography variant="body2" color="text.secondary">
-                最終ログイン: {userData.last_login 
+                最終ログイン: {userData.last_login
                   ? new Date(userData.last_login).toLocaleString('ja-JP')
                   : '未ログイン'}
               </Typography>
@@ -257,9 +257,9 @@ const UserEdit: React.FC = () => {
             )}
           </Grid>
         </Box>
-        
+
         <Divider sx={{ mb: 3 }} />
-        
+
         <Box component="form" onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
@@ -274,7 +274,7 @@ const UserEdit: React.FC = () => {
                 disabled={saving}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -284,7 +284,7 @@ const UserEdit: React.FC = () => {
                 disabled={saving}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -294,7 +294,7 @@ const UserEdit: React.FC = () => {
                 disabled={saving}
               />
             </Grid>
-            
+
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <FormControlLabel
@@ -307,7 +307,7 @@ const UserEdit: React.FC = () => {
                   }
                   label="アカウントを有効にする"
                 />
-                
+
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -318,7 +318,7 @@ const UserEdit: React.FC = () => {
                   }
                   label="管理者権限"
                 />
-                
+
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -331,7 +331,7 @@ const UserEdit: React.FC = () => {
                 />
               </Box>
             </Grid>
-            
+
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
               <FormControlLabel
@@ -345,7 +345,7 @@ const UserEdit: React.FC = () => {
                 label="パスワードを変更する"
               />
             </Grid>
-            
+
             {changePassword && (
               <>
                 <Grid item xs={12} sm={6}>
@@ -360,7 +360,7 @@ const UserEdit: React.FC = () => {
                     disabled={saving}
                   />
                 </Grid>
-                
+
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
@@ -376,7 +376,7 @@ const UserEdit: React.FC = () => {
               </>
             )}
           </Grid>
-          
+
           <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
@@ -395,14 +395,14 @@ const UserEdit: React.FC = () => {
           </Box>
         </Box>
       </Paper>
-      
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert 
-          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
           severity={snackbar.severity}
         >
           {snackbar.message}

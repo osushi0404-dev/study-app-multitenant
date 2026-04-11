@@ -115,13 +115,13 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
 
     try {
       let response;
-      
+
       if (settings.use_adaptive) {
         // 適応的問題生成
         response = await apiService.post('/api/problems/generate_adaptive/', {
           subject_id: settings.subject_id
         });
-        
+
         if (response.data.success) {
           setGeneratedProblems([response.data.problem]);
           setAdaptationInfo(response.data.adaptation_info);
@@ -136,7 +136,7 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
           topic: settings.topic || undefined,
           save_to_db: settings.save_to_db
         });
-        
+
         if (response.data.success) {
           if (settings.count === 1) {
             setGeneratedProblems([response.data.problem]);
@@ -145,9 +145,9 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
           }
         }
       }
-      
+
       toast.success('問題を生成しました');
-      
+
     } catch (error: any) {
       console.error('AI問題生成エラー:', error);
       toast.error(error.response?.data?.error || 'AI問題生成に失敗しました');
@@ -186,7 +186,7 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
             <Typography variant="h6" gutterBottom>
               AI問題生成設定
             </Typography>
-            
+
             <Box sx={{ mb: 3 }}>
               <FormControlLabel
                 control={
@@ -297,7 +297,7 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
                   AI問題を生成中...
                 </Typography>
                 <Typography color="text.secondary" textAlign="center">
-                  {settings.use_adaptive 
+                  {settings.use_adaptive
                     ? 'あなたの学習履歴を分析して最適な問題を作成しています'
                     : `${settings.count}個の問題を生成しています`
                   }
@@ -346,22 +346,22 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
               <Card key={index} sx={{ mb: 2 }}>
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={1} mb={2}>
-                    <Chip 
-                      label={difficultyLabels[problem.difficulty as keyof typeof difficultyLabels]} 
-                      color="primary" 
-                      size="small" 
+                    <Chip
+                      label={difficultyLabels[problem.difficulty as keyof typeof difficultyLabels]}
+                      color="primary"
+                      size="small"
                     />
-                    <Chip 
-                      label={problemTypeLabels[problem.problem_type as keyof typeof problemTypeLabels]} 
-                      variant="outlined" 
-                      size="small" 
+                    <Chip
+                      label={problemTypeLabels[problem.problem_type as keyof typeof problemTypeLabels]}
+                      variant="outlined"
+                      size="small"
                     />
                   </Box>
-                  
+
                   <Typography variant="h6" gutterBottom>
                     {problem.title}
                   </Typography>
-                  
+
                   <Typography variant="body1" paragraph>
                     {problem.description}
                   </Typography>
@@ -372,10 +372,10 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
                         選択肢:
                       </Typography>
                       {problem.choices.map((choice: any, choiceIndex: number) => (
-                        <Typography 
-                          key={choiceIndex} 
-                          variant="body2" 
-                          sx={{ 
+                        <Typography
+                          key={choiceIndex}
+                          variant="body2"
+                          sx={{
                             color: choice.is_correct ? 'success.main' : 'text.secondary',
                             fontWeight: choice.is_correct ? 'bold' : 'normal'
                           }}
@@ -416,7 +416,7 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
           AI問題生成
         </Box>
       </DialogTitle>
-      
+
       <DialogContent>
         <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
           {steps.map((label) => (
@@ -433,24 +433,24 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
         <Button onClick={handleClose}>
           キャンセル
         </Button>
-        
+
         {activeStep > 0 && (
           <Button onClick={handleBack} disabled={generating}>
             戻る
           </Button>
         )}
-        
+
         {activeStep < steps.length - 1 ? (
-          <Button 
-            onClick={handleNext} 
+          <Button
+            onClick={handleNext}
             variant="contained"
             disabled={generating || (activeStep === 0 && !settings.subject_id)}
           >
             次へ
           </Button>
         ) : (
-          <Button 
-            onClick={handleFinish} 
+          <Button
+            onClick={handleFinish}
             variant="contained"
             color="success"
           >

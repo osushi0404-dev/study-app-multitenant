@@ -26,7 +26,7 @@ export const useAutoLogout = ({
     if (warningTimeoutRef.current) {
       clearTimeout(warningTimeoutRef.current);
     }
-    
+
     // Reset warning flag
     warningShownRef.current = false;
 

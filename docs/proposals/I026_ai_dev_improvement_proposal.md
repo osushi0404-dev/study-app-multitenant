@@ -8,7 +8,7 @@
 
 ## エグゼクティブサマリー
 
-本プロジェクトは Claude Code + Django REST Framework + React TypeScript の構成で、  
+本プロジェクトは Claude Code + Django REST Framework + React TypeScript の構成で、
 「イシュー → 計画 → 実装 → テスト → レビュー → マージ」の安全寄りワークフローで開発している。
 
 現状の運用は概ね機能しているが、以下の5領域に改善余地がある：
@@ -227,7 +227,7 @@ MCP（Model Context Protocol）とは、Claude が外部ツール・サービス
 
 #### Sequential Thinking MCP とは
 
-複雑な問題を解くとき、Claude に「段階的な思考プロセス」を明示的に踏ませるためのツール。  
+複雑な問題を解くとき、Claude に「段階的な思考プロセス」を明示的に踏ませるためのツール。
 通常の Claude は 1 ターンで回答を生成するが、Sequential Thinking MCP を使うと：
 
 ```
@@ -247,7 +247,7 @@ MCP（Model Context Protocol）とは、Claude が外部ツール・サービス
 
 #### Web Search MCP とは
 
-Claude がリアルタイムで Web 検索を実行し、結果を回答に組み込めるようにするツール。  
+Claude がリアルタイムで Web 検索を実行し、結果を回答に組み込めるようにするツール。
 Claude の学習データのカットオフ（2025年8月）以降の情報も参照できる。
 
 **このプロジェクトでの効果**:

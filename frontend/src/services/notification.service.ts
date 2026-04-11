@@ -41,13 +41,13 @@ class NotificationService {
     try {
       const permission = await Notification.requestPermission();
       this.permission = permission as NotificationPermission;
-      
+
       if (permission === 'granted') {
         toast.success('通知が有効になりました');
       } else {
         toast.error('通知の権限が拒否されました');
       }
-      
+
       return this.permission;
     } catch (error) {
       console.error('Error requesting notification permission:', error);
@@ -105,27 +105,27 @@ class NotificationService {
   scheduleStudyReminder(time: string, message?: string): string {
     const now = new Date();
     const [hours, minutes] = time.split(':').map(Number);
-    
+
     // Create target time for today
     const targetTime = new Date();
     targetTime.setHours(hours, minutes, 0, 0);
-    
+
     // If target time has passed today, schedule for tomorrow
     if (targetTime <= now) {
       targetTime.setDate(targetTime.getDate() + 1);
     }
-    
+
     const timeUntilReminder = targetTime.getTime() - now.getTime();
     const reminderId = `reminder-${Date.now()}`;
-    
+
     const timeout = setTimeout(() => {
       this.showStudyReminder(message);
       // Schedule next day's reminder
       this.scheduleStudyReminder(time, message);
     }, timeUntilReminder);
-    
+
     this.reminderTimeouts.set(reminderId, timeout);
-    
+
     console.log(`Study reminder scheduled for ${targetTime.toLocaleString()}`);
     return reminderId;
   }
@@ -210,21 +210,21 @@ class NotificationService {
   // Schedule study session reminders during study
   scheduleStudySessionReminders(sessionDuration: number): string[] {
     const reminderIds: string[] = [];
-    
+
     // Remind to take a break every 25 minutes (Pomodoro technique)
     const breakInterval = 25 * 60 * 1000; // 25 minutes in milliseconds
     const numberOfBreaks = Math.floor(sessionDuration / breakInterval);
-    
+
     for (let i = 1; i <= numberOfBreaks; i++) {
       const timeout = setTimeout(() => {
         this.showBreakReminder();
       }, i * breakInterval);
-      
+
       const reminderId = `break-${Date.now()}-${i}`;
       this.reminderTimeouts.set(reminderId, timeout);
       reminderIds.push(reminderId);
     }
-    
+
     return reminderIds;
   }
 

@@ -112,14 +112,14 @@ const Monitoring: React.FC = () => {
   const handleClearCache = async () => {
     try {
       setClearingCache(true);
-      
+
       await apiService.post('/cache/clear/', {
         types: ['all']
       });
-      
+
       toast.success('キャッシュをクリアしました');
       setClearCacheDialogOpen(false);
-      
+
     } catch (error) {
       console.error('Failed to clear cache:', error);
       toast.error('キャッシュのクリアに失敗しました');
@@ -174,7 +174,7 @@ const Monitoring: React.FC = () => {
         </Typography>
         <Box>
           <Tooltip title="キャッシュクリア">
-            <IconButton 
+            <IconButton
               onClick={() => setClearCacheDialogOpen(true)}
               disabled={refreshing}
             >
@@ -182,7 +182,7 @@ const Monitoring: React.FC = () => {
             </IconButton>
           </Tooltip>
           <Tooltip title="更新">
-            <IconButton 
+            <IconButton
               onClick={fetchMonitoringData}
               disabled={refreshing}
             >
@@ -200,13 +200,13 @@ const Monitoring: React.FC = () => {
             <Typography variant="h5">
               システム全体: {healthData.overall_status}
             </Typography>
-            <Chip 
+            <Chip
               label={`最終更新: ${new Date(healthData.timestamp).toLocaleString()}`}
               size="small"
               variant="outlined"
             />
           </Box>
-          
+
           {refreshing && <LinearProgress sx={{ mb: 2 }} />}
         </Paper>
       )}
@@ -215,7 +215,7 @@ const Monitoring: React.FC = () => {
       {alerts.length > 0 && (
         <Box mb={3}>
           {alerts.map((alert, index) => (
-            <Alert 
+            <Alert
               key={index}
               severity={alert.severity === 'critical' ? 'error' : alert.severity as any}
               sx={{ mb: 1 }}
@@ -237,7 +237,7 @@ const Monitoring: React.FC = () => {
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <StorageIcon />
                   <Typography variant="h6">データベース</Typography>
-                  <Chip 
+                  <Chip
                     label={healthData.database.status}
                     color={getStatusColor(healthData.database.status) as any}
                     size="small"
@@ -260,7 +260,7 @@ const Monitoring: React.FC = () => {
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <SpeedIcon />
                   <Typography variant="h6">Redis</Typography>
-                  <Chip 
+                  <Chip
                     label={healthData.redis.status}
                     color={getStatusColor(healthData.redis.status) as any}
                     size="small"
@@ -285,7 +285,7 @@ const Monitoring: React.FC = () => {
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <ComputerIcon />
                   <Typography variant="h6">システム</Typography>
-                  <Chip 
+                  <Chip
                     label={healthData.system.status}
                     color={getStatusColor(healthData.system.status) as any}
                     size="small"
@@ -295,8 +295,8 @@ const Monitoring: React.FC = () => {
                   <Typography variant="body2" color="text.secondary">
                     CPU: {healthData.system.cpu_percent}%
                   </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
+                  <LinearProgress
+                    variant="determinate"
                     value={healthData.system.cpu_percent}
                     color={healthData.system.cpu_percent > 80 ? 'error' : 'primary'}
                     sx={{ mt: 0.5 }}
@@ -304,11 +304,11 @@ const Monitoring: React.FC = () => {
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    メモリ: {healthData.system.memory_percent}% 
+                    メモリ: {healthData.system.memory_percent}%
                     (空き: {healthData.system.memory_available_gb}GB)
                   </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
+                  <LinearProgress
+                    variant="determinate"
                     value={healthData.system.memory_percent}
                     color={healthData.system.memory_percent > 80 ? 'error' : 'primary'}
                     sx={{ mt: 0.5 }}
@@ -326,7 +326,7 @@ const Monitoring: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             エラーサマリー (過去{errorSummary.period_days}日)
           </Typography>
-          
+
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Box>
@@ -338,7 +338,7 @@ const Monitoring: React.FC = () => {
                 </Typography>
               </Box>
             </Grid>
-            
+
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" gutterBottom>
                 日別エラー数
@@ -382,7 +382,7 @@ const Monitoring: React.FC = () => {
           <Button onClick={() => setClearCacheDialogOpen(false)}>
             キャンセル
           </Button>
-          <Button 
+          <Button
             onClick={handleClearCache}
             disabled={clearingCache}
             color="error"

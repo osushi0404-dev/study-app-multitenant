@@ -52,7 +52,7 @@ function App() {
               <Router>
               <NavigationLogger />
               <CssBaseline />
-              <Toaster 
+              <Toaster
                 position="top-right"
                 toastOptions={{
                   duration: 4000,
@@ -62,7 +62,7 @@ function App() {
                   },
                 }}
               />
-              
+
               <Routes>
               {/* Public Routes - 組織別登録URLを先に配置 */}
               <Route path="/login" element={<Login />} />
@@ -70,7 +70,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/password-reset" element={<PasswordReset />} />
               <Route path="/verify-email" element={<EmailVerification />} />
-              
+
               {/* Protected Routes */}
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
@@ -88,7 +88,7 @@ function App() {
                 <Route path="admin/users/new" element={<AdminRoute><UserCreate /></AdminRoute>} />
                 <Route path="admin/users/:id/edit" element={<AdminRoute><UserEdit /></AdminRoute>} />
               </Route>
-              
+
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
