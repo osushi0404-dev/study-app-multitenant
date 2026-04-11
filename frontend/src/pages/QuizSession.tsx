@@ -269,7 +269,7 @@ const QuizSessionPage: React.FC = () => {
   }
 
   if (sessionComplete && session) {
-    const accuracy = session.total_problems > 0 
+    const accuracy = session.total_problems > 0
       ? Math.round((session.correct_answers / session.total_problems) * 100)
       : 0;
 
@@ -281,7 +281,7 @@ const QuizSessionPage: React.FC = () => {
               <Typography variant="h4" gutterBottom>
                 クイズ完了！
               </Typography>
-              
+
               <Box my={4}>
                 <Typography variant="h2" color="primary" gutterBottom>
                   {accuracy}%
@@ -395,10 +395,10 @@ const QuizSessionPage: React.FC = () => {
             {/* Problem Info */}
             <Box display="flex" gap={1} mb={2}>
               {currentProblem.subject_name && (
-                <Chip 
-                  icon={<School />} 
-                  label={currentProblem.subject_name} 
-                  size="small" 
+                <Chip
+                  icon={<School />}
+                  label={currentProblem.subject_name}
+                  size="small"
                 />
               )}
               <Chip
@@ -533,13 +533,13 @@ const QuizSessionPage: React.FC = () => {
             {/* Result */}
             {showResult && result && (
               <Box mt={3}>
-                <Alert 
+                <Alert
                   severity={result.is_correct ? 'success' : 'error'}
                   icon={result.is_correct ? <CheckCircle /> : <Cancel />}
                 >
                   {result.is_correct ? '正解です！' : '不正解です'}
                 </Alert>
-                
+
                 {/* 解説ボックス: 解説文または解説画像がある場合に表示 */}
                 {(result.explanation || result.explanation_image) && (
                   <Box mt={2} p={2} bgcolor="grey.100" borderRadius={1}>

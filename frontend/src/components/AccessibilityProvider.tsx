@@ -50,7 +50,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
     const saved = localStorage.getItem('accessibility-settings');
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
-  
+
   const [isAccessibilityPanelOpen, setIsAccessibilityPanelOpen] = useState(false);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
 
@@ -87,7 +87,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
     // CSS変数を更新
     const root = document.documentElement;
     root.style.setProperty('--accessibility-font-size', `${settings.fontSize}px`);
-    
+
     // ハイコントラストモード
     if (settings.highContrast) {
       root.classList.add('high-contrast');
@@ -112,12 +112,12 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
   }, [settings]);
 
   const updateSetting = <K extends keyof AccessibilitySettings>(
-    key: K, 
+    key: K,
     value: AccessibilitySettings[K]
   ) => {
     // eslint-disable-next-line security/detect-object-injection
     setSettings(prev => ({ ...prev, [key]: value }));
-    
+
     // 変更時のアナウンス
     if (settings.voiceAnnouncements) {
       speak(`設定が変更されました: ${key}`);
@@ -126,10 +126,10 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
 
   const speak = (text: string) => {
     if (!speechSynthesis || !settings.voiceAnnouncements) return;
-    
+
     // 既存の発話を停止
     speechSynthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ja-JP';
     utterance.rate = 0.8;
@@ -154,10 +154,10 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
       <div style={{ fontSize: settings.fontSize }}>
         {children}
       </div>
-      
+
       {/* アクセシビリティコントロールパネル */}
       <AccessibilityPanel />
-      
+
       {/* アクセシビリティFAB */}
       <Tooltip title="アクセシビリティ設定 (Alt+A)">
         <Fab
@@ -188,7 +188,7 @@ const AccessibilityPanel: React.FC = () => {
   if (!isAccessibilityPanelOpen) return null;
 
   const handleFontSizeChange = (increment: boolean) => {
-    const newSize = increment 
+    const newSize = increment
       ? Math.min(settings.fontSize + 2, 24)
       : Math.max(settings.fontSize - 2, 12);
     updateSetting('fontSize', newSize);

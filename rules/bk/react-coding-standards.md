@@ -131,14 +131,14 @@ interface ButtonProps {
   disabled?: boolean;
 }
 
-export const Button: React.FC<ButtonProps> = ({ 
-  label, 
-  onClick, 
+export const Button: React.FC<ButtonProps> = ({
+  label,
+  onClick,
   variant = 'primary',
-  disabled = false 
+  disabled = false
 }) => {
   return (
-    <button 
+    <button
       className={`btn btn-${variant}`}
       onClick={onClick}
       disabled={disabled}
@@ -166,9 +166,9 @@ const UserListContainer: React.FC = () => {
 };
 
 // Presentational Component (表示担当)
-const UserListView: React.FC<{ users: User[]; loading: boolean }> = ({ 
-  users, 
-  loading 
+const UserListView: React.FC<{ users: User[]; loading: boolean }> = ({
+  users,
+  loading
 }) => {
   if (loading) return <Spinner />;
   return (
@@ -452,15 +452,15 @@ src/
 describe('LoginForm', () => {
   it('should display error message when login fails', async () => {
     render(<LoginForm />);
-    
+
     const emailInput = screen.getByLabelText('Email');
     const passwordInput = screen.getByLabelText('Password');
     const submitButton = screen.getByRole('button', { name: 'Login' });
-    
+
     await userEvent.type(emailInput, 'invalid@email.com');
     await userEvent.type(passwordInput, 'wrongpassword');
     await userEvent.click(submitButton);
-    
+
     expect(screen.getByText('ログインに失敗しました')).toBeInTheDocument();
   });
 });
@@ -477,7 +477,7 @@ describe('LoginForm', () => {
  * ユーザー一覧を取得するカスタムフック
  * @param filters - 検索フィルター
  * @returns ユーザー一覧、ローディング状態、エラー
- * 
+ *
  * @example
  * const { users, loading, error } = useUsers({ role: 'admin' });
  */

@@ -55,7 +55,7 @@ const PasswordReset: React.FC = () => {
   const [emailSent, setEmailSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -126,7 +126,7 @@ const PasswordReset: React.FC = () => {
               パスワードリセット用のメールを送信しました。
               メール内のリンクをクリックして、新しいパスワードを設定してください。
             </Alert>
-            
+
             <Button
               onClick={() => navigate('/login')}
               startIcon={<ArrowBack />}
@@ -163,7 +163,7 @@ const PasswordReset: React.FC = () => {
           <Typography component="h1" variant="h4" gutterBottom>
             学習アプリ
           </Typography>
-          
+
           <Typography component="h2" variant="h5" gutterBottom>
             {isConfirmMode ? '新しいパスワード設定' : 'パスワードリセット'}
           </Typography>

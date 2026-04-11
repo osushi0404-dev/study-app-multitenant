@@ -75,7 +75,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         styleOverrides: {
           root: {
             borderRadius: 12,
-            boxShadow: darkMode 
+            boxShadow: darkMode
               ? '0 2px 8px rgba(0,0,0,0.3)'
               : '0 2px 8px rgba(0,0,0,0.1)',
           },

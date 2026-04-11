@@ -188,9 +188,9 @@ export const ScreenReaderOnly: React.FC<{ children: React.ReactNode }> = ({ chil
 };
 
 // スキップリンク
-export const SkipLink: React.FC<{ href: string; children: React.ReactNode }> = ({ 
-  href, 
-  children 
+export const SkipLink: React.FC<{ href: string; children: React.ReactNode }> = ({
+  href,
+  children
 }) => {
   return (
     <a href={href} className="skip-link">

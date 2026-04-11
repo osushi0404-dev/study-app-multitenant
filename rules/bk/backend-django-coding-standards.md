@@ -109,21 +109,21 @@ class Article(models.Model):
     # 必須フィールドを先に定義
     title = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
-    
+
     # オプションフィールド
     description = models.TextField(blank=True)
-    
+
     # 外部キー
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='articles'
     )
-    
+
     # 日時フィールドは最後に
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Article'
@@ -132,10 +132,10 @@ class Article(models.Model):
             models.Index(fields=['slug']),
             models.Index(fields=['-created_at']),
         ]
-    
+
     def __str__(self):
         return self.title
-    
+
     def save(self, *args, **kwargs):
         # カスタムロジック
         if not self.slug:
@@ -169,14 +169,14 @@ class ArticleViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'content']
     ordering_fields = ['created_at', 'updated_at']
     ordering = ['-created_at']
-    
+
     def get_queryset(self):
         """クエリセットをカスタマイズ"""
         queryset = super().get_queryset()
         if self.request.user.is_authenticated:
             return queryset
         return queryset.filter(is_public=True)
-    
+
     def get_serializer_class(self):
         """アクションに応じてシリアライザーを切り替え"""
         if self.action == 'list':
@@ -184,7 +184,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return ArticleCreateSerializer
         return self.serializer_class
-    
+
     @action(detail=True, methods=['post'])
     def publish(self, request, pk=None):
         """カスタムアクション: 記事を公開"""
@@ -202,14 +202,14 @@ class LoginAPIView(APIView):
     ユーザーログインエンドポイント
     """
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
-        
+
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -224,22 +224,22 @@ class LoginAPIView(APIView):
 class UserSerializer(serializers.ModelSerializer):
     # 追加フィールド
     full_name = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'full_name', 'created_at']
         read_only_fields = ['id', 'created_at']
-    
+
     def get_full_name(self, obj):
         """フルネームを返す"""
         return f"{obj.first_name} {obj.last_name}".strip()
-    
+
     def validate_email(self, value):
         """メールアドレスのカスタムバリデーション"""
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("このメールアドレスは既に使用されています")
         return value
-    
+
     def create(self, validated_data):
         """ユーザー作成時のカスタムロジック"""
         user = User.objects.create_user(**validated_data)
@@ -250,7 +250,7 @@ class UserSerializer(serializers.ModelSerializer):
 ```python
 class CommentSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
-    
+
     class Meta:
         model = Comment
         fields = ['id', 'content', 'author', 'created_at']
@@ -258,7 +258,7 @@ class CommentSerializer(serializers.ModelSerializer):
 class ArticleDetailSerializer(serializers.ModelSerializer):
     comments = CommentSerializer(many=True, read_only=True)
     author = UserSerializer(read_only=True)
-    
+
     class Meta:
         model = Article
         fields = ['id', 'title', 'content', 'author', 'comments']
@@ -281,7 +281,7 @@ router.register('articles', views.ArticleViewSet)
 urlpatterns = [
     # ViewSetのルーティング
     path('', include(router.urls)),
-    
+
     # 個別のビュー
     path('search/', views.SearchView.as_view(), name='search'),
     path('stats/', views.StatsView.as_view(), name='stats'),
@@ -310,7 +310,7 @@ urlpatterns = [
 class BusinessLogicError(Exception):
     """ビジネスロジックエラーの基底クラス"""
     default_message = "ビジネスロジックエラーが発生しました"
-    
+
     def __init__(self, message=None):
         self.message = message or self.default_message
         super().__init__(self.message)
@@ -331,7 +331,7 @@ from rest_framework import status
 
 def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
-    
+
     if response is not None:
         custom_response_data = {
             'error': True,
@@ -340,7 +340,7 @@ def custom_exception_handler(exc, context):
             'details': response.data
         }
         response.data = custom_response_data
-    
+
     return response
 ```
 
@@ -353,13 +353,13 @@ class PaymentView(APIView):
             payment_service = PaymentService()
             result = payment_service.process_payment(request.data)
             return Response(result)
-        
+
         except InsufficientBalanceError as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         except Exception as e:
             logger.error(f"Payment processing failed: {e}", exc_info=True)
             return Response(
@@ -391,15 +391,15 @@ articles = Article.objects.prefetch_related('tags', 'comments').all()
 class ArticleViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Article.objects.all()
-        
+
         # 関連データを事前に取得
         queryset = queryset.select_related('author', 'category')
         queryset = queryset.prefetch_related('tags', 'comments__author')
-        
+
         # 必要なフィールドのみ取得
         if self.action == 'list':
             queryset = queryset.only('id', 'title', 'slug', 'created_at')
-        
+
         # アノテーション
         queryset = queryset.annotate(
             comment_count=Count('comments'),
@@ -409,7 +409,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 output_field=BooleanField()
             )
         )
-        
+
         return queryset
 ```
 
@@ -425,15 +425,15 @@ from .factories import UserFactory, ArticleFactory
 
 class ArticleModelTest(TestCase):
     """モデルのテスト"""
-    
+
     def setUp(self):
         self.user = UserFactory()
         self.article = ArticleFactory(author=self.user)
-    
+
     def test_string_representation(self):
         """文字列表現のテスト"""
         self.assertEqual(str(self.article), self.article.title)
-    
+
     def test_slug_generation(self):
         """スラッグ自動生成のテスト"""
         article = Article.objects.create(
@@ -444,29 +444,29 @@ class ArticleModelTest(TestCase):
 
 class ArticleAPITest(APITestCase):
     """APIエンドポイントのテスト"""
-    
+
     def setUp(self):
         self.user = UserFactory()
         self.client.force_authenticate(user=self.user)
-    
+
     def test_list_articles(self):
         """記事一覧取得のテスト"""
         ArticleFactory.create_batch(3)
-        
+
         response = self.client.get('/api/articles/')
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 3)
-    
+
     def test_create_article(self):
         """記事作成のテスト"""
         data = {
             'title': 'New Article',
             'content': 'Article content'
         }
-        
+
         response = self.client.post('/api/articles/', data)
-        
+
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Article.objects.count(), 1)
 ```
@@ -481,7 +481,7 @@ from .models import User, Article
 class UserFactory(DjangoModelFactory):
     class Meta:
         model = User
-    
+
     username = factory.Sequence(lambda n: f'user{n}')
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
     first_name = factory.Faker('first_name')
@@ -490,7 +490,7 @@ class UserFactory(DjangoModelFactory):
 class ArticleFactory(DjangoModelFactory):
     class Meta:
         model = Article
-    
+
     title = factory.Faker('sentence', nb_words=4)
     content = factory.Faker('text')
     author = factory.SubFactory(UserFactory)
@@ -510,7 +510,7 @@ class IsOwnerOrReadOnly(BasePermission):
         # 読み取り権限は全員に許可
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         # 書き込み権限は所有者のみ
         return obj.owner == request.user
 
@@ -535,7 +535,7 @@ class UserRegistrationSerializer(serializers.Serializer):
         write_only=True,
         style={'input_type': 'password'}
     )
-    
+
     def validate_password(self, value):
         """パスワードの強度チェック"""
         if not any(char.isdigit() for char in value):
@@ -561,16 +561,16 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
     @method_decorator(cache_page(60 * 15))  # 15分キャッシュ
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
-    
+
     def retrieve(self, request, *args, **kwargs):
         # 手動キャッシング
         cache_key = f'article_{kwargs["pk"]}'
         article = cache.get(cache_key)
-        
+
         if article is None:
             article = self.get_object()
             cache.set(cache_key, article, 60 * 60)  # 1時間キャッシュ
-        
+
         serializer = self.get_serializer(article)
         return Response(serializer.data)
 ```
@@ -588,7 +588,7 @@ class CustomPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
-    
+
     def get_paginated_response(self, data):
         return Response({
             'count': self.page.paginator.count,
@@ -611,13 +611,13 @@ logger = logging.getLogger(__name__)
 class PaymentService:
     def process_payment(self, payment_data):
         logger.info(f"Processing payment for user {payment_data['user_id']}")
-        
+
         try:
             # 処理ロジック
             result = self._execute_payment(payment_data)
             logger.info(f"Payment successful: {result['transaction_id']}")
             return result
-        
+
         except PaymentGatewayError as e:
             logger.error(
                 f"Payment gateway error for user {payment_data['user_id']}: {e}",
@@ -625,7 +625,7 @@ class PaymentService:
                 extra={'payment_data': payment_data}
             )
             raise
-        
+
         except Exception as e:
             logger.critical(
                 f"Unexpected error in payment processing: {e}",
@@ -646,9 +646,9 @@ class ArticleService:
             user_id=user.id,
             action='create_article'
         )
-        
+
         log.info("Starting article creation")
-        
+
         try:
             article = Article.objects.create(**data)
             log.info(
@@ -657,7 +657,7 @@ class ArticleService:
                 title=article.title
             )
             return article
-        
+
         except Exception as e:
             log.error(
                 "Article creation failed",
@@ -696,7 +696,7 @@ def send_email_task(self, subject, message, recipient_list):
             fail_silently=False
         )
         logger.info(f"Email sent successfully to {recipient_list}")
-    
+
     except Exception as exc:
         logger.error(f"Email sending failed: {exc}")
         raise self.retry(exc=exc)
@@ -707,20 +707,20 @@ def generate_report(report_id):
     レポート生成タスク
     """
     from .models import Report
-    
+
     report = Report.objects.get(id=report_id)
     report.status = 'processing'
     report.save()
-    
+
     try:
         # レポート生成ロジック
         data = collect_report_data(report)
         file_path = create_report_file(data)
-        
+
         report.file_path = file_path
         report.status = 'completed'
         report.save()
-        
+
     except Exception as e:
         report.status = 'failed'
         report.error_message = str(e)
@@ -742,13 +742,13 @@ async def async_view(request):
     @sync_to_async
     def get_articles():
         return list(Article.objects.all()[:10])
-    
+
     # 複数の非同期処理を並行実行
     articles, user_count = await asyncio.gather(
         get_articles(),
         sync_to_async(User.objects.count)()
     )
-    
+
     return JsonResponse({
         'articles': [{'id': a.id, 'title': a.title} for a in articles],
         'user_count': user_count
@@ -838,17 +838,17 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 def calculate_discount(price: float, discount_percent: float) -> float:
     """
     割引価格を計算する
-    
+
     Args:
         price: 元の価格
         discount_percent: 割引率（0-100）
-    
+
     Returns:
         割引後の価格
-    
+
     Raises:
         ValueError: 価格が負の値または割引率が範囲外の場合
-    
+
     Example:
         >>> calculate_discount(1000, 20)
         800.0
@@ -857,36 +857,36 @@ def calculate_discount(price: float, discount_percent: float) -> float:
         raise ValueError("価格は0以上である必要があります")
     if not 0 <= discount_percent <= 100:
         raise ValueError("割引率は0-100の範囲である必要があります")
-    
+
     return price * (1 - discount_percent / 100)
 
 class PaymentProcessor:
     """
     決済処理を行うクラス
-    
+
     Attributes:
         gateway: 決済ゲートウェイのインスタンス
         logger: ロガーインスタンス
-    
+
     Example:
         >>> processor = PaymentProcessor(gateway=StripeGateway())
         >>> result = processor.process(amount=1000, currency='JPY')
     """
-    
+
     def process(self, amount: float, currency: str) -> dict:
         """
         決済を処理する
-        
+
         Args:
             amount: 決済金額
             currency: 通貨コード（ISO 4217）
-        
+
         Returns:
             dict: 決済結果を含む辞書
                 - transaction_id: トランザクションID
                 - status: 決済ステータス
                 - timestamp: 処理日時
-        
+
         Raises:
             PaymentError: 決済処理に失敗した場合
         """

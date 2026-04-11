@@ -97,16 +97,16 @@ const Settings: React.FC = () => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   const { user } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
-  const { 
-    permission, 
-    isEnabled, 
-    requestPermission, 
-    scheduleReminders, 
+  const {
+    permission,
+    isEnabled,
+    requestPermission,
+    scheduleReminders,
     testNotification,
-    activeRemindersCount 
+    activeRemindersCount
   } = useNotifications();
 
   const settingsForm = useForm({
@@ -159,14 +159,14 @@ const Settings: React.FC = () => {
         email_notifications: data.notificationSettings.email,
         push_notifications: data.notificationSettings.push,
       };
-      
+
       const updatedSettings = await dashboardService.updateUserSettings(submitData);
-      
+
       // Update notification reminders if enabled
       if (data.studyRemindersEnabled && isEnabled) {
         scheduleReminders(updatedSettings);
       }
-      
+
       setSettings(data);
       toast.success('設定を保存しました');
     } catch (error) {
@@ -184,7 +184,7 @@ const Settings: React.FC = () => {
         new_password: data.newPassword,
         confirm_password: data.confirmPassword,
       });
-      
+
       setPasswordDialogOpen(false);
       passwordForm.reset();
       toast.success('パスワードを変更しました');
@@ -216,7 +216,7 @@ const Settings: React.FC = () => {
                 <Typography variant="h6" gutterBottom>
                   アカウント情報
                 </Typography>
-                
+
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
                     メールアドレス
@@ -353,7 +353,7 @@ const Settings: React.FC = () => {
                     <Typography variant="body2" color="text.secondary">
                       現在の状態:
                     </Typography>
-                    <Chip 
+                    <Chip
                       label={
                         permission === 'granted' ? '許可済み' :
                         permission === 'denied' ? '拒否' : '未設定'
@@ -365,7 +365,7 @@ const Settings: React.FC = () => {
                       size="small"
                     />
                   </Box>
-                  
+
                   {permission !== 'granted' && (
                     <Box sx={{ mb: 2 }}>
                       <Alert severity="info" sx={{ mb: 1 }}>

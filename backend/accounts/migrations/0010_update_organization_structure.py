@@ -30,12 +30,12 @@ class Migration(migrations.Migration):
             model_name='user',
             name='organization',
         ),
-        
+
         # 2. 既存のOrganizationテーブルを削除
         migrations.DeleteModel(
             name='Organization',
         ),
-        
+
         # 3. 新しい構成でOrganizationテーブルを作成
         migrations.CreateModel(
             name='Organization',
@@ -54,26 +54,26 @@ class Migration(migrations.Migration):
                 'db_table': 'organizations',
             },
         ),
-        
+
         # 4. インデックスを追加
         migrations.AddIndex(
             model_name='organization',
             index=models.Index(fields=['slug'], name='organizatio_slug_idx'),
         ),
-        
+
         # 5. UserモデルにOrganizationへの外部キー参照を再追加
         migrations.AddField(
             model_name='user',
             name='organization',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='users', to='accounts.organization', verbose_name='所属組織'),
         ),
-        
+
         # 6. Userモデルのインデックスを再追加
         migrations.AddIndex(
             model_name='user',
             index=models.Index(fields=['organization'], name='users_organiz_idx'),
         ),
-        
+
         # 7. データ移行（実際のデータ復元は手動で行う）
         migrations.RunPython(migrate_organization_data, reverse_migrate_organization_data),
     ]

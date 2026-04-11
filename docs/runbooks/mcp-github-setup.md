@@ -31,7 +31,7 @@ GitHub MCP サーバーを導入することで、Claude が GitHub API を直�
    | Pull requests | Read and write |
    | Contents | Read-only |
 
-6. **Generate token** をクリックし、表示されたトークン（`github_pat_xxx...`）をコピーする  
+6. **Generate token** をクリックし、表示されたトークン（`github_pat_xxx...`）をコピーする
    ⚠️ このページを閉じると二度と表示されない
 
 ---

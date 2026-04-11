@@ -1,6 +1,6 @@
 # React フロントエンド コーディング規約 統合版 v2.0
 
-> Cursor/Claude Code を使用した React アプリケーション開発のための包括的コーディング規約  
+> Cursor/Claude Code を使用した React アプリケーション開発のための包括的コーディング規約
 > ChatGPT版とClaude版の良いところを統合
 
 ---
@@ -106,7 +106,7 @@ interface User {
   name: string;
 }
 
-// pages/UserDetail.tsx  
+// pages/UserDetail.tsx
 interface User {  // 重複！
   id: string;
   name: string;
@@ -186,7 +186,7 @@ const fetchUser = async (id: string): Promise<User> => {
 };
 
 // ✅ 良い例: ユニオン型で状態を表現
-type LoadingState<T> = 
+type LoadingState<T> =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'success'; data: T }
@@ -282,7 +282,7 @@ interface ButtonProps {
   children?: React.ReactNode;  // 明示的に定義
 }
 
-export const Button = ({ 
+export const Button = ({
   label,
   variant = 'primary',
   size = 'md',
@@ -330,12 +330,12 @@ const UserListContainer = () => {
         setLoading(false);
       }
     };
-    
+
     fetchUsers();
   }, []);
 
   return (
-    <UserListView 
+    <UserListView
       users={users}
       loading={loading}
       error={error}
@@ -355,7 +355,7 @@ const UserListView = ({ users, loading, error }: UserListViewProps) => {
   if (loading) return <Spinner />;
   if (error) return <ErrorMessage error={error} />;
   if (users.length === 0) return <EmptyState message="ユーザーが見つかりません" />;
-  
+
   return (
     <ul className="divide-y divide-gray-200">
       {users.map(user => (
@@ -380,15 +380,15 @@ interface CardProps {
   // 必須プロパティ
   title: string;
   description: string;
-  
+
   // オプションプロパティ（デフォルト値あり）
   variant?: 'default' | 'highlighted';
   showActions?: boolean;
-  
+
   // コールバック（オプション）
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
-  
+
   // 子要素（明示的に定義）
   children?: React.ReactNode;
   footer?: React.ReactElement;
@@ -456,11 +456,11 @@ export const useApi = <T>(
 
   const fetchData = useCallback(async () => {
     setState({ status: 'loading' });
-    
+
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      
+
       const data = await response.json();
       setState({ status: 'success', data });
       options.onSuccess?.(data);
@@ -519,20 +519,20 @@ const Button = ({ variant = 'primary', size = 'md', className, ...props }: Butto
         // ベーススタイル
         'inline-flex items-center justify-center rounded-lg font-medium transition-colors',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
-        
+
         // バリアント
         {
           'bg-blue-600 text-white hover:bg-blue-700': variant === 'primary',
           'bg-gray-100 text-gray-900 hover:bg-gray-200': variant === 'secondary',
         },
-        
+
         // サイズ
         {
           'h-8 px-3 text-sm': size === 'sm',
           'h-10 px-4 text-sm': size === 'md',
           'h-12 px-6 text-base': size === 'lg',
         },
-        
+
         // カスタムクラス
         className
       )}
@@ -610,7 +610,7 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    
+
     const config: RequestInit = {
       ...options,
       headers: {
@@ -620,11 +620,11 @@ class ApiClient {
     };
 
     const response = await fetch(url, config);
-    
+
     if (!response.ok) {
       throw new ApiError(response.status, `API Error: ${response.statusText}`);
     }
-    
+
     return response.json();
   }
 
@@ -670,19 +670,19 @@ import { apiClient } from '@/services/api-client';
 import { User, CreateUserDTO, UpdateUserDTO } from './types';
 
 export const userApi = {
-  getAll: () => 
+  getAll: () =>
     apiClient.get<User[]>('/users'),
-    
-  getById: (id: string) => 
+
+  getById: (id: string) =>
     apiClient.get<User>(`/users/${id}`),
-    
-  create: (data: CreateUserDTO) => 
+
+  create: (data: CreateUserDTO) =>
     apiClient.post<User>('/users', data),
-    
-  update: (id: string, data: UpdateUserDTO) => 
+
+  update: (id: string, data: UpdateUserDTO) =>
     apiClient.put<User>(`/users/${id}`, data),
-    
-  delete: (id: string) => 
+
+  delete: (id: string) =>
     apiClient.delete<void>(`/users/${id}`),
 };
 ```
@@ -753,7 +753,7 @@ export const createUserSchema = z.object({
     .string()
     .min(1, 'メールアドレスは必須です')
     .email('有効なメールアドレスを入力してください'),
-  
+
   password: z
     .string()
     .min(8, 'パスワードは8文字以上で入力してください')
@@ -761,11 +761,11 @@ export const createUserSchema = z.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
       'パスワードは大文字、小文字、数字を含む必要があります'
     ),
-    
+
   confirmPassword: z
     .string()
     .min(1, 'パスワード確認は必須です'),
-    
+
   age: z
     .number()
     .min(18, '18歳以上である必要があります')
@@ -884,7 +884,7 @@ class ErrorBoundary extends React.Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // エラーログをサービスに送信
     console.error('Error caught by boundary:', error, errorInfo);
-    
+
     // Sentryなどのエラー監視サービスに送信
     if (import.meta.env.PROD) {
       // Sentry.captureException(error, { contexts: { react: errorInfo } });
@@ -932,7 +932,7 @@ const DefaultErrorFallback = ({ error }: { error: Error }) => (
 // hooks/useAsyncError.ts
 export const useAsyncError = () => {
   const [, setError] = useState();
-  
+
   return useCallback(
     (error: Error) => {
       setError(() => {
@@ -946,7 +946,7 @@ export const useAsyncError = () => {
 // 使用例
 const MyComponent = () => {
   const throwAsyncError = useAsyncError();
-  
+
   const handleClick = async () => {
     try {
       await riskyAsyncOperation();
@@ -983,11 +983,11 @@ export const handleApiError = (error: unknown): string => {
         return 'エラーが発生しました';
     }
   }
-  
+
   if (error instanceof Error) {
     return error.message;
   }
-  
+
   return '予期しないエラーが発生しました';
 };
 ```
@@ -1032,7 +1032,7 @@ const DataTable = ({ onRowClick }: Props) => {
 const SimpleComponent = ({ value }: { value: number }) => {
   // 単純な計算にuseMemoは不要
   const doubled = useMemo(() => value * 2, [value]);
-  
+
   // プリミティブ値にuseCallbackは不要
   const handleClick = useCallback(() => {
     console.log('clicked');
@@ -1159,7 +1159,7 @@ describe('UserCard', () => {
 
   it('ユーザー情報を正しく表示する', () => {
     render(<UserCard user={mockUser} />);
-    
+
     expect(screen.getByText('田中太郎')).toBeInTheDocument();
     expect(screen.getByText('tanaka@example.com')).toBeInTheDocument();
     expect(screen.getByText('管理者')).toBeInTheDocument();
@@ -1168,17 +1168,17 @@ describe('UserCard', () => {
   it('クリック時にコールバックが呼ばれる', async () => {
     const handleClick = vi.fn();
     const user = userEvent.setup();
-    
+
     render(<UserCard user={mockUser} onClick={handleClick} />);
-    
+
     await user.click(screen.getByRole('button'));
-    
+
     expect(handleClick).toHaveBeenCalledWith(mockUser.id);
   });
 
   it('ローディング状態を表示する', () => {
     render(<UserCard user={mockUser} loading />);
-    
+
     expect(screen.getByTestId('skeleton')).toBeInTheDocument();
     expect(screen.queryByText('田中太郎')).not.toBeInTheDocument();
   });
@@ -1200,22 +1200,22 @@ describe('useCounter', () => {
 
   it('インクリメントが正しく動作する', () => {
     const { result } = renderHook(() => useCounter());
-    
+
     act(() => {
       result.current.increment();
     });
-    
+
     expect(result.current.count).toBe(1);
   });
 
   it('最大値を超えない', () => {
     const { result } = renderHook(() => useCounter(9, { max: 10 }));
-    
+
     act(() => {
       result.current.increment();
       result.current.increment(); // 11になろうとする
     });
-    
+
     expect(result.current.count).toBe(10);
   });
 });
@@ -1240,7 +1240,7 @@ export const handlers = [
 
   rest.post('/api/users', async (req, res, ctx) => {
     const body = await req.json();
-    
+
     // バリデーションエラーのテスト
     if (!body.email) {
       return res(
@@ -1248,7 +1248,7 @@ export const handlers = [
         ctx.json({ error: 'Email is required' })
       );
     }
-    
+
     return res(
       ctx.status(201),
       ctx.json({ id: '3', ...body })
@@ -1277,7 +1277,7 @@ afterAll(() => server.close());
 // ✅ 良い例: アクセシブルなフォーム
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
-  
+
   return (
     <form aria-label="ログインフォーム">
       <div>
@@ -1341,7 +1341,7 @@ const LoginForm = () => {
 // ✅ 良い例: キーボード操作対応モーダル
 const Modal = ({ isOpen, onClose, children }: ModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
-  
+
   // ESCキーで閉じる
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -1349,7 +1349,7 @@ const Modal = ({ isOpen, onClose, children }: ModalProps) => {
         onClose();
       }
     };
-    
+
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
@@ -1359,7 +1359,7 @@ const Modal = ({ isOpen, onClose, children }: ModalProps) => {
     if (isOpen && modalRef.current) {
       const previouslyFocused = document.activeElement as HTMLElement;
       modalRef.current.focus();
-      
+
       return () => {
         previouslyFocused?.focus();
       };
@@ -1377,7 +1377,7 @@ const Modal = ({ isOpen, onClose, children }: ModalProps) => {
       tabIndex={-1}
       className="fixed inset-0 z-50"
     >
-      <div 
+      <div
         className="fixed inset-0 bg-black/50"
         onClick={onClose}
         aria-hidden="true"
@@ -1450,7 +1450,7 @@ const SafeHTML = ({ html }: { html: string }) => {
     ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p'],
     ALLOWED_ATTR: ['href'],
   });
-  
+
   return <div dangerouslySetInnerHTML={{ __html: sanitized }} />;
 };
 ```
@@ -1483,22 +1483,22 @@ localStorage.setItem('token', token);
 // ✅ 良い例: httpOnly Cookie または メモリ管理
 class TokenManager {
   private token: string | null = null;
-  
+
   setToken(token: string) {
     this.token = token;
   }
-  
+
   getToken(): string | null {
     return this.token;
   }
-  
+
   clearToken() {
     this.token = null;
   }
-  
+
   // APIリクエスト時にヘッダーに追加
   getAuthHeader(): HeadersInit {
-    return this.token 
+    return this.token
       ? { Authorization: `Bearer ${this.token}` }
       : {};
   }
@@ -1516,10 +1516,10 @@ class TokenManager {
  * AUTOGEN: 2024-01-15
  * Generated by: Claude/Cursor
  * Purpose: ユーザー管理機能のCRUD操作
- * Limitations: 
+ * Limitations:
  *   - ページネーションは未実装
  *   - ソート機能は名前のみ対応
- * TODO: 
+ * TODO:
  *   - [ ] ページネーション実装
  *   - [ ] 複数項目でのソート対応
  */
@@ -1589,25 +1589,25 @@ const AI_CODE_REVIEW_CHECKLIST = {
     'any型が使われていないか',
     '既存の型定義を再利用しているか',
   ],
-  
+
   security: [
     'XSS脆弱性がないか',
     '環境変数が適切に管理されているか',
     'APIキーが露出していないか',
   ],
-  
+
   performance: [
     '不要な再レンダリングが発生しないか',
     'メモ化が適切に使用されているか',
     '大きなリストに仮想スクロールが必要か',
   ],
-  
+
   a11y: [
     'aria属性が適切に設定されているか',
     'キーボード操作が可能か',
     'フォーカス管理が適切か',
   ],
-  
+
   consistency: [
     '既存のコードスタイルと一致しているか',
     '命名規則に従っているか',
@@ -1651,8 +1651,8 @@ chore(deps): update React to v18.2.0
 
 ## 🔄 変更内容
 <!-- 主な変更点をリストで -->
-- 
-- 
+-
+-
 
 ## 📸 スクリーンショット
 <!-- UIの変更がある場合は必須 -->
@@ -1691,28 +1691,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
           node-version: 18
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Lint
         run: npm run lint
-      
+
       - name: Type check
         run: npm run typecheck
-      
+
       - name: Test
         run: npm run test:ci
-      
+
       - name: Build
         run: npm run build
-      
+
       - name: Bundle size check
         uses: andresz1/size-limit-action@v1
         with:
@@ -1818,13 +1818,13 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ 
+  ({
     className,
     variant = 'default',
     padding = 'md',
     interactive = false,
     children,
-    ...props 
+    ...props
   }, ref) => {
     return (
       <div
@@ -1832,14 +1832,14 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
         className={cn(
           // ベーススタイル
           'rounded-lg',
-          
+
           // バリアント
           {
             'bg-white border border-gray-200': variant === 'default',
             'bg-transparent border-2 border-gray-300': variant === 'outlined',
             'bg-white shadow-lg': variant === 'elevated',
           },
-          
+
           // パディング
           {
             'p-0': padding === 'none',
@@ -1847,14 +1847,14 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
             'p-4': padding === 'md',
             'p-6': padding === 'lg',
           },
-          
+
           // インタラクティブ
           interactive && [
             'cursor-pointer transition-all duration-200',
             'hover:shadow-md hover:-translate-y-0.5',
             'active:translate-y-0 active:shadow-sm',
           ],
-          
+
           className
         )}
         {...props}
@@ -1956,7 +1956,7 @@ CardContent.displayName = 'CardContent';
     "react/react-in-jsx-scope": "off",
     "react/prop-types": "off",
     "react/display-name": "off",
-    
+
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "@typescript-eslint/no-unused-vars": [
       "error",
@@ -1964,7 +1964,7 @@ CardContent.displayName = 'CardContent';
     ],
     "@typescript-eslint/no-explicit-any": "error",
     "@typescript-eslint/consistent-type-imports": "error",
-    
+
     "import/order": [
       "error",
       {
@@ -1983,7 +1983,7 @@ CardContent.displayName = 'CardContent';
         "newlines-between": "always"
       }
     ],
-    
+
     "no-console": [
       "warn",
       { "allow": ["warn", "error"] }
@@ -2019,7 +2019,7 @@ CardContent.displayName = 'CardContent';
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
-    
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -2027,14 +2027,14 @@ CardContent.displayName = 'CardContent';
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    
+
     /* Paths */
     "baseUrl": ".",
     "paths": {

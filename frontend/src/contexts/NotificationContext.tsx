@@ -69,12 +69,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     try {
       const newPermission = await notificationService.requestPermission();
       setPermission(newPermission);
-      
+
       if (newPermission === 'granted') {
         // Reload settings and schedule reminders
         loadUserSettingsAndScheduleReminders();
       }
-      
+
       return newPermission;
     } catch (error) {
       console.error('Error requesting notification permission:', error);
@@ -98,7 +98,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       );
       setCurrentReminderId(reminderId);
       updateActiveRemindersCount();
-      
+
       console.log(`Study reminder scheduled for ${settings.study_reminder_time}`);
     }
   };
@@ -108,7 +108,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       notificationService.cancelStudyReminder(currentReminderId);
       setCurrentReminderId(null);
     }
-    
+
     // Cancel all reminders to be safe
     notificationService.cancelAllReminders();
     updateActiveRemindersCount();
@@ -119,7 +119,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       toast.error('通知が有効になっていません。設定で通知を有効にしてください。');
       return;
     }
-    
+
     notificationService.testNotification();
   };
 
