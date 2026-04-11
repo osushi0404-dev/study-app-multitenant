@@ -33,8 +33,8 @@ cd backend && python -m pytest --tb=short -q 2>&1 | tail -5
 cd frontend && npm test -- --watchAll=false --passWithNoTests 2>&1 | tail -5
 ```
 
-## 結果（実施後に記入）
-- pipx インストール確認:
-- pre-commit run --all-files:
-- Backend テスト:
-- Frontend テスト:
+## 結果（2026-04-11 実施）
+- pipx インストール確認: pre-commit / detect-secrets 両方リスト表示確認済み
+- pre-commit run --all-files: 全フック passed（chore コミットで auto-fix 適用済み）
+- Backend テスト: 25 passed, 3 warnings
+- Frontend テスト: 7 passed (2 suites)

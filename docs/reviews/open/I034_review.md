@@ -19,11 +19,11 @@
 - Config/Infra: リポジトリルートの設定ファイル追加、runbook 追加
 
 ## テスト結果
-- 自動: （実施後に記入）
-- 手動: （実施後に記入）
+- 自動: Backend 25 passed / Frontend 7 passed（2026-04-11）
+- 手動: 全 10 項目 OK（2026-04-11）
 
 ## 計画との差分
-- （実施後に記入）
+- なし
 
 ## ロールバック
 - `pre-commit uninstall` → `.pre-commit-config.yaml` / `.secrets.baseline` / `docs/runbooks/pre-commit.md` を git rm してコミット
