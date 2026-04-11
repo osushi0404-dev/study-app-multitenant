@@ -28,7 +28,7 @@
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /code-review に戻る
 6. /test I### → 自動テスト＋手動テスト確認（OK/NG）
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /test に戻る
-7. OK の場合 /retro I###（任意）または /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
+7. OK の場合 /retro I###（必須）→ /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。
 
@@ -57,7 +57,7 @@
 | code-review OK 後 | 「`/test I###` を入力してください」と案内 |
 | code-review NG 後 | 「`/fix-loop I###` を入力してください（fix-loop 完了後は `/code-review I###` に戻る）」と案内 |
 | test NG 後 | 「`/fix-loop I###` を入力してください（fix-loop 完了後は `/test I###` に戻る）」と案内 |
-| test OK 後 | 「`/retro I###` または `/close I###` を入力してください」と案内 |
+| test OK 後 | 「`/retro I###` を入力してください（必須）。完了後 `/close I###` を入力してください」と案内 |
 
 **NG例**（やってはいけない）:
 - ユーザーが「承認します」「OK」「進めて」と言った直後に `Skill("implement")` を呼び出す
