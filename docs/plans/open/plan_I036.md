@@ -106,7 +106,7 @@ CLAUDE.md では `docs/runbooks/workflow.md` の「使うスキル」セクシ�
 
 修正後:
 ```
-| test OK 後 | 「`/retro I###` を入力してください（必須）」と案内 |
+| test OK 後 | 「`/retro I###` を入力してください（必須）。完了後 `/close I###` を入力してください」と案内 |
 ```
 
 ---
