@@ -1,4 +1,4 @@
-# I036 自動テスト: workflow.md の /retro 推奨化
+# I036 自動テスト: workflow.md の /retro 必須化
 
 ## テスト概要
 ドキュメント変更のみのイシューのため、自動テスト（pytest / Jest）は対象外。
@@ -9,8 +9,7 @@
 | No | 確認内容 | コマンド | 期待結果 | 実結果 | 備考 |
 |---:|---------|---------|---------|--------|------|
 | 1 | workflow.md に `（任意）` という表記が残っていないこと | `grep -n "任意" docs/runbooks/workflow.md` | マッチなし（0 件） | - | |
-| 2 | workflow.md に「推奨」の文言が含まれること | `grep -n "推奨" docs/runbooks/workflow.md` | 少なくとも 1 件マッチ | - | |
-| 3 | workflow.md の「省略」に関する記述が存在すること | `grep -n "省略" docs/runbooks/workflow.md` | 少なくとも 1 件マッチ | - | |
+| 2 | workflow.md に「必須」の文言が含まれること | `grep -n "必須" docs/runbooks/workflow.md` | retro に関連して少なくとも 1 件マッチ | - | |
 
 ## 備考
 - Backend / Frontend のコード変更なし
