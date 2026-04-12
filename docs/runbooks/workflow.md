@@ -2,6 +2,7 @@
 
 ## 使うスキル（/ で実行）
 - /issue-bootstrap [title] : 採番、イシューファイル作成、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
+- /grill-me I### : 計画書作成前の設計インタビュー（推奨。複雑なイシューや設計判断が多いイシューで実行する）
 - /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
 - /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK なら /implement へ）
 - /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
@@ -19,6 +20,7 @@
 
 ## フロー（あなたの運用をそのまま型にする）
 1. /issue-bootstrap → ユーザーがイシューファイル確認（OK/NG）
+1.5. /grill-me I### → 設計上の疑問点を解消（推奨・任意）
 2. /plan-issue I### → ユーザーが計画書確認（OK/NG）
 3. /plan-issue-review I### → 計画書・テスト文書レビュー（OK/NG）
    - NG（Edit/Write で修正可能）: Claude が自分で修正 → /plan-issue-review に戻る
@@ -40,7 +42,7 @@
 
 ## スキル呼び出しルール（絶対厳守）
 
-ワークフロースキル（`/issue-bootstrap` `/plan-issue` `/plan-issue-review` `/implement` `/code-review` `/test` `/fix-loop` `/retro` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
+ワークフロースキル（`/issue-bootstrap` `/grill-me` `/plan-issue` `/plan-issue-review` `/implement` `/code-review` `/test` `/fix-loop` `/retro` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
 
 **Claude は絶対に `Skill` ツールでこれらのスキルを自律呼び出ししてはならない。**
 
@@ -49,7 +51,8 @@
 | タイミング | Claude がやること |
 |-----------|-----------------|
 | イシュー作成依頼を受けた後 | 「`/issue-bootstrap [タイトル]` を入力してください」と案内 |
-| イシュー承認後 | 「`/plan-issue I###` を入力してください」と案内 |
+| イシュー承認後 | 「`/grill-me I###` を実行することを推奨します（複雑なイシューの場合）。準備ができたら `/plan-issue I###` を入力してください」と案内 |
+| grill-me 完了後 | 「`/plan-issue I###` を入力してください」と案内 |
 | 計画書承認後 | 「`/plan-issue-review I###` を入力してください」と案内 |
 | plan-issue-review OK 後 | 「`/implement I###` を入力してください」と案内 |
 | plan-issue-review NG 後 | Edit/Write で修正可能なものは自分で修正してレビューを再実行する。設計判断が必要な問題のみユーザーに選択肢を提示して確認する |
