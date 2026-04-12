@@ -55,6 +55,7 @@
 |---------|---------|------|
 | `.claude/skills/grill-me/SKILL.md` | 新規作成 | `/grill-me` スキルの定義 |
 | `docs/runbooks/workflow.md` | 追記 | スキル一覧と運用フローに `/grill-me` を追加 |
+| `docs/runbooks/plan-writing-rules.md` | 追記 | 関連ドキュメント同期ルールに「計画書作成中の設計変更時も同様」を追記 |
 
 ---
 
@@ -126,6 +127,17 @@ cat docs/issues/open/$ARGUMENTS.md
 - パフォーマンス要件・データ量・ページネーション
 - 既存機能との互換性・後方互換の要否
 ```
+
+### ステップ3: `docs/runbooks/plan-writing-rules.md` を編集する（振り返り予防処置）
+
+`plan-writing-rules.md` の関連ドキュメント同期ルール（18行目）に以下を追記する:
+
+**追記内容**（既存文末に続けて追加）:
+```
+計画書**作成中**に設計方針が変更された場合も同様に適用する（例: スキルの実装形態を変更した場合、レビュー文書のレビュー対象も即座に更新する）。
+```
+
+---
 
 ### ステップ2: `docs/runbooks/workflow.md` を編集する
 
