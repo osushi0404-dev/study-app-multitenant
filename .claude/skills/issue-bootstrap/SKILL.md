@@ -92,7 +92,9 @@ GITHUB_ISSUE_NUM=$(gh issue list --state open --limit 1 --json number --jq '.[0]
 🔗 GitHubイシュー: [GitHubイシューURL]
 
 ⚠️ ブランチはまだ作成されていません。
-次のステップ: /plan-issue I${ISSUE_NUM} でブランチ作成・計画書作成を行ってください。
+次のステップ:
+  👉 設計上の疑問がある場合は先に `/grill-me I${ISSUE_NUM}` を実行してください（推奨）。
+  👉 準備ができたら `/plan-issue I${ISSUE_NUM}` でブランチ作成・計画書作成を行ってください。
 ```
 
 ## 詳細ルール
