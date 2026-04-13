@@ -10,6 +10,10 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 前提: /code-review OK。
 
+## 停止条件
+- 自動テスト（pytest / Jest）が1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+- 手動テスト確認でユーザーが NG を返した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+
 0) 実行環境を確認する:
    ```bash
    # pytest がローカルで利用可能か確認
