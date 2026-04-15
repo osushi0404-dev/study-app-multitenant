@@ -28,4 +28,11 @@
 
 ## 指摘事項
 
-実装前時点では指摘なし。実装後に code-review で差分確認する。
+指摘なし。
+
+## 自動テスト結果（2026-04-15）
+
+| テスト | 結果 |
+|--------|------|
+| Backend pytest | 25 passed, 3 warnings |
+| Frontend Jest | 7 passed (2 suites) |
