@@ -59,6 +59,7 @@ allowed-tools: Read, Edit, Glob, Grep
    - API/DB/イベント変更の影響範囲が把握されているか
    - ForeignKey 削除時の挙動（CASCADE/PROTECT/SET_NULL）が計画書に明記されているか
    - インデックス設計の適切性（必要なインデックスがあるか、過剰・不足がないか）
+   問題がなければ「問題なし」と記載する。
 
    **P5. 運用性・障害対応性:**
    - ログが構造化され原因追跡に必要な情報を持つ設計か（request_id・user_id・tenant_id）
