@@ -4,7 +4,8 @@
 - /issue-bootstrap [title] : 採番、イシューファイル作成、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
 - /grill-me I### : 計画書作成前の設計インタビュー（推奨。複雑なイシューや設計判断が多いイシューで実行する）
 - /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
-- /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK なら /implement へ）
+- /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK かつ高リスク判定 Yes → /security-review、No → /implement へ）
+- /security-review I### : 高リスク変更の実装前セキュリティ深掘り（設計レビュー + 攻撃シナリオ）。/plan-issue-review で高リスク判定 Yes 時のみ実行（Blocker なし → /implement へ）
 - /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
 - /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
 - /test I### : 自動テスト（pytest + Jest）+ 手動テスト確認（OK なら /close へ）
@@ -25,6 +26,8 @@
 3. /plan-issue-review I### → 計画書・テスト文書レビュー（OK/NG）
    - NG（Edit/Write で修正可能）: Claude が自分で修正 → /plan-issue-review に戻る
    - NG（設計判断が必要）: 選択肢を提示してユーザー確認 → 承認後修正 → /plan-issue-review に戻る
+   - OK かつ高リスク判定 Yes: /security-review へ
+3.5. /security-review I###（高リスク判定 Yes の場合のみ）→ Blocker 解消後 /implement へ
 4. /implement I### → 実装・型チェック・push
 5. /code-review I### → CI 確認＋要件照合（OK/NG）
    - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /code-review に戻る
@@ -42,7 +45,7 @@
 
 ## スキル呼び出しルール（絶対厳守）
 
-ワークフロースキル（`/issue-bootstrap` `/grill-me` `/plan-issue` `/plan-issue-review` `/implement` `/code-review` `/test` `/fix-loop` `/retro` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
+ワークフロースキル（`/issue-bootstrap` `/grill-me` `/plan-issue` `/plan-issue-review` `/security-review` `/implement` `/code-review` `/test` `/fix-loop` `/retro` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
 
 **Claude は絶対に `Skill` ツールでこれらのスキルを自律呼び出ししてはならない。**
 
@@ -54,7 +57,10 @@
 | イシュー承認後 | 「`/grill-me I###` を実行することを推奨します（複雑なイシューの場合）。準備ができたら `/plan-issue I###` を入力してください」と案内 |
 | grill-me 完了後 | 「`/plan-issue I###` を入力してください」と案内 |
 | 計画書承認後 | 「`/plan-issue-review I###` を入力してください」と案内 |
-| plan-issue-review OK 後 | 「`/implement I###` を入力してください」と案内 |
+| plan-issue-review OK 後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内 |
+| plan-issue-review OK 後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |
+| security-review Blocker なし後 | 「`/implement I###` を入力してください」と案内 |
+| security-review Blocker あり後 | Blocker を解消してから `/security-review I###` を再実行するよう案内。`/implement` は案内しない |
 | plan-issue-review NG 後 | Edit/Write で修正可能なものは自分で修正してレビューを再実行する。設計判断が必要な問題のみユーザーに選択肢を提示して確認する |
 | implement 完了後 | 「`/code-review I###` を入力してください」と案内 |
 | code-review OK 後 | 「`/test I###` を入力してください」と案内 |
