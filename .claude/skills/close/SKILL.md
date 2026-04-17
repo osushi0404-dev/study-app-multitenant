@@ -20,26 +20,32 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    ```bash
    ISSUE_NUM="###"  # 実際のイシュー番号（3桁）に置き換える
 
+   # ISSUE_NUM が3桁の数字であることを確認（パストラバーサル防止）
+   if ! [[ "$ISSUE_NUM" =~ ^[0-9]{3}$ ]]; then
+     echo "⚠️ ISSUE_NUM が3桁の数字ではありません: $ISSUE_NUM"
+     exit 1
+   fi
+
    # イシューファイル（I###.md 形式優先、旧 ###.md 形式にも対応）
    if [ -f "docs/issues/open/I${ISSUE_NUM}.md" ]; then
-     mv docs/issues/open/I${ISSUE_NUM}.md docs/issues/closed/
+     git mv docs/issues/open/I${ISSUE_NUM}.md docs/issues/closed/
    elif [ -f "docs/issues/open/${ISSUE_NUM}.md" ]; then
-     mv docs/issues/open/${ISSUE_NUM}.md docs/issues/closed/
+     git mv docs/issues/open/${ISSUE_NUM}.md docs/issues/closed/
    else
      echo "⚠️ イシューファイルが見つかりません（I${ISSUE_NUM}.md / ${ISSUE_NUM}.md）"
    fi
 
    # 計画書
-   [ -f "docs/plans/open/plan_I${ISSUE_NUM}.md" ] && mv "docs/plans/open/plan_I${ISSUE_NUM}.md" docs/plans/closed/
+   [ -f "docs/plans/open/plan_I${ISSUE_NUM}.md" ] && git mv "docs/plans/open/plan_I${ISSUE_NUM}.md" docs/plans/closed/
 
    # テストケース（auto_test・manual_test の両ファイルを一括移動）
    for f in docs/tests/open/I${ISSUE_NUM}_*.md; do
-     [ -f "$f" ] && mv "$f" docs/tests/closed/
+     [ -f "$f" ] && git mv "$f" docs/tests/closed/
    done
 
    # レビュー
    for f in docs/reviews/open/I${ISSUE_NUM}_*.md; do
-     [ -f "$f" ] && mv "$f" docs/reviews/closed/
+     [ -f "$f" ] && git mv "$f" docs/reviews/closed/
    done
    ```
    移動後、open に残留ファイルがないことを必ず確認:
