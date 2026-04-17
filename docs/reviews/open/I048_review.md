@@ -33,7 +33,7 @@
 ### P3/P5/P8
 - スキルファイル変更のみのため対象外
 
-## 自動テスト結果
+## 自動テスト結果（最終）
 - Backend: 25 passed, 0 failed（Docker）
 - Frontend: 7 passed, 0 failed（Docker）
 
