@@ -68,6 +68,10 @@ Draft PR 番号をイシューファイルの「## 関連資料」セクショ�
 - docs/tests/open/$ARGUMENTS_auto_test.md
 - docs/reviews/open/$ARGUMENTS_review.md
 
+テスト文書（`$ARGUMENTS_manual_test.md`）の「実施者」欄は以下の基準で判定する:
+- **Claude で実施可**: ファイルの内容確認（Read ツール）・コマンド実行・ログ確認（Bash ツール）・ファイル間の比較・差分確認
+- **Human のみ可**: ブラウザ操作・画面の目視確認・外部ツール（Figma・Slack 等）の操作・操作感・UX の感覚的な確認
+
 禁止:
 - コード変更（承認前のEdit/Write開始は禁止）
 

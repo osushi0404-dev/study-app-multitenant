@@ -36,6 +36,7 @@ I046 でレビュースキルの同観点を整備した実績をもとに、上
   - `.claude/skills/grill-me/SKILL.md`
   - `.claude/skills/plan-issue/SKILL.md`
   - `.claude/skills/implement/SKILL.md`
+  - `.claude/skills/close/SKILL.md`（retro 予防処置 #1/#2 対応）
 - Runbook:
   - `docs/runbooks/plan-writing-rules.md`
 
@@ -70,6 +71,19 @@ I046 でレビュースキルの同観点を整備した実績をもとに、上
 | 変更種別 | 変更内容 |
 |---------|---------|
 | 追加 | 既存「P3・P5 実装確認チェック」を「P1・P3・P5・P6・P7 実装確認チェック」に拡張 |
+
+### 4-5. `.claude/skills/close/SKILL.md`（retro 予防処置 #1）
+
+| 変更種別 | 変更内容 |
+|---------|---------|
+| 追加 | ファイル移動前に `ISSUE_NUM` が3桁の数字であることを検証するバリデーションを追加 |
+| 修正 | `mv` コマンドを `git mv` に置き換え（4箇所）。削除側（open/）と追加側（closed/）を同時にステージングし、I047 で発生した「open/ 削除の未ステージング」問題を防止する |
+
+### 4-6. `.claude/skills/plan-issue/SKILL.md` への追記（retro 予防処置 #2）
+
+| 変更種別 | 変更内容 |
+|---------|---------|
+| 追加 | テスト文書（`I###_manual_test.md`）生成指示に「実施者」判定基準を追記（Claude 可: ファイル確認・コマンド実行・ファイル比較 / Human のみ: ブラウザ操作・外部ツール・UX 感覚確認） |
 
 ## 5. 実装手順
 
@@ -189,6 +203,32 @@ DB変更がある場合（P3）:
 - N+1 クエリ・不要な全件取得が発生していないか
 
 DB変更なし・外部API/非同期処理なし・フロントエンド変更なし・データ量懸念なしの場合は条件付き確認をスキップしてよい。
+```
+
+### ステップ5: `close/SKILL.md` の変更（retro 予防処置 #1）
+
+手順1の `ISSUE_NUM="###"` 行の直後に以下のバリデーションを追加:
+```bash
+if ! [[ "$ISSUE_NUM" =~ ^[0-9]{3}$ ]]; then
+  echo "⚠️ ISSUE_NUM が3桁の数字ではありません: $ISSUE_NUM"
+  exit 1
+fi
+```
+
+`mv` を `git mv` に置き換え（4箇所）:
+- `mv docs/issues/open/I${ISSUE_NUM}.md docs/issues/closed/` → `git mv ...`
+- `mv docs/issues/open/${ISSUE_NUM}.md docs/issues/closed/` → `git mv ...`
+- `mv "docs/plans/open/plan_I${ISSUE_NUM}.md" docs/plans/closed/` → `git mv ...`
+- for ループ内の `mv "$f" docs/tests/closed/` → `git mv "$f" docs/tests/closed/`
+- for ループ内の `mv "$f" docs/reviews/closed/` → `git mv "$f" docs/reviews/closed/`
+
+### ステップ6: `plan-issue/SKILL.md` への実施者判定基準追記（retro 予防処置 #2）
+
+テスト文書生成の指示（生成物リストの近く）に以下を追記:
+```markdown
+テスト文書（I###_manual_test.md）の「実施者」欄は以下の基準で判定する:
+- Claude で実施可: ファイルの内容確認（Read ツール）・コマンド実行・ログ確認（Bash ツール）・ファイル間の比較・差分確認
+- Human のみ可: ブラウザ操作・画面の目視確認・外部ツール（Figma・Slack 等）の操作・操作感・UX の感覚的な確認
 ```
 
 ## 6. テスト計画
