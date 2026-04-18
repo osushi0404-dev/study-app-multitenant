@@ -43,13 +43,28 @@ docker compose config --format json | python3 -c "import sys,json; cfg=json.load
 
 # db が healthy になっていることを確認（起動後）
 docker compose ps db
+
+# HealthCheckMiddleware が MIDDLEWARE から削除されていることを確認
+grep "HealthCheckMiddleware" backend/core/settings.py && echo "NG: まだ残っている" || echo "OK: 削除済み"
+
+# /health/ が {"status": "ok"} を返すことを確認（DB 接続確認のみ）
+# ※ curl は deny 設定のため docker compose exec 経由で確認
+docker compose exec -T backend python manage.py shell -c "
+from django.test import RequestFactory
+from django.urls import resolve
+rf = RequestFactory()
+req = rf.get('/health/')
+view = resolve('/health/').func
+resp = view(req)
+print('status:', resp.status_code, 'body:', resp.content.decode())
+"
 ```
 
-> **確認観点**: `db.healthcheck.test` に `pg_isready -U postgres` が含まれること、`backend.depends_on.db.condition` が `service_healthy` であること、`backend.volumes` に `backend_logs` が含まれること、top-level `volumes` に `backend_logs` が定義されていること。
+> **確認観点**: `db.healthcheck.test` に `pg_isready -U postgres` が含まれること、`backend.depends_on.db.condition` が `service_healthy` であること、`backend.volumes` に `backend_logs` が含まれること、top-level `volumes` に `backend_logs` が定義されていること。`HealthCheckMiddleware` が `MIDDLEWARE` から削除されていること。`/health/` が `{"status": "ok"}` (HTTP 200) を返すこと。
 
-| 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | 備考 |
-|---------|--------------------|------------------------------------|-------------------------------|------|
-| 実装後 | - | - | - | 未実施 |
+| 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | HealthCheckMiddleware 削除 | /health/ 応答 | 備考 |
+|---------|--------------------|------------------------------------|-------------------------------|--------------------------|--------------|------|
+| 実装後 | - | - | - | - | - | 未実施 |
 
 ## E2E（Playwright）
 

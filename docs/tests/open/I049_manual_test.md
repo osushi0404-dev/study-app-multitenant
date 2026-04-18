@@ -11,7 +11,7 @@ plan_I049: Playwright E2Eテスト基盤を導入しクリティカルパスを�
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| 1 | `curl -sf http://localhost:8000/health/` を実行する | `{"status": "ok"}` が返る（DB 接続確認済み） | Claude | - | `/health/` エンドポイント動作確認 |
+| 1 | `curl -sf http://localhost:8000/health/` を実行する | `{"status": "ok"}` が返る（DB 接続確認済み）。`timestamp`・`redis`・`overall_status` 等の詳細フィールドは含まれない | Claude | - | `/health/` エンドポイント動作確認。`HealthCheckMiddleware` 削除後に `health()` 関数が応答することを確認 |
 | 2 | `curl -sf http://localhost:8000/health/` の応答時間を確認する | 1秒以内に応答が返る | Claude | - | レスポンスタイム確認 |
 | 3 | `cat e2e/.env.e2e.example` でファイル内容を確認する | `E2E_TEST_PASSWORD=<set-your-e2e-password-here>` が出力される | Claude | - | テンプレートファイル存在確認 |
 | 4 | `E2E_TEST_PASSWORD` を未設定の状態で `docker compose --profile e2e run --rm e2e npm test` を実行する | `E2E_TEST_PASSWORD is not set.` というエラーメッセージが出力されて即停止する | Claude | - | 未設定時のフェイルファスト確認 |

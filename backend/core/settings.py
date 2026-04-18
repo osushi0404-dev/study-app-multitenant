@@ -62,7 +62,6 @@ MIDDLEWARE = [
     'core.middleware.MonitoringMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.HealthCheckMiddleware',
     'django_ratelimit.middleware.RatelimitMiddleware',
 ]
 

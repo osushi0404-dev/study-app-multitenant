@@ -71,6 +71,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
 | `backend/fixtures/e2e_master.json` | 新規 | 固定マスタデータ（OrganizationCategory 等） |
 | `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
+| `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）|
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
 | `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
 | `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。top-level `volumes` に `backend_logs:` 追加 |
@@ -448,7 +449,9 @@ test.describe('クイズセッション', () => {
 
 ### Step 8: Docker ヘルスチェック・CI GitHub Actions 独立ジョブ追加
 
-#### 8-1: `/health/` エンドポイント追加（`backend/core/urls.py`）
+#### 8-1: `/health/` エンドポイント追加 + `HealthCheckMiddleware` 削除
+
+**`backend/core/urls.py`** に DB のみ確認するシンプルな readiness check を追加する:
 
 ```python
 from django.db import connection
@@ -462,9 +465,18 @@ def health(request):
     except Exception:
         return JsonResponse({'status': 'error'}, status=503)
 
-# urlpatterns に追加:
+# urlpatterns の先頭に追加:
 path('health/', health, name='health'),
 ```
+
+**`backend/core/settings.py`** の `MIDDLEWARE` から `HealthCheckMiddleware` を削除する:
+
+```python
+# 削除する行:
+# 'core.middleware.HealthCheckMiddleware',
+```
+
+> **設計方針**: `HealthCheckMiddleware` は `process_request` で `/health/` を横取りし `PerformanceMonitor.get_comprehensive_health_check()` を呼ぶ。これは (1) URL ルーティングをバイパスするアンチパターン（ミドルウェアの責務は横断的関心事であり特定 URL のビジネスロジックではない）、(2) 認証なしで DB 接続数・Redis エラーメッセージ・システムリソース情報を公開するセキュリティリスク（OWASP: Sensitive Data Exposure）、(3) Redis エラー時に 503 を返し Docker compose healthcheck が常に失敗する、の 3 点から削除する。詳細な監視情報は認証保護された `/monitoring/status/` 等で提供するのが正しい設計。
 
 #### 8-2: curl インストール（`backend/Dockerfile` と `frontend/Dockerfile.dev`）
 
@@ -623,6 +635,7 @@ jobs:
   3. `.github/workflows/e2e.yml` を削除
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
+  5a. `backend/core/settings.py` の `MIDDLEWARE` に `'core.middleware.HealthCheckMiddleware',` を復元
   6. `backend/Dockerfile` と `frontend/Dockerfile.dev` から `curl` のインストール行を削除
   7. `.claude/skills/test/SKILL.md` のE2Eステップを削除
   8. ブランチを revert
@@ -643,6 +656,7 @@ jobs:
 | コンテナに `curl` が存在せずヘルスチェックが常に unhealthy | E2E CI がハング | Dockerfile に `curl` をインストール（`apt-get install -y --no-install-recommends curl`）。Python/Node の回避策は使わない |
 | Postgres 初期化完了前に `migrate` が実行されるレースコンディション（`depends_on: db` は `service_started` であり、DB がまだ接続を受け付けていない段階で backend が起動し migrate に失敗する） | backend コンテナが exit code 1 で終了し `--wait` も失敗 | `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定。Postgres が接続受付可能になるまで backend の起動を保留する（根本対処） |
 | bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
+| `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
 
 ---
 
@@ -656,6 +670,7 @@ jobs:
 - E2E 専用 DB 名 (`learning_app_e2e`) を `.env.e2e` で管理し、本番 DB (`learning_app`) とは別インスタンス
 - seed コマンドで作成するデータは `e2e_` プレフィックスを持つため本番データとの混在を防ぐ
 - npm audit: Playwright 公式パッケージのみ使用。高/クリティカル脆弱性があれば修正対象
+- **`HealthCheckMiddleware` の削除**: 既存の `HealthCheckMiddleware` は認証なしで DB 接続数・Redis エラー詳細・システムリソース（CPU/メモリ）を公開しており、OWASP Security Misconfiguration / Sensitive Data Exposure に該当する。`/health/` は DB 接続確認のみ返す最小応答に限定する。詳細監視情報は `/monitoring/status/` 等（別途認証保護が必要）で提供するのが正しい設計
 
 ---
 
