@@ -35,6 +35,13 @@ jobs:
           API_URL: http://localhost:8000
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== backend logs ===" && docker compose logs backend --tail=100
+          echo "=== db logs ===" && docker compose logs db --tail=50
+          echo "=== docker compose ps ===" && docker compose ps
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
