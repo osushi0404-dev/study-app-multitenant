@@ -70,7 +70,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `e2e/.env.e2e.example` | 新規 | E2E テスト認証情報のテンプレート（git 管理）。実値は `.env.e2e`（gitignore 済み）に記載 |
 | `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
 | `backend/fixtures/e2e_master.json` | 新規 | 固定マスタデータ（OrganizationCategory 等） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加 |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。`backend`・`celery`・`celery-beat` の `env_file` を `required: false` に変更（CI で `.env` が不在でも動作するよう根本対処） |
 | `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ（E2E_TEST_PASSWORD を GitHub Secrets から注入） |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
@@ -543,6 +543,7 @@ jobs:
 | seed_e2e コマンドで Subject モデルのフィールドが不足 | Step 3 でエラー | Subject モデルの必須フィールドを事前確認（調査済み: organization FK が必須） |
 | CI の E2E が既存ジョブをブロック | PR マージに影響 | 独立ジョブ（別 workflow）にし、既存 ci.yml には触れない |
 | E2E テストがフレーキー（非決定的失敗） | CI 信頼性低下 | retry: 2、trace: on-first-retry 設定、テスト間の状態分離（beforeEach で必要に応じて状態リセット） |
+| CI に `backend/.env` が存在しないため `docker compose up` が失敗する | E2E CI ジョブ全体がブロック | `docker-compose.yml` の `env_file` を `required: false` に変更（根本対処）。CI ワークフロー側の補完ステップは不要になる。`settings.py` の全変数にデフォルト値があるため動作に問題なし |
 
 ---
 

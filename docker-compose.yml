@@ -31,7 +31,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
@@ -57,7 +58,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
@@ -76,7 +78,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0

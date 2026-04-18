@@ -37,6 +37,7 @@ docker compose --profile e2e run --rm e2e npm test
 ```
 
 > **注意**: `E2E_TEST_PASSWORD` が未設定の場合、globalSetup が即停止してテストは実行されない（フェイルファスト）。
+> **前提**: `docker-compose.yml` の `env_file` が `required: false` になっているため、`backend/.env` が存在しなくても `docker compose up` は動作する（CI・新規開発者環境どちらでも追加手順不要）。
 
 | 実行日時 | auth.spec | tenant-isolation.spec | quiz-session.spec | 備考 |
 |---------|-----------|----------------------|------------------|------|
