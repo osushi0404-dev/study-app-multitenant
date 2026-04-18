@@ -138,6 +138,7 @@ services:
     working_dir: /e2e
     volumes:
       - ./e2e:/e2e
+      - e2e_node_modules:/e2e/node_modules   # named volume: Linux 向け node_modules を --rm 後も保持
     depends_on:
       - frontend
       - backend
@@ -148,6 +149,7 @@ services:
       - API_URL=http://backend:8000
     profiles:
       - e2e
+    command: sh -c "npm ci && npm test"   # 依存インストール後にテスト実行（npm ci は package-lock.json 変更がなければ高速）
 
   # Nginx (Production only)
   nginx:
@@ -175,6 +177,7 @@ volumes:
   backend_static:
   frontend_build:
   backend_logs:
+  e2e_node_modules:   # named volume: Playwright Docker イメージ（Linux）向け node_modules を保持
 
 networks:
   app-network:

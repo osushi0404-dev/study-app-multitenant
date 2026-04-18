@@ -74,7 +74,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）|
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
 | `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。top-level `volumes` に `backend_logs:` 追加 |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持し `npm ci` を効率化）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加 |
 | `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入 |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
@@ -527,13 +527,22 @@ frontend:
     retries: 18
     start_period: 60s
 
+e2e:
+  volumes:
+    - ./e2e:/e2e
+    - e2e_node_modules:/e2e/node_modules   # named volume: --rm でコンテナが消えても node_modules を保持
+  command: sh -c "npm ci && npm test"      # 依存インストール後にテスト実行
+
 volumes:
   backend_logs:   # named volume: image の /app/logs ディレクトリの所有権（django ユーザー）を引き継ぐ
+  e2e_node_modules:   # named volume: Playwright Docker イメージ（Linux）向けに npm ci でインストールした node_modules を保持
 ```
 
 > **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
 >
 > **`backend_logs` named volume の必要性**: `./backend:/app` の bind mount は CI チェックアウトのルート所有権（UID 1001）で `/app` をオーバーライドする。`backend/logs/` は `.gitignore` 対象のため CI に存在せず、`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir(exist_ok=True)` を呼ぶと `PermissionError: [Errno 13] Permission denied: '/app/logs'` が発生する。`.gitkeep` での回避は「ディレクトリは存在するが CI ランナー所有のため django が書き込めない」状態を生み出すため不十分。Named volume は初回マウント時に image の `/app/logs` ディレクトリ（django 所有）をコピーするため、書き込み権限が正しく維持される。
+>
+> **`e2e_node_modules` named volume の必要性**: `./e2e:/e2e` bind mount で `node_modules` を host と共有すると、host の OS（例: Windows/Mac）向けにコンパイルされた native addon やバイナリが Linux コンテナでは動作しない。また `--rm` でコンテナを破棄するたびに `npm ci` を全実行すると遅い。Named volume に分離することで Linux 向けの正しい `node_modules` が永続化され、`package-lock.json` に変更がなければ `npm ci` も高速で完了する。`e2e` サービスの `command` に `npm ci && npm test` を設定し、`docker compose --profile e2e run --rm e2e` だけで依存インストール＋テスト実行が完結する。
 
 #### 8-4: `.github/workflows/e2e.yml` 新規作成
 
@@ -631,7 +640,7 @@ jobs:
 
 - ロールバック手順:
   1. `e2e/` ディレクトリを削除
-  2. `docker-compose.yml` の `e2e` サービスを削除、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs` を実行する
+  2. `docker-compose.yml` の `e2e` サービスを削除、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:`・`e2e_node_modules:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs <project>_e2e_node_modules` を実行する
   3. `.github/workflows/e2e.yml` を削除
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
@@ -657,6 +666,7 @@ jobs:
 | Postgres 初期化完了前に `migrate` が実行されるレースコンディション（`depends_on: db` は `service_started` であり、DB がまだ接続を受け付けていない段階で backend が起動し migrate に失敗する） | backend コンテナが exit code 1 で終了し `--wait` も失敗 | `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定。Postgres が接続受付可能になるまで backend の起動を保留する（根本対処） |
 | bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
 | `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
+| `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm ci && npm test` に変更。Linux 向けパッケージが正しくインストールされ `--rm` 後も保持される |
 
 ---
 
