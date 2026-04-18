@@ -13,6 +13,12 @@ services:
       - "5432:5432"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # Redis Cache
   redis:
@@ -43,8 +49,10 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy   # Postgres 接続受付後にのみ起動（migrate の前提）
+      redis:
+        condition: service_started
     networks:
       - app-network
     healthcheck:

@@ -20,3 +20,4 @@ plan_I049: Playwright E2Eテスト基盤を導入しクリティカルパスを�
 | 7 | CI（GitHub Actions）で `e2e.yml` ジョブが実行されていることを確認する | PR の Checks 一覧に「E2E Tests (Playwright)」ジョブが表示され、`Start services and wait for healthy` ステップが成功する（手動ポーリングステップなし） | Human | - | CI 統合確認・GitHub Secrets 設定も必要 |
 | 8 | `docker compose --profile e2e run --rm e2e npm test` 実行後にトレースファイルを確認する | `playwright-report/` に trace ファイルが生成されている（失敗時のみ） | Claude | - | trace ファイル存在確認 |
 | 9 | ログイン画面（`http://localhost:3000/login`）を開き、`data-testid` 属性が付与されていることを確認する | DevTools で `email-input`・`password-input`・`login-button` の `data-testid` が確認できる | Human | - | data-testid 追加確認 |
+| 10 | `docker compose up -d db backend` 後に `docker compose ps db` を実行する | db サービスのステータスが `healthy` と表示される（`pg_isready` ヘルスチェックが機能している） | Claude | - | db ヘルスチェック動作確認・migrate レースコンディション防止の検証 |

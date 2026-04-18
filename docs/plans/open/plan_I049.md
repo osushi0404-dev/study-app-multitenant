@@ -368,7 +368,7 @@ test.describe('ログインフロー（未認証）', () => {
   test('正しい認証情報でログインしてダッシュボードに遷移する', async ({ page }) => {
     await page.goto('/login');
     await page.fill('[data-testid="email-input"]', 'e2e_user_a@example.com');
-    await page.fill('[data-testid="password-input"]', 'E2ePassword1!');
+    await page.fill('[data-testid="password-input"]', process.env.E2E_TEST_PASSWORD || '');  // 環境変数から取得。ハードコード禁止
     await page.click('[data-testid="login-button"]');
     await expect(page).toHaveURL(/dashboard/);
   });
@@ -473,10 +473,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-#### 8-3: `docker-compose.yml` にヘルスチェック追加
+#### 8-3: `docker-compose.yml` にヘルスチェック・depends_on 条件追加
 
 ```yaml
+db:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+    start_period: 10s
+
 backend:
+  depends_on:
+    db:
+      condition: service_healthy   # Postgres 接続受付後にのみ起動（migrate の前提）
+    redis:
+      condition: service_started
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
     interval: 10s
@@ -492,6 +505,8 @@ frontend:
     retries: 18
     start_period: 60s
 ```
+
+> **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
 
 #### 8-4: `.github/workflows/e2e.yml` 新規作成
 
@@ -587,14 +602,15 @@ jobs:
 
 ## 9. ロールバック
 
-- 本イシューの変更は全て**追加のみ**（既存ファイルへの変更は `/test` スキルのみ）
 - ロールバック手順:
   1. `e2e/` ディレクトリを削除
-  2. `docker-compose.yml` の `e2e` サービスを削除
+  2. `docker-compose.yml` の `e2e` サービスを削除、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除
   3. `.github/workflows/e2e.yml` を削除
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
-  5. `.claude/skills/test/SKILL.md` のE2Eステップを削除
-  6. ブランチを revert
+  5. `backend/core/urls.py` の `/health/` エンドポイントを削除
+  6. `backend/Dockerfile` と `frontend/Dockerfile.dev` から `curl` のインストール行を削除
+  7. `.claude/skills/test/SKILL.md` のE2Eステップを削除
+  8. ブランチを revert
 
 ---
 
@@ -610,6 +626,7 @@ jobs:
 | CI に `backend/.env` が存在しないため `docker compose up` が失敗する | E2E CI ジョブ全体がブロック | `docker-compose.yml` の `env_file` を `required: false` に変更（根本対処）。CI ワークフロー側の補完ステップは不要。`settings.py` の全変数にデフォルト値があるため動作に問題なし |
 | バックエンド起動タイムアウト（migrate 完了前にヘルスチェックが失敗） | E2E CI ジョブ全体がブロック | `healthcheck` に `start_period: 60s` を設定し起動猶予を確保。`/health/` エンドポイントが DB 接続を検証するため migrate 完了後にのみ healthy となる |
 | コンテナに `curl` が存在せずヘルスチェックが常に unhealthy | E2E CI がハング | Dockerfile に `curl` をインストール（`apt-get install -y --no-install-recommends curl`）。Python/Node の回避策は使わない |
+| Postgres 初期化完了前に `migrate` が実行されるレースコンディション（`depends_on: db` は `service_started` であり、DB がまだ接続を受け付けていない段階で backend が起動し migrate に失敗する） | backend コンテナが exit code 1 で終了し `--wait` も失敗 | `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定。Postgres が接続受付可能になるまで backend の起動を保留する（根本対処） |
 
 ---
 
