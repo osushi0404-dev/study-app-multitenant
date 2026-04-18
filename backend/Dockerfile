@@ -15,6 +15,7 @@ RUN apt-get update \
         build-essential \
         libpq-dev \
         libmagic1 \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

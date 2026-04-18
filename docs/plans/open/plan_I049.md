@@ -70,8 +70,11 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `e2e/.env.e2e.example` | 新規 | E2E テスト認証情報のテンプレート（git 管理）。実値は `.env.e2e`（gitignore 済み）に記載 |
 | `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
 | `backend/fixtures/e2e_master.json` | 新規 | 固定マスタデータ（OrganizationCategory 等） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加。`backend`・`celery`・`celery-beat` の `env_file` を `required: false` に変更（CI で `.env` が不在でも動作するよう根本対処） |
-| `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ（E2E_TEST_PASSWORD を GitHub Secrets から注入） |
+| `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
+| `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
+| `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加 |
+| `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入 |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
 ---
@@ -438,9 +441,62 @@ test.describe('クイズセッション', () => {
 });
 ```
 
-### Step 8: CI GitHub Actions 独立ジョブ追加
+### Step 8: Docker ヘルスチェック・CI GitHub Actions 独立ジョブ追加
 
-`.github/workflows/e2e.yml` 新規作成:
+#### 8-1: `/health/` エンドポイント追加（`backend/core/urls.py`）
+
+```python
+from django.db import connection
+from django.http import JsonResponse
+
+def health(request):
+    """Readiness check: DB 接続を検証してサービス準備完了を示す"""
+    try:
+        connection.ensure_connection()
+        return JsonResponse({'status': 'ok'})
+    except Exception:
+        return JsonResponse({'status': 'error'}, status=503)
+
+# urlpatterns に追加:
+path('health/', health, name='health'),
+```
+
+#### 8-2: curl インストール（`backend/Dockerfile` と `frontend/Dockerfile.dev`）
+
+```dockerfile
+# backend/Dockerfile（既存 RUN apt-get ... の後に追記、または既存行に追加）
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# frontend/Dockerfile.dev（同様）
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+#### 8-3: `docker-compose.yml` にヘルスチェック追加
+
+```yaml
+backend:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+    interval: 10s
+    timeout: 10s
+    retries: 18       # 最大 3 分
+    start_period: 60s # migrate + 起動猶予
+
+frontend:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+    interval: 10s
+    timeout: 5s
+    retries: 18
+    start_period: 60s
+```
+
+#### 8-4: `.github/workflows/e2e.yml` 新規作成
+
+`docker compose up --wait` でサービスが healthy になるまでブロックするため、手動ポーリングステップは不要：
+
 ```yaml
 name: E2E Tests
 
@@ -456,17 +512,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Start services
-        run: docker compose up -d db backend frontend
-      - name: Wait for frontend to be ready
-        run: |
-          timeout 60 sh -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done'
+
+      - name: Start services and wait for healthy
+        run: docker compose up -d --wait db backend frontend
+        timeout-minutes: 5
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
       - name: Install Playwright dependencies
         run: npm ci && npx playwright install --with-deps chromium
         working-directory: e2e
+
       - name: Run E2E tests
         run: npm test
         working-directory: e2e
@@ -474,12 +534,16 @@ jobs:
           BASE_URL: http://localhost:3000
           API_URL: http://localhost:8000
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
           path: e2e/playwright-report/
+          retention-days: 7
 ```
+
+> **設計方針**: `--wait` は docker-compose.yml の `healthcheck` が通過するまでブロックする。マジックナンバーのタイムアウトによる手動ポーリングより信頼性が高く、ヘルスチェックの定義がサービス側（compose ファイル）に集約される。`/health/` エンドポイントは DB 接続を検証するため、「サーバーは起動しているが migrate が完了していない」状態も検出できる。
 
 ### Step 9: `/test` スキル更新
 
@@ -543,7 +607,9 @@ jobs:
 | seed_e2e コマンドで Subject モデルのフィールドが不足 | Step 3 でエラー | Subject モデルの必須フィールドを事前確認（調査済み: organization FK が必須） |
 | CI の E2E が既存ジョブをブロック | PR マージに影響 | 独立ジョブ（別 workflow）にし、既存 ci.yml には触れない |
 | E2E テストがフレーキー（非決定的失敗） | CI 信頼性低下 | retry: 2、trace: on-first-retry 設定、テスト間の状態分離（beforeEach で必要に応じて状態リセット） |
-| CI に `backend/.env` が存在しないため `docker compose up` が失敗する | E2E CI ジョブ全体がブロック | `docker-compose.yml` の `env_file` を `required: false` に変更（根本対処）。CI ワークフロー側の補完ステップは不要になる。`settings.py` の全変数にデフォルト値があるため動作に問題なし |
+| CI に `backend/.env` が存在しないため `docker compose up` が失敗する | E2E CI ジョブ全体がブロック | `docker-compose.yml` の `env_file` を `required: false` に変更（根本対処）。CI ワークフロー側の補完ステップは不要。`settings.py` の全変数にデフォルト値があるため動作に問題なし |
+| バックエンド起動タイムアウト（migrate 完了前にヘルスチェックが失敗） | E2E CI ジョブ全体がブロック | `healthcheck` に `start_period: 60s` を設定し起動猶予を確保。`/health/` エンドポイントが DB 接続を検証するため migrate 完了後にのみ healthy となる |
+| コンテナに `curl` が存在せずヘルスチェックが常に unhealthy | E2E CI がハング | Dockerfile に `curl` をインストール（`apt-get install -y --no-install-recommends curl`）。Python/Node の回避策は使わない |
 
 ---
 

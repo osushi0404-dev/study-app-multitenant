@@ -47,6 +47,12 @@ services:
       - redis
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 60s
     command: >
       sh -c "python manage.py collectstatic --noinput &&
              python manage.py migrate &&
@@ -110,6 +116,12 @@ services:
       - backend
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
 
   # E2E Tests (Playwright)
   e2e:
