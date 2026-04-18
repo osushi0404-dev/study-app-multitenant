@@ -1,5 +1,5 @@
 import { chromium, FullConfig } from '@playwright/test';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -18,22 +18,20 @@ async function globalSetup(_config: FullConfig) {
 
   // 1. DB 初期化・migrate・fixture 投入・seed
   console.log('[globalSetup] Running migrations and seeding...');
-  execSync(
-    'docker compose exec -T backend python manage.py migrate --noinput',
-    { stdio: 'inherit' },
-  );
-  execSync(
-    'docker compose exec -T backend python manage.py loaddata e2e_master.json',
-    { stdio: 'inherit' },
-  );
-  execSync(
-    `docker compose exec -T backend python manage.py seed_e2e --scenario tenant_isolation --password "${e2ePassword}"`,
-    { stdio: 'inherit' },
-  );
-  execSync(
-    `docker compose exec -T backend python manage.py seed_e2e --scenario quiz_session --password "${e2ePassword}"`,
-    { stdio: 'inherit' },
-  );
+  // spawnSync + args 配列でシェルを介さずコマンドを実行する。
+  // execSync はシェルを通じて文字列を解釈するためパスワードに特殊文字が含まれると
+  // シェルインジェクションが起きる。spawnSync の args 配列は OS に直接渡されるため安全。
+  const run = (args: string[]): void => {
+    const result = spawnSync('docker', ['compose', ...args], { stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`Command failed (exit ${result.status}): docker compose ${args.join(' ')}`);
+    }
+  };
+
+  run(['exec', '-T', 'backend', 'python', 'manage.py', 'migrate', '--noinput']);
+  run(['exec', '-T', 'backend', 'python', 'manage.py', 'loaddata', 'e2e_master.json']);
+  run(['exec', '-T', 'backend', 'python', 'manage.py', 'seed_e2e', '--scenario', 'tenant_isolation', '--password', e2ePassword]);
+  run(['exec', '-T', 'backend', 'python', 'manage.py', 'seed_e2e', '--scenario', 'quiz_session', '--password', e2ePassword]);
 
   // 2. storageState 生成（ユーザー A・ユーザー B）
   fs.mkdirSync('e2e/.auth', { recursive: true });
