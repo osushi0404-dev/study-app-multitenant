@@ -108,6 +108,23 @@ services:
     networks:
       - app-network
 
+  # E2E Tests (Playwright)
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.50.0-jammy
+    working_dir: /e2e
+    volumes:
+      - ./e2e:/e2e
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+    environment:
+      - BASE_URL=http://frontend:3000
+      - API_URL=http://backend:8000
+    profiles:
+      - e2e
+
   # Nginx (Production only)
   nginx:
     image: nginx:alpine

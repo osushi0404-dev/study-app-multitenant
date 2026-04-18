@@ -1,0 +1,13 @@
+[
+  {
+    "model": "accounts.organizationcategory",
+    "pk": null,
+    "fields": {
+      "name": "教育",
+      "slug": "education",
+      "description": "学習塾・予備校等",
+      "display_order": 1,
+      "is_active": true
+    }
+  }
+]

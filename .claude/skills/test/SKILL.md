@@ -11,7 +11,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 前提: /code-review OK。
 
 ## 停止条件
-- 自動テスト（pytest / Jest）が1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+- 自動テスト（pytest / Jest / Playwright E2E）が1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
 - 手動テスト確認でユーザーが NG を返した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
 
 0) 実行環境を確認する:
@@ -60,9 +60,23 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
         fix-loop 完了後は `/test $ARGUMENTS` に戻ってください。
      ```
 
-3) docs/reviews と docs/tests に結果を記録
+3) E2E テスト（Playwright）:
+   ```bash
+   docker compose --profile e2e run --rm e2e npm test
+   ```
+   - 成功: 手順 4) へ
+   - 失敗: 即 STOP。以下を報告してユーザー待機:
+     - 失敗したテスト名（spec ファイル名・テスト名）
+     - エラー内容（期待値 / 実際値 / スクリーンショットパス）
+     ```
+     ⛔ E2E テストが失敗しました。修正作業は開始しません。
+     👉 続けるには `/fix-loop $ARGUMENTS` を入力してください。
+        fix-loop 完了後は `/test $ARGUMENTS` に戻ってください。
+     ```
 
-4) 手動テスト確認項目を以下の形式で提示してユーザー検証（OK/NG）待ち:
+4) docs/reviews と docs/tests に結果を記録
+
+5) 手動テスト確認項目を以下の形式で提示してユーザー検証（OK/NG）待ち:
    ```
    ## 手動テスト確認項目
    | # | 確認内容 | 操作手順 | 期待結果 | 結果(OK/NG) |
