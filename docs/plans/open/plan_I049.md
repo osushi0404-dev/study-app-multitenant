@@ -74,7 +74,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）|
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
 | `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持し `npm ci` を効率化）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加 |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。**`e2e-init` サービス追加（Init Container パターン: backend イメージで `migrate`・`loaddata`・`seed_e2e` を実行し、`e2e` サービスが起動する前に完了させる）。** `env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加 |
 | `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入 |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
@@ -294,12 +294,13 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 ### Step 4: globalSetup 実装
 
-**目的**: E2E 実行前に DB を初期化し、認証状態を生成する。パスワードは `process.env.E2E_TEST_PASSWORD` から取得し、seed コマンドに `--password` 引数として渡す。
+**目的**: E2E 実行前に認証状態（storageState）を生成する。DB 初期化（migrate・seed）は `e2e-init` サービス（Init Container パターン）が担うため、globalSetup はブラウザログイン操作のみを行う。パスワードは `process.env.E2E_TEST_PASSWORD` から取得する。
+
+> **Init Container パターンの採用理由**: Playwright コンテナ（`mcr.microsoft.com/playwright`）には `docker` CLI が存在しないため、globalSetup 内で `docker compose exec` を呼ぶことができない（`ENOENT: No such file or directory, docker`）。Docker socket をマウント（DooD: Docker-outside-of-Docker）する方法はコンテナにホスト root 相当の権限を与えるセキュリティリスクがあり採用しない。代わりに `e2e-init` 専用サービス（backend イメージ）を docker-compose.yml で定義し、migrate・loaddata・seed を実行させる。`e2e` サービスは `depends_on: e2e-init: condition: service_completed_successfully` で完了を待つ。これにより globalSetup はブラウザ操作のみに集中できる（単一責任の原則）。
 
 `e2e/global-setup.ts` 作成:
 ```typescript
 import { chromium, FullConfig } from '@playwright/test';
-import { execSync } from 'child_process';
 import * as fs from 'fs';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -316,22 +317,10 @@ async function globalSetup(_config: FullConfig) {
     );
   }
 
-  // 1. DB 初期化・migrate・fixture 投入・seed
-  console.log('[globalSetup] Running migrations and seeding...');
-  execSync('docker compose exec -T backend python manage.py migrate --noinput', { stdio: 'inherit' });
-  execSync('docker compose exec -T backend python manage.py loaddata e2e_master.json', { stdio: 'inherit' });
-  // パスワードは env オプションで渡すことでシェルインジェクションを防ぐ（シェル文字列への直接埋め込み禁止）
-  const execOpts = { stdio: 'inherit' as const, env: { ...process.env, E2E_TEST_PASSWORD: e2ePassword } };
-  execSync(
-    'docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario tenant_isolation --password "$E2E_TEST_PASSWORD"',
-    execOpts,
-  );
-  execSync(
-    'docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario quiz_session --password "$E2E_TEST_PASSWORD"',
-    execOpts,
-  );
+  // DB 初期化（migrate・loaddata・seed_e2e）は e2e-init サービス（docker-compose.yml）が実行済み
+  // globalSetup はブラウザログイン操作と storageState 生成のみを担う
 
-  // 2. storageState 生成（ユーザーA・ユーザーB）
+  // storageState 生成（ユーザーA・ユーザーB）
   fs.mkdirSync('e2e/.auth', { recursive: true });
   const browser = await chromium.launch();
 
@@ -358,7 +347,7 @@ async function globalSetup(_config: FullConfig) {
 export default globalSetup;
 ```
 
-> **注意**: globalSetup 内の `docker compose exec` は、E2E をホストから実行する場合の記述。Docker 内実行の場合は直接 `python manage.py` を呼び出す形に調整する。`E2E_TEST_PASSWORD` が未設定の場合は明確なエラーメッセージで即停止する（サイレント失敗を防ぐ）。
+> **`E2E_TEST_PASSWORD` が未設定の場合**: `globalSetup` が明確なエラーメッセージで即停止する（サイレント失敗を防ぐ）。
 
 ### Step 5: ログイン／ログアウト E2E テスト実装
 
@@ -527,10 +516,40 @@ frontend:
     retries: 18
     start_period: 60s
 
+e2e-init:
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  env_file:
+    - path: ./backend/.env
+      required: false
+  environment:
+    - DB_HOST=db
+    - REDIS_URL=redis://redis:6379/0
+    - E2E_TEST_PASSWORD=${E2E_TEST_PASSWORD}
+  volumes:
+    - ./backend:/app
+  depends_on:
+    backend:
+      condition: service_healthy   # backend（migrate 完了）が healthy になってから実行
+  networks:
+    - app-network
+  profiles:
+    - e2e
+  command: >
+    sh -c "python manage.py migrate --noinput &&
+           python manage.py loaddata e2e_master.json &&
+           python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
+           python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
+  # $$E2E_TEST_PASSWORD: docker-compose.yml 内でシェル変数展開を防ぐため $$ でエスケープ
+
 e2e:
   volumes:
     - ./e2e:/e2e
     - e2e_node_modules:/e2e/node_modules   # named volume: --rm でコンテナが消えても node_modules を保持
+  depends_on:
+    e2e-init:
+      condition: service_completed_successfully   # Init Container 完了後に実行
   command: sh -c "npm install && npm test"  # npm install: named volume キャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
 
 volumes:
@@ -539,6 +558,8 @@ volumes:
 ```
 
 > **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
+>
+> **Init Container パターン（`e2e-init` サービス）**: Playwright コンテナには Docker CLI が存在しないため、`global-setup.ts` 内で `docker compose exec` による DB 初期化は不可能。`e2e-init` サービスは backend イメージを再利用して `migrate`・`loaddata`・`seed_e2e` を実行し、完了後に終了（exit 0）する。`e2e` サービスは `condition: service_completed_successfully` で `e2e-init` の正常完了を待ってからテストを実行する。これにより `global-setup.ts` はブラウザ操作のみに集中でき、Docker socket マウント（セキュリティリスク）や追加のシェルスクリプトが不要になる。
 >
 > **`backend_logs` named volume の必要性**: `./backend:/app` の bind mount は CI チェックアウトのルート所有権（UID 1001）で `/app` をオーバーライドする。`backend/logs/` は `.gitignore` 対象のため CI に存在せず、`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir(exist_ok=True)` を呼ぶと `PermissionError: [Errno 13] Permission denied: '/app/logs'` が発生する。`.gitkeep` での回避は「ディレクトリは存在するが CI ランナー所有のため django が書き込めない」状態を生み出すため不十分。Named volume は初回マウント時に image の `/app/logs` ディレクトリ（django 所有）をコピーするため、書き込み権限が正しく維持される。
 >
@@ -640,7 +661,7 @@ jobs:
 
 - ロールバック手順:
   1. `e2e/` ディレクトリを削除
-  2. `docker-compose.yml` の `e2e` サービスを削除、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:`・`e2e_node_modules:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs <project>_e2e_node_modules` を実行する
+  2. `docker-compose.yml` の `e2e` サービスを削除、**`e2e-init` サービスを削除**、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:`・`e2e_node_modules:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs <project>_e2e_node_modules` を実行する
   3. `.github/workflows/e2e.yml` を削除
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
@@ -667,6 +688,7 @@ jobs:
 | bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
 | `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
 | `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm install && npm test` に変更。`npm install` は named volume のキャッシュを活かして差分のみ更新（2回目以降は数秒）。CI では `e2e.yml` で `npm ci` を使い決定論的インストールを保証 |
+| Playwright コンテナに `docker` CLI が存在しないため `global-setup.ts` 内で `docker compose exec` による DB 初期化が不可能（`ENOENT: docker`）。Docker socket マウント（DooD）はホスト root 相当の権限を与えるセキュリティリスク | DB が初期化されないまま全テストが失敗する | **Init Container パターン** を採用。`e2e-init` サービス（backend イメージ）で migrate・loaddata・seed_e2e を実行し、`e2e` サービスは `condition: service_completed_successfully` で完了を待つ。`global-setup.ts` はブラウザ操作のみに限定し Docker CLI への依存を排除する |
 
 ---
 
@@ -680,6 +702,7 @@ jobs:
 - E2E 専用 DB 名 (`learning_app_e2e`) を `.env.e2e` で管理し、本番 DB (`learning_app`) とは別インスタンス
 - seed コマンドで作成するデータは `e2e_` プレフィックスを持つため本番データとの混在を防ぐ
 - npm audit: Playwright 公式パッケージのみ使用。高/クリティカル脆弱性があれば修正対象
+- **Docker socket マウント（DooD）不採用**: `global-setup.ts` が直接 `docker compose exec` を呼ぶ設計は Playwright コンテナに `/var/run/docker.sock` をマウントする必要があり、コンテナにホスト root 相当の権限を与えるセキュリティリスクがある。代わりに Init Container パターン（`e2e-init` サービス）を採用し、`global-setup.ts` からの Docker CLI 依存を完全に排除する
 - **`HealthCheckMiddleware` の削除**: 既存の `HealthCheckMiddleware` は認証なしで DB 接続数・Redis エラー詳細・システムリソース（CPU/メモリ）を公開しており、OWASP Security Misconfiguration / Sensitive Data Exposure に該当する。`/health/` は DB 接続確認のみ返す最小応答に限定する。詳細監視情報は `/monitoring/status/` 等（別途認証保護が必要）で提供するのが正しい設計
 
 ---

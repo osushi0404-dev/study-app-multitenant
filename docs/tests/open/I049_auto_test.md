@@ -41,6 +41,10 @@ docker compose config --format json | python3 -c "import sys,json; cfg=json.load
 docker compose config --format json | python3 -c "import sys,json; cfg=json.load(sys.stdin); vols=cfg['services']['backend'].get('volumes',[]); print([v for v in vols if 'logs' in str(v)])"
 docker compose config --format json | python3 -c "import sys,json; cfg=json.load(sys.stdin); print(list(cfg.get('volumes',{}).keys()))"
 
+# e2e-init サービス定義確認（Init Container パターン）
+docker compose config --format json | python3 -c "import sys,json; cfg=json.load(sys.stdin); svc=cfg['services'].get('e2e-init',{}); print('image:', svc.get('image','(build)'), 'profiles:', svc.get('profiles',[]))"
+docker compose config --format json | python3 -c "import sys,json; cfg=json.load(sys.stdin); dep=cfg['services']['e2e'].get('depends_on',{}); print(dep)"
+
 # db が healthy になっていることを確認（起動後）
 docker compose ps db
 
@@ -60,11 +64,11 @@ print('status:', resp.status_code, 'body:', resp.content.decode())
 "
 ```
 
-> **確認観点**: `db.healthcheck.test` に `pg_isready -U postgres` が含まれること、`backend.depends_on.db.condition` が `service_healthy` であること、`backend.volumes` に `backend_logs` が含まれること、top-level `volumes` に `backend_logs` が定義されていること。`HealthCheckMiddleware` が `MIDDLEWARE` から削除されていること。`/health/` が `{"status": "ok"}` (HTTP 200) を返すこと。
+> **確認観点**: `db.healthcheck.test` に `pg_isready -U postgres` が含まれること、`backend.depends_on.db.condition` が `service_healthy` であること、`backend.volumes` に `backend_logs` が含まれること、top-level `volumes` に `backend_logs` が定義されていること。`e2e-init` サービスが `e2e` プロファイル付きで定義されていること、`e2e.depends_on` に `e2e-init: condition: service_completed_successfully` が設定されていること。`HealthCheckMiddleware` が `MIDDLEWARE` から削除されていること。`/health/` が `{"status": "ok"}` (HTTP 200) を返すこと。
 
-| 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | HealthCheckMiddleware 削除 | /health/ 応答 | 備考 |
-|---------|--------------------|------------------------------------|-------------------------------|--------------------------|--------------|------|
-| 実装後 | - | - | - | - | - | 未実施 |
+| 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | e2e-init サービス定義 | e2e depends_on e2e-init | HealthCheckMiddleware 削除 | /health/ 応答 | 備考 |
+|---------|--------------------|------------------------------------|-------------------------------|----------------------|------------------------|--------------------------|--------------|------|
+| 実装後 | - | - | - | - | - | - | - | 未実施 |
 
 ## E2E（Playwright）
 
