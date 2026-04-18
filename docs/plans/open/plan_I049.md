@@ -531,18 +531,18 @@ e2e:
   volumes:
     - ./e2e:/e2e
     - e2e_node_modules:/e2e/node_modules   # named volume: --rm でコンテナが消えても node_modules を保持
-  command: sh -c "npm ci && npm test"      # 依存インストール後にテスト実行
+  command: sh -c "npm install && npm test"  # npm install: named volume キャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
 
 volumes:
   backend_logs:   # named volume: image の /app/logs ディレクトリの所有権（django ユーザー）を引き継ぐ
-  e2e_node_modules:   # named volume: Playwright Docker イメージ（Linux）向けに npm ci でインストールした node_modules を保持
+  e2e_node_modules:   # named volume: Playwright Docker イメージ（Linux）向けに npm install でインストールした node_modules を保持
 ```
 
 > **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
 >
 > **`backend_logs` named volume の必要性**: `./backend:/app` の bind mount は CI チェックアウトのルート所有権（UID 1001）で `/app` をオーバーライドする。`backend/logs/` は `.gitignore` 対象のため CI に存在せず、`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir(exist_ok=True)` を呼ぶと `PermissionError: [Errno 13] Permission denied: '/app/logs'` が発生する。`.gitkeep` での回避は「ディレクトリは存在するが CI ランナー所有のため django が書き込めない」状態を生み出すため不十分。Named volume は初回マウント時に image の `/app/logs` ディレクトリ（django 所有）をコピーするため、書き込み権限が正しく維持される。
 >
-> **`e2e_node_modules` named volume の必要性**: `./e2e:/e2e` bind mount で `node_modules` を host と共有すると、host の OS（例: Windows/Mac）向けにコンパイルされた native addon やバイナリが Linux コンテナでは動作しない。また `--rm` でコンテナを破棄するたびに `npm ci` を全実行すると遅い。Named volume に分離することで Linux 向けの正しい `node_modules` が永続化され、`package-lock.json` に変更がなければ `npm ci` も高速で完了する。`e2e` サービスの `command` に `npm ci && npm test` を設定し、`docker compose --profile e2e run --rm e2e` だけで依存インストール＋テスト実行が完結する。
+> **`e2e_node_modules` named volume の必要性**: `./e2e:/e2e` bind mount で `node_modules` を host と共有すると、host の OS（例: Windows/Mac）向けにコンパイルされた native addon やバイナリが Linux コンテナでは動作しない。Named volume に分離することで Linux 向けの正しい `node_modules` が保持される。`npm install` は既存 `node_modules` を保持したまま差分のみ更新するため、named volume との組み合わせで 2 回目以降は数秒で完了する（`npm ci` は毎回 `node_modules` を削除して全インストールするため named volume のキャッシュ効果がない）。CI（`e2e.yml`）では `npm ci` を使い決定論的・クリーンなインストールを保証する。`e2e` サービスの `command` に `npm install && npm test` を設定し、`docker compose --profile e2e run --rm e2e` だけで依存インストール＋テスト実行が完結する。
 
 #### 8-4: `.github/workflows/e2e.yml` 新規作成
 
@@ -666,7 +666,7 @@ jobs:
 | Postgres 初期化完了前に `migrate` が実行されるレースコンディション（`depends_on: db` は `service_started` であり、DB がまだ接続を受け付けていない段階で backend が起動し migrate に失敗する） | backend コンテナが exit code 1 で終了し `--wait` も失敗 | `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定。Postgres が接続受付可能になるまで backend の起動を保留する（根本対処） |
 | bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
 | `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
-| `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm ci && npm test` に変更。Linux 向けパッケージが正しくインストールされ `--rm` 後も保持される |
+| `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm install && npm test` に変更。`npm install` は named volume のキャッシュを活かして差分のみ更新（2回目以降は数秒）。CI では `e2e.yml` で `npm ci` を使い決定論的インストールを保証 |
 
 ---
 

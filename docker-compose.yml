@@ -149,7 +149,7 @@ services:
       - API_URL=http://backend:8000
     profiles:
       - e2e
-    command: sh -c "npm ci && npm test"   # 依存インストール後にテスト実行（npm ci は package-lock.json 変更がなければ高速）
+    command: sh -c "npm install && npm test"   # npm install: named volume のキャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
 
   # Nginx (Production only)
   nginx:
