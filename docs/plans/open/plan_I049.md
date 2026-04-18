@@ -31,7 +31,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 - **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加、`e2e_master.json` fixture 追加
 - **Frontend**: なし（E2E テストはプロジェクトルートの `e2e/` ディレクトリに配置し frontend ディレクトリには触れない）
-- **DB**: E2E 専用 DB `learning_app_e2e`（`.env.e2e` で設定）
+- **DB**: デフォルト DB（`learning_app`）を使用。E2E データは `e2e_` プレフィックスで識別。CI ではクリーンな DB インスタンスから起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持
 - **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加、`.github/workflows/e2e.yml` 追加、`.claude/skills/test/SKILL.md` 更新
 
 ---
@@ -162,7 +162,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
    export default defineConfig({
      testDir: './tests',
-     globalSetup: './global-setup.ts',  // DB 初期化・seed・storageState 生成をここで実行
+     globalSetup: './global-setup.ts',  // storageState 生成をここで実行（DB 初期化は e2e-init サービスが担当）
      use: {
        baseURL: process.env.BASE_URL || 'http://localhost:3000',
        trace: 'on-first-retry',
@@ -174,7 +174,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
          name: 'chromium-authed',
          use: {
            ...devices['Desktop Chrome'],
-           storageState: 'e2e/.auth/user_a.json',
+           storageState: path.join(__dirname, '.auth', 'user_a.json'),  // __dirname ベース: CI/コンテナ両方で正しく解決される
          },
          testMatch: /(?!.*auth\.spec).*\.spec\.ts/,  // auth.spec 以外に適用
        },
@@ -302,8 +302,10 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 ```typescript
 import { chromium, FullConfig } from '@playwright/test';
 import * as fs from 'fs';
+import * as path from 'path';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const AUTH_DIR = path.join(__dirname, '.auth');  // __dirname ベース: CI/コンテナ両方で正しく解決
 
 async function globalSetup(_config: FullConfig) {
   // E2E_TEST_PASSWORD は playwright.config.ts で dotenv.config() により .env.e2e から読み込まれる
@@ -321,12 +323,12 @@ async function globalSetup(_config: FullConfig) {
   // globalSetup はブラウザログイン操作と storageState 生成のみを担う
 
   // storageState 生成（ユーザーA・ユーザーB）
-  fs.mkdirSync('e2e/.auth', { recursive: true });
+  fs.mkdirSync(AUTH_DIR, { recursive: true });
   const browser = await chromium.launch();
 
   const users = [
-    { email: 'e2e_user_a@example.com', file: 'e2e/.auth/user_a.json' },
-    { email: 'e2e_user_b@example.com', file: 'e2e/.auth/user_b.json' },
+    { email: 'e2e_user_a@example.com', file: path.join(AUTH_DIR, 'user_a.json') },
+    { email: 'e2e_user_b@example.com', file: path.join(AUTH_DIR, 'user_b.json') },
   ];
 
   for (const user of users) {
@@ -354,6 +356,7 @@ export default globalSetup;
 `e2e/tests/auth.spec.ts` 作成:
 ```typescript
 import { test, expect } from '@playwright/test';
+import * as path from 'path';
 
 // 未認証状態でのテスト（chromium-unauthed プロジェクトで実行）
 test.describe('ログインフロー（未認証）', () => {
@@ -378,7 +381,7 @@ test.describe('ログインフロー（未認証）', () => {
 
 // 認証済み状態でのテスト（test.use でプロジェクト設定を上書き）
 test.describe('ログアウトフロー（認証済み）', () => {
-  test.use({ storageState: 'e2e/.auth/user_a.json' });
+  test.use({ storageState: path.join(__dirname, '..', '.auth', 'user_a.json') });  // tests/ からの相対パス
 
   test('ログアウト後にログイン画面に戻る', async ({ page }) => {
     await page.goto('/dashboard');
@@ -395,18 +398,21 @@ test.describe('ログアウトフロー（認証済み）', () => {
 `e2e/tests/tenant-isolation.spec.ts` 作成:
 ```typescript
 import { test, expect, Browser } from '@playwright/test';
+import * as path from 'path';
+
+const authDir = path.join(__dirname, '..', '.auth');  // tests/ からの相対パス
 
 test.describe('テナント間データ分離', () => {
   test('Organization A のデータが Organization B ユーザーから見えない', async ({ browser }) => {
     // User A: Organization A の Subject が見える
-    const ctxA = await browser.newContext({ storageState: 'e2e/.auth/user_a.json' });
+    const ctxA = await browser.newContext({ storageState: path.join(authDir, 'user_a.json') });
     const pageA = await ctxA.newPage();
     await pageA.goto('/subjects');
     await expect(pageA.locator('text=E2E Subject A')).toBeVisible();
     await ctxA.close();
 
     // User B: Organization A の Subject が見えない
-    const ctxB = await browser.newContext({ storageState: 'e2e/.auth/user_b.json' });
+    const ctxB = await browser.newContext({ storageState: path.join(authDir, 'user_b.json') });
     const pageB = await ctxB.newPage();
     await pageB.goto('/subjects');
     await expect(pageB.locator('text=E2E Subject A')).not.toBeVisible();
@@ -537,11 +543,13 @@ e2e-init:
   profiles:
     - e2e
   command: >
-    sh -c "python manage.py migrate --noinput &&
+    sh -c "[ -z \"$$E2E_TEST_PASSWORD\" ] && echo 'E2E_TEST_PASSWORD is not set.' >&2 && exit 1;
+           python manage.py migrate --noinput &&
            python manage.py loaddata e2e_master.json &&
            python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
            python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
   # $$E2E_TEST_PASSWORD: docker-compose.yml 内でシェル変数展開を防ぐため $$ でエスケープ
+  # [ -z ... ] チェック: global-setup.ts より先に実行されるため、ここでもフェイルファストを行う
 
 e2e:
   volumes:
@@ -699,8 +707,8 @@ jobs:
   - CI: GitHub Actions Secrets に `E2E_TEST_PASSWORD` を登録し、`e2e.yml` から注入
   - `E2E_TEST_PASSWORD` 未設定時は `globalSetup` が明確なエラーで即停止（サイレント失敗を防ぐ）
 - `e2e/.env.e2e` は `.gitignore` 対象にする。テンプレートとして `e2e/.env.e2e.example` を git 管理する
-- E2E 専用 DB 名 (`learning_app_e2e`) を `.env.e2e` で管理し、本番 DB (`learning_app`) とは別インスタンス
-- seed コマンドで作成するデータは `e2e_` プレフィックスを持つため本番データとの混在を防ぐ
+- デフォルト DB (`learning_app`) を使用し、別 DB の作成は行わない。CI ではクリーンな Docker volume から起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持する（別 DB 管理は docker-compose の init-db.sql 変更・手動 DB 作成等のコストが高く、プレフィックス識別で十分なため採用しない）
+- seed コマンドで作成するデータは `e2e_` プレフィックスを持つため本番データと識別可能
 - npm audit: Playwright 公式パッケージのみ使用。高/クリティカル脆弱性があれば修正対象
 - **Docker socket マウント（DooD）不採用**: `global-setup.ts` が直接 `docker compose exec` を呼ぶ設計は Playwright コンテナに `/var/run/docker.sock` をマウントする必要があり、コンテナにホスト root 相当の権限を与えるセキュリティリスクがある。代わりに Init Container パターン（`e2e-init` サービス）を採用し、`global-setup.ts` からの Docker CLI 依存を完全に排除する
 - **`HealthCheckMiddleware` の削除**: 既存の `HealthCheckMiddleware` は認証なしで DB 接続数・Redis エラー詳細・システムリソース（CPU/メモリ）を公開しており、OWASP Security Misconfiguration / Sensitive Data Exposure に該当する。`/health/` は DB 接続確認のみ返す最小応答に限定する。詳細監視情報は `/monitoring/status/` 等（別途認証保護が必要）で提供するのが正しい設計
