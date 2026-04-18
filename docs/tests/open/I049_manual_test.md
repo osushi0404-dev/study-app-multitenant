@@ -21,3 +21,4 @@ plan_I049: Playwright E2Eテスト基盤を導入しクリティカルパスを�
 | 8 | `docker compose --profile e2e run --rm e2e npm test` 実行後にトレースファイルを確認する | `playwright-report/` に trace ファイルが生成されている（失敗時のみ） | Claude | - | trace ファイル存在確認 |
 | 9 | ログイン画面（`http://localhost:3000/login`）を開き、`data-testid` 属性が付与されていることを確認する | DevTools で `email-input`・`password-input`・`login-button` の `data-testid` が確認できる | Human | - | data-testid 追加確認 |
 | 10 | `docker compose up -d db backend` 後に `docker compose ps db` を実行する | db サービスのステータスが `healthy` と表示される（`pg_isready` ヘルスチェックが機能している） | Claude | - | db ヘルスチェック動作確認・migrate レースコンディション防止の検証 |
+| 11 | `docker compose config --format json \| python3 -c "import sys,json; cfg=json.load(sys.stdin); vols=cfg['services']['backend'].get('volumes',[]); print([v for v in vols if 'logs' in str(v)])"` を実行する | `backend_logs:/app/logs` を含む出力が表示される（named volume が設定されている） | Claude | - | named volume 設定確認・PermissionError 対策の検証 |

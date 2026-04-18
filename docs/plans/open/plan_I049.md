@@ -73,7 +73,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
 | `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加 |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。`env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。top-level `volumes` に `backend_logs:` 追加 |
 | `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入 |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
@@ -319,13 +319,15 @@ async function globalSetup(_config: FullConfig) {
   console.log('[globalSetup] Running migrations and seeding...');
   execSync('docker compose exec -T backend python manage.py migrate --noinput', { stdio: 'inherit' });
   execSync('docker compose exec -T backend python manage.py loaddata e2e_master.json', { stdio: 'inherit' });
+  // パスワードは env オプションで渡すことでシェルインジェクションを防ぐ（シェル文字列への直接埋め込み禁止）
+  const execOpts = { stdio: 'inherit' as const, env: { ...process.env, E2E_TEST_PASSWORD: e2ePassword } };
   execSync(
-    `docker compose exec -T backend python manage.py seed_e2e --scenario tenant_isolation --password "${e2ePassword}"`,
-    { stdio: 'inherit' },
+    'docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario tenant_isolation --password "$E2E_TEST_PASSWORD"',
+    execOpts,
   );
   execSync(
-    `docker compose exec -T backend python manage.py seed_e2e --scenario quiz_session --password "${e2ePassword}"`,
-    { stdio: 'inherit' },
+    'docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario quiz_session --password "$E2E_TEST_PASSWORD"',
+    execOpts,
   );
 
   // 2. storageState 生成（ユーザーA・ユーザーB）
@@ -376,9 +378,11 @@ test.describe('ログインフロー（未認証）', () => {
   test('誤ったパスワードでログインが拒否される', async ({ page }) => {
     await page.goto('/login');
     await page.fill('[data-testid="email-input"]', 'e2e_user_a@example.com');
-    await page.fill('[data-testid="password-input"]', 'WrongPassword!');
+    await page.fill('[data-testid="password-input"]', 'WrongPassword999!');
     await page.click('[data-testid="login-button"]');
-    await expect(page.locator('[data-testid="error-message"]')).toBeVisible();
+    // エラーは react-toastify のトースト通知として表示される
+    await expect(page.locator('.Toastify__toast--error')).toBeVisible();
+    await expect(page).toHaveURL(/login/);
   });
 });
 
@@ -388,6 +392,7 @@ test.describe('ログアウトフロー（認証済み）', () => {
 
   test('ログアウト後にログイン画面に戻る', async ({ page }) => {
     await page.goto('/dashboard');
+    await page.click('[data-testid="user-menu-button"]');  // メニューを開いてからログアウトボタンを押す
     await page.click('[data-testid="logout-button"]');
     await expect(page).toHaveURL(/login/);
   });
@@ -485,6 +490,11 @@ db:
     start_period: 10s
 
 backend:
+  volumes:
+    - ./backend:/app
+    - ./docs:/app/docs
+    - backend_static:/app/staticfiles
+    - backend_logs:/app/logs   # named volume: bind mount では django ユーザーが /app/logs を作成できないため
   depends_on:
     db:
       condition: service_healthy   # Postgres 接続受付後にのみ起動（migrate の前提）
@@ -504,9 +514,14 @@ frontend:
     timeout: 5s
     retries: 18
     start_period: 60s
+
+volumes:
+  backend_logs:   # named volume: image の /app/logs ディレクトリの所有権（django ユーザー）を引き継ぐ
 ```
 
 > **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
+>
+> **`backend_logs` named volume の必要性**: `./backend:/app` の bind mount は CI チェックアウトのルート所有権（UID 1001）で `/app` をオーバーライドする。`backend/logs/` は `.gitignore` 対象のため CI に存在せず、`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir(exist_ok=True)` を呼ぶと `PermissionError: [Errno 13] Permission denied: '/app/logs'` が発生する。`.gitkeep` での回避は「ディレクトリは存在するが CI ランナー所有のため django が書き込めない」状態を生み出すため不十分。Named volume は初回マウント時に image の `/app/logs` ディレクトリ（django 所有）をコピーするため、書き込み権限が正しく維持される。
 
 #### 8-4: `.github/workflows/e2e.yml` 新規作成
 
@@ -604,7 +619,7 @@ jobs:
 
 - ロールバック手順:
   1. `e2e/` ディレクトリを削除
-  2. `docker-compose.yml` の `e2e` サービスを削除、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除
+  2. `docker-compose.yml` の `e2e` サービスを削除、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs` を実行する
   3. `.github/workflows/e2e.yml` を削除
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
@@ -627,6 +642,7 @@ jobs:
 | バックエンド起動タイムアウト（migrate 完了前にヘルスチェックが失敗） | E2E CI ジョブ全体がブロック | `healthcheck` に `start_period: 60s` を設定し起動猶予を確保。`/health/` エンドポイントが DB 接続を検証するため migrate 完了後にのみ healthy となる |
 | コンテナに `curl` が存在せずヘルスチェックが常に unhealthy | E2E CI がハング | Dockerfile に `curl` をインストール（`apt-get install -y --no-install-recommends curl`）。Python/Node の回避策は使わない |
 | Postgres 初期化完了前に `migrate` が実行されるレースコンディション（`depends_on: db` は `service_started` であり、DB がまだ接続を受け付けていない段階で backend が起動し migrate に失敗する） | backend コンテナが exit code 1 で終了し `--wait` も失敗 | `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定。Postgres が接続受付可能になるまで backend の起動を保留する（根本対処） |
+| bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
 
 ---
 

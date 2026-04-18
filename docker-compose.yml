@@ -46,6 +46,7 @@ services:
       - ./backend:/app
       - ./docs:/app/docs
       - backend_static:/app/staticfiles
+      - backend_logs:/app/logs   # named volume: bind mount では django ユーザーが /app/logs を作成できないため
     ports:
       - "8000:8000"
     depends_on:
@@ -173,6 +174,7 @@ volumes:
   backend_media:
   backend_static:
   frontend_build:
+  backend_logs:
 
 networks:
   app-network:
