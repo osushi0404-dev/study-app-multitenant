@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import * as path from 'path';
 
 // 未認証状態でのテスト（chromium-unauthed プロジェクトで実行）
 test.describe('ログインフロー（未認証）', () => {
@@ -27,7 +28,7 @@ test.describe('ログインフロー（未認証）', () => {
 
 // 認証済み状態でのテスト（test.use でプロジェクト設定を上書き）
 test.describe('ログアウトフロー（認証済み）', () => {
-  test.use({ storageState: 'e2e/.auth/user_a.json' });
+  test.use({ storageState: path.join(__dirname, '..', '.auth', 'user_a.json') });  // tests/ の親ディレクトリの .auth/
 
   test('ログアウト後にログイン画面に戻る', async ({ page }) => {
     await page.goto('/dashboard');

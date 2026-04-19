@@ -17,6 +17,16 @@ jobs:
         run: docker compose up -d --wait db backend frontend
         timeout-minutes: 5
 
+      - name: Initialize E2E database
+        # CI はホスト上で npm test を実行するため e2e-init コンテナを使わず直接 docker exec で初期化する
+        run: |
+          docker compose exec -T backend python manage.py migrate --noinput
+          docker compose exec -T backend python manage.py loaddata e2e_master.json
+          docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario tenant_isolation --password "$E2E_TEST_PASSWORD"
+          docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario quiz_session --password "$E2E_TEST_PASSWORD"
+        env:
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'

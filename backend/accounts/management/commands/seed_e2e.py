@@ -15,11 +15,13 @@ class Command(BaseCommand):
     help = 'Seed E2E test data by scenario'
 
     def add_arguments(self, parser):
-        parser.add_argument('--scenario', required=True, choices=SCENARIOS.keys())
+        parser.add_argument(
+            '--scenario', required=True, choices=SCENARIOS.keys(),
+        )
         parser.add_argument(
             '--password',
             required=True,
-            help='E2E test user password. Pass via E2E_TEST_PASSWORD env var; do not hardcode.',
+            help='E2E test user password. Pass via env var; do not hardcode.',
         )
         parser.add_argument(
             '--flush',
@@ -37,7 +39,9 @@ class Command(BaseCommand):
 
         method = getattr(self, SCENARIOS[options['scenario']])
         method()
-        self.stdout.write(self.style.SUCCESS(f"Seeded scenario: {options['scenario']}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Seeded scenario: {options['scenario']}")
+        )
 
     def _get_or_create_category(self):
         cat, _ = OrganizationCategory.objects.get_or_create(

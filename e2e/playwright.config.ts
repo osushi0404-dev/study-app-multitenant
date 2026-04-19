@@ -19,7 +19,7 @@ export default defineConfig({
       name: 'chromium-authed',
       use: {
         ...devices['Desktop Chrome'],
-        storageState: 'e2e/.auth/user_a.json',
+        storageState: path.join(__dirname, '.auth', 'user_a.json'),  // __dirname ベース: CI/コンテナ両方で正しく解決
       },
       testMatch: /(?!.*auth\.spec).*\.spec\.ts/,
     },

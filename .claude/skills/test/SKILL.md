@@ -62,8 +62,11 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 3) E2E テスト（Playwright）:
    ```bash
-   docker compose --profile e2e run --rm e2e npm test
+   docker compose --profile e2e run --rm e2e
    ```
+   # コマンド省略時は compose file の default command が適用される:
+   # sh -c "npm install && npm test"
+   # e2e-init（Init Container）が先行して migrate・seed を実行してから e2e が起動する
    - 成功: 手順 4) へ
    - 失敗: 即 STOP。以下を報告してユーザー待機:
      - 失敗したテスト名（spec ファイル名・テスト名）

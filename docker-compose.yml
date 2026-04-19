@@ -132,7 +132,36 @@ services:
       retries: 18
       start_period: 60s
 
-  # E2E Tests (Playwright)
+  # E2E Init Container: backend イメージで migrate・loaddata・seed_e2e を実行してから e2e サービスに引き渡す
+  e2e-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - path: ./backend/.env
+        required: false
+      - path: ./e2e/.env.e2e   # E2E_TEST_PASSWORD を env_file で読み込む（required: false で CI 環境でも動作）
+        required: false
+    environment:
+      - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy   # backend（migrate 完了）が healthy になってから実行
+    networks:
+      - app-network
+    profiles:
+      - e2e
+    command: >
+      sh -c "[ -z \"$$E2E_TEST_PASSWORD\" ] && echo 'E2E_TEST_PASSWORD is not set.' >&2 && exit 1;
+             python manage.py migrate --noinput &&
+             python manage.py loaddata e2e_master.json &&
+             python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
+             python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
+
+  # E2E Tests (Playwright): e2e-init 完了後に起動する
   e2e:
     image: mcr.microsoft.com/playwright:v1.50.0-jammy
     working_dir: /e2e
@@ -140,8 +169,10 @@ services:
       - ./e2e:/e2e
       - e2e_node_modules:/e2e/node_modules   # named volume: Linux 向け node_modules を --rm 後も保持
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_started
+      e2e-init:
+        condition: service_completed_successfully   # Init Container 完了後に実行
     networks:
       - app-network
     environment:

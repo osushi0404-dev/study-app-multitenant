@@ -22,7 +22,9 @@ def health(request):
 
 # 組織科目用のルーター
 organizations_router = DefaultRouter()
-organizations_router.register(r'subjects', SubjectViewSet, basename='organization-subject')
+organizations_router.register(
+    r'subjects', SubjectViewSet, basename='organization-subject'
+)
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -37,7 +39,9 @@ urlpatterns = [
 
 # Serve media files in development
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(
+        settings.MEDIA_URL, document_root=settings.MEDIA_ROOT
+    )
 
 # Admin site customization
 admin.site.site_header = "学習アプリ 管理画面"

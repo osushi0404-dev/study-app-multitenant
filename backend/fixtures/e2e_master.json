@@ -1,7 +1,7 @@
 [
   {
     "model": "accounts.organizationcategory",
-    "pk": null,
+    "pk": 9901,
     "fields": {
       "name": "教育",
       "slug": "education",
