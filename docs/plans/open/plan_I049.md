@@ -29,7 +29,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 ## 3. 影響範囲
 
-- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加、`e2e_master.json` fixture 追加
+- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）
 - **Frontend**: なし（E2E テストはプロジェクトルートの `e2e/` ディレクトリに配置し frontend ディレクトリには触れない）
 - **DB**: デフォルト DB（`learning_app`）を使用。E2E データは `e2e_` プレフィックスで識別。CI ではクリーンな DB インスタンスから起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持
 - **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加、`.github/workflows/e2e.yml` 追加、`.claude/skills/test/SKILL.md` 更新
@@ -69,12 +69,12 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `e2e/.gitignore` | 新規 | `.auth/`・`.env.e2e` を除外 |
 | `e2e/.env.e2e.example` | 新規 | E2E テスト認証情報のテンプレート（git 管理）。実値は `.env.e2e`（gitignore 済み）に記載 |
 | `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
-| `backend/fixtures/e2e_master.json` | 新規 | 固定マスタデータ（OrganizationCategory 等） |
+| `backend/accounts/migrations/0021_rename_organization_id_to_id.py` | 変更 | 新規 DB で `problems_subject.organization_id` が UUID 型のまま残る型不一致バグを修正（条件付き `ALTER COLUMN TYPE INTEGER USING NULL` を追加）。**データ安全性根拠**: `accounts.0010` が Organization を `DROP TABLE CASCADE` で削除・再作成したため、UUID 値はすでに孤立（参照先消滅）。また PostgreSQL は UUID カラムへの INTEGER 値保存を拒否するため、0010 適用後に作成された Subject の organization_id 実データも存在しない。NULL 変換によるデータ損失は実質ゼロ。 |
 | `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
 | `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）|
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
 | `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加。**`e2e-init` サービス追加（Init Container パターン: backend イメージで `migrate`・`loaddata`・`seed_e2e` を実行し、`e2e` サービスが起動する前に完了させる）。** `env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加 |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。**`e2e-init` サービス追加（Init Container パターン: backend イメージで `migrate`・`seed_e2e` を実行し、`e2e` サービスが起動する前に完了させる）。** `env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加 |
 | `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入 |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
@@ -82,11 +82,9 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 ## 6. テストデータ設計
 
-### 6-1. 固定マスタデータ（`backend/fixtures/e2e_master.json`）
-変更頻度が低いデータのみ fixture で管理：
-- `OrganizationCategory`（例: `general`）
+> **設計方針**: `accounts.0016_load_organization_categories` マイグレーションがすでに `education` カテゴリーを作成するため、`OrganizationCategory` 用の fixture は不要。`seed_e2e._get_or_create_category()` は `get_or_create(slug='education')` でマイグレーション作成済みのカテゴリーを取得する。fixture による二重管理はせず、マイグレーションを唯一の信頼源とする。
 
-### 6-2. シナリオデータ（`manage.py seed_e2e --scenario <name>`）
+### 6-1. シナリオデータ（`manage.py seed_e2e --scenario <name>`）
 
 | シナリオ名 | 作成されるデータ |
 |-----------|----------------|
@@ -96,7 +94,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 > **認証情報の扱い**: パスワードはソースコードに一切ハードコードしない。`global-setup.ts` が `process.env.E2E_TEST_PASSWORD` を読み取り、`--password` 引数として seed コマンドに渡す。ローカル開発は `.env.e2e`（gitignore 済み）、CI は GitHub Actions Secrets から注入する。
 
-### 6-3. 認証状態再利用
+### 6-2. 認証状態再利用
 - Playwright の `storageState` を使用
 - `globalSetup` でログイン → `e2e/.auth/user_a.json` / `user_b.json` に保存
 - 各テストは `storageState` を読み込んでログイン UI をスキップ
@@ -233,14 +231,17 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
            if options['flush']:
                from django.core.management import call_command
                call_command('flush', '--no-input')
-               call_command('loaddata', 'e2e_master.json')
+               call_command('migrate', '--noinput')
+               # flush で全テーブルを空にした後、migrate を再実行して
+               # accounts.0016 などのデータ投入マイグレーションを再適用する。
+               # これにより OrganizationCategory（education 等）が復元される。
 
            method = getattr(self, SCENARIOS[options['scenario']])
            method()
            self.stdout.write(self.style.SUCCESS(f"Seeded scenario: {options['scenario']}"))
 
        def _seed_login(self):
-           cat, _ = OrganizationCategory.objects.get_or_create(name='general')
+           cat = self._get_or_create_category()
            org_a, _ = Organization.objects.get_or_create(
                slug='e2e-org-a', defaults={'name': 'E2E Org A', 'category': cat}
            )
@@ -252,9 +253,16 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
                organization=org_a,
            )
 
+       def _get_or_create_category(self):
+           cat, _ = OrganizationCategory.objects.get_or_create(
+               slug='education',  # accounts.0016 が作成済み。get_or_create で冪等に取得
+               defaults={'name': '教育', 'description': 'E2E テスト用カテゴリー', 'display_order': 99},
+           )
+           return cat
+
        def _seed_tenant_isolation(self):
            self._seed_login()
-           cat = OrganizationCategory.objects.get(name='general')
+           cat = self._get_or_create_category()
            org_b, _ = Organization.objects.get_or_create(
                slug='e2e-org-b', defaults={'name': 'E2E Org B', 'category': cat}
            )
@@ -290,13 +298,12 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
            # Choice モデルの正確なフィールドは problems/models.py を確認して補完
    ```
    > **注意**: `--password` 引数に渡す値は `global-setup.ts` が `process.env.E2E_TEST_PASSWORD` から取得して渡す。seed コマンド単体をローカルで呼ぶ場合は `--password $E2E_TEST_PASSWORD` のように明示する。
-3. `backend/fixtures/e2e_master.json` 作成（`OrganizationCategory` の `general` レコード）
 
 ### Step 4: globalSetup 実装
 
 **目的**: E2E 実行前に認証状態（storageState）を生成する。DB 初期化（migrate・seed）は `e2e-init` サービス（Init Container パターン）が担うため、globalSetup はブラウザログイン操作のみを行う。パスワードは `process.env.E2E_TEST_PASSWORD` から取得する。
 
-> **Init Container パターンの採用理由**: Playwright コンテナ（`mcr.microsoft.com/playwright`）には `docker` CLI が存在しないため、globalSetup 内で `docker compose exec` を呼ぶことができない（`ENOENT: No such file or directory, docker`）。Docker socket をマウント（DooD: Docker-outside-of-Docker）する方法はコンテナにホスト root 相当の権限を与えるセキュリティリスクがあり採用しない。代わりに `e2e-init` 専用サービス（backend イメージ）を docker-compose.yml で定義し、migrate・loaddata・seed を実行させる。`e2e` サービスは `depends_on: e2e-init: condition: service_completed_successfully` で完了を待つ。これにより globalSetup はブラウザ操作のみに集中できる（単一責任の原則）。
+> **Init Container パターンの採用理由**: Playwright コンテナ（`mcr.microsoft.com/playwright`）には `docker` CLI が存在しないため、globalSetup 内で `docker compose exec` を呼ぶことができない（`ENOENT: No such file or directory, docker`）。Docker socket をマウント（DooD: Docker-outside-of-Docker）する方法はコンテナにホスト root 相当の権限を与えるセキュリティリスクがあり採用しない。代わりに `e2e-init` 専用サービス（backend イメージ）を docker-compose.yml で定義し、migrate・seed を実行させる。`e2e` サービスは `depends_on: e2e-init: condition: service_completed_successfully` で完了を待つ。これにより globalSetup はブラウザ操作のみに集中できる（単一責任の原則）。
 
 `e2e/global-setup.ts` 作成:
 ```typescript
@@ -545,11 +552,12 @@ e2e-init:
   command: >
     sh -c "[ -z \"$$E2E_TEST_PASSWORD\" ] && echo 'E2E_TEST_PASSWORD is not set.' >&2 && exit 1;
            python manage.py migrate --noinput &&
-           python manage.py loaddata e2e_master.json &&
            python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
            python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
   # $$E2E_TEST_PASSWORD: docker-compose.yml 内でシェル変数展開を防ぐため $$ でエスケープ
   # [ -z ... ] チェック: global-setup.ts より先に実行されるため、ここでもフェイルファストを行う
+  # loaddata は不要: OrganizationCategory（education）は accounts.0016 マイグレーションで作成済み
+  #                  seed_e2e._get_or_create_category() が get_or_create で取得する
 
 e2e:
   volumes:
@@ -567,7 +575,7 @@ volumes:
 
 > **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
 >
-> **Init Container パターン（`e2e-init` サービス）**: Playwright コンテナには Docker CLI が存在しないため、`global-setup.ts` 内で `docker compose exec` による DB 初期化は不可能。`e2e-init` サービスは backend イメージを再利用して `migrate`・`loaddata`・`seed_e2e` を実行し、完了後に終了（exit 0）する。`e2e` サービスは `condition: service_completed_successfully` で `e2e-init` の正常完了を待ってからテストを実行する。これにより `global-setup.ts` はブラウザ操作のみに集中でき、Docker socket マウント（セキュリティリスク）や追加のシェルスクリプトが不要になる。
+> **Init Container パターン（`e2e-init` サービス）**: Playwright コンテナには Docker CLI が存在しないため、`global-setup.ts` 内で `docker compose exec` による DB 初期化は不可能。`e2e-init` サービスは backend イメージを再利用して `migrate`・`seed_e2e` を実行し、完了後に終了（exit 0）する。`OrganizationCategory`（education）は `accounts.0016` マイグレーションで作成されるため `loaddata` は不要。`e2e` サービスは `condition: service_completed_successfully` で `e2e-init` の正常完了を待ってからテストを実行する。これにより `global-setup.ts` はブラウザ操作のみに集中でき、Docker socket マウント（セキュリティリスク）や追加のシェルスクリプトが不要になる。
 >
 > **`backend_logs` named volume の必要性**: `./backend:/app` の bind mount は CI チェックアウトのルート所有権（UID 1001）で `/app` をオーバーライドする。`backend/logs/` は `.gitignore` 対象のため CI に存在せず、`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir(exist_ok=True)` を呼ぶと `PermissionError: [Errno 13] Permission denied: '/app/logs'` が発生する。`.gitkeep` での回避は「ディレクトリは存在するが CI ランナー所有のため django が書き込めない」状態を生み出すため不十分。Named volume は初回マウント時に image の `/app/logs` ディレクトリ（django 所有）をコピーするため、書き込み権限が正しく維持される。
 >
@@ -633,8 +641,10 @@ jobs:
 ```
 3) E2E テスト（Playwright）:
    ```bash
-   docker compose --profile e2e run --rm e2e npm test
+   docker compose --profile e2e run --rm e2e
    ```
+   # コマンド省略時は compose file の default command が適用される:
+   # sh -c "npm install && npm test"
    - 成功: 手順 4) へ
    - 失敗: 即 STOP。以下を報告してユーザー待機:
      - 失敗したテスト名（spec ファイル名・テスト名）
@@ -654,13 +664,18 @@ jobs:
 - **E2E（本イシュー対象）**: クリティカルパス3本のみ（ログイン・データ分離・クイズ）
 - **ユニット/結合（既存）**: seed コマンドの動作は pytest で検証しない（E2E 実行で間接的に確認）
 
+### リント・セキュリティスキャン
+- `ci.yml` の `backend-lint` ジョブ（GitHub Actions ランナー上で `pip install -r requirements-dev.txt` 後に実行）が権威あるチェック
+- Docker コンテナ内では `requirements-dev.txt` が未インストールのため `python -m flake8` は利用不可（設計による仕様）
+- 確認方法: push 後に `gh pr checks [PR番号]` で `backend-lint` ジョブの pass を確認する
+
 ### 自動テスト（E2E 本体）
 - `auth.spec.ts`: ログイン成功・ログアウト・ログイン失敗
 - `tenant-isolation.spec.ts`: データ分離確認
 - `quiz-session.spec.ts`: クイズ閲覧〜回答
 
 ### 手動テスト
-- `docker compose --profile e2e run e2e npm test` の実行と全テスト PASS 確認
+- `docker compose --profile e2e run --rm e2e` の実行と全テスト PASS 確認（default command: `npm install && npm test`）
 - CI（GitHub Actions）E2E ジョブが独立して動作することの確認
 
 ---
@@ -696,7 +711,7 @@ jobs:
 | bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
 | `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
 | `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm install && npm test` に変更。`npm install` は named volume のキャッシュを活かして差分のみ更新（2回目以降は数秒）。CI では `e2e.yml` で `npm ci` を使い決定論的インストールを保証 |
-| Playwright コンテナに `docker` CLI が存在しないため `global-setup.ts` 内で `docker compose exec` による DB 初期化が不可能（`ENOENT: docker`）。Docker socket マウント（DooD）はホスト root 相当の権限を与えるセキュリティリスク | DB が初期化されないまま全テストが失敗する | **Init Container パターン** を採用。`e2e-init` サービス（backend イメージ）で migrate・loaddata・seed_e2e を実行し、`e2e` サービスは `condition: service_completed_successfully` で完了を待つ。`global-setup.ts` はブラウザ操作のみに限定し Docker CLI への依存を排除する |
+| Playwright コンテナに `docker` CLI が存在しないため `global-setup.ts` 内で `docker compose exec` による DB 初期化が不可能（`ENOENT: docker`）。Docker socket マウント（DooD）はホスト root 相当の権限を与えるセキュリティリスク | DB が初期化されないまま全テストが失敗する | **Init Container パターン** を採用。`e2e-init` サービス（backend イメージ）で migrate・seed_e2e を実行し、`e2e` サービスは `condition: service_completed_successfully` で完了を待つ。`global-setup.ts` はブラウザ操作のみに限定し Docker CLI への依存を排除する |
 
 ---
 

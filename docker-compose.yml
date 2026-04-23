@@ -132,7 +132,7 @@ services:
       retries: 18
       start_period: 60s
 
-  # E2E Init Container: backend イメージで migrate・loaddata・seed_e2e を実行してから e2e サービスに引き渡す
+  # E2E Init Container: backend イメージで migrate・seed_e2e を実行してから e2e サービスに引き渡す
   e2e-init:
     build:
       context: ./backend
@@ -157,7 +157,6 @@ services:
     command: >
       sh -c "[ -z \"$$E2E_TEST_PASSWORD\" ] && echo 'E2E_TEST_PASSWORD is not set.' >&2 && exit 1;
              python manage.py migrate --noinput &&
-             python manage.py loaddata e2e_master.json &&
              python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
              python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
 

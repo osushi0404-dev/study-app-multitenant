@@ -15,6 +15,23 @@ docker compose exec backend python -m pytest --tb=short -q
 | ベースライン (2026-04-18) | 25 | 0 | 3 | 実装前ベースライン |
 | 実装後 | - | - | - | 未実施 |
 
+## CI リント・セキュリティスキャン（backend-lint ジョブ）
+
+> **確認観点**: このプロジェクトでは flake8・bandit は GitHub Actions ランナー上で実行される（`ci.yml` の `backend-lint` ジョブ）。Dockerfile は本番・開発コンテナ共通で `requirements-dev.txt` を含まないため、`docker compose exec backend python -m flake8` は動作しない。これは設計による仕様（Docker コンテナはアプリ実行用、lint は CI ランナーで行う）。
+>
+> **本実装の変更ファイルの lint リスク評価**:
+> - `seed_e2e.py`: 変更は `'loaddata', 'e2e_master.json'` → `'migrate', '--noinput'` の文字列置換1行のみ（新規コードなし）
+> - `accounts/migrations/0021_*`: `backend/setup.cfg` の `exclude` 設定と CI の `-x ./\*/migrations/` により flake8・bandit の対象外
+
+確認コマンド:
+```bash
+gh pr checks [PR番号]
+```
+
+| 確認日時 | flake8 pass（backend-lint） | bandit pass（backend-lint） | 備考 |
+|---------|--------------------------|--------------------------|------|
+| 実装後 | - | - | 未実施 |
+
 ## Frontend（Jest）
 
 実行コマンド:
@@ -64,11 +81,29 @@ print('status:', resp.status_code, 'body:', resp.content.decode())
 "
 ```
 
-> **確認観点**: `db.healthcheck.test` に `pg_isready -U postgres` が含まれること、`backend.depends_on.db.condition` が `service_healthy` であること、`backend.volumes` に `backend_logs` が含まれること、top-level `volumes` に `backend_logs` が定義されていること。`e2e-init` サービスが `e2e` プロファイル付きで定義されていること、`e2e.depends_on` に `e2e-init: condition: service_completed_successfully` が設定されていること。`HealthCheckMiddleware` が `MIDDLEWARE` から削除されていること。`/health/` が `{"status": "ok"}` (HTTP 200) を返すこと。
+> **確認観点**: `db.healthcheck.test` に `pg_isready -U postgres` が含まれること、`backend.depends_on.db.condition` が `service_healthy` であること、`backend.volumes` に `backend_logs` が含まれること、top-level `volumes` に `backend_logs` が定義されていること。`e2e-init` サービスが `e2e` プロファイル付きで定義されていること（コマンドに `loaddata` が含まれないこと）、`e2e.depends_on` に `e2e-init: condition: service_completed_successfully` が設定されていること。`HealthCheckMiddleware` が `MIDDLEWARE` から削除されていること。`/health/` が `{"status": "ok"}` (HTTP 200) を返すこと。
 
-| 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | e2e-init サービス定義 | e2e depends_on e2e-init | HealthCheckMiddleware 削除 | /health/ 応答 | 備考 |
-|---------|--------------------|------------------------------------|-------------------------------|----------------------|------------------------|--------------------------|--------------|------|
+| 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | e2e-init サービス定義（loaddata なし） | e2e depends_on e2e-init | HealthCheckMiddleware 削除 | /health/ 応答 | 備考 |
+|---------|--------------------|------------------------------------|-------------------------------|--------------------------------------|------------------------|--------------------------|--------------|------|
 | 実装後 | - | - | - | - | - | - | - | 未実施 |
+
+## マイグレーション修正（accounts.0021）
+
+### 検証内容
+`accounts.0021_rename_organization_id_to_id` の型不一致バグ修正確認。
+
+**背景**: 新規 DB では `problems.0004` が `accounts.0010` より先に実行されるため `problems_subject.organization_id` が UUID 型で作成される。`accounts.0010` が Organization を INTEGER PK で再作成（DROP TABLE CASCADE）した後、カラム型が UUID のまま残り、`accounts.0021` の FK 再作成で `DatatypeMismatch` が発生していた。
+
+確認コマンド（CI ログまたはローカル fresh DB での確認）:
+```bash
+# accounts.0021 が正常完了することを確認（CI ログで "OK" が表示されること）
+# ローカル確認は既存 DB に適用済みのため CI ログで代替確認
+gh run view <run_id> --log 2>&1 | grep "0021_rename_organization_id_to_id"
+```
+
+| 確認日時 | 0021 マイグレーション正常完了（CI） | 備考 |
+|---------|-----------------------------------|------|
+| 実装後 | - | 未実施 |
 
 ## E2E（Playwright）
 

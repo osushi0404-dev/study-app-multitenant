@@ -35,7 +35,7 @@ class Command(BaseCommand):
         if options['flush']:
             from django.core.management import call_command
             call_command('flush', '--no-input')
-            call_command('loaddata', 'e2e_master.json')
+            call_command('migrate', '--noinput')
 
         method = getattr(self, SCENARIOS[options['scenario']])
         method()
