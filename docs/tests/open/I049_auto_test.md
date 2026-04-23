@@ -13,7 +13,7 @@ docker compose exec backend python -m pytest --tb=short -q
 | 実行日時 | Pass | Fail | Warn | 備考 |
 |---------|------|------|------|------|
 | ベースライン (2026-04-18) | 25 | 0 | 3 | 実装前ベースライン |
-| 実装後 | - | - | - | 未実施 |
+| 2026-04-23 | 25 | 0 | 3 | CI run #24841399046 pass |
 
 ## CI リント・セキュリティスキャン（backend-lint ジョブ）
 
@@ -30,7 +30,7 @@ gh pr checks [PR番号]
 
 | 確認日時 | flake8 pass（backend-lint） | bandit pass（backend-lint） | 備考 |
 |---------|--------------------------|--------------------------|------|
-| 実装後 | - | - | 未実施 |
+| 2026-04-23 | ✅ | ✅ | CI run #24841399046 Backend Lint & Security pass (21s) |
 
 ## Frontend（Jest）
 
@@ -42,7 +42,7 @@ docker compose exec frontend sh -c "CI=true npm test -- --watchAll=false"
 | 実行日時 | Suites | Tests | 備考 |
 |---------|--------|-------|------|
 | ベースライン (2026-04-18) | 2 | 7 | 実装前ベースライン |
-| 実装後 | - | - | 未実施 |
+| 2026-04-23 | 2 | 7 | CI run #24841399046 Frontend Tests pass (54s) |
 
 ## インフラ検証（docker compose 設定確認）
 
@@ -85,7 +85,7 @@ print('status:', resp.status_code, 'body:', resp.content.decode())
 
 | 確認日時 | db healthcheck 設定 | backend condition: service_healthy | backend_logs named volume 設定 | e2e-init サービス定義（loaddata なし） | e2e depends_on e2e-init | HealthCheckMiddleware 削除 | /health/ 応答 | 備考 |
 |---------|--------------------|------------------------------------|-------------------------------|--------------------------------------|------------------------|--------------------------|--------------|------|
-| 実装後 | - | - | - | - | - | - | - | 未実施 |
+| 2026-04-23 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 200 OK | ローカル docker compose config・shell で確認済み |
 
 ## マイグレーション整合性チェック（CI backend-lint ジョブ）
 
@@ -105,7 +105,7 @@ gh run view <run_id> --log 2>&1 | grep -A3 "makemigrations"
 
 | 確認日時 | `makemigrations --check` pass（backend-lint） | 備考 |
 |---------|----------------------------------------------|------|
-| 実装後 | - | 未実施 |
+| 2026-04-23 | ✅ | CI run #24841399046 Backend Lint & Security pass (21s)、makemigrations --check exit 0 確認 |
 
 ---
 
@@ -127,7 +127,7 @@ gh run view <run_id> --log 2>&1 | grep "quiz_session"
 
 | 確認日時 | 0017 マイグレーション正常完了（CI） | seed_e2e quiz_session 成功（CI） | 備考 |
 |---------|----------------------------------|-------------------------------|------|
-| 実装後 | - | - | 未実施 |
+| 2026-04-23 | ✅ | ✅ | CI run #24841398927 E2E Tests pass (3m14s) |
 
 ## マイグレーション追加（problems.0018）
 
@@ -147,7 +147,7 @@ gh run view <run_id> --log 2>&1 | grep "quiz_session"
 
 | 確認日時 | 0018 マイグレーション正常完了（CI） | quiz-session E2E テスト pass（CI） | 備考 |
 |---------|----------------------------------|----------------------------------|------|
-| 実装後 | - | - | 未実施 |
+| 2026-04-23 | ✅ | ✅ | CI run #24841398927 E2E Tests pass (3m14s) |
 
 ---
 
@@ -167,7 +167,7 @@ gh run view <run_id> --log 2>&1 | grep "0021_rename_organization_id_to_id"
 
 | 確認日時 | 0021 マイグレーション正常完了（CI） | 備考 |
 |---------|-----------------------------------|------|
-| 実装後 | - | 未実施 |
+| 2026-04-23 | ✅ | CI run #24841399046 Backend Tests pass (45s) |
 
 ## E2E（Playwright）
 
@@ -185,7 +185,9 @@ docker compose --profile e2e run --rm e2e npm test
 
 | 実行日時 | auth.spec | tenant-isolation.spec | quiz-session.spec | 備考 |
 |---------|-----------|----------------------|------------------|------|
-| 実装後 | - | - | - | 未実施 |
+| 2026-04-23 | ✅ pass | ✅ pass | ✅ pass | CI run #24841398927 E2E Tests (Playwright) pass (3m14s) |
+
+> **補足（ローカル Docker E2E について）**: `docker compose --profile e2e run --rm e2e` はローカルでは動作しない。原因: React アプリが `REACT_APP_API_BASE_URL || 'http://localhost:8000'` を絶対 URL として使用しており、e2e コンテナ内の Chromium から `localhost:8000` に到達できない（e2e コンテナ自身の loopback に解決される）。CI（ホスト上で Playwright 実行）では `localhost:8000` がホストの backend ポートに繋がるため問題なし。根本修正（webpack proxy で相対 URL 化）は別イシューで対応予定。
 
 ## fix-loop 発見事項（E2E テストコード修正）
 
