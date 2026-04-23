@@ -416,6 +416,7 @@ const Dashboard: React.FC = () => {
               onClick={handleStartQuiz}
               fullWidth
               disabled={loadingSubjects}
+              data-testid="start-quiz-button"
             >
               クイズを始める
             </Button>

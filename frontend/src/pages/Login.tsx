@@ -101,6 +101,7 @@ const Login: React.FC = () => {
               autoFocus
               error={!!errors.emailOrUserId}
               helperText={errors.emailOrUserId?.message || '登録時のユーザーIDまたはメールアドレスを入力'}
+              inputProps={{ 'data-testid': 'email-input' }}
               {...register('emailOrUserId')}
             />
 
@@ -112,6 +113,7 @@ const Login: React.FC = () => {
               autoComplete="current-password"
               error={!!errors.password}
               helperText={errors.password?.message}
+              inputProps={{ 'data-testid': 'password-input' }}
               {...register('password')}
               InputProps={{
                 endAdornment: (
@@ -134,6 +136,7 @@ const Login: React.FC = () => {
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
+              data-testid="login-button"
             >
               {loading ? <CircularProgress size={24} /> : 'ログイン'}
             </Button>

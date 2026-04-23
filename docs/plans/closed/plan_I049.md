@@ -1,0 +1,892 @@
+# plan_I049: Playwright E2Eテスト基盤を導入しクリティカルパスを保護する
+
+## 基本情報
+- **計画書ID**: plan_I049
+- **関連イシュー**: #102
+- **Draft PR**: #103
+- **作成日**: 2026-04-18
+
+---
+
+## 1. 背景/目的
+
+pytest（Backend）・Jest（Frontend）はロジック層をカバーするが、ブラウザ操作を通じたユーザー体験の検証が欠落している。フロントとバックエンドの繋ぎ目・認証フロー・画面表示など「ユニットテストでは検出できないバグ」を保護するため、Playwright による E2E テスト基盤を整備する。
+
+テストピラミッドの最上層として **クリティカルパスのみを薄く保護** する方針とする（細かい分岐は pytest / Jest に委ねる）。
+
+---
+
+## 2. 受け入れ条件
+
+- [ ] `docker compose run e2e` で Playwright が起動しテストが実行される
+- [ ] ログイン／ログアウトの E2E テストが通る
+- [ ] テナント間データ分離の E2E テストが通る（Organization A のデータが Organization B ユーザーから見えないことを確認）
+- [ ] 学習コンテンツ閲覧〜回答の E2E テストが通る
+- [ ] `/test` スキルに E2E ステップが追加されている
+- [ ] CI（GitHub Actions）で E2E が独立ジョブとして自動実行される
+
+---
+
+## 3. 影響範囲
+
+- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）。`problems.0017` マイグレーション追加（`problems_problem.points` 孤立カラム削除 — モデルから削除済みだが DROP 用マイグレーションが欠落していたため fresh DB でのみ NOT NULL 違反が発生していた）。`backend/core/settings.py` の `RATELIMIT_ENABLE` を env var から読み取るよう変更（12-Factor App 原則。デフォルト `True` で本番動作は変わらず。E2E CI でのみ `false` を設定）。`problems.0018` マイグレーション追加（`makemigrations --check --dry-run` で検出されたモデルと migration の乖離 6 件を一括解消: `QuizSession.total_points`・`QuizAnswer.points_earned` の孤立カラム削除、Subject の孤立インデックス削除、`slug`/`explanation`/`problem_type` の state 整合 — `total_points` NOT NULL 違反が CI で quiz-session テストを失敗させていた根本原因）
+- **Frontend**: なし（E2E テストはプロジェクトルートの `e2e/` ディレクトリに配置し frontend ディレクトリには触れない）
+- **DB**: デフォルト DB（`learning_app`）を使用。E2E データは `e2e_` プレフィックスで識別。CI ではクリーンな DB インスタンスから起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持
+- **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加・backend の `environment:` に `RATELIMIT_ENABLE` パススルーを追加、`.github/workflows/e2e.yml` 追加（Start services ステップに `RATELIMIT_ENABLE: "false"` を設定）、`.github/workflows/ci.yml` の `backend-lint` ジョブに `python manage.py makemigrations --check --dry-run` を追加（将来の migration drift を PR 段階で早期検出）、`.claude/skills/test/SKILL.md` 更新、`docs/runbooks/common-commands.md` に「モデル変更後は必ず `makemigrations` を実行してコミットする」開発者フローを追記
+
+---
+
+## 4. 調査結果
+
+### 環境状況
+- Playwright: v1.59.1（Node.js ホスト環境にグローバルインストール済み）
+- Node.js: v24.14.1
+- pytest: Docker 経由で実行（`docker compose exec backend`）
+- Backend ベースラインテスト: **25 passed, 3 warnings**（全通過）
+- Frontend ベースラインテスト: **7 passed, 2 suites**（全通過）
+
+### 既存コード確認
+- ログイン API: `POST /api/auth/login/`（JWT トークン）
+- ログアウト API: `POST /api/auth/logout/`
+- QuizSession: `/api/quiz/{session_id}/submit_answer/` で回答送信
+- マルチテナント: `User.organization` FK（Organization モデル）でデータを分離
+- 既存の e2e ディレクトリ・playwright.config.ts は存在しない（新規整備）
+
+---
+
+## 5. 変更点一覧
+
+| ファイル | 変更種別 | 内容 |
+|---------|---------|------|
+| `e2e/` | 新規ディレクトリ | Playwright プロジェクトルート |
+| `e2e/package.json` | 新規 | Playwright 依存・スクリプト定義（dotenv を含む） |
+| `e2e/playwright.config.ts` | 新規 | Playwright 設定（baseURL・globalSetup・storageState・dotenv 読み込み） |
+| `e2e/global-setup.ts` | 新規 | DB 初期化・migrate・seed・storageState 生成（E2E_TEST_PASSWORD を環境変数から取得） |
+| `e2e/tests/auth.spec.ts` | 新規 | ログイン／ログアウト E2E テスト |
+| `e2e/tests/tenant-isolation.spec.ts` | 新規 | テナント間データ分離 E2E テスト |
+| `e2e/tests/quiz-session.spec.ts` | 新規 | クイズ閲覧〜回答 E2E テスト |
+| `e2e/.auth/` | 新規ディレクトリ | storageState 保存先（.gitignore 対象） |
+| `e2e/.gitignore` | 新規 | `.auth/`・`.env.e2e` を除外 |
+| `e2e/.env.e2e.example` | 新規 | E2E テスト認証情報のテンプレート（git 管理）。実値は `.env.e2e`（gitignore 済み）に記載 |
+| `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
+| `backend/problems/migrations/0017_remove_problem_points.py` | 新規 | `problems_problem.points` カラムを DROP する。`points` は `0001_initial.py` で `IntegerField(default=10, NOT NULL)` として作成されたが、その後 `models.py` から削除されたにもかかわらず DROP 用マイグレーションが存在しなかった。既存 DB では値が入っているため発現しないが、fresh DB（CI）では Django ORM の INSERT に `points` が含まれず NOT NULL 違反が発生する。**データ安全性根拠**: `points` は現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。 |
+| `backend/accounts/migrations/0021_rename_organization_id_to_id.py` | 変更 | 新規 DB で `problems_subject.organization_id` が UUID 型のまま残る型不一致バグを修正（条件付き `ALTER COLUMN TYPE INTEGER USING NULL` を追加）。**データ安全性根拠**: `accounts.0010` が Organization を `DROP TABLE CASCADE` で削除・再作成したため、UUID 値はすでに孤立（参照先消滅）。また PostgreSQL は UUID カラムへの INTEGER 値保存を拒否するため、0010 適用後に作成された Subject の organization_id 実データも存在しない。NULL 変換によるデータ損失は実質ゼロ。 |
+| `backend/problems/migrations/0018_remove_obsolete_fields_and_fix_schema.py` | 新規 | `makemigrations --check --dry-run` で検出されたモデルと migration の乖離（drift）6 件を一括解消: (1) `QuizSession.total_points`（`IntegerField(default=0, NOT NULL)`）の孤立カラム削除 — CI の `POST /api/quiz/` で NOT NULL 違反 HTTP 500 を引き起こしていた直接原因、(2) `QuizAnswer.points_earned` の孤立カラム削除、(3) `Subject` の孤立インデックス削除、(4)〜(6) `Problem.explanation`・`Problem.problem_type`・`Subject.slug` の migration state 整合（DB 変更は最小）。**データ安全性根拠**: `total_points`・`points_earned` はいずれも現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。`slug` の max_length 拡張（50→100）は常に後方互換。 |
+| `.github/workflows/ci.yml` | 変更 | `backend-lint` ジョブに `python manage.py makemigrations --check --dry-run` ステップを追加。DB 接続不要の静的チェックのため lint ジョブ（flake8/bandit と同列）に配置。将来のモデル変更で `makemigrations` を忘れた場合に PR 段階で即検出する（再発防止）。 |
+| `docs/runbooks/common-commands.md` | 変更 | 「モデルを変更したら必ず `makemigrations` を実行してコミットする」開発者フローを明記。migration drift の再発防止として `makemigrations --check` の手動確認コマンドも追記。 |
+| `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
+| `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）。`RATELIMIT_ENABLE` を env var 経由で設定可能に変更（`os.environ.get('RATELIMIT_ENABLE', 'True').lower() != 'false'`。デフォルト `True` で本番動作は変わらない。E2E CI でのみ `false` を設定） |
+| `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
+| `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。**`e2e-init` サービス追加（Init Container パターン: backend イメージで `migrate`・`seed_e2e` を実行し、`e2e` サービスが起動する前に完了させる）。** `env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加。**backend の `environment:` に `- RATELIMIT_ENABLE` パススルーを追加**（ホスト env から注入。未設定時はデフォルト `True`） |
+| `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入。**Start services ステップに `RATELIMIT_ENABLE: "false"` を設定**（CI でのレート制限超過を防止）。`migrate` と `seed_e2e` は e2e-init サービスが担当し、Run E2E tests ステップで `npm ci && npm test` を実行 |
+| `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
+
+---
+
+## 6. テストデータ設計
+
+> **設計方針**: `accounts.0016_load_organization_categories` マイグレーションがすでに `education` カテゴリーを作成するため、`OrganizationCategory` 用の fixture は不要。`seed_e2e._get_or_create_category()` は `get_or_create(slug='education')` でマイグレーション作成済みのカテゴリーを取得する。fixture による二重管理はせず、マイグレーションを唯一の信頼源とする。
+
+### 6-1. シナリオデータ（`manage.py seed_e2e --scenario <name>`）
+
+| シナリオ名 | 作成されるデータ |
+|-----------|----------------|
+| `login` | Organization A、ユーザー A（email: `e2e_user_a@example.com`, pw: `$E2E_TEST_PASSWORD`, **role: `admin`**） |
+| `tenant_isolation` | Organization A + B、ユーザー A（**role: `admin`**）・B（**role: `admin`**）（pw: `$E2E_TEST_PASSWORD`）、Organization A の Subject 1件（`E2E Subject A`） |
+| `quiz_session` | Organization A、ユーザー A（**role: `admin`**、pw: `$E2E_TEST_PASSWORD`）、Subject（`E2E Quiz Subject`）+ Problem（選択肢付き）1件。**`UserSubjectAccess` を user_a に対して `E2E Quiz Subject`・`E2E Subject A` の 2件作成**（`/api/user/subjects/` は `UserSubjectAccess` を参照するため、登録なしでは空配列が返りダイアログが表示されない）。QuizSession はフロント操作で作成するため seed しない |
+
+> **シナリオ累積に関する注意**: `e2e-init` は `tenant_isolation` → `quiz_session` の順でシードするため（flush なし）、org_a には `E2E Subject A`（tenant_isolation 由来）と `E2E Quiz Subject`（quiz_session 由来）の **2件の Subject** が存在する。ただし、ダッシュボードの「クイズを始める」が呼ぶ `/api/user/subjects/` は **`UserSubjectAccess`（ユーザー登録済み科目）を参照**するため、`_seed_quiz_session` で `UserSubjectAccess` を両科目分作成する。これにより `subjects.length >= 2` が保証され、quiz-session.spec.ts が「クイズを始める」押下時に科目選択ダイアログが必ず表示されることを前提として実装できる。
+> **`/subject-management` のアクセス制御**: `SubjectManagement.tsx` は `user.role === 'admin'` のユーザーのみ科目一覧を表示する。tenant-isolation.spec.ts がテナント境界を正確に検証するため（ロール制御とテナント分離を混在させないため）、両ユーザーを `role='admin'` で作成する。
+
+> **認証情報の扱い**: パスワードはソースコードに一切ハードコードしない。`global-setup.ts` が `process.env.E2E_TEST_PASSWORD` を読み取り、`--password` 引数として seed コマンドに渡す。ローカル開発は `.env.e2e`（gitignore 済み）、CI は GitHub Actions Secrets から注入する。
+
+### 6-2. 認証状態再利用
+- Playwright の `storageState` を使用
+- `globalSetup` でログイン → `e2e/.auth/user_a.json` / `user_b.json` に保存
+- 各テストは `storageState` を読み込んでログイン UI をスキップ
+
+---
+
+## 7. 実装手順
+
+> **依存関係**: Step 1〜3 は並行実施可能。Step 4 は Step 3 完了が前提。Step 5〜7 は Step 4 完了が前提。Step 8・9 は Step 7 完了後。
+
+### Step 1: Docker 環境での Playwright 疎通確認（未知リスク先行）
+
+**目的**: e2e コンテナから `frontend:3000` / `backend:8000` にアクセスできることを確認する（最大の未知リスク）。
+
+1. `docker-compose.yml` に最小限の `e2e` サービスを追加:
+   ```yaml
+   e2e:
+     image: mcr.microsoft.com/playwright:v1.50.0-jammy
+     working_dir: /e2e
+     volumes:
+       - ./e2e:/e2e
+     depends_on:
+       - frontend
+       - backend
+     networks:
+       - app-network
+     environment:
+       - BASE_URL=http://frontend:3000
+       - API_URL=http://backend:8000
+     profiles:
+       - e2e
+   ```
+2. `docker compose --profile e2e run e2e curl http://frontend:3000` で疎通確認
+3. 疎通確認 OK → Step 2 へ。NG → ネットワーク設定を調整してから進む
+
+### Step 2: e2e/ ディレクトリ・設定ファイル整備
+
+**目的**: Playwright プロジェクトの骨格を作る。
+
+1. `e2e/package.json` 作成:
+   ```json
+   {
+     "name": "e2e",
+     "private": true,
+     "scripts": {
+       "test": "playwright test",
+       "test:headed": "playwright test --headed"
+     },
+     "devDependencies": {
+       "@playwright/test": "^1.50.0",
+       "dotenv": "^16.0.0"
+     }
+   }
+   ```
+2. `e2e/playwright.config.ts` 作成:
+   ```typescript
+   import { defineConfig, devices } from '@playwright/test';
+   import dotenv from 'dotenv';
+   import path from 'path';
+
+   // .env.e2e をローカル開発用に読み込む（CI では GitHub Secrets から直接 process.env に注入される）
+   dotenv.config({ path: path.resolve(__dirname, '.env.e2e') });
+
+   export default defineConfig({
+     testDir: './tests',
+     globalSetup: './global-setup.ts',  // storageState 生成をここで実行（DB 初期化は e2e-init サービスが担当）
+     use: {
+       baseURL: process.env.BASE_URL || 'http://localhost:3000',
+       trace: 'on-first-retry',
+     },
+     retries: 2,
+     projects: [
+       // 認証済みユーザーAでのテスト（storageState を適用）
+       {
+         name: 'chromium-authed',
+         use: {
+           ...devices['Desktop Chrome'],
+           storageState: path.join(__dirname, '.auth', 'user_a.json'),  // __dirname ベース: CI/コンテナ両方で正しく解決される
+         },
+         testMatch: /(?!.*auth\.spec).*\.spec\.ts/,  // auth.spec 以外に適用
+       },
+       // 認証不要テスト（auth.spec.ts のみ。storageState を適用しない）
+       {
+         name: 'chromium-unauthed',
+         use: {
+           ...devices['Desktop Chrome'],
+           // storageState なし（未認証状態でログインテストを実行）
+         },
+         testMatch: /auth\.spec\.ts/,
+       },
+     ],
+   });
+   ```
+   > **設計方針**: `globalSetup` のみで storageState を生成する。`setup` プロジェクトは使用しない（`globalSetup` との混在はエラーを招くため）。認証が必要なテスト（`auth.spec.ts` 以外）と不要なテストを別プロジェクトで分離する。
+3. `e2e/.gitignore` 作成（`.auth/`・`.env.e2e` を除外）
+4. `e2e/.env.e2e.example` 作成（git 管理。開発者はこれをコピーして `.env.e2e` を作成する）:
+   ```
+   # E2E テスト専用の認証情報。本番環境とは完全に分離されたテスト DB で使用する。
+   # このファイルをコピーして .env.e2e を作成し、パスワードを設定してください。
+   E2E_TEST_PASSWORD=<set-your-e2e-password-here>
+   ```
+5. `e2e/tests/` ディレクトリ作成
+
+### Step 3: seed_e2e Django 管理コマンド実装
+
+**目的**: シナリオ単位でテストデータを投入する管理コマンドを作る。パスワードはコードにハードコードせず `--password` 引数で受け取る。
+
+1. `backend/accounts/management/__init__.py`・`commands/__init__.py`（存在しない場合のみ）確認
+2. `backend/accounts/management/commands/seed_e2e.py` 作成:
+   ```python
+   from django.core.management.base import BaseCommand
+   from django.contrib.auth import get_user_model
+   from accounts.models import Organization, OrganizationCategory
+
+   User = get_user_model()
+
+   SCENARIOS = {
+       'login': '_seed_login',
+       'tenant_isolation': '_seed_tenant_isolation',
+       'quiz_session': '_seed_quiz_session',
+   }
+
+   class Command(BaseCommand):
+       help = 'Seed E2E test data by scenario'
+
+       def add_arguments(self, parser):
+           parser.add_argument('--scenario', required=True, choices=SCENARIOS.keys())
+           parser.add_argument('--password', required=True, help='E2E test user password (do not hardcode; pass via env var)')
+           parser.add_argument('--flush', action='store_true', help='Flush DB before seeding')
+
+       def handle(self, *args, **options):
+           self.e2e_password = options['password']  # 環境変数由来。コード内でリテラルを持たない
+
+           if options['flush']:
+               from django.core.management import call_command
+               call_command('flush', '--no-input')
+               call_command('migrate', '--noinput')
+               # flush で全テーブルを空にした後、migrate を再実行して
+               # accounts.0016 などのデータ投入マイグレーションを再適用する。
+               # これにより OrganizationCategory（education 等）が復元される。
+
+           method = getattr(self, SCENARIOS[options['scenario']])
+           method()
+           self.stdout.write(self.style.SUCCESS(f"Seeded scenario: {options['scenario']}"))
+
+       def _seed_login(self):
+           cat = self._get_or_create_category()
+           org_a, _ = Organization.objects.get_or_create(
+               slug='e2e-org-a', defaults={'name': 'E2E Org A', 'category': cat}
+           )
+           User.objects.filter(email='e2e_user_a@example.com').delete()
+           User.objects.create_user(
+               email='e2e_user_a@example.com',
+               user_id='e2e_user_a',
+               password=self.e2e_password,
+               organization=org_a,
+               role='admin',  # /subject-management へのアクセスに admin ロールが必要
+           )
+
+       def _get_or_create_category(self):
+           cat, _ = OrganizationCategory.objects.get_or_create(
+               slug='education',  # accounts.0016 が作成済み。get_or_create で冪等に取得
+               defaults={'name': '教育', 'description': 'E2E テスト用カテゴリー', 'display_order': 99},
+           )
+           return cat
+
+       def _seed_tenant_isolation(self):
+           self._seed_login()
+           cat = self._get_or_create_category()
+           org_b, _ = Organization.objects.get_or_create(
+               slug='e2e-org-b', defaults={'name': 'E2E Org B', 'category': cat}
+           )
+           User.objects.filter(email='e2e_user_b@example.com').delete()
+           User.objects.create_user(
+               email='e2e_user_b@example.com',
+               user_id='e2e_user_b',
+               password=self.e2e_password,
+               organization=org_b,
+               role='admin',  # org_b admin として /subject-management にアクセスし、org_a データが見えないことを検証
+           )
+           from problems.models import Subject
+           org_a = Organization.objects.get(slug='e2e-org-a')
+           Subject.objects.get_or_create(
+               name='E2E Subject A',
+               organization=org_a,  # ルックアップキーに含める（defaults= に入れると org を無視して重複が生じる）
+               defaults={'slug': 'e2e-subject-a'},
+           )
+
+       def _seed_quiz_session(self):
+           self._seed_login()
+           from problems.models import Subject, Problem, Choice, UserSubjectAccess
+           org_a = Organization.objects.get(slug='e2e-org-a')
+           user_a = User.objects.get(email='e2e_user_a@example.com')
+           subj, _ = Subject.objects.get_or_create(
+               name='E2E Quiz Subject',
+               organization=org_a,
+               defaults={'slug': 'e2e-quiz-subject'},
+           )
+           problem, _ = Problem.objects.get_or_create(
+               subject=subj,
+               question='E2E テスト用の問題文です。',
+               defaults={
+                   'problem_type': 'single',
+                   'difficulty': 1,
+                   'explanation': 'E2E テスト用の解説文です。',
+                   'organization': org_a,
+                   'created_by': user_a,
+               },
+           )
+           # 選択問題には最低1件の正解選択肢が必要
+           Choice.objects.get_or_create(
+               problem=problem, text='正解の選択肢',
+               defaults={'is_correct': True, 'order': 0},
+           )
+           Choice.objects.get_or_create(
+               problem=problem, text='不正解の選択肢',
+               defaults={'is_correct': False, 'order': 1},
+           )
+           # E2E Subject A も idempotent に確保（tenant_isolation 由来だが累積実行で存在する）
+           subj_a, _ = Subject.objects.get_or_create(
+               name='E2E Subject A',
+               organization=org_a,
+               defaults={'slug': 'e2e-subject-a'},
+           )
+           # UserSubjectAccess: /api/user/subjects/ は UserSubjectAccess を参照するため、
+           # 登録なしでは空配列が返り Dashboard でダイアログが表示されない。
+           # user_a が両科目（E2E Quiz Subject + E2E Subject A）にアクセスできるよう登録する。
+           # これにより subjects.length >= 2 が保証され科目選択ダイアログが必ず表示される。
+           UserSubjectAccess.objects.get_or_create(
+               user=user_a, subject=subj, defaults={'granted_by': None}
+           )
+           UserSubjectAccess.objects.get_or_create(
+               user=user_a, subject=subj_a, defaults={'granted_by': None}
+           )
+   ```
+   > **注意**: `--password` 引数に渡す値は `global-setup.ts` が `process.env.E2E_TEST_PASSWORD` から取得して渡す。seed コマンド単体をローカルで呼ぶ場合は `--password $E2E_TEST_PASSWORD` のように明示する。
+
+### Step 4: globalSetup 実装
+
+**目的**: E2E 実行前に認証状態（storageState）を生成する。DB 初期化（migrate・seed）は `e2e-init` サービス（Init Container パターン）が担うため、globalSetup はブラウザログイン操作のみを行う。パスワードは `process.env.E2E_TEST_PASSWORD` から取得する。
+
+> **Init Container パターンの採用理由**: Playwright コンテナ（`mcr.microsoft.com/playwright`）には `docker` CLI が存在しないため、globalSetup 内で `docker compose exec` を呼ぶことができない（`ENOENT: No such file or directory, docker`）。Docker socket をマウント（DooD: Docker-outside-of-Docker）する方法はコンテナにホスト root 相当の権限を与えるセキュリティリスクがあり採用しない。代わりに `e2e-init` 専用サービス（backend イメージ）を docker-compose.yml で定義し、migrate・seed を実行させる。`e2e` サービスは `depends_on: e2e-init: condition: service_completed_successfully` で完了を待つ。これにより globalSetup はブラウザ操作のみに集中できる（単一責任の原則）。
+
+`e2e/global-setup.ts` 作成:
+```typescript
+import { chromium, FullConfig } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const AUTH_DIR = path.join(__dirname, '.auth');  // __dirname ベース: CI/コンテナ両方で正しく解決
+
+async function globalSetup(_config: FullConfig) {
+  // E2E_TEST_PASSWORD は playwright.config.ts で dotenv.config() により .env.e2e から読み込まれる
+  // CI では GitHub Actions Secrets から直接 process.env に注入される
+  const e2ePassword = process.env.E2E_TEST_PASSWORD;
+  if (!e2ePassword) {
+    throw new Error(
+      'E2E_TEST_PASSWORD is not set. ' +
+      'For local dev: copy e2e/.env.e2e.example to e2e/.env.e2e and set the password. ' +
+      'For CI: add E2E_TEST_PASSWORD to GitHub Actions Secrets.'
+    );
+  }
+
+  // DB 初期化（migrate・loaddata・seed_e2e）は e2e-init サービス（docker-compose.yml）が実行済み
+  // globalSetup はブラウザログイン操作と storageState 生成のみを担う
+
+  // storageState 生成（ユーザーA・ユーザーB）
+  fs.mkdirSync(AUTH_DIR, { recursive: true });
+  const browser = await chromium.launch();
+
+  const users = [
+    { email: 'e2e_user_a@example.com', file: path.join(AUTH_DIR, 'user_a.json') },
+    { email: 'e2e_user_b@example.com', file: path.join(AUTH_DIR, 'user_b.json') },
+  ];
+
+  for (const user of users) {
+    const page = await browser.newPage();
+    await page.goto(`${BASE_URL}/login`);
+    await page.fill('[data-testid="email-input"]', user.email);
+    await page.fill('[data-testid="password-input"]', e2ePassword);  // env var から取得
+    await page.click('[data-testid="login-button"]');
+    await page.waitForURL('**/dashboard');
+    await page.context().storageState({ path: user.file });
+    await page.close();
+  }
+
+  await browser.close();
+  console.log('[globalSetup] Done.');
+}
+
+export default globalSetup;
+```
+
+> **`E2E_TEST_PASSWORD` が未設定の場合**: `globalSetup` が明確なエラーメッセージで即停止する（サイレント失敗を防ぐ）。
+
+### Step 5: ログイン／ログアウト E2E テスト実装
+
+`e2e/tests/auth.spec.ts` 作成:
+```typescript
+import { test, expect } from '@playwright/test';
+import * as path from 'path';
+
+// 未認証状態でのテスト（chromium-unauthed プロジェクトで実行）
+test.describe('ログインフロー（未認証）', () => {
+  test('正しい認証情報でログインしてダッシュボードに遷移する', async ({ page }) => {
+    await page.goto('/login');
+    await page.fill('[data-testid="email-input"]', 'e2e_user_a@example.com');
+    await page.fill('[data-testid="password-input"]', process.env.E2E_TEST_PASSWORD || '');  // 環境変数から取得。ハードコード禁止
+    await page.click('[data-testid="login-button"]');
+    await expect(page).toHaveURL(/dashboard/);
+  });
+
+  test('誤ったパスワードでログインが拒否される', async ({ page }) => {
+    await page.goto('/login');
+    await page.fill('[data-testid="email-input"]', 'e2e_user_a@example.com');
+    await page.fill('[data-testid="password-input"]', 'WrongPassword999!');
+    await page.click('[data-testid="login-button"]');
+    // エラーは react-hot-toast のトースト通知として表示される（バックエンドの ValidationError → main_message）
+    // ライブラリ内部クラスではなくユーザーが実際に見るテキストでアサートする
+    await expect(page.getByText('入力内容にエラーがあります')).toBeVisible();
+    await expect(page).toHaveURL(/login/);
+  });
+});
+
+// 認証済み状態でのテスト（test.use でプロジェクト設定を上書き）
+test.describe('ログアウトフロー（認証済み）', () => {
+  test.use({ storageState: path.join(__dirname, '..', '.auth', 'user_a.json') });  // tests/ からの相対パス
+
+  test('ログアウト後にログイン画面に戻る', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.click('[data-testid="user-menu-button"]');  // メニューを開いてからログアウトボタンを押す
+    await page.click('[data-testid="logout-button"]');
+    await expect(page).toHaveURL(/login/);
+  });
+});
+```
+> **設計方針**: `auth.spec.ts` は `chromium-unauthed` プロジェクト（storageState なし）で実行されるが、ログアウトテストのみ `test.use({ storageState: '...' })` でファイル内から上書きする。Playwright では `test.use` をネストした `describe` 内に記述することでプロジェクト設定を部分的に上書きできる。
+
+### Step 6: テナント間データ分離 E2E テスト実装
+
+`e2e/tests/tenant-isolation.spec.ts` 作成:
+```typescript
+import { test, expect, Browser } from '@playwright/test';
+import * as path from 'path';
+
+const authDir = path.join(__dirname, '..', '.auth');  // tests/ からの相対パス
+
+test.describe('テナント間データ分離', () => {
+  test('Organization A のデータが Organization B ユーザーから見えない', async ({ browser }) => {
+    // User A（org_a admin）: Organization A の Subject が見える
+    const ctxA = await browser.newContext({ storageState: path.join(authDir, 'user_a.json') });
+    const pageA = await ctxA.newPage();
+    await pageA.goto('/subject-management');  // admin ロール必須ページ
+    await expect(pageA.locator('text=E2E Subject A')).toBeVisible();
+    await ctxA.close();
+
+    // User B（org_b admin）: Organization A の Subject が見えない（テナント境界の検証）
+    const ctxB = await browser.newContext({ storageState: path.join(authDir, 'user_b.json') });
+    const pageB = await ctxB.newPage();
+    await pageB.goto('/subject-management');  // org_b admin はアクセスできるが org_a データは見えない
+    await expect(pageB.locator('text=E2E Subject A')).not.toBeVisible();
+    await ctxB.close();
+  });
+});
+```
+
+### Step 7: クイズ閲覧〜回答 E2E テスト実装
+
+`e2e/tests/quiz-session.spec.ts` 作成:
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('クイズセッション', () => {
+  test('ダッシュボードからクイズを開始して回答できる', async ({ page }) => {
+    await page.goto('/dashboard');
+
+    // 「クイズを始める」ボタンをクリック
+    await page.click('[data-testid="start-quiz-button"]');
+
+    // e2e-init が tenant_isolation → quiz_session の順でシードするため org_a には 2件の Subject が存在し、
+    // ダッシュボードの handleStartQuiz は必ずダイアログを開く（subjects.length >= 2）。
+    // expect(...).toBeVisible() は Playwright の自動リトライ付きアサートで、
+    // React 状態更新 + MUI ダイアログアニメーション（~300ms）を安全に待機する。
+    const subjectDialog = page.locator('[role="dialog"]');
+    await expect(subjectDialog).toBeVisible();
+
+    // アクセシブルネーム（aria-label="E2E Quiz Subjectのクイズを開始"）に基づいて選択
+    await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
+
+    // クイズ画面に遷移することを確認
+    await expect(page).toHaveURL(/\/quiz/);
+
+    // 選択肢が表示されるまで待機してクリック
+    await page.waitForSelector('[data-testid="choice-option"]');
+    await page.click('[data-testid="choice-option"]');
+
+    // 回答結果が表示されることを確認
+    await expect(page.locator('[data-testid="answer-result"]')).toBeVisible();
+  });
+});
+```
+
+> **設計方針**: Dashboard 起点のクリティカルパスを検証する。科目選択ダイアログは seed の累積データ（2件の Subject）により必ず表示されるため、`if (await dialog.isVisible())` のような条件分岐（瞬時チェック・非同期レース）は使用しない。`expect(locator).toBeVisible()` + `getByRole` の組み合わせが Playwright 推奨パターン（自動リトライ・アクセシビリティファースト）。
+
+### Step 8: Docker ヘルスチェック・CI GitHub Actions 独立ジョブ追加
+
+#### 8-1: `/health/` エンドポイント追加 + `HealthCheckMiddleware` 削除
+
+**`backend/core/urls.py`** に DB のみ確認するシンプルな readiness check を追加する:
+
+```python
+from django.db import connection
+from django.http import JsonResponse
+
+def health(request):
+    """Readiness check: DB 接続を検証してサービス準備完了を示す"""
+    try:
+        connection.ensure_connection()
+        return JsonResponse({'status': 'ok'})
+    except Exception:
+        return JsonResponse({'status': 'error'}, status=503)
+
+# urlpatterns の先頭に追加:
+path('health/', health, name='health'),
+```
+
+**`backend/core/settings.py`** の `MIDDLEWARE` から `HealthCheckMiddleware` を削除する:
+
+```python
+# 削除する行:
+# 'core.middleware.HealthCheckMiddleware',
+```
+
+> **設計方針**: `HealthCheckMiddleware` は `process_request` で `/health/` を横取りし `PerformanceMonitor.get_comprehensive_health_check()` を呼ぶ。これは (1) URL ルーティングをバイパスするアンチパターン（ミドルウェアの責務は横断的関心事であり特定 URL のビジネスロジックではない）、(2) 認証なしで DB 接続数・Redis エラーメッセージ・システムリソース情報を公開するセキュリティリスク（OWASP: Sensitive Data Exposure）、(3) Redis エラー時に 503 を返し Docker compose healthcheck が常に失敗する、の 3 点から削除する。詳細な監視情報は認証保護された `/monitoring/status/` 等で提供するのが正しい設計。
+
+#### 8-2: curl インストール（`backend/Dockerfile` と `frontend/Dockerfile.dev`）
+
+```dockerfile
+# backend/Dockerfile（既存 RUN apt-get ... の後に追記、または既存行に追加）
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# frontend/Dockerfile.dev（同様）
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+#### 8-3: `docker-compose.yml` にヘルスチェック・depends_on 条件追加
+
+```yaml
+db:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+    start_period: 10s
+
+backend:
+  volumes:
+    - ./backend:/app
+    - ./docs:/app/docs
+    - backend_static:/app/staticfiles
+    - backend_logs:/app/logs   # named volume: bind mount では django ユーザーが /app/logs を作成できないため
+  depends_on:
+    db:
+      condition: service_healthy   # Postgres 接続受付後にのみ起動（migrate の前提）
+    redis:
+      condition: service_started
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+    interval: 10s
+    timeout: 10s
+    retries: 18       # 最大 3 分
+    start_period: 60s # migrate + 起動猶予
+
+frontend:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+    interval: 10s
+    timeout: 5s
+    retries: 18
+    start_period: 60s
+
+e2e-init:
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  env_file:
+    - path: ./backend/.env
+      required: false
+  environment:
+    - DB_HOST=db
+    - REDIS_URL=redis://redis:6379/0
+    - E2E_TEST_PASSWORD=${E2E_TEST_PASSWORD}
+  volumes:
+    - ./backend:/app
+  depends_on:
+    backend:
+      condition: service_healthy   # backend（migrate 完了）が healthy になってから実行
+  networks:
+    - app-network
+  profiles:
+    - e2e
+  command: >
+    sh -c "[ -z \"$$E2E_TEST_PASSWORD\" ] && echo 'E2E_TEST_PASSWORD is not set.' >&2 && exit 1;
+           python manage.py migrate --noinput &&
+           python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
+           python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
+  # $$E2E_TEST_PASSWORD: docker-compose.yml 内でシェル変数展開を防ぐため $$ でエスケープ
+  # [ -z ... ] チェック: global-setup.ts より先に実行されるため、ここでもフェイルファストを行う
+  # loaddata は不要: OrganizationCategory（education）は accounts.0016 マイグレーションで作成済み
+  #                  seed_e2e._get_or_create_category() が get_or_create で取得する
+
+e2e:
+  volumes:
+    - ./e2e:/e2e
+    - e2e_node_modules:/e2e/node_modules   # named volume: --rm でコンテナが消えても node_modules を保持
+  depends_on:
+    e2e-init:
+      condition: service_completed_successfully   # Init Container 完了後に実行
+  command: sh -c "npm install && npm test"  # npm install: named volume キャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
+
+volumes:
+  backend_logs:   # named volume: image の /app/logs ディレクトリの所有権（django ユーザー）を引き継ぐ
+  e2e_node_modules:   # named volume: Playwright Docker イメージ（Linux）向けに npm install でインストールした node_modules を保持
+```
+
+> **設計方針**: `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定することで、Postgres 初期化完了前に `migrate` が実行されるレースコンディションを根本解消する。`condition: service_started`（旧来の depends_on）ではコンテナ起動のみを待つため不十分。
+>
+> **Init Container パターン（`e2e-init` サービス）**: Playwright コンテナには Docker CLI が存在しないため、`global-setup.ts` 内で `docker compose exec` による DB 初期化は不可能。`e2e-init` サービスは backend イメージを再利用して `migrate`・`seed_e2e` を実行し、完了後に終了（exit 0）する。`OrganizationCategory`（education）は `accounts.0016` マイグレーションで作成されるため `loaddata` は不要。`e2e` サービスは `condition: service_completed_successfully` で `e2e-init` の正常完了を待ってからテストを実行する。これにより `global-setup.ts` はブラウザ操作のみに集中でき、Docker socket マウント（セキュリティリスク）や追加のシェルスクリプトが不要になる。
+>
+> **`backend_logs` named volume の必要性**: `./backend:/app` の bind mount は CI チェックアウトのルート所有権（UID 1001）で `/app` をオーバーライドする。`backend/logs/` は `.gitignore` 対象のため CI に存在せず、`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir(exist_ok=True)` を呼ぶと `PermissionError: [Errno 13] Permission denied: '/app/logs'` が発生する。`.gitkeep` での回避は「ディレクトリは存在するが CI ランナー所有のため django が書き込めない」状態を生み出すため不十分。Named volume は初回マウント時に image の `/app/logs` ディレクトリ（django 所有）をコピーするため、書き込み権限が正しく維持される。
+>
+> **`e2e_node_modules` named volume の必要性**: `./e2e:/e2e` bind mount で `node_modules` を host と共有すると、host の OS（例: Windows/Mac）向けにコンパイルされた native addon やバイナリが Linux コンテナでは動作しない。Named volume に分離することで Linux 向けの正しい `node_modules` が保持される。`npm install` は既存 `node_modules` を保持したまま差分のみ更新するため、named volume との組み合わせで 2 回目以降は数秒で完了する（`npm ci` は毎回 `node_modules` を削除して全インストールするため named volume のキャッシュ効果がない）。CI（`e2e.yml`）では `npm ci` を使い決定論的・クリーンなインストールを保証する。`e2e` サービスの `command` に `npm install && npm test` を設定し、`docker compose --profile e2e run --rm e2e` だけで依存インストール＋テスト実行が完結する。
+
+#### 8-4: `.github/workflows/e2e.yml` 新規作成
+
+`docker compose up --wait` でサービスが healthy になるまでブロックするため、手動ポーリングステップは不要：
+
+```yaml
+name: E2E Tests
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services and wait for healthy
+        run: docker compose up -d --wait db backend frontend
+        timeout-minutes: 5
+        env:
+          RATELIMIT_ENABLE: "false"  # E2E CI でのみ無効化（global-setup + テストの累積 POST が 5/5m 制限を超えるため）
+
+      - name: Initialize E2E database
+        # CI はホスト上で npm test を実行するため e2e-init コンテナを使わず直接 docker exec で初期化する
+        run: |
+          docker compose exec -T backend python manage.py migrate --noinput
+          docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario tenant_isolation --password "$E2E_TEST_PASSWORD"
+          docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario quiz_session --password "$E2E_TEST_PASSWORD"
+        env:
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright dependencies
+        run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Run E2E tests
+        run: npm test
+        working-directory: e2e
+        env:
+          BASE_URL: http://localhost:3000
+          API_URL: http://localhost:8000
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== backend logs ===" && docker compose logs backend --tail=100
+          echo "=== db logs ===" && docker compose logs db --tail=50
+          echo "=== docker compose ps ===" && docker compose ps
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+```
+
+> **設計方針**: `--wait` は docker-compose.yml の `healthcheck` が通過するまでブロックする。マジックナンバーのタイムアウトによる手動ポーリングより信頼性が高く、ヘルスチェックの定義がサービス側（compose ファイル）に集約される。`/health/` エンドポイントは DB 接続を検証するため、「サーバーは起動しているが migrate が完了していない」状態も検出できる。
+
+### Step 9: `/test` スキル更新
+
+`.claude/skills/test/SKILL.md` に E2E ステップを追記:
+
+現在の手順 2) の後（手順 3) の前）に以下を追加。既存の手順 3)・4) は番号をシフト（3→4、4→5）:
+```
+3) E2E テスト（Playwright）:
+   ```bash
+   docker compose --profile e2e run --rm e2e
+   ```
+   # コマンド省略時は compose file の default command が適用される:
+   # sh -c "npm install && npm test"
+   - 成功: 手順 4) へ
+   - 失敗: 即 STOP。以下を報告してユーザー待機:
+     - 失敗したテスト名（spec ファイル名・テスト名）
+     - エラー内容（期待値 / 実際値 / スクリーンショットパス）
+     ```
+     ⛔ E2E テストが失敗しました。修正作業は開始しません。
+     👉 続けるには `/fix-loop $ARGUMENTS` を入力してください。
+        fix-loop 完了後は `/test $ARGUMENTS` に戻ってください。
+     ```
+```
+
+---
+
+## 8. テスト計画
+
+### テストレベルの選択
+- **E2E（本イシュー対象）**: クリティカルパス3本のみ（ログイン・データ分離・クイズ）
+- **ユニット/結合（既存）**: seed コマンドの動作は pytest で検証しない（E2E 実行で間接的に確認）
+
+### リント・セキュリティスキャン
+- `ci.yml` の `backend-lint` ジョブ（GitHub Actions ランナー上で `pip install -r requirements-dev.txt` 後に実行）が権威あるチェック
+- Docker コンテナ内では `requirements-dev.txt` が未インストールのため `python -m flake8` は利用不可（設計による仕様）
+- 確認方法: push 後に `gh pr checks [PR番号]` で `backend-lint` ジョブの pass を確認する
+
+### 自動テスト（E2E 本体）
+- `auth.spec.ts`: ログイン成功・ログアウト・ログイン失敗
+- `tenant-isolation.spec.ts`: データ分離確認
+- `quiz-session.spec.ts`: クイズ閲覧〜回答
+
+### 手動テスト
+- `docker compose --profile e2e run --rm e2e` の実行と全テスト PASS 確認（default command: `npm install && npm test`）
+- CI（GitHub Actions）E2E ジョブが独立して動作することの確認
+
+---
+
+## 9. ロールバック
+
+- ロールバック手順:
+  1. `e2e/` ディレクトリを削除
+  2. `docker-compose.yml` の `e2e` サービスを削除、**`e2e-init` サービスを削除**、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:`・`e2e_node_modules:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs <project>_e2e_node_modules` を実行する
+  3. `.github/workflows/e2e.yml` を削除
+  4. `backend/accounts/management/commands/seed_e2e.py` を削除
+  4a. `backend/problems/migrations/0017_remove_problem_points.py` を削除（ロールバック後は `points` カラムが再び孤立状態に戻る。既存 DB への影響はないが fresh DB では NOT NULL 違反が再発する）
+  4b. `backend/accounts/migrations/0021_rename_organization_id_to_id.py` を元のバージョンに戻す（条件付き ALTER COLUMN ステップを削除）
+  4c. `backend/problems/migrations/0018_remove_obsolete_fields_and_fix_schema.py` を削除（ロールバック後は `total_points`・`points_earned` カラムが再び孤立状態に戻る。既存 DB への影響はないが fresh DB では NOT NULL 違反が再発し quiz-session CI テストが失敗する）
+  4d. `.github/workflows/ci.yml` の `backend-lint` ジョブから `makemigrations --check --dry-run` ステップを削除
+  4e. `docs/runbooks/common-commands.md` の migration drift 防止フローを削除
+  5. `backend/core/urls.py` の `/health/` エンドポイントを削除
+  5a. `backend/core/settings.py` の `MIDDLEWARE` に `'core.middleware.HealthCheckMiddleware',` を復元
+  5b. `backend/core/settings.py` の `RATELIMIT_ENABLE` を `True`（ハードコード）に戻す
+  5c. `docker-compose.yml` の backend `environment:` から `- RATELIMIT_ENABLE` を削除
+  6. `backend/Dockerfile` と `frontend/Dockerfile.dev` から `curl` のインストール行を削除
+  7. `.claude/skills/test/SKILL.md` のE2Eステップを削除
+  8. ブランチを revert
+
+---
+
+## 10. Risk & 回避策
+
+| リスク | 影響 | 回避策 |
+|--------|------|--------|
+| Docker e2e コンテナから frontend にアクセスできない | Step 1 でブロック | Step 1 を先行実施し、疎通確認後に進む |
+| Login UI の `data-testid` 属性が存在しない | テスト全般がブロック | Step 4 実施前にログイン画面の HTML 確認、必要に応じて data-testid を追加（計画変更を提案） |
+| seed_e2e コマンドで Subject モデルのフィールドが不足 | Step 3 でエラー | Subject モデルの必須フィールドを事前確認（調査済み: organization FK が必須） |
+| CI の E2E が既存ジョブをブロック | PR マージに影響 | 独立ジョブ（別 workflow）にし、既存 ci.yml には触れない |
+| E2E テストがフレーキー（非決定的失敗） | CI 信頼性低下 | retry: 2、trace: on-first-retry 設定、テスト間の状態分離（beforeEach で必要に応じて状態リセット） |
+| CI に `backend/.env` が存在しないため `docker compose up` が失敗する | E2E CI ジョブ全体がブロック | `docker-compose.yml` の `env_file` を `required: false` に変更（根本対処）。CI ワークフロー側の補完ステップは不要。`settings.py` の全変数にデフォルト値があるため動作に問題なし |
+| バックエンド起動タイムアウト（migrate 完了前にヘルスチェックが失敗） | E2E CI ジョブ全体がブロック | `healthcheck` に `start_period: 60s` を設定し起動猶予を確保。`/health/` エンドポイントが DB 接続を検証するため migrate 完了後にのみ healthy となる |
+| コンテナに `curl` が存在せずヘルスチェックが常に unhealthy | E2E CI がハング | Dockerfile に `curl` をインストール（`apt-get install -y --no-install-recommends curl`）。Python/Node の回避策は使わない |
+| Postgres 初期化完了前に `migrate` が実行されるレースコンディション（`depends_on: db` は `service_started` であり、DB がまだ接続を受け付けていない段階で backend が起動し migrate に失敗する） | backend コンテナが exit code 1 で終了し `--wait` も失敗 | `db` に `pg_isready` ヘルスチェックを追加し、`backend.depends_on` に `condition: service_healthy` を設定。Postgres が接続受付可能になるまで backend の起動を保留する（根本対処） |
+| bind mount で `/app/logs` が `django` ユーザーのパーミッションで作成できない（`enhanced_logging.py` が settings インポート時に `LOG_DIR.mkdir()` を呼ぶが、CI では `/app/logs` が存在せず、ランナー所有の `/app` 配下に `django` ユーザーが mkdir できない） | `PermissionError: [Errno 13] Permission denied: '/app/logs'` で backend が起動失敗し `--wait` がタイムアウト | `backend_logs:/app/logs` named volume を使用。Named volume は初回マウント時に image の `/app/logs`（django 所有）をコピーするため書き込み権限が正しく維持される。`.gitkeep` は回避策にならない（CI ランナー所有のディレクトリになり django が書き込めない） |
+| `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
+| `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm install && npm test` に変更。`npm install` は named volume のキャッシュを活かして差分のみ更新（2回目以降は数秒）。CI では `e2e.yml` で `npm ci` を使い決定論的インストールを保証 |
+| Playwright コンテナに `docker` CLI が存在しないため `global-setup.ts` 内で `docker compose exec` による DB 初期化が不可能（`ENOENT: docker`）。Docker socket マウント（DooD）はホスト root 相当の権限を与えるセキュリティリスク | DB が初期化されないまま全テストが失敗する | **Init Container パターン** を採用。`e2e-init` サービス（backend イメージ）で migrate・seed_e2e を実行し、`e2e` サービスは `condition: service_completed_successfully` で完了を待つ。`global-setup.ts` はブラウザ操作のみに限定し Docker CLI への依存を排除する |
+| `problems_problem.points` カラムが `NOT NULL` かつ DB DEFAULT なしのまま残存しており、fresh DB で `Problem.objects.create()` が NOT NULL 違反で失敗する（`points` は `models.py` から削除済みだが DROP 用マイグレーションが欠落）。既存 DB では発現しないため見落とされていた | `seed_e2e.py` の quiz_session シナリオが失敗し E2E テスト全体がブロック | `problems.0017` マイグレーション（`RemoveField`）を追加し `points` カラムを正式に DROP。モデルを唯一の信頼源とする Django の設計原則に沿った根本対処 |
+| `/api/user/subjects/` が `UserSubjectAccess`（ユーザー登録済み科目）を参照するため、seed で Subject を作成するだけでは空配列が返る。`subjects.length === 0` → Dashboard はダイアログでなくエラートーストを表示し、quiz-session.spec.ts が `[role="dialog"]` を見つけられず失敗する | quiz-session.spec.ts が CI でタイムアウトにより失敗 | `_seed_quiz_session` に `UserSubjectAccess.objects.get_or_create()` を追加し、user_a が E2E Quiz Subject・E2E Subject A の両方にアクセスできるようにする（`subjects.length >= 2` を保証） |
+| CI での認証 POST 累積が `django-ratelimit` の `5/5m` 制限を超過する（`block=True` デフォルトにより 6 回目で 403 が返り、シリアライザーが実行されずトーストテキストが表示されない）。`global-setup.ts` の 2 ログイン + auth.spec.ts のテスト実行で 5 回以上の POST が発生する | auth.spec.ts の「誤パスワード」テストが `入力内容にエラーがあります` を検出できず失敗 | `RATELIMIT_ENABLE` を env var で制御可能にし（デフォルト `True`）、E2E CI の Start services ステップに `RATELIMIT_ENABLE: "false"` を設定。本番・開発環境の動作は変わらない |
+| **migration drift（モデルと migration の構造的乖離）**: 開発者が `models.py` からフィールドを削除する際に `makemigrations` を実行しなかったため、DB スキーマと ORM の状態が乖離。fresh DB（CI）では削除フィールドの NOT NULL 制約が残存し ORM の INSERT で `IntegrityError` が発生する。`problems_problem.points`（0017 で解消済み）・`quizsession.total_points`・`quizanswer.points_earned` が同パターン。ローカル（既存 DB）では `points` 列に値が入っているため発現せず、CI でのみ判明する性質のバグ | `POST /api/quiz/` → HTTP 500（`total_points` NOT NULL 違反）→ CI の quiz-session テストが `choice-option` セレクターでタイムアウト | (1) `problems.0018` で既存 drift 6 件を一括解消（症状の根本修正）。(2) `.github/workflows/ci.yml` の `backend-lint` ジョブに `makemigrations --check --dry-run` を追加（DB 接続不要の静的チェック、PR 段階で即検出）。(3) `docs/runbooks/common-commands.md` に開発者フロー明記（再発防止のプロセス改善）。3 層構造で症状・検知・プロセスを同時に対処する |
+
+---
+
+## 11. セキュリティ
+
+- **E2E テスト用パスワードはソースコードに一切ハードコードしない**（12-Factor App・OWASP 準拠）
+  - ローカル開発: `e2e/.env.e2e`（gitignore 済み）に `E2E_TEST_PASSWORD=<値>` を記載
+  - CI: GitHub Actions Secrets に `E2E_TEST_PASSWORD` を登録し、`e2e.yml` から注入
+  - `E2E_TEST_PASSWORD` 未設定時は `globalSetup` が明確なエラーで即停止（サイレント失敗を防ぐ）
+- `e2e/.env.e2e` は `.gitignore` 対象にする。テンプレートとして `e2e/.env.e2e.example` を git 管理する
+- デフォルト DB (`learning_app`) を使用し、別 DB の作成は行わない。CI ではクリーンな Docker volume から起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持する（別 DB 管理は docker-compose の init-db.sql 変更・手動 DB 作成等のコストが高く、プレフィックス識別で十分なため採用しない）
+- seed コマンドで作成するデータは `e2e_` プレフィックスを持つため本番データと識別可能
+- npm audit: Playwright 公式パッケージのみ使用。高/クリティカル脆弱性があれば修正対象
+- **Docker socket マウント（DooD）不採用**: `global-setup.ts` が直接 `docker compose exec` を呼ぶ設計は Playwright コンテナに `/var/run/docker.sock` をマウントする必要があり、コンテナにホスト root 相当の権限を与えるセキュリティリスクがある。代わりに Init Container パターン（`e2e-init` サービス）を採用し、`global-setup.ts` からの Docker CLI 依存を完全に排除する
+- **`HealthCheckMiddleware` の削除**: 既存の `HealthCheckMiddleware` は認証なしで DB 接続数・Redis エラー詳細・システムリソース（CPU/メモリ）を公開しており、OWASP Security Misconfiguration / Sensitive Data Exposure に該当する。`/health/` は DB 接続確認のみ返す最小応答に限定する。詳細監視情報は `/monitoring/status/` 等（別途認証保護が必要）で提供するのが正しい設計
+- **`RATELIMIT_ENABLE` の env var 化**: デフォルトは `True` を維持し本番・開発環境の安全性は変わらない。`RATELIMIT_ENABLE=false` は E2E CI 環境の `e2e.yml` Start services ステップのみに設定する。ホスト環境に意図せず `RATELIMIT_ENABLE=false` が設定された場合でも `docker-compose.yml` のパススルーにより影響を受けるため、ローカル開発環境で `.env` 等に誤って設定しないよう注意する。CI の GitHub Actions 環境は各 job で独立しており、他ジョブへの波及なし
+
+---
+
+## 12. コスト・保守見積もり
+
+| 項目 | 見積もり |
+|------|---------|
+| E2E テスト実行時間（ローカル） | 約 60〜120 秒（chromium のみ） |
+| CI 追加時間 | 約 3〜5 分（既存 CI と並列実行のため影響は最小） |
+| 保守コスト | UI 変更時に `data-testid` の維持が必要。テスト本数が少ないため低コスト |
+| 属人化リスク | Playwright は公式ドキュメントが充実しており低い |
+
+---
+
+## 13. 設計判断の明示
+
+以下の設計判断は **仮定で決めた** 項目です（承認ポイントで確認）:
+
+| 判断項目 | 内容 | 根拠 |
+|---------|------|------|
+| e2e/ 配置場所 | プロジェクトルート（`frontend/` 外） | Playwright ベストプラクティス。frontend の依存と分離できる |
+| テスト用 DB 名 | デフォルト DB `learning_app` を使用（別 DB は作成しない） | Section 11 参照。CI では Docker volume がクリーンなため本番データと完全分離。ローカルでは `e2e_` プレフィックスで識別 |
+| Playwright ブラウザ | chromium のみ | CI 実行時間を最小化するため。クロスブラウザは本イシュースコープ外 |
+| storageState 保存先 | `e2e/.auth/user_a.json` / `user_b.json` | Playwright 公式推奨パターン |
+| data-testid 追加 | 必要に応じて Login 画面に追加 | E2E テストの安定性のため。ただし Frontend コード変更が発生するため別途確認が必要 |
+| E2E CI workflow | 既存 `ci.yml` と分離した `e2e.yml` を新規作成 | 既存の高速 CI をブロックしない |
+
+---
+
+## 承認ポイント
+
+以下をご確認の上、「OK」とお答えください。
+
+### 確認項目
+
+- [ ] **e2e/ 配置**: プロジェクトルートに `e2e/` ディレクトリを作る（`frontend/` の外）
+- [ ] **テスト用 DB**: デフォルト DB `learning_app` を使用（別 DB は作成しない）。CI では Docker volume がクリーンなため本番データと完全分離
+- [ ] **ブラウザ**: chromium のみ（Firefox/WebKit は対象外）
+- [ ] **data-testid の追加**: ログイン画面に `data-testid="email-input"` 等を追加する可能性がある（Login.tsx への変更が発生）
+- [ ] **CI**: `.github/workflows/e2e.yml` を新規作成（既存 `ci.yml` は変更しない）
+- [ ] **seed コマンドのテストデータ**: `e2e_user_a@example.com` / `e2e_user_b@example.com` を使用。パスワードは `E2E_TEST_PASSWORD` 環境変数から注入（ソースコードにハードコードしない）
+- [ ] **ステップ順序**: Step 1（疎通確認）→ Step 2〜3（並行可）→ Step 4（globalSetup）→ Step 5〜7（テスト）→ Step 8〜9（CI・スキル）
+
+### セキュリティ確認
+- [ ] テスト用パスワードはソースコードにハードコードせず、`E2E_TEST_PASSWORD` 環境変数から注入する
+- [ ] ローカル開発は `e2e/.env.e2e`（gitignore 済み）、CI は GitHub Actions Secrets から注入する
+- [ ] `E2E_TEST_PASSWORD` 未設定時に globalSetup が明確なエラーで停止することを確認する
+
+### 要件適合性確認
+- P3/P5/P8（データ整合性・運用性）: **migration 0017/0018 で孤立カラム削除・スキーマ整合あり。データ安全性根拠は Section 5 に記載**
+- P6（性能・UX）: **フロントエンドの UI ロジック変更なし。data-testid 追加のみの場合あり**
+
+---
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-04-23
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処 |
+|--------|------|--------------|------|
+| Low | 認証・認可 | `/health/` は認証不要。DB 死活状態が外部に漏れる | 返却値は `{"status": "ok/error"}` のみ。詳細情報（DB 接続数・スタックトレース等）は含まない。`HealthCheckMiddleware`（詳細情報を認証なしで返していた OWASP Sensitive Data Exposure 該当）の削除で改善済み |
+| Low | OWASP | `/health/` への連続リクエストで軽微な DoS リスク | `connection.ensure_connection()` のみの軽量処理。レート制限はロードバランサー・Nginx レベルで対処（アプリレベルの制限は不要） |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `GET /health/` | 未認証 | DB 死活状態の探索・サービス稼働確認 | レスポンスは `{"status": "ok"}` または `{"status": "error"}` のみ（詳細情報なし） | No | Yes: レスポンスが最小情報のみか確認 | なし | Low |
+| 2 | `GET /health/` | 未認証 | 連続リクエストによる軽微な負荷 | 軽量エンドポイントのため影響は最小。本番では Nginx/LB でレート制限 | No | No | アプリレベルのレート制限なし（許容） | Low |
+
+### 残余リスク処遇
+- `/health/` への連続リクエスト: 本番 Nginx でレート制限を設定することで対処（本 PR のスコープ外）
+- Low 2件のみ。Blocker・High なし

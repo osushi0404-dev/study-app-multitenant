@@ -146,6 +146,7 @@ const Layout: React.FC = () => {
             aria-haspopup="true"
             onClick={handleProfileMenuOpen}
             color="inherit"
+            data-testid="user-menu-button"
           >
             <Avatar sx={{ width: 32, height: 32 }}>
               <AccountCircle />
@@ -177,7 +178,7 @@ const Layout: React.FC = () => {
           <ListItemIcon><Settings fontSize="small" /></ListItemIcon>
           設定
         </MenuItem>
-        <MenuItem onClick={handleLogout}>
+        <MenuItem onClick={handleLogout} data-testid="logout-button">
           <ListItemIcon><Logout fontSize="small" /></ListItemIcon>
           ログアウト
         </MenuItem>

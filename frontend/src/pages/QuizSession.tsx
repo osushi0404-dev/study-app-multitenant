@@ -453,7 +453,7 @@ const QuizSessionPage: React.FC = () => {
                     const isSelectedWrong = showResult && selectedChoices.includes(choice.id) && !result?.is_correct;
 
                     return (
-                      <Box key={choice.id} sx={{ position: 'relative', mb: 1 }}>
+                      <Box key={choice.id} sx={{ position: 'relative', mb: 1 }} data-testid="choice-option">
                         <FormControlLabel
                           value={choice.id}
                           control={<Radio />}
@@ -532,7 +532,7 @@ const QuizSessionPage: React.FC = () => {
 
             {/* Result */}
             {showResult && result && (
-              <Box mt={3}>
+              <Box mt={3} data-testid="answer-result">
                 <Alert
                   severity={result.is_correct ? 'success' : 'error'}
                   icon={result.is_correct ? <CheckCircle /> : <Cancel />}

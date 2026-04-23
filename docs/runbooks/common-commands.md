@@ -51,6 +51,65 @@ nginx/         - Nginx設定
 - ログファイル: `backend/logs/django.log`
 - フロントエンドのURL変更時はキャッシュクリア必要
 
+## モデル変更時の必須手順（migration drift 防止）
+
+`backend/*/models.py` を変更した場合は **必ず** 以下を実行してコミットする。
+
+```bash
+# マイグレーションファイルを生成
+docker compose exec backend python manage.py makemigrations
+
+# 生成されたファイルを確認してからコミット
+git add backend/*/migrations/
+git commit -m "feat: add migration for <変更内容>"
+```
+
+### 確認コマンド（drift チェック）
+
+```bash
+# 乖離がなければ "No changes detected"（exit 0）
+# 乖離があれば生成予定の migration 内容が表示される（exit 1）
+docker compose exec backend python manage.py makemigrations --check --dry-run
+```
+
+> **なぜ重要か**: migration を書き忘れると、fresh DB（CI・新規デプロイ）では NOT NULL 違反などの
+> IntegrityError が発生してアプリが壊れる。既存 DB では実データが入っているため発現せず、
+> CI でのみ発覚する性質の問題になる（I049 の `total_points` / `points_earned` が同ケース）。
+> CI の backend-lint ジョブでも `makemigrations --check` を実行するが、
+> PR を出す前にローカルで確認することを推奨する。
+
+## ローカル E2E テスト実行手順（初回セットアップ）
+
+### 1. `.env.e2e` を作成する（初回のみ）
+
+```bash
+cp e2e/.env.e2e.example e2e/.env.e2e
+# e2e/.env.e2e を開いて E2E_TEST_PASSWORD に任意のパスワードを設定する
+```
+
+> **注意**: `.env.e2e` は `.gitignore` に含まれています。コミットしないでください。
+
+### 2. E2E テストを実行する
+
+```bash
+# e2e-init は前回の実行結果が残っているため毎回削除してから実行する
+docker compose rm -f e2e-init
+docker compose --profile e2e run --rm e2e
+```
+
+> **なぜ `rm -f e2e-init` が必要か**: `docker compose run --rm` は対象サービス（e2e）のみを削除する。
+> `e2e-init`（シードコンテナ）は残存し、次回実行時に「完了済み」と判断されてスキップされる。
+> 削除せずに実行すると、古いパスワードでシードされたままテストが実行されログインが失敗する。
+
+### 3. パスワードを変更したい場合
+
+```bash
+# .env.e2e のパスワードを変更してから再実行
+docker compose rm -f e2e-init
+docker compose --profile e2e run --rm e2e
+# seed_e2e は既存ユーザーを削除して再作成するため自動的に新パスワードが反映される
+```
+
 ## webpack キャッシュトラブル対処
 
 ### 症状

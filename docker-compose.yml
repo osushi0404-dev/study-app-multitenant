@@ -13,6 +13,12 @@ services:
       - "5432:5432"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # Redis Cache
   redis:
@@ -31,21 +37,32 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
+      - RATELIMIT_ENABLE  # パススルー: ホスト env に RATELIMIT_ENABLE があれば反映。なければデフォルト(True)
     volumes:
       - ./backend:/app
       - ./docs:/app/docs
       - backend_static:/app/staticfiles
+      - backend_logs:/app/logs   # named volume: bind mount では django ユーザーが /app/logs を作成できないため
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy   # Postgres 接続受付後にのみ起動（migrate の前提）
+      redis:
+        condition: service_started
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 60s
     command: >
       sh -c "python manage.py collectstatic --noinput &&
              python manage.py migrate &&
@@ -57,7 +74,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
@@ -76,7 +94,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
@@ -107,6 +126,64 @@ services:
       - backend
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+
+  # E2E Init Container: backend イメージで migrate・seed_e2e を実行してから e2e サービスに引き渡す
+  e2e-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - path: ./backend/.env
+        required: false
+      - path: ./e2e/.env.e2e   # E2E_TEST_PASSWORD を env_file で読み込む（required: false で CI 環境でも動作）
+        required: false
+    environment:
+      - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy   # backend（migrate 完了）が healthy になってから実行
+    networks:
+      - app-network
+    profiles:
+      - e2e
+    command: >
+      sh -c "[ -z \"$$E2E_TEST_PASSWORD\" ] && echo 'E2E_TEST_PASSWORD is not set.' >&2 && exit 1;
+             python manage.py migrate --noinput &&
+             python manage.py seed_e2e --scenario tenant_isolation --password $$E2E_TEST_PASSWORD &&
+             python manage.py seed_e2e --scenario quiz_session --password $$E2E_TEST_PASSWORD"
+
+  # E2E Tests (Playwright): e2e-init 完了後に起動する
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.59.1-jammy
+    working_dir: /e2e
+    volumes:
+      - ./e2e:/e2e
+      - e2e_node_modules:/e2e/node_modules   # named volume: Linux 向け node_modules を --rm 後も保持
+    depends_on:
+      frontend:
+        condition: service_started
+      e2e-init:
+        condition: service_completed_successfully   # Init Container 完了後に実行
+    networks:
+      - app-network
+    env_file:
+      - path: ./e2e/.env.e2e   # E2E_TEST_PASSWORD を読み込む（required: false で未作成でも起動可）
+        required: false
+    environment:
+      - BASE_URL=http://frontend:3000
+      - API_URL=http://backend:8000
+    profiles:
+      - e2e
+    command: sh -c "npm install && npm test"   # npm install: named volume のキャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
 
   # Nginx (Production only)
   nginx:
@@ -133,6 +210,8 @@ volumes:
   backend_media:
   backend_static:
   frontend_build:
+  backend_logs:
+  e2e_node_modules:   # named volume: Playwright Docker イメージ（Linux）向け node_modules を保持
 
 networks:
   app-network:
