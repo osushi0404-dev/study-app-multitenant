@@ -762,6 +762,8 @@ jobs:
   4b. `backend/accounts/migrations/0021_rename_organization_id_to_id.py` を元のバージョンに戻す（条件付き ALTER COLUMN ステップを削除）
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
   5a. `backend/core/settings.py` の `MIDDLEWARE` に `'core.middleware.HealthCheckMiddleware',` を復元
+  5b. `backend/core/settings.py` の `RATELIMIT_ENABLE` を `True`（ハードコード）に戻す
+  5c. `docker-compose.yml` の backend `environment:` から `- RATELIMIT_ENABLE` を削除
   6. `backend/Dockerfile` と `frontend/Dockerfile.dev` から `curl` のインストール行を削除
   7. `.claude/skills/test/SKILL.md` のE2Eステップを削除
   8. ブランチを revert
@@ -803,6 +805,7 @@ jobs:
 - npm audit: Playwright 公式パッケージのみ使用。高/クリティカル脆弱性があれば修正対象
 - **Docker socket マウント（DooD）不採用**: `global-setup.ts` が直接 `docker compose exec` を呼ぶ設計は Playwright コンテナに `/var/run/docker.sock` をマウントする必要があり、コンテナにホスト root 相当の権限を与えるセキュリティリスクがある。代わりに Init Container パターン（`e2e-init` サービス）を採用し、`global-setup.ts` からの Docker CLI 依存を完全に排除する
 - **`HealthCheckMiddleware` の削除**: 既存の `HealthCheckMiddleware` は認証なしで DB 接続数・Redis エラー詳細・システムリソース（CPU/メモリ）を公開しており、OWASP Security Misconfiguration / Sensitive Data Exposure に該当する。`/health/` は DB 接続確認のみ返す最小応答に限定する。詳細監視情報は `/monitoring/status/` 等（別途認証保護が必要）で提供するのが正しい設計
+- **`RATELIMIT_ENABLE` の env var 化**: デフォルトは `True` を維持し本番・開発環境の安全性は変わらない。`RATELIMIT_ENABLE=false` は E2E CI 環境の `e2e.yml` Start services ステップのみに設定する。ホスト環境に意図せず `RATELIMIT_ENABLE=false` が設定された場合でも `docker-compose.yml` のパススルーにより影響を受けるため、ローカル開発環境で `.env` 等に誤って設定しないよう注意する。CI の GitHub Actions 環境は各 job で独立しており、他ジョブへの波及なし
 
 ---
 
