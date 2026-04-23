@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
     def _seed_quiz_session(self):
         self._seed_login()
-        from problems.models import Subject, Problem, Choice
+        from problems.models import Subject, Problem, Choice, UserSubjectAccess
         org_a = Organization.objects.get(slug='e2e-org-a')
         user_a = User.objects.get(email='e2e_user_a@example.com')
 
@@ -124,4 +124,19 @@ class Command(BaseCommand):
             problem=problem,
             text='不正解の選択肢',
             defaults={'is_correct': False, 'order': 1},
+        )
+        # E2E Subject A も idempotent に確保（tenant_isolation 由来だが累積実行で存在する）
+        subj_a, _ = Subject.objects.get_or_create(
+            name='E2E Subject A',
+            organization=org_a,
+            defaults={'slug': 'e2e-subject-a'},
+        )
+        # UserSubjectAccess: /api/user/subjects/ は UserSubjectAccess を参照するため、
+        # 登録なしでは空配列が返り Dashboard でダイアログが表示されない。
+        # user_a が両科目にアクセスできるよう登録し、subjects.length >= 2 を保証する。
+        UserSubjectAccess.objects.get_or_create(
+            user=user_a, subject=subj, defaults={'granted_by': None}
+        )
+        UserSubjectAccess.objects.get_or_create(
+            user=user_a, subject=subj_a, defaults={'granted_by': None}
         )

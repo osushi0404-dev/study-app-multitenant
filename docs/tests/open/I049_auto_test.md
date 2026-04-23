@@ -207,3 +207,88 @@ User.objects.create_user(
     role='admin',  # 追加
 )
 ```
+
+### Failure 4: quiz-session.spec.ts — `[role="dialog"]` が表示されない（UserSubjectAccess 未作成）
+
+**再現手順**: `e2e-init` が `quiz_session` シナリオを実行 → quiz-session.spec.ts が `[data-testid="start-quiz-button"]` をクリック → `[role="dialog"]` が現れず `expect(subjectDialog).toBeVisible()` がタイムアウト
+
+**期待値**: 科目選択ダイアログ（`[role="dialog"]`）が表示される
+
+**実際値**: ダイアログが表示されず `Error: Locator: expect.toBeVisible` がタイムアウト
+
+**根本原因**:
+- ダッシュボードの「クイズを始める」ボタンは `/api/user/subjects/` を呼ぶ
+- `/api/user/subjects/` は `UserSubjectAccess.objects.filter(user=user)` を照会する（org の全 Subject ではなく、ユーザーが **登録済み** の Subject のみを返す）
+- `_seed_quiz_session` は Subject と Problem を作成するが `UserSubjectAccess` レコードを作成しなかった
+- 結果: `/api/user/subjects/` が空配列 `[]` を返す → `subjects.length === 0` → エラートーストが表示されダイアログが開かない
+
+**修正**: `_seed_quiz_session` に `UserSubjectAccess.objects.get_or_create()` を追加し、user_a が E2E Quiz Subject と E2E Subject A の両方にアクセスできるようにする。これにより `subjects.length >= 2` となり科目選択ダイアログが必ず表示される。
+
+```python
+# _seed_quiz_session に追加
+from problems.models import Subject, Problem, Choice, UserSubjectAccess
+
+# E2E Subject A も idempotent に確保（tenant_isolation 由来だが quiz_session から参照する）
+subj_a, _ = Subject.objects.get_or_create(
+    name='E2E Subject A',
+    organization=org_a,
+    defaults={'slug': 'e2e-subject-a'},
+)
+
+# UserSubjectAccess: user_a が両科目にアクセスできるようにする
+# （/api/user/subjects/ は UserSubjectAccess を参照するため、登録なしでは空配列が返る）
+UserSubjectAccess.objects.get_or_create(user=user_a, subject=subj, defaults={'granted_by': None})
+UserSubjectAccess.objects.get_or_create(user=user_a, subject=subj_a, defaults={'granted_by': None})
+```
+
+**セキュリティ上の考慮点**: UserSubjectAccess は「ユーザーが科目にアクセスできる」という認可情報。テスト用データであるため `granted_by=None` は許容。本番では必ず管理者ユーザーを `granted_by` に設定すること。
+
+**次回どう防ぐか**: 新しいシードシナリオで「Dashboard からクイズを開始できるか」を検証する場合は、Subject 作成だけでなく UserSubjectAccess レコードの作成を必ずセットで行う。`/api/user/subjects/` が UserSubjectAccess ベースであることをコメントに明記する。
+
+### Failure 5: auth.spec.ts — `getByText('入力内容にエラーがあります')` が見つからない（CI でのレート制限 403）
+
+**再現手順**: CI の E2E ジョブで `global-setup.ts` がユーザー A・B の 2 回ログイン POST → `chromium-unauthed` のテスト 1（正常ログイン 1 回） → テスト 2（誤パスワード + retries: 2 で最大 3 回） → 合計 6 POSTs > 5/5m 制限 → 6 回目のリクエストに 403 が返る
+
+**期待値**: `入力内容にエラーがあります`（HTTP 400 ValidationError）のトーストが表示される
+
+**実際値**: 403 Forbidden が返り、バックエンドのシリアライザーが実行されないためトーストテキストが表示されない
+
+**根本原因**:
+- `django-ratelimit==4.1.0` の `@ratelimit(key='ip', rate='5/5m')` はデフォルト `block=True`
+- `block=True` の場合、レート超過時に `PermissionDenied` 例外が raise され、シリアライザーは実行されない（HTTP 400 の代わりに 403 が返る）
+- `global-setup.ts` が user_a・user_b を順番にログイン（2 POSTs）
+- auth.spec.ts の「誤パスワード」テストが `retries: 2` 設定により最大 3 回実行される可能性がある
+- ローカル（単体実行）では 5 回を超えないが、CI の累積実行で 5/5m を超える
+- `RATELIMIT_ENABLE` は `settings.py` にハードコードされた `True` で、テスト環境で無効化する手段がなかった
+
+**修正**:
+1. `backend/core/settings.py`: `RATELIMIT_ENABLE` を env var から読み取るよう変更（12-Factor App 原則）
+2. `docker-compose.yml` backend の `environment:` に `- RATELIMIT_ENABLE` パススルーを追加
+3. `.github/workflows/e2e.yml` の "Start services" ステップに `RATELIMIT_ENABLE: "false"` を追加（E2E CI 環境でのみ無効化）
+
+```python
+# backend/core/settings.py 修正前:
+RATELIMIT_ENABLE = True
+
+# backend/core/settings.py 修正後:
+import os
+RATELIMIT_ENABLE = os.environ.get('RATELIMIT_ENABLE', 'True').lower() != 'false'
+# デフォルトは True（本番・開発環境）。E2E CI では RATELIMIT_ENABLE=false を設定して無効化する。
+```
+
+```yaml
+# docker-compose.yml backend environment に追加:
+environment:
+  - RATELIMIT_ENABLE  # パススルー: ホスト env に RATELIMIT_ENABLE があれば反映。なければデフォルト(True)
+
+# e2e.yml "Start services" ステップに追加:
+- name: Start services and wait for healthy
+  run: docker compose up -d --wait db backend frontend
+  timeout-minutes: 5
+  env:
+    RATELIMIT_ENABLE: "false"  # E2E CI でのみ無効化。本番・開発はデフォルト(True)のまま
+```
+
+**セキュリティ上の考慮点**: デフォルトを `True` に保つことで本番環境の安全性は維持される。`RATELIMIT_ENABLE=false` は E2E CI 環境にのみ設定し、設定値のデプロイが本番に影響しないことを確認する。
+
+**次回どう防ぐか**: CI でのみ発現するレート制限問題は、CI POSTリクエスト数を把握してレート設定と比較することで事前検出できる。認証エンドポイントに `block=True` を設定する場合は「テスト環境での無効化手段」も合わせて設計する。

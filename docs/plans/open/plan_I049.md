@@ -29,10 +29,10 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 ## 3. 影響範囲
 
-- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）。`problems.0017` マイグレーション追加（`problems_problem.points` 孤立カラム削除 — モデルから削除済みだが DROP 用マイグレーションが欠落していたため fresh DB でのみ NOT NULL 違反が発生していた）
+- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）。`problems.0017` マイグレーション追加（`problems_problem.points` 孤立カラム削除 — モデルから削除済みだが DROP 用マイグレーションが欠落していたため fresh DB でのみ NOT NULL 違反が発生していた）。`backend/core/settings.py` の `RATELIMIT_ENABLE` を env var から読み取るよう変更（12-Factor App 原則。デフォルト `True` で本番動作は変わらず。E2E CI でのみ `false` を設定）
 - **Frontend**: なし（E2E テストはプロジェクトルートの `e2e/` ディレクトリに配置し frontend ディレクトリには触れない）
 - **DB**: デフォルト DB（`learning_app`）を使用。E2E データは `e2e_` プレフィックスで識別。CI ではクリーンな DB インスタンスから起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持
-- **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加、`.github/workflows/e2e.yml` 追加、`.claude/skills/test/SKILL.md` 更新
+- **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加・backend の `environment:` に `RATELIMIT_ENABLE` パススルーを追加、`.github/workflows/e2e.yml` 追加（Start services ステップに `RATELIMIT_ENABLE: "false"` を設定）、`.claude/skills/test/SKILL.md` 更新
 
 ---
 
@@ -72,11 +72,11 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `backend/problems/migrations/0017_remove_problem_points.py` | 新規 | `problems_problem.points` カラムを DROP する。`points` は `0001_initial.py` で `IntegerField(default=10, NOT NULL)` として作成されたが、その後 `models.py` から削除されたにもかかわらず DROP 用マイグレーションが存在しなかった。既存 DB では値が入っているため発現しないが、fresh DB（CI）では Django ORM の INSERT に `points` が含まれず NOT NULL 違反が発生する。**データ安全性根拠**: `points` は現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。 |
 | `backend/accounts/migrations/0021_rename_organization_id_to_id.py` | 変更 | 新規 DB で `problems_subject.organization_id` が UUID 型のまま残る型不一致バグを修正（条件付き `ALTER COLUMN TYPE INTEGER USING NULL` を追加）。**データ安全性根拠**: `accounts.0010` が Organization を `DROP TABLE CASCADE` で削除・再作成したため、UUID 値はすでに孤立（参照先消滅）。また PostgreSQL は UUID カラムへの INTEGER 値保存を拒否するため、0010 適用後に作成された Subject の organization_id 実データも存在しない。NULL 変換によるデータ損失は実質ゼロ。 |
 | `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
-| `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）|
+| `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）。`RATELIMIT_ENABLE` を env var 経由で設定可能に変更（`os.environ.get('RATELIMIT_ENABLE', 'True').lower() != 'false'`。デフォルト `True` で本番動作は変わらない。E2E CI でのみ `false` を設定） |
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
 | `frontend/Dockerfile.dev` | 変更 | `curl` インストール追加（ヘルスチェック用） |
-| `docker-compose.yml` | 変更 | `e2e` サービス追加。**`e2e-init` サービス追加（Init Container パターン: backend イメージで `migrate`・`seed_e2e` を実行し、`e2e` サービスが起動する前に完了させる）。** `env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加 |
-| `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入 |
+| `docker-compose.yml` | 変更 | `e2e` サービス追加。**`e2e-init` サービス追加（Init Container パターン: backend イメージで `migrate`・`seed_e2e` を実行し、`e2e` サービスが起動する前に完了させる）。** `env_file` を `required: false` に変更。`backend`・`frontend` に `healthcheck` 追加。`backend` に named volume `backend_logs:/app/logs` 追加（PermissionError 対策）。`e2e` に named volume `e2e_node_modules:/e2e/node_modules` 追加（コンテナ破棄後も `node_modules` を保持）。top-level `volumes` に `backend_logs:`・`e2e_node_modules:` 追加。**backend の `environment:` に `- RATELIMIT_ENABLE` パススルーを追加**（ホスト env から注入。未設定時はデフォルト `True`） |
+| `.github/workflows/e2e.yml` | 新規 | E2E 独立 CI ジョブ。`docker compose up --wait` でサービス起動待機（手動ポーリング不要）。E2E_TEST_PASSWORD を GitHub Secrets から注入。**Start services ステップに `RATELIMIT_ENABLE: "false"` を設定**（CI でのレート制限超過を防止）。`migrate` と `seed_e2e` は e2e-init サービスが担当し、Run E2E tests ステップで `npm ci && npm test` を実行 |
 | `.claude/skills/test/SKILL.md` | 変更 | E2E ステップ追加 |
 
 ---
@@ -91,9 +91,9 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 |-----------|----------------|
 | `login` | Organization A、ユーザー A（email: `e2e_user_a@example.com`, pw: `$E2E_TEST_PASSWORD`, **role: `admin`**） |
 | `tenant_isolation` | Organization A + B、ユーザー A（**role: `admin`**）・B（**role: `admin`**）（pw: `$E2E_TEST_PASSWORD`）、Organization A の Subject 1件（`E2E Subject A`） |
-| `quiz_session` | Organization A、ユーザー A（**role: `admin`**、pw: `$E2E_TEST_PASSWORD`）、Subject（`E2E Quiz Subject`）+ Problem（選択肢付き）1件（QuizSession はフロント操作で作成するため seed しない） |
+| `quiz_session` | Organization A、ユーザー A（**role: `admin`**、pw: `$E2E_TEST_PASSWORD`）、Subject（`E2E Quiz Subject`）+ Problem（選択肢付き）1件。**`UserSubjectAccess` を user_a に対して `E2E Quiz Subject`・`E2E Subject A` の 2件作成**（`/api/user/subjects/` は `UserSubjectAccess` を参照するため、登録なしでは空配列が返りダイアログが表示されない）。QuizSession はフロント操作で作成するため seed しない |
 
-> **シナリオ累積に関する注意**: `e2e-init` は `tenant_isolation` → `quiz_session` の順でシードするため（flush なし）、org_a には `E2E Subject A`（tenant_isolation 由来）と `E2E Quiz Subject`（quiz_session 由来）の **2件の Subject** が存在する。quiz-session.spec.ts はこれを前提として「クイズを始める」ボタン押下時に科目選択ダイアログが必ず表示されることを想定して実装する。
+> **シナリオ累積に関する注意**: `e2e-init` は `tenant_isolation` → `quiz_session` の順でシードするため（flush なし）、org_a には `E2E Subject A`（tenant_isolation 由来）と `E2E Quiz Subject`（quiz_session 由来）の **2件の Subject** が存在する。ただし、ダッシュボードの「クイズを始める」が呼ぶ `/api/user/subjects/` は **`UserSubjectAccess`（ユーザー登録済み科目）を参照**するため、`_seed_quiz_session` で `UserSubjectAccess` を両科目分作成する。これにより `subjects.length >= 2` が保証され、quiz-session.spec.ts が「クイズを始める」押下時に科目選択ダイアログが必ず表示されることを前提として実装できる。
 > **`/subject-management` のアクセス制御**: `SubjectManagement.tsx` は `user.role === 'admin'` のユーザーのみ科目一覧を表示する。tenant-isolation.spec.ts がテナント境界を正確に検証するため（ロール制御とテナント分離を混在させないため）、両ユーザーを `role='admin'` で作成する。
 
 > **認証情報の扱い**: パスワードはソースコードに一切ハードコードしない。`global-setup.ts` が `process.env.E2E_TEST_PASSWORD` を読み取り、`--password` 引数として seed コマンドに渡す。ローカル開発は `.env.e2e`（gitignore 済み）、CI は GitHub Actions Secrets から注入する。
@@ -287,7 +287,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
        def _seed_quiz_session(self):
            self._seed_login()
-           from problems.models import Subject, Problem, Choice
+           from problems.models import Subject, Problem, Choice, UserSubjectAccess
            org_a = Organization.objects.get(slug='e2e-org-a')
            user_a = User.objects.get(email='e2e_user_a@example.com')
            subj, _ = Subject.objects.get_or_create(
@@ -314,6 +314,22 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
            Choice.objects.get_or_create(
                problem=problem, text='不正解の選択肢',
                defaults={'is_correct': False, 'order': 1},
+           )
+           # E2E Subject A も idempotent に確保（tenant_isolation 由来だが累積実行で存在する）
+           subj_a, _ = Subject.objects.get_or_create(
+               name='E2E Subject A',
+               organization=org_a,
+               defaults={'slug': 'e2e-subject-a'},
+           )
+           # UserSubjectAccess: /api/user/subjects/ は UserSubjectAccess を参照するため、
+           # 登録なしでは空配列が返り Dashboard でダイアログが表示されない。
+           # user_a が両科目（E2E Quiz Subject + E2E Subject A）にアクセスできるよう登録する。
+           # これにより subjects.length >= 2 が保証され科目選択ダイアログが必ず表示される。
+           UserSubjectAccess.objects.get_or_create(
+               user=user_a, subject=subj, defaults={'granted_by': None}
+           )
+           UserSubjectAccess.objects.get_or_create(
+               user=user_a, subject=subj_a, defaults={'granted_by': None}
            )
    ```
    > **注意**: `--password` 引数に渡す値は `global-setup.ts` が `process.env.E2E_TEST_PASSWORD` から取得して渡す。seed コマンド単体をローカルで呼ぶ場合は `--password $E2E_TEST_PASSWORD` のように明示する。
@@ -641,6 +657,17 @@ jobs:
       - name: Start services and wait for healthy
         run: docker compose up -d --wait db backend frontend
         timeout-minutes: 5
+        env:
+          RATELIMIT_ENABLE: "false"  # E2E CI でのみ無効化（global-setup + テストの累積 POST が 5/5m 制限を超えるため）
+
+      - name: Initialize E2E database
+        # CI はホスト上で npm test を実行するため e2e-init コンテナを使わず直接 docker exec で初期化する
+        run: |
+          docker compose exec -T backend python manage.py migrate --noinput
+          docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario tenant_isolation --password "$E2E_TEST_PASSWORD"
+          docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario quiz_session --password "$E2E_TEST_PASSWORD"
+        env:
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - uses: actions/setup-node@v4
         with:
@@ -659,6 +686,13 @@ jobs:
           BASE_URL: http://localhost:3000
           API_URL: http://localhost:8000
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== backend logs ===" && docker compose logs backend --tail=100
+          echo "=== db logs ===" && docker compose logs db --tail=50
+          echo "=== docker compose ps ===" && docker compose ps
 
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -752,6 +786,8 @@ jobs:
 | `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm install && npm test` に変更。`npm install` は named volume のキャッシュを活かして差分のみ更新（2回目以降は数秒）。CI では `e2e.yml` で `npm ci` を使い決定論的インストールを保証 |
 | Playwright コンテナに `docker` CLI が存在しないため `global-setup.ts` 内で `docker compose exec` による DB 初期化が不可能（`ENOENT: docker`）。Docker socket マウント（DooD）はホスト root 相当の権限を与えるセキュリティリスク | DB が初期化されないまま全テストが失敗する | **Init Container パターン** を採用。`e2e-init` サービス（backend イメージ）で migrate・seed_e2e を実行し、`e2e` サービスは `condition: service_completed_successfully` で完了を待つ。`global-setup.ts` はブラウザ操作のみに限定し Docker CLI への依存を排除する |
 | `problems_problem.points` カラムが `NOT NULL` かつ DB DEFAULT なしのまま残存しており、fresh DB で `Problem.objects.create()` が NOT NULL 違反で失敗する（`points` は `models.py` から削除済みだが DROP 用マイグレーションが欠落）。既存 DB では発現しないため見落とされていた | `seed_e2e.py` の quiz_session シナリオが失敗し E2E テスト全体がブロック | `problems.0017` マイグレーション（`RemoveField`）を追加し `points` カラムを正式に DROP。モデルを唯一の信頼源とする Django の設計原則に沿った根本対処 |
+| `/api/user/subjects/` が `UserSubjectAccess`（ユーザー登録済み科目）を参照するため、seed で Subject を作成するだけでは空配列が返る。`subjects.length === 0` → Dashboard はダイアログでなくエラートーストを表示し、quiz-session.spec.ts が `[role="dialog"]` を見つけられず失敗する | quiz-session.spec.ts が CI でタイムアウトにより失敗 | `_seed_quiz_session` に `UserSubjectAccess.objects.get_or_create()` を追加し、user_a が E2E Quiz Subject・E2E Subject A の両方にアクセスできるようにする（`subjects.length >= 2` を保証） |
+| CI での認証 POST 累積が `django-ratelimit` の `5/5m` 制限を超過する（`block=True` デフォルトにより 6 回目で 403 が返り、シリアライザーが実行されずトーストテキストが表示されない）。`global-setup.ts` の 2 ログイン + auth.spec.ts のテスト実行で 5 回以上の POST が発生する | auth.spec.ts の「誤パスワード」テストが `入力内容にエラーがあります` を検出できず失敗 | `RATELIMIT_ENABLE` を env var で制御可能にし（デフォルト `True`）、E2E CI の Start services ステップに `RATELIMIT_ENABLE: "false"` を設定。本番・開発環境の動作は変わらない |
 
 ---
 

@@ -284,7 +284,8 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # Rate Limiting
-RATELIMIT_ENABLE = True
+# デフォルト True（本番・開発環境）。E2E CI では RATELIMIT_ENABLE=false を設定して無効化する（12-Factor App）。
+RATELIMIT_ENABLE = os.environ.get('RATELIMIT_ENABLE', 'True').lower() != 'false'
 RATELIMIT_USE_CACHE = 'default'
 
 # Logging

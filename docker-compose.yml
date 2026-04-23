@@ -42,6 +42,7 @@ services:
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
+      - RATELIMIT_ENABLE  # パススルー: ホスト env に RATELIMIT_ENABLE があれば反映。なければデフォルト(True)
     volumes:
       - ./backend:/app
       - ./docs:/app/docs

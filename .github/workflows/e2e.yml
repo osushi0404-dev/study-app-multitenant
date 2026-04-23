@@ -16,6 +16,8 @@ jobs:
       - name: Start services and wait for healthy
         run: docker compose up -d --wait db backend frontend
         timeout-minutes: 5
+        env:
+          RATELIMIT_ENABLE: "false"  # E2E CI でのみ無効化（global-setup + テストの累積 POST が 5/5m 制限を超えるため）
 
       - name: Initialize E2E database
         # CI はホスト上で npm test を実行するため e2e-init コンテナを使わず直接 docker exec で初期化する
