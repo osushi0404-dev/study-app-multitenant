@@ -19,8 +19,10 @@ test.describe('ログインフロー（未認証）', () => {
     await page.fill('[data-testid="email-input"]', 'e2e_user_a@example.com');
     await page.fill('[data-testid="password-input"]', 'WrongPassword999!');
     await page.click('[data-testid="login-button"]');
-    // エラーはreact-toastifyのトースト通知として表示される
-    await expect(page.locator('.Toastify__toast--error')).toBeVisible();
+    // エラーは react-hot-toast のトースト通知として表示される
+    // バックエンドの ValidationError → custom_exception_handler → main_message='入力内容にエラーがあります'
+    // ライブラリ内部クラスではなくユーザーが実際に見るテキストでアサートする（ライブラリ非依存）
+    await expect(page.getByText('入力内容にエラーがあります')).toBeVisible();
     // ダッシュボードへの遷移が起きないことも確認
     await expect(page).toHaveURL(/login/);
   });

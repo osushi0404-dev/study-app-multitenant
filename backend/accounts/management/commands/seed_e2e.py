@@ -66,6 +66,7 @@ class Command(BaseCommand):
             user_id='e2e_user_a',
             password=self.e2e_password,
             organization=org_a,
+            role='admin',  # /subject-management へのアクセスに admin ロールが必要
         )
 
     def _seed_tenant_isolation(self):
@@ -81,6 +82,7 @@ class Command(BaseCommand):
             user_id='e2e_user_b',
             password=self.e2e_password,
             organization=org_b,
+            role='admin',  # org_b admin として /subject-management にアクセスし、org_a データが見えないことを検証
         )
         from problems.models import Subject
         org_a = Organization.objects.get(slug='e2e-org-a')

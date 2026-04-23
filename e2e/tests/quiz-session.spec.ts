@@ -7,11 +7,16 @@ test.describe('クイズセッション', () => {
     // 「クイズを始める」ボタンをクリック
     await page.click('[data-testid="start-quiz-button"]');
 
-    // 科目選択ダイアログが表示される場合は E2E Quiz Subject を選択
-    const dialog = page.locator('[role="dialog"]');
-    if (await dialog.isVisible()) {
-      await page.click('text=E2E Quiz Subject');
-    }
+    // e2e-init が tenant_isolation → quiz_session の順でシードするため
+    // org_a には E2E Subject A + E2E Quiz Subject の 2件が存在し、
+    // Dashboard の handleStartQuiz は必ずダイアログを開く（subjects.length >= 2）。
+    // expect(...).toBeVisible() は自動リトライ付きアサートで
+    // React 状態更新 + MUI ダイアログアニメーション（~300ms）を安全に待機する。
+    const subjectDialog = page.locator('[role="dialog"]');
+    await expect(subjectDialog).toBeVisible();
+
+    // aria-label="E2E Quiz Subjectのクイズを開始" に基づくアクセシビリティファーストなセレクタ
+    await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
 
     // クイズ画面に遷移することを確認
     await expect(page).toHaveURL(/\/quiz/);

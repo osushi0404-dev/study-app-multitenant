@@ -89,9 +89,12 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 | シナリオ名 | 作成されるデータ |
 |-----------|----------------|
-| `login` | Organization A、ユーザー A（email: `e2e_user_a@example.com`, pw: `$E2E_TEST_PASSWORD`） |
-| `tenant_isolation` | Organization A + B、ユーザー A・B（pw: `$E2E_TEST_PASSWORD`）、Organization A の Subject 1件 |
-| `quiz_session` | Organization A、ユーザー A（pw: `$E2E_TEST_PASSWORD`）、Subject + Problem（選択肢付き）数件（QuizSession はフロント操作で作成するため seed しない） |
+| `login` | Organization A、ユーザー A（email: `e2e_user_a@example.com`, pw: `$E2E_TEST_PASSWORD`, **role: `admin`**） |
+| `tenant_isolation` | Organization A + B、ユーザー A（**role: `admin`**）・B（**role: `admin`**）（pw: `$E2E_TEST_PASSWORD`）、Organization A の Subject 1件（`E2E Subject A`） |
+| `quiz_session` | Organization A、ユーザー A（**role: `admin`**、pw: `$E2E_TEST_PASSWORD`）、Subject（`E2E Quiz Subject`）+ Problem（選択肢付き）1件（QuizSession はフロント操作で作成するため seed しない） |
+
+> **シナリオ累積に関する注意**: `e2e-init` は `tenant_isolation` → `quiz_session` の順でシードするため（flush なし）、org_a には `E2E Subject A`（tenant_isolation 由来）と `E2E Quiz Subject`（quiz_session 由来）の **2件の Subject** が存在する。quiz-session.spec.ts はこれを前提として「クイズを始める」ボタン押下時に科目選択ダイアログが必ず表示されることを想定して実装する。
+> **`/subject-management` のアクセス制御**: `SubjectManagement.tsx` は `user.role === 'admin'` のユーザーのみ科目一覧を表示する。tenant-isolation.spec.ts がテナント境界を正確に検証するため（ロール制御とテナント分離を混在させないため）、両ユーザーを `role='admin'` で作成する。
 
 > **認証情報の扱い**: パスワードはソースコードに一切ハードコードしない。`global-setup.ts` が `process.env.E2E_TEST_PASSWORD` を読み取り、`--password` 引数として seed コマンドに渡す。ローカル開発は `.env.e2e`（gitignore 済み）、CI は GitHub Actions Secrets から注入する。
 
@@ -252,6 +255,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
                user_id='e2e_user_a',
                password=self.e2e_password,
                organization=org_a,
+               role='admin',  # /subject-management へのアクセスに admin ロールが必要
            )
 
        def _get_or_create_category(self):
@@ -273,6 +277,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
                user_id='e2e_user_b',
                password=self.e2e_password,
                organization=org_b,
+               role='admin',  # org_b admin として /subject-management にアクセスし、org_a データが見えないことを検証
            )
            from problems.models import Subject
            Subject.objects.get_or_create(
@@ -282,21 +287,34 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
        def _seed_quiz_session(self):
            self._seed_login()
-           from problems.models import Subject, Problem
+           from problems.models import Subject, Problem, Choice
            org_a = Organization.objects.get(slug='e2e-org-a')
+           user_a = User.objects.get(email='e2e_user_a@example.com')
            subj, _ = Subject.objects.get_or_create(
-               name='E2E Quiz Subject', defaults={'organization': org_a}
+               name='E2E Quiz Subject',
+               organization=org_a,
+               defaults={'slug': 'e2e-quiz-subject'},
            )
            problem, _ = Problem.objects.get_or_create(
                subject=subj,
-               question_text='E2E test question?',
+               question='E2E テスト用の問題文です。',
                defaults={
-                   'problem_type': 'choice',
-                   'explanation': 'E2E explanation',
-               }
+                   'problem_type': 'single',
+                   'difficulty': 1,
+                   'explanation': 'E2E テスト用の解説文です。',
+                   'organization': org_a,
+                   'created_by': user_a,
+               },
            )
-           # 選択肢がないと quiz-session.spec.ts の [data-testid="choice-option"] クリックが失敗する
-           # Choice モデルの正確なフィールドは problems/models.py を確認して補完
+           # 選択問題には最低1件の正解選択肢が必要
+           Choice.objects.get_or_create(
+               problem=problem, text='正解の選択肢',
+               defaults={'is_correct': True, 'order': 0},
+           )
+           Choice.objects.get_or_create(
+               problem=problem, text='不正解の選択肢',
+               defaults={'is_correct': False, 'order': 1},
+           )
    ```
    > **注意**: `--password` 引数に渡す値は `global-setup.ts` が `process.env.E2E_TEST_PASSWORD` から取得して渡す。seed コマンド単体をローカルで呼ぶ場合は `--password $E2E_TEST_PASSWORD` のように明示する。
 
@@ -381,8 +399,9 @@ test.describe('ログインフロー（未認証）', () => {
     await page.fill('[data-testid="email-input"]', 'e2e_user_a@example.com');
     await page.fill('[data-testid="password-input"]', 'WrongPassword999!');
     await page.click('[data-testid="login-button"]');
-    // エラーは react-toastify のトースト通知として表示される
-    await expect(page.locator('.Toastify__toast--error')).toBeVisible();
+    // エラーは react-hot-toast のトースト通知として表示される（バックエンドの ValidationError → main_message）
+    // ライブラリ内部クラスではなくユーザーが実際に見るテキストでアサートする
+    await expect(page.getByText('入力内容にエラーがあります')).toBeVisible();
     await expect(page).toHaveURL(/login/);
   });
 });
@@ -412,17 +431,17 @@ const authDir = path.join(__dirname, '..', '.auth');  // tests/ からの相対�
 
 test.describe('テナント間データ分離', () => {
   test('Organization A のデータが Organization B ユーザーから見えない', async ({ browser }) => {
-    // User A: Organization A の Subject が見える
+    // User A（org_a admin）: Organization A の Subject が見える
     const ctxA = await browser.newContext({ storageState: path.join(authDir, 'user_a.json') });
     const pageA = await ctxA.newPage();
-    await pageA.goto('/subjects');
+    await pageA.goto('/subject-management');  // admin ロール必須ページ
     await expect(pageA.locator('text=E2E Subject A')).toBeVisible();
     await ctxA.close();
 
-    // User B: Organization A の Subject が見えない
+    // User B（org_b admin）: Organization A の Subject が見えない（テナント境界の検証）
     const ctxB = await browser.newContext({ storageState: path.join(authDir, 'user_b.json') });
     const pageB = await ctxB.newPage();
-    await pageB.goto('/subjects');
+    await pageB.goto('/subject-management');  // org_b admin はアクセスできるが org_a データは見えない
     await expect(pageB.locator('text=E2E Subject A')).not.toBeVisible();
     await ctxB.close();
   });
@@ -436,19 +455,36 @@ test.describe('テナント間データ分離', () => {
 import { test, expect } from '@playwright/test';
 
 test.describe('クイズセッション', () => {
-  test('科目を選択してクイズに回答できる', async ({ page }) => {
-    await page.goto('/subjects');
-    await page.click('text=E2E Quiz Subject');
-    // クイズ開始ボタンを押す
+  test('ダッシュボードからクイズを開始して回答できる', async ({ page }) => {
+    await page.goto('/dashboard');
+
+    // 「クイズを始める」ボタンをクリック
     await page.click('[data-testid="start-quiz-button"]');
-    await expect(page).toHaveURL(/quiz/);
-    // 選択肢をクリックして回答送信
+
+    // e2e-init が tenant_isolation → quiz_session の順でシードするため org_a には 2件の Subject が存在し、
+    // ダッシュボードの handleStartQuiz は必ずダイアログを開く（subjects.length >= 2）。
+    // expect(...).toBeVisible() は Playwright の自動リトライ付きアサートで、
+    // React 状態更新 + MUI ダイアログアニメーション（~300ms）を安全に待機する。
+    const subjectDialog = page.locator('[role="dialog"]');
+    await expect(subjectDialog).toBeVisible();
+
+    // アクセシブルネーム（aria-label="E2E Quiz Subjectのクイズを開始"）に基づいて選択
+    await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
+
+    // クイズ画面に遷移することを確認
+    await expect(page).toHaveURL(/\/quiz/);
+
+    // 選択肢が表示されるまで待機してクリック
+    await page.waitForSelector('[data-testid="choice-option"]');
     await page.click('[data-testid="choice-option"]');
-    // 結果表示確認
+
+    // 回答結果が表示されることを確認
     await expect(page.locator('[data-testid="answer-result"]')).toBeVisible();
   });
 });
 ```
+
+> **設計方針**: Dashboard 起点のクリティカルパスを検証する。科目選択ダイアログは seed の累積データ（2件の Subject）により必ず表示されるため、`if (await dialog.isVisible())` のような条件分岐（瞬時チェック・非同期レース）は使用しない。`expect(locator).toBeVisible()` + `getByRole` の組み合わせが Playwright 推奨パターン（自動リトライ・アクセシビリティファースト）。
 
 ### Step 8: Docker ヘルスチェック・CI GitHub Actions 独立ジョブ追加
 
@@ -752,7 +788,7 @@ jobs:
 | 判断項目 | 内容 | 根拠 |
 |---------|------|------|
 | e2e/ 配置場所 | プロジェクトルート（`frontend/` 外） | Playwright ベストプラクティス。frontend の依存と分離できる |
-| テスト用 DB 名 | `learning_app_e2e` | 本番 DB `learning_app` との混同を防ぐ命名 |
+| テスト用 DB 名 | デフォルト DB `learning_app` を使用（別 DB は作成しない） | Section 11 参照。CI では Docker volume がクリーンなため本番データと完全分離。ローカルでは `e2e_` プレフィックスで識別 |
 | Playwright ブラウザ | chromium のみ | CI 実行時間を最小化するため。クロスブラウザは本イシュースコープ外 |
 | storageState 保存先 | `e2e/.auth/user_a.json` / `user_b.json` | Playwright 公式推奨パターン |
 | data-testid 追加 | 必要に応じて Login 画面に追加 | E2E テストの安定性のため。ただし Frontend コード変更が発生するため別途確認が必要 |
@@ -767,7 +803,7 @@ jobs:
 ### 確認項目
 
 - [ ] **e2e/ 配置**: プロジェクトルートに `e2e/` ディレクトリを作る（`frontend/` の外）
-- [ ] **テスト用 DB**: `learning_app_e2e` を別 DB として作成（`.env.e2e` で管理）
+- [ ] **テスト用 DB**: デフォルト DB `learning_app` を使用（別 DB は作成しない）。CI では Docker volume がクリーンなため本番データと完全分離
 - [ ] **ブラウザ**: chromium のみ（Firefox/WebKit は対象外）
 - [ ] **data-testid の追加**: ログイン画面に `data-testid="email-input"` 等を追加する可能性がある（Login.tsx への変更が発生）
 - [ ] **CI**: `.github/workflows/e2e.yml` を新規作成（既存 `ci.yml` は変更しない）

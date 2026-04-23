@@ -142,3 +142,68 @@ docker compose --profile e2e run --rm e2e npm test
 | 実行日時 | auth.spec | tenant-isolation.spec | quiz-session.spec | 備考 |
 |---------|-----------|----------------------|------------------|------|
 | 実装後 | - | - | - | 未実施 |
+
+## fix-loop 発見事項（E2E テストコード修正）
+
+CI で E2E_TEST_PASSWORD 設定後に判明した 3 件の失敗と根本原因・修正内容。
+
+### Failure 1: auth.spec.ts — トーストセレクター誤り
+
+**根本原因**: テストコードが `.Toastify__toast--error`（`react-toastify` のクラス）を使っていたが、アプリは `react-hot-toast` を使用しており当該クラスは存在しない。
+
+**修正**: ライブラリ内部実装ではなくユーザーが実際に見るテキストでアサートする。
+
+ログイン失敗時の全経路:
+`UserLoginSerializer.validate()` → `serializers.ValidationError("ユーザーIDまたはパスワードが正しくありません。")` → `custom_exception_handler` → `main_message = '入力内容にエラーがあります'` → `showErrorToast` → toast 表示。
+
+```typescript
+// ❌ 修正前: react-toastify クラス（アプリに存在しない）
+await expect(page.locator('.Toastify__toast--error')).toBeVisible();
+
+// ✅ 修正後: ユーザーが見るテキストでアサート（ライブラリ非依存）
+await expect(page.getByText('入力内容にエラーがあります')).toBeVisible();
+```
+
+### Failure 2: quiz-session.spec.ts — ダイアログの非同期レース
+
+**根本原因**: `e2e-init` が `tenant_isolation → quiz_session` の順でシードするため（flush なし）、org_a に Subject が 2件（`E2E Subject A` + `E2E Quiz Subject`）累積する。Dashboard の `handleStartQuiz` は `subjects.length >= 2` のときダイアログを開くが、テストの `if (await dialog.isVisible())` は瞬時チェック（待機なし）で React 状態更新 + MUI アニメーション（~300ms）に競合してダイアログを見逃し、科目が選択されないまま `/quiz` 遷移が発生しなかった。
+
+**修正**: 「2件存在するためダイアログが必ず出る」という前提を明示した確定的実装に変更。
+
+```typescript
+// ❌ 修正前: 瞬時チェックで非同期レースが発生
+if (await dialog.isVisible()) {
+  await page.click('text=E2E Quiz Subject');
+}
+
+// ✅ 修正後: expect でリトライ付き待機、getByRole でアクセシビリティファースト
+const subjectDialog = page.locator('[role="dialog"]');
+await expect(subjectDialog).toBeVisible();  // 自動リトライ付きアサート
+await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
+```
+
+### Failure 3: tenant-isolation.spec.ts — seed ユーザーが non-admin でページにアクセス不可
+
+**根本原因**: `SubjectManagement.tsx` は `user.role === 'admin'` のユーザーにのみ科目一覧を表示する。seed が `role` を指定しておらず、user_a・user_b はデフォルト `role='user'` で作成されていたため `/subject-management` でアクセス拒否画面が表示され `text=E2E Subject A` が見つからなかった。
+
+**修正**: 両ユーザーを `role='admin'` で作成する。これにより「org_a の admin は org_a の科目のみ見える」「org_b の admin に org_a の科目は見えない」というテナント境界を正確に検証できる（ロール制御とテナント分離を混在させない）。
+
+```python
+# _seed_login: user_a に role='admin' を追加
+User.objects.create_user(
+    email='e2e_user_a@example.com',
+    user_id='e2e_user_a',
+    password=self.e2e_password,
+    organization=org_a,
+    role='admin',  # 追加
+)
+
+# _seed_tenant_isolation: user_b にも role='admin' を追加
+User.objects.create_user(
+    email='e2e_user_b@example.com',
+    user_id='e2e_user_b',
+    password=self.e2e_password,
+    organization=org_b,
+    role='admin',  # 追加
+)
+```
