@@ -283,9 +283,11 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
                role='admin',  # org_b admin として /subject-management にアクセスし、org_a データが見えないことを検証
            )
            from problems.models import Subject
+           org_a = Organization.objects.get(slug='e2e-org-a')
            Subject.objects.get_or_create(
                name='E2E Subject A',
-               defaults={'organization': Organization.objects.get(slug='e2e-org-a')}
+               organization=org_a,  # ルックアップキーに含める（defaults= に入れると org を無視して重複が生じる）
+               defaults={'slug': 'e2e-subject-a'},
            )
 
        def _seed_quiz_session(self):
