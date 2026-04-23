@@ -29,10 +29,10 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 ## 3. 影響範囲
 
-- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）。`problems.0017` マイグレーション追加（`problems_problem.points` 孤立カラム削除 — モデルから削除済みだが DROP 用マイグレーションが欠落していたため fresh DB でのみ NOT NULL 違反が発生していた）。`backend/core/settings.py` の `RATELIMIT_ENABLE` を env var から読み取るよう変更（12-Factor App 原則。デフォルト `True` で本番動作は変わらず。E2E CI でのみ `false` を設定）
+- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）。`problems.0017` マイグレーション追加（`problems_problem.points` 孤立カラム削除 — モデルから削除済みだが DROP 用マイグレーションが欠落していたため fresh DB でのみ NOT NULL 違反が発生していた）。`backend/core/settings.py` の `RATELIMIT_ENABLE` を env var から読み取るよう変更（12-Factor App 原則。デフォルト `True` で本番動作は変わらず。E2E CI でのみ `false` を設定）。`problems.0018` マイグレーション追加（`makemigrations --check --dry-run` で検出されたモデルと migration の乖離 6 件を一括解消: `QuizSession.total_points`・`QuizAnswer.points_earned` の孤立カラム削除、Subject の孤立インデックス削除、`slug`/`explanation`/`problem_type` の state 整合 — `total_points` NOT NULL 違反が CI で quiz-session テストを失敗させていた根本原因）
 - **Frontend**: なし（E2E テストはプロジェクトルートの `e2e/` ディレクトリに配置し frontend ディレクトリには触れない）
 - **DB**: デフォルト DB（`learning_app`）を使用。E2E データは `e2e_` プレフィックスで識別。CI ではクリーンな DB インスタンスから起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持
-- **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加・backend の `environment:` に `RATELIMIT_ENABLE` パススルーを追加、`.github/workflows/e2e.yml` 追加（Start services ステップに `RATELIMIT_ENABLE: "false"` を設定）、`.claude/skills/test/SKILL.md` 更新
+- **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加・backend の `environment:` に `RATELIMIT_ENABLE` パススルーを追加、`.github/workflows/e2e.yml` 追加（Start services ステップに `RATELIMIT_ENABLE: "false"` を設定）、`.github/workflows/ci.yml` の `backend-lint` ジョブに `python manage.py makemigrations --check --dry-run` を追加（将来の migration drift を PR 段階で早期検出）、`.claude/skills/test/SKILL.md` 更新、`docs/runbooks/common-commands.md` に「モデル変更後は必ず `makemigrations` を実行してコミットする」開発者フローを追記
 
 ---
 
@@ -71,6 +71,9 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
 | `backend/problems/migrations/0017_remove_problem_points.py` | 新規 | `problems_problem.points` カラムを DROP する。`points` は `0001_initial.py` で `IntegerField(default=10, NOT NULL)` として作成されたが、その後 `models.py` から削除されたにもかかわらず DROP 用マイグレーションが存在しなかった。既存 DB では値が入っているため発現しないが、fresh DB（CI）では Django ORM の INSERT に `points` が含まれず NOT NULL 違反が発生する。**データ安全性根拠**: `points` は現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。 |
 | `backend/accounts/migrations/0021_rename_organization_id_to_id.py` | 変更 | 新規 DB で `problems_subject.organization_id` が UUID 型のまま残る型不一致バグを修正（条件付き `ALTER COLUMN TYPE INTEGER USING NULL` を追加）。**データ安全性根拠**: `accounts.0010` が Organization を `DROP TABLE CASCADE` で削除・再作成したため、UUID 値はすでに孤立（参照先消滅）。また PostgreSQL は UUID カラムへの INTEGER 値保存を拒否するため、0010 適用後に作成された Subject の organization_id 実データも存在しない。NULL 変換によるデータ損失は実質ゼロ。 |
+| `backend/problems/migrations/0018_remove_obsolete_fields_and_fix_schema.py` | 新規 | `makemigrations --check --dry-run` で検出されたモデルと migration の乖離（drift）6 件を一括解消: (1) `QuizSession.total_points`（`IntegerField(default=0, NOT NULL)`）の孤立カラム削除 — CI の `POST /api/quiz/` で NOT NULL 違反 HTTP 500 を引き起こしていた直接原因、(2) `QuizAnswer.points_earned` の孤立カラム削除、(3) `Subject` の孤立インデックス削除、(4)〜(6) `Problem.explanation`・`Problem.problem_type`・`Subject.slug` の migration state 整合（DB 変更は最小）。**データ安全性根拠**: `total_points`・`points_earned` はいずれも現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。`slug` の max_length 拡張（50→100）は常に後方互換。 |
+| `.github/workflows/ci.yml` | 変更 | `backend-lint` ジョブに `python manage.py makemigrations --check --dry-run` ステップを追加。DB 接続不要の静的チェックのため lint ジョブ（flake8/bandit と同列）に配置。将来のモデル変更で `makemigrations` を忘れた場合に PR 段階で即検出する（再発防止）。 |
+| `docs/runbooks/common-commands.md` | 変更 | 「モデルを変更したら必ず `makemigrations` を実行してコミットする」開発者フローを明記。migration drift の再発防止として `makemigrations --check` の手動確認コマンドも追記。 |
 | `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
 | `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）。`RATELIMIT_ENABLE` を env var 経由で設定可能に変更（`os.environ.get('RATELIMIT_ENABLE', 'True').lower() != 'false'`。デフォルト `True` で本番動作は変わらない。E2E CI でのみ `false` を設定） |
 | `backend/Dockerfile` | 変更 | `curl` インストール追加（ヘルスチェック・デバッグ用） |
@@ -760,6 +763,9 @@ jobs:
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
   4a. `backend/problems/migrations/0017_remove_problem_points.py` を削除（ロールバック後は `points` カラムが再び孤立状態に戻る。既存 DB への影響はないが fresh DB では NOT NULL 違反が再発する）
   4b. `backend/accounts/migrations/0021_rename_organization_id_to_id.py` を元のバージョンに戻す（条件付き ALTER COLUMN ステップを削除）
+  4c. `backend/problems/migrations/0018_remove_obsolete_fields_and_fix_schema.py` を削除（ロールバック後は `total_points`・`points_earned` カラムが再び孤立状態に戻る。既存 DB への影響はないが fresh DB では NOT NULL 違反が再発し quiz-session CI テストが失敗する）
+  4d. `.github/workflows/ci.yml` の `backend-lint` ジョブから `makemigrations --check --dry-run` ステップを削除
+  4e. `docs/runbooks/common-commands.md` の migration drift 防止フローを削除
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
   5a. `backend/core/settings.py` の `MIDDLEWARE` に `'core.middleware.HealthCheckMiddleware',` を復元
   5b. `backend/core/settings.py` の `RATELIMIT_ENABLE` を `True`（ハードコード）に戻す
@@ -790,6 +796,7 @@ jobs:
 | `problems_problem.points` カラムが `NOT NULL` かつ DB DEFAULT なしのまま残存しており、fresh DB で `Problem.objects.create()` が NOT NULL 違反で失敗する（`points` は `models.py` から削除済みだが DROP 用マイグレーションが欠落）。既存 DB では発現しないため見落とされていた | `seed_e2e.py` の quiz_session シナリオが失敗し E2E テスト全体がブロック | `problems.0017` マイグレーション（`RemoveField`）を追加し `points` カラムを正式に DROP。モデルを唯一の信頼源とする Django の設計原則に沿った根本対処 |
 | `/api/user/subjects/` が `UserSubjectAccess`（ユーザー登録済み科目）を参照するため、seed で Subject を作成するだけでは空配列が返る。`subjects.length === 0` → Dashboard はダイアログでなくエラートーストを表示し、quiz-session.spec.ts が `[role="dialog"]` を見つけられず失敗する | quiz-session.spec.ts が CI でタイムアウトにより失敗 | `_seed_quiz_session` に `UserSubjectAccess.objects.get_or_create()` を追加し、user_a が E2E Quiz Subject・E2E Subject A の両方にアクセスできるようにする（`subjects.length >= 2` を保証） |
 | CI での認証 POST 累積が `django-ratelimit` の `5/5m` 制限を超過する（`block=True` デフォルトにより 6 回目で 403 が返り、シリアライザーが実行されずトーストテキストが表示されない）。`global-setup.ts` の 2 ログイン + auth.spec.ts のテスト実行で 5 回以上の POST が発生する | auth.spec.ts の「誤パスワード」テストが `入力内容にエラーがあります` を検出できず失敗 | `RATELIMIT_ENABLE` を env var で制御可能にし（デフォルト `True`）、E2E CI の Start services ステップに `RATELIMIT_ENABLE: "false"` を設定。本番・開発環境の動作は変わらない |
+| **migration drift（モデルと migration の構造的乖離）**: 開発者が `models.py` からフィールドを削除する際に `makemigrations` を実行しなかったため、DB スキーマと ORM の状態が乖離。fresh DB（CI）では削除フィールドの NOT NULL 制約が残存し ORM の INSERT で `IntegrityError` が発生する。`problems_problem.points`（0017 で解消済み）・`quizsession.total_points`・`quizanswer.points_earned` が同パターン。ローカル（既存 DB）では `points` 列に値が入っているため発現せず、CI でのみ判明する性質のバグ | `POST /api/quiz/` → HTTP 500（`total_points` NOT NULL 違反）→ CI の quiz-session テストが `choice-option` セレクターでタイムアウト | (1) `problems.0018` で既存 drift 6 件を一括解消（症状の根本修正）。(2) `.github/workflows/ci.yml` の `backend-lint` ジョブに `makemigrations --check --dry-run` を追加（DB 接続不要の静的チェック、PR 段階で即検出）。(3) `docs/runbooks/common-commands.md` に開発者フロー明記（再発防止のプロセス改善）。3 層構造で症状・検知・プロセスを同時に対処する |
 
 ---
 

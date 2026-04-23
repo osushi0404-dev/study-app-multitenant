@@ -87,6 +87,28 @@ print('status:', resp.status_code, 'body:', resp.content.decode())
 |---------|--------------------|------------------------------------|-------------------------------|--------------------------------------|------------------------|--------------------------|--------------|------|
 | 実装後 | - | - | - | - | - | - | - | 未実施 |
 
+## マイグレーション整合性チェック（CI backend-lint ジョブ）
+
+### 検証内容
+`makemigrations --check --dry-run` による migration drift 早期検出の確認。
+
+**背景**: `problems.0018` で既存の drift 6 件を解消したが、将来のモデル変更で同じ問題が再発しないよう、CI の `backend-lint` ジョブに静的チェックを追加する。DB 接続不要のため lint ジョブに配置し、PR 段階で即検出できる。
+
+確認コマンド（CI ログで確認）:
+```bash
+# backend-lint ジョブで makemigrations --check が pass することを確認
+gh run view <run_id> --log 2>&1 | grep -A3 "makemigrations"
+
+# exit 0（pending migrations なし）であれば OK
+# exit 1（pending migrations あり）であれば NG
+```
+
+| 確認日時 | `makemigrations --check` pass（backend-lint） | 備考 |
+|---------|----------------------------------------------|------|
+| 実装後 | - | 未実施 |
+
+---
+
 ## マイグレーション追加（problems.0017）
 
 ### 検証内容
@@ -106,6 +128,28 @@ gh run view <run_id> --log 2>&1 | grep "quiz_session"
 | 確認日時 | 0017 マイグレーション正常完了（CI） | seed_e2e quiz_session 成功（CI） | 備考 |
 |---------|----------------------------------|-------------------------------|------|
 | 実装後 | - | - | 未実施 |
+
+## マイグレーション追加（problems.0018）
+
+### 検証内容
+`problems.0018_remove_obsolete_fields_and_fix_schema` による migration drift 一括解消の確認。
+
+**背景**: `total_points`（QuizSession）・`points_earned`（QuizAnswer）等の孤立カラムが fresh DB で NOT NULL 違反を引き起こしていた。`makemigrations` で 6 件の drift を一括解消する。
+
+確認コマンド（CI ログで確認）:
+```bash
+# problems.0018 が正常完了することを確認
+gh run view <run_id> --log 2>&1 | grep "0018_remove_obsolete_fields_and_fix_schema"
+
+# quiz_session シナリオが成功することを確認（POST /api/quiz/ が HTTP 500 にならないこと）
+gh run view <run_id> --log 2>&1 | grep "quiz_session"
+```
+
+| 確認日時 | 0018 マイグレーション正常完了（CI） | quiz-session E2E テスト pass（CI） | 備考 |
+|---------|----------------------------------|----------------------------------|------|
+| 実装後 | - | - | 未実施 |
+
+---
 
 ## マイグレーション修正（accounts.0021）
 
@@ -292,3 +336,32 @@ environment:
 **セキュリティ上の考慮点**: デフォルトを `True` に保つことで本番環境の安全性は維持される。`RATELIMIT_ENABLE=false` は E2E CI 環境にのみ設定し、設定値のデプロイが本番に影響しないことを確認する。
 
 **次回どう防ぐか**: CI でのみ発現するレート制限問題は、CI POSTリクエスト数を把握してレート設定と比較することで事前検出できる。認証エンドポイントに `block=True` を設定する場合は「テスト環境での無効化手段」も合わせて設計する。
+
+### Failure 6: quiz-session.spec.ts — `choice-option` がタイムアウト（migration drift による HTTP 500）
+
+**再現手順**: CI が fresh DB で起動 → `migrate` 実行（`0001_initial.py` が `problems_quizsession.total_points`・`problems_quizanswer.points_earned` を `IntegerField(default=0, NOT NULL)` で作成）→ quiz-session.spec.ts が科目ダイアログ選択後クイズ画面に遷移 → `POST /api/quiz/` 実行 → HTTP 500 → `[data-testid="choice-option"]` が表示されず 30s タイムアウト
+
+**期待値**: `POST /api/quiz/` → HTTP 201、クイズ画面に `[data-testid="choice-option"]` が表示される
+
+**実際値**: `POST /api/quiz/` → HTTP 500（`IntegrityError: null value in column "total_points" of relation "problems_quizsession"`）→ テストタイムアウト
+
+**根本原因（構造的 migration drift）**:
+- `total_points`・`points_earned` は `problems/migrations/0001_initial.py` で `IntegerField(default=0, NOT NULL)` として作成されたが、その後 `models.py` から削除されたにもかかわらず DROP 用マイグレーションが作成されなかった
+- Django ORM は `models.py` を唯一の信頼源として INSERT 文を生成するため、`total_points` カラムを INSERT に含めない
+- fresh DB（CI）では `0001_initial.py` が作成した NOT NULL 制約が残存し `IntegrityError` が発生する
+- ローカル（既存 DB）では既存行に値が入っているため発現せず、CI でのみ判明する性質のバグ（`problems_problem.points` が同パターン — 0017 で解消済み）
+- `makemigrations --check --dry-run` を実行すると合計 6 件の drift が検出される（`total_points`・`points_earned` の削除、インデックス削除、`slug`/`explanation`/`problem_type` の state 整合）
+
+**修正**:
+1. `backend/problems/migrations/0018_remove_obsolete_fields_and_fix_schema.py` を `makemigrations` で自動生成（6件の drift を一括解消、DB はモデルに合わせる）
+2. `.github/workflows/ci.yml` の `backend-lint` ジョブに `python manage.py makemigrations --check --dry-run` を追加（再発防止 CI ゲート）
+3. `docs/runbooks/common-commands.md` に開発者フローを明記（再発防止のプロセス改善）
+
+**データ安全性根拠**: `total_points`・`points_earned` は現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。
+
+**セキュリティ上の考慮点**: migration の自動生成（`makemigrations`）にセキュリティリスクなし。`Subject.slug` の max_length 拡張（50→100）は本番 DB 適用時に後方互換（拡張は常に安全）。`null` 設定変更は migration state 上のみで DB の実データに影響なし。
+
+**次回どう防ぐか**:
+- CI の `backend-lint` ジョブで `makemigrations --check --dry-run` を実行し、PR 段階で drift を検出する（DB 接続不要の静的チェック）
+- `docs/runbooks/common-commands.md` に「`models.py` を変更したら必ず `makemigrations` を実行してコミット」と明記する
+- 3 層対処: (1) 症状修正（0018 migration）、(2) 検知強化（CI ゲート）、(3) プロセス変更（developer 習慣の文書化）
