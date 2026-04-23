@@ -163,7 +163,7 @@ services:
 
   # E2E Tests (Playwright): e2e-init 完了後に起動する
   e2e:
-    image: mcr.microsoft.com/playwright:v1.50.0-jammy
+    image: mcr.microsoft.com/playwright:v1.59.1-jammy
     working_dir: /e2e
     volumes:
       - ./e2e:/e2e
@@ -175,6 +175,9 @@ services:
         condition: service_completed_successfully   # Init Container 完了後に実行
     networks:
       - app-network
+    env_file:
+      - path: ./e2e/.env.e2e   # E2E_TEST_PASSWORD を読み込む（required: false で未作成でも起動可）
+        required: false
     environment:
       - BASE_URL=http://frontend:3000
       - API_URL=http://backend:8000
