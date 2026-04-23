@@ -29,7 +29,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 
 ## 3. 影響範囲
 
-- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）
+- **Backend**: `manage.py seed_e2e` カスタム管理コマンド追加。`accounts.0021` マイグレーション修正（新規 DB での UUID→INTEGER 型不一致バグを修正）。`problems.0017` マイグレーション追加（`problems_problem.points` 孤立カラム削除 — モデルから削除済みだが DROP 用マイグレーションが欠落していたため fresh DB でのみ NOT NULL 違反が発生していた）
 - **Frontend**: なし（E2E テストはプロジェクトルートの `e2e/` ディレクトリに配置し frontend ディレクトリには触れない）
 - **DB**: デフォルト DB（`learning_app`）を使用。E2E データは `e2e_` プレフィックスで識別。CI ではクリーンな DB インスタンスから起動するため本番データとは完全分離。ローカルでは同一 DB に `e2e_` プレフィックス付きデータが混在するが、`seed_e2e` の冪等設計（get_or_create / delete→create）で整合性を維持
 - **Config/Infra**: `docker-compose.yml` に `e2e` サービス追加、`.github/workflows/e2e.yml` 追加、`.claude/skills/test/SKILL.md` 更新
@@ -69,6 +69,7 @@ pytest（Backend）・Jest（Frontend）はロジック層をカバーするが�
 | `e2e/.gitignore` | 新規 | `.auth/`・`.env.e2e` を除外 |
 | `e2e/.env.e2e.example` | 新規 | E2E テスト認証情報のテンプレート（git 管理）。実値は `.env.e2e`（gitignore 済み）に記載 |
 | `backend/accounts/management/commands/seed_e2e.py` | 新規 | `manage.py seed_e2e --scenario <name> --password <pw>` 実装 |
+| `backend/problems/migrations/0017_remove_problem_points.py` | 新規 | `problems_problem.points` カラムを DROP する。`points` は `0001_initial.py` で `IntegerField(default=10, NOT NULL)` として作成されたが、その後 `models.py` から削除されたにもかかわらず DROP 用マイグレーションが存在しなかった。既存 DB では値が入っているため発現しないが、fresh DB（CI）では Django ORM の INSERT に `points` が含まれず NOT NULL 違反が発生する。**データ安全性根拠**: `points` は現在の `models.py` に定義がなく ORM 経由で読み書き不可。raw SQL での参照もなし。既存データの損失はアクセス不能なデータのみ。 |
 | `backend/accounts/migrations/0021_rename_organization_id_to_id.py` | 変更 | 新規 DB で `problems_subject.organization_id` が UUID 型のまま残る型不一致バグを修正（条件付き `ALTER COLUMN TYPE INTEGER USING NULL` を追加）。**データ安全性根拠**: `accounts.0010` が Organization を `DROP TABLE CASCADE` で削除・再作成したため、UUID 値はすでに孤立（参照先消滅）。また PostgreSQL は UUID カラムへの INTEGER 値保存を拒否するため、0010 適用後に作成された Subject の organization_id 実データも存在しない。NULL 変換によるデータ損失は実質ゼロ。 |
 | `backend/core/urls.py` | 変更 | `/health/` エンドポイント追加（DB 接続確認付き readiness check） |
 | `backend/core/settings.py` | 変更 | `MIDDLEWARE` から `HealthCheckMiddleware` を削除（URL ルーティングバイパス・情報漏洩リスク）|
@@ -687,6 +688,8 @@ jobs:
   2. `docker-compose.yml` の `e2e` サービスを削除、**`e2e-init` サービスを削除**、`db` の `healthcheck` を削除、`backend`/`celery`/`celery-beat` の `depends_on` を `service_started`（旧来の記法）に戻す、`env_file` の `required: false` を削除、`backend` の `volumes` から `backend_logs:/app/logs` を削除、top-level `volumes` から `backend_logs:`・`e2e_node_modules:` を削除。named volume 本体を削除する場合は `docker volume rm <project>_backend_logs <project>_e2e_node_modules` を実行する
   3. `.github/workflows/e2e.yml` を削除
   4. `backend/accounts/management/commands/seed_e2e.py` を削除
+  4a. `backend/problems/migrations/0017_remove_problem_points.py` を削除（ロールバック後は `points` カラムが再び孤立状態に戻る。既存 DB への影響はないが fresh DB では NOT NULL 違反が再発する）
+  4b. `backend/accounts/migrations/0021_rename_organization_id_to_id.py` を元のバージョンに戻す（条件付き ALTER COLUMN ステップを削除）
   5. `backend/core/urls.py` の `/health/` エンドポイントを削除
   5a. `backend/core/settings.py` の `MIDDLEWARE` に `'core.middleware.HealthCheckMiddleware',` を復元
   6. `backend/Dockerfile` と `frontend/Dockerfile.dev` から `curl` のインストール行を削除
@@ -712,6 +715,7 @@ jobs:
 | `HealthCheckMiddleware` が `/health/` を横取りし `PerformanceMonitor` の複雑な応答を返す | URL ルーティングで追加した `health()` 関数が呼ばれず、Redis エラー時に 503 が返るため Docker compose healthcheck が常に失敗する | `MIDDLEWARE` から `HealthCheckMiddleware` を削除し、`urls.py` の `health()` 関数が直接処理するよう修正。詳細監視は認証保護された `/monitoring/status/` で提供 |
 | `e2e/node_modules` が存在しないため `playwright: not found` が発生し E2E テストが実行できない | `docker compose --profile e2e run --rm e2e npm test` が即座に失敗する | `e2e_node_modules` named volume を追加し `e2e` サービスの command を `npm install && npm test` に変更。`npm install` は named volume のキャッシュを活かして差分のみ更新（2回目以降は数秒）。CI では `e2e.yml` で `npm ci` を使い決定論的インストールを保証 |
 | Playwright コンテナに `docker` CLI が存在しないため `global-setup.ts` 内で `docker compose exec` による DB 初期化が不可能（`ENOENT: docker`）。Docker socket マウント（DooD）はホスト root 相当の権限を与えるセキュリティリスク | DB が初期化されないまま全テストが失敗する | **Init Container パターン** を採用。`e2e-init` サービス（backend イメージ）で migrate・seed_e2e を実行し、`e2e` サービスは `condition: service_completed_successfully` で完了を待つ。`global-setup.ts` はブラウザ操作のみに限定し Docker CLI への依存を排除する |
+| `problems_problem.points` カラムが `NOT NULL` かつ DB DEFAULT なしのまま残存しており、fresh DB で `Problem.objects.create()` が NOT NULL 違反で失敗する（`points` は `models.py` から削除済みだが DROP 用マイグレーションが欠落）。既存 DB では発現しないため見落とされていた | `seed_e2e.py` の quiz_session シナリオが失敗し E2E テスト全体がブロック | `problems.0017` マイグレーション（`RemoveField`）を追加し `points` カラムを正式に DROP。モデルを唯一の信頼源とする Django の設計原則に沿った根本対処 |
 
 ---
 

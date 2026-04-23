@@ -87,6 +87,26 @@ print('status:', resp.status_code, 'body:', resp.content.decode())
 |---------|--------------------|------------------------------------|-------------------------------|--------------------------------------|------------------------|--------------------------|--------------|------|
 | 実装後 | - | - | - | - | - | - | - | 未実施 |
 
+## マイグレーション追加（problems.0017）
+
+### 検証内容
+`problems.0017_remove_problem_points` の孤立カラム削除確認。
+
+**背景**: `points` は `problems/migrations/0001_initial.py` で `IntegerField(default=10, NOT NULL)` として作成されたが、その後 `models.py` から削除されたにもかかわらず DROP 用マイグレーションが存在しなかった。fresh DB（CI）では Django ORM の INSERT に `points` が含まれず NOT NULL 違反で `seed_e2e` の quiz_session シナリオが失敗していた。
+
+確認コマンド（CI ログで確認）:
+```bash
+# problems.0017 が正常完了することを確認
+gh run view <run_id> --log 2>&1 | grep "0017_remove_problem_points"
+
+# seed_e2e quiz_session シナリオが成功することを確認
+gh run view <run_id> --log 2>&1 | grep "quiz_session"
+```
+
+| 確認日時 | 0017 マイグレーション正常完了（CI） | seed_e2e quiz_session 成功（CI） | 備考 |
+|---------|----------------------------------|-------------------------------|------|
+| 実装後 | - | - | 未実施 |
+
 ## マイグレーション修正（accounts.0021）
 
 ### 検証内容

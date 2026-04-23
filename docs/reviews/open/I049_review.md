@@ -13,7 +13,8 @@ plan_I049: Playwright E2Eテスト基盤を導入しクリティカルパスを�
 | `e2e/tests/tenant-isolation.spec.ts` | データ分離検証の正確性 |
 | `e2e/tests/quiz-session.spec.ts` | クリティカルパスのカバレッジ |
 | `backend/accounts/management/commands/seed_e2e.py` | データ生成の冪等性・フラッシュ安全性 |
-| `backend/fixtures/e2e_master.json` | データの正確性 |
+| `backend/problems/migrations/0017_remove_problem_points.py` | 孤立カラム削除の安全性・データ安全性根拠 |
+| `backend/accounts/migrations/0021_rename_organization_id_to_id.py` | 型不一致修正の安全性・条件付き ALTER COLUMN の冪等性 |
 | `docker-compose.yml` | e2e サービスの設定・ネットワーク分離 |
 | `.github/workflows/e2e.yml` | CI 設定の正確性・既存ジョブへの影響なし |
 | `.claude/skills/test/SKILL.md` | E2E ステップの記述の正確性 |
