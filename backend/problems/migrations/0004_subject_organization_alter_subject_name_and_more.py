@@ -8,6 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('accounts', '0009_organization_user_users_organiz_ca9165_idx_and_more'),
+        ('accounts', '0010_update_organization_structure'),  # explicit: ensure AutoField pk before FK
         ('problems', '0003_field_problem_field_usersubjectaccess_and_more'),
     ]
 
