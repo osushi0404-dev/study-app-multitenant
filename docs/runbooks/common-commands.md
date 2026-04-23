@@ -51,6 +51,33 @@ nginx/         - Nginx設定
 - ログファイル: `backend/logs/django.log`
 - フロントエンドのURL変更時はキャッシュクリア必要
 
+## モデル変更時の必須手順（migration drift 防止）
+
+`backend/*/models.py` を変更した場合は **必ず** 以下を実行してコミットする。
+
+```bash
+# マイグレーションファイルを生成
+docker compose exec backend python manage.py makemigrations
+
+# 生成されたファイルを確認してからコミット
+git add backend/*/migrations/
+git commit -m "feat: add migration for <変更内容>"
+```
+
+### 確認コマンド（drift チェック）
+
+```bash
+# 乖離がなければ "No changes detected"（exit 0）
+# 乖離があれば生成予定の migration 内容が表示される（exit 1）
+docker compose exec backend python manage.py makemigrations --check --dry-run
+```
+
+> **なぜ重要か**: migration を書き忘れると、fresh DB（CI・新規デプロイ）では NOT NULL 違反などの
+> IntegrityError が発生してアプリが壊れる。既存 DB では実データが入っているため発現せず、
+> CI でのみ発覚する性質の問題になる（I049 の `total_points` / `points_earned` が同ケース）。
+> CI の backend-lint ジョブでも `makemigrations --check` を実行するが、
+> PR を出す前にローカルで確認することを推奨する。
+
 ## webpack キャッシュトラブル対処
 
 ### 症状

@@ -25,6 +25,13 @@ jobs:
       - name: bandit
         run: bandit -r . -x ./\*/migrations/,./\*/tests/ -ll
         working-directory: backend
+      - name: Check migration drift
+        # makemigrations --check は DB 接続不要の静的チェック（モデルと migration の乖離を検出）
+        # requirements.txt を追加インストールして Django と依存パッケージを揃える
+        run: |
+          pip install -r requirements.txt
+          python manage.py makemigrations --check --dry-run
+        working-directory: backend
 
   backend-test:
     name: Backend Tests
