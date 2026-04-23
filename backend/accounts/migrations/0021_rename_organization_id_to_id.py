@@ -33,7 +33,30 @@ class Migration(migrations.Migration):
             """,
         ),
 
-        # Step 3: 外部キー制約を再作成
+        # Step 3: problems_subject.organization_id の型を INTEGER に変換（必要な場合）
+        # 理由: 新規 DB では problems.0004 が accounts.0010 より先に実行されるため
+        # problems_subject.organization_id は UUID 型で作成される。
+        # accounts.0010 が Organization を INTEGER PK で再作成した後、
+        # problems_subject.organization_id は UUID のまま残るため型不一致が発生する。
+        migrations.RunSQL(
+            sql="""
+                DO $$
+                BEGIN
+                  IF (
+                    SELECT data_type
+                    FROM information_schema.columns
+                    WHERE table_name = 'problems_subject'
+                      AND column_name = 'organization_id'
+                  ) = 'uuid' THEN
+                    ALTER TABLE problems_subject
+                      ALTER COLUMN organization_id TYPE INTEGER USING NULL;
+                  END IF;
+                END $$;
+            """,
+            reverse_sql=migrations.RunSQL.noop,
+        ),
+
+        # Step 4: 外部キー制約を再作成
         migrations.RunSQL(
             sql="""
                 ALTER TABLE users
