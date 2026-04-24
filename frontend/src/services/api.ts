@@ -9,7 +9,7 @@ class ApiClient {
 
   constructor() {
     this.instance = axios.create({
-      baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000',
+      baseURL: process.env.REACT_APP_API_BASE_URL ?? '',
       timeout: parseInt(process.env.REACT_APP_API_TIMEOUT || '10000'),
       headers: {
         'Content-Type': 'application/json',
@@ -129,7 +129,7 @@ class ApiClient {
   private async refreshAccessToken(refreshToken: string): Promise<string> {
     try {
       const response = await axios.post(
-        `${process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000'}/api/auth/token/refresh/`,
+        `${process.env.REACT_APP_API_BASE_URL ?? ''}/api/auth/token/refresh/`,
         { refresh: refreshToken },
         {
           headers: { 'Content-Type': 'application/json' },

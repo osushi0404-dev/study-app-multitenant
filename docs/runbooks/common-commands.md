@@ -89,7 +89,19 @@ cp e2e/.env.e2e.example e2e/.env.e2e
 
 > **注意**: `.env.e2e` は `.gitignore` に含まれています。コミットしないでください。
 
-### 2. E2E テストを実行する
+### 2. バックエンドを Rate Limiting 無効で起動する（毎回）
+
+webpack proxy 導入後は、すべての E2E リクエストが frontend コンテナの IP からバックエンドに転送される。
+この IP 集約により rate limiting のカウントが累積し、ログイン失敗テストなどが影響を受けるため、
+E2E 実行前に rate limiting を無効にしてバックエンドを起動する（CI と同じ設定）:
+
+```bash
+RATELIMIT_ENABLE=false docker compose up -d backend
+```
+
+> **本番・通常開発**: `RATELIMIT_ENABLE` を設定せずに `docker compose up -d` すれば rate limiting は有効のまま動作する。
+
+### 3. E2E テストを実行する
 
 ```bash
 # e2e-init は前回の実行結果が残っているため毎回削除してから実行する
@@ -101,7 +113,7 @@ docker compose --profile e2e run --rm e2e
 > `e2e-init`（シードコンテナ）は残存し、次回実行時に「完了済み」と判断されてスキップされる。
 > 削除せずに実行すると、古いパスワードでシードされたままテストが実行されログインが失敗する。
 
-### 3. パスワードを変更したい場合
+### 4. パスワードを変更したい場合
 
 ```bash
 # .env.e2e のパスワードを変更してから再実行
