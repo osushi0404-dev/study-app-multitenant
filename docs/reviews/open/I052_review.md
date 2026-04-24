@@ -35,3 +35,12 @@
 ## 備考
 - セキュリティ影響なし（dev server proxy のみ）
 - 本番 nginx プロキシ設定への変更なし
+
+## テスト実行結果（/test）
+
+| テスト種別 | 結果 | 備考 |
+|-----------|------|------|
+| Backend (pytest) | ✅ 25 passed | |
+| Frontend (Jest) | ✅ 7 passed | |
+| E2E (Playwright) ローカル | ✅ 8 passed | `RATELIMIT_ENABLE=false` で実行 |
+| E2E (Playwright) CI | ✅ pass (3m25s) | GitHub Actions |
