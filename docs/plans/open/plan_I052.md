@@ -86,7 +86,8 @@ webpack dev server がサーバーサイドで `http://backend:8000` へプロ�
 | 3 | `frontend/src/utils/url.ts` | 修正 | `getMediaUrl` の `\|\|` を `??` に変更 |
 | 4 | `docker-compose.yml` | 修正 | frontend: `REACT_APP_API_URL`削除・`REACT_APP_API_BASE_URL=''`・`BACKEND_URL=http://backend:8000` 追加; e2e: `API_URL` 削除 |
 | 5 | `.github/workflows/e2e.yml` | 修正 | `API_URL: http://localhost:8000` 削除（デッドコード） |
-| 6 | `docs/runbooks/common-commands.md` | 修正 | E2E セットアップ手順の更新 |
+| 6 | `backend/core/settings.py` | 修正 | `ALLOWED_HOSTS` デフォルト値に `backend` を追加（proxy の `changeOrigin: true` 対応） |
+| 7 | `docs/runbooks/common-commands.md` | 確認のみ | 変更不要（手順不変） |
 
 ---
 
@@ -165,9 +166,26 @@ e2e サービス:
 # API_URL: http://localhost:8000
 ```
 
-### ステップ 6: `common-commands.md` を確認・更新
+### ステップ 6: `backend/core/settings.py` の ALLOWED_HOSTS を修正
 
-E2E セットアップ手順に `BACKEND_URL` 関連の説明が必要か確認し、必要に応じて更新する。
+`changeOrigin: true` により webpack proxy が `Host: backend:8000` ヘッダーを設定するため、
+Django の `ALLOWED_HOSTS` に `backend` を追加する。
+
+```python
+# 修正前
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# 修正後
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,backend').split(',')
+```
+
+**方針**:
+- `backend` は Docker 内部ネットワーク専用ホスト名（外部公開なし）
+- 本番環境では `ALLOWED_HOSTS` を env var で設定するため、このデフォルト値は使われない
+
+### ステップ 7: `common-commands.md` を確認
+
+E2E セットアップ手順は変更不要（手順不変）。
 
 ---
 
@@ -191,6 +209,7 @@ git revert <コミット SHA>
 # - frontend/src/setupProxy.js を削除
 # - api.ts・url.ts の ?? を || に戻す
 # - docker-compose.yml を元の状態に戻す
+# - backend/core/settings.py の ALLOWED_HOSTS から 'backend' を削除
 ```
 
 ---
@@ -199,7 +218,7 @@ git revert <コミット SHA>
 
 | リスク | 影響度 | 対策 |
 |--------|--------|------|
-| Django `ALLOWED_HOSTS` が `frontend:3000` を拒否する | 中 | `changeOrigin: true` で Host ヘッダーを `backend:8000` に変更。Django 側の設定変更不要 |
+| `changeOrigin: true` が `Host: backend:8000` を設定し、Django `ALLOWED_HOSTS` が拒否する | 高（CI E2E 失敗として顕在化） | `settings.py` の `ALLOWED_HOSTS` デフォルト値に `backend` を追加（ステップ 6） |
 | 本番ビルドで `REACT_APP_API_BASE_URL` が未設定のまま → 空文字でデプロイ | 高 | `??` 演算子により空文字が正しく通る。本番は `REACT_APP_API_BASE_URL=<prod URL>` を明示設定（既存運用） |
 | 既存 Jest テストが proxy 設定で壊れる | 低 | `setupProxy.js` は webpack dev server 専用。Jest テストは Node.js で実行されるため無影響 |
 | `BACKEND_URL` 未設定時にプロキシが `localhost:8000` に向く | 低 | Docker なし直接 `npm start` での既存動作と同一。意図通り |
@@ -207,7 +226,7 @@ git revert <コミット SHA>
 セキュリティ:
 - `setupProxy.js` は webpack dev server（開発/CI 環境）専用。本番の nginx には一切影響しない
 - proxy ターゲット `BACKEND_URL` はユーザー入力でなく環境変数（サーバーサイド）のため SSRF リスクなし
-- `changeOrigin: true` により Django 側の CORS/ALLOWED_HOSTS 設定に変更不要
+- `backend` は Docker 内部ネットワーク専用ホスト名。`ALLOWED_HOSTS` への追加はセキュリティリスクなし
 
 ---
 
@@ -223,6 +242,7 @@ git revert <コミット SHA>
 | `REACT_APP_API_URL` の削除 | コード全文検索で `REACT_APP_API_URL` を読む箇所なし → デッドコードと判断 |
 | `API_URL` を e2e・CI から削除 | E2E テストコード全文検索で `API_URL` を読む箇所なし → デッドコードと判断 |
 | `setupProxy.js` に `http-proxy-middleware` を `require` で使用 | CRA の `react-scripts` に同梱済みのため新規インストール不要 |
+| `ALLOWED_HOSTS` に `backend` を追加（fix-loop で追加） | `changeOrigin: true` が `Host: backend:8000` を設定するため Django が `backend` を正当なホストとして認識する必要がある。`backend` は Docker 内部専用ホスト名のため安全 |
 
 すべて「コードから判断」であり、ユーザーの仮定に依存する判断はありません。
 
