@@ -29,21 +29,26 @@
 
 ## 再発防止記録（fix-loop）
 
-### 失敗内容
-CI E2E: `DisallowedHost: Invalid HTTP_HOST header: 'backend:8000'` → ログイン API が 400 で拒否 → `waitForURL('**/dashboard')` タイムアウト
+### 失敗内容（1回目: CI E2E fix-loop）
+CI E2E: `DisallowedHost: Invalid HTTP_HOST header: 'backend:8000'` → ログイン API が 400 で拒否 → タイムアウト
 
-### 根本原因
-`setupProxy.js` の `changeOrigin: true` が `Host` ヘッダーを proxy ターゲット名 `backend:8000` に書き換える。Django の `ALLOWED_HOSTS` デフォルト値に `backend` が含まれていなかった。
+**根本原因**: `setupProxy.js` の `changeOrigin: true` が `Host: backend:8000` を設定するが、Django の `ALLOWED_HOSTS` に `backend` が含まれていなかった。
 
-### 修正内容
-`backend/core/settings.py:22` — default 値に `backend` を追加:
-```python
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,backend').split(',')
-```
+**修正内容（revert 済み）**: ~~`settings.py` デフォルト値に `backend` を追加~~ → 責務分離の観点から不適切として revert。
+
+---
+
+### 失敗内容（2回目: ローカル E2E fix-loop）
+ローカル E2E: 同じ `DisallowedHost` エラー
+
+**根本原因**: `backend/.env` が `ALLOWED_HOSTS=localhost,127.0.0.1` を env var で設定しており、`settings.py` の default（`backend` 含む想定）を上書きしていた。Docker Compose の優先順位: `environment` > `env_file`（`.env`）> `settings.py` default。CI には `.env` がないため CI のみ pass という環境依存の差異が発生。
+
+**修正内容**: `docker-compose.yml` backend environment に `ALLOWED_HOSTS=localhost,127.0.0.1,backend` を明示設定。`environment` が `env_file` を上書きするため `.env` の内容に依存しない。
 
 ### セキュリティ考慮点
 - `backend` は Docker 内部ネットワーク専用ホスト名。外部インターネットから到達不能。
-- 本番環境では `ALLOWED_HOSTS` を env var で設定するため、このデフォルト値は使われない。
+- `settings.py` のデフォルト値は変更しない（`backend` は Docker 専用設定のため一般デフォルトに含めない）。
 
 ### 次回の防止策
-webpack proxy + Django の構成を計画書に含める際は「proxy target のホスト名が Django の `ALLOWED_HOSTS` に含まれているか」を必ずチェックする（plan-issue-review の P1 チェック項目として追加を検討）。
+- webpack proxy + Django の構成では「proxy target のホスト名が Django の `ALLOWED_HOSTS` に含まれているか」をチェックする
+- `.env` ファイルが存在するローカル環境と CI の環境差異を考慮し、Docker 固有の設定は `docker-compose.yml` environment（`env_file` より優先）に集約する
