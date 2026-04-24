@@ -43,6 +43,7 @@ services:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - RATELIMIT_ENABLE  # パススルー: ホスト env に RATELIMIT_ENABLE があれば反映。なければデフォルト(True)
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend  # proxy の changeOrigin: true が Host: backend:8000 を設定するため。env_file (.env) より environment が優先されるため .env の ALLOWED_HOSTS 設定に依存しない
     volumes:
       - ./backend:/app
       - ./docs:/app/docs
