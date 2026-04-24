@@ -34,7 +34,10 @@ I050 で `problems/0004_subject_organization_alter_subject_name_and_more` が
 - Backend: なし（ドキュメント変更のみ）
 - Frontend: なし
 - DB: なし
-- Config/Infra: なし
+- Config/Infra: E2E テスト設定（`e2e/playwright.config.ts`・`e2e/tests/auth.spec.ts`）
+
+> **追記（fix-loop）**: `/test I053` 実行中にローカル E2E の既存バグが顕在化したため、
+> E2E インフラの修正を本イシューのスコープに含める。
 
 ---
 
@@ -43,12 +46,14 @@ I050 で `problems/0004_subject_organization_alter_subject_name_and_more` が
 | ファイル | 変更種別 | 内容 |
 |---|---|---|
 | `rules/ultimate_django_coding_standards.md` | 追記 | Section 4「モデル設計」末尾（カスタムマネージャー節の直後）に `### マイグレーション` サブセクションを新設 |
+| `e2e/playwright.config.ts` | 修正 | `chromium-authed` の `testMatch`（負の先読み regex）を削除し `testIgnore: '**/auth.spec.ts'` に置換。`chromium-unauthed` の `testMatch` を glob に統一 |
+| `e2e/tests/auth.spec.ts` | 修正 | 先頭に `test.use({ storageState: { cookies: [], origins: [] } })` を追加し、どのプロジェクトで実行されても未認証状態が保証されるよう二重防御を実装 |
 
 ---
 
 ## 5. 実装手順
 
-### ステップ 1: `rules/ultimate_django_coding_standards.md` に追記
+### ステップ 1: `rules/ultimate_django_coding_standards.md` に追記（実装済み）
 
 **対象箇所**: Section 4「モデル設計」の `### カスタムマネージャー` コードブロック終了直後（`---` 区切り線の前）
 
@@ -108,11 +113,55 @@ class Migration(migrations.Migration):
 
 ---
 
+### ステップ 2: E2E テスト設定の修正（fix-loop 追加）
+
+**背景**: `/test I053` 実行時に既存バグが顕在化。`playwright.config.ts` の `testMatch` 負の先読み regex の部分一致バグにより、`chromium-authed`（認証済み）プロジェクトが `auth.spec.ts` を誤って実行していた。
+
+**修正方針**: 設定レベルの防御（testIgnore glob）＋テストレベルの防御（test.use 自己宣言）の二重防御。
+
+#### 2-1: `e2e/playwright.config.ts`
+
+```ts
+// chromium-authed プロジェクト
+// Before（負の先読み regex のバグ）:
+testMatch: /(?!.*auth\.spec).*\.spec\.ts/,
+
+// After（明示的な除外）:
+testIgnore: '**/auth.spec.ts',
+// testMatch は省略（デフォルトで全 .spec.ts にマッチ）
+```
+
+```ts
+// chromium-unauthed プロジェクト
+// Before:
+testMatch: /auth\.spec\.ts/,
+
+// After（glob に統一）:
+testMatch: '**/auth.spec.ts',
+```
+
+#### 2-2: `e2e/tests/auth.spec.ts`
+
+```ts
+// ファイル先頭の test.describe の前に追加
+// 未認証状態を自己宣言。chromium-authed で誤実行されても auth state が混入しない。
+test.use({ storageState: { cookies: [], origins: [] } });
+```
+
+> **スコープ補足**: この `test.use()` はファイルスコープで全 describe に適用されるが、
+> `ログアウトフロー` describe 内の `test.use({ storageState: user_a.json })` が
+> Playwright の内側優先ルールにより上書きされるため、ログアウトテストの認証状態には影響しない。
+
+**依存関係**: ステップ 1 と独立して実施可能。
+
+---
+
 ## 6. テスト計画
 
 ### 自動テスト
 
-対象なし（ドキュメント変更のみ）
+- ドキュメント変更（ステップ 1）: 対象なし
+- E2E 修正（ステップ 2）: ローカル E2E `docker compose --profile e2e run --rm e2e` で全テスト pass を確認
 
 ### 手動テスト
 
@@ -122,12 +171,12 @@ class Migration(migrations.Migration):
 
 ## 7. ロールバック
 
-計画書 commit を revert するだけで元に戻る。
-DB・コード変更がないため、副作用なし。
-
 ```bash
 git revert HEAD
 ```
+
+- `rules/ultimate_django_coding_standards.md`: revert のみで元に戻る。DB・コード変更なし。
+- `e2e/playwright.config.ts` / `e2e/tests/auth.spec.ts`: revert で元の状態に戻る。ただし元の状態はバグあり（`chromium-authed` が auth.spec.ts を誤実行）のため、ロールバックは非推奨。
 
 ---
 
@@ -137,6 +186,8 @@ git revert HEAD
 |---|---|---|
 | 追記位置が適切でなく将来の追記と重複する | 低（ドキュメントのみ） | Section 4 末尾の固定位置に配置し、migration ルールはここに集約するコメントを残す |
 | コード例が実際のファイル名と乖離する | 低 | 実ファイル名ではなく `problems/0004`・`accounts/0010` という省略形で記載し、本文で I050 の事例と明記する |
+| `testIgnore` の glob パターンが将来のファイル構成変更で機能しなくなる | 低 | `auth.spec.ts` の `test.use()` 宣言が二重防御になっているため、config 側が崩れても動作する |
+| `test.use({ storageState: ... })` が Playwright のバージョンアップで挙動変更 | 低 | Playwright 公式 API であり後方互換性が保たれている。変更時は CHANGELOG で確認する |
 
 ---
 
