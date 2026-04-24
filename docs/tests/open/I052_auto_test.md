@@ -24,3 +24,26 @@
 ## 新規自動テストの追加
 
 なし。受け入れ条件（ローカル E2E 全件 pass）は既存 E2E テストスイートで直接検証できる。
+
+---
+
+## 再発防止記録（fix-loop）
+
+### 失敗内容
+CI E2E: `DisallowedHost: Invalid HTTP_HOST header: 'backend:8000'` → ログイン API が 400 で拒否 → `waitForURL('**/dashboard')` タイムアウト
+
+### 根本原因
+`setupProxy.js` の `changeOrigin: true` が `Host` ヘッダーを proxy ターゲット名 `backend:8000` に書き換える。Django の `ALLOWED_HOSTS` デフォルト値に `backend` が含まれていなかった。
+
+### 修正内容
+`backend/core/settings.py:22` — default 値に `backend` を追加:
+```python
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,backend').split(',')
+```
+
+### セキュリティ考慮点
+- `backend` は Docker 内部ネットワーク専用ホスト名。外部インターネットから到達不能。
+- 本番環境では `ALLOWED_HOSTS` を env var で設定するため、このデフォルト値は使われない。
+
+### 次回の防止策
+webpack proxy + Django の構成を計画書に含める際は「proxy target のホスト名が Django の `ALLOWED_HOSTS` に含まれているか」を必ずチェックする（plan-issue-review の P1 チェック項目として追加を検討）。
