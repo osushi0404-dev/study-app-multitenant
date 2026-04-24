@@ -4,7 +4,7 @@
 webpack proxy 導入後に、開発者ブラウザからのアプリ操作が正常に動作することを確認する。
 
 ## 前提条件
-- 実装完了後（`docker compose up -d` で全サービス起動済み）
+- 実装完了後（`RATELIMIT_ENABLE=false docker compose up -d backend` でバックエンドを rate limiting 無効で起動済み）
 - ブラウザで `http://localhost:3000` にアクセス可能
 
 ## テストケース

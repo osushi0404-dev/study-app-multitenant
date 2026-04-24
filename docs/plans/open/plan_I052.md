@@ -88,7 +88,7 @@ webpack dev server がサーバーサイドで `http://backend:8000` へプロ�
 | 5 | `.github/workflows/e2e.yml` | 修正 | `API_URL: http://localhost:8000` 削除（デッドコード） |
 | 6 | `docker-compose.yml` | 追加修正 | backend environment に `ALLOWED_HOSTS=localhost,127.0.0.1,backend` を追加（proxy `changeOrigin: true` が `Host: backend:8000` を設定するため） |
 | 7 | `backend/core/settings.py` | 変更なし | `ALLOWED_HOSTS` default は `'localhost,127.0.0.1'` のまま。`backend` は Docker 専用ホスト名のため docker-compose.yml で管理 |
-| 8 | `docs/runbooks/common-commands.md` | 確認のみ | 変更不要（手順不変） |
+| 8 | `docs/runbooks/common-commands.md` | 修正 | ローカル E2E 実行手順に `RATELIMIT_ENABLE=false docker compose up -d backend` を追加（proxy 経由リクエストが frontend コンテナ IP に集約されるため rate limit が累積しやすい。CI は常に `RATELIMIT_ENABLE=false` を設定） |
 
 ---
 
@@ -185,9 +185,28 @@ Docker 環境固有の設定である `docker-compose.yml` で明示的に管理
 - `settings.py` の `ALLOWED_HOSTS` default は `'localhost,127.0.0.1'` のまま維持する
   （`backend` は Docker 専用なので一般デフォルトに含めない）
 
-### ステップ 7: `common-commands.md` を確認
+### ステップ 7: `common-commands.md` の E2E 手順を更新
 
-E2E セットアップ手順は変更不要（手順不変）。
+proxy 導入により、E2E テストの全 API リクエストが frontend コンテナの IP から backend に届く（サーバーサイド proxy のため）。
+これにより rate limit のカウントが累積しやすくなり、`誤ったパスワードでログインが拒否される` テストが失敗する。
+CI は `RATELIMIT_ENABLE=false` を設定してこの問題を回避している。ローカルでも同様の設定を手順に追加する。
+
+```markdown
+## E2E テスト実行前の準備（Rate Limiting 無効化）
+
+proxy 導入後はすべての E2E リクエストが frontend コンテナ IP からバックエンドに集約されるため、
+rate limiting を無効にしてバックエンドを再起動してから E2E を実行する:
+
+```bash
+RATELIMIT_ENABLE=false docker compose up -d backend
+```
+
+その後、通常通り E2E を実行する:
+
+```bash
+docker compose rm -f e2e-init
+docker compose --profile e2e run --rm e2e
+```
 
 ---
 

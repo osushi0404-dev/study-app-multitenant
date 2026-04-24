@@ -13,7 +13,7 @@
 
 | No | コマンド | 期待結果 | 実施者 |
 |---:|---------|---------|--------|
-| 1 | `docker compose rm -f e2e-init && docker compose --profile e2e run --rm e2e` | 全テストケース pass（exit 0） | Claude |
+| 1 | `RATELIMIT_ENABLE=false docker compose up -d backend && docker compose rm -f e2e-init && docker compose --profile e2e run --rm e2e` | 全テストケース pass（exit 0） | Claude |
 
 ### Frontend Jest（regression）
 
@@ -52,3 +52,18 @@ CI E2E: `DisallowedHost: Invalid HTTP_HOST header: 'backend:8000'` → ログイ
 ### 次回の防止策
 - webpack proxy + Django の構成では「proxy target のホスト名が Django の `ALLOWED_HOSTS` に含まれているか」をチェックする
 - `.env` ファイルが存在するローカル環境と CI の環境差異を考慮し、Docker 固有の設定は `docker-compose.yml` environment（`env_file` より優先）に集約する
+
+---
+
+### 失敗内容（3回目: ローカル E2E rate limit fix-loop）
+ローカル E2E: `誤ったパスワードでログインが拒否される` が `入力内容にエラーがあります` を見つけられず失敗
+
+**根本原因**: proxy 導入後、E2E の全 API リクエストが frontend コンテナの IP からバックエンドに届く（proxy がサーバーサイドでリクエストを転送するため）。rate limiting が IP ベースで集計されるため、global setup 2回 + login test + wrong password test の累積で制限に到達。CI は `RATELIMIT_ENABLE=false` を設定しているが、ローカルは未設定（デフォルト有効）。
+
+**修正内容**:
+1. `common-commands.md` のローカル E2E 手順に `RATELIMIT_ENABLE=false docker compose up -d backend` を追加
+2. E2E 実行コマンドを `RATELIMIT_ENABLE=false docker compose up -d backend && docker compose rm -f e2e-init && docker compose --profile e2e run --rm e2e` に更新
+
+**セキュリティ考慮点**: rate limiting を無効化するのは E2E テスト実行時のみ。本番・通常開発では rate limiting は有効のまま。
+
+**次回の防止策**: proxy 経由で E2E を実行する構成では、rate limiting の集計単位（IP ベース）が proxy の送信元 IP に統一されることを意識する。CI と同じ `RATELIMIT_ENABLE=false` の設定をローカル手順に明記する。
