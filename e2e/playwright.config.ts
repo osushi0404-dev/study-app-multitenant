@@ -14,14 +14,14 @@ export default defineConfig({
   },
   retries: 2,
   projects: [
-    // 認証済みユーザーAでのテスト（auth.spec.ts 以外に適用）
+    // 認証済みユーザーAでのテスト（auth.spec.ts を除く全 .spec.ts に適用）
     {
       name: 'chromium-authed',
       use: {
         ...devices['Desktop Chrome'],
         storageState: path.join(__dirname, '.auth', 'user_a.json'),  // __dirname ベース: CI/コンテナ両方で正しく解決
       },
-      testMatch: /(?!.*auth\.spec).*\.spec\.ts/,
+      testIgnore: '**/auth.spec.ts',  // glob で明示除外（旧 testMatch 負の先読み regex はバグあり: I053 fix）
     },
     // 認証不要テスト（auth.spec.ts のみ。storageState を適用しない）
     {
@@ -29,7 +29,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
       },
-      testMatch: /auth\.spec\.ts/,
+      testMatch: '**/auth.spec.ts',
     },
   ],
 });

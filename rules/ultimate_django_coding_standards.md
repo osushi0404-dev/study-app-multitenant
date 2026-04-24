@@ -288,6 +288,56 @@ class Article(models.Model):
     published = PublishedManager()
 ```
 
+### マイグレーション
+
+#### FK 追加 migration の dependencies ルール
+
+FK（外部キー）を追加する migration を作成する際、参照先テーブルが
+別の migration で **DELETE → CREATE 再作成** されている場合は、
+その再作成 migration を `dependencies` に明示的に含めること。
+
+Django の migration グラフは FK の参照先テーブルが「どの migration で作られたか」
+を最初の `CreateModel` から追跡する。テーブルが一度 `DeleteModel` → `CreateModel`
+で再作成されると、再作成 migration への依存を手動で追加しない限り、
+Django は旧来の `CreateModel` migration（再作成前）を参照先と誤認識する。
+これにより FK を追加した migration が再作成 migration より先に実行される可能性があり、
+整合性エラーや `django.db.utils.ProgrammingError` を引き起こす。
+
+**ルール**:
+> FK を追加する migration を書く際は、参照先テーブルの migration 履歴を確認し、
+> 後続の migration で `DeleteModel` → `CreateModel` が行われていれば、
+> その migration 番号を `dependencies` に追加すること。
+
+**具体例（I050 の事例）**:
+
+`problems/0004` は `accounts.Organization` に FK を追加する。
+`accounts/0010` では Organization テーブルを DELETE → CREATE で再作成している。
+この場合、`problems/0004` の `dependencies` に `accounts/0010` を明示しなければ、
+FK migration が再作成 migration より前に実行されうる。
+
+```python
+# ❌ 悪い例: 再作成 migration が dependencies に含まれていない
+class Migration(migrations.Migration):
+    dependencies = [
+        ('accounts', '0009_organization_user_users_organiz_ca9165_idx_and_more'),
+        ('problems', '0003_field_problem_field_usersubjectaccess_and_more'),
+    ]
+
+# ✅ 良い例: 再作成 migration を明示的に含める
+class Migration(migrations.Migration):
+    dependencies = [
+        ('accounts', '0009_organization_user_users_organiz_ca9165_idx_and_more'),
+        ('accounts', '0010_update_organization_structure'),  # explicit: ensure table recreated before FK
+        ('problems', '0003_field_problem_field_usersubjectaccess_and_more'),
+    ]
+```
+
+**チェック手順**:
+1. `makemigrations` 後、生成された migration の `dependencies` を確認する
+2. 参照先アプリの migration 履歴を `git log -- <app>/migrations/` で確認する
+3. 参照先テーブルに `DeleteModel` + `CreateModel` のセットが存在する場合、
+   その `CreateModel` を含む migration 番号を `dependencies` に追加する
+
 ---
 
 ## 5. API設計（DRF）

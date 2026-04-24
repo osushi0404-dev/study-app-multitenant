@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 
+// 未認証状態を自己宣言。chromium-authed で誤実行されても auth state が混入しない（二重防御）。
+// ログアウトフロー describe 内の test.use({ storageState: user_a.json }) が Playwright の
+// 内側優先ルールにより上書きされるため、ログアウトテストの認証状態には影響しない。
+test.use({ storageState: { cookies: [], origins: [] } });
+
 // 未認証状態でのテスト（chromium-unauthed プロジェクトで実行）
 test.describe('ログインフロー（未認証）', () => {
   test('正しい認証情報でログインしてダッシュボードに遷移する', async ({ page }) => {
