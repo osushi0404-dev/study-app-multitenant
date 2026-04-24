@@ -114,7 +114,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     environment:
-      - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_API_BASE_URL=
+      - BACKEND_URL=http://backend:8000
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
     volumes:
@@ -180,7 +181,6 @@ services:
         required: false
     environment:
       - BASE_URL=http://frontend:3000
-      - API_URL=http://backend:8000
     profiles:
       - e2e
     command: sh -c "npm install && npm test"   # npm install: named volume のキャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
