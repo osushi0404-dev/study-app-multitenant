@@ -18,4 +18,4 @@ webpack proxy 導入後に、開発者ブラウザからのアプリ操作が正
 | 5 | `api.ts` の baseURL が `??` 演算子を使用していることを確認 | `process.env.REACT_APP_API_BASE_URL \?\? ''` の形式 | Claude | | |
 | 6 | ブラウザで `http://localhost:3000` を開き、ログイン画面が表示される | ログイン画面が表示される | Human | | |
 | 7 | ログイン（E2E テストユーザー or 自分のアカウント）してダッシュボードが表示される | ダッシュボードが表示され、API エラーが出ない | Human | | |
-| 8 | ブラウザの DevTools Network タブで API リクエストが `/api/...` の相対パスで送信されていることを確認 | `http://localhost:8000/api/...` ではなく `/api/...` のリクエストが見える | Human | | |
+| 8 | ブラウザの DevTools Network タブで API リクエストの送信先を確認 | リクエスト Host が `localhost:3000`（`http://localhost:3000/api/...`）になっており、以前の `localhost:8000` への直接通信が消えている | Human | | |
