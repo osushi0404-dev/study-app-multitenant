@@ -21,3 +21,12 @@
 ## 備考
 - Backend・Frontend・DB の変更なし
 - セキュリティ影響なし
+
+## テスト実行結果（/test）
+
+| テスト種別 | 結果 | 備考 |
+|-----------|------|------|
+| Backend (pytest) | ✅ 25 passed | |
+| Frontend (Jest) | ✅ 7 passed | |
+| E2E (Playwright) CI | ✅ pass (2m51s) | GitHub Actions |
+| E2E (Playwright) ローカル | ⚠️ login timeout | I051 変更前から存在するローカル環境固有の問題。アプリコード変更なし |
