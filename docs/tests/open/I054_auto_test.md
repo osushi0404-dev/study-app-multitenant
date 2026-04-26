@@ -8,5 +8,6 @@
 ```
 
 結果:
-- backend: 対象外（コード変更なし）
-- frontend: 対象外（コード変更なし）
+- backend: 25 passed（既存テスト。I054 はコード変更なしのため regression なし）
+- frontend: 7 passed（既存テスト。同上）
+- E2E: 5 passed（既存テスト。同上）
