@@ -3,7 +3,7 @@ name: code-review
 description: Verify CI passes and review implementation against acceptance criteria.
 argument-hint: "I###"
 disable-model-invocation: false
-allowed-tools: Read, Bash, Glob, Grep, Agent, Edit
+allowed-tools: Read, Glob, Grep, Agent, Edit, Bash
 ---
 
 # /code-review

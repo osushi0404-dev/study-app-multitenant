@@ -65,8 +65,9 @@ gh pr review $PR_NUM --comment --body "$(cat $REVIEW_FILE)"
 
 ```markdown
 ## レビュー結果
-- [TIMESTAMP 判定結果](../../reviews/[REVIEW_FILE名])
+- [2026-04-26_1530 ✅ 完了](../../reviews/I054_plan_review_20260426_1530.md)
 ```
+（例: `[YYYYMMDD_HHMM 判定結果](../../reviews/[REVIEW_FILE名])`）
 
 ### 6. 判定とユーザー案内
 
