@@ -34,6 +34,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    | **残余リスク処遇** | security-review を実施した場合、残余リスクの処遇を決定したか？High 以上はイシュー化・Medium 以下は判断任意。実施していない場合はスキップ。 |
    | **設計ルール昇格** | 今回の security-review で発見した問題パターンを、grill-me の確認観点または plan-issue-review のチェック項目に昇格できるか？実施していない場合はスキップ。 |
    | **モダン開発** | REST API 設計の一貫性・N+1 等のパフォーマンス問題・アクセシビリティに未対処の問題は残っていないか？ |
+   | **指示ファイルメンテナンス** | 今回のイシューで発見した問題パターンを踏まえて `.claude/review-agents/plan-reviewer.md` / `code-reviewer.md` に追加・修正すべきレビュー観点はないか？発見した観点は `rules/` の更新とセットで行うことを推奨する。 |
 
 2.5) 改善点の候補が出たら、まず「理想の状態」を定義してから 5 Whys を実施する:
 
