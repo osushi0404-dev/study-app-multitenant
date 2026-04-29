@@ -60,7 +60,7 @@
 - [ ] CI の lint ジョブは `pre-commit run --all-files` を実行する（個別ツールステップを削除）
 - [ ] CI の `frontend-lint` ジョブで `npm audit --audit-level=critical` が実行される
 - [ ] CI の `backend-lint` ジョブで `pip-audit` が実行される
-- [ ] bandit の除外設定が `backend/setup.cfg` の `[bandit]` セクションに集約されている
+- [ ] bandit の除外設定が `backend/.bandit`（INI 形式）に集約され、bandit の自動検出で CI・pre-commit の両方に適用されている
 - [ ] `detect-secrets` の JWT 検出状況を確認し、対応方針を `docs/runbooks/pre-commit.md` に記録している
 - [ ] `/implement` SKILL.md 手順2 から手動 lint・audit の実行指示が「pre-commit / CI が自動実行」に書き換えられている
 - [ ] `docs/runbooks/pre-commit.md` のフック一覧が最新の状態に更新されている
@@ -75,7 +75,7 @@
 
 | 層 | 変更ファイル |
 |----|------------|
-| Config | `.pre-commit-config.yaml`、`backend/setup.cfg`（`[flake8]` 削除・`[bandit]` 追加）、`backend/pyproject.toml`（新規: Ruff 設定）、`backend/requirements-dev.txt` |
+| Config | `.pre-commit-config.yaml`、`backend/setup.cfg`（`[flake8]` 削除）、`backend/pyproject.toml`（新規: Ruff 設定）、`backend/.bandit`（新規: bandit YAML 設定）、`backend/requirements-dev.txt` |
 | CI | `.github/workflows/ci.yml` |
 | Frontend | `frontend/package.json`（`overrides` 追加、`npm audit fix` による `package-lock.json` 更新） |
 | Skills | `.claude/skills/implement/SKILL.md` |
@@ -122,7 +122,9 @@ pipx run ruff check backend/ --select E,F,W --line-length 120 \
 ```
 ruff==0.15.12
 bandit==1.7.9
-pip-audit==x.x.x
+pip-audit==2.10.0
+pytest==8.3.4
+pytest-django==4.9.0
 ```
 
 **2A-2: `backend/setup.cfg` の `[flake8]` セクションを削除し `backend/pyproject.toml` に移行**
@@ -141,48 +143,63 @@ select = ["E", "F", "W"]
 
 現状維持。ステップ3へ進む。
 
-### ステップ3 bandit 設定を `backend/setup.cfg` に集約
+### ステップ3 bandit 設定を `backend/.bandit`（YAML）に集約
 
-`backend/setup.cfg` に `[bandit]` セクションを追加（bandit 1.7.x は INI 形式の setup.cfg をサポートする）：
+bandit 1.7.x は `setup.cfg` を自動検出しないが、`.bandit` ファイルをプロジェクトレベルで自動検出する。INI 形式（`[bandit]` セクション）で作成すると `--configfile` 不要で自動適用される。
+
+`backend/.bandit`（新規作成、INI 形式）:
 ```ini
 [bandit]
 skips = B101
 exclude_dirs = migrations,tests
-level = 2  # MEDIUM 以上（-ll 相当）
 ```
 
-**設定読み込み検証（必須）**: `[bandit]` セクション追加後、以下で正しく読み込まれることを確認する：
+**設定読み込み検証（必須）**: 作成後、以下で `cli exclude tests: B101` が表示されることを確認する:
 ```bash
-# 自動検出で設定が適用されるか確認（出力に "[bandit] section" または設定値が含まれるか）
-docker compose exec backend bandit -r . -f txt 2>&1 | head -10
+pipx run bandit -r /mnt/c/app/study-app-multitenant/backend/ -f txt 2>&1 | head -8
+# 期待: "Found project level .bandit file" + "cli exclude tests: B101"
 ```
 
-出力に設定が反映されていない（空またはデフォルト値のみ）場合は `--configfile` を明示するフォールバックを使用する:
-```bash
-docker compose exec backend bandit -r . --configfile setup.cfg -f txt 2>&1 | head -10
-```
-
-`ci.yml` の bandit コマンドから除外引数を削除し、設定ファイル自動読み込みに変更。自動検出が確認できなかった場合は `--configfile setup.cfg` を明示する:
+`ci.yml` の bandit コマンドから CLI 除外引数を削除する（自動検出で代替）:
 ```yaml
 - name: bandit
-  run: bandit -r .          # または bandit -r . --configfile setup.cfg
+  run: bandit -r .
   working-directory: backend
 ```
 
-### ステップ4 pip-audit をベースライン確認・CI 追加
+### ステップ4 pip-audit ベースライン確認・依存関係アップグレード・CI 追加
+
+**4-0: pip-audit ベースライン確認（実施済み）**
 
 ```bash
-# Docker 内で pip-audit をインストールしてベースライン確認
-docker compose exec backend pip install pip-audit
-docker compose exec backend pip-audit -r requirements.txt
+pipx run pip-audit -r backend/requirements.txt
 ```
 
-結果を確認し、既知の問題には `--ignore-vuln VULN-ID` を付与する方針を決定してから CI に追加する。
+結果: 58件の CVE が 7パッケージで検出。**すべてに修正バージョンが存在**するため `--ignore-vuln` は使用せず、全パッケージをアップグレードする。
 
-`backend/requirements-dev.txt` に追記：
+**4-1: pytest を requirements.txt（本番）から requirements-dev.txt へ移動**
+
+`requirements.txt` に pytest/pytest-django が混入しておりプロダクション Docker イメージの攻撃対象を増やしている。`requirements-dev.txt` に移動する。
+
+**4-2: requirements.txt の依存関係アップグレード**
+
+| パッケージ | 変更 | 理由 |
+|---|---|---|
+| Django 4.2.7 → 4.2.30 | LTS 内パッチ | 45件の CVE を修正 |
+| DRF 3.14.0 → 3.15.2 | マイナー | CVE-2024-21520 |
+| simplejwt 5.3.0 → 5.5.1 | マイナー | CVE-2024-22513 |
+| python-dotenv 1.0.0 → 1.2.2 | マイナー | CVE-2026-28684 |
+| Pillow 10.1.0 → 10.3.0 | マイナー | CVE-2023-50447, CVE-2024-28219 |
+| gunicorn 21.2.0 → 22.0.0 | メジャー | CVE-2024-1135, CVE-2024-6827（HTTP インジェクション） |
+
+**4-3: アップグレード後のリグレッション確認**
+
+```bash
+docker compose build backend
+docker compose exec backend python3 -m pytest --tb=short -q
 ```
-pip-audit==x.x.x
-```
+
+テストが通過したら pip-audit を CI に追加する。
 
 ### ステップ5 npm audit fix・overrides 設定
 
@@ -232,10 +249,10 @@ npm audit --audit-level=critical
   rev: 1.7.9
   hooks:
     - id: bandit
-      args: ["-c", "backend/setup.cfg"]
       files: ^backend/
       exclude: ^backend/.*/migrations/|^backend/.*/tests/
 ```
+> `backend/.bandit`（INI 形式）が自動検出されるため `--configfile` 不要。
 
 **ESLint（共通）:**
 ```yaml
@@ -426,3 +443,4 @@ npm audit fix による `package-lock.json` の変更も `git revert` で戻せ�
 
 - [20260428_0130 ✅ 完了](../../reviews/I055_plan_review_20260428_0130.md)
 - [20260430_0056 ✅ 完了](../../reviews/I055_plan_review_20260430_0056.md)
+- [20260430_0255 ✅ 完了](../../reviews/I055_plan_review_20260430_0255.md)

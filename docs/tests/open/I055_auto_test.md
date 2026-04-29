@@ -46,13 +46,13 @@ docker compose exec frontend npm test -- --watchAll=false
 - **期待値**: `pre-commit` の記述が ci.yml に存在する
 
 ### TC-05 bandit 設定の集約確認
-- **目的**: bandit の除外設定が setup.cfg に存在し、CI の CLI 引数から削除されていること
+- **目的**: bandit の除外設定が `backend/.bandit`（INI 形式）に存在し、CI の CLI 除外引数が削除されていること
 - **実行**:
   ```bash
-  grep -A 5 "\[bandit\]" backend/setup.cfg
+  grep -A 5 "\[bandit\]" backend/.bandit
   grep "bandit" .github/workflows/ci.yml
   ```
-- **期待値**: `setup.cfg` に `[bandit]` セクションがある。`ci.yml` の bandit コマンドに `-x` 除外引数がない
+- **期待値**: `backend/.bandit` に `[bandit]` セクションがあり `skips = B101` が含まれる。`ci.yml` の bandit コマンドに `-x` 除外引数がない
 
 ### TC-06 pip-audit が requirements-dev.txt に追加されていること
 - **実行**: `grep "pip-audit" backend/requirements-dev.txt`
