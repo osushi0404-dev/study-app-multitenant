@@ -77,7 +77,7 @@
 |----|------------|
 | Config | `.pre-commit-config.yaml`、`backend/setup.cfg`（`[flake8]` 削除）、`backend/pyproject.toml`（新規: Ruff 設定）、`backend/.bandit`（新規: bandit YAML 設定）、`backend/requirements-dev.txt` |
 | CI | `.github/workflows/ci.yml` |
-| Frontend | `frontend/package.json`（`overrides` 追加、`npm audit fix` による `package-lock.json` 更新）、`frontend/src/Login.tsx`（`<a href="#">` → `<button type="button">` に変更: ESLint `--max-warnings 0` 達成のために必要。アクセシビリティ上も正しい修正） |
+| Frontend | `frontend/package.json`（`overrides` 追加、`npm audit fix` による `package-lock.json` 更新）、`frontend/src/Login.tsx`（`<a href="#">` → `<button type="button">` に変更: ESLint `--max-warnings 0` 達成のために必要。アクセシビリティ上も正しい修正）、`frontend/src/pages/QuizManagement.tsx`（`eslint-disable-next-line security/detect-object-injection` を 3箇所追加: `--max-warnings 0` 達成のために必要。ランダムアクセスではなく定数インデックスで安全） |
 | Skills | `.claude/skills/implement/SKILL.md` |
 | Docs | `docs/runbooks/pre-commit.md`、`rules/ultimate_django_coding_standards.md`、`rules/react-coding-standards-integrated.md` |
 | DB | なし |
@@ -111,12 +111,7 @@ pipx run ruff check backend/ --select E,F,W --line-length 120 \
 - `backend/studylogs/mistake_analysis.py:330`
 - `backend/studylogs/mistake_analysis.py:390`
 
-修正後に再チェック:
-```bash
-pipx run ruff check backend/ --select E,F,W --line-length 120 \
-  --exclude "*/migrations/*" --exclude staticfiles
-# → Found 0 errors を確認
-```
+→ TC-03 参照（pre-commit run --all-files の pass を確認）
 
 **2A-1: `backend/requirements-dev.txt` の `flake8` を `ruff` に置き換え**
 ```
@@ -154,11 +149,7 @@ skips = B101
 exclude_dirs = migrations,tests
 ```
 
-**設定読み込み検証（必須）**: 作成後、以下で `cli exclude tests: B101` が表示されることを確認する:
-```bash
-pipx run bandit -r /mnt/c/app/study-app-multitenant/backend/ -f txt 2>&1 | head -8
-# 期待: "Found project level .bandit file" + "cli exclude tests: B101"
-```
+→ TC-11 参照（pre-commit run bandit --all-files の pass を確認）
 
 **検証結果（実施済み）**:
 ```
@@ -261,6 +252,7 @@ npm audit --audit-level=critical
       exclude: ^backend/.*/migrations/|^backend/.*/tests/
 ```
 > `backend/.bandit`（INI 形式）が自動検出されるため `--configfile` 不要。
+> **設計根拠（exclude の二重定義ではない理由）**: pre-commit の `exclude:` は pre-commit がファイルリストをフィルタする層（bandit に渡す前の段階）で機能する。`backend/.bandit` の `exclude_dirs` は bandit が直接呼ばれた場合（CI 直接実行・ローカル手動実行）に機能する。両者は異なる実行レイヤーを担うため冗長ではなく、どちらのコンテキストでも確実に除外されることを保証する多層防御。
 
 **ESLint（共通）:**
 ```yaml
@@ -370,6 +362,8 @@ backend-lint:
     - name: pip-audit
       run: pip-audit -r requirements.txt
       working-directory: backend
+      # 本番依存（requirements.txt）のみをスキャン対象とする。
+      # 開発依存（requirements-dev.txt: ruff, bandit, pip-audit 自身等）は本番環境に含まれないためスコープ外。
     - name: Check migration drift
       run: python manage.py makemigrations --check --dry-run
       working-directory: backend
@@ -440,6 +434,37 @@ frontend-lint:
 - パフォーマンス設計（N+1・キャッシュ・ページネーション）
 - 業務ロジック・ステータス遷移・エッジケースの考慮
 - API 設計（URL 設計・レスポンス形式・エラーハンドリング方針）
+```
+
+### ステップ10 ワークフロー改善（コードレビュー指摘への対応）
+
+**背景**: 本イシューの実装中、計画書ステップ3に「（必須）検証」として埋め込んだ bandit 自動検出の確認コマンドが、自動テスト文書の TC に昇格されなかったため実装時にスキップされた。コードレビューで後追い検知されたが、これは構造的な問題であるため以下の 3ファイルを変更して再発を防ぐ。
+
+**変更方針（防御の深度）**:
+- **予防（計画作成時）**: `plan-writing-rules.md` に規則定義 + `plan-issue` SKILL.md 文書品質ゲートに明示項目追加
+- **検知（レビュー時）**: `code-reviewer.md` に確認観点追加
+
+**① `docs/runbooks/plan-writing-rules.md` への追記:**
+
+実装ステップの記述規則として以下を追加する:
+```
+計画書の実装ステップ内に「確認する」「検証する」等の検証コマンドを書かない。
+検証手順は必ず自動テスト文書の TC として記述し、ステップ本文には「→ TC-XX 参照」と書く。
+```
+
+**② `.claude/skills/plan-issue/SKILL.md` 文書品質ゲートへの追記:**
+
+既存の6項目チェックリストの末尾に以下を追加する:
+```
+- [ ] 計画書の各実装ステップ本文内に検証コマンドが残っていないか（ある場合は自動テスト文書のTCに昇格する）
+```
+
+**③ `.claude/review-agents/code-reviewer.md` への追記:**
+
+コードレビューの確認観点として以下を追加する:
+```
+計画書の各実装ステップ本文内に「確認する」「検証する」等の検証コマンドが残っている場合、対応するTCが
+自動テスト文書に存在し結果が記録されているか確認する（plan-writing-rules.md のルール遵守確認）
 ```
 
 ---
@@ -513,3 +538,4 @@ npm audit fix による `package-lock.json` の変更も `git revert` で戻せ�
 - [20260430_0255 ✅ 完了](../../reviews/I055_plan_review_20260430_0255.md)
 - [20260430_0931 ✅ 完了](../../reviews/I055_plan_review_20260430_0931.md)
 - [20260430_0945 ✅ 完了](../../reviews/I055_plan_review_20260430_0945.md)
+- [20260430_1057 ✅ 完了](../../reviews/I055_plan_review_20260430_1057.md)
