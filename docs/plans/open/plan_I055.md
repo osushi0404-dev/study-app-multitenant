@@ -70,6 +70,10 @@
 - [ ] CI の全ジョブが pass する
 - [ ] `docs/runbooks/plan-writing-rules.md` の事前調査セクションに「lint/audit/scan 系ツール導入イシューでは計画前にツールを実際に実行し副作用ファイルを列挙する」という原則が追加されている
 - [ ] `.claude/review-agents/code-reviewer.md` に「CI 全ジョブ pass かつテスト結果欄空白 → /test 実施前の正常状態として Low 以下で扱う」という条件付き基準が追加されている
+- [ ] TC-03b の異常系テストインプットが Ruff で確実に F841 を発動するコード（`def foo():\n    unused_var = 1`）に修正され、exit 1 で終了することを確認している
+- [ ] `backend/problems/utils.py` 行261-264 の implicit string concatenation が単一 f-string に統合されている
+- [ ] `plan-issue/SKILL.md` の「データ整合性・運用性・コスト設計チェック（該当する場合）」ブロックに「依存関係ファイル変更時の Dockerfile・docker-compose.yml 影響確認」が追加されている
+- [ ] `plan-issue/SKILL.md` の「文書品質ゲート」チェックリストに「lint 異常系テストのインプットを対象ツールで実際に実行し非ゼロ終了を確認済みか」が追加されている
 
 ---
 
@@ -561,6 +565,70 @@ CI 未 pass またはテスト結果空白かつ CI 状況不明の場合は従�
 
 → TC-16 参照
 
+### ステップ13【是正処置 C1】TC-03b テストインプット修正
+
+**背景**: TC-03b の異常系テストで `import os,sys,re` を使ったが、Ruff は E401 をこのパターンでは発動しないため exit 0 になった。「エラーがあればコミットがブロックされる」の証拠として弱い。
+
+**変更内容**: `I055_auto_test.md` の TC-03b テストコマンドを以下に差し替える:
+
+```bash
+printf 'def foo():\n    unused_var = 1\n' > backend/test_lint_dummy.py
+pre-commit run --files backend/test_lint_dummy.py
+EXIT_CODE=$?
+rm backend/test_lint_dummy.py
+echo "exit code: $EXIT_CODE"
+```
+
+期待値: exit code が非ゼロ（F841: Local variable `unused_var` is assigned to but never used）
+
+→ TC-17 参照
+
+### ステップ14【是正処置 C2】utils.py 行261-264 の implicit string concatenation 修正
+
+**背景**: 2 回のコードレビューで指摘（Low→Medium に昇格）された pre-existing の問題。1行目は `f"..."` だが 2行目は f-prefix なしのため、将来の変更時に silent bug になるリスクがある。
+
+**変更内容**: `backend/problems/utils.py` 行261-264 を単一 f-string に統合する:
+
+```python
+# Before
+return False, (
+    f"ディレクトリが存在しません: {directory_path}"
+    "（科目登録時にディレクトリが作成されているか確認してください）"
+)
+
+# After
+return False, f"ディレクトリが存在しません: {directory_path}（科目登録時にディレクトリが作成されているか確認してください）"
+```
+
+→ TC-18 参照
+
+### ステップ15【予防処置 P3】plan-issue/SKILL.md に依存関係変更時の Docker 影響チェックを追加
+
+**背景**: I055 で pytest を requirements.txt → requirements-dev.txt に移動した際、Dockerfile への影響が計画書の影響範囲テーブルに記載されず、実装中に「Docker コンテナで pytest が動かない」問題として顕在化した。計画段階（上流）で Dockerfile 影響を必須確認させることで再発を防ぐ。
+
+**変更内容**: `plan-issue/SKILL.md` の「データ整合性・運用性・コスト設計チェック（該当する場合）」ブロックの末尾に以下を追加する:
+
+```
+- 依存関係ファイル（requirements*.txt / package*.json）を変更する場合：
+  Dockerfile のインストール対象・docker-compose.yml のビルドターゲットへの
+  波及を確認し、計画書の影響範囲テーブルに記載する
+```
+
+→ TC-19 参照
+
+### ステップ16【予防処置 P4】plan-issue/SKILL.md 文書品質ゲートに異常系テスト入力確認を追加
+
+**背景**: TC-03b で `import os,sys,re` という「実際にはツールで検出されないインプット」をテストケースに記載してしまった。文書品質ゲート（承認前の必須自己チェックリスト）に追加することで、「インプット未確認のまま承認ポイントを提示する」構造的問題を防ぐ。
+
+**変更内容**: `plan-issue/SKILL.md` の「文書品質ゲート（承認ポイント提示前に必ず自己チェック）」チェックリストの末尾に以下を追加する:
+
+```
+- [ ] lint / 静的解析ツールの異常系テストがある場合、インプットコードを
+      対象ツールで実際に実行し非ゼロ終了することを確認済みか
+```
+
+→ TC-20 参照
+
 ---
 
 ## レビュー結果
@@ -572,3 +640,4 @@ CI 未 pass またはテスト結果空白かつ CI 状況不明の場合は従�
 - [20260430_0931 ✅ 完了](../../reviews/I055_plan_review_20260430_0931.md)
 - [20260430_0945 ✅ 完了](../../reviews/I055_plan_review_20260430_0945.md)
 - [20260430_1057 ✅ 完了](../../reviews/I055_plan_review_20260430_1057.md)
+- [20260430_1537 ⛔ 差し戻し](../../reviews/I055_plan_review_20260430_1537.md)

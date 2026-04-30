@@ -20,7 +20,12 @@
 | 16 | `grep -n "audit\|scan.*ツール\|副作用\|実際に実行" docs/runbooks/plan-writing-rules.md` を実行する | lint/audit/scan 系ツールを計画前に実行する原則の記述が存在する | Claude | ✅ OK | plan-writing-rules.md 104行に `lint/audit/scan 系ツール導入時の副作用事前調査（必須）` セクション存在（2026-04-30） |
 | 17 | `grep -n "CI.*pass\|正常状態\|Low 以下\|フロー順序" .claude/review-agents/code-reviewer.md` を実行する | 条件付き基準の記述が存在する | Claude | ✅ OK | code-reviewer.md 114行に条件付き基準の記述存在（2026-04-30） |
 
-結論: No.1〜17 全て OK（2026-04-30 確認済み）
+| 18 | `printf 'def foo():\n    unused_var = 1\n' > backend/test_lint_dummy.py && pre-commit run --files backend/test_lint_dummy.py; EXIT=$?; rm backend/test_lint_dummy.py; echo "exit:$EXIT"` を実行する | exit code が非ゼロ（F841 が検出されコミットブロックが確認できること） | Claude | | ステップ13 是正処置 C1 確認 |
+| 19 | `grep -n -A 3 "ディレクトリが存在しません" backend/problems/utils.py` を実行する | 単一 f-string になっており f-prefix のない文字列との implicit concatenation が存在しない | Claude | | ステップ14 是正処置 C2 確認 |
+| 20 | `grep -n "Dockerfile\|docker-compose\|依存関係ファイル" .claude/skills/plan-issue/SKILL.md` を実行する | Docker 影響確認に関する記述が存在する | Claude | | ステップ15 予防処置 P3 確認 |
+| 21 | `grep -n "異常系\|非ゼロ終了\|lint.*テスト\|静的解析.*テスト" .claude/skills/plan-issue/SKILL.md` を実行する | 異常系テストのインプット事前確認に関する記述が存在する | Claude | | ステップ16 予防処置 P4 確認 |
+
+結論: No.1〜17 全て OK（2026-04-30 確認済み）、No.18〜21 は実施後に記入
 
 ## 備考
 - No.6（TC-03b）は `import os,sys,re` が Ruff E/F/W ルール非対象のため exit 0。フック自体は正常動作（TC-03・TC-11 で確認済み）。

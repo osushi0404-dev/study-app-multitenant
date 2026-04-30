@@ -134,6 +134,46 @@ docker compose exec frontend npm test -- --watchAll=false
   ```
 - **期待値**: lint/audit/scan 系ツールを計画前に実行する原則の記述が存在する
 
+### TC-17 是正処置 C1: TC-03b 修正インプットの Ruff 検出確認
+
+- **目的**: `def foo():\n    unused_var = 1` が Ruff F841 で確実に検出されコミットがブロックされること
+- **実行**:
+  ```bash
+  printf 'def foo():\n    unused_var = 1\n' > backend/test_lint_dummy.py
+  pre-commit run --files backend/test_lint_dummy.py
+  EXIT_CODE=$?
+  rm backend/test_lint_dummy.py
+  echo "exit code: $EXIT_CODE"
+  ```
+- **期待値**: exit code が非ゼロ（F841 が検出されること）
+
+### TC-18 是正処置 C2: utils.py implicit string concatenation 解消確認
+
+- **目的**: `backend/problems/utils.py` 行261付近の implicit string concatenation が除去されていること
+- **実行**:
+  ```bash
+  grep -n -A 3 "ディレクトリが存在しません" backend/problems/utils.py
+  ```
+- **期待値**: 2行の implicit concatenation が単一 f-string にまとめられ、f-prefix のない文字列が連結されていないこと
+
+### TC-19 予防処置 P3: plan-issue/SKILL.md Docker 影響チェック追記確認
+
+- **目的**: 依存関係ファイル変更時の Dockerfile・docker-compose.yml 影響確認が plan-issue スキルに追加されていること
+- **実行**:
+  ```bash
+  grep -n "Dockerfile\|docker-compose\|依存関係ファイル" .claude/skills/plan-issue/SKILL.md
+  ```
+- **期待値**: Docker 影響確認に関する記述が存在する
+
+### TC-20 予防処置 P4: plan-issue/SKILL.md 文書品質ゲート追記確認
+
+- **目的**: lint 異常系テストのインプット事前確認が文書品質ゲートに追加されていること
+- **実行**:
+  ```bash
+  grep -n "異常系\|非ゼロ終了\|lint.*テスト\|静的解析.*テスト" .claude/skills/plan-issue/SKILL.md
+  ```
+- **期待値**: 異常系テストのインプット事前確認に関する記述が存在する
+
 ### TC-16 予防処置 P2: code-reviewer.md へのテスト結果基準精密化確認
 - **目的**: CI pass かつテスト結果欄空白を「/test 実施前の正常状態」として Low 以下で扱う基準が追加されていること
 - **実行**:
@@ -143,9 +183,9 @@ docker compose exec frontend npm test -- --watchAll=false
 - **期待値**: 条件付き基準の記述が存在する
 
 結果:
-- backend: 25 passed, 2 warnings（2026-04-30 実施）
-- frontend: 7 passed, 2 suites（2026-04-30 実施）
-- E2E: 5 passed（2026-04-30 実施）
+- backend: 25 passed, 2 warnings（2026-04-30 実施・再確認 /test スキル）
+- frontend: 7 passed, 2 suites（2026-04-30 実施・再確認 /test スキル）
+- E2E: 5 passed（2026-04-30 実施・再確認 /test スキル）
 
 ## 各 TC 実行結果（2026-04-30）
 
