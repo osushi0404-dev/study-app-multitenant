@@ -126,6 +126,22 @@ docker compose exec frontend npm test -- --watchAll=false
   ```
 - **期待値**: 該当行が存在する
 
+### TC-15 予防処置 P1: plan-writing-rules.md への事前実行原則追記確認
+- **目的**: lint/audit/scan 系ツール導入時の副作用ファイル計画外変更を防ぐ原則が追加されていること
+- **実行**:
+  ```bash
+  grep -n "audit\|scan.*ツール\|副作用\|実際に実行" docs/runbooks/plan-writing-rules.md
+  ```
+- **期待値**: lint/audit/scan 系ツールを計画前に実行する原則の記述が存在する
+
+### TC-16 予防処置 P2: code-reviewer.md へのテスト結果基準精密化確認
+- **目的**: CI pass かつテスト結果欄空白を「/test 実施前の正常状態」として Low 以下で扱う基準が追加されていること
+- **実行**:
+  ```bash
+  grep -n "CI.*pass\|正常状態\|Low 以下\|フロー順序" .claude/review-agents/code-reviewer.md
+  ```
+- **期待値**: 条件付き基準の記述が存在する
+
 結果:
 - backend: 25 passed, 2 warnings（2026-04-30 実施）
 - frontend: 7 passed, 2 suites（2026-04-30 実施）

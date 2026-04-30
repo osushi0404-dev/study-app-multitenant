@@ -17,8 +17,10 @@
 | 13 | `grep -n "検証コマンドを書かない\|TC に昇格" docs/runbooks/plan-writing-rules.md` を実行する | 規則の記述が存在する | Claude | | ステップ10 ワークフロー改善確認 |
 | 14 | `grep -n "ステップ本文内\|TC に昇格" .claude/skills/plan-issue/SKILL.md` を実行する | 文書品質ゲートへの追記が存在する | Claude | | ステップ10 ワークフロー改善確認 |
 | 15 | `grep -n "ステップ本文内\|TC に昇格\|plan-writing-rules" .claude/review-agents/code-reviewer.md` を実行する | 確認観点への追記が存在する | Claude | | ステップ10 ワークフロー改善確認 |
+| 16 | `grep -n "audit\|scan.*ツール\|副作用\|実際に実行" docs/runbooks/plan-writing-rules.md` を実行する | lint/audit/scan 系ツールを計画前に実行する原則の記述が存在する | Claude | | ステップ11 予防処置 P1 確認 |
+| 17 | `grep -n "CI.*pass\|正常状態\|Low 以下\|フロー順序" .claude/review-agents/code-reviewer.md` を実行する | 条件付き基準の記述が存在する | Claude | | ステップ12 予防処置 P2 確認 |
 
-結論: OK（2026-04-30 ユーザー確認済み）
+結論: No.1〜15 OK（2026-04-30 ユーザー確認済み）、No.16〜17 は実施後に記入
 
 ## 備考
 - No.6（TC-03b）は `import os,sys,re` が Ruff E/F/W ルール非対象のため exit 0。フック自体は正常動作（TC-03・TC-11 で確認済み）。

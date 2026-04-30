@@ -68,6 +68,8 @@
 - [ ] Backend テスト: 25 passed 以上（ベースライン維持）
 - [ ] Frontend テスト: 7 passed 以上（ベースライン維持）
 - [ ] CI の全ジョブが pass する
+- [ ] `docs/runbooks/plan-writing-rules.md` の事前調査セクションに「lint/audit/scan 系ツール導入イシューでは計画前にツールを実際に実行し副作用ファイルを列挙する」という原則が追加されている
+- [ ] `.claude/review-agents/code-reviewer.md` に「CI 全ジョブ pass かつテスト結果欄空白 → /test 実施前の正常状態として Low 以下で扱う」という条件付き基準が追加されている
 
 ---
 
@@ -79,7 +81,7 @@
 | CI | `.github/workflows/ci.yml` |
 | Frontend | `frontend/package.json`（`overrides` 追加、`npm audit fix` による `package-lock.json` 更新）、`frontend/src/Login.tsx`（`<a href="#">` → `<button type="button">` に変更: ESLint `--max-warnings 0` 達成のために必要。アクセシビリティ上も正しい修正）、`frontend/src/pages/QuizManagement.tsx`（`eslint-disable-next-line security/detect-object-injection` を 3箇所追加: `--max-warnings 0` 達成のために必要。ランダムアクセスではなく定数インデックスで安全） |
 | Skills | `.claude/skills/implement/SKILL.md` |
-| Docs | `docs/runbooks/pre-commit.md`、`rules/ultimate_django_coding_standards.md`、`rules/react-coding-standards-integrated.md` |
+| Docs | `docs/runbooks/pre-commit.md`、`rules/ultimate_django_coding_standards.md`、`rules/react-coding-standards-integrated.md`、`docs/runbooks/plan-writing-rules.md`（ステップ11）、`.claude/review-agents/code-reviewer.md`（ステップ12） |
 | DB | なし |
 
 ---
@@ -529,6 +531,37 @@ npm audit fix による `package-lock.json` の変更も `git revert` で戻せ�
 - [ ] CI を `pre-commit run --all-files` に統一する方針に同意する
 - [ ] ESLint の 12 warnings を 0 にしてから pre-commit フックを追加する運用に同意する
 
+
+### ステップ11【予防処置 P1】plan-writing-rules.md への事前実行原則追記
+
+I055 振り返りで特定した予防処置: lint/audit/scan 系ツール導入時に副作用ファイルが計画外変更になる根本原因への対処。
+
+`docs/runbooks/plan-writing-rules.md` の「lint エラー数の事前計測」セクションに以下の原則を追加する:
+
+```
+lint/audit/scan 系ツール（pip-audit・npm audit・mypy・semgrep 等）を導入するイシューでは、
+そのツールを計画書作成前に実際に実行し、検出された問題と修正必要ファイルを計画書に列挙する。
+初回実行で初めて顕在化するエラー・CVE・警告を計画書作成時点で把握することで、計画外変更を防ぐ。
+```
+
+→ TC-15 参照
+
+### ステップ12【予防処置 P2】code-reviewer.md へのテスト結果基準精密化追記
+
+I055 振り返りで特定した予防処置: /code-review がフロー順序を知らずテスト結果欄空白を Medium 指摘した根本原因への対処。
+
+`.claude/review-agents/code-reviewer.md` の P4 テスト妥当性セクションに以下の条件付き基準を追加する:
+
+```
+テスト結果文書（I###_auto_test.md）の結果欄が空白の場合、
+CI が全ジョブ pass していれば /test スキル実施前の正常状態として Low 以下で扱う。
+CI 未 pass またはテスト結果空白かつ CI 状況不明の場合は従来通り Medium 以上で指摘する。
+（フロー順序: /implement → /code-review → /test のため /code-review 時点では空白が正常）
+```
+
+→ TC-16 参照
+
+---
 
 ## レビュー結果
 - [20260428_0117 ⛔ 差し戻し → 修正済み](../../reviews/I055_plan_review_20260428_0117.md)
