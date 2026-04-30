@@ -101,8 +101,10 @@ dummy_password = "example_only"  # pragma: allowlist secret
 
 detect-secrets のバージョンアップや設定変更後は baseline を再生成します。
 
+> ⚠️ **`--force-use-all-plugins` は必須**: このフラグなしで再生成すると `JwtTokenDetector` 等の追加プラグインが baseline から消え、以降の pre-commit で JWT が検出されなくなります（エラーなし・サイレント回帰）。
+
 ```bash
-detect-secrets scan > .secrets.baseline
+detect-secrets scan --force-use-all-plugins --exclude-files "package-lock\.json" > .secrets.baseline
 detect-secrets audit .secrets.baseline  # 誤検知を除外
 git add .secrets.baseline
 git commit -m "docs: regenerate secrets baseline"
