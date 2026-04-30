@@ -166,3 +166,5 @@ docker compose exec frontend npm test -- --watchAll=false
 | TC-12 | ✅ PASS | `検証コマンドを書かない` 規則が plan-writing-rules.md に存在 |
 | TC-13 | ✅ PASS | `TC に昇格` チェック項目が plan-issue/SKILL.md に存在 |
 | TC-14 | ✅ PASS | `plan-writing-rules` 参照が code-reviewer.md に存在 |
+| TC-15 | ✅ PASS | `lint/audit/scan 系ツール導入時の副作用事前調査（必須）` セクションが plan-writing-rules.md 104行付近に存在 |
+| TC-16 | ✅ PASS | CI pass 時のテスト結果空白を Low 以下で扱う条件付き基準が code-reviewer.md 114行に存在 |
