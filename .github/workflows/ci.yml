@@ -19,11 +19,12 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install dev dependencies
         run: pip install -r backend/requirements-dev.txt
-      - name: flake8
-        run: flake8 . --format='::error file=%(path)s,line=%(row)d,col=%(col)d::%(code)s %(text)s'
-        working-directory: backend
-      - name: bandit
-        run: bandit -r . -x ./\*/migrations/,./\*/tests/ -ll
+      - name: pre-commit (Ruff + bandit)
+        uses: pre-commit/action@v3.0.1
+        env:
+          SKIP: eslint
+      - name: pip-audit
+        run: pip-audit -r requirements.txt
         working-directory: backend
       - name: Check migration drift
         # makemigrations --check は DB 接続不要の静的チェック（モデルと migration の乖離を検出）
@@ -60,7 +61,9 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get install -y libmagic1
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
         working-directory: backend
       - name: Run pytest
         run: pytest
@@ -103,7 +106,10 @@ jobs:
         run: npm ci
         working-directory: frontend
       - name: ESLint
-        run: npx eslint src/ --ext .ts,.tsx -f github-actions
+        run: npx eslint src/ --ext .ts,.tsx --max-warnings 0 -f github-actions
+        working-directory: frontend
+      - name: npm audit
+        run: npm audit --audit-level=critical --omit=dev
         working-directory: frontend
 
   frontend-test:

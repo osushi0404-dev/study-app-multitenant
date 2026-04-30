@@ -11,5 +11,8 @@
 | 7 | `grep -n "自動強制範囲" rules/ultimate_django_coding_standards.md` を実行する | 「自動強制範囲」セクションが存在する | Claude | | |
 | 8 | `docs/runbooks/pre-commit.md` を確認する | 追加したフック（Ruff/flake8・bandit・ESLint）が一覧に記載されており、detect-secrets JWT 対応方針が記録されている | Claude | | |
 | 9 | `/implement` SKILL.md を確認する | 手順2 から「手動で flake8/bandit/ESLint を実行してください」という指示が削除または「pre-commit / CI が自動実行」に書き換えられている | Claude | | |
+| 10 | `grep -n "import subprocess" backend/core/management/commands/watch_errors.py` を実行する | 結果が 0件（subprocess が call_command に置き換えられ import が削除されていること） | Claude | | B404/B603/B607 修正確認 |
+| 11 | `grep -n "call_command" backend/core/management/commands/watch_errors.py` を実行する | `call_command` の記述が存在する | Claude | | call_command 置き換え確認 |
+| 12 | `pre-commit run bandit --all-files` を実行する | exit code 0、bandit フックが pass する | Claude | | Low 発見 0件で通過すること |
 
 結論: OK / NG

@@ -363,6 +363,7 @@ const QuizManagement: React.FC = () => {
     } else {
       // For multiple choice, toggle the selected one
       const newChoices = [...currentChoices];
+      // eslint-disable-next-line security/detect-object-injection
       newChoices[index].is_correct = !newChoices[index].is_correct;
       setValue('choices', newChoices);
     }
@@ -720,7 +721,9 @@ const QuizManagement: React.FC = () => {
                                   fullWidth
                                   size="small"
                                   label={`選択肢 ${String.fromCharCode(65 + index)}`}
+                                  // eslint-disable-next-line security/detect-object-injection
                                   error={!!errors.choices?.[index] && errors.choices[index] && typeof errors.choices[index] === 'object' && 'text' in errors.choices[index]!}
+                                  // eslint-disable-next-line security/detect-object-injection
                                   helperText={errors.choices?.[index] && errors.choices[index] && typeof errors.choices[index] === 'object' && 'text' in errors.choices[index]! ? (errors.choices[index] as any).text?.message : ''}
                                 />
                               )}

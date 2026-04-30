@@ -74,6 +74,30 @@ docker compose exec frontend npm test -- --watchAll=false
   ```
 - **期待値**: 両ファイルに「自動強制範囲」セクションが存在する
 
+### TC-10 bandit Low 発見対処の確認
+- **目的**: B110 が修正され、`watch_errors.py` が `call_command` に置き換えられ、B311 に `# nosec` が付いていること
+- **実行**:
+  ```bash
+  # B110 修正確認（bare except Exception がないこと）
+  grep -n "except Exception:" backend/core/enhanced_logging.py
+  grep -n "except Exception:" backend/core/management/commands/watch_errors.py
+  # subprocess 削除確認（call_command 置き換え後は import subprocess がないこと）
+  grep -n "import subprocess" backend/core/management/commands/watch_errors.py
+  # call_command 使用確認
+  grep -n "call_command" backend/core/management/commands/watch_errors.py
+  # B311 nosec コメントの存在確認
+  grep -n "nosec B311" backend/studylogs/adaptive_selection.py
+  ```
+- **期待値**: `except Exception:` が 0件。`import subprocess` が 0件。`call_command` の記述が存在する。`nosec B311` が 3件存在する
+
+### TC-11 pre-commit bandit フック通過確認
+- **目的**: bandit フックが Low 発見なしで pass すること
+- **実行**:
+  ```bash
+  pre-commit run bandit --all-files
+  ```
+- **期待値**: exit code 0（bandit フックが pass）
+
 結果:
 - backend: （実施後に記入）
 - frontend: （実施後に記入）

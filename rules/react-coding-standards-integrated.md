@@ -3,6 +3,25 @@
 > Cursor/Claude Code を使用した React アプリケーション開発のための包括的コーディング規約
 > ChatGPT版とClaude版の良いところを統合
 
+## 自動強制範囲（linter が担当）
+
+以下の規約項目は **ESLint / TypeScript** が pre-commit（commit 時）と CI（PR 時）に自動検出・ブロックします。設定の詳細は `frontend/package.json`（eslintConfig）を参照してください。
+
+- 命名規則・未使用変数・型エラー（ESLint, TypeScript）
+- セキュリティパターン（eslint-plugin-security: `detect-object-injection` 等）
+- アクセシビリティ（eslint-plugin-jsx-a11y）
+- フロントエンド依存関係の既知 CVE（`npm audit --audit-level=critical`、CI の frontend-lint で実行）
+
+## 手動レビュー対象（linter が検出できない項目）
+
+以下は AI レビュー（/plan-issue-review・/code-review）および人間によるレビューの対象です:
+
+- コンポーネント設計（Props drilling 排除・責務分離）
+- マルチテナント制約（組織スコープ・閲覧範囲の制御）
+- パフォーマンス設計（不要な再レンダリング・N+1 API 呼び出し）
+- UX・アクセシビリティの意図的な設計判断
+- API 設計との整合性
+
 ---
 
 ## 目次

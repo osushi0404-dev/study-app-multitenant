@@ -60,7 +60,7 @@
 - [ ] CI の lint ジョブは `pre-commit run --all-files` を実行する（個別ツールステップを削除）
 - [ ] CI の `frontend-lint` ジョブで `npm audit --audit-level=critical` が実行される
 - [ ] CI の `backend-lint` ジョブで `pip-audit` が実行される
-- [ ] bandit の除外設定が `backend/.bandit`（INI 形式）に集約され、bandit の自動検出で CI・pre-commit の両方に適用されている
+- [ ] bandit の除外設定が `backend/.bandit`（INI 形式）に集約され、bandit の自動検出（`.bandit` INI 形式は bandit 1.7.x が自動検出）で CI・pre-commit の両方に適用されている
 - [ ] `detect-secrets` の JWT 検出状況を確認し、対応方針を `docs/runbooks/pre-commit.md` に記録している
 - [ ] `/implement` SKILL.md 手順2 から手動 lint・audit の実行指示が「pre-commit / CI が自動実行」に書き換えられている
 - [ ] `docs/runbooks/pre-commit.md` のフック一覧が最新の状態に更新されている
@@ -228,7 +228,7 @@ npm audit --audit-level=critical
 **Ruff 採用の場合:**
 ```yaml
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.x.x
+  rev: v0.15.12
   hooks:
     - id: ruff
       args: [--fix]
@@ -267,6 +267,56 @@ npm audit --audit-level=critical
 ```
 > **設計根拠**: `language: system` を採用することで既存の `frontend/node_modules` をそのまま使用できる。`language: node` では `additional_dependencies` にすべての ESLint プラグイン（eslint-plugin-security 等）を列挙する必要があり、WSL2 環境での環境差異リスクが高い。
 
+### ステップ6b bandit Low 発見への対処（実装中に判明）
+
+`pre-commit run --all-files` 実行時に bandit が 8件の Low severity 発見を検出し、exit 1 となることが判明。
+pre-commit の bandit フックは `-ll` なしで実行するため Low 発見もブロックになる。
+プランの方針「LOW は # nosec で抑制・理由記載必須」に従い、修正可能なものは修正し、受容するものはコードに根拠を記録する。
+
+**発見一覧と処置方針:**
+
+| ファイル | ルール | 処置 | 理由 |
+|--------|--------|------|------|
+| `core/enhanced_logging.py:247` | B110（try-except-pass） | **修正**: `except json.JSONDecodeError:` に変更 | `json.loads` が送出する例外は `json.JSONDecodeError` のみ。silent failure は debug を困難にする |
+| `core/management/commands/watch_errors.py:69` | B110（try-except-pass） | **修正**: `except (ValueError, OSError):` に変更 | `int()` → `ValueError`、`read_text()` → `OSError` の組み合わせ。silent failure は debug を困難にする |
+| `core/management/commands/watch_errors.py:7` | B404（subprocess import） | **修正**: `import subprocess` を削除 | `call_command` への置き換えで subprocess 自体が不要になる |
+| `core/management/commands/watch_errors.py:120` | B603/B607（subprocess.run） | **修正**: `call_command` + `StringIO` に置き換え | Django 慣用パターン。subprocess 不使用で B603/B607 の発生余地をなくす。`analyze_logs` は `self.stdout.write()` で出力するため `stdout=StringIO()` で完全捕捉可能（インターフェース確認済み） |
+| `studylogs/adaptive_selection.py:435` | B311（random） | `# nosec B311` | 暗号用途ではなく学習アルゴリズムの探索的選択。`secrets` モジュールは不要 |
+| `studylogs/adaptive_selection.py:467` | B311（random） | `# nosec B311` | 同上 |
+| `studylogs/adaptive_selection.py:478` | B311（random） | `# nosec B311` | 同上 |
+
+**`call_command` 置き換えの実装（`_analyze_error` メソッド）:**
+
+```python
+def _analyze_error(self, request_id):
+    """エラーを詳細解析"""
+    from io import StringIO
+    from django.core.management import call_command
+    try:
+        output = StringIO()
+        call_command('analyze_logs', request_id=request_id, format='claude', stdout=output)
+        result = output.getvalue()
+        return result if result else None
+    except Exception as e:
+        self.stdout.write(self.style.ERROR(f'エラー解析失敗: {e}'))
+        return None
+```
+
+> `--request-id` → `request_id`、`--format` → `format` の変換は Django の `call_command` が自動処理する。
+> `analyze_logs` の出力は全て `self.stdout.write()` 経由のため `stdout=StringIO()` で捕捉できることを確認済み。
+
+**設計根拠（`-ll` フラグを採用しない理由）:**
+`-ll`（MEDIUM+ のみ）をフック args に追加することは「LOW 発見を一括で非表示にする」ことになり、
+将来の新規 Low 発見も検知されなくなる。プランの方針「LOW は # nosec で抑制・理由記載必須」は
+「Low 発見に対して意識的な判断（修正 or 受容記録）を必須化する」という意図であるため、
+`-ll` は方針をバイパスする。フックはデフォルト（LOW+）で動作させ、発見ごとに対処する。
+
+**設計根拠（`call_command` を採用する理由）:**
+`# nosec B603,B607` での抑制は bandit 1.7.9 のカンマ区切りパース挙動により B603 が抑制されないことが実装中に判明。
+根本原因は `subprocess` を使った management command 呼び出しというアンチパターンであり、
+Django 慣用の `call_command` に置き換えることで B404/B603/B607 の 3件が `# nosec` なしで消える。
+これは抑制ではなく修正であり、コード品質も向上する。
+
 ### ステップ7 detect-secrets JWT 検出確認
 
 ```bash
@@ -301,17 +351,19 @@ backend-lint:
         python-version: '3.11'
         cache: 'pip'
         cache-dependency-path: backend/requirements-dev.txt
-    - name: Install dev dependencies
-      run: pip install -r backend/requirements-dev.txt
+    - name: Install dependencies
+      run: |
+        pip install -r backend/requirements.txt
+        pip install -r backend/requirements-dev.txt
     - name: pre-commit (lint & security)
       uses: pre-commit/action@v3.0.1
+      env:
+        SKIP: eslint
     - name: pip-audit
-      run: pip-audit -r backend/requirements.txt
+      run: pip-audit -r requirements.txt
       working-directory: backend
     - name: Check migration drift
-      run: |
-        pip install -r requirements.txt
-        python manage.py makemigrations --check --dry-run
+      run: python manage.py makemigrations --check --dry-run
       working-directory: backend
 
 frontend-lint:
@@ -327,12 +379,19 @@ frontend-lint:
     - name: Install dependencies
       run: npm ci
       working-directory: frontend
+    - name: ESLint
+      run: npx eslint src/ --ext .ts,.tsx --max-warnings 0
+      working-directory: frontend
     - name: npm audit
       run: npm audit --audit-level=critical --omit=dev
       working-directory: frontend
 ```
 
-> **設計根拠**: CI で `pre-commit run --all-files` を実行することで、ローカルと CI が完全に同じフックを実行することが保証される（設定の二重管理を解消）。個別の flake8・bandit・ESLint ステップは削除し、pre-commit 経由に統一する。
+> **設計根拠（ESLint CI 実行経路）**: ESLint は `frontend-lint` ジョブで直接実行する。
+> `backend-lint` の `pre-commit/action@v3.0.1` では Node.js 環境がないため ESLint フックを `SKIP=eslint` で除外し、
+> `frontend-lint` で Node.js 環境を持つジョブが直接 `npx eslint` を実行することで確実に CI ゲートとなる。
+>
+> **設計根拠**: CI で `pre-commit run --all-files` を実行することで、ローカルと CI が完全に同じフックを実行することが保証される（設定の二重管理を解消）。個別の flake8・bandit ステップは削除し、pre-commit 経由に統一する。
 
 ### ステップ9 ドキュメント更新（3ファイル）
 
@@ -444,3 +503,5 @@ npm audit fix による `package-lock.json` の変更も `git revert` で戻せ�
 - [20260428_0130 ✅ 完了](../../reviews/I055_plan_review_20260428_0130.md)
 - [20260430_0056 ✅ 完了](../../reviews/I055_plan_review_20260430_0056.md)
 - [20260430_0255 ✅ 完了](../../reviews/I055_plan_review_20260430_0255.md)
+- [20260430_0931 ✅ 完了](../../reviews/I055_plan_review_20260430_0931.md)
+- [20260430_0945 ✅ 完了](../../reviews/I055_plan_review_20260430_0945.md)

@@ -14,3 +14,27 @@ repos:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
         exclude: package-lock\.json
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+        exclude: ^backend/.*/migrations/
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9
+    hooks:
+      - id: bandit
+        files: ^backend/
+        exclude: ^backend/.*/migrations/|^backend/.*/tests/
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint
+        language: system
+        entry: bash -c 'cd frontend && npx eslint src/ --ext .ts,.tsx --max-warnings 0'
+        pass_filenames: false
+        files: ^frontend/src/

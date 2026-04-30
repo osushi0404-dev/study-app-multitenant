@@ -83,7 +83,10 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
         width, height = image.size
 
         if width > MAX_IMAGE_DIMENSION or height > MAX_IMAGE_DIMENSION:
-            return False, f"画像サイズが大きすぎます（{width}x{height}）。最大{MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}ピクセルまでです。"
+            return False, (
+                f"画像サイズが大きすぎます（{width}x{height}）。"
+                f"最大{MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}ピクセルまでです。"
+            )
 
         file.seek(0)  # ファイルポインタを先頭に戻す
 
@@ -255,7 +258,10 @@ def check_directory_exists(directory_path: str) -> Tuple[bool, Optional[str]]:
     full_path = os.path.join(settings.MEDIA_ROOT, directory_path)
 
     if not os.path.exists(full_path):
-        return False, f"ディレクトリが存在しません: {directory_path}（科目登録時にディレクトリが作成されているか確認してください）"
+        return False, (
+            f"ディレクトリが存在しません: {directory_path}"
+            "（科目登録時にディレクトリが作成されているか確認してください）"
+        )
 
     if not os.path.isdir(full_path):
         return False, f"指定されたパスがディレクトリではありません: {directory_path}"

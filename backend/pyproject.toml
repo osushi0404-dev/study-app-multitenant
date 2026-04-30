@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 120
+exclude = [
+    "*/migrations/*",
+    ".venv",
+    "staticfiles",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]

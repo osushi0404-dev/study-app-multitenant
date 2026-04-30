@@ -82,8 +82,8 @@ DB変更なし・外部API/非同期処理なし・フロントエンド変更�
    - セキュリティ・ベストプラクティス・モダン開発の観点で最適な実装を採用する
    - より良い方法がある場合は plan-writing-rules.md の「改善提案フォーマット」に従い提案してから実装する
 2) ビルド・型チェック・リント・セキュリティスキャンを実行してクリーンを確認:
-   - Backend: flake8（全エラー修正）/ bandit（MEDIUM 以上を修正対象。LOW は # nosec で抑制・理由記載必須）/ 未使用変数・import の残留がないこと
-   - Frontend: react-scripts build（型チェック）/ ESLint（error を修正対象、warning は記録）/ npm audit（high/critical を修正対象、moderate は記録・期限設定）
+   - lint・セキュリティスキャン・依存関係 CVE チェックは pre-commit（commit 時）と CI（PR 時）が自動実行する。手動実行は不要。
+   - ビルド確認: react-scripts build（型エラーが出た場合は修正してから次のステップへ）
    - 修正対象の警告・エラーがある場合は修正してから次のステップへ
 3) commit/push して PR を更新
 4) 停止し以下を案内:

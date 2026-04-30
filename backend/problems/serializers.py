@@ -287,7 +287,8 @@ class QuizAnswerDetailSerializer(serializers.ModelSerializer):
 
 class QuizSessionSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
-    answered_problems = serializers.IntegerField(source='completed_problems', read_only=True)  # フロントエンド用のフィールド名
+    # フロントエンド用のフィールド名（completed_problems のエイリアス）
+    answered_problems = serializers.IntegerField(source='completed_problems', read_only=True)
     duration = serializers.SerializerMethodField()
     accuracy = serializers.SerializerMethodField()
 

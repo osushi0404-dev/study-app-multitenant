@@ -432,7 +432,7 @@ class AdaptiveProblemSelector:
             score -= 0.1  # 最近よく解いている問題は避ける
 
         # ランダム要素を追加（探索的学習のため）
-        score += random.uniform(0, 0.1)
+        score += random.uniform(0, 0.1)  # nosec B311  # not cryptographic; used for exploratory learning variation
 
         return max(0, min(1, score))  # 0-1の範囲にクランプ
 
@@ -464,7 +464,7 @@ class AdaptiveProblemSelector:
             total_weight = sum(weights)
 
             if total_weight > 0:
-                rand_val = random.uniform(0, total_weight)
+                rand_val = random.uniform(0, total_weight)  # nosec B311  # not cryptographic; weighted selection for adaptive learning
                 cumulative = 0
 
                 for i, (problem, score) in enumerate(top_problems):
@@ -475,7 +475,7 @@ class AdaptiveProblemSelector:
                         break
             else:
                 # フォールバック：ランダム選択
-                problem, score = random.choice(top_problems)
+                problem, score = random.choice(top_problems)  # nosec B311  # not cryptographic; fallback selection for adaptive learning
                 selected.append(problem)
                 remaining_problems.remove((problem, score))
 

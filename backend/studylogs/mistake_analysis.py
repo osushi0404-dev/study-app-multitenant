@@ -315,7 +315,10 @@ class MistakeAnalysisService:
         suggestions_map = {
             'subject_difficulty': {
                 'title': f"{pattern.subject.name}の重点的な復習",
-                'description': f"{pattern.subject.name}で間違いが多発しているため、基礎から復習することをお勧めします。",
+                'description': (
+                    f"{pattern.subject.name}で間違いが多発しているため、"
+                    "基礎から復習することをお勧めします。"
+                ),
                 'action_steps': [
                     f"{pattern.subject.name}の基本概念を復習する",
                     "簡単な問題から段階的に練習する",
@@ -327,7 +330,10 @@ class MistakeAnalysisService:
             },
             'problem_type': {
                 'title': f"{pattern.get_problem_difficulty_display()}レベル問題の強化",
-                'description': f"{pattern.get_problem_difficulty_display()}レベルの問題で苦戦しています。段階的なアプローチで克服しましょう。",
+                'description': (
+                    f"{pattern.get_problem_difficulty_display()}レベルの問題で苦戦しています。"
+                    "段階的なアプローチで克服しましょう。"
+                ),
                 'action_steps': [
                     "より簡単なレベルから始める",
                     "解法パターンを覚える",
@@ -387,7 +393,10 @@ class MistakeAnalysisService:
     def _generate_weakness_based_suggestions(self, weakness: LearningWeakness):
         """弱点ベースの学習提案を生成"""
         suggestion_title = f"{weakness.concept_name}の集中強化"
-        suggestion_description = f"{weakness.concept_name}で{weakness.error_rate:.1f}%のエラー率となっています。集中的な練習が必要です。"
+        suggestion_description = (
+            f"{weakness.concept_name}で{weakness.error_rate:.1f}%のエラー率となっています。"
+            "集中的な練習が必要です。"
+        )
 
         action_steps = [
             f"{weakness.concept_name}の基本理論を復習する",

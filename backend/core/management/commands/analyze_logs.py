@@ -227,7 +227,8 @@ class Command(BaseCommand):
 
                     if 'location' in error_log:
                         loc = error_log['location']
-                        self.stdout.write(f"- 発生箇所: `{loc.get('file')}:{loc.get('line')}` in `{loc.get('function')}()`")
+                        location = f"`{loc.get('file')}:{loc.get('line')}` in `{loc.get('function')}()`"
+                        self.stdout.write(f"- 発生箇所: {location}")
 
                     if 'exception' in error_log:
                         exc = error_log['exception']
