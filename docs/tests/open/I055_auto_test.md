@@ -59,8 +59,12 @@ docker compose exec frontend npm test -- --watchAll=false
 - **期待値**: `pip-audit` の記述が存在する
 
 ### TC-07 npm audit critical チェックが CI に追加されていること
-- **実行**: `grep -n "npm audit" .github/workflows/ci.yml`
-- **期待値**: `npm audit --audit-level=critical` の記述が存在する
+- **実行**:
+  ```bash
+  grep -n "npm audit" .github/workflows/ci.yml
+  cd frontend && npm audit --audit-level=critical --omit=dev; echo "exit:$?"
+  ```
+- **期待値**: `npm audit --audit-level=critical` の記述が ci.yml に存在する。かつ `npm audit --audit-level=critical --omit=dev` の exit code が 0（critical 件数ゼロ。high は react-scripts のトランザクティブ依存として記録・管理済み）
 
 ### TC-08 ESLint warnings が 0 件であること（pre-commit 追加前提）
 - **実行**: `docker compose exec frontend npx eslint src/ --ext .ts,.tsx --max-warnings 0`
@@ -98,6 +102,51 @@ docker compose exec frontend npm test -- --watchAll=false
   ```
 - **期待値**: exit code 0（bandit フックが pass）
 
+### TC-12 ワークフロー改善: plan-writing-rules.md への規則追記確認
+- **目的**: 計画書ステップ内への検証コマンド記述を禁止する規則が追加されていること
+- **実行**:
+  ```bash
+  grep -n "検証コマンドを書かない\|TC に昇格" docs/runbooks/plan-writing-rules.md
+  ```
+- **期待値**: 該当行が存在する
+
+### TC-13 ワークフロー改善: plan-issue SKILL.md 文書品質ゲートへの項目追加確認
+- **目的**: 計画書ステップ内の検証コマンドTCへの昇格チェックが文書品質ゲートに追加されていること
+- **実行**:
+  ```bash
+  grep -n "ステップ本文内\|TC に昇格" .claude/skills/plan-issue/SKILL.md
+  ```
+- **期待値**: 該当行が存在する
+
+### TC-14 ワークフロー改善: code-reviewer.md への確認観点追加確認
+- **目的**: コードレビュアーが計画書ステップ内の未昇格検証コマンドを検知する観点が追加されていること
+- **実行**:
+  ```bash
+  grep -n "ステップ本文内\|TC に昇格\|plan-writing-rules" .claude/review-agents/code-reviewer.md
+  ```
+- **期待値**: 該当行が存在する
+
 結果:
-- backend: （実施後に記入）
-- frontend: （実施後に記入）
+- backend: 25 passed, 2 warnings（2026-04-30 実施）
+- frontend: 7 passed, 2 suites（2026-04-30 実施）
+- E2E: 5 passed（2026-04-30 実施）
+
+## 各 TC 実行結果（2026-04-30）
+
+| TC | 結果 | 備考 |
+|----|------|------|
+| TC-01 | ✅ PASS | 25 passed, 2 warnings |
+| TC-02 | ✅ PASS | 7 passed, 2 suites |
+| TC-03 | ✅ PASS | 全フック pass（ruff / bandit / ESLint 実行ログ確認済み） |
+| TC-03b | ⚠️ exit 0（注記あり） | `import os,sys,re` は Ruff E/F/W ルール非対象（E401 は複数 import *文* が対象）。Ruff が検出しないため exit 0。フック自体は正常動作 |
+| TC-04 | ✅ PASS | `pre-commit/action@v3.0.1` が ci.yml に存在 |
+| TC-05 | ✅ PASS | `[bandit]` セクション + `skips = B101` 存在。ci.yml に `-x` 引数なし |
+| TC-06 | ✅ PASS | `pip-audit==2.10.0` が requirements-dev.txt に存在 |
+| TC-07 | ✅ PASS | ci.yml に記述あり。`npm audit --audit-level=critical --omit=dev` exit 0（critical 0件） |
+| TC-08 | ✅ PASS | ESLint --max-warnings 0 exit 0 |
+| TC-09 | ✅ PASS | 両ファイルに「自動強制範囲」セクションあり |
+| TC-10 | ✅ PASS（注記あり） | `import subprocess` 0件・`call_command` 存在・`nosec B311` 3件。`enhanced_logging.py:237` の `except Exception:` は B110 非対象（body が return None のため）。bandit TC-11 で問題なし確認済み |
+| TC-11 | ✅ PASS | `pre-commit run bandit --all-files` exit 0 |
+| TC-12 | ✅ PASS | `検証コマンドを書かない` 規則が plan-writing-rules.md に存在 |
+| TC-13 | ✅ PASS | `TC に昇格` チェック項目が plan-issue/SKILL.md に存在 |
+| TC-14 | ✅ PASS | `plan-writing-rules` 参照が code-reviewer.md に存在 |

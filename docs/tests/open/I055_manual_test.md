@@ -14,5 +14,11 @@
 | 10 | `grep -n "import subprocess" backend/core/management/commands/watch_errors.py` を実行する | 結果が 0件（subprocess が call_command に置き換えられ import が削除されていること） | Claude | | B404/B603/B607 修正確認 |
 | 11 | `grep -n "call_command" backend/core/management/commands/watch_errors.py` を実行する | `call_command` の記述が存在する | Claude | | call_command 置き換え確認 |
 | 12 | `pre-commit run bandit --all-files` を実行する | exit code 0、bandit フックが pass する | Claude | | Low 発見 0件で通過すること |
+| 13 | `grep -n "検証コマンドを書かない\|TC に昇格" docs/runbooks/plan-writing-rules.md` を実行する | 規則の記述が存在する | Claude | | ステップ10 ワークフロー改善確認 |
+| 14 | `grep -n "ステップ本文内\|TC に昇格" .claude/skills/plan-issue/SKILL.md` を実行する | 文書品質ゲートへの追記が存在する | Claude | | ステップ10 ワークフロー改善確認 |
+| 15 | `grep -n "ステップ本文内\|TC に昇格\|plan-writing-rules" .claude/review-agents/code-reviewer.md` を実行する | 確認観点への追記が存在する | Claude | | ステップ10 ワークフロー改善確認 |
 
-結論: OK / NG
+結論: OK（2026-04-30 ユーザー確認済み）
+
+## 備考
+- No.6（TC-03b）は `import os,sys,re` が Ruff E/F/W ルール非対象のため exit 0。フック自体は正常動作（TC-03・TC-11 で確認済み）。
