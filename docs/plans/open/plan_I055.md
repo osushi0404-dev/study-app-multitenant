@@ -77,7 +77,7 @@
 |----|------------|
 | Config | `.pre-commit-config.yaml`、`backend/setup.cfg`（`[flake8]` 削除）、`backend/pyproject.toml`（新規: Ruff 設定）、`backend/.bandit`（新規: bandit YAML 設定）、`backend/requirements-dev.txt` |
 | CI | `.github/workflows/ci.yml` |
-| Frontend | `frontend/package.json`（`overrides` 追加、`npm audit fix` による `package-lock.json` 更新） |
+| Frontend | `frontend/package.json`（`overrides` 追加、`npm audit fix` による `package-lock.json` 更新）、`frontend/src/Login.tsx`（`<a href="#">` → `<button type="button">` に変更: ESLint `--max-warnings 0` 達成のために必要。アクセシビリティ上も正しい修正） |
 | Skills | `.claude/skills/implement/SKILL.md` |
 | Docs | `docs/runbooks/pre-commit.md`、`rules/ultimate_django_coding_standards.md`、`rules/react-coding-standards-integrated.md` |
 | DB | なし |
@@ -160,6 +160,14 @@ pipx run bandit -r /mnt/c/app/study-app-multitenant/backend/ -f txt 2>&1 | head 
 # 期待: "Found project level .bandit file" + "cli exclude tests: B101"
 ```
 
+**検証結果（実施済み）**:
+```
+[main] INFO Found project level .bandit file: backend/.bandit
+[main] INFO Using ini file for skipped tests
+[main] INFO cli exclude tests: B101
+```
+→ 自動検出・B101 skip 適用ともに確認済み。
+
 `ci.yml` の bandit コマンドから CLI 除外引数を削除する（自動検出で代替）:
 ```yaml
 - name: bandit
@@ -189,7 +197,7 @@ pipx run pip-audit -r backend/requirements.txt
 | DRF 3.14.0 → 3.15.2 | マイナー | CVE-2024-21520 |
 | simplejwt 5.3.0 → 5.5.1 | マイナー | CVE-2024-22513 |
 | python-dotenv 1.0.0 → 1.2.2 | マイナー | CVE-2026-28684 |
-| Pillow 10.1.0 → 10.3.0 | マイナー | CVE-2023-50447, CVE-2024-28219 |
+| Pillow 10.1.0 → 10.3.0 → **12.2.0** | マイナー→**メジャー（実装中に判明）** | CVE-2023-50447, CVE-2024-28219（10.3.0）+ CVE-2026-25990, CVE-2026-40192（12.2.0）。pip-audit が CI で 10.3.0 の新規 CVE 2件を検出。修正バージョンが 12.1.1/12.2.0 のみのため 12.2.0 に追加アップグレード。Backend テスト 25 passed でリグレッションなしを確認済み |
 | gunicorn 21.2.0 → 22.0.0 | メジャー | CVE-2024-1135, CVE-2024-6827（HTTP インジェクション） |
 
 **4-3: アップグレード後のリグレッション確認**
