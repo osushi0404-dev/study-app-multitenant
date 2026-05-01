@@ -208,3 +208,7 @@ docker compose exec frontend npm test -- --watchAll=false
 | TC-14 | ✅ PASS | `plan-writing-rules` 参照が code-reviewer.md に存在 |
 | TC-15 | ✅ PASS | `lint/audit/scan 系ツール導入時の副作用事前調査（必須）` セクションが plan-writing-rules.md 104行付近に存在 |
 | TC-16 | ✅ PASS | CI pass 時のテスト結果空白を Low 以下で扱う条件付き基準が code-reviewer.md 114行に存在 |
+| TC-17 | ✅ PASS | `def foo():\n    unused_var = 1` → F841 exit 1 確認（2026-05-01） |
+| TC-18 | ✅ PASS | utils.py 行261 が単一 f-string に統合済み。implicit concatenation 解消（2026-05-01） |
+| TC-19 | ✅ PASS | `依存関係ファイル…Dockerfile…docker-compose.yml` チェックが plan-issue/SKILL.md 109行に存在（2026-05-01） |
+| TC-20 | ✅ PASS | `lint / 静的解析ツールの異常系テスト…非ゼロ終了` チェックが plan-issue/SKILL.md 141行に存在（2026-05-01） |

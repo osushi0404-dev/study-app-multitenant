@@ -260,7 +260,7 @@ def check_directory_exists(directory_path: str) -> Tuple[bool, Optional[str]]:
     if not os.path.exists(full_path):
         return False, (
             f"ディレクトリが存在しません: {directory_path}"
-            "（科目登録時にディレクトリが作成されているか確認してください）"
+            f"（科目登録時にディレクトリが作成されているか確認してください）"
         )
 
     if not os.path.isdir(full_path):
