@@ -7,7 +7,7 @@
 | 3 | `grep -A 5 "[bandit]" backend/.bandit` を実行する | `[bandit]` セクションが存在し、`skips = B101` が設定されている | Claude | | |
 | 4 | `grep "npm audit" .github/workflows/ci.yml` を実行する | `npm audit --audit-level=critical` の記述が存在する | Claude | | |
 | 5 | `grep "pip-audit" backend/requirements-dev.txt` を実行する | `pip-audit` の記述が存在する | Claude | | |
-| 6 | `echo "import os,sys,re" > backend/test_lint_dummy.py && pre-commit run --files backend/test_lint_dummy.py; EXIT=$?; rm backend/test_lint_dummy.py; echo "exit:$EXIT"` を実行する | exit code が非ゼロとなり、フックがエラーを検出したログが出力される | Claude | | `/tmp/` は `files: ^backend/` フィルタでスキャン対象外になる可能性があるためリポジトリ内パスを使用 |
+| 6 | `printf 'def foo():\n    unused_var = 1\n' > backend/test_lint_dummy.py && pre-commit run --files backend/test_lint_dummy.py; EXIT=$?; rm backend/test_lint_dummy.py; echo "exit:$EXIT"` を実行する | exit code が 1 となり、F841（未使用ローカル変数）がエラーとして検出されたログが出力される | Claude | ✅ OK（是正処置 C1 で修正済み） | `import os,sys,re` は Ruff E401 対象外のため exit 0 になることが判明（実験済み）。F841 を確実に発動するインプットに変更 |
 | 7 | `grep -n "自動強制範囲" rules/ultimate_django_coding_standards.md` を実行する | 「自動強制範囲」セクションが存在する | Claude | | |
 | 8 | `docs/runbooks/pre-commit.md` を確認する | 追加したフック（Ruff/flake8・bandit・ESLint）が一覧に記載されており、detect-secrets JWT 対応方針が記録されている | Claude | | |
 | 9 | `/implement` SKILL.md を確認する | 手順2 から「手動で flake8/bandit/ESLint を実行してください」という指示が削除または「pre-commit / CI が自動実行」に書き換えられている | Claude | | |

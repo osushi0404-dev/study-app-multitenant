@@ -30,15 +30,15 @@ docker compose exec frontend npm test -- --watchAll=false
 - **目的**: lint エラーがある場合に pre-commit がコミットを止めること（AC 第1項の核心）
 - **実行**:
   ```bash
-  # lint エラーを含むダミーファイルをリポジトリ内に作成して pre-commit を走らせる
-  echo "import os,sys,re" > backend/test_lint_dummy.py
+  # F841（ローカル変数の未使用割り当て）を確実に発動するダミーファイルを作成して pre-commit を走らせる
+  printf 'def foo():\n    unused_var = 1\n' > backend/test_lint_dummy.py
   pre-commit run --files backend/test_lint_dummy.py
   EXIT_CODE=$?
   rm backend/test_lint_dummy.py
   echo "exit code: $EXIT_CODE"
   ```
-- **期待値**: exit code が非ゼロ（フックがエラーを検出してブロックしたこと）
-- **注**: `/tmp/` 配下のファイルは pre-commit の `files: ^backend/` フィルタでスキャン対象外になる可能性があるため、リポジトリ内パスを使用する
+- **期待値**: exit code が 1（F841: Local variable `unused_var` is assigned to but never used が検出されること）
+- **注**: `/tmp/` 配下のファイルは pre-commit の `files: ^backend/` フィルタでスキャン対象外になる可能性があるため、リポジトリ内パスを使用する。`import os,sys,re` は Ruff E401 対象外のため exit 0 になる（実験済み）
 
 ### TC-04 CI lint ジョブの構成確認
 - **目的**: `pre-commit run --all-files` が CI の backend-lint ジョブに含まれていること
@@ -145,7 +145,7 @@ docker compose exec frontend npm test -- --watchAll=false
   rm backend/test_lint_dummy.py
   echo "exit code: $EXIT_CODE"
   ```
-- **期待値**: exit code が非ゼロ（F841 が検出されること）
+- **期待値**: exit code が 1（F841: Local variable `unused_var` is assigned to but never used が検出されること）
 
 ### TC-18 是正処置 C2: utils.py implicit string concatenation 解消確認
 
