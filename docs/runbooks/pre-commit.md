@@ -33,14 +33,23 @@ pre-commit install
 
 ## フック一覧
 
-| フック | 役割 |
-|--------|------|
-| `detect-secrets` | シークレット（APIキー・パスワード等）のハードコードを検出 |
-| `check-yaml` | YAML ファイルの構文チェック |
-| `end-of-file-fixer` | ファイル末尾の改行を統一 |
-| `trailing-whitespace` | 行末の空白を除去 |
-| `check-added-large-files` | 大きなファイルの誤コミットを防止 |
-| `check-merge-conflict` | マージコンフリクトマーカーの残留を検出 |
+| フック | 対象 | 役割 |
+|--------|------|------|
+| `detect-secrets` | 全体 | シークレット（APIキー・パスワード等）のハードコードを検出。JWT トークン検出（`JwtTokenDetector`）も有効 |
+| `check-yaml` | 全体 | YAML ファイルの構文チェック |
+| `end-of-file-fixer` | 全体 | ファイル末尾の改行を統一 |
+| `trailing-whitespace` | 全体 | 行末の空白を除去 |
+| `check-added-large-files` | 全体 | 大きなファイルの誤コミットを防止 |
+| `check-merge-conflict` | 全体 | マージコンフリクトマーカーの残留を検出 |
+| `ruff` | `backend/`（migrations 除く） | Python lint・import 整理（flake8 相当）。違反があれば自動修正（`--fix`） |
+| `bandit` | `backend/`（migrations・tests 除く） | Python セキュリティスキャン。設定は `backend/.bandit` で管理（`B101` skip、LOW 以上すべてを対象。Low 発見は `# nosec BXXX` で個別に抑制） |
+| `eslint` | `frontend/src/` | TypeScript/TSX lint。`--max-warnings 0` で警告もブロック |
+
+### detect-secrets JWT 検出について
+
+- `JwtTokenDetector` は有効（`--force-use-all-plugins` でベースライン生成済み）
+- `e2e/.auth/` 配下の JWT ファイルは `e2e/.gitignore` で git 追跡対象外のため、detect-secrets のスキャン対象にならない
+- ベースライン再生成時は `detect-secrets scan --force-use-all-plugins --exclude-files "package-lock\.json" > .secrets.baseline` を使用する
 
 ---
 
@@ -92,8 +101,10 @@ dummy_password = "example_only"  # pragma: allowlist secret
 
 detect-secrets のバージョンアップや設定変更後は baseline を再生成します。
 
+> ⚠️ **`--force-use-all-plugins` は必須**: このフラグなしで再生成すると `JwtTokenDetector` 等の追加プラグインが baseline から消え、以降の pre-commit で JWT が検出されなくなります（エラーなし・サイレント回帰）。
+
 ```bash
-detect-secrets scan > .secrets.baseline
+detect-secrets scan --force-use-all-plugins --exclude-files "package-lock\.json" > .secrets.baseline
 detect-secrets audit .secrets.baseline  # 誤検知を除外
 git add .secrets.baseline
 git commit -m "docs: regenerate secrets baseline"

@@ -47,7 +47,7 @@ const Login: React.FC = () => {
         <button type="submit" style={{ width: '100%', padding: 10, background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4 }}>ログイン</button>
       </form>
       <div style={{ marginTop: 16, textAlign: 'center' }}>
-        <a href="#" style={{ color: '#1976d2', textDecoration: 'underline' }}>会員登録はこちら</a>
+        <button type="button" style={{ background: 'none', border: 'none', color: '#1976d2', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>会員登録はこちら</button>
       </div>
     </div>
   );

@@ -1,14 +1,11 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# --- base: shared system deps + production Python packages ---
+FROM python:3.11-slim AS base
 
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set work directory
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         postgresql-client \
@@ -18,29 +15,32 @@ RUN apt-get update \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
+# --- dev: base + development/test packages (used by docker-compose) ---
+FROM base AS dev
+
+COPY requirements-dev.txt /app/
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
 COPY . /app/
 
-# Create logs directory
-RUN mkdir -p /app/logs
+EXPOSE 8000
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
+# --- production: base + hardened for deployment ---
+FROM base AS production
 
-# Create a non-root user
-RUN addgroup --system django \
-    && adduser --system --ingroup django django
+COPY . /app/
 
-# Change ownership of the app directory
-RUN chown -R django:django /app
+RUN mkdir -p /app/logs \
+    && python manage.py collectstatic --noinput || true \
+    && addgroup --system django \
+    && adduser --system --ingroup django django \
+    && chown -R django:django /app
+
 USER django
 
-# Expose port
 EXPOSE 8000
-
-# Run the application
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "core.wsgi:application"]

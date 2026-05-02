@@ -4,7 +4,6 @@
 """
 import time
 import json
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from django.core.management.base import BaseCommand
@@ -66,7 +65,7 @@ class Command(BaseCommand):
         if position_file.exists():
             try:
                 return int(position_file.read_text())
-            except Exception:
+            except (ValueError, OSError):
                 pass
         return 0
 
@@ -116,14 +115,13 @@ class Command(BaseCommand):
 
     def _analyze_error(self, request_id):
         """エラーを詳細解析"""
+        from io import StringIO
+        from django.core.management import call_command
         try:
-            result = subprocess.run([
-                'python', 'manage.py', 'analyze_logs',
-                '--request-id', request_id,
-                '--format', 'claude'
-            ], capture_output=True, text=True)
-
-            return result.stdout if result.returncode == 0 else None
+            output = StringIO()
+            call_command('analyze_logs', request_id=request_id, format='claude', stdout=output)
+            result = output.getvalue()
+            return result if result else None
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'エラー解析失敗: {e}'))
             return None

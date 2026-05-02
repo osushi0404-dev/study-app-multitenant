@@ -244,7 +244,7 @@ class ErrorContextMiddleware:
             user_actions_header = request.headers.get('X-User-Actions', '')
             if user_actions_header:
                 return json.loads(user_actions_header)
-        except Exception:
+        except json.JSONDecodeError:
             pass
         return None
 

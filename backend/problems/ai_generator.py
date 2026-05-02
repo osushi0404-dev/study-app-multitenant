@@ -66,7 +66,10 @@ class AIQuestionGenerator:
                 messages=[
                     {
                         "role": "system",
-                        "content": "あなたは教育的な問題を作成する専門家です。日本語で高品質な学習問題を生成してください。"
+                        "content": (
+                            "あなたは教育的な問題を作成する専門家です。"
+                            "日本語で高品質な学習問題を生成してください。"
+                        )
                     },
                     {
                         "role": "user",

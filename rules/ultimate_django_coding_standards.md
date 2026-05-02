@@ -4,6 +4,25 @@
 >
 > 本規約は実践的な開発効率と最高品質を両立する、理想的なコーディングスタンダードです。
 
+## 自動強制範囲（linter が担当）
+
+以下の規約項目は **Ruff / bandit** が pre-commit（commit 時）と CI（PR 時）に自動検出・ブロックします。設定の詳細は `backend/pyproject.toml`（Ruff）および `backend/.bandit`（bandit）を参照してください。
+
+- 命名規則・import 順序・未使用 import（Ruff: E, F, W ルール）
+- 行長超過（max-line-length = 120、Ruff E501）
+- セキュリティパターン（bandit: MEDIUM 以上を修正対象、B101 は # nosec で抑制可）
+- Python 依存関係の既知 CVE（pip-audit、CI の backend-lint で実行）
+
+## 手動レビュー対象（linter が検出できない項目）
+
+以下は AI レビュー（/plan-issue-review・/code-review）および人間によるレビューの対象です:
+
+- 設計パターン（Fat View 排除・サービス/セレクタパターンの適用等）
+- マルチテナント制約（組織スコープ・閲覧範囲・操作範囲の制御）
+- パフォーマンス設計（N+1・キャッシュ・ページネーション）
+- 業務ロジック・ステータス遷移・エッジケースの考慮
+- API 設計（URL 設計・レスポンス形式・エラーハンドリング方針）
+
 ---
 
 ## 📋 目次
