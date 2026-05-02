@@ -10,6 +10,8 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 前提: ユーザー検証OK。
 
+（事前チェック）直近のコードレビューで Medium 以上の指摘が未対応のまま残っていないか確認する。未対応がある場合は、計画書に是正ステップを追記するかインライン修正を先に完了させてから以降のステップに進む。
+
 0) PR のベースブランチを確認する（必須）:
    ```bash
    gh pr view --json baseRefName --jq '.baseRefName'
