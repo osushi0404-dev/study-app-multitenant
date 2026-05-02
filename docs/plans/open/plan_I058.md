@@ -145,7 +145,7 @@ if [ -f "$PLAN_FILE" ]; then
 fi
 
 # 判定とユーザー案内
-if grep -q "差し戻し" "$REVIEW_FILE"; then
+if grep -qE "判定:.*差し戻し" "$REVIEW_FILE"; then
   printf '\n⛔ Blocker が残っています。修正後に `/plan-issue-review %s` を再実行してください。\n' "$ISSUE"
 elif grep -qi "高リスク判定.*Yes" "$REVIEW_FILE"; then
   printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE"
@@ -180,7 +180,7 @@ if [ -n "$PR_NUM" ]; then
   TIMEOUT=600
   ELAPSED=0
   while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-    CI_OUTPUT=$(gh pr checks "$PR_NUM" 2>&1)
+    CI_OUTPUT=$(gh pr checks "$PR_NUM" 2>&1 || true)
     if ! echo "$CI_OUTPUT" | grep -q "pending"; then
       break
     fi
@@ -248,9 +248,9 @@ if [ -n "$PR_NUM" ]; then
 fi
 
 # 判定とユーザー案内
-if grep -qF "| Blocker |" "$REVIEW_FILE"; then
+if grep -qE "^\| Blocker \|" "$REVIEW_FILE"; then
   printf '\n⛔ Blocker が残っています。`/fix-loop %s` で修正後、`/code-review %s` を再実行してください。\n' "$ISSUE" "$ISSUE"
-elif grep -qF "| High |" "$REVIEW_FILE"; then
+elif grep -qE "^\| High \|" "$REVIEW_FILE"; then
   printf '\n❌ レビュー NG。`/fix-loop %s` を実行してください。fix-loop 完了後は `/code-review %s` に戻ってください。\n' "$ISSUE" "$ISSUE"
 else
   printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE"
@@ -360,3 +360,7 @@ P3/P5/P8 影響なし。P6 影響なし。
 ## レビュー結果
 - [20260503_0111 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260503_0111.md)
 - [20260503_0123 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_0123.md)
+- [20260503_0145 差し戻し（Blocker 2件）](../../reviews/I058_plan_review_20260503_0145.md)
+
+## レビュー結果
+- [20260503_0139 判定: 差し戻し（Blocker 2件）**](../../reviews/I058_plan_review_20260503_0139.md)

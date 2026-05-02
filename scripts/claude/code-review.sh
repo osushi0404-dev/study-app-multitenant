@@ -17,7 +17,7 @@ if [ -n "$PR_NUM" ]; then
   TIMEOUT=600
   ELAPSED=0
   while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-    CI_OUTPUT=$(gh pr checks "$PR_NUM" 2>&1)
+    CI_OUTPUT=$(gh pr checks "$PR_NUM" 2>&1 || true)
     if ! echo "$CI_OUTPUT" | grep -q "pending"; then
       break
     fi
@@ -85,9 +85,9 @@ if [ -n "$PR_NUM" ]; then
 fi
 
 # 判定とユーザー案内
-if grep -qF "| Blocker |" "$REVIEW_FILE"; then
+if grep -qE "^\| Blocker \|" "$REVIEW_FILE"; then
   printf '\n⛔ Blocker が残っています。`/fix-loop %s` で修正後、`/code-review %s` を再実行してください。\n' "$ISSUE" "$ISSUE"
-elif grep -qF "| High |" "$REVIEW_FILE"; then
+elif grep -qE "^\| High \|" "$REVIEW_FILE"; then
   printf '\n❌ レビュー NG。`/fix-loop %s` を実行してください。fix-loop 完了後は `/code-review %s` に戻ってください。\n' "$ISSUE" "$ISSUE"
 else
   printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE"

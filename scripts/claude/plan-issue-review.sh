@@ -72,7 +72,7 @@ if [ -f "$PLAN_FILE" ]; then
 fi
 
 # 判定とユーザー案内
-if grep -q "差し戻し" "$REVIEW_FILE"; then
+if grep -qE "判定:.*差し戻し" "$REVIEW_FILE"; then
   printf '\n⛔ Blocker が残っています。修正後に `/plan-issue-review %s` を再実行してください。\n' "$ISSUE"
 elif grep -qi "高リスク判定.*Yes" "$REVIEW_FILE"; then
   printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE"

@@ -55,6 +55,32 @@
   ```
 - **期待値**: 両方 PASS
 
+### TC-07 plan-issue-review.sh の差し戻し判定パターン（判定フィールド限定）
+- **目的**: 「判定:」フィールドを含む行のみにマッチするパターンが使用されていること（レビュー本文中の単独「差し戻し」誤検知防止・reviewer 出力フォーマット揺れへの耐性）
+- **実行**:
+  ```bash
+  grep -qF 'grep -qE "判定:.*差し戻し"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
+  ```
+- **期待値**: PASS
+
+### TC-08 code-review.sh の Blocker/High 判定パターン（行頭アンカー）
+- **目的**: テーブル第1列のみにマッチする grep パターンが使用されていること（受け入れ条件テーブル等からの誤検知防止）
+- **実行**:
+  ```bash
+  grep -qF 'grep -qE "^\| Blocker \|"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF 'grep -qE "^\| High \|"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
+  ```
+- **期待値**: 両方 PASS
+
+### TC-09 code-review.sh の gh pr checks set -e 保護
+- **目的**: `gh pr checks` の非ゼロ exit code で `set -euo pipefail` によりスクリプトが即終了しないこと
+- **実行**:
+  ```bash
+  grep -qF "gh pr checks" scripts/claude/code-review.sh && \
+  grep -qF "|| true" scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
+  ```
+- **期待値**: PASS
+
 ## 各 TC 実行結果
 
 | TC | 結果 | 備考 |
@@ -65,3 +91,6 @@
 | TC-04 | PASS | |
 | TC-05 | PASS | |
 | TC-06 | PASS | |
+| TC-07 | PASS | |
+| TC-08 | PASS | |
+| TC-09 | PASS | |
