@@ -183,9 +183,9 @@ docker compose exec frontend npm test -- --watchAll=false
 - **期待値**: 条件付き基準の記述が存在する
 
 結果:
-- backend: 25 passed, 2 warnings（2026-04-30 実施・再確認 /test スキル）
-- frontend: 7 passed, 2 suites（2026-04-30 実施・再確認 /test スキル）
-- E2E: 5 passed（2026-04-30 実施・再確認 /test スキル）
+- backend: 25 passed, 2 warnings（2026-04-30 実施・再確認 /test スキル・2026-05-01 再確認 /test スキル）
+- frontend: 7 passed, 2 suites（2026-04-30 実施・再確認 /test スキル・2026-05-01 再確認 /test スキル）
+- E2E: 5 passed（2026-04-30 実施・再確認 /test スキル・2026-05-01 再確認 /test スキル）
 
 ## 各 TC 実行結果（2026-04-30）
 

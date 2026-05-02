@@ -317,7 +317,7 @@ class MistakeAnalysisService:
                 'title': f"{pattern.subject.name}の重点的な復習",
                 'description': (
                     f"{pattern.subject.name}で間違いが多発しているため、"
-                    "基礎から復習することをお勧めします。"
+                    f"基礎から復習することをお勧めします。"
                 ),
                 'action_steps': [
                     f"{pattern.subject.name}の基本概念を復習する",
@@ -332,7 +332,7 @@ class MistakeAnalysisService:
                 'title': f"{pattern.get_problem_difficulty_display()}レベル問題の強化",
                 'description': (
                     f"{pattern.get_problem_difficulty_display()}レベルの問題で苦戦しています。"
-                    "段階的なアプローチで克服しましょう。"
+                    f"段階的なアプローチで克服しましょう。"
                 ),
                 'action_steps': [
                     "より簡単なレベルから始める",
@@ -395,7 +395,7 @@ class MistakeAnalysisService:
         suggestion_title = f"{weakness.concept_name}の集中強化"
         suggestion_description = (
             f"{weakness.concept_name}で{weakness.error_rate:.1f}%のエラー率となっています。"
-            "集中的な練習が必要です。"
+            f"集中的な練習が必要です。"
         )
 
         action_steps = [
