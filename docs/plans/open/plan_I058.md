@@ -122,10 +122,11 @@ $(cat "$AUTO_TEST")"
 ### 手動テスト
 $(cat "$MANUAL_TEST")"
 
-# claude -p でレビュー実行
+# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
 REVIEW=$(claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
+  --allowedTools "Read,Grep,Glob" \
   "$CONTEXT")
 
 # 出力正規化: 行末スペース除去 + 末尾改行保証
@@ -158,7 +159,7 @@ else
 fi
 ```
 
-→ TC-01・TC-02・TC-03・TC-05・TC-06 参照
+→ TC-01・TC-02・TC-03・TC-05・TC-06・TC-10 参照
 
 ### ステップ2: `scripts/claude/code-review.sh` の新規作成
 
@@ -216,8 +217,10 @@ PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")
 
 [ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません"; exit 1; }
 
-# git diff（最大 100KB）
+# git 情報取得（最大 100KB）
 GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400)
+GIT_LOG=$(git log origin/develop...HEAD --oneline)
+GIT_FILES=$(git diff origin/develop...HEAD --name-only)
 
 # コンテキスト組み立て
 CONTEXT="イシュー番号: ${ISSUE}
@@ -228,15 +231,22 @@ $(cat "$ISSUE_FILE")
 ### 計画書
 $([ -n "$PLAN_FILE" ] && cat "$PLAN_FILE" || echo "(計画書なし)")
 
+### git log (origin/develop...HEAD)
+${GIT_LOG}
+
+### 変更ファイル一覧
+${GIT_FILES}
+
 ### git diff (origin/develop...HEAD, max 100KB)
 \`\`\`diff
 ${GIT_DIFF}
 \`\`\`"
 
-# claude -p でレビュー実行
+# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
 REVIEW=$(claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
+  --allowedTools "Read,Grep,Glob" \
   "$CONTEXT")
 
 # 出力正規化
@@ -261,7 +271,7 @@ else
 fi
 ```
 
-→ TC-01・TC-02・TC-04・TC-05・TC-06 参照
+→ TC-01・TC-02・TC-04・TC-05・TC-06・TC-11 参照
 
 ### ステップ3: `.claude/skills/plan-issue-review/SKILL.md` を thin wrapper に更新
 
@@ -307,47 +317,9 @@ bash scripts/claude/code-review.sh $ARGUMENTS
 
 → TC-06 参照
 
-### ステップ5: `claude -p` への `--allowedTools` 制限追加・reviewer ファイルにツールアクセス制限明記
+### ステップ5: reviewer ファイルにツールアクセス制限明記
 
-**背景**: I058 retro C2 — `claude -p` が `--allowedTools` 未指定のため Edit ツールでテストファイルを書き換えた。
-
-**設計方針**: Bash を完全排除し `--allowedTools "Read,Grep,Glob"` に統一。`code-review.sh` は git log・変更ファイル一覧をシェルが事前注入することで Bash 不要にする（シェルが git 操作を担う I058 設計原則と一致）。
-
-**`code-review.sh` の変更**:
-
-1. CONTEXT 組み立て部分に git log・変更ファイル一覧を追加:
-```bash
-GIT_LOG=$(git log origin/develop...HEAD --oneline)
-GIT_FILES=$(git diff origin/develop...HEAD --name-only)
-
-CONTEXT="...
-### git log (origin/develop...HEAD)
-${GIT_LOG}
-
-### 変更ファイル一覧
-${GIT_FILES}
-..."
-```
-
-2. `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` を追加:
-```bash
-REVIEW=$(claude -p \
-  --model claude-sonnet-4-6 \
-  --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read,Grep,Glob" \
-  "$CONTEXT")
-```
-
-**`plan-issue-review.sh` の変更**:
-
-`claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` を追加:
-```bash
-REVIEW=$(claude -p \
-  --model claude-sonnet-4-6 \
-  --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read,Grep,Glob" \
-  "$CONTEXT")
-```
+**背景**: I058 retro C2 — `claude -p` が Edit ツールでテストファイルを書き換えた。`--allowedTools` はステップ1/2 のスクリプトに既に反映済み。本ステップはドキュメント側の整合を取る。
 
 **`code-reviewer.md` の変更**:
 
@@ -435,3 +407,6 @@ P3/P5/P8 影響なし。P6 影響なし。
 
 ## レビュー結果
 - [20260503_1444 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_1444.md)
+
+## レビュー結果
+- [20260504_0049 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0049.md)
