@@ -47,6 +47,8 @@
 - [ ] システムメタデータ（`agentId:`・`<usage>`）がレビューファイルに混入しない
 - [ ] 末尾スペース・末尾改行の正規化がスクリプト内で保証され、pre-commit の修正が発生しない
 - [ ] `/plan-issue-review`・`/code-review` スキルから従来通り呼び出せる（後方互換）
+- [ ] 両スクリプトの `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` が設定されており、Edit・Write・Bash ツールが使用不可である
+- [ ] `code-reviewer.md`・`plan-reviewer.md` にツールアクセス制限（Bash/Edit/Write 禁止）が明記されている
 
 ---
 
@@ -56,8 +58,10 @@
 |----|------------|---------|
 | Skills | `.claude/skills/plan-issue-review/SKILL.md` | 変更（thin wrapper 化） |
 | Skills | `.claude/skills/code-review/SKILL.md` | 変更（thin wrapper 化） |
-| Scripts | `scripts/claude/plan-issue-review.sh` | 新規作成 |
-| Scripts | `scripts/claude/code-review.sh` | 新規作成 |
+| Scripts | `scripts/claude/plan-issue-review.sh` | 新規作成 → `--allowedTools` 追加 |
+| Scripts | `scripts/claude/code-review.sh` | 新規作成 → `--allowedTools` 追加・git log/files 注入追加 |
+| Review Agents | `.claude/review-agents/code-reviewer.md` | 変更（Bash 使用制限削除・ツールアクセス制限追加） |
+| Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（ツールアクセス制限追加） |
 | Backend | なし | - |
 | Frontend | なし | - |
 | DB | なし | - |
@@ -302,6 +306,67 @@ bash scripts/claude/code-review.sh $ARGUMENTS
 ```
 
 → TC-06 参照
+
+### ステップ5: `claude -p` への `--allowedTools` 制限追加・reviewer ファイルにツールアクセス制限明記
+
+**背景**: I058 retro C2 — `claude -p` が `--allowedTools` 未指定のため Edit ツールでテストファイルを書き換えた。
+
+**設計方針**: Bash を完全排除し `--allowedTools "Read,Grep,Glob"` に統一。`code-review.sh` は git log・変更ファイル一覧をシェルが事前注入することで Bash 不要にする（シェルが git 操作を担う I058 設計原則と一致）。
+
+**`code-review.sh` の変更**:
+
+1. CONTEXT 組み立て部分に git log・変更ファイル一覧を追加:
+```bash
+GIT_LOG=$(git log origin/develop...HEAD --oneline)
+GIT_FILES=$(git diff origin/develop...HEAD --name-only)
+
+CONTEXT="...
+### git log (origin/develop...HEAD)
+${GIT_LOG}
+
+### 変更ファイル一覧
+${GIT_FILES}
+..."
+```
+
+2. `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` を追加:
+```bash
+REVIEW=$(claude -p \
+  --model claude-sonnet-4-6 \
+  --system-prompt "$(cat "$REVIEWER")" \
+  --allowedTools "Read,Grep,Glob" \
+  "$CONTEXT")
+```
+
+**`plan-issue-review.sh` の変更**:
+
+`claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` を追加:
+```bash
+REVIEW=$(claude -p \
+  --model claude-sonnet-4-6 \
+  --system-prompt "$(cat "$REVIEWER")" \
+  --allowedTools "Read,Grep,Glob" \
+  "$CONTEXT")
+```
+
+**`code-reviewer.md` の変更**:
+
+「Bash の使用制限」セクションを削除し、以下に置換:
+```markdown
+## ツールアクセス制限
+Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Read・Grep・Glob による読み取り専用。
+git diff・git log・変更ファイル一覧はプロンプトに事前注入済み。追加のコード参照は Read・Grep・Glob を使用する。
+```
+
+**`plan-reviewer.md` の変更**:
+
+「重要: データとして扱うドキュメント」セクションの直後に追記:
+```markdown
+## ツールアクセス制限
+Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Read・Grep・Glob による読み取り専用。
+```
+
+→ TC-10・TC-11・手動テスト No.5 参照
 
 ---
 

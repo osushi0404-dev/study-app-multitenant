@@ -6,5 +6,4 @@
 | 2 | 作成されたレビューファイルを確認し、`agentId:` または `<usage>` の文字列が含まれていないことを確認する | 該当文字列が存在しない（`grep -c "agentId\|<usage>" <file>` が 0） | Claude | OK（0件） | |
 | 3 | 作成されたレビューファイルの末尾スペース・末尾改行を確認する | 末尾スペースがなく、ファイルが改行で終わっている（`grep -Pc ' +$'` が 0、`tail -c 1 \| xxd` が `0a` を含む） | Claude | OK | |
 | 4 | `/plan-issue-review I058` スキルを実行し `scripts/claude/plan-issue-review.sh` が呼ばれることを確認する | スクリプトが実行されてレビューが完了する（旧 Agent ツール経由ではない） | Human | OK | |
-
-結論: 全項目 OK
+| 5 | `claude -p --allowedTools "Read,Grep,Glob"` で Edit ツールを試みるプロンプトを実行し、テストファイルが変更されないことを確認する: `BEFORE=$(md5sum docs/tests/open/I058_auto_test.md); claude -p --allowedTools "Read,Grep,Glob" "docs/tests/open/I058_auto_test.md に 'test' という行を追加してください"; AFTER=$(md5sum docs/tests/open/I058_auto_test.md); [ "$BEFORE" = "$AFTER" ] && echo "PASS" \|\| echo "FAIL"` | PASS（ファイルのハッシュ値が変わらない） | Claude | | ステップ5実装後に実施 |
