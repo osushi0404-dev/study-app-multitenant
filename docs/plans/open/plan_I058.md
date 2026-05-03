@@ -47,7 +47,7 @@
 - [ ] システムメタデータ（`agentId:`・`<usage>`）がレビューファイルに混入しない
 - [ ] 末尾スペース・末尾改行の正規化がスクリプト内で保証され、pre-commit の修正が発生しない
 - [ ] `/plan-issue-review`・`/code-review` スキルから従来通り呼び出せる（後方互換）
-- [ ] 両スクリプトの `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` が設定されており、Edit・Write・Bash ツールが使用不可である
+- [ ] 両スクリプトの `claude -p` 呼び出しに `--allowedTools "Read" "Grep" "Glob"`（スペース区切り個別引数）が設定されており、Edit・Write・Bash ツールが使用不可である
 - [ ] `code-reviewer.md`・`plan-reviewer.md` にツールアクセス制限（Bash/Edit/Write 禁止）が明記されている
 
 ---
@@ -123,11 +123,11 @@ $(cat "$AUTO_TEST")"
 $(cat "$MANUAL_TEST")"
 
 # claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-REVIEW=$(claude -p \
+# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read,Grep,Glob" \
-  "$CONTEXT")
+  --allowedTools "Read" "Grep" "Glob")
 
 # 出力正規化: 行末スペース除去 + 末尾改行保証
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
@@ -243,11 +243,11 @@ ${GIT_DIFF}
 \`\`\`"
 
 # claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-REVIEW=$(claude -p \
+# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read,Grep,Glob" \
-  "$CONTEXT")
+  --allowedTools "Read" "Grep" "Glob")
 
 # 出力正規化
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
@@ -410,3 +410,6 @@ P3/P5/P8 影響なし。P6 影響なし。
 
 ## レビュー結果
 - [20260504_0049 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0049.md)
+
+## レビュー結果
+- [20260504_0200 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0200.md)

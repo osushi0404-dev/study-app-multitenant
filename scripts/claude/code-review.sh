@@ -75,11 +75,11 @@ ${GIT_DIFF}
 \`\`\`"
 
 # claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-REVIEW=$(claude -p \
+# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read,Grep,Glob" \
-  "$CONTEXT")
+  --allowedTools "Read" "Grep" "Glob")
 
 # 出力正規化
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')

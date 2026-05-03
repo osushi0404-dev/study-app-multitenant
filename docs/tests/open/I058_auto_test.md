@@ -82,18 +82,18 @@
 - **期待値**: PASS
 
 ### TC-10 `--allowedTools` 設定の確認（plan-issue-review.sh）
-- **目的**: plan-issue-review.sh の `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` が設定されていること
+- **目的**: plan-issue-review.sh の `claude -p` 呼び出しに `--allowedTools "Read" "Grep" "Glob"` が設定されていること（スペース区切り個別引数形式）
 - **実行**:
   ```bash
-  grep -qF -- '--allowedTools "Read,Grep,Glob"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF -- '--allowedTools "Read" "Grep" "Glob"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
   ```
 - **期待値**: PASS
 
 ### TC-11 `--allowedTools` 設定の確認（code-review.sh）
-- **目的**: code-review.sh の `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` が設定されていること
+- **目的**: code-review.sh の `claude -p` 呼び出しに `--allowedTools "Read" "Grep" "Glob"` が設定されていること（スペース区切り個別引数形式）
 - **実行**:
   ```bash
-  grep -qF -- '--allowedTools "Read,Grep,Glob"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF -- '--allowedTools "Read" "Grep" "Glob"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
   ```
 - **期待値**: PASS
 
@@ -110,5 +110,5 @@
 | TC-07 | PASS | |
 | TC-08 | PASS | |
 | TC-09 | PASS | |
-| TC-10 | | ステップ5実装後に実施 |
-| TC-11 | | ステップ5実装後に実施 |
+| TC-10 | PASS | |
+| TC-11 | PASS | |
