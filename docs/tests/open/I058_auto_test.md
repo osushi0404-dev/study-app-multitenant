@@ -85,7 +85,7 @@
 - **目的**: plan-issue-review.sh の `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` が設定されていること
 - **実行**:
   ```bash
-  grep -qF '--allowedTools "Read,Grep,Glob"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF -- '--allowedTools "Read,Grep,Glob"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
   ```
 - **期待値**: PASS
 
@@ -93,7 +93,7 @@
 - **目的**: code-review.sh の `claude -p` 呼び出しに `--allowedTools "Read,Grep,Glob"` が設定されていること
 - **実行**:
   ```bash
-  grep -qF '--allowedTools "Read,Grep,Glob"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF -- '--allowedTools "Read,Grep,Glob"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
   ```
 - **期待値**: PASS
 

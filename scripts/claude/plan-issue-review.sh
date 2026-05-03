@@ -45,10 +45,11 @@ $(cat "$AUTO_TEST")"
 ### 手動テスト
 $(cat "$MANUAL_TEST")"
 
-# claude -p でレビュー実行
+# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
 REVIEW=$(claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
+  --allowedTools "Read,Grep,Glob" \
   "$CONTEXT")
 
 # 出力正規化: 行末スペース除去 + 末尾改行保証

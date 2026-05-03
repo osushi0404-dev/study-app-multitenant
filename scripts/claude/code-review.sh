@@ -49,8 +49,10 @@ PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")
 
 [ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません"; exit 1; }
 
-# git diff（最大 100KB）
+# git 情報取得（最大 100KB）
 GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400)
+GIT_LOG=$(git log origin/develop...HEAD --oneline)
+GIT_FILES=$(git diff origin/develop...HEAD --name-only)
 
 # コンテキスト組み立て
 CONTEXT="イシュー番号: ${ISSUE}
@@ -61,15 +63,22 @@ $(cat "$ISSUE_FILE")
 ### 計画書
 $([ -n "$PLAN_FILE" ] && cat "$PLAN_FILE" || echo "(計画書なし)")
 
+### git log (origin/develop...HEAD)
+${GIT_LOG}
+
+### 変更ファイル一覧
+${GIT_FILES}
+
 ### git diff (origin/develop...HEAD, max 100KB)
 \`\`\`diff
 ${GIT_DIFF}
 \`\`\`"
 
-# claude -p でレビュー実行
+# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
 REVIEW=$(claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
+  --allowedTools "Read,Grep,Glob" \
   "$CONTEXT")
 
 # 出力正規化

@@ -24,19 +24,10 @@
 
 ---
 
-## Bash の使用制限
+## ツールアクセス制限
 
-以下の読み取り専用 git コマンドのみ実行する:
-- `git diff origin/develop...HEAD`
-- `git diff origin/develop...HEAD --name-only`
-- `git log origin/develop...HEAD --oneline`
-- `git show <hash>`
-
-以下は絶対に実行しない:
-- `git commit` / `git push` / `git checkout` / `git reset` / `git rebase`
-- ファイル変更を伴うコマンド（`rm`, `mv`, `cp`, `mkdir` 等）
-- ネットワークアクセスを伴うコマンド（`curl`, `wget`, `pip install` 等）
-- `gh` コマンド（GitHub への投稿は**親エージェントのみ**が実行する）
+Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Read・Grep・Glob による読み取り専用。
+git diff・git log・変更ファイル一覧はプロンプトに事前注入済み。追加のコード参照は Read・Grep・Glob を使用する。
 
 ---
 
@@ -49,15 +40,15 @@ Blocker 判定を下すことを恐れるな。
 
 ---
 
-## 読むべきファイル・差分（渡された I### から自力でパスを導出する）
+## 提供されるコンテキスト（プロンプトに事前注入済み）
 
-1. `docs/issues/open/I###.md`（なければ `docs/issues/closed/I###.md`）
-2. `docs/plans/open/plan_I###.md`（なければ `docs/plans/closed/plan_I###.md`）
-3. 実装差分: `git diff origin/develop...HEAD` で取得
-4. 変更ファイル一覧: `git diff origin/develop...HEAD --name-only` で取得
-5. 必要に応じて変更ファイルを Read して詳細確認
+1. イシューファイル（`docs/issues/open/I###.md` または `closed/`）
+2. 計画書（`docs/plans/open/plan_I###.md` または `closed/`）
+3. git log（`git log origin/develop...HEAD --oneline` の出力）
+4. 変更ファイル一覧（`git diff origin/develop...HEAD --name-only` の出力）
+5. git diff（`git diff origin/develop...HEAD`、最大 100KB）
 
-すべての情報を取得してからレビューを開始すること。
+上記はプロンプト内に含まれている。追加で必要なファイルは Read・Grep・Glob を使用して参照する。
 
 ---
 
