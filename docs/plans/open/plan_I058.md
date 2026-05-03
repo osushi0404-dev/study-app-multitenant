@@ -62,6 +62,7 @@
 | Scripts | `scripts/claude/code-review.sh` | 新規作成 → `--allowedTools` 追加・git log/files 注入追加 |
 | Review Agents | `.claude/review-agents/code-reviewer.md` | 変更（Bash 使用制限削除・ツールアクセス制限追加） |
 | Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（ツールアクセス制限追加） |
+| Skills | `.claude/skills/test/SKILL.md` | 変更（実施者: Claude 項目の自己実行ロジック追加） |
 | Backend | なし | - |
 | Frontend | なし | - |
 | DB | なし | - |
