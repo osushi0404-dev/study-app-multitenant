@@ -46,16 +46,19 @@ $(cat "$AUTO_TEST")"
 $(cat "$MANUAL_TEST")"
 
 # claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-REVIEW=$(claude -p \
+# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read,Grep,Glob" \
-  "$CONTEXT")
+  --allowedTools "Read" "Grep" "Glob")
+
+[ -z "$REVIEW" ] && { echo "⚠️ claude -p が空を返しました。終了します。"; exit 1; }
 
 # 出力正規化: 行末スペース除去 + 末尾改行保証
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 
 # ファイル保存
+mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
 # PR コメント投稿

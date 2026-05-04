@@ -81,10 +81,13 @@ REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --system-prompt "$(cat "$REVIEWER")" \
   --allowedTools "Read" "Grep" "Glob")
 
+[ -z "$REVIEW" ] && { echo "⚠️ claude -p が空を返しました。終了します。"; exit 1; }
+
 # 出力正規化
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 
 # ファイル保存
+mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
 # PR コメント投稿
