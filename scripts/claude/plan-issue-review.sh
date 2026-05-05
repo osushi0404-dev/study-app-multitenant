@@ -45,12 +45,11 @@ $(cat "$AUTO_TEST")"
 ### 手動テスト
 $(cat "$MANUAL_TEST")"
 
-# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
 REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read" "Grep" "Glob")
+  --tools "Read,Grep,Glob")
 
 [ -z "$REVIEW" ] && { echo "⚠️ claude -p が空を返しました。終了します。"; exit 1; }
 
