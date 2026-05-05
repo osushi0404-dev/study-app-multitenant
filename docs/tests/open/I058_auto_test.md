@@ -81,19 +81,19 @@
   ```
 - **期待値**: PASS
 
-### TC-10 `--allowedTools` 設定の確認（plan-issue-review.sh）
-- **目的**: plan-issue-review.sh の `claude -p` 呼び出しに `--allowedTools "Read" "Grep" "Glob"` が設定されていること（スペース区切り個別引数形式）
+### TC-10 `--tools` ホワイトリスト設定の確認（plan-issue-review.sh）
+- **目的**: plan-issue-review.sh の `claude -p` 呼び出しに `--tools "Read,Grep,Glob"` が設定されていること（ホワイトリスト制限。`--allowedTools` は承認プロンプト省略フラグであり制限には使用しない）
 - **実行**:
   ```bash
-  grep -qF -- '--allowedTools "Read" "Grep" "Glob"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF -- '--tools "Read,Grep,Glob"' scripts/claude/plan-issue-review.sh && echo "PASS" || echo "FAIL"
   ```
 - **期待値**: PASS
 
-### TC-11 `--allowedTools` 設定の確認（code-review.sh）
-- **目的**: code-review.sh の `claude -p` 呼び出しに `--allowedTools "Read" "Grep" "Glob"` が設定されていること（スペース区切り個別引数形式）
+### TC-11 `--tools` ホワイトリスト設定の確認（code-review.sh）
+- **目的**: code-review.sh の `claude -p` 呼び出しに `--tools "Read,Grep,Glob"` が設定されていること（ホワイトリスト制限）
 - **実行**:
   ```bash
-  grep -qF -- '--allowedTools "Read" "Grep" "Glob"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
+  grep -qF -- '--tools "Read,Grep,Glob"' scripts/claude/code-review.sh && echo "PASS" || echo "FAIL"
   ```
 - **期待値**: PASS
 
@@ -110,5 +110,5 @@
 | TC-07 | PASS | |
 | TC-08 | PASS | |
 | TC-09 | PASS | |
-| TC-10 | PASS | |
-| TC-11 | PASS | |
+| TC-10 | | スクリプト修正後に実施 |
+| TC-11 | | スクリプト修正後に実施 |

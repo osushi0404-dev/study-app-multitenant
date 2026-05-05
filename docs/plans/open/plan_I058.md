@@ -47,7 +47,7 @@
 - [ ] システムメタデータ（`agentId:`・`<usage>`）がレビューファイルに混入しない
 - [ ] 末尾スペース・末尾改行の正規化がスクリプト内で保証され、pre-commit の修正が発生しない
 - [ ] `/plan-issue-review`・`/code-review` スキルから従来通り呼び出せる（後方互換）
-- [ ] 両スクリプトの `claude -p` 呼び出しに `--allowedTools "Read" "Grep" "Glob"`（スペース区切り個別引数）が設定されており、Edit・Write・Bash ツールが使用不可である
+- [ ] 両スクリプトの `claude -p` 呼び出しに `--tools "Read,Grep,Glob"`（ホワイトリスト指定）が設定されており、Edit・Write・Bash ツールが使用不可である
 - [ ] `code-reviewer.md`・`plan-reviewer.md` にツールアクセス制限（Bash/Edit/Write 禁止）が明記されている
 
 ---
@@ -58,8 +58,8 @@
 |----|------------|---------|
 | Skills | `.claude/skills/plan-issue-review/SKILL.md` | 変更（thin wrapper 化） |
 | Skills | `.claude/skills/code-review/SKILL.md` | 変更（thin wrapper 化） |
-| Scripts | `scripts/claude/plan-issue-review.sh` | 新規作成 → `--allowedTools` 追加 |
-| Scripts | `scripts/claude/code-review.sh` | 新規作成 → `--allowedTools` 追加・git log/files 注入追加 |
+| Scripts | `scripts/claude/plan-issue-review.sh` | 新規作成 → `--tools` ホワイトリスト追加 |
+| Scripts | `scripts/claude/code-review.sh` | 新規作成 → `--tools` ホワイトリスト追加・git log/files 注入追加 |
 | Review Agents | `.claude/review-agents/code-reviewer.md` | 変更（Bash 使用制限削除・ツールアクセス制限追加） |
 | Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（ツールアクセス制限追加） |
 | Skills | `.claude/skills/test/SKILL.md` | 変更（実施者: Claude 項目の自己実行ロジック追加） |
@@ -123,12 +123,11 @@ $(cat "$AUTO_TEST")"
 ### 手動テスト
 $(cat "$MANUAL_TEST")"
 
-# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
 REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read" "Grep" "Glob")
+  --tools "Read,Grep,Glob")
 
 # 出力正規化: 行末スペース除去 + 末尾改行保証
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
@@ -243,12 +242,11 @@ ${GIT_FILES}
 ${GIT_DIFF}
 \`\`\`"
 
-# claude -p でレビュー実行（Read/Grep/Glob のみ許可・Bash/Edit/Write 禁止）
-# --allowedTools はスペース区切りの個別引数。コンテキストは stdin 経由で渡す
+# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
 REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
   --model claude-sonnet-4-6 \
   --system-prompt "$(cat "$REVIEWER")" \
-  --allowedTools "Read" "Grep" "Glob")
+  --tools "Read,Grep,Glob")
 
 # 出力正規化
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
@@ -320,7 +318,7 @@ bash scripts/claude/code-review.sh $ARGUMENTS
 
 ### ステップ5: reviewer ファイルにツールアクセス制限明記
 
-**背景**: I058 retro C2 — `claude -p` が Edit ツールでテストファイルを書き換えた。`--allowedTools` はステップ1/2 のスクリプトに既に反映済み。本ステップはドキュメント側の整合を取る。
+**背景**: I058 retro C2 — `claude -p` が Edit ツールでテストファイルを書き換えた。`--allowedTools` は承認プロンプト省略フラグであり実際にはツールを制限しない。`--tools`（ホワイトリスト制限）が正しいフラグ。両スクリプトで `--tools "Read,Grep,Glob"` を使用し、reviewer ファイルにも命令として明記する（多層防御）。
 
 **`code-reviewer.md` の変更**:
 
@@ -386,7 +384,7 @@ P3/P5/P8 影響なし。P6 影響なし。
 ### 設計判断
 | 項目 | 判断内容 | 根拠 |
 |------|----------|------|
-| コンテキスト渡し方 | `--system-prompt` + シェルによるファイル注入（`--allowedTools` 不使用） | grill-me で確定（最大一貫性） |
+| コンテキスト渡し方 | `--system-prompt` + シェルによるファイル注入・stdin でプロンプト渡し | grill-me で確定（最大一貫性） |
 | CI タイムアウト | 600 秒（10 分）ハードコード | grill-me で確定（CI 実績 ~3 分に対して余裕を持たせた固定値） |
 | git diff 上限 | 100KB（`head -c 102400`） | コンテキスト上限対策・先頭から重要部分を含める |
 
