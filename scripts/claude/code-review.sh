@@ -97,9 +97,12 @@ fi
 
 # 判定とユーザー案内
 if grep -qE "^\| Blocker \|" "$REVIEW_FILE"; then
+  # shellcheck disable=SC2016
   printf '\n⛔ Blocker が残っています。`/fix-loop %s` で修正後、`/code-review %s` を再実行してください。\n' "$ISSUE" "$ISSUE"
 elif grep -qE "^\| High \|" "$REVIEW_FILE"; then
+  # shellcheck disable=SC2016
   printf '\n❌ レビュー NG。`/fix-loop %s` を実行してください。fix-loop 完了後は `/code-review %s` に戻ってください。\n' "$ISSUE" "$ISSUE"
 else
+  # shellcheck disable=SC2016
   printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE"
 fi
