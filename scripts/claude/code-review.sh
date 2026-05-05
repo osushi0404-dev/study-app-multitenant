@@ -49,8 +49,8 @@ PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")
 
 [ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません"; exit 1; }
 
-# git 情報取得（最大 100KB）
-GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400)
+# git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）
+GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400 || true)
 GIT_LOG=$(git log origin/develop...HEAD --oneline)
 GIT_FILES=$(git diff origin/develop...HEAD --name-only)
 
