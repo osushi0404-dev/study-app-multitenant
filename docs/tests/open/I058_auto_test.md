@@ -122,6 +122,15 @@
   ```
 - **期待値**: 両方 PASS
 
+### TC-15 `implement/SKILL.md` ステップ 2 への新規フック pre-flight 例外ルール追加（retro P-NEW）
+- **目的**: 新規 pre-commit フック追加時の `--all-files` 事前検証ルールがステップ 2 に追加されていること
+- **実行**:
+  ```bash
+  grep -q "pre-commit run" .claude/skills/implement/SKILL.md && echo "PASS" || echo "FAIL"
+  grep -q "\-\-all-files" .claude/skills/implement/SKILL.md && echo "PASS scope" || echo "FAIL scope"
+  ```
+- **期待値**: 両方 PASS
+
 ## 各 TC 実行結果
 
 | TC | 結果 | 備考 |
@@ -137,6 +146,7 @@
 | TC-09 | PASS | |
 | TC-10 | PASS | |
 | TC-11 | PASS | |
-| TC-12 | - | |
-| TC-13 | - | |
-| TC-14 | - | |
+| TC-12 | PASS | |
+| TC-13 | PASS | |
+| TC-14 | PASS | |
+| TC-15 | PASS | |

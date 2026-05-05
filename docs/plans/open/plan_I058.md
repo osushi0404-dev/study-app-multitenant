@@ -52,6 +52,7 @@
 - [ ] `plan-reviewer.md` の P4 セクションに CLI フラグ振る舞い検証チェックが追加されている（retro P1）
 - [ ] `implement/SKILL.md` にコードレビュー再実行ルール（Medium 以上 → 再レビュー・Low/Warning → CI）が追加されている（retro P2）
 - [ ] `.pre-commit-config.yaml` に shellcheck フックが追加され、`scripts/` 配下のシェルスクリプトが commit 時に検証される（retro P3）
+- [ ] `implement/SKILL.md` のステップ 2 に「新規 pre-commit フック追加時の既存ファイル事前検証」例外ルールが追加されている（retro P-NEW）
 
 ---
 
@@ -69,6 +70,7 @@
 | Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（P4 セクションに CLI フラグ振る舞い検証チェック追加・retro P1） |
 | Skills | `.claude/skills/implement/SKILL.md` | 変更（コードレビュー再実行ルール追加・retro P2） |
 | Config | `.pre-commit-config.yaml` | 変更（shellcheck フック追加・retro P3） |
+| Skills | `.claude/skills/implement/SKILL.md` | 変更（新規フック pre-flight 例外ルール追加・retro P-NEW） |
 | Backend | なし | - |
 | Frontend | なし | - |
 | DB | なし | - |
@@ -389,6 +391,18 @@ Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Re
 
 → TC-14 参照
 
+### ステップ9: `.claude/skills/implement/SKILL.md` のステップ 2 に新規フック pre-flight 例外ルールを追加
+
+**背景**: I058 retro P-NEW — shellcheck フック追加直後に CI が失敗。原因: commit 時の pre-commit は**ステージ済みファイルのみ**を対象とするため、新規フックを追加しても既存ファイルの違反は自動検出されない。この gap を implement フローに明示する。
+
+**変更内容**: `implement/SKILL.md` のステップ 2 のリスト末尾に以下を追加:
+
+```markdown
+- **例外 — 新規 pre-commit フックを `.pre-commit-config.yaml` に追加した場合**: `pre-commit run <hook-id> --all-files` を実行し、スコープ内の既存ファイル全体が hook を PASS することを確認してからコミットする（commit 時の自動実行はステージ済みファイルのみを対象とするため、既存ファイルの違反は自動では検出されない）
+```
+
+→ TC-15 参照
+
 ---
 
 ## 6. テスト計画
@@ -445,6 +459,7 @@ P3/P5/P8 影響なし。P6 影響なし。
 - [ ] `plan-reviewer.md` P4 への CLI フラグ振る舞い検証チェック追加（ステップ6）に同意する
 - [ ] `implement/SKILL.md` へのコードレビュー再実行ルール追加（ステップ7）に同意する
 - [ ] `.pre-commit-config.yaml` への shellcheck フック追加（ステップ8）に同意する
+- [ ] `implement/SKILL.md` ステップ 2 への新規フック pre-flight 例外ルール追加（ステップ9）に同意する
 
 ## レビュー結果
 - [20260503_0111 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260503_0111.md)
@@ -474,3 +489,6 @@ P3/P5/P8 影響なし。P6 影響なし。
 
 ## レビュー結果
 - [20260505_2309 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2309.md)
+
+## レビュー結果
+- [20260506_0139 判定: ✅ 完了](../../reviews/I058_plan_review_20260506_0139.md)
