@@ -49,6 +49,9 @@
 - [ ] `/plan-issue-review`・`/code-review` スキルから従来通り呼び出せる（後方互換）
 - [ ] 両スクリプトの `claude -p` 呼び出しに `--tools "Read,Grep,Glob"`（ホワイトリスト指定）が設定されており、Edit・Write・Bash ツールが使用不可である
 - [ ] `code-reviewer.md`・`plan-reviewer.md` にツールアクセス制限（Bash/Edit/Write 禁止）が明記されている
+- [ ] `plan-reviewer.md` の P4 セクションに CLI フラグ振る舞い検証チェックが追加されている（retro P1）
+- [ ] `implement/SKILL.md` にコードレビュー再実行ルール（Medium 以上 → 再レビュー・Low/Warning → CI）が追加されている（retro P2）
+- [ ] `.pre-commit-config.yaml` に shellcheck フックが追加され、`scripts/` 配下のシェルスクリプトが commit 時に検証される（retro P3）
 
 ---
 
@@ -63,6 +66,9 @@
 | Review Agents | `.claude/review-agents/code-reviewer.md` | 変更（Bash 使用制限削除・ツールアクセス制限追加） |
 | Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（ツールアクセス制限追加） |
 | Skills | `.claude/skills/test/SKILL.md` | 変更（実施者: Claude 項目の自己実行ロジック追加） |
+| Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（P4 セクションに CLI フラグ振る舞い検証チェック追加・retro P1） |
+| Skills | `.claude/skills/implement/SKILL.md` | 変更（コードレビュー再実行ルール追加・retro P2） |
+| Config | `.pre-commit-config.yaml` | 変更（shellcheck フック追加・retro P3） |
 | Backend | なし | - |
 | Frontend | なし | - |
 | DB | なし | - |
@@ -339,6 +345,50 @@ Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Re
 
 → TC-10・TC-11・手動テスト No.5 参照
 
+### ステップ6: `.claude/review-agents/plan-reviewer.md` の P4 セクションに CLI フラグ振る舞い検証チェックを追加
+
+**背景**: I058 retro P1 — `--allowedTools` バグの根本原因は「CLI フラグの存在確認 TC はあったが、そのフラグが保証する振る舞い（ファイル変更の可否）を直接検証する TC がなかった」こと。計画書レビュー時点でこの不備を検出できるよう P4 観点を強化する。
+
+**変更内容**: `plan-reviewer.md` の P4 セクション末尾に以下を追加:
+
+```markdown
+- CLI フラグ・外部コマンドのオプションに依存する保証がある場合、そのフラグの振る舞い自体を検証するテストケースがあるか（フラグの文字列一致確認だけでは不十分：実際の制限・効果が動作レベルで確認されているかを検証すること）
+```
+
+→ TC-12 参照
+
+### ステップ7: `.claude/skills/implement/SKILL.md` にコードレビュー再実行ルールを追加
+
+**背景**: I058 retro P2 — コードレビュー後に Warning を修正した際、変更の重大度に関わらず再レビューせずに進んだ。設計方針（サブエージェントレビュー = 要件/セキュリティ/ロジック・機械的チェック = CI）に沿い、Medium 以上の修正のみ再レビューを要求する。
+
+**変更内容**: `implement/SKILL.md` のステップ 2 と 3 の間に以下を挿入:
+
+```markdown
+2.5) コードレビュー指摘（fix-loop 等）を修正した場合:
+- **Medium 以上**（セキュリティ・要件・ロジックに関わる修正）後は commit/push 前に `/code-review $ARGUMENTS` を再実行する
+- **Low / Warning のみ**（静的解析・フォーマット・コメント等の機械的チェック相当）の修正のみの場合は CI で十分（再レビュー不要）
+```
+
+→ TC-13 参照
+
+### ステップ8: `.pre-commit-config.yaml` に shellcheck フックを追加
+
+**背景**: I058 retro P3 — `set -o pipefail` + `| head -c N` による SIGPIPE バグはシェルスクリプト静的解析（shellcheck）で検出可能。機械的なシェルスクリプト品質チェックは CI 領域（サブエージェントレビューではなく pre-commit フック）が適切。
+
+**変更内容**: `.pre-commit-config.yaml` の `local` hooks の前に以下を追加:
+
+```yaml
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/
+```
+
+実装時に `https://github.com/shellcheck-py/shellcheck-py/releases` で最新 rev を確認し採用する。
+
+→ TC-14 参照
+
 ---
 
 ## 6. テスト計画
@@ -392,6 +442,9 @@ P3/P5/P8 影響なし。P6 影響なし。
 - [ ] `plan-issue-review.sh` のスクリプト内容（ステップ1）に同意する
 - [ ] `code-review.sh` のスクリプト内容（ステップ2）に同意する
 - [ ] スキル thin wrapper の形式（ステップ3・4）に同意する
+- [ ] `plan-reviewer.md` P4 への CLI フラグ振る舞い検証チェック追加（ステップ6）に同意する
+- [ ] `implement/SKILL.md` へのコードレビュー再実行ルール追加（ステップ7）に同意する
+- [ ] `.pre-commit-config.yaml` への shellcheck フック追加（ステップ8）に同意する
 
 ## レビュー結果
 - [20260503_0111 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260503_0111.md)
@@ -418,3 +471,6 @@ P3/P5/P8 影響なし。P6 影響なし。
 
 ## レビュー結果
 - [20260505_2138 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2138.md)
+
+## レビュー結果
+- [20260505_2309 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2309.md)

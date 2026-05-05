@@ -97,6 +97,31 @@
   ```
 - **期待値**: PASS
 
+### TC-12 `plan-reviewer.md` P4 セクションへの CLI フラグ振る舞い検証チェック追加（retro P1）
+- **目的**: P4 セクションに CLI フラグの振る舞い検証を求める観点が追加されていること
+- **実行**:
+  ```bash
+  grep -q "CLI フラグ" .claude/review-agents/plan-reviewer.md && echo "PASS" || echo "FAIL"
+  ```
+- **期待値**: PASS
+
+### TC-13 `implement/SKILL.md` へのコードレビュー再実行ルール追加（retro P2）
+- **目的**: Medium 以上修正後の再レビュー・Low/Warning は CI のルールが追加されていること
+- **実行**:
+  ```bash
+  grep -q "Medium 以上" .claude/skills/implement/SKILL.md && echo "PASS" || echo "FAIL"
+  ```
+- **期待値**: PASS
+
+### TC-14 `.pre-commit-config.yaml` への shellcheck フック追加（retro P3）
+- **目的**: shellcheck フックが追加されており `scripts/` を対象としていること
+- **実行**:
+  ```bash
+  grep -q "shellcheck" .pre-commit-config.yaml && echo "PASS" || echo "FAIL"
+  grep -q "files: ^scripts/" .pre-commit-config.yaml && echo "PASS files scope" || echo "FAIL files scope"
+  ```
+- **期待値**: 両方 PASS
+
 ## 各 TC 実行結果
 
 | TC | 結果 | 備考 |
@@ -112,3 +137,6 @@
 | TC-09 | PASS | |
 | TC-10 | PASS | |
 | TC-11 | PASS | |
+| TC-12 | - | |
+| TC-13 | - | |
+| TC-14 | - | |

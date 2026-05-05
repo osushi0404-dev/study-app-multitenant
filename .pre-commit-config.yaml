@@ -30,6 +30,12 @@ repos:
         files: ^backend/
         exclude: ^backend/.*/migrations/|^backend/.*/tests/
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/
+
   - repo: local
     hooks:
       - id: eslint
