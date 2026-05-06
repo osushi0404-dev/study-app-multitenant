@@ -43,7 +43,6 @@ echo ""
 echo "[2/5] 移植先との照合..."
 set +e
 python3 scripts/migration_verify/match_atomic_lines.py
-MATCH_EXIT=$?
 set -e
 UNMATCHED=$(python3 -c "
 import json
@@ -56,7 +55,6 @@ echo ""
 echo "[3/5] 参照切れチェック..."
 set +e
 python3 scripts/migration_verify/check_references.py
-REF_EXIT=$?
 set -e
 BROKEN=$(grep -c "^\[BROKEN\]" docs/migration/reports/broken_references.txt 2>/dev/null) || BROKEN=0
 
@@ -65,7 +63,6 @@ echo ""
 echo "[4/5] Skill lint..."
 set +e
 python3 scripts/migration_verify/lint_skills.py
-LINT_EXIT=$?
 set -e
 LINT_ERRORS=$(python3 -c "
 import json
@@ -78,7 +75,6 @@ echo ""
 echo "[5/5] シークレットスキャン..."
 set +e
 python3 scripts/migration_verify/scan_secrets.py
-SECRET_EXIT=$?
 set -e
 SECRETS=$(grep -c "^\[" docs/migration/reports/secrets_scan_report.txt 2>/dev/null) || SECRETS=0
 

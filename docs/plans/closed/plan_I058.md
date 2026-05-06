@@ -1,0 +1,494 @@
+# plan_I058: コマンド化: plan-issue-review・code-review のオーケストレーションをシェルスクリプト化する
+
+## 基本情報
+- **計画書ID**: plan_I058
+- **関連イシュー**: #119
+- **作成根拠資料**: I057 振り返り・レビューシステム動作検証（2026-05-03）
+- **実装後評価**: （未作成）
+- **作成日**: 2026-05-03
+
+---
+
+## 1. 背景/目的
+
+`/plan-issue-review`・`/code-review` スキルは markdown を Claude が解釈して実行するため、実行ごとに手順のぶれが生じる。具体的な問題：
+
+- 決定論的な操作（ファイル保存・PR 投稿・計画書リンク追記・判定案内）が prose で書かれており Claude の解釈に依存
+- `Agent` ツールの出力に `agentId:` 行・`<usage>` ブロックが付与され verbatim 保存が厳密に守れない
+- pre-commit フックが末尾スペース・末尾改行を修正するため、保存後に再ステージが必要
+
+**解決策**: オーケストレーション（制御フロー・副作用）をシェルスクリプトに移し、Claude は `claude -p` 経由で判断部分（レビュー内容の生成）のみ担当する。
+
+---
+
+## 2. 調査結果
+
+### CLI フラグ確認
+- `claude -p`: 非インタラクティブ実行 ✅
+- `--system-prompt <prompt>`: システムプロンプト指定 ✅（`claude --help` で確認）
+- `--model <model>`: モデル指定 ✅
+- `--allowedTools`: ✅（今回は不要・使用しない）
+
+### `scripts/claude/` の現状
+- `scripts/claude/hooks/` は存在する
+- `scripts/claude/plan-issue-review.sh`・`code-review.sh` は未存在 → 新規作成
+
+### コンテキスト渡し方の決定
+- `--system-prompt "$(cat plan-reviewer.md)"` で reviewer.md をシステムプロンプトとして渡す
+- イシューファイル・計画書・テスト文書はシェルが読んでプロンプトに注入（`--allowedTools` 不要）
+- `code-review.sh` の git diff は `head -c 102400`（100KB）で上限を設ける
+
+---
+
+## 3. 受け入れ条件
+
+- [ ] `scripts/claude/plan-issue-review.sh I###` を実行すると、タイムスタンプ付きレビューファイルの保存・PR コメント投稿・計画書リンク追記・判定案内が一貫して行われる
+- [ ] `scripts/claude/code-review.sh I###` を実行すると、同様の処理が一貫して行われる
+- [ ] システムメタデータ（`agentId:`・`<usage>`）がレビューファイルに混入しない
+- [ ] 末尾スペース・末尾改行の正規化がスクリプト内で保証され、pre-commit の修正が発生しない
+- [ ] `/plan-issue-review`・`/code-review` スキルから従来通り呼び出せる（後方互換）
+- [ ] 両スクリプトの `claude -p` 呼び出しに `--tools "Read,Grep,Glob"`（ホワイトリスト指定）が設定されており、Edit・Write・Bash ツールが使用不可である
+- [ ] `code-reviewer.md`・`plan-reviewer.md` にツールアクセス制限（Bash/Edit/Write 禁止）が明記されている
+- [ ] `plan-reviewer.md` の P4 セクションに CLI フラグ振る舞い検証チェックが追加されている（retro P1）
+- [ ] `implement/SKILL.md` にコードレビュー再実行ルール（Medium 以上 → 再レビュー・Low/Warning → CI）が追加されている（retro P2）
+- [ ] `.pre-commit-config.yaml` に shellcheck フックが追加され、`scripts/` 配下のシェルスクリプトが commit 時に検証される（retro P3）
+- [ ] `implement/SKILL.md` のステップ 2 に「新規 pre-commit フック追加時の既存ファイル事前検証」例外ルールが追加されている（retro P-NEW）
+
+---
+
+## 4. 影響範囲
+
+| 層 | 変更ファイル | 変更種別 |
+|----|------------|---------|
+| Skills | `.claude/skills/plan-issue-review/SKILL.md` | 変更（thin wrapper 化） |
+| Skills | `.claude/skills/code-review/SKILL.md` | 変更（thin wrapper 化） |
+| Scripts | `scripts/claude/plan-issue-review.sh` | 新規作成 → `--tools` ホワイトリスト追加 |
+| Scripts | `scripts/claude/code-review.sh` | 新規作成 → `--tools` ホワイトリスト追加・git log/files 注入追加 |
+| Review Agents | `.claude/review-agents/code-reviewer.md` | 変更（Bash 使用制限削除・ツールアクセス制限追加） |
+| Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（ツールアクセス制限追加） |
+| Skills | `.claude/skills/test/SKILL.md` | 変更（実施者: Claude 項目の自己実行ロジック追加） |
+| Review Agents | `.claude/review-agents/plan-reviewer.md` | 変更（P4 セクションに CLI フラグ振る舞い検証チェック追加・retro P1） |
+| Skills | `.claude/skills/implement/SKILL.md` | 変更（コードレビュー再実行ルール追加・retro P2） |
+| Config | `.pre-commit-config.yaml` | 変更（shellcheck フック追加・retro P3） |
+| Skills | `.claude/skills/implement/SKILL.md` | 変更（新規フック pre-flight 例外ルール追加・retro P-NEW） |
+| Backend | なし | - |
+| Frontend | なし | - |
+| DB | なし | - |
+
+---
+
+## 5. 実装手順
+
+### ステップ1: `scripts/claude/plan-issue-review.sh` の新規作成
+
+**内容**:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ISSUE="${1:?Usage: $0 I###}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+TIMESTAMP=$(date +%Y%m%d_%H%M)
+REVIEW_FILE="docs/reviews/${ISSUE}_plan_review_${TIMESTAMP}.md"
+REVIEWER=".claude/review-agents/plan-reviewer.md"
+
+# open/closed 両方を検索してパスを返す
+find_file() {
+  local dir="$1" pattern="$2"
+  if [ -f "docs/${dir}/open/${pattern}" ]; then echo "docs/${dir}/open/${pattern}"
+  elif [ -f "docs/${dir}/closed/${pattern}" ]; then echo "docs/${dir}/closed/${pattern}"
+  else echo ""
+  fi
+}
+
+ISSUE_FILE=$(find_file "issues" "${ISSUE}.md")
+PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")
+AUTO_TEST=$(find_file "tests" "${ISSUE}_auto_test.md")
+MANUAL_TEST=$(find_file "tests" "${ISSUE}_manual_test.md")
+
+[ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません: ${ISSUE}.md"; exit 1; }
+[ -z "$PLAN_FILE" ]  && { echo "⚠️ 計画書が見つかりません: plan_${ISSUE}.md"; exit 1; }
+
+# コンテキスト組み立て
+CONTEXT="イシュー番号: ${ISSUE}
+
+### イシューファイル
+$(cat "$ISSUE_FILE")
+
+### 計画書
+$(cat "$PLAN_FILE")"
+
+[ -n "$AUTO_TEST" ]   && CONTEXT+="
+
+### 自動テスト
+$(cat "$AUTO_TEST")"
+
+[ -n "$MANUAL_TEST" ] && CONTEXT+="
+
+### 手動テスト
+$(cat "$MANUAL_TEST")"
+
+# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
+REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
+  --model claude-sonnet-4-6 \
+  --system-prompt "$(cat "$REVIEWER")" \
+  --tools "Read,Grep,Glob")
+
+# 出力正規化: 行末スペース除去 + 末尾改行保証
+REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
+
+# ファイル保存
+printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
+
+# PR コメント投稿
+PR_NUM=$(gh pr view --json number -q .number 2>/dev/null || echo "")
+if [ -n "$PR_NUM" ]; then
+  gh pr review "$PR_NUM" --comment --body "$(cat "$REVIEW_FILE")" \
+    || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body \"\$(cat $REVIEW_FILE)\""
+fi
+
+# 計画書にレビュー結果リンクを追記
+if [ -f "$PLAN_FILE" ]; then
+  VERDICT=$(grep -o '判定:.*' "$REVIEW_FILE" | head -1 || echo "完了")
+  printf '\n## レビュー結果\n- [%s %s](../../reviews/%s)\n' \
+    "$TIMESTAMP" "$VERDICT" "$(basename "$REVIEW_FILE")" >> "$PLAN_FILE"
+fi
+
+# 判定とユーザー案内
+if grep -qE "判定:.*差し戻し" "$REVIEW_FILE"; then
+  printf '\n⛔ Blocker が残っています。修正後に `/plan-issue-review %s` を再実行してください。\n' "$ISSUE"
+elif grep -qi "高リスク判定.*Yes" "$REVIEW_FILE"; then
+  printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE"
+else
+  printf '\n✅ プランレビュー完了。`/implement %s` を実行してください。\n' "$ISSUE"
+fi
+```
+
+→ TC-01・TC-02・TC-03・TC-05・TC-06・TC-10 参照
+
+### ステップ2: `scripts/claude/code-review.sh` の新規作成
+
+**内容**:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ISSUE="${1:?Usage: $0 I###}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+TIMESTAMP=$(date +%Y%m%d_%H%M)
+REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}.md"
+REVIEWER=".claude/review-agents/code-reviewer.md"
+
+# CI 待機（最大 10 分）
+PR_NUM=$(gh pr view --json number -q .number 2>/dev/null || echo "")
+CI_OUTPUT=""
+if [ -n "$PR_NUM" ]; then
+  echo "CI を確認しています (PR #${PR_NUM})..."
+  TIMEOUT=600
+  ELAPSED=0
+  while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    CI_OUTPUT=$(gh pr checks "$PR_NUM" 2>&1 || true)
+    if ! echo "$CI_OUTPUT" | grep -q "pending"; then
+      break
+    fi
+    echo "  pending... ${ELAPSED}s / ${TIMEOUT}s"
+    sleep 15
+    ELAPSED=$((ELAPSED + 15))
+  done
+  if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+    echo "⚠️ CI タイムアウト（${TIMEOUT}秒）。"
+  fi
+  if echo "$CI_OUTPUT" | grep -q "fail"; then
+    echo "⛔ CI が失敗しています。修正後に再 push してください。"
+    echo "$CI_OUTPUT"
+    exit 1
+  fi
+fi
+
+# open/closed 両方を検索してパスを返す
+find_file() {
+  local dir="$1" pattern="$2"
+  if [ -f "docs/${dir}/open/${pattern}" ]; then echo "docs/${dir}/open/${pattern}"
+  elif [ -f "docs/${dir}/closed/${pattern}" ]; then echo "docs/${dir}/closed/${pattern}"
+  else echo ""
+  fi
+}
+
+ISSUE_FILE=$(find_file "issues" "${ISSUE}.md")
+PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")
+
+[ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません"; exit 1; }
+
+# git 情報取得（最大 100KB）
+GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400)
+GIT_LOG=$(git log origin/develop...HEAD --oneline)
+GIT_FILES=$(git diff origin/develop...HEAD --name-only)
+
+# コンテキスト組み立て
+CONTEXT="イシュー番号: ${ISSUE}
+
+### イシューファイル
+$(cat "$ISSUE_FILE")
+
+### 計画書
+$([ -n "$PLAN_FILE" ] && cat "$PLAN_FILE" || echo "(計画書なし)")
+
+### git log (origin/develop...HEAD)
+${GIT_LOG}
+
+### 変更ファイル一覧
+${GIT_FILES}
+
+### git diff (origin/develop...HEAD, max 100KB)
+\`\`\`diff
+${GIT_DIFF}
+\`\`\`"
+
+# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
+REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
+  --model claude-sonnet-4-6 \
+  --system-prompt "$(cat "$REVIEWER")" \
+  --tools "Read,Grep,Glob")
+
+# 出力正規化
+REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
+
+# ファイル保存
+printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
+
+# PR コメント投稿
+if [ -n "$PR_NUM" ]; then
+  gh pr review "$PR_NUM" --comment --body "$(cat "$REVIEW_FILE")" \
+    || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body \"\$(cat $REVIEW_FILE)\""
+fi
+
+# 判定とユーザー案内
+if grep -qE "^\| Blocker \|" "$REVIEW_FILE"; then
+  printf '\n⛔ Blocker が残っています。`/fix-loop %s` で修正後、`/code-review %s` を再実行してください。\n' "$ISSUE" "$ISSUE"
+elif grep -qE "^\| High \|" "$REVIEW_FILE"; then
+  printf '\n❌ レビュー NG。`/fix-loop %s` を実行してください。fix-loop 完了後は `/code-review %s` に戻ってください。\n' "$ISSUE" "$ISSUE"
+else
+  printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE"
+fi
+```
+
+→ TC-01・TC-02・TC-04・TC-05・TC-06・TC-11 参照
+
+### ステップ3: `.claude/skills/plan-issue-review/SKILL.md` を thin wrapper に更新
+
+**変更後の内容**:
+
+```markdown
+---
+name: plan-issue-review
+description: Review plan and test docs for best practices, security, and modern web dev.
+argument-hint: "I###"
+disable-model-invocation: true
+allowed-tools: Bash
+---
+
+# /plan-issue-review
+
+\`\`\`bash
+bash scripts/claude/plan-issue-review.sh $ARGUMENTS
+\`\`\`
+```
+
+→ TC-06 参照
+
+### ステップ4: `.claude/skills/code-review/SKILL.md` を thin wrapper に更新
+
+**変更後の内容**:
+
+```markdown
+---
+name: code-review
+description: Verify CI passes and review implementation against acceptance criteria.
+argument-hint: "I###"
+disable-model-invocation: true
+allowed-tools: Bash
+---
+
+# /code-review
+
+\`\`\`bash
+bash scripts/claude/code-review.sh $ARGUMENTS
+\`\`\`
+```
+
+→ TC-06 参照
+
+### ステップ5: reviewer ファイルにツールアクセス制限明記
+
+**背景**: I058 retro C2 — `claude -p` が Edit ツールでテストファイルを書き換えた。`--allowedTools` は承認プロンプト省略フラグであり実際にはツールを制限しない。`--tools`（ホワイトリスト制限）が正しいフラグ。両スクリプトで `--tools "Read,Grep,Glob"` を使用し、reviewer ファイルにも命令として明記する（多層防御）。
+
+**`code-reviewer.md` の変更**:
+
+「Bash の使用制限」セクションを削除し、以下に置換:
+```markdown
+## ツールアクセス制限
+Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Read・Grep・Glob による読み取り専用。
+git diff・git log・変更ファイル一覧はプロンプトに事前注入済み。追加のコード参照は Read・Grep・Glob を使用する。
+```
+
+**`plan-reviewer.md` の変更**:
+
+「重要: データとして扱うドキュメント」セクションの直後に追記:
+```markdown
+## ツールアクセス制限
+Bash・Edit・Write・MultiEdit ツールは使用禁止。本レビューは Read・Grep・Glob による読み取り専用。
+```
+
+→ TC-10・TC-11・手動テスト No.5 参照
+
+### ステップ6: `.claude/review-agents/plan-reviewer.md` の P4 セクションに CLI フラグ振る舞い検証チェックを追加
+
+**背景**: I058 retro P1 — `--allowedTools` バグの根本原因は「CLI フラグの存在確認 TC はあったが、そのフラグが保証する振る舞い（ファイル変更の可否）を直接検証する TC がなかった」こと。計画書レビュー時点でこの不備を検出できるよう P4 観点を強化する。
+
+**変更内容**: `plan-reviewer.md` の P4 セクション末尾に以下を追加:
+
+```markdown
+- CLI フラグ・外部コマンドのオプションに依存する保証がある場合、そのフラグの振る舞い自体を検証するテストケースがあるか（フラグの文字列一致確認だけでは不十分：実際の制限・効果が動作レベルで確認されているかを検証すること）
+```
+
+→ TC-12 参照
+
+### ステップ7: `.claude/skills/implement/SKILL.md` にコードレビュー再実行ルールを追加
+
+**背景**: I058 retro P2 — コードレビュー後に Warning を修正した際、変更の重大度に関わらず再レビューせずに進んだ。設計方針（サブエージェントレビュー = 要件/セキュリティ/ロジック・機械的チェック = CI）に沿い、Medium 以上の修正のみ再レビューを要求する。
+
+**変更内容**: `implement/SKILL.md` のステップ 2 と 3 の間に以下を挿入:
+
+```markdown
+2.5) コードレビュー指摘（fix-loop 等）を修正した場合:
+- **Medium 以上**（セキュリティ・要件・ロジックに関わる修正）後は commit/push 前に `/code-review $ARGUMENTS` を再実行する
+- **Low / Warning のみ**（静的解析・フォーマット・コメント等の機械的チェック相当）の修正のみの場合は CI で十分（再レビュー不要）
+```
+
+→ TC-13 参照
+
+### ステップ8: `.pre-commit-config.yaml` に shellcheck フックを追加
+
+**背景**: I058 retro P3 — `set -o pipefail` + `| head -c N` による SIGPIPE バグはシェルスクリプト静的解析（shellcheck）で検出可能。機械的なシェルスクリプト品質チェックは CI 領域（サブエージェントレビューではなく pre-commit フック）が適切。
+
+**変更内容**: `.pre-commit-config.yaml` の `local` hooks の前に以下を追加:
+
+```yaml
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/
+```
+
+実装時に `https://github.com/shellcheck-py/shellcheck-py/releases` で最新 rev を確認し採用する。
+
+→ TC-14 参照
+
+### ステップ9: `.claude/skills/implement/SKILL.md` のステップ 2 に新規フック pre-flight 例外ルールを追加
+
+**背景**: I058 retro P-NEW — shellcheck フック追加直後に CI が失敗。原因: commit 時の pre-commit は**ステージ済みファイルのみ**を対象とするため、新規フックを追加しても既存ファイルの違反は自動検出されない。この gap を implement フローに明示する。
+
+**変更内容**: `implement/SKILL.md` のステップ 2 のリスト末尾に以下を追加:
+
+```markdown
+- **例外 — 新規 pre-commit フックを `.pre-commit-config.yaml` に追加した場合**: `pre-commit run <hook-id> --all-files` を実行し、スコープ内の既存ファイル全体が hook を PASS することを確認してからコミットする（commit 時の自動実行はステージ済みファイルのみを対象とするため、既存ファイルの違反は自動では検出されない）
+```
+
+→ TC-15 参照
+
+---
+
+## 6. テスト計画
+
+### 自動テスト
+→ `I058_auto_test.md` 参照
+
+### 手動テスト
+→ `I058_manual_test.md` 参照
+
+---
+
+## 7. ロールバック
+
+スキルファイルとシェルスクリプトのみの変更。`git revert` で即時ロールバック可能。
+ロールバック後は旧スキルファイル（Agent ツール使用）に戻る。
+
+---
+
+## 8. Risk & 回避策
+
+| リスク | 対策 |
+|--------|------|
+| `claude -p` が OAuth 認証環境で動作しない | `claude -p` は通常の認証で動作する（`--bare` は使用しない） |
+| git diff が 100KB を超える大規模 PR では差分が切り捨てられる | `head -c 102400` で 100KB に制限しつつ、先頭から最重要部分を含める |
+| `--system-prompt` に reviewer.md の内容が長すぎる場合 | 現在の reviewer.md は約 100 行程度、問題ない範囲 |
+| CI タイムアウト（10 分超）でスクリプトが警告を出して続行 | 警告を表示しつつ CI 失敗でなければレビューは続行 |
+
+---
+
+## 9. セキュリティ・ベストプラクティスチェック
+
+セキュリティ影響なし（スキルドキュメントとシェルスクリプトのみの変更、コード・認証・DB 変更なし）。
+- `set -euo pipefail` でエラー即終了・未定義変数参照を防止
+- `${1:?...}` で引数検証（パストラバーサル防止）
+- `find_file()` は固定のディレクトリプレフィックスを使用（外部入力が直接パスに影響しない）
+P3/P5/P8 影響なし。P6 影響なし。
+
+---
+
+## 10. 承認ポイント
+
+### 設計判断
+| 項目 | 判断内容 | 根拠 |
+|------|----------|------|
+| コンテキスト渡し方 | `--system-prompt` + シェルによるファイル注入・stdin でプロンプト渡し | grill-me で確定（最大一貫性） |
+| CI タイムアウト | 600 秒（10 分）ハードコード | grill-me で確定（CI 実績 ~3 分に対して余裕を持たせた固定値） |
+| git diff 上限 | 100KB（`head -c 102400`） | コンテキスト上限対策・先頭から重要部分を含める |
+
+### チェックリスト
+- [ ] `plan-issue-review.sh` のスクリプト内容（ステップ1）に同意する
+- [ ] `code-review.sh` のスクリプト内容（ステップ2）に同意する
+- [ ] スキル thin wrapper の形式（ステップ3・4）に同意する
+- [ ] `plan-reviewer.md` P4 への CLI フラグ振る舞い検証チェック追加（ステップ6）に同意する
+- [ ] `implement/SKILL.md` へのコードレビュー再実行ルール追加（ステップ7）に同意する
+- [ ] `.pre-commit-config.yaml` への shellcheck フック追加（ステップ8）に同意する
+- [ ] `implement/SKILL.md` ステップ 2 への新規フック pre-flight 例外ルール追加（ステップ9）に同意する
+
+## レビュー結果
+- [20260503_0111 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260503_0111.md)
+- [20260503_0123 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_0123.md)
+- [20260503_0145 差し戻し（Blocker 2件）](../../reviews/I058_plan_review_20260503_0145.md)
+
+## レビュー結果
+- [20260503_0139 判定: 差し戻し（Blocker 2件）**](../../reviews/I058_plan_review_20260503_0139.md)
+
+## レビュー結果
+- [20260503_1438 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_1438.md)
+
+## レビュー結果
+- [20260503_1444 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_1444.md)
+
+## レビュー結果
+- [20260504_0049 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0049.md)
+
+## レビュー結果
+- [20260504_0200 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0200.md)
+
+## レビュー結果
+- [20260505_2130 判定: 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260505_2130.md)
+
+## レビュー結果
+- [20260505_2138 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2138.md)
+
+## レビュー結果
+- [20260505_2309 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2309.md)
+
+## レビュー結果
+- [20260506_0139 判定: ✅ 完了](../../reviews/I058_plan_review_20260506_0139.md)
