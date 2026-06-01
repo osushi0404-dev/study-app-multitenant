@@ -107,6 +107,10 @@ GitHubイシュー登録後、必ず以下を報告：
 === フェーズ1: イシュー準備（/issue-bootstrap） ===
 1. イシューファイル作成（テンプレート：docs/issues/templates/issue_template.md）
     ↓
+1.5. issue-review サブエージェントによる自己完結度レビュー（ソフト・非ブロック）
+     - 判定「十分」→ /grill-me スキップ可・/plan-issue 直行を案内
+     - 判定「要補足」→ 未確定セクション提示・/grill-me 推奨
+    ↓
 2. GitHubイシュー登録・イシューファイルに Issue 番号を記録
     ↓
 3. ユーザーがイシューファイルを確認
