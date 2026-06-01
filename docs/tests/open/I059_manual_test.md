@@ -34,6 +34,6 @@ Read・Bash で判定できる項目は Claude が実行する。コンテキス
 - AT1 shellcheck（pre-commit 経由）: ✅ PASS
 - AT2 `bash -n`: ✅ PASS
 
-## CI（PR #123）
+## CI（PR #123・最新 push 264b4da）
 - Backend Lint & Security / Backend Tests / Frontend Lint & Security / Frontend Tests / Frontend Type Check: ✅ pass
-- E2E Tests (Playwright): /test 実行時点では最新 push 分が pending（本変更はアプリ非該当）
+- E2E Tests (Playwright): ✅ pass（3m1s）
