@@ -1,7 +1,7 @@
 # Vibe Coding 運用フロー（安全寄り）
 
 ## 使うスキル（/ で実行）
-- /issue-bootstrap [title] : 採番、イシューファイル作成、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
+- /issue-bootstrap [title] : 採番、イシューファイル作成、issue-review による自己完結度レビュー（ソフト）、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
 - /grill-me I### : 計画書作成前の設計インタビュー（推奨。複雑なイシューや設計判断が多いイシューで実行する）
 - /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
 - /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK かつ高リスク判定 Yes → /security-review、No → /implement へ）
@@ -20,8 +20,8 @@
 - docs/reviews/open, docs/reviews/in_progress, docs/reviews/closed
 
 ## フロー（あなたの運用をそのまま型にする）
-1. /issue-bootstrap → ユーザーがイシューファイル確認（OK/NG）
-1.5. /grill-me I### → 設計上の疑問点を解消（推奨・任意）
+1. /issue-bootstrap → issue-review で自己完結度レビュー（ソフト・判定で grill-me 要否を案内）→ ユーザーがイシューファイル確認（OK/NG）
+1.5. /grill-me I### → 設計上の疑問点を解消（推奨・任意。issue-review 判定「十分」ならスキップ可）
 2. /plan-issue I### → ユーザーが計画書確認（OK/NG）
 3. /plan-issue-review I### → 計画書・テスト文書レビュー（OK/NG）
    - NG（Edit/Write で修正可能）: Claude が自分で修正 → /plan-issue-review に戻る

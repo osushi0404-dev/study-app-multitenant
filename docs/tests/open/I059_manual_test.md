@@ -25,6 +25,8 @@ Read・Bash で判定できる項目は Claude が実行する。コンテキス
 | 10 | コンテキストクリア後の `/plan-issue` 実セッション入域（AC#7） | 新規セッション（コンテキストクリア）で検証用イシューに対し `/plan-issue` を実行 | 不足情報を問い返すことなく計画書作成に着手できる | Human | ⏳ 任意 | TC9 で**ゼロ文脈のサブエージェント**が「十分」判定済み＝代理検証は充足。実セッションでの最終確認は任意 |
 | 11 | issue-review.sh の非ブロック失敗動作（plan-review Warning 反映） | 失敗する `claude` スタブを PATH 先頭に置く等で再現し `bash scripts/claude/issue-review.sh I059` | 警告を出し**終了コード 0**。bootstrap を止めない | Claude | ✅ PASS | implement 時確認。(a) claude失敗→exit0／(b) reviewer未検出→exit0／(c) イシュー未検出(I999)→exit0 |
 | 12 | issue-bootstrap フロントマター description 更新（plan-review Warning 反映） | `.claude/skills/issue-bootstrap/SKILL.md` のフロントマターを読む | `description` が issue-review 起動を含む実態に更新されている | Claude | ✅ PASS | "...run issue-review (self-completeness), then register GitHub Issue." 確認 |
+| 13 | issue-flow.md のフロー同期（C1・retro 是正） | `docs/runbooks/issue-flow.md` のフェーズ1 フロー図を読む | ステップ1（作成）と2（GitHub登録）の間に issue-review（自己完結度レビュー・ソフト・判定で grill-me 要否分岐）が追記されている | Claude | ✅ PASS | L110 に step 1.5 挿入。ソフト・非ブロック・十分/要補足分岐を確認 |
+| 14 | workflow.md のスキル説明・フロー同期（C1・retro 是正） | `docs/runbooks/workflow.md` の「使うスキル」と「フロー」を読む | `/issue-bootstrap` 説明に issue-review が含まれ、フロー手順1に issue-review（判定で grill-me 要否案内）が反映されている | Claude | ✅ PASS | 使うスキル説明・フロー手順1・grill-me スキップ可記載すべて確認 |
 
 ---
 

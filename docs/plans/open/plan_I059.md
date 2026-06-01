@@ -56,6 +56,8 @@ I058 の retro でフォローアップイシューを起票した際、現行�
 - [ ] `issue-bootstrap` スキルが GitHub 登録前（step 3.5）に `issue-review.sh` を起動し、結果をユーザーに提示する（ソフト・非ブロック）
 - [ ] `issue-bootstrap` スキルの完了ガイドに「自己完結なら `/grill-me` スキップ可」が明記され、issue-review の判定で報告文が動的分岐する
 - [ ] 改訂後のテンプレート＋issue-review フローで新規イシューを1件作成し、コンテキストクリア後に `/plan-issue` に入れることを確認する
+- [ ]（C1・retro 是正）`docs/runbooks/issue-flow.md` のフェーズ1 フロー図に issue-review（step 1.5・自己完結度レビュー・ソフト）が追記されている
+- [ ]（C1・retro 是正）`docs/runbooks/workflow.md` の「使うスキル」`/issue-bootstrap` 説明とフローに issue-review が反映されている
 
 ---
 
@@ -69,7 +71,10 @@ I058 の retro でフォローアップイシューを起票した際、現行�
   - `.claude/review-agents/issue-reviewer.md`（新規）
   - `scripts/claude/issue-review.sh`（新規・bash。pre-commit の shellcheck 対象）
   - `.claude/skills/issue-bootstrap/SKILL.md`（改訂）
+  - `docs/runbooks/issue-flow.md`（改訂・C1: フロー図に issue-review を同期）
+  - `docs/runbooks/workflow.md`（改訂・C1: 使うスキル／フローに issue-review を同期）
 
+> C1 は retro で検出した是正処置。issue-bootstrap のフロー変更（step 3.5 追加）を、フローを記述する上記2ランブックに同期する。
 > 依存関係ファイル（requirements*.txt / package*.json）の変更なし → Dockerfile・docker-compose.yml への波及なし。
 > 新規 bash スクリプトは pre-commit の `shellcheck` フックの対象になる（I058 で導入済み）。
 
@@ -223,6 +228,34 @@ step 3.5 の issue-review 判定に応じて次ステップ案内を出し分け
 
 ---
 
+### 5. `docs/runbooks/issue-flow.md`・`docs/runbooks/workflow.md`（改訂・C1: retro 是正）
+
+issue-bootstrap のフロー変更（step 3.5 issue-review 追加）を、フローを記述するランブックに同期する。最小差分の追記のみ。
+
+**A: `docs/runbooks/issue-flow.md`（フェーズ1 フロー図にステップ 1.5 を挿入）**
+```
+1. イシューファイル作成（テンプレート：docs/issues/templates/issue_template.md）
+    ↓
+1.5. issue-review サブエージェントによる自己完結度レビュー（ソフト・非ブロック）
+     - 判定「十分」→ /grill-me スキップ可・/plan-issue 直行を案内
+     - 判定「要補足」→ 未確定セクション提示・/grill-me 推奨
+    ↓
+2. GitHubイシュー登録・イシューファイルに Issue 番号を記録
+```
+
+**B: `docs/runbooks/workflow.md`（使うスキル `/issue-bootstrap` 説明）**
+```
+- /issue-bootstrap [title] : 採番、イシューファイル作成、issue-review による自己完結度レビュー（ソフト）、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
+```
+
+**C: `docs/runbooks/workflow.md`（フロー 1〜1.5）**
+```
+1. /issue-bootstrap → issue-review で自己完結度レビュー（ソフト・判定で grill-me 要否を案内）→ ユーザーがイシューファイル確認（OK/NG）
+1.5. /grill-me I### → 設計上の疑問点を解消（推奨・任意。issue-review 判定「十分」ならスキップ可）
+```
+
+---
+
 ## 実装手順
 
 **未知リスク先行**: 最も新しい要素は「`claude -p` を issue-reviewer.md で起動し有用なレビューを得る」部分。
@@ -233,8 +266,9 @@ step 3.5 の issue-review 判定に応じて次ステップ案内を出し分け
   `docs/reviews/` に出力されること・非ブロックで終了することを確認する → TC4・TC5・TC9 参照
 **ステップ2**（独立）: `issue_template.md` を改訂する（背景/目的の3サブセクション化・実装対象テーブル・制約セクション）→ TC1〜TC3 参照
 **ステップ3**（ステップ1に依存）: `issue-bootstrap/SKILL.md` の step 3.5 に issue-review 起動を追加し、step 6 を動的分岐に改訂する → TC6・TC7 参照
+**ステップ4**（C1・独立）: `issue-flow.md`・`workflow.md` に issue-review ステップを同期追記する → TC13・TC14 参照
 
-> 依存関係: ステップ3 はステップ1（スクリプト存在）が前提。ステップ1とステップ2は並行実施可能。
+> 依存関係: ステップ3 はステップ1（スクリプト存在）が前提。ステップ1・ステップ2・ステップ4は並行実施可能。
 > 検証（AC#6: 改訂テンプレート＋issue-review フローで新規イシュー作成 → コンテキストクリア後 `/plan-issue` 入域）は `/test` 時に実施 → TC8 参照。
 
 ---
@@ -309,3 +343,6 @@ bandit/ESLint 対象のアプリコードなし。新規 bash は shellcheck（M
 
 ## レビュー結果
 - [20260601_0001 判定: ✅ 完了](../../reviews/I059_plan_review_20260601_0001.md)
+
+## レビュー結果
+- [20260601_1730 判定: ✅ 完了](../../reviews/I059_plan_review_20260601_1730.md)

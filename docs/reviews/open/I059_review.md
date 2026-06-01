@@ -8,6 +8,8 @@
 | `.claude/review-agents/issue-reviewer.md`（新規） | イシュー内容を第三者レビューするサブエージェント指示（自己完結度＋内容妥当性・読み取り専用・インジェクション対策） |
 | `scripts/claude/issue-review.sh`（新規） | issue-reviewer を `claude -p`（sonnet-4-6/Read,Grep,Glob）で起動し `docs/reviews/` に保存。非ブロック・PRコメントなし |
 | `.claude/skills/issue-bootstrap/SKILL.md` | step 3.5 で issue-review 起動（ソフト）、step 6 を判定で動的分岐 |
+| `docs/runbooks/issue-flow.md`（C1・retro 是正） | フェーズ1 フロー図に issue-review（step 1.5）を同期追記 |
+| `docs/runbooks/workflow.md`（C1・retro 是正） | 使うスキル `/issue-bootstrap` 説明・フローに issue-review を同期追記 |
 
 ---
 
