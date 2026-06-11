@@ -43,6 +43,7 @@ pre-commit install
 | `check-merge-conflict` | 全体 | マージコンフリクトマーカーの残留を検出 |
 | `ruff` | `backend/`（migrations 除く） | Python lint・import 整理（flake8 相当）。違反があれば自動修正（`--fix`） |
 | `bandit` | `backend/`（migrations・tests 除く） | Python セキュリティスキャン。設定は `backend/.bandit` で管理（`B101` skip、LOW 以上すべてを対象。Low 発見は `# nosec BXXX` で個別に抑制） |
+| `shellcheck` | `scripts/` 等の shell スクリプト | シェルスクリプトの構文・バグ・非推奨記法を静的解析（`shellcheck-py`） |
 | `eslint` | `frontend/src/` | TypeScript/TSX lint。`--max-warnings 0` で警告もブロック |
 
 ### detect-secrets JWT 検出について

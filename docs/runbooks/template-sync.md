@@ -23,8 +23,19 @@ ls -la docs/reviews/templates/*.md 2>/dev/null || echo "レビューテンプレ
 # イシューファイルルール変更の場合
 ls -la docs/issues/templates/*.md 2>/dev/null || echo "イシューテンプレートなし"
 
-# タスクファイルルール変更の場合
-ls -la docs/tasks/templates/*.md 2>/dev/null || echo "タスクテンプレートなし"
+# テストファイルルール変更の場合
+ls -la docs/tests/templates/*.md 2>/dev/null || echo "テストテンプレートなし"
+```
+
+### ステップ2.5: CLAUDE.md 参照先一覧の同期（新規 runbook 追加時は必須）
+`docs/runbooks/` に runbook を新規追加・改名・削除した場合は、必ず `CLAUDE.md` の「0. 参照先」一覧を同時更新する（漏れると CLAUDE.md の参照先と実体が乖離する）。
+
+```bash
+# CLAUDE.md の参照先が docs/runbooks/ の実体と一致しているか確認
+comm -3 \
+  <(grep -oE 'docs/runbooks/[a-z-]+\.md' CLAUDE.md | sort -u) \
+  <(find docs/runbooks -maxdepth 1 -name '*.md' | sort -u)
+# 差分が出た場合は CLAUDE.md の「0. 参照先」に追記・修正する（運用系/セットアップ系の区分に合わせる）
 ```
 
 ### ステップ3: テンプレート更新要否の判定
@@ -56,6 +67,7 @@ ls -la docs/tasks/templates/*.md 2>/dev/null || echo "タスクテンプレー�
 ```markdown
 ## ルール変更完了チェックリスト
 - [ ] CLAUDE.md（またはルールファイル）を更新した
+- [ ] runbook を新規追加・改名・削除した場合、CLAUDE.md「0. 参照先」を同期した（ステップ2.5）
 - [ ] 関連テンプレートファイルの存在を確認した
 - [ ] 存在するテンプレートファイルをすべて更新した
 - [ ] テンプレートと新ルールの整合性を確認した

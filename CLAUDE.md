@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 0. 参照先（このファイルは短く保つ）
 詳細ルールは以下へ集約します（この CLAUDE.md にルールを増やさないこと）。
 
+運用・ルール:
 - 運用フロー: docs/runbooks/workflow.md
 - 計画書の書き方: docs/runbooks/plan-writing-rules.md
 - 危険操作（破壊的変更）: docs/runbooks/danger-ops.md
@@ -20,6 +21,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - バックエンドチェック: docs/runbooks/backend-check.md
 - レビュールール: docs/runbooks/review-rules.md
 - テンプレート同期: docs/runbooks/template-sync.md
+- pre-commit 運用: docs/runbooks/pre-commit.md
+
+セットアップ・環境構築:
+- オンボーディング（全体の進め方）: docs/runbooks/onboarding.md
+- ブランチ保護設定: docs/runbooks/branch-protection-setup.md
+- GitHub MCP セットアップ: docs/runbooks/mcp-github-setup.md
+- MCP 利用ガイドライン: docs/runbooks/mcp-usage.md
 
 コーディング規約（必読）:
 - Backend: rules/ultimate_django_coding_standards.md
@@ -37,4 +45,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 3. 権限と二重ガード
 - 権限（allow/ask/deny）は .claude/settings.json
-- さらに hooks（PreToolUse）で危険操作をブロックする（scripts/claude/hooks/pretooluse_guard.py）
+- hooks（PreToolUse）で危険操作をブロックする（scripts/claude/hooks/pretooluse_guard.py）
+- hooks（PostToolUse）で Edit/Write 直後の .py/.json/.yaml 構文を検証する（scripts/claude/hooks/posttooluse_check.py）
