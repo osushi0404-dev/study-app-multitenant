@@ -12,3 +12,4 @@
 | 6 | `backend-check.md` の curl 手順を読む | 「Claude では実行不可（deny）・手動/CI 前提」の注記があり、誤って Claude が実行して失敗する誤解が生じない | Claude | | 注記の明確さ確認 |
 | 7 | 変更した全 runbook を通読する | 文体・用語が統一され、誤字・冗長・古い言い回しが解消されている（セマンティクスは変わっていない） | Human | | 文体の一貫性・自然さは人間判断 |
 | 8 | `pre-commit.md` のフック表と実際の commit 時フック出力を見比べる | 表のフック一覧（shellcheck 含む10個）が実際に走るフックと一致する | Human | | 実 commit 時のフック実行確認 |
+| 9 | `workflow.md` `issue-flow.md` `onboarding.md` のディレクトリ規約・ツリー図を読む | ディレクトリ構成が `open` / `closed`（+`templates`）の実在2系統で一貫し、不在の `in_progress` が記載されていない（D16） | Claude | | 実在ディレクトリとの整合確認。`"status": "in_progress"` は task 状態値であり対象外 |

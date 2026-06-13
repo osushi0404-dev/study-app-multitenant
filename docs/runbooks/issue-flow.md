@@ -15,7 +15,7 @@
 - FS最大 0、git履歴最大 0（初回）→ **001**
 
 ```bash
-# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
@@ -36,7 +36,7 @@ echo "次のイシュー番号: $ISSUE_NUM"
 
 ### 1. イシュー番号の採番
 ```bash
-# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
@@ -184,7 +184,7 @@ GitHubイシュー登録後、必ず以下を報告：
 - 命名規則: `XXX.md`（XXX: 3桁のイシュー番号）
 
 ```bash
-# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
@@ -448,7 +448,7 @@ git commit -m "docs: イシュー#XXX レビュー完了・クローズ"
 
 ### イシュー対応時の必須ルール
 イシュー番号（例: 001, #1など）を指定されたら、必ず以下を実行：
-1. `/docs/issues/open/XXX.md`または`/docs/issues/in_progress/XXX.md`を読み込む（XXXは指定された番号）
+1. `/docs/issues/open/XXX.md`または`/docs/issues/closed/XXX.md`を読み込む（XXXは指定された番号）
 2. `/rules/`配下の関連ルールファイルを確認
 3. 特にコード変更時はコーディング標準を厳守
 4. **UX設計セクションを計画書に必ず含める**（docs/runbooks/ux-rules.md参照）

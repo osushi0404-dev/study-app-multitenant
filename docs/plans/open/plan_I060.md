@@ -7,6 +7,7 @@
 - **作成根拠資料**: docs/issues/open/I060.md（設計確認メモ /grill-me 反映済み）
 - **実装後評価**: （未作成）
 - **作成日**: 2026-06-02
+- **改訂**: 2026-06-12 D16 を追加（実装後コードレビュー I060_code_review_20260612_0057.md の Medium 指摘を受け AC3/AC4 を完遂）。旧 plan_I060_2.md は本文へ統合し削除。
 
 ---
 
@@ -63,6 +64,14 @@
 | D13 | onboarding.md:43 | 実体 | hooks は pretooluse_guard.py のみ | posttooluse も実在 | posttooluse_check.py（構文検証）を追記 |
 | D14 | onboarding.md:24,30-38 | 実体 | スキル表・フローに `/grill-me` 欠落 | grill-me 実在（issue-bootstrap と plan-issue の間） | スキル表とフロー図に `/grill-me` を追記 |
 | D15 | workflow.md / plan-writing-rules.md / review-rules.md / ux-rules.md / danger-ops.md / mcp-github-setup.md / mcp-usage.md / branch-protection-setup.md | 文体 | 重大な実体乖離なし（スキル名・フック・危険操作定義は実体と整合） | — | 全文リライト方針（下記）に沿って文体・表現・リンク健全性のみ点検整備（セマンティクス不変） |
+| **D16** | workflow.md:17,20 / issue-flow.md:18,39,187,451 / onboarding.md:105 | 実体(AC3)・相互(AC4) | 不在ディレクトリ `in_progress/` をディレクトリ規約・読込パス・ツリー図に列挙 | 実在は `open/` `closed/`（+`templates/`）のみ（`ls -d docs/issues/in_progress docs/reviews/in_progress` → No such file） | `in_progress` 記載を削除し `open`/`closed` の2系統に統一。grep ヘルパーのコメントも修正。**`workflow.md:140,151` の `"status": "in_progress"`（TodoWrite 状態値）は変更しない** |
+
+> **D16 はスコープ拡大ではない**: 不在パス参照の削除であり、既出の D4（不在 `tasks/templates` 削除）・D11（不在スクリプト削除）と同種。AC3「実体整合」・AC4「矛盾解消」を*完遂*する補完であって新規 AC ではない。運用フローは元から open→closed の2状態で `in_progress` を使っておらず、運用セマンティクスは不変。実装後コードレビュー（I060_code_review_20260612_0057.md）が workflow.md と review-rules.md の2箇所を Medium 検出したのを契機に、改訂時の `grep -rn in_progress docs/runbooks/` で本 PR 変更済みの issue-flow.md・onboarding.md にも残存することを確認して全数を D16 にまとめた。
+
+### 別イシューに切り出す項目（本 PR では実施しない）
+| 項目 | 理由 | 提案 |
+|---|---|---|
+| `review-rules.md` の旧レビュー番号体系（`reviewXXX_IYYY` / `in_progress` 状態管理 / `_post`）と `plan-writing-rules.md:180` のヘッダ例 `reviewXXX_IXXX` を現行 `IXXX_*` 体系へ再編 | 旧体系は歴史的に実在（`review001_I004` 〜 `review003_I007`）し単なる誤記ではない。「正準のレビュー命名・状態管理をどちらに統一するか」という運用設計判断を伴い、文体最新化（I060 の主旨）を超える。`review_template.md`・採番ロジック・`_post` の要否まで波及する | **新規フォローイシュー**として起票。本 PR の review-rules.md は D15（文体）のみに留める |
 
 ### スコープ外として除外した監査提案（記録）
 監査エージェントが提示した以下は「最新化」を超える**機能・分量の追加**であり、CLAUDE.md「短く保つ」精神を runbook にも適用する観点から**本イシューでは実施しない**:
@@ -100,12 +109,12 @@
 
 - `CLAUDE.md`: D1（参照先5本追記）/ D2（PostToolUse 追記）
 - `docs/runbooks/template-sync.md`: D3（CLAUDE.md 同期手順追記）/ D4（tasks/templates 整理）
-- `docs/runbooks/workflow.md`: D9（retro 必須に統一・issue-flow と表現整合）/ D15（文体）
-- `docs/runbooks/issue-flow.md`: D6 / D7 / D8 / D9（retro 必須）/ D15（文体）
+- `docs/runbooks/workflow.md`: D9（retro 必須に統一・issue-flow と表現整合）/ D15（文体）/ D16（17,20 の `in_progress` 削除。140,151 は不変）
+- `docs/runbooks/issue-flow.md`: D6 / D7 / D8 / D9（retro 必須）/ D15（文体）/ D16（18,39,187 コメント・451 読込パスの `in_progress` 削除）
 - `docs/runbooks/pre-commit.md`: D5（shellcheck 追記）/ D15
 - `docs/runbooks/common-commands.md`: D10（docker compose 統一）/ D15
 - `docs/runbooks/backend-check.md`: D11（非実在スクリプト削除）/ D12（curl 注記）/ D15
-- `docs/runbooks/onboarding.md`: D13（posttooluse 追記）/ D14（grill-me 追記）/ D15
+- `docs/runbooks/onboarding.md`: D13（posttooluse 追記）/ D14（grill-me 追記）/ D15 / D16（105 ツリー図の `in_progress` 削除）
 - `docs/runbooks/danger-ops.md` / `plan-writing-rules.md` / `review-rules.md` / `ux-rules.md` / `mcp-github-setup.md` / `mcp-usage.md` / `branch-protection-setup.md`: D15（文体・リンク健全性のみ）
 
 ---
@@ -113,6 +122,8 @@
 ## 7. 実装手順（ステップ）
 
 ドキュメント変更のため「層を縦に貫く」垂直スライスは存在しない。代わりに**依存順（インデックス→同期機構→意味変更→実体整合→文体）**でステップを切る。各ステップ完了後の整合性検証は自動テスト文書の TC に委譲する（本文に検証コマンドを書かない）。
+
+> **実装状況（重要・再実行防止）**: ステップ1〜6（D1〜D15）は commit `e0ca732` で**適用済み**。`/implement` での残作業は **ステップ7（D16）のみ**。ステップ1〜6 は冪等性確認（該当 TC が pass するか）に留め、既に適用済みの箇所を再編集しないこと。
 
 ### ステップ1: CLAUDE.md の最新化（インデックス確定）【依存なし・最初に実施】
 - D1: 「0. 参照先」に未掲載5本を追記し全14本を網羅する。セットアップ/環境構築系（onboarding / pre-commit / branch-protection-setup / mcp-github-setup / mcp-usage）は既存の運用系リストと区別できる並びで列挙する。各行に1行ラベルを付す。
@@ -144,15 +155,23 @@
 - **セマンティクス不変の明示**: D15 対象ファイルはコミットメッセージ／PR コメントで「**文体のみ改変・セマンティクス不変**」と宣言し、実装後レビューでレビュアーが意味変更の有無を判断しやすくする（指摘 W-3 対応）。
 - → TC-11, TC-12 参照（全 runbook 横断のリンク健全性・参照整合）
 
-**依存関係**: ステップ1 → ステップ2（参照先確定が前提）。ステップ3 は D9 承認後。ステップ4・5・6 は相互に独立（並行実施可）。
+### ステップ7: dead `in_progress` ディレクトリ参照の削除【D16・改訂で追加】
+- `workflow.md:17,20`「ディレクトリ規約」から `in_progress` を削除し `open` / `closed` の2系統にする。
+- `issue-flow.md:18,39,187` の grep ヘルパーコメント `open/in_progress/closed 全て` を `open/closed 全て` に修正。
+- `issue-flow.md:451` の `open/XXX.md または in_progress/XXX.md` を `open/XXX.md または closed/XXX.md` に修正。
+- `onboarding.md:105` のディレクトリツリーから `in_progress` を削除。
+- `workflow.md:140,151` の `"status": "in_progress"`（TodoWrite 状態値）は**触らない**。
+- → TC-13 参照
+
+**依存関係**: ステップ1 → ステップ2（参照先確定が前提）。ステップ3 は D9 承認後。ステップ4・5・6・7 は相互に独立（並行実施可）。
 
 ---
 
 ## 8. テスト計画（自動/手動）
 
-- 自動テスト（`docs/tests/open/I060_auto_test.md`）: grep/ls による参照整合性・実体整合性の機械検証（TC-01〜TC-12）。すべて Claude が実行可能。
-- 手動テスト（`docs/tests/open/I060_manual_test.md`）: 文体・可読性・「短く保つ」感覚の通読確認（一部 Human）。
-- バグ修正イシューではないため再発防止テストは D3（同期手順）の存在確認（TC-10）で代替する。認可・テナント境界テストは該当なし（コード変更なし）。
+- 自動テスト（`docs/tests/open/I060_auto_test.md`）: grep/ls による参照整合性・実体整合性の機械検証（TC-01〜TC-13）。すべて Claude が実行可能。TC-13 は D16（dead `in_progress` 参照除去・TodoWrite 状態値は除外）を検証。
+- 手動テスト（`docs/tests/open/I060_manual_test.md`）: 文体・可読性・「短く保つ」感覚の通読確認（一部 Human）。No.9 で D16 のディレクトリ規約一貫性を確認。
+- バグ修正イシューではないため再発防止テストは D3（同期手順）の存在確認（TC-10）で代替する。D16 の「不在パス取りこぼし」再発は TC-13 が防止テストを兼ねる。認可・テナント境界テストは該当なし（コード変更なし）。
 
 ---
 
@@ -168,6 +187,8 @@
 | 全文リライトでセマンティクスを意図せず変えてしまう | §5 の「セマンティクス不変」を厳守。意味変更は D9 のみと宣言。差分レビューで逐次確認 |
 | スコープ外提案（danger-ops 拡充等）に引きずられ肥大化 | §3 除外項目を明記済み。増設禁止を方針に固定 |
 | D7（error_log テンプレ不在）を本イシューで作ろうとして scope creep | テンプレ新設はしない。参照を実体に合わせ、テンプレ要否は別イシュー候補として注記 |
+| D16 で `"status": "in_progress"`（TodoWrite 値）まで誤削除する | 変更対象を行番号で限定（workflow.md は 17,20 のみ）。TC-13 の grep は `"status"` 行を除外して検証 |
+| review-rules.md を中途半端に直して新たな不整合を生む | review-rules.md は本 PR では D15（文体）のみ。命名体系・in_progress 状態管理の再編は §3「別イシュー切り出し」へ一括 |
 
 ---
 
@@ -185,6 +206,9 @@
 | D7: error_log テンプレは新設せず参照のみ修正 | 仮定（Q5「実体作成は別イシュー」の解釈）→ 承認ポイントで確認 |
 | D12: curl 手順は注記追加に留め手順自体は残す | 仮定（手動/CI 前提と解釈）→ 承認ポイントで確認 |
 | スコープ外提案（danger-ops 拡充・ナビ目次・ux スキル連携）を実施しない | 仮定（「短く保つ」方針の適用）→ 承認ポイントで確認 |
+| D16: dead `in_progress` 参照を削除し AC3/AC4 を完遂（対象は本 PR 変更済みの workflow.md / issue-flow.md / onboarding.md の3ファイル） | 仮定（コードレビュー指摘の補完）→ 承認ポイントで確認 |
+| D16: `"status": "in_progress"`（TodoWrite 値）は変更しない | 確定（ディレクトリではない） |
+| review-rules.md / plan-writing-rules.md の `reviewXXX` 命名体系再編は別フォローイシュー | 仮定（運用設計判断を伴うため切り出し）→ 承認ポイントで確認 |
 
 ---
 
@@ -199,6 +223,11 @@
 5. ★ **スコープ外除外**（§3）: danger-ops.md の大幅拡充・各 runbook へのナビ目次新設・ux-rules へのスキル連携追記は**実施しない**でよいか
 6. CLAUDE.md 参照先5本のラベル・並び（運用系と区別したセットアップ群）でよいか
 7. 全文リライトを §5 の制約（セマンティクス不変・増設禁止）で進めてよいか
+8. ★ **D16**（改訂で追加）: 不在ディレクトリ `in_progress/` 参照を workflow.md(17,20) / issue-flow.md(18,39,187,451) / onboarding.md(105) から削除し AC3/AC4 を完遂する。対象は本 PR 変更済みの3ファイルに限定、`workflow.md:140,151` の TodoWrite 状態値は不変。でよいか
+9. ★ **別イシュー切り出し**: `review-rules.md` の旧レビュー番号体系（`reviewXXX_IYYY` / `in_progress` 状態管理 / `_post`）と `plan-writing-rules.md:180` の再編は本 PR に含めず新規フォローイシューへ。でよいか
 
 ## レビュー結果
 - [20260603_1719 判定: ✅ 完了](../../reviews/I060_plan_review_20260603_1719.md)
+
+## レビュー結果
+- [20260613_1149 判定: ✅ 完了](../../reviews/I060_plan_review_20260613_1149.md)

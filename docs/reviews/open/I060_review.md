@@ -13,6 +13,10 @@
 - backend-check.md: 非実在スクリプト削除（D11）/ curl 注記（D12）
 - onboarding.md: posttooluse 追記（D13）/ grill-me 追記（D14）
 - danger-ops / plan-writing-rules / review-rules / ux-rules / mcp-github-setup / mcp-usage / branch-protection-setup: 文体リライト（D15）
+- workflow.md / issue-flow.md / onboarding.md: 不在ディレクトリ `in_progress/` 参照の削除（D16・plan_I060 §3。AC3/AC4 完遂）
+
+## 別イシュー切り出し（plan_I060 §3）
+- `review-rules.md` の旧レビュー番号体系（`reviewXXX_IYYY` / `in_progress` 状態管理 / `_post`）と `plan-writing-rules.md:180` の再編は、運用設計判断を伴うため本 PR に含めず新規フォローイシューへ。本 PR の review-rules.md は D15（文体）のみ。
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -23,7 +27,8 @@
 - [ ] D9（retro 必須統一）が承認済み方針どおりか
 - [ ] スコープ外除外項目（danger-ops 拡充・ナビ目次・ux スキル連携）に手を出していないか
 - [ ] CLAUDE.md が「短く保つ」方針を維持しているか（新規ルール増設なし）
-- [ ] 全 TC（TC-01〜TC-12）が pass しているか
+- [ ] D16: dead `in_progress` 削除で `"status": "in_progress"`（TodoWrite 値）を誤って消していないか
+- [ ] 全 TC（TC-01〜TC-13）が pass しているか
 
 ## テスト結果
 - 自動: （未実施）docs/tests/open/I060_auto_test.md

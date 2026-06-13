@@ -14,10 +14,10 @@
 - /close I### : open→closed へ整理、PR 説明整備、クローズ作業
 
 ## ディレクトリ規約
-- docs/issues/open, docs/issues/in_progress, docs/issues/closed
+- docs/issues/open, docs/issues/closed
 - docs/plans/open, docs/plans/closed
 - docs/tests/open, docs/tests/closed
-- docs/reviews/open, docs/reviews/in_progress, docs/reviews/closed
+- docs/reviews/open, docs/reviews/closed
 
 ## フロー（あなたの運用をそのまま型にする）
 1. /issue-bootstrap → issue-review で自己完結度レビュー（ソフト・判定で grill-me 要否を案内）→ ユーザーがイシューファイル確認（OK/NG）

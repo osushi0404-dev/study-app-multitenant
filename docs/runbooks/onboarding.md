@@ -102,7 +102,7 @@ feature/I###-xxx ← イシューごとに作成
 
 ```
 docs/
-├── issues/      open / in_progress / closed / templates   # イシューファイル
+├── issues/      open / closed / templates                 # イシューファイル
 ├── plans/       open / closed                             # 計画書
 ├── proposals/                                             # 改善提案資料
 ├── tests/       open / closed / templates                 # テスト文書（自動・手動）
