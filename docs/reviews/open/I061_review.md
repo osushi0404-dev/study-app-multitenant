@@ -27,7 +27,7 @@
 
 ## テスト結果
 - 自動（implement 時にローカル実行）: TC-01〜TC-09 すべて pass。critical=0（exit 0）/ shell-quote→1.8.4 / axios→1.17.0 / クリーン high 6 解消 / build exit 0 / unit 7 passed / tsc exit 0 / 残存 high=react-scripts 固着5件 / 脆弱性 30→18（moderate 9→4）。`/test` で環境パリティ再確認予定。
-- 手動: （未実施・`/test` でブラウザスモーク）docs/tests/open/I061_manual_test.md
+- 手動（/test 2026-06-13）: No.1〜6（axios API スモーク: ログイン/ダッシュボード/クイズ/設定/パスワードリセット/インターセプタ）すべて **OK**。No.7（PR #127 CI 全緑）**OK**。No.8（develop マージ後の #125 緑化）は close 以降に確認。
 - 実装メモ: bfj/jsonpath/underscore は `npm audit fix` では未解決（react-scripts が bfj@7.1.0 を pin）。根本の underscore を計画ステップ3どおり override（`^1.13.8`）し3件一括解消（react-scripts 破壊なし）。
 
 ## 計画との差分

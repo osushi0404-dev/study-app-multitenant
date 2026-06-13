@@ -15,7 +15,20 @@
 | TC-08 | 残存 high = react-scripts 固着の5件のみ（risk-accept 範囲の確認） | `cd frontend && npm audit --omit=dev --json \| node -e "const d=JSON.parse(require('fs').readFileSync(0));const hi=Object.entries(d.vulnerabilities).filter(([k,v])=>v.severity==='high').map(([k])=>k).sort();console.log(JSON.stringify(hi))"` | `["react-scripts","rollup-plugin-terser","serialize-javascript","workbox-build","workbox-webpack-plugin"]`（この5件のみ。クリーン6件は含まれない） | |
 | TC-09 | moderate/low の before/after 記録（--force 不要分の是正確認・再発防止） | `cd frontend && npm audit --omit=dev --json \| node -e "const d=JSON.parse(require('fs').readFileSync(0));console.log(JSON.stringify(d.metadata.vulnerabilities))"` | 修正前 `{...,"moderate":9,"low":9,...}` に対し、修正後は moderate/low が**減少**（`--force` 不要分が解消。残存は react-scripts 由来＝計画書 §9 と整合）。before/after を備考に記録 | |
 
+## 実行結果（2026-06-13 /test）
+全 TC pass。
+- TC-01 critical ゲート: `exit=0` ✓
+- TC-02 shell-quote: 1.8.3→**1.8.4** 解消 ✓
+- TC-03 axios: **1.17.0**（≥1.15.3）✓
+- TC-04 クリーン high 6件: 全解消（`OK`）✓
+- TC-05 build: `exit=0`（Compiled）✓
+- TC-06 frontend unit（ローカル新依存）: **7 passed / 2 suites** ✓
+- TC-07 tsc: `exit=0` ✓
+- TC-08 残存 high: `["react-scripts","rollup-plugin-terser","serialize-javascript","workbox-build","workbox-webpack-plugin"]`（固着5件のみ）✓
+- TC-09 moderate/low: before `{moderate:9,low:9}` → after `{moderate:4,low:9,high:5,critical:0,total:18}` ✓
+- 併せて Backend pytest（docker）= **25 passed**、E2E（CI #127・fresh）= **pass**。
+
 ## 補足
-- TC-01 は CI `Frontend Lint & Security`（`npm audit --audit-level=critical`）と同条件。これが exit 0 になれば PR #127、および develop マージ後の PR #125 の当該ジョブが緑化する。
+- TC-01 は CI `Frontend Lint & Security`（`npm audit --audit-level=critical`）と同条件。これが exit 0 になれば PR #127、および develop マージ後の PR #125 の当該ジョブが緑化する。→ PR #127 CI で **Frontend Lint & Security pass を実証済み**。
 - TC-03 の axios バージョンは lockfile 実体を見る（package.json の range ではなく実インストール版）。
 - TC-08 の5件は計画書 §9 の risk-accept 対象。これ以外の high が出た場合は想定外として要調査。
