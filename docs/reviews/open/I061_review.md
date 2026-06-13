@@ -31,7 +31,9 @@
 - 実装メモ: bfj/jsonpath/underscore は `npm audit fix` では未解決（react-scripts が bfj@7.1.0 を pin）。根本の underscore を計画ステップ3どおり override（`^1.13.8`）し3件一括解消（react-scripts 破壊なし）。
 
 ## 計画との差分
-- なし / あり（理由）
+- あり: bfj/jsonpath は `npm audit fix` で解消できず（react-scripts が bfj@7.1.0 を pin）、計画ステップ3どおり根本の `underscore ^1.13.8` override に切り替えて3件を連鎖解消（react-scripts 破壊なし・計画の想定範囲内）。
+- collateral（許容範囲）: `npm audit fix` の副作用で patch/minor 更新が併発（react-router 6.30.3→6.30.4 / express 4.22.1→4.22.2 / ws 8.18.3→8.21.0 / qs 6.14.2→6.15.2 / @remix-run/router 1.23.2→1.23.3 等）。後方互換・build/test pass 確認済み。
+- CI 実績: PR #127 全ジョブ緑（**Frontend Lint & Security pass**＝critical 解消を実証）。
 
 ## ロールバック
 - `frontend/package.json` / `package-lock.json` の変更のみ。`git revert` で原状復帰可能。
