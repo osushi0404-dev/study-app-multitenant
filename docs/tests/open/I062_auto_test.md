@@ -15,6 +15,10 @@ bash scripts/claude/tests/test_review_verdict.sh
 
 テストは両スクリプトを `REVIEW_LIB_SOURCE_ONLY=1` で source し、実関数（`find_plan_file` / `detect_code_verdict` / `detect_plan_verdict`）を直接アサートする（実装と乖離しない）。
 
+### テスト隔離方針（リポジトリ汚染防止）
+- `find_plan_file` / `detect_*` 用のダミー fixture（`plan_I999.md`・ダミーレビュー等）は **`mktemp -d` の一時ディレクトリ配下に作成**し、`docs/plans/` や `docs/reviews/` を汚さない。`trap 'rm -rf "$TMP"' EXIT`（テストスクリプト内、`DANGER_OK` 不要なスクリプト実行コンテキスト）でクリーンアップする。`find_plan_file` は CWD 相対パスを見るため、fixture 検証時は一時ディレクトリへ `cd` する。
+- リポジトリ内の確定パスを使うのは **TC-05（実ファイル回帰）のみ**。該当ファイルは `docs/reviews/I060_code_review_20260612_0045.md`（**フラット配置を実在確認済み**。`closed/` ではない）。
+
 ---
 
 ## find_plan_file（連番数値順・最大選択）

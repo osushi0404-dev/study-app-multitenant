@@ -158,6 +158,7 @@
     ```
 - source 専用ガード（関数定義群の直後）追加。
 - 既存 `PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")` → `PLAN_FILE=$(find_plan_file "$ISSUE")`（22行目相当）。
+- **エラーメッセージ精度（plan review Warning 反映）**: 27行目相当の `"⚠️ 計画書が見つかりません: plan_${ISSUE}.md"` を、`_N` も探索対象であることを正確に伝えるため `"⚠️ 計画書が見つかりません: plan_${ISSUE}*.md"` に更新する（`code-review.sh` 側は計画書なしでも `(計画書なし)` で続行する設計のため該当メッセージなし＝変更不要）。
 - 最終判定ブロック（78〜87行目相当）を `detect_plan_verdict` 主導の `case` に置換（メッセージ文面・遷移先は現行維持）:
   ```bash
   case "$(detect_plan_verdict "$REVIEW_FILE")" in
@@ -173,6 +174,7 @@
 - 両スクリプトを `REVIEW_LIB_SOURCE_ONLY=1` で source し、`find_plan_file` / `detect_code_verdict` / `detect_plan_verdict` を直接アサート（実関数を検証＝ドリフトなし）。
 - エージェント `.md` 2ファイルに `VERDICT` 契約・P1 gate 観点が含まれることを grep でアサート。
 - いずれか失敗で非ゼロ終了。`bash scripts/claude/tests/test_review_verdict.sh` で実行（対話シェルへ貼らない）。
+- **テスト隔離（plan review Warning 反映）**: `find_plan_file` 用の fixture（`plan_I999.md` 等のダミー）は **`mktemp -d` の一時ディレクトリ内に作成**し（`docs/plans/` を汚染しない）、`trap '...' EXIT` でクリーンアップする。`detect_*` 用のダミーレビューファイルも同様に一時ファイル。実ファイル参照（TC-05）のみリポジトリ内の確定パスを使う。
 - 詳細 TC は `docs/tests/open/I062_auto_test.md` 参照。
 
 ---
@@ -269,3 +271,6 @@
 
 ## 承認待ち宣言
 この計画書の内容（特に **P1 gate 観点を両エージェントに追加**・**回帰テスト資産を新規コミット**・**スクリプトの関数前出し＋source ガード**という3つのスコープ要素）で実装を進めてよいかご確認ください。
+
+## レビュー結果
+- [20260615_0732 判定: ✅ 完了](../../reviews/I062_plan_review_20260615_0732.md)
