@@ -18,6 +18,15 @@
 | TC-12 | runbook 間リンク健全性 | `for f in docs/runbooks/*.md; do grep -oE 'docs/runbooks/[a-z-]+\.md' "$f"; done \| sort -u \| while read p; do test -f "$p" \|\| echo "MISSING: $p"; done` | 出力なし（runbook 間の相互参照が全て実在ファイルに解決） | |
 | TC-13 | D16 dead `in_progress` ディレクトリ参照除去 | `grep -n in_progress docs/runbooks/workflow.md docs/runbooks/issue-flow.md docs/runbooks/onboarding.md \| grep -v '"status".*in_progress'` | 出力なし（不在ディレクトリ `in_progress/` への参照が3ファイルから除去済み。`workflow.md` の TodoWrite `"status": "in_progress"` は除外） | |
 
+## 実行結果（2026-06-14 /test）
+TC-01〜13 すべて pass。
+- TC-01 参照漏れ: 差分なし ✓ / TC-02 PostToolUse: 1 ✓ / TC-03 shellcheck: 1 ✓
+- TC-04 不在テンプレ: 0件 ✓ / TC-05 reviewXXX_IXXX: 0 ✓ / TC-06 retro 必須: exit0 ✓
+- TC-07 docker-compose 旧形式: 0（新形式 16）✓ / TC-08 test_api_integration: 0 ✓
+- TC-09 onboarding: posttooluse=1/grill-me=2 ✓ / TC-10 同期手順: ステップ2.5 存在 ✓
+- TC-11/12 リンク健全性: MISSING なし ✓ / TC-13 dead in_progress: 出力なし ✓
+- 併せて Backend pytest（docker）= 25 passed、PR #125 CI 全ジョブ緑（Frontend Lint&Security/Tests/Type Check/Backend/E2E）。
+
 ## 補足
 - TC-07 は `docker-compose.yml` のようなファイル名内のハイフンを誤検知しないよう、コマンド形式（`docker-compose ` のように後ろにスペース＋サブコマンドが続く箇所）に限定して確認する。残存が正当な箇所のみの場合は備考に記録する。
 - TC-06 は「必須」の存在と「任意/optional」の不在を AND で確認する。pass 後は issue-flow.md と workflow.md の retro 記述が「必須」で一致していることを必ず目視確認すること（「推奨」「原則実施」等の表現に倒れていないか）。
