@@ -238,7 +238,7 @@ gh pr create \
 **ステップ6: 計画書作成**
 - テンプレート: `docs/plans/templates/plan_template.md`
 - 保存先: `docs/plans/open/`
-- 命名規則: `plan_I{イシュー番号}_{概要}.md`
+- 命名規則: `plan_I###.md`（再作成時 `plan_I###_N.md`）
 
 **ステップ7: テストケース作成**
 2種類のテストケースを**別ファイル**で作成：
@@ -344,7 +344,7 @@ fi
 **ステップ23: 計画書をclosedに移動**
 ```bash
 # 全ての関連計画書（エラー対応計画書含む）をclosedに移動
-for PLAN_FILE in docs/plans/open/plan_IXXX_*.md; do
+for PLAN_FILE in docs/plans/open/plan_IXXX*.md; do
   echo "## 完了情報" >> "$PLAN_FILE"
   echo "- **完了日時**: $(date)" >> "$PLAN_FILE"
   echo "- **対応者**: Claude Code" >> "$PLAN_FILE"
@@ -362,7 +362,7 @@ cat >> docs/issues/open/XXX.md << 'EOF'
 - **対応者**: Claude Code
 - **実施内容の要約**: [実装内容を簡潔に記載]
 - **関連ファイル**:
-  - 計画書: docs/plans/closed/plan_IXXX_*.md
+  - 計画書: docs/plans/closed/plan_IXXX*.md
   - レビュー: docs/reviews/closed/IXXX_review.md
   - テスト: docs/tests/closed/IXXX_*_test.md
 EOF

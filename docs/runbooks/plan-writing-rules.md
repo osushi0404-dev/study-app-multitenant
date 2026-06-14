@@ -177,8 +177,9 @@ pip-audit・npm audit・mypy・semgrep 等の**既存コードを検査するツ
 ## 基本情報
 - **計画書ID**: plan_I###
 - **関連イシュー**: #XXX
-- **作成根拠資料**: reviewXXX_IXXX（問題分析と改善提案）
-- **実装後評価**: （未作成）
+- **Draft PR**: #XX
+- **作成根拠資料**: docs/issues/open/IXXX.md（起点イシュー）
+- **実装後評価**: docs/reviews/open/IXXX_review.md（または未作成）
 - **作成日**: YYYY-MM-DD
 ```
 
