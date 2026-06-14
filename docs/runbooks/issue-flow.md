@@ -15,7 +15,7 @@
 - FS最大 0、git履歴最大 0（初回）→ **001**
 
 ```bash
-# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
@@ -36,7 +36,7 @@ echo "次のイシュー番号: $ISSUE_NUM"
 
 ### 1. イシュー番号の採番
 ```bash
-# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
@@ -150,10 +150,10 @@ GitHubイシュー登録後、必ず以下を報告：
 ─────────────────────────────────────────
     ↓ OK                    ↓ NG
 ─────────────────────────────────────────
-14.5. /retro I### （任意）  15. レビューにNG結果記入
-      または直接フェーズ4へ 16. エラー管理ファイル作成（初回）
+14.5. /retro I###（必須）   15. レビューにNG結果記入
+                           16. エラー管理ファイル作成（初回）
     ↓                          または追記（2回目以降）
-    ↓                          （docs/tests/templates/error_log_template.md）
+    ↓                          （docs/tests/open/error_IXXX.md／テンプレートなし）
     ↓                     17. エラー対応計画書を新規作成
     ↓                          （docs/plans/open/に新規作成、元の計画書は上書きしない）
     ↓                     18. 承認待ち → 修正
@@ -184,7 +184,7 @@ GitHubイシュー登録後、必ず以下を報告：
 - 命名規則: `XXX.md`（XXX: 3桁のイシュー番号）
 
 ```bash
-# ファイルシステム上の番号（open/in_progress/closed 全て、I###.md / ###.md 両方に対応）
+# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
 FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
 # git 履歴上の番号（削除済みファイルも含む）
 GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
@@ -248,7 +248,7 @@ gh pr create \
 | ユーザーテスト | `IXXX_manual_test.md` | ユーザーしか実施できないテスト項目 |
 | 自動テスト | `IXXX_auto_test.md` | ユニットテスト、統合テスト等の自動テスト項目 |
 
-- テンプレート: `docs/tests/templates/test_record_template.md`
+- テンプレート: `docs/tests/templates/auto_test_template.md` / `docs/tests/templates/manual_test_template.md`
 - 保存先: `docs/tests/open/`
 
 **ステップ8: レビューファイル作成**
@@ -296,7 +296,7 @@ gh pr create \
 - レビューファイルにNG結果と発見された問題を記入
 
 **ステップ16: エラー管理ファイル作成/追記**
-- 初回: `docs/tests/templates/error_log_template.md`から新規作成
+- 初回: `docs/tests/open/error_IXXX.md` を新規作成（専用テンプレートは無いため、エラー内容・原因・対応を手書きで記録）
 - 2回目以降: 既存ファイルに追記（新規作成しない）
 - 保存先: `docs/tests/open/`
 - 命名規則: `error_IXXX.md`
@@ -392,10 +392,10 @@ git push origin develop
 
 **ステップ26: レビューファイルをclosedに移動**
 ```bash
-echo "## クローズ情報" >> docs/reviews/open/reviewXXX_IXXX.md
-echo "- **クローズ日時**: $(date)" >> docs/reviews/open/reviewXXX_IXXX.md
+echo "## クローズ情報" >> docs/reviews/open/IXXX_review.md
+echo "- **クローズ日時**: $(date)" >> docs/reviews/open/IXXX_review.md
 
-mv docs/reviews/open/reviewXXX_IXXX.md docs/reviews/closed/
+mv docs/reviews/open/IXXX_review.md docs/reviews/closed/
 ```
 
 **ステップ27: GitHubイシューをクローズ**
@@ -448,7 +448,7 @@ git commit -m "docs: イシュー#XXX レビュー完了・クローズ"
 
 ### イシュー対応時の必須ルール
 イシュー番号（例: 001, #1など）を指定されたら、必ず以下を実行：
-1. `/docs/issues/open/XXX.md`または`/docs/issues/in_progress/XXX.md`を読み込む（XXXは指定された番号）
+1. `/docs/issues/open/XXX.md`または`/docs/issues/closed/XXX.md`を読み込む（XXXは指定された番号）
 2. `/rules/`配下の関連ルールファイルを確認
 3. 特にコード変更時はコーディング標準を厳守
 4. **UX設計セクションを計画書に必ず含める**（docs/runbooks/ux-rules.md参照）

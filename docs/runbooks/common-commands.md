@@ -11,7 +11,7 @@ python manage.py analyze_logs --last-errors=1
 
 ### 開発環境起動
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### ログ確認
@@ -21,16 +21,16 @@ tail -f backend/logs/django.log
 
 ### フロントエンド・バックエンド再起動
 ```bash
-docker-compose restart frontend backend
+docker compose restart frontend backend
 ```
 
 ### テスト実行
 ```bash
 # バックエンドテスト
-docker-compose exec backend python manage.py test
+docker compose exec backend python manage.py test
 
 # フロントエンドテスト
-docker-compose exec frontend npm test
+docker compose exec frontend npm test
 ```
 
 ## API エンドポイント
@@ -128,12 +128,12 @@ docker compose --profile e2e run --rm e2e
 新規 `.ts`/`.tsx` ファイル追加後に `TS2307: Cannot find module '...'` が発生する。
 
 ### 恒久対処（I024 実装済み）
-コンテナ起動時に自動でキャッシュクリアされます。`docker-compose restart frontend` で解消します。
+コンテナ起動時に自動でキャッシュクリアされます。`docker compose restart frontend` で解消します。
 
 ### 手動回避（緊急時）
 ```bash
-docker-compose exec frontend rm -rf /app/node_modules/.cache
-docker-compose restart frontend
+docker compose exec frontend rm -rf /app/node_modules/.cache
+docker compose restart frontend
 ```
 
 ## 修正済みの問題（履歴）

@@ -144,6 +144,8 @@ tail -f backend/logs/django.log
 
 ## バックエンド修正時のAPI統合テスト必須ルール
 
+> **注記（実行主体）**: 以下の `curl` を用いた API 直叩き手順は、`.claude/settings.json` で `Bash(curl *)` が deny されているため **Claude Code は実行できない**。ユーザーが手動で実行するか、CI／pytest の API テストで代替すること。Claude が自動検証する場合は `docker compose exec backend python manage.py test`（または pytest）の API テストを用いる。
+
 ### バックエンドロジック修正後の自動検証手順
 バックエンドの修正（モデル、ビュー、サービス等）を行った場合は、**必ず以下の順序でAPI統合テストを実行**すること：
 
@@ -353,13 +355,6 @@ tail -f backend/logs/django.log
 ```bash
 # Djangoシェルで同一条件でデータ取得テスト
 # フィルタリングロジックの確認
-```
-
-### 自動化推奨
-上記手順を`scripts/test_api_integration.sh`として保存し、修正後に実行：
-```bash
-chmod +x scripts/test_api_integration.sh
-./scripts/test_api_integration.sh
 ```
 
 ---

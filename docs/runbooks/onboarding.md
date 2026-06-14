@@ -21,13 +21,14 @@ Claude Code に実装を委任しながら、人間がゲートキーパーに�
 作業はスラッシュコマンドを打つだけで進む。Claude が次のコマンドを都度案内してくれる。
 
 ```
-/issue-bootstrap → /plan-issue → /plan-issue-review
+/issue-bootstrap → /grill-me → /plan-issue → /plan-issue-review
 → /implement → /code-review → /test → /retro → /close
 ```
 
 | スキル | 内容 |
 |---|---|
 | `/issue-bootstrap [title]` | 採番・イシューファイル作成・ブランチ作成・Draft PR 作成 |
+| `/grill-me I###` | 計画書作成前の設計インタビュー（推奨。設計判断の多いイシューで実行） |
 | `/plan-issue I###` | 計画書・テスト文書・レビュー文書を作成（承認待ち） |
 | `/plan-issue-review I###` | 計画書をBP・セキュリティ・モダン開発観点でレビュー |
 | `/implement I###` | 承認済み計画に沿って実装・型チェック・push |
@@ -40,7 +41,8 @@ Claude Code に実装を委任しながら、人間がゲートキーパーに�
 ### 2. 承認ゲート付きの安全設計
 
 - 計画書への OK を出すまで Claude はコードを一切書かない
-- hooks（`scripts/claude/hooks/pretooluse_guard.py`）が危険操作を物理的にブロック
+- hooks（`scripts/claude/hooks/pretooluse_guard.py`）が危険操作を物理的にブロック（PreToolUse）
+- hooks（`scripts/claude/hooks/posttooluse_check.py`）が Edit/Write 直後の `.py`/`.json`/`.yaml` 構文を検証（PostToolUse）
 - Claude が「勝手に次フェーズへ進む」ことを禁止
 
 ### 3. GitHub が品質ゲートになっている
@@ -74,7 +76,7 @@ CI の内容（全部 pass しないとマージ不可）:
 /implement ────────────────────→ push → CI 実行
 /code-review     （CI 結果確認）
 /test            （テスト確認）
-/retro           （振り返り・推奨）
+/retro           （振り返り・必須）
 /close ────────────────────────→ PR 本文整備 → develop へマージ
                                   （main へは定期リリース時のみ）
 ```
@@ -100,7 +102,7 @@ feature/I###-xxx ← イシューごとに作成
 
 ```
 docs/
-├── issues/      open / in_progress / closed / templates   # イシューファイル
+├── issues/      open / closed / templates                 # イシューファイル
 ├── plans/       open / closed                             # 計画書
 ├── proposals/                                             # 改善提案資料
 ├── tests/       open / closed / templates                 # テスト文書（自動・手動）
@@ -136,5 +138,6 @@ docs/
 - UX ルール: `docs/runbooks/ux-rules.md`
 - バックエンドチェック: `docs/runbooks/backend-check.md`
 - テンプレート同期: `docs/runbooks/template-sync.md`
+- pre-commit 運用: `docs/runbooks/pre-commit.md`
 - コーディング規約（Backend）: `rules/ultimate_django_coding_standards.md`
 - コーディング規約（Frontend）: `rules/react-coding-standards-integrated.md`
