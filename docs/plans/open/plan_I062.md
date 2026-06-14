@@ -3,7 +3,7 @@
 ## 基本情報
 - **計画書ID**: plan_I062
 - **関連イシュー**: #128
-- **Draft PR**: #（作成後に追記）
+- **Draft PR**: #133
 - **作成根拠資料**: docs/issues/open/I062.md（起点イシュー）
 - **実装後評価**: docs/reviews/open/I062_review.md
 - **作成日**: 2026-06-15
