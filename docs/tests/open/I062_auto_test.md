@@ -16,7 +16,7 @@ bash scripts/claude/tests/test_review_verdict.sh
 テストは両スクリプトを `REVIEW_LIB_SOURCE_ONLY=1` で source し、実関数（`find_plan_file` / `detect_code_verdict` / `detect_plan_verdict`）を直接アサートする（実装と乖離しない）。
 
 ## 実行結果（2026-06-15）
-- `bash scripts/claude/tests/test_review_verdict.sh` → **PASS=40 / FAIL=0（EXIT=0）**。下表の全 TC を網羅（1 TC が複数アサートに分割されている箇所あり）。
+- `bash scripts/claude/tests/test_review_verdict.sh` → **PASS=40 / FAIL=0（EXIT=0）**。この 40 は**ステップ1〜4 の TC-01〜TC-20 のみ**を対象（1 TC が複数アサートに分割されている箇所あり）。**retro 由来の TC-21〜23 は未実装（ステップ5 後に追加・実行予定）**。
 - 補助スモーク: `bash scripts/claude/code-review.sh`（引数なし）→ 41行目 Usage エラー（本体実行＝source ガードが通常実行を阻害しないことを確認）。`plan-issue-review.sh` も同様。`find_file` 定義は各スクリプト 1 箇所のみ（重複なし）。
 - **結論: 全自動 TC PASS**。実 `claude -p` 経路の VERDICT 出力は手動テスト No.1〜3 で実アーティファクトを確認済み（`/test` 時に `/code-review`・`/plan-issue-review` を実行し、生成レビューファイルが新契約 `VERDICT: OK` で終端することを確認）。
 
