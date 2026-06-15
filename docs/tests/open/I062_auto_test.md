@@ -85,6 +85,16 @@ bash scripts/claude/tests/test_review_verdict.sh
 | TC-19 | `code-review.sh` / `plan-issue-review.sh` を `REVIEW_LIB_SOURCE_ONLY=1` で source | 本体（CI 待機・claude -p）を実行せず関数のみ定義される | Claude | ✅ PASS |
 | TC-20 | `bash -n` 構文チェック（両スクリプト＋テストスクリプト） | 構文エラーなし（exit 0） | Claude | ✅ PASS |
 
+## retro 由来（C1 堅牢化・P1 予防処置）※ステップ5 実装後に検証
+
+| TC | 対象 | 期待 | 実施者 | 実結果 |
+|---:|------|------|--------|--------|
+| TC-21a | `detect_code_verdict`：末尾に `VERDICT: HIGHRISK`（plan用値が混入）かつ Blocker/High 表記なし | `OK`（`HIGH` に部分一致せず保険もヒットせず） | Claude | (ステップ5後) |
+| TC-21b | `detect_plan_verdict`：末尾に `VERDICT: HIGH`（code用値が混入）かつ差し戻し/高リスク表記なし | `OK`（`HIGHRISK` に部分一致しない） | Claude | (ステップ5後) |
+| TC-21c | `detect_code_verdict`：正常な `VERDICT: OK`（末尾アンカー後も正常系が壊れない） | `OK` | Claude | (ステップ5後) |
+| TC-22 | `code-reviewer.md` | テスト妥当性観点に「シェル…決定論」相当の文言が存在（gate層） | Claude | (ステップ5後) |
+| TC-23 | `docs/runbooks/common-commands.md` | シェルロジック検証の実行コンテキスト注意（`bash` 実行 / grep ラッパー）が記載（do層） | Claude | (ステップ5後) |
+
 ---
 
 ## 実装前プロトタイプ検証（参考・調査フェーズで実測済み）

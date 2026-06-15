@@ -50,6 +50,9 @@
 - [ ] `find_file` の `_N` 対応が issues/tests/reviews の通常ルックアップを壊さない（回帰確認）
 - [ ] 既存の正常系（OK 判定）が壊れていないこと
 - [ ] P1 gate 観点（規約是正イシューの消費箇所取りこぼし検証）が `plan-reviewer.md` / `code-reviewer.md` に追加されている
+- [ ] **（retro C1）** `detect_code_verdict` / `detect_plan_verdict` の VERDICT 一次パターンが**末尾アンカー付き**で、未知・隣接値（例: code 側に `VERDICT: HIGHRISK` が混入）を部分一致で誤読しない（誤読せず保険にフォールバックする）
+- [ ] **（retro P1 do層）** シェルロジック検証の実行コンテキスト注意（対話シェルの grep ラッパー）が `docs/runbooks/common-commands.md` に明記されている
+- [ ] **（retro P1 gate層）** `code-reviewer.md` のテスト妥当性観点に「シェルスクリプト検証テストが実行コンテキスト非依存・`bash` 実行で決定論的に再現可能か」が追加されている
 
 ---
 
@@ -66,6 +69,7 @@
   - `.claude/review-agents/code-reviewer.md`（レビュー出力契約）
   - `.claude/review-agents/plan-reviewer.md`（同上）
   - `scripts/claude/tests/test_review_verdict.sh`（**新規・回帰テスト資産**。実装関数を source して検証）
+  - `docs/runbooks/common-commands.md`（**retro P1 do層**: シェルロジック検証の実行コンテキスト注意を追記。命名規約ドキュメントではないため I064 棲み分けに抵触しない）
   - ワークフロー判定ロジックに関わるため、変更後は実レビュー1件で誤判定なしを確認（手動 TC）
 
 ### セキュリティ影響
@@ -86,6 +90,8 @@
   上記のうち**該当する1行だけ**を出力の最終行に置く（装飾・前後の語を付けない）。
 - **P1 gate 観点の追加**（「ベストプラクティス」観点に1項目）:
   - 「**規約・命名・フォーマット是正の網羅性**: 命名規則・フォーマット・規約を是正する変更で、宣言箇所のみを修正し消費箇所（グロブパターン・参照・スクリプト・ドキュメント）への反映を取りこぼしていないか。宣言箇所のみ修正＝該当時 High。」
+- **retro P1 gate 観点の追加**（「P4. テスト妥当性・回帰防止」観点に1項目）:
+  - 「**シェルスクリプト検証の決定論性**: シェルスクリプトのロジックを検証するテストが、実行コンテキスト依存（対話シェルでのコマンド置換等）に影響されず、`bash` 実行で決定論的に再現可能な形か（フルパス指定・スクリプト実行）。」
 
 ### 4-2. `.claude/review-agents/plan-reviewer.md`
 - **修正方針**: 同様に固定判定行を追加（3値）。
@@ -115,11 +121,11 @@
       echo "$best"
     }
     ```
-  - `detect_code_verdict()`（**新規**）: 一次=`^VERDICT:` 行（`BLOCKER|HIGH|OK`、最終一致を採用）、無ければ保険=装飾許容 grep。
+  - `detect_code_verdict()`（**新規**）: 一次=`^VERDICT:` 行（`BLOCKER|HIGH|OK`、**末尾アンカー付き**で完全一致のみ採用＝retro C1。最終一致を採用）、無ければ保険=装飾許容 grep。
     ```bash
     detect_code_verdict() {
       local file="$1" v
-      v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGH|OK)' || true)
+      v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGH|OK)' || true)
       if [ -n "$v" ]; then echo "$v"; return; fi
       if grep -qE '^\|\s*\*{0,2}Blocker\b' "$file"; then echo "BLOCKER"; return; fi
       if grep -qE '^\|\s*\*{0,2}High\b'    "$file"; then echo "HIGH"; return; fi
@@ -145,11 +151,11 @@
 - 追加/変更関数:
   - `find_file()`（既存・変更なし・冒頭へ移動）
   - `find_plan_file()`（**新規**・4-3 と同一実装）
-  - `detect_plan_verdict()`（**新規**）: 一次=`^VERDICT:`（`BLOCKER|HIGHRISK|OK`）、無ければ保険=既存プレーン判定（`判定:.*差し戻し` / `高リスク判定.*Yes`、後方互換のため残置）。
+  - `detect_plan_verdict()`（**新規**）: 一次=`^VERDICT:`（`BLOCKER|HIGHRISK|OK`、**末尾アンカー付き**＝retro C1）、無ければ保険=既存プレーン判定（`判定:.*差し戻し` / `高リスク判定.*Yes`、後方互換のため残置）。
     ```bash
     detect_plan_verdict() {
       local file="$1" v
-      v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGHRISK|OK)' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGHRISK|OK)' || true)
+      v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGHRISK|OK)[[:space:]]*$' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGHRISK|OK)' || true)
       if [ -n "$v" ]; then echo "$v"; return; fi
       if grep -qE "判定:.*差し戻し" "$file"; then echo "BLOCKER"; return; fi
       if grep -qiE "高リスク判定.*Yes" "$file"; then echo "HIGHRISK"; return; fi
@@ -175,7 +181,13 @@
 - エージェント `.md` 2ファイルに `VERDICT` 契約・P1 gate 観点が含まれることを grep でアサート。
 - いずれか失敗で非ゼロ終了。`bash scripts/claude/tests/test_review_verdict.sh` で実行（対話シェルへ貼らない）。
 - **テスト隔離（plan review Warning 反映）**: `find_plan_file` 用の fixture（`plan_I999.md` 等のダミー）は **`mktemp -d` の一時ディレクトリ内に作成**し（`docs/plans/` を汚染しない）、`trap '...' EXIT` でクリーンアップする。`detect_*` 用のダミーレビューファイルも同様に一時ファイル。実ファイル参照（TC-05）のみリポジトリ内の確定パスを使う。
+- **retro C1 の回帰**: `VERDICT: HIGHRISK` を含むファイルで `detect_code_verdict` が `HIGH` を返さない（末尾アンカーで部分一致を弾く）TC を追加。
+- **retro P1 gate の確認**: `code-reviewer.md` にシェルテスト決定論性観点が含まれることを grep アサート。
 - 詳細 TC は `docs/tests/open/I062_auto_test.md` 参照。
+
+### 4-6. `docs/runbooks/common-commands.md`（retro P1 do層）
+- **修正方針**: シェルスクリプトのロジック検証手順に、実行コンテキスト差の注意を1項目追記する（命名規約ドキュメントではないため I064 棲み分けに抵触しない）。
+- 追記内容（趣旨）: 「シェルスクリプトのロジック（grep/sed/awk の regex 挙動に依存する関数等）を検証するときは、対象を `bash <script>` で実行する。Claude Code の対話シェルでは `grep` 等が同梱ラッパーに置換され `-E`/`-o` 等の挙動が実 GNU grep と異なる場合があるため、対話シェルへ直接貼り付けない（必要時は `/usr/bin/grep` をフルパス指定）。」
 
 ---
 
@@ -202,7 +214,13 @@
   - 構文チェック（`bash -n`）を両スクリプトに実施。
   - → TC-19・TC-20 参照。
 
-**依存関係**: ステップ1・2は並行実施可能。ステップ3はステップ1・2の `.md` 編集に同梱。ステップ4はステップ1〜3完了が前提。
+- **ステップ5: retro 由来の堅牢化（C1）と予防処置（P1 do+gate）**（retro 後の追加周回）
+  - C1: `detect_code_verdict` / `detect_plan_verdict` の一次 grep を末尾アンカー付き（`...[[:space:]]*$`）に変更し、未知・隣接値の部分一致誤読を排除。
+  - P1 do層: `docs/runbooks/common-commands.md` にシェルロジック検証の実行コンテキスト注意を追記。
+  - P1 gate層: `code-reviewer.md` のテスト妥当性観点に「シェル検証テストの決定論性」を追加。
+  - → TC-21（HIGHRISK 非誤読）・TC-22（gate 観点存在）・TC-23（runbook do層記載）参照。
+
+**依存関係**: ステップ1・2は並行実施可能。ステップ3はステップ1・2の `.md` 編集に同梱。ステップ4はステップ1〜3完了が前提。ステップ5は retro 後の追加で、ステップ1〜4の成果物（detect 関数・code-reviewer.md・テストスクリプト）への上乗せ。
 
 ---
 
@@ -210,7 +228,7 @@
 - **テストレベルの選択**: スクリプト関数のユニットテスト（`find_plan_file` / `detect_*` を source して直接アサート）＋ 文字列契約の grep アサート＋ 実レビュー1件のスモーク（手動）。E2E（`claude -p` 込みの全経路）は非決定的・コスト高のため手動スモーク1件に留める。
 - **認可・テナント境界テスト**: 本イシューに認証認可変更なし → 非該当。
 - **再発防止テスト**: バグ修正イシューのため、太字 Blocker サンプル（実ファイル `I060_code_review_20260612_0045.md`）での誤 `✅` 非発生を TC-05 として固定化。
-- 自動: `docs/tests/open/I062_auto_test.md`（TC-01〜TC-20）
+- 自動: `docs/tests/open/I062_auto_test.md`（TC-01〜TC-23。TC-21〜23 は retro C1/P1 由来）
 - 手動: `docs/tests/open/I062_manual_test.md`
 
 ---
