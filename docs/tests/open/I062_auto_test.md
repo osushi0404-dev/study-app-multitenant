@@ -15,6 +15,11 @@ bash scripts/claude/tests/test_review_verdict.sh
 
 テストは両スクリプトを `REVIEW_LIB_SOURCE_ONLY=1` で source し、実関数（`find_plan_file` / `detect_code_verdict` / `detect_plan_verdict`）を直接アサートする（実装と乖離しない）。
 
+## 実行結果（2026-06-15）
+- `bash scripts/claude/tests/test_review_verdict.sh` → **PASS=40 / FAIL=0（EXIT=0）**。下表の全 TC を網羅（1 TC が複数アサートに分割されている箇所あり）。
+- 補助スモーク: `bash scripts/claude/code-review.sh`（引数なし）→ 41行目 Usage エラー（本体実行＝source ガードが通常実行を阻害しないことを確認）。`plan-issue-review.sh` も同様。`find_file` 定義は各スクリプト 1 箇所のみ（重複なし）。
+- **結論: 全自動 TC PASS**。実 `claude -p` 経路の VERDICT 出力確認は手動テスト（Human）に委譲。
+
 ### テスト隔離方針（リポジトリ汚染防止）
 - `find_plan_file` / `detect_*` 用のダミー fixture（`plan_I999.md`・ダミーレビュー等）は **`mktemp -d` の一時ディレクトリ配下に作成**し、`docs/plans/` や `docs/reviews/` を汚さない。`trap 'rm -rf "$TMP"' EXIT`（テストスクリプト内、`DANGER_OK` 不要なスクリプト実行コンテキスト）でクリーンアップする。`find_plan_file` は CWD 相対パスを見るため、fixture 検証時は一時ディレクトリへ `cd` する。
 - リポジトリ内の確定パスを使うのは **TC-05（実ファイル回帰）のみ**。該当ファイルは `docs/reviews/I060_code_review_20260612_0045.md`（**フラット配置を実在確認済み**。`closed/` ではない）。
