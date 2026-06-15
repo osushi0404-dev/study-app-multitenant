@@ -16,7 +16,8 @@ bash scripts/claude/tests/test_review_verdict.sh
 テストは両スクリプトを `REVIEW_LIB_SOURCE_ONLY=1` で source し、実関数（`find_plan_file` / `detect_code_verdict` / `detect_plan_verdict`）を直接アサートする（実装と乖離しない）。
 
 ## 実行結果（2026-06-15）
-- `bash scripts/claude/tests/test_review_verdict.sh` → **PASS=40 / FAIL=0（EXIT=0）**。この 40 は**ステップ1〜4 の TC-01〜TC-20 のみ**を対象（1 TC が複数アサートに分割されている箇所あり）。**retro 由来の TC-21〜23 は未実装（ステップ5 後に追加・実行予定）**。
+- `bash scripts/claude/tests/test_review_verdict.sh` → **PASS=45 / FAIL=0（EXIT=0）**（2026-06-16 ステップ5実装後に再実行）。TC-01〜TC-23 を網羅（retro C1 の TC-21・P1 gate の TC-22・P1 do の TC-23 を含む。1 TC が複数アサートに分割されている箇所あり）。
+- 実アーティファクト検証: 末尾アンカー適用後も実 OK レビュー（code/plan）は `OK`、太字 Blocker 実ファイルは `BLOCKER` を返すことを確認（正常系の非退行）。
 - 補助スモーク: `bash scripts/claude/code-review.sh`（引数なし）→ 41行目 Usage エラー（本体実行＝source ガードが通常実行を阻害しないことを確認）。`plan-issue-review.sh` も同様。`find_file` 定義は各スクリプト 1 箇所のみ（重複なし）。
 - **結論: 全自動 TC PASS**。実 `claude -p` 経路の VERDICT 出力は手動テスト No.1〜3 で実アーティファクトを確認済み（`/test` 時に `/code-review`・`/plan-issue-review` を実行し、生成レビューファイルが新契約 `VERDICT: OK` で終端することを確認）。
 
@@ -89,11 +90,11 @@ bash scripts/claude/tests/test_review_verdict.sh
 
 | TC | 対象 | 期待 | 実施者 | 実結果 |
 |---:|------|------|--------|--------|
-| TC-21a | `detect_code_verdict`：末尾に `VERDICT: HIGHRISK`（plan用値が混入）かつ Blocker/High 表記なし | `OK`（`HIGH` に部分一致せず保険もヒットせず） | Claude | (ステップ5後) |
-| TC-21b | `detect_plan_verdict`：末尾に `VERDICT: HIGH`（code用値が混入）かつ差し戻し/高リスク表記なし | `OK`（`HIGHRISK` に部分一致しない） | Claude | (ステップ5後) |
-| TC-21c | `detect_code_verdict`：正常な `VERDICT: OK`（末尾アンカー後も正常系が壊れない） | `OK` | Claude | (ステップ5後) |
-| TC-22 | `code-reviewer.md` | テスト妥当性観点に「シェル…決定論」相当の文言が存在（gate層） | Claude | (ステップ5後) |
-| TC-23 | `docs/runbooks/common-commands.md` | シェルロジック検証の実行コンテキスト注意（`bash` 実行 / grep ラッパー）が記載（do層） | Claude | (ステップ5後) |
+| TC-21a | `detect_code_verdict`：末尾に `VERDICT: HIGHRISK`（plan用値が混入）かつ Blocker/High 表記なし | `OK`（`HIGH` に部分一致せず保険もヒットせず） | Claude | ✅ PASS |
+| TC-21b | `detect_plan_verdict`：末尾に `VERDICT: HIGH`（code用値が混入）かつ差し戻し/高リスク表記なし | `OK`（`HIGHRISK` に部分一致しない） | Claude | ✅ PASS |
+| TC-21c | `detect_code_verdict`：正常な `VERDICT: OK`（末尾アンカー後も正常系が壊れない） | `OK` | Claude | ✅ PASS |
+| TC-22 | `code-reviewer.md` | テスト妥当性観点に「シェル…決定論」相当の文言が存在（gate層） | Claude | ✅ PASS |
+| TC-23 | `docs/runbooks/common-commands.md` | シェルロジック検証の実行コンテキスト注意（`bash` 実行 / grep ラッパー）が記載（do層） | Claude | ✅ PASS |
 
 ---
 

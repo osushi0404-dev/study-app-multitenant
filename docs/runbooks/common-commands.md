@@ -33,6 +33,16 @@ docker compose exec backend python manage.py test
 docker compose exec frontend npm test
 ```
 
+## シェルスクリプトのロジック検証
+
+シェルスクリプトのロジック（`grep`/`sed`/`awk` の regex 挙動に依存する関数等）を検証するときは、対象を **スクリプトファイルとして `bash` で実行**する:
+
+```bash
+bash scripts/claude/tests/test_review_verdict.sh   # 例: 検証スクリプトを bash で実行
+```
+
+> **なぜ重要か**: Claude Code の対話シェルでは `grep` 等が同梱ラッパー（`ugrep`）に置換されており、`-E`/`-o` などの挙動が実 GNU grep と異なる場合がある。対話シェルへ直接コマンドを貼り付けて検証すると偽の失敗・誤判定を招く。`bash <script>` のサブプロセスや CI では実 GNU grep が使われるため、検証は必ずスクリプト実行で行う（どうしても対話シェルで実 grep が必要な場合は `/usr/bin/grep` をフルパス指定する）。実スクリプト自体（`bash foo.sh`）の本番挙動は実 grep のため影響はなく、これは**検証手順だけの注意点**。
+
 ## API エンドポイント
 - ユーザー登録: `POST /api/auth/register/`
 - ユーザー設定: `GET/PATCH /api/settings/`

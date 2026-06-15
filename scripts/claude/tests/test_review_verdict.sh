@@ -17,6 +17,7 @@ PLAN_REVIEW="scripts/claude/plan-issue-review.sh"
 CODE_AGENT=".claude/review-agents/code-reviewer.md"
 PLAN_AGENT=".claude/review-agents/plan-reviewer.md"
 REAL_BOLD_BLOCKER="docs/reviews/I060_code_review_20260612_0045.md"
+RUNBOOK="docs/runbooks/common-commands.md"
 
 pass=0; fail=0
 ck() { # name expected actual
@@ -105,6 +106,16 @@ ck_true TC-18b-plan-highrisk grep -q 'VERDICT: HIGHRISK' "$PLAN_AGENT"
 ck_true TC-18b-plan-ok       grep -q 'VERDICT: OK'       "$PLAN_AGENT"
 ck_true TC-18c-code-p1gate   grep -q '消費箇所' "$CODE_AGENT"
 ck_true TC-18c-plan-p1gate   grep -q '消費箇所' "$PLAN_AGENT"
+
+echo "== TC-21〜23: retro C1（末尾アンカー）・P1（do/gate） =="
+# C1: 隣接値の部分一致誤読を末尾アンカーで排除
+printf 'x\nVERDICT: HIGHRISK\n' > "$TMP/r1"; ck TC-21a OK "$(detect_code_verdict "$TMP/r1")"   # code側に HIGHRISK 混入 → HIGH 誤読しない
+printf 'x\nVERDICT: HIGH\n'     > "$TMP/r2"; ck TC-21b OK "$(detect_plan_verdict "$TMP/r2")"   # plan側に HIGH 混入 → HIGHRISK 部分一致しない
+printf 'x\nVERDICT: OK\n'       > "$TMP/r3"; ck TC-21c OK "$(detect_code_verdict "$TMP/r3")"   # 正常系がアンカー後も壊れない
+# P1 gate: code-reviewer.md にシェルテスト決定論性観点
+ck_true TC-22-gate grep -q 'シェルスクリプト検証の決定論性' "$CODE_AGENT"
+# P1 do: runbook にシェル検証の実行コンテキスト注意
+ck_true TC-23-do   grep -q 'シェルスクリプトのロジック検証' "$RUNBOOK"
 
 echo "== TC-20: bash -n 構文チェック =="
 ck_true TC-20-syntax-code bash -n "$CODE_REVIEW"

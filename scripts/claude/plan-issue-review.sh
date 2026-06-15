@@ -28,7 +28,7 @@ find_plan_file() {
 # 計画書レビュー結果の判定: 一次=VERDICT 行 / 保険=既存プレーン判定（後方互換のため残置）
 detect_plan_verdict() {
   local file="$1" v
-  v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGHRISK|OK)' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGHRISK|OK)' || true)
+  v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGHRISK|OK)[[:space:]]*$' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGHRISK|OK)' || true)
   if [ -n "$v" ]; then echo "$v"; return; fi
   if grep -qE "判定:.*差し戻し" "$file"; then echo "BLOCKER"; return; fi
   if grep -qiE "高リスク判定.*Yes" "$file"; then echo "HIGHRISK"; return; fi
