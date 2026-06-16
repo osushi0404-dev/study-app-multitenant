@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ISSUE="${1:?Usage: $0 I###}"
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+# ---- helper functions (テストは REVIEW_LIB_SOURCE_ONLY=1 で source して利用) ----
 
-TIMESTAMP=$(date +%Y%m%d_%H%M)
-REVIEW_FILE="docs/reviews/${ISSUE}_plan_review_${TIMESTAMP}.md"
-REVIEWER=".claude/review-agents/plan-reviewer.md"
-
-# open/closed 両方を検索してパスを返す
+# open/closed 両方を検索してパスを返す（issues/tests/reviews 等の単一パターン用）
 find_file() {
   local dir="$1" pattern="$2"
   if [ -f "docs/${dir}/open/${pattern}" ]; then echo "docs/${dir}/open/${pattern}"
@@ -18,13 +12,47 @@ find_file() {
   fi
 }
 
+# 計画書専用: plan_I###*.md の連番を数値ソートし最大（最新）を返す。
+# 無印=最古=0、_N=N。open/closed 横断で最大サフィックスを選ぶ（同値は open 優先）。該当なしは空文字。
+find_plan_file() {
+  local issue="$1" f n best="" best_n=-1
+  for f in "docs/plans/open/plan_${issue}.md" docs/plans/open/plan_"${issue}"_*.md \
+           "docs/plans/closed/plan_${issue}.md" docs/plans/closed/plan_"${issue}"_*.md; do
+    [ -f "$f" ] || continue
+    if [[ "$f" =~ plan_${issue}_([0-9]+)\.md$ ]]; then n="${BASH_REMATCH[1]}"; else n=0; fi
+    if [ "$n" -gt "$best_n" ]; then best_n="$n"; best="$f"; fi
+  done
+  echo "$best"
+}
+
+# 計画書レビュー結果の判定: 一次=VERDICT 行 / 保険=既存プレーン判定（後方互換のため残置）
+detect_plan_verdict() {
+  local file="$1" v
+  v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGHRISK|OK)[[:space:]]*$' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGHRISK|OK)' || true)
+  if [ -n "$v" ]; then echo "$v"; return; fi
+  if grep -qE "判定:.*差し戻し" "$file"; then echo "BLOCKER"; return; fi
+  if grep -qiE "高リスク判定.*Yes" "$file"; then echo "HIGHRISK"; return; fi
+  echo "OK"
+}
+
+# テストから関数のみを source するためのガード（本体は実行しない）
+if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
+
+ISSUE="${1:?Usage: $0 I###}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+TIMESTAMP=$(date +%Y%m%d_%H%M)
+REVIEW_FILE="docs/reviews/${ISSUE}_plan_review_${TIMESTAMP}.md"
+REVIEWER=".claude/review-agents/plan-reviewer.md"
+
 ISSUE_FILE=$(find_file "issues" "${ISSUE}.md")
-PLAN_FILE=$(find_file "plans" "plan_${ISSUE}.md")
+PLAN_FILE=$(find_plan_file "$ISSUE")
 AUTO_TEST=$(find_file "tests" "${ISSUE}_auto_test.md")
 MANUAL_TEST=$(find_file "tests" "${ISSUE}_manual_test.md")
 
 [ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません: ${ISSUE}.md"; exit 1; }
-[ -z "$PLAN_FILE" ]  && { echo "⚠️ 計画書が見つかりません: plan_${ISSUE}.md"; exit 1; }
+[ -z "$PLAN_FILE" ]  && { echo "⚠️ 計画書が見つかりません: plan_${ISSUE}*.md"; exit 1; }
 
 # コンテキスト組み立て
 CONTEXT="イシュー番号: ${ISSUE}
@@ -74,14 +102,15 @@ if [ -f "$PLAN_FILE" ]; then
     "$TIMESTAMP" "$VERDICT" "$(basename "$REVIEW_FILE")" >> "$PLAN_FILE"
 fi
 
-# 判定とユーザー案内
-if grep -qE "判定:.*差し戻し" "$REVIEW_FILE"; then
-  # shellcheck disable=SC2016
-  printf '\n⛔ Blocker が残っています。修正後に `/plan-issue-review %s` を再実行してください。\n' "$ISSUE"
-elif grep -qi "高リスク判定.*Yes" "$REVIEW_FILE"; then
-  # shellcheck disable=SC2016
-  printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE"
-else
-  # shellcheck disable=SC2016
-  printf '\n✅ プランレビュー完了。`/implement %s` を実行してください。\n' "$ISSUE"
-fi
+# 判定とユーザー案内（一次=VERDICT 行 / 保険=既存プレーン判定）
+case "$(detect_plan_verdict "$REVIEW_FILE")" in
+  BLOCKER)
+    # shellcheck disable=SC2016
+    printf '\n⛔ Blocker が残っています。修正後に `/plan-issue-review %s` を再実行してください。\n' "$ISSUE" ;;
+  HIGHRISK)
+    # shellcheck disable=SC2016
+    printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE" ;;
+  *)
+    # shellcheck disable=SC2016
+    printf '\n✅ プランレビュー完了。`/implement %s` を実行してください。\n' "$ISSUE" ;;
+esac
