@@ -632,13 +632,13 @@ return False, f"ディレクトリが存在しません: {directory_path}（科�
 ---
 
 ## レビュー結果
-- [20260428_0117 ⛔ 差し戻し → 修正済み](../../reviews/I055_plan_review_20260428_0117.md)
+- [20260428_0117 ⛔ 差し戻し → 修正済み](../../reviews/closed/I055_plan_review_20260428_0117.md)
 
-- [20260428_0130 ✅ 完了](../../reviews/I055_plan_review_20260428_0130.md)
-- [20260430_0056 ✅ 完了](../../reviews/I055_plan_review_20260430_0056.md)
-- [20260430_0255 ✅ 完了](../../reviews/I055_plan_review_20260430_0255.md)
-- [20260430_0931 ✅ 完了](../../reviews/I055_plan_review_20260430_0931.md)
-- [20260430_0945 ✅ 完了](../../reviews/I055_plan_review_20260430_0945.md)
-- [20260430_1057 ✅ 完了](../../reviews/I055_plan_review_20260430_1057.md)
-- [20260430_1537 ⛔ 差し戻し](../../reviews/I055_plan_review_20260430_1537.md)
-- [20260501_1014 ⛔ 差し戻し](../../reviews/I055_plan_review_20260501_1014.md)
+- [20260428_0130 ✅ 完了](../../reviews/closed/I055_plan_review_20260428_0130.md)
+- [20260430_0056 ✅ 完了](../../reviews/closed/I055_plan_review_20260430_0056.md)
+- [20260430_0255 ✅ 完了](../../reviews/closed/I055_plan_review_20260430_0255.md)
+- [20260430_0931 ✅ 完了](../../reviews/closed/I055_plan_review_20260430_0931.md)
+- [20260430_0945 ✅ 完了](../../reviews/closed/I055_plan_review_20260430_0945.md)
+- [20260430_1057 ✅ 完了](../../reviews/closed/I055_plan_review_20260430_1057.md)
+- [20260430_1537 ⛔ 差し戻し](../../reviews/closed/I055_plan_review_20260430_1537.md)
+- [20260501_1014 ⛔ 差し戻し](../../reviews/closed/I055_plan_review_20260501_1014.md)

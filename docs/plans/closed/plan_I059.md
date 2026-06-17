@@ -342,7 +342,7 @@ bandit/ESLint 対象のアプリコードなし。新規 bash は shellcheck（M
 承認いただけましたら `/plan-issue-review I059` でレビューに進みます。
 
 ## レビュー結果
-- [20260601_0001 判定: ✅ 完了](../../reviews/I059_plan_review_20260601_0001.md)
+- [20260601_0001 判定: ✅ 完了](../../reviews/closed/I059_plan_review_20260601_0001.md)
 
 ## レビュー結果
-- [20260601_1730 判定: ✅ 完了](../../reviews/I059_plan_review_20260601_1730.md)
+- [20260601_1730 判定: ✅ 完了](../../reviews/closed/I059_plan_review_20260601_1730.md)

@@ -24,7 +24,7 @@
 | 種別 | 命名 | 生成者 | 保存先・ライフサイクル |
 |------|------|--------|----------------------|
 | ライフサイクルレビュー | `I###_review.md` | `/plan-issue` | `docs/reviews/open/` → `docs/reviews/closed/`（`/close` が移動） |
-| コードレビュー監査記録 | `I###_code_review_<timestamp>.md` | `scripts/claude/code-review.sh` | `docs/reviews/` 直下に時系列で蓄積（open/closed 管理外・移動しない） |
+| コードレビュー監査記録 | `I###_code_review_<timestamp>.md` | `scripts/claude/code-review.sh` | issue が open の間は `docs/reviews/` 直下に時系列で蓄積。`/close` 実行時に当該 issue 分を `closed/` へ回収（I065） |
 | プランレビュー監査記録 | `I###_plan_review_<timestamp>.md` | `scripts/claude/plan-issue-review.sh` | 同上 |
 | イシューレビュー監査記録 | `I###_issue_review_<timestamp>.md` | `scripts/claude/issue-review.sh` | 同上 |
 
@@ -35,7 +35,7 @@
 状態は `open` / `closed` の2つのみ（旧来の3状態管理は廃止）。
 
 - `I###_review.md`: `docs/reviews/open/` で作成し、issue クローズ時に `/close` が `docs/reviews/closed/` へ移動する。
-- timestamped 監査記録（`I###_{code,plan,issue}_review_<timestamp>.md`）: `docs/reviews/` 直下に蓄積する（open/closed の外。スクリプトが直下に保存し、移動しない）。
+- timestamped 監査記録（`I###_{code,plan,issue}_review_<timestamp>.md`）: issue が open の間は `docs/reviews/` 直下に蓄積し、`/close` が当該 issue 分を `closed/` へ回収する（スクリプトの保存先は直下のまま・移動は `/close` が担当）。
 
 ---
 

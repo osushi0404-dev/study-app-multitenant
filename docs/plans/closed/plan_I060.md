@@ -227,7 +227,7 @@
 9. ★ **別イシュー切り出し**: `review-rules.md` の旧レビュー番号体系（`reviewXXX_IYYY` / `in_progress` 状態管理 / `_post`）と `plan-writing-rules.md:180` の再編は本 PR に含めず新規フォローイシューへ。でよいか
 
 ## レビュー結果
-- [20260603_1719 判定: ✅ 完了](../../reviews/I060_plan_review_20260603_1719.md)
+- [20260603_1719 判定: ✅ 完了](../../reviews/closed/I060_plan_review_20260603_1719.md)
 
 ## レビュー結果
-- [20260613_1149 判定: ✅ 完了](../../reviews/I060_plan_review_20260613_1149.md)
+- [20260613_1149 判定: ✅ 完了](../../reviews/closed/I060_plan_review_20260613_1149.md)

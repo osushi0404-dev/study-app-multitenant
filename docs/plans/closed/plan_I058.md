@@ -462,33 +462,33 @@ P3/P5/P8 影響なし。P6 影響なし。
 - [ ] `implement/SKILL.md` ステップ 2 への新規フック pre-flight 例外ルール追加（ステップ9）に同意する
 
 ## レビュー結果
-- [20260503_0111 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260503_0111.md)
-- [20260503_0123 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_0123.md)
-- [20260503_0145 差し戻し（Blocker 2件）](../../reviews/I058_plan_review_20260503_0145.md)
+- [20260503_0111 差し戻し（Blocker 1件）](../../reviews/closed/I058_plan_review_20260503_0111.md)
+- [20260503_0123 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260503_0123.md)
+- [20260503_0145 差し戻し（Blocker 2件）](../../reviews/closed/I058_plan_review_20260503_0145.md)
 
 ## レビュー結果
-- [20260503_0139 判定: 差し戻し（Blocker 2件）**](../../reviews/I058_plan_review_20260503_0139.md)
+- [20260503_0139 判定: 差し戻し（Blocker 2件）**](../../reviews/closed/I058_plan_review_20260503_0139.md)
 
 ## レビュー結果
-- [20260503_1438 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_1438.md)
+- [20260503_1438 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260503_1438.md)
 
 ## レビュー結果
-- [20260503_1444 判定: ✅ 完了](../../reviews/I058_plan_review_20260503_1444.md)
+- [20260503_1444 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260503_1444.md)
 
 ## レビュー結果
-- [20260504_0049 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0049.md)
+- [20260504_0049 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260504_0049.md)
 
 ## レビュー結果
-- [20260504_0200 判定: ✅ 完了](../../reviews/I058_plan_review_20260504_0200.md)
+- [20260504_0200 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260504_0200.md)
 
 ## レビュー結果
-- [20260505_2130 判定: 差し戻し（Blocker 1件）](../../reviews/I058_plan_review_20260505_2130.md)
+- [20260505_2130 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I058_plan_review_20260505_2130.md)
 
 ## レビュー結果
-- [20260505_2138 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2138.md)
+- [20260505_2138 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260505_2138.md)
 
 ## レビュー結果
-- [20260505_2309 判定: ✅ 完了](../../reviews/I058_plan_review_20260505_2309.md)
+- [20260505_2309 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260505_2309.md)
 
 ## レビュー結果
-- [20260506_0139 判定: ✅ 完了](../../reviews/I058_plan_review_20260506_0139.md)
+- [20260506_0139 判定: ✅ 完了](../../reviews/closed/I058_plan_review_20260506_0139.md)

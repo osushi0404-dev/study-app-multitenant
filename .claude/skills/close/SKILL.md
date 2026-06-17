@@ -45,9 +45,21 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
      [ -f "$f" ] && git mv "$f" docs/tests/closed/
    done
 
-   # レビュー
+   # レビュー（ライフサイクルファイル IXXX_review.md）
    for f in docs/reviews/open/I${ISSUE_NUM}_*.md; do
      [ -f "$f" ] && git mv "$f" docs/reviews/closed/
+   done
+
+   # timestamped 監査記録（直下）を closed/ へ回収（I065）
+   # glob は IXXX_{code,plan,issue}_review_<ts>.md に一致。
+   # IXXX_review.md（lifecycle・_review_ を含まない）には非マッチ＝誤回収しない。
+   for f in docs/reviews/I${ISSUE_NUM}_*_review_*.md; do
+     [ -f "$f" ] || continue
+     base="$(basename "$f")"
+     git mv "$f" docs/reviews/closed/
+     # plan 内 ## レビュー結果 リンクを closed/ 向きに更新（リンク切れ防止・Q3）
+     PLAN="docs/plans/closed/plan_I${ISSUE_NUM}.md"
+     [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${base})#(../../reviews/closed/${base})#g" "$PLAN"
    done
    ```
    移動後、open に残留ファイルがないことを必ず確認:

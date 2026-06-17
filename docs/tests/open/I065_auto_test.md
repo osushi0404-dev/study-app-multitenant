@@ -16,10 +16,10 @@
 
 | TC | 対象 | 期待（ヒットする趣旨／値） | 実施者 | 実結果 |
 |---:|------|----------------------------|--------|--------|
-| TC-01 | `.claude/skills/close/SKILL.md` | step 1 に「直下 timestamped 監査記録を `closed/` へ `git mv` する」回収手順と、対応 plan の `## レビュー結果` リンクを `../../reviews/closed/` 向きに `sed` 更新する手順が存在する（glob `I${ISSUE_NUM}_*_review_*.md` を含む） | Claude | 未実行 |
-| TC-02 | `docs/runbooks/review-rules.md` | `:27-29` の監査記録3行の備考が「移動しない」ではなく「`/close` が当該 issue 分を `closed/` へ回収（I065）」相当のライフサイクル記述になっている | Claude | 未実行 |
-| TC-03 | `docs/runbooks/review-rules.md` | `:38` 相当の文が「直下に蓄積し `/close` が `closed/` へ回収」に更新され、「移動しない」と断定する旧文言が残っていない | Claude | 未実行 |
-| TC-07 | `scripts/claude/{code-review,plan-issue-review,issue-review}.sh` | `REVIEW_FILE=` が `docs/reviews/${ISSUE}_..._review_${TIMESTAMP}.md`（直下）のまま**不変**。`docs/reviews/closed/` や `open/` へ保存先変更していない（案A・I062 非衝突） | Claude | 未実行 |
+| TC-01 | `.claude/skills/close/SKILL.md` | step 1 に「直下 timestamped 監査記録を `closed/` へ `git mv` する」回収手順と、対応 plan の `## レビュー結果` リンクを `../../reviews/closed/` 向きに `sed` 更新する手順が存在する（glob `I${ISSUE_NUM}_*_review_*.md` を含む） | Claude | ✅ PASS（2026-06-17） |
+| TC-02 | `docs/runbooks/review-rules.md` | `:27-29` の監査記録3行の備考が「移動しない」ではなく「`/close` が当該 issue 分を `closed/` へ回収（I065）」相当のライフサイクル記述になっている | Claude | ✅ PASS（2026-06-17） |
+| TC-03 | `docs/runbooks/review-rules.md` | `:38` 相当の文が「直下に蓄積し `/close` が `closed/` へ回収」に更新され、「移動しない」と断定する旧文言が残っていない | Claude | ✅ PASS（2026-06-17） |
+| TC-07 | `scripts/claude/{code-review,plan-issue-review,issue-review}.sh` | `REVIEW_FILE=` が `docs/reviews/${ISSUE}_..._review_${TIMESTAMP}.md`（直下）のまま**不変**。`docs/reviews/closed/` や `open/` へ保存先変更していない（案A・I062 非衝突） | Claude | ✅ PASS（2026-06-17） |
 
 検証スクリプト例（`/tmp/i065_static.sh`）:
 ```bash
@@ -46,7 +46,7 @@ done
 
 | TC | シナリオ | 期待 | 実施者 | 実結果 |
 |---:|----------|------|--------|--------|
-| TC-S1 | 一時ディレクトリに擬似 `docs/reviews/I999_code_review_20260101_0000.md`（timestamped）・`docs/reviews/I999_review.md`（lifecycle）・`docs/plans/closed/plan_I999.md`（`](../../reviews/I999_code_review_20260101_0000.md)` リンク入り）を作り、`/close` 回収ロジックと同型のコードを実走する。期待: ① timestamped 記録が `docs/reviews/closed/` へ移動、② plan リンクが `../../reviews/closed/I999_code_review_20260101_0000.md` に更新、③ `I999_review.md`（lifecycle）は**移動されず**直下に残る（glob 非マッチ）。終了コード 0 | Claude | 未実行 |
+| TC-S1 | 一時ディレクトリに擬似 `docs/reviews/I999_code_review_20260101_0000.md`（timestamped）・`docs/reviews/I999_review.md`（lifecycle）・`docs/plans/closed/plan_I999.md`（`](../../reviews/I999_code_review_20260101_0000.md)` リンク入り）を作り、`/close` 回収ロジックと同型のコードを実走する。期待: ① timestamped 記録が `docs/reviews/closed/` へ移動、② plan リンクが `../../reviews/closed/I999_code_review_20260101_0000.md` に更新、③ `I999_review.md`（lifecycle）は**移動されず**直下に残る（glob 非マッチ）。終了コード 0 | Claude | ✅ PASS（2026-06-17） |
 
 検証スクリプト例（`/tmp/i065_smoke.sh`）— sandbox は git 不要のため `mv` で同型検証:
 ```bash
@@ -80,9 +80,9 @@ echo "TC-S1 PASS"; rm -rf "$T"
 
 | TC | 期待値 | 実施者 | 実結果 |
 |---:|--------|--------|--------|
-| TC-04 | 遡及移動後、不変量を機械検証: ① 直下（`docs/reviews/*.md`）に残るのは **open issue（`docs/issues/open/` に存在する番号）の記録のみ**。② 総数（直下+`closed/`）が移動前後で**保存**。参考値（2026-06-17 develop ベース）: 直下 64→**3**、`closed/` 53→**114**、総数 **117** で一定。**実装直前に `wc -l` で基準値（BEFORE_ROOT/BEFORE_CLOSED）を再取得し、他イシューの close/レビュー実行で増減があれば期待値を再算出する** | Claude | 未実行 |
-| TC-05 | 移動後、I054〜I064 の `docs/plans/closed/plan_I###.md` 内 `](../../reviews/I###_..._review_<ts>.md)` リンクがすべて `](../../reviews/closed/...)` を指し、リンク先実ファイルが `test -f` で存在（デッドリンクゼロ） | Claude | 未実行 |
-| TC-06 | 遡及 `git mv` 時、移動先 `docs/reviews/closed/` に同名ファイルが既存せず衝突ゼロ（移動が61件すべて成功） | Claude | 未実行 |
+| TC-04 | 遡及移動後、不変量を機械検証: ① 直下（`docs/reviews/*.md`）に残るのは **open issue（`docs/issues/open/` に存在する番号）の記録のみ**。② 総数（直下+`closed/`）が移動前後で**保存**。参考値（2026-06-17 develop ベース）: 直下 64→**3**、`closed/` 53→**114**、総数 **117** で一定。**実装直前に `wc -l` で基準値（BEFORE_ROOT/BEFORE_CLOSED）を再取得し、他イシューの close/レビュー実行で増減があれば期待値を再算出する** | Claude | ✅ PASS（2026-06-17） |
+| TC-05 | 移動後、I054〜I064 の `docs/plans/closed/plan_I###.md` 内 `](../../reviews/I###_..._review_<ts>.md)` リンクがすべて `](../../reviews/closed/...)` を指し、リンク先実ファイルが `test -f` で存在（デッドリンクゼロ） | Claude | ✅ PASS（2026-06-17） |
+| TC-06 | 遡及 `git mv` 時、移動先 `docs/reviews/closed/` に同名ファイルが既存せず衝突ゼロ（移動が61件すべて成功） | Claude | ✅ PASS（2026-06-17） |
 
 > **基準値の再取得（必須）**: TC-04 の参考値（3 / 114 / 117）は固定値ではない。**遡及移動の直前**に
 > `BEFORE_ROOT=$(ls docs/reviews/*.md | wc -l)` / `BEFORE_CLOSED=$(ls docs/reviews/closed/*.md | wc -l)` を控え、
@@ -121,5 +121,9 @@ done
 
 ---
 
-## 実行結果（実装後に追記）
-- （未実行）
+## 実行結果（2026-06-17・実装後）
+- **静的/grep（TC-01/02/03/07）**: `bash /tmp/i065_static.sh` → `STATIC PASS`（exit 0）。close/SKILL.md に回収＋リンク更新手順あり、review-rules.md は「移動しない」断定が消え「回収」記述に更新、review スクリプト3本は保存先不変。
+- **振る舞いスモーク（TC-S1）**: sandbox 実走 → `TC-S1 PASS`。timestamped 記録が `closed/` へ移動・plan リンクが `closed/` 化・lifecycle ファイル `I999_review.md` は**非回収**（glob `*_review_*` で除外）。
+- **遡及検証（TC-04/05/06）**: 移動前 直下=65・closed/=53・総数=118 → 移動 **61件** → 移動後 直下=**4**（open の I065×2/I066/I067 のみ）・closed/=**114**・**総数118で保存**。`bash /tmp/i065_retro_verify.sh 118` → `RETRO PASS`（デッドリンクゼロ）。衝突事前チェック=なし（TC-06）。
+- **結論: 全自動 TC PASS**。
+- 補足: 参考値は当初プラン時点の直下=64 だったが、`/plan-issue-review` 実行で `I065_plan_review_*`（open 記録）が1件増え 65 になった。TC-04 は固定値ではなく「総数保存＋直下は open のみ」を不変量として検証する設計のため、増分に影響されず PASS。
