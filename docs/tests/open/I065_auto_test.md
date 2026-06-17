@@ -80,20 +80,30 @@ echo "TC-S1 PASS"; rm -rf "$T"
 
 | TC | 期待値 | 実施者 | 実結果 |
 |---:|--------|--------|--------|
-| TC-04 | 遡及移動後、`ls docs/reviews/*.md \| wc -l` = **3**（open の I065/I066/I067 のみ）。`ls docs/reviews/closed/*.md \| wc -l` = **114**（既存53 + 移動61）。総数（直下+closed）が移動前後で保存（移動前 64+53=117 → 移動後 3+114=117） | Claude | 未実行 |
+| TC-04 | 遡及移動後、不変量を機械検証: ① 直下（`docs/reviews/*.md`）に残るのは **open issue（`docs/issues/open/` に存在する番号）の記録のみ**。② 総数（直下+`closed/`）が移動前後で**保存**。参考値（2026-06-17 develop ベース）: 直下 64→**3**、`closed/` 53→**114**、総数 **117** で一定。**実装直前に `wc -l` で基準値（BEFORE_ROOT/BEFORE_CLOSED）を再取得し、他イシューの close/レビュー実行で増減があれば期待値を再算出する** | Claude | 未実行 |
 | TC-05 | 移動後、I054〜I064 の `docs/plans/closed/plan_I###.md` 内 `](../../reviews/I###_..._review_<ts>.md)` リンクがすべて `](../../reviews/closed/...)` を指し、リンク先実ファイルが `test -f` で存在（デッドリンクゼロ） | Claude | 未実行 |
 | TC-06 | 遡及 `git mv` 時、移動先 `docs/reviews/closed/` に同名ファイルが既存せず衝突ゼロ（移動が61件すべて成功） | Claude | 未実行 |
 
-検証スクリプト例（`/tmp/i065_retro_verify.sh`・**実装後**実行）:
+> **基準値の再取得（必須）**: TC-04 の参考値（3 / 114 / 117）は固定値ではない。**遡及移動の直前**に
+> `BEFORE_ROOT=$(ls docs/reviews/*.md | wc -l)` / `BEFORE_CLOSED=$(ls docs/reviews/closed/*.md | wc -l)` を控え、
+> 「総数 = `BEFORE_ROOT + BEFORE_CLOSED` が移動後も一定」かつ「直下に残るのは open issue 記録のみ」を不変量として検証する。
+> open issue 集合・期待件数はハードコードせず `docs/issues/open/` から動的に導出する。
+
+検証スクリプト例（`/tmp/i065_retro_verify.sh`・**実装後**実行。移動前の総数 `$EXPECTED_TOTAL` を引数で渡す）:
 ```bash
 #!/usr/bin/env bash
 set -u; cd /mnt/c/app/study-app-multitenant; fail=0
+EXPECTED_TOTAL="${1:-117}"   # 移動直前に控えた BEFORE_ROOT+BEFORE_CLOSED を渡す（既定は参考値117）
 root=$(ls docs/reviews/*.md 2>/dev/null | wc -l)
 closed=$(ls docs/reviews/closed/*.md 2>/dev/null | wc -l)
-# TC-04
-[ "$root" = 3 ] || { echo "TC-04 NG: 直下=$root（期待3）"; fail=1; }
-[ "$closed" = 114 ] || { echo "TC-04 NG: closed=$closed（期待114）"; fail=1; }
-ls docs/reviews/*.md | grep -qvE 'I06[567]_' && { echo "TC-04 NG: 直下に open 以外が残存"; fail=1; }
+# TC-04-①: 総数保存（記録の消失なし）
+[ "$((root + closed))" = "$EXPECTED_TOTAL" ] || { echo "TC-04 NG: 総数=$((root+closed))（期待$EXPECTED_TOTAL）"; fail=1; }
+# TC-04-②: 直下に残るのは open issue（issues/open）の記録のみ（番号を動的導出）
+OPEN_RE="$(ls docs/issues/open/ | grep -oE 'I[0-9]{3}' | sort -u | paste -sd'|' -)"
+for f in docs/reviews/*.md; do
+  n="$(basename "$f" | grep -oE 'I[0-9]{3}')"
+  echo "$n" | grep -qE "^(${OPEN_RE})$" || { echo "TC-04 NG: 直下に非-open 記録が残存: $f"; fail=1; }
+done
 # TC-05: closed plan の reviews リンク先がすべて実在
 for p in docs/plans/closed/plan_I054.md docs/plans/closed/plan_I055.md docs/plans/closed/plan_I057.md \
          docs/plans/closed/plan_I058.md docs/plans/closed/plan_I059.md docs/plans/closed/plan_I060.md \
