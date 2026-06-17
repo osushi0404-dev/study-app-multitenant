@@ -32,7 +32,8 @@
 - **計画レビュー** (`/plan-issue-review I063`): ✅ 完了（`VERDICT: OK` / 高リスク No）。`docs/reviews/I063_plan_review_20260617_1702.md`。Warning×2（W1: `gh issue edit --body-file` 採用 / W2: item3「実行省略不可」明示）・Info×1（git diff は未 push を検出しない＝Q1 設計確定で変更不要）。W1/W2 を計画書・auto_test・本レビュー観点に反映済み。
 - **コードレビュー** (`/code-review I063`): ✅ OK（`VERDICT: OK` / 高リスク No）。`docs/reviews/I063_code_review_20260617_1734.md`。受け入れ条件 10/10 実装済み。指摘は Low×2（#1: 本レビューのテスト結果行プレースホルダ未更新→本コミットで解消／#2: item3 配置は既存パターンと一致で対応任意）。
 - **自動テスト** (`/implement` ステップ5 で実行・`/test I063` で再確認予定): 静的/存在 TC-01〜09＋TC-S2b post-fix = PASS=10/0、振る舞いスモーク TC-S1a/S1b/S2 = PASS。デッドリンク消失確認。`docs/tests/open/I063_auto_test.md` に記録。
-- **手動テスト**: （未実施。grill-me 実走の観察記録 TC-S3 は Human 判断）
+- **自動テスト** (`/test I063`): ✅ 再確認 PASS=10/0（grep 存在 TC-01〜09＋TC-S2b post-fix）＋ 振る舞いスモーク TC-S1a/S1b/S2 PASS（`bash` サブプロセス・実 grep）。Backend/Frontend/E2E は**本変更に非該当**（影響範囲 Backend/Frontend/DB なし）。
+- **手動テスト**: No.5（implement 手順の STOP-before-案内 ordering）を Claude 実施で ✅ OK。No.1〜4（grill-me 実走の観察記録 TC-S3）は Human 判断（要ユーザー確認）。
 
 ## メモ
 - 影響範囲は Backend/Frontend/DB なし（ワークフロー定義ドキュメントのみ）。セキュリティ影響なし。
