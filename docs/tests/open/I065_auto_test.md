@@ -58,12 +58,13 @@ touch "$T/docs/reviews/I999_review.md"   # lifecycle: 移動されてはなら�
 printf '## レビュー結果\n- [20260101_0000 ✅](../../reviews/I999_code_review_20260101_0000.md)\n' \
   > "$T/docs/plans/closed/plan_I999.md"
 cd "$T"; ISSUE_NUM=999
+PLAN="docs/plans/closed/plan_I${ISSUE_NUM}.md"
 for f in docs/reviews/I${ISSUE_NUM}_*_review_*.md; do
   [ -f "$f" ] || continue
   base="$(basename "$f")"
+  esc="${base//./\\.}"   # sed LHS 用に . をエスケープ（誤マッチ防止）
   mv "$f" docs/reviews/closed/
-  PLAN="docs/plans/closed/plan_I${ISSUE_NUM}.md"
-  [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${base})#(../../reviews/closed/${base})#g" "$PLAN"
+  [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${esc})#(../../reviews/closed/${base})#g" "$PLAN"
 done
 # 検証
 [ -f docs/reviews/closed/I999_code_review_20260101_0000.md ] || { echo "TC-S1 NG: 未移動"; exit 1; }
@@ -126,4 +127,5 @@ done
 - **振る舞いスモーク（TC-S1）**: sandbox 実走 → `TC-S1 PASS`。timestamped 記録が `closed/` へ移動・plan リンクが `closed/` 化・lifecycle ファイル `I999_review.md` は**非回収**（glob `*_review_*` で除外）。
 - **遡及検証（TC-04/05/06）**: 移動前 直下=65・closed/=53・総数=118 → 移動 **61件** → 移動後 直下=**4**（open の I065×2/I066/I067 のみ）・closed/=**114**・**総数118で保存**。`bash /tmp/i065_retro_verify.sh 118` → `RETRO PASS`（デッドリンクゼロ）。衝突事前チェック=なし（TC-06）。
 - **結論: 全自動 TC PASS**。
+- **code-review Low 指摘 反映後 再検証（2026-06-18）**: sed LHS の `.` エスケープ（`${base//./\\.}`）と `PLAN` のループ外移動を反映。`.` を任意マッチさせると改変される trap 行を含む sandbox で再スモーク → PASS（誤マッチなし・移動/リンク更新は従来どおり）。Low のみのため CI で十分（再コードレビュー不要・implement 手順2.5）。
 - 補足: 参考値は当初プラン時点の直下=64 だったが、`/plan-issue-review` 実行で `I065_plan_review_*`（open 記録）が1件増え 65 になった。TC-04 は固定値ではなく「総数保存＋直下は open のみ」を不変量として検証する設計のため、増分に影響されず PASS。

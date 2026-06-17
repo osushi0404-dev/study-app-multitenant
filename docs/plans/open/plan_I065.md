@@ -143,13 +143,14 @@ I054〜I064 の `docs/plans/closed/plan_I###.md` はいずれも timestamped 記
    # timestamped 監査記録（直下）を closed/ へ回収（I065）
    # glob は IXXX_{code,plan,issue}_review_<ts>.md に一致。
    # IXXX_review.md（lifecycle・_review_ を含まない）には非マッチ＝誤回収しない。
+   PLAN="docs/plans/closed/plan_I${ISSUE_NUM}.md"   # close 実行内で一定（ループ外へ）
    for f in docs/reviews/I${ISSUE_NUM}_*_review_*.md; do
      [ -f "$f" ] || continue
      base="$(basename "$f")"
+     esc="${base//./\\.}"   # sed LHS 用に正規表現メタ文字 . をエスケープ
      git mv "$f" docs/reviews/closed/
      # plan 内 ## レビュー結果 リンクを closed/ 向きに更新（リンク切れ防止・Q3）
-     PLAN="docs/plans/closed/plan_I${ISSUE_NUM}.md"
-     [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${base})#(../../reviews/closed/${base})#g" "$PLAN"
+     [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${esc})#(../../reviews/closed/${base})#g" "$PLAN"
    done
 ```
 
@@ -178,8 +179,9 @@ I054〜I064 の `docs/plans/closed/plan_I###.md` はいずれも timestamped 記
      for f in docs/reviews/I${n}_*_review_*.md; do
        [ -f "$f" ] || continue
        base="$(basename "$f")"
+       esc="${base//./\\.}"   # sed LHS 用に正規表現メタ文字 . をエスケープ
        git mv "$f" docs/reviews/closed/
-       [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${base})#(../../reviews/closed/${base})#g" "$PLAN"
+       [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${esc})#(../../reviews/closed/${base})#g" "$PLAN"
      done
    done
 ```
