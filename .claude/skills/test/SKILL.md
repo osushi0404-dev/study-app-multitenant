@@ -20,6 +20,7 @@ app/非app の区別では分岐しない。Backend/Frontend 変更が無いイ�
 ## 停止条件
 - 自動テスト（pytest / Jest / Playwright E2E）が1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
 - 計画書（auto_test.md）が指定する専用自動テストが1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+  - 計画書が pytest/Jest/E2E を正のテストとして指定している場合は両条件に該当し得るが、いずれも STOP のため扱いは同じ。
 - 手動テスト確認でユーザーが NG を返した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
 
 ### 既定の自動テスト（auto_test.md に指定が無い場合のフォールバック）

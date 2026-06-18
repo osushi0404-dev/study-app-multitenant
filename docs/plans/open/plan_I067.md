@@ -113,7 +113,7 @@ fi
   git push -u origin feature/I${ISSUE_NUM}-[概要]
   \`\`\`
   → step 3 でそのまま draft PR を作成する。
-- **既コミット（`ISSUE_ALREADY_ON_BASE`）**: `docs: create issue` コミットを **スキップ**する。本スキルで生成する計画書 docs（plan/tests/review）を最初のコミットとし（例: `git commit -m "docs(I${ISSUE_NUM}): plan/tests/review 作成"`）、push してから step 3 の draft PR を作成する（docs コミットが差分になるため PR 作成は成功する）。
+- **既コミット（`ISSUE_ALREADY_ON_BASE`）**: `docs: create issue` コミットを **スキップ**する。生成した計画書 docs（plan/tests/review）を `git add`→commit→**`git push -u origin feature/I${ISSUE_NUM}-[概要]`**（通常経路と対称に初回 push を明示）してから step 3 の draft PR を作成する（docs コミットが差分になるため PR 作成は成功する）。
 ```
 
 (3) `#### 3. Draft PR 作成` の冒頭に注記を追加:

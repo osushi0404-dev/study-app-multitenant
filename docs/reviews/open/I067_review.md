@@ -28,4 +28,10 @@
   - I2(P4): test/SKILL.md に auto_test.md 欠損時の既定フォールバックを明記（変更B(2)・TC-08）
 
 ## code-review 記録
-（`/code-review` 実行時に追記）
+- 実行: 2026-06-18 / レビューファイル: `docs/reviews/I067_code_review_20260618_1906.md`
+- **VERDICT: OK**（高リスク判定: No）。受け入れ条件 1〜4 ✅、AC#5 は `/test` 前のため manual No.1 実結果空白（正常）
+- 指摘対応:
+  - Medium(BP): plan-issue 既コミット経路に初回 push コマンドが無く通常経路と非対称 → `git add`→commit→`git push -u origin feature/...` を明示（plan も同期）
+  - Low(BP): 停止条件2条件の重複関係が不明確 → 「既定テストを正と指定する場合は両条件該当だが扱いは同じ」を注記
+  - Low(BP): git log 判定の `${ISSUE_NUM}.md`（I なし）冗長 → **保持**（close/issue-bootstrap の旧 `###.md` 形式サポートと対称・レビューも許容）
+- Medium 修正のため commit/push 後に `/code-review I067` を再実行（implement ルール 2.5）
