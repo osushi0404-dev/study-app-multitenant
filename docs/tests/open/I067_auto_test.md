@@ -25,14 +25,30 @@
 | Jest（Frontend） | 非該当 | Frontend コード変更なし |
 | Playwright E2E | 非該当 | UI/フロー変更なし |
 
-## 実行記録（/test 時に記入）
+## 実行記録（/implement 時の実装後検証）
+2026-06-18 実装直後に全 TC を実行（PASS=8 FAIL=0）。決定論ゲート・自動判定ロジックは機能検証も実施済み。
+
 | TC | 結果(PASS/FAIL) | 備考 |
 |----|------|------|
-| TC-01 | | |
-| TC-02 | | |
-| TC-03 | | |
-| TC-04 | | |
-| TC-05 | | |
-| TC-06 | | |
-| TC-07 | | |
-| TC-08 | | |
+| TC-01 | PASS | invariant＋`ISSUE_ALREADY_ON_BASE` 自動判定を確認 |
+| TC-02 | PASS | 計画駆動節＋description（plan-specified）を確認 |
+| TC-03 | PASS | 指定なし時のフォールバック文言を確認 |
+| TC-04 | PASS | 非該当記録＋「app/非app の区別では分岐しない」を確認 |
+| TC-05 | PASS | retro バックログ未コミット invariant を確認 |
+| TC-06 | PASS | `git add -u`＋`git add -A` 禁止＋決定論ゲートを確認 |
+| TC-07 | PASS | 4 スキルの frontmatter（disable-model-invocation）健全 |
+| TC-08 | PASS | 停止条件に計画書指定テスト失敗＋auto_test.md 欠損フォールバックを確認 |
+
+### 機能検証（決定論ロジックの敵対的確認）
+| 検証 | ケース | 結果 |
+|------|--------|------|
+| close ゲート | I067 のみ staged | PASS（通過・正当 close を妨げない） |
+| close ゲート | I068 混入 | TRIPPED（スコープ外検出・中断） |
+| close ゲート | I0670（別 issue・アンカー検証） | TRIPPED（`I067` と `I0670` を正しく区別） |
+| plan-issue 判定 | I067（develop に既コミット） | `ISSUE_ALREADY_ON_BASE`（既コミット経路） |
+| plan-issue 判定 | I999（未存在） | 未コミット経路（通常フロー） |
+
+### 既定テスト（フォールバック）
+| 種別 | 判定 | 理由 |
+|------|------|------|
+| pytest / Jest / Playwright E2E | 非該当 | Backend/Frontend/DB/UI のコード変更なし |

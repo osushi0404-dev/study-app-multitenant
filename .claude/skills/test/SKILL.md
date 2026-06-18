@@ -1,6 +1,6 @@
 ---
 name: test
-description: Run automated tests (pytest + Jest) and prompt manual test verification.
+description: Run the plan-specified automated tests (default: pytest + Jest + E2E) and prompt manual test verification.
 argument-hint: "I###"
 disable-model-invocation: true
 allowed-tools: Read, Bash, Write, Edit, Glob, Grep
@@ -10,9 +10,19 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 前提: /code-review OK。
 
+## 自動テストの選択（計画駆動）
+実行する自動テストは **計画書のテスト計画（`docs/tests/open/$ARGUMENTS_auto_test.md`）が正**。
+- auto_test.md が **専用の自動テスト**（例: `bash scripts/...` の専用スクリプト・特定 TC）を指定している場合: **それを正として実行**し結果を記録する。auto_test.md が「非該当」と明記した既定テスト（pytest/Jest/E2E のいずれか）は実行せず「非該当」と記録する。
+- auto_test.md が自動テストを **指定していない場合**、または **auto_test.md が存在しない場合**: 下記の既定（pytest → Jest → E2E）にフォールバックする。
+
+app/非app の区別では分岐しない。Backend/Frontend 変更が無いイシューでは、auto_test.md が専用テストを正と指定し pytest/Jest/E2E を「非該当」と明記する運用になる。
+
 ## 停止条件
 - 自動テスト（pytest / Jest / Playwright E2E）が1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+- 計画書（auto_test.md）が指定する専用自動テストが1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
 - 手動テスト確認でユーザーが NG を返した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+
+### 既定の自動テスト（auto_test.md に指定が無い場合のフォールバック）
 
 0) 実行環境を確認する:
    ```bash

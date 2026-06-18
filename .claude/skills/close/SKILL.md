@@ -98,7 +98,28 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    )"
    ```
    テンプレートが存在しない場合は「目的/変更点/テスト/ロールバック/参照パス」を手動で記載する。
-3) commit/push して PR を更新
+3) commit/push して PR を更新する。
+   **staging は close 対象の I### 関連ファイルに限定する**（step 1 の `git mv` で移動した issue/plan/tests/reviews と、完了情報追記などで編集した追跡済みファイルのみ）。
+   ```bash
+   # 追跡済みファイルの変更（git mv 済みの move・完了情報追記）だけを staging する。
+   git add -u
+   # ⚠️ `git add -A` / `git add .` / `git add docs` は使わない。
+   #    retro が /issue-bootstrap で作成した未コミットのバックログ issue ファイル（別 I###.md）を
+   #    巻き込み、当該イシューの plan-issue 初コミットを no-op 化させる（I062/I067 の事故原因）。
+
+   # 決定論ゲート: staged に I### スコープ外が混ざっていないか検証（番号をアンカーして誤マッチ回避）。
+   STAGED=$(git diff --cached --name-only)
+   if echo "$STAGED" | grep -vE "I${ISSUE_NUM}([^0-9]|$)" | grep -q .; then
+     echo "⚠️ close 対象（I${ISSUE_NUM}）以外が staged されています。確認してください:"
+     echo "$STAGED"
+     # → スコープ外（特に docs/issues/open/ の別 I###.md）を unstage してから続行する。
+     exit 1
+   fi
+
+   git commit -m "close(I${ISSUE_NUM}): ..."
+   git push
+   ```
+   `git status` に未追跡のバックログ issue ファイル（`docs/issues/open/` 配下の別 I###.md 等）が出る場合は、**コミットせず未追跡のまま残す**。
 4) PR のベースブランチが `develop` であることを確認・修正:
    ```bash
    gh pr view <PR番号> --json baseRefName -q .baseRefName
