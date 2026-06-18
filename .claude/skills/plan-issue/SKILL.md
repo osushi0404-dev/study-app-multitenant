@@ -35,13 +35,35 @@ git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
 - 最大5単語程度に要約
 
 #### 2. イシューファイルのコミット・プッシュ
+
+**前提（invariant）**: イシューファイルは **plan-issue が feature ブランチで初コミットする**のが原則。`/issue-bootstrap` はローカル作成（未コミット）に留め、develop 等のベースブランチへ事前コミットしない（retro/close のハンドオフでも同様）。同一ファイルシステム上の untracked ファイルは context clear をまたいでも残り、別コンテキストの plan-issue が拾える（develop 事前コミットもハンドオフ PR も不要）。
+
+イシューが既にベースへコミット済みかを自動判定する（既コミットだと `docs: create issue` が no-op 化し `gh pr create` が「No commits between develop and feature/…」で失敗するため）。パスはバージョン非依存になるよう open/closed を明示列挙する（`**` glob は git バージョン/設定依存のため使わない）:
 ```bash
-git add docs/issues/open/I${ISSUE_NUM}.md
-git commit -m "docs: create issue I${ISSUE_NUM}"
-git push -u origin feature/I${ISSUE_NUM}-[概要]
+if git log origin/develop --oneline -- \
+     "docs/issues/open/I${ISSUE_NUM}.md" "docs/issues/closed/I${ISSUE_NUM}.md" \
+     "docs/issues/open/${ISSUE_NUM}.md"  "docs/issues/closed/${ISSUE_NUM}.md" | grep -q .; then
+  echo "ISSUE_ALREADY_ON_BASE"   # → 既コミット経路（issue commit をスキップ）
+fi
 ```
 
+- **未コミット（通常）**:
+  ```bash
+  git add docs/issues/open/I${ISSUE_NUM}.md
+  git commit -m "docs: create issue I${ISSUE_NUM}"
+  git push -u origin feature/I${ISSUE_NUM}-[概要]
+  ```
+  → step 3 でそのまま draft PR を作成する。
+- **既コミット（`ISSUE_ALREADY_ON_BASE`）**: `docs: create issue` コミットを **スキップ**する。本スキルで生成する計画書 docs（plan/tests/review）を最初のコミットとする:
+  ```bash
+  git add docs/plans/open/plan_I${ISSUE_NUM}.md docs/tests/open/I${ISSUE_NUM}_*.md docs/reviews/open/I${ISSUE_NUM}_review.md
+  git commit -m "docs(I${ISSUE_NUM}): plan/tests/review 作成"
+  git push -u origin feature/I${ISSUE_NUM}-[概要]
+  ```
+  → step 3 で draft PR を作成する（docs コミットが差分になるため PR 作成は成功する）。
+
 #### 3. Draft PR 作成
+（既コミット経路の場合は、上記の計画書 docs を commit・push した後に本コマンドを実行する。）
 ```bash
 gh pr create \
   --title "feat: I${ISSUE_NUM} [イシュータイトル]" \

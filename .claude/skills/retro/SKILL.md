@@ -115,6 +115,8 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    禁止: インライン修正（その場での Edit/Write）は禁止。必ず正規フローを使う。
    ```
 
+   **（ハンドオフ invariant）** `/issue-bootstrap` で起票したバックログのイシューファイルは **ローカル作成（未コミット）のまま**にする。develop 等のベースへコミットしない。コミットすると当該イシューの `/plan-issue` の初コミットが no-op 化し draft PR が失敗する（plan-issue の invariant 参照）。イシューは各自の `/plan-issue` が feature ブランチで初コミットする。
+
 5) 是正処置がある場合、対応方法を確認する（ユーザーの判断を待つ）:
 
    ```
