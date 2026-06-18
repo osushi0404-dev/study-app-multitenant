@@ -242,4 +242,10 @@ ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$TMP/c5"
 - [x] 設計判断 2 項目（`append_review_link` 関数抽出 / fixture の合成 hermetic 化）はユーザー承認済み
 
 ## レビュー結果
-- [20260618_1637 判定: ✅ 完了](../../reviews/I066_plan_review_20260618_1637.md)
+- [20260618_1637 判定: ✅ 完了](../../reviews/closed/I066_plan_review_20260618_1637.md)
+
+## 完了情報
+- **完了日時**: Thu Jun 18 18:21:05 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review VERDICT: OK / code-review VERDICT: OK・AC 6/6）
+- **テスト**: 自動 PASS=55 FAIL=0 / 手動 No.1-5 Claude OK
