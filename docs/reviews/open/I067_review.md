@@ -27,6 +27,12 @@
   - I1(Claude BP): plan-issue 既コミット判定の `**` glob を open/closed 明示列挙に変更（バージョン非依存）
   - I2(P4): test/SKILL.md に auto_test.md 欠損時の既定フォールバックを明記（変更B(2)・TC-08）
 
+## /test 記録
+- 実行: 2026-06-18（計画駆動経路）
+- 自動テスト（正＝auto_test.md TC-01〜08）: **PASS=8 / FAIL=0**。既定 pytest/Jest/E2E は **非該当**（コード変更なし）
+- 手動テスト No.1〜4（Claude）: すべて OK（完走シナリオ実証・計画駆動整合・ゲート機能検証・参照実在）
+- 手動テスト No.5（Human）: 文言明確性の最終サインオフをユーザーに依頼中
+
 ## code-review 記録
 - 実行: 2026-06-18 / レビューファイル: `docs/reviews/I067_code_review_20260618_1906.md`
 - **VERDICT: OK**（高リスク判定: No）。受け入れ条件 1〜4 ✅、AC#5 は `/test` 前のため manual No.1 実結果空白（正常）
