@@ -9,12 +9,12 @@
 
 | TC | 対象 | コマンド | 期待結果 |
 |----|------|---------|---------|
-| TC-01 | plan-issue invariant＋既コミット分岐 | `grep -F "feature ブランチで初コミット" .claude/skills/plan-issue/SKILL.md && grep -F "No commits between" .claude/skills/plan-issue/SKILL.md` | 両 grep がヒット（exit 0）。invariant と既コミット時のエラー説明が存在する |
+| TC-01 | plan-issue invariant＋既コミット自動判定分岐 | `grep -F "feature ブランチで初コミット" .claude/skills/plan-issue/SKILL.md && grep -F "ISSUE_ALREADY_ON_BASE" .claude/skills/plan-issue/SKILL.md` | 両 grep がヒット（exit 0）。invariant と `git log` 自動判定（既コミット経路マーカー）が存在する |
 | TC-02 | test 計画駆動節＋description | `grep -F "自動テストの選択（計画駆動）" .claude/skills/test/SKILL.md && grep -F "plan-specified" .claude/skills/test/SKILL.md` | 両 grep がヒット（exit 0）。計画駆動節と更新後 description が存在する |
 | TC-03 | test フォールバック文言 | `grep -F "指定していない場合のみ" .claude/skills/test/SKILL.md && grep -F "フォールバック" .claude/skills/test/SKILL.md` | 両 grep がヒット（exit 0）。指定なし時のみ既定にフォールバックする旨が存在する |
 | TC-04 | test 非該当記録＋分岐なし宣言 | `grep -F "非該当" .claude/skills/test/SKILL.md && grep -F "app/非app の区別では分岐しない" .claude/skills/test/SKILL.md` | 両 grep がヒット（exit 0）。既定テストの非該当記録指示と app/非app 非分岐の宣言が存在する |
 | TC-05 | retro ハンドオフ invariant | `grep -F "ローカル作成（未コミット）のまま" .claude/skills/retro/SKILL.md` | grep がヒット（exit 0）。バックログ issue を未コミットのまま残す invariant が存在する |
-| TC-06 | close scoped staging | `grep -F "git add -u" .claude/skills/close/SKILL.md && grep -F "git add -A" .claude/skills/close/SKILL.md` | 両 grep がヒット（exit 0）。`git add -u` 採用と `git add -A` 等の禁止注記が存在する |
+| TC-06 | close scoped staging＋決定論ゲート | `grep -F "git add -u" .claude/skills/close/SKILL.md && grep -F "git add -A" .claude/skills/close/SKILL.md && grep -F "決定論ゲート" .claude/skills/close/SKILL.md` | 3 grep すべてヒット（exit 0）。`git add -u` 採用・`git add -A` 等の禁止注記・スコープ外検出の決定論ゲートが存在する |
 | TC-07 | 4 スキルの frontmatter 妥当性 | `for f in plan-issue test retro close; do head -7 .claude/skills/$f/SKILL.md \| grep -q "disable-model-invocation: true" && echo "$f OK" \|\| echo "$f NG"; done` | 4 ファイルすべて `OK`（frontmatter が破壊されていない） |
 
 ## 既定テスト（フォールバック）— 本イシューでは非該当

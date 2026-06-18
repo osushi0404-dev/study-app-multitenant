@@ -76,10 +76,10 @@ P6 影響なし（UI なし・データ量/外部API 懸念なし）。
 
 | # | ファイル | 変更内容 |
 |---|---------|---------|
-| A | `.claude/skills/plan-issue/SKILL.md` | step 2 付近に invariant（イシューは feature ブランチで初コミット／ベース事前コミット禁止）と「既コミット時」分岐（issue commit スキップ→計画書 docs コミットで draft PR）を追記 |
+| A | `.claude/skills/plan-issue/SKILL.md` | step 2 に invariant（イシューは feature ブランチで初コミット／ベース事前コミット禁止）＋**「イシューが既に base へコミット済みか」を `git log` で自動判定して分岐**（既コミット時は issue commit スキップ→計画書 docs コミットで draft PR）を追記。step 3 に既コミット時の PR 作成タイミング注記 |
 | B | `.claude/skills/test/SKILL.md` | 冒頭に「自動テストの選択（計画駆動）」節を追加（auto_test.md を正・指定なし時のみ既定にフォールバック・非該当を明記）。既定手順 0-3 を「フォールバック」と明示。`description` を更新 |
 | C | `.claude/skills/retro/SKILL.md` | step 4（予防処置への対応）に、バックログ issue ファイルはローカル未コミットのまま残す invariant を注記 |
-| D | `.claude/skills/close/SKILL.md` | step 3 を「scoped staging（`git add -u`）＋ `git add -A`/`.`/`docs` 禁止＋未追跡バックログ issue は未コミットのまま残す」に具体化 |
+| D | `.claude/skills/close/SKILL.md` | step 3 を「`git add -u`（未追跡を構造的に除外）＋**決定論ゲート**（staged に I### スコープ外があれば中断・番号アンカーで I0670 誤マッチ回避）＋`git add -A`/`.`/`docs` 禁止」に具体化 |
 
 ---
 
@@ -87,18 +87,36 @@ P6 影響なし（UI なし・データ量/外部API 懸念なし）。
 
 > 各ステップの検証は自動テスト文書（`docs/tests/open/I067_auto_test.md`）の TC を参照。本文には検証コマンドを書かない。
 
-### ステップ1: plan-issue/SKILL.md に invariant＋既コミット分岐を追記（変更A）
-**修正方針**: 「イシューは feature ブランチで初コミットするのが原則」という invariant を明記し、既にベースへコミット済みの場合の代替手順を示す。これにより `gh pr create` の「No commits between …」エラーを回避できる。
+### ステップ1: plan-issue/SKILL.md に invariant＋既コミット自動判定分岐を追記（変更A）
+**修正方針**: 「イシューは feature ブランチで初コミットするのが原則」という invariant を明記し、**「イシューが既に base へコミット済みか」を `git log` で自動判定して分岐**する。エラーを見てから手動で代替手順に切り替えるのではなく、判定結果で経路を決めるため `gh pr create` の「No commits between …」エラーにそもそも遭遇しない（手続き→決定論的判定への格上げ）。
 
-`#### 2. イシューファイルのコミット・プッシュ` のコードブロック直後に以下を追記:
-
+(1) `#### 2. イシューファイルのコミット・プッシュ` のコードブロック直前に invariant を追記:
 ```markdown
 **前提（invariant）**: イシューファイルは **plan-issue が feature ブランチで初コミットする**のが原則。`/issue-bootstrap` はローカル作成（未コミット）に留め、develop 等のベースブランチへ事前コミットしない（retro/close のハンドオフでも同様）。同一ファイルシステム上の untracked ファイルは context clear をまたいでも残り、別コンテキストの plan-issue が拾える（develop 事前コミットもハンドオフ PR も不要）。
+```
 
-**分岐（イシューが既にベースへコミット済みの場合）**: 何らかの理由でイシューファイルが既にベースブランチ（develop）にコミット済みのときは、上記 `git commit -m "docs: create issue I###"` は **no-op** になり、続く `gh pr create` が **「No commits between develop and feature/…」でエラー**になる。この場合は次の手順で進める:
-1. `docs: create issue` コミットを **スキップ**する。
-2. 生成物の計画書 docs（plan / tests / review）を先に commit する（例: `git commit -m "docs: plan I### (issue already on base)"`）。
-3. その docs コミットを push し、それを基に `gh pr create --draft --base develop` を実行する（差分が生じるため PR 作成は成功する）。
+(2) 同 step 2 のコミット手順を、自動判定分岐に置き換える:
+```markdown
+イシューが既にベースへコミット済みかを自動判定する（既コミットだと `docs: create issue` が no-op 化し `gh pr create` が「No commits between develop and feature/…」で失敗するため）:
+\`\`\`bash
+if git log origin/develop --oneline -- "docs/issues/**/I${ISSUE_NUM}.md" "docs/issues/**/${ISSUE_NUM}.md" | grep -q .; then
+  echo "ISSUE_ALREADY_ON_BASE"   # → 既コミット経路（issue commit をスキップ）
+fi
+\`\`\`
+
+- **未コミット（通常）**:
+  \`\`\`bash
+  git add docs/issues/open/I${ISSUE_NUM}.md
+  git commit -m "docs: create issue I${ISSUE_NUM}"
+  git push -u origin feature/I${ISSUE_NUM}-[概要]
+  \`\`\`
+  → step 3 でそのまま draft PR を作成する。
+- **既コミット（`ISSUE_ALREADY_ON_BASE`）**: `docs: create issue` コミットを **スキップ**する。本スキルで生成する計画書 docs（plan/tests/review）を最初のコミットとし（例: `git commit -m "docs(I${ISSUE_NUM}): plan/tests/review 作成"`）、push してから step 3 の draft PR を作成する（docs コミットが差分になるため PR 作成は成功する）。
+```
+
+(3) `#### 3. Draft PR 作成` の冒頭に注記を追加:
+```markdown
+（既コミット経路の場合は、上記の計画書 docs を commit・push した後に本コマンドを実行する。）
 ```
 → 検証: TC-01
 
@@ -134,8 +152,8 @@ step 4 のコードブロック（予防処置への対応ガイド）の直後�
 ```
 → 検証: TC-05
 
-### ステップ4: close/SKILL.md step 3 を scoped staging に具体化（変更D）
-**修正方針**: close の commit が close 対象の I### 関連ファイルのみを staging し、未コミットのバックログ issue ファイルを巻き込まないようにする。`git add -A`/`.`/`docs` の broad add を明示的に禁止する。
+### ステップ4: close/SKILL.md step 3 を「scoped staging＋決定論ゲート」に具体化（変更D）
+**修正方針**: close の commit が close 対象の I### 関連ファイルのみを staging するよう `git add -u`（未追跡を構造的に除外）を使い、さらに **staging 内容が I### スコープ外を含まないことを決定論ゲートで検証**してから commit する。`git add -A`/`.`/`docs` の broad add は明示禁止。これにより、将来 add コマンドが broad に戻された場合でもゲートが out-of-scope を検出して中断する（防御多重化）。ゲートは番号をアンカーして `I067` が `I0670` 等に誤マッチしないようにする。
 
 step 3「commit/push して PR を更新」を以下に置き換える:
 ```markdown
@@ -147,7 +165,17 @@ step 3「commit/push して PR を更新」を以下に置き換える:
    # ⚠️ `git add -A` / `git add .` / `git add docs` は使わない。
    #    retro が /issue-bootstrap で作成した未コミットのバックログ issue ファイル（別 I###.md）を
    #    巻き込み、当該イシューの plan-issue 初コミットを no-op 化させる（I062/I067 の事故原因）。
-   git commit -m "close(I###): ..."
+
+   # 決定論ゲート: staged に I### スコープ外が混ざっていないか検証（番号をアンカーして誤マッチ回避）。
+   STAGED=$(git diff --cached --name-only)
+   if echo "$STAGED" | grep -vE "I${ISSUE_NUM}([^0-9]|$)" | grep -q .; then
+     echo "⚠️ close 対象（I${ISSUE_NUM}）以外が staged されています。確認してください:"
+     echo "$STAGED"
+     # → スコープ外（特に docs/issues/open/ の別 I###.md）を unstage してから続行する。
+     exit 1
+   fi
+
+   git commit -m "close(I${ISSUE_NUM}): ..."
    git push
    ```
    `git status` に未追跡のバックログ issue ファイル（`docs/issues/open/` 配下の別 I###.md 等）が出る場合は、**コミットせず未追跡のまま残す**。
@@ -184,7 +212,8 @@ step 3「commit/push して PR を更新」を以下に置き換える:
 | Risk | 影響 | 回避策 |
 |------|------|--------|
 | close の `git add -u` が完了情報追記済みファイルを取りこぼす | close の commit が不完全 | step 1 の `git mv` で move は既に staging 済み。`git add -u` は追跡済みの変更（move 先への追記含む）を再 staging するため取りこぼさない。TC-06 で文言確認 |
-| 既コミット分岐の手順が plan-issue の通常フロー（PR を先に作る）と順序が逆 | 運用者の混乱 | invariant＋分岐を「step 2 直後」に併記し、通常時/既コミット時の差を明示。本イシュー自身で実地適用し完走確認 |
+| 決定論ゲートが誤検知し正当な close を中断 | close が進まない | ゲートの許可条件は「パスに `I${ISSUE_NUM}` を含む」。close が触る正当ファイル（move 先・完了情報追記の plan・timestamped review）はすべて I### を含む。PR 本文編集は `gh`（ファイル変更なし）。番号アンカー `([^0-9]|$)` で `I0670` 等の誤マッチも回避。手動 No.3 で確認 |
+| 既コミット経路が plan-issue 通常フロー（PR を先に作る）と順序が逆 | 運用者の混乱 | `git log` 自動判定で経路を決定論的に分岐するため、運用者が手動で切り替える必要がない。invariant を理由として併記。本イシュー自身で実地適用し完走確認 |
 | 追記文言が冗長でスキルが読みづらくなる | 保守性低下 | 各追記は invariant＋分岐の最小限。既存節構造を壊さず挿入 |
 
 ---
@@ -198,9 +227,10 @@ step 3「commit/push して PR を更新」を以下に置き換える:
 | 既コミット時は issue commit スキップ→計画書 docs コミットで draft PR | **イシュー明記**（解決方針1） | I067.md 解決方針1 |
 | /test を計画駆動（auto_test.md を正・指定なし時のみ既定にフォールバック） | **イシュー明記**（設計メモ Q2=B） | I067.md「auto_test.md が指定する自動テストを正として実行、指定が無い場合のみ既定にフォールバック」 |
 | retro/close をハンドオフ是正の対象に追加 | **イシュー明記**（設計メモ Q1=A ②・スコープ補足） | I067.md「対象スキルは plan-issue, test, retro, close」 |
-| close の scoped staging に **`git add -u`** を採用 | **仮定（イシュー意図からの導出）** | イシューは「close の一括 git add が未コミット backlog を巻き込まない」と意図を明記。具体コマンド `git add -u` は本計画での導出（move は git mv 済みのため `-u` で追跡済み変更のみ staging すれば足りる） |
+| close の staging を **`git add -u`＋決定論ゲート** にする | **イシュー意図＋ユーザー承認** | イシューは「close の一括 add が未コミット backlog を巻き込まない」意図を明記。具体方式（`git add -u`＋スコープ外検出ゲート）は理想/根治の観点でユーザーが承認（2026-06-18） |
+| plan-issue の既コミット対応を **`git log` 自動判定で分岐** にする | **イシュー意図＋ユーザー承認** | イシューは「既コミット時は issue commit スキップ→docs コミットで draft PR」を明記。自動判定（エラー遭遇前に経路決定）は理想/根治の観点でユーザーが承認（2026-06-18） |
 
-> `git add -u` の採用のみ「仮定（導出）」です。close で `git add -u` を使うか、より明示的にファイル名指定の `git add docs/issues/closed/... docs/plans/closed/...` を列挙する方式にするか、ご確認ください（既定推奨は `git add -u`）。
+> 仮定で未確定の設計判断はありません（close の staging 方式・plan-issue の判定方式はいずれもユーザー承認済み）。
 
 ### チェックリスト（要件適合性・セキュリティ・テスト計画・設計品質）
 - [x] 要件適合性: 受け入れ条件の範囲内（4 スキルの分岐明文化のみ）。命名規約 runbook・スクリプト/close 側ロジック（I066 担当）は触らない
