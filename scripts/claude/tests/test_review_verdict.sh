@@ -16,7 +16,6 @@ CODE_REVIEW="scripts/claude/code-review.sh"
 PLAN_REVIEW="scripts/claude/plan-issue-review.sh"
 CODE_AGENT=".claude/review-agents/code-reviewer.md"
 PLAN_AGENT=".claude/review-agents/plan-reviewer.md"
-REAL_BOLD_BLOCKER="docs/reviews/I060_code_review_20260612_0045.md"
 RUNBOOK="docs/runbooks/common-commands.md"
 
 pass=0; fail=0
@@ -76,13 +75,14 @@ printf 'x\nVERDICT: BLOCKER\n'              > "$TMP/c1"; ck TC-01c BLOCKER "$(de
 printf 'x\nVERDICT: HIGH\n'                 > "$TMP/c2"; ck TC-02c HIGH    "$(detect_code_verdict "$TMP/c2")"
 printf 'x\nVERDICT: OK\n'                   > "$TMP/c3"; ck TC-03c OK      "$(detect_code_verdict "$TMP/c3")"
 printf '| **Blocker** | x |\nVERDICT: OK\n' > "$TMP/c4"; ck TC-04c OK      "$(detect_code_verdict "$TMP/c4")"
-ck TC-05 BLOCKER "$(detect_code_verdict "$REAL_BOLD_BLOCKER")"
+# TC-05: 太字 Blocker・VERDICT 行なし → 保険経路で BLOCKER（合成 hermetic fixture・実ファイル依存撤去）
+printf '| **Blocker** | 説明 |\n指摘あり\n'  > "$TMP/c5"; ck TC-05 BLOCKER "$(detect_code_verdict "$TMP/c5")"
 printf '| Blocker | x |\n'                  > "$TMP/c7"; ck TC-07 BLOCKER "$(detect_code_verdict "$TMP/c7")"
 printf '| High | x |\n'                     > "$TMP/c8"; ck TC-08 HIGH    "$(detect_code_verdict "$TMP/c8")"
 printf '| **High** | x |\n'                 > "$TMP/c9"; ck TC-09 HIGH    "$(detect_code_verdict "$TMP/c9")"
 printf '# clean review\n指摘なし\n'         > "$TMP/c10"; ck TC-10 OK     "$(detect_code_verdict "$TMP/c10")"
-# TC-12: 旧 grep が太字 Blocker に非マッチ（バグの存在＝修正の前提を固定化）
-ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$REAL_BOLD_BLOCKER"
+# TC-12: 旧プレーン grep が太字 Blocker に非マッチ（バグの存在＝修正の前提を固定化）
+ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$TMP/c5"
 
 echo "== TC-13〜TC-17: detect_plan_verdict（一次=VERDICT / 保険=プレーン判定） =="
 printf '## 判定: 差し戻し\nVERDICT: BLOCKER\n' > "$TMP/p1"; ck TC-13 BLOCKER  "$(detect_plan_verdict "$TMP/p1")"
@@ -116,6 +116,32 @@ printf 'x\nVERDICT: OK\n'       > "$TMP/r3"; ck TC-21c OK "$(detect_code_verdict
 ck_true TC-22-gate grep -q 'シェルスクリプト検証の決定論性' "$CODE_AGENT"
 # P1 do: runbook にシェル検証の実行コンテキスト注意
 ck_true TC-23-do   grep -q 'シェルスクリプトのロジック検証' "$RUNBOOK"
+
+echo "== TC-24〜27: detect_plan_verdict 高リスク保険の多行対応（VERDICT 行なし・I066 #1） =="
+# 実出力書式: 「## 高リスク判定」見出し + 次行「判定: Yes/No」（別行）。VERDICT 行を持たない旧形式を想定。
+printf '## 高リスク判定\n判定: Yes\n該当条件: 認可変更\n' > "$TMP/hr1"; ck TC-24 HIGHRISK "$(detect_plan_verdict "$TMP/hr1")"
+printf '## 高リスク判定\n判定: No\n該当条件: なし\n'      > "$TMP/hr2"; ck TC-25 OK       "$(detect_plan_verdict "$TMP/hr2")"
+# アンカリング: 高リスク判定ブロックは No、別セクションに 判定: Yes → 誤検出しない
+printf '## 高リスク判定\n判定: No\n## その他\n判定: Yes\n' > "$TMP/hr3"; ck TC-26 OK       "$(detect_plan_verdict "$TMP/hr3")"
+# TC-27: 旧行単位 grep が多行 Yes に非マッチ（バグの存在＝修正の前提を固定化）
+ck_false TC-27-old-grep-nonmatch grep -qiE "高リスク判定.*Yes" "$TMP/hr1"
+# TC-27b: 大文字小文字を無視（旧 grep -i パリティ）— 小文字 yes も HIGHRISK
+printf '## 高リスク判定\n判定: yes\n' > "$TMP/hr4"; ck TC-27b HIGHRISK "$(detect_plan_verdict "$TMP/hr4")"
+
+echo "== TC-28〜31: append_review_link 冪等追記（I066 #3） =="
+ck_true TC-28-fn-append declare -F append_review_link
+# TC-29/30:「## レビュー結果」を含まない plan に 2 回追記 → 見出し1個・リンク2行（履歴保持）
+printf '# plan\n本文\n' > "$TMP/pl1"
+append_review_link "$TMP/pl1" "20260618_0900" "判定: 完了" "I066_plan_review_a.md"
+append_review_link "$TMP/pl1" "20260618_1000" "判定: 完了" "I066_plan_review_b.md"
+ck TC-29 1 "$(grep -c '^## レビュー結果$' "$TMP/pl1")"
+# リンク行はレビューリンク形式で厳密にカウント（本文の箇条書き混入による偽陽性を排除）
+ck TC-30 2 "$(grep -cF '](../../reviews/' "$TMP/pl1")"
+# TC-31: 見出しなし plan への初回（1回）追記 → 見出し+リンク 1組（TC-29 との差分は呼び出し回数のみ）
+printf '# plan\n本文\n' > "$TMP/pl2"
+append_review_link "$TMP/pl2" "20260618_1100" "判定: 完了" "I066_plan_review_c.md"
+ck TC-31a 1 "$(grep -c '^## レビュー結果$' "$TMP/pl2")"
+ck TC-31b 1 "$(grep -cF '](../../reviews/' "$TMP/pl2")"
 
 echo "== TC-20: bash -n 構文チェック =="
 ck_true TC-20-syntax-code bash -n "$CODE_REVIEW"
