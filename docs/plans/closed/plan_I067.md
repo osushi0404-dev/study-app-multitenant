@@ -254,4 +254,10 @@ step 3「commit/push して PR を更新」を以下に置き換える:
 - 計画書（本書）・auto_test.md・manual_test.md・review.md を同時作成済み。設計（計画駆動 test・scoped staging）変更時は 4 文書を同時更新する。
 
 ## レビュー結果
-- [20260618_1849 判定: ✅ 完了](../../reviews/I067_plan_review_20260618_1849.md)
+- [20260618_1849 判定: ✅ 完了](../../reviews/closed/I067_plan_review_20260618_1849.md)
+
+## 完了情報
+- **完了日時**: Fri Jun 19 01:22:09 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review VERDICT OK / code-review VERDICT OK・高リスク No）
+- **テスト結果**: 計画駆動 自動 TC-01〜08 PASS=8 FAIL=0・手動 No.1〜4 Claude OK / No.5 Human サインオフ
