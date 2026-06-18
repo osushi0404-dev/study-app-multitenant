@@ -30,7 +30,13 @@
   - Info/テスト妥当性: TC-29/30/31 の fixture 説明（「空 plan」曖昧）→ 「`## レビュー結果` を含まない plan に 2 回/1 回」と明確化
 - 反映先: 計画書 4-1 #3 / R2 / 4-2・本イシュー auto_test TC-29〜31
 
-### code-review（実装後 `/code-review` で記入）
+### code-review（2026-06-18・VERDICT: OK）
+- 記録: `docs/reviews/I066_code_review_20260618_1738.md`
+- 判定: ✅ OK（AC 6/6 達成・Blocker/High なし）。Low 指摘 3 件はいずれも任意だが全件反映:
+  - Low/BP: awk 高リスク判定が case-sensitive（旧 grep は `-i`）→ **`toupper` で大文字小文字無視に**（パリティ復元・保険経路の寛容性）。TC-27b（`判定: yes`→HIGHRISK）で固定
+  - Low/テスト妥当性: TC-30/31b の `grep -c '^- \['` 偽陽性リスク → **`grep -cF '](../../reviews/'`** でリンク形式を厳密カウント
+  - Low/テスト妥当性: テスト文書の TC 数見積もり（「52前後」）→ 実数 **PASS=55** に補正
+- 反映後の全 TC: **PASS=55 FAIL=0**（Low 修正のみのため CI 十分・再レビュー不要）
 
 ## 高リスク判定
 判定: （未）

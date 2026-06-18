@@ -33,10 +33,11 @@ detect_plan_verdict() {
   if grep -qE "判定:.*差し戻し" "$file"; then echo "BLOCKER"; return; fi
   # 保険（多行対応）: 「## 高リスク判定」見出しから次の「## 」見出しまでのブロック内に
   # 末尾アンカーで「判定: Yes」があれば HIGHRISK。見出しと判定行が別行の実出力に対応。
+  # toupper で大文字小文字を無視（旧 grep -i とのパリティ・保険経路は寛容に）。
   if awk '
     /^## 高リスク判定/ { inblock=1; next }
     /^## /            { inblock=0 }
-    inblock && /^判定:[[:space:]]*Yes[[:space:]]*$/ { found=1 }
+    inblock && toupper($0) ~ /^判定:[[:space:]]*YES[[:space:]]*$/ { found=1 }
     END { exit(found?0:1) }
   ' "$file"; then echo "HIGHRISK"; return; fi
   echo "OK"

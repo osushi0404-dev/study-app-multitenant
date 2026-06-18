@@ -47,8 +47,9 @@ FAIL TC-05  expected[BLOCKER] got[OK]   ← I065 移動で fixture パス破損�
 ### ステップ4: 全回帰・健全性
 | TC | 内容 | 期待結果 |
 |----|------|----------|
+| TC-27b | 大文字小文字無視（旧 grep -i パリティ）— 小文字 `判定: yes` | `## 高リスク判定`\n`判定: yes` | `detect_plan_verdict` = `HIGHRISK` |
 | TC-20（既存） | `bash -n` 構文チェック（code/plan/self） | いずれも成功 |
-| 全体 | 全 TC 実行 | **FAIL=0**（既存 TC-01〜TC-23 + 新規 TC-24〜TC-31、TC-05/TC-12 是正含む） |
+| 全体 | 全 TC 実行 | **PASS=55 FAIL=0**（既存 TC-01〜TC-23 + 新規 TC-24〜TC-27b・TC-28〜TC-31b、TC-05/TC-12 是正含む） |
 
 ## 実行結果記録（/test で記入）
 - 実行日時: （未実施）

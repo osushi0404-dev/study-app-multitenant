@@ -125,6 +125,8 @@ printf '## 高リスク判定\n判定: No\n該当条件: なし\n'      > "$TMP/
 printf '## 高リスク判定\n判定: No\n## その他\n判定: Yes\n' > "$TMP/hr3"; ck TC-26 OK       "$(detect_plan_verdict "$TMP/hr3")"
 # TC-27: 旧行単位 grep が多行 Yes に非マッチ（バグの存在＝修正の前提を固定化）
 ck_false TC-27-old-grep-nonmatch grep -qiE "高リスク判定.*Yes" "$TMP/hr1"
+# TC-27b: 大文字小文字を無視（旧 grep -i パリティ）— 小文字 yes も HIGHRISK
+printf '## 高リスク判定\n判定: yes\n' > "$TMP/hr4"; ck TC-27b HIGHRISK "$(detect_plan_verdict "$TMP/hr4")"
 
 echo "== TC-28〜31: append_review_link 冪等追記（I066 #3） =="
 ck_true TC-28-fn-append declare -F append_review_link
@@ -133,12 +135,13 @@ printf '# plan\n本文\n' > "$TMP/pl1"
 append_review_link "$TMP/pl1" "20260618_0900" "判定: 完了" "I066_plan_review_a.md"
 append_review_link "$TMP/pl1" "20260618_1000" "判定: 完了" "I066_plan_review_b.md"
 ck TC-29 1 "$(grep -c '^## レビュー結果$' "$TMP/pl1")"
-ck TC-30 2 "$(grep -c '^- \[' "$TMP/pl1")"
+# リンク行はレビューリンク形式で厳密にカウント（本文の箇条書き混入による偽陽性を排除）
+ck TC-30 2 "$(grep -cF '](../../reviews/' "$TMP/pl1")"
 # TC-31: 見出しなし plan への初回（1回）追記 → 見出し+リンク 1組（TC-29 との差分は呼び出し回数のみ）
 printf '# plan\n本文\n' > "$TMP/pl2"
 append_review_link "$TMP/pl2" "20260618_1100" "判定: 完了" "I066_plan_review_c.md"
 ck TC-31a 1 "$(grep -c '^## レビュー結果$' "$TMP/pl2")"
-ck TC-31b 1 "$(grep -c '^- \[' "$TMP/pl2")"
+ck TC-31b 1 "$(grep -cF '](../../reviews/' "$TMP/pl2")"
 
 echo "== TC-20: bash -n 構文チェック =="
 ck_true TC-20-syntax-code bash -n "$CODE_REVIEW"
