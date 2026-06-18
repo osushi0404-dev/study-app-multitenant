@@ -77,7 +77,7 @@ P6 影響なし（UI なし・データ量/外部API 懸念なし）。
 | # | ファイル | 変更内容 |
 |---|---------|---------|
 | A | `.claude/skills/plan-issue/SKILL.md` | step 2 に invariant（イシューは feature ブランチで初コミット／ベース事前コミット禁止）＋**「イシューが既に base へコミット済みか」を `git log` で自動判定して分岐**（既コミット時は issue commit スキップ→計画書 docs コミットで draft PR）を追記。step 3 に既コミット時の PR 作成タイミング注記 |
-| B | `.claude/skills/test/SKILL.md` | 冒頭に「自動テストの選択（計画駆動）」節を追加（auto_test.md を正・指定なし時のみ既定にフォールバック・非該当を明記）。既定手順 0-3 を「フォールバック」と明示。`description` を更新 |
+| B | `.claude/skills/test/SKILL.md` | 冒頭に「自動テストの選択（計画駆動）」節を追加（auto_test.md を正・指定なし/欠損時のみ既定にフォールバック・非該当を明記）。既定手順 0-3 を「フォールバック」と明示。**`## 停止条件` に計画書指定テストの失敗も STOP トリガーとして追加**。`description` を更新 |
 | C | `.claude/skills/retro/SKILL.md` | step 4（予防処置への対応）に、バックログ issue ファイルはローカル未コミットのまま残す invariant を注記 |
 | D | `.claude/skills/close/SKILL.md` | step 3 を「`git add -u`（未追跡を構造的に除外）＋**決定論ゲート**（staged に I### スコープ外があれば中断・番号アンカーで I0670 誤マッチ回避）＋`git add -A`/`.`/`docs` 禁止」に具体化 |
 
@@ -97,9 +97,11 @@ P6 影響なし（UI なし・データ量/外部API 懸念なし）。
 
 (2) 同 step 2 のコミット手順を、自動判定分岐に置き換える:
 ```markdown
-イシューが既にベースへコミット済みかを自動判定する（既コミットだと `docs: create issue` が no-op 化し `gh pr create` が「No commits between develop and feature/…」で失敗するため）:
+イシューが既にベースへコミット済みかを自動判定する（既コミットだと `docs: create issue` が no-op 化し `gh pr create` が「No commits between develop and feature/…」で失敗するため）。パスはバージョン非依存になるよう open/closed を明示列挙する（`**` glob は git バージョン/設定依存のため使わない）:
 \`\`\`bash
-if git log origin/develop --oneline -- "docs/issues/**/I${ISSUE_NUM}.md" "docs/issues/**/${ISSUE_NUM}.md" | grep -q .; then
+if git log origin/develop --oneline -- \
+     "docs/issues/open/I${ISSUE_NUM}.md" "docs/issues/closed/I${ISSUE_NUM}.md" \
+     "docs/issues/open/${ISSUE_NUM}.md"  "docs/issues/closed/${ISSUE_NUM}.md" | grep -q .; then
   echo "ISSUE_ALREADY_ON_BASE"   # → 既コミット経路（issue commit をスキップ）
 fi
 \`\`\`
@@ -132,7 +134,7 @@ fi
 ## 自動テストの選択（計画駆動）
 実行する自動テストは **計画書のテスト計画（`docs/tests/open/$ARGUMENTS_auto_test.md`）が正**。
 - auto_test.md が **専用の自動テスト**（例: `bash scripts/...` の専用スクリプト・特定 TC）を指定している場合: **それを正として実行**し結果を記録する。auto_test.md が「非該当」と明記した既定テスト（pytest/Jest/E2E のいずれか）は実行せず「非該当」と記録する。
-- auto_test.md が自動テストを **指定していない場合のみ**: 下記の既定（pytest → Jest → E2E）にフォールバックする。
+- auto_test.md が自動テストを **指定していない場合**、または **auto_test.md が存在しない場合**: 下記の既定（pytest → Jest → E2E）にフォールバックする。
 
 app/非app の区別では分岐しない。Backend/Frontend 変更が無いイシューでは、auto_test.md が専用テストを正と指定し pytest/Jest/E2E を「非該当」と明記する運用になる。
 ```
@@ -141,7 +143,12 @@ app/非app の区別では分岐しない。Backend/Frontend 変更が無いイ�
 ```markdown
 ### 既定の自動テスト（auto_test.md に指定が無い場合のフォールバック）
 ```
-→ 検証: TC-02・TC-03・TC-04
+
+(4) `## 停止条件` を計画駆動テストの失敗もトリガーに含める。既存の `自動テスト（pytest / Jest / Playwright E2E）が1件でも失敗した場合: STOP` の直後に以下を追加:
+```markdown
+- 計画書（auto_test.md）が指定する専用自動テストが1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+```
+→ 検証: TC-02・TC-03・TC-04・TC-08
 
 ### ステップ3: retro/SKILL.md にバックログ未コミット invariant を注記（変更C）
 **修正方針**: 予防処置/是正処置を `/issue-bootstrap` でバックログ起票する際、その issue ファイルをベースへコミットしないことを明記し、close 側の事故（現象1）の発生源を断つ。
@@ -193,7 +200,7 @@ step 3「commit/push して PR を更新」を以下に置き換える:
 ## 6. テスト計画（自動/手動）
 
 ### 自動テスト（計画駆動 — 本イシュー自身が新 test/SKILL.md 設計のドッグフーディング）
-- **本イシューの正とする自動テスト**: `docs/tests/open/I067_auto_test.md` の TC-01〜TC-07（追記文言の存在を `grep -F` で機械検証＋frontmatter 妥当性）。Claude が `/test` 時に実行・記録する。
+- **本イシューの正とする自動テスト**: `docs/tests/open/I067_auto_test.md` の TC-01〜TC-08（追記文言の存在を `grep -F` で機械検証＋frontmatter 妥当性）。Claude が `/test` 時に実行・記録する。
 - **既定テスト**: pytest / Jest / Playwright E2E は **非該当**（Backend/Frontend/DB のコード変更なし）。`/test` 実行時に「非該当」と明示記録する。
 - テストレベル: 本イシューはドキュメント整備のためユニット/結合/E2E は不適用。検証は文字列存在検証（決定論ゲート）＋文書レビュー（敵対的確認）で行う。
 - 認証・認可・テナント境界テスト: 該当なし（認可変更なし）。
@@ -237,9 +244,12 @@ step 3「commit/push して PR を更新」を以下に置き換える:
 - [x] マルチテナント/組織スコープ: 該当なし（コード変更なし）
 - [x] ステータス遷移/承認条件: 該当なし
 - [x] セキュリティ: セキュリティ影響なし（コード・依存関係・認可に変更なし）
-- [x] テスト計画: 再発防止＝TC-01〜TC-07＋手動テスト No.1 が分岐文言の存在と完走シナリオを検証。テストレベル明示済（文字列検証＋文書レビュー、pytest/Jest/E2E は非該当）
+- [x] テスト計画: 再発防止＝TC-01〜TC-08＋手動テスト No.1 が分岐文言の存在と完走シナリオを検証。テストレベル明示済（文字列検証＋文書レビュー、pytest/Jest/E2E は非該当）
 - [x] 設計品質: アンチパターンなし。close の broad add 禁止は根治（宣言箇所＝close step 3 を是正）
 - [x] 文書品質ゲート: API/permission/DB/エラー応答は該当なし（コード変更なし）。auto_test TC の期待値（grep ヒット）と manual_test の期待結果（具体的な文言・動作）は具体記載済み。実装ステップ本文に検証コマンドを残さず TC 参照に統一済み
 
 ### 文書間整合
 - 計画書（本書）・auto_test.md・manual_test.md・review.md を同時作成済み。設計（計画駆動 test・scoped staging）変更時は 4 文書を同時更新する。
+
+## レビュー結果
+- [20260618_1849 判定: ✅ 完了](../../reviews/I067_plan_review_20260618_1849.md)

@@ -1,7 +1,7 @@
 # I067 自動テスト（計画駆動）
 
 - **関連計画書**: docs/plans/open/plan_I067.md
-- **正とする自動テスト**: 下記 TC-01〜TC-07（追記文言の存在を `grep -F` で機械検証＋frontmatter 妥当性）
+- **正とする自動テスト**: 下記 TC-01〜TC-08（追記文言の存在を `grep -F` で機械検証＋frontmatter 妥当性）
 - **既定テスト**: pytest / Jest / Playwright E2E は **非該当**（Backend/Frontend/DB のコード変更なし）。`/test` 実行時に「非該当」と明示記録する。
 - 実行者: すべて Claude（Bash `grep`／`head` で機械実行・記録）
 
@@ -16,6 +16,7 @@
 | TC-05 | retro ハンドオフ invariant | `grep -F "ローカル作成（未コミット）のまま" .claude/skills/retro/SKILL.md` | grep がヒット（exit 0）。バックログ issue を未コミットのまま残す invariant が存在する |
 | TC-06 | close scoped staging＋決定論ゲート | `grep -F "git add -u" .claude/skills/close/SKILL.md && grep -F "git add -A" .claude/skills/close/SKILL.md && grep -F "決定論ゲート" .claude/skills/close/SKILL.md` | 3 grep すべてヒット（exit 0）。`git add -u` 採用・`git add -A` 等の禁止注記・スコープ外検出の決定論ゲートが存在する |
 | TC-07 | 4 スキルの frontmatter 妥当性 | `for f in plan-issue test retro close; do head -7 .claude/skills/$f/SKILL.md \| grep -q "disable-model-invocation: true" && echo "$f OK" \|\| echo "$f NG"; done` | 4 ファイルすべて `OK`（frontmatter が破壊されていない） |
+| TC-08 | test 停止条件＋欠損フォールバック | `grep -F "指定する専用自動テストが1件でも失敗" .claude/skills/test/SKILL.md && grep -F "auto_test.md が存在しない場合" .claude/skills/test/SKILL.md` | 両 grep がヒット（exit 0）。計画書指定テストの失敗が STOP トリガーに含まれ、auto_test.md 欠損時の既定フォールバックが明記されている |
 
 ## 既定テスト（フォールバック）— 本イシューでは非該当
 | 種別 | 判定 | 理由 |
@@ -34,3 +35,4 @@
 | TC-05 | | |
 | TC-06 | | |
 | TC-07 | | |
+| TC-08 | | |

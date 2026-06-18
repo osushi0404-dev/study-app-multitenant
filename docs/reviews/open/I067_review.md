@@ -19,7 +19,13 @@
 - セキュリティ影響なし（コード・依存関係・認可に変更なし）の妥当性
 
 ## plan-issue-review 記録
-（`/plan-issue-review I067` 実行時に追記）
+- 実行: 2026-06-18 / レビューファイル: `docs/reviews/I067_plan_review_20260618_1849.md`
+- **VERDICT: OK**（高リスク判定: No）→ `/implement I067` 可
+- 指摘 4 件すべて計画書/イシュー側で反映済み:
+  - W1(BP): test/SKILL.md 停止条件に「計画書指定テストの失敗」を STOP トリガーとして追加（変更B(4)・TC-08）
+  - W2(P1): I067.md「想定する反映先」テーブルに retro/close 行を追加（設計メモ更新意図に整合）
+  - I1(Claude BP): plan-issue 既コミット判定の `**` glob を open/closed 明示列挙に変更（バージョン非依存）
+  - I2(P4): test/SKILL.md に auto_test.md 欠損時の既定フォールバックを明記（変更B(2)・TC-08）
 
 ## code-review 記録
 （`/code-review` 実行時に追記）
