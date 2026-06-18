@@ -21,7 +21,16 @@
 - [ ] 文字列分類のアンカー/完全一致（`reference_string_token_match_anchoring`）に準拠
 
 ## レビュー結果
-（実装後 `/code-review` で記入）
+
+### plan-review（2026-06-18・VERDICT: OK）
+- 記録: `docs/reviews/I066_plan_review_20260618_1637.md`
+- 判定: ✅ 完了（Blocker・差し戻しなし）。指摘 3 件はいずれも任意だが、理想・根治の方針で**全件反映済み**:
+  - Warning/BP: `append_review_link` の `awk -v` バックスラッシュ エスケープ解釈 → **`ENVIRON["LINE"]` 経由に変更**（`bash /tmp/i066_environ.sh` で `\textbf` 保持・PASS=4 実証）
+  - Info/BP: `${plan}.tmp` の一時ファイル残留 → awk 失敗時 **`rm -f` + `return 1`** を追加
+  - Info/テスト妥当性: TC-29/30/31 の fixture 説明（「空 plan」曖昧）→ 「`## レビュー結果` を含まない plan に 2 回/1 回」と明確化
+- 反映先: 計画書 4-1 #3 / R2 / 4-2・本イシュー auto_test TC-29〜31
+
+### code-review（実装後 `/code-review` で記入）
 
 ## 高リスク判定
 判定: （未）

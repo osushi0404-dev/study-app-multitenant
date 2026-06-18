@@ -110,13 +110,20 @@ append_review_link() {
   local plan="$1" ts="$2" verdict="$3" base="$4"
   local line="- [${ts} ${verdict}](../../reviews/${base})"
   if grep -q '^## レビュー結果$' "$plan"; then
-    awk -v l="$line" '{print} /^## レビュー結果$/ && !d {print l; d=1}' \
-      "$plan" > "${plan}.tmp" && mv "${plan}.tmp" "$plan"
+    local tmp="${plan}.tmp"
+    # LINE を環境変数で渡し ENVIRON で読む（awk -v のバックスラッシュ エスケープ解釈を回避）
+    if LINE="$line" awk 'BEGIN{l=ENVIRON["LINE"]} {print} /^## レビュー結果$/ && !d {print l; d=1}' \
+         "$plan" > "$tmp"; then
+      mv "$tmp" "$plan"
+    else
+      rm -f "$tmp"; return 1   # awk 失敗時は一時ファイルを残さない
+    fi
   else
     printf '\n## レビュー結果\n%s\n' "$line" >> "$plan"
   fi
 }
 ```
+> plan-review 反映: `awk -v` は値中の `\` をエスケープ解釈するため、`VERDICT`（`grep -o '判定:.*'` 由来）に `\` が混入すると link 行が壊れうる（Warning/BP）。`ENVIRON["LINE"]` 経由で受け取りエスケープ解釈を排除（`bash /tmp/i066_environ.sh` で `\textbf` 保持を実証）。awk 失敗時は `rm -f` で一時ファイル残留を防ぐ（Info/BP）。
 ```bash
 # 変更後の本体（99-103 行）
 if [ -f "$PLAN_FILE" ]; then
@@ -148,9 +155,9 @@ ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$TMP/c5"
 
 **(#3 TC 追加)** 冪等追記の回帰（`append_review_link` を source して検証）:
 - TC-28: `declare -F append_review_link`（関数定義の存在）
-- TC-29: 空 plan に 2 回追記 → `## レビュー結果` 見出しは**1 個**
-- TC-30: 同上 → リンク行（`^- \[`）は**2 個**（履歴保持）
-- TC-31: 見出しが無い plan への初回追記 → 見出し＋リンク行が 1 組生成
+- TC-29: `## レビュー結果` を含まない plan に **2 回**追記 → 見出しは**1 個**
+- TC-30: TC-29 と同一 fixture（2 回呼び出し後）→ リンク行（`^- \[`）は**2 個**（履歴保持）
+- TC-31: 見出しが無い plan への**初回（1 回）**追記 → 見出し＋リンク行が 1 組生成（TC-29 との差分は呼び出し回数のみ）
 
 > 注: TC 番号は既存（TC-01〜TC-23）に継続。`append_review_link` は `PLAN_REVIEW` の source（既存 42 行）で取り込まれる。
 
@@ -199,7 +206,7 @@ ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$TMP/c5"
 
 ## 8. Risk & 回避策
 - **R1: awk の `inblock` クリア漏れ**（高リスク判定が最終セクション/別の `## ` 見出し直後）。→ TC-24（最終想定）・TC-26（後続 `## ` でクリア）で固定。
-- **R2: `append_review_link` の awk -v 値にメタ文字混入**。入力は全てスクリプト生成値（`TIMESTAMP`=date、`basename`=自前 REVIEW_FILE、`VERDICT`=自前エージェント出力の `判定:` 行）で外部ユーザー入力ではなく、バックスラッシュ等は想定されない。現行 `printf` と同一の信頼境界を維持。→ TC-29/30 で挙動固定。
+- **R2: `append_review_link` の awk 値にメタ文字混入**。入力は全てスクリプト生成値（`TIMESTAMP`=date、`basename`=自前 REVIEW_FILE、`VERDICT`=自前エージェント出力の `判定:` 行）だが、`VERDICT` は LLM 出力由来のため `\` 混入はゼロではない。→ plan-review Warning を受け **`ENVIRON["LINE"]` 経由でエスケープ解釈を排除**（`-v` 不使用）。実証済み（`\textbf` 保持）。awk 失敗時は `rm -f` で一時ファイル残留を防止。
 - **R3: 対話シェル grep ラッパーによる誤検証**。→ テストは必ず `bash scripts/claude/tests/test_review_verdict.sh` でファイル実行（既存 TC-23/runbook 既出の注意）。
 - **R4: テストの外部ファイル依存による破損（今回 FAIL の根本）**。→ TC-05/TC-12 を合成 hermetic fixture に置換し、外部ファイルの移動・削除・編集に不変化する（既存 TC-04c/09 と同様式）。
 
@@ -233,3 +240,6 @@ ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$TMP/c5"
 - [x] #4 + fixture 是正: `test_review_verdict.sh` に TC-24〜TC-31 追加・TC-05/TC-12 を合成 hermetic fixture に置換（実ファイル依存撤去）
 - [ ] 影響範囲は `plan-issue-review.sh` / `test_review_verdict.sh` の 2 ファイルのみ・Danger Ops 無し・セキュリティ/P3/P5/P6/P8 影響なし、で良い
 - [x] 設計判断 2 項目（`append_review_link` 関数抽出 / fixture の合成 hermetic 化）はユーザー承認済み
+
+## レビュー結果
+- [20260618_1637 判定: ✅ 完了](../../reviews/I066_plan_review_20260618_1637.md)
