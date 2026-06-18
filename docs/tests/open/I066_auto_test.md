@@ -51,7 +51,8 @@ FAIL TC-05  expected[BLOCKER] got[OK]   ← I065 移動で fixture パス破損�
 | TC-20（既存） | `bash -n` 構文チェック（code/plan/self） | いずれも成功 |
 | 全体 | 全 TC 実行 | **PASS=55 FAIL=0**（既存 TC-01〜TC-23 + 新規 TC-24〜TC-27b・TC-28〜TC-31b、TC-05/TC-12 是正含む） |
 
-## 実行結果記録（/test で記入）
-- 実行日時: （未実施）
-- 結果: PASS=__ / FAIL=__
-- 備考:
+## 実行結果記録（/test）
+- 実行日時: 2026-06-18
+- 結果: **PASS=55 / FAIL=0**（`bash scripts/claude/tests/test_review_verdict.sh`）
+- 内訳: 既存 TC-01〜TC-23 + 新規 TC-24〜TC-27b（#1・case-insensitive 含む）+ TC-28〜TC-31b（#3）。TC-05/TC-12 は合成 hermetic fixture で再 PASS。
+- 備考: Backend(pytest)/Frontend(Jest)/E2E は本変更（shell のみ・Backend/Frontend/DB=なし）の対象外。PR CI は code-review 時に green 確認済み。
