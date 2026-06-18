@@ -31,8 +31,34 @@ detect_plan_verdict() {
   v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGHRISK|OK)[[:space:]]*$' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGHRISK|OK)' || true)
   if [ -n "$v" ]; then echo "$v"; return; fi
   if grep -qE "判定:.*差し戻し" "$file"; then echo "BLOCKER"; return; fi
-  if grep -qiE "高リスク判定.*Yes" "$file"; then echo "HIGHRISK"; return; fi
+  # 保険（多行対応）: 「## 高リスク判定」見出しから次の「## 」見出しまでのブロック内に
+  # 末尾アンカーで「判定: Yes」があれば HIGHRISK。見出しと判定行が別行の実出力に対応。
+  if awk '
+    /^## 高リスク判定/ { inblock=1; next }
+    /^## /            { inblock=0 }
+    inblock && /^判定:[[:space:]]*Yes[[:space:]]*$/ { found=1 }
+    END { exit(found?0:1) }
+  ' "$file"; then echo "HIGHRISK"; return; fi
   echo "OK"
+}
+
+# 計画書の「## レビュー結果」へリンク行を冪等追記（重複見出しを作らない・履歴保持）。
+# 既存セクションがあればリンク行のみを見出し直後に挿入、無ければ見出し＋リンクを新規追記。
+append_review_link() {
+  local plan="$1" ts="$2" verdict="$3" base="$4"
+  local line="- [${ts} ${verdict}](../../reviews/${base})"
+  if grep -q '^## レビュー結果$' "$plan"; then
+    local tmp="${plan}.tmp"
+    # LINE を環境変数で渡し ENVIRON で読む（awk -v のバックスラッシュ エスケープ解釈を回避）
+    if LINE="$line" awk 'BEGIN{l=ENVIRON["LINE"]} {print} /^## レビュー結果$/ && !d {print l; d=1}' \
+         "$plan" > "$tmp"; then
+      mv "$tmp" "$plan"
+    else
+      rm -f "$tmp"; return 1   # awk 失敗時は一時ファイルを残さない
+    fi
+  else
+    printf '\n## レビュー結果\n%s\n' "$line" >> "$plan"
+  fi
 }
 
 # テストから関数のみを source するためのガード（本体は実行しない）
@@ -95,11 +121,10 @@ if [ -n "$PR_NUM" ]; then
     || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body \"\$(cat $REVIEW_FILE)\""
 fi
 
-# 計画書にレビュー結果リンクを追記
+# 計画書にレビュー結果リンクを冪等追記
 if [ -f "$PLAN_FILE" ]; then
   VERDICT=$(grep -o '判定:.*' "$REVIEW_FILE" | head -1 || echo "完了")
-  printf '\n## レビュー結果\n- [%s %s](../../reviews/%s)\n' \
-    "$TIMESTAMP" "$VERDICT" "$(basename "$REVIEW_FILE")" >> "$PLAN_FILE"
+  append_review_link "$PLAN_FILE" "$TIMESTAMP" "$VERDICT" "$(basename "$REVIEW_FILE")"
 fi
 
 # 判定とユーザー案内（一次=VERDICT 行 / 保険=既存プレーン判定）
