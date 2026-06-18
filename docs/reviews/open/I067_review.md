@@ -35,3 +35,6 @@
   - Low(BP): 停止条件2条件の重複関係が不明確 → 「既定テストを正と指定する場合は両条件該当だが扱いは同じ」を注記
   - Low(BP): git log 判定の `${ISSUE_NUM}.md`（I なし）冗長 → **保持**（close/issue-bootstrap の旧 `###.md` 形式サポートと対称・レビューも許容）
 - Medium 修正のため commit/push 後に `/code-review I067` を再実行（implement ルール 2.5）
+- 再レビュー（`docs/reviews/I067_code_review_20260618_1918.md`）: **VERDICT OK**・Medium 解消・Blocker/High なし
+  - Low: 計画駆動経路で実行後に手順 4)・5) へ続く旨が暗黙 → 計画駆動節に一文追記（plan も同期）。Low のみのため再レビュー不要（CI で十分）
+  - Low: git log の `${ISSUE_NUM}.md` 冗長 → 保持（前回判断どおり）

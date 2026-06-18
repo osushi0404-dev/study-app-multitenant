@@ -17,6 +17,8 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 app/非app の区別では分岐しない。Backend/Frontend 変更が無いイシューでは、auto_test.md が専用テストを正と指定し pytest/Jest/E2E を「非該当」と明記する運用になる。
 
+いずれの経路（専用テスト／既定フォールバック）でも、自動テスト実行後は手順 4)（記録）・5)（手動テスト）を続ける。
+
 ## 停止条件
 - 自動テスト（pytest / Jest / Playwright E2E）が1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
 - 計画書（auto_test.md）が指定する専用自動テストが1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
