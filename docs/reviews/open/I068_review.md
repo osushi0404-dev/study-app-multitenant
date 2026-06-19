@@ -27,6 +27,12 @@
   - W3: auto_test ヘッダー・計画書 §6 を **TC-A〜TC-N** に統一
   - Info1: P3-b/c・P2-a/b・P1-a/b の具体文言案を計画書 §5 に追記（TC grep キーワードと整合）
 
+## /test 記録
+- 実行: 2026-06-19（計画駆動経路）
+- 自動テスト（正＝auto_test.md TC-A〜N）: **PASS=15 / FAIL=0**。既定 pytest/Jest/E2E は **非該当**（app コード変更なし）
+- 手動テスト No.1〜4（Claude）: すべて OK（誤検出レビュー・I067 逆引き実証・P2 整合・P3↔P2 一本化）
+- 手動テスト No.5（Human）: gate 文言の明確性 最終サインオフをユーザーに依頼中
+
 ## code-review 記録
 - 実行: 2026-06-19 / レビューファイル: `docs/reviews/I068_code_review_20260619_1017.md`
 - **VERDICT: OK**（高リスク判定: No）。受け入れ条件 1〜4 すべて ✅
