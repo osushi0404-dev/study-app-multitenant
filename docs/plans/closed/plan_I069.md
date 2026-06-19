@@ -236,4 +236,9 @@ git fixture 単体テスト（TC-A1〜A6・TC-B1〜B3・TC-C1〜C3）を実装�
 承認後の次のステップ: `/plan-issue-review I069` を実行して計画書・テスト文書をレビューしてください。
 
 ## レビュー結果
-- [20260619_1219 判定: ✅ 完了](../../reviews/I069_plan_review_20260619_1219.md)
+- [20260619_1219 判定: ✅ 完了](../../reviews/closed/I069_plan_review_20260619_1219.md)
+
+## 完了情報
+- **完了日時**: 2026-06-19 19:38:15
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-issue-review OK / code-review OK・Low 2件は自己修正/受容 / 自動テスト PASS=30 FAIL=0）
