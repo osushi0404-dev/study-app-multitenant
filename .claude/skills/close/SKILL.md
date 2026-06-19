@@ -58,6 +58,9 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
      [ -f "$f" ] || continue
      base="$(basename "$f")"
      esc="${base//./\\.}"   # sed LHS 用に正規表現メタ文字 . をエスケープ
+     # 案B(I069): 未追跡（issue-review 等＝案A' 経路）でも git mv が "fatal: not under version control" で
+     # 失敗しないよう、mv の直前にその1ファイルのみを追跡化する。追跡済みファイルには no-op。
+     git add -- "$f"
      git mv "$f" docs/reviews/closed/
      # plan 内 ## レビュー結果 リンクを closed/ 向きに更新（リンク切れ防止・Q3）
      [ -f "$PLAN" ] && sed -i "s#(\.\./\.\./reviews/${esc})#(../../reviews/closed/${base})#g" "$PLAN"

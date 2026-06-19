@@ -62,6 +62,28 @@ append_review_link() {
   fi
 }
 
+# 案A(I069): レビュー記録（生産物）は生産者がコミットする。引数の1ファイルのみを path-scoped で
+# add→commit（他の index/作業ツリーに触れない・auto-push しない・後続 close が push）。
+# ブランチガード: 保護ブランチ（develop/main/detached HEAD/取得失敗）では commit せず未追跡のまま残す
+#   （develop 直 commit 禁止＝絶対ルール3。未追跡分は close 案B が回収）。
+# 非ブロック: add/commit が失敗してもレビューフロー（呼び出し元）は止めない。
+commit_review_artifact() {
+  local file="$1" issue="$2" kind="$3" branch
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  case "$branch" in
+    develop|main|HEAD|"")
+      echo "ℹ️ ブランチ '${branch:-detached}' のため ${file} は commit しません（close 案B が回収）。"
+      return 0 ;;
+  esac
+  if ! git add -- "$file" 2>/dev/null; then
+    echo "⚠️ git add 失敗（未追跡のまま・close 案B が回収）: ${file}"
+    return 0
+  fi
+  git commit -q -m "docs(${issue}): ${kind} 記録" -- "$file" 2>/dev/null \
+    || echo "⚠️ git commit 失敗（未追跡のまま・close 案B が回収）: ${file}"
+  return 0
+}
+
 # テストから関数のみを source するためのガード（本体は実行しない）
 if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 
@@ -114,6 +136,9 @@ REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 # ファイル保存
 mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
+
+# 案A(I069): 生産物（レビュー記録）を生産者がコミットする（feature ブランチ時のみ・path-scoped）。
+commit_review_artifact "$REVIEW_FILE" "$ISSUE" "plan-review"
 
 # PR コメント投稿
 PR_NUM=$(gh pr view --json number -q .number 2>/dev/null || echo "")
