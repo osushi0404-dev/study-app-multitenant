@@ -28,4 +28,11 @@
   - Info1: P3-b/c・P2-a/b・P1-a/b の具体文言案を計画書 §5 に追記（TC grep キーワードと整合）
 
 ## code-review 記録
-（`/code-review` 実行時に追記）
+- 実行: 2026-06-19 / レビューファイル: `docs/reviews/I068_code_review_20260619_1017.md`
+- **VERDICT: OK**（高リスク判定: No）。受け入れ条件 1〜4 すべて ✅
+- **AC4 検出ログ（参照）**: I067 の 3 件を新ルール/ゲートに当てはめた検出ログは `docs/tests/open/I068_manual_test.md` No.1（I067 の brace-glob を advisory 検出）・No.2（W2 を再現しゲートが retro/close 未反映を exit 1 で検出）に記録。
+- Low 指摘 3 件の対応（いずれも Low のため CI で十分・再レビュー不要）:
+  - Low①（運用性）: git リポジトリ外で exit 128 になり 0/1/2 規約から外れる → `git rev-parse … || exit 2` で決定論化（`/tmp` 実行で exit 2 を確認）
+  - Low②（BP）: メモにパス無し時の早期 return を追加（空文字を comm に渡さない・意図明確化）
+  - Low③（P4）: 本記録に AC4 検出ログの参照先を明記（上記）
+- 修正後 回帰: スクリプト TC PASS=7 FAIL=0・shellcheck Pass
