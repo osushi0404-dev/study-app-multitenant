@@ -19,7 +19,13 @@
 - セキュリティ影響（app/依存変更なし・read-only）の妥当性
 
 ## plan-issue-review 記録
-（`/plan-issue-review I068` 実行時に追記）
+- 実行: 2026-06-19 / レビューファイル: `docs/reviews/I068_plan_review_20260619_0938.md`
+- **VERDICT: OK**（高リスク判定: No）→ `/implement I068` 可
+- 指摘 5 件すべて計画書/テスト文書に反映済み:
+  - W1+Info2: 終了コード規約を 0=整合/1=不一致/2=実行不可（不正引数・未検出）に明確化。TC-E の期待値（exit 2・対象外ファイル非出力）を補完
+  - W2: 計画書 §5 ステップ5 の TC 参照を TC-E・M → **TC-N（実イシュー ドッグフード）** に訂正
+  - W3: auto_test ヘッダー・計画書 §6 を **TC-A〜TC-N** に統一
+  - Info1: P3-b/c・P2-a/b・P1-a/b の具体文言案を計画書 §5 に追記（TC grep キーワードと整合）
 
 ## code-review 記録
 （`/code-review` 実行時に追記）
