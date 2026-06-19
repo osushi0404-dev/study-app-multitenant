@@ -59,6 +59,7 @@ close/SKILL.md step 1 の timestamped 回収ループのロジック（`git add 
 Red（実装前）: PASS=16 FAIL=11 SKIP=1（TC-A1/A1b 関数未定義・TC-A2〜A5 commit されず/rc=127・TC-A6b コメント未追加・TC-B2 close 未修正）。
 Green（実装後）: **PASS=27 FAIL=0 SKIP=1**。TC-C1 はローカル shellcheck 未インストールのため SKIP だが、pre-commit shellcheck フックで **Passed** を別途確認。
 code-review Low 反映後（TC-A4b 追加）: **PASS=30 FAIL=0 SKIP=1**。
+`/test`（2026-06-19・計画駆動）: 専用テスト **PASS=30 FAIL=0 SKIP=1**。TC-C1 は pre-commit shellcheck で **Passed** を確認（ゲート対象 SKIP を実エンフォース経路で解消）。既定 pytest/Jest/E2E は **非該当**（app コード変更なし）。手動テスト No.1〜6（Claude）すべて OK。No.7（Human）は実 PR を要する E2E のためサインオフ待ち。
 
 | TC | 結果(PASS/FAIL) | 備考 |
 |----|------|------|

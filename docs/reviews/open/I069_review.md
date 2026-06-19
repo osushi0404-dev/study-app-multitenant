@@ -32,7 +32,10 @@
   - Info1: source 時の `set -euo pipefail` 伝播 → auto_test のテスト実装上の注意に隔離方針（`set +e +o pipefail`／サブシェル）を明記
 
 ## /test 記録
-- 実行: （/test I069 実行後に追記）
+- 実行: 2026-06-19（計画駆動経路）
+- 自動テスト（正＝auto_test.md・専用 `test_review_commit_lifecycle.sh`）: **PASS=30 / FAIL=0 / SKIP=1**。TC-C1（shellcheck）はローカル未インストールで SKIP だが pre-commit shellcheck で **Passed** を別途確認。既定 pytest/Jest/E2E は **非該当**（app コード変更なし）。
+- 手動テスト No.1〜6（Claude）: すべて OK（両スクリプト定義・配線／issue-review 案A'／close 案B add→mv 順／I067 ゲート残存／専用テスト PASS=30）。
+- 手動テスト No.7（Human）: 実運用 `/close` の E2E 完走（`git mv` が `fatal: not under version control` を起こさない）最終サインオフを依頼中。
 
 ## code-review 記録
 - 実行: 2026-06-19 / レビューファイル: `docs/reviews/I069_code_review_20260619_1916.md`
