@@ -28,6 +28,7 @@ fixture は一時 git repo（`git init` + ローカル user 設定 + 初期コ�
 | TC-A2 | feature ブランチで commit される | fixture を feature ブランチに切替→未追跡 review ファイル作成→`commit_review_artifact` 実行 | `git ls-files` に review ファイルが出る（追跡済み）・新規コミットが1件増える・コミットは当該1ファイルのみ |
 | TC-A3 | 他 index 不可侵（path-scoped） | 無関係ファイルを `git add` で staging 済みにしてから `commit_review_artifact` 実行 | 新コミットに含まれるのは review ファイルのみ（`git show --name-only HEAD` に無関係ファイルが**含まれない**）・無関係ファイルは staged のまま残る |
 | TC-A4 | develop ではスキップ（未追跡で残す） | fixture を `develop` ブランチに切替→`commit_review_artifact` 実行 | review ファイルは**未追跡のまま**（`git ls-files` に出ない）・新規コミットは増えない・`ℹ️ ...commit しません` を出力・終了コード 0 |
+| TC-A4b | main でもスキップ（ブランチガード・main 明示／code-review Low 反映） | fixture を `main` ブランチに切替→`commit_review_artifact` 実行 | 未追跡のまま・新規コミットなし・終了コード 0 |
 | TC-A5 | detached HEAD でスキップ | detached HEAD 状態で実行 | 未追跡のまま・新規コミットなし・終了コード 0 |
 | TC-A6 | issue-review.sh は commit を配線していない（案A'・W1 反映） | コメント行を除外して配線を検査: `grep -vE '^[[:space:]]*#' scripts/claude/issue-review.sh \| grep -E 'commit_review_artifact\|git commit'` | **マッチ無し**（終了コード 1＝実コードに `commit_review_artifact` 呼び出し・`git commit` が無い＝案A'）。コメント行内の文言は除外され偽陽性しない |
 | TC-A6b | issue-review.sh に「commit しない」意図コメントが存在（W2 反映・コメント存在は本 TC で検証） | `grep -qE 'commit しない\|コミットしない\|案A' scripts/claude/issue-review.sh` | マッチあり（終了コード 0＝commit しない旨／案A' の意図が明記されている） |
@@ -57,6 +58,7 @@ close/SKILL.md step 1 の timestamped 回収ループのロジック（`git add 
 ## 実行記録（/implement TDD 時・2026-06-19）
 Red（実装前）: PASS=16 FAIL=11 SKIP=1（TC-A1/A1b 関数未定義・TC-A2〜A5 commit されず/rc=127・TC-A6b コメント未追加・TC-B2 close 未修正）。
 Green（実装後）: **PASS=27 FAIL=0 SKIP=1**。TC-C1 はローカル shellcheck 未インストールのため SKIP だが、pre-commit shellcheck フックで **Passed** を別途確認。
+code-review Low 反映後（TC-A4b 追加）: **PASS=30 FAIL=0 SKIP=1**。
 
 | TC | 結果(PASS/FAIL) | 備考 |
 |----|------|------|
@@ -65,6 +67,7 @@ Green（実装後）: **PASS=27 FAIL=0 SKIP=1**。TC-C1 はローカル shellche
 | TC-A2 | PASS | feature ブランチで review 1ファイルのみ commit・追跡化 |
 | TC-A3 | PASS | 事前 staged の無関係ファイルを commit に含めない（path-scoped）・staged のまま残存 |
 | TC-A4 | PASS | develop でスキップ・未追跡・新規コミットなし・`commit しません` 出力 |
+| TC-A4b | PASS | main でスキップ・未追跡・新規コミットなし（code-review Low 反映） |
 | TC-A5 | PASS | detached HEAD でスキップ・未追跡・新規コミットなし |
 | TC-A6 | PASS | issue-review.sh は配線なし（コメント除外 grep でマッチ無し＝偽陽性なし） |
 | TC-A6b | PASS | issue-review.sh に案A' 意図コメント存在 |

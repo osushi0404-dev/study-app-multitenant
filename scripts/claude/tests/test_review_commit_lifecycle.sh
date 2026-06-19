@@ -102,6 +102,18 @@ ck_false TC-A4-untracked git ls-files --error-unmatch "$rf"
 ck_true  TC-A4-msg sh -c "printf '%s' \"\$1\" | grep -q 'commit しません'" _ "$out"
 cd "$REPO_ROOT" || exit 1
 
+echo "== TC-A4b: main でも commit せず未追跡で残す（ブランチガード・main 明示） =="
+r="$(mk_repo a4b)"; cd "$r" || exit 1
+git branch -M main
+rf="docs/reviews/I900_plan_review_20260619_0004.md"; echo body > "$rf"
+before="$(git rev-list --count HEAD)"
+commit_review_artifact "$rf" I900 plan-review >/dev/null 2>&1; rc=$?
+after="$(git rev-list --count HEAD)"
+ck TC-A4b-rc 0 "$rc"
+ck TC-A4b-nocommit 0 "$((after - before))"
+ck_false TC-A4b-untracked git ls-files --error-unmatch "$rf"
+cd "$REPO_ROOT" || exit 1
+
 echo "== TC-A5: detached HEAD でも commit せずスキップ =="
 r="$(mk_repo a5)"; cd "$r" || exit 1
 git checkout -q "$(git rev-parse HEAD)"             # detached
