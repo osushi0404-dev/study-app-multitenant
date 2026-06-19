@@ -39,20 +39,22 @@ fixture は heredoc で一時生成（`docs/issues/open/I900.md` 等の使い捨
 |------|------|------|
 | pytest / Jest / Playwright E2E | 非該当 | app（Backend/Frontend/DB/UI）変更なし |
 
-## 実行記録（/implement・/test 時に記入）
+## 実行記録（/implement TDD 時・2026-06-19）
+Red（スクリプト不在 exit 127）確認 → Green 実装 → 全 TC PASS=15 FAIL=0。
+
 | TC | 結果(PASS/FAIL) | 備考 |
 |----|------|------|
-| TC-A | | |
-| TC-B | | |
-| TC-C | | |
-| TC-D | | |
-| TC-E | | |
-| TC-F | | |
-| TC-G | | |
-| TC-H | | |
-| TC-I | | |
-| TC-J | | |
-| TC-K | | |
-| TC-L | | |
-| TC-M | | |
-| TC-N | | |
+| TC-A | PASS | 整合ケース exit 0・`✅` |
+| TC-B | PASS | 不一致ケース exit 1・不足パス列挙 |
+| TC-C | PASS | プレースホルダ（未特定）行のパスを除外 |
+| TC-D | PASS | バックティック無しの裸パスを抽出しない |
+| TC-E | PASS | 不正引数 exit 2・対象外ファイル非出力（パストラバーサル防止） |
+| TC-F | PASS | grill-me に check-memo-body-paths.sh 実行 do |
+| TC-G | PASS | plan-reviewer に P3 backstop（設計メモ／実装対象） |
+| TC-H | PASS | plan-writing-rules に「セマンティクス」拡張 |
+| TC-I | PASS | plan-reviewer に「中核概念」P2 gate |
+| TC-J | PASS | plan-writing-rules に「パリティ」P1 do |
+| TC-K | PASS | plan-reviewer に「非対称」P1 gate |
+| TC-L | PASS | code-reviewer に「非対称」P1 gate |
+| TC-M | PASS | shellcheck（pre-commit 経由）Pass。SC2016 は正規表現リテラルのため局所 disable |
+| TC-N | PASS | 実 I068・I069（ゲート前提で作成）が exit 0 で整合 |
