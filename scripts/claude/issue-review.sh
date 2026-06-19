@@ -56,6 +56,11 @@ REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
+# 案A'(I069): この記録は commit しない（生産者コミットの例外）。issue-review は /issue-bootstrap 中に走り、
+# その時点のブランチが develop の場合があるため、ここで commit すると develop 直 commit（絶対ルール3 違反）に
+# なり得る。よって未追跡のまま残し、当該イシューの close（案B＝単一回収点）で git add→git mv して回収する。
+# plan-issue-review / code-review（feature ブランチ前提）の案A とは扱いを分ける。
+
 echo "📝 issue-review 結果: ${REVIEW_FILE}"
 printf '%s\n' "$REVIEW_CLEAN"
 # 判定はソフト。呼び出し元（issue-bootstrap）が判定（十分/要補足）を見て報告文を分岐する。
