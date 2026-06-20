@@ -33,6 +33,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Backend: rules/ultimate_django_coding_standards.md
 - Frontend: rules/react-coding-standards-integrated.md
 
+プロダクト品質基準（設計の北極星）:
+- 良い学習アプリの品質基準（C1〜C8）: docs/proposals/learning_app_quality_criteria.md
+
 ## 1. 絶対ルール（破ったら中断）
 1) 計画書に書いていない実装は禁止（より良い案がある場合は提案→承認→計画書更新が先）。
 2) ユーザー承認なしにコード変更（Edit/Write/MultiEdit 等）を開始しない（読み取り・調査は可）。
