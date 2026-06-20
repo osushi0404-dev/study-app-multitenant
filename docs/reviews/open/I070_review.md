@@ -12,7 +12,7 @@ auto_test=`docs/tests/open/I070_auto_test.md`・manual_test=`docs/tests/open/I07
 
 - **自動テスト: PASS=15 / FAIL=0**（grep/`test -e` 専用 TC。pytest/Jest/E2E は非該当＝コード変更なし）
   - AC1〜AC6 すべて充足・デッドリンク 0・memo↔body ゲート PASS・テンプレ儀式化なし（checkbox 0）
-- **手動テスト: Claude 実施分 No.1-6 すべて OK**。Human 実施分 No.7（全体所感）はユーザー確認待ち
+- **手動テスト: 全件 OK**（Claude No.1-6・Human No.7 全体所感ともユーザー確認済み 2026-06-20）
 - code-review 判定: OK（Low×3 を TC 決定論化で反映済み）／plan-review 判定: OK（Warning×2・Info×1 反映済み）
 
 ## 計画との差分
