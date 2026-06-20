@@ -19,8 +19,8 @@
 | TC-08b | review-rules.md L5 が P1〜P9 | `grep -q 'レビュー観点フレームワーク（P1〜P9）' docs/runbooks/review-rules.md && echo OK \|\| echo NG` | `OK` |
 | TC-09 | §8 プレースホルダが確定（「対応予定」不在・「追加済み」存在） | `! grep -q 'P9 の実体追加は I071（#145）で対応予定' docs/proposals/review_perspective_framework.md && grep -q 'I071（#145）で追加済み' docs/proposals/review_perspective_framework.md && echo OK \|\| echo NG` | `OK` |
 | TC-10 | 回帰: ライブ消費箇所に「P1〜P8 / 8観点」取りこぼしなし | `grep -rn 'P1〜P8\|8観点' docs/proposals/review_perspective_framework.md docs/proposals/learning_app_quality_criteria.md docs/runbooks/review-rules.md \| grep -v 'I046' \| grep -q . && echo NG \|\| echo OK` | `OK`（§6 L228 の I046 歴史記述のみ許容、他に残存なし） |
-| TC-11a | 回帰: 両 review-agent の VERDICT 行が無改変 | `grep -q 'VERDICT: <BLOCKER\|HIGHRISK\|OK>' .claude/review-agents/plan-reviewer.md && grep -q 'VERDICT: <BLOCKER\|HIGH\|OK>' .claude/review-agents/code-reviewer.md && echo OK \|\| echo NG` | `OK` |
-| TC-11b | 回帰: 既存 P1〜P8 見出しが全て残存（plan-reviewer は P1/P3/P4/P5/P8 が `### `、P2/BP/モダンは別見出し） | `for n in P3 P4 P5 P8; do grep -q "^### $n\." .claude/review-agents/plan-reviewer.md \|\| { echo NG; break; }; done; echo OK` | `OK`（最終行 `OK`） |
+| TC-11a | 回帰: 両 review-agent の VERDICT テンプレート行が無改変 | `grep -q 'VERDICT: <BLOCKER' .claude/review-agents/plan-reviewer.md && grep -q 'VERDICT: <BLOCKER' .claude/review-agents/code-reviewer.md && echo OK \|\| echo NG` | `OK`（`<BLOCKER` は機械判定契約のテンプレート行にのみ出現＝実出力 `VERDICT: OK` 等とは別。両ファイルに残存すれば契約が無改変） |
+| TC-11b | 回帰: 既存 P3/P4/P5/P8 見出しが全て残存（plan-reviewer。P1 も `### P1.`、P2/BP/モダンは別見出し） | `pass=true; for n in P3 P4 P5 P8; do grep -q "^### $n\." .claude/review-agents/plan-reviewer.md \|\| pass=false; done; $pass && echo OK \|\| echo NG` | `OK`（1 つでも見出しが欠ければ `pass=false` で `NG`。break 後の無条件 echo による誤合格を排除） |
 
 ## 実行結果記録欄
 
