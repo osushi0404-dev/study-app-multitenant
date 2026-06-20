@@ -2,7 +2,7 @@
 
 ## 参照（レビューの前提となる基準）
 - プロダクト品質基準（C1〜C8・設計の北極星）: `docs/proposals/learning_app_quality_criteria.md`
-- レビュー観点フレームワーク（P1〜P8）: `docs/proposals/review_perspective_framework.md`
+- レビュー観点フレームワーク（P1〜P9）: `docs/proposals/review_perspective_framework.md`
 
 ## 文書間の関係性記載ルール
 
