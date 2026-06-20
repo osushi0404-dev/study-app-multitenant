@@ -7,11 +7,13 @@
 
 ---
 
-## テスト結果
-（`/test` 実行後に記入。auto_test=`docs/tests/open/I070_auto_test.md`・manual_test=`docs/tests/open/I070_manual_test.md` の結果を集約）
+## テスト結果（2026-06-20 /test 実行）
+auto_test=`docs/tests/open/I070_auto_test.md`・manual_test=`docs/tests/open/I070_manual_test.md`
 
-- 自動テスト: 未実施
-- 手動テスト: 未実施
+- **自動テスト: PASS=15 / FAIL=0**（grep/`test -e` 専用 TC。pytest/Jest/E2E は非該当＝コード変更なし）
+  - AC1〜AC6 すべて充足・デッドリンク 0・memo↔body ゲート PASS・テンプレ儀式化なし（checkbox 0）
+- **手動テスト: Claude 実施分 No.1-6 すべて OK**。Human 実施分 No.7（全体所感）はユーザー確認待ち
+- code-review 判定: OK（Low×3 を TC 決定論化で反映済み）／plan-review 判定: OK（Warning×2・Info×1 反映済み）
 
 ## 計画との差分
 （実装完了後に記入。計画書 §5 の変更点と実装の差分を記録）
