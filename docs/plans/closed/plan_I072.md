@@ -158,4 +158,11 @@ P4 ブロックの「認可テスト（…）」bullet（L106）の直後に追�
 > 「仮定」項目は配置と文面の具体化であり、新たな仕様追加ではない。承認時にご確認ください。
 
 ## レビュー結果
-- [20260621_2314 判定: ✅ 完了](../../reviews/I072_plan_review_20260621_2314.md)
+- [20260621_2314 判定: ✅ 完了](../../reviews/closed/I072_plan_review_20260621_2314.md)
+
+## 完了情報
+- **完了日時**: Mon Jun 22 00:50:22 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review VERDICT OK / code-review VERDICT OK・Low のみ＝うち2件自己修正）
+- **テスト結果**: 専用自動テスト 6/6 PASS・ドッグフーディング(TC-05/06 失敗注入→NG)確認・手動 3/3 OK（pytest/Jest/E2E 非該当）
+- **retro**: docs/reviews/I072_retro_20260622.md（予防処置 #1＝retro 対象所在の grep 実在確認は未起票・優先度中）
