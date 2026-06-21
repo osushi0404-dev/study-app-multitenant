@@ -19,12 +19,14 @@
 
 | TC | 結果 | 実行日時 | 備考 |
 |----|------|---------|------|
-| TC-01 | | | |
-| TC-02 | | | |
-| TC-03 | | | |
-| TC-04 | | | |
-| TC-05 | | | |
-| TC-06 | | | |
+| TC-01 | ✅ OK | 2026-06-22 | plan-writing-rules に false-green 原則サブセクション＋「失敗条件を注入」原則あり |
+| TC-02 | ✅ OK | 2026-06-22 | plan-issue/SKILL L169 が一般形（false-green・否定/不在/回帰/無改変）へ更新済み |
+| TC-03 | ✅ OK | 2026-06-22 | plan-reviewer P4 に false-green 検出 bullet あり |
+| TC-04 | ✅ OK | 2026-06-22 | code-reviewer P4 に false-green 検出 bullet あり（plan-reviewer と同一文言） |
+| TC-05 | ✅ OK | 2026-06-22 | 既存ゲート項目残存＋lint「非ゼロ終了」要件が一般化後も残存 |
+| TC-06 | ✅ OK | 2026-06-22 | 追加 false-green 行に I071 固有トークン（P9/VERDICT/HIGHRISK）なし |
+
+**自動テスト結果サマリー**: 専用 TC 6 件すべて PASS（FAIL 0）。pytest/Jest/E2E は Backend/Frontend 変更なしのため **非該当**（実行せず）。
 
 ## ドッグフーディング検証（TC-05・TC-06 が失敗条件で NG を返すこと）
 
@@ -48,5 +50,5 @@ rm -f "$TMP"
 
 | 検証 | 期待（注入時） | 結果 |
 |------|--------------|------|
-| TC-05 失敗注入 | `NG` | |
-| TC-06 失敗注入 | `NG` | |
+| TC-05 失敗注入 | `NG` | ✅ NG（2026-06-22・非ゼロ終了 除去コピーで NG を確認＝false-green でない） |
+| TC-06 失敗注入 | `NG` | ✅ NG（2026-06-22・false-green 行に P9 混入で NG を確認＝false-green でない） |
