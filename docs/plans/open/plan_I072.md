@@ -84,15 +84,15 @@ L148「lint/audit/scan 系ツール導入時の副作用事前調査」サブセ
 - → lint 異常系（非ゼロ終了確認）を**特例として包含**しつつ一般化。`plan-writing-rules.md` の原則と粒度パリティを保つ。
 
 ### 4.3 `.claude/review-agents/plan-reviewer.md`（gate層／P4 に bullet 追加）
-P4 ブロック末尾（L114「CLI フラグ…」bullet の後）に追加:
+P4 ブロック末尾（L114「CLI フラグ…」bullet の後）に追加（plan-reviewer・code-reviewer で**同一文言**＝parity）:
 ```
-- 否定・回帰・不在・無改変を検証する合否判定 TC（grep 等の決定論テスト・lint 異常系を含む）が、失敗条件で実際に不合格になることが確認されているか（正常系で合格するだけの false-green な常時 OK でないか）
+- 否定・不在・回帰・無改変を検証する合否判定 TC（grep 等の決定論テスト・lint 異常系を含む）が、失敗条件で実際に不合格になることが確認されているか（正常系で合格するだけの false-green な常時 OK でないか）
 ```
 
 ### 4.4 `.claude/review-agents/code-reviewer.md`（gate層／P4 に bullet 追加）
-P4 ブロックの「認可テスト（…）」bullet（L106）の直後に追加:
+P4 ブロックの「認可テスト（…）」bullet（L106）の直後に追加（plan-reviewer と**同一文言**＝parity）:
 ```
-- 否定・回帰・不在・無改変を検証する合否判定 TC（決定論テスト・lint 異常系を含む）が、失敗条件で実際に不合格になることが確認されているか（false-green な常時 OK でないか）
+- 否定・不在・回帰・無改変を検証する合否判定 TC（grep 等の決定論テスト・lint 異常系を含む）が、失敗条件で実際に不合格になることが確認されているか（正常系で合格するだけの false-green な常時 OK でないか）
 ```
 
 ---
