@@ -41,6 +41,9 @@ def make_png(name="img.png", size=(10, 10)):
 | TC-AUTO-10 | 解説画像 | explanation 種別でも追加・削除・並び替えが機能 | TC-01/03/04 相当を `explanation_images_order`＋`explanation_image_*` で実施（problem 種別の order は未送信） | 各 200・具体値: ①追加=explanation link 2件 pos1=既存A/pos2=新B、②空配列削除=explanation link 0件・該当 MediaAsset.is_deleted=True×（非共有分）・物理削除済み、③並び替え [A,B,C]→[C,A,B]=position C=1,A=2,B=3。いずれも **problem 種別の画像は不変**。 |
 | TC-AUTO-11 | 差し替え（AC直結） | 1リクエストで既存除外＋新規追加（existing/new 混在）が反映 | 既存問題（problem画像2枚 A,B）に PUT、`question_images_order=[{"existing":A},{"new":"question_image_1"}]`＋`question_image_1`=新C（=B を差し替え） | 200。有効 link 2件: pos1=A, pos2=新C。B は紐づけ解除（非共有なら is_deleted=True＋物理削除）。GET 順序 A,C。 |
 | TC-AUTO-12 | 認可（テナント・SEC-1） | 自組織の問題を他組織 subject に付け替える越境を拒否 | org1 ユーザが org1 の自問題に PUT、`subject`=org2 の subject id を指定（＋新規画像 `question_image_1` を同送） | 400（subject の組織不一致）。problem の subject は org1 のまま不変。**他組織ストレージ配下に新規ファイルが書き込まれていない**（org2 ディレクトリにファイル増加なし）。画像 link も不変。 |
+| TC-AUTO-10b | 解説画像（削除・並び替え） | AC#5 完全性: explanation 種別でも削除・並び替えが機能 | explanation 画像3枚 [A,B,C] を [C,A,B] に並び替え→空配列で全削除 | 並び替え 200: position C=1,A=2,B=3。全削除 200: link 0件・3アセット is_deleted=True・物理削除済み。 |
+| TC-AUTO-13 | 入力検証（重複existing） | 同一既存UUID重複指定で unique違反の500を防止 | PUT `question_images_order=[{existing:A},{existing:A}]` | 400（「同じ既存画像を重複して指定できません」）。画像不変（Aのみ）。 |
+| TC-AUTO-14 | 入力検証（両キー） | existing/new 同時指定を拒否（孤児アセット防止） | PUT `question_images_order=[{existing:A, new:question_image_1}]`＋ファイル | 400（「existing と new を同時に指定できません」）。画像不変（Aのみ）。 |
 
 ---
 
@@ -58,13 +61,15 @@ def make_png(name="img.png", size=(10, 10)):
 | TC-AUTO-09（横断混入） | existing UUID 検証を一時除去 | 他問題アセットが紐づき「400・不変」assert が FAIL |
 | TC-AUTO-11（差し替え／差し替え後 B 不在） | 共有チェックを無効化、または物理削除ステップ6を削除 | 差し替えで除外した B の `is_deleted=True`・物理削除の不在 assert が FAIL（B が残ってしまう） |
 | TC-AUTO-12（越境 subject 拒否） | SEC-1 の subject org 検証ガードを一時除去 | 越境付け替えが 200 で通り「400・subject 不変・他組織にファイル不在」assert が FAIL |
+| TC-AUTO-13（重複existing） | step3 の重複existingチェックを一時除去 | unique違反で500になり「400」assert が FAIL |
+| TC-AUTO-14（両キー） | step3 の existing/new 同時指定チェックを一時除去 | existing として処理され200になり「400」assert が FAIL |
 
 > 上記は「正常系で OK を返すだけ」の見かけゲートでないことを担保する。各 TC は具体的な DB 件数・position 値・is_deleted・物理ファイル有無・HTTP ステータスを assert する（単なる「例外が出ない」ではない）。
 
 ---
 
 ## 完了条件
-- TC-AUTO-00〜12 が全て PASS。
+- TC-AUTO-00〜14（10b 含む）が全て PASS。
 - 上表の故障注入で対象 TC が FAIL することを確認（false-green でない）。
 - `flake8` / `bandit`（MEDIUM 以上）に新規違反がないこと。
 </content>

@@ -3,7 +3,7 @@
  * イシュー#031対応: 問題・解説画像のアップロード機能
  * イシュー#073対応: 既存画像（URL）と新規画像（File）の混在表示・並び替え・削除
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -193,17 +193,39 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
     setValidationError(null);
   }, [onRemove]);
 
-  /** プレビューURL・タイトル・サブタイトルをアイテム種別から導出 */
-  const getPreview = (item: EditableImage) => {
-    if (item.kind === 'existing') {
-      return { src: item.url, title: item.filename, subtitle: '保存済み' };
-    }
-    return {
-      src: URL.createObjectURL(item.file),
-      title: item.file.name,
-      subtitle: `${(item.file.size / 1024).toFixed(1)} KB`,
-    };
-  };
+  /**
+   * プレビュー（既存=URL / 新規=Object URL）を導出。
+   * 新規 File の Object URL はここで生成し、items 変更・アンマウント時に revoke して
+   * メモリリークを防ぐ（イシュー#073 コードレビュー対応）。
+   */
+  const previews = useMemo(
+    () => items.map((item, index) => (
+      item.kind === 'existing'
+        ? {
+            key: `existing-${item.assetId}`,
+            src: item.url,
+            title: item.filename,
+            subtitle: '保存済み',
+            revoke: false,
+          }
+        : {
+            key: `new-${index}-${item.file.name}`,
+            src: URL.createObjectURL(item.file),
+            title: item.file.name,
+            subtitle: `${(item.file.size / 1024).toFixed(1)} KB`,
+            revoke: true,
+          }
+    )),
+    [items],
+  );
+
+  useEffect(() => () => {
+    previews.forEach((p) => {
+      if (p.revoke) {
+        URL.revokeObjectURL(p.src);
+      }
+    });
+  }, [previews]);
 
   return (
     <Box sx={{ mb: 3 }}>
@@ -272,11 +294,9 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
       {items.length > 0 && (
         <Box sx={{ mt: 2 }}>
           <ImageList cols={3} gap={8} sx={{ maxHeight: 400 }}>
-            {items.map((item, index) => {
-              const preview = getPreview(item);
-              const itemKey = item.kind === 'existing' ? `existing-${item.assetId}` : `new-${index}-${item.file.name}`;
+            {previews.map((preview, index) => {
               return (
-                <ImageListItem key={itemKey}>
+                <ImageListItem key={preview.key}>
                   <Box
                     component="img"
                     src={preview.src}

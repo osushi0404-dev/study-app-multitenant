@@ -118,16 +118,24 @@
      ).select_related('asset')
    current_assets = {str(link.asset_id): link for link in current}
 3. order を検証しながら「残すアセット」を決定:
-     keep_asset_ids = set()
+     keep_asset_ids = set(); seen_new_keys = set()
      for entry in order:
+       # existing と new の同時指定は不正（孤児アセット生成・あいまいさ防止）→ 400【code-review対応】
+       if 'existing' in entry and 'new' in entry:
+          raise ValidationError("order 要素は existing と new を同時に指定できません")
        if 'existing' in entry:
          aid = str(entry['existing'])
          if aid not in current_assets:            # 他問題/他種別のアセット混入を拒否（認可・整合）
             raise ValidationError("指定された既存画像は本問題に紐づいていません")
+         if aid in keep_asset_ids:                # 同一既存の重複指定（unique違反=500）を事前に弾く→400【code-review対応】
+            raise ValidationError("同じ既存画像を重複して指定できません")
          keep_asset_ids.add(aid)
        elif 'new' in entry:
          if entry['new'] not in files:            # 参照する新規ファイルが未送信
             raise ValidationError(f"新規画像ファイル {entry['new']} が見つかりません")
+         if entry['new'] in seen_new_keys:        # 同一新規キーの重複指定（unique違反=500）を弾く→400
+            raise ValidationError("同じ新規画像を重複して指定できません")
+         seen_new_keys.add(entry['new'])
        else:
          raise ValidationError("order 要素は existing / new のいずれかを指定してください")
 4. 【新規ファイルを先に保存】（物理削除の前に実施＝失敗時に削除を一切行わせない）:

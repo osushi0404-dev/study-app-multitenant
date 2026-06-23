@@ -323,20 +323,35 @@ class ProblemService:
 
         # order を検証しながら「残すアセット」を決定
         keep_asset_ids = set()
+        seen_new_keys = set()
         for entry in order:
             if not isinstance(entry, dict):
                 raise ValidationError(
                     "order 要素は existing / new のいずれかを指定してください")
-            if 'existing' in entry:
+            has_existing = 'existing' in entry
+            has_new = 'new' in entry
+            # existing / new の同時指定は不正（孤児アセット生成・あいまいさを防ぐ）
+            if has_existing and has_new:
+                raise ValidationError(
+                    "order 要素は existing と new を同時に指定できません")
+            if has_existing:
                 aid = str(entry['existing'])
                 if aid not in current_assets:
                     raise ValidationError(
                         "指定された既存画像は本問題に紐づいていません")
+                # 同一既存アセットの重複指定は unique 制約違反（500）になるため事前に弾く
+                if aid in keep_asset_ids:
+                    raise ValidationError("同じ既存画像を重複して指定できません")
                 keep_asset_ids.add(aid)
-            elif 'new' in entry:
-                if entry['new'] not in files:
+            elif has_new:
+                new_key = entry['new']
+                if new_key not in files:
                     raise ValidationError(
-                        f"新規画像ファイル {entry['new']} が見つかりません")
+                        f"新規画像ファイル {new_key} が見つかりません")
+                # 同一新規キーの重複指定も unique 制約違反になるため弾く
+                if new_key in seen_new_keys:
+                    raise ValidationError("同じ新規画像を重複して指定できません")
+                seen_new_keys.add(new_key)
             else:
                 raise ValidationError(
                     "order 要素は existing / new のいずれかを指定してください")
@@ -373,6 +388,8 @@ class ProblemService:
             if aid in keep_asset_ids:
                 continue
             asset = link.asset
+            # 他問題で当該アセットが使われているか（共有判定）。手順5で本問題の
+            # link は全削除済みのため exclude(problem) は防御的（本問題分が再混入しても除外）。
             shared = ProblemMediaAsset.objects.filter(
                 asset=asset, is_deleted=False
             ).exclude(problem=problem).exists()

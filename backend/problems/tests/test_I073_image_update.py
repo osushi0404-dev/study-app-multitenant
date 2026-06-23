@@ -390,6 +390,65 @@ def test_explanation_images(env):
     assert [str(link.asset_id) for link in active_links(problem, "problem")] == [str(qa.id)]
 
 
+# ---- TC-AUTO-10b: 解説画像の削除・並び替え（AC#5 完全性） ----------------
+
+@pytest.mark.django_db
+def test_explanation_delete_and_reorder(env):
+    problem = make_problem(env["org"], env["subject"], env["user"])
+    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                             problem, "explanation", 1, "ea.png")
+    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                             problem, "explanation", 2, "eb.png")
+    c = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                             problem, "explanation", 3, "ec.png")
+    # 並び替え [A,B,C] -> [C,A,B]
+    data = put_payload(env["subject"], explanation_images_order=json.dumps(
+        [{"existing": str(c.id)}, {"existing": str(a.id)}, {"existing": str(b.id)}]))
+    resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
+    assert resp.status_code == 200, resp.content
+    links = active_links(problem, "explanation")
+    assert [(str(link.asset_id), link.position) for link in links] == [
+        (str(c.id), 1), (str(a.id), 2), (str(b.id), 3)]
+    # 全削除
+    data = put_payload(env["subject"], explanation_images_order=json.dumps([]))
+    resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
+    assert resp.status_code == 200, resp.content
+    assert active_links(problem, "explanation") == []
+    for asset in (a, b, c):
+        asset.refresh_from_db()
+        assert asset.is_deleted is True
+        assert not file_exists(env["media_root"], asset)
+
+
+# ---- TC-AUTO-13: 同一既存UUID重複指定を拒否（unique違反の500を防止） --------
+
+@pytest.mark.django_db
+def test_duplicate_existing_rejected(env):
+    problem = make_problem(env["org"], env["subject"], env["user"])
+    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                             problem, "problem", 1, "a.png")
+    data = put_payload(env["subject"], question_images_order=json.dumps(
+        [{"existing": str(a.id)}, {"existing": str(a.id)}]))
+    resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
+    assert resp.status_code == 400, resp.content
+    assert [str(link.asset_id) for link in active_links(problem, "problem")] == [str(a.id)]
+
+
+# ---- TC-AUTO-14: existing/new 同時指定を拒否 -------------------------------
+
+@pytest.mark.django_db
+def test_both_keys_entry_rejected(env):
+    problem = make_problem(env["org"], env["subject"], env["user"])
+    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                             problem, "problem", 1, "a.png")
+    data = put_payload(env["subject"], question_images_order=json.dumps(
+        [{"existing": str(a.id), "new": "question_image_1"}]),
+        question_image_1=png_upload("x.png"))
+    resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
+    assert resp.status_code == 400, resp.content
+    assert [str(link.asset_id) for link in active_links(problem, "problem")] == [str(a.id)]
+
+
 # ---- TC-AUTO-11: 差し替え（existing/new 混在で B→C） ----------------------
 
 @pytest.mark.django_db
