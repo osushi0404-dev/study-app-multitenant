@@ -1,0 +1,70 @@
+# I073 自動テスト計画（バックエンド結合テスト）
+
+- **関連イシュー**: #150 / **計画書**: docs/plans/open/plan_I073.md
+- **対象**: `backend/problems/tests/test_I073_image_update.py`（新規）
+- **方式**: pytest（`@pytest.mark.django_db`）＋ DRF `APIClient`。既存 `problems/tests/` のパターンを踏襲。
+- **実行**: `docker compose exec backend python -m pytest problems/tests/test_I073_image_update.py -v`
+- **MEDIA_ROOT**: 各テストで `settings.MEDIA_ROOT = str(tmp_path)`。科目ディレクトリ（`org/<slug>/subjects/<slug>/{problem,explanation}`）をフィクスチャで作成（`check_directory_exists` を満たすため）。
+- **画像生成ヘルパ**: PIL で実画像バイト列を生成し `SimpleUploadedFile(name, content, content_type)` で渡す（`validate_image_file` の MIME/マジックナンバー/ピクセル検証を通すため、ダミーバイトではなく実 PNG を生成する）。
+
+```python
+# 画像生成ヘルパ（テスト内）
+import io
+from PIL import Image
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+def make_png(name="img.png", size=(10, 10)):
+    buf = io.BytesIO()
+    Image.new("RGB", size, (123, 222, 64)).save(buf, format="PNG")
+    return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
+```
+
+共通フィクスチャ: 組織 `org`・管理ユーザ・`subject`（slug 付き）・MEDIA ディレクトリ作成・`APIClient().force_authenticate(user)`。
+「問題＋画像」の初期データは PUT 経由でなく `ProblemService.create_problem_with_images()` または作成 API（POST `/api/problems/`）で用意する。
+
+---
+
+## テストケース一覧
+
+| TC | 種別 | 目的 | 手順（要点） | 期待結果（具体値） |
+|----|------|------|------------|------------------|
+| TC-AUTO-00 | 回帰 | 作成フロー（`_process_images` リファクタ後）が従来通り画像を作成する | POST `/api/problems/` に `question_image_1/2` を multipart 送信 | 201。`ProblemMediaAsset` が usage_kind='problem' で2件、position=1,2。`MediaAsset` 2件、物理ファイル2個存在。 |
+| TC-AUTO-01 | 追加 | 既存1枚の問題に新規1枚を追加 | 既存問題（problem画像1枚, asset A, pos1）に対し PUT、`question_images_order=[{"existing":A},{"new":"question_image_1"}]`＋`question_image_1`=新PNG | 200。problem画像の有効 link 2件（pos1=A, pos2=新B）。GET 再取得で `question_images` 長さ2、順序 A,B。 |
+| TC-AUTO-02 | 無変更（テキストのみ） | order フィールド非送信時は画像を変更しない | 既存問題（画像2枚）に対し PUT で `question_text` のみ変更、`*_images_order` を**送らない** | 200。`question_images` は2枚のまま不変。`question_text` 更新済み。 |
+| TC-AUTO-03 | 全削除 | 空配列 `[]` 送信で当該種別を全削除 | 既存問題（problem画像2枚・共有なし）に PUT、`question_images_order=[]` | 200。problem の有効 link 0件。両 `MediaAsset.is_deleted=True`、物理ファイル削除済み。explanation 画像は未送信なら不変。 |
+| TC-AUTO-04 | 並び替え | 既存3枚 [A,B,C] を [C,A,B] に並び替え | PUT `question_images_order=[{"existing":C},{"existing":A},{"existing":B}]` | 200。position 再採番: C=1,A=2,B=3。UNIQUE 制約違反が起きない（例外なし）。GET 順序 C,A,B。物理ファイル・MediaAsset は削除されない。 |
+| TC-AUTO-05 | 共有画像の削除 | 他問題と共有するアセットの削除は紐づけ解除のみ | asset S を problem1・problem2 が共有。problem1 に PUT `question_images_order=[]` | 200。problem1 の link 解除。`MediaAsset(S).is_deleted=False`、物理ファイル**残存**。problem2 から S は引き続き取得可能。 |
+| TC-AUTO-06 | 認可（テナント） | 他組織ユーザは編集不可 | org2 のユーザで org1 の問題に PUT | 404（queryset スコープ）。org1 問題の画像・テキストは不変。 |
+| TC-AUTO-07 | atomic（新規保存失敗・物理削除遅延の検証） | 途中失敗で部分更新が残らず、**残すべき物理ファイルも消えない** | 既存問題（画像2枚 A,B）に PUT、order で既存B削除＋不正な新規ファイル（非画像/サイズ超過）を `{"new":...}` で追加 | 400。**ロールバック＋物理削除未到達**: 既存2枚（A,B）の link・MediaAsset.is_deleted=False・**物理ファイル2個が全て元のまま**（B も削除されていない）。※物理削除を全工程の最後に遅延する設計（plan §10）が正しく実装されていれば成立。 |
+| TC-AUTO-08 | atomic（不正order） | 不正 order で全ロールバック | 既存問題に PUT、`question_images_order` が不正JSON or 6要素（上限超過） | 400（不正JSON or 「最大5枚」）。画像・選択肢・テキストいずれも変更なし。 |
+| TC-AUTO-09 | 認可（横断混入） | 他問題のアセットUUIDを existing 指定で拒否 | problem1 に PUT、`existing` に problem2 のアセット UUID を指定 | 400（「本問題に紐づいていません」）。problem1 の画像不変。 |
+| TC-AUTO-10 | 解説画像 | explanation 種別でも追加・削除・並び替えが機能 | TC-01/03/04 相当を `explanation_images_order`＋`explanation_image_*` で実施（problem 種別の order は未送信） | 各 200・具体値: ①追加=explanation link 2件 pos1=既存A/pos2=新B、②空配列削除=explanation link 0件・該当 MediaAsset.is_deleted=True×（非共有分）・物理削除済み、③並び替え [A,B,C]→[C,A,B]=position C=1,A=2,B=3。いずれも **problem 種別の画像は不変**。 |
+| TC-AUTO-11 | 差し替え（AC直結） | 1リクエストで既存除外＋新規追加（existing/new 混在）が反映 | 既存問題（problem画像2枚 A,B）に PUT、`question_images_order=[{"existing":A},{"new":"question_image_1"}]`＋`question_image_1`=新C（=B を差し替え） | 200。有効 link 2件: pos1=A, pos2=新C。B は紐づけ解除（非共有なら is_deleted=True＋物理削除）。GET 順序 A,C。 |
+| TC-AUTO-12 | 認可（テナント・SEC-1） | 自組織の問題を他組織 subject に付け替える越境を拒否 | org1 ユーザが org1 の自問題に PUT、`subject`=org2 の subject id を指定（＋新規画像 `question_image_1` を同送） | 400（subject の組織不一致）。problem の subject は org1 のまま不変。**他組織ストレージ配下に新規ファイルが書き込まれていない**（org2 ディレクトリにファイル増加なし）。画像 link も不変。 |
+
+---
+
+## 否定・回帰系 TC の false-green 自己検証（実装時に必須）
+
+計画書ルール「否定・不在・回帰系の決定論テストは失敗条件を注入して実際に NG になることを確認してから採用する」に従い、以下の TC は**検証対象を一時的に壊して NG になること**を実装時に確認してから採用する。確認結果は `/test` 実行記録に残す。
+
+| TC | 注入する故障（一時的に壊す） | 期待: 注入時に FAIL すること |
+|----|------------------------------|------------------------------|
+| TC-AUTO-02（無変更） | `_reconcile_images` が `order is None` でも reconcile を走るよう改変 | 画像が消える/変わるため assert で FAIL |
+| TC-AUTO-04（並び替え） | delete→recreate を「インプレース position 更新」に差し替え | UNIQUE 制約違反 or 順序不一致で FAIL |
+| TC-AUTO-05（共有） | 共有チェック（`exclude(problem=...).exists()`）を無効化し常に物理削除 | 共有ファイルが消えるため「残存」assert が FAIL |
+| TC-AUTO-06（他組織404） | get_queryset の組織スコープを一時撤廃 | 200/編集成功になり「404・不変」assert が FAIL |
+| TC-AUTO-07（atomic／物理削除遅延） | (a) `@transaction.atomic` を一時除去、または (b) 物理削除を手順4の前（新規保存より先）に戻す | (a)で DB 部分更新が残り、(b)で B の物理ファイルが消えるため「全て元のまま」assert が FAIL |
+| TC-AUTO-09（横断混入） | existing UUID 検証を一時除去 | 他問題アセットが紐づき「400・不変」assert が FAIL |
+| TC-AUTO-11（差し替え／差し替え後 B 不在） | 共有チェックを無効化、または物理削除ステップ6を削除 | 差し替えで除外した B の `is_deleted=True`・物理削除の不在 assert が FAIL（B が残ってしまう） |
+| TC-AUTO-12（越境 subject 拒否） | SEC-1 の subject org 検証ガードを一時除去 | 越境付け替えが 200 で通り「400・subject 不変・他組織にファイル不在」assert が FAIL |
+
+> 上記は「正常系で OK を返すだけ」の見かけゲートでないことを担保する。各 TC は具体的な DB 件数・position 値・is_deleted・物理ファイル有無・HTTP ステータスを assert する（単なる「例外が出ない」ではない）。
+
+---
+
+## 完了条件
+- TC-AUTO-00〜12 が全て PASS。
+- 上表の故障注入で対象 TC が FAIL することを確認（false-green でない）。
+- `flake8` / `bandit`（MEDIUM 以上）に新規違反がないこと。
+</content>
