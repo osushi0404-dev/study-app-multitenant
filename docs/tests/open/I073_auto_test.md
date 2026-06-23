@@ -44,6 +44,7 @@ def make_png(name="img.png", size=(10, 10)):
 | TC-AUTO-10b | 解説画像（削除・並び替え） | AC#5 完全性: explanation 種別でも削除・並び替えが機能 | explanation 画像3枚 [A,B,C] を [C,A,B] に並び替え→空配列で全削除 | 並び替え 200: position C=1,A=2,B=3。全削除 200: link 0件・3アセット is_deleted=True・物理削除済み。 |
 | TC-AUTO-13 | 入力検証（重複existing） | 同一既存UUID重複指定で unique違反の500を防止 | PUT `question_images_order=[{existing:A},{existing:A}]` | 400（「同じ既存画像を重複して指定できません」）。画像不変（Aのみ）。 |
 | TC-AUTO-14 | 入力検証（両キー） | existing/new 同時指定を拒否（孤児アセット防止） | PUT `question_images_order=[{existing:A, new:question_image_1}]`＋ファイル | 400（「existing と new を同時に指定できません」）。画像不変（Aのみ）。 |
+| TC-AUTO-15 | 共有（別usage_kind） | 同一アセットが problem/explanation 両方に共有される場合、片方削除で物理削除しない | 同一アセットを problem(pos1)・explanation(pos1) に紐づけ→problem を空配列で全削除（explanation は order 未送信） | 200。problem link 0件。explanation link 残存。**アセット is_deleted=False・物理ファイル残存**（別 usage_kind 共有を考慮）。 |
 
 ---
 
@@ -63,13 +64,14 @@ def make_png(name="img.png", size=(10, 10)):
 | TC-AUTO-12（越境 subject 拒否） | SEC-1 の subject org 検証ガードを一時除去 | 越境付け替えが 200 で通り「400・subject 不変・他組織にファイル不在」assert が FAIL |
 | TC-AUTO-13（重複existing） | step3 の重複existingチェックを一時除去 | unique違反で500になり「400」assert が FAIL |
 | TC-AUTO-14（両キー） | step3 の existing/new 同時指定チェックを一時除去 | existing として処理され200になり「400」assert が FAIL |
+| TC-AUTO-15（別usage_kind共有） | step6 共有チェックに `.exclude(problem=problem)` を復活 | 別 usage_kind 共有が見落とされ物理削除され「is_deleted=False・ファイル残存」assert が FAIL |
 
 > 上記は「正常系で OK を返すだけ」の見かけゲートでないことを担保する。各 TC は具体的な DB 件数・position 値・is_deleted・物理ファイル有無・HTTP ステータスを assert する（単なる「例外が出ない」ではない）。
 
 ---
 
 ## 完了条件
-- TC-AUTO-00〜14（10b 含む）が全て PASS。
+- TC-AUTO-00〜15（10b 含む）が全て PASS。
 - 上表の故障注入で対象 TC が FAIL することを確認（false-green でない）。
 - `flake8` / `bandit`（MEDIUM 以上）に新規違反がないこと。
 </content>

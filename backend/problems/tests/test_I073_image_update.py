@@ -420,6 +420,29 @@ def test_explanation_delete_and_reorder(env):
         assert not file_exists(env["media_root"], asset)
 
 
+# ---- TC-AUTO-15: 同一アセットが別usage_kindで共有される場合は物理削除しない ----
+
+@pytest.mark.django_db
+def test_asset_shared_across_usage_kinds_preserved(env):
+    problem = make_problem(env["org"], env["subject"], env["user"])
+    # 同一アセットを problem 種別と explanation 種別の両方に紐づけ（共有）
+    asset = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                                 problem, "problem", 1, "shared.png")
+    ProblemMediaAsset.objects.create(
+        organization=env["org"], problem=problem, asset=asset,
+        usage_kind="explanation", position=1)
+    # problem 種別のみ全削除（explanation は order 未送信＝無変更）
+    data = put_payload(env["subject"], question_images_order=json.dumps([]))
+    resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
+    assert resp.status_code == 200, resp.content
+    assert active_links(problem, "problem") == []
+    # explanation 側の共有リンクが残るため、アセット実体・物理ファイルは保持される
+    assert [str(link.asset_id) for link in active_links(problem, "explanation")] == [str(asset.id)]
+    asset.refresh_from_db()
+    assert asset.is_deleted is False
+    assert file_exists(env["media_root"], asset)
+
+
 # ---- TC-AUTO-13: 同一既存UUID重複指定を拒否（unique違反の500を防止） --------
 
 @pytest.mark.django_db

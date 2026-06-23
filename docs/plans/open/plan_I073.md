@@ -158,9 +158,13 @@
      for aid, link in current_assets.items():
        if aid not in keep_asset_ids:
          asset = link.asset
+         # 共有判定: 当該アセットの有効リンクが他に残るか。手順5で本問題の
+         # (problem, usage_kind) リンクは削除済みのため、残るのは「他問題」または
+         # 「本問題の別 usage_kind」＝いずれも共有。exclude(problem) は付けない
+         # （別 usage_kind 共有を見落とし共有画像を誤削除するため・code-review対応）
          shared = ProblemMediaAsset.objects.filter(
              asset=asset, is_deleted=False
-         ).exclude(problem=problem).exists()      # 手順5で自問題 link は削除済み（多重防御）
+         ).exists()
          if not shared:
             asset.is_deleted = True
             asset.save(update_fields=['is_deleted'])

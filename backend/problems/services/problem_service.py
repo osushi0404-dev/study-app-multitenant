@@ -388,11 +388,14 @@ class ProblemService:
             if aid in keep_asset_ids:
                 continue
             asset = link.asset
-            # 他問題で当該アセットが使われているか（共有判定）。手順5で本問題の
-            # link は全削除済みのため exclude(problem) は防御的（本問題分が再混入しても除外）。
+            # 共有判定: 当該アセットを参照する有効リンクが他に残っているか。
+            # 手順5で本問題の (problem, usage_kind) リンクは全削除済みのため、ここで
+            # 残るのは「他問題」または「本問題の別 usage_kind」のリンク＝いずれも共有。
+            # exclude(problem) を付けると本問題の別 usage_kind 共有を見落とし、共有画像を
+            # 誤って物理削除してしまうため付けない（code-review Medium 対応）。
             shared = ProblemMediaAsset.objects.filter(
                 asset=asset, is_deleted=False
-            ).exclude(problem=problem).exists()
+            ).exists()
             if shared:
                 continue  # 共有されている場合は紐づけ解除のみ（物理削除しない）
             asset.is_deleted = True

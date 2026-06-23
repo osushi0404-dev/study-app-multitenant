@@ -50,9 +50,24 @@ import * as yup from 'yup';
 import { toast } from 'react-hot-toast';
 import AIQuestionGenerator from '../components/AIQuestionGenerator';
 import ProblemPreview from '../components/ProblemPreview';
+import axios from 'axios';
 import { Subject, Problem, EditableImage } from '../services/types';
 import apiClient from '../services/api';
 import quizService from '../services/quiz.service';
+
+/** API（DRF）のバリデーションエラーから表示用メッセージを抽出（イシュー#073） */
+const extractApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError(error) && error.response?.data) {
+    const data = error.response.data;
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return data.map((v) => String(v)).join(' ');
+    if (typeof data === 'object') {
+      const parts = Object.values(data).flat().map((v) => String(v));
+      if (parts.length > 0) return parts.join(' ');
+    }
+  }
+  return fallback;
+};
 
 
 const problemSchema = yup.object({
@@ -106,7 +121,7 @@ const QuizManagement: React.FC = () => {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<ProblemFormData>({
     resolver: yupResolver(problemSchema),
     defaultValues: {
@@ -285,7 +300,7 @@ const QuizManagement: React.FC = () => {
       setExplanationImageItems([]);
       fetchProblems();
     } catch (error) {
-      toast.error('問題の作成に失敗しました');
+      toast.error(extractApiErrorMessage(error, '問題の作成に失敗しました'));
       console.error('Error creating problem:', error);
     }
   };
@@ -353,7 +368,7 @@ const QuizManagement: React.FC = () => {
       setExplanationImageItems([]);
       fetchProblems();
     } catch (error) {
-      toast.error('問題の更新に失敗しました');
+      toast.error(extractApiErrorMessage(error, '問題の更新に失敗しました'));
       console.error('Error updating problem:', error);
     }
   };
@@ -875,7 +890,7 @@ const QuizManagement: React.FC = () => {
             <Button onClick={editingProblem ? closeEditDialog : closeCreateDialog}>
               キャンセル
             </Button>
-            <Button type="submit" variant="contained" startIcon={<Save />}>
+            <Button type="submit" variant="contained" startIcon={<Save />} disabled={isSubmitting}>
               {editingProblem ? '更新' : '作成'}
             </Button>
           </DialogActions>
