@@ -74,4 +74,16 @@ def make_png(name="img.png", size=(10, 10)):
 - TC-AUTO-00〜15（10b 含む）が全て PASS。
 - 上表の故障注入で対象 TC が FAIL することを確認（false-green でない）。
 - `flake8` / `bandit`（MEDIUM 以上）に新規違反がないこと。
-</content>
+
+---
+
+## 実行記録（/test I073 — 2026-06-24）
+
+- 環境: Docker（`docker compose exec backend python -m pytest`）。pytest.ini（`--no-migrations`）。
+- **backend 専用 TC（auto_test 正）**: `problems/tests/test_I073_image_update.py` → **18 passed**（TC-AUTO-00〜15 を 18 テスト関数で網羅）。
+- **backend 全体（回帰）**: **43 passed**, 0 failed。
+- **frontend Jest（回帰）**: 2 suites / **7 passed**, 0 failed（passWithNoTests）。
+- **lint/scan**: ruff / bandit / tsc / ESLint(--max-warnings 0) すべてクリーン（pre-commit 通過）。
+- **false-green 自己検証**: 否定/認可系 TC（02/04/05/06/07/09/12/13/14/15）に故障注入し、全件で NG（FAIL）検出を確認済み（見かけゲートなし）。
+- **手動 TC-MAN-09（Claude実施）**: aria-label 付与を確認 → OK。
+- 手動 TC-MAN-01〜08（Human・ブラウザ操作）は別途実施。
