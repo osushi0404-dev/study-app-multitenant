@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+import json
 import uuid
 import hashlib
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
@@ -283,7 +284,6 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             3. ProblemService による差分更新（追加・削除・並び替え・トランザクション）
             4. キャッシュ無効化
         """
-        import json
         from rest_framework.exceptions import ValidationError as DRFValidationError
         from problems.services import ProblemService
 
@@ -313,12 +313,15 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             raw = request.data.get(field)
             if raw is None:
                 return None
-            if isinstance(raw, (list, dict)):
+            if isinstance(raw, list):
                 return raw
             try:
-                return json.loads(raw)
+                parsed = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
                 raise DRFValidationError({field: ['不正なJSON形式です']})
+            if not isinstance(parsed, list):
+                raise DRFValidationError({field: ['画像の順序指定はJSON配列で指定してください']})
+            return parsed
 
         question_order = parse_order('question_images_order')
         explanation_order = parse_order('explanation_images_order')
