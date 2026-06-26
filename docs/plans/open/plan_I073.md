@@ -62,7 +62,7 @@
 ---
 
 ## 3. 影響範囲
-- **Backend**: `problems/services/problem_service.py`（差分処理本体）、`problems/views.py`（`perform_update` で order/files 取り出し）、`problems/serializers.py`（multipart 追加フィールドの無害な受理確認のみ。原則コード変更なし）。
+- **Backend**: `problems/services/problem_service.py`（差分処理本体）、`problems/views.py`（`perform_update` で order/files 取り出し）、`problems/serializers.py`（multipart 追加フィールドの無害な受理確認のみ。原則コード変更なし）、`core/cache_service.py`（`invalidate_problems_cache` のキャッシュ無効化バグ修正＝/test で発覚・AC① 必須。下記「キャッシュ無効化修正」参照）。
 - **Frontend**: `pages/QuizManagement.tsx`（編集ダイアログの既存画像ロード・multipart 送信）、`components/ImageUploadArea.tsx`（既存/新規混在・並び替え対応）、`services/quiz.service.ts`（`updateProblem` を multipart 転用）、`services/types.ts`（編集用画像アイテム型の追加）。
 - **DB**: スキーマ変更なし（既存 `MediaAsset`/`ProblemMediaAsset` を使用）。→ セクション10（データ整合性設計）は**マイグレーションなし**だがトランザクション境界の設計を記載。
 - **Config/Infra**: なし。依存ライブラリ追加なし（DnD ライブラリ不採用＝上下ボタン）。→ Dockerfile / docker-compose / requirements / package.json への波及なし（**P3/P5/P8 影響なし**）。
@@ -79,6 +79,7 @@
 | 〃 | `update_problem_with_images()` | シグネチャを `(problem, validated_data, question_files=None, explanation_files=None, question_order=None, explanation_order=None)` に変更。基本情報・選択肢更新は現状維持。usage_kind ごとに `_reconcile_images()` を呼ぶ。 |
 | 〃 | `_reconcile_images()`（**新規・staticmethod**） | order 配列に基づく差分削除・追加・並び替え（後述ロジック）。`order is None` の usage_kind は無変更。 |
 | `problems/views.py` | `ProblemViewSet.perform_update()` | `request.FILES` から `question_image_*`/`explanation_image_*` を収集、`request.data` から `question_images_order`/`explanation_images_order`（JSON）をパース。`ProblemService.update_problem_with_images()` を呼び、キャッシュ無効化、`serializer.instance` 設定（`serializer.save()` は**呼ばない**＝作成フローと同方式）。 |
+| `core/cache_service.py` | `invalidate_problems_cache()` / `_delete_by_pattern()`（docstring） | **キャッシュ無効化修正（/test で発覚）**: `delete_pattern` へ渡すパターンから手書き KEY_PREFIX（`learning_app_problems:`）を除去（django-redis が自動付与＝旧実装は二重付与で不一致）。subject 限定パターンも実キー構造と不一致のため `problems_*` で一括無効化（問題変更は全件/科目別/難易度別/全ユーザ別の全変種に波及）。`_delete_by_pattern` に「プレフィックスを含めない」契約 docstring を追記。系統的同型バグ（analytics 等）は別イシュー（提案4）。 |
 
 ### Frontend
 | ファイル | 箇所 | 変更内容 |
@@ -379,3 +380,15 @@
 ### 提案2（フォローアップ・セキュリティイシュー候補）
 
 - `ProblemSerializer.subject` の queryset が組織スコープ未対応で、**作成フロー（`create_problem_with_images`）にも同じテナント越境ギャップ**が残る（I073 は更新経路を SEC-1 で遮断したのみ）。シリアライザ全体の org スコープ化を別イシューで起票するか /retro で処遇決定する。
+
+### 提案3（フォローアップ・UXイシュー候補｜/test で発覚・ユーザー判断で別イシュー化）
+
+- **正解選択肢が管理画面で確認・保持できない**（既存・I073 とは独立）。`ChoiceSerializer.is_correct` が `write_only=True` で GET レスポンスに含まれないため:
+  - 参照プレビューで正解選択肢がマークされない。
+  - 編集ダイアログで正解ラジオが初期選択されず、編集のたびに正解を選び直す必要がある（選び忘れると保存時に「正解を1つ選択」で 400）。
+- 是正案: 管理用シリアライザ（`ProblemSerializer`/管理プレビュー）で `is_correct` を返す（出題用は write_only 維持＝答え漏洩防止）→ フロントで正解マーク・編集の初期ラジオ選択・差分保存。
+- ユーザー判断: **別イシューで対応**（I073 スコープ外）。/retro または別途起票。
+
+### 提案4（フォローアップ・キャッシュ系統バグ候補）
+
+- `_delete_by_pattern` 利用箇所のうち、`invalidate_analytics_cache` / `invalidate_spaced_repetition_cache` / `invalidate_mistake_patterns_cache` 等も**同じ「KEY_PREFIX 二重付与」バグ**を抱える可能性が高い（パターンに `learning_app_*:` を手動付与）。I073 では `invalidate_problems_cache` のみ修正し、系統的な是正は別イシュー候補。

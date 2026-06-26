@@ -496,6 +496,60 @@ def test_replace_image(env):
     assert not file_exists(env["media_root"], b)
 
 
+# ---- TC-AUTO-16: invalidate_problems_cache が実際にキャッシュをクリアする -----
+
+@pytest.mark.django_db
+def test_invalidate_problems_cache_actually_clears(env):
+    from core.cache_service import cache_service
+    uid = env["user"].id
+    sid = env["subject"].id
+    cache_service.set_problems_cache(["x"], subject_id=sid, difficulty=None, user_id=uid)
+    cache_service.set_problems_cache(["x"], subject_id=None, difficulty=None, user_id=uid)
+    cache_service.invalidate_problems_cache(sid)
+    # subject 指定キャッシュ・全件キャッシュの双方がクリアされること
+    assert cache_service.get_problems_cache(
+        subject_id=sid, difficulty=None, user_id=uid) is None
+    assert cache_service.get_problems_cache(
+        subject_id=None, difficulty=None, user_id=uid) is None
+
+
+# ---- TC-AUTO-17: list エンドポイント越し（キャッシュ越し）に追加が反映される ----
+
+@pytest.mark.django_db
+def test_added_image_reflected_through_list_endpoint(env):
+    """DB だけでなく、一覧 API（キャッシュ経由）でも追加画像が見えること。
+
+    保存後に invalidate_problems_cache が効かないと、2回目の GET が古いキャッシュを
+    返して追加画像が見えない（実機で観測された不具合の回帰テスト）。
+    """
+    problem = make_problem(env["org"], env["subject"], env["user"])
+    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+                             problem, "problem", 1, "a.png")
+    client = env["client"]
+
+    def img_count(resp, pid):
+        for item in resp.json():
+            if item["id"] == pid:
+                return len(item.get("question_images", []))
+        return None
+
+    # 1. 一覧を取得してキャッシュを生成（UI と同じく科目フィルタ無し）
+    r1 = client.get("/api/problems/")
+    assert r1.status_code == 200
+    assert img_count(r1, problem.id) == 1
+
+    # 2. 画像を1枚追加
+    data = put_payload(env["subject"], question_images_order=json.dumps(
+        [{"existing": str(a.id)}, {"new": "question_image_1"}]),
+        question_image_1=png_upload("b.png"))
+    rp = client.put(f"/api/problems/{problem.id}/", data, format="multipart")
+    assert rp.status_code == 200, rp.content
+
+    # 3. 再取得で2枚に反映されている（キャッシュ無効化が効いている）
+    r2 = client.get("/api/problems/")
+    assert img_count(r2, problem.id) == 2, "キャッシュ無効化が効かず古い一覧が返っている"
+
+
 # ---- TC-AUTO-12: 越境 subject 付け替えを拒否（SEC-1） ----------------------
 
 @pytest.mark.django_db

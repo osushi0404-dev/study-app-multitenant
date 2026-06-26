@@ -45,6 +45,8 @@ def make_png(name="img.png", size=(10, 10)):
 | TC-AUTO-13 | 入力検証（重複existing） | 同一既存UUID重複指定で unique違反の500を防止 | PUT `question_images_order=[{existing:A},{existing:A}]` | 400（「同じ既存画像を重複して指定できません」）。画像不変（Aのみ）。 |
 | TC-AUTO-14 | 入力検証（両キー） | existing/new 同時指定を拒否（孤児アセット防止） | PUT `question_images_order=[{existing:A, new:question_image_1}]`＋ファイル | 400（「existing と new を同時に指定できません」）。画像不変（Aのみ）。 |
 | TC-AUTO-15 | 共有（別usage_kind） | 同一アセットが problem/explanation 両方に共有される場合、片方削除で物理削除しない | 同一アセットを problem(pos1)・explanation(pos1) に紐づけ→problem を空配列で全削除（explanation は order 未送信） | 200。problem link 0件。explanation link 残存。**アセット is_deleted=False・物理ファイル残存**（別 usage_kind 共有を考慮）。 |
+| TC-AUTO-16 | キャッシュ無効化 | `invalidate_problems_cache` が実際に problems キャッシュをクリアする | `set_problems_cache`(subject指定/None) → `invalidate_problems_cache(sid)` → `get` | 双方 `None`（旧実装は KEY_PREFIX 二重付与＋subject 限定パターン不一致でクリアされなかった）。 |
+| TC-AUTO-17 | 結合（キャッシュ越し反映） | 一覧 API（キャッシュ経由）でも追加画像が反映される | GET `/api/problems/`（キャッシュ生成）→ PUT で画像追加 → 再 GET | 再 GET の `question_images` が 1→2 に増える（無効化が効かないと古い一覧が返り FAIL）。実機で観測された不具合の回帰テスト。 |
 
 ---
 
@@ -65,13 +67,14 @@ def make_png(name="img.png", size=(10, 10)):
 | TC-AUTO-13（重複existing） | step3 の重複existingチェックを一時除去 | unique違反で500になり「400」assert が FAIL |
 | TC-AUTO-14（両キー） | step3 の existing/new 同時指定チェックを一時除去 | existing として処理され200になり「400」assert が FAIL |
 | TC-AUTO-15（別usage_kind共有） | step6 共有チェックに `.exclude(problem=problem)` を復活 | 別 usage_kind 共有が見落とされ物理削除され「is_deleted=False・ファイル残存」assert が FAIL |
+| TC-AUTO-16/17（キャッシュ無効化） | `invalidate_problems_cache` を旧実装（手書きKEY_PREFIX＋subject限定パターン）に戻す | 無効化が効かず get が旧値を返す/再GETが古い一覧を返すため双方 FAIL |
 
 > 上記は「正常系で OK を返すだけ」の見かけゲートでないことを担保する。各 TC は具体的な DB 件数・position 値・is_deleted・物理ファイル有無・HTTP ステータスを assert する（単なる「例外が出ない」ではない）。
 
 ---
 
 ## 完了条件
-- TC-AUTO-00〜15（10b 含む）が全て PASS。
+- TC-AUTO-00〜17（10b 含む）が全て PASS。
 - 上表の故障注入で対象 TC が FAIL することを確認（false-green でない）。
 - `flake8` / `bandit`（MEDIUM 以上）に新規違反がないこと。
 
@@ -87,3 +90,15 @@ def make_png(name="img.png", size=(10, 10)):
 - **false-green 自己検証**: 否定/認可系 TC（02/04/05/06/07/09/12/13/14/15）に故障注入し、全件で NG（FAIL）検出を確認済み（見かけゲートなし）。
 - **手動 TC-MAN-09（Claude実施）**: aria-label 付与を確認 → OK。
 - 手動 TC-MAN-01〜08（Human・ブラウザ操作）は別途実施。
+
+---
+
+## 再発防止記録（/fix-loop I073 — 2026-06-26｜キャッシュ無効化バグ）
+
+- **なぜ失敗したか**: 編集で画像を追加・保存しても参照/一覧に反映されなかった。保存自体は成功（DB 反映済み）だが、`core/cache_service.py` の `invalidate_problems_cache` が機能しておらず、`fetchProblems()` が古い問題一覧キャッシュを返していた。要因は (1) `delete_pattern` へ渡すパターンに KEY_PREFIX（`learning_app_problems:`）を手書き → django-redis が自動付与するため二重付与で永久に不一致、(2) `subject_id` 限定パターンが実キー（`problems_difficulty_*_subject_id_*_user_id_*`）と構造不一致＋全件リスト（subject_id=None）未対応。
+- **なぜ自動テストで漏れたか**: 既存 TC が **DB 状態のみ** を assert し、一覧 API（キャッシュ経路）を経由していなかった。
+- **何を変えたか**: `invalidate_problems_cache` を `_delete_by_pattern(self.problems_cache, "problems_*")` に修正（プレフィックス除去＋全変種一括クリア）。`_delete_by_pattern` に「パターンに KEY_PREFIX を含めない」契約 docstring を追記。
+- **回帰テスト追加**: TC-AUTO-16（`cache_service` 直: set→invalidate→get が None）／TC-AUTO-17（結合: GET→PUT追加→再GET で `question_images` が 1→2）。いずれも旧実装に戻すと FAIL することを故障注入で確認（false-green なし）。
+- **次回どう防ぐか**: 「保存後の再取得で反映される」系 AC は **DB だけでなく API（キャッシュ経路）越し**で検証する。`_delete_by_pattern` 利用時はパターンに KEY_PREFIX を含めない（docstring に明記）。
+- **セキュリティ考慮**: 無効化範囲を広げても、キャッシュは user_id 別・データは組織スコープ queryset のためテナント越境・情報漏洩は発生しない。認証/認可/注入/XSS いずれにも非該当。
+- **未対応（別イシュー）**: `analytics`/`spaced_repetition` 等の同型 KEY_PREFIX 二重付与バグ（提案4）。`is_correct` write_only による正解表示・編集UX（提案3）。
