@@ -39,10 +39,16 @@ class QuizService {
     return response.data;
   }
 
-  async updateProblem(id: string, problemData: Partial<CreateProblemRequest>): Promise<Problem> {
+  async updateProblem(id: string, formData: FormData): Promise<Problem> {
+    // イシュー#073: 画像差分（order配列＋新規ファイル）を multipart で送信
     const response: AxiosResponse<Problem> = await apiClient.put(
       `${this.PROBLEMS_BASE_URL}/${id}/`,
-      problemData
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
     );
     return response.data;
   }

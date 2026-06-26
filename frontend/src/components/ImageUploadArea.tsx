@@ -1,8 +1,9 @@
 /**
  * 画像アップロードエリアコンポーネント
  * イシュー#031対応: 問題・解説画像のアップロード機能
+ * イシュー#073対応: 既存画像（URL）と新規画像（File）の混在表示・並び替え・削除
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -17,17 +18,24 @@ import {
   CloudUpload as CloudUploadIcon,
   Delete as DeleteIcon,
   Image as ImageIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
+import { EditableImage } from '../services/types';
 
 interface ImageUploadAreaProps {
   /** 表示ラベル（例: "問題用画像", "解説用画像"） */
   label: string;
-  /** アップロード済み画像のリスト */
-  images: File[];
-  /** 画像追加時のコールバック */
+  /** 既存＋新規を1リストで表す画像アイテム */
+  items: EditableImage[];
+  /** 画像追加時のコールバック（新規Fileのみ） */
   onImagesAdd: (files: File[]) => void;
   /** 画像削除時のコールバック */
-  onImageRemove: (index: number) => void;
+  onRemove: (index: number) => void;
+  /** 上に移動 */
+  onMoveUp: (index: number) => void;
+  /** 下に移動 */
+  onMoveDown: (index: number) => void;
   /** 最大アップロード枚数（デフォルト: 5） */
   maxImages?: number;
   /** 無効化フラグ */
@@ -38,10 +46,10 @@ interface ImageUploadAreaProps {
  * 画像アップロードエリアコンポーネント
  *
  * 機能:
- * - ドラッグ&ドロップでの画像アップロード
- * - ファイル選択ボタンでのアップロード
- * - 画像プレビュー表示
- * - 個別の画像削除
+ * - ドラッグ&ドロップ／ファイル選択での新規画像追加
+ * - 既存画像（サーバ保存済み・URL）と新規画像（未送信File）の混在プレビュー
+ * - 上下ボタンによる並び替え（先頭の↑・末尾の↓は無効化）
+ * - 個別の画像削除（保存するまでローカルのみ＝取り消し可能）
  * - クライアント側バリデーション（ファイル形式、サイズ、枚数）
  */
 // 対応画像形式
@@ -53,9 +61,11 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
   label,
-  images,
+  items,
   onImagesAdd,
-  onImageRemove,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
   maxImages = 5,
   disabled = false,
 }) => {
@@ -69,11 +79,11 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
     const valid: File[] = [];
     const errors: string[] = [];
 
-    // 枚数チェック
-    const remainingSlots = maxImages - images.length;
+    // 枚数チェック（既存＋新規の合計で判定）
+    const remainingSlots = maxImages - items.length;
     if (files.length > remainingSlots) {
       errors.push(`画像は最大${maxImages}枚までアップロード可能です（残り${remainingSlots}枚）`);
-      files = files.slice(0, remainingSlots);
+      files = files.slice(0, Math.max(0, remainingSlots));
     }
 
     for (const file of files) {
@@ -100,7 +110,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
     }
 
     return { valid, errors };
-  }, [images.length, maxImages]);
+  }, [items.length, maxImages]);
 
   /**
    * ファイル選択ハンドラー
@@ -179,9 +189,43 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
    * 画像削除ハンドラー
    */
   const handleRemove = useCallback((index: number) => {
-    onImageRemove(index);
+    onRemove(index);
     setValidationError(null);
-  }, [onImageRemove]);
+  }, [onRemove]);
+
+  /**
+   * プレビュー（既存=URL / 新規=Object URL）を導出。
+   * 新規 File の Object URL はここで生成し、items 変更・アンマウント時に revoke して
+   * メモリリークを防ぐ（イシュー#073 コードレビュー対応）。
+   */
+  const previews = useMemo(
+    () => items.map((item, index) => (
+      item.kind === 'existing'
+        ? {
+            key: `existing-${item.assetId}`,
+            src: item.url,
+            title: item.filename,
+            subtitle: '保存済み',
+            revoke: false,
+          }
+        : {
+            key: `new-${index}-${item.file.name}`,
+            src: URL.createObjectURL(item.file),
+            title: item.file.name,
+            subtitle: `${(item.file.size / 1024).toFixed(1)} KB`,
+            revoke: true,
+          }
+    )),
+    [items],
+  );
+
+  useEffect(() => () => {
+    previews.forEach((p) => {
+      if (p.revoke) {
+        URL.revokeObjectURL(p.src);
+      }
+    });
+  }, [previews]);
 
   return (
     <Box sx={{ mb: 3 }}>
@@ -200,7 +244,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
       )}
 
       {/* ドラッグ&ドロップエリア */}
-      {images.length < maxImages && (
+      {items.length < maxImages && (
         <Paper
           elevation={0}
           onDragEnter={handleDragEnter}
@@ -239,55 +283,76 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
                 画像をドラッグ&ドロップ、またはクリックして選択
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                残り{maxImages - images.length}枚
+                残り{maxImages - items.length}枚
               </Typography>
             </Box>
           </label>
         </Paper>
       )}
 
-      {/* 画像プレビュー */}
-      {images.length > 0 && (
+      {/* 画像プレビュー（既存＋新規・並び替え可能） */}
+      {items.length > 0 && (
         <Box sx={{ mt: 2 }}>
           <ImageList cols={3} gap={8} sx={{ maxHeight: 400 }}>
-            {images.map((image, index) => (
-              <ImageListItem key={index}>
-                <Box
-                  component="img"
-                  src={URL.createObjectURL(image)}
-                  alt={image.name}
-                  loading="lazy"
-                  sx={{
-                    width: '100%',
-                    height: 150,
-                    objectFit: 'cover',
-                    borderRadius: 1,
-                  }}
-                />
-                <ImageListItemBar
-                  title={image.name}
-                  subtitle={`${(image.size / 1024).toFixed(1)} KB`}
-                  actionIcon={
-                    <IconButton
-                      sx={{ color: 'rgba(255, 255, 255, 0.8)' }}
-                      onClick={() => handleRemove(index)}
-                      disabled={disabled}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  }
-                  sx={{
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0) 100%)',
-                  }}
-                />
-              </ImageListItem>
-            ))}
+            {previews.map((preview, index) => {
+              return (
+                <ImageListItem key={preview.key}>
+                  <Box
+                    component="img"
+                    src={preview.src}
+                    alt={preview.title}
+                    loading="lazy"
+                    sx={{
+                      width: '100%',
+                      height: 150,
+                      objectFit: 'cover',
+                      borderRadius: 1,
+                    }}
+                  />
+                  <ImageListItemBar
+                    title={preview.title}
+                    subtitle={preview.subtitle}
+                    actionIcon={
+                      <Box sx={{ display: 'flex' }}>
+                        <IconButton
+                          sx={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                          aria-label="上に移動"
+                          onClick={() => onMoveUp(index)}
+                          disabled={disabled || index === 0}
+                        >
+                          <ArrowUpwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          sx={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                          aria-label="下に移動"
+                          onClick={() => onMoveDown(index)}
+                          disabled={disabled || index === items.length - 1}
+                        >
+                          <ArrowDownwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          sx={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                          aria-label="削除"
+                          onClick={() => handleRemove(index)}
+                          disabled={disabled}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    }
+                    sx={{
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0) 100%)',
+                    }}
+                  />
+                </ImageListItem>
+              );
+            })}
           </ImageList>
         </Box>
       )}
 
       {/* 画像が最大枚数に達した場合のメッセージ */}
-      {images.length >= maxImages && (
+      {items.length >= maxImages && (
         <Alert severity="info" sx={{ mt: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ImageIcon />

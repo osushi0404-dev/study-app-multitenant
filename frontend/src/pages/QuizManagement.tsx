@@ -50,8 +50,24 @@ import * as yup from 'yup';
 import { toast } from 'react-hot-toast';
 import AIQuestionGenerator from '../components/AIQuestionGenerator';
 import ProblemPreview from '../components/ProblemPreview';
-import { Subject, Problem } from '../services/types';
+import axios from 'axios';
+import { Subject, Problem, EditableImage } from '../services/types';
 import apiClient from '../services/api';
+import quizService from '../services/quiz.service';
+
+/** API（DRF）のバリデーションエラーから表示用メッセージを抽出（イシュー#073） */
+const extractApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError(error) && error.response?.data) {
+    const data = error.response.data;
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return data.map((v) => String(v)).join(' ');
+    if (typeof data === 'object') {
+      const parts = Object.values(data).flat().map((v) => String(v));
+      if (parts.length > 0) return parts.join(' ');
+    }
+  }
+  return fallback;
+};
 
 
 const problemSchema = yup.object({
@@ -93,9 +109,9 @@ const QuizManagement: React.FC = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // 画像アップロード用の状態（イシュー#031対応）
-  const [questionImages, setQuestionImages] = useState<File[]>([]);
-  const [explanationImages, setExplanationImages] = useState<File[]>([]);
+  // 画像アップロード用の状態（イシュー#031/#073対応: 既存＋新規を1リストで管理）
+  const [questionImageItems, setQuestionImageItems] = useState<EditableImage[]>([]);
+  const [explanationImageItems, setExplanationImageItems] = useState<EditableImage[]>([]);
 
   const navigate = useNavigate();
 
@@ -105,7 +121,7 @@ const QuizManagement: React.FC = () => {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<ProblemFormData>({
     resolver: yupResolver(problemSchema),
     defaultValues: {
@@ -252,14 +268,22 @@ const QuizManagement: React.FC = () => {
         }
       }
 
-      // 問題用画像の追加（最大5枚）
-      questionImages.forEach((image, index) => {
-        formData.append(`question_image_${index + 1}`, image);
+      // 問題用画像の追加（作成は新規Fileのみ・positional命名）
+      let qi = 0;
+      questionImageItems.forEach((item) => {
+        if (item.kind === 'new') {
+          qi += 1;
+          formData.append(`question_image_${qi}`, item.file);
+        }
       });
 
-      // 解説用画像の追加（最大5枚）
-      explanationImages.forEach((image, index) => {
-        formData.append(`explanation_image_${index + 1}`, image);
+      // 解説用画像の追加（作成は新規Fileのみ・positional命名）
+      let ei = 0;
+      explanationImageItems.forEach((item) => {
+        if (item.kind === 'new') {
+          ei += 1;
+          formData.append(`explanation_image_${ei}`, item.file);
+        }
       });
 
       await apiClient.post('/api/problems/', formData, {
@@ -272,26 +296,79 @@ const QuizManagement: React.FC = () => {
       setCreateDialogOpen(false);
       reset();
       // 画像状態をクリア
-      setQuestionImages([]);
-      setExplanationImages([]);
+      setQuestionImageItems([]);
+      setExplanationImageItems([]);
       fetchProblems();
     } catch (error) {
-      toast.error('問題の作成に失敗しました');
+      toast.error(extractApiErrorMessage(error, '問題の作成に失敗しました'));
       console.error('Error creating problem:', error);
     }
+  };
+
+  /**
+   * 編集時の画像差分を FormData に積む（イシュー#073）。
+   * 最終並び順を *_images_order（{existing}|{new}）として送信し、新規ファイルを添付する。
+   */
+  const appendImageOrder = (
+    formData: FormData,
+    kind: 'question' | 'explanation',
+    items: EditableImage[],
+  ) => {
+    const order: Array<{ existing: string } | { new: string }> = [];
+    let newIdx = 0;
+    items.forEach((item) => {
+      if (item.kind === 'existing') {
+        order.push({ existing: item.assetId });
+      } else {
+        newIdx += 1;
+        const key = `${kind}_image_${newIdx}`;
+        formData.append(key, item.file);
+        order.push({ new: key });
+      }
+    });
+    formData.append(`${kind}_images_order`, JSON.stringify(order));
+  };
+
+  /** 画像アイテムを delta（-1=上 / +1=下）方向へ移動した新配列を返す（イシュー#073） */
+  const moveItem = (items: EditableImage[], index: number, delta: number): EditableImage[] => {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return items;
+    const next = [...items];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    return next;
   };
 
   const handleUpdateProblem = async (data: ProblemFormData) => {
     if (!editingProblem) return;
 
     try {
-      await apiClient.put(`/api/problems/${editingProblem.id}/`, data);
+      // multipart PUT で画像差分（order配列＋新規ファイル）を送信（イシュー#073）
+      const formData = new FormData();
+      formData.append('question_text', data.question_text);
+      formData.append('subject', data.subject);
+      formData.append('difficulty', data.difficulty);
+      formData.append('problem_type', data.problem_type);
+      formData.append('explanation', data.explanation || '');
+
+      if (data.choices && data.choices.length > 0) {
+        data.choices.forEach((choice) => {
+          formData.append('choices', JSON.stringify(choice));
+        });
+      }
+
+      appendImageOrder(formData, 'question', questionImageItems);
+      appendImageOrder(formData, 'explanation', explanationImageItems);
+
+      await quizService.updateProblem(editingProblem.id, formData);
       toast.success('問題を更新しました');
       setEditingProblem(null);
       reset();
+      setQuestionImageItems([]);
+      setExplanationImageItems([]);
       fetchProblems();
     } catch (error) {
-      toast.error('問題の更新に失敗しました');
+      toast.error(extractApiErrorMessage(error, '問題の更新に失敗しました'));
       console.error('Error updating problem:', error);
     }
   };
@@ -322,22 +399,32 @@ const QuizManagement: React.FC = () => {
         is_correct: c.is_correct,
       })),
     });
+    // 既存画像を1リストに読み込む（イシュー#073）
+    const toExisting = (assets?: { id: string; url: string; original_filename: string }[]): EditableImage[] =>
+      (assets ?? []).map(a => ({
+        kind: 'existing',
+        assetId: a.id,
+        url: a.url,
+        filename: a.original_filename,
+      }));
+    setQuestionImageItems(toExisting(problem.question_images));
+    setExplanationImageItems(toExisting(problem.explanation_images));
   };
 
   const closeEditDialog = () => {
     setEditingProblem(null);
     reset();
-    // 画像状態をクリア（イシュー#031対応）
-    setQuestionImages([]);
-    setExplanationImages([]);
+    // 画像状態をクリア（イシュー#031/#073対応）
+    setQuestionImageItems([]);
+    setExplanationImageItems([]);
   };
 
   const closeCreateDialog = () => {
     setCreateDialogOpen(false);
     reset();
-    // 画像状態をクリア（イシュー#031対応）
-    setQuestionImages([]);
-    setExplanationImages([]);
+    // 画像状態をクリア（イシュー#031/#073対応）
+    setQuestionImageItems([]);
+    setExplanationImageItems([]);
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -613,13 +700,15 @@ const QuizManagement: React.FC = () => {
               <Grid item xs={12}>
                 <ImageUploadArea
                   label="問題用画像"
-                  images={questionImages}
-                  onImagesAdd={(files) => setQuestionImages([...questionImages, ...files])}
-                  onImageRemove={(index) => {
-                    const newImages = [...questionImages];
-                    newImages.splice(index, 1);
-                    setQuestionImages(newImages);
-                  }}
+                  items={questionImageItems}
+                  onImagesAdd={(files) => setQuestionImageItems([
+                    ...questionImageItems,
+                    ...files.map(f => ({ kind: 'new' as const, file: f })),
+                  ])}
+                  onRemove={(index) => setQuestionImageItems(
+                    questionImageItems.filter((_, i) => i !== index))}
+                  onMoveUp={(index) => setQuestionImageItems(moveItem(questionImageItems, index, -1))}
+                  onMoveDown={(index) => setQuestionImageItems(moveItem(questionImageItems, index, 1))}
                   maxImages={5}
                 />
               </Grid>
@@ -783,13 +872,15 @@ const QuizManagement: React.FC = () => {
               <Grid item xs={12}>
                 <ImageUploadArea
                   label="解説用画像"
-                  images={explanationImages}
-                  onImagesAdd={(files) => setExplanationImages([...explanationImages, ...files])}
-                  onImageRemove={(index) => {
-                    const newImages = [...explanationImages];
-                    newImages.splice(index, 1);
-                    setExplanationImages(newImages);
-                  }}
+                  items={explanationImageItems}
+                  onImagesAdd={(files) => setExplanationImageItems([
+                    ...explanationImageItems,
+                    ...files.map(f => ({ kind: 'new' as const, file: f })),
+                  ])}
+                  onRemove={(index) => setExplanationImageItems(
+                    explanationImageItems.filter((_, i) => i !== index))}
+                  onMoveUp={(index) => setExplanationImageItems(moveItem(explanationImageItems, index, -1))}
+                  onMoveDown={(index) => setExplanationImageItems(moveItem(explanationImageItems, index, 1))}
                   maxImages={5}
                 />
               </Grid>
@@ -799,7 +890,7 @@ const QuizManagement: React.FC = () => {
             <Button onClick={editingProblem ? closeEditDialog : closeCreateDialog}>
               キャンセル
             </Button>
-            <Button type="submit" variant="contained" startIcon={<Save />}>
+            <Button type="submit" variant="contained" startIcon={<Save />} disabled={isSubmitting}>
               {editingProblem ? '更新' : '作成'}
             </Button>
           </DialogActions>

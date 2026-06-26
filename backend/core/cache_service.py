@@ -105,15 +105,19 @@ class CacheService:
         self.problems_cache.set(key, problems_data, timeout)
 
     def invalidate_problems_cache(self, subject_id: Optional[int] = None):
-        """問題関連キャッシュを無効化"""
-        if subject_id:
-            # 特定科目のキャッシュを削除
-            pattern = f"learning_app_problems:problems_subject_id_{subject_id}_*"
-        else:
-            # 全問題キャッシュを削除
-            pattern = "learning_app_problems:problems_*"
+        """問題関連キャッシュを無効化（イシュー#073）
 
-        self._delete_by_pattern(self.problems_cache, pattern)
+        問題の追加・編集・削除は「全件リスト / 科目別 / 難易度別 / 同組織の全ユーザ別」の
+        すべてのキャッシュ変種に波及するため、problems キャッシュ名前空間を一括クリアする。
+        `subject_id` は後方互換のため受け取るが、無効化範囲は常に全 problems キャッシュ。
+
+        注意: django-redis の delete_pattern は KEY_PREFIX（learning_app_problems:）を
+        自動付与するため、パターンに KEY_PREFIX を含めずキー本体（problems_*）のみを渡す。
+        旧実装は KEY_PREFIX を手書きして二重付与となり、かつ subject_id 限定パターンが
+        実キー（problems_difficulty_*_subject_id_*_user_id_*）と構造的に不一致だったため、
+        無効化が無言で機能せず編集結果が一覧/参照に反映されなかった。
+        """
+        self._delete_by_pattern(self.problems_cache, "problems_*")
 
     # 科目関連
     def get_subjects_cache(self, cache_key: str = 'subjects_all') -> Optional[List]:
@@ -254,7 +258,15 @@ class CacheService:
 
     # ユーティリティメソッド
     def _delete_by_pattern(self, cache, pattern: str):
-        """パターンマッチでキャッシュを削除"""
+        """パターンマッチでキャッシュを削除
+
+        重要（イシュー#073）: django-redis の delete_pattern は KEY_PREFIX とバージョンを
+        自動付与する。そのため `pattern` には KEY_PREFIX（例: ``learning_app_problems:``）を
+        含めず、キー本体部分（例: ``"problems_*"``）のみを渡すこと。プレフィックスを手書きすると
+        二重付与となり、どのキーにもマッチせず無効化が無言で失敗する。
+        （analytics / spaced_repetition 等の他 invalidate_* は現状この罠を踏んでいるため、
+        系統的是正は別イシューで対応する。）
+        """
         try:
             # django-redisの場合
             if hasattr(cache, 'delete_pattern'):

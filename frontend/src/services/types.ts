@@ -118,6 +118,14 @@ export interface MediaAsset {
   created_at: string;
 }
 
+/**
+ * 編集ダイアログの画像アイテム（イシュー#073）
+ * 既存画像（サーバ保存済み）と新規画像（未送信File）を1リストで扱う。
+ */
+export type EditableImage =
+  | { kind: 'existing'; assetId: string; url: string; filename: string }
+  | { kind: 'new'; file: File };
+
 export interface Problem {
   id: string;
   question_text: string;

@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+import json
 import uuid
 import hashlib
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
@@ -274,9 +275,70 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         serializer.instance = instance
 
     def perform_update(self, serializer):
-        instance = serializer.save()
-        # 問題更新時に関連キャッシュを無効化
+        """
+        問題更新（イシュー#073対応: 画像差分の一括更新）
+
+        処理フロー:
+            1. SEC-1: subject の他組織付け替えを拒否
+            2. 新規ファイル・order 配列の取り出し（multipart）
+            3. ProblemService による差分更新（追加・削除・並び替え・トランザクション）
+            4. キャッシュ無効化
+        """
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from problems.services import ProblemService
+
+        instance = serializer.instance
+        validated_data = serializer.validated_data
+        request = self.request
+
+        # 1. SEC-1: subject の他組織付け替えを拒否（越境データ注入・越境ファイル書き込み防止）
+        new_subject = validated_data.get('subject')
+        if new_subject and new_subject.organization_id != request.user.organization_id:
+            raise DRFValidationError({'subject': ['他組織の科目には変更できません']})
+
+        # 2. 新規ファイル収集（question_image_* / explanation_image_*）
+        question_files = {
+            key: request.FILES[key]
+            for key in request.FILES
+            if key.startswith('question_image_')
+        }
+        explanation_files = {
+            key: request.FILES[key]
+            for key in request.FILES
+            if key.startswith('explanation_image_')
+        }
+
+        # order 配列のパース（フィールド非送信は None＝当該種別無変更）
+        def parse_order(field):
+            raw = request.data.get(field)
+            if raw is None:
+                return None
+            if isinstance(raw, list):
+                return raw
+            try:
+                parsed = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                raise DRFValidationError({field: ['不正なJSON形式です']})
+            if not isinstance(parsed, list):
+                raise DRFValidationError({field: ['画像の順序指定はJSON配列で指定してください']})
+            return parsed
+
+        question_order = parse_order('question_images_order')
+        explanation_order = parse_order('explanation_images_order')
+
+        # 3. 差分更新（トランザクション管理）
+        instance = ProblemService.update_problem_with_images(
+            problem=instance,
+            validated_data=validated_data,
+            question_files=question_files,
+            explanation_files=explanation_files,
+            question_order=question_order,
+            explanation_order=explanation_order,
+        )
+
+        # 4. 問題更新時に関連キャッシュを無効化
         cache_service.invalidate_problems_cache(instance.subject.id)
+        serializer.instance = instance
 
     def perform_destroy(self, instance):
         from problems.services import ProblemService

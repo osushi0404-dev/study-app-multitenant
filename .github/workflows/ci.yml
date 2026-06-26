@@ -51,6 +51,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Redis: アプリはキャッシュ/セッション/Celery で Redis に依存するため、
+      # キャッシュ挙動（イシュー#073 の無効化テスト等）を CI でも検証する。
+      # REDIS_URL 既定が redis://localhost:6379/0 のため env 追加は不要。
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
