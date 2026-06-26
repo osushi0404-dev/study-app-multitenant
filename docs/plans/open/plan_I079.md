@@ -3,7 +3,7 @@
 ## 基本情報
 - **計画書ID**: plan_I079
 - **関連イシュー**: #158
-- **Draft PR**: #157（既存・`chore/relax-impl-edit-permissions` → develop。新規作成せず本 PR を更新）
+- **Draft PR**: #159（`feature/I079-relax-edit-permissions` → develop。旧 PR #157 を置き換え・クローズ済み）
 - **作成根拠資料**: docs/issues/open/I079.md（起点イシュー）
 - **実装後評価**: docs/reviews/open/I079_review.md
 - **作成日**: 2026-06-27
@@ -19,7 +19,7 @@
 - 高リスク対象の実在を確認済み（全て存在）: `backend/requirements.txt`・`backend/requirements-dev.txt`・`backend/pyproject.toml`・`backend/init-db.sql`・`backend/Dockerfile`・`frontend/package.json`・`frontend/package-lock.json`・`frontend/Dockerfile`・`frontend/Dockerfile.dev`・`frontend/nginx.conf`。
 - マイグレーションディレクトリ: `backend/{problems,studylogs,accounts}/migrations`。
 - **環境前提**: アプリコード変更なしのため pytest/eslint ベースライン・lint 計測・依存監査（pip-audit/npm audit）は非該当。
-- **先行実装の現状**: PR #157（OPEN・未マージ）には `Write/Edit(backend/**)`・`Write/Edit(frontend/**)` の allow がコミット済み（commit `166d21f`）。`Bash(bash scripts/claude/*)` の allow は作業ツリーに未コミットで存在。`deny` 群は未追加。
+- **先行実装の現状**: feature ブランチ `feature/I079-relax-edit-permissions`（Draft PR #159）に `Write/Edit(backend/**)`・`Write/Edit(frontend/**)` の allow がコミット済み（commit `166d21f`、旧 chore ブランチから引き継ぎ）。`Bash(bash scripts/claude/*)` の allow は作業ツリーに未コミットで存在。`deny` 群は未追加。旧 PR #157 は #159 へ置き換えクローズ。
 
 ## 2. 受け入れ条件（イシュー AC を継承）
 - [ ] `allow` に `Write/Edit(backend/**)`・`Write/Edit(frontend/**)`・`Bash(bash scripts/claude/*)` が含まれる
@@ -64,11 +64,10 @@ broad allow（アプリコード全体を無確認）＋ deny 例外（高リス
 ## 6. 実装手順
 > ⚠️ 未知リスク先行: 「deny が broad allow に優先するか」「`**/migrations/*.py` グロブが効くか」が本変更の最大の不確実性。ステップ1で実挙動を確認する。
 
-- **ステップ1（未知リスク検証）**: `deny` 群を `.claude/settings.json` に追記し、JSON 妥当性と「deny 優先・グロブ一致」の実挙動を確認する。→ TC-A1, TC-A2, TC-M1, TC-M2 参照
-- **ステップ2**: 作業ツリーに未コミットの `Bash(bash scripts/claude/*)` allow を含め、settings.json の全変更を PR #157 のブランチにコミット・push する。→ TC-A1 参照
-- **ステップ3**: PR #157 の本文へ `Closes #158` を追記し、イシューと紐づける。
+- **ステップ1（未知リスク検証）**: `deny` 群を `.claude/settings.json` に追記し、JSON 妥当性と「deny 優先・グロブ一致」の実挙動を確認する。→ TC-A1, TC-A2-deny, M1, M2, M3 参照
+- **ステップ2**: 作業ツリーに未コミットの `Bash(bash scripts/claude/*)` allow を含め、settings.json の全変更を feature ブランチにコミット・push する。→ TC-A1 参照
 
-依存関係: ステップ2はステップ1完了が前提。ステップ3は独立。
+依存関係: ステップ2はステップ1完了が前提。（PR #159 は作成済み・`Closes #158` 紐づけ済みのため旧ステップ3は不要）
 
 ## 7. テスト計画
 - 自動（決定論）: docs/tests/open/I079_auto_test.md（JSON 妥当性・allow/deny エントリの存在 grep・既存機密 deny の不変）
@@ -83,6 +82,7 @@ broad allow（アプリコード全体を無確認）＋ deny 例外（高リス
 | `deny` が `allow` に優先しない実装だった場合、高リスク群が無確認編集される | 中（誤って依存/スキーマを無確認編集） | ステップ1の TC-M1 で deny 優先を実挙動確認してからコミット。NG なら narrow allow 方式に切替（計画更新→再承認） |
 | `**/migrations/*.py` グロブが効かない | 中（マイグレーションが無確認に） | TC-M2 で実挙動確認。効かなければアプリ別に列挙（`backend/*/migrations/*.py`）へ修正（計画更新→再承認） |
 | 権限を緩めたことでワークフローゲート未経由の編集が起きる | 低 | allow は権限レイヤーのみ。実装開始の承認はワークフロー（`/implement`）で担保。機密は deny 優先で保護 |
+| `Bash(bash scripts/claude/*)` allow により、悪意あるスクリプトが `scripts/claude/` に追加された場合に無確認実行され得る | 低〜中 | `scripts/claude/` 配下の変更は PR レビュー必須（develop/main 直 push は deny で禁止・絶対ルール3）。信頼境界はリポジトリの PR レビューで担保。範囲も `scripts/*` 全体でなく `scripts/claude/*` に限定 |
 
 ## 12. コスト・保守見積もり
 - 低コスト・低保守。設定 JSON への静的追記のみ。新規インフラ・外部サービスなし。
@@ -105,6 +105,9 @@ broad allow（アプリコード全体を無確認）＋ deny 例外（高リス
 | マイグレーションは手書き編集のみプロンプト維持 | イシュー明記（grill-me 確定） |
 | `Bash(bash scripts/claude/*)` を allow 追加 | イシュー明記（grill-me 確定） |
 | PR #157 を新規ブランチを切らず更新する | イシュー明記（制約・引き継ぎ） |
-| deny パターンは Write/Edit 両方を列挙 | 仮定で決めた（deny は動作種別ごとに必要なため。承認ポイントで確認） |
+| deny パターンは Write/Edit 両方を列挙 | 仮定で決めた → プランレビューで既存実装と一致を確認（既存 deny も `Read`/`Edit`/`Write` を個別行で列挙）。承認ポイントでも確認する |
 
-→ 「仮定で決めた」項目（deny を Write/Edit 両方列挙）について承認ポイントで確認する。
+→ 「deny を Write/Edit 両方列挙」は、既存 settings.json の `deny`（`Read(./.env)`/`Edit(./.env)`/`Write(./.env)` を独立行で列挙）と一貫しており妥当（プランレビュー I079_plan_review_20260627_0256 で確認済み）。最終確認として承認ポイントでも提示する。
+
+## レビュー結果
+- [20260627_0256 判定: ✅ 完了](../../reviews/I079_plan_review_20260627_0256.md)
