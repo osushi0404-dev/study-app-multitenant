@@ -102,3 +102,12 @@ def make_png(name="img.png", size=(10, 10)):
 - **次回どう防ぐか**: 「保存後の再取得で反映される」系 AC は **DB だけでなく API（キャッシュ経路）越し**で検証する。`_delete_by_pattern` 利用時はパターンに KEY_PREFIX を含めない（docstring に明記）。
 - **セキュリティ考慮**: 無効化範囲を広げても、キャッシュは user_id 別・データは組織スコープ queryset のためテナント越境・情報漏洩は発生しない。認証/認可/注入/XSS いずれにも非該当。
 - **未対応（別イシュー）**: `analytics`/`spaced_repetition` 等の同型 KEY_PREFIX 二重付与バグ（提案4）。`is_correct` write_only による正解表示・編集UX（提案3）。
+
+## 実行記録（/test I073 再実行 — 2026-06-26｜キャッシュ修正後）
+
+- backend 専用 TC: `test_I073_image_update.py` → **20 passed**（TC-AUTO-00〜17、10b 含む）。
+- backend 全体（回帰）: **45 passed**, 0 failed。
+- frontend Jest: 2 suites / **7 passed**, 0 failed。
+- CI（PR #151）: Redis サービス追加後、全ジョブ green（Backend Tests 45 passed・E2E pass）。
+- 手動 TC-MAN-09（aria-label・Claude実施）: 既に OK 記録済み。
+- 手動 TC-MAN-01〜08（Human・ブラウザ操作）を再確認（キャッシュ修正で「追加→参照反映」が直っている想定）。

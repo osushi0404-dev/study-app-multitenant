@@ -321,8 +321,8 @@
 </invoke>
 
 ## レビュー結果
-- [20260623_0730 判定: ✅ 完了](../../reviews/I073_plan_review_20260623_0730.md)
-- [20260623_0652 判定: 差し戻し（Blocker 1件）](../../reviews/I073_plan_review_20260623_0652.md)
+- [20260623_0730 判定: ✅ 完了](../../reviews/closed/I073_plan_review_20260623_0730.md)
+- [20260623_0652 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I073_plan_review_20260623_0652.md)
 
 ---
 
@@ -406,3 +406,10 @@
     - 手順5.5（新規）: 実装差分を専用サブエージェント（例: `fix-content-reviewer`、`code-reviewer` 流用可）でレビュー。**手順3.5 が OK の場合のみ実施**。
   - **gate層** — 各レビューはサブエージェント実行を必須化し、**A→B の順次ゲート**（A が NG ならば B に進まない）をスキル本文に明記。レビューエージェント定義（`.claude/review-agents/` 配下）を新設または既存流用。
 - **スコープ判断**: スキル改善のため新規イシューは過剰。/retro の予防処置として実装（既存運用に同梱）。`/plan-issue-review`・`/code-review` が既にサブエージェント（`claude -p`＋review-agent）でレビューする実装パターンを踏襲できる。
+
+## 完了情報
+- **完了日時**: 2026-06-27
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review 十分／security-review High=SEC-1 対応済／code-review 3ラウンド Medium 全対応・最終 OK）
+- **テスト結果**: backend 20/20（TC-AUTO-00〜17）・全体 45 PASS／frontend Jest 7 PASS／CI green／手動 TC-MAN-01〜09 OK／削除ボタン手動 OK
+- **フォローアップ**: I074〜I078（#152〜#156）を起票（retro 予防処置/是正処置）
