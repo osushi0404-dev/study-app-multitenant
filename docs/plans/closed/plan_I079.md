@@ -138,6 +138,6 @@
 → 「deny を Write/Edit 両方列挙」は、既存 settings.json の `deny`（`Read(./.env)`/`Edit(./.env)`/`Write(./.env)` を独立行で列挙）と一貫しており妥当（プランレビュー I079_plan_review_20260627_0256 で確認済み）。最終確認として承認ポイントでも提示する。
 
 ## レビュー結果
-- [20260627_1302 判定: ✅ 完了](../../reviews/I079_plan_review_20260627_1302.md)
-- [20260627_1022 判定: ✅ 完了](../../reviews/I079_plan_review_20260627_1022.md)
-- [20260627_0256 判定: ✅ 完了](../../reviews/I079_plan_review_20260627_0256.md)
+- [20260627_1302 判定: ✅ 完了](../../reviews/closed/I079_plan_review_20260627_1302.md)
+- [20260627_1022 判定: ✅ 完了](../../reviews/closed/I079_plan_review_20260627_1022.md)
+- [20260627_0256 判定: ✅ 完了](../../reviews/closed/I079_plan_review_20260627_0256.md)
