@@ -25,6 +25,7 @@
 - [ ] `allow` に `Write/Edit(backend/**)`・`Write/Edit(frontend/**)`・`Bash(bash scripts/claude/*)` が含まれる
 - [ ] `deny` に高リスク群が `Write`/`Edit` 両方で含まれ、broad allow に優先する
 - [ ] 既存の機密ファイル `deny`（`.env`/`.env.*`/`secrets/**`/`*.pem`/`*.key`）が維持されている
+- [ ] `deny` に `Edit/Write(**/*.pem)`・`Edit/Write(**/*.key)` が含まれる（broad allow による鍵ファイル無確認編集の穴を塞ぐ・Read deny と対称）
 - [ ] settings.json が有効な JSON である（`python3 -m json.tool` でパス）
 - [ ] 実装開始の承認ゲート（計画承認＋`/implement`、CLAUDE.md 絶対ルール2 / `docs/runbooks/workflow.md`）は変更されていない
 
@@ -46,6 +47,10 @@
 
 ### 4-2. `permissions.deny` に追加（高リスク群・Write/Edit 両方）
 ```
+// 鍵ファイルの Edit/Write（既存 Read deny との対称化。broad allow が開く穴を塞ぐ＝code-review Low② 対応）
+"Edit(**/*.pem)",                   "Write(**/*.pem)",
+"Edit(**/*.key)",                   "Write(**/*.key)",
+// 高リスク群
 "Edit(backend/requirements*.txt)",  "Write(backend/requirements*.txt)",
 "Edit(backend/pyproject.toml)",     "Write(backend/pyproject.toml)",
 "Edit(frontend/package.json)",      "Write(frontend/package.json)",
@@ -79,9 +84,10 @@ broad allow（アプリコード全体を無確認）＋ deny 例外（高リス
 ## 9. Risk & 回避策
 | Risk | 影響 | 回避策 |
 |------|------|--------|
-| `deny` が `allow` に優先しない実装だった場合、高リスク群が無確認編集される | 中（誤って依存/スキーマを無確認編集） | ステップ1の TC-M1 で deny 優先を実挙動確認してからコミット。NG なら narrow allow 方式に切替（計画更新→再承認） |
-| `**/migrations/*.py` グロブが効かない | 中（マイグレーションが無確認に） | TC-M2 で実挙動確認。効かなければアプリ別に列挙（`backend/*/migrations/*.py`）へ修正（計画更新→再承認） |
+| `deny` が `allow` に優先しない実装だった場合、高リスク群が無確認編集される | 中（誤って依存/スキーマを無確認編集） | ステップ1の M2 で deny 優先を実挙動確認してからコミット。NG なら narrow allow 方式に切替（計画更新→再承認） |
+| `**/migrations/*.py` グロブが効かない | 中（マイグレーションが無確認に） | M3 で実挙動確認。効かなければアプリ別に列挙（`backend/*/migrations/*.py`）へ修正（計画更新→再承認） |
 | 権限を緩めたことでワークフローゲート未経由の編集が起きる | 低 | allow は権限レイヤーのみ。実装開始の承認はワークフロー（`/implement`）で担保。機密は deny 優先で保護 |
+| broad allow（backend/frontend）により、配下に置かれた `.pem`/`.key` の Edit/Write が従来 ask から allow に格上げされる | 低 | `deny` に `Edit/Write(**/*.pem)`・`Edit/Write(**/*.key)` を追加し Read deny と対称化（code-review Low② 根治対応）。鍵ファイルはアプリコードに置かない設計のため通常運用に影響なし |
 | `Bash(bash scripts/claude/*)` allow により、悪意あるスクリプトが `scripts/claude/` に追加された場合に無確認実行され得る | 低〜中 | `scripts/claude/` 配下の変更は PR レビュー必須（develop/main 直 push は deny で禁止・絶対ルール3）。信頼境界はリポジトリの PR レビューで担保。範囲も `scripts/*` 全体でなく `scripts/claude/*` に限定 |
 
 ## 12. コスト・保守見積もり
@@ -104,10 +110,11 @@ broad allow（アプリコード全体を無確認）＋ deny 例外（高リス
 | 高リスク群の具体パス10種 | イシュー明記（grill-me 確定） |
 | マイグレーションは手書き編集のみプロンプト維持 | イシュー明記（grill-me 確定） |
 | `Bash(bash scripts/claude/*)` を allow 追加 | イシュー明記（grill-me 確定） |
-| PR #157 を新規ブランチを切らず更新する | イシュー明記（制約・引き継ぎ） |
+| ~~PR #157 を新規ブランチを切らず更新する~~（対応済: feature ブランチ運用に変更し PR #159 で代替・#157 はクローズ済み） | イシュー明記（制約・引き継ぎ）→ 後に方針変更 |
 | deny パターンは Write/Edit 両方を列挙 | 仮定で決めた → プランレビューで既存実装と一致を確認（既存 deny も `Read`/`Edit`/`Write` を個別行で列挙）。承認ポイントでも確認する |
 
 → 「deny を Write/Edit 両方列挙」は、既存 settings.json の `deny`（`Read(./.env)`/`Edit(./.env)`/`Write(./.env)` を独立行で列挙）と一貫しており妥当（プランレビュー I079_plan_review_20260627_0256 で確認済み）。最終確認として承認ポイントでも提示する。
 
 ## レビュー結果
+- [20260627_1022 判定: ✅ 完了](../../reviews/I079_plan_review_20260627_1022.md)
 - [20260627_0256 判定: ✅ 完了](../../reviews/I079_plan_review_20260627_0256.md)

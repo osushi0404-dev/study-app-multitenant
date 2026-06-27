@@ -2,7 +2,7 @@
 
 - 関連イシュー: #158
 - 計画書: docs/plans/open/plan_I079.md
-- PR: #157
+- PR: #159
 
 ## レビュー対象
 `.claude/settings.json` の `permissions`（allow へコードパス＋`bash scripts/claude/*`、deny へ高リスク群10種×Write/Edit）。
