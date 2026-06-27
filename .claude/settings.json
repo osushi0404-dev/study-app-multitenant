@@ -121,27 +121,7 @@
       "Edit(**/*.pem)",
       "Write(**/*.pem)",
       "Edit(**/*.key)",
-      "Write(**/*.key)",
-      "Edit(backend/requirements*.txt)",
-      "Write(backend/requirements*.txt)",
-      "Edit(backend/pyproject.toml)",
-      "Write(backend/pyproject.toml)",
-      "Edit(frontend/package.json)",
-      "Write(frontend/package.json)",
-      "Edit(frontend/package-lock.json)",
-      "Write(frontend/package-lock.json)",
-      "Edit(**/migrations/*.py)",
-      "Write(**/migrations/*.py)",
-      "Edit(backend/init-db.sql)",
-      "Write(backend/init-db.sql)",
-      "Edit(backend/Dockerfile)",
-      "Write(backend/Dockerfile)",
-      "Edit(frontend/Dockerfile)",
-      "Write(frontend/Dockerfile)",
-      "Edit(frontend/Dockerfile.dev)",
-      "Write(frontend/Dockerfile.dev)",
-      "Edit(frontend/nginx.conf)",
-      "Write(frontend/nginx.conf)"
+      "Write(**/*.key)"
     ]
   },
   "hooks": {
@@ -157,6 +137,15 @@
       }
     ],
     "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py"
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
