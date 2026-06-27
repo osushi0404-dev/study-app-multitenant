@@ -8,6 +8,10 @@
       "Glob(*)",
       "Write(docs/**)",
       "Edit(docs/**)",
+      "Write(backend/**)",
+      "Edit(backend/**)",
+      "Write(frontend/**)",
+      "Edit(frontend/**)",
       "Bash(mv docs/*/open/* docs/*/closed/)",
       "Bash(rm docs/*/open/*)",
       "Bash(pwd)",
@@ -35,6 +39,7 @@
       "Bash(git fetch *)",
       "Bash(git push -u origin *)",
       "Bash(python3 scripts/*)",
+      "Bash(bash scripts/claude/*)",
       "Bash(python3 -m py_compile *)",
       "Bash(python3 -m json.tool *)",
       "Bash(gh pr create *)",
@@ -112,7 +117,11 @@
       "Edit(./secrets/**)",
       "Write(./.env)",
       "Write(./.env.*)",
-      "Write(./secrets/**)"
+      "Write(./secrets/**)",
+      "Edit(**/*.pem)",
+      "Write(**/*.pem)",
+      "Edit(**/*.key)",
+      "Write(**/*.key)"
     ]
   },
   "hooks": {
@@ -128,6 +137,15 @@
       }
     ],
     "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py"
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
