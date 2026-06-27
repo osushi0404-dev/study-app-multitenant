@@ -72,6 +72,6 @@ sys.exit(f"STILL PRESENT (撤去漏れ): {present}" if present else 0)
 
 ## false-green 自己検証（案D）
 - **TC-H3 が中核**: 高リスク判定の決定論ゲートは、判定パターンを1つ外した状態で高リスクパスを投入し **ask が出なくなる（素通りになる）こと** を確認してから本実装に戻す。これにより「ask を出しているのは判定ロジックのおかげ」を裏取りする（常に ask を出すだけの false-green を排除）。
-  - 具体手順例: `pretooluse_guard.py` の高リスクパターン定義（例 `DANGEROUS_EDIT_PATTERNS`）の先頭1件（例 `backend/Dockerfile` 相当）を一時コメントアウト → そのパスで TC-H1 を実行し **ask が出ない**ことを確認（＝判定が効いている裏取り）→ コメントアウトを戻して TC-H1 が再び ask を返すことを確認。
+  - 具体手順例: `pretooluse_guard.py` の `HIGH_RISK_EDIT_PATTERNS` の先頭1件（`backend/Dockerfile` 相当）を一時コメントアウト → そのパスで TC-H1 を実行し **ask が出ない**ことを確認（＝判定が効いている裏取り）→ コメントアウトを戻して TC-H1 が再び ask を返すことを確認。（実施済み 2026-06-27: 注入で ask 消失を確認）
 - TC-A1/A2-allow/A3/A4 は membership/JSON の決定論チェック（実装後に実行・記録）。TC-A2-allow は欠落注入で NG を返すこと（同型ロジック）を確認済み。
 - 旧 TC-A2-deny は廃止（保護はフックへ移管。settings の高リスク deny は実効しないため存在チェックに意味がない）。
