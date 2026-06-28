@@ -8,6 +8,8 @@
 - **実装後評価**: docs/reviews/open/I080_review.md
 - **作成日**: 2026-06-28
 
+> **【限定注記・2026-06-29／本計画内の「網羅／全形／全宛先形／全経路」表現すべてに優先】** これらは **static（静的）形に限る**。実装後の敵対的レビュー・再レビューで2つの残余が判明: **R5（Critical）** 動的宛先（`$(...)`/`$VAR`/`-c alias.`/`eval`・`sh -c`）の静的解析すり抜け、**R6/F1（High）** force push の `-f`/複合コマンド取りこぼし。いずれもフック・deny の双方を擦り抜ける。I080 は静的形保護にスコープ確定し、両者の根治は **I083（#166）** で対応する（§10 Risk・残余リスク処遇 参照）。
+
 ## 1. 背景/目的
 
 ### 原因の概要（平易な説明）
@@ -56,7 +58,7 @@ develop 上:
 - [ ] `allow` に `Bash(git push)`・`Bash(git push *)` が含まれ、`ask` から `Bash(git push *)` が除かれている
 - [ ] `deny` の保護ブランチ/force エントリが維持されている
 - [ ] settings.json が有効な JSON（`python3 -m json.tool` でパス）
-- [ ] フックが protected 宛先 push の全形を既定 exit 2 ブロック（明示名・保護ブランチ上の引数なし push・refspec `<src>:develop|main`・`+develop`・`refs/heads/develop`・`HEAD:refs/heads/main`）
+- [ ] フックが protected 宛先 push の**静的形**を既定 exit 2 ブロック（明示名・保護ブランチ上の引数なし push・refspec `<src>:develop|main`・`+develop`・`refs/heads/develop`・`HEAD:refs/heads/main`）。**動的宛先（コマンド置換/変数展開/エイリアス/`eval`・`sh -c` ラッパー）は静的解析の対象外＝既知の限界、根治は I083(#166)**
 - [ ] protected 宛先 push が `DANGER_OK=1` 前置で exit 0（release/hotfix 解除経路）／`DANGER_OK` 無しは exit 2
 - [ ] 宛先正規化が完全一致で、`develop-fix`/`main-backup` 宛先 push が exit 0（部分一致 FP なし）
 - [ ] `git push --all`/`--mirror` が既定 exit 2・`DANGER_OK=1` で exit 0
@@ -102,12 +104,12 @@ def _current_branch():
 
 def _norm_push_dest(token: str, cur_branch):
     """push 宛先トークンを正規化して宛先ブランチ名を返す（判定不能は None）。
-    先頭 '+'（force shorthand）除去 → 'src:dst' なら dst 採用 → 'refs/heads/' 接頭辞除去 → 'HEAD' は現ブランチ解決。"""
+    'src:dst' なら dst 採用 → force-shorthand '+'（先頭/dst 側いずれも）除去 → 'refs/heads/' 接頭辞除去 → 'HEAD' は現ブランチ解決。
+    注: 'src:dst' 分割を先に行い、その後 lstrip('+') する順序が必須。逆順だと dst 側 '+'（例 feat:+refs/heads/main）を取り逃す（TC-P33・code-review Low 対応）。"""
     t = token
-    if t.startswith("+"):
-        t = t[1:]
     if ":" in t:
-        t = t.split(":", 1)[1]      # 右側 = 宛先
+        t = t.split(":", 1)[1]      # 'src:dst' の dst を採用
+    t = t.lstrip("+")               # force-shorthand '+'（先頭 / dst 側）を除去
     if t.startswith("refs/heads/"):
         t = t[len("refs/heads/"):]
     if t == "HEAD":
@@ -174,7 +176,7 @@ I081 の `test_pretooluse_checkout_guard.sh` 規約に準拠（`set -uo pipefail
 
 ### 5-4. `docs/claude-code-structure.md`
 - `git push *` を **ask** カテゴリと記載している箇所（L133 付近）を **allow** へ修正。
-- 保護ブランチ push の説明（L145 付近・「直接 push 禁止」）に、フックが danger-op（既定 block・`DANGER_OK=1` 解除可）として宛先正規化で全形を検出する旨を反映。
+- 保護ブランチ push の説明（L145 付近・「直接 push 禁止」）に、フックが danger-op（既定 block・`DANGER_OK=1` 解除可）として宛先正規化で**静的形**を検出する旨を反映（実際の編集では併せて動的宛先・force 取りこぼしの「既知の限界（I083 #166）」注記も追加した）。
 - 追記文言にイシュー番号（`I080` 等）を含めない（一般形・TC-DOC で確認）。
 
 ## 6. 修正アプローチ
@@ -209,7 +211,8 @@ I081 の `test_pretooluse_checkout_guard.sh` 規約に準拠（`set -uo pipefail
 
 ## セキュリティ・要件適合チェック結果
 - **要件適合性**: イシュー AC の範囲内。仕様追加なし。アプリのビジネスロジック・マルチテナント・ステータス遷移は非該当（開発ハーネスの権限/ガード）。
-- **セキュリティ**: アプリのコード変更なし＝OWASP/入力バリデーション/認証認可への直接影響なし。本変更は開発ハーネスの**防御的強化**（protected 宛先 push の検出網羅・FP 解消）＋権限ノイズ削減。`allow: git push *` の緩和はフック（protected/`--all`/`--mirror` を既定 block）＋deny で二重に担保。フックは `subprocess` を**リスト引数**で呼び `shell=False`＝コマンドインジェクションなし。`DANGER_OK=1` 解除は release/hotfix の意図的 escape（danger-ops.md 枠組み）。依存追加なし → pip-audit/npm audit 非該当。**結論: セキュリティ影響はハーネスのガード強化（むしろ厳密化）**。
+- **セキュリティ**: アプリのコード変更なし＝OWASP/入力バリデーション/認証認可への直接影響なし。本変更は開発ハーネスの**防御的強化**（protected 宛先 push の検出網羅・FP 解消）＋権限ノイズ削減。`allow: git push *` の緩和はフック（protected/`--all`/`--mirror` を既定 block）＋deny で二重に担保。フックは `subprocess` を**リスト引数**で呼び `shell=False`＝コマンドインジェクションなし。`DANGER_OK=1` 解除は release/hotfix の意図的 escape（danger-ops.md 枠組み）。依存追加なし → pip-audit/npm audit 非該当。**結論: セキュリティ影響はハーネスのガード強化（静的形に限り厳密化）**。
+  > **【再レビューによる訂正・2026-06-29】** 上記「二重に担保／むしろ厳密化」は **static 形に限る**。実装後の敵対的レビューで、(R5) 動的宛先（`$(...)`/`$VAR`/`-c alias.`/`eval`・`sh -c`）と (R6) force push の `-f`/複合コマンド取りこぼし（F1・High）が**フック・deny の双方を擦り抜ける**ことが判明（残余 Critical/High）。二重担保は静的形のみ成立。根治は **I083（#166）** で対応。
 - **テスト計画**: 新規振る舞い（protected 検出網羅・FP 解消）に対し決定論テストを用意。否定・回帰系（TC-FALSEGREEN）は判定無効化注入で exit 0 化を確認＝false-green でない。認可/テナント境界テストは非該当（アプリ認可ロジック不変）。
 - **P3/P5/P8（データ整合性/運用/コスト）**: DB・外部API・非同期・インフラ追加なし → 影響なし。
 - **P6（性能・UX）**: UI なし・データ量/外部API懸念なし → 影響なし。`subprocess`（rev-parse）は push コマンド検出時のみ・1回 → オーバーヘッド軽微。
@@ -232,6 +235,7 @@ I081 の `test_pretooluse_checkout_guard.sh` 規約に準拠（`set -uo pipefail
 | block メッセージ文言 | 仮定で決めた（実装時に簡潔化可・挙動に影響なし） |
 
 ## レビュー結果
+- [20260629_0047 判定: ✅ 完了](../../reviews/I080_plan_review_20260629_0047.md)
 - [20260628_1754 判定: ✅ 完了](../../reviews/I080_plan_review_20260628_1754.md)
 - [20260628_1505 判定: 差し戻し（Blocker 1件）](../../reviews/I080_plan_review_20260628_1505.md)
 
@@ -255,7 +259,7 @@ I081 の `test_pretooluse_checkout_guard.sh` 規約に準拠（`set -uo pipefail
 
 | # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
 |---|------|---------|---------|------------|----------------|------------|---------|--------|
-| 1 | `git push`（Claude Bash） | agent | 引数なし/refspec/`+`/`refs/heads/`/`HEAD:` で protected へ push | protected 宛先は既定 exit 2 | Yes: TC-P1〜P20,P27 | No | realistic 形は網羅・残余なし | 解消 |
+| 1 | `git push`（Claude Bash） | agent | 引数なし/refspec/`+`/`refs/heads/`/`HEAD:` で protected へ push | protected 宛先は既定 exit 2 | Yes: TC-P1〜P20,P27 | No | **静的形は網羅。動的宛先（`$(...)`/`$VAR`/`-c alias.`/`eval`・`sh -c`）は静的解析で捕捉不可＝実装後の敵対的レビューで発見・実機実証** | **残余あり→I083(#166)** |
 | 2 | `git push --repo` | agent | `--repo` で remote 指定し positional ベース検出を evade | `--repo[=]` は既定 block | Yes: TC-P28〜32, FALSEGREEN-E/F | No | git 新版で未知フラグが出れば再評価要 | Low |
 | 3 | `git push --all`/`--mirror` | agent | 全 ref 一括 push で protected を含める | 既定 block | Yes: TC-P21,22, FALSEGREEN-C/D | No | なし | 解消 |
 | 4 | `DANGER_OK=1 git push origin develop` | agent/operator | escape hatch で protected push | release/hotfix の意図的 escape のみ。手続き（danger-approved）で担保 | Yes: TC-P6,23,31(escape が効くこと) | No: 手続き遵守は人間ゲート | DANGER_OK は手続き層・機械強制せず | Low |
@@ -268,3 +272,5 @@ I081 の `test_pretooluse_checkout_guard.sh` 規約に準拠（`set -uo pipefail
 - **R2（Low）**: `DANGER_OK` の機械非強制。→ 全 danger-op 共通。手続き（danger-ops.md）で担保。I080 固有対応は不要。
 - **R3（Low）**: 将来の git バージョンの未知 push フラグによる evasion。→ 現 git 2.43 では realistic 形＋`--repo` を網羅。新フラグ顕在時に再評価。
 - **R4（Low・スコープ外）**: `.claude/settings.json` 自体の編集権限。→ I080 範囲外（別途検討）。
+- **R5（Critical→繰り越し）**: 静的トークナイザの原理的限界により、コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}`／git エイリアス `-c alias.x=...`／`eval`・`sh -c`・`bash -c` ラッパー経由の protected push を捕捉できず**無確認ですり抜ける**（例: `git push origin $(git rev-parse --abbrev-ref HEAD)` を develop 上）。**I080 実装後レビューの敵対的サブエージェントレビューで発見・実機実証**。本計画のセキュリティレビュー（攻撃シナリオ1）が「静的形＝realistic 網羅」と見做し動的宛先を検討対象外としていたのが見落としの原因。I080 は静的形保護にスコープ確定し、動的宛先の根治は **I083（#166）** で対応する（2026-06-28 決定）。
+- **R6（High→繰り越し・F1）**: force push の danger-op 判定（`pretooluse_guard.py` の `re.match(r"git\s+push\b.*--force", ...)`）が**先頭アンカー＋`--force` 文字列限定**のため、`-f` 短縮形（`git push -f origin x`＝単体ですり抜け）と複合コマンド（`cd foo && git push --force origin x`）で回避される（実測 exit 0）。deny glob `Bash(git push * --force*)` も先頭一致せず空振りし、**非保護ブランチへの force push が無防備**。force 判定だけ他の danger-op（`re.search`）と一貫性を欠いていたのが原因（保護ブランチ宛は `_push_protected_target` が `_segments` 分割で捕捉するため漏れは非保護宛に限定）。**再レビュー（2026-06-29）で発見・実機実証**。根治（`re.search` 化＋`-f`/`--force-with-lease` 対応＋理想は `_segments` ベース）は **I083（#166）** で対応。

@@ -1,5 +1,7 @@
 # I080 自動テスト（決定論）
 
+> **【限定注記・2026-06-29／本書の「全宛先形」表現に優先】** 本書の TC が網羅するのは **static（静的）形**の宛先のみ。実装後レビューで (R5) 動的宛先（`$(...)`/`$VAR`/`-c alias.`/`eval`・`sh -c`）と (R6/F1・High) force push の `-f`/複合コマンド取りこぼしが未カバーと判明。根治は **I083（#166）**。詳細は `docs/reviews/open/I080_review.md`。
+
 フック単体の exit code 検証＋settings.json/ドキュメントの決定論ファイル検証。
 実行: `bash scripts/claude/tests/test_pretooluse_push_guard.sh`（TC-P 群）＋個別コマンド（TC-S/TC-DOC）。
 
