@@ -93,5 +93,10 @@ protected 宛先判定（`_push_protected_target`）と `--all`/`--mirror` 判�
 | TC-DOC3-a | `git diff origin/develop -- docs/claude-code-structure.md > /tmp/i080_doc.diff` | diff をファイルへ出力（exit 0） |
 | TC-DOC3-b | `grep -nE '^\+.*I0[0-9]{2}' /tmp/i080_doc.diff` | **マッチ無し（非ゼロ終了）で合格**：追加行（`^+`）にイシュー番号 `I0\d\d` が無い＝一般形（`^\+.*I0[0-9]{2}` を単一 grep で判定・パイプ不要） |
 
-## 実施結果
-（/test 実行時に追記）
+## 実施結果（/test・2026-06-28）
+- **TC-P1〜P33・Pregr1・TC-FALSEGREEN-A〜F**: `bash scripts/claude/tests/test_pretooluse_push_guard.sh` → **pass=40 fail=0**（全宛先形 block／安全 push 素通し／DANGER_OK escape／FP→0／`--all`/`--mirror`/`--repo`/dst側`+`／false-green 注入3判定行）。
+- **TC-Pregr2（checkout 回帰）**: `bash scripts/claude/tests/test_pretooluse_checkout_guard.sh` → **pass=14 fail=0**（無回帰）。
+- **TC-S1〜S5**: settings.json の JSON 妥当性・allow に `git push`/`git push *`・ask に `git push *` 不在・deny 保護/force 維持・冗長 `-u origin *` 削除 → **全 PASS**。
+- **TC-DOC1〜3**: `claude-code-structure.md` の旧 ask 記載なし・danger-op 文言あり・追加行にイシュー番号なし → **全 PASS**。
+- **pytest/Jest/E2E**: 非該当（backend/frontend のアプリコード変更なし）。
+- 補足: false-green 注入（FG-A〜F）で protected／`--all`/`--mirror`／`--repo` の3判定行を各々無効化すると当該 push が素通り(0)になり、実体では block(2) になることを対で確認済み＝決定論ゲートが実体に依存（false-green でない）。
