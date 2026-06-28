@@ -161,9 +161,9 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 `git push` は安全な feature push を allow（確認なし）にする一方、**保護ブランチ（develop/main）を宛先とする push はフックが danger-op として既定で block（exit 2）**する。宛先トークンを正規化（先頭 `+` 除去・`src:dst` の dst 採用・`refs/heads/` 除去・`HEAD` は現ブランチ解決）して完全一致判定するため、引数なし push（保護ブランチ上）・refspec・force-shorthand・完全修飾 ref・`--all`/`--mirror`・`--repo` まで一括で捕捉する。release/hotfix の正当なローカル push のみ `DANGER_OK=1`（＋計画書明記＋danger-approved）で解除可。`deny` はテキストで自明な形のバックストップとして残す。
 
-> **既知の限界（静的形のみ・I083 #166 で根治予定）**: 本ガードはコマンド**実行前の生コマンド文字列**を静的に解析する。次の2クラスは現状すり抜ける。
+> **既知の限界（静的形のみ・後続イシューで根治予定）**: 本ガードはコマンド**実行前の生コマンド文字列**を静的に解析する。次の2クラスは現状すり抜ける。
 > - **動的宛先**: コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}`／git エイリアス間接参照（`-c alias.x=...`）／`eval`・`sh -c`・`bash -c` ラッパー等、実行時にしか宛先が確定しない形（例: `git push origin $(git rev-parse --abbrev-ref HEAD)` を develop 上で実行すると現状すり抜ける）。
-> - **force push の取りこぼし（F1）**: force 判定が先頭アンカー＋`--force` 文字列限定のため、`-f` 短縮形（`git push -f origin x`）・複合コマンド（`cd foo && git push --force ...`）で非保護ブランチへの force push が DANGER_OK ゲートを回避する。
+> - **force push の取りこぼし**: force 判定が先頭アンカー＋`--force` 文字列限定のため、`-f` 短縮形（`git push -f origin x`）・複合コマンド（`cd foo && git push --force ...`）で非保護ブランチへの force push が DANGER_OK ゲートを回避する。
 
 ---
 

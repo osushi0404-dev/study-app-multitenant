@@ -102,3 +102,7 @@ protected 宛先判定（`_push_protected_target`）と `--all`/`--mirror` 判�
 - **TC-DOC1〜3**: `claude-code-structure.md` の旧 ask 記載なし・danger-op 文言あり・追加行にイシュー番号なし → **全 PASS**。
 - **pytest/Jest/E2E**: 非該当（backend/frontend のアプリコード変更なし）。
 - 補足: false-green 注入（FG-A〜F）で protected／`--all`/`--mirror`／`--repo` の3判定行を各々無効化すると当該 push が素通り(0)になり、実体では block(2) になることを対で確認済み＝決定論ゲートが実体に依存（false-green でない）。
+
+## 再実施結果（/test・2026-06-29）
+コード未変更（直近コミットは文書のみ）だが /test を再走。**全件 PASS を再確認**: TC-P `pass=40 fail=0`／checkout 回帰 `pass=14 fail=0`／TC-S1〜S5 PASS／TC-DOC1〜3 PASS／pytest・Jest・E2E 非該当。
+- **TC-DOC3 の回帰を実走検出・修正**: `claude-code-structure.md` の限界注記に `I083（#166）` を含めていたため TC-DOC3（追加行にイシュー番号なし）が一旦 FAIL。注記を一般形（番号は issue/plan/review 側に保持）へ修正し PASS を確認。直前の /code-review は TC-DOC を実走せず「PASS」と記載しており見落としていた＝決定論ゲートは実行してこそ有効、の実例。
