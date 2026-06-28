@@ -15,4 +15,8 @@
 
 ## 結果
 
-（/test・/code-review 後に記入）
+- **plan-issue-review**: ✅ OK（`I082_plan_review_20260628_1203.md`、Blocker/Warning なし・Info 2件）
+- **code-review**: ✅ OK（`I082_code_review_20260628_1218.md`、AC 8項目すべて実装確認・Blocker/High なし・Low 4件）
+  - Low 2（TC-A4 補完）対応済み、Low 3（TC-A5 一般化）は既存 `plan_I010.md` 例示により false-NG となるため見送り＋根拠明記、Low 1/4 は見送り
+- **/test（自動・専用 TC）**: ✅ TC-A1〜A5 すべて OK。pytest/Jest/E2E は doc-only のため非該当
+- **/test（手動・実施者 Claude）**: ✅ No.1〜5 すべて OK（配置・参照・トーン整合を Read で確認）
