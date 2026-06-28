@@ -30,8 +30,8 @@
 - TC-D1〜D5（runbook/review-agent 文言・イシュー番号不在）: **PASS**
 - 既存 Edit/Write ask 経路・危険 bash exit2 の非退行: **PASS**（TC-G9・requirements.txt→ask）
 
-## 手動テスト結果（/test 時に記入）
-- 統合挙動（実セッションでの block/素通し）: ⏳
+## 手動テスト結果（/test・2026-06-28）
+- 全6項目 Claude 実施 **OK**。ライブ統合確認: dirty ファイルへの `git checkout` を**実セッションでフックが exit 2 ブロック**（メッセージ実観測・データ消失なし）／clean ファイル・ブランチ checkout は**ブロックされず no-op**（誤検知なし）。
 
 ## 総合判定
-- （コードレビュー後に記入）
+- ✅ コードレビュー **VERDICT: OK**（高リスク: No・Blocker/High なし・Low 1件は対応済み `e593b95`）。自動 14/14＋TC-D・手動ライブ統合いずれも PASS。
