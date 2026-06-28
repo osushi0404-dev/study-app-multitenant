@@ -76,8 +76,8 @@ grep -qE 'I079|I080' docs/runbooks/plan-writing-rules.md .claude/review-agents/p
 
 | TC | 実行日時 | 結果 | 備考 |
 |----|----------|------|------|
-| TC-A1 | （/test 時に記入） | - | |
-| TC-A2 | （/test 時に記入） | - | |
-| TC-A3 | （/test 時に記入） | - | |
-| TC-A4 | （/test 時に記入） | - | |
-| TC-A5 | （/test 時に記入） | - | |
+| TC-A1 | 2026-06-28 (implement) | OK | スパイク二分岐・完了基準が追記済み |
+| TC-A2 | 2026-06-28 (implement) | OK | 「未知リスク先行原則」参照2回・「前倒しで拡張」明記 |
+| TC-A3 | 2026-06-28 (implement) | OK | gate bullet＋差し戻し表例示行ともに存在 |
+| TC-A4 | 2026-06-28 (implement) | OK | 実施環境（条件付き列）・遡及改修不要を明記 |
+| TC-A5 | 2026-06-28 (implement) | OK | 両ファイルにイシュー番号の混入なし |
