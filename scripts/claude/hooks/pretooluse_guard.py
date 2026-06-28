@@ -19,7 +19,7 @@ def _block(msg: str, raw: str):
 def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip())
 
-# --- I081: git checkout/restore on a file with uncommitted worktree changes 防止 ---
+# --- git checkout/restore on a file with uncommitted worktree changes 防止 ---
 # トークナイズは shlex.split()（クォート対応）で行う。素朴な str.split() だと
 # `git checkout -- "my file.py"` のような空白パスを取りこぼし黙って素通し（データ消失）する。
 _SHELL_OPS = ("&&", "||", "|", ";")
