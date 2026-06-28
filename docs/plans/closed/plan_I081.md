@@ -215,4 +215,12 @@ def _git_revert_target_on_dirty(cmd: str):
 | settings.json（push ポリシー）は触らない | イシュー明記（スコープ「含まない」＝I080 の範疇） |
 
 ## レビュー結果
-- [20260628_0311 判定: ✅ 完了](../../reviews/I081_plan_review_20260628_0311.md)
+- [20260628_0311 判定: ✅ 完了](../../reviews/closed/I081_plan_review_20260628_0311.md)
+- [20260628_0406 コードレビュー: ✅ VERDICT OK](../../reviews/closed/I081_code_review_20260628_0406.md)
+
+## 完了情報
+- **完了日時**: 2026-06-28
+- **対応者**: Claude Code
+- **レビュー結果**: コードレビュー VERDICT OK（高リスク No・Blocker/High なし・Low 1件対応済み）
+- **テスト結果**: 自動 14/14＋TC-D PASS・手動ライブ統合 全 OK
+- **実装コミット**: `5a0c096`（フック＋テスト＋runbook＋review-agents）/ `e593b95`（Low対応）/ `37a44c6`（test記録）
