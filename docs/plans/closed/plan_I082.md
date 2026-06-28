@@ -145,4 +145,9 @@ I079 では計画書自身が「deny が broad allow に優先するか」を"�
 - [ ] 「実施環境」列を条件付き列とし既存文書を遡及改修しない方針でよいか
 
 ## レビュー結果
-- [20260628_1203 判定: ✅ 完了](../../reviews/I082_plan_review_20260628_1203.md)
+- [20260628_1203 判定: ✅ 完了](../../reviews/closed/I082_plan_review_20260628_1203.md)
+
+## 完了情報
+- **完了日時**: 2026-06-28
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review OK / code-review OK / auto TC-A1〜A5 OK / 手動 No.1〜5 OK）
