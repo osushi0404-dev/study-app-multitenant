@@ -66,6 +66,7 @@ ck "P29 --repo= +develop"              2 "$(run 'git push --repo=origin +develop
 ck "P30 --repo (space) develop:main"   2 "$(run 'git push --repo origin develop:main')"
 ck "P31 DANGER_OK --repo= develop:main" 0 "$(run 'DANGER_OK=1 git push --repo=origin develop:main')"
 ck "P32 --repo= feature (flag-block)"  2 "$(run 'git push --repo=origin feature')"
+ck "P33 dst-side + (feat:+refs/heads/main)" 2 "$(run 'git push origin feat:+refs/heads/main')"
 
 # ===== 回帰（既存ハードブロック維持） =====
 ck "Pregr1 force push exit2"           2 "$(run 'git push --force origin x')"

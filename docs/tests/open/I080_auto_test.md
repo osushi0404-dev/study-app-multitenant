@@ -49,6 +49,7 @@
 | TC-P30 | `git push --repo origin develop:main` | 2 | `--repo`（空白形）evasion |
 | TC-P31 | `DANGER_OK=1 git push --repo=origin develop:main` | 0 | `--repo` の DANGER_OK escape |
 | TC-P32 | `git push --repo=origin feature` | 2 | `--repo` はフラグごと block（vestigial・正当用途無＝許容的 over-block） |
+| TC-P33 | `git push origin feat:+refs/heads/main` | 2 | dst 側 `+`（force-shorthand）も `lstrip("+")` で正規化して main を捕捉（code-review Low 対応） |
 
 ### 回帰（既存ガード維持）
 | TC | コマンド/操作 | 期待 | 観点 |

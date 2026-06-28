@@ -101,12 +101,12 @@ def _current_branch():
 
 def _norm_push_dest(token: str, cur_branch):
     """push 宛先トークンを正規化して宛先ブランチ名を返す（判定不能は None）。
-    先頭 '+'(force shorthand)除去 → 'src:dst' なら dst 採用 → 'refs/heads/' 接頭辞除去 → 'HEAD' は現ブランチ解決。"""
+    'src:dst' なら dst 採用 → force-shorthand '+'（先頭/dst 側いずれも）除去 →
+    'refs/heads/' 接頭辞除去 → 'HEAD' は現ブランチ解決。"""
     t = token
-    if t.startswith("+"):
-        t = t[1:]
     if ":" in t:
-        t = t.split(":", 1)[1]          # 右側 = 宛先
+        t = t.split(":", 1)[1]          # 'src:dst' の dst を採用
+    t = t.lstrip("+")                    # force-shorthand '+'（先頭 / dst 側）を除去
     if t.startswith("refs/heads/"):
         t = t[len("refs/heads/"):]
     if t == "HEAD":
