@@ -121,7 +121,7 @@ Claude Code が実行できる Bash コマンドを 3 段階で制御し、さ�
 |---------|-------------|
 | ファイル読み取り | `Read(*)`, `Grep(*)`, `Glob(*)`, `cat *`, `head *`, `tail *` |
 | Git 調査 | `git status`, `git diff`, `git log *`, `git show *`, `git branch *` |
-| Git 操作（安全系） | `git checkout *`, `git switch *`, `git add *`, `git commit *` |
+| Git 操作（安全系） | `git checkout *`, `git switch *`, `git add *`, `git commit *`, `git push`, `git push *` |
 | GitHub CLI（読み取り系） | `gh pr view *`, `gh pr status *`, `gh issue *` |
 | Docker（読み取り系） | `docker compose ps`, `docker compose logs *`, `docker compose up *`, `docker compose build *` |
 | テスト実行 | `docker compose exec backend pytest *`, `docker compose exec frontend npm test *`, `npm run lint *`, `npm run typecheck *` |
@@ -130,7 +130,7 @@ Claude Code が実行できる Bash コマンドを 3 段階で制御し、さ�
 
 | カテゴリ | 確認が必要なコマンド例 |
 |---------|-------------------|
-| Git 破壊系 | `git push *`, `git merge *`, `git rebase *`, `git reset *`, `git cherry-pick *` |
+| Git 破壊系 | `git merge *`, `git rebase *`, `git reset *`, `git cherry-pick *` |
 | Docker 操作 | `docker compose exec *`, `docker compose run *`, `docker compose down *` |
 | ファイル操作 | `rm *`, `mv *`, `cp *`, `chmod *`, `chown *` |
 | DB 操作 | `psql *` |
@@ -142,7 +142,7 @@ Claude Code が実行できる Bash コマンドを 3 段階で制御し、さ�
 | ネットワーク | `curl *`, `wget *`, `ssh *`, `scp *`, `rsync *` | 外部通信・情報漏洩リスク |
 | 権限昇格 | `sudo *` | 管理者操作の防止 |
 | データ破壊 | `dd *`, `mkfs *`, `shred *`, `rm -rf / *` | 復元不可能な操作 |
-| 保護ブランチへの push | `git push origin develop`, `git push origin main`, `git push * --force*` | 直接 push 禁止 |
+| 保護ブランチへの push | `git push origin develop`, `git push origin main`, `git push * --force*` | 直接 push 禁止（deny はテキスト自明形のバックストップ） |
 | シークレット読み書き | `Read(.env)`, `Edit(.env)`, `Write(.env)`, `Read(**/*.pem)`, `Read(**/*.key)` | 機密情報保護 |
 
 #### hooks（PreToolUse）
@@ -158,6 +158,12 @@ Claude Code が実行できる Bash コマンドを 3 段階で制御し、さ�
 ```
 
 Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、settings.json の deny だけでは捕捉できないパターンも二重でブロックする。
+
+`git push` は安全な feature push を allow（確認なし）にする一方、**保護ブランチ（develop/main）を宛先とする push はフックが danger-op として既定で block（exit 2）**する。宛先トークンを正規化（先頭 `+` 除去・`src:dst` の dst 採用・`refs/heads/` 除去・`HEAD` は現ブランチ解決）して完全一致判定するため、引数なし push（保護ブランチ上）・refspec・force-shorthand・完全修飾 ref・`--all`/`--mirror`・`--repo` まで一括で捕捉する。release/hotfix の正当なローカル push のみ `DANGER_OK=1`（＋計画書明記＋danger-approved）で解除可。`deny` はテキストで自明な形のバックストップとして残す。
+
+> **既知の限界（静的形のみ・後続イシューで根治予定）**: 本ガードはコマンド**実行前の生コマンド文字列**を静的に解析する。次の2クラスは現状すり抜ける。
+> - **動的宛先**: コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}`／git エイリアス間接参照（`-c alias.x=...`）／`eval`・`sh -c`・`bash -c` ラッパー等、実行時にしか宛先が確定しない形（例: `git push origin $(git rev-parse --abbrev-ref HEAD)` を develop 上で実行すると現状すり抜ける）。
+> - **force push の取りこぼし**: force 判定が先頭アンカー＋`--force` 文字列限定のため、`-f` 短縮形（`git push -f origin x`）・複合コマンド（`cd foo && git push --force ...`）で非保護ブランチへの force push が DANGER_OK ゲートを回避する。
 
 ---
 

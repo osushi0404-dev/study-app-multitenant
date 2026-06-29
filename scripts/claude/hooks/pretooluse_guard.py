@@ -85,6 +85,58 @@ def _git_revert_target_on_dirty(cmd: str):
                 return t
     return None
 
+# --- git push の保護ブランチ宛先判定（I080） ---
+PROTECTED_BRANCHES = ("develop", "main")
+
+def _current_branch():
+    """現ブランチ名を返す。git 不在/失敗は None（fail-open＝既存 HEAD チェックと同方針）。"""
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True
+        )
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+def _norm_push_dest(token: str, cur_branch):
+    """push 宛先トークンを正規化して宛先ブランチ名を返す（判定不能は None）。
+    'src:dst' なら dst 採用 → force-shorthand '+'（先頭/dst 側いずれも）除去 →
+    'refs/heads/' 接頭辞除去 → 'HEAD' は現ブランチ解決。"""
+    t = token
+    if ":" in t:
+        t = t.split(":", 1)[1]          # 'src:dst' の dst を採用
+    t = t.lstrip("+")                    # force-shorthand '+'（先頭 / dst 側）を除去
+    if t.startswith("refs/heads/"):
+        t = t[len("refs/heads/"):]
+    if t == "HEAD":
+        return cur_branch               # None 可（detached/fail-open）
+    return t or None
+
+def _push_protected_target(cmd: str):
+    """git push が protected ブランチを名前/refspec で宛先にするなら宛先名を返す。非該当は None。
+    複合コマンドは _segments(I081)で分割して各セグメントを判定。
+    --all/--mirror・--repo は positional を持たない/前提を崩すため main() 側の独立チェックで扱う。"""
+    for toks in _segments(cmd):
+        if "git" not in toks or "push" not in toks:
+            continue
+        after = toks[toks.index("push") + 1:]
+        positionals = [a for a in after if not a.startswith("-")]
+        refspecs = positionals[1:] if positionals else []   # [0]=remote、以降=refspec
+        cur = None
+        if not refspecs:                                     # 宛先明示なし → 現ブランチが宛先
+            cur = _current_branch()
+            if cur in PROTECTED_BRANCHES:
+                return cur
+            continue
+        for rs in refspecs:
+            if cur is None:
+                cur = _current_branch()
+            dest = _norm_push_dest(rs, cur)
+            if dest in PROTECTED_BRANCHES:
+                return dest
+    return None
+
 # 高リスク Edit/Write パス（リポジトリルート相対で照合）。
 # 価値判断寄り（依存/スキーマ/インフラ）のため、編集時に ask（プロンプト）を出す。
 # 注: ハードブロック(exit 2)ではなく ask。承認すれば編集可（I079 案D）。
@@ -166,28 +218,30 @@ def main():
         _block("shred is forbidden", raw)
 
     if not danger_ok:
-        # force push requires explicit ack
+        # push to a protected branch by name/refspec — danger-op:
+        # release/hotfix のローカル push のみ DANGER_OK=1 で解除可（danger-ops.md 枠組み）。
+        # 明示名・引数なし(保護ブランチ上)・refspec <src>:develop|main・+develop・
+        # refs/heads/develop・HEAD:refs/heads/main を宛先正規化＋完全一致で一括網羅。
+        dest = _push_protected_target(cmd)
+        if dest:
+            _block(
+                f"push to protected branch '{dest}' is forbidden "
+                f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)",
+                raw,
+            )
+
+        # bulk push of all refs (includes protected) — danger-op
+        if re.search(r"\bgit\s+push\b.*\s(--all|--mirror)\b", cmd, re.I):
+            _block("git push --all/--mirror pushes all refs incl. protected; requires DANGER_OK=1", raw)
+
+        # vestigial --repo flag sets the remote without a positional arg, which evades the
+        # positional-based protected detector → block outright (security-review/I080).
+        if re.search(r"\bgit\s+push\b.*\s--repo(\s|=)", cmd, re.I):
+            _block("git push --repo can evade protected-branch detection and is unused here; requires DANGER_OK=1", raw)
+
+        # force push to non-protected (protected 宛先は上で先に block)
         if re.match(r"git\s+push\b.*--force", cmd, re.I):
             _block("force push requires DANGER_OK=1", raw)
-
-        # push to protected branches is forbidden
-        if re.match(r"git\s+push\b.*\borigin\b\s+(develop|main)\b", cmd, re.I):
-            _block("direct push to develop/main is forbidden", raw)
-
-        # git push ... HEAD on develop/main is forbidden
-        if re.match(r"git\s+push\b.*\bHEAD\b", cmd, re.I):
-            try:
-                result = subprocess.run(
-                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                    capture_output=True, text=True
-                )
-                if result.returncode == 0 and result.stdout.strip() in ("develop", "main"):
-                    _block(
-                        f"push via HEAD to protected branch '{result.stdout.strip()}' is forbidden",
-                        raw
-                    )
-            except Exception:
-                pass  # git が利用できない環境ではスキップ
 
         # reset --hard requires explicit ack
         if re.search(r"\bgit\s+reset\b.*--hard\b", cmd, re.I):
