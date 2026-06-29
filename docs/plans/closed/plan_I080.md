@@ -235,9 +235,9 @@ I081 の `test_pretooluse_checkout_guard.sh` 規約に準拠（`set -uo pipefail
 | block メッセージ文言 | 仮定で決めた（実装時に簡潔化可・挙動に影響なし） |
 
 ## レビュー結果
-- [20260629_0047 判定: ✅ 完了](../../reviews/I080_plan_review_20260629_0047.md)
-- [20260628_1754 判定: ✅ 完了](../../reviews/I080_plan_review_20260628_1754.md)
-- [20260628_1505 判定: 差し戻し（Blocker 1件）](../../reviews/I080_plan_review_20260628_1505.md)
+- [20260629_0047 判定: ✅ 完了](../../reviews/closed/I080_plan_review_20260629_0047.md)
+- [20260628_1754 判定: ✅ 完了](../../reviews/closed/I080_plan_review_20260628_1754.md)
+- [20260628_1505 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I080_plan_review_20260628_1505.md)
 
 ## セキュリティレビュー結果
 
