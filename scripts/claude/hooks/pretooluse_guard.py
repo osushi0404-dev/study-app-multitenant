@@ -137,6 +137,63 @@ def _push_protected_target(cmd: str):
                 return dest
     return None
 
+# --- git push force フラグ判定（_segments ベース・I083 欠陥2/F1） ---
+_FORCE_LONG = ("--force", "--force-with-lease", "--force-if-includes")
+
+def _is_force_flag(tok: str) -> bool:
+    """push の force 系フラグなら True。--push-option=force 等の非 force 用法は False。"""
+    if tok.startswith("--"):
+        return tok.split("=", 1)[0] in _FORCE_LONG
+    if tok.startswith("-") and len(tok) > 1:          # 単一ダッシュ短縮クラスタ（-f/-uf/-fu）
+        # 単一ダッシュで 'f' を含む全クラスタを force として扱う（git push の短縮フラグで 'f' は -f のみ）。
+        # 注: '-rf' 等の非実在フラグも True になるが、push セグメント内で '-rf' は無効構文＝実害なし。
+        return "f" in tok[1:]
+    return False
+
+def _push_has_force(cmd: str) -> bool:
+    """push を含むセグメントの push 以降トークンに force 系フラグがあれば True。
+    複合コマンド・短縮結合形に頑健（_segments でセグメント分割）。protected 宛先の force は
+    _push_protected_target が先に block するため、ここで捕捉する漏れは非保護宛に限定される。"""
+    for toks in _segments(cmd):
+        if "git" in toks and "push" in toks:
+            after = toks[toks.index("push") + 1:]
+            if any(_is_force_flag(t) for t in after):
+                return True
+    return False
+
+# --- 動的・不透明 push 判定（ask degrade・I083 欠陥1/R5） ---
+_WRAP_SHELLS = ("sh", "bash", "dash", "zsh")
+
+def _push_is_dynamic(cmd: str) -> bool:
+    """静的に宛先を確定できない push なら True（ask に degrade する対象）。
+    (i) 直接 push の push 以降引数に動的メタ文字（宛先トークン分離に依存しない）。
+    (ii) 構造的に不透明なラッパー（eval/sh -c/bash -c/git -c alias.）が push を隠蔽。
+    脅威モデル=事故。push トークンが完全隠蔽される eval "$VAR" 形は対象外（既知の限界）。"""
+    if not (re.search(r"\bgit\b", cmd) and re.search(r"\bpush\b", cmd)):
+        return False
+    for toks in _segments(cmd):
+        # (i) 直接 push: push 以降の引数領域に動的メタ文字（$(...) の空白で shlex が壊れてもすり抜けない）
+        if "git" in toks and "push" in toks:
+            after = " ".join(toks[toks.index("push") + 1:])
+            if any(ch in after for ch in "$`{("):
+                return True
+        # (ii) 構造的に不透明なラッパー（先頭トークンで判定＝branch/remote 名の偶然一致を排除）
+        if not toks:
+            continue
+        head = toks[0]
+        if head == "eval" and any("push" in t for t in toks[1:]):
+            return True
+        if head in _WRAP_SHELLS and "-c" in toks:
+            ci = toks.index("-c")
+            wrapped = toks[ci + 1] if ci + 1 < len(toks) else ""
+            if "push" in wrapped:
+                return True
+        if head == "git":
+            for i, t in enumerate(toks[:-1]):
+                if t == "-c" and toks[i + 1].startswith("alias.") and "push" in toks[i + 1]:
+                    return True
+    return False
+
 # 高リスク Edit/Write パス（リポジトリルート相対で照合）。
 # 価値判断寄り（依存/スキーマ/インフラ）のため、編集時に ask（プロンプト）を出す。
 # 注: ハードブロック(exit 2)ではなく ask。承認すれば編集可（I079 案D）。
@@ -240,7 +297,9 @@ def main():
             _block("git push --repo can evade protected-branch detection and is unused here; requires DANGER_OK=1", raw)
 
         # force push to non-protected (protected 宛先は上で先に block)
-        if re.match(r"git\s+push\b.*--force", cmd, re.I):
+        # I083: pure _segments ベース。-f/-uf/--force-with-lease/--force-if-includes・複合コマンドに頑健。
+        # 旧 re.match(r"git\s+push\b.*--force") の潜在誤 block（後続 echo の --force まで貪欲一致）も根治。
+        if _push_has_force(cmd):
             _block("force push requires DANGER_OK=1", raw)
 
         # reset --hard requires explicit ack
@@ -274,6 +333,12 @@ def main():
                 _block("DELETE without WHERE is forbidden (requires DANGER_OK=1 + plan/rollback)", raw)
             if any(k in sql for k in [" drop ", " truncate ", " alter table "]):
                 _block("destructive SQL requires DANGER_OK=1", raw)
+
+        # I083 欠陥1: 動的・不透明な宛先の push は静的に安全と断言できないため ask に degrade する。
+        # 全 hard-block の後に置くことで、rm -rf 等の同居 danger-op を ask で先食いしない
+        # （静的 protected/force は上で先に exit 2 block 済み・DANGER_OK=1 時はこのブロックに来ない）。
+        if _push_is_dynamic(cmd):
+            _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
 
     sys.exit(0)
 
