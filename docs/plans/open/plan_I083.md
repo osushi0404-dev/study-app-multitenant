@@ -77,6 +77,8 @@ I080 で導入した PreToolUse フック（`scripts/claude/hooks/pretooluse_gua
 
 セキュリティ影響: 本件はハーネス安全機構（危険操作ガード）の堅牢化そのもの。Django/React のアプリコード変更なし＝**OWASP/認可/個人情報の観点は対象外**。ガードを「より誤検知少なく・より取りこぼし少なく」する方向の変更で、権限を緩める変更は含まない（`allow: Bash(git push *)` 維持・判定はフックに集約）。
 
+限界注記の参照整合: `docs/claude-code-structure.md` の限界注記更新に伴い、同一限界を参照する関連レビュー文書（`docs/reviews/open/I080_review.md` 等）を grep 確認した結果、当該文言の参照は無く更新不要（実装非依存の履歴記録）。
+
 ---
 
 ## 4. 変更点一覧（ファイル/関数）
@@ -200,4 +202,5 @@ I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・fo
 別途本文末尾に提示する。
 
 ## レビュー結果
+- [20260701_0222 判定: ✅ 完了](../../reviews/I083_plan_review_20260701_0222.md)
 - [20260701_0055 判定: ✅ 完了](../../reviews/I083_plan_review_20260701_0055.md)
