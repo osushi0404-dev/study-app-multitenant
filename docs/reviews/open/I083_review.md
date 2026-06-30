@@ -26,8 +26,9 @@
 - [ ] DANGER_OK escape が動的・force・ラッパー隠蔽 force すべてで維持されるか（TC-DOK1〜3）。
 
 ### 4. テスト健全性（false-green 禁止）
-- [ ] 新判定行（`_push_has_force`/`_is_force_flag` 短縮分岐/`_push_is_dynamic`/構造的ラッパー分岐）が load-bearing であることを注入で対裏取り（TC-FG-G/H/I/J）。
-- [ ] ask 判定が exit code だけでなく `permissionDecision=ask` の stdout で確認されているか（exit0 を pass と取り違えない）。
+- [ ] 新判定行（`_push_has_force`/`_is_force_flag` 短縮分岐/`_push_is_dynamic`/構造的ラッパー `eval`・`sh -c` 分岐/`-c alias.` 分岐）が load-bearing であることを注入で対裏取り（TC-FG-G/H/I/J/K）。
+- [ ] ask 判定が exit code だけでなく `permissionDecision=ask` の stdout（`runj`/`rungj`）で確認されているか（**ask と pass は exit0 同一**＝exit code 比較では false-green を見逃す）。
+- [ ] 限界注記の更新が決定論 grep（TC-DOC1a/b/c）で固定されているか。
 
 ### 5. ドキュメント整合・スコープ
 - [ ] 限界注記が「対応済み」へ更新され、残余既知限界（`eval "$VAR"` 完全隠蔽＝脅威モデル外）が明記されているか（honest scoping）。

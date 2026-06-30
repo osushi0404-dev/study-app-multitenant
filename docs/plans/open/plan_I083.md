@@ -104,6 +104,8 @@ def _is_force_flag(tok: str) -> bool:
     if tok.startswith("--"):
         return tok.split("=", 1)[0] in _FORCE_LONG
     if tok.startswith("-") and len(tok) > 1:          # 単一ダッシュ短縮クラスタ（-f/-uf/-fu）
+        # 単一ダッシュで 'f' を含む全クラスタを force として扱う（git push の短縮フラグで 'f' は -f のみ）。
+        # 注: `-rf` 等の非実在フラグも True になるが、push セグメント内で `-rf` は無効構文＝実害なし。
         return "f" in tok[1:]
     return False
 
@@ -151,7 +153,8 @@ def _push_is_dynamic(cmd: str) -> bool:
 ```
 
 ### 4-2. `scripts/claude/tests/test_pretooluse_push_guard.sh`
-I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・force 誤 block 回帰→pass・ラッパー隠蔽 force→ask・ラッパー誤 ask 回帰→pass・DANGER_OK escape・false-green 注入）を追記。ask 応答の検証は exit 0 かつ stdout JSON に `"permissionDecision": "ask"` を含むことで判定する `cka` ヘルパーを追加。
+I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・force 誤 block 回帰→pass・ラッパー隠蔽 force→ask・ラッパー誤 ask 回帰→pass・DANGER_OK escape・false-green 注入・限界注記 grep）を追記。
+**ヘルパー**: 既存 `run`/`rung`（exit code）・`ck` を流用。**新規追加** `runj`（実フックの stdout を捕捉し `exit 0 ＋ "permissionDecision": "ask"` なら文字列 `ASK`、それ以外は exit code を返す）と `rungj`（壊した版フック変種）。**ask と pass は exit code が同一（0）**のため、ask 系・「ask されないこと」固定系・ask の false-green 注入（TC-FG-I/J/K）は必ず `runj`/`rungj` で判別する（詳細は auto_test.md「ハーネス追加」を参照）。
 
 ### 4-3. `docs/claude-code-structure.md`
 `:164-166` の「既知の限界（静的形のみ・後続イシューで根治予定）」注記を「**対応済み（I083 / ask degrade）**」へ更新。残余の既知限界（push トークンを完全隠蔽する `eval "$VAR"` 形＝脅威モデル外・`DANGER_OK=1` 解除に委ねる）を honest scoping として明記。
@@ -165,8 +168,8 @@ I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・fo
 - **ステップ0（未知リスク先行・実証済み）**: 実フックへのスパイクで欠陥2＋潜在誤 block を実測（§1 調査結果）。本セッションで成立済みのため、実装は確定設計で進められる。
 - **ステップ1【欠陥2/F1: force】**: `_FORCE_LONG`/`_is_force_flag`/`_push_has_force` を追加し、`main()` の force 判定を置換。→ TC-F1〜F8 参照（取りこぼし→block・誤 block 回帰→pass・ラッパー隠蔽→後段 ask）。
 - **ステップ2【欠陥1/R5: 動的 ask】**: `_push_is_dynamic` を追加し、`not danger_ok` ブロック末尾（全 hard-block の後）に `_ask` を追加。→ TC-D1〜D9・TC-W1〜W4 参照（動的→ask・静的安全→pass・ラッパー誤 ask 回帰→pass・rm -rf 同居→block 維持）。
-- **ステップ3【false-green 注入】**: 新判定行（静的安全判定／動的→ask／force／構造的ラッパー）を一時的に壊した入力で TC が NG になることを対で裏取り。→ TC-FG-G/H/I/J 参照。
-- **ステップ4【ドキュメント】**: `docs/claude-code-structure.md` の限界注記を更新。→ TC-DOC1 参照（grep で旧注記不在・新注記存在を判定）。
+- **ステップ3【false-green 注入】**: 新判定行（force `_push_has_force`／短縮クラスタ `_is_force_flag`／動的→ask `_push_is_dynamic`／構造的ラッパー `eval`・`sh -c` 分岐／`-c alias.` 分岐）を一時的に壊した入力で TC が NG になることを対で裏取り。ask 系（TC-FG-I/J/K）は exit code でなく ask JSON で判別。→ TC-FG-G/H/I/J/K 参照。
+- **ステップ4【ドキュメント】**: `docs/claude-code-structure.md` の限界注記を更新。→ TC-DOC1（a/b/c）参照（grep で旧注記不在・新注記存在・残余限界明記を判定）。
 
 ---
 
@@ -195,3 +198,6 @@ I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・fo
 ## 9. 承認ポイント（ユーザーがOKを返すチェックリスト）
 
 別途本文末尾に提示する。
+
+## レビュー結果
+- [20260701_0055 判定: ✅ 完了](../../reviews/I083_plan_review_20260701_0055.md)
