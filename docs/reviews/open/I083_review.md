@@ -41,5 +41,10 @@
 ## 既知の残余限界（仕様・対象外）
 - push トークンを完全隠蔽する偽装形（`eval "$VAR"`／`sh -c "$CMD"` で push が文字列に一切現れない）は脅威モデル（事故防止）外。`DANGER_OK=1` 解除に委ね、`docs/claude-code-structure.md` に明記する。
 
+## code-review 検出事項の処理（後続イシューへ繰り延べ）
+- 実装後の独立 code-review（再レビュー・docs/reviews/I083_code_review_20260701_1602.md）が **Medium** を検出: `--all`/`--mirror`/`--repo` 判定が force と同型の貪欲正規表現のまま残り、複合コマンド跨ぎで安全 push を誤 block（`git push origin feature && ls --all` → exit 2・`; foo --repo=x` → exit 2 を実測）。
+- 判断: I080 由来の pre-existing 欠陥・本 PR の変更対象外（I083 スコープの「含まない」に該当）・本 PR は悪化させない。→ **差し戻さず I088(#172) に切り出して根治**（同一原因・同一修正＝`_segments` 化）。
+- その他の Low 指摘（`-rf` 短縮クラスタ判定＝文書化済み許容・`runj` の `$?` タイミング＝注記のみ）は対応不要。
+
 ## レビュー結果
 （実装後に記入）

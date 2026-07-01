@@ -165,6 +165,7 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 > - **動的宛先 → ask に degrade**: コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}`／git エイリアス間接参照（`-c alias.x=...`）／`eval`・`sh -c`・`bash -c` ラッパー等、実行時にしか宛先が確定しない形（例: `git push origin $(git rev-parse --abbrev-ref HEAD)`）は、宛先を安全と断言できないため **ask（確認プロンプト）に degrade** する（hard block ではなく人へ委ねる）。ラッパー検出は `_segments` の先頭トークンによる**構造的**判定で、`bash-feature` 等のブランチ/remote 名の偶然一致では誤発火しない。
 > - **force push の取りこぼし → pure `_segments` で捕捉**: force 判定を `_push_has_force`（push セグメントのトークン走査）に置換し、`-f`/`-uf`/`--force-with-lease`/`--force-if-includes`・複合コマンド（`cd foo && git push --force ...`）を捕捉する。旧 `re.match` の潜在誤 block（`git push origin feature; echo "--force"` 等の安全 push を誤遮断）も解消した。
 > - **残余の既知限界（脅威モデル外）**: push トークンを**完全に隠蔽**する偽装形（`eval "$VAR"`／`sh -c "$CMD"` で push がコマンド文字列に一切現れない）は検知対象外。本ガードの脅威モデルは「事故による protected/force push の防止」であり、意図的な難読化は対象としない（`DANGER_OK=1` の解除導線と同様に運用者の責任に委ねる）。
+> - **既知の残課題（I088 で対応予定）**: `--all`/`--mirror`/`--repo` の判定は現状まだ貪欲正規表現（`.*` がシェル区切りを跨ぐ）のため、複合コマンド（例 `git push origin feature && ls --all`）で無関係な後続トークンに一致し安全 push を誤 block し得る。force と同型の兄弟バグで、I088(#172) が同一修正（`_segments` 化）で根治予定。
 
 ---
 
