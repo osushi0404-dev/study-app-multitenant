@@ -197,6 +197,11 @@ I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・fo
 
 ---
 
+## 8.5 実装後 code-review で検出した兄弟バグ（スコープ外・I088 へ繰り延べ）
+実装後の独立 code-review（再レビュー）で **Medium** を検出: `--all`/`--mirror`/`--repo` の判定が force と同型の貪欲正規表現（`.*` がシェル区切りを跨ぐ）のまま残り、複合コマンドで安全 push を誤 block する（`git push origin feature && ls --all` → exit 2・`; foo --repo=x` → exit 2 を実測）。I080 由来の pre-existing 欠陥で本 PR は悪化させず、I083 スコープの「含まない」に該当するため **差し戻さず I088(#172) に切り出して根治**（同一原因・同一修正＝`_segments` 化）。本計画書のスコープは force/dynamic のみで、この兄弟バグの実装は含まない（issue 引き継ぎ・`docs/reviews/open/I083_review.md`・`docs/claude-code-structure.md` の限界注記と同期）。
+
+---
+
 ## 9. 承認ポイント（ユーザーがOKを返すチェックリスト）
 
 別途本文末尾に提示する。
