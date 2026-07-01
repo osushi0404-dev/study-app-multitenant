@@ -69,11 +69,13 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 | `omission_lint <auto_test_file>` | 宣言セクション**外**に allowlist ゲートパターン行があれば `HIGH`、なければ `OK`（heavy・散文裸語は非検出） |
 | `verdict_rank <v>` / `combine_verdict <v...>` | `BLOCKER>HIGH>OK` の順位で最大の VERDICT を返す |
 
-**classify_gate 判定順（重要・分岐順で挙動が変わる）**:
-1. HEAVY キーワード（`pytest` / `manage.py test` / `npm test` / `npm run` / `docker compose` / `docker-compose` / `jest` / `playwright`）→ `HEAVY`（実走しないのでチェーン有無は不問）
-2. チェーン系メタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）を含む → `UNSAFE`（実走しない・コマンド衛生）
-3. allowlist 前方一致（`bash scripts/claude/tests/*.sh` / `grep ` / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile `）→ `ALLOW`
-4. 上記いずれにも該当しない → `UNSAFE`
+**classify_gate 判定順（重要・分岐順で挙動が変わる。HEAVY は先頭コマンド anchored＝部分一致にしない）**:
+1. **HEAVY（先頭コマンド anchored）**: 先頭トークンが heavy ツール（`docker` / `docker-compose` / `npm` / `npx` / `pytest` / `python -m pytest` / `python3 -m pytest` / `jest` / `playwright`）または `manage.py test` を含む invocation → `HEAVY`（実走しないのでチェーン有無は不問）。
+   - **anchored の理由**: 部分一致にすると `grep -q "npm test done" build.log`（引数に heavy 語を含む正当な grep ゲート）が HEAVY 誤判定で**実走されず沈黙スキップ＝false-negative（gate 取りこぼし）**になる。先頭コマンドで判定してこれを防ぐ。
+2. **allowlist 前方一致 ＋ チェーンメタ文字なし** → `ALLOW`。allowlist＝`bash scripts/claude/tests/*.sh` / `grep ` / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile `。チェーン系メタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）を含む場合は ALLOW にせず 3 へ（**実行する ALLOW のみメタ文字ガードを課す＝安全境界**）。
+3. 上記いずれにも該当しない（破壊系・チェーン付き・未知）→ `UNSAFE`（実走しない）。
+
+> doc-sync ゲートは plain grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`grep -L 文言 file`（file が文言を含まないとき exit0=合格・含むと exit1＝I080 型の混入を捕捉）。`!`/`grep -v`＋チェーンを使わず allowlist に収める。
 
 **run_declared_gates の verdict 集約**:
 - `ALLOW` を実走し exit≠0 が 1 件でもあれば `GATE_VERDICT=BLOCKER`（fail-closed）

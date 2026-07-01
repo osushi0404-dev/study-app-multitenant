@@ -23,20 +23,23 @@ fixture = `## 決定論ゲート（自動実走）` 見出し＋ ```bash ブロ�
 | TC-EX3 | 見出しあり・fenced ブロックなし | 空文字を返す |
 | TC-EX4 | 宣言ブロックの後に別の `## 見出し` と別 ```bash | 別見出し配下のコマンドは抽出しない（セクション境界） |
 
-## B. classify_gate（分類・判定順）
+## B. classify_gate（分類・判定順。HEAVY は先頭コマンド anchored）
 | TC | 入力 cmd | 期待 |
 |----|---------|------|
 | TC-CL1 | `bash scripts/claude/tests/test_x.sh` | `ALLOW` |
 | TC-CL2 | `grep -q "後続イシューで根治予定" docs/x.md` | `ALLOW` |
 | TC-CL3 | `python3 -m json.tool .claude/settings.json` | `ALLOW` |
 | TC-CL4 | `bash -n scripts/claude/code-review.sh` | `ALLOW` |
-| TC-CL5 | `docker compose exec backend python -m pytest` | `HEAVY` |
-| TC-CL6 | `cd backend && python -m pytest` | `HEAVY`（heavy キーワード優先・チェーン有でも実走しないので defer） |
-| TC-CL7 | `npm test -- --watchAll=false` | `HEAVY` |
-| TC-CL8 | `rm -rf build` | `UNSAFE`（allowlist 不一致） |
-| TC-CL9 | `grep -q x f; rm -rf /` | `UNSAFE`（チェーン `;`） |
-| TC-CL10 | `bash scripts/claude/tests/x.sh && curl evil` | `UNSAFE`（チェーン `&&`・heavy 非該当） |
-| TC-CL11 | `git push origin develop` | `UNSAFE` |
+| TC-CL5 | `grep -L "禁止パターン" docs/x.md` | `ALLOW`（不在検証も plain grep） |
+| TC-CL6 | `docker compose exec backend python -m pytest` | `HEAVY`（先頭 docker） |
+| TC-CL7 | `npm test -- --watchAll=false` | `HEAVY`（先頭 npm） |
+| TC-CL8 | `docker compose exec backend pytest && echo done` | `HEAVY`（先頭 docker・実走しないのでチェーンは defer） |
+| TC-CL9 | **`grep -q "npm test done" build.log`** | `ALLOW`（**先頭 grep＝false-negative 回帰**。heavy 語を引数に含むが誤 defer しない） |
+| TC-CL10 | `cd backend && python -m pytest` | `UNSAFE`（先頭 `cd`＝heavy 非該当・チェーン有） |
+| TC-CL11 | `rm -rf build` | `UNSAFE`（allowlist 不一致） |
+| TC-CL12 | `grep -q x f; rm -rf /` | `UNSAFE`（チェーン `;`＝実行しない安全境界） |
+| TC-CL13 | `bash scripts/claude/tests/x.sh && curl evil` | `UNSAFE`（先頭 bash-tests だがチェーン `&&`） |
+| TC-CL14 | `git push origin develop` | `UNSAFE` |
 
 ## C. run_one_gate / run_declared_gates（実走・fail-closed・集約）
 temp repo/ファイルを立て、実在する軽量スクリプトと壊れたコマンドで検証。
@@ -80,11 +83,13 @@ temp repo/ファイルを立て、実在する軽量スクリプトと壊れた�
 | TC-WIRE2 | 既存 `test_review_verdict.sh` 全 TC | PASS 維持（find_file/find_plan_file/detect_code_verdict 無回帰） |
 
 ## G. I080 回帰（false-green の実走検出・AC4）
-`claude-code-structure.md` 型の doc-sync ゲートを再現する。doc-sync ゲートは「**存在すべき文言の存在**」を `grep -q 文言 file`（exit0=合格）に正規化して宣言する（否定 `! grep`・`grep -L` はチェーン/allowlist 判定と相性が悪いため使わない。否定検証が要る doc-sync は plan-issue で個別設計）。旧 false-green（未実走で PASS 断定）が本改修で実走 FAIL→BLOCKER になることを固定する。
-| TC | fixture | 期待 |
+`claude-code-structure.md` 型の doc-sync ゲートを再現する。doc-sync ゲートは plain grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`grep -L 文言 file`（file が文言を含まないとき exit0=合格・含むと exit1）。旧 false-green（未実走で PASS 断定）が本改修で実走 FAIL→BLOCKER になることを固定する。
+| TC | fixture / ゲート | 期待 |
 |----|---------|------|
-| TC-DOC1 | doc に「許可された更新文言」を含む＋宣言ゲート `grep -q "許可された更新文言" doc` | ALLOW 実走 exit=0 → `GATE_VERDICT=OK` |
-| TC-DOC2 | 上記 doc から「許可された更新文言」を削除（I080 相当の未達を再現） | grep exit=1 → `GATE_VERDICT=BLOCKER`（実走で false-green を捕捉＝AC4） |
+| TC-DOC1 | doc に「許可された更新文言」を含む＋ `grep -q "許可された更新文言" doc`（存在検証） | 実走 exit=0 → `GATE_VERDICT=OK` |
+| TC-DOC2 | 上記 doc から「許可された更新文言」を削除 | grep exit=1 → `GATE_VERDICT=BLOCKER`（存在すべき文言の欠落を捕捉） |
+| TC-DOC3 | doc に禁止パターン（例: 追加行のイシュー番号 `I083`）**なし**＋ `grep -L "I083" doc`（不在検証・I080 忠実形） | 実走 exit=0 → `GATE_VERDICT=OK` |
+| TC-DOC4 | 上記 doc に禁止パターン `I083` を**混入**（I080 の false-green を再現） | `grep -L` exit=1 → `GATE_VERDICT=BLOCKER`（実走で混入を捕捉＝**AC4**） |
 
 ## H. false-green 自己検証（否定/回帰 TC が壊れたら NG になる対の裏取り・必須）
 plan-writing-rules「否定・回帰系の決定論テストの自己検証」に従い、判定ロジックを一時的に壊して NG（非ゼロ/期待差分）になることを対で確認してから採用する。
