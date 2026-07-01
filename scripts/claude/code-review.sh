@@ -110,8 +110,16 @@ classify_gate() {
 
 # 1 ゲートを timeout 付きで実走し exit code を返す（command not found / timeout も非ゼロ＝fail-closed）。
 # GATE_TIMEOUT はテストで上書き可能（既定 120 秒）。
+# 不在検証 `! grep …` は特別扱い: 生 `!` はエラー(exit≥2・ファイル不在等)まで 0 に反転し
+# false-PASS になるため、内側コマンドの exit を見て「一致なし(1)＝pass / それ以外＝fail-closed」に正す。
 run_one_gate() {
-  timeout "${GATE_TIMEOUT:-120}" bash -c "$1" >/dev/null 2>&1
+  local cmd="$1" rc
+  case "$cmd" in
+    '! grep '*)
+      timeout "${GATE_TIMEOUT:-120}" bash -c "${cmd#! }" >/dev/null 2>&1; rc=$?
+      [ "$rc" -eq 1 ] && return 0 || return 1 ;;   # grep 一致なし(1)のみ pass・エラー(≥2)は fail
+  esac
+  timeout "${GATE_TIMEOUT:-120}" bash -c "$cmd" >/dev/null 2>&1
 }
 
 # 宣言ゲートを分類・実走し、グローバル GATE_EVIDENCE（証跡 md）/ GATE_VERDICT（OK|BLOCKER）を設定する。

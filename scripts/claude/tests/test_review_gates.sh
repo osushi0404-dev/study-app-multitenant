@@ -153,6 +153,13 @@ run_declared_gates "$TMP/at_doc3.md"; ck TC-DOC3 OK "$GATE_VERDICT"
 printf 'doc with I083 mixed in\n' > "$TMP/doc4.md"
 printf '! grep -q "I083" %s\n' "$TMP/doc4.md" | mk_gate_fixture "$TMP/at_doc4.md"
 run_declared_gates "$TMP/at_doc4.md"; ck TC-DOC4 BLOCKER "$GATE_VERDICT"
+# TC-DOC5: 不在検証のターゲットファイルが存在しない → grep exit2 を ! が 0 化する false-PASS を防ぐ
+printf '! grep -q "I083" %s/no_such_file.md\n' "$TMP" | mk_gate_fixture "$TMP/at_doc5.md"
+run_declared_gates "$TMP/at_doc5.md"; ck TC-DOC5 BLOCKER "$GATE_VERDICT"
+# TC-RUN10: run_one_gate 単体で ! grep のファイル不在=fail・一致なし=pass を固定
+if run_one_gate "! grep -q X $TMP/no_such_file.md"; then r10=zero; else r10=nonzero; fi
+ck TC-RUN10a nonzero "$r10"
+run_one_gate "! grep -q ABSENT $TMP/f_ok.txt"; ck TC-RUN10b 0 "$?"
 
 echo "== H. false-green 自己検証（実ソースを壊して NG を裏取り） =="
 b1="$TMP/b1.sh"; sed '/I084-CL-GREP/d' "$CODE_REVIEW" > "$b1"

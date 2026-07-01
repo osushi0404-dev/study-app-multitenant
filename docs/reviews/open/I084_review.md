@@ -18,6 +18,7 @@
 - [ ] doc-sync ゲートは grep（存在=`grep -q` / 不在=`! grep -q`）で allowlist に収まる（`grep -L` は不在検証に使えない・是正済み）
 - [ ] allowlist に `! grep …`（不在検証の否定）を含む
 - [ ] `run_one_gate`: `timeout "${GATE_TIMEOUT:-120}" bash -c` で実走し exit code を返す（command not found / timeout も非ゼロ・GATE_TIMEOUT はテスト上書き可）
+- [ ] `run_one_gate`: `! grep …` を特別扱いし grep exit1(一致なし)のみ pass・exit≥2(ファイル不在等)は fail-closed（false-PASS 対策・TC-DOC5/RUN10）
 - [ ] `run_declared_gates`: **グローバル `GATE_EVIDENCE`/`GATE_VERDICT` を設定**（`$()` で呼ばない＝W1 サブシェル回避）。ALLOW 実走・exit≠0 で BLOCKER・UNSAFE も BLOCKER・HEAVY は委譲記録（FAIL でない）
 - [ ] `run_declared_gates`: UNSAFE を `bash -c` に渡さない（破壊系非実走・TC-RUN8 で GATE_VERDICT=BLOCKER も assert）
 - [ ] `omission_lint`: 宣言セクション外の **fenced ```bash/```sh ブロック内**の allowlist パターンのみ HIGH。**テーブルセル/インライン backtick/散文/heavy は非検出**（W4 自傷回避・TC-OM7/8）

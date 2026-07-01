@@ -64,7 +64,7 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 |------|------|
 | `extract_gate_commands <auto_test_file>` | 見出し `## 決定論ゲート（自動実走）` 配下の単一 fenced ```bash ブロックから、非空・非コメント行を 1 行 1 コマンドで抽出。見出し不在なら空 |
 | `classify_gate <cmd>` | `ALLOW`（副作用なし＝実走）/ `HEAVY`（/test 委譲・実走しない）/ `UNSAFE`（allowlist 不一致・チェーン系＝実走せず fail-closed）を返す |
-| `run_one_gate <cmd>` | `timeout "${GATE_TIMEOUT:-120}" bash -c "$cmd"` で実走し exit code を返す（command not found / timeout も非ゼロ＝fail-closed）。`GATE_TIMEOUT` は**テスト用に上書き可能**（例 `GATE_TIMEOUT=1` で timeout 系 TC を高速化） |
+| `run_one_gate <cmd>` | `timeout "${GATE_TIMEOUT:-120}" bash -c "$cmd"` で実走し exit code を返す（command not found / timeout も非ゼロ＝fail-closed）。`GATE_TIMEOUT` は**テスト用に上書き可能**（例 `GATE_TIMEOUT=1`）。**`! grep …` 不在検証は特別扱い**: 生 `!` は grep のエラー(exit≥2・ファイル不在等)まで 0 に反転し **false-PASS** になるため、内側 grep の exit を見て「一致なし(1)＝pass / それ以外(0=一致あり・≥2=エラー)＝fail-closed」に正す（code-review Medium 対応・TC-DOC5/RUN10） |
 | `run_declared_gates <auto_test_file>` | 宣言ゲートを分類・実走し、**グローバル変数 `GATE_EVIDENCE`（証跡 markdown）・`GATE_VERDICT`（OK/BLOCKER）を設定**する。**コマンド置換 `$()` で呼ばない**（サブシェルだとグローバル設定が呼び出し元へ伝播しない・W1）。呼び出しは `run_declared_gates "$f"` 直呼び |
 | `omission_lint <auto_test_file>` | 宣言セクション**外**の **fenced ```bash/```sh ブロック**に allowlist ゲートパターンがあれば `HIGH`、なければ `OK`。**インライン backtick・Markdown テーブルセル・散文・heavy のみブロックは非検出**（TC 記述文中のコマンド文字列で自傷 HIGH しない・W4） |
 | `verdict_rank <v>` / `combine_verdict <v...>` | `BLOCKER>HIGH>OK` の順位で最大の VERDICT を返す |
@@ -76,7 +76,9 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 2.5. **パストラバーサル拒否**: `case` glob の `*` は `/` にもマッチするため、`../` を含む行は `UNSAFE`（`bash scripts/claude/tests/*.sh` 経由で `.../../evil.sh` を実走させない安全境界・code-review Medium 対応・TC-CL15）。
 3. 上記いずれにも該当しない（破壊系・チェーン付き・未知）→ `UNSAFE`（実走しない）。
 
-> doc-sync ゲートは grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`! grep -q 文言 file`（file が文言を含まないとき grep exit1→`!`で exit0=合格・含むと exit0→`!`で exit1＝I080 型の混入を捕捉）。allowlist に `! grep …` を含める（`!` は grep の否定のみで安全）。※ `grep -L` は exit status が「pattern が見つかったか」に従い**不在検証には使えない**ため採用しない（実測で確認済み）。
+> doc-sync ゲートは grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`! grep -q 文言 file`（file が文言を含まないとき grep exit1→`!`で exit0=合格・含むと exit0→`!`で exit1＝I080 型の混入を捕捉）。allowlist に `! grep …` を含める（`!` は grep の否定のみで安全）。
+> - **ファイル不在の false-PASS 対策（必須）**: `! grep -q pat missing_file` は grep exit2 を `!` が 0 化し「不在＝合格」と誤判定する。`run_one_gate` が `! grep` を特別扱いし **grep exit1 のみ pass・exit≥2(エラー)は fail-closed** に正す。よって auto_test 側は素直に `! grep -q pat file` と書けばよい（`[ -f file ] && …` のようなチェーンは不要かつ allowlist 不一致で書けない）。
+> - ※ `grep -L` は exit status が「pattern が見つかったか」に従い**不在検証には使えない**ため採用しない（実測で確認済み）。
 
 > **omission_lint の走査スコープ（W4 対策・自傷回避）**: 対象は宣言セクション外の **fenced ```bash/```sh コードブロック内の行のみ**。Markdown テーブルセルやインライン backtick（TC 記述中の `` `bash scripts/…` `` 等の文字列）・散文は**走査しない**。これにより本 auto_test.md 自身（TC テーブルにコマンド文字列を多数含む）がドッグフーディング実走時に自傷 HIGH しない。実装は「宣言セクション除外 → 残りから ``` フェンス内行のみ抽出 → allowlist パターン grep」。
 

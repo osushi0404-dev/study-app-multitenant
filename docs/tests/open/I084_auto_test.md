@@ -97,6 +97,11 @@ temp repo/ファイルを立て、実在する軽量スクリプトと壊れた�
 | TC-DOC2 | 上記 doc から「許可された更新文言」を削除 | grep exit=1 → `GATE_VERDICT=BLOCKER`（存在すべき文言の欠落を捕捉） |
 | TC-DOC3 | doc に禁止パターン `I083` **なし**＋ `! grep -q "I083" doc`（不在検証・I080 忠実形） | 実走 exit=0 → `GATE_VERDICT=OK` |
 | TC-DOC4 | 上記 doc に禁止パターン `I083` を**混入**（I080 の false-green を再現） | `! grep -q` exit=1 → `GATE_VERDICT=BLOCKER`（実走で混入を捕捉＝**AC4**） |
+| TC-DOC5 | 不在検証のターゲットファイルが**存在しない** `! grep -q "I083" missing_file` | `GATE_VERDICT=BLOCKER`（grep exit2 を `!` が 0 化する false-PASS を `run_one_gate` が fail-closed に是正） |
+| TC-RUN10a | `run_one_gate "! grep -q X missing_file"` | 非ゼロ（ファイル不在＝fail） |
+| TC-RUN10b | `run_one_gate "! grep -q ABSENT existing_file"`（文言なし） | 0（一致なし＝pass） |
+
+> 安全境界（追加）: TC-CL15 `bash scripts/claude/tests/../../../scripts/evil.sh` → `UNSAFE`（case glob の `*` が `/` にマッチする穴を `../` 拒否で塞ぐ・code-review Medium 対応）。
 
 ## H. false-green 自己検証（否定/回帰 TC が壊れたら NG になる対の裏取り・必須）
 plan-writing-rules「否定・回帰系の決定論テストの自己検証」に従い、判定ロジックを一時的に壊して NG（非ゼロ/期待差分）になることを対で確認してから採用する。
