@@ -207,5 +207,6 @@ I083_auto_test.md の TC 群（動的→ask・force 取りこぼし→block・fo
 別途本文末尾に提示する。
 
 ## レビュー結果
-- [20260701_0222 判定: ✅ 完了](../../reviews/I083_plan_review_20260701_0222.md)
-- [20260701_0055 判定: ✅ 完了](../../reviews/I083_plan_review_20260701_0055.md)
+- [20260701_1655 判定: ✅ 完了](../../reviews/closed/I083_plan_review_20260701_1655.md)
+- [20260701_0222 判定: ✅ 完了](../../reviews/closed/I083_plan_review_20260701_0222.md)
+- [20260701_0055 判定: ✅ 完了](../../reviews/closed/I083_plan_review_20260701_0055.md)
