@@ -47,4 +47,11 @@
 - その他の Low 指摘（`-rf` 短縮クラスタ判定＝文書化済み許容・`runj` の `$?` タイミング＝注記のみ）は対応不要。
 
 ## レビュー結果
-（実装後に記入）
+- plan-issue-review ×3（20260701 0055/0222/1655）＝すべて VERDICT OK。3回目で TC-DOK の runj 漏れ Warning を検出・spec 整合済み。
+- code-review ×2（20260701 0301/1602）＝すべて VERDICT OK。2回目で `--all/--mirror/--repo` 兄弟バグ Medium を検出 → I088(#172) へ繰り延べ。
+
+## /test 実行結果（20260701）
+- 自動（決定論・canonical）: `test_pretooluse_push_guard.sh` = **87 PASS / 0 fail**（既存40＋I083 追加47）／`test_pretooluse_checkout_guard.sh` = **14 PASS / 0 fail**（無回帰）。
+- pytest/Jest/E2E = **非該当**（Backend/Frontend 変更なし・auto_test.md 指定どおり）。
+- 手動 No.1〜5（Claude 実施）= すべて ✅ OK（テスト実行・構文・限界注記 grep・settings 不変）。
+- 手動 No.6〜7（Human・プレーン default 新規セッション）= 実施依頼中（ask プロンプト描画・安全 push 無確認通過のハーネス統合目視）。
