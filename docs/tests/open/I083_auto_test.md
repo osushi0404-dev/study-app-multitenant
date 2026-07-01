@@ -24,7 +24,8 @@ rungj() { local out code; out=$(json "$2" | python3 "$1" 2>/dev/null); code=$?;
 ```
 > 注: `out=$(...)` 直後の `code=$?` で python の exit を捕捉する（bash はパイプ全体の `$?` を末尾コマンドの exit とするため `pipefail` 不要）。grep パターンは json.dumps の `": "` 区切りに `[[:space:]]*` で寛容に一致させる。
 
-> **重要（ask と pass の判別）**: ask（degrade）も pass（無確認通過）も **exit code は 0** で同一。両者の判別は exit code では不可能なため、ask 系 TC（TC-D*・TC-F7・TC-FG-I/J/K）と「ask されないこと」を固定する TC（TC-S*・TC-W*・TC-FP*）は必ず `runj`/`rungj`（stdout JSON 判定）で検証する。block 系（exit 2）と force/protected 系は `run`/`rung`（exit code）で足りる。
+> **重要（ask と pass の判別）**: ask（degrade）も pass（無確認通過）も **exit code は 0** で同一。両者の判別は exit code では不可能なため、ask 系 TC（TC-D*・TC-F7・TC-FG-I/J/K/L）と「ask されないこと」を固定する TC（TC-S*・TC-W*・TC-FP*・**TC-DOK1/2/3**）は必ず `runj`/`rungj`（stdout JSON 判定）で検証する。block 系（exit 2）と force/protected 系は `run`/`rung`（exit code）で足りる。
+> - 特に **TC-DOK1/3** は「DANGER_OK=1 なら ask も発火しない」を固定するため `runj` 必須。`run`（exit code のみ）だと、`_push_is_dynamic` の ask を誤って `not danger_ok` ブロック外に置く実装ミス（DANGER_OK=1 でも ask 発火）を exit 0 のまま見逃し **false-PASS** する。
 
 - 現ブランチ依存 TC（protected 宛先・引数なし push・動的宛先）は既存同様 temp git repo（develop / feature/x）を立てて実行する。
 
@@ -82,19 +83,21 @@ rungj() { local out code; out=$(json "$2" | python3 "$1" 2>/dev/null); code=$?;
 | TC-F7 | `eval "git push --force origin x"` | feature/x | **ASK** |
 
 ### G. ラッパー誤 ask 回帰（構造的検出・branch/remote 名の偶然一致で発火しない・Q8）→ 無確認 pass
-| TC | コマンド | 実行ブランチ | 期待 |
+**検証は `runj` で `0` を期待**（ask になっても exit 0 のため `run` では false-green）。
+| TC | コマンド | 実行ブランチ | 期待（`runj`） |
 |---|---|---|---|
-| TC-W1 | `git push origin bash-feature` | feature/x | exit 0（ask 無し） |
-| TC-W2 | `git push origin sh-fix` | feature/x | exit 0 |
-| TC-W3 | `git push eval-remote feature` | feature/x | exit 0 |
-| TC-W4 | `git -c user.name=x push origin feature` | feature/x | exit 0（非 alias の `-c`） |
+| TC-W1 | `git push origin bash-feature` | feature/x | `0`（ask 無し） |
+| TC-W2 | `git push origin sh-fix` | feature/x | `0` |
+| TC-W3 | `git push eval-remote feature` | feature/x | `0` |
+| TC-W4 | `git -c user.name=x push origin feature` | feature/x | `0`（非 alias の `-c`） |
 
 ### H. DANGER_OK escape 維持
-| TC | コマンド | 実行ブランチ | 期待 |
+**検証は `runj` で `0` を期待**（DANGER_OK=1 で ask も block も出ないこと＝escape。`run` だと ask 漏れを exit 0 のまま見逃す）。
+| TC | コマンド | 実行ブランチ | 期待（`runj`） |
 |---|---|---|---|
-| TC-DOK1 | `DANGER_OK=1 git push origin $(echo develop)` | develop | exit 0（ask も block も無し＝escape） |
-| TC-DOK2 | `DANGER_OK=1 git push -f origin x` | feature/x | exit 0 |
-| TC-DOK3 | `DANGER_OK=1 eval "git push --force origin x"` | feature/x | exit 0 |
+| TC-DOK1 | `DANGER_OK=1 git push origin $(echo develop)` | develop | `0`（ask も block も無し＝escape） |
+| TC-DOK2 | `DANGER_OK=1 git push -f origin x` | feature/x | `0` |
+| TC-DOK3 | `DANGER_OK=1 eval "git push --force origin x"` | feature/x | `0` |
 
 ### I. false-green 注入（各判定行が load-bearing であることを対で裏取り）
 壊した版（`sed` で判定行/式を無効化したフックのコピー）で「素通り」を、実版で「捕捉」を確認する**対**で固定する。
@@ -107,6 +110,7 @@ force/block 系（TC-FG-G/H）は exit code で判別できるため `rung`/`run
 | TC-FG-J | `_push_is_dynamic` の構造的ラッパー（`eval`/`sh -c`）分岐を削除 | `eval "git push origin develop"`（develop）→ `0` | `ASK` | `rungj`/`runj` |
 | TC-FG-K | `_push_is_dynamic` の `git -c alias.` サブ分岐を削除 | `git -c alias.p="push origin develop" p`（develop）→ `0` | `ASK` | `rungj`/`runj` |
 | TC-FG-L | `_push_is_dynamic` の `eval` 分岐を削除（TC-F7 裏取り） | `eval "git push --force origin x"`（feature/x）→ `0`（force は `_push_has_force` で捕捉されない＝ask も消える） | `ASK` | `rungj`/`runj` |
+| TC-DOC1a-fg | （grep パターンの反転裏取り）旧注記を残したダミー doc に対し grep | ダミーに旧注記あり → grep hit（`0`）＝パターンが実際に旧注記へ一致 | 実 doc は旧注記なし → miss（`1`） | grep exit |
 
 > 注: false-green 注入は plan-writing-rules「否定・回帰系の決定論テストの自己検証」に従い、判定行を実際に壊して NG（期待差分）が出ることを確認してから採用する。TC-FG-I/J/K は exit code でなく ask JSON の有無で「壊れたら ask が消える」ことを裏取りする（ask ロジックの load-bearing 性の本質的検証）。
 
