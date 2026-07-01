@@ -123,6 +123,8 @@ plan-writing-rules「否定・回帰系の決定論テストの自己検証」�
 - `test_review_verdict.sh`: 無回帰（PASS=55 相当・fail=0）。
 - TC-FG 群で各否定/回帰 TC が「壊すと NG・実版で OK」の対を確認済み。
 
-結果:
-- test_review_gates.sh:
-- test_review_verdict.sh:
+結果（2026-07-02 /test 実行）:
+- test_review_gates.sh: **PASS=67 FAIL=0**（A〜I 全 TC・false-green 自己検証 TC-FG 含む）
+- test_review_verdict.sh: **PASS=55 FAIL=0**（無回帰）
+- 無回帰（参考）: test_pretooluse_checkout_guard.sh=14/0・test_pretooluse_push_guard.sh=87/0
+- pytest / Jest / E2E: **非該当**（Backend/Frontend/DB 変更なし）
