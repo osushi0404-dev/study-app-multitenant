@@ -172,14 +172,14 @@ def _push_is_dynamic(cmd: str) -> bool:
     if not (re.search(r"\bgit\b", cmd) and re.search(r"\bpush\b", cmd)):
         return False
     for toks in _segments(cmd):
+        if not toks:                       # _segments は空セグメントを返さないが防御的に
+            continue
         # (i) 直接 push: push 以降の引数領域に動的メタ文字（$(...) の空白で shlex が壊れてもすり抜けない）
         if "git" in toks and "push" in toks:
             after = " ".join(toks[toks.index("push") + 1:])
             if any(ch in after for ch in "$`{("):
                 return True
         # (ii) 構造的に不透明なラッパー（先頭トークンで判定＝branch/remote 名の偶然一致を排除）
-        if not toks:
-            continue
         head = toks[0]
         if head == "eval" and any("push" in t for t in toks[1:]):
             return True
