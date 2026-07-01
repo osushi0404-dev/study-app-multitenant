@@ -72,10 +72,10 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 **classify_gate 判定順（重要・分岐順で挙動が変わる。HEAVY は先頭コマンド anchored＝部分一致にしない）**:
 1. **HEAVY（先頭コマンド anchored）**: 先頭トークンが heavy ツール（`docker` / `docker-compose` / `npm` / `npx` / `pytest` / `python -m pytest` / `python3 -m pytest` / `jest` / `playwright`）または `manage.py test` を含む invocation → `HEAVY`（実走しないのでチェーン有無は不問）。
    - **anchored の理由**: 部分一致にすると `grep -q "npm test done" build.log`（引数に heavy 語を含む正当な grep ゲート）が HEAVY 誤判定で**実走されず沈黙スキップ＝false-negative（gate 取りこぼし）**になる。先頭コマンドで判定してこれを防ぐ。
-2. **allowlist 前方一致 ＋ チェーンメタ文字なし** → `ALLOW`。allowlist＝`bash scripts/claude/tests/*.sh` / `grep ` / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile `。チェーン系メタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）を含む場合は ALLOW にせず 3 へ（**実行する ALLOW のみメタ文字ガードを課す＝安全境界**）。
+2. **allowlist 前方一致 ＋ チェーンメタ文字なし** → `ALLOW`。allowlist＝`bash scripts/claude/tests/*.sh` / `grep ` / `! grep `（不在検証） / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile `。チェーン系メタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）を含む場合は ALLOW にせず 3 へ（**実行する ALLOW のみメタ文字ガードを課す＝安全境界**）。
 3. 上記いずれにも該当しない（破壊系・チェーン付き・未知）→ `UNSAFE`（実走しない）。
 
-> doc-sync ゲートは plain grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`grep -L 文言 file`（file が文言を含まないとき exit0=合格・含むと exit1＝I080 型の混入を捕捉）。`!`/`grep -v`＋チェーンを使わず allowlist に収める。
+> doc-sync ゲートは grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`! grep -q 文言 file`（file が文言を含まないとき grep exit1→`!`で exit0=合格・含むと exit0→`!`で exit1＝I080 型の混入を捕捉）。allowlist に `! grep …` を含める（`!` は grep の否定のみで安全）。※ `grep -L` は exit status が「pattern が見つかったか」に従い**不在検証には使えない**ため採用しない（実測で確認済み）。
 
 > **omission_lint の走査スコープ（W4 対策・自傷回避）**: 対象は宣言セクション外の **fenced ```bash/```sh コードブロック内の行のみ**。Markdown テーブルセルやインライン backtick（TC 記述中の `` `bash scripts/…` `` 等の文字列）・散文は**走査しない**。これにより本 auto_test.md 自身（TC テーブルにコマンド文字列を多数含む）がドッグフーディング実走時に自傷 HIGH しない。実装は「宣言セクション除外 → 残りから ``` フェンス内行のみ抽出 → allowlist パターン grep」。
 

@@ -15,7 +15,8 @@
 - [ ] `classify_gate`: 判定順が「**HEAVY（先頭コマンド anchored）** → allowlist(メタ文字ガード付き) ALLOW → その他 UNSAFE」
 - [ ] HEAVY は先頭コマンド判定（部分一致でない）: `grep -q "npm test done" log` は ALLOW（false-negative 回帰・TC-CL9）
 - [ ] allowlist は `bash scripts/claude/tests/*.sh` / `grep ` / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile ` のみ、かつチェーンメタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）なしのときのみ ALLOW
-- [ ] doc-sync ゲートは plain grep（存在=`grep -q` / 不在=`grep -L`）で allowlist に収まる
+- [ ] doc-sync ゲートは grep（存在=`grep -q` / 不在=`! grep -q`）で allowlist に収まる（`grep -L` は不在検証に使えない・是正済み）
+- [ ] allowlist に `! grep …`（不在検証の否定）を含む
 - [ ] `run_one_gate`: `timeout "${GATE_TIMEOUT:-120}" bash -c` で実走し exit code を返す（command not found / timeout も非ゼロ・GATE_TIMEOUT はテスト上書き可）
 - [ ] `run_declared_gates`: **グローバル `GATE_EVIDENCE`/`GATE_VERDICT` を設定**（`$()` で呼ばない＝W1 サブシェル回避）。ALLOW 実走・exit≠0 で BLOCKER・UNSAFE も BLOCKER・HEAVY は委譲記録（FAIL でない）
 - [ ] `run_declared_gates`: UNSAFE を `bash -c` に渡さない（破壊系非実走・TC-RUN8 で GATE_VERDICT=BLOCKER も assert）

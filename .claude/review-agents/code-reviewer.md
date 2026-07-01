@@ -48,7 +48,11 @@ Blocker 判定を下すことを恐れるな。
 4. 変更ファイル一覧（`git diff origin/develop...HEAD --name-only` の出力）
 5. git diff（`git diff origin/develop...HEAD`、最大 100KB）
 
+6. **決定論ゲート実行結果**（`### 決定論ゲート実行結果`・スクリプトが実走済みの実 exit code）
+
 上記はプロンプト内に含まれている。追加で必要なファイルは Read・Grep・Glob を使用して参照する。
+
+**決定論ゲートの扱い（必須）**: プロンプトの `### 決定論ゲート実行結果` は `code-review.sh` が `auto_test.md` 指定ゲートを**実走した実 exit code**である。決定論で判定可能なゲート（テストスクリプト・doc-sync grep 等）は、**この注入済み実結果を根拠に用い、Read/Grep の読解で「PASS」と断定しない**。証跡（コマンド＋exit code）を受け入れ条件照合の備考に併記する。ゲートに FAIL がある場合は該当 AC を未達として扱う（スクリプトが最終 VERDICT を BLOCKER へ決定論的に上書きするが、レビュー本文の判定も実結果と矛盾させない）。
 
 ---
 
@@ -193,7 +197,7 @@ High のみ: 「`/fix-loop [I###]` を実行してください。fix-loop 完了
 VERDICT: <BLOCKER|HIGH|OK>
 ```
 
-**VERDICT 行（必須・出力の最終行）**: 上記出力の最終行に、機械判定用の固定行を **1 行だけ** 出力する（装飾・前後の語を付けない）。スクリプト（`code-review.sh`）はこの行を一次判定に使う。
+**VERDICT 行（必須・出力の最終行）**: 上記出力の最終行に、機械判定用の固定行を **1 行だけ** 出力する（装飾・前後の語を付けない）。スクリプト（`code-review.sh`）はこの行を、**決定論ゲートの実結果（gate/omission）と合成**して最終 VERDICT を決める（`final = max(gate, omission, この行)`）。したがってこの行は「LLM 観点の判定」を表し、決定論ゲートの実結果を上書きするものではない（実結果と矛盾する OK を出さない）。
 - `VERDICT: BLOCKER` … Blocker を 1 件以上検出
 - `VERDICT: HIGH` … Blocker 0 かつ High を 1 件以上検出
 - `VERDICT: OK` … Blocker・High なし
