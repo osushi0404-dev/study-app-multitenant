@@ -3,7 +3,7 @@
 ## 基本情報
 - **計画書ID**: plan_I084
 - **関連イシュー**: #167
-- **Draft PR**: #（作成後に追記）
+- **Draft PR**: #174
 - **作成根拠資料**: docs/issues/open/I084.md（起点イシュー・grill-me で設計確定済み）
 - **実装後評価**: docs/reviews/open/I084_review.md
 - **作成日**: 2026-07-01
