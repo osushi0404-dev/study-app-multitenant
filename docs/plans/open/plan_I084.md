@@ -64,9 +64,9 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 |------|------|
 | `extract_gate_commands <auto_test_file>` | 見出し `## 決定論ゲート（自動実走）` 配下の単一 fenced ```bash ブロックから、非空・非コメント行を 1 行 1 コマンドで抽出。見出し不在なら空 |
 | `classify_gate <cmd>` | `ALLOW`（副作用なし＝実走）/ `HEAVY`（/test 委譲・実走しない）/ `UNSAFE`（allowlist 不一致・チェーン系＝実走せず fail-closed）を返す |
-| `run_one_gate <cmd>` | `timeout 120 bash -c "$cmd"` で実走し exit code を返す（command not found / timeout も非ゼロ＝fail-closed） |
-| `run_declared_gates <auto_test_file>` | 宣言ゲートを分類・実走し、証跡 markdown を stdout に出力・`GATE_VERDICT`（OK/BLOCKER）を設定 |
-| `omission_lint <auto_test_file>` | 宣言セクション**外**に allowlist ゲートパターン行があれば `HIGH`、なければ `OK`（heavy・散文裸語は非検出） |
+| `run_one_gate <cmd>` | `timeout "${GATE_TIMEOUT:-120}" bash -c "$cmd"` で実走し exit code を返す（command not found / timeout も非ゼロ＝fail-closed）。`GATE_TIMEOUT` は**テスト用に上書き可能**（例 `GATE_TIMEOUT=1` で timeout 系 TC を高速化） |
+| `run_declared_gates <auto_test_file>` | 宣言ゲートを分類・実走し、**グローバル変数 `GATE_EVIDENCE`（証跡 markdown）・`GATE_VERDICT`（OK/BLOCKER）を設定**する。**コマンド置換 `$()` で呼ばない**（サブシェルだとグローバル設定が呼び出し元へ伝播しない・W1）。呼び出しは `run_declared_gates "$f"` 直呼び |
+| `omission_lint <auto_test_file>` | 宣言セクション**外**の **fenced ```bash/```sh ブロック**に allowlist ゲートパターンがあれば `HIGH`、なければ `OK`。**インライン backtick・Markdown テーブルセル・散文・heavy のみブロックは非検出**（TC 記述文中のコマンド文字列で自傷 HIGH しない・W4） |
 | `verdict_rank <v>` / `combine_verdict <v...>` | `BLOCKER>HIGH>OK` の順位で最大の VERDICT を返す |
 
 **classify_gate 判定順（重要・分岐順で挙動が変わる。HEAVY は先頭コマンド anchored＝部分一致にしない）**:
@@ -76,6 +76,8 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 3. 上記いずれにも該当しない（破壊系・チェーン付き・未知）→ `UNSAFE`（実走しない）。
 
 > doc-sync ゲートは plain grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`grep -L 文言 file`（file が文言を含まないとき exit0=合格・含むと exit1＝I080 型の混入を捕捉）。`!`/`grep -v`＋チェーンを使わず allowlist に収める。
+
+> **omission_lint の走査スコープ（W4 対策・自傷回避）**: 対象は宣言セクション外の **fenced ```bash/```sh コードブロック内の行のみ**。Markdown テーブルセルやインライン backtick（TC 記述中の `` `bash scripts/…` `` 等の文字列）・散文は**走査しない**。これにより本 auto_test.md 自身（TC テーブルにコマンド文字列を多数含む）がドッグフーディング実走時に自傷 HIGH しない。実装は「宣言セクション除外 → 残りから ``` フェンス内行のみ抽出 → allowlist パターン grep」。
 
 **run_declared_gates の verdict 集約**:
 - `ALLOW` を実走し exit≠0 が 1 件でもあれば `GATE_VERDICT=BLOCKER`（fail-closed）
@@ -88,8 +90,9 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 AUTO_TEST_FILE=$(find_file "tests" "${ISSUE}_auto_test.md")
 GATE_VERDICT=OK; OMISSION_VERDICT=OK; GATE_EVIDENCE="(決定論ゲート宣言なし)"
 if [ -n "$AUTO_TEST_FILE" ]; then
-  GATE_EVIDENCE=$(run_declared_gates "$AUTO_TEST_FILE")   # GATE_VERDICT を設定
-  OMISSION_VERDICT=$(omission_lint "$AUTO_TEST_FILE")
+  # 直呼び（$() を使わない）: run_declared_gates が GATE_EVIDENCE / GATE_VERDICT をグローバル設定（W1）
+  run_declared_gates "$AUTO_TEST_FILE"
+  OMISSION_VERDICT=$(omission_lint "$AUTO_TEST_FILE")   # omission_lint は HIGH/OK を stdout 返しなので $() 可
 fi
 ```
 `CONTEXT` に証跡セクションを追加（LLM 文脈への事前注入・叙述整合）:
@@ -110,6 +113,7 @@ inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_V
 ### 4-3. `.claude/review-agents/code-reviewer.md`
 「レビュー観点 > テスト妥当性」節付近と「出力フォーマット」節に追記:
 - 「**決定論ゲートは注入済みの実 exit code を使い、Read/Grep の読解で PASS と断定しない**。証跡（コマンド＋exit code）を受け入れ条件照合の備考に併記する。スクリプトが実走・注入した `### 決定論ゲート実行結果` を上書き・無視しない」
+- 追記前に既存の VERDICT 説明・判定根拠節を Read し、「LLM 独自判定を記録の根拠にしない（注入済み実結果を優先）」と矛盾する記述がないことを確認して整合させる（Info I2）。
 
 ### 4-4. `docs/tests/templates/auto_test_template.md`
 機械可読セクション規約を追加（既存の heavy 例示ブロックは残置＝P1 で omission 非検出を保証）:
@@ -187,3 +191,6 @@ bash scripts/claude/tests/test_xxx.sh
 ⏸️ **承認待ち中**: 実際の修正作業は開始しません
 ✅ 承認いただけましたら「OK」または「承認」とお答えください
 ❌ 修正が必要でしたら具体的な指示をお願いします
+
+## レビュー結果
+- [20260701_2243 判定: ✅ 完了](../../reviews/I084_plan_review_20260701_2243.md)

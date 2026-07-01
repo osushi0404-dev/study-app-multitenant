@@ -16,16 +16,17 @@
 - [ ] HEAVY は先頭コマンド判定（部分一致でない）: `grep -q "npm test done" log` は ALLOW（false-negative 回帰・TC-CL9）
 - [ ] allowlist は `bash scripts/claude/tests/*.sh` / `grep ` / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile ` のみ、かつチェーンメタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）なしのときのみ ALLOW
 - [ ] doc-sync ゲートは plain grep（存在=`grep -q` / 不在=`grep -L`）で allowlist に収まる
-- [ ] `run_one_gate`: `timeout 120 bash -c` で実走し exit code を返す（command not found / timeout も非ゼロ）
-- [ ] `run_declared_gates`: ALLOW 実走・exit≠0 で `GATE_VERDICT=BLOCKER`・UNSAFE も BLOCKER・HEAVY は委譲記録（FAIL でない）
-- [ ] `run_declared_gates`: UNSAFE を `bash -c` に渡さない（破壊系非実走・TC-RUN8）
-- [ ] `omission_lint`: 宣言セクション外の allowlist パターン行のみ HIGH・heavy/裸語は非検出
+- [ ] `run_one_gate`: `timeout "${GATE_TIMEOUT:-120}" bash -c` で実走し exit code を返す（command not found / timeout も非ゼロ・GATE_TIMEOUT はテスト上書き可）
+- [ ] `run_declared_gates`: **グローバル `GATE_EVIDENCE`/`GATE_VERDICT` を設定**（`$()` で呼ばない＝W1 サブシェル回避）。ALLOW 実走・exit≠0 で BLOCKER・UNSAFE も BLOCKER・HEAVY は委譲記録（FAIL でない）
+- [ ] `run_declared_gates`: UNSAFE を `bash -c` に渡さない（破壊系非実走・TC-RUN8 で GATE_VERDICT=BLOCKER も assert）
+- [ ] `omission_lint`: 宣言セクション外の **fenced ```bash/```sh ブロック内**の allowlist パターンのみ HIGH。**テーブルセル/インライン backtick/散文/heavy は非検出**（W4 自傷回避・TC-OM7/8）
 - [ ] `verdict_rank` / `combine_verdict`: `BLOCKER>HIGH>OK` の最大選択
 - [ ] `inject_gate_result`: 末尾 `^VERDICT:` を FINAL に置換＋証跡見出しを prepend
 
 ### scripts/claude/code-review.sh — 本体配線
-- [ ] `claude -p` 前に `run_declared_gates` / `omission_lint` を実行し CONTEXT へ証跡注入
+- [ ] `claude -p` 前に `run_declared_gates`（直呼び）/ `omission_lint` を実行し CONTEXT へ証跡注入
 - [ ] `claude -p` 保存後に `combine_verdict` → `inject_gate_result` で VERDICT 決定論上書き
+- [ ] **実行順序**: `run_declared_gates` < `claude -p` < `inject_gate_result`（TC-WIRE3 行番号単調増加）
 - [ ] 既存 `case "$(detect_code_verdict "$REVIEW_FILE")"` を変更していない（書換え後の値を読む）
 - [ ] `commit_review_artifact` / PR コメント投稿 / ブランチガードが無回帰
 

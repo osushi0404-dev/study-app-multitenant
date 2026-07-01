@@ -30,6 +30,7 @@ fixture = `## 決定論ゲート（自動実走）` 見出し＋ ```bash ブロ�
 | TC-CL2 | `grep -q "後続イシューで根治予定" docs/x.md` | `ALLOW` |
 | TC-CL3 | `python3 -m json.tool .claude/settings.json` | `ALLOW` |
 | TC-CL4 | `bash -n scripts/claude/code-review.sh` | `ALLOW` |
+| TC-CL4b | `python3 -m py_compile scripts/x.py` | `ALLOW`（allowlist・W3） |
 | TC-CL5 | `grep -L "禁止パターン" docs/x.md` | `ALLOW`（不在検証も plain grep） |
 | TC-CL6 | `docker compose exec backend python -m pytest` | `HEAVY`（先頭 docker） |
 | TC-CL7 | `npm test -- --watchAll=false` | `HEAVY`（先頭 npm） |
@@ -52,7 +53,8 @@ temp repo/ファイルを立て、実在する軽量スクリプトと壊れた�
 | TC-RUN5 | run_declared_gates: ALLOW に 1 件 FAIL 含む | `GATE_VERDICT=BLOCKER` |
 | TC-RUN6 | run_declared_gates: UNSAFE を含む宣言 | `GATE_VERDICT=BLOCKER`（検証不能を OK にしない）・証跡に「実走対象外」 |
 | TC-RUN7 | run_declared_gates: HEAVY のみ | `GATE_VERDICT=OK`・証跡に「/test に委譲」（FAIL でない） |
-| TC-RUN8 | **破壊系非実走の実証**: 宣言に `rm -f <sentinel>` を入れ run_declared_gates 実行後、sentinel が**消えていない** | sentinel 実在（UNSAFE は bash -c に渡らない＝安全境界） |
+| TC-RUN8 | **破壊系非実走の実証**: 宣言に `rm -f <sentinel>` を入れ run_declared_gates 実行後 | sentinel が**消えていない**（実在）**かつ** `GATE_VERDICT=BLOCKER`（UNSAFE は bash -c に渡らない＝安全境界・I1） |
+| TC-RUN9 | **timeout 超過 fail-closed（AC3）**: `GATE_TIMEOUT=1` で ALLOW 相当に `grep`… ではなく実走がハングする fixture（`bash scripts/claude/tests/<sleepする一時テスト>.sh`）を宣言し run_declared_gates | `run_one_gate` 非ゼロ（124=timeout）→ `GATE_VERDICT=BLOCKER`（高速化のため `GATE_TIMEOUT=1`＋`sleep 5` 相当） |
 
 ## D. verdict_rank / combine_verdict（VERDICT 合成）
 | TC | 入力 | 期待 |
@@ -63,15 +65,18 @@ temp repo/ファイルを立て、実在する軽量スクリプトと壊れた�
 | TC-CB4 | `combine_verdict OK OK BLOCKER`（LLM のみ BLOCKER） | `BLOCKER` |
 | TC-CB5 | gate=BLOCKER・llm=OK（**false-green 注入**の中核） | `BLOCKER`（LLM の OK を決定論で上書き） |
 
-## E. omission_lint（宣言漏れ検出・P1 精度）
+## E. omission_lint（宣言漏れ検出・P1 精度・W4 走査スコープ）
+走査対象は宣言セクション外の **fenced ```bash/```sh ブロック内行のみ**。テーブルセル・インライン backtick・散文は非走査。
 | TC | fixture | 期待 |
 |----|---------|------|
-| TC-OM1 | 宣言セクション外に `bash scripts/claude/tests/foo.sh` | `HIGH` |
-| TC-OM2 | 宣言セクション外に `grep -q pat docs/x.md`（TC 判定行） | `HIGH` |
-| TC-OM3 | 宣言セクション外に **heavy のみ**（`docker compose ... pytest` / `npm test`） | `OK`（heavy は omission でない・**自傷 HIGH を出さない**） |
-| TC-OM4 | 散文中に裸の語「grep で確認」（`-q ... file` 形でない） | `OK`（非検出） |
+| TC-OM1 | 宣言セクション外の **fenced ```bash ブロック**に `bash scripts/claude/tests/foo.sh` | `HIGH` |
+| TC-OM2 | 宣言セクション外の **fenced ```bash ブロック**に `grep -q pat docs/x.md` | `HIGH` |
+| TC-OM3 | 宣言セクション外の fenced ブロックに **heavy のみ**（`docker compose ... pytest` / `npm test`） | `OK`（heavy は omission でない・自傷 HIGH を出さない） |
+| TC-OM4 | 散文中に裸の語「grep で確認」（fenced でない・`-q ... file` 形でない） | `OK`（非検出） |
 | TC-OM5 | 宣言セクション**内**にのみ allowlist 行（外に無し） | `OK` |
 | TC-OM6 | auto_test テンプレートの例示 heavy ブロック相当 | `OK`（P1 の自傷回帰） |
+| TC-OM7 | **W4 自傷回帰**: 宣言セクション外の **Markdown テーブルセル/インライン backtick**に `` `bash scripts/claude/tests/x.sh` `` `` `grep -q pat file` `` を含む（＝本 auto_test.md の TC テーブル構造と同型） | `OK`（テーブルセルは走査せず**自傷 HIGH を出さない**） |
+| TC-OM8 | **ドッグフーディング実データ**: `docs/tests/open/I084_auto_test.md` 自身に `omission_lint` を適用 | `OK`（宣言セクション外に allowlist を含む fenced ブロックが無い＝本書自身が自傷しない） |
 
 ## F. inject_gate_result / 本体配線（無回帰・上書き）
 | TC | シナリオ | 期待 |
@@ -81,6 +86,8 @@ temp repo/ファイルを立て、実在する軽量スクリプトと壊れた�
 | TC-INJ3 | inject（gate=OK・omission=OK・llm=OK） | `VERDICT: OK` のまま（正常系無改変） |
 | TC-WIRE1 | `code-review.sh` に `run_declared_gates` / `omission_lint` / `combine_verdict` / `inject_gate_result` の呼び出しが配線されている（grep） | 各呼び出しが存在（ゼロ終了） |
 | TC-WIRE2 | 既存 `test_review_verdict.sh` 全 TC | PASS 維持（find_file/find_plan_file/detect_code_verdict 無回帰） |
+| TC-WIRE3 | **実行順序（W5）**: `grep -n` の行番号で `run_declared_gates` < `claude -p`（証跡の事前注入）< `inject_gate_result`（保存後の上書き）の順序を検証 | 行番号が単調増加（順序が逆転すると FAIL） |
+| TC-WIRE4 | `run_declared_gates` が `code-review.sh` 本体で **`$()` を使わず直呼び**されている（W1 サブシェル回避）grep | `GATE_EVIDENCE=$(run_declared_gates` の形が**存在しない**こと（非該当＝ゼロ終了で確認） |
 
 ## G. I080 回帰（false-green の実走検出・AC4）
 `claude-code-structure.md` 型の doc-sync ゲートを再現する。doc-sync ゲートは plain grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`grep -L 文言 file`（file が文言を含まないとき exit0=合格・含むと exit1）。旧 false-green（未実走で PASS 断定）が本改修で実走 FAIL→BLOCKER になることを固定する。
