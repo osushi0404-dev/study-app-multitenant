@@ -161,9 +161,11 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 `git push` は安全な feature push を allow（確認なし）にする一方、**保護ブランチ（develop/main）を宛先とする push はフックが danger-op として既定で block（exit 2）**する。宛先トークンを正規化（先頭 `+` 除去・`src:dst` の dst 採用・`refs/heads/` 除去・`HEAD` は現ブランチ解決）して完全一致判定するため、引数なし push（保護ブランチ上）・refspec・force-shorthand・完全修飾 ref・`--all`/`--mirror`・`--repo` まで一括で捕捉する。release/hotfix の正当なローカル push のみ `DANGER_OK=1`（＋計画書明記＋danger-approved）で解除可。`deny` はテキストで自明な形のバックストップとして残す。
 
-> **既知の限界（静的形のみ・後続イシューで根治予定）**: 本ガードはコマンド**実行前の生コマンド文字列**を静的に解析する。次の2クラスは現状すり抜ける。
-> - **動的宛先**: コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}`／git エイリアス間接参照（`-c alias.x=...`）／`eval`・`sh -c`・`bash -c` ラッパー等、実行時にしか宛先が確定しない形（例: `git push origin $(git rev-parse --abbrev-ref HEAD)` を develop 上で実行すると現状すり抜ける）。
-> - **force push の取りこぼし**: force 判定が先頭アンカー＋`--force` 文字列限定のため、`-f` 短縮形（`git push -f origin x`）・複合コマンド（`cd foo && git push --force ...`）で非保護ブランチへの force push が DANGER_OK ゲートを回避する。
+> **動的宛先・force 取りこぼしへの対応（I083 で対応済み）**: 本ガードはコマンド**実行前の生コマンド文字列**を静的に解析する。かつて以下の2クラスがすり抜けたが、I083 で根治した。
+> - **動的宛先 → ask に degrade**: コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}`／git エイリアス間接参照（`-c alias.x=...`）／`eval`・`sh -c`・`bash -c` ラッパー等、実行時にしか宛先が確定しない形（例: `git push origin $(git rev-parse --abbrev-ref HEAD)`）は、宛先を安全と断言できないため **ask（確認プロンプト）に degrade** する（hard block ではなく人へ委ねる）。ラッパー検出は `_segments` の先頭トークンによる**構造的**判定で、`bash-feature` 等のブランチ/remote 名の偶然一致では誤発火しない。
+> - **force push の取りこぼし → pure `_segments` で捕捉**: force 判定を `_push_has_force`（push セグメントのトークン走査）に置換し、`-f`/`-uf`/`--force-with-lease`/`--force-if-includes`・複合コマンド（`cd foo && git push --force ...`）を捕捉する。旧 `re.match` の潜在誤 block（`git push origin feature; echo "--force"` 等の安全 push を誤遮断）も解消した。
+> - **残余の既知限界（脅威モデル外）**: push トークンを**完全に隠蔽**する偽装形（`eval "$VAR"`／`sh -c "$CMD"` で push がコマンド文字列に一切現れない）は検知対象外。本ガードの脅威モデルは「事故による protected/force push の防止」であり、意図的な難読化は対象としない（`DANGER_OK=1` の解除導線と同様に運用者の責任に委ねる）。
+> - **既知の残課題（I088 で対応予定）**: `--all`/`--mirror`/`--repo` の判定は現状まだ貪欲正規表現（`.*` がシェル区切りを跨ぐ）のため、複合コマンド（例 `git push origin feature && ls --all`）で無関係な後続トークンに一致し安全 push を誤 block し得る。force と同型の兄弟バグで、I088(#172) が同一修正（`_segments` 化）で根治予定。
 
 ---
 
