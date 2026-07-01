@@ -93,6 +93,9 @@ classify_gate() {
   case "$cmd" in
     *';'*|*'|'*|*'&'*|*'`'*|*'$('*|*'>'*) echo UNSAFE; return;;
   esac
+  # パストラバーサル拒否: case glob の `*` は `/` にもマッチするため、allowlist の
+  # `bash scripts/claude/tests/*.sh` 経由で `.../../evil.sh` を実走させない（安全境界）。
+  case "$cmd" in *'../'*) echo UNSAFE; return;; esac
   # 3. allowlist 前方一致（副作用なし読み取り系）→ ALLOW
   case "$cmd" in
     bash\ scripts/claude/tests/*.sh|bash\ scripts/claude/tests/*.sh\ *) echo ALLOW; return;;

@@ -73,6 +73,7 @@ code-review 記録 `docs/reviews/I080_code_review_20260629_0101.md` は AC#11 �
 1. **HEAVY（先頭コマンド anchored）**: 先頭トークンが heavy ツール（`docker` / `docker-compose` / `npm` / `npx` / `pytest` / `python -m pytest` / `python3 -m pytest` / `jest` / `playwright`）または `manage.py test` を含む invocation → `HEAVY`（実走しないのでチェーン有無は不問）。
    - **anchored の理由**: 部分一致にすると `grep -q "npm test done" build.log`（引数に heavy 語を含む正当な grep ゲート）が HEAVY 誤判定で**実走されず沈黙スキップ＝false-negative（gate 取りこぼし）**になる。先頭コマンドで判定してこれを防ぐ。
 2. **allowlist 前方一致 ＋ チェーンメタ文字なし** → `ALLOW`。allowlist＝`bash scripts/claude/tests/*.sh` / `grep ` / `! grep `（不在検証） / `python3 -m json.tool` / `bash -n ` / `python3 -m py_compile `。チェーン系メタ文字（`;` `&&` `||` `|` `` ` `` `$(` `>`）を含む場合は ALLOW にせず 3 へ（**実行する ALLOW のみメタ文字ガードを課す＝安全境界**）。
+2.5. **パストラバーサル拒否**: `case` glob の `*` は `/` にもマッチするため、`../` を含む行は `UNSAFE`（`bash scripts/claude/tests/*.sh` 経由で `.../../evil.sh` を実走させない安全境界・code-review Medium 対応・TC-CL15）。
 3. 上記いずれにも該当しない（破壊系・チェーン付き・未知）→ `UNSAFE`（実走しない）。
 
 > doc-sync ゲートは grep で表現する: **存在**=`grep -q 文言 file`（exit0=合格）、**不在**=`! grep -q 文言 file`（file が文言を含まないとき grep exit1→`!`で exit0=合格・含むと exit0→`!`で exit1＝I080 型の混入を捕捉）。allowlist に `! grep …` を含める（`!` は grep の否定のみで安全）。※ `grep -L` は exit status が「pattern が見つかったか」に従い**不在検証には使えない**ため採用しない（実測で確認済み）。
