@@ -108,5 +108,8 @@ exit $fail
 - **TC-A14**: `.env` と `insecure|既定` の独立 grep を **近接一致** `grep -A3 '\.env' | grep 'insecure|既定'` に厳格化。デコイ（`.env` と `insecure` を 5 行離す）で **NG**、正フィクスチャで OK を確認。
 - **TC-A12**（Info）: 非対称な `<トラック` を削除し、実際に使うプレースホルダ `<track>`/`<番号>` に限定。
 
-### `/test` 実行（実装後）
-- （`/implement` 後に `/test` で実行し、`RESULT: ALL PASS` を記入）
+### 実装時検証（2026-07-02・/implement）
+- 実装（worktree.md 作成・CLAUDE.md 追記）後に全 TC を本番ファイルに対して実行 → **`RESULT: ALL PASS`（exit=0, A1〜A14）**。RED（実装前 全 NG）→ GREEN（実装後 全 OK）の遷移を確認。TC-A11 も追加した worktree.md 参照が解決（リンク切れ 0）。
+
+### `/test` 実行（環境パリティ最終確認）
+- （`/test` で再実行し `RESULT: ALL PASS` を記入）
