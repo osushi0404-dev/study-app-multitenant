@@ -238,4 +238,11 @@ echo "[wt-new] ポート割当: offset=$OFFSET db=$((BASE_DB+OFFSET)) redis=$((B
 5. **セキュリティ影響なし**の判定（インフラ設定のみ・アプリコード不変）に同意いただけるか。
 
 ## レビュー結果
-- [20260702_2215 判定: ✅ 完了](../../reviews/I097_plan_review_20260702_2215.md)
+- [20260702_2215 判定: ✅ 完了](../../reviews/closed/I097_plan_review_20260702_2215.md)
+
+## 完了情報
+- **完了日時**: 2026-07-02
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review OK / code-review OK・高リスク No）
+- **テスト**: 自動 test_wt_port_offset.sh 34/34・test_compose_ports.sh 13/13・回帰 test_wt_lifecycle.sh 55/55、手動 No1〜8 OK（No7/No8 は実機 2 スタック同時 up スモーク）
+- **逸脱対応**: `.env.example`（deny ガード）→ runbook 集約／wt-new の `.env` 生成に伴う既存 fixture 整合（いずれも計画反映・承認済み）
