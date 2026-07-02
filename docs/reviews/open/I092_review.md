@@ -1,0 +1,36 @@
+# I092 レビュー: worktree ベースの並行トラック運用を runbook 化
+
+## レビュー対象
+- `docs/runbooks/worktree.md`（新規作成）
+- `CLAUDE.md`（「0. 参照先」運用・ルール: に worktree.md 参照 1 行追加）
+- 計画書 `docs/plans/open/plan_I092.md`
+- テスト文書 `docs/tests/open/I092_auto_test.md` / `I092_manual_test.md`
+
+## 変更概要
+- worktree 並行トラック運用の手順を runbook 化（ベースブランチ選択・トラック/ブランチ設計・独立セッション起動・新 worktree セットアップ・共有/非共有・採番一貫性・セッション間引き継ぎ原則・現構成の参考例）。
+- CLAUDE.md の参照先に 1 行追加（実体は runbook、CLAUDE.md にはルールを増やさない方針に準拠）。
+
+## 影響範囲
+- Backend/Frontend/DB: なし
+- Config/Infra: `docs/runbooks/worktree.md`（新規）・`CLAUDE.md`（参照 1 行）
+
+## レビュー観点（実装後に確認）
+- [ ] AC 全 7 項目を満たす（自動 TC-A1〜A12 が ALL PASS）
+- [ ] 再発防止: ベースブランチ＝develop・main を使わない旨が runbook に明記（TC-A3）
+- [ ] CLAUDE.md 参照行のリンク切れ 0（TC-A11）
+- [ ] 手順本文が一般表現＋参考例の 2 層（TC-A12）／固有値が参考表に隔離
+- [ ] 計画書に無い実装・仕様追加が入っていない（docs 2 ファイルのみの変更）
+- [ ] 設計確認メモ（/grill-me）の確定値と runbook 記載が矛盾しない（wt-app 新設なし・アプリ開発=study-app-multitenant 等）
+
+## テスト結果
+- 自動: 実装前 false-green 検証済み（RED→フィクスチャ GREEN で全 TC の反転を実証）。実装後 `/test` で ALL PASS を記録予定。
+- 手動: `/test` でユーザー確認（No.6 の可読性のみ Human）。
+
+## セキュリティ影響
+- なし（コード変更なし。docs 追加のみ）。
+
+## 計画との差分
+- （実装後に記入）
+
+## ロールバック
+- `git` で worktree.md 追加・CLAUDE.md 差分を復元可能。破壊的操作なし。
