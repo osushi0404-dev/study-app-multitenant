@@ -12,13 +12,13 @@ pytest / npm test の対象コード変更は無い。本イシューの受け�
 |----|---------|---------|---------|
 | TC-A1 | worktree.md が存在する | AC1 | `test -f` |
 | TC-A2 | `git worktree add`/`list`/`remove` が記載 | AC1 | grep（3 語すべて） |
-| TC-A3 | ベースブランチ＝develop・main を使わない旨が記載（再発防止） | AC1 | grep（`develop` かつ `main`） |
+| TC-A3 | ベースブランチ＝develop・main を使わない旨が記載（再発防止） | AC1 | grep（`develop` かつ `main` の**文脈アンカー** `main.{0,4}(は\|を\|初期\|ブランチ\|使わ)`。`domain`/`remains` 等の部分一致を排除） |
 | TC-A4 | トラック/ブランチ設計（トラック=worktree・イシュー=ブランチ、study-app-multitenant/wt- 命名） | AC1 | grep |
 | TC-A5 | 独立セッション起動（Cursor 別ウィンドウ + 同一フォルダ再オープンの落とし穴） | AC2 | grep（`ウィンドウ` かつ `再オープン`/`フォーカス`） |
 | TC-A6 | 新 worktree セットアップ手順（`docker compose up` + backend `.env` コピー。venv/pip/npm は非使用） | AC3 | grep（`docker compose up` かつ `.env`） |
 | TC-A7 | 共有/非共有一覧（node_modules はコンテナ管理・`.claude/settings.json` 共有・dev DB は Postgres） | AC4 | grep（`node_modules` かつ `settings.json` かつ `Postgres`） |
 | TC-A13 | 並行実行の衝突（ホスト固定ポート衝突・`COMPOSE_PROJECT_NAME`） | AC(並行衝突) | grep（`COMPOSE_PROJECT_NAME` かつ `5432`/`ポート`） |
-| TC-A14 | `.env` 欠落の静かな insecure 既定起動の警告（安全性） | AC3 | grep（`.env` かつ `insecure`/`既定`） |
+| TC-A14 | `.env` 欠落の静かな insecure 既定起動の警告（安全性） | AC3 | **近接** grep（`.env` 行の -A3 近傍に `insecure`/`既定`。分散配置での誤通過を排除） |
 | TC-A8 | 採番一貫性（untracked が worktree 間で不可視） | AC5 | grep（`untracked` かつ `採番`） |
 | TC-A9 | セッション間引き継ぎ＝ファイル経由・自己完結の原則 | AC6 | grep（`引き継ぎ`/`引継ぎ` かつ `自己完結`） |
 | TC-A10 | CLAUDE.md に worktree.md 参照 1 行が追加 | AC7 | grep |
@@ -43,8 +43,8 @@ test -f "$RB" && ok "TC-A1 worktree.md 存在" || ng "TC-A1 worktree.md 不在"
 # TC-A2
 if grep -q 'git worktree add' "$RB" && grep -q 'worktree list' "$RB" && grep -q 'worktree remove' "$RB"; then ok "TC-A2 add/list/remove"; else ng "TC-A2 add/list/remove 記載不足"; fi
 
-# TC-A3 (再発防止: develop 基点 / main を使わない)
-if grep -q 'develop' "$RB" && grep -Eq 'main' "$RB"; then ok "TC-A3 ベースブランチ develop / main 注意"; else ng "TC-A3 develop/main 記載不足"; fi
+# TC-A3 (再発防止: develop 基点 / main を使わない) ※main は文脈アンカーで部分一致(domain/remains 等)を排除
+if grep -q 'develop' "$RB" && grep -Eq 'main.{0,4}(は|を|初期|ブランチ|使わ)' "$RB"; then ok "TC-A3 ベースブランチ develop / main 注意"; else ng "TC-A3 develop/main 記載不足"; fi
 
 # TC-A4
 if grep -q 'study-app-multitenant' "$RB" && grep -q 'wt-' "$RB" && grep -Eq 'ブランチ' "$RB"; then ok "TC-A4 トラック/ブランチ設計"; else ng "TC-A4 トラック/ブランチ設計 不足"; fi
@@ -61,8 +61,8 @@ if grep -q 'node_modules' "$RB" && grep -q 'settings.json' "$RB" && grep -Eq 'Po
 # TC-A13 (並行衝突: 固定ポート + COMPOSE_PROJECT_NAME)
 if grep -q 'COMPOSE_PROJECT_NAME' "$RB" && grep -Eq '5432|ポート' "$RB"; then ok "TC-A13 並行ポート衝突"; else ng "TC-A13 並行ポート衝突 不足"; fi
 
-# TC-A14 (.env 欠落の静かな insecure 既定起動の警告)
-if grep -Eq '\.env' "$RB" && grep -Eq 'insecure|既定' "$RB"; then ok "TC-A14 .env 静かな insecure 既定 警告"; else ng "TC-A14 .env 警告 不足"; fi
+# TC-A14 (.env 欠落の静かな insecure 既定起動の警告) ※近接一致: .env 行の近傍に警告があること
+if grep -A3 -E '\.env' "$RB" 2>/dev/null | grep -Eq 'insecure|既定'; then ok "TC-A14 .env 静かな insecure 既定 警告"; else ng "TC-A14 .env 警告 不足"; fi
 
 # TC-A8
 if grep -q 'untracked' "$RB" && grep -q '採番' "$RB"; then ok "TC-A8 採番一貫性"; else ng "TC-A8 採番一貫性 不足"; fi
@@ -81,7 +81,7 @@ done
 [ "$miss" -eq 0 ] && ok "TC-A11 参照先リンク切れ 0" || ng "TC-A11 リンク切れあり"
 
 # TC-A12 (一般表現 + 参考の 2 層)
-if grep -Eq '<track>|<番号>|<トラック' "$RB" && grep -q '参考' "$RB"; then ok "TC-A12 一般表現+参考例 2層"; else ng "TC-A12 一般表現/参考例 不足"; fi
+if grep -Eq '<track>|<番号>' "$RB" && grep -q '参考' "$RB"; then ok "TC-A12 一般表現+参考例 2層"; else ng "TC-A12 一般表現/参考例 不足"; fi
 
 echo "----"
 [ "$fail" -eq 0 ] && echo "RESULT: ALL PASS" || echo "RESULT: FAIL"
@@ -101,6 +101,12 @@ exit $fail
 - **RED（実リポジトリ・実装前）**: 内容系 TC（A1〜A10・A13・A12）= NG（worktree.md 未作成・CLAUDE.md 未追加を正しく検出）、TC-A11 = OK（現行 CLAUDE.md 参照は全件実在）。→ `RESULT: FAIL / exit=1`。内容系ゲートが always-green でないことを確認。
 - **GREEN（充足フィクスチャ）**: A1〜A10・A13・A12 = OK に反転（内容を満たせば合格）。TC-A11 は「参照行はあるが実ファイル未作成」のフィクスチャで NG を検出（リンク切れ捕捉能力を確認 → 実装ステップ2 をステップ1 の後に行う依存順序の妥当性を裏付け）。
 - 結論: 全 TC（A1〜A14）が対象の有無に応じて OK/NG を反転する決定論ゲートであることを実証済み（Docker 是正後の TC-A6=docker compose/TC-A7=Postgres/TC-A13=ポート衝突/TC-A14=.env 静かな insecure 既定警告 も RED→GREEN 反転を確認）。
+
+### plan-issue-review 指摘（Warning 2件）への対応と decoy 反証（2026-07-02）
+独立プランレビュー（判定: OK）で指摘された false-green 弱点 2 件を修正し、デコイで反証可能性を実証:
+- **TC-A3**: `grep 'main'` の部分一致を文脈アンカー `main.{0,4}(は|を|初期|ブランチ|使わ)` に厳格化。デコイ（`domain`/`remains`/`maintain` を含むが main 警告を欠く）で **NG**、正フィクスチャで OK を確認（`domain` 誤通過を排除）。
+- **TC-A14**: `.env` と `insecure|既定` の独立 grep を **近接一致** `grep -A3 '\.env' | grep 'insecure|既定'` に厳格化。デコイ（`.env` と `insecure` を 5 行離す）で **NG**、正フィクスチャで OK を確認。
+- **TC-A12**（Info）: 非対称な `<トラック` を削除し、実際に使うプレースホルダ `<track>`/`<番号>` に限定。
 
 ### `/test` 実行（実装後）
 - （`/implement` 後に `/test` で実行し、`RESULT: ALL PASS` を記入）
