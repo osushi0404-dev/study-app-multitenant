@@ -19,7 +19,7 @@ worktree の作成・撤去 lifecycle をスクリプト化し、`worktree.md` �
 - 手動テスト（Claude 実施のファイル・構文・runbook 確認）OK
 
 ## 変更概要
-（実装後に記入）`scripts/claude/wt-new.sh` / `wt-remove.sh` を新規追加し、worktree lifecycle の foot-gun を機械化。`test_wt_lifecycle.sh`（temp repo + docker スタブ）で決定論検証。`worktree.md` §3/§5 をスクリプト利用手順に更新（手動は fallback 保持）。
+`scripts/claude/wt-new.sh` / `wt-remove.sh` を新規追加し、worktree lifecycle の foot-gun を機械化。`test_wt_lifecycle.sh`（temp repo + docker スタブ）で決定論検証。`worktree.md` §3/§5 をスクリプト利用手順に更新（手動は fallback 保持）。
 
 ## 変更点
 - `scripts/claude/wt-new.sh`（新規）
@@ -32,13 +32,17 @@ worktree の作成・撤去 lifecycle をスクリプト化し、`worktree.md` �
 - Config/Infra: 上記 4 ファイル
 
 ## 実装結果評価
-（実装後に記入）
+- 計画書 §4-1/§4-2/§4-3/§4-4 のとおり実装。TDD（Red: 43 fail → Green: 55 PASS）で進行。
+- plan-review 指摘（W1 CWD 内側ガード・W2 `--env-source` 値検査・W4 down 失敗案内・Info6 未コミットチェックの fail-safe）を実装に反映し、TC-R7/N10/R8 で回帰検証。
+- code-review（VERDICT: OK・高リスク No）の Low 指摘（恒真な `SRC_ROOT` 非空チェック）を修正済み。
 
 ## テスト結果
-（実装後に記入）
+- 自動: `test_wt_lifecycle.sh` **55/55 PASS**（2026-07-02）。決定論ゲート 5/5 exit=0（lifecycle test・`bash -n` wt-new/wt-remove・runbook grep wt-new/wt-remove）。pytest/Jest/E2E は非該当（アプリコード変更なし）。false-green 注入 TC-FG1/FG2 で否定・停止ガードの実効性を反証。
+- 手動: `I096_manual_test.md` 全 6 項目 Claude 実施・**OK**（ファイル存在/実行ビット・`bash -n`・テスト全 PASS・no-arg Usage・runbook §3/§5・DANGER_OK/未 push 実装確認）。Human 専用項目なし。
+- pre-commit（shellcheck 含む）PASS。code-review VERDICT: OK。
 
 ## 計画との差分
-（実装後に記入）
+- なし（plan-review・code-review 指摘反映はいずれも計画書へ同時更新済みのため計画一致）。SRC_ROOT の e2e 導出を `cd/pwd` から `dirname` 二重に簡素化（SC2015 回避・plan §4-1 へ同時反映）。
 
 ## ロールバック
 - 新規 3 ファイルを削除し `worktree.md` §3/§5 の追記を revert すれば従来の手動運用に戻る（DB・外部状態の永続変更なし・テストは temp repo と docker スタブのみ）。
