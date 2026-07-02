@@ -38,8 +38,8 @@ PreToolUse フック `pretooluse_guard.py` に「対象パスが別 worktree ル
 - plan-review 指摘（W1 付着形/埋め込みリダイレクト・Info fail-safe on パス未取得）も実装に反映済み。
 
 ## テスト結果
-- 自動: `test_pretooluse_worktree_guard.sh` **26/26 PASS**。回帰 `test_pretooluse_checkout_guard.sh`・`test_pretooluse_push_guard.sh` PASS。`py_compile`・`json.tool` OK。pre-commit（shellcheck 含む）PASS。
-- 手動:（`/test` 後に記入。TC-M1〜M5 はプレーン default 新規セッションでの実ブロック目視が必要）
+- 自動: `test_pretooluse_worktree_guard.sh` **27/27 PASS**（TC-A23 誤警告防止追加後）。回帰 `test_pretooluse_checkout_guard.sh`・`test_pretooluse_push_guard.sh` PASS。決定論ゲート 8/8 exit=0。`py_compile`・`json.tool` OK。pre-commit（shellcheck 含む）PASS。code-review VERDICT: OK（3周で収束・Blocker/High なし）。
+- 手動: TC-M6（§9 追記確認・Claude）OK。**TC-M1〜M5 はプレーン default 新規セッションでの実ブロック目視が必要（Human・未実施）**。
 
 ## 計画との差分
 - なし（plan-review 指摘反映は計画書へ同時更新済みのため計画一致）。

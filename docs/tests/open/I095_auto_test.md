@@ -3,8 +3,10 @@
 実行は下記「決定論ゲート（自動実走）」セクションのコマンドで行う（code-review が自動実走する）。個別実行もそのコマンドを参照。
 
 結果:
-- backend: 該当なし（ハーネスフックのため）
-- frontend: 該当なし
+- backend: 該当なし（ハーネスフックのため・pytest 非該当）
+- frontend: 該当なし（Jest 非該当）
+- 専用自動テスト `test_pretooluse_worktree_guard.sh`: **27/27 PASS**（2026-07-02）
+- 決定論ゲート 8/8 exit=0（回帰 checkout/push・py_compile・json.tool・runbook/matcher grep 含む）
 
 ## テストケース一覧
 

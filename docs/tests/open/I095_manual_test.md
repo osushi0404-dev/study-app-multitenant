@@ -9,6 +9,6 @@
 | 3 | 逆方向: `study-app-multitenant`（primary）のプレーン新規セッションから `wt-harness` 配下（例 `/mnt/c/app/wt-harness/README.md`）を `Edit`／`echo x > /mnt/c/app/wt-harness/tmp_probe.txt` で書込する | いずれも `[guard]` メッセージ付きでブロックされ、`wt-harness/README.md` の内容・mtime が不変、`wt-harness/tmp_probe.txt` が作成されない（`ls` で不在確認）＝双方向に効く | プレーン default 新規セッション | Human | | TC-M3 |
 | 4 | 同セッションで別 worktree 配下を `Read`/`cat`/`grep` で読み取る | 読み取りは成功する（横断書込のみ禁止・§9 の趣旨） | プレーン default 新規セッション | Human | | TC-M4 |
 | 5 | 現 worktree 配下の通常の Edit/Write（例 現 worktree の一時ファイル）と `echo x > ./tmp_probe.txt` を行う | ブロックされずに成功し、対象ファイルが実際に作成・更新される（`cat`/`ls` で内容・mtime 変化を確認）＝誤ブロック無し | プレーン default 新規セッション | Human | | TC-M5 |
-| 6 | `docs/runbooks/worktree.md` §9 に技術強制済みの追記があることを確認する | §9 に `pretooluse_guard.py` による技術強制（exit 2・読み取り許可・fail-safe・エスケープ無し）の記述がある | 稼働中セッション | Claude | | ファイル確認で可 |
+| 6 | `docs/runbooks/worktree.md` §9 に技術強制済みの追記があることを確認する | §9 に `pretooluse_guard.py` による技術強制（exit 2・読み取り許可・fail-safe・エスケープ無し）の記述がある | 稼働中セッション | Claude | OK | L134 に記述確認済み（Edit/Write/MultiEdit/NotebookEdit・Bash 書込・双方向・fail-safe・エスケープ無し明記） |
 
 結論: OK / NG
