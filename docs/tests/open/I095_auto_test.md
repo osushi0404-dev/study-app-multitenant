@@ -1,9 +1,6 @@
 # I095 自動テスト: 別 worktree 配下への編集ハードブロック
 
-実行コマンド（例）:
-```bash
-bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
-```
+実行は下記「決定論ゲート（自動実走）」セクションのコマンドで行う（code-review が自動実走する）。個別実行もそのコマンドを参照。
 
 結果:
 - backend: 該当なし（ハーネスフックのため）
