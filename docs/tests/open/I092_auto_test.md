@@ -18,6 +18,7 @@ pytest / npm test の対象コード変更は無い。本イシューの受け�
 | TC-A6 | 新 worktree セットアップ手順（`docker compose up` + backend `.env` コピー。venv/pip/npm は非使用） | AC3 | grep（`docker compose up` かつ `.env`） |
 | TC-A7 | 共有/非共有一覧（node_modules はコンテナ管理・`.claude/settings.json` 共有・dev DB は Postgres） | AC4 | grep（`node_modules` かつ `settings.json` かつ `Postgres`） |
 | TC-A13 | 並行実行の衝突（ホスト固定ポート衝突・`COMPOSE_PROJECT_NAME`） | AC(並行衝突) | grep（`COMPOSE_PROJECT_NAME` かつ `5432`/`ポート`） |
+| TC-A14 | `.env` 欠落の静かな insecure 既定起動の警告（安全性） | AC3 | grep（`.env` かつ `insecure`/`既定`） |
 | TC-A8 | 採番一貫性（untracked が worktree 間で不可視） | AC5 | grep（`untracked` かつ `採番`） |
 | TC-A9 | セッション間引き継ぎ＝ファイル経由・自己完結の原則 | AC6 | grep（`引き継ぎ`/`引継ぎ` かつ `自己完結`） |
 | TC-A10 | CLAUDE.md に worktree.md 参照 1 行が追加 | AC7 | grep |
@@ -60,6 +61,9 @@ if grep -q 'node_modules' "$RB" && grep -q 'settings.json' "$RB" && grep -Eq 'Po
 # TC-A13 (並行衝突: 固定ポート + COMPOSE_PROJECT_NAME)
 if grep -q 'COMPOSE_PROJECT_NAME' "$RB" && grep -Eq '5432|ポート' "$RB"; then ok "TC-A13 並行ポート衝突"; else ng "TC-A13 並行ポート衝突 不足"; fi
 
+# TC-A14 (.env 欠落の静かな insecure 既定起動の警告)
+if grep -Eq '\.env' "$RB" && grep -Eq 'insecure|既定' "$RB"; then ok "TC-A14 .env 静かな insecure 既定 警告"; else ng "TC-A14 .env 警告 不足"; fi
+
 # TC-A8
 if grep -q 'untracked' "$RB" && grep -q '採番' "$RB"; then ok "TC-A8 採番一貫性"; else ng "TC-A8 採番一貫性 不足"; fi
 
@@ -96,7 +100,7 @@ exit $fail
 ### 実装前 false-green 検証（2026-07-02・計画作成時／Docker 是正版 TC で再検証）
 - **RED（実リポジトリ・実装前）**: 内容系 TC（A1〜A10・A13・A12）= NG（worktree.md 未作成・CLAUDE.md 未追加を正しく検出）、TC-A11 = OK（現行 CLAUDE.md 参照は全件実在）。→ `RESULT: FAIL / exit=1`。内容系ゲートが always-green でないことを確認。
 - **GREEN（充足フィクスチャ）**: A1〜A10・A13・A12 = OK に反転（内容を満たせば合格）。TC-A11 は「参照行はあるが実ファイル未作成」のフィクスチャで NG を検出（リンク切れ捕捉能力を確認 → 実装ステップ2 をステップ1 の後に行う依存順序の妥当性を裏付け）。
-- 結論: 全 TC が対象の有無に応じて OK/NG を反転する決定論ゲートであることを実証済み（Docker 是正後の TC-A6=docker compose/TC-A7=Postgres/TC-A13=ポート衝突 も反転を確認）。
+- 結論: 全 TC（A1〜A14）が対象の有無に応じて OK/NG を反転する決定論ゲートであることを実証済み（Docker 是正後の TC-A6=docker compose/TC-A7=Postgres/TC-A13=ポート衝突/TC-A14=.env 静かな insecure 既定警告 も RED→GREEN 反転を確認）。
 
 ### `/test` 実行（実装後）
 - （`/implement` 後に `/test` で実行し、`RESULT: ALL PASS` を記入）

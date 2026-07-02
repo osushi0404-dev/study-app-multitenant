@@ -44,6 +44,13 @@
 - `env_file: ./backend/.env`（gitignore・非共有）→ 新 worktree で**コピーが必要**。E2E は `e2e/.env.e2e`（gitignore・任意）。
 - 帰結: セットアップは「backend `.env` コピー → `docker compose up -d`」に集約し、venv/pip/npm 手順は記載しない（既存アーキと矛盾するため）。共有/非共有の説明も Docker 前提に是正する。
 
+### 敵対的検証（独立サブエージェント「合格を反証せよ」＋自己再実証）
+上記 Docker 前提を独立レビュアーに反証させた結果、**主張 6 件すべて HOLDS**（DB=Postgres・固定ポート衝突・project 名は dir 名で自動分離＝トップレベル `name:` 無し／`container_name:` 無し／override 無し・node_modules は匿名ボリューム＋Dockerfile.dev で `npm install`・backend `.env` は gitignore+env_file・CLAUDE.md の運用フロー行は先頭）。加えて runbook に取り込むべき**4 精緻化**を検出（自己再実証済み）:
+- **(A) 既定 up の衝突ポートは `5432/6379/8000/3000`**。`nginx`（80/443）は `profiles:`（production）配下で plain `docker compose up` では起動しない（docker-compose.yml:194-209 自己確認）。→ ポート列を訂正。
+- **(B) `backend/.env` は全サービス `required: false`**（docker-compose.yml:42/81/102/149）。欠落しても `up` は失敗せず、`SECRET_KEY` の insecure な既定（settings.py:17）・`DB_PASSWORD` の既定（:94）の**危険な既定値で静かに起動**する。→ 「コピー必須。欠落はエラーにならず静かに insecure 既定で動く」と警告を明記。
+- **(C) `COMPOSE_PROJECT_NAME` をシェルで global export しない**。既定（dir 名）を上書きし全 worktree が同一 project 名になると分離が壊れる。→ 注意を明記。
+- **(D) volume 掃除**: worktree ごとに named volume が増える。`git worktree remove` 前に当該ディレクトリで `docker compose down -v` を実行して回収する。→ 掃除手順を追記。
+
 ### AC の性質
 本イシューの AC は「runbook / CLAUDE.md の**記載有無**」の照合であり、lint/audit/scan の出力では決まらない（監査系ツール実走は非該当）。→ AC は grep ベースの決定論チェックで機械検証する（自動テスト文書 I092_auto_test.md）。
 
@@ -95,7 +102,9 @@ runbook は以下のセクションで構成する:
    git fetch origin
    git worktree add /mnt/c/app/wt-<track> -b feature/I<番号>-<概要> origin/develop
    git worktree list      # 一覧確認
-   git worktree remove /mnt/c/app/wt-<track>   # 作業完了後の削除
+   # 作業完了後: 先に volume を回収してから worktree を削除
+   docker compose down -v            # 当該 worktree の named volume を回収（(D)）
+   git worktree remove /mnt/c/app/wt-<track>
    ```
    - **落とし穴**: `main` は初期コミットのみ。必ず `develop` を基点にする。
 5. **独立 Claude セッションの起動**:
@@ -104,11 +113,13 @@ runbook は以下のセクションで構成する:
    - **落とし穴**: 同じフォルダを再オープンすると既存ウィンドウにフォーカスが戻るだけで新規セッションにならない。
 6. **新 worktree のセットアップ手順（Docker Compose 前提）**:
    - backend `.env` を既存 worktree からコピー（gitignore・非共有）: `cp /mnt/c/app/study-app-multitenant/backend/.env backend/.env`。E2E を行う場合は `e2e/.env.e2e` も同様に用意。
+     - **⚠️ 警告(B)**: `.env` は `env_file` で `required: false` のため、**欠落しても `up` は失敗しない**。その場合 `SECRET_KEY`/`DB_PASSWORD` が **insecure な既定値で静かに起動**する（エラーで気づけない）。必ずコピーを確認する。
    - `docker compose up -d` で起動（正準手順・テスト実行は `common-commands.md` 参照）。**ホストの `venv`/`pip install`/`npm install` は不要**（依存は image に焼き込み・`node_modules` は frontend コンテナの匿名ボリューム管理）。
    - `COMPOSE_PROJECT_NAME` は既定でディレクトリ名になるため、worktree ごとにコンテナ・named volume（Postgres データ含む）は自動分離される（追加設定不要）。
+     - **⚠️ 注意(C)**: `COMPOSE_PROJECT_NAME` を**シェルで global に export しない**こと。既定（dir 名）を上書きすると全 worktree が同一 project 名になり分離が壊れる。
 7. **並行実行の衝突（重要）**:
-   - ホスト固定ポート `5432(db)/6379(redis)/8000(backend)/3000(frontend)/80,443(nginx)` は全 worktree 共通。**2 worktree で同時に `docker compose up` するとポートが衝突**する。
-   - 対処: 現行の人手2トラック運用では**同時に up せず 1 スタックずつ**起動する（推奨）。同時起動が必要な場合のみ worktree ごとに compose override でポート＋`COMPOSE_PROJECT_NAME` を変える（override 構築は本イシュー対象外＝別イシュー化）。
+   - 既定 `docker compose up` の起動サービスはホスト固定ポート `5432(db)/6379(redis)/8000(backend)/3000(frontend)` を使い、全 worktree 共通。**2 worktree で同時に `up` するとこれらが衝突**する（`nginx` の 80/443 は `profiles: production` 配下で既定 up では起動しない）。
+   - 対処: 現行の人手2トラック運用では**同時に up せず 1 スタックずつ**起動する（推奨）。同時起動が必要な場合のみ worktree ごとに compose override でポート＋`COMPOSE_PROJECT_NAME` を変える（ポートは env テンプレート化されておらず compose ファイル編集が要るため、override 構築は本イシュー対象外＝別イシュー化）。
 8. **共有 / 非共有の一覧**:
    - **共有される**: `.git` 履歴・コミット済みファイル・`CLAUDE.md`・`docs/runbooks`・`.claude/settings.json`・tracked な `frontend/.env.*`。
    - **共有されない（手当てが要る）**: backend `.env`（要コピー）・`e2e/.env.e2e`（任意）・未コミット/untracked ファイル。
