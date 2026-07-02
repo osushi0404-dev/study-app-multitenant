@@ -31,8 +31,8 @@ Docker 前提の是正が正しいかを独立サブエージェントに「合�
 - **追加検出 4 精緻化（反映済み）**: (A) 既定 up 衝突ポートは 5432/6379/8000/3000（nginx は production profile で対象外・自己確認）／(B) `.env` 欠落は `required: false` で静かに insecure 既定起動（settings.py:17,94・自己確認）→ 警告明記＋TC-A14／(C) `COMPOSE_PROJECT_NAME` の global export 禁止／(D) 削除時 `docker compose down -v` で volume 回収。
 
 ## テスト結果
-- 自動: 実装前 false-green 検証済み（RED→フィクスチャ GREEN で全 TC(A1〜A14) の反転を実証）。実装後 `/test` で ALL PASS を記録予定。
-- 手動: `/test` でユーザー確認（No.6 の可読性のみ Human）。
+- 自動: 実装前 false-green 検証済み（RED→フィクスチャ GREEN で全 TC(A1〜A14) の反転を実証）。**実装後 `/test` で専用 TC-A1〜A14 = `RESULT: ALL PASS`（exit=0）を確認**。pytest/Jest/E2E は非該当（docs のみ）。
+- 手動: **Claude 実施分 No.1・1b・2・3・4・5 = OK**（`/test` で自己実行・記録済み）。No.6（可読性）のみ Human 確認待ち。
 
 ## セキュリティ影響
 - なし（コード変更なし。docs 追加のみ）。

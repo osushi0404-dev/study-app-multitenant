@@ -112,4 +112,5 @@ exit $fail
 - 実装（worktree.md 作成・CLAUDE.md 追記）後に全 TC を本番ファイルに対して実行 → **`RESULT: ALL PASS`（exit=0, A1〜A14）**。RED（実装前 全 NG）→ GREEN（実装後 全 OK）の遷移を確認。TC-A11 も追加した worktree.md 参照が解決（リンク切れ 0）。
 
 ### `/test` 実行（環境パリティ最終確認）
-- （`/test` で再実行し `RESULT: ALL PASS` を記入）
+- 2026-07-02 `/test` 実行: 専用自動テスト（TC-A1〜A14）を本番ファイルに対して実行 → **`RESULT: ALL PASS`（exit=0）**。
+- pytest / Jest / E2E（Playwright）: **非該当**（Backend/Frontend/DB のコード変更なし・docs のみ）。
