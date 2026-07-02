@@ -25,6 +25,7 @@
 | TC-N7 | 番号非数字 `wt-new.sh app abc x` / 概要に空白 `wt-new.sh app 005 "a b"` / track にスラッシュ `wt-new.sh a/b 006 x` | いずれも exit 2・`worktree list` 不変（不正引数で停止） |
 | TC-N8 | 既存 branch 名で `wt-new.sh app 007 dup`（`feature/I007-dup` を事前作成） | exit 2・`branch が既に存在`・worktree 非作成 |
 | TC-N9 | 既存 path で `wt-new.sh app 008 x`（`<base>/wt-app` を事前作成済み＝TC-N1 の残り or ダミー） | exit 2・`worktree path が既に存在` |
+| TC-N10 | `wt-new.sh app 010 x --env-source`（**値なし**で末尾指定）※W2 回帰 | exit 2・`--env-source に値がありません`（`shift 2` 範囲外の無言 exit にならない）・worktree 非作成 |
 
 ### wt-remove: 撤去（TC-R1〜R6）
 | TC | 入力/前提 | 期待 |
@@ -34,7 +35,9 @@
 | TC-R3 | TC-R2 の `down` 記録が `present=yes` | `down -v` 実行時に `WT_PATH/.git` が存在＝**`down -v`→`remove` の順序**が実証される（remove 後なら `present=no`） |
 | TC-R4 | worktree に未コミット変更を作成し `DANGER_OK=1 wt-remove.sh app` | exit 2・`未コミット変更あり`・`down` 非実行・worktree 残存 |
 | TC-R5 | worktree で push していないローカルコミットを作り `DANGER_OK=1 wt-remove.sh app` | exit 2・`HEAD が未 push`・`down` 非実行・worktree 残存 |
-| TC-R6 | `wt-remove.sh <primary の track 相当>`（primary を指す path） | exit 2・`primary checkout は撤去できません`（primary 保護） |
+| TC-R6 | primary 保護。**セットアップ**: primary temp checkout を `<base>/wt-primary` という名前で配置（`WT_PATH==PRIMARY` を成立させるため clone 先ディレクトリ名を `wt-primary` にする）→ `DANGER_OK=1 wt-remove.sh primary` を呼ぶ | exit 2・`primary checkout は撤去できません`（primary 保護・`down` 非実行） |
+| TC-R7 | 撤去対象 WT の**内側に cd した状態**で `DANGER_OK=1 wt-remove.sh app`（`( cd "$WT_PATH" && ... )` で実行）※W1 回帰 | exit 2・`撤去対象 WT の内側からは実行できません`・`down` 非実行・worktree 残存 |
+| TC-R8 | 撤去可能な worktree に対し **docker スタブを `down` で非ゼロ終了**させて `DANGER_OK=1 wt-remove.sh app`（スタブが引数に `down` を含むとき `exit 1`）※W4 回帰 | exit 2・`docker compose down -v が失敗しました` 案内出力・`git worktree remove` は実行されず worktree 残存 |
 
 ### COMPOSE_PROJECT_NAME 検出（TC-C1）
 | TC | 入力/前提 | 期待 |

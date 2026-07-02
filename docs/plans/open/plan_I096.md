@@ -82,7 +82,9 @@ shift 3
 ENV_SOURCE=""; DO_UP=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --env-source) ENV_SOURCE="${2:-}"; shift 2 ;;
+    --env-source)
+      [ -n "${2:-}" ] || { echo "[wt-new] --env-source に値がありません" >&2; exit 2; }
+      ENV_SOURCE="$2"; shift 2 ;;
     --up)         DO_UP=1; shift ;;
     *) echo "[wt-new] 不明な引数: $1" >&2; usage ;;
   esac
@@ -153,11 +155,17 @@ BASE="$(dirname "$PRIMARY")"
 WT_PATH="$BASE/wt-$TRACK"
 
 [ -d "$WT_PATH" ] || { echo "[wt-remove] worktree path が存在しません: $WT_PATH" >&2; exit 2; }
+WT_REAL="$(cd "$WT_PATH" && pwd -P)"
 # primary を誤って撤去しない
-[ "$(cd "$WT_PATH" && pwd)" = "$(cd "$PRIMARY" && pwd)" ] && { echo "[wt-remove] primary checkout は撤去できません" >&2; exit 2; }
+[ "$WT_REAL" = "$(cd "$PRIMARY" && pwd -P)" ] && { echo "[wt-remove] primary checkout は撤去できません" >&2; exit 2; }
+# CWD が撤去対象 WT 内だと後段の git worktree remove が拒否する → 事前に明示エラーで弾く
+case "$(pwd -P)/" in
+  "$WT_REAL"/*) echo "[wt-remove] 撤去対象 WT の内側からは実行できません。外（例: primary）に cd して再実行してください: $WT_PATH" >&2; exit 2 ;;
+esac
 
-# 撤去前チェック（1）未コミット変更
-[ -n "$(git -C "$WT_PATH" status --porcelain)" ] && \
+# 撤去前チェック（1）未コミット変更（git 失敗は set -e で abort＝fail-safe。$() を [ ] に埋めると失敗が握り潰されるため一旦代入）
+DIRTY="$(git -C "$WT_PATH" status --porcelain)"
+[ -n "$DIRTY" ] && \
   { echo "[wt-remove] 未コミット変更あり。撤去中止（作業消失防止）: $WT_PATH" >&2; exit 2; }
 # 撤去前チェック（2）未 push コミット（HEAD がどの remote-tracking にも含まれない＝未 push）
 if [ -z "$(git -C "$WT_PATH" branch -r --contains HEAD 2>/dev/null)" ]; then
@@ -170,7 +178,10 @@ fi
 
 # volume 回収は danger-op（DANGER_OK=1 必須＝pretooluse_guard.py と同一契約）
 if [ "${DANGER_OK:-}" = "1" ]; then
-  ( cd "$WT_PATH" && docker compose down -v )   # 当該ディレクトリで named volume を回収（§5D）
+  # 当該ディレクトリで named volume を回収（§5D）。down 失敗時は remove へ進まず対処を案内
+  ( cd "$WT_PATH" && docker compose down -v ) || {
+    echo "[wt-remove] docker compose down -v が失敗しました。docker 稼働・compose ファイルを確認し、手動対応後に 'git worktree remove $WT_PATH' を実行してください。" >&2
+    exit 2; }
 else
   echo "[wt-remove] docker compose down -v は破壊的操作です（Postgres 開発データ削除を含む）。" >&2
   echo "[wt-remove] 必要なら 'scripts/db_backup.sh' で事前バックアップのうえ 'DANGER_OK=1 $0 $TRACK' で再実行してください。" >&2
@@ -184,9 +195,16 @@ echo "[wt-remove] 撤去完了: $WT_PATH"
 
 - **修正方針**: `down -v` を `DANGER_OK=1` 未設定時は実行しない（＝`pretooluse_guard.py` L487 の契約と同一化）ことで、Claude が `bash wt-remove.sh` 経由で無言に volume を消す抜けを塞ぐ。未コミット/未 push は `--force` を使わず中止し、git 既定が弾かない「clean だが未 push」も機械化で捕捉する。
 
+**プランレビュー（20260702_2027・VERDICT OK）反映**:
+- W1: CWD が撤去対象 WT 内なら後段 `git worktree remove` が拒否するため、`case "$(pwd -P)/" in "$WT_REAL"/*)` で事前に明示エラー停止（→ TC-R7）。
+- W2: `--env-source` を値なしで渡すと `shift 2` が範囲外で `set -e` 発火・無言 exit するため、値の非空検査を追加（→ TC-N10）。
+- W4: `docker compose down -v` 失敗時は `|| { 案内; exit 2; }` で「手動対応後に remove」を案内（→ TC-R8）。
+- Info6: 未コミットチェックの `$()` を `[ ]` 内に直書きすると git 失敗が握り潰され silent pass になるため、一旦 `DIRTY=$(...)` へ代入（git 失敗は `set -e` で abort＝fail-safe）。
+- Info5（remote-only ブランチ衝突は fetch 前検査では検出しない）: **対応任意として受容**。単一開発者の worktree 管理が対象で、`git worktree add -b` 自身がローカル同名ブランチ存在時に失敗するため主要な事故は防げる。ネットワーク往復（`ls-remote`）を毎回課すのは要件規模に対し過剰と判断。
+
 ### 4-3. `scripts/claude/tests/test_wt_lifecycle.sh`（新規）
 - `test_pretooluse_worktree_guard.sh` の型を踏襲（temp git repo + `ck()` + false-green 注入）。
-- **セットアップ**: `mktemp -d` に (a) bare origin repo（`backend/.env`・`e2e/.env.e2e`・`docker-compose.yml`・`main` にonly-main-file / `develop` に only-develop-file を持つ）を作り、(b) それを clone して primary temp checkout とする。(c) `docker` スタブ（PATH shim・`$DOCKER_LOG` に `docker $*` を追記、`down` 呼出時は `WT_PATH/.git` の存在を `present=yes/no` として記録＝順序検証）を `$TMP/bin` に置き PATH 先頭に付与。
+- **セットアップ**: `mktemp -d` に (a) bare origin repo（`backend/.env`・`e2e/.env.e2e`・`docker-compose.yml`・`main` にonly-main-file / `develop` に only-develop-file を持つ）を作り、(b) それを clone して primary temp checkout とする。TC-R6（primary 保護）用に clone 先ディレクトリ名を `wt-primary` にする回でのみ `WT_PATH==PRIMARY` を成立させる。(c) `docker` スタブ（PATH shim・`$DOCKER_LOG` に `docker $*` を追記、`down` 呼出時は `$WT_REAL/.git` の存在を `present=yes/no` として記録＝順序検証）を `$TMP/bin` に置き PATH 先頭に付与。**失敗注入**: 環境変数 `DOCKER_FAIL_ON`（例 `down`）を設定した回は、引数にその語を含むとき `exit 1` する（TC-R8 用・通常回は未設定で成功）。
 - 各スクリプトは `( cd "$PRIMARY_TMP" && PATH="$TMP/bin:$PATH" bash "$SCRIPT" ... )` で実行し exit code / 生成物 / `$DOCKER_LOG` を検証。TC 詳細は `docs/tests/open/I096_auto_test.md` 参照。
 
 ### 4-4. `docs/runbooks/worktree.md`（§3/§5 更新）
@@ -247,3 +265,6 @@ echo "[wt-remove] 撤去完了: $WT_PATH"
 - [ ] e2e `.env.e2e` は `--env-source` と同じ worktree 由来から在れば非致命コピー、という一意化でよいか（planning 中の精緻化）
 - [ ] テスト計画（temp repo + docker スタブの決定論ゲート＋false-green 注入／手動は Claude 実施のファイル・構文確認）で妥当か
 - [ ] Danger Ops: 有（`down -v`）。`DANGER_OK=1` ゲート＋明示コマンドで既存枠組みに整合。ロールバックは開発 DB のため不要（必要なら `scripts/db_backup.sh`）
+
+## レビュー結果
+- [20260702_2027 判定: ✅ 完了](../../reviews/I096_plan_review_20260702_2027.md)
