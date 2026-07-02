@@ -8,6 +8,8 @@
 
 隔離方針は既存 `test_wt_lifecycle.sh` を踏襲（temp bare origin + clone、docker は不使用または `docker compose config` のみ）。
 
+**実装メモ（隔離環境・I1）**: `test_wt_port_offset.sh` の `new_env()` 相当では、実 `.gitignore`（`.env` / `*.env`）と環境を揃えるため temp repo の `.gitignore` に `.env` を追加する（既存 `test_wt_lifecycle.sh` は `backend/.env` / `e2e/.env.e2e` のみ）。これにより wt-new が生成する root `.env` が untracked/dirty 扱いにならず、実運用と同じ挙動で検証できる。
+
 ---
 
 ## A. wt-new オフセット/衝突ロジック（test_wt_port_offset.sh・docker 不要）
@@ -21,7 +23,8 @@
 | TC-P5 | `wt-new app 105 x --port-offset abc`（非整数） | exit 2。メッセージに「--port-offset は数字」。非作成 |
 | TC-P6 | `--port-offset 0` を明示（primary 既定ポートと同値） | exit 2（衝突検出が primary の既定ポートと衝突を検知）。非作成 |
 | TC-P7 | `.env.example` の存在と内容 | `.env.example` が存在し `DB_PORT=5432` `REDIS_PORT=6379` `BACKEND_PORT=8000` `FRONTEND_PORT=3000` を含む |
-| TC-P8（回帰） | `wt-new` 実行後、backend/.env コピー・基点 origin/develop 等の既存挙動 | 既存どおり（`test_wt_lifecycle.sh` 55/55 維持で担保。本ファイルでは新 `.env` 生成が既存挙動を壊さないことを確認） |
+| TC-P9（COMPOSE_PROJECT_NAME 不在・W3/AC4） | TC-P1/TC-P2 で生成された `wt-app/.env` を検査 | 生成 `.env` に `COMPOSE_PROJECT_NAME` が**含まれない**（`grep -q 'COMPOSE_PROJECT_NAME' → 非ヒット`）。分離は既定（ディレクトリ名）に委ね、`.env` へ混入させない設計を機械保証（AC4） |
+| TC-P8（回帰・W4 具体化） | `wt-new app 108 x`（自動割当）実行後の既存挙動 | exit 0 かつ ①`wt-app/backend/.env` が primary の `backend/.env` と一致（`cmp -s`＝`SECRET=stub` コピー済）②基点が origin/develop（`only-develop-file.txt` 在・`only-main-file.txt` 無）③新 root `.env` 生成が上記を壊さない |
 
 ### false-green 注入（test_wt_port_offset.sh 内）
 | TC | 操作 | 期待結果 |
@@ -47,7 +50,7 @@
 
 | TC | 検証 | 期待結果 |
 |----|------|----------|
-| TC-DOC1 | `docs/runbooks/worktree.md` §6 | 「同時起動」「BACKEND_PORT」等ポート変数への言及があり、「1 スタックずつ」のみの旧記述が残っていない |
+| TC-DOC1 | `docs/runbooks/worktree.md` §6 + §3 | ①§6 に「同時起動」「BACKEND_PORT」等ポート変数への言及があり「1 スタックずつ」のみの旧記述が残っていない ②§3 の wt-new コマンド例に `--port-offset` が含まれる（W1・引数パリティの機械検証） |
 | TC-DOC2 | `docs/runbooks/common-commands.md` | ポート変数・同時 up 手順への言及がある |
 
 ---

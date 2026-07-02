@@ -20,6 +20,10 @@
 - [ ] false-green 検証: 衝突/重複系 TC が失敗注入で NG になることを確認
 - [ ] nginx が対象外のまま（80/443 変数化されていない）
 - [ ] root `.env` が gitignore・`.env.example` のみ追跡
+- [ ] 生成 `.env` に `COMPOSE_PROJECT_NAME` が混入しない（TC-P9・AC4）
+- [ ] worktree.md §3 の wt-new コマンド例に `--port-offset` が追記（TC-DOC1・W1）
+- [ ] wt-new.sh の `usage()`・冒頭コメント・§6 コメントが stale でない（W2）
+- [ ] plan-review 指摘（W1/W2/W3/W4/I1/I2）の反映確認
 
 ## 自動テスト結果（実装後に記入）
 - test_wt_port_offset.sh:

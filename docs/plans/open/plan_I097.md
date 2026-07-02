@@ -68,7 +68,7 @@ worktree の本来の狙い（複数トラックの**並行**作業）が「編�
 | scripts/claude/wt-new.sh | `--port-offset N` 追加。未指定時は既存 worktree の `.env` を走査して空きオフセット自動割当・衝突時 fail・直下 `.env` 生成・確定ポート表示 |
 | scripts/claude/tests/test_wt_port_offset.sh（新規） | 決定論テスト①（オフセット/衝突ロジック・docker 不要）＋ false-green 注入 |
 | scripts/claude/tests/test_compose_ports.sh（新規） | 決定論テスト②（`docker compose config` レンダリングで publish ポート重複なし・docker 無しは skip） |
-| docs/runbooks/worktree.md | §6 を同時起動可能な手順に更新 |
+| docs/runbooks/worktree.md | §6 を同時起動可能な手順に更新。**§3 のコマンド例に `[--port-offset N]` を追記**（消費箇所の取りこぼし防止） |
 | docs/runbooks/common-commands.md | ポート変数・オフセット確認・同時 up 手順の追記 |
 
 ### 4-1. docker-compose.yml（修正方針）
@@ -112,6 +112,11 @@ FRONTEND_PORT=3000
 
 **修正アプローチ**: 既存の引数パーサに `--port-offset N` を追加し、`git worktree list` を走査して空きオフセットを決定、衝突を検出したら fail、確定ポートを新規 worktree 直下 `.env` に書き出す。既存の `.env`（backend）コピー・`--up` 等の挙動は不変。
 
+**併せて更新する消費箇所（stale 防止・W2）**:
+- `usage()` の Usage 文に `[--port-offset N]` を追記（引数パリティ）。
+- 冒頭コメント（L4-8 相当）の使い方注記に `--port-offset` を追加。
+- L65-66 の `# 任意 up（既定 OFF・§6 ポート衝突のため opt-in）` コメントを、I097 後の実態（§6 は同時 up 可能に変わる）に合わせて更新（例: `# 任意 up（既定 OFF・opt-in。同ホストで複数スタックを同時 up する場合は --port-offset でポート分離）`）。
+
 **定数**:
 ```bash
 PORT_STEP=10
@@ -138,9 +143,11 @@ echo "[wt-new] ポート割当: offset=$OFFSET db=$((BASE_DB+OFFSET)) redis=$((B
 - 既定ポートを避けるため自動割当は必ず `+PORT_STEP` 以上になる（primary=offset 0 が collected に含まれるため min offset=10）。
 - `--port-offset 0` を明示した場合は衝突検出が primary（既定ポート）と衝突を検知して fail する（意図的な同ポート指定を防ぐ）。
 
-### 4-4. docs/runbooks/worktree.md §6（修正方針）
+### 4-4. docs/runbooks/worktree.md §6 + §3（修正方針）
 
-**修正方針**: 「1 スタックずつ・人手規律」の記述を「ポート変数化により同時 up 可能・wt-new が自動オフセット」に更新。ポート表は「既定値（変数未設定時）」と明記。COMPOSE_PROJECT_NAME 分離（既定＝ディレクトリ名）は維持される旨を残す。
+**修正方針（§6）**: 「1 スタックずつ・人手規律」の記述を「ポート変数化により同時 up 可能・wt-new が自動オフセット」に更新。ポート表は「既定値（変数未設定時）」と明記。COMPOSE_PROJECT_NAME 分離（既定＝ディレクトリ名）は維持される旨を残す。
+
+**修正方針（§3・W1）**: §3 の `wt-new.sh` コマンド例（`... [--env-source <path>] [--up]`）に `[--port-offset N]` を追記し、実装した引数と runbook のパリティを保つ（消費箇所の取りこぼし防止）。→ TC-DOC1 で機械検証。
 
 ### 4-5. docs/runbooks/common-commands.md（修正方針）
 
@@ -206,6 +213,7 @@ echo "[wt-new] ポート割当: offset=$OFFSET db=$((BASE_DB+OFFSET)) redis=$((B
 
 - **要件適合性・業務ロジック**: AC の範囲内。仕様追加なし。マルチテナント閲覧/操作範囲・ステータス遷移に変更なし（該当なし）。
 - **セキュリティ**: **セキュリティ影響なし**（インフラ設定＝ホスト publish ポートの変数化のみ・アプリコード不変）。db/redis のホスト publish は現状の既定でも公開されており、オフセットで露出面は増えない。機密情報（パスワード/トークン）を新規に扱わない。root `.env` は gitignore 済み。OWASP Top 10 該当なし（XSS/SQLi/CSRF に関わるコード変更なし）。依存ライブラリ変更なし（pip-audit/npm audit 対象外）。
+  - **pre-existing の認識（レビュー I2）**: db(5432)/redis(6379) をホストへ publish する設計は本イシュー以前から存在する開発環境専用設定。本変更で新規リスクは追加されず、オフセットによる露出面の変化もない。非ローカル環境デプロイ時の注意は既存の設計課題として範囲外（本イシューでは変更しない）。
 - **設計品質**: ハードコード回避（既定値は compose の `:-` 既定＋`.env.example` に集約、STEP は wt-new の名前付き定数 `PORT_STEP`）。null/空値: `.env`/`BACKEND_PORT` 不在は offset 0 として扱う方針を統一。例外処理: 衝突・不正引数は exit 2 で明示停止（既存 wt-new の契約と一致）。アンチパターン踏襲なし。
 - **P3（データ整合性）/P5（運用）/P8（コスト）/P6（性能・UX）/P9（プライバシー）**: **いずれも影響なし**（DB スキーマ・マイグレーション変更なし／外部 API・非同期・バッチなし／新規インフラ・外部サービスなし／UI コンポーネント変更なし／個人情報・未成年・テナントデータを扱わない）。
 
@@ -233,3 +241,6 @@ echo "[wt-new] ポート割当: offset=$OFFSET db=$((BASE_DB+OFFSET)) redis=$((B
 3. **`.env.example` 追加**: 追跡ファイルとして 4 変数・既定値・オフセット規約を記載する方針でよいか。
 4. **テスト構成**: 決定論テストを新規 2 ファイル（ロジック用 docker 非依存 + compose レンダリング用 docker 任意 SKIP）に追加し、既存 `test_wt_lifecycle.sh` は改変しない方針でよいか。
 5. **セキュリティ影響なし**の判定（インフラ設定のみ・アプリコード不変）に同意いただけるか。
+
+## レビュー結果
+- [20260702_2215 判定: ✅ 完了](../../reviews/I097_plan_review_20260702_2215.md)
