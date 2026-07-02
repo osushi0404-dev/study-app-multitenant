@@ -8,7 +8,7 @@
 
 隔離方針は既存 `test_wt_lifecycle.sh` を踏襲（temp bare origin + clone、docker は不使用または `docker compose config` のみ）。
 
-**実装メモ（隔離環境・I1）**: `test_wt_port_offset.sh` の `new_env()` 相当では、実 `.gitignore`（`.env` / `*.env`）と環境を揃えるため temp repo の `.gitignore` に `.env` を追加する（既存 `test_wt_lifecycle.sh` は `backend/.env` / `e2e/.env.e2e` のみ）。これにより wt-new が生成する root `.env` が untracked/dirty 扱いにならず、実運用と同じ挙動で検証できる。
+**実装メモ（隔離環境・I1）**: `test_wt_port_offset.sh` の `new_env()` は temp repo の `.gitignore` に `.env` / `*.env` を含め、実 `.gitignore` と揃える。これにより wt-new が生成する root `.env` が untracked/dirty 扱いにならず実運用と同じ挙動で検証できる。**既存 `test_wt_lifecycle.sh` も同様に fixture の `.gitignore` へ `.env`/`*.env` を追加**（追加しないと生成 `.env` が dirty 扱いになり wt-remove テストが誤 abort する＝実装時に検出・修正）。テスト内容・形式は不変。
 
 ---
 
@@ -22,7 +22,7 @@
 | TC-P4 | 既存 worktree が offset=10 を使用中、`wt-new app 104 x`（自動割当） | exit 0。新 `.env` は offset=20（`BACKEND_PORT=8020`）＝使用済みを避ける |
 | TC-P5 | `wt-new app 105 x --port-offset abc`（非整数） | exit 2。メッセージに「--port-offset は数字」。非作成 |
 | TC-P6 | `--port-offset 0` を明示（primary 既定ポートと同値） | exit 2（衝突検出が primary の既定ポートと衝突を検知）。非作成 |
-| TC-P7 | `.env.example` の存在と内容 | `.env.example` が存在し `DB_PORT=5432` `REDIS_PORT=6379` `BACKEND_PORT=8000` `FRONTEND_PORT=3000` を含む |
+| TC-P7 | ポート変数の runbook 文書化（`.env.example` は deny ガードにより取り止め） | `docs/runbooks/worktree.md` または `common-commands.md` に 4 変数（`DB_PORT`/`REDIS_PORT`/`BACKEND_PORT`/`FRONTEND_PORT`）と STEP=10 の記載がある（TC-DOC で機械検証） |
 | TC-P9（COMPOSE_PROJECT_NAME 不在・W3/AC4） | TC-P1/TC-P2 で生成された `wt-app/.env` を検査 | 生成 `.env` に `COMPOSE_PROJECT_NAME` が**含まれない**（`grep -q 'COMPOSE_PROJECT_NAME' → 非ヒット`）。分離は既定（ディレクトリ名）に委ね、`.env` へ混入させない設計を機械保証（AC4） |
 | TC-P8（回帰・W4 具体化） | `wt-new app 108 x`（自動割当）実行後の既存挙動 | exit 0 かつ ①`wt-app/backend/.env` が primary の `backend/.env` と一致（`cmp -s`＝`SECRET=stub` コピー済）②基点が origin/develop（`only-develop-file.txt` 在・`only-main-file.txt` 無）③新 root `.env` 生成が上記を壊さない |
 
@@ -55,7 +55,7 @@
 
 ---
 
-## 実行結果（実装後に記入）
-- test_wt_port_offset.sh: （未実施）
-- test_compose_ports.sh: （未実施）
-- test_wt_lifecycle.sh（回帰）: baseline 55/55（実装後に再実行して記入）
+## 実行結果（2026-07-02 実装時）
+- test_wt_port_offset.sh: **pass=34 fail=0**（TC-P1〜P9・P5b・FG-P1・DOC1a〜e）
+- test_compose_ports.sh: **pass=13 fail=0**（TC-D1〜D4・自己検証含む。docker compose v5.1.0 で実行）
+- test_wt_lifecycle.sh（回帰）: **pass=55 fail=0**（fixture の `.gitignore` 整合後・baseline 維持）

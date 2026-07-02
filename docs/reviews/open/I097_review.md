@@ -3,7 +3,7 @@
 - **関連**: docs/plans/open/plan_I097.md / docs/issues/open/I097.md（#183, PR #187）
 - **レビュー対象**:
   - docker-compose.yml（db/redis/backend/frontend の ports 変数化・nginx 対象外）
-  - .env.example（新規・追跡・4 変数と既定値・オフセット規約）
+  - ポート変数の runbook 文書化（`.env.example` は deny ガードにより取り止め・worktree.md §6 / common-commands.md へ集約）
   - scripts/claude/wt-new.sh（--port-offset・自動割当・衝突 fail・直下 .env 生成）
   - scripts/claude/tests/test_wt_port_offset.sh（新規・決定論①＋false-green 注入）
   - scripts/claude/tests/test_compose_ports.sh（新規・決定論②・docker 任意 SKIP）
@@ -19,7 +19,7 @@
 - [ ] AC7: 既存 test_wt_lifecycle.sh が 55/55 のまま
 - [ ] false-green 検証: 衝突/重複系 TC が失敗注入で NG になることを確認
 - [ ] nginx が対象外のまま（80/443 変数化されていない）
-- [ ] root `.env` が gitignore・`.env.example` のみ追跡
+- [ ] root `.env` が gitignore・ポート変数は runbook に文書化（`.env.example` 不採用）
 - [ ] 生成 `.env` に `COMPOSE_PROJECT_NAME` が混入しない（TC-P9・AC4）
 - [ ] worktree.md §3 の wt-new コマンド例に `--port-offset` が追記（TC-DOC1・W1）
 - [ ] wt-new.sh の `usage()`・冒頭コメント・§6 コメントが stale でない（W2）

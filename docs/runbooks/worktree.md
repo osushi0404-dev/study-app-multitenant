@@ -33,7 +33,8 @@
 ```bash
 # 作成: <base>/wt-<track> を origin/develop 基点で作る（base は primary checkout の親から自動導出）。
 # backend/.env を primary からコピー＆存在検証（欠落なら停止）。up は既定 OFF・--up で opt-in。
-bash scripts/claude/wt-new.sh <track> <番号> <概要> [--env-source <path>] [--up]
+# ポート分離（§6・I097）: 直下 .env に *_PORT を自動生成。--port-offset 未指定時は空きオフセット(+10)を自動割当。
+bash scripts/claude/wt-new.sh <track> <番号> <概要> [--env-source <path>] [--up] [--port-offset N]
 
 git worktree list          # 現在の worktree 一覧を確認
 
@@ -93,22 +94,40 @@ docker compose up -d
 
 ---
 
-## 6. 並行実行の衝突（重要）
+## 6. 並行実行のポート分離（同時起動可能・I097）
 
-worktree ごとにコンテナ・volume は分離されるが、**ホストのポートは共有**される。既定の `docker compose up` が起動するサービスは固定のホストポートを使う:
+worktree ごとにコンテナ・volume は `COMPOSE_PROJECT_NAME`（既定＝ディレクトリ名）で分離される。ホストの publish ポートは **環境変数でテンプレート化**されており（I097）、worktree ごとに直下 `.env` でオフセットすることで**同時に `docker compose up` してもポートが衝突しない**。
 
-| サービス | ホストポート |
-|---------|------------|
-| db (Postgres) | 5432 |
-| redis | 6379 |
-| backend | 8000 |
-| frontend | 3000 |
+`docker-compose.yml` のホストポートは既定値付き環境変数で publish される（**変数未設定時は下表の既定値**＝後方互換）:
 
-（`nginx` の 80 / 443 は `profiles: production` 配下のため、既定の `docker compose up` では起動しない。）
+| サービス | 環境変数 | 既定ポート |
+|---------|---------|-----------|
+| db (Postgres) | `DB_PORT` | 5432 |
+| redis | `REDIS_PORT` | 6379 |
+| backend | `BACKEND_PORT` | 8000 |
+| frontend | `FRONTEND_PORT` | 3000 |
 
-- **2 つの worktree で同時に `docker compose up` すると、これらのポートが衝突**して片方が起動に失敗する。
-- **対処（推奨）**: 現行の人手による並行運用では、**同時にスタックを up せず 1 スタックずつ**起動する。トラックを切り替えるときは、使っていない方を `docker compose down` してから他方を up する。
-- 同時起動がどうしても必要な場合のみ、worktree ごとに compose override でポートと `COMPOSE_PROJECT_NAME` を変える。ただしポートは環境変数でテンプレート化されておらず compose ファイルの編集が要るため、この override 化は本 runbook の対象外（必要なら別イシューで仕組み化する）。
+（`nginx` の 80 / 443 は `profiles: production` 配下のため、既定の `docker compose up` では起動しない＝ポート変数化の対象外。）
+
+**オフセット規約**: STEP=10。primary=offset 0（既定ポート）、追加 worktree は +10 ずつ（次=10, 次=20 ...）。`port = 既定 + offset`（例: offset=10 → db 5442 / redis 6389 / backend 8010 / frontend 3010）。base 間隔が広いためサービス間衝突は起きない。
+
+**運用（推奨・自動）**: `scripts/claude/wt-new.sh` が新規 worktree 作成時に直下 `.env` を自動生成する。
+- `--port-offset` 未指定時は既存 worktree の `.env` を走査し、**空きオフセット（max+10）を自動割当**。
+- `--port-offset N` で明示指定も可能。既存 worktree とポートが衝突する場合は **fail**（作成前に停止）。
+- 生成される `.env` は gitignore 対象（`.env` / `*.env`）で worktree ごとに非共有。`COMPOSE_PROJECT_NAME` は `.env` に書かない（既定＝ディレクトリ名でコンテナ/volume を分離）。
+
+```bash
+# 例: 2 トラックを同時起動
+bash scripts/claude/wt-new.sh app 201 feature-a          # 自動で offset=10 → backend 8010 等
+bash scripts/claude/wt-new.sh api 202 feature-b          # 自動で offset=20 → backend 8020 等
+( cd <base>/wt-app && docker compose up -d )              # 両方を同時に up してもポート衝突しない
+( cd <base>/wt-api && docker compose up -d )
+
+# 割当ポートの確認（publish されるホストポートをレンダリングして確認）
+docker compose config | grep -A1 published
+```
+
+**手動運用（wt-new を使わない場合）**: 対象 worktree 直下に `.env` を作り、上表の 4 変数へ「既定＋オフセット」を設定してから `docker compose up`（変数未設定なら既定ポートで起動＝従来どおり）。
 
 ---
 

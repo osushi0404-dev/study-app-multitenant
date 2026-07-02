@@ -14,6 +14,21 @@ python manage.py analyze_logs --last-errors=1
 docker compose up -d
 ```
 
+### worktree ごとのポート分離（同時起動・I097）
+複数 worktree のスタックを同時に up する場合、ホストポートを直下 `.env` で分離する（詳細: `worktree.md` §6）。
+
+```bash
+# ホストポートは既定値付き環境変数（変数未設定＝既定値で従来どおり）
+#   DB_PORT(5432) / REDIS_PORT(6379) / BACKEND_PORT(8000) / FRONTEND_PORT(3000)
+# 規約: オフセット STEP=10（primary=0, 追加 worktree は +10 ずつ）。port = 既定 + offset。
+
+# wt-new が新規 worktree 作成時に直下 .env を自動生成（空きオフセットを自動割当）
+bash scripts/claude/wt-new.sh <track> <番号> <概要> [--port-offset N]
+
+# 割当済みの publish ホストポートを確認（.env を読んでレンダリング）
+docker compose config | grep -A1 published
+```
+
 ### ログ確認
 ```bash
 tail -f backend/logs/django.log
