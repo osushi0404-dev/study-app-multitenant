@@ -35,8 +35,10 @@ git worktree add /mnt/c/app/wt-<track> -b feature/I<番号>-<概要> origin/deve
 
 git worktree list          # 現在の worktree 一覧を確認
 
-# 作業完了後: 先に volume を回収してから worktree を削除する（§5(D)）
-docker compose down -v      # 当該 worktree の named volume を回収
+# 作業完了後: まず当該 worktree のディレクトリに移動し、volume を回収してから削除する（§5(D)）
+cd /mnt/c/app/wt-<track>
+docker compose down -v      # ← 当該 worktree ディレクトリで実行（named volume を回収）
+cd -                        # 元のディレクトリへ戻る（worktree remove は内部から実行不可のため）
 git worktree remove /mnt/c/app/wt-<track>
 ```
 
