@@ -196,4 +196,4 @@ bash scripts/claude/tests/test_xxx.sh
 ❌ 修正が必要でしたら具体的な指示をお願いします
 
 ## レビュー結果
-- [20260701_2243 判定: ✅ 完了](../../reviews/I084_plan_review_20260701_2243.md)
+- [20260701_2243 判定: ✅ 完了](../../reviews/closed/I084_plan_review_20260701_2243.md)
