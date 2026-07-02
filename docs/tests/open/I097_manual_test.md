@@ -11,8 +11,8 @@
 | 4 | `docker compose config` をリポジトリ直下（`.env` 無し）で実行し published を確認 | `5432/6379/8000/3000` が publish される（後方互換） | Claude | OK（3000/5432/6379/8000） | AC1 |
 | 5 | 直下に一時 `.env`（`BACKEND_PORT=8010` 等）を置き `docker compose config` を実行 | published が `5442/6389/8010/3010` に変わる。確認後 `.env` を削除 | Claude | OK（3010/5442/6389/8010・--env-file で検証） | AC2 の裏付け |
 | 6 | `git check-ignore .env` / `git status` で root `.env` が未追跡・ignore 済みを確認 | `.env` は ignore（誤コミットされない） | Claude | OK（check-ignore .env → 一致） | 誤コミット防止（`.env.example` は deny ガードにより不採用） |
-| 7 | 実際に 2 つの worktree（例: offset=10 と offset=20）で **同時に** `docker compose up -d` し、両スタックが起動することをブラウザ/ポートで目視 | 両 frontend（例 3010 / 3020）へアクセスでき、片方が起動失敗しない | Human | | 実環境の同時 up 目視スモーク（任意・環境依存） |
-| 8 | 2 スタック同時稼働中に `docker compose ps` を各 worktree で確認し、`COMPOSE_PROJECT_NAME`（ディレクトリ名）でコンテナが分離されていることを確認 | 各 worktree のコンテナ名が別プロジェクトで分離 | Human | | AC4 の実環境確認（任意） |
+| 7 | 実際に 2 つの worktree（例: offset=10 と offset=20）で **同時に** `docker compose up -d` し、両スタックが起動することをブラウザ/ポートで目視 | 両 frontend（例 3010 / 3020）へアクセスでき、片方が起動失敗しない | Human | OK | 実機スモーク（2026-07-02・db/redis で実施）: スタックA=study-app-multitenant（db `5432->5432`/redis `6379->6379`）稼働中に、スタックB=wt-harness を `--env-file`（offset=10: DB_PORT=5442/REDIS_PORT=6389）で同時 `up -d db redis` → 両方 Up・ポート衝突なし（B=db `5442->5432`/redis `6389->6379`）。A は teardown 後も継続 Up |
+| 8 | 2 スタック同時稼働中に `docker compose ps` を各 worktree で確認し、`COMPOSE_PROJECT_NAME`（ディレクトリ名）でコンテナが分離されていることを確認 | 各 worktree のコンテナ名が別プロジェクトで分離 | Human | OK | 実機スモーク（2026-07-02）: コンテナが `wt-harness-db-1`/`wt-harness-redis-1` と `study-app-multitenant-*` で別プロジェクト分離。network/volume も `wt-harness_app-network`/`wt-harness_postgres_data`/`wt-harness_redis_data` として独立生成を確認 |
 
 **実施者の判定根拠**:
 - No1〜6: コマンド実行・出力確認・ファイル/ignore 確認で完結 → Claude。
