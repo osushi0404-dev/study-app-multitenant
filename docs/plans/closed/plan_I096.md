@@ -267,4 +267,10 @@ echo "[wt-remove] 撤去完了: $WT_PATH"
 - [ ] Danger Ops: 有（`down -v`）。`DANGER_OK=1` ゲート＋明示コマンドで既存枠組みに整合。ロールバックは開発 DB のため不要（必要なら `scripts/db_backup.sh`）
 
 ## レビュー結果
-- [20260702_2027 判定: ✅ 完了](../../reviews/I096_plan_review_20260702_2027.md)
+- [20260702_2027 判定: ✅ 完了](../../reviews/closed/I096_plan_review_20260702_2027.md)
+- [20260702_2059 code-review 判定: ✅ OK（高リスク No・Low 1件対応済）](../../reviews/closed/I096_code_review_20260702_2059.md)
+
+## 完了情報
+- **完了日時**: 2026-07-02
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review OK / code-review VERDICT OK / 自動 55/55 PASS・手動 6件 OK）
