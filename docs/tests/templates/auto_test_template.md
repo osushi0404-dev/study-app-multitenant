@@ -18,3 +18,19 @@ docker compose exec frontend npm test
 結果:
 - backend:
 - frontend:
+
+## 決定論ゲート（自動実走）
+<!--
+  I084: `/code-review`（code-review.sh）がこの見出し直後の**単一 ```bash ブロック**を
+  1 行 1 コマンドで抽出し、実走して実 exit code を VERDICT に注入する。
+  - 許可（実走）: `bash scripts/claude/tests/*.sh` / `grep -q 文言 file`（存在）/
+    `! grep -q 文言 file`（不在）/ `python3 -m json.tool file` / `bash -n file` / `python3 -m py_compile file`
+  - 1 行 1 コマンド・チェーン（; && || | ` $( > 等）不可。
+  - heavy（pytest/Jest/E2E・docker/npm）はここに書かず /test に委譲する。
+  - このセクション外の fenced ```bash に許可コマンドを書くと omission-lint が HIGH を出す（宣言漏れ防止）。
+  - 決定論ゲートが無いイシューはこのセクションを空（または省略）にしてよい。
+-->
+```bash
+# 例: bash scripts/claude/tests/test_xxx.sh  ← 実ゲートに置換。決定論ゲートが無ければこのブロックごと削除。
+# （未編集のままだと code-review はゲート抽出 0 件として扱い、実走・BLOCKER は起きない）
+```
