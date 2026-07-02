@@ -3,7 +3,7 @@
 ## 基本情報
 - **計画書ID**: plan_I092
 - **関連イシュー**: #177
-- **Draft PR**: #（作成後に追記）
+- **Draft PR**: #178
 - **作成根拠資料**: docs/issues/open/I092.md（起点イシュー）
 - **実装後評価**: docs/reviews/open/I092_review.md
 - **作成日**: 2026-07-02
