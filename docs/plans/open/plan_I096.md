@@ -123,7 +123,7 @@ cp "$ENV_SRC" "$WT_PATH/backend/.env"
 [ -f "$WT_PATH/backend/.env" ] || { echo "[wt-new] .env コピー失敗: $WT_PATH/backend/.env" >&2; exit 2; }
 
 # e2e/.env.e2e は source と同じ worktree に在れば同様コピー（非致命）
-SRC_ROOT="$(cd "$(dirname "$ENV_SRC")/.." 2>/dev/null && pwd || true)"
+SRC_ROOT="$(dirname "$(dirname "$ENV_SRC")")"   # .../backend/.env → .../（source worktree root）
 if [ -n "$SRC_ROOT" ] && [ -f "$SRC_ROOT/e2e/.env.e2e" ]; then
   cp "$SRC_ROOT/e2e/.env.e2e" "$WT_PATH/e2e/.env.e2e" || echo "[wt-new] e2e/.env.e2e コピーをスキップ（非致命）" >&2
 fi

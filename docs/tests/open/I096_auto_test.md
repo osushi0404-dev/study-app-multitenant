@@ -5,7 +5,8 @@
 結果:
 - backend: 該当なし（ハーネススクリプトのため・pytest 非該当）
 - frontend: 該当なし（Jest 非該当）
-- 専用自動テスト `test_wt_lifecycle.sh`: **未実装（実装ステップで作成・実走して更新）**
+- 専用自動テスト `test_wt_lifecycle.sh`: **55/55 PASS**（2026-07-02・`fail=0`）
+- 決定論ゲート 5/5 exit=0（lifecycle test・`bash -n` wt-new/wt-remove・runbook grep wt-new/wt-remove）
 
 ## テスト方式
 

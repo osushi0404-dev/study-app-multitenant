@@ -28,6 +28,22 @@
 
 ## 3. worktree の作成・一覧・削除（ベースブランチ = develop）
 
+**推奨: ヘルパースクリプト（`scripts/claude/wt-new.sh` / `wt-remove.sh`）を使う**（I096）。下記 §3 の手動手順は fallback（スクリプトを使わない場合）として残す。スクリプトは基点 origin/develop 固定・`.env` コピー検証・volume 回収の順序を機械化し、§3/§5 の foot-gun を人手規律に頼らず防ぐ。
+
+```bash
+# 作成: <base>/wt-<track> を origin/develop 基点で作る（base は primary checkout の親から自動導出）。
+# backend/.env を primary からコピー＆存在検証（欠落なら停止）。up は既定 OFF・--up で opt-in。
+bash scripts/claude/wt-new.sh <track> <番号> <概要> [--env-source <path>] [--up]
+
+git worktree list          # 現在の worktree 一覧を確認
+
+# 撤去: down -v（named volume 回収）→ git worktree remove。down -v は破壊的なため DANGER_OK=1 必須。
+# 未コミット変更・未 push コミットがあると（作業消失防止のため）中止する。
+DANGER_OK=1 bash scripts/claude/wt-remove.sh <track>
+```
+
+**fallback（スクリプトを使わない手動手順）**:
+
 ```bash
 git fetch origin
 # ベースは必ず origin/develop。追加トラックを linked worktree として作る
@@ -42,7 +58,7 @@ cd -                        # 元のディレクトリへ戻る（worktree remov
 git worktree remove /mnt/c/app/wt-<track>
 ```
 
-- **落とし穴（重大）**: **`main` は使わない**。`main` は初期コミット（`Initialize README`）のみで、テンプレート・スクリプト・runbook・アプリコードが一切無い。ここから worktree を作ると空ツリーになる。必ず **`origin/develop` を基点**にする。
+- **落とし穴（重大）**: **`main` は使わない**。`main` は初期コミット（`Initialize README`）のみで、テンプレート・スクリプト・runbook・アプリコードが一切無い。ここから worktree を作ると空ツリーになる。必ず **`origin/develop` を基点**にする（`wt-new.sh` は基点を origin/develop に固定してこれを機械化で防ぐ）。
 
 ---
 
@@ -60,6 +76,8 @@ git worktree remove /mnt/c/app/wt-<track>
 
 このプロジェクトの開発環境は **Docker Compose**。ホストでの `venv` / `pip install` / `npm install` は使わない（依存はイメージに焼き込み、`node_modules` は frontend コンテナの匿名ボリュームで管理される）。
 
+**推奨**: §3 の `wt-new.sh` が (1) の `.env` コピー＆存在検証と (2) の起動（`--up` 指定時）を自動化する。以下の手動手順は fallback（`wt-new.sh` を使わない場合）。
+
 ```bash
 # (1) backend の .env を既存 worktree からコピー（.env は gitignore 対象で worktree 間で共有されない）
 cp /mnt/c/app/study-app-multitenant/backend/.env backend/.env
@@ -69,9 +87,9 @@ cp /mnt/c/app/study-app-multitenant/backend/.env backend/.env
 docker compose up -d
 ```
 
-- **⚠️ (B) `.env` 欠落は静かに壊れる**: `.env` は `env_file` の `required: false` で参照されるため、コピーを忘れても `docker compose up` は**失敗しない**。その代わり `SECRET_KEY` / `DB_PASSWORD` などが **insecure な既定値のまま静かに起動**する（エラーで気づけない）。必ずコピーできているか確認する。
-- **(C) `COMPOSE_PROJECT_NAME` を global に export しない**: Compose のプロジェクト名は既定でディレクトリ名になる。これにより worktree ごとにコンテナ・named volume（Postgres データ含む）が自動的に分離される。シェルで `COMPOSE_PROJECT_NAME` を global に export すると全 worktree が同一プロジェクト名になり、この分離が壊れる。
-- **(D) 掃除**: worktree ごとに named volume が増える。不要になった worktree は `git worktree remove` の前に、そのディレクトリで `docker compose down -v` を実行して volume を回収する（§3 参照）。
+- **⚠️ (B) `.env` 欠落は静かに壊れる**: `.env` は `env_file` の `required: false` で参照されるため、コピーを忘れても `docker compose up` は**失敗しない**。その代わり `SECRET_KEY` / `DB_PASSWORD` などが **insecure な既定値のまま静かに起動**する（エラーで気づけない）。必ずコピーできているか確認する。→ `wt-new.sh` は `.env` を `cp` した後に存在検証し、欠落/コピー失敗なら明示エラーで停止して機械化で防ぐ。
+- **(C) `COMPOSE_PROJECT_NAME` を global に export しない**: Compose のプロジェクト名は既定でディレクトリ名になる。これにより worktree ごとにコンテナ・named volume（Postgres データ含む）が自動的に分離される。シェルで `COMPOSE_PROJECT_NAME` を global に export すると全 worktree が同一プロジェクト名になり、この分離が壊れる。→ `wt-new.sh` / `wt-remove.sh` は当該変数が設定されていれば警告する。
+- **(D) 掃除**: worktree ごとに named volume が増える。不要になった worktree は `git worktree remove` の前に、そのディレクトリで `docker compose down -v` を実行して volume を回収する（§3 参照）。→ `wt-remove.sh` は `down -v`（`DANGER_OK=1` 必須）→ `remove` の順序を機械化して volume 漏れを防ぐ。
 
 ---
 
