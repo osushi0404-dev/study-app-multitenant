@@ -52,7 +52,9 @@ STUB
   git -C "$SRC" config user.email t@example.com
   git -C "$SRC" config user.name tester
   mkdir -p "$SRC/backend" "$SRC/e2e"
-  printf 'backend/.env\ne2e/.env.e2e\n' > "$SRC/.gitignore"
+  # 実 .gitignore と揃える。root .env / *.env を無視（I097: wt-new が生成する直下 .env が
+  # dirty 扱いにならず、wt-remove の未コミット変更チェックが実運用と同じ挙動になる）。
+  printf 'backend/.env\ne2e/.env.e2e\n.env\n*.env\n' > "$SRC/.gitignore"
   printf 'keep\n' > "$SRC/backend/.gitkeep"
   printf 'keep\n' > "$SRC/e2e/.gitkeep"
   printf 'services: {}\n' > "$SRC/docker-compose.yml"
