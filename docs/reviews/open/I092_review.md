@@ -7,7 +7,8 @@
 - テスト文書 `docs/tests/open/I092_auto_test.md` / `I092_manual_test.md`
 
 ## 変更概要
-- worktree 並行トラック運用の手順を runbook 化（ベースブランチ選択・トラック/ブランチ設計・独立セッション起動・新 worktree セットアップ・共有/非共有・採番一貫性・セッション間引き継ぎ原則・現構成の参考例）。
+- worktree 並行トラック運用の手順を runbook 化（ベースブランチ選択・トラック/ブランチ設計・独立セッション起動・**Docker Compose 前提のセットアップ**・**並行実行のポート衝突**・共有/非共有・採番一貫性・セッション間引き継ぎ原則・現構成の参考例）。
+- ※初回グリルの venv/pip/npm・SQLite ロック前提を docker-compose.yml 実査で是正（Docker/Postgres/固定ポート衝突へ）。
 - CLAUDE.md の参照先に 1 行追加（実体は runbook、CLAUDE.md にはルールを増やさない方針に準拠）。
 
 ## 影響範囲
@@ -15,12 +16,14 @@
 - Config/Infra: `docs/runbooks/worktree.md`（新規）・`CLAUDE.md`（参照 1 行）
 
 ## レビュー観点（実装後に確認）
-- [ ] AC 全 7 項目を満たす（自動 TC-A1〜A12 が ALL PASS）
+- [ ] AC 全項目を満たす（自動 TC-A1〜A13 が ALL PASS）
 - [ ] 再発防止: ベースブランチ＝develop・main を使わない旨が runbook に明記（TC-A3）
-- [ ] CLAUDE.md 参照行のリンク切れ 0（TC-A11）
+- [ ] **Docker 整合**: セットアップが `docker compose up -d`+`.env` コピーで、venv/pip/npm 手順が無い（TC-A6）。dev DB=Postgres・node_modules はコンテナ管理と記載（TC-A7）
+- [ ] **並行衝突**: ホスト固定ポート衝突・`COMPOSE_PROJECT_NAME` が記載（TC-A13）
+- [ ] CLAUDE.md 参照行のリンク切れ 0（TC-A11）・挿入位置＝workflow.md の直後（TC-A10）
 - [ ] 手順本文が一般表現＋参考例の 2 層（TC-A12）／固有値が参考表に隔離
 - [ ] 計画書に無い実装・仕様追加が入っていない（docs 2 ファイルのみの変更）
-- [ ] 設計確認メモ（/grill-me）の確定値と runbook 記載が矛盾しない（wt-app 新設なし・アプリ開発=study-app-multitenant 等）
+- [ ] 設計確認メモ（/grill-me）の確定値と runbook 記載が矛盾しない（wt-app 新設なし・アプリ開発=study-app-multitenant・Docker 前提の是正が反映済み）
 
 ## テスト結果
 - 自動: 実装前 false-green 検証済み（RED→フィクスチャ GREEN で全 TC の反転を実証）。実装後 `/test` で ALL PASS を記録予定。

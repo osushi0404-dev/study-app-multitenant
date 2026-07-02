@@ -34,7 +34,15 @@
 ### 共有/非共有の事実確認（`.gitignore` / tracked 状態）
 - **非共有（gitignore 対象）**: `venv/` `.venv` `node_modules/` `frontend/node_modules/` `db.sqlite3` `.env` `*.env` `.env.e2e`。
 - **共有（tracked）**: `.claude/settings.json` `backend/.env.example` `frontend/.env.development` `frontend/.env.production` ほかコミット済みファイル・`.git` 履歴。
-- 帰結: `db.sqlite3` は worktree ごとに独立（共有しない）ため DB ロック競合は既定で発生しない。backend `.env` は非共有＝新 worktree で手動コピーが必要。
+
+### 実行環境の事実確認（`docker-compose.yml` / `common-commands.md` 実査）※前提訂正
+初回グリルでは「venv/pip/npm でセットアップ」「SQLite ロック競合」を前提にしたが、**docker-compose.yml と common-commands.md の実査で前提が誤りと判明**したため訂正する:
+- **開発環境は Docker Compose**（`docker compose up -d`／テストも `docker compose exec ...`）。ホストでの `venv`/`pip install`/`npm install` の運用は文書化されておらず、依存は image に焼き込み。`frontend` は `volumes: - /app/node_modules`（**匿名ボリューム**）で node_modules をコンテナ内管理 → ホスト `frontend/node_modules` は起動アプリに使われない。
+- **dev DB は Postgres コンテナ**（`ports: 5432`・named volume）。`db.sqlite3`（gitignore）は起動 dev DB ではない。
+- **`COMPOSE_PROJECT_NAME` 未設定・override ファイル無し** → 既定の project 名＝ディレクトリ名。よって `wt-harness` と `study-app-multitenant` はコンテナ名・named volume（Postgres データ含む）が**自動分離**される（DB データはロック競合せず独立）。
+- **ただしホスト固定ポートが衝突する**: `5432/6379/8000/3000/80/443` は全サービスで固定。2 worktree で**同時に `docker compose up`** すると全ポートが衝突 → 同時起動不可。これが「並行運用の真の衝突点」（SQLite ロックではない）。
+- `env_file: ./backend/.env`（gitignore・非共有）→ 新 worktree で**コピーが必要**。E2E は `e2e/.env.e2e`（gitignore・任意）。
+- 帰結: セットアップは「backend `.env` コピー → `docker compose up -d`」に集約し、venv/pip/npm 手順は記載しない（既存アーキと矛盾するため）。共有/非共有の説明も Docker 前提に是正する。
 
 ### AC の性質
 本イシューの AC は「runbook / CLAUDE.md の**記載有無**」の照合であり、lint/audit/scan の出力では決まらない（監査系ツール実走は非該当）。→ AC は grep ベースの決定論チェックで機械検証する（自動テスト文書 I092_auto_test.md）。
@@ -47,7 +55,7 @@
 - **Frontend**: なし
 - **DB**: なし
 - **Config/Infra**: `docs/runbooks/worktree.md`（新規）・`CLAUDE.md`（参照先 1 行追加）
-- **変更対象外（説明目的でのみ言及）**: `.claude/settings.json` / `db.sqlite3` / backend `.env` / frontend `.env.*` は共有/非共有を説明するため runbook 本文で言及するが、いずれも本イシューでは編集しない。
+- **変更対象外（説明目的でのみ言及・参照）**: `.claude/settings.json` / `db.sqlite3` / backend `.env` / frontend `.env.*` / `e2e/.env.e2e` / `docker-compose.yml` / `docs/runbooks/common-commands.md` は共有/非共有・セットアップ・ポート衝突を説明・参照するため runbook 本文で言及するが、いずれも本イシューでは編集しない。
 - **P3/P5/P8 影響なし**（DB 変更・依存関係変更・外部 API/非同期/バッチなし。requirements/package の変更なし → Dockerfile/compose への波及なし）。
 - **P6 影響なし**（UI 変更・データ量/外部 API 懸念なし → 性能・UX 設計セクション不要）。
 - **P9 影響なし**（個人情報・未成年データ・テナントデータを扱わない → プライバシー設計セクション不要）。
@@ -60,12 +68,12 @@
 | ファイル | 種別 | 変更内容 |
 |---------|------|---------|
 | docs/runbooks/worktree.md | 新規 | worktree 並行トラック運用の手順・ベースブランチ選択・トラック/ブランチ設計・独立セッション起動・新 worktree セットアップ・共有/非共有・採番一貫性・セッション間引き継ぎ原則・現構成の参考例（下記§5 の構成に従う） |
-| CLAUDE.md | 編集 | 「0. 参照先」の**運用・ルール:** リスト末尾（`pre-commit 運用` の次）に `- worktree 並行トラック運用: docs/runbooks/worktree.md` を 1 行追加 |
+| CLAUDE.md | 編集 | 「0. 参照先」運用・ルール: リストの **`運用フロー: workflow.md` の直後**に `- 並行トラック運用（worktree）: docs/runbooks/worktree.md` を 1 行追加 |
 
 ### 4.1 CLAUDE.md への追加内容（確定文言）
-運用・ルール: リストの `- pre-commit 運用: docs/runbooks/pre-commit.md` の直後に以下を挿入する:
+worktree 並行トラック運用は運用フロー（workflow.md）の直接拡張であり、発見容易性・概念的近接から**運用・ルール: 区分の 2 番目**（`- 運用フロー: docs/runbooks/workflow.md` の直後）に置く。挿入する行:
 ```
-- worktree 並行トラック運用: docs/runbooks/worktree.md
+- 並行トラック運用（worktree）: docs/runbooks/worktree.md
 ```
 
 ---
@@ -94,18 +102,22 @@ runbook は以下のセクションで構成する:
    - 各 worktree ディレクトリで別々に `claude` を起動する。
    - Cursor/VSCode で**別フォルダを別ウィンドウ**で開く手順（File > New Window → Open Folder、または `code -n <path>` / `cursor -n <path>`）。
    - **落とし穴**: 同じフォルダを再オープンすると既存ウィンドウにフォーカスが戻るだけで新規セッションにならない。
-6. **新 worktree のセットアップ手順**:
-   - backend: `python -m venv venv` → `pip install -r requirements.txt`、`.env` を手動コピー（`cp <他worktree>/backend/.env backend/.env`。gitignore 対象で共有されないため）。
-   - frontend: `npm install`（`node_modules` は非共有）。
-   - DB マイグレーション（`python manage.py migrate` 等）は**アプリ開発トラックのみ**条件付き。ハーネストラックは DB を参照しない。
-7. **共有 / 非共有の一覧**:
+6. **新 worktree のセットアップ手順（Docker Compose 前提）**:
+   - backend `.env` を既存 worktree からコピー（gitignore・非共有）: `cp /mnt/c/app/study-app-multitenant/backend/.env backend/.env`。E2E を行う場合は `e2e/.env.e2e` も同様に用意。
+   - `docker compose up -d` で起動（正準手順・テスト実行は `common-commands.md` 参照）。**ホストの `venv`/`pip install`/`npm install` は不要**（依存は image に焼き込み・`node_modules` は frontend コンテナの匿名ボリューム管理）。
+   - `COMPOSE_PROJECT_NAME` は既定でディレクトリ名になるため、worktree ごとにコンテナ・named volume（Postgres データ含む）は自動分離される（追加設定不要）。
+7. **並行実行の衝突（重要）**:
+   - ホスト固定ポート `5432(db)/6379(redis)/8000(backend)/3000(frontend)/80,443(nginx)` は全 worktree 共通。**2 worktree で同時に `docker compose up` するとポートが衝突**する。
+   - 対処: 現行の人手2トラック運用では**同時に up せず 1 スタックずつ**起動する（推奨）。同時起動が必要な場合のみ worktree ごとに compose override でポート＋`COMPOSE_PROJECT_NAME` を変える（override 構築は本イシュー対象外＝別イシュー化）。
+8. **共有 / 非共有の一覧**:
    - **共有される**: `.git` 履歴・コミット済みファイル・`CLAUDE.md`・`docs/runbooks`・`.claude/settings.json`・tracked な `frontend/.env.*`。
-   - **共有されない**: `venv`・`node_modules`・ビルド成果物・backend `.env`・未コミット/untracked ファイル。
-   - **DB(`db.sqlite3`)**: gitignore 対象で worktree ごとに独立（共有しない）→ ロック競合は考慮不要。1 DB を意図的に共有した場合のみ競合が起きる（アンチパターン）。
+   - **共有されない（手当てが要る）**: backend `.env`（要コピー）・`e2e/.env.e2e`（任意）・未コミット/untracked ファイル。
+   - **コンテナ管理（ホスト非共有だが手当て不要）**: 依存（image）・`node_modules`（frontend の匿名ボリューム `/app/node_modules`）。
+   - **dev DB**: **Postgres コンテナ + named volume**。`COMPOSE_PROJECT_NAME`（既定＝ディレクトリ名）ごとに自動分離されるためロック競合は起きない。`db.sqlite3`（gitignore）は起動 dev DB ではない旨を補足。
    - **WSL 表示確認**: WSL 環境でのパス表示・エクスプローラ確認の注意。
-8. **採番の一貫性**: 起票直後の untracked イシューは他 worktree から不可視。採番は権威ツリー（未コミット分が見える primary checkout `study-app-multitenant`）で行うか、起票後すみやかに develop へ取り込む。
-9. **セッション間引き継ぎ原則**: 口頭メモ禁止。引き継ぎはイシュー/計画/レビューのファイルに**自己完結**で記述し、文脈ゼロのセッションが同じ結論に到達できる状態を必須とする。
-10. **現時点のトラック構成（参考・2026-07 時点）**（別枠・日付つき）:
+9. **採番の一貫性**: 起票直後の untracked イシューは他 worktree から不可視。採番は権威ツリー（未コミット分が見える primary checkout `study-app-multitenant`）で行うか、起票後すみやかに develop へ取り込む。
+10. **セッション間引き継ぎ原則**: 口頭メモ禁止。引き継ぎはイシュー/計画/レビューのファイルに**自己完結**で記述し、文脈ゼロのセッションが同じ結論に到達できる状態を必須とする。
+11. **現時点のトラック構成（参考・2026-07 時点）**（別枠・日付つき）:
     | トラック | 作業ツリー | 種別 | 用途 |
     |---------|-----------|------|------|
     | ハーネス改善 | /mnt/c/app/wt-harness | linked worktree | 仕組み改善イシュー |
@@ -117,9 +129,9 @@ runbook は以下のセクションで構成する:
 
 > 本イシューは docs のみ。垂直スライス/未知リスク先行の対象となるコード層は無いため、単一ステップで完結する。検証は各 TC（I092_auto_test.md）に委譲する。
 
-- **ステップ1**: `docs/runbooks/worktree.md` を §5 の構成で新規作成する。→ TC-A1〜A9, TC-A11 参照
-- **ステップ2**: `CLAUDE.md` の運用・ルール: リスト末尾（`pre-commit 運用` の次）に §4.1 の 1 行を追加する。→ TC-A10, TC-A12 参照
-- **依存関係**: ステップ2 はステップ1 の完了が前提（追加するリンク先が存在してからリンクを張る）。
+- **ステップ1**: `docs/runbooks/worktree.md` を §5 の構成（1〜11）で新規作成する。→ TC-A1〜A9, TC-A13, TC-A11 参照
+- **ステップ2**: `CLAUDE.md` 運用・ルール: の 2 番目（`運用フロー: workflow.md` の直後）に §4.1 の 1 行を追加する。→ TC-A10, TC-A12 参照
+- **依存関係**: ステップ2 はステップ1 の完了が前提（追加するリンク先が存在してからリンクを張る＝TC-A11 のリンク切れ回避）。
 
 ---
 
@@ -143,8 +155,9 @@ runbook は以下のセクションで構成する:
 | Risk | 回避策 |
 |------|--------|
 | 追加した CLAUDE.md リンクがリンク切れ | ステップ2 をステップ1 の後に実施。TC-A11/A12 でリンク先実在を機械検証 |
-| runbook が I092 固有表現に依存し一般性を欠く | 手順本文は `<track>`/`I<番号>` プレースホルダの一般形。具体値は §10 の「参考・日付つき」別枠に隔離。TC-A12 で検証 |
-| 記載漏れ（AC 項目の抜け） | AC の各項目を TC-A1〜A12 に 1:1 対応させ、`/test` で全件検証 |
+| runbook が I092 固有表現に依存し一般性を欠く | 手順本文は `<track>`/`I<番号>` プレースホルダの一般形。具体値は §5-11 の「参考・日付つき」別枠に隔離。TC-A12 で検証 |
+| 記載漏れ（AC 項目の抜け） | AC の各項目を TC-A1〜A13 に 1:1 対応させ、`/test` で全件検証 |
+| 初回グリルの誤前提(venv/npm・SQLite)の残存 | イシュー本文・メモ・プラン・テストを Docker 現実へ同時是正済み。TC-A6/A7/A8 を docker/ポート/Postgres 検証に更新 |
 
 ---
 
@@ -156,18 +169,22 @@ runbook は以下のセクションで構成する:
 | アプリ開発＝既存 study-app-multitenant、追加＝wt-<track>、wt-app 新設なし | イシュー明記 | /grill-me メモ（2ラウンド目） |
 | 2層構成（一般手順＋参考の現構成） | イシュー明記 | /grill-me メモ（2ラウンド目） |
 | 共有/非共有の具体項目（backend .env 非共有・frontend .env.* 共有・DB 独立） | イシュー明記 | /grill-me メモ（1ラウンド目）＋ .gitignore 実査 |
-| CLAUDE.md の挿入位置＝運用・ルール: リスト末尾（pre-commit の次） | 仮定で決めた | イシューは「参照先リストに 1 行追加」とのみ指定。運用・ルール: 区分の末尾が自然と判断（下記 承認ポイントで確認） |
-| runbook セットアップ手順の具体コマンド（venv/pip/npm/cp .env） | 仮定で決めた | イシューは「再セットアップ手順を記載」と指定。具体コマンドは既存 backend/frontend 構成に合わせて補完（承認ポイントで確認） |
+| CLAUDE.md の挿入位置＝運用・ルール: の 2 番目（workflow.md の直後） | 決定（理想基準） | worktree 運用は運用フローの直接拡張。発見容易性・概念的近接で最適位置と判断 |
+| セットアップ手順＝backend `.env` コピー → `docker compose up -d`（venv/pip/npm は不使用） | 決定（Docker 現実に整合） | docker-compose.yml/common-commands.md 実査。初回グリルの venv/pip/npm 前提は誤りと判明し是正 |
+| 並行衝突点＝ホスト固定ポート（SQLite ロックではない） | 決定（Docker 現実に整合） | docker-compose.yml 実査（固定ポート・override 無し・PROJECT_NAME 未設定） |
+| dev DB＝Postgres コンテナ+named volume（COMPOSE_PROJECT_NAME で自動分離） | 決定（Docker 現実に整合） | docker-compose.yml 実査。`db.sqlite3` は起動 dev DB でないと確認 |
 
-※「仮定で決めた」2 項目を承認ポイントで確認する。
+※ 上記はいずれも**理想・現実整合を基準に決定済み**（仮定なし）。初回グリルで確定した venv/pip/npm・SQLite 前提は Docker 実査により誤りと判明したため、イシュー本文・メモも同時に是正済み（plan-writing-rules「計画変更時に関連ドキュメントを同時更新」に準拠）。
 
 ---
 
 ## 11. 承認ポイント（チェックリスト）
 
-以下を確認してください:
+**重要（前提訂正）**: 初回グリルで確定した「venv/pip/npm でセットアップ」「SQLite ロック競合」は、docker-compose.yml/common-commands.md の実査により**既存アーキ(Docker Compose)と矛盾する誤り**と判明しました。理想・現実整合を基準に以下へ是正済みです（イシュー本文・メモも同時更新）:
 
-1. **CLAUDE.md 挿入位置**: 「0. 参照先」の**運用・ルール:** リスト末尾（`- pre-commit 運用: ...` の直後）に `- worktree 並行トラック運用: docs/runbooks/worktree.md` を追加する方針でよいか。
-2. **セットアップ手順の具体コマンド**: runbook §6 に `python -m venv venv` / `pip install -r requirements.txt` / `npm install` / backend `.env` の `cp` を具体コマンドとして記載する方針でよいか（既存構成に準拠）。
-3. **runbook の構成（§5 の 1〜10）** で AC を満たす想定でよいか。
-4. 上記以外は全てイシュー本文・/grill-me メモに明記済みの確定値で、仕様追加・逸脱なし。
+1. **セットアップ＝Docker 前提**: backend `.env` コピー → `docker compose up -d`（正準手順は common-commands.md 参照）。ホストの venv/pip/npm install は不要（依存はコンテナ管理・node_modules は匿名ボリューム）。
+2. **並行の衝突点＝ホスト固定ポート**（5432/6379/8000/3000/80/443）。同時 `up` 不可 → 1 スタックずつ起動（推奨）。同時起動用の compose override は別イシュー化。
+3. **dev DB＝Postgres コンテナ+named volume**。`COMPOSE_PROJECT_NAME`（既定＝ディレクトリ名）で worktree ごとに自動分離。`db.sqlite3` は起動 dev DB ではない。
+4. **CLAUDE.md 挿入位置**: 運用・ルール: の 2 番目（`運用フロー: workflow.md` の直後）。worktree 運用は運用フローの直接拡張のため最適位置と判断。
+
+上記の是正方針で **`docs/runbooks/worktree.md` を §5 の構成（1〜11）** で作成し、CLAUDE.md に 1 行追加します。この方針で承認いただけますか。その他はイシュー本文・/grill-me メモの確定値どおりで、仕様追加・逸脱はありません。

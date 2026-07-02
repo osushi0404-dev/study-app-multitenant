@@ -15,8 +15,9 @@ pytest / npm test の対象コード変更は無い。本イシューの受け�
 | TC-A3 | ベースブランチ＝develop・main を使わない旨が記載（再発防止） | AC1 | grep（`develop` かつ `main`） |
 | TC-A4 | トラック/ブランチ設計（トラック=worktree・イシュー=ブランチ、study-app-multitenant/wt- 命名） | AC1 | grep |
 | TC-A5 | 独立セッション起動（Cursor 別ウィンドウ + 同一フォルダ再オープンの落とし穴） | AC2 | grep（`ウィンドウ` かつ `再オープン`/`フォーカス`） |
-| TC-A6 | 新 worktree セットアップ手順（venv / pip install / npm install / .env コピー） | AC3 | grep（4 要素） |
-| TC-A7 | 共有/非共有一覧（venv/node_modules/backend .env 非共有・.claude/settings.json/frontend .env.* 共有・db.sqlite3 独立） | AC4 | grep |
+| TC-A6 | 新 worktree セットアップ手順（`docker compose up` + backend `.env` コピー。venv/pip/npm は非使用） | AC3 | grep（`docker compose up` かつ `.env`） |
+| TC-A7 | 共有/非共有一覧（node_modules はコンテナ管理・`.claude/settings.json` 共有・dev DB は Postgres） | AC4 | grep（`node_modules` かつ `settings.json` かつ `Postgres`） |
+| TC-A13 | 並行実行の衝突（ホスト固定ポート衝突・`COMPOSE_PROJECT_NAME`） | AC(並行衝突) | grep（`COMPOSE_PROJECT_NAME` かつ `5432`/`ポート`） |
 | TC-A8 | 採番一貫性（untracked が worktree 間で不可視） | AC5 | grep（`untracked` かつ `採番`） |
 | TC-A9 | セッション間引き継ぎ＝ファイル経由・自己完結の原則 | AC6 | grep（`引き継ぎ`/`引継ぎ` かつ `自己完結`） |
 | TC-A10 | CLAUDE.md に worktree.md 参照 1 行が追加 | AC7 | grep |
@@ -50,11 +51,14 @@ if grep -q 'study-app-multitenant' "$RB" && grep -q 'wt-' "$RB" && grep -Eq 'ブ
 # TC-A5
 if grep -Eq 'ウィンドウ' "$RB" && grep -Eq '再オープン|フォーカス' "$RB"; then ok "TC-A5 独立セッション/落とし穴"; else ng "TC-A5 独立セッション/落とし穴 不足"; fi
 
-# TC-A6
-if grep -q 'venv' "$RB" && grep -q 'pip install' "$RB" && grep -q 'npm install' "$RB" && grep -Eq '\.env' "$RB"; then ok "TC-A6 セットアップ手順"; else ng "TC-A6 セットアップ手順 不足"; fi
+# TC-A6 (Docker: docker compose up + backend .env コピー)
+if grep -q 'docker compose up' "$RB" && grep -Eq '\.env' "$RB"; then ok "TC-A6 セットアップ手順(docker)"; else ng "TC-A6 セットアップ手順 不足"; fi
 
-# TC-A7
-if grep -q 'node_modules' "$RB" && grep -q 'settings.json' "$RB" && grep -q 'db.sqlite3' "$RB"; then ok "TC-A7 共有/非共有一覧"; else ng "TC-A7 共有/非共有一覧 不足"; fi
+# TC-A7 (共有/非共有: node_modules コンテナ管理・settings.json 共有・Postgres)
+if grep -q 'node_modules' "$RB" && grep -q 'settings.json' "$RB" && grep -Eq 'Postgres|postgres' "$RB"; then ok "TC-A7 共有/非共有一覧"; else ng "TC-A7 共有/非共有一覧 不足"; fi
+
+# TC-A13 (並行衝突: 固定ポート + COMPOSE_PROJECT_NAME)
+if grep -q 'COMPOSE_PROJECT_NAME' "$RB" && grep -Eq '5432|ポート' "$RB"; then ok "TC-A13 並行ポート衝突"; else ng "TC-A13 並行ポート衝突 不足"; fi
 
 # TC-A8
 if grep -q 'untracked' "$RB" && grep -q '採番' "$RB"; then ok "TC-A8 採番一貫性"; else ng "TC-A8 採番一貫性 不足"; fi
@@ -89,10 +93,10 @@ exit $fail
 
 ## 実行結果
 
-### 実装前 false-green 検証（2026-07-02・計画作成時）
-- **RED（実リポジトリ・実装前）**: TC-A1〜A10・A12 = NG（対象の worktree.md 未作成・CLAUDE.md 未追加を正しく検出）、TC-A11 = OK（現行 CLAUDE.md 参照は全件実在）。→ `RESULT: FAIL / exit=1`。内容系ゲートが always-green でないことを確認。
-- **GREEN（充足フィクスチャ）**: TC-A1〜A10・A12 = OK に反転（内容を満たせば合格することを確認）。TC-A11 は「参照行はあるが実ファイル未作成」のフィクスチャで NG を検出（リンク切れ捕捉能力を確認。→ 実装ステップ2 はステップ1 の後に実施する依存順序の妥当性を裏付け）。
-- 結論: 全 TC が対象の有無に応じて OK/NG を反転する決定論ゲートであることを実証済み。
+### 実装前 false-green 検証（2026-07-02・計画作成時／Docker 是正版 TC で再検証）
+- **RED（実リポジトリ・実装前）**: 内容系 TC（A1〜A10・A13・A12）= NG（worktree.md 未作成・CLAUDE.md 未追加を正しく検出）、TC-A11 = OK（現行 CLAUDE.md 参照は全件実在）。→ `RESULT: FAIL / exit=1`。内容系ゲートが always-green でないことを確認。
+- **GREEN（充足フィクスチャ）**: A1〜A10・A13・A12 = OK に反転（内容を満たせば合格）。TC-A11 は「参照行はあるが実ファイル未作成」のフィクスチャで NG を検出（リンク切れ捕捉能力を確認 → 実装ステップ2 をステップ1 の後に行う依存順序の妥当性を裏付け）。
+- 結論: 全 TC が対象の有無に応じて OK/NG を反転する決定論ゲートであることを実証済み（Docker 是正後の TC-A6=docker compose/TC-A7=Postgres/TC-A13=ポート衝突 も反転を確認）。
 
 ### `/test` 実行（実装後）
 - （`/implement` 後に `/test` で実行し、`RESULT: ALL PASS` を記入）
