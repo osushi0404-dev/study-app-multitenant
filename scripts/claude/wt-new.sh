@@ -133,7 +133,7 @@ FRONTEND_PORT=$NEW_FRONTEND
 EOF
 echo "[wt-new] ポート割当: offset=$OFFSET db=$NEW_DB redis=$NEW_REDIS backend=$NEW_BACKEND frontend=$NEW_FRONTEND"
 
-# 任意 up（既定 OFF・§6 ポート衝突のため opt-in）
+# 任意 up（既定 OFF・opt-in。同ホストで複数スタックを同時 up する場合は上記のポート分離（--port-offset／自動割当）で衝突回避＝§6）
 if [ "$DO_UP" -eq 1 ]; then
   ( cd "$WT_PATH" && docker compose up -d )
 fi
