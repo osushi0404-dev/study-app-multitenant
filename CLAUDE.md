@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 運用・ルール:
 - 運用フロー: docs/runbooks/workflow.md
+- 並行トラック運用（worktree）: docs/runbooks/worktree.md
 - 計画書の書き方: docs/runbooks/plan-writing-rules.md
 - 危険操作（破壊的変更）: docs/runbooks/danger-ops.md
 - よく使うコマンド: docs/runbooks/common-commands.md
