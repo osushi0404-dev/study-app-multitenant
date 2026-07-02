@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -225,6 +226,145 @@ def _repo_relative(path: str) -> str:
         p = p[2:]
     return p
 
+# --- worktree 横断書込のブロック（I095） ---
+# 別トラック（別 worktree）の作業ツリーへの直接書込を技術強制で禁止する（worktree.md §9）。
+# 読み取りは許可・書込のみブロック。fail-safe（境界確定不能はブロック）・エスケープ無し（DANGER_OK 非解除）。
+_REDIR_OPS = (">>", ">|", ">")   # 長いものから判定（">>" を ">" より先に）
+
+def _worktree_roots():
+    """全 worktree ルート（realpath 正規化）のリストを返す。git 失敗/非ゼロは None（fail-safe 対象）。"""
+    try:
+        r = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            capture_output=True, text=True
+        )
+        if r.returncode != 0:
+            return None
+        roots = []
+        for line in r.stdout.splitlines():
+            if line.startswith("worktree "):
+                roots.append(os.path.realpath(line[len("worktree "):].strip()))
+        return roots
+    except Exception:
+        return None
+
+def _current_worktree_root():
+    """現 worktree ルート（realpath 正規化）。失敗は None。"""
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True
+        )
+        return os.path.realpath(r.stdout.strip()) if r.returncode == 0 else None
+    except Exception:
+        return None
+
+def _cross_worktree(path):
+    """path が別 worktree 配下なら True / どの別 worktree 配下でもなければ False /
+    境界を確定できなければ None（fail-safe 対象）。境界一致は realpath＋末尾 os.sep 接頭辞で
+    行い、兄弟ディレクトリ名の部分一致（<root>-foo）を誤判定しない。"""
+    if not path or not isinstance(path, str):
+        return None
+    roots = _worktree_roots()
+    cur = _current_worktree_root()
+    if roots is None or cur is None:
+        return None
+    ap = os.path.realpath(os.path.abspath(path))
+    for root in roots:
+        if root == cur:
+            continue
+        if ap == root or ap.startswith(root + os.sep):
+            return True
+    return False
+
+def _edit_path(data: dict) -> str:
+    """書込ツールの対象パス（Edit/Write/MultiEdit=file_path, NotebookEdit=notebook_path）。"""
+    ti = data.get("tool_input") or {}
+    p = ti.get("file_path") or ti.get("notebook_path") or ""
+    return p if isinstance(p, str) else ""
+
+def _split_redir_target(tok: str):
+    """リダイレクト演算子が埋め込まれたトークンの右側（宛先候補）を返す。無ければ None。
+    例: '>>/p'→'/p'・'>|/p'→'/p'・'>/p'→'/p'・'x>/p'→'/p'・'2>/p'→'/p'。'>' 単体は None。"""
+    for op in _REDIR_OPS:
+        idx = tok.find(op)
+        if idx != -1:
+            rhs = tok[idx + len(op):]
+            return rhs or None
+    return None
+
+def _bash_write_targets(cmd: str) -> list:
+    """Bash コマンドから書込先の絶対パスのみを抽出する（ヒューリスティック）。
+    対象: リダイレクト（>/>>/>| の単体・付着・語中埋め込み）・tee・cp/mv の宛先・sed -i の対象。
+    src 側（読み取り）は対象外・相対/変数越しは対象外（絶対パスのみ）。"""
+    targets = []
+    for toks in _segments(cmd):
+        if not toks:
+            continue
+        # リダイレクト（全コマンド共通）
+        i, n = 0, len(toks)
+        while i < n:
+            t = toks[i]
+            if t in _REDIR_OPS:                 # 演算子単体 → 次トークンが宛先
+                if i + 1 < n:
+                    targets.append(toks[i + 1])
+            elif any(op in t for op in _REDIR_OPS):   # 付着/語中埋め込み
+                rhs = _split_redir_target(t)
+                if rhs:
+                    targets.append(rhs)
+            i += 1
+        # コマンド別の宛先
+        head = os.path.basename(toks[0]) if toks[0] else ""
+        rest = toks[1:]
+        if head == "tee":
+            targets += [a for a in rest if not a.startswith("-")]
+        elif head in ("cp", "mv"):
+            if "-t" in rest:                    # cp/mv -t <dir> src...
+                ti = rest.index("-t")
+                if ti + 1 < len(rest):
+                    targets.append(rest[ti + 1])
+            else:
+                positional = [a for a in rest if not a.startswith("-")]
+                if len(positional) >= 2:
+                    targets.append(positional[-1])   # 末尾＝宛先（src は対象外）
+        elif head == "sed":
+            if any(a == "-i" or a.startswith("-i") or a.startswith("--in-place") for a in rest):
+                targets += [a for a in rest if not a.startswith("-")]   # in-place 対象（絶対パスのみ後段で選別）
+    # 絶対パスのみ（相対 src・sed script 等を除外）
+    return [t for t in targets if t.startswith("/")]
+
+def _has_write_intent(cmd: str) -> bool:
+    """Bash に書込語（リダイレクト・tee・cp・mv・sed -i）が含まれるか（未カバー警告の判定用）。"""
+    for toks in _segments(cmd):
+        if not toks:
+            continue
+        for t in toks:
+            if t in _REDIR_OPS or any(op in t for op in _REDIR_OPS):
+                return True
+        head = os.path.basename(toks[0]) if toks[0] else ""
+        if head in ("tee", "cp", "mv"):
+            return True
+        if head == "sed" and any(a == "-i" or a.startswith("-i") or a.startswith("--in-place")
+                                 for a in toks[1:]):
+            return True
+    return False
+
+def _block_cross_worktree(kind: str, path: str):
+    """別 worktree への書込／判定不能を exit 2 でブロックする（DANGER_OK でも解除しない）。"""
+    roots = _worktree_roots()
+    cur = _current_worktree_root()
+    if not path or roots is None or cur is None:
+        reason = "対象パスを取得できない" if not path else "worktree 境界を確定できない"
+        print(f"[guard] {reason}ため{kind}をブロックしました（fail-safe）。"
+              f"git の状態/入力を確認してください: {path!r}", file=sys.stderr)
+        sys.exit(2)
+    ap = os.path.realpath(os.path.abspath(path))
+    x_root = next((r for r in roots if r != cur and (ap == r or ap.startswith(r + os.sep))), None)
+    print(f"[guard] 別 worktree（{x_root}）への{kind}は禁止です。"
+          f"トラック境界を越える変更は worktree.md §9 のファイル経由で引き継いでください: {path}",
+          file=sys.stderr)
+    sys.exit(2)
+
 def _ask(reason: str):
     """PreToolUse の permissionDecision=ask を返す（プロンプト化）。"""
     print(json.dumps({
@@ -251,8 +391,14 @@ def _check_edit_write(data: dict):
 def main():
     data = _load()
     tool_name = data.get("tool_name")
-    if tool_name in ("Edit", "Write"):
-        _check_edit_write(data)  # 高リスクなら ask、非該当は exit 0
+    if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        # I095: 別 worktree 配下への書込は禁止（パス未取得/境界不能も fail-safe で block）
+        path = _edit_path(data)
+        x = _cross_worktree(path) if path else None
+        if x is True or x is None:
+            _block_cross_worktree("編集", path)
+        if tool_name in ("Edit", "Write"):
+            _check_edit_write(data)  # 既存の高リスク ask は Edit/Write のみ（現状維持）
         sys.exit(0)
     if tool_name != "Bash":
         sys.exit(0)
@@ -273,6 +419,17 @@ def main():
         _block("dd is forbidden", raw)
     if re.search(r"\bshred\b", cmd, re.I):
         _block("shred is forbidden", raw)
+
+    # I095: worktree 横断書込のブロック（DANGER_OK でも解除しない＝danger_ok ゲートの外）。
+    _wt_targets = _bash_write_targets(cmd)
+    for _tgt in _wt_targets:
+        x = _cross_worktree(_tgt)
+        if x is True or x is None:
+            _block_cross_worktree("Bash 書込", _tgt)
+    # no silent caps: 書込語はあるが絶対パス宛先を抽出できない経路（cd/変数越し等）は限界を明示。
+    if not _wt_targets and _has_write_intent(cmd):
+        print("[guard] worktree ガードは絶対パス宛先のみ検査します（cd/変数展開越しの宛先は非対象）",
+              file=sys.stderr)
 
     if not danger_ok:
         # push to a protected branch by name/refspec — danger-op:
