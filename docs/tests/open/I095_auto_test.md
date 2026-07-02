@@ -55,6 +55,7 @@ bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
 | TC-A20 | 既存回帰: clean checkout・dirty checkout block・force push block 等が従来どおり | 既存期待値維持 |
 | TC-A21 | **false-green 注入**: `_cross_worktree` の戻りを常に False 化した複製フックでは別wt宛が素通し(0)、実体では block(2) | 複製=0 / 実体=2 |
 | TC-A22 | Bash 書込語を含むが絶対パス宛先を抽出できない（`cd <別wt> && echo x > f`）→ stderr に未カバー注意が出る | 0（block しない）かつ stderr に部分文字列 `絶対パス宛先のみ検査` が出る（`grep -q` で確認）※W2 |
+| TC-A23 | 別wt から読み `cp <別wt>/src ./dest`（cd/変数なし）→ **未カバー警告を誤発火しない**（Medium 対応） | 0（block しない）かつ stderr に `絶対パス宛先のみ検査` が**出ない** |
 
 ## 決定論ゲート（自動実走）
 <!--
@@ -68,5 +69,9 @@ bash scripts/claude/tests/test_pretooluse_push_guard.sh
 python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
 python3 -m json.tool .claude/settings.json
 grep -q "pretooluse_guard.py" docs/runbooks/worktree.md
-grep -q "MultiEdit|NotebookEdit" .claude/settings.json
+grep -q "MultiEdit" .claude/settings.json
+grep -q "NotebookEdit" .claude/settings.json
 ```
+<!-- 注: grep パターンに `|`（パイプ）を含めない。code-review ランナーの allowlist が
+     チェーン系とみなして fail-closed（未実走→omission-lint HIGH）にするため、MultiEdit /
+     NotebookEdit の存在は別々の pipe-free grep で確認する。 -->

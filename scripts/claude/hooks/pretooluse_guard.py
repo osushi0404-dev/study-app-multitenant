@@ -349,6 +349,24 @@ def _has_write_intent(cmd: str) -> bool:
             return True
     return False
 
+def _bash_uncovered_risk(cmd: str) -> bool:
+    """絶対パス宛先の抽出では捕捉できない書込リスク（`cd` 後の相対書込・変数/コマンド置換・
+    不透明ラッパー越しの宛先）があるか。no-silent-caps 警告用。
+    読み取り（例: `cp /other/src ./dest`）や単純な相対書込では False（誤警告しない）。"""
+    if not _has_write_intent(cmd):
+        return False
+    for toks in _segments(cmd):
+        if not toks:
+            continue
+        head = os.path.basename(toks[0]) if toks[0] else ""
+        if head == "cd":                                   # cwd が変わる → 相対宛先を分類できない
+            return True
+        if head == "eval" or (head in _WRAP_SHELLS and "-c" in toks):   # 不透明ラッパー
+            return True
+        if any(("$" in t) or ("`" in t) for t in toks):    # 変数/コマンド置換越しの宛先
+            return True
+    return False
+
 def _block_cross_worktree(kind: str, path: str):
     """別 worktree への書込／判定不能を exit 2 でブロックする（DANGER_OK でも解除しない）。"""
     roots = _worktree_roots()
@@ -360,7 +378,8 @@ def _block_cross_worktree(kind: str, path: str):
         sys.exit(2)
     ap = os.path.realpath(os.path.abspath(path))
     x_root = next((r for r in roots if r != cur and (ap == r or ap.startswith(r + os.sep))), None)
-    print(f"[guard] 別 worktree（{x_root}）への{kind}は禁止です。"
+    where = f"別 worktree（{x_root}）" if x_root else "別 worktree"
+    print(f"[guard] {where}への{kind}は禁止です。"
           f"トラック境界を越える変更は worktree.md §9 のファイル経由で引き継いでください: {path}",
           file=sys.stderr)
     sys.exit(2)
@@ -426,8 +445,9 @@ def main():
         x = _cross_worktree(_tgt)
         if x is True or x is None:
             _block_cross_worktree("Bash 書込", _tgt)
-    # no silent caps: 書込語はあるが絶対パス宛先を抽出できない経路（cd/変数越し等）は限界を明示。
-    if not _wt_targets and _has_write_intent(cmd):
+    # no silent caps: 絶対パス宛先を抽出できないが cd/変数/ラッパー越しで別 worktree を
+    # 指し得る経路のみ限界を明示（読み取り・単純な相対書込では誤警告しない）。
+    if not _wt_targets and _bash_uncovered_risk(cmd):
         print("[guard] worktree ガードは絶対パス宛先のみ検査します（cd/変数展開越しの宛先は非対象）",
               file=sys.stderr)
 

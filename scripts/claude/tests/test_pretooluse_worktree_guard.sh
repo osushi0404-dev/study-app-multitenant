@@ -90,6 +90,12 @@ A22_ERR=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd %s && echo x >
 if printf '%s' "$A22_ERR" | grep -q "絶対パス宛先のみ検査"; then
   ck "A22 未カバー警告出力" 0 0; else ck "A22 未カバー警告出力" 0 1; fi
 
+# --- 未カバー警告の誤発火防止（TC-A23・cp read は cd/変数なし → 警告なし・Medium 対応） ---
+A23_ERR=$(printf '{"tool_name":"Bash","tool_input":{"command":"cp %s/src.txt ./dest.txt"}}' "$OTHER" \
+             | ( cd "$MAIN" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
+if printf '%s' "$A23_ERR" | grep -q "絶対パス宛先のみ検査"; then
+  ck "A23 read-cp 警告誤発火なし" 0 1; else ck "A23 read-cp 警告誤発火なし" 0 0; fi
+
 # --- FALSEGREEN 注入（TC-A21・_cross_worktree を常に False 化） ---
 BROKEN="$TMP/guard_broken.py"
 sed 's/^def _cross_worktree(path):/def _cross_worktree(path):\n    return False  # FALSEGREEN/' \
