@@ -12,6 +12,8 @@
       "Edit(backend/**)",
       "Write(frontend/**)",
       "Edit(frontend/**)",
+      "Write(scripts/claude/**)",
+      "Edit(scripts/claude/**)",
       "Bash(mv docs/*/open/* docs/*/closed/)",
       "Bash(rm docs/*/open/*)",
       "Bash(pwd)",
