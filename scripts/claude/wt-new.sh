@@ -58,7 +58,7 @@ cp "$ENV_SRC" "$WT_PATH/backend/.env"
 
 # e2e/.env.e2e は source と同じ worktree に在れば同様コピー（非致命）
 SRC_ROOT="$(dirname "$(dirname "$ENV_SRC")")"   # .../backend/.env → .../（source worktree root）
-if [ -n "$SRC_ROOT" ] && [ -f "$SRC_ROOT/e2e/.env.e2e" ]; then
+if [ -f "$SRC_ROOT/e2e/.env.e2e" ]; then
   cp "$SRC_ROOT/e2e/.env.e2e" "$WT_PATH/e2e/.env.e2e" || echo "[wt-new] e2e/.env.e2e コピーをスキップ（非致命）" >&2
 fi
 
