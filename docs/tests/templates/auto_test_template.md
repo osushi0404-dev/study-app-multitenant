@@ -31,5 +31,6 @@ docker compose exec frontend npm test
   - 決定論ゲートが無いイシューはこのセクションを空（または省略）にしてよい。
 -->
 ```bash
-bash scripts/claude/tests/test_xxx.sh
+# 例: bash scripts/claude/tests/test_xxx.sh  ← 実ゲートに置換。決定論ゲートが無ければこのブロックごと削除。
+# （未編集のままだと code-review はゲート抽出 0 件として扱い、実走・BLOCKER は起きない）
 ```
