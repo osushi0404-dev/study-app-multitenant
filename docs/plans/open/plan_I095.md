@@ -70,7 +70,7 @@ plan-writing-rules「外部/ハーネス挙動依存のスパイク実証(1)」�
 - `_cross_worktree(path: str) -> bool | None`: `path` を `realpath(abspath(path))` 化し、**現 worktree 以外**のルートに対し境界一致（`ap == root or ap.startswith(root + os.sep)`）すれば `True`。どのルート配下でもなければ `False`。列挙/現ルート取得失敗は `None`（判定不能）。
 - `_edit_path(data) -> str`: `tool_input.file_path`（Edit/Write/MultiEdit）または `notebook_path`（NotebookEdit）を返す。
 - `_bash_write_targets(cmd: str) -> list[str]`: `_segments()` で分割し、各セグメントから**書込先の絶対パス**のみを抽出:
-  - リダイレクト: トークンが `>`/`>>`/`>|` の直後、または `>file`/`>>file`/`>|file` の付着形の宛先。
+  - リダイレクト: (a) トークンが `>`/`>>`/`>|` 単体でその次トークンが宛先、(b) 先頭付着形 `>file`/`>>file`/`>|file`、(c) **語中埋め込み形** `word>/path`（`echo x>/path/f` は shlex では `['echo','x>/path/f']` の単一トークンになる）→ トークン内に `>`/`>>`/`>|` を検出したら演算子で分割し**右側を宛先**として抽出する。いずれも右側が絶対パスのときのみ対象。
   - `tee`（`tee`/`tee -a`）: 直後の非フラグ file 引数（全て＝書込先）。
   - `cp`/`mv`: 末尾の非フラグ引数（宛先）。`-t <dir>` 指定時は `<dir>`。**src 側は対象外**（別 worktree を読むのは許可）。
   - `sed -i`（`-i`/`--in-place`）: セグメント内の非フラグ file 引数（全て in-place で書換＝書込先）。
@@ -82,10 +82,9 @@ plan-writing-rules「外部/ハーネス挙動依存のスパイク実証(1)」�
   ```
   if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
       path = _edit_path(data)
-      if path:
-          x = _cross_worktree(path)
-          if x is True or x is None:   # 別wt配下 or 判定不能(fail-safe) → block（DANGER_OK でも解除しない）
-              _block_cross_worktree("編集", path)
+      x = _cross_worktree(path) if path else None   # パス未取得も None＝fail-safe(block)（Info#1 反映）
+      if x is True or x is None:   # 別wt配下 / 判定不能 / パス未取得(fail-safe) → block（DANGER_OK でも解除しない）
+          _block_cross_worktree("編集", path)
       if tool_name in ("Edit", "Write"):
           _check_edit_write(data)      # 既存の高リスク ask は Edit/Write のみ（現状維持・スコープ外）
       sys.exit(0)
@@ -98,7 +97,7 @@ plan-writing-rules「外部/ハーネス挙動依存のスパイク実証(1)」�
           _block_cross_worktree("Bash 書込", tgt)
   # 書込先を1件でも検出したが判定に絶対パスが無い等の未カバー経路は stderr に注意を出す（no silent caps）
   ```
-  - 未カバー経路（`cd <別wt>` 後の相対書込・`eval`/`sh -c`/変数展開越しの宛先）は、Bash 書込コマンド語（`tee`/`cp`/`mv`/`sed -i`/リダイレクト）を含むのに絶対パス宛先を抽出できなかった場合に stderr へ「worktree ガードは絶対パス宛先のみ検査。cd/変数越しは非対象」と注意を出す。
+  - 未カバー経路（`cd <別wt>` 後の相対書込・`eval`/`sh -c`/変数展開越しの宛先）は、Bash 書込コマンド語（`tee`/`cp`/`mv`/`sed -i`/リダイレクト）を含むのに絶対パス宛先を抽出できなかった場合に stderr へ**固定文字列**を出す（no silent caps・TC-A22 が grep 検証）。確定メッセージ: `[guard] worktree ガードは絶対パス宛先のみ検査します（cd/変数展開越しの宛先は非対象）` — TC-A22 は部分文字列 `絶対パス宛先のみ検査` を grep で確認する。
 
 ### 4-3. `.claude/settings.json`
 - PreToolUse の Edit/Write 用マッチャ `"matcher": "Edit|Write"` を `"matcher": "Edit|Write|MultiEdit|NotebookEdit"` に変更（部分一致依存を排除し全書込ツールで確実に発火させる）。Bash 用マッチャは変更なし。
@@ -158,3 +157,6 @@ plan-writing-rules「外部/ハーネス挙動依存のスパイク実証(1)」�
 - [ ] Bash 検出は絶対パス宛先のみ・cd/eval/変数越しは既知の限界として log 明示する範囲でよいか
 - [ ] Danger Ops: 無（破壊的操作なし・ガード強化のみ）
 - [ ] テスト計画（自動＝決定論ゲート＋既存回帰／手動＝プレーン新規セッション目視）で妥当か
+
+## レビュー結果
+- [20260702_1539 判定: ✅ 完了（Blocker 0件）](../../reviews/I095_plan_review_20260702_1539.md)

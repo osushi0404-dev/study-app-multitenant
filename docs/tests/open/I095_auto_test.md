@@ -34,7 +34,8 @@ bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
 ### Bash 書込経路（TC-A11〜A15）
 | TC | 入力コマンド | 期待 exit |
 |----|------|-----------|
-| TC-A11 | `echo x > <別wt>/f`（付着形 `>|<別wt>/f`・`>> ` も別行で） | 2 |
+| TC-A11 | `echo x > <別wt>/f`（先頭付着形 `>|<別wt>/f`・`>> ` も別行で） | 2 |
+| TC-A11b | `echo x>/<別wt>/f`（**語中埋め込み形**・shlex 単一トークン `x>/...`）※W1 | 2 |
 | TC-A12 | `tee <別wt>/f` / `tee -a <別wt>/f` | 2 |
 | TC-A13 | `cp a.txt <別wt>/`（宛先が別wt） | 2 |
 | TC-A14 | `mv a.txt <別wt>/b.txt` | 2 |
@@ -53,7 +54,7 @@ bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
 | TC-A19 | `DANGER_OK=1` を前置した別wt宛 Bash 書込 | 2（エスケープで解除されない） |
 | TC-A20 | 既存回帰: clean checkout・dirty checkout block・force push block 等が従来どおり | 既存期待値維持 |
 | TC-A21 | **false-green 注入**: `_cross_worktree` の戻りを常に False 化した複製フックでは別wt宛が素通し(0)、実体では block(2) | 複製=0 / 実体=2 |
-| TC-A22 | Bash 書込語を含むが絶対パス宛先を抽出できない（`cd <別wt> && echo x > f`）→ stderr に未カバー注意が出る | 0（block しないが警告出力・grep で確認） |
+| TC-A22 | Bash 書込語を含むが絶対パス宛先を抽出できない（`cd <別wt> && echo x > f`）→ stderr に未カバー注意が出る | 0（block しない）かつ stderr に部分文字列 `絶対パス宛先のみ検査` が出る（`grep -q` で確認）※W2 |
 
 ## 決定論ゲート（自動実走）
 <!--
