@@ -201,4 +201,9 @@ runbook は以下のセクションで構成する:
 上記の是正方針で **`docs/runbooks/worktree.md` を §5 の構成（1〜11）** で作成し、CLAUDE.md に 1 行追加します。この方針で承認いただけますか。その他はイシュー本文・/grill-me メモの確定値どおりで、仕様追加・逸脱はありません。
 
 ## レビュー結果
-- [20260702_1328 判定: ✅ 完了](../../reviews/I092_plan_review_20260702_1328.md)
+- [20260702_1328 判定: ✅ 完了](../../reviews/closed/I092_plan_review_20260702_1328.md)
+
+## 完了情報
+- **完了日時**: 2026-07-02
+- **対応者**: Claude Code
+- **レビュー結果**: plan-issue-review OK / code-review OK / /test ALL PASS（手動 No.6 Human OK）
