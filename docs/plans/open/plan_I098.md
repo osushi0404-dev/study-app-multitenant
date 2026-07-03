@@ -33,7 +33,9 @@
 追加でパターンの健全性（I094 decoy）も実証:
 - 既存の `\d+(?=\.md)` は **`draft-I200.md` を `200` と誤マッチ**（decoy 誤カウント）。
 - アンカー版 `/I?\K\d+(?=\.md$)` は `I098.md`/`098.md` のみ一致し、`draft-I200.md`・`I098-backup.md`・`error_I016.md`・`issue_template.md` を全て不一致（decoy を排除）。
-- git 履歴最大は **commit subject 走査**（現行 `grep -oP 'I0*\d+'`）だと無関係な番号言及を拾いうる。**touched file path をアンカー抽出**（`git log --all --name-only --pretty=format: -- 'docs/issues' | grep -oP '/I?\K\d+(?=\.md$)'`）に変えると、削除済みファイルも含めつつ subject 誤マッチを排除できることを確認（現状はどちらも 098）。
+- git 履歴最大は **commit subject 走査**（現行 `grep -oP 'I0*\d+'`）だと無関係な番号言及を拾いうる。**touched file path をアンカー抽出**（`git log --all --name-only --pretty=format: -- ':/docs/issues' | grep -oP '/I?\K\d+(?=\.md$)'`）に変えると、削除済みファイルも含めつつ subject 誤マッチを排除できることを確認（現状はどちらも 098）。
+- **CWD 依存バグを発見・是正**: 相対 pathspec `-- 'docs/issues'` はサブディレクトリから実行すると履歴半分を黙って脱落させ、削除済み番号を落として低い番号を rc=0 で返す（＝二重採番）ことを実証。`:/docs/issues`（repo root 固定）で解消（サブディレクトリ実行でも `099` を維持）。
+- **gate は棄却**: 「確定番号の存在 assert」は `NEXT=大域max+1` ゆえ発火不能（false-green）。「content-hash 版」は実リポジトリで `I042` の open/closed 共存を誤検出し全採番をブロック（＋find 走査順依存の flaky）。→ **gate なし（forward-scan のみ）**に確定（§4-1 設計判断）。
 
 ### 目的
 採番の入力に**全 worktree 横断**（untracked 含む）を含める仕組みを単一スクリプトに一元化し、**任意の worktree で同一の大域一意番号**を算出可能にする（採番権威の単一化＝人手規律の撤廃・根治）。
@@ -44,7 +46,8 @@
 - [ ] 複数 worktree に未コミットのイシューが存在しても、採番が全 worktree を通じて一意になる（二重採番が起きない）
 - [ ] 再現ケース（primary の untracked I085〜I091 が wt-harness から不可視）が更新後の採番手順（`scripts/claude/next-issue-num.sh`）で回避される
 - [ ] `scripts/claude/next-issue-num.sh` が新規作成され、全 worktree 横断（untracked 含む）＋`git log --all` で `max(...)+1` を算出する
-- [ ] 成功時は **3 桁ゼロ詰めの番号のみ**を stdout に出力し、重複検出時は stdout に番号を出さず**非 0 終了**する（consumer の `ISSUE_NUM=$(...)` 契約が成立）
+- [ ] 成功時は **3 桁ゼロ詰めの番号のみ**を stdout に出力する（consumer の `ISSUE_NUM=$(...)` 契約が成立）
+- [ ] **CWD 非依存**: リポジトリ内のどのサブディレクトリ／どの worktree から実行しても同一結果を返す（git 履歴 pathspec を `:/docs/issues` に固定）
 - [ ] `docs/runbooks/issue-flow.md`（3 箇所）と `.claude/skills/issue-bootstrap/SKILL.md`（1 箇所）の計 4 箇所の採番 bash が `next-issue-num.sh` 呼び出しに置換され、ロジック重複が解消されている
 - [ ] `docs/runbooks/worktree.md` §8 が「任意 worktree でスクリプト実行=権威単一化」に更新され、旧「primary で採番/速やかに取り込む」人手規律が撤廃されている
 - [ ] 他 worktree の読み取りが I095 の読み取り許可方針と衝突しない（読み取りのみ・書込なし）
@@ -65,14 +68,22 @@
 ## 4. 変更点一覧（具体）
 
 ### 4-1. 新規 `scripts/claude/next-issue-num.sh`（採番権威の単一実装）
-**修正方針**: 全 worktree 横断 FS 最大 ＋ git 履歴最大 の `max+1` を 3 桁で stdout 出力。read-only。重複検出で非 0 停止。
+**修正方針**: 全 worktree 横断 FS 最大（untracked 含む）＋ git 履歴最大 の `max+1` を 3 桁で stdout 出力。read-only・CWD 非依存。**gate は設けない**（下記の設計判断参照）。
+
+> **設計判断（plan フェーズの敵対的レビュー＋スパイクで確定・§8 参照）**
+> plan フェーズで独立レビューとスパイクにより、当初計画の「gate」を 2 度作り直した末、**gate を設けない**判断に至った。経緯:
+> - **案A（当初）「確定番号が未存在であることの assert」**: `NEXT=大域max+1` ゆえ確定番号は定義上どこにも存在せず、**構造的に発火不能な false-green ゲート**（見せかけ）。棄却。
+> - **案B「同一番号が複数箇所に異なる内容で存在したら fail」（content-hash）**: 実リポジトリで即 false-positive（**`I042` が `open/` と `closed/` に別内容で共存**する既存の hygiene 問題を誤検出し、全採番をブロック）。さらに `set -e`+`pipefail` 下で find の走査順に依存して落ちる flaky バグも露見。**過剰・脆弱**として棄却。
+> - **確定「gate なし（forward cross-scan のみ）」**: 本イシューの根治対象は「**将来**の二重採番の防止」であり、それは横断 forward-scan が満たす（AC 充足・スパイク実証）。**既存**の二重採番（open/closed 重複・過去の衝突）の検出/修復は、tracked/untracked・open/closed の意味論を要する別課題であり、採番スクリプトに同梱するのは proportionality に反する（→ スコープ外・§8 R4）。
+>
+> **併せて是正した実バグ**: git 履歴 pathspec を `:/docs/issues`（マジック接頭辞）に固定。相対 pathspec だと**サブディレクトリから実行すると履歴半分が黙って脱落**し、削除済み番号を取りこぼして低い番号を rc=0 で返す（＝二重採番）バグをスパイクで実証・是正。
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-# I098: イシュー採番の単一権威。全 worktree（git worktree list）の docs/issues FS 最大
-# （untracked 含む）＋ git 履歴最大から max+1 を算出し 3 桁ゼロ詰めで stdout に出力する。
-# read-only（I095 は横断読み取りを許可）。確定番号が既存なら stderr にエラー・非 0 終了。
+# I098: イシュー採番の単一権威（forward cross-scan）。
+# 全 worktree（git worktree list）の docs/issues FS 最大（untracked 含む）＋ git 履歴最大から
+# max+1 を算出し 3 桁ゼロ詰めで stdout に出力する。read-only（I095 は横断読み取りを許可）・CWD 非依存。
 # 呼び出し元: docs/runbooks/issue-flow.md ・ .claude/skills/issue-bootstrap/SKILL.md
 
 # パターン（I094 decoy 対策・アンカー）: パス末尾が /I###.md または /###.md のときの数字のみ抽出。
@@ -87,43 +98,33 @@ update_max() {  # $1=数字文字列（空可）。8 進誤解釈を防ぐ 10# �
   n=$((10#$n)); [ "$n" -gt "$max" ] && max="$n"; return 0
 }
 
-# 1) 全 worktree の FS 最大（untracked 含む・docs/issues 配下のみ）
+# 全 worktree の FS 最大（untracked 含む・docs/issues 配下のみ・絶対パス＝CWD 非依存）
 while IFS= read -r wt; do
   [ -d "$wt/docs/issues" ] || continue
   update_max "$(find "$wt/docs/issues" -name '*.md' 2>/dev/null \
                  | grep -oP "$ISSUE_NUM_RE" | sort -n | tail -1 || true)"
 done < <(worktrees)
 
-# 2) git 履歴最大（削除済み含む・全 ref・touched file path をアンカー抽出）
-update_max "$(git log --all --name-only --pretty=format: -- 'docs/issues' 2>/dev/null \
+# git 履歴最大（削除済み含む・全 ref）。':/docs/issues' で pathspec を repo root に固定＝CWD 非依存。
+update_max "$(git log --all --name-only --pretty=format: -- ':/docs/issues' 2>/dev/null \
                | grep -oP "$ISSUE_NUM_RE" | sort -n | tail -1 || true)"
 
-ISSUE_NUM="$(printf '%03d' "$((max + 1))")"
-
-# 3) gate（fail-loud）: 確定番号が全 worktree のいずれにも未存在であることを assert
-while IFS= read -r wt; do
-  for f in "$wt/docs/issues/open/I${ISSUE_NUM}.md"   "$wt/docs/issues/closed/I${ISSUE_NUM}.md" \
-           "$wt/docs/issues/open/${ISSUE_NUM}.md"    "$wt/docs/issues/closed/${ISSUE_NUM}.md"; do
-    [ -e "$f" ] && { echo "[next-issue-num] 確定番号 I${ISSUE_NUM} が既に存在: $f（採番権威の不整合）" >&2; exit 1; }
-  done
-done < <(worktrees)
-
-printf '%s\n' "$ISSUE_NUM"
+printf '%03d\n' "$((max + 1))"
 ```
 
 ### 4-2. `docs/runbooks/issue-flow.md`（3 箇所の重複 bash を置換）
 **修正方針**: 「### 採番ルール」（§イシュー新規作成時）・「### 1. イシュー番号の採番」（§自動実行フロー）・「ステップ1」（§フェーズ1）の 3 つの採番 bash ブロックを、以下のスクリプト呼び出しに置換。プロセス説明文の「FS 最大 + git 履歴最大」を「**全 worktree 横断（untracked 含む）+ git 履歴最大**」に更新し、`scripts/claude/next-issue-num.sh` を参照させる。
 
 ```bash
-# 採番（全 worktree 横断＋git履歴。重複検出時は非0終了）
+# 採番（全 worktree 横断＋git履歴）
 ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
-  echo "採番に失敗しました（重複検出またはエラー）。git worktree list と docs/issues を確認してください。" >&2
+  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
   exit 1
 }
 echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-「**重要**: ファイルシステムだけでなく git 履歴も必ず確認」の注記は「**重要**: 採番は必ず `next-issue-num.sh` 経由で行う（全 worktree 横断＋git 履歴＋重複検出を一括実施）」に更新。
+「**重要**: ファイルシステムだけでなく git 履歴も必ず確認」の注記は「**重要**: 採番は必ず `next-issue-num.sh` 経由で行う（全 worktree 横断 FS〔untracked 含む〕＋git 履歴を一括集計）」に更新。
 
 ### 4-3. `.claude/skills/issue-bootstrap/SKILL.md`（1 箇所を置換）
 **修正方針**: 「### 2. イシュー番号の採番」の bash ブロックを 4-2 と同一のスクリプト呼び出しに置換。直後の「**重要**: ...git 履歴も必ず確認」も同様に更新。step 3 以降（`I${ISSUE_NUM}.md` 生成）は既存契約（3 桁番号）のまま無改変。
@@ -141,8 +142,8 @@ echo "次のイシュー番号: $ISSUE_NUM"
 
 ## 5. 実装手順（ステップ）
 
-- **ステップ1**〔未知リスク先行〕: `scripts/claude/next-issue-num.sh` を新規作成（4-1）。※アルゴリズムは scratchpad で実証済み（調査結果）。→ 検証は TC-N1〜N6 参照（`docs/tests/open/I098_auto_test.md`）。
-- **ステップ2**: `scripts/claude/tests/test_next_issue_num.sh` を新規作成（4-5）。→ TC-N1〜N6 を実装・全 PASS を確認。
+- **ステップ1**〔未知リスク先行〕: `scripts/claude/next-issue-num.sh` を新規作成（4-1）。※アルゴリズムは scratchpad で実証済み（調査結果）。→ 検証は TC-N1〜N7 参照（`docs/tests/open/I098_auto_test.md`）。
+- **ステップ2**: `scripts/claude/tests/test_next_issue_num.sh` を新規作成（4-5）。→ TC-N1〜N7 を実装・全 PASS を確認。
 - **ステップ3**: `docs/runbooks/issue-flow.md` の 3 箇所の採番 bash を置換（4-2）。→ TC-DOC1 参照。
 - **ステップ4**: `.claude/skills/issue-bootstrap/SKILL.md` の 1 箇所を置換（4-3）。→ TC-DOC2 参照。
 - **ステップ5**: `docs/runbooks/worktree.md` §8 を書き換え（4-4）。→ TC-DOC3 参照。
@@ -159,8 +160,9 @@ echo "次のイシュー番号: $ISSUE_NUM"
 - **TC-N2（git 履歴・削除済み）**: `I060.md` を commit → 削除して commit（FS からは消える）。FS 最大が 40 でも履歴最大 60 → **`061`**。
 - **TC-N3（I094 decoy: 部分一致）**: docs/issues に `draft-I200.md`・`I055-backup.md`（decoy）を置く。実 issue が `I040.md` のみ → decoy を無視して **`041`**（`200`/`055` に釣られない）。
 - **TC-N4（I094 decoy: 非近接/subject 誤マッチ）**: 実 issue `I040.md`、別途 commit message に「refs docs/issues I900」等の高番号を含めても、file-path 抽出のため無視 → **`041`**。
-- **TC-N5（出力契約）**: 成功時 stdout は `^[0-9]{3}$` の 1 行のみ（余計な行なし・末尾改行）。
-- **TC-N6（gate fail-loud・false-green 反証）**: assert を除去した複製（`sed` で gate ブロックを無効化）に、確定番号と同じファイルを別 worktree へ注入 → 除去版は誤って番号を出力、**本体は非 0 終了 + stderr にエラー**（assert が実体の停止要因である反証）。
+- **TC-N5（出力契約）**: 成功時 stdout は `^[0-9]{3}$` の 1 行のみ（余計な行なし・末尾改行）・rc=0。
+- **TC-N6（CWD 非依存・回帰）**: 削除済み `I060` が履歴に在る repo で、**repo root から**と**サブディレクトリ（`docs/`）から**の実行が**同一結果**を返す（相対 pathspec だとサブディレクトリで履歴が脱落する退行を捕捉）。decoy 反証: `-- 'docs/issues'`（相対）に差し替えた複製をサブディレクトリで実行すると履歴を落として**異なる（低い）値**を返すこと＝`:/` 固定が実際の停止要因であることを反証。
+- **TC-N7（false-green 反証・全体）**: FS 走査行を無効化した複製（`sed` で `find ... update_max` 行を潰す）は、他 worktree の高番号 untracked を無視して**低い番号**を返す（横断スキャンが実体の入力である反証）。本体は正しい高番号を返す。
 
 ### 決定論ゲート（`/code-review` 自動実走・auto_test.md に記載）
 - `bash scripts/claude/tests/test_next_issue_num.sh`
@@ -186,25 +188,28 @@ echo "次のイシュー番号: $ISSUE_NUM"
 - **R1: `find -name '*.md'` が docs/issues 配下の非イシュー md を拾う** → アンカー正規表現 `/I?\K\d+(?=\.md$)` で `I###.md`/`###.md` のみに限定（TC-N3 で反証）。
 - **R2: git 履歴の subject 誤マッチ** → touched file path 抽出に変更（TC-N4 で反証）。
 - **R3: 別 worktree 読み取りが I095 にブロックされる** → I095 は**書込のみ**ブロック・読み取りは許可（`pretooluse_guard.py` 実装確認済み）。本スクリプトは find/git の read-only のみ。
-- **R4: 同時 bootstrap（2 worktree ほぼ同時）の TOCTOU** → **スコープ外**（単一逐次オペレータ前提）。gate（存在 assert）で事後の取りこぼしは fail-loud 化。ロック機構は入れない。
-- **R5: `set -euo pipefail` 下で grep 無一致（exit 1）が全体を落とす** → 各コマンド置換に `|| true` を付与（プロトタイプで検証済み）。
+- **R4: 同時 bootstrap（2 worktree ほぼ同時）の TOCTOU／既存の二重採番** → **スコープ外・既知の残存**。forward cross-scan は「相手の untracked が書かれた後」には見えるため**逐次運用では衝突しない**が、両者が相手の書き込み前に採番する瞬間の競合は残る。また**既存の**二重採番（過去に別々に採番された同番号・open/closed 重複〔本レビュー中に `I042` の open/closed 共存を発見〕）の検出/修復も本スクリプトは行わない。いずれも別課題（予防的ロック・既存重複の棚卸し）。gate は false-green/過剰・脆弱のため設けない（§4-1 設計判断）。**本イシューの AC は「将来の二重採番の防止」であり forward-scan で充足する。**
+- **R5: `set -euo pipefail` 下で grep 無一致（exit 1）が全体を落とす** → 各コマンド置換に `|| true` を付与。`update_max` は末尾 `return 0` で false 比較でも関数が非 0 を返さない（スパイクで `set -e` 相互作用を検証済み）。
+- **R6: git 履歴 pathspec の CWD 相対問題** → `:/docs/issues`（マジック接頭辞）で repo root に固定。サブディレクトリ実行で履歴が黙って脱落するバグをスパイクで実証・是正（TC-N6 で回帰検出）。
 
 ---
 
 ## 9. 承認ポイント
 - [ ] 計画内容（横断スキャン方式・スクリプト一元化・4 箇所置換・§8 撤廃）
 - [ ] **【要判断①】I094 decoy 対策として、既存の緩いパターン `\d+(?=\.md)` を踏襲せず、アンカー版 `/I?\K\d+(?=\.md$)` に強化する**（スパイクで `draft-I200.md` 誤カウントを実証）。イシューは「両対応を踏襲」だったが、decoy 堅牢性のため**改善提案**。
-- [ ] **【要判断②】git 履歴最大を commit subject 走査ではなく touched file path 抽出に変更する**（subject 誤マッチ排除・削除済みは維持）。同じく**改善提案**。
+- [ ] **【要判断②】git 履歴最大を commit subject 走査ではなく touched file path 抽出（`:/docs/issues` 固定）に変更する**（subject 誤マッチ排除・削除済みは維持・CWD 非依存）。**改善提案**。
+- [ ] **【要判断③】gate を設けない**（当初計画の存在 assert＝発火不能な false-green、content-hash 版＝実リポジトリで `I042` open/closed 共存を誤検出し全採番ブロック＋flaky、をいずれも棄却）。**既存**二重採番の検出/修復はスコープ外の別課題とする（AC は「将来の二重採番防止」で、forward-scan が充足）。**設計変更**。
 - [ ] Danger Ops: 無（read-only スクリプト＋文書更新）
-- [ ] テスト計画（TC-N1〜N6＋TC-DOC1〜4・決定論ゲート自動実走）
+- [ ] テスト計画（TC-N1〜N7〔N6=CWD 非依存回帰・N7=横断 false-green 反証〕＋TC-DOC1〜4・決定論ゲート自動実走）
 
-### 設計判断の明示（イシュー明記 / 仮定・提案の区別）
+### 設計判断の明示（イシュー明記 / 提案・変更の区別）
 | 判断 | 区分 |
 |------|------|
 | 横断スキャン方式・即コミット不採用 | イシュー明記（grill 確定） |
 | スクリプト一元化・4 箇所置換 | イシュー明記 |
-| 出力契約（3 桁 stdout・重複時非0） | イシュー明記 |
+| 出力契約（3 桁 stdout） | イシュー明記 |
 | 入力集合（全 worktree FS＋git履歴 の max+1） | イシュー明記 |
-| 存在 assert（fail-loud gate）・TOCTOU スコープ外 | イシュー明記 |
 | **アンカー正規表現への強化（要判断①）** | **提案（スパイク発見・イシューの「踏襲」から逸脱）** |
-| **git 履歴を file path 抽出へ変更（要判断②）** | **提案（スパイク発見）** |
+| **git 履歴を file path 抽出 `:/` 固定へ（要判断②）** | **提案（スパイク発見・CWD バグ是正）** |
+| **gate を設けない（要判断③）** | **変更（イシューの「存在 assert」を敵対的レビューで棄却）** |
+| TOCTOU・既存二重採番はスコープ外 | イシュー明記（残存を §8 R4 に明示） |
