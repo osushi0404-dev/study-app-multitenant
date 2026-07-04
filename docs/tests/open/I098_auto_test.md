@@ -2,10 +2,7 @@
 
 対象: `scripts/claude/next-issue-num.sh` / `scripts/claude/tests/test_next_issue_num.sh`
 
-実行コマンド:
-```bash
-bash scripts/claude/tests/test_next_issue_num.sh
-```
+実行コマンド: `bash scripts/claude/tests/test_next_issue_num.sh`（決定論ゲートとして下記「## 決定論ゲート（自動実走）」で実走）
 
 結果:
 - backend: N/A（bash スクリプトのみ・Django 非関与）
