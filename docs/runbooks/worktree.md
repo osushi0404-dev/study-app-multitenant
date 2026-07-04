@@ -155,11 +155,13 @@ docker compose config | grep -A1 published
 
 ---
 
-## 8. 採番の一貫性
+## 8. 採番の一貫性（採番権威の単一化・I098）
 
-- `/issue-bootstrap` 直後のイシューファイルは **untracked（未コミット）** で、それを作った worktree からしか見えない。
-- 別の worktree でイシューを起票すると、互いの untracked イシューが不可視なため**採番が食い違う**恐れがある。
-- **ルール**: 採番は権威となる作業ツリー（未コミットのイシューが見える primary checkout = `study-app-multitenant`）で行うか、起票後すみやかに develop へ取り込んで全 worktree から見える状態にする。
+- `/issue-bootstrap` 直後のイシューファイルは **untracked（未コミット）** で、それを作った worktree からしか見えない。かつては別 worktree で起票すると互いの untracked が不可視で**採番が食い違う**恐れがあった（primary で採番する人手規律に依存）。
+- **ルール（機械化）**: 採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う。本スクリプトは `git worktree list` で**全 worktree の `docs/issues`（untracked 含む）**＋`git log --all`（削除済み含む）を横断集計し `max(...)+1` を返すため、**どの worktree から実行しても同一の大域一意番号**が得られる（採番権威が単一化）。primary 固定・起票後の事前取り込みといった人手規律は不要。
+  - 読み取りのみ（find / git log）で他 worktree を参照するため、I095 の横断ガード（書込のみブロック・読み取りは許可）に抵触しない。
+  - CWD 非依存（git 履歴 pathspec を `:/docs/issues` に固定）。アンカー正規表現 `/I?\K\d+(?=\.md$)` で `I###.md`/`###.md` のみを対象にし、`draft-I200.md` 等の decoy を誤カウントしない（I094）。
+- **スコープ外（既知の残存）**: 2 worktree がほぼ同時に採番する競合（TOCTOU）、および**既存の**二重採番（過去に別々採番された同番号・同一番号の open/closed 共存）の検出/修復は本スクリプトの対象外（単一逐次オペレータ前提）。将来の二重採番の防止のみを保証する。
 
 ---
 
