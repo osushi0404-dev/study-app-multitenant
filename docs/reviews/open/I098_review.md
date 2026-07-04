@@ -25,8 +25,9 @@
 - Config/Infra: `scripts/claude/next-issue-num.sh`（新規）・`scripts/claude/tests/test_next_issue_num.sh`（新規）・`docs/runbooks/issue-flow.md`・`docs/runbooks/worktree.md`・`.claude/skills/issue-bootstrap/SKILL.md`
 
 ## テスト結果
-- 自動: `bash scripts/claude/tests/test_next_issue_num.sh` → **pass=21 fail=0**（TC-N1〜N7・TC-DOC1〜4）。実リポジトリで `next-issue-num.sh` → `099`（root/subdir 一致）。
-- 手動: `/test` / ユーザーテスト待ち（`docs/tests/open/I098_manual_test.md`）。
+- 自動: `bash scripts/claude/tests/test_next_issue_num.sh` → **pass=21 fail=0**（TC-N1〜N7・TC-DOC1〜4）。実リポジトリで `next-issue-num.sh` → `099`（root/subdir 一致）。pytest/Jest/E2E は非該当（bash＋markdown のみ）。
+- 手動: `docs/tests/open/I098_manual_test.md` 全 4 項目 **OK**（No1 出力 099/exit0・No2 21 PASS・No3 横断 max 098+1=099 一致・No4 記述整合）。Human 実施項目なし（全て Claude 実施可）。
+- code-review: **VERDICT OK**（決定論ゲート exit0・omission-lint OK・CI 全 pass）。
 
 ## 計画との差分
 - なし / あり（理由）
