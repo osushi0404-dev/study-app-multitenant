@@ -67,6 +67,13 @@ printf 'この文には BLOCKER や HIGH の語がある\nVERDICT: OK\n' > "$TMP
 ck TC-07 "OK" "$(detect_fix_verdict "$TMP/v_decoy2.md")"
 printf '対話例:\nVERDICT: HIGH\n本文つづき\nVERDICT: OK\n' > "$TMP/v_mid.md"
 ck TC-07b "OK" "$(detect_fix_verdict "$TMP/v_mid.md")"
+# TC-07b 明示反証: tail -1 を外した複製は先頭マッチ(HIGH)を返す＝正規(OK)と食い違う（tail -1 が実体である反証）
+detect_no_tail() {
+  grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$1" 2>/dev/null \
+    | grep -oE '(BLOCKER|HIGH|OK)' | head -1
+}
+ck TC-07b-broken "HIGH" "$(detect_no_tail "$TMP/v_mid.md")"
+ck TC-07b-real   "OK"   "$(detect_fix_verdict "$TMP/v_mid.md")"
 
 echo "== TC-08〜11: verdict_to_gate / gate_exit_code =="
 ck TC-08 "REMAND" "$(verdict_to_gate BLOCKER)"
