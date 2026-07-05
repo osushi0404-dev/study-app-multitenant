@@ -4,48 +4,39 @@
 `docs/runbooks/workflow.md` の「フロー」セクションも合わせて参照してください。
 
 ## イシュー新規作成時の採番ルール
-新しいイシューを作成する際は、**ファイルシステム上の最大番号** と **git 履歴上の最大番号** の大きい方を採用して採番する。
+新しいイシューを作成する際は、**全 worktree 横断のファイルシステム上の最大番号**（untracked 含む）と **git 履歴上の最大番号** の大きい方を採用して採番する。採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う（採番権威の単一実装。I098）。
 
 ### 採番ルール
-**新イシュー番号 = max(FS最大値, git履歴最大値) + 1**
+**新イシュー番号 = max(全 worktree 横断 FS最大値〔untracked 含む〕, git履歴最大値) + 1**
 
 例:
 - FS最大 039、git履歴最大 039 → max(39, 39) + 1 = **040**
 - FS最大 005、git履歴最大 008（削除済み含む）→ max(5, 8) + 1 = **009**
-- FS最大 0、git履歴最大 0（初回）→ **001**
+- 別 worktree に untracked I091 が存在 → 現 worktree の FS が低くても max に含まれ二重採番を防ぐ
 
 ```bash
-# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
-FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
-# git 履歴上の番号（削除済みファイルも含む）
-GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
-# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
-FS_NUM=$((10#${FS_MAX:-0}))
-GIT_NUM=$((10#${GIT_MAX:-0}))
-if [ "$FS_NUM" -gt "$GIT_NUM" ]; then LAST_NUM=$FS_NUM; else LAST_NUM=$GIT_NUM; fi
-NEXT_NUM=$((LAST_NUM + 1))
-ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
+# 採番（全 worktree 横断〔untracked 含む〕＋git履歴。next-issue-num.sh が単一権威）
+ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
+  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
+  exit 1
+}
 echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-**重要**: ファイルシステムだけでなく git 履歴も必ず確認すること（closed から削除されたイシューも番号として使用済み）。
+**重要**: 採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う。本スクリプトが全 worktree 横断 FS（untracked 含む）＋git 履歴（削除済み含む・closed から削除された番号も使用済み扱い）を一括集計するため、どの worktree から実行しても同一の大域一意番号が得られる。
 
 ## イシュー作成時の自動実行フロー（必須）
 
 ユーザーから「イシューファイルを作成して」または「新しいイシューを作成して」という指示を受けた場合は、**必ず以下の手順を自動的に実行**すること：
 
 ### 1. イシュー番号の採番
+全 worktree 横断（untracked 含む）＋git 履歴を単一権威スクリプトで一括集計する：
 ```bash
-# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
-FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
-# git 履歴上の番号（削除済みファイルも含む）
-GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
-# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
-FS_NUM=$((10#${FS_MAX:-0}))
-GIT_NUM=$((10#${GIT_MAX:-0}))
-if [ "$FS_NUM" -gt "$GIT_NUM" ]; then LAST_NUM=$FS_NUM; else LAST_NUM=$GIT_NUM; fi
-NEXT_NUM=$((LAST_NUM + 1))
-ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
+# 採番（next-issue-num.sh が単一権威。3 桁ゼロ詰めの番号を stdout に返す）
+ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
+  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
+  exit 1
+}
 ```
 
 ### 2. イシューファイル作成
@@ -184,16 +175,11 @@ GitHubイシュー登録後、必ず以下を報告：
 - 命名規則: `XXX.md`（XXX: 3桁のイシュー番号）
 
 ```bash
-# ファイルシステム上の番号（open/closed 全て、I###.md / ###.md 両方に対応）
-FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
-# git 履歴上の番号（削除済みファイルも含む）
-GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
-# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
-FS_NUM=$((10#${FS_MAX:-0}))
-GIT_NUM=$((10#${GIT_MAX:-0}))
-if [ "$FS_NUM" -gt "$GIT_NUM" ]; then LAST_NUM=$FS_NUM; else LAST_NUM=$GIT_NUM; fi
-NEXT_NUM=$((LAST_NUM + 1))
-ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
+# 採番（全 worktree 横断〔untracked 含む〕＋git履歴。next-issue-num.sh が単一権威）
+ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
+  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
+  exit 1
+}
 
 # テンプレートからコピー
 cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md

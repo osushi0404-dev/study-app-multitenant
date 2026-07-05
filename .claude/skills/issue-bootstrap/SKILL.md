@@ -17,30 +17,17 @@ git branch --show-current
 ```
 
 ### 2. イシュー番号の採番
-ファイルシステムと git 履歴の両方から最大番号を取得する：
+全 worktree 横断（untracked 含む）＋git 履歴を単一権威スクリプトで一括集計する：
 ```bash
-# ファイルシステム上の番号（I###.md / ###.md 両方に対応）
-FS_MAX=$(find docs/issues -name "*.md" 2>/dev/null | grep -oP '\d+(?=\.md)' | sort -n | tail -1)
-# git 履歴上の番号（削除済みファイルも含む）
-GIT_MAX=$(git log --all --oneline -- "docs/issues/**" | grep -oP 'I0*\d+' | grep -oP '\d+' | sort -n | tail -1)
-# 大きい方を採用（$((10#...)) で8進数誤解釈を防ぐ）
-FS_NUM=$((10#${FS_MAX:-0}))
-GIT_NUM=$((10#${GIT_MAX:-0}))
-if [ "$FS_NUM" -gt "$GIT_NUM" ]; then
-  LAST_NUM=$FS_NUM
-else
-  LAST_NUM=$GIT_NUM
-fi
-if [ "$LAST_NUM" -eq 0 ]; then
-  ISSUE_NUM="001"
-else
-  NEXT_NUM=$((LAST_NUM + 1))
-  ISSUE_NUM=$(printf "%03d" $NEXT_NUM)
-fi
+# 採番（next-issue-num.sh が単一権威。3 桁ゼロ詰めの番号を stdout に返す）
+ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
+  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
+  exit 1
+}
 echo "次のイシュー番号: $ISSUE_NUM"
 ```
 
-**重要**: ファイルシステムだけでなく git 履歴も必ず確認すること（closed から削除されたイシューも番号として使用済み）。
+**重要**: 採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う。本スクリプトが**全 worktree 横断 FS（untracked 含む）**＋git 履歴（削除済み含む・closed から削除された番号も使用済み扱い）を一括集計するため、別 worktree の未コミットイシューも含めて二重採番を防ぐ（どの worktree から実行しても同一の大域一意番号）。
 
 ### 3. イシューファイル作成
 
