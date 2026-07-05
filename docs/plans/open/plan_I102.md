@@ -211,3 +211,37 @@
 
 ## レビュー結果
 - [20260706_0707 判定: ✅ 完了](../../reviews/I102_plan_review_20260706_0707.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-07-06
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| — | 認証・認可 | なし（最小権限強化。`permission_classes=[IsAuthenticated, IsOrgAdmin]` を全アクションに適用・custom action override 無し） | 全経路で `IsOrgAdmin` 適用維持。custom action に独自 permission を付けない |
+| Medium | マルチテナント | `perform_create` に subject の org 検証が無く、org-A admin が org-B subject に問題を作成できる越境書き込みが残る（`IsOrgAdmin` は role のみ判定・org スコープは get_queryset 側） | **本イシュー対象外・I103（#193）で対応**。I102 は当該穴を悪化させない（非admin 締め出しで悪用面縮小） |
+| — | 入力検証 | なし（新規入力ハンドリングなし） | 既存 `validate_choices` 維持 |
+| — | 機密情報 | なし（is_correct 露出は I078・本変更外。403 メッセージに漏洩なし） | is_correct は I102 で露出しない |
+| — | OWASP（IDOR/アクセス制御） | なし（Broken Access Control 是正。`upload_image`/`delete_image` は get_object()+org チェック経由） | 実装時に get_object() 経由維持（org 絞り込み迂回不可）＝TC-AUTO-02b 補足 |
+| — | ファイル操作 | なし（`StorageService.validate_file` 不変・admin 限定化で悪用面縮小） | 既存検証維持 |
+| — | 外部通信 | なし（AI 生成が admin 限定化＝濫用面縮小） | admin 限定維持 |
+| — | 依存ライブラリ | なし（新規依存なし） | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化 | 手動確認 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|------------|---------|---------|--------|
+| 1 | `/api/problems/*` | 一般(role=user) | GET/POST/PUT/PATCH/DELETE・AI生成・画像 | 全経路 403 | Yes: TC-AUTO-01/02/03b | No | なし | Low |
+| 2 | `/api/problems/` | 未認証 | GET | 401（認証で先に遮断） | Yes: TC-AUTO-02b | No | なし | Low |
+| 3 | `POST /api/problems/` | org-A admin | org-B subject で作成 | 越境作成を拒否 | I103 で対応 | No | create 越境が未対策（I103 まで） | Medium |
+| 4 | `/api/problems/{id}/` | org-A admin | 他組織の問題を操作 | 他組織は 404 | Yes: test_I073 越境テスト | No | なし（get_queryset+SEC-1+get_object） | Low |
+| 5 | `/quiz-management`(FE) | 一般(role=user) | UI 直アクセス | UI 遮断＋BE 403（多層） | Yes: E2E TC-AUTO-05＋BE 403 | Yes: No.2 | なし（FE 迂回でも BE 403） | Low |
+| 6 | `/quiz-management`(FE) | org admin(is_staff=false) | 管理画面到達 | ロックアウトしない | Yes: E2E(user_a) | Yes: No.3 | なし（role 判定） | Low |
+
+サマリー: Blocker 0 / High 0 / Medium 1（create 越境＝I103 で対応）/ Low 5。
+
+### 残余リスク処遇
+- **Medium（create 越境）**: I103（#193）で対応する既知の穴。I102 では扱わず、悪化もさせない。処遇は `/retro` で最終確認する。
+- Blocker・High は無し。`/implement I102` へ進める。
