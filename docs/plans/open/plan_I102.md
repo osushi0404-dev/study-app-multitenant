@@ -48,7 +48,7 @@
 - [ ] AC4: 非admin では `Layout.tsx` のナビに「問題管理」項目が表示されない（org admin には表示される）。
 - [ ] AC5: BE 認可回帰テスト（role 別の結合テスト）が追加され全て PASS する。
 - [ ] AC6: 既存 `test_I073_image_update.py` の fixture を admin 化し、当該テスト群が引き続き PASS する。
-- [ ] AC7: E2E インフラに非admin identity（`seed_e2e.py` の `e2e_user_c`（`role='user'`）＋ `global-setup.ts` の storageState ＋ `playwright.config.ts` のプロジェクト）が追加され、E2E authz スモークが非admin 遮断・admin 到達を検証して PASS する。
+- [ ] AC7: E2E インフラに非admin identity（`seed_e2e.py` の `e2e_user_c`（`role='user'`）＋ `global-setup.ts` の `user_c.json` storageState）が追加され、E2E authz スモーク（`browser.newContext` でユーザー切替）が非admin 遮断・admin 到達を検証して PASS する（`playwright.config.ts` は変更不要）。
 
 ---
 
@@ -56,7 +56,7 @@
 
 - **Backend**: `problems/views.py`（`ProblemViewSet.permission_classes`）、`problems/tests/`（認可回帰テスト新設＋`test_I073_image_update.py` fixture 整合）、`accounts/management/commands/seed_e2e.py`（非admin `e2e_user_c` 追加）
 - **Frontend**: `components/OrgAdminRoute.tsx`（新設）、`App.tsx`（`quiz-management` ルート保護）、`components/Layout.tsx`（「問題管理」ナビ限定表示）
-- **E2E**: `e2e/global-setup.ts`・`e2e/playwright.config.ts`（非admin storageState）、`e2e/tests/problem-management-authz.spec.ts`（新設）
+- **E2E**: `e2e/global-setup.ts`（非admin `user_c` の storageState 生成）、`e2e/tests/problem-management-authz.spec.ts`（新設）。`e2e/playwright.config.ts` は変更不要（spec で `browser.newContext` 切替）
 - **DB**: なし（マイグレーションなし。seed はテストデータのみ）
 - **Config/Infra**: `.claude/settings.json`（本 PR に allowlist の docs/issues 追加を同梱。機能に影響なし）
 
@@ -74,8 +74,8 @@
 | `frontend/src/App.tsx` | `quiz-management` ルート | `<OrgAdminRoute>` でラップ＋ import 追加 |
 | `frontend/src/components/Layout.tsx` | `menuItems` | 「問題管理」項目を既存 `isOrgAdmin` 条件付き表示に移動 |
 | `e2e/global-setup.ts` | ユーザー配列 | `e2e_user_c` の storageState（`.auth/user_c.json`）生成を追加 |
-| `e2e/playwright.config.ts` | `projects` | 非admin storageState を使うプロジェクト追加（または spec 内 `test.use`） |
-| `e2e/tests/problem-management-authz.spec.ts` | 新設 | 非admin=メニュー非表示＋`/quiz-management` 遮断／admin=到達 |
+| `e2e/playwright.config.ts` | — | **変更不要**（spec で `browser.newContext({ storageState })` を使い user_c/user_a を切替＝`tenant-isolation.spec.ts` と同パターン。新規プロジェクト不要） |
+| `e2e/tests/problem-management-authz.spec.ts` | 新設 | 非admin(`user_c`)=メニュー非表示＋`/quiz-management` 遮断／admin(`user_a`)=到達（`browser.newContext` でユーザー切替） |
 
 ---
 
@@ -159,7 +159,7 @@
   )
   ```
 - `e2e/global-setup.ts`: `e2e_user_c` でログインし `.auth/user_c.json` を生成（既存 user A/B と同パターン）。
-- `e2e/playwright.config.ts`: 非admin storageState を使うプロジェクト追加（または spec 内 `test.use({ storageState: '.auth/user_c.json' })`）。
+- `e2e/playwright.config.ts`: **変更不要**（spec 内で `browser.newContext({ storageState: '.auth/user_c.json' })` によりユーザーを切替＝`tenant-isolation.spec.ts` と同パターン。新規プロジェクト不要）。
 - `e2e/tests/problem-management-authz.spec.ts` を新設: 非admin(`user_c`)→「問題管理」メニュー非表示＋`/quiz-management` 直アクセスで権限エラー／admin(`user_a`)→到達。
 - → TC-AUTO-05（E2E）参照。
 - 依存: ステップ1（BE 403）・ステップ3（FE ナビ/ルート）完了が前提。

@@ -80,7 +80,7 @@
 - `test_other_org_cannot_edit` / `test_cross_org_subject_rejected`: user2（org2 admin）による他組織問題/subject への PUT → **400/404**（role ゲート 403 ではなく越境拒否＝従来意図を保持）
 
 ## TC-AUTO-05: E2E authz スモーク（非admin 遮断 / admin 到達）
-**対象**: `e2e/tests/problem-management-authz.spec.ts`（前提: `seed_e2e` に `e2e_user_c`（`role='user'`）追加・`global-setup` で `.auth/user_c.json` 生成）
+**対象**: `e2e/tests/problem-management-authz.spec.ts`（前提: `seed_e2e` に `e2e_user_c`（`role='user'`）追加・`global-setup` で `.auth/user_c.json` 生成。spec は `browser.newContext({ storageState })` で user_c/user_a を切替＝`playwright.config.ts` 変更不要）
 **手順/期待値**:
 | 手順 | ユーザー | 期待 |
 |------|---------|------|

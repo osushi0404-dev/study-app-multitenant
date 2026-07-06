@@ -28,6 +28,8 @@ async function globalSetup(_config: FullConfig) {
   const users = [
     { email: 'e2e_user_a@example.com', file: path.join(AUTH_DIR, 'user_a.json') },
     { email: 'e2e_user_b@example.com', file: path.join(AUTH_DIR, 'user_b.json') },
+    // I102: 非admin（role='user'）。問題管理 authz E2E で「遮断される側」の storageState。
+    { email: 'e2e_user_c@example.com', file: path.join(AUTH_DIR, 'user_c.json') },
   ];
 
   for (const user of users) {

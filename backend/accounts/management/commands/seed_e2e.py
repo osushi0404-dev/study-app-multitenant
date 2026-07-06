@@ -68,6 +68,16 @@ class Command(BaseCommand):
             organization=org_a,
             role='admin',  # /subject-management へのアクセスに admin ロールが必要
         )
+        # I102: 問題管理 authz E2E 用の非admin ユーザー（org_a・role='user'）。
+        # 「問題管理」メニュー非表示・/quiz-management 遮断を検証するために必要。
+        User.objects.filter(email='e2e_user_c@example.com').delete()
+        User.objects.create_user(
+            email='e2e_user_c@example.com',
+            user_id='e2e_user_c',
+            password=self.e2e_password,
+            organization=org_a,
+            role='user',
+        )
 
     def _seed_tenant_isolation(self):
         self._seed_login()
