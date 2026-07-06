@@ -131,3 +131,7 @@ def test_admin_custom_actions_not_forbidden(setup, tmp_path, settings):
     assert client.post("/api/problems/generate_ai/", {}, format="json").status_code != 403
     assert client.post("/api/problems/generate_adaptive/", {}, format="json").status_code != 403
     assert client.post(f"/api/problems/{pid}/images/upload/", {}, format="multipart").status_code != 403
+    # 画像削除も admin は認可通過（存在しない asset のため 404 だが 403 でない）
+    assert client.delete(
+        f"/api/problems/{pid}/images/delete/{DUMMY_ASSET_ID}/"
+    ).status_code != 403
