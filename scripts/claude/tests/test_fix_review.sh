@@ -134,6 +134,42 @@ ck_grep TC-22-failsafe "$SKILL" 'fail-safe|実 diff|再判定'
 ck_grep TC-22-minor "$SKILL" '軽微例外'
 ck_grep TC-22-skip "$SKILL" '未実施'
 
+echo "== TC-26〜29: REMAND 分類駆動・前回NG検証・回帰（案1 追加分） =="
+# TC-26: SKILL.md に分類駆動＋前回NG＋回帰(無影響)＋環流の記述
+ck_grep TC-26-exec "$SKILL" '実行の不備'
+ck_grep TC-26-approach "$SKILL" '方針の誤り'
+ck_grep TC-26-prior "$SKILL" '前回NG'
+ck_grep TC-26-regress "$SKILL" '回帰|無影響'
+# TC-21 非後退: 実行の不備ルートで実装 NG は依然 手順5 に至る（環流で消えていない）
+ck_grep TC-26-step5 "$SKILL" '実行の不備.*手順5|手順5.*再修正'
+# TC-27: entrypoint が前回NGパス（オプション）を受理し context に付加
+ck_grep TC-27-impl "$IMPL_SH" 'PRIOR|前回NG|prior_ng_review_path'
+ck_grep TC-27-test "$TEST_SH" 'PRIOR|前回NG|prior_ng_review_path'
+# TC-28: 実装/テスト reviewer が前回NGを fail-closed 検証＋実行/方針を分類
+ck_grep TC-28-impl-prior "$IMPL_AGENT" '前回NG'
+ck_grep TC-28-impl-failclosed "$IMPL_AGENT" 'fail-closed'
+ck_grep TC-28-impl-class "$IMPL_AGENT" '実行の不備|方針の誤り'
+ck_grep TC-28-test-prior "$TEST_AGENT" '前回NG'
+ck_grep TC-28-test-failclosed "$TEST_AGENT" 'fail-closed'
+ck_grep TC-28-test-class "$TEST_AGENT" '実行の不備|方針の誤り'
+# TC-29: 診断 reviewer が再診断時の分類・手順4 再承認要否を評価
+ck_grep TC-29-diag-class "$DIAG_AGENT" '実行の不備|方針の誤り'
+ck_grep TC-29-diag-reapprove "$DIAG_AGENT" '再承認|手順4'
+# TC-29 反証: 前回NG検証キーワードを削除した SKILL 複製は TC-26-prior を満たさない（機構が実体である反証）
+sed 's/前回NG//g' "$SKILL" > "$TMP/skill_noprior.md"
+if grep -qE '前回NG' "$TMP/skill_noprior.md"; then
+  printf 'FAIL TC-29-decoy (broken copy still matched)\n'; fail=$((fail+1))
+else
+  printf 'PASS TC-29-decoy\n'; pass=$((pass+1))
+fi
+# TC-28-test-class 反証: TEST_AGENT から分類キーワードを除去した複製は TC-28-test-class を満たさない
+sed 's/実行の不備//g; s/方針の誤り//g' "$TEST_AGENT" > "$TMP/testagent_noclass.md"
+if grep -qE '実行の不備|方針の誤り' "$TMP/testagent_noclass.md"; then
+  printf 'FAIL TC-28-test-class-decoy (broken copy still matched)\n'; fail=$((fail+1))
+else
+  printf 'PASS TC-28-test-class-decoy\n'; pass=$((pass+1))
+fi
+
 echo "== TC-23/24: 既存手順1〜7 の非後退（回帰）＋反証 =="
 regress_ok() { # $1=file : 既存 lint/scan キーワードが全て残っているか
   local f="$1"

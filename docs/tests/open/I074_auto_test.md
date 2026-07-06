@@ -50,4 +50,22 @@
 bash scripts/claude/tests/test_fix_review.sh
 ```
 
-補足（false-green 自己検証の実施タイミング）: 上記 TC-12/TC-13/TC-17/TC-24 は「壊した複製へ注入すると NG を返す」反証を含む。実装未着手の現時点（plan フェーズ）では対象コードが存在しないため未実行。`/implement` で各ファイル生成後、テスト作成時に注入反証まで実走・記録してから green とする（plan-writing-rules「否定・回帰系の false-green 禁止」を実装時に充足）。
+補足（false-green 自己検証の実施タイミング）: 上記 TC-12/TC-13/TC-17/TC-24 は「壊した複製へ注入すると NG を返す」反証を含む。`/implement` で各ファイル生成後、テスト作成時に注入反証まで実走・記録して green を確認済み。
+
+## 案1 追加分（REMAND 分類駆動・前回NG検証・回帰）— fix-loop で追加
+
+| TC | 目的 | 期待値 |
+|----|------|--------|
+| TC-26-exec/approach/prior/regress/step5 | SKILL.md に分類駆動の記述 | `実行の不備`・`方針の誤り`・`前回NG`・`回帰\|無影響` が出現し、実行の不備ルートで実装NGが手順5 に至る（TC-21 非後退） |
+| TC-27-impl/test | entrypoint が前回NGパス（オプション）を受理 | `fix-{implementation,test}-review.sh` に `PRIOR`/`前回NG` 相当が出現 |
+| TC-28-impl-{prior,failclosed,class} / test-{prior,failclosed,class} | 実装/テスト reviewer が前回NGを fail-closed 検証＋実行/方針を分類 | 各 reviewer に `前回NG`・`fail-closed`・`実行の不備\|方針の誤り` が出現 |
+| TC-29-diag-{class,reapprove} | 診断 reviewer が再診断時の分類・手順4 再承認要否を評価 | `fix-diagnosis-reviewer.md` に `実行の不備\|方針の誤り`・`再承認\|手順4` |
+| TC-29-decoy / TC-28-test-class-decoy | false-green 反証 | SKILL から `前回NG` 除去／TEST_AGENT から分類キーワード除去した複製で検査が NG になる |
+
+合計 **pass=83 fail=0**（false-green 反証 TC-07b-broken/12/13/17/24/29-decoy/28-test-class-decoy 含む）。
+
+## 再発防止記録（/fix-loop I074・REMAND 処理の追加）
+- **なぜ「失敗」したか**: REMAND（NG差し戻し）が「原因調査・修正方針・修正内容・テストのレビュー」を欠き、盲目的再修正・方針ミス空転・回帰見逃しのリスクがあった。
+- **何を変えたか**: SKILL.md に「差し戻しの形態（分類駆動）」を実装。実行の不備＝手順5/6 自動再修正→再レビュー、方針の誤り＝手順2 環流→手順3.5 再診断→手順4、前回NG は entrypoint 第2/3引数で reviewer に渡し fail-closed 検証、回帰は手順6 全スイート再走。reviewer 3種・entrypoint 2種・テストを同期。
+- **ドッグフーディング実証**: この変更自身を新 fix-loop に通し、診断ゲート v1→REMAND(HIGH)→v2→PASS、テストゲート REMAND(HIGH)＝自テストの false-green（TC-28-test-class 欠落）を検出→(a)実行の不備と自動分類→手順5/6 で TC 追加→前回NG を第3引数で渡し再レビュー→PASS。全新機能が実地で機能。
+- **次回どう防ぐか**: 対の TC（impl 側があれば test 側も）を追加する規律を TC-28 群で明示。テストゲートが非対称 TC の false-green を検知する。

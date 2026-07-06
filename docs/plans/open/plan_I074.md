@@ -100,6 +100,14 @@
 - **手順6.5 テストレビュー**（手順6 が green の後・手順7 の前）: **(a)** Claude が手順6 で観測したテスト/lint/scan 出力を `docs/reviews/I###_fix_test_result_<ts>.md` に保存する（手順6 は再実行しない・非改変）。**(b)** `bash scripts/claude/fix-test-review.sh I### docs/reviews/I###_fix_test_result_<ts>.md` を実行。exit 0→手順7／exit 1→**自動ループバック手順5/6**（テスト追記・修正→再実行）＋NG 報告（連続 NG 2 回でエスカレーション）／SKIP→記録済み・手順7。
 - **共通の明記**: 順次ゲートしきい値（`OK`=exit0 次段・`BLOCKER`＋`HIGH`=exit1 差し戻し）／各ゲート連続 NG 上限=2（**カウンタは「各ゲート × 各 fix-loop 実行」で独立にカウントし、当該ゲートが PASS したら 0 にリセット。2 到達でエスカレーション＝ユーザー介入を挟むため、次の fix-loop 実行では新規に 0 から数える**）／軽微例外条件の定義（「単一ファイルのタイポ・フォーマット・コメント修正のみ、かつロジック・制御フロー・テスト対象の振る舞いを変えない」変更・行数しきい値なし・実装/テストのみ簡略化可・診断は常時必須）／`claude -p` 不可時の非ブロック skip＋未実施記録（headless でも fix-loop が回る）。
 
+### 4-4b. REMAND 処理（分類駆動・fix-loop で追加）
+実装/テストゲートの REMAND を「新たな失敗」として深さに応じて処理する（SKILL.md 共通ルール「差し戻しの形態（分類駆動）」）:
+- **(a) 実行の不備**（承認済み方針は正・実装/テストの実行のみ誤り）: 自動で手順5（テストは手順5/6）→ 手順6 で全スイート再走（回帰＝既存OK箇所への無影響を確認）→ 手順5.5/6.5 再レビュー。手順3.5・手順4 は不要（自動・headless 維持）。
+- **(b) 方針の誤り**（アプローチ自体が不適）: 手順2 環流 → 手順3 → 手順3.5 診断レビュー → 手順4 ユーザー承認 → 手順5…。2回上限を待たず即エスカレーション可。
+- **前回NG の明示検証（fail-closed）**: 実装/テスト再レビューで直前 REMAND のレビュー記録パスを entrypoint へ渡し（実装=第2引数・テスト=第3引数）、reviewer が各前回NG指摘の diff 上解消を検証（未確認は未解消として REMAND）。
+- **分類の主体**: Claude が手順2 で分類し、方針の誤りは手順3.5 が妥当性を審査／実行の不備は reviewer の「実行/方針」明示＋連続NG上限(2)が誤分類を捕捉。
+- 変更: `fix-loop/SKILL.md`（共通ルール＋手順5.5/6.5）・`fix-{diagnosis,implementation,test}-reviewer.md`（分類・前回NG fail-closed 観点）・`fix-{implementation,test}-review.sh`（前回NGパスをオプション受理）・`test_fix_review.sh`/`I074_auto_test.md`（TC-26〜29＋分類 decoy）。
+
 ### 4-5. `scripts/claude/tests/test_fix_review.sh`（新設）
 `REVIEW_LIB_SOURCE_ONLY=1 source fix-review-lib.sh` で helper を取り出しユニット/回帰テスト（§6・auto_test 参照）。
 

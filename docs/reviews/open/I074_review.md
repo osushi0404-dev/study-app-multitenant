@@ -21,7 +21,9 @@
 - Config/Infra: `.claude/skills/fix-loop/SKILL.md`・`.claude/review-agents/fix-{diagnosis,implementation,test}-reviewer.md`・`scripts/claude/fix-review-lib.sh`・`scripts/claude/fix-{diagnosis,implementation,test}-review.sh`・`scripts/claude/tests/test_fix_review.sh`
 
 ## テスト結果
-（実装後に記入。自動: `bash scripts/claude/tests/test_fix_review.sh` → pass=?/fail=? ／ 手動: `docs/tests/open/I074_manual_test.md`）
+- 自動（専用）: `bash scripts/claude/tests/test_fix_review.sh` → **pass=66 fail=0**（TC-01〜25＋07b/12/13/17/24 の false-green 反証含む）。pytest/Jest/E2E は非該当（bash＋md のみ）。
+- コードレビュー: **FINAL VERDICT OK**（決定論ゲート exit0 注入・omission-lint OK・高リスク No）。Low 1件（tail-1 反証の明示化）対応済み。
+- 手動: Claude 5 項目（No1-4,6）**OK**。特に No3 でライブ `claude -p` により「良い診断→PASS/exit0・不十分な診断→BLOCKER/REMAND/exit1」を実証。No5（SKILL.md 記述品質の目視）は Human 実施待ち。
 
 ## 計画との差分
 - （実装後に記入）
