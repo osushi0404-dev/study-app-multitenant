@@ -27,9 +27,10 @@ test.describe('問題管理の認可（I102）', () => {
     const ctx = await browser.newContext({ storageState: path.join(authDir, 'user_a.json') });
     const page = await ctx.newPage();
 
-    // ナビに「問題管理」項目が表示される
+    // ナビに「問題管理」項目が存在する（レスポンシブ Layout は mobile/desktop の2 Drawer を
+    // レンダリングするため複数一致し得る。可視性ではなく「存在（count != 0）」で判定する）。
     await page.goto('/dashboard');
-    await expect(page.getByText('問題管理', { exact: true })).toBeVisible();
+    await expect(page.getByText('問題管理', { exact: true })).not.toHaveCount(0);
 
     // /quiz-management に到達し、権限エラーが表示されない
     await page.goto('/quiz-management');
