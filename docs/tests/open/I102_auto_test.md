@@ -4,9 +4,10 @@
 - Backend: `docker compose exec backend pytest problems/tests -q`
 - E2E: `docker compose exec frontend`（or e2e ランナー）で Playwright authz spec
 
-結果:
-- backend: （/test 実行時に記入）
-- frontend/E2E: （/test 実行時に記入）
+結果（2026-07-07 /test 実走・Docker）:
+- backend (pytest): **50 passed**（新規 test_I102_problem_authz.py 5件・test_I073 20件 admin化後も PASS 含む）
+- frontend (Jest): **7 passed**（2 suites）
+- E2E (Playwright): **7 passed**（problem-management-authz.spec.ts 2件＝非admin 遮断・admin 到達、既存 spec 回帰なし）
 
 ---
 
