@@ -1,16 +1,24 @@
 # I102 手動テスト: 問題管理を組織管理者権限に限定
 
 前提:
-- 開発環境が稼働（`docker compose ps` で backend/frontend/db が Up）。
-- 組織管理者（`role='admin'`）と一般ユーザー（`role='user'`）の2アカウントでログインできること。
+- 開発環境が稼働（`docker compose ps` で backend/frontend/db が Up）。フロントは http://localhost:3000 。
+- テスト用アカウント（I102 手動テスト専用・同一組織 `cute_school`＝科目2/問題21 あり）:
+
+  | 役割 | メールアドレス | パスワード | role | 組織 |
+  |------|--------------|-----------|------|------|
+  | 組織管理者 | `i102_admin@example.com` | `I102ManualTest!` | admin | cute_school |
+  | 一般ユーザー | `i102_user@example.com` | `I102ManualTest!` | user | cute_school |
+
+  ※ どちらもメール認証済み・有効化済み。パスワード認証確認済み（2026-07-07）。
+  ※ 既存アカウントはパスワード不明のため専用に作成（既存アカウントは未変更）。
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| 1 | 一般ユーザー（`role='user'`）でログインし、サイドバーのメニューを確認 | メニューに「問題管理」項目が**表示されない**（「科目管理」も非表示・「ダッシュボード/学習統計/設定」は表示） | Human | | |
-| 2 | 一般ユーザーのまま、URL に `/quiz-management` を直接入力して遷移 | 管理 UI に到達せず「このページにアクセスする権限がありません。管理者権限が必要です。」のエラーが表示される | Human | | |
-| 3 | 組織管理者（`role='admin'`）でログインし、サイドバーを確認 | メニューに「問題管理」項目が**表示される** | Human | | |
-| 4 | 組織管理者で「問題管理」に遷移し、問題の一覧表示・新規作成・編集・削除を実施 | 従来どおり一覧が表示され、作成/編集/削除が成功する（403 等のエラーが出ない） | Human | | |
-| 5 | 一般ユーザーで `GET /api/problems/` を直接呼ぶ（ブラウザ devtools / curl 相当。認証トークン付き） | HTTP **403**（`{"detail": "管理者権限が必要です"}` 相当）が返る | Human | | API 直叩き確認。E2E/TC-AUTO でも自動検証 |
+| 1 | `i102_user@example.com` / `I102ManualTest!` で http://localhost:3000/login からログイン→ダッシュボード左のサイドバーを確認 | サイドバーに「問題管理」が**無い**（「科目管理」も無い。「ダッシュボード/学習統計/設定」は有る） | Human | | 非admin |
+| 2 | 上記 `i102_user` のまま、ブラウザのアドレスバーに `http://localhost:3000/quiz-management` を入力して Enter | 管理画面が出ず「このページにアクセスする権限がありません。管理者権限が必要です。」の赤いエラーが表示される | Human | | 非admin 直アクセス遮断 |
+| 3 | 一度ログアウトし `i102_admin@example.com` / `I102ManualTest!` でログイン→サイドバーを確認し「問題管理」をクリック | 「問題管理」が表示され、クリックで問題一覧画面（cute_school の問題21件）に遷移できる | Human | | admin |
+| 4 | `i102_admin` で問題管理画面から「新規作成」で問題を1件作成→編集→削除 | 作成/編集/削除がいずれも成功する（403 やエラーが出ない） | Human | | admin CRUD |
+| 5 | （任意）`i102_user` でログイン後、ブラウザ devtools の Console で `fetch('/api/problems/').then(r=>console.log(r.status))` を実行 | `403` が表示される | Human | | 任意。BE TC-AUTO-01（自動）で担保済み |
 | 6 | `frontend/src/components/OrgAdminRoute.tsx` の判定条件を確認 | `user.role !== 'admin'` で権限エラーを返す（`is_staff`/`is_superuser` 判定を使っていない） | Claude | OK | :33 `if (user.role !== 'admin')`。is_staff はコメントのみ |
 | 7 | `frontend/src/App.tsx` の `quiz-management` ルートを確認 | `<OrgAdminRoute>` でラップされている（`<AdminRoute>` ではない） | Claude | OK | :79 `<OrgAdminRoute><QuizManagement /></OrgAdminRoute>` |
 | 8 | `frontend/src/components/Layout.tsx` の menuItems を確認 | 「問題管理」項目が `isOrgAdmin ? [...]` ブロック内にある | Claude | OK | :76-77 isOrgAdmin ブロック内 |
