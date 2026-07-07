@@ -61,8 +61,16 @@ bash scripts/claude/tests/test_fix_review.sh
 | TC-28-impl-{prior,failclosed,class} / test-{prior,failclosed,class} | 実装/テスト reviewer が前回NGを fail-closed 検証＋実行/方針を分類 | 各 reviewer に `前回NG`・`fail-closed`・`実行の不備\|方針の誤り` が出現 |
 | TC-29-diag-{class,reapprove} | 診断 reviewer が再診断時の分類・手順4 再承認要否を評価 | `fix-diagnosis-reviewer.md` に `実行の不備\|方針の誤り`・`再承認\|手順4` |
 | TC-29-decoy / TC-28-test-class-decoy | false-green 反証 | SKILL から `前回NG` 除去／TEST_AGENT から分類キーワード除去した複製で検査が NG になる |
+| TC-30-map-{diag,impl,test}/origin/record{,2,3} | 成果物のレビュー対応表＋**手順1/2/3 全て**の記録先明示（No5 記述品質） | SKILL.md に `手順3.5/5.5/6.5 …レビュー`・`原因調査結果`・`診断メモ「失敗分解／根本原因／対応方針」` が出現 |
+| TC-30-decoy{,2,3}/decoy-{mapdiag,mapimpl,maptest,origin} | false-green 反証（全 TC-30 存在検査に付与） | 各キーワードを除去した複製で該当検査が NG になる（`ck_absent` ヘルパー） |
 
-合計 **pass=83 fail=0**（false-green 反証 TC-07b-broken/12/13/17/24/29-decoy/28-test-class-decoy 含む）。
+合計 **pass=97 fail=0**（false-green 反証 TC-07b-broken/12/13/17/24/29-decoy/28-test-class-decoy/30-decoy 系 含む）。
+
+## 再発防止記録（/fix-loop I074・No5 記述明確化）
+- **なぜ「失敗」したか**: fix-loop/SKILL.md の手順1/2/3 が成果物の記録先を明示せず（口頭報告と誤読可能）、各成果物のレビュー対応表が無く「自動テストだけレビュー」と読める記述品質の穴（Human No5 目視で検出）。
+- **何を変えたか**: SKILL.md 冒頭に「成果物とレビュー対応」表を追加、手順1/2/3 末尾に診断メモ記録を明示。TC-30 群（対応表・手順1/2/3 全記録先の存在＋各 decoy）で回帰保護。
+- **ドッグフーディング**: 本変更を新 fix-loop に通し、診断 PASS・実装 PASS・テスト REMAND(HIGH: 手順2/3 記録が無検証の自テスト穴)→(a)実行の不備分類→手順5/6 で TC 補完→前回NG第3引数で再レビュー→PASS。
+- **次回どう防ぐか**: 「N 項目に同種の指示を追加したら N 件すべてに検査＋decoy を付す」規律を ck_absent ヘルパーで型化。テストゲートが部分カバレッジの false-green を検知する。
 
 ## 再発防止記録（/fix-loop I074・REMAND 処理の追加）
 - **なぜ「失敗」したか**: REMAND（NG差し戻し）が「原因調査・修正方針・修正内容・テストのレビュー」を欠き、盲目的再修正・方針ミス空転・回帰見逃しのリスクがあった。

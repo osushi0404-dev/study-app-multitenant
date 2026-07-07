@@ -155,6 +155,30 @@ ck_grep TC-28-test-class "$TEST_AGENT" '実行の不備|方針の誤り'
 # TC-29: 診断 reviewer が再診断時の分類・手順4 再承認要否を評価
 ck_grep TC-29-diag-class "$DIAG_AGENT" '実行の不備|方針の誤り'
 ck_grep TC-29-diag-reapprove "$DIAG_AGENT" '再承認|手順4'
+
+echo "== TC-30: 成果物のレビュー対応表＋手順1/2/3 の記録先明示（No5 記述品質） =="
+ck_grep TC-30-map-diag "$SKILL" '手順3.5 診断レビュー'
+ck_grep TC-30-map-impl "$SKILL" '手順5.5 実装レビュー'
+ck_grep TC-30-map-test "$SKILL" '手順6.5 テストレビュー'
+ck_grep TC-30-origin  "$SKILL" '原因調査結果'
+ck_grep TC-30-record  "$SKILL" '診断メモ「失敗分解」'
+# 手順1/2/3 それぞれの記録先明示を全件検査（手順1だけでなく2・3も）
+ck_grep TC-30-record2 "$SKILL" '診断メモ「根本原因」'
+ck_grep TC-30-record3 "$SKILL" '診断メモ「対応方針'
+# TC-30 反証: 各記録先/対応表キーワードを除去した複製で存在検査が NG になる（全存在検査に decoy を付与）
+ck_absent() { # name keyword : 除去複製で不在になることを確認
+  local name="$1" kw="$2"
+  sed "s/${kw}//g" "$SKILL" > "$TMP/skill_nokw.md"
+  if grep -qF "$kw" "$TMP/skill_nokw.md"; then printf 'FAIL %s (broken copy still matched)\n' "$name"; fail=$((fail+1))
+  else printf 'PASS %s\n' "$name"; pass=$((pass+1)); fi
+}
+ck_absent TC-30-decoy  '診断メモ「失敗分解」'
+ck_absent TC-30-decoy2 '診断メモ「根本原因」'
+ck_absent TC-30-decoy3 '診断メモ「対応方針'
+ck_absent TC-30-decoy-mapdiag '手順3.5 診断レビュー'
+ck_absent TC-30-decoy-mapimpl '手順5.5 実装レビュー'
+ck_absent TC-30-decoy-maptest '手順6.5 テストレビュー'
+ck_absent TC-30-decoy-origin  '原因調査結果'
 # TC-29 反証: 前回NG検証キーワードを削除した SKILL 複製は TC-26-prior を満たさない（機構が実体である反証）
 sed 's/前回NG//g' "$SKILL" > "$TMP/skill_noprior.md"
 if grep -qE '前回NG' "$TMP/skill_noprior.md"; then

@@ -108,6 +108,12 @@
 - **分類の主体**: Claude が手順2 で分類し、方針の誤りは手順3.5 が妥当性を審査／実行の不備は reviewer の「実行/方針」明示＋連続NG上限(2)が誤分類を捕捉。
 - 変更: `fix-loop/SKILL.md`（共通ルール＋手順5.5/6.5）・`fix-{diagnosis,implementation,test}-reviewer.md`（分類・前回NG fail-closed 観点）・`fix-{implementation,test}-review.sh`（前回NGパスをオプション受理）・`test_fix_review.sh`/`I074_auto_test.md`（TC-26〜29＋分類 decoy）。
 
+### 4-4c. 記述明確化（No5・記述品質）
+SKILL.md を「機構は既存・記述のみ」の範囲で明確化する:
+- 冒頭に**「成果物とレビュー対応」表**を追加: 原因調査結果＋修正方針→手順3.5 診断レビュー／修正内容→手順5.5 実装レビュー／テスト結果→手順6.5 テストレビュー（「自動テストだけレビュー」の誤読を排除）。
+- **手順1/2/3 の各末尾に記録先を明示**: 「→ 手順3.5 の診断メモ『失敗分解／根本原因／対応方針』に記録する」（口頭でなくドキュメント化を強制）。
+- 回帰: `test_fix_review.sh` TC-30（対応表・記録先明示の存在＋false-green 反証）で後退を検知。
+
 ### 4-5. `scripts/claude/tests/test_fix_review.sh`（新設）
 `REVIEW_LIB_SOURCE_ONLY=1 source fix-review-lib.sh` で helper を取り出しユニット/回帰テスト（§6・auto_test 参照）。
 
