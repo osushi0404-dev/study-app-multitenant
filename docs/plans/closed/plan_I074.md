@@ -189,9 +189,14 @@ SKILL.md を「機構は既存・記述のみ」の範囲で明確化する:
 - 新規 `.sh` は pre-commit の **shellcheck** 対象（bandit=py・npm audit=js は N/A）。
 
 ## レビュー結果
-- [20260705_1801 判定: ✅ 完了](../../reviews/I074_plan_review_20260705_1801.md)
-- [20260705_1754 判定: ✅ 完了](../../reviews/I074_plan_review_20260705_1754.md)
-- [20260705_1748 判定: ✅ 完了](../../reviews/I074_plan_review_20260705_1748.md)
-- [20260705_1741 判定: ✅ 完了](../../reviews/I074_plan_review_20260705_1741.md)
-- [20260705_1735 判定: ✅ 完了](../../reviews/I074_plan_review_20260705_1735.md)
-- [20260705_1724 判定: 差し戻し（Blocker 1件）](../../reviews/I074_plan_review_20260705_1724.md)
+- [20260705_1801 判定: ✅ 完了](../../reviews/closed/I074_plan_review_20260705_1801.md)
+- [20260705_1754 判定: ✅ 完了](../../reviews/closed/I074_plan_review_20260705_1754.md)
+- [20260705_1748 判定: ✅ 完了](../../reviews/closed/I074_plan_review_20260705_1748.md)
+- [20260705_1741 判定: ✅ 完了](../../reviews/closed/I074_plan_review_20260705_1741.md)
+- [20260705_1735 判定: ✅ 完了](../../reviews/closed/I074_plan_review_20260705_1735.md)
+- [20260705_1724 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I074_plan_review_20260705_1724.md)
+
+## 完了情報
+- **完了日時**: Thu Jul  9 00:45:53 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review・code-review 2回・fix-loop 3周の全ゲート PASS／専用自動 pass=97・手動 全6項目 OK）
