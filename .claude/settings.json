@@ -8,6 +8,8 @@
       "Glob(*)",
       "Write(docs/**)",
       "Edit(docs/**)",
+      "Write(docs/issues/**)",
+      "Edit(docs/issues/**)",
       "Write(backend/**)",
       "Edit(backend/**)",
       "Write(frontend/**)",

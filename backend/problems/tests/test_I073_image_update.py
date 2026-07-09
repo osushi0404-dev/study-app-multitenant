@@ -129,13 +129,18 @@ def env(db, category, tmp_path, settings):
     settings.MEDIA_ROOT = str(tmp_path)
     org = Organization.objects.create(name="org1", slug="org1", category=category)
     org2 = Organization.objects.create(name="org2", slug="org2", category=category)
+    # I102: ProblemViewSet が組織管理者(role=='admin')限定になったため、
+    # 問題 CRUD を検証する本テストの被験ユーザーは各組織の admin とする。
+    # user2 を org2 admin にすることで、越境テスト（test_other_org_cannot_edit /
+    # test_cross_org_subject_rejected）は role ゲート 403 で短絡せず、
+    # get_queryset(404)/SEC-1(400) による越境拒否を検証する意図が保たれる。
     user = User.objects.create_user(
         email="u1@example.com", user_id="u1", password="p", organization=org,
-        role="user",
+        role="admin",
     )
     user2 = User.objects.create_user(
         email="u2@example.com", user_id="u2", password="p", organization=org2,
-        role="user",
+        role="admin",
     )
     subject = Subject.objects.create(name="s1", slug="s1", organization=org)
     subject2 = Subject.objects.create(name="s2", slug="s2", organization=org2)

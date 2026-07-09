@@ -71,8 +71,10 @@ const Layout: React.FC = () => {
 
   const menuItems = [
     { text: 'ダッシュボード', icon: <Dashboard />, path: '/dashboard' },
-    { text: '問題管理', icon: <Quiz />, path: '/quiz-management' },
+    // I102: 問題管理は組織管理者(role==='admin')限定。非admin にはメニューを出さない
+    // （route ガード OrgAdminRoute と多層防御・デッドリンク回避）。
     ...(isOrgAdmin ? [
+      { text: '問題管理', icon: <Quiz />, path: '/quiz-management' },
       { text: '科目管理', icon: <School />, path: '/subject-management' },
     ] : []),
     { text: '学習統計', icon: <BarChart />, path: '/statistics' },

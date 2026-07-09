@@ -9,6 +9,7 @@ import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
+import OrgAdminRoute from './components/OrgAdminRoute';
 import Layout from './components/Layout';
 import NavigationLogger from './components/NavigationLogger';
 
@@ -75,7 +76,7 @@ function App() {
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
-                <Route path="quiz-management" element={<QuizManagement />} />
+                <Route path="quiz-management" element={<OrgAdminRoute><QuizManagement /></OrgAdminRoute>} />
                 <Route path="quiz/:id?" element={<QuizSession />} />
                 <Route path="statistics" element={<Statistics />} />
                 <Route path="settings" element={<Settings />} />
