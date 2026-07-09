@@ -210,7 +210,7 @@
 - テナント越境（他組織 subject への create）は本イシューの対象外（I103 で対応）。本イシューの `IsOrgAdmin` は「非admin 遮断」のみを担い、admin 間の越境は get_queryset の org スコープ＋I103 が担保する。
 
 ## レビュー結果
-- [20260706_0707 判定: ✅ 完了](../../reviews/I102_plan_review_20260706_0707.md)
+- [20260706_0707 判定: ✅ 完了](../../reviews/closed/I102_plan_review_20260706_0707.md)
 
 ## セキュリティレビュー結果
 
