@@ -147,7 +147,9 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         - QueryDict変換: MultipartFormDataMixinで自動処理
     """
     serializer_class = ProblemSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # I102: 問題管理は組織管理者（role=='admin'）限定。参照・更新系・AI生成・画像の
+    # 全アクションに一律適用（custom action に permission override は無い）。
+    permission_classes = [permissions.IsAuthenticated, IsOrgAdmin]
     pagination_class = None  # ページネーション無効化
     parser_classes = [MultiPartParser, FormParser]  # 画像アップロード対応
 
