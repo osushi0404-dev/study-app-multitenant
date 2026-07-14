@@ -31,11 +31,13 @@ def setup(db):
 | TC | 内容 | 手順（org A admin で認証） | 期待値 | 実施者 |
 |----|------|------|--------|--------|
 | TC-AUTO-01 | 越境 create=403 | `POST /api/problems/` に `_valid_payload(subject_b.id)`（multipart） | `status_code == 403` かつ `Problem.objects.filter(question="新規問題").exists() is False` | Claude |
-| TC-AUTO-02a | 越境 generate_ai=403（save_to_db 既定=True） | `POST /api/problems/generate_ai/` に `{"subject_id": subject_b.id}`（json） | `status_code == 403` かつ `Problem.objects.filter(subject=subject_b).count() == 0`（org B の Problem が増えない） | Claude |
-| TC-AUTO-02b | 越境 generate_ai=403（save_to_db=False） | `POST /api/problems/generate_ai/` に `{"subject_id": subject_b.id, "save_to_db": False}` | `status_code == 403` | Claude |
-| TC-AUTO-03 | 越境 generate_adaptive=403 | `POST /api/problems/generate_adaptive/` に `{"subject_id": subject_b.id}` | `status_code == 403` かつ `Problem.objects.filter(subject=subject_b).count() == 0` | Claude |
-| TC-AUTO-04 | 自組織 create=201（正常系不変） | `POST /api/problems/` に `_valid_payload(subject_a.id)`（multipart・`settings.MEDIA_ROOT=tmp_path`） | `status_code == 201` かつ `Problem.objects.filter(question="新規問題", is_deleted=False).exists()` | Claude |
-| TC-AUTO-05 | 自組織 AI 経路は非403（認可・org 検証通過） | `POST /api/problems/generate_ai/`・`generate_adaptive/` に `{"subject_id": subject_a.id}` | いずれも `status_code != 403`（org 検証を通過し生成処理へ進む。AI 未設定で 400/500 になり得るが 403 でないことが要点） | Claude |
+| TC-AUTO-02a | 越境 generate_ai=403（save_to_db 既定=True） | `POST /api/problems/generate_ai/` に `{"subject_id": subject_b.id}`（**multipart**※） | `status_code == 403` かつ `Problem.objects.filter(subject=subject_b).count() == 0`（org B の Problem が増えない） | Claude |
+| TC-AUTO-02b | 越境 generate_ai=403（save_to_db=False でも一律） | `POST /api/problems/generate_ai/` に `{"subject_id": subject_b.id, "save_to_db": False}`（**multipart**） | `status_code == 403` | Claude |
+| TC-AUTO-03 | 越境 generate_adaptive=403 | `POST /api/problems/generate_adaptive/` に `{"subject_id": subject_b.id}`（**multipart**） | `status_code == 403` かつ `Problem.objects.filter(subject=subject_b).count() == 0` | Claude |
+| TC-AUTO-04 | 自組織 create=201（正常系不変） | `POST /api/problems/` に `_valid_payload(subject_a.id)`（multipart・`settings.MEDIA_ROOT=tmp_path`） | `status_code == 201` かつ `Problem.objects.filter(question="自組織問題I103", is_deleted=False).exists()` | Claude |
+| TC-AUTO-05 | 自組織 AI 経路は非403（認可・org 検証通過） | `POST /api/problems/generate_ai/`・`generate_adaptive/` に `{"subject_id": subject_a.id}`（**multipart**） | いずれも `status_code != 403`（org 検証を通過し生成処理へ進む。AI 未設定で 400/500 になり得るが 403 でないことが要点） | Claude |
+
+※ `ProblemViewSet.parser_classes = [MultiPartParser, FormParser]`（JSON 非対応）。AI 経路も json で送ると org チェック到達前に **415** になるため、テストは multipart で送る（parser 変更はスコープ外）。
 | TC-AUTO-06 | 全体回帰 | `problems/tests/` 全体実行 | 新規 TC 全 PASS ＋ 既存 50 件 PASS（回帰なし） | Claude |
 
 ## false-green 自己検証（TDD RED 確認・実装時に実施）
