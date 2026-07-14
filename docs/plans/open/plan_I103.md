@@ -159,6 +159,37 @@ def perform_create(self, serializer):
 
 → 「仮定で決めた」項目は**テストファイル名のみ**（命名規約に沿った軽微な決定）。他は全てイシュー本文に明記済み。
 
+## セキュリティレビュー結果
+
+**実施日**: 2026-07-14
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Low | OWASP(enumeration)/機密情報 | 越境時 403 が「他組織に当該 subject が実在」を露呈（403 vs 404）。到達者は自組織 admin のみ（I102） | 設計決定済み：`upload_image`/`delete_image` の既存 403 と統一。許容。将来 404 統一は別途検討可 |
+| Low | 入力検証 | `generate_ai`/`generate_adaptive` の `Subject.objects.get(id=subject_id)` は非整数 subject_id で `ValueError`→500（`DoesNotExist` 非該当）。**I103 以前からの既存挙動**（org チェックは get 後に追加＝本変更が導入したものではない） | 本イシュー対象外（越境バイパスにはならない）。堅牢化は別イシュー候補 |
+
+その他（認証・認可／マルチテナント（本変更が是正）／ファイル操作（越境ファイル書込みも同時封鎖＝改善）／外部通信（org チェックが AI 呼び出し前）／依存ライブラリ）: リスクなし。
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化 | 手動確認 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/problems/` | org A admin | org B subject_id で作成 | 403・Problem 未作成・越境ファイル書込みなし | Yes: TC-AUTO-01 | No | なし | 封鎖 |
+| 2 | `POST /generate_ai/` | org A admin | org B subject_id で生成（save_to_db T/F） | 403・生成前停止（AI 未呼出）・未作成 | Yes: TC-AUTO-02a/b | No | なし | 封鎖 |
+| 3 | `POST /generate_adaptive/` | org A admin | org B subject_id で適応生成 | 403・未作成 | Yes: TC-AUTO-03 | No | なし | 封鎖 |
+| 4 | 3経路 | 非admin(role=user) | 直叩き | 403（IsOrgAdmin・I102 前段防御） | Yes: I102 TC 済 | No | なし（多層） | — |
+| 5 | 3経路 | org A admin | 自組織 subject | 正常成功（過剰拒否なし） | Yes: TC-AUTO-04/05 | No | なし | — |
+| 6 | `POST /generate_ai/` | org A admin | 非整数 subject_id | 500 になる既存挙動 | No | No | 既存・越境バイパスでない | Low |
+
+**サマリー**: Blocker 0 / High 0（新規リスクは本変更で封鎖）/ Medium 0 / Low 2（既存挙動・設計決定済みの残余）。
+
+### 残余リスク処遇
+（/retro で決定する）
+- Low-1（403 enumeration）: 設計決定として許容。将来 404 統一の是非は SEC-1 status 統一の別イシューと併せて検討。
+- Low-2（非整数 subject_id→500）: 既存挙動。堅牢化（400 化）は別イシュー候補。
+
 ## 9. 承認ポイント（チェックリスト）
 - [ ] 対象3経路（perform_create / generate_ai / generate_adaptive）と各実装位置でよいか
 - [ ] 拒否 status = **403**、message = `他組織の科目には問題を作成できません` でよいか
