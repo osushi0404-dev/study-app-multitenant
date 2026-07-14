@@ -51,19 +51,20 @@
 
 | ファイル | 関数 | 変更内容 |
 |---------|------|---------|
-| `backend/problems/views.py` | `ProblemViewSet.perform_create`（:234） | 冒頭で `subject = serializer.validated_data.get('subject')` を取り、`subject.organization_id != self.request.user.organization_id` なら `PermissionDenied('他組織の科目には問題を作成できません')`（→403）。既存の画像収集・`ProblemService` 呼び出しの前に配置 |
+| `backend/problems/views.py` | `ProblemViewSet.perform_create`（:234） | 冒頭で `subject = serializer.validated_data['subject']`（`Problem.subject` は NOT NULL・serializer でも required のため create 時は必ず存在＝未指定は serializer で 400 済み。None ガードは不要）を取り、`subject.organization_id != self.request.user.organization_id` なら `PermissionDenied('他組織の科目には問題を作成できません')`（→403）。既存の画像収集・`ProblemService` 呼び出しの前に配置。`from rest_framework.exceptions import PermissionDenied` はファイル先頭に置く |
 | `backend/problems/views.py` | `ProblemViewSet.generate_ai`（:354） | `subject = Subject.objects.get(id=subject_id)`（:373）取得直後・`DoesNotExist`（404）処理の後、生成 try ブロックの前に、`subject.organization_id != request.user.organization_id` なら `Response({'error': '他組織の科目には問題を作成できません'}, status=status.HTTP_403_FORBIDDEN)`。`save_to_db` の値に関わらず一律 |
 | `backend/problems/views.py` | `ProblemViewSet.generate_adaptive`（:483） | `Subject.objects.get(id=subject_id)`（:496）取得直後・`DoesNotExist`（404）処理の後、生成の前に同じ org チェックで 403 を返す |
 | `backend/problems/tests/test_I103_cross_org_create.py`（新規） | — | 越境作成の回帰テスト（下記テスト計画 TC-AUTO-01〜05） |
 
 ### 実装コード例
 
-`perform_create`（冒頭に追加）:
+`perform_create`（冒頭に追加。`from rest_framework.exceptions import PermissionDenied` はファイル先頭へ）:
 ```python
 def perform_create(self, serializer):
-    from rest_framework.exceptions import PermissionDenied
-    subject = serializer.validated_data.get('subject')
-    if subject and subject.organization_id != self.request.user.organization_id:
+    # subject は Problem.subject=NOT NULL・serializer required のため create 時は必ず存在
+    # （未指定なら serializer バリデーションで 400 済み）。よって None ガードは不要。
+    subject = serializer.validated_data['subject']
+    if subject.organization_id != self.request.user.organization_id:
         raise PermissionDenied('他組織の科目には問題を作成できません')
     # 以降は現行のまま（画像収集 → ProblemService.create_problem_with_images ...）
 ```
@@ -165,3 +166,6 @@ def perform_create(self, serializer):
 - [ ] `generate_ai` の `save_to_db=False` でも 403 で弾く方針でよいか
 - [ ] SEC-1（update）の 400→403 統一を本イシューに含めず別イシューとする（当面 create/AI=403・update=400 の一時的不整合を許容）でよいか
 - [ ] テストファイル名 `test_I103_cross_org_create.py`（新規）でよいか
+
+## レビュー結果
+- [20260714_2159 判定: ✅ 完了](../../reviews/I103_plan_review_20260714_2159.md)
