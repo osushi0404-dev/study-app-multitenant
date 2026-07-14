@@ -53,6 +53,7 @@
 - 検証内容: `track:app` / `track:harness` の各文言の行数下限 — SKILL.md ≥1行・issue-flow.md ≥**2行**（2箇所更新の代理指標）・worktree.md ≥1行。不足箇所を列挙して exit 1。
 - 期待値: exit 0
 - false-green 検証: 実装ステップ2 でスクリプト新設直後（文書更新前）に実走し **exit 非0** を記録すること（plan_I107 実装手順ステップ2）。worktree.md の grep は実装前に exit 1 を確認済み（2026-07-14・plan_I107 調査結果）
+- **false-green 実証記録（2026-07-15・実装ステップ2 実施済み）**: 文書更新前の実走で **exit=1**（6項目全 FAIL: SKILL.md 0行/0行・issue-flow.md 0行/0行・worktree.md 0行/0行）→ 文書更新後（ステップ4完了時）の再実走で **exit=0**（6項目全 PASS: SKILL.md 2行/2行・issue-flow.md 4行/4行・worktree.md 1行/1行）
 
 ## 決定論ゲート（自動実走）
 <!-- G1〜G5。G1〜G4 は実装前の実走で全件 exit 1（不合格）を確認済み。G5 はスクリプト新設直後（文書更新前）の実走で exit 非0 を記録する（plan_I107 調査結果・実装手順ステップ2） -->
