@@ -15,9 +15,9 @@
 | 1 | `docker compose exec -T backend python -m pytest problems/tests/test_I078_is_correct_exposure.py -q` を実行 | TC-AUTO-01〜07 全 PASS | Claude | OK | 7 passed（2026-07-16） |
 | 2 | `docker compose exec -T backend python -m pytest problems/tests -q` を実行 | 既存 61 件＋新規が全 PASS（回帰なし＝TC-AUTO-08） | Claude | OK | 68 passed（2026-07-16） |
 | 3 | `ProblemAdminSerializer` の参照箇所を grep で確認（`grep -rn "ProblemAdminSerializer" backend/`） | 定義（serializers.py）と `ProblemViewSet.serializer_class`・import（views.py）のみ。出題・結果・AI 応答（`ProblemDisplaySerializer`／`QuizAnswerDetailSerializer`／`generate_ai`/`generate_adaptive` の `ProblemSerializer(...)`）に混入していない | Claude | OK | 定義2＋import1＋serializer_class1 の計4箇所のみ（2026-07-16） |
-| 4 | `i102_admin@example.com` でログイン→問題管理→任意の問題を編集で開き**そのまま保存**（キャッシュ無効化）→同じ問題の**プレビュー（目のアイコン）**を開く | 正解の選択肢の行だけ緑枠＋緑背景で、行の右端に**チェックアイコン＋「正解」の緑 Chip** が表示される。不正解の選択肢にはマークが無い | Human | | |
-| 5 | 単一選択（single_choice）の問題で**編集ダイアログ**を開く | 正解の選択肢のラジオが**最初から選択済み**（全未選択ではない） | Human | | |
-| 6 | 複数選択（multiple_choice）の問題で編集ダイアログを開く。**準備済み**: 科目「高校英語」の問題 ID 247「【I078手動テスト用・複数選択】次のうち、動詞として使える単語をすべて選びなさい。」（正解: book / water の2つ） | 正解の選択肢**複数**（book と water）のチェックが最初から入っている | Human | | cute_school に multiple 問題が無かったため Claude が作成（2026-07-16・キャッシュ無効化済み） |
-| 7 | No.5 の問題で**問題文だけ**書き換えて保存→再度編集ダイアログを開く | 保存が正常に完了し（「正解の選択肢を選択してください」エラーが出ない）、再表示時も**元の正解が保持**されている | Human | | AC「正解の取り違え・未指定エラーなし」 |
-| 8 | `i102_user@example.com` でログイン→クイズ画面で **No.4 で使用した問題と同じ科目**を選択してクイズを開始し、問題を表示する | 出題画面の選択肢に正解マーク・「正解」ラベルが**表示されない**（従来どおり回答後にのみ正解が分かる） | Human | | 答え漏洩なしの目視（API は TC-AUTO-05 で担保済み）。No.4 実施時に使用した科目名を備考欄に控えておく |
+| 4 | `i102_admin@example.com` でログイン→問題管理→任意の問題を編集で開き**そのまま保存**（キャッシュ無効化）→同じ問題の**プレビュー（目のアイコン）**を開く | 正解の選択肢の行だけ緑枠＋緑背景で、行の右端に**チェックアイコン＋「正解」の緑 Chip** が表示される。不正解の選択肢にはマークが無い | Human | OK | 2026-07-16 スクリーンショット確認（ID247: book/water に正解 Chip・C/D にマーク無し） |
+| 5 | 単一選択（single_choice）の問題で**編集ダイアログ**を開く | 正解の選択肢のラジオが**最初から選択済み**（全未選択ではない） | Human | OK | 2026-07-16 |
+| 6 | 複数選択（multiple_choice）の問題で編集ダイアログを開く。**準備済み**: 科目「高校英語」の問題 ID 247「【I078手動テスト用・複数選択】次のうち、動詞として使える単語をすべて選びなさい。」（正解: book / water の2つ） | 正解の選択肢**複数**（book と water）のチェックが最初から入っている | Human | OK | 2026-07-16 スクリーンショット確認（A/B にチェック済み・C/D 未チェック） |
+| 7 | No.5 の問題で**問題文だけ**書き換えて保存→再度編集ダイアログを開く | 保存が正常に完了し（「正解の選択肢を選択してください」エラーが出ない）、再表示時も**元の正解が保持**されている | Human | OK | 2026-07-16 スクリーンショット確認（「問題文修正」追記後も book/water が正解のまま） |
+| 8 | `i102_user@example.com` でログイン→クイズ画面で **科目「高校英語」**を選択してクイズを開始し、問題を表示する | 出題画面の選択肢に正解マーク・「正解」ラベルが**表示されない**（従来どおり回答後にのみ正解が分かる） | Human | | 答え漏洩なしの目視（API は TC-AUTO-05 で担保済み）。初回実施時「科目が登録されていません」→ i102_user に科目「高校英語」の `UserSubjectAccess` を付与（granted_by=i102_admin・キャッシュ無効化済み 2026-07-16）して再実施 |
 | 9 | `docker compose exec -T frontend npm test -- --watchAll=false` を実行 | 既存 2 suites / 7 tests PASS（FE 回帰なし） | Claude | OK | 7 passed・`npm run build` も成功（2026-07-16） |
