@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
@@ -246,6 +247,12 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         # バリデーション済みデータ
         validated_data = serializer.validated_data
 
+        # I103: 越境 subject への作成を拒否（テナント境界）。
+        # subject は Problem.subject=NOT NULL・serializer required のため create 時は必ず存在。
+        subject = validated_data['subject']
+        if subject.organization_id != self.request.user.organization_id:
+            raise PermissionDenied('他組織の科目には問題を作成できません')
+
         # 画像ファイルの取得（multipart/form-data）
         question_images = []
         explanation_images = []
@@ -376,6 +383,12 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                 'error': '指定された科目が見つかりません'
             }, status=status.HTTP_404_NOT_FOUND)
 
+        # I103: 越境 subject への作成を拒否（save_to_db に関わらず生成前に停止）
+        if subject.organization_id != request.user.organization_id:
+            return Response({
+                'error': '他組織の科目には問題を作成できません'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         try:
             # AI生成器の初期化
             generator = AIQuestionGenerator()
@@ -498,6 +511,12 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             return Response({
                 'error': '指定された科目が見つかりません'
             }, status=status.HTTP_404_NOT_FOUND)
+
+        # I103: 越境 subject への作成を拒否（テナント境界）
+        if subject.organization_id != request.user.organization_id:
+            return Response({
+                'error': '他組織の科目には問題を作成できません'
+            }, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # ユーザーの最近のパフォーマンス分析
