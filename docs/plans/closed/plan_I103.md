@@ -198,5 +198,12 @@ def perform_create(self, serializer):
 - [ ] SEC-1（update）の 400→403 統一を本イシューに含めず別イシューとする（当面 create/AI=403・update=400 の一時的不整合を許容）でよいか
 - [ ] テストファイル名 `test_I103_cross_org_create.py`（新規）でよいか
 
+## 完了情報
+- **完了日**: 2026-07-15
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review: Blocker 0 / security-review: Blocker 0・Low 2 / code-review: VERDICT OK・Low 2）
+- **テスト**: `problems/tests/` 56 passed（既存50＋新規6・回帰なし）・false-green 検証済み・CI 全ジョブ green
+- **retro 派生**: P4/P5 → I105 同梱 / P3 → I111（#206）起票 / 残余リスク Low×3 は追跡
+
 ## レビュー結果
-- [20260714_2159 判定: ✅ 完了](../../reviews/I103_plan_review_20260714_2159.md)
+- [20260714_2159 判定: ✅ 完了](../../reviews/closed/I103_plan_review_20260714_2159.md)
