@@ -6,7 +6,7 @@
 |---:|------|----------|--------|--------|------|
 | M1 | ブラウザで https://github.com/osushi0404-dev/study-app-multitenant/settings にオーナー（osushi0404-dev）でアクセスし、General → Default branch を `main` から `develop` に変更する | Default branch の表示が `develop` になる | Human | OK | 実装ステップ1（前提ゲート）。2026-07-15 ユーザー実施（スクリーンショット確認） |
 | M2 | `gh api repos/osushi0404-dev/study-app-multitenant --jq .default_branch` を実行 | 出力が `develop` | Claude | OK | 2026-07-15 実行・出力 `develop` を確認 |
-| M3 | `gh label list --search dependency-audit` を実行 | `dependency-audit` ラベルが 1 件表示される | Claude | | 実装ステップ2 の検証 |
+| M3 | `gh label list --search dependency-audit` を実行 | `dependency-audit` ラベルが 1 件表示される | Claude | OK | 2026-07-15 実行・`dependency-audit（scheduled 依存監査の自動起票・#D93F0B）` 1 件を確認（実装ステップ2 で作成） |
 | M4 | PR #211 の CI 結果を `gh pr checks 211` で確認 | 全チェックが pass（fail 0 件） | Claude | | 既存 CI が新規ファイルで壊れないこと |
 
 ## Phase B（develop マージ後・クローズ処理内で GitHub イシュークローズ前に実施）

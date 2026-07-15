@@ -1,9 +1,6 @@
 # I109 自動テスト: 依存脆弱性ドリフトの定期検知（scheduled 監査＋自動起票）
 
-実行コマンド:
-```bash
-bash scripts/claude/tests/test_i109_dependency_audit.sh
-```
+実行コマンドは末尾の「決定論ゲート（自動実走）」セクションに宣言（`test_i109_dependency_audit.sh` の単独実行・fenced ブロックはゲートセクションのみに置く）。
 
 結果:
 - backend: 対象外（アプリコード変更なし・pytest 不要）

@@ -7,6 +7,7 @@
 - `.github/workflows/dependency-audit.yml` が**毎日 JST 7:00**（cron `0 22 * * *` UTC）に develop（`ref: develop` 固定）を checkout し、**PR ゲート（ci.yml）と同一条件**の監査を実行する:
   - backend: `pip-audit -r requirements.txt`（全件 fail 対象）
   - frontend: `npm audit --audit-level=critical --omit=dev`（critical のみ fail 対象）
+  - 「同一条件」は**判定条件**の同一を指す。frontend の `npm ci` は省略している（npm audit は package-lock.json とレジストリ advisory DB のみで判定するため node_modules 不要・判定結果は PR ゲートと同一）
 - 監査 fail 時は `scripts/claude/dependency-audit-issue.sh` が GitHub イシューを自動起票する:
   - タイトル: `[dependency-audit] <backend|frontend>: 依存脆弱性を検知（scheduled audit）`・ラベル: `dependency-audit`
   - **重複防止**: 監査種別ごとに open イシュー最大 1 本。既存 open があれば新規作成せず**コメント追記**（＝open のまま放置すると毎朝コメントが増えるが、イシューは乱立しない）
