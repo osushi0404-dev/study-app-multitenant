@@ -20,6 +20,7 @@ import {
   ImageList,
   ImageListItem,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ImageModal from './ImageModal';
 import { Problem } from '../services/types';
 import { getMediaUrl } from '../utils/url';
@@ -174,12 +175,17 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
               borderColor: showCorrectAnswer && choice.is_correct ? 'success.main' : 'grey.300',
               borderRadius: 1,
               backgroundColor: showCorrectAnswer && choice.is_correct ? 'success.light' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
             <Typography>
               {String.fromCharCode(65 + index)}. {choice.text}
-              {showCorrectAnswer && choice.is_correct && ' ✓'}
             </Typography>
+            {showCorrectAnswer && choice.is_correct && (
+              <Chip icon={<CheckCircleIcon />} label="正解" size="small" color="success" />
+            )}
           </Box>
         ))}
       </Box>

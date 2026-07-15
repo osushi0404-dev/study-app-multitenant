@@ -64,6 +64,15 @@ def setup(db):
 - TC-AUTO-06/07: `ChoiceSerializer` の `extra_kwargs`（write_only）を一時的に削除 → TC-AUTO-06/07 が**RED**になることを確認 → 戻す。
 - **復元は必ず Edit ツールで注入前の内容に戻す**（`git restore` / `git checkout -- <file>` は禁止＝実装差分が未コミットの場合、注入と実装差分が共に失われるため）。復元後に `git diff` が実装差分のみであることを確認する。結果（RED 確認の有無）を本文書に記録する。
 
+## 実施記録（2026-07-16 /implement）
+- **RED（実装前）**: TC-AUTO-01〜04 が**失敗**（is_correct キー欠落・想定どおり）、TC-AUTO-05〜07 は合格 → `4 failed, 3 passed`
+- **GREEN（実装後）**: `test_I078_is_correct_exposure.py` → **7 passed**
+- **false-green 注入検証（実装後・Edit で注入→確認→Edit で復元）**:
+  - 注入1: `ProblemDisplaySerializer.choices` を `ChoiceAdminSerializer` に一時差し替え → TC-AUTO-05 **RED（1 failed）** ✅
+  - 注入2: `ChoiceSerializer` の `extra_kwargs`（write_only）を一時削除 → TC-AUTO-06/07 **RED（2 failed）** ✅
+  - 復元後の `git diff` は実装差分（新設2クラス＋serializer_class 切替＋import）のみであることを確認済み
+- **TC-AUTO-08（全体回帰）**: `problems/tests/` → **68 passed**（既存 61＋新規 7・回帰なし）
+
 ## 注記
 - list（TC-AUTO-01）はユーザー別キャッシュを通るが、fixture のユーザーはテストごとに新規作成されるためキャッシュキー（user_id）が衝突しない。同一テスト内の再 GET はキャッシュヒットし得る点に留意。
 - `ProblemViewSet.parser_classes = [MultiPartParser, FormParser]`（JSON 非対応）のため、create/update は multipart で送る（I103 と同様）。
