@@ -178,7 +178,7 @@ docker compose config | grep -A1 published
 
 > この節は現状のスナップショット（参考）。手順本文の一般形とは別枠。構成が変わったら更新する。
 
-| トラック | 作業ツリー | 種別 | 用途 |
-|---------|-----------|------|------|
-| ハーネス改善 | `/mnt/c/app/wt-harness` | linked worktree | バイブコーディングの仕組み改善イシュー |
-| アプリ開発 | `/mnt/c/app/study-app-multitenant` | primary checkout（採番権威） | 学習アプリ開発 |
+| トラック | 作業ツリー | 種別 | 用途 | 対応 GitHub ラベル |
+|---------|-----------|------|------|-------------------|
+| ハーネス改善 | `/mnt/c/app/wt-harness` | linked worktree | バイブコーディングの仕組み改善イシュー | `track:harness` |
+| アプリ開発 | `/mnt/c/app/study-app-multitenant` | primary checkout（採番権威） | 学習アプリ開発 | `track:app` |

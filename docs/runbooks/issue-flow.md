@@ -52,14 +52,15 @@ cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
 gh issue create \
   --title "I${ISSUE_NUM}: [イシュータイトル]" \
   --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
-  --label "[種別に応じたラベル]"
+  --label "[種別ラベル]" --label "[トラックラベル]"
 ```
 
-**ラベル設定**:
-- Bug → `bug`
-- Feature → `enhancement`
-- Documentation → `documentation`
-- Refactoring → `refactoring`
+**ラベル設定（2軸・両方必須）**:
+- **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
+- **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`（対応 worktree: wt-harness）
+  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`（対応 worktree: study-app-multitenant）
+  - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
 **注意事項**:
 - GitHubイシュー番号とローカルイシュー番号は異なる場合がある（GitHub側は自動採番）
@@ -190,8 +191,15 @@ cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
 gh issue create \
   --title "I${ISSUE_NUM}: [イシュータイトル]" \
   --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
-  --label "[種別に応じたラベル]"
+  --label "[種別ラベル]" --label "[トラックラベル]"
 ```
+**ラベル設定（2軸・両方必須）**:
+- **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
+- **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`（対応 worktree: wt-harness）
+  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`（対応 worktree: study-app-multitenant）
+  - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
+
 登録後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
 ```
 - GitHub Issue: #XX
