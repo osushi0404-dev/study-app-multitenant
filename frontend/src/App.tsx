@@ -81,8 +81,8 @@ function App() {
                 <Route path="statistics" element={<Statistics />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="monitoring" element={<Monitoring />} />
-                <Route path="subject-management" element={<SubjectManagement />} />
-                <Route path="subject-management/:id" element={<SubjectDetail />} />
+                <Route path="subject-management" element={<OrgAdminRoute><SubjectManagement /></OrgAdminRoute>} />
+                <Route path="subject-management/:id" element={<OrgAdminRoute><SubjectDetail /></OrgAdminRoute>} />
 
                 {/* Admin Routes */}
                 <Route path="admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
