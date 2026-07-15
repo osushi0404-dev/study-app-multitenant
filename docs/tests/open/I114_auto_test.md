@@ -6,7 +6,8 @@
 - backend: 非該当（アプリコード変更なし・pytest 不要）
 - frontend: 非該当（アプリコード変更なし・Jest 不要）
 - E2E: 非該当（アプリ挙動変更なし）
-- 決定論ゲート: **実行済み（実装時 2026-07-15・`RESULT: OK (14/14)`・exit 0）**。TDD Red（計画時・G1〜G10 全 NO-HIT）→ Green（実装後・14/14 OK）を確認。スクリプト単位の false-green 注入検証も NG 検知を確認（TC-02 実施記録参照）
+- 決定論ゲート: **実行済み（実装時 2026-07-15・code-review 時 2026-07-16・/test 時 2026-07-16 の 3 回とも `RESULT: OK (14/14)`・exit 0）**。TDD Red（計画時・G1〜G10 全 NO-HIT）→ Green（実装後・14/14 OK）を確認。スクリプト単位の false-green 注入検証も NG 検知を確認（TC-02 実施記録参照）
+- TC-03（イシュー本文整合）: **/test 時 2026-07-16 再確認 OK**（`grep -qF "test_i114_retro_plain_output.sh" docs/issues/open/I114.md` exit 0・`bash -n` exit 0）
 
 ## テストケース
 
