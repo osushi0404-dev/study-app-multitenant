@@ -3,9 +3,10 @@
 実行コマンドは末尾の「決定論ゲート（自動実走）」セクションに宣言（`test_i109_dependency_audit.sh` の単独実行・fenced ブロックはゲートセクションのみに置く）。
 
 結果:
-- backend: 対象外（アプリコード変更なし・pytest 不要）
-- frontend: 対象外（アプリコード変更なし・Jest 不要）
-- 決定論ゲート: **実行済み（2026-07-15・RESULT: OK・16/16 項目 OK・exit 0）**。TDD Red（実装前・全16項目 NG・exit 1）→ Green（実装後・全 OK）を確認
+- backend: 非該当（アプリコード変更なし・pytest 不要。PR CI の Backend Tests は pass）
+- frontend: 非該当（アプリコード変更なし・Jest 不要。PR CI の Frontend Tests は pass）
+- E2E: 非該当（アプリ挙動変更なし。PR CI の E2E Tests は pass）
+- 決定論ゲート: **実行済み（実装時 2026-07-15・/test 時 2026-07-15 の両方で RESULT: OK・16/16 項目 OK・exit 0）**。TDD Red（実装前・全16項目 NG・exit 1）→ Green（実装後・全 OK）を確認
 
 ## テストケース
 
