@@ -205,7 +205,7 @@ def get_permissions(self):
 ```
 
 ## レビュー結果
-- [20260715_1335 判定: ✅ 完了](../../reviews/I104_plan_review_20260715_1335.md)
+- [20260715_1335 判定: ✅ 完了](../../reviews/closed/I104_plan_review_20260715_1335.md)
 
 ## セキュリティレビュー結果
 
@@ -241,3 +241,11 @@ def get_permissions(self):
 （/retro で決定する）
 - Low #4: 越境 admin の 404 を固定する TC-AUTO-06 は任意追加（既存 queryset 防御に依存・本 PR で退行なし）。
 - Low #6: `public` 未認証到達性は経路不変。TC-SMOKE-01 で /test 時にスモーク確認。401 なら pre-existing bug として別イシュー化を検討。
+  - → /test で **401 を確認**（pre-existing bug）。I115（#213）として起票済み。再発防止のレビュー観点は I116（#214）。
+
+## 完了情報
+- **完了日時**: 2026-07-15
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review 完了・security-review Blocker 0・code-review VERDICT OK）
+- **テスト結果**: Backend pytest 61 passed・Frontend Jest 7 passed・E2E 非該当。手動テスト（FE ルートガード）ユーザー確認 OK。
+- **retro 派生イシュー**: I114（#212 retro出力平易化）・I115（#213 public 401 修正）・I116（#214 レビュー観点追加）

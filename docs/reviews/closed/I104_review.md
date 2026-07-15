@@ -16,4 +16,7 @@
 - [ ] 計画書外の変更（他 ViewSet・参照範囲の縮小等）が混入していないか
 
 ## レビュー結果
-（実装後に記録）
+- plan-review: `docs/reviews/I104_plan_review_20260715_1335.md` → ✅ 完了（HIGHRISK・Blocker 0）
+- security-review: Blocker 0 / High 0 / Medium 0 / Low 2（越境404・public 未認証、いずれも既存防御依存）
+- code-review: `docs/reviews/I104_code_review_20260715_1415.md` → ✅ VERDICT OK（Blocker/High 0・Medium=public pre-existing bug スコープ外・Low=許容）
+- /test（2026-07-15）: Backend pytest `61 passed`・Frontend Jest `7 passed`・E2E 非該当。自動テスト全 PASS・回帰なし。Claude 実施の手動 TC（STATIC-01/02・INJECT-01・SMOKE-01）は manual_test に記録済み（SMOKE-01 は public 401 の pre-existing bug を検出＝別イシュー候補）。

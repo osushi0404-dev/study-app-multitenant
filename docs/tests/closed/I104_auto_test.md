@@ -21,3 +21,9 @@ TC-AUTO-01/05 は「非admin が拒否される（403）」という否定判定
 
 ## 期待実行結果
 全 5 TC PASS。既存 `test_I006_subject_org_admin.py`（12件）・`test_I102_problem_authz.py`（5件）も回帰なく PASS。
+
+## 実行結果（/test I104・2026-07-15）
+- **Backend pytest（全スイート・Docker）**: `61 passed, 3 warnings`（警告は imghdr Deprecation / Pagination UnorderedObjectList のみ・失敗なし）。I104 5TC 含む全件 PASS。
+- **Frontend Jest（全スイート・Docker）**: `Test Suites: 2 passed / Tests: 7 passed`（react-router v6 deprecation 警告のみ・失敗なし）。
+- **E2E（Playwright）**: 非該当（本イシュー「含まない: E2E の追加」・auto_test テスト計画で E2E 不要と明記）。
+- 結論: 自動テスト全 PASS・回帰なし。
