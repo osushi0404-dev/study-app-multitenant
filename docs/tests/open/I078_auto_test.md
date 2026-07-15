@@ -31,7 +31,7 @@ def setup(db):
     wrong = Choice.objects.create(problem=problem, text="不正解", is_correct=False, order=2)
     # 出題・結果経路用（TC-AUTO-05/06）: normal ユーザーのセッションと回答
     session = QuizSession.objects.create(user=normal, subject=subject, is_active=True)
-    answer = QuizAnswer.objects.create(session=session, problem=problem)
+    answer = QuizAnswer.objects.create(session=session, problem=problem, time_taken=0)
     answer.selected_choices.set([correct])
     return {"org": org, "admin": admin, "normal": normal, "subject": subject,
             "problem": problem, "correct": correct, "wrong": wrong,

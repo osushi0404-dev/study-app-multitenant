@@ -79,7 +79,8 @@ def test_admin_list_exposes_is_correct(setup):
     res = client.get("/api/problems/")
     assert res.status_code == 200
     data = res.json()
-    target = next(p for p in data if p["id"] == setup["problem"].id)
+    target = next((p for p in data if p["id"] == setup["problem"].id), None)
+    assert target is not None
     assert len(target["choices"]) == 2
     assert all("is_correct" in c for c in target["choices"])
     by_text = {c["text"]: c["is_correct"] for c in target["choices"]}
