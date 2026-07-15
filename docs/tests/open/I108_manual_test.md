@@ -11,8 +11,8 @@
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
 | 1 | `backend/requirements.txt` を Read し、Pillow の行を確認する | 9行目が `Pillow==12.3.0` であり、他の行（Pillow 以外の依存 19 行）に変更がない（`git diff` の変更行が `-Pillow==12.2.0` / `+Pillow==12.3.0` の1組のみ） | Claude | OK（2026-07-15） | git diff で変更行が当該1組のみであることを確認 |
-| 2 | `gh pr checks 204` で Draft PR #204 の CI 結果を確認する | Backend Lint & Security（pip-audit 含む）/ Backend Tests / E2E Tests / Frontend 系の全チェックが `pass` と表示される | Claude | | TC-03 と同一コマンド。ここでは個別ジョブ名の pass 表示を目視相当で確認 |
-| 3 | Backend Lint & Security ジョブのログで pip-audit ステップを確認する（`gh run view <run-id> --log` の該当ステップ） | pip-audit ステップに脆弱性検出の表（`PYSEC-...`）が**出力されていない**こと（`No known vulnerabilities found` またはステップ成功） | Claude | | 修正前は同ステップに PYSEC-2026-2253〜2257 の5件が表形式で出力されていた |
+| 2 | `gh pr checks 204` で Draft PR #204 の CI 結果を確認する | Backend Lint & Security（pip-audit 含む）/ Backend Tests / E2E Tests / Frontend 系の全チェックが `pass` と表示される | Claude | OK（2026-07-15） | 全6チェック `pass` 表示を確認（Backend Lint & Security / Backend Tests / E2E Tests (Playwright) / Frontend Lint & Security / Frontend Tests / Frontend Type Check） |
+| 3 | Backend Lint & Security ジョブのログで pip-audit ステップを確認する（`gh run view <run-id> --log` の該当ステップ） | pip-audit ステップに脆弱性検出の表（`PYSEC-...`）が**出力されていない**こと（`No known vulnerabilities found` またはステップ成功） | Claude | OK（2026-07-15） | job 87236639003 のログを取得し確認: `PYSEC` の出現ゼロ（grep 不一致）・pip-audit ステップに `No known vulnerabilities found` を確認 |
 | 4 | （develop マージ後）PR #202（I107）で develop を取り込み、CI を再実行して結果を確認する | PR #202 の Backend Lint & Security が pass に転じる（pip-audit ブロック解消。AC-4 の充足確認） | Claude | | マージ後の後続確認。実施タイミングは I108 マージ直後 |
 
 ## 補足

@@ -43,4 +43,4 @@ gh pr checks 204
 |----|--------|------|------|
 | TC-01 | 2026-07-15 | **PASS**（exit 0・`Pillow==12.3.0` が完全一致で出力） | false-green 検証は計画時に実施済み（12.2.0 状態で NG を確認） |
 | TC-02 | 2026-07-15 | **PASS**（exit 0・`No known vulnerabilities found`・依存解決込み） | pipx pip-audit 2.10.1。計画時スパイク以降の新規 CVE 追加公開なし |
-| TC-03 | - | 未実施（push 後に実行） | |
+| TC-03 | 2026-07-15 | **PASS**（exit 0・全6チェック pass: Backend Lint & Security 49s / Backend Tests 1m9s / E2E Tests (Playwright) 2m57s / Frontend Lint & Security / Frontend Tests / Frontend Type Check） | `gh pr checks 204 --watch` で完了まで監視。run: 29378446350 / 29378446344 |
