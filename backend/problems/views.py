@@ -82,8 +82,9 @@ class SubjectViewSet(viewsets.ModelViewSet):
         return Response(list(subjects))
 
     def get_permissions(self):
-        """create は org admin のみ許可（update/destroy は別イシュー）"""
-        if self.action == 'create':
+        """参照(list/retrieve)は認証ユーザー、更新系(create/update/partial_update/destroy)は
+        組織管理者(role=='admin')限定（I104）。public(未認証登録用)は @action の AllowAny を維持。"""
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [permissions.IsAuthenticated(), IsOrgAdmin()]
         return [permissions.IsAuthenticated()]
 
