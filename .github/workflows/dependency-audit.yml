@@ -1,0 +1,81 @@
+name: Dependency Audit
+
+# I109: 依存脆弱性ドリフトの定期検知。
+# PR ゲート（ci.yml）と同一ツール・同一条件で develop を毎日監査し、
+# fail 時に scripts/claude/dependency-audit-issue.sh がイシューを自動起票する。
+# 監査コマンドは ci.yml と一致させること（test_i109_dependency_audit.sh がペア検証）。
+
+on:
+  schedule:
+    - cron: '0 22 * * *'  # UTC 22:00 = JST 翌朝 7:00（毎日）
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: '検知動作テスト用: 監査を強制 fail させる対象'
+        type: choice
+        options:
+          - none
+          - backend
+          - frontend
+        default: none
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backend-audit:
+    name: Backend Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop   # default branch がどちらでも監査対象を develop に固定
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dev dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: pip-audit
+        working-directory: backend
+        run: |
+          if [ "${{ inputs.simulate_failure }}" = "backend" ]; then
+            echo "SIMULATED FAILURE (workflow_dispatch テスト)" | tee /tmp/audit_backend.txt
+            exit 1
+          fi
+          set -o pipefail
+          pip-audit -r requirements.txt 2>&1 | tee /tmp/audit_backend.txt
+      - name: Report failure as issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/claude/dependency-audit-issue.sh backend /tmp/audit_backend.txt
+
+  frontend-audit:
+    name: Frontend Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: npm audit
+        working-directory: frontend
+        run: |
+          if [ "${{ inputs.simulate_failure }}" = "frontend" ]; then
+            echo "SIMULATED FAILURE (workflow_dispatch テスト)" | tee /tmp/audit_frontend.txt
+            exit 1
+          fi
+          set -o pipefail
+          npm audit --audit-level=critical --omit=dev 2>&1 | tee /tmp/audit_frontend.txt
+      - name: Report failure as issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/claude/dependency-audit-issue.sh frontend /tmp/audit_frontend.txt

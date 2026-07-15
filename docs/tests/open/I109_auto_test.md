@@ -8,7 +8,7 @@ bash scripts/claude/tests/test_i109_dependency_audit.sh
 結果:
 - backend: 対象外（アプリコード変更なし・pytest 不要）
 - frontend: 対象外（アプリコード変更なし・Jest 不要）
-- 決定論ゲート: 未実行（実装ステップ3 で実行・記録する）
+- 決定論ゲート: **実行済み（2026-07-15・RESULT: OK・16/16 項目 OK・exit 0）**。TDD Red（実装前・全16項目 NG・exit 1）→ Green（実装後・全 OK）を確認
 
 ## テストケース
 
@@ -34,7 +34,10 @@ bash scripts/claude/tests/test_i109_dependency_audit.sh
 | workflow の一時コピーの cron 行を `'0 23 * * *'` へ書き換え → `I109_TEST_WF=<コピー> bash scripts/claude/tests/test_i109_dependency_audit.sh` | テストが **NG 行を出力し非ゼロ終了**（壊れた状態を合格させない） |
 | `dependency-audit-issue.sh` の一時コピーから `gh issue comment` 分岐を削除 → `I109_TEST_SCRIPT=<コピー> bash scripts/claude/tests/test_i109_dependency_audit.sh` | テストが **非ゼロ終了** |
 
-実施記録: （実装時に記入）
+実施記録（2026-07-15 実施・実ファイル無改変）:
+- 注入1: 一時コピーの cron を `'0 23 * * *'` に改変 → `NG: cron 値` を出力し **exit 1**（検知 OK）
+- 注入2: 一時コピーの `gh issue comment` 呼び出しを no-op に置換 → `NG: 重複防止B` を出力し **exit 1**（検知 OK）
+- 判定: 本テストは false-green ではない（壊れた状態を確実に不合格にする）
 
 ### TC-03: 重複防止ロジックの分岐検証（gh スタブ・test_i109_dependency_audit.sh 内）
 gh コマンドを PATH 差し替えのスタブ（応答固定・呼び出しログ記録）に置き換えて `dependency-audit-issue.sh backend <ダミー出力>` を実行する。
