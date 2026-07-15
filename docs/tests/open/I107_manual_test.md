@@ -7,6 +7,6 @@
 | 3 | `gh issue list --state open --limit 200 --label "track:harness"` を実行する | #197, #191, #190, #189, #180, #179, #177, #176, #175, #173, #172, #169, #168, #154, #153, #10, #200 の17件が表示される（承認済み分類表の harness 側と一致） | Claude | OK | 期待17件と完全一致 |
 | 4 | Read で `.claude/skills/issue-bootstrap/SKILL.md` の step 4 と `docs/runbooks/issue-flow.md` のラベル設定2箇所を確認する | 3箇所すべてに「種別＋トラックの2ラベル必須（`--label` 分割形式）」「トラック判定基準（docs/runbooks/・scripts/claude/・.claude/ → track:harness、backend/・frontend/・e2e/ → track:app、両属は主目的側に単一付与・迷えばユーザー確認）」が同一粒度で記載されている | Claude | OK | SKILL.md L59-72・issue-flow.md L49-63/L189-202 を Read 確認。3箇所同一粒度 |
 | 5 | Read で `docs/runbooks/worktree.md` §10 のトラック構成表を確認する | 表に「対応 GitHub ラベル」列があり、ハーネス改善 → `track:harness`・アプリ開発 → `track:app` が記載されている | Claude | OK | L181-184 で列追加・対応関係を確認 |
-| 6 | GitHub Web UI（https://github.com/osushi0404-dev/study-app-multitenant/issues）でラベル `track:harness` によるフィルタを操作する | イシュー一覧に紫色の `track:harness` ラベルが視認でき、フィルタ適用で該当17件のみに絞り込まれる | Human | | |
+| 6 | GitHub Web UI（https://github.com/osushi0404-dev/study-app-multitenant/issues）でラベル `track:harness` によるフィルタを操作する | イシュー一覧に紫色の `track:harness` ラベルが視認でき、フィルタ適用で該当17件のみに絞り込まれる | Human | OK | 2026-07-15 ユーザー実施（スクリーンショット確認）。`is:issue is:open label:track:harness` で Open 17件・紫ラベル視認。※素のテキスト検索 `track:harness` は全文検索になりフィルタされない点に注意（`label:` 修飾子が必要） |
 
-結論: OK / NG
+結論: OK
