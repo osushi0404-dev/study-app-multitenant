@@ -164,8 +164,8 @@ gh issue edit <番号> --remove-label "track:app"   # または track:harness
 | `--label` の分割形式・worktree.md §10 追記・文書回帰ゲートスクリプト新設 | plan-review（I107_plan_review_20260714_2158.md）の指摘 Info/Warning-1/Warning-2 を採用 |
 
 ## レビュー結果
-- [20260714_2208 判定: ✅ 完了](../../reviews/I107_plan_review_20260714_2208.md)
-- [20260714_2158 判定: ✅ 完了](../../reviews/I107_plan_review_20260714_2158.md)
+- [20260714_2208 判定: ✅ 完了](../../reviews/closed/I107_plan_review_20260714_2208.md)
+- [20260714_2158 判定: ✅ 完了](../../reviews/closed/I107_plan_review_20260714_2158.md)
 
 ### レビュー指摘への対応記録
 - 2158 レビュー（Warning×2・Info×1）: 3件すべて採用し計画・テスト・イシューに反映（§4-2 分割形式 / §4-4 worktree.md §10 / §4-5 回帰ゲート）→ 2208 で再レビュー済み。
