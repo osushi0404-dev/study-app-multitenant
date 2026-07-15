@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - イシューフロー: docs/runbooks/issue-flow.md
 - UXルール: docs/runbooks/ux-rules.md
 - バックエンドチェック: docs/runbooks/backend-check.md
+- 依存監査（定期検知）: docs/runbooks/dependency-audit.md
 - レビュールール: docs/runbooks/review-rules.md
 - テンプレート同期: docs/runbooks/template-sync.md
 - pre-commit 運用: docs/runbooks/pre-commit.md
