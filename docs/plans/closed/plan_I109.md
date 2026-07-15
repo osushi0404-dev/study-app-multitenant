@@ -5,7 +5,7 @@
 - **関連イシュー**: #205（ローカル: docs/issues/open/I109.md）
 - **Draft PR**: #211
 - **作成根拠資料**: docs/issues/open/I109.md（起点イシュー・設計確認メモで方式確定済み）
-- **実装後評価**: docs/reviews/open/I109_review.md
+- **実装後評価**: docs/reviews/closed/I109_review.md
 - **作成日**: 2026-07-15
 
 ## 1. 背景/目的
@@ -274,4 +274,9 @@ fi
 | Phase B をマージ後実施とする順序特例 | **仮定**（GitHub 仕様上の制約による。Risk 表参照） |
 
 ## レビュー結果
-- [20260715_1744 判定: ✅ 完了](../../reviews/I109_plan_review_20260715_1744.md)
+- [20260715_1744 判定: ✅ 完了](../../reviews/closed/I109_plan_review_20260715_1744.md)
+
+## 完了情報
+- **完了日時**: 2026-07-15
+- **対応者**: Claude Code
+- **レビュー結果**: OK（code-review VERDICT: OK・I109_code_review_20260715_1856.md）

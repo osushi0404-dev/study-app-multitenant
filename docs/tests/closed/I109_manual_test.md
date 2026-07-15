@@ -22,3 +22,7 @@
 | M9 | （任意・翌営業日）Actions タブまたは `gh run list --workflow=dependency-audit.yml` で JST 7:00 台の scheduled 実行を確認 | schedule イベント起因の run が存在し conclusion が `success` | Human | | AC 必須ではない（AC は workflow_dispatch 検証まで）。schedule 発火の最終確認 |
 
 結論: OK / NG （全 TC 完了後に記入）
+
+## 完了情報
+- **完了日時**: 2026-07-15
+- **結果**: Phase A（M1〜M4）OK。Phase B（M5〜M9）は承認済み順序特例により develop マージ直後に実施し結果を追記する
