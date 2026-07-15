@@ -6,7 +6,7 @@ psycopg2-binary==2.9.9
 python-dotenv==1.2.2
 django-extensions==3.2.3
 django-filter==23.4
-Pillow==12.2.0
+Pillow==12.3.0
 celery==5.3.4
 redis==5.0.1
 django-redis==5.4.0
