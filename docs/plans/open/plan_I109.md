@@ -161,7 +161,8 @@ trap 'rm -f "$BODY_FILE"' EXIT
 } > "$BODY_FILE"
 
 # 重複防止: 同種（KIND）の open イシューが既にあればコメント追記、なければ新規作成
-EXISTING="$(gh issue list --label "$LABEL" --state open --json number,title \
+# --limit 50: gh issue list の既定上限 30 に暗黙依存しない（通常運用の open は種別ごと最大 1 本）
+EXISTING="$(gh issue list --label "$LABEL" --state open --limit 50 --json number,title \
   --jq "[.[] | select(.title | startswith(\"${TITLE_PREFIX}\"))][0].number // empty")"
 
 if [ -n "$EXISTING" ]; then
@@ -178,7 +179,7 @@ fi
 - 監査出力（CVE 情報）は公開情報のみで機密は含まない（public リポジトリのイシューに掲載可）。
 
 ### 4-3. `scripts/claude/tests/test_i109_dependency_audit.sh`（新規・決定論ゲート）
-**修正方針**: (a) workflow YAML の構文（PyYAML）と不変条件（cron 値・`ref: develop`・監査コマンドの CI 同一性・`issues: write`・workflow_dispatch）を grep で検証、(b) 起票スクリプトの重複防止分岐を **gh スタブ**（PATH 差し替え・応答固定・呼び出しログ記録）で「既存なし→create のみ」「既存あり→comment のみ」の両分岐とも検証する。既存 `scripts/claude/tests/test_*.sh` の慣例（exit 0/非ゼロ・OK/NG 行出力）に従う。全 TC の合否判定・期待値は docs/tests/open/I109_auto_test.md に記載（→ TC-01〜TC-03 参照）。
+**修正方針**: (a) workflow YAML の構文（PyYAML）と不変条件（cron 値・`ref: develop`・`issues: write`・workflow_dispatch）を grep で検証、(b) 監査コマンドの CI 同一性は **ci.yml とのペア検証**で行う（`pip-audit -r requirements.txt` / `--audit-level=critical --omit=dev` が `.github/workflows/ci.yml` と `dependency-audit.yml` の**両方**に存在することを検証。ci.yml 側の将来変更による乖離も自動検知する）、(c) 起票スクリプトの重複防止分岐を **gh スタブ**（PATH 差し替え・応答固定・呼び出しログ記録）で「既存なし→create のみ」「既存あり→comment のみ」の両分岐とも検証する。検証対象パスは環境変数 `I109_TEST_WF` / `I109_TEST_SCRIPT` で差し替え可能にし（既定は実ファイル）、false-green 注入検証（TC-02）は**実ファイルを改変せず一時コピーの破壊**で行う。既存 `scripts/claude/tests/test_*.sh` の慣例（exit 0/非ゼロ・OK/NG 行出力）に従う。全 TC の合否判定・期待値は docs/tests/open/I109_auto_test.md に記載（→ TC-01〜TC-03 参照）。
 
 ### 4-4. `docs/runbooks/dependency-audit.md`（新規）＋ `CLAUDE.md` 1 行追記
 **修正方針**: 検知時運用を自己完結で記述する（文脈ゼロのセッションが読んで対応できる状態）。
@@ -271,3 +272,6 @@ fi
 | イシュータイトル形式 `[dependency-audit] <kind>: 依存脆弱性を検知（scheduled audit）` | **仮定**（重複判定のアンカーとなる固定プレフィックス） |
 | ジョブ timeout-minutes: 15・npm ci 省略（npm audit は lockfile のみで判定） | **仮定**（判定結果に影響しない実行効率の選択） |
 | Phase B をマージ後実施とする順序特例 | **仮定**（GitHub 仕様上の制約による。Risk 表参照） |
+
+## レビュー結果
+- [20260715_1744 判定: ✅ 完了](../../reviews/I109_plan_review_20260715_1744.md)
