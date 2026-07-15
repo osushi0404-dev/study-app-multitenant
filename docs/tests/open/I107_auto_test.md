@@ -10,7 +10,16 @@
 結果:
 - backend: 対象外（コード変更なし）
 - frontend: 対象外（コード変更なし）
-- gh 実走TC（AT-01〜07）:
+- gh 実走TC（AT-01〜07）: **全 PASS**（2026-07-15 /test 実走）
+  - AT-01: PASS — `track:app` 1件ヒット・description「学習アプリ開発トラック（worktree: study-app-multitenant）」・color `0e8a16`
+  - AT-02: PASS — `track:harness` 1件ヒット・description「ハーネス改善トラック（worktree: wt-harness）」・color `5319e7`
+  - AT-03: PASS — 決定論ゲート G1/G2 exit=0（/code-review 実走）＋Read で SKILL.md step 4 の `--label` 分割2軸形式・判定基準3条件を確認
+  - AT-04: PASS — 決定論ゲート G3/G4/G5 exit=0＋Read で issue-flow.md 2箇所（自動実行フロー ステップ3 L49-63・統合ルール ステップ2 L189-202）とも同一粒度の記載を確認
+  - AT-05: PASS — jq 判定 `0`（track ラベル無し・二重付与ともに0件。オープン26件全件がちょうど1つ）
+  - AT-06: PASS — sort+diff 突き合わせで承認済み25行と過不足なし。増分1行のみ `205:track:app`（I109・2026-07-15 検証前起票。track ラベルちょうど1つで許容条件に適合）
+  - AT-07: PASS — `track:app` 9件（承認8件＋#205 増分・AT-06 と整合）/ `track:harness` 17件
+  - AT-08: PASS — `bash scripts/claude/tests/test_i107_track_label_docs.sh` exit=0（6項目全 PASS: SKILL.md 2行/2行・issue-flow.md 4行/4行・worktree.md 1行/1行）。false-green 実証は下記記録どおり（更新前 exit=1）
+- CI（PR #202）: 全6ジョブ pass（Backend Lint & Security / Backend Tests / Frontend Lint & Security / Frontend Tests / Frontend Type Check / E2E Tests）
 
 ## テストケース
 

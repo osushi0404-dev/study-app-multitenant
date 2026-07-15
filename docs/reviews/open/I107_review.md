@@ -22,9 +22,10 @@
 - Config: GitHubラベル定義・オープンイシューのラベル・運用文書2ファイル（.claude/skills/issue-bootstrap/SKILL.md / docs/runbooks/issue-flow.md）
 
 ## テスト結果
-- 自動: （/test 実行後に記入。AT-01〜08・決定論ゲート G1〜G5。実装時サニティチェックでは AT-05=0・AT-07=8/17・G5=exit 0 を確認済み）
-- 手動: （テスト後に記入。No1〜5 = Claude / No6 = Human）
-- ※ /code-review は CI ブロッカー（Pillow CVE = I108/#203）解消待ち。再開手順はイシューファイルの「現在地と再開手順」参照。
+- 自動: **AT-01〜08 全 PASS**（2026-07-15 /test 実走・詳細は I107_auto_test.md）。決定論ゲート G1〜G5 exit=0（/code-review 実走）。AT-05=0（無し/二重付与ゼロ）・AT-06=承認済み25行と過不足なし（増分 #205=I109 のみ・許容条件適合）・AT-07=9/17（#205 増分込み・AT-06 と整合）。CI（PR #202）全6ジョブ pass。
+- 手動: No1〜5（Claude 実施分）**全 OK**（詳細は I107_manual_test.md）。No6（Human・GitHub Web UI でのフィルタ操作）はユーザー確認待ち。
+- /code-review（2026-07-15）: VERDICT **OK**（Blocker/High なし。Low 1件 = issue-flow.md 空行非対称 → commit `856951d` で修正済み・ゲート再実走 PASS）。記録: docs/reviews/I107_code_review_20260715_1050.md
+- ※ CI ブロッカー（Pillow CVE = I108/#203）は I108 完了（PR #204 マージ）で解消済み。origin/develop 取り込み後 CI グリーン確認済み。
 
 ## 計画との差分
 - なし（実装は計画の全ステップどおり・逸脱なし。plan-review 指摘の反映経緯は plan_I107.md「レビュー指摘への対応記録」参照）
