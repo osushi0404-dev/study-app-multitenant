@@ -78,6 +78,7 @@ class ChoiceAdminSerializer(serializers.ModelSerializer):
 
     ProblemViewSet（I102 で admin 限定）以外で使用しないこと。
     出題・結果・AI 応答は ChoiceSerializer / ChoiceDisplaySerializer（非露出）を維持する。
+    ChoiceSerializer の fields を変更する場合は本クラスも合わせて更新すること（意図的な非継承＝既存クラス不変更方針のため）。
     """
     class Meta:
         model = Choice
@@ -198,6 +199,48 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 → 「仮定で決めた」5項目は次の承認ポイントで確認する。
 
+## セキュリティレビュー結果
+
+**実施日**: 2026-07-16
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Low | 機密情報/情報露出 | `ProblemAdminSerializer`/`ChoiceAdminSerializer` が将来、学生到達可能な経路（出題 `ProblemDisplaySerializer`・結果 `QuizAnswerDetailSerializer`・AI 応答）に誤配線されると正解が学生に漏れる | **禁止事項: 両クラスを `ProblemViewSet.serializer_class` 以外で使用しない**（docstring に明記）。否定 TC-AUTO-05/06/07 が漏洩を恒久固定（false-green 注入検証付き）。手動 No.3 で参照箇所を grep 全件確認 |
+| Low | 機密情報 | 正解入りの問題一覧がユーザー別キャッシュ（Redis）に保存されるようになる | キャッシュキーは `user_id` スコープ（`cache_service.get/set_problems_cache`）で他ユーザーへ配信されない。Redis は内部ネットワーク限定の既存構成。許容 |
+| Low | 保守 | `ChoiceAdminSerializer` が `ChoiceSerializer` 非継承（意図的＝既存クラス不変更方針）のため、将来のフィールド追加時に乖離し得る | docstring に「`ChoiceSerializer` の fields 変更時は本クラスも更新」を明記（plan-review Info 対応済み）。乖離は機能劣化方向であり漏洩方向ではない |
+
+その他の分類: 認証・認可（`permission_classes` 不変更＝I102 の `IsAuthenticated + IsOrgAdmin` が前段防御・最小権限維持）／マルチテナント（`get_queryset` の組織フィルタ不変更＝露出は自組織データのみ）／入力検証（`validate_choices` 継承・不変更）／OWASP（XSS: MUI テキスト描画・dangerouslySetInnerHTML 不使用。IDOR: org フィルタで 404）／ファイル操作（画像経路不変更）／外部通信（AI 経路不変更・新規外部連携なし）／依存ライブラリ（追加なし）: **リスクなし**
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `GET /api/problems/`（list/retrieve） | 一般（role=user） | 直叩きで is_correct 入りデータの取得 | I102 の `IsOrgAdmin` が 403 | Yes: I102 既存 TC（`test_non_admin_cannot_read`） | No | なし（前段防御・本イシューで不変更） | 封鎖 |
+| 2 | 同上 | 未認証 | 直叩き | `IsAuthenticated` が 401 | Yes: I102 既存 TC | No | なし | 封鎖 |
+| 3 | `GET /api/quiz/{id}/next_problem/` | 一般（学生） | 出題レスポンスから回答前に正解を読む | `ChoiceDisplaySerializer`（is_correct 非含有）を維持 | Yes: TC-AUTO-05 | Yes: manual No.8（画面目視） | なし | 封鎖 |
+| 4 | `GET /api/quiz/{id}/` | 一般（学生） | 結果詳細の `problem.choices`/`selected_choices` から正解を読む | 共有 `ChoiceSerializer` の write_only 維持 | Yes: TC-AUTO-06 | No | なし | 封鎖 |
+| 5 | `POST /api/problems/generate_ai/` 等の応答 | admin（現状）・将来の権限緩和時 | AI 応答から is_correct を読む | `ProblemSerializer(...)` 直接使用を維持 | Yes: TC-AUTO-07（シリアライザ単体） | Yes: manual No.3（grep 配線確認） | API レベル検証は既存 500 バグ（別イシュー対応決定済み）により不可＝単体 TC で代替 | Low |
+| 6 | `GET /api/problems/{他組織のid}/` | 他組織 admin | 越境で他組織の正解を取得 | `get_queryset` の `subject__organization` フィルタ → 404 | No（既存挙動・専用 TC なし） | No（コード確認済み） | 越境 retrieve の専用回帰テストが無い（既存挙動・本イシューで不変更。I106 の CRUD カバレッジ拡充で補完余地） | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 0件 | 0件 |
+| Low     | 3件 | 2件 |
+
+### 残余リスク処遇
+（/retro で決定する）
+- 設計 Low-1（誤配線漏洩）: 否定 TC＋grep で継続監視。/retro で追加ゲート要否を判断。
+- 設計 Low-2（キャッシュ内の正解データ）: 既存構成で許容。
+- 設計 Low-3（Admin シリアライザの保守乖離）: docstring 注記で運用。
+- シナリオ Low-5（AI 応答の API レベル未検証）: 既存 500 バグの別イシュー（起票予定・メモリ記録済み）で解消後に API レベル TC 追加を検討。
+- シナリオ Low-6（越境 retrieve の専用 TC 不在）: I106（テストカバレッジ負債）での補完を検討。
+
 ## 9. 承認ポイント（チェックリスト）
 - [ ] BE 方式: `ChoiceAdminSerializer`＋`ProblemAdminSerializer`（継承・choices のみ差し替え）新設、`ProblemViewSet.serializer_class` 無条件切替、既存クラス不変更 — でよいか
 - [ ] クラス名 `ChoiceAdminSerializer` でよいか（既存 `ChoiceDisplaySerializer` の命名パターン準拠）
@@ -206,3 +249,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 - [ ] AI 生成応答の漏洩防止テストは、既存バグ（`_save_ai_problem_to_db` の title/description 不整合→500・本イシュー対象外・**別イシューで対応＝決定済み**）により API レベルでなく **`ProblemSerializer` 単体 TC** で担保する — でよいか
 - [ ] テストファイル名 `test_I078_is_correct_exposure.py` でよいか
 - [ ] 高リスク判定 Yes（情報露出軸）→ plan-review 後に `/security-review I078` を通すフローでよいか
+
+## レビュー結果
+- [20260716_0038 判定: ✅ 完了](../../reviews/I078_plan_review_20260716_0038.md)

@@ -29,9 +29,16 @@ def setup(db):
         problem_type="single", difficulty=1, explanation="解説")
     correct = Choice.objects.create(problem=problem, text="正解", is_correct=True, order=1)
     wrong = Choice.objects.create(problem=problem, text="不正解", is_correct=False, order=2)
+    # 出題・結果経路用（TC-AUTO-05/06）: normal ユーザーのセッションと回答
+    session = QuizSession.objects.create(user=normal, subject=subject, is_active=True)
+    answer = QuizAnswer.objects.create(session=session, problem=problem)
+    answer.selected_choices.set([correct])
     return {"org": org, "admin": admin, "normal": normal, "subject": subject,
-            "problem": problem, "correct": correct, "wrong": wrong}
+            "problem": problem, "correct": correct, "wrong": wrong,
+            "session": session, "answer": answer}
 ```
+
+注: `QuizSession` は `subject` 紐づけ・`is_active=True` を明示する（`next_problem` は非アクティブセッションで 400、subject 未設定だと全科目出題になるため）。`QuizAnswer.selected_choices` は M2M のため `create` 後に `.set()` で設定する。
 
 ## テストケース
 
@@ -41,8 +48,8 @@ def setup(db):
 | TC-AUTO-02 | 管理 retrieve で is_correct 露出 | admin で `GET /api/problems/{problem.id}/` | `status_code == 200`。choices に `'is_correct'` キーが存在し値が DB と一致 | Claude |
 | TC-AUTO-03 | create の読み書き両可 | admin で `POST /api/problems/`（multipart・`_valid_payload` 形式・choices に `is_correct` 指定・`settings.MEDIA_ROOT=tmp_path`） | `status_code == 201`。レスポンス choices に `'is_correct'` キーが存在し送信値と一致。DB でも `Choice.objects.get(problem_id=resp['id'], text="A").is_correct is True` | Claude |
 | TC-AUTO-04 | 正解保持（テキストのみ編集） | admin で `PUT /api/problems/{id}/`（multipart。`question_text` のみ変更し choices は取得値どおり `is_correct` 付きで再送＝FE の編集保存と同型） | `status_code == 200`。DB で正解 choice が `text=="正解"` のまま（取り違えなし）。レスポンス choices にも `is_correct` が返る | Claude |
-| TC-AUTO-05 | 出題経路の非露出（回帰） | normal で `QuizSession` を ORM 作成し `GET /api/quiz/{sid}/next_problem/` | `status_code == 200`。レスポンス `choices` の**全要素に `'is_correct'` キーが存在しない**（`all('is_correct' not in c for c in resp['choices'])`） | Claude |
-| TC-AUTO-06 | 結果経路の非露出（回帰） | normal で `QuizAnswer`（selected_choices あり）を ORM 作成し `GET /api/quiz/{sid}/` | `status_code == 200`。`answers[].problem['choices']` と `answers[].selected_choices` の全要素に `'is_correct'` キーが存在しない | Claude |
+| TC-AUTO-05 | 出題経路の非露出（回帰） | normal で fixture の `session` に対し `GET /api/quiz/{session.id}/next_problem/` | `status_code == 200`。レスポンス `choices` の**全要素に `'is_correct'` キーが存在しない**（`all('is_correct' not in c for c in resp['choices'])`）。※fixture は回答済み1問のみだが、復習モードのフォールバック（`quiz_service.py:67-73`）により決定論的に同問題が 200 で返る（確認済み） | Claude |
+| TC-AUTO-06 | 結果経路の非露出（回帰） | normal で fixture の `session`（`answer`＝selected_choices 設定済み）に対し `GET /api/quiz/{session.id}/` | `status_code == 200`。`answers[].problem['choices']` と `answers[].selected_choices` の全要素に `'is_correct'` キーが存在しない | Claude |
 | TC-AUTO-07 | AI 応答が使う ProblemSerializer の非露出（単体・回帰） | `ProblemSerializer(problem).data` と `ChoiceSerializer(correct).data` を直接評価（`generate_ai`/`generate_adaptive` 応答はこのクラスを直接使用＝`views.py:422/446/551`） | `data['choices']` の全要素・`ChoiceSerializer` 出力に `'is_correct'` キーが存在しない | Claude |
 | TC-AUTO-08 | 全体回帰 | `problems/tests/` 全体実行 | 新規 TC 全 PASS ＋ 既存 61 件 PASS（回帰なし） | Claude |
 
@@ -55,7 +62,7 @@ def setup(db):
 否定 TC（TC-AUTO-05/06/07）は現行コードでも合格するため、**失敗条件を注入して RED になることを確認**してから採用する（正常系合格だけの false-green 防止）:
 - TC-AUTO-05: `ProblemDisplaySerializer.choices` を一時的に `ChoiceAdminSerializer(many=True, read_only=True)` へ差し替え → TC-AUTO-05 が**RED（非ゼロ終了）**になることを確認 → 戻す。
 - TC-AUTO-06/07: `ChoiceSerializer` の `extra_kwargs`（write_only）を一時的に削除 → TC-AUTO-06/07 が**RED**になることを確認 → 戻す。
-- 注入・復元は作業ツリー上の一時変更で行い、確認後に `git diff` が実装差分のみであることを確認する。結果（RED 確認の有無）を本文書に記録する。
+- **復元は必ず Edit ツールで注入前の内容に戻す**（`git restore` / `git checkout -- <file>` は禁止＝実装差分が未コミットの場合、注入と実装差分が共に失われるため）。復元後に `git diff` が実装差分のみであることを確認する。結果（RED 確認の有無）を本文書に記録する。
 
 ## 注記
 - list（TC-AUTO-01）はユーザー別キャッシュを通るが、fixture のユーザーはテストごとに新規作成されるためキャッシュキー（user_id）が衝突しない。同一テスト内の再 GET はキャッシュヒットし得る点に留意。
