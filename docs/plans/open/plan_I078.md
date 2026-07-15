@@ -36,7 +36,7 @@
 ### キャッシュ仕様（デプロイ直後の表示に影響）
 - 問題一覧はユーザー別キャッシュ（`cache_service`、TTL=`problem_list: 3600`＝1時間、`core/settings.py:319`）。デプロイ直後は**旧形式（is_correct 無し）のキャッシュ**が最大1時間残り得る。問題の作成/更新/削除で `invalidate_problems_cache` が走るため恒久障害にはならない（→ Risk-4・手動テスト手順に反映）。
 
-### 発見した既存バグ（本イシュー対象外・別イシュー候補）
+### 発見した既存バグ（本イシュー対象外・**別イシューで対応＝ユーザー決定 2026-07-16**）
 - `_save_ai_problem_to_db`（`views.py:465-476`）が `Problem(title=..., description=...)` を使うが、`Problem` モデルに `title`/`description` フィールドは存在しない（`models.py:103-180`、本文フィールドは `question`）。`generate_ai`/`generate_adaptive` の `save_to_db=True` 経路は TypeError→500 になる**既存不具合**（I103 計画の「AI 未設定で 400/500 になり得る」注記とも整合）。このため **AI 生成応答の is_correct 非露出は API レベルではなくシリアライザ単体 TC（TC-AUTO-07）で担保**する（応答は `ProblemSerializer` 直接使用のため単体で構造的に固定できる）。
 
 ## 2. 受け入れ条件（Acceptance Criteria）
@@ -193,7 +193,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 | `QuizManagement.tsx` はコード変更なし（動作確認のみ） | 仮定で決めた（コード読解: :397-400/:793/:798 で動作見込み。NG 時は計画更新へ） |
 | `ChoiceAdminSerializer` というクラス名 | 仮定で決めた（イシューは「管理専用 Choice シリアライザ」とのみ記載。既存 `ChoiceDisplaySerializer` の命名パターンに準拠） |
 | 正解 Chip の配置＝選択肢行の右端（`justifyContent: 'space-between'`） | 仮定で決めた（UI 詳細は承認ポイントで事前確認） |
-| AI 応答の漏洩防止はシリアライザ単体 TC で担保（API レベル不可） | 仮定で決めた（調査で発見した既存バグ＝`_save_ai_problem_to_db` の title/description 不整合により API 経路が 500 のため。バグ自体は別イシュー候補） |
+| AI 応答の漏洩防止はシリアライザ単体 TC で担保（API レベル不可） | 仮定で決めた（調査で発見した既存バグ＝`_save_ai_problem_to_db` の title/description 不整合により API 経路が 500 のため。**バグ自体は別イシューで対応＝ユーザー決定 2026-07-16**） |
 | テストファイル名 `test_I078_is_correct_exposure.py` | 仮定で決めた（既存 `test_I###_*.py` 命名に準拠） |
 
 → 「仮定で決めた」5項目は次の承認ポイントで確認する。
@@ -203,6 +203,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 - [ ] クラス名 `ChoiceAdminSerializer` でよいか（既存 `ChoiceDisplaySerializer` の命名パターン準拠）
 - [ ] UI: プレビューの正解マークは**選択肢行の右端に `CheckCircle` アイコン＋「正解」Chip（緑・small）**、既存の緑枠・緑背景は維持 — この配置・ラベルでよいか
 - [ ] `QuizManagement.tsx` はコード変更なし（編集初期選択は既存コードで動作見込み・手動テストで検証、NG なら計画更新に戻る）— でよいか
-- [ ] AI 生成応答の漏洩防止テストは、既存バグ（`_save_ai_problem_to_db` の title/description 不整合→500・本イシュー対象外）により API レベルでなく **`ProblemSerializer` 単体 TC** で担保する — でよいか（バグは別イシュー起票を後日判断）
+- [ ] AI 生成応答の漏洩防止テストは、既存バグ（`_save_ai_problem_to_db` の title/description 不整合→500・本イシュー対象外・**別イシューで対応＝決定済み**）により API レベルでなく **`ProblemSerializer` 単体 TC** で担保する — でよいか
 - [ ] テストファイル名 `test_I078_is_correct_exposure.py` でよいか
 - [ ] 高リスク判定 Yes（情報露出軸）→ plan-review 後に `/security-review I078` を通すフローでよいか
