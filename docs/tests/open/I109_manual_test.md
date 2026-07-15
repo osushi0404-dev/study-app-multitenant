@@ -4,8 +4,8 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| M1 | ブラウザで https://github.com/osushi0404-dev/study-app-multitenant/settings にオーナー（osushi0404-dev）でアクセスし、General → Default branch を `main` から `develop` に変更する | Default branch の表示が `develop` になる | Human | | 実装ステップ1（前提ゲート）。bot は admin 権限なしのため代行不可 |
-| M2 | `gh api repos/osushi0404-dev/study-app-multitenant --jq .default_branch` を実行 | 出力が `develop` | Claude | | M1 の機械検証 |
+| M1 | ブラウザで https://github.com/osushi0404-dev/study-app-multitenant/settings にオーナー（osushi0404-dev）でアクセスし、General → Default branch を `main` から `develop` に変更する | Default branch の表示が `develop` になる | Human | OK | 実装ステップ1（前提ゲート）。2026-07-15 ユーザー実施（スクリーンショット確認） |
+| M2 | `gh api repos/osushi0404-dev/study-app-multitenant --jq .default_branch` を実行 | 出力が `develop` | Claude | OK | 2026-07-15 実行・出力 `develop` を確認 |
 | M3 | `gh label list --search dependency-audit` を実行 | `dependency-audit` ラベルが 1 件表示される | Claude | | 実装ステップ2 の検証 |
 | M4 | PR #211 の CI 結果を `gh pr checks 211` で確認 | 全チェックが pass（fail 0 件） | Claude | | 既存 CI が新規ファイルで壊れないこと |
 
