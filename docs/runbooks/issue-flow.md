@@ -199,6 +199,7 @@ gh issue create \
   - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`（対応 worktree: wt-harness）
   - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`（対応 worktree: study-app-multitenant）
   - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
+
 登録後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
 ```
 - GitHub Issue: #XX
