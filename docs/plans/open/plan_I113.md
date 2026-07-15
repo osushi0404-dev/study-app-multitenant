@@ -85,19 +85,27 @@ LOOP_MAX="${PBS_LOOP_MAX:-3}"               # final の BEHIND 追従再チェ�
 
 BASE=$(gh pr view "$PR_NUM" --json baseRefName -q .baseRefName) || { echo "⚠️ baseRefName 取得失敗"; exit 1; }
 
-get_status() { gh pr view "$PR_NUM" --json mergeStateStatus -q .mergeStateStatus; }
+# 取得失敗・空値は return 1（fail-closed）。エラーメッセージは >&2（$() にキャプチャさせない）
+get_status() {
+  local v
+  v=$(gh pr view "$PR_NUM" --json mergeStateStatus -q .mergeStateStatus) || { echo "⚠️ mergeStateStatus 取得失敗" >&2; return 1; }
+  [ -n "$v" ] || { echo "⚠️ mergeStateStatus が空値" >&2; return 1; }
+  printf '%s\n' "$v"
+}
 
-# UNKNOWN（と final の DRAFT）は反映ラグの可能性があるためリトライして確定値を得る
+# UNKNOWN（と final の DRAFT）は反映ラグの可能性があるためリトライして確定値を得る。
+# 途中の取得失敗も return 1 で呼び出し元へ伝播する（fail-closed）
 resolve_status() {
   local s i=0
-  s=$(get_status) || { echo "⚠️ mergeStateStatus 取得失敗"; exit 1; }
+  s=$(get_status) || return 1
   while [ "$i" -lt "$RETRY_MAX" ]; do
     case "$s" in
       UNKNOWN) ;;                                # 常にリトライ対象
       DRAFT) [ "$MODE" = "final" ] || break ;;   # sync では DRAFT は確定値（step 0 の正常状態）
       *) break ;;
     esac
-    sleep "$RETRY_INTERVAL"; i=$((i+1)); s=$(get_status)
+    sleep "$RETRY_INTERVAL"; i=$((i+1))
+    s=$(get_status) || return 1
   done
   echo "$s"
 }
@@ -126,7 +134,8 @@ ci_wait() {  # code-review.sh L214-237 と同型: pending 待機・fail 時 STOP
 }
 
 if [ "$MODE" = "sync" ]; then
-  S=$(resolve_status)
+  # $() はサブシェルのため、resolve_status 内の失敗は || で親に伝播させる（fail-open 防止）
+  S=$(resolve_status) || { echo "⛔ mergeStateStatus が取得できません。STOP してユーザーに報告"; exit 1; }
   case "$S" in
     BEHIND)  merge_base; echo "✅ base（origin/${BASE}）を取り込みました（push は step 3 の close コミットに相乗り）" ;;
     DIRTY)   echo "⛔ DIRTY（マージ不能・コンフリクト予測）。STOP してユーザーに報告"; exit 1 ;;
@@ -139,7 +148,7 @@ fi
 # final モード
 n=0
 while :; do
-  S=$(resolve_status)
+  S=$(resolve_status) || { echo "⛔ mergeStateStatus が取得できません。STOP してユーザーに報告"; exit 1; }
   case "$S" in
     BEHIND)
       n=$((n+1))
@@ -190,7 +199,8 @@ bash scripts/claude/pr-base-sync.sh sync
 ```markdown
 5.5) base 追従の最終チェック（マージ依頼の直前・必須）:
    ```bash
-   bash scripts/claude/pr-base-sync.sh final <PR番号>
+   bash scripts/claude/pr-base-sync.sh final
+   # PR番号は省略可（step 0 と同じ・カレントブランチの PR を自動特定。明示指定も可）
    ```
    合格条件は「**BEHIND / DIRTY でない ＋ CI 全グリーン**」（CLEAN は要求しない。ユーザーの
    Approve がマージ条件のため、承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
@@ -200,7 +210,7 @@ bash scripts/claude/pr-base-sync.sh sync
 ```
 
 ### 4-4. `scripts/claude/tests/test_pr_base_sync.sh`（新規・決定論ゲート）
-**修正方針**: 実 GitHub に依存せず全分岐を検証するため、一時ディレクトリに **gh / git のスタブ**を置き `PATH` 先頭に挿して実行する（スタブは呼び出し引数をログに記録し、状態値はケースごとのキューから返す）。`PBS_*` を 0〜1 秒に上書きして高速実行する。1 ケースでも不一致なら非ゼロ終了（fail-closed）。
+**修正方針**: 実 GitHub に依存せず全分岐を検証するため、一時ディレクトリに **gh / git のスタブ**を置き `PATH` 先頭に挿して実行する（スタブは呼び出し引数をログに記録し、状態値はケースごとのキューから返す）。`PBS_*` を 0〜1 秒に上書きして高速実行する。1 ケースでも不一致なら非ゼロ終了（fail-closed）。テスト対象スクリプトのパスは `TARGET_SCRIPT="${TARGET_SCRIPT:-scripts/claude/pr-base-sync.sh}"` で外部注入可能にする（TC-02 の false-green 注入＝改変コピーへの差し替えに使う。I114 の `I114_TEST_SKILL` と同方式）。
 
 検証ケース（期待終了コードと副作用の両方を検証）:
 | # | モード | 状態系列（スタブ） | 期待 |
@@ -219,10 +229,12 @@ bash scripts/claude/pr-base-sync.sh sync
 | T12 | final | DRAFT×継続 | exit 1（Ready 化不全の検知） |
 | T13 | final | BEHIND 連続（LOOP_MAX=1 に上書き） | exit 1（追従ループ上限で STOP） |
 | T14 | final | HOGE（未知値） | exit 1（fail-closed） |
+| T15 | sync | gh pr view 失敗（スタブが exit 1） | exit 1（取得失敗の fail-open 防止） |
+| T16 | final | gh pr view 失敗（同上） | exit 1（同上） |
 
 ## 5. 実装手順（ステップ）
 - **ステップ1**: pr-base-sync.sh を新設する（4-1）。→ 構文検証は TC-03（`bash -n`）参照
-- **ステップ2**: test_pr_base_sync.sh を新設し（4-4）、TC-01（T1〜T14 全 pass）と TC-02（false-green 注入: スクリプトの DIRTY 分岐を一時コピー上で `exit 0` に改変→テストが NG を返すこと）を実行・記録する
+- **ステップ2**: test_pr_base_sync.sh を新設し（4-4）、TC-01（T1〜T16 全 pass）と TC-02（false-green 注入: スクリプトの DIRTY 分岐を一時コピー上で `exit 0` に改変し `TARGET_SCRIPT` で差し替え→テストが NG を返すこと）を実行・記録する
 - **ステップ3**: close SKILL.md へ 4-2 / 4-3 を反映する。→ TC-03（呼び出し文言 grep）参照
 - **ステップ4**: 実機スモーク（manual M2/M3: 本イシュー自身の PR #219 に対する sync 実走・draft 状態での final 実走）を実施し記録する
 - 依存関係: ステップ2 はステップ1 の完了が前提。ステップ3 はステップ1 と並行可（呼び出し先の実在はステップ1 で担保）。ステップ4 はステップ1〜3 の完了が前提
@@ -231,9 +243,9 @@ bash scripts/claude/pr-base-sync.sh sync
 - サービス再起動: 不要（bash スクリプト＋Markdown のみ）
 
 ## 6. テスト計画
-- 自動: docs/tests/open/I113_auto_test.md（TC-01 スタブ決定論テスト T1〜T14・TC-02 false-green 注入・TC-03 SKILL.md 統合 grep＋構文検証）。テストレベル: ユニット相当（gh/git スタブによる分岐網羅）＋静的検証（grep / bash -n）。アプリのユニット/結合/E2E は非該当（アプリコード変更なし）
+- 自動: docs/tests/open/I113_auto_test.md（TC-01 スタブ決定論テスト T1〜T16・TC-02 false-green 注入・TC-03 SKILL.md 統合 grep＋構文検証）。テストレベル: ユニット相当（gh/git スタブによる分岐網羅）＋静的検証（grep / bash -n）。アプリのユニット/結合/E2E は非該当（アプリコード変更なし）
 - 手動: docs/tests/open/I113_manual_test.md（Claude 実施 3 件＋Human 実施 1 件・非ブロック）。実 GitHub に対するスモーク（M2/M3）でスタブと実環境の乖離を補完する
-- 再発防止テスト: I107 実証事象（close 後の BEHIND 見逃し）は T10（final: BEHIND→追従→合格）と M3 が捕捉。fail-open 回帰は T14（未知値 STOP）が捕捉
+- 再発防止テスト: I107 実証事象（close 後の BEHIND 見逃し）は T10（final: BEHIND→追従→合格）と M3 が捕捉。fail-open 回帰は T14（未知値 STOP）・T15/T16（取得失敗 STOP・plan review Blocker の再発防止）が捕捉
 - 認可テスト: 非該当（認可変更なし）
 - TDD 適用: ベースライン（Red）は計画時に実走済み（調査結果参照: 呼び出し文言 NO-HIT・スクリプト不在）。実装後に Green（T1〜T14 全 pass・grep 全 HIT）を確認する
 
@@ -267,3 +279,6 @@ bash scripts/claude/pr-base-sync.sh sync
 - [ ] **仮定 A1〜A5**（セクション9の「仮定で決めた」5件）の内容でよいか
 - [ ] **step 5.5 の新設**: 既存 step 5（Ready 化）と step 6（マージ依頼）の間に挿入する構成でよいか
 - [ ] コーディング規約（Django/React）: 本イシューはアプリコード変更なしのため非適用（bash は既存 shellcheck pre-commit が適用される）
+
+## レビュー結果
+- [20260716_0142 判定: 差し戻し（Blocker 1件）](../../reviews/I113_plan_review_20260716_0142.md)

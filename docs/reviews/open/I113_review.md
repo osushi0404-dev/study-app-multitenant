@@ -8,7 +8,8 @@
 ## レビュー目的
 - mergeStateStatus 全8値の分岐が設計確認メモの確定内容（sync=取り込みのみ／final=フル・合格条件は「BEHIND/DIRTY でない＋CI 全グリーン」）と 1:1 で一致していること
 - fail-closed が貫かれていること（コンフリクト STOP・未知値 STOP・UNKNOWN 継続はユーザー確認・自動解決なし）
-- 決定論ゲート（T1〜T14）が false-green でないこと（TDD Red・注入検証の記録）
+- 決定論ゲート（T1〜T16）が false-green でないこと（TDD Red・注入検証の記録）
+- plan review Blocker の是正（resolve_status の取得失敗が fail-closed に伝播すること＝T15/T16）が実装に反映されていること
 - 既存 /close 手順（step 1〜6）と code-review.sh が無改変であること
 
 ## 期待する成果
@@ -16,7 +17,7 @@
 - 2 worktree 並行運用でのトラック間干渉（他トラック PR の先行マージ）に /close が自律追従する
 
 ## 変更概要
-- base 追従チェック本体 `scripts/claude/pr-base-sync.sh` を新設（sync/final 2モード・全8値分岐・リトライ 5秒×6回・CI 待機 15秒/600秒）。/close SKILL.md の step 0 と新設 step 5.5 から呼び出す。決定論テスト（gh/git スタブ・T1〜T14）を新設。
+- base 追従チェック本体 `scripts/claude/pr-base-sync.sh` を新設（sync/final 2モード・全8値分岐・リトライ 5秒×6回・CI 待機 15秒/600秒）。/close SKILL.md の step 0 と新設 step 5.5 から呼び出す。決定論テスト（gh/git スタブ・T1〜T16）を新設。
 
 ## 変更点
 - `scripts/claude/pr-base-sync.sh`: 新規（計画 4-1）

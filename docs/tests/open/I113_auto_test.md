@@ -10,8 +10,8 @@
 
 ## テストケース
 
-### TC-01: pr-base-sync.sh の分岐網羅（test_pr_base_sync.sh・T1〜T14）
-方式: 一時ディレクトリに gh / git のスタブを置き `PATH` 先頭に挿して実行（実 GitHub・実 git 非依存）。スタブは呼び出し引数をログ記録し、mergeStateStatus はケースごとのキューから返す。`PBS_RETRY_INTERVAL=0` `PBS_CI_INTERVAL=0` 等で高速実行。
+### TC-01: pr-base-sync.sh の分岐網羅（test_pr_base_sync.sh・T1〜T16）
+方式: 一時ディレクトリに gh / git のスタブを置き `PATH` 先頭に挿して実行（実 GitHub・実 git 非依存）。スタブは呼び出し引数をログ記録し、mergeStateStatus はケースごとのキューから返す。`PBS_RETRY_INTERVAL=0` `PBS_CI_INTERVAL=0` 等で高速実行。テスト対象は `TARGET_SCRIPT`（既定 scripts/claude/pr-base-sync.sh）で差し替え可能。
 
 | # | モード | 状態系列（スタブ） | 期待値 |
 |---|--------|-------------------|--------|
@@ -29,14 +29,16 @@
 | T12 | final | DRAFT 継続 | exit 1 |
 | T13 | final | BEHIND 連続（`PBS_LOOP_MAX=1`） | exit 1（追従上限 STOP） |
 | T14 | final | HOGE（未知値） | exit 1（fail-closed） |
-| — | 合計判定 | test_pr_base_sync.sh 全体 | **exit 0・`RESULT: OK (14/14)`** |
+| T15 | sync | gh pr view 失敗（スタブが exit 1） | exit 1（取得失敗で「✅ 追従不要」に落ちない＝fail-open 防止・plan review Blocker の再発防止） |
+| T16 | final | gh pr view 失敗（同上） | exit 1（同上） |
+| — | 合計判定 | test_pr_base_sync.sh 全体 | **exit 0・`RESULT: OK (16/16)`** |
 
-AC との対応: T2/T11=AC1（照会・fetch/merge・コンフリクト STOP）、T2＋T10=AC2（2モード）、T7/T8=AC3（合格条件・CLEAN 非要求）、T1〜T14=AC4（全8値分岐＋確定数値）、スクリプト全体=AC7（決定論ゲート）。
+AC との対応: T2/T11=AC1（照会・fetch/merge・コンフリクト STOP）、T2＋T10=AC2（2モード）、T7/T8=AC3（合格条件・CLEAN 非要求）、T1〜T14=AC4（全8値分岐＋確定数値）、スクリプト全体=AC7（決定論ゲート）。T15/T16 は plan review Blocker（取得失敗時の fail-open）の再発防止。
 
 ### TC-02: false-green 注入検証（実装ステップ2 で実施・実ファイル無改変）
 | 手順 | 期待値 |
 |------|--------|
-| pr-base-sync.sh の一時コピーを作り DIRTY 分岐を `exit 0` に改変、テスト対象パスを差し替えて test_pr_base_sync.sh を実行 | **T3 が NG を出力し exit 非ゼロ**（テストは壊れた実装を確実に不合格にする） |
+| pr-base-sync.sh の一時コピーを作り DIRTY 分岐を `exit 0` に改変、`TARGET_SCRIPT=<コピー>` で差し替えて test_pr_base_sync.sh を実行 | **T3 が NG を出力し exit 非ゼロ**（テストは壊れた実装を確実に不合格にする） |
 | SKILL.md の一時コピーから呼び出し行を削除し、TC-03 の grep を当てる | **NO-HIT（exit 1）**（統合 grep は欠落を検知する） |
 
 実施記録: （実装ステップ2 で追記）
