@@ -6,7 +6,7 @@
 - backend: 非該当（アプリコード変更なし・pytest 不要）
 - frontend: 非該当（アプリコード変更なし・Jest 不要）
 - E2E: 非該当（アプリ挙動変更なし）
-- 決定論ゲート: 未実行（実装ステップ2/3 で Green を確認し、この文書に追記する）。TDD Red は計画時に確認済み（呼び出し文言 NO-HIT・スクリプト不在＝plan_I113 調査結果）
+- 決定論ゲート: **実行済み（実装時 2026-07-16）**。TDD Red（スクリプト不在で全ケース NG=exit 127）→ Green（**`RESULT: OK (16/16 cases, 23 assertions)`・exit 0**）を確認。TC-02 注入 3 件（DIRTY→exit 0 改変・SKILL.md sync 行欠落・final 行欠落）すべて NG/NO-HIT 検知。TC-03 統合 grep 5 件＋`bash -n` 2 件すべて OK
 
 ## テストケース
 
@@ -41,7 +41,10 @@ AC との対応: T2/T11=AC1（照会・fetch/merge・コンフリクト STOP）�
 | pr-base-sync.sh の一時コピーを作り DIRTY 分岐を `exit 0` に改変、`TARGET_SCRIPT=<コピー>` で差し替えて test_pr_base_sync.sh を実行 | **T3 が NG を出力し exit 非ゼロ**（テストは壊れた実装を確実に不合格にする） |
 | SKILL.md の一時コピーから呼び出し行を削除し、TC-03 の grep を当てる | **NO-HIT（exit 1）**（統合 grep は欠落を検知する） |
 
-実施記録: （実装ステップ2 で追記）
+実施記録（実装ステップ2・2026-07-16・実ファイル無改変・scratchpad/i113/ 上のコピーで実施）:
+- 注入1: pr-base-sync.sh のコピーの sync DIRTY 分岐を `exit 0` に改変し `TARGET_SCRIPT` で差し替え → `NG: T3 sync DIRTY=STOP (expect=1 actual=0)`・`RESULT: NG (1 件 / pass 22)`・**exit 1**（検知 OK）
+- 注入2: SKILL.md のコピーから `pr-base-sync.sh` 行を削除し grep → sync 行・final 行とも **NO-HIT（exit 1）**（欠落を検知 OK）
+- 判定: 本ゲートは false-green ではない（壊れた状態を確実に不合格にする）
 
 ### TC-03: SKILL.md 統合＋構文検証
 | 検証項目 | 判定方法 | 期待値 |

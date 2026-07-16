@@ -12,11 +12,17 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 （事前チェック）直近のコードレビューで Medium 以上の指摘が未対応のまま残っていないか確認する。未対応がある場合は、計画書に是正ステップを追記するかインライン修正を先に完了させてから以降のステップに進む。
 
-0) PR のベースブランチを確認する（必須）:
+0) PR のベースブランチ確認と base 追従（必須）:
    ```bash
    gh pr view --json baseRefName --jq '.baseRefName'
    # → "develop" であること。"main" の場合は以下で修正してから続行:
    # gh pr edit <PR番号> --base develop
+
+   # base 追従チェック（I113）: BEHIND なら origin/develop を取り込む（push/CI はしない。
+   # push は step 3 の close コミットに相乗りさせ、CI 実行を1回にまとめる）
+   bash scripts/claude/pr-base-sync.sh sync
+   # exit 0 → 続行 / exit 1 → STOP してユーザーに報告（マージコンフリクト等・自動解決しない）
+   # exit 2 → mergeStateStatus=UNKNOWN が継続。値を報告し続行可否をユーザーに確認
    ```
 1) docs/*/open の対象 I### ファイルを closed へ移動（以下を順番に実行）:
    ```bash
@@ -130,4 +136,14 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    gh pr edit <PR番号> --base develop
    ```
 5) Draft PRをReadyに切り替え: `gh pr ready <PR番号>`
+5.5) base 追従の最終チェック（マージ依頼の直前・必須）:
+   ```bash
+   bash scripts/claude/pr-base-sync.sh final
+   # PR番号は省略可（step 0 と同じ・カレントブランチの PR を自動特定。明示指定も可）
+   ```
+   合格条件は「**BEHIND / DIRTY でない ＋ CI 全グリーン**」（CLEAN は要求しない。ユーザーの
+   Approve がマージ条件のため、承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
+   - exit 0 → step 6 のマージ依頼へ進む
+   - exit 1 → STOP してユーザーに報告（マージコンフリクト・CI fail・DRAFT 残留等。自動解決しない）
+   - exit 2 → mergeStateStatus=UNKNOWN が継続。値を報告し続行可否をユーザーに確認
 6) ユーザーへ GitHub 上で Approve & Merge を依頼
