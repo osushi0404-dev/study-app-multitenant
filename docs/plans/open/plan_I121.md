@@ -85,7 +85,7 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 
 ### ステップ1: npm audit fix の適用（唯一の変更ステップ）
 - **修正方針**: 非破壊 fix で lockfile を更新し、node_modules も同時に同期させる（`npm audit fix` は install を伴うため追加操作不要）。
-- 実行: `cd frontend && npm audit fix`（`--force` は使わない）
+- 実行: `npm audit fix --prefix frontend`（`--force` は使わない。単体コマンド＝allowlist 一致のため `&&` 結合を使わない・plan review Warning 対応）
 - 直後に変更ファイルが package-lock.json のみであることを確認する → TC-03 参照
 - 万一 package.json に変更が出た場合・新規 critical が fix 不可で残る場合は**停止してユーザーへ報告**（計画との不一致）。
 
@@ -127,3 +127,6 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - [ ] 変更は frontend/package-lock.json 1 ファイルのみ（package.json 無変更を実証済み）
 - [ ] 残存 18 件（high 5 / moderate 4 / low 9・critical 0）はスコープ外として許容（--force 必須または非破壊で到達不能・本番バンドル露出なし・根治は Vite 移行別イシュー）
 - [ ] マージ後に #220 をクローズする（runbook step 3）
+
+## レビュー結果
+- [20260716_2021 判定: ✅ 完了](../../reviews/I121_plan_review_20260716_2021.md)
