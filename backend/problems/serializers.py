@@ -225,6 +225,24 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
         return MediaAssetSerializer([link.asset for link in media_links], many=True).data
 
 
+class ChoiceAdminSerializer(serializers.ModelSerializer):
+    """管理画面専用: is_correct を読み書き両可で露出する（I078）。
+
+    ProblemViewSet（I102 で admin 限定）以外で使用しないこと。
+    出題・結果・AI 応答は ChoiceSerializer / ChoiceDisplaySerializer（非露出）を維持する。
+    ChoiceSerializer の fields を変更する場合は本クラスも合わせて更新すること
+    （意図的な非継承＝既存クラス不変更方針のため）。
+    """
+    class Meta:
+        model = Choice
+        fields = ['id', 'text', 'is_correct', 'order']
+
+
+class ProblemAdminSerializer(ProblemSerializer):
+    """管理画面専用: choices のみ is_correct 露出版に差し替える（I078）"""
+    choices = ChoiceAdminSerializer(many=True, required=False)
+
+
 class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSerializer):
     choices = ChoiceDisplaySerializer(many=True, read_only=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
