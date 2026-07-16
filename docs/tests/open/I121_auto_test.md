@@ -4,7 +4,14 @@
 実行ディレクトリ: リポジトリルート（コマンドは `--prefix frontend` / `cd frontend` を明記）
 
 結果:
-- 実装後に各 TC の実結果をこの文書へ追記する
+- **全 TC PASS（実装時 2026-07-17 実測）**
+  - 事前確認: fix 適用直前の再監査で 25 件（critical 1）＝計画時と同一・advisory DB ドリフトなし
+  - TC-01: `TC01_gate_exit=0`（CI ゲート同一条件で exit 0・critical 0 件）
+  - TC-02: grep -c 出力 **0**（3 GHSA とも監査結果から消失。修正前は 3）
+  - TC-03: #1 変更ファイルは `frontend/package-lock.json` の 1 行のみ / #2 package.json 差分ゼロ / #3 `"react-scripts": "5.0.1"` ヒット / #4 lockfile の react-scripts version 5.0.1 ヒット（websocket-driver 0.7.5・ws 7.5.12 への更新も確認）
+  - TC-04: **exit 0・2 suites / 7 tests 全 PASS**（46.8s・ベースライン 2026-07-16 と同数）
+  - TC-05: **exit 0**（`The build folder is ready to be deployed.`）
+  - TC-06: `18 vulnerabilities (9 low, 4 moderate, 5 high)`・**critical 0**（計画時の模擬適用実測と完全一致）
 - Red 状態（修正前）の実測は計画時 2026-07-16 に記録済み（各 TC の false-green 検証欄参照）
 
 ## テストケース
