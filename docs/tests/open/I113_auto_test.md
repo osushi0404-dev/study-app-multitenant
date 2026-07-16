@@ -7,6 +7,7 @@
 - frontend: 非該当（アプリコード変更なし・Jest 不要）
 - E2E: 非該当（アプリ挙動変更なし）
 - 決定論ゲート: **実行済み（実装時 2026-07-16）**。TDD Red（スクリプト不在で全ケース NG=exit 127）→ Green（**`RESULT: OK (16/16 cases, 23 assertions)`・exit 0**）を確認。TC-02 注入 3 件（DIRTY→exit 0 改変・SKILL.md sync 行欠落・final 行欠落）すべて NG/NO-HIT 検知。TC-03 統合 grep 5 件＋`bash -n` 2 件すべて OK
+- 決定論ゲート再実行（/test 時 2026-07-17・develop 取り込み 67bef93 後）: test_pr_base_sync.sh → **`RESULT: OK (16/16 cases, 23 assertions)`・exit 0**。統合 grep 5 件（sync/final/合格条件/`gh pr ready`/staged ガード）＋`bash -n` すべて exit 0。CI（PR #219）も全6項目 pass 確認済み
 
 ## テストケース
 
