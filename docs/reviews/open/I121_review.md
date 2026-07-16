@@ -29,13 +29,16 @@
 - Docker: frontend/Dockerfile は `npm ci`（lockfile 準拠）のため自動追従・定義変更なし
 
 ## 実装結果評価
-（実装後に記入）
+- 計画書 §6 ステップ1〜3 のとおり実装（2026-07-17）。fix 直前の再監査でドリフトなし（25 件・critical 1＝計画時と同一）を確認してから `npm audit fix --prefix frontend` を 1 回実行。変更は frontend/package-lock.json のみ（93 insertions / 52 deletions・package.json 無変更）。
+- plan review: VERDICT OK（Warning 1 件＝ステップ1 の単体コマンド化は実装前に計画書へ反映済み）。code review: VERDICT OK・高リスク No・修正要指摘ゼロ（Low 1 件は plan review Info の再掲・対応不要判定）。
 
 ## テスト結果
-（実装後に記入: TC-01〜TC-06 / M1〜M4）
+- 自動: TC-01〜TC-06 **全 PASS**（実装時 2026-07-17・/test 再実行 2026-07-17 の 2 回とも同値）。ゲート exit 0・3 GHSA 消失（3→0）・非破壊性 4 項目 OK・Jest 2 suites / 7 tests PASS（ベースライン一致）・build exit 0・残存 18 件（critical 0・模擬適用予測と完全一致）。false-green 検証は計画時に実施済み（修正前状態で TC-01 exit 1・TC-02 3 ヒットを実測）。
+- CI: PR #224 全 6 ジョブ green。ブロック原因の「Frontend Lint & Security」npm audit ステップは `18 vulnerabilities（critical 0）` で成功（M1/M2 OK）。
+- 手動: M1/M2 OK（2026-07-17）。M3（#220 クローズ）・M4（PR #219 の CI 復旧確認）はマージ後実施。
 
 ## 計画との差分
-（実装後に記入）
+- なし（変更ファイル・更新パッケージ・残存件数すべて計画書の模擬適用実測どおり）
 
 ## ロールバック
 - lockfile 更新コミットの revert → `npm ci` で復元。データ・インフラ影響なし。

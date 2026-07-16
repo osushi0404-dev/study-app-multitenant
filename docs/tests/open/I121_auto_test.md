@@ -13,6 +13,10 @@
   - TC-05: **exit 0**（`The build folder is ready to be deployed.`）
   - TC-06: `18 vulnerabilities (9 low, 4 moderate, 5 high)`・**critical 0**（計画時の模擬適用実測と完全一致）
 - Red 状態（修正前）の実測は計画時 2026-07-16 に記録済み（各 TC の false-green 検証欄参照）
+- **/test 再実行（2026-07-17）: 全 TC PASS（実装時と同値）**
+  - TC-01: exit 0 / TC-02: 0 ヒット / TC-03: package.json 差分ゼロ / TC-04: 2 suites・7 tests PASS（49.8s） / TC-05: build exit 0 / TC-06: 18 件（9 low / 4 moderate / 5 high・critical 0）
+  - CI 環境パリティ: PR #224 の CI 全 6 ジョブ green（Backend Lint & Security / Backend Tests / E2E / Frontend Lint & Security / Frontend Tests / Frontend Type Check）。CI の npm audit ステップ出力も `18 vulnerabilities (9 low, 4 moderate, 5 high)`＝ローカルと完全一致
+  - pytest / E2E のローカル個別実行: 非該当（backend・アプリコード変更なし。CI の Backend Tests 1m34s / E2E 3m21s pass で環境パリティ確認済み）
 
 ## テストケース
 
