@@ -251,4 +251,11 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 - [ ] 高リスク判定 Yes（情報露出軸）→ plan-review 後に `/security-review I078` を通すフローでよいか
 
 ## レビュー結果
-- [20260716_0038 判定: ✅ 完了](../../reviews/I078_plan_review_20260716_0038.md)
+- [20260716_0038 判定: ✅ 完了](../../reviews/closed/I078_plan_review_20260716_0038.md)
+
+## 完了情報
+- **完了日**: 2026-07-16
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review: Blocker 0・Warning 2 対応済み / security-review: Blocker 0・Low 5 処遇決定済み / code-review: VERDICT OK・Low 3 対応済み）
+- **テスト**: problems/tests 68 passed（既存61＋新規7・false-green 注入検証済み）・FE Jest 7 passed・E2E 7 passed・手動テスト全9項目 OK
+- **retro 派生**: C1 → I119（#221）起票 / C2 → I106（#199）同梱追記 / C3+P1-P3 → I120（#222）起票 / 残余リスク Low 5 件処遇決定済み
