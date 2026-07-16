@@ -10,7 +10,7 @@ import uuid
 import hashlib
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
 from .serializers import (
-    SubjectSerializer, ProblemSerializer, ProblemDisplaySerializer,
+    SubjectSerializer, ProblemSerializer, ProblemAdminSerializer, ProblemDisplaySerializer,
     QuizSessionSerializer, QuizSessionDetailSerializer,
     SubmitAnswerSerializer, MediaAssetSerializer
 )
@@ -148,7 +148,8 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         - 画像アップロード: multipart/form-data対応（問題登録時）
         - QueryDict変換: MultipartFormDataMixinで自動処理
     """
-    serializer_class = ProblemSerializer
+    # I078: 管理経路のみ is_correct 露出（I102 で admin 限定のため無条件切替でよい）
+    serializer_class = ProblemAdminSerializer
     # I102: 問題管理は組織管理者（role=='admin'）限定。参照・更新系・AI生成・画像の
     # 全アクションに一律適用（custom action に permission override は無い）。
     permission_classes = [permissions.IsAuthenticated, IsOrgAdmin]
