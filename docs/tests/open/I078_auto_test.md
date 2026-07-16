@@ -73,6 +73,12 @@ def setup(db):
   - 復元後の `git diff` は実装差分（新設2クラス＋serializer_class 切替＋import）のみであることを確認済み
 - **TC-AUTO-08（全体回帰）**: `problems/tests/` → **68 passed**（既存 61＋新規 7・回帰なし）
 
+## /test 実施記録（2026-07-16・環境パリティ最終確認）
+- Backend 全体（Docker）: `python -m pytest --tb=short -q` → **68 passed**（TC-AUTO-01〜08 含む・回帰なし）
+- Frontend Jest（Docker）: **2 suites / 7 passed**
+- E2E（Playwright・`docker compose --profile e2e run --rm e2e`）: **7 passed**（認可 I102・テナント分離・クイズセッション・認証フロー）
+- 停止条件該当なし（全自動テスト PASS）
+
 ## 注記
 - list（TC-AUTO-01）はユーザー別キャッシュを通るが、fixture のユーザーはテストごとに新規作成されるためキャッシュキー（user_id）が衝突しない。同一テスト内の再 GET はキャッシュヒットし得る点に留意。
 - `ProblemViewSet.parser_classes = [MultiPartParser, FormParser]`（JSON 非対応）のため、create/update は multipart で送る（I103 と同様）。

@@ -2,6 +2,7 @@
 
 - 関連: docs/issues/open/I078.md / docs/plans/open/plan_I078.md / GitHub #156 / Draft PR #218
 - **実施結果（2026-07-16）: 全9項目 OK**（Claude 4 項目・Human 5 項目。Human 分はユーザーのスクリーンショットで確認）
+- **/test 最終確認（2026-07-16）**: Backend 68 passed（Docker）・FE Jest 7 passed・E2E 7 passed。手動テストは全項目 OK 済み・停止条件該当なし
 - 前提: BE（is_correct 露出）＋ FE（プレビュー正解マーク）の変更。API 露出の正否は自動テスト（`I078_auto_test.md`）が主で、本文書は UI 目視と配線確認。
 - 使用アカウント（既存・I102 手動テストでパスワード認証確認済み 2026-07-07）:
   - **管理者**: `i102_admin@example.com` / `I102ManualTest!`（org: cute_school・問題 22 件あり）— UI テストの主アカウント
