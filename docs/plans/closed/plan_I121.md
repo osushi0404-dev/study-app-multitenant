@@ -129,4 +129,9 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - [ ] マージ後に #220 をクローズする（runbook step 3）
 
 ## レビュー結果
-- [20260716_2021 判定: ✅ 完了](../../reviews/I121_plan_review_20260716_2021.md)
+- [20260716_2021 判定: ✅ 完了](../../reviews/closed/I121_plan_review_20260716_2021.md)
+
+## 完了情報
+- **完了日時**: Fri Jul 17 01:05:46 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan review OK・code review OK・TC-01〜06 全 PASS・CI 全 6 ジョブ green）
