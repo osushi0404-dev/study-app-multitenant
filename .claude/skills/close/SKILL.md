@@ -136,6 +136,7 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    gh pr edit <PR番号> --base develop
    ```
 5) Draft PRをReadyに切り替え: `gh pr ready <PR番号>`
+
 5.5) base 追従の最終チェック（マージ依頼の直前・必須）:
    ```bash
    bash scripts/claude/pr-base-sync.sh final
