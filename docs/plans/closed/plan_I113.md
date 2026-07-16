@@ -281,5 +281,5 @@ bash scripts/claude/pr-base-sync.sh sync
 - [ ] コーディング規約（Django/React）: 本イシューはアプリコード変更なしのため非適用（bash は既存 shellcheck pre-commit が適用される）
 
 ## レビュー結果
-- [20260716_0154 判定: ✅ 完了](../../reviews/I113_plan_review_20260716_0154.md)
-- [20260716_0142 判定: 差し戻し（Blocker 1件）](../../reviews/I113_plan_review_20260716_0142.md)
+- [20260716_0154 判定: ✅ 完了](../../reviews/closed/I113_plan_review_20260716_0154.md)
+- [20260716_0142 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I113_plan_review_20260716_0142.md)
