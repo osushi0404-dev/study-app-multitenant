@@ -153,4 +153,9 @@ docker compose exec frontend npm test
 - [ ] テスト計画: 決定論ゲート TC-01〜07（decoy 反証込み）＋手動目視
 
 ## レビュー結果
-- [20260717_2345 判定: ✅ 完了](../../reviews/I117_plan_review_20260717_2345.md)
+- [20260717_2345 判定: ✅ 完了](../../reviews/closed/I117_plan_review_20260717_2345.md)
+
+## 完了情報
+- **完了日時**: 2026-07-18
+- **対応者**: Claude Code
+- **レビュー結果**: OK（code-review FINAL VERDICT: OK・決定論ゲート exit=0・手動テスト全 OK）
