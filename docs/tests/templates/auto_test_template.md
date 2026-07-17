@@ -9,11 +9,14 @@
 
 # I### 自動テスト: <title>
 
-実行コマンド（例）:
-```bash
-docker compose exec backend python manage.py test
-docker compose exec frontend npm test
-```
+<!--
+  実行コマンド欄の書き方（I117）:
+  - heavy な実行例はインラインコード表記で書く（下の既定例を参照）。fenced の bash ブロックはここに作らない。
+  - ゲート系コマンド（テストスクリプト等）は必ず「## 決定論ゲート（自動実走）」セクションに書く。
+    セクション外の fenced ブロックに書くと code-review.sh の omission-lint が「宣言漏れ」として HIGH を出す。
+    対象コマンドの一覧（allowlist）はゲートセクション内コメントを参照。
+-->
+実行コマンド（例）: `docker compose exec backend python manage.py test` / `docker compose exec frontend npm test`
 
 結果:
 - backend:
@@ -23,7 +26,7 @@ docker compose exec frontend npm test
 <!--
   I084: `/code-review`（code-review.sh）がこの見出し直後の**単一 ```bash ブロック**を
   1 行 1 コマンドで抽出し、実走して実 exit code を VERDICT に注入する。
-  - 許可（実走）: `bash scripts/claude/tests/*.sh` / `grep -q 文言 file`（存在）/
+  - 許可（実走）: `bash scripts/claude/tests/*.sh` / `grep -q 文言 file`（存在）/ `grep -L 文言 dir/*`（不在ファイル一覧）/
     `! grep -q 文言 file`（不在）/ `python3 -m json.tool file` / `bash -n file` / `python3 -m py_compile file`
   - 1 行 1 コマンド・チェーン（; && || | ` $( > 等）不可。
   - heavy（pytest/Jest/E2E・docker/npm）はここに書かず /test に委譲する。
