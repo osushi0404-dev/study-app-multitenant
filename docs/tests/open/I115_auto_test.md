@@ -17,8 +17,11 @@ BOTH_ROUTES = ["/api/subjects/public/", "/api/organizations/subjects/public/"]
 @pytest.fixture
 def setup(db):
     cat = OrganizationCategory.objects.create(name="テストI115", slug="test-cat-i115")
-    org_a = Organization.objects.create(name="組織A_I115", slug="org-a-i115", category=cat)
-    org_b = Organization.objects.create(name="組織B_I115", slug="org-b-i115", category=cat)
+    # public は is_active=True の組織のみ返すため、前提条件として明示する（code-review Low 対応）
+    org_a = Organization.objects.create(
+        name="組織A_I115", slug="org-a-i115", category=cat, is_active=True)
+    org_b = Organization.objects.create(
+        name="組織B_I115", slug="org-b-i115", category=cat, is_active=True)
     sub_a1 = Subject.objects.create(name="科目A1_I115", slug="subj-a1-i115", organization=org_a)
     sub_a2 = Subject.objects.create(name="科目A2_I115", slug="subj-a2-i115", organization=org_a)
     sub_b1 = Subject.objects.create(name="科目B1_I115", slug="subj-b1-i115", organization=org_b)
@@ -38,6 +41,7 @@ def setup(db):
 
 注:
 - TC 番号と実装するテスト関数の対応: 独立したテスト関数を書くのは **TC-AUTO-01 / 03 / 05** の3つ（各 parametrize で両ルート網羅）。TC-AUTO-02 は手順（実装前の先行実行）、TC-AUTO-04 はコマンド実行（全体回帰）であり関数は書かない。
+- TC-AUTO-05 は fixture の組織データを使わないため `setup` ではなく `db` fixture を受け取る（code-review Low 対応・余分な DB 操作と誤読の回避）。
 - 期待値の status は `rest_framework.status` の定数で assert する（規約準拠）。
 - TC-AUTO-01 のレスポンスはページネーションなしの素の JSON 配列（`public` は `Response(list(subjects))` を直接返す・`views.py:82`）。
 

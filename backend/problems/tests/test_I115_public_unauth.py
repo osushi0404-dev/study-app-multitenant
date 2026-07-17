@@ -20,8 +20,11 @@ BOTH_ROUTES = ["/api/subjects/public/", "/api/organizations/subjects/public/"]
 @pytest.fixture
 def setup(db):
     cat = OrganizationCategory.objects.create(name="テストI115", slug="test-cat-i115")
-    org_a = Organization.objects.create(name="組織A_I115", slug="org-a-i115", category=cat)
-    org_b = Organization.objects.create(name="組織B_I115", slug="org-b-i115", category=cat)
+    # public は is_active=True の組織のみ返すため、前提条件として明示する
+    org_a = Organization.objects.create(
+        name="組織A_I115", slug="org-a-i115", category=cat, is_active=True)
+    org_b = Organization.objects.create(
+        name="組織B_I115", slug="org-b-i115", category=cat, is_active=True)
     sub_a1 = Subject.objects.create(name="科目A1_I115", slug="subj-a1-i115", organization=org_a)
     sub_a2 = Subject.objects.create(name="科目A2_I115", slug="subj-a2-i115", organization=org_a)
     sub_b1 = Subject.objects.create(name="科目B1_I115", slug="subj-b1-i115", organization=org_b)
@@ -60,7 +63,7 @@ def test_public_unknown_slug_empty_200(setup, route):
 @pytest.mark.django_db
 @pytest.mark.parametrize("route", BOTH_ROUTES)
 @pytest.mark.parametrize("query", ["", "?slug=register"])
-def test_public_legacy_slug_resolves_personal(setup, route, query):
+def test_public_legacy_slug_resolves_personal(db, route, query):
     # 両者とも 'personal' に解決される。personal 組織はマイグレーション 0014 で作成され
     # 科目を持たないため空リスト（組織が無い環境でも同じく空リスト）で決定論的。
     client = APIClient()
