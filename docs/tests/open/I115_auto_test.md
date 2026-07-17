@@ -66,3 +66,9 @@ TC-AUTO-01 の否定 assert（org_b 科目の非混入・フィールド集合�
   - 注入2: `.values()` に `'slug'` を一時追加 → TC-AUTO-01 **RED（2 failed）** ✅
   - 復元後の `git diff -- backend/problems/views.py` は `public` 分岐追加の2行のみであることを確認済み
 - **TC-AUTO-04（全体回帰）**: `problems/tests` → **76 passed**（既存 68 + 新規 8・回帰なし）
+
+## /test 実施記録（2026-07-18・環境パリティ最終確認）
+- Backend 全体（Docker）: `python -m pytest --tb=short -q` → **76 passed**（TC-AUTO-01/03/05 含む・code-review Low 対応後・回帰なし）
+- Frontend Jest（Docker）: **2 suites / 7 passed**
+- E2E（Playwright・`docker compose --profile e2e run --rm e2e`）: **7 passed**（認証フロー・問題管理認可 I102・テナント分離・クイズセッション）
+- 停止条件該当なし（全自動テスト PASS）
