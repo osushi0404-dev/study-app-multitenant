@@ -5,7 +5,7 @@
 結果:
 - backend: 非該当（コード変更なし）
 - frontend: 非該当（コード変更なし）
-- 専用テスト（test_auto_test_template_lint.sh）: **全 TC 合格・exit 0**（2026-07-18 実装時実走。スクリプト自体の不合格経路も実証済み: コピーの複製パターンを故意に破壊 → TC-07 NG・exit 1）
+- 専用テスト（test_auto_test_template_lint.sh）: **全 TC 合格・exit 0**（2026-07-18 実装時実走・/code-review 決定論ゲート exit=0・/test 再実走でも全 TC 合格。スクリプト自体の不合格経路も実証済み: コピーの複製パターンを故意に破壊 → TC-07 NG・exit 1）
 
 ## テストケース一覧（スクリプト内 TC）
 
