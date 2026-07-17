@@ -86,6 +86,8 @@ class SubjectViewSet(viewsets.ModelViewSet):
         組織管理者(role=='admin')限定（I104）。public(未認証登録用)は @action の AllowAny を維持。"""
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [permissions.IsAuthenticated(), IsOrgAdmin()]
+        if self.action == 'public':
+            return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
