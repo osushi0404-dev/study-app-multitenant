@@ -214,4 +214,12 @@
 - 設計 Low-2 / シナリオ Low-2（スロットル未設定での列挙・スクレイピング）: 既存構成・本イシュースコープ外。レート制限導入の要否を /retro で判断（別イシュー候補）。
 
 ## レビュー結果
-- [20260717_2345 判定: ✅ 完了](../../reviews/I115_plan_review_20260717_2345.md)
+- [20260717_2345 判定: ✅ 完了](../../reviews/closed/I115_plan_review_20260717_2345.md)
+- [code-review 20260718 VERDICT: OK](../../reviews/closed/I115_code_review_20260718_0109.md)
+
+## 完了情報
+- **完了日**: 2026-07-18
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review: ✅ 完了・Warning 1/Info 1 対応済み / security-review: Blocker 0・Low 3 処遇決定済み（Low-2 は I127 #232 で根治予定） / code-review: VERDICT OK・Low 2 対応済み）
+- **テスト**: Backend 76 passed（既存 68＋新規 8・TDD RED/false-green 注入検証済み）・FE Jest 7 passed・E2E 7 passed・手動テスト全 4 項目 OK
+- **retro 派生**: 予防処置 3 件 → I126（#231）起票 / 残余リスク Low（レート制限）→ I127（#232）起票
