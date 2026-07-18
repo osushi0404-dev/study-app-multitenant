@@ -119,7 +119,7 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 | TC-01 | plan-writing-rules に統一規定が存在 | `grep -q '合否判定インターフェースの統一' docs/runbooks/plan-writing-rules.md` |
 | TC-02 | 同規定に不在判定の合格=exit 0 形（`! grep -q 文言 file`）が存在 | `grep -qF '! grep -q 文言 file' docs/runbooks/plan-writing-rules.md` |
 | TC-03 | plan-reviewer P4 に exit code 向き一致観点が存在 | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/plan-reviewer.md` |
-| TC-04 | plan-reviewer 差し戻しファースト表に Blocker パターン行が存在（行頭 `\|` で表行にアンカー・P4 bullet と誤一致しない） | `grep -qF '\| 合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md` |
+| TC-04 | plan-reviewer 差し戻しファースト表に Blocker パターン行が存在（表行第1セルの一意フレーズで判定・P4 bullet は語順が異なり不一致） | `grep -q '合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md` |
 | TC-05 | plan-issue SKILL のセルフチェック項目が存在 | `grep -q '合否判定インターフェースが exit code に統一' .claude/skills/plan-issue/SKILL.md` |
 | TC-07 | fix-test-reviewer の観点 3 に exit code 向き一致の確認が存在 | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/fix-test-reviewer.md` |
 | TC-06 | 失敗注入（false-green 防止）: 該当行を欠いた入力で TC-01〜05・TC-07 が非ゼロ終了 | 計画時実証済み（2026-07-18・文言未追記の現状ファイルで全て exit 1。TC-07 も同日 exit 1 確認済み）。実装後、該当行を削除した一時コピーでも再確認 |
@@ -132,7 +132,7 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 
 ## 8. Risk & 回避策
 - **R1: 追記文言と TC のセンチネル文字列の不一致**（実装時に文言を変えると TC が落ちる）→ 4 章の追記文言を全文固定し、TC は 4 章の文字列から機械的に採っている。文言を変える場合は計画書と TC を同時更新する。
-- **R2: TC-04 が P4 観点の bullet に誤一致して表行の不在を見逃す** → 判定文字列の先頭を行頭のテーブル罫線 `|` にして表行のみに一致させる（bullet は `- ` 始まりのため一致しない。計画時に現状ファイルで exit 1 を確認済み）。
+- **R2: TC-04 が P4 観点の bullet に誤一致して表行の不在を見逃す** → 表行第1セルの文言「合否基準が合格時に非ゼロ終了する」で判定する。P4 bullet は語順が異なる（「…コマンドを合否基準にしていないか」）ため不一致で、フレーズはファイル内一意（`grep -c` = 1 を機械確認済み）。※当初の行頭罫線 `|` アンカー案は、code-review.sh のゲート分類器がコマンド文字列中の `|` をパイプと誤判定し実走対象外（fail-closed → BLOCKER）になるため不採用（code-review 20260718_1303 対応。分類器の精緻化は別イシュー候補）。
 - **R3: 既存の grep 系決定論テスト（test_review_verdict.sh・test_fix_review.sh）が壊れる** → 対象 4 ファイルへの参照は「存在」チェック（＋今回追記と無関係なキーワードの除去反証）のみで、本計画は行追記のみ（既存行は不変更）のため影響なし（調査結果で機械確認済み）。
 - **R4: fix-loop 経路の TC は plan-reviewer を通らず gate がかからない** → fix-test-reviewer.md を変更対象 D として含め、fix 経路にも gate 層を張る（ユーザー確定 2026-07-18）。番号付き観点リストの再採番は行わず観点 3 の継続行として追記するため、既存観点の参照（fix-loop SKILL 等からの観点番号言及）に影響しない。
 
