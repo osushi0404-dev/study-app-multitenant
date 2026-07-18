@@ -181,6 +181,9 @@ class ApiClient {
       case 404:
         toast.error('要求されたリソースが見つかりません');
         break;
+      case 429:
+        toast.error('リクエストが多すぎます。しばらく待ってから再試行してください');
+        break;
       case 500:
         toast.error('サーバーエラーが発生しました');
         break;

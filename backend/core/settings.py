@@ -139,6 +139,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 
 # Django REST Framework
+# スロットル設定（DEFAULT_THROTTLE_CLASSES/RATES・NUM_PROXIES）は下方の Rate Limiting セクション参照（I127）
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -285,8 +286,26 @@ if not DEBUG:
 
 # Rate Limiting
 # デフォルト True（本番・開発環境）。E2E CI では RATELIMIT_ENABLE=false を設定して無効化する（12-Factor App）。
+# このスイッチは django-ratelimit（accounts の認証系）と DRF スロットル（API 全体・I127）の両方に効く。
 RATELIMIT_ENABLE = os.environ.get('RATELIMIT_ENABLE', 'True').lower() != 'false'
 RATELIMIT_USE_CACHE = 'default'
+
+# DRF スロットル（I127: API 全体の基本レート制限。使用キャッシュは default=Redis・
+# IGNORE_EXCEPTIONS=True のため Redis 断時はフェイルオープン=可用性優先）
+# クラスリストは無条件の定数とし、有効スイッチ・レート値は core/throttling.py の
+# アプリ専用クラスがリクエスト時にライブ評価する（import 時スナップショット回避・計画 発見4）。
+API_THROTTLE_ENABLED = RATELIMIT_ENABLE  # DRF スロットル有効スイッチ（リクエスト時にライブ参照される）
+REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = [
+    'core.throttling.AppAnonRateThrottle',
+    'core.throttling.AppUserRateThrottle',
+]
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
+    'anon': '60/min',   # 未認証: IP ごと（登録画面の科目取得等は数 req/min で余裕）
+    'user': '300/min',  # 認証済み: ユーザーごと（1 問/秒のクイズ回答=60 req/min でも 300/min に余裕で抵触しない）
+}
+# 本番は nginx 1 段（X-Forwarded-For 付与・nginx/default.conf）。XFF が無い直アクセスは
+# REMOTE_ADDR に自動フォールバックするため開発環境でもこの値のままでよい。
+REST_FRAMEWORK['NUM_PROXIES'] = 1
 
 # Logging
 # 拡張ログ設定をインポート

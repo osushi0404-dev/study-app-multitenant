@@ -57,6 +57,10 @@ def custom_exception_handler(exc, context):
             custom_error_data['error']['main_message'] = '認証が必要です'
             custom_error_data['error']['sub_message'] = 'ログインしてください'
 
+        elif response.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            custom_error_data['error']['main_message'] = 'リクエストが多すぎます'
+            custom_error_data['error']['sub_message'] = 'しばらく時間をおいて再度お試しください'
+
         elif response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR:
             custom_error_data['error']['main_message'] = 'サーバーエラー'
             custom_error_data['error']['sub_message'] = 'しばらく時間をおいて再度お試しください'
