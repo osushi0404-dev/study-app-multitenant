@@ -38,7 +38,7 @@
 `scripts/claude/tests/*.sh` 全 16 本を実走し **16/16 PASS**（2026-07-19・scratchpad i086_baseline.sh）。
 
 ### 失敗注入の事前実証（false-green でないことの確認）
-決定論 TC の grep 系 9 件＋新規テストスクリプト実行 1 件を**文言未追記・未実装の現状ファイル**に対して実行し、**10 件全て非ゼロ終了（NG）**を確認済み（2026-07-19・scratchpad i086_tc_prerun.sh）。実装後に exit 0 へ転じることを確認する。
+決定論 TC の grep 系 9 件＋新規テストスクリプト実行 1 件を**文言未追記・未実装の現状ファイル**に対して実行し、**10 件全て非ゼロ終了（NG）**を確認済み（2026-07-19・scratchpad i086_tc_prerun.sh）。plan-review Warning 対応で追加した TC-12/13 センチネル 2 件も同日追加実証し非ゼロ終了を確認済み（i086_tc_prerun2.sh）。実装後に exit 0 へ転じることを確認する。なお対話シェルの grep はラッパーで挙動が信頼できないため、実証はすべて bash スクリプトファイル実行で行った。
 
 ### 外部/ハーネス挙動依存の実証状況
 - Agent ツールによる多観点サブエージェント並列起動＋Bash 制限付き実機 repro＋対応後再レビューは、**I080 で本セッション系列の実機実証済み**（Critical/High を実際に捕捉。記憶 feedback_review_with_subagent_adversarial）。スパイク不要。
@@ -47,6 +47,11 @@
 ### 環境前提確認
 - bash / grep / git / gh: 本セッションで実走済み。`claude` CLI: 既存 code-review.sh が使用中（変更なし）。Agent ツール: 本ハーネスで利用可能（I080 実績）。
 
+### disable-model-invocation とマルチステップ SKILL の互換性（plan-review Blocker 対応・実機実績あり）
+- `disable-model-invocation: true` の意味は「**Claude が Skill ツールで当該スキルを自発起動することの禁止**（ユーザーの `/コマンド` 入力時のみ起動）」であり、**起動後の SKILL 本文の処理方法には影響しない**。起動後は SKILL 本文がメインループ Claude への指示としてロードされ、多ステップ・多ツールの実行が通常どおり行われる。
+- リポジトリ内実績（全て `disable-model-invocation: true`＋複数 allowed-tools の多ステップスキルで、日常運用で機能している）: `plan-issue`（Read/Bash/Write/Edit/Glob/Grep）・`grill-me`（Read/Bash/Glob/Grep/Edit）・`close`・`fix-loop`・`security-review`。
+- 実機実証（本セッション 2026-07-19）: `/grill-me I086` と `/plan-issue I086` が同フラグのまま「探索→ファイル編集→git 操作→PR 作成」の多ステップを実行済み。したがって仮説 B（bash 1 行実行のみで LLM 処理されない）は成立せず、現行 code-review SKILL が bash 1 行なのは**単に本文が 1 ステップしか書かれていないため**である。本計画のセクション 2/3 追記は既存多ステップスキルと同型で、フラグ維持と両立する。
+
 ## 2. 受け入れ条件（イシューの AC を転記・TC 対応付き）
 - [ ] `/code-review` が「高リスク判定: Yes」を返す変更で、敵対的レビューステージが自動起動する（手動依存でない）（TC-01/05・手動 No.2）
 - [ ] 敵対ステージは反証マンデート×複数観点で実行され、必要時に実機 repro（Bash・temp repo）で裏取りできる（TC-07・手動 No.2/3）
@@ -54,7 +59,7 @@
 - [ ] 実装者が書く実装後レビューが合格判定の根拠にならないことが review-rules に明記（TC-08）
 - [ ] 通常（非高リスク）変更では敵対ステージが起動せず、現行 code-review フローが無回帰（TC-01/10・手動 No.4）
 - [ ] I080 の R5/R6 相当を、本ステージが過去ケース逆引きで検出できることを確認・記録（手動 No.3）
-- [ ] loop の最大周回数（3 周）・サブエージェント総数上限（15）が実装され、超過時は自動 OK にせず打ち切り＝FINAL VERDICT を HIGH 以上に固定してユーザーへエスカレーションする挙動が定義されている（TC-06）
+- [ ] loop の最大周回数（3 周）・サブエージェント総数上限（15）が実装され、超過時は自動 OK にせず打ち切り＝FINAL VERDICT を HIGH 以上に固定してユーザーへエスカレーションする挙動が定義されている（TC-06/12/13）
 
 ## 3. 影響範囲
 - Backend: なし / Frontend: なし / DB: なし
@@ -173,7 +178,7 @@ A4. 案内 `case` の OK 分岐（`*)`）を高リスク時の文言に分岐（
   ```
 
 ### 4-4. .claude/skills/code-review/SKILL.md（変更対象 D）
-**修正方針**: 現行の 1 行実行を「1. 基本レビュー」とし、機械可読行の分岐と敵対ステージのフローを追加する。frontmatter の `allowed-tools` を `Bash, Read, Grep, Glob, Edit, Write, Agent` に拡張し、description に敵対ステージの起動条件を追記する（`disable-model-invocation: true`・`argument-hint` は不変更）。本文構成（全文は実装時に本方針どおり記述・センチネル文言は固定）:
+**修正方針**: 現行の 1 行実行を「1. 基本レビュー」とし、機械可読行の分岐と敵対ステージのフローを追加する。frontmatter の `allowed-tools` を `Bash, Read, Grep, Glob, Edit, Write, Agent` に拡張し、description に敵対ステージの起動条件を追記する（`disable-model-invocation: true`・`argument-hint` は不変更。同フラグは「Claude による自発起動の禁止」のみを意味し、起動後の多ステップ処理とは両立する — 調査結果「disable-model-invocation とマルチステップ SKILL の互換性」参照）。本文構成（全文は実装時に本方針どおり記述・センチネル文言は固定）:
 
 ```markdown
 ## 1. 基本レビュー（決定論ゲート実走つき）
@@ -187,13 +192,13 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
 
 ## 3. 敵対的レビューステージ（高リスク時のみ・自動起動）
 実装者・基本レビューの「合格」を反証する独立ステージ。実装者の自己レビューは判定根拠にしない。
-- 3-1. 起動: `.claude/review-agents/adversarial-reviewer.md` を Read し、観点ごとに {ISSUE}/{PERSPECTIVE}/{KNOWN_FINDINGS} を埋めて Agent ツールで並列起動する。固定 3 観点（毎周回必須）＝①ロジック回避・実機 repro ②テスト false-green・tautology ③要件・脅威モデル網羅。動的観点（最大 2）は diff の内容に応じて追加。1 周回 = 最大 5 エージェント並列。
+- 3-1. 起動: `.claude/review-agents/adversarial-reviewer.md` を Read し、観点ごとに {ISSUE}/{PERSPECTIVE}/{KNOWN_FINDINGS} を埋めて Agent ツールで並列起動する。固定 3 観点（毎周回必須）＝①ロジック回避・実機 repro ②テスト false-green・tautology ③要件・脅威モデル網羅。動的観点（最大 2）は diff の内容に応じて追加。1 周回 = 最大 5 エージェント並列。{KNOWN_FINDINGS} には**先行周回で報告済みの全 findings の一覧**（オーケストレーターが周回ごとに集約保持しているもの。同一イシューの過去の `I###_adversarial_review_*.md` が存在する場合はそれも Read して合算）を充てる（plan-review Info 対応）。
 - 3-2. loop-until-dry と上限: 各周回の NEW_CRITICAL/NEW_HIGH 合計が 0 の周回が出たら終了（ステージ通過）。1 件以上なら 3-3 の修正後に次周回（修正の妥当性も反証対象に含める＝対応後再レビュー）。上限 = 最大 3 周・サブエージェント総数 15。上限到達時に新規 Critical/High が残る場合は自動 OK にせず打ち切り、最終判定を HIGH 以上に固定してユーザーへエスカレーションする。
 - 3-3. findings の修正（依頼側が実施）: 修正は本スキル（メインセッション）が Edit/Write で行い、レビューアのサブエージェントには修正させない。設計判断が必要な findings はユーザーに確認して停止する。修正は findings 対応の範囲に限定し、内容を記録に残して commit する。
 - 3-4. 記録・結線:
   - 記録: `docs/reviews/I###_adversarial_review_<YYYYMMDD_HHMM>.md`（周回・観点・エージェント数・findings・修正内容・最終行 `VERDICT: <BLOCKER|HIGH|OK>`）
   - commit: feature ブランチのみ・当該ファイルのみ path-scoped（git add <記録> → git commit -m "docs(I###): adversarial-review 記録"。develop/main では commit しない）
-  - PR コメント: gh pr review <PR#> --comment --body "$(cat <記録>)"（失敗時は手動実行を案内・非ブロック）
+  - PR コメント: gh pr review <PR#> --comment --body "$(cat <記録>)"（失敗時は手動実行を案内・非ブロック。記録が GitHub コメント上限 65,536 文字を超える場合はサマリ＝最終判定・周回数・findings 見出しのみを投稿し、詳細は記録ファイルへの参照を書く。記録ファイル自体は常に完全版が commit されるため情報は失われない。plan-review Info 対応）
   - 最終判定 = max(スクリプト FINAL VERDICT, 敵対ステージ VERDICT)。OK → 「✅ 敵対的レビューステージ通過。`/test I###` を実行してください。」／HIGH・BLOCKER → 従来どおり `/fix-loop I###` を案内
 ```
 
@@ -241,7 +246,9 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
 | TC-03 | code-reviewer.md に条件リストが存在 | `grep -q '高リスク判定の条件' .claude/review-agents/code-reviewer.md` |
 | TC-04 | code-reviewer.md に RISK 行仕様が存在 | `grep -q '機械判定用の RISK 行' .claude/review-agents/code-reviewer.md` |
 | TC-05 | SKILL.md に敵対ステージフローが存在 | `grep -q '敵対的レビューステージ' .claude/skills/code-review/SKILL.md` |
-| TC-06 | SKILL.md に上限（最大 3 周）が存在 | `grep -q '最大 3 周' .claude/skills/code-review/SKILL.md` |
+| TC-06 | SKILL.md に周回上限（最大 3 周）が存在 | `grep -q '最大 3 周' .claude/skills/code-review/SKILL.md` |
+| TC-12 | SKILL.md にサブエージェント総数上限（15）が存在 | `grep -q 'サブエージェント総数 15' .claude/skills/code-review/SKILL.md` |
+| TC-13 | SKILL.md に上限到達時の打ち切り（自動 OK 禁止）が存在 | `grep -q '打ち切り' .claude/skills/code-review/SKILL.md` |
 | TC-07 | adversarial-reviewer.md に反証マンデートが存在 | `grep -q '合格判定を反証' .claude/review-agents/adversarial-reviewer.md` |
 | TC-08 | review-rules.md に非権威化規定が存在 | `grep -q '自己レビューは判定根拠にしない' docs/runbooks/review-rules.md` |
 | TC-09 | review-rules.md 命名表に敵対記録の行が存在 | `grep -q 'adversarial_review' docs/runbooks/review-rules.md` |
@@ -281,3 +288,6 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
   - (c) 強制 YES パスの `scripts/claude/*.sh` は case glob 仕様により `scripts/claude/tests/` 等の配下にも一致（＝テストスクリプト変更も高リスク扱い）
   - (d) 敵対記録の commit メッセージは `docs(I###): adversarial-review 記録`（既存 kind 命名と同型）
   - (e) ゲートでの既存テスト再実走は code-review.sh を source する隣接 3 本のみ（全 16 本はベースライン確認済み・非隣接はゲート化しない）
+
+## レビュー結果
+- [20260719_0331 判定: 差し戻し（Blocker 1件）](../../reviews/I086_plan_review_20260719_0331.md)
