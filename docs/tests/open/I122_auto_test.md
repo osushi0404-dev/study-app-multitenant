@@ -5,7 +5,7 @@
   - heavy な実行例はインラインコード表記で書く。fenced の bash ブロックはここに作らない。
   - ゲート系コマンド（grep 判定等）は必ず「## 決定論ゲート（自動実走）」セクションに書く。
 -->
-実行コマンド（例）: 下記「決定論ゲート（自動実走）」の grep 5 件（pytest/Jest/E2E はアプリコード変更なしのため非該当）
+実行コマンド（例）: 下記「決定論ゲート（自動実走）」の grep 6 件（pytest/Jest/E2E はアプリコード変更なしのため非該当）
 
 結果:
 - backend: 非該当（コード変更なし）
@@ -21,10 +21,11 @@
 | TC-03 | plan-reviewer.md の P4 観点に exit code 向き一致チェックが存在（AC2） | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/plan-reviewer.md` | 未実施 |
 | TC-04 | plan-reviewer.md の差し戻しファースト「自動テストケース」表に Blocker パターン行が存在（AC3。判定文字列先頭を行頭罫線 `\|` にして表行のみに一致させ、P4 bullet との誤一致を防ぐ） | `grep -qF '\| 合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md` | 未実施 |
 | TC-05 | plan-issue/SKILL.md の文書品質ゲートにセルフチェック項目が存在（AC4） | `grep -q '合否判定インターフェースが exit code に統一' .claude/skills/plan-issue/SKILL.md` | 未実施 |
-| TC-06 | 失敗注入（false-green 防止・AC5）: 該当行を欠いた入力に対し TC-01〜05 の判定コマンドが非ゼロ終了する | 実装後に該当行を削除した一時コピー（mktemp）で再確認 | 計画時実証済み（下記） |
+| TC-07 | fix-test-reviewer.md の false-green 観点（観点3）に exit code 向き一致の確認が存在（AC5） | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/fix-test-reviewer.md` | 未実施 |
+| TC-06 | 失敗注入（false-green 防止・AC6）: 該当行を欠いた入力に対し TC-01〜05・TC-07 の判定コマンドが非ゼロ終了する | 実装後に該当行を削除した一時コピー（mktemp）で再確認 | 計画時実証済み（下記） |
 
 - 合否インターフェース: **合格 = exit 0**（本イシューで導入するルールを本文書の TC 自体で dogfood する。不合格=非ゼロ終了・出力値の目視比較は合否基準にしない）。
-- 計画時実証（2026-07-18・plan_I122 調査結果）: TC-01〜05 の判定コマンドを**文言未追記の現状ファイル**に対して実行し、**全て exit 1（NG）**を確認済み（失敗条件で不合格になる＝false-green でない）。
+- 計画時実証（2026-07-18・plan_I122 調査結果）: TC-01〜05・TC-07 の判定コマンドを**文言未追記の現状ファイル**に対して実行し、**全て exit 1（NG）**を確認済み（失敗条件で不合格になる＝false-green でない）。
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -33,4 +34,5 @@ grep -qF '! grep -q 文言 file' docs/runbooks/plan-writing-rules.md
 grep -q 'exit code の向きと一致しているか' .claude/review-agents/plan-reviewer.md
 grep -qF '| 合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md
 grep -q '合否判定インターフェースが exit code に統一' .claude/skills/plan-issue/SKILL.md
+grep -q 'exit code の向きと一致しているか' .claude/review-agents/fix-test-reviewer.md
 ```

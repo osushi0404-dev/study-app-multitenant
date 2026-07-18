@@ -23,7 +23,7 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 ## 調査結果（計画時実証・すべて実行済み・2026-07-18）
 
 ### 失敗注入の事前実証（false-green でないことの確認）
-決定論 TC-01〜05（下記 6. 参照）を**文言未追記の現状ファイル**に対して実行し、**全て exit 1（NG）**を確認済み（scratchpad スクリプト i122_tc_prerun.sh で実走）。「該当行を欠いた入力で NG を返す」注入確認は計画時点で完了している。実装後は TC-01〜05 が exit 0 に転じることを確認する。
+決定論 TC-01〜05・TC-07（下記 6. 参照）を**文言未追記の現状ファイル**に対して実行し、**全て exit 1（NG）**を確認済み（scratchpad スクリプト i122_tc_prerun.sh ＋ fix-test-reviewer 追加分の単体実行）。「該当行を欠いた入力で NG を返す」注入確認は計画時点で完了している。実装後は TC-01〜05・TC-07 が exit 0 に転じることを確認する。
 
 ### 消費箇所の全件確認（`false-green` を repo 全体 grep 済み）
 現行ルール・指示ファイルでのヒットは以下で全件。歴史的記録（docs/issues・plans・reviews・tests の open/closed 配下）は遡及改修対象外（イシュー確定）:
@@ -33,7 +33,7 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 | .claude/skills/plan-issue/SKILL.md | 消費（文書品質ゲートのセルフチェック項目） | **変更対象 C**（grill Q1 確定） |
 | .claude/review-agents/plan-reviewer.md | 消費（P4 観点・差し戻しファースト表） | **変更対象 B**（grill Q2 確定・表にも追加） |
 | .claude/review-agents/code-reviewer.md | 消費（false-green 観点） | 対象外（イシュー「含まない」確定） |
-| .claude/review-agents/fix-test-reviewer.md | 消費（false-green 観点 l.27。exit code 向き規定なし） | **対象外（仮定）**— code-reviewer と同じ「必要性が出たら別途」の扱い。承認前確認事項として提示 |
+| .claude/review-agents/fix-test-reviewer.md | 消費（false-green 観点 l.27。exit code 向き規定なし） | **変更対象 D**（承認前確認 → ユーザー確定 2026-07-18: fix 経路の TC は plan-reviewer を通らず、除外すると gate 層のない経路が残るため含める。code-reviewer の除外＝同一経路の重複回避とは事情が異なる） |
 | scripts/claude/fix-review-lib.sh・fix-test-review.sh | VERDICT 処理のコメント言及のみ（TC 作法に非依存） | 変更不要 |
 
 ### 既存決定論テストへの影響（機械確認済み）
@@ -51,13 +51,14 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 - [ ] plan-reviewer.md の P4 テスト妥当性観点に exit code 向き一致チェックが追記されている（TC-03）
 - [ ] plan-reviewer.md の差し戻しファースト原則「自動テストケース」表に exit code 向き反転の Blocker パターン行が追記されている（TC-04）
 - [ ] plan-issue/SKILL.md の false-green セルフチェック項目に合格=exit 0 統一が反映されている（TC-05）
+- [ ] fix-test-reviewer.md の false-green 観点に exit code 向き一致チェックが追記されている（TC-07）
 - [ ] 追記の決定論ゲートが false-green でない（該当行を欠いた入力で NG を返すことを注入確認 — 計画時実証済み・TC-06）
 
 ## 3. 影響範囲
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra: docs/runbooks/plan-writing-rules.md・.claude/review-agents/plan-reviewer.md・.claude/skills/plan-issue/SKILL.md（ハーネス文書 3 ファイルのみ・行追記のみ）
+- Config/Infra: docs/runbooks/plan-writing-rules.md・.claude/review-agents/plan-reviewer.md・.claude/skills/plan-issue/SKILL.md・.claude/review-agents/fix-test-reviewer.md（ハーネス文書 4 ファイルのみ・行追記のみ）
 
 ## 4. 変更点一覧（具体・追記文言の全文）
 
@@ -92,11 +93,20 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 - [ ] 決定論 TC の合否判定インターフェースが exit code に統一されているか（合格=exit 0・不合格=非ゼロ終了。出力値の目視比較を合否基準にせず、不在判定は `! grep -q` 等の合格=exit 0 形で書かれているか）
 ```
 
+### 4-4. .claude/review-agents/fix-test-reviewer.md（変更対象 D）
+**修正方針**: レビュー観点 3（false-green でないか）の本文末尾（l.28 の直後）に、観点の続きとして 1 行追加する。番号付きリストの再採番を避けるため独立項目にはせず、観点 3 のインデント継続行として追記する（既存の観点 4・5 の番号・文言は変更しない）。
+
+追記文言（全文）:
+```markdown
+   決定論 TC（grep 等のシェル判定・lint 異常系）では、合否基準が exit code の向きと一致しているか（合格=exit 0・不合格=非ゼロ終了。`grep -c` の出力値の目視比較など、合格時に非ゼロ終了するコマンドを合否基準にしていないか）。
+```
+
 ## 5. 実装手順（ステップ）
 1. **plan-writing-rules.md へ統一規定を追記**（4-1。→ TC-01/02 参照）
 2. **plan-reviewer.md へ P4 観点＋差し戻し表行を追記**（4-2。→ TC-03/04 参照。ステップ1と独立・並行可）
 3. **plan-issue/SKILL.md へセルフチェック項目を追記**（4-3。→ TC-05 参照。ステップ1/2と独立・並行可）
-4. **決定論ゲートの実走・記録**: docs/tests/open/I122_auto_test.md の全 TC を実行し結果を記録する（ステップ1〜3完了が前提）
+4. **fix-test-reviewer.md へ観点3の続き行を追記**（4-4。→ TC-07 参照。ステップ1〜3と独立・並行可）
+5. **決定論ゲートの実走・記録**: docs/tests/open/I122_auto_test.md の全 TC を実行し結果を記録する（ステップ1〜4完了が前提）
 
 - 未知リスク先行: なし（外部挙動依存なし。判定ロジックは計画時に失敗注入まで実証済み）。
 - 垂直スライス: 非該当（ドキュメント 3 ファイルの文言追記で完結）。
@@ -111,10 +121,11 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 | TC-03 | plan-reviewer P4 に exit code 向き一致観点が存在 | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/plan-reviewer.md` |
 | TC-04 | plan-reviewer 差し戻しファースト表に Blocker パターン行が存在（行頭 `\|` で表行にアンカー・P4 bullet と誤一致しない） | `grep -qF '\| 合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md` |
 | TC-05 | plan-issue SKILL のセルフチェック項目が存在 | `grep -q '合否判定インターフェースが exit code に統一' .claude/skills/plan-issue/SKILL.md` |
-| TC-06 | 失敗注入（false-green 防止）: 該当行を欠いた入力で TC-01〜05 が非ゼロ終了 | 計画時実証済み（2026-07-18・文言未追記の現状ファイルで全て exit 1）。実装後、該当行を削除した一時コピーでも再確認 |
+| TC-07 | fix-test-reviewer の観点 3 に exit code 向き一致の確認が存在 | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/fix-test-reviewer.md` |
+| TC-06 | 失敗注入（false-green 防止）: 該当行を欠いた入力で TC-01〜05・TC-07 が非ゼロ終了 | 計画時実証済み（2026-07-18・文言未追記の現状ファイルで全て exit 1。TC-07 も同日 exit 1 確認済み）。実装後、該当行を削除した一時コピーでも再確認 |
 - pytest/Jest/E2E: 非該当（アプリコード変更なし）。
 ### 手動
-- docs/tests/open/I122_manual_test.md 参照(追記箇所の実体確認 3 件 = Claude・追記文言の平易さ確認 1 件 = Human)。
+- docs/tests/open/I122_manual_test.md 参照(追記箇所の実体確認 4 件 = Claude・追記文言の平易さ確認 1 件 = Human)。
 
 ## 7. ロールバック
 - `git revert` のみ（ドキュメント 3 ファイルの行追記のみ。DB・設定・サービスへの影響なし）。
@@ -123,7 +134,7 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 - **R1: 追記文言と TC のセンチネル文字列の不一致**（実装時に文言を変えると TC が落ちる）→ 4 章の追記文言を全文固定し、TC は 4 章の文字列から機械的に採っている。文言を変える場合は計画書と TC を同時更新する。
 - **R2: TC-04 が P4 観点の bullet に誤一致して表行の不在を見逃す** → 判定文字列の先頭を行頭のテーブル罫線 `|` にして表行のみに一致させる（bullet は `- ` 始まりのため一致しない。計画時に現状ファイルで exit 1 を確認済み）。
 - **R3: 既存の grep 系決定論テスト（test_review_verdict.sh 等）が壊れる** → 対象 3 ファイルへの参照は「存在」チェックのみで、本計画は行追記のみ（既存行は不変更）のため影響なし（調査結果で機械確認済み）。
-- **R4: fix-loop 経路の TC は plan-reviewer を通らず gate がかからない** → fix-test-reviewer.md は本イシューの対象外（仮定。承認前確認事項として提示。do 層の plan-writing-rules はテスト文書作成の共通ルールとして fix 経路にも及ぶ）。
+- **R4: fix-loop 経路の TC は plan-reviewer を通らず gate がかからない** → fix-test-reviewer.md を変更対象 D として含め、fix 経路にも gate 層を張る（ユーザー確定 2026-07-18）。番号付き観点リストの再採番は行わず観点 3 の継続行として追記するため、既存観点の参照（fix-loop SKILL 等からの観点番号言及）に影響しない。
 
 ## 9. セキュリティ・品質チェック（plan-issue 必須確認）
 - **セキュリティ影響なし**（ハーネス文書 3 ファイルの行追記のみ。認証・認可・入力・機密データ・依存ライブラリの変更なし）。
@@ -135,10 +146,12 @@ do（作成時に防ぐ）＋ gate（レビューで止める）の 2 層で、�
 - **Claude Code ベストプラクティス**: 指示ファイル変更（SKILL.md・review-agents）だが、追加はチェックリスト項目・レビュー観点の行追記のみで、allowed-tools・停止条件・分岐構造は変更しない。
 
 ## 10. 承認ポイント
-- [ ] 計画内容（変更点/影響）: 3 ファイルへの行追記（追記文言は 4 章に全文固定）・既存文言の変更なし
-- [ ] Danger Ops: 無（ドキュメント 3 ファイルのみ・ロールバックは revert のみ）
-- [ ] テスト計画: 決定論ゲート TC-01〜06（失敗注入は計画時実証済み）＋手動 4 件（Claude 3・Human 1）
-- [ ] 仮定事項の確認: fix-test-reviewer.md（fix-loop 用テストレビュー観点）を対象外とする扱い（下記「承認前確認事項」参照）
+- [x] 計画内容（変更点/影響）: 4 ファイルへの行追記（追記文言は 4 章に全文固定）・既存文言の変更なし
+- [x] Danger Ops: 無（ドキュメント 4 ファイルのみ・ロールバックは revert のみ）
+- [x] テスト計画: 決定論ゲート TC-01〜07（失敗注入は計画時実証済み）＋手動 5 件（Claude 4・Human 1）
+- [x] 仮定事項の確認: fix-test-reviewer.md を対象に**含める**（ユーザー確定 2026-07-18。fix 経路の gate 欠落解消・理想/根治基準）
+
+（承認済み: 2026-07-18。3 ファイル案で承認ポイント提示 → fix-test-reviewer の扱いを理想基準で再検討し「含める」で確定 → 4 ファイル案に更新のうえ /plan-issue-review へ）
 
 ## レビュー結果
 （/plan-issue-review 実施後に記録）
