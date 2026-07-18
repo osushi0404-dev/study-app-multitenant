@@ -10,19 +10,19 @@
 結果:
 - backend: 非該当（コード変更なし）
 - frontend: 非該当（コード変更なし）
-- 決定論ゲート: 未実施（実装ステップ4で実走・記録する）
+- 決定論ゲート: **全 TC 合格・exit 0**（2026-07-18 実装時実走。TC-01〜05・TC-07 = 全て exit 0、TC-06 = 6 件の判定コマンドすべてで注入後に exit 1 を確認）
 
 ## テストケース一覧
 
 | TC | 検証内容 | 判定コマンド（合格=exit 0） | 結果 |
 |----|---------|---------------------------|------|
-| TC-01 | plan-writing-rules.md の false-green 節に合否判定インターフェース統一規定が存在（AC1） | `grep -q '合否判定インターフェースの統一' docs/runbooks/plan-writing-rules.md` | 未実施 |
-| TC-02 | 同規定に不在判定の合格=exit 0 形（`! grep -q 文言 file`）の例示が存在（AC1） | `grep -qF '! grep -q 文言 file' docs/runbooks/plan-writing-rules.md` | 未実施 |
-| TC-03 | plan-reviewer.md の P4 観点に exit code 向き一致チェックが存在（AC2） | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/plan-reviewer.md` | 未実施 |
-| TC-04 | plan-reviewer.md の差し戻しファースト「自動テストケース」表に Blocker パターン行が存在（AC3。判定文字列先頭を行頭罫線 `\|` にして表行のみに一致させ、P4 bullet との誤一致を防ぐ） | `grep -qF '\| 合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md` | 未実施 |
-| TC-05 | plan-issue/SKILL.md の文書品質ゲートにセルフチェック項目が存在（AC4） | `grep -q '合否判定インターフェースが exit code に統一' .claude/skills/plan-issue/SKILL.md` | 未実施 |
-| TC-07 | fix-test-reviewer.md の false-green 観点（観点3）に exit code 向き一致の確認が存在（AC5） | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/fix-test-reviewer.md` | 未実施 |
-| TC-06 | 失敗注入（false-green 防止・AC6）: 該当行を欠いた入力に対し TC-01〜05・TC-07 の判定コマンドが非ゼロ終了する | 実装後に該当行を削除した一時コピー（mktemp）で再確認 | 計画時実証済み（下記） |
+| TC-01 | plan-writing-rules.md の false-green 節に合否判定インターフェース統一規定が存在（AC1） | `grep -q '合否判定インターフェースの統一' docs/runbooks/plan-writing-rules.md` | OK（exit 0） |
+| TC-02 | 同規定に不在判定の合格=exit 0 形（`! grep -q 文言 file`）の例示が存在（AC1） | `grep -qF '! grep -q 文言 file' docs/runbooks/plan-writing-rules.md` | OK（exit 0） |
+| TC-03 | plan-reviewer.md の P4 観点に exit code 向き一致チェックが存在（AC2） | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/plan-reviewer.md` | OK（exit 0） |
+| TC-04 | plan-reviewer.md の差し戻しファースト「自動テストケース」表に Blocker パターン行が存在（AC3。判定文字列先頭を行頭罫線 `\|` にして表行のみに一致させ、P4 bullet との誤一致を防ぐ） | `grep -qF '\| 合否基準が合格時に非ゼロ終了する' .claude/review-agents/plan-reviewer.md` | OK（exit 0） |
+| TC-05 | plan-issue/SKILL.md の文書品質ゲートにセルフチェック項目が存在（AC4） | `grep -q '合否判定インターフェースが exit code に統一' .claude/skills/plan-issue/SKILL.md` | OK（exit 0） |
+| TC-07 | fix-test-reviewer.md の false-green 観点（観点3）に exit code 向き一致の確認が存在（AC5） | `grep -q 'exit code の向きと一致しているか' .claude/review-agents/fix-test-reviewer.md` | OK（exit 0） |
+| TC-06 | 失敗注入（false-green 防止・AC6）: 該当行を欠いた入力に対し TC-01〜05・TC-07 の判定コマンドが非ゼロ終了する | 該当行を除去した一時コピー（mktemp・`grep -vF`）に対し各判定コマンドを実行 | OK（6 件全て exit 1・2026-07-18） |
 
 - 合否インターフェース: **合格 = exit 0**（本イシューで導入するルールを本文書の TC 自体で dogfood する。不合格=非ゼロ終了・出力値の目視比較は合否基準にしない）。
 - 計画時実証（2026-07-18・plan_I122 調査結果）: TC-01〜05・TC-07 の判定コマンドを**文言未追記の現状ファイル**に対して実行し、**全て exit 1（NG）**を確認済み（失敗条件で不合格になる＝false-green でない）。
