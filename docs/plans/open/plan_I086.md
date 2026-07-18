@@ -117,6 +117,7 @@ A3. 末尾の案内 `case` の直前に、SKILL が解析する機械可読固�
 # I086: SKILL（オーケストレーション層）が解析する機械可読行
 echo "REVIEW_FILE: ${REVIEW_FILE}"
 echo "RISK: ${RISK_FINAL}"
+echo "FINAL_VERDICT: ${FINAL_VERDICT}"
 if [ "$RISK_FINAL" = "YES" ]; then
   echo "ADVERSARIAL_STAGE: REQUIRED"
 else
@@ -185,10 +186,10 @@ A4. 案内 `case` の OK 分岐（`*)`）を高リスク時の文言に分岐（
 bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced bash ブロック）
 
 ## 2. 出力の機械判定
-スクリプト stdout の固定行で分岐する:
+スクリプト stdout の固定行（`ADVERSARIAL_STAGE:` と `FINAL_VERDICT:`。いずれも A3 で出力）で分岐する:
 - `ADVERSARIAL_STAGE: NOT_REQUIRED` → 従来どおりスクリプトの案内に従い終了（無回帰）
-- `ADVERSARIAL_STAGE: REQUIRED` かつ最終 VERDICT が BLOCKER/HIGH → 従来どおり `/fix-loop` を案内（修正後の `/code-review` 再実行で再判定＝ステージは基本レビュー通過後にのみ走らせる）
-- `ADVERSARIAL_STAGE: REQUIRED` かつ最終 VERDICT が OK → 3. の敵対的レビューステージをユーザー操作を待たず自動実行する
+- `ADVERSARIAL_STAGE: REQUIRED` かつ `FINAL_VERDICT: BLOCKER` または `FINAL_VERDICT: HIGH` → 従来どおり `/fix-loop` を案内（修正後の `/code-review` 再実行で再判定＝ステージは基本レビュー通過後にのみ走らせる）
+- `ADVERSARIAL_STAGE: REQUIRED` かつ `FINAL_VERDICT: OK` → 3. の敵対的レビューステージをユーザー操作を待たず自動実行する
 
 ## 3. 敵対的レビューステージ（高リスク時のみ・自動起動）
 実装者・基本レビューの「合格」を反証する独立ステージ。実装者の自己レビューは判定根拠にしない。
@@ -198,7 +199,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
 - 3-4. 記録・結線:
   - 記録: `docs/reviews/I###_adversarial_review_<YYYYMMDD_HHMM>.md`（周回・観点・エージェント数・findings・修正内容・最終行 `VERDICT: <BLOCKER|HIGH|OK>`）
   - commit: feature ブランチのみ・当該ファイルのみ path-scoped（git add <記録> → git commit -m "docs(I###): adversarial-review 記録"。develop/main では commit しない）
-  - PR コメント: gh pr review <PR#> --comment --body "$(cat <記録>)"（失敗時は手動実行を案内・非ブロック。記録が GitHub コメント上限 65,536 文字を超える場合はサマリ＝最終判定・周回数・findings 見出しのみを投稿し、詳細は記録ファイルへの参照を書く。記録ファイル自体は常に完全版が commit されるため情報は失われない。plan-review Info 対応）
+  - PR コメント: gh pr review <PR#> --comment --body-file <記録>（コマンド置換を避ける --body-file 形式・plan-review Info 対応。失敗時は手動実行を案内・非ブロック。記録が GitHub コメント上限 65,536 文字を超える場合はサマリ＝最終判定・周回数・findings 見出しのみを一時ファイル経由で投稿し、詳細は記録ファイルへの参照を書く。記録ファイル自体は常に完全版が commit されるため情報は失われない）
   - 最終判定 = max(スクリプト FINAL VERDICT, 敵対ステージ VERDICT)。OK → 「✅ 敵対的レビューステージ通過。`/test I###` を実行してください。」／HIGH・BLOCKER → 従来どおり `/fix-loop I###` を案内
 ```
 
@@ -222,7 +223,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
 **修正方針**: 既存テスト（test_review_verdict.sh 等）と同型で、`REVIEW_LIB_SOURCE_ONLY=1 source scripts/claude/code-review.sh` により関数を単体テストする。アサート内容:
 - `detect_risk_flag`: `RISK: YES`→YES／`RISK: NO`→NO／RISK 行なし→YES（fail-closed）／装飾付き（`**RISK: YES**`）→YES（anchored 不一致＝fail-closed）／複数行（NO の後に YES）→tail -1 で YES
 - `path_risk_trigger`: 監視 7 パターン各 1 件→YES（`scripts/claude/hooks/x.py`・`scripts/git-hooks/pre-push`・`.claude/settings.json`・`.claude/settings.local.json`・`scripts/claude/code-review.sh`・`.claude/skills/x/SKILL.md`・`.claude/review-agents/x.md`）／`scripts/claude/tests/x.sh`→YES（glob が / を跨ぐ仕様の固定化）／`backend/app/views.py` のみ→NO／空入力→NO／通常＋監視パスの混在→YES
-- 結線の存在: code-review.sh 内に `ADVERSARIAL_STAGE: REQUIRED`・`ADVERSARIAL_STAGE: NOT_REQUIRED`・`RISK: ${RISK_FINAL}` の出力行が存在（grep）
+- 結線の存在: code-review.sh 内に `ADVERSARIAL_STAGE: REQUIRED`・`ADVERSARIAL_STAGE: NOT_REQUIRED`・`RISK: ${RISK_FINAL}`・`FINAL_VERDICT: ${FINAL_VERDICT}` の出力行が存在（grep）
 - 合否インターフェース: 合格=exit 0・不合格=非ゼロ終了（失敗アサート名を表示して exit 1）
 
 ## 5. 実装手順（ステップ）
@@ -241,7 +242,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
 ### 自動（docs/tests/open/I086_auto_test.md・合格=exit 0 に統一）
 | TC | 検証内容 | 判定コマンド（合格=exit 0） |
 |----|---------|---------------------------|
-| TC-01 | 新規テストスクリプト全アサート合格（detect_risk_flag 5 系・path_risk_trigger 11 系・結線 3 系） | `bash scripts/claude/tests/test_adversarial_trigger.sh` |
+| TC-01 | 新規テストスクリプト全アサート合格（detect_risk_flag 5 系・path_risk_trigger 11 系・結線 4 系） | `bash scripts/claude/tests/test_adversarial_trigger.sh` |
 | TC-02 | code-review.sh の bash 構文健全性 | `bash -n scripts/claude/code-review.sh` |
 | TC-03 | code-reviewer.md に条件リストが存在 | `grep -q '高リスク判定の条件' .claude/review-agents/code-reviewer.md` |
 | TC-04 | code-reviewer.md に RISK 行仕様が存在 | `grep -q '機械判定用の RISK 行' .claude/review-agents/code-reviewer.md` |
@@ -290,4 +291,5 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"   ← 現行どおり（fenced b
   - (e) ゲートでの既存テスト再実走は code-review.sh を source する隣接 3 本のみ（全 16 本はベースライン確認済み・非隣接はゲート化しない）
 
 ## レビュー結果
+- [20260719_0345 判定: ✅ 完了](../../reviews/I086_plan_review_20260719_0345.md)
 - [20260719_0331 判定: 差し戻し（Blocker 1件）](../../reviews/I086_plan_review_20260719_0331.md)
