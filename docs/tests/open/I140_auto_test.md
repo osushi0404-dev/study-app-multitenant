@@ -70,7 +70,7 @@ EXPECTED_400_BODY = {
 テストファイル作成後、**実装前の現行コード**に対して先に実行し RED/GREEN の内訳を確認・記録してから修正する:
 - 想定: TC-AUTO-01 → **RED**（現行はフォールバック create が IntegrityError → 広域 except の 400 「エラーが発生しました」= body 不一致）／ TC-AUTO-03 → **RED**（error ログなし・現行は create 失敗で warning にも到達しない）／ TC-AUTO-04 → **RED**（同上）／ TC-AUTO-02 → **GREEN の可能性あり**（IntegrityError で create が失敗し組織が残らないため。この TC の実効性は下記 false-green 注入で担保）
 - TC-AUTO-05 は実装前 NG（exit 1）を事前検証済み（下記）。
-- 記録欄: （実装時に記入）
+- 記録欄: 2026-07-20 実施（実装前）→ **4 failed（TC-AUTO-01〜04 全 RED）✅**。イシューの想定どおり `IntegrityError: null value in column "category_id" ... violates not-null constraint`（views.py:156 の create）が実際に発生し、広域 except が 400 `{"error": {"main_message": "エラーが発生しました", "sub_message": null, "details": {}}}` に丸めることを実測で確定（TC-AUTO-01 は body 不一致で RED）。TC-AUTO-02 は想定（GREEN の可能性）と異なり **RED**（IntegrityError がテストの atomic ブロックを汚染し後続クエリが失敗するため）— いずれにせよ全 TC が修正前 FAIL であり AC「TDD RED」を満たす。
 
 ## 決定論 TC の事前検証（TC-AUTO-05・失敗注入 = 現行コードそのもの）
 `! grep -q "Organization.objects.create" backend/accounts/views.py` は「フォールバックが存在する状態」を検出して NG になることが実効性の条件。現行コード（= 失敗状態そのもの）に対して実行し **exit 1（NG）** を確認する:
@@ -80,7 +80,11 @@ EXPECTED_400_BODY = {
 ## false-green 自己検証（否定系 assert・実装後に失敗注入で確認）
 TC-AUTO-02（組織が新規作成されない）は**現行コードでも合格し得る**（IntegrityError で create 自体が失敗するため）。実装後に失敗条件を注入して RED になることを確認してから採用する（復元は必ず Edit ツールで行い、`git restore` は使わない＝実装差分保護。復元後に `git diff` が実装差分のみであることを確認）:
 - 注入: `_get_organization` の `if not personal:` 節に、一時的に `personal = Organization.objects.create(name='注入', slug='personal', type='personal', is_active=True, category=OrganizationCategory.objects.first()); return personal`（category 付き = IntegrityError にならない自動作成）を挿入 → **TC-AUTO-01（201 化で body 不一致）・TC-AUTO-02（件数増加）・TC-AUTO-03（error ログなし）が RED** になることを確認 → Edit で復元。
-- 記録欄: （実装時に記入）
+- 記録欄: 2026-07-20 実施 → **4 failed（TC-AUTO-01〜04 全 RED）✅**。TC-AUTO-02 は `assert 2 == 1`（組織件数増加）で失敗 = 自動作成の復活を正しく検出。TC-AUTO-03 は error ログ不在で失敗。Edit で復元後、`git diff backend/accounts/views.py` が計画のコード例どおりの実装差分のみであることを確認済み。
 
-## 実施記録
-（/implement 時に記入）
+## 実施記録（2026-07-20 /implement）
+- **TDD RED（実装前）**: `test_I140_personal_org_fallback.py` → **4 failed（全 RED）**（上記「TDD RED 確認」記録欄参照。IntegrityError の実発生と広域 except 400 への丸めを実測確定）
+- **GREEN（実装後）**: `test_I140_personal_org_fallback.py` → **4 passed**（TC-AUTO-01/02/03/04）
+- **TC-AUTO-05（決定論 grep）**: `! grep -q "Organization.objects.create" backend/accounts/views.py` → **exit 0（合格）**（実装前 exit 1 → 実装後 exit 0 に転じたことを確認）
+- **false-green 注入検証**: 上記記録欄のとおり注入で全 RED ✅・Edit で復元済み・復元後 GREEN（4 passed）再確認済み
+- **TC-AUTO-06（全体回帰）**: `python -m pytest --tb=short -q` → **94 passed**（baseline 90 + 新規 4・`test_I131_org_id_rename.py` 含め回帰なし）
