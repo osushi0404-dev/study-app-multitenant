@@ -83,3 +83,9 @@ def _payload(user_id, subject_id):
   - 実装時修正: fixture の `org`/`inactive` に `type="school"` を明示（`Organization.type` デフォルト 'personal' のため、slug なし登録の既定組織検索に誤って拾われ TC-AUTO-06 が別要因 400 になる問題。テスト実装詳細の修正・本体コード無関係）
 - **false-green 注入検証（Edit で注入→確認→Edit で復元）**: 上記記録欄のとおり 2 注入とも RED ✅。復元後の `git diff -- backend/accounts/views.py backend/accounts/serializers.py` は計画の 3 行のみであることを確認済み
 - **TC-AUTO-08（全体回帰）**: `python -m pytest --tb=short -q` → **90 passed**（既存 baseline 84 + 新規 6・回帰なし）
+
+## /test 実施記録（2026-07-19・環境パリティ最終確認）
+- Backend 全体（Docker）: `python -m pytest --tb=short -q` → **90 passed**（TC-AUTO-01/03/04/05/06/07 含む・回帰なし）
+- Frontend Jest（Docker）: **3 suites / 10 passed**
+- E2E（Playwright・`docker compose --profile e2e run --rm e2e`）: **7 passed**（認証フロー・問題管理認可 I102・テナント分離・クイズセッション）
+- 停止条件該当なし（全自動テスト PASS）
