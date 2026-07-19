@@ -31,6 +31,7 @@
 | コードレビュー監査記録 | `I###_code_review_<timestamp>.md` | `scripts/claude/code-review.sh` | issue が open の間は `docs/reviews/` 直下に時系列で蓄積。`/close` 実行時に当該 issue 分を `closed/` へ回収（I065） |
 | プランレビュー監査記録 | `I###_plan_review_<timestamp>.md` | `scripts/claude/plan-issue-review.sh` | 同上 |
 | イシューレビュー監査記録 | `I###_issue_review_<timestamp>.md` | `scripts/claude/issue-review.sh` | 同上 |
+| 敵対的レビュー監査記録 | `I###_adversarial_review_<timestamp>.md` | `/code-review` スキル（敵対ステージ） | 同上 |
 
 - `<timestamp>` は `YYYYMMDD_HHMM` 形式。
 - 旧形式 `review001〜003`（旧通し番号方式）は**廃止・履歴**。`docs/reviews/closed/` にそのまま残す（**リネーム不要**）。新規作成しない。
@@ -40,6 +41,15 @@
 
 - `I###_review.md`: `docs/reviews/open/` で作成し、issue クローズ時に `/close` が `docs/reviews/closed/` へ移動する。
 - timestamped 監査記録（`I###_{code,plan,issue}_review_<timestamp>.md`）: issue が open の間は `docs/reviews/` 直下に蓄積し、`/close` が当該 issue 分を `closed/` へ回収する（スクリプトの保存先は直下のまま・移動は `/close` が担当）。
+
+---
+
+## 高リスク変更の敵対的レビューステージ（自己認証の非権威化・I086）
+
+- 高リスク判定 YES の変更は、敵対的レビューステージ（反証マンデート×多観点サブエージェント・loop-until-dry・対応後再レビュー）の通過を合格条件とする（`/code-review` スキルが自動起動する）。
+- **実装者（実装セッション）が書く実装後レビュー・自己レビューは判定根拠にしない**（自己認証の非権威化）。合否は独立ステージ（基本 code-review＋敵対ステージ）の結論を正とする。
+- 通常（高リスク判定 NO）の変更は従来の単発 code-review のまま（比例性）。
+- ステージ上限（最大 3 周・サブエージェント総数 15）到達時は自動 OK にせず、打ち切り・FINAL VERDICT HIGH 以上・ユーザーエスカレーションとする。
 
 ---
 

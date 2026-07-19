@@ -35,6 +35,60 @@ detect_code_verdict() {
   echo "OK"
 }
 
+# I086: 高リスク判定の機械可読解析。
+# RISK 行は VERDICT 行の直前（隣接行）に出力される正規仕様（code-reviewer.md）。
+# 本文中の引用（fenced block・テーブル・fixture 等）に紛れた `RISK: NO` を拾って
+# fail-open するのを防ぐため、「直後の行が VERDICT 行である RISK 行」のみを候補とし、
+# その最後（＝最終 VERDICT 直前）を採用する。候補が無ければ YES（fail-closed）。
+# （I086 敵対レビュー H2 対応: 本文全体 grep + tail -1 は引用注入で破れる）
+detect_risk_flag() {
+  local file="$1" v
+  v=$(awk '
+    /^RISK:[[:space:]]*YES[[:space:]]*$/ { pend="YES"; next }
+    /^RISK:[[:space:]]*NO[[:space:]]*$/  { pend="NO";  next }
+    /^VERDICT:/ { if (pend != "") last=pend; pend=""; next }
+    { pend="" }
+    END { if (last != "") print last }
+  ' "$file" 2>/dev/null)
+  if [ -n "$v" ]; then echo "$v"; return; fi
+  echo "YES"
+}
+
+# I086: パス決定論トリガ。レビュー基盤・ガード・権限設定・指示階層の変更は LLM 判定に関わらず強制 YES。
+# case glob の * は / にも一致するため scripts/claude/*.sh は tests/ 等の配下にも一致する（意図どおり＝レビュー基盤の一部）。
+# 監視集合には指示階層（CLAUDE.md・workflow.md・review-rules.md・.claude/agents/）も含む
+# （I086 敵対レビュー H4 対応: これらの自己改変で安全網を弱める変更を機械検出する）。
+path_risk_trigger() {
+  local files="$1" f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "$f" in
+      scripts/claude/hooks/*|scripts/git-hooks/*|.claude/settings.json|.claude/settings.local.json|scripts/claude/*.sh|.claude/skills/*|.claude/review-agents/*|.claude/agents/*|CLAUDE.md|docs/runbooks/workflow.md|docs/runbooks/review-rules.md) echo YES; return;;
+    esac
+  done <<< "$files"
+  echo NO
+}
+
+# I086: 高リスク判定の合成（LLM RISK OR パス決定論）と敵対ステージ要否の決定を関数化する。
+# 本体フローに直書きすると配線（OR・分岐）を壊してもテストが文字列存在のみで素通りする
+# false-green になるため、挙動を関数として固定しユニットテストで検証する（敵対レビュー H5 対応）。
+combine_risk() {   # $1=RISK_LLM $2=RISK_PATH → YES/NO
+  if [ "$1" = "YES" ] || [ "$2" = "YES" ]; then echo YES; else echo NO; fi
+}
+adversarial_stage_decision() {   # $1=RISK_FINAL → REQUIRED/NOT_REQUIRED
+  if [ "$1" = "YES" ]; then echo REQUIRED; else echo NOT_REQUIRED; fi
+}
+# I086 敵対レビュー H6 対応: SKILL が解析する機械可読行の emit を関数に集約する。
+# 本体直書きだと RISK 行と ADVERSARIAL_STAGE 行が別変数を参照する誤配線をしても
+# 前方一致 grep が素通りする（false-green）。引数 $2（risk_final）が両行を一貫して
+# 決める構造に固定し、入出力対応をユニットテストで担保する。副作用なしの純関数。
+emit_decision_lines() {   # $1=review_file $2=risk_final $3=final_verdict
+  echo "REVIEW_FILE: $1"
+  echo "RISK: $2"
+  echo "FINAL_VERDICT: $3"
+  echo "ADVERSARIAL_STAGE: $(adversarial_stage_decision "$2")"
+}
+
 # 案A(I069): レビュー記録（生産物）は生産者がコミットする。引数の1ファイルのみを path-scoped で
 # add→commit（他の index/作業ツリーに触れない・auto-push しない・後続 close が push）。
 # ブランチガード: 保護ブランチ（develop/main/detached HEAD/取得失敗）では commit せず未追跡のまま残す
@@ -244,7 +298,10 @@ PLAN_FILE=$(find_plan_file "$ISSUE")
 # git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）
 GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400 || true)
 GIT_LOG=$(git log origin/develop...HEAD --oneline)
-GIT_FILES=$(git diff origin/develop...HEAD --name-only)
+# I086 敵対レビュー H3 対応: core.quotePath=false で取得する。git 既定（true）は非 ASCII を含む
+# パスを "..."（八進エスケープ）で丸ごとクォートし、path_risk_trigger の先頭リテラル glob が
+# 不一致になって監視パスを NO に落とす（日本語ファイル名で安全網が fail-open する）ため。
+GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only)
 
 # I084: auto_test.md の決定論ゲートをスクリプト自身で実走し、実 exit code を証跡化する。
 # 直呼び（$() 不可）で GATE_EVIDENCE / GATE_VERDICT をグローバル設定する（W1）。
@@ -294,6 +351,12 @@ REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
+# I086: 高リスク判定（LLM RISK 行 OR パス決定論トリガ）。証跡は注入セクションに残す。
+RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")
+RISK_PATH=$(path_risk_trigger "$GIT_FILES")
+RISK_FINAL=$(combine_risk "$RISK_LLM" "$RISK_PATH")
+GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（LLM=${RISK_LLM} / path=${RISK_PATH}）"$'\n'
+
 # I084: 決定論ゲート結果で VERDICT を決定論的に上書きする（LLM 出力非依存）。
 # FINAL = max(gate, omission, LLM)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
 LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
@@ -309,6 +372,9 @@ if [ -n "$PR_NUM" ]; then
     || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body \"\$(cat $REVIEW_FILE)\""
 fi
 
+# I086: SKILL（オーケストレーション層）が解析する機械可読行（emit を関数に集約・H6 対応）
+emit_decision_lines "$REVIEW_FILE" "$RISK_FINAL" "$FINAL_VERDICT"
+
 # 判定とユーザー案内（一次=VERDICT 行 / 保険=装飾許容 grep）
 case "$(detect_code_verdict "$REVIEW_FILE")" in
   BLOCKER)
@@ -318,6 +384,11 @@ case "$(detect_code_verdict "$REVIEW_FILE")" in
     # shellcheck disable=SC2016
     printf '\n❌ レビュー NG。`/fix-loop %s` を実行してください。fix-loop 完了後は `/code-review %s` に戻ってください。\n' "$ISSUE" "$ISSUE" ;;
   *)
-    # shellcheck disable=SC2016
-    printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE" ;;
+    if [ "$RISK_FINAL" = "YES" ]; then
+      # shellcheck disable=SC2016
+      printf '\n⚠️ 高リスク判定 YES。敵対的レビューステージの通過後に `/test %s` へ進んでください（ステージは SKILL が自動実行します）。\n' "$ISSUE"
+    else
+      # shellcheck disable=SC2016
+      printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE"
+    fi ;;
 esac

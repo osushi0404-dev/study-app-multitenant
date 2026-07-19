@@ -151,6 +151,25 @@ Blocker 判定を下すことを恐れるな。
 
 ---
 
+## 高リスク判定の条件
+
+以下の条件に 1 つでも該当する場合、高リスク: Yes と判定する（plan-reviewer.md と同一基準＋harness 固有条件）:
+- 認証・認可・ロール変更
+- マルチテナント境界変更
+- 管理画面追加・変更
+- ファイルアップロード/ダウンロード
+- 外部公開API追加・変更
+- Webhook・外部API連携
+- 個人情報・機微情報の新規取り扱い
+- 未成年データ・個人情報のテナント越境・目的外利用（P9）
+- DBスキーマ重要変更
+- 既存事故の再発リスクが高い変更
+- 画面制御していてもAPI直叩きで事故りうる変更
+- 【harness 固有】hooks・ガード・権限設定・レビュー基盤（scripts/claude/ 配下・.claude/skills/・.claude/review-agents/・.claude/agents/・scripts/git-hooks/・.claude/settings*.json）の変更
+- 【harness 固有】指示階層（CLAUDE.md・docs/runbooks/workflow.md・docs/runbooks/review-rules.md 等、レビュー/ガードをいつ・どう走らせるかを規定する中核文書）の変更
+
+---
+
 ## 重大度定義
 
 | 重大度 | 定義 | 差し戻しトリガー |
@@ -194,8 +213,13 @@ High のみ: 「`/fix-loop [I###]` を実行してください。fix-loop 完了
 （Blocker / High なしの場合）
 「✅ コードレビュー完了。`/test [I###]` を実行してください。」
 
+RISK: <YES|NO>
 VERDICT: <BLOCKER|HIGH|OK>
 ```
+
+**RISK 行（必須・VERDICT 行の直前）**: 機械判定用の RISK 行を 1 行だけ出力する（装飾・前後の語を付けない）。「## 高リスク判定」セクションの判定（Yes/No）と一致させる。スクリプト（`code-review.sh`）はこの行を anchored 解析し、**行が無い・形式が崩れている場合は YES（fail-closed）として扱う**。
+- `RISK: YES` … 高リスク判定の条件に 1 つ以上該当
+- `RISK: NO` … いずれの条件にも非該当
 
 **VERDICT 行（必須・出力の最終行）**: 上記出力の最終行に、機械判定用の固定行を **1 行だけ** 出力する（装飾・前後の語を付けない）。スクリプト（`code-review.sh`）はこの行を、**決定論ゲートの実結果（gate/omission）と合成**して最終 VERDICT を決める（`final = max(gate, omission, この行)`）。したがってこの行は「LLM 観点の判定」を表し、決定論ゲートの実結果を上書きするものではない（実結果と矛盾する OK を出さない）。
 - `VERDICT: BLOCKER` … Blocker を 1 件以上検出
