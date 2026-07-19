@@ -96,16 +96,27 @@ ck "combine: NO/NO → NO"    "NO"  "$(combine_risk NO NO)"
 ck "decision: YES → REQUIRED"     "REQUIRED"     "$(adversarial_stage_decision YES)"
 ck "decision: NO → NOT_REQUIRED"  "NOT_REQUIRED" "$(adversarial_stage_decision NO)"
 
-# ---- 結線行の存在: SKILL が解析する機械可読 stdout ----
-# shellcheck disable=SC2016  # スクリプト内のリテラル `$(...)` 出力行を検索する意図（展開させない）
-ck_true "wire: ADVERSARIAL_STAGE 出力行" grep -qF 'ADVERSARIAL_STAGE: $(adversarial_stage_decision' "$CODE_REVIEW"
-# shellcheck disable=SC2016  # スクリプト内のリテラル `${...}` 出力行を検索する意図（展開させない）
-ck_true "wire: RISK 出力行" grep -qF 'RISK: ${RISK_FINAL}' "$CODE_REVIEW"
+# ---- H6 対応: emit_decision_lines の入出力対応を担保（引数 risk_final が RISK 行と
+#      ADVERSARIAL_STAGE 行の両方を一貫して決めることを固定。emit 内での別変数参照＝
+#      誤配線を構造的に排除し、前方一致 grep では捕捉できない false-green を潰す） ----
+OUT_YES=$(emit_decision_lines "rev.md" YES OK)
+ck_true "emit: risk_final=YES → RISK: YES 行"          grep -qx 'RISK: YES' <<< "$OUT_YES"
+ck_true "emit: risk_final=YES → ADVERSARIAL_STAGE: REQUIRED" grep -qx 'ADVERSARIAL_STAGE: REQUIRED' <<< "$OUT_YES"
+ck_true "emit: review_file を REVIEW_FILE 行へ"        grep -qx 'REVIEW_FILE: rev.md' <<< "$OUT_YES"
+ck_true "emit: final_verdict を FINAL_VERDICT 行へ"    grep -qx 'FINAL_VERDICT: OK' <<< "$OUT_YES"
+OUT_NO=$(emit_decision_lines "rev.md" NO BLOCKER)
+ck_true "emit: risk_final=NO → RISK: NO 行"            grep -qx 'RISK: NO' <<< "$OUT_NO"
+ck_true "emit: risk_final=NO → ADVERSARIAL_STAGE: NOT_REQUIRED" grep -qx 'ADVERSARIAL_STAGE: NOT_REQUIRED' <<< "$OUT_NO"
+
+# ---- 本体の配線行を厳密文字列で固定（引数レベルの誤配線＝path→GIT_LOG 取り違え等を捕捉） ----
+# shellcheck disable=SC2016  # スクリプト内リテラルの配線行を検索（展開させない）
+ck_true "wire: 本体 RISK_LLM の取得元" grep -qF 'RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")' "$CODE_REVIEW"
 # shellcheck disable=SC2016
-ck_true "wire: FINAL_VERDICT 出力行" grep -qF 'FINAL_VERDICT: ${FINAL_VERDICT}' "$CODE_REVIEW"
-# 本体が配線関数を実際に通ること（直書き回帰の防止）
+ck_true "wire: 本体 RISK_PATH の取得元（GIT_FILES 固定）" grep -qF 'RISK_PATH=$(path_risk_trigger "$GIT_FILES")' "$CODE_REVIEW"
 # shellcheck disable=SC2016
-ck_true "wire: 本体が combine_risk を使用" grep -qF 'RISK_FINAL=$(combine_risk' "$CODE_REVIEW"
+ck_true "wire: 本体 RISK_FINAL の合成" grep -qF 'RISK_FINAL=$(combine_risk "$RISK_LLM" "$RISK_PATH")' "$CODE_REVIEW"
+# shellcheck disable=SC2016
+ck_true "wire: 本体 emit の引数配線" grep -qF 'emit_decision_lines "$REVIEW_FILE" "$RISK_FINAL" "$FINAL_VERDICT"' "$CODE_REVIEW"
 
 echo "----"
 echo "pass=$pass fail=$fail"

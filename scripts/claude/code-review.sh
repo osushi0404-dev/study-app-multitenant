@@ -78,6 +78,16 @@ combine_risk() {   # $1=RISK_LLM $2=RISK_PATH → YES/NO
 adversarial_stage_decision() {   # $1=RISK_FINAL → REQUIRED/NOT_REQUIRED
   if [ "$1" = "YES" ]; then echo REQUIRED; else echo NOT_REQUIRED; fi
 }
+# I086 敵対レビュー H6 対応: SKILL が解析する機械可読行の emit を関数に集約する。
+# 本体直書きだと RISK 行と ADVERSARIAL_STAGE 行が別変数を参照する誤配線をしても
+# 前方一致 grep が素通りする（false-green）。引数 $2（risk_final）が両行を一貫して
+# 決める構造に固定し、入出力対応をユニットテストで担保する。副作用なしの純関数。
+emit_decision_lines() {   # $1=review_file $2=risk_final $3=final_verdict
+  echo "REVIEW_FILE: $1"
+  echo "RISK: $2"
+  echo "FINAL_VERDICT: $3"
+  echo "ADVERSARIAL_STAGE: $(adversarial_stage_decision "$2")"
+}
 
 # 案A(I069): レビュー記録（生産物）は生産者がコミットする。引数の1ファイルのみを path-scoped で
 # add→commit（他の index/作業ツリーに触れない・auto-push しない・後続 close が push）。
@@ -362,11 +372,8 @@ if [ -n "$PR_NUM" ]; then
     || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body \"\$(cat $REVIEW_FILE)\""
 fi
 
-# I086: SKILL（オーケストレーション層）が解析する機械可読行
-echo "REVIEW_FILE: ${REVIEW_FILE}"
-echo "RISK: ${RISK_FINAL}"
-echo "FINAL_VERDICT: ${FINAL_VERDICT}"
-echo "ADVERSARIAL_STAGE: $(adversarial_stage_decision "$RISK_FINAL")"
+# I086: SKILL（オーケストレーション層）が解析する機械可読行（emit を関数に集約・H6 対応）
+emit_decision_lines "$REVIEW_FILE" "$RISK_FINAL" "$FINAL_VERDICT"
 
 # 判定とユーザー案内（一次=VERDICT 行 / 保険=装飾許容 grep）
 case "$(detect_code_verdict "$REVIEW_FILE")" in
