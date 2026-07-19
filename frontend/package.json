@@ -44,6 +44,7 @@
     ]
   },
   "devDependencies": {
+    "axios-mock-adapter": "^2.1.0",
     "eslint-formatter-github-actions": "^1.1.0",
     "eslint-plugin-security": "^3.0.0"
   },
@@ -57,12 +58,17 @@
       "security"
     ],
     "rules": {
-      "no-restricted-imports": ["error", {
-        "paths": [{
-          "name": "vitest",
-          "message": "このプロジェクトは Jest を使用しています。vitest は使用禁止です。"
-        }]
-      }],
+      "no-restricted-imports": [
+        "error",
+        {
+          "paths": [
+            {
+              "name": "vitest",
+              "message": "このプロジェクトは Jest を使用しています。vitest は使用禁止です。"
+            }
+          ]
+        }
+      ],
       "react-hooks/exhaustive-deps": "error"
     }
   },
