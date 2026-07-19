@@ -189,7 +189,7 @@ exit 0
 ## 7. ロールバック
 - **tracked 分（テンプレート・旧 12 件・スクリプト）**: 本 PR を revert（または `git revert <commit>`）で完全復元。
 - **untracked 分（13 件）**: 挿入した 2 行（＋空行）を Edit で除去すれば復元（挿入のみのため既存内容は無傷・TC-05 がそれを保証）。
-- **GitHub 本文 38 件**: ステップ3-1 で退避した scratchpad の原本 body を `gh issue edit --body-file` で書き戻す（GitHub 側にも編集履歴が残る）。
+- **GitHub 本文（退避原本の全件・初回 38＋レース追補 3＝41 件）**: ステップ3-1 で退避した scratchpad の原本 body を `gh issue edit --body-file` で書き戻す（GitHub 側にも編集履歴が残る）。
 - DB 変更なし・マイグレーション不要・サービス再起動不要。
 
 ## 8. Risk & 回避策
@@ -266,7 +266,12 @@ echo "total=$total missing=$missing"
 ```bash
 #!/usr/bin/env bash
 set -u
-# I134.md 自身は sweep 対象でなく本イシューの管理文書（Draft PR 追記・AC 文言整合で行置換が正当に入る）ため除外する
+# I134.md 自身は sweep 対象でなく本イシューの管理文書（Draft PR 追記・AC 文言整合で行置換が正当に入る）ため
+# numstat 判定からは除外する。ただし丸ごと削除は無警報になるため存在チェックのみ独立に課す（周回2 Medium 対応）
+if [ ! -f docs/issues/open/I134.md ]; then
+  echo "FILE-DELETED: docs/issues/open/I134.md"
+  exit 1
+fi
 git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md' | awk '$2!=0{print "DELETION:",$0; bad=1} END{exit bad?1:0}'
 ```
 
@@ -322,6 +327,12 @@ if [ ! -d "$ORIG" ]; then
   echo "ERROR: no such dir: $ORIG"
   exit 2
 fi
+# 期待件数は正の整数のみ受理（非数値は test のエラーで照合が素通りするため fail-closed・周回2 Medium 対応）
+case "$EXPECTED" in
+  ''|0|*[!0-9]*)
+    echo "ERROR: expected_count must be a positive integer: $EXPECTED"
+    exit 2 ;;
+esac
 bad=0
 checked=0
 for o in "$ORIG"/*.md; do
@@ -335,6 +346,10 @@ for o in "$ORIG"/*.md; do
   fi
 done
 echo "checked=$checked expected=$EXPECTED"
+if [ "$checked" -eq 0 ]; then
+  echo "ERROR: no original bodies scanned (fail-closed)"
+  exit 2
+fi
 if [ "$checked" -ne "$EXPECTED" ]; then
   echo "NG: checked count mismatch (fail-closed)"
   exit 1
@@ -356,7 +371,16 @@ exit "$bad"
 set -u
 cd "$(git rev-parse --show-toplevel)"
 for f in docs/issues/open/*.md; do
-  grep -q '^\*\*背景\*\*:' "$f" && grep -q '^\*\*目的\*\*:' "$f" && continue
+  has_bg=0
+  has_mk=0
+  grep -q '^\*\*背景\*\*:' "$f" && has_bg=1
+  grep -q '^\*\*目的\*\*:' "$f" && has_mk=1
+  if [ "$has_bg" -eq 1 ] && [ "$has_mk" -eq 1 ]; then continue; fi
+  if [ "$has_bg" -ne "$has_mk" ]; then
+    # 片ラベルのみの中途状態に挿入すると重複するため停止して手動確認（周回2 対応）
+    echo "SKIP(片ラベルのみ・手動確認): $f"
+    continue
+  fi
   base=$(basename "$f" .md)
   num=$(gh issue list --state open --limit 100 --json number,title \
         --jq ".[] | select(.title | startswith(\"${base}:\")) | .number" | head -1)
@@ -371,10 +395,11 @@ for f in docs/issues/open/*.md; do
     echo "SKIP(GH 未反映): $f (#$num)"
     continue
   fi
-  awk -v bg="$bg" -v mk="$mk" \
-    '{print} $0=="## 背景/目的" && !d {print ""; print bg; print mk; d=1}' \
+  # awk -v はバックスラッシュをエスケープ解釈して内容が化けるため環境変数渡しにする（周回2 対応）
+  bg="$bg" mk="$mk" awk \
+    '{print} $0=="## 背景/目的" && !d {print ""; print ENVIRON["bg"]; print ENVIRON["mk"]; d=1}' \
     "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  if grep -q '^\*\*背景\*\*:' "$f"; then
+  if grep -q '^\*\*背景\*\*:' "$f" && grep -q '^\*\*目的\*\*:' "$f"; then
     echo "UPDATED: $f (#$num)"
   else
     echo "ERROR(見出し完全一致なし・未挿入): $f"
