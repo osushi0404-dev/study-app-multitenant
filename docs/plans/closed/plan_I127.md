@@ -285,5 +285,5 @@ def _disable_api_throttling(settings):
 - [ ] 高リスク判定の自己評価 No（最終判定は plan-issue-review）— でよいか
 
 ## レビュー結果
-- [20260719_0145 判定: ✅ 完了](../../reviews/I127_plan_review_20260719_0145.md)
-- [20260718_1443 判定: ✅ 完了](../../reviews/I127_plan_review_20260718_1443.md)
+- [20260719_0145 判定: ✅ 完了](../../reviews/closed/I127_plan_review_20260719_0145.md)
+- [20260718_1443 判定: ✅ 完了](../../reviews/closed/I127_plan_review_20260718_1443.md)
