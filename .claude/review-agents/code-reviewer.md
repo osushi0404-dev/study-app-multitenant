@@ -165,7 +165,8 @@ Blocker 判定を下すことを恐れるな。
 - DBスキーマ重要変更
 - 既存事故の再発リスクが高い変更
 - 画面制御していてもAPI直叩きで事故りうる変更
-- 【harness 固有】hooks・ガード・権限設定・レビュー基盤（scripts/claude/ 配下・.claude/skills/・.claude/review-agents/・scripts/git-hooks/・.claude/settings*.json）の変更
+- 【harness 固有】hooks・ガード・権限設定・レビュー基盤（scripts/claude/ 配下・.claude/skills/・.claude/review-agents/・.claude/agents/・scripts/git-hooks/・.claude/settings*.json）の変更
+- 【harness 固有】指示階層（CLAUDE.md・docs/runbooks/workflow.md・docs/runbooks/review-rules.md 等、レビュー/ガードをいつ・どう走らせるかを規定する中核文書）の変更
 
 ---
 

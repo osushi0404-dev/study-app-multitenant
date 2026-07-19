@@ -46,8 +46,24 @@ ck "risk: 行欠落は fail-closed YES" "YES" "$(detect_risk_flag "$TMP/r_none.m
 printf '**RISK: NO**\nVERDICT: OK\n' > "$TMP/r_deco.md"
 ck "risk: 装飾付き行は不一致=fail-closed YES" "YES" "$(detect_risk_flag "$TMP/r_deco.md")"
 
-printf 'RISK: NO\n中間テキスト\nRISK: YES\n' > "$TMP/r_multi.md"
-ck "risk: 複数行は tail -1 優先" "YES" "$(detect_risk_flag "$TMP/r_multi.md")"
+# VERDICT 行直前の RISK 行を採用（正規出力）。複数の RISK/VERDICT では最終 VERDICT 直前を採る。
+printf 'RISK: NO\n中間テキスト\nRISK: YES\nVERDICT: OK\n' > "$TMP/r_multi.md"
+ck "risk: VERDICT 直前の RISK 行を採用" "YES" "$(detect_risk_flag "$TMP/r_multi.md")"
+
+# H2 対応: 本文（fenced block・引用）に紛れた RISK 行は、直後が VERDICT 行でないため拾わない。
+# RISK 行の正規出力が欠落していれば fail-closed YES（引用の NO で fail-open しない）。
+# shellcheck disable=SC2016  # printf のフォーマット文字列はリテラル（展開させない）
+printf '# レビュー\n```\nRISK: NO\n```\n本文\nVERDICT: OK\n' > "$TMP/r_quoted.md"
+ck "risk: 引用内 RISK NO は無視し fail-closed YES" "YES" "$(detect_risk_flag "$TMP/r_quoted.md")"
+
+# H2 対応: 引用の NO があっても、正規の VERDICT 直前 RISK 行が優先される。
+# shellcheck disable=SC2016
+printf '```\nRISK: NO\n```\nRISK: YES\nVERDICT: OK\n' > "$TMP/r_quoted_yes.md"
+ck "risk: 引用 NO より正規 VERDICT 直前 YES を優先" "YES" "$(detect_risk_flag "$TMP/r_quoted_yes.md")"
+
+# 正規の NO（VERDICT 直前）は NO を返す。
+printf 'RISK: NO\nVERDICT: OK\n' > "$TMP/r_regnO.md"
+ck "risk: VERDICT 直前の正規 NO は NO" "NO" "$(detect_risk_flag "$TMP/r_regnO.md")"
 
 # ---- path_risk_trigger: 監視パスの決定論トリガ ----
 ck "path: hooks 配下" "YES" "$(path_risk_trigger "scripts/claude/hooks/pretooluse_guard.py")"
@@ -59,18 +75,37 @@ ck "path: skills 配下" "YES" "$(path_risk_trigger ".claude/skills/code-review/
 ck "path: review-agents 配下" "YES" "$(path_risk_trigger ".claude/review-agents/code-reviewer.md")"
 ck "path: tests 配下 .sh も一致（glob が / を跨ぐ仕様の固定化）" "YES" \
    "$(path_risk_trigger "scripts/claude/tests/test_review_gates.sh")"
+# H4 対応: 指示階層ファイル（レビュー/ガードの挙動を規定する上位文書）も監視対象。
+ck "path: CLAUDE.md（最上位指示）" "YES" "$(path_risk_trigger "CLAUDE.md")"
+ck "path: workflow.md（フロー定義）" "YES" "$(path_risk_trigger "docs/runbooks/workflow.md")"
+ck "path: review-rules.md（非権威化規定）" "YES" "$(path_risk_trigger "docs/runbooks/review-rules.md")"
+ck "path: .claude/agents 配下（構造制限の昇格先）" "YES" "$(path_risk_trigger ".claude/agents/reviewer.md")"
 ck "path: アプリコードのみは NO" "NO" "$(path_risk_trigger "backend/app/views.py")"
+ck "path: 他の runbook は NO（監視は中核文書に限定）" "NO" "$(path_risk_trigger "docs/runbooks/common-commands.md")"
 ck "path: 空入力は NO" "NO" "$(path_risk_trigger "")"
 MIXED="$(printf 'backend/app/views.py\nfrontend/src/App.tsx\nscripts/claude/hooks/guard.py')"
 ck "path: 通常＋監視パスの混在は YES" "YES" "$(path_risk_trigger "$MIXED")"
 
+# ---- H5 対応: 配線ロジックの挙動（OR 合成・ステージ要否）を関数として固定化 ----
+# 本体フローに直書きすると OR→AND 変異や REQUIRED/NOT_REQUIRED 反転を文字列 grep が検出できず
+# false-green になるため、関数の真理値表をここで固定する。
+ck "combine: YES/YES → YES" "YES" "$(combine_risk YES YES)"
+ck "combine: YES/NO → YES"  "YES" "$(combine_risk YES NO)"
+ck "combine: NO/YES → YES"  "YES" "$(combine_risk NO YES)"
+ck "combine: NO/NO → NO"    "NO"  "$(combine_risk NO NO)"
+ck "decision: YES → REQUIRED"     "REQUIRED"     "$(adversarial_stage_decision YES)"
+ck "decision: NO → NOT_REQUIRED"  "NOT_REQUIRED" "$(adversarial_stage_decision NO)"
+
 # ---- 結線行の存在: SKILL が解析する機械可読 stdout ----
-ck_true "wire: ADVERSARIAL_STAGE REQUIRED 行" grep -qF 'ADVERSARIAL_STAGE: REQUIRED' "$CODE_REVIEW"
-ck_true "wire: ADVERSARIAL_STAGE NOT_REQUIRED 行" grep -qF 'ADVERSARIAL_STAGE: NOT_REQUIRED' "$CODE_REVIEW"
+# shellcheck disable=SC2016  # スクリプト内のリテラル `$(...)` 出力行を検索する意図（展開させない）
+ck_true "wire: ADVERSARIAL_STAGE 出力行" grep -qF 'ADVERSARIAL_STAGE: $(adversarial_stage_decision' "$CODE_REVIEW"
 # shellcheck disable=SC2016  # スクリプト内のリテラル `${...}` 出力行を検索する意図（展開させない）
 ck_true "wire: RISK 出力行" grep -qF 'RISK: ${RISK_FINAL}' "$CODE_REVIEW"
 # shellcheck disable=SC2016
 ck_true "wire: FINAL_VERDICT 出力行" grep -qF 'FINAL_VERDICT: ${FINAL_VERDICT}' "$CODE_REVIEW"
+# 本体が配線関数を実際に通ること（直書き回帰の防止）
+# shellcheck disable=SC2016
+ck_true "wire: 本体が combine_risk を使用" grep -qF 'RISK_FINAL=$(combine_risk' "$CODE_REVIEW"
 
 echo "----"
 echo "pass=$pass fail=$fail"
