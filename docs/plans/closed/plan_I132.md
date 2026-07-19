@@ -3,7 +3,7 @@
 - **関連イシュー**: #240
 - **Draft PR**: #243
 - **作成根拠資料**: docs/issues/open/I132.md（起点イシュー・grill-me 設計確認メモ確定済み）
-- **実装後評価**: docs/reviews/open/I132_review.md
+- **実装後評価**: docs/reviews/closed/I132_review.md
 - **作成日**: 2026-07-19
 
 ---
@@ -246,4 +246,4 @@ describe('api client handleApiError (I132)', () => {
 - [ ] 高リスク判定の自己評価 No（最終判定は plan-issue-review）— でよいか
 
 ## レビュー結果
-- [20260719_1430 判定: ✅ 完了](../../reviews/I132_plan_review_20260719_1430.md)
+- [20260719_1430 判定: ✅ 完了](../../reviews/closed/I132_plan_review_20260719_1430.md)
