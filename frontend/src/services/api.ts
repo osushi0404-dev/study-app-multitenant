@@ -2,19 +2,21 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } f
 import { toast } from 'react-hot-toast';
 import { userActionLogger } from '../utils/userActionLogger';
 
-class ApiClient {
+export class ApiClient {
   private instance: AxiosInstance;
   private refreshingToken = false;
   private refreshPromise: Promise<string> | null = null;
 
-  constructor() {
-    this.instance = axios.create({
-      baseURL: process.env.REACT_APP_API_BASE_URL ?? '',
-      timeout: parseInt(process.env.REACT_APP_API_TIMEOUT || '10000'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+  constructor(instance?: AxiosInstance) {
+    this.instance =
+      instance ??
+      axios.create({
+        baseURL: process.env.REACT_APP_API_BASE_URL ?? '',
+        timeout: parseInt(process.env.REACT_APP_API_TIMEOUT || '10000'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
     this.setupInterceptors();
   }
