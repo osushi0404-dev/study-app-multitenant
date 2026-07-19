@@ -88,3 +88,11 @@ TC-AUTO-02（組織が新規作成されない）は**現行コードでも合�
 - **TC-AUTO-05（決定論 grep）**: `! grep -q "Organization.objects.create" backend/accounts/views.py` → **exit 0（合格）**（実装前 exit 1 → 実装後 exit 0 に転じたことを確認）
 - **false-green 注入検証**: 上記記録欄のとおり注入で全 RED ✅・Edit で復元済み・復元後 GREEN（4 passed）再確認済み
 - **TC-AUTO-06（全体回帰）**: `python -m pytest --tb=short -q` → **94 passed**（baseline 90 + 新規 4・`test_I131_org_id_rename.py` 含め回帰なし）
+
+## /test 実施記録（2026-07-20・環境パリティ最終確認）
+- Backend 全体（Docker）: `python -m pytest --tb=short -q` → **94 passed**（TC-AUTO-01〜04 含む・回帰なし）
+- Frontend Jest（Docker）: **3 suites / 10 passed**
+  - 初回実行は `api.test.ts` が `Cannot find module 'axios-mock-adapter'` で実行失敗 → I132（develop マージ済み）が追加した宣言済み依存が frontend コンテナ未インストールという**環境同期ずれ**（I140 と無関係・コード変更なし）。コンテナ内 `npm install` で同期後に全 PASS
+- E2E（Playwright・`docker compose --profile e2e run --rm e2e`）: **7 passed**（認証フロー・問題管理認可 I102・テナント分離・クイズセッション）
+  - 初回実行は global-setup タイムアウト → 上記 npm install が稼働中 dev サーバーの webpack キャッシュを失効させ 26 エラー（I024 既知パターン・環境要因）。`docker compose restart frontend` で再コンパイル後に全 PASS
+- 停止条件該当なし（全自動テスト PASS。失敗はいずれも環境要因でコード修正なしに解消）
