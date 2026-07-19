@@ -10,7 +10,7 @@
 結果:
 - backend: 非該当（コード変更なし）
 - frontend: 非該当（コード変更なし）
-- 決定論ゲート: **全 14 件 exit=0**（2026-07-19 実装時実走・scratchpad i086_run_gates.sh。TC-11 注入 9 件は全て非ゼロ終了を確認。既存ハーネステスト全 17 本も PASS で無回帰）
+- 決定論ゲート: **全 14 件 exit=0**（2026-07-19 実装時実走＋/test 再実走・scratchpad i086_run_gates.sh。TC-11 注入 9 件は全て非ゼロ終了を確認。test_adversarial_trigger.sh は敵対レビュー H2/H4/H5/H6 対応で 40 アサートに拡充し全 PASS。既存ハーネステスト全 17 本も PASS で無回帰）
 
 ## テストケース一覧
 
