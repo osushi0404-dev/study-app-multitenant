@@ -101,5 +101,5 @@ exit "$bad"
   - TC-03: 41 件ループ走査 → **exit 0**（`total=41 missing=0`。計画時 missing=38 から全件反映へ転化＝AC-4 達成）。
   - TC-05: sweep 前スナップショットと `docs/issues/open/*.md` 全件（tracked 12 件含む 26 件）を diff → **exit 0**（削除行なし＝挿入のみ。要求の untracked 13 件より広く全ファイルで確認）。
   - TC-06: 退避原本 38 件（要求の直接更新 26 件＋paired 12 件も含めて拡大実施）と更新後 body を diff → **exit 0**（全 38 件で削除行なし）。
-  - TC-04: tracked 分の numstat 削除ゼロ判定 — sweep コミット作成後に実行（下記に記録）。
+  - TC-04: sweep コミット（5488652）作成後に `git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md'` の削除ゼロ判定 → **exit 0**（DELETION 出力なし。コミット全体の 4 deletions は pathspec 対象外の plan/auto_test の記録更新行）。
   - 実装時の事実訂正: 見出し無し本文は #10・#220 の 2 件のみ（#42/#44 は見出し実在のため見出し直下挿入）。計画書に訂正記録済み。
