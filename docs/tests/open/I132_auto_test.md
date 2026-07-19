@@ -50,6 +50,12 @@ TC-04 の 2 本を「失敗条件が存在する現状態（書き換え前の a
   - 復元後 `git diff -- frontend/src/services/api.ts` = 変更点2 の 2 箇所のみ・`--testPathPattern=api.test` → **3 passed** を確認。
 
 ## 実施記録
+- 2026-07-19（/test 実施 ✅・code-review Low 対応 beaf960 反映後の最終状態）:
+  - TC-04: (a)(b) とも **exit 0**（`as jest.Mock` → `jest.mocked()` 置換後も不在維持）。
+  - TC-05: `npm --prefix frontend test -- --watchAll=false` → **3 suites / 10 passed**（TC-01〜03 含む・警告は既存の React Router 非推奨警告のみ）。
+  - TC-06: audit パイプ判定 → **exit 0**（18 件・critical 0 のままベースライン同値）。
+  - TC-07: `docker compose exec frontend npm run build` 成功（gzip 後 main 428.08 kB）＋ガード付き不在 grep → **exit 0**。
+  - pytest / E2E: 本 auto_test の指定外（BE 変更なし・E2E は PR #243 CI で PASS を manual No.3 として確認）→ 非該当。
 - 2026-07-19（/implement 実施 ✅）:
   - TC-01〜03: `npm --prefix frontend test -- --watchAll=false --testPathPattern=api.test` → **1 suite / 3 passed**（ステップ2 ゲート通過＝モックアダプタとインターセプタ連鎖の協調成立）。
   - TC-04: (a) `interceptors.response.handlers` 不在 → **exit 0** (b) `as any` 不在 → **exit 0**（計画時の NG 実証 exit 1×2 から合格へ転化＝AC-1 達成）。

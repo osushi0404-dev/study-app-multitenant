@@ -1,7 +1,7 @@
 # I132 実装レビュー（FE テストの axios 内部構造依存解消・DI + axios-mock-adapter）
 
 - 関連: docs/issues/open/I132.md / docs/plans/open/plan_I132.md / GitHub #240 / Draft PR #243
-- レビュー対象コミット: （実装後に記入）
+- レビュー対象コミット: 16563b7（feat 実装）・9a76baf（docs）・beaf960（code-review Low 対応）
 
 ## レビュー観点（計画に対応）
 
@@ -42,10 +42,14 @@
 ## 結果
 
 ### 実装結果評価
-（/code-review 実施後に記入）
+- /code-review 判定 **OK**（決定論ゲート: omission-lint OK・FINAL VERDICT OK・高リスク No）。記録: `docs/reviews/I132_code_review_20260719_1447.md`
+- 受け入れ条件 6 件すべて実装済みと照合確認。指摘は Low 2 件のみ: (1) `as jest.Mock` キャスト → `jest.mocked()` へ**即修正済み**（beaf960・計画書コード例も同期）。(2) npm install による package.json 既存セクションの機械的整形 → 機能影響なし・対応不要（次回以降の参考）。
 
 ### テスト結果
-（/test 実施後に記入）
+- 自動（/test 2026-07-19・最終状態）: TC-01〜03 実経路トースト検証 **3 passed**・TC-04 不在 grep **exit 0×2**・TC-05 FE 全体回帰 **3 suites / 10 passed**・TC-06 audit **exit 0**（18 件維持・critical 0）・TC-07 build 成功＋バンドル不在 **exit 0**。
+- false-green 注入検証: 4 件すべて NG 転化を実証（429 分岐破壊→TC-01 RED・/auth/ スキップ削除→TC-03 RED・audit ダミー JSON→exit 1・バンドルダミー→exit 1）。詳細: `docs/tests/open/I132_auto_test.md`
+- E2E / CI: PR #243 全 6 チェック **PASS**（E2E Tests (Playwright) 3m11s 含む）。
+- 手動: No.1〜3 **全合格**（変更範囲・api.ts 差分 2 箇所のみ・CI）。記録: `docs/tests/open/I132_manual_test.md`
 
 ### 総合判定
-（実施後に記入）
+**合格**（自動・手動・CI・レビューすべて PASS。残指摘なし＝Low 1 件は修正済み・Low 1 件は対応不要確定）
