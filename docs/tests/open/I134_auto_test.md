@@ -4,81 +4,33 @@
 - 対象: `docs/issues/templates/issue_template.md`・`scripts/claude/check-issue-background.sh`（新規）・`docs/issues/open/*.md`（25 件）・GitHub open イシュー本文（38 件）
 - テストレベル: 決定論 TC のみ（grep / awk / diff・合否判定は exit code に統一・合格=exit 0）。ユニット/結合/E2E は対象コードが無いため非該当。
 
+## 決定論ゲート（自動実走）
+
+TC-01 の 2 コマンド（読み取り専用・ALLOW 分類）。code-review.sh が毎回実走し exit code を証跡注入する。
+
+```bash
+grep -q '^\*\*背景\*\*:' docs/issues/templates/issue_template.md
+grep -q '^\*\*目的\*\*:' docs/issues/templates/issue_template.md
+```
+
+TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scripts/claude/tests/*.sh` のみ）外・TC-03 はネットワーク依存（gh 41 件走査）・TC-04〜06 は実行時にしか存在しない比較基準（コミット・スナップショット・退避原本）が必要なため、formal gate 化すると false-red になる。スクリプト実行形（手順欄参照）で実施し実施記録に exit code を残す。
+
 ## テストケース
 
 | TC | 内容 | 手順 | 期待値 | 実施者 |
 |----|------|------|--------|--------|
-| TC-01 | テンプレートにプレースホルダ 2 行が存在（AC-1/2） | (a) `grep -q '^\*\*背景\*\*:' docs/issues/templates/issue_template.md` (b) `grep -q '^\*\*目的\*\*:' docs/issues/templates/issue_template.md` | (a)(b) とも **exit 0** | Claude |
+| TC-01 | テンプレートにプレースホルダ 2 行が存在（AC-1/2） | 上記「決定論ゲート（自動実走）」の grep 2 本（code-review.sh が毎回自動実走） | (a)(b) とも **exit 0** | Claude |
 | TC-02 | wt-harness open 全件にラベル 2 行が存在（AC-3） | `bash scripts/claude/check-issue-background.sh docs/issues/open` | **exit 0**（`OK: all files have 背景/目的 labels`） | Claude |
 | TC-02-inject | TC-02 チェッカーの検知能力（実装後の注入再確認） | scratchpad にラベル無しダミー md を置いたディレクトリへ `bash scripts/claude/check-issue-background.sh <dir>` | **exit 1**（MISSING 列挙）→ ダミー削除 | Claude |
-| TC-03 | GitHub open 全 41 件の本文にラベル 2 行が反映（AC-4） | 下記「TC-03 スクリプト」を scratchpad に保存し `bash <scratchpad>/tc03_gh_labels.sh` を実行 | **exit 0**（`total=41 missing=0`） | Claude |
-| TC-04 | tracked 分の無改変保証（挿入のみ・削除ゼロ） | 下記「TC-04 スクリプト」を scratchpad に保存し `bash <scratchpad>/tc04_no_deletion.sh` を実行 | **exit 0**（削除列がすべて 0） | Claude |
-| TC-05 | untracked 分の無改変保証（挿入のみ） | 下記「TC-05 スクリプト」を scratchpad に保存し `bash <scratchpad>/tc05_untracked_insert_only.sh <snapshot_dir>` を実行（比較基準はステップ2-1 のスナップショット） | **exit 0**（全 13 件で削除行なし） | Claude |
-| TC-06 | GitHub 直接更新分の無改変保証（挿入のみ・ローカル対応の無い 26 件） | 下記「TC-06 スクリプト」を scratchpad に保存し `bash <scratchpad>/tc06_gh_insert_only.sh <退避dir>` を実行（比較基準はステップ3-1 の退避原本） | **exit 0**（全 26 件で削除行なし） | Claude |
+| TC-03 | GitHub open 全 41 件の本文にラベル 2 行が反映（AC-4） | 計画書「検証スクリプト全文」の tc03_gh_labels.sh を scratchpad に保存し `bash <scratchpad>/tc03_gh_labels.sh` を実行 | **exit 0**（`total=41 missing=0`） | Claude |
+| TC-04 | tracked 分の無改変保証（挿入のみ・削除ゼロ） | 計画書「検証スクリプト全文」の tc04_no_deletion.sh を scratchpad に保存し `bash <scratchpad>/tc04_no_deletion.sh` を実行 | **exit 0**（削除列がすべて 0） | Claude |
+| TC-05 | untracked 分の無改変保証（挿入のみ） | 計画書「検証スクリプト全文」の tc05_untracked_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc05_untracked_insert_only.sh <snapshot_dir>` を実行（比較基準はステップ2-1 のスナップショット） | **exit 0**（全 13 件で削除行なし） | Claude |
+| TC-06 | GitHub 直接更新分の無改変保証（挿入のみ・ローカル対応の無い 26 件） | 計画書「検証スクリプト全文」の tc06_gh_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc06_gh_insert_only.sh <退避dir>` を実行（比較基準はステップ3-1 の退避原本） | **exit 0**（全 26 件で削除行なし） | Claude |
 
 注:
 - 合否判定インターフェースは全 TC で exit code に統一（合格=exit 0）。不在・無削除の判定は `! grep -q` / awk の exit 畳み込み形。
-- TC-03〜06 はスクリプトファイル実行形（`bash <file>`）に統一する（plan-review Warning 対応: パイプ複合コマンドの直接実行を避け、allowlist 単体形 `bash` 1 コマンドで走らせる。スクリプト本文は下記に全文を記載し実装者の再構築を不要にする）。
-
-### TC-03 スクリプト（tc03_gh_labels.sh・計画時 G3 実証と同一ロジック）
-```bash
-#!/usr/bin/env bash
-set -u
-missing=0
-total=0
-for n in $(gh issue list --state open --limit 100 --json number --jq '.[].number'); do
-  total=$((total + 1))
-  body=$(gh issue view "$n" --json body --jq .body)
-  if ! printf '%s\n' "$body" | grep -q '^\*\*背景\*\*:' || ! printf '%s\n' "$body" | grep -q '^\*\*目的\*\*:'; then
-    echo "MISSING: #$n"
-    missing=$((missing + 1))
-  fi
-done
-echo "total=$total missing=$missing"
-[ "$missing" -eq 0 ] && exit 0 || exit 1
-```
-
-### TC-04 スクリプト（tc04_no_deletion.sh）
-```bash
-#!/usr/bin/env bash
-set -u
-# I134.md 自身は sweep 対象でなく本イシューの管理文書（Draft PR 追記・AC 文言整合で行置換が正当に入る）ため除外する
-git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md' | awk '$2!=0{print "DELETION:",$0; bad=1} END{exit bad?1:0}'
-```
-
-### TC-05 スクリプト（tc05_untracked_insert_only.sh・引数=スナップショット dir）
-```bash
-#!/usr/bin/env bash
-set -u
-SNAP="${1:?Usage: $0 <snapshot_dir>}"
-bad=0
-for f in docs/issues/open/*.md; do
-  b=$(basename "$f")
-  [ -f "$SNAP/$b" ] || continue
-  if diff "$SNAP/$b" "$f" | grep -q '^<'; then
-    echo "DELETED-LINES: $f"
-    bad=1
-  fi
-done
-exit "$bad"
-```
-
-### TC-06 スクリプト（tc06_gh_insert_only.sh・引数=退避原本 dir。原本は `<#>.md` 名で保存しておく）
-```bash
-#!/usr/bin/env bash
-set -u
-ORIG="${1:?Usage: $0 <original_bodies_dir>}"
-bad=0
-for o in "$ORIG"/*.md; do
-  n=$(basename "$o" .md)
-  gh issue view "$n" --json body --jq .body > "$ORIG/$n.after"
-  if diff "$o" "$ORIG/$n.after" | grep -q '^<'; then
-    echo "DELETED-LINES: #$n"
-    bad=1
-  fi
-done
-exit "$bad"
-```
+- TC-03〜06 はスクリプトファイル実行形（`bash <file>`）に統一する（plan-review Warning 対応: パイプ複合コマンドの直接実行を避け、allowlist 単体形 `bash` 1 コマンドで走らせる）。**スクリプト全文は計画書 `plan_I134.md`「検証スクリプト全文（scratchpad 実行用）」に記載**（本文書に fenced で掲載すると omission-lint が宣言外ゲートと誤認するため計画書側へ配置。code-review 20260719_2210 High 対応・診断記録 `I134_fix_diagnosis_20260719_2221.md` 案 A）。
+- TC-02 のチェッカー・TC-03〜06 を決定論ゲートセクションへ宣言しない理由は同セクション末尾の注記参照。
 - ラベル判定は行頭アンカー（`^\*\*背景\*\*:`）。引用ブロック内の同形行との誤検知限界は計画 リスク2 に記録済み（現状の該当は I134 本文のみで実害なし）。
 
 ## false-green 自己検証
@@ -103,3 +55,9 @@ exit "$bad"
   - TC-06: 退避原本 38 件（要求の直接更新 26 件＋paired 12 件も含めて拡大実施）と更新後 body を diff → **exit 0**（全 38 件で削除行なし）。
   - TC-04: sweep コミット（5488652）作成後に `git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md'` の削除ゼロ判定 → **exit 0**（DELETION 出力なし。コミット全体の 4 deletions は pathspec 対象外の plan/auto_test の記録更新行）。
   - 実装時の事実訂正: 見出し無し本文は #10・#220 の 2 件のみ（#42/#44 は見出し実在のため見出し直下挿入）。計画書に訂正記録済み。
+
+## 再発防止記録（fix-loop 2026-07-19・code-review HIGH 対応）
+- **なぜ失敗したか**: 本文書に `## 決定論ゲート（自動実走）` セクションが無く（自動実走可能な TC-01 の grep 2 本が未宣言）、かつ TC-03〜06 のスクリプト全文を fenced で掲載したため、omission-lint（宣言セクション外の fenced 内 allowlist パターン検出）が HIGH を返した。
+- **何を変えたか**: ①決定論ゲートセクションを新設し TC-01 の grep 2 本を宣言（code-review ごとに自動実走・証跡注入される）②スクリプト全文を計画書「検証スクリプト全文」節へ移設し本文書は参照化 ③チェッカーに formal gate 化時の移動制約コメントを追記（code-review Medium 対応）。検証: omission-lint OK 転化・ゲート 2 本 ALLOW 実走 exit 0・隠れゲート形の HIGH 検知維持・TC-02 無回帰（docs/reviews/I134_fix_test_result_20260719_2239.md）。
+- **セキュリティ上の考慮点**: 該当なし（文書構成とコメントのみ・宣言した 2 コマンドは読み取り専用 grep）。
+- **次回どう防ぐか**: 自動実走可能な TC は最初から決定論ゲートセクションに宣言する。スクリプト全文の参考掲載は auto_test の fenced に置かない（現行 lint は隠れゲートと区別しないため計画書側へ）。lint の弁別と allowlist の check-*.sh 拡張という根治は I139(#250) で対応（I130 マージ後着手）。

@@ -108,6 +108,8 @@ I132 のイシュー本文で `## 背景/目的` セクションに小見出し 
 #!/usr/bin/env bash
 # I134: イシュー文書の **背景**:/**目的**: ラベル 2 行の全件存在チェック（合格=exit 0）
 # 使い方: bash scripts/claude/check-issue-background.sh [対象ディレクトリ]（既定: docs/issues/open）
+# 注意: auto_test の決定論ゲート（自動実走）として宣言する場合は scripts/claude/tests/ への移動が必要
+#（code-review.sh classify_gate の allowlist は `bash scripts/claude/tests/*.sh` のみ ALLOW。allowlist の check-*.sh 拡張は I139(#250)）
 set -u
 DIR="${1:-docs/issues/open}"
 missing=0
@@ -218,6 +220,72 @@ exit 0
 - [ ] 引き継ぎは「本計画書のスクリプト＋4 件スニペット」を隣 worktree セッション（またはユーザー）が実施 — でよいか
 - [ ] 手動テストは No.4（要約内容のサンプル目視・3 件）のみ Human — でよいか
 - [ ] 高リスク判定の自己評価 No（最終判定は plan-issue-review）— でよいか
+
+---
+
+## 検証スクリプト全文（TC-03〜06・scratchpad 実行用）
+
+auto_test の TC-03〜06 が参照するスクリプト全文（実行時に scratchpad へ保存して `bash <ファイル>` で実行する）。auto_test 側に fenced で掲載すると omission-lint が宣言外ゲートと誤認して HIGH になるため、本計画書に配置する（code-review 20260719_2210 High 対応・診断記録 `docs/reviews/I134_fix_diagnosis_20260719_2221.md` 案 A。lint 側の根治は I139(#250)）。
+
+### tc03_gh_labels.sh（GitHub open 全件のラベル存在・計画時 G3 実証と同一ロジック）
+```bash
+#!/usr/bin/env bash
+set -u
+missing=0
+total=0
+for n in $(gh issue list --state open --limit 100 --json number --jq '.[].number'); do
+  total=$((total + 1))
+  body=$(gh issue view "$n" --json body --jq .body)
+  if ! printf '%s\n' "$body" | grep -q '^\*\*背景\*\*:' || ! printf '%s\n' "$body" | grep -q '^\*\*目的\*\*:'; then
+    echo "MISSING: #$n"
+    missing=$((missing + 1))
+  fi
+done
+echo "total=$total missing=$missing"
+[ "$missing" -eq 0 ] && exit 0 || exit 1
+```
+
+### tc04_no_deletion.sh（tracked 分の無改変保証）
+```bash
+#!/usr/bin/env bash
+set -u
+# I134.md 自身は sweep 対象でなく本イシューの管理文書（Draft PR 追記・AC 文言整合で行置換が正当に入る）ため除外する
+git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md' | awk '$2!=0{print "DELETION:",$0; bad=1} END{exit bad?1:0}'
+```
+
+### tc05_untracked_insert_only.sh（untracked 分の無改変保証・引数=スナップショット dir）
+```bash
+#!/usr/bin/env bash
+set -u
+SNAP="${1:?Usage: $0 <snapshot_dir>}"
+bad=0
+for f in docs/issues/open/*.md; do
+  b=$(basename "$f")
+  [ -f "$SNAP/$b" ] || continue
+  if diff "$SNAP/$b" "$f" | grep -q '^<'; then
+    echo "DELETED-LINES: $f"
+    bad=1
+  fi
+done
+exit "$bad"
+```
+
+### tc06_gh_insert_only.sh（GitHub 直接更新分の無改変保証・引数=退避原本 dir。原本は `<#>.md` 名で保存しておく）
+```bash
+#!/usr/bin/env bash
+set -u
+ORIG="${1:?Usage: $0 <original_bodies_dir>}"
+bad=0
+for o in "$ORIG"/*.md; do
+  n=$(basename "$o" .md)
+  gh issue view "$n" --json body --jq .body > "$ORIG/$n.after"
+  if diff "$o" "$ORIG/$n.after" | grep -q '^<'; then
+    echo "DELETED-LINES: #$n"
+    bad=1
+  fi
+done
+exit "$bad"
+```
 
 ---
 
