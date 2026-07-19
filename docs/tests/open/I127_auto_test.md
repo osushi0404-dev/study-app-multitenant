@@ -75,5 +75,5 @@ def low_rate_rest_framework():  # 低レート差し替え（アプリ専用ク�
 - 記録欄（2026-07-19 実施 ✅）: (1) `'anon': '60/min'` → `'3/min'` 注入 → TC-AUTO-05(a) **RED**（4 回目以降 429）→ Edit で復元。(2) `throttling.py` の `allow_request` スイッチ判定 2 行を削除 → TC-AUTO-03(b) **RED**（スイッチ off でも 429）→ Edit で復元。(3) `API_THROTTLE_ENABLED = RATELIMIT_ENABLE` → `= True` 固定へ変更 → TC-AUTO-03(a) **RED**（`[false-False]` のみ FAIL＝false 環境でも True）→ Edit で復元。復元後 `git diff -- backend/core/settings.py backend/core/throttling.py` は実装差分のみ・`core/tests/test_I127_throttling.py` → **8 passed** を確認。
 
 ## 実施記録
-（/implement で記入）
+- 2026-07-19（/test 実施 ✅）: TC-AUTO-06 `docker compose exec backend python -m pytest --tb=short -q` → **84 passed**（既存 76＋新規 8・warnings 5 のみ）。TC-FE-03 `docker compose exec frontend npm test -- --watchAll=false` → **3 suites / 9 passed**（既存 7＋新規 2）。E2E は auto_test 指定外・PR #236 CI で PASS 済み（manual_test No.3 参照）。
 - 2026-07-19（plan-review 指摘対応・発見4〜6 対処時の中間検証）: BE `core/tests/test_I127_throttling.py` 単独 → **8 passed**／発見4・6 の再現ペア（スロットル TC→I073 の順）→ **28 passed**／全体回帰 `python -m pytest -q` → **84 passed**（既存 76＋新規 8・実行順依存の解消を確認）。FE `npm test -- --watchAll=false` → **3 suites / 9 passed**（既存 7＋新規 2）。false-green 注入検証は /implement ステップ2で実施予定。

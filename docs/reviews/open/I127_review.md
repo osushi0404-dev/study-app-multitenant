@@ -1,7 +1,7 @@
 # I127 実装レビュー（DRF スロットル導入・API 全体の基本レート制限）
 
 - 関連: docs/issues/open/I127.md / docs/plans/open/plan_I127.md / GitHub #232 / Draft PR #236
-- レビュー対象コミット: （実装後に記入）
+- レビュー対象コミット: b88abc9（feat 実装）・fb203cc（docs 案F 更新）・7c50de6（手動テスト記録）
 
 ## レビュー観点（計画に対応）
 
@@ -42,13 +42,15 @@
 - Redis 断時（`IGNORE_EXCEPTIONS: True`）に 500 やリクエスト全拒否にならず、フェイルオープンすることを反証・実証せよ。
 
 ## 結果
-（実装後に記入）
 
 ### 実装結果評価
-（記入待ち）
+- /code-review 判定 **OK**（決定論ゲート: omission-lint OK・FINAL VERDICT OK・高リスク No）。記録: `docs/reviews/I127_code_review_20260719_1149.md`
+- 受け入れ条件 6 件すべて実装済みと照合確認。指摘は Low 2 件（FE テストの axios 内部構造依存・429 トースト二重表示）のみで、いずれも別イシュー候補の改善提案（ブロッカーなし）。
 
 ### テスト結果
-（記入待ち）
+- 自動（/test 2026-07-19）: BE 全体 **84 passed**（既存 76＋新規 8）・FE **3 suites / 9 passed**。false-green 注入検証 3 件・TDD RED 記録は auto_test 参照。
+- E2E: PR #236 CI 全 6 チェック **PASS**（E2E Tests (Playwright) 3m13s）。
+- 手動: No.1〜4 **全合格**（実 Redis 429・スイッチ off/復元・CI・429 トースト目視スクリーンショット確認）。記録: `docs/tests/open/I127_manual_test.md`
 
 ### 総合判定
-（記入待ち）
+**合格**（自動・手動・CI・レビューすべて PASS。残指摘は Low の別イシュー候補のみ）
