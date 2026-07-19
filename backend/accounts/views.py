@@ -85,7 +85,7 @@ class UserRegistrationView(generics.CreateAPIView):
 
             # リクエストデータに組織IDを追加
             mutable_data = request.data.copy()
-            mutable_data['organization_id'] = organization.organization_id
+            mutable_data['organization_id'] = organization.id
 
             logger.info(f"Registration attempt with data: {mutable_data}")
 
@@ -227,7 +227,7 @@ class OrganizationSlugValidationView(APIView):
                 return Response({
                     'valid': True,
                     'organization_name': organization.name,
-                    'organization_id': organization.organization_id
+                    'organization_id': organization.id
                 })
             else:
                 logger.warning(f"No active organization found for slug: {slug}")
