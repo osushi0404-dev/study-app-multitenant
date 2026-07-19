@@ -17,7 +17,7 @@ from django.utils.decorators import method_decorator
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from rest_framework.throttling import AnonRateThrottle
+from core.throttling import AppAnonRateThrottle
 
 from .models import User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization
 from .serializers import (
@@ -546,7 +546,7 @@ class FieldValidationView(generics.GenericAPIView):
     """フィールド単位のバリデーション（既存のバリデーションロジックを再利用）"""
     permission_classes = [permissions.AllowAny]
     serializer_class = UserRegistrationSerializer
-    throttle_classes = [AnonRateThrottle]
+    throttle_classes = [AppAnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
         field_name = request.data.get('field')
