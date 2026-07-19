@@ -18,8 +18,15 @@
 - Backend/Frontend/DB: なし・Config はハーネススクリプト/文書 5 変更＋新規 2（adversarial-reviewer.md・test_adversarial_trigger.sh）
 
 ## テスト結果
-- 自動: 決定論ゲート全 14 件 exit=0＋TC-11 注入 9 件全て非ゼロ＋既存ハーネステスト 17 本 PASS（2026-07-19 実装時実走。/code-review・/test での再実走結果は追記）
+- 自動: 決定論ゲート全 14 件 exit=0＋TC-11 注入 9 件全て非ゼロ＋既存ハーネステスト 17 本 PASS（2026-07-19 実装時実走）。test_adversarial_trigger.sh は敵対レビュー対応で 20→40 アサートに拡充・全 PASS。
 - 手動: （/test 時に記録）
+
+## 敵対的レビューステージ（ドッグフード・本イシューの自己適用）
+本イシューは `.claude/skills/` 等の変更を含むためパス決定論トリガで RISK=YES となり、実装した敵対ステージが**自分自身に対して初めて自動起動**した（AC1/AC6 の実地検証）。基本レビュー（`claude -p`）FINAL_VERDICT OK・決定論ゲート 14 件 exit=0 だったにもかかわらず、独立ステージが設計・実装の穴を検出:
+- 周回1（固定 3 観点＋観点①深掘り）: New High 5（H1 非権威化の構造未達／H2 RISK 行 fail-open（引用注入）／H3 非 ASCII パス fail-open（core.quotePath）／H4 監視パスに指示階層欠落／H5 配線の false-green）。記録: `docs/reviews/I086_adversarial_review_20260719_1225.md`
+- 対応: H2/H3/H4/H5 を本イシューで根治（RISK 行探索を VERDICT 近傍に限定・GIT_FILES を quotePath=false・監視パスに CLAUDE.md/workflow.md/review-rules.md/.claude/agents/ 追加・配線を関数化＋挙動/変異テスト）。H1（下流ゲート新設）はスコープ大のため別イシュー化（ユーザー承認 2026-07-19）。
+- 周回2（修正差分に 2 観点）: New High 1（H6 本体配線が引数レベルの誤配線でも全緑）。対応: emit を関数化し本体配線 4 行を厳密文字列 grep で固定（誤配線 3 パターンの検出を変異テストで確認）。
+- ＝ 基本レビュー・決定論ゲートが見逃す欠陥を敵対ステージが捕捉した実証（ステージが load-bearing）。
 
 ## 計画との差分
 - （実装後に記録）

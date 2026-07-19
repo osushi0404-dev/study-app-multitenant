@@ -16,7 +16,7 @@
 
 | TC | 検証内容 | 判定コマンド（合格=exit 0） | 結果 |
 |----|---------|---------------------------|------|
-| TC-01 | 新規テストスクリプト全アサート合格: detect_risk_flag（YES／NO／行欠落=YES fail-closed／装飾付き=YES fail-closed／複数行 tail -1）・path_risk_trigger（監視 7 パターン各 YES・tests 配下 YES・非対象 NO・空 NO・混在 YES）・結線行 4 系（ADVERSARIAL_STAGE 2 種・RISK・FINAL_VERDICT）の存在（AC1/5/7） | `bash scripts/claude/tests/test_adversarial_trigger.sh` | OK（exit 0・20アサート） |
+| TC-01 | 新規テストスクリプト全アサート合格: detect_risk_flag（YES／NO／行欠落=YES fail-closed／装飾=YES／VERDICT 直前採用／引用内 NO 無視の fail-closed=H2）・path_risk_trigger（監視パス各 YES・tests 配下 YES・指示階層 CLAUDE.md/workflow.md/review-rules.md/agents=H4・非対象 NO・空 NO・混在 YES）・combine_risk/adversarial_stage_decision 真理値表（H5）・emit_decision_lines 入出力対応＋本体配線の厳密 grep（H6）（AC1/5/7） | `bash scripts/claude/tests/test_adversarial_trigger.sh` | OK（exit 0・40アサート・敵対レビュー H2/H4/H5/H6 対応分を含む） |
 | TC-02 | code-review.sh の bash 構文健全性 | `bash -n scripts/claude/code-review.sh` | OK（exit 0） |
 | TC-03 | code-reviewer.md に高リスク判定の条件リストが存在（AC1） | `grep -q '高リスク判定の条件' .claude/review-agents/code-reviewer.md` | OK（exit 0） |
 | TC-04 | code-reviewer.md に機械判定用 RISK 行の仕様が存在（AC1） | `grep -q '機械判定用の RISK 行' .claude/review-agents/code-reviewer.md` | OK（exit 0） |
