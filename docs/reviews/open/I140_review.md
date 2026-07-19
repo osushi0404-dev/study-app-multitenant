@@ -11,7 +11,7 @@
 - [ ] 追加した error ログに個人情報・認証情報が含まれない（固定文言のみ）
 
 ### 2. フォールバック廃止の完全性
-- [ ] 旧フォールバックの固有文言が views.py に残存しない（TC-AUTO-05・`! grep -q "Personal organization was missing" backend/accounts/views.py` が exit 0）
+- [ ] ビュー内に組織作成コードが残存しない（TC-AUTO-05・`! grep -q "Organization.objects.create" backend/accounts/views.py` が exit 0・plan-review Info 指摘反映の強化判定式）
 - [ ] フォールバック自動作成に依存する箇所（テスト・スクリプト・runbook）が repo 全体に存在しない（grep で確認）
 
 ### 3. personal 不在時の挙動（本イシューの根治）

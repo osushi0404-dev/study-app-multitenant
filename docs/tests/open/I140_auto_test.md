@@ -57,7 +57,7 @@ EXPECTED_400_BODY = {
 | TC-AUTO-02 | 上記の際に組織が新規作成されない（自動作成廃止の固定） | TC-AUTO-01 と同一リクエストの前後で `Organization.objects.count()` を取得 | 前後で件数不変。かつ `Organization.objects.filter(slug='personal').exists() is False` | Claude |
 | TC-AUTO-03 | 上記の際に error ログが記録される（環境異常の可観測化） | `caplog.at_level(logging.ERROR, logger='django')` 下で TC-AUTO-01 と同一リクエスト | `caplog.records` に `levelno == logging.ERROR` かつメッセージに `"Personal organization"` を含むレコードが 1 件以上存在 | Claude |
 | TC-AUTO-04 | personal が非アクティブのみ存在する場合も 400（発現条件「非アクティブ化された環境」の固定） | fixture に加え `Organization.objects.create(name="個人利用I140", slug="personal", type="personal", category=cat, is_active=False)` を作成し、TC-AUTO-01 と同一リクエスト | `status_code == 400`・`response.json() == EXPECTED_400_BODY`・`Organization.objects.count()` 前後不変（非アクティブを active 化したり複製したりしない） | Claude |
-| TC-AUTO-05 | フォールバック自動作成コードの不在（決定論 grep・exit code 判定） | `! grep -q "Personal organization was missing" backend/accounts/views.py` を実行（合格=exit 0） | exit 0（旧フォールバックの固有文言が views.py に存在しない）。**実装前は exit 1（NG）になることを確認済み**（下記「事前検証」） | Claude |
+| TC-AUTO-05 | フォールバック自動作成コードの不在（決定論 grep・exit code 判定） | `! grep -q "Organization.objects.create" backend/accounts/views.py` を実行（合格=exit 0） | exit 0（ビュー内に組織作成コードが存在しない = 文言変更で再実装されても検出できる。plan-review Info 指摘を反映し旧ログ文言依存から強化）。**実装前は exit 1（NG）になることを確認済み**（下記「事前検証」） | Claude |
 | TC-AUTO-06 | 全体回帰 | `docker compose exec backend python -m pytest --tb=short -q` | 新規 TC 全 PASS + 既存 **90 件** PASS（baseline 2026-07-19・`test_I131_org_id_rename.py` の 6 件含む・回帰なし） | Claude |
 
 注:
@@ -73,8 +73,9 @@ EXPECTED_400_BODY = {
 - 記録欄: （実装時に記入）
 
 ## 決定論 TC の事前検証（TC-AUTO-05・失敗注入 = 現行コードそのもの）
-`! grep -q "Personal organization was missing" backend/accounts/views.py` は「フォールバックが存在する状態」を検出して NG になることが実効性の条件。現行コード（= 失敗状態そのもの）に対して実行し **exit 1（NG）** を確認する:
-- 記録欄: 2026-07-20 実施 → **exit 1（NG）✅**（現行 views.py:162 に旧文言が存在するため不合格 = 実装後に exit 0 へ転じることで「フォールバック削除」を機械判定できる）
+`! grep -q "Organization.objects.create" backend/accounts/views.py` は「フォールバックが存在する状態」を検出して NG になることが実効性の条件。現行コード（= 失敗状態そのもの）に対して実行し **exit 1（NG）** を確認する:
+- 記録欄（旧判定式・plan-review 前）: 2026-07-20 実施 `! grep -q "Personal organization was missing" ...` → **exit 1（NG）✅**
+- 記録欄（強化後の判定式）: 2026-07-20 実施 → **exit 1（NG）✅**（現行 views.py:156 の `Organization.objects.create(` を検出して不合格 = 実装後に exit 0 へ転じることで「組織作成コードの不在」を機械判定できる）
 
 ## false-green 自己検証（否定系 assert・実装後に失敗注入で確認）
 TC-AUTO-02（組織が新規作成されない）は**現行コードでも合格し得る**（IntegrityError で create 自体が失敗するため）。実装後に失敗条件を注入して RED になることを確認してから採用する（復元は必ず Edit ツールで行い、`git restore` は使わない＝実装差分保護。復元後に `git diff` が実装差分のみであることを確認）:
