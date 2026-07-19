@@ -134,7 +134,7 @@ describe('api client handleApiError (I132)', () => {
     const instance = axios.create();
     mock = new MockAdapter(instance);
     client = new ApiClient(instance);
-    (toast.error as jest.Mock).mockClear();
+    jest.mocked(toast.error).mockClear();
   });
 
   afterEach(() => {
