@@ -64,13 +64,19 @@ I132 のイシュー本文で `## 背景/目的` セクションに小見出し 
 ### 既存テストの事前実行
 - 対象外（BE/FE コード変更ゼロ・docs とチェックスクリプト 1 本のみ）。CI への影響は docs 差分と shellcheck（新規 bash スクリプト）のみ。
 
+### 実装後追記（敵対的レビュー周回1 対応・2026-07-19）
+- **sweep 母集団のレース（周回1 High）**: sweep（TC-03 初回合格 total=41 missing=0）の後、隣 worktree で新規イシュー I140〜I142（#251〜#253）が旧テンプレートから起票され、GitHub open は 44 件・ラベル欠落 3 件が再発した。同一手順（原本退避→見出し直下挿入→`--body-file` 更新・冪等）で 3 件を追補し、TC-03 を 44 件で再実走して合格を確認（実施記録参照）。
+- **レース窓の規定**: テンプレート修正が develop マージ・引き継ぎで全 worktree に伝播するまで、旧テンプレ起票によるラベル無し新規イシューは構造的に発生し得る。よって AC-4/TC-03 は「**実行時点の open 全件**」を対象とし、新規発生分は同一手順で追補する（既ラベル保有は skip＝冪等）。テンプレート伝播後は新規発生が構造的に止まる。
+- **例外（受容）**: dependency-audit の自動起票（`dependency-audit-issue.sh`）は本文生成にテンプレートを使わないため、今後の scheduled 監査 fail 時にラベル無し open イシューが再生産され得る（周回1 Medium）。本イシューでは #220 への手動挿入で対応済み。根治（生成本文への定型 背景/目的 ブロック追加）は計画外変更のためスコープ外とし、対応要否はユーザー判断に委ねる（敵対レビュー記録参照）。
+- **無改変ゲートの強化（周回1 High/Medium）**: tc05 をスナップショット側駆動に変更（ファイル丸ごと消失の検出を追加）・tc06 に期待件数引数を追加（原本保存漏れの検出）・チェッカーに dir 不在 exit 2／走査 0 件 exit 1 の fail-closed を追加。いずれも失敗注入で NG 転化を再実証（実施記録参照）。
+
 ## 2. 受け入れ条件（Acceptance Criteria）
 イシューの AC を採用（判定 TC を対応付け）:
 - [ ] AC-1: `issue_template.md` の `## 背景/目的` 直下にプレースホルダ 2 行が存在する（TC-01・合格=exit 0）
 - [ ] AC-2: テンプレートから新規作成したイシューで背景・目的の未記入が構造的に起きない（プレースホルダは `（…）` 形式のため issue-review の未記入検出対象・調査結果「消費箇所」で確認済み。TC-01 成立をもって構造成立と判定）
 - [ ] AC-3: wt-harness の `docs/issues/open/*.md` 全件にラベル 2 行が存在することを機械検証済み（TC-02・対象一覧は調査結果 (A)）
-- [ ] AC-4: GitHub open イシュー全 41 件の本文にラベル 2 行が反映済み（TC-03・`gh issue edit --body-file` で更新）
-- [ ] AC-5: 隣 worktree にのみ存在する 25 件への反映手順（スクリプト＋GitHub 無し 4 件のスニペット）が本計画書「引き継ぎ手順」に記載済み（Human/別セッション実施）
+- [ ] AC-4: **TC-03 実行時点の** GitHub open イシュー全件の本文にラベル 2 行が反映済み（計画時 41 件・sweep 後の新規発生分は同一手順で追補。件数と実測は実施記録に記録。TC-03・`gh issue edit --body-file` で更新）
+- [ ] AC-5: 隣 worktree にのみ存在する**ラベル未保有ファイル（実行時点の全件）**への反映手順（スクリプト＋GitHub open イシューが無いファイル向けの挿入スニペット）が本計画書「引き継ぎ手順」に記載済み（Human/別セッション実施）
 - [ ] 追加ゲート: 既存本文の無改変（挿入のみ・削除ゼロ）を機械検証（tracked=TC-04・untracked=TC-05・GitHub 直接更新分=TC-06）
 
 ## 3. 影響範囲
@@ -108,23 +114,34 @@ I132 のイシュー本文で `## 背景/目的` セクションに小見出し 
 #!/usr/bin/env bash
 # I134: イシュー文書の **背景**:/**目的**: ラベル 2 行の全件存在チェック（合格=exit 0）
 # 使い方: bash scripts/claude/check-issue-background.sh [対象ディレクトリ]（既定: docs/issues/open）
+# fail-closed: 対象ディレクトリ不在は exit 2・走査 0 件は exit 1（引数タイプミス等を「全件合格」と誤認しない）
 # 注意: auto_test の決定論ゲート（自動実走）として宣言する場合は scripts/claude/tests/ への移動が必要
 #（code-review.sh classify_gate の allowlist は `bash scripts/claude/tests/*.sh` のみ ALLOW。allowlist の check-*.sh 拡張は I139(#250)）
 set -u
 DIR="${1:-docs/issues/open}"
+if [ ! -d "$DIR" ]; then
+  echo "ERROR: no such directory: $DIR"
+  exit 2
+fi
 missing=0
+scanned=0
 for f in "$DIR"/*.md; do
   [ -f "$f" ] || continue
+  scanned=$((scanned + 1))
   if ! grep -q '^\*\*背景\*\*:' "$f" || ! grep -q '^\*\*目的\*\*:' "$f"; then
     echo "MISSING: $f"
     missing=$((missing + 1))
   fi
 done
-if [ "$missing" -gt 0 ]; then
-  echo "NG: ${missing} file(s) missing 背景/目的 labels"
+if [ "$scanned" -eq 0 ]; then
+  echo "NG: no .md files scanned in $DIR (fail-closed)"
   exit 1
 fi
-echo "OK: all files have 背景/目的 labels"
+if [ "$missing" -gt 0 ]; then
+  echo "NG: ${missing}/${scanned} file(s) missing 背景/目的 labels"
+  exit 1
+fi
+echo "OK: all ${scanned} files have 背景/目的 labels"
 exit 0
 ```
 （このロジックは計画時に scratchpad 上で実走し、NG 検知・合格・注入 NG の 3 方向を実証済み＝調査結果 G2。`set -e`/`pipefail` は不採用: パイプ非使用かつ全コマンドの失敗が条件分岐で処理済みのため検知力が増えず、実証済みロジックとの同一性を優先する＝plan-review Info 対応・見送り確定）
@@ -254,36 +271,74 @@ git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/
 ```
 
 ### tc05_untracked_insert_only.sh（untracked 分の無改変保証・引数=スナップショット dir）
+
+スナップショット側を駆動することで「削除行」に加え「ファイル丸ごとの消失」も検出する（敵対レビュー周回1 H1 対応）。dir 不在は exit 2・走査 0 件も exit 2 の fail-closed。
+
 ```bash
 #!/usr/bin/env bash
 set -u
 SNAP="${1:?Usage: $0 <snapshot_dir>}"
+if [ ! -d "$SNAP" ]; then
+  echo "ERROR: no such dir: $SNAP"
+  exit 2
+fi
 bad=0
-for f in docs/issues/open/*.md; do
-  b=$(basename "$f")
-  [ -f "$SNAP/$b" ] || continue
-  if diff "$SNAP/$b" "$f" | grep -q '^<'; then
+checked=0
+for s in "$SNAP"/*.md; do
+  [ -f "$s" ] || continue
+  b=$(basename "$s")
+  # I134.md 自身は sweep 対象でなく本イシューの管理文書（AC 文言整合等で行置換が正当に入る）ため除外（TC-04 と同一の設計）
+  [ "$b" = "I134.md" ] && continue
+  f="docs/issues/open/$b"
+  checked=$((checked + 1))
+  if [ ! -f "$f" ]; then
+    echo "FILE-DELETED: $f"
+    bad=1
+    continue
+  fi
+  if diff "$s" "$f" | grep -q '^<'; then
     echo "DELETED-LINES: $f"
     bad=1
   fi
 done
+if [ "$checked" -eq 0 ]; then
+  echo "ERROR: snapshot dir has no .md files (fail-closed)"
+  exit 2
+fi
+echo "checked=$checked"
 exit "$bad"
 ```
 
-### tc06_gh_insert_only.sh（GitHub 直接更新分の無改変保証・引数=退避原本 dir。原本は `<#>.md` 名で保存しておく）
+### tc06_gh_insert_only.sh（GitHub 直接更新分の無改変保証・引数=退避原本 dir と期待件数。原本は `<#>.md` 名で保存しておく）
+
+期待件数の第 2 引数で「原本の保存漏れ・不完全な dir でも合格」を防ぐ（敵対レビュー周回1 Medium 対応）。
+
 ```bash
 #!/usr/bin/env bash
 set -u
-ORIG="${1:?Usage: $0 <original_bodies_dir>}"
+ORIG="${1:?Usage: $0 <original_bodies_dir> <expected_count>}"
+EXPECTED="${2:?Usage: $0 <original_bodies_dir> <expected_count>}"
+if [ ! -d "$ORIG" ]; then
+  echo "ERROR: no such dir: $ORIG"
+  exit 2
+fi
 bad=0
+checked=0
 for o in "$ORIG"/*.md; do
+  [ -f "$o" ] || continue
   n=$(basename "$o" .md)
+  checked=$((checked + 1))
   gh issue view "$n" --json body --jq .body > "$ORIG/$n.after"
   if diff "$o" "$ORIG/$n.after" | grep -q '^<'; then
     echo "DELETED-LINES: #$n"
     bad=1
   fi
 done
+echo "checked=$checked expected=$EXPECTED"
+if [ "$checked" -ne "$EXPECTED" ]; then
+  echo "NG: checked count mismatch (fail-closed)"
+  exit 1
+fi
 exit "$bad"
 ```
 
@@ -294,7 +349,7 @@ exit "$bad"
 **実施タイミング**: 本 PR (#249) マージ後、study-app-multitenant 側セッション（またはユーザー）が実施する。先に develop を取り込むこと（tracked 12 件・テンプレート・チェッカーは git 経由で反映される）。
 
 **手順**:
-1. develop 取り込み後、以下のスクリプトを worktree ルートで実行する（未追跡 25 件のうち GitHub 対応あり 21 件へ、GitHub 本文からラベル 2 行を抽出して挿入する。既ラベル保有・GitHub 無しは skip）:
+1. develop 取り込み後、以下のスクリプトを worktree ルートで実行する（ラベル 2 行を持たない全ファイルへ、GitHub 本文からラベル 2 行を抽出して挿入する。件数は実行時点の実態に従う — 2026-07-19 の周回1 追補後時点では未追跡 28 件中 GitHub 対応あり 24 件（I140〜I142 含む）が対象。既ラベル保有・GitHub 無しは skip）:
 ```bash
 #!/usr/bin/env bash
 # I134 引き継ぎ: open イシューへ **背景**:/**目的**: ラベル 2 行を GitHub 本文から反映する（冪等）
@@ -319,7 +374,11 @@ for f in docs/issues/open/*.md; do
   awk -v bg="$bg" -v mk="$mk" \
     '{print} $0=="## 背景/目的" && !d {print ""; print bg; print mk; d=1}' \
     "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  echo "UPDATED: $f (#$num)"
+  if grep -q '^\*\*背景\*\*:' "$f"; then
+    echo "UPDATED: $f (#$num)"
+  else
+    echo "ERROR(見出し完全一致なし・未挿入): $f"
+  fi
 done
 ```
 2. GitHub open イシューが無い 4 件は、以下のスニペットを各ファイルの `## 背景/目的` 見出し直下（空行を挟んで）に挿入する:

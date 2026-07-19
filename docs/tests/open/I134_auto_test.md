@@ -20,16 +20,16 @@ TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scr
 | TC | 内容 | 手順 | 期待値 | 実施者 |
 |----|------|------|--------|--------|
 | TC-01 | テンプレートにプレースホルダ 2 行が存在（AC-1/2） | 上記「決定論ゲート（自動実走）」の grep 2 本（code-review.sh が毎回自動実走） | (a)(b) とも **exit 0** | Claude |
-| TC-02 | wt-harness open 全件にラベル 2 行が存在（AC-3） | `bash scripts/claude/check-issue-background.sh docs/issues/open` | **exit 0**（`OK: all files have 背景/目的 labels`） | Claude |
+| TC-02 | wt-harness open 全件にラベル 2 行が存在（AC-3） | `bash scripts/claude/check-issue-background.sh docs/issues/open` | **exit 0**（`OK: all <走査件数> files have 背景/目的 labels`。dir 不在は exit 2・走査 0 件は exit 1 の fail-closed＝敵対レビュー周回1 対応） | Claude |
 | TC-02-inject | TC-02 チェッカーの検知能力（実装後の注入再確認） | scratchpad にラベル無しダミー md を置いたディレクトリへ `bash scripts/claude/check-issue-background.sh <dir>` | **exit 1**（MISSING 列挙）→ ダミー削除 | Claude |
 | TC-03 | GitHub open 全 41 件の本文にラベル 2 行が反映（AC-4） | 計画書「検証スクリプト全文」の tc03_gh_labels.sh を scratchpad に保存し `bash <scratchpad>/tc03_gh_labels.sh` を実行 | **exit 0**（`total=41 missing=0`） | Claude |
 | TC-04 | tracked 分の無改変保証（挿入のみ・削除ゼロ） | 計画書「検証スクリプト全文」の tc04_no_deletion.sh を scratchpad に保存し `bash <scratchpad>/tc04_no_deletion.sh` を実行 | **exit 0**（削除列がすべて 0） | Claude |
-| TC-05 | untracked 分の無改変保証（挿入のみ） | 計画書「検証スクリプト全文」の tc05_untracked_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc05_untracked_insert_only.sh <snapshot_dir>` を実行（比較基準はステップ2-1 のスナップショット） | **exit 0**（全 13 件で削除行なし） | Claude |
-| TC-06 | GitHub 直接更新分の無改変保証（挿入のみ・ローカル対応の無い 26 件） | 計画書「検証スクリプト全文」の tc06_gh_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc06_gh_insert_only.sh <退避dir>` を実行（比較基準はステップ3-1 の退避原本） | **exit 0**（全 26 件で削除行なし） | Claude |
+| TC-05 | ローカル分の無改変保証（挿入のみ＋**ファイル消失検出**） | 計画書「検証スクリプト全文」の tc05_untracked_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc05_untracked_insert_only.sh <snapshot_dir>` を実行（比較基準はステップ2-1 のスナップショット。スナップショット側駆動＝敵対レビュー周回1 H1 対応。I134.md 自身は TC-04 と同一の理由で除外） | **exit 0**（`checked=<スナップショット件数−1>`・削除行/消失なし。dir 不在・走査 0 件は exit 2） | Claude |
+| TC-06 | GitHub 直接更新分の無改変保証（挿入のみ・期待件数突合） | 計画書「検証スクリプト全文」の tc06_gh_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc06_gh_insert_only.sh <退避dir> <期待件数>` を実行（比較基準はステップ3-1 の退避原本。期待件数は退避時の実件数＝原本保存漏れの fail-closed） | **exit 0**（`checked=<N> expected=<N>` 一致・全件で削除行なし） | Claude |
 
 注:
 - 合否判定インターフェースは全 TC で exit code に統一（合格=exit 0）。不在・無削除の判定は `! grep -q` / awk の exit 畳み込み形。
-- TC-03〜06 はスクリプトファイル実行形（`bash <file>`）に統一する（plan-review Warning 対応: パイプ複合コマンドの直接実行を避け、allowlist 単体形 `bash` 1 コマンドで走らせる）。**スクリプト全文は計画書 `plan_I134.md`「検証スクリプト全文（scratchpad 実行用）」に記載**（本文書に fenced で掲載すると omission-lint が宣言外ゲートと誤認するため計画書側へ配置。code-review 20260719_2210 High 対応・診断記録 `I134_fix_diagnosis_20260719_2221.md` 案 A）。
+- TC-03〜06 はスクリプトファイル実行形（`bash <file>`）に統一する（plan-review Warning 対応: パイプ複合コマンドの直接実行を避け、allowlist 単体形 `bash` 1 コマンドで走らせる）。**スクリプト全文は計画書 `plan_I134.md`「検証スクリプト全文（TC-03〜06・scratchpad 実行用）」に記載**（本文書に fenced で掲載すると omission-lint が宣言外ゲートと誤認するため計画書側へ配置。code-review 20260719_2210 High 対応・診断記録 `I134_fix_diagnosis_20260719_2221.md` 案 A）。
 - TC-02 のチェッカー・TC-03〜06 を決定論ゲートセクションへ宣言しない理由は同セクション末尾の注記参照。
 - ラベル判定は行頭アンカー（`^\*\*背景\*\*:`）。引用ブロック内の同形行との誤検知限界は計画 リスク2 に記録済み（現状の該当は I134 本文のみで実害なし）。
 
@@ -55,6 +55,16 @@ TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scr
   - TC-06: 退避原本 38 件（要求の直接更新 26 件＋paired 12 件も含めて拡大実施）と更新後 body を diff → **exit 0**（全 38 件で削除行なし）。
   - TC-04: sweep コミット（5488652）作成後に `git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md'` の削除ゼロ判定 → **exit 0**（DELETION 出力なし。コミット全体の 4 deletions は pathspec 対象外の plan/auto_test の記録更新行）。
   - 実装時の事実訂正: 見出し無し本文は #10・#220 の 2 件のみ（#42/#44 は見出し実在のため見出し直下挿入）。計画書に訂正記録済み。
+
+- 2026-07-20（敵対的レビュー周回1 修正後の再実走 ✅）:
+  - TC-01: run_declared_gates 実走 → grep 2 本とも **exit=0**・GATE_VERDICT=OK・omission-lint=OK。
+  - TC-02: 強化版チェッカー → **exit 0**（`OK: all 27 files`・I139 追加後の 27 件）。注入: dir 不在 → **exit 2**・空 dir → **exit 1**・ラベル無しダミー → **exit 1**（fail-closed 3 方向を実証）。
+  - TC-03: **exit 0**（**total=44 missing=0**）。sweep 後に隣 worktree で I140〜I142（#251〜#253）が旧テンプレ起票され missing=3 が再発 → 同一手順で追補（周回1 High 対応）。さらに隣セッションの /plan-issue I140 本文再同期で #251 のラベルが一度消失 → 規定どおり冪等に再追補（レース窓の実例 2 件目・原本退避も現行本文で更新）。
+  - TC-04: **exit 0**（削除ゼロ維持）。
+  - TC-05（強化版・スナップショット駆動＋I134.md 除外）: **exit 0**（checked=25・削除行/消失なし）。注入: ファイル消失（スナップショットに在るファイルを現物から除いた temp repo）→ **exit 1・FILE-DELETED 検出**・スナップショット dir 不在 → **exit 2**（周回1 H1 の盲点解消を実証）。
+  - TC-06（強化版・期待件数突合）: **exit 0**（checked=41 expected=41・全件削除行なし）。注入: 期待件数 42 指定 → **exit 1・count mismatch**（原本保存漏れの fail-closed を実証）。
+  - GitHub 本文の宣言外挿入の記録（周回1 Medium 対応）: paired 12 件の `--body-file` 全文同期により、ローカル側にのみ存在した `- GitHub Issue: #NNN` 行が 11 件（#179/#180/#189/#191/#207/#208/#216/#230/#233/#244/#245）の GitHub 本文へ追加挿入されていた。全件が自番号と一致する挿入のみ（削除ゼロ・TC-06 で機械確認済み）で、bootstrap 由来の正当なメタ行の同期であるため**受容**（是正不要・ここに記録）。
+  - 挿入ラベルの恒久記録: `docs/reviews/I134_sweep_inserted_labels.md`（周回1 Medium「一覧未記録」対応・計画 ステップ4-1 の履行）。
 
 ## 再発防止記録（fix-loop 2026-07-19・code-review HIGH 対応）
 - **なぜ失敗したか**: 本文書に `## 決定論ゲート（自動実走）` セクションが無く（自動実走可能な TC-01 の grep 2 本が未宣言）、かつ TC-03〜06 のスクリプト全文を fenced で掲載したため、omission-lint（宣言セクション外の fenced 内 allowlist パターン検出）が HIGH を返した。

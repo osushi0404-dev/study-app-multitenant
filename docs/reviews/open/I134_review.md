@@ -12,7 +12,7 @@
 ### 2. sweep の全件性と機械検証（AC-3/4）
 - [ ] TC-02（`check-issue-background.sh docs/issues/open`）が exit 0・対象 25 件すべてにラベル 2 行が入っている
 - [ ] TC-03（GitHub 41 件走査）が exit 0（missing=0）・wt-harness 対応 12 件は「ローカル編集→ `--body-file` 同期」の順で行われローカル＝GitHub が一致している
-- [ ] 見出し無し 4 件（#10/#42/#44/#220）はタイトル直後に見出しごと挿入されている（manual No.2）
+- [ ] 見出し無し 2 件（#10/#220・実装時実測で確定。#42/#44 は見出し実在のため見出し直下挿入）は本文冒頭に見出しごと挿入されている（manual No.2）
 
 ### 3. 既存記述の無改変（挿入のみ）
 - [ ] TC-04（tracked numstat 削除ゼロ）が exit 0
