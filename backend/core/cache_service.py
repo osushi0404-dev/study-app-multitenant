@@ -21,11 +21,26 @@ class CacheService:
     """統一キャッシュサービス"""
 
     def __init__(self):
-        self.default_cache = caches['default']
-        self.sessions_cache = caches['sessions']
-        self.problems_cache = caches['problems']
-        self.analytics_cache = caches['analytics']
         self.timeouts = settings.CACHE_TIMEOUTS
+
+    # キャッシュ実体は初期化時に固定せず使用時に解決する（I127 計画 発見6）。
+    # モジュールレベルのシングルトンが生成時点の CACHES 構成（テストの override 等）を
+    # 握り続けるのを防ぐ。caches[alias] の参照解決は軽量で毎回呼ぶのが Django の想定。
+    @property
+    def default_cache(self):
+        return caches['default']
+
+    @property
+    def sessions_cache(self):
+        return caches['sessions']
+
+    @property
+    def problems_cache(self):
+        return caches['problems']
+
+    @property
+    def analytics_cache(self):
+        return caches['analytics']
 
     def _generate_key(self, prefix: str, *args, **kwargs) -> str:
         """キャッシュキーを生成"""
