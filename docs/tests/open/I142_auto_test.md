@@ -37,6 +37,8 @@ def request_log():
     logger.removeHandler(handler)
 ```
 
+テストクライアントは通常の `APIClient()` を使う（`raise_request_exception=False` は**不要**。`custom_exception_handler` が Response を返すため、想定外例外はテストクライアントまで伝播しない。計画時のスパイクで実証済み）。
+
 想定外例外の注入は次の形（本番コードに注入点を設けない）:
 ```python
 with mock.patch.object(Organization.objects, 'filter', side_effect=RuntimeError('I142 injected')):

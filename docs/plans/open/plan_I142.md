@@ -173,6 +173,9 @@ def custom_exception_handler(exc, context):
 
     # 以降は既存ロジック（ValidationError / 404 / 403 / 401 / 429 / 500 の文言変換）を変更せず維持する。
     # ただし 5xx（APIException 由来）もスタックトレースを記録する（I142）。
+    # 注: EnvironmentMisconfiguredError のように raise 元で既に logger.error を出しているケースでは
+    # 記録が二重になるが、raise 元のログは「何が不足しているか」、ここのログは「どこで発生したか」を
+    # 担うため意図的に残す（5xx のみが対象で通常運用では稀）。
     if response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
         logger.exception("Server error response: %s", type(exc).__name__)
 
@@ -246,6 +249,8 @@ INSTALLED_APPS = [
         # 想定外例外はここで捕捉せず伝播させる（custom_exception_handler がログ+500 に変換）
 ```
 ※ `logger.info(f"Registration attempt with data: {mutable_data}")` の平文パスワード出力は**本計画では変更しない**（別イシュー「I144」で対応・イシュー本文で除外済み）。
+※ slug 指定組織不在の 400 body に `details` キーを**追加しない**のは意図的（既存 I131/I140 テストが body 完全一致で固定しているため。統一 JSON の他経路とは形が揃わないが既存契約を優先する）。
+※ メソッド内の `import logging` も既存パターンを踏襲して**変更しない**（ファイル先頭への集約は本イシューの対象外。別途整理する場合は独立したイシューで扱う）。
 
 ### 5-4. `backend/accounts/views.py`（`_get_organization`）
 **修正方針**: 環境異常（既定組織が無い）をクライアント起因の 400 に混ぜず、専用例外で 500 に分類する。
@@ -428,3 +433,6 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 - 実装対象ファイルと変更内容（5-1〜5-9）
 - 設計判断の出所（イシュー明記／計画時に確定）
 - テスト計画（TC-AUTO-01〜14・TC-DET-01〜03・手動 5 件）
+
+## レビュー結果
+- [20260721_0028 判定: ✅ 完了](../../reviews/I142_plan_review_20260721_0028.md)
