@@ -23,9 +23,10 @@ TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scr
 | TC-02 | wt-harness open 全件にラベル 2 行が存在（AC-3） | `bash scripts/claude/check-issue-background.sh docs/issues/open` | **exit 0**（`OK: all <走査件数> files have 背景/目的 labels`。dir 不在は exit 2・走査 0 件は exit 1 の fail-closed＝敵対レビュー周回1 対応） | Claude |
 | TC-02-inject | TC-02 チェッカーの検知能力（実装後の注入再確認） | scratchpad にラベル無しダミー md を置いたディレクトリへ `bash scripts/claude/check-issue-background.sh <dir>` | **exit 1**（MISSING 列挙）→ ダミー削除 | Claude |
 | TC-03 | **実行時点の** GitHub open 全件の本文にラベル 2 行が反映（AC-4・レース窓規定＝計画「実装後追記」参照） | 計画書「検証スクリプト全文」の tc03_gh_labels.sh を scratchpad に保存し `bash <scratchpad>/tc03_gh_labels.sh` を実行 | **exit 0**（`total=<実行時点の open 件数> missing=0`。total は実施記録に記録する — 計画時 41・2026-07-20 実測 44） | Claude |
-| TC-04 | tracked 分の無改変保証（挿入のみ・削除ゼロ） | 計画書「検証スクリプト全文」の tc04_no_deletion.sh を scratchpad に保存し `bash <scratchpad>/tc04_no_deletion.sh` を実行 | **exit 0**（削除列がすべて 0） | Claude |
+| TC-04 | tracked 分の無改変保証（挿入のみ・削除ゼロ） | 計画書「検証スクリプト全文」の tc04_no_deletion.sh を scratchpad に保存し `bash <scratchpad>/tc04_no_deletion.sh` を実行 | **exit 0**（削除列がすべて 0）。fail-closed: I134.md 不在 → **exit 1**（FILE-DELETED・周回2）／基底 ref `origin/develop` 不解決 → **exit 2**（周回3） | Claude |
 | TC-05 | ローカル分の無改変保証（挿入のみ＋**ファイル消失検出**） | 計画書「検証スクリプト全文」の tc05_untracked_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc05_untracked_insert_only.sh <snapshot_dir>` を実行（比較基準はステップ2-1 のスナップショット。スナップショット側駆動＝敵対レビュー周回1 H1 対応。I134.md 自身は TC-04 と同一の理由で除外） | **exit 0**（`checked=<スナップショット件数−1>`・削除行/消失なし。dir 不在・走査 0 件は exit 2） | Claude |
-| TC-06 | GitHub 直接更新分の無改変保証（挿入のみ・期待件数突合） | 計画書「検証スクリプト全文」の tc06_gh_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc06_gh_insert_only.sh <退避dir> <期待件数>` を実行（比較基準はステップ3-1 の退避原本。期待件数は退避時の実件数＝原本保存漏れの fail-closed） | **exit 0**（`checked=<N> expected=<N>` 一致・全件で削除行なし） | Claude |
+| TC-07 | 引き継ぎスニペット集合の実態一致（**AC-5 の決定論判定**・周回3 Medium 対応） | 計画書「検証スクリプト全文」の tc07_handoff_snippets.sh を scratchpad に保存し `bash <scratchpad>/tc07_handoff_snippets.sh /mnt/c/app/study-app-multitenant` を実行 | **exit 0**（`OK: snippet set matches (<N> file(s))`。隣 worktree のラベル未保有かつ GitHub open イシュー無しのファイル集合＝計画書のスニペット見出し集合。本ブランチで commit 済みのファイルは develop 取り込みで配布されるため対象外）。fail-closed: 集合不一致 → **exit 1**（差分を出力）／対象 dir・計画書の不在・0 件走査 → **exit 2** | Claude |
+| TC-06 | GitHub 直接更新分の無改変保証（挿入のみ・期待件数突合） | 計画書「検証スクリプト全文」の tc06_gh_insert_only.sh を scratchpad に保存し `bash <scratchpad>/tc06_gh_insert_only.sh <退避dir> <期待件数>` を実行（比較基準はステップ3-1 の退避原本。期待件数は退避時の実件数＝原本保存漏れの fail-closed） | **exit 0**（`checked=<N> expected=<N>` 一致・全件で削除行なし）。fail-closed: 0 バイト原本 → **exit 1**（EMPTY-ORIGINAL・周回3）／件数不一致 → **exit 1**／dir 不在・0 件走査・期待件数が非正整数または 6 桁超 → **exit 2**（周回2/3） | Claude |
 
 注:
 - 合否判定インターフェースは全 TC で exit code に統一（合格=exit 0）。不在・無削除の判定は `! grep -q` / awk の exit 畳み込み形。
@@ -77,6 +78,11 @@ TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scr
   - TC-04（基底 ref 検証を追加）: 本走 **exit 0**。注入: `origin/develop` を持たない temp repo → **exit 2**（従来は git の fatal を awk が空入力で飲み込み exit 0 に化けていた fail-open を解消）。
   - TC-06（0 バイト原本検出・期待件数の桁数上限を追加）: 本走 41 件 **exit 0**。注入: 0 バイト原本を 1 件混入（件数は一致させる）→ **exit 1・EMPTY-ORIGINAL**（退避時 gh 失敗の痕跡で削除検出とロールバック原本が同時に無効化される穴を解消）・桁あふれ引数 → **exit 2**（`[ -ne ]` のエラーで照合が素通りする残穴を解消）。
   - 実データの健全性: `find gh_orig -name '*.md' -size 0` → 0 件/41 件（今回の退避に 0 バイト原本なし）。
+
+- 2026-07-20（敵対的レビュー周回3・文書整合検査後の対応 ✅）:
+  - **レース窓の 3・4 例目**: TC-03 再実走で missing=2（**#255(I143)** = sweep 後の旧テンプレ新規起票・**#253(I142)** = 隣セッションの本文再同期による再消失）→ 規定どおり冪等に追補し **total=44 missing=0** で合格。累計のレース事例: #251〜#253（周回1 新規）・#251（再同期消失）・#255（新規）・#253（再同期消失）。
+  - **TC-07 新設（AC-5 の決定論判定）**: 引き継ぎスニペットの集合が隣 worktree の実態と一致するかを機械検証。本走 → **exit 0**（`OK: snippet set matches (4 file(s))`＝I074/I086/I114/I122）。注入: スニペット未整備ファイルを 1 件混入 → **exit 1**（差分に当該ファイルを出力）・対象 dir 不在 → **exit 2**。判定は「本ブランチで commit 済み＝develop 取り込みで配布される」ファイルを除外する（初回実装時にこの除外が無く tracked 12 件で偽 NG が出たため是正）。
+  - TC 表への fail-closed 仕様の反映（TC-04 の I134.md 存在・基底 ref／TC-06 の EMPTY-ORIGINAL・引数検証）とレビューチェックリストの同期、恒久記録の母集合定義の明確化（**#250(I139) は新テンプレ起票＝本イシューの挿入ではない**旨を明記）、計画書に残っていた「41 件」固定表記 2 箇所の是正、manual No.1 の未追跡ファイル説明の更新を実施。
 
 ## 再発防止記録（fix-loop 2026-07-19・code-review HIGH 対応）
 - **なぜ失敗したか**: 本文書に `## 決定論ゲート（自動実走）` セクションが無く（自動実走可能な TC-01 の grep 2 本が未宣言）、かつ TC-03〜06 のスクリプト全文を fenced で掲載したため、omission-lint（宣言セクション外の fenced 内 allowlist パターン検出）が HIGH を返した。

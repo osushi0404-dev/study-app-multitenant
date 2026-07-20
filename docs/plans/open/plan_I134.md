@@ -76,7 +76,7 @@ I132 のイシュー本文で `## 背景/目的` セクションに小見出し 
 - [ ] AC-2: テンプレートから新規作成したイシューで背景・目的の未記入が構造的に起きない（プレースホルダは `（…）` 形式のため issue-review の未記入検出対象・調査結果「消費箇所」で確認済み。TC-01 成立をもって構造成立と判定）
 - [ ] AC-3: wt-harness の `docs/issues/open/*.md` 全件にラベル 2 行が存在することを機械検証済み（TC-02・対象一覧は調査結果 (A)）
 - [ ] AC-4: **TC-03 実行時点の** GitHub open イシュー全件の本文にラベル 2 行が反映済み（計画時 41 件・sweep 後の新規発生分は同一手順で追補。件数と実測は実施記録に記録。TC-03・`gh issue edit --body-file` で更新）
-- [ ] AC-5: 隣 worktree にのみ存在する**ラベル未保有ファイル（実行時点の全件）**への反映手順（スクリプト＋GitHub open イシューが無いファイル向けの挿入スニペット）が本計画書「引き継ぎ手順」に記載済み（Human/別セッション実施）
+- [ ] AC-5: 隣 worktree にのみ存在する**ラベル未保有ファイル（実行時点の全件）**への反映手順（スクリプト＋GitHub open イシューが無いファイル向けの挿入スニペット）が本計画書「引き継ぎ手順」に記載済み（**TC-07** でスニペット集合と実態の一致を機械検証・実施は Human/別セッション）
 - [ ] 追加ゲート: 既存本文の無改変（挿入のみ・削除ゼロ）を機械検証（tracked=TC-04・untracked=TC-05・GitHub 直接更新分=TC-06）
 
 ## 3. 影響範囲
@@ -169,7 +169,7 @@ exit 0
   1. 更新前に 38 件の現行本文を scratchpad へ退避（ロールバック用）。
   2. wt-harness 対応 12 件: `gh issue edit <#> --body-file docs/issues/open/I###.md` で同期。
   3. 残り 26 件: `gh issue view <#> --json body` で取得→挿入フォーマットどおりラベル 2 行を挿入した一時ファイルを作成→ `gh issue edit <#> --body-file` で更新（既にラベルがある場合は skip＝再実行冪等）。
-  4. → TC-03（41 件全件 grep 走査・missing=0）・TC-06（26 件の原本 body との diff に削除行なし）参照。
+  4. → TC-03（**実行時点の open 全件**を grep 走査・missing=0）・TC-06（退避原本との diff に削除行なし・期待件数突合）参照。
 - **ステップ4: 記録と引き継ぎ確定**（ステップ3 完了が前提）
   1. TC-01〜05 の実行結果を auto_test に記録。挿入した 25 件のラベル内容一覧（実施記録）を auto_test に残す。
   2. 「引き継ぎ手順」セクション（本計画書に記載済み）が実装結果と乖離していないか突き合わせ、乖離があれば同期する。
@@ -220,7 +220,7 @@ exit 0
 | 隣 worktree 分は GitHub を正として本セッションから本文更新・ローカル反映は引き継ぎ | イシュー明記（grill 確定） |
 | チェッカーを常設スクリプト `scripts/claude/check-issue-background.sh`（dir 引数）として追加 | **仮定で決めた**（イシューは「grep で機械検証」とのみ規定。引き継ぎ先での再利用と注入テスト可能性のため常設化・`check-memo-body-paths.sh` と同じ置き場所） |
 | ラベル判定は行頭アンカー `^**背景**:` / `^**目的**:`（引用言及との区別・decoy 考慮） | **仮定で決めた**（リスク2 に限界を明記） |
-| 見出しが無い本文はタイトル直後（タイトルも無ければ冒頭）に `## 背景/目的` 見出しごと挿入 | **仮定で決めた**（「全 41 件」の AC を一様に満たすため。#220 の自動生成形式とも衝突しないことを確認済み。実装時実測で該当は #10・#220 の 2 件＝計画時想定 4 件から事実訂正） |
+| 見出しが無い本文はタイトル直後（タイトルも無ければ冒頭）に `## 背景/目的` 見出しごと挿入 | **仮定で決めた**（「open 全件」の AC を一様に満たすため。#220 の自動生成形式とも衝突しないことを確認済み。実装時実測で該当は #10・#220 の 2 件＝計画時想定 4 件から事実訂正） |
 | tracked 旧 12 件は本 PR でコミット・untracked 13 件は未コミット維持 | **仮定で決めた**（イシューファイルは自イシューの close で回収する既存 invariant の踏襲） |
 | I121 等「GitHub 側クローズ済みだがローカル open に残るファイル」もローカル sweep 対象（GitHub 側は対象外） | **仮定で決めた**（ゲートを「ディレクトリ全件」で単純に保つ。open/closed 共存の棚卸しは I101 の担当でスコープ外） |
 | 無改変保証ゲート TC-04（tracked 削除ゼロ）/ TC-05（untracked 挿入のみ）/ TC-06（GitHub 直接更新分 挿入のみ）の追加 | **仮定で決めた**（「挿入のみ・既存記述を壊さない」主張を散文で終わらせないための決定論化） |
@@ -319,6 +319,54 @@ echo "checked=$checked"
 exit "$bad"
 ```
 
+### tc07_handoff_snippets.sh（AC-5 の決定論判定・引数=隣 worktree のパス）
+
+引き継ぎ手順の「GitHub open イシューが無いファイル向けスニペット」の集合が、隣 worktree の実態（ラベル未保有かつ GitHub open イシューが無いファイル）と一致することを機械検証する（周回3 Medium 対応＝AC-5 が決定論層に載っていなかった穴を塞ぐ）。
+
+```bash
+#!/usr/bin/env bash
+set -u
+WT="${1:?Usage: $0 <neighbor_worktree_path>}"
+PLAN=docs/plans/open/plan_I134.md
+if [ ! -d "$WT/docs/issues/open" ]; then
+  echo "ERROR: no such dir: $WT/docs/issues/open"
+  exit 2
+fi
+if [ ! -f "$PLAN" ]; then
+  echo "ERROR: no such plan: $PLAN"
+  exit 2
+fi
+need=$(mktemp)
+have=$(mktemp)
+scanned=0
+for f in "$WT"/docs/issues/open/*.md; do
+  [ -f "$f" ] || continue
+  scanned=$((scanned + 1))
+  grep -q '^\*\*背景\*\*:' "$f" && grep -q '^\*\*目的\*\*:' "$f" && continue
+  base=$(basename "$f" .md)
+  # 本ブランチで commit 済みのファイルは develop 取り込みでラベル付きが配布されるため対象外
+  if git cat-file -e "HEAD:docs/issues/open/${base}.md" 2>/dev/null; then continue; fi
+  num=$(gh issue list --state open --limit 100 --json number,title --jq ".[] | select(.title | startswith(\"${base}:\")) | .number" | head -1)
+  [ -n "$num" ] && continue
+  echo "$base" >> "$need"
+done
+if [ "$scanned" -eq 0 ]; then
+  echo "ERROR: no issue files scanned (fail-closed)"
+  exit 2
+fi
+grep -oE '^`docs/issues/open/I[0-9]+\.md`' "$PLAN" | tr -d '`' | xargs -r -n1 basename | sed 's/\.md$//' | sort -u > "$have"
+sort -u -o "$need" "$need"
+if ! diff "$need" "$have" > /dev/null; then
+  echo "NG: snippet set mismatch (need vs have)"
+  diff "$need" "$have"
+  rm -f "$need" "$have"
+  exit 1
+fi
+echo "OK: snippet set matches ($(wc -l < "$need") file(s))"
+rm -f "$need" "$have"
+exit 0
+```
+
 ### tc06_gh_insert_only.sh（GitHub 直接更新分の無改変保証・引数=退避原本 dir と期待件数。原本は `<#>.md` 名で保存しておく）
 
 期待件数の第 2 引数で「原本の保存漏れ・不完全な dir でも合格」を防ぐ（敵対レビュー周回1 Medium 対応）。
@@ -380,7 +428,7 @@ exit "$bad"
 **実施タイミング**: 本 PR (#249) マージ後、study-app-multitenant 側セッション（またはユーザー）が実施する。先に develop を取り込むこと（tracked 12 件・テンプレート・チェッカーは git 経由で反映される）。
 
 **手順**:
-1. develop 取り込み後、以下のスクリプトを worktree ルートで実行する（ラベル 2 行を持たない全ファイルへ、GitHub 本文からラベル 2 行を抽出して挿入する。件数は実行時点の実態に従う — 2026-07-19 の周回1 追補後時点では未追跡 28 件中 GitHub 対応あり 24 件（I140〜I142 含む）が対象。既ラベル保有・GitHub 無しは skip）:
+1. develop 取り込み後、以下のスクリプトを worktree ルートで実行する（ラベル 2 行を持たない全ファイルへ、GitHub 本文からラベル 2 行を抽出して挿入する。**件数は固定せず実行時点の実態に従う**＝ラベル未保有ファイルのうち GitHub open イシューが対応するもの全件が対象。既ラベル保有・片ラベル・GitHub 無しは skip。実行のたびに対象数は変動する（イシューのクローズによる減少・旧テンプレ起票による増加）ため、件数の一致でなく**手順 3 のゲート exit 0 到達をもって完了と判定する**）:
 ```bash
 #!/usr/bin/env bash
 # I134 引き継ぎ: open イシューへ **背景**:/**目的**: ラベル 2 行を GitHub 本文から反映する（冪等）
@@ -422,7 +470,7 @@ for f in docs/issues/open/*.md; do
   fi
 done
 ```
-2. GitHub open イシューが無い 4 件は、以下のスニペットを各ファイルの `## 背景/目的` 見出し直下（空行を挟んで）に挿入する:
+2. GitHub open イシューが無いファイル（2026-07-20 時点で I074/I086/I114/I122 の 4 件・**実行時点で手順 1 が `SKIP(no GH issue)` を出したファイルが正**）は、以下のスニペットを各ファイルの `## 背景/目的` 見出し直下（空行を挟んで）に挿入する。スニペットに無いファイルが SKIP された場合は、そのイシューの既存記述から同形式で背景・目的を書き起こす（TC-07 がこの集合一致を機械検証する）:
 
 `docs/issues/open/I074.md`:
 ```markdown
