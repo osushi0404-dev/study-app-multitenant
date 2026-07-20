@@ -84,6 +84,18 @@ TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scr
   - **TC-07 新設（AC-5 の決定論判定）**: 引き継ぎスニペットの集合が隣 worktree の実態と一致するかを機械検証。本走 → **exit 0**（`OK: snippet set matches (4 file(s))`＝I074/I086/I114/I122）。注入: スニペット未整備ファイルを 1 件混入 → **exit 1**（差分に当該ファイルを出力）・対象 dir 不在 → **exit 2**。判定は「本ブランチで commit 済み＝develop 取り込みで配布される」ファイルを除外する（初回実装時にこの除外が無く tracked 12 件で偽 NG が出たため是正）。
   - TC 表への fail-closed 仕様の反映（TC-04 の I134.md 存在・基底 ref／TC-06 の EMPTY-ORIGINAL・引数検証）とレビューチェックリストの同期、恒久記録の母集合定義の明確化（**#250(I139) は新テンプレ起票＝本イシューの挿入ではない**旨を明記）、計画書に残っていた「41 件」固定表記 2 箇所の是正、manual No.1 の未追跡ファイル説明の更新を実施。
 
+- 2026-07-21（**/test 実施 ✅ 全 TC PASS**）:
+  - TC-01: run_declared_gates → grep 2 本とも **exit=0**・GATE_VERDICT=OK・omission_lint=OK。
+  - TC-02: `bash scripts/claude/check-issue-background.sh docs/issues/open` → **exit 0**（`OK: all 27 files`）。
+  - TC-02-inject: ラベル無しダミー dir → **exit 1**（検知能力を再確認）。
+  - TC-03: **exit 0**（`total=44 missing=0`）。※初回実行では `missing=1`（#253）で NG → レース窓規定どおり冪等に追補して再実走で合格（下記「レース窓の観測」参照）。
+  - TC-04: **exit 0**（tracked 削除ゼロ・I134.md 存在・基底 ref 解決を確認）。
+  - TC-05: **exit 0**（`checked=25`・削除行/ファイル消失なし）。
+  - TC-06: **exit 0**（`checked=42 expected=42`・全件で削除行なし）。※初回実行では `checked=42 expected=41` の件数不一致＋#253 の DELETED-LINES で NG → 退避原本が #255 追補で 42 件に増えていたため期待件数を実態（42）へ更新し、#253 は再追補で原本も更新して合格。**期待件数はレース追補のたびに退避原本の実件数へ更新する**（固定値ではない）。
+  - TC-07: **exit 0**（`OK: snippet set matches (4 file(s))`＝I074/I086/I114/I122）。
+  - pytest / Jest / E2E: **非該当**（BE/FE コード変更ゼロ。本文書冒頭の宣言どおり）。
+  - **レース窓の観測（重要・運用上の残課題）**: #253(I142) のラベルが**計 3 回**消失した（隣セッションが I142 のローカルファイル＝ラベル未保有版を `gh issue edit --body-file` で再同期するたびに上書きされる）。#251 も 1 回消失。**GitHub 側の状態は、隣 worktree のローカルファイルにラベルが入るまで安定しない**（＝引き継ぎ手順の実施が恒久解）。TC-03/TC-06 は「実行時点の実態」を fail-closed で正しく検出しており、検証体系としては健全（消失を見逃していない）。
+
 ## 再発防止記録（fix-loop 2026-07-19・code-review HIGH 対応）
 - **なぜ失敗したか**: 本文書に `## 決定論ゲート（自動実走）` セクションが無く（自動実走可能な TC-01 の grep 2 本が未宣言）、かつ TC-03〜06 のスクリプト全文を fenced で掲載したため、omission-lint（宣言セクション外の fenced 内 allowlist パターン検出）が HIGH を返した。
 - **何を変えたか**: ①決定論ゲートセクションを新設し TC-01 の grep 2 本を宣言（code-review ごとに自動実走・証跡注入される）②スクリプト全文を計画書「検証スクリプト全文」節へ移設し本文書は参照化 ③チェッカーに formal gate 化時の移動制約コメントを追記（code-review Medium 対応）。検証: omission-lint OK 転化・ゲート 2 本 ALLOW 実走 exit 0・隠れゲート形の HIGH 検知維持・TC-02 無回帰（docs/reviews/I134_fix_test_result_20260719_2239.md）。
