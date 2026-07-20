@@ -272,6 +272,11 @@ if [ ! -f docs/issues/open/I134.md ]; then
   echo "FILE-DELETED: docs/issues/open/I134.md"
   exit 1
 fi
+# 比較基底が解決できないと git が fatal を吐いても awk が空入力で exit 0 を返し合格に化けるため先に検証する（周回3 Medium 対応）
+if ! git rev-parse --verify --quiet origin/develop > /dev/null; then
+  echo "ERROR: base ref origin/develop is unresolvable (fail-closed)"
+  exit 2
+fi
 git diff --numstat origin/develop...HEAD -- docs/issues/ ':(exclude)docs/issues/open/I134.md' | awk '$2!=0{print "DELETION:",$0; bad=1} END{exit bad?1:0}'
 ```
 
@@ -328,17 +333,28 @@ if [ ! -d "$ORIG" ]; then
   exit 2
 fi
 # 期待件数は正の整数のみ受理（非数値は test のエラーで照合が素通りするため fail-closed・周回2 Medium 対応）
+# 桁あふれも同じ機構で素通りするため桁数上限も課す（周回3 Low 対応）
 case "$EXPECTED" in
   ''|0|*[!0-9]*)
     echo "ERROR: expected_count must be a positive integer: $EXPECTED"
     exit 2 ;;
 esac
+if [ "${#EXPECTED}" -gt 6 ]; then
+  echo "ERROR: expected_count out of range: $EXPECTED"
+  exit 2
+fi
 bad=0
 checked=0
 for o in "$ORIG"/*.md; do
   [ -f "$o" ] || continue
   n=$(basename "$o" .md)
   checked=$((checked + 1))
+  # 0 バイト原本は退避時の gh 失敗の痕跡。diff が全行追加扱いになり削除検出とロールバック原本が同時に無効化されるため弾く（周回3 Medium 対応）
+  if [ ! -s "$o" ]; then
+    echo "EMPTY-ORIGINAL: #$n"
+    bad=1
+    continue
+  fi
   gh issue view "$n" --json body --jq .body > "$ORIG/$n.after"
   if diff "$o" "$ORIG/$n.after" | grep -q '^<'; then
     echo "DELETED-LINES: #$n"

@@ -73,6 +73,11 @@ TC-02〜06 は宣言しない: TC-02 のチェッカーは allowlist（`bash scr
   - 恒久記録へ #239(I131) を追補（sweep 時 open・記録初版前にクローズされ欠落していた分。母集合を「open 全件」でなく「更新した全件」に是正）。
   - 受容（記録のみ）: TC-05/06 の比較基準（scratchpad スナップショット）は実行セッション自身が管理する ephemeral な基準であり原理的に自己証明の限界を持つ。tracked 12 件は origin/develop とバイト一致を独立確認済み（周回2 で実証）・GitHub 側は編集履歴が恒久監査経路・untracked 分はこの限界を明記して受容する。
 
+- 2026-07-20（敵対的レビュー周回3 修正後の追加検証 ✅）:
+  - TC-04（基底 ref 検証を追加）: 本走 **exit 0**。注入: `origin/develop` を持たない temp repo → **exit 2**（従来は git の fatal を awk が空入力で飲み込み exit 0 に化けていた fail-open を解消）。
+  - TC-06（0 バイト原本検出・期待件数の桁数上限を追加）: 本走 41 件 **exit 0**。注入: 0 バイト原本を 1 件混入（件数は一致させる）→ **exit 1・EMPTY-ORIGINAL**（退避時 gh 失敗の痕跡で削除検出とロールバック原本が同時に無効化される穴を解消）・桁あふれ引数 → **exit 2**（`[ -ne ]` のエラーで照合が素通りする残穴を解消）。
+  - 実データの健全性: `find gh_orig -name '*.md' -size 0` → 0 件/41 件（今回の退避に 0 バイト原本なし）。
+
 ## 再発防止記録（fix-loop 2026-07-19・code-review HIGH 対応）
 - **なぜ失敗したか**: 本文書に `## 決定論ゲート（自動実走）` セクションが無く（自動実走可能な TC-01 の grep 2 本が未宣言）、かつ TC-03〜06 のスクリプト全文を fenced で掲載したため、omission-lint（宣言セクション外の fenced 内 allowlist パターン検出）が HIGH を返した。
 - **何を変えたか**: ①決定論ゲートセクションを新設し TC-01 の grep 2 本を宣言（code-review ごとに自動実走・証跡注入される）②スクリプト全文を計画書「検証スクリプト全文」節へ移設し本文書は参照化 ③チェッカーに formal gate 化時の移動制約コメントを追記（code-review Medium 対応）。検証: omission-lint OK 転化・ゲート 2 本 ALLOW 実走 exit 0・隠れゲート形の HIGH 検知維持・TC-02 無回帰（docs/reviews/I134_fix_test_result_20260719_2239.md）。
