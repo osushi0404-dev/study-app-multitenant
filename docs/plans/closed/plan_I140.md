@@ -179,5 +179,5 @@
 - [ ] 高リスク判定 No（security-review 省略・plan-review 後に /implement へ） — でよいか
 
 ## レビュー結果
-- [20260720_0233 判定: ✅ 完了](../../reviews/I140_plan_review_20260720_0233.md)
+- [20260720_0233 判定: ✅ 完了](../../reviews/closed/I140_plan_review_20260720_0233.md)
 - Info 指摘への対応（2026-07-20）: ① TC-AUTO-05 の判定式を `! grep -q "Organization.objects.create" backend/accounts/views.py` に強化（旧ログ文言依存を排除・現行コードで exit 1 の事前検証を再実施済み）。② `logger.info` の f-string は既存コードで本イシューの変更対象外のため不変更（追加する `logger.error` は固定文字列で規約準拠）。
