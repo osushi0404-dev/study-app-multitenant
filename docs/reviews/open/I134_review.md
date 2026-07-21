@@ -39,10 +39,19 @@
 ## 結果
 
 ### 実装結果評価
-（/code-review 後に記入）
+- /code-review 判定 **OK**（2 回目・`docs/reviews/I134_code_review_20260719_2253.md`。初回 20260719_2210 は omission-lint HIGH で差し戻し → fix-loop 案 A で解消）。高リスク判定 **Yes**（`scripts/claude/` 配下スクリプト追加）のため敵対的レビューステージが自動起動。
+- **敵対的レビューステージ通過**（`docs/reviews/I134_adversarial_review_20260720_0238.md`・VERDICT: OK）。3 周・エージェント 12 体で収束（周回1: NEW_HIGH 2 → 修正／周回2: NEW_HIGH 1 → 修正／周回3: **NEW_HIGH 0＝ゼロ周回成立**）。周回3 の Medium 8・Low 2 もすべて修正または理由付きの受容記録として処理済み。
+- 主要な設計変更（レビュー起点）: ①無改変ゲートをスナップショット側駆動に変更しファイル消失を検出（周回1 H1）②完了条件を「実行時点の open 全件」へ再定義しレース窓を規定（周回1 H2）③AC-4 再定義の全文書伝播（周回2 H1）④TC-07 新設で AC-5 を決定論層に載せた（周回3 M）。
 
 ### テスト結果
-（/test 後に記入）
+- 自動（/test 2026-07-21・最終状態）: 決定論 TC **全 7 件 PASS** — TC-01 ゲート実走 exit 0×2（GATE_VERDICT=OK・omission_lint=OK）／TC-02 exit 0（27 件）＋TC-02-inject exit 1／TC-03 **total=44 missing=0**／TC-04 exit 0／TC-05 exit 0（checked=25）／TC-06 exit 0（checked=42=expected）／TC-07 exit 0（スニペット 4 件一致）。pytest / Jest / E2E は **非該当**（BE/FE コード変更ゼロ）。
+- fail-closed 注入検証: チェッカー（dir 不在 exit 2・空 exit 1・ラベル無し exit 1）／TC-05（ファイル消失 exit 1・dir 不在 exit 2）／TC-06（EMPTY-ORIGINAL exit 1・件数不一致 exit 1・非数値/0/桁超 exit 2）／TC-07（集合不一致 exit 1・dir 不在 exit 2）／TC-04（I134.md 不在 exit 1・基底 ref 不解決 exit 2）をすべて実測。
+- CI: PR #249 全 6 チェック **pass**（E2E Tests (Playwright) 3m13s 含む）。
+- 手動: No.1〜4 **全合格**（No.1 変更範囲＝1427 insertions / 0 deletions・計画外なし／No.2 見出し無し本文への挿入位置／No.3 CI／No.4 要約内容の妥当性は Human 確認 2026-07-22）。記録: `docs/tests/open/I134_manual_test.md`
 
 ### 総合判定
-（記入待ち）
+**合格**（自動・手動・CI・基本レビュー・敵対的レビューすべて PASS。残指摘なし）
+
+### 残課題（クローズ後の引き継ぎ・非ブロック）
+1. **引き継ぎ手順の実施**（AC-5 の実行分）: 隣 worktree（study-app-multitenant）のローカルファイルへのラベル反映は、本 PR マージ後にあちらのセッションが計画書「引き継ぎ手順」を実行する。**これが完了するまで GitHub 側のラベルは不安定**（隣セッションの本文再同期で上書きされる。実際に #251 で 1 回・#253 で 3 回の消失を観測）。
+2. **dependency-audit 自動起票の生成本文**（ユーザー判断待ち）: `dependency-audit-issue.sh` はテンプレート非依存のため、次回の scheduled 監査 fail 時にラベル無し open イシューが再生産される。根治は生成本文への定型ブロック追加（別イシュー化または I139 の grill 時に同梱判断）。
