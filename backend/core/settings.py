@@ -34,6 +34,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # logout での refresh トークン失効に必要（I142）
     'corsheaders',
     'django_extensions',
     'django_filters',

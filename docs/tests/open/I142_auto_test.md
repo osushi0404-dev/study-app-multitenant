@@ -85,9 +85,16 @@ with mock.patch.object(Organization.objects, 'filter', side_effect=RuntimeError(
 | TC-DET-02 | `exit=1`（該当節が未追加） | `exit=0` |
 | TC-DET-03 | `exit=1`（INSTALLED_APPS 未登録） | `exit=0` |
 
-## 実施記録（/test 実行時に記入）
-- TC-AUTO-01〜10: 未実施
-- TC-AUTO-11/12: 未実施
-- TC-AUTO-13: 未実施
-- TC-AUTO-14: 未実施
-- TC-DET-01〜03: 実装前の不合格確認のみ実施済み（実装後に合格を再確認する）
+## 実施記録
+
+### 実装時（/implement・2026-07-21）
+- TDD Red: 実装前に新規テストを実行 → **6 failed / 4 passed**（新しい振る舞い 6 件が失敗・既存 400 契約 4 件は先行 PASS）
+- TC-AUTO-01〜10: **10 passed**（`pytest accounts/tests/test_I142_error_handling.py`）
+- TC-AUTO-11/12: PASS（`test_I140_personal_org_fallback.py` を 500 期待へ更新済み）
+- TC-AUTO-13/14: **104 passed**（baseline 94 + 新規 10・回帰なし）
+- TC-DET-01: exit 0（実装前は exit 1）
+- TC-DET-02: exit 0（実装前は exit 1）
+- TC-DET-03: exit 0（実装前は exit 1）
+
+### /test 実行時に追記
+（未実施）

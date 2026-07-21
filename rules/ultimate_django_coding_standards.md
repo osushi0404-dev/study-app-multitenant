@@ -481,6 +481,51 @@ class ArticleViewSet(viewsets.ModelViewSet):
         serializer.save()
 ```
 
+### エラーハンドリング方針（例外設計）
+
+**原則**: 想定内の失敗（クライアント起因）は種別ごとに個別捕捉して適切な 4xx を返し、想定外の例外（プログラム欠陥）は**捕捉しない**。DRF の `EXCEPTION_HANDLER`（`core.exceptions.custom_exception_handler`）に委ね、スタックトレース記録 + 5xx で顕在化させる。
+
+**広域 `except Exception` は禁止**。プログラム欠陥がクライアント起因エラー（4xx）として返ると、監視・ログ上で入力ミスと区別できず、重大障害が「エラーが発生しました」の表示のまま潜伏する。
+
+例外的に広域捕捉を許容するのは次の 2 ケースのみで、いずれも**意図をコメントで明記**する。
+1. 失敗しても処理継続が業務上正しい副作用（メール送信・通知等）
+2. ログを記録したうえで必ず `raise` して再送出する場合（横断的なロギング等）
+
+```python
+# ✅ 良い例: 想定内は個別捕捉、想定外は伝播させる
+def logout_view(request):
+    # 想定内: refresh 欠落・不正なリクエスト形式（クライアント起因）は例外ではなく分岐で判定する
+    refresh_token = request.data.get('refresh') if isinstance(request.data, dict) else None
+    if not refresh_token:
+        return Response({'error': 'ログアウトに失敗しました。'}, status=400)
+
+    try:
+        RefreshToken(refresh_token).blacklist()
+    except TokenError:
+        # 想定内: 無効・失効トークン（クライアント起因）
+        return Response({'error': 'ログアウトに失敗しました。'}, status=400)
+
+    return Response({'message': 'ログアウトしました。'})
+    # 想定外例外は捕捉せず伝播（custom_exception_handler がログ+500 に変換する）
+
+
+# ❌ 悪い例: 種別を問わず捕捉して 4xx に丸める（プログラム欠陥が入力エラーと区別できない）
+def register_view(request):
+    try:
+        ...
+    except Exception as e:
+        logger.error(f"Registration error: {e}", exc_info=True)
+        return Response({'error': 'エラーが発生しました'}, status=400)
+```
+
+**環境構成の不備**（既定データの欠落・設定漏れ等、サーバー起因で入力では回復できない失敗）は `core.exceptions.EnvironmentMisconfiguredError`（500）で表現し、400 に混ぜない。
+
+```python
+if not personal_organization:
+    logger.error("Personal organization not found. Environment is misconfigured.")
+    raise EnvironmentMisconfiguredError()
+```
+
 ### 高度なシリアライザー
 ```python
 class ArticleSerializer(serializers.ModelSerializer):
@@ -626,7 +671,7 @@ class ArticleSelector:
 # apps/articles/services.py
 import logging
 from typing import Optional, Dict, Any
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.core.exceptions import ValidationError
 from .models import Article, ArticleHistory
 from .tasks import send_notification
@@ -658,6 +703,8 @@ class ArticleService:
             logger.info(f"Article already exists: {existing.id}")
             return existing
 
+        # 想定内の失敗（DB 制約違反）のみ捕捉し、想定外の例外は伝播させる
+        # （「エラーハンドリング方針（例外設計）」参照）
         try:
             article = Article.objects.create(
                 title=title,
@@ -686,9 +733,10 @@ class ArticleService:
             logger.info(f"Article created: {article.id}")
             return article
 
-        except Exception as e:
+        except IntegrityError as e:
             logger.error(f"Failed to create article: {e}", exc_info=True)
             raise ValidationError(f"記事の作成に失敗しました: {str(e)}")
+        # 想定外の例外はここで捕捉しない（EXCEPTION_HANDLER がログ+500 で顕在化させる）
 
     @staticmethod
     @transaction.atomic
@@ -1220,6 +1268,8 @@ def generate_report(self, report_id: str):
         logger.error(f"Report {report_id} not found")
         raise self.retry(countdown=60)
 
+    # 広域捕捉の許容ケース: バックグラウンドタスクは失敗を記録して retry させる設計のため
+    # （HTTP 応答を返さないので 4xx/5xx の取り違えは起きない。「エラーハンドリング方針」参照）
     except Exception as e:
         logger.error(f"Failed to generate report {report_id}: {e}")
 
@@ -1400,6 +1450,8 @@ class LoggingMixin:
             )
             return response
 
+        # 広域捕捉の許容ケース: ログ記録のみを行い必ず再送出する（握りつぶさない）
+        # （「エラーハンドリング方針（例外設計）」参照）
         except Exception as e:
             log.error(
                 "Request failed",

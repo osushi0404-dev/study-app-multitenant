@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django_ratelimit.decorators import ratelimit
@@ -18,6 +19,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from core.throttling import AppAnonRateThrottle
+from core.exceptions import EnvironmentMisconfiguredError
 
 from .models import User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization
 from .serializers import (
@@ -72,64 +74,66 @@ class UserRegistrationView(generics.CreateAPIView):
         organization_slug = kwargs.get('organization_slug')
         logger.info(f"Registration attempt with slug: {organization_slug}")
 
-        try:
-            # 組織を決定
-            organization = self._get_organization(organization_slug)
-            if not organization:
-                return Response({
-                    'error': {
-                        'main_message': '組織の設定に失敗しました',
-                        'sub_message': '無効な組織URLまたはシステムエラー'
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # リクエストデータに組織IDを追加
-            mutable_data = request.data.copy()
-            mutable_data['organization_id'] = organization.id
-
-            logger.info(f"Registration attempt with data: {mutable_data}")
-
-            with transaction.atomic():
-                serializer = self.get_serializer(data=mutable_data)
-                if not serializer.is_valid():
-                    logger.error(f"Validation failed: {serializer.errors}")
-                    return Response({
-                        'error': {
-                            'main_message': '入力内容にエラーがあります',
-                            'sub_message': next(iter(serializer.errors.values()))[0] if serializer.errors else None,
-                            'details': serializer.errors
-                        }
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-                logger.info("Validation passed, creating user...")
-                user = serializer.save()
-                logger.info(f"User created successfully: {user.email} with organization_id: {user.organization_id}")
-
-                # Send email verification
-                try:
-                    self.send_verification_email(user)
-                    logger.info("Email verification sent")
-                except Exception as email_error:
-                    logger.error(f"Email sending failed: {str(email_error)}", exc_info=True)
-                    # Continue with registration even if email fails
-
-                return Response({
-                    'message': '登録完了。メール認証を行ってください。',
-                    'user_id': str(user.id),
-                    'organization': organization.name
-                }, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            logger.error(f"Registration error: {str(e)}", exc_info=True)
+        # 想定内: リクエスト形式が不正（クライアント起因）
+        if not isinstance(request.data, dict):
             return Response({
                 'error': {
-                    'main_message': 'エラーが発生しました',
-                    'sub_message': str(e) if settings.DEBUG else None,
+                    'main_message': '入力内容にエラーがあります',
+                    'sub_message': '不正なリクエスト形式です',
                     'details': {}
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # 想定内: slug 指定で組織が見つからない（クライアント起因）
+        # slug なしで personal 組織が不在の場合は _get_organization が 500 を raise する
+        organization = self._get_organization(organization_slug)
+        if not organization:
+            return Response({
+                'error': {
+                    'main_message': '組織の設定に失敗しました',
+                    'sub_message': '無効な組織URLまたはシステムエラー'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # リクエストデータに組織IDを追加
+        mutable_data = request.data.copy()
+        mutable_data['organization_id'] = organization.id
+
+        logger.info(f"Registration attempt with data: {mutable_data}")
+
+        with transaction.atomic():
+            serializer = self.get_serializer(data=mutable_data)
+            if not serializer.is_valid():
+                logger.error(f"Validation failed: {serializer.errors}")
+                return Response({
+                    'error': {
+                        'main_message': '入力内容にエラーがあります',
+                        'sub_message': next(iter(serializer.errors.values()))[0] if serializer.errors else None,
+                        'details': serializer.errors
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            logger.info("Validation passed, creating user...")
+            user = serializer.save()
+            logger.info(f"User created successfully: {user.email} with organization_id: {user.organization_id}")
+
+            # Send email verification
+            try:
+                self.send_verification_email(user)
+                logger.info("Email verification sent")
+            except Exception as email_error:
+                # 意図的な狭域設計: メール送信の失敗では登録自体を失敗させない（I142 規約の許容ケース）
+                logger.error(f"Email sending failed: {str(email_error)}", exc_info=True)
+
+            return Response({
+                'message': '登録完了。メール認証を行ってください。',
+                'user_id': str(user.id),
+                'organization': organization.name
+            }, status=status.HTTP_201_CREATED)
+        # 想定外例外は捕捉せず伝播させる（custom_exception_handler がログ+500 に変換する）
+
     def _get_organization(self, slug=None):
-        """組織を取得または作成"""
+        """組織を取得する（slug 指定時は該当組織・未指定時は既定の personal 組織）"""
         import logging
         logger = logging.getLogger('django')
 
@@ -153,12 +157,13 @@ class UserRegistrationView(generics.CreateAPIView):
 
             if not personal:
                 # personal 組織は migration 0014/0017/0018 で常に存在する前提。
-                # 不在は環境異常のため自動作成せず、既存の 400 分岐（create() 側）に委ねる
+                # 不在は環境異常（サーバー起因）のため、クライアント起因の 400 ではなく
+                # 500 で顕在化させる（I142）
                 logger.error(
                     "Personal organization (type='personal', is_active=True) not found. "
                     "Environment is misconfigured; slug-less registration rejected."
                 )
-                return None
+                raise EnvironmentMisconfiguredError()
 
             logger.info(f"Using personal organization: {personal.name}")
             return personal
@@ -214,32 +219,25 @@ class OrganizationSlugValidationView(APIView):
 
         logger.info(f"Organization slug validation request: {slug}")
 
-        try:
-            organization = Organization.objects.filter(
-                slug=slug,
-                is_active=True
-            ).first()
+        organization = Organization.objects.filter(
+            slug=slug,
+            is_active=True
+        ).first()
 
-            if organization:
-                logger.info(f"Valid organization found: {organization.name}")
-                return Response({
-                    'valid': True,
-                    'organization_name': organization.name,
-                    'organization_id': organization.id
-                })
-            else:
-                logger.warning(f"No active organization found for slug: {slug}")
-                return Response({
-                    'valid': False,
-                    'message': f'組織 "{slug}" は見つかりません'
-                }, status=status.HTTP_404_NOT_FOUND)
-
-        except Exception as e:
-            logger.error(f"Error validating organization slug: {str(e)}", exc_info=True)
+        if organization:
+            logger.info(f"Valid organization found: {organization.name}")
             return Response({
-                'valid': False,
-                'message': 'エラーが発生しました'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                'valid': True,
+                'organization_name': organization.name,
+                'organization_id': organization.id
+            })
+
+        logger.warning(f"No active organization found for slug: {slug}")
+        return Response({
+            'valid': False,
+            'message': f'組織 "{slug}" は見つかりません'
+        }, status=status.HTTP_404_NOT_FOUND)
+        # 想定外例外は捕捉せず伝播させる（custom_exception_handler がログ+500 に変換する）
 
 
 class EmailVerificationView(APIView):
@@ -417,16 +415,25 @@ class ChangePasswordView(APIView):
 @permission_classes([permissions.AllowAny])
 @ratelimit(key='ip', rate='5/5m', method='POST')
 def logout_view(request):
-    try:
-        refresh_token = request.data["refresh"]
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-        return Response({'message': 'ログアウトしました。'})
-    except Exception:
+    # 想定内: refresh 欠落・不正なリクエスト形式（クライアント起因）
+    refresh_token = request.data.get('refresh') if isinstance(request.data, dict) else None
+    if not refresh_token:
         return Response(
             {'error': 'ログアウトに失敗しました。'},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    try:
+        RefreshToken(refresh_token).blacklist()
+    except TokenError:
+        # 想定内: 無効・失効・ブラックリスト済みのトークン（クライアント起因）
+        return Response(
+            {'error': 'ログアウトに失敗しました。'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response({'message': 'ログアウトしました。'})
+    # 想定外例外は捕捉せず伝播させる（custom_exception_handler がログ+500 に変換する）
 
 
 class AdminUserViewSet(viewsets.ModelViewSet):
