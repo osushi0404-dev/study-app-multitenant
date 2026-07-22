@@ -26,6 +26,8 @@ def first_error_message(errors):
     なるため、`next(iter(errors.values()))[0]` のような添字アクセスは KeyError を投げる。
     ネストの形に依存せず、必ず文字列（該当なしは None）を返す。
     """
+    if errors is None:
+        return None
     if isinstance(errors, dict):
         values = errors.values()
     elif isinstance(errors, (list, tuple)):

@@ -53,3 +53,28 @@
 - TC-DET-01/02/03: いずれも exit 0（変異体では exit 1 を実測＝false-green でないことを確認）
 
 （第 1 周は新規 High が 1 件以上あったため、修正の妥当性も反証対象に含めて第 2 周を実施する）
+
+---
+
+## 第 2 周
+
+### 観点とエージェント（3 観点・並列）
+1. 第 1 周修正の妥当性の反証（mutation で修正が tautology でないことを確認）
+2. 残存するロジック回避・想定外 500 化（第 1 周とは別入力・別経路）
+3. 既存レスポンス契約の回帰（第 1 周の `custom_exception_handler` 変更が全 API に波及していないか）
+
+### 結果
+- 観点1: NEW_CRITICAL 0 / NEW_HIGH 0。first_error_message・`BLACKLIST_AFTER_ROTATION=False`・admin unregister・500 ログの文脈追加・TC-AUTO-15〜20 のいずれも mutation で「壊すと落ちる」ことを実測（tautology でない）。Low 1 件（AST 判定が `except builtins.Exception:` の属性アクセス形を見逃す）
+- 観点2: NEW_CRITICAL 0 / NEW_HIGH 0。登録の非 dict/QueryDict/ListField・validate-slug・logout の各種不正入力で想定外 500 化は再現せず。真の未捕捉例外は JSON 500 でレンダリングされ DEBUG=False で詳細非露出を実測。Low 2 件（いずれも I142 非変更の既存分岐・到達不能経路）
+- 観点3: NEW_CRITICAL 0 / NEW_HIGH 0。ハンドラの非 None 経路は byte 一致で不変、`first_error_message` は登録ビュー内 1 箇所のみ、I127（429）・I131（body 完全一致）・I006（rollback）とも GREEN。非 accounts 全域 84 passed で契約回帰なし
+
+### 第 2 周の集計
+- **NEW_CRITICAL: 0 / NEW_HIGH: 0（合計 0 の周回＝収束）**
+- Low 指摘への任意対応: `first_error_message(None)` に明示 None ガードを追加、TC-DET-01 の AST 判定を属性アクセス形（`builtins.Exception`）も検出するよう強化。対応後 accounts 16 passed・TC-DET-01 exit 0
+
+---
+
+## ステージ結論
+第 2 周で新規 Critical/High がゼロの周回に到達（loop-until-dry 収束）。上限（3 周・15 エージェント）内。最終判定 = max(スクリプト FINAL_VERDICT=OK, 敵対ステージ=OK) = **OK**。
+
+VERDICT: OK
