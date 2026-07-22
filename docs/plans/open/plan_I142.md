@@ -70,15 +70,15 @@ LOGOUT STATUS: 400 BODY: {"error":"ログアウトに失敗しました。"}
 | `self._get_organization(None)`（personal 不在） | 例外なし（`None` 返却） | 400 同上 | `EnvironmentMisconfiguredError`（500）を raise |
 | `request.data.copy()` + キー代入（非 dict body） | `TypeError` | 400「エラーが発生しました」 | **事前 `isinstance` 判定で 400**（入力形式エラーとして明示） |
 | `serializer.is_valid()` | 例外なし（`False` 返却） | 400「入力内容にエラーがあります」 | **変更なし** |
-| `serializer.save()`（同時登録の競合等） | `IntegrityError` 等 | 400「エラーが発生しました」 | 想定外として伝播 → 500（極めて稀・重複は serializer で 400 済み） |
+| `serializer.save()`（同時登録の競合等） | `IntegrityError` 等 | 400「エラーが発生しました」 | 想定外として伝播 → 500（極めて稀・重複は serializer で 400 済み。**捕捉しない理由**: `IntegrityError` は重複制約以外（FK 違反・NOT NULL 違反等のプログラム欠陥）でも発生するため、一括捕捉して 4xx に変換すると本イシューが排除しようとしている「欠陥の 4xx 化」を再現してしまう。規約側にも「同じ例外型でも文脈で分類が変わる」判断基準を明記した） |
 | `send_verification_email` | 各種 | 内側の狭域 except で握りつぶし（意図的） | **変更なし**（意図をコメントで明記） |
 
 ### 調査6: 規約ファイルの既存コード例（`rules/ultimate_django_coding_standards.md`）
 | 行 | 内容 | 判定 |
 |----|------|------|
-| :689 | サービス層 `create_article` の `except Exception` → `ValidationError` へ変換（＝プログラム欠陥が 400 になる） | **規約と矛盾**。想定内例外の個別捕捉へ修正する |
-| :1223 | Celery タスクの `except Exception` → `self.retry` | **意図的**（バックグラウンド処理のリトライ設計）。意図をコメントで明記 |
-| :1403 | `LoggingMixin` の `except Exception` → ログ後に `raise` | **規約に適合**（握りつぶさない）。意図をコメントで明記 |
+| サービス層 `create_article` | サービス層 `create_article` の `except Exception` → `ValidationError` へ変換（＝プログラム欠陥が 400 になる） | **規約と矛盾**。想定内例外の個別捕捉へ修正する |
+| Celery タスク `generate_report` | Celery タスクの `except Exception` → `self.retry` | **意図的**（バックグラウンド処理のリトライ設計）。意図をコメントで明記 |
+| `LoggingMixin.dispatch` | `LoggingMixin` の `except Exception` → ログ後に `raise` | **規約に適合**（握りつぶさない）。意図をコメントで明記 |
 
 新規節の配置は **セクション 5「API設計（DRF）」配下の `### エラーハンドリング方針（例外設計）`** とする（同ファイル :24 が「API 設計（URL 設計・レスポンス形式・エラーハンドリング方針）」を手動レビュー対象に挙げており整合。目次番号の振り直しが不要）。
 
@@ -104,6 +104,20 @@ LOGOUT STATUS: 400 BODY: {"error":"ログアウトに失敗しました。"}
 7. 既存テスト全 PASS（baseline 94） → TC-AUTO-14
 8. 規約が明文化され、既存コード例が整合 → TC-DET-02
 9. FE の登録・logout 導線が実動作で退行しない → 手動テスト
+10. 登録の非 dict body が新契約 400（`不正なリクエスト形式です`）で返る → TC-AUTO-05
+11. `subject_ids` の 2 要素目以降の検証エラーでも 400・`sub_message` は文字列 → TC-AUTO-18
+12. refresh ローテーション後も旧トークンが有効（`BLACKLIST_AFTER_ROTATION=False`） → TC-AUTO-19
+13. `OutstandingToken` / `BlacklistedToken` が admin に未登録 → TC-AUTO-20
+
+### 敵対的レビュー（2026-07-22・第 1 周）で追加した対応
+- **High**: `next(iter(serializer.errors.values()))[0]` が index キー dict で `KeyError` → 500 になる欠陥を修正（`core.exceptions.first_error_message` を新設）
+- **High**: `token_blacklist` 有効化により `BLACKLIST_AFTER_ROTATION=True` が初めて効き、refresh が単回使用になる副作用を回避（明示的に `False` を設定・FE 是正は別イシュー）
+- **High**: 「INSTALLED_APPS から外すだけ」のロールバック手順が成立しないことを実測で確認し、§8 を訂正
+- **Medium**: `OutstandingToken` の admin 露出を遮断（`accounts/admin.py` で unregister）
+- **Medium**: 可観測性で失われる経路（Django 標準 500 ログ・シグナル・ミドルウェア例外ログ）を §11 に明記し、ハンドラのログにビュー・メソッド・パス・ユーザを追加
+- **Medium**: 規約例が Django の `ValidationError`（＝新ハンドラでは 500 になる）を使っていた矛盾を修正し、DRF 例外を使う旨を規約に明記
+- **Medium**: mutation 生存（logout の狭域捕捉・分類の例外型・handler の 5xx ログ）を検知する TC-AUTO-15〜17 を追加
+- **Low**: 決定論チェックの素通り（`grep` がコメント行や `except BaseException` を見逃す）を AST 判定・設定値の意味論判定に差し替え
 
 ---
 
@@ -183,7 +197,7 @@ def custom_exception_handler(exc, context):
 ```
 
 ### 5-2. `backend/core/settings.py`
-**修正方針**: logout がトークンを実際に失効させられるよう、simplejwt の失効機能を有効化する。
+**修正方針**: logout がトークンを実際に失効させられるよう simplejwt の失効機能を有効化する。ただし有効化に伴って初めて効き始める「ローテート後の旧トークン失効」は、FE が新 refresh を保存していないため強制ログアウトを招く。現行挙動を維持するため明示的に無効化する。
 
 ```python
 INSTALLED_APPS = [
@@ -192,6 +206,49 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',  # logout での refresh トークン失効に必要（I142）
     ...
 ]
+
+SIMPLE_JWT = {
+    ...
+    'ROTATE_REFRESH_TOKENS': True,
+    # I142: 有効化前は blacklist 機能が無く、この設定は無視されていた（＝ローテート済みも有効）。
+    # FE がローテート後の新 refresh を保存しないため、True のままだと 2 回目の更新で強制ログアウトになる。
+    'BLACKLIST_AFTER_ROTATION': False,
+}
+```
+
+### 5-2b. `backend/accounts/admin.py`
+**修正方針**: 失効管理テーブルの詳細画面は refresh トークン全文を表示するため、admin への自動登録を取り下げて露出面を作らない。
+
+```python
+try:  # pragma: no cover - INSTALLED_APPS 構成に依存する防御的分岐
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+except ImportError:
+    pass
+else:
+    for _token_model in (OutstandingToken, BlacklistedToken):
+        if admin.site.is_registered(_token_model):
+            admin.site.unregister(_token_model)
+```
+
+### 5-1b. `backend/core/exceptions.py`（`first_error_message` ヘルパー）
+**修正方針**: `serializer.errors` の先頭メッセージ取り出しを、ネストの形（`ListField` の index キー dict 等）に依存しない実装にする。従来の `next(iter(errors.values()))[0]` は index 0 が無い dict で `KeyError` を投げ、広域 except 撤去後は 500 になっていた。
+
+```python
+def first_error_message(errors):
+    """serializer.errors から先頭のエラーメッセージを 1 つだけ安全に取り出す（I142）。"""
+    if isinstance(errors, dict):
+        values = errors.values()
+    elif isinstance(errors, (list, tuple)):
+        values = errors
+    else:
+        message = str(errors)
+        return message or None
+
+    for value in values:
+        message = first_error_message(value)
+        if message:
+            return message
+    return None
 ```
 
 ### 5-3. `backend/accounts/views.py`（登録ビュー）
@@ -325,7 +382,7 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 - 想定外の例外（プログラム欠陥）は**捕捉しない**。`EXCEPTION_HANDLER` に委ね、スタックトレース記録 + 5xx で顕在化させる
 - **広域 `except Exception` は禁止**。例外的に許容するのは「失敗しても処理継続が業務上正しい副作用」（メール送信等）と「ログ後に必ず `raise` する」ケースのみで、その場合は意図をコメントで明記する
 - 環境構成の不備は `core.exceptions.EnvironmentMisconfiguredError`（500）で表現する
-あわせて既存コード例 :689 を規約準拠へ修正、:1223 / :1403 に許容理由のコメントを追加する（調査6）。
+あわせて既存コード例のサービス層 `create_article` を規約準拠へ修正し、Celery タスク `generate_report` と `LoggingMixin.dispatch` に許容理由のコメントを追加する（調査6）。行番号は節の追加で変動するため、以降は関数名で参照する。
 
 ---
 
@@ -353,7 +410,7 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 
 ### ステップ4: 規約を明文化する（ステップ1〜3 と並行可）
 1. `rules/ultimate_django_coding_standards.md` に `### エラーハンドリング方針（例外設計）` を追加（5-9）
-2. 既存コード例 :689 の修正、:1223 / :1403 への意図コメント追加
+2. 既存コード例のサービス層 `create_article` の修正、Celery タスク `generate_report` / `LoggingMixin.dispatch` への意図コメント追加
 → 検証は TC-DET-02 参照
 
 ### ステップ5: 全体回帰と手動確認
@@ -381,8 +438,9 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 
 ## 8. ロールバック
 1. コードは PR 単位で revert（`git revert`）
-2. `token_blacklist` は INSTALLED_APPS から 1 行削除すれば無効化できる（テーブルは残置して無害。完全に戻す場合は `manage.py migrate token_blacklist zero`）
-3. DB のデータ変更は行わないため、データ復旧作業は不要
+2. **`token_blacklist` を INSTALLED_APPS から外すだけの部分ロールバックは不可**（敵対的レビューで実測）。アプリを外すと `RefreshToken.blacklist` 属性自体が定義されなくなり、`AttributeError` は `except TokenError` に捕まらず logout が 500 になる。設定を戻す場合は `accounts/views.py` の logout（blacklist 呼び出し）も同時に戻すこと。緊急退避は PR 全体の revert を第一手段とする
+3. 追加テーブルは残置して無害（完全に戻す場合のみ `manage.py migrate token_blacklist zero`）
+4. DB の既存データ変更は行わないため、データ復旧作業は不要
 
 ---
 
@@ -390,7 +448,9 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 | リスク | 影響 | 回避策 |
 |--------|------|--------|
 | 想定外例外の 500 化で、これまで 400 として黙って処理されていた経路がエラーとして表面化する | 監視上のエラー増加 | それが本イシューの目的。既存テスト（94 件）＋新規 TC で正常系・想定内 4xx の不変を確認する |
-| `token_blacklist` 有効化で migrate 忘れ | logout が 500（テーブル不在） | 実装ステップ1 に migrate を組み込み、TC-AUTO-06 で 200 を固定。デプロイ手順にも migrate 必要を明記 |
+| `token_blacklist` 有効化で migrate 忘れ | **logout だけでなく login・refresh も 500**（`BlacklistMixin.for_user` が `OutstandingToken` へ無条件 INSERT するため認証系が全滅） | 実装ステップ1 に migrate を組み込み、TC-AUTO-06 で 200 を固定。`docker-compose.yml`（backend 起動コマンド）と E2E ワークフローに `migrate` が含まれることを確認済み。backend CI は `--no-migrations` のためこの経路は E2E 側で担保する |
+| `BLACKLIST_AFTER_ROTATION` の既存設定が有効化され refresh が単回使用になる | FE がローテート後の新 refresh を保存しないため、refresh 経路が繋がった時に強制ログアウト（セッション寿命が実質 1 回分） | 明示的に `BLACKLIST_AFTER_ROTATION=False` を設定して現行挙動を維持し、TC-AUTO-19 で固定。FE の更新処理の是正と再有効化は別イシューへ引き継ぐ |
+| `OutstandingToken` に refresh トークンが平文で蓄積し、admin から閲覧可能になる | staff 権限経由での他ユーザーなりすまし・無制限のテーブル成長 | admin 登録を解除（TC-AUTO-20 で固定）。定期削除（`flushexpiredtokens`）の運用整備は別イシューへ引き継ぐ |
 | `DEBUG=True` の本番運用時に例外詳細が応答へ出る | 情報漏洩 | 既存実装（`views.py:126`）と同じ条件付き。`DEBUG=False` での非露出を TC-AUTO-01 で固定 |
 | `set_rollback()` 追加による副作用 | 既存トランザクション挙動の変化 | `ATOMIC_REQUESTS` は未設定（デフォルト False）のため実質 no-op。登録ビューは明示的 `transaction.atomic()` で従来どおりロールバックする |
 | ログ出力の増加（5xx ごとにスタックトレース） | ログ量増 | 5xx のみが対象で、通常運用では稀。`error_file` は TimedRotatingFileHandler でローテーション済み |
@@ -399,7 +459,8 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 
 ## 10. データ整合性設計（DB 変更があるため記載）
 - **追加テーブル**: `token_blacklist_outstandingtoken`（発行済み refresh トークン）・`token_blacklist_blacklistedtoken`（失効済み）。simplejwt 同梱のマイグレーションをそのまま適用する（自作マイグレーションなし）
-- **制約**: simplejwt 既定（`OutstandingToken.jti` は unique、`BlacklistedToken.token` は OneToOne + `on_delete=CASCADE`、`user` は `on_delete=CASCADE`）。既存テーブルへの FK 追加・カラム変更はなし
+- **制約**: simplejwt 既定（`OutstandingToken.jti` は unique、`BlacklistedToken.token` は OneToOne + `on_delete=CASCADE`、`OutstandingToken.user` は **`null=True` + `on_delete=SET_NULL`**）。既存テーブルへの FK 追加・カラム変更はなし
+- **保存内容の注意**: `OutstandingToken.token` は refresh JWT を**平文**で保持し、`user` が SET_NULL のためユーザー削除後も行が残る。admin 登録を解除して露出面を塞ぐ（TC-AUTO-20）。保持期間の設計と定期削除は別イシューへ引き継ぐ
 - **後方互換性**: 追加のみ。旧コード（blacklist を呼ばない状態）でもテーブルが存在するだけで無害
 - **冪等性・同時更新**: 同一トークンで logout を 2 回叩いた場合、2 回目は `TokenError`（ブラックリスト済み）で 400 を返す（TC-AUTO-06 で固定）
 - **マイグレーション安全性**: 追加テーブルのみでロック時間は無視できる。ロールバックは `migrate token_blacklist zero` で可能
@@ -408,7 +469,8 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 ---
 
 ## 11. 運用設計（ログ・可観測性の変更があるため記載）
-- **構造化ログ方針**: 既存 `ErrorContextMiddleware`（`core/enhanced_logging.py:111-`）が `request_id` / `user_id` / パス等を付けて 4xx・5xx を `django.request` に記録する。本変更で追加するのは**スタックトレース付きの例外ログ**（`logger.exception`）で、出力先は既存の `error_file` ハンドラ（ローテーション済み）
+- **構造化ログ方針**: 既存 `ErrorContextMiddleware`（`core/enhanced_logging.py:111-`）が `request_id` / `user_id` / パス等を付けて 4xx・5xx **レスポンス**を `django.request` に記録する（この経路は変更後も維持される）。本変更で追加するのは**スタックトレース付きの例外ログ**（`logger.exception`）で、出力先は既存の `error_file` ハンドラ（ローテーション済み）
+- **失われる経路（敵対的レビューで判明・許容する）**: ハンドラが応答を返すため、DRF ビューの未捕捉例外は (a) Django 標準の `Internal Server Error: <path>` ログ、(b) `got_request_exception` シグナル、(c) `ErrorContextMiddleware._log_exception`（locals 付き詳細ログ）を通らなくなる。代替として、ハンドラの `logger.exception` にビュー名・HTTP メソッド・パス・ユーザ ID を含める。将来 Sentry 等の APM を導入する場合は、シグナル経由ではなく**ロギング連携**で 5xx を収集する必要がある（導入時の申し送り事項）
 - **タイムアウト・リトライ**: 外部 API 呼び出しの追加はないため該当なし
 - **Feature Flag・段階リリース**: 変更は 1 アプリ内の例外設計に閉じ、切り戻しは revert で完結するため不要
 
@@ -424,8 +486,11 @@ TC-AUTO-01〜10 を実装する（詳細な期待値は `docs/tests/open/I142_au
 
 ---
 
-## 14. プライバシー・コンプライアンス
-本変更は個人情報の新規収集・保存・越境を伴わない。`DEBUG=False` では例外詳細を応答に出さないため、エラー応答経由の情報漏洩も増えない。既存の平文パスワードログ出力は別イシュー（I144）で対応する。→ **P9 影響なし**
+## 14. プライバシー・コンプライアンス（**P9 影響あり**・敵対的レビューで判定を訂正）
+- 個人情報の新規収集はないが、`token_blacklist_outstandingtoken` に **refresh JWT が平文で新規保存**される。これは保持しているだけでなりすまし可能な資格情報であり、DB 読み取り権限・admin 閲覧権限が新たな攻撃面になる
+- 緩和策（本イシューで実施）: admin 登録の解除（TC-AUTO-20）。`DEBUG=False` では例外詳細を応答に出さない
+- 残存リスク（別イシューへ引き継ぎ）: 保持期間の定義と定期削除（`flushexpiredtokens`）、ユーザー削除後も `user=NULL` で行が残る点の扱い
+- 既存の平文パスワードログ出力は別イシュー（I144）で対応する
 
 ---
 

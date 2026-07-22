@@ -19,7 +19,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from core.throttling import AppAnonRateThrottle
-from core.exceptions import EnvironmentMisconfiguredError
+from core.exceptions import EnvironmentMisconfiguredError, first_error_message
 
 from .models import User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization
 from .serializers import (
@@ -108,7 +108,9 @@ class UserRegistrationView(generics.CreateAPIView):
                 return Response({
                     'error': {
                         'main_message': '入力内容にエラーがあります',
-                        'sub_message': next(iter(serializer.errors.values()))[0] if serializer.errors else None,
+                        # ListField の要素エラーは index キーの dict になるため、
+                        # 添字アクセスではなくネスト非依存のヘルパーで取り出す（I142）
+                        'sub_message': first_error_message(serializer.errors),
                         'details': serializer.errors
                     }
                 }, status=status.HTTP_400_BAD_REQUEST)

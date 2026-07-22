@@ -168,7 +168,11 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    # I142: token_blacklist 有効化前は blacklist 機能が存在せず、この設定は
+    # simplejwt 内部で無視されていた（＝ローテート済み refresh も期限まで有効）。
+    # フロントエンドがローテート後の新 refresh を保存していないため、True のままだと
+    # 2 回目の更新で強制ログアウトになる。FE の更新処理を是正するまで明示的に False とする。
+    'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,

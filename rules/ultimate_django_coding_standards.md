@@ -518,6 +518,10 @@ def register_view(request):
         return Response({'error': 'エラーが発生しました'}, status=400)
 ```
 
+**4xx を返したいときは DRF の例外を使う**。`django.core.exceptions.ValidationError` は DRF の `EXCEPTION_HANDLER` が処理しない（未捕捉例外として扱われる）ため、想定内エラーのつもりで raise すると **500「サーバーエラー」**になる。API 層・サービス層から 4xx を意図する場合は `rest_framework.exceptions.ValidationError`（および `NotFound` / `PermissionDenied` 等の DRF 例外）を使う。
+
+**同じ例外型でも文脈で分類が変わる**。判断基準は「その箇所でその失敗が業務上想定されているか」。例えば `IntegrityError` は、重複チェックを DB 制約に委ねている箇所では想定内（4xx へ変換）だが、事前にシリアライザ検証で重複を弾いている箇所では想定外（伝播させて 5xx）として扱う。捕捉する側が「なぜここでは想定内なのか」をコメントで示すこと。
+
 **環境構成の不備**（既定データの欠落・設定漏れ等、サーバー起因で入力では回復できない失敗）は `core.exceptions.EnvironmentMisconfiguredError`（500）で表現し、400 に混ぜない。
 
 ```python
@@ -672,7 +676,9 @@ class ArticleSelector:
 import logging
 from typing import Optional, Dict, Any
 from django.db import transaction, IntegrityError
-from django.core.exceptions import ValidationError
+# 4xx を意図する例外は DRF 側を使う（django.core.exceptions.ValidationError は
+# EXCEPTION_HANDLER が処理せず 500 になる。「エラーハンドリング方針」参照）
+from rest_framework.exceptions import ValidationError
 from .models import Article, ArticleHistory
 from .tasks import send_notification
 
@@ -1216,6 +1222,7 @@ class ArticleFactory(DjangoModelFactory):
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.core.cache import cache
+from django.db import DatabaseError
 import time
 
 logger = get_task_logger(__name__)
@@ -1268,18 +1275,21 @@ def generate_report(self, report_id: str):
         logger.error(f"Report {report_id} not found")
         raise self.retry(countdown=60)
 
-    # 広域捕捉の許容ケース: バックグラウンドタスクは失敗を記録して retry させる設計のため
-    # （HTTP 応答を返さないので 4xx/5xx の取り違えは起きない。「エラーハンドリング方針」参照）
+    # 広域捕捉の許容ケース 2（ログ後に必ず再送出する）: 失敗を記録してから
+    # raise self.retry(exc=e) で再送出するため握りつぶしにはならない
+    # （「エラーハンドリング方針（例外設計）」参照）
     except Exception as e:
         logger.error(f"Failed to generate report {report_id}: {e}")
 
-        # 失敗時の処理
+        # 失敗時の処理（ステータス更新に失敗しても retry は行う）
         try:
             report.status = 'failed'
             report.error_message = str(e)
             report.save(update_fields=['status', 'error_message'])
-        except:
-            pass
+        except DatabaseError:
+            # 広域捕捉の許容ケース 1（失敗しても継続が業務上正しい副作用）:
+            # ステータス記録の失敗で retry 自体を止めない。bare except は使わない
+            logger.exception(f"Failed to mark report {report_id} as failed")
 
         raise self.retry(exc=e)
 
@@ -1450,7 +1460,7 @@ class LoggingMixin:
             )
             return response
 
-        # 広域捕捉の許容ケース: ログ記録のみを行い必ず再送出する（握りつぶさない）
+        # 広域捕捉の許容ケース 2（ログ後に必ず再送出する・握りつぶさない）
         # （「エラーハンドリング方針（例外設計）」参照）
         except Exception as e:
             log.error(

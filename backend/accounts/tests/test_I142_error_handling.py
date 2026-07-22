@@ -16,6 +16,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import Organization, OrganizationCategory, User
+from accounts.views import UserRegistrationView
+from core.exceptions import EnvironmentMisconfiguredError
 from problems.models import Subject
 
 
@@ -195,6 +197,109 @@ def test_logout_with_non_dict_body_returns_400():
     resp = APIClient().post("/api/auth/logout/", [], format="json")
     assert resp.status_code == status.HTTP_400_BAD_REQUEST
     assert resp.json() == LOGOUT_FAILURE_BODY
+
+
+# ---- TC-AUTO-15: logout の想定外例外は握りつぶさず 500（狭域捕捉であることの固定） ----
+@pytest.mark.django_db
+def test_logout_unexpected_exception_returns_json_500(setup, settings, request_log):
+    """`except TokenError` を広い捕捉に戻す改変を検知するための TC。
+    TokenError 以外（ここでは blacklist 実行時の RuntimeError）は 500 で顕在化する。"""
+    settings.DEBUG = False
+    user = User.objects.create_user(
+        user_id="i142_logout_boom", email="i142_logout_boom@example.com",
+        password="I142TestPass123!",  # pragma: allowlist secret（テスト用ダミー値）
+        organization=setup["org"])
+    refresh = str(RefreshToken.for_user(user))
+
+    with mock.patch(
+            'rest_framework_simplejwt.tokens.BlacklistMixin.blacklist',
+            side_effect=RuntimeError('I142 injected')):
+        resp = APIClient().post("/api/auth/logout/", {"refresh": refresh}, format="json")
+
+    assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert resp.json() == EXPECTED_500_BODY
+    assert any(
+        r.exc_info and r.exc_info[0] is RuntimeError for r in request_log.records)
+
+
+# ---- TC-AUTO-16: personal 不在は EnvironmentMisconfiguredError で分類される ----
+@pytest.mark.django_db
+def test_personal_org_absence_raises_environment_misconfigured_error(setup):
+    """統一 JSON 500 の body だけでは「分類による 500」と「無関係なクラッシュ」を
+    区別できないため、例外型そのものを固定する（I140 テストの判別力を補完）。"""
+    view = UserRegistrationView()
+    assert not Organization.objects.filter(type='personal', is_active=True).exists()
+    with pytest.raises(EnvironmentMisconfiguredError):
+        view._get_organization(None)
+
+
+# ---- TC-AUTO-17: APIException 由来の 5xx もスタックトレースが記録される ----
+@pytest.mark.django_db
+def test_api_exception_5xx_is_logged_with_stack_trace(setup, request_log):
+    """handler の `response is not None` 側 5xx ログ（二重記録の片系統）を固定する。"""
+    client = APIClient()
+    resp = client.post(
+        "/api/auth/register/", _payload("i142_env_err", setup["subject"].id),
+        format="json")
+    assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert any(
+        r.exc_info and r.exc_info[0] is EnvironmentMisconfiguredError
+        for r in request_log.records)
+
+
+# ---- TC-AUTO-18: ListField の 2 要素目以降の検証エラーも 400（500 化しない） ----
+@pytest.mark.django_db
+def test_register_listfield_error_at_later_index_returns_400(setup):
+    """`subject_ids` の index>=1 の要素エラーは index キーの dict になり、
+    従来の添字アクセスでは KeyError → 500 になっていた（I142 レビューで検出）。"""
+    payload = _payload("i142_list_err", setup["subject"].id)
+    payload["subject_ids"] = [setup["subject"].id, "not-an-int"]
+    resp = APIClient().post("/api/auth/register/org-i142/", payload, format="json")
+    assert resp.status_code == status.HTTP_400_BAD_REQUEST
+    body = resp.json()
+    assert body["error"]["main_message"] == "入力内容にエラーがあります"
+    # sub_message は必ず文字列（list や dict を返さない）
+    assert isinstance(body["error"]["sub_message"], str)
+
+
+# ---- TC-AUTO-19: refresh トークンのローテーションで旧トークンを失効させない ----
+@pytest.mark.django_db
+def test_refresh_rotation_does_not_blacklist_previous_token(setup):
+    """`BLACKLIST_AFTER_ROTATION=False` の固定。FE がローテート後の新 refresh を
+    保存していないため、旧トークンの失効は強制ログアウトを招く（I142 レビューで検出）。"""
+    User.objects.create_user(
+        user_id="i142_rotate", email="i142_rotate@example.com",
+        password="I142TestPass123!",  # pragma: allowlist secret（テスト用ダミー値）
+        organization=setup["org"])
+    client = APIClient()
+    login = client.post(
+        "/api/auth/login/",
+        {"email": "i142_rotate@example.com",
+         "password": "I142TestPass123!"},  # pragma: allowlist secret
+        format="json")
+    assert login.status_code == status.HTTP_200_OK
+    refresh = login.json()["refresh"]
+
+    first = client.post("/api/auth/refresh/", {"refresh": refresh}, format="json")
+    assert first.status_code == status.HTTP_200_OK
+    # 同じ refresh の再利用が引き続き可能（ローテート後失効が無効であること）
+    second = client.post("/api/auth/refresh/", {"refresh": refresh}, format="json")
+    assert second.status_code == status.HTTP_200_OK
+    # ログアウトによる明示的失効は機能する
+    assert client.post(
+        "/api/auth/logout/", {"refresh": refresh}, format="json"
+    ).status_code == status.HTTP_200_OK
+
+
+# ---- TC-AUTO-20: 失効管理テーブルを admin に露出させない ----
+def test_token_blacklist_models_are_not_registered_in_admin():
+    """OutstandingToken の詳細画面は refresh トークン全文を表示するため登録解除する。"""
+    from django.contrib import admin as django_admin
+    from rest_framework_simplejwt.token_blacklist.models import (
+        BlacklistedToken, OutstandingToken)
+
+    assert not django_admin.site.is_registered(OutstandingToken)
+    assert not django_admin.site.is_registered(BlacklistedToken)
 
 
 # ---- TC-AUTO-10: 登録の serializer 検証 400 の契約維持 ----

@@ -19,6 +19,28 @@ class EnvironmentMisconfiguredError(APIException):
     default_code = 'environment_misconfigured'
 
 
+def first_error_message(errors):
+    """serializer.errors から先頭のエラーメッセージを 1 つだけ安全に取り出す（I142）。
+
+    `ListField` の要素エラーは index をキーとする dict（例 `{'subject_ids': {1: [...]}}`）に
+    なるため、`next(iter(errors.values()))[0]` のような添字アクセスは KeyError を投げる。
+    ネストの形に依存せず、必ず文字列（該当なしは None）を返す。
+    """
+    if isinstance(errors, dict):
+        values = errors.values()
+    elif isinstance(errors, (list, tuple)):
+        values = errors
+    else:
+        message = str(errors)
+        return message or None
+
+    for value in values:
+        message = first_error_message(value)
+        if message:
+            return message
+    return None
+
+
 def custom_exception_handler(exc, context):
     """
     カスタム例外ハンドラー
@@ -29,10 +51,17 @@ def custom_exception_handler(exc, context):
     if response is None:
         # DRF が処理しない例外＝想定外（プログラム欠陥）。
         # 握りつぶさずスタックトレースを記録し、統一 JSON の 500 で顕在化させる（I142）。
+        # DRF が応答を返すと Django 標準の 500 ログ・got_request_exception シグナル・
+        # ErrorContextMiddleware の例外ログを通らないため、切り分けに必要な文脈
+        # （ビュー・メソッド・パス・ユーザ）をこのログに含める。
         view = context.get('view')
+        request = context.get('request')
         logger.exception(
-            "Unhandled exception in %s",
-            view.__class__.__name__ if view else 'unknown view')
+            "Unhandled exception in %s (%s %s, user=%s)",
+            view.__class__.__name__ if view else 'unknown view',
+            getattr(request, 'method', '-'),
+            getattr(request, 'path', '-'),
+            getattr(getattr(request, 'user', None), 'id', 'anonymous'))
         set_rollback()  # ATOMIC_REQUESTS 有効時にトランザクションを確実にロールバックする
         return Response({
             'error': {

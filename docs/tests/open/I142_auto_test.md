@@ -59,6 +59,12 @@ with mock.patch.object(Organization.objects, 'filter', side_effect=RuntimeError(
 | TC-AUTO-08 | logout: 無効トークン | `POST /api/auth/logout/` に `{"refresh": "not-a-valid-token"}` | `status_code == 400` かつ body 完全一致 `{"error": "ログアウトに失敗しました。"}` |
 | TC-AUTO-09 | logout: 不正なリクエスト形式 | `POST /api/auth/logout/` に JSON 配列 `[]` | `status_code == 400` かつ body 完全一致 `{"error": "ログアウトに失敗しました。"}`（500 でないこと） |
 | TC-AUTO-10 | 登録: serializer 検証 400 の契約維持 | 既存ユーザーと同じ `user_id` で `POST /api/auth/register/org-i142/` | `status_code == 400` かつ `body['error']['main_message'] == '入力内容にエラーがあります'` かつ `'user_id' in body['error']['details']` |
+| TC-AUTO-15 | logout の想定外例外は 500（狭域捕捉の固定） | `BlacklistMixin.blacklist` に `RuntimeError` を注入して有効トークンで `POST /api/auth/logout/` | `status_code == 500` かつ body 完全一致 `EXPECTED_500_BODY`、`django.request` に `exc_info[0] is RuntimeError` のレコード（`except TokenError` を広い捕捉に戻す改変を検知する） |
+| TC-AUTO-16 | personal 不在の分類（例外型の固定） | `UserRegistrationView()._get_organization(None)` を personal 不在状態で直接呼ぶ | `EnvironmentMisconfiguredError` が raise される（body 一致だけでは無関係なクラッシュと区別できないため型で固定） |
+| TC-AUTO-17 | APIException 由来 5xx のスタックトレース記録 | personal 不在で `POST /api/auth/register/` | `status_code == 500` かつ `django.request` に `exc_info[0] is EnvironmentMisconfiguredError` のレコード |
+| TC-AUTO-18 | ListField の 2 要素目以降の検証エラー | `subject_ids = [有効ID, "not-an-int"]` で `POST /api/auth/register/org-i142/` | `status_code == 400` かつ `main_message == '入力内容にエラーがあります'`、`sub_message` が **文字列**（従来は index キー dict への添字アクセスで KeyError → 500） |
+| TC-AUTO-19 | refresh ローテーションで旧トークンを失効させない | login → 同一 refresh で `POST /api/auth/refresh/` を 2 回 → `POST /api/auth/logout/` | 1 回目・2 回目とも `200`（`BLACKLIST_AFTER_ROTATION=False` の固定）、logout は `200` |
+| TC-AUTO-20 | 失効管理テーブルを admin に露出しない | `django.contrib.admin.site.is_registered()` を確認 | `OutstandingToken` / `BlacklistedToken` とも未登録（refresh トークン全文の露出面を作らない） |
 | TC-AUTO-11 | personal 不在 → 500（I140 テスト更新） | personal 組織なしで `POST /api/auth/register/`（`test_I140_personal_org_fallback.py`） | `status_code == 500` かつ body 完全一致 `{"error": {"main_message": "サーバーエラー", "sub_message": "しばらく時間をおいて再度お試しください", "details": {}}}` |
 | TC-AUTO-12 | personal が非アクティブのみ → 500（I140 テスト更新） | 非アクティブ personal のみ存在する状態で同 POST | TC-AUTO-11 と同じ 500 body。かつ組織が新規作成されない・active 化されない（既存アサート維持） |
 | TC-AUTO-13 | I131 契約テストの GREEN 維持 | `docker compose exec backend python -m pytest accounts/tests/test_I131_org_id_rename.py -q` | **6 passed**（validate-slug 200/404×2・登録 201×2・無効 slug 400） |
@@ -72,18 +78,19 @@ with mock.patch.object(Organization.objects, 'filter', side_effect=RuntimeError(
 
 | TC | 目的 | コマンド（リポジトリルートで実行） | 合格条件 |
 |----|------|----------------------------------|----------|
-| TC-DET-01 | accounts/views.py に広域 except が意図的な 1 箇所（メール送信）のみ | `[ "$(grep -c 'except Exception' backend/accounts/views.py)" -eq 1 ] && [ "$(grep -c 'except Exception as email_error' backend/accounts/views.py)" -eq 1 ]` | exit 0 |
+| TC-DET-01 | accounts/views.py に広域 except が意図的な 1 箇所（メール送信）のみ。**AST 判定**（`except Exception` の文字列 grep では `except BaseException` / bare `except:` / タプル指定を見逃すため） | `docker compose exec -T backend python -c "import ast; tree = ast.parse(open('accounts/views.py').read()); is_broad = lambda h: h.type is None or any(isinstance(n, ast.Name) and n.id in ('Exception','BaseException') for n in ([h.type] if not isinstance(h.type, ast.Tuple) else h.type.elts)); broad = [h for h in ast.walk(tree) if isinstance(h, ast.ExceptHandler) and is_broad(h)]; assert len(broad) == 1 and broad[0].name == 'email_error', [(h.lineno, h.name) for h in broad]"` | exit 0 |
 | TC-DET-02 | 規約の新規節が存在する | `grep -q '^### エラーハンドリング方針' rules/ultimate_django_coding_standards.md` | exit 0 |
-| TC-DET-03 | token_blacklist が INSTALLED_APPS に登録されている | `grep -q "rest_framework_simplejwt.token_blacklist" backend/core/settings.py` | exit 0 |
+| TC-DET-03 | token_blacklist が有効かつローテート後失効が無効であること。**設定値の意味論判定**（grep はコメントアウト行にもマッチするため） | `docker compose exec -T backend python manage.py shell -c "from django.conf import settings; assert 'rest_framework_simplejwt.token_blacklist' in settings.INSTALLED_APPS; assert settings.SIMPLE_JWT['BLACKLIST_AFTER_ROTATION'] is False"`（`python -c` では `DJANGO_SETTINGS_MODULE` 未設定で `ImproperlyConfigured` になるため `manage.py shell -c` を使う） | exit 0 |
 
-### false-green 自己検証（実施済み・2026-07-20）
-判定ロジックが「壊れている状態」で確実に不合格になることを、実装前の現状（＝失敗条件が実在する状態）に対して実行して確認した。あわせて、目標状態を模した合成ファイル（scratchpad）に対して合格（exit 0）を返すことも確認済み。
+### false-green 自己検証
+判定ロジックが「壊れている状態」で確実に不合格になることを実測で確認する。
 
-| TC | 実装前の現状（不合格であるべき） | 目標状態の合成入力（合格であるべき） |
-|----|------------------------------|--------------------------------|
-| TC-DET-01 | `exit=1`（広域 except が 4 箇所存在） | `exit=0` |
-| TC-DET-02 | `exit=1`（該当節が未追加） | `exit=0` |
-| TC-DET-03 | `exit=1`（INSTALLED_APPS 未登録） | `exit=0` |
+**初版（2026-07-20・grep 判定）**: 実装前の現状に対して TC-DET-01/02/03 とも `exit=1`、目標状態を模した合成ファイルに対して `exit=0` を確認。
+
+**改訂版（2026-07-22・敵対的レビュー指摘反映）**: 旧 TC-DET-01/03 は素通りの穴があることが実測で判明したため判定方式を差し替えた。
+- 旧 TC-DET-01（`grep -c 'except Exception'`）: `except TokenError` を `except BaseException` に改変した変異体でも `1/1` で **exit 0**（＝改悪を検知できない）。→ AST 判定に変更し、同じ変異体で `exit=1`（`[(430, None), (126, 'email_error')]` を検出）を実測。
+- 旧 TC-DET-03（`grep -q`）: 該当行をコメントアウトした状態でも **exit 0**。→ settings の意味論判定に変更し、アプリ未登録相当の状態で `exit=1` を実測。
+- 現行コードに対しては TC-DET-01/02/03 とも `exit=0` を実測。
 
 ## 実施記録
 
@@ -95,6 +102,13 @@ with mock.patch.object(Organization.objects, 'filter', side_effect=RuntimeError(
 - TC-DET-01: exit 0（実装前は exit 1）
 - TC-DET-02: exit 0（実装前は exit 1）
 - TC-DET-03: exit 0（実装前は exit 1）
+
+### 敵対的レビュー第 1 周の指摘反映後（2026-07-22）
+- TC-AUTO-01〜20: accounts 配下 **26 passed**
+- 全体回帰: **110 passed**（実装時 104 + 追加 6）
+- TC-DET-01（AST 判定）: exit 0 / 変異体（`except BaseException` 化）で exit 1 を実測
+- TC-DET-02: exit 0
+- TC-DET-03（設定の意味論判定）: exit 0 / アプリ未登録相当で exit 1 を実測
 
 ### /test 実行時に追記
 （未実施）
