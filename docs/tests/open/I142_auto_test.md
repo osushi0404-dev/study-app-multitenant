@@ -110,5 +110,11 @@ with mock.patch.object(Organization.objects, 'filter', side_effect=RuntimeError(
 - TC-DET-02: exit 0
 - TC-DET-03（設定の意味論判定）: exit 0 / アプリ未登録相当で exit 1 を実測
 
-### /test 実行時に追記
-（未実施）
+### /test 実行時（2026-07-22）
+- TC-AUTO-01〜20（accounts/tests/test_I142_error_handling.py + test_I140 + test_I131 の該当分）: **26 passed**（-v で個別 PASSED を確認）
+- TC-AUTO-14（全体回帰・`pytest --tb=short -q`）: **110 passed**（回帰なし）
+- TC-DET-01（AST 判定）: exit 0
+- TC-DET-02（規約節の存在）: exit 0
+- TC-DET-03（設定の意味論判定）: exit 0
+- Frontend Jest（`npm test -- --watchAll=false`）: **10 passed**（3 suites）
+- E2E（`docker compose --profile e2e run --rm e2e`）: **7 passed**（auth.spec.ts のログイン/ログアウトフロー含む）
