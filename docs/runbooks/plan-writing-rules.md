@@ -79,6 +79,9 @@
 - インストールを伴うイシュー: `which <tool>` / `<tool> --version` で存在確認
 - Docker を使う手順: `docker compose ps` でサービス稼働確認
 - OS パッケージを使う手順: `apt list --installed <pkg>` / `pipx list` 等で確認
+- 実行環境選定の確認: `test -f /.dockerenv && echo "container" || echo "host"` 等で実行環境 (コンテナ/ホスト) を確認
+- コンテナ内必須ファイルの存在確認: `test -f <essential-file-path> && echo "存在" || echo "不在"` 等でコンテナ内ファイルを確認
+- 出力先ディレクトリの書き込み権限確認: `test -w <output-directory-path> && echo "書き込み可能" || echo "書き込み不可"` 等で出力先ディレクトリの書き込み権限を確認
 
 確認結果は計画書の「調査結果」または「実装手順 ステップ1」に明記する。前提ツールが未インストールの場合はインストール手順を計画書のステップ1に組み込む。
 
