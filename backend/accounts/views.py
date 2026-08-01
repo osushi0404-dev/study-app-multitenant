@@ -85,7 +85,7 @@ class UserRegistrationView(generics.CreateAPIView):
 
             # リクエストデータに組織IDを追加
             mutable_data = request.data.copy()
-            mutable_data['organization_id'] = organization.organization_id
+            mutable_data['organization_id'] = organization.id
 
             logger.info(f"Registration attempt with data: {mutable_data}")
 
@@ -152,17 +152,15 @@ class UserRegistrationView(generics.CreateAPIView):
             ).first()
 
             if not personal:
-                # personal組織が存在しない場合は作成
-                personal = Organization.objects.create(
-                    name='個人利用',
-                    slug='personal',
-                    type='personal',
-                    is_active=True
+                # personal 組織は migration 0014/0017/0018 で常に存在する前提。
+                # 不在は環境異常のため自動作成せず、既存の 400 分岐（create() 側）に委ねる
+                logger.error(
+                    "Personal organization (type='personal', is_active=True) not found. "
+                    "Environment is misconfigured; slug-less registration rejected."
                 )
-                logger.warning("Personal organization was missing, created new one")
-            else:
-                logger.info(f"Using personal organization: {personal.name}")
+                return None
 
+            logger.info(f"Using personal organization: {personal.name}")
             return personal
 
     def send_verification_email(self, user):
@@ -227,7 +225,7 @@ class OrganizationSlugValidationView(APIView):
                 return Response({
                     'valid': True,
                     'organization_name': organization.name,
-                    'organization_id': organization.organization_id
+                    'organization_id': organization.id
                 })
             else:
                 logger.warning(f"No active organization found for slug: {slug}")

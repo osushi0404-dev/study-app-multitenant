@@ -88,7 +88,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate_organization_id(self, value):
         """組織IDの検証"""
         if not Organization.objects.filter(
-            organization_id=value,
+            id=value,
             is_active=True
         ).exists():
             raise serializers.ValidationError('無効な組織IDです')
