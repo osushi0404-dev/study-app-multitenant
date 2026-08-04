@@ -86,3 +86,20 @@ class StudyStreakAdmin(admin.ModelAdmin):
     search_fields = ('user__email',)
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-current_streak',)
+
+
+# I142: token_blacklist アプリの有効化に伴い simplejwt が自動登録する
+# OutstandingToken / BlacklistedToken を admin から取り下げる。
+# 詳細画面は refresh トークン全文（= なりすまし可能な資格情報）を readonly 表示するため、
+# staff 権限経由での露出面を作らない。失効操作は logout API 経由のみとする。
+try:  # pragma: no cover - INSTALLED_APPS 構成に依存する防御的分岐
+    from rest_framework_simplejwt.token_blacklist.models import (
+        BlacklistedToken,
+        OutstandingToken,
+    )
+except ImportError:
+    pass
+else:
+    for _token_model in (OutstandingToken, BlacklistedToken):
+        if admin.site.is_registered(_token_model):
+            admin.site.unregister(_token_model)
