@@ -243,3 +243,19 @@ git branch -d hotfix/critical-bug-description
 3. **ユーザーが明示的に指示**: 「ブランチ作成不要」等の指示がある場合
 
 ただし、**イシューファイル作成依頼の場合は必ずブランチを作成**すること。
+
+## 外部（fork）からの PR の扱い
+
+public リポジトリのため、第三者（自律 AI エージェントを含む）から fork 経由の PR が届くことがある。
+外部からのコード寄稿は受け付けない（`CONTRIBUTING.md`）。届いた場合は次の手順で処理する。
+
+1. head リポジトリを確認する: `gh pr view <PR番号> --json isCrossRepository -q .isCrossRepository` → `true` なら外部 PR。
+2. **Actions の実行を承認しない**（fork PR には repository secrets が渡らず、E2E は原理的に失敗する）。
+3. **base 追従・CI 対応・レビューをしない**（マージしない PR に投じる意味がない）。
+4. 方針コメントを付けて close する: `gh pr comment <PR番号> --body-file <file>` → `gh pr close <PR番号>`。
+5. 対象のイシューは OPEN のまま残し、必要なら通常のハーネス手順（/plan-issue 以降）で自前実装する。
+
+判定は `scripts/claude/pr-base-sync.sh`（/close step 0）と PreToolUse ガード
+（`scripts/claude/hooks/pretooluse_guard.py`）でも自動検知されるが、上記は人が最初に見たときの手順である。
+ガードは `gh pr merge` を block、`gh pr ready` / `edit` / `review --approve` と MCP 経由の
+取り込み操作を ask にする。読み取りと `close` / `comment` は断るために必要なので素通しする。
