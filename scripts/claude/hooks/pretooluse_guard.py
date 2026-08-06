@@ -506,7 +506,10 @@ def _guard_cross_repo(kind: str, ident, repo, raw: str, require_ident: bool = Fa
     """cross-repo 判定に応じて block / ask / 素通しを決める。判定不能は ask（fail-safe）。
     require_ident=True（MCP 経路）で識別子が取れない場合は照会せず ask する。
     MCP はカレントブランチという概念を持たず、ident=None のまま照会すると
-    「別の PR（カレントブランチの PR）を検査して素通しする」誤判定になり得るため。"""
+    「別の PR（カレントブランチの PR）を検査して素通しする」誤判定になり得るため。
+
+    注: `_ask()` / `_block()` は内部で sys.exit する（呼び出し後は戻らない）。
+    以降の行に到達するのは、それらを通らなかった経路だけである。"""
     if require_ident and not ident:
         _ask("対象 PR の番号を特定できませんでした（tool_input に pull_number がない）。"
              "外部（fork）由来の PR でないか確認してください。")
