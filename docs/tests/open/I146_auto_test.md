@@ -170,6 +170,8 @@ grep -q '"matcher": "Edit|Write|MultiEdit|NotebookEdit"' .claude/settings.json
 
 有効化後、上記 TC-07 コマンドを再実行して exit 0 を確認する（読み取り側は bot トークンでも可）。
 
+**実施結果（2026-08-15）**: ユーザーが GitHub UI（Settings → Advanced Security → Private vulnerability reporting → Enable）で有効化。読み取り API が `{"enabled":true}` を返すことを確認済み。
+
 ## TC-08: 既存テストの回帰
 
 ```bash
@@ -194,5 +196,5 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 | TC-04 | 2026-08-05 実装時 | ✅ PASS | FG-A/FG-C/FG-D が素通し（0）、FG-B/FG-E が block（2）。TC-03 の exit code に畳み込み済み |
 | TC-05 | 2026-08-05 実装時 | ✅ PASS | `py_compile` / `bash -n`（3 ファイル）/ `json.load(settings.json)` すべて exit 0 |
 | TC-06 | 2026-08-05 実装時 | ✅ PASS | 19 項目すべて OK（必須文言 14・無改変 4・false-green 裏取り 1） |
-| TC-07 | 2026-08-13 | ⏸ 保留 | Private vulnerability reporting は現状 `{"enabled":false}`。ユーザー承認を得て `gh api -X PUT` を実行したが、bot アカウントに admin 権限がなく **HTTP 404**（詳細は TC-07 節の「有効化の実施者」）。**リポジトリ管理者による GitHub UI 操作待ち** |
+| TC-07 | 2026-08-15 | ✅ PASS | ユーザー（リポジトリ管理者）が GitHub UI で有効化。`gh api repos/osushi0404-dev/study-app-multitenant/private-vulnerability-reporting` → `{"enabled":true}`（exit 0）。ベースライン `false` → `true` の遷移を確認。※ 2026-08-13 に bot アカウントで `gh api -X PUT` を試行したが admin 権限がなく HTTP 404（詳細は TC-07 節の「有効化の実施者」） |
 | TC-08 | 2026-08-05 実装時 | ✅ PASS | push guard `pass=87 fail=0`・worktree guard `pass=27 fail=0`・checkout guard `pass=14 fail=0`（回帰なし） |
