@@ -407,6 +407,131 @@ def _check_edit_write(data: dict):
             _ask(f"高リスクファイル（依存/スキーマ/インフラ）の編集です。確認してください: {rel}")
     sys.exit(0)
 
+# --- I146: cross-repo（fork）PR への取り込み系操作の防止 ---
+# 判定の単一ソースは `gh pr view <識別子> --json isCrossRepository`。
+# block = 不可逆かつ方針上ありえない操作（外部コードが develop に入る）。
+# ask   = 取り込み方向だが可逆な操作。close/comment/read-only は素通し
+#         （外部 PR を断るのに必要な操作を塞いではならない）。
+_GH_PR_BLOCK_VERBS = ("merge",)
+_GH_PR_ASK_VERBS = ("ready", "edit")
+_GH_PR_APPROVE_FLAGS = ("--approve", "-a")
+
+_MCP_PR_BLOCK_TOOLS = ("mcp__github__merge_pull_request",)
+_MCP_PR_ASK_TOOLS = (
+    "mcp__github__update_pull_request_branch",
+    "mcp__github__create_pull_request_review",
+)
+
+_GH_TIMEOUT = 5  # 秒。ハーネスを長く止めない（超過時は ask に降格）
+
+
+def _pr_is_cross_repo(ident, repo=None):
+    """(cross, head) を返す。cross は fork 由来 True / 自前 False / 判定不能 None（＝ask 降格）。
+    head は "owner/repo" 形式の head リポジトリ名（取れなければ None）。
+    ident が None のときはカレントブランチの PR を解決させる（gh の既定挙動）。
+    head も同一クエリで取得するため照会回数は 1 回のまま。"""
+    argv = ["gh", "pr", "view"]
+    if ident:
+        argv.append(ident)
+    if repo:
+        argv += ["--repo", repo]
+    argv += ["--json", "isCrossRepository,headRepositoryOwner,headRepository"]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=_GH_TIMEOUT)
+    except Exception:
+        return None, None
+    if r.returncode != 0:
+        return None, None
+    try:
+        d = json.loads(r.stdout)
+    except Exception:
+        return None, None
+    v = d.get("isCrossRepository")
+    owner = (d.get("headRepositoryOwner") or {}).get("login")
+    name = (d.get("headRepository") or {}).get("name")
+    head = f"{owner}/{name}" if owner and name else None
+    if v is True:
+        return True, head
+    if v is False:
+        return False, head
+    return None, head
+
+
+def _gh_pr_target(cmd: str):
+    """`gh pr <verb> [識別子]` を検出して (kind, ident) を返す。非該当は None。
+    kind は "block" / "ask"。識別子（番号・URL・ブランチ名）は解釈せず gh へそのまま渡す。"""
+    for toks in _segments(cmd):
+        if len(toks) < 3 or toks[0] != "gh" or toks[1] != "pr":
+            continue
+        verb = toks[2]
+        rest = toks[3:]
+        if verb in _GH_PR_BLOCK_VERBS:
+            kind = "block"
+        elif verb in _GH_PR_ASK_VERBS:
+            kind = "ask"
+        elif verb == "review" and any(f in rest for f in _GH_PR_APPROVE_FLAGS):
+            kind = "ask"
+        else:
+            continue  # view/checks/diff/list/close/comment/review --comment は対象外
+        ident = next((t for t in rest if not t.startswith("-")), None)
+        return kind, ident
+    return None
+
+
+def _mcp_pr_target(tool_name: str, tool_input: dict):
+    """対象 MCP ツールなら (kind, ident, repo) を返す。非該当は None。
+    create_pull_request_review は event=APPROVE のときのみ対象にする。
+    キー名は対象 3 ツールのスキーマ実測値: owner / repo / pull_number（スネークケース・全て required）。
+    別実装の MCP サーバに備えてキャメルケースも読むが、正は snake_case。"""
+    if tool_name in _MCP_PR_BLOCK_TOOLS:
+        kind = "block"
+    elif tool_name in _MCP_PR_ASK_TOOLS:
+        if tool_name.endswith("create_pull_request_review") and \
+                str(tool_input.get("event", "")).upper() != "APPROVE":
+            return None
+        kind = "ask"
+    else:
+        return None
+    num = tool_input.get("pull_number")
+    if num is None:
+        num = tool_input.get("pullNumber")
+    owner = tool_input.get("owner")
+    repo = tool_input.get("repo")
+    ident = str(num) if num is not None else None
+    full = f"{owner}/{repo}" if owner and repo else None
+    return kind, ident, full
+
+
+def _guard_cross_repo(kind: str, ident, repo, raw: str, require_ident: bool = False):
+    """cross-repo 判定に応じて block / ask / 素通しを決める。判定不能は ask（fail-safe）。
+    require_ident=True（MCP 経路）で識別子が取れない場合は照会せず ask する。
+    MCP はカレントブランチという概念を持たず、ident=None のまま照会すると
+    「別の PR（カレントブランチの PR）を検査して素通しする」誤判定になり得るため。
+
+    注: `_ask()` / `_block()` は内部で sys.exit する（呼び出し後は戻らない）。
+    以降の行に到達するのは、それらを通らなかった経路だけである。"""
+    if require_ident and not ident:
+        _ask("対象 PR の番号を特定できませんでした（tool_input に pull_number がない）。"
+             "外部（fork）由来の PR でないか確認してください。")
+    cross, head = _pr_is_cross_repo(ident, repo)
+    label = f"PR {ident}" if ident else "カレントブランチの PR"
+    origin = f"（head: {head}）" if head else ""
+    if cross is None:
+        _ask(f"{label} が自前のものか判定できませんでした（gh 照会失敗/タイムアウト）。"
+             f"外部（fork）由来の PR でないか確認してください。")
+    if cross is False:
+        return  # 自前 PR → 従来どおり素通し
+    if kind == "block":
+        _block(
+            f"{label} は fork（外部リポジトリ）由来です{origin}。外部からのコード寄稿は受け付けていません"
+            f"（CONTRIBUTING.md）。マージせず、方針コメント付きで close してください。"
+            f"どうしても必要なら DANGER_OK=1 を前置してください。",
+            raw,
+        )
+    _ask(f"{label} は fork（外部リポジトリ）由来です{origin}。取り込み方向の操作になります。"
+         f"CONTRIBUTING.md の方針（外部からのコード寄稿は受け付けない）を確認してください。")
+
+
 def main():
     data = _load()
     tool_name = data.get("tool_name")
@@ -418,6 +543,12 @@ def main():
             _block_cross_worktree("編集", path)
         if tool_name in ("Edit", "Write"):
             _check_edit_write(data)  # 既存の高リスク ask は Edit/Write のみ（現状維持）
+        sys.exit(0)
+    # I146: MCP 経由の PR 取り込み操作（Bash を通らない経路）
+    if str(tool_name or "").startswith("mcp__github__"):
+        t = _mcp_pr_target(tool_name, data.get("tool_input") or {})
+        if t:
+            _guard_cross_repo(t[0], t[1], t[2], tool_name, require_ident=True)
         sys.exit(0)
     if tool_name != "Bash":
         sys.exit(0)
@@ -514,6 +645,12 @@ def main():
         # I083 欠陥1: 動的・不透明な宛先の push は静的に安全と断言できないため ask に degrade する。
         # 全 hard-block の後に置くことで、rm -rf 等の同居 danger-op を ask で先食いしない
         # （静的 protected/force は上で先に exit 2 block 済み・DANGER_OK=1 時はこのブロックに来ない）。
+        # I146: cross-repo PR ガード。既存 hard-block の後に置き、danger-op 同居時に
+        # ask で先食いしない（I083 で確立した順序方針を踏襲）。
+        t = _gh_pr_target(cmd)
+        if t:
+            _guard_cross_repo(t[0], t[1], None, raw)
+
         if _push_is_dynamic(cmd):
             _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
 

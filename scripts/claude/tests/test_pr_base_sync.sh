@@ -17,6 +17,11 @@ mkdir -p "$STUB_DIR"
 cat > "$STUB_DIR/gh" <<'EOF'
 #!/bin/bash
 case "$*" in
+  *isCrossRepository*)
+    # I146: cross-repo 判定。GH_FAIL_CROSS=1 で照会失敗（T19）。
+    [ "${GH_FAIL_CROSS:-0}" = "1" ] && exit 1
+    printf '%s\n' "${CROSS_VALUE-false}"
+    ;;
   *mergeStateStatus*)
     [ "${GH_FAIL:-0}" = "1" ] && exit 1
     if [ "$(wc -l < "$STATE_FILE")" -gt 1 ]; then
@@ -61,6 +66,7 @@ run_case() {
   : > "$LAST_LOG"
   STATE_FILE="$state_file" CHECKS_FILE="$checks_file" GIT_LOG="$LAST_LOG" \
     MERGE_FAIL="$merge_fail" GH_FAIL="$gh_fail" \
+    CROSS_VALUE="${CROSS_VALUE-false}" GH_FAIL_CROSS="${GH_FAIL_CROSS:-0}" \
     PBS_RETRY_INTERVAL=0 PBS_CI_INTERVAL=0 PBS_CI_TIMEOUT=0 PBS_LOOP_MAX="$loop_max" \
     PATH="$STUB_DIR:$PATH" bash "$TARGET_SCRIPT" "$mode" 219 >/dev/null 2>&1
   rc=$?
@@ -122,9 +128,19 @@ run_case "T14 final 未知値=STOP"              final "HOGE"           "$CHECKS
 run_case "T15 sync 照会失敗=STOP"             sync  "CLEAN"          "$CHECKS_GREEN" 0 1 3 1
 run_case "T16 final 照会失敗=STOP"            final "CLEAN"          "$CHECKS_GREEN" 0 1 3 1
 
+# --- I146: cross-repo（fork）PR ガード（sync/final 共通・fail-closed） ---
+# T17/T18 は BEHIND を与える（ガードが無ければ merge/push まで進む状態＝副作用アサーションが意味を持つ）
+CROSS_VALUE=true run_case "T17 sync cross-repo=STOP"   sync  "BEHIND" "$CHECKS_GREEN" 0 0 3 1
+log_not  "merge"                              "T17 副作用なし（merge が呼ばれない）"
+CROSS_VALUE=true run_case "T18 final cross-repo=STOP"  final "BEHIND" "$CHECKS_GREEN" 0 0 3 1
+log_not  "push"                               "T18 副作用なし（push が呼ばれない）"
+GH_FAIL_CROSS=1  run_case "T19 sync 照会失敗=STOP"      sync  "CLEAN" "$CHECKS_GREEN" 0 0 3 1
+CROSS_VALUE=""   run_case "T20 sync 空値=STOP"          sync  "CLEAN" "$CHECKS_GREEN" 0 0 3 1
+CROSS_VALUE=hoge run_case "T21 sync 想定外値=STOP"      sync  "CLEAN" "$CHECKS_GREEN" 0 0 3 1
+
 echo "---"
 if [ "$NG" -gt 0 ]; then
   echo "RESULT: NG (${NG} 件 / pass ${PASS})"
   exit 1
 fi
-echo "RESULT: OK (16/16 cases, ${PASS} assertions)"
+echo "RESULT: OK (21/21 cases, ${PASS} assertions)"
