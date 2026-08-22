@@ -33,7 +33,8 @@
 | TC-AUTO-08 | マイグレーション drift が無い | AC-07 | ステップ 1 |
 | TC-AUTO-09 | まっさらな DB で `migrate` が通る | AC-06 | ステップ 1 |
 | TC-AUTO-10 | celery worker のタスクが成功する | AC-15 | ステップ 1 |
-| TC-AUTO-11 | 依存の固定値が確定セットと一致する | AC-01・AC-10 | ステップ 1・2 |
+| TC-AUTO-11A | 本体依存＋pytest-django の固定値が一致する | AC-01・AC-10 | ステップ 1 |
+| TC-AUTO-11B | pytest の固定値が一致する | AC-10 | ステップ 2 |
 | TC-AUTO-12 | frontend テストが 10 件 pass | AC-12 | ステップ 1・2 |
 | TC-AUTO-13 | E2E が全件 pass | AC-13 | ステップ 3 |
 | TC-AUTO-14 | CI の全 6 チェックが SUCCESS | AC-14 | ステップ 3 |
@@ -167,8 +168,9 @@ docker compose exec -T backend python manage.py makemigrations --check --dry-run
 
 開発 DB を壊さないよう、**検証専用の使い捨て DB** を作って `migrate` を流す（イシュー決定 7-A）。
 
-セットアップ:
+セットアップ（前回の後片付けが済んでいない場合に備え、作成前に取り除く）:
 ```bash
+docker compose exec -T db psql -U postgres -c "DROP DATABASE IF EXISTS migrate_check;"
 docker compose exec -T db psql -U postgres -c "CREATE DATABASE migrate_check;"
 ```
 
@@ -194,9 +196,12 @@ docker compose exec -T db psql -U postgres -c "DROP DATABASE migrate_check;"
 beat が投げたことではなく、worker が**成功で完了した**ことまで判定する（イシュー決定 7-B）。`update_daily_analytics_task` は 30 秒間隔のため、再作成から 1 分以上経過してから実行する。
 
 ```bash
-docker compose logs celery --since 3m 2>&1 | grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' \
-  && ! docker compose logs celery --since 3m 2>&1 | grep -qE 'ERROR|Traceback'
+docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1 \
+  && grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log \
+  && ! grep -qE 'ERROR|Traceback' /tmp/i151_celery.log
 ```
+
+> ログを一時ファイルに落としてから 2 つの判定を行う。`docker compose logs` を 2 回実行すると、成功判定とエラー判定が**別々のスナップショット**を見ることになり、その間に書き込まれたエラーを取りこぼす。
 
 - **合格**: exit 0（直近 3 分に成功ログがあり、かつ ERROR / Traceback が無い）
 - **不合格**: 非ゼロ
@@ -204,9 +209,11 @@ docker compose logs celery --since 3m 2>&1 | grep -qE 'Task studylogs\.tasks\.[a
 
 ---
 
-## TC-AUTO-11: 依存の固定値が確定セットと一致する（AC-01・AC-10）
+## TC-AUTO-11A: 本体依存＋pytest-django の固定値が一致する（AC-01・AC-10）
 
-宣言（requirements）と実インストール（pip freeze）の両方を判定する。宣言だけを見ると、再ビルド漏れで古いイメージのまま合格してしまう。
+**実行タイミング: ステップ 1 完了後。** 宣言（requirements）と実インストール（pip freeze）の両方を判定する。宣言だけを見ると、再ビルド漏れで古いイメージのまま合格してしまう。
+
+> **pytest の判定を含めない理由**: ステップ 1 時点の `pytest` は 8.3.4 のままが正しい。pytest の固定値判定を本 TC に混ぜると、ステップ 1 の「全 TC 合格」条件が原理的に満たせなくなる。pytest は TC-AUTO-11B としてステップ 2 で独立に判定する。
 
 宣言側:
 ```bash
@@ -216,23 +223,37 @@ grep -qx 'Django==5.2.17' backend/requirements.txt \
   && grep -qx 'django-extensions==4.1' backend/requirements.txt \
   && grep -qx 'django-filter==26.1' backend/requirements.txt \
   && grep -qx 'django-redis==7.0.0' backend/requirements.txt \
-  && grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt \
-  && grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
+  && grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
 ```
 
-実インストール側:
+実インストール側（`pip freeze` の表記は PyPI の正規化名で固定されるため、宣言側と同じ `-qx` の完全一致で判定する）:
 ```bash
 docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt \
   && grep -qx 'Django==5.2.17' /tmp/i151_freeze.txt \
-  && grep -qix 'djangorestframework==3.18.0' /tmp/i151_freeze.txt \
+  && grep -qx 'djangorestframework==3.18.0' /tmp/i151_freeze.txt \
   && grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt \
-  && grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt
+  && grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt \
+  && grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt
 ```
 
 - **合格**: 両方が exit 0
 - **不合格**: 非ゼロ
 - **実装前の状態（false-green 検証）**: 宣言側の 1 行目 `grep -qx 'Django==5.2.17'` が **exit 1** になることを実測済み
-- **補足**: `pytest==9.0.3` の判定はステップ 2 完了後に評価する（ステップ 1 時点では 8.3.4 のため不合格が正しい）
+
+---
+
+## TC-AUTO-11B: pytest の固定値が一致する（AC-10）
+
+**実行タイミング: ステップ 2 完了後。**
+
+```bash
+grep -qx 'pytest==9.0.3' backend/requirements-dev.txt \
+  && docker compose exec -T backend pip freeze | grep -qx 'pytest==9.0.3'
+```
+
+- **合格**: exit 0（宣言と実インストールの両方が 9.0.3）
+- **不合格**: 非ゼロ
+- **ステップ 1 時点の状態**: `pytest==8.3.4` のため **exit 1**。これはこの時点では正常であり、本 TC はステップ 2 完了後にのみ評価する
 
 ---
 
@@ -320,7 +341,8 @@ git log origin/develop..HEAD --oneline | grep -qE 'fix\(I151\)' \
 | TC-AUTO-08 | 未実施 | | |
 | TC-AUTO-09 | 未実施 | | |
 | TC-AUTO-10 | 未実施 | | |
-| TC-AUTO-11 | 未実施 | | |
+| TC-AUTO-11A | 未実施 | | |
+| TC-AUTO-11B | 未実施 | | |
 | TC-AUTO-12 | 未実施 | | |
 | TC-AUTO-13 | 未実施 | | |
 | TC-AUTO-14 | 未実施 | | |
@@ -337,7 +359,7 @@ git log origin/develop..HEAD --oneline | grep -qE 'fix\(I151\)' \
 | TC-AUTO-05 | `! grep -qi guardian ...` | 実装前の状態（guardian 記述あり） | **exit 1**（正しく不合格） |
 | TC-AUTO-06 | `! grep -rqi guardian --include=*.py backend/` | 実装前の状態 | **exit 1**（正しく不合格） |
 | TC-AUTO-07 | `! grep -rq ANONYMOUS_USER_NAME ...` | ダミー注入（`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むファイルを一時ディレクトリに作成） | **exit 1**（正しく不合格） |
-| TC-AUTO-11 | `grep -qx 'Django==5.2.17' ...` | 実装前の状態（4.2.30） | **exit 1**（正しく不合格） |
+| TC-AUTO-11A | `grep -qx 'Django==5.2.17' ...` | 実装前の状態（4.2.30） | **exit 1**（正しく不合格） |
 | TC-AUTO-16 | `git log ... grep -qE 'fix\(I151\)'` | 実装前の状態（コミット未作成） | **exit 1**（正しく不合格） |
 
 ### 機構の事前検証（計画時点・2026-08-22 実施済み）

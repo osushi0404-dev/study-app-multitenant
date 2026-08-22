@@ -17,15 +17,15 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| 1 | 自動テストの TC-AUTO-00〜12 を順に実行する（`docs/tests/open/I151_auto_test.md` 参照） | すべて exit 0。とくに TC-AUTO-03 が **94 passed**、TC-AUTO-04 が警告 0、TC-AUTO-05/06/07 が guardian 不在で合格 | Claude | | |
-| 2 | TC-AUTO-09（使い捨て DB での `migrate`）を実行する | `CREATE DATABASE migrate_check` → `migrate --noinput` が exit 0 で完了し、`Applying ...` のログが最後まで進む。後片付けで DB を破棄する | Claude | | 後片付けの `DROP DATABASE` はフックが承認を求める場合がある（検証専用 DB のため承認可） |
+| 1 | ステップ 1 完了後に自動テストの TC-AUTO-00〜10 / 11A / 12 を順に実行する（`docs/tests/open/I151_auto_test.md` 参照）。**TC-AUTO-02 と TC-AUTO-11B はステップ 2 完了後に実施する**（この時点では pytest 8.3.4 が正しいため） | すべて exit 0。とくに TC-AUTO-03 が **94 passed**（skip 0 件）、TC-AUTO-04 が警告 0、TC-AUTO-05/06/07 が guardian 不在で合格、TC-AUTO-11A が宣言・実インストールの両方で一致 | Claude | | |
+| 2 | TC-AUTO-09（使い捨て DB での `migrate`）を実行する | 前回残骸の除去 → `CREATE DATABASE migrate_check` → `migrate --noinput` が exit 0 で完了し、`Applying ...` のログが最後まで進む。後片付けで DB を破棄する | Claude | | 後片付けの `DROP DATABASE` はフックが承認を求める場合がある（検証専用 DB のため承認可） |
 | 3 | 再作成から 1 分以上待ってから TC-AUTO-10 を実行する | 直近 3 分のログに `Task studylogs.tasks.update_daily_analytics_task[...] succeeded` があり、`ERROR` / `Traceback` が無い | Claude | | beat が 30 秒間隔で投げるため 1 分待てば 2 回分出る |
 | 4 | TC-AUTO-15（`pip freeze`）を実行し、出力を `I151_auto_test.md` の実施記録へ貼り付ける | Django が `5.2.17`、`django-guardian` が**一覧に無い**。kombu 等の推移的依存のバージョンが記録に残る | Claude | | celery が落ちた場合の切り分け材料 |
 | 5 | `docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/admin/login/` を実行する | `200`（Django 5.2 の admin が正常に描画される） | Claude | | Django 本体のテンプレート・静的ファイル経路の生存確認 |
 | 6 | 認可・テナント境界の対象モジュールを個別に実行し、モジュール名と件数を記録する。対象: `problems/tests/test_I103_cross_org_create.py` / `problems/tests/test_I104_subject_authz.py` / `problems/tests/test_I006_subject_org_admin.py` / `problems/tests/test_I078_is_correct_exposure.py` / `accounts/tests/test_I131_org_id_rename.py` / `accounts/tests/test_I140_personal_org_fallback.py` / `core/tests/test_I127_throttling.py` | 全モジュールが pass。更新前と更新後の件数が一致し、skip・削除・条件緩和が 0 件であることを記録する（AC-18） | Claude | | 「関連テストを実行した」ではなくモジュール名を列挙して記録する |
 | 7 | ブラウザで `http://localhost:3000` を開き、`osushi0404admin`（`test01@gmail.com`）でログインする。ログイン後、ダッシュボード → 問題一覧 → クイズを 1 問回答 → 学習履歴 の順に画面を開く | ログインが成功しダッシュボードが表示される。問題一覧に自組織（株式会社おすしはなんだか楽しいよ）の科目 3 件が並び、他組織の科目が混ざらない。クイズが出題され回答が保存される。学習履歴に回答が反映される。いずれの画面でも赤いエラー表示・白画面・コンソールの 500 エラーが出ない | Human | | UI のコード変更はないため、依存更新による API 応答形の変化がないことの目視確認 |
 | 8 | 後続イシュー 4 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7 / 7-C / 7-D に記載） | 4 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / django-extensions の依存移動 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | | AC-19 |
-| 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 12 を再実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-12 が 10 passed | Claude | | ここが落ちた場合は 2 段目のみ取り消す（計画 §8） |
+| 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 11B / 12 を実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-11B が宣言・実インストールとも 9.0.3、TC-AUTO-12 が 10 passed | Claude | | ここが落ちた場合は 2 段目のみ取り消す（計画 §8）。取り消したら**再ビルドが必要**（イメージには pytest 9 が残るため） |
 | 10 | Draft PR #269 を push 後、TC-AUTO-13（E2E）と TC-AUTO-14（CI 6 チェック）を実行する | E2E が全件 pass。`gh pr checks 269` で SUCCESS 以外が 0 件 | Claude | | AC-13・AC-14 |
 
 ---

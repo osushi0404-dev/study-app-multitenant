@@ -140,7 +140,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 
 | # | 条件 | 判定 |
 |---|---|---|
-| AC-01 | `backend/requirements.txt` が確定セットに更新されている（`==` 完全固定） | TC-AUTO-11 |
+| AC-01 | `backend/requirements.txt` が確定セットに更新されている（`==` 完全固定） | TC-AUTO-11A |
 | AC-02 | `django-guardian` が `requirements.txt` と `core/settings.py` の双方から削除されている | TC-AUTO-05 |
 | AC-03 | コード全体に guardian 参照が残っていない | TC-AUTO-06 |
 | AC-04 | `ANONYMOUS_USER_NAME` 等の guardian 専用設定が残っていない | TC-AUTO-07 |
@@ -149,7 +149,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-07 | マイグレーション drift がない | TC-AUTO-08 |
 | AC-08 | `pip-audit -r requirements.txt` が exit 0 | TC-AUTO-01 |
 | AC-09 | `pip-audit -r requirements-dev.txt` が exit 0（手元実行の記録。`ci.yml` は変更しない） | TC-AUTO-02 |
-| AC-10 | `backend/requirements-dev.txt` が `pytest-django==4.14.0` ＋ `pytest==9.0.3` | TC-AUTO-11 |
+| AC-10 | `backend/requirements-dev.txt` が `pytest-django==4.14.0` ＋ `pytest==9.0.3` | TC-AUTO-11A（pytest-django）／TC-AUTO-11B（pytest） |
 | AC-11 | backend テストが **94 件 pass**（ベースラインと同数・skip / 削除 / 条件緩和なし） | TC-AUTO-03 |
 | AC-12 | frontend テストが **10 件 pass**（無退行） | TC-AUTO-12 |
 | AC-13 | E2E（Playwright）が全件 pass | TC-AUTO-13 |
@@ -250,7 +250,7 @@ THIRD_PARTY_APPS = [
 2. `backend/requirements-dev.txt` の `pytest-django` を `4.14.0` に更新する（§5-2）。
 3. `backend/core/settings.py` の `THIRD_PARTY_APPS` から `'guardian',` を削除する（§5-3）。
 4. backend イメージを再ビルドし、`backend` / `celery` / `celery-beat` を作り直す（`docker compose build backend celery celery-beat` → `docker compose up -d --wait`）。
-5. 検証 → TC-AUTO-01 / 03 / 04 / 05 / 06 / 07 / 08 / 09 / 10 / 11 / 12 参照。
+5. 検証 → TC-AUTO-01 / 03 / 04 / 05 / 06 / 07 / 08 / 09 / 10 / 11A / 12 参照。**TC-AUTO-11B（pytest の固定値）はこの時点では対象外**（pytest は 8.3.4 のままが正しいため）。
 6. すべて合格したら実装コミットとして記録する。
    - コミットメッセージ: `fix(I151): Django 5.2.17 へ更新し依存を対応版へ一括更新・未使用の django-guardian を削除`
    - 対象: `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`
@@ -260,7 +260,7 @@ THIRD_PARTY_APPS = [
 ### ステップ 2: pytest 9 への更新（コミット 2）
 1. `backend/requirements-dev.txt` の `pytest` を `9.0.3` に更新する。
 2. backend イメージを再ビルドし、`backend` を作り直す。
-3. 検証 → TC-AUTO-02 / 03 / 12 参照。
+3. 検証 → TC-AUTO-02 / 03 / 11B / 12 参照。
 4. 合格したらコミットする。
    - コミットメッセージ: `chore(I151): pytest 9.0.3 へ更新（PYSEC-2026-1845 の解消）`
    - 対象: `backend/requirements-dev.txt`
@@ -293,7 +293,7 @@ THIRD_PARTY_APPS = [
 | E2E | 既存 Playwright 一式 | まっさらな DB への `migrate` とログイン〜主要画面の通しを同時に担保する |
 
 ### 再発防止テストの要否
-本イシューは**バグ修正ではなく依存更新**のため、新しい振る舞いに対する再発防止テストは追加しない。ただし「EOL 依存への逆戻り」を防ぐ決定論 TC（TC-AUTO-11: 固定値の一致確認）を置く。
+本イシューは**バグ修正ではなく依存更新**のため、新しい振る舞いに対する再発防止テストは追加しない。ただし「EOL 依存への逆戻り」を防ぐ決定論 TC（TC-AUTO-11A / 11B: 固定値の一致確認）を置く。
 
 ### 認可・テナント境界の検証（AC-18）
 新規テストは追加せず、既存の以下のモジュールが更新後も同じ結果を返すことを記録する。
@@ -315,7 +315,7 @@ THIRD_PARTY_APPS = [
 
 | 段階 | 手順 |
 |---|---|
-| ステップ 2 で失敗 | 2 段目の変更のみを取り消す。`requirements-dev.txt` の `pytest` が 8.3.4 に戻り、ステップ 1 の成果は保持される |
+| ステップ 2 で失敗 | 2 段目の変更のみを取り消す。`requirements-dev.txt` の `pytest` が 8.3.4 に戻り、ステップ 1 の成果は保持される。**取り消し後は必ず再ビルドする**（ファイルを戻してもイメージには pytest 9 が残るため、宣言と実インストールが食い違う） |
 | ステップ 1 で失敗 | `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py` を更新前の内容へ戻し、backend / celery / celery-beat を再ビルドする |
 | develop マージ後に判明 | revert PR で戻す。`guardian_*` テーブルは残置しているため、guardian を戻す場合も `INSTALLED_APPS` と依存の復元のみで足りる（データ復旧は不要） |
 | DB | マイグレーションを新規生成しないため、DB のロールバックは不要。検証用の使い捨て DB（`migrate_check`）は検証後に破棄する |
@@ -452,3 +452,6 @@ THIRD_PARTY_APPS = [
 - [ ] P8（コスト・保守見積もり）: **影響なし**（§12）
 - [ ] P6（性能・UX 設計）: **影響なし**（§13）
 - [ ] P9（プライバシー・コンプライアンス）: **影響なし**（§15）
+
+## レビュー結果
+- [20260822_1809 判定: ✅ 完了](../../reviews/I151_plan_review_20260822_1809.md)
