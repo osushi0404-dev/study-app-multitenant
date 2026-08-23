@@ -24,9 +24,9 @@
 | 5 | `docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/admin/login/` を実行する | `200`（Django 5.2 の admin が正常に描画される） | Claude | OK（2026-08-24）— `admin_login_http=200` | Django 本体のテンプレート・静的ファイル経路の生存確認 |
 | 6 | 認可・テナント境界の対象モジュールを個別に実行し、モジュール名と件数を記録する。対象: `problems/tests/test_I103_cross_org_create.py` / `problems/tests/test_I104_subject_authz.py` / `problems/tests/test_I006_subject_org_admin.py` / `problems/tests/test_I078_is_correct_exposure.py` / `accounts/tests/test_I131_org_id_rename.py` / `accounts/tests/test_I140_personal_org_fallback.py` / `core/tests/test_I127_throttling.py` | 全モジュールが pass。更新前と更新後の件数が一致し、skip・削除・条件緩和が 0 件であることを記録する（AC-18） | Claude | OK（2026-08-24）— 7 モジュール全て pass（下表）。テストファイルは 1 件も変更していない | 「関連テストを実行した」ではなくモジュール名を列挙して記録する |
 | 7 | ブラウザで `http://localhost:3000` を開き、`osushi0404admin`（`test01@gmail.com`）でログインする。ログイン後、ダッシュボード → 問題一覧 → クイズを 1 問回答 → 学習履歴 の順に画面を開く | ログインが成功しダッシュボードが表示される。問題一覧に自組織（株式会社おすしはなんだか楽しいよ）の科目 3 件が並び、他組織の科目が混ざらない。クイズが出題され回答が保存される。学習履歴に回答が反映される。いずれの画面でも赤いエラー表示・白画面・コンソールの 500 エラーが出ない | Human | | UI のコード変更はないため、依存更新による API 応答形の変化がないことの目視確認 |
-| 8 | 後続イシュー 3 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7-C / 7-D に記載） | 3 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | | AC-19。django-extensions の依存移動は決定 7 の変更（更新→削除）により不要になった |
+| 8 | 後続イシュー 3 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7-C / 7-D に記載） | 3 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | OK（2026-08-24）— I155(#272) / I156(#273) / I157(#274) を起票 | AC-19。django-extensions の依存移動は決定 7 の変更（更新→削除）により不要になった |
 | 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 11B / 12 を実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-11B が宣言・実インストールとも 9.0.3、TC-AUTO-12 が 10 passed | Claude | OK（2026-08-24）— TC-AUTO-02 exit 0・TC-AUTO-03 94 passed・TC-AUTO-11B exit 0・TC-AUTO-12 10 passed | ここが落ちた場合は 2 段目のみ取り消す（計画 §8）。取り消したら**再ビルドが必要**（イメージには pytest 9 が残るため） |
-| 10 | Draft PR #269 を push 後、TC-AUTO-13（E2E）と TC-AUTO-14（CI 6 チェック）を実行する | E2E が全件 pass。`gh pr checks 269` で SUCCESS 以外が 0 件 | Claude | | AC-13・AC-14 |
+| 10 | Draft PR #269 を push 後、TC-AUTO-13（E2E）と TC-AUTO-14（CI 6 チェック）を実行する | E2E が全件 pass。`gh pr checks 269` で SUCCESS 以外が 0 件 | Claude | OK（2026-08-24）— E2E 全件 pass（3m10s）。`gh pr checks 269` で SUCCESS 以外 0 件（全 6 チェック SUCCESS） | AC-13・AC-14 |
 | 11 | 再ビルド後の実コンテナに対し、ログインエンドポイントへ誤ったパスワードで 6 回連続 POST する（`docker compose exec -T backend python manage.py shell -c` の `APIClient` を使用。`RATELIMIT_ENABLE` は既定の有効のまま） | 6 回目が **403（django-ratelimit の遮断）** で拒否される。5 回目までは 400/401 が返る。遮断されない場合はレート制限がフェイルオープンしている（security-review シナリオ #1・AC-21 の実挙動確認） | Claude | OK（2026-08-24）— `codes [400, 400, 400, 400, 400, 403]`。5 回目まで 400、**6 回目で 403 に遮断**。django-redis 7.0.0 上でブルートフォース防御が機能 | TC-AUTO-17 がカウンタ機構を、本項目が実際の遮断を確認する。確認後はカウンタが残るため、後続の手動確認では IP かキーを変えるか 5 分待つ |
 
 ---
@@ -61,6 +61,6 @@
 
 | # | タイトル | イシュー番号 |
 |---|---|---|
-| 1 | 未使用の guardian_* テーブル除去（2 テーブル・バックアップ取得のうえ実施） | |
-| 2 | backend 依存のロックファイル導入 | |
-| 3 | celery beat のスケジュールが開発用のまま（5 タスク・crontab の import 欠落も併せて是正） | |
+| 1 | 未使用の guardian_* テーブル除去（2 テーブル・バックアップ取得のうえ実施） | I155 / #272 |
+| 2 | backend 依存のロックファイル導入 | I156 / #273 |
+| 3 | celery beat のスケジュールが開発用のまま（5 タスク・crontab の import 欠落も併せて是正） | I157 / #274 |

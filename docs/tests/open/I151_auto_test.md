@@ -471,8 +471,8 @@ grep -q 'incr2 2' /tmp/i151_rl.txt
 | TC-AUTO-11A | ✅ 合格 | 2026-08-24 | 宣言側 6 件・実インストール側 6 件ともすべて exit 0 |
 | TC-AUTO-11B | ✅ 合格 | 2026-08-24 | ステップ 2 完了後。宣言・実インストールとも `pytest==9.0.3` |
 | TC-AUTO-12 | ✅ 合格 | 2026-08-24 | ステップ 1・2 とも `Tests: 10 passed, 10 total` |
-| TC-AUTO-13 | ⏳ 未実施 | 2026-08-24 | CI の E2E ジョブで実行（PR push 後） |
-| TC-AUTO-14 | ⏳ 未実施 | 2026-08-24 | PR push 後に確認 |
+| TC-AUTO-13 | ✅ 合格 | 2026-08-24 | CI の E2E ジョブで全件 pass（3m10s） |
+| TC-AUTO-14 | ✅ 合格 | 2026-08-24 | 全 6 チェック SUCCESS。`gh pr checks 269` の SUCCESS 以外が 0 件 |
 | TC-AUTO-15 | ✅ 合格 | 2026-08-24 | `docs/tests/open/I151_pip_freeze.txt`（81 行）に記録。判定 1・2 とも exit 0 |
 | TC-AUTO-16 | ✅ 合格 | 2026-08-24 | `fix(I151)` / `chore(I151)` の 2 コミット。`requirements.txt` を触ったコミットは 1 つ |
 | TC-AUTO-17 | ✅ 合格 | 2026-08-24 | `add_new True` / `add_dup False` / `incr1 1` / `incr2 2`。**当初の `python -c` は Django 未設定で落ちたため `manage.py shell -c` へ是正** |
