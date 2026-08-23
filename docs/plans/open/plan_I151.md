@@ -168,7 +168,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-13 | E2E（Playwright）が全件 pass | TC-AUTO-13 |
 | AC-14 | CI の全 6 チェックが SUCCESS | TC-AUTO-14 |
 | AC-15 | celery worker のログでタスクの**成功**が確認できる | TC-AUTO-10 |
-| AC-16 | 再ビルド後の `pip freeze` をテスト記録に残している | TC-AUTO-15 |
+| AC-16 | 再ビルド後の `pip freeze` を `docs/tests/open/I151_pip_freeze.txt` に記録している | TC-AUTO-15 |
 | AC-17 | コミットが 2 段に分かれている | TC-AUTO-16 |
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
 | AC-19 | 後続 3 件を起票している | 手動 No.8 |
@@ -182,6 +182,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 |---|---|---|
 | Backend（変更） | `backend/requirements.txt` | 5 パッケージのバージョン更新＋`django-guardian` / `django-extensions` の 2 行削除 |
 | Backend（変更） | `backend/requirements-dev.txt` | `pytest-django` 4.9.0→4.14.0（1 段目）／`pytest` 8.3.4→9.0.3（2 段目） |
+| 記録（新規） | `docs/tests/open/I151_pip_freeze.txt` | 再ビルド後の `pip freeze` の出力。推移的依存が変動した際の切り分け材料（TC-AUTO-15 の判定対象） |
 | Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'django_extensions',`（38 行目）と `'guardian',`（41 行目）の**2 行**を削除 |
 | Backend（変更なし・検証対象） | `backend/accounts/views.py` | `@ratelimit` を 7 箇所で使用。django-ratelimit の Django 5.2 互換の影響を最も受ける |
 | Backend（変更なし・検証対象） | `backend/core/exceptions.py` | DRF の `exception_handler` / `set_rollback` を使用。DRF 3.18 の API 互換の影響を受ける |
@@ -282,7 +283,7 @@ THIRD_PARTY_APPS = [
 ### ステップ 3: CI での検証
 1. Draft PR #269 に 2 コミットを push する。
 2. CI の全 6 チェックの結果を確認する → TC-AUTO-13 / TC-AUTO-14 参照。
-3. `pip freeze` の出力をテスト記録へ残す → TC-AUTO-15 参照。
+3. `pip freeze` の出力を `docs/tests/open/I151_pip_freeze.txt` へ保存しコミットする → TC-AUTO-15 参照。
 4. コミットが 2 段に分かれていることを確認する → TC-AUTO-16 参照。
 
 ### ステップ 4: 後続イシューの起票
@@ -471,5 +472,6 @@ THIRD_PARTY_APPS = [
 - PR のマージ（不可逆・外向きの操作）
 
 ## レビュー結果
+- [20260823_1419 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1419.md)
 - [20260823_1344 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1344.md)
 - [20260822_1809 判定: ✅ 完了](../../reviews/I151_plan_review_20260822_1809.md)

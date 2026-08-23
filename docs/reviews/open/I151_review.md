@@ -50,7 +50,7 @@
 ### 7. celery と推移的依存
 - [ ] worker のログでタスクの**成功**が確認できる（TC-AUTO-10・beat が投げただけの確認になっていない）
 - [ ] ログに `ERROR` / `Traceback` がない
-- [ ] 再ビルド後の `pip freeze` が記録されている（TC-AUTO-15）
+- [ ] 再ビルド後の `pip freeze` が `docs/tests/open/I151_pip_freeze.txt` に記録・コミットされており、除去した 2 パッケージが含まれていない（TC-AUTO-15 判定 1・2）
 - [ ] `celery` / `celery-beat` が**再ビルド後のイメージ**で起動している（旧イメージのままになっていない）
 
 ### 8. コミット分割

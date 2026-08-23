@@ -354,21 +354,40 @@ test "$(gh pr checks 269 --json state -q '[.[]|select(.state!="SUCCESS")]|length
 
 推移的依存（kombu 等）が再ビルドで変動した場合に、後から切り分けられるようにする（イシュー決定 7-C）。
 
+記録先は**専用ファイル**とする。本文書を grep 対象にすると、説明文中に書かれた文字列にも反応してしまい判定が壊れる（初版はこの誤りを含んでいた）。
+
+準備（出力を記録ファイルへ保存し、リポジトリにコミットする）:
 ```bash
-docker compose exec -T backend pip freeze
+docker compose exec -T backend pip freeze > docs/tests/open/I151_pip_freeze.txt
 ```
 
-- **合格**: 出力を本文書の「実施記録」へ貼り付けてあること
-- **判定**: 記録の有無（人手判定・機械判定なし）
-- **ベースライン（実装前・2026-08-22）**: `Django==4.2.30` / `celery==5.3.4` / `kombu==5.6.2` / `amqp==5.3.1` / `billiard==4.2.4` / `vine==5.1.0` / `redis==5.0.1` / `djangorestframework==3.15.2` / `django-guardian==2.4.0` / `pytest==8.3.4` / `pytest-django==4.9.0`
+判定 1（更新後の Django が記録されている）:
+```bash
+grep -q 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt
+```
+
+判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）:
+```bash
+! grep -qE 'django-(guardian|extensions)==' docs/tests/open/I151_pip_freeze.txt
+```
+
+- **合格**: 判定 1・2 の**両方が exit 0**
+- **この形にした理由**: 「記録した」という主張を人手判定に委ねると、貼り忘れても合格になる。専用ファイルを grep 対象にすることで、記録の有無と中身の正しさを exit code で判定できる（文書冒頭の「合否判定はすべて exit code」を満たす）
+- **実装前の状態（false-green 検証）**: 記録ファイルが存在しないため判定 1 が **exit 2**（grep のファイル不在エラー・非ゼロ）になる。ベースラインの `pip freeze` をそのまま保存した場合は、除去前の 2 パッケージが含まれるため判定 2 が **exit 1** になる
+- **ベースライン（実装前・2026-08-22）**: Django 4.2.30 / celery 5.3.4 / kombu 5.6.2 / amqp 5.3.1 / billiard 4.2.4 / vine 5.1.0 / redis 5.0.1 / djangorestframework 3.15.2 / django-guardian 2.4.0 / django-extensions 3.2.3 / pytest 8.3.4 / pytest-django 4.9.0
 
 ---
 
 ## TC-AUTO-16: コミットが 2 段に分かれている（AC-17）
 
-準備:
+準備 1:
 ```bash
 git log origin/develop..HEAD --oneline > /tmp/i151_commits.txt
+```
+
+準備 2:
+```bash
+git log origin/develop..HEAD --oneline -- backend/requirements.txt > /tmp/i151_req_commits.txt
 ```
 
 判定 1（1 段目のコミットが存在する）:
@@ -383,8 +402,10 @@ grep -qE 'chore\(I151\)' /tmp/i151_commits.txt
 
 判定 3（`requirements.txt` を触ったコミットが 1 つだけ＝本体依存が 1 段目に集約されている）:
 ```bash
-test "$(git log origin/develop..HEAD --oneline -- backend/requirements.txt | wc -l)" -eq 1
+test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 1
 ```
+
+> `wc -l < file` はリダイレクトであってパイプではないため、本文書冒頭の「コマンドを複合化しない」原則を満たす。
 
 - **合格**: 判定 1〜3 の**すべてが exit 0**
 - **不合格**: 非ゼロ
