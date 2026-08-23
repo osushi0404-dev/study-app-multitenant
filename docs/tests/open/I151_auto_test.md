@@ -5,6 +5,7 @@
 - テストレベル: 静的検証（決定論 TC）／ツール実行／既存の単体・API 結合／コンポーネント／E2E
 - **新規テストコードは追加しない**（イシュー決定 6）。既存 94 件が同じ結果を返すことで依存更新の影響を測る
 - 合否判定インターフェース: **すべて exit code に統一**（合格 = exit 0・不合格 = 非ゼロ）
+- **コマンドは複合化しない**（`&&` / パイプで束ねない）。複数条件がある TC は「準備」と「判定 1・判定 2 …」に分け、**判定コマンドすべてが exit 0 なら合格**とする。複合コマンドは Claude Code の bash allowlist に一致せず承諾プロンプトを誘発し、自動テスト工程が止まるため
 
 ## ベースライン（実装前・2026-08-22 実測）
 
@@ -87,10 +88,19 @@ docker compose exec -T backend pip-audit -r requirements-dev.txt
 
 exit 0 と件数の両方を判定する（件数を見ないと skip 化による緑化を検出できない）。
 
+準備:
 ```bash
-docker compose exec -T backend python -m pytest -q > /tmp/i151_pytest.log 2>&1 \
-  && grep -qE '^94 passed' /tmp/i151_pytest.log \
-  && ! grep -qE 'skipped|xfailed|deselected' /tmp/i151_pytest.log
+docker compose exec -T backend python -m pytest -q > /tmp/i151_pytest.log 2>&1
+```
+
+判定 1（件数が 94 ちょうど）:
+```bash
+grep -qE '^94 passed' /tmp/i151_pytest.log
+```
+
+判定 2（skip / xfail / deselect が 0 件）:
+```bash
+! grep -qE 'skipped|xfailed|deselected' /tmp/i151_pytest.log
 ```
 
 - **合格**: exit 0（全件 pass・**94 件ちょうど**・skip / xfail / deselect が 0 件）
@@ -195,10 +205,19 @@ docker compose exec -T db psql -U postgres -c "DROP DATABASE migrate_check;"
 
 beat が投げたことではなく、worker が**成功で完了した**ことまで判定する（イシュー決定 7-B）。`update_daily_analytics_task` は 30 秒間隔のため、再作成から 1 分以上経過してから実行する。
 
+準備（1 スナップショットを取る）:
 ```bash
-docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1 \
-  && grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log \
-  && ! grep -qE 'ERROR|Traceback' /tmp/i151_celery.log
+docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1
+```
+
+判定 1（タスクが成功で完了している）:
+```bash
+grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log
+```
+
+判定 2（エラーが出ていない）:
+```bash
+! grep -qE 'ERROR|Traceback' /tmp/i151_celery.log
 ```
 
 > ログを一時ファイルに落としてから 2 つの判定を行う。`docker compose logs` を 2 回実行すると、成功判定とエラー判定が**別々のスナップショット**を見ることになり、その間に書き込まれたエラーを取りこぼす。
@@ -215,28 +234,36 @@ docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1 \
 
 > **pytest の判定を含めない理由**: ステップ 1 時点の `pytest` は 8.3.4 のままが正しい。pytest の固定値判定を本 TC に混ぜると、ステップ 1 の「全 TC 合格」条件が原理的に満たせなくなる。pytest は TC-AUTO-11B としてステップ 2 で独立に判定する。
 
-宣言側:
+判定 A-1（宣言側・7 パッケージを 1 コマンドずつ確認）:
 ```bash
-grep -qx 'Django==5.2.17' backend/requirements.txt \
-  && grep -qx 'djangorestframework==3.18.0' backend/requirements.txt \
-  && grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt \
-  && grep -qx 'django-extensions==4.1' backend/requirements.txt \
-  && grep -qx 'django-filter==26.1' backend/requirements.txt \
-  && grep -qx 'django-redis==7.0.0' backend/requirements.txt \
-  && grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
+grep -qx 'Django==5.2.17' backend/requirements.txt
+grep -qx 'djangorestframework==3.18.0' backend/requirements.txt
+grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt
+grep -qx 'django-extensions==4.1' backend/requirements.txt
+grep -qx 'django-filter==26.1' backend/requirements.txt
+grep -qx 'django-redis==7.0.0' backend/requirements.txt
+grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
 ```
 
-実インストール側（`pip freeze` の表記は PyPI の正規化名で固定されるため、宣言側と同じ `-qx` の完全一致で判定する）:
+準備（実インストール側のスナップショット）:
 ```bash
-docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt \
-  && grep -qx 'Django==5.2.17' /tmp/i151_freeze.txt \
-  && grep -qx 'djangorestframework==3.18.0' /tmp/i151_freeze.txt \
-  && grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt \
-  && grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt \
-  && grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt
+docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt
 ```
 
-- **合格**: 両方が exit 0
+判定 A-2（実インストール側・**宣言側と同じ 7 パッケージを全件**確認）:
+```bash
+grep -qx 'Django==5.2.17' /tmp/i151_freeze.txt
+grep -qx 'djangorestframework==3.18.0' /tmp/i151_freeze.txt
+grep -qx 'django-cors-headers==4.9.0' /tmp/i151_freeze.txt
+grep -qx 'django-extensions==4.1' /tmp/i151_freeze.txt
+grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt
+grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt
+grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt
+```
+
+- **合格**: 判定 A-1 / A-2 の**全コマンドが exit 0**
+- **宣言側と実インストール側で対象を揃える理由**: 片方だけ確認すると、再ビルド漏れ（宣言は新しいがイメージは古い）を検出できない。初版では実インストール側から `django-cors-headers` と `django-extensions` が漏れていたため、全 7 件に揃えた
+- **表記の事前確認**: `pip freeze` が `django-cors-headers==4.3.1` / `django-extensions==3.2.3` の形（ハイフン・小文字）で出力することを実測済み（2026-08-22）。`-qx` の完全一致で判定できる
 - **不合格**: 非ゼロ
 - **実装前の状態（false-green 検証）**: 宣言側の 1 行目 `grep -qx 'Django==5.2.17'` が **exit 1** になることを実測済み
 
@@ -246,12 +273,22 @@ docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt \
 
 **実行タイミング: ステップ 2 完了後。**
 
+判定 B-1（宣言側）:
 ```bash
-grep -qx 'pytest==9.0.3' backend/requirements-dev.txt \
-  && docker compose exec -T backend pip freeze | grep -qx 'pytest==9.0.3'
+grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
 ```
 
-- **合格**: exit 0（宣言と実インストールの両方が 9.0.3）
+準備（実インストール側のスナップショット）:
+```bash
+docker compose exec -T backend pip freeze > /tmp/i151_freeze2.txt
+```
+
+判定 B-2（実インストール側）:
+```bash
+grep -qx 'pytest==9.0.3' /tmp/i151_freeze2.txt
+```
+
+- **合格**: 判定 B-1 / B-2 の**両方が exit 0**
 - **不合格**: 非ゼロ
 - **ステップ 1 時点の状態**: `pytest==8.3.4` のため **exit 1**。これはこの時点では正常であり、本 TC はステップ 2 完了後にのみ評価する
 
@@ -259,12 +296,17 @@ grep -qx 'pytest==9.0.3' backend/requirements-dev.txt \
 
 ## TC-AUTO-12: frontend テストが 10 件 pass（AC-12）
 
+準備:
 ```bash
-docker compose exec -T frontend npm test -- --watchAll=false > /tmp/i151_jest.log 2>&1 \
-  && grep -qE 'Tests:[[:space:]]+10 passed, 10 total' /tmp/i151_jest.log
+docker compose exec -T frontend npm test -- --watchAll=false > /tmp/i151_jest.log 2>&1
 ```
 
-- **合格**: exit 0
+判定:
+```bash
+grep -qE 'Tests:[[:space:]]+10 passed, 10 total' /tmp/i151_jest.log
+```
+
+- **合格**: 準備・判定とも exit 0
 - **不合格**: 非ゼロ
 - **ベースライン**: 10 passed / 3 suites（実装前・実測済み）
 
@@ -288,7 +330,7 @@ docker compose --profile e2e run --rm e2e
 ## TC-AUTO-14: CI の全 6 チェックが SUCCESS（AC-14）
 
 ```bash
-[ "$(gh pr checks 269 --json state -q '[.[]|select(.state!="SUCCESS")]|length')" -eq 0 ]
+test "$(gh pr checks 269 --json state -q '[.[]|select(.state!="SUCCESS")]|length')" -eq 0
 ```
 
 - **合格**: exit 0（SUCCESS 以外のチェックが 0 件）
@@ -314,13 +356,27 @@ docker compose exec -T backend pip freeze
 
 ## TC-AUTO-16: コミットが 2 段に分かれている（AC-17）
 
+準備:
 ```bash
-git log origin/develop..HEAD --oneline | grep -qE 'fix\(I151\)' \
-  && git log origin/develop..HEAD --oneline | grep -qE 'chore\(I151\)' \
-  && [ "$(git log origin/develop..HEAD --oneline -- backend/requirements.txt | wc -l)" -eq 1 ]
+git log origin/develop..HEAD --oneline > /tmp/i151_commits.txt
 ```
 
-- **合格**: exit 0（1 段目と 2 段目のコミットが存在し、`requirements.txt` を触ったコミットが 1 つだけ＝本体依存の変更が 1 段目に集約されている）
+判定 1（1 段目のコミットが存在する）:
+```bash
+grep -qE 'fix\(I151\)' /tmp/i151_commits.txt
+```
+
+判定 2（2 段目のコミットが存在する）:
+```bash
+grep -qE 'chore\(I151\)' /tmp/i151_commits.txt
+```
+
+判定 3（`requirements.txt` を触ったコミットが 1 つだけ＝本体依存が 1 段目に集約されている）:
+```bash
+test "$(git log origin/develop..HEAD --oneline -- backend/requirements.txt | wc -l)" -eq 1
+```
+
+- **合格**: 判定 1〜3 の**すべてが exit 0**
 - **不合格**: 非ゼロ
 - **実装前の状態（false-green 検証）**: `fix(I151)` コミットが存在しないため **exit 1**
 
