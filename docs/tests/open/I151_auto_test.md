@@ -182,7 +182,9 @@ docker compose exec -T backend python manage.py makemigrations --check --dry-run
 
 - **合格**: exit 0（`No changes detected`）
 - **不合格**: 非ゼロ（モデルとマイグレーションに乖離がある）
-- **事前実測**: guardian 除去済み＋確定セットの組み合わせで `No changes detected` を確認済み
+- **事前実測**: guardian / django-extensions 除去済み＋確定セットの組み合わせで `No changes detected` を確認済み
+- **false-green 検証（2026-08-23 実施）**: マイグレーション未作成のモデルを持つダミーアプリを `INSTALLED_APPS` に注入したところ **exit 1**（`+ Create model DriftProbe`）を返した。判定式が実際に drift を捕捉できることを確認済み
+- **検出の盲点（実測で判明）**: `migrations/` パッケージを持たないアプリは Django が drift 検出の対象外として**黙って読み飛ばす**（同じダミーアプリでも `migrations/__init__.py` を置く前は `No changes detected` が返った）。本イシューの変更範囲では既存アプリがすべて `migrations/` を持つため影響しないが、将来 `migrations/` の無いアプリにモデルを足した場合、この TC と CI の drift チェックの双方が素通りする
 
 ---
 
@@ -215,7 +217,7 @@ docker compose exec -T db psql -U postgres -c "DROP DATABASE migrate_check;"
 
 ## TC-AUTO-10: celery worker のタスクが成功する（AC-15）
 
-beat が投げたことではなく、worker が**成功で完了した**ことまで判定する（イシュー決定 7-B）。`update_daily_analytics_task` は 30 秒間隔のため、再作成から 1 分以上経過してから実行する。
+beat が投げたことではなく、worker が**成功で完了した**ことまで判定する（イシュー決定 7-B）。**起算点は `docker compose up -d --wait` が完了し、`celery` / `celery-beat` コンテナが healthy になった時点**であり、そこから **1 分以上**待ってから実行する。`update_daily_analytics_task` が 30 秒間隔のため、1 分待てば 2 回分の実行ログが出る。待たずに実行すると、worker が 1 度も実行していない状態で判定 1 が exit 1 になる（false-red）。
 
 準備（1 スナップショットを取る）:
 ```bash
@@ -446,6 +448,7 @@ test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 1
 | TC-AUTO-05 | `! grep -qi guardian ...` / `! grep -qiE 'django[-_]extensions' ...` | 実装前の状態（両方の記述あり） | **exit 1**（正しく不合格） |
 | TC-AUTO-06 | `! grep -rqi guardian ...` / `! grep -rqi django_extensions ...` | 実装前の状態 | **exit 1**（正しく不合格） |
 | TC-AUTO-07 | `! grep -rq ANONYMOUS_USER_NAME ...` | ダミー注入（`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むファイルを一時ディレクトリに作成） | **exit 1**（正しく不合格） |
+| TC-AUTO-08 | `makemigrations --check --dry-run` | マイグレーション未作成のモデルを持つダミーアプリを `INSTALLED_APPS` に注入 | **exit 1**（正しく不合格） |
 | TC-AUTO-11A | `grep -qx 'Django==5.2.17' ...` | 実装前の状態（4.2.30） | **exit 1**（正しく不合格） |
 | TC-AUTO-16 | `git log ... grep -qE 'fix\(I151\)'` | 実装前の状態（コミット未作成） | **exit 1**（正しく不合格） |
 
