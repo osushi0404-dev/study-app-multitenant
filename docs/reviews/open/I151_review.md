@@ -1,4 +1,4 @@
-# I151 実装レビュー（Django 5.2 LTS 更新・未使用 django-guardian の除去）
+# I151 実装レビュー（Django 5.2 LTS 更新・未使用の django-guardian / django-extensions の除去）
 
 - 関連: docs/issues/open/I151.md / docs/plans/open/plan_I151.md / GitHub #267 / Draft PR #269
 - レビュー対象コミット: （実装後に記入。1 段目 `fix(I151): ...` / 2 段目 `chore(I151): ...`）
@@ -7,7 +7,7 @@
 
 ### 1. 変更の局所性（計画外変更がないこと）
 - [ ] 差分が `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py` の 3 ファイルのみである
-- [ ] `settings.py` の差分が `THIRD_PARTY_APPS` からの `'guardian',` 1 行削除のみで、`AUTHENTICATION_BACKENDS`・`REST_FRAMEWORK`・`MIDDLEWARE` に変更がない
+- [ ] `settings.py` の差分が `THIRD_PARTY_APPS` からの `'django_extensions',` と `'guardian',` の 2 行削除のみで、`AUTHENTICATION_BACKENDS`・`REST_FRAMEWORK`・`MIDDLEWARE` に変更がない
 - [ ] アプリコード（`accounts` / `core` / `problems` / `studylogs` / `dashboard`）に変更がない
 - [ ] マイグレーションファイルが新規追加されていない
 - [ ] `.github/workflows/ci.yml` / `e2e.yml` / `backend/Dockerfile` / `backend/pytest.ini` に変更がない（計画 §4 のとおり）
@@ -17,14 +17,15 @@
 - [ ] 実際にインストールされたバージョンが宣言と一致する（TC-AUTO-11A / 11B 実インストール側＝再ビルド漏れがない）
 - [ ] `==` の完全固定が維持されている（範囲指定に変わっていない）
 - [ ] 据え置きと決めたパッケージ（celery 5.3.4 等）が変更されていない
-- [ ] `django-guardian` の行が削除されている（コメントアウトではなく行ごと）
+- [ ] `django-guardian` と `django-extensions` の行が削除されている（コメントアウトではなく行ごと）
 
-### 3. guardian 除去の完全性
-- [ ] `requirements.txt` / `settings.py` に guardian が残っていない（TC-AUTO-05・実装前 exit 1 を確認済み）
-- [ ] Python コード全体に guardian 参照がない（TC-AUTO-06・実装前 exit 1 を確認済み）
+### 3. 未使用アプリ 2 件（guardian / django-extensions）の除去の完全性
+- [ ] `requirements.txt` / `settings.py` に guardian・django-extensions が残っていない（TC-AUTO-05 判定 1・2・いずれも実装前 exit 1 を確認済み）
+- [ ] Python コード全体に guardian・django_extensions の参照がない（TC-AUTO-06 判定 1・2・いずれも実装前 exit 1 を確認済み）
 - [ ] `ANONYMOUS_USER_NAME` 等の専用設定がない（TC-AUTO-07・ダミー注入で exit 1 を確認済み）
 - [ ] `manage.py check` が**警告 0**（TC-AUTO-04・実装前 exit 1 を確認済み）
 - [ ] `guardian_*` の 2 テーブルが**意図的に残置**されており、削除するマイグレーションや SQL が含まれていない
+- [ ] django-extensions がテーブルを持たないことを前提に、残置物の確認が不要であることを記録している
 
 ### 4. 脆弱性の解消
 - [ ] `pip-audit -r requirements.txt` が exit 0（TC-AUTO-01）
@@ -67,13 +68,13 @@
 ### 10. 記録の完全性
 - [ ] `I151_auto_test.md` の実施記録がすべて埋まっている（未実施が残っていない）
 - [ ] `I151_manual_test.md` の実結果が埋まっている（Human 項目 No.7 を含む）
-- [ ] 後続イシュー 4 件が起票され、番号が記録されている（AC-19）
+- [ ] 後続イシュー 3 件が起票され、番号が記録されている（AC-19）
 - [ ] 計画書との差分（あれば）が理由付きで記録されている
 
 ## 敵対的レビュー観点（独立サブエージェント向け・「合格を反証せよ」）
 
 - **「94 件 pass だから無退行」を反証せよ**: `--no-migrations` により pytest はマイグレーションを検証しない。DRF 3.18 / Django 5.2 で挙動が変わるが**既存テストが触れていない経路**（シリアライザのエラー形・ページネーション・認証トークンの失効・admin）が存在しないか。件数一致は「同じテストが通った」ことしか示さず、カバーされていない範囲の退行は検出できない。
-- **「guardian は未使用だから削除しても安全」を反証せよ**: `INSTALLED_APPS` から外すことで、guardian が提供していた**暗黙の副作用**（マイグレーション適用・AnonymousUser 行の作成・パーミッション関連のシグナル）に依存する箇所が本当にゼロか。既存 DB と新規 DB で挙動が分岐しないか。
+- **「guardian / django-extensions は未使用だから削除しても安全」を反証せよ**: `INSTALLED_APPS` から外すことで、両アプリが提供していた**暗黙の副作用**（guardian: マイグレーション適用・AnonymousUser 行の作成・パーミッション関連のシグナル／django-extensions: management コマンドの登録・`AutoSlugField` 等のモデルフィールド・シグナル）に依存する箇所が本当にゼロか。既存 DB と新規 DB で挙動が分岐しないか。**とくに django-extensions は grep が `django_extensions` 文字列に依存しており、`from django_extensions.db.fields import ...` 以外の経路（settings 文字列以外での間接利用）を取りこぼしていないか。**
 - **「認可の判定経路は不変」を反証せよ**: DRF 3.15 → 3.18 で権限クラスの評価順・`has_object_permission` の呼ばれ方・例外の型が変わっていないか。テナント境界テスト 7 モジュールが**組織越境を本当に検出できる**内容か（緩い assert で通っているだけではないか）。
 - **「TC-AUTO-03 は緑化を検出できる」を反証せよ**: 計画時点で判定式に `! grep -qE 'skipped|xfailed|deselected'` を追加し、`94 passed, 2 skipped` 形の緑化を弾くよう強化した（強化後の式が実装前ログに対し exit 0 を返すことも実測済み）。それでも抜け道が残らないか — 例えば**テストファイルごと削除して同数の新規テストを足す**、`pytest.ini` の `testpaths` を狭める、条件分岐で assert を実質無効化する、といった手段は件数一致でも検出できない。差分レビューで実際にテストコードが無改変であることを別途確認したか。
 - **「celery は正常」を反証せよ**: TC-AUTO-10 は直近 3 分のログを見るだけである。**再ビルド前の古いログ**を拾って合格していないか。worker が起動直後で 1 回も実行していない場合に false-green にならないか。`ERROR` の grep がログ書式の違い（`CRITICAL` 等）を取りこぼさないか。

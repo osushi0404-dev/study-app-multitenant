@@ -1,4 +1,4 @@
-# I151 自動テスト（Django 5.2 LTS 更新・未使用 django-guardian の除去）
+# I151 自動テスト（Django 5.2 LTS 更新・未使用の django-guardian / django-extensions の除去）
 
 - 関連: docs/issues/open/I151.md / docs/plans/open/plan_I151.md / GitHub #267 / Draft PR #269
 - 実行環境: **Docker（`docker compose exec`）**。ホスト venv の結果は合否根拠にしない（イシュー決定 5）
@@ -28,8 +28,8 @@
 | TC-AUTO-02 | 開発依存の脆弱性が 0 件 | AC-09 | ステップ 2 |
 | TC-AUTO-03 | backend テストが 94 件 pass | AC-11 | ステップ 1・2 |
 | TC-AUTO-04 | `manage.py check` が警告 0 | AC-05 | ステップ 1 |
-| TC-AUTO-05 | guardian が requirements / settings に無い | AC-02 | ステップ 1 |
-| TC-AUTO-06 | guardian が Python コード全体に無い | AC-03 | ステップ 1 |
+| TC-AUTO-05 | guardian / django-extensions が requirements / settings に無い | AC-02 | ステップ 1 |
+| TC-AUTO-06 | guardian / django_extensions が Python コード全体に無い | AC-03 | ステップ 1 |
 | TC-AUTO-07 | guardian 専用設定が無い | AC-04 | ステップ 1 |
 | TC-AUTO-08 | マイグレーション drift が無い | AC-07 | ステップ 1 |
 | TC-AUTO-09 | まっさらな DB で `migrate` が通る | AC-06 | ステップ 1 |
@@ -124,27 +124,39 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 ---
 
-## TC-AUTO-05: guardian が requirements / settings に無い（AC-02）
+## TC-AUTO-05: guardian / django-extensions が requirements / settings に無い（AC-02）
 
+判定 1（guardian）:
 ```bash
 ! grep -qi guardian backend/requirements.txt backend/core/settings.py
 ```
 
-- **合格**: exit 0（どちらのファイルにも guardian の記述が無い）
+判定 2（django-extensions）:
+```bash
+! grep -qiE 'django[-_]extensions' backend/requirements.txt backend/core/settings.py
+```
+
+- **合格**: 判定 1・2 の**両方が exit 0**（どちらのファイルにも記述が無い）
 - **不合格**: 非ゼロ
-- **実装前の状態（false-green 検証）**: **exit 1** を実測済み（`requirements.txt:14` と `settings.py:41` に存在）
+- **実装前の状態（false-green 検証）**: 判定 1 は **exit 1** を実測済み（`requirements.txt:14` と `settings.py:41` に存在）。判定 2 も `requirements.txt:7` と `settings.py:38` に存在するため **exit 1** になる
 
 ---
 
-## TC-AUTO-06: guardian が Python コード全体に無い（AC-03）
+## TC-AUTO-06: guardian / django_extensions が Python コード全体に無い（AC-03）
 
+判定 1（guardian）:
 ```bash
 ! grep -rqi guardian --include=*.py backend/
 ```
 
-- **合格**: exit 0
+判定 2（django_extensions）:
+```bash
+! grep -rqi django_extensions --include=*.py backend/
+```
+
+- **合格**: 判定 1・2 の**両方が exit 0**
 - **不合格**: 非ゼロ
-- **実装前の状態（false-green 検証）**: **exit 1** を実測済み（`backend/core/settings.py:41`）
+- **実装前の状態（false-green 検証）**: 判定 1 は **exit 1** を実測済み（`backend/core/settings.py:41`）。判定 2 も `backend/core/settings.py:38` に存在するため **exit 1** になる
 
 ---
 
@@ -234,12 +246,11 @@ grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.lo
 
 > **pytest の判定を含めない理由**: ステップ 1 時点の `pytest` は 8.3.4 のままが正しい。pytest の固定値判定を本 TC に混ぜると、ステップ 1 の「全 TC 合格」条件が原理的に満たせなくなる。pytest は TC-AUTO-11B としてステップ 2 で独立に判定する。
 
-判定 A-1（宣言側・7 パッケージを 1 コマンドずつ確認）:
+判定 A-1（宣言側・6 パッケージを 1 コマンドずつ確認）:
 ```bash
 grep -qx 'Django==5.2.17' backend/requirements.txt
 grep -qx 'djangorestframework==3.18.0' backend/requirements.txt
 grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt
-grep -qx 'django-extensions==4.1' backend/requirements.txt
 grep -qx 'django-filter==26.1' backend/requirements.txt
 grep -qx 'django-redis==7.0.0' backend/requirements.txt
 grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
@@ -250,20 +261,19 @@ grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
 docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt
 ```
 
-判定 A-2（実インストール側・**宣言側と同じ 7 パッケージを全件**確認）:
+判定 A-2（実インストール側・**宣言側と同じ 6 パッケージを全件**確認）:
 ```bash
 grep -qx 'Django==5.2.17' /tmp/i151_freeze.txt
 grep -qx 'djangorestframework==3.18.0' /tmp/i151_freeze.txt
 grep -qx 'django-cors-headers==4.9.0' /tmp/i151_freeze.txt
-grep -qx 'django-extensions==4.1' /tmp/i151_freeze.txt
 grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt
 grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt
 grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt
 ```
 
 - **合格**: 判定 A-1 / A-2 の**全コマンドが exit 0**
-- **宣言側と実インストール側で対象を揃える理由**: 片方だけ確認すると、再ビルド漏れ（宣言は新しいがイメージは古い）を検出できない。初版では実インストール側から `django-cors-headers` と `django-extensions` が漏れていたため、全 7 件に揃えた
-- **表記の事前確認**: `pip freeze` が `django-cors-headers==4.3.1` / `django-extensions==3.2.3` の形（ハイフン・小文字）で出力することを実測済み（2026-08-22）。`-qx` の完全一致で判定できる
+- **宣言側と実インストール側で対象を揃える理由**: 片方だけ確認すると、再ビルド漏れ（宣言は新しいがイメージは古い）を検出できない。初版では実インストール側から `django-cors-headers` が漏れていたため両側を揃えた。`django-extensions` は削除対象になったため本 TC の対象から外し、不在確認（TC-AUTO-05 / 06）へ移した
+- **表記の事前確認**: `pip freeze` が `django-cors-headers==4.3.1` の形（ハイフン・小文字）で出力することを実測済み（2026-08-22）。`-qx` の完全一致で判定できる
 - **不合格**: 非ゼロ
 - **実装前の状態（false-green 検証）**: 宣言側の 1 行目 `grep -qx 'Django==5.2.17'` が **exit 1** になることを実測済み
 
@@ -412,8 +422,8 @@ test "$(git log origin/develop..HEAD --oneline -- backend/requirements.txt | wc 
 | TC | 判定式 | 検証方法 | 結果 |
 |---|---|---|---|
 | TC-AUTO-04 | `manage.py check --fail-level WARNING` | 実装前の状態（guardian.W001 あり） | **exit 1**（正しく不合格） |
-| TC-AUTO-05 | `! grep -qi guardian ...` | 実装前の状態（guardian 記述あり） | **exit 1**（正しく不合格） |
-| TC-AUTO-06 | `! grep -rqi guardian --include=*.py backend/` | 実装前の状態 | **exit 1**（正しく不合格） |
+| TC-AUTO-05 | `! grep -qi guardian ...` / `! grep -qiE 'django[-_]extensions' ...` | 実装前の状態（両方の記述あり） | **exit 1**（正しく不合格） |
+| TC-AUTO-06 | `! grep -rqi guardian ...` / `! grep -rqi django_extensions ...` | 実装前の状態 | **exit 1**（正しく不合格） |
 | TC-AUTO-07 | `! grep -rq ANONYMOUS_USER_NAME ...` | ダミー注入（`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むファイルを一時ディレクトリに作成） | **exit 1**（正しく不合格） |
 | TC-AUTO-11A | `grep -qx 'Django==5.2.17' ...` | 実装前の状態（4.2.30） | **exit 1**（正しく不合格） |
 | TC-AUTO-16 | `git log ... grep -qE 'fix\(I151\)'` | 実装前の状態（コミット未作成） | **exit 1**（正しく不合格） |

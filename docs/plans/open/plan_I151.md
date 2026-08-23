@@ -1,4 +1,4 @@
-# plan_I151: Django 4.2 LTS → 5.2 LTS 更新による CVE 解消（未使用 django-guardian の削除を含む）
+# plan_I151: Django 4.2 LTS → 5.2 LTS 更新による脆弱性解消（未使用の django-guardian / django-extensions の削除を含む）
 
 ## 基本情報
 - **計画書ID**: plan_I151
@@ -92,6 +92,19 @@ django 4.2.30  CVE-2026-53878  5.2.16,6.0.7
 
 → **更新ではなく削除**が正しい。本更新で最もリスクの高い「認可パッケージのメジャー 2 段更新（2.4.0 → 3.3.3）」が丸ごと不要になる。
 
+### 2-4b. django-extensions も未使用であることの確認（2026-08-22 の再調査）
+
+当初計画では「4.1 へ更新し、本番依存 → 開発依存への移動は別イシュー」としていたが、前提が誤っていた。
+
+| 確認項目 | 結果 |
+|---|---|
+| `shell_plus` / `graph_models` / `runserver_plus` / `show_urls` の使用 | コード・スクリプト・runbook・CI とも **0 件** |
+| 出現箇所 | `backend/core/settings.py:38` の `'django_extensions',` の 1 行のみ |
+| マイグレーションディレクトリ | **不在**（`django_extensions/migrations` が存在しない） |
+| DB のテーブル | **0 件**（`pg_tables` に `django_extensions%` の該当なし） |
+
+→ **guardian より安全に削除できる**（guardian は 2 テーブルを残置するが、こちらは残置物が一切ない）。更新は「使っていないものの互換性を検証する」作業であり、無駄の上にリスクが乗る。移動は「使っていないものを置き直す」だけで問題が消えない。**削除が最適**である。
+
 ### 2-5. 事前スパイク（ホスト venv・Python 3.12 / 3.11 の両方で実測）
 
 ホスト venv 上の下見であり**テスト合否の根拠にはしない**が（イシュー決定 5）、計画の前提が成立することを実証済みである。
@@ -140,9 +153,9 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 
 | # | 条件 | 判定 |
 |---|---|---|
-| AC-01 | `backend/requirements.txt` が確定セットに更新されている（`==` 完全固定） | TC-AUTO-11A |
-| AC-02 | `django-guardian` が `requirements.txt` と `core/settings.py` の双方から削除されている | TC-AUTO-05 |
-| AC-03 | コード全体に guardian 参照が残っていない | TC-AUTO-06 |
+| AC-01 | `backend/requirements.txt` が確定セットに更新され、未使用 2 件が削除されている（`==` 完全固定） | TC-AUTO-11A |
+| AC-02 | `django-guardian` と `django-extensions` が `requirements.txt` と `core/settings.py` の双方から削除されている | TC-AUTO-05 |
+| AC-03 | コード全体に guardian / django_extensions の参照が残っていない | TC-AUTO-06 |
 | AC-04 | `ANONYMOUS_USER_NAME` 等の guardian 専用設定が残っていない | TC-AUTO-07 |
 | AC-05 | `manage.py check` が**警告 0** で終了する | TC-AUTO-04 |
 | AC-06 | まっさらな DB に対する `migrate` が最後まで通る（使い捨て DB 方式） | TC-AUTO-09 |
@@ -158,7 +171,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-16 | 再ビルド後の `pip freeze` をテスト記録に残している | TC-AUTO-15 |
 | AC-17 | コミットが 2 段に分かれている | TC-AUTO-16 |
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
-| AC-19 | 後続 4 件を起票している | 手動 No.8 |
+| AC-19 | 後続 3 件を起票している | 手動 No.8 |
 | AC-20 | develop マージ後に #262 をクローズしている | `/close` 工程（本 PR の範囲外） |
 
 ---
@@ -167,15 +180,15 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 
 | 区分 | 対象 | 内容 |
 |---|---|---|
-| Backend（変更） | `backend/requirements.txt` | 6 パッケージのバージョン更新＋`django-guardian` 行の削除 |
+| Backend（変更） | `backend/requirements.txt` | 5 パッケージのバージョン更新＋`django-guardian` / `django-extensions` の 2 行削除 |
 | Backend（変更） | `backend/requirements-dev.txt` | `pytest-django` 4.9.0→4.14.0（1 段目）／`pytest` 8.3.4→9.0.3（2 段目） |
-| Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'guardian',`（41 行目）を削除 |
+| Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'django_extensions',`（38 行目）と `'guardian',`（41 行目）の**2 行**を削除 |
 | Backend（変更なし・検証対象） | `backend/accounts/views.py` | `@ratelimit` を 7 箇所で使用。django-ratelimit の Django 5.2 互換の影響を最も受ける |
 | Backend（変更なし・検証対象） | `backend/core/exceptions.py` | DRF の `exception_handler` / `set_rollback` を使用。DRF 3.18 の API 互換の影響を受ける |
 | Backend（変更なし・検証対象） | `backend/core/celery.py` / `backend/core/tasks.py` / `backend/studylogs/tasks.py` | worker / beat が backend と同じイメージから作られるため再ビルドの影響を受ける |
 | Backend（変更なし） | `backend/pytest.ini` | `--no-migrations` は意図的な高速化設定。維持する |
 | Frontend | なし | API 契約は変わらない。無退行のみ確認（TC-AUTO-12 / TC-AUTO-13） |
-| DB | マイグレーション新規生成なし（事前実測で `No changes detected`）。**`guardian_*` の 2 テーブルは残置**（削除は別イシュー）。スキーマの破壊的変更なし |
+| DB | マイグレーション新規生成なし（事前実測で `No changes detected`）。**`guardian_*` の 2 テーブルは残置**（削除は別イシュー）。django-extensions はテーブルを持たないため残置物なし。スキーマの破壊的変更なし |
 | Config/Infra | `backend/Dockerfile` は**変更なし**（Python 3.11 のままで要件充足）。ただし `requirements.txt` 変更に伴い **イメージ再ビルドが必須**。`docker-compose.yml` の `backend` / `celery` / `celery-beat` / `e2e-init` が同じ Dockerfile（`target: dev`）を参照するため、**再ビルドは 4 サービスすべてに波及する** |
 | CI | `.github/workflows/ci.yml` / `.github/workflows/e2e.yml` とも**変更しない**。ただし `ci.yml:27`（pip-audit）と `ci.yml:29-35`（migration drift）、`e2e.yml:17,25`（まっさらな DB への migrate）が本変更の判定に関わる |
 
@@ -190,7 +203,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | 1 | `Django==4.2.30` | `Django==5.2.17` | 7 件すべての Fix Versions を満たす 5.2 系最新（`PYSEC-2026-3717` の修正が 5.2.17） |
 | 2 | `djangorestframework==3.15.2` | `djangorestframework==3.18.0` | 3.15 は 5.2 非対応（宣言は 5.0 まで） |
 | 4 | `django-cors-headers==4.3.1` | `django-cors-headers==4.9.0` | 4.3.1 の宣言は 5.0 まで |
-| 7 | `django-extensions==3.2.3` | `django-extensions==4.1` | 3.2.3 の宣言は 4.2 まで |
+| 7 | `django-extensions==3.2.3` | **行ごと削除** | 未使用（§2-4b）。更新せず除去する |
 | 8 | `django-filter==23.4` | `django-filter==26.1` | 23.4 の宣言は 5.0 まで |
 | 12 | `django-redis==5.4.0` | `django-redis==7.0.0` | 5.4.0 の宣言は 4.2 まで |
 | 14 | `django-guardian==2.4.0` | **行ごと削除** | 未使用（§2-4）。更新せず除去する |
@@ -215,9 +228,9 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',  # logout での refresh トークン失効に必要（I142）
     'corsheaders',
-    'django_extensions',
+    'django_extensions',     # <- 削除（未使用・§2-4b）
     'django_filters',
-    'guardian',              # <- この 1 行を削除
+    'guardian',              # <- 削除（未使用・§2-4）
 ]
 
 # 変更後
@@ -226,12 +239,11 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',  # logout での refresh トークン失効に必要（I142）
     'corsheaders',
-    'django_extensions',
     'django_filters',
 ]
 ```
 
-**修正アプローチ**: `INSTALLED_APPS` から未使用アプリを外すだけで、認証・認可の設定（`AUTHENTICATION_BACKENDS`・`REST_FRAMEWORK` の権限クラス）には一切触れない。guardian は認証バックエンドに登録されていないため、削除しても認可の判定経路は変わらない。DB のテーブルは残置するため、データ損失も起きない。
+**修正アプローチ**: `INSTALLED_APPS` から未使用アプリ 2 件を外すだけで、認証・認可の設定（`AUTHENTICATION_BACKENDS`・`REST_FRAMEWORK` の権限クラス）には一切触れない。guardian は認証バックエンドに登録されていないため、削除しても認可の判定経路は変わらない。DB のテーブルは残置するため、データ損失も起きない。
 
 ---
 
@@ -246,13 +258,13 @@ THIRD_PARTY_APPS = [
 - Docker が稼働していること・6 サービスが healthy であることを確認する → TC-AUTO-00 参照。
 
 ### ステップ 1: 本体依存と guardian 削除（コミット 1）
-1. `backend/requirements.txt` を §5-1 のとおり更新する（6 行の書き換え＋`django-guardian` 行の削除）。
+1. `backend/requirements.txt` を §5-1 のとおり更新する（5 行の書き換え＋`django-guardian` / `django-extensions` の 2 行削除）。
 2. `backend/requirements-dev.txt` の `pytest-django` を `4.14.0` に更新する（§5-2）。
-3. `backend/core/settings.py` の `THIRD_PARTY_APPS` から `'guardian',` を削除する（§5-3）。
+3. `backend/core/settings.py` の `THIRD_PARTY_APPS` から `'django_extensions',` と `'guardian',` の 2 行を削除する（§5-3）。
 4. backend イメージを再ビルドし、`backend` / `celery` / `celery-beat` を作り直す（`docker compose build backend celery celery-beat` → `docker compose up -d --wait`）。
 5. 検証 → TC-AUTO-01 / 03 / 04 / 05 / 06 / 07 / 08 / 09 / 10 / 11A / 12 参照。**TC-AUTO-11B（pytest の固定値）はこの時点では対象外**（pytest は 8.3.4 のままが正しいため）。
 6. すべて合格したら実装コミットとして記録する。
-   - コミットメッセージ: `fix(I151): Django 5.2.17 へ更新し依存を対応版へ一括更新・未使用の django-guardian を削除`
+   - コミットメッセージ: `fix(I151): Django 5.2.17 へ更新し依存を対応版へ一括更新・未使用の django-guardian / django-extensions を削除`
    - 対象: `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`
 
 > **このステップが失敗した場合**: 計画をやり直す。テストの skip・削除・条件緩和による緑化は行わない（イシュー Danger Ops の承認条件）。
@@ -274,7 +286,7 @@ THIRD_PARTY_APPS = [
 4. コミットが 2 段に分かれていることを確認する → TC-AUTO-16 参照。
 
 ### ステップ 4: 後続イシューの起票
-イシュー決定 2 / 7 / 7-C / 7-D に基づき 4 件を起票する（タイトル案はイシュー本文に記載済み） → 手動テスト No.8 参照。
+イシュー決定 2 / 7-C / 7-D に基づき 3 件を起票する（タイトル案はイシュー本文に記載済み）→ 手動テスト No.8 参照。**django-extensions の依存移動イシューは決定 7 の変更により不要になった**。
 
 ### ステップ 5: 記録の完成
 `docs/tests/open/I151_auto_test.md` / `I151_manual_test.md` に結果を記入し、認可・テナント境界テストのモジュール名と前後の件数を記録する → 手動テスト No.6 参照。
@@ -359,7 +371,7 @@ THIRD_PARTY_APPS = [
 
 ## 12. コスト・保守見積もり
 
-**P8 影響なし。** 新規インフラリソース・外部サービスの追加はない。既存パッケージのバージョン更新と 1 パッケージの除去のみで、むしろ依存が 1 つ減るため保守対象は縮小する。
+**P8 影響なし。** 新規インフラリソース・外部サービスの追加はない。既存パッケージのバージョン更新と 2 パッケージの除去のみで、むしろ依存が 2 つ減るため保守対象は縮小する。
 
 ---
 
@@ -386,12 +398,12 @@ THIRD_PARTY_APPS = [
 | 観点 | 回答 |
 |---|---|
 | 入力バリデーション・サニタイズ | 変更なし（シリアライザ・バリデータに手を入れない） |
-| 認証・認可の変更 | **判定ロジックの変更なし**。guardian は `AUTHENTICATION_BACKENDS` に未登録のため、除去しても最小権限の設計は変わらない。`REST_FRAMEWORK` の権限クラス設定にも触れない |
+| 認証・認可の変更 | **判定ロジックの変更なし**。guardian は `AUTHENTICATION_BACKENDS` に未登録のため、除去しても最小権限の設計は変わらない。django-extensions は認可に関与しない。`REST_FRAMEWORK` の権限クラス設定にも触れない |
 | 機密データの扱い | 変更なし。本 PR で新たにログ出力・保存する機密データはない |
 | OWASP Top 10 | **A06（脆弱で古くなったコンポーネント）を直接是正するのが本イシューの目的**。XSS / SQLi / CSRF に関わるコード変更はない。Django 5.2 へ上げることで 7 件の既知脆弱性が解消する |
 | フレームワーク推奨パターン | Django のセキュリティ設定（`SecurityHeadersMiddleware` 等）に変更なし。サポート対象系列を使うこと自体が推奨パターンへの回帰 |
 | 依存ライブラリの既知脆弱性 | `pip-audit` で本体・開発の双方が **0 件**であることを計画時点で実測済み（§2-3） |
-| スキャンツールの重大度基準 | **bandit: MEDIUM 以上を修正対象・LOW は `# nosec` で抑制／npm audit: high・critical を修正対象**。本 PR の Python コード変更は `settings.py` の 1 行削除のみのため新規検出は想定しない |
+| スキャンツールの重大度基準 | **bandit: MEDIUM 以上を修正対象・LOW は `# nosec` で抑制／npm audit: high・critical を修正対象**。本 PR の Python コード変更は `settings.py` の 2 行削除のみのため新規検出は想定しない |
 
 ---
 
@@ -401,6 +413,7 @@ THIRD_PARTY_APPS = [
 |---|---|---|
 | D-1 | Django を 5.2.17 に固定する | **イシューに明記**（決定 3）。計画時の再実測で 5.2.16 では新 CVE を解消できないことも判明（§2-2） |
 | D-2 | django-guardian を更新せず除去する | **イシューに明記**（決定 1） |
+| D-2b | django-extensions を更新せず除去する | **イシューに明記**（決定 7・2026-08-22 に「4.1 へ更新」から変更） |
 | D-3 | `guardian_*` テーブルは残置する | **イシューに明記**（決定 2） |
 | D-4 | 依存は最新一括・`==` 完全固定 | **イシューに明記**（決定 3） |
 | D-5 | `requirements-dev.txt` を 2 段コミットに分ける（1 段目に pytest-django） | **イシューに明記**（決定 4） |
@@ -420,22 +433,22 @@ THIRD_PARTY_APPS = [
 ## 18. 承認ポイント
 
 ### A. 更新するバージョンの組み合わせ（Danger Ops の承認条件）
-- [ ] `requirements.txt`: Django 5.2.17 / DRF 3.18.0 / django-cors-headers 4.9.0 / django-extensions 4.1 / django-filter 26.1 / django-redis 7.0.0、`django-guardian` は行ごと削除
+- [ ] `requirements.txt`: Django 5.2.17 / DRF 3.18.0 / django-cors-headers 4.9.0 / django-filter 26.1 / django-redis 7.0.0。**`django-guardian` と `django-extensions` は行ごと削除**（いずれも未使用）
 - [ ] `requirements-dev.txt`: pytest-django 4.14.0（1 段目）／pytest 9.0.3（2 段目）
 - [ ] 上記以外のパッケージは据え置き（celery 5.3.4 を含む）
 
 ### B. 計画時に判明した差分（イシューとの読み替え）
-- [ ] **脆弱性が 6 件 → 7 件に増えている**。新規の `PYSEC-2026-3717` の修正版が 5.2.17 のため、既に決めていた 5.2.17 で解消できる（方針変更は不要）。**イシューのタイトルと本文の「6 件」を「7 件」に更新するかどうかを判断してください**
-- [ ] **ベースラインは 94 件**（イシュー本文の 110 件は I142 ブランチでの値）。判定基準を 94 件 pass → 94 件 pass に読み替える
+- [ ] **脆弱性の件数はタイトル・受け入れ条件に固定しない**（2026-08-22 決定）。起票時 6 件 → 再実測 7 件と 1 週間で変動しており、直しても必ず古くなる。イシューのタイトルから件数を外し、**日付付きの実測値として本文に残す**形に変更済み。新規 `PYSEC-2026-3717` の修正版は 5.2.17 で、既に決めていたバージョンで解消できる（方針変更は不要）
+- [ ] **テスト件数もイシューには固定しない**（2026-08-22 決定）。イシューの受け入れ条件は「実装直前に計測したベースラインと同数」という不変条件に変更し、**実測値 94 件は本計画書と自動テスト文書（TC-AUTO-03）に固定**して決定論を保つ。イシュー本文の 110 件は I142 ブランチの値だった
 
 ### C. 仮定で決めた事項（D-12 〜 D-15）
+- [ ] **django-extensions を「4.1 へ更新」から「削除」へ変更**（2026-08-22 決定・§2-4b の実測に基づく）。当初の「本番イメージに入っている開発ツール」という前提が誤りで、実際は未使用だった。これにより後続イシューが 1 件不要になる
 - [ ] ブランチ名 `feature/I151-django-52-lts-upgrade`（作成・push・Draft PR #269 まで実施済み）
 - [ ] **再ビルド対象を `backend` だけでなく `celery` / `celery-beat` にも広げる**（同一 Dockerfile を参照するため。イシューは backend のみ記載）
-- [ ] ベースライン件数の読み替え（B と同じ）
 - [ ] コミットメッセージの文言（`fix(I151): ...` / `chore(I151): ...`）
 
 ### S. セキュリティ・業務ロジック確認
-- [ ] **S-1 認可の判定経路は変更しない**。guardian は `AUTHENTICATION_BACKENDS` に未登録のため、除去しても最小権限の設計に影響しない
+- [ ] **S-1 認可の判定経路は変更しない**。guardian は `AUTHENTICATION_BACKENDS` に未登録のため、除去しても最小権限の設計に影響しない。django-extensions は認可に一切関与しない
 - [ ] **S-2 マルチテナントの閲覧・操作範囲は変更しない**。組織スコープの絞り込みは自前実装であり guardian に依存していない。無退行は §7 の認可・テナント境界モジュール群で確認する
 - [ ] **S-3 依存の既知脆弱性はゼロ**であることを計画時点で実測済み（本体・開発とも exit 0）
 - [ ] **S-4 実装後に `/security-review` を実施する**（認可ライブラリの依存除去を含むため）
