@@ -185,7 +185,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | Backend（変更） | `backend/requirements.txt` | 5 パッケージのバージョン更新＋`django-guardian` / `django-extensions` の 2 行削除 |
 | Backend（変更） | `backend/requirements-dev.txt` | `pytest-django` 4.9.0→4.14.0（1 段目）／`pytest` 8.3.4→9.0.3（2 段目） |
 | 記録（新規） | `docs/tests/open/I151_pip_freeze.txt` | 再ビルド後の `pip freeze` の出力。推移的依存が変動した際の切り分け材料（TC-AUTO-15 の判定対象） |
-| Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'django_extensions',`（38 行目）と `'guardian',`（41 行目）の**2 行**を削除 |
+| Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'django_extensions',`（38 行目）と `'guardian',`（40 行目）の**2 行**を削除 |
 | Backend（変更なし・検証対象） | `backend/accounts/views.py` | `@ratelimit` を 7 箇所で使用。django-ratelimit の Django 5.2 互換の影響を最も受ける |
 | Backend（変更なし・検証対象） | `backend/core/exceptions.py` | DRF の `exception_handler` / `set_rollback` を使用。DRF 3.18 の API 互換の影響を受ける |
 | Backend（変更なし・検証対象） | `backend/core/celery.py` / `backend/core/tasks.py` / `backend/studylogs/tasks.py` | worker / beat が backend と同じイメージから作られるため再ビルドの影響を受ける |
@@ -225,26 +225,26 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 ### 5-3. `backend/core/settings.py`
 
 ```python
-# 変更前（34-42 行目）
+# 変更前（34-41 行目）
 THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',  # logout での refresh トークン失効に必要（I142）
     'corsheaders',
-    'django_extensions',     # <- 削除（未使用・§2-4b）
+    'django_extensions',     # <- 削除（未使用・§2-4b・38 行目）
     'django_filters',
-    'guardian',              # <- 削除（未使用・§2-4）
+    'guardian',              # <- 削除（未使用・§2-4・40 行目）
 ]
 
 # 変更後
 THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',  # logout での refresh トークン失効に必要（I142）
     'corsheaders',
     'django_filters',
 ]
 ```
+
+> **【実装時の訂正・2026-08-24】** 初版のスニペットは `'rest_framework_simplejwt.token_blacklist',` を含んでいたが、これは `feature/I142-*` ブランチの状態であり、`develop` 起点の本ブランチには存在しない。削除対象の 2 行は同じで実装内容に影響はないが、guardian の行番号が 41 → 40 にずれる。上記は実態に合わせた内容。
 
 **修正アプローチ**: `INSTALLED_APPS` から未使用アプリ 2 件を外すだけで、認証・認可の設定（`AUTHENTICATION_BACKENDS`・`REST_FRAMEWORK` の権限クラス）には一切触れない。guardian は認証バックエンドに登録されていないため、削除しても認可の判定経路は変わらない。DB のテーブルは残置するため、データ損失も起きない。
 
