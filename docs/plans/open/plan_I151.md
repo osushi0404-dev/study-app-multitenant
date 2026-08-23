@@ -118,6 +118,7 @@ django 4.2.30  CVE-2026-53878  5.2.16,6.0.7
 | Django 5.x で削除された API の使用 | 0 件（`DEFAULT_FILE_STORAGE` / `STATICFILES_STORAGE` / `get_storage_class` / `index_together` / `USE_L10N` / `timezone.utc` / `make_random_password` / `NullBooleanField` / `force_text`） |
 | DRF 3.18.0 の API 互換 | `from rest_framework.views import exception_handler, set_rollback` が健在。`core.exceptions` と全ビューモジュールの import 成功 |
 | django-ratelimit 4.1.0 | Django 5.2 で正常に読み込み（`backend/accounts/views.py` の `@ratelimit` 7 箇所を含む） |
+| **django-redis 7.0.0（メジャー 2 段更新）** | **稼働中の Redis に対して実際に読み書きして検証済み**（2026-08-23）。`settings.py` の `CACHES` が使う API がすべて 7.0.0 に存在し、4 つのキャッシュ（`default` / `sessions` / `problems` / `analytics`）すべてで set → get → delete が成功した。確認した API: `django_redis.cache.RedisCache` / `django_redis.client.DefaultClient` / `django_redis.compressors.zlib.ZlibCompressor`、および `CONNECTION_POOL_KWARGS`（`max_connections=50` / `retry_on_timeout=True`）と `IGNORE_EXCEPTIONS=True` の受理 |
 | pytest-django 4.14.0 と pytest 8.3.4 の共存 | `Requires-Dist: pytest>=7.0.0`・依存解決 exit 0 ＝ **2 段コミットが成立** |
 
 ### 2-6. 環境前提の確認（`plan-writing-rules.md`「環境前提確認」）
@@ -278,7 +279,7 @@ THIRD_PARTY_APPS = [
    - コミットメッセージ: `chore(I151): pytest 9.0.3 へ更新（PYSEC-2026-1845 の解消）`
    - 対象: `backend/requirements-dev.txt`
 
-> **このステップが失敗した場合**: **2 段目の変更のみを取り消す**（コミット前なら `backend/requirements-dev.txt` の `pytest` を 8.3.4 へ戻す。コミット後なら当該コミットを revert する）。ステップ 1 の成果は保持される。その場合は pytest の脆弱性解消を別イシューへ送り、受け入れ条件 AC-09 / AC-10 を「pytest は据え置き」に読み替える旨をレビュー記録に明記する。
+> **このステップが失敗した場合**: **2 段目の変更のみを取り消す**（手順は §8 を参照。Edit ツールで書き戻し、再ビルドまで行う）。ステップ 1 の成果は保持される。その場合は pytest の脆弱性解消を別イシューへ送り、受け入れ条件 AC-09 / AC-10 を「pytest は据え置き」に読み替える旨をレビュー記録に明記する。
 
 ### ステップ 3: CI での検証
 1. Draft PR #269 に 2 コミットを push する。
@@ -328,8 +329,8 @@ THIRD_PARTY_APPS = [
 
 | 段階 | 手順 |
 |---|---|
-| ステップ 2 で失敗 | 2 段目の変更のみを取り消す。`requirements-dev.txt` の `pytest` が 8.3.4 に戻り、ステップ 1 の成果は保持される。**取り消し後は必ず再ビルドする**（ファイルを戻してもイメージには pytest 9 が残るため、宣言と実インストールが食い違う） |
-| ステップ 1 で失敗 | `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py` を更新前の内容へ戻し、backend / celery / celery-beat を再ビルドする |
+| ステップ 2 で失敗 | 2 段目の変更のみを取り消す。**手順を明示する**: コミット前なら `backend/requirements-dev.txt` の `pytest==9.0.3` の行を **Edit ツールで `pytest==8.3.4` に書き戻す**（`git restore` は同一ファイル内の他の未コミット変更まで巻き戻すため使わない）。コミット後なら当該コミットを `git revert` する。**取り消し後は必ず再ビルドする**（ファイルを戻してもイメージには pytest 9 が残り、宣言と実インストールが食い違うため）。再ビルド後に TC-AUTO-11B が exit 1（= pytest が 9.0.3 でない）になることで、戻し漏れを検出できる |
+| ステップ 1 で失敗 | 3 ファイル（`backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`）を **Edit ツールで更新前の内容へ書き戻す**（変更箇所は §5-1 / §5-2 / §5-3 に列挙済みなので機械的に戻せる。`git restore` は使わない）。その後 backend / celery / celery-beat を再ビルドし、TC-AUTO-01 が exit 1（= 脆弱性が再検出される）に戻ることで巻き戻しの完了を確認する |
 | develop マージ後に判明 | revert PR で戻す。`guardian_*` テーブルは残置しているため、guardian を戻す場合も `INSTALLED_APPS` と依存の復元のみで足りる（データ復旧は不要） |
 | DB | マイグレーションを新規生成しないため、DB のロールバックは不要。検証用の使い捨て DB（`migrate_check`）は検証後に破棄する |
 
@@ -472,6 +473,7 @@ THIRD_PARTY_APPS = [
 - PR のマージ（不可逆・外向きの操作）
 
 ## レビュー結果
+- [20260823_1428 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1428.md)
 - [20260823_1419 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1419.md)
 - [20260823_1344 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1344.md)
 - [20260822_1809 判定: ✅ 完了](../../reviews/I151_plan_review_20260822_1809.md)
