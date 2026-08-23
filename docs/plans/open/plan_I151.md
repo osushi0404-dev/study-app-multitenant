@@ -174,6 +174,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
 | AC-19 | 後続 3 件を起票している | 手動 No.8 |
 | AC-20 | develop マージ後に #262 をクローズしている | `/close` 工程（本 PR の範囲外） |
+| AC-21 | レート制限のカウンタ保存が再ビルド後の実コンテナで機能する（security-review 由来） | TC-AUTO-17 |
 
 ---
 
@@ -264,7 +265,7 @@ THIRD_PARTY_APPS = [
 2. `backend/requirements-dev.txt` の `pytest-django` を `4.14.0` に更新する（§5-2）。
 3. `backend/core/settings.py` の `THIRD_PARTY_APPS` から `'django_extensions',` と `'guardian',` の 2 行を削除する（§5-3）。
 4. backend イメージを再ビルドし、`backend` / `celery` / `celery-beat` を作り直す（`docker compose build backend celery celery-beat` → `docker compose up -d --wait`）。
-5. 検証 → TC-AUTO-01 / 03 / 04 / 05 / 06 / 07 / 08 / 09 / 10 / 11A / 12 参照。**TC-AUTO-11B（pytest の固定値）はこの時点では対象外**（pytest は 8.3.4 のままが正しいため）。
+5. 検証 → TC-AUTO-01 / 03 / 04 / 05 / 06 / 07 / 08 / 09 / 10 / 11A / 12 / 17 参照。**TC-AUTO-11B（pytest の固定値）はこの時点では対象外**（pytest は 8.3.4 のままが正しいため）。
 6. すべて合格したら実装コミットとして記録する。
    - コミットメッセージ: `fix(I151): Django 5.2.17 へ更新し依存を対応版へ一括更新・未使用の django-guardian / django-extensions を削除`
    - 対象: `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`
@@ -471,6 +472,53 @@ THIRD_PARTY_APPS = [
 ### ユーザーに残るもの
 - `/security-review I151` と `/implement I151` の起動（Claude はプロジェクトスキルを自己起動しない）
 - PR のマージ（不可逆・外向きの操作）
+
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-08-23
+
+### セキュリティ設計レビュー
+
+**対象コード変更**: `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`（`INSTALLED_APPS` から未使用アプリ 2 行の削除）のみ。**新規エンドポイント・シリアライザ・モデル・URL・permission_classes の変更なし**。
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 依存ライブラリ／認証 | **レート制限がフェイルオープンしうる**。`@ratelimit`（ログイン 5/5m・登録 10/5m・パスワードリセット 3/15m 等のブルートフォース防御）はカウンタを `default` キャッシュに保存する（`RATELIMIT_USE_CACHE = 'default'`）。その `default` は本 PR で **django-redis 5.4.0 → 7.0.0（メジャー 2 段）** に更新され、かつ `IGNORE_EXCEPTIONS: True` により**キャッシュ操作の失敗が例外にならず握り潰される**。カウンタが機能しなくなってもエラーは出ず、総当たり防御だけが静かに消える。さらに既存テスト `core/tests/test_I127_throttling.py` は 4 キャッシュすべてを `LocMemCache` に差し替えるため、**django-redis は 1 度も検証されない**（94 件が全部 pass しても検出できない） | **TC-AUTO-17 を追加し、再ビルド後の実コンテナで `cache.add` / `cache.incr` の動作を必須確認とする**（django-ratelimit が実際に使う操作を `django_ratelimit.core` の実測で特定）。設計時点でホスト venv 上の django-redis 7.0.0 に対し `add_new True` / `add_dup False` / `incr 1→2` を確認済みだが、ホスト venv は合否根拠にしないため実コンテナで再実行する。**`IGNORE_EXCEPTIONS` を無効化する変更は本 PR では行わない**（キャッシュ障害時にアプリ全体を落とす設計変更になるため。恒久対応は別途判断） |
+| Low | 認証・認可 | `REST_FRAMEWORK` の `DEFAULT_PERMISSION_CLASSES` が **空リスト**（既存設計）。`permission_classes` を明示し忘れたビューは無防備になる。本 PR は DRF を 3.15 → 3.18 に上げるため、空リストの解釈が変わらないことの確認が要る | **本 PR では設定を変更しない**（変更すると全ビューの挙動が動き、脆弱性解消という目的から外れる）。DRF 更新後も認可判定が不変であることを、既存の認可・テナント境界 7 モジュール（§7）と全 94 件で確認する。空リストの是正は本 PR のスコープ外 |
+| Low | 機密情報 | 新規に `docs/tests/open/I151_pip_freeze.txt` をコミットする（TC-AUTO-15 の記録） | `pip freeze` の出力は**パッケージ名とバージョンのみ**で認証情報を含まない。コミット前に内容を確認する。pre-commit の detect-secrets も通過させる |
+| — | マルチテナント | なし。組織スコープの絞り込みは自前実装であり、除去する guardian / django-extensions のいずれにも依存していない（§2-4 / §2-4b で実測） | 既存の認可・テナント境界テストで無退行を確認 |
+| — | 入力検証 | なし。シリアライザ・バリデータに変更なし | — |
+| — | OWASP Top 10 | **A06（脆弱で古くなったコンポーネント）を直接是正するのが本 PR の目的**。XSS / SQLi / CSRF / IDOR に関わるコード変更なし。`SECURE_BROWSER_XSS_FILTER` / `SECURE_CONTENT_TYPE_NOSNIFF` / `X_FRAME_OPTIONS='DENY'` / 本番時の HSTS 設定はいずれも変更しない | — |
+| — | ファイル操作 | なし。アップロード・ダウンロード経路に変更なし | — |
+| — | 外部通信 | なし。外部 API・Webhook の呼び出し経路に変更なし | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/auth/login/` | 未認証 | パスワードを変えて連続試行（総当たり） | `@ratelimit(key='ip', rate='5/5m')` が 5 回で遮断する | Yes: TC-AUTO-17（カウンタ保存が機能することを実コンテナで確認） | Yes: 実コンテナで連続リクエストして遮断されることを確認（手動 No.11） | カウンタは機能しても、レート値そのものの妥当性は本 PR の対象外 | Medium |
+| 2 | `POST /api/auth/password-reset/` 等 | 未認証 | リセット要求の大量送信 | `@ratelimit(key='ip', rate='3/15m')` が遮断する | Yes: TC-AUTO-17（同一のカウンタ機構） | No（#1 と同じ機構のため代表確認で足りる） | 同上 | Medium |
+| 3 | 任意の API | 一般ユーザー | 他組織のリソースを取得・更新（テナント越境） | 組織スコープの絞り込みで 403 / 404 を返す | Yes: `test_I103_cross_org_create` / `test_I104_subject_authz` / `test_I006_subject_org_admin` / `test_I078_is_correct_exposure` | No | DRF 3.18 で権限クラスの評価順が変わる可能性は既存テストで担保（新規テストは追加しない方針） | Low |
+| 4 | 任意の API | 未認証 / 認証済み | 大量リクエストで DRF スロットルを突破 | `anon 60/min` / `user 300/min` で 429 を返す | Yes: `test_I127_throttling`（ただし LocMemCache 上での検証） | No | 実バックエンド（django-redis 7.0.0）でのスロットル動作は TC-AUTO-17 のカウンタ確認で間接的に担保。DRF スロットルは `cache.get`/`cache.set` を使うため、TC-AUTO-15 の read/write 実測と合わせて充足 | Low |
+| 5 | `POST /api/auth/logout/` → refresh トークン再利用 | 認証済み | ログアウト後の refresh トークンでアクセストークンを再取得 | `token_blacklist` により 401 を返す（I142 の成果） | Yes: `accounts/tests/test_I142_error_handling.py` 他 | No | simplejwt はバージョン据え置きだが Django 5.2 上での動作は既存テストで確認 | Low |
+| 6 | Django admin | 未認証 | `/admin/` への到達 | 認証画面が返り、未認証で内部データに到達できない | No | Yes: 手動 No.5（`/admin/login/` が 200） | admin に登録されているモデルの露出範囲は本 PR で変更しない（I142 で token_blacklist の admin 登録を除外済み） | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0 件 | 0 件 |
+| High    | 0 件 | 0 件 |
+| Medium  | 1 件 | 2 件 |
+| Low     | 2 件 | 4 件 |
+
+### 残余リスク処遇
+（/retro で決定する）
+
+暫定の申し送り:
+- `IGNORE_EXCEPTIONS: True` によるキャッシュのフェイルオープンは、レート制限という**セキュリティ制御**の可用性に直結する。本 PR では変更しないが、「キャッシュ障害時にレート制限だけはフェイルクローズさせる」設計の要否を別途判断する
+- `DEFAULT_PERMISSION_CLASSES: []` は、ビューの書き忘れが即座に無防備につながる設計。是正の要否を別途判断する
 
 ## レビュー結果
 - [20260823_1437 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1437.md)

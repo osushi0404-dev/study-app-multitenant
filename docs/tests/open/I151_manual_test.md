@@ -27,6 +27,7 @@
 | 8 | 後続イシュー 3 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7-C / 7-D に記載） | 3 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | | AC-19。django-extensions の依存移動は決定 7 の変更（更新→削除）により不要になった |
 | 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 11B / 12 を実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-11B が宣言・実インストールとも 9.0.3、TC-AUTO-12 が 10 passed | Claude | | ここが落ちた場合は 2 段目のみ取り消す（計画 §8）。取り消したら**再ビルドが必要**（イメージには pytest 9 が残るため） |
 | 10 | Draft PR #269 を push 後、TC-AUTO-13（E2E）と TC-AUTO-14（CI 6 チェック）を実行する | E2E が全件 pass。`gh pr checks 269` で SUCCESS 以外が 0 件 | Claude | | AC-13・AC-14 |
+| 11 | 再ビルド後の実コンテナに対し、ログインエンドポイントへ誤ったパスワードで 6 回連続 POST する（`docker compose exec -T backend python manage.py shell -c` の `APIClient` を使用。`RATELIMIT_ENABLE` は既定の有効のまま） | 6 回目が **403（django-ratelimit の遮断）** で拒否される。5 回目までは 400/401 が返る。遮断されない場合はレート制限がフェイルオープンしている（security-review シナリオ #1・AC-21 の実挙動確認） | Claude | | TC-AUTO-17 がカウンタ機構を、本項目が実際の遮断を確認する。確認後はカウンタが残るため、後続の手動確認では IP かキーを変えるか 5 分待つ |
 
 ---
 

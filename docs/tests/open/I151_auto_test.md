@@ -41,6 +41,7 @@
 | TC-AUTO-14 | CI の全 6 チェックが SUCCESS | AC-14 | ステップ 3 |
 | TC-AUTO-15 | 再ビルド後の `pip freeze` を記録 | AC-16 | ステップ 3 |
 | TC-AUTO-16 | コミットが 2 段に分かれている | AC-17 | ステップ 3 |
+| TC-AUTO-17 | レート制限のカウンタ保存が実コンテナで機能する | AC-21（security-review 由来） | ステップ 1 |
 
 ---
 
@@ -415,6 +416,40 @@ test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 1
 
 ---
 
+## TC-AUTO-17: レート制限のカウンタ保存が実コンテナで機能する（AC-21・security-review 由来）
+
+**なぜ必要か**: `@ratelimit`（ログイン 5/5m・登録 10/5m・パスワードリセット 3/15m 等のブルートフォース防御）は、カウンタを **`default` キャッシュ**に保存する（`settings.py` の `RATELIMIT_USE_CACHE = 'default'`）。その `default` は本 PR で **django-redis 5.4.0 → 7.0.0（メジャー 2 段）** に更新され、しかも `IGNORE_EXCEPTIONS: True` が設定されているため**失敗しても例外が出ずに握り潰される（フェイルオープン）**。
+
+**既存テストでは検出できない**: `backend/core/tests/test_I127_throttling.py` は 4 つのキャッシュをすべて `LocMemCache` に差し替えるため、django-redis は一度も実行されない。つまり 94 件が全部 pass しても、実環境でレート制限が黙って無効化されている可能性が残る。
+
+django-ratelimit が使うキャッシュ操作は `cache.add` と `cache.incr` の 2 つ（`django_ratelimit.core` を実測）。これを**再ビルド後の実コンテナ**で確認する。
+
+準備:
+```bash
+docker compose exec -T backend python -c "from django.core.cache import cache; cache.delete('i151_rl_probe'); print('add_new', cache.add('i151_rl_probe', 0, 60)); print('add_dup', cache.add('i151_rl_probe', 0, 60)); print('incr1', cache.incr('i151_rl_probe')); print('incr2', cache.incr('i151_rl_probe')); cache.delete('i151_rl_probe')" > /tmp/i151_rl.txt 2>&1
+```
+
+判定 1（新規キーの追加が成功する）:
+```bash
+grep -q 'add_new True' /tmp/i151_rl.txt
+```
+
+判定 2（既存キーの重複追加が拒否される）:
+```bash
+grep -q 'add_dup False' /tmp/i151_rl.txt
+```
+
+判定 3（カウンタが加算される）:
+```bash
+grep -q 'incr2 2' /tmp/i151_rl.txt
+```
+
+- **合格**: 判定 1〜3 の**すべてが exit 0**
+- **不合格**: 非ゼロ（＝カウンタが機能せず、レート制限がフェイルオープンしている）
+- **設計時点の実測（2026-08-23・ホスト venv）**: django-redis 7.0.0 に対して `add_new True` / `add_dup False` / `incr 1` / `incr 2` を確認済み。ただし**ホスト venv の結果は合否根拠にしない**（イシュー決定 5）ため、再ビルド後の実コンテナで再実行する
+
+---
+
 ## 実施記録
 
 | TC | 結果 | 実施日 | 備考 |
@@ -437,6 +472,7 @@ test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 1
 | TC-AUTO-14 | 未実施 | | |
 | TC-AUTO-15 | 未実施 | | |
 | TC-AUTO-16 | 未実施 | | |
+| TC-AUTO-17 | 未実施 | | |
 
 ### false-green 検証の記録（計画時点・2026-08-22 実施済み）
 
