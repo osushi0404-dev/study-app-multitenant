@@ -147,29 +147,31 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 判定 1（guardian）:
 ```bash
-! grep -rqi guardian --include=*.py backend/
+! git grep -qi guardian -- 'backend/*.py' 'backend/**/*.py'
 ```
 
 判定 2（django_extensions）:
 ```bash
-! grep -rqi django_extensions --include=*.py backend/
+! git grep -qi django_extensions -- 'backend/*.py' 'backend/**/*.py'
 ```
 
 - **合格**: 判定 1・2 の**両方が exit 0**
 - **不合格**: 非ゼロ
-- **実装前の状態（false-green 検証）**: 判定 1 は **exit 1** を実測済み（`backend/core/settings.py:41`）。判定 2 も `backend/core/settings.py:38` に存在するため **exit 1** になる
+- **`grep -r` ではなく `git grep` を使う理由（2026-08-23・実装中に是正）**: 当初は `! grep -rqi guardian --include=*.py backend/` としていたが、これは **gitignore 対象の `backend/.venv/` まで走査する**。実際に実装後の検証で、`backend/.venv/lib/python3.12/site-packages/pygments/lexers/_scheme_builtins.py` が Scheme の組み込み関数名 `make-guardian` を含むために **false-red（実装は正しいのに不合格）** になった。`git grep` は追跡ファイルのみを対象とするため、リポジトリの実体（＝ CI が見るもの）と一致する
+- **実装前の状態（false-green 検証）**: 差し替え後の判定式が失敗条件を捕捉できることを確認済み。`origin/develop` の `backend/core/settings.py`（guardian / django_extensions を含む）に対して **exit 1** を返す
 
 ---
 
 ## TC-AUTO-07: guardian 専用設定が無い（AC-04）
 
 ```bash
-! grep -rq ANONYMOUS_USER_NAME backend/
+! git grep -q ANONYMOUS_USER_NAME -- 'backend/'
 ```
 
 - **合格**: exit 0
 - **不合格**: 非ゼロ
 - **false-green 検証**: 実装前も 0 件のため現状では合格してしまう。判定式が実際に不合格を返せることを、`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むダミーファイルを作った一時ディレクトリに対して実行し **exit 1** になることで確認済み（2026-08-22）
+- **`git grep` を使う理由**: TC-AUTO-06 と同じ（`grep -r` は gitignore 対象の `backend/.venv/` を巻き込む）
 
 ---
 
@@ -426,7 +428,7 @@ django-ratelimit が使うキャッシュ操作は `cache.add` と `cache.incr` 
 
 準備:
 ```bash
-docker compose exec -T backend python -c "from django.core.cache import cache; cache.delete('i151_rl_probe'); print('add_new', cache.add('i151_rl_probe', 0, 60)); print('add_dup', cache.add('i151_rl_probe', 0, 60)); print('incr1', cache.incr('i151_rl_probe')); print('incr2', cache.incr('i151_rl_probe')); cache.delete('i151_rl_probe')" > /tmp/i151_rl.txt 2>&1
+docker compose exec -T backend python manage.py shell -c "from django.core.cache import cache; cache.delete('i151_rl_probe'); print('add_new', cache.add('i151_rl_probe', 0, 60)); print('add_dup', cache.add('i151_rl_probe', 0, 60)); print('incr1', cache.incr('i151_rl_probe')); print('incr2', cache.incr('i151_rl_probe')); cache.delete('i151_rl_probe')" > /tmp/i151_rl.txt 2>&1
 ```
 
 判定 1（新規キーの追加が成功する）:
@@ -446,6 +448,7 @@ grep -q 'incr2 2' /tmp/i151_rl.txt
 
 - **合格**: 判定 1〜3 の**すべてが exit 0**
 - **不合格**: 非ゼロ（＝カウンタが機能せず、レート制限がフェイルオープンしている）
+- **`python -c` ではなく `manage.py shell -c` を使う理由（実装中に是正）**: `python -c` は Django の設定を読み込まないため `ImproperlyConfigured: Requested setting CACHES` で落ちる（実装時に実測）。`manage.py shell -c` は設定済みの状態で実行される
 - **設計時点の実測（2026-08-23・ホスト venv）**: django-redis 7.0.0 に対して `add_new True` / `add_dup False` / `incr 1` / `incr 2` を確認済み。ただし**ホスト venv の結果は合否根拠にしない**（イシュー決定 5）ため、再ビルド後の実コンテナで再実行する
 
 ---
@@ -454,25 +457,25 @@ grep -q 'incr2 2' /tmp/i151_rl.txt
 
 | TC | 結果 | 実施日 | 備考 |
 |---|---|---|---|
-| TC-AUTO-00 | 未実施 | | |
-| TC-AUTO-01 | 未実施 | | |
-| TC-AUTO-02 | 未実施 | | |
-| TC-AUTO-03 | 未実施 | | |
-| TC-AUTO-04 | 未実施 | | |
-| TC-AUTO-05 | 未実施 | | |
-| TC-AUTO-06 | 未実施 | | |
-| TC-AUTO-07 | 未実施 | | |
-| TC-AUTO-08 | 未実施 | | |
-| TC-AUTO-09 | 未実施 | | |
-| TC-AUTO-10 | 未実施 | | |
-| TC-AUTO-11A | 未実施 | | |
-| TC-AUTO-11B | 未実施 | | |
-| TC-AUTO-12 | 未実施 | | |
-| TC-AUTO-13 | 未実施 | | |
-| TC-AUTO-14 | 未実施 | | |
-| TC-AUTO-15 | 未実施 | | |
-| TC-AUTO-16 | 未実施 | | |
-| TC-AUTO-17 | 未実施 | | |
+| TC-AUTO-00 | ✅ 合格 | 2026-08-24 | `docker compose up -d --wait` exit 0（6 サービス healthy） |
+| TC-AUTO-01 | ✅ 合格 | 2026-08-24 | `No known vulnerabilities found`・exit 0（ベースライン 7 件 → 0 件） |
+| TC-AUTO-02 | ✅ 合格 | 2026-08-24 | ステップ 2 完了後に実行。`No known vulnerabilities found`・exit 0 |
+| TC-AUTO-03 | ✅ 合格 | 2026-08-24 | ステップ 1・2 とも `94 passed`（ベースラインと同数）・skip / xfail / deselect 0 件 |
+| TC-AUTO-04 | ✅ 合格 | 2026-08-24 | `System check identified no issues (0 silenced).`・exit 0（guardian.W001 が消滅） |
+| TC-AUTO-05 | ✅ 合格 | 2026-08-24 | 判定 1・2 とも exit 0 |
+| TC-AUTO-06 | ✅ 合格 | 2026-08-24 | 判定 1・2 とも exit 0。**当初の `grep -r` は `backend/.venv` の pygments に反応して false-red となったため `git grep` へ是正** |
+| TC-AUTO-07 | ✅ 合格 | 2026-08-24 | exit 0 |
+| TC-AUTO-08 | ✅ 合格 | 2026-08-24 | `No changes detected`・exit 0 |
+| TC-AUTO-09 | ✅ 合格 | 2026-08-24 | 使い捨て DB で 58 マイグレーションを適用し exit 0。guardian のマイグレーションは 0 件。検証後に DB を破棄 |
+| TC-AUTO-10 | ✅ 合格 | 2026-08-24 | 直近 3 分に成功ログ 9 件・`ERROR` / `Traceback` 0 件 |
+| TC-AUTO-11A | ✅ 合格 | 2026-08-24 | 宣言側 6 件・実インストール側 6 件ともすべて exit 0 |
+| TC-AUTO-11B | ✅ 合格 | 2026-08-24 | ステップ 2 完了後。宣言・実インストールとも `pytest==9.0.3` |
+| TC-AUTO-12 | ✅ 合格 | 2026-08-24 | ステップ 1・2 とも `Tests: 10 passed, 10 total` |
+| TC-AUTO-13 | ⏳ 未実施 | 2026-08-24 | CI の E2E ジョブで実行（PR push 後） |
+| TC-AUTO-14 | ⏳ 未実施 | 2026-08-24 | PR push 後に確認 |
+| TC-AUTO-15 | ✅ 合格 | 2026-08-24 | `docs/tests/open/I151_pip_freeze.txt`（81 行）に記録。判定 1・2 とも exit 0 |
+| TC-AUTO-16 | ✅ 合格 | 2026-08-24 | `fix(I151)` / `chore(I151)` の 2 コミット。`requirements.txt` を触ったコミットは 1 つ |
+| TC-AUTO-17 | ✅ 合格 | 2026-08-24 | `add_new True` / `add_dup False` / `incr1 1` / `incr2 2`。**当初の `python -c` は Django 未設定で落ちたため `manage.py shell -c` へ是正** |
 
 ### false-green 検証の記録（計画時点・2026-08-22 実施済み）
 
