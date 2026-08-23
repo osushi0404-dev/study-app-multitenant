@@ -2,4 +2,4 @@ ruff==0.15.12
 bandit==1.7.9
 pip-audit==2.10.0
 pytest==8.3.4
-pytest-django==4.9.0
+pytest-django==4.14.0
