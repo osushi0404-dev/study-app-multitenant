@@ -10,8 +10,10 @@
 |---|---|---|---|---|---|
 | 主（組織あり・管理者） | `osushi0404admin` | `test01@gmail.com` | 株式会社おすしはなんだか楽しいよ | 科目 3・問題 30 | staff |
 | 副（個人利用・データ多め） | `osushi014` | `test014@gmail.com` | 個人利用 | 科目 11・問題 131 | 一般 |
+| No.7 実施時（代替） | `i102_user` | `i102_user@example.com` | かわいいだけじゃだめですか学園（cute_school） | 科目 2・問題 25（本人のアクセス科目は高校英語 1） | 一般（role=user） |
 
-> パスワードはユーザーご自身が設定したものを使用してください（dev DB の既存アカウントです）。テナント分離そのものの検証は E2E の `tenant_isolation` シナリオ（TC-AUTO-13）が担保します。
+> パスワードはユーザーご自身が設定したものを使用してください（dev DB の既存アカウントです）。
+> **2026-10-07 追記**: `osushi0404admin` のパスワードが不明だったため、No.7 はパスワードが記録済みの既存アカウント `i102_user`（`docs/tests/closed/I102_manual_test.md` 記載・`check_password` で一致を確認）で実施した。新規作成・既存アカウントの変更はしていない。テナント分離そのものの検証は E2E の `tenant_isolation` シナリオ（TC-AUTO-13）が担保します。
 
 ---
 
@@ -23,7 +25,7 @@
 | 4 | TC-AUTO-15（`pip freeze`）を実行し、出力を `docs/tests/open/I151_pip_freeze.txt` へ保存してコミットする | Django が `5.2.17`、`django-guardian` と `django-extensions` が**一覧に無い**。kombu 等の推移的依存のバージョンが記録に残る | Claude | OK（2026-08-24）— `docs/tests/open/I151_pip_freeze.txt`（81 行）に記録。Django==5.2.17・django-guardian / django-extensions は不在 | celery が落ちた場合の切り分け材料 |
 | 5 | `docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/admin/login/` を実行する | `200`（Django 5.2 の admin が正常に描画される） | Claude | OK（2026-08-24）— `admin_login_http=200` | Django 本体のテンプレート・静的ファイル経路の生存確認 |
 | 6 | 認可・テナント境界の対象モジュールを個別に実行し、モジュール名と件数を記録する。対象: `problems/tests/test_I103_cross_org_create.py` / `problems/tests/test_I104_subject_authz.py` / `problems/tests/test_I006_subject_org_admin.py` / `problems/tests/test_I078_is_correct_exposure.py` / `accounts/tests/test_I131_org_id_rename.py` / `accounts/tests/test_I140_personal_org_fallback.py` / `core/tests/test_I127_throttling.py` | 全モジュールが pass。更新前と更新後の件数が一致し、skip・削除・条件緩和が 0 件であることを記録する（AC-18） | Claude | OK（2026-08-24）— 7 モジュール全て pass（下表）。テストファイルは 1 件も変更していない | 「関連テストを実行した」ではなくモジュール名を列挙して記録する |
-| 7 | ブラウザで `http://localhost:3000` を開き、`osushi0404admin`（`test01@gmail.com`）でログインする。ログイン後、ダッシュボード → 問題一覧 → クイズを 1 問回答 → 学習履歴 の順に画面を開く | ログインが成功しダッシュボードが表示される。問題一覧に自組織（株式会社おすしはなんだか楽しいよ）の科目 3 件が並び、他組織の科目が混ざらない。クイズが出題され回答が保存される。学習履歴に回答が反映される。いずれの画面でも赤いエラー表示・白画面・コンソールの 500 エラーが出ない | Human | | UI のコード変更はないため、依存更新による API 応答形の変化がないことの目視確認 |
+| 7 | ブラウザで `http://localhost:3000` を開き、`osushi0404admin`（`test01@gmail.com`）でログインする。ログイン後、ダッシュボード → 問題一覧 → クイズを 1 問回答 → 学習履歴 の順に画面を開く | ログインが成功しダッシュボードが表示される。問題一覧に自組織（株式会社おすしはなんだか楽しいよ）の科目 3 件が並び、他組織の科目が混ざらない。クイズが出題され回答が保存される。学習履歴に回答が反映される。いずれの画面でも赤いエラー表示・白画面・コンソールの 500 エラーが出ない | Human | OK（2026-10-07）— 代替アカウント `i102_user` で実施（使用アカウント欄参照）。**画面**: ログイン成功・ダッシュボードとクイズ画面（高校英語・問題 2/12・総回答 1）がエラー表示・白画面なしで表示（スクリーンショット 2 枚）。**データ（Claude 確認）**: QuizSession id=169 に QuizAnswer 1 件（問題の組織 = cute_school・2026-10-07 13:07 JST）が保存。出題科目は自組織の高校英語のみ。`/api/dashboard/overview/`・`/api/dashboard/analytics/`（学習統計画面）・`/api/user/subjects/` が 200 で、overview の `recent_quizzes` に回答済みセッションが反映。問題管理画面は一般ユーザーのため対象外（組織越境は TC-AUTO-13 の `tenant_isolation` で担保済み） | UI のコード変更はないため、依存更新による API 応答形の変化がないことの目視確認 |
 | 8 | 後続イシュー 3 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7-C / 7-D に記載） | 3 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | OK（2026-08-24）— I155(#272) / I156(#273) / I157(#274) を起票 | AC-19。django-extensions の依存移動は決定 7 の変更（更新→削除）により不要になった |
 | 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 11B / 12 を実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-11B が宣言・実インストールとも 9.0.3、TC-AUTO-12 が 10 passed | Claude | OK（2026-08-24）— TC-AUTO-02 exit 0・TC-AUTO-03 94 passed・TC-AUTO-11B exit 0・TC-AUTO-12 10 passed | ここが落ちた場合は 2 段目のみ取り消す（計画 §8）。取り消したら**再ビルドが必要**（イメージには pytest 9 が残るため） |
 | 10 | Draft PR #269 を push 後、TC-AUTO-13（E2E）と TC-AUTO-14（CI 6 チェック）を実行する | E2E が全件 pass。`gh pr checks 269` で SUCCESS 以外が 0 件 | Claude | OK（2026-08-24）— E2E 全件 pass（3m10s）。`gh pr checks 269` で SUCCESS 以外 0 件（全 6 チェック SUCCESS） | AC-13・AC-14 |
@@ -56,6 +58,17 @@
 - **注意**: `backend/pytest.ini` の `--no-migrations` により、**pytest はマイグレーションを検証しない**。上記 3 経路がその穴を埋めている
 - **実施結果（2026-08-24）**: (a) 使い捨て DB `migrate_check` で 58 マイグレーションを適用し exit 0（guardian のマイグレーション 0 件・検証後に破棄）。(c) `makemigrations --check --dry-run` が `No changes detected`。(b) は CI の E2E ジョブで実行される
 - **更新前後の件数が同一である根拠**: テスト関連ファイル（`backend/*/tests/*` / `conftest.py` / `pytest.ini`）の変更は **0 件**。ブランチの backend 側の差分は `requirements.txt` / `requirements-dev.txt` / `core/settings.py` の 3 ファイルのみ（`git diff origin/develop...HEAD --name-only -- backend/` で確認）
+
+### No.7 で見つかった既存不具合（I151 起因ではない・2026-10-07）
+
+I151 はアプリコード・URL・画面を変更していない（backend 差分は依存 2 ファイル＋`settings.py` の INSTALLED_APPS 2 行削除のみ）。以下はいずれも更新前から存在し、No.7 の合否には影響しない。起票は未実施（ユーザー判断待ち）。
+
+| # | 事象 | 更新前から存在する根拠 | 起票タイトル案 |
+|---|---|---|---|
+| 1 | クイズを 1 回開始すると QuizSession が同時刻に 2 件作成される（今回も id=169/170） | dev DB の全 120 セッション中 60 組が 1 秒未満差の重複。最古は 2025-08-18 | クイズ開始時にセッションが二重作成される（開始リクエストの重複送信）を是正 |
+| 2 | クイズに回答してもダッシュボードの「解答問題数」「正答率」が 0 のまま | `/api/dashboard/overview/` の `today.problems_attempted` が回答後も 0。集計元（StudyLog / ProblemAttempt）にクイズ回答が記録されていない（i102_user の ProblemAttempt / StudyLog は 0 件） | クイズ回答がダッシュボードの学習統計（解答問題数・正答率）に反映されない問題を是正 |
+
+参考: `dashboard.service.ts` の `getStudyStats` / `getRecentSessions` / `getSubjectProgress` が呼ぶ API は 404 を返すが、いずれも画面から呼ばれていない未使用メソッドで、No.7 の対象外。
 
 ### 後続イシューの起票結果（No.8 で記入）
 
