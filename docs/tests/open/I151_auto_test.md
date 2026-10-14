@@ -43,6 +43,35 @@
 | TC-AUTO-16 | コミットが 2 段に分かれている | AC-17 | ステップ 3 |
 | TC-AUTO-17 | レート制限のカウンタ保存が実コンテナで機能する | AC-21（security-review 由来） | ステップ 1 |
 
+> **判定コマンドの表記ルール（2026-10-07・fix-loop で是正）**: リポジトリ内ファイルだけを見る静的判定は下の「決定論ゲート（自動実走）」欄に宣言し、`/code-review` が毎回実走する。実行時の一時ファイル（`/tmp/i151_*`）や `git grep` を見る判定は code-review で実走できない（前者は heavy 実行の産物・後者は gate allowlist 外）ため、各 TC 本文に **inline code** で記載する（判定式・合否基準は是正前と同一。コピーして単体実行する）。
+
+---
+
+## 決定論ゲート（自動実走）
+<!--
+  code-review.sh が下の ```bash ブロックを 1 行 1 コマンドで実走し、実 exit code を VERDICT に注入する。
+  対象はリポジトリ内ファイルだけを見る静的判定のみ（TC-AUTO-05 / 11A 判定 A-1 / 11B 判定 B-1 / 15）。
+  TC-AUTO-15 判定 2 は正規表現の `|` が gate のチェーン文字ガード（UNSAFE）に掛かるため、パッケージごとに 2 行へ分割した（判定内容は同一）。
+-->
+```bash
+# TC-AUTO-05 判定 1・2（guardian / django-extensions が requirements / settings に無い）
+! grep -qi guardian backend/requirements.txt backend/core/settings.py
+! grep -qiE 'django[-_]extensions' backend/requirements.txt backend/core/settings.py
+# TC-AUTO-11A 判定 A-1（宣言側の固定値）
+grep -qx 'Django==5.2.17' backend/requirements.txt
+grep -qx 'djangorestframework==3.18.0' backend/requirements.txt
+grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt
+grep -qx 'django-filter==26.1' backend/requirements.txt
+grep -qx 'django-redis==7.0.0' backend/requirements.txt
+grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
+# TC-AUTO-11B 判定 B-1（宣言側の固定値）
+grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
+# TC-AUTO-15 判定 1・2（pip freeze 記録の中身）
+grep -q 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt
+! grep -q 'django-guardian==' docs/tests/open/I151_pip_freeze.txt
+! grep -q 'django-extensions==' docs/tests/open/I151_pip_freeze.txt
+```
+
 ---
 
 ## TC-AUTO-00: 実行環境の前提
@@ -94,15 +123,9 @@ exit 0 と件数の両方を判定する（件数を見ないと skip 化によ�
 docker compose exec -T backend python -m pytest -q > /tmp/i151_pytest.log 2>&1
 ```
 
-判定 1（件数が 94 ちょうど）:
-```bash
-grep -qE '^94 passed' /tmp/i151_pytest.log
-```
+判定 1（件数が 94 ちょうど）: `grep -qE '^94 passed' /tmp/i151_pytest.log`
 
-判定 2（skip / xfail / deselect が 0 件）:
-```bash
-! grep -qE 'skipped|xfailed|deselected' /tmp/i151_pytest.log
-```
+判定 2（skip / xfail / deselect が 0 件）: `! grep -qE 'skipped|xfailed|deselected' /tmp/i151_pytest.log`
 
 - **合格**: exit 0（全件 pass・**94 件ちょうど**・skip / xfail / deselect が 0 件）
 - **不合格**: 非ゼロ（失敗があるか、件数が 94 でないか、skip 等が混入した）
@@ -127,15 +150,9 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 ## TC-AUTO-05: guardian / django-extensions が requirements / settings に無い（AC-02）
 
-判定 1（guardian）:
-```bash
-! grep -qi guardian backend/requirements.txt backend/core/settings.py
-```
-
-判定 2（django-extensions）:
-```bash
-! grep -qiE 'django[-_]extensions' backend/requirements.txt backend/core/settings.py
-```
+判定 1（guardian）・判定 2（django-extensions）: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。
+- 判定 1: `! grep -qi guardian backend/requirements.txt backend/core/settings.py`
+- 判定 2: `! grep -qiE 'django[-_]extensions' backend/requirements.txt backend/core/settings.py`
 
 - **合格**: 判定 1・2 の**両方が exit 0**（どちらのファイルにも記述が無い）
 - **不合格**: 非ゼロ
@@ -145,15 +162,9 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 ## TC-AUTO-06: guardian / django_extensions が Python コード全体に無い（AC-03）
 
-判定 1（guardian）:
-```bash
-! git grep -qi guardian -- 'backend/*.py' 'backend/**/*.py'
-```
+判定 1（guardian）: `! git grep -qi guardian -- 'backend/*.py' 'backend/**/*.py'`
 
-判定 2（django_extensions）:
-```bash
-! git grep -qi django_extensions -- 'backend/*.py' 'backend/**/*.py'
-```
+判定 2（django_extensions）: `! git grep -qi django_extensions -- 'backend/*.py' 'backend/**/*.py'`
 
 - **合格**: 判定 1・2 の**両方が exit 0**
 - **不合格**: 非ゼロ
@@ -164,9 +175,7 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 ## TC-AUTO-07: guardian 専用設定が無い（AC-04）
 
-```bash
-! git grep -q ANONYMOUS_USER_NAME -- 'backend/'
-```
+判定: `! git grep -q ANONYMOUS_USER_NAME -- 'backend/'`
 
 - **合格**: exit 0
 - **不合格**: 非ゼロ
@@ -227,15 +236,9 @@ beat が投げたことではなく、worker が**成功で完了した**こと�
 docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1
 ```
 
-判定 1（タスクが成功で完了している）:
-```bash
-grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log
-```
+判定 1（タスクが成功で完了している）: `grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log`
 
-判定 2（エラーが出ていない）:
-```bash
-! grep -qE 'ERROR|Traceback' /tmp/i151_celery.log
-```
+判定 2（エラーが出ていない）: `! grep -qE 'ERROR|Traceback' /tmp/i151_celery.log`
 
 > ログを一時ファイルに落としてから 2 つの判定を行う。`docker compose logs` を 2 回実行すると、成功判定とエラー判定が**別々のスナップショット**を見ることになり、その間に書き込まれたエラーを取りこぼす。
 
@@ -251,15 +254,13 @@ grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.lo
 
 > **pytest の判定を含めない理由**: ステップ 1 時点の `pytest` は 8.3.4 のままが正しい。pytest の固定値判定を本 TC に混ぜると、ステップ 1 の「全 TC 合格」条件が原理的に満たせなくなる。pytest は TC-AUTO-11B としてステップ 2 で独立に判定する。
 
-判定 A-1（宣言側・6 パッケージを 1 コマンドずつ確認）:
-```bash
-grep -qx 'Django==5.2.17' backend/requirements.txt
-grep -qx 'djangorestframework==3.18.0' backend/requirements.txt
-grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt
-grep -qx 'django-filter==26.1' backend/requirements.txt
-grep -qx 'django-redis==7.0.0' backend/requirements.txt
-grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
-```
+判定 A-1（宣言側・6 パッケージを 1 コマンドずつ確認）: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。
+- `grep -qx 'Django==5.2.17' backend/requirements.txt`
+- `grep -qx 'djangorestframework==3.18.0' backend/requirements.txt`
+- `grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt`
+- `grep -qx 'django-filter==26.1' backend/requirements.txt`
+- `grep -qx 'django-redis==7.0.0' backend/requirements.txt`
+- `grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt`
 
 準備（実インストール側のスナップショット）:
 ```bash
@@ -267,14 +268,12 @@ docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt
 ```
 
 判定 A-2（実インストール側・**宣言側と同じ 6 パッケージを全件**確認）:
-```bash
-grep -qx 'Django==5.2.17' /tmp/i151_freeze.txt
-grep -qx 'djangorestframework==3.18.0' /tmp/i151_freeze.txt
-grep -qx 'django-cors-headers==4.9.0' /tmp/i151_freeze.txt
-grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt
-grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt
-grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt
-```
+- `grep -qx 'Django==5.2.17' /tmp/i151_freeze.txt`
+- `grep -qx 'djangorestframework==3.18.0' /tmp/i151_freeze.txt`
+- `grep -qx 'django-cors-headers==4.9.0' /tmp/i151_freeze.txt`
+- `grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt`
+- `grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt`
+- `grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt`
 
 - **合格**: 判定 A-1 / A-2 の**全コマンドが exit 0**
 - **宣言側と実インストール側で対象を揃える理由**: 片方だけ確認すると、再ビルド漏れ（宣言は新しいがイメージは古い）を検出できない。初版では実インストール側から `django-cors-headers` が漏れていたため両側を揃えた。`django-extensions` は削除対象になったため本 TC の対象から外し、不在確認（TC-AUTO-05 / 06）へ移した
@@ -288,20 +287,14 @@ grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt
 
 **実行タイミング: ステップ 2 完了後。**
 
-判定 B-1（宣言側）:
-```bash
-grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
-```
+判定 B-1（宣言側）: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。`grep -qx 'pytest==9.0.3' backend/requirements-dev.txt`
 
 準備（実インストール側のスナップショット）:
 ```bash
 docker compose exec -T backend pip freeze > /tmp/i151_freeze2.txt
 ```
 
-判定 B-2（実インストール側）:
-```bash
-grep -qx 'pytest==9.0.3' /tmp/i151_freeze2.txt
-```
+判定 B-2（実インストール側）: `grep -qx 'pytest==9.0.3' /tmp/i151_freeze2.txt`
 
 - **合格**: 判定 B-1 / B-2 の**両方が exit 0**
 - **不合格**: 非ゼロ
@@ -316,10 +309,7 @@ grep -qx 'pytest==9.0.3' /tmp/i151_freeze2.txt
 docker compose exec -T frontend npm test -- --watchAll=false > /tmp/i151_jest.log 2>&1
 ```
 
-判定:
-```bash
-grep -qE 'Tests:[[:space:]]+10 passed, 10 total' /tmp/i151_jest.log
-```
+判定: `grep -qE 'Tests:[[:space:]]+10 passed, 10 total' /tmp/i151_jest.log`
 
 - **合格**: 準備・判定とも exit 0
 - **不合格**: 非ゼロ
@@ -366,15 +356,10 @@ test "$(gh pr checks 269 --json state -q '[.[]|select(.state!="SUCCESS")]|length
 docker compose exec -T backend pip freeze > docs/tests/open/I151_pip_freeze.txt
 ```
 
-判定 1（更新後の Django が記録されている）:
-```bash
-grep -q 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt
-```
+判定 1・2: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。
 
-判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）:
-```bash
-! grep -qE 'django-(guardian|extensions)==' docs/tests/open/I151_pip_freeze.txt
-```
+- 判定 1（更新後の Django が記録されている）: `grep -q 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt`
+- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -q 'django-guardian==' docs/tests/open/I151_pip_freeze.txt` と `! grep -q 'django-extensions==' docs/tests/open/I151_pip_freeze.txt` の 2 行（2026-10-07 に `! grep -qE 'django-(guardian|extensions)=='` から分割。正規表現の `|` が gate のチェーン文字ガードに掛かるため。判定内容は同一）
 
 - **合格**: 判定 1・2 の**両方が exit 0**
 - **この形にした理由**: 「記録した」という主張を人手判定に委ねると、貼り忘れても合格になる。専用ファイルを grep 対象にすることで、記録の有無と中身の正しさを exit code で判定できる（文書冒頭の「合否判定はすべて exit code」を満たす）
@@ -395,15 +380,9 @@ git log origin/develop..HEAD --oneline > /tmp/i151_commits.txt
 git log origin/develop..HEAD --oneline -- backend/requirements.txt > /tmp/i151_req_commits.txt
 ```
 
-判定 1（1 段目のコミットが存在する）:
-```bash
-grep -qE 'fix\(I151\)' /tmp/i151_commits.txt
-```
+判定 1（1 段目のコミットが存在する）: `grep -qE 'fix\(I151\)' /tmp/i151_commits.txt`
 
-判定 2（2 段目のコミットが存在する）:
-```bash
-grep -qE 'chore\(I151\)' /tmp/i151_commits.txt
-```
+判定 2（2 段目のコミットが存在する）: `grep -qE 'chore\(I151\)' /tmp/i151_commits.txt`
 
 判定 3（`requirements.txt` を触ったコミットが 1 つだけ＝本体依存が 1 段目に集約されている）:
 ```bash
@@ -431,20 +410,11 @@ django-ratelimit が使うキャッシュ操作は `cache.add` と `cache.incr` 
 docker compose exec -T backend python manage.py shell -c "from django.core.cache import cache; cache.delete('i151_rl_probe'); print('add_new', cache.add('i151_rl_probe', 0, 60)); print('add_dup', cache.add('i151_rl_probe', 0, 60)); print('incr1', cache.incr('i151_rl_probe')); print('incr2', cache.incr('i151_rl_probe')); cache.delete('i151_rl_probe')" > /tmp/i151_rl.txt 2>&1
 ```
 
-判定 1（新規キーの追加が成功する）:
-```bash
-grep -q 'add_new True' /tmp/i151_rl.txt
-```
+判定 1（新規キーの追加が成功する）: `grep -q 'add_new True' /tmp/i151_rl.txt`
 
-判定 2（既存キーの重複追加が拒否される）:
-```bash
-grep -q 'add_dup False' /tmp/i151_rl.txt
-```
+判定 2（既存キーの重複追加が拒否される）: `grep -q 'add_dup False' /tmp/i151_rl.txt`
 
-判定 3（カウンタが加算される）:
-```bash
-grep -q 'incr2 2' /tmp/i151_rl.txt
-```
+判定 3（カウンタが加算される）: `grep -q 'incr2 2' /tmp/i151_rl.txt`
 
 - **合格**: 判定 1〜3 の**すべてが exit 0**
 - **不合格**: 非ゼロ（＝カウンタが機能せず、レート制限がフェイルオープンしている）
