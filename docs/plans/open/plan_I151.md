@@ -175,6 +175,28 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-19 | 後続 3 件を起票している | 手動 No.8 |
 | AC-20 | develop マージ後に #262 をクローズしている | `/close` 工程（本 PR の範囲外） |
 | AC-21 | レート制限のカウンタ保存が再ビルド後の実コンテナで機能する（security-review 由来） | TC-AUTO-17 |
+| AC-22 | psycopg2-binary の 5.2 環境での動作がテスト実走で確定している（イシュー受け入れ条件・2026-10-14 追補） | TC-AUTO-03（94 件が Docker の postgres:15 へ実接続して pass） |
+| AC-23 | テスト記録に「マイグレーション検証は (a) ローカルの使い捨て DB と (b) CI の E2E ジョブの 2 経路で担保」と明記している（イシュー受け入れ条件・2026-10-14 追補） | `I151_manual_test.md`「マイグレーション検証の担保経路」欄 |
+
+> **追補の経緯（2026-10-14・敵対的レビュー第 1 周）**: イシュー本文の受け入れ条件のうち AC-22 / AC-23 の 2 件が、本表に割り当てられていなかった（作業自体は完了済み）。あわせて、過去のコードレビュー記録は本表と異なる番号体系を使っているため、対応を下表に示す。**正となる番号は本表**とする。
+>
+> | 本表 | `I151_code_review_20260824_0126.md` | `I151_code_review_20261007_1356.md` | `I151_code_review_20261014_1548.md` |
+> |---|---|---|---|
+> | AC-01〜AC-11 | 同番号 | 同番号 | 同番号 |
+> | AC-12（frontend テスト） | 行なし（未照合） | AC-12 | AC-12 |
+> | AC-13（E2E） | AC-12 | AC-13 | AC-13 |
+> | AC-14（CI 6 チェック） | AC-13 | AC-14 | AC-14 |
+> | AC-15（celery 成功） | AC-14 | AC-15 | AC-15 |
+> | AC-16（pip freeze） | AC-16 | AC-17 | AC-16 |
+> | AC-17（2 段コミット） | AC-19 | AC-20-commit | AC-17 |
+> | AC-18（認可モジュール記録） | AC-20 | AC-21 | AC-18 |
+> | AC-19（後続 3 件起票） | AC-21 | AC-22 | AC-19 |
+> | AC-20（#262 クローズ） | AC-22 | AC-23 | AC-20 |
+> | AC-21（レート制限） | AC-23 | AC-24 | AC-21 |
+> | AC-22（psycopg2） | AC-15 | AC-16 | 行なし（未照合） |
+> | AC-23（マイグレーション 2 経路の明記） | AC-17 | AC-18 | 行なし（未照合） |
+> | （本表に無し・AC-07 と同内容） | AC-18（マイグレーション新規生成の有無） | AC-19（同） | — |
+> | （本表に無し・手動 No.7） | — | AC-25（ブラウザ UI 確認） | — |
 
 ---
 
@@ -320,6 +342,8 @@ THIRD_PARTY_APPS = [
 - `backend/accounts/tests/test_I131_org_id_rename.py`（登録と組織割当）
 - `backend/accounts/tests/test_I140_personal_org_fallback.py`（personal 組織フォールバック廃止）
 - `backend/core/tests/test_I127_throttling.py`（レート制限＝django-ratelimit / DRF throttle）
+- `backend/problems/tests/test_I102_problem_authz.py`（ロール別の認可。2026-10-14 追加）
+- `backend/problems/tests/test_I115_public_unauth.py`（未認証時の 401。2026-10-14 追加）
 
 ### false-green 防止
 否定・不在を判定する TC（TC-AUTO-05 / 06 / 07）は、失敗条件を注入して実際に非ゼロ終了することを確認してから採用する（手順は auto_test 文書に記載）。
@@ -332,7 +356,7 @@ THIRD_PARTY_APPS = [
 |---|---|
 | ステップ 2 で失敗 | 2 段目の変更のみを取り消す。**手順を明示する**: コミット前なら `backend/requirements-dev.txt` の `pytest==9.0.3` の行を **Edit ツールで `pytest==8.3.4` に書き戻す**（`git restore` は同一ファイル内の他の未コミット変更まで巻き戻すため使わない）。コミット後なら当該コミットを `git revert` する。**取り消し後は必ず再ビルドする**（ファイルを戻してもイメージには pytest 9 が残り、宣言と実インストールが食い違うため）。再ビルド後に TC-AUTO-11B が exit 1（= pytest が 9.0.3 でない）になることで、戻し漏れを検出できる |
 | ステップ 1 で失敗 | 3 ファイル（`backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`）を **Edit ツールで更新前の内容へ書き戻す**（変更箇所は §5-1 / §5-2 / §5-3 に列挙済みなので機械的に戻せる。`git restore` は使わない）。その後 backend / celery / celery-beat を再ビルドし、TC-AUTO-01 が exit 1（= 脆弱性が再検出される）に戻ることで巻き戻しの完了を確認する |
-| develop マージ後に判明 | revert PR で戻す。`guardian_*` テーブルは残置しているため、guardian を戻す場合も `INSTALLED_APPS` と依存の復元のみで足りる（データ復旧は不要） |
+| develop マージ後に判明 | **前方修正（5.2 系のまま直す）を正式手順とする**。不具合の原因となった依存だけを 5.2 対応の別パッチ版へ再固定するか、アプリ側を修正する PR を出す。**revert PR は使えない**（2026-10-14・敵対的レビュー第 1 周で訂正）: ① revert すると Django 4.2.30 に戻り、CI の必須チェック `Backend Lint & Security`（`pip-audit -r requirements.txt`）が 7 件検出で必ず失敗する。branch protection は管理者も迂回不可の設定で、bot には admin 権限もない。② DRF 3.18・django-filter 26.1・django-redis 7.0.0 はいずれも `Django>=5.2` を要求するため、Django だけを戻す部分ロールバックもできない。どうしても 4.2 系へ戻す必要が生じた場合は、ユーザーが GitHub の UI で branch protection を一時解除する判断が必要（Danger Ops）。なお `guardian_*` テーブルは残置しているため、guardian を再導入する場合も `INSTALLED_APPS` と依存の復元のみで足りる（データ復旧は不要） |
 | DB | マイグレーションを新規生成しないため、DB のロールバックは不要。検証用の使い捨て DB（`migrate_check`）は検証後に破棄する |
 
 ---

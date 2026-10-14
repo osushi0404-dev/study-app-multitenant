@@ -44,6 +44,8 @@
 | TC-AUTO-17 | レート制限のカウンタ保存が実コンテナで機能する | AC-21（security-review 由来） | ステップ 1 |
 
 > **判定コマンドの表記ルール（2026-10-07・fix-loop で是正）**: リポジトリ内ファイルだけを見る静的判定は下の「決定論ゲート（自動実走）」欄に宣言し、`/code-review` が毎回実走する。実行時の一時ファイル（`/tmp/i151_*`）や `git grep` を見る判定は code-review で実走できない（前者は heavy 実行の産物・後者は gate allowlist 外）ため、各 TC 本文に **inline code** で記載する（判定式・合否基準は是正前と同一。コピーして単体実行する）。
+>
+> **判定式の厳格化（2026-10-14・敵対的レビュー第 1 周）**: TC-AUTO-03 / 06 / 07 / 14 / 15 の判定式を、見逃しのない形に改めた（各 TC 本文に理由と false-green 検証を記載）。合否の意図（何を合格とするか）は変わらない。
 
 ---
 
@@ -51,7 +53,8 @@
 <!--
   code-review.sh が下の ```bash ブロックを 1 行 1 コマンドで実走し、実 exit code を VERDICT に注入する。
   対象はリポジトリ内ファイルだけを見る静的判定のみ（TC-AUTO-05 / 11A 判定 A-1 / 11B 判定 B-1 / 15）。
-  TC-AUTO-15 判定 2 は正規表現の `|` が gate のチェーン文字ガード（UNSAFE）に掛かるため、パッケージごとに 2 行へ分割した（判定内容は同一）。
+  TC-AUTO-15 判定 2 は正規表現の `|` が gate のチェーン文字ガード（UNSAFE）に掛かるため、パッケージごとに 2 行へ分割した。
+  TC-AUTO-15 は 2026-10-14（敵対的レビュー第 1 周の指摘）で厳格化: 判定 1 に -x（行全体一致）、判定 2 を行頭アンカー＋大文字小文字無視＋ハイフン/アンダースコア両対応に変更。
 -->
 ```bash
 # TC-AUTO-05 判定 1・2（guardian / django-extensions が requirements / settings に無い）
@@ -67,9 +70,9 @@ grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
 # TC-AUTO-11B 判定 B-1（宣言側の固定値）
 grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
 # TC-AUTO-15 判定 1・2（pip freeze 記録の中身）
-grep -q 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt
-! grep -q 'django-guardian==' docs/tests/open/I151_pip_freeze.txt
-! grep -q 'django-extensions==' docs/tests/open/I151_pip_freeze.txt
+grep -qx 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt
+! grep -qiE '^django[-_]guardian' docs/tests/open/I151_pip_freeze.txt
+! grep -qiE '^django[-_]extensions' docs/tests/open/I151_pip_freeze.txt
 ```
 
 ---
@@ -116,21 +119,20 @@ docker compose exec -T backend pip-audit -r requirements-dev.txt
 
 ## TC-AUTO-03: backend テストが 94 件 pass（AC-11）
 
-exit 0 と件数の両方を判定する（件数を見ないと skip 化による緑化を検出できない）。
+pytest の最終サマリ行が「94 passed（＋警告件数と所要時間のみ）」と**行全体で一致**することを判定する。失敗・エラー・skip・xfail・xpass・deselect が 1 件でも混ざるとサマリ行に追記されて一致しなくなるため、pytest の exit code が非ゼロになるケースをすべて不合格にできる。
 
 準備:
 ```bash
 docker compose exec -T backend python -m pytest -q > /tmp/i151_pytest.log 2>&1
 ```
 
-判定 1（件数が 94 ちょうど）: `grep -qE '^94 passed' /tmp/i151_pytest.log`
+判定（サマリ行の完全一致）: `grep -qxE '94 passed(, [0-9]+ warnings?)? in [0-9.]+s( \([0-9:]+\))?' /tmp/i151_pytest.log`
 
-判定 2（skip / xfail / deselect が 0 件）: `! grep -qE 'skipped|xfailed|deselected' /tmp/i151_pytest.log`
-
-- **合格**: exit 0（全件 pass・**94 件ちょうど**・skip / xfail / deselect が 0 件）
-- **不合格**: 非ゼロ（失敗があるか、件数が 94 でないか、skip 等が混入した）
-- **skip 判定を足した理由**: 件数だけを見ると `94 passed, 2 skipped` のように「テストを追加しつつ別のテストを skip 化する」緑化を検出できない。skip・xfail・deselect の不在を独立に判定する
-- **ベースライン**: 94 passed（実装前・実測済み。skip / xfail / deselect は 0 件で、強化後の判定式が実装前のログに対して exit 0 を返すことを確認済み）
+- **合格**: exit 0（全件 pass・**94 件ちょうど**・それ以外の結果種別が 0 件）
+- **不合格**: 非ゼロ（失敗・エラーがあるか、件数が 94 でないか、skip / xfail / xpass / deselect が混入した）
+- **判定を 1 本の完全一致にした理由（2026-10-14・敵対的レビュー第 1 周で是正）**: 旧判定（`grep -qE '^94 passed'` と `! grep -qE 'skipped|xfailed|deselected'` の 2 本）は、`94 passed, 1 xpassed, 1 error` のような**テスト後片付け（teardown）のエラーや xpass が混ざったログでも両方合格**していた（pytest 自体は exit 1）。禁止語を列挙する方式は列挙漏れが原理的に残るため、許可する形（passed と warnings と所要時間のみ）を行全体で指定する方式に改めた
+- **false-green 検証（2026-10-14 実施）**: 合格すべき 3 形（`94 passed in 20.01s` / `94 passed, 5 warnings in 22.69s` / `94 passed, 1 warning in 70.00s (0:01:10)`）で exit 0、不合格にすべき 9 形（error 混入 2 種・failed・skipped・xfailed・deselected・93 件・940 件・行頭に余計な文字）ですべて exit 1 を確認
+- **ベースライン**: 94 passed（実装前・実測済み）
 
 ---
 
@@ -156,18 +158,20 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 - **合格**: 判定 1・2 の**両方が exit 0**（どちらのファイルにも記述が無い）
 - **不合格**: 非ゼロ
-- **実装前の状態（false-green 検証）**: 判定 1 は **exit 1** を実測済み（`requirements.txt:14` と `settings.py:41` に存在）。判定 2 も `requirements.txt:7` と `settings.py:38` に存在するため **exit 1** になる
+- **実装前の状態（false-green 検証）**: 判定 1 は **exit 1** を実測済み（`requirements.txt:14` と `settings.py:40` に存在。計画書 §5-3 の訂正に合わせて 41→40 に修正）。判定 2 も `requirements.txt:7` と `settings.py:38` に存在するため **exit 1** になる
 
 ---
 
 ## TC-AUTO-06: guardian / django_extensions が Python コード全体に無い（AC-03）
 
-判定 1（guardian）: `! git grep -qi guardian -- 'backend/*.py' 'backend/**/*.py'`
+判定 1（guardian）: `! git grep -qi guardian -- ':(top)backend/*.py' ':(top)backend/**/*.py'`
 
-判定 2（django_extensions）: `! git grep -qi django_extensions -- 'backend/*.py' 'backend/**/*.py'`
+判定 2（django_extensions）: `! git grep -qi django_extensions -- ':(top)backend/*.py' ':(top)backend/**/*.py'`
 
 - **合格**: 判定 1・2 の**両方が exit 0**
 - **不合格**: 非ゼロ
+- **前提**: リポジトリ内（任意のサブディレクトリ可）で実行する
+- **`:(top)` を付ける理由（2026-10-14・敵対的レビュー第 1 周で是正）**: `git grep` の pathspec は実行ディレクトリ基準で解釈されるため、旧判定を `backend/` から実行すると `backend/backend/...` を探して何もヒットせず、`!` で**痕跡があっても合格**になっていた。`:(top)` はリポジトリルート基準を強制する。お試し用の一時リポジトリで、ルート・`backend/` のどちらから実行しても追跡済みの痕跡を検出（exit 1）できることを確認済み
 - **`grep -r` ではなく `git grep` を使う理由（2026-08-23・実装中に是正）**: 当初は `! grep -rqi guardian --include=*.py backend/` としていたが、これは **gitignore 対象の `backend/.venv/` まで走査する**。実際に実装後の検証で、`backend/.venv/lib/python3.12/site-packages/pygments/lexers/_scheme_builtins.py` が Scheme の組み込み関数名 `make-guardian` を含むために **false-red（実装は正しいのに不合格）** になった。`git grep` は追跡ファイルのみを対象とするため、リポジトリの実体（＝ CI が見るもの）と一致する
 - **実装前の状態（false-green 検証）**: 差し替え後の判定式が失敗条件を捕捉できることを確認済み。`origin/develop` の `backend/core/settings.py`（guardian / django_extensions を含む）に対して **exit 1** を返す
 
@@ -175,11 +179,12 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 
 ## TC-AUTO-07: guardian 専用設定が無い（AC-04）
 
-判定: `! git grep -q ANONYMOUS_USER_NAME -- 'backend/'`
+判定: `! git grep -q ANONYMOUS_USER_NAME -- ':(top)backend/'`
 
 - **合格**: exit 0
 - **不合格**: 非ゼロ
-- **false-green 検証**: 実装前も 0 件のため現状では合格してしまう。判定式が実際に不合格を返せることを、`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むダミーファイルを作った一時ディレクトリに対して実行し **exit 1** になることで確認済み（2026-08-22）
+- **前提・`:(top)` の理由**: TC-AUTO-06 と同じ
+- **false-green 検証（2026-10-14 再実施）**: 実装前も 0 件のため現状では合格してしまう。2026-08-22 の検証は差し替え前の `grep -r` に対するもので、`git grep` は**未追跡ファイルを見ない**ため現判定式の検証にはならなかった。そこでお試し用の一時リポジトリで `backend/core/dirty.py` に `ANONYMOUS_USER_NAME = 'AnonymousUser'` を書き、**`git add` した状態**で現判定式を実行し、ルート・`backend/` の双方から **exit 1**（正しく不合格）を確認した。未追跡のままでは検出しない（exit 0）が、これは「リポジトリの実体＝CI が見るもの」を対象にする設計どおり
 - **`git grep` を使う理由**: TC-AUTO-06 と同じ（`grep -r` は gitignore 対象の `backend/.venv/` を巻き込む）
 
 ---
@@ -334,12 +339,19 @@ docker compose --profile e2e run --rm e2e
 
 ## TC-AUTO-14: CI の全 6 チェックが SUCCESS（AC-14）
 
+判定 1（SUCCESS 以外が 0 件）:
 ```bash
 test "$(gh pr checks 269 --json state -q '[.[]|select(.state!="SUCCESS")]|length')" -eq 0
 ```
 
-- **合格**: exit 0（SUCCESS 以外のチェックが 0 件）
+判定 2（チェックが 6 件そろっている）:
+```bash
+test "$(gh pr checks 269 --json name -q length)" -eq 6
+```
+
+- **合格**: 判定 1・2 の**両方が exit 0**
 - **不合格**: 非ゼロ
+- **判定 2 を足した理由（2026-10-14・敵対的レビュー第 1 周で是正）**: 判定 1 だけでは、ワークフローが起動しなかった（チェック 0 件）場合も「SUCCESS 以外が 0 件」で合格してしまう。2026-10-14 に PR #269 で `6` を確認済み
 - **対象 6 チェック**: Backend Lint & Security / Backend Tests / Frontend Lint & Security / Frontend Tests / Frontend Type Check / E2E Tests (Playwright)
 - **機構の事前検証**: 同じ判定式を PR #256 に対して実行し `0` が返ることを確認済み（2026-08-22）
 
@@ -358,8 +370,10 @@ docker compose exec -T backend pip freeze > docs/tests/open/I151_pip_freeze.txt
 
 判定 1・2: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。
 
-- 判定 1（更新後の Django が記録されている）: `grep -q 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt`
-- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -q 'django-guardian==' docs/tests/open/I151_pip_freeze.txt` と `! grep -q 'django-extensions==' docs/tests/open/I151_pip_freeze.txt` の 2 行（2026-10-07 に `! grep -qE 'django-(guardian|extensions)=='` から分割。正規表現の `|` が gate のチェーン文字ガードに掛かるため。判定内容は同一）
+- 判定 1（更新後の Django が記録されている）: `grep -qx 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt`
+- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -qiE '^django[-_]guardian' docs/tests/open/I151_pip_freeze.txt` と `! grep -qiE '^django[-_]extensions' docs/tests/open/I151_pip_freeze.txt` の 2 行
+- **判定式の変遷**: 2026-10-07 に `! grep -qE 'django-(guardian|extensions)=='` を 2 行に分割（正規表現の `|` が gate のチェーン文字ガードに掛かるため）。2026-10-14（敵対的レビュー第 1 周）で厳格化した。旧判定 1 は `-x` が無く `Django==5.2.170` やコメント行に部分一致していた。旧判定 2 は `django-guardian==` 固定で、`django_guardian==`（pip freeze はアンダースコア表記も出す）・大文字表記・`@ file://` 形式を見逃していた
+- **false-green 検証（2026-10-14 実施）**: 実記録で判定 1〜3 がすべて exit 0。不合格にすべき 5 形（`Django==5.2.170` → 判定 1 が exit 1／コメント行のみ → 判定 1 が exit 1／アンダースコア表記の旧 freeze → 判定 2 の両行が exit 1／`Django-Guardian==` → guardian 行が exit 1／`django-extensions @ file://` → extensions 行が exit 1）と、ファイル不在（判定 1 が exit 2）をすべて確認
 
 - **合格**: 判定 1・2 の**両方が exit 0**
 - **この形にした理由**: 「記録した」という主張を人手判定に委ねると、貼り忘れても合格になる。専用ファイルを grep 対象にすることで、記録の有無と中身の正しさを exit code で判定できる（文書冒頭の「合否判定はすべて exit code」を満たす）
@@ -447,6 +461,16 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-16 | ✅ 合格 | 2026-08-24 | `fix(I151)` / `chore(I151)` の 2 コミット。`requirements.txt` を触ったコミットは 1 つ |
 | TC-AUTO-17 | ✅ 合格 | 2026-08-24 | `add_new True` / `add_dup False` / `incr1 1` / `incr2 2`。**当初の `python -c` は Django 未設定で落ちたため `manage.py shell -c` へ是正** |
 
+### 判定式厳格化後の再実施（2026-10-14・敵対的レビュー第 1 周の是正）
+
+| TC | 結果 | 実施日 | 備考 |
+|---|---|---|---|
+| TC-AUTO-03 | ✅ 合格 | 2026-10-14 | 新判定式（サマリ行の完全一致）で再実行。pytest exit 0・サマリ行 `94 passed, 5 warnings in 22.69s`。警告 5 件は DRF の `UnorderedObjectListWarning` 等で I151 以前から出ているもの（判定対象外） |
+| TC-AUTO-06 | ✅ 合格 | 2026-10-14 | `:(top)` 付き判定式で、リポジトリルート・`backend/` の双方から判定 1・2 とも exit 0。`origin/develop` に対しては判定 1 が exit 1（正しく不合格） |
+| TC-AUTO-07 | ✅ 合格 | 2026-10-14 | `:(top)` 付き判定式で、ルート・`backend/` の双方から exit 0 |
+| TC-AUTO-14 | ✅ 合格 | 2026-10-14 | 判定 1（SUCCESS 以外 0 件）・判定 2（チェック 6 件）とも exit 0 |
+| TC-AUTO-15 | ✅ 合格 | 2026-10-14 | 厳格化後の判定 1〜3 とも exit 0（`/code-review` の決定論ゲートでも実走） |
+
 ### false-green 検証の記録（計画時点・2026-08-22 実施済み）
 
 否定・回帰系 TC が実際に不合格を返せることを、実装前の状態またはダミー注入で確認した。
@@ -455,11 +479,19 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 |---|---|---|---|
 | TC-AUTO-04 | `manage.py check --fail-level WARNING` | 実装前の状態（guardian.W001 あり） | **exit 1**（正しく不合格） |
 | TC-AUTO-05 | `! grep -qi guardian ...` / `! grep -qiE 'django[-_]extensions' ...` | 実装前の状態（両方の記述あり） | **exit 1**（正しく不合格） |
-| TC-AUTO-06 | `! grep -rqi guardian ...` / `! grep -rqi django_extensions ...` | 実装前の状態 | **exit 1**（正しく不合格） |
-| TC-AUTO-07 | `! grep -rq ANONYMOUS_USER_NAME ...` | ダミー注入（`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むファイルを一時ディレクトリに作成） | **exit 1**（正しく不合格） |
+| TC-AUTO-06 | `! grep -rqi guardian ...` / `! grep -rqi django_extensions ...`（旧判定式。現行の `git grep` 版は下の 2026-10-14 表を参照） | 実装前の状態 | **exit 1**（正しく不合格） |
+| TC-AUTO-07 | `! grep -rq ANONYMOUS_USER_NAME ...`（旧判定式。現行の `git grep` 版は下の 2026-10-14 表を参照） | ダミー注入（`ANONYMOUS_USER_NAME = 'AnonymousUser'` を含むファイルを一時ディレクトリに作成） | **exit 1**（正しく不合格） |
 | TC-AUTO-08 | `makemigrations --check --dry-run` | マイグレーション未作成のモデルを持つダミーアプリを `INSTALLED_APPS` に注入 | **exit 1**（正しく不合格） |
 | TC-AUTO-11A | `grep -qx 'Django==5.2.17' ...` | 実装前の状態（4.2.30） | **exit 1**（正しく不合格） |
 | TC-AUTO-16 | `git log ... grep -qE 'fix\(I151\)'` | 実装前の状態（コミット未作成） | **exit 1**（正しく不合格） |
+
+### false-green 検証の記録（現行判定式・2026-10-14 実施）
+
+| TC | 判定式 | 検証方法 | 結果 |
+|---|---|---|---|
+| TC-AUTO-03 | `grep -qxE '94 passed(, [0-9]+ warnings?)? in [0-9.]+s( \([0-9:]+\))?'` | 合格形 3 種・不合格形 9 種のログを一時ディレクトリに作って実行 | 合格形はすべて exit 0、不合格形はすべて **exit 1** |
+| TC-AUTO-06 / 07 | `:(top)` 付き `git grep` | 一時リポジトリに痕跡ファイルを `git add` し、ルート・`backend/` の双方から実行 | 双方で **exit 1**（正しく不合格）。旧判定式は `backend/` から実行すると合格していた |
+| TC-AUTO-15 | `grep -qx 'Django==5.2.17'` / `! grep -qiE '^django[-_]guardian'` / `! grep -qiE '^django[-_]extensions'` | 壊れた記録 5 形とファイル不在 | 該当する判定がすべて非ゼロ（正しく不合格） |
 
 ### 機構の事前検証（計画時点・2026-08-22 実施済み）
 
