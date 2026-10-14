@@ -343,7 +343,9 @@ THIRD_PARTY_APPS = [
 - `backend/accounts/tests/test_I140_personal_org_fallback.py`（personal 組織フォールバック廃止）
 - `backend/core/tests/test_I127_throttling.py`（レート制限＝django-ratelimit / DRF throttle）
 - `backend/problems/tests/test_I102_problem_authz.py`（ロール別の認可。2026-10-14 追加）
-- `backend/problems/tests/test_I115_public_unauth.py`（未認証時の 401。2026-10-14 追加）
+- `backend/problems/tests/test_I115_public_unauth.py`（公開エンドポイントが**未認証でも 200** を返し、テナント範囲と露出フィールドが固定されていること。認証クラス更新で公開経路が誤って 401 化する退行の検出。2026-10-14 追加）
+
+> 未認証の**拒否（401）**は `test_I102_problem_authz.py` の `test_anonymous_gets_401` が担保する。以上 **9 モジュール**（当初 7・2026-10-14 に 2 追加）。
 
 ### false-green 防止
 否定・不在を判定する TC（TC-AUTO-05 / 06 / 07）は、失敗条件を注入して実際に非ゼロ終了することを確認してから採用する（手順は auto_test 文書に記載）。
@@ -356,7 +358,7 @@ THIRD_PARTY_APPS = [
 |---|---|
 | ステップ 2 で失敗 | 2 段目の変更のみを取り消す。**手順を明示する**: コミット前なら `backend/requirements-dev.txt` の `pytest==9.0.3` の行を **Edit ツールで `pytest==8.3.4` に書き戻す**（`git restore` は同一ファイル内の他の未コミット変更まで巻き戻すため使わない）。コミット後なら当該コミットを `git revert` する。**取り消し後は必ず再ビルドする**（ファイルを戻してもイメージには pytest 9 が残り、宣言と実インストールが食い違うため）。再ビルド後に TC-AUTO-11B が exit 1（= pytest が 9.0.3 でない）になることで、戻し漏れを検出できる |
 | ステップ 1 で失敗 | 3 ファイル（`backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`）を **Edit ツールで更新前の内容へ書き戻す**（変更箇所は §5-1 / §5-2 / §5-3 に列挙済みなので機械的に戻せる。`git restore` は使わない）。その後 backend / celery / celery-beat を再ビルドし、TC-AUTO-01 が exit 1（= 脆弱性が再検出される）に戻ることで巻き戻しの完了を確認する |
-| develop マージ後に判明 | **前方修正（5.2 系のまま直す）を正式手順とする**。不具合の原因となった依存だけを 5.2 対応の別パッチ版へ再固定するか、アプリ側を修正する PR を出す。**revert PR は使えない**（2026-10-14・敵対的レビュー第 1 周で訂正）: ① revert すると Django 4.2.30 に戻り、CI の必須チェック `Backend Lint & Security`（`pip-audit -r requirements.txt`）が 7 件検出で必ず失敗する。branch protection は管理者も迂回不可の設定で、bot には admin 権限もない。② DRF 3.18・django-filter 26.1・django-redis 7.0.0 はいずれも `Django>=5.2` を要求するため、Django だけを戻す部分ロールバックもできない。どうしても 4.2 系へ戻す必要が生じた場合は、ユーザーが GitHub の UI で branch protection を一時解除する判断が必要（Danger Ops）。なお `guardian_*` テーブルは残置しているため、guardian を再導入する場合も `INSTALLED_APPS` と依存の復元のみで足りる（データ復旧は不要） |
+| develop マージ後に判明 | **前方修正（5.2 系のまま直す）を正式手順とする**。不具合の原因となった依存だけを 5.2 対応の別パッチ版へ再固定するか、アプリ側を修正する PR を出す。**revert PR は使えない**（2026-10-14・敵対的レビュー第 1 周で訂正）: ① revert すると Django 4.2.30 に戻り、CI の必須チェック `Backend Lint & Security`（`pip-audit -r requirements.txt`）が 7 件検出で必ず失敗する。branch protection は管理者も迂回不可の設定で、bot には admin 権限もない。② DRF 3.18・django-filter 26.1・django-redis 7.0.0 はいずれも `Django>=5.2` を要求するため、Django だけを戻す部分ロールバックもできない。どうしても 4.2 系へ戻す必要が生じた場合は、ユーザーが GitHub の UI で branch protection を一時解除する判断が必要（Danger Ops）。**前方修正にも同じ行き止まりがある**（2026-10-14・敵対的レビュー第 2 周で追記）: 前方修正 PR も同じ `pip-audit` 必須チェックを通る必要があるため、5.2 系に修正版の無い CVE が公開されている間は前方修正 PR を含む全 PR が止まる（I151 の発端と同じ構造）。この構造の解消は **I152（#268・PR ゲートを許可リスト＋失効日方式へ）** に依存する。I152 マージ前にこの状況が起きた場合も、branch protection の一時解除はユーザー判断（Danger Ops）となる。なお `guardian_*` テーブルは残置しているため、guardian を再導入する場合も `INSTALLED_APPS` と依存の復元のみで足りる（データ復旧は不要） |
 | DB | マイグレーションを新規生成しないため、DB のロールバックは不要。検証用の使い捨て DB（`migrate_check`）は検証後に破棄する |
 
 ---
@@ -370,7 +372,7 @@ THIRD_PARTY_APPS = [
 | R3 | pytest 9 のメジャー更新でテスト基盤が壊れる | テストが落ちる | 2 段目のコミットに隔離。取り消せば 1 段目の成果は残る |
 | R4 | 再ビルドで推移的依存（kombu 等）が変動し celery が壊れる | 非同期タスクの失敗 | worker ログでタスクの**成功**まで確認（TC-AUTO-10）。`pip freeze` を記録して誤帰属を防ぐ（TC-AUTO-15）。現況では kombu 5.6.2 で既に正常動作（§2-7） |
 | R5 | 再ビルド対象の取りこぼし（celery / celery-beat が旧イメージのまま） | 本番相当構成での検証にならない | ビルド対象に `celery` `celery-beat` を明示（ステップ 1-4）。`e2e-init` は E2E 実行時に再ビルドされる |
-| R6 | 新しい CVE が実装中に公開され `pip-audit` が再び落ちる | CI が赤のまま | 計画時点で 7 件へ増えた実績あり（§2-2）。発生時は Fix Versions を確認し 5.2 系の最新パッチへ再固定する（系列変更を伴わないため影響は局所） |
+| R6 | 新しい CVE が実装中に公開され `pip-audit` が再び落ちる | CI が赤のまま | 計画時点で 7 件へ増えた実績あり（§2-2）。発生時は Fix Versions を確認し 5.2 系の最新パッチへ再固定する（系列変更を伴わないため影響は局所）。**マージ後の運用時**も同じ手順だが、修正版が未公開の間は全 PR が止まる（§8 参照）。この構造の解消は I152（#268）に依存する |
 | R7 | ホスト venv の実測を合否根拠にしてしまう | 本番構成と異なる結論 | すべての TC を `docker compose exec` 経由で実行する。ホスト venv の結果は「下見」としてのみ記載 |
 
 ---
@@ -381,6 +383,7 @@ THIRD_PARTY_APPS = [
 - **マイグレーション**: 新規生成なし（事前実測で `No changes detected`・実装時に TC-AUTO-08 で再確認）。
 - **`INSTALLED_APPS` からのアプリ除去の扱い**: guardian を外しても Django は既存テーブルに触れない。`django_migrations` テーブルに残る guardian の適用履歴も削除されないが、参照されなくなるだけで整合性に影響しない。
 - **孤立テーブル**: `guardian_userobjectpermission` / `guardian_groupobjectpermission` の 2 テーブルが未参照のまま残る。**本イシューでは意図的に残置**し、除去は別イシュー（バックアップ取得のうえ実施）とする。
+- **孤立データ（2026-10-14・敵対的レビュー第 2 周で判明）**: テーブルのほかに、guardian が既存 DB に自動作成したデータも残る。① `AnonymousUser` ユーザー行 1 件（`email='AnonymousUser'`・`is_active=True`・組織 3「個人利用」所属。パスワードは使用不可（`!` 始まり）のためログイン不可）② contenttype 2 行（`guardian.groupobjectpermission` / `guardian.userobjectpermission`）③ それに紐づく `auth_permission` 8 行。I151 以降に作られる新しい DB にはこれらは作られないため、**既存 DB と新規 DB で中身が食い違う**。開発 DB で実測済み（読み取りのみ）。除去は I155（#272）の範囲に追加した。
 - **トランザクション境界・冪等性・同時更新**: 本変更はスキーマにもデータにも触れないため該当なし。
 - **後方互換性**: guardian を戻す場合も `INSTALLED_APPS` と依存の復元のみで足り、テーブルが残っているためデータ復旧は不要。
 
@@ -391,7 +394,7 @@ THIRD_PARTY_APPS = [
 - **構造化ログ方針**: 変更なし。`core/enhanced_logging.py` / `core/middleware.py` のログ出力に手を入れない。I142 で整備したエラーハンドリング規約（`custom_exception_handler` によるログ＋統一 JSON 500）も変更しない。
 - **celery の検証方針**: worker と beat を再ビルド後に起動し、beat がスケジュールしたタスクが**成功**するまでをログで確認する（TC-AUTO-10）。`update_daily_analytics_task` は 30 秒間隔のため 1 分以内に判定できる。
 - **タイムアウト・リトライ**: 変更なし（`studylogs/tasks.py` の `max_retries=3` 等はそのまま）。
-- **Feature Flag・段階リリース**: 不要。依存更新は全体一括で適用され、部分的に有効化する意味がない。切り戻しは §8 のとおりコミット単位・revert PR で行う。
+- **Feature Flag・段階リリース**: 不要。依存更新は全体一括で適用され、部分的に有効化する意味がない。マージ前の切り戻しは §8 のとおりコミット単位で行い、develop マージ後は §8 のとおり前方修正で直す（revert PR は CI の必須チェックで必ず落ちるため使えない。2026-10-14 訂正）。
 - **beat スケジュールの環境別切り替え**: `backend/core/celery.py` が開発用の短間隔で固定されている件は**本イシューの範囲外**（イシュー決定 7-D・別イシューで対応）。
 
 ---
@@ -485,7 +488,7 @@ THIRD_PARTY_APPS = [
 - bandit は MEDIUM 以上を修正対象・LOW は `# nosec`／npm audit は high・critical を修正対象
 
 ### テスト
-- **新規テストは追加しない**（イシュー決定 6）。依存更新の影響は既存 94 件＋認可・テナント境界の 7 モジュールの結果一致で測る
+- **新規テストは追加しない**（イシュー決定 6）。依存更新の影響は既存 94 件＋認可・テナント境界の 9 モジュール（§7・当初 7、2026-10-14 に 2 追加）の結果一致で測る
 - 否定系 TC（TC-AUTO-04/05/06/07/11A/16）は失敗条件を注入して非ゼロ終了することを確認済み（§実施記録）
 - **テストの skip・削除・条件緩和による緑化は行わない**
 
@@ -509,7 +512,7 @@ THIRD_PARTY_APPS = [
 | 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
 |--------|------|--------------|-------------------------------|
 | Medium | 依存ライブラリ／認証 | **レート制限がフェイルオープンしうる**。`@ratelimit`（ログイン 5/5m・登録 10/5m・パスワードリセット 3/15m 等のブルートフォース防御）はカウンタを `default` キャッシュに保存する（`RATELIMIT_USE_CACHE = 'default'`）。その `default` は本 PR で **django-redis 5.4.0 → 7.0.0（メジャー 2 段）** に更新され、かつ `IGNORE_EXCEPTIONS: True` により**キャッシュ操作の失敗が例外にならず握り潰される**。カウンタが機能しなくなってもエラーは出ず、総当たり防御だけが静かに消える。さらに既存テスト `core/tests/test_I127_throttling.py` は 4 キャッシュすべてを `LocMemCache` に差し替えるため、**django-redis は 1 度も検証されない**（94 件が全部 pass しても検出できない） | **TC-AUTO-17 を追加し、再ビルド後の実コンテナで `cache.add` / `cache.incr` の動作を必須確認とする**（django-ratelimit が実際に使う操作を `django_ratelimit.core` の実測で特定）。設計時点でホスト venv 上の django-redis 7.0.0 に対し `add_new True` / `add_dup False` / `incr 1→2` を確認済みだが、ホスト venv は合否根拠にしないため実コンテナで再実行する。**`IGNORE_EXCEPTIONS` を無効化する変更は本 PR では行わない**（キャッシュ障害時にアプリ全体を落とす設計変更になるため。恒久対応は別途判断） |
-| Low | 認証・認可 | `REST_FRAMEWORK` の `DEFAULT_PERMISSION_CLASSES` が **空リスト**（既存設計）。`permission_classes` を明示し忘れたビューは無防備になる。本 PR は DRF を 3.15 → 3.18 に上げるため、空リストの解釈が変わらないことの確認が要る | **本 PR では設定を変更しない**（変更すると全ビューの挙動が動き、脆弱性解消という目的から外れる）。DRF 更新後も認可判定が不変であることを、既存の認可・テナント境界 7 モジュール（§7）と全 94 件で確認する。空リストの是正は本 PR のスコープ外 |
+| Low | 認証・認可 | `REST_FRAMEWORK` の `DEFAULT_PERMISSION_CLASSES` が **空リスト**（既存設計）。`permission_classes` を明示し忘れたビューは無防備になる。本 PR は DRF を 3.15 → 3.18 に上げるため、空リストの解釈が変わらないことの確認が要る | **本 PR では設定を変更しない**（変更すると全ビューの挙動が動き、脆弱性解消という目的から外れる）。DRF 更新後も認可判定が不変であることを、既存の認可・テナント境界 9 モジュール（§7・当初 7、2026-10-14 に 2 追加）と全 94 件で確認する。空リストの是正は本 PR のスコープ外 |
 | Low | 機密情報 | 新規に `docs/tests/open/I151_pip_freeze.txt` をコミットする（TC-AUTO-15 の記録） | `pip freeze` の出力は**パッケージ名とバージョンのみ**で認証情報を含まない。コミット前に内容を確認する。pre-commit の detect-secrets も通過させる |
 | — | マルチテナント | なし。組織スコープの絞り込みは自前実装であり、除去する guardian / django-extensions のいずれにも依存していない（§2-4 / §2-4b で実測） | 既存の認可・テナント境界テストで無退行を確認 |
 | — | 入力検証 | なし。シリアライザ・バリデータに変更なし | — |

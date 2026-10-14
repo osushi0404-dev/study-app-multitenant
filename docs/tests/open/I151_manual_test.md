@@ -24,7 +24,7 @@
 | 3 | 再作成から 1 分以上待ってから TC-AUTO-10 を実行する | 直近 3 分のログに `Task studylogs.tasks.update_daily_analytics_task[...] succeeded` があり、`ERROR` / `Traceback` が無い | Claude | OK（2026-08-24）— 直近 3 分に成功ログ 9 件・ERROR / Traceback 0 件 | beat が 30 秒間隔で投げるため 1 分待てば 2 回分出る |
 | 4 | TC-AUTO-15（`pip freeze`）を実行し、出力を `docs/tests/open/I151_pip_freeze.txt` へ保存してコミットする | Django が `5.2.17`、`django-guardian` と `django-extensions` が**一覧に無い**。kombu 等の推移的依存のバージョンが記録に残る | Claude | OK（2026-08-24）— `docs/tests/open/I151_pip_freeze.txt`（81 行）に記録。Django==5.2.17・django-guardian / django-extensions は不在 | celery が落ちた場合の切り分け材料 |
 | 5 | `docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/admin/login/` を実行する | `200`（Django 5.2 の admin が正常に描画される） | Claude | OK（2026-08-24）— `admin_login_http=200` | Django 本体のテンプレート・静的ファイル経路の生存確認 |
-| 6 | 認可・テナント境界の対象モジュールを個別に実行し、モジュール名と件数を記録する。対象: `problems/tests/test_I103_cross_org_create.py` / `problems/tests/test_I104_subject_authz.py` / `problems/tests/test_I006_subject_org_admin.py` / `problems/tests/test_I078_is_correct_exposure.py` / `accounts/tests/test_I131_org_id_rename.py` / `accounts/tests/test_I140_personal_org_fallback.py` / `core/tests/test_I127_throttling.py` | 全モジュールが pass。更新前と更新後の件数が一致し、skip・削除・条件緩和が 0 件であることを記録する（AC-18） | Claude | OK（2026-08-24）— 7 モジュール全て pass（下表）。テストファイルは 1 件も変更していない | 「関連テストを実行した」ではなくモジュール名を列挙して記録する |
+| 6 | 認可・テナント境界の対象モジュールを個別に実行し、モジュール名と件数を記録する。対象: `problems/tests/test_I103_cross_org_create.py` / `problems/tests/test_I104_subject_authz.py` / `problems/tests/test_I006_subject_org_admin.py` / `problems/tests/test_I078_is_correct_exposure.py` / `accounts/tests/test_I131_org_id_rename.py` / `accounts/tests/test_I140_personal_org_fallback.py` / `core/tests/test_I127_throttling.py` / `problems/tests/test_I102_problem_authz.py` / `problems/tests/test_I115_public_unauth.py`（最後の 2 つは 2026-10-14 追加・計 9 モジュール） | 全モジュールが pass。更新前と更新後の件数が一致し、skip・削除・条件緩和が 0 件であることを記録する（AC-18） | Claude | OK（2026-08-24）— 当初の 7 モジュール全て pass（下表）。テストファイルは 1 件も変更していない。**2026-10-14 追加の 2 モジュールも pass（計 13 passed）** | 「関連テストを実行した」ではなくモジュール名を列挙して記録する |
 | 7 | ブラウザで `http://localhost:3000` を開き、`osushi0404admin`（`test01@gmail.com`）でログインする。ログイン後、ダッシュボード → 問題一覧 → クイズを 1 問回答 → 学習履歴 の順に画面を開く | ログインが成功しダッシュボードが表示される。問題一覧に自組織（株式会社おすしはなんだか楽しいよ）の科目 3 件が並び、他組織の科目が混ざらない。クイズが出題され回答が保存される。学習履歴に回答が反映される。いずれの画面でも赤いエラー表示・白画面・コンソールの 500 エラーが出ない | Human | OK（2026-10-07）— 代替アカウント `i102_user` で実施（使用アカウント欄参照）。**画面**: ログイン成功・ダッシュボードとクイズ画面（高校英語・問題 2/12・総回答 1）がエラー表示・白画面なしで表示（スクリーンショット 2 枚）。**データ（Claude 確認）**: QuizSession id=169 に QuizAnswer 1 件（問題の組織 = cute_school・2026-10-07 13:07 JST）が保存。出題科目は自組織の高校英語のみ。`/api/dashboard/overview/`・`/api/dashboard/analytics/`（学習統計画面）・`/api/user/subjects/` が 200 で、overview の `recent_quizzes` に回答済みセッションが反映。問題管理画面は一般ユーザーのため対象外（組織越境は TC-AUTO-13 の `tenant_isolation` で担保済み。**2026-10-14 訂正**: この担保は科目・問題の一覧／作成の経路に限られ、**クイズ経路は含まない**。敵対的レビューで、クイズ作成時に組織チェックが無く他組織の問題が出題される既存の不具合が見つかった。I151 以前からの問題で、別イシューで対応する） | UI のコード変更はないため、依存更新による API 応答形の変化がないことの目視確認 |
 | 8 | 後続イシュー 3 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7-C / 7-D に記載） | 3 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | OK（2026-08-24）— I155(#272) / I156(#273) / I157(#274) を起票 | AC-19。django-extensions の依存移動は決定 7 の変更（更新→削除）により不要になった |
 | 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 11B / 12 を実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-11B が宣言・実インストールとも 9.0.3、TC-AUTO-12 が 10 passed | Claude | OK（2026-08-24）— TC-AUTO-02 exit 0・TC-AUTO-03 94 passed・TC-AUTO-11B exit 0・TC-AUTO-12 10 passed | ここが落ちた場合は 2 段目のみ取り消す（計画 §8）。取り消したら**再ビルドが必要**（イメージには pytest 9 が残るため） |
@@ -35,7 +35,7 @@
 
 ## 記録欄
 
-### AC-18: 認可・テナント境界テストの前後比較（No.6 で記入）
+### AC-18: 認可・テナント境界テストの前後比較（No.6 で記入・9 モジュール）
 
 | モジュール | 更新前 | 更新後 | skip/削除/緩和 |
 |---|---|---|---|
@@ -50,9 +50,9 @@
 | `problems/tests/test_I115_public_unauth.py`（2026-10-14 追加） | 8（※） | 8 passed | なし |
 | **全体** | **94 passed** | **94 passed** | なし |
 
-> **2026-10-14 追記（敵対的レビュー第 1 周の指摘）**: ロール別認可（I102）と未認証 401（I115）は DRF の permission / authentication 更新の影響を最も受けるモジュールだが、当初の列挙から漏れていたため追加した。更新後の個別実行は 2026-10-14 に実施（2 モジュール計 `13 passed`）。※更新前は個別実行していない。テスト関連ファイルの変更が 0 件で、全体が更新前後とも 94 passed（skip 0 件）であることから、件数は前後同一と判断した（間接根拠）。なお `test_I127_throttling.py` はレート制限のテストで、厳密には認可ではないが、ブルートフォース防御の回帰確認として残す。
+> **2026-10-14 追記（敵対的レビュー第 1 周の指摘・第 2 周で説明を訂正）**: ロール別認可（I102。未認証の拒否 401 を確かめる `test_anonymous_gets_401` を含む）と、公開エンドポイントが**未認証でも 200** を返すことの回帰テスト（I115。認証クラスの更新で公開経路が誤って 401 化する退行を検出する）は、DRF の permission / authentication 更新の影響を最も受けるモジュールだが、当初の列挙から漏れていたため追加した。更新後の個別実行は 2026-10-14 に実施（2 モジュール計 `13 passed`）。※更新前は個別実行していない。テスト関連ファイルの変更が 0 件で、全体が更新前後とも 94 passed（skip 0 件）であることから、件数は前後同一と判断した（間接根拠）。なお `test_I127_throttling.py` はレート制限のテストで、厳密には認可ではないが、ブルートフォース防御の回帰確認として残す。
 
-### マイグレーション検証の担保経路（記録必須・イシュー決定 7-A）
+### マイグレーション検証の担保経路（記録必須・イシュー決定 7-A・計画書 AC-23）
 
 次に同じ疑問が出たときに調べ直さずに済むよう、以下を記録する。
 
