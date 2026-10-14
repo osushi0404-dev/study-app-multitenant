@@ -4,8 +4,8 @@
 - 実行環境: **Docker（`docker compose exec`）**。ホスト venv の結果は合否根拠にしない（イシュー決定 5）
 - テストレベル: 静的検証（決定論 TC）／ツール実行／既存の単体・API 結合／コンポーネント／E2E
 - **新規テストコードは追加しない**（イシュー決定 6）。既存 94 件が同じ結果を返すことで依存更新の影響を測る
-- 合否判定インターフェース: **すべて exit code に統一**（合格 = exit 0・不合格 = 非ゼロ）
-- **コマンドは複合化しない**（`&&` / パイプで束ねない）。複数条件がある TC は「準備」と「判定 1・判定 2 …」に分け、**判定コマンドすべてが exit 0 なら合格**とする。複合コマンドは Claude Code の bash allowlist に一致せず承諾プロンプトを誘発し、自動テスト工程が止まるため
+- 合否判定インターフェース: **すべて exit code で判定する**。**合格とする exit code は下の「TC 一覧」の『合格条件』列だけで定める（唯一の正）**。既定は「exit 0 = 合格・非ゼロ = 不合格」。TC-AUTO-06 / 07 だけは「exit 1 = 合格・それ以外 = 不合格」（理由は TC-AUTO-06 本文）。TC 本文・実施記録・手動テスト・計画書で合否に触れる箇所は、この列に従う
+- **コマンドは複合化しない**（`&&` / パイプで束ねない）。複数条件がある TC は「準備」と「判定 1・判定 2 …」に分け、**判定コマンドすべてが『合格条件』列の exit code を返したら合格**とする。複合コマンドは Claude Code の bash allowlist に一致せず承諾プロンプトを誘発し、自動テスト工程が止まるため
 
 ## ベースライン（実装前・2026-08-22 実測）
 
@@ -21,33 +21,33 @@
 
 ## TC 一覧
 
-| TC | 検証内容 | 対応 AC | 実行タイミング |
-|---|---|---|---|
-| TC-AUTO-00 | 実行環境の前提（6 サービス healthy） | — | ステップ 0 |
-| TC-AUTO-01 | 本体依存の脆弱性が 0 件 | AC-08 | ステップ 1 |
-| TC-AUTO-02 | 開発依存の脆弱性が 0 件 | AC-09 | ステップ 2 |
-| TC-AUTO-03 | backend テストが 94 件 pass（postgres 実接続＝psycopg2 の動作確認を内包） | AC-11・AC-22 | ステップ 1・2 |
-| TC-AUTO-04 | `manage.py check` が警告 0 | AC-05 | ステップ 1 |
-| TC-AUTO-05 | guardian / django-extensions が requirements / settings に無い | AC-02 | ステップ 1 |
-| TC-AUTO-06 | guardian / django_extensions が Python コード全体に無い | AC-03 | ステップ 1 |
-| TC-AUTO-07 | guardian 専用設定が無い | AC-04 | ステップ 1 |
-| TC-AUTO-08 | マイグレーション drift が無い | AC-07 | ステップ 1 |
-| TC-AUTO-09 | まっさらな DB で `migrate` が通る | AC-06 | ステップ 1 |
-| TC-AUTO-10 | celery worker のタスクが成功する | AC-15 | ステップ 1 |
-| TC-AUTO-11A | 本体依存＋pytest-django の固定値が一致する | AC-01・AC-10 | ステップ 1 |
-| TC-AUTO-11B | pytest の固定値が一致する | AC-10 | ステップ 2 |
-| TC-AUTO-12 | frontend テストが 10 件 pass | AC-12 | ステップ 1・2 |
-| TC-AUTO-13 | E2E が全件 pass | AC-13 | ステップ 3 |
-| TC-AUTO-14 | CI の全 6 チェックが SUCCESS | AC-14 | ステップ 3 |
-| TC-AUTO-15 | 再ビルド後の `pip freeze` を記録 | AC-16 | ステップ 3 |
-| TC-AUTO-16 | コミットが 2 段に分かれている | AC-17 | ステップ 3 |
-| TC-AUTO-17 | レート制限のカウンタ保存が実コンテナで機能する | AC-21（security-review 由来） | ステップ 1 |
+| TC | 検証内容 | 対応 AC | 実行タイミング | 合格条件（唯一の正） |
+|---|---|---|---|---|
+| TC-AUTO-00 | 実行環境の前提（6 サービス healthy） | — | ステップ 0 | exit 0 |
+| TC-AUTO-01 | 本体依存の脆弱性が 0 件 | AC-08 | ステップ 1 | exit 0 |
+| TC-AUTO-02 | 開発依存の脆弱性が 0 件 | AC-09 | ステップ 2 | exit 0 |
+| TC-AUTO-03 | backend テストが 94 件 pass（postgres 実接続＝psycopg2 の動作確認を内包） | AC-11・AC-22 | ステップ 1・2 | exit 0 |
+| TC-AUTO-04 | `manage.py check` が警告 0 | AC-05 | ステップ 1 | exit 0 |
+| TC-AUTO-05 | guardian / django-extensions が requirements / requirements-dev / settings に無い | AC-02 | ステップ 1 | exit 0 |
+| TC-AUTO-06 | guardian / django_extensions が Python コード全体に無い | AC-03 | ステップ 1 | **exit 1**（例外） |
+| TC-AUTO-07 | guardian 専用設定が無い | AC-04 | ステップ 1 | **exit 1**（例外） |
+| TC-AUTO-08 | マイグレーション drift が無い | AC-07 | ステップ 1 | exit 0 |
+| TC-AUTO-09 | まっさらな DB で `migrate` が通る | AC-06 | ステップ 1 | exit 0 |
+| TC-AUTO-10 | celery worker のタスクが成功する | AC-15 | ステップ 1 | exit 0 |
+| TC-AUTO-11A | 本体依存＋pytest-django の固定値が一致する | AC-01・AC-10 | ステップ 1 | exit 0 |
+| TC-AUTO-11B | pytest の固定値が一致する | AC-10 | ステップ 2 | exit 0 |
+| TC-AUTO-12 | frontend テストが 10 件 pass | AC-12 | ステップ 1・2 | exit 0 |
+| TC-AUTO-13 | E2E が全件 pass | AC-13 | ステップ 3 | exit 0 |
+| TC-AUTO-14 | CI の全 6 チェックが SUCCESS | AC-14 | ステップ 3 | exit 0 |
+| TC-AUTO-15 | 再ビルド後の `pip freeze` を記録 | AC-16 | ステップ 3 | exit 0 |
+| TC-AUTO-16 | コミットが 2 段に分かれている | AC-17 | ステップ 3 | exit 0 |
+| TC-AUTO-17 | レート制限のカウンタ保存が実コンテナで機能する | AC-21（security-review 由来） | ステップ 1 | exit 0 |
 
 > **判定コマンドの表記ルール（2026-10-07・fix-loop で是正）**: リポジトリ内ファイルだけを見る静的判定は下の「決定論ゲート（自動実走）」欄に宣言し、`/code-review` が毎回実走する。実行時の一時ファイル（`/tmp/i151_*`）や `git grep` を見る判定は code-review で実走できない（前者は heavy 実行の産物・後者は gate allowlist 外）ため、各 TC 本文に **inline code** で記載する（コピーして単体実行する）。2026-10-07 の表記変更の時点では、判定式・合否基準は変えていない。
 >
 > **判定式の厳格化（2026-10-14・敵対的レビュー第 1・2 周）**: 判定式そのものに見逃しが見つかったため、TC-AUTO-03 / 05 / 06 / 07 / 12 / 14 / 15 / 16 の判定式を改めた。条件を足して**合否基準を厳しくした**もの（例: TC-AUTO-14 にチェック件数の判定を追加）を含む。「何を確かめる TC か」という意図は変えていない。各 TC 本文に、変更理由と false-green 検証を記載している。
 >
-> **例外（TC-AUTO-06 / 07）**: この 2 つだけは「**exit 1 のときだけ合格**」とする（理由は TC-AUTO-06 本文）。
+> **合格条件の定義場所（2026-10-14・fix-loop で是正）**: 合格とする exit code は「TC 一覧」の『合格条件』列だけで定める。第 2 周で TC-AUTO-06 / 07 を「exit 1 のときだけ合格」に変えた際、合否の書き方が文書中に散らばっていたため、書き換え漏れ（同じ TC 本文の旧 exit code 記述など）が残った。その再発を防ぐため、定義を 1 か所にまとめた。
 
 ---
 
@@ -178,7 +178,7 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 - **不合格**: exit 0（痕跡がある）・exit 128 など 2 以上（リポジトリ外での実行・index 破損などの実行エラー）
 - **前提**: リポジトリ内（任意のサブディレクトリ可）で実行する
 - **`!` で反転させず「exit 1 のみ合格」にした理由（2026-10-14・敵対的レビュー第 2 周）**: `! git grep ...` は実行エラー（exit 128）まで exit 0＝合格に反転させる。お試し用の一時リポジトリで、痕跡がある状態でも、リポジトリ外での実行・壊れた index ではそれぞれ合格になることを実測した。「exit 1 のみ合格」は、`code-review.sh` の決定論ゲートが `! grep` を扱う方式（exit 1 のみ合格・2 以上は不合格）と同じ。お試し用リポジトリで、痕跡なし→exit 1、痕跡あり→exit 0、リポジトリ外→exit 128、壊れた index→exit 128 を確認済み
-- **`:(top)` を付ける理由（2026-10-14・敵対的レビュー第 1 周で是正）**: `git grep` の pathspec は実行ディレクトリ基準で解釈されるため、旧判定を `backend/` から実行すると `backend/backend/...` を探して何もヒットせず、`!` で**痕跡があっても合格**になっていた。`:(top)` はリポジトリルート基準を強制する。お試し用の一時リポジトリで、ルート・`backend/` のどちらから実行しても追跡済みの痕跡を検出（exit 1）できることを確認済み
+- **`:(top)` を付ける理由（2026-10-14・敵対的レビュー第 1 周で是正）**: `git grep` の pathspec は実行ディレクトリ基準で解釈されるため、旧判定を `backend/` から実行すると `backend/backend/...` を探して何もヒットせず、`!` で**痕跡があっても合格**になっていた。`:(top)` はリポジトリルート基準を強制する。お試し用の一時リポジトリで、ルート・`backend/` のどちらから実行しても追跡済みの痕跡を検出できることを確認済み（検出したときの exit code は、第 1 周の `!` 付き旧形式では exit 1、第 2 周以降の現判定式では exit 0。どちらも「不合格」）
 - **`grep -r` ではなく `git grep` を使う理由（2026-08-23・実装中に是正）**: 当初は `! grep -rqi guardian --include=*.py backend/` としていたが、これは **gitignore 対象の `backend/.venv/` まで走査する**。実際に実装後の検証で、`backend/.venv/lib/python3.12/site-packages/pygments/lexers/_scheme_builtins.py` が Scheme の組み込み関数名 `make-guardian` を含むために **false-red（実装は正しいのに不合格）** になった。`git grep` は追跡ファイルのみを対象とするため、リポジトリの実体（＝ CI が見るもの）と一致する
 - **実装前の状態（false-green 検証）**: 差し替え後の判定式が失敗条件を捕捉できることを確認済み。`origin/develop` の `backend/core/settings.py`（guardian / django_extensions を含む）に対して不合格を返す（`!` 付きの旧形式では exit 1。第 2 周の「exit 1 のみ合格」形式では、痕跡を検出して exit 0＝不合格）
 
@@ -191,7 +191,7 @@ docker compose exec -T backend python manage.py check --fail-level WARNING
 - **合格**: **exit 1**（痕跡が見つからなかった）
 - **不合格**: exit 0（痕跡がある）・2 以上（実行エラー）
 - **前提・`:(top)` の理由・「exit 1 のみ合格」の理由**: TC-AUTO-06 と同じ
-- **false-green 検証（2026-10-14 再実施）**: 実装前も 0 件のため現状では合格してしまう。2026-08-22 の検証は差し替え前の `grep -r` に対するもので、`git grep` は**未追跡ファイルを見ない**ため現判定式の検証にはならなかった。そこでお試し用の一時リポジトリで `backend/core/dirty.py` に `ANONYMOUS_USER_NAME = 'AnonymousUser'` を書き、**`git add` した状態**で現判定式を実行し、ルート・`backend/` の双方から **exit 1**（正しく不合格）を確認した。未追跡のままでは検出しない（exit 0）が、これは「リポジトリの実体＝CI が見るもの」を対象にする設計どおり
+- **false-green 検証（2026-10-14 再実施）**: 実装前も 0 件のため現状では合格してしまう。2026-08-22 の検証は差し替え前の `grep -r` に対するもので、`git grep` は**未追跡ファイルを見ない**ため現判定式の検証にはならなかった。そこでお試し用の一時リポジトリで `backend/core/dirty.py` に `ANONYMOUS_USER_NAME = 'AnonymousUser'` を書き、**`git add` した状態**で判定式を実行し、ルート・`backend/` の双方から不合格になることを確認した（第 1 周の `!` 付き旧形式では exit 1、現判定式では **exit 0**。どちらも「不合格」）。未追跡のままでは検出しない（現判定式では exit 1＝合格扱い）が、これは「リポジトリの実体＝CI が見るもの」を対象にする設計どおり。2026-10-14（fix-loop）に現判定式で再実測し、`git add` 後はルート・`backend/` とも exit 0、`git rm --cached` で未追跡に戻すと exit 1 を確認
 - **`git grep` を使う理由**: TC-AUTO-06 と同じ（`grep -r` は gitignore 対象の `backend/.venv/` を巻き込む）
 
 ---
@@ -335,16 +335,47 @@ docker compose exec -T frontend npm test -- --watchAll=false > /tmp/i151_jest.lo
 
 ## TC-AUTO-13: E2E が全件 pass（AC-13）
 
-E2E はまっさらな DB への `migrate` とログイン〜主要画面の通しを同時に担保する。
+E2E はログイン〜主要画面の通しを担保する。**「まっさらな DB への `migrate`」を同時に担保するのは CI 実行に限る**（CI は毎回新しいランナーで DB ボリュームが空）。ローカルの `e2e-init` は開発用 DB（`learning_app`）へ `migrate` と `seed_e2e` を流すため、まっさらな DB の検証にはならない。ローカルでのまっさらな DB の検証は TC-AUTO-09 が担う。
 
+**合否は CI 記録で判定する（AC-13 の正式な判定）**:
+
+準備 1（CI の E2E ジョブログを保存。`<run_id>` / `<job_id>` は `gh pr checks 269 --json name,link` の E2E Tests (Playwright) 行から取る）:
 ```bash
-docker compose rm -f e2e-init
-docker compose --profile e2e run --rm e2e
+gh run view <run_id> --log --job <job_id> > /tmp/i151_e2e_ci.log
 ```
 
-- **合格**: exit 0
+判定 1（Playwright の合格サマリ行がある）: `grep -qE ' [0-9]+ passed \(' /tmp/i151_e2e_ci.log`
+
+判定 2（flaky・failed・skipped・did not run・interrupted の行が無い）: `! grep -qE ' [0-9]+ (flaky|failed|skipped|did not run|interrupted)$' /tmp/i151_e2e_ci.log`
+
+- **合格**: 判定 1・2 とも exit 0
 - **不合格**: 非ゼロ
-- **備考**: `docker compose rm -f e2e-init` は `common-commands.md` に記載の必須手順（`run --rm` は対象サービスのみ削除するため）
+- **判定 2 を足した理由（2026-10-14・fix-loop）**: `e2e/playwright.config.ts` は `retries: 2` を条件なしで設定している。1 回失敗して再試行で通ったテスト（flaky）でも、Playwright は exit 0 を返す。Django 5.2 化で生じた間欠的な不具合を見逃さないよう、flaky が 0 件であることを判定する（CI 設定 `e2e.yml` と `playwright.config.ts` は I151 の範囲外のため変更しない）
+- **判定 2 の `!` がファイル不在で合格に反転しない理由**: ログが保存されていなければ判定 1 が exit 2 で不合格になるため、TC 全体として不合格になる
+- **false-green 検証（2026-10-14 実施）**: 実際の CI ログ（run 32651105381・job 97222730997）で判定 1・2 とも exit 0（`7 passed (15.4s)`・flaky 等の行なし）。`1 flaky` 行・`1 failed` 行を含むダミーログでは、判定 2 の grep が一致して不合格になることを確認
+
+**ローカルで実行する場合（補助・合否には使わない）**:
+
+準備 L1（`e2e-init` のイメージを作り直す。`run` は依存サービスのイメージを自動では作り直さないため）:
+```bash
+docker compose --profile e2e build e2e-init
+```
+
+準備 L2（`e2e-init` イメージの中身を記録）:
+```bash
+docker compose --profile e2e run --rm --no-deps --entrypoint pip e2e-init freeze > /tmp/i151_e2einit_freeze.txt
+```
+
+判定 L0（`e2e-init` イメージが更新後の Django である）: `grep -qx 'Django==5.2.17' /tmp/i151_e2einit_freeze.txt`
+
+実行（flaky も不合格にする）:
+```bash
+docker compose rm -f e2e-init
+docker compose --profile e2e run --rm e2e npx playwright test --fail-on-flaky-tests
+```
+
+- **備考**: `docker compose rm -f e2e-init` は `common-commands.md` に記載の必須手順（`run --rm` は対象サービスのみ削除するため）。ローカル実行には、`common-commands.md` の手順に従ってレート制限を無効にした backend が必要
+- **準備 L1・判定 L0 を足した理由（2026-10-14・fix-loop）**: 旧手順は `e2e-init` を作り直さなかった。`e2e-init` は `./backend` をマウントするのでコードは最新になるが、ライブラリはイメージ作成時のまま残る。2026-10-14 時点の手元イメージは 5 か月前のもので（Django 4.2.7・django-guardian 2.4.0）、旧手順のままだと Django 4.2 のまま合格していた。2026-10-14 に準備 L1 で作り直し、判定 L0 が exit 0 になることを確認
 
 ---
 
@@ -382,7 +413,7 @@ docker compose exec -T backend pip freeze > docs/tests/open/I151_pip_freeze.txt
 判定 1・2: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。
 
 - 判定 1（更新後の Django が記録されている）: `grep -qx 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt`
-- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -qiE 'django[-_]guardian' docs/tests/open/I151_pip_freeze.txt` と `! grep -qiE 'django[-_]extensions' docs/tests/open/I151_pip_freeze.txt` の 2 行（ゲート欄では 3 行で宣言しているため、記録欄では「判定 1〜3」と書いている箇所がある。判定 1 ＋ 判定 2 の 2 行のことを指す）
+- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -qiE 'django[-_]guardian' docs/tests/open/I151_pip_freeze.txt` と `! grep -qiE 'django[-_]extensions' docs/tests/open/I151_pip_freeze.txt` の 2 行
 - **判定式の変遷**: 2026-10-07 に `! grep -qE 'django-(guardian|extensions)=='` を 2 行に分割（正規表現の `|` が gate のチェーン文字ガードに掛かるため）。2026-10-14（敵対的レビュー第 1 周）で厳格化した。旧判定 1 は `-x` が無く `Django==5.2.170` やコメント行に部分一致していた。旧判定 2 は `django-guardian==` 固定で、`django_guardian==`（pip freeze はアンダースコア表記も出す）・大文字表記・`@ file://` 形式を見逃していた
 - **第 2 周での変更（2026-10-14）**: 第 1 周で付けた行頭アンカー `^` を外した。アンカー付きだと、pip freeze の editable install の形（`# Editable install with no version control (django-guardian==2.4.0)` / `-e /src/django-guardian` / `-e git+...#egg=django_extensions`）を見逃すため。追加で検証し、これら 3 形と第 1 周の不合格形がすべて不合格（exit 1）、実記録が合格（exit 0）になることを確認した
 - **false-green 検証（2026-10-14 実施）**: 実記録で判定 1・判定 2（2 行）がすべて exit 0。不合格にすべき 5 形（`Django==5.2.170` → 判定 1 が exit 1／コメント行のみ → 判定 1 が exit 1／アンダースコア表記の旧 freeze → 判定 2 の両行が exit 1／`Django-Guardian==` → guardian 行が exit 1／`django-extensions @ file://` → extensions 行が exit 1）と、ファイル不在（判定 1 が exit 2）をすべて確認
@@ -419,7 +450,27 @@ test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 1
 
 判定 4（`requirements.txt` を触った唯一のコミットが 1 段目＝`fix(I151)` である）: `grep -qE 'fix\(I151\)' /tmp/i151_req_commits.txt`
 
-- **合格**: 判定 1〜4 の**すべてが exit 0**
+準備 3（2 段目のコミットの変更ファイル一覧）:
+```bash
+git log origin/develop..HEAD --grep='^chore(I151)' --name-only --format= > /tmp/i151_chore_files.txt
+```
+
+準備 4（2 段目のコミットの差分）:
+```bash
+git log origin/develop..HEAD --grep='^chore(I151)' -p --format= > /tmp/i151_chore_diff.txt
+```
+
+判定 5（2 段目のコミットがちょうど 1 つ）: `test "$(grep -c 'chore(I151)' /tmp/i151_commits.txt)" -eq 1`
+
+判定 6（2 段目が `requirements-dev.txt` を変えている）: `grep -qx 'backend/requirements-dev.txt' /tmp/i151_chore_files.txt`
+
+判定 7（2 段目が変えたファイルはそれ 1 つだけ）: `test "$(grep -c . /tmp/i151_chore_files.txt)" -eq 1`
+
+判定 8（2 段目の変更行は pytest の 1 行の置き換えだけ）: `grep -qx -- '-pytest==8.3.4' /tmp/i151_chore_diff.txt` と `grep -qx -- '+pytest==9.0.3' /tmp/i151_chore_diff.txt` と `test "$(grep -cE '^[-+][^-+]' /tmp/i151_chore_diff.txt)" -eq 2` の 3 行
+
+- **合格**: 判定 1〜8 の**すべてが exit 0**
+- **判定 5〜8 を足した理由（2026-10-14・fix-loop）**: 判定 2 は件名に `chore(I151)` を含むコミットがあることしか見ていなかった。そのため、pytest を 1 段目にまとめて 2 段目を空のコミットにするような誤った分け方でも、判定 1〜4 がすべて合格していた。それでは「2 段目のコミットを落とすだけで pytest 9 を取り消せる」という退避手順（計画書 §8）が成り立たない
+- **false-green 検証（2026-10-14 実施）**: 実リポジトリで判定 5〜8 がすべて exit 0（2 段目＝3a6e0e8 は `requirements-dev.txt` の pytest 行だけを変更）。一時リポジトリでの結果は次のとおり。2 段目が空コミット → 判定 6・7・8 がすべて不合格。2 段目に pytest 以外の行が混入 → 判定 8 の件数判定が不合格。正しい分け方 → 全判定が合格
 - **判定 4 を足した理由（2026-10-14・敵対的レビュー第 2 周）**: 判定 1〜3 だけでは、「requirements.txt を触ったコミットが 1 つある」ことしか分からず、それが 1 段目かどうかは確かめていなかった。依存更新を全部 2 段目（chore）に入れるような誤った分け方でも合格してしまう。2026-10-14 に実リポジトリで exit 0（該当コミット 4877e18 は `fix(I151)`）、chore だけのダミー記録で exit 1 を確認
 - **不合格**: 非ゼロ
 - **実装前の状態（false-green 検証）**: `fix(I151)` コミットが存在しないため **exit 1**
@@ -462,8 +513,8 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-03 | ✅ 合格 | 2026-08-24 | ステップ 1・2 とも `94 passed`（ベースラインと同数）・skip / xfail / deselect 0 件 |
 | TC-AUTO-04 | ✅ 合格 | 2026-08-24 | `System check identified no issues (0 silenced).`・exit 0（guardian.W001 が消滅） |
 | TC-AUTO-05 | ✅ 合格 | 2026-08-24 | 判定 1・2 とも exit 0 |
-| TC-AUTO-06 | ✅ 合格 | 2026-08-24 | 判定 1・2 とも exit 0。**当初の `grep -r` は `backend/.venv` の pygments に反応して false-red となったため `git grep` へ是正** |
-| TC-AUTO-07 | ✅ 合格 | 2026-08-24 | exit 0 |
+| TC-AUTO-06 | ✅ 合格 | 2026-08-24 | 判定 1・2 とも exit 0（**当時の `!` 付き旧形式での値**。旧形式では exit 0 が合格。現行の合格条件は exit 1 で、2026-10-14 の再実施を参照）。**当初の `grep -r` は `backend/.venv` の pygments に反応して false-red となったため `git grep` へ是正** |
+| TC-AUTO-07 | ✅ 合格 | 2026-08-24 | exit 0（**当時の `!` 付き旧形式での値**。現行の合格条件は exit 1 で、2026-10-14 の再実施を参照） |
 | TC-AUTO-08 | ✅ 合格 | 2026-08-24 | `No changes detected`・exit 0 |
 | TC-AUTO-09 | ✅ 合格 | 2026-08-24 | 使い捨て DB で 58 マイグレーションを適用し exit 0。guardian のマイグレーションは 0 件。検証後に DB を破棄 |
 | TC-AUTO-10 | ✅ 合格 | 2026-08-24 | 直近 3 分に成功ログ 9 件・`ERROR` / `Traceback` 0 件 |
@@ -487,11 +538,12 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-12 | ✅ 合格 | 2026-10-14 | 第 2 周：frontend テストを再実行。`Test Suites: 3 passed, 3 total` / `Tests: 10 passed, 10 total` で判定 1・2 とも exit 0 |
 | TC-AUTO-14 | ✅ 合格 | 2026-10-14 | 判定 1（SUCCESS 以外 0 件）・判定 2（チェック 6 件）とも exit 0 |
 | TC-AUTO-15 | ✅ 合格 | 2026-10-14 | 厳格化後の判定 1・判定 2（2 行）とも exit 0（第 2 周で行頭アンカーを外した形でも exit 0。`/code-review` の決定論ゲートでも実走） |
-| TC-AUTO-16 | ✅ 合格 | 2026-10-14 | 第 2 周：判定 4（requirements.txt を触ったコミットが `fix(I151)`）が exit 0 |
+| TC-AUTO-16 | ✅ 合格 | 2026-10-14 | 第 2 周：判定 4（requirements.txt を触ったコミットが `fix(I151)`）が exit 0。fix-loop：判定 5〜8（2 段目＝pytest 単独）もすべて exit 0 |
+| TC-AUTO-13 | ✅ 合格 | 2026-10-14 | fix-loop：CI 記録（run 32651105381）で判定 1・2 とも exit 0（`7 passed (15.4s)`・flaky / failed / skipped の行なし）。ローカル補助手順の判定 L0 も、`e2e-init` の作り直し後に exit 0（Django==5.2.17） |
 
 ### false-green 検証の記録（計画時点・2026-08-22 実施済み）
 
-否定・回帰系 TC が実際に不合格を返せることを、実装前の状態またはダミー注入で確認した。
+否定・回帰系 TC が実際に不合格を返せることを、実装前の状態またはダミー注入で確認した。**この表の exit code は、2026-08-22 時点の判定式（TC-AUTO-06 / 07 は `!` 付きの旧形式）での値**であり、当時の合格条件は exit 0 だったので、exit 1＝不合格である。現行の判定式での検証は、下の「現行判定式・2026-10-14」の表を参照（合格条件は TC 一覧の『合格条件』列）。
 
 | TC | 判定式 | 検証方法 | 結果 |
 |---|---|---|---|
@@ -513,6 +565,9 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-12 | `grep -qxE` で Test Suites 行・Tests 行の両方 | suite 読み込み失敗・afterAll 失敗・テスト失敗・skip のログ | すべていずれかの判定が **exit 1**（正しく不合格） |
 | TC-AUTO-15 | `grep -qx 'Django==5.2.17'` / `! grep -qiE 'django[-_]guardian'` / `! grep -qiE 'django[-_]extensions'`（第 2 周で行頭アンカーを外した形） | 壊れた記録 5 形＋editable 形式 3 形とファイル不在 | 該当する判定がすべて非ゼロ（正しく不合格） |
 | TC-AUTO-16 | 判定 4 `grep -qE 'fix\(I151\)' /tmp/i151_req_commits.txt` | requirements.txt を触ったコミットが chore だけのダミー記録 | **exit 1**（正しく不合格） |
+| TC-AUTO-16 | 判定 5〜8（2 段目＝pytest 単独） | 一時リポジトリで「2 段目が空コミット」「2 段目に余計な行」「正しい分け方」を作成 | 空コミットは判定 6〜8 が不合格・余計な行は判定 8 の件数判定が不合格・正しい分け方は全合格 |
+| TC-AUTO-13 | 判定 2（flaky 等の行なし） | `1 flaky` / `1 failed` の行を含むダミーログ | grep が一致して判定 2 が不合格 |
+| TC-AUTO-07 | `git grep -q ANONYMOUS_USER_NAME -- ':(top)backend/'`（合格条件 exit 1） | 一時リポジトリで痕跡を `git add`、その後 `git rm --cached` | 追跡中はルート・`backend/` とも exit 0（不合格）、未追跡に戻すと exit 1 |
 
 ### 機構の事前検証（計画時点・2026-08-22 実施済み）
 
