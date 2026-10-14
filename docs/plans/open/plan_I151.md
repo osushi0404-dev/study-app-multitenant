@@ -170,7 +170,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-14 | CI の全 6 チェックが SUCCESS | TC-AUTO-14 |
 | AC-15 | celery worker のログでタスクの**成功**が確認できる | TC-AUTO-10 |
 | AC-16 | 再ビルド後の `pip freeze` を `docs/tests/open/I151_pip_freeze.txt` に記録している | TC-AUTO-15 |
-| AC-17 | コミットが 2 段に分かれている | TC-AUTO-16 |
+| AC-17 | コミットが 2 段に分かれている（2026-10-14 追補: R6 発動による openai 再固定は、独立して取り消せるよう 3 つ目の `fix(I151)` コミットに分ける） | TC-AUTO-16 |
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
 | AC-19 | 後続 3 件を起票している | 手動 No.8 |
 | AC-20 | develop マージ後に #262 をクローズしている | `/close` 工程（本 PR の範囲外） |
@@ -232,8 +232,22 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | 8 | `django-filter==23.4` | `django-filter==26.1` | 23.4 の宣言は 5.0 まで |
 | 12 | `django-redis==5.4.0` | `django-redis==7.0.0` | 5.4.0 の宣言は 4.2 まで |
 | 14 | `django-guardian==2.4.0` | **行ごと削除** | 未使用（§2-4）。更新せず除去する |
+| 15（2026-10-14 追補・R6 発動） | `openai==1.3.0` | `openai==3.31.0` | 推移的依存 `anyio 3.7.1` に新規 CVE 2 件（`PYSEC-2026-4024` / `PYSEC-2026-4025`・修正版 4.14.2）が公開された。`openai 1.3.0` は `anyio<4` を要求するため、anyio だけを上げることはできない。openai 3.31.0 は `anyio>=4.10,<5` を要求する（§5-1 追補） |
 
-据え置き: `djangorestframework-simplejwt==5.5.1` / `psycopg2-binary==2.9.9` / `python-dotenv==1.2.2` / `Pillow==12.3.0` / `celery==5.3.4` / `redis==5.0.1` / `django-ratelimit==4.1.0` / `sendgrid==6.10.0` / `pydantic==2.5.0` / `openai==1.3.0` / `gunicorn==22.0.0` / `psutil==5.9.6` / `python-magic==0.4.27`
+据え置き: `djangorestframework-simplejwt==5.5.1` / `psycopg2-binary==2.9.9` / `python-dotenv==1.2.2` / `Pillow==12.3.0` / `celery==5.3.4` / `redis==5.0.1` / `django-ratelimit==4.1.0` / `sendgrid==6.10.0` / `pydantic==2.5.0` / `gunicorn==22.0.0` / `psutil==5.9.6` / `python-magic==0.4.27`（`openai` は 2026-10-14 に据え置きから外した）
+
+### 5-1 追補（2026-10-14）: 実装後に公開された新規 CVE（R6 発動）
+
+fix-loop の手順 6 で `pip-audit -r requirements.txt` を再実行したところ、exit 1 になった（`anyio 3.7.1` に `PYSEC-2026-4024` / `PYSEC-2026-4025`、修正版 4.14.2）。develop の定期監査も 2026-10-10 以降、毎日失敗している。
+
+| 確認項目 | 結果（2026-10-14・Docker 実測） |
+|---|---|
+| anyio を要求しているもの | `openai==1.3.0`（`anyio<4,>=3.5.0`）と `httpx 0.28.1`。直接固定している依存は無い |
+| 解消方法 | openai を anyio 4 系を許す版へ上げる。`openai==3.31.0`（最新・`anyio<5,>=4.10.0`・`pydantic>=1.10.13,<3` で 2.5.0 と両立・Python 3.10 以上）。anyio は推移的依存として 4 系の最新が解決される |
+| 候補セットの監査 | `requirements.txt` の openai 行だけを 3.31.0 に変えた候補で `pip-audit -r` → **`No known vulnerabilities found`** |
+| アプリへの影響 | openai を使うのは `problems/ai_generator.py` だけ。同ファイルは openai 0.x 時代の `openai.ChatCompletion.create` を呼んでおり、**現行の 1.3.0 でも既に動いていない**（呼び出し時に例外が出て `except` で代替問題に切り替わる）。3.31.0 でも同じく例外→代替問題になるので、挙動は変わらない（退行なし）。テストからの参照は無い。v1 以降の API への書き換えは別イシューで行う |
+
+R6 の想定（「新しい CVE が実装中に公開され、`pip-audit` が再び落ちる」→「Fix Versions を確認して再固定する」）が発動したものとして、I151 の範囲で対応する（ユーザー承認 2026-10-14）。
 
 ### 5-2. `backend/requirements-dev.txt`
 
@@ -378,7 +392,7 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 | R3 | pytest 9 のメジャー更新でテスト基盤が壊れる | テストが落ちる | 2 段目のコミットに隔離。取り消せば 1 段目の成果は残る |
 | R4 | 再ビルドで推移的依存（kombu 等）が変動し celery が壊れる | 非同期タスクの失敗 | worker ログでタスクの**成功**まで確認（TC-AUTO-10）。`pip freeze` を記録して誤帰属を防ぐ（TC-AUTO-15）。現況では kombu 5.6.2 で既に正常動作（§2-7） |
 | R5 | 再ビルド対象の取りこぼし（celery / celery-beat が旧イメージのまま） | 本番相当構成での検証にならない | ビルド対象に `celery` `celery-beat` を明示（ステップ 1-4）。**`e2e-init` は E2E 実行時に自動では再ビルドされない**（2026-10-14 訂正。旧記述「E2E 実行時に再ビルドされる」は誤りで、手元の `e2e-init` イメージは Django 4.2.7 のまま残っていた）。ローカル E2E では TC-AUTO-13 の準備 L1 で明示的に作り直し、判定 L0 でイメージの Django 版を確かめる。AC-13 の正式な判定は、毎回ビルドする CI 実行の記録で行う |
-| R6 | 新しい CVE が実装中に公開され `pip-audit` が再び落ちる | CI が赤のまま | 計画時点で 7 件へ増えた実績あり（§2-2）。発生時は Fix Versions を確認し 5.2 系の最新パッチへ再固定する（系列変更を伴わないため影響は局所）。**マージ後の運用時**も同じ手順だが、修正版が未公開の間は全 PR が止まる（§8 参照）。この構造の解消は I152（#268）に依存する |
+| R6 | 新しい CVE が実装中に公開され `pip-audit` が再び落ちる | CI が赤のまま | 計画時点で 7 件へ増えた実績あり（§2-2）。発生時は Fix Versions を確認し 5.2 系の最新パッチへ再固定する（系列変更を伴わないため影響は局所）。**2026-10-14 に実装後の発動を確認**（anyio の新規 CVE。openai を 3.31.0 へ再固定。§5-1 追補）。**マージ後の運用時**も同じ手順だが、修正版が未公開の間は全 PR が止まる（§8 参照）。この構造の解消は I152（#268）に依存する |
 | R7 | ホスト venv の実測を合否根拠にしてしまう | 本番構成と異なる結論 | すべての TC を `docker compose exec` 経由で実行する。ホスト venv の結果は「下見」としてのみ記載 |
 | R8 | Django 5.2 でパスワードハッシュ（PBKDF2）の反復回数が 600,000 → 1,000,000 に増える（2026-10-14 追記） | 既存ユーザーは次回ログイン時にハッシュが作り直され、ログイン経路で `password` 列への書き込みが起きる。1 回あたりの計算時間が増える（2026-10-14 にコンテナ内で実測し、1 回約 0.1 秒） | 影響は小さく、許容する。旧ハッシュは検証でき（`verify=True`）、ログイン時に自動で作り直される（`must_update=True`）。ログインのロック処理とは別のインスタンスで保存されるので衝突しない（敵対的レビュー第 2 周で確認）。4.2 系は反復回数の多いハッシュも検証できるため、仮に戻しても検証は失敗しない |
 
@@ -472,7 +486,7 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 本計画に**ユーザーの価値判断を要する未決事項は残っていない**。以下はすべて実測または既存ルールから一意に決まったものであり、承認を求めずに実装へ進む。
 
 ### 依存の確定セット（Danger Ops の対象）
-- `requirements.txt`: Django 5.2.17 / DRF 3.18.0 / django-cors-headers 4.9.0 / django-filter 26.1 / django-redis 7.0.0。**`django-guardian` と `django-extensions` は行ごと削除**（いずれも未使用）
+- `requirements.txt`: Django 5.2.17 / DRF 3.18.0 / django-cors-headers 4.9.0 / django-filter 26.1 / django-redis 7.0.0。**`django-guardian` と `django-extensions` は行ごと削除**（いずれも未使用）。**2026-10-14 追補（R6 発動・§5-1 追補）**: openai 1.3.0 → 3.31.0（anyio の新規 CVE 解消のため）
 - `requirements-dev.txt`: pytest-django 4.14.0（1 段目）／pytest 9.0.3（2 段目）
 - 上記以外は据え置き（celery 5.3.4 を含む）
 - 根拠: `pip-audit` 本体・開発とも 0 件、`manage.py check` 警告 0、マイグレーション drift なし、Python 3.11 / PostgreSQL 15 で要件充足（すべて §2 で実測）

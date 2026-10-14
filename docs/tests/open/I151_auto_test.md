@@ -69,6 +69,7 @@ grep -qx 'djangorestframework==3.18.0' backend/requirements.txt
 grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt
 grep -qx 'django-filter==26.1' backend/requirements.txt
 grep -qx 'django-redis==7.0.0' backend/requirements.txt
+grep -qx 'openai==3.31.0' backend/requirements.txt
 grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
 # TC-AUTO-11B 判定 B-1（宣言側の固定値）
 grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
@@ -272,6 +273,7 @@ docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1
 - `grep -qx 'django-cors-headers==4.9.0' backend/requirements.txt`
 - `grep -qx 'django-filter==26.1' backend/requirements.txt`
 - `grep -qx 'django-redis==7.0.0' backend/requirements.txt`
+- `grep -qx 'openai==3.31.0' backend/requirements.txt`（2026-10-14 追加・R6 発動）
 - `grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt`
 
 準備（実インストール側のスナップショット）:
@@ -285,6 +287,7 @@ docker compose exec -T backend pip freeze > /tmp/i151_freeze.txt
 - `grep -qx 'django-cors-headers==4.9.0' /tmp/i151_freeze.txt`
 - `grep -qx 'django-filter==26.1' /tmp/i151_freeze.txt`
 - `grep -qx 'django-redis==7.0.0' /tmp/i151_freeze.txt`
+- `grep -qx 'openai==3.31.0' /tmp/i151_freeze.txt`（2026-10-14 追加・R6 発動）
 - `grep -qx 'pytest-django==4.14.0' /tmp/i151_freeze.txt`
 
 - **合格**: 判定 A-1 / A-2 の**全コマンドが exit 0**
@@ -441,14 +444,30 @@ git log origin/develop..HEAD --oneline -- backend/requirements.txt > /tmp/i151_r
 
 判定 2（2 段目のコミットが存在する）: `grep -qE 'chore\(I151\)' /tmp/i151_commits.txt`
 
-判定 3（`requirements.txt` を触ったコミットが 1 つだけ＝本体依存が 1 段目に集約されている）:
+判定 3（`requirements.txt` を触ったコミットが 2 つ＝1 段目と、R6 発動による openai 再固定の 2 つだけ）:
 ```bash
-test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 1
+test "$(wc -l < /tmp/i151_req_commits.txt)" -eq 2
 ```
 
 > `wc -l < file` はリダイレクトであってパイプではないため、本文書冒頭の「コマンドを複合化しない」原則を満たす。
 
-判定 4（`requirements.txt` を触った唯一のコミットが 1 段目＝`fix(I151)` である）: `grep -qE 'fix\(I151\)' /tmp/i151_req_commits.txt`
+判定 4（`requirements.txt` を触ったコミットがどちらも `fix(I151)`＝2 段目の chore には本体依存が入っていない）: `test "$(grep -c 'fix(I151)' /tmp/i151_req_commits.txt)" -eq 2`
+
+- **判定 3・4 の改訂（2026-10-14・R6 発動）**: anyio の新規 CVE 解消のため、openai の再固定を **3 つ目の `fix(I151)` コミット（055aa11）** として足した（計画書 AC-17 追補）。独立したコミットにしたのは、問題が出たときにこの再固定だけを取り消せるようにするため。旧判定（requirements.txt を触ったコミットが 1 つ）は、この追補で 2 になる
+
+準備 5（R6 コミットの変更ファイル一覧）:
+```bash
+git log origin/develop..HEAD --grep='^fix(I151): openai' --name-only --format= > /tmp/i151_r6_files.txt
+```
+
+準備 6（R6 コミットの差分）:
+```bash
+git log origin/develop..HEAD --grep='^fix(I151): openai' -p --format= > /tmp/i151_r6_diff.txt
+```
+
+判定 9（R6 コミットが変えたのは `requirements.txt` だけ）: `grep -qx 'backend/requirements.txt' /tmp/i151_r6_files.txt` と `test "$(grep -c . /tmp/i151_r6_files.txt)" -eq 1` の 2 行
+
+判定 10（R6 コミットの変更行は openai の 1 行の置き換えだけ）: `grep -qx -- '-openai==1.3.0' /tmp/i151_r6_diff.txt` と `grep -qx -- '+openai==3.31.0' /tmp/i151_r6_diff.txt` と `test "$(grep -cE '^[-+][^-+]' /tmp/i151_r6_diff.txt)" -eq 2` の 3 行
 
 準備 3（2 段目のコミットの変更ファイル一覧）:
 ```bash
@@ -468,7 +487,7 @@ git log origin/develop..HEAD --grep='^chore(I151)' -p --format= > /tmp/i151_chor
 
 判定 8（2 段目の変更行は pytest の 1 行の置き換えだけ）: `grep -qx -- '-pytest==8.3.4' /tmp/i151_chore_diff.txt` と `grep -qx -- '+pytest==9.0.3' /tmp/i151_chore_diff.txt` と `test "$(grep -cE '^[-+][^-+]' /tmp/i151_chore_diff.txt)" -eq 2` の 3 行
 
-- **合格**: 判定 1〜8 の**すべてが exit 0**
+- **合格**: 判定 1〜10 の**すべてが exit 0**
 - **判定 5〜8 を足した理由（2026-10-14・fix-loop）**: 判定 2 は件名に `chore(I151)` を含むコミットがあることしか見ていなかった。そのため、pytest を 1 段目にまとめて 2 段目を空のコミットにするような誤った分け方でも、判定 1〜4 がすべて合格していた。それでは「2 段目のコミットを落とすだけで pytest 9 を取り消せる」という退避手順（計画書 §8）が成り立たない
 - **false-green 検証（2026-10-14 実施）**: 実リポジトリで判定 5〜8 がすべて exit 0（2 段目＝3a6e0e8 は `requirements-dev.txt` の pytest 行だけを変更）。一時リポジトリでの結果は次のとおり。2 段目が空コミット → 判定 6・7・8 がすべて不合格。2 段目に pytest 以外の行が混入 → 判定 8 の件数判定が不合格。正しい分け方 → 全判定が合格
 - **判定 4 を足した理由（2026-10-14・敵対的レビュー第 2 周）**: 判定 1〜3 だけでは、「requirements.txt を触ったコミットが 1 つある」ことしか分からず、それが 1 段目かどうかは確かめていなかった。依存更新を全部 2 段目（chore）に入れるような誤った分け方でも合格してしまう。2026-10-14 に実リポジトリで exit 0（該当コミット 4877e18 は `fix(I151)`）、chore だけのダミー記録で exit 1 を確認
@@ -539,6 +558,19 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-14 | ✅ 合格 | 2026-10-14 | 判定 1（SUCCESS 以外 0 件）・判定 2（チェック 6 件）とも exit 0 |
 | TC-AUTO-15 | ✅ 合格 | 2026-10-14 | 厳格化後の判定 1・判定 2（2 行）とも exit 0（第 2 周で行頭アンカーを外した形でも exit 0。`/code-review` の決定論ゲートでも実走） |
 | TC-AUTO-16 | ✅ 合格 | 2026-10-14 | 第 2 周：判定 4（requirements.txt を触ったコミットが `fix(I151)`）が exit 0。fix-loop：判定 5〜8（2 段目＝pytest 単独）もすべて exit 0 |
+| TC-AUTO-00 | ✅ 合格 | 2026-10-14 | R6 発動：openai 3.31.0 で 4 イメージ（backend / celery / celery-beat / e2e-init）を作り直した後、`docker compose up -d --wait` が exit 0（6 サービス healthy） |
+| TC-AUTO-01 | ✅ 合格 | 2026-10-14 | R6 発動：再固定**前**は exit 1（`anyio 3.7.1` に `PYSEC-2026-4024` / `PYSEC-2026-4025`）。再固定後は `No known vulnerabilities found`・exit 0 |
+| TC-AUTO-02 | ✅ 合格 | 2026-10-14 | R6 発動：再固定後に `No known vulnerabilities found`・exit 0 |
+| TC-AUTO-03 | ✅ 合格 | 2026-10-14 | R6 発動：再固定後に `94 passed, 5 warnings in 21.00s`。判定（サマリ行の完全一致）exit 0 |
+| TC-AUTO-04 | ✅ 合格 | 2026-10-14 | R6 発動：`System check identified no issues (0 silenced).` |
+| TC-AUTO-08 | ✅ 合格 | 2026-10-14 | R6 発動：`No changes detected` |
+| TC-AUTO-09 | ✅ 合格 | 2026-10-14 | R6 発動：使い捨て DB `migrate_check` に 58 マイグレーションを適用して exit 0。検証後に破棄 |
+| TC-AUTO-10 | ✅ 合格 | 2026-10-14 | R6 発動：コンテナ作り直しの後、直近 3 分に成功ログ 9 件・`ERROR` / `Traceback` 0 件 |
+| TC-AUTO-11A | ✅ 合格 | 2026-10-14 | R6 発動：宣言側（決定論ゲート・`openai==3.31.0` を追加）・実インストール側とも全件 exit 0 |
+| TC-AUTO-15 | ✅ 合格 | 2026-10-14 | R6 発動：作り直し後の `pip freeze` で `I151_pip_freeze.txt` を更新（openai 3.31.0・anyio 4.15.1。作り直しで推移的依存の amqp 5.4.1 / billiard 4.3.1 なども更新された。kombu は 5.6.2 のまま）。判定 1・2 とも exit 0 |
+| TC-AUTO-16 | ✅ 合格 | 2026-10-14 | R6 発動：判定 3・4 を「requirements.txt を触ったコミットが 2 つ、どちらも `fix(I151)`」に改め、判定 9・10（R6 コミット 055aa11 は openai の 1 行だけ）を追加。すべて exit 0 |
+| TC-AUTO-17 | ✅ 合格 | 2026-10-14 | R6 発動：`add_new True` / `add_dup False` / `incr1 1` / `incr2 2` |
+| （参考） | — | 2026-10-14 | R6 発動：`problems/ai_generator.py` を実際に呼び、更新前と同じく `openai.ChatCompletion` の例外 → 代替問題が返ることを確認（挙動不変。v1 以降の API への書き換えは別イシュー） |
 | TC-AUTO-13 | ✅ 合格 | 2026-10-14 | fix-loop：CI 記録（run 32651105381）で判定 1・2 とも exit 0（`7 passed (15.4s)`・flaky / failed / skipped の行なし）。ローカル補助手順の判定 L0 も、`e2e-init` の作り直し後に exit 0（Django==5.2.17） |
 
 ### false-green 検証の記録（計画時点・2026-08-22 実施済み）
