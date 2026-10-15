@@ -170,7 +170,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-14 | CI の全 6 チェックが SUCCESS | TC-AUTO-14 |
 | AC-15 | celery worker のログでタスクの**成功**が確認できる | TC-AUTO-10 |
 | AC-16 | 再ビルド後の `pip freeze` を `docs/tests/open/I151_pip_freeze.txt` に記録している | TC-AUTO-15 |
-| AC-17 | コミットが 2 段に分かれている（2026-10-14 追補: R6 発動による openai 再固定は、独立して取り消せるよう 3 つ目の `fix(I151)` コミットに分ける） | TC-AUTO-16 |
+| AC-17 | コミットが 2 段に分かれている（2026-10-14 追補: R6 発動による openai 再固定は、変更の出どころを追えるよう 3 つ目の `fix(I151)` コミットに分ける。2026-10-15 訂正: このコミットだけを取り消すと openai 1.3.0（`anyio<4`）に戻り、anyio の CVE 2 件で必須チェック `pip-audit` が必ず落ちる。したがって**単独では取り消せない**。問題が出たときは §8 の前方修正で直す） | TC-AUTO-16 |
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
 | AC-19 | 後続 3 件を起票している | 手動 No.8 |
 | AC-20 | develop マージ後に #262 をクローズしている | `/close` 工程（本 PR の範囲外） |
@@ -204,7 +204,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 
 | 区分 | 対象 | 内容 |
 |---|---|---|
-| Backend（変更） | `backend/requirements.txt` | 5 パッケージのバージョン更新＋`django-guardian` / `django-extensions` の 2 行削除 |
+| Backend（変更） | `backend/requirements.txt` | 6 パッケージのバージョン更新（2026-10-14 の R6 で openai を追加し 5→6）＋`django-guardian` / `django-extensions` の 2 行削除 |
 | Backend（変更） | `backend/requirements-dev.txt` | `pytest-django` 4.9.0→4.14.0（1 段目）／`pytest` 8.3.4→9.0.3（2 段目） |
 | 記録（新規） | `docs/tests/open/I151_pip_freeze.txt` | 再ビルド後の `pip freeze` の出力。推移的依存が変動した際の切り分け材料（TC-AUTO-15 の判定対象） |
 | Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'django_extensions',`（38 行目）と `'guardian',`（40 行目）の**2 行**を削除 |
@@ -232,7 +232,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | 8 | `django-filter==23.4` | `django-filter==26.1` | 23.4 の宣言は 5.0 まで |
 | 12 | `django-redis==5.4.0` | `django-redis==7.0.0` | 5.4.0 の宣言は 4.2 まで |
 | 14 | `django-guardian==2.4.0` | **行ごと削除** | 未使用（§2-4）。更新せず除去する |
-| 15（2026-10-14 追補・R6 発動） | `openai==1.3.0` | `openai==3.31.0` | 推移的依存 `anyio 3.7.1` に新規 CVE 2 件（`PYSEC-2026-4024` / `PYSEC-2026-4025`・修正版 4.14.2）が公開された。`openai 1.3.0` は `anyio<4` を要求するため、anyio だけを上げることはできない。openai 3.31.0 は `anyio>=4.10,<5` を要求する（§5-1 追補） |
+| 17（develop 版の行番号。2026-10-14 追補・R6 発動。2026-10-15 に 15→17 へ訂正） | `openai==1.3.0` | `openai==3.31.0` | 推移的依存 `anyio 3.7.1` に新規 CVE 2 件（`PYSEC-2026-4024` / `PYSEC-2026-4025`・修正版 4.14.2）が公開された。`openai 1.3.0` は `anyio<4` を要求するため、anyio だけを上げることはできない。openai 3.31.0 は `anyio>=4.10,<5` を要求する（§5-1 追補） |
 
 据え置き: `djangorestframework-simplejwt==5.5.1` / `psycopg2-binary==2.9.9` / `python-dotenv==1.2.2` / `Pillow==12.3.0` / `celery==5.3.4` / `redis==5.0.1` / `django-ratelimit==4.1.0` / `sendgrid==6.10.0` / `pydantic==2.5.0` / `gunicorn==22.0.0` / `psutil==5.9.6` / `python-magic==0.4.27`（`openai` は 2026-10-14 に据え置きから外した）
 
@@ -371,6 +371,7 @@ THIRD_PARTY_APPS = [
 | 段階 | 手順 |
 |---|---|
 | ステップ 2 で失敗 | 2 段目の変更のみを取り消す。**手順を明示する**: コミット前なら `backend/requirements-dev.txt` の `pytest==9.0.3` の行を **Edit ツールで `pytest==8.3.4` に書き戻す**（`git restore` は同一ファイル内の他の未コミット変更まで巻き戻すため使わない）。コミット後なら当該コミットを `git revert` する。**取り消し後は必ず再ビルドする**（ファイルを戻してもイメージには pytest 9 が残り、宣言と実インストールが食い違うため）。再ビルド後に TC-AUTO-11B が exit 1（= pytest が 9.0.3 でない）になることで、戻し漏れを検出できる |
+| R6 の openai 再固定（055aa11）で問題 | **このコミットだけを取り消すことはできない**（2026-10-15 追記）。取り消すと openai 1.3.0（`anyio<4`）に戻り、anyio 3.7.1 の CVE 2 件（`PYSEC-2026-4024` / `PYSEC-2026-4025`）で `pip-audit` が必ず落ちる。下の「develop マージ後に判明」と同じく前方修正（openai を anyio 4 系を許す別の版へ再固定するか、アプリ側を直す）で対応する |
 | ステップ 1 で失敗 | 3 ファイル（`backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`）を **Edit ツールで更新前の内容へ書き戻す**（変更箇所は §5-1 / §5-2 / §5-3 に列挙済みなので機械的に戻せる。`git restore` は使わない）。その後 backend / celery / celery-beat を再ビルドし、TC-AUTO-01 が exit 1（= 脆弱性が再検出される）に戻ることで巻き戻しの完了を確認する |
 | develop マージ後に判明 | **前方修正（5.2 系のまま直す）を正式手順とする**。不具合の原因となった依存だけを 5.2 対応の別パッチ版へ再固定するか、アプリ側を修正する PR を出す。**revert PR は使えない**（2026-10-14・敵対的レビュー第 1 周で訂正）: ① revert すると Django 4.2.30 に戻り、CI の必須チェック `Backend Lint & Security`（`pip-audit -r requirements.txt`）が 7 件検出で必ず失敗する。branch protection は管理者も迂回不可の設定で、bot には admin 権限もない。② DRF 3.18・django-filter 26.1・django-redis 7.0.0 はいずれも `Django>=5.2` を要求するため、Django だけを戻す部分ロールバックもできない。どうしても 4.2 系へ戻す必要が生じた場合は、ユーザーが GitHub の UI で branch protection を一時解除する判断が必要（Danger Ops）。**前方修正にも同じ行き止まりがある**（2026-10-14・敵対的レビュー第 2 周で追記）: 前方修正 PR も同じ `pip-audit` 必須チェックを通る必要があるため、5.2 系に修正版の無い CVE が公開されている間は前方修正 PR を含む全 PR が止まる（I151 の発端と同じ構造）。この構造の解消は **I152（#268・PR ゲートを許可リスト＋失効日方式へ）** に依存する。I152 マージ前にこの状況が起きた場合も、branch protection の一時解除はユーザー判断（Danger Ops）となる。**一時解除の手順（2026-10-14・fix-loop で追記）**:
 ① **範囲**は最小にする。外すのは develop の必須チェックのうち、止めている `Backend Lint & Security` の必須指定だけ。管理者への適用（`enforcement_level: everyone`）とほかの 4 チェックは外さない。
@@ -549,8 +550,10 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 | 2 | `POST /api/auth/password-reset/` 等 | 未認証 | リセット要求の大量送信 | `@ratelimit(key='ip', rate='3/15m')` が遮断する | Yes: TC-AUTO-17（同一のカウンタ機構） | No（#1 と同じ機構のため代表確認で足りる） | 同上 | Medium |
 | 3 | 任意の API | 一般ユーザー | 他組織のリソースを取得・更新（テナント越境） | 組織スコープの絞り込みで 403 / 404 を返す | Yes: `test_I103_cross_org_create` / `test_I104_subject_authz` / `test_I006_subject_org_admin` / `test_I078_is_correct_exposure` | No | DRF 3.18 で権限クラスの評価順が変わる可能性は既存テストで担保（新規テストは追加しない方針） | Low |
 | 4 | 任意の API | 未認証 / 認証済み | 大量リクエストで DRF スロットルを突破 | `anon 60/min` / `user 300/min` で 429 を返す | Yes: `test_I127_throttling`（ただし LocMemCache 上での検証） | No | 実バックエンド（django-redis 7.0.0）でのスロットル動作は TC-AUTO-17 のカウンタ確認で間接的に担保。DRF スロットルは `cache.get`/`cache.set` を使うため、TC-AUTO-15 の read/write 実測と合わせて充足 | Low |
-| 5 | `POST /api/auth/logout/` → refresh トークン再利用 | 認証済み | ログアウト後の refresh トークンでアクセストークンを再取得 | `token_blacklist` により 401 を返す（I142 の成果） | Yes: `accounts/tests/test_I142_error_handling.py` 他 | No | simplejwt はバージョン据え置きだが Django 5.2 上での動作は既存テストで確認 | Low |
-| 6 | Django admin | 未認証 | `/admin/` への到達 | 認証画面が返り、未認証で内部データに到達できない | No | Yes: 手動 No.5（`/admin/login/` が 200） | admin に登録されているモデルの露出範囲は本 PR で変更しない（I142 で token_blacklist の admin 登録を除外済み） | Low |
+| 5 | `POST /api/auth/logout/` → refresh トークン再利用 | 認証済み | ログアウト後の refresh トークンでアクセストークンを再取得 | （あるべき姿）ログアウトした refresh トークンは 401 で拒否される。**I151 時点の実体は満たしていない**（下の訂正注記） | No（本ブランチに該当テストは無い） | No | **I151 以前からある不備（I151 起因ではない）**。是正は I142（PR #256・未マージ）に依存する。I151 は simplejwt を据え置いており、挙動は更新前後で同じ | — （既存・範囲外） |
+| 6 | Django admin | 未認証 | `/admin/` への到達 | 認証画面が返り、未認証で内部データに到達できない | No | Yes: 手動 No.5（`/admin/login/` が 200） | admin に登録されているモデルの露出範囲は本 PR で変更しない | Low |
+
+> **訂正（2026-10-15・敵対的レビュー第 1 周）**: 初版の #5 は「`token_blacklist` により 401（I142 の成果）・自動テスト `accounts/tests/test_I142_error_handling.py`」、#6 は「I142 で token_blacklist の admin 登録を除外済み」と記載していた。しかし I142（PR #256）は**未マージ**で、`develop` 起点の本ブランチには `rest_framework_simplejwt.token_blacklist` も当該テストも無い（§5-3 訂正注記と同じ取り違え）。実体は次のとおり（敵対的レビューで実測・メインセッションでコードを確認）: `logout_view`（`backend/accounts/views.py:419-429`）の `token.blacklist()` はアプリ未導入のため例外になり、ログアウトは常に 400 を返す。そのため refresh トークンはログアウト後も使える（ローテーション後の旧 refresh も再利用できる）。この挙動は更新前（Django 4.2.30）の旧イメージでも同じで、I151 による退行ではない。是正は I142 のマージで行う。I151 のセキュリティ判定（Blocker / High 0 件）は、この既存の不備を「担保済み」として数えていたので、下のサマリーから #5 を外した。
 
 ### レビュー結果サマリー
 
@@ -559,7 +562,8 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 | Blocker | 0 件 | 0 件 |
 | High    | 0 件 | 0 件 |
 | Medium  | 1 件 | 2 件 |
-| Low     | 2 件 | 4 件 |
+| Low     | 2 件 | 3 件 |
+| 既存・範囲外 | — | 1 件（#5。I142 に依存。2026-10-15 訂正） |
 
 ### 残余リスク処遇
 （/retro で決定する）
@@ -567,6 +571,8 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 暫定の申し送り:
 - `IGNORE_EXCEPTIONS: True` によるキャッシュのフェイルオープンは、レート制限という**セキュリティ制御**の可用性に直結する。本 PR では変更しないが、「キャッシュ障害時にレート制限だけはフェイルクローズさせる」設計の要否を別途判断する
 - `DEFAULT_PERMISSION_CLASSES: []` は、ビューの書き忘れが即座に無防備につながる設計。是正の要否を別途判断する
+- **Redis 障害時の向きの訂正（2026-10-15・敵対的レビュー第 1 周）**: 上の設計レビュー Medium 行は「カウンタ失敗が握り潰されて総当たり防御が消える（フェイルオープン）」を想定していた。実測では逆だった。django-ratelimit は既定の `RATELIMIT_FAIL_OPEN=False` で**フェイルクローズ**する。Redis に接続できないと、正しいパスワードのログインを含め、`@ratelimit` 付きの全経路が 403 になる（可用性の喪失）。DRF スロットルのほうはフェイルオープンする。この挙動は更新前（django-redis 5.4.0）と同じで、I151 による退行ではない。TC-AUTO-17 / 手動 No.11 は Redis が正常な状態だけを担保する。障害時の扱いは、上の「キャッシュ障害時の設計」と合わせて別途判断する
+- **logout の不備（攻撃シナリオ #5 の訂正）**: I142（PR #256）のマージで是正される前提。I142 マージ後に、ログアウトした refresh トークンが 401 になることを確認する
 
 ## レビュー結果
 - [20260823_1437 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1437.md)

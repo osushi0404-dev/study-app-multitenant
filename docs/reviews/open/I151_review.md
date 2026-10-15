@@ -1,12 +1,12 @@
 # I151 実装レビュー（Django 5.2 LTS 更新・未使用の django-guardian / django-extensions の除去）
 
 - 関連: docs/issues/open/I151.md / docs/plans/open/plan_I151.md / GitHub #267 / Draft PR #269
-- レビュー対象コミット: （実装後に記入。1 段目 `fix(I151): ...` / 2 段目 `chore(I151): ...`）
+- レビュー対象コミット（2026-10-15 記入）: 1 段目 `4877e18 fix(I151): Django 5.2.17 へ更新し…` / 2 段目 `3a6e0e8 chore(I151): pytest 9.0.3 へ更新…` / R6 `055aa11 fix(I151): openai 3.31.0 へ更新…`。ほかに I159 の取り込み（`729dfbd` / `5c31947`。`frontend/package-lock.json` だけ）と docs コミット
 
 ## レビュー観点（計画に対応）
 
 ### 1. 変更の局所性（計画外変更がないこと）
-- [ ] 差分が `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py` の 3 ファイルのみである
+- [ ] docs 以外の差分が `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py` の 3 ファイルと、I159 の取り込みによる `frontend/package-lock.json` だけである（2026-10-15 訂正: I159 の取り込みを反映。lockfile は I159 の head と同一であることを確認する）
 - [ ] `settings.py` の差分が `THIRD_PARTY_APPS` からの `'django_extensions',` と `'guardian',` の 2 行削除のみで、`AUTHENTICATION_BACKENDS`・`REST_FRAMEWORK`・`MIDDLEWARE` に変更がない
 - [ ] アプリコード（`accounts` / `core` / `problems` / `studylogs` / `dashboard`）に変更がない
 - [ ] マイグレーションファイルが新規追加されていない
@@ -17,6 +17,7 @@
 - [ ] 実際にインストールされたバージョンが宣言と一致する（TC-AUTO-11A / 11B 実インストール側＝再ビルド漏れがない）
 - [ ] `==` の完全固定が維持されている（範囲指定に変わっていない）
 - [ ] 据え置きと決めたパッケージ（celery 5.3.4 等）が変更されていない
+- [ ] R6 の openai 1.3.0 → 3.31.0 が `requirements.txt` の openai の 1 行だけで、`problems/ai_generator.py` の挙動（例外→代替問題）が更新前と同じ（2026-10-15 追加）
 - [ ] django-redis 7.0.0 でキャッシュが実際に読み書きできる（`default` / `sessions` / `problems` / `analytics` の 4 alias。計画時に実測済みだが、再ビルド後の実環境で再確認する）
 - [ ] `django-guardian` と `django-extensions` の行が削除されている（コメントアウトではなく行ごと）
 
@@ -43,7 +44,7 @@
 ### 6. 無退行（依存更新の本丸）
 - [ ] backend テストが **94 件 pass**（ベースラインと同数・TC-AUTO-03）
 - [ ] **skip・削除・条件緩和による緑化をしていない**（件数一致で機械判定）
-- [ ] 認可・テナント境界の 7 モジュールが更新前後で同じ結果（AC-18 の記録表が埋まっている）
+- [ ] 認可・テナント境界の 9 モジュール（当初 7。2026-10-14 に I102 / I115 の 2 つを追加）が更新前後で同じ結果（AC-18 の記録表が埋まっている）
 - [ ] frontend Jest が 10 件 pass（TC-AUTO-12）
 - [ ] E2E が全件 pass（TC-AUTO-13）
 - [ ] CI の全 6 チェックが SUCCESS（TC-AUTO-14）
@@ -56,8 +57,8 @@
 
 ### 8. コミット分割
 - [ ] 1 段目（本体依存＋pytest-django）と 2 段目（pytest のみ）に分かれている（TC-AUTO-16）
-- [ ] `requirements.txt` を触ったコミットが 1 つだけ（本体依存が 1 段目に集約されている）
-- [ ] 2 段目を取り消せば 1 段目の成果が残る構造になっている
+- [ ] `requirements.txt` を触ったコミットが 2 つ（1 段目と R6 の openai 再固定）で、どちらも `fix(I151)`（2026-10-15 訂正: R6 発動で 1→2）
+- [ ] 2 段目を取り消せば 1 段目の成果が残る構造になっている（R6 コミットは単独で取り消せない。計画書 §8 のとおり前方修正で対応する）
 
 ### 9. セキュリティ
 - [ ] 認可の判定経路に変更がない（`AUTHENTICATION_BACKENDS`・権限クラスが不変）
@@ -76,7 +77,7 @@
 
 - **「94 件 pass だから無退行」を反証せよ**: `--no-migrations` により pytest はマイグレーションを検証しない。DRF 3.18 / Django 5.2 で挙動が変わるが**既存テストが触れていない経路**（シリアライザのエラー形・ページネーション・認証トークンの失効・admin）が存在しないか。件数一致は「同じテストが通った」ことしか示さず、カバーされていない範囲の退行は検出できない。
 - **「guardian / django-extensions は未使用だから削除しても安全」を反証せよ**: `INSTALLED_APPS` から外すことで、両アプリが提供していた**暗黙の副作用**（guardian: マイグレーション適用・AnonymousUser 行の作成・パーミッション関連のシグナル／django-extensions: management コマンドの登録・`AutoSlugField` 等のモデルフィールド・シグナル）に依存する箇所が本当にゼロか。既存 DB と新規 DB で挙動が分岐しないか。**とくに django-extensions は grep が `django_extensions` 文字列に依存しており、`from django_extensions.db.fields import ...` 以外の経路（settings 文字列以外での間接利用）を取りこぼしていないか。**
-- **「認可の判定経路は不変」を反証せよ**: DRF 3.15 → 3.18 で権限クラスの評価順・`has_object_permission` の呼ばれ方・例外の型が変わっていないか。テナント境界テスト 7 モジュールが**組織越境を本当に検出できる**内容か（緩い assert で通っているだけではないか）。
+- **「認可の判定経路は不変」を反証せよ**: DRF 3.15 → 3.18 で権限クラスの評価順・`has_object_permission` の呼ばれ方・例外の型が変わっていないか。テナント境界テスト 9 モジュールが**組織越境を本当に検出できる**内容か（緩い assert で通っているだけではないか）。
 - **「TC-AUTO-03 は緑化を検出できる」を反証せよ**: 計画時点で判定式に `! grep -qE 'skipped|xfailed|deselected'` を追加し、`94 passed, 2 skipped` 形の緑化を弾くよう強化した（強化後の式が実装前ログに対し exit 0 を返すことも実測済み）。それでも抜け道が残らないか — 例えば**テストファイルごと削除して同数の新規テストを足す**、`pytest.ini` の `testpaths` を狭める、条件分岐で assert を実質無効化する、といった手段は件数一致でも検出できない。差分レビューで実際にテストコードが無改変であることを別途確認したか。
 - **「celery は正常」を反証せよ**: TC-AUTO-10 は直近 3 分のログを見るだけである。**再ビルド前の古いログ**を拾って合格していないか。worker が起動直後で 1 回も実行していない場合に false-green にならないか。`ERROR` の grep がログ書式の違い（`CRITICAL` 等）を取りこぼさないか。
 - **「再ビルドは完了している」を反証せよ**: `celery` / `celery-beat` / `e2e-init` が旧イメージのまま動いていないか。TC-AUTO-11A / 11B の実インストール判定は `backend` コンテナしか見ていないため、worker 側が古いままでも合格しうる。
@@ -85,4 +86,7 @@
 
 ## 結果
 
-（実装後に記入）
+各回の判定は次の記録を正とする（2026-10-15 記入）:
+- `/code-review`: `docs/reviews/I151_code_review_*.md`（最新 20261015_1826＝OK・RISK YES）
+- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。その是正後の再実施は 20261015 の記録）
+- fix-loop: `docs/reviews/I151_fix_*.md`
