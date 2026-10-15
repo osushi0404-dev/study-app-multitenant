@@ -24,12 +24,24 @@
 
 ## TC 用スクリプト（実行前に `$S` へ保存する）
 
-`$S/tc02.sh`（対象 GHSA の不在判定）:
+`$S/tc02.js`（対象 GHSA の不在判定。監査結果の JSON を読み、advisory の URL で構造的に照合する）:
+```js
+const target = ['GHSA-jqcg-44mw-7w3h', 'GHSA-395f-4hp3-45gv', 'GHSA-pqg4-j6r4-53mv'];
+const v = JSON.parse(require('fs').readFileSync(0)).vulnerabilities || {};
+const hits = [];
+for (const [name, info] of Object.entries(v)) for (const x of info.via)
+  if (typeof x === 'object' && target.some(t => x.url.endsWith(t))) hits.push(`${name} ${x.url}`);
+console.log(hits.length ? 'NG: ' + hits.join(', ') : 'OK: target advisories absent');
+process.exit(hits.length ? 1 : 0);
+```
+
+`$S/tc02.sh`（パイプを 1 コマンドに含めないためのラッパー）:
 ```bash
 #!/bin/bash
 # usage: tc02.sh <package-lock.json があるディレクトリ>
+S="$(cd "$(dirname "$0")" && pwd)"
 cd "$1" || exit 2
-! npm audit --omit=dev --json 2>/dev/null | grep -q -E 'GHSA-jqcg-44mw-7w3h|GHSA-395f-4hp3-45gv|GHSA-pqg4-j6r4-53mv'
+npm audit --omit=dev --json 2>/dev/null | node "$S/tc02.js"
 ```
 
 `$S/tc03.js`（最低版の判定。lockfile 内のすべての proxy-addr / shell-quote を対象にする）:
@@ -93,7 +105,7 @@ npm audit --omit=dev --json 2>/dev/null | node "$S/tc10.js"
 |------|------|
 | コマンド | `bash $S/tc02.sh frontend` |
 | 期待値 | **exit 0**（GHSA-jqcg-44mw-7w3h / GHSA-395f-4hp3-45gv / GHSA-pqg4-j6r4-53mv が監査結果にない） |
-| 失敗注入 | 修正前の lockfile で exit 1・模擬適用後で exit 0（2026-10-15 実測） |
+| 失敗注入 | 修正前の lockfile で exit 1・模擬適用後で exit 0（2026-10-15 実測）。code-review 指摘（omission-lint）対応で文字列検索から JSON 構造照合に書き換えた後も、修正前の lockfile で exit 1（3 件とも NG 表示）・修正後の frontend で exit 0 を再実測（2026-10-15） |
 
 ### TC-03: 修正版以上への更新（AC-2）
 | 項目 | 内容 |
@@ -153,3 +165,6 @@ npm audit --omit=dev --json 2>/dev/null | node "$S/tc10.js"
 - TC-00 は `npm audit fix` の前に実行する。
 - TC-01〜TC-10 は `npm audit fix` の後に実行する。TC-06〜TC-09 は node_modules の更新が前提（`npm audit fix` はインストールを伴うため通常は追加操作不要。ずれている場合のみ `npm ci --prefix frontend`）。
 - E2E（Playwright）は CI で確認する（手動テスト M1・M2）。
+
+## 決定論ゲート（自動実走）
+<!-- 本イシューの TC は npm / node / docker を使う heavy 判定のため /test・実装時に実行する（code-review.sh の allowlist 外）。自動実走するゲートは無い。 -->
