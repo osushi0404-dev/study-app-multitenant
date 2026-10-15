@@ -265,12 +265,28 @@ docker compose logs celery --since 3m > /tmp/i151_celery.log 2>&1
 
 判定 1（タスクが成功で完了している）: `grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log`
 
-判定 2（エラーが出ていない）: `! grep -qE 'ERROR|Traceback' /tmp/i151_celery.log`
+判定 2a（ERROR の行は、既知の既存不具合 1 種だけ）: `test "$(grep -c 'ERROR' /tmp/i151_celery.log)" -eq "$(grep -c "unregistered task of type 'core.tasks.cache_maintenance_task'" /tmp/i151_celery.log)"`
 
-> ログを一時ファイルに落としてから 2 つの判定を行う。`docker compose logs` を 2 回実行すると、成功判定とエラー判定が**別々のスナップショット**を見ることになり、その間に書き込まれたエラーを取りこぼす。
+判定 2b（Traceback は、既知の既存不具合 1 種だけ）: `test "$(grep -c 'Traceback' /tmp/i151_celery.log)" -eq "$(grep -c "KeyError: 'core.tasks.cache_maintenance_task'" /tmp/i151_celery.log)"`
 
-- **合格**: exit 0（直近 3 分に成功ログがあり、かつ ERROR / Traceback が無い）
+> ログを一時ファイルに落としてから判定を行う。`docker compose logs` を 2 回実行すると、成功判定とエラー判定が**別々のスナップショット**を見ることになり、その間に書き込まれたエラーを取りこぼす。
+
+準備 2（worker が登録しているタスクの一覧）:
+```bash
+docker compose exec -T celery celery -A core inspect registered > /tmp/i151_celery_registered.txt 2>&1
+```
+
+判定 3（beat スケジュールの `studylogs` 4 タスクがすべて登録されている）: 次の 4 行
+- `grep -qE '^[[:space:]]+\* studylogs\.tasks\.update_daily_analytics_task$' /tmp/i151_celery_registered.txt`
+- `grep -qE '^[[:space:]]+\* studylogs\.tasks\.send_study_reminders_task$' /tmp/i151_celery_registered.txt`
+- `grep -qE '^[[:space:]]+\* studylogs\.tasks\.analyze_mistake_patterns_task$' /tmp/i151_celery_registered.txt`
+- `grep -qE '^[[:space:]]+\* studylogs\.tasks\.cleanup_expired_suggestions_task$' /tmp/i151_celery_registered.txt`
+
+- **合格**: 判定 1・2a・2b・3 のすべてが exit 0（直近 3 分に成功ログがある。ERROR / Traceback は既知の 1 種以外に無い。スケジュールされた studylogs のタスクがすべて登録されている）
 - **不合格**: 非ゼロ
+- **判定 2 を 2a・2b に改め、判定 3 を足した理由（2026-10-16・fix-loop）**: `/test` で旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いので worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている（`docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。I151 の差分は `settings.py` の 2 行削除だけで、`celery.py` / `tasks.py` / celery の版は変わっていない。これまで合格していたのは、30 分周期のエラーが判定窓の 3 分に入らなかったからで、旧判定は**タイミング次第でしか既存エラーを検出できなかった**。新判定は、タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、ほかの ERROR / Traceback が 1 行でもあれば件数がずれて不合格になる。既知の 1 種が窓に入らなくても 0 = 0 で同じ結果になり、タイミングに左右されない。判定 3 は、依存更新で登録そのものが壊れる退行を、タイミングに関係なく検出する
+- **除外は暫定**: 既知の 1 種の除外は、別イシュー（起票予定:「celery の core.tasks が未登録で cache_maintenance_task が 30 分ごとに破棄される問題を修正」）のマージまでとする。そのイシューの受け入れ条件に「TC-AUTO-10 から除外を外しても合格すること」を入れる
+- **false-green 検証（2026-10-16 実施）**: 下の「現行判定式・2026-10-16」の表を参照
 - **ベースライン**: 実装前に成功ログを実測済み（`Task studylogs.tasks.update_daily_analytics_task[...] succeeded in 0.0103s`）。したがって前半の判定式が実際に成功ログを捕捉できることは確認済み
 
 ---
@@ -661,6 +677,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-14 | ✅ 合格 | 2026-10-16 | PR head 94271e4 で全 6 チェック SUCCESS（判定 1・2 とも exit 0） |
 | TC-AUTO-15 | ✅ 合格 | 2026-10-15 | 判定 3（全 8 固定値・7 行）・判定 4（`anyio==4.15.1` / `kombu==5.6.2`）とも、現在の記録で exit 0。false-green 検証は TC 本文のとおり（R6 前の記録・requirements の連結・Django 1 行だけのファイルで不合格）。決定論ゲートでの実走は、次回の `/code-review` で行われる |
 | TC-AUTO-16 | ✅ 合格 | 2026-10-16 | 判定 11: 実リポジトリで `requirements-dev.txt` を触ったコミットは 2 件（4877e18 fix / 3a6e0e8 chore）で、3 行とも exit 0。false-green 検証: 一時リポジトリで 3 つ目のコミット（`test(I151): add plugin`）を足すと、件数の行が exit 1 |
+| TC-AUTO-10 | ❌→✅ | 2026-10-16 | `/test` で旧判定 2 が不合格（既存不具合 `core.tasks.cache_maintenance_task` の未登録エラーが窓に入った）。fix-loop で判定 2a・2b・3 へ改め、再実行で判定 1（succeeded 10 件）・2a・2b・3（4 行）すべて exit 0。不合格時の実ログでも新判定 2a・2b は exit 0（下の再発防止記録） |
 | （環境復旧） | ✅ | 2026-10-16 | ユーザー指示で `docker compose build backend celery celery-beat` → `docker compose up -d --wait`（6 サービス healthy）。作り直し後、TC-AUTO-11A 判定 A-2 相当（全 8 固定値＋anyio 4.15.1）が backend・celery の両コンテナで exit 0。backend の `pip freeze` は `I151_pip_freeze.txt` と完全に一致。TC-AUTO-03 `94 passed, 5 warnings in 21.20s`（判定 exit 0）・TC-AUTO-01 `No known vulnerabilities found`・TC-AUTO-17 `add_new True` / `add_dup False` / `incr1 1` / `incr2 2` |
 
 > **手元環境の注意（2026-10-15 確認・2026-10-16 復旧済み）**: 手元の `backend` コンテナは、このブランチのコードをマウントしたまま、別ブランチ（develop）で作ったイメージ（Django 4.2.30）で動いていた（同じ compose プロジェクトを複数のブランチで共有しているため）。backend 系 TC を手元で再実行するときは、先に `docker compose build backend celery celery-beat` で作り直し、TC-AUTO-11A 判定 A-2 が exit 0 になることを確かめてから実行する。上の CI 系 3 TC は CI（毎回ビルド）と frontend コンテナだけを使うので、この状態の影響を受けない。
@@ -693,6 +710,13 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-13 | 判定 2（flaky 等の行なし） | `1 flaky` / `1 failed` の行を含むダミーログ | grep が一致して判定 2 が不合格 |
 | TC-AUTO-07 | `git grep -q ANONYMOUS_USER_NAME -- ':(top)backend/'`（合格条件 exit 1） | 一時リポジトリで痕跡を `git add`、その後 `git rm --cached` | 追跡中はルート・`backend/` とも exit 0（不合格）、未追跡に戻すと exit 1 |
 
+### false-green 検証の記録（現行判定式・2026-10-16 実施・fix-loop）
+
+| TC | 判定式 | 検証方法 | 結果 |
+|---|---|---|---|
+| TC-AUTO-10 | 判定 2a（ERROR の数＝既知 1 種の数）・2b（Traceback の数＝既知の KeyError の数） | 一時ディレクトリにログを 6 種作成: 成功のみ／既知の 1 種のみ／既知＋別の ERROR／既知＋別の Traceback／別のエラーのみ／2026-10-16 の実ログ | 成功のみ・既知のみ・実ログは 2a・2b とも exit 0。別の ERROR を足すと 2a が exit 1、別の Traceback を足すと 2b が exit 1、別のエラーのみは 2a・2b とも exit 1 |
+| TC-AUTO-10 | 判定 3（studylogs 4 タスクの登録） | 実際の `inspect registered` の出力／そこから `send_study_reminders_task` を除いた出力／空ファイル | 実出力は 4 行とも exit 0。1 件欠けると該当行が exit 1。空ファイルは 4 行とも exit 1 |
+
 ### 機構の事前検証（計画時点・2026-08-22 実施済み）
 
 | 対象 | 検証内容 | 結果 |
@@ -700,3 +724,18 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-09 | `docker compose exec -e DB_NAME=migrate_check` が Django 設定に届くか | `settings.DATABASES['default']['NAME'] = migrate_check` を確認 |
 | TC-AUTO-10 | 成功ログの grep パターンが実際のログに一致するか | 実装前のログで `Task studylogs.tasks.update_daily_analytics_task[...] succeeded` に一致 |
 | TC-AUTO-14 | `gh pr checks --json` の判定式が動くか | PR #256 に対して `0` を確認 |
+
+---
+
+## 再発防止記録（2026-10-16・fix-loop: TC-AUTO-10 判定 2 の不合格）
+
+- **なぜ失敗したか**: `/test` で TC-AUTO-10 の旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いため worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている。I151 の差分（`settings.py` の 2 行削除）は関係しない。これまでの実施（2026-08-24 / 2026-10-14）が合格していたのは、30 分周期のエラーが判定窓の 3 分に入らなかったからである。2026-10-16 はコンテナを作り直している間に溜まったメッセージが起動時に一斉に届いたので、窓に入った。**判定がタイミング次第でしか既存エラーを検出できない設計だった**ことが、本当の弱点である
+- **何を変えたか**（docs のみ・コードは変えていない。計画外の実装を I151 に混ぜないため）:
+  - 判定 2 を 2a・2b に改めた。タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格になる。既知の 1 種が窓に入るかどうかに関係なく、同じ結果になる
+  - 判定 3 を追加した。`inspect registered` で、beat スケジュールの studylogs 4 タスクがすべて登録されていることを、タイミングに関係なく確かめる（依存更新で登録が壊れる退行を検出する）
+  - 手動 No.3 の期待結果を同じ書きぶりへ揃えた
+  - 失敗注入で検証した（上の「false-green 検証の記録（現行判定式・2026-10-16 実施・fix-loop）」）
+- **セキュリティ上の考慮点**: 該当なし。捨てられているのは引数なしのキャッシュ統計タスクで、認証・認可・入力・機密データのいずれにも関わらない。除外は ERROR と Traceback それぞれの件数一致で、タスク名まで完全に指定しており、別のエラーを隠さない（別の ERROR / Traceback を 1 つ足したログで不合格になることを確認）
+- **次回どう防ぐか**:
+  - 根治は別イシューで行う（起票予定:「celery の core.tasks が未登録で cache_maintenance_task が 30 分ごとに破棄される問題を修正（キャッシュ統計も取得できていない）」）。登録方式と、何もしていないタスクを残すか消すかは、そちらで決める。そのイシューの受け入れ条件に「TC-AUTO-10 から既知 1 種の除外を外しても合格すること」を入れ、暫定の除外が残り続けないようにする
+  - ログの時間窓だけで「エラーが無い」を判定する TC は、周期の長いエラーを見逃す。今後は、窓に頼らない状態の確認（登録一覧・設定の照合など）を組み合わせる。この観点は /retro で、テストテンプレートとレビュー観点への反映を判断する
