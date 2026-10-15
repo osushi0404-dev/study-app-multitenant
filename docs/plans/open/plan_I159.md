@@ -140,6 +140,7 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - `git checkout feature/I151-django-52-lts-upgrade` → `git pull` → `git merge --no-ff origin/feature/I159-fix-frontend-critical-vulns` → `git push`（force push なし）。衝突が出た場合は停止して報告（I151 は frontend を変更していないため想定しない）。
 - → M2 参照
 - 本ステップ後に I159 側の修正が発生した場合は、修正を I159 ブランチへコミットし、本ステップを再実施する。
+- 記録だけのコミット（テスト・レビュー・close の docs）も I159 ブランチに積まれるため、**#269 をマージする直前に I159 ブランチの最新を I151 ブランチへもう一度取り込む**（#277 が「マージ済み」になる条件は、#277 の最新コミットが develop に入ること）。
 
 ### ステップ6: 開発サーバーの起動確認（ステップ2 完了が前提・ステップ4/5 と並行可）
 - → M3・M4 参照
