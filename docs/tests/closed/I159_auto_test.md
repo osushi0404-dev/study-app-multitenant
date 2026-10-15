@@ -21,15 +21,33 @@
   - TC-08: exit 0・3 suites / 10 tests 全 PASS（65.3s・ベースラインと同数）
   - TC-09: exit 0（`Compiled successfully.`）
   - TC-10: exit 0・`low 3 / moderate 34 / high 57 / critical 0（total 94）`＝計画時の模擬適用と一致
+- **/test 再実行（2026-10-15・code-review OK 後・HEAD 42f1615）: 全 TC PASS（実装時と同値）**
+  - TC-00: 非該当（修正前にのみ実行する Red 確認。実装時に記録済み）
+  - TC-01 exit 0 / TC-02 exit 0（JSON 構造照合版）/ TC-03 exit 0（2.0.8・1.12.0）/ TC-04 #1・#2 exit 0 / TC-05 exit 0・changed=34 ng=0 / TC-06 exit 0 / TC-07 exit 0 / TC-08 3 suites・10 tests PASS（52.3s）/ TC-09 exit 0（Compiled successfully.）/ TC-10 exit 0・critical 0（total 94）
+  - pytest: 非該当（backend 変更なし。CI の Backend Tests は SUCCESS）
+  - E2E: CI で確認（PR #277 HEAD 42f1615 で E2E Tests (Playwright) SUCCESS・PR #269 で 6 チェック全 SUCCESS）。手元 Docker での Playwright 実行は manual M4c
+  - CI 環境パリティ: PR #277 HEAD 42f1615（run 38703894441）で Backend Lint & Security のみ FAILURE・失敗ステップは `pip-audit` のみ（既知・I151 で解消）、他 5 チェック SUCCESS
 
 ## TC 用スクリプト（実行前に `$S` へ保存する）
 
-`$S/tc02.sh`（対象 GHSA の不在判定）:
+`$S/tc02.js`（対象 GHSA の不在判定。監査結果の JSON を読み、advisory の URL で構造的に照合する）:
+```js
+const target = ['GHSA-jqcg-44mw-7w3h', 'GHSA-395f-4hp3-45gv', 'GHSA-pqg4-j6r4-53mv'];
+const v = JSON.parse(require('fs').readFileSync(0)).vulnerabilities || {};
+const hits = [];
+for (const [name, info] of Object.entries(v)) for (const x of info.via)
+  if (typeof x === 'object' && target.some(t => x.url.endsWith(t))) hits.push(`${name} ${x.url}`);
+console.log(hits.length ? 'NG: ' + hits.join(', ') : 'OK: target advisories absent');
+process.exit(hits.length ? 1 : 0);
+```
+
+`$S/tc02.sh`（パイプを 1 コマンドに含めないためのラッパー）:
 ```bash
 #!/bin/bash
 # usage: tc02.sh <package-lock.json があるディレクトリ>
+S="$(cd "$(dirname "$0")" && pwd)"
 cd "$1" || exit 2
-! npm audit --omit=dev --json 2>/dev/null | grep -q -E 'GHSA-jqcg-44mw-7w3h|GHSA-395f-4hp3-45gv|GHSA-pqg4-j6r4-53mv'
+npm audit --omit=dev --json 2>/dev/null | node "$S/tc02.js"
 ```
 
 `$S/tc03.js`（最低版の判定。lockfile 内のすべての proxy-addr / shell-quote を対象にする）:
@@ -93,7 +111,7 @@ npm audit --omit=dev --json 2>/dev/null | node "$S/tc10.js"
 |------|------|
 | コマンド | `bash $S/tc02.sh frontend` |
 | 期待値 | **exit 0**（GHSA-jqcg-44mw-7w3h / GHSA-395f-4hp3-45gv / GHSA-pqg4-j6r4-53mv が監査結果にない） |
-| 失敗注入 | 修正前の lockfile で exit 1・模擬適用後で exit 0（2026-10-15 実測） |
+| 失敗注入 | 修正前の lockfile で exit 1・模擬適用後で exit 0（2026-10-15 実測）。code-review 指摘（omission-lint）対応で文字列検索から JSON 構造照合に書き換えた後も、修正前の lockfile で exit 1（3 件とも NG 表示）・修正後の frontend で exit 0 を再実測（2026-10-15） |
 
 ### TC-03: 修正版以上への更新（AC-2）
 | 項目 | 内容 |
@@ -153,3 +171,6 @@ npm audit --omit=dev --json 2>/dev/null | node "$S/tc10.js"
 - TC-00 は `npm audit fix` の前に実行する。
 - TC-01〜TC-10 は `npm audit fix` の後に実行する。TC-06〜TC-09 は node_modules の更新が前提（`npm audit fix` はインストールを伴うため通常は追加操作不要。ずれている場合のみ `npm ci --prefix frontend`）。
 - E2E（Playwright）は CI で確認する（手動テスト M1・M2）。
+
+## 決定論ゲート（自動実走）
+<!-- 本イシューの TC は npm / node / docker を使う heavy 判定のため /test・実装時に実行する（code-review.sh の allowlist 外）。自動実走するゲートは無い。 -->

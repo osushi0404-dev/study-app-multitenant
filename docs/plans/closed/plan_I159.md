@@ -5,7 +5,7 @@
 - **関連イシュー**: #276（docs/issues/open/I159.md）
 - **Draft PR**: #277
 - **作成根拠資料**: docs/issues/open/I159.md（起点イシュー）
-- **実装後評価**: docs/reviews/open/I159_review.md
+- **実装後評価**: docs/reviews/closed/I159_review.md
 - **作成日**: 2026-10-15
 
 ## 1. 背景/目的
@@ -95,7 +95,7 @@ I151（PR #269）と本イシューは CI 上で相互に待ち合っている:
 - [ ] AC-3: `frontend/package.json` の直接依存は変わっていない → TC-04・TC-05
 - [ ] AC-4: 本イシューの変更と I151 の変更がそろった状態で、CI の 6 チェックがすべて SUCCESS（Frontend Lint & Security を含む） → M2
 - [ ] AC-5: フロントエンドのテスト・型チェック・ビルド・E2E が更新前と同じく通る → TC-06〜TC-09・M1・M2
-- [ ] AC-6: 開発サーバー（`npm start` / docker compose の frontend）が起動し、画面が表示される → M3・M4
+- [ ] AC-6: 開発サーバー（`npm start` / docker compose の frontend）が起動し、画面が表示される → M3・M4a〜M4c
 
 ## 4. 影響範囲
 | 領域 | 影響 |
@@ -104,7 +104,7 @@ I151（PR #269）と本イシューは CI 上で相互に待ち合っている:
 | Frontend | `frontend/package-lock.json` のみ（範囲内更新 34 パッケージ。うち本番バンドルに入るのは axios / react-router / react-router-dom / @remix-run/router）。package.json・ソースコードは無変更 |
 | DB | なし |
 | Config/Infra | CI 定義・監査条件は変更しない |
-| Docker | `frontend/Dockerfile` は `npm ci --only=production`、`Dockerfile.dev` は `npm install` で lockfile に従うため定義の変更は不要。docker compose の `frontend` は `/app/node_modules` を匿名ボリュームで持つため、既存コンテナは古い node_modules を使い続ける。反映には `docker compose up -d --build -V frontend`（再ビルド＋匿名ボリューム作り直し）が必要（M4 の手順に記載）。`frontend-test` は起動時の `npm install` で追従 |
+| Docker | `frontend/Dockerfile` は `npm ci --only=production`、`Dockerfile.dev` は `npm install` で lockfile に従うため定義の変更は不要。docker compose の `frontend` は `/app/node_modules` を匿名ボリュームで持つため、既存コンテナは古い node_modules を使い続ける。反映には `docker compose up -d --build -V frontend`（再ビルド＋匿名ボリューム作り直し）が必要（M4c の手順に記載）。`frontend-test` は起動時の `npm install` で追従 |
 | 他ブランチ | `feature/I151-django-52-lts-upgrade` に本ブランチを merge する（ユーザー決定のマージ経路）。I151 のファイルは変更しない |
 
 ## 5. 変更点一覧
@@ -140,9 +140,10 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - `git checkout feature/I151-django-52-lts-upgrade` → `git pull` → `git merge --no-ff origin/feature/I159-fix-frontend-critical-vulns` → `git push`（force push なし）。衝突が出た場合は停止して報告（I151 は frontend を変更していないため想定しない）。
 - → M2 参照
 - 本ステップ後に I159 側の修正が発生した場合は、修正を I159 ブランチへコミットし、本ステップを再実施する。
+- 記録だけのコミット（テスト・レビュー・close の docs）も I159 ブランチに積まれるため、**#269 をマージする直前に I159 ブランチの最新を I151 ブランチへもう一度取り込む**（#277 が「マージ済み」になる条件は、#277 の最新コミットが develop に入ること）。
 
 ### ステップ6: 開発サーバーの起動確認（ステップ2 完了が前提・ステップ4/5 と並行可）
-- → M3・M4 参照
+- → M3・M4a〜M4c 参照
 
 ### ステップ7（PR #269 マージ後）: 後始末
 - PR #277 が「マージ済み」になったことを確認する（ならない場合は「#269 経由で develop に取り込み済み」とコメントして close）。→ M5 参照
@@ -169,7 +170,7 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 | npm のバージョン差（ローカル 11.11.0 / CI） | fix はローカルで実行し lockfile をコミットする。CI は `npm ci` ＋判定のみのため差は出ない |
 | PR #277 が自動で「マージ済み」にならない | M5 で確認し、ならない場合はコメントを付けて close |
 | I151 ブランチ側との衝突 | I151 は frontend を変更していない（`git diff origin/develop origin/feature/I151-django-52-lts-upgrade -- frontend/` が空であることを確認済み）。衝突したら停止して報告 |
-| docker compose の frontend が古い node_modules を使い続ける | M4 の手順で `-V` 付きで作り直す |
+| docker compose の frontend が古い node_modules を使い続ける | M4c の手順で `-V` 付きで作り直す |
 | `frontend/build/static` が root 所有でホストの build が失敗する（pre-existing） | `BUILD_PATH` を scratchpad に向けて実行（TC-09）。build ディレクトリの所有者是正は本イシューの範囲外 |
 
 ## 10. セキュリティ・品質チェック（plan-issue 必須確認の記録）
@@ -177,7 +178,7 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - **セキュリティ**: セキュリティを改善する側の変更（critical 2 件を含む計 57 advisory（GHSA 単位）の解消・新しい advisory 0 件）。コード変更なし・認証認可/入力検証/機密データの変更なし。追加・更新する依存の既知脆弱性は模擬適用後の `npm audit` で確認済み（fix 後にだけ現れる advisory ID は 0 件）。
 - **重大度基準**: npm audit は critical を修正対象（CI ゲート）とし、`npm audit fix` で範囲内に直せる high 以下も同時に解消する。`--force` が必要な残存はスコープ外。bandit は Backend 変更なしのため対象外。
 - **P3（データ整合性）/ P5（運用設計）/ P8（コスト）影響なし**: DB・外部 API・非同期処理・新規インフラなし。依存ファイルの Dockerfile / docker-compose への波及は §4 に記載。
-- **P6（性能・UX）影響なし**: UI・アプリコードの変更なし（画面表示の確認は M4 で実施）。
+- **P6（性能・UX）影響なし**: UI・アプリコードの変更なし（画面表示の確認は M4a〜M4c で実施）。
 - **P9（プライバシー）影響なし**: 個人情報・テナントデータを扱わない。
 - **設計品質**: コード変更なし。設定値・定数のハードコードなし。
 
@@ -189,7 +190,7 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 | 変更は package-lock.json のみ・package.json 無変更 | イシューに明記（模擬適用で実証） |
 | 残存（high 以下・`--force` 必須）はスコープ外 | イシューに明記（「含まない」） |
 | ビルド回帰を `BUILD_PATH` で scratchpad に出力 | 仮定ではなく環境実測（build/static が root 所有）に基づく検証手段の選択。成果物・コードに影響しない |
-| 開発サーバー確認はホストの `npm start` を主とし、docker compose は再ビルド手順付きで Human 確認 | イシュー AC が「`npm start` / docker compose の frontend」と両方を許容。Docker 停止中の実測に基づく |
+| 開発サーバー確認は Claude が実施する: ホストの `npm start`（M3）＋ CI E2E の結果（M4b）＋ 修正前後の CSS 同一性（M4a）＋ 手元 Docker での Playwright 実行で Console エラー 0 件（M4c）。人の目視は使わない | 2026-10-15 ユーザー合意（当初は docker compose＋ブラウザを Human 確認としていたが、CI E2E が同じ経路を検証済みであり、未検証点は CSS と Console エラーと手元 Docker のみと整理して Claude 実施に変更） |
 | #220（frontend 定期監査イシュー）をマージ後にクローズ | runbook（dependency-audit.md 手順 3）に明記 |
 
 仮定で決めた項目はない。
@@ -202,6 +203,12 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - [ ] #269 マージ後に #277 の状態確認と #220 のクローズを行い、I151 の `/code-review` をやり直す
 
 ## レビュー結果
-- [20261015_1222 判定: ✅ 完了](../../reviews/I159_plan_review_20261015_1222.md)
+- [20261015_1222 判定: ✅ 完了](../../reviews/closed/I159_plan_review_20261015_1222.md)
   - Warning（TC-10 のパイプ前提）: 対応済み。auto_test に `$S/tc10.sh` ラッパーを追加し TC-00(4)・TC-10 を `bash $S/tc10.sh frontend` に変更（修正前 lockfile で exit 1・模擬適用後で exit 0 を再実測）
   - Info（TC-04 #2 注記）: 対応不要。`git diff <commit>` は 1 引数のときコミットと作業ツリーを比較する仕様のため、「コミット前は作業ツリーとの比較」の記述は正しい（修正前の実測 exit 1 も作業ツリー比較の結果）
+
+## 完了情報
+- **完了日時**: Thu Oct 15 18:09:48 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan review OK・code review 2 回目 OK・TC-01〜TC-10 全 PASS・合流 PR #269 で CI 6 チェック全 SUCCESS）
+- **マージ経路**: PR #277 は直接マージしない。I159 ブランチの最新を I151 ブランチへ取り込み、PR #269 のマージで develop へ入る（#277 は自動で MERGED になる想定・M5 で確認）
