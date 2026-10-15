@@ -21,6 +21,12 @@
   - TC-08: exit 0・3 suites / 10 tests 全 PASS（65.3s・ベースラインと同数）
   - TC-09: exit 0（`Compiled successfully.`）
   - TC-10: exit 0・`low 3 / moderate 34 / high 57 / critical 0（total 94）`＝計画時の模擬適用と一致
+- **/test 再実行（2026-10-15・code-review OK 後・HEAD 42f1615）: 全 TC PASS（実装時と同値）**
+  - TC-00: 非該当（修正前にのみ実行する Red 確認。実装時に記録済み）
+  - TC-01 exit 0 / TC-02 exit 0（JSON 構造照合版）/ TC-03 exit 0（2.0.8・1.12.0）/ TC-04 #1・#2 exit 0 / TC-05 exit 0・changed=34 ng=0 / TC-06 exit 0 / TC-07 exit 0 / TC-08 3 suites・10 tests PASS（52.3s）/ TC-09 exit 0（Compiled successfully.）/ TC-10 exit 0・critical 0（total 94）
+  - pytest: 非該当（backend 変更なし。CI の Backend Tests は SUCCESS）
+  - E2E: CI で確認（PR #277 HEAD 42f1615 で E2E Tests (Playwright) SUCCESS・PR #269 で 6 チェック全 SUCCESS）。手元 Docker での Playwright 実行は manual M4c
+  - CI 環境パリティ: PR #277 HEAD 42f1615（run 38703894441）で Backend Lint & Security のみ FAILURE・失敗ステップは `pip-audit` のみ（既知・I151 で解消）、他 5 チェック SUCCESS
 
 ## TC 用スクリプト（実行前に `$S` へ保存する）
 

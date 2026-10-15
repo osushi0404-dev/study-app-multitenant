@@ -34,7 +34,7 @@
 - ステップ6（開発サーバー）: ホストの `npm start` でコンパイル成功まで確認。画面表示は M4a〜M4c（Claude 実施・2026-10-15 ユーザー合意で Human から変更）で確認する。
 
 ## テスト結果
-- 自動: TC-00〜TC-10 全 PASS（詳細は I159_auto_test.md）
+- 自動: TC-00〜TC-10 全 PASS（詳細は I159_auto_test.md）。/test 再実行（2026-10-15・HEAD 42f1615）でも TC-01〜TC-10 全 PASS（実装時と同値）
 - CI: PR #277 は Backend Lint & Security のみ pip-audit で FAILURE（既知）・他 5 チェック SUCCESS（M1）。PR #269 は取り込み後 6 チェックすべて SUCCESS（M2・AC-4）
 - 手動: M1/M2 OK・M3 一部実施（curl 不許可）・M4a/M4b/M4c OK（M4c の Console エラー 6 件は修正前と完全同一の既存挙動・/login のみ）・M5/M6 は #269 マージ後
 
