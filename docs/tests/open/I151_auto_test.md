@@ -382,7 +382,7 @@ gh api repos/osushi0404-dev/study-app-multitenant/actions/jobs/<job_id> -q .head
 - **不合格**: 非ゼロ
 - **ID を job の 1 つに絞った理由（2026-10-15・敵対的レビュー第 2 周）**: 第 1 周の版は、コミットを `<run_id>` から、ログを `--job <job_id>` から取っていた。`gh run view` は `--job` を渡すと位置引数の run_id を無視し、その job のログを返す。そのため、新しい run_id と旧 job_id（本文の false-green 検証欄にある 97222730997）を組み合わせると、旧 run（ac7a1dd・openai 1.3.0）のログで判定 0・1・2 がすべて合格した（メインセッションで再現。`gh run view 38711268663 --log --job 97222730997` の出力に `openai==1.3.0` と `7 passed (15.4s)` が含まれる）。ログとコミットを同じ job_id から取れば、組み合わせの誤りは起こらない
 - **判定 0b・0c を足した理由（同上）**: 判定 0 は「job のコミット」と「手元の HEAD」を比べる。手元にコード変更が未コミットで残っている場合や、手元の HEAD が PR の head とずれている場合（push 忘れ、remote 側だけにある merge コミット）は、判定 0 だけでは見逃す。なお pull_request の CI がテストするのは develop との合成（`refs/pull/269/merge`）で、job の後に develop が進んだ場合は判定 0 では検出しない。I151 のマージ前に develop が進んだら、CI を再実行してから判定する
-- **判定 0 を足した理由（2026-10-15・敵対的レビュー第 1 周）**: 旧手順は run を選ぶ条件が無かった。そのため、2026-10-14 の再実施記録は 2026-08-23 の run 32651105381（head ac7a1dd・openai 1.3.0・I159 の lockfile 取り込み前）を根拠にしていた。その後の R6 再固定や I159 取り込みの後で E2E が通ることは示していなかった。判定 0 で、根拠にする run を「その後にコード・依存・設定の変更が無い」コミットに結び付ける。記録用の docs コミットは許す（「PR の head と一致」にすると、結果を記録するコミット自体が head を進めるため、永遠に合格できない）。run の後に `docs/` 以外が 1 行でも変わっていれば exit 1、run の SHA が手元に無ければ exit 128 で、どちらも不合格
+- **判定 0 を足した理由（2026-10-15・敵対的レビュー第 1 周）**: 旧手順は run を選ぶ条件が無かった。そのため、2026-10-14 の再実施記録は 2026-08-23 の run 32651105381（head ac7a1dd・openai 1.3.0・I159 の lockfile 取り込み前）を根拠にしていた。その後の R6 再固定や I159 取り込みの後で E2E が通ることは示していなかった。判定 0 で、根拠にする run を「その後にコード・依存・設定の変更が無い」コミットに結び付ける。記録用の docs コミットは許す（「job の SHA が PR の head と一致」にすると、結果を記録するコミット自体が head を進めるため、永遠に合格できない）。判定 0c が比べるのは job の SHA ではなく「手元の HEAD と PR の head」で、記録コミットを push した後なら一致するので、この問題は起きない。run の後に `docs/` 以外が 1 行でも変わっていれば exit 1、run の SHA が手元に無ければ exit 128 で、どちらも不合格
 - **判定 2 を足した理由（2026-10-14・fix-loop）**: `e2e/playwright.config.ts` は `retries: 2` を条件なしで設定している。1 回失敗して再試行で通ったテスト（flaky）でも、Playwright は exit 0 を返す。Django 5.2 化で生じた間欠的な不具合を見逃さないよう、flaky が 0 件であることを判定する（CI 設定 `e2e.yml` と `playwright.config.ts` は I151 の範囲外のため変更しない）
 - **判定 2 の `!` がファイル不在で合格に反転しない理由**: ログが保存されていなければ判定 1 が exit 2 で不合格になるため、TC 全体として不合格になる
 - **false-green 検証（2026-10-14 実施）**: 実際の CI ログ（run 32651105381・job 97222730997）で判定 1・2 とも exit 0（`7 passed (15.4s)`・flaky 等の行なし）。`1 flaky` 行・`1 failed` 行を含むダミーログでは、判定 2 の grep が一致して不合格になることを確認
@@ -556,6 +556,7 @@ git log origin/develop..HEAD --oneline -- backend/requirements-dev.txt > /tmp/i1
 判定 11（`requirements-dev.txt` を触ったコミットはちょうど 2 つで、`fix(I151)` 1 つ（pytest-django）と `chore(I151)` 1 つ（pytest））: `test "$(wc -l < /tmp/i151_dev_commits.txt)" -eq 2` と `test "$(grep -c 'fix(I151)' /tmp/i151_dev_commits.txt)" -eq 1` と `test "$(grep -c 'chore(I151)' /tmp/i151_dev_commits.txt)" -eq 1` の 3 行
 
 - **判定 11 を足した理由（2026-10-15・敵対的レビュー第 2 周）**: 判定 3・4 はコミット数を `requirements.txt` についてしか数えていなかった。`requirements-dev.txt` は 2 段目の中身だけを照合していた。そのため、pytest 9 を前提にするプラグインを足す 3 つ目のコミット（例: `test(I151): ...`）が混ざっても判定 1〜10 はすべて合格し、「2 段目を落とせば pytest 9 を取り消せる」（計画書 §8）が成り立たなくなっていた
+- **判定 11 の false-green 検証（2026-10-16 実施）**: 一時リポジトリで、fix・chore の 2 コミットでは 3 行とも exit 0。3 つ目の `test(I151): add plugin`（`requirements-dev.txt` に 1 行追加）を足すと、件数の行が exit 1
 - **合格**: 判定 1〜11 の**すべてが exit 0**
 - **判定 5〜8 を足した理由（2026-10-14・fix-loop）**: 判定 2 は件名に `chore(I151)` を含むコミットがあることしか見ていなかった。そのため、pytest を 1 段目にまとめて 2 段目を空のコミットにするような誤った分け方でも、判定 1〜4 がすべて合格していた。それでは「2 段目のコミットを落とすだけで pytest 9 を取り消せる」という退避手順（計画書 §8）が成り立たない
 - **false-green 検証（2026-10-14 実施）**: 実リポジトリで判定 5〜8 がすべて exit 0（2 段目＝3a6e0e8 は `requirements-dev.txt` の pytest 行だけを変更）。一時リポジトリでの結果は次のとおり。2 段目が空コミット → 判定 6・7・8 がすべて不合格。2 段目に pytest 以外の行が混入 → 判定 8 の件数判定が不合格。正しい分け方 → 全判定が合格
@@ -571,7 +572,7 @@ git log origin/develop..HEAD --oneline -- backend/requirements-dev.txt > /tmp/i1
 
 > **訂正（2026-10-15・敵対的レビュー第 1・2 周）**: 当初は、握り潰された結果「レート制限がフェイルオープンする（総当たり防御が消える）」と書いていた。実際は逆である。django-ratelimit は、カウンタを取得できないとき（`count is None`）、既定の `RATELIMIT_FAIL_OPEN=False` により**遮断**する（`django_ratelimit/core.py:249-252`。新イメージで確認）。つまりカウンタ操作が壊れると、正しいパスワードのログインを含め、`@ratelimit` 付きの全経路が 403 になる（**フェイルクローズ＝可用性の喪失**）。この TC が検出するのは「django-redis 7 でカウンタ操作が壊れて、全利用者がログインできなくなる」退行である。Redis 障害時の扱いは計画書の残余リスク申し送りを参照
 
-**既存テストでは検出できない**: `backend/core/tests/test_I127_throttling.py` は 4 つのキャッシュをすべて `LocMemCache` に差し替えるため、django-redis は一度も実行されない。つまり 94 件が全部 pass しても、実環境でレート制限が黙って無効化されている可能性が残る。
+**既存テストでは検出できない**: `backend/core/tests/test_I127_throttling.py` は 4 つのキャッシュをすべて `LocMemCache` に差し替えるため、django-redis は一度も実行されない。つまり 94 件が全部 pass しても、実環境でカウンタ操作が壊れている可能性が残る（2026-10-15 訂正: 当初は「レート制限が黙って無効化される」と書いていた。実際の症状は上の訂正注記のとおり、全経路が 403 になる側である）。
 
 django-ratelimit が使うキャッシュ操作は `cache.add` と `cache.incr` の 2 つ（`django_ratelimit.core` を実測）。これを**再ビルド後の実コンテナ**で確認する。
 
@@ -656,8 +657,13 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-13 | ✅ 合格 | 2026-10-15 | run 38711268663・job 116342939620（head 5c31947＝R6 と I159 取り込みの後）。判定 0（run 後の `docs/` 以外の差分なし）exit 0・判定 1 exit 0（`7 passed (14.9s)`）・判定 2 exit 0（flaky / failed / skipped 等の行なし）。判定 0 の false-green 検証: 旧根拠の run 32651105381（ac7a1dd）では exit 1、存在しない SHA では exit 128 で、どちらも不合格 |
 | TC-AUTO-14 | ✅ 合格 | 2026-10-15 | PR head 5c31947 で判定 1（SUCCESS 以外 0 件）・判定 2（チェック 6 件）とも exit 0 |
 | TC-AUTO-16 | ✅ 合格 | 2026-10-15 | 判定 8・10 を `--numstat` 版へ替えて再実行。2 段目 `1	1	backend/requirements-dev.txt`・R6 `1	1	backend/requirements.txt` で exit 0 |
+| TC-AUTO-13 | ✅ 合格 | 2026-10-16 | 第 2 周の手順（ID は job の 1 つ）で再実施。job 116375327027（run 38721027473・head 94271e4＝第 2 周の是正を push した head）。判定 0（job 後の `docs/` 以外の差分なし）・0b（未コミットの非 docs 変更なし）・0c（手元 HEAD 94271e4 = PR head）・1（`7 passed (15.6s)`）・2（flaky 等の行なし）がすべて exit 0。false-green 検証: 旧 job 97222730997 から取った SHA（ac7a1dd）では判定 0 が exit 1。新 run_id と旧 job_id を組み合わせる誤りは、ID を 1 つにしたので起こらない |
+| TC-AUTO-14 | ✅ 合格 | 2026-10-16 | PR head 94271e4 で全 6 チェック SUCCESS（判定 1・2 とも exit 0） |
+| TC-AUTO-15 | ✅ 合格 | 2026-10-15 | 判定 3（全 8 固定値・7 行）・判定 4（`anyio==4.15.1` / `kombu==5.6.2`）とも、現在の記録で exit 0。false-green 検証は TC 本文のとおり（R6 前の記録・requirements の連結・Django 1 行だけのファイルで不合格）。決定論ゲートでの実走は、次回の `/code-review` で行われる |
+| TC-AUTO-16 | ✅ 合格 | 2026-10-16 | 判定 11: 実リポジトリで `requirements-dev.txt` を触ったコミットは 2 件（4877e18 fix / 3a6e0e8 chore）で、3 行とも exit 0。false-green 検証: 一時リポジトリで 3 つ目のコミット（`test(I151): add plugin`）を足すと、件数の行が exit 1 |
+| （環境復旧） | ✅ | 2026-10-16 | ユーザー指示で `docker compose build backend celery celery-beat` → `docker compose up -d --wait`（6 サービス healthy）。作り直し後、TC-AUTO-11A 判定 A-2 相当（全 8 固定値＋anyio 4.15.1）が backend・celery の両コンテナで exit 0。backend の `pip freeze` は `I151_pip_freeze.txt` と完全に一致。TC-AUTO-03 `94 passed, 5 warnings in 21.20s`（判定 exit 0）・TC-AUTO-01 `No known vulnerabilities found`・TC-AUTO-17 `add_new True` / `add_dup False` / `incr1 1` / `incr2 2` |
 
-> **手元環境の注意（2026-10-15 確認）**: 手元の `backend` コンテナは、このブランチのコードをマウントしたまま、別ブランチ（develop）で作ったイメージ（Django 4.2.30）で動いていた（同じ compose プロジェクトを複数のブランチで共有しているため）。backend 系 TC を手元で再実行するときは、先に `docker compose build backend celery celery-beat` で作り直し、TC-AUTO-11A 判定 A-2 が exit 0 になることを確かめてから実行する。上の CI 系 3 TC は CI（毎回ビルド）と frontend コンテナだけを使うので、この状態の影響を受けない。
+> **手元環境の注意（2026-10-15 確認・2026-10-16 復旧済み）**: 手元の `backend` コンテナは、このブランチのコードをマウントしたまま、別ブランチ（develop）で作ったイメージ（Django 4.2.30）で動いていた（同じ compose プロジェクトを複数のブランチで共有しているため）。backend 系 TC を手元で再実行するときは、先に `docker compose build backend celery celery-beat` で作り直し、TC-AUTO-11A 判定 A-2 が exit 0 になることを確かめてから実行する。上の CI 系 3 TC は CI（毎回ビルド）と frontend コンテナだけを使うので、この状態の影響を受けない。
 
 ### false-green 検証の記録（計画時点・2026-08-22 実施済み）
 
