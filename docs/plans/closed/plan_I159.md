@@ -5,7 +5,7 @@
 - **関連イシュー**: #276（docs/issues/open/I159.md）
 - **Draft PR**: #277
 - **作成根拠資料**: docs/issues/open/I159.md（起点イシュー）
-- **実装後評価**: docs/reviews/open/I159_review.md
+- **実装後評価**: docs/reviews/closed/I159_review.md
 - **作成日**: 2026-10-15
 
 ## 1. 背景/目的
@@ -203,6 +203,12 @@ frontend で `npm audit fix`（`--force` なし）を 1 回実行し、package-l
 - [ ] #269 マージ後に #277 の状態確認と #220 のクローズを行い、I151 の `/code-review` をやり直す
 
 ## レビュー結果
-- [20261015_1222 判定: ✅ 完了](../../reviews/I159_plan_review_20261015_1222.md)
+- [20261015_1222 判定: ✅ 完了](../../reviews/closed/I159_plan_review_20261015_1222.md)
   - Warning（TC-10 のパイプ前提）: 対応済み。auto_test に `$S/tc10.sh` ラッパーを追加し TC-00(4)・TC-10 を `bash $S/tc10.sh frontend` に変更（修正前 lockfile で exit 1・模擬適用後で exit 0 を再実測）
   - Info（TC-04 #2 注記）: 対応不要。`git diff <commit>` は 1 引数のときコミットと作業ツリーを比較する仕様のため、「コミット前は作業ツリーとの比較」の記述は正しい（修正前の実測 exit 1 も作業ツリー比較の結果）
+
+## 完了情報
+- **完了日時**: Thu Oct 15 18:09:48 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan review OK・code review 2 回目 OK・TC-01〜TC-10 全 PASS・合流 PR #269 で CI 6 チェック全 SUCCESS）
+- **マージ経路**: PR #277 は直接マージしない。I159 ブランチの最新を I151 ブランチへ取り込み、PR #269 のマージで develop へ入る（#277 は自動で MERGED になる想定・M5 で確認）
