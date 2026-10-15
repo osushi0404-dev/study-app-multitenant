@@ -47,6 +47,8 @@
 >
 > **判定式の厳格化（2026-10-14・敵対的レビュー第 1・2 周）**: 判定式そのものに見逃しが見つかったため、TC-AUTO-03 / 05 / 06 / 07 / 12 / 14 / 15 / 16 の判定式を改めた。条件を足して**合否基準を厳しくした**もの（例: TC-AUTO-14 にチェック件数の判定を追加）を含む。「何を確かめる TC か」という意図は変えていない。各 TC 本文に、変更理由と false-green 検証を記載している。
 >
+> **判定式の追加・改訂（2026-10-15・敵対的レビュー第 1・2 周）**: TC-AUTO-13 に判定 0・0b・0c を追加した（根拠にする CI の job を現コードに結び付ける。ログとコミットは同じ job_id から取る）。TC-AUTO-15 に判定 3（全 8 固定値）と判定 4（推移的依存 anyio / kombu）を追加した。TC-AUTO-16 は判定 8・10 の件数判定を `--numstat` に替え、判定 11（`requirements-dev.txt` を触ったコミットの数）を追加した。いずれも合否基準を厳しくする方向の変更である。
+>
 > **合格条件の定義場所（2026-10-14・fix-loop で是正）**: 合格とする exit code は「TC 一覧」の『合格条件』列だけで定める。第 2 周で TC-AUTO-06 / 07 を「exit 1 のときだけ合格」に変えた際、合否の書き方が文書中に散らばっていたため、書き換え漏れ（同じ TC 本文の旧 exit code 記述など）が残った。その再発を防ぐため、定義を 1 か所にまとめた。
 
 ---
@@ -58,6 +60,7 @@
   TC-AUTO-15 判定 2 は正規表現の `|` が gate のチェーン文字ガード（UNSAFE）に掛かるため、パッケージごとに 2 行へ分割した。
   TC-AUTO-15 は 2026-10-14（敵対的レビュー第 1 周の指摘）で厳格化: 判定 1 に -x（行全体一致）、判定 2 を大文字小文字無視＋ハイフン/アンダースコア両対応に変更。
   第 2 周で判定 2 の行頭アンカーを外した（editable install のコメント行・-e 行も検出するため）。TC-AUTO-05 は requirements-dev.txt も対象に追加（Dockerfile でイメージに入るため）。
+  2026-10-15 に TC-AUTO-15 判定 3（全 8 固定値・7 行）と判定 4（推移的依存 anyio / kombu・2 行）を追加。
 -->
 ```bash
 # TC-AUTO-05 判定 1・2（guardian / django-extensions が requirements / requirements-dev / settings に無い）
@@ -85,6 +88,9 @@ grep -qx 'django-redis==7.0.0' docs/tests/open/I151_pip_freeze.txt
 grep -qx 'openai==3.31.0' docs/tests/open/I151_pip_freeze.txt
 grep -qx 'pytest-django==4.14.0' docs/tests/open/I151_pip_freeze.txt
 grep -qx 'pytest==9.0.3' docs/tests/open/I151_pip_freeze.txt
+# TC-AUTO-15 判定 4（宣言ファイルには無い推移的依存が記録されている＝requirements の写しではなく実コンテナの freeze である。anyio は R6 の対象）
+grep -qx 'anyio==4.15.1' docs/tests/open/I151_pip_freeze.txt
+grep -qx 'kombu==5.6.2' docs/tests/open/I151_pip_freeze.txt
 ```
 
 ---
@@ -350,24 +356,32 @@ E2E はログイン〜主要画面の通しを担保する。**「まっさら�
 
 **合否は CI 記録で判定する（AC-13 の正式な判定）**:
 
-準備 1（CI の E2E ジョブログを保存。`<run_id>` / `<job_id>` は `gh pr checks 269 --json name,link` の E2E Tests (Playwright) 行から取る）:
+**使う ID は `<job_id>` の 1 つだけ**（`gh pr checks 269 --json name,link` の E2E Tests (Playwright) 行の link 末尾）。ログもコミットも、この同じ job から取る。
+
+準備 1（CI の E2E ジョブログを保存）:
 ```bash
-gh run view <run_id> --log --job <job_id> > /tmp/i151_e2e_ci.log
+gh run view --log --job <job_id> > /tmp/i151_e2e_ci.log
 ```
 
-準備 0（使う run の head コミットを取得）:
+準備 0（同じ job がテストしたコミットを取得）:
 ```bash
-gh run view <run_id> --json headSha -q .headSha > /tmp/i151_e2e_run_sha.txt
+gh api repos/osushi0404-dev/study-app-multitenant/actions/jobs/<job_id> -q .head_sha > /tmp/i151_e2e_run_sha.txt
 ```
 
-判定 0（その run の後に、`docs/` 以外の変更が 1 つも無い）: `git diff --quiet "$(cat /tmp/i151_e2e_run_sha.txt)" HEAD -- ':(top)' ':(top,exclude)docs'`
+判定 0（その job の後に、`docs/` 以外の変更が 1 つも無い）: `git diff --quiet "$(cat /tmp/i151_e2e_run_sha.txt)" HEAD -- ':(top)' ':(top,exclude)docs'`
+
+判定 0b（手元に、`docs/` 以外の未コミットの変更が無い）: `git diff --quiet HEAD -- ':(top)' ':(top,exclude)docs'`
+
+判定 0c（手元の HEAD が push 済みで、PR の head と同じ。記録用の docs コミットを push した後に判定する）: `test "$(git rev-parse HEAD)" = "$(gh pr view 269 --json headRefOid -q .headRefOid)"`
 
 判定 1（Playwright の合格サマリ行がある）: `grep -qE ' [0-9]+ passed \(' /tmp/i151_e2e_ci.log`
 
 判定 2（flaky・failed・skipped・did not run・interrupted の行が無い）: `! grep -qE ' [0-9]+ (flaky|failed|skipped|did not run|interrupted)$' /tmp/i151_e2e_ci.log`
 
-- **合格**: 判定 0・1・2 とも exit 0
+- **合格**: 判定 0・0b・0c・1・2 とも exit 0
 - **不合格**: 非ゼロ
+- **ID を job の 1 つに絞った理由（2026-10-15・敵対的レビュー第 2 周）**: 第 1 周の版は、コミットを `<run_id>` から、ログを `--job <job_id>` から取っていた。`gh run view` は `--job` を渡すと位置引数の run_id を無視し、その job のログを返す。そのため、新しい run_id と旧 job_id（本文の false-green 検証欄にある 97222730997）を組み合わせると、旧 run（ac7a1dd・openai 1.3.0）のログで判定 0・1・2 がすべて合格した（メインセッションで再現。`gh run view 38711268663 --log --job 97222730997` の出力に `openai==1.3.0` と `7 passed (15.4s)` が含まれる）。ログとコミットを同じ job_id から取れば、組み合わせの誤りは起こらない
+- **判定 0b・0c を足した理由（同上）**: 判定 0 は「job のコミット」と「手元の HEAD」を比べる。手元にコード変更が未コミットで残っている場合や、手元の HEAD が PR の head とずれている場合（push 忘れ、remote 側だけにある merge コミット）は、判定 0 だけでは見逃す。なお pull_request の CI がテストするのは develop との合成（`refs/pull/269/merge`）で、job の後に develop が進んだ場合は判定 0 では検出しない。I151 のマージ前に develop が進んだら、CI を再実行してから判定する
 - **判定 0 を足した理由（2026-10-15・敵対的レビュー第 1 周）**: 旧手順は run を選ぶ条件が無かった。そのため、2026-10-14 の再実施記録は 2026-08-23 の run 32651105381（head ac7a1dd・openai 1.3.0・I159 の lockfile 取り込み前）を根拠にしていた。その後の R6 再固定や I159 取り込みの後で E2E が通ることは示していなかった。判定 0 で、根拠にする run を「その後にコード・依存・設定の変更が無い」コミットに結び付ける。記録用の docs コミットは許す（「PR の head と一致」にすると、結果を記録するコミット自体が head を進めるため、永遠に合格できない）。run の後に `docs/` 以外が 1 行でも変わっていれば exit 1、run の SHA が手元に無ければ exit 128 で、どちらも不合格
 - **判定 2 を足した理由（2026-10-14・fix-loop）**: `e2e/playwright.config.ts` は `retries: 2` を条件なしで設定している。1 回失敗して再試行で通ったテスト（flaky）でも、Playwright は exit 0 を返す。Django 5.2 化で生じた間欠的な不具合を見逃さないよう、flaky が 0 件であることを判定する（CI 設定 `e2e.yml` と `playwright.config.ts` は I151 の範囲外のため変更しない）
 - **判定 2 の `!` がファイル不在で合格に反転しない理由**: ログが保存されていなければ判定 1 が exit 2 で不合格になるため、TC 全体として不合格になる
@@ -453,7 +467,9 @@ docker compose exec -T backend pip freeze > docs/tests/open/I151_pip_freeze.txt
 - 判定 3（2026-10-15 追加）: 記録が、宣言側（TC-AUTO-11A / 11B の判定 A-1・B-1）の全 8 固定値と行全体で一致する。決定論ゲート欄に 7 行で宣言（Django は判定 1 と同じ）
 - **判定 3 を足した理由（2026-10-15・敵対的レビュー第 1 周）**: 判定 1・2 は Django の 1 行と、除去した 2 パッケージが無いことしか見ていなかった。そのため、R6 の再ビルド前の古い記録（openai 1.3.0・脆弱な anyio 3.7.1。`git show bca4503:docs/tests/open/I151_pip_freeze.txt`）でも、`Django==5.2.17` の 1 行だけのファイルでも全判定が合格した。R6 の後に記録の更新を忘れても、`/code-review` の決定論ゲートは OK のままだった。判定 3 で、記録を宣言側の固定値に縛る
 - **false-green 検証（2026-10-15 実施）**: 現在の記録で判定 3 の 7 行すべて exit 0。R6 前の記録（bca4503 版）では `openai==3.31.0` の行が exit 1。`Django==5.2.17` だけのファイルでは 7 行すべて exit 1
-- **合格**: 判定 1・2・3 の**すべてが exit 0**
+- 判定 4（2026-10-15・敵対的レビュー第 2 周で追加）: 宣言ファイル（requirements / requirements-dev）には書かれていない推移的依存 `anyio==4.15.1`（R6 で CVE を解消した対象）と `kombu==5.6.2`（イシュー決定 7-C で据え置きを確認する対象）が記録にある。判定 3 だけでは、コンテナを作り直さずに `backend/requirements*.txt` を連結しただけのファイルでも判定 1〜3 がすべて合格した（判定 3 は宣言の固定値をもう一度書いたものなので、宣言そのものと一致するだけ）。判定 4 は、記録が「実際のコンテナから取った freeze」であることを判定する。再ビルドで anyio / kombu が変わった場合は、記録の更新と同時にこの 2 行も更新する
+- **判定 4 の false-green 検証（2026-10-15 実施）**: 現在の記録で 2 行とも exit 0。requirements 2 ファイルを連結したファイルでは 2 行とも exit 1。R6 前の記録（bca4503 版・anyio 3.7.1）では anyio の行が exit 1
+- **合格**: 判定 1・2・3・4 の**すべてが exit 0**
 - **この形にした理由**: 「記録した」という主張を人手判定に委ねると、貼り忘れても合格になる。専用ファイルを grep 対象にすることで、記録の有無と中身の正しさを exit code で判定できる（文書冒頭の「合否判定はすべて exit code」を満たす）
 - **実装前の状態（false-green 検証）**: 記録ファイルが存在しないため判定 1 が **exit 2**（grep のファイル不在エラー・非ゼロ）になる。ベースラインの `pip freeze` をそのまま保存した場合は、除去前の 2 パッケージが含まれるため判定 2 が **exit 1** になる
 - **ベースライン（実装前・2026-08-22）**: Django 4.2.30 / celery 5.3.4 / kombu 5.6.2 / amqp 5.3.1 / billiard 4.2.4 / vine 5.1.0 / redis 5.0.1 / djangorestframework 3.15.2 / django-guardian 2.4.0 / django-extensions 3.2.3 / pytest 8.3.4 / pytest-django 4.9.0
@@ -532,7 +548,15 @@ git log origin/develop..HEAD --grep='^chore(I151)' --numstat --format= > /tmp/i1
 - **件数判定を `--numstat` に替えた理由（2026-10-15・敵対的レビュー第 1 周）**: 旧判定 `grep -cE '^[-+][^-+]'` は、差分行のうち「+/- の直後が +/- の行」と空行を数えなかった。そのため `+--extra-index-url ...`（取得元の追加）・`+-e git+...`（editable install）・`+-r other.txt`・空行の追加を 2 段目や R6 コミットに混ぜても件数が 2 のままで、判定 6〜10 がすべて合格していた。`--numstat` は git 自身が追加・削除行を全行数えるため、行の中身による数え漏れが無い。差分ヘッダ（`---` / `+++`）と区別する必要も無くなる
 - **false-green 検証（2026-10-15 実施）**: 一時リポジトリで、正しい分け方（pytest 行だけ）→ exit 0。`--extra-index-url` の追加・`-e git+...` の追加・空行の追加・`-r other.txt` の追加 → いずれも `2	1	...` となり exit 1。空コミット → 出力なしで exit 1。実リポジトリでは 2 段目（3a6e0e8）・R6（055aa11）とも `1	1	...` で exit 0
 
-- **合格**: 判定 1〜10 の**すべてが exit 0**
+準備 9（`requirements-dev.txt` を触ったコミットの一覧）:
+```bash
+git log origin/develop..HEAD --oneline -- backend/requirements-dev.txt > /tmp/i151_dev_commits.txt
+```
+
+判定 11（`requirements-dev.txt` を触ったコミットはちょうど 2 つで、`fix(I151)` 1 つ（pytest-django）と `chore(I151)` 1 つ（pytest））: `test "$(wc -l < /tmp/i151_dev_commits.txt)" -eq 2` と `test "$(grep -c 'fix(I151)' /tmp/i151_dev_commits.txt)" -eq 1` と `test "$(grep -c 'chore(I151)' /tmp/i151_dev_commits.txt)" -eq 1` の 3 行
+
+- **判定 11 を足した理由（2026-10-15・敵対的レビュー第 2 周）**: 判定 3・4 はコミット数を `requirements.txt` についてしか数えていなかった。`requirements-dev.txt` は 2 段目の中身だけを照合していた。そのため、pytest 9 を前提にするプラグインを足す 3 つ目のコミット（例: `test(I151): ...`）が混ざっても判定 1〜10 はすべて合格し、「2 段目を落とせば pytest 9 を取り消せる」（計画書 §8）が成り立たなくなっていた
+- **合格**: 判定 1〜11 の**すべてが exit 0**
 - **判定 5〜8 を足した理由（2026-10-14・fix-loop）**: 判定 2 は件名に `chore(I151)` を含むコミットがあることしか見ていなかった。そのため、pytest を 1 段目にまとめて 2 段目を空のコミットにするような誤った分け方でも、判定 1〜4 がすべて合格していた。それでは「2 段目のコミットを落とすだけで pytest 9 を取り消せる」という退避手順（計画書 §8）が成り立たない
 - **false-green 検証（2026-10-14 実施）**: 実リポジトリで判定 5〜8 がすべて exit 0（2 段目＝3a6e0e8 は `requirements-dev.txt` の pytest 行だけを変更）。一時リポジトリでの結果は次のとおり。2 段目が空コミット → 判定 6・7・8 がすべて不合格。2 段目に pytest 以外の行が混入 → 判定 8 の件数判定が不合格。正しい分け方 → 全判定が合格
 - **判定 4 を足した理由（2026-10-14・敵対的レビュー第 2 周）**: 判定 1〜3 だけでは、「requirements.txt を触ったコミットが 1 つある」ことしか分からず、それが 1 段目かどうかは確かめていなかった。依存更新を全部 2 段目（chore）に入れるような誤った分け方でも合格してしまう。2026-10-14 に実リポジトリで exit 0（該当コミット 4877e18 は `fix(I151)`）、chore だけのダミー記録で exit 1 を確認
@@ -543,7 +567,9 @@ git log origin/develop..HEAD --grep='^chore(I151)' --numstat --format= > /tmp/i1
 
 ## TC-AUTO-17: レート制限のカウンタ保存が実コンテナで機能する（AC-21・security-review 由来）
 
-**なぜ必要か**: `@ratelimit`（ログイン 5/5m・登録 10/5m・パスワードリセット 3/15m 等のブルートフォース防御）は、カウンタを **`default` キャッシュ**に保存する（`settings.py` の `RATELIMIT_USE_CACHE = 'default'`）。その `default` は本 PR で **django-redis 5.4.0 → 7.0.0（メジャー 2 段）** に更新され、しかも `IGNORE_EXCEPTIONS: True` が設定されているため**失敗しても例外が出ずに握り潰される（フェイルオープン）**。
+**なぜ必要か**: `@ratelimit`（ログイン 5/5m・登録 10/5m・パスワードリセット 3/15m 等のブルートフォース防御）は、カウンタを **`default` キャッシュ**に保存する（`settings.py` の `RATELIMIT_USE_CACHE = 'default'`）。その `default` は本 PR で **django-redis 5.4.0 → 7.0.0（メジャー 2 段）** に更新され、しかも `IGNORE_EXCEPTIONS: True` が設定されているため**失敗しても例外が出ずに握り潰される**。
+
+> **訂正（2026-10-15・敵対的レビュー第 1・2 周）**: 当初は、握り潰された結果「レート制限がフェイルオープンする（総当たり防御が消える）」と書いていた。実際は逆である。django-ratelimit は、カウンタを取得できないとき（`count is None`）、既定の `RATELIMIT_FAIL_OPEN=False` により**遮断**する（`django_ratelimit/core.py:249-252`。新イメージで確認）。つまりカウンタ操作が壊れると、正しいパスワードのログインを含め、`@ratelimit` 付きの全経路が 403 になる（**フェイルクローズ＝可用性の喪失**）。この TC が検出するのは「django-redis 7 でカウンタ操作が壊れて、全利用者がログインできなくなる」退行である。Redis 障害時の扱いは計画書の残余リスク申し送りを参照
 
 **既存テストでは検出できない**: `backend/core/tests/test_I127_throttling.py` は 4 つのキャッシュをすべて `LocMemCache` に差し替えるため、django-redis は一度も実行されない。つまり 94 件が全部 pass しても、実環境でレート制限が黙って無効化されている可能性が残る。
 
@@ -561,7 +587,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 判定 3（カウンタが加算される）: `grep -q 'incr2 2' /tmp/i151_rl.txt`
 
 - **合格**: 判定 1〜3 の**すべてが exit 0**
-- **不合格**: 非ゼロ（＝カウンタが機能せず、レート制限がフェイルオープンしている）
+- **不合格**: 非ゼロ（＝カウンタが機能していない。django-ratelimit はこのとき遮断側に倒れるため、`@ratelimit` 付きの全経路が 403 になる。2026-10-15 訂正）
 - **`python -c` ではなく `manage.py shell -c` を使う理由（実装中に是正）**: `python -c` は Django の設定を読み込まないため `ImproperlyConfigured: Requested setting CACHES` で落ちる（実装時に実測）。`manage.py shell -c` は設定済みの状態で実行される
 - **設計時点の実測（2026-08-23・ホスト venv）**: django-redis 7.0.0 に対して `add_new True` / `add_dup False` / `incr 1` / `incr 2` を確認済み。ただし**ホスト venv の結果は合否根拠にしない**（イシュー決定 5）ため、再ビルド後の実コンテナで再実行する
 
@@ -622,7 +648,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 
 2026-10-14 の再実施表のうち、TC-AUTO-12 / 13 / 14 は R6（055aa11 / 9a6f809）と I159 の取り込み（729dfbd / 5c31947）**より前**の状態を根拠にしていた。TC-AUTO-13 の CI run 32651105381 は 2026-08-23 の ac7a1dd（openai 1.3.0）。TC-AUTO-12 / 14 は R6 前の第 1・2 周の実行。そのため、最新のコードで取り直した。
 
-**記録していなかった CI 失敗**: R6 を push した 9a6f809 の CI run 38564774555 は **FAILURE** だった（`Frontend Lint & Security` の npm audit。backend 側 4 チェックは success）。原因は frontend の推移的依存 proxy-addr / shell-quote の critical で、I151 の変更（backend のみ）が原因ではない。I159（#276）で是正し、I151 へ取り込んだ（5c31947）。取り込み後の run 38711268649（CI）/ 38711268663（E2E）は全 6 チェックが success。
+**記録していなかった CI 失敗**: R6 を push した 9a6f809 の CI run 38564774555 は **FAILURE** だった（失敗は `Frontend Lint & Security` の npm audit だけ。Backend Lint & Security・Backend Tests・Frontend Type Check・Frontend Tests の 4 つは success。同じ SHA の E2E run 38564774645 も success）。原因は frontend の推移的依存 proxy-addr / shell-quote の critical で、I151 の変更（backend のみ）が原因ではない。I159（#276）で是正し、I151 へ取り込んだ（5c31947）。取り込み後の run 38711268649（CI）/ 38711268663（E2E）は全 6 チェックが success。
 
 | TC | 結果 | 実施日 | 備考 |
 |---|---|---|---|

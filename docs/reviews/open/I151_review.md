@@ -52,7 +52,7 @@
 ### 7. celery と推移的依存
 - [ ] worker のログでタスクの**成功**が確認できる（TC-AUTO-10・beat が投げただけの確認になっていない）
 - [ ] ログに `ERROR` / `Traceback` がない
-- [ ] 再ビルド後の `pip freeze` が `docs/tests/open/I151_pip_freeze.txt` に記録・コミットされており、除去した 2 パッケージが含まれていない（TC-AUTO-15 判定 1・2）
+- [ ] 再ビルド後の `pip freeze` が `docs/tests/open/I151_pip_freeze.txt` に記録・コミットされており、除去した 2 パッケージが含まれていない。宣言側の全固定値と、推移的依存 anyio / kombu も記録されている（TC-AUTO-15 判定 1〜4。判定 3・4 は 2026-10-15 追加）
 - [ ] `celery` / `celery-beat` が**再ビルド後のイメージ**で起動している（旧イメージのままになっていない）
 
 ### 8. コミット分割
@@ -88,5 +88,5 @@
 
 各回の判定は次の記録を正とする（2026-10-15 記入）:
 - `/code-review`: `docs/reviews/I151_code_review_*.md`（最新 20261015_1826＝OK・RISK YES）
-- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。その是正後の再実施は 20261015 の記録）
+- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261015_*.md`。ステージ終了時に作成する）
 - fix-loop: `docs/reviews/I151_fix_*.md`
