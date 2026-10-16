@@ -2,6 +2,7 @@
 import functools
 import json
 import os
+import posixpath
 import re
 import shlex
 import subprocess
@@ -408,13 +409,14 @@ def _check_edit_write(data: dict):
             _ask(f"高リスクファイル（依存/スキーマ/インフラ）の編集です。確認してください: {rel}")
     sys.exit(0)
 
-# --- I174: 危険操作・外部送信・コンテナ内操作の判定 ---
-# 方針（plan_I174.md 0 章）:
-#   - コマンドを「単純コマンド」の列に読み解いてから判定する（付着した ; && | ( ) $(...) `...`・
-#     ヒアドキュメント・リダイレクト・包むコマンド〔sh -c・eval・env・timeout 等〕を展開する）。
-#   - 危険操作・外部送信・秘密情報は列挙で判定し、ホストとコンテナの両方に当てる。
-#   - コンテナ内（docker exec / docker compose exec|run / docker-compose exec|run）の操作は、
-#     許可リストに入るものだけを素通しにし、それ以外は人の確認（ask）に回す（fail-safe）。
+# --- I174: 危険操作・外部送信・秘密情報・コンテナ内操作の判定 ---
+# 方針（plan_I174.md 0 章・0-9）:
+#   - コマンドを「単純コマンド」の列に読み解いてから判定する（付着した ; && | ( )・$(...)・`...`・
+#     ヒアドキュメント・リダイレクト・包むコマンド〔sh -c・eval・env・timeout・sudo 等〕を展開する）。
+#   - 危険操作・外部送信・秘密情報は列挙で判定し、ホスト・コンテナの両方に当てる。
+#   - docker compose exec|run（docker-compose も同じ）の中の操作は、許可リストに入るものだけを素通しにし、
+#     それ以外は人の確認（ask）に回す（fail-safe）。素の docker exec|run は列挙だけで判定する。
+#   - 脅威モデルは「事故」（Claude が普段書くコマンドでの事故を防ぐ。意図的な回避は対象外）。
 _MAX_WRAP_DEPTH = 4                 # sh -c・eval・$(...) の入れ子を展開する深さの上限
 _MAX_SCRIPT_BYTES = 1_000_000       # 中身を読む実行ファイルの大きさの上限
 # コンテナ内パス → リポジトリ相対パス（docker-compose.yml の backend/celery の volumes に合わせる。
@@ -427,14 +429,19 @@ _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _OPS = ("&&", "||", "|&", ">>", "<<<", ">&", "&>", "<&", ">|", "<>", ";", "&", "|", "(", ")", "<", ">", "\n")
 _SEPARATORS = {"&&", "||", ";", "&", "\n", "(", ")", "|", "|&"}
 _HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+_HEREDOC_STORE = []                 # ヒアドキュメント本文（$(...) の中から参照されても失われないよう共有する）
 
-# 危険操作・外部送信の列挙（Python コード＝manage.py shell / python -c / ヒアドキュメント本文 / 実行ファイル）
+# 危険操作・外部送信・秘密情報の列挙（Python コード＝manage.py shell / python -c / ヒアドキュメント本文 / 実行ファイル）
 _CODE_DANGER = (
-    (r"\.delete\(", "データ削除（.delete()）"),
-    (r"\b(objects|qs|queryset|\w+_qs)\b[^\n]*?\.update\(", "QuerySet の一括更新（.update()）"),
-    (r"\.bulk_update\(", "一括更新（bulk_update）"),
+    (r"(?<!cache)\.\s*delete\s*\(|\b_raw_delete\s*\(", "データ削除（.delete()）"),
+    (r"\bobjects\b[^;\n]*?\.update\s*\(", "QuerySet の一括更新（.update()）"),
+    (r"\b(qs|queryset|\w+_qs)\s*\.\s*update\s*\(", "QuerySet の一括更新（.update()）"),
+    (r"\.\s*bulk_update\s*\(", "一括更新（bulk_update）"),
     (r"call_command\(\s*['\"](flush|sqlflush|reset_db|loaddata)['\"]", "管理コマンドによる DB 全消去・上書き"),
     (r"call_command\(\s*['\"]migrate['\"][^)]*['\"]zero['\"]", "管理コマンドによるマイグレーション巻き戻し"),
+    (r"\bshutil\s*\.\s*rmtree\b|\bos\s*\.\s*(remove|unlink|rmdir|removedirs)\s*\(|\.\s*(unlink|rmdir)\s*\(",
+     "ファイルの削除（shutil.rmtree / os.remove 等）"),
+    (r"\bopen\s*\([^)]*,\s*['\"][^'\"]*[wax+]", "ファイルの書き込み（open の書き込みモード）"),
 )
 _CODE_EXTERNAL = (
     (r"\b(send_mail|send_mass_mail|mail_admins|mail_managers)\b", "メール送信"),
@@ -444,25 +451,52 @@ _CODE_EXTERNAL = (
     (r"\.(delay|apply_async)\(", "celery タスクの起動"),
     (r"\b\w+_task\s*\(", "celery タスク関数の直接実行"),
     (r"\bsend_study_reminders_task\b", "学習リマインダー送信タスク"),
-    (r"auth/register/", "登録 API（確認メールを送信）"),
-    (r"auth/password-reset/", "パスワード再設定依頼 API（メールを送信）"),
+    (r"auth/register/|reverse\(\s*['\"]register", "登録 API（確認メールを送信）"),
+    (r"auth/password-reset/|reverse\(\s*['\"]password_reset['\"]", "パスワード再設定依頼 API（メールを送信）"),
     (r"\bAIQuestionGenerator\b|problems/generate_(ai|adaptive)/|\bopenai\.", "OpenAI への送信"),
+    (r"\b(smtplib|socket|requests|urllib|httpx|http\.client)\b", "外部への通信"),
+    (r"\bsubprocess\b|\bos\s*\.\s*(system|popen|exec\w*|spawn\w*)\s*\(", "外部コマンドの実行"),
+    (r"\bos\s*\.\s*environ\b|\bgetenv\s*\(|/proc/|['\"][^'\"]*\.env['\"]|"
+     r"\bsettings\s*\.\s*(SECRET_KEY|DATABASES|EMAIL_HOST_PASSWORD|OPENAI_API_KEY|SENDGRID_API_KEY)\b",
+     "秘密情報（環境変数・.env・設定の鍵）の参照"),
 )
-_SQL_VERB_RE = re.compile(r"^\s*(drop|truncate|alter|update|delete|insert|create|grant|revoke)\b", re.I)
-_SECRET_PATH_RE = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets/.*|[^/]*\.(pem|key))$")
+_DJANGO_CTX_RE = re.compile(r"\bdjango\b|\bmanage\.py\b|\.models\b|DJANGO_SETTINGS_MODULE|\bconnection\b|"
+                            r"\bsettings\.|\bopenai\b|\bsmtplib\b")
+_SQL_VERB_RE = re.compile(r"^\s*(drop|truncate|alter|update|delete|insert|create|grant|revoke|with|merge)\b", re.I)
+_SECRET_PATH_RE = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets/.*|[^/]*\.(pem|key))$|^/proc/(\d+|self)/environ$")
+_SECRET_VAR_RE = re.compile(r"\$\{?[A-Za-z_]*(KEY|SECRET|PASSWORD|TOKEN|PASS)[A-Za-z_]*\}?")
 _SECRET_READERS = ("cat", "less", "more", "head", "tail", "grep", "rg", "sed", "awk", "strings", "cp",
-                   "base64", "xxd", "od", "tac", "nl", "bat", "vi", "vim", "nano")
+                   "base64", "xxd", "od", "tac", "nl", "bat", "vi", "vim", "nano", "sort", "uniq", "diff",
+                   "cmp", "jq", "wc", "cut", "tr", "file")
+_PATTERN_FIRST = ("grep", "rg", "sed", "awk")   # 最初の位置引数がパターン（パスではない）コマンド
+# .env に並ぶ設定名に当たりうる検索語（grep -r で .env の行が表示されうるもの）
+_ENV_NAME_HINT_RE = re.compile(r"(?i)key|secret|pass|token|api|email|smtp|db_|database|dsn|sendgrid|openai|"
+                               r"redis|_url|host|user|=|\.\*|^\.$|^\^")
+# curl の引数に当てる外部送信の列挙（_CODE_EXTERNAL のうち API のパスで判定するもの）
+_URL_EXTERNAL_RE = re.compile(r"auth/register/|auth/password-reset/|problems/generate_(ai|adaptive)/")
 
-# コンテナ内の許可リスト（plan_I174.md 0-5）
-_SAFE_MANAGE = ("test", "check", "showmigrations", "sqlmigrate", "dumpdata", "diffsettings", "help",
-                "version", "collectstatic")
-_SAFE_SQL_RE = re.compile(r"^\s*(select|show|explain(?!\s+analyze)|create\s+database)\b", re.I)
-_SAFE_META_RE = re.compile(r"^\\(d[a-zA-Z+]*|l\+?|conninfo|x|timing|pset|echo|q)(\s|$)")   # \! \copy \i \g は不可
-_SAFE_REDIS = ("PING", "INFO", "KEYS", "GET", "TTL", "PTTL", "EXISTS", "DBSIZE", "SCAN", "--SCAN", "TYPE",
+# docker compose exec|run の中の許可リスト（plan_I174.md 0-5・0-9）
+_SAFE_MANAGE = ("test", "check", "showmigrations", "sqlmigrate", "help", "version")
+_SAFE_SQL_RE = re.compile(r"^\s*(select|show|explain(?!\s*\(|\s+analy[sz]e)|create\s+database|with)\b", re.I)
+_UNSAFE_SQL_RE = re.compile(r"\b(lo_export|lo_import|pg_read_file|pg_read_binary_file|pg_write\w*|"
+                            r"pg_terminate_backend|pg_cancel_backend|pg_reload_conf|dblink\w*|set_config|"
+                            r"copy|insert|update|delete|merge|truncate|drop|alter|grant|revoke|nextval|setval)\b", re.I)
+_SAFE_META_RE = re.compile(r"^\\(d[a-zA-Z+]*|l\+?|conninfo|x|timing|pset|echo|q)$")
+_SAFE_REDIS = ("PING", "INFO", "KEYS", "GET", "TTL", "PTTL", "EXISTS", "DBSIZE", "SCAN", "TYPE",
                "HGETALL", "LRANGE", "SMEMBERS", "LLEN", "HLEN", "SCARD", "STRLEN")
-_SAFE_READ_CMDS = ("ls", "pwd", "cat", "head", "tail", "grep", "wc", "which", "whoami", "id", "echo", "true",
-                   "date", "uname", "hostname", "stat", "file", "du", "df", "ps", "printf", "test", "[", "sort",
-                   "uniq", "cut", "tr", "jq", "diff", "cmp", "basename", "dirname", "realpath", "readlink")
+_SAFE_READ_CMDS = ("ls", "pwd", "cat", "head", "tail", "grep", "wc", "which", "whoami", "id", "true",
+                   "date", "uname", "hostname", "stat", "file", "du", "df", "ps", "test", "[", "cut", "tr",
+                   "jq", "diff", "cmp", "basename", "dirname", "realpath", "readlink", "cd", "env")
+_PIPE_FILTERS = ("grep", "head", "tail", "wc", "sort", "cut", "tr", "jq", "uniq", "cat")
+_SAFE_COMPOSE_DEFAULT = ("e2e",)    # コンテナ内のコマンドを書かず既定コマンドで動かしてよいサービス
+_CURL_FLAGS = set("sSfIiLkv")
+_CURL_VALUE_OPTS = ("-H", "--header", "-w", "--write-out", "-m", "--max-time", "--connect-timeout", "-o",
+                    "--output", "-X", "--request", "-A", "--user-agent", "-e", "--referer")
+_CURL_BAD_RE = re.compile(r"^(-d|--data.*|-F|--form.*|-T|--upload-file|-x|--proxy.*|--resolve|--connect-to|"
+                          r"-K|--config|-O|--remote-name.*|--json|-b|--cookie|-c|--cookie-jar|-u|--user)$")
+_COMPOSE_EXEC_BOOL = ("-T", "-d", "-i", "-t", "-it", "-ti", "--rm", "--no-deps", "--service-ports",
+                      "--use-aliases", "--build", "--quiet-pull", "--detach", "--interactive", "--tty",
+                      "--no-TTY", "--privileged", "--remove-orphans")
 
 def _strip_env(toks: list) -> list:
     """先頭の環境変数の代入（`FOO=1 cmd ...` の `FOO=1`）を除いたトークン列を返す。"""
@@ -487,17 +521,17 @@ def _split_ops(tok: str) -> list:
             i += 1
     return out
 
-def _cut_heredocs(text: str):
-    """ヒアドキュメントの本文を取り出し、演算子の位置に __HEREDOC_n__ を置いたテキストと本文の一覧を返す。"""
+def _cut_heredocs(text: str) -> str:
+    """ヒアドキュメントの本文を _HEREDOC_STORE に移し、演算子の位置に __HEREDOC_n__ を置いたテキストを返す。"""
     lines = text.split("\n")
-    out, bodies, i = [], [], 0
+    out, i = [], 0
     while i < len(lines):
         line = lines[i]
         pending = []
 
         def repl(m):
             pending.append((m.group(3), m.group(1) == "-"))
-            return f" __HEREDOC_{len(bodies) + len(pending) - 1}__ "
+            return f" __HEREDOC_{len(_HEREDOC_STORE) + len(pending) - 1}__ "
         if "<<<" not in line:
             line = _HEREDOC_RE.sub(repl, line)
         out.append(line)
@@ -507,11 +541,11 @@ def _cut_heredocs(text: str):
             while i < len(lines):
                 cur = lines[i].lstrip("\t") if strip_tabs else lines[i]
                 i += 1
-                if cur == word:
+                if cur.strip() == word:
                     break
                 body.append(lines[i - 1])
-            bodies.append("\n".join(body))
-    return "\n".join(out), bodies
+            _HEREDOC_STORE.append("\n".join(body))
+    return "\n".join(out)
 
 def _cut_substitutions(text: str):
     """$(...) と `...` の中身を取り出し、その位置を __SUBST__ に置き換える（単一引用符の中は対象外）。"""
@@ -561,13 +595,13 @@ def _cut_substitutions(text: str):
         i += 1
     return "".join(out), subs
 
-def _new_cmd(toks: list, ctr: bool) -> dict:
-    return {"toks": toks, "ctr": ctr, "piped": False, "stdin": None, "heredoc": None, "herestr": None,
-            "note": None}
+def _new_cmd(toks: list, ctr: bool, compose: bool = False) -> dict:
+    return {"toks": toks, "ctr": ctr, "compose": compose, "piped": False, "stdin": None, "heredoc": None,
+            "herestr": None, "writes": False, "note": None, "workdir": None}
 
-def _raw_commands(text: str, ctr: bool):
+def _raw_commands(text: str, ctr: bool, compose: bool):
     """テキストを単純コマンド（dict）の列と、$(...) の中身の列に分ける（包むコマンドの展開はしない）。"""
-    text, bodies = _cut_heredocs(text)
+    text = _cut_heredocs(text)
     text, subs = _cut_substitutions(text)
     lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()<>\n")
     lex.whitespace = " \t\r"
@@ -577,16 +611,16 @@ def _raw_commands(text: str, ctr: bool):
         for t in lex:
             toks += _split_ops(t)
     except ValueError:
-        c = _new_cmd(text.split(), ctr)
+        c = _new_cmd(text.split(), ctr, compose)
         c["note"] = "引用符が閉じていない"
         return [c], subs
-    cmds, cur, piped, i = [], _new_cmd([], ctr), False, 0
+    cmds, cur, i = [], _new_cmd([], ctr, compose), 0
 
     def flush():
         nonlocal cur
         if cur["toks"] or cur["heredoc"] is not None or cur["stdin"] or cur["herestr"] is not None:
             cmds.append(cur)
-        cur = _new_cmd([], ctr)
+        cur = _new_cmd([], ctr, compose)
     while i < len(toks):
         t = toks[i]
         if t in _SEPARATORS:
@@ -596,7 +630,8 @@ def _raw_commands(text: str, ctr: bool):
             continue
         m = re.fullmatch(r"__HEREDOC_(\d+)__", t)
         if m:
-            cur["heredoc"] = bodies[int(m.group(1))]
+            k = int(m.group(1))
+            cur["heredoc"] = _HEREDOC_STORE[k] if k < len(_HEREDOC_STORE) else ""
             i += 1
             continue
         nxt = toks[i + 1] if i + 1 < len(toks) else None
@@ -612,6 +647,8 @@ def _raw_commands(text: str, ctr: bool):
             i += 2
             continue
         if t in (">", ">>", ">&", "&>", "<&", ">|", "<>"):
+            if t != "<&" and nxt is not None and not nxt.isdigit() and nxt not in ("/dev/null", "-"):
+                cur["writes"] = True                 # ファイルへの書き込み（fd の複製・/dev/null は除く）
             i += 2                                   # 出力先は引数に入れない
             continue
         cur["toks"].append(t)
@@ -632,44 +669,64 @@ _DOCKER_GLOBAL_VALUE = ("--context", "-c", "-H", "--host", "--config", "-l", "--
 _COMPOSE_GLOBAL_VALUE = ("-f", "--file", "-p", "--project-name", "--project-directory", "--env-file",
                          "--profile", "--ansi", "--progress", "--parallel")
 _EXEC_VALUE = ("-e", "--env", "-u", "--user", "-w", "--workdir", "--index", "--env-file", "-v", "--volume",
-               "--name", "--entrypoint", "-p", "--publish", "-l", "--label", "--network", "--pull")
+               "--name", "--entrypoint", "-p", "--publish", "-l", "--label", "--network", "--pull", "--mount",
+               "--platform", "--cap-add", "--cap-drop", "--add-host", "--hostname", "-h", "--memory", "-m",
+               "--cpus", "--restart", "--gpus", "--ipc", "--pid", "--security-opt", "--tmpfs", "--ulimit",
+               "--volumes-from", "--detach-keys", "--device", "--dns", "--expose", "--link", "--log-driver",
+               "--log-opt", "--runtime", "--shm-size", "--stop-signal", "--user", "--group-add")
 
-def _docker_parts(toks: list):
-    """docker / docker-compose のコマンドを (サブコマンド列, コンテナ内コマンド or None) に分解する。"""
+def _docker_parts(toks: list) -> dict:
+    """docker / docker-compose のコマンドを分解する（subs・args・inner・compose・entrypoint・workdir・unknown）。"""
     head = os.path.basename(toks[0])
     rest = toks[1:]
+    compose = head == "docker-compose"
     if head == "docker":
         rest = rest[_skip_opts(rest, _DOCKER_GLOBAL_VALUE):]
         if rest[:1] == ["compose"]:
-            rest = rest[1:]
-            rest = rest[_skip_opts(rest, _COMPOSE_GLOBAL_VALUE):]
-            subs = ["compose"] + rest[:1]
-        else:
-            subs = rest[:1]
-    else:
+            compose, rest = True, rest[1:]
+    if compose:
         rest = rest[_skip_opts(rest, _COMPOSE_GLOBAL_VALUE):]
-        subs = ["compose"] + rest[:1]
+    if not compose and rest[:1] == ["container"] and rest[1:2] in (["exec"], ["run"], ["inspect"], ["cp"]):
+        rest = rest[1:]                              # docker container exec|run|inspect|cp
+    subs = (["compose"] if compose else []) + rest[:1]
+    res = {"subs": subs, "args": rest[1:], "inner": None, "compose": compose, "entrypoint": None,
+           "workdir": None, "unknown": False}
     if subs[-1:] in (["exec"], ["run"]):
-        args = rest[1:]
-        j = _skip_opts(args, _EXEC_VALUE)
-        return subs, rest[1:], args[j + 1:]          # [j] はサービス名 / コンテナ名
-    return subs, rest[1:], None
+        args, j = rest[1:], 0
+        while j < len(args) and args[j].startswith("-") and args[j] != "-":
+            a = args[j]
+            name, _eq, val = a.partition("=")
+            if name in _EXEC_VALUE:
+                v = val if _eq else (args[j + 1] if j + 1 < len(args) else "")
+                if name == "--entrypoint":
+                    res["entrypoint"] = v
+                if name in ("-w", "--workdir"):
+                    res["workdir"] = v
+                j += 1 if _eq else 2
+                continue
+            if a not in _COMPOSE_EXEC_BOOL:
+                res["unknown"] = True                # 知らないオプション（値の有無が分からない）
+            j += 1
+        res["service"] = args[j] if j < len(args) else ""
+        res["inner"] = args[j + 1:]
+    return res
 
-def _resolve_exec_file(path: str, in_container: bool):
+def _resolve_exec_file(path: str, in_container: bool, workdir=None):
     """実行ファイルのホスト上のパスを返す。読み替えできなければ None。"""
     root = _current_worktree_root()
     if in_container:
-        p = path if path.startswith("/") else _CONTAINER_WORKDIR + path
+        base = (workdir.rstrip("/") + "/") if workdir else _CONTAINER_WORKDIR
+        p = posixpath.normpath(path if path.startswith("/") else base + path)   # -w と .. を考える
         for cpre, hpre in _CONTAINER_MOUNTS:
-            if p.startswith(cpre) and root:
-                return os.path.join(root, hpre + p[len(cpre):])
+            if root and (p == cpre.rstrip("/") or p.startswith(cpre)):
+                return os.path.join(root, hpre + p[len(cpre):]) if p.startswith(cpre) else os.path.join(root, hpre)
         return None
     return os.path.abspath(path)
 
 @functools.lru_cache(maxsize=256)
-def _read_exec_file(path: str, in_container: bool):
+def _read_exec_file(path: str, in_container: bool, workdir=None):
     """実行ファイルの中身を返す。ハーネス自身のコードは ""（判定しない）。読めなければ None（stderr に通知）。"""
-    host = _resolve_exec_file(path, in_container)
+    host = _resolve_exec_file(path, in_container, workdir)
     root = _current_worktree_root()
     if host and root and os.path.realpath(host).startswith(
             os.path.join(os.path.realpath(root), "scripts", "claude") + os.sep):
@@ -683,44 +740,83 @@ def _read_exec_file(path: str, in_container: bool):
         print(f"[guard] 実行ファイルの中身を確認できませんでした（判定を省略）: {path}", file=sys.stderr)
         return None
 
-def _unknown(ctr: bool, note: str, toks=None) -> dict:
-    c = _new_cmd(list(toks or []), ctr)
-    c["note"] = note
-    return c
+def _unknown(c: dict, note: str, toks=None) -> dict:
+    d = dict(c)
+    d["toks"] = list(toks or [])
+    d["note"] = note
+    return d
+
+def _wrap_skip(head: str, rest: list):
+    """包むコマンド（sudo・nice・timeout 等）の後ろの、中のコマンドのトークン列を返す。包むコマンドでなければ None。"""
+    if head in ("time", "nohup", "command", "builtin", "setsid", "busybox", "{", "}", "!"):
+        return rest[_skip_opts(rest, ()):]
+    if head == "exec":
+        return rest[_skip_opts(rest, ("-a",)):]
+    if head == "sudo":
+        return rest[_skip_opts(rest, ("-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t")):]
+    if head == "nice":
+        return rest[_skip_opts(rest, ("-n", "--adjustment")):]
+    if head == "ionice":
+        return rest[_skip_opts(rest, ("-c", "-n", "-p", "--class", "--classdata")):]
+    if head == "stdbuf":
+        return rest[_skip_opts(rest, ("-i", "-o", "-e")):]
+    if head == "watch":
+        return rest[_skip_opts(rest, ("-n", "--interval", "-d")):]
+    if head == "timeout":
+        j = _skip_opts(rest, ("-s", "--signal", "-k", "--kill-after"))
+        return rest[j + 1:]
+    if head == "xargs":
+        return rest[_skip_opts(rest, ("-I", "-i", "-n", "-L", "-P", "-d", "-a", "-E", "-s")):]
+    if head == "flock":
+        j = _skip_opts(rest, ("-w", "--timeout", "-E", "--conflict-exit-code", "-c", "--command"))
+        return rest[j + 1:]
+    return None
 
 def _expand(c: dict, depth: int) -> list:
     """包むコマンドを外し、sh -c / eval / スクリプト / docker exec の中身を単純コマンドの列に展開する。"""
     toks = _strip_env(c["toks"])
     if depth > _MAX_WRAP_DEPTH:
-        return [_unknown(c["ctr"], "入れ子が深すぎる", toks)]
+        return [_unknown(c, "入れ子が深すぎる", toks)]
     if not toks:
         return [c] if (c["heredoc"] is not None or c["stdin"] or c["herestr"] is not None) else []
     head = os.path.basename(toks[0])
     rest = toks[1:]
-    nc = dict(c)
 
     def again(new_toks):
         d = dict(c)
         d["toks"] = new_toks
         return _expand(d, depth + 1)
-    if head in ("time", "nohup", "command", "builtin", "exec", "sudo", "{", "}", "!"):
-        return again(rest[_skip_opts(rest, ("-u", "-g"))] if head == "sudo" else rest)
-    if head == "nice":
-        return again(rest[_skip_opts(rest, ("-n", "--adjustment"))])
-    if head == "timeout":
-        j = _skip_opts(rest, ("-s", "--signal", "-k", "--kill-after"))
-        return again(rest[j + 1:])
-    if head == "xargs":
-        j = _skip_opts(rest, ("-I", "-i", "-n", "-L", "-P", "-d", "-a", "-E", "-s"))
-        return again(rest[j:])
+
+    def sub(text, **kw):
+        return list(_parse(text, kw.get("ctr", c["ctr"]), depth + 1, kw.get("compose", c["compose"])))
+    inner = _wrap_skip(head, rest)
+    if inner is not None:
+        flock_cmd = _opt_values(rest, ("-c", "--command")) if head == "flock" else []
+        return (again(inner) if inner else []) + [e for s in flock_cmd for e in sub(s)]
     if head == "env":
         j = _skip_opts(rest, ("-u", "--unset", "-C", "--chdir", "-S", "--split-string"))
         k = j
         while k < len(rest) and _ENV_ASSIGN_RE.match(rest[k]):
             k += 1
-        return again(rest[k:]) if k < len(rest) else [c]          # 引数なしの env は表示（秘密情報）
+        return again(rest[k:]) if k < len(rest) else [dict(c, toks=toks)]   # 引数なしの env は表示
     if head == "eval":
-        return list(_parse(" ".join(rest), c["ctr"], depth + 1))
+        return sub(" ".join(rest))
+    if head in ("su", "script"):
+        return [e for s in _opt_values(rest, ("-c", "--command")) for e in sub(s)] or [dict(c, toks=toks)]
+    if head == "find":
+        out, base, k = [], [], 0
+        while k < len(rest):
+            if rest[k] in ("-exec", "-execdir", "-ok", "-okdir"):
+                j = k + 1
+                while j < len(rest) and rest[j] not in (";", "+", "\\;"):
+                    j += 1
+                out += again(rest[k + 1:j])
+                base.append(rest[k])
+                k = j + 1
+                continue
+            base.append(rest[k])
+            k += 1
+        return [dict(c, toks=[toks[0]] + base)] + out
     if head in _WRAP_SHELLS:
         flags, pos, k = [], [], 0
         while k < len(rest):                                        # -o/-O は値を 1 つ取る
@@ -734,59 +830,88 @@ def _expand(c: dict, depth: int) -> list:
                 pos.append(a)
             k += 1
         if any("c" in f[1:] for f in flags) and pos:
-            return list(_parse(pos[0], c["ctr"], depth + 1))
+            return sub(pos[0])
         if pos and not any("s" in f[1:] for f in flags):            # sh <スクリプト>
             if not c["ctr"]:
-                return [c]                                          # ホストの bash スクリプトは見ない
-            body = _read_exec_file(pos[0], True)
+                return [dict(c, toks=toks)]                         # ホストのシェルスクリプトは見ない
+            body = _read_exec_file(pos[0], True, c["workdir"])
             if body is None:
-                return [_unknown(True, f"スクリプトを読めない: {pos[0]}", toks)]
-            return list(_parse(body, True, depth + 1))
+                return [_unknown(c, f"スクリプトを読めない: {pos[0]}", toks)]
+            return sub(body)
         if c["heredoc"] is not None:                                # bash -s <<EOF
-            return list(_parse(c["heredoc"], c["ctr"], depth + 1))
+            return sub(c["heredoc"])
         if c["stdin"]:
             body = _read_exec_file(c["stdin"], False)
             if body is None:
-                return [_unknown(c["ctr"], f"スクリプトを読めない: {c['stdin']}", toks)]
-            return list(_parse(body, c["ctr"], depth + 1))
-        return [_unknown(c["ctr"], "中身の見えないシェル（パイプ等）", toks)]
+                return [_unknown(c, f"スクリプトを読めない: {c['stdin']}", toks)]
+            return sub(body)
+        return [_unknown(c, "中身の見えないシェル（パイプ等）", toks)]
     if head in _DOCKER_CLIS:
-        subs, _args, inner = _docker_parts(toks)
-        if inner is None:
-            nc["docker_subs"] = subs
-            return [nc]
-        if not inner:
-            return [_unknown(True, "コンテナ内のコマンドが無い", toks)]
-        d = dict(c)
-        d["toks"], d["ctr"] = inner, True
+        dp = _docker_parts(toks)
+        if dp["inner"] is None:
+            return [dict(c, toks=toks, docker=dp)]
+        inner_toks = list(dp["inner"])
+        if dp["entrypoint"]:
+            try:
+                inner_toks = shlex.split(dp["entrypoint"]) + inner_toks
+            except ValueError:
+                inner_toks = dp["entrypoint"].split() + inner_toks
+        d = dict(c, toks=inner_toks, ctr=True, compose=dp["compose"], workdir=dp["workdir"])
+        if dp["compose"] and (dp["unknown"] or dp["entrypoint"]):
+            return [_unknown(d, "読めない docker compose のオプション（未知のオプション・--entrypoint）",
+                             inner_toks)] + _expand(dict(d, compose=False), depth + 1)
+        if not inner_toks:
+            if dp["compose"] and dp["subs"][-1] == "run" and dp.get("service") in _SAFE_COMPOSE_DEFAULT:
+                return []                                           # 既定コマンドで動かす e2e
+            return [_unknown(d, "コンテナ内のコマンドが無い", [])]
         return _expand(d, depth + 1)
-    nc["toks"] = toks
-    return [nc]
+    return [dict(c, toks=toks)]
 
 @functools.lru_cache(maxsize=64)
-def _parse(text: str, ctr: bool = False, depth: int = 0) -> tuple:
+def _parse(text: str, ctr: bool = False, depth: int = 0, compose: bool = False) -> tuple:
     """コマンド文字列を、包むコマンドを外した単純コマンド（dict）のタプルに読み解く。"""
     if depth > _MAX_WRAP_DEPTH:
-        return (_unknown(ctr, "入れ子が深すぎる"),)
-    cmds, subs = _raw_commands(text, ctr)
+        return (_unknown(_new_cmd([], ctr, compose), "入れ子が深すぎる"),)
+    cmds, subs = _raw_commands(text, ctr, compose)
     out = []
     for c in cmds:
         out += _expand(c, depth)
     for s in subs:
-        out += list(_parse(s, ctr, depth + 1))
+        out += list(_parse(s, ctr, depth + 1, compose))
     return tuple(out)
 
-def _opt_value(toks: list, names: tuple):
-    """toks から `-c X` / `-cX` / `--command X` / `--command=X` 形式の値を返す（無ければ None）。"""
-    for i, t in enumerate(toks):
-        if t in names and i + 1 < len(toks):
-            return toks[i + 1]
+def _opt_values(toks: list, names: tuple) -> list:
+    """toks から `-c X` / `-cX` / `-tAc X`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。"""
+    vals, i = [], 0
+    shorts = [n[1] for n in names if not n.startswith("--") and len(n) == 2]
+    while i < len(toks):
+        t = toks[i]
+        hit = False
         for n in names:
+            if t == n and i + 1 < len(toks):
+                vals.append(toks[i + 1])
+                i += 2
+                hit = True
+                break
             if n.startswith("--") and t.startswith(n + "="):
-                return t[len(n) + 1:]
-            if not n.startswith("--") and len(n) == 2 and t.startswith(n) and len(t) > 2:
-                return t[2:]
-    return None
+                vals.append(t[len(n) + 1:])
+                i += 1
+                hit = True
+                break
+        if hit:
+            continue
+        if t.startswith("-") and not t.startswith("--") and len(t) > 2:
+            body = t[1:]
+            if body[-1] in shorts and body[:-1].isalpha() and i + 1 < len(toks):
+                vals.append(toks[i + 1])             # -tAc X
+                i += 2
+                continue
+            if body[0] in shorts:
+                vals.append(body[1:])                # -cX（付着形）
+                i += 1
+                continue
+        i += 1
+    return vals
 
 def _has_short(toks: list, letter: str, long_name: str = "") -> bool:
     """短いオプションのまとめ書き（-cd・-sfv 等）を含めて、letter のオプションがあれば True。"""
@@ -800,10 +925,13 @@ def _has_short(toks: list, letter: str, long_name: str = "") -> bool:
 def _strip_sql_literals(sql: str) -> str:
     return re.sub(r"'(?:[^']|'')*'", "''", sql)
 
+def _strip_sql_comments(sql: str) -> str:
+    return re.sub(r"--[^\n]*", " ", re.sub(r"/\*.*?\*/", " ", sql, flags=re.S))
+
 def _sql_is_destructive(sql: str) -> bool:
     """SQL（; 区切りの複数文可）に DROP/TRUNCATE/ALTER TABLE/WHERE なし UPDATE・DELETE があれば True。
-    SQL の文字列リテラル（'...'）の中身は判定しない。"""
-    for stmt in _strip_sql_literals(sql).split(";"):
+    SQL の文字列リテラル（'...'）とコメントの中身は判定しない。"""
+    for stmt in _strip_sql_comments(_strip_sql_literals(sql)).split(";"):
         s = stmt.lower()
         if re.search(r"\b(drop|truncate)\b", s) or re.search(r"\balter\s+table\b", s):
             return True
@@ -815,20 +943,22 @@ def _sql_is_destructive(sql: str) -> bool:
     return False
 
 def _sql_is_safe_read(sql: str) -> bool:
-    """SQL の全文が読み取り（SELECT 等）とメタコマンド（\\d 等）だけなら True。"""
-    lines = _strip_sql_literals(sql).split("\n")
-    meta = [ln.strip() for ln in lines if ln.strip().startswith("\\")]
-    body = "\n".join(ln for ln in lines if not ln.strip().startswith("\\"))
-    if not all(_SAFE_META_RE.match(m) for m in meta):
+    """SQL の全文が読み取り（SELECT 等）と安全なメタコマンド（\\d 等）だけなら True。"""
+    text = _strip_sql_comments(_strip_sql_literals(sql))
+    metas = re.findall(r"\\[A-Za-z!?+]+", text)
+    if not all(_SAFE_META_RE.match(m) for m in metas):
+        return False                                 # \! \gexec \copy \i \o などを行のどこにあっても不可
+    body = re.sub(r"\\[A-Za-z!?+]+[^\n;]*", " ", text)
+    if _UNSAFE_SQL_RE.search(body):
         return False
     stmts = [s for s in body.split(";") if s.strip()]
-    return bool(meta or stmts) and all(_SAFE_SQL_RE.match(s) for s in stmts)
+    return bool(metas or stmts) and all(_SAFE_SQL_RE.match(s) for s in stmts)
 
 def _code_reasons(code: str) -> tuple:
-    """実行される Python コードの (危険操作の理由, 外部送信の理由) を返す。"""
+    """実行される Python コードの (危険操作の理由, 外部送信・秘密情報の理由) を返す。"""
     danger = [why for pat, why in _CODE_DANGER if re.search(pat, code)]
     lits = [lit for _q, lit in re.findall(r"(['\"])(.*?)\1", code, re.S)]
-    if any(_SQL_VERB_RE.match(lit) and _sql_is_destructive(lit) for lit in lits):
+    if any(_SQL_VERB_RE.match(_strip_sql_comments(lit)) and _sql_is_destructive(lit) for lit in lits):
         danger.append("文字列中の破壊的 SQL")
     external = [why for pat, why in _CODE_EXTERNAL if re.search(pat, code)]
     return danger, external
@@ -839,18 +969,29 @@ def _django_sub(toks: list):
         b = os.path.basename(t)
         if b == "manage.py" or b == "django-admin":
             return (toks[i + 1], toks[i + 2:]) if i + 1 < len(toks) else ("", [])
-        if _PYTHON_RE.match(b) and toks[i + 1:i + 3] == ["-m", "django"]:
-            return (toks[i + 3], toks[i + 4:]) if i + 3 < len(toks) else ("", [])
+        if _PYTHON_RE.match(b):
+            k = i + 1
+            while k < len(toks) and toks[k] in ("-W", "-X", "-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S"):
+                k += 2 if toks[k] in ("-W", "-X") else 1
+            if toks[k:k + 2] == ["-m", "django"]:
+                return (toks[k + 2], toks[k + 3:]) if k + 2 < len(toks) else ("", [])
     return None
 
 def _python_code(c: dict):
-    """コマンドが実行する Python コード（文字列）を返す。見えないなら None、Python でないなら False。"""
+    """コマンドが実行する Python コード（文字列）を返す。見えないなら None、Python でないなら False。
+    ホストの Python は Django を使うコードのときだけ返す（文書の書き換え等の文字列に反応しないため）。"""
+    code = _python_code_raw(c)
+    if code and not c["ctr"] and not _DJANGO_CTX_RE.search(code):
+        return ""
+    return code
+
+def _python_code_raw(c: dict):
     toks = c["toks"]
     dj = _django_sub(toks)
     if dj and dj[0] == "shell":
-        code = _opt_value(dj[1], ("-c", "--command"))
-        if code is not None:
-            return code
+        codes = _opt_values(dj[1], ("-c", "--command"))
+        if codes:
+            return "\n".join(codes)
         if c["heredoc"] is not None:
             return c["heredoc"]
         if c["stdin"]:
@@ -859,14 +1000,14 @@ def _python_code(c: dict):
     head = os.path.basename(toks[0]) if toks else ""
     if _PYTHON_RE.match(head) and not dj:
         rest = toks[1:]
-        code = _opt_value(rest, ("-c",))
-        if code is not None:
-            return code
+        codes = _opt_values(rest, ("-c",))
+        if codes:
+            return "\n".join(codes)
         if "-m" in rest:
             return False
         pos = [a for a in rest if not a.startswith("-")]
         if pos and pos[0].endswith(".py"):
-            return _read_exec_file(pos[0], c["ctr"])
+            return _read_exec_file(pos[0], c["ctr"], c["workdir"])
         if c["heredoc"] is not None:
             return c["heredoc"]
         return None
@@ -879,26 +1020,25 @@ def _sql_of(c: dict):
     args = toks[1:]
     if dj and dj[0] == "dbshell":
         args = dj[1][dj[1].index("--") + 1:] if "--" in dj[1] else []
-    sql = _opt_value(args, ("-c", "--command"))
-    if sql is not None:
-        return sql
+    sqls = _opt_values(args, ("-c", "--command"))
+    if sqls:
+        return ";\n".join(sqls)
     if c["heredoc"] is not None:
         return c["heredoc"]
     if c["herestr"] is not None:
         return c["herestr"]
     return None
 
-def _cmd_hard(c: dict) -> bool:
-    """解除不可で止めるコマンド（ルートの rm -rf）なら True。"""
-    return any(t in ("/", "/*") for t in _rm_rf_targets_of(c["toks"]))
-
-def _rm_rf_targets_of(toks: list) -> list:
+def _is_rm_rf(toks: list) -> bool:
     if not toks or os.path.basename(toks[0]) != "rm":
-        return []
+        return False
     args = toks[1:]
     rec = _has_short(args, "r", "--recursive") or _has_short(args, "R")
-    force = _has_short(args, "f", "--force")
-    return [a for a in args if not a.startswith("-")] if (rec and force) else []
+    return rec and _has_short(args, "f", "--force")
+
+def _cmd_hard(c: dict) -> bool:
+    """解除不可で止めるコマンド（ルートの rm -rf）なら True。"""
+    return _is_rm_rf(c["toks"]) and any(t in ("/", "/*") for t in c["toks"][1:])
 
 def _git_sub(toks: list):
     rest = toks[1:]
@@ -912,7 +1052,7 @@ def _cmd_danger(c: dict) -> list:
         return []
     head = os.path.basename(toks[0])
     r = []
-    if _rm_rf_targets_of(toks):
+    if _is_rm_rf(toks):
         r.append("rm -rf requires DANGER_OK=1")
     if head == "git":
         sub, args = _git_sub(toks)
@@ -921,8 +1061,9 @@ def _cmd_danger(c: dict) -> list:
         if sub == "clean" and _has_short(args, "f", "--force") and (_has_short(args, "d") or _has_short(args, "x")
                                                                     or _has_short(args, "X")):
             r.append("追跡されていないファイルの削除（git clean -f -d/-x）requires DANGER_OK=1")
-    if c.get("docker_subs"):
-        subs, args = c["docker_subs"], _docker_parts(toks)[1]
+    dp = c.get("docker")
+    if dp:
+        subs, args = dp["subs"], dp["args"]
         if subs[:2] == ["compose", "down"] and _has_short(args, "v", "--volumes"):
             r.append("docker compose down -v/--volumes requires DANGER_OK=1")
         if subs[:2] == ["compose", "rm"] and _has_short(args, "v", "--volumes"):
@@ -954,7 +1095,7 @@ def _cmd_danger(c: dict) -> list:
         sql = _sql_of(c)
         if sql is not None and _sql_is_destructive(sql):
             r.append("destructive SQL requires DANGER_OK=1")
-        if _opt_value(toks[1:], ("-f", "--file")) is not None or c["stdin"]:
+        if _opt_values(toks[1:], ("-f", "--file")) or c["stdin"]:
             r.append("ダンプ・SQL ファイルの流し込み（psql -f / <）requires DANGER_OK=1")
     if head == "dropdb":
         r.append("データベースの削除（dropdb）requires DANGER_OK=1")
@@ -971,6 +1112,37 @@ def _cmd_danger(c: dict) -> list:
         r += [f"{why} requires DANGER_OK=1" for why in _code_reasons(code)[0]]
     return r
 
+def _grep_recursive_secret(c: dict) -> bool:
+    """grep -r が --include なしで .env を含むディレクトリを読むなら True（rg は .gitignore を守るので対象外）。"""
+    toks = c["toks"]
+    args = toks[1:]
+    if not (_has_short(args, "r", "--recursive") or _has_short(args, "R", "--dereference-recursive")):
+        return False
+    if any(a.startswith("--include") for a in args):
+        return False
+    pos = [a for a in args if not a.startswith("-")]
+    patterns = _opt_values(args, ("-e", "-f", "--regexp", "--file"))
+    if not patterns:
+        patterns, pos = pos[:1], pos[1:]
+    if not any(_ENV_NAME_HINT_RE.search(p) for p in patterns):
+        return False                                 # .env の設定名に当たらない検索語なら秘密は出ない
+    for d in (pos or ["."]):
+        host = _resolve_exec_file(d, True, c["workdir"]) if c["ctr"] else os.path.abspath(d)
+        if not host or not os.path.isdir(host):
+            continue
+        for _dirpath, _dirs, files in _walk_shallow(host, 2):
+            if any(_SECRET_PATH_RE.search(f) and not f.endswith(".example") for f in files):
+                return True
+    return False
+
+def _walk_shallow(top: str, depth: int):
+    base = top.rstrip(os.sep).count(os.sep)
+    for dirpath, dirs, files in os.walk(top):
+        if dirpath.count(os.sep) - base >= depth:
+            dirs[:] = []
+        dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", ".venv", "__pycache__")]
+        yield dirpath, dirs, files
+
 def _cmd_external(c: dict) -> list:
     """単純コマンドの外部送信・秘密情報の理由（人の確認）。"""
     toks = c["toks"]
@@ -983,28 +1155,52 @@ def _cmd_external(c: dict) -> list:
         r.append("OpenAI への送信（generate_ai_problems）")
     if dj and dj[0] == "sendtestemail":
         r.append("メール送信（sendtestemail）")
+    if dj and dj[0] == "diffsettings":
+        r.append("設定の表示（diffsettings は秘密情報を含む）")
     if head == "celery" and "call" in toks:
         r.append("celery タスクの起動（celery call）")
+    if head == "curl" and any(_URL_EXTERNAL_RE.search(a) for a in toks[1:]):
+        r.append("メール送信・OpenAI への送信を伴う API の呼び出し（curl）")
     code = _python_code(c)
     if code:
         r += _code_reasons(code)[1]
-    if head in _SECRET_READERS and any(_SECRET_PATH_RE.search(a) and not a.endswith(".example")
-                                       for a in toks[1:] if not a.startswith("-")):
+    paths = [a for a in toks[1:] if not a.startswith("-")]
+    if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file")):
+        paths = paths[1:]
+    if head in _SECRET_READERS and any(_SECRET_PATH_RE.search(a) and not a.endswith(".example") for a in paths):
         r.append("秘密情報ファイルの読み出し")
+    if c["stdin"] and _SECRET_PATH_RE.search(c["stdin"]) and not c["stdin"].endswith(".example"):
+        r.append("秘密情報ファイルの読み出し（< で流し込み）")
+    if head in ("grep",) and _grep_recursive_secret(c):
+        r.append("秘密情報ファイルを含むディレクトリの再帰検索（grep -r。--include で絞るか rg を使う）")
     if head == "printenv" or (head == "env" and not [a for a in toks[1:] if not a.startswith("-")]):
         r.append("環境変数（秘密情報を含む）の表示")
-    subs = c.get("docker_subs") or []
-    if subs[:2] == ["compose", "config"] or subs[:1] == ["inspect"]:
-        r.append("環境変数（秘密情報を含む）の表示（docker compose config / docker inspect）")
+    if c["ctr"] and any(_SECRET_VAR_RE.search(a) for a in toks[1:]):
+        r.append("秘密の環境変数の展開")
+    if head == "gh" and toks[1:3] == ["auth", "token"] or (head == "gh" and "--show-token" in toks):
+        r.append("GitHub のトークンの表示")
+    dp = c.get("docker")
+    if dp:
+        subs, args = dp["subs"], dp["args"]
+        if subs[:2] == ["compose", "config"]:
+            r.append("環境変数（秘密情報を含む）の表示（docker compose config）")
+        if subs[-1:] == ["inspect"]:
+            fmt = _opt_values(args, ("-f", "--format"))
+            if not fmt or any(re.search(r"Env|Config|json\s+\.", f) for f in fmt):
+                r.append("環境変数（秘密情報を含む）の表示（docker inspect）")
+        if subs[-1:] == ["cp"]:
+            r.append("コンテナからのファイルの取り出し（docker cp）")
     return r
 
 def _container_safe(c: dict) -> bool:
-    """コンテナ内の単純コマンドが許可リストに入るなら True（plan_I174.md 0-5）。"""
+    """docker compose exec|run の中の単純コマンドが許可リストに入るなら True（plan_I174.md 0-5・0-9）。"""
     toks = c["toks"]
-    if c["note"] or c["piped"] or c["herestr"] is not None or not toks:
+    if c["note"] or c["herestr"] is not None or c["writes"] or not toks:
         return False
     head = os.path.basename(toks[0])
     rest = toks[1:]
+    if c["piped"] and head not in _PIPE_FILTERS:
+        return False
     dj = _django_sub(toks)
     if dj:
         sub, args = dj
@@ -1015,8 +1211,7 @@ def _container_safe(c: dict) -> bool:
         if sub == "migrate":
             return True                                  # 巻き戻しは _cmd_danger が先に止める
         if sub == "shell":
-            code = _python_code(c)
-            return bool(code) or code == ""              # 見えて危険が無い（危険・外部送信は先に判定済み）
+            return bool(_python_code(c))                 # 見えて危険が無い（危険・外部送信は先に判定済み）
         if sub == "dbshell":
             sql = _sql_of(c)
             return sql is not None and _sql_is_safe_read(sql)
@@ -1024,9 +1219,10 @@ def _container_safe(c: dict) -> bool:
     if c["heredoc"] is not None and head not in ("psql", "redis-cli") and not _PYTHON_RE.match(head):
         return False
     if head == "ruff":
-        return rest[:1] == ["check"] or (rest[:1] == ["format"] and "--check" in rest)
+        return (rest[:1] == ["check"] and not any(a.startswith(("--fix", "--unsafe-fixes")) for a in rest)) or \
+            (rest[:1] == ["format"] and ("--check" in rest or "--diff" in rest))
     if head in ("pytest", "flake8", "bandit", "pip-audit", "mypy", "eslint", "tsc", "jest"):
-        return True
+        return not any(a.startswith(("--fix", "--basetemp")) for a in rest)
     if _PYTHON_RE.match(head):
         k = 0
         while k < len(rest) and rest[k] in ("-W", "-X", "-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S", "-b", "-q"):
@@ -1035,33 +1231,72 @@ def _container_safe(c: dict) -> bool:
             return True
         if rest[:1] in (["--version"], ["-V"]):
             return True
-        code = _python_code(c)
-        return bool(code) or code == ""
+        return bool(_python_code(c))
     if head == "pip":
         return rest[:1] in (["freeze"], ["list"], ["show"], ["check"], ["--version"]) or rest[:2] == ["index", "versions"]
     if head == "npm":
-        return rest[:1] in (["test"], ["audit"], ["ls"], ["outdated"], ["view"], ["--version"]) or \
+        if rest[:1] == ["audit"]:
+            return "fix" not in rest
+        return rest[:1] in (["test"], ["ls"], ["outdated"], ["view"], ["--version"]) or \
             rest[:2] in (["run", "lint"], ["run", "typecheck"], ["run", "build"], ["run", "test"])
     if head == "npx":
-        return rest[:1] in (["tsc"], ["eslint"], ["jest"])
+        return rest[:1] in (["tsc"], ["eslint"], ["jest"]) and "--fix" not in rest
     if head == "psql":
+        if _opt_values(rest, ("-o", "--output", "-L", "--log-file", "-f", "--file")) or c["stdin"]:
+            return False
         sql = _sql_of(c)
-        return sql is not None and _sql_is_safe_read(sql) and not c["stdin"]
+        return sql is not None and _sql_is_safe_read(sql)
     if head == "redis-cli":
         if "--scan" in rest:
             return True
         sub = rest[_skip_opts(rest, ("-h", "-p", "-n", "-a", "-u")):]
         return bool(sub) and sub[0].upper() in _SAFE_REDIS
     if head == "celery":
-        return any(a in ("inspect", "status", "report") for a in rest)
+        sub = rest[_skip_opts(rest, ("-A", "--app", "-b", "--broker", "--workdir", "-l", "--loglevel")):]
+        return sub[:1] in (["inspect"], ["status"], ["report"])
     if head == "sed":
-        return "-n" in rest and not _has_short(rest, "i", "--in-place")
+        if _has_short(rest, "i", "--in-place") or "-n" not in rest and "--quiet" not in rest:
+            return False
+        scripts = _opt_values(rest, ("-e", "--expression"))
+        if not scripts:
+            pos = [a for a in rest if not a.startswith("-")]
+            scripts = pos[:1]
+        return bool(scripts) and all(re.fullmatch(r"(\d+|\$)?(,(\d+|\$))?p|/[^/]*/p", s) for s in scripts)
     if head == "find":
-        return "-exec" not in rest and "-execdir" not in rest and "-delete" not in rest
+        return not any(a in ("-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0",
+                             "-fprintf", "-fls") for a in rest)
+    if head == "sort":
+        return not any(a == "-o" or a.startswith(("--output", "-o")) for a in rest)
+    if head == "uniq":
+        return len([a for a in rest if not a.startswith("-")]) <= 1
+    if head in ("echo", "printf"):
+        return not any("$" in a for a in rest)
     if head == "curl":
-        urls = [a for a in rest if "://" in a]
+        k, urls = 0, []
+        while k < len(rest):
+            a = rest[k]
+            if _CURL_BAD_RE.match(a.split("=", 1)[0]):
+                return False
+            if a in _CURL_VALUE_OPTS:
+                v = rest[k + 1] if k + 1 < len(rest) else ""
+                if a in ("-o", "--output") and v != "/dev/null":
+                    return False
+                if a in ("-X", "--request") and v.upper() not in ("GET", "HEAD"):
+                    return False
+                k += 2
+                continue
+            if a.startswith("--"):
+                if a not in ("--silent", "--show-error", "--fail", "--head", "--include", "--location",
+                             "--insecure", "--verbose"):
+                    return False
+            elif a.startswith("-"):
+                if not set(a[1:]) <= _CURL_FLAGS:
+                    return False
+            else:
+                urls.append(a)
+            k += 1
         return bool(urls) and all(re.match(r"https?://(localhost|127\.0\.0\.1|backend)(:\d+)?(/|$)", u) for u in urls)
-    if head in ("node", "npm") and rest[:1] == ["--version"]:
+    if head in ("node",) and rest[:1] == ["--version"]:
         return True
     return head in _SAFE_READ_CMDS
 
@@ -1076,10 +1311,10 @@ def _analyze(text: str) -> dict:
     for c in cmds:
         if _cmd_hard(c):
             res["hard"] = True
-        res["danger"] += _cmd_danger(c)
-        res["external"] += _cmd_external(c)
-    for c in cmds:
-        if c["ctr"] and not _cmd_danger(c) and not _cmd_external(c) and not _container_safe(c):
+        d, e = _cmd_danger(c), _cmd_external(c)
+        res["danger"] += d
+        res["external"] += e
+        if c["compose"] and not d and not e and not _container_safe(c):
             res["container"].append(_describe(c))
     for k in ("danger", "external", "container"):
         res[k] = list(dict.fromkeys(res[k]))

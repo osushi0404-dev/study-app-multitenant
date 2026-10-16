@@ -83,6 +83,24 @@
 ### 0-8. danger-ops.md の直し（第 1 周 #13）
 「どれで実行しても止める」を、実際に見張りが判定する範囲（0-3〜0-5）に合わせて書き直し、判定しないもの（secrets の Edit 以外の操作のうち列挙外・`docker compose cp` 後の実行など）を明記する。
 
+### 0-9. 第 2 周の後の方針（2026-10-16・ユーザー決定）
+敵対的レビュー第 2 周（`docs/reviews/I174_adversarial_review_20261016_1930.md`）で、①素の `docker exec|run` まで許可リストの対象にしたため、もともと確認の無かった操作に確認が増え、docker 全体の承認待ちは 17% しか減っていない ②許可リストを「コマンド名」で通していて書き込み・実行・外部送信のオプションを見ていない、と分かった。ユーザーの決定で次のとおりにする。
+- **許可リストを当てるのは `docker compose exec|run` と `docker-compose exec|run` だけ**。素の `docker exec|run`・`docker container exec|run` は、I174 の前と同じく列挙（危険操作・外部送信・秘密情報）だけで判定する（中のコマンドは展開して列挙を当てる）。
+- **脅威モデルは「事故」**（Claude が普段書くコマンドでの事故を防ぐ。意図的な回避は対象外。既存の I083 の方針と同じ）。ただし、直すのが簡単な回避は塞ぐ。
+- 許可リストは「名前」でなく「書き込み・実行・外部送信につながるオプションが無いこと」まで確かめて通す。判断できないオプションは確認に回す（compose の中だけ）。
+  - 外す: `diffsettings`（秘密を表示）・`dumpdata`（セッション・トークン）・`collectstatic`（書き込み）
+  - 絞る: `curl`（宛先がすべて localhost の URL で、データ送信・アップロード・プロキシ・宛先の付け替え・ファイル出力・未知のオプションが無いとき）・`sed -n`（行番号か `/正規表現/p` の表示だけ）・`sort`（`-o` なし）・`uniq`（出力ファイルなし）・`find`（`-exec` 系・`-delete`・`-fprint` 系なし）・`ruff`（`--fix` なし）・`npm audit`（`fix` なし）・`celery`（サブコマンドの位置で `inspect|status|report`）・psql の読み取り（行の途中を含むすべてのメタコマンドが安全な一覧に入る・`EXPLAIN (ANALYZE)` / `ANALYSE` なし・`lo_export` 等の関数なし・`-o` / `-L` なし・`WITH` は書き込みの語が無いときだけ）・`echo` / `printf`（`$` を含まないとき）
+  - 出力リダイレクト（`>` / `>>`、行き先が `/dev/null` 以外）があるものは素通しにしない
+  - パイプで受けてよいのは読み取りのフィルタ（`grep`・`head`・`tail`・`wc`・`sort`・`cut`・`tr`・`jq`・`uniq`）だけ
+  - 追加: `cd`（`sh -c "cd /app && ..."`）・`psql -tAc` のまとめ書き・`WITH ... SELECT`・既定コマンドで動かす `docker compose run e2e`（`/test` の E2E）
+  - compose の exec / run の未知のオプション・`--entrypoint` は確認に回す
+- 直す不具合: `sudo` / `nice` の展開（スライスの誤り）・`xargs rm -rf`（対象なし）と `find -exec rm -rf`・`docker container exec|run`・`-c` の複数指定・`$(...)` の中のヒアドキュメントの IndexError・包むコマンドの追加（`setsid`・`stdbuf`・`ionice`・`busybox`・`flock`・`su -c`・`script -c`・`watch`・`time -p`・`nohup --`・`command -p`・`exec -a`）・`python -W ... -m django`・`docker run --entrypoint` の中身・`-w` と `..` を考えたパスの読み替え
+- 秘密情報の追加: Python コードの `os.environ` / `getenv` / `/proc/` / `.env` の文字列 / `settings.SECRET_KEY` 等・`/proc/*/environ`・`echo $...KEY` 等・`cat < .env`・`grep -r`（`--include` なしで `.env` を含むディレクトリ）・`docker cp` / `docker compose cp`・`docker container inspect`・`gh auth token`
+- Python コードの列挙の追加: `.delete ()`（空白入り）・`_raw_delete`・`shutil.rmtree`・`os.remove|unlink|rmdir`・`subprocess` / `os.system` / `os.popen`（外部コマンド）・`smtplib` / `socket` / `requests` / `urllib` / `httpx`（外部送信）・書き込みモードの `open(`・SQL 文字列の先頭のコメントと `WITH`
+- 誤判定の修正: `cache.delete(` は削除扱いにしない・`objects ... .update(` は `;` をまたがない（`qs.update(` は別の判定）・ホストの Python は Django を使うコードのときだけ中身を判定する（文書の書き換えスクリプトに危険語の文字列が入っているだけでは止めない）・`docker inspect -f` で環境変数を出さない指定は素通し・grep のパターン引数を秘密情報のパスとして扱わない
+- 残余リスクとして明記: `migrate`（前進）で未適用の破壊的マイグレーションが走ること（マイグレーションは PR でレビューされ、コンテナ起動時にも自動で走る）・素の `docker exec|run` の中の列挙外の操作・意図的な回避
+- テスト: 第 2 周 #17・#18 の生き残り（包むコマンド・区切り・秘密情報・compose の許可リストの各枝・流し込み・`$(...)`・docker のオプション・ヒアストリング・細かい枝）を確かめるケースを足す。`test_settings_permissions.sh` に、PreToolUse の Bash フックの登録・`defaultMode` が `bypassPermissions` でないこと・allow に `Bash(*)` / `Bash(docker *)` が無いことを加える
+
 ## 1. 背景/目的
 
 **背景**: I151 の作業中に、`docker compose exec` の承認待ちが約 28 回出て作業が滞った。過去 51 セッションの集計では、確認対象の操作 125 回のうち 120 回（約 96%）が `docker compose exec` で、中身は pytest・ruff・pip-audit・npm audit・読み取りの `manage.py shell` が大半だった。`.claude/settings.json` の `permissions.ask` が「コマンドの種類」で一律に確認をかけていて、「危険かどうか」を見ていないのが原因である。

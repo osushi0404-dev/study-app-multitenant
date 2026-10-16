@@ -18,10 +18,10 @@ PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）は、コマ
 1. **常に止める（解除不可）**: `rm -rf /` と `rm -rf /*`・mkfs・dd・shred・別 worktree への書き込み
 2. **危険操作として止める**（exit 2）: 上の「例」のうち、見張りが判定できるもの＝DB の各操作・`git reset --hard`・`git clean -f -d/-x`・force push / 保護ブランチへの push・変更ありのファイルの checkout・Docker の各操作・Redis の全消去・`rm -rf`・`find -delete`。ホスト・`docker exec`・`docker compose exec|run`・`docker-compose` のどれで実行しても同じ
 3. **人の確認**: 外部への送信（メール送信・celery タスクの起動・登録 API とパスワード再設定依頼 API・OpenAI）と、秘密情報の表示（`.env` 等の読み出し・`printenv`・引数なしの `env`・`docker compose config`・`docker inspect`）
-4. **コンテナ内の操作は「安全と確認済みの一覧」に入るものだけ素通し**: テスト・lint・監査・読み取りの `manage.py`（`test`・`check`・`showmigrations` など）・ふだんの `migrate`・中身が見えて危険のない `manage.py shell`・読み取りの SQL・`redis-cli` の読み取りなど（一覧は `plan_I174.md` 0-5 章）。一覧にない操作（例 `seed_e2e`・`createsuperuser`・`pip install`）や、パイプで受ける流し込み・読めない書き方は人の確認になる
+4. **`docker compose exec|run`（`docker-compose` も同じ）の中の操作は「安全と確認済みの一覧」に入るものだけ素通し**: テスト・lint・監査・読み取りの `manage.py`（`test`・`check`・`showmigrations` など）・ふだんの `migrate`・中身が見えて危険のない `manage.py shell`・読み取りの SQL・`redis-cli` の読み取りなど。名前だけでなく、書き込み・実行・外部送信につながるオプション（`--fix`・`sed -i`・`curl -d` など）が無いことまで確かめる（一覧は `plan_I174.md` 0-5・0-9 章）。一覧にない操作（例 `seed_e2e`・`createsuperuser`・`pip install`・`dumpdata`・`diffsettings`）や、パイプで受ける流し込み・読めない書き方・未知の compose オプションは人の確認になる。素の `docker exec|run` は 2. と 3. の列挙だけで判定する（I174 の前と同じ）
 
 - **`DANGER_OK=1 を付けても`、見張りは人の承認を求める**（承認画面が出る）。Claude が自分で `DANGER_OK=1` を付けて通すことはできない。上の「ユーザー明示承認」を技術的に強制するためである。
-- **見張りが判定しないもの**: 「大規模 rebase」（settings.json の ask で人の確認）・ホストで実行するシェルスクリプトの中身・コードを経由しない大量更新・secrets のうち上の 3. に当たらない操作（ファイルの編集は settings.json の deny で拒否）。これらは計画書と人の承認で管理する。
+- **見張りが判定しないもの**: 「大規模 rebase」（settings.json の ask で人の確認）・ホストで実行するシェルスクリプトの中身・コードを経由しない大量更新・secrets のうち上の 3. に当たらない操作（ファイルの編集は settings.json の deny で拒否）・ふだんの `migrate`（前進）で未適用の破壊的マイグレーションが走ること（マイグレーションは PR でレビューし、コンテナ起動時にも自動で走る）・素の `docker exec|run` の中の列挙外の操作。これらは計画書と人の承認で管理する。見張りの脅威モデルは「事故」で、意図的な回避は対象外。
 - **見張りを避ける書き方を使わない**: 変数・`eval "$VAR"`・base64 などで命令を組み立てる形、`docker compose cp` でファイルを送ってから実行する形、コンテナの中で作ったファイルを実行する形は、見張りが中身を判定できない。危険操作や外部送信をこうした書き方で行わない（判定できない部分は auto mode の判断が第 2 層になる）。
 
 ## 未コミット変更の取り消し（`git checkout/restore <file>`）

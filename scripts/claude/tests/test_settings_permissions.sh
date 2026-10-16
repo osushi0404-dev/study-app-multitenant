@@ -13,9 +13,20 @@ trap 'rm -rf "$TMP"' EXIT
 # 判定本体: 引数の settings.json が I174 の期待どおりなら exit 0、違えば理由を出して exit 1
 cat > "$TMP/check.py" <<'PY'
 import json, sys
-p = json.load(open(sys.argv[1], encoding="utf-8"))["permissions"]
+full = json.load(open(sys.argv[1], encoding="utf-8"))
+p = full["permissions"]
 allow, ask, deny = p.get("allow", []), p.get("ask", []), p.get("deny", [])
 errs = []
+# guard が唯一の決定論ゲートなので、Bash の PreToolUse フック登録と権限モードも確かめる（第 2 周 #18）
+pre = (full.get("hooks") or {}).get("PreToolUse") or []
+if not any(h.get("matcher") == "Bash" and any("pretooluse_guard.py" in x.get("command", "") for x in h.get("hooks", []))
+           for h in pre):
+    errs.append("Bash の PreToolUse フック（pretooluse_guard.py）が登録されていない")
+if p.get("defaultMode") in ("bypassPermissions", "dontAsk") or full.get("defaultMode") in ("bypassPermissions", "dontAsk"):
+    errs.append("権限モードが確認なしの設定になっている")
+for wide in ("Bash(*)", "Bash", "Bash(docker *)", "Bash(docker compose *)", "Bash(docker-compose *)"):
+    if wide in allow:
+        errs.append(f"allow に広すぎる {wide} がある")
 keep_ask = ["Bash(git rebase *)", "Bash(psql *)", "Bash(rm *)", "Bash(mv *)", "Bash(cp *)",
             "Bash(chmod *)", "Bash(chown *)"]
 removed = ["Bash(git merge *)", "Bash(git reset *)", "Bash(git cherry-pick *)",
@@ -65,11 +76,25 @@ write("rm_to_allow", lambda p: (p["ask"].remove("Bash(rm *)"), p["allow"].append
 write("exec_back", lambda p: p["ask"].append("Bash(docker compose exec *)"))
 write("write_back", lambda p: p["deny"].append("Write(./.env)"))
 write("env_root_only", lambda p: (p["deny"].remove("Read(**/.env)"), p["deny"].append("Read(./.env)")))
+write("allow_bash_star", lambda p: p["allow"].append("Bash(*)"))
+write("allow_docker_star", lambda p: p["allow"].append("Bash(docker *)"))
+write("bypass_mode", lambda p: p.__setitem__("defaultMode", "bypassPermissions"))
+d = copy.deepcopy(base)
+d["hooks"]["PreToolUse"] = [h for h in d["hooks"]["PreToolUse"] if h.get("matcher") != "Bash"]
+json.dump(d, open(f"{tmp}/drop_bash_hook.json", "w", encoding="utf-8"))
+d = copy.deepcopy(base)
+d.pop("hooks")
+json.dump(d, open(f"{tmp}/drop_all_hooks.json", "w", encoding="utf-8"))
 PY
 ck "S2 rm を ask から allow へ移すと不合格"   1 "$(run_check "$TMP/rm_to_allow.json")"
 ck "S3 exec の ask を戻すと不合格"            1 "$(run_check "$TMP/exec_back.json")"
 ck "S4 Write(...) を戻すと不合格"             1 "$(run_check "$TMP/write_back.json")"
 ck "S5 .env の deny をルート固定に戻すと不合格" 1 "$(run_check "$TMP/env_root_only.json")"
+ck "S6 allow に Bash(*) を足すと不合格"      1 "$(run_check "$TMP/allow_bash_star.json")"
+ck "S7 allow に Bash(docker *) を足すと不合格" 1 "$(run_check "$TMP/allow_docker_star.json")"
+ck "S8 bypassPermissions にすると不合格"     1 "$(run_check "$TMP/bypass_mode.json")"
+ck "S9 Bash のフック登録を消すと不合格"      1 "$(run_check "$TMP/drop_bash_hook.json")"
+ck "S10 hooks を丸ごと消すと不合格"          1 "$(run_check "$TMP/drop_all_hooks.json")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
