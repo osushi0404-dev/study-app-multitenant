@@ -197,6 +197,12 @@ grep -q -- 'pr view 257 ' "$GH_LOG"
 ck "G54 Bash の識別子が照会に渡る"      0   "$?"
 # 個別分岐（削除しても落ちなかった分岐）
 ck "G55 review -a（短縮形）"             ASK "$(CROSS_VALUE=true runj 'gh pr review 257 -a')"
+# checkout=block（hook 本体の置き換え防止）・update-branch=ask（MCP 版と揃える）（R10・2026-10-16 承認）
+ck "G57 checkout (fork)"                 2   "$(CROSS_VALUE=true runj 'gh pr checkout 257')"
+ck "G58 checkout (自前)"                 0   "$(CROSS_VALUE=false runj 'gh pr checkout 261')"
+ck "G59 checkout -b x 257 (fork)"        2   "$(CROSS_VALUE=true runj 'gh pr checkout -b x 257')"
+ck "G60 update-branch (fork)"            ASK "$(CROSS_VALUE=true runj 'gh pr update-branch 257 --rebase')"
+ck "G61 update-branch (自前)"            0   "$(CROSS_VALUE=false runj 'gh pr update-branch 261')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====

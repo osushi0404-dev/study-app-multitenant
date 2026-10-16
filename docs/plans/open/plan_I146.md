@@ -638,6 +638,8 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 | R6 | 読み取り中心の調査での思い込みは hook でも止まらない | 残存ギャップ | 同上。`/close` step 0（skill 層）で作業開始時に必ず一度確認する導線を作る |
 | R7 | `.claude/settings.json` の matcher 追加が既存 hook 動作に影響する | 誤 block | 追加は新規オブジェクトのみ。既存 2 エントリは無改変（TC-06 で無改変を grep 検証・TC-08 で push guard 回帰） |
 | R8 | 将来 `gh pr` に新しい取り込み系サブコマンドが増える | 取りこぼし | 対象 verb は定数（`_GH_PR_BLOCK_VERBS` / `_GH_PR_ASK_VERBS`）に集約し、追加が 1 行で済む形にする |
+| R9 | 日常的な書き方（複数行・空白なし `;`・`GH_REPO=` 前置・`env`/`command`/`timeout`・絶対パス・`gh -R o/r pr …`・値付きフラグ）で判定をすり抜ける／別 PR を検査する | fork PR の merge 素通し | **2026-10-16 敵対的レビュー第 1 周で判明・承認済みの追加対応**。gh pr 判定専用の区切り処理 `_gh_segments`（改行・`; & \| ( ) \``）と `_gh_invocation`（前置の読み飛ばし）を追加し、`-R/--repo`・`GH_REPO` を照会へ渡し、値付きフラグの値を識別子とみなさない。識別子を一意に決められなければ ask。既存 `_segments` は無改変（G28〜G56） |
+| R10 | `gh pr checkout <fork PR>` で `.claude/settings.json` と hook 本体が攻撃者版に置き換わり、次のツール呼び出しで実行される | ガード自体の無力化・任意コード実行 | **2026-10-16 ユーザー承認（敵対的レビュー A7）**。`checkout` を block 対象（`_GH_PR_BLOCK_VERBS`）に追加する（DANGER_OK=1 で明示解除可）。Bash の `gh pr update-branch` は MCP 版と揃えて ask 対象に追加する（A8）。runbook に「checkout しない」を追記する |
 
 ### 設計上の限界（no silent caps）
 
@@ -646,7 +648,7 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 - GitHub UI 上の操作（マージ・Actions 実行承認・ブランチ更新）はハーネスを経由しないため捕捉できない。
 - 読み取り操作（`gh pr view` 等）は素通しさせるため、調査中に外部 PR を自前だと思い込むこと自体は防げない。
 - API を直接叩く経路（`gh api -X PUT .../merge`・`curl` で GitHub API を叩く等）は対象外。判定は `gh pr <verb>` の形と対象 MCP ツールに限る。
-- ラッパー越しの隠蔽（`eval "gh pr merge 257"`・`bash -c "..."`）は検出しない。push ガードは `_push_is_dynamic` で ask に降格させているが、本ガードでは同等の降格を入れない（`gh` を含む文字列の誤 ask が増え、日常操作の妨げになるため）。脅威モデルは「うっかり外部 PR を取り込む」であり、隠蔽の意図がある操作は対象外とする。
+- ラッパー越しの隠蔽（`eval "gh pr merge 257"`・`bash -c "..."`・クォート内のコマンド置換 `"$(gh pr merge 257)"`）は検出しない（R9 で対応した前置・区切りは「日常的な書き方」であり隠蔽ではないため検出する）。push ガードは `_push_is_dynamic` で ask に降格させているが、本ガードでは同等の降格を入れない（`gh` を含む文字列の誤 ask が増え、日常操作の妨げになるため）。脅威モデルは「うっかり外部 PR を取り込む」であり、隠蔽の意図がある操作は対象外とする。
 
 ---
 

@@ -32,6 +32,7 @@ grep -q "Report a vulnerability" SECURITY.md
 grep -q "CONTRIBUTING.md" .github/pull_request_template.md
 grep -q "isCrossRepository" .claude/skills/close/SKILL.md
 grep -q "外部（fork）からの PR の扱い" docs/runbooks/workflow.md
+grep -q "手元に checkout しない" docs/runbooks/workflow.md
 grep -q "mcp__github__merge_pull_request" .claude/settings.json
 grep -q "mcp__github__update_pull_request_branch" .claude/settings.json
 grep -q "mcp__github__create_pull_request_review" .claude/settings.json
@@ -131,6 +132,7 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 | G52 | 位置引数が複数（識別子を一意に決められない） | ASK（降格） |
 | G53・G54 | MCP の pull_number/owner/repo、Bash の識別子が実際に照会へ渡る（GH_LOG で検証） | exit 0（grep） |
 | G55・G56 | `review -a` 短縮形・MCP `pullNumber`（キャメル）の個別分岐 | ASK / exit 2 |
+| G57〜G61 | `gh pr checkout`（fork=block・`-b x` の値を識別子としない・自前=素通し）・`gh pr update-branch`（fork=ASK・自前=素通し）。計画書 R10（2026-10-16 ユーザー承認） | 2 / 0 / 2 / ASK / 0 |
 
 スタブは tautology 解消のため、識別子なし照会（カレントブランチ）と `SELF_IDENTS` の識別子には**自前（false）**を返すよう変更した（G11 のみ `CURRENT_FORK=1` で fork 扱い）。G22 は順序を検証できるよう ask 種別の `gh pr ready` に変更した。`test_pr_base_sync.sh` のスタブも対象 PR（219）以外への照会には false を返すよう変更し、照会先を別 PR にした注入版で `RESULT: NG (5 件)` になることを確認した。
 
@@ -220,5 +222,6 @@ FG-A / FG-C / FG-D が exit 0 を返し、かつ FG-B / FG-E が exit 2 を返�
 | TC-07 | 2026-08-15 | ✅ PASS | ユーザー（リポジトリ管理者）が GitHub UI で有効化。`gh api repos/osushi0404-dev/study-app-multitenant/private-vulnerability-reporting` → `{"enabled":true}`（exit 0）。ベースライン `false` → `true` の遷移を確認。※ 2026-08-13 に bot アカウントで `gh api -X PUT` を試行したが admin 権限がなく HTTP 404（詳細は TC-07 節の「有効化の実施者」） |
 | TC-08 | 2026-08-05 実装時 | ✅ PASS | push guard `pass=87 fail=0`・worktree guard `pass=27 fail=0`・checkout guard `pass=14 fail=0`（回帰なし） |
 | TC-03 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | Red: 修正前ガードで `pass=45 fail=22`（G28〜G52 の回避経路が素通し）→ 修正後 `pass=67 fail=0` |
+| TC-03 | 2026-10-16 R10（checkout/update-branch）追加 | ✅ PASS | Red: `pass=69 fail=3`（G57/G59/G60）→ 実装後 `pass=72 fail=0` |
 | TC-01 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | スタブ厳格化後も `RESULT: OK (21/21 cases, 30 assertions)`。照会先を PR 1 にした注入版は `RESULT: NG (5 件 / pass 25)` |
 | TC-08 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | push guard `pass=87`・worktree guard `pass=27`・checkout guard `pass=14`（いずれも fail=0・回帰なし） |

@@ -37,8 +37,10 @@
 - 回帰: push guard `pass=87`・worktree guard `pass=27`・checkout guard `pass=14`（fail=0）
 - code-review.sh の omission-lint OK・宣言ゲート 22 件 exit 0
 
-### 未収束（ユーザー判断待ち）
+### A7/A8 のユーザー判断（2026-10-16）
 
-A7/A8 は計画書の対象動詞（merge / ready / edit / review --approve）を広げる設計判断のため、SKILL 3-3 に従い停止してユーザーに確認する。確認後に第 2 周（修正の妥当性を含む反証）を実施する。
+計画書の対象動詞を広げる設計判断のため SKILL 3-3 に従い確認した。ユーザー回答: **「checkout=止める・update-branch=確認」**。計画書 R9/R10・設計上の限界・runbook（「手元に checkout しない」）を更新し、`_GH_PR_BLOCK_VERBS=("merge","checkout")`・`_GH_PR_ASK_VERBS` に `update-branch`・値付きフラグに `--branch` を追加。G57〜G61 を追加（Red `pass=69 fail=3` → `pass=72 fail=0`）。
+
+第 1 周の新規 High 2 件はいずれも修正済み。修正の妥当性を含めて第 2 周で反証する。
 
 VERDICT: HIGH

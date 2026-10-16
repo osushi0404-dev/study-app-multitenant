@@ -412,8 +412,10 @@ def _check_edit_write(data: dict):
 # block = 不可逆かつ方針上ありえない操作（外部コードが develop に入る）。
 # ask   = 取り込み方向だが可逆な操作。close/comment/read-only は素通し
 #         （外部 PR を断るのに必要な操作を塞いではならない）。
-_GH_PR_BLOCK_VERBS = ("merge",)
-_GH_PR_ASK_VERBS = ("ready", "edit")
+# checkout も block: fork のブランチを checkout すると `.claude/settings.json` と hook 本体が
+# 相手の版に置き換わり、次のツール呼び出しでそのコードが実行される（R10・2026-10-16 承認）。
+_GH_PR_BLOCK_VERBS = ("merge", "checkout")
+_GH_PR_ASK_VERBS = ("ready", "edit", "update-branch")
 _GH_PR_APPROVE_FLAGS = ("--approve", "-a")
 
 _MCP_PR_BLOCK_TOOLS = ("mcp__github__merge_pull_request",)
@@ -467,7 +469,7 @@ _GH_PR_VALUE_LONG = (
     "--repo", "--body", "--body-file", "--subject", "--title", "--match-head-commit",
     "--author-email", "--base", "--milestone", "--add-assignee", "--remove-assignee",
     "--add-label", "--remove-label", "--add-project", "--remove-project",
-    "--add-reviewer", "--remove-reviewer", "--head",
+    "--add-reviewer", "--remove-reviewer", "--head", "--branch",
 )
 _GH_PR_VALUE_SHORT = "RbFtABmH"
 
@@ -638,7 +640,7 @@ def _guard_cross_repo(kind: str, ident, repo, raw: str, require_ident: bool = Fa
     if kind == "block":
         _block(
             f"{label} は fork（外部リポジトリ）由来です{origin}。外部からのコード寄稿は受け付けていません"
-            f"（CONTRIBUTING.md）。マージせず、方針コメント付きで close してください。"
+            f"（CONTRIBUTING.md）。マージ・checkout せず、方針コメント付きで close してください。"
             f"どうしても必要なら DANGER_OK=1 を前置してください。",
             raw,
         )
