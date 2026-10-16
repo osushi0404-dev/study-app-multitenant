@@ -425,6 +425,10 @@ T0=$(date +%s%N); R=$(CROSS_VALUE=true runj "$HD2"); T1=$(date +%s%N)
 FAST=1; [ $(( (T1 - T0) / 1000000 )) -lt 5000 ] && FAST=0
 ck "G203 異なる終端語の heredoc 9000 個でも 5 秒未満" 0 "$FAST"
 ck "G203b その末尾の fork merge は block" 2 "$R"
+# 第 7 周: 引用なし終端語の heredoc 本文に行継続があると bash は連結後の行で終端判定する → 除去しない（fail-safe）
+ck "G204 本文行継続＋コメント内 <<Z"      2   "$(CROSS_VALUE=true runj $'cat <<true\ntr\\\nue\ntrue # <<Z\ngh pr merge 257\nZ\ntrue\n')"
+ck "G205 本文行継続＋混在終端語 <<A\"B\"" 2   "$(CROSS_VALUE=true runj $'cat <<true\ntr\\\nue\ncat <<A"B"\nAB\ngh pr merge 257\nA\ntrue\n')"
+ck "G206 本文行継続のみ（block を保つ）"  2   "$(CROSS_VALUE=true runj $'cat <<true\ntr\\\nue\ngh pr merge 257\ntrue\n')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
@@ -450,6 +454,14 @@ for c in 'gh pr checkout 257' 'gh co 257' 'gh.exe pr merge 257' 'gh -R o/r pr me
   ck "FG-N 安全網が拾う: $c" ASK "$(CROSS_VALUE=true runj "$c" "$BROKEN_GH")"
 done
 ck "FG-N 安全網は review --comment を拾わない" 0 "$(CROSS_VALUE=true runj 'gh pr review 257 --comment' "$BROKEN_GH")"
+# 第 7 周: 2 つ目の安全網はコメント内の << を heredoc 開始とみなさない・混在終端語は除去しない
+# （精密判定と 1 つ目の安全網を無効化し、2 つ目の安全網だけで検証）
+BROKEN_ONLY2="$TMP/guard_only2.py"
+sed 's/_gh_coarse_count(_shell_code(raw, keep_quoted=False)) != n_targets/False/' "$BROKEN_GH" > "$BROKEN_ONLY2"
+grep -q '(False$' "$BROKEN_ONLY2"
+ck "FG-N1 注入が一致している"           0   "$?"
+ck "FG-N2 コメント内 <<Z の次行 merge"   ASK "$(CROSS_VALUE=true runj $'echo x # <<Z\ngh pr merge 257\nZ' "$BROKEN_ONLY2")"
+ck "FG-N3 混在終端語 <<A\"B\" の AB 後"   ASK "$(CROSS_VALUE=true runj $'cat <<A"B"\nAB\ngh pr merge 257\nA' "$BROKEN_ONLY2")"
 
 # 精密判定と安全網の両方を無効化すると素通しになる（FG-A の ASK が安全網によるものであることの裏取り）
 BROKEN_BOTH="$TMP/guard_noboth.py"

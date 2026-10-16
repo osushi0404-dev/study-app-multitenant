@@ -554,17 +554,23 @@ def _safety_text(raw: str) -> str:
             out.append(" ")
             i = j + 1
             continue
+        if ch == "#" and (i == 0 or s[i - 1] in " \t\n;&|()"):
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+            out.append(s[i:j])  # コメントは残すが、中の << をヒアドキュメント開始とみなさない
+            i = j
+            continue
         if s.startswith("<<<", i):
             out.append("<<<")
             i += 3
             continue
         if s.startswith("<<", i):
-            m = re.match(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|([^\s;&|()<>'\"]+))", s[i:])
+            # 終端語は「英数字等だけ」か「全体を 1 組の引用符で囲んだもの」に限る（混在 `A"B"` 等は除去しない）
+            m = re.match(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n\\\\$`]*)\"|([A-Za-z0-9_.\-]+)|\\([A-Za-z0-9_.\-]+))(?=[\s;&|()<>]|$)", s[i:])
             if not m:
                 return s
-            word = m.group(2) if m.group(2) is not None else (
-                m.group(3) if m.group(3) is not None else m.group(4).replace("\\", ""))
-            pending.append((word, bool(m.group(1)), m.group(4) is not None))
+            pending.append((m.group(2) or m.group(3) or m.group(4) or m.group(5) or "", bool(m.group(1)),
+                            m.group(4) is not None))  # `\WORD` は引用付きと同じ扱い（本文は展開されない）
             out.append(m.group(0))
             i += m.end()
             continue
@@ -858,15 +864,20 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
                 word.append(s[k])
                 k += 1
             if word:
-                pending.append(("".join(word), dash))
+                raw_word = s[j:k]
+                pending.append(("".join(word), dash, not any(c in raw_word for c in "'\"\\")))
             out.append(s[i:k])
             i = k
             continue
         if ch == "\n" and pending:
             out.append(ch)
             pos = i + 1
-            for word, dash in pending:
+            for word, dash, unquoted in pending:
                 e = -1 if (word, dash) in unfound else find_terminator(word, dash, pos)
+                if e >= 0 and unquoted:
+                    body = s[pos:s.rfind("\n", 0, e) + 1]
+                    if re.search(r"\\\n", body):
+                        e = -1  # 引用なし終端語の本文に行継続: bash と終端位置が食い違い得るので除去しない
                 found = e >= 0
                 if found:
                     pos = e  # 終端行の末尾（改行の手前）
