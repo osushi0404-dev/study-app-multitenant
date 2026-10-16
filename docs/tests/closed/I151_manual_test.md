@@ -1,0 +1,85 @@
+# I151 手動テスト（Django 5.2 LTS 更新・未使用アプリ 2 件の除去後の無退行確認）
+
+- 関連: docs/issues/closed/I151.md / docs/plans/closed/plan_I151.md / GitHub #267 / Draft PR #269
+- 前提: `docker compose up -d --wait`（6 サービス healthy）。**ステップ 1 の再ビルド完了後**に実施する
+- **再実施時の注意（2026-10-16 追記）**: 2026-10-15 時点の手元の `backend` イメージ（`study-app-multitenant-backend:latest`）は、別ブランチ（develop）で作り直されて Django 4.2.30 / django-redis 5.4.0 / DRF 3.15.2 に戻っていた（同じ compose プロジェクトを複数ブランチで共有しているため）。この状態で TC-AUTO-17 や No.11 を再実行すると、旧依存のまま合格してしまう（どちらも旧依存でも合格する）。再実施の前に `docker compose build backend celery celery-beat` で作り直し、TC-AUTO-11A 判定 A-2 が exit 0 になることを確かめる。I142 マージ後の確認（計画書の残余リスク (a)）も同じ
+- UI のコード変更はないため、Human 項目は「依存更新で画面が壊れていないこと」の目視確認に絞る
+
+## 使用アカウント
+
+| 用途 | ユーザーID | メール | 所属組織 | データ量 | 権限 |
+|---|---|---|---|---|---|
+| 主（組織あり・管理者） | `osushi0404admin` | `test01@gmail.com` | 株式会社おすしはなんだか楽しいよ | 科目 3・問題 30 | staff |
+| 副（個人利用・データ多め） | `osushi014` | `test014@gmail.com` | 個人利用 | 科目 11・問題 131 | 一般 |
+| No.7 実施時（代替） | `i102_user` | `i102_user@example.com` | かわいいだけじゃだめですか学園（cute_school） | 科目 2・問題 25（本人のアクセス科目は高校英語 1） | 一般（role=user） |
+
+> パスワードはユーザーご自身が設定したものを使用してください（dev DB の既存アカウントです）。
+> **2026-10-07 追記**: `osushi0404admin` のパスワードが不明だったため、No.7 はパスワードが記録済みの既存アカウント `i102_user`（`docs/tests/closed/I102_manual_test.md` 記載・`check_password` で一致を確認）で実施した。新規作成・既存アカウントの変更はしていない。テナント分離そのものの検証は E2E の `tenant_isolation` シナリオ（TC-AUTO-13）が担保します。
+
+---
+
+| No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
+|---:|------|----------|--------|--------|------|
+| 1 | ステップ 1 完了後に自動テストの TC-AUTO-00〜10 / 11A / 12 を順に実行する（2026-10-16 の /test 再実施では TC-AUTO-00〜17 を全件実行し、すべて合格。auto_test の実施記録を参照）（`docs/tests/closed/I151_auto_test.md` 参照）。**TC-AUTO-02 と TC-AUTO-11B はステップ 2 完了後に実施する**（この時点では pytest 8.3.4 が正しいため） | すべて `I151_auto_test.md` の TC 一覧『合格条件』列どおりの exit code（既定 exit 0・TC-AUTO-06 / 07 は exit 1。2026-10-14 に合格条件を一本化）。とくに TC-AUTO-03 が **94 passed**（skip 0 件）、TC-AUTO-04 が警告 0、TC-AUTO-05/06/07 が guardian・django_extensions 不在で合格、TC-AUTO-11A が宣言・実インストールの両方で一致 | Claude | OK（2026-08-24）— TC-AUTO-00〜10 / 11A / 12 / 17 すべて exit 0（当時の判定式。TC-AUTO-06 / 07 は `!` 付き旧形式で、exit 0＝合格）。94 passed・skip 0 件・check 警告 0 | |
+| 2 | TC-AUTO-09（使い捨て DB での `migrate`）を実行する | 前回残骸の除去 → `CREATE DATABASE migrate_check` → `migrate --noinput` が exit 0 で完了し、`Applying ...` のログが最後まで進む。後片付けで DB を破棄する | Claude | OK（2026-08-24）— 使い捨て DB `migrate_check` で 58 マイグレーション適用・exit 0。guardian のマイグレーション 0 件。検証後に破棄済み | 後片付けの `DROP DATABASE` はフックが承認を求める場合がある（検証専用 DB のため承認可） |
+| 3 | 再作成から 3 分以上待ってから TC-AUTO-10 を実行する（2026-10-16 に 1 分から改訂。worker の作り直し直後のキューの残りが判定 1c の窓に入らないようにするため） | 直近 3 分のログに `Task studylogs.tasks.update_daily_analytics_task[...] succeeded` があり、`ERROR` / `Traceback` が既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）以外に無い。beat が送信を試みていて、beat のログに ERROR / Traceback が無く、beat が送ったタスクが worker に届いて成功している。beat と worker のコンテナが実行中である。beat スケジュールの全対象タスクが、応答する唯一の worker に登録され、実際の実行（送信タスクは実メールを送らない設定）で失敗が無い（2026-10-16 改訂。TC-AUTO-10 判定 1・1b・1c・1d・2a・2b・2c・2d・3s・3a・3b・4a・4b と同じ。手順は確認スクリプト → ログの順。**注意: 復習カードが 1 件でもある状態では celery を動かさない**。カードは学習プランやカードの API を直接呼んだときにだけ作られる。開発環境の worker は SMTP 設定で、カードが残る限り beat の定期実行が実メールの送信を試みるため） | Claude | OK（2026-08-24・旧期待値）— 直近 3 分に成功ログ 9 件・ERROR / Traceback 0 件。**OK（2026-10-16・新期待値）**— 本文の順番（スクリプト → ログ）で、判定 1・1b・2a・2b・3s・3a・3b・4a・4b すべて exit 0。succeeded 13 件・ERROR 0・Traceback 0・beat の送信 10 回。対象 4 タスク（スケジュール 5 件中）が worker 1 つに登録済みで、実行結果はすべて OK（`SUMMARY targets=4 ok=4`）。（訂正: 第 1 周時点で「窓に既知の 1 種が 1 件入っていたが除外された」と記録した 1 件は、実施者自身の false-green 検証が送ったもので、beat の送信ではなかった）。**OK（2026-10-16・最新の期待値・12 判定＋1d）**— 確認スクリプトを 2 回続けて実行したうえで、判定 1・1b・1c・1d・2a・2b・2c・2d・3s・3a・3b・4a・4b すべて exit 0（worker の `update_daily_analytics_task` の succeeded 6 件はすべて beat 由来・beat の ERROR 0・celery と celery-beat は実行中）。詳細は auto_test の実施記録 | beat が 30 秒間隔で投げるため、3 分の窓に 6 回ほど出る |
+| 4 | TC-AUTO-15（`pip freeze`）を実行し、出力を `docs/tests/closed/I151_pip_freeze.txt` へ保存してコミットする | Django が `5.2.17`、`django-guardian` と `django-extensions` が**一覧に無い**。kombu 等の推移的依存のバージョンが記録に残る | Claude | OK（2026-08-24）— `docs/tests/closed/I151_pip_freeze.txt`（81 行）に記録。Django==5.2.17・django-guardian / django-extensions は不在 | celery が落ちた場合の切り分け材料 |
+| 5 | `docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/admin/login/` を実行する | `200`（Django 5.2 の admin が正常に描画される） | Claude | OK（2026-08-24）— `admin_login_http=200`。**OK（2026-10-16・/test 再実施）**— `200` | Django 本体のテンプレート・静的ファイル経路の生存確認 |
+| 6 | 認可・テナント境界の対象モジュールを個別に実行し、モジュール名と件数を記録する。対象: `problems/tests/test_I103_cross_org_create.py` / `problems/tests/test_I104_subject_authz.py` / `problems/tests/test_I006_subject_org_admin.py` / `problems/tests/test_I078_is_correct_exposure.py` / `accounts/tests/test_I131_org_id_rename.py` / `accounts/tests/test_I140_personal_org_fallback.py` / `core/tests/test_I127_throttling.py` / `problems/tests/test_I102_problem_authz.py` / `problems/tests/test_I115_public_unauth.py`（最後の 2 つは 2026-10-14 追加・計 9 モジュール） | 全モジュールが pass。更新前と更新後の件数が一致し、skip・削除・条件緩和が 0 件であることを記録する（AC-18） | Claude | OK（2026-08-24）— 当初の 7 モジュール全て pass（下表）。テストファイルは 1 件も変更していない。**2026-10-14 追加の 2 モジュールも pass（計 13 passed）**。**OK（2026-10-16・/test 再実施）**— 9 モジュールをまとめて実行し `61 passed`（下表の更新後の件数の合計と一致）。テストファイルの変更 0 件 | 「関連テストを実行した」ではなくモジュール名を列挙して記録する |
+| 7 | ブラウザで `http://localhost:3000` を開き、`osushi0404admin`（`test01@gmail.com`）でログインする。ログイン後、ダッシュボード → 問題一覧 → クイズを 1 問回答 → 学習履歴 の順に画面を開く | ログインが成功しダッシュボードが表示される。問題一覧に自組織（株式会社おすしはなんだか楽しいよ）の科目 3 件が並び、他組織の科目が混ざらない。クイズが出題され回答が保存される。学習履歴に回答が反映される。いずれの画面でも赤いエラー表示・白画面・コンソールの 500 エラーが出ない | Human | **OK（2026-10-16・/test 再実施）**— 2026-10-07 の確認より後に、openai の更新（backend・055aa11）と frontend のパッケージ 34 件の更新（I159 の取り込み・axios 1.17→1.20 を含む）が入ったため再確認した。`i102_user` でログインし、ダッシュボードがエラー表示・白画面なしで表示（スクリーンショット 1 枚・ユーザー提供）。**データ（Claude 確認）**: `last_login` 2026-10-16 13:53 JST。13:54 に QuizSession id=171/172（科目 11＝自組織。2 件同時作成は既知の不具合 #1）に QuizAnswer 2 件が保存。同ユーザーで `/api/dashboard/overview/`・`/api/dashboard/analytics/`（学習統計画面）・`/api/user/subjects/` がすべて 200。ダッシュボードの解答問題数 0 は既知の不具合 #2。／OK（2026-10-07）— 代替アカウント `i102_user` で実施（使用アカウント欄参照）。**画面**: ログイン成功・ダッシュボードとクイズ画面（高校英語・問題 2/12・総回答 1）がエラー表示・白画面なしで表示（スクリーンショット 2 枚）。**データ（Claude 確認）**: QuizSession id=169 に QuizAnswer 1 件（問題の組織 = cute_school・2026-10-07 13:07 JST）が保存。出題科目は自組織の高校英語のみ。`/api/dashboard/overview/`・`/api/dashboard/analytics/`（学習統計画面）・`/api/user/subjects/` が 200 で、overview の `recent_quizzes` に回答済みセッションが反映。問題管理画面は一般ユーザーのため対象外（組織越境は TC-AUTO-13 の `tenant_isolation` で担保済み。**2026-10-14 訂正**: この担保は科目・問題の一覧／作成の経路に限られ、**クイズ経路は含まない**。敵対的レビューで、クイズ作成時に組織チェックが無く他組織の問題が出題される既存の不具合が見つかった。I151 以前からの問題で、別イシューで対応する） | UI のコード変更はないため、依存更新による API 応答形の変化がないことの目視確認 |
+| 8 | 後続イシュー 3 件を `/issue-bootstrap` で起票する（タイトル案はイシュー本文の決定 2 / 7-C / 7-D に記載） | 3 件が起票され、イシュー番号が記録される。内訳: guardian_* テーブル除去 / backend 依存の lockfile 導入 / celery beat スケジュールの環境別切り替え | Claude | OK（2026-08-24）— I155(#272) / I156(#273) / I157(#274) を起票。**2026-10-16 追補**: 4 件目（celery `core.tasks` 未登録の根治）は I151 の完了後に起票する（ユーザー指示）。I151 の完了までの確認は、タイトル・受け入れ条件・実施順の制約が記録されていること（下の後続イシュー欄 No.4・計画書ステップ 4・GitHub の I150（#266）・I157（#274）の本文）。2026-10-16 に、#266・#274 の本文へ反映したことを確認（当初はローカルの未追跡ファイルを根拠にしていた。敵対的レビュー 1100 の指摘で訂正）。あわせて、PR #269 の本文の「後続タスク」節に、I151 の完了後に起票する 6 件（計画書ステップ 5。2026-10-16 の /test で 6 件目を追加）が列挙されていることを確認する（2026-10-16 に PR 本文へ書き込み済み。`/test` の時点で再確認する）。**OK（2026-10-16・/test 再実施）**— `gh pr view 269` の本文に「後続タスク（I151 の完了後に起票）」節があり、1〜5 の 5 件が列挙されていることを確認（その後 6 件目を追加し、PR 本文にも反映済み）。GitHub #266・#274・#265 の本文の注記も確認済み（敵対的レビュー 1308 の記録整合の観点で照合） | AC-19。django-extensions の依存移動は決定 7 の変更（更新→削除）により不要になった |
+| 9 | ステップ 2（pytest 9.0.3）完了後に TC-AUTO-02 / 03 / 11B / 12 を実行する | TC-AUTO-02 が exit 0（開発依存の脆弱性 0 件）、TC-AUTO-03 が 94 passed、TC-AUTO-11B が宣言・実インストールとも 9.0.3、TC-AUTO-12 が 10 passed | Claude | OK（2026-08-24）— TC-AUTO-02 exit 0・TC-AUTO-03 94 passed・TC-AUTO-11B exit 0・TC-AUTO-12 10 passed。**2026-10-15 再確認**: R6・I159 取り込み後に TC-AUTO-12 を再実行して 3 suites / 10 passed（auto_test の「R6・I159 取り込み後の CI 系の再実施」表）。TC-AUTO-02 / 03 / 11B は 2026-10-14 の R6 再実施表を参照 | ここが落ちた場合は 2 段目のみ取り消す（計画 §8）。取り消したら**再ビルドが必要**（イメージには pytest 9 が残るため） |
+| 10 | Draft PR #269 を push 後、TC-AUTO-13（E2E）と TC-AUTO-14（CI 6 チェック）を実行する | E2E が全件 pass。`gh pr checks 269` で SUCCESS 以外が 0 件 | Claude | OK（2026-08-24）— E2E 全件 pass（3m10s）。`gh pr checks 269` で SUCCESS 以外 0 件（全 6 チェック SUCCESS）。**2026-10-15 再確認**: R6・I159 取り込み後の head 5c31947 で E2E 7 passed（flaky 0）・全 6 チェック SUCCESS。R6 を push した 9a6f809 では `Frontend Lint & Security` が失敗していた（I159 で解消。詳細は auto_test の同じ表） | AC-13・AC-14 |
+| 11 | 再ビルド後の実コンテナに対し、ログインエンドポイントへ誤ったパスワードで 6 回連続 POST する（`docker compose exec -T backend python manage.py shell -c` の `APIClient` を使用。`RATELIMIT_ENABLE` は既定の有効のまま）。**リクエストは `{'email': <存在しないアドレス>, 'password': <誤り>}`（ログイン API の項目は `username` ではなく `email`）。`HTTP_HOST='localhost'`（`ALLOWED_HOSTS` にある値）と、ほかの確認と混ざらない専用の `REMOTE_ADDR` を指定する**（2026-10-16 改訂） | 6 回目が **403（django-ratelimit の遮断）** で拒否される。5 回目までは 400/401 が返る。**400 の中身が、ログイン失敗の応答（`non_field_errors` に「ユーザーIDまたはパスワードが正しくありません。」）であること**を確かめる（ホスト名の不正や項目不足の 400 でも、ステータスコードだけなら同じに見えるため）。遮断されない場合はレート制限が機能していない（security-review シナリオ #1・AC-21 の実挙動確認。2026-10-15 訂正: 当初「フェイルオープン」と書いていたが、カウンタ操作の失敗時、django-ratelimit は既定で遮断側に倒れる。したがって、カウンタが壊れた場合の症状は 1 回目から 403 になること。本項目は 1〜5 回目が 400 であることも確認しているので、その症状も検出できる） | Claude | OK（2026-08-24）— `codes [400, 400, 400, 400, 400, 403]`。5 回目まで 400、**6 回目で 403 に遮断**。django-redis 7.0.0 上でブルートフォース防御が機能。**2026-10-15 但し書き**: ① 本項目は `APIClient`（`REMOTE_ADDR` が固定）で実行したので、確かめたのは「カウンタ機構が更新後も遮断まで動く」ことまでである。プロキシ（nginx・frontend の dev proxy）の背後では IP キーが全利用者共通になる既存の不備があり、本項目では原理的に検出できない（計画書の残余リスク処遇を参照）。② 実施は 2026-08-24 の 1 回である。2026-10-14 の R6 作り直しの後は、同じカウンタ機構を TC-AUTO-17 で再確認した（`add_new True` / `add_dup False` / `incr2 2`）。django-ratelimit と django-redis の版は R6 で変わっていない。**OK（2026-10-16・/test 再実施）**— `codes [400, 400, 400, 400, 400, 403]`（送信元 IP を専用の値 203.0.113.152 にし、`HTTP_HOST='localhost'` を指定）。**注意**: 1 回目は `HTTP_HOST` を指定せず、`APIClient` の既定 `testserver` が `ALLOWED_HOSTS`（`localhost` / `127.0.0.1` / `backend`）に無いため、6 回とも `DisallowedHost` の 400 になり、ログイン処理にもレート制限にも届いていなかった（無効な試行として扱い、合否に使わない）。再実施時は `HTTP_HOST='localhost'` を付けること。**さらに 2026-10-16 に判明**: この再実施（と 2026-08-24 の実施とみられる形）は `username` を送っており、1〜5 回目の 400 の中身は「`email` は必須です」という入力エラーだった（ログイン失敗の 400 ではない）。レート制限は処理の前にかかるので 6 回目の 403 は正しいが、「誤ったパスワードでの試行」にはなっていなかった。`email` と誤ったパスワードで再実施し、`codes [400, 400, 400, 400, 400, 403]`・1 回目の中身が `non_field_errors: ['ユーザーIDまたはパスワードが正しくありません。']`・6 回目が「アクセスが拒否されました」であることを確認した（**OK・2026-10-16**） | TC-AUTO-17 がカウンタ機構を、本項目が実際の遮断を確認する。確認後はカウンタが残るため、後続の手動確認では IP かキーを変えるか 5 分待つ |
+
+---
+
+## 記録欄
+
+### AC-18: 認可・テナント境界テストの前後比較（No.6 で記入・9 モジュール）
+
+| モジュール | 更新前 | 更新後 | skip/削除/緩和 |
+|---|---|---|---|
+| `problems/tests/test_I103_cross_org_create.py` | 6 passed | 6 passed | なし |
+| `problems/tests/test_I104_subject_authz.py` | 5 passed | 5 passed | なし |
+| `problems/tests/test_I006_subject_org_admin.py` | 12 passed | 12 passed | なし |
+| `problems/tests/test_I078_is_correct_exposure.py` | 7 passed | 7 passed | なし |
+| `accounts/tests/test_I131_org_id_rename.py` | 6 passed | 6 passed | なし |
+| `accounts/tests/test_I140_personal_org_fallback.py` | 4 passed | 4 passed | なし |
+| `core/tests/test_I127_throttling.py` | 8 passed | 8 passed | なし |
+| `problems/tests/test_I102_problem_authz.py`（2026-10-14 追加） | 5（※） | 5 passed | なし |
+| `problems/tests/test_I115_public_unauth.py`（2026-10-14 追加） | 8（※） | 8 passed | なし |
+| **全体** | **94 passed** | **94 passed** | なし |
+
+> **2026-10-14 追記（敵対的レビュー第 1 周の指摘・第 2 周で説明を訂正）**: ロール別認可（I102。未認証の拒否 401 を確かめる `test_anonymous_gets_401` を含む）と、公開エンドポイントが**未認証でも 200** を返すことの回帰テスト（I115。認証クラスの更新で公開経路が誤って 401 化する退行を検出する）は、DRF の permission / authentication 更新の影響を最も受けるモジュールだが、当初の列挙から漏れていたため追加した。更新後の個別実行は 2026-10-14 に実施（2 モジュール計 `13 passed`）。※更新前は個別実行していない。テスト関連ファイルの変更が 0 件で、全体が更新前後とも 94 passed（skip 0 件）であることから、件数は前後同一と判断した（間接根拠）。なお `test_I127_throttling.py` はレート制限のテストで、厳密には認可ではないが、ブルートフォース防御の回帰確認として残す。
+
+### マイグレーション検証の担保経路（記録必須・イシュー決定 7-A・計画書 AC-23）
+
+次に同じ疑問が出たときに調べ直さずに済むよう、以下を記録する。
+
+- **(a) ローカル**: 使い捨て DB（`migrate_check`）への `migrate`（TC-AUTO-09）
+- **(b) CI**: E2E ジョブがまっさらなランナー上で `migrate` を実行（`.github/workflows/e2e.yml` の 17 行目・25 行目）
+- **(c) CI**: Backend Lint & Security の「Check migration drift」（`.github/workflows/ci.yml` 29〜35 行目）
+- **注意**: `backend/pytest.ini` の `--no-migrations` により、**pytest はマイグレーションを検証しない**。上記 3 経路がその穴を埋めている
+- **実施結果（2026-08-24）**: (a) 使い捨て DB `migrate_check` で 58 マイグレーションを適用し exit 0（guardian のマイグレーション 0 件・検証後に破棄）。(c) `makemigrations --check --dry-run` が `No changes detected`。(b) は CI の E2E ジョブで実行される
+- **更新前後の件数が同一である根拠**: テスト関連ファイル（`backend/*/tests/*` / `conftest.py` / `pytest.ini`）の変更は **0 件**。ブランチの backend 側の差分は `requirements.txt` / `requirements-dev.txt` / `core/settings.py` の 3 ファイルのみ（`git diff origin/develop...HEAD --name-only -- backend/` で確認）
+
+### No.7 で見つかった既存不具合（I151 起因ではない・2026-10-07）
+
+I151 はアプリコード・URL・画面を変更していない（backend 差分は依存 2 ファイル＋`settings.py` の INSTALLED_APPS 2 行削除のみ）。以下はいずれも更新前から存在し、No.7 の合否には影響しない。#1 は I158（#275）として起票済み。#2 はダッシュボード改善時に対応する方針（ユーザー決定・2026-10-07）で個別起票しない。
+
+| # | 事象 | 更新前から存在する根拠 | 起票タイトル案 |
+|---|---|---|---|
+| 1 | クイズを 1 回開始すると QuizSession が同時刻に 2 件作成される（今回も id=169/170） | dev DB の全 120 セッション中 60 組が 1 秒未満差の重複。最古は 2025-08-18 | クイズ開始時にセッションが二重作成される（開始リクエストの重複送信）を是正 |
+| 2 | クイズに回答してもダッシュボードの「解答問題数」「正答率」が 0 のまま | `/api/dashboard/overview/` の `today.problems_attempted` が回答後も 0。集計元（StudyLog / ProblemAttempt）にクイズ回答が記録されていない（i102_user の ProblemAttempt / StudyLog は 0 件） | クイズ回答がダッシュボードの学習統計（解答問題数・正答率）に反映されない問題を是正 |
+
+参考: `dashboard.service.ts` の `getStudyStats` / `getRecentSessions` / `getSubjectProgress` が呼ぶ API は 404 を返すが、いずれも画面から呼ばれていない未使用メソッドで、No.7 の対象外。
+
+### 後続イシューの起票結果（No.8 で記入）
+
+| # | タイトル | イシュー番号 |
+|---|---|---|
+| 1 | 未使用の guardian_* テーブル除去（2 テーブル・バックアップ取得のうえ実施） | I155 / #272 |
+| 2 | backend 依存のロックファイル導入 | I156 / #273 |
+| 3 | celery beat のスケジュールが開発用のまま（5 タスク・crontab の import 欠落も併せて是正） | I157 / #274 |
+| 4 | celery の core.tasks が未登録で cache_maintenance_task が 30 分ごとに破棄される問題を修正（キャッシュ統計も取得できていない）（2026-10-16 追加・/test で判明した既存不具合） | 未起票（I151 の完了後に起票。I150 より先に実施・I157 と cache-maintenance の扱いを調整。計画書ステップ 4） |
