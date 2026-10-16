@@ -88,7 +88,7 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 
 （注入の sed 式は実装時に対象行へ合わせて確定する。要件は「cross-repo 判定行だけを無効化し、他の分岐を壊さないこと」。）
 
-## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G56）
+## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G106）
 
 実行コマンド: 「決定論ゲート（自動実走）」の `test_pretooluse_gh_pr_guard.sh`。
 
@@ -133,6 +133,15 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 | G53・G54 | MCP の pull_number/owner/repo、Bash の識別子が実際に照会へ渡る（GH_LOG で検証） | exit 0（grep） |
 | G55・G56 | `review -a` 短縮形・MCP `pullNumber`（キャメル）の個別分岐 | ASK / exit 2 |
 | G57〜G61 | `gh pr checkout`（fork=block・`-b x` の値を識別子としない・自前=素通し）・`gh pr update-branch`（fork=ASK・自前=素通し）。計画書 R10（2026-10-16 ユーザー承認） | 2 / 0 / 2 / ASK / 0 |
+| G62〜G64 | 第 2 周: サブコマンド別フラグ表（merge の `-m`/`-dm` は値なし）・表にないフラグは ASK | 2 / 2 / ASK |
+| G65〜G68 | ヒアドキュメント本文の `gh pr merge`/`` `gh pr checkout` `` は無視（誤 block しない）・終端後の実コマンドと終端なしは検出 | 0 / 0 / 2 / 2 |
+| G69〜G74 | `then`・`do`・`{ }`・`!`・前置 `>/dev/null`・`&>/dev/null` の後ろの merge | exit 2 |
+| G75〜G84 | 値付きラッパー（`nice -n 5`・`sudo -u`・`env -u`・`timeout -s KILL`・`--kill-after=`）・`nohup`/`time`/`exec`/`env -i`・`xargs`（識別子が外から＝ASK） | 2 … / ASK |
+| G85〜G93 | `gh pr --repo/-R o/r merge`・`2>&1`（自前は ask しない／fork は block）・`#` コメント行の次・パイプ・バッククォート・クォート不整合 | 2 / 2 / 0 / 2 / 2 … |
+| G94〜G96 | 複数の `gh pr` を全件判定（先頭が自前でも後続の fork merge/checkout を block・fork edit を ASK） | 2 / 2 / ASK |
+| G97〜G100 | グローバル `--repo=`・`-Rx`・サブコマンド側 `-R` が照会に渡る・`-bLGTM` の値連結 | grep 0 / 2 |
+| G101〜G103 | 既定エイリアス `gh co`（fork=block・自前=素通し）・`cd` 後の識別子なし merge は ASK | 2 / 0 / ASK |
+| G104〜G106 | 自前 PR の正規手順（識別子なし `merge --squash --delete-branch`・`ready`・`edit --body "$(cat <<'EOF' …)"`）は不変 | 0 |
 
 スタブは tautology 解消のため、識別子なし照会（カレントブランチ）と `SELF_IDENTS` の識別子には**自前（false）**を返すよう変更した（G11 のみ `CURRENT_FORK=1` で fork 扱い）。G22 は順序を検証できるよう ask 種別の `gh pr ready` に変更した。`test_pr_base_sync.sh` のスタブも対象 PR（219）以外への照会には false を返すよう変更し、照会先を別 PR にした注入版で `RESULT: NG (5 件)` になることを確認した。
 
@@ -223,5 +232,6 @@ FG-A / FG-C / FG-D が exit 0 を返し、かつ FG-B / FG-E が exit 2 を返�
 | TC-08 | 2026-08-05 実装時 | ✅ PASS | push guard `pass=87 fail=0`・worktree guard `pass=27 fail=0`・checkout guard `pass=14 fail=0`（回帰なし） |
 | TC-03 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | Red: 修正前ガードで `pass=45 fail=22`（G28〜G52 の回避経路が素通し）→ 修正後 `pass=67 fail=0` |
 | TC-03 | 2026-10-16 R10（checkout/update-branch）追加 | ✅ PASS | Red: `pass=69 fail=3`（G57/G59/G60）→ 実装後 `pass=72 fail=0` |
+| TC-03 | 2026-10-16 敵対的レビュー第 2 周対応（作り直し） | ✅ PASS | 新テストを直前コミット 670d184 のガードに当てると `pass=90 fail=27`（Red）→ 作り直し後 `pass=117 fail=0`。回帰: push 87・worktree 27・checkout 14・pr-base-sync 21/21 |
 | TC-01 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | スタブ厳格化後も `RESULT: OK (21/21 cases, 30 assertions)`。照会先を PR 1 にした注入版は `RESULT: NG (5 件 / pass 25)` |
 | TC-08 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | push guard `pass=87`・worktree guard `pass=27`・checkout guard `pass=14`（いずれも fail=0・回帰なし） |

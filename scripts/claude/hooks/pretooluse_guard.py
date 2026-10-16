@@ -414,9 +414,7 @@ def _check_edit_write(data: dict):
 #         （外部 PR を断るのに必要な操作を塞いではならない）。
 # checkout も block: fork のブランチを checkout すると `.claude/settings.json` と hook 本体が
 # 相手の版に置き換わり、次のツール呼び出しでそのコードが実行される（R10・2026-10-16 承認）。
-_GH_PR_BLOCK_VERBS = ("merge", "checkout")
-_GH_PR_ASK_VERBS = ("ready", "edit", "update-branch")
-_GH_PR_APPROVE_FLAGS = ("--approve", "-a")
+# 対象サブコマンドと種別は下の _GH_PR_SPECS に集約する（R8: 追加は 1 エントリ）。
 
 _MCP_PR_BLOCK_TOOLS = ("mcp__github__merge_pull_request",)
 _MCP_PR_ASK_TOOLS = (
@@ -459,98 +457,140 @@ def _pr_is_cross_repo(ident, repo=None):
     return None, head
 
 
-# 区切り: 改行・; & | ( ) ` を演算子として分割する（空白なしの `true;gh`・複数行・サブシェル・
-# コマンド置換の内側も独立したコマンドとして見る）。クォート内の改行・記号は分割しない。
-_GH_SEP_CHARS = ";&|()`\n"
-# 先頭から読み飛ばす前置ラッパー（実行対象を後続トークンに委ねるもの）
-_GH_WRAPPERS = ("env", "command", "nohup", "time", "exec", "nice", "sudo")
-# gh pr の値を取るフラグ（値を PR 識別子と取り違えないため。merge/edit/ready/review/共通）
-_GH_PR_VALUE_LONG = (
-    "--repo", "--body", "--body-file", "--subject", "--title", "--match-head-commit",
-    "--author-email", "--base", "--milestone", "--add-assignee", "--remove-assignee",
-    "--add-label", "--remove-label", "--add-project", "--remove-project",
-    "--add-reviewer", "--remove-reviewer", "--head", "--branch",
-)
-_GH_PR_VALUE_SHORT = "RbFtABmH"
+# gh pr サブコマンドごとのフラグ表（gh 2.88 の `gh pr <verb> --help` 準拠）。
+# (kind, 値を取る long, 値を取る short, 値を取らない long, 値を取らない short)
+# 表にないフラグは推測せず ambiguous（ask 降格）にする。値の有無を取り違えると識別子を誤認し、
+# 別の PR を検査して素通しするため（例: merge の -m は値なし、edit の -m は値あり）。
+# kind="approve" は review 用（--approve/-a があるときだけ ask 対象）。
+_GH_PR_SPECS = {
+    "merge": ("block",
+              ("--body", "--body-file", "--subject", "--match-head-commit", "--author-email", "--repo"),
+              "bFtAR",
+              ("--merge", "--rebase", "--squash", "--delete-branch", "--admin", "--auto",
+               "--disable-auto", "--help"),
+              "mrsdh"),
+    "checkout": ("block",
+                 ("--branch", "--repo"), "bR",
+                 ("--recurse-submodules", "--force", "--detach", "--help"), "fh"),
+    "ready": ("ask", ("--repo",), "R", ("--undo", "--help"), "h"),
+    "edit": ("ask",
+             ("--title", "--body", "--body-file", "--base", "--milestone", "--add-assignee",
+              "--remove-assignee", "--add-label", "--remove-label", "--add-project",
+              "--remove-project", "--add-reviewer", "--remove-reviewer", "--repo"),
+             "tbFBmR",
+             ("--remove-milestone", "--help"), "h"),
+    "update-branch": ("ask", ("--repo",), "R", ("--rebase", "--help"), "h"),
+    "review": ("approve", ("--body", "--body-file", "--repo"), "bFR",
+               ("--approve", "--comment", "--request-changes", "--help"), "acrh"),
+}
+_GH_PUNCT = "();<>|&`"
+_HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+_FD_RE = re.compile(r"(?:(?<=^)|(?<=[\s;&|()`]))\d+(?=[<>])", re.M)
 
 
-def _gh_segments(raw: str) -> list:
-    """生コマンドを区切り演算子ごとのトークン列に分割する（gh pr 判定専用）。
-    既存 `_segments` は改行を空白に潰した文字列を受け、空白で囲まれた演算子しか区切らないため、
-    gh pr 判定ではこちらを使う（既存ガードの挙動は変えない）。クォート不整合は素朴分割で fail-safe。"""
+def _strip_heredoc_bodies(raw: str) -> str:
+    """ヒアドキュメントの本文行を除く（本文はデータであり実行されないため。誤 block の防止）。
+    終端行が見つからない場合は除かない（区切りの誤認で後続コマンドを隠さない fail-safe）。"""
+    lines = raw.split("\n")
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        i += 1
+        for dash, _q, word in _HEREDOC_RE.findall(line.replace("<<<", "   ")):
+            j = i
+            while j < len(lines):
+                body = lines[j].lstrip("\t") if dash else lines[j]
+                if body == word:
+                    break
+                j += 1
+            if j < len(lines):
+                i = j + 1  # 本文と終端行を読み飛ばす
+    return "\n".join(out)
+
+
+def _gh_tokens(raw: str) -> list:
+    """生コマンドを (token, is_op) の列にする（gh pr 判定専用。既存 `_segments` は無改変）。
+    改行は区切りとして扱う（`#` コメントが行末の改行ごと読み捨てても区切りが残るよう `\\n;\\n` に置換）。
+    fd 番号付きリダイレクト（`2>&1`）の番号は除く。クォート不整合は素朴分割で fail-safe。"""
+    s = _FD_RE.sub("", _strip_heredoc_bodies(raw)).replace("\n", "\n;\n")
     try:
-        lx = shlex.shlex(raw, posix=True, punctuation_chars=_GH_SEP_CHARS)
-        lx.whitespace = " \t\r"
+        lx = shlex.shlex(s, posix=True, punctuation_chars=_GH_PUNCT)
+        lx.whitespace = " \t\r\n"
         lx.whitespace_split = True
         toks = list(lx)
     except ValueError:
-        toks = [t for t in re.split(r"([;&|()`\n])|[ \t\r]+", raw) if t]
-    segs, seg = [], []
-    for t in toks:
-        if set(t) <= set(_GH_SEP_CHARS) or t == "$":
-            if seg:
-                segs.append(seg)
-                seg = []
-        else:
-            seg.append(t)
-    if seg:
-        segs.append(seg)
-    return segs
-
-
-def _gh_invocation(seg: list):
-    """1 区切り分のトークン列が gh 呼び出しなら (gh 以降の引数, env 由来の repo) を返す。
-    `VAR=val` 前置・ラッパー（env/command/timeout 等）・絶対パスの gh を読み飛ばす。"""
-    i, env_repo = 0, None
-    while i < len(seg):
-        t = seg[i]
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t):
-            if t.startswith("GH_REPO="):
-                env_repo = t.split("=", 1)[1] or None
-            i += 1
-            continue
-        base = os.path.basename(t)
-        if base in _GH_WRAPPERS:
-            i += 1
-            while i < len(seg) and seg[i].startswith("-"):
-                i += 1
-            continue
-        if base == "timeout":
-            i += 1
-            while i < len(seg) and seg[i].startswith("-"):
-                i += 1
-            i += 1  # 継続時間
-            continue
-        break
-    if i >= len(seg) or os.path.basename(seg[i]) != "gh":
-        return None
-    return seg[i + 1:], env_repo
+        toks = [t for t in re.split(r"([();<>|&`]+)|\s+", s) if t]
+    return [(t, bool(t) and set(t) <= set(_GH_PUNCT)) for t in toks]
 
 
 def _gh_pr_target(cmd: str):
-    """`gh pr <verb> ...` を検出して (kind, ident, repo, ambiguous) を返す。非該当は None。
-    cmd は生コマンド（改行を潰す前）。kind は "block" / "ask"。複数該当時は block を優先する。
-    識別子（番号・URL・ブランチ名）は解釈せず gh へそのまま渡す。値を取るフラグの値は識別子と
-    みなさず、`-R/--repo`・`GH_REPO=` は照会側へ渡す。位置引数が複数なら ambiguous（ask 降格）。"""
-    found = None
-    for seg in _gh_segments(cmd):
-        inv = _gh_invocation(seg)
-        if not inv:
+    """`gh pr <verb> ...` をすべて検出して [(kind, ident, repo, ambiguous), ...] を返す（非該当は空）。
+    cmd は生コマンド（改行を潰す前）。`gh` はコマンド中のどの位置でも検出する
+    （then/do/{/!/リダイレクト・ラッパー越しでも取りこぼさないため）。gh 既定エイリアス `co` は checkout と同一視する
+    （利用者定義のエイリアスは対象外＝計画書「設計上の限界」）。
+    識別子（番号・URL・ブランチ名）は解釈せず gh へそのまま渡す。`-R/--repo`・`GH_REPO=` は照会側へ渡す。
+    次は ambiguous（照会せず ask）: 表にないフラグ・位置引数が複数・識別子がなく gh の前に別コマンドがある
+    （xargs 等で識別子が外から渡る）。"""
+    toks = _gh_tokens(cmd)
+    targets = []
+    for idx, (tok, is_op) in enumerate(toks):
+        if is_op or os.path.basename(tok) != "gh":
             continue
-        args, repo = inv
-        # gh のグローバルフラグ（`gh -R o/r pr ...`）
-        while args and args[0].startswith("-"):
-            a = args.pop(0)
-            if a in ("-R", "--repo") and args:
-                repo = args.pop(0)
+        # 同じ区切り内で gh より前にあるもの（GH_REPO= と、別コマンドの有無）
+        k, env_repo, prefixed = idx - 1, None, False
+        while k >= 0 and not (toks[k][1] and not re.search(r"[<>]", toks[k][0])):
+            t = toks[k][0]
+            if t.startswith("GH_REPO="):
+                env_repo = t.split("=", 1)[1] or None
+            elif not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t):
+                prefixed = True
+            k -= 1
+        # gh より後ろ（区切り演算子まで）。リダイレクトは演算子と行き先を除く
+        args, j = [], idx + 1
+        while j < len(toks):
+            t, op = toks[j]
+            if op and re.search(r"[<>]", t):
+                j += 2
+                continue
+            if op:
+                break
+            args.append(t)
+            j += 1
+        repo = env_repo
+        verb, seen_pr, i = None, False, 0
+        while i < len(args):  # gh / pr の後ろ・verb の前のフラグ（`gh -R o/r pr --repo o/r merge`）
+            a = args[i]
+            if a in ("-R", "--repo"):
+                repo = args[i + 1] if i + 1 < len(args) else repo
+                i += 2
             elif a.startswith("--repo="):
                 repo = a.split("=", 1)[1]
+                i += 1
             elif a.startswith("-R") and len(a) > 2:
                 repo = a[2:]
-        if len(args) < 2 or args[0] != "pr":
-            continue
-        verb, rest = args[1], args[2:]
-        positionals, approve, j = [], False, 0
+                i += 1
+            elif a.startswith("-"):
+                i += 1
+            elif not seen_pr:
+                if a == "co":  # gh 既定エイリアス `co: pr checkout`
+                    verb = "checkout"
+                    i += 1
+                    break
+                if a != "pr":
+                    break
+                seen_pr = True
+                i += 1
+            else:
+                verb = a
+                i += 1
+                break
+        spec = _GH_PR_SPECS.get(verb)
+        if not spec:
+            continue  # view/checks/diff/list/close/comment は対象外
+        kind, vlong, vshort, blong, bshort = spec
+        rest = args[i:]
+        positionals, approve, ambiguous, j = [], False, False, 0
         while j < len(rest):
             a = rest[j]
             if a == "--":
@@ -558,40 +598,49 @@ def _gh_pr_target(cmd: str):
                 break
             if a.startswith("--"):
                 name, eq, val = a.partition("=")
-                if name == "--approve" and val.lower() not in ("false", "0"):
-                    approve = True
-                if name in _GH_PR_VALUE_LONG and not eq:
-                    val = rest[j + 1] if j + 1 < len(rest) else ""
-                    j += 1
-                if name == "--repo" and val:
-                    repo = val
+                if name in vlong:
+                    if not eq:
+                        val = rest[j + 1] if j + 1 < len(rest) else ""
+                        j += 1
+                    if name == "--repo" and val:
+                        repo = val
+                elif name in blong:
+                    if name == "--approve" and not (eq and val.lower() in ("false", "0")):
+                        approve = True
+                else:
+                    ambiguous = True
             elif a.startswith("-") and len(a) > 1:
                 cluster = a[1:]
-                for k, ch in enumerate(cluster):
-                    if ch == "a":
-                        approve = True
-                    if ch in _GH_PR_VALUE_SHORT:
-                        val = cluster[k + 1:]
+                for c, ch in enumerate(cluster):
+                    if ch in vshort:
+                        val = cluster[c + 1:]
                         if not val:
                             val = rest[j + 1] if j + 1 < len(rest) else ""
                             j += 1
                         if ch == "R" and val:
                             repo = val
                         break
+                    if ch in bshort:
+                        if kind == "approve" and ch == "a":
+                            approve = True
+                        continue
+                    ambiguous = True
+                    break
             else:
                 positionals.append(a)
             j += 1
-        if verb in _GH_PR_BLOCK_VERBS:
-            kind = "block"
-        elif verb in _GH_PR_ASK_VERBS or (verb == "review" and approve):
+        if kind == "approve":
+            if not approve and not ambiguous:
+                continue  # review --comment / --request-changes は対象外
             kind = "ask"
-        else:
-            continue  # view/checks/diff/list/close/comment/review --comment は対象外
-        t = (kind, positionals[0] if positionals else None, repo, len(positionals) > 1)
-        if kind == "block":
-            return t
-        found = found or t
-    return found
+        # 識別子なし＝カレントブランチの PR。照会は hook の作業ディレクトリで走るため、
+        # gh の前に別コマンド（xargs 等）や cd/pushd があると実際の対象と食い違い得る → ask
+        moved = any(not op and t in ("cd", "pushd") for t, op in toks[:idx])
+        if len(positionals) > 1 or (not positionals and (prefixed or moved)):
+            ambiguous = True
+        targets.append((kind, positionals[0] if positionals else None, repo, ambiguous))
+    targets.sort(key=lambda t: t[0] != "block")  # block 種別を先に評価する
+    return targets
 
 
 def _mcp_pr_target(tool_name: str, tool_input: dict):
@@ -618,34 +667,58 @@ def _mcp_pr_target(tool_name: str, tool_input: dict):
     return kind, ident, full
 
 
-def _guard_cross_repo(kind: str, ident, repo, raw: str, require_ident: bool = False):
-    """cross-repo 判定に応じて block / ask / 素通しを決める。判定不能は ask（fail-safe）。
+def _cross_decision(kind: str, ident, repo, require_ident: bool = False):
+    """cross-repo 判定に応じて ("block", 理由) / ("ask", 理由) / None（素通し）を返す。判定不能は ask（fail-safe）。
     require_ident=True（MCP 経路）で識別子が取れない場合は照会せず ask する。
     MCP はカレントブランチという概念を持たず、ident=None のまま照会すると
-    「別の PR（カレントブランチの PR）を検査して素通しする」誤判定になり得るため。
-
-    注: `_ask()` / `_block()` は内部で sys.exit する（呼び出し後は戻らない）。
-    以降の行に到達するのは、それらを通らなかった経路だけである。"""
+    「別の PR（カレントブランチの PR）を検査して素通しする」誤判定になり得るため。"""
     if require_ident and not ident:
-        _ask("対象 PR の番号を特定できませんでした（tool_input に pull_number がない）。"
-             "外部（fork）由来の PR でないか確認してください。")
+        return ("ask", "対象 PR の番号を特定できませんでした（tool_input に pull_number がない）。"
+                       "外部（fork）由来の PR でないか確認してください。")
     cross, head = _pr_is_cross_repo(ident, repo)
     label = f"PR {ident}" if ident else "カレントブランチの PR"
     origin = f"（head: {head}）" if head else ""
     if cross is None:
-        _ask(f"{label} が自前のものか判定できませんでした（gh 照会失敗/タイムアウト）。"
-             f"外部（fork）由来の PR でないか確認してください。")
+        return ("ask", f"{label} が自前のものか判定できませんでした（gh 照会失敗/タイムアウト）。"
+                       f"外部（fork）由来の PR でないか確認してください。")
     if cross is False:
-        return  # 自前 PR → 従来どおり素通し
+        return None  # 自前 PR → 従来どおり素通し
     if kind == "block":
-        _block(
-            f"{label} は fork（外部リポジトリ）由来です{origin}。外部からのコード寄稿は受け付けていません"
-            f"（CONTRIBUTING.md）。マージ・checkout せず、方針コメント付きで close してください。"
-            f"どうしても必要なら DANGER_OK=1 を前置してください。",
-            raw,
-        )
-    _ask(f"{label} は fork（外部リポジトリ）由来です{origin}。取り込み方向の操作になります。"
-         f"CONTRIBUTING.md の方針（外部からのコード寄稿は受け付けない）を確認してください。")
+        return ("block",
+                f"{label} は fork（外部リポジトリ）由来です{origin}。外部からのコード寄稿は受け付けていません"
+                f"（CONTRIBUTING.md）。マージ・checkout せず、方針コメント付きで close してください。"
+                f"中身の確認は gh pr diff / gh pr view で行えます（checkout すると相手の .claude/ と hook が"
+                f"次の操作で実行されます）。どうしても必要なら DANGER_OK=1 を前置してください。")
+    return ("ask", f"{label} は fork（外部リポジトリ）由来です{origin}。取り込み方向の操作になります。"
+                   f"CONTRIBUTING.md の方針（外部からのコード寄稿は受け付けない）を確認してください。")
+
+
+def _guard_cross_repo(kind: str, ident, repo, raw: str, require_ident: bool = False):
+    """単一対象（MCP 経路）の判定を適用する。
+    注: `_ask()` / `_block()` は内部で sys.exit する（呼び出し後は戻らない）。"""
+    d = _cross_decision(kind, ident, repo, require_ident)
+    if d and d[0] == "block":
+        _block(d[1], raw)
+    if d:
+        _ask(d[1])
+
+
+def _guard_gh_pr_targets(targets: list, raw: str):
+    """Bash 経路で検出した全 `gh pr` 対象を判定する。1 件でも fork への block 種別があれば block、
+    それ以外に ask 理由が 1 件でもあれば ask（先頭の自前 PR で後続の fork PR を見逃さないため）。"""
+    asks = []
+    for kind, ident, repo, ambiguous in targets:
+        if ambiguous:
+            asks.append("gh pr の対象 PR を一意に特定できませんでした（未知のフラグ・位置引数が複数・"
+                        "識別子なしで前に別コマンドや cd がある）。外部（fork）由来の PR でないか確認してください。")
+            continue
+        d = _cross_decision(kind, ident, repo)
+        if d and d[0] == "block":
+            _block(d[1], raw)
+        if d:
+            asks.append(d[1])
+    if asks:
+        _ask(asks[0])
 
 
 def main():
@@ -763,12 +836,8 @@ def main():
         # （静的 protected/force は上で先に exit 2 block 済み・DANGER_OK=1 時はこのブロックに来ない）。
         # I146: cross-repo PR ガード。既存 hard-block の後に置き、danger-op 同居時に
         # ask で先食いしない（I083 で確立した順序方針を踏襲）。
-        t = _gh_pr_target(raw)  # 改行を区切りとして扱うため _norm 前の生コマンドを渡す
-        if t:
-            if t[3]:
-                _ask("gh pr の対象 PR を一意に特定できませんでした（位置引数が複数）。"
-                     "外部（fork）由来の PR でないか確認してください。")
-            _guard_cross_repo(t[0], t[1], t[2], raw)
+        # 改行を区切りとして扱うため _norm 前の生コマンドを渡す
+        _guard_gh_pr_targets(_gh_pr_target(raw) or [], raw)
 
         if _push_is_dynamic(cmd):
             _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")

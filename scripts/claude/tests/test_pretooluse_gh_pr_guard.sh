@@ -203,6 +203,65 @@ ck "G58 checkout (自前)"                 0   "$(CROSS_VALUE=false runj 'gh pr 
 ck "G59 checkout -b x 257 (fork)"        2   "$(CROSS_VALUE=true runj 'gh pr checkout -b x 257')"
 ck "G60 update-branch (fork)"            ASK "$(CROSS_VALUE=true runj 'gh pr update-branch 257 --rebase')"
 ck "G61 update-branch (自前)"            0   "$(CROSS_VALUE=false runj 'gh pr update-branch 261')"
+# ===== 敵対的レビュー第 2 周（2026-10-16）対応: サブコマンド別フラグ表・gh の位置非依存検出・全件判定 =====
+# merge の -m は値なし（--merge）。値ありと誤認すると 257 を読み捨てて自前を照会する
+ck "G62 merge -m 257"                    2   "$(CROSS_VALUE=true runj 'gh pr merge -m 257')"
+ck "G63 merge -dm 257"                   2   "$(CROSS_VALUE=true runj 'gh pr merge -dm 257')"
+ck "G64 merge 257 未知フラグ=ask"         ASK "$(CROSS_VALUE=false runj 'gh pr merge 261 --foo')"
+# ヒアドキュメント本文はデータ（誤 block しない）。終端の後ろの実コマンド・終端なしは検出する
+ck "G65 heredoc 本文の merge は無視"     0   "$(CROSS_VALUE=true runj $'git commit -F - <<\'X\'\nfix\ngh pr merge 257\nX')"
+ck "G66 heredoc 本文の \`checkout\` 無視" 0  "$(CROSS_VALUE=true runj $'cat > /tmp/n.md <<\'X\'\n手順: don\'t run `gh pr checkout 257`\nX')"
+ck "G67 heredoc 終端後の merge"          2   "$(CROSS_VALUE=true runj $'cat <<EOF\nx\nEOF\ngh pr merge 257')"
+ck "G68 heredoc 終端なし=除外しない"     2   "$(CROSS_VALUE=true runj $'cat <<EOF\ngh pr merge 257')"
+# シェル構文（キーワード・グループ・否定・前置リダイレクト）
+ck "G69 if/then 内の merge"              2   "$(CROSS_VALUE=true runj 'if true; then gh pr merge 257; fi')"
+ck "G70 for/do 内の merge"               2   "$(CROSS_VALUE=true runj 'for i in 1; do gh pr merge 257; done')"
+ck "G71 { } 内の merge"                  2   "$(CROSS_VALUE=true runj '{ gh pr merge 257; }')"
+ck "G72 ! merge"                         2   "$(CROSS_VALUE=true runj '! gh pr merge 257')"
+ck "G73 前置 >/dev/null"                 2   "$(CROSS_VALUE=true runj '>/dev/null gh pr merge 257')"
+ck "G74 前置 &>/dev/null"                2   "$(CROSS_VALUE=true runj '&>/dev/null gh pr merge 257')"
+# 値付きフラグを持つラッパー・その他ラッパー
+ck "G75 nice -n 5"                       2   "$(CROSS_VALUE=true runj 'nice -n 5 gh pr merge 257')"
+ck "G76 sudo -u bob"                     2   "$(CROSS_VALUE=true runj 'sudo -u bob gh pr merge 257')"
+ck "G77 env -u X"                        2   "$(CROSS_VALUE=true runj 'env -u X gh pr merge 257')"
+ck "G78 timeout -s KILL 60"              2   "$(CROSS_VALUE=true runj 'timeout -s KILL 60 gh pr merge 257')"
+ck "G79 timeout --kill-after=5 60"       2   "$(CROSS_VALUE=true runj 'timeout --kill-after=5 60 gh pr merge 257')"
+ck "G80 nohup"                           2   "$(CROSS_VALUE=true runj 'nohup gh pr merge 257')"
+ck "G81 time"                            2   "$(CROSS_VALUE=true runj 'time gh pr merge 257')"
+ck "G82 exec"                            2   "$(CROSS_VALUE=true runj 'exec gh pr merge 257')"
+ck "G83 env -i"                          2   "$(CROSS_VALUE=true runj 'env -i gh pr merge 257')"
+ck "G84 xargs（識別子が外から）=ask"     ASK "$(CROSS_VALUE=false runj 'echo 257 | xargs gh pr merge')"
+# pr と verb の間のフラグ・fd リダイレクト・コメント・パイプ・バッククォート・クォート不整合
+ck "G85 gh pr --repo o/r merge"          2   "$(CROSS_VALUE=true runj 'gh pr --repo o/r merge 257')"
+ck "G86 gh pr -R o/r merge"              2   "$(CROSS_VALUE=true runj 'gh pr -R o/r merge 257')"
+ck "G87 自前 merge 2>&1 は ask しない"   0   "$(CROSS_VALUE=false runj 'gh pr merge 12 2>&1')"
+ck "G88 fork merge 2>&1"                 2   "$(CROSS_VALUE=true runj 'gh pr merge 257 2>&1')"
+ck "G89 # コメント行の次の merge"        2   "$(CROSS_VALUE=true runj $'true #note\ngh pr merge 257')"
+ck "G90 クォート付きコメントの次"        2   "$(CROSS_VALUE=true runj $'true # don\'t\ngh pr merge 257')"
+ck "G91 パイプの後の merge"              2   "$(CROSS_VALUE=true runj 'echo y | gh pr merge 257')"
+# shellcheck disable=SC2016  # バッククォートを展開させず文字列のまま hook に渡す意図
+ck "G92 バッククォート内の merge"        2   "$(CROSS_VALUE=true runj 'echo `gh pr merge 257`')"
+ck "G93 クォート不整合でも検出"          2   "$(CROSS_VALUE=true runj 'echo "oops; gh pr merge 257')"
+# 複数の gh pr を全件判定（先頭の自前 PR で後続の fork を見逃さない）
+ck "G94 自前 merge; fork merge"          2   "$(CROSS_VALUE=true SELF_IDENTS=261 runj 'gh pr merge 261; gh pr merge 257')"
+ck "G95 自前 merge && fork checkout"     2   "$(CROSS_VALUE=true SELF_IDENTS=261 runj 'gh pr merge 261 && gh pr checkout 257')"
+ck "G96 fork edit; 自前 merge"           ASK "$(CROSS_VALUE=true SELF_IDENTS=261 runj 'gh pr edit 257 --base main; gh pr merge 261')"
+# 照会先リポジトリ（各形式）・値の連結
+: > "$GH_LOG"; CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'gh --repo=o/r pr merge 257' >/dev/null
+grep -q -- '--repo o/r' "$GH_LOG"; ck "G97 グローバル --repo= が照会に渡る" 0 "$?"
+: > "$GH_LOG"; CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'gh -Ro/r pr merge 257' >/dev/null
+grep -q -- '--repo o/r' "$GH_LOG"; ck "G98 グローバル -Rx が照会に渡る"     0 "$?"
+: > "$GH_LOG"; CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'gh pr merge 257 -R o/r' >/dev/null
+grep -q -- '--repo o/r' "$GH_LOG"; ck "G99 サブコマンド側 -R が照会に渡る" 0 "$?"
+ck "G100 -bLGTM 257（値の連結）"          2   "$(CROSS_VALUE=true runj 'gh pr merge -bLGTM 257')"
+# gh 既定エイリアス co・cd 後の識別子なし
+ck "G101 gh co 257（fork）"               2   "$(CROSS_VALUE=true runj 'gh co 257')"
+ck "G102 gh co 261（自前）"               0   "$(CROSS_VALUE=false runj 'gh co 261')"
+ck "G103 cd 後の識別子なし merge=ask"     ASK "$(CROSS_VALUE=false runj 'cd /x && gh pr merge --squash')"
+# 自前 PR の正規手順（/close 等）は不変
+ck "G104 自前 merge --squash --delete-branch" 0 "$(CROSS_VALUE=false runj 'gh pr merge --squash --delete-branch')"
+ck "G105 自前 ready（識別子なし）"        0   "$(CROSS_VALUE=false runj 'gh pr ready')"
+ck "G106 自前 edit --body \$(heredoc)"    0   "$(CROSS_VALUE=false runj $'gh pr edit 261 --body "$(cat <<\'EOF\'\n## x (A) `y`\nEOF\n)"')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====

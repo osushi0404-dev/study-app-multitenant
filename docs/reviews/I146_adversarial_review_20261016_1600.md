@@ -43,4 +43,41 @@
 
 第 1 周の新規 High 2 件はいずれも修正済み。修正の妥当性を含めて第 2 周で反証する。
 
+## 第 2 周（エージェント 3・累計 7）
+
+| # | 観点 | NEW_CRITICAL | NEW_HIGH |
+|---|---|---|---|
+| 1 | ロジック回避・実機 repro（修正の妥当性） | 1 | 2 |
+| 2 | テストの false-green・tautology（修正の妥当性） | 0 | 7 |
+| 3 | 要件・脅威モデルの網羅漏れと回帰 | 0 | 2（うち 1 件は #1 の Critical と同一） |
+
+### findings（重複統合後）
+
+| ID | 重大度 | 指摘 | 対応 |
+|---|---|---|---|
+| B1 | **Critical** | 第 1 周の修正で値付き短縮フラグ表を全サブコマンド共通にしたため、merge の `-m`（`--merge`・値なし）を値ありと誤認。`gh pr merge -m 257` で 257 を読み捨て、カレントブランチ（自前）を照会して fork merge が素通し（#1・#3 が独立検出。**第 1 周の修正が持ち込んだ回帰**） | サブコマンドごとのフラグ表 `_GH_PR_SPECS`（gh 2.88 の help 準拠）に作り直し、表にないフラグは推測せず ask（G62〜G64） |
+| B2 | High | ヒアドキュメント本文（コミットメッセージ・PR 本文・文書）の `gh pr merge 257` で誤 block。レビュー中に実 hook でも発生 | 本文行を判定前に除外（終端なしは除外しない fail-safe）（G65〜G68） |
+| B3 | High | `then`/`do`/`{`/`!`/前置リダイレクトの後ろの gh を検出しない | `gh` をコマンド中の位置に依らず検出（G69〜G74） |
+| B4 | High | 値付きラッパー（`nice -n`・`sudo -u`・`env -u`・`timeout -s`）で gh に到達しない・`xargs` | 位置非依存検出で解消。識別子なしで前に別コマンドがある形は ask（G75〜G84） |
+| B5 | High | `#` コメントが行末改行ごと読み捨てられ区切りが消える | 改行を `\n;\n` に置換してからトークン化（G89・G90） |
+| B6 | High | 最初の block で return・照会 1 件のため、先頭の自前 PR で後続の fork を見逃す | 検出した全 `gh pr` を判定（`_guard_gh_pr_targets`）（G94〜G96） |
+| B7 | High | false-green: 区切り `|`・`` ` ``、各ラッパー、複数区切り、ValueError 経路にテストなし | 各経路のテストを追加（G80〜G83・G91〜G93 ほか） |
+| B8 | High | gh 既定エイリアス `gh co`（= pr checkout）で checkout block を回避 | `co` を checkout と同一視（G101・G102）。利用者定義エイリアスは設計上の限界に明記 |
+| B9 | Medium | `gh pr --repo o/r merge`（pr と verb の間のフラグ）で verb を誤認 | pr 後・verb 前のフラグを処理（G85・G86） |
+| B10 | Medium | `2>&1` が位置引数扱いになり自前 PR でも ask・識別子取り違え | fd 番号付きリダイレクトを除去しリダイレクトは演算子＋行き先ごと除外（G87・G88） |
+| B11 | Medium | グローバル `--repo=`/`-Rx`/サブコマンド側 `-R`/値連結 `-bLGTM` の分岐にテストなし | G97〜G100 を追加 |
+| B12 | Medium | `cd <別 clone> && gh pr merge`（識別子なし）は hook 側のカレントを照会 | 識別子なしで `cd`/`pushd` がある形は ask（G103） |
+| B13 | Medium | `git fetch pull/N/head`・`gh pr diff | git apply` 等の別経路で fork コードを持ち込めるのに「block される」と過大記述 | 計画書「設計上の限界」と runbook に対象外として明記し、do 層の手順で補う |
+| B14 | Low | checkout block 文言に代替手段がない | 文言に `gh pr diff` / `gh pr view` と checkout の危険を追記 |
+| B15 | Low | `export GH_REPO=…;`・cwd の変更を追跡しない | 設計上の限界に明記 |
+| B16 | Low | 安全側の等価変異（ask が増える方向） | 見送り（実害なし） |
+
+### 修正後の検証
+
+- 新テスト（G62〜G106）を直前コミット 670d184 のガードに当てると `pass=90 fail=27`（Red）→ 作り直し後 `pass=117 fail=0`
+- 回帰: push guard 87・worktree guard 27・checkout guard 14・pr-base-sync 21/21（fail=0）
+- 自前 PR の正規手順（/close の識別子なし merge/ready・`edit --body "$(cat <<'EOF' …)"`）は不変（G104〜G106）
+
+第 2 周の新規 Critical/High はすべて修正済み。修正の妥当性を第 3 周（上限）で反証する。
+
 VERDICT: HIGH

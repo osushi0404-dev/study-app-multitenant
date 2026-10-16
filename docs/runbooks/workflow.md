@@ -252,7 +252,8 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 1. head リポジトリを確認する: `gh pr view <PR番号> --json isCrossRepository -q .isCrossRepository` → `true` なら外部 PR。
 2. **Actions の実行を承認しない**（fork PR には repository secrets が渡らず、E2E は原理的に失敗する）。
 3. **base 追従・CI 対応・レビューをしない**（マージしない PR に投じる意味がない）。
-   **手元に checkout しない**（`gh pr checkout` で `.claude/` と hook 本体が相手の版に置き換わり、次の操作でそのコードが実行されるため。PreToolUse ガードでも block される）。
+   **手元に checkout しない**（`.claude/` と hook 本体が相手の版に置き換わり、次の操作でそのコードが実行されるため）。中身は `gh pr diff <PR番号>` / `gh pr view <PR番号>` で確認する。
+   `gh pr checkout` と既定エイリアス `gh co` は PreToolUse ガードで block されるが、`git fetch origin pull/<N>/head` → `git checkout`・`gh pr diff <N> | git apply` などの別経路はガードの対象外なので、手順として行わないこと。
 4. 方針コメントを付けて close する: `gh pr comment <PR番号> --body-file <file>` → `gh pr close <PR番号>`。
 5. 対象のイシューは OPEN のまま残し、必要なら通常のハーネス手順（/plan-issue 以降）で自前実装する。
 
