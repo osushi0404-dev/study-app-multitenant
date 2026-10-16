@@ -8,16 +8,24 @@ import sys
 
 from django.conf import settings
 from django.test.utils import override_settings
+from kombu.utils.url import parse_url
 
 from core.celery import app
 
 # 開発環境（手元の compose）専用。本番相当の環境では、スケジュール外の時刻に定期処理が増えるので実行しない。
 # DEBUG は環境変数が無いと True になる（settings.py）ので、それだけでは判定しない。
 # DB と broker の接続先が、compose のサービス名（db / redis）であることも確かめる（フェイルクローズ）
+# broker は URL を分解し、ホスト名の完全一致で見る
+# （先頭一致だと redis://redis:<パスワード>@<別ホスト> を通してしまう）。
+# 限界: 同じ compose ファイルを手元以外（共有サーバー・CI）で動かした場合は区別できない（運用で実行しない）
 _db_host = settings.DATABASES['default'].get('HOST', '')
-_broker = str(app.conf.broker_url or '')
-if not (settings.DEBUG and _db_host == 'db' and _broker.startswith('redis://redis:')):
-    print(f'NG PROBE ABORTED: not the local compose environment (DEBUG={settings.DEBUG} DB_HOST={_db_host!r})')
+_broker = parse_url(str(app.conf.broker_url or ''))
+_broker_host = _broker.get('hostname')
+if not (settings.DEBUG and _db_host == 'db' and _broker.get('transport') == 'redis' and _broker_host == 'redis'):
+    print(
+        'NG PROBE ABORTED: not the local compose environment '
+        f'(DEBUG={settings.DEBUG} DB_HOST={_db_host!r} BROKER_HOST={_broker_host!r})'
+    )
     sys.exit(0)
 
 # 更新前（develop・Django 4.2.30）でも未登録だったことを実測した既知の既存不具合（2026-10-16）。
