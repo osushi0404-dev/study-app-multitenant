@@ -20,6 +20,10 @@ git commit -qm init
 
 json() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1"; }
 run()  { json "$1" | python3 "$GUARD" >/dev/null 2>&1; echo $?; }
+# ask 判別版（test_pretooluse_push_guard.sh と同じ定義）: exit 0 ＋ stdout に permissionDecision=ask を含めば ASK。
+runj() { local out code; out=$(json "$1" | python3 "$GUARD" 2>/dev/null); code=$?;
+         if [ "$code" = "0" ] && printf '%s' "$out" | grep -q '"permissionDecision":[[:space:]]*"ask"'; \
+         then echo "ASK"; else echo "$code"; fi; }
 
 pass=0; fail=0
 ck() { if [ "$2" = "$3" ]; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
@@ -35,7 +39,7 @@ ck "G3 dirty checkout -- file" 2 "$(run 'git checkout -- tracked.txt')"
 ck "G4 dirty restore file"     2 "$(run 'git restore tracked.txt')"
 ck "G5 dirty checkout ."       2 "$(run 'git checkout .')"
 ck "G6 branch switch name"     0 "$(run 'git checkout develop')"
-ck "G7 DANGER_OK bypass"       0 "$(run 'DANGER_OK=1 git checkout -- tracked.txt')"
+ck "G7 DANGER_OK → ask (I174)" ASK "$(runj 'DANGER_OK=1 git checkout -- tracked.txt')"
 
 # --- staged のみ（index）変更 → restore --staged は素通し ---
 git add tracked.txt

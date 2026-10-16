@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import functools
 import json
 import os
 import re
@@ -407,6 +408,282 @@ def _check_edit_write(data: dict):
             _ask(f"高リスクファイル（依存/スキーマ/インフラ）の編集です。確認してください: {rel}")
     sys.exit(0)
 
+# --- I174: 危険操作・外部送信の判定（書き出しに依存せず「実際に何をするか」で判定する） ---
+# 判定はトークン列（_segments）に対して行い、コマンド行の文字列全体には当てない
+# （grep の検索文字列・ヒアドキュメント本文への誤反応を防ぐ）。
+_MAX_WRAP_DEPTH = 3                 # sh -c の入れ子を展開する深さの上限
+_MAX_SCRIPT_BYTES = 1_000_000       # 中身を読む実行ファイルの大きさの上限
+# コンテナ内パス → リポジトリ相対パス（docker-compose.yml の backend/celery の volumes に合わせる。
+# マウントを変えたらここも更新する）。長い接頭辞から順に照合する。
+_CONTAINER_MOUNTS = (("/app/docs/", "docs/"), ("/app/", "backend/"))
+_CONTAINER_WORKDIR = "/app/"
+_DOCKER_CLIS = ("docker", "docker-compose")
+_PYTHON_RE = re.compile(r"^python(\d+(\.\d+)?)?$")
+_MANAGE_DB_WIPE = ("flush", "sqlflush", "reset_db")
+_MIGRATE_VALUE_OPTS = ("--database", "--settings", "--pythonpath", "-v", "--verbosity")
+_REDIRECT_RE = re.compile(r"^\d*[<>]|&")   # 2>&1・>out・<in などの位置引数でないトークン
+
+# 実行される Python コードに対する判定（manage.py shell -c / python -c / 実行ファイルの中身）
+_CODE_DANGER = (
+    (r"\.delete\(", "データ削除（.delete()）"),
+    (r"\bobjects\b[^;\n]*\.update\(", "QuerySet の一括更新（.update()）"),
+    (r"\.bulk_update\(", "一括更新（bulk_update）"),
+    (r"call_command\(\s*['\"](flush|sqlflush|reset_db)['\"]", "管理コマンドによる DB 全消去"),
+    (r"call_command\(\s*['\"]migrate['\"][^)]*['\"]zero['\"]", "管理コマンドによるマイグレーション巻き戻し"),
+)
+_CODE_EXTERNAL = (
+    (r"\b(send_mail|send_mass_mail|mail_admins|mail_managers)\(", "メール送信"),
+    (r"\bEmail(Message|MultiAlternatives)\b", "メール送信"),
+    (r"\.(delay|apply_async)\(", "celery タスクの起動"),
+    (r"\bsend_study_reminders_task\b", "学習リマインダー送信タスク"),
+    (r"auth/register/", "登録 API（確認メールを送信）"),
+    (r"auth/password-reset/", "パスワード再設定依頼 API（メールを送信）"),
+    (r"\bAIQuestionGenerator\b|problems/generate_(ai|adaptive)/|\bopenai\.", "OpenAI への送信"),
+)
+
+_ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+def _strip_env(toks: list) -> list:
+    """先頭の環境変数の代入（`FOO=1 cmd ...` の `FOO=1`）を除いたトークン列を返す。"""
+    i = 0
+    while i < len(toks) and _ENV_ASSIGN_RE.match(toks[i]):
+        i += 1
+    return toks[i:]
+
+def _is_container_seg(toks: list) -> bool:
+    """docker / docker-compose の exec・run でコンテナ内に渡すセグメントなら True。"""
+    toks = _strip_env(toks)
+    return bool(toks) and os.path.basename(toks[0]) in _DOCKER_CLIS and \
+        ("exec" in toks or "run" in toks)
+
+def _expand_segments(cmd: str, in_container: bool = False, depth: int = 0) -> list:
+    """(トークン列, コンテナ内か) のリストを返す。sh/bash -c と eval の中身も再帰で展開する。"""
+    out = []
+    for toks in _segments(cmd):
+        ctr = in_container or _is_container_seg(toks)
+        out.append((toks, ctr))
+        if depth >= _MAX_WRAP_DEPTH:
+            continue
+        for i, t in enumerate(toks):
+            if os.path.basename(t) in _WRAP_SHELLS and i + 2 < len(toks) and toks[i + 1] == "-c":
+                out += _expand_segments(toks[i + 2], ctr, depth + 1)
+        head = _strip_env(toks)
+        if head and head[0] == "eval" and len(head) > 1:
+            out += _expand_segments(" ".join(head[1:]), ctr, depth + 1)
+    return out
+
+def _opt_value(toks: list, names: tuple):
+    """toks から `-c X` / `--command X` / `--command=X` 形式の値を返す（無ければ None）。"""
+    for i, t in enumerate(toks):
+        if t in names and i + 1 < len(toks):
+            return toks[i + 1]
+        for n in names:
+            if n.startswith("--") and t.startswith(n + "="):
+                return t[len(n) + 1:]
+    return None
+
+def _stdin_file(toks: list):
+    """`< FILE` / `<FILE` の FILE を返す（ヒアドキュメント `<<` は除く）。無ければ None。"""
+    for i, t in enumerate(toks):
+        if t == "<" and i + 1 < len(toks):
+            return toks[i + 1]
+        if t.startswith("<") and not t.startswith("<<") and len(t) > 1:
+            return t[1:]
+    return None
+
+def _sql_is_destructive(sql: str) -> bool:
+    """SQL（; 区切りの複数文可）に DROP/TRUNCATE/ALTER TABLE/WHERE なし UPDATE・DELETE があれば True。"""
+    for stmt in sql.split(";"):
+        s = stmt.lower()
+        if re.search(r"\b(drop|truncate)\b", s) or re.search(r"\balter\s+table\b", s):
+            return True
+        has_where = re.search(r"\bwhere\b", s)
+        if re.search(r"\bupdate\b", s) and re.search(r"\bset\b", s) and not has_where:
+            return True
+        if re.search(r"\bdelete\s+from\b", s) and not has_where:
+            return True
+    return False
+
+def _code_reasons(code: str) -> tuple:
+    """実行される Python コードの (危険操作の理由, 外部送信の理由) を返す。"""
+    danger = [why for pat, why in _CODE_DANGER if re.search(pat, code)]
+    if any(_sql_is_destructive(lit) for _q, lit in re.findall(r"(['\"])(.*?)\1", code, re.S)):
+        danger.append("文字列中の破壊的 SQL")
+    external = [why for pat, why in _CODE_EXTERNAL if re.search(pat, code)]
+    return danger, external
+
+def _resolve_exec_file(path: str, in_container: bool):
+    """実行ファイルのホスト上のパスを返す。読み替えできなければ None。"""
+    root = _current_worktree_root()
+    if in_container:
+        p = path if path.startswith("/") else _CONTAINER_WORKDIR + path
+        for cpre, hpre in _CONTAINER_MOUNTS:
+            if p.startswith(cpre) and root:
+                return os.path.join(root, hpre + p[len(cpre):])
+        return None
+    return os.path.abspath(path)
+
+def _exec_files(toks: list, in_container: bool) -> list:
+    """セグメントで実行されるファイル（中身を判定する対象）を (パス, コンテナ内か) で返す。"""
+    files = []
+    for i, t in enumerate(toks):
+        base = os.path.basename(t)
+        if base == "manage.py" and i + 1 < len(toks) and toks[i + 1] == "shell":
+            f = _stdin_file(toks[i + 2:])
+            if f:
+                files.append((f, False))          # `<` はホストのシェルが処理する
+        elif _PYTHON_RE.match(base):
+            rest = toks[i + 1:]
+            if "-m" in rest or "-c" in rest:
+                continue
+            pos = [a for a in rest if not a.startswith("-")]
+            if pos and pos[0].endswith(".py"):
+                files.append((pos[0], in_container))
+        elif in_container and base in ("sh", "bash") and "-c" not in toks[i + 1:]:
+            pos = [a for a in toks[i + 1:] if not a.startswith("-")]
+            if pos:
+                files.append((pos[0], True))
+    return files
+
+@functools.lru_cache(maxsize=None)
+def _file_reasons(path: str, in_container: bool) -> tuple:
+    """実行ファイルの中身の (危険操作の理由, 外部送信の理由)。読めなければ stderr に出して ([], [])。
+    危険操作と外部送信の両方の判定から呼ばれるため、1 回の実行の中では結果を使い回す。"""
+    if os.path.basename(path) == "manage.py":
+        return [], []
+    host = _resolve_exec_file(path, in_container)
+    root = _current_worktree_root()
+    if host and root and os.path.realpath(host).startswith(
+            os.path.join(os.path.realpath(root), "scripts", "claude") + os.sep):
+        return [], []                             # ハーネス自身のコード（判定パターンを文字列で含む）
+    try:
+        if not host or os.path.getsize(host) > _MAX_SCRIPT_BYTES:
+            raise OSError("unresolvable or too large")
+        with open(host, encoding="utf-8") as fh:
+            code = fh.read()
+    except (OSError, UnicodeDecodeError):
+        print(f"[guard] 実行ファイルの中身を確認できませんでした（判定を省略）: {path}", file=sys.stderr)
+        return [], []
+    d, e = _code_reasons(code)
+    return [f"{why}（{path}）" for why in d], [f"{why}（{path}）" for why in e]
+
+def _rm_rf_targets(cmd: str) -> list:
+    """再帰＋強制の rm の対象トークンを返す（該当なしは []）。ヒアドキュメント本文（<< 以降）は見ない。"""
+    targets = []
+    for toks, _ctr in _expand_segments(cmd.split("<<", 1)[0]):
+        for i, t in enumerate(toks):
+            if os.path.basename(t) != "rm":
+                continue
+            args = toks[i + 1:]
+            flags = [a for a in args if a.startswith("-")]
+            short = "".join(a[1:] for a in flags if not a.startswith("--"))
+            rec = any(c in short for c in "rR") or "--recursive" in flags
+            force = "f" in short or "--force" in flags
+            if rec and force:
+                targets += [a for a in args if not a.startswith("-")]
+    return targets
+
+def _segment_danger(toks: list, in_container: bool) -> list:
+    """1 セグメントのコンテナ内／DB 系の危険操作の理由（書き出しに依存しない）。"""
+    reasons = []
+    for i, t in enumerate(toks):
+        base = os.path.basename(t)
+        rest = toks[i + 1:]
+        if base == "manage.py" and rest:
+            sub, args = rest[0], rest[1:]
+            if sub in _MANAGE_DB_WIPE:
+                reasons.append(f"DB 全消去（manage.py {sub}）requires DANGER_OK=1")
+            elif sub == "loaddata":
+                reasons.append("既存データの上書き（manage.py loaddata）requires DANGER_OK=1")
+            elif sub == "migrate":
+                pos, skip = [], False
+                for a in args:
+                    if skip:
+                        skip = False
+                        continue
+                    if a in _MIGRATE_VALUE_OPTS:
+                        skip = True
+                    elif not a.startswith("-") and not _REDIRECT_RE.search(a):
+                        pos.append(a)
+                if len(pos) >= 2:
+                    reasons.append("マイグレーションの巻き戻し（migrate <app> <移動先>）requires DANGER_OK=1")
+            elif sub == "shell":
+                code = _opt_value(args, ("-c", "--command"))
+                if code:
+                    reasons += [f"{why}（manage.py shell）requires DANGER_OK=1" for why in _code_reasons(code)[0]]
+        elif _PYTHON_RE.match(base) and "-c" in rest:
+            code = _opt_value(rest, ("-c",))
+            if code:
+                reasons += [f"{why}（python -c）requires DANGER_OK=1" for why in _code_reasons(code)[0]]
+        elif base == "psql":
+            sql = _opt_value(rest, ("-c", "--command"))
+            if sql and _sql_is_destructive(sql):
+                reasons.append("destructive SQL requires DANGER_OK=1")
+            if _opt_value(rest, ("-f", "--file")) or _stdin_file(rest):
+                reasons.append("ダンプ・SQL ファイルの流し込み（psql -f / <）requires DANGER_OK=1")
+        elif base == "dropdb":
+            reasons.append("データベースの削除（dropdb）requires DANGER_OK=1")
+        elif base == "pg_restore" and ("--clean" in rest or "-c" in rest):
+            reasons.append("既存データを消して復元（pg_restore --clean）requires DANGER_OK=1")
+        elif base == "redis-cli" and any(a.upper() in ("FLUSHALL", "FLUSHDB") for a in rest):
+            reasons.append("Redis の全消去（FLUSHALL/FLUSHDB）requires DANGER_OK=1")
+    return reasons
+
+def _danger_reasons(cmd: str) -> list:
+    """DANGER_OK=1 で人の承認に切り替わる危険操作の理由を集める（該当なしは []）。"""
+    reasons = []
+    dest = _push_protected_target(cmd)
+    if dest:
+        reasons.append(f"push to protected branch '{dest}' is forbidden "
+                       f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
+    if re.search(r"\bgit\s+push\b.*\s(--all|--mirror)\b", cmd, re.I):
+        reasons.append("git push --all/--mirror pushes all refs incl. protected; requires DANGER_OK=1")
+    # vestigial --repo flag sets the remote without a positional arg, which evades the
+    # positional-based protected detector（security-review/I080）。
+    if re.search(r"\bgit\s+push\b.*\s--repo(\s|=)", cmd, re.I):
+        reasons.append("git push --repo can evade protected-branch detection and is unused here; requires DANGER_OK=1")
+    # I083: pure _segments ベース。protected 宛先は上で先に理由化済み。
+    if _push_has_force(cmd):
+        reasons.append("force push requires DANGER_OK=1")
+    if re.search(r"\bgit\s+reset\b.*--hard\b", cmd, re.I):
+        reasons.append("git reset --hard requires DANGER_OK=1")
+    if re.search(r"\bdocker(\s+compose|\-compose)\s+down\b.*\s(-v|--volumes)\b", cmd, re.I):
+        reasons.append("docker compose down -v/--volumes requires DANGER_OK=1")
+    if _rm_rf_targets(cmd):
+        reasons.append("rm -rf requires DANGER_OK=1")
+    target = _git_revert_target_on_dirty(cmd)
+    if target:
+        reasons.append(f"git checkout/restore would discard uncommitted changes in '{target}'. "
+                       f"Edit で戻すか、どうしても必要なら DANGER_OK=1 を前置してください。")
+    for toks, ctr in _expand_segments(cmd):
+        reasons += _segment_danger(toks, ctr)
+        for path, fctr in _exec_files(toks, ctr):
+            reasons += [f"{why} requires DANGER_OK=1" for why in _file_reasons(path, fctr)[0]]
+    return list(dict.fromkeys(reasons))           # 重複（入れ子展開で同じ理由）を順序を保って除く
+
+def _external_reasons(cmd: str) -> list:
+    """外部送信（メール・celery の起動・OpenAI）の理由を集める。実行されるコードと構造だけを見る。"""
+    reasons = []
+    for toks, ctr in _expand_segments(cmd):
+        for i, t in enumerate(toks):
+            base = os.path.basename(t)
+            rest = toks[i + 1:]
+            if base == "manage.py" and rest[:1] == ["generate_ai_problems"]:
+                reasons.append("OpenAI への送信（manage.py generate_ai_problems）")
+            elif base == "manage.py" and rest[:1] == ["shell"]:
+                code = _opt_value(rest[1:], ("-c", "--command"))
+                if code:
+                    reasons += _code_reasons(code)[1]
+            elif _PYTHON_RE.match(base) and "-c" in rest:
+                code = _opt_value(rest, ("-c",))
+                if code:
+                    reasons += _code_reasons(code)[1]
+            elif base == "celery" and "call" in rest:
+                reasons.append("celery タスクの起動（celery call）")
+        for path, fctr in _exec_files(toks, ctr):
+            reasons += _file_reasons(path, fctr)[1]
+    return list(dict.fromkeys(reasons))
+
 def main():
     data = _load()
     tool_name = data.get("tool_name")
@@ -426,11 +703,14 @@ def main():
     if not isinstance(raw, str) or not raw.strip():
         sys.exit(0)
 
-    cmd = _norm(raw)
     danger_ok = raw.lstrip().startswith("DANGER_OK=1 ")
+    # I174: 判定は DANGER_OK=1 を外したコマンドで行う（先頭トークンで判定する eval / sh -c 等を
+    # DANGER_OK=1 の前置で見逃さないため。DANGER_OK=1 の扱いは danger_ok で別に決める）。
+    cmd = re.sub(r"^DANGER_OK=1\s+", "", _norm(raw))
 
-    # hard-block
-    if re.search(r"\brm\s+-rf\s+/\b", cmd, re.I):
+    # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
+    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。
+    if any(t in ("/", "/*") for t in _rm_rf_targets(cmd)):
         _block("rm -rf / is forbidden", raw)
     if re.search(r"\bmkfs(\.|\s)", cmd, re.I):
         _block("mkfs is forbidden", raw)
@@ -451,71 +731,24 @@ def main():
         print("[guard] worktree ガードは絶対パス宛先のみ検査します（cd/変数展開越しの宛先は非対象）",
               file=sys.stderr)
 
-    if not danger_ok:
-        # push to a protected branch by name/refspec — danger-op:
-        # release/hotfix のローカル push のみ DANGER_OK=1 で解除可（danger-ops.md 枠組み）。
-        # 明示名・引数なし(保護ブランチ上)・refspec <src>:develop|main・+develop・
-        # refs/heads/develop・HEAD:refs/heads/main を宛先正規化＋完全一致で一括網羅。
-        dest = _push_protected_target(cmd)
-        if dest:
-            _block(
-                f"push to protected branch '{dest}' is forbidden "
-                f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)",
-                raw,
-            )
+    # 危険操作（danger-ops.md）。I174: DANGER_OK=1 は素通しではなく人の承認（ask）に切り替える。
+    # settings.json の ask ルールに頼らず、決定論的に人の承認を求める（CLAUDE.md 絶対ルール 4）。
+    reasons = _danger_reasons(cmd)
+    if reasons:
+        if danger_ok:
+            _ask("DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: " + " / ".join(reasons))
+        _block(reasons[0], raw)
 
-        # bulk push of all refs (includes protected) — danger-op
-        if re.search(r"\bgit\s+push\b.*\s(--all|--mirror)\b", cmd, re.I):
-            _block("git push --all/--mirror pushes all refs incl. protected; requires DANGER_OK=1", raw)
+    # I174: 外部送信（メール・celery の起動・OpenAI）はデータを壊さないが外へ出るため人の確認にする。
+    external = _external_reasons(cmd)
+    if external:
+        _ask("外部への送信を伴う操作です。確認してください: " + " / ".join(external))
 
-        # vestigial --repo flag sets the remote without a positional arg, which evades the
-        # positional-based protected detector → block outright (security-review/I080).
-        if re.search(r"\bgit\s+push\b.*\s--repo(\s|=)", cmd, re.I):
-            _block("git push --repo can evade protected-branch detection and is unused here; requires DANGER_OK=1", raw)
-
-        # force push to non-protected (protected 宛先は上で先に block)
-        # I083: pure _segments ベース。-f/-uf/--force-with-lease/--force-if-includes・複合コマンドに頑健。
-        # 旧 re.match(r"git\s+push\b.*--force") の潜在誤 block（後続 echo の --force まで貪欲一致）も根治。
-        if _push_has_force(cmd):
-            _block("force push requires DANGER_OK=1", raw)
-
-        # reset --hard requires explicit ack
-        if re.search(r"\bgit\s+reset\b.*--hard\b", cmd, re.I):
-            _block("git reset --hard requires DANGER_OK=1", raw)
-
-        # docker volume wipe requires explicit ack
-        if re.search(r"\bdocker(\s+compose|\-compose)\s+down\b.*\s(-v|--volumes)\b", cmd, re.I):
-            _block("docker compose down -v/--volumes requires DANGER_OK=1", raw)
-
-        # rm -rf anywhere requires explicit ack
-        if re.search(r"\brm\s+-rf\b", cmd, re.I):
-            _block("rm -rf requires DANGER_OK=1", raw)
-
-        # git checkout/restore on a file with uncommitted worktree changes would discard them
-        target = _git_revert_target_on_dirty(cmd)
-        if target:
-            _block(
-                f"git checkout/restore would discard uncommitted changes in '{target}'. "
-                f"Edit で戻すか、どうしても必要なら DANGER_OK=1 を前置してください。",
-                raw,
-            )
-
-        # heuristics for psql -c "...": block destructive SQL unless explicit ack
-        m = re.search(r"\bpsql\b.*\s-c\s+\"([^\"]+)\"", raw, re.I)
-        if m:
-            sql = _norm(m.group(1)).lower()
-            if " update " in sql and " where " not in sql:
-                _block("UPDATE without WHERE is forbidden (requires DANGER_OK=1 + plan/rollback)", raw)
-            if " delete from " in sql and " where " not in sql:
-                _block("DELETE without WHERE is forbidden (requires DANGER_OK=1 + plan/rollback)", raw)
-            if any(k in sql for k in [" drop ", " truncate ", " alter table "]):
-                _block("destructive SQL requires DANGER_OK=1", raw)
-
-        # I083 欠陥1: 動的・不透明な宛先の push は静的に安全と断言できないため ask に degrade する。
-        # 全 hard-block の後に置くことで、rm -rf 等の同居 danger-op を ask で先食いしない
-        # （静的 protected/force は上で先に exit 2 block 済み・DANGER_OK=1 時はこのブロックに来ない）。
-        if _push_is_dynamic(cmd):
-            _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
+    # I083 欠陥1: 動的・不透明な宛先の push は静的に安全と断言できないため ask に degrade する。
+    # 危険操作の判定の後に置くことで、rm -rf 等の同居 danger-op を ask で先食いしない。
+    # I174: DANGER_OK=1 でも ask にする（宛先が保護ブランチに解決し得るため）。
+    if _push_is_dynamic(cmd):
+        _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
 
     sys.exit(0)
 
