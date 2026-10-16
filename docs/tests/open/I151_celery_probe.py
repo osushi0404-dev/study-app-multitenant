@@ -11,9 +11,13 @@ from django.test.utils import override_settings
 
 from core.celery import app
 
-# 開発環境（手元の compose・DEBUG=True）専用。本番相当の環境では、スケジュール外の時刻に定期処理が増えるので実行しない
-if not settings.DEBUG:
-    print('NG PROBE ABORTED: settings.DEBUG is False (development only)')
+# 開発環境（手元の compose）専用。本番相当の環境では、スケジュール外の時刻に定期処理が増えるので実行しない。
+# DEBUG は環境変数が無いと True になる（settings.py）ので、それだけでは判定しない。
+# DB と broker の接続先が、compose のサービス名（db / redis）であることも確かめる（フェイルクローズ）
+_db_host = settings.DATABASES['default'].get('HOST', '')
+_broker = str(app.conf.broker_url or '')
+if not (settings.DEBUG and _db_host == 'db' and _broker.startswith('redis://redis:')):
+    print(f'NG PROBE ABORTED: not the local compose environment (DEBUG={settings.DEBUG} DB_HOST={_db_host!r})')
     sys.exit(0)
 
 # 更新前（develop・Django 4.2.30）でも未登録だったことを実測した既知の既存不具合（2026-10-16）。
@@ -24,6 +28,11 @@ KNOWN_UNREGISTERED = {'core.tasks.cache_maintenance_task'}
 # このスクリプトが足す 1 回分は、このプロセス内でメールをメモリに溜める設定にして実行する
 # （backend と worker は別イメージだが、依存の版は一致する）。beat の定期実行は対象外で、worker は SMTP のまま
 RUN_LOCALLY_WITHOUT_SENDING = {'studylogs.tasks.send_study_reminders_task'}
+
+# beat から worker への受け渡しの判定（TC-AUTO-10 判定 1c）用。このタスクは worker へ送らず、このプロセス内で実行する。
+# そうすると、worker のログにある このタスクの succeeded は、すべて beat が送ったものになる
+# （このスクリプトを何回実行しても混ざらない）
+RUN_LOCALLY_FOR_BEAT_CHECK = {'studylogs.tasks.update_daily_analytics_task'}
 
 
 class _ErrorCounter(logging.Handler):
@@ -57,7 +66,7 @@ ok = 0
 for name in targets:
     local_errors = 0
     try:
-        if name in RUN_LOCALLY_WITHOUT_SENDING:
+        if name in RUN_LOCALLY_WITHOUT_SENDING or name in RUN_LOCALLY_FOR_BEAT_CHECK:
             counter = _ErrorCounter()
             logging.getLogger().addHandler(counter)
             try:
