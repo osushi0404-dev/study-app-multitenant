@@ -352,6 +352,23 @@ ck "G170 gh pr \"merge\" 12"             ASK "$(CROSS_VALUE=false runj 'gh pr "m
 ck "G171 echo \"\$(gh pr merge 257)\""   ASK "$(CROSS_VALUE=true runj 'echo "$(gh pr merge 257)"')"
 # 算術式の << はヒアドキュメントではない
 ck "G172 \$((1<<X)) の次行 merge"        2   "$(CROSS_VALUE=true runj $'echo $((1<<X))\ngh pr merge 257\nX')"
+# 第 4 周 false-green 対応: 引用状態の各分岐（取り違えると後続の実コマンドをコメント/本文として消す）
+ck "G173 \$'\\' # x'; merge（ANSI-C）"   2   "$(CROSS_VALUE=true runj "echo \$'\\' # x'; gh pr merge 257")"
+ck "G174 \$'a #'; merge（ANSI-C 終端）"  2   "$(CROSS_VALUE=true runj "echo \$'a #'; gh pr merge 257")"
+ck "G175 \"a\\\" # \"; merge（dq の \\\"）" 2 "$(CROSS_VALUE=true runj 'echo "a\" # "; gh pr merge 257')"
+ck "G176 \\<<EOF はヒアドキュメントでない" 2  "$(CROSS_VALUE=true runj $'echo \\<<EOF\ngh pr merge 257\nEOF')"
+ck "G177 ((x=1<<2)) の次行 checkout"     2   "$(CROSS_VALUE=true runj $'((x=1<<2))\ngh pr checkout 257\n2')"
+ck "G178 <<-X の後ろの -X 行まで隠さない" 2  "$(CROSS_VALUE=true runj $'cat <<-X\nb\n\tX\ngh pr merge 257\n-X')"
+ck "G179 << 'EOF'（空白入り）本文は無視"  0   "$(CROSS_VALUE=true runj $'git commit -F - << \'EOF\'\nfix: gh pr merge 257\nEOF')"
+ck "G180 heredoc 2 つの本文は両方無視"    0   "$(CROSS_VALUE=true runj $'cat <<A <<B\na\nA\ngh pr merge 257\nB')"
+# 照会キャッシュは repo ごと（同番号でも別リポジトリは別照会）
+: > "$GH_LOG"; CROSS_VALUE=false GH_LOG="$GH_LOG" runj 'gh pr ready 257 -R self/r; gh pr ready 257 -R fork/x' >/dev/null
+ck "G181 repo 違いの同番号は別照会"       2   "$(wc -l < "$GH_LOG" | tr -d ' ')"
+# 第 4 周 D2: 安全網は線形時間（`gh pr` を 900 回並べた 1 行でも 2 秒以内。旧正規表現は 11 秒以上）
+PAD=$(python3 -c 'print("echo" + " gh pr" * 900)')
+T0=$(date +%s%N); CROSS_VALUE=false runj "$PAD" >/dev/null; T1=$(date +%s%N)
+FAST=1; [ $(( (T1 - T0) / 1000000 )) -lt 2000 ] && FAST=0
+ck "G182 安全網の走査が線形（900 件 < 2 秒）" 0 "$FAST"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
@@ -370,9 +387,17 @@ sed 's/^def _mcp_pr_target(tool_name: str, tool_input: dict):$/&\n    return Non
 ck "FG-D MCP 判定無効化で素通し"        0   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_PR" "$BROKEN_MCP")"
 ck "FG-E 実体は block（MCP）"           2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_PR")"
 
+# ===== 第 4 周 false-green 対応: 安全網の各選択肢を、精密判定を無効化したガードで個別に検証 =====
+for c in 'gh pr checkout 257' 'gh co 257' 'gh.exe pr merge 257' 'gh -R o/r pr merge 257' \
+         'gh pr --repo o/r merge 257' 'gh pr ready 257' 'gh pr edit 257 --base main' \
+         'gh pr update-branch 257' 'gh pr review 257 --approve' 'gh pr review 257 -a'; do
+  ck "FG-N 安全網が拾う: $c" ASK "$(CROSS_VALUE=true runj "$c" "$BROKEN_GH")"
+done
+ck "FG-N 安全網は review --comment を拾わない" 0 "$(CROSS_VALUE=true runj 'gh pr review 257 --comment' "$BROKEN_GH")"
+
 # 精密判定と安全網の両方を無効化すると素通しになる（FG-A の ASK が安全網によるものであることの裏取り）
 BROKEN_BOTH="$TMP/guard_noboth.py"
-sed 's/len(_GH_COARSE_RE.findall(_shell_code(raw, keep_quoted=False))) != len(targets)/False/' "$BROKEN_GH" > "$BROKEN_BOTH"
+sed 's/_gh_coarse_count(_shell_code(raw, keep_quoted=False)) != len(targets)/False/' "$BROKEN_GH" > "$BROKEN_BOTH"
 grep -q 'if False:' "$BROKEN_BOTH"
 ck "FG-F 注入が一致している"            0   "$?"
 ck "FG-G 両層無効化で素通し"            0   "$(CROSS_VALUE=true runj 'gh pr merge 257' "$BROKEN_BOTH")"

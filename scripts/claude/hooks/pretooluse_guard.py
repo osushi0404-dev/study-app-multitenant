@@ -497,17 +497,36 @@ _GH_PR_SPECS = {
 _GH_PUNCT = "();<>|&`"
 _FD_RE = re.compile(r"(?:(?<=^)|(?<=[\s;&|()`]))\d+(?=[<>])", re.M)
 _WORD_BREAK = " \t\n;&|()<>"
-# 安全網: 精密判定（下の _gh_pr_target）が取りこぼした「gh pr の取り込み系操作の記述」を数える粗い検出。
+# 安全網（_gh_coarse_count）: 精密判定（下の _gh_pr_target）が取りこぼした「gh pr の取り込み系操作の記述」を数える粗い検出。
 # 「実行される部分」（_shell_code(keep_quoted=False)＝引用符の中身・ヒアドキュメント本文・コメントを除いた文字列）に掛け、
 # 精密判定の件数と一致しなければ「判定しきれない記述がある」とみなして ask にする
 # （精密判定の穴を黙った素通しではなく確認に倒す fail-safe。block はしない）。
 # 引数として渡す文字列データ（`run 'gh pr merge 257'`・`python3 -c "…"`）には反応しない（I174 と同じ方針）。
-_GH_COARSE_RE = re.compile(
-    r"\bgh(?:\.exe)?\s+(?:[^\n;&|`]*?\s)?"
-    r"(?:pr\s+(?:[^\n;&|`]*?\s)?(?:merge|checkout|ready|edit|update-branch)\b"
-    r"|co\b"
-    r"|pr\s+(?:[^\n;&|`]*?\s)?review\b[^\n;&|`]*?(?:--approve|\s-[crh]*a))"
-)
+_GH_COARSE_VERBS = ("merge", "checkout", "ready", "edit", "update-branch")
+
+
+def _gh_coarse_count(text: str) -> int:
+    """安全網の粗い検出: `gh … pr … <取り込み系 verb>`・`gh … co`・`gh … pr … review … --approve/-a` の
+    記述を数える（区切り `\n ; & | ` ( )` ごとに空白で単語に分け、gh ごとに次の gh までを見る線形走査）。
+    正規表現の入れ子の遅延一致は入力によって 3 乗の時間がかかり hook のタイムアウト＝素通しを招くため使わない。"""
+    count = 0
+    for seg in re.split(r"[\n;&|`()]", text):
+        words = seg.split()
+        idxs = [k for k, w in enumerate(words) if os.path.basename(w) in ("gh", "gh.exe")]
+        for a, k in enumerate(idxs):
+            rest = words[k + 1:idxs[a + 1] if a + 1 < len(idxs) else len(words)]
+            if "co" in rest:
+                count += 1
+                continue
+            if "pr" not in rest:
+                continue
+            after = rest[rest.index("pr") + 1:]
+            if any(w in _GH_COARSE_VERBS for w in after):
+                count += 1
+            elif "review" in after and any(
+                    w.startswith("--approve") or re.match(r"^-[crh]*a", w) for w in after):
+                count += 1
+    return count
 
 
 def _shell_code(raw: str, keep_quoted: bool = True) -> str:
@@ -914,7 +933,7 @@ def _guard_gh_pr_targets(targets: list, raw: str):
         if d:
             asks.append(d[1])
     # 安全網: 判定しきれない「gh pr の取り込み系操作の記述」が残っていれば ask
-    if len(_GH_COARSE_RE.findall(_shell_code(raw, keep_quoted=False))) != len(targets):
+    if _gh_coarse_count(_shell_code(raw, keep_quoted=False)) != len(targets):
         asks.append("判定しきれない形で gh pr の取り込み系操作（merge/checkout/ready/edit/update-branch/"
                     "review --approve）が書かれています（クォート内・置換内・未知の書き方など）。"
                     "外部（fork）由来の PR への操作でないか確認してください。")
