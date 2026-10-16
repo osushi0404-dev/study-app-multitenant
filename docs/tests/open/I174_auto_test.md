@@ -14,7 +14,8 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件） | exit 0（最終行 `pass=N fail=0`） | AC-4〜AC-9 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・242 ケース。2026-10-16 の設計変更〔計画書 0 章〕で作り直し） | exit 0（最終行 `pass=242 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した複製で不合格になることも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-04 | `scripts/claude/tests/test_pretooluse_worktree_guard.sh`（変更なし。A19 は exit 2 のまま） | exit 0 | AC-10 | 2 |
@@ -29,127 +30,228 @@
 
 TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。
 
-### TC-01 のケース表（`test_pretooluse_container_guard.sh` に全件入れる）
+### TC-01 のケース表（`test_pretooluse_container_guard.sh` から自動生成・1 対 1）
 
-コンテナ名は `docker-compose.yml` の自動命名（`study-app-multitenant-<サービス>-1`）に合わせる。`...` は直前の行と同じ書き出し（`docker compose exec -T backend python manage.py`）の省略。
+`$M` は `docker compose exec -T backend python manage.py`、`$RM` は `rm -r`＋`f`、`${NL}` は改行。コマンド欄はテストスクリプトの記述そのまま。
 
-**(A) 止める（期待値 2）。DANGER_OK=1 を前置すると ASK（各行を 2 通りで確かめる）**
+**(A) 危険操作（2。DANGER_OK=1 を前置すると ASK。各行を 2 通りで確かめる）**
 
-| # | コマンド | 理由 |
-|---|---|---|
-| A1 | `docker compose exec -T db psql -U postgres -c "DROP DATABASE migrate_check;"` | 先頭の DROP（既存の見逃しの再現） |
-| A2 | `docker compose exec -T db psql -U postgres learning_app -c "TRUNCATE problems_problem;"` | 先頭の TRUNCATE |
-| A3 | `docker compose exec -T db psql -U postgres learning_app -c "DELETE FROM problems_problem;"` | WHERE なしの DELETE |
-| A4 | `docker compose exec -T db psql -U postgres -c 'DROP DATABASE x;'` | 単一引用符（既存の見逃しの再現） |
-| A5 | `docker compose exec -T db psql -U postgres learning_app -c "UPDATE problems_problem SET is_public=false;"` | WHERE なしの UPDATE |
-| A6 | `docker compose exec -T db dropdb -U postgres learning_app` | dropdb |
-| A7 | `docker compose exec -T db psql -U postgres learning_app < dump.sql` | ダンプの流し込み（`<` 単独） |
-| A8 | `docker compose exec -T db psql -U postgres learning_app -f /tmp/x.sql` | SQL ファイルの流し込み |
-| A9 | `docker compose exec -T db pg_restore --clean -d learning_app /tmp/x.dump` | pg_restore --clean |
-| A10 | `docker compose exec -T backend python manage.py flush --noinput` | DB 全消去 |
-| A11 | `... sqlflush` | DB 全消去 |
-| A12 | `docker compose exec backend python manage.py migrate problems zero` | 巻き戻し（zero） |
-| A13 | `... migrate problems 0003_previous` | 巻き戻し（移動先指定） |
-| A14 | `... loaddata fixtures.json` | 上書き |
-| A15 | `docker compose exec -T redis redis-cli FLUSHALL` | Redis 全消去 |
-| A16 | `docker compose exec -T redis redis-cli flushdb` | Redis 全消去（小文字） |
-| A17 | `... shell -c "from problems.models import Problem; Problem.objects.all().delete()"` | shell 内の削除 |
-| A18 | `... shell -c "Problem.objects.filter(subject_id=1).update(is_public=False)"` | QuerySet の一括更新 |
-| A19 | `... shell -c "Problem.objects.bulk_update(ps, ['title'])"` | 一括更新 |
-| A20 | `... shell -c "from django.core.management import call_command; call_command('flush', interactive=False)"` | call_command の flush |
-| A21 | `... shell -c "from django.db import connection; connection.cursor().execute('DELETE FROM problems_problem')"` | 文字列リテラルの破壊的 SQL |
-| A22 | `docker-compose run --rm backend rm -rf /app/tmp` | ルート以外の rm -rf（通常の危険操作） |
-| A23 | `rm -rf node_modules/.cache` | 相対パスの rm -rf（既存どおり） |
-| A24 | `rm -rf /tmp/claude-1000/xyz` | 絶対パスの rm -rf（既存では解除不能だった。DANGER_OK=1 で ASK になることが再発防止） |
-| A25 | `docker exec study-app-multitenant-db-1 psql -U postgres -c "DROP DATABASE learning_app;"` | 書き出し違い（docker exec） |
-| A26 | `docker exec study-app-multitenant-backend-1 python manage.py flush --noinput` | 書き出し違い（docker exec） |
-| A27 | `docker exec study-app-multitenant-redis-1 redis-cli FLUSHALL` | 書き出し違い（docker exec） |
-| A28 | `backend/.venv/bin/python backend/manage.py flush --noinput` | ホストで直接実行 |
-| A29 | `docker compose exec backend sh -c "python manage.py flush --noinput"` | `sh -c` で包んだ形 |
-| A30 | `python3 -c "import django; from problems.models import Problem; Problem.objects.all().delete()"` | `python -c` のコード |
-| A31 | `git reset --hard HEAD~1` | 既存の危険操作（回帰） |
-| A32 | `docker compose down -v` | 既存の危険操作（回帰） |
-
-**(H) 常に止める（期待値 2。DANGER_OK=1 を前置しても 2）**
-
-| # | コマンド |
-|---|---|
-| H1 | `rm -rf /` |
-| H2 | `rm -rf /*` |
-| H3 | `DANGER_OK=1 rm -rf /` |
-
-**(X) 外部送信（期待値 ASK）**
-
-| # | コマンド |
-|---|---|
-| X1 | `... shell -c "from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])"` |
-| X2 | `... shell -c "from studylogs.tasks import send_study_reminders_task; send_study_reminders_task.delay()"` |
-| X3 | `... shell -c "from rest_framework.test import APIClient; APIClient().post('/api/auth/register/', {}, HTTP_HOST='localhost')"` |
-| X4 | `... shell -c "from rest_framework.test import APIClient; APIClient().post('/api/auth/password-reset/', {}, HTTP_HOST='localhost')"` |
-| X5 | `docker compose exec -T celery celery -A core call studylogs.tasks.send_study_reminders_task` |
-| X6 | `docker compose exec backend sh -c "python manage.py shell -c 'from django.core.mail import send_mail; send_mail(1,2,3,[4])'"` |
-| X7 | `docker compose exec -T backend python manage.py generate_ai_problems` |
-| X8 | `... shell -c "from rest_framework.test import APIClient; APIClient().post('/api/problems/generate_ai/', {})"` |
-| X9 | `... shell -c "from rest_framework.test import APIClient; APIClient().post('/api/problems/generate_adaptive/', {})"` |
-| X10 | `... shell -c "from problems.ai_generator import AIQuestionGenerator; AIQuestionGenerator().generate_question(None)"` |
-| X11 | `docker exec study-app-multitenant-backend-1 python manage.py generate_ai_problems` |
-
-**(F) 実行ファイルの中身（テスト内で一時ファイルを作る。期待値は表のとおり）**
-
-| # | ファイルの中身 | コマンド | 期待値 |
+| # | 内容 | 期待値 | テストの記述 |
 |---|---|---|---|
-| F1 | `from problems.models import Problem` と `Problem.objects.all().delete()` | `docker compose exec -T backend python manage.py shell < <一時ファイルのホストの絶対パス>` | 2 |
-| F2 | 同上 | `... shell <<一時ファイル>`（`<` が付着した形） | 2 |
-| F3 | `from django.core.mail import send_mail` と `send_mail(1,2,3,[4])` | `python3 <一時ファイル>.py` | ASK |
-| F4 | `print(1)` | `docker compose exec -T backend python manage.py shell < <一時ファイル>` | 0 |
-| F5 | 存在しないパス | `docker compose exec -T backend python manage.py shell < /nonexistent/i174.py` | 0（stderr に「中身を確認できませんでした」を含む） |
-| F6 | リポジトリの `docs/` 配下に置いた一時ファイル（中身は F1 と同じ・テストの最後に削除） | `docker compose exec -T backend python /app/docs/<相対パス>` | 2（`/app/docs/` → `docs/` の読み替え） |
-| F7 | リポジトリの `backend/` 配下に置いた一時ファイル（中身は F3 と同じ・テストの最後に削除） | `docker compose exec -T backend python /app/<相対パス>` | ASK（`/app/` → `backend/` の読み替え） |
-| F8 | 中身に `manage.py flush` を含むホストのシェルスクリプト | `bash <一時ファイル>.sh` | 0（ホストの bash スクリプトは中身を見ない） |
-| F9 | — | `python3 scripts/claude/hooks/pretooluse_guard.py` | 0（`scripts/claude/` は中身を見ない。guard 自身が判定パターンを含むため） |
+| A1 | psql DROP 先頭 | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres -c "DROP DATABASE migrate_check;"'` |
+| A2 | psql TRUNCATE 先頭 | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres learning_app -c "TRUNCATE problems_problem;"'` |
+| A3 | psql DELETE WHERE なし | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres learning_app -c "DELETE FROM problems_problem;"'` |
+| A4 | psql 単一引用符 | 2 / +DANGER_OK=1 で ASK | `"docker compose exec -T db psql -U postgres -c 'DROP DATABASE x;'"` |
+| A5 | psql UPDATE WHERE なし | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres learning_app -c "UPDATE problems_problem SET is_public=false;"'` |
+| A6 | dropdb | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db dropdb -U postgres learning_app'` |
+| A7 | psql < dump | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres learning_app < dump.sql'` |
+| A8 | psql -f | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres learning_app -f /tmp/x.sql'` |
+| A9 | pg_restore --clean | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db pg_restore --clean -d learning_app /tmp/x.dump'` |
+| A10 | flush | 2 / +DANGER_OK=1 で ASK | `"$M flush --noinput"` |
+| A11 | sqlflush | 2 / +DANGER_OK=1 で ASK | `"$M sqlflush"` |
+| A12 | migrate zero | 2 / +DANGER_OK=1 で ASK | `'docker compose exec backend python manage.py migrate problems zero'` |
+| A13 | migrate 移動先 | 2 / +DANGER_OK=1 で ASK | `"$M migrate problems 0003_previous"` |
+| A14 | loaddata | 2 / +DANGER_OK=1 で ASK | `"$M loaddata fixtures.json"` |
+| A15 | redis FLUSHALL | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T redis redis-cli FLUSHALL'` |
+| A16 | redis flushdb 小文字 | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T redis redis-cli flushdb'` |
+| A17 | shell .delete() | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"from problems.models import Problem; Problem.objects.all().delete()\""` |
+| A18 | shell 一括 update | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"Problem.objects.filter(subject_id=1).update(is_public=False)\""` |
+| A19 | shell bulk_update | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"Problem.objects.bulk_update(ps, ['title'])\""` |
+| A20 | shell call_command flush | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"from django.core.management import call_command; call_command('flush', interactive=False)\""` |
+| A21 | shell 文字列の SQL | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"from django.db import connection; connection.cursor().execute('DELETE FROM problems_problem')\""` |
+| A22 | compose run rm-rf | 2 / +DANGER_OK=1 で ASK | `"docker-compose run --rm backend $RM /app/tmp"` |
+| A23 | 相対 rm-rf | 2 / +DANGER_OK=1 で ASK | `"$RM node_modules/.cache"` |
+| A24 | 絶対 rm-rf（解除可） | 2 / +DANGER_OK=1 で ASK | `"$RM /tmp/claude-1000/xyz"` |
+| A25 | docker exec psql | 2 / +DANGER_OK=1 で ASK | `'docker exec study-app-multitenant-db-1 psql -U postgres -c "DROP DATABASE learning_app;"'` |
+| A26 | docker exec flush | 2 / +DANGER_OK=1 で ASK | `'docker exec study-app-multitenant-backend-1 python manage.py flush --noinput'` |
+| A27 | docker exec redis | 2 / +DANGER_OK=1 で ASK | `'docker exec study-app-multitenant-redis-1 redis-cli FLUSHALL'` |
+| A28 | ホスト直接 flush | 2 / +DANGER_OK=1 で ASK | `'backend/.venv/bin/python backend/manage.py flush --noinput'` |
+| A29 | sh -c flush | 2 / +DANGER_OK=1 で ASK | `'docker compose exec backend sh -c "python manage.py flush --noinput"'` |
+| A30 | python -c delete | 2 / +DANGER_OK=1 で ASK | `'python3 -c "import django; from problems.models import Problem; Problem.objects.all().delete()"'` |
+| A31 | reset --hard（回帰） | 2 / +DANGER_OK=1 で ASK | `'git reset --hard HEAD~1'` |
+| A32 | down -v（回帰） | 2 / +DANGER_OK=1 で ASK | `'docker compose down -v'` |
+| A33 | 付着 ; の rm-rf | 2 / +DANGER_OK=1 で ASK | `"echo hi;$RM backend"` |
+| A34 | ( ) の rm-rf | 2 / +DANGER_OK=1 で ASK | `"($RM backend)"` |
+| A35 | \$( ) の rm-rf | 2 / +DANGER_OK=1 で ASK | `"echo \$($RM backend)"` |
+| A36 | バッククォートの rm-rf | 2 / +DANGER_OK=1 で ASK | `"ls \`$RM backend\`"` |
+| A37 | 付着 ; の FLUSHALL | 2 / +DANGER_OK=1 で ASK | `'true;redis-cli FLUSHALL'` |
+| A38 | 付着 ; の dropdb | 2 / +DANGER_OK=1 で ASK | `'true;dropdb app'` |
+| A39 | python -m django flush | 2 / +DANGER_OK=1 で ASK | `'docker compose exec backend python3 -m django flush --noinput'` |
+| A40 | django-admin flush | 2 / +DANGER_OK=1 で ASK | `'docker compose exec backend django-admin flush --noinput'` |
+| A41 | bash -lc flush | 2 / +DANGER_OK=1 で ASK | `'docker compose exec backend bash -lc "python manage.py flush --noinput"'` |
+| A42 | sh -ec flush | 2 / +DANGER_OK=1 で ASK | `'docker compose exec backend sh -ec "python manage.py flush"'` |
+| A43 | git -C reset --hard | 2 / +DANGER_OK=1 で ASK | `'git -C /mnt/c/app/study-app-multitenant reset --hard origin/develop'` |
+| A44 | git --no-pager reset | 2 / +DANGER_OK=1 で ASK | `'git --no-pager reset --hard'` |
+| A45 | compose -f down -v | 2 / +DANGER_OK=1 で ASK | `'docker compose -f docker-compose.yml down -v'` |
+| A46 | compose -p down --volumes | 2 / +DANGER_OK=1 で ASK | `'docker compose -p study down --volumes'` |
+| A47 | docker volume rm | 2 / +DANGER_OK=1 で ASK | `'docker volume rm study_postgres_data'` |
+| A48 | system prune --volumes | 2 / +DANGER_OK=1 で ASK | `'docker system prune -a --volumes -f'` |
+| A49 | compose rm -sfv | 2 / +DANGER_OK=1 で ASK | `'docker compose rm -sfv db'` |
+| A50 | git clean -fdx | 2 / +DANGER_OK=1 で ASK | `'git clean -fdx'` |
+| A51 | find -delete | 2 / +DANGER_OK=1 で ASK | `"find . -name '*.pyc' -delete"` |
+| A52 | psql -c 付着 | 2 / +DANGER_OK=1 で ASK | `'docker compose exec db psql -U postgres -c"drop table x"'` |
+| A53 | pg_restore -cd | 2 / +DANGER_OK=1 で ASK | `'docker compose exec db pg_restore -cd app dump'` |
+| A54 | seed_e2e --flush | 2 / +DANGER_OK=1 で ASK | `"$M seed_e2e --scenario login --password x --flush"` |
+| A55 | ヒアドキュメント psql | 2 / +DANGER_OK=1 で ASK | `"docker compose exec -T db psql -U postgres <<'EOF'${NL}DROP TABLE accounts_user CASCADE;${NL}EOF"` |
+| A56 | ヒアドキュメント shell | 2 / +DANGER_OK=1 で ASK | `"$M shell <<'EOF'${NL}from accounts.models import User${NL}User.objects.all().delete()${NL}EOF"` |
+| A57 | ./manage.py shell -c | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T backend ./manage.py shell -c "Problem.objects.all().delete()"'` |
+| A58 | shell --command= | 2 / +DANGER_OK=1 で ASK | `"$M shell --command=\"Problem.objects.all().delete()\""` |
+| A59 | dbshell -- -c DROP | 2 / +DANGER_OK=1 で ASK | `"$M dbshell -- -c \"DROP TABLE x\""` |
+| A60 | dbshell < dump | 2 / +DANGER_OK=1 で ASK | `"$M dbshell < dump.sql"` |
+| A61 | FOO=1 前置 | 2 / +DANGER_OK=1 で ASK | `"FOO=1 $M flush --noinput"` |
+| A62 | eval の展開 | 2 / +DANGER_OK=1 で ASK | `"eval \"$M flush --noinput\""` |
+| A63 | rm -R -f | 2 / +DANGER_OK=1 で ASK | `'rm -R -f build'` |
+| A64 | call_command migrate zero | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"call_command('migrate', 'problems', 'zero')\""` |
+| A65 | reset_db | 2 / +DANGER_OK=1 で ASK | `"$M reset_db"` |
+| A66 | ALTER TABLE | 2 / +DANGER_OK=1 で ASK | `'docker compose exec -T db psql -U postgres -c "ALTER TABLE x DROP COLUMN y"'` |
+| A67 | 変数経由の update | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"qs = User.objects.all(); qs.update(is_active=False)\""` |
+| A68 | bash -s ヒアドキュメント | 2 / +DANGER_OK=1 で ASK | `"docker compose exec -T backend bash -s <<'EOF'${NL}$RM /app/media${NL}EOF"` |
+| A69 | ヒアドキュメント redis | 2 / +DANGER_OK=1 で ASK | `"docker compose exec -T redis redis-cli <<'EOF'${NL}FLUSHALL${NL}EOF"` |
+| A70 | -o 付き bash -c | 2 / +DANGER_OK=1 で ASK | `"bash -o pipefail -c \"$RM build\""` |
 
-**(P) 素通し（期待値 0）**
+**(H) 常に止める（2。DANGER_OK=1 でも 2）**
 
-| # | コマンド | 確かめること |
-|---|---|---|
-| P1 | `docker compose exec -T backend python -m pytest -q` | テスト |
-| P2 | `docker compose exec -T backend ruff check .` | lint |
-| P3 | `docker compose exec -T backend pip-audit -r requirements.txt` | 監査 |
-| P4 | `docker compose exec -T frontend npm audit --audit-level=critical --omit=dev` | 監査 |
-| P5 | `docker compose exec -T backend python manage.py makemigrations --check --dry-run` | 確認 |
-| P6 | `docker compose exec -T backend python manage.py migrate --noinput` | 通常の migrate |
-| P7 | `docker compose exec -T backend python manage.py migrate problems` | 位置引数 1 つ |
-| P8 | `docker compose exec -T backend python manage.py migrate --database default problems` | 値を取るオプションを数えない |
-| P9 | `docker compose exec -T db psql -U postgres learning_app -c "\dt"` | 読み取りの psql |
-| P10 | `docker compose exec -T db psql -U postgres -c "CREATE DATABASE migrate_check;"` | CREATE |
-| P11 | `docker compose exec -T db psql -U postgres learning_app -c "DELETE FROM problems_problem WHERE id=1;"` | WHERE 付きの DELETE |
-| P12 | `... shell -c "from problems.models import Problem; print(Problem.objects.filter(subject_id=1).count())"` | 読み取りの shell |
-| P13 | `... shell -c "d={}; d.update({'a':1}); print(d)"` | `dict.update(` |
-| P14 | `... shell -c "u=User.objects.get(pk=1); u.set_password('x'); u.save()"` | 1 件だけの更新 |
-| P15 | `... shell -c "from rest_framework.test import APIClient; APIClient().post('/api/auth/login/', {}, HTTP_HOST='localhost')"` | ログイン |
-| P16 | `... shell -c "from rest_framework.test import APIClient; APIClient().post('/api/auth/password-reset-confirm/', {})"` | 再設定の確定 |
-| P17 | `... shell -c "from rest_framework.test import APIClient; APIClient().get('/api/problems/')"` | 一覧の取得 |
-| P18 | `docker compose exec -T redis redis-cli ping` | Redis の確認 |
-| P19 | `docker compose exec -T redis redis-cli KEYS 'rl:*'` | Redis の確認 |
-| P20 | `docker compose exec -T backend python manage.py dumpdata problems` | 書き出し |
-| P21 | `grep -n "rm -rf" scripts/claude/tests/test_pretooluse_checkout_guard.sh` | grep の検索文字列（既存の止めすぎの再現） |
-| P22 | `grep -rn send_mail backend` | 外部送信の語の検索 |
-| P23 | `grep -rn "manage.py flush" docs` | 危険操作の語の検索 |
-| P24 | ヒアドキュメントで `rm -rf /app` を本文に含むファイルを書く `cat > /tmp/x.sh <<'EOF'`（本文 2 行目に `rm -rf /app`） | ヒアドキュメントの中身（既存の止めすぎの再現） |
-| P25 | `docker compose exec -T backend python -m pytest -q problems/tests/test_I103_cross_org_create.py` | テスト（ファイル指定） |
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| H1 | rm-rf / | 2 | `"$(runj "$RM /")"` |
+| H2 | rm-rf /* | 2 | `"$(runj "$RM /*")"` |
+| H3 | DANGER_OK rm-rf / | 2 | `"$(runj "DANGER_OK=1 $RM /")"` |
+| H4 | DANGER_OK rm-rf /* | 2 | `"$(runj "DANGER_OK=1 $RM /*")"` |
 
-**(G) 偽合格の防止（既存の FALSEGREEN と同じ方式）**
+**(X) 外部送信（ASK）**
 
-| # | 内容 | 期待値 |
-|---|---|---|
-| G1 | guard を `sed` で複製し、`reasons += _segment_danger(toks, ctr)` を `pass` に置き換えたもので A10 を実行（G0 で置換が入ったことも確認） | 0（判定を外すと素通しになる） |
-| G2 | 実体の guard で A10 を実行 | 2 |
-| G3 | 複製で `_external_reasons(cmd)` の呼び出しを `[]` に置き換えたもので X1 を実行 | 0 |
-| G4 | 実体の guard で X1 を実行 | ASK |
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| X1 | send_mail | ASK | `"$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])\"")"` |
+| X2 | リマインダー .delay | ASK | `"$(runj "$M shell -c \"from studylogs.tasks import send_study_reminders_task; send_study_reminders_task.delay()\"")"` |
+| X3 | 登録 API | ASK | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().post('/api/auth/register/', {}, HTTP_HOST='localhost')\"")"` |
+| X4 | 再設定依頼 API | ASK | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().post('/api/auth/password-reset/', {}, HTTP_HOST='localhost')\"")"` |
+| X5 | celery call | ASK | `"$(runj 'docker compose exec -T celery celery -A core call studylogs.tasks.send_study_reminders_task')"` |
+| X6 | sh -c 内の send_mail | ASK | `"$(runj "docker compose exec backend sh -c \"python manage.py shell -c 'from django.core.mail import send_mail; send_mail(1,2,3,[4])'\"")"` |
+| X7 | generate_ai_problems | ASK | `"$(runj "$M generate_ai_problems")"` |
+| X8 | generate_ai API | ASK | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().post('/api/problems/generate_ai/', {})\"")"` |
+| X9 | generate_adaptive API | ASK | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().post('/api/problems/generate_adaptive/', {})\"")"` |
+| X10 | AIQuestionGenerator | ASK | `"$(runj "$M shell -c \"from problems.ai_generator import AIQuestionGenerator; AIQuestionGenerator().generate_question(None)\"")"` |
+| X11 | docker exec AI | ASK | `"$(runj 'docker exec study-app-multitenant-backend-1 python manage.py generate_ai_problems')"` |
+| X12 | apply_async | ASK | `"$(runj "$M shell -c \"from x.tasks import t; t.apply_async()\"")"` |
+| X13 | mail_admins | ASK | `"$(runj "$M shell -c \"from django.core import mail; mail.mail_admins('s','b')\"")"` |
+| X14 | EmailMessage | ASK | `"$(runj "$M shell -c \"from django.core.mail import EmailMessage as E; E('s','b','a',['x']).send()\"")"` |
+| X15 | openai. | ASK | `"$(runj "$M shell -c \"import openai; openai.ChatCompletion.create(model='x', messages=[])\"")"` |
+| X16 | sendtestemail | ASK | `"$(runj "$M sendtestemail x@example.com")"` |
+| X17 | send_mail の別名 | ASK | `"$(runj "$M shell -c \"from django.core.mail import send_mail as s; s('a','b','c',['x@y'])\"")"` |
+| X18 | email_user | ASK | `"$(runj "$M shell -c \"u=User.objects.get(pk=1); u.email_user('s','b')\"")"` |
+| X19 | python -c の send_mail | ASK | `"$(runj "python3 -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"` |
+| X20 | タスク関数の直接実行 | ASK | `"$(runj "$M shell -c \"from studylogs.tasks import bulk_update_spaced_repetition_task as t; bulk_update_spaced_repetition_task()\"")"` |
+
+**(S) 秘密情報（ASK）と秘密でないもの（0）**
+
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| S1 | コンテナ cat .env | ASK | `"$(runj 'docker compose exec backend cat .env')"` |
+| S2 | コンテナ printenv | ASK | `"$(runj 'docker compose exec backend printenv')"` |
+| S3 | コンテナ env | ASK | `"$(runj 'docker compose exec backend env')"` |
+| S4 | ホスト cat backend/.env | ASK | `"$(runj 'cat backend/.env')"` |
+| S5 | docker compose config | ASK | `"$(runj 'docker compose config')"` |
+| S6 | grep e2e/.env.e2e | ASK | `"$(runj 'grep KEY e2e/.env.e2e')"` |
+| S7 | .env.example は読める | 0 | `"$(runj 'cat backend/.env.example')"` |
+
+**(C) コンテナ内で安全と確かめられない操作（ASK）**
+
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| C1 | createsuperuser | ASK | `"$(runj "$M createsuperuser")"` |
+| C2 | npm install | ASK | `"$(runj 'docker compose exec frontend npm install')"` |
+| C3 | パイプで psql | ASK | `"$(runj 'echo "drop table x" \| docker compose exec -T db psql -U postgres')"` |
+| C4 | パイプで shell | ASK | `"$(runj "echo 'User.objects.all().delete()' \| $M shell")"` |
+| C5 | パイプで redis-cli | ASK | `"$(runj "printf 'FLUSHALL\\n' \| docker compose exec -T redis redis-cli")"` |
+| C6 | dbshell（対話） | ASK | `"$(runj "$M dbshell")"` |
+| C7 | 一覧にないコマンド | ASK | `"$(runj 'docker compose exec backend some_unknown_cmd --flag')"` |
+| C8 | 書き込みの SQL | ASK | `"$(runj 'docker compose exec -T db psql -U postgres learning_app -c "DELETE FROM problems_problem WHERE id=1;"')"` |
+| C9 | pip install | ASK | `"$(runj 'docker compose exec backend pip install requests')"` |
+| C10 | bash -lc 一覧外 | ASK | `"$(runj 'docker compose exec backend bash -lc "python manage.py seed_e2e"')"` |
+| C11 | python -m pip install | ASK | `"$(runj 'docker compose exec backend python -m pip install x')"` |
+| C12 | seed_e2e（flush なし） | ASK | `"$(runj "$M seed_e2e --scenario login --password x")"` |
+
+**(F) 実行ファイルの中身**
+
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| F1 | shell < 削除ファイル | 2 | `"$(runj "$M shell < $TMP/del.py")"` |
+| F2 | shell <付着形 | 2 | `"$(runj "$M shell <$TMP/del.py")"` |
+| F3 | python 送信ファイル | ASK | `"$(runj "python3 $TMP/mail.py")"` |
+| F4 | shell < 無害ファイル | 0 | `"$(runj "$M shell < $TMP/ok.py")"` |
+| F5 | 存在しないファイル | ASK | `"$(runj "$M shell < /nonexistent/i174.py")"` |
+| F5b | 確認できなかった旨を出す | YES | `"$(printf '%s' "$f5err" \| grep -q '中身を確認できませんでした' && echo YES \|\| echo NO)"` |
+| F6 | /app/docs/ の読み替え | 2 | `"$(runj "docker compose exec -T backend python /app/docs/${PROBE_DOCS#docs/}")"` |
+| F7 | /app/ の読み替え | ASK | `"$(runj "docker compose exec -T backend python /app/${PROBE_BACKEND#backend/}")"` |
+| F8 | ホストの bash は見ない | 0 | `"$(runj "bash $TMP/host.sh")"` |
+| F9 | scripts/claude は見ない | 0 | `"$(runj 'python3 scripts/claude/hooks/pretooluse_guard.py')"` |
+| F10 | コンテナ sh スクリプト危険 | 2 | `"$(runj "docker compose exec -T backend sh /app/${PROBE_SH_BAD#backend/}")"` |
+| F11 | コンテナ sh スクリプト安全 | 0 | `"$(runj "docker compose exec -T backend sh /app/${PROBE_SH_OK#backend/}")"` |
+
+**(P) 素通し（0）**
+
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| P1 | pytest | 0 | `"$(runj 'docker compose exec -T backend python -m pytest -q')"` |
+| P2 | ruff | 0 | `"$(runj 'docker compose exec -T backend ruff check .')"` |
+| P3 | pip-audit | 0 | `"$(runj 'docker compose exec -T backend pip-audit -r requirements.txt')"` |
+| P4 | npm audit | 0 | `"$(runj 'docker compose exec -T frontend npm audit --audit-level=critical --omit=dev')"` |
+| P5 | makemigrations --check | 0 | `"$(runj "$M makemigrations --check --dry-run")"` |
+| P6 | migrate --noinput | 0 | `"$(runj "$M migrate --noinput")"` |
+| P7 | migrate <app> | 0 | `"$(runj "$M migrate problems")"` |
+| P8 | migrate --database 値 | 0 | `"$(runj "$M migrate --database default problems")"` |
+| P9 | psql \\dt | 0 | `"$(runj 'docker compose exec -T db psql -U postgres learning_app -c "\dt"')"` |
+| P10 | CREATE DATABASE | 0 | `"$(runj 'docker compose exec -T db psql -U postgres -c "CREATE DATABASE migrate_check;"')"` |
+| P11 | psql SELECT | 0 | `"$(runj 'docker compose exec -T db psql -U postgres learning_app -c "SELECT count(*) FROM problems_problem;"')"` |
+| P12 | 読み取りの shell | 0 | `"$(runj "$M shell -c \"from problems.models import Problem; print(Problem.objects.filter(subject_id=1).count())\"")"` |
+| P13 | dict.update | 0 | `"$(runj "$M shell -c \"d={}; d.update({'a':1}); print(d)\"")"` |
+| P14 | 1 件の更新 | 0 | `"$(runj "$M shell -c \"u=User.objects.get(pk=1); u.set_password('x'); u.save()\"")"` |
+| P15 | ログイン API | 0 | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().post('/api/auth/login/', {}, HTTP_HOST='localhost')\"")"` |
+| P16 | 再設定の確定 API | 0 | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().post('/api/auth/password-reset-confirm/', {})\"")"` |
+| P17 | 一覧の取得 | 0 | `"$(runj "$M shell -c \"from rest_framework.test import APIClient; APIClient().get('/api/problems/')\"")"` |
+| P18 | redis ping | 0 | `"$(runj 'docker compose exec -T redis redis-cli ping')"` |
+| P19 | redis KEYS | 0 | `"$(runj "docker compose exec -T redis redis-cli KEYS 'rl:*'")"` |
+| P20 | dumpdata | 0 | `"$(runj "$M dumpdata problems")"` |
+| P21 | grep の検索文字列 | 0 | `"$(runj "grep -n \"$RM\" scripts/claude/tests/test_pretooluse_checkout_guard.sh")"` |
+| P22 | send_mail の検索 | 0 | `"$(runj 'grep -rn send_mail backend')"` |
+| P23 | manage.py flush の検索 | 0 | `"$(runj 'grep -rn "manage.py flush" docs')"` |
+| P24 | ヒアドキュメント本文 | 0 | `"$(runj "cat > /tmp/i174_x.sh <<'EOF'${NL}#!/bin/sh${NL}$RM /app${NL}EOF")"` |
+| P25 | pytest ファイル指定 | 0 | `"$(runj 'docker compose exec -T backend python -m pytest -q problems/tests/test_I103_cross_org_create.py')"` |
+| P26 | python -W -m pytest | 0 | `"$(runj 'docker compose exec -T backend python -W error -m pytest -q')"` |
+| P27 | ヒアドキュメント shell 読み取り | 0 | `"$(runj "$M shell <<'EOF'${NL}from problems.models import Problem${NL}print(Problem.objects.count())${NL}EOF")"` |
+| P28 | bash -lc 一覧内 | 0 | `"$(runj 'docker compose exec backend bash -lc "python -m pytest -q && ruff check ."')"` |
+| P29 | SQL リテラル内の drop | 0 | `"$(runj "docker compose exec -T db psql -U postgres -c \"select 'drop' as x\"")"` |
+| P30 | curl localhost | 0 | `"$(runj "docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/admin/login/")"` |
+| P31 | migrate 2>&1 | 0 | `"$(runj "$M migrate problems 2>&1")"` |
+| P32 | sed -n | 0 | `"$(runj 'docker compose exec -T backend sed -n 1,5p core/settings.py')"` |
+| P33 | pip check | 0 | `"$(runj 'docker compose exec -T backend pip check')"` |
+| P34 | ヒアドキュメント psql 読み取り | 0 | `"$(runj "docker compose exec -T db psql -U postgres learning_app <<'EOF'${NL}SELECT count(*)${NL}FROM problems_problem;${NL}\\dt${NL}EOF")"` |
+| P35 | git -C status | 0 | `"$(runj 'git -C . status')"` |
+| P36 | docker compose logs | 0 | `"$(runj 'docker compose logs --tail=50 backend')"` |
+| P37 | パイプで出力を絞る | 0 | `"$(runj 'docker compose exec -T backend python -m pytest -q 2>&1 \| tail -5')"` |
+| P38 | npm test | 0 | `"$(runj 'docker compose exec -T frontend npm test -- --watchAll=false')"` |
+
+**(G) 偽合格の防止**
+
+| # | 内容 | 期待値 | テストの記述 |
+|---|---|---|---|
+| G0 | 複製に置換が入った | YES | `"$( (! cmp -s "$GUARD" "$BROKEN_D") && (! cmp -s "$GUARD" "$BROKEN_X") && (! cmp -s "$GUARD" "$BROKEN_C") && (! cmp -s "$GUARD" "$BROKEN_H") && echo YES \|\| ec` |
+| G1 | 危険判定を外すと A10 素通し | 0 | `"$(rungj "$BROKEN_D" "$M flush --noinput")"` |
+| G2 | 実体では A10 を止める | 2 | `"$(runj "$M flush --noinput")"` |
+| G3 | 外部判定を外すと X1 素通し | 0 | `"$(rungj "$BROKEN_X" "$M shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"` |
+| G4 | 実体では X1 を確認 | ASK | `"$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"` |
+| G5 | 許可リストを外すと C7 素通し | 0 | `"$(rungj "$BROKEN_C" 'docker compose exec backend some_unknown_cmd --flag')"` |
+| G6 | 実体では C7 を確認 | ASK | `"$(runj 'docker compose exec backend some_unknown_cmd --flag')"` |
+| G7 | hard を外すと H4 は確認止まり | ASK | `"$(rungj "$BROKEN_H" "DANGER_OK=1 $RM /*")"` |
+| G8 | 実体では H4 を止める | 2 | `"$(runj "DANGER_OK=1 $RM /*")"` |
+
+<!-- 行数: 172（A は 2 通りずつ数えると 242 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_pretooluse_container_guard.sh
+bash scripts/claude/tests/test_settings_permissions.sh
 bash scripts/claude/tests/test_pretooluse_push_guard.sh
 bash scripts/claude/tests/test_pretooluse_checkout_guard.sh
 bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
@@ -179,6 +281,7 @@ grep -qF "DANGER_OK=1 を付けても" docs/runbooks/danger-ops.md
 grep -qF "見張りを避ける書き方" docs/runbooks/danger-ops.md
 python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
 bash -n scripts/claude/tests/test_pretooluse_container_guard.sh
+bash -n scripts/claude/tests/test_settings_permissions.sh
 ```
 
 ## 実施記録
@@ -216,3 +319,16 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 
 - 実装中の気づき: 初回の実行で TC-01 の F6 が不合格（期待 2・実際 ASK）。テストのコマンドが `/app/docs/` でなく `/app/` を指していて、`backend/` 側のテスト用ファイル（中身はメール送信）が読まれていた。テストを正しいパスに直し、読み替えが設計どおり動いていることを確認した。
 - 実装中に見つけた穴: 既存の DOK3（`DANGER_OK=1 eval "git push --force origin x"`）が、先頭の `DANGER_OK=1` のせいで `eval` の検出をすり抜け、確認なしで通っていた。判定を `DANGER_OK=1` を外したコマンドで行うように直し、DOK3 は ASK になった（計画書 4-2(1) に追記）。
+
+### 設計変更後（2026-10-16・敵対的レビュー第 1 周への対応・計画書 0 章）
+決定論ゲート全 32 行を 1 行ずつ実行し、**すべて exit 0**。
+
+| TC | 結果 |
+|---|---|
+| TC-01 `test_pretooluse_container_guard.sh` | pass=242 fail=0（作り直し。(A) 70 件×2 通り・(H) 4・(X) 20・(S) 7・(C) 12・(F) 12・(P) 38・(G) 9） |
+| TC-13 `test_settings_permissions.sh` | pass=5 fail=0（後退を注入した 4 つの複製がすべて不合格になることを含む） |
+| TC-02〜TC-05 | push 87・checkout 14・worktree 27・adversarial 40（すべて fail=0） |
+| TC-06〜TC-11 | すべて exit 0 |
+
+- 作り直しの途中で見つけた誤り: `python -W ... -m pytest` の `-W` を読み飛ばす処理が `-m` まで読み飛ばし、pytest が「安全と確かめられない」扱いになっていた（P1・P25 が ASK）。インタプリタのオプションだけを読み飛ばすように直した。
+- 新しい方式で期待値が変わったケース: WHERE 付きの DELETE（旧 P11 → C8）と、存在しないファイルの流し込み（F5）は、コンテナ内で安全と確かめられないため ASK にした（計画書 0-1 の 4.）。

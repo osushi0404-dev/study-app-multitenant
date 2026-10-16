@@ -34,6 +34,10 @@
   2. 関数の構成を計画のスケッチ（`_sql_reasons`・`_container_danger_reasons`）から、`_segment_danger`（1 セグメントの SQL・DB・Redis・shell）＋`_exec_files`／`_file_reasons`（実行ファイル）に整理した。判定の中身は計画どおり
   3. 旧 psql 判定の 3 つのメッセージを `destructive SQL requires DANGER_OK=1` に 1 本化した
 
+## 設計変更（2026-10-16・敵対的レビュー第 1 周の後・ユーザー決定）
+- 敵対的レビュー第 1 周（Critical 1・High 約 10）を受け、コンテナ内の操作を「許可リストに入るものだけ素通し・それ以外は人の確認」に切り替えた（計画書 0 章）。コマンドの読み取りを作り直し（付着した記号・`$(...)`・ヒアドキュメント・`bash -lc`・`eval`・`env` 等の展開）、危険操作の列挙を拡張（`django-admin` / `python -m django`・`dbshell`・`seed_e2e --flush`・`git -C`・`compose -f`・`docker volume rm`・`git clean -fdx`・`find -delete` 等）、秘密情報の表示を人の確認に、settings.json の deny を `**/.env` 等に直した。判定の失敗時は人の確認に倒す。
+- テスト: container テストを 242 ケースに作り直し、settings.json の中身を確かめる `test_settings_permissions.sh` を追加した。
+
 ## 気づいた点（本イシューの範囲外）
 - `DANGER_OK=1 bash scripts/claude/wt-remove.sh <track>` の中の `docker compose down -v` は、guard から見えない（スクリプト自身が DANGER_OK=1 を要求する既存の挙動）。DANGER_OK=1 を付けると人の承認なしで実行される（計画書 R7）
 - `pretooluse_guard.py` の `\bdd\b`・`\bshred\b`・`\bmkfs` は、コマンド行の文字列全体を見るので、grep の検索文字列などにも反応する止めすぎ（計画書 R8。本セッションでも `shred` を含む grep が止められた）

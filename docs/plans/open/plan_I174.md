@@ -11,6 +11,78 @@
 - **作業場所**: primary checkout（`/mnt/c/app/study-app-multitenant`）。track:harness だが、wt-harness は I146 で使用中のため例外（2026-10-16 ユーザー決定）
 - **マージ順の制約**: I146（#260）のマージ後にマージする（ステップ 6）
 
+## 0. 設計変更（2026-10-16・敵対的レビュー第 1 周の後・ユーザー決定）
+
+敵対的レビュー第 1 周（`docs/reviews/I174_adversarial_review_20261016_1745.md`）で Critical 1・High 約 10 が出た。原因は「危険なものを列挙して止める（列挙外は素通し）」方式そのもので、ask を外した結果、列挙の漏れがそのまま確認なしで通る。ユーザーの決定で、**コンテナ内の操作は「安全と確かめられたものだけ通し、それ以外は人の確認」（許可リスト方式・fail-safe）**に切り替える。本節は 4-2 の (3)(5)(6) を置き換え、(1)(2)(4) を補強する。
+
+### 0-1. 判定の全体像（優先順）
+1. **常に止める（exit 2・解除不可）**: ルートの `rm -rf`・mkfs・dd・shred・別 worktree への書き込み（既存どおり）
+2. **危険操作（exit 2・DANGER_OK=1 で ask）**: ホスト・コンテナの両方に当てる列挙（下の 0-3）
+3. **外部送信・秘密情報（ask）**: ホスト・コンテナの両方に当てる列挙（0-4）
+4. **コンテナ内で安全と確認できない操作（ask）**: コンテナ内（`docker exec` / `docker compose exec|run` / `docker-compose exec|run`）のコマンドが、0-5 の許可リストに入らなければ ask。**流し込み（パイプで受ける・`<<<`）・読めない書き方も ask**
+5. それ以外のホストの操作は素通し（auto mode の判断が第 2 層）
+
+### 0-2. コマンドの読み取り（作り直し）
+- `shlex.shlex(posix=True, punctuation_chars=";&|()<>\n")` でトークン化し、`;` `&&` `||` `|` `&` `(` `)` 改行を区切りとして扱う（語にくっついた `x;rm`・`(rm` も分割する。第 1 周 #2）。`|` の直後のコマンドには「パイプで受ける」印を付ける。
+- `$(...)` と `` `...` `` の中身は、取り出して別のコマンドとして判定する（第 1 周 #2）。
+- ヒアドキュメント（`<<WORD` 〜 `WORD` の行）は本文を取り出し、受け手のコマンドに付ける。受け手が `manage.py shell` / `python` なら本文を Python コード、`psql` / `dbshell` なら SQL、`sh` / `bash` ならシェルとして判定する。それ以外（`cat > f` など）の本文はデータとして判定しない（`rm -rf` 等の誤反応を防ぐ）。
+- リダイレクト（`2>&1`・`>f`・`>>f`・`<f`）は引数から除く。`<f` は「標準入力のファイル」として受け手に付ける（中身の判定は 0-6）。
+- 包むコマンドを外して中を判定する: `sh` / `bash` / `dash` / `zsh` の `-c`（`-lc`・`-ec`・`-xc` などのまとめ書きを含む。第 1 周 #4）・`eval`・`time`・`nice [-n N]`・`nohup`・`timeout [opts] N`・`env [VAR=..] cmd`・`xargs`。先頭の `VAR=val` も外す。
+- 同じコマンド文字列の読み取り結果は 1 回の実行の中で使い回す（第 1 周 #16 の性能）。
+
+### 0-3. 危険操作の列挙（追加分。既存の列挙もトークン単位に直す）
+| 対象 | 危険とする条件 |
+|---|---|
+| `manage.py` / `django-admin` / `python -m django`（第 1 周 #3） | `flush` / `sqlflush` / `reset_db` / `loaddata`・`migrate` の位置引数 2 つ以上・`seed_e2e --flush`（第 1 周 #6）・`dbshell` に破壊的 SQL か流し込み |
+| `git`（`-C <path>`・`-c k=v`・`--no-pager` などの前置オプションを読み飛ばす。第 1 周 #5） | `reset --hard`・`clean` に `-f` と（`-d` または `-x`）・`push` の既存判定 |
+| `docker compose` / `docker-compose`（`-f`・`-p`・`--project-name` などを読み飛ばす） | `down` に `-v` / `--volumes`（まとめ書き含む）・`rm` に `-v` |
+| `docker volume rm|prune`・`docker system prune --volumes`（第 1 周 #11） | 常に |
+| `psql`（`-c"..."` の付着形・`--command=` を含む。第 1 周 #12） | 破壊的 SQL・`-f`・`<f`・ヒアドキュメント本文が破壊的 SQL |
+| `pg_restore`（`-cd` のようなまとめ書き） | `-c` / `--clean` |
+| `redis-cli` | `FLUSHALL` / `FLUSHDB`（引数・ヒアドキュメント本文） |
+| `find` | `-delete` |
+| Python コード（`manage.py shell -c`・`python -c`・ヒアドキュメント本文・実行ファイル） | 既存の `_CODE_DANGER`＋変数経由の一括更新 `\.update\(` を QuerySet 変数（`qs`・`*_qs`・`queryset`）にも当てる |
+| 破壊的 SQL の判定 | SQL の文字列リテラル（`'...'`）の中身は判定から外す（第 1 周 #16 の `select 'drop'`）。Python コードでは、文字列リテラルが SQL の動詞で始まるときだけ SQL として判定する |
+
+### 0-4. 外部送信・秘密情報（ask）
+- 外部送信: 既存の `_CODE_EXTERNAL` に、`django.core.mail` の import（別名 import を含む）・`.email_user(`・`send_verification_email`・`PasswordResetForm`・celery タスク関数の直接実行（`\w+_task\(`）を加える。`manage.py sendtestemail` も対象（第 1 周 #12）。
+- 秘密情報（第 1 周 #7）: `cat` / `less` / `more` / `head` / `tail` / `grep` / `sed` / `awk` / `strings` / `cp` / `base64` の引数に `.env`・`.env.*`（`*.example` を除く）・`*.pem`・`*.key`・`secrets/` があるとき、`printenv`・引数なしの `env`・`docker compose config`・`docker inspect` は ask。
+- `.claude/settings.json` の deny の `Read(./.env)`・`Read(./.env.*)`・`Edit(./.env)`・`Edit(./.env.*)` を、`Read(**/.env)`・`Read(**/.env.*)`・`Edit(**/.env)`・`Edit(**/.env.*)` に置き換える（`backend/.env`・`e2e/.env.e2e` を守る）。`*.example` と `frontend/.env.development` / `.env.production`（追跡済み・秘密を含まない）も読めなくなるが、秘密情報を守るほうを優先する。
+
+### 0-5. コンテナ内の許可リスト（ここに入るものだけ確認なしで通す）
+| 種類 | 通す形 |
+|---|---|
+| テスト・lint・監査 | `pytest`・`python -m pytest`（`python -W ... -m pytest` を含む）・`ruff check|format --check`・`flake8`・`python -m flake8`・`bandit`・`pip-audit`・`mypy`・`npm test|audit|ls|outdated`・`npm run lint|typecheck|build|test`・`npx tsc|eslint|jest` |
+| 依存の確認 | `pip freeze|list|show|check`・`pip index versions`・`npm view` |
+| manage.py（`django-admin`・`python -m django` も同じ） | `test`・`check`・`showmigrations`・`sqlmigrate`・`dumpdata`・`diffsettings`・`help`・`version`・`collectstatic`・`makemigrations --check` / `--dry-run`・`migrate`（位置引数 1 つまで）・`shell`（コードが全部見えて〔`-c`・`--command`・ヒアドキュメント・`<` の読めるファイル〕、危険操作・外部送信が無いとき） |
+| `python -c` | コードに危険操作・外部送信が無いとき |
+| `python <ファイル>.py` | ファイルを読めて、中身に危険操作・外部送信が無いとき |
+| psql・dbshell | SQL の全文が `SELECT` / `SHOW` / `EXPLAIN`（`ANALYZE` なし）/ `CREATE DATABASE` / `\d*` / `\l` / `\dt` で始まるとき（`\!`・`\copy`・`\i` は除く） |
+| redis-cli | `PING`・`INFO`・`KEYS`・`GET`・`TTL`・`PTTL`・`EXISTS`・`DBSIZE`・`SCAN`・`--scan`・`TYPE`・`HGETALL`・`LRANGE`・`SMEMBERS` |
+| celery | `inspect`・`status`・`report` |
+| 読み取り | `ls`・`pwd`・`cat`・`head`・`tail`・`grep`・`wc`・`sed -n`・`which`・`whoami`・`id`・`find`（`-delete`・`-exec` なし）・`python|node|pip|npm --version`（秘密情報の引数は 0-4 で ask） |
+| 疎通確認 | `curl` の宛先が `localhost` / `127.0.0.1` / `backend` のとき |
+| `sh` / `bash -c` | 中の全コマンドが許可リストに入るとき |
+| `sh` / `bash <ファイル>` | ファイルを読めて、中の全コマンドが許可リストに入るとき（第 1 周 #10） |
+
+上の表に無いもの（例: `seed_e2e`・`createsuperuser`・`pip install`・`npm install`・`dbshell` の対話・独自の管理コマンド・パイプで受けるコマンド）は ask。
+
+### 0-6. テストの直し（第 1 周 #8〜#10・#14・#15）
+- shell の判定と `python -c` の判定を別々に確かめる（`./manage.py shell -c ...`・`shell --command=...`・`python3 -c ...` を単独のケースにする）。
+- `DANGER_OK=1 rm -rf /*` のケースを足す。
+- コンテナ内 `sh <スクリプト>` のケースを足す。
+- パターンごとのケースを足す（`apply_async`・`mail_admins`・`EmailMessage`・`openai.`・`call_command('migrate', ..., 'zero')`・`reset_db`・`ALTER TABLE`・`eval` 展開・`--command=`・`-R`・`2>&1` を位置引数に数えない・`FOO=1` 前置）。
+- `.claude/settings.json` の ask・allow・deny の中身を JSON として確かめるテスト `scripts/claude/tests/test_settings_permissions.sh` を新規に作る（「残す 7 行」が ask にあり allow に無いこと。第 1 周 #14）。
+
+### 0-7. 受け入れ条件の追加・変更
+- AC-4 を補強: 第 1 周の再現コマンド（ヒアドキュメント・パイプ・付着記号・`$(...)`・`django-admin`・`python -m django`・`bash -lc`・`git -C`・`compose -f`・`seed_e2e --flush`・`docker volume rm`・`git clean -fdx`）を exit 2 または ask にする
+- AC-13（新規）: コンテナ内の操作は、0-5 の許可リストに入るものだけが素通しで、それ以外は ask
+- AC-14（新規）: 秘密情報の読み出し・表示は ask。settings.json の deny が `backend/.env` に効く
+- AC-9 は維持（許可リストの操作は止めず、ask も出さない）
+
+### 0-8. danger-ops.md の直し（第 1 周 #13）
+「どれで実行しても止める」を、実際に見張りが判定する範囲（0-3〜0-5）に合わせて書き直し、判定しないもの（secrets の Edit 以外の操作のうち列挙外・`docker compose cp` 後の実行など）を明記する。
+
 ## 1. 背景/目的
 
 **背景**: I151 の作業中に、`docker compose exec` の承認待ちが約 28 回出て作業が滞った。過去 51 セッションの集計では、確認対象の操作 125 回のうち 120 回（約 96%）が `docker compose exec` で、中身は pytest・ruff・pip-audit・npm audit・読み取りの `manage.py shell` が大半だった。`.claude/settings.json` の `permissions.ask` が「コマンドの種類」で一律に確認をかけていて、「危険かどうか」を見ていないのが原因である。
