@@ -8,6 +8,39 @@
 
 ---
 
+## 決定論ゲート（自動実走）
+<!--
+  /code-review（code-review.sh）がこのブロックを 1 行 1 コマンドで実走し、実 exit code を VERDICT に注入する。
+  TC-01/03/05/06/08 の実行コマンドはここに集約する（各 TC からは本セクションを参照）。
+  チェーン・コマンド置換を含む検証（TC-02 の注入・TC-06 の件数一致・TC-07 の API 照会）は allowlist 外のため /test で実施する。
+-->
+```bash
+bash scripts/claude/tests/test_pr_base_sync.sh
+bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh
+bash scripts/claude/tests/test_pretooluse_push_guard.sh
+python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
+bash -n scripts/claude/pr-base-sync.sh
+bash -n scripts/claude/tests/test_pr_base_sync.sh
+bash -n scripts/claude/tests/test_pretooluse_gh_pr_guard.sh
+python3 -m json.tool .claude/settings.json
+grep -q "not accept" CONTRIBUTING.md
+grep -q "受け付けていません" CONTRIBUTING.md
+grep -q "SECURITY.md" CONTRIBUTING.md
+grep -q "Issue" CONTRIBUTING.md
+grep -q "Report a vulnerability" SECURITY.md
+! grep -qE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" SECURITY.md
+grep -q "CONTRIBUTING.md" .github/pull_request_template.md
+grep -q "isCrossRepository" .claude/skills/close/SKILL.md
+grep -q "外部（fork）からの PR の扱い" docs/runbooks/workflow.md
+grep -q "mcp__github__merge_pull_request" .claude/settings.json
+grep -q "mcp__github__update_pull_request_branch" .claude/settings.json
+grep -q "mcp__github__create_pull_request_review" .claude/settings.json
+grep -q '"matcher": "Bash"' .claude/settings.json
+grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
+```
+
+---
+
 ## 計画時ベースライン（TDD Red・2026-08-04 実測）
 
 | 検証 | コマンド | 実測 |
@@ -27,9 +60,7 @@
 
 方式: 一時ディレクトリの `gh` / `git` スタブを PATH 先頭に挿して実行（実 GitHub 非依存）。`CROSS_VALUE` / `GH_FAIL_CROSS` でケースごとに fork 判定値を注入する。
 
-```bash
-bash scripts/claude/tests/test_pr_base_sync.sh
-```
+実行コマンド: 「決定論ゲート（自動実走）」の `test_pr_base_sync.sh`。
 
 | 期待 | 内容 |
 |---|---|
@@ -45,10 +76,10 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 
 `pr-base-sync.sh` のコピーを作り cross-repo 判定を無効化（`case "$CROSS" in` の `true)` 分岐を `exit 0` 化）し、`TARGET_SCRIPT` で差し替えて TC-01 を実行する。
 
-```bash
-sed 's/^  true)$/  true) exit 0;;\n  __disabled__)/' scripts/claude/pr-base-sync.sh > /tmp/claude-1000/guard_nocross.sh
-TARGET_SCRIPT=/tmp/claude-1000/guard_nocross.sh bash scripts/claude/tests/test_pr_base_sync.sh
-```
+注入手順（ファイル書き出しと環境変数の前置を伴うため決定論ゲートの allowlist 外。/test で実施する）:
+
+    sed 's/^  true)$/  true) exit 0;;\n  __disabled__)/' scripts/claude/pr-base-sync.sh > /tmp/claude-1000/guard_nocross.sh
+    TARGET_SCRIPT=/tmp/claude-1000/guard_nocross.sh bash scripts/claude/tests/test_pr_base_sync.sh
 
 | 期待 | 内容 |
 |---|---|
@@ -58,9 +89,7 @@ TARGET_SCRIPT=/tmp/claude-1000/guard_nocross.sh bash scripts/claude/tests/test_p
 
 ## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G22）
 
-```bash
-bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh
-```
+実行コマンド: 「決定論ゲート（自動実走）」の `test_pretooluse_gh_pr_guard.sh`。
 
 | # | 入力 | CROSS_VALUE | 期待 | AC |
 |---|---|---|---|---|
@@ -111,13 +140,7 @@ FG-A / FG-C / FG-D が exit 0 を返し、かつ FG-B / FG-E が exit 2 を返�
 
 ## TC-05: 構文検証
 
-```bash
-python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
-bash -n scripts/claude/pr-base-sync.sh
-bash -n scripts/claude/tests/test_pr_base_sync.sh
-bash -n scripts/claude/tests/test_pretooluse_gh_pr_guard.sh
-python3 -c "import json,sys; json.load(open('.claude/settings.json'))"
-```
+実行コマンド: 「決定論ゲート（自動実走）」の `py_compile` / `bash -n`（3 ファイル）/ `python3 -m json.tool .claude/settings.json`（旧記述 `json.load` と同等の JSON 構文検証）。
 
 | 期待 | 全コマンド exit 0 |
 |---|---|
@@ -126,27 +149,12 @@ python3 -c "import json,sys; json.load(open('.claude/settings.json'))"
 
 すべて `grep -q`（合格 = exit 0）で判定する。
 
-```bash
-grep -q "not accept" CONTRIBUTING.md
-grep -q "受け付けていません" CONTRIBUTING.md
-grep -q "SECURITY.md" CONTRIBUTING.md
-grep -q "Issue" CONTRIBUTING.md
-grep -q "Report a vulnerability" SECURITY.md
-! grep -qE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" SECURITY.md
-grep -q "CONTRIBUTING.md" .github/pull_request_template.md
-grep -q "isCrossRepository" .claude/skills/close/SKILL.md
-grep -q "外部（fork）からの PR の扱い" docs/runbooks/workflow.md
-grep -q "mcp__github__merge_pull_request" .claude/settings.json
-grep -q "mcp__github__update_pull_request_branch" .claude/settings.json
-grep -q "mcp__github__create_pull_request_review" .claude/settings.json
-```
+実行コマンド: 「決定論ゲート（自動実走）」の `grep -q` 群（必須文言 12 件・既存 matcher 2 件）。Edit 系 matcher は文字列中の `|` がゲートのチェーン判定に掛かるため、パターンを `"Edit.Write.MultiEdit.NotebookEdit"`（`.` が `|` に一致）で表記している。
 
-無改変の確認（既存 hook 登録が消えていないこと・AC-10 / R7）:
+無改変の確認のうち件数一致（既存 hook 登録が消えていないこと・AC-10 / R7）はコマンド置換を含みゲート対象外のため /test で実施する:
 
 ```bash
 [ "$(grep -c 'pretooluse_guard.py' .claude/settings.json)" -eq 3 ]
-grep -q '"matcher": "Bash"' .claude/settings.json
-grep -q '"matcher": "Edit|Write|MultiEdit|NotebookEdit"' .claude/settings.json
 ```
 
 | 期待 | 全コマンド exit 0 |
@@ -174,10 +182,7 @@ grep -q '"matcher": "Edit|Write|MultiEdit|NotebookEdit"' .claude/settings.json
 
 ## TC-08: 既存テストの回帰
 
-```bash
-bash scripts/claude/tests/test_pretooluse_push_guard.sh
-bash scripts/claude/tests/test_pr_base_sync.sh
-```
+実行コマンド: 「決定論ゲート（自動実走）」の `test_pretooluse_push_guard.sh` / `test_pr_base_sync.sh`。
 
 | 期待 | 両方 exit 0。push guard は `pass=87 fail=0` 以上（新規 assert を足さないため 87 のまま） |
 |---|---|
