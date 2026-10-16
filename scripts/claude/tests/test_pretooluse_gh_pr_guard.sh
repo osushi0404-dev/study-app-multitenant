@@ -23,6 +23,14 @@ echo "$*" >> "${GH_LOG:-/dev/null}"
 case "$*" in
   *isCrossRepository*)
     [ "${GH_FAIL_CROSS:-0}" = "1" ] && exit 1
+    # SELF_IDENTS に含まれる識別子は自前 PR として答える（「別の PR を照会して素通し」を検出するため）
+    # 識別子なし照会（＝カレントブランチの PR）も実環境どおり自前 PR として答える
+    # （「識別子を gh に渡し忘れて自前 PR を検査し素通し」を検出するため・G11 のみ識別子なしが正）
+    #  CURRENT_FORK=1 のときだけカレントブランチを fork PR 扱いにする（G11: fork を checkout 済みの状況）
+    if [ "$1 $2" = "pr view" ] && { { [[ "$3" == -* ]] && [ "${CURRENT_FORK:-0}" != "1" ]; } || { [ -n "${SELF_IDENTS:-}" ] && [[ " $SELF_IDENTS " == *" $3 "* ]]; }; }; then
+      printf '{"isCrossRepository":false,"headRepositoryOwner":{"login":"osushi0404-dev"},"headRepository":{"name":"study-app-multitenant"}}\n'
+      exit 0
+    fi
     case "${CROSS_VALUE-false}" in
       true|false)
         printf '{"isCrossRepository":%s,"headRepositoryOwner":{"login":"Dodothereal"},"headRepository":{"name":"study-app-multitenant"}}\n' "${CROSS_VALUE-false}" ;;
@@ -55,6 +63,7 @@ runj() {
   local out code
   out=$(json "$1" | env PATH="$STUB:$PATH" \
         CROSS_VALUE="${CROSS_VALUE-false}" GH_FAIL_CROSS="${GH_FAIL_CROSS:-0}" \
+        SELF_IDENTS="${SELF_IDENTS:-}" CURRENT_FORK="${CURRENT_FORK:-0}" \
         GH_LOG="${GH_LOG:-/dev/null}" python3 "${2:-$GUARD}" 2>/dev/null)
   code=$?
   _decide "$out" "$code"
@@ -64,6 +73,7 @@ runm() {
   local out code
   out=$(mjson "$1" "$2" | env PATH="$STUB:$PATH" \
         CROSS_VALUE="${CROSS_VALUE-false}" GH_FAIL_CROSS="${GH_FAIL_CROSS:-0}" \
+        SELF_IDENTS="${SELF_IDENTS:-}" CURRENT_FORK="${CURRENT_FORK:-0}" \
         GH_LOG="${GH_LOG:-/dev/null}" python3 "${3:-$GUARD}" 2>/dev/null)
   code=$?
   _decide "$out" "$code"
@@ -92,7 +102,7 @@ ck "G7 gh pr close (fork)"            0   "$(CROSS_VALUE=true runj 'gh pr close 
 ck "G8 gh pr comment (fork)"          0   "$(CROSS_VALUE=true runj 'gh pr comment 257 --body x')"
 ck "G9 gh pr view (fork)"             0   "$(CROSS_VALUE=true runj 'gh pr view 257 --json state')"
 ck "G10 gh pr checks (fork)"          0   "$(CROSS_VALUE=true runj 'gh pr checks 257')"
-ck "G11 gh pr merge 識別子なし"        2   "$(CROSS_VALUE=true runj 'gh pr merge')"
+ck "G11 gh pr merge 識別子なし"        2   "$(CROSS_VALUE=true CURRENT_FORK=1 runj 'gh pr merge')"
 ck "G12 gh pr merge URL 形式"          2   "$(CROSS_VALUE=true runj 'gh pr merge https://github.com/o/r/pull/257')"
 
 # ===== MCP 経路 =====
@@ -117,7 +127,7 @@ unset GH_LOG
 
 # ===== エスケープ・既存ガードとの順序 =====
 ck "G21 DANGER_OK エスケープ"          0   "$(CROSS_VALUE=true runj 'DANGER_OK=1 gh pr merge 257')"
-ck "G22 rm -rf 同居は hard-block 優先"  2   "$(CROSS_VALUE=true runj 'gh pr merge 257 && rm -rf x')"
+ck "G22 rm -rf 同居は hard-block 優先"  2   "$(CROSS_VALUE=true runj 'gh pr ready 257 && rm -rf x')"  # ask 種別の動詞で順序を検証（merge だと cross ガード自身も exit 2 で順序が見えない）
 ck "G23 mcp pull_number なし=ask"      ASK "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_NONUM")"
 
 # ===== 想定外値・空応答は ask 降格 =====
@@ -129,6 +139,65 @@ ASK_OUT=$(json 'gh pr ready 257' | env PATH="$STUB:$PATH" CROSS_VALUE=true \
           python3 "$GUARD" 2>/dev/null)
 printf '%s' "$ASK_OUT" | grep -q "Dodothereal/study-app-multitenant"
 ck "G27 ask 文言に head リポジトリ名"  0 "$?"
+
+# ===== 敵対的レビュー（2026-10-16）対応: 区切り・前置・-R・値付きフラグ =====
+# 複数行・空白なし区切り・サブシェル・コマンド置換で gh pr merge を隠さない
+ck "G28 複数行の 2 行目 merge"           2   "$(CROSS_VALUE=true runj $'git status\ngh pr merge 257 --squash')"
+ck "G29 空白なし ; の後の merge"         2   "$(CROSS_VALUE=true runj 'true;gh pr merge 257')"
+ck "G30 & の後の merge"                  2   "$(CROSS_VALUE=true runj 'echo ok& gh pr merge 257')"
+ck "G31 サブシェル (merge)"              2   "$(CROSS_VALUE=true runj '(gh pr merge 257)')"
+# shellcheck disable=SC2016  # $( を展開させず文字列のまま hook に渡す意図
+ck "G32 コマンド置換 \$(merge)"          2   "$(CROSS_VALUE=true runj 'echo $(gh pr merge 257)')"
+# 前置（環境変数・ラッパー・絶対パス）
+ck "G33 GH_REPO= 前置"                   2   "$(CROSS_VALUE=true runj 'GH_REPO=o/r gh pr merge 257')"
+ck "G34 env 前置"                        2   "$(CROSS_VALUE=true runj 'env gh pr merge 257')"
+ck "G35 command 前置"                    2   "$(CROSS_VALUE=true runj 'command gh pr merge 257')"
+ck "G36 絶対パス /usr/bin/gh"            2   "$(CROSS_VALUE=true runj '/usr/bin/gh pr merge 257')"
+ck "G37 timeout 前置"                    2   "$(CROSS_VALUE=true runj 'timeout 60 gh pr merge 257')"
+# -R / --repo / GH_REPO は照会側へ渡す（別リポジトリの PR を検査しない）
+GH_LOG="$TMP/ghlog.adv"
+: > "$GH_LOG"
+ck "G38 gh -R o/r pr merge（グローバル位置）" 2 "$(CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'gh -R o/r pr merge 257')"
+grep -q -- '--repo o/r' "$GH_LOG"
+ck "G38b グローバル -R が照会に渡る"    0   "$?"
+: > "$GH_LOG"
+ck "G39 gh pr merge 257 --repo o/r"      2   "$(CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'gh pr merge 257 --repo o/r')"
+grep -q -- '--repo o/r' "$GH_LOG"
+ck "G39b --repo が照会に渡る"           0   "$?"
+: > "$GH_LOG"
+ck "G40 GH_REPO 前置"                    2   "$(CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'GH_REPO=o/r gh pr merge 257')"
+grep -q -- '--repo o/r' "$GH_LOG"
+ck "G40b GH_REPO が照会に渡る"          0   "$?"
+# 値付きフラグの値を PR 識別子と取り違えない（12 は自前 PR として応答するスタブ）
+ck "G41 --subject 12 257"                2   "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr merge --subject 12 257')"
+ck "G42 -t 12 257"                       2   "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr merge -t 12 257')"
+ck "G43 --body=12 は値を消費しない"      2   "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr merge --body=12 257')"
+ck "G44 edit --title 12 257"             ASK "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr edit --title 12 257')"
+ck "G45 review -b 12 -a 257"             ASK "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr review -b 12 -a 257')"
+# approve の結合・= 形式
+ck "G46 review -ab LGTM"                 ASK "$(CROSS_VALUE=true runj 'gh pr review 257 -ab LGTM')"
+ck "G47 review --approve=true"           ASK "$(CROSS_VALUE=true runj 'gh pr review 257 --approve=true')"
+ck "G48 review -ba（-b の値が a）"       0   "$(CROSS_VALUE=true runj 'gh pr review 257 -ba')"
+# 誤検出しない・自前 PR の挙動は不変（AC-12）
+ck "G49 クォート内の改行＋merge 文字列"  0   "$(CROSS_VALUE=true runj $'gh pr comment 1 --body "x\ngh pr merge 257"')"
+ck "G50 自前 PR の複数行 merge"          0   "$(CROSS_VALUE=false runj $'git status\ngh pr merge 261')"
+: > "$GH_LOG"
+ck "G51 複数行の無関係コマンド"          0   "$(CROSS_VALUE=true GH_LOG="$GH_LOG" runj $'git status\nls -la')"
+ck "G51b 無関係コマンドで gh 未呼出"     0   "$(wc -l < "$GH_LOG" | tr -d ' ')"
+# 識別子を一意に決められない（位置引数が複数）場合は ask に降格する
+ck "G52 位置引数が複数=ask 降格"         ASK "$(CROSS_VALUE=false runj 'gh pr merge 261 257')"
+# 照会に識別子と repo が実際に渡ること（スタブが引数を見ない tautology の解消）
+: > "$GH_LOG"
+CROSS_VALUE=true GH_LOG="$GH_LOG" runm mcp__github__merge_pull_request "$MCP_PR" >/dev/null
+grep -q -- 'pr view 257 --repo osushi0404-dev/study-app-multitenant' "$GH_LOG"
+ck "G53 MCP の pull_number/owner/repo が照会に渡る" 0 "$?"
+: > "$GH_LOG"
+CROSS_VALUE=true GH_LOG="$GH_LOG" runj 'gh pr merge 257' >/dev/null
+grep -q -- 'pr view 257 ' "$GH_LOG"
+ck "G54 Bash の識別子が照会に渡る"      0   "$?"
+# 個別分岐（削除しても落ちなかった分岐）
+ck "G55 review -a（短縮形）"             ASK "$(CROSS_VALUE=true runj 'gh pr review 257 -a')"
+ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
 BROKEN_GH="$TMP/guard_nogh.py"

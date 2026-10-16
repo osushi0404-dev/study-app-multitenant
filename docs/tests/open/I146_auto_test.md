@@ -87,7 +87,7 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 
 （注入の sed 式は実装時に対象行へ合わせて確定する。要件は「cross-repo 判定行だけを無効化し、他の分岐を壊さないこと」。）
 
-## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G22）
+## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G56）
 
 実行コマンド: 「決定論ゲート（自動実走）」の `test_pretooluse_gh_pr_guard.sh`。
 
@@ -117,6 +117,22 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 | G22 | `gh pr merge 257 && rm -rf x` | true | exit 2（既存 hard-block が先に効く） | 回帰 |
 | G23 | MCP `merge_pull_request`（`pull_number` なし） | true | ASK（照会せず降格） | AC-17 |
 | G24 | MCP `mcp__github__get_pull_request`（対象外ツール） | true | exit 0（`gh` を呼ばない） | AC-18 |
+
+**敵対的レビュー（2026-10-16 第 1 周）対応で追加した G28〜G56**（詳細は `docs/reviews/I146_adversarial_review_20261016_*.md`）:
+
+| 範囲 | 内容 | 期待 |
+|---|---|---|
+| G28〜G32 | 複数行・空白なし `;`・`&`・サブシェル `( )`・コマンド置換 `$( )` の中の `gh pr merge`（fork） | exit 2 |
+| G33〜G37 | `GH_REPO=` 前置・`env`・`command`・絶対パス `/usr/bin/gh`・`timeout 60` 前置 | exit 2 |
+| G38〜G40（b） | `gh -R o/r pr merge`・`--repo o/r`・`GH_REPO=o/r` が照会 `gh pr view … --repo o/r` に渡る | exit 2 ＋ GH_LOG に `--repo o/r` |
+| G41〜G45 | 値付きフラグ（`--subject`/`-t`/`--title`/`-b`）の値（自前 PR 12）を識別子と取り違えない・`--body=12` は値を消費しない | merge=exit 2 / edit・review=ASK |
+| G46〜G48 | `-ab`（approve 結合）・`--approve=true` は ASK、`-ba`（-b の値が a）は素通し | ASK / ASK / exit 0 |
+| G49〜G51（b） | クォート内の改行＋merge 文字列は誤検出しない・自前 PR の複数行 merge は不変・複数行の無関係コマンドで gh を呼ばない | exit 0 |
+| G52 | 位置引数が複数（識別子を一意に決められない） | ASK（降格） |
+| G53・G54 | MCP の pull_number/owner/repo、Bash の識別子が実際に照会へ渡る（GH_LOG で検証） | exit 0（grep） |
+| G55・G56 | `review -a` 短縮形・MCP `pullNumber`（キャメル）の個別分岐 | ASK / exit 2 |
+
+スタブは tautology 解消のため、識別子なし照会（カレントブランチ）と `SELF_IDENTS` の識別子には**自前（false）**を返すよう変更した（G11 のみ `CURRENT_FORK=1` で fork 扱い）。G22 は順序を検証できるよう ask 種別の `gh pr ready` に変更した。`test_pr_base_sync.sh` のスタブも対象 PR（219）以外への照会には false を返すよう変更し、照会先を別 PR にした注入版で `RESULT: NG (5 件)` になることを確認した。
 
 MCP ケースの `tool_input` キー名は**スネークケース**（`owner` / `repo` / `pull_number`、レビューは加えて `body` / `event`）。対象 3 ツールの JSON Schema を実取得して確認済み（計画書 S9）。テストと実装の双方でこのキー名を使う。
 
@@ -203,3 +219,6 @@ FG-A / FG-C / FG-D が exit 0 を返し、かつ FG-B / FG-E が exit 2 を返�
 | TC-06 | 2026-08-05 実装時 | ✅ PASS | 19 項目すべて OK（必須文言 14・無改変 4・false-green 裏取り 1） |
 | TC-07 | 2026-08-15 | ✅ PASS | ユーザー（リポジトリ管理者）が GitHub UI で有効化。`gh api repos/osushi0404-dev/study-app-multitenant/private-vulnerability-reporting` → `{"enabled":true}`（exit 0）。ベースライン `false` → `true` の遷移を確認。※ 2026-08-13 に bot アカウントで `gh api -X PUT` を試行したが admin 権限がなく HTTP 404（詳細は TC-07 節の「有効化の実施者」） |
 | TC-08 | 2026-08-05 実装時 | ✅ PASS | push guard `pass=87 fail=0`・worktree guard `pass=27 fail=0`・checkout guard `pass=14 fail=0`（回帰なし） |
+| TC-03 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | Red: 修正前ガードで `pass=45 fail=22`（G28〜G52 の回避経路が素通し）→ 修正後 `pass=67 fail=0` |
+| TC-01 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | スタブ厳格化後も `RESULT: OK (21/21 cases, 30 assertions)`。照会先を PR 1 にした注入版は `RESULT: NG (5 件 / pass 25)` |
+| TC-08 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | push guard `pass=87`・worktree guard `pass=27`・checkout guard `pass=14`（いずれも fail=0・回帰なし） |

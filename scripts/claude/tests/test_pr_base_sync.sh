@@ -20,7 +20,13 @@ case "$*" in
   *isCrossRepository*)
     # I146: cross-repo 判定。GH_FAIL_CROSS=1 で照会失敗（T19）。
     [ "${GH_FAIL_CROSS:-0}" = "1" ] && exit 1
-    printf '%s\n' "${CROSS_VALUE-false}"
+    # 対象 PR（219）への照会にだけ CROSS_VALUE を返し、それ以外の PR・識別子なしは自前（false）と答える
+    # （「別の PR を照会して素通し」を tautology で見逃さないため）。
+    if [ "$1 $2 $3" = "pr view 219" ]; then
+      printf '%s\n' "${CROSS_VALUE-false}"
+    else
+      printf 'false\n'
+    fi
     ;;
   *mergeStateStatus*)
     [ "${GH_FAIL:-0}" = "1" ] && exit 1
