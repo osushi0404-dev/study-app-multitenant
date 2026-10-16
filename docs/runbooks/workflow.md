@@ -259,5 +259,7 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 
 判定は `scripts/claude/pr-base-sync.sh`（/close step 0）と PreToolUse ガード
 （`scripts/claude/hooks/pretooluse_guard.py`）でも自動検知されるが、上記は人が最初に見たときの手順である。
-ガードは `gh pr merge` を block、`gh pr ready` / `edit` / `review --approve` と MCP 経由の
-取り込み操作を ask にする。読み取りと `close` / `comment` は断るために必要なので素通しする。
+ガードは外部 PR への `gh pr merge` / `gh pr checkout`（`gh co`）と MCP の `merge_pull_request` を block、
+`gh pr ready` / `edit` / `update-branch` / `review --approve` と MCP の `update_pull_request_branch` /
+`create_pull_request_review`（APPROVE）を ask にする。読み取りと `close` / `comment` は断るために必要なので素通しする。
+コマンド中に `gh pr merge` 等の記述があるのに判定しきれない場合（クォート内に書いた等）も、block ではなく ask になる。

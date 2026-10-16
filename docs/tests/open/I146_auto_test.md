@@ -88,7 +88,7 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 
 （注入の sed 式は実装時に対象行へ合わせて確定する。要件は「cross-repo 判定行だけを無効化し、他の分岐を壊さないこと」。）
 
-## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G106）
+## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G157）
 
 実行コマンド: 「決定論ゲート（自動実走）」の `test_pretooluse_gh_pr_guard.sh`。
 
@@ -142,6 +142,17 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 | G97〜G100 | グローバル `--repo=`・`-Rx`・サブコマンド側 `-R` が照会に渡る・`-bLGTM` の値連結 | grep 0 / 2 |
 | G101〜G103 | 既定エイリアス `gh co`（fork=block・自前=素通し）・`cd` 後の識別子なし merge は ASK | 2 / 0 / ASK |
 | G104〜G106 | 自前 PR の正規手順（識別子なし `merge --squash --delete-branch`・`ready`・`edit --body "$(cat <<'EOF' …)"`）は不変 | 0 |
+| G107〜G111 | 第 3 周: 行継続 `\<改行>`（`gh pr \⏎ merge`・`gh \⏎ pr`・`merge \⏎ 257`・`review 257 \⏎ --approve`）・自前 PR の折り返しは ask しない | 2 / 2 / 2 / ASK / 0 |
+| G112〜G113 | 語中の `#`（`a#b`・`${#PATH}`）はコメントではない | 2 |
+| G114〜G122 | heredoc: クォート/コメント内の `<<X` は開始ではない・`<<'END-OF-MSG'`/`<<\EOF`/`<<'EOF.'`/CRLF の本文は無視・`<<EO"F"` 終端後と here-string・`<<-` タブ終端後の実コマンドは検出 | 2 / 2 / 0×4 / 2 / 2 / 2 |
+| G123〜G124 | 値の位置のプロセス置換 `<(…)`・クォートなし `$(…)` は ASK | ASK |
+| G125〜G144 | フラグ表の各エントリ（merge の値なし -s/-r/-d/--squash/--rebase/--merge/--delete-branch/--admin/--auto/--disable-auto・checkout の -f/--force/--detach/--recurse-submodules・ready --undo・update-branch --rebase・値あり -F/--match-head-commit/-A/--branch） | 2 / ASK / 2 |
+| G145〜G153 | fork が先・自前が後の順・`--`・識別子より前のリダイレクト・`$'…'` の fallback・pushd・未知短縮フラグ・review の未知フラグ・`gh.exe` | 2 / 2 / 2 / 2 / 2 / ASK×3 / 2 |
+| G154〜G156 | 安全網: クォート内の取り込み系記述は ASK（block しない）・`review --comment`・`view`/`checks` は素通し | ASK / 0 / 0 |
+| G157 | 同一 PR への複数操作で照会は 1 回 | GH_LOG 1 行 |
+| FG-A・FG-F・FG-G | 精密判定を無効化すると block が消え安全網の ASK に落ちる／安全網を無効化するとクォート内記述が素通し／実体は ASK | ASK / 0 / ASK |
+
+G49（クォート内の改行＋merge 文字列）は安全網の導入により期待値を 0 → ASK に変更した（2026-10-16 ユーザー了承の過剰確認）。
 
 スタブは tautology 解消のため、識別子なし照会（カレントブランチ）と `SELF_IDENTS` の識別子には**自前（false）**を返すよう変更した（G11 のみ `CURRENT_FORK=1` で fork 扱い）。G22 は順序を検証できるよう ask 種別の `gh pr ready` に変更した。`test_pr_base_sync.sh` のスタブも対象 PR（219）以外への照会には false を返すよう変更し、照会先を別 PR にした注入版で `RESULT: NG (5 件)` になることを確認した。
 
@@ -232,6 +243,7 @@ FG-A / FG-C / FG-D が exit 0 を返し、かつ FG-B / FG-E が exit 2 を返�
 | TC-08 | 2026-08-05 実装時 | ✅ PASS | push guard `pass=87 fail=0`・worktree guard `pass=27 fail=0`・checkout guard `pass=14 fail=0`（回帰なし） |
 | TC-03 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | Red: 修正前ガードで `pass=45 fail=22`（G28〜G52 の回避経路が素通し）→ 修正後 `pass=67 fail=0` |
 | TC-03 | 2026-10-16 R10（checkout/update-branch）追加 | ✅ PASS | Red: `pass=69 fail=3`（G57/G59/G60）→ 実装後 `pass=72 fail=0` |
+| TC-03 | 2026-10-16 敵対的レビュー第 3 周対応（二重の構え） | ✅ PASS | 新テストを直前コミット 8e68ef0 のガードに当てると `pass=149 fail=21`（Red）→ 修正後 `pass=170 fail=0`。回帰: push 87・worktree 27・checkout 14・pr-base-sync 21/21 |
 | TC-03 | 2026-10-16 敵対的レビュー第 2 周対応（作り直し） | ✅ PASS | 新テストを直前コミット 670d184 のガードに当てると `pass=90 fail=27`（Red）→ 作り直し後 `pass=117 fail=0`。回帰: push 87・worktree 27・checkout 14・pr-base-sync 21/21 |
 | TC-01 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | スタブ厳格化後も `RESULT: OK (21/21 cases, 30 assertions)`。照会先を PR 1 にした注入版は `RESULT: NG (5 件 / pass 25)` |
 | TC-08 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | push guard `pass=87`・worktree guard `pass=27`・checkout guard `pass=14`（いずれも fail=0・回帰なし） |

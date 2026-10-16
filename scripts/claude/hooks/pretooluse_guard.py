@@ -425,7 +425,18 @@ _MCP_PR_ASK_TOOLS = (
 _GH_TIMEOUT = 5  # 秒。ハーネスを長く止めない（超過時は ask に降格）
 
 
+_CROSS_CACHE = {}
+
+
 def _pr_is_cross_repo(ident, repo=None):
+    """同一 (ident, repo) の照会は 1 回にまとめる（hook は 1 回の呼び出しごとに起動するため安全）。"""
+    key = (ident, repo)
+    if key not in _CROSS_CACHE:
+        _CROSS_CACHE[key] = _pr_is_cross_repo_uncached(ident, repo)
+    return _CROSS_CACHE[key]
+
+
+def _pr_is_cross_repo_uncached(ident, repo=None):
     """(cross, head) を返す。cross は fork 由来 True / 自前 False / 判定不能 None（＝ask 降格）。
     head は "owner/repo" 形式の head リポジトリ名（取れなければ None）。
     ident が None のときはカレントブランチの PR を解決させる（gh の既定挙動）。
@@ -484,40 +495,141 @@ _GH_PR_SPECS = {
                ("--approve", "--comment", "--request-changes", "--help"), "acrh"),
 }
 _GH_PUNCT = "();<>|&`"
-_HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
 _FD_RE = re.compile(r"(?:(?<=^)|(?<=[\s;&|()`]))\d+(?=[<>])", re.M)
+_WORD_BREAK = " \t\n;&|()<>"
+# 安全網: 精密判定（下の _gh_pr_target）が取りこぼした「gh pr の取り込み系操作の記述」を数える粗い検出。
+# クォートを区別しないため、精密判定の件数より多ければ「判定しきれない記述がある」とみなして ask にする
+# （新しい書き方の穴を黙った素通しではなく確認に倒す fail-safe。block はしない）。
+_GH_COARSE_RE = re.compile(
+    r"\bgh(?:\.exe)?\s+(?:[^\n;&|`]*?\s)?"
+    r"(?:pr\s+(?:[^\n;&|`]*?\s)?(?:merge|checkout|ready|edit|update-branch)\b"
+    r"|co\b"
+    r"|pr\s+(?:[^\n;&|`]*?\s)?review\b[^\n;&|`]*?(?:--approve|\s-[crh]*a))"
+)
 
 
-def _strip_heredoc_bodies(raw: str) -> str:
-    """ヒアドキュメントの本文行を除く（本文はデータであり実行されないため。誤 block の防止）。
-    終端行が見つからない場合は除かない（区切りの誤認で後続コマンドを隠さない fail-safe）。"""
-    lines = raw.split("\n")
-    out, i = [], 0
-    while i < len(lines):
-        line = lines[i]
-        out.append(line)
-        i += 1
-        for dash, _q, word in _HEREDOC_RE.findall(line.replace("<<<", "   ")):
-            j = i
-            while j < len(lines):
-                body = lines[j].lstrip("\t") if dash else lines[j]
-                if body == word:
-                    break
+def _shell_code(raw: str) -> str:
+    """bash と同じ規則で、実行されない部分を取り除いた文字列を返す（gh pr 判定専用）。
+    - CRLF を LF に揃え、クォート外の行継続（\\<改行>）を連結する
+    - クォート外の語頭の `#` から行末までのコメントを除く（語中の `#` は文字のまま）
+    - クォート外・算術式外の `<<WORD`（`<<<` を除く）をヒアドキュメント開始とみなし、本文行と終端行を除く。
+      終端語はクォート・バックスラッシュを除いた語全体（`'END-OF-MSG'`・`\\EOF`・`EO"F"` → END-OF-MSG/EOF/EOF）。
+      終端行が見つからない場合は除かない（後続の実コマンドを隠さない fail-safe）。
+    クォートの中身はそのまま残す（shlex 側で 1 語になる）。"""
+    s = raw.replace("\r\n", "\n")
+    out, pending, i, n = [], [], 0, len(s)
+    state = None  # None / "'" / '"' / "$'"（ANSI-C クォート）
+    while i < n:
+        ch = s[i]
+        if state == "'":
+            out.append(ch)
+            i += 1
+            if ch == "'":
+                state = None
+            continue
+        if state in ('"', "$'"):
+            if ch == "\\" and i + 1 < n:
+                out.append(s[i:i + 2])
+                i += 2
+                continue
+            out.append(ch)
+            i += 1
+            if ch == ("'" if state == "$'" else '"'):
+                state = None
+            continue
+        # クォート外
+        if ch == "\\" and i + 1 < n:
+            if s[i + 1] == "\n":
+                i += 2  # 行継続
+                continue
+            out.append(s[i:i + 2])
+            i += 2
+            continue
+        if ch == "'":
+            state = "$'" if out and out[-1].endswith("$") else "'"
+            out.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            state = '"'
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "#" and (not out or out[-1][-1:] in _WORD_BREAK):
+            while i < n and s[i] != "\n":
+                i += 1
+            continue
+        if s.startswith("$((", i) or (s.startswith("((", i) and (not out or out[-1][-1:] in _WORD_BREAK)):
+            end = s.find("))", i)
+            end = n if end < 0 else end + 2
+            out.append(s[i:end])
+            i = end
+            continue
+        if s.startswith("<<<", i):  # here-string（ヒアドキュメントではない）
+            out.append("<<<")
+            i += 3
+            continue
+        if s.startswith("<<", i):
+            j = i + 2
+            dash = j < n and s[j] == "-"
+            j += 1 if dash else 0
+            while j < n and s[j] in " \t":
                 j += 1
-            if j < len(lines):
-                i = j + 1  # 本文と終端行を読み飛ばす
-    return "\n".join(out)
+            k, word = j, []
+            while k < n and s[k] not in _WORD_BREAK:
+                if s[k] == "\\" and k + 1 < n:
+                    word.append(s[k + 1])
+                    k += 2
+                    continue
+                if s[k] in "'\"":
+                    q = s[k]
+                    e = s.find(q, k + 1)
+                    e = n if e < 0 else e
+                    word.append(s[k + 1:e])
+                    k = e + 1
+                    continue
+                word.append(s[k])
+                k += 1
+            if word:
+                pending.append(("".join(word), dash))
+            out.append(s[i:k])
+            i = k
+            continue
+        if ch == "\n" and pending:
+            out.append(ch)
+            pos = i + 1
+            for word, dash in pending:
+                p, found = pos, False
+                while p <= n:
+                    e = s.find("\n", p)
+                    e = n if e < 0 else e
+                    line = s[p:e]
+                    if (line.lstrip("\t") if dash else line) == word:
+                        found = True
+                        pos = e  # 終端行の末尾（改行の手前）
+                        break
+                    if e >= n:
+                        break
+                    p = e + 1
+                if not found:
+                    break  # 終端なし: 以降は除かない
+            pending = []
+            i = pos if pos > i + 1 else i + 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
-def _gh_tokens(raw: str) -> list:
-    """生コマンドを (token, is_op) の列にする（gh pr 判定専用。既存 `_segments` は無改変）。
-    改行は区切りとして扱う（`#` コメントが行末の改行ごと読み捨てても区切りが残るよう `\\n;\\n` に置換）。
-    fd 番号付きリダイレクト（`2>&1`）の番号は除く。クォート不整合は素朴分割で fail-safe。"""
-    s = _FD_RE.sub("", _strip_heredoc_bodies(raw)).replace("\n", "\n;\n")
+def _gh_tokens(code: str) -> list:
+    """`_shell_code` 済みの文字列を (token, is_op) の列にする（gh pr 判定専用。既存 `_segments` は無改変）。
+    改行は区切りとして扱う。fd 番号付きリダイレクト（`2>&1`）の番号は除く。クォート不整合は素朴分割で fail-safe。"""
+    s = _FD_RE.sub("", code).replace("\n", " ; ")
     try:
         lx = shlex.shlex(s, posix=True, punctuation_chars=_GH_PUNCT)
         lx.whitespace = " \t\r\n"
         lx.whitespace_split = True
+        lx.commenters = ""  # コメントは _shell_code で bash の規則どおり除去済み
         toks = list(lx)
     except ValueError:
         toks = [t for t in re.split(r"([();<>|&`]+)|\s+", s) if t]
@@ -532,11 +644,12 @@ def _gh_pr_target(cmd: str):
     識別子（番号・URL・ブランチ名）は解釈せず gh へそのまま渡す。`-R/--repo`・`GH_REPO=` は照会側へ渡す。
     次は ambiguous（照会せず ask）: 表にないフラグ・位置引数が複数・識別子がなく gh の前に別コマンドがある
     （xargs 等で識別子が外から渡る）。"""
-    toks = _gh_tokens(cmd)
+    toks = _gh_tokens(_shell_code(cmd))
     targets = []
     for idx, (tok, is_op) in enumerate(toks):
-        if is_op or os.path.basename(tok) != "gh":
+        if is_op or os.path.basename(tok) not in ("gh", "gh.exe"):
             continue
+        in_backquote = sum(1 for t, op in toks[:idx] if op and t == "`") % 2 == 1
         # 同じ区切り内で gh より前にあるもの（GH_REPO= と、別コマンドの有無）
         k, env_repo, prefixed = idx - 1, None, False
         while k >= 0 and not (toks[k][1] and not re.search(r"[<>]", toks[k][0])):
@@ -547,15 +660,22 @@ def _gh_pr_target(cmd: str):
                 prefixed = True
             k -= 1
         # gh より後ろ（区切り演算子まで）。リダイレクトは演算子と行き先を除く
-        args, j = [], idx + 1
+        # プロセス置換 `<(`・クォートなしのコマンド置換 `$(`/`` ` `` が引数にあると識別子を確定できない → ambiguous
+        args, j, subst = [], idx + 1, False
         while j < len(toks):
             t, op = toks[j]
+            if op and t == "`" and in_backquote:
+                break  # 閉じのバッククォート
+            if op and ("(" in t or "`" in t):
+                subst = True
+                break
             if op and re.search(r"[<>]", t):
                 j += 2
                 continue
             if op:
                 break
-            args.append(t)
+            if t != "$":
+                args.append(t)
             j += 1
         repo = env_repo
         verb, seen_pr, i = None, False, 0
@@ -629,17 +749,16 @@ def _gh_pr_target(cmd: str):
             else:
                 positionals.append(a)
             j += 1
-        if kind == "approve":
-            if not approve and not ambiguous:
-                continue  # review --comment / --request-changes は対象外
-            kind = "ask"
         # 識別子なし＝カレントブランチの PR。照会は hook の作業ディレクトリで走るため、
         # gh の前に別コマンド（xargs 等）や cd/pushd があると実際の対象と食い違い得る → ask
         moved = any(not op and t in ("cd", "pushd") for t, op in toks[:idx])
-        if len(positionals) > 1 or (not positionals and (prefixed or moved)):
+        if subst or len(positionals) > 1 or (not positionals and (prefixed or moved)):
             ambiguous = True
+        if kind == "approve":  # ambiguous 判定の後に評価する（位置引数の異常で ask を消さない）
+            if not approve and not ambiguous:
+                continue  # review --comment / --request-changes は対象外
+            kind = "ask"
         targets.append((kind, positionals[0] if positionals else None, repo, ambiguous))
-    targets.sort(key=lambda t: t[0] != "block")  # block 種別を先に評価する
     return targets
 
 
@@ -717,6 +836,11 @@ def _guard_gh_pr_targets(targets: list, raw: str):
             _block(d[1], raw)
         if d:
             asks.append(d[1])
+    # 安全網: 判定しきれない「gh pr の取り込み系操作の記述」が残っていれば ask
+    if len(_GH_COARSE_RE.findall(_shell_code(raw))) > len(targets):
+        asks.append("判定しきれない形で gh pr の取り込み系操作（merge/checkout/ready/edit/update-branch/"
+                    "review --approve）が書かれています（クォート内・置換内・未知の書き方など）。"
+                    "外部（fork）由来の PR への操作でないか確認してください。")
     if asks:
         _ask(asks[0])
 

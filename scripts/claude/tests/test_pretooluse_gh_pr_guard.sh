@@ -179,7 +179,8 @@ ck "G46 review -ab LGTM"                 ASK "$(CROSS_VALUE=true runj 'gh pr rev
 ck "G47 review --approve=true"           ASK "$(CROSS_VALUE=true runj 'gh pr review 257 --approve=true')"
 ck "G48 review -ba（-b の値が a）"       0   "$(CROSS_VALUE=true runj 'gh pr review 257 -ba')"
 # 誤検出しない・自前 PR の挙動は不変（AC-12）
-ck "G49 クォート内の改行＋merge 文字列"  0   "$(CROSS_VALUE=true runj $'gh pr comment 1 --body "x\ngh pr merge 257"')"
+# 第 3 周で安全網を導入: クォート内の取り込み系記述は block せず ask（2026-10-16 ユーザー了承の過剰確認）
+ck "G49 クォート内の改行＋merge 文字列"  ASK "$(CROSS_VALUE=true runj $'gh pr comment 1 --body "x\ngh pr merge 257"')"
 ck "G50 自前 PR の複数行 merge"          0   "$(CROSS_VALUE=false runj $'git status\ngh pr merge 261')"
 : > "$GH_LOG"
 ck "G51 複数行の無関係コマンド"          0   "$(CROSS_VALUE=true GH_LOG="$GH_LOG" runj $'git status\nls -la')"
@@ -262,12 +263,77 @@ ck "G103 cd 後の識別子なし merge=ask"     ASK "$(CROSS_VALUE=false runj '
 ck "G104 自前 merge --squash --delete-branch" 0 "$(CROSS_VALUE=false runj 'gh pr merge --squash --delete-branch')"
 ck "G105 自前 ready（識別子なし）"        0   "$(CROSS_VALUE=false runj 'gh pr ready')"
 ck "G106 自前 edit --body \$(heredoc)"    0   "$(CROSS_VALUE=false runj $'gh pr edit 261 --body "$(cat <<\'EOF\'\n## x (A) `y`\nEOF\n)"')"
+# ===== 敵対的レビュー第 3 周（2026-10-16）対応: 行継続・語中 #・heredoc の厳密化・安全網 =====
+# 行継続（\<改行>）は bash と同じく 1 コマンドに連結する
+ck "G107 gh pr \\⏎ merge 257"            2   "$(CROSS_VALUE=true runj $'gh pr \\\n merge 257')"
+ck "G108 gh \\⏎ pr merge 257"            2   "$(CROSS_VALUE=true runj $'gh \\\n pr merge 257')"
+ck "G109 merge \\⏎ 257"                  2   "$(CROSS_VALUE=true runj $'gh pr merge \\\n  257 --squash')"
+ck "G110 review 257 \\⏎ --approve"       ASK "$(CROSS_VALUE=true runj $'gh pr review 257 \\\n  --approve')"
+ck "G111 自前 merge の折り返しは ask しない" 0 "$(CROSS_VALUE=false runj $'gh pr merge 236 \\\n  --squash --delete-branch')"
+# 語中の # はコメントではない
+ck "G112 echo a#b; merge"                2   "$(CROSS_VALUE=true runj 'echo a#b; gh pr merge 257')"
+# shellcheck disable=SC2016  # ${#PATH} を展開させず文字列のまま hook に渡す意図
+ck "G113 \${#PATH}; checkout"            2   "$(CROSS_VALUE=true runj 'echo ${#PATH}; gh pr checkout 257')"
+# heredoc: クォート/コメント内の << は開始ではない・終端語の各形式・CRLF・here-string・<<-
+ck "G114 \"<<X\" の次行 merge"           2   "$(CROSS_VALUE=true runj $'echo "<<X"\ngh pr merge 257\nX')"
+ck "G115 コメント内 <<X の次行 merge"    2   "$(CROSS_VALUE=true runj $'true # <<X\ngh pr merge 257\nX')"
+ck "G116 <<'END-OF-MSG' 本文は無視"      0   "$(CROSS_VALUE=true runj $'git commit -F - <<\'END-OF-MSG\'\nfix\n    gh pr merge 257 --squash\nEND-OF-MSG')"
+ck "G117 <<\\EOF 本文は無視"             0   "$(CROSS_VALUE=true runj $'git commit -F - <<\\EOF\nfix\n    gh pr checkout 257\nEOF')"
+ck "G118 <<'EOF.' 本文は無視"            0   "$(CROSS_VALUE=true runj $'git commit -F - <<\'EOF.\'\nfix: gh pr merge 257\nEOF.')"
+ck "G119 CRLF の heredoc 本文は無視"     0   "$(CROSS_VALUE=true runj $'cat > /tmp/x.md <<\'EOF\'\r\nx gh pr merge 257\r\nEOF\r\n')"
+ck "G120 <<EO\"F\" 終端後の merge"       2   "$(CROSS_VALUE=true runj $'cat <<EO"F"\nb\nEOF\ngh pr merge 257\nEO')"
+ck "G121 here-string <<< の次行 merge"   2   "$(CROSS_VALUE=true runj $'cat <<<EOF\ngh pr merge 257\nEOF')"
+ck "G122 <<- タブ終端後の merge"         2   "$(CROSS_VALUE=true runj $'cat <<-X\nb\n\tX\ngh pr merge 257\nX')"
+# 値の位置のプロセス置換・クォートなしコマンド置換は識別子を確定できない → ask
+ck "G123 --body-file <(…) 257"           ASK "$(CROSS_VALUE=false runj 'gh pr merge --body-file <(echo hi) 257')"
+# shellcheck disable=SC2016  # $( を展開させず文字列のまま hook に渡す意図
+ck "G124 --subject \$(…) 257"            ASK "$(CROSS_VALUE=false runj 'gh pr merge --subject $(echo x) 257')"
+# フラグ表: 値なしフラグの後ろの識別子を読み捨てない（fork）
+ck "G125 merge -s 257"                   2   "$(CROSS_VALUE=true runj 'gh pr merge -s 257')"
+ck "G126 merge -r 257"                   2   "$(CROSS_VALUE=true runj 'gh pr merge -r 257')"
+ck "G127 merge -d 257"                   2   "$(CROSS_VALUE=true runj 'gh pr merge -d 257')"
+ck "G128 merge --squash 257"             2   "$(CROSS_VALUE=true runj 'gh pr merge --squash 257')"
+ck "G129 merge --rebase 257"             2   "$(CROSS_VALUE=true runj 'gh pr merge --rebase 257')"
+ck "G130 merge --merge 257"              2   "$(CROSS_VALUE=true runj 'gh pr merge --merge 257')"
+ck "G131 merge --delete-branch 257"      2   "$(CROSS_VALUE=true runj 'gh pr merge --delete-branch 257')"
+ck "G132 merge --admin 257"              2   "$(CROSS_VALUE=true runj 'gh pr merge --admin 257')"
+ck "G133 merge --auto 257"               2   "$(CROSS_VALUE=true runj 'gh pr merge --auto 257')"
+ck "G134 merge --disable-auto 257"       2   "$(CROSS_VALUE=true runj 'gh pr merge --disable-auto 257')"
+ck "G135 checkout -f 257"                2   "$(CROSS_VALUE=true runj 'gh pr checkout -f 257')"
+ck "G136 checkout --force 257"           2   "$(CROSS_VALUE=true runj 'gh pr checkout --force 257')"
+ck "G137 checkout --detach 257"          2   "$(CROSS_VALUE=true runj 'gh pr checkout --detach 257')"
+ck "G138 checkout --recurse-submodules 257" 2 "$(CROSS_VALUE=true runj 'gh pr checkout --recurse-submodules 257')"
+ck "G139 ready --undo 257"               ASK "$(CROSS_VALUE=true runj 'gh pr ready --undo 257')"
+ck "G140 update-branch --rebase 257"     ASK "$(CROSS_VALUE=true runj 'gh pr update-branch --rebase 257')"
+# 値ありフラグ（各サブコマンド）の値を識別子にしない（12 は自前）
+ck "G141 merge -F f 257"                 2   "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr merge -F 12 257')"
+ck "G142 merge --match-head-commit 12 257" 2 "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr merge --match-head-commit 12 257')"
+ck "G143 merge -A 12 257"                2   "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr merge -A 12 257')"
+ck "G144 checkout --branch 12 257"       2   "$(CROSS_VALUE=true SELF_IDENTS=12 runj 'gh pr checkout --branch 12 257')"
+# 順序・--・リダイレクトが識別子より前・ValueError fallback・pushd・未知短縮・review の未知フラグ
+ck "G145 fork merge; 自前 merge"         2   "$(CROSS_VALUE=true SELF_IDENTS=261 runj 'gh pr merge 257; gh pr merge 261')"
+ck "G146 merge -- 257"                   2   "$(CROSS_VALUE=true runj 'gh pr merge -- 257')"
+ck "G147 merge >/dev/null 257"           2   "$(CROSS_VALUE=true runj 'gh pr merge >/dev/null 257')"
+ck "G148 merge 2>/dev/null 257"          2   "$(CROSS_VALUE=true runj 'gh pr merge 2>/dev/null 257')"
+ck "G149 \$'it\\'s';merge（fallback）"   2   "$(CROSS_VALUE=true runj $'echo $\'it\\\'s\';gh pr merge 257')"
+ck "G150 pushd 後の識別子なし=ask"       ASK "$(CROSS_VALUE=false runj 'pushd /x && gh pr merge')"
+ck "G151 merge 261 -x（未知短縮）=ask"   ASK "$(CROSS_VALUE=false runj 'gh pr merge 261 -x')"
+ck "G152 review 257 --foo=ask"           ASK "$(CROSS_VALUE=false runj 'gh pr review 257 --foo')"
+ck "G153 gh.exe pr merge"                2   "$(CROSS_VALUE=true runj 'gh.exe pr merge 257')"
+# 安全網: 判定しきれない gh pr の取り込み系記述は ask（block しない）・該当しない記述は素通し
+ck "G154 クォート内の merge 記述=ask"    ASK "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"')"
+ck "G155 review --comment 記述は素通し"   0   "$(CROSS_VALUE=false runj 'gh pr review 261 --comment --body-file /tmp/r.md')"
+ck "G156 view/checks は素通し"            0   "$(CROSS_VALUE=false runj 'gh pr view 261 --json state && gh pr checks 261')"
+# 照会の重複排除（同じ PR への複数操作で照会 1 回）
+: > "$GH_LOG"; CROSS_VALUE=false GH_LOG="$GH_LOG" runj 'gh pr edit 236 --add-label a && gh pr ready 236' >/dev/null
+ck "G157 同一 PR の照会は 1 回"          1   "$(wc -l < "$GH_LOG" | tr -d ' ')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
 BROKEN_GH="$TMP/guard_nogh.py"
 sed 's/^def _gh_pr_target(cmd: str):$/&\n    return None/' "$GUARD" > "$BROKEN_GH"
-ck "FG-A 判定無効化で素通し"           0   "$(CROSS_VALUE=true runj 'gh pr merge 257' "$BROKEN_GH")"
+# 精密判定を無効化すると block が消え、安全網の ask に落ちる（精密判定が block の担い手であることの裏取り）
+ck "FG-A 判定無効化で block が消える"   ASK "$(CROSS_VALUE=true runj 'gh pr merge 257' "$BROKEN_GH")"
 ck "FG-B 実体は block"                 2   "$(CROSS_VALUE=true runj 'gh pr merge 257')"
 
 BROKEN_CROSS="$TMP/guard_nocross.py"
@@ -278,6 +344,11 @@ BROKEN_MCP="$TMP/guard_nomcp.py"
 sed 's/^def _mcp_pr_target(tool_name: str, tool_input: dict):$/&\n    return None/' "$GUARD" > "$BROKEN_MCP"
 ck "FG-D MCP 判定無効化で素通し"        0   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_PR" "$BROKEN_MCP")"
 ck "FG-E 実体は block（MCP）"           2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_PR")"
+
+BROKEN_NET="$TMP/guard_nonet.py"
+sed 's/len(_GH_COARSE_RE.findall(_shell_code(raw))) > len(targets)/False/' "$GUARD" > "$BROKEN_NET"
+ck "FG-F 安全網無効化で素通し"          0   "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"' "$BROKEN_NET")"
+ck "FG-G 実体は安全網で ask"            ASK "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"')"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
