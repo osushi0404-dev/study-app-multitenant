@@ -1,6 +1,6 @@
 # I151 自動テスト（Django 5.2 LTS 更新・未使用の django-guardian / django-extensions の除去）
 
-- 関連: docs/issues/open/I151.md / docs/plans/open/plan_I151.md / GitHub #267 / Draft PR #269
+- 関連: docs/issues/closed/I151.md / docs/plans/closed/plan_I151.md / GitHub #267 / Draft PR #269
 - 実行環境: **Docker（`docker compose exec`）**。ホスト venv の結果は合否根拠にしない（イシュー決定 5）
 - テストレベル: 静的検証（決定論 TC）／ツール実行／既存の単体・API 結合／コンポーネント／E2E
 - **新規テストコードは追加しない**（イシュー決定 6）。既存 94 件が同じ結果を返すことで依存更新の影響を測る
@@ -79,20 +79,20 @@ grep -qx 'pytest-django==4.14.0' backend/requirements-dev.txt
 # TC-AUTO-11B 判定 B-1（宣言側の固定値）
 grep -qx 'pytest==9.0.3' backend/requirements-dev.txt
 # TC-AUTO-15 判定 1・2（pip freeze 記録の中身）
-grep -qx 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt
-! grep -qiE 'django[-_]guardian' docs/tests/open/I151_pip_freeze.txt
-! grep -qiE 'django[-_]extensions' docs/tests/open/I151_pip_freeze.txt
+grep -qx 'Django==5.2.17' docs/tests/closed/I151_pip_freeze.txt
+! grep -qiE 'django[-_]guardian' docs/tests/closed/I151_pip_freeze.txt
+! grep -qiE 'django[-_]extensions' docs/tests/closed/I151_pip_freeze.txt
 # TC-AUTO-15 判定 3（記録が宣言側の全固定値と一致する＝R6 などの再固定後に記録を更新し忘れていない）
-grep -qx 'djangorestframework==3.18.0' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'django-cors-headers==4.9.0' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'django-filter==26.1' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'django-redis==7.0.0' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'openai==3.31.0' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'pytest-django==4.14.0' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'pytest==9.0.3' docs/tests/open/I151_pip_freeze.txt
+grep -qx 'djangorestframework==3.18.0' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'django-cors-headers==4.9.0' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'django-filter==26.1' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'django-redis==7.0.0' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'openai==3.31.0' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'pytest-django==4.14.0' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'pytest==9.0.3' docs/tests/closed/I151_pip_freeze.txt
 # TC-AUTO-15 判定 4（宣言ファイルには無い推移的依存が記録されている＝requirements の写しではなく実コンテナの freeze である。anyio は R6 の対象）
-grep -qx 'anyio==4.15.1' docs/tests/open/I151_pip_freeze.txt
-grep -qx 'kombu==5.6.2' docs/tests/open/I151_pip_freeze.txt
+grep -qx 'anyio==4.15.1' docs/tests/closed/I151_pip_freeze.txt
+grep -qx 'kombu==5.6.2' docs/tests/closed/I151_pip_freeze.txt
 ```
 
 ---
@@ -262,9 +262,9 @@ beat が投げたことではなく、worker が**成功で完了した**こと�
 
 **手順の順番（2026-10-16 改訂）**: 先に準備 1（スクリプトによる全タスクの実行）を行い、その後で準備 2・3（ログのスナップショット）を取る。この順番にすると、スクリプトが worker で動かしたタスクが出した ERROR / Traceback が、必ずログの判定 2a・2b の窓に入る。ユーザー単位の失敗をログにしか出さないタスク（`update_daily_analytics_task` 以外）でも、時間窓の運に頼らずに拾える。
 
-準備 1（beat スケジュールの全タスクを、時間窓に頼らずに確かめる。スクリプトは `docs/tests/open/I151_celery_probe.py`）:
+準備 1（beat スケジュールの全タスクを、時間窓に頼らずに確かめる。スクリプトは `docs/tests/closed/I151_celery_probe.py`）:
 ```bash
-docker compose exec -T backend python manage.py shell < docs/tests/open/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
+docker compose exec -T backend python manage.py shell < docs/tests/closed/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
 ```
 
 > スクリプトは `app.conf.beat_schedule` から対象タスクを**自動で導く**（既知の既存不具合 1 種だけを除く）。そのうえで、応答した worker ごとに登録漏れを出し、対象タスクを**実際に 1 回ずつ実行**して結果を出す。戻り値の `'error'` キー（タスク全体の失敗）と、0 でない `error_count`（ユーザー単位の失敗の件数）を NG とする。**外部へ送信するタスク（`send_study_reminders_task`）だけは**、worker では動かさない。開発環境の worker は SMTP（SendGrid）が有効で、実在のアドレスへメールが送られうるためである。このタスクはスクリプトのプロセス内で、メールをメモリに溜める設定（locmem）にして実行し、実行中に出た ERROR ログの件数も NG の条件にする（backend と worker は別イメージだが、依存の版は一致する）。`update_daily_analytics_task` も worker へは送らず、スクリプトのプロセス内で実行する（判定 1c のため。worker のログにある、このタスクの succeeded がすべて beat から届いたものになり、スクリプトを何回実行しても混ざらない）。残りの 2 タスク（`analyze_mistake_patterns_task`・`cleanup_expired_suggestions_task`）は worker で実行する。**locmem で止めるのはスクリプトが足す 1 回分だけで、beat の定期実行は止めない**。beat は `send_study_reminders_task` を 60 秒ごとに、SMTP 設定の worker へ送っている（開発環境の常設設定。I151 の範囲外の既存の問題）。いま実際に送信されないのは、開発 DB の復習カードが 0 件で、さらに送信処理が既存の不具合（`User.get_full_name` が無い）で必ず失敗するためである。復習カードは、学習プランやカードの API を直接呼んだときにだけ作られる（frontend と E2E にその呼び出しは無い）。**カードが 1 件でもある状態では、この TC を含め celery を動かさない**（カードが残る限り、24 時間学習していない利用者へ毎分の送信が試みられる）。副作用は、beat が定期実行するのと同じ処理を 1 回ずつ余分に動かすことだけである（例: 期限切れ提案の無効化）。**開発環境（手元の compose）以外では実行しない**（本番相当の環境では、スケジュールに無い時刻に定期処理が 1 回ずつ増える）。スクリプトは、`settings.DEBUG` が True で、かつ DB の接続先（設定上の `HOST`）が `db`・broker の URL を分解したホスト名が `redis`（手元の compose のサービス名）であるときだけ実行し、それ以外は何も実行せずに `NG PROBE ABORTED` を出して終わる（判定 3s・4a・4b が不合格になる）。`DEBUG` は環境変数が無いと True になる（`settings.py`）ので、`DEBUG` だけには頼らない。**ガードが見分けられない範囲**: ① 同じ compose ファイルを手元以外（共有の検証サーバー・CI の E2E）で動かした場合 ② 設定上の名前は `db` のまま、libpq の環境変数（`PGHOSTADDR`・`PGSERVICE`）で実際の接続先を変えた場合 ③ broker の URL に `;` 区切りで予備の接続先を書き、手元の redis が止まっている場合（kombu が予備へ切り替える）。いずれも意図的な設定が要る経路で、運用（手元の compose 以外では実行しない・`backend/.env` に本番の値を書かない）で守る（敵対的レビュー 1308 第 3 周で実測）。
@@ -314,7 +314,7 @@ docker compose ps --status running --services > /tmp/i151_running.txt
 
 - **合格**: 判定 1・1b・1c・1d・2a・2b・2c・2d・3s・3a・3b・4a・4b のすべてが exit 0
 - **不合格**: 非ゼロ
-- **判定 2 を 2a・2b に改めた理由と、これが判定を緩める変更であること（2026-10-16・fix-loop）**: `/test` で旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いので worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている（`docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。2a・2b は、タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格にする。**旧判定 2 なら不合格になるログを合格にするので、この 1 種については判定を緩めている**。I151 の「条件緩和による緑化は行わない」に対する例外である。承認は条件付き（「理想的・最適なものを基準として問題ないなら OK」）で、条件を満たしたかの判定は Claude が行い、その判定を、敵対的レビュー `I151_adversarial_review_20261016_1100.md`（上限到達で HIGH）の是正後に、`I151_adversarial_review_20261016_1308.md`（3 周目で新規 Critical/High 0・通過）で検証した。経緯は計画書 §2-8・イシューの Danger Ops に記録した。なお beat の予定ファイル（`backend/celerybeat-schedule`。ホスト側に残る）のため、beat を再起動すると cache-maintenance がすぐ送られる。そのため「再作成から 3 分後」の実行でも、既知の 1 種がほぼ毎回窓に入る。つまりこの除外は、まれなケースではなく毎回働く前提である
+- **判定 2 を 2a・2b に改めた理由と、これが判定を緩める変更であること（2026-10-16・fix-loop）**: `/test` で旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いので worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている（`docs/reviews/closed/I151_fix_diagnosis_20261016_1740.md`）。2a・2b は、タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格にする。**旧判定 2 なら不合格になるログを合格にするので、この 1 種については判定を緩めている**。I151 の「条件緩和による緑化は行わない」に対する例外である。承認は条件付き（「理想的・最適なものを基準として問題ないなら OK」）で、条件を満たしたかの判定は Claude が行い、その判定を、敵対的レビュー `I151_adversarial_review_20261016_1100.md`（上限到達で HIGH）の是正後に、`I151_adversarial_review_20261016_1308.md`（3 周目で新規 Critical/High 0・通過）で検証した。経緯は計画書 §2-8・イシューの Danger Ops に記録した。なお beat の予定ファイル（`backend/celerybeat-schedule`。ホスト側に残る）のため、beat を再起動すると cache-maintenance がすぐ送られる。そのため「再作成から 3 分後」の実行でも、既知の 1 種がほぼ毎回窓に入る。つまりこの除外は、まれなケースではなく毎回働く前提である
 - **更新前と同じであることの実測（2026-10-16）**: 除外する 1 種が依存更新で生じたものではないことを、更新前の依存で実測した。`origin/develop` の `backend/` を取り出し、更新前の requirements（Django 4.2.30）で使い捨てイメージ（`i151-baseline-develop:tmp`）を作った。worker 起動時と同じ手順でタスクを読み込み（`app.loader.import_default_modules()`）、スケジュールとの差を出した。結果は、更新前（Django 4.2.30）・更新後（Django 5.2.17）とも、登録済みタスクの一覧が完全に一致した。スケジュールにあって未登録なのも、どちらも `['core.tasks.cache_maintenance_task']` の 1 件だけだった。つまりこの除外は「更新前と同じ状態であることを実測で確かめた既知の差分」であり、テストの目的（依存更新で celery が壊れていないこと）に照らして、更新後に新しく増えた失敗を見逃すものではない
 - **判定 3・4 を足した理由（2026-10-16・fix-loop 後の敵対的レビュー第 1・2 周）**: 判定 1・2 はログの 3 分窓しか見ない。そのため周期の長いタスク（`cleanup_expired_suggestions_task` は 1 時間ごと）が失敗しても、ERROR 行は 1 時間に 1 本しか出ず、95% 前後の窓で見逃していた（レビューアが実ログで実測）。判定 3 は、スケジュールから導いた全対象タスクの登録を worker ごとに確かめる。判定 4 は、全対象タスクを実際に実行して結果を確かめる。fix-loop で最初に足した判定 3（studylogs 4 タスク名の固定リスト）は、スケジュールへの追加や別 worker の混入を見なかったので置き換えた。第 2 周で、戻り値の `'error'` キーだけでは、ユーザー単位の失敗（`error_count` やログだけに出るもの）を見逃すと分かった。そこで、`error_count` の確認・ローカル実行分のエラーログの件数・「スクリプトの後にログを取る」順番を加えた
 - **判定 1c・2c・2d を足した理由（2026-10-16・fix-loop 後の敵対的レビュー第 3 周）**: 第 2 周で足した判定 1b（`Sending due task`）だけでは、beat の送信の失敗を見逃していた。Celery 5.3.4 の `Scheduler.apply_entry` は、送信の**前**に `Sending due task` を出し、送信が例外になると `ERROR ... Message Error: Couldn't apply scheduled task` と Traceback を出して処理を続ける。さらに判定 1 はスクリプトの実行だけでも満たされる。そのため、beat → broker → worker の経路が壊れていても全判定が合格していた（レビューアが使い捨てのコンテナで送信を失敗させて実測）。2c・2d は beat 側の失敗を、1c は「beat が送ったものが worker に届いて成功した」ことを、端から端まで確かめる。beat 側には既知のエラーが無いので、除外は無い。**再是正（2026-10-16・その後の敵対的レビュー）**: 当初の 1c は「succeeded が 2 件以上（スクリプト分は 1 件）」で、スクリプトを 2 回実行すると、beat から 1 件も届いていなくても合格した（レビューアが、beat だけを別の broker DB へ向けた使い捨て環境で、全 12 判定の合格を再現）。そこで、スクリプトが `update_daily_analytics_task` を worker へ送らない形に改め、1c を「1 件以上」にした。あわせて、無言で停止した beat を拾う判定 1d（コンテナが実行中）を加えた。残る限界: beat のプロセスが動いたままハングした場合は、ハングの前の送信が窓に入っていると見逃しうる。worker を作り直した直後は、作り直し前にキューへ溜まった分（beat が以前に送ったもの）を消化して succeeded を出す。手順は「`up -d --wait` の 1 分後に直近 3 分」なので、作り直した worker の起動直後はいつも窓に入る。そのため、beat は動いて送信も出しているのに worker へ届かない状態でも、キューに過去分が 1 件でも残っていれば 1c は合格しうる（レビューアが使い捨て環境で実測: 起動直後にキューの残り 2 件を消化し、その後 65 秒間の受信 0 件でも 13 判定がすべて合格）。この状態は、2a（worker 側の接続エラー）・2c（beat 側の送信エラー）が出ない形の壊れ方に限られる。worker を作り直した直後に判定するときは、起動から 3 分以上待ってから実行する（キューの残りの消化が窓から外れる）。処理役の上で動く `update_daily_analytics_task` の戻り値（`error_count`）は、どの判定も見ていない（LOCAL 実行に改めたため、判定範囲を狭めた点）。ユーザー単位の失敗は、`logger.error` の行として 2a で拾う
@@ -504,19 +504,19 @@ test "$(gh pr checks 269 --json name -q length)" -eq 6
 
 準備（出力を記録ファイルへ保存し、リポジトリにコミットする）:
 ```bash
-docker compose exec -T backend pip freeze > docs/tests/open/I151_pip_freeze.txt
+docker compose exec -T backend pip freeze > docs/tests/closed/I151_pip_freeze.txt
 ```
 
 判定 1・2: 「決定論ゲート（自動実走）」欄に宣言（`/code-review` が毎回実走）。
 
-- 判定 1（更新後の Django が記録されている）: `grep -qx 'Django==5.2.17' docs/tests/open/I151_pip_freeze.txt`
-- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -qiE 'django[-_]guardian' docs/tests/open/I151_pip_freeze.txt` と `! grep -qiE 'django[-_]extensions' docs/tests/open/I151_pip_freeze.txt` の 2 行
+- 判定 1（更新後の Django が記録されている）: `grep -qx 'Django==5.2.17' docs/tests/closed/I151_pip_freeze.txt`
+- 判定 2（除去した 2 パッケージが記録に現れない＝再ビルド後の実体である）: `! grep -qiE 'django[-_]guardian' docs/tests/closed/I151_pip_freeze.txt` と `! grep -qiE 'django[-_]extensions' docs/tests/closed/I151_pip_freeze.txt` の 2 行
 - **判定式の変遷**: 2026-10-07 に `! grep -qE 'django-(guardian|extensions)=='` を 2 行に分割（正規表現の `|` が gate のチェーン文字ガードに掛かるため）。2026-10-14（敵対的レビュー第 1 周）で厳格化した。旧判定 1 は `-x` が無く `Django==5.2.170` やコメント行に部分一致していた。旧判定 2 は `django-guardian==` 固定で、`django_guardian==`（pip freeze はアンダースコア表記も出す）・大文字表記・`@ file://` 形式を見逃していた
 - **第 2 周での変更（2026-10-14）**: 第 1 周で付けた行頭アンカー `^` を外した。アンカー付きだと、pip freeze の editable install の形（`# Editable install with no version control (django-guardian==2.4.0)` / `-e /src/django-guardian` / `-e git+...#egg=django_extensions`）を見逃すため。追加で検証し、これら 3 形と第 1 周の不合格形がすべて不合格（exit 1）、実記録が合格（exit 0）になることを確認した
 - **false-green 検証（2026-10-14 実施）**: 実記録で判定 1・判定 2（2 行）がすべて exit 0。不合格にすべき 5 形（`Django==5.2.170` → 判定 1 が exit 1／コメント行のみ → 判定 1 が exit 1／アンダースコア表記の旧 freeze → 判定 2 の両行が exit 1／`Django-Guardian==` → guardian 行が exit 1／`django-extensions @ file://` → extensions 行が exit 1）と、ファイル不在（判定 1 が exit 2）をすべて確認
 
 - 判定 3（2026-10-15 追加）: 記録が、宣言側（TC-AUTO-11A / 11B の判定 A-1・B-1）の全 8 固定値と行全体で一致する。決定論ゲート欄に 7 行で宣言（Django は判定 1 と同じ）
-- **判定 3 を足した理由（2026-10-15・敵対的レビュー第 1 周）**: 判定 1・2 は Django の 1 行と、除去した 2 パッケージが無いことしか見ていなかった。そのため、R6 の再ビルド前の古い記録（openai 1.3.0・脆弱な anyio 3.7.1。`git show bca4503:docs/tests/open/I151_pip_freeze.txt`）でも、`Django==5.2.17` の 1 行だけのファイルでも全判定が合格した。R6 の後に記録の更新を忘れても、`/code-review` の決定論ゲートは OK のままだった。判定 3 で、記録を宣言側の固定値に縛る
+- **判定 3 を足した理由（2026-10-15・敵対的レビュー第 1 周）**: 判定 1・2 は Django の 1 行と、除去した 2 パッケージが無いことしか見ていなかった。そのため、R6 の再ビルド前の古い記録（openai 1.3.0・脆弱な anyio 3.7.1。`git show bca4503:docs/tests/closed/I151_pip_freeze.txt`）でも、`Django==5.2.17` の 1 行だけのファイルでも全判定が合格した。R6 の後に記録の更新を忘れても、`/code-review` の決定論ゲートは OK のままだった。判定 3 で、記録を宣言側の固定値に縛る
 - **false-green 検証（2026-10-15 実施）**: 現在の記録で判定 3 の 7 行すべて exit 0。R6 前の記録（bca4503 版）では `openai==3.31.0` の行が exit 1。`Django==5.2.17` だけのファイルでは 7 行すべて exit 1
 - 判定 4（2026-10-15・敵対的レビュー第 2 周で追加）: 宣言ファイル（requirements / requirements-dev）には書かれていない推移的依存 `anyio==4.15.1`（R6 で CVE を解消した対象）と `kombu==5.6.2`（イシュー決定 7-C で据え置きを確認する対象）が記録にある。判定 3 だけでは、コンテナを作り直さずに `backend/requirements*.txt` を連結しただけのファイルでも判定 1〜3 がすべて合格した（判定 3 は宣言の固定値をもう一度書いたものなので、宣言そのものと一致するだけ）。判定 4 は、記録が「実際のコンテナから取った freeze」であることを判定する。再ビルドで anyio / kombu が変わった場合は、記録の更新と同時にこの 2 行も更新する
 - **判定 4 の false-green 検証（2026-10-15 実施）**: 現在の記録で 2 行とも exit 0。requirements 2 ファイルを連結したファイルでは 2 行とも exit 1。R6 前の記録（bca4503 版・anyio 3.7.1）では anyio の行が exit 1
@@ -665,7 +665,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-12 | ✅ 合格 | 2026-08-24 | ステップ 1・2 とも `Tests: 10 passed, 10 total` |
 | TC-AUTO-13 | ✅ 合格 | 2026-08-24 | CI の E2E ジョブで全件 pass（3m10s） |
 | TC-AUTO-14 | ✅ 合格 | 2026-08-24 | 全 6 チェック SUCCESS。`gh pr checks 269` の SUCCESS 以外が 0 件 |
-| TC-AUTO-15 | ✅ 合格 | 2026-08-24 | `docs/tests/open/I151_pip_freeze.txt`（81 行）に記録。判定 1・2 とも exit 0 |
+| TC-AUTO-15 | ✅ 合格 | 2026-08-24 | `docs/tests/closed/I151_pip_freeze.txt`（81 行）に記録。判定 1・2 とも exit 0 |
 | TC-AUTO-16 | ✅ 合格 | 2026-08-24 | `fix(I151)` / `chore(I151)` の 2 コミット。`requirements.txt` を触ったコミットは 1 つ |
 | TC-AUTO-17 | ✅ 合格 | 2026-08-24 | `add_new True` / `add_dup False` / `incr1 1` / `incr2 2`。**当初の `python -c` は Django 未設定で落ちたため `manage.py shell -c` へ是正** |
 
@@ -762,7 +762,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-10 | 除外 1 種が更新前から同じであること | 更新前（`origin/develop`・Django 4.2.30）の使い捨てイメージと、更新後（Django 5.2.17）のイメージで、worker と同じ手順でタスクを読み込んで比較 | 登録済みタスクの一覧が完全に一致。スケジュールにあって未登録なのは、どちらも `['core.tasks.cache_maintenance_task']` の 1 件だけ |
 | TC-AUTO-10 | 判定 1b・2c・2d（beat の送信失敗） | 実際の beat のログの末尾に、Celery 5.3.4 の `apply_entry` と同じ順の行（`Sending due task` → `ERROR ... Message Error: Couldn't apply scheduled task` → Traceback）を足したログ | 1b は exit 0（レビューアの指摘どおり見逃す）。2c・2d が exit 1 で不合格にする |
 | TC-AUTO-10 | （旧 1c・2 件以上の版。現行の 1c（1 件以上）では、この注入は合格になるため、現行の検証は下の行を参照）判定 1・1c（beat から worker に届かない） | 実際の worker のログから `update_daily_analytics_task` の succeeded 行を 1 件（スクリプト分に相当）だけ残したログ | 判定 1 は exit 0（スクリプトの実行だけで満たされる）。1c が exit 1 で不合格にする |
-| TC-AUTO-10 | （旧ガード・DEBUG だけを見る版。現行のメッセージは `NG PROBE ABORTED: not the local compose environment (...)`）確認スクリプトの開発環境ガード | `docker compose exec -T -e DEBUG=False backend python manage.py shell < docs/tests/open/I151_celery_probe.py` | `NG PROBE ABORTED: settings.DEBUG is False (development only)` だけを出して終了し、タスクは 1 つも実行しない。判定 3s・3a・3b・4a・4b が不合格になる |
+| TC-AUTO-10 | （旧ガード・DEBUG だけを見る版。現行のメッセージは `NG PROBE ABORTED: not the local compose environment (...)`）確認スクリプトの開発環境ガード | `docker compose exec -T -e DEBUG=False backend python manage.py shell < docs/tests/closed/I151_celery_probe.py` | `NG PROBE ABORTED: settings.DEBUG is False (development only)` だけを出して終了し、タスクは 1 つも実行しない。判定 3s・3a・3b・4a・4b が不合格になる |
 | TC-AUTO-10 | 判定 1c（第 1 周の再是正版・1 件以上） | スクリプトを 2 回続けて実行したうえで、worker のログから `update_daily_analytics_task` の succeeded 行をすべて除いたログ（beat から届かない状態） | 1c が exit 1。スクリプトは `update_daily_analytics_task` を worker へ送らない（2 回とも `LOCAL`）ので、再実行しても件数に混ざらない |
 | TC-AUTO-10 | 判定 1d（コンテナの実行状態） | 実行中のサービスの一覧から `celery-beat`／`celery` を除いた一覧 | それぞれ該当の行が exit 1 |
 | TC-AUTO-10 | 確認スクリプトのガード（接続先） | `-e DB_HOST=prod-db.example.com`／`-e REDIS_URL=redis://prod-redis.example.com:6379/0` を付けて実行 | どちらも `NG PROBE ABORTED: not the local compose environment ...` だけを出して終了し、タスクは実行しない |
@@ -784,7 +784,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 - **なぜ失敗したか**: `/test` で TC-AUTO-10 の旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いため worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている。I151 の差分（`settings.py` の 2 行削除）は関係しない。これまでの実施（2026-08-24 / 2026-10-14）が合格していた理由は、エラーが判定窓の 3 分に入らなかったためと考えられる（両日の実行時刻と beat の送信時刻は突き合わせていない）。2026-10-16 08:26 に窓に入った経緯は次のとおり（2026-10-16・敵対的レビューで訂正。当初は「コンテナの作り直しの間に溜まったメッセージが起動時に一斉に届いた」と書いていたが誤り。コンテナは 01:44 JST に起動したまま動き続けていた）。worker と beat のログは 08:00:32〜08:26:19 に途切れており（ホストのスリープからの復帰とみられる）、08:26:19 に beat が期限を過ぎた予定をまとめて送った。その中に cache-maintenance が含まれていた。また beat の予定ファイル（`backend/celerybeat-schedule`。ホスト側に残る）のため、beat を再起動すると cache-maintenance がすぐに送られる（01:44:38 に実例あり）。したがって「再作成から 1 分後」に実行する手順では、既知のエラーはほぼ毎回窓に入る。**判定がタイミング次第でしか既存エラーを検出できない設計だった**ことが、本当の弱点である
 - **何を変えたか**（docs のみ・コードは変えていない。計画外の実装を I151 に混ぜないため）:
   - 判定 2 を 2a・2b に改めた。タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格になる。**この 1 種については判定を緩める変更である**
-  - 判定 3 を追加した（fix-loop 時点は studylogs 4 タスク名の固定リスト）。その後の敵対的レビュー第 1 周で、固定リストでは周期の長いタスクの実行時の失敗・スケジュールへの追加・別 worker の混入を見逃すと分かった。そこで `docs/tests/open/I151_celery_probe.py` を使う判定 3s・3a・3b（スケジュールから導いた全タスクの登録・worker 1 つ）と判定 4a・4b（全タスクを実際に実行した戻り値）に置き換えた。第 2 周では、戻り値の `'error'` キーだけではユーザー単位の失敗を見逃すこと、リマインダー送信が実メールを送りうることが分かった。そこで、`error_count` の確認・送信タスクの locmem 実行とエラーログの件数・「スクリプト → ログ」の順番・beat の生存（判定 1b）を加えた
+  - 判定 3 を追加した（fix-loop 時点は studylogs 4 タスク名の固定リスト）。その後の敵対的レビュー第 1 周で、固定リストでは周期の長いタスクの実行時の失敗・スケジュールへの追加・別 worker の混入を見逃すと分かった。そこで `docs/tests/closed/I151_celery_probe.py` を使う判定 3s・3a・3b（スケジュールから導いた全タスクの登録・worker 1 つ）と判定 4a・4b（全タスクを実際に実行した戻り値）に置き換えた。第 2 周では、戻り値の `'error'` キーだけではユーザー単位の失敗を見逃すこと、リマインダー送信が実メールを送りうることが分かった。そこで、`error_count` の確認・送信タスクの locmem 実行とエラーログの件数・「スクリプト → ログ」の順番・beat の生存（判定 1b）を加えた
   - 除外する 1 種が更新前（Django 4.2.30）でも同じだったことを、使い捨てイメージで実測した。緩める変更は、条件付きのユーザー承認（2026-10-16「理想的・最適なものを基準として問題ないなら OK」。条件の充足は Claude が判定し、敵対的レビュー `I151_adversarial_review_20261016_1308.md`（3 周目で新規 Critical/High 0・通過）で検証済み）のうえで「条件緩和しない」の例外として記録した
   - 敵対的レビュー 1100（上限到達・HIGH）を受けた是正: beat のログの ERROR / Traceback（判定 2c・2d）と、beat から worker への受け渡し（判定 1c）を追加した。beat の `Sending due task` は送信の前に出る行なので、それだけで生存を判断しない。確認スクリプトに開発環境ガードを付けた。実メール対策は「スクリプトが足す 1 回分だけ」と範囲を正しく書き、beat の定期実行による危険を記録した。I150 / I157 への注記は、GitHub の本文（#266 / #274）に反映した
   - 敵対的レビュー 1308 の第 1 周を受けた再是正: 判定 1c がスクリプトの再実行でごまかせたので、スクリプトが判定対象のタスクを worker へ送らない形に改めた（判定に使う証拠と、テストが自分で作る証拠を分ける）。無言で停止する beat を拾う判定 1d を加えた。開発環境ガードは `DEBUG` だけでなく接続先も見る形にした（環境変数が無いと有効になる設定に頼らない）

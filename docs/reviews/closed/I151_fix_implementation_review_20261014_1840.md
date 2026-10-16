@@ -12,7 +12,7 @@
 
 **解消確認**:
 - `Glob("backend/tmp_test_images/**")` → **No files found**（ディレクトリごと削除済みを実確認）
-- 解消記録 `docs/reviews/I151_fix_implementation_resolution_20261014_1835.md` が存在し、削除経緯・`git status` での確認結果・`backend/media/org/personal/subjects/i073-manual/` 7 件の残置判断（`.git/info/exclude` 追加）が明記されている
+- 解消記録 `docs/reviews/closed/I151_fix_implementation_resolution_20261014_1835.md` が存在し、削除経緯・`git status` での確認結果・`backend/media/org/personal/subjects/i073-manual/` 7 件の残置判断（`.git/info/exclude` 追加）が明記されている
 - 未追跡ファイルの削除は `git diff` に現れないため fail-closed 原則上、上記 2 点の実証で代替する――これは適正
 
 ### 各観点の評価

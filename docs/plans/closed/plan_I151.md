@@ -4,8 +4,8 @@
 - **計画書ID**: plan_I151
 - **関連イシュー**: #267
 - **Draft PR**: #269
-- **作成根拠資料**: docs/issues/open/I151.md（起点イシュー）
-- **実装後評価**: docs/reviews/open/I151_review.md
+- **作成根拠資料**: docs/issues/closed/I151.md（起点イシュー）
+- **実装後評価**: docs/reviews/closed/I151_review.md
 - **作成日**: 2026-08-22
 - **ブランチ**: `feature/I151-django-52-lts-upgrade`（`origin/develop` 起点）
 
@@ -145,10 +145,10 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 
 - `backend/core/storage_service.py:2` の `import imghdr` に `DeprecationWarning`（Python 3.13 で削除予定）。**本イシューでは Python 3.11 のままなので影響なし**。将来の Python 更新時の課題として記録のみ。
 - `rest_framework/pagination.py` の `UnorderedObjectListWarning`（`problems.models.Subject` の未ソート QuerySet）。ベースラインで既に出ている警告であり、本イシューの対象外。
-- **celery の `core.tasks` が未登録（2026-10-16・`/test` で判明。I004＝2026-03-20 からの既存不具合）**: `core/celery.py:52` の beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いため worker が登録しておらず、届くたびに `Received unregistered task` の ERROR と Traceback を出して捨てている。試しに直接実行すると、中で呼ぶ `cache_service.get_cache_stats()` は `_cache` 不在で失敗し、処理は空振りする。I151 の差分（`settings.py` の 2 行削除）とは無関係で、celery の版も据え置き。**本イシューでは直さず、別イシューで根治する**（登録方式と、空振りしているタスクを残すか消すかの設計判断を伴うため。診断は `docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。TC-AUTO-10 ではこの 1 種だけを暫定で除外する（§11 の celery 検証方針を参照）。AC-15（イシュー決定 7-B「成功まで確かめる」）は、beat スケジュール 5 件のうち、この既知の 1 件を除く 4 件の成功で判定する（2026-10-16 の解釈。I151 では直さない既存不具合のため）。
+- **celery の `core.tasks` が未登録（2026-10-16・`/test` で判明。I004＝2026-03-20 からの既存不具合）**: `core/celery.py:52` の beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いため worker が登録しておらず、届くたびに `Received unregistered task` の ERROR と Traceback を出して捨てている。試しに直接実行すると、中で呼ぶ `cache_service.get_cache_stats()` は `_cache` 不在で失敗し、処理は空振りする。I151 の差分（`settings.py` の 2 行削除）とは無関係で、celery の版も据え置き。**本イシューでは直さず、別イシューで根治する**（登録方式と、空振りしているタスクを残すか消すかの設計判断を伴うため。診断は `docs/reviews/closed/I151_fix_diagnosis_20261016_1740.md`）。TC-AUTO-10 ではこの 1 種だけを暫定で除外する（§11 の celery 検証方針を参照）。AC-15（イシュー決定 7-B「成功まで確かめる」）は、beat スケジュール 5 件のうち、この既知の 1 件を除く 4 件の成功で判定する（2026-10-16 の解釈。I151 では直さない既存不具合のため）。
   - **更新前と同じであることの実測（2026-10-16）**: `origin/develop` の `backend/` と更新前の requirements（Django 4.2.30）で使い捨てイメージを作り、worker と同じ手順でタスクを読み込んで、更新後（Django 5.2.17）と比べた。登録済みタスクの一覧は完全に一致し、スケジュールにあって未登録なのは、どちらも `core.tasks.cache_maintenance_task` の 1 件だけだった。この 1 件は、依存更新で生じたものではないことが実測で確かめられた。
   - **「条件緩和しない」の例外としての承認（2026-10-16）**: TC-AUTO-10 の判定 2a・2b で、この 1 件だけを除外するのは、旧判定 2 より合否基準を緩める変更である。fix-loop で案 A を承認いただいた時点では、私（Claude）が「判定は厳しくなる」と誤って説明していた。そのため、敵対的レビューの指摘を受けて、改めて判断を仰いだ。ユーザーの回答は「理想的・最適なものを基準として問題ないなら OK」（条件付きの承認）。理想の基準で見ると、除外の根拠がコードを読んだだけで実測ではない点と、確認スクリプトが実メールを送りうる点が不十分だった。そこで、更新前の実測（上記）と、確認スクリプトが足す 1 回分のメール送信の停止を加えた。条件を満たしたかの判定は Claude が行い、例外として適用した。その判定の検証は、敵対的レビュー（`I151_adversarial_review_20261016_1100.md`＝上限到達で HIGH。その是正後の `I151_adversarial_review_20261016_1308.md`（1158 の `/code-review` に続くステージ））で行う。**`I151_adversarial_review_20261016_1308.md` は 3 周目で新規 Critical/High 0 となり通過した（VERDICT: OK）。この例外は検証済みである**（同じ承認に触れている箇所＝計画書ステップ 1 の注記・§テスト、イシューの決定 7-B と Danger Ops、auto_test の冒頭注記・TC-AUTO-10 本文・再発防止記録、review.md の結果欄も、同じ状態に更新した）。除外は根治イシューのマージまでの暫定である（TC-AUTO-10 本文）
-  - **確認スクリプトの副作用（Danger Ops の扱い）**: `docs/tests/open/I151_celery_probe.py` は、beat が定期実行するのと同じ 4 タスクを 1 回ずつ余分に実行する（期限切れ提案の無効化など）。外部送信を伴う `send_study_reminders_task` は、スクリプトが足す 1 回分だけ、メールを locmem に溜める設定で実行し、実際には送らない。開発環境（手元の compose）専用で、CI・本番相当の環境では実行しない。スクリプトは、`settings.DEBUG` が True で、かつ DB の接続先が `db`・broker の URL を分解したホスト名が `redis`（compose のサービス名）のときだけ実行し、それ以外は何も実行せずに終わる（`DEBUG` は環境変数が無いと True になるので、`DEBUG` だけには頼らない）。**限界**: 同じ compose ファイルを手元以外（共有の検証サーバー・CI の E2E）で動かした場合は、条件がすべて成り立つので区別できない。CI では TC-AUTO-10 を実行しない、という運用で守る。ほかに、libpq の環境変数（`PGHOSTADDR` など）で実際の DB の接続先を変えた場合と、broker の URL に `;` 区切りで予備の接続先を書いた場合も見分けられない（敵対的レビュー 1308 第 3 周で実測。意図的な設定が要る経路で、`backend/.env` に本番の値を書かない運用で守る）
+  - **確認スクリプトの副作用（Danger Ops の扱い）**: `docs/tests/closed/I151_celery_probe.py` は、beat が定期実行するのと同じ 4 タスクを 1 回ずつ余分に実行する（期限切れ提案の無効化など）。外部送信を伴う `send_study_reminders_task` は、スクリプトが足す 1 回分だけ、メールを locmem に溜める設定で実行し、実際には送らない。開発環境（手元の compose）専用で、CI・本番相当の環境では実行しない。スクリプトは、`settings.DEBUG` が True で、かつ DB の接続先が `db`・broker の URL を分解したホスト名が `redis`（compose のサービス名）のときだけ実行し、それ以外は何も実行せずに終わる（`DEBUG` は環境変数が無いと True になるので、`DEBUG` だけには頼らない）。**限界**: 同じ compose ファイルを手元以外（共有の検証サーバー・CI の E2E）で動かした場合は、条件がすべて成り立つので区別できない。CI では TC-AUTO-10 を実行しない、という運用で守る。ほかに、libpq の環境変数（`PGHOSTADDR` など）で実際の DB の接続先を変えた場合と、broker の URL に `;` 区切りで予備の接続先を書いた場合も見分けられない（敵対的レビュー 1308 第 3 周で実測。意図的な設定が要る経路で、`backend/.env` に本番の値を書かない運用で守る）
   - **開発環境の常設設定による実メールの危険（2026-10-16・敵対的レビュー第 3 周で判明。I151 の範囲外の既存の問題）**: beat は `send_study_reminders_task` を 60 秒ごとに worker へ送り、worker の `EMAIL_BACKEND` は SMTP（SendGrid のキーあり）で固定されている。復習カードがある状態で celery が動いていると、24 時間学習していない有効ユーザー（実在とみられる gmail.com のアドレスを含む）に、1 分ごとにメールが送られうる。いま送信されないのは、復習カードが 0 件で、さらに下の既存不具合で送信処理が必ず失敗するためである。復習カードは、学習プランやカードの API を直接呼んだときにだけ作られる（frontend と E2E にその呼び出しは無い）。TC-AUTO-10 と手動テストでは、カードが 1 件でもある状態で celery を動かさない（カードが残る限り、24 時間学習していない利用者へ毎分の送信が試みられる）。根治（開発環境では明示しない限り送信しない設定）は、I151 の完了後に起票するイシューで行う
   - **`send_study_reminders_task` の送信処理が必ず失敗する（同・既存不具合）**: 送信処理が呼ぶ `User.get_full_name` が、カスタムの `User(AbstractBaseUser, PermissionsMixin)` に存在しないので、復習カードを持つユーザーごとに AttributeError になり、`send_mail` まで届かない（Django 2.0 以降ずっと同じで、I151 による退行ではない）。直後の `or user.username` の `username` も User に存在しない。tasks を参照するテストは 0 件で、この経路を確かめるテストは無い。**この既存不具合は、開発環境の実メールを止めている最後の壁でもある**（`get_full_name` だけを直すと、名前のある有効ユーザー 8 人に、開発環境から毎分メールが送られうる状態になる）。そのため後続イシューでは、**開発環境の送信停止を先に入れ、送信処理の修正はその後に行う**
 
@@ -175,7 +175,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-13 | E2E（Playwright）が全件 pass | TC-AUTO-13 |
 | AC-14 | CI の全 6 チェックが SUCCESS | TC-AUTO-14 |
 | AC-15 | celery worker のログでタスクの**成功**が確認できる（2026-10-16 の解釈: beat スケジュール 5 件のうち、更新前から未登録の既知 1 件を除く 4 件の成功を、ログと実際の実行結果で確認する。§2-8） | TC-AUTO-10 |
-| AC-16 | 再ビルド後の `pip freeze` を `docs/tests/open/I151_pip_freeze.txt` に記録している | TC-AUTO-15 |
+| AC-16 | 再ビルド後の `pip freeze` を `docs/tests/closed/I151_pip_freeze.txt` に記録している | TC-AUTO-15 |
 | AC-17 | コミットが 2 段に分かれている（2026-10-14 追補: R6 発動による openai 再固定は、変更の出どころを追えるよう 3 つ目の `fix(I151)` コミットに分ける。2026-10-15 訂正: このコミットだけを取り消すと openai 1.3.0（`anyio<4`）に戻り、anyio の CVE 2 件で必須チェック `pip-audit` が必ず落ちる。したがって**単独では取り消せない**。問題が出たときは §8 の前方修正で直す） | TC-AUTO-16 |
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
 | AC-19 | 後続 3 件を起票している。2026-10-16 追補: 4 件目（celery `core.tasks` 未登録の根治）は、I151 の完了後に起票する（ユーザー指示）。I151 の完了までに満たすのは「4 件目のタイトル・受け入れ条件・実施順の制約が確定し、記録されている」こと（ステップ 4・手動テストの後続イシュー欄・GitHub の I150（#266）・I157（#274）の本文への注記。ローカルの未追跡ファイルは根拠にしない。2026-10-16 訂正） | 手動 No.8 |
@@ -212,7 +212,7 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 |---|---|---|
 | Backend（変更） | `backend/requirements.txt` | 6 パッケージのバージョン更新（2026-10-14 の R6 で openai を追加し 5→6）＋`django-guardian` / `django-extensions` の 2 行削除 |
 | Backend（変更） | `backend/requirements-dev.txt` | `pytest-django` 4.9.0→4.14.0（1 段目）／`pytest` 8.3.4→9.0.3（2 段目） |
-| 記録（新規） | `docs/tests/open/I151_pip_freeze.txt` | 再ビルド後の `pip freeze` の出力。推移的依存が変動した際の切り分け材料（TC-AUTO-15 の判定対象） |
+| 記録（新規） | `docs/tests/closed/I151_pip_freeze.txt` | 再ビルド後の `pip freeze` の出力。推移的依存が変動した際の切り分け材料（TC-AUTO-15 の判定対象） |
 | Backend（変更） | `backend/core/settings.py` | `THIRD_PARTY_APPS` から `'django_extensions',`（38 行目）と `'guardian',`（40 行目）の**2 行**を削除 |
 | Backend（変更なし・検証対象） | `backend/accounts/views.py` | `@ratelimit` を 7 箇所で使用。django-ratelimit の Django 5.2 互換の影響を最も受ける |
 | Backend（変更なし・検証対象） | `backend/core/exceptions.py` | DRF の `exception_handler` / `set_rollback` を使用。DRF 3.18 の API 互換の影響を受ける |
@@ -327,14 +327,14 @@ THIRD_PARTY_APPS = [
 ### ステップ 3: CI での検証
 1. Draft PR #269 に 2 コミットを push する。
 2. CI の全 6 チェックの結果を確認する → TC-AUTO-13 / TC-AUTO-14 参照。
-3. `pip freeze` の出力を `docs/tests/open/I151_pip_freeze.txt` へ保存しコミットする → TC-AUTO-15 参照。
+3. `pip freeze` の出力を `docs/tests/closed/I151_pip_freeze.txt` へ保存しコミットする → TC-AUTO-15 参照。
 4. コミットが 2 段に分かれていることを確認する → TC-AUTO-16 参照。
 
 ### ステップ 4: 後続イシューの起票
 イシュー決定 2 / 7-C / 7-D に基づき 3 件を起票する（タイトル案はイシュー本文に記載済み）→ 手動テスト No.8 参照。**django-extensions の依存移動イシューは決定 7 の変更により不要になった**。**2026-10-16 追加（fix-loop）**: §2-8 の celery `core.tasks` 未登録の既存不具合を、別イシューとして起票する（タイトル案:「celery の core.tasks が未登録で cache_maintenance_task が 30 分ごとに破棄される問題を修正（キャッシュ統計も取得できていない）」）。受け入れ条件に「`core.tasks` を worker が登録する仕組み（登録方式）を整え、`core/tasks.py` のタスクが worker の登録一覧に載ること（cache-maintenance を残すか消すかに関わらず必須。I150 がこの前提で `core/tasks.py` にタスクを足すため）」と、「TC-AUTO-10 から既知 1 種の除外（2a・2b のパターンと `I151_celery_probe.py` の `KNOWN_UNREGISTERED`）を外し、判定 3s・4a の期待値（`SCHEDULED 5 TARGETS 4`・`targets=4 ok=4`）を根治後のスケジュールに合わせて改めたうえで、合格すること」を入れる（除外を外すだけでは 3s・4a は必ず不合格になる）。**起票は I151 の完了後に行う**（2026-10-16 ユーザー指示）。これで後続イシューは計 4 件になる（AC-19）。**実施順の制約（2026-10-16・敵対的レビュー第 1 周で追加）**: ① 未着手の I150（失効トークンの定期削除）は `core/tasks.py` にタスクを足して beat に載せる計画である。この根治イシューより先に I150 を実装すると、単体テストは通るのに worker がタスクを未登録として捨て続け、トークン表が増え続ける。そのため**根治イシューを I150 より先に実施する**（I150 の計画時に、根治イシューが**マージ済み**であることを前提として確認する。この制約は GitHub の I150（#266）の本文に注記済み。2026-10-16）。根治イシューを起票したら、#266・#274 の注記にある根治イシューのタイトルを、イシュー番号へのリンクに更新する。② 起票済みの I157（beat スケジュールの環境別切り替え・#274）は、AC で cache-maintenance を含む 5 件すべての crontab 化を求めている。これは根治イシューで決める「このタスクを残すか消すか」を、先に「残す」と決める形になる。根治イシューの起票時に、cache-maintenance の扱いをどちらが持つかを決め、I157 の AC を調整する（この調整が必要なことは、GitHub の I157（#274）の本文に注記済み。2026-10-16）
 
 ### ステップ 5: 記録の完成
-`docs/tests/open/I151_auto_test.md` / `I151_manual_test.md` に結果を記入し、認可・テナント境界テストのモジュール名と前後の件数を記録する → 手動テスト No.6 参照。
+`docs/tests/closed/I151_auto_test.md` / `I151_manual_test.md` に結果を記入し、認可・テナント境界テストのモジュール名と前後の件数を記録する → 手動テスト No.6 参照。
 
 **I151 の完了後に起票するイシューの引き継ぎ（2026-10-16 追加・同日に経路を改訂）**: AC-19 は「4 件目の記録の確定」までを I151 の完了条件にしたので、完了後の起票は、どの AC も追わない。`/close` のスキルと PR テンプレートには「後続タスク」の節が無く、手順上は `/retro`（起票を判断する場）が `/close` より先にある。そこで次の 2 か所に載せる。① `/retro I151` の是正・予防処置の候補に、次の 6 件を必ず含める（起票の判断と実行は `/retro` で行う）。② PR #269 の本文に「後続タスク（I151 の完了後に起票）」の節を今の時点で書き込み、`/close` で本文を書き直すときも残す（マージ後の参照用）。
 1. celery の `core.tasks` が未登録で cache_maintenance_task が 30 分ごとに破棄される問題の根治（ステップ 4。I150 より先・I157 と調整。TC-AUTO-10 の除外の撤去）
@@ -430,7 +430,7 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 ## 11. 運用設計（非同期処理があるため記載）
 
 - **構造化ログ方針**: 変更なし。`core/enhanced_logging.py` / `core/middleware.py` のログ出力に手を入れない。`custom_exception_handler`（`core/exceptions.py`）も変更しない。（2026-10-15 訂正: 当初は「I142 で整備したエラーハンドリング規約（ログ＋統一 JSON 500）」と書いていた。しかし I142（PR #256）は未マージで、本ブランチの `core/exceptions.py` は I142 前の版である。ロガーも無く、DRF 以外の例外は Django 標準の HTML 500 になる。I151 で確認できるのは「この I142 前のハンドラの挙動が、依存更新の前後で変わらない」ことまでで、「ログ＋統一 JSON 500」は担保していない）
-- **celery の検証方針**: worker と beat を再ビルド後に起動し、beat がスケジュールしたタスクが**成功**するまでをログで確認する（TC-AUTO-10）。`update_daily_analytics_task` は 30 秒間隔のため 1 分以内に判定できる。**2026-10-16 改訂（fix-loop）**: エラーの判定は、§2-8 の既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）だけを、ERROR と Traceback それぞれの件数一致で除外する形にした（それ以外のエラーが 1 行でもあれば不合格）。この 1 種については合否基準を緩める変更である。除外は、別イシューのマージまでの暫定とする。**2026-10-16 再改訂（fix-loop 後の敵対的レビュー第 1 周）**: ログの 3 分窓だけでは、周期の長いタスク（1 時間ごとの `cleanup_expired_suggestions_task` など）の実行時の失敗を 95% 前後の窓で見逃す。studylogs のタスクは例外を捕まえて `{'error': ...}` を返し、celery 上は succeeded になる点も、ログの成功判定では見抜けない。そこで `docs/tests/open/I151_celery_probe.py` で、`beat_schedule` から導いた全対象タスクについて、worker ごとの登録（応答 worker は 1 つ）と、実際の実行結果を確かめる判定を加えた。**第 2 周の改訂**: 実行結果は、戻り値の `'error'` キーに加えて `error_count` も見る。送信タスク（`send_study_reminders_task`）は実メールを送らないよう、スクリプトのプロセス内で locmem にして実行し、そのエラーログの件数も見る。手順は「スクリプト → ログ」の順にし、スクリプトが worker で動かしたタスクのエラーが必ずログ判定の窓に入るようにした。**第 3 周の改訂**: beat の送信（判定 1b）だけでなく、beat のログの ERROR / Traceback が 0 件であること（2c・2d）と、beat が送ったタスクが worker に届いて成功したこと（1c）を確かめる。**その後の再是正（敵対的レビュー 1308）**: 1c はスクリプトの再実行でごまかせたので、スクリプトが `update_daily_analytics_task` を worker へ送らない形に改め、1c を「1 件以上」にした（worker の succeeded はすべて beat 由来になる）。無言で停止した beat を拾う判定 1d（beat と worker のコンテナが実行中）を加えた。残る限界は、worker 起動直後のキューの残りの消化（起動から 3 分以上待てば窓から外れる）と、beat のハング。限界として、開発 DB には復習カードが 0 件で直近の学習記録もほとんど無いので、ユーザーごとのループの中の処理はほぼ通らない。この経路を確かめるテストは無い（tasks を参照するテストは 0 件。2026-10-16 訂正）
+- **celery の検証方針**: worker と beat を再ビルド後に起動し、beat がスケジュールしたタスクが**成功**するまでをログで確認する（TC-AUTO-10）。`update_daily_analytics_task` は 30 秒間隔のため 1 分以内に判定できる。**2026-10-16 改訂（fix-loop）**: エラーの判定は、§2-8 の既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）だけを、ERROR と Traceback それぞれの件数一致で除外する形にした（それ以外のエラーが 1 行でもあれば不合格）。この 1 種については合否基準を緩める変更である。除外は、別イシューのマージまでの暫定とする。**2026-10-16 再改訂（fix-loop 後の敵対的レビュー第 1 周）**: ログの 3 分窓だけでは、周期の長いタスク（1 時間ごとの `cleanup_expired_suggestions_task` など）の実行時の失敗を 95% 前後の窓で見逃す。studylogs のタスクは例外を捕まえて `{'error': ...}` を返し、celery 上は succeeded になる点も、ログの成功判定では見抜けない。そこで `docs/tests/closed/I151_celery_probe.py` で、`beat_schedule` から導いた全対象タスクについて、worker ごとの登録（応答 worker は 1 つ）と、実際の実行結果を確かめる判定を加えた。**第 2 周の改訂**: 実行結果は、戻り値の `'error'` キーに加えて `error_count` も見る。送信タスク（`send_study_reminders_task`）は実メールを送らないよう、スクリプトのプロセス内で locmem にして実行し、そのエラーログの件数も見る。手順は「スクリプト → ログ」の順にし、スクリプトが worker で動かしたタスクのエラーが必ずログ判定の窓に入るようにした。**第 3 周の改訂**: beat の送信（判定 1b）だけでなく、beat のログの ERROR / Traceback が 0 件であること（2c・2d）と、beat が送ったタスクが worker に届いて成功したこと（1c）を確かめる。**その後の再是正（敵対的レビュー 1308）**: 1c はスクリプトの再実行でごまかせたので、スクリプトが `update_daily_analytics_task` を worker へ送らない形に改め、1c を「1 件以上」にした（worker の succeeded はすべて beat 由来になる）。無言で停止した beat を拾う判定 1d（beat と worker のコンテナが実行中）を加えた。残る限界は、worker 起動直後のキューの残りの消化（起動から 3 分以上待てば窓から外れる）と、beat のハング。限界として、開発 DB には復習カードが 0 件で直近の学習記録もほとんど無いので、ユーザーごとのループの中の処理はほぼ通らない。この経路を確かめるテストは無い（tasks を参照するテストは 0 件。2026-10-16 訂正）
 - **タイムアウト・リトライ**: 変更なし（`studylogs/tasks.py` の `max_retries=3` 等はそのまま）。
 - **Feature Flag・段階リリース**: 不要。依存更新は全体一括で適用され、部分的に有効化する意味がない。マージ前の切り戻しは §8 のとおりコミット単位で行い、develop マージ後は §8 のとおり前方修正で直す（revert PR は CI の必須チェックで必ず落ちるため使えない。2026-10-14 訂正）。
 - **beat スケジュールの環境別切り替え**: `backend/core/celery.py` が開発用の短間隔で固定されている件は**本イシューの範囲外**（イシュー決定 7-D・別イシューで対応）。
@@ -551,7 +551,7 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 |--------|------|--------------|-------------------------------|
 | Medium | 依存ライブラリ／認証 | **レート制限がフェイルオープンしうる**（2026-10-15 訂正: 実際の失敗時の向きは**フェイルクローズ**で、全利用者のログインが 403 になる＝可用性の喪失。下の「残余リスク処遇」の訂正注記を参照。対処の TC-AUTO-17 は、どちら向きの故障も検出できるので有効なまま）。`@ratelimit`（ログイン 5/5m・登録 10/5m・パスワードリセット 3/15m 等のブルートフォース防御）はカウンタを `default` キャッシュに保存する（`RATELIMIT_USE_CACHE = 'default'`）。その `default` は本 PR で **django-redis 5.4.0 → 7.0.0（メジャー 2 段）** に更新され、かつ `IGNORE_EXCEPTIONS: True` により**キャッシュ操作の失敗が例外にならず握り潰される**。カウンタが機能しなくなってもエラーは出ない（初版はここで「総当たり防御だけが静かに消える」と書いていたが誤り。django-ratelimit はカウンタを取得できないと遮断するので、実際の症状は全利用者の 403。2026-10-15 訂正）。さらに既存テスト `core/tests/test_I127_throttling.py` は 4 キャッシュすべてを `LocMemCache` に差し替えるため、**django-redis は 1 度も検証されない**（94 件が全部 pass しても検出できない） | **TC-AUTO-17 を追加し、再ビルド後の実コンテナで `cache.add` / `cache.incr` の動作を必須確認とする**（django-ratelimit が実際に使う操作を `django_ratelimit.core` の実測で特定）。設計時点でホスト venv 上の django-redis 7.0.0 に対し `add_new True` / `add_dup False` / `incr 1→2` を確認済みだが、ホスト venv は合否根拠にしないため実コンテナで再実行する。**`IGNORE_EXCEPTIONS` を無効化する変更は本 PR では行わない**（キャッシュ障害時にアプリ全体を落とす設計変更になるため。恒久対応は別途判断） |
 | Low | 認証・認可 | `REST_FRAMEWORK` の `DEFAULT_PERMISSION_CLASSES` が **空リスト**（既存設計）。`permission_classes` を明示し忘れたビューは無防備になる。本 PR は DRF を 3.15 → 3.18 に上げるため、空リストの解釈が変わらないことの確認が要る | **本 PR では設定を変更しない**（変更すると全ビューの挙動が動き、脆弱性解消という目的から外れる）。DRF 更新後も認可判定が不変であることを、既存の認可・テナント境界 9 モジュール（§7・当初 7、2026-10-14 に 2 追加）と全 94 件で確認する。空リストの是正は本 PR のスコープ外 |
-| Low | 機密情報 | 新規に `docs/tests/open/I151_pip_freeze.txt` をコミットする（TC-AUTO-15 の記録） | `pip freeze` の出力は**パッケージ名とバージョンのみ**で認証情報を含まない。コミット前に内容を確認する。pre-commit の detect-secrets も通過させる |
+| Low | 機密情報 | 新規に `docs/tests/closed/I151_pip_freeze.txt` をコミットする（TC-AUTO-15 の記録） | `pip freeze` の出力は**パッケージ名とバージョンのみ**で認証情報を含まない。コミット前に内容を確認する。pre-commit の detect-secrets も通過させる |
 | — | マルチテナント | なし。組織スコープの絞り込みは自前実装であり、除去する guardian / django-extensions のいずれにも依存していない（§2-4 / §2-4b で実測） | 既存の認可・テナント境界テストで無退行を確認 |
 | — | 入力検証 | なし。シリアライザ・バリデータに変更なし | — |
 | — | OWASP Top 10 | **A06（脆弱で古くなったコンポーネント）を直接是正するのが本 PR の目的**。XSS / SQLi / CSRF / IDOR に関わるコード変更なし。`SECURE_BROWSER_XSS_FILTER` / `SECURE_CONTENT_TYPE_NOSNIFF` / `X_FRAME_OPTIONS='DENY'` / 本番時の HSTS 設定はいずれも変更しない | — |
@@ -595,11 +595,11 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 - **Redis 障害時の範囲（2026-10-16・第 3 周で追加）**: `IGNORE_EXCEPTIONS` があるのは `default` だけである。`sessions` / `problems` / `analytics` の各キャッシュには無く、`SESSION_ENGINE` もキャッシュを使う（`settings.py:235-262, 319-320`）。障害時は、これらを使う経路（admin ログインなど）が 403 ではなく例外（500）になる見込みである（静的読解・未実測）。「キャッシュ障害時の設計」を判断するときは、この範囲も含める
 
 ## レビュー結果
-- [20261016_1358 判定: ✅ 完了](../../reviews/I151_plan_review_20261016_1358.md)
-- [20261016_1130 判定: ✅ 完了](../../reviews/I151_plan_review_20261016_1130.md)
-- [20261016_0922 判定: ✅ 完了](../../reviews/I151_plan_review_20261016_0922.md)
-- [20260823_1437 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1437.md)
-- [20260823_1428 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1428.md)
-- [20260823_1419 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1419.md)
-- [20260823_1344 判定: ✅ 完了](../../reviews/I151_plan_review_20260823_1344.md)
-- [20260822_1809 判定: ✅ 完了](../../reviews/I151_plan_review_20260822_1809.md)
+- [20261016_1358 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20261016_1358.md)
+- [20261016_1130 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20261016_1130.md)
+- [20261016_0922 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20261016_0922.md)
+- [20260823_1437 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20260823_1437.md)
+- [20260823_1428 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20260823_1428.md)
+- [20260823_1419 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20260823_1419.md)
+- [20260823_1344 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20260823_1344.md)
+- [20260822_1809 判定: ✅ 完了](../../reviews/closed/I151_plan_review_20260822_1809.md)

@@ -1,6 +1,6 @@
 # 敵対的レビュー [I151] ── 2026-10-14
 
-- 起動条件: `/code-review I151`（`docs/reviews/I151_code_review_20261014_1548.md`）が `RISK: YES` / `FINAL_VERDICT: OK` → `ADVERSARIAL_STAGE: REQUIRED`
+- 起動条件: `/code-review I151`（`docs/reviews/closed/I151_code_review_20261014_1548.md`）が `RISK: YES` / `FINAL_VERDICT: OK` → `ADVERSARIAL_STAGE: REQUIRED`
 - 周回: 3 周（上限）・サブエージェント 12 体（各周 4 体＝固定 3 観点＋動的 1 観点「記録と実体の整合」）
 - 結果: **上限到達・未収束**（第 3 周で新規 High 2 件が残存）→ 最終判定を HIGH に固定し、ユーザーへエスカレーション
 - findings は依頼側（メインセッション）が自分で再実証してから扱った
@@ -41,7 +41,7 @@
 
 | # | 重大度 | 指摘 | 該当箇所 | 再実証 |
 |---|---|---|---|---|
-| 3-1 | High | TC-AUTO-06/07 を「exit 1 のみ合格」に変えたのに、同じ TC 本文の false-green 根拠が旧形式の exit code のまま（「痕跡を検出（exit 1）」「exit 1（正しく不合格）」）。現判定式では逆（痕跡あり＝exit 0＝不合格）。記述どおりに再検証すると判定式が壊れていると誤判断する | `docs/tests/open/I151_auto_test.md` 181・194 行 | 該当 2 行を確認（メインセッション） |
+| 3-1 | High | TC-AUTO-06/07 を「exit 1 のみ合格」に変えたのに、同じ TC 本文の false-green 根拠が旧形式の exit code のまま（「痕跡を検出（exit 1）」「exit 1（正しく不合格）」）。現判定式では逆（痕跡あり＝exit 0＝不合格）。記述どおりに再検証すると判定式が壊れていると誤判断する | `docs/tests/closed/I151_auto_test.md` 181・194 行 | 該当 2 行を確認（メインセッション） |
 | 3-2 | High | TC-AUTO-13 のローカル手順 `docker compose --profile e2e run --rm e2e` はイメージを再ビルドしない。手元の `e2e-init` イメージは 5 か月前（Django 4.2.7・guardian 2.4.0）のままで、開発 DB `learning_app` に migrate する。それでも exit 0 で合格し、「まっさらな DB への migrate」も担保しない。記録上の合格は CI 実行（毎回ビルド）なので実害は未発生 | `I151_auto_test.md` TC-AUTO-13・`docker-compose.yml` e2e-init | `docker images` で e2e-init = 5 months ago・backend = 7 weeks ago を確認（メインセッション） |
 | — | Medium | 「合格 = exit 0」の冒頭原則・手動 No.1 の期待結果・計画書 §7/テスト方針の「非ゼロ終了を確認」が TC-06/07 の例外と食い違う | `I151_auto_test.md` 7-8 行・`I151_manual_test.md` No.1・`plan_I151.md` §7 | — |
 | — | Medium | E2E の `retries: 2` で flaky が exit 0 になる（`--fail-on-flaky-tests` 未使用） | `e2e/playwright.config.ts:15` | — |

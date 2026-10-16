@@ -1,6 +1,6 @@
 # I151 実装レビュー（Django 5.2 LTS 更新・未使用の django-guardian / django-extensions の除去）
 
-- 関連: docs/issues/open/I151.md / docs/plans/open/plan_I151.md / GitHub #267 / Draft PR #269
+- 関連: docs/issues/closed/I151.md / docs/plans/closed/plan_I151.md / GitHub #267 / Draft PR #269
 - レビュー対象コミット（2026-10-15 記入）: 1 段目 `4877e18 fix(I151): Django 5.2.17 へ更新し…` / 2 段目 `3a6e0e8 chore(I151): pytest 9.0.3 へ更新…` / R6 `055aa11 fix(I151): openai 3.31.0 へ更新…`。ほかに I159 の取り込み（`729dfbd` / `5c31947`。`frontend/package-lock.json` だけ）と docs コミット
 
 ## レビュー観点（計画に対応）
@@ -56,7 +56,7 @@
 - [ ] beat が送信を試みていて（1b）、beat のログに ERROR / Traceback が無く（2c・2d）、beat が送ったタスクが worker に届いて成功している（1c。確認スクリプトは `update_daily_analytics_task` を worker へ送らないので、再実行しても混ざらない）。beat と worker のコンテナが実行中である（1d）（2026-10-16 追加）
 - [ ] 手順が「確認スクリプト → ログ」の順で実施されている（スクリプトが worker で動かしたタスクのエラーが、ログ判定の窓に入る）
 - [ ] 確認スクリプトが開発環境専用（`DEBUG` が True で、かつ DB・broker の接続先が手元の compose のものでなければ実行しない）で、実メール対策の範囲（スクリプトが足す 1 回分だけ。beat の定期実行は対象外）が正しく書かれている
-- [ ] 再ビルド後の `pip freeze` が `docs/tests/open/I151_pip_freeze.txt` に記録・コミットされており、除去した 2 パッケージが含まれていない。宣言側の全固定値と、推移的依存 anyio / kombu も記録されている（TC-AUTO-15 判定 1〜4。判定 3・4 は 2026-10-15 追加）
+- [ ] 再ビルド後の `pip freeze` が `docs/tests/closed/I151_pip_freeze.txt` に記録・コミットされており、除去した 2 パッケージが含まれていない。宣言側の全固定値と、推移的依存 anyio / kombu も記録されている（TC-AUTO-15 判定 1〜4。判定 3・4 は 2026-10-15 追加）
 - [ ] `celery` / `celery-beat` が**再ビルド後のイメージ**で起動している（旧イメージのままになっていない）
 
 ### 8. コミット分割
@@ -94,6 +94,6 @@
 ## 結果
 
 各回の判定は次の記録を正とする（2026-10-15 記入・2026-10-16 更新）:
-- `/code-review`: `docs/reviews/I151_code_review_*.md`（20261016_0926＝OK・RISK YES。/test の fix-loop 後の再実施。**注記**: この記録の AC-15 の根拠「判定 3: studylogs タスク 4 種すべて登録確認」は fix-loop 時点の固定リスト版で、その後の敵対的レビューで判定 1b・1c・1d・2c・2d・3s・3a・3b・4a・4b に置き換えた。現行の判定は auto_test の TC-AUTO-10 を正とする）
-- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261016_0205.md`＝3 周で収束・OK。/test の fix-loop 後の再実施は `I151_adversarial_review_20261016_1100.md`＝3 周で上限到達・HIGH。その是正の fix-loop 後の再レビューは `/code-review` の `I151_code_review_20261016_1158.md`＝OK・RISK YES と、それに続く敵対的レビュー `I151_adversarial_review_20261016_1308.md`＝3 周目で新規 Critical/High 0・通過・VERDICT: OK）
-- fix-loop: `docs/reviews/I151_fix_*.md`（2026-10-16 の /test 起点の分は `I151_fix_diagnosis_20261016_1740.md` ほか。敵対的レビュー 1100 の HIGH を受けた分は `I151_fix_diagnosis_20261016_1049.md` ほか）
+- `/code-review`: `docs/reviews/closed/I151_code_review_*.md`（20261016_0926＝OK・RISK YES。/test の fix-loop 後の再実施。**注記**: この記録の AC-15 の根拠「判定 3: studylogs タスク 4 種すべて登録確認」は fix-loop 時点の固定リスト版で、その後の敵対的レビューで判定 1b・1c・1d・2c・2d・3s・3a・3b・4a・4b に置き換えた。現行の判定は auto_test の TC-AUTO-10 を正とする）
+- 敵対的レビュー: `docs/reviews/closed/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261016_0205.md`＝3 周で収束・OK。/test の fix-loop 後の再実施は `I151_adversarial_review_20261016_1100.md`＝3 周で上限到達・HIGH。その是正の fix-loop 後の再レビューは `/code-review` の `I151_code_review_20261016_1158.md`＝OK・RISK YES と、それに続く敵対的レビュー `I151_adversarial_review_20261016_1308.md`＝3 周目で新規 Critical/High 0・通過・VERDICT: OK）
+- fix-loop: `docs/reviews/closed/I151_fix_*.md`（2026-10-16 の /test 起点の分は `I151_fix_diagnosis_20261016_1740.md` ほか。敵対的レビュー 1100 の HIGH を受けた分は `I151_fix_diagnosis_20261016_1049.md` ほか）

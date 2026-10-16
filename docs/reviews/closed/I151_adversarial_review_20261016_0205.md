@@ -1,6 +1,6 @@
 # 敵対的レビュー [I151] ── 2026-10-15〜16（fix-loop 後の再実施）
 
-- 起動条件: `/code-review I151`（`docs/reviews/I151_code_review_20261015_1826.md`）が `RISK: YES` / `FINAL_VERDICT: OK` → `ADVERSARIAL_STAGE: REQUIRED`
+- 起動条件: `/code-review I151`（`docs/reviews/closed/I151_code_review_20261015_1826.md`）が `RISK: YES` / `FINAL_VERDICT: OK` → `ADVERSARIAL_STAGE: REQUIRED`
 - 既知 findings: 前回ステージ `I151_adversarial_review_20261014_1736.md`（上限到達・HIGH）の全 findings を合算して各エージェントへ渡した
 - 周回: 3 周・サブエージェント 12 体（各周 4 体＝固定 3 観点＋動的 1 観点「記録と実体の整合」）
 - 結果: **第 3 周で新規 Critical / High 0 件 → ステージ通過**

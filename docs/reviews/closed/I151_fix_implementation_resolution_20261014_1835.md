@@ -1,6 +1,6 @@
 # I151 fix-loop 実装レビュー指摘の解消記録（2026-10-14 18:35）
 
-対象: `docs/reviews/I151_fix_implementation_review_20261014_1817.md` / `_1822.md` / `_1830.md` の HIGH 指摘「`backend/tmp_test_images/` の未追跡 PNG 6 件」
+対象: `docs/reviews/closed/I151_fix_implementation_review_20261014_1817.md` / `_1822.md` / `_1830.md` の HIGH 指摘「`backend/tmp_test_images/` の未追跡 PNG 6 件」
 
 ## 解消内容
 - ユーザーの指示（2026-10-14「削除して進めて」）により、`backend/tmp_test_images/` の PNG 6 件（`test_1_red.png`〜`test_6_purple.png`・2026-06-26 作成・I151 の作業開始前から存在した無関係の一時ファイル）とディレクトリを**削除した**

@@ -1,7 +1,7 @@
 # I151 TC-AUTO-10 判定 3・4 用: beat スケジュールの全タスクを、ログの時間窓に頼らずに確かめる
 # 実行（リポジトリのルートで 1 行のコマンドとして実行する）:
 #   docker compose exec -T backend python manage.py shell
-#     < docs/tests/open/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
+#     < docs/tests/closed/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
 # 出力の各行は TC-AUTO-10 の判定式で照合する（このファイル自体は合否を決めない）
 import logging
 import sys

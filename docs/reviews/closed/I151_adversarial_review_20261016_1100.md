@@ -1,6 +1,6 @@
 # 敵対的レビュー [I151] ── 2026-10-16（/test 起点の fix-loop 後の再実施）
 
-- 起動条件: `/code-review I151`（`docs/reviews/I151_code_review_20261016_0926.md`）が `RISK: YES` / `FINAL_VERDICT: OK` → `ADVERSARIAL_STAGE: REQUIRED`
+- 起動条件: `/code-review I151`（`docs/reviews/closed/I151_code_review_20261016_0926.md`）が `RISK: YES` / `FINAL_VERDICT: OK` → `ADVERSARIAL_STAGE: REQUIRED`
 - 既知 findings: `I151_adversarial_review_20261014_1736.md` と `I151_adversarial_review_20261016_0205.md` の全 findings、および `I151_plan_review_20261016_0922.md` の Warning 3 件・Info 1 件を合算して、各エージェントへ渡した
 - 周回: 3 周・サブエージェント 12 体（各周 4 体＝固定 3 観点＋動的 1 観点「記録と実体の整合」）
 - 結果: **上限到達・未収束**（第 3 周で新規 High 2 件が残った）→ 最終判定を HIGH に固定し、ユーザーへエスカレーションする
@@ -20,7 +20,7 @@
 
 | # | 重大度 | 指摘 | 再実証 | 対応 |
 |---|---|---|---|---|
-| 1-1 | High | TC-AUTO-10 がログの 3 分窓しか見ず、周期の長いタスク（1 時間ごとの cleanup など）の実行時の失敗を 95% 前後の窓で見逃す。studylogs のタスクは例外を捕まえて `{'error': ...}` を返し、celery 上は succeeded と記録される | `studylogs/tasks.py:181-183` を確認 | `docs/tests/open/I151_celery_probe.py` を新設した。`beat_schedule` から対象を導き、worker ごとの登録と、実際の実行結果を確かめる（判定 3s・3a・3b・4a・4b） |
+| 1-1 | High | TC-AUTO-10 がログの 3 分窓しか見ず、周期の長いタスク（1 時間ごとの cleanup など）の実行時の失敗を 95% 前後の窓で見逃す。studylogs のタスクは例外を捕まえて `{'error': ...}` を返し、celery 上は succeeded と記録される | `studylogs/tasks.py:181-183` を確認 | `docs/tests/closed/I151_celery_probe.py` を新設した。`beat_schedule` から対象を導き、worker ごとの登録と、実際の実行結果を確かめる（判定 3s・3a・3b・4a・4b） |
 | — | Medium | 固定リストの判定 3・I150 の順番・I157 との食い違い・空回り・診断の経緯説明の誤り（作り直しではなくホストのスリープ復帰）・「緩める変更」の未明記・review.md / 手動 No.3 の不揃い・npm audit の説明誤り・/test 実施記録の抜け | 経緯は `docker inspect` と beat のログで確認 | すべて是正（計画書ステップ 4 に実施順の制約・診断メモ §5 に訂正・auto_test 冒頭に「緩める変更」を明記ほか） |
 | — | Low | worker の混入・ゲート記録のファイル名の時刻ずれ・前回記録の「全 14 タスク」（実際は 13）・AC-19 の件数 | — | 一部是正（ファイル名の時刻・前回記録は、本記録に注記するにとどめる） |
 
