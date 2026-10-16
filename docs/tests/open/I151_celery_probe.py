@@ -1,18 +1,28 @@
 # I151 TC-AUTO-10 判定 3・4 用: beat スケジュールの全タスクを、ログの時間窓に頼らずに確かめる
-# 実行: docker compose exec -T backend python manage.py shell < docs/tests/open/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
+# 実行（リポジトリのルートで 1 行のコマンドとして実行する）:
+#   docker compose exec -T backend python manage.py shell
+#     < docs/tests/open/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
 # 出力の各行は TC-AUTO-10 の判定式で照合する（このファイル自体は合否を決めない）
 import logging
+import sys
 
+from django.conf import settings
 from django.test.utils import override_settings
 
 from core.celery import app
 
+# 開発環境（手元の compose・DEBUG=True）専用。本番相当の環境では、スケジュール外の時刻に定期処理が増えるので実行しない
+if not settings.DEBUG:
+    print('NG PROBE ABORTED: settings.DEBUG is False (development only)')
+    sys.exit(0)
+
 # 更新前（develop・Django 4.2.30）でも未登録だったことを実測した既知の既存不具合（2026-10-16）。
-# 根治イシューのマージ時に空にし、TC-AUTO-10 判定 3s の期待値も改める
+# 根治イシューのマージ時に空にし、TC-AUTO-10 判定 3s・4a の期待値（SCHEDULED / SUMMARY の件数）も改める
 KNOWN_UNREGISTERED = {'core.tasks.cache_maintenance_task'}
 
 # 外部へ実際に送信するタスク。worker で動かすと SMTP（SendGrid）で実在のアドレスへメールが送られうるため、
-# このプロセス内でメールをメモリに溜める設定にして実行する（コードと依存は worker と同じイメージ・同じ版）
+# このスクリプトが足す 1 回分は、このプロセス内でメールをメモリに溜める設定にして実行する
+# （backend と worker は別イメージだが、依存の版は一致する）。beat の定期実行は対象外で、worker は SMTP のまま
 RUN_LOCALLY_WITHOUT_SENDING = {'studylogs.tasks.send_study_reminders_task'}
 
 

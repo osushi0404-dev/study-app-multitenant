@@ -49,7 +49,7 @@
 >
 > **判定式の追加・改訂（2026-10-15・敵対的レビュー第 1・2 周）**: TC-AUTO-13 に判定 0・0b・0c を追加した（根拠にする CI の job を現コードに結び付ける。ログとコミットは同じ job_id から取る）。TC-AUTO-15 に判定 3（全 8 固定値）と判定 4（推移的依存 anyio / kombu）を追加した。TC-AUTO-16 は判定 8・10 の件数判定を `--numstat` に替え、判定 11（`requirements-dev.txt` を触ったコミットの数）を追加した。いずれも合否基準を厳しくする方向の変更である。
 >
-> **TC-AUTO-10 の改訂（2026-10-16・fix-loop と、その後の敵対的レビュー第 1 周）**: 判定 2 を 2a・2b に改めた。これは既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）について、**合否基準を緩める変更**である（旧判定 2 なら不合格になるログを合格にする）。別イシューのマージまでの暫定で、理由と歯止めは TC 本文に書いた。同時に、ログの時間窓に頼らない判定 3s・3a・3b（スケジュールから導いた全タスクの登録・worker 1 つ）と判定 4a・4b（全タスクの実行結果）、判定 1b（beat の生存）を追加し、手順を「スクリプト → ログ」の順に改めた。こちらは厳しくする方向の変更である。除外する 1 種が更新前（Django 4.2.30）でも同じだったことは実測で確かめ、緩める変更はユーザー承認のうえで例外として記録した（計画書 §2-8・イシューの Danger Ops）。
+> **TC-AUTO-10 の改訂（2026-10-16・fix-loop と、その後の敵対的レビュー第 1〜3 周）**: 判定 2 を 2a・2b に改めた。これは既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）について、**合否基準を緩める変更**である（旧判定 2 なら不合格になるログを合格にする）。別イシューのマージまでの暫定で、理由と歯止めは TC 本文に書いた。同時に、ログの時間窓に頼らない判定 3s・3a・3b（スケジュールから導いた全タスクの登録・worker 1 つ）と判定 4a・4b（全タスクの実行結果）、判定 1b・1c・2c・2d（beat の送信と、beat から worker への受け渡し）を追加し、手順を「スクリプト → ログ」の順に改めた。こちらは厳しくする方向の変更である。除外する 1 種が更新前（Django 4.2.30）でも同じだったことは実測で確かめ、緩める変更は、条件付きのユーザー承認（「理想的・最適なものを基準として問題ないなら OK」。条件の充足は Claude が判定し、敵対的レビューで検証）のうえで、例外として記録した（計画書 §2-8・イシューの Danger Ops）。
 >
 > **合格条件の定義場所（2026-10-14・fix-loop で是正）**: 合格とする exit code は「TC 一覧」の『合格条件』列だけで定める。第 2 周で TC-AUTO-06 / 07 を「exit 1 のときだけ合格」に変えた際、合否の書き方が文書中に散らばっていたため、書き換え漏れ（同じ TC 本文の旧 exit code 記述など）が残った。その再発を防ぐため、定義を 1 か所にまとめた。
 
@@ -267,7 +267,7 @@ beat が投げたことではなく、worker が**成功で完了した**こと�
 docker compose exec -T backend python manage.py shell < docs/tests/open/I151_celery_probe.py > /tmp/i151_celery_probe.txt 2>&1
 ```
 
-> スクリプトは `app.conf.beat_schedule` から対象タスクを**自動で導く**（既知の既存不具合 1 種だけを除く）。そのうえで、応答した worker ごとに登録漏れを出し、対象タスクを**実際に 1 回ずつ実行**して結果を出す。戻り値の `'error'` キー（タスク全体の失敗）と、0 でない `error_count`（ユーザー単位の失敗の件数）を NG とする。**外部へ送信するタスク（`send_study_reminders_task`）だけは**、worker では動かさない。開発環境の worker は SMTP（SendGrid）が有効で、実在のアドレスへメールが送られうるためである。このタスクはスクリプトのプロセス内で、メールをメモリに溜める設定（locmem）にして実行し、実行中に出た ERROR ログの件数も NG の条件にする（コードと依存は worker と同じイメージ・同じ版）。ほかの 3 タスクは worker で実行する。副作用は、beat が定期実行するのと同じ処理を 1 回ずつ余分に動かすことだけである（例: 期限切れ提案の無効化）。**開発環境（手元の compose）以外では実行しない**（本番相当の環境では、スケジュールに無い時刻に定期処理が 1 回ずつ増える）。
+> スクリプトは `app.conf.beat_schedule` から対象タスクを**自動で導く**（既知の既存不具合 1 種だけを除く）。そのうえで、応答した worker ごとに登録漏れを出し、対象タスクを**実際に 1 回ずつ実行**して結果を出す。戻り値の `'error'` キー（タスク全体の失敗）と、0 でない `error_count`（ユーザー単位の失敗の件数）を NG とする。**外部へ送信するタスク（`send_study_reminders_task`）だけは**、worker では動かさない。開発環境の worker は SMTP（SendGrid）が有効で、実在のアドレスへメールが送られうるためである。このタスクはスクリプトのプロセス内で、メールをメモリに溜める設定（locmem）にして実行し、実行中に出た ERROR ログの件数も NG の条件にする（backend と worker は別イメージだが、依存の版は一致する）。ほかの 3 タスクは worker で実行する。**locmem で止めるのはスクリプトが足す 1 回分だけで、beat の定期実行は止めない**。beat は `send_study_reminders_task` を 60 秒ごとに、SMTP 設定の worker へ送っている（開発環境の常設設定。I151 の範囲外の既存の問題）。いま実際に送信されないのは、開発 DB の復習カードが 0 件で、さらに送信処理が既存の不具合（`User.get_full_name` が無い）で必ず失敗するためである。**この TC を実行するときは、復習カードを作る操作（学習プランの表示など）をした直後に celery を動かさない**。副作用は、beat が定期実行するのと同じ処理を 1 回ずつ余分に動かすことだけである（例: 期限切れ提案の無効化）。**開発環境（手元の compose）以外では実行しない**（本番相当の環境では、スケジュールに無い時刻に定期処理が 1 回ずつ増える）。スクリプトは `settings.DEBUG` が False のとき、実行せずに `NG PROBE ABORTED` を出して終わる（判定 3s・4a・4b が不合格になる）。
 
 準備 2（スクリプトの実行後に、worker のログを 1 スナップショット取る）:
 ```bash
@@ -281,13 +281,19 @@ docker compose logs celery-beat --since 3m > /tmp/i151_celery_beat.log 2>&1
 
 判定 1（worker でタスクが成功で完了している）: `grep -qE 'Task studylogs\.tasks\.[a-z_]+\[[^]]+\] succeeded' /tmp/i151_celery.log`
 
-判定 1b（beat が動いて、スケジュールどおりに送信している。判定 1 はスクリプトの実行だけでも満たされるので、beat の生存を別に確かめる）: `grep -q 'Sending due task' /tmp/i151_celery_beat.log`
+判定 1b（beat が送信を試みている）: `grep -q 'Sending due task' /tmp/i151_celery_beat.log`
+
+判定 1c（beat が送ったタスクが worker に届いて成功している。30 秒間隔の `update_daily_analytics_task` の succeeded が 2 件以上。スクリプトが足す実行は 1 回だけなので、2 件以上なら少なくとも 1 件は beat から届いたもの）: `test "$(grep -cE 'Task studylogs\.tasks\.update_daily_analytics_task\[[^]]+\] succeeded' /tmp/i151_celery.log)" -ge 2`
+
+判定 2c（beat のログに ERROR が無い。beat は送信の前に `Sending due task` を出し、送信に失敗すると ERROR を出して続けるため）: `test "$(grep -c 'ERROR' /tmp/i151_celery_beat.log)" -eq 0`
+
+判定 2d（beat のログに Traceback が無い）: `test "$(grep -c 'Traceback' /tmp/i151_celery_beat.log)" -eq 0`
 
 判定 2a（ERROR の行は、既知の既存不具合 1 種だけ）: `test "$(grep -c 'ERROR' /tmp/i151_celery.log)" -eq "$(grep -c "unregistered task of type 'core.tasks.cache_maintenance_task'" /tmp/i151_celery.log)"`
 
 判定 2b（Traceback は、既知の既存不具合 1 種だけ）: `test "$(grep -c 'Traceback' /tmp/i151_celery.log)" -eq "$(grep -c "KeyError: 'core.tasks.cache_maintenance_task'" /tmp/i151_celery.log)"`
 
-判定 3s（スケジュールが I151 で変わっていない。5 件中、既知の 1 種を除く 4 件が対象）: `grep -qx 'SCHEDULED 5 TARGETS 4' /tmp/i151_celery_probe.txt`
+判定 3s（スケジュールの件数が I151 で変わっていない。5 件中、既知の 1 種を除く 4 件が対象。件数だけを見るので、タスクの入れ替えは検出しない。I151 は `core/celery.py` を変えていないので、入れ替えが起きる経路は無い）: `grep -qx 'SCHEDULED 5 TARGETS 4' /tmp/i151_celery_probe.txt`
 
 判定 3a（応答した worker はちょうど 1 つ）: `grep -qx 'NODES 1' /tmp/i151_celery_probe.txt`
 
@@ -299,13 +305,14 @@ docker compose logs celery-beat --since 3m > /tmp/i151_celery_beat.log 2>&1
 
 > ログを一時ファイルに落としてから判定を行う。`docker compose logs` を 2 回実行すると、成功判定とエラー判定が**別々のスナップショット**を見ることになり、その間に書き込まれたエラーを取りこぼす。判定式は後方参照などの GNU 拡張を使わない（実行環境の grep の差で誤って不合格になるのを避けるため。4a は固定値で照合する）。
 
-- **合格**: 判定 1・1b・2a・2b・3s・3a・3b・4a・4b のすべてが exit 0
+- **合格**: 判定 1・1b・1c・2a・2b・2c・2d・3s・3a・3b・4a・4b のすべてが exit 0
 - **不合格**: 非ゼロ
-- **判定 2 を 2a・2b に改めた理由と、これが判定を緩める変更であること（2026-10-16・fix-loop）**: `/test` で旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いので worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている（`docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。2a・2b は、タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格にする。**旧判定 2 なら不合格になるログを合格にするので、この 1 種については判定を緩めている**。I151 の「条件緩和による緑化は行わない」に対する例外で、ユーザー承認と根拠を計画書 §2-8 とイシューの Danger Ops に記録した。なお beat の予定ファイル（`backend/celerybeat-schedule`。ホスト側に残る）のため、beat を再起動すると cache-maintenance がすぐ送られる。そのため「再作成から 1 分後」の実行では、既知の 1 種がほぼ毎回窓に入る。つまりこの除外は、まれなケースではなく毎回働く前提である
+- **判定 2 を 2a・2b に改めた理由と、これが判定を緩める変更であること（2026-10-16・fix-loop）**: `/test` で旧判定 2（`! grep -qE 'ERROR|Traceback'`）が不合格になった。原因は I151 以前（2026-03-20 の I004）からある既存の不具合である。beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いので worker が登録しておらず、届くたびに ERROR と Traceback を出して捨てている（`docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。2a・2b は、タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格にする。**旧判定 2 なら不合格になるログを合格にするので、この 1 種については判定を緩めている**。I151 の「条件緩和による緑化は行わない」に対する例外である。承認は条件付き（「理想的・最適なものを基準として問題ないなら OK」）で、条件を満たしたかの判定は Claude が行い、その後の敵対的レビューで検証した。経緯は計画書 §2-8・イシューの Danger Ops に記録した。なお beat の予定ファイル（`backend/celerybeat-schedule`。ホスト側に残る）のため、beat を再起動すると cache-maintenance がすぐ送られる。そのため「再作成から 1 分後」の実行では、既知の 1 種がほぼ毎回窓に入る。つまりこの除外は、まれなケースではなく毎回働く前提である
 - **更新前と同じであることの実測（2026-10-16）**: 除外する 1 種が依存更新で生じたものではないことを、更新前の依存で実測した。`origin/develop` の `backend/` を取り出し、更新前の requirements（Django 4.2.30）で使い捨てイメージ（`i151-baseline-develop:tmp`）を作った。worker 起動時と同じ手順でタスクを読み込み（`app.loader.import_default_modules()`）、スケジュールとの差を出した。結果は、更新前（Django 4.2.30）・更新後（Django 5.2.17）とも、登録済みタスクの一覧が完全に一致した。スケジュールにあって未登録なのも、どちらも `['core.tasks.cache_maintenance_task']` の 1 件だけだった。つまりこの除外は「更新前と同じ状態であることを実測で確かめた既知の差分」であり、テストの目的（依存更新で celery が壊れていないこと）に照らして、更新後に新しく増えた失敗を見逃すものではない
 - **判定 3・4 を足した理由（2026-10-16・fix-loop 後の敵対的レビュー第 1・2 周）**: 判定 1・2 はログの 3 分窓しか見ない。そのため周期の長いタスク（`cleanup_expired_suggestions_task` は 1 時間ごと）が失敗しても、ERROR 行は 1 時間に 1 本しか出ず、95% 前後の窓で見逃していた（レビューアが実ログで実測）。判定 3 は、スケジュールから導いた全対象タスクの登録を worker ごとに確かめる。判定 4 は、全対象タスクを実際に実行して結果を確かめる。fix-loop で最初に足した判定 3（studylogs 4 タスク名の固定リスト）は、スケジュールへの追加や別 worker の混入を見なかったので置き換えた。第 2 周で、戻り値の `'error'` キーだけでは、ユーザー単位の失敗（`error_count` やログだけに出るもの）を見逃すと分かった。そこで、`error_count` の確認・ローカル実行分のエラーログの件数・「スクリプトの後にログを取る」順番を加えた
+- **判定 1c・2c・2d を足した理由（2026-10-16・fix-loop 後の敵対的レビュー第 3 周）**: 第 2 周で足した判定 1b（`Sending due task`）だけでは、beat の送信の失敗を見逃していた。Celery 5.3.4 の `Scheduler.apply_entry` は、送信の**前**に `Sending due task` を出し、送信が例外になると `ERROR ... Message Error: Couldn't apply scheduled task` と Traceback を出して処理を続ける。さらに判定 1 はスクリプトの実行だけでも満たされる。そのため、beat → broker → worker の経路が壊れていても全判定が合格していた（レビューアが使い捨てのコンテナで送信を失敗させて実測）。2c・2d は beat 側の失敗を、1c は「beat が送ったものが worker に届いて成功した」ことを、端から端まで確かめる。beat 側には既知のエラーが無いので、除外は無い
 - **判定 3a の範囲**: 3a が確かめるのは、応答した worker の数だけで、worker のイメージの版は見ない。worker が古いイメージのままかどうかは、作り直し後の `docker compose exec -T celery pip freeze` で確かめる（2026-10-16 の環境復旧の行を参照）
-- **残る限界**: 開発 DB には復習カードが 0 件、直近の学習記録もほとんど無い。そのため、ユーザーごとのループに入っても中の処理（カードの取得後の送信・集計の更新など）はほぼ通らない。`send_study_reminders_task` は有効ユーザー 49 人のループを実際に回すが、送信対象は 0 件である。この経路の退行は、backend の単体テスト（TC-AUTO-03）が担う範囲に限られる
+- **残る限界**: 開発 DB には復習カードが 0 件、直近の学習記録もほとんど無い。そのため、ユーザーごとのループに入っても中の処理（カードの取得後の送信・集計の更新など）はほぼ通らない。`send_study_reminders_task` は有効ユーザー 49 人のループを実際に回すが、送信対象は 0 件である。この経路を確かめるテストは無い（2026-10-16 訂正: 当初「backend の単体テスト（TC-AUTO-03）が担う」と書いたが、tasks を参照するテストは 0 件だった）。さらに送信経路は、`User` に `get_full_name` が無いため、復習カードを持つユーザーごとに必ず AttributeError になる（I151 以前からの既存不具合。計画書 §2-8）
 - **除外は暫定**: 既知の 1 種の除外（2a・2b のパターンと `I151_celery_probe.py` の `KNOWN_UNREGISTERED`）は、別イシュー（I151 の完了後に起票:「celery の core.tasks が未登録で cache_maintenance_task が 30 分ごとに破棄される問題を修正」）のマージまでとする。そのイシューの受け入れ条件に「除外を外しても TC-AUTO-10 が合格すること」を入れる。そのとき判定 3s・4a の期待値（`SCHEDULED 5 TARGETS 4`・`targets=4 ok=4`）も、根治後のスケジュールに合わせて改める（除外を外すだけでは 3s・4a は必ず不合格になる）。除外を外した状態では、現環境で判定 3s・3b・4a・4b が不合格になる（`NotRegistered` を実測済み）
 - **false-green 検証（2026-10-16 実施）**: 下の「現行判定式・2026-10-16」の表を参照
 - **ベースライン**: 実装前に成功ログを実測済み（`Task studylogs.tasks.update_daily_analytics_task[...] succeeded in 0.0103s`）。したがって判定 1 の判定式が実際に成功ログを捕捉できることは確認済み
@@ -701,6 +708,7 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | （/test 2026-10-16） | ✅ | 2026-10-16 | `/test I151` で TC-AUTO-10 以外を実行し、すべて合格。TC-AUTO-02 `No known vulnerabilities found`・TC-AUTO-04 `System check identified no issues`・TC-AUTO-05 決定論ゲート（code-review で実走）・TC-AUTO-06 判定 1・2 と TC-AUTO-07 が exit 1（合格）・TC-AUTO-08 `No changes detected`・TC-AUTO-09 使い捨て DB に 58 マイグレーション（guardian 0 件）・exit 0・後片付け済み・TC-AUTO-11B 判定 B-1・B-2 exit 0・TC-AUTO-16 判定 1〜11 の全 18 コマンド exit 0。TC-AUTO-00 / 01 / 03 / 11A / 15 / 17 は同日の環境復旧の行を参照。TC-AUTO-12 / 13 / 14 は TC-AUTO-10 の不合格で停止したため未実行 |
 | TC-AUTO-10 | ❌→✅ | 2026-10-16 | `/test` で旧判定 2 が不合格（既存不具合 `core.tasks.cache_maintenance_task` の未登録エラーが窓に入った）。fix-loop で判定 2a・2b（と固定リストの判定 3）へ改め、判定 1（succeeded 10 件）・2a・2b・3 がすべて exit 0。その後の敵対的レビュー第 1 周の再実行（succeeded 15 件・ERROR 1 件）について、当初「窓に既知の 1 種が 1 件入っていたが、2a・2b で除外」と記録したが、**誤り**だった（第 2 周で判明・訂正）。その 1 件と succeeded のうち 4 件は、実施者が直前に行った false-green 検証（除外を外したスクリプトの実行・09:46:51）が送ったもので、beat が送った既存不具合ではない。実行順も、スクリプト（09:43）→検証（09:46）→ログ取得（09:48）で、本文の手順とは違っていた |
 | TC-AUTO-10 | ✅ 合格 | 2026-10-16 | 第 2 周の是正後の判定（1・1b・2a・2b・3s・3a・3b・4a・4b）を、本文の順番（準備 1 スクリプト → 準備 2・3 ログ）で実行し、すべて exit 0。スクリプト出力: `SCHEDULED 5 TARGETS 4` / `NODES 1` / `MISSING -` / analyze・cleanup・update は WORKER で OK、send_study_reminders は LOCAL（メール送信なし）で OK `{'sent_count': 0}` / `SUMMARY targets=4 ok=4`。ログ: succeeded 13 件・ERROR 0・Traceback 0。beat の送信 10 回（直近 3 分）。直前に false-green 検証の手動送信は行っていない |
+| TC-AUTO-10 | ✅ 合格 | 2026-10-16 | 敵対的レビュー 1100 の是正（判定 1c・2c・2d の追加・確認スクリプトの開発環境ガード）後に、本文の順番で全判定（1・1b・1c・2a・2b・2c・2d・3s・3a・3b・4a・4b）を実行し、すべて exit 0。succeeded 13 件（うち `update_daily_analytics_task` 7 件＝beat からの受け渡しあり）・worker の ERROR 0・Traceback 0・beat の送信 10 回・beat の ERROR 0。スクリプトは `SUMMARY targets=4 ok=4` |
 | （環境復旧） | ✅ | 2026-10-16 | ユーザー指示で `docker compose build backend celery celery-beat` → `docker compose up -d --wait`（exit 0。healthcheck のある db・backend・frontend は healthy。celery・celery-beat・redis には healthcheck が無いので、起動中であることを確認。2026-10-16 表記を訂正）。作り直し後、TC-AUTO-11A 判定 A-2 相当（全 8 固定値＋anyio 4.15.1）が backend・celery の両コンテナで exit 0。backend の `pip freeze` は `I151_pip_freeze.txt` と完全に一致。TC-AUTO-03 `94 passed, 5 warnings in 21.20s`（判定 exit 0）・TC-AUTO-01 `No known vulnerabilities found`・TC-AUTO-17 `add_new True` / `add_dup False` / `incr1 1` / `incr2 2` |
 
 > **手元環境の注意（2026-10-15 確認・2026-10-16 復旧済み）**: 手元の `backend` コンテナは、このブランチのコードをマウントしたまま、別ブランチ（develop）で作ったイメージ（Django 4.2.30）で動いていた（同じ compose プロジェクトを複数のブランチで共有しているため）。backend 系 TC を手元で再実行するときは、先に `docker compose build backend celery celery-beat` で作り直し、TC-AUTO-11A 判定 A-2 が exit 0 になることを確かめてから実行する。上の CI 系 3 TC は CI（毎回ビルド）と frontend コンテナだけを使うので、この状態の影響を受けない。
@@ -742,6 +750,9 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 | TC-AUTO-10 | 判定 3s・3a・3b・4a・4b（第 1 周版。4a は後方参照の正規表現だった） | 実出力／除外を外して実行した実出力（タイムアウト 8 秒）／偽の出力 7 種（worker 2 つ・登録漏れ・戻り値が `{'error': ...}`・件数の不一致・スケジュールの縮小・worker の応答なし・空ファイル） | 実出力だけ全判定 exit 0。除外を外した実出力は 3s・3b・4a・4b が exit 1（`NG core.tasks.cache_maintenance_task EXC NotRegistered`）。偽の 7 種は、いずれも 1 つ以上の判定が exit 1（worker 2 つ→3a、登録漏れ→3b、エラー戻り値→4a・4b、件数不一致→4a、縮小→3s、応答なし・空→3s・3a・3b・4a） |
 | TC-AUTO-10 | 第 2 周版の判定 4a・4b（固定値 `SUMMARY targets=4 ok=4`）と、スクリプトの `error_count`・ローカル実行分のエラーログ件数 | ① 実出力 ② スクリプトの写しの先頭で `SpacedRepetitionService.get_due_cards` を常に例外にして実行（有効ユーザー 49 人のループで全件失敗させる。メールは locmem で送らない。DB 書き込みなし） ③ 戻り値 `{'updated_count': 0, 'error_count': 3, 'total_users': 3}` | ① 全判定 exit 0 ② `NG studylogs.tasks.send_study_reminders_task LOCAL RESULT {'sent_count': 0} ERROR_LOGS 49`・`SUMMARY targets=4 ok=3` で 4a・4b が exit 1（第 1 周版では、同じ失敗で合格していた＝レビューアが実測） ③ スクリプトの判定で NG（`error_count != 0`） |
 | TC-AUTO-10 | 除外 1 種が更新前から同じであること | 更新前（`origin/develop`・Django 4.2.30）の使い捨てイメージと、更新後（Django 5.2.17）のイメージで、worker と同じ手順でタスクを読み込んで比較 | 登録済みタスクの一覧が完全に一致。スケジュールにあって未登録なのは、どちらも `['core.tasks.cache_maintenance_task']` の 1 件だけ |
+| TC-AUTO-10 | 判定 1b・2c・2d（beat の送信失敗） | 実際の beat のログの末尾に、Celery 5.3.4 の `apply_entry` と同じ順の行（`Sending due task` → `ERROR ... Message Error: Couldn't apply scheduled task` → Traceback）を足したログ | 1b は exit 0（レビューアの指摘どおり見逃す）。2c・2d が exit 1 で不合格にする |
+| TC-AUTO-10 | 判定 1・1c（beat から worker に届かない） | 実際の worker のログから `update_daily_analytics_task` の succeeded 行を 1 件（スクリプト分に相当）だけ残したログ | 判定 1 は exit 0（スクリプトの実行だけで満たされる）。1c が exit 1 で不合格にする |
+| TC-AUTO-10 | 確認スクリプトの開発環境ガード | `docker compose exec -T -e DEBUG=False backend python manage.py shell < docs/tests/open/I151_celery_probe.py` | `NG PROBE ABORTED: settings.DEBUG is False (development only)` だけを出して終了し、タスクは 1 つも実行しない。判定 3s・3a・3b・4a・4b が不合格になる |
 
 ### 機構の事前検証（計画時点・2026-08-22 実施済み）
 
@@ -759,7 +770,9 @@ docker compose exec -T backend python manage.py shell -c "from django.core.cache
 - **何を変えたか**（docs のみ・コードは変えていない。計画外の実装を I151 に混ぜないため）:
   - 判定 2 を 2a・2b に改めた。タスク名まで完全に指定した既知の 1 種だけを件数一致で除き、それ以外の ERROR / Traceback が 1 行でもあれば不合格になる。**この 1 種については判定を緩める変更である**
   - 判定 3 を追加した（fix-loop 時点は studylogs 4 タスク名の固定リスト）。その後の敵対的レビュー第 1 周で、固定リストでは周期の長いタスクの実行時の失敗・スケジュールへの追加・別 worker の混入を見逃すと分かった。そこで `docs/tests/open/I151_celery_probe.py` を使う判定 3s・3a・3b（スケジュールから導いた全タスクの登録・worker 1 つ）と判定 4a・4b（全タスクを実際に実行した戻り値）に置き換えた。第 2 周では、戻り値の `'error'` キーだけではユーザー単位の失敗を見逃すこと、リマインダー送信が実メールを送りうることが分かった。そこで、`error_count` の確認・送信タスクの locmem 実行とエラーログの件数・「スクリプト → ログ」の順番・beat の生存（判定 1b）を加えた
-  - 除外する 1 種が更新前（Django 4.2.30）でも同じだったことを、使い捨てイメージで実測した。緩める変更は、ユーザー承認のうえで「条件緩和しない」の例外として記録した
+  - 除外する 1 種が更新前（Django 4.2.30）でも同じだったことを、使い捨てイメージで実測した。緩める変更は、条件付きのユーザー承認（2026-10-16「理想的・最適なものを基準として問題ないなら OK」。条件の充足は Claude が判定し、敵対的レビューで検証）のうえで「条件緩和しない」の例外として記録した
+  - 敵対的レビュー 1100（上限到達・HIGH）を受けた是正: beat のログの ERROR / Traceback（判定 2c・2d）と、beat から worker への受け渡し（判定 1c）を追加した。beat の `Sending due task` は送信の前に出る行なので、それだけで生存を判断しない。確認スクリプトに開発環境ガードを付けた。実メール対策は「スクリプトが足す 1 回分だけ」と範囲を正しく書き、beat の定期実行による危険を記録した。I150 / I157 への注記は、GitHub の本文（#266 / #274）に反映した
+  - 教訓: 「ログに行がある」ことを成功の根拠にするときは、その行が処理の前に出るのか後に出るのかを、ライブラリのソースで確かめる。合格の根拠を、版管理されていないファイルに置かない
   - 手動 No.3 の期待結果を同じ書きぶりへ揃えた
   - 失敗注入で検証した（上の「false-green 検証の記録（現行判定式・2026-10-16 実施・fix-loop）」）
 - **セキュリティ上の考慮点**: 該当なし。捨てられているのは引数なしのキャッシュ統計タスクで、認証・認可・入力・機密データのいずれにも関わらない。除外は ERROR と Traceback それぞれの件数一致で、タスク名まで完全に指定しており、別のエラーを隠さない（別の ERROR / Traceback を 1 つ足したログで不合格になることを確認）
