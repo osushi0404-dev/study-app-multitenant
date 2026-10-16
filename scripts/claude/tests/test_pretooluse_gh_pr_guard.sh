@@ -429,6 +429,12 @@ ck "G203b その末尾の fork merge は block" 2 "$R"
 ck "G204 本文行継続＋コメント内 <<Z"      2   "$(CROSS_VALUE=true runj $'cat <<true\ntr\\\nue\ntrue # <<Z\ngh pr merge 257\nZ\ntrue\n')"
 ck "G205 本文行継続＋混在終端語 <<A\"B\"" 2   "$(CROSS_VALUE=true runj $'cat <<true\ntr\\\nue\ncat <<A"B"\nAB\ngh pr merge 257\nA\ntrue\n')"
 ck "G206 本文行継続のみ（block を保つ）"  2   "$(CROSS_VALUE=true runj $'cat <<true\ntr\\\nue\ngh pr merge 257\ntrue\n')"
+# 第 8 周: 定番の "$(cat <<'EOF' … EOF\n)" の本文（展開されないデータ）には反応しない（自前 PR）
+ck "G207 pr edit --body \"\$(cat <<'EOF' …merge…)\"" 0 "$(CROSS_VALUE=false runj $'gh pr edit 230 --body "$(cat <<\'EOF\'\n## 概要\nfork PR に対する `gh pr merge` を block\nEOF\n)"')"
+ck "G208 commit -m \"\$(cat <<'EOF' …)\""   0   "$(CROSS_VALUE=false runj $'git commit -m "$(cat <<\'EOF\'\nfix(I146): gh pr merge の fork 判定を強化\nEOF\n)"')"
+ck "G209 issue create --body \"\$(cat <<'EOF'…)\"" 0 "$(CROSS_VALUE=false runj $'gh issue create --title t --body "$(cat <<\'EOF\'\nfork PR を gh pr merge しないよう guard する\nEOF\n)"')"
+# 定番形でも本文の後ろの実コマンドは数える（終端の後ろは除かない）
+ck "G210 定番形の後ろの fork merge"       2   "$(CROSS_VALUE=true runj $'gh pr edit 230 --body "$(cat <<\'EOF\'\nx\nEOF\n)" ; gh pr merge 257')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
@@ -461,6 +467,10 @@ sed 's/_gh_coarse_count(_shell_code(raw, keep_quoted=False)) != n_targets/False/
 grep -q '(False$' "$BROKEN_ONLY2"
 ck "FG-N1 注入が一致している"           0   "$?"
 ck "FG-N2 コメント内 <<Z の次行 merge"   ASK "$(CROSS_VALUE=true runj $'echo x # <<Z\ngh pr merge 257\nZ' "$BROKEN_ONLY2")"
+# 第 8 周: 安全網は gh の表記揺れ（g\h・\gh・"gh"・g''h）も数える（精密判定を無効化して検証）
+ck "FG-N5 g\\h pr merge"                 ASK "$(CROSS_VALUE=true runj 'g\h pr merge 257' "$BROKEN_GH")"
+ck "FG-N6 \\gh co"                        ASK "$(CROSS_VALUE=true runj '\gh co 257' "$BROKEN_GH")"
+ck "FG-N7 g''h pr checkout"              ASK "$(CROSS_VALUE=true runj "g''h pr checkout 257" "$BROKEN_GH")"
 ck "FG-N3 混在終端語 <<A\"B\" の AB 後"   ASK "$(CROSS_VALUE=true runj $'cat <<A"B"\nAB\ngh pr merge 257\nA' "$BROKEN_ONLY2")"
 
 # 精密判定と安全網の両方を無効化すると素通しになる（FG-A の ASK が安全網によるものであることの裏取り）

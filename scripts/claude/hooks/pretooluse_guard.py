@@ -505,9 +505,30 @@ _WORD_BREAK = " \t\n;&|()<>"
 # （精密判定の穴を黙った素通しではなく確認に倒す fail-safe。block はしない）。
 # 引数として渡す文字列データ（`run 'gh pr merge 257'`・`python3 -c "…"`）には反応しない（I174 と同じ方針）。
 _GH_COARSE_VERBS = ("merge", "checkout", "ready", "edit", "update-branch")
+_GH_COARSE_WORDS = ("gh", "gh.exe", "pr", "co", "review") + _GH_COARSE_VERBS
 
 
 _NESTING_RE = re.compile(r"\$\(|\$\{|`|\(\(")
+# 定番の `$(cat <<'EOF' … EOF\n)`（PR 本文・コミットメッセージの標準形）。引用付き終端語の本文は bash で一切展開されない
+_CAT_HEREDOC_RE = re.compile(
+    r"\$\(\s*cat\s+<<-?[ \t]*(?:'([A-Za-z0-9_.\-]+)'|\"([A-Za-z0-9_.\-]+)\"|\\([A-Za-z0-9_.\-]+))[ \t]*\n")
+
+
+def _strip_cat_heredoc_bodies(s: str) -> str:
+    """`$(cat <<'W'` の直後から終端行 `W` までの本文を除く（終端行の直後が `)` のときだけ。それ以外は触らない）。"""
+    out, pos = [], 0
+    for m in _CAT_HEREDOC_RE.finditer(s):
+        if m.start() < pos:
+            continue
+        word = m.group(1) or m.group(2) or m.group(3)
+        term = re.compile(r"^" + re.escape(word) + r"\n[ \t]*\)", re.M)
+        t = term.search(s, m.end())
+        if not t:
+            continue
+        out.append(s[pos:m.end()])
+        pos = t.start()
+    out.append(s[pos:])
+    return "".join(out)
 
 
 def _safety_text(raw: str) -> str:
@@ -517,8 +538,19 @@ def _safety_text(raw: str) -> str:
     その場合に限り、引用符の中身とヒアドキュメント本文（データ）を空白に置き換えて返す（I174 と同じ方針）。
     入れ子を含むコマンド・閉じない引用・終端のないヒアドキュメントは、何も除かず生の文字列を返す
     （前処理の取り違えで実行されるコードを消さない fail-safe。コメントは常に残す）。"""
-    s = raw.replace("\r\n", "\n").replace("\\\n", "")
+    s = _strip_cat_heredoc_bodies(raw.replace("\r\n", "\n").replace("\\\n", ""))
     out, pending, i, n = [], [], 0, len(s)
+
+    def quoted(a, b, after):
+        """引用部分の置換。前後の語とくっつく（`g''h`）か中身が命令語そのもの（`"gh"`）なら、
+        実行される語の一部になるので中身を残す。それ以外はデータとして空白にする。"""
+        body = s[a:b]
+        glued = (out and out[-1][-1:] not in ("", " ", "\t", "\n", ";", "&", "|", "(", ")", "<", ">")) \
+            or (after < n and s[after] not in " \t\n;&|()<>")
+        if glued or body.strip() in _GH_COARSE_WORDS:
+            return body
+        return " "
+
     while i < n:
         ch = s[i]
         if _NESTING_RE.match(s, i):
@@ -533,14 +565,14 @@ def _safety_text(raw: str) -> str:
                 j += 2 if s[j] == "\\" else 1
             if j >= n:
                 return s
-            out.append(" ")
+            out.append(quoted(i + 2, j, j + 1))
             i = j + 1
             continue
         if ch == "'":
             j = s.find("'", i + 1)
             if j < 0:
                 return s
-            out.append(" ")
+            out.append(quoted(i + 1, j, j + 1))
             i = j + 1
             continue
         if ch == '"':
@@ -551,7 +583,7 @@ def _safety_text(raw: str) -> str:
                 j += 2 if s[j] == "\\" else 1
             if j >= n:
                 return s
-            out.append(" ")
+            out.append(quoted(i + 1, j, j + 1))
             i = j + 1
             continue
         if ch == "#" and (i == 0 or s[i - 1] in " \t\n;&|()"):
@@ -612,7 +644,7 @@ def _gh_coarse_count(text: str) -> int:
     正規表現の入れ子の遅延一致は入力によって 3 乗の時間がかかり hook のタイムアウト＝素通しを招くため使わない。"""
     count = 0
     for seg in re.split(r"[\n;&|`()]", text):
-        words = seg.split()
+        words = [w.replace("\\", "") for w in seg.split()]
         idxs = [k for k, w in enumerate(words) if os.path.basename(w) in ("gh", "gh.exe")]
         for a, k in enumerate(idxs):
             rest = words[k + 1:idxs[a + 1] if a + 1 < len(idxs) else len(words)]
