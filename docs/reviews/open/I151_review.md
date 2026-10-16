@@ -51,7 +51,8 @@
 
 ### 7. celery と推移的依存
 - [ ] worker のログでタスクの**成功**が確認できる（TC-AUTO-10・beat が投げただけの確認になっていない）
-- [ ] ログに `ERROR` / `Traceback` がない
+- [ ] ログに `ERROR` / `Traceback` が、既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）以外に無い（TC-AUTO-10 判定 2a・2b。2026-10-16 改訂）
+- [ ] beat スケジュールの全対象タスクが、応答する唯一の worker に登録され、実際の実行で戻り値にエラーが無い（TC-AUTO-10 判定 3s・3a・3b・4a・4b。2026-10-16 追加）
 - [ ] 再ビルド後の `pip freeze` が `docs/tests/open/I151_pip_freeze.txt` に記録・コミットされており、除去した 2 パッケージが含まれていない。宣言側の全固定値と、推移的依存 anyio / kombu も記録されている（TC-AUTO-15 判定 1〜4。判定 3・4 は 2026-10-15 追加）
 - [ ] `celery` / `celery-beat` が**再ビルド後のイメージ**で起動している（旧イメージのままになっていない）
 
@@ -80,14 +81,14 @@
 - **「guardian / django-extensions は未使用だから削除しても安全」を反証せよ**: `INSTALLED_APPS` から外すことで、両アプリが提供していた**暗黙の副作用**（guardian: マイグレーション適用・AnonymousUser 行の作成・パーミッション関連のシグナル／django-extensions: management コマンドの登録・`AutoSlugField` 等のモデルフィールド・シグナル）に依存する箇所が本当にゼロか。既存 DB と新規 DB で挙動が分岐しないか。**とくに django-extensions は grep が `django_extensions` 文字列に依存しており、`from django_extensions.db.fields import ...` 以外の経路（settings 文字列以外での間接利用）を取りこぼしていないか。**
 - **「認可の判定経路は不変」を反証せよ**: DRF 3.15 → 3.18 で権限クラスの評価順・`has_object_permission` の呼ばれ方・例外の型が変わっていないか。テナント境界テスト 9 モジュールが**組織越境を本当に検出できる**内容か（緩い assert で通っているだけではないか）。
 - **「TC-AUTO-03 は緑化を検出できる」を反証せよ**: 判定式は 2026-10-14 にサマリ行の完全一致（`grep -qxE '94 passed(, [0-9]+ warnings?)? in [0-9.]+s( \([0-9:]+\))?'`）へ改めた（計画時点の `! grep -qE 'skipped|xfailed|deselected'` 方式は teardown error / xpass を見逃していた。auto_test の TC-AUTO-03 本文を参照）。それでも抜け道が残らないか — 例えば**テストファイルごと削除して同数の新規テストを足す**、`pytest.ini` の `testpaths` を狭める、条件分岐で assert を実質無効化する、といった手段は件数一致でも検出できない。差分レビューで実際にテストコードが無改変であることを別途確認したか。
-- **「celery は正常」を反証せよ**: TC-AUTO-10 は直近 3 分のログを見るだけである。**再ビルド前の古いログ**を拾って合格していないか。worker が起動直後で 1 回も実行していない場合に false-green にならないか。`ERROR` の grep がログ書式の違い（`CRITICAL` 等）を取りこぼさないか。
+- **「celery は正常」を反証せよ**: TC-AUTO-10 は、直近 3 分のログと、`I151_celery_probe.py` によるスケジュール全タスクの登録・実行結果を見る（2026-10-16 改訂）。既知の 1 種の除外が別の失敗を隠していないか。実行が 0 件の空回りで、ユーザーごとの処理を通っていない点をどう補うか。以下は改訂前の観点:**再ビルド前の古いログ**を拾って合格していないか。worker が起動直後で 1 回も実行していない場合に false-green にならないか。`ERROR` の grep がログ書式の違い（`CRITICAL` 等）を取りこぼさないか。
 - **「再ビルドは完了している」を反証せよ**: `celery` / `celery-beat` / `e2e-init` が旧イメージのまま動いていないか。TC-AUTO-11A / 11B の実インストール判定は `backend` コンテナしか見ていないため、worker 側が古いままでも合格しうる。
 - **「pip-audit exit 0 だから安全」を反証せよ**: 監査は既知の advisory しか見ない。DB の更新タイミング次第で結果が変わる（実際に 6 件 → 7 件へ増えた）。マージ直前に再実行しても同じ結果が保証されるか。
 - **「2 段コミットで安全に退避できる」を反証せよ**: 2 段目を取り消したとき、`requirements-dev.txt` だけが戻り**イメージは pytest 9 のまま**という不整合が起きないか。§8 は「再ビルドまで行い、TC-AUTO-11B が exit 1 に戻ることで戻し漏れを検出する」としているが、この検出は**戻した後に TC を実行した場合にのみ効く**。実行を忘れた場合に気づける経路が別にあるか。
 
 ## 結果
 
-各回の判定は次の記録を正とする（2026-10-15 記入）:
-- `/code-review`: `docs/reviews/I151_code_review_*.md`（最新 20261015_1826＝OK・RISK YES）
-- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261016_0205.md`＝3 周で収束・OK）
-- fix-loop: `docs/reviews/I151_fix_*.md`
+各回の判定は次の記録を正とする（2026-10-15 記入・2026-10-16 更新）:
+- `/code-review`: `docs/reviews/I151_code_review_*.md`（最新 20261016_0926＝OK・RISK YES。/test の fix-loop 後の再実施）
+- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261016_0205.md`＝3 周で収束・OK。/test の fix-loop 後の再実施は、このステージの終了時に作る記録）
+- fix-loop: `docs/reviews/I151_fix_*.md`（2026-10-16 の /test 起点の分は `I151_fix_diagnosis_20261016_1740.md` ほか）
