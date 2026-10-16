@@ -77,7 +77,7 @@
 - [ ] `I151_manual_test.md` の実結果が埋まっている（Human 項目 No.7 を含む）
 - [ ] 後続イシュー 3 件が起票され、番号が記録されている（AC-19）
 - [ ] 4 件目（celery `core.tasks` 未登録の根治・I151 の完了後に起票）のタイトル・受け入れ条件・実施順の制約が、計画書ステップ 4・手動テストの後続イシュー欄と、**GitHub の I150（#266）・I157（#274）の本文**に記録されている（AC-19 の 2026-10-16 追補。ローカルの未追跡ファイルは根拠にしない）
-- [ ] 計画書ステップ 5 の「I151 の完了後に起票するイシュー」4 件が、`/close` で PR 本文の「後続タスク」節に列挙されている
+- [ ] 計画書ステップ 5 の「I151 の完了後に起票するイシュー」5 件が、PR #269 本文の「後続タスク」節に列挙されていて、`/close` で本文を置き換えた後も残っている
 - [ ] 計画書との差分（あれば）が理由付きで記録されている
 
 ## 敵対的レビュー観点（独立サブエージェント向け・「合格を反証せよ」）
@@ -95,5 +95,5 @@
 
 各回の判定は次の記録を正とする（2026-10-15 記入・2026-10-16 更新）:
 - `/code-review`: `docs/reviews/I151_code_review_*.md`（20261016_0926＝OK・RISK YES。/test の fix-loop 後の再実施。**注記**: この記録の AC-15 の根拠「判定 3: studylogs タスク 4 種すべて登録確認」は fix-loop 時点の固定リスト版で、その後の敵対的レビューで判定 1b・1c・1d・2c・2d・3s・3a・3b・4a・4b に置き換えた。現行の判定は auto_test の TC-AUTO-10 を正とする）
-- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261016_0205.md`＝3 周で収束・OK。/test の fix-loop 後の再実施は `I151_adversarial_review_20261016_1100.md`＝3 周で上限到達・HIGH。その是正の fix-loop 後の再レビューは `/code-review` の `I151_code_review_20261016_1158.md`＝OK・RISK YES と、それに続く敵対的レビュー `I151_adversarial_review_20261016_1308.md`）
+- 敵対的レビュー: `docs/reviews/I151_adversarial_review_*.md`（20261014_1736＝上限到達で HIGH。fix-loop 後の再実施は `I151_adversarial_review_20261016_0205.md`＝3 周で収束・OK。/test の fix-loop 後の再実施は `I151_adversarial_review_20261016_1100.md`＝3 周で上限到達・HIGH。その是正の fix-loop 後の再レビューは `/code-review` の `I151_code_review_20261016_1158.md`＝OK・RISK YES と、それに続く敵対的レビュー `I151_adversarial_review_20261016_1308.md`＝3 周目で新規 Critical/High 0・通過・VERDICT: OK）
 - fix-loop: `docs/reviews/I151_fix_*.md`（2026-10-16 の /test 起点の分は `I151_fix_diagnosis_20261016_1740.md` ほか。敵対的レビュー 1100 の HIGH を受けた分は `I151_fix_diagnosis_20261016_1049.md` ほか）
