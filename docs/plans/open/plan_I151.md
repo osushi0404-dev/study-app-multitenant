@@ -145,7 +145,10 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 
 - `backend/core/storage_service.py:2` の `import imghdr` に `DeprecationWarning`（Python 3.13 で削除予定）。**本イシューでは Python 3.11 のままなので影響なし**。将来の Python 更新時の課題として記録のみ。
 - `rest_framework/pagination.py` の `UnorderedObjectListWarning`（`problems.models.Subject` の未ソート QuerySet）。ベースラインで既に出ている警告であり、本イシューの対象外。
-- **celery の `core.tasks` が未登録（2026-10-16・`/test` で判明。I004＝2026-03-20 からの既存不具合）**: `core/celery.py:52` の beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いため worker が登録しておらず、届くたびに `Received unregistered task` の ERROR と Traceback を出して捨てている。試しに直接実行すると、中で呼ぶ `cache_service.get_cache_stats()` は `_cache` 不在で失敗し、処理は空振りする。I151 の差分（`settings.py` の 2 行削除）とは無関係で、celery の版も据え置き。**本イシューでは直さず、別イシューで根治する**（登録方式と、空振りしているタスクを残すか消すかの設計判断を伴うため。診断は `docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。TC-AUTO-10 ではこの 1 種だけを暫定で除外する（§11 の celery 検証方針を参照）。AC-15（イシュー決定 7-B「成功まで確かめる」）は、beat スケジュール 5 件のうち、この既知の 1 件を除く 4 件の成功で判定する（2026-10-16 の解釈。I151 では直さない既存不具合のため）
+- **celery の `core.tasks` が未登録（2026-10-16・`/test` で判明。I004＝2026-03-20 からの既存不具合）**: `core/celery.py:52` の beat が 30 分ごとに `core.tasks.cache_maintenance_task` を送るが、`core` が `INSTALLED_APPS` に無いため worker が登録しておらず、届くたびに `Received unregistered task` の ERROR と Traceback を出して捨てている。試しに直接実行すると、中で呼ぶ `cache_service.get_cache_stats()` は `_cache` 不在で失敗し、処理は空振りする。I151 の差分（`settings.py` の 2 行削除）とは無関係で、celery の版も据え置き。**本イシューでは直さず、別イシューで根治する**（登録方式と、空振りしているタスクを残すか消すかの設計判断を伴うため。診断は `docs/reviews/I151_fix_diagnosis_20261016_1740.md`）。TC-AUTO-10 ではこの 1 種だけを暫定で除外する（§11 の celery 検証方針を参照）。AC-15（イシュー決定 7-B「成功まで確かめる」）は、beat スケジュール 5 件のうち、この既知の 1 件を除く 4 件の成功で判定する（2026-10-16 の解釈。I151 では直さない既存不具合のため）。
+  - **更新前と同じであることの実測（2026-10-16）**: `origin/develop` の `backend/` と更新前の requirements（Django 4.2.30）で使い捨てイメージを作り、worker と同じ手順でタスクを読み込んで、更新後（Django 5.2.17）と比べた。登録済みタスクの一覧は完全に一致し、スケジュールにあって未登録なのは、どちらも `core.tasks.cache_maintenance_task` の 1 件だけだった。この 1 件は、依存更新で生じたものではないことが実測で確かめられた。
+  - **「条件緩和しない」の例外としての承認（2026-10-16）**: TC-AUTO-10 の判定 2a・2b で、この 1 件だけを除外するのは、旧判定 2 より合否基準を緩める変更である。fix-loop で案 A を承認いただいた時点では、私（Claude）が「判定は厳しくなる」と誤って説明していた。そのため、敵対的レビューの指摘を受けて、改めて判断を仰いだ。ユーザーの回答は「理想的・最適なものを基準として問題ないなら OK」（条件付きの承認）。理想の基準で見ると、除外の根拠がコードを読んだだけで実測ではない点と、確認スクリプトが実メールを送りうる点が不十分だった。そこで、更新前の実測（上記）とメール送信の停止を加えたうえで、例外として適用した。除外は根治イシューのマージまでの暫定である（TC-AUTO-10 本文）
+  - **確認スクリプトの副作用（Danger Ops の扱い）**: `docs/tests/open/I151_celery_probe.py` は、beat が定期実行するのと同じ 4 タスクを 1 回ずつ余分に実行する（期限切れ提案の無効化など）。外部送信を伴う `send_study_reminders_task` は、メールを locmem に溜める設定で実行し、実際には送らない。開発環境（手元の compose）専用で、CI・本番相当の環境では実行しない
 
 ---
 
@@ -169,11 +172,11 @@ celery-1 | Task studylogs.tasks.send_study_reminders_task[...] succeeded in 0.01
 | AC-12 | frontend テストが **10 件 pass**（無退行） | TC-AUTO-12 |
 | AC-13 | E2E（Playwright）が全件 pass | TC-AUTO-13 |
 | AC-14 | CI の全 6 チェックが SUCCESS | TC-AUTO-14 |
-| AC-15 | celery worker のログでタスクの**成功**が確認できる | TC-AUTO-10 |
+| AC-15 | celery worker のログでタスクの**成功**が確認できる（2026-10-16 の解釈: beat スケジュール 5 件のうち、更新前から未登録の既知 1 件を除く 4 件の成功を、ログと実際の実行結果で確認する。§2-8） | TC-AUTO-10 |
 | AC-16 | 再ビルド後の `pip freeze` を `docs/tests/open/I151_pip_freeze.txt` に記録している | TC-AUTO-15 |
 | AC-17 | コミットが 2 段に分かれている（2026-10-14 追補: R6 発動による openai 再固定は、変更の出どころを追えるよう 3 つ目の `fix(I151)` コミットに分ける。2026-10-15 訂正: このコミットだけを取り消すと openai 1.3.0（`anyio<4`）に戻り、anyio の CVE 2 件で必須チェック `pip-audit` が必ず落ちる。したがって**単独では取り消せない**。問題が出たときは §8 の前方修正で直す） | TC-AUTO-16 |
 | AC-18 | 認可・テナント境界テストのモジュール名を列挙し、前後の件数を記録している | 手動 No.6 |
-| AC-19 | 後続 3 件を起票している | 手動 No.8 |
+| AC-19 | 後続 3 件を起票している。2026-10-16 追補: 4 件目（celery `core.tasks` 未登録の根治）は、I151 の完了後に起票する（ユーザー指示）。I151 の完了までに満たすのは「4 件目のタイトル・受け入れ条件・実施順の制約が確定し、記録されている」こと（ステップ 4・手動テストの後続イシュー欄・I150 / I157 への注記） | 手動 No.8 |
 | AC-20 | develop マージ後に #262 をクローズしている | `/close` 工程（本 PR の範囲外） |
 | AC-21 | レート制限のカウンタ保存が再ビルド後の実コンテナで機能する（security-review 由来） | TC-AUTO-17 |
 | AC-22 | psycopg2-binary の 5.2 環境での動作がテスト実走で確定している（イシュー受け入れ条件・2026-10-14 追補） | TC-AUTO-03（94 件が Docker の postgres:15 へ実接続して pass） |
@@ -307,7 +310,7 @@ THIRD_PARTY_APPS = [
    - コミットメッセージ: `fix(I151): Django 5.2.17 へ更新し依存を対応版へ一括更新・未使用の django-guardian / django-extensions を削除`
    - 対象: `backend/requirements.txt` / `backend/requirements-dev.txt` / `backend/core/settings.py`
 
-> **このステップが失敗した場合**: 計画をやり直す。テストの skip・削除・条件緩和による緑化は行わない（イシュー Danger Ops の承認条件）。
+> **このステップが失敗した場合**: 計画をやり直す。テストの skip・削除・条件緩和による緑化は行わない（イシュー Danger Ops の承認条件）。**唯一の例外（2026-10-16・ユーザー承認）**: TC-AUTO-10 の判定 2a・2b で、更新前から存在することを実測した既知の既存不具合 1 種だけを除外する（§2-8）。
 
 ### ステップ 2: pytest 9 への更新（コミット 2）
 1. `backend/requirements-dev.txt` の `pytest` を `9.0.3` に更新する。
@@ -415,7 +418,7 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 ## 11. 運用設計（非同期処理があるため記載）
 
 - **構造化ログ方針**: 変更なし。`core/enhanced_logging.py` / `core/middleware.py` のログ出力に手を入れない。`custom_exception_handler`（`core/exceptions.py`）も変更しない。（2026-10-15 訂正: 当初は「I142 で整備したエラーハンドリング規約（ログ＋統一 JSON 500）」と書いていた。しかし I142（PR #256）は未マージで、本ブランチの `core/exceptions.py` は I142 前の版である。ロガーも無く、DRF 以外の例外は Django 標準の HTML 500 になる。I151 で確認できるのは「この I142 前のハンドラの挙動が、依存更新の前後で変わらない」ことまでで、「ログ＋統一 JSON 500」は担保していない）
-- **celery の検証方針**: worker と beat を再ビルド後に起動し、beat がスケジュールしたタスクが**成功**するまでをログで確認する（TC-AUTO-10）。`update_daily_analytics_task` は 30 秒間隔のため 1 分以内に判定できる。**2026-10-16 改訂（fix-loop）**: エラーの判定は、§2-8 の既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）だけを、ERROR と Traceback それぞれの件数一致で除外する形にした（それ以外のエラーが 1 行でもあれば不合格）。この 1 種については合否基準を緩める変更である。除外は、別イシューのマージまでの暫定とする。**2026-10-16 再改訂（fix-loop 後の敵対的レビュー第 1 周）**: ログの 3 分窓だけでは、周期の長いタスク（1 時間ごとの `cleanup_expired_suggestions_task` など）の実行時の失敗を 95% 前後の窓で見逃す。studylogs のタスクは例外を捕まえて `{'error': ...}` を返し、celery 上は succeeded になる点も、ログの成功判定では見抜けない。そこで `docs/tests/open/I151_celery_probe.py` で、`beat_schedule` から導いた全対象タスクについて、worker ごとの登録（応答 worker は 1 つ）と、worker での実際の実行結果（戻り値にエラーが無いこと）を確かめる判定を加えた。どちらもログの時間窓に左右されない。限界として、開発 DB に対象データが無いため実行は 0 件の空回りで、ユーザーごとの ORM 処理は TC-AUTO-03 が担う範囲に限られる
+- **celery の検証方針**: worker と beat を再ビルド後に起動し、beat がスケジュールしたタスクが**成功**するまでをログで確認する（TC-AUTO-10）。`update_daily_analytics_task` は 30 秒間隔のため 1 分以内に判定できる。**2026-10-16 改訂（fix-loop）**: エラーの判定は、§2-8 の既知の既存不具合 1 種（`core.tasks.cache_maintenance_task` の未登録）だけを、ERROR と Traceback それぞれの件数一致で除外する形にした（それ以外のエラーが 1 行でもあれば不合格）。この 1 種については合否基準を緩める変更である。除外は、別イシューのマージまでの暫定とする。**2026-10-16 再改訂（fix-loop 後の敵対的レビュー第 1 周）**: ログの 3 分窓だけでは、周期の長いタスク（1 時間ごとの `cleanup_expired_suggestions_task` など）の実行時の失敗を 95% 前後の窓で見逃す。studylogs のタスクは例外を捕まえて `{'error': ...}` を返し、celery 上は succeeded になる点も、ログの成功判定では見抜けない。そこで `docs/tests/open/I151_celery_probe.py` で、`beat_schedule` から導いた全対象タスクについて、worker ごとの登録（応答 worker は 1 つ）と、実際の実行結果を確かめる判定を加えた。**第 2 周の改訂**: 実行結果は、戻り値の `'error'` キーに加えて `error_count` も見る。送信タスク（`send_study_reminders_task`）は実メールを送らないよう、スクリプトのプロセス内で locmem にして実行し、そのエラーログの件数も見る。手順は「スクリプト → ログ」の順にし、スクリプトが worker で動かしたタスクのエラーが必ずログ判定の窓に入るようにした。beat の生存も別に確かめる。限界として、開発 DB には復習カードが 0 件で直近の学習記録もほとんど無いので、ユーザーごとのループの中の処理はほぼ通らない。この経路は TC-AUTO-03 が担う範囲に限られる
 - **タイムアウト・リトライ**: 変更なし（`studylogs/tasks.py` の `max_retries=3` 等はそのまま）。
 - **Feature Flag・段階リリース**: 不要。依存更新は全体一括で適用され、部分的に有効化する意味がない。マージ前の切り戻しは §8 のとおりコミット単位で行い、develop マージ後は §8 のとおり前方修正で直す（revert PR は CI の必須チェックで必ず落ちるため使えない。2026-10-14 訂正）。
 - **beat スケジュールの環境別切り替え**: `backend/core/celery.py` が開発用の短間隔で固定されている件は**本イシューの範囲外**（イシュー決定 7-D・別イシューで対応）。
@@ -513,7 +516,7 @@ danger-ops.md の対象例（DB・Git・Docker・Files）にリポジトリ設�
 ### テスト
 - **新規テストは追加しない**（イシュー決定 6）。依存更新の影響は既存 94 件＋認可・テナント境界の 9 モジュール（§7・当初 7、2026-10-14 に 2 追加）の結果一致で測る
 - 否定系 TC（TC-AUTO-04/05/06/07/11A/16）は失敗条件を注入して**不合格**を返すことを確認済み（auto_test の実施記録。合格条件は auto_test の TC 一覧『合格条件』列）
-- **テストの skip・削除・条件緩和による緑化は行わない**
+- **テストの skip・削除・条件緩和による緑化は行わない**（唯一の例外は TC-AUTO-10 の既知 1 種の除外。2026-10-16 ユーザー承認・§2-8）
 
 ### 条件付きセクションの適用
 - P3（データ整合性設計）: 記載あり（§10）／P5（運用設計）: 記載あり（§11）
