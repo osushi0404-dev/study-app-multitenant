@@ -142,7 +142,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 
 | # | 内容 | 期待値 |
 |---|---|---|
-| G1 | guard を `sed` で複製し、`_container_danger_reasons(cmd)` の呼び出しを `[]` に置き換えたもので A10 を実行 | 0（判定を外すと素通しになる） |
+| G1 | guard を `sed` で複製し、`reasons += _segment_danger(toks, ctr)` を `pass` に置き換えたもので A10 を実行（G0 で置換が入ったことも確認） | 0（判定を外すと素通しになる） |
 | G2 | 実体の guard で A10 を実行 | 2 |
 | G3 | 複製で `_external_reasons(cmd)` の呼び出しを `[]` に置き換えたもので X1 を実行 | 0 |
 | G4 | 実体の guard で X1 を実行 | ASK |
@@ -200,3 +200,19 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 | TC-10（guard の構文） | exit 0 | 回帰確認 |
 
 追記（2026-10-16・計画レビュー後）: exec の確認を `! grep -qF "Bash(docker compose exec" .claude/settings.json` と `! grep -qF "Bash(docker-compose exec" .claude/settings.json` の 2 行にまとめ直し、ゲート全行を再実行した。この 2 行は実装前は exit 1（不合格）で、ほかの行の結果も上の表と同じだった。
+
+### 実装後（2026-10-16・/implement ステップ 2〜5）
+決定論ゲート全 30 行を 1 行ずつ実行し、**すべて exit 0**。
+
+| TC | 結果 |
+|---|---|
+| TC-01 `test_pretooluse_container_guard.sh` | pass=118 fail=0（(A) 32 件×2 通り・(H) 3・(X) 11・(F) 10・(P) 25・(G) 5） |
+| TC-02 `test_pretooluse_push_guard.sh` | pass=87 fail=0（DOK1〜3・P6・P7・P23・P24・P26・P31 は `runj` で ASK） |
+| TC-03 `test_pretooluse_checkout_guard.sh` | pass=14 fail=0（G7 は `runj` で ASK） |
+| TC-04 `test_pretooluse_worktree_guard.sh` | pass=27 fail=0（A19 は exit 2 のまま） |
+| TC-05 `test_adversarial_trigger.sh` | pass=40 fail=0 |
+| TC-06〜TC-11 | すべて exit 0 |
+| TC-12 | 未実施（I146 のマージ後・ステップ 6） |
+
+- 実装中の気づき: 初回の実行で TC-01 の F6 が不合格（期待 2・実際 ASK）。テストのコマンドが `/app/docs/` でなく `/app/` を指していて、`backend/` 側のテスト用ファイル（中身はメール送信）が読まれていた。テストを正しいパスに直し、読み替えが設計どおり動いていることを確認した。
+- 実装中に見つけた穴: 既存の DOK3（`DANGER_OK=1 eval "git push --force origin x"`）が、先頭の `DANGER_OK=1` のせいで `eval` の検出をすり抜け、確認なしで通っていた。判定を `DANGER_OK=1` を外したコマンドで行うように直し、DOK3 は ASK になった（計画書 4-2(1) に追記）。

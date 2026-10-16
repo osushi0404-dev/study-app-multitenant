@@ -108,9 +108,12 @@ def _danger_reasons(cmd: str) -> list:
         reasons.append(f"push to protected branch '{dest}' is forbidden "
                        f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
     # ... 既存の --all/--mirror・--repo・force・reset --hard・down -v・checkout をここへ移す（文言は既存のまま）
-    reasons += _rm_rf_reasons(cmd)                 # (4) ルート以外の rm -rf
-    reasons += _sql_reasons(cmd)                   # (2) 破壊的 SQL
-    reasons += _container_danger_reasons(cmd)      # (3) DB 全消去・巻き戻し・流し込み・Redis・shell
+    if _rm_rf_targets(cmd):                        # (4) ルート以外の rm -rf
+        reasons.append("rm -rf requires DANGER_OK=1")
+    for toks, ctr in _expand_segments(cmd):        # sh -c / eval の中身も展開
+        reasons += _segment_danger(toks, ctr)      # (2)(3) 破壊的 SQL・DB 全消去・巻き戻し・流し込み・Redis・shell
+        for path, fctr in _exec_files(toks, ctr):  # (6) 実行ファイルの中身
+            reasons += [f"{why} requires DANGER_OK=1" for why in _file_reasons(path, fctr)[0]]
     return reasons
 
 # main() の Bash 分岐（hard-block・worktree の後）
@@ -125,7 +128,8 @@ if external:
 if _push_is_dynamic(cmd):                          # 既存。DANGER_OK=1 でも ask にする（DOK1〜3）
     _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
 ```
-- 既存のメッセージ文言は変えない（`requires DANGER_OK=1` など）。
+- 既存のメッセージ文言は変えない（`requires DANGER_OK=1` など）。ただし、旧 psql 判定の 3 文言（`UPDATE without WHERE ...`・`DELETE without WHERE ...`・`destructive SQL ...`）は `destructive SQL requires DANGER_OK=1` に 1 本化する（既存テストは文言を検査していない）。
+- **判定は先頭の `DANGER_OK=1` を外したコマンドで行う**（実装時に追加・2026-10-16）。`DANGER_OK=1 eval "git push --force origin x"`（既存テスト DOK3）は、先頭トークンが `DANGER_OK=1` になるため、`eval` の検出（先頭トークンで判定）をすり抜けていた。これまでは DANGER_OK=1 で判定ごと飛ばしていたので表に出なかったが、本計画で DANGER_OK=1 を ask にすると、確認なしで通ってしまう。あわせて、`_expand_segments` と `_is_container_seg` は先頭の環境変数の代入（`FOO=1 cmd`）を読み飛ばす（`_strip_env`）。
 
 **(2) 破壊的 SQL の判定（解決方針 1(a)）**
 - 修正方針: 引用符の種類と書き出しに関係なく、`psql` のトークン列から SQL を取り出し、文（`;` 区切り）ごとに単語境界で判定する。
@@ -227,7 +231,7 @@ _CODE_EXTERNAL = [
 - コンテナのパスの対応表・判定パターンの表・ファイルの大きさの上限（`_MAX_SCRIPT_BYTES = 1_000_000`）は、モジュールの先頭付近の定数にまとめる（ハードコードを散らさない）。
 
 ### 4-3. テスト
-- `scripts/claude/tests/test_pretooluse_container_guard.sh`（新規）: 既存の `test_pretooluse_push_guard.sh` と同じ形（`json()`・`run()`・`runj()`・`ck()`・最後に `pass=` / `fail=` を出して `[ "$fail" -eq 0 ]`）で書く。ケースは自動テスト文書の TC-01 の表を全件入れる。偽合格を防ぐため、判定関数の呼び出しを無効化した複製（`sed` で `_container_danger_reasons(cmd)` を `[]` に置き換えるなど）では素通しになり、実体では止まることも確かめる（既存の FALSEGREEN と同じ方式）。
+- `scripts/claude/tests/test_pretooluse_container_guard.sh`（新規）: 既存の `test_pretooluse_push_guard.sh` と同じ形（`json()`・`run()`・`runj()`・`ck()`・最後に `pass=` / `fail=` を出して `[ "$fail" -eq 0 ]`）で書く。ケースは自動テスト文書の TC-01 の表を全件入れる。偽合格を防ぐため、判定関数の呼び出しを無効化した複製（`sed` で `reasons += _segment_danger(toks, ctr)` を `pass` に、`external = _external_reasons(cmd)` を `external = []` に置き換える）では素通しになり、実体では止まることも確かめる（既存の FALSEGREEN と同じ方式）。
 - `scripts/claude/tests/test_pretooluse_push_guard.sh`: `DOK1`〜`DOK3`（114・140・141 行目）の期待値を `ASK` にする。`P6`・`P7`・`P23`・`P24`・`P26`・`P31`（51・52・71・72・74・79 行目）を `run` から `runj` に変え、期待値を `ASK` にする。
 - `scripts/claude/tests/test_pretooluse_checkout_guard.sh`: `runj()` を `test_pretooluse_push_guard.sh:33-35` と同じ定義で追加し、`G7`（38 行目）を `runj` の `ASK` にする。
 
