@@ -495,6 +495,7 @@ _GH_PR_SPECS = {
                ("--approve", "--comment", "--request-changes", "--help"), "acrh"),
 }
 _GH_PUNCT = "();<>|&`"
+_GH_SCAN_MAX = 200  # 1 つの gh 呼び出しで見る引数の上限（超えたら ambiguous。悪意ある巨大入力で 2 乗にしない）
 _FD_RE = re.compile(r"(?:(?<=^)|(?<=[\s;&|()`]))\d+(?=[<>])", re.M)
 _WORD_BREAK = " \t\n;&|()<>"
 # 安全網（_gh_coarse_count）: 精密判定（下の _gh_pr_target）が取りこぼした「gh pr の取り込み系操作の記述」を数える粗い検出。
@@ -542,8 +543,10 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
     安全網はこの「実行される部分だけ」の文字列に掛ける（I174 と同じ方針: 引数の文字列・ヒアドキュメント本文に反応しない）。"""
     s = raw.replace("\r\n", "\n")
     out, pending, i, n = [], [], 0, len(s)
-    stack = ["top"]   # top / sq / dq / ansi / subst / bt
+    stack = ["top"]   # top / sq / dq / ansi / subst / bt / param（${…}）
     depth = []        # subst ごとの括弧の深さ
+    case_d = []       # subst ごとの未閉の case の数（case パターンの `)` で置換を閉じない）
+    unfound = set()   # 終端行が見つからなかった (語, dash)（以降の位置でも見つからないので探し直さない）
     bare_dollar = False  # 直前に出力したのが「引用・エスケープされていない単独の $」か
 
     def emit(text, data=False):
@@ -551,6 +554,11 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
             out.append(" ")
         else:
             out.append(text)
+
+    def push_subst():
+        stack.append("subst")
+        depth.append(0)
+        case_d.append(0)
 
     while i < n:
         ch, ctx = s[i], stack[-1]
@@ -581,8 +589,7 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
                 emit('"', data=True)
                 i += 1
             elif s.startswith("$(", i) and not s.startswith("$((", i):
-                stack.append("subst")
-                depth.append(0)
+                push_subst()
                 emit("$(")
                 i += 2
             elif ch == "`":
@@ -591,6 +598,35 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
                 i += 1
             else:
                 emit(ch, data=True)
+                i += 1
+            bare_dollar = False
+            continue
+        if ctx == "param":  # ${…} の中はコメント・ヒアドキュメントの開始にならない
+            if ch == "\\" and i + 1 < n:
+                out.append(s[i:i + 2])
+                i += 2
+            elif ch == "}":
+                stack.pop()
+                out.append(ch)
+                i += 1
+            elif ch == "'":
+                stack.append("sq")
+                emit("'", data=True)
+                i += 1
+            elif ch == '"':
+                stack.append("dq")
+                emit('"', data=True)
+                i += 1
+            elif s.startswith("$(", i) and not s.startswith("$((", i):
+                push_subst()
+                out.append("$(")
+                i += 2
+            elif s.startswith("${", i):
+                stack.append("param")
+                out.append("${")
+                i += 2
+            else:
+                out.append(ch)
                 i += 1
             bare_dollar = False
             continue
@@ -608,14 +644,18 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
             out.append(s[i:end])
             i = end
             continue
+        if s.startswith("${", i) and not prev_bare:
+            stack.append("param")
+            out.append("${")
+            i += 2
+            continue
         if ch == "$":
             # `$$` の 2 文字目は展開の開始ではない
             bare_dollar = not prev_bare
             out.append(ch)
             i += 1
             if s.startswith("$(", i - 1) and not s.startswith("$((", i - 1):
-                stack.append("subst")
-                depth.append(0)
+                push_subst()
                 out.append("(")
                 i += 1
                 bare_dollar = False
@@ -638,12 +678,22 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
             out.append("`")
             i += 1
             continue
+        if ctx == "subst" and (not out or out[-1][-1:] in _WORD_BREAK):
+            m = re.match(r"(case|esac)(?=[\s;&|()<>]|$)", s[i:i + 5])
+            if m:
+                case_d[-1] = case_d[-1] + 1 if m.group(1) == "case" else max(0, case_d[-1] - 1)
+                out.append(m.group(1))
+                i += 4
+                continue
         if ctx == "subst" and ch in "()":
             if ch == "(":
                 depth[-1] += 1
+            elif depth[-1] == 0 and case_d[-1] > 0:
+                pass  # case パターンの `)`（置換は閉じない）
             elif depth[-1] == 0:
                 stack.pop()
                 depth.pop()
+                case_d.pop()
             else:
                 depth[-1] -= 1
             out.append(ch)
@@ -671,6 +721,9 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
                 j += 1
             k, word = j, []
             while k < n and s[k] not in _WORD_BREAK:
+                if s[k] == "$" and k + 1 < n and s[k + 1] in "'\"":
+                    k += 1  # $'…' / $"…" の $ は引用の一部（終端語に含めない）
+                    continue
                 if s[k] == "\\" and k + 1 < n:
                     word.append(s[k + 1])
                     k += 2
@@ -694,7 +747,7 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
             pos = i + 1
             for word, dash in pending:
                 p, found = pos, False
-                while p <= n:
+                while (word, dash) not in unfound and p <= n:
                     e = s.find("\n", p)
                     e = n if e < 0 else e
                     line = s[p:e]
@@ -706,6 +759,7 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
                         break
                     p = e + 1
                 if not found:
+                    unfound.add((word, dash))
                     break  # 終端なし: 以降は除かない
             pending = []
             i = pos if pos > i + 1 else i + 1
@@ -739,24 +793,41 @@ def _gh_pr_target(cmd: str):
     次は ambiguous（照会せず ask）: 表にないフラグ・位置引数が複数・識別子がなく gh の前に別コマンドがある
     （xargs 等で識別子が外から渡る）。"""
     toks = _gh_tokens(_shell_code(cmd))
+    # 引用符の中のデータに反応しないよう、cd/pushd とブレース展開は「実行される部分」で判定する
+    exec_text = _shell_code(cmd, keep_quoted=False)
+    moved = bool(re.search(r"(?:^|[\s;&|()`])(?:cd|pushd)(?=$|[\s;&|)])", exec_text))
+    has_brace = bool(re.search(r"\{[^{}\s]*,[^{}\s]*\}", exec_text))
+    # gh ごとに先頭まで遡らないよう、各位置の「区切り内で前にあるもの」を 1 パスで前計算する（線形）
+    bt_par, pref, env_at = [], [], []
+    bt, cnt, env = 0, 0, None
+    for t, op in toks:
+        bt_par.append(bt % 2 == 1)
+        pref.append(cnt > 0)
+        env_at.append(env)
+        if op:
+            if t == "`":
+                bt += 1
+            if not re.search(r"[<>]", t):
+                cnt, env = 0, None  # 区切り（リダイレクト以外の演算子）
+        elif t.startswith("GH_REPO="):
+            env = t.split("=", 1)[1] or None
+        elif not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t):
+            cnt += 1
     targets = []
     for idx, (tok, is_op) in enumerate(toks):
         if is_op or os.path.basename(tok) not in ("gh", "gh.exe"):
             continue
-        in_backquote = sum(1 for t, op in toks[:idx] if op and t == "`") % 2 == 1
-        # 同じ区切り内で gh より前にあるもの（GH_REPO= と、別コマンドの有無）
-        k, env_repo, prefixed = idx - 1, None, False
-        while k >= 0 and not (toks[k][1] and not re.search(r"[<>]", toks[k][0])):
-            t = toks[k][0]
-            if t.startswith("GH_REPO="):
-                env_repo = t.split("=", 1)[1] or None
-            elif not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t):
-                prefixed = True
-            k -= 1
+        in_backquote, env_repo, prefixed = bt_par[idx], env_at[idx], pref[idx]
         # gh より後ろ（区切り演算子まで）。リダイレクトは演算子と行き先を除く
         # プロセス置換 `<(`・クォートなしのコマンド置換 `$(`/`` ` `` が引数にあると識別子を確定できない → ambiguous
-        args, j, subst = [], idx + 1, False
+        # 1 つの gh が見る範囲は _GH_SCAN_MAX 語まで（超えたら ambiguous）。先頭が pr/co でなければ数語で打ち切る
+        args, j, subst, overflow = [], idx + 1, False, False
         while j < len(toks):
+            if len(args) >= _GH_SCAN_MAX:
+                overflow = True
+                break
+            if len(args) >= 1 and args[0] not in ("pr", "co") and not args[0].startswith("-"):
+                break  # gh pr / gh co 以外（対象外）
             t, op = toks[j]
             if op and t == "`" and in_backquote:
                 break  # 閉じのバッククォート
@@ -845,10 +916,9 @@ def _gh_pr_target(cmd: str):
             j += 1
         # 識別子なし＝カレントブランチの PR。照会は hook の作業ディレクトリで走るため、
         # gh の前に別コマンド（xargs 等）や cd/pushd があると実際の対象と食い違い得る → ask
-        moved = any(not op and t in ("cd", "pushd") for t, op in toks[:idx])
         # 引用符の外のブレース展開（`{x,257}`）は bash が複数の語に展開するため、値と識別子の対応を確定できない
-        braced = any(re.search(r"\{[^{}]*,[^{}]*\}", a) for a in rest)
-        if subst or braced or len(positionals) > 1 or (not positionals and (prefixed or moved)):
+        braced = has_brace and any(re.search(r"\{[^{}]*,[^{}]*\}", a) for a in rest)
+        if subst or overflow or braced or len(positionals) > 1 or (not positionals and (prefixed or moved)):
             ambiguous = True
         if kind == "approve":  # ambiguous 判定の後に評価する（位置引数の異常で ask を消さない）
             if not approve and not ambiguous:

@@ -88,7 +88,7 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 
 （注入の sed 式は実装時に対象行へ合わせて確定する。要件は「cross-repo 判定行だけを無効化し、他の分岐を壊さないこと」。）
 
-## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G182）
+## TC-03: `pretooluse_guard.py` の cross-repo ポリシー（G1〜G192）
 
 実行コマンド: 「決定論ゲート（自動実走）」の `test_pretooluse_gh_pr_guard.sh`。
 
@@ -160,6 +160,9 @@ grep -q '"matcher": "Edit.Write.MultiEdit.NotebookEdit"' .claude/settings.json
 | G173〜G181 | 第 4 周 false-green: 引用状態の各分岐（ANSI-C の `\'`・終端・dq の `\"`・クォート外の `\<<`）・`((x=1<<2))`・`<<-X` 後ろの `-X` 行・`<< 'EOF'`（空白入り）・heredoc 2 つ・照会キャッシュの repo 区別 | 2×6 / 0 / 0 / GH_LOG 2 行 |
 | FG-N | 精密判定を無効化したガードで、安全網が checkout・co・gh.exe・`-R` 付き・pr と verb の間のフラグ・ready・edit・update-branch・review --approve/-a を ASK にし、review --comment は拾わない | ASK×10 / 0 |
 | G182 | 安全網の走査が線形（`gh pr` を 900 回並べた 1 行で 2 秒未満。旧正規表現は 11 秒以上） | 0 |
+| G183〜G187 | 第 5 周: `${…}` 内の `#`・`<<` はコメント/ヒアドキュメントではない・`"$(case … a) …; gh pr merge 257)"` は case パターンの `)` で置換を閉じない（安全網で ASK）・`<<$'EOF'` の終端語は EOF | 2 / 2 / 2 / ASK / 2 |
+| G188〜G189（b） | 第 5 周: gh 語 2.4 万個・終端なし heredoc 8000 行でも 5 秒未満で判定し、末尾の fork merge を block（旧版は 84 秒でタイムアウト＝素通しの恐れ） | 0 / 2 |
+| G190〜G192 | 第 5 周: 引用符の中の `{x,y}`・JSON・`"cd"` はデータ（自前 PR で ask しない） | 0 |
 
 G49・G154（引用符の中の `gh pr merge` 記述）は、第 3 周で一時的に ASK にしたが、I174 引き継ぎ（2026-10-16 ユーザー指示）で「実行される部分だけを判定する」方針に改め、0（素通し）に戻した。
 
@@ -252,6 +255,7 @@ FG-A / FG-C / FG-D が exit 0 を返し、かつ FG-B / FG-E が exit 2 を返�
 | TC-08 | 2026-08-05 実装時 | ✅ PASS | push guard `pass=87 fail=0`・worktree guard `pass=27 fail=0`・checkout guard `pass=14 fail=0`（回帰なし） |
 | TC-03 | 2026-10-16 敵対的レビュー第 1 周対応 | ✅ PASS | Red: 修正前ガードで `pass=45 fail=22`（G28〜G52 の回避経路が素通し）→ 修正後 `pass=67 fail=0` |
 | TC-03 | 2026-10-16 R10（checkout/update-branch）追加 | ✅ PASS | Red: `pass=69 fail=3`（G57/G59/G60）→ 実装後 `pass=72 fail=0` |
+| TC-03 | 2026-10-16 第 5 周対応 | ✅ PASS | Red: `pass=206 fail=5`（G183〜G187）・`pass=214 fail=4`（G188・G190〜G192）→ 修正後 `pass=218 fail=0`。重い入力の判定時間: gh 語 2.4 万個 84 秒 → 0.28 秒・終端なし heredoc 8000 行 0.33 秒・`gh pr merge`×8000 0.56 秒。変異 13 種はすべて検出。回帰: push 87・worktree 27・checkout 14・pr-base-sync 21/21 |
 | TC-03 | 2026-10-16 第 4 周 false-green・過剰検出対応 | ✅ PASS | `pass=206 fail=0`。指摘の変異 13 種（引用状態・算術式・dash・空白スキップ・安全網の各 verb・gh.exe・キャッシュ key）をすべて検出（各 fail≥1）。過剰検出 D1/D3 は現行版で ask なし、D2 は 11.13 秒 → 0.29 秒 |
 | TC-03 | 2026-10-16 第 4 周＋I174 引き継ぎ対応 | ✅ PASS | 新テストを直前コミット 8e7ded4 のガードに当てると `pass=171 fail=14`（Red）→ 修正後 `pass=185 fail=0`。回帰: push 87・worktree 27・checkout 14・pr-base-sync 21/21 |
 | TC-03 | 2026-10-16 敵対的レビュー第 3 周対応（二重の構え） | ✅ PASS | 新テストを直前コミット 8e68ef0 のガードに当てると `pass=149 fail=21`（Red）→ 修正後 `pass=170 fail=0`。回帰: push 87・worktree 27・checkout 14・pr-base-sync 21/21 |

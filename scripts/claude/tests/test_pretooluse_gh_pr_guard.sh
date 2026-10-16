@@ -369,6 +369,33 @@ PAD=$(python3 -c 'print("echo" + " gh pr" * 900)')
 T0=$(date +%s%N); CROSS_VALUE=false runj "$PAD" >/dev/null; T1=$(date +%s%N)
 FAST=1; [ $(( (T1 - T0) / 1000000 )) -lt 2000 ] && FAST=0
 ck "G182 安全網の走査が線形（900 件 < 2 秒）" 0 "$FAST"
+# 第 5 周: ${…}（パラメータ展開）の中の # や << はコメント/ヒアドキュメントではない
+# shellcheck disable=SC2016  # ${…} を展開させず文字列のまま hook に渡す意図
+ck "G183 \${x:- #}; merge"                2   "$(CROSS_VALUE=true runj 'echo ${x:- #}; gh pr merge 257')"
+# shellcheck disable=SC2016
+ck "G184 \${x:-\$(echo }) #)}; merge"     2   "$(CROSS_VALUE=true runj 'echo ${x:-$(echo }) #)}; gh pr merge 257')"
+# shellcheck disable=SC2016
+ck "G185 \${x/<<true } の次行 co"         2   "$(CROSS_VALUE=true runj $'echo ${x/<<true }\ngh co 257\ntrue')"
+# 第 5 周: \$( … ) 内の case パターンの ) は閉じ括弧ではない
+# shellcheck disable=SC2016
+ck "G186 \"\$(case …) …; merge)\""        ASK "$(CROSS_VALUE=true runj 'echo "$(case x in a) echo;; esac; gh pr merge 257)"')"
+# 第 5 周: <<\$'EOF' の終端語は EOF（$ は引用の一部）
+ck "G187 <<\$'EOF' 終端後の merge"        2   "$(CROSS_VALUE=true runj $'cat <<$\'EOF\'\nhi\nEOF\ngh pr merge 257\n$EOF')"
+# 第 5 周: 判定は入力に対して線形（多数の gh 語・終端なし heredoc の多数行でもタイムアウトしない）
+BIG=$(python3 -c 'print("echo " + "gh " * 24000 + "; gh pr merge 257")')
+T0=$(date +%s%N); R=$(CROSS_VALUE=true runj "$BIG"); T1=$(date +%s%N)
+FAST=1; [ $(( (T1 - T0) / 1000000 )) -lt 5000 ] && FAST=0
+ck "G188 gh 語 2.4 万個でも 5 秒未満"     0   "$FAST"
+ck "G188b その末尾の fork merge は block" 2   "$R"
+HD=$(python3 -c 'print("cat <<EOF x\n" * 8000 + "gh pr merge 257")')
+T0=$(date +%s%N); R=$(CROSS_VALUE=true runj "$HD"); T1=$(date +%s%N)
+FAST=1; [ $(( (T1 - T0) / 1000000 )) -lt 5000 ] && FAST=0
+ck "G189 終端なし heredoc 8000 行でも 5 秒未満" 0 "$FAST"
+ck "G189b その末尾の fork merge は block" 2   "$R"
+# 第 5 周: 引用符の中の {a,b}・"cd" はデータ（自前 PR で ask しない）
+ck "G190 --title \"…{x,y}…\"（自前）"     0   "$(CROSS_VALUE=false runj 'gh pr edit 230 --title "feat: support {x,y} tokens"')"
+ck "G191 --body '{\"a\": 1, \"b\": 2}'"   0   "$(CROSS_VALUE=false runj "gh pr edit 230 --body '{\"a\": 1, \"b\": 2}'")"
+ck "G192 echo \"cd\"; gh pr ready"        0   "$(CROSS_VALUE=false runj 'echo "cd"; gh pr ready')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
