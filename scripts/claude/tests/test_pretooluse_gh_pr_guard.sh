@@ -396,6 +396,35 @@ ck "G189b その末尾の fork merge は block" 2   "$R"
 ck "G190 --title \"…{x,y}…\"（自前）"     0   "$(CROSS_VALUE=false runj 'gh pr edit 230 --title "feat: support {x,y} tokens"')"
 ck "G191 --body '{\"a\": 1, \"b\": 2}'"   0   "$(CROSS_VALUE=false runj "gh pr edit 230 --body '{\"a\": 1, \"b\": 2}'")"
 ck "G192 echo \"cd\"; gh pr ready"        0   "$(CROSS_VALUE=false runj 'echo "cd"; gh pr ready')"
+# 第 6 周: 前処理の入れ子の取り違え（dq 内の ${・param 内の `・bt 内 dq の `・param 内の $'）でも
+# 独立した 2 つ目の安全網（入れ子を含むコマンドは生の文字列で数える）が ask に倒す（黙って通さない）
+# shellcheck disable=SC2016
+ck "G193 \"\${x:-\" #\"}\" ; merge"        ASK "$(CROSS_VALUE=true runj 'echo "${x:-" #"}" ; gh pr merge 257')"
+# shellcheck disable=SC2016
+ck "G194 \"\${x:-\" #\"}\" ; co"           ASK "$(CROSS_VALUE=true runj 'echo "${x:-" #"}" ; gh co 257')"
+# shellcheck disable=SC2016
+ck "G195 \${x:-\`echo } #\`}; merge"       ASK "$(CROSS_VALUE=true runj 'echo ${x:-`echo } #`}; gh pr merge 257')"
+# shellcheck disable=SC2016
+ck "G196 \"\`echo \"\`  #\" ; merge"       ASK "$(CROSS_VALUE=true runj 'echo "`echo "`  #" ; gh pr merge 257')"
+# shellcheck disable=SC2016
+ck "G197 \${x:-\$'\\''} ; merge"           ASK "$(CROSS_VALUE=true runj "echo \${x:-\$'\\\\''} ; gh pr merge 257 ; echo \\\\'")"
+# 入れ子を含まないコマンドの文字列データには反応しない（I174 方針の維持）
+ck "G198 bash t.sh \$'cat <<EOF…merge'"    0   "$(CROSS_VALUE=true runj $'bash t.sh $\'cat <<EOF\\ndon\\\'t\\nEOF\\ngh pr merge 257\'')"
+# 第 6 周: case/esac はコマンド位置のときだけ数える（引数の case で置換の閉じを誤らない）
+# shellcheck disable=SC2016
+ck "G199 X=\"\$(echo case)\"; echo \" # \"; merge" 2 "$(CROSS_VALUE=true runj 'X="$(echo case)"; echo " # "; gh pr merge 257')"
+# shellcheck disable=SC2016
+ck "G200 X=\"\$(echo test case)\"; 自前 merge" 0  "$(CROSS_VALUE=false runj 'X="$(echo test case)"; gh pr merge 12')"
+# shellcheck disable=SC2016
+ck "G201 n=\"\$(grep -c case f)\"; 自前 ready" 0  "$(CROSS_VALUE=false runj 'n="$(grep -c case README.md)"; echo "$n"; gh pr ready 12')"
+# 第 6 周: 閉じ引用の直後の # はコメントではない（実行される部分の置換で誤認しない）
+ck "G202 echo \"a\"#b; 自前 ready"        0   "$(CROSS_VALUE=false runj 'echo "a"#b; gh pr ready 12')"
+# 第 6 周: 終端語の違う終端なし heredoc が多数でも線形
+HD2=$(python3 -c 'print("".join("cat <<E%d\n" % k for k in range(9000)) + "gh pr merge 257")')
+T0=$(date +%s%N); R=$(CROSS_VALUE=true runj "$HD2"); T1=$(date +%s%N)
+FAST=1; [ $(( (T1 - T0) / 1000000 )) -lt 5000 ] && FAST=0
+ck "G203 異なる終端語の heredoc 9000 個でも 5 秒未満" 0 "$FAST"
+ck "G203b その末尾の fork merge は block" 2 "$R"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
@@ -424,10 +453,18 @@ ck "FG-N 安全網は review --comment を拾わない" 0 "$(CROSS_VALUE=true ru
 
 # 精密判定と安全網の両方を無効化すると素通しになる（FG-A の ASK が安全網によるものであることの裏取り）
 BROKEN_BOTH="$TMP/guard_noboth.py"
-sed 's/_gh_coarse_count(_shell_code(raw, keep_quoted=False)) != len(targets)/False/' "$BROKEN_GH" > "$BROKEN_BOTH"
+sed 's/_safety_net_mismatch(raw, len(targets))/False/' "$BROKEN_GH" > "$BROKEN_BOTH"
 grep -q 'if False:' "$BROKEN_BOTH"
 ck "FG-F 注入が一致している"            0   "$?"
 ck "FG-G 両層無効化で素通し"            0   "$(CROSS_VALUE=true runj 'gh pr merge 257' "$BROKEN_BOTH")"
+
+# 2 つ目の安全網（_safety_text）だけを無効化すると、共有前処理を取り違える入力が黙って通る（G193 の ASK の担い手の裏取り）
+BROKEN_NET2="$TMP/guard_nonet2.py"
+sed 's/or _gh_coarse_count(_safety_text(raw)) > n_targets)/)/' "$GUARD" > "$BROKEN_NET2"
+grep -q '_safety_text(raw)) > n_targets' "$BROKEN_NET2"
+ck "FG-H 注入が一致している"            1   "$?"
+# shellcheck disable=SC2016
+ck "FG-I 2 つ目の安全網なしでは素通し"   0   "$(CROSS_VALUE=true runj 'echo "${x:-" #"}" ; gh pr merge 257' "$BROKEN_NET2")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import bisect
 import json
 import os
 import re
@@ -506,6 +507,99 @@ _WORD_BREAK = " \t\n;&|()<>"
 _GH_COARSE_VERBS = ("merge", "checkout", "ready", "edit", "update-branch")
 
 
+_NESTING_RE = re.compile(r"\$\(|\$\{|`|\(\(")
+
+
+def _safety_text(raw: str) -> str:
+    """安全網の 2 つ目の前処理（精密判定の `_shell_code` とは独立）。
+    入れ子の起きる構文（`$(`・`${`・バッククォート・`((`）を含まないコマンドでは、bash の引用規則は
+    単引用符・二重引用符（\\ エスケープ）・`$'…'`（\\ エスケープ）・クォート外の \\ だけになり、ここで正確に再現できる。
+    その場合に限り、引用符の中身とヒアドキュメント本文（データ）を空白に置き換えて返す（I174 と同じ方針）。
+    入れ子を含むコマンド・閉じない引用・終端のないヒアドキュメントは、何も除かず生の文字列を返す
+    （前処理の取り違えで実行されるコードを消さない fail-safe。コメントは常に残す）。"""
+    s = raw.replace("\r\n", "\n").replace("\\\n", "")
+    out, pending, i, n = [], [], 0, len(s)
+    while i < n:
+        ch = s[i]
+        if _NESTING_RE.match(s, i):
+            return s  # クォート外の入れ子構文
+        if ch == "\\":
+            out.append(s[i:i + 2])
+            i += 2
+            continue
+        if ch == "'" and i > 0 and s[i - 1] == "$" and (i < 2 or s[i - 2] != "\\"):
+            j = i + 1
+            while j < n and s[j] != "'":
+                j += 2 if s[j] == "\\" else 1
+            if j >= n:
+                return s
+            out.append(" ")
+            i = j + 1
+            continue
+        if ch == "'":
+            j = s.find("'", i + 1)
+            if j < 0:
+                return s
+            out.append(" ")
+            i = j + 1
+            continue
+        if ch == '"':
+            j = i + 1
+            while j < n and s[j] != '"':
+                if _NESTING_RE.match(s, j):
+                    return s  # 二重引用符内の入れ子構文
+                j += 2 if s[j] == "\\" else 1
+            if j >= n:
+                return s
+            out.append(" ")
+            i = j + 1
+            continue
+        if s.startswith("<<<", i):
+            out.append("<<<")
+            i += 3
+            continue
+        if s.startswith("<<", i):
+            m = re.match(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|([^\s;&|()<>'\"]+))", s[i:])
+            if not m:
+                return s
+            word = m.group(2) if m.group(2) is not None else (
+                m.group(3) if m.group(3) is not None else m.group(4).replace("\\", ""))
+            pending.append((word, bool(m.group(1)), m.group(4) is not None))
+            out.append(m.group(0))
+            i += m.end()
+            continue
+        if ch == "\n" and pending:
+            out.append("\n")
+            pos = i + 1
+            for word, dash, expands in pending:
+                while True:
+                    e = s.find("\n", pos)
+                    e = n if e < 0 else e
+                    line = s[pos:e]
+                    if (line.lstrip("\t") if dash else line) == word:
+                        pos = e
+                        break
+                    if expands and _NESTING_RE.search(line):
+                        return s  # 引用なし終端語の本文は展開される
+                    if e >= n:
+                        return s  # 終端なし
+                    pos = e + 1
+            pending = []
+            i = pos
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _safety_net_mismatch(raw: str, n_targets: int) -> bool:
+    """安全網: (1) 実行される部分（_shell_code・精密判定と共有）の粗い件数が精密判定と一致しない、または
+    (2) 独立した前処理（_safety_text）の粗い件数が精密判定を上回る、なら True（＝ask）。
+    (2) により、共有前処理の取り違えで精密判定と (1) が同時に見落としても黙って素通しにならない。"""
+    return (_gh_coarse_count(_shell_code(raw, keep_quoted=False)) != n_targets
+            or _gh_coarse_count(_safety_text(raw)) > n_targets)
+
+
 def _gh_coarse_count(text: str) -> int:
     """安全網の粗い検出: `gh … pr … <取り込み系 verb>`・`gh … co`・`gh … pr … review … --approve/-a` の
     記述を数える（区切り `\n ; & | ` ( )` ごとに空白で単語に分け、gh ごとに次の gh までを見る線形走査）。
@@ -551,9 +645,35 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
 
     def emit(text, data=False):
         if data and not keep_quoted:
-            out.append(" ")
+            out.append("_")  # 空白にすると直後の # や case を語頭と誤認するため、語の一部になる文字で埋める
         else:
             out.append(text)
+
+    def last_code_char():
+        for piece in reversed(out):
+            t = piece.rstrip(" \t")
+            if t:
+                return t[-1]
+            if piece and piece[-1] not in " \t":
+                return piece[-1]
+        return ""
+
+    line_idx = {}  # (行の内容, dash) → 行頭位置のリスト（終端行の探索を線形にするため一度だけ作る）
+
+    def find_terminator(word, dash, pos):
+        if not line_idx:
+            p0 = 0
+            for line in s.split("\n"):
+                line_idx.setdefault((line, False), []).append(p0)
+                line_idx.setdefault((line.lstrip("\t"), True), []).append(p0)
+                p0 += len(line) + 1
+        starts = line_idx.get((word, dash), [])
+        k = bisect.bisect_left(starts, pos)
+        if k >= len(starts):
+            return -1
+        st = starts[k]
+        e = s.find("\n", st)
+        return n if e < 0 else e
 
     def push_subst():
         stack.append("subst")
@@ -678,7 +798,7 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
             out.append("`")
             i += 1
             continue
-        if ctx == "subst" and (not out or out[-1][-1:] in _WORD_BREAK):
+        if ctx == "subst" and (not out or out[-1][-1:] in _WORD_BREAK) and last_code_char() in "(;&|\n":
             m = re.match(r"(case|esac)(?=[\s;&|()<>]|$)", s[i:i + 5])
             if m:
                 case_d[-1] = case_d[-1] + 1 if m.group(1) == "case" else max(0, case_d[-1] - 1)
@@ -746,18 +866,10 @@ def _shell_code(raw: str, keep_quoted: bool = True) -> str:
             out.append(ch)
             pos = i + 1
             for word, dash in pending:
-                p, found = pos, False
-                while (word, dash) not in unfound and p <= n:
-                    e = s.find("\n", p)
-                    e = n if e < 0 else e
-                    line = s[p:e]
-                    if (line.lstrip("\t") if dash else line) == word:
-                        found = True
-                        pos = e  # 終端行の末尾（改行の手前）
-                        break
-                    if e >= n:
-                        break
-                    p = e + 1
+                e = -1 if (word, dash) in unfound else find_terminator(word, dash, pos)
+                found = e >= 0
+                if found:
+                    pos = e  # 終端行の末尾（改行の手前）
                 if not found:
                     unfound.add((word, dash))
                     break  # 終端なし: 以降は除かない
@@ -1003,7 +1115,7 @@ def _guard_gh_pr_targets(targets: list, raw: str):
         if d:
             asks.append(d[1])
     # 安全網: 判定しきれない「gh pr の取り込み系操作の記述」が残っていれば ask
-    if _gh_coarse_count(_shell_code(raw, keep_quoted=False)) != len(targets):
+    if _safety_net_mismatch(raw, len(targets)):
         asks.append("判定しきれない形で gh pr の取り込み系操作（merge/checkout/ready/edit/update-branch/"
                     "review --approve）が書かれています（クォート内・置換内・未知の書き方など）。"
                     "外部（fork）由来の PR への操作でないか確認してください。")
