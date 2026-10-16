@@ -262,4 +262,5 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 ガードは外部 PR への `gh pr merge` / `gh pr checkout`（`gh co`）と MCP の `merge_pull_request` を block、
 `gh pr ready` / `edit` / `update-branch` / `review --approve` と MCP の `update_pull_request_branch` /
 `create_pull_request_review`（APPROVE）を ask にする。読み取りと `close` / `comment` は断るために必要なので素通しする。
-コマンド中に `gh pr merge` 等の記述があるのに判定しきれない場合（クォート内に書いた等）も、block ではなく ask になる。
+実行されるコマンドの中に `gh pr merge` 等があるのに判定しきれない場合は、block ではなく ask になる。
+引用符の中の文字列やヒアドキュメントの本文（コミットメッセージ・文書・テスト用の文字列）には反応しない。

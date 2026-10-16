@@ -179,8 +179,8 @@ ck "G46 review -ab LGTM"                 ASK "$(CROSS_VALUE=true runj 'gh pr rev
 ck "G47 review --approve=true"           ASK "$(CROSS_VALUE=true runj 'gh pr review 257 --approve=true')"
 ck "G48 review -ba（-b の値が a）"       0   "$(CROSS_VALUE=true runj 'gh pr review 257 -ba')"
 # 誤検出しない・自前 PR の挙動は不変（AC-12）
-# 第 3 周で安全網を導入: クォート内の取り込み系記述は block せず ask（2026-10-16 ユーザー了承の過剰確認）
-ck "G49 クォート内の改行＋merge 文字列"  ASK "$(CROSS_VALUE=true runj $'gh pr comment 1 --body "x\ngh pr merge 257"')"
+# 引用符の中身はデータ（I174 と同じ方針・2026-10-16 ユーザー指示）: 判定しない
+ck "G49 クォート内の改行＋merge 文字列"  0   "$(CROSS_VALUE=true runj $'gh pr comment 1 --body "x\ngh pr merge 257"')"
 ck "G50 自前 PR の複数行 merge"          0   "$(CROSS_VALUE=false runj $'git status\ngh pr merge 261')"
 : > "$GH_LOG"
 ck "G51 複数行の無関係コマンド"          0   "$(CROSS_VALUE=true GH_LOG="$GH_LOG" runj $'git status\nls -la')"
@@ -321,12 +321,37 @@ ck "G151 merge 261 -x（未知短縮）=ask"   ASK "$(CROSS_VALUE=false runj 'gh
 ck "G152 review 257 --foo=ask"           ASK "$(CROSS_VALUE=false runj 'gh pr review 257 --foo')"
 ck "G153 gh.exe pr merge"                2   "$(CROSS_VALUE=true runj 'gh.exe pr merge 257')"
 # 安全網: 判定しきれない gh pr の取り込み系記述は ask（block しない）・該当しない記述は素通し
-ck "G154 クォート内の merge 記述=ask"    ASK "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"')"
+ck "G154 クォート内の merge 記述は素通し" 0   "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"')"
 ck "G155 review --comment 記述は素通し"   0   "$(CROSS_VALUE=false runj 'gh pr review 261 --comment --body-file /tmp/r.md')"
 ck "G156 view/checks は素通し"            0   "$(CROSS_VALUE=false runj 'gh pr view 261 --json state && gh pr checks 261')"
 # 照会の重複排除（同じ PR への複数操作で照会 1 回）
 : > "$GH_LOG"; CROSS_VALUE=false GH_LOG="$GH_LOG" runj 'gh pr edit 236 --add-label a && gh pr ready 236' >/dev/null
 ck "G157 同一 PR の照会は 1 回"          1   "$(wc -l < "$GH_LOG" | tr -d ' ')"
+# ===== 敵対的レビュー第 4 周・I174 引き継ぎ（2026-10-16）対応 =====
+# 引き継ぎ 1: リダイレクトを PR 番号と読み違えない・--help だけの呼び出しは ask しない
+ck "G158 merge --help 2>&1 | grep"       0   "$(CROSS_VALUE=false runj 'gh pr merge --help 2>&1 | grep -E "squash"; gh pr checkout --help 2>&1 | grep -E "force"')"
+ck "G159 merge 12 >out <in 2>/dev/null"  0   "$(CROSS_VALUE=false runj 'gh pr merge 12 >/tmp/o <in 2>/dev/null')"
+# 引き継ぎ 2: 引数として渡す文字列・ヒアドキュメント本文には反応しない
+ck "G160 run '…gh pr merge…' の列"       0   "$(CROSS_VALUE=true runj "run 'gh pr merge 257' ; run 'gh pr edit 12 --base x' ; run 'gh co 257'")"
+ck "G161 python3 -c \"…gh pr merge…\""   0   "$(CROSS_VALUE=true runj 'python3 -c "print(\"gh pr merge 257\")"')"
+ck "G162 heredoc でスクリプトを書く"     0   "$(CROSS_VALUE=true runj $'cat > /tmp/t.sh <<\'EOF\'\nrun \'gh pr merge 257\'\nrun $\'cat <<X\\ndon\\\'t\\nX\\ngh pr merge 257\'\nEOF')"
+# 第 4 周: 二重引用符内のコマンド置換に引用符があっても状態を取り違えない（後続の実コマンドを検出）
+ck "G163 \"\$(printf '\"')\" ' #'; merge"  2  "$(CROSS_VALUE=true runj "echo \"\$(printf '\"')\" ' #' ; gh pr merge 257")"
+ck "G164 \"\`printf '\"'\`\" ' #'; co"   2   "$(CROSS_VALUE=true runj "echo \"\`printf '\"'\`\" ' #' ; gh co 257")"
+# 第 4 周: \$' と $$' は ANSI-C 引用ではない
+ck "G165 \$\$'x\\' ' #'; merge"          2   "$(CROSS_VALUE=true runj "echo \$\$'x\\' ' #' ; gh pr merge 257")"
+ck "G166 \\\$'a\\' ' #'; checkout"       2   "$(CROSS_VALUE=true runj "echo \\\$'a\\' ' #'; gh pr checkout 257")"
+# 第 4 周: ブレース展開は識別子を確定できない → ask
+ck "G167 merge -t {x,257}"               ASK "$(CROSS_VALUE=true runj 'gh pr merge -t {x,257}')"
+ck "G168 gh co -b {x,257}"               ASK "$(CROSS_VALUE=true runj 'gh co -b {x,257}')"
+ck "G169 review -b {x,-a} 257"           ASK "$(CROSS_VALUE=true runj 'gh pr review -b {x,-a} 257')"
+# 第 4 周: 件数相殺（引用符で囲んだ verb は精密判定のみが数える）→ 件数不一致で ask
+ck "G170 gh pr \"merge\" 12"             ASK "$(CROSS_VALUE=false runj 'gh pr "merge" 12')"
+# 引用符の中のコマンド置換は実行される部分（精密判定が拾えなくても安全網が ask）
+# shellcheck disable=SC2016  # $( を展開させず文字列のまま hook に渡す意図
+ck "G171 echo \"\$(gh pr merge 257)\""   ASK "$(CROSS_VALUE=true runj 'echo "$(gh pr merge 257)"')"
+# 算術式の << はヒアドキュメントではない
+ck "G172 \$((1<<X)) の次行 merge"        2   "$(CROSS_VALUE=true runj $'echo $((1<<X))\ngh pr merge 257\nX')"
 ck "G56 MCP pullNumber（キャメル）"      2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request '{"owner":"o","repo":"r","pullNumber":257}')"
 
 # ===== false-green 注入（判定関数ごとに独立に裏取り） =====
@@ -345,10 +370,12 @@ sed 's/^def _mcp_pr_target(tool_name: str, tool_input: dict):$/&\n    return Non
 ck "FG-D MCP 判定無効化で素通し"        0   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_PR" "$BROKEN_MCP")"
 ck "FG-E 実体は block（MCP）"           2   "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_PR")"
 
-BROKEN_NET="$TMP/guard_nonet.py"
-sed 's/len(_GH_COARSE_RE.findall(_shell_code(raw))) > len(targets)/False/' "$GUARD" > "$BROKEN_NET"
-ck "FG-F 安全網無効化で素通し"          0   "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"' "$BROKEN_NET")"
-ck "FG-G 実体は安全網で ask"            ASK "$(CROSS_VALUE=false runj 'git commit -m "note: gh pr merge 257 is blocked"')"
+# 精密判定と安全網の両方を無効化すると素通しになる（FG-A の ASK が安全網によるものであることの裏取り）
+BROKEN_BOTH="$TMP/guard_noboth.py"
+sed 's/len(_GH_COARSE_RE.findall(_shell_code(raw, keep_quoted=False))) != len(targets)/False/' "$BROKEN_GH" > "$BROKEN_BOTH"
+grep -q 'if False:' "$BROKEN_BOTH"
+ck "FG-F 注入が一致している"            0   "$?"
+ck "FG-G 両層無効化で素通し"            0   "$(CROSS_VALUE=true runj 'gh pr merge 257' "$BROKEN_BOTH")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

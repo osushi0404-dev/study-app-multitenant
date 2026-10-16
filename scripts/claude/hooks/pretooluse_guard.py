@@ -498,8 +498,10 @@ _GH_PUNCT = "();<>|&`"
 _FD_RE = re.compile(r"(?:(?<=^)|(?<=[\s;&|()`]))\d+(?=[<>])", re.M)
 _WORD_BREAK = " \t\n;&|()<>"
 # 安全網: 精密判定（下の _gh_pr_target）が取りこぼした「gh pr の取り込み系操作の記述」を数える粗い検出。
-# クォートを区別しないため、精密判定の件数より多ければ「判定しきれない記述がある」とみなして ask にする
-# （新しい書き方の穴を黙った素通しではなく確認に倒す fail-safe。block はしない）。
+# 「実行される部分」（_shell_code(keep_quoted=False)＝引用符の中身・ヒアドキュメント本文・コメントを除いた文字列）に掛け、
+# 精密判定の件数と一致しなければ「判定しきれない記述がある」とみなして ask にする
+# （精密判定の穴を黙った素通しではなく確認に倒す fail-safe。block はしない）。
+# 引数として渡す文字列データ（`run 'gh pr merge 257'`・`python3 -c "…"`）には反応しない（I174 と同じ方針）。
 _GH_COARSE_RE = re.compile(
     r"\bgh(?:\.exe)?\s+(?:[^\n;&|`]*?\s)?"
     r"(?:pr\s+(?:[^\n;&|`]*?\s)?(?:merge|checkout|ready|edit|update-branch)\b"
@@ -508,50 +510,123 @@ _GH_COARSE_RE = re.compile(
 )
 
 
-def _shell_code(raw: str) -> str:
+def _shell_code(raw: str, keep_quoted: bool = True) -> str:
     """bash と同じ規則で、実行されない部分を取り除いた文字列を返す（gh pr 判定専用）。
     - CRLF を LF に揃え、クォート外の行継続（\\<改行>）を連結する
-    - クォート外の語頭の `#` から行末までのコメントを除く（語中の `#` は文字のまま）
+    - クォート外の語頭の `#` から行末までのコメントを除く（語中の `#`・クォート内の `#` は文字のまま）
     - クォート外・算術式外の `<<WORD`（`<<<` を除く）をヒアドキュメント開始とみなし、本文行と終端行を除く。
       終端語はクォート・バックスラッシュを除いた語全体（`'END-OF-MSG'`・`\\EOF`・`EO"F"` → END-OF-MSG/EOF/EOF）。
       終端行が見つからない場合は除かない（後続の実コマンドを隠さない fail-safe）。
-    クォートの中身はそのまま残す（shlex 側で 1 語になる）。"""
+    - 二重引用符の中の `$( … )`・`` ` … ` `` は実行される部分として入れ子で追う（中の引用符で状態を取り違えない）。
+      ANSI-C 引用 `$'…'` は、直前の `$` が引用・エスケープされておらず `$$` の 2 文字目でもないときだけ認める。
+    keep_quoted=False のときは引用符の中身（データ）を空白に置き換える（コマンド置換の中身は実行されるので残す）。
+    安全網はこの「実行される部分だけ」の文字列に掛ける（I174 と同じ方針: 引数の文字列・ヒアドキュメント本文に反応しない）。"""
     s = raw.replace("\r\n", "\n")
     out, pending, i, n = [], [], 0, len(s)
-    state = None  # None / "'" / '"' / "$'"（ANSI-C クォート）
+    stack = ["top"]   # top / sq / dq / ansi / subst / bt
+    depth = []        # subst ごとの括弧の深さ
+    bare_dollar = False  # 直前に出力したのが「引用・エスケープされていない単独の $」か
+
+    def emit(text, data=False):
+        if data and not keep_quoted:
+            out.append(" ")
+        else:
+            out.append(text)
+
     while i < n:
-        ch = s[i]
-        if state == "'":
-            out.append(ch)
-            i += 1
+        ch, ctx = s[i], stack[-1]
+        if ctx == "sq":
             if ch == "'":
-                state = None
+                stack.pop()
+                emit("'", data=True)
+            else:
+                emit(ch, data=True)
+            i += 1
             continue
-        if state in ('"', "$'"):
+        if ctx == "ansi":
             if ch == "\\" and i + 1 < n:
-                out.append(s[i:i + 2])
+                emit(s[i:i + 2], data=True)
                 i += 2
                 continue
-            out.append(ch)
+            if ch == "'":
+                stack.pop()
+            emit(ch, data=True)
             i += 1
-            if ch == ("'" if state == "$'" else '"'):
-                state = None
             continue
-        # クォート外
+        if ctx == "dq":
+            if ch == "\\" and i + 1 < n:
+                emit(s[i:i + 2], data=True)
+                i += 2
+            elif ch == '"':
+                stack.pop()
+                emit('"', data=True)
+                i += 1
+            elif s.startswith("$(", i) and not s.startswith("$((", i):
+                stack.append("subst")
+                depth.append(0)
+                emit("$(")
+                i += 2
+            elif ch == "`":
+                stack.append("bt")
+                emit("`")
+                i += 1
+            else:
+                emit(ch, data=True)
+                i += 1
+            bare_dollar = False
+            continue
+        # クォート外（top / subst / bt）
+        prev_bare = bare_dollar
+        bare_dollar = False
         if ch == "\\" and i + 1 < n:
-            if s[i + 1] == "\n":
-                i += 2  # 行継続
-                continue
-            out.append(s[i:i + 2])
+            if s[i + 1] != "\n":  # 行継続は連結（出力しない）
+                out.append(s[i:i + 2])
             i += 2
             continue
-        if ch == "'":
-            state = "$'" if out and out[-1].endswith("$") else "'"
+        if s.startswith("$((", i):  # 算術式（中の << はシフト演算）
+            end = s.find("))", i)
+            end = n if end < 0 else end + 2
+            out.append(s[i:end])
+            i = end
+            continue
+        if ch == "$":
+            # `$$` の 2 文字目は展開の開始ではない
+            bare_dollar = not prev_bare
             out.append(ch)
+            i += 1
+            if s.startswith("$(", i - 1) and not s.startswith("$((", i - 1):
+                stack.append("subst")
+                depth.append(0)
+                out.append("(")
+                i += 1
+                bare_dollar = False
+            continue
+        if ch == "'":
+            stack.append("ansi" if prev_bare else "sq")
+            emit("'", data=True)
             i += 1
             continue
         if ch == '"':
-            state = '"'
+            stack.append("dq")
+            emit('"', data=True)
+            i += 1
+            continue
+        if ch == "`":
+            if ctx == "bt":
+                stack.pop()
+            else:
+                stack.append("bt")
+            out.append("`")
+            i += 1
+            continue
+        if ctx == "subst" and ch in "()":
+            if ch == "(":
+                depth[-1] += 1
+            elif depth[-1] == 0:
+                stack.pop()
+                depth.pop()
+            else:
+                depth[-1] -= 1
             out.append(ch)
             i += 1
             continue
@@ -559,7 +634,7 @@ def _shell_code(raw: str) -> str:
             while i < n and s[i] != "\n":
                 i += 1
             continue
-        if s.startswith("$((", i) or (s.startswith("((", i) and (not out or out[-1][-1:] in _WORD_BREAK)):
+        if s.startswith("((", i) and (not out or out[-1][-1:] in _WORD_BREAK):
             end = s.find("))", i)
             end = n if end < 0 else end + 2
             out.append(s[i:end])
@@ -752,7 +827,9 @@ def _gh_pr_target(cmd: str):
         # 識別子なし＝カレントブランチの PR。照会は hook の作業ディレクトリで走るため、
         # gh の前に別コマンド（xargs 等）や cd/pushd があると実際の対象と食い違い得る → ask
         moved = any(not op and t in ("cd", "pushd") for t, op in toks[:idx])
-        if subst or len(positionals) > 1 or (not positionals and (prefixed or moved)):
+        # 引用符の外のブレース展開（`{x,257}`）は bash が複数の語に展開するため、値と識別子の対応を確定できない
+        braced = any(re.search(r"\{[^{}]*,[^{}]*\}", a) for a in rest)
+        if subst or braced or len(positionals) > 1 or (not positionals and (prefixed or moved)):
             ambiguous = True
         if kind == "approve":  # ambiguous 判定の後に評価する（位置引数の異常で ask を消さない）
             if not approve and not ambiguous:
@@ -837,7 +914,7 @@ def _guard_gh_pr_targets(targets: list, raw: str):
         if d:
             asks.append(d[1])
     # 安全網: 判定しきれない「gh pr の取り込み系操作の記述」が残っていれば ask
-    if len(_GH_COARSE_RE.findall(_shell_code(raw))) > len(targets):
+    if len(_GH_COARSE_RE.findall(_shell_code(raw, keep_quoted=False))) != len(targets):
         asks.append("判定しきれない形で gh pr の取り込み系操作（merge/checkout/ready/edit/update-branch/"
                     "review --approve）が書かれています（クォート内・置換内・未知の書き方など）。"
                     "外部（fork）由来の PR への操作でないか確認してください。")
