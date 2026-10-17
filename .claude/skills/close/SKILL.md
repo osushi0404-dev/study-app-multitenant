@@ -14,6 +14,12 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 0) PR のベースブランチ確認と base 追従（必須）:
    ```bash
+   # cross-repo チェック（I146）: 自前の PR であることを最初に確認する
+   gh pr view <PR番号> --json isCrossRepository -q .isCrossRepository
+   # → "false" であること。"true"（fork 由来の外部 PR）なら **STOP**。
+   #   base 追従も CI 対応もせず、CONTRIBUTING.md の方針に沿って方針コメント付きで close する
+   #   （手順: docs/runbooks/workflow.md「外部（fork）からの PR の扱い」）。
+
    gh pr view --json baseRefName --jq '.baseRefName'
    # → "develop" であること。"main" の場合は以下で修正してから続行:
    # gh pr edit <PR番号> --base develop

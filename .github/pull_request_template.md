@@ -1,3 +1,5 @@
+> 外部からの PR は受け付けていません（[CONTRIBUTING.md](https://github.com/osushi0404-dev/study-app-multitenant/blob/develop/CONTRIBUTING.md)）。このテンプレートはメンテナ用です。
+
 ## 概要
 <!-- 何をしたか・なぜしたか -->
 
