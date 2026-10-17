@@ -31,14 +31,19 @@ _SHELL_OPS = ("&&", "||", "|", ";")
 
 def _segments(cmd: str) -> list:
     """コマンドをクォート対応で分割し、shell 演算子区切りごとのトークン列リストを返す。
-    クォート不整合（実シェルでもエラー）の場合は素朴分割にフォールバック。"""
+    クォート不整合（実シェルでもエラー）の場合は素朴分割にフォールバック。
+    語にくっついた演算子（`git checkout feat; git log -- x`）も区切る（I174: 区切らないと後ろの `-- x` を
+    checkout の対象と誤読する）。"""
     try:
-        toks = shlex.split(cmd)
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|")
+        lex.whitespace_split = True
+        lex.commenters = ""
+        toks = list(lex)
     except ValueError:
         toks = cmd.split()
     segs, seg = [], []
     for t in toks:
-        if t in _SHELL_OPS:
+        if t in _SHELL_OPS or (t and set(t) <= set(";&|")):
             if seg:
                 segs.append(seg)
                 seg = []
@@ -456,13 +461,16 @@ _CODE_EXTERNAL = (
     (r"\.(delay|apply_async)\(", "celery タスクの起動"),
     (r"\b\w+_task\s*\(", "celery タスク関数の直接実行"),
     (r"\bsend_study_reminders_task\b", "学習リマインダー送信タスク"),
-    (r"auth/register/|reverse\(\s*['\"]register", "登録 API（確認メールを送信）"),
-    (r"auth/password-reset/|reverse\(\s*['\"]password_reset['\"]", "パスワード再設定依頼 API（メールを送信）"),
-    (r"\bAIQuestionGenerator\b|problems/generate_(ai|adaptive)/|\bopenai\.", "OpenAI への送信"),
+    (r"auth/register/|reverse\(\s*(viewname\s*=\s*)?['\"](\w+:)?register", "登録 API（確認メールを送信）"),
+    (r"auth/password-reset/|reverse\(\s*(viewname\s*=\s*)?['\"](\w+:)?password_reset['\"]",
+     "パスワード再設定依頼 API（メールを送信）"),
+    (r"\bAIQuestionGenerator\b|problems/generate_(ai|adaptive)/|\bopenai\.|['\"](\w+:)?problem-generate-(ai|adaptive)['\"]",
+     "OpenAI への送信"),
     (r"\b(smtplib|socket|requests|urllib|httpx|http\.client)\b", "外部への通信"),
     (r"\bsubprocess\b|\bos\s*\.\s*(system|popen|exec\w*|spawn\w*)\s*\(", "外部コマンドの実行"),
     (r"\bos\s*\.\s*environ\b(?!\s*\.\s*setdefault)|\bgetenv\s*\(|/proc/|['\"][^'\"]*\.env['\"]|"
-     r"\bsettings\s*\.\s*(SECRET_KEY|DATABASES|EMAIL_HOST_PASSWORD|OPENAI_API_KEY|SENDGRID_API_KEY)\b",
+     r"\b(SECRET_KEY|DATABASES|EMAIL_HOST_PASSWORD|OPENAI_API_KEY|SENDGRID_API_KEY|SIMPLE_JWT|SIGNING_KEY|"
+     r"settings_dict|_wrapped)\b",
      "秘密情報（環境変数・.env・設定の鍵）の参照"),
 )
 _DJANGO_CTX_RE = re.compile(r"\bdjango\b|\bmanage\.py\b|\.models\b|DJANGO_SETTINGS_MODULE|\bconnection\b|"
@@ -480,7 +488,14 @@ _ORM_QS_METHODS = ("filter", "exclude", "all", "order_by", "select_related", "pr
                    "only", "defer", "distinct", "none", "using", "values", "values_list", "reverse")
 _MAIL_FUNCS = ("send_mail", "send_mass_mail", "mail_admins", "mail_managers")
 _MAIL_CLASSES = ("EmailMessage", "EmailMultiAlternatives", "PasswordResetForm")
-_SECRET_SETTINGS = ("SECRET_KEY", "DATABASES", "EMAIL_HOST_PASSWORD", "OPENAI_API_KEY", "SENDGRID_API_KEY")
+# 秘密を含む設定の名前（SIMPLE_JWT は SIGNING_KEY に SECRET_KEY を持つ）。属性・文字列・import のどの形でも確認に回す
+_SECRET_SETTINGS = ("SECRET_KEY", "DATABASES", "EMAIL_HOST_PASSWORD", "OPENAI_API_KEY", "SENDGRID_API_KEY",
+                    "SIMPLE_JWT")
+_SECRET_NAMES = _SECRET_SETTINGS + ("SIGNING_KEY", "PASSWORD", "DB_PASSWORD")
+_SECRET_ATTRS = ("settings_dict", "_wrapped")   # DB 接続情報（パスワードを含む）・設定の全体
+# メール送信・OpenAI への送信を伴う API のルート名（reverse で指定されたとき。名前空間 accounts: 等は外して比べる）
+_EXTERNAL_ROUTES = ("register", "register_with_org", "password_reset", "problem-generate-ai",
+                    "problem-generate-adaptive")
 _DANGER_MANAGE = ("flush", "sqlflush", "reset_db", "loaddata")
 # compose の中で素通しにしてよい呼び出しの名前（関数名・メソッド名）。ここに無い呼び出しがあれば確認に回す
 _SAFE_CALLS = frozenset((
@@ -488,6 +503,7 @@ _SAFE_CALLS = frozenset((
     "print", "len", "list", "dict", "set", "tuple", "str", "int", "float", "bool", "sorted", "reversed",
     "range", "enumerate", "zip", "min", "max", "sum", "any", "all", "isinstance", "type", "repr", "round",
     "abs", "hasattr", "getattr", "format", "next", "iter", "divmod", "chr", "ord", "pprint", "vars", "id",
+    "defaultdict", "most_common", "ceil", "floor", "load",
     # 文字列・辞書・リスト（読み取りか、コードの中だけの変更）
     "items", "keys", "values", "get", "append", "extend", "join", "split", "rsplit", "strip", "lstrip",
     "rstrip", "startswith", "endswith", "lower", "upper", "replace", "count", "index", "find",
@@ -497,6 +513,8 @@ _SAFE_CALLS = frozenset((
     "defer", "distinct", "exists", "first", "last", "latest", "earliest", "in_bulk", "values_list", "using",
     "none", "iterator", "explain", "get_user_model", "get_model", "Q", "F", "Count", "Sum", "Avg", "Max",
     "Min", "Value", "Coalesce", "Subquery", "OuterRef", "Exists", "TruncDate", "Cast", "ExpressionWrapper",
+    "dates", "datetimes", "get_fields", "get_field", "get_models", "get_app_config", "model_to_dict",
+    "get_full_name", "get_short_name", "get_username", "has_usable_password",
     # 1 件だけの書き込み（ループの中のものは危険操作として先に止める）
     "save", "create", "get_or_create", "set_password", "check_password", "refresh_from_db", "full_clean",
     "has_perm", "has_perms",
@@ -507,6 +525,7 @@ _SAFE_CALLS = frozenset((
     "get_many", "has_key", "ttl",
     # 日時・JSON・設定
     "now", "today", "timedelta", "date", "datetime", "isoformat", "strftime", "strptime", "astimezone",
+    "localdate", "weekday", "isoweekday", "timestamp", "total_seconds",
     "localtime", "make_aware", "dumps", "loads", "setup", "override_settings", "dedent",
     # DB の読み取り（execute の SQL は別に判定する）
     "cursor", "fetchall", "fetchone", "fetchmany",
@@ -533,6 +552,14 @@ def _ast_dotted(node) -> str:
 def _ast_str(node):
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
+def _is_cache_ref(node, cache_names=()) -> bool:
+    """node が Django のキャッシュ（cache・caches['x']・それを代入した変数）を指すか。"""
+    if isinstance(node, ast.Subscript):
+        return _ast_dotted(node.value).split(".")[-1] == "caches"
+    if isinstance(node, ast.Name) and node.id in cache_names:
+        return True
+    return _ast_dotted(node).split(".")[-1] == "cache"
+
 class _CodeVisitor(ast.NodeVisitor):
     """Python コードの呼び出し・import・属性の参照を、書き方の揺れに関係なく調べる。"""
 
@@ -540,8 +567,11 @@ class _CodeVisitor(ast.NodeVisitor):
         self.danger, self.external, self.unknown = [], [], []
         self.imports_app = False
         self.loop = 0
-        self.dict_names, self.qs_names = set(), set()
+        self.dict_names, self.qs_names, self.cache_names = set(), set(), set()
         self.setdefault_environ = set()
+        self.aliases = {}                        # from x import y as z の z → y（別名の呼び出しを元の名前で判定する）
+        self.settings_names = {"settings"}       # django.conf の settings とその別名
+        self.environ_names = set()               # from os import environ（as 別名）
 
     # --- ループ（中の save / delete は一括操作） ---
     def _loop(self, node):
@@ -560,6 +590,8 @@ class _CodeVisitor(ast.NodeVisitor):
         elif "objects" in _ast_dotted(v).split(".") or (
                 isinstance(v, ast.Call) and isinstance(v.func, ast.Attribute) and v.func.attr in _ORM_QS_METHODS):
             self.qs_names.update(names)
+        elif _is_cache_ref(v, self.cache_names):
+            self.cache_names.update(names)
         self.generic_visit(node)
 
     # --- import ---
@@ -582,17 +614,30 @@ class _CodeVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
-        self._import(node.module or "", [a.name for a in node.names])
+        mod = node.module or ""
+        self._import(mod, [a.name for a in node.names])
+        for a in node.names:
+            if a.asname:
+                self.aliases[a.asname] = a.name
+            if a.name in _SECRET_NAMES:
+                self.external.append(f"秘密情報（import {a.name}）の参照")
+            if mod == "django.conf" and a.name == "settings":
+                self.settings_names.add(a.asname or a.name)
         self.generic_visit(node)
 
-    # --- 属性の参照（秘密情報） ---
+    # --- 属性・名前の参照（秘密情報） ---
     def visit_Attribute(self, node):
         d = _ast_dotted(node)
         if d.endswith("os.environ") and id(node) not in self.setdefault_environ:
             self.external.append("秘密情報（os.environ）の参照")
-        if node.attr in _SECRET_SETTINGS and d.split(".")[-2:-1] == ["settings"]:
-            self.external.append(f"秘密情報（settings.{node.attr}）の参照")
+        if node.attr in _SECRET_SETTINGS or node.attr in _SECRET_ATTRS or \
+                (node.attr == "__dict__" and d.split(".")[-2:-1] and d.split(".")[-2] in self.settings_names):
+            self.external.append(f"秘密情報（{node.attr}）の参照")
         self.generic_visit(node)
+
+    def visit_Name(self, node):
+        if node.id in self.environ_names and id(node) not in self.setdefault_environ:
+            self.external.append("秘密情報（environ）の参照")
 
     def visit_Constant(self, node):
         if isinstance(node.value, str):
@@ -600,19 +645,24 @@ class _CodeVisitor(ast.NodeVisitor):
                 self.external.append("メール送信・OpenAI への送信を伴う API のパス")
             if "/proc/" in node.value and "environ" in node.value:
                 self.external.append("秘密情報（/proc/*/environ）の参照")
+            if node.value in _SECRET_NAMES:
+                self.external.append(f"秘密情報（'{node.value}'）の参照")
 
     # --- 呼び出し ---
     def visit_Call(self, node):
         f = node.func
         name = f.attr if isinstance(f, ast.Attribute) else (f.id if isinstance(f, ast.Name) else "")
+        if isinstance(f, ast.Name):
+            name = self.aliases.get(name, name)               # 別名で import した関数は元の名前で判定する
         recv = f.value if isinstance(f, ast.Attribute) else None
         rd = _ast_dotted(recv) if recv is not None else ""
         args = [_ast_str(a) for a in node.args]
+        kws = {k.arg: k.value for k in node.keywords}
         handled = False
         # 危険操作
         if name in ("delete", "_raw_delete"):
-            if rd.split(".")[-1] in ("cache",) or rd.endswith("caches"):
-                handled = True                                # cache.delete('k') は 1 件の削除
+            if recv is not None and _is_cache_ref(recv, self.cache_names):
+                handled = True                                # cache.delete('k') / caches['x'].delete('k') は 1 件の削除
             else:
                 self.danger.append("データ削除（.delete()）")
         if name == "update" and recv is not None:
@@ -629,19 +679,20 @@ class _CodeVisitor(ast.NodeVisitor):
                 handled = True                                # 辞書の update
         if name == "bulk_update":
             self.danger.append("一括更新（bulk_update）")
-        if (name == "clear" and (rd.split(".")[-1] == "cache" or "caches" in rd)) or name in ("flushall", "flushdb"):
+        if (name == "clear" and recv is not None and (_is_cache_ref(recv, self.cache_names) or "caches" in rd)) \
+                or name in ("flushall", "flushdb"):
             self.danger.append("キャッシュ（Redis）の全消去（sessions・celery・レート制限と共有）")
         if self.loop and name in ("save", "delete", "update", "set_password", "create"):
             self.danger.append(f"ループでの一括操作（.{name}()）")
         if name == "call_command" and args and args[0]:
             sub = args[0]
-            kws = {k.arg: k.value for k in node.keywords}
             if sub in _DANGER_MANAGE:
                 self.danger.append(f"管理コマンドによる DB 全消去・上書き（{sub}）")
             elif sub == "seed_e2e" and ("--flush" in args or (isinstance(kws.get("flush"), ast.Constant)
                                                              and kws["flush"].value)):
                 self.danger.append("管理コマンドによる DB 全消去（seed_e2e flush）")
-            elif sub == "migrate" and len([a for a in args[1:] if a and not a.startswith("-")]) >= 2:
+            elif sub == "migrate" and (len([a for a in args[1:] if a and not a.startswith("-")]) >= 2
+                                       or "migration_name" in kws):
                 self.danger.append("管理コマンドによるマイグレーションの巻き戻し")
             elif sub in _SAFE_MANAGE or sub in ("migrate", "makemigrations"):
                 handled = True
@@ -665,8 +716,13 @@ class _CodeVisitor(ast.NodeVisitor):
             self.external.append("外部コマンドの実行（os.system 等）")
         if name == "AIQuestionGenerator" or rd.startswith("openai"):
             self.external.append("OpenAI への送信")
-        if name == "reverse" and args and args[0] in ("register", "register_with_org", "password_reset"):
-            self.external.append(f"メール送信を伴う API（reverse('{args[0]}')）")
+        if name in ("reverse", "reverse_lazy"):
+            view = args[0] if args else _ast_str(kws.get("viewname"))
+            if view and view.split(":")[-1] in _EXTERNAL_ROUTES:
+                self.external.append(f"メール送信・OpenAI への送信を伴う API（reverse('{view}')）")
+        if name in ("getattr", "vars") and node.args and _ast_dotted(node.args[0]).split(".")[-1] in self.settings_names:
+            if name == "vars" or len(node.args) < 2 or _ast_str(node.args[1]) is None:
+                self.external.append(f"秘密情報（{name}(settings, ...) で設定をまとめて参照）")
         if name == "getenv":
             self.external.append("秘密情報（getenv）の参照")
         if name == "setdefault" and recv is not None and rd.endswith("os.environ"):
@@ -681,7 +737,10 @@ class _CodeVisitor(ast.NodeVisitor):
             if mode is not None and not any(ch in mode for ch in "wax+"):
                 handled = True                                # 読み取りの open
         # compose の許可リスト（一覧に無い呼び出し）
-        if not handled and name not in _SAFE_CALLS and not (isinstance(f, ast.Name) and name[:1].isupper()):
+        # .set() は組み込みの set() と同名だが、多対多の関係を置き換える（外す）書き込みなので一覧外として扱う
+        safe = (name in _SAFE_CALLS and not (name == "set" and recv is not None)) or \
+            (name.startswith("get_") and name.endswith("_display"))
+        if not handled and not safe and not (isinstance(f, ast.Name) and name[:1].isupper()):
             self.unknown.append(f"{name or _ast_dotted(f)}()")
         self.generic_visit(node)
 
@@ -693,10 +752,14 @@ def _code_ast(code: str):
     except (SyntaxError, ValueError):
         return False, (), (), (), False
     v = _CodeVisitor()
-    # setdefault の受け手を先に覚えるため、呼び出しを先に見てから全体を見る
+    # environ の別名と setdefault の受け手を先に覚えるため、import と呼び出しを先に見てから全体を見る
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "os":
+            v.environ_names.update(a.asname or a.name for a in node.names if a.name == "environ")
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "setdefault" \
-                and _ast_dotted(node.func.value).endswith("os.environ"):
+                and (_ast_dotted(node.func.value).endswith("os.environ")
+                     or _ast_dotted(node.func.value) in v.environ_names):
             v.setdefault_environ.add(id(node.func.value))
     v.visit(tree)
     uniq = lambda xs: tuple(dict.fromkeys(xs))
@@ -1520,7 +1583,9 @@ def _cmd_external(c: dict) -> list:
     f = _code_findings(c)
     if f:
         r += f[2]
-        if not f[0] and c["piped"] and not c["compose"]:
+        # 実行するファイルを引数で指定した python（python3 $G など）では、パイプで流れるのはデータでコードではない
+        script_arg = _PYTHON_RE.match(head) and not dj and [a for a in toks[1:] if not a.startswith("-")]
+        if not f[0] and c["piped"] and not c["compose"] and not script_arg:
             r.append("パイプで流し込むコード（中身が見えない）")
     paths = [a for a in toks[1:] if not a.startswith("-")]
     if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file")):
@@ -1666,6 +1731,8 @@ def _container_safe(c: dict) -> bool:
         return bool(urls) and all(re.match(r"https?://(localhost|127\.0\.0\.1|backend)(:\d+)?(/|$)", u) for u in urls)
     if head in ("node",) and rest[:1] == ["--version"]:
         return True
+    if head == "ps":                       # BSD 形式の e（ps auxe 等）は各プロセスの環境変数＝秘密情報を表示する
+        return not any(not a.startswith("-") and "e" in a for a in rest)
     return head in _SAFE_READ_CMDS
 
 def _describe(c: dict) -> str:

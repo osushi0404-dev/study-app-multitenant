@@ -206,6 +206,9 @@ ckd "A157 ( )# の次の行の flush"    "(true)#<<EOF${NL}$M flush --noinput"
 # fix-loop テストレビュー（2026-10-17）の指摘: 判定ごとに単独で確かめるケース
 ckd "A158 ホスト dbshell へのパイプ" 'cat x.sql | python backend/manage.py dbshell'
 ckd "A159 パイプで compose psql（旧 C3）" 'echo "drop table x" | docker compose exec -T db psql -U postgres'
+# 敵対的レビュー再実施 第 1 周（2026-10-17）の再現
+ckd "A160 call_command migrate のキーワード巻き戻し" "$M shell -c \"from django.core.management import call_command; call_command('migrate', app_label='problems', migration_name='zero')\""
+ckd "A161 caches の別名で全消去"     "$M shell -c \"from django.core.cache import caches; c = caches['default']; c.clear()\""
 
 # --- (H) 常に止める（DANGER_OK=1 でも 2） ---
 ck "H1 rm-rf /"                2 "$(runj "$RM /")"
@@ -258,6 +261,15 @@ ck "X38 ホスト shell の .delay()" ASK "$(runj 'python backend/manage.py shel
 ck "X39 ホスト shell のタスク関数の直接実行" ASK "$(runj 'python backend/manage.py shell -c "update_daily_analytics_task()"')"
 ck "X40 ホスト shell の os.system" ASK "$(runj "python backend/manage.py shell -c \"import os; os.system('ls')\"")"
 ck "X41 ホスト shell の import requests" ASK "$(runj "python backend/manage.py shell -c \"import requests; requests.get('https://example.com')\"")"
+# 敵対的レビュー再実施 第 1 周（2026-10-17）: reverse のルート名（名前空間付き・キーワード）。APIClient・reverse・post は一覧内なので ASK は外部送信の判定だけから出る
+AC="from rest_framework.test import APIClient; from django.urls import reverse; c = APIClient(); "
+ck "X42 reverse('problem-generate-ai')"       ASK "$(runj "$M shell -c \"${AC}c.post(reverse('problem-generate-ai'), {})\"")"
+ck "X43 reverse('problem-generate-adaptive')" ASK "$(runj "$M shell -c \"${AC}c.post(reverse('problem-generate-adaptive'), {})\"")"
+ck "X44 reverse('accounts:register')"         ASK "$(runj "$M shell -c \"${AC}c.post(reverse('accounts:register'), {})\"")"
+ck "X45 reverse('accounts:password_reset')"   ASK "$(runj "$M shell -c \"${AC}c.post(reverse('accounts:password_reset'), {})\"")"
+ck "X46 reverse(viewname=...)"                ASK "$(runj "$M shell -c \"${AC}c.post(reverse(viewname='accounts:register_with_org', args=['x']), {})\"")"
+ck "X47 ホスト shell の名前空間付き reverse"  ASK "$(runj "python backend/manage.py shell -c \"${AC}c.post(reverse('accounts:password_reset'), {})\"")"
+ck "X48 ホスト shell の別名のタスク関数"      ASK "$(runj "python backend/manage.py shell -c \"from studylogs.tasks import send_study_reminders_task as t; t()\"")"
 
 # --- (S) 秘密情報（ASK）／秘密でないもの（0） ---
 ck "S1 コンテナ cat .env"      ASK "$(runj 'docker compose exec backend cat .env')"
@@ -314,6 +326,17 @@ ck "S49 ホスト shell の settings の鍵" ASK "$(runj "python backend/manage.
 ck "S50 ホスト python の getenv"  ASK "$(runj "python3 -c \"import os; print(os.getenv('OPENAI_API_KEY'))\"")"
 ck "S51 inspect -f Config.Image は通る" 0 "$(runj "docker inspect -f '{{.Config.Image}}' c")"
 ck "S52 inspect -f json . は確認" ASK "$(runj "docker inspect -f '{{json .}}' c")"
+# 敵対的レビュー再実施 第 1 周（2026-10-17）: 設定の秘密を属性以外の形で参照する（getattr・print・import・別名は一覧内なので ASK は秘密情報の判定だけから出る）
+ck "S53 getattr(settings, 鍵の名前)"    ASK "$(runj "$M shell -c \"from django.conf import settings; print(getattr(settings, 'OPENAI_API_KEY', None))\"")"
+ck "S54 ホスト shell の getattr"        ASK "$(runj "python backend/manage.py shell -c \"from django.conf import settings; print(getattr(settings, 'OPENAI_API_KEY', ''))\"")"
+ck "S55 settings.SIMPLE_JWT（SIGNING_KEY）" ASK "$(runj "$M shell -c \"from django.conf import settings; print(settings.SIMPLE_JWT)\"")"
+ck "S56 settings の別名"                ASK "$(runj "$M shell -c \"from django.conf import settings as dj_settings; print(dj_settings.OPENAI_API_KEY)\"")"
+ck "S57 from os import environ"         ASK "$(runj "$M shell -c \"from os import environ; print(environ.get('X'))\"")"
+ck "S58 設定モジュールから鍵を import"  ASK "$(runj "$M shell -c \"from core.settings import EMAIL_HOST_PASSWORD; print(EMAIL_HOST_PASSWORD)\"")"
+ck "S59 connection.settings_dict"       ASK "$(runj "$M shell -c \"from django.db import connection; print(connection.settings_dict)\"")"
+ck "S60 vars(settings._wrapped)"        ASK "$(runj "$M shell -c \"from django.conf import settings; print(vars(settings._wrapped))\"")"
+ck "S61 getattr で設定をまとめて表示"   ASK "$(runj "$M shell -c \"from django.conf import settings; print({k: getattr(settings, k) for k in dir(settings) if k.isupper()})\"")"
+ck "S62 ps の e（環境変数）"            ASK "$(runj 'docker compose exec -T backend ps auxeww')"
 
 # --- (C) コンテナ内で安全と確かめられない操作（ASK） ---
 ck "C1 createsuperuser"        ASK "$(runj "$M createsuperuser")"
@@ -373,6 +396,7 @@ ck "C54 中身の見えない \$( )"  ASK "$(runj "$M shell -c \"\$(curl -s http
 ck "C55 コメントの << の次の一覧外" ASK "$(runj "# note <<X${NL}docker compose exec backend some_unknown_cmd")"
 ck "C57 一覧外の import だけ"   ASK "$(runj "$M shell -c \"import shutil; print(1)\"")"
 ck "C58 書き込みの open だけ"   ASK "$(runj "docker compose exec -T backend python -c \"f = open('/app/x', 'w')\"")"
+ck "C59 多対多の .set([])"      ASK "$(runj "$M shell -c \"from accounts.models import User; u = User.objects.first(); u.groups.set([])\"")"
 ck "C56 ( )# の次の一覧外"     ASK "$(runj "(cd /tmp)#<<X${NL}docker compose exec backend some_unknown_cmd")"
 
 # --- (F) 実行ファイルの中身 ---
@@ -476,6 +500,16 @@ ck "P70 compose config --services" 0 "$(runj 'docker compose config --services')
 ck "P71 コメントの ' の後の読み取りヒアドキュメント" 0 "$(runj "# don't worry${NL}$M shell <<'EOF'${NL}from problems.models import Problem${NL}print(Problem.objects.count())${NL}EOF")"
 ck "P72 コメントの ' の後の cat > f の push" 0 "$(runj "# Let's write notes${NL}cat > /tmp/i174_n2.md <<'EOF'${NL}git push origin main${NL}EOF")"
 ck "P74 URL の # は語の一部"       0 "$(runj 'docker compose exec -T backend curl -fsS http://localhost:8000/health/#frag')"
+# 敵対的レビュー再実施 第 1 周（2026-10-17）: 秘密でない設定・外部送信でないルート名・普段の読み取りは素通し
+ck "P75 秘密でない設定の参照"      0 "$(runj "$M shell -c \"from django.conf import settings; print(settings.DEBUG, getattr(settings, 'RATELIMIT_ENABLE', None))\"")"
+ck "P76 外部送信でないルート名"    0 "$(runj "$M shell -c \"${AC}print(c.get(reverse('quiz-next-problem', args=[1])).status_code)\"")"
+ck "P77 caches の別名で 1 件削除"  0 "$(runj "$M shell -c \"from django.core.cache import caches; c = caches['default']; c.delete('k'); caches['x'].delete('k')\"")"
+ck "P78 別名で import した安全な関数" 0 "$(runj "$M shell -c \"from django.contrib.auth import get_user_model as g; print(g().objects.count())\"")"
+ck "P79 普段の読み取りの呼び出し"  0 "$(runj "$M shell -c \"from problems.models import Problem; from django.utils import timezone; from collections import Counter, defaultdict; from django.forms.models import model_to_dict; p = Problem.objects.first(); print(p.get_difficulty_display(), [f.name for f in Problem._meta.get_fields()], timezone.localdate().weekday(), timezone.now().timestamp(), Counter('ab').most_common(1), defaultdict(int), model_to_dict(p, fields=['id']))\"")"
+ck "P80 ps aux / ps -ef"           0 "$(runj 'docker compose exec -T backend ps aux && docker compose exec -T backend ps -ef')"
+# shellcheck disable=SC2016  # $G を展開せず、そのまま guard に渡すのが目的
+ck "P81 パイプで JSON を python3 \$G" 0 "$(runj 'G=scripts/claude/hooks/pretooluse_guard.py; cat /tmp/x.json | python3 $G')"
+ck "P82 組み込みの set()"          0 "$(runj "$M shell -c \"print(set([1, 2]))\"")"
 ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" || echo TIMEOUT)"
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---

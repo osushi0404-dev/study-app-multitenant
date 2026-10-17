@@ -67,6 +67,11 @@ git commit -qm g11
 printf 'x\n' >> g11.txt
 ck "G11 && trailing checkout"  2 "$(run 'git push origin tmpbranch && git checkout -- g11.txt')"
 
+# --- 語にくっついた ; で区切る（I174: 区切らないと後ろの git log の -- g11.txt を checkout の対象と誤読する） ---
+ck "G12 checkout br; log -- dirty (複数行)" 0 "$(run 'git status\ngit checkout feat; git log --oneline -3 -- g11.txt')"
+ck "G13 checkout br; log -- dirty (1 行)"  0 "$(run 'git checkout feat; git log -- g11.txt')"
+ck "G14 log; checkout -- dirty も検出"     2 "$(run 'git log -1; git checkout -- g11.txt')"
+
 # --- FALSEGREEN（自動注入）: 判定呼び出し行を無効化した複製で dirty が素通し /
 #     実体で block。両者の差で「block は判定行に依存」を機械裏取り（false-green 排除） ---
 BROKEN="$TMP/guard_broken.py"
