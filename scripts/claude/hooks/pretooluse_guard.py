@@ -1861,6 +1861,75 @@ def _analyze(text: str) -> dict:
         res[k] = list(dict.fromkeys(res[k]))
     return res
 
+# --- 安全網（plan_I174.md 0-12）: 精密判定が何も返さなかったコマンドの最後の層（確認に回すだけで止めない） ---
+_SN_SEPS = frozenset((";", "&", "|", "&&", "||", "|&", ";;", "(", ")", "{", "}", "\n", "!", "`", "$"))
+_SN_KEYWORDS = frozenset(("if", "then", "elif", "else", "while", "until", "do", "time", "coproc"))
+_SN_WRAPPERS = frozenset(("sudo", "nohup", "env", "nice", "timeout", "xargs", "exec", "command", "builtin", "stdbuf",
+                          "ionice", "setsid", "strace", "ltrace", "parallel", "watch", "flock", "busybox"))
+_SN_KEYWORDS_EXTRA = ("function",)              # function f { ... } の f はコマンドではないが、{ で位置が戻る
+
+def _sn_judge(seg: list) -> list:
+    """コマンドの位置から始まる 1 つのコマンドを、精密判定にかけ直した理由（独自の見分け方は持たない）。
+    引用符の中の $( )・`...`・ヒアドキュメントを含むコマンドは、組み直すと意味が変わる（中身が見えない扱いになる）うえ、
+    精密判定が中身を読んで判定済みなので、かけ直さない。"""
+    if any("$(" in t or "`" in t or "__HEREDOC_" in t for t in seg):
+        return []
+    an = _analyze(shlex.join(seg))
+    return ([an["hard"]] if an["hard"] else []) + an["danger"] + an["external"] + an["container"]
+
+def _safety_net(text: str) -> list:
+    """文法に依存しない区切り（区切り記号・予約語・包むコマンド）でコマンドの位置を見つけ、そこから始まる各コマンドを
+    精密判定にかけ直した理由を返す（該当なしは []）。精密判定が読み落とした文法（function の本体・coproc・
+    プロセス置換 <( ) の中 等）を素通しにしないための最後の層。ヒアドキュメントの本文・引用符の中・コメントは見ない。"""
+    body = _strip_comments(_cut_heredocs(text))
+    lex = shlex.shlex(body, posix=True, punctuation_chars=";&|()<>\n")
+    lex.whitespace = " \t\r"
+    lex.whitespace_split = True
+    lex.commenters = ""
+    try:
+        toks = []
+        for t in lex:
+            toks += _split_ops(t)
+    except ValueError:
+        toks = body.split()
+    reasons, i, at_cmd = [], 0, True
+    while i < len(toks):
+        t = toks[i]
+        if t in ("<", ">") and i + 1 < len(toks) and toks[i + 1] == "(":
+            i += 2                                          # プロセス置換 <( ) / >( ) の中はコマンド
+            at_cmd = True
+            continue
+        if t in _SN_SEPS or t.startswith("$("):
+            at_cmd = True
+            i += 1
+            continue
+        if t[:1] in ("<", ">") or (t[:-1].isdigit() and t[-1:] in ("<", ">")) or re.fullmatch(r"\d*[<>]+&?\d*", t):
+            i += 2                                          # リダイレクトと宛先は飛ばす
+            continue
+        if not at_cmd:
+            at_cmd = t in ("-exec", "-execdir", "-ok", "-okdir")   # find -exec の後ろはコマンド
+            i += 1
+            continue
+        base = os.path.basename(t)
+        if _ENV_ASSIGN_RE.match(t) or base in _SN_KEYWORDS:
+            i += 1                                          # コマンドの位置のまま
+            continue
+        if base in _SN_KEYWORDS_EXTRA:
+            i += 2                                          # function と関数名
+            continue
+        if base in _SN_WRAPPERS:
+            i += 1
+            while i < len(toks) and (toks[i].startswith("-") or toks[i].isdigit() or _ENV_ASSIGN_RE.match(toks[i])):
+                i += 1                                      # 包むコマンドのオプション・数値・VAR=値
+            continue
+        j = i
+        while j < len(toks) and toks[j] not in _SN_SEPS:
+            j += 1
+        reasons += _sn_judge(toks[i:j])
+        at_cmd = False
+        i += 1
+    return list(dict.fromkeys(reasons))
+
 def _danger_reasons(cmd: str, pcmd: str) -> list:
     """DANGER_OK=1 で人の承認に切り替わる危険操作の理由を集める（該当なしは []）。
     cmd は空白を正規化したコマンド、pcmd は改行を保ったコマンド（読み解き用）。
@@ -1957,6 +2026,15 @@ def main():
     # I174: DANGER_OK=1 でも ask にする（宛先が保護ブランチに解決し得るため）。
     if _push_is_dynamic(cmd):
         _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
+
+    # I174 0-12: 安全網。上の精密判定がすべて素通しにしたコマンドでも、読めない書き方・コマンドの位置の
+    # 危険なコマンドがあれば確認にする（読み落としを素通しにしない＝fail-safe。止めはしない）。
+    try:
+        net = _safety_net(pcmd)
+    except Exception as e:                       # 安全網の失敗でも素通しにしない
+        net = [f"安全網の読み取りに失敗（{type(e).__name__}）"]
+    if net:
+        _ask("見張りが内容を読み切れませんでした。確認してください: " + " / ".join(net))
 
     sys.exit(0)
 

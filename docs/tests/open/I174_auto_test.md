@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・682 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=682 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・691 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=691 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -26,6 +26,8 @@
 | TC-09 | danger-ops.md に追記した語句がある | すべて exit 0 | AC-11 | 5 |
 | TC-10 | `pretooluse_guard.py` の構文 | exit 0 | — | 2・3 |
 | TC-11 | 新規テストの構文 | exit 0 | — | 2 |
+| TC-14 | 新規 `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 10 × 書き方 29 を総当たりで生成し、どれも 2 か ASK。計画書 0-12。安全網の前の guard では 23 件が素通しになることを確認済み） | exit 0（最終行 `pass=291 fail=0`） | AC-4・AC-6・AC-14 | fix-loop（0-12） |
+| TC-15 | 新規 `scripts/claude/tests/guard_corpus_diff.py`（作業記録の Bash コマンドを HEAD の guard と作業ツリーの guard で並べて判定し、確認＋停止の増加が記録の 1% 以内。作業記録が無い環境では SKIP。計画書 0-12） | exit 0 | AC-12（承認待ちを増やさない） | fix-loop（0-12） |
 | TC-12 | I146 マージ後の `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（I146 が足すテスト。DANGER_OK=1 の解除経路があれば期待値を ASK に揃える） | exit 0 | AC-10 | 6 |
 
 TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。
@@ -586,8 +588,17 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G8 | 実体では H4 を止める | 2 | `"$(runj "DANGER_OK=1 $RM /*")"` |
 | G9 | 複製に例外を入れた | YES | `"$(grep -q 'raise RuntimeError("injected")' "$BROKEN_E" && echo YES \|\| echo NO)"` |
 | G10 | 例外のときは確認に倒す | ASK | `"$(rungj "$BROKEN_E" 'docker compose exec -T backend python -m pytest -q')"` |
+| G11 | 複製に置換が入った（安全網） | YES | `"$( (! cmp -s "$GUARD" "$BROKEN_D2") && (! cmp -s "$GUARD" "$BROKEN_X2") && (! cmp -s "$GUARD" "$BROKEN_N") && echo YES \|\| echo NO)"` |
+| G12 | 危険判定の出口を外しても安全網が確認 | ASK | `"$(rungj "$BROKEN_D2" "$M flush --noinput")"` |
+| G13 | 外部判定の出口を外しても安全網が確認 | ASK | `"$(rungj "$BROKEN_X2" "$M shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"` |
+| G14 | 安全網を外すと function の本体が素通し | 0 | `"$(rungj "$BROKEN_N" 'function f { git reset --hard origin/develop; }; f')"` |
+| G15 | 実体では function の本体を確認 | ASK | `"$(runj 'function f { git reset --hard origin/develop; }; f')"` |
+| G16 | 安全網を外すと coproc が素通し | 0 | `"$(rungj "$BROKEN_N" "coproc $RM backend/media")"` |
+| G17 | 実体では coproc を確認 | ASK | `"$(runj "coproc $RM backend/media")"` |
+| G18 | 安全網を外すと <( ) の中が素通し | 0 | `"$(rungj "$BROKEN_N" 'diff <(printenv) /dev/null')"` |
+| G19 | 実体では <( ) の中を確認 | ASK | `"$(runj 'diff <(printenv) /dev/null')"` |
 
-<!-- 行数: 513（危険操作の行 169 件を 2 通りずつ数えると 682 ケース） -->
+<!-- 行数: 522（危険操作の行 169 件を 2 通りずつ数えると 691 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -597,6 +608,8 @@ bash scripts/claude/tests/test_pretooluse_push_guard.sh
 bash scripts/claude/tests/test_pretooluse_checkout_guard.sh
 bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
 bash scripts/claude/tests/test_adversarial_trigger.sh
+bash scripts/claude/tests/test_pretooluse_guard_matrix.sh
+python3 scripts/claude/tests/guard_corpus_diff.py
 python3 -m json.tool .claude/settings.json
 ! grep -qF "Bash(git merge *)" .claude/settings.json
 ! grep -qF "Bash(git reset *)" .claude/settings.json
@@ -623,6 +636,8 @@ grep -qF "見張りを避ける書き方" docs/runbooks/danger-ops.md
 python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
 bash -n scripts/claude/tests/test_pretooluse_container_guard.sh
 bash -n scripts/claude/tests/test_settings_permissions.sh
+bash -n scripts/claude/tests/test_pretooluse_guard_matrix.sh
+python3 -m py_compile scripts/claude/tests/guard_corpus_diff.py
 ```
 
 ## 実施記録
@@ -711,3 +726,24 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 - ソースコード（Python 等）の意味を判定するときは、正規表現ではなく構文木を使う。許可リスト方式では、許可の判定の中に列挙方式（「危険に当たらなければ安全」）を混ぜない。
 - テストは、判定の分岐ごとに「その分岐だけで結果が決まるケース」を置く（別の分岐に覆い隠されないケース）。ミューテーション（判定を 1 つずつ壊した複製でテストが落ちるか）で確かめる。
 - fix-loop のレビュー用スクリプト（`fix-implementation-review.sh` / `fix-test-review.sh`）は、作業ツリーの無関係な未追跡ファイルまで材料に含めて `claude -p` が失敗する。今回は同じ指示書の独立サブエージェントで代替した。スクリプトの修正は別イシューで扱う（範囲外）。
+
+### fix-loop（2026-10-18・敵対的レビューやり直し第 3 周・上限到達への対応・計画書 0-12）の再発防止記録（手順7）
+決定論ゲート全 36 行 exit 0（container `pass=691 fail=0`・総当たり `pass=291 fail=0`・作業記録の再判定 増減 +0・settings 12・push 87・checkout 18・worktree 30・adversarial 40）。pre-commit すべて Passed。診断 `docs/reviews/I174_fix_diagnosis_20261017_1927.md`・実装レビュー `_fix_implementation_review_20261017_1948.md`・テスト結果 `_fix_test_result_20261018_0000.md`・テストレビュー `_fix_test_review_20261018_0405.md`（すべて OK）。
+
+**なぜ失敗したか**
+- 見張りは、シェルの文法を部分的にしか読まず、読めない形（`if … then` の本体・`function` の本体・`coproc`・`<( )` の中）を「知らないコマンド」として素通しにしていた（fail-open）。予約語を 1 つずつ足す直し方では、次の未対応の語でまた素通しになった。
+- 修正は指摘の再現コマンドだけをテストに足していて、同じ判定が他の書き方（制御構文・包むコマンド・置換）の中でどう振る舞うか、普段の作業で余計な確認が増えないかを、コミットの前に確かめる仕組みがなかった。そのため敵対的レビューの周ごとに「前の周の修正が生んだ後退」が出た（`dd` の名前判定 → `if` の中で素通り、`.env` の glob → 広すぎ・狭すぎ）。
+
+**何を変えたか**
+- 安全網（`_safety_net` / `_sn_judge`）: 精密判定が素通しにしたコマンドを、文法に依存しない区切りで分け直し、各コマンドを精密判定にかけ直す。何か出れば確認（止めない）。独自の危険語の一覧は持たない（精密判定と食い違わない）。
+- 総当たりのテスト（`test_pretooluse_guard_matrix.sh`）: 危険な操作 10 × 書き方 29。操作・書き方を 1 行足すと表が広がる。
+- 作業記録の再判定（`guard_corpus_diff.py`）: HEAD の guard と作業ツリーの guard を作業記録 3,701 件で並べて判定し、確認＋停止の増加が 1% を超えたら不合格。作業記録はリポジトリに入れない（公開リポジトリのため）。
+
+**セキュリティ上の考慮点**
+- 安全網は確認（ask）だけを返し、停止（exit 2）の範囲は精密判定のまま。安全網の読み取りで例外が起きたら確認に倒す（fail-safe）。
+- 作業記録のキャッシュ（`~/.cache/claude-guard-corpus/`）はファイルの権限を 600 にし、リポジトリの外に置く（作業のコマンドに秘密が含まれうるため）。
+
+**次回どう防ぐか**
+- 見張りの判定を変えたら、コミットの前に `test_pretooluse_guard_matrix.sh`（素通しの穴）と `guard_corpus_diff.py`（余計な確認・誤停止の増加）を必ず流す（決定論ゲートに入れた）。
+- 新しい危険な操作や書き方が見つかったら、個別のケースではなく総当たりの表の OPS / TPLS に足す（同じ種類の別の書き方を一度に確かめる）。
+- 「読めない形を素通しにする」作りを避け、精密判定の後ろに必ず安全網（読めないものは確認）を置く（I146 の gh pr ガードと同じ 2 層の考え方）。

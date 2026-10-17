@@ -600,12 +600,14 @@ ck "P90 environ の別名の setdefault" 0 "$(runj "$M shell -c \"from os import
 ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" || echo TIMEOUT)"
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---
+# D / X / C は安全網（0-12）も外す（外さないと、外した判定を安全網が確認として拾い直すため。それは G11〜G13 で確かめる）
+NO_NET='s/net = _safety_net(pcmd)/net = []/'
 BROKEN_D="$TMP/guard_no_danger.py"
-sed 's/reasons += _analyze(pcmd)\["danger"\]/pass/' "$GUARD" > "$BROKEN_D"
+sed -e 's/reasons += _analyze(pcmd)\["danger"\]/pass/' -e "$NO_NET" "$GUARD" > "$BROKEN_D"
 BROKEN_X="$TMP/guard_no_external.py"
-sed 's/external = an\["external"\]/external = []/' "$GUARD" > "$BROKEN_X"
+sed -e 's/external = an\["external"\]/external = []/' -e "$NO_NET" "$GUARD" > "$BROKEN_X"
 BROKEN_C="$TMP/guard_no_container.py"
-sed 's/if an\["container"\]:/if False:/' "$GUARD" > "$BROKEN_C"
+sed -e 's/if an\["container"\]:/if False:/' -e "$NO_NET" "$GUARD" > "$BROKEN_C"
 BROKEN_H="$TMP/guard_no_hard.py"
 sed 's/if an\["hard"\]:/if False:/' "$GUARD" > "$BROKEN_H"
 ck "G0 複製に置換が入った"         YES "$( (! cmp -s "$GUARD" "$BROKEN_D") && (! cmp -s "$GUARD" "$BROKEN_X") && (! cmp -s "$GUARD" "$BROKEN_C") && (! cmp -s "$GUARD" "$BROKEN_H") && echo YES || echo NO)"
@@ -622,6 +624,22 @@ BROKEN_E="$TMP/guard_raise.py"
 sed 's/^def _analyze(text: str) -> dict:$/def _analyze(text: str) -> dict:\n    raise RuntimeError("injected")/' "$GUARD" > "$BROKEN_E"
 ck "G9 複製に例外を入れた"         YES "$(grep -q 'raise RuntimeError("injected")' "$BROKEN_E" && echo YES || echo NO)"
 ck "G10 例外のときは確認に倒す"    ASK "$(rungj "$BROKEN_E" 'docker compose exec -T backend python -m pytest -q')"
+# 安全網（plan_I174.md 0-12）: 精密判定の出口を外しても、安全網が確認に倒す（2 層目が働いている）／安全網を外すと穴が素通し
+BROKEN_D2="$TMP/guard_no_danger_keep_net.py"
+sed 's/reasons += _analyze(pcmd)\["danger"\]/pass/' "$GUARD" > "$BROKEN_D2"
+BROKEN_X2="$TMP/guard_no_external_keep_net.py"
+sed 's/external = an\["external"\]/external = []/' "$GUARD" > "$BROKEN_X2"
+BROKEN_N="$TMP/guard_no_net.py"
+sed "$NO_NET" "$GUARD" > "$BROKEN_N"
+ck "G11 複製に置換が入った（安全網）" YES "$( (! cmp -s "$GUARD" "$BROKEN_D2") && (! cmp -s "$GUARD" "$BROKEN_X2") && (! cmp -s "$GUARD" "$BROKEN_N") && echo YES || echo NO)"
+ck "G12 危険判定の出口を外しても安全網が確認" ASK "$(rungj "$BROKEN_D2" "$M flush --noinput")"
+ck "G13 外部判定の出口を外しても安全網が確認" ASK "$(rungj "$BROKEN_X2" "$M shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"
+ck "G14 安全網を外すと function の本体が素通し" 0 "$(rungj "$BROKEN_N" 'function f { git reset --hard origin/develop; }; f')"
+ck "G15 実体では function の本体を確認"   ASK "$(runj 'function f { git reset --hard origin/develop; }; f')"
+ck "G16 安全網を外すと coproc が素通し"   0   "$(rungj "$BROKEN_N" "coproc $RM backend/media")"
+ck "G17 実体では coproc を確認"          ASK "$(runj "coproc $RM backend/media")"
+ck "G18 安全網を外すと <( ) の中が素通し" 0  "$(rungj "$BROKEN_N" 'diff <(printenv) /dev/null')"
+ck "G19 実体では <( ) の中を確認"        ASK "$(runj 'diff <(printenv) /dev/null')"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
