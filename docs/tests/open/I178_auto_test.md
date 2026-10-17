@@ -134,5 +134,6 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 
 | TC | 実行日 | 結果 | 備考 |
 |---|---|---|---|
-| TC-01〜TC-16・TC-18 | | 未実施 | /implement・/test で記録 |
+| TC-04 | 2026-10-17 | ✅ exit 0 | /implement ステップ 1 のゲート。CODEOWNERS push 直後（3d6f029）に `{"errors":[]}` を確認してから後続へ進んだ |
+| TC-01〜TC-16・TC-18 | 2026-10-17 | ✅ 全件 exit 0 | /implement 完了時（ステップ 1〜3 反映後）。TC-16 は `RESULT: OK (21/21 cases, 30 assertions)`。/test で再実行する |
 | TC-17 | | 未実施（マージ後） | |
