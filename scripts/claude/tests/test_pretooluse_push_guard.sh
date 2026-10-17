@@ -48,8 +48,8 @@ ck "P2 push origin (develop)"          2 "$(run 'git push origin')"
 ck "P3 push -u origin (develop)"       2 "$(run 'git push -u origin')"
 ck "P4 push origin develop"            2 "$(run 'git push origin develop')"
 ck "P5 push origin feature (safe dst)" 0 "$(run 'git push origin feature')"
-ck "P6 DANGER_OK push origin develop"  0 "$(run 'DANGER_OK=1 git push origin develop')"
-ck "P7 DANGER_OK bare push"            0 "$(run 'DANGER_OK=1 git push')"
+ck "P6 DANGER_OK push origin develop"  ASK "$(runj 'DANGER_OK=1 git push origin develop')"
+ck "P7 DANGER_OK bare push"            ASK "$(runj 'DANGER_OK=1 git push')"
 
 # ===== feature/x ブランチ context =====
 git checkout -q feature/x
@@ -68,15 +68,15 @@ ck "P19 FP main-backup (safe)"         0 "$(run 'git push origin main-backup')"
 ck "P20 refspec feat:feat (safe)"      0 "$(run 'git push origin feat:feat')"
 ck "P21 --all"                         2 "$(run 'git push --all')"
 ck "P22 --mirror"                      2 "$(run 'git push --mirror')"
-ck "P23 DANGER_OK origin develop"      0 "$(run 'DANGER_OK=1 git push origin develop')"
-ck "P24 DANGER_OK --all"               0 "$(run 'DANGER_OK=1 git push --all')"
+ck "P23 DANGER_OK origin develop"      ASK "$(runj 'DANGER_OK=1 git push origin develop')"
+ck "P24 DANGER_OK --all"               ASK "$(runj 'DANGER_OK=1 git push --all')"
 ck "P25 --force origin feature"        2 "$(run 'git push --force origin feature')"
-ck "P26 DANGER_OK --force feature"     0 "$(run 'DANGER_OK=1 git push --force origin feature')"
+ck "P26 DANGER_OK --force feature"     ASK "$(runj 'DANGER_OK=1 git push --force origin feature')"
 ck "P27 git -C push origin develop"    2 "$(run 'git -C /tmp push origin develop')"
 ck "P28 --repo= develop:main"          2 "$(run 'git push --repo=origin develop:main')"
 ck "P29 --repo= +develop"              2 "$(run 'git push --repo=origin +develop')"
 ck "P30 --repo (space) develop:main"   2 "$(run 'git push --repo origin develop:main')"
-ck "P31 DANGER_OK --repo= develop:main" 0 "$(run 'DANGER_OK=1 git push --repo=origin develop:main')"
+ck "P31 DANGER_OK --repo= develop:main" ASK "$(runj 'DANGER_OK=1 git push --repo=origin develop:main')"
 ck "P32 --repo= feature (flag-block)"  2 "$(run 'git push --repo=origin feature')"
 ck "P33 dst-side + (feat:+refs/heads/main)" 2 "$(run 'git push origin feat:+refs/heads/main')"
 
@@ -111,7 +111,7 @@ ck "D5 eval wrapper"                   ASK "$(runj 'eval "git push origin develo
 ck "D6 sh -c wrapper"                  ASK "$(runj 'sh -c "git push origin develop"')"
 ck "D8 brace \${BR}"                   ASK "$(runj 'git push origin ${BR}')"
 ck "D10 backtick substitution"         ASK "$(runj 'git push origin x`whoami`y')"
-ck "DOK1 DANGER_OK dynamic escape"     0   "$(runj 'DANGER_OK=1 git push origin $(echo develop)')"
+ck "DOK1 DANGER_OK dynamic escape"     ASK "$(runj 'DANGER_OK=1 git push origin $(echo develop)')"
 
 # ----- feature/x context -----
 git checkout -q feature/x
@@ -137,8 +137,8 @@ ck "W2 branch sh-fix"                  0   "$(runj 'git push origin sh-fix')"
 ck "W3 remote eval-remote"             0   "$(runj 'git push eval-remote feature')"
 ck "W4 non-alias -c config"            0   "$(runj 'git -c user.name=x push origin feature')"
 # DANGER_OK escape（force / eval-force）
-ck "DOK2 DANGER_OK -f"                 0   "$(runj 'DANGER_OK=1 git push -f origin x')"
-ck "DOK3 DANGER_OK eval force"         0   "$(runj 'DANGER_OK=1 eval "git push --force origin x"')"
+ck "DOK2 DANGER_OK -f"                 ASK "$(runj 'DANGER_OK=1 git push -f origin x')"
+ck "DOK3 DANGER_OK eval force"         ASK "$(runj 'DANGER_OK=1 eval "git push --force origin x"')"
 # 静的安全 push 無確認通過（runj=0・ask 無し）
 ck "S1 bare push feature"              0   "$(runj 'git push')"
 ck "S2 -u origin feature"              0   "$(runj 'git push -u origin feature')"
