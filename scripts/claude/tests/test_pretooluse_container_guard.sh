@@ -17,7 +17,8 @@ PROBE_DOCS="docs/.i174_guard_probe_$$.py"          # F6: /app/docs/ → docs/ �
 PROBE_BACKEND="backend/.i174_guard_probe_$$.py"    # F7: /app/ → backend/ の読み替え用
 PROBE_SH_BAD="backend/.i174_guard_probe_bad_$$.sh" # F10: コンテナ内 sh スクリプト（危険）
 PROBE_SH_OK="backend/.i174_guard_probe_ok_$$.sh"   # F11: コンテナ内 sh スクリプト（安全）
-trap 'rm -rf "$TMP"; rm -f "$REPO_ROOT/$PROBE_DOCS" "$REPO_ROOT/$PROBE_BACKEND" "$REPO_ROOT/$PROBE_SH_BAD" "$REPO_ROOT/$PROBE_SH_OK"' EXIT
+PROBE_FRONT="frontend/.i174_guard_probe_front_$$.py" # F13: frontend の /app/ → frontend/ の読み替え用（backend 側と別名）
+trap 'rm -rf "$TMP"; rm -f "$REPO_ROOT/$PROBE_DOCS" "$REPO_ROOT/$PROBE_BACKEND" "$REPO_ROOT/$PROBE_SH_BAD" "$REPO_ROOT/$PROBE_SH_OK" "$REPO_ROOT/$PROBE_FRONT"' EXIT
 
 json() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1"; }
 # ask 判別版（test_pretooluse_push_guard.sh と同じ定義）
@@ -158,6 +159,52 @@ ckd "A114 python -W -m django"     'python3 -W ignore -m django flush --noinput'
 ckd "A115 コメント付き SQL 文字列" "$M shell -c \"connection.cursor().execute('/* x */ DROP TABLE problems_problem')\""
 ckd "A116 docker run --entrypoint" "docker run --rm --entrypoint \"$RM /app/media\" img cat x"
 ckd "A117 compose run --entrypoint" "docker compose run --rm --entrypoint \"$RM /app/media\" backend cat x"
+# 敵対的レビュー第 3 周の再現（fix-loop 2026-10-17・案 C）
+ckd "A118 -c \$(cat ヒアドキュメント)" "$M shell -c \"\$(cat <<'EOF'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}EOF${NL})\""
+ckd "A119 ホスト psql -c \$(cat)"   "psql -h localhost -c \"\$(cat <<'EOF'${NL}DROP TABLE problems_problem;${NL}EOF${NL})\""
+ckd "A120 素の docker \$(cat)"      "docker exec study-app-multitenant-backend-1 python manage.py shell -c \"\$(cat <<'EOF'${NL}Problem.objects.all().delete()${NL}EOF${NL})\""
+ckd "A121 ホスト shell import なし" 'python backend/manage.py shell -c "Problem.objects.all().delete()"'
+ckd "A122 改行をはさんだ update"   "$M shell <<'EOF'${NL}from problems.models import Problem${NL}Problem.objects.filter(${NL}    subject_id=1,${NL}).update(is_public=False)${NL}EOF"
+ckd "A123 関連マネージャ update"   "$M shell -c \"s = Subject.objects.get(id=1); s.problems.update(is_public=False)\""
+ckd "A124 _set の update"          "$M shell -c \"s = Subject.objects.get(id=1); s.problem_set.all().update(is_public=False)\""
+ckd "A125 QuerySet 変数の update"  "$M shell -c \"users = User.objects.all(); users.update(is_active=False)\""
+ckd "A126 cache.clear()"           "$M shell -c \"from django.core.cache import cache; cache.clear()\""
+ckd "A127 flushall()"              "$M shell -c \"from django_redis import get_redis_connection; get_redis_connection().flushall()\""
+ckd "A128 ループで save"           "$M shell <<'EOF'${NL}for u in User.objects.all():${NL}    u.set_password('x'); u.save()${NL}EOF"
+ckd "A129 内包表記で save"         "$M shell -c \"[p.save() for p in Problem.objects.all()]\""
+ckd "A130 call_command seed_e2e flush" "$M shell -c \"from django.core.management import call_command; call_command('seed_e2e', flush=True)\""
+ckd "A131 call_command migrate 移動先" "$M shell -c \"call_command('migrate', 'problems', '0003')\""
+ckd "A132 パイプで素の docker psql" 'cat backup.sql | docker exec -i study-db psql -U postgres study'
+ckd "A133 パイプでホスト psql"     'cat backup.sql | psql -U postgres -h localhost study'
+ckd "A134 Path().unlink()"         "$M shell -c \"from pathlib import Path; Path('/app/x').unlink()\""
+ckd "A135 { } で包む"              '{ docker compose down -v; } 2>&1'
+ckd "A136 flock"                   "flock /tmp/l $RM backend"
+ckd "A137 flock -c"                "flock -c \"$RM backend\" /tmp/l"
+ckd "A138 watch"                   "watch -n 1 $RM backend"
+ckd "A139 ! で包む"                "! $RM backend"
+ckd "A140 素の docker -e"          "docker exec -e FOO=1 c $RM /app/media"
+ckd "A141 素の docker --user="     "docker exec --user=root c1 $RM /app"
+ckd "A142 docker container run"    "docker container run --rm img $RM /app"
+ckd "A143 DANGER_OK=1 が途中"      "echo DANGER_OK=1 && $RM backend"
+ckd "A144 引用符内の << の後のヒアドキュメント" "bash -c \"cat <<'A'${NL}hi${NL}A\" ; psql <<'B'${NL}DROP TABLE x;${NL}B"
+# fix-loop 実装レビュー（2026-10-17）の再現: コメントの ' でヒアドキュメントを読み落とさない
+ckd "A145 コメントの ' の後のホスト shell" "# don't worry${NL}cd backend && python manage.py shell <<'EOF'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}EOF"
+ckd "A146 コメントの ' の後の素の docker" "# what's there${NL}docker exec -i c python manage.py shell <<'EOF'${NL}Problem.objects.all().delete()${NL}EOF"
+ckd "A147 コメントの ' の後の compose" "# don't worry${NL}$M shell <<'EOF'${NL}Problem.objects.all().delete()${NL}EOF"
+# fix-loop 実装再レビュー（2026-10-17）の再現: コメントの中の << をヒアドキュメントと取り違えない
+ckd "A148 コメントの << の次の行"   "# <<EOF${NL}$RM backend"
+ckd "A149 行末コメントの << の次の行" "ls # <<EOF${NL}$RM backend"
+ckd "A150 コメントの << の次の push" "# <<EOF${NL}git push --force origin main"
+ckd "A151 コメントの例の次の flush" "# example: cat <<EOF${NL}$M flush --noinput"
+ckd "A152 コメントの << の次の psql" "# see <<EOF${NL}docker compose exec -T db psql -c \"DROP TABLE x\""
+ckd "A153 語の途中の # はコメントでない" "echo a#b && $RM backend"
+ckd "A154 \${#x} の後の rm-rf"      "echo \${#x}; $RM backend"
+# fix-loop 実装レビュー 3 回目（2026-10-17）の再現: ) の直後の # もコメント
+ckd "A155 ( )# の次の行の rm-rf"    "(true)#<<EOF${NL}$RM backend"
+ckd "A156 ( )# の次の行の push"     "(ls)#<<EOF${NL}git push --force origin main"
+ckd "A157 ( )# の次の行の flush"    "(true)#<<EOF${NL}$M flush --noinput"
+# fix-loop テストレビュー（2026-10-17）の指摘: 判定ごとに単独で確かめるケース
+ckd "A158 ホスト dbshell へのパイプ" 'cat x.sql | python backend/manage.py dbshell'
 
 # --- (H) 常に止める（DANGER_OK=1 でも 2） ---
 ck "H1 rm-rf /"                2 "$(runj "$RM /")"
@@ -201,6 +248,15 @@ ck "X29 smtplib"               ASK "$(runj "docker compose exec -T backend pytho
 ck "X30 requests"              ASK "$(runj "docker compose exec -T backend python -c \"import requests; requests.post('http://x')\"")"
 ck "X31 os.system"             ASK "$(runj "docker compose exec -T backend python -c \"import os; os.system('ls')\"")"
 ck "X32 reverse('register')"   ASK "$(runj "$M shell -c \"Client().post(reverse('register'), {})\"")"
+ck "X33 ホスト curl 登録 API"  ASK "$(runj "curl -X POST http://localhost:8000/api/auth/register/ -d '{}'")"
+ck "X34 ホスト curl 再設定依頼" ASK "$(runj "curl -X POST http://localhost:8000/api/auth/password-reset/ -d '{}'")"
+ck "X35 ホスト python で登録 API" ASK "$(runj "python3 -c \"import requests; requests.post('http://localhost:8000/api/auth/register/', json={})\"")"
+ck "X36 \$(cat) 内の .delay()" ASK "$(runj "$M shell -c \"\$(cat <<'EOF'${NL}from studylogs.tasks import t${NL}t.delay()${NL}EOF${NL})\"")"
+ck "X37 パイプで素の docker shell" ASK "$(runj "echo 'x' | docker exec -i backend python manage.py shell")"
+ck "X38 ホスト shell の .delay()" ASK "$(runj 'python backend/manage.py shell -c "from studylogs.tasks import send_study_reminders_task; send_study_reminders_task.delay()"')"
+ck "X39 ホスト shell のタスク関数の直接実行" ASK "$(runj 'python backend/manage.py shell -c "update_daily_analytics_task()"')"
+ck "X40 ホスト shell の os.system" ASK "$(runj "python backend/manage.py shell -c \"import os; os.system('ls')\"")"
+ck "X41 ホスト shell の import requests" ASK "$(runj "python backend/manage.py shell -c \"import requests; requests.get('https://example.com')\"")"
 
 # --- (S) 秘密情報（ASK）／秘密でないもの（0） ---
 ck "S1 コンテナ cat .env"      ASK "$(runj 'docker compose exec backend cat .env')"
@@ -230,11 +286,38 @@ ck "S24 diffsettings"          ASK "$(runj "$M diffsettings")"
 ck "S25 inspect -f の状態"     0   "$(runj "docker inspect -f '{{.State.Status}}' study-app-multitenant-backend-1")"
 ck "S26 grep のパターンの .key" 0  "$(runj "grep -E '\\.env|secrets|\\.key' .claude/settings.json")"
 ck "S27 設定名でない grep -r"  0   "$(runj 'grep -rn send_mail backend')"
+ck "S28 grep -r の . （下の階層）" ASK "$(runj 'grep -rn SECRET_KEY .')"
+ck "S29 grep -r のパス省略"    ASK "$(runj 'grep -rn OPENAI_API_KEY')"
+ck "S30 ホスト diffsettings"   ASK "$(runj 'python backend/manage.py diffsettings')"
+ck "S31 inspect -f Config.Env" ASK "$(runj "docker inspect -f '{{json .Config.Env}}' c")"
+ck "S32 素の docker echo \$KEY" ASK "$(runj "docker exec c sh -c 'echo \$SECRET_KEY'")"
+# shellcheck disable=SC2016  # $OPENAI_API_KEY を展開せず、そのまま guard に渡すのが目的
+ck "S33 curl -H Bearer \$KEY"  ASK "$(runj 'docker compose exec -T backend curl -H "Authorization: Bearer $OPENAI_API_KEY" http://localhost:8000/')"
+# shellcheck disable=SC2016  # 同上
+ck "S34 ホスト echo \$KEY"     ASK "$(runj 'echo $OPENAI_API_KEY')"
+ck "S35 gh auth status -t"     ASK "$(runj 'gh auth status -t')"
+ck "S36 git diff の .env"      ASK "$(runj 'git diff --no-index backend/.env.example backend/.env')"
+ck "S37 ホスト python open(.env)" ASK "$(runj "python3 -c \"print(open('backend/.env').read())\"")"
+ck "S38 sed -n で .env"        ASK "$(runj 'sed -n 1,20p backend/.env')"
+ck "S39 tail で .env"          ASK "$(runj 'tail -n 5 backend/.env')"
+ck "S40 awk で .env"           ASK "$(runj "awk '{print}' backend/.env")"
+ck "S41 less で .env"          ASK "$(runj 'less backend/.env')"
+ck "S42 rg で .env"            ASK "$(runj 'rg KEY backend/.env')"
+ck "S43 diff で .env"          ASK "$(runj 'diff a.txt backend/.env')"
+ck "S44 *.pem"                 ASK "$(runj 'cat certs/server.pem')"
+ck "S45 compose config --services は通る" 0 "$(runj 'docker compose config --services')"
+ck "S46 inspect --format Mounts は通る" 0 "$(runj "docker inspect c --format '{{.Name}} {{range .Mounts}}{{.Source}}{{end}}'")"
+ck "S47 setdefault は秘密ではない" 0 "$(runj "$M shell -c \"import os; os.environ.setdefault('X','1'); from problems.models import Problem; print(Problem.objects.count())\"")"
+ck "S48 settings.SECRET_KEY の表示" ASK "$(runj "$M shell -c \"from django.conf import settings; print(settings.SECRET_KEY)\"")"
+ck "S49 ホスト shell の settings の鍵" ASK "$(runj "python backend/manage.py shell -c \"from django.conf import settings; print(settings.OPENAI_API_KEY)\"")"
+ck "S50 ホスト python の getenv"  ASK "$(runj "python3 -c \"import os; print(os.getenv('OPENAI_API_KEY'))\"")"
+ck "S51 inspect -f Config.Image は通る" 0 "$(runj "docker inspect -f '{{.Config.Image}}' c")"
+ck "S52 inspect -f json . は確認" ASK "$(runj "docker inspect -f '{{json .}}' c")"
 
 # --- (C) コンテナ内で安全と確かめられない操作（ASK） ---
 ck "C1 createsuperuser"        ASK "$(runj "$M createsuperuser")"
 ck "C2 npm install"            ASK "$(runj 'docker compose exec frontend npm install')"
-ck "C3 パイプで psql"          ASK "$(runj 'echo "drop table x" | docker compose exec -T db psql -U postgres')"
+ckd "C3 パイプで psql（流し込み）" 'echo "drop table x" | docker compose exec -T db psql -U postgres'
 ck "C4 パイプで shell"         ASK "$(runj "echo 'User.objects.all().delete()' | $M shell")"
 ck "C5 パイプで redis-cli"     ASK "$(runj "printf 'FLUSHALL\\n' | docker compose exec -T redis redis-cli")"
 ck "C6 dbshell（対話）"        ASK "$(runj "$M dbshell")"
@@ -273,6 +356,23 @@ ck "C38 uniq IN OUT"           ASK "$(runj 'docker compose exec -T backend uniq 
 ck "C39 collectstatic"         ASK "$(runj "$M collectstatic --noinput")"
 ck "C40 未知の compose オプション" ASK "$(runj 'docker compose exec --unknown-opt backend ls')"
 ck "C41 compose run --entrypoint" ASK "$(runj 'docker compose run --rm --entrypoint ls backend -la')"
+ck "C42 一覧外の呼び出し"      ASK "$(runj "$M shell -c \"p = Problem.objects.get(id=1); setattr(p, 'x', 1); p.save()\"")"
+ck "C43 一覧外の import"       ASK "$(runj "$M shell -c \"import shutil; print(shutil.which('x'))\"")"
+ck "C44 書き込みの open"       ASK "$(runj "docker compose exec -T backend python -c \"open('/app/core/settings.py','w').write('')\"")"
+ck "C45 WITH ... DELETE"       ASK "$(runj 'docker compose exec -T db psql -c "WITH d AS (DELETE FROM problems_problem WHERE id=1 RETURNING *) SELECT 1"')"
+ck "C46 pg_terminate_backend"  ASK "$(runj 'docker compose exec -T db psql -c "SELECT pg_terminate_backend(1)"')"
+ck "C47 pg_read_file"          ASK "$(runj "docker compose exec -T db psql -c \"select pg_read_file('/etc/passwd')\"")"
+ck "C48 ruff format（--check なし）" ASK "$(runj 'docker compose exec -T backend ruff format .')"
+ck "C49 npx eslint --fix"      ASK "$(runj 'docker compose exec -T frontend npx eslint --fix src')"
+ck "C50 curl -o 上書き"        ASK "$(runj 'docker compose exec -T backend curl -o /app/core/settings.py http://localhost:8000/')"
+ck "C51 パイプで sh"           ASK "$(runj "echo 'ls' | docker compose exec -T backend sh")"
+ck "C52 migrate --fake"        ASK "$(runj "$M migrate problems --fake")"
+ck "C53 構文として読めない"    ASK "$(runj "$M shell -c \"print(\"")"
+ck "C54 中身の見えない \$( )"  ASK "$(runj "$M shell -c \"\$(curl -s http://localhost:8000/x)\"")"
+ck "C55 コメントの << の次の一覧外" ASK "$(runj "# note <<X${NL}docker compose exec backend some_unknown_cmd")"
+ck "C57 一覧外の import だけ"   ASK "$(runj "$M shell -c \"import shutil; print(1)\"")"
+ck "C58 書き込みの open だけ"   ASK "$(runj "docker compose exec -T backend python -c \"f = open('/app/x', 'w')\"")"
+ck "C56 ( )# の次の一覧外"     ASK "$(runj "(cd /tmp)#<<X${NL}docker compose exec backend some_unknown_cmd")"
 
 # --- (F) 実行ファイルの中身 ---
 printf 'from problems.models import Problem\nProblem.objects.all().delete()\n' > "$TMP/del.py"
@@ -296,6 +396,10 @@ ck "F8 ホストの bash は見ない"     0   "$(runj "bash $TMP/host.sh")"
 ck "F9 scripts/claude は見ない"    0   "$(runj 'python3 scripts/claude/hooks/pretooluse_guard.py')"
 ck "F10 コンテナ sh スクリプト危険" 2  "$(runj "docker compose exec -T backend sh /app/${PROBE_SH_BAD#backend/}")"
 ck "F11 コンテナ sh スクリプト安全" 0  "$(runj "docker compose exec -T backend sh /app/${PROBE_SH_OK#backend/}")"
+ck "F12 -c の \$(cat ファイル) の中身" 2  "$(runj "$M shell -c \"\$(cat $TMP/del.py)\"")"
+cp "$TMP/del.py" "$REPO_ROOT/$PROBE_FRONT"
+ck "F13 frontend の /app/ の読み替え" 2  "$(runj "docker compose exec -T frontend python /app/${PROBE_FRONT#frontend/}")"
+ck "F14 backend 側に同名が無いこと" 0   "$( [ -e "$REPO_ROOT/backend/${PROBE_FRONT#frontend/}" ] && echo 1 || echo 0)"
 
 # --- (P) 素通し ---
 ck "P1 pytest"                     0 "$(runj 'docker compose exec -T backend python -m pytest -q')"
@@ -355,6 +459,23 @@ ck "P54 curl -fsS localhost"       0 "$(runj 'docker compose exec -T backend cur
 ck "P55 redis-cli -n 1 ping"       0 "$(runj 'docker compose exec -T redis redis-cli -n 1 ping')"
 ck "P56 celery inspect"            0 "$(runj 'docker compose exec -T celery celery -A core inspect active')"
 ck "P57 manage.py test"            0 "$(runj "$M test problems")"
+ck "P58 ホスト側の > /tmp/log"     0 "$(runj 'docker compose exec -T backend pytest -q > /tmp/pytest.log 2>&1')"
+ck "P59 記録を書き換える python"   0 "$(runj "python3 - <<'PY'${NL}p='docs/reviews/open/I999_review.md'${NL}s=open(p,encoding='utf-8').read()${NL}s+='DB connection と settings.DEBUG の確認済み'${NL}open(p,'w',encoding='utf-8').write(s)${NL}PY")"
+ck "P60 検証スクリプト（危険語を文字列で含む）" 0 "$(runj "python3 - <<'PY'${NL}import json, subprocess${NL}cases = ['Problem.objects.all().delete()', 'DROP DATABASE x']${NL}print(json.dumps(cases))${NL}PY")"
+ck "P61 \$(cat) の読み取りコード"  0 "$(runj "$M shell -c \"\$(cat <<'EOF'${NL}from problems.models import Problem${NL}print(Problem.objects.count())${NL}EOF${NL})\"")"
+ck "P62 sed -n の範囲"             0 "$(runj "docker compose exec -T backend sed -n '10,40p' core/settings.py")"
+ck "P63 PR 本文に危険語"           0 "$(runj "gh pr create --title t --body \"\$(cat <<'EOF'${NL}DROP DATABASE と rm -rf と .delete() と manage.py flush の説明${NL}git push --force-with-lease${NL}EOF${NL})\"")"
+ck "P64 cat > f のヒアドキュメント本文の push" 0 "$(runj "cat > /tmp/i174_n.md <<'EOF'${NL}git push -f${NL}git switch -f develop${NL}EOF")"
+ck "P65 辞書の update（変数）"     0 "$(runj "$M shell -c \"d = {}; d.update(a=1); print(d)\"")"
+ck "P66 1 件の save"               0 "$(runj "$M shell -c \"p = Problem.objects.get(id=1); p.is_public = False; p.save()\"")"
+ck "P67 APIClient で get と post"  0 "$(runj "$M shell -c \"from rest_framework.test import APIClient; c = APIClient(); c.force_authenticate(user=User.objects.first()); print(c.get('/api/problems/').status_code, c.post('/api/quiz/', {}).status_code)\"")"
+ck "P68 cursor の読み取り SQL"     0 "$(runj "$M shell -c \"from django.db import connection; c = connection.cursor(); c.execute('SELECT 1'); print(c.fetchall())\"")"
+ck "P69 for ループの読み取り"      0 "$(runj "$M shell <<'EOF'${NL}for p in Problem.objects.all()[:5]:${NL}    print(p.id, p.title)${NL}EOF")"
+ck "P70 compose config --services" 0 "$(runj 'docker compose config --services')"
+ck "P71 コメントの ' の後の読み取りヒアドキュメント" 0 "$(runj "# don't worry${NL}$M shell <<'EOF'${NL}from problems.models import Problem${NL}print(Problem.objects.count())${NL}EOF")"
+ck "P72 コメントの ' の後の cat > f の push" 0 "$(runj "# Let's write notes${NL}cat > /tmp/i174_n2.md <<'EOF'${NL}git push origin main${NL}EOF")"
+ck "P74 URL の # は語の一部"       0 "$(runj 'docker compose exec -T backend curl -fsS http://localhost:8000/health/#frag')"
+ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" || echo TIMEOUT)"
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---
 BROKEN_D="$TMP/guard_no_danger.py"
@@ -374,6 +495,11 @@ ck "G5 許可リストを外すと C7 素通し" 0 "$(rungj "$BROKEN_C" 'docker 
 ck "G6 実体では C7 を確認"         ASK "$(runj 'docker compose exec backend some_unknown_cmd --flag')"
 ck "G7 hard を外すと H4 は確認止まり" ASK "$(rungj "$BROKEN_H" "DANGER_OK=1 $RM /*")"
 ck "G8 実体では H4 を止める"       2   "$(runj "DANGER_OK=1 $RM /*")"
+# 判定の途中で例外が起きたら、素通しにせず確認（ask）に倒す（main の try/except）
+BROKEN_E="$TMP/guard_raise.py"
+sed 's/^def _analyze(text: str) -> dict:$/def _analyze(text: str) -> dict:\n    raise RuntimeError("injected")/' "$GUARD" > "$BROKEN_E"
+ck "G9 複製に例外を入れた"         YES "$(grep -q 'raise RuntimeError("injected")' "$BROKEN_E" && echo YES || echo NO)"
+ck "G10 例外のときは確認に倒す"    ASK "$(rungj "$BROKEN_E" 'docker compose exec -T backend python -m pytest -q')"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -19,7 +19,7 @@
 1. **常に止める（exit 2・解除不可）**: ルートの `rm -rf`・mkfs・dd・shred・別 worktree への書き込み（既存どおり）
 2. **危険操作（exit 2・DANGER_OK=1 で ask）**: ホスト・コンテナの両方に当てる列挙（下の 0-3）
 3. **外部送信・秘密情報（ask）**: ホスト・コンテナの両方に当てる列挙（0-4）
-4. **コンテナ内で安全と確認できない操作（ask）**: コンテナ内（`docker exec` / `docker compose exec|run` / `docker-compose exec|run`）のコマンドが、0-5 の許可リストに入らなければ ask。**流し込み（パイプで受ける・`<<<`）・読めない書き方も ask**
+4. **コンテナ内で安全と確認できない操作（ask）**: `docker compose exec|run` / `docker-compose exec|run` の中のコマンドが、0-5 の許可リストに入らなければ ask（素の `docker exec|run` は 2.・3. の列挙だけ。0-9 で変更）。**流し込み（パイプで受ける・`<<<`）・読めない書き方も ask**
 5. それ以外のホストの操作は素通し（auto mode の判断が第 2 層）
 
 ### 0-2. コマンドの読み取り（作り直し）
@@ -76,7 +76,7 @@
 
 ### 0-7. 受け入れ条件の追加・変更
 - AC-4 を補強: 第 1 周の再現コマンド（ヒアドキュメント・パイプ・付着記号・`$(...)`・`django-admin`・`python -m django`・`bash -lc`・`git -C`・`compose -f`・`seed_e2e --flush`・`docker volume rm`・`git clean -fdx`）を exit 2 または ask にする
-- AC-13（新規）: コンテナ内の操作は、0-5 の許可リストに入るものだけが素通しで、それ以外は ask
+- AC-13（新規）: `docker compose exec|run` の中の操作は、0-5・0-9・0-10 の許可リストに入るものだけが素通しで、それ以外は ask（素の `docker exec|run` は列挙だけ）
 - AC-14（新規）: 秘密情報の読み出し・表示は ask。settings.json の deny が `backend/.env` に効く
 - AC-9 は維持（許可リストの操作は止めず、ask も出さない）
 
@@ -100,6 +100,22 @@
 - 誤判定の修正: `cache.delete(` は削除扱いにしない・`objects ... .update(` は `;` をまたがない（`qs.update(` は別の判定）・ホストの Python は Django を使うコードのときだけ中身を判定する（文書の書き換えスクリプトに危険語の文字列が入っているだけでは止めない）・`docker inspect -f` で環境変数を出さない指定は素通し・grep のパターン引数を秘密情報のパスとして扱わない
 - 残余リスクとして明記: `migrate`（前進）で未適用の破壊的マイグレーションが走ること（マイグレーションは PR でレビューされ、コンテナ起動時にも自動で走る）・素の `docker exec|run` の中の列挙外の操作・意図的な回避
 - テスト: 第 2 周 #17・#18 の生き残り（包むコマンド・区切り・秘密情報・compose の許可リストの各枝・流し込み・`$(...)`・docker のオプション・ヒアストリング・細かい枝）を確かめるケースを足す。`test_settings_permissions.sh` に、PreToolUse の Bash フックの登録・`defaultMode` が `bypassPermissions` でないこと・allow に `Bash(*)` / `Bash(docker *)` が無いことを加える
+
+### 0-10. fix-loop（敵対的レビュー第 3 周・上限到達への対応・2026-10-17・ユーザー決定＝案 C）
+診断メモ `docs/reviews/I174_fix_diagnosis_20261017_0030.md`（診断レビュー PASS）。根本原因は「Python のコードを正規表現で判定していること」と「`-c "$(...)"` の中身をコードとして扱っていないこと」。
+- **Python コードの判定を構文木（標準ライブラリ `ast`）に置き換える**（`_code_ast` / `_CodeVisitor` / `_code_findings`）。呼び出し・import・属性の参照・ループを、改行・空白・変数名の揺れに関係なく取り出す。構文として読めないコードは、compose では確認、ホスト・素の docker では従来の正規表現（予備）で判定する。
+  - 危険操作（共通）: `.delete()` / `_raw_delete()`（`cache.delete` は除く）・QuerySet の `.update()`（呼び出しのチェーン・`objects` を含む連鎖・関連マネージャ〔2 段以上の属性〕・`*_set`・QuerySet を代入した変数・`qs` 等）・`.bulk_update()`・`cache.clear()` / `.flushall()` / `.flushdb()`・ループや内包表記の中の `save` / `delete` / `update` / `set_password` / `create`・`call_command`（`flush` / `sqlflush` / `reset_db` / `loaddata`・`seed_e2e` の `flush=True` / `--flush`・`migrate` の位置引数 2 つ以上）・`shutil.rmtree` / `os.remove` 等 / `Path().unlink()`・`execute()` の破壊的 SQL のリテラル
+  - 外部送信・秘密情報（共通）: 通信・外部コマンドのモジュールの import・`django.core.mail`・メール送信の関数とクラス・`.delay()` / `.apply_async()`・`*_task()`・`os.system` 等・OpenAI・`reverse('register')` 等・API パスの文字列・`os.environ` の読み出し（`setdefault` は除く）・`getenv`・`.env` の `open`・`settings.SECRET_KEY` 等・`/proc/*/environ`
+  - compose の許可リスト: 上に当たらず、すべての呼び出しが `_SAFE_CALLS`（表示・変換・ORM の読み取り・1 件の書き込み・テスト用クライアント・日時・JSON など）に入り、import が `_SAFE_IMPORT_ROOTS` に入るときだけ素通し。大文字で始まる名前の呼び出し（クラスの生成）は通す（メール・AI のクラスは先に外部送信として判定する）。
+  - ホストの Python: `manage.py shell` のコードは常に判定する。素の `python` は、アプリ（`django` 等）を import するときだけ危険操作を判定し、秘密情報と API パスはいつも判定する。書き込みモードの `open(` は危険操作から外す（ホストのファイル編集は通常の作業）。
+- **`-c "$(cat <<'EOF' ... EOF)"` / `-c "$(cat <ファイル>)"` の中身をコードとして戻す**（`_SUBST_STORE` と `_resolve_marks`）。中身が分からない `$(...)` のコードや SQL は「見えない」扱い（compose では確認）。
+- そのほか: ホスト側のリダイレクトをコンテナ内の書き込みとして引き継がない・パイプで受ける psql / dbshell は流し込みとして危険操作・パイプで受ける見えないコード（ホスト・素の docker）は確認・`migrate --fake` / `--prune` / `--run-syncdb` は compose の許可リストから外す・引用符の中の `<<` をヒアドキュメントとして扱わない・push の判定はヒアドキュメントの本文を除き改行を区切りにしたテキストで行う・frontend サービスの `/app` は `frontend/` に読み替える・作業ディレクトリ（`-w`）とサービス名を入れ子の判定に引き継ぐ・ホストの `echo $...KEY`・`gh auth status -t`・`git diff` 等の `.env`・`docker compose config --services` 等と環境変数を出さない `docker inspect --format` は素通し・deny の `**/.env.*` を、実際に秘密を含む名前（`**/.env.e2e`・`**/.env.local`・`**/.env.*.local`）に絞る（`.env.example` 等の編集を妨げない）
+- テスト: 第 3 周の再現と生き残り（A118〜A144・X33〜X38・S28〜S47・C42〜C54・P58〜P70・G9〜G10）を足す。settings テストに `disableAllHooks` と guard を呼ばないフックの検出を足す
+- 残余リスク（受け入れ）: ホストの `git checkout -f` / `git switch -f` での未コミット変更の消失（I174 の前から・範囲外）・`_SAFE_CALLS` の中の呼び出しを意図的に悪用する形（脅威モデル外）・settings.json の deny は実在する秘密ファイルの名前（`.env`・`.env.e2e`・`.env.local`・`.env.*.local`）に絞ったため、将来 `.env.prod` のような別の名前の秘密ファイルを置くと Read / Edit の deny が効かない（Bash での読み出しは guard の `_SECRET_PATH_RE` が引き続き確認に回す。新しい秘密ファイルを置くときは deny に名前を足す）・ホストの素の python で API パスの文字列や `os.environ` の読み出しを含むもの（文書の書き換えスクリプトを含む）は確認になる（0-10 の方針どおり）
+- 実装レビュー（手順5.5）の指摘で追加した修正: `_quote_state` が引用符の外の `#` コメントを飛ばす（`# don't` の ' でヒアドキュメントを読み落とさない）・`_read_exec_file` は普通のファイルだけを読む（`$(cat /dev/zero)` で固まらない）
+- 実装再レビュー（手順5.5・2 回目）の指摘で追加した修正（連続 NG 2 回のエスカレーションの後、ユーザーの了承で 3 回目へ）: コメントの中の `<<`（`# 例: cat <<EOF`）をヒアドキュメントとして扱わない（`_scan_quotes` がコメントの中かどうかも返す）・引用符の外のコメントは `_strip_comments` で先に取り除いて改行を残し、shlex のコメント処理は使わない（shlex は改行ごと消すため、次の行のコマンドが前の行の引数としてつながっていた）・自動テスト文書のケース表と件数を 552 に同期
+- 実装再レビュー（手順5.5・3 回目）の指摘で追加した修正（連続 NG 3 回のエスカレーションの後、ユーザーの了承で 4 回目へ）: コメントの始まりの判定を `_is_comment_start` の 1 か所にまとめ、直前の文字に `)` `<` `>` を足す（bash と同じく語の始まりの `#` をコメントとする。`(true)#<<EOF` の次の行を飲み込まない）。`echo $(true)#<<EOF` は bash では本物のヒアドキュメントだが、guard はコメントとして扱い本文をコマンドとして判定する（止めすぎる側・普段書かない形のため受け入れ）。ケース表と件数を 559 に同期
+- 残余リスク（受け入れ・追記）: ホストの素の python3 で、アプリを import しないコードのファイル削除（`shutil.rmtree('backend')` 等）は判定しない（0-10 の方針どおり。ホストのファイル操作は通常の作業で、取り消せない削除は settings の `rm` の ask と git で守る）
 
 ## 1. 背景/目的
 

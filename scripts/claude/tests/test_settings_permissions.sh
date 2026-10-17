@@ -24,6 +24,14 @@ if not any(h.get("matcher") == "Bash" and any("pretooluse_guard.py" in x.get("co
     errs.append("Bash の PreToolUse フック（pretooluse_guard.py）が登録されていない")
 if p.get("defaultMode") in ("bypassPermissions", "dontAsk") or full.get("defaultMode") in ("bypassPermissions", "dontAsk"):
     errs.append("権限モードが確認なしの設定になっている")
+if full.get("disableAllHooks"):
+    errs.append("disableAllHooks でフックが止まっている")
+for h in pre:
+    if h.get("matcher") == "Bash":
+        for x in h.get("hooks", []):
+            if x.get("type") != "command" or not x.get("command", "").startswith("python3 ") \
+                    or "pretooluse_guard.py" not in x.get("command", ""):
+                errs.append(f"Bash のフックが guard を正しく呼んでいない: {x}")
 for wide in ("Bash(*)", "Bash", "Bash(docker *)", "Bash(docker compose *)", "Bash(docker-compose *)"):
     if wide in allow:
         errs.append(f"allow に広すぎる {wide} がある")
@@ -44,13 +52,16 @@ if any(e.startswith(("Bash(docker compose exec", "Bash(docker-compose exec")) fo
     errs.append("docker compose exec 系の行が残っている")
 if any(e.startswith("Write(") for e in allow + ask + deny):
     errs.append("効かない Write(...) ルールが残っている")
-for r in ["Read(**/.env)", "Read(**/.env.*)", "Edit(**/.env)", "Edit(**/.env.*)",
+for r in ["Read(**/.env)", "Read(**/.env.e2e)", "Edit(**/.env)", "Edit(**/.env.e2e)",
+          "Read(**/.env.local)", "Edit(**/.env.local)", "Read(**/.env.*.local)", "Edit(**/.env.*.local)",
           "Read(**/secrets/**)", "Edit(**/secrets/**)", "Read(**/*.pem)", "Edit(**/*.pem)",
           "Read(**/*.key)", "Edit(**/*.key)"]:
     if r not in deny:
         errs.append(f"deny に {r} が無い")
 if any(e.startswith(("Read(./.env", "Edit(./.env")) for e in deny):
     errs.append("deny に ./.env 固定の行が残っている（backend/.env に効かない）")
+if any(e in ("Edit(**/.env.*)",) for e in deny):
+    errs.append("deny の Edit(**/.env.*) が .env.example 等の編集まで拒否する")
 for e in errs:
     print(e)
 sys.exit(1 if errs else 0)
@@ -85,6 +96,14 @@ json.dump(d, open(f"{tmp}/drop_bash_hook.json", "w", encoding="utf-8"))
 d = copy.deepcopy(base)
 d.pop("hooks")
 json.dump(d, open(f"{tmp}/drop_all_hooks.json", "w", encoding="utf-8"))
+d = copy.deepcopy(base)
+d["disableAllHooks"] = True
+json.dump(d, open(f"{tmp}/disable_all_hooks.json", "w", encoding="utf-8"))
+d = copy.deepcopy(base)
+for h in d["hooks"]["PreToolUse"]:
+    if h.get("matcher") == "Bash":
+        h["hooks"].append({"type": "command", "command": "true # pretooluse_guard.py"})
+json.dump(d, open(f"{tmp}/neutered_hook.json", "w", encoding="utf-8"))
 PY
 ck "S2 rm を ask から allow へ移すと不合格"   1 "$(run_check "$TMP/rm_to_allow.json")"
 ck "S3 exec の ask を戻すと不合格"            1 "$(run_check "$TMP/exec_back.json")"
@@ -95,6 +114,8 @@ ck "S7 allow に Bash(docker *) を足すと不合格" 1 "$(run_check "$TMP/allo
 ck "S8 bypassPermissions にすると不合格"     1 "$(run_check "$TMP/bypass_mode.json")"
 ck "S9 Bash のフック登録を消すと不合格"      1 "$(run_check "$TMP/drop_bash_hook.json")"
 ck "S10 hooks を丸ごと消すと不合格"          1 "$(run_check "$TMP/drop_all_hooks.json")"
+ck "S11 disableAllHooks を足すと不合格"      1 "$(run_check "$TMP/disable_all_hooks.json")"
+ck "S12 guard を呼ばないフックを足すと不合格" 1 "$(run_check "$TMP/neutered_hook.json")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
