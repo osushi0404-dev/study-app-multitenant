@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import ast
+import fnmatch
 import functools
 import json
 import os
@@ -41,8 +42,17 @@ def _segments(cmd: str) -> list:
         toks = list(lex)
     except ValueError:
         toks = cmd.split()
-    segs, seg = [], []
+    segs, seg, glue = [], [], False
     for t in toks:
+        # リダイレクトの一部（`>|`・`2>&1`・`>&2`）は区切りではないので、直前の語に戻す
+        if seg and t in ("|", "&") and seg[-1].endswith((">", "<")):
+            seg[-1] += t
+            glue = t == "&"
+            continue
+        if glue:
+            seg[-1] += t
+            glue = False
+            continue
         if t in _SHELL_OPS or (t and set(t) <= set(";&|")):
             if seg:
                 segs.append(seg)
@@ -480,7 +490,8 @@ _DJANGO_CTX_RE = re.compile(r"\bdjango\b|\bmanage\.py\b|\.models\b|DJANGO_SETTIN
 _APP_MODULES = ("django", "rest_framework", "problems", "accounts", "studylogs", "core", "celery", "openai")
 _SAFE_IMPORT_ROOTS = ("django", "rest_framework", "problems", "accounts", "studylogs", "core", "json",
                       "datetime", "collections", "pprint", "math", "re", "decimal", "uuid", "itertools",
-                      "functools", "statistics", "time", "zoneinfo", "os", "sys", "textwrap", "string")
+                      "functools", "statistics", "time", "zoneinfo", "os", "sys", "textwrap", "string",
+                      "inspect", "importlib", "secrets", "logging", "glob", "hashlib")
 _NET_IMPORT_ROOTS = ("smtplib", "socket", "requests", "urllib", "urllib3", "httpx", "http", "ftplib",
                      "telnetlib", "paramiko", "boto3", "aiohttp", "openai")
 _EXEC_IMPORT_ROOTS = ("subprocess", "pty", "multiprocessing")
@@ -527,6 +538,11 @@ _SAFE_CALLS = frozenset((
     "now", "today", "timedelta", "date", "datetime", "isoformat", "strftime", "strptime", "astimezone",
     "localdate", "weekday", "isoweekday", "timestamp", "total_seconds",
     "localtime", "make_aware", "dumps", "loads", "setup", "override_settings", "dedent",
+    "time", "perf_counter", "monotonic", "process_time",
+    # 標準ライブラリの読み取り（ソース・版・ファイル名の一覧・ハッシュ・乱数の文字列・ログの抑止）
+    "getsource", "getsourcefile", "getfile", "getdoc", "getmembers", "signature", "version",
+    "glob", "iglob", "token_urlsafe", "token_hex", "get_hasher", "make_password", "hexdigest", "sha256",
+    "md5", "getLogger", "disable", "sqrt",
     # DB の読み取り（execute の SQL は別に判定する）
     "cursor", "fetchall", "fetchone", "fetchmany",
 ))
@@ -647,6 +663,9 @@ class _CodeVisitor(ast.NodeVisitor):
                 self.external.append("秘密情報（/proc/*/environ）の参照")
             if node.value in _SECRET_NAMES:
                 self.external.append(f"秘密情報（'{node.value}'）の参照")
+            # open() 以外（Path(...).read_text()・dotenv_values(...) 等）で読む .env も、パスの文字列で捕まえる
+            if _secret_path(node.value):
+                self.external.append(f"秘密情報（{node.value}）の参照")
 
     # --- 呼び出し ---
     def visit_Call(self, node):
@@ -710,8 +729,11 @@ class _CodeVisitor(ast.NodeVisitor):
             self.external.append(f"メール送信（{name}）")
         if name in ("delay", "apply_async"):
             self.external.append("celery タスクの起動")
-        if name.endswith("_task"):
-            self.external.append(f"celery タスク関数の直接実行（{name}）")
+        # タスクを起点にした呼び出し（t()・t.apply()・t.run()・t.s().apply() 等。別名は元の名前に戻す）
+        task = next((p for p in (self.aliases.get(q, q) for q in _ast_dotted(f).split(".")) if p.endswith("_task")),
+                    None)
+        if task:
+            self.external.append(f"celery タスクの実行（{task}）")
         if name in ("system", "popen") and rd.endswith("os") or name.startswith(("exec", "spawn")) and rd.endswith("os"):
             self.external.append("外部コマンドの実行（os.system 等）")
         if name == "AIQuestionGenerator" or rd.startswith("openai"):
@@ -732,7 +754,7 @@ class _CodeVisitor(ast.NodeVisitor):
             path = args[0] if args else None
             mode = args[1] if len(args) > 1 else _ast_str(next((k.value for k in node.keywords if k.arg == "mode"),
                                                                  ast.Constant(value="r")))
-            if path and _SECRET_PATH_RE.search(path) and not path.endswith(".example"):
+            if path and _secret_path(path):
                 self.external.append("秘密情報ファイル（.env 等）の読み出し")
             if mode is not None and not any(ch in mode for ch in "wax+"):
                 handled = True                                # 読み取りの open
@@ -766,6 +788,26 @@ def _code_ast(code: str):
     return True, uniq(v.danger), uniq(v.external), uniq(v.unknown), v.imports_app
 _SQL_VERB_RE = re.compile(r"^\s*(drop|truncate|alter|update|delete|insert|create|grant|revoke|with|merge)\b", re.I)
 _SECRET_PATH_RE = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets/.*|[^/]*\.(pem|key))$|^/proc/(\d+|self)/environ$")
+
+def _secret_path(arg: str) -> bool:
+    """引数が秘密情報のファイル（.env・鍵・/proc の environ）を指し得るなら True。.example は除く。
+    ブレース展開（{.env,x}）と glob（.env*・.e*・/proc/*/environ）で書いたものも、当たり得れば True。"""
+    alts = [arg]
+    m = re.search(r"\{([^{}]*,[^{}]*)\}", arg)
+    if m:
+        alts = [arg[:m.start()] + a + arg[m.end():] for a in m.group(1).split(",")]
+    for a in alts:
+        if a.endswith(".example"):
+            continue
+        if a.startswith("/proc/") and a.endswith("environ"):
+            return True
+        base = a.rsplit("/", 1)[-1]
+        if re.search(r"[*?\[]", base):                   # glob は、秘密のファイル名に当たり得るかで判定する
+            if any(fnmatch.fnmatchcase(n, base) for n in (".env", ".env.local", ".env.prod", "id_rsa.key")):
+                return True
+        elif _SECRET_PATH_RE.search(a):
+            return True
+    return False
 _SECRET_VAR_RE = re.compile(r"\$\{?[A-Za-z_]*(KEY|SECRET|PASSWORD|TOKEN|PASS)[A-Za-z_]*\}?")
 _SECRET_READERS = ("cat", "less", "more", "head", "tail", "grep", "rg", "sed", "awk", "strings", "cp",
                    "base64", "xxd", "od", "tac", "nl", "bat", "vi", "vim", "nano", "sort", "uniq", "diff",
@@ -992,7 +1034,27 @@ def _cut_substitutions(text: str):
 
 def _new_cmd(toks: list, ctr: bool, compose: bool = False) -> dict:
     return {"toks": toks, "ctr": ctr, "compose": compose, "piped": False, "stdin": None, "stdin_ctr": ctr,
-            "heredoc": None, "herestr": None, "writes": False, "note": None, "workdir": None, "service": None}
+            "heredoc": None, "herestr": None, "writes": False, "write_to": [], "note": None, "workdir": None,
+            "service": None}
+
+# 同じコマンドの中で書き込まれるファイル（ファイル名 → 書き込む中身の列。中身が見えない書き込みは None）。
+# 判定の時点のディスクには書き込む前の古い中身があるため、実行ファイルの判定ではこちらも合わせて見る。
+_WRITTEN = {}
+
+def _record_writes(c: dict):
+    """単純コマンド c が書き込むファイルを _WRITTEN に記録する（cat/tee のヒアドキュメントは中身も）。"""
+    toks = c["toks"]
+    head = os.path.basename(toks[0]) if toks else ""
+    targets = list(c["write_to"])
+    if head == "tee":
+        targets += [a for a in toks[1:] if not a.startswith("-")]
+    elif head == "sed" and _has_short(toks[1:], "i", "--in-place"):
+        targets += [a for a in toks[1:] if not a.startswith("-")][1:]
+    elif head in ("cp", "mv", "install", "ln", "rsync") and len(toks) > 2:
+        targets.append(toks[-1])
+    body = c["heredoc"] if c["heredoc"] is not None else c["herestr"]
+    for t in targets:
+        _WRITTEN.setdefault(os.path.basename(t), []).append(body if head in ("cat", "tee") else None)
 
 def _raw_commands(text: str, ctr: bool, compose: bool, loc=(None, None)):
     """テキストを単純コマンド（dict）の列と、$(...) の中身の列に分ける（包むコマンドの展開はしない）。"""
@@ -1015,6 +1077,7 @@ def _raw_commands(text: str, ctr: bool, compose: bool, loc=(None, None)):
     def flush():
         nonlocal cur
         if cur["toks"] or cur["heredoc"] is not None or cur["stdin"] or cur["herestr"] is not None:
+            _record_writes(cur)
             cmds.append(cur)
         cur = dict(_new_cmd([], ctr, compose), workdir=loc[0], service=loc[1])
     while i < len(toks):
@@ -1045,6 +1108,7 @@ def _raw_commands(text: str, ctr: bool, compose: bool, loc=(None, None)):
         if t in (">", ">>", ">&", "&>", "<&", ">|", "<>"):
             if t != "<&" and nxt is not None and not nxt.isdigit() and nxt not in ("/dev/null", "-"):
                 cur["writes"] = True                 # ファイルへの書き込み（fd の複製・/dev/null は除く）
+                cur["write_to"].append(nxt)
             i += 2                                   # 出力先は引数に入れない
             continue
         cur["toks"].append(_resolve_marks(t))       # -c "$(cat <<EOF ...)" の中身をコードとして戻す
@@ -1120,9 +1184,22 @@ def _resolve_exec_file(path: str, in_container: bool, workdir=None, service=None
         return None
     return os.path.abspath(path)
 
-@functools.lru_cache(maxsize=256)
 def _read_exec_file(path: str, in_container: bool, workdir=None, service=None):
-    """実行ファイルの中身を返す。ハーネス自身のコードは ""（判定しない）。読めなければ None（stderr に通知）。"""
+    """実行ファイルの中身を返す。読めなければ None（stderr に通知）。
+    同じコマンドの中で書き込まれるファイルは、ディスクの中身と書き込む中身をすべて合わせて判定する
+    （どれが実行されても見逃さないため）。書き込む中身が見えなければ None（確認に回す）。"""
+    written = _WRITTEN.get(os.path.basename(path))
+    if written is None:
+        return _read_exec_file_disk(path, in_container, workdir, service)
+    if any(b is None for b in written):
+        print(f"[guard] 同じコマンドの中で書き換えるファイルの中身を確認できませんでした: {path}", file=sys.stderr)
+        return None
+    disk = _read_exec_file_disk(path, in_container, workdir, service, quiet=True)
+    return "\n".join(([disk] if disk else []) + written)
+
+@functools.lru_cache(maxsize=256)
+def _read_exec_file_disk(path: str, in_container: bool, workdir=None, service=None, quiet=False):
+    """ディスク上の実行ファイルの中身を返す。ハーネス自身のコードは ""（判定しない）。読めなければ None。"""
     host = _resolve_exec_file(path, in_container, workdir, service)
     root = _current_worktree_root()
     if host and root and os.path.realpath(host).startswith(
@@ -1135,7 +1212,8 @@ def _read_exec_file(path: str, in_container: bool, workdir=None, service=None):
         with open(host, encoding="utf-8") as fh:
             return fh.read()
     except (OSError, UnicodeDecodeError):
-        print(f"[guard] 実行ファイルの中身を確認できませんでした（判定を省略）: {path}", file=sys.stderr)
+        if not quiet:
+            print(f"[guard] 実行ファイルの中身を確認できませんでした（判定を省略）: {path}", file=sys.stderr)
         return None
 
 def _unknown(c: dict, note: str, toks=None) -> dict:
@@ -1455,9 +1533,16 @@ def _is_rm_rf(toks: list) -> bool:
     rec = _has_short(args, "r", "--recursive") or _has_short(args, "R")
     return rec and _has_short(args, "f", "--force")
 
-def _cmd_hard(c: dict) -> bool:
-    """解除不可で止めるコマンド（ルートの rm -rf）なら True。"""
-    return _is_rm_rf(c["toks"]) and any(t in ("/", "/*") for t in c["toks"][1:])
+def _cmd_hard(c: dict) -> str:
+    """解除不可で止めるコマンドなら理由を返す（ルートの rm -rf・mkfs・dd・shred）。該当なしは ""。
+    コマンド名で判定する（grep のパターンや YYYY-MM-DD などの引数の中の語では止めない）。"""
+    toks = c["toks"]
+    if _is_rm_rf(toks) and any(t in ("/", "/*") for t in toks[1:]):
+        return "rm -rf / is forbidden"
+    head = os.path.basename(toks[0]).lower() if toks else ""
+    if head in ("dd", "shred") or head == "mkfs" or head.startswith("mkfs."):
+        return f"{head} is forbidden"
+    return ""
 
 def _git_sub(toks: list):
     rest = toks[1:]
@@ -1477,9 +1562,9 @@ def _cmd_danger(c: dict) -> list:
         sub, args = _git_sub(toks)
         if sub == "reset" and "--hard" in args:
             r.append("git reset --hard requires DANGER_OK=1")
-        if sub == "clean" and _has_short(args, "f", "--force") and (_has_short(args, "d") or _has_short(args, "x")
-                                                                    or _has_short(args, "X")):
-            r.append("追跡されていないファイルの削除（git clean -f -d/-x）requires DANGER_OK=1")
+        # -d / -x が無くても、追跡済みのディレクトリの中の追跡されていないファイル（未コミットの記録等）は消える
+        if sub == "clean" and _has_short(args, "f", "--force") and not _has_short(args, "n", "--dry-run"):
+            r.append("追跡されていないファイルの削除（git clean -f）requires DANGER_OK=1")
     dp = c.get("docker")
     if dp:
         subs, args = dp["subs"], dp["args"]
@@ -1584,18 +1669,21 @@ def _cmd_external(c: dict) -> list:
     if f:
         r += f[2]
         # 実行するファイルを引数で指定した python（python3 $G など）では、パイプで流れるのはデータでコードではない
-        script_arg = _PYTHON_RE.match(head) and not dj and [a for a in toks[1:] if not a.startswith("-")]
+        # ただし `python - 引数` と `python /dev/stdin` は標準入力（パイプの中身）をコードとして実行する
+        first = next((a for a in toks[1:] if a == "-" or not a.startswith("-")), None)
+        script_arg = _PYTHON_RE.match(head) and not dj and first is not None and first != "-" \
+            and not first.startswith(("/dev/", "/proc/"))
         if not f[0] and c["piped"] and not c["compose"] and not script_arg:
             r.append("パイプで流し込むコード（中身が見えない）")
     paths = [a for a in toks[1:] if not a.startswith("-")]
     if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file")):
         paths = paths[1:]
-    secret_path = any(_SECRET_PATH_RE.search(a) and not a.endswith(".example") for a in paths)
+    secret_path = any(_secret_path(a) for a in paths)
     if head in _SECRET_READERS and secret_path:
         r.append("秘密情報ファイルの読み出し")
     if head == "git" and _git_sub(toks)[0] in ("diff", "show", "blame", "cat-file", "grep") and secret_path:
         r.append("秘密情報ファイルの表示（git）")
-    if c["stdin"] and _SECRET_PATH_RE.search(c["stdin"]) and not c["stdin"].endswith(".example"):
+    if c["stdin"] and _secret_path(c["stdin"]):
         r.append("秘密情報ファイルの読み出し（< で流し込み）")
     if head in ("grep",) and _grep_recursive_secret(c):
         r.append("秘密情報ファイルを含むディレクトリの再帰検索（grep -r。--include で絞るか rg を使う）")
@@ -1742,10 +1830,9 @@ def _describe(c: dict) -> str:
 def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
-    res = {"hard": False, "danger": [], "external": [], "container": []}
+    res = {"hard": "", "danger": [], "external": [], "container": []}
     for c in cmds:
-        if _cmd_hard(c):
-            res["hard"] = True
+        res["hard"] = res["hard"] or _cmd_hard(c)
         d, e = _cmd_danger(c), _cmd_external(c)
         res["danger"] += d
         res["external"] += e
@@ -1812,15 +1899,9 @@ def main():
         _ask(f"見張りがコマンドを読み解けませんでした（{type(e).__name__}）。内容を確認してください。")
 
     # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
-    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。
+    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。mkfs・dd・shred はコマンド名で判定する。
     if an["hard"]:
-        _block("rm -rf / is forbidden", raw)
-    if re.search(r"\bmkfs(\.|\s)", cmd, re.I):
-        _block("mkfs is forbidden", raw)
-    if re.search(r"\bdd\b", cmd, re.I):
-        _block("dd is forbidden", raw)
-    if re.search(r"\bshred\b", cmd, re.I):
-        _block("shred is forbidden", raw)
+        _block(an["hard"], raw)
 
     # I095: worktree 横断書込のブロック（DANGER_OK でも解除しない＝danger_ok ゲートの外）。
     _wt_targets = _bash_write_targets(cmd)

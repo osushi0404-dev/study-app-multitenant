@@ -209,6 +209,9 @@ ckd "A159 パイプで compose psql（旧 C3）" 'echo "drop table x" | docker c
 # 敵対的レビュー再実施 第 1 周（2026-10-17）の再現
 ckd "A160 call_command migrate のキーワード巻き戻し" "$M shell -c \"from django.core.management import call_command; call_command('migrate', app_label='problems', migration_name='zero')\""
 ckd "A161 caches の別名で全消去"     "$M shell -c \"from django.core.cache import caches; c = caches['default']; c.clear()\""
+# 敵対的レビュー再実施 第 2 周（2026-10-17）: -d/-x なしでも追跡されていないファイルは消える
+ckd "A162 git clean -f"             'git clean -f'
+ckd "A163 git clean -f <パス>"      'git clean -f docs/'
 
 # --- (H) 常に止める（DANGER_OK=1 でも 2） ---
 ck "H1 rm-rf /"                2 "$(runj "$RM /")"
@@ -217,6 +220,13 @@ ck "H3 DANGER_OK rm-rf /"      2 "$(runj "DANGER_OK=1 $RM /")"
 ck "H4 DANGER_OK rm-rf /*"     2 "$(runj "DANGER_OK=1 $RM /*")"
 ck "H5 DANGER_OK sudo rm-rf /" 2 "$(runj "DANGER_OK=1 sudo $RM /")"
 ck "H6 nice rm-rf /*"          2 "$(runj "nice $RM /*")"
+# 第 2 周（2026-10-17）: mkfs・dd・shred はコマンド名で止める（引数の中の語では止めない＝P83〜P85）
+ck "H7 dd"                     2 "$(runj 'dd if=/dev/zero of=/tmp/i174_x bs=1 count=1')"
+ck "H8 DANGER_OK sudo dd"      2 "$(runj 'DANGER_OK=1 sudo dd if=/dev/zero of=/tmp/i174_x')"
+ck "H9 DANGER_OK shred"        2 "$(runj 'DANGER_OK=1 shred -u /tmp/i174_x')"
+ck "H10 mkfs.ext4"             2 "$(runj 'mkfs.ext4 /dev/sdz')"
+ck "H11 sh -c 内の mkfs"       2 "$(runj "bash -c 'mkfs -t ext4 /dev/sdz'")"
+ck "H12 コンテナ内の dd"       2 "$(runj 'docker compose exec -T backend dd if=/dev/zero of=/app/x')"
 
 # --- (X) 外部送信（ASK） ---
 ck "X1 send_mail"              ASK "$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])\"")"
@@ -270,6 +280,12 @@ ck "X45 reverse('accounts:password_reset')"   ASK "$(runj "$M shell -c \"${AC}c.
 ck "X46 reverse(viewname=...)"                ASK "$(runj "$M shell -c \"${AC}c.post(reverse(viewname='accounts:register_with_org', args=['x']), {})\"")"
 ck "X47 ホスト shell の名前空間付き reverse"  ASK "$(runj "python backend/manage.py shell -c \"${AC}c.post(reverse('accounts:password_reset'), {})\"")"
 ck "X48 ホスト shell の別名のタスク関数"      ASK "$(runj "python backend/manage.py shell -c \"from studylogs.tasks import send_study_reminders_task as t; t()\"")"
+# 第 2 周（2026-10-17）: タスクの同期実行。素の docker exec は列挙だけで判定するので、ASK は外部送信の判定だけから出る
+DX='docker exec study-app-multitenant-backend-1 python manage.py shell -c'
+ck "X49 素の exec のタスク .apply()"        ASK "$(runj "$DX \"from studylogs.tasks import send_study_reminders_task; print(send_study_reminders_task.apply().get())\"")"
+ck "X50 素の exec の別名タスク .run()"      ASK "$(runj "$DX \"from studylogs.tasks import send_study_reminders_task as t; t.run()\"")"
+ck "X51 素の exec のタスク .s().apply()"    ASK "$(runj "$DX \"from studylogs.tasks import send_study_reminders_task; send_study_reminders_task.s().apply()\"")"
+ck "X52 素の exec の reverse_lazy のルート名" ASK "$(runj "$DX \"${AC}from django.urls import reverse_lazy; c.post(str(reverse_lazy('accounts:register')), {})\"")"
 
 # --- (S) 秘密情報（ASK）／秘密でないもの（0） ---
 ck "S1 コンテナ cat .env"      ASK "$(runj 'docker compose exec backend cat .env')"
@@ -337,6 +353,20 @@ ck "S59 connection.settings_dict"       ASK "$(runj "$M shell -c \"from django.d
 ck "S60 vars(settings._wrapped)"        ASK "$(runj "$M shell -c \"from django.conf import settings; print(vars(settings._wrapped))\"")"
 ck "S61 getattr で設定をまとめて表示"   ASK "$(runj "$M shell -c \"from django.conf import settings; print({k: getattr(settings, k) for k in dir(settings) if k.isupper()})\"")"
 ck "S62 ps の e（環境変数）"            ASK "$(runj 'docker compose exec -T backend ps auxeww')"
+# 第 2 周（2026-10-17）: S61 は一覧外の dir()・isupper() でも ASK になるため、getattr・vars・別名・__dict__ の判定を単独で確かめる
+# （呼び出しは print・getattr・vars だけ＝一覧内。ASK は秘密情報の判定だけから出る）
+ck "S63 vars(settings)"                 ASK "$(runj "$M shell -c \"from django.conf import settings; print(vars(settings))\"")"
+ck "S64 getattr(settings, 変数)"        ASK "$(runj "$M shell -c \"from django.conf import settings; k = 'X'; print(getattr(settings, k))\"")"
+ck "S65 settings の別名の vars"         ASK "$(runj "$M shell -c \"from django.conf import settings as s; print(vars(s))\"")"
+ck "S66 settings.__dict__"              ASK "$(runj "$M shell -c \"from django.conf import settings; print(settings.__dict__)\"")"
+# 第 2 周（2026-10-17）: glob・ブレース展開の .env と、open() 以外で読む .env
+ck "S67 cat .env*"                      ASK "$(runj 'cat backend/.env*')"
+ck "S68 grep KEY .env*"                 ASK "$(runj 'grep -n KEY backend/.env*')"
+ck "S69 tail .e*"                       ASK "$(runj 'tail -n +1 backend/.e*')"
+ck "S70 ブレース展開の .env"            ASK "$(runj 'cat backend/{.env,requirements.txt}')"
+ck "S71 /proc/*/environ"                ASK "$(runj "docker compose exec -T backend sh -c 'cat /proc/*/environ'")"
+ck "S72 素の exec の Path().read_text()" ASK "$(runj "docker exec app-backend-1 python -c \"from pathlib import Path; print(Path('/app/.env').read_text())\"")"
+ck "S73 ホストの dotenv_values"         ASK "$(runj "python3 -c \"from dotenv import dotenv_values; print(dotenv_values('backend/.env'))\"")"
 
 # --- (C) コンテナ内で安全と確かめられない操作（ASK） ---
 ck "C1 createsuperuser"        ASK "$(runj "$M createsuperuser")"
@@ -425,6 +455,18 @@ ck "F12 -c の \$(cat ファイル) の中身" 2  "$(runj "$M shell -c \"\$(cat 
 cp "$TMP/del.py" "$REPO_ROOT/$PROBE_FRONT"
 ck "F13 frontend の /app/ の読み替え" 2  "$(runj "docker compose exec -T frontend python /app/${PROBE_FRONT#frontend/}")"
 ck "F14 backend 側に同名が無いこと" 0   "$( [ -e "$REPO_ROOT/backend/${PROBE_FRONT#frontend/}" ] && echo 1 || echo 0)"
+# 第 2 周（2026-10-17）: 同じコマンドの中で書き換えるファイルは、ディスクの古い中身（無害）だけで判定しない
+printf 'print(1)\n' > "$TMP/old.py"
+ck "F15 書き換え直後の流し込み"     2   "$(runj "cat > $TMP/old.py <<'EOF'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}EOF${NL}$M shell < $TMP/old.py")"
+ck "F16 tee で書き換えて流し込み"   2   "$(runj "tee $TMP/old.py <<'EOF' >/dev/null${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}EOF${NL}$M shell < $TMP/old.py")"
+ck "F17 中身の見えない書き換え"     ASK "$(runj "sed -i 's/1/2/' $TMP/old.py; $M shell < $TMP/old.py")"
+ck "F18 書き換え直後に python3 で実行" 2 "$(runj "cat > $TMP/old.py <<'EOF'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}EOF${NL}python3 $TMP/old.py")"
+ck "F19 同じコマンドで作る無害なファイル" 0 "$(runj "cat > $TMP/i174_new.py <<'EOF'${NL}print(1)${NL}EOF${NL}$M shell < $TMP/i174_new.py")"
+ck "F20 別のファイルの書き込みは影響しない" 0 "$(runj "cat > $TMP/other.py <<'EOF'${NL}import os${NL}EOF${NL}$M shell < $TMP/old.py")"
+# 第 2 周（2026-10-17）: python - 引数 / python /dev/stdin はパイプの中身をコードとして実行する（中身が見えないので確認）
+ck "F21 パイプで python - 引数"     ASK "$(runj "echo x | docker exec -i app-backend-1 python - 42")"
+ck "F22 パイプで python /dev/stdin" ASK "$(runj "printf x | docker exec -i app-backend-1 python /dev/stdin")"
+ck "F23 ホストのパイプで python3 -" ASK "$(runj "cat f | python3 - x")"
 
 # --- (P) 素通し ---
 ck "P1 pytest"                     0 "$(runj 'docker compose exec -T backend python -m pytest -q')"
@@ -510,6 +552,17 @@ ck "P80 ps aux / ps -ef"           0 "$(runj 'docker compose exec -T backend ps 
 # shellcheck disable=SC2016  # $G を展開せず、そのまま guard に渡すのが目的
 ck "P81 パイプで JSON を python3 \$G" 0 "$(runj 'G=scripts/claude/hooks/pretooluse_guard.py; cat /tmp/x.json | python3 $G')"
 ck "P82 組み込みの set()"          0 "$(runj "$M shell -c \"print(set([1, 2]))\"")"
+# 第 2 周（2026-10-17）: 引数の中の語（dd・shred・mkfs）では止めない・読み取りだけの標準ライブラリは素通し・git clean の試し実行
+ck "P83 grep のパターンの shred"   0 "$(runj 'grep -n -E "shred|mkfs" scripts/x.sh')"
+ck "P84 YYYY-MM-DD のコミット"     0 "$(runj 'git commit -m "docs: 日付形式 YYYY-MM-DD に統一"')"
+ck "P85 grep の dd"                0 "$(runj 'grep -rn "dd is" docs/')"
+ck "P86 git clean -n（試し実行）"  0 "$(runj 'git clean -fn')"
+ck "P87 time.time()"               0 "$(runj 'docker compose exec -T backend python -c "import time; print(time.time())"')"
+ck "P88 inspect.getsource"         0 "$(runj "$M shell -c \"import inspect, rest_framework.filters; print(inspect.getsource(rest_framework.filters.SearchFilter))\"")"
+ck "P89 importlib.metadata.version" 0 "$(runj "docker compose exec -T backend python -c \"from importlib.metadata import version; print(version('django'))\"")"
+ck "P91 .env.example の glob は秘密でない" 0 "$(runj 'cat backend/.env.example*')"
+ck "P92 2>&1 は区切りでない"         0 "$(runj 'git status 2>&1 | head -5')"
+ck "P90 environ の別名の setdefault" 0 "$(runj "$M shell -c \"from os import environ; environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings'); print(1)\"")"
 ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" || echo TIMEOUT)"
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---

@@ -118,6 +118,20 @@
 - 計画レビュー（2026-10-17・`docs/reviews/I174_plan_review_20261017_1220.md`・OK）の指摘への対応: 旧 C3（パイプでの compose psql）は危険操作なので (A) の A159 に移した・新しい秘密ファイルを置くときに deny へ名前を足す運用を danger-ops.md に明記・テストの最終件数は 574（テストレビューで足したケースを含む。ケース表は `docs/tests/open/I174_auto_test.md`）・`_SAFE_CALLS` / `_SAFE_IMPORT_ROOTS` の具体的な中身は `scripts/claude/hooks/pretooluse_guard.py` の定数が正本（計画書には写さず二重管理を避ける）
 - 残余リスク（受け入れ・追記）: ホストの素の python3 で、アプリを import しないコードのファイル削除（`shutil.rmtree('backend')` 等）は判定しない（0-10 の方針どおり。ホストのファイル操作は通常の作業で、取り消せない削除は settings の `rm` の ask と git で守る）
 
+### 0-11. 敵対的レビューのやり直し（fix-loop 後・2026-10-17）
+記録: `docs/reviews/I174_adversarial_review_20261017_1443.md`（第 1 周）・`docs/reviews/I174_adversarial_review_20261017_1930.md`（第 2 周）。設計の変更は無く、0-10 の方針の中での判定の追加と直しだけ。
+- 第 1 周: 別名の import・`reverse` の名前空間とキーワード・設定の秘密の参照の形（getattr・vars・別名・import・`settings_dict`）・`caches[...]` の変数・`migration_name=`・多対多の `.set()`・`ps e`・語にくっついた `;` `&` の区切り
+- 第 2 周:
+  - 同じコマンドの中で書き込むファイルを実行するときは、ディスクの中身と書き込む中身を合わせて判定し、中身が見えない書き込み（`sed -i`・`echo >` 等）なら確認にする（`_WRITTEN`・`_record_writes`）
+  - celery タスクを起点にした呼び出し（`.apply()`・`.run()`・`.s().apply()`・別名）を外部送信にする
+  - `git clean -f` は `-d` / `-x` が無くても危険操作にする（`-n` は除く）。danger-ops.md も同じに直す
+  - **mkfs・dd・shred の解除不可の停止を、コマンド名で判定する**（R8 を範囲に入れる。引数・コミットメッセージ・grep の検索語の中の語では止めない）
+  - 読み取りだけの標準ライブラリ（`time`・`inspect`・`importlib.metadata`・`secrets`・`logging`・`glob`・`hashlib` 等）を compose の許可リストに足す
+  - `.env` の判定を、glob・ブレース展開・`/proc/*/environ`・Python の文字列（`Path().read_text()`・`dotenv_values()`）にも当てる（`_secret_path`）
+  - `python -`（引数あり）と `python /dev/stdin` はパイプの中身をコードとして実行するので、中身が見えない確認を外さない
+  - `>|`・`2>&1` を区切りとして分けない（第 1 周の `;` `&` の区切りでの後退の修正）
+- 先送り（Medium・Low。この周の通過条件外。/close の時に、まとめて別イシューとして起票するかを判断する）: 多対多の `.clear()`・変数に入れた SQL / `executemany` / `raw` / `WHERE 1=1`・素の docker exec の `dumpdata` / `remove_stale_contenttypes` / `get_connection_params()` / `ps auxeww`・`git worktree remove --force` / `git stash clear|drop`・`settings.DATABASES['default']['HOST']` と `getenv('DEBUG')` の余計な確認・`wget` / httpie / `node fetch` での登録 API・キャッシュの別名と `delete_pattern('*')`・`import os as o`・`vars(connection)`・`call_command('generate_ai_problems' | 'sendtestemail')`・`/proc/1/task/1/environ`・`env -u X`・`ps -o user` の余計な確認・frontend の `npm audit | node -e`・`psql -lqt`
+
 ## 1. 背景/目的
 
 **背景**: I151 の作業中に、`docker compose exec` の承認待ちが約 28 回出て作業が滞った。過去 51 セッションの集計では、確認対象の操作 125 回のうち 120 回（約 96%）が `docker compose exec` で、中身は pytest・ruff・pip-audit・npm audit・読み取りの `manage.py shell` が大半だった。`.claude/settings.json` の `permissions.ask` が「コマンドの種類」で一律に確認をかけていて、「危険かどうか」を見ていないのが原因である。
@@ -408,7 +422,7 @@ _CODE_EXTERNAL = [
 | R7 | `DANGER_OK=1 bash scripts/claude/wt-remove.sh` の中の `down -v` は、guard から見えない（既存の挙動のまま） | 本計画では変えない（スクリプト自身が DANGER_OK=1 を要求する）。気づいた点としてレビュー文書に記録する |
 | R9 | celery の起動（`.delay(` / `.apply_async(`・`celery ... call`）は、メールや OpenAI と関係のないタスクにも反応する。今後タスクが増えると確認が増えうる（2026-10-16 計画レビュー Warning 2） | 現状、shell から celery タスクを起動する作業はまれで、送信の有無はタスクの中を見ないと分からないため、広めに確認を出すほうを選ぶ。確認が頻繁に出るようになったら、送信するタスクの名前の一覧で判定する形に絞る（その時点で別イシュー） |
 | R10 | ステップ 1 で、対話セッションの一部（wt-harness・版 2.1.300・permissionMode default）では、guard が ask を返しても承認画面が出ずに実行されると分かった（auto mode の対話セッションと、非対話の 3 モードでは承認が求められた。手動テスト No.1 の実結果） | 本計画の前提（auto mode）は成り立つので進める。ただし、DANGER_OK=1 の ask 化と外部送信の ask は、この条件のセッションでは効かない。手動テスト No.3・No.4 は auto mode で行う。原因（版・モード・セッション固有のどれか）の切り分けと Claude Code への報告は、本イシューの範囲外としてユーザーに引き継ぐ（I146 の手動テストの「gh pr 系が止まらない」も同じ現象の可能性が高い） |
-| R8 | `\bdd\b`（437 行目）が `dd` という単語にも反応する止めすぎ | 本計画の範囲外（イシューのスコープ外）。気づいた点として記録する |
+| R8 | `\bdd\b`（437 行目）が `dd` という単語にも反応する止めすぎ | 2026-10-17 に範囲へ入れて解消（0-11）。当初は範囲外としたが、敵対的レビューで High とされ、`YYYY-MM-DD`・grep の検索語で DANGER_OK=1 でも解除できない停止が作業中に実際に起きたため |
 
 ## 9. 承認ポイント
 - [ ] 計画内容（4 章の変更点・3 章の影響範囲）

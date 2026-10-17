@@ -59,6 +59,10 @@ ck "A10 edit symlink→block"     2 "$(edit Edit "$MAIN/link_to_other/x.py")"
 # --- Bash 書込経路（TC-A11〜A15・A11b） ---
 ck "A11 redirect 別wt→block"       2 "$(bash_c "echo x > $OTHER/f")"
 ck "A11b 埋め込みredirect→block"   2 "$(bash_c "echo x>$OTHER/f")"
+# I174 敵対的レビュー再実施 第 2 周: >| を > とパイプに割らない
+ck "A11c >| redirect→block"        2 "$(bash_c "echo x >| $OTHER/f")"
+ck "A11d 埋め込み>|→block"         2 "$(bash_c "echo x >|$OTHER/f")"
+ck "A11e 2>&1 の後の >|→block"     2 "$(bash_c "echo x 2>&1 >| $OTHER/f")"
 ck "A12 tee 別wt→block"            2 "$(bash_c "tee $OTHER/f")"
 ck "A13 cp dest別wt→block"         2 "$(bash_c "cp a.txt $OTHER/")"
 ck "A14 mv dest別wt→block"         2 "$(bash_c "mv a.txt $OTHER/b.txt")"

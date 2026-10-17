@@ -7,7 +7,7 @@
   - `manage.py flush` / `sqlflush` / `reset_db`（DB 全消去・`django-admin` / `python -m django` も同じ）・`migrate <app> <移動先>`（巻き戻し。`zero` を含む）・`loaddata`（既存の行の上書き）・`seed_e2e --flush`
   - ダンプ・SQL ファイルの流し込み（`psql -f <ファイル>` / `psql ... < <ファイル>`・`dbshell < <ファイル>`・`pg_restore --clean`）・`dropdb`
   - `manage.py shell` / `python -c` / ヒアドキュメントで渡す Python の `.delete()`・QuerySet の一括 `update()`・`bulk_update()`・`call_command('flush')` など
-- Git: force push / reset --hard / 大規模rebase / `git clean -f -d`・`-x`（追跡されていないファイルの削除）/ **未コミット変更があるファイルへの `git checkout/restore <file>`**（下記注記）
+- Git: force push / reset --hard / 大規模rebase / `git clean -f`（`-d`・`-x` の有無を問わない。追跡されていないファイルの削除）/ **未コミット変更があるファイルへの `git checkout/restore <file>`**（下記注記）
 - Docker: down -v / --volumes（データ消失）・`docker compose rm -v`・`docker volume rm|prune`・`docker system prune --volumes`・`redis-cli FLUSHALL` / `FLUSHDB`（ログイン状態・celery の待ち行列・レート制限カウンタの全消去）
 - Files: rm -rf / `find -delete` / secrets 操作
 
@@ -16,7 +16,7 @@
 PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）は、コマンドを読み解いてから（付着した `;` `&&` `|` `( )`・`$(...)`・ヒアドキュメント・`sh -c` / `bash -lc`・`eval`・`env` などを展開してから）、次の順に判定する。
 
 1. **常に止める（解除不可）**: `rm -rf /` と `rm -rf /*`・mkfs・dd・shred・別 worktree への書き込み
-2. **危険操作として止める**（exit 2）: 上の「例」のうち、見張りが判定できるもの＝DB の各操作・`git reset --hard`・`git clean -f -d/-x`・force push / 保護ブランチへの push・変更ありのファイルの checkout・Docker の各操作・Redis の全消去・`rm -rf`・`find -delete`。ホスト・`docker exec`・`docker compose exec|run`・`docker-compose` のどれで実行しても同じ
+2. **危険操作として止める**（exit 2）: 上の「例」のうち、見張りが判定できるもの＝DB の各操作・`git reset --hard`・`git clean -f`・force push / 保護ブランチへの push・変更ありのファイルの checkout・Docker の各操作・Redis の全消去・`rm -rf`・`find -delete`。ホスト・`docker exec`・`docker compose exec|run`・`docker-compose` のどれで実行しても同じ
 3. **人の確認**: 外部への送信（メール送信・celery タスクの起動・登録 API とパスワード再設定依頼 API・OpenAI）と、秘密情報の表示（`.env` 等の読み出し・`printenv`・引数なしの `env`・`docker compose config`・`docker inspect`）
 4. **`docker compose exec|run`（`docker-compose` も同じ）の中の操作は「安全と確認済みの一覧」に入るものだけ素通し**: テスト・lint・監査・読み取りの `manage.py`（`test`・`check`・`showmigrations` など）・ふだんの `migrate`・中身が見えて危険のない `manage.py shell`・読み取りの SQL・`redis-cli` の読み取りなど。名前だけでなく、書き込み・実行・外部送信につながるオプション（`--fix`・`sed -i`・`curl -d` など）が無いことまで確かめる（一覧は `plan_I174.md` 0-5・0-9 章）。一覧にない操作（例 `seed_e2e`・`createsuperuser`・`pip install`・`dumpdata`・`diffsettings`）や、パイプで受ける流し込み・読めない書き方・未知の compose オプションは人の確認になる。素の `docker exec|run` は 2. と 3. の列挙だけで判定する（I174 の前と同じ）
 
