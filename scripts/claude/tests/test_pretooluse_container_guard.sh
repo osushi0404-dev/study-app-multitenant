@@ -209,6 +209,14 @@ ckd "A159 パイプで compose psql（旧 C3）" 'echo "drop table x" | docker c
 # 敵対的レビュー再実施 第 1 周（2026-10-17）の再現
 ckd "A160 call_command migrate のキーワード巻き戻し" "$M shell -c \"from django.core.management import call_command; call_command('migrate', app_label='problems', migration_name='zero')\""
 ckd "A161 caches の別名で全消去"     "$M shell -c \"from django.core.cache import caches; c = caches['default']; c.clear()\""
+# 第 3 周（2026-10-17）: if/while/for の本体
+ckd "A164 if の then の rm-rf"      "if [ -d backend/media ]; then $RM backend/media; fi"
+ckd "A165 while の do の reset"     'while true; do git reset --hard origin/develop; break; done'
+# shellcheck disable=SC2016  # $f を展開せず、そのまま guard に渡すのが目的
+ckd "A166 for の do の git clean"   'for f in a b; do git clean -fdx $f; done'
+ckd "A167 if の then の down -v"    'if true; then docker compose down -v; fi'
+ckd "A168 else の後の DROP"         "if false; then :; else docker compose exec -T db psql -U postgres -c 'DROP DATABASE app'; fi"
+ckd "A169 then の後の force push"   'if true; then git push -f origin main; fi'
 # 敵対的レビュー再実施 第 2 周（2026-10-17）: -d/-x なしでも追跡されていないファイルは消える
 ckd "A162 git clean -f"             'git clean -f'
 ckd "A163 git clean -f <パス>"      'git clean -f docs/'
@@ -227,6 +235,13 @@ ck "H9 DANGER_OK shred"        2 "$(runj 'DANGER_OK=1 shred -u /tmp/i174_x')"
 ck "H10 mkfs.ext4"             2 "$(runj 'mkfs.ext4 /dev/sdz')"
 ck "H11 sh -c 内の mkfs"       2 "$(runj "bash -c 'mkfs -t ext4 /dev/sdz'")"
 ck "H12 コンテナ内の dd"       2 "$(runj 'docker compose exec -T backend dd if=/dev/zero of=/app/x')"
+# 第 3 周（2026-10-17）: if/while/for の本体（then・do の後ろ）もコマンドとして判定する
+ck "H13 if の then の rm-rf /"  2 "$(runj "if true; then $RM /; fi")"
+# shellcheck disable=SC2016  # $f を展開せず、そのまま guard に渡すのが目的
+ck "H14 for の do の shred"     2 "$(runj 'for f in backend/*.sqlite3; do shred -u $f; done')"
+# shellcheck disable=SC2016  # $f を展開せず、そのまま guard に渡すのが目的
+ck "H15 while の do の dd"      2 "$(runj 'while read f; do dd if=/dev/zero of="$f"; done < list.txt')"
+ck "H16 parallel の shred"      2 "$(runj 'parallel shred -u ::: backend/db.sqlite3')"
 
 # --- (X) 外部送信（ASK） ---
 ck "X1 send_mail"              ASK "$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])\"")"
@@ -366,6 +381,12 @@ ck "S69 tail .e*"                       ASK "$(runj 'tail -n +1 backend/.e*')"
 ck "S70 ブレース展開の .env"            ASK "$(runj 'cat backend/{.env,requirements.txt}')"
 ck "S71 /proc/*/environ"                ASK "$(runj "docker compose exec -T backend sh -c 'cat /proc/*/environ'")"
 ck "S72 素の exec の Path().read_text()" ASK "$(runj "docker exec app-backend-1 python -c \"from pathlib import Path; print(Path('/app/.env').read_text())\"")"
+ck "S74 鍵ファイルの glob"              ASK "$(runj 'cat certs/*.pem')"
+ck "S75 .env.e2* の glob"               ASK "$(runj 'cat e2e/.env.e2*')"
+ck "S76 .env.d* の glob"                ASK "$(runj 'cat frontend/.env.d*')"
+ck "S77 secrets/ の下の glob"           ASK "$(runj 'cat secrets/*.json')"
+ck "S78 then の後の cat .env"           ASK "$(runj 'if true; then cat backend/.env; fi')"
+ck "S79 do の後の printenv"             ASK "$(runj 'for f in 1; do printenv; done')"
 ck "S73 ホストの dotenv_values"         ASK "$(runj "python3 -c \"from dotenv import dotenv_values; print(dotenv_values('backend/.env'))\"")"
 
 # --- (C) コンテナ内で安全と確かめられない操作（ASK） ---
@@ -464,6 +485,11 @@ ck "F18 書き換え直後に python3 で実行" 2 "$(runj "cat > $TMP/old.py <<
 ck "F19 同じコマンドで作る無害なファイル" 0 "$(runj "cat > $TMP/i174_new.py <<'EOF'${NL}print(1)${NL}EOF${NL}$M shell < $TMP/i174_new.py")"
 ck "F20 別のファイルの書き込みは影響しない" 0 "$(runj "cat > $TMP/other.py <<'EOF'${NL}import os${NL}EOF${NL}$M shell < $TMP/old.py")"
 # 第 2 周（2026-10-17）: python - 引数 / python /dev/stdin はパイプの中身をコードとして実行する（中身が見えないので確認）
+ck "F25 python3 - < 削除ファイル"   2   "$(runj "python3 - < $TMP/del.py")"
+ck "F26 python3 /dev/stdin < 送信ファイル" ASK "$(runj "python3 /dev/stdin < $TMP/mail.py")"
+ck "F27 python3 -q - 引数 < ファイル" 2  "$(runj "python3 -q - x < $TMP/del.py")"
+ck "F28 書いた直後の python3 - <"   2   "$(runj "cat > $TMP/n.py <<'PY'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}PY${NL}python3 - < $TMP/n.py")"
+ck "F24 cp で上書きして流し込み"   ASK "$(runj "cp $TMP/del.py $TMP/old.py; $M shell < $TMP/old.py")"
 ck "F21 パイプで python - 引数"     ASK "$(runj "echo x | docker exec -i app-backend-1 python - 42")"
 ck "F22 パイプで python /dev/stdin" ASK "$(runj "printf x | docker exec -i app-backend-1 python /dev/stdin")"
 ck "F23 ホストのパイプで python3 -" ASK "$(runj "cat f | python3 - x")"
@@ -562,6 +588,14 @@ ck "P88 inspect.getsource"         0 "$(runj "$M shell -c \"import inspect, rest
 ck "P89 importlib.metadata.version" 0 "$(runj "docker compose exec -T backend python -c \"from importlib.metadata import version; print(version('django'))\"")"
 ck "P91 .env.example の glob は秘密でない" 0 "$(runj 'cat backend/.env.example*')"
 ck "P92 2>&1 は区切りでない"         0 "$(runj 'git status 2>&1 | head -5')"
+# 第 3 周（2026-10-17）: . で始まらない glob・git の pathspec・Python の '*' は秘密情報でない
+ck "P93 grep の docs/reviews/*"      0 "$(runj 'grep -n I174 docs/reviews/*')"
+ck "P94 head の docs/runbooks/*"     0 "$(runj 'head -3 docs/runbooks/*')"
+ck "P95 git diff の除外 pathspec"    0 "$(runj "git diff A B -- ':!*/migrations/*'")"
+ck "P96 git grep の pathspec"        0 "$(runj "git grep foo -- 'backend/*'")"
+ck "P97 Python の '*'"               0 "$(runj "python3 -c \"print('*' * 40)\"")"
+ck "P98 ALLOWED_HOSTS の '*'"        0 "$(runj "$M shell -c \"from django.conf import settings; print(settings.ALLOWED_HOSTS == ['*'])\"")"
+ck "P99 glob.glob の docs/*"         0 "$(runj "$M shell -c \"import glob; print(glob.glob('docs/reviews/*'))\"")"
 ck "P90 environ の別名の setdefault" 0 "$(runj "$M shell -c \"from os import environ; environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings'); print(1)\"")"
 ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" || echo TIMEOUT)"
 

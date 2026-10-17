@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・648 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=648 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・682 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=682 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -199,6 +199,12 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | A159 | パイプで compose psql（旧 C3） | 2 / +DANGER_OK=1 で ASK | `'echo "drop table x" \| docker compose exec -T db psql -U postgres'` |
 | A160 | call_command migrate のキーワード巻き戻し | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"from django.core.management import call_command; call_command('migrate', app_label='problems', migration_name='zero')\""` |
 | A161 | caches の別名で全消去 | 2 / +DANGER_OK=1 で ASK | `"$M shell -c \"from django.core.cache import caches; c = caches['default']; c.clear()\""` |
+| A164 | if の then の rm-rf | 2 / +DANGER_OK=1 で ASK | `"if [ -d backend/media ]; then $RM backend/media; fi"` |
+| A165 | while の do の reset | 2 / +DANGER_OK=1 で ASK | `'while true; do git reset --hard origin/develop; break; done'` |
+| A166 | for の do の git clean | 2 / +DANGER_OK=1 で ASK | `'for f in a b; do git clean -fdx $f; done'` |
+| A167 | if の then の down -v | 2 / +DANGER_OK=1 で ASK | `'if true; then docker compose down -v; fi'` |
+| A168 | else の後の DROP | 2 / +DANGER_OK=1 で ASK | `"if false; then :; else docker compose exec -T db psql -U postgres -c 'DROP DATABASE app'; fi"` |
+| A169 | then の後の force push | 2 / +DANGER_OK=1 で ASK | `'if true; then git push -f origin main; fi'` |
 | A162 | git clean -f | 2 / +DANGER_OK=1 で ASK | `'git clean -f'` |
 | A163 | git clean -f <パス> | 2 / +DANGER_OK=1 で ASK | `'git clean -f docs/'` |
 
@@ -218,6 +224,10 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | H10 | mkfs.ext4 | 2 | `"$(runj 'mkfs.ext4 /dev/sdz')"` |
 | H11 | sh -c 内の mkfs | 2 | `"$(runj "bash -c 'mkfs -t ext4 /dev/sdz'")"` |
 | H12 | コンテナ内の dd | 2 | `"$(runj 'docker compose exec -T backend dd if=/dev/zero of=/app/x')"` |
+| H13 | if の then の rm-rf / | 2 | `"$(runj "if true; then $RM /; fi")"` |
+| H14 | for の do の shred | 2 | `"$(runj 'for f in backend/*.sqlite3; do shred -u $f; done')"` |
+| H15 | while の do の dd | 2 | `"$(runj 'while read f; do dd if=/dev/zero of="$f"; done < list.txt')"` |
+| H16 | parallel の shred | 2 | `"$(runj 'parallel shred -u ::: backend/db.sqlite3')"` |
 
 **(X) 外部送信（ASK）**
 
@@ -352,6 +362,12 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | S70 | ブレース展開の .env | ASK | `"$(runj 'cat backend/{.env,requirements.txt}')"` |
 | S71 | /proc/*/environ | ASK | `"$(runj "docker compose exec -T backend sh -c 'cat /proc/*/environ'")"` |
 | S72 | 素の exec の Path().read_text() | ASK | `"$(runj "docker exec app-backend-1 python -c \"from pathlib import Path; print(Path('/app/.env').read_text())\"")"` |
+| S74 | 鍵ファイルの glob | ASK | `"$(runj 'cat certs/*.pem')"` |
+| S75 | .env.e2* の glob | ASK | `"$(runj 'cat e2e/.env.e2*')"` |
+| S76 | .env.d* の glob | ASK | `"$(runj 'cat frontend/.env.d*')"` |
+| S77 | secrets/ の下の glob | ASK | `"$(runj 'cat secrets/*.json')"` |
+| S78 | then の後の cat .env | ASK | `"$(runj 'if true; then cat backend/.env; fi')"` |
+| S79 | do の後の printenv | ASK | `"$(runj 'for f in 1; do printenv; done')"` |
 | S73 | ホストの dotenv_values | ASK | `"$(runj "python3 -c \"from dotenv import dotenv_values; print(dotenv_values('backend/.env'))\"")"` |
 
 **(C) コンテナ内で安全と確かめられない操作（ASK）**
@@ -442,6 +458,11 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | F18 | 書き換え直後に python3 で実行 | 2 | `"$(runj "cat > $TMP/old.py <<'EOF'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}EOF${NL}python3 $TMP/old.py")"` |
 | F19 | 同じコマンドで作る無害なファイル | 0 | `"$(runj "cat > $TMP/i174_new.py <<'EOF'${NL}print(1)${NL}EOF${NL}$M shell < $TMP/i174_new.py")"` |
 | F20 | 別のファイルの書き込みは影響しない | 0 | `"$(runj "cat > $TMP/other.py <<'EOF'${NL}import os${NL}EOF${NL}$M shell < $TMP/old.py")"` |
+| F25 | python3 - < 削除ファイル | 2 | `"$(runj "python3 - < $TMP/del.py")"` |
+| F26 | python3 /dev/stdin < 送信ファイル | ASK | `"$(runj "python3 /dev/stdin < $TMP/mail.py")"` |
+| F27 | python3 -q - 引数 < ファイル | 2 | `"$(runj "python3 -q - x < $TMP/del.py")"` |
+| F28 | 書いた直後の python3 - < | 2 | `"$(runj "cat > $TMP/n.py <<'PY'${NL}from problems.models import Problem${NL}Problem.objects.all().delete()${NL}PY${NL}python3 - < $TMP/n.py")"` |
+| F24 | cp で上書きして流し込み | ASK | `"$(runj "cp $TMP/del.py $TMP/old.py; $M shell < $TMP/old.py")"` |
 | F21 | パイプで python - 引数 | ASK | `"$(runj "echo x \| docker exec -i app-backend-1 python - 42")"` |
 | F22 | パイプで python /dev/stdin | ASK | `"$(runj "printf x \| docker exec -i app-backend-1 python /dev/stdin")"` |
 | F23 | ホストのパイプで python3 - | ASK | `"$(runj "cat f \| python3 - x")"` |
@@ -540,6 +561,13 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | P89 | importlib.metadata.version | 0 | `"$(runj "docker compose exec -T backend python -c \"from importlib.metadata import version; print(version('django'))\"")"` |
 | P91 | .env.example の glob は秘密でない | 0 | `"$(runj 'cat backend/.env.example*')"` |
 | P92 | 2>&1 は区切りでない | 0 | `"$(runj 'git status 2>&1 \| head -5')"` |
+| P93 | grep の docs/reviews/* | 0 | `"$(runj 'grep -n I174 docs/reviews/*')"` |
+| P94 | head の docs/runbooks/* | 0 | `"$(runj 'head -3 docs/runbooks/*')"` |
+| P95 | git diff の除外 pathspec | 0 | `"$(runj "git diff A B -- ':!*/migrations/*'")"` |
+| P96 | git grep の pathspec | 0 | `"$(runj "git grep foo -- 'backend/*'")"` |
+| P97 | Python の '*' | 0 | `"$(runj "python3 -c \"print('*' * 40)\"")"` |
+| P98 | ALLOWED_HOSTS の '*' | 0 | `"$(runj "$M shell -c \"from django.conf import settings; print(settings.ALLOWED_HOSTS == ['*'])\"")"` |
+| P99 | glob.glob の docs/* | 0 | `"$(runj "$M shell -c \"import glob; print(glob.glob('docs/reviews/*'))\"")"` |
 | P90 | environ の別名の setdefault | 0 | `"$(runj "$M shell -c \"from os import environ; environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings'); print(1)\"")"` |
 | P73 | \$(cat /dev/zero) で固まらない | 0 | `"$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" \|\| echo TIMEOUT)"` |
 
@@ -559,7 +587,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G9 | 複製に例外を入れた | YES | `"$(grep -q 'raise RuntimeError("injected")' "$BROKEN_E" && echo YES \|\| echo NO)"` |
 | G10 | 例外のときは確認に倒す | ASK | `"$(rungj "$BROKEN_E" 'docker compose exec -T backend python -m pytest -q')"` |
 
-<!-- 行数: 485（危険操作の行 163 件を 2 通りずつ数えると 648 ケース） -->
+<!-- 行数: 513（危険操作の行 169 件を 2 通りずつ数えると 682 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash

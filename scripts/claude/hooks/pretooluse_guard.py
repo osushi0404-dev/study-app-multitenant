@@ -663,8 +663,9 @@ class _CodeVisitor(ast.NodeVisitor):
                 self.external.append("秘密情報（/proc/*/environ）の参照")
             if node.value in _SECRET_NAMES:
                 self.external.append(f"秘密情報（'{node.value}'）の参照")
-            # open() 以外（Path(...).read_text()・dotenv_values(...) 等）で読む .env も、パスの文字列で捕まえる
-            if _secret_path(node.value):
+            # open() 以外（Path(...).read_text()・dotenv_values(...) 等）で読む .env も、パスの文字列で捕まえる。
+            # Python の文字列は glob として展開されないので、glob の記号を含む文字列（'*'・r'.*' 等）は対象外
+            if not re.search(r"[*?\[]", node.value) and _secret_path(node.value):
                 self.external.append(f"秘密情報（{node.value}）の参照")
 
     # --- 呼び出し ---
@@ -802,8 +803,14 @@ def _secret_path(arg: str) -> bool:
         if a.startswith("/proc/") and a.endswith("environ"):
             return True
         base = a.rsplit("/", 1)[-1]
-        if re.search(r"[*?\[]", base):                   # glob は、秘密のファイル名に当たり得るかで判定する
-            if any(fnmatch.fnmatchcase(n, base) for n in (".env", ".env.local", ".env.prod", "id_rsa.key")):
+        if re.search(r"[*?\[]", base):
+            # glob: シェルの * は . で始まるファイルに当たらないので、. で始まる glob だけを .env 系と見る。
+            # glob の記号の前までが .env の頭（.・.e・.en）か .env で始まれば当たり得る（.env.e2* 等）。
+            # 鍵ファイルは拡張子を書いたもの（*.pem・*.key）、secrets/ の下はすべて（docs/* などは秘密扱いしない）
+            prefix = re.split(r"[*?\[]", base, maxsplit=1)[0]
+            dot_env = base.startswith(".") and (".env".startswith(prefix) or prefix.startswith(".env")) \
+                and not prefix.startswith(".env.example")
+            if dot_env or base.endswith((".pem", ".key")) or re.search(r"(^|/)secrets/", a):
                 return True
         elif _SECRET_PATH_RE.search(a):
             return True
@@ -1224,8 +1231,13 @@ def _unknown(c: dict, note: str, toks=None) -> dict:
 
 def _wrap_skip(head: str, rest: list):
     """包むコマンド（sudo・nice・timeout 等）の後ろの、中のコマンドのトークン列を返す。包むコマンドでなければ None。"""
-    if head in ("time", "nohup", "command", "builtin", "setsid", "busybox", "{", "}", "!"):
+    if head in ("time", "nohup", "command", "builtin", "setsid", "busybox", "{", "}", "!", "strace", "ltrace",
+                # シェルの予約語の後ろ（if X; then Y; fi の Y・while X; do Y; done の Y）もコマンド
+                "if", "then", "elif", "else", "while", "until", "do"):
         return rest[_skip_opts(rest, ()):]
+    if head == "parallel":                       # parallel cmd ::: 引数
+        inner = rest[_skip_opts(rest, ("-j", "--jobs", "-S", "--sshlogin")):]
+        return inner[:inner.index(":::")] if ":::" in inner else inner
     if head == "exec":
         return rest[_skip_opts(rest, ("-a",)):]
     if head == "sudo":
@@ -1502,6 +1514,13 @@ def _python_code_raw(c: dict):
         if "-m" in rest:
             return False
         pos = [a for a in rest if not a.startswith("-")]
+        k = 0                                        # 最初の位置引数（- を含む。-W / -X の値は飛ばす）
+        while k < len(rest) and rest[k].startswith("-") and rest[k] != "-":
+            k += 2 if rest[k] in ("-W", "-X") else 1
+        first = rest[k] if k < len(rest) else None
+        stdin_code = first is None or first == "-" or first.startswith(("/dev/stdin", "/dev/fd/0", "/proc/self/fd/0"))
+        if c["stdin"] and stdin_code:              # python3 - < f.py / python3 /dev/stdin < f.py
+            return _read_exec_file(c["stdin"], c.get("stdin_ctr", False), c["workdir"], c.get("service"))
         if pos and pos[0].endswith(".py"):
             return _read_exec_file(pos[0], c["ctr"], c["workdir"], c.get("service"))
         if c["heredoc"] is not None:

@@ -130,7 +130,12 @@
   - `.env` の判定を、glob・ブレース展開・`/proc/*/environ`・Python の文字列（`Path().read_text()`・`dotenv_values()`）にも当てる（`_secret_path`）
   - `python -`（引数あり）と `python /dev/stdin` はパイプの中身をコードとして実行するので、中身が見えない確認を外さない
   - `>|`・`2>&1` を区切りとして分けない（第 1 周の `;` `&` の区切りでの後退の修正）
-- 先送り（Medium・Low。この周の通過条件外。/close の時に、まとめて別イシューとして起票するかを判断する）: 多対多の `.clear()`・変数に入れた SQL / `executemany` / `raw` / `WHERE 1=1`・素の docker exec の `dumpdata` / `remove_stale_contenttypes` / `get_connection_params()` / `ps auxeww`・`git worktree remove --force` / `git stash clear|drop`・`settings.DATABASES['default']['HOST']` と `getenv('DEBUG')` の余計な確認・`wget` / httpie / `node fetch` での登録 API・キャッシュの別名と `delete_pattern('*')`・`import os as o`・`vars(connection)`・`call_command('generate_ai_problems' | 'sendtestemail')`・`/proc/1/task/1/environ`・`env -u X`・`ps -o user` の余計な確認・frontend の `npm audit | node -e`・`psql -lqt`
+- 第 3 周（`docs/reviews/I174_adversarial_review_20261017_2030.md`）:
+  - シェルの予約語（`if`・`then`・`elif`・`else`・`while`・`until`・`do`）の後ろもコマンドとして判定する（`if X; then rm -rf x; fi` の本体を見逃していた）。`strace`・`ltrace`・`parallel` も包むコマンドとして外す
+  - `.env` の glob は、シェルの `*` が `.` で始まるファイルに当たらないことに合わせ、`.` で始まる glob だけを `.env` 系と見る（`.env.e2*` 等も当てる）。鍵は拡張子付きの glob・`secrets/` の下はすべて。Python の文字列は glob の記号を含むものを対象外にする（`docs/reviews/*`・`'*'` を秘密扱いしていた第 2 周の誤判定の修正）
+  - `python3 - < f.py`・`python3 /dev/stdin < f.py` は、流し込むファイルの中身を判定する
+- 残余リスク（追記）: `ssh` / `kubectl exec` の先のコマンドは判定しない（このプロジェクトの作業で使わない）
+- 先送り（Medium・Low。この周の通過条件外。/close の時に、まとめて別イシューとして起票するかを判断する）: 多対多の `.clear()`・変数に入れた SQL / `executemany` / `raw` / `WHERE 1=1`・素の docker exec の `dumpdata` / `remove_stale_contenttypes` / `get_connection_params()` / `ps auxeww`・`git worktree remove --force` / `git stash clear|drop`・`settings.DATABASES['default']['HOST']` と `getenv('DEBUG')` の余計な確認・`wget` / httpie / `node fetch` での登録 API・キャッシュの別名と `delete_pattern('*')`・`import os as o`・`vars(connection)`・`call_command('generate_ai_problems' | 'sendtestemail')`・`/proc/1/task/1/environ`・`env -u X`・`ps -o user` の余計な確認・frontend の `npm audit | node -e`・`psql -lqt`・（第 3 周）`export -p` / `declare -x` / `set`・パス無しの `dotenv_values()`・`column` / `paste` / `iconv` / `node readFileSync` での `.env`・`'->' &` の直後の結合・F17 / `2>&1` の結合のテストの覆い隠し
 
 ## 1. 背景/目的
 
