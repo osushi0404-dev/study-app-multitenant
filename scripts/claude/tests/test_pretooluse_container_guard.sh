@@ -205,6 +205,7 @@ ckd "A156 ( )# の次の行の push"     "(ls)#<<EOF${NL}git push --force origin
 ckd "A157 ( )# の次の行の flush"    "(true)#<<EOF${NL}$M flush --noinput"
 # fix-loop テストレビュー（2026-10-17）の指摘: 判定ごとに単独で確かめるケース
 ckd "A158 ホスト dbshell へのパイプ" 'cat x.sql | python backend/manage.py dbshell'
+ckd "A159 パイプで compose psql（旧 C3）" 'echo "drop table x" | docker compose exec -T db psql -U postgres'
 
 # --- (H) 常に止める（DANGER_OK=1 でも 2） ---
 ck "H1 rm-rf /"                2 "$(runj "$RM /")"
@@ -317,7 +318,7 @@ ck "S52 inspect -f json . は確認" ASK "$(runj "docker inspect -f '{{json .}}'
 # --- (C) コンテナ内で安全と確かめられない操作（ASK） ---
 ck "C1 createsuperuser"        ASK "$(runj "$M createsuperuser")"
 ck "C2 npm install"            ASK "$(runj 'docker compose exec frontend npm install')"
-ckd "C3 パイプで psql（流し込み）" 'echo "drop table x" | docker compose exec -T db psql -U postgres'
+# （旧 C3。パイプでの流し込みは危険操作なので (A) に移した・計画レビュー 2026-10-17 の指摘）
 ck "C4 パイプで shell"         ASK "$(runj "echo 'User.objects.all().delete()' | $M shell")"
 ck "C5 パイプで redis-cli"     ASK "$(runj "printf 'FLUSHALL\\n' | docker compose exec -T redis redis-cli")"
 ck "C6 dbshell（対話）"        ASK "$(runj "$M dbshell")"

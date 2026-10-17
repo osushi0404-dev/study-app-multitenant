@@ -196,6 +196,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | A156 | ( )# の次の行の push | 2 / +DANGER_OK=1 で ASK | `"(ls)#<<EOF${NL}git push --force origin main"` |
 | A157 | ( )# の次の行の flush | 2 / +DANGER_OK=1 で ASK | `"(true)#<<EOF${NL}$M flush --noinput"` |
 | A158 | ホスト dbshell へのパイプ | 2 / +DANGER_OK=1 で ASK | `'cat x.sql \| python backend/manage.py dbshell'` |
+| A159 | パイプで compose psql（旧 C3） | 2 / +DANGER_OK=1 で ASK | `'echo "drop table x" \| docker compose exec -T db psql -U postgres'` |
 
 **(H) 常に止める（2。DANGER_OK=1 でも 2）**
 
@@ -317,7 +318,6 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 |---|---|---|---|
 | C1 | createsuperuser | ASK | `"$(runj "$M createsuperuser")"` |
 | C2 | npm install | ASK | `"$(runj 'docker compose exec frontend npm install')"` |
-| C3 | パイプで psql（流し込み） | 2 / +DANGER_OK=1 で ASK | `'echo "drop table x" \| docker compose exec -T db psql -U postgres'` |
 | C4 | パイプで shell | ASK | `"$(runj "echo 'User.objects.all().delete()' \| $M shell")"` |
 | C5 | パイプで redis-cli | ASK | `"$(runj "printf 'FLUSHALL\\n' \| docker compose exec -T redis redis-cli")"` |
 | C6 | dbshell（対話） | ASK | `"$(runj "$M dbshell")"` |
