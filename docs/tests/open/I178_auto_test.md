@@ -14,23 +14,26 @@
   コマンド置換を含む検証（TC-02b・TC-03・TC-04・TC-17）は allowlist 外のため /test で実施する。
 -->
 ```bash
-test -f .github/CODEOWNERS
+grep -q "oshui0404" .github/CODEOWNERS
 grep -qxF '* @oshui0404' .github/CODEOWNERS
 grep -q "Require review from Code Owners" docs/runbooks/branch-protection-setup.md
 grep -q "Restrict who can push to matching branches" docs/runbooks/branch-protection-setup.md
-! grep -qE "自己 approve|セルフ approve" docs/runbooks/branch-protection-setup.md
+! grep -q "自己 approve" docs/runbooks/branch-protection-setup.md
+! grep -q "セルフ approve" docs/runbooks/branch-protection-setup.md
 ! grep -q "承認不要" docs/runbooks/branch-protection-setup.md
 grep -q "承認者の限定（I178）" docs/runbooks/branch-protection-setup.md
 grep -q "main には CODEOWNERS が無い" docs/runbooks/branch-protection-setup.md
 grep -q "PR は必ず bot（Claude）が作成する" docs/runbooks/branch-protection-setup.md
 grep -q "承認が取り消される" docs/runbooks/branch-protection-setup.md
-grep -qF 'Code Owners（`oshui0404`）の承認が必須' .claude/skills/close/SKILL.md
+grep -q "Code Owners（.oshui0404.）の承認が必須" .claude/skills/close/SKILL.md
 grep -q "再承認を依頼する" .claude/skills/close/SKILL.md
-git diff --quiet origin/develop -- scripts/claude/pr-base-sync.sh
+grep -q "CLEAN は要求しない＝Approve 待ちの BLOCKED は正常" scripts/claude/pr-base-sync.sh
 bash scripts/claude/tests/test_pr_base_sync.sh
-! grep -qF "| Required approvals | 0 |" docs/runbooks/branch-protection-setup.md
+! grep -q "Required approvals . 0 ." docs/runbooks/branch-protection-setup.md
 ! grep -qF "Require approvals（サブオプション）" docs/runbooks/branch-protection-setup.md
 ```
+
+**ゲート行の書き方（code-review 20261017_1936 対応）**: code-review.sh は `|`・バッククォート・`$(`・`;`・`&`・`>` を含む行と、`grep` / `! grep` / `bash scripts/claude/tests/*.sh` 等の許可リスト以外のコマンド（`test`・`git diff` 等）を実走せず fail-closed（BLOCKER）にする。そのため、TC-01 は `test -f` の代わりに `grep -q`（ファイルが無いと exit 2）、TC-07 は `|` を使わず 2 行に分割、TC-13・TC-18a は該当文字（バッククォート・`|`）を任意の 1 文字 `.` で表す。TC-15 は完全な無改変確認（`git diff --quiet`）を /test で行い、ゲートでは前提の文言が残っていることを `grep` で確認する。書き換えた 6 行は、変更前のファイル（`origin/develop` の版・前提文言を壊した pr-base-sync・CODEOWNERS 不在）で非ゼロになることを確認済み（2026-10-17）。
 
 ---
 
@@ -85,34 +88,39 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 - コマンド: 決定論ゲート 4 行目 / 期待: exit 0
 
 ## TC-07: runbook に「自己 approve」「セルフ approve」の誤記が無い（AC-6）
-- コマンド: 決定論ゲート 5 行目 / 期待: exit 0
+- コマンド: 決定論ゲート 5・6 行目 / 期待: exit 0
 
 ## TC-08: runbook に develop を「承認不要」とする記述が無い（AC-6）
-- コマンド: 決定論ゲート 6 行目 / 期待: exit 0
-
-## TC-09: runbook に新設セクション「承認者の限定（I178）」がある（AC-6）
 - コマンド: 決定論ゲート 7 行目 / 期待: exit 0
 
-## TC-10: runbook に main の制約（CODEOWNERS が届かない）が書かれている（AC-6・R3）
+## TC-09: runbook に新設セクション「承認者の限定（I178）」がある（AC-6）
 - コマンド: 決定論ゲート 8 行目 / 期待: exit 0
 
-## TC-11: runbook に「PR は必ず bot（Claude）が作成する」運用が書かれている（AC-6・R4）
+## TC-10: runbook に main の制約（CODEOWNERS が届かない）が書かれている（AC-6・R3）
 - コマンド: 決定論ゲート 9 行目 / 期待: exit 0
 
-## TC-12: runbook に、承認後のコミットで承認が取り消される旨が書かれている（AC-6・R6）
+## TC-11: runbook に「PR は必ず bot（Claude）が作成する」運用が書かれている（AC-6・R4）
 - コマンド: 決定論ゲート 10 行目 / 期待: exit 0
 
-## TC-13: close スキル step 5.5 の前提が「Code Owners の承認が必須」になっている（AC-7）
+## TC-12: runbook に、承認後のコミットで承認が取り消される旨が書かれている（AC-6・R6）
 - コマンド: 決定論ゲート 11 行目 / 期待: exit 0
 
-## TC-14: close スキル step 6 に再承認の依頼が書かれている（AC-7・R6）
+## TC-13: close スキル step 5.5 の前提が「Code Owners の承認が必須」になっている（AC-7）
 - コマンド: 決定論ゲート 12 行目 / 期待: exit 0
 
-## TC-15: `pr-base-sync.sh` を変更していない（AC-7）
+## TC-14: close スキル step 6 に再承認の依頼が書かれている（AC-7・R6）
 - コマンド: 決定論ゲート 13 行目 / 期待: exit 0
 
+## TC-15: `pr-base-sync.sh` を変更していない（AC-7）
+- TC-15g（決定論ゲート 14 行目）: 前提の文言「CLEAN は要求しない＝Approve 待ちの BLOCKED は正常」が残っている → exit 0
+- TC-15（/test で実行）: ファイル全体が無改変
+  ```bash
+  git diff --quiet origin/develop -- scripts/claude/pr-base-sync.sh
+  ```
+- 期待: どちらも exit 0
+
 ## TC-16: `pr-base-sync.sh` の既存テストが合格する（AC-7・回帰）
-- コマンド: 決定論ゲート 14 行目
+- コマンド: 決定論ゲート 15 行目
 - 期待: exit 0（`RESULT: OK (21/21 cases, 30 assertions)`）
 
 ## TC-17: マージ後、develop の CODEOWNERS 検査で問題が 0 件（AC-1・マージ後）
@@ -124,8 +132,8 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 
 ## TC-18: runbook から旧設定の表の行が消えている（AC-6）
 - plan-review 20261017_1916→1921 Warning 対応。TC-07・TC-08 は日本語の文言しか見ないため、英語の表の行が残っても検知できない穴を塞ぐ。
-- TC-18a（決定論ゲート 15 行目）: 旧「develop と main の差異」表の `| Required approvals | 0 |` 行が無い
-- TC-18b（決定論ゲート 16 行目）: 旧 develop 表の `Require approvals（サブオプション）` 行が無い
+- TC-18a（決定論ゲート 16 行目）: 旧「develop と main の差異」表の `| Required approvals | 0 |` 行が無い
+- TC-18b（決定論ゲート 17 行目）: 旧 develop 表の `Require approvals（サブオプション）` 行が無い
 - 期待: どちらも exit 0
 
 ---
