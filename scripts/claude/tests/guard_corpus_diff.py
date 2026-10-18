@@ -46,8 +46,10 @@ def build_corpus(path: str) -> list:
                     if isinstance(cmd, str) and cmd.strip() and c.get("id") not in seen:
                         seen.add(c.get("id"))
                         out.append(cmd)
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
+    os.chmod(CACHE_DIR, 0o700)
+    # 作業のコマンドには秘密が含まれうるので、作る時点から本人だけが読める権限にする
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False)
     os.chmod(path, 0o600)
     return out
@@ -68,9 +70,12 @@ def main() -> int:
     ap.add_argument("--base", default="HEAD")
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--limit", type=float, default=1.0)
+    ap.add_argument("--guard", default=None, help="作業ツリーの guard の代わりに比べるファイル（ゲート自体の検証用）")
     a = ap.parse_args()
 
     path = os.path.join(CACHE_DIR, os.path.basename(REPO) + ".json")
+    if os.path.isdir(CACHE_DIR):
+        os.chmod(CACHE_DIR, 0o700)                   # 以前の版で作ったキャッシュも本人だけに絞る
     if a.rebuild or not os.path.exists(path):
         if not os.path.isdir(_project_dir()):
             print("SKIP: 作業記録が無い環境です（CI 等）")
@@ -82,20 +87,26 @@ def main() -> int:
         print("SKIP: 作業記録に Bash コマンドがありません")
         return 0
 
+    git = lambda *args: subprocess.run(["git", *args], capture_output=True, text=True, cwd=REPO)
     with tempfile.TemporaryDirectory() as td:
         base = os.path.join(td, "guard_base.py")
-        src = subprocess.run(["git", "show", f"{a.base}:{GUARD_REL}"], capture_output=True, text=True, cwd=REPO)
+        src = git("show", f"{a.base}:{GUARD_REL}")
         if src.returncode != 0:
             print(f"SKIP: {a.base} に guard がありません")
             return 0
+        cur = os.path.abspath(a.guard) if a.guard else os.path.join(REPO, GUARD_REL)
+        with open(cur, encoding="utf-8") as fh:
+            same = fh.read() == src.stdout
+        if same and a.base == "HEAD":
+            # 未コミットの変更が無い（コミットの後・コードレビュー時）: guard を最後に変えたコミットの直前と比べる
+            last = git("log", "-1", "--format=%H", "--", GUARD_REL).stdout.strip()
+            src = git("show", f"{last}^:{GUARD_REL}") if last else src
+            if not last or src.returncode != 0:
+                print("SKIP: 比べる前の版の guard がありません")
+                return 0
+            a.base = f"{last[:7]}^（guard を最後に変えたコミットの直前）"
         with open(base, "w", encoding="utf-8") as fh:
             fh.write(src.stdout)
-        cur = os.path.join(REPO, GUARD_REL)
-        with open(cur, encoding="utf-8") as fh:
-            if fh.read() == src.stdout:
-                # コミットの前に使うゲート。変更をコミットした後（コードレビュー時など）は比べるものが無い
-                print(f"SKIP: guard に {a.base} からの変更がありません（コミットの前に流すゲート）")
-                return 0
         with ThreadPoolExecutor(12) as ex:
             b = list(ex.map(lambda c: judge(base, c), cmds))
             w = list(ex.map(lambda c: judge(cur, c), cmds))
@@ -112,11 +123,20 @@ def main() -> int:
         print("  [新しく停止] " + c.replace("\n", "⏎")[:200])
     for c in [c for c, x, y in zip(cmds, b, w) if x == "pass" and y == "ask"][:30]:
         print("  [新しく確認] " + c.replace("\n", "⏎")[:200])
-    inc = hit(w) - hit(b)
-    if inc > n * a.limit / 100:
-        print(f"FAIL: 確認＋停止が {inc} 件増えた（上限は記録の {a.limit}%＝{n * a.limit / 100:.0f} 件）")
+    # 異常終了（exit 0・2 以外）は Claude Code では止めない扱い＝素通しになるので、1 件でも不合格
+    crashed = [c for c, x, y in zip(cmds, b, w) if y.startswith("rc") and not x.startswith("rc")]
+    for c in crashed[:10]:
+        print("  [異常終了] " + c.replace("\n", "⏎")[:200])
+    if crashed:
+        print(f"FAIL: 作業ツリーの guard が {len(crashed)} 件で異常終了した（素通しになる）")
         return 1
-    print(f"OK: 増減 {inc:+d} 件（上限 {n * a.limit / 100:.0f} 件）")
+    # 判定は差し引きでなく「新しく確認・停止になった件数」で行う（消えた確認と増えた確認が打ち消し合わないように）
+    new = sum(1 for x, y in zip(b, w) if y in ("ask", "block") and x not in ("ask", "block"))
+    new += sum(1 for x, y in zip(b, w) if x == "ask" and y == "block")
+    if new > n * a.limit / 100:
+        print(f"FAIL: 新しく確認・停止になったものが {new} 件（上限は記録の {a.limit}%＝{n * a.limit / 100:.0f} 件）")
+        return 1
+    print(f"OK: 新しく確認・停止 {new} 件・差し引き {hit(w) - hit(b):+d} 件（上限 {n * a.limit / 100:.0f} 件）")
     return 0
 
 

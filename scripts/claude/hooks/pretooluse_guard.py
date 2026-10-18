@@ -1868,19 +1868,19 @@ _SN_WRAPPERS = frozenset(("sudo", "nohup", "env", "nice", "timeout", "xargs", "e
                           "ionice", "setsid", "strace", "ltrace", "parallel", "watch", "flock", "busybox"))
 _SN_KEYWORDS_EXTRA = ("function",)              # function f { ... } の f はコマンドではないが、{ で位置が戻る
 
-def _sn_judge(seg: list) -> list:
-    """コマンドの位置から始まる 1 つのコマンドを、精密判定にかけ直した理由（独自の見分け方は持たない）。
+def _sn_judge(seg: list) -> dict:
+    """コマンドの位置から始まる 1 つのコマンドを、精密判定にかけ直した結果（_analyze と同じ形。独自の見分け方は持たない）。
     引用符の中の $( )・`...`・ヒアドキュメントを含むコマンドは、組み直すと意味が変わる（中身が見えない扱いになる）うえ、
     精密判定が中身を読んで判定済みなので、かけ直さない。"""
     if any("$(" in t or "`" in t or "__HEREDOC_" in t for t in seg):
-        return []
-    an = _analyze(shlex.join(seg))
-    return ([an["hard"]] if an["hard"] else []) + an["danger"] + an["external"] + an["container"]
+        return {"hard": "", "danger": [], "external": [], "container": []}
+    return _analyze(shlex.join(seg))
 
-def _safety_net(text: str) -> list:
+def _safety_net(text: str) -> dict:
     """文法に依存しない区切り（区切り記号・予約語・包むコマンド）でコマンドの位置を見つけ、そこから始まる各コマンドを
-    精密判定にかけ直した理由を返す（該当なしは []）。精密判定が読み落とした文法（function の本体・coproc・
-    プロセス置換 <( ) の中 等）を素通しにしないための最後の層。ヒアドキュメントの本文・引用符の中・コメントは見ない。"""
+    精密判定にかけ直した結果を、_analyze と同じ形（hard / danger / external / container）でまとめて返す。
+    精密判定が読み落とした文法（function の本体・coproc・プロセス置換 <( ) の中 等）を素通しにしないための最後の層。
+    ヒアドキュメントの本文・引用符の中・コメントは見ない。"""
     body = _strip_comments(_cut_heredocs(text))
     lex = shlex.shlex(body, posix=True, punctuation_chars=";&|()<>\n")
     lex.whitespace = " \t\r"
@@ -1892,7 +1892,7 @@ def _safety_net(text: str) -> list:
             toks += _split_ops(t)
     except ValueError:
         toks = body.split()
-    reasons, i, at_cmd = [], 0, True
+    res, i, at_cmd = {"hard": "", "danger": [], "external": [], "container": []}, 0, True
     while i < len(toks):
         t = toks[i]
         if t in ("<", ">") and i + 1 < len(toks) and toks[i + 1] == "(":
@@ -1925,10 +1925,15 @@ def _safety_net(text: str) -> list:
         j = i
         while j < len(toks) and toks[j] not in _SN_SEPS:
             j += 1
-        reasons += _sn_judge(toks[i:j])
+        an = _sn_judge(toks[i:j])
+        res["hard"] = res["hard"] or an["hard"]
+        for k in ("danger", "external", "container"):
+            res[k] += an[k]
         at_cmd = False
         i += 1
-    return list(dict.fromkeys(reasons))
+    for k in ("danger", "external", "container"):
+        res[k] = list(dict.fromkeys(res[k]))
+    return res
 
 def _danger_reasons(cmd: str, pcmd: str) -> list:
     """DANGER_OK=1 で人の承認に切り替わる危険操作の理由を集める（該当なしは []）。
@@ -1975,6 +1980,9 @@ def main():
     if not isinstance(raw, str) or not raw.strip():
         sys.exit(0)
 
+    # I174: 行の継続（\ の直後の改行）は、bash と同じく 1 つのコマンドとして読む（区切りの改行と取り違えると、
+    # `git reset \⏎ --hard` が 2 つのコマンドに分かれて素通りする）
+    raw = re.sub(r"\\\r?\n", " ", raw)
     danger_ok = raw.lstrip().startswith("DANGER_OK=1 ")
     # I174: 判定は DANGER_OK=1 を外したコマンドで行う（先頭トークンで判定する eval / sh -c 等を
     # DANGER_OK=1 の前置で見逃さないため。DANGER_OK=1 の扱いは danger_ok で別に決める）。
@@ -2027,14 +2035,21 @@ def main():
     if _push_is_dynamic(cmd):
         _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
 
-    # I174 0-12: 安全網。上の精密判定がすべて素通しにしたコマンドでも、読めない書き方・コマンドの位置の
-    # 危険なコマンドがあれば確認にする（読み落としを素通しにしない＝fail-safe。止めはしない）。
+    # I174 0-12: 安全網。上の精密判定がすべて素通しにしたコマンドでも、コマンドの位置ごとに精密判定をかけ直し、
+    # 精密判定と同じ扱いにする（解除不可は停止・危険操作は停止〔DANGER_OK=1 なら確認〕・外部送信等は確認）。
     try:
         net = _safety_net(pcmd)
     except Exception as e:                       # 安全網の失敗でも素通しにしない
-        net = [f"安全網の読み取りに失敗（{type(e).__name__}）"]
-    if net:
-        _ask("見張りが内容を読み切れませんでした。確認してください: " + " / ".join(net))
+        _ask(f"見張りが内容を読み切れませんでした（安全網の読み取りに失敗: {type(e).__name__}）。確認してください。")
+    if net["hard"]:
+        _block(net["hard"], raw)
+    if net["danger"]:
+        if danger_ok:
+            _ask("DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: " + " / ".join(net["danger"]))
+        _block(net["danger"][0], raw)
+    if net["external"] or net["container"]:
+        _ask("見張りが読み落としかけた書き方の中に、確認が必要な操作があります: "
+             + " / ".join(net["external"] + net["container"]))
 
     sys.exit(0)
 

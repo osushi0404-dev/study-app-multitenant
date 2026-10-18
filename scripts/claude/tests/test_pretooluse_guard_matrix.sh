@@ -14,18 +14,20 @@ runj() { local out code; out=$(json "$1" | python3 "${2:-$GUARD}" 2>/dev/null); 
          then echo "ASK"; else echo "$code"; fi; }
 
 RM="rm -r""f"   # ソース上の連続表記を避ける（このファイルを検索・編集するコマンドへの誤反応防止）
-# 危険な操作（引用符は二重引用符だけを使う。bash -c '...' の中に入れるため）
+# 危険な操作と、期待する結果（「期待|操作」。2＝停止〔危険操作・解除不可〕／ASK＝確認〔秘密情報・外部送信〕）。
+# 書き方によらず、そのまま書いたときと同じ結果になること（安全網で拾っても停止を確認に格下げしない）。
+# 引用符は二重引用符だけを使う（bash -c '...' の中に入れるため）
 OPS=(
-  "$RM backend/media"
-  "git reset --hard origin/develop"
-  "git clean -fdx"
-  "dd if=/dev/zero of=backend/db.sqlite3"
-  "shred -u backend/db.sqlite3"
-  "docker compose exec -T backend python manage.py flush --noinput"
-  "docker compose exec -T db psql -U postgres -c \"DROP DATABASE app\""
-  "cat backend/.env"
-  "printenv"
-  "docker compose exec -T backend python manage.py shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\""
+  "2|$RM backend/media"
+  "2|git reset --hard origin/develop"
+  "2|git clean -fdx"
+  "2|dd if=/dev/zero of=backend/db.sqlite3"
+  "2|shred -u backend/db.sqlite3"
+  "2|docker compose exec -T backend python manage.py flush --noinput"
+  "2|docker compose exec -T db psql -U postgres -c \"DROP DATABASE app\""
+  "ASK|cat backend/.env"
+  "ASK|printenv"
+  "ASK|docker compose exec -T backend python manage.py shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\""
 )
 # 書き方（@@ が操作に置き換わる）
 TPLS=(
@@ -62,16 +64,22 @@ TPLS=(
 )
 
 pass=0; fail=0
-for op in "${OPS[@]}"; do
+for entry in "${OPS[@]}"; do
+  want="${entry%%|*}"; op="${entry#*|}"
   for tpl in "${TPLS[@]}"; do
     cmd="${tpl//@@/$op}"
     got="$(runj "$cmd")"
-    if [ "$got" = "2" ] || [ "$got" = "ASK" ]; then
+    if [ "$got" = "$want" ]; then
       pass=$((pass+1))
     else
-      printf 'FAIL got=%s :: %s\n' "$got" "$cmd"; fail=$((fail+1))
+      printf 'FAIL want=%s got=%s :: %s\n' "$want" "$got" "$cmd"; fail=$((fail+1))
     fi
   done
+  # 行の継続（\ と改行）で操作の途中を折り返す書き方（各操作の最後の空白で折り返す。例: git reset \⏎  --hard …）
+  cont="${op% *} \\
+  ${op##* }"
+  got="$(runj "$cont")"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else printf 'FAIL want=%s got=%s :: %s\n' "$want" "$got" "$cont"; fail=$((fail+1)); fi
 done
 
 # 偽合格の防止: 何でも素通しにする guard では 0 と判別されること（runj の判別が働いている）
@@ -81,5 +89,5 @@ fg="$(runj "$RM backend/media" "$TMP/noop_guard.py")"
 if [ "$fg" = "0" ]; then pass=$((pass+1)); else printf 'FAIL FALSEGREEN noop guard: got=%s\n' "$fg"; fail=$((fail+1)); fi
 
 echo "---"
-echo "pass=$pass fail=$fail（${#OPS[@]} 操作 × ${#TPLS[@]} 書き方 + 偽合格の防止 1）"
+echo "pass=$pass fail=$fail（${#OPS[@]} 操作 × (${#TPLS[@]} 書き方 + 行の継続 1) + 偽合格の防止 1）"
 [ "$fail" = "0" ]

@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・691 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=691 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・708 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=708 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -26,7 +26,7 @@
 | TC-09 | danger-ops.md に追記した語句がある | すべて exit 0 | AC-11 | 5 |
 | TC-10 | `pretooluse_guard.py` の構文 | exit 0 | — | 2・3 |
 | TC-11 | 新規テストの構文 | exit 0 | — | 2 |
-| TC-14 | 新規 `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 10 × 書き方 29 を総当たりで生成し、どれも 2 か ASK。計画書 0-12。安全網の前の guard では 23 件が素通しになることを確認済み） | exit 0（最終行 `pass=291 fail=0`） | AC-4・AC-6・AC-14 | fix-loop（0-12） |
+| TC-14 | 新規 `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 10 × 書き方 29 を総当たりで生成し、どれも 2 か ASK。計画書 0-12。安全網の前の guard では 23 件が素通しになることを確認済み） | exit 0（最終行 `pass=301 fail=0`。行の継続 10 を含む） | AC-4・AC-6・AC-14 | fix-loop（0-12） |
 | TC-15 | 新規 `scripts/claude/tests/guard_corpus_diff.py`（ゲートでは `test_guard_corpus_diff.sh` 経由。作業記録の Bash コマンドを HEAD の guard と作業ツリーの guard で並べて判定し、確認＋停止の増加が記録の 1% 以内。作業記録が無い環境と、guard に未コミットの変更が無いとき（コミットの後・コードレビュー時）は SKIP。計画書 0-12） | exit 0 | AC-12（承認待ちを増やさない） | fix-loop（0-12） |
 | TC-12 | I146 マージ後の `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（I146 が足すテスト。DANGER_OK=1 の解除経路があれば期待値を ASK に揃える） | exit 0 | AC-10 | 6 |
 
@@ -207,6 +207,13 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | A167 | if の then の down -v | 2 / +DANGER_OK=1 で ASK | `'if true; then docker compose down -v; fi'` |
 | A168 | else の後の DROP | 2 / +DANGER_OK=1 で ASK | `"if false; then :; else docker compose exec -T db psql -U postgres -c 'DROP DATABASE app'; fi"` |
 | A169 | then の後の force push | 2 / +DANGER_OK=1 で ASK | `'if true; then git push -f origin main; fi'` |
+| A170 | 継続行の git reset --hard | 2 / +DANGER_OK=1 で ASK | `"git reset ${BS}${NL}  --hard origin/develop"` |
+| A171 | 継続行の rm-rf | 2 / +DANGER_OK=1 で ASK | `"rm ${BS}${NL}  -rf backend/media"` |
+| A172 | 継続行の down -v | 2 / +DANGER_OK=1 で ASK | `"docker compose down ${BS}${NL}  -v"` |
+| A173 | 継続行の migrate の巻き戻し | 2 / +DANGER_OK=1 で ASK | `"docker compose exec backend python manage.py migrate ${BS}${NL}  problems 0001"` |
+| A174 | 継続行の find -delete | 2 / +DANGER_OK=1 で ASK | `"find backend -name '*.pyc' ${BS}${NL}  -delete"` |
+| A175 | 継続行の force push | 2 / +DANGER_OK=1 で ASK | `"git push origin ${BS}${NL}  --force"` |
+| A176 | 継続行の保護ブランチ push | 2 / +DANGER_OK=1 で ASK | `"git push ${BS}${NL}  origin main"` |
 | A162 | git clean -f | 2 / +DANGER_OK=1 で ASK | `'git clean -f'` |
 | A163 | git clean -f <パス> | 2 / +DANGER_OK=1 で ASK | `'git clean -f docs/'` |
 
@@ -589,16 +596,19 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G9 | 複製に例外を入れた | YES | `"$(grep -q 'raise RuntimeError("injected")' "$BROKEN_E" && echo YES \|\| echo NO)"` |
 | G10 | 例外のときは確認に倒す | ASK | `"$(rungj "$BROKEN_E" 'docker compose exec -T backend python -m pytest -q')"` |
 | G11 | 複製に置換が入った（安全網） | YES | `"$( (! cmp -s "$GUARD" "$BROKEN_D2") && (! cmp -s "$GUARD" "$BROKEN_X2") && (! cmp -s "$GUARD" "$BROKEN_N") && echo YES \|\| echo NO)"` |
-| G12 | 危険判定の出口を外しても安全網が確認 | ASK | `"$(rungj "$BROKEN_D2" "$M flush --noinput")"` |
+| G12 | 危険判定の出口を外しても安全網が止める | 2 | `"$(rungj "$BROKEN_D2" "$M flush --noinput")"` |
 | G13 | 外部判定の出口を外しても安全網が確認 | ASK | `"$(rungj "$BROKEN_X2" "$M shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"` |
 | G14 | 安全網を外すと function の本体が素通し | 0 | `"$(rungj "$BROKEN_N" 'function f { git reset --hard origin/develop; }; f')"` |
-| G15 | 実体では function の本体を確認 | ASK | `"$(runj 'function f { git reset --hard origin/develop; }; f')"` |
+| G15 | 実体では function の本体を止める | 2 | `"$(runj 'function f { git reset --hard origin/develop; }; f')"` |
 | G16 | 安全網を外すと coproc が素通し | 0 | `"$(rungj "$BROKEN_N" "coproc $RM backend/media")"` |
-| G17 | 実体では coproc を確認 | ASK | `"$(runj "coproc $RM backend/media")"` |
+| G17 | 実体では coproc を止める | 2 | `"$(runj "coproc $RM backend/media")"` |
 | G18 | 安全網を外すと <( ) の中が素通し | 0 | `"$(rungj "$BROKEN_N" 'diff <(printenv) /dev/null')"` |
 | G19 | 実体では <( ) の中を確認 | ASK | `"$(runj 'diff <(printenv) /dev/null')"` |
+| G20 | 安全網の解除不可は DANGER_OK=1 でも停止 | 2 | `"$(runj "DANGER_OK=1 coproc $RM /")"` |
+| G21 | 安全網の危険操作は DANGER_OK=1 で確認 | ASK | `"$(runj 'DANGER_OK=1 coproc git reset --hard origin/develop')"` |
+| G22 | 安全網の mkfs は停止 | 2 | `"$(runj 'cat <(mkfs.ext4 /dev/sdz)')"` |
 
-<!-- 行数: 522（危険操作の行 169 件を 2 通りずつ数えると 691 ケース） -->
+<!-- 行数: 532（危険操作の行 176 件を 2 通りずつ数えると 708 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash

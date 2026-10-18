@@ -217,6 +217,15 @@ ckd "A166 for の do の git clean"   'for f in a b; do git clean -fdx $f; done'
 ckd "A167 if の then の down -v"    'if true; then docker compose down -v; fi'
 ckd "A168 else の後の DROP"         "if false; then :; else docker compose exec -T db psql -U postgres -c 'DROP DATABASE app'; fi"
 ckd "A169 then の後の force push"   'if true; then git push -f origin main; fi'
+# コードレビュー後の敵対的レビュー（2026-10-18）: 行の継続（\ と改行）は 1 つのコマンド
+BS="\\"
+ckd "A170 継続行の git reset --hard"   "git reset ${BS}${NL}  --hard origin/develop"
+ckd "A171 継続行の rm-rf"              "rm ${BS}${NL}  -rf backend/media"
+ckd "A172 継続行の down -v"            "docker compose down ${BS}${NL}  -v"
+ckd "A173 継続行の migrate の巻き戻し" "docker compose exec backend python manage.py migrate ${BS}${NL}  problems 0001"
+ckd "A174 継続行の find -delete"       "find backend -name '*.pyc' ${BS}${NL}  -delete"
+ckd "A175 継続行の force push"         "git push origin ${BS}${NL}  --force"
+ckd "A176 継続行の保護ブランチ push"   "git push ${BS}${NL}  origin main"
 # 敵対的レビュー再実施 第 2 周（2026-10-17）: -d/-x なしでも追跡されていないファイルは消える
 ckd "A162 git clean -f"             'git clean -f'
 ckd "A163 git clean -f <パス>"      'git clean -f docs/'
@@ -601,7 +610,7 @@ ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---
 # D / X / C は安全網（0-12）も外す（外さないと、外した判定を安全網が確認として拾い直すため。それは G11〜G13 で確かめる）
-NO_NET='s/net = _safety_net(pcmd)/net = []/'
+NO_NET='s/net = _safety_net(pcmd)/net = {"hard": "", "danger": [], "external": [], "container": []}/'
 BROKEN_D="$TMP/guard_no_danger.py"
 sed -e 's/reasons += _analyze(pcmd)\["danger"\]/pass/' -e "$NO_NET" "$GUARD" > "$BROKEN_D"
 BROKEN_X="$TMP/guard_no_external.py"
@@ -632,14 +641,18 @@ sed 's/external = an\["external"\]/external = []/' "$GUARD" > "$BROKEN_X2"
 BROKEN_N="$TMP/guard_no_net.py"
 sed "$NO_NET" "$GUARD" > "$BROKEN_N"
 ck "G11 複製に置換が入った（安全網）" YES "$( (! cmp -s "$GUARD" "$BROKEN_D2") && (! cmp -s "$GUARD" "$BROKEN_X2") && (! cmp -s "$GUARD" "$BROKEN_N") && echo YES || echo NO)"
-ck "G12 危険判定の出口を外しても安全網が確認" ASK "$(rungj "$BROKEN_D2" "$M flush --noinput")"
+ck "G12 危険判定の出口を外しても安全網が止める" 2 "$(rungj "$BROKEN_D2" "$M flush --noinput")"
 ck "G13 外部判定の出口を外しても安全網が確認" ASK "$(rungj "$BROKEN_X2" "$M shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\"")"
 ck "G14 安全網を外すと function の本体が素通し" 0 "$(rungj "$BROKEN_N" 'function f { git reset --hard origin/develop; }; f')"
-ck "G15 実体では function の本体を確認"   ASK "$(runj 'function f { git reset --hard origin/develop; }; f')"
+ck "G15 実体では function の本体を止める"   2 "$(runj 'function f { git reset --hard origin/develop; }; f')"
 ck "G16 安全網を外すと coproc が素通し"   0   "$(rungj "$BROKEN_N" "coproc $RM backend/media")"
-ck "G17 実体では coproc を確認"          ASK "$(runj "coproc $RM backend/media")"
+ck "G17 実体では coproc を止める"          2 "$(runj "coproc $RM backend/media")"
 ck "G18 安全網を外すと <( ) の中が素通し" 0  "$(rungj "$BROKEN_N" 'diff <(printenv) /dev/null')"
 ck "G19 実体では <( ) の中を確認"        ASK "$(runj 'diff <(printenv) /dev/null')"
+# 安全網で見つけた危険操作も、精密判定と同じ扱い（解除不可は DANGER_OK=1 でも停止・危険操作は DANGER_OK=1 で確認）
+ck "G20 安全網の解除不可は DANGER_OK=1 でも停止" 2   "$(runj "DANGER_OK=1 coproc $RM /")"
+ck "G21 安全網の危険操作は DANGER_OK=1 で確認"   ASK "$(runj 'DANGER_OK=1 coproc git reset --hard origin/develop')"
+ck "G22 安全網の mkfs は停止"                   2   "$(runj 'cat <(mkfs.ext4 /dev/sdz)')"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
