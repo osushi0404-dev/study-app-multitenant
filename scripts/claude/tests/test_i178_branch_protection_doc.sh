@@ -186,7 +186,7 @@ expect_block "close step 5.5" "$CLOSE" "$EXPECTED_CLOSE"
 STEP6=$(grep -A2 -xF -- "$STEP6_HEAD" "$SKILL" 2>/dev/null)
 EXPECTED_STEP6="${STEP6_HEAD}
    承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
-   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。"
+   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。"
 expect_block "close step 6" "$STEP6" "$EXPECTED_STEP6"
 
 echo "---"
