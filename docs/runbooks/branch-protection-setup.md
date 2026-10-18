@@ -245,7 +245,10 @@ develop に CODEOWNERS が入った後に行う（§1.5「設定変更直後の 
    ```bash
    gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge
    ```
-3. 期待結果: API が失敗（HTTP 405 等）し、応答の `message` が push 権限の不足（`not authorized to push` 等）を示す。承認やチェックの不足を示す文の場合は 1 の前提が崩れているので、状態を整えてやり直す。`gh pr view <PR番号> --json state` は `OPEN` のまま。その後 `oshui0404` がマージする
+3. 期待結果: API が失敗し、`gh pr view <PR番号> --json state` は `OPEN` のまま。応答の `message` を次の基準で判定する（大文字小文字は区別しない）。その後 `oshui0404` がマージする
+   - **合格（push 制限による拒否）**: `push` または `authorized` を含み、`review`・`approv`・`status check` を含まない
+   - **前提崩れ（やり直し）**: `review`・`approv`・`status check` のいずれかを含む。1 の状態を整えてやり直す
+   - **判断保留**: 上のどちらにも当たらない（例: `Resource not accessible by integration`）。文をそのまま記録し、`oshui0404` に確認する
 
 ---
 
