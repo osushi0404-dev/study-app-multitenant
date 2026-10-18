@@ -669,6 +669,13 @@ ck "G19 実体では <( ) の中を確認"        ASK "$(runj 'diff <(printenv) 
 ck "G20 安全網の解除不可は DANGER_OK=1 でも停止" 2   "$(runj "DANGER_OK=1 coproc $RM /")"
 ck "G21 安全網の危険操作は DANGER_OK=1 で確認"   ASK "$(runj 'DANGER_OK=1 coproc git reset --hard origin/develop')"
 ck "G22 安全網の mkfs は停止"                   2   "$(runj 'cat <(mkfs.ext4 /dev/sdz)')"
+# 読みきれない形（plan_I174.md 0-13）: 引用符が閉じないコマンドは、中身に危険が見えなくても確認／その処理を外すと素通し
+BROKEN_U="$TMP/guard_no_unsure.py"
+sed 's/    if an\["unsure"\]:/    if False:/' "$GUARD" > "$BROKEN_U"
+ck "G23 複製に置換が入った（読みきれない形）" YES "$( (! cmp -s "$GUARD" "$BROKEN_U") && echo YES || echo NO)"
+ck "G24 引用符が閉じないコマンドは確認"     ASK "$(runj 'echo "abc')"
+ck "G25 その処理を外すと素通し"             0   "$(rungj "$BROKEN_U" 'echo "abc')"
+ck "G26 閉じない引用符の後ろの行も確認"     ASK "$(runj "echo 'it${NL}ls")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

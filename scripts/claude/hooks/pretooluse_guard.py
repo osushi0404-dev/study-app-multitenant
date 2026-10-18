@@ -1583,6 +1583,16 @@ def _cmd_danger(c: dict) -> list:
         sub, args = _git_sub(toks)
         if sub == "reset" and "--hard" in args:
             r.append("git reset --hard requires DANGER_OK=1")
+        # push は最上位の文字列でも判定しているが、入れ子のシェル（bash <<'X' … X・bash -c '…'）の中の push も
+        # 単純コマンドごとに同じ判定を当てる（0-13 の bash との差分テストで見つかった見逃し）
+        if sub == "push":
+            seg = shlex.join(toks)
+            dest = _push_protected_target(seg)
+            if dest:
+                r.append(f"push to protected branch '{dest}' is forbidden "
+                         f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
+            if _push_has_force(seg):
+                r.append("force push requires DANGER_OK=1")
         # -d / -x が無くても、追跡済みのディレクトリの中の追跡されていないファイル（未コミットの記録等）は消える
         if sub == "clean" and _has_short(args, "f", "--force") and not _has_short(args, "n", "--dry-run"):
             r.append("追跡されていないファイルの削除（git clean -f）requires DANGER_OK=1")
@@ -1851,7 +1861,7 @@ def _describe(c: dict) -> str:
 def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
-    res = {"hard": "", "danger": [], "external": [], "container": []}
+    res = {"hard": "", "danger": [], "external": [], "container": [], "unsure": []}
     for c in cmds:
         res["hard"] = res["hard"] or _cmd_hard(c)
         d, e = _cmd_danger(c), _cmd_external(c)
@@ -1859,7 +1869,9 @@ def _analyze(text: str) -> dict:
         res["external"] += e
         if c["compose"] and not d and not e and not _container_safe(c):
             res["container"].append(_describe(c))
-    for k in ("danger", "external", "container"):
+        if c["note"] == "引用符が閉じていない":
+            res["unsure"].append("引用符が閉じていない")   # 読み取りが代替経路に落ちた（0-13: 素通しにしない）
+    for k in ("danger", "external", "container", "unsure"):
         res[k] = list(dict.fromkeys(res[k]))
     return res
 
@@ -1941,7 +1953,7 @@ def _danger_reasons(cmd: str, pcmd: str) -> list:
     """DANGER_OK=1 で人の承認に切り替わる危険操作の理由を集める（該当なしは []）。
     cmd は空白を正規化したコマンド、pcmd は改行を保ったコマンド（読み解き用）。
     push 系の既存判定は、ヒアドキュメントの本文を除き、改行を区切りにしたテキストで行う（本文の誤反応を防ぐ）。"""
-    cmd = _norm(re.sub(r"__HEREDOC_\d+__", " ", _cut_heredocs(pcmd)).replace("\n", " ; "))
+    cmd = _norm(re.sub(r"__HEREDOC_\d+__", " ", _strip_comments(_cut_heredocs(pcmd))).replace("\n", " ; "))
     reasons = []
     dest = _push_protected_target(cmd)
     if dest:
@@ -1962,6 +1974,44 @@ def _danger_reasons(cmd: str, pcmd: str) -> list:
                        f"Edit で戻すか、どうしても必要なら DANGER_OK=1 を前置してください。")
     reasons += _analyze(pcmd)["danger"]
     return list(dict.fromkeys(reasons))
+
+_ANSI_C_SIMPLE = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b", "f": "\f", "v": "\v", "e": "\x1b",
+                  "E": "\x1b", "\\": "\\", "'": "'", '"': '"', "?": "?"}
+
+def _ansi_c_decode(text: str, j: int):
+    """text[j:] を $'…' の中身として bash と同じ規則で展開し、(展開した文字列, 閉じの ' の位置) を返す。
+    \\xHH・\\NNN（8 進）・\\uHHHH・\\UHHHHHHHH・\\n 等を展開する。知らないエスケープは bash と同じく \\ ごと残す。"""
+    n, out = len(text), []
+    while j < n and text[j] != "'":
+        ch = text[j]
+        if ch != "\\" or j + 1 >= n:
+            out.append(ch)
+            j += 1
+            continue
+        e = text[j + 1]
+        if e in _ANSI_C_SIMPLE:
+            out.append(_ANSI_C_SIMPLE[e])
+            j += 2
+        elif e in "xuU":
+            width = {"x": 2, "u": 4, "U": 8}[e]
+            m = re.match(r"[0-9A-Fa-f]{1,%d}" % width, text[j + 2:])
+            if m:
+                out.append(chr(int(m.group(0), 16)))
+                j += 2 + len(m.group(0))
+            else:
+                out.append("\\" + e)
+                j += 2
+        elif e in "01234567":
+            m = re.match(r"[0-7]{1,3}", text[j + 1:])
+            out.append(chr(int(m.group(0), 8) & 0xFF))
+            j += 1 + len(m.group(0))
+        elif e == "c" and j + 2 < n:
+            out.append(chr(ord(text[j + 2]) & 0x1F))  # \cX（制御文字）
+            j += 3
+        else:
+            out.append("\\" + e)
+            j += 2
+    return "".join(out), j
 
 def _join_continuations(text: str) -> str:
     """bash と同じ規則で行の継続（\\ と改行）を取り除く（前後をそのままつなげる）。
@@ -2001,6 +2051,16 @@ def _join_continuations(text: str) -> str:
                 continue
             out.append(text[i:i + 2])
             i += 2
+            continue
+        if c == "$" and not sq and not dq and text.startswith("$'", i):
+            # ANSI-C 引用 $'…' は、bash と同じ規則でエスケープ（\x6d・\055・\n 等）を展開し、同じ文字列の "…" に
+            # 書き換える（ほかの読み取りの処理が $'…' を知らず、\' で閉じたと読み違えて後ろを飲み込むため。
+            # 展開しないと $'\x6dain'〔= main〕のような宛先や引数を別の文字列と読み違える）
+            s, j = _ansi_c_decode(text, i + 2)
+            for ch in ("\\", '"', "$", "`"):
+                s = s.replace(ch, "\\" + ch)
+            out.append('"' + s + '"')
+            i = j + 1
             continue
         if c == "'" and not dq:
             sq = not sq
@@ -2094,7 +2154,8 @@ def main():
     # I083 欠陥1: 動的・不透明な宛先の push は静的に安全と断言できないため ask に degrade する。
     # 危険操作の判定の後に置くことで、rm -rf 等の同居 danger-op を ask で先食いしない。
     # I174: DANGER_OK=1 でも ask にする（宛先が保護ブランチに解決し得るため）。
-    if _push_is_dynamic(cmd):
+    # コメントとヒアドキュメントの本文は判定しない（_danger_reasons の push の判定と同じ前処理）
+    if _push_is_dynamic(_norm(re.sub(r"__HEREDOC_\d+__", " ", _strip_comments(_cut_heredocs(pcmd))).replace("\n", " ; "))):
         _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
 
     # I174 0-12: 安全網。上の精密判定がすべて素通しにしたコマンドでも、コマンドの位置ごとに精密判定をかけ直し、
@@ -2112,6 +2173,9 @@ def main():
     if net["external"] or net["container"]:
         _ask("見張りが読み落としかけた書き方の中に、確認が必要な操作があります: "
              + " / ".join(net["external"] + net["container"]))
+    # I174 0-13: 読み取りが代替経路に落ちた形（引用符が閉じていない等）は、何も見つからなくても確認にする
+    if an["unsure"]:
+        _ask("見張りがコマンドを読みきれませんでした（" + " / ".join(an["unsure"]) + "）。確認してください。")
 
     sys.exit(0)
 

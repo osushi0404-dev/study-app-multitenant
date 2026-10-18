@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・736 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=736 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・740 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=740 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -28,6 +28,7 @@
 | TC-11 | 新規テストの構文 | exit 0 | — | 2 |
 | TC-14 | 新規 `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 10 × 書き方 29 を総当たりで生成し、どれも 2 か ASK。計画書 0-12。安全網の前の guard では 23 件が素通しになることを確認済み） | exit 0（最終行 `pass=301 fail=0`。行の継続 10 を含む） | AC-4・AC-6・AC-14 | fix-loop（0-12） |
 | TC-15 | 新規 `scripts/claude/tests/guard_corpus_diff.py`（ゲートでは `test_guard_corpus_diff.sh` 経由。作業記録の Bash コマンドを HEAD の guard と作業ツリーの guard で並べて判定し、確認＋停止の増加が記録の 1% 以内。作業記録が無い環境と、guard に未コミットの変更が無いとき（コミットの後・コードレビュー時）は SKIP。計画書 0-12） | exit 0 | AC-12（承認待ちを増やさない） | fix-loop（0-12） |
+| TC-16 | 新規 `scripts/claude/tests/guard_bash_oracle.py`（ゲートでは `test_guard_bash_oracle.sh` 経由。危険なコマンド 8〔`$'…'` で書いた引数・保護ブランチへの push を含む〕 × 前置きの文脈 16 × つなぎ方 × 書き方 3 × 包み方 3 と、bash が実行しない形の計 1,844 件を、本物の bash〔git・rm は印を出すだけの関数〕と guard の両方に流し、bash が実行するのに guard が素通しのものが 0 件。計画書 0-13。修正前の guard では見逃し 692 件） | exit 0（最終行 `見逃し=0`） | AC-4・AC-8 | fix-loop（0-13） |
 | TC-12 | I146 マージ後の `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（I146 が足すテスト。DANGER_OK=1 の解除経路があれば期待値を ASK に揃える） | exit 0 | AC-10 | 6 |
 
 TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。
@@ -621,8 +622,12 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G20 | 安全網の解除不可は DANGER_OK=1 でも停止 | 2 | `"$(runj "DANGER_OK=1 coproc $RM /")"` |
 | G21 | 安全網の危険操作は DANGER_OK=1 で確認 | ASK | `"$(runj 'DANGER_OK=1 coproc git reset --hard origin/develop')"` |
 | G22 | 安全網の mkfs は停止 | 2 | `"$(runj 'cat <(mkfs.ext4 /dev/sdz)')"` |
+| G23 | 複製に置換が入った（読みきれない形） | YES | `"$( (! cmp -s "$GUARD" "$BROKEN_U") && echo YES \|\| echo NO)"` |
+| G24 | 引用符が閉じないコマンドは確認 | ASK | `"$(runj 'echo "abc')"` |
+| G25 | その処理を外すと素通し | 0 | `"$(rungj "$BROKEN_U" 'echo "abc')"` |
+| G26 | 閉じない引用符の後ろの行も確認 | ASK | `"$(runj "echo 'it${NL}ls")"` |
 
-<!-- 行数: 546（危険操作の行 190 件を 2 通りずつ数えると 736 ケース） -->
+<!-- 行数: 550（危険操作の行 190 件を 2 通りずつ数えると 740 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -634,6 +639,7 @@ bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
 bash scripts/claude/tests/test_adversarial_trigger.sh
 bash scripts/claude/tests/test_pretooluse_guard_matrix.sh
 bash scripts/claude/tests/test_guard_corpus_diff.sh
+bash scripts/claude/tests/test_guard_bash_oracle.sh
 python3 -m json.tool .claude/settings.json
 ! grep -qF "Bash(git merge *)" .claude/settings.json
 ! grep -qF "Bash(git reset *)" .claude/settings.json
@@ -662,6 +668,7 @@ bash -n scripts/claude/tests/test_pretooluse_container_guard.sh
 bash -n scripts/claude/tests/test_settings_permissions.sh
 bash -n scripts/claude/tests/test_pretooluse_guard_matrix.sh
 python3 -m py_compile scripts/claude/tests/guard_corpus_diff.py
+python3 -m py_compile scripts/claude/tests/guard_bash_oracle.py
 ```
 
 ## 実施記録
@@ -771,3 +778,22 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 - 見張りの判定を変えたら、コミットの前に `test_pretooluse_guard_matrix.sh`（素通しの穴）と `guard_corpus_diff.py`（余計な確認・誤停止の増加）を必ず流す（決定論ゲートに入れた）。
 - 新しい危険な操作や書き方が見つかったら、個別のケースではなく総当たりの表の OPS / TPLS に足す（同じ種類の別の書き方を一度に確かめる）。
 - 「読めない形を素通しにする」作りを避け、精密判定の後ろに必ず安全網（読めないものは確認）を置く（I146 の gh pr ガードと同じ 2 層の考え方）。
+
+### fix-loop（2026-10-18・0-12 後のコードレビューの敵対的レビュー・上限到達への対応・計画書 0-13）の再発防止記録（手順7）
+決定論ゲート全 38 行 exit 0（container `pass=740`・総当たり `pass=301`・bash との差分テスト 1,844 件 見逃し 0・作業記録の再判定 新しく確認・停止 0・settings 12・push 87・checkout 18・worktree 30・adversarial 40）。pre-commit すべて Passed。診断 `docs/reviews/I174_fix_diagnosis_20261018_1321.md`・実装レビュー `_fix_implementation_review_20261018_1403.md`・テスト結果 `_fix_test_result_20261018_1405.md`・テストレビュー `_fix_test_review_20261018_1417.md`（すべて OK）。
+
+**なぜ失敗したか**
+- 見張りが bash の文法（引用符・コメント・ヒアドキュメント・行の継続・`$'…'`）を、6 か所の別々の処理で、それぞれ自前の規則で読んでいた。1 か所を直すとほかの処理と食い違い、敵対的レビューの周ごとに新しい穴が見つかった（行の継続 → 本文とコメント → 入れ子のシェルと `<<<`）。
+- 「見張りの読み方が本物の bash と同じか」を確かめる仕組みがなく、テストは人が考えた具体例だけだった。そのため例の外の組み合わせで食い違いが残り、処理の分岐を外しても気づけなかった。
+- 引用符が閉じないなど読みきれない形を、素通しにしていた。
+
+**何を変えたか**
+- 本物の bash との差分テスト（`guard_bash_oracle.py`・1,844 件・約 9 秒）: 危険なコマンドを文脈・つなぎ方・書き方・包み方で組み合わせ、本物の bash（git・rm は印を出すだけの関数）と見張りの両方に流して、bash が実行するのに見張りが素通しのものを不合格にする。修正前の見張りでは見逃し 692 件 → 0 件
+- 見つかった食い違いの修正: 入れ子のシェルの中の push も単純コマンドごとに判定・`$'…'` は読み取りの入口で bash と同じ規則で展開して `"…"` に書き換え・push の判定はコメントと本文を除いてから・引用符が閉じない形は確認
+
+**セキュリティ上の考慮点**
+- 差分テストは本物の bash を実行するので、生成するスクリプトは無害なコマンド（echo・cat・wc・tr）と、印を出すだけの関数に置き換えた git・rm だけを使い、一時ディレクトリの中で PATH と HOME だけを渡して動かす。
+
+**次回どう防ぐか**
+- 見張りの読み方を変えたら、コミットの前に `test_guard_bash_oracle.sh` を流す（決定論ゲートに入れた）。新しい文脈や書き方の抜けが見つかったら、個別のテストではなく差分テストの CONTEXTS / DANGERS / forms / wraps に足す（本物の bash が正解を決めるので、期待値を人が書かない）。
+- fix-loop の実装レビューで代替サブエージェントを使ったときは、その出力を記録ファイルに保存し、再レビューの「前回 NG」としてそのファイルを渡す（今回は空の SKIP 記録を渡してしまい、やり直した）。

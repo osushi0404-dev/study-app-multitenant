@@ -86,7 +86,7 @@ ck "Pregr1 force push exit2"           2 "$(run 'git push --force origin x')"
 # ===== false-green 注入（判定行ごと独立に裏取り） =====
 # protected 判定行を無効化（dest を常に None 化）
 BROKEN_PROT="$TMP/guard_noprot.py"
-sed 's/dest = _push_protected_target(cmd)/dest = None/' "$GUARD" > "$BROKEN_PROT"
+sed -e 's/dest = _push_protected_target(cmd)/dest = None/' -e 's/dest = _push_protected_target(seg)/dest = None/' "$GUARD" > "$BROKEN_PROT"
 ck "FG-A noprot passes develop"        0 "$(rung "$BROKEN_PROT" 'git push origin develop')"
 ck "FG-B real blocks develop"          2 "$(run 'git push origin develop')"
 # --all/--mirror 判定行を無効化（regex を非マッチ化）
@@ -107,8 +107,9 @@ ck "D1 cmdsubst \$(echo develop)"      ASK "$(runj 'git push origin $(echo devel
 ck "D2 cmdsubst rev-parse"             ASK "$(runj 'git push origin $(git rev-parse --abbrev-ref HEAD)')"
 ck "D3 var expansion \$D"              ASK "$(runj 'D=develop; git push origin $D')"
 ck "D4 alias indirection"              ASK "$(runj 'git -c alias.p="push origin develop" p')"
-ck "D5 eval wrapper"                   ASK "$(runj 'eval "git push origin develop"')"
-ck "D6 sh -c wrapper"                  ASK "$(runj 'sh -c "git push origin develop"')"
+# I174 0-13: eval / sh -c の中の push は中身を読んで単純コマンドごとに判定するので、直接書いたときと同じく停止（以前は「宛先を確定できない」として確認）
+ck "D5 eval wrapper"                   2 "$(runj 'eval "git push origin develop"')"
+ck "D6 sh -c wrapper"                  2 "$(runj 'sh -c "git push origin develop"')"
 ck "D8 brace \${BR}"                   ASK "$(runj 'git push origin ${BR}')"
 ck "D10 backtick substitution"         ASK "$(runj 'git push origin x`whoami`y')"
 ck "DOK1 DANGER_OK dynamic escape"     ASK "$(runj 'DANGER_OK=1 git push origin $(echo develop)')"
@@ -130,7 +131,7 @@ ck "FP2 push&&echo --force"            0   "$(runj 'git push origin feature && e
 ck "FP3 --push-option=force"           0   "$(runj 'git push --push-option=force origin x')"
 ck "FP4 rm -f && push"                 0   "$(runj 'rm -f x && git push origin feature')"
 # ラッパー隠蔽 force → ask（block しない・Q7）
-ck "F7 eval hidden force"              ASK "$(runj 'eval "git push --force origin x"')"
+ck "F7 eval hidden force"              2 "$(runj 'eval "git push --force origin x"')"
 # ラッパー誤 ask 回帰（構造的検出・branch/remote 名の偶然一致で発火しない・Q8）→ pass
 ck "W1 branch bash-feature"            0   "$(runj 'git push origin bash-feature')"
 ck "W2 branch sh-fix"                  0   "$(runj 'git push origin sh-fix')"
@@ -162,9 +163,9 @@ ck "FG-I nodyn passes cmdsubst"       0   "$(rungj "$BROKEN_DYN" 'git push origi
 ck "FG-I2 real asks cmdsubst"         ASK "$(runj 'git push origin $(echo develop)')"
 # FG-J: eval ラッパー分岐を無効化
 BROKEN_EVAL="$TMP/guard_noeval.py"
-sed 's/if head == "eval" and any("push" in t for t in toks\[1:\]):/if False:/' "$GUARD" > "$BROKEN_EVAL"
+sed -e 's/if head == "eval" and any("push" in t for t in toks\[1:\]):/if False:/' -e 's/        if sub == "push":/        if False:/' "$GUARD" > "$BROKEN_EVAL"
 ck "FG-J noeval passes eval"          0   "$(rungj "$BROKEN_EVAL" 'eval "git push origin develop"')"
-ck "FG-J2 real asks eval"             ASK "$(runj 'eval "git push origin develop"')"
+ck "FG-J2 real blocks eval"           2   "$(runj 'eval "git push origin develop"')"
 # FG-K: alias サブ分岐を無効化
 BROKEN_ALIAS="$TMP/guard_noalias.py"
 sed 's/if t == "-c" and toks\[i + 1\].startswith("alias.") and "push" in toks\[i + 1\]:/if False:/' "$GUARD" > "$BROKEN_ALIAS"
@@ -172,7 +173,7 @@ ck "FG-K noalias passes alias"        0   "$(rungj "$BROKEN_ALIAS" 'git -c alias
 ck "FG-K2 real asks alias"            ASK "$(runj 'git -c alias.p="push origin develop" p')"
 # FG-L: eval 分岐削除 + force 入力（force-in-eval が block でなく ask に degrade する裏取り）
 ck "FG-L noeval passes eval-force"    0   "$(rungj "$BROKEN_EVAL" 'eval "git push --force origin x"')"
-ck "FG-L2 real asks eval-force"       ASK "$(runj 'eval "git push --force origin x"')"
+ck "FG-L2 real blocks eval-force"     2   "$(runj 'eval "git push --force origin x"')"
 
 # ----- TC-DOC1: 限界注記更新の決定論 grep（手動テスト No.4 の機械版・grep 0=hit/1=miss） -----
 DOC="$REPO_ROOT/docs/claude-code-structure.md"
