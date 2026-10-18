@@ -10,6 +10,7 @@
 - **ブランチ**: `feature/I174-guard-based-permission-review`（`origin/develop` から分岐）
 - **作業場所**: primary checkout（`/mnt/c/app/study-app-multitenant`）。track:harness だが、wt-harness は I146 で使用中のため例外（2026-10-16 ユーザー決定）
 - **マージ順の制約**: I146（#260）のマージ後にマージする（ステップ 6）
+- **テストの件数の正本**: `docs/tests/open/I174_auto_test.md` の「TC 一覧」と「実施記録」（本書の各節に書いた件数は、その時点の値）
 
 ## 0. 設計変更（2026-10-16・敵対的レビュー第 1 周の後・ユーザー決定）
 
@@ -50,11 +51,12 @@
 - `.claude/settings.json` の deny の `Read(./.env)`・`Read(./.env.*)`・`Edit(./.env)`・`Edit(./.env.*)` を、`Read(**/.env)`・`Read(**/.env.*)`・`Edit(**/.env)`・`Edit(**/.env.*)` に置き換える（`backend/.env`・`e2e/.env.e2e` を守る）。`*.example` と `frontend/.env.development` / `.env.production`（追跡済み・秘密を含まない）も読めなくなるが、秘密情報を守るほうを優先する。
 
 ### 0-5. コンテナ内の許可リスト（ここに入るものだけ確認なしで通す）
+（表は 0-9 の変更〔`diffsettings`・`dumpdata`・`collectstatic` を外す〕を反映済み。一覧の正本は `pretooluse_guard.py` の定数）
 | 種類 | 通す形 |
 |---|---|
 | テスト・lint・監査 | `pytest`・`python -m pytest`（`python -W ... -m pytest` を含む）・`ruff check|format --check`・`flake8`・`python -m flake8`・`bandit`・`pip-audit`・`mypy`・`npm test|audit|ls|outdated`・`npm run lint|typecheck|build|test`・`npx tsc|eslint|jest` |
 | 依存の確認 | `pip freeze|list|show|check`・`pip index versions`・`npm view` |
-| manage.py（`django-admin`・`python -m django` も同じ） | `test`・`check`・`showmigrations`・`sqlmigrate`・`dumpdata`・`diffsettings`・`help`・`version`・`collectstatic`・`makemigrations --check` / `--dry-run`・`migrate`（位置引数 1 つまで）・`shell`（コードが全部見えて〔`-c`・`--command`・ヒアドキュメント・`<` の読めるファイル〕、危険操作・外部送信が無いとき） |
+| manage.py（`django-admin`・`python -m django` も同じ） | `test`・`check`・`showmigrations`・`sqlmigrate`・`help`・`version`・`makemigrations --check` / `--dry-run`・`migrate`（位置引数 1 つまで）・`shell`（コードが全部見えて〔`-c`・`--command`・ヒアドキュメント・`<` の読めるファイル〕、危険操作・外部送信が無いとき） |
 | `python -c` | コードに危険操作・外部送信が無いとき |
 | `python <ファイル>.py` | ファイルを読めて、中身に危険操作・外部送信が無いとき |
 | psql・dbshell | SQL の全文が `SELECT` / `SHOW` / `EXPLAIN`（`ANALYZE` なし）/ `CREATE DATABASE` / `\d*` / `\l` / `\dt` で始まるとき（`\!`・`\copy`・`\i` は除く） |
@@ -458,5 +460,6 @@ _CODE_EXTERNAL = [
 - [ ] マージ順（I146 の後）と作業場所（primary・例外）
 
 ## レビュー結果
+- [20261019_0005 判定: ✅ 完了](../../reviews/I174_plan_review_20261019_0005.md)
 - [20261017_1220 判定: ✅ 完了](../../reviews/I174_plan_review_20261017_1220.md)
 - [20261016_1621 判定: ✅ 完了](../../reviews/I174_plan_review_20261016_1621.md)
