@@ -226,6 +226,13 @@ ckd "A173 継続行の migrate の巻き戻し" "docker compose exec backend pyt
 ckd "A174 継続行の find -delete"       "find backend -name '*.pyc' ${BS}${NL}  -delete"
 ckd "A175 継続行の force push"         "git push origin ${BS}${NL}  --force"
 ckd "A176 継続行の保護ブランチ push"   "git push ${BS}${NL}  origin main"
+# 第 2 周（2026-10-18）: 引用符付きヒアドキュメントの本文・コメントの中の \ は継続ではない（後ろのコマンドを読み飛ばさない）
+ckd "A177 本文の最後の行が \\ のヒアドキュメントの後の reset" "cat > notes.md <<'EOF'${NL}1行目${BS}${NL}2行目${BS}${NL}EOF${NL}git reset --hard origin/develop"
+ckd "A178 Windows パスの本文の後の force push" "git commit -F - <<'EOF'${NL}fix: path C:${BS}tmp${BS}${NL}EOF${NL}git push --force origin develop"
+ckd "A179 \\ で終わるコメントの次の行の reset" "# Windows: C:${BS}work${BS}${NL}git reset --hard HEAD~1"
+ckd "A180 単語の途中で折った継続行"   "git reset --ha${BS}${NL}rd HEAD~1"
+ckd "A181 行の途中のコメントの \\ の次の行" "ls # see dir${BS}${NL}git reset --hard origin/develop"
+ckd "A182 \\\\ で終わる行の次の行"      "echo C:${BS}${BS}${NL}git reset --hard origin/develop"
 # 敵対的レビュー再実施 第 2 周（2026-10-17）: -d/-x なしでも追跡されていないファイルは消える
 ckd "A162 git clean -f"             'git clean -f'
 ckd "A163 git clean -f <パス>"      'git clean -f docs/'

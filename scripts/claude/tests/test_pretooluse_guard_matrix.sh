@@ -75,9 +75,10 @@ for entry in "${OPS[@]}"; do
       printf 'FAIL want=%s got=%s :: %s\n' "$want" "$got" "$cmd"; fail=$((fail+1))
     fi
   done
-  # 行の継続（\ と改行）で操作の途中を折り返す書き方（各操作の最後の空白で折り返す。例: git reset \⏎  --hard …）
-  cont="${op% *} \\
-  ${op##* }"
+  # 行の継続（\ と改行）で操作の途中を折り返す書き方（各操作の最初の空白で折り返す。例: rm \⏎  -rf …・git \⏎  reset --hard …。
+  # 危険なフラグや引数を折り返しの後ろに置き、継続をつながないと判定できない形にする）
+  cont="${op%% *} \\
+  ${op#* }"
   got="$(runj "$cont")"
   if [ "$got" = "$want" ]; then pass=$((pass+1)); else printf 'FAIL want=%s got=%s :: %s\n' "$want" "$got" "$cont"; fail=$((fail+1)); fi
 done

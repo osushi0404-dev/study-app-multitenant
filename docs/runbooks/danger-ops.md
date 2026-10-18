@@ -13,13 +13,13 @@
 
 ## 見張り（pretooluse_guard.py）の扱い（I174）
 
-PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）は、コマンドを読み解いてから（付着した `;` `&&` `|` `( )`・`$(...)`・ヒアドキュメント・`sh -c` / `bash -lc`・`eval`・`env` などを展開してから）、次の順に判定する。
+PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）は、コマンドを読み解いてから（行の継続 `\`＋改行を bash と同じ規則でつなぎ、付着した `;` `&&` `|` `( )`・`$(...)`・ヒアドキュメント・`sh -c` / `bash -lc`・`eval`・`env` などを展開してから）、次の順に判定する。
 
 1. **常に止める（解除不可）**: `rm -rf /` と `rm -rf /*`・mkfs・dd・shred・別 worktree への書き込み
 2. **危険操作として止める**（exit 2）: 上の「例」のうち、見張りが判定できるもの＝DB の各操作・`git reset --hard`・`git clean -f`・force push / 保護ブランチへの push・変更ありのファイルの checkout・Docker の各操作・Redis の全消去・`rm -rf`・`find -delete`。ホスト・`docker exec`・`docker compose exec|run`・`docker-compose` のどれで実行しても同じ
 3. **人の確認**: 外部への送信（メール送信・celery タスクの起動・登録 API とパスワード再設定依頼 API・OpenAI）と、秘密情報の表示（`.env` 等の読み出し・`printenv`・引数なしの `env`・`docker compose config`・`docker inspect`）
 4. **`docker compose exec|run`（`docker-compose` も同じ）の中の操作は「安全と確認済みの一覧」に入るものだけ素通し**: テスト・lint・監査・読み取りの `manage.py`（`test`・`check`・`showmigrations` など）・ふだんの `migrate`・中身が見えて危険のない `manage.py shell`・読み取りの SQL・`redis-cli` の読み取りなど。名前だけでなく、書き込み・実行・外部送信につながるオプション（`--fix`・`sed -i`・`curl -d` など）が無いことまで確かめる（一覧は `plan_I174.md` 0-5・0-9 章）。一覧にない操作（例 `seed_e2e`・`createsuperuser`・`pip install`・`dumpdata`・`diffsettings`）や、パイプで受ける流し込み・読めない書き方・未知の compose オプションは人の確認になる。素の `docker exec|run` は 2. と 3. の列挙だけで判定する（I174 の前と同じ）
-5. **安全網（最後の層）**: 上の判定が読み落とした書き方（`function f { … }` の本体・`coproc`・`<( )` の中・行の継続 `\` など）でも、コマンドの位置ごとに上の判定をかけ直し、同じ扱いにする（1. は止める・2. は止める〔`DANGER_OK=1` なら確認〕・3.／4. は確認）。読み落としを素通しにしないため。
+5. **安全網（最後の層）**: 上の判定が読み落とした書き方（`function f { … }` の本体・`coproc`・`<( )` の中 など）でも、コマンドの位置ごとに上の判定をかけ直し、同じ扱いにする（1. は止める・2. は止める〔`DANGER_OK=1` なら確認〕・3.／4. は確認）。読み落としを素通しにしないため。
 
 - **見張りを直したら、コミットの前に 2 つのテストを流す**: `bash scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 × 書き方の総当たり。素通しの穴）と `bash scripts/claude/tests/test_guard_corpus_diff.sh`（過去の作業コマンドで、新しく確認・停止になったものが記録の 1% を超えないか・見張りが異常終了しないか）。後者は手元の作業記録を `~/.cache/claude-guard-corpus/`（本人だけが読める権限）に抜き出して使い、リポジトリには入れない
 - **新しい秘密ファイルを置くときは、`.claude/settings.json` の deny に名前を足す**（`Read(**/<名前>)`・`Edit(**/<名前>)`）。deny は実在する秘密ファイルの名前（`.env`・`.env.e2e`・`.env.local`・`.env.*.local`）に絞ってある（`.env.example` 等の編集を妨げないため）。名前を足さないと、Read / Edit ツールでの読み書きが確認なしで通る（Bash での読み出しは見張りが確認に回す）。`scripts/claude/tests/test_settings_permissions.sh` の期待値も合わせて更新する

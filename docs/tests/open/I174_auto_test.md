@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・708 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=708 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・720 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=720 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -214,6 +214,12 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | A174 | 継続行の find -delete | 2 / +DANGER_OK=1 で ASK | `"find backend -name '*.pyc' ${BS}${NL}  -delete"` |
 | A175 | 継続行の force push | 2 / +DANGER_OK=1 で ASK | `"git push origin ${BS}${NL}  --force"` |
 | A176 | 継続行の保護ブランチ push | 2 / +DANGER_OK=1 で ASK | `"git push ${BS}${NL}  origin main"` |
+| A177 | 本文の最後の行が \\ のヒアドキュメントの後の reset | 2 / +DANGER_OK=1 で ASK | `"cat > notes.md <<'EOF'${NL}1行目${BS}${NL}2行目${BS}${NL}EOF${NL}git reset --hard origin/develop"` |
+| A178 | Windows パスの本文の後の force push | 2 / +DANGER_OK=1 で ASK | `"git commit -F - <<'EOF'${NL}fix: path C:${BS}tmp${BS}${NL}EOF${NL}git push --force origin develop"` |
+| A179 | \\ で終わるコメントの次の行の reset | 2 / +DANGER_OK=1 で ASK | `"# Windows: C:${BS}work${BS}${NL}git reset --hard HEAD~1"` |
+| A180 | 単語の途中で折った継続行 | 2 / +DANGER_OK=1 で ASK | `"git reset --ha${BS}${NL}rd HEAD~1"` |
+| A181 | 行の途中のコメントの \\ の次の行 | 2 / +DANGER_OK=1 で ASK | `"ls # see dir${BS}${NL}git reset --hard origin/develop"` |
+| A182 | \\\\ で終わる行の次の行 | 2 / +DANGER_OK=1 で ASK | `"echo C:${BS}${BS}${NL}git reset --hard origin/develop"` |
 | A162 | git clean -f | 2 / +DANGER_OK=1 で ASK | `'git clean -f'` |
 | A163 | git clean -f <パス> | 2 / +DANGER_OK=1 で ASK | `'git clean -f docs/'` |
 
@@ -608,7 +614,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G21 | 安全網の危険操作は DANGER_OK=1 で確認 | ASK | `"$(runj 'DANGER_OK=1 coproc git reset --hard origin/develop')"` |
 | G22 | 安全網の mkfs は停止 | 2 | `"$(runj 'cat <(mkfs.ext4 /dev/sdz)')"` |
 
-<!-- 行数: 532（危険操作の行 176 件を 2 通りずつ数えると 708 ケース） -->
+<!-- 行数: 538（危険操作の行 182 件を 2 通りずつ数えると 720 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash

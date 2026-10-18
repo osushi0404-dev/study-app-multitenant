@@ -1961,6 +1961,59 @@ def _danger_reasons(cmd: str, pcmd: str) -> list:
     reasons += _analyze(pcmd)["danger"]
     return list(dict.fromkeys(reasons))
 
+def _join_continuations(text: str) -> str:
+    """bash と同じ規則で行の継続（\\ と改行）を取り除く（前後をそのままつなげる）。
+    単一引用符の中・ヒアドキュメントの本文・コメントの中の \\ は継続ではないので残す
+    （残さないと、本文の最後の行の \\ で終わりの行が吸収され、後ろのコマンドを本文として読み飛ばす）。"""
+    out, i, n = [], 0, len(text)
+    sq = dq = comment = False
+    pending = []                                     # この行で始まるヒアドキュメント（タブを除くか, 終わりの語）
+    while i < n:
+        c = text[i]
+        if c == "\n":
+            out.append(c)
+            i += 1
+            comment = False
+            if pending and not sq and not dq:
+                for strip_tabs, delim in pending:    # 本文は終わりの行までそのまま写す
+                    while i < n:
+                        j = text.find("\n", i)
+                        end = n if j < 0 else j + 1
+                        line = text[i:end].rstrip("\r\n")
+                        out.append(text[i:end])
+                        i = end
+                        if (line.lstrip("\t") if strip_tabs else line) == delim:
+                            break
+                pending = []
+            continue
+        if comment:
+            out.append(c)
+            i += 1
+            continue
+        if c == "\\" and not sq:
+            if text.startswith("\n", i + 1) or text.startswith("\r\n", i + 1):
+                i += 2 if text[i + 1] == "\n" else 3  # 行の継続: \ と改行を取り除く
+                continue
+            out.append(text[i:i + 2])
+            i += 2
+            continue
+        if c == "'" and not dq:
+            sq = not sq
+        elif c == '"' and not sq:
+            dq = not dq
+        elif c == "#" and not sq and not dq and (i == 0 or text[i - 1] in " \t\n;&|()<>"):
+            comment = True
+        elif c == "<" and not sq and not dq and text.startswith("<<", i) and not text.startswith("<<<", i):
+            m = re.match(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2", text[i:])
+            if m:
+                pending.append((m.group(1) == "-", m.group(3)))
+                out.append(m.group(0))
+                i += len(m.group(0))
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
 def main():
     data = _load()
     tool_name = data.get("tool_name")
@@ -1982,7 +2035,7 @@ def main():
 
     # I174: 行の継続（\ の直後の改行）は、bash と同じく 1 つのコマンドとして読む（区切りの改行と取り違えると、
     # `git reset \⏎ --hard` が 2 つのコマンドに分かれて素通りする）
-    raw = re.sub(r"\\\r?\n", " ", raw)
+    raw = _join_continuations(raw)
     danger_ok = raw.lstrip().startswith("DANGER_OK=1 ")
     # I174: 判定は DANGER_OK=1 を外したコマンドで行う（先頭トークンで判定する eval / sh -c 等を
     # DANGER_OK=1 の前置で見逃さないため。DANGER_OK=1 の扱いは danger_ok で別に決める）。
