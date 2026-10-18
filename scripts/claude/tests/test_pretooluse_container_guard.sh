@@ -233,6 +233,15 @@ ckd "A179 \\ で終わるコメントの次の行の reset" "# Windows: C:${BS}w
 ckd "A180 単語の途中で折った継続行"   "git reset --ha${BS}${NL}rd HEAD~1"
 ckd "A181 行の途中のコメントの \\ の次の行" "ls # see dir${BS}${NL}git reset --hard origin/develop"
 ckd "A182 \\\\ で終わる行の次の行"      "echo C:${BS}${BS}${NL}git reset --hard origin/develop"
+# 第 3 周（2026-10-18）: 入れ子のシェルの継続・ヒアストリング・区切り語の - ・CRLF
+ckd "A183 bash ヒアドキュメントの中の継続" "bash <<'EOF'${NL}git reset ${BS}${NL}  --hard HEAD~1${NL}EOF"
+ckd "A184 sh -c の中の継続"           "sh -c 'git reset ${BS}${NL}  --hard HEAD~1'"
+ckd "A185 bash -c の中の継続の down -v" "bash -c 'docker compose down ${BS}${NL}  -v'"
+ckd "A186 ヒアストリングの後の継続"   "wc -c <<< EOF${NL}git reset ${BS}${NL} --hard"
+ckd "A187 引用ヒアストリングの後の継続" "tr a-z A-Z <<< 'hello'${NL}git push ${BS}${NL} --force origin main"
+ckd "A188 区切り語に - を含むヒアドキュメントの後" "cat <<'EOF-PR' > /tmp/x${NL}don't${NL}EOF-PR${NL}git reset --hard HEAD~1"
+ckd "A189 引用なしの区切り語の - "    "cat > a.sql <<END-SQL${NL}select 1;${NL}END-SQL${NL}git reset --hard"
+ckd "A190 CR の前の \\ の次の行"      "echo hi ${BS}"$'\r'"${NL}git reset --hard"
 # 敵対的レビュー再実施 第 2 周（2026-10-17）: -d/-x なしでも追跡されていないファイルは消える
 ckd "A162 git clean -f"             'git clean -f'
 ckd "A163 git clean -f <パス>"      'git clean -f docs/'

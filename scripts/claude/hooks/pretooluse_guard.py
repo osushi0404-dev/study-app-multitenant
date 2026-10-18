@@ -446,7 +446,7 @@ _PYTHON_RE = re.compile(r"^python(\d+(\.\d+)?)?$")
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _OPS = ("&&", "||", "|&", ">>", "<<<", ">&", "&>", "<&", ">|", "<>", ";", "&", "|", "(", ")", "<", ">", "\n")
 _SEPARATORS = {"&&", "||", ";", "&", "\n", "(", ")", "|", "|&"}
-_HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+_HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_.-]*)\2")   # 区切り語は EOF-PR・END.SQL も可
 _HEREDOC_STORE = []                 # ヒアドキュメント本文（$(...) の中から参照されても失われないよう共有する）
 _SUBST_STORE = []                   # $(...) / `...` の中身（-c "$(cat <<EOF ...)" のコードを取り出すために共有する）
 
@@ -1363,6 +1363,8 @@ def _parse(text: str, ctr: bool = False, depth: int = 0, compose: bool = False, 
     """コマンド文字列を、包むコマンドを外した単純コマンド（dict）のタプルに読み解く。"""
     if depth > _MAX_WRAP_DEPTH:
         return (_unknown(_new_cmd([], ctr, compose), "入れ子が深すぎる"),)
+    # 入れ子のシェル（sh -c '…'・bash <<'EOF' の本文）も、内側のシェルが行の継続をつなぐので同じ規則でつなぐ
+    text = _join_continuations(text)
     cmds, subs = _raw_commands(text, ctr, compose, loc)
     out = []
     for c in cmds:
@@ -1991,8 +1993,11 @@ def _join_continuations(text: str) -> str:
             i += 1
             continue
         if c == "\\" and not sq:
-            if text.startswith("\n", i + 1) or text.startswith("\r\n", i + 1):
-                i += 2 if text[i + 1] == "\n" else 3  # 行の継続: \ と改行を取り除く
+            if text.startswith("\n", i + 1):
+                i += 2                                # 行の継続: \ と改行を取り除く
+                continue
+            if text.startswith("\r\n", i + 1):
+                i += 2                                # bash では \ が CR だけを打ち消し、LF は区切りのまま
                 continue
             out.append(text[i:i + 2])
             i += 2
@@ -2003,8 +2008,12 @@ def _join_continuations(text: str) -> str:
             dq = not dq
         elif c == "#" and not sq and not dq and (i == 0 or text[i - 1] in " \t\n;&|()<>"):
             comment = True
-        elif c == "<" and not sq and not dq and text.startswith("<<", i) and not text.startswith("<<<", i):
-            m = re.match(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2", text[i:])
+        elif c == "<" and not sq and not dq and text.startswith("<<<", i):
+            out.append("<<<")                         # ヒアストリング（1 文字ずらして << と読み違えない）
+            i += 3
+            continue
+        elif c == "<" and not sq and not dq and text.startswith("<<", i):
+            m = _HEREDOC_RE.match(text, i)
             if m:
                 pending.append((m.group(1) == "-", m.group(3)))
                 out.append(m.group(0))
