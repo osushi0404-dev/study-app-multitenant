@@ -3,7 +3,7 @@
 - **関連イシュー**: #297
 - **計画書**: docs/plans/open/plan_I178.md
 - **Draft PR**: #298
-- **ステータス**: 計画作成済み（承認待ち）
+- **ステータス**: 実装済み・/code-review 敵対的レビューステージ中（第2周対応済み・2026-10-18）
 
 ---
 
@@ -15,7 +15,8 @@
 | 2 | `docs/runbooks/branch-protection-setup.md` | 変更（develop・main の設定値・承認者の限定・確認手順・トラブルシューティング） |
 | 3 | `.claude/skills/close/SKILL.md` | 変更（step 5.5・6 の文言） |
 | 4 | `scripts/claude/pr-base-sync.sh` | 無改変の確認 |
-| 5 | GitHub リポジトリ設定（develop・main のブランチ保護） | ユーザーが UI で変更 |
+| 5 | `scripts/claude/tests/test_i178_branch_protection_doc.sh` | 新規（敵対的レビュー第1周 High 対応・第2周で全文比較に変更） |
+| 6 | GitHub リポジトリ設定（develop・main のブランチ保護） | ユーザーが UI で変更 |
 
 ## 重点レビュー観点
 

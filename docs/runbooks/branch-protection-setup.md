@@ -184,11 +184,10 @@ Frontend Tests
 git push origin HEAD:develop
 ```
 
-期待結果:
-```
-remote: error: GH006: Protected branch update failed for refs/heads/develop.
-remote: error: Changes must be made through a pull request.
-```
+期待結果: push が拒否される（`remote: error: GH006: Protected branch update failed for refs/heads/develop.` に続けて、拒否の理由が表示される）。理由の文は実行するアカウントで変わる。
+
+- `oshui0404` が実行した場合: `Changes must be made through a pull request.`（PR 必須による拒否）
+- bot など Restrict の一覧に無いアカウントが実行した場合: push 権限の不足（`You're not authorized to push to this branch` 等）または上記の PR 必須の文。どちらでも拒否されていれば合格
 
 ### 確認 2: main への直 push がブロックされること
 
@@ -196,7 +195,7 @@ remote: error: Changes must be made through a pull request.
 git push origin HEAD:main
 ```
 
-期待結果: develop と同様のエラーメッセージ
+期待結果: develop と同様に拒否される
 
 ### 確認 3: CI 失敗 PR がマージできないこと
 
@@ -212,7 +211,7 @@ git push origin HEAD:main
 2. 期待結果: `reviewDecision=REVIEW_REQUIRED`・`mergeStateStatus=BLOCKED`
 3. `oshui0404` が承認した後に同じコマンドを実行し、`reviewDecision=APPROVED` になることを確認する
 
-main は CODEOWNERS が届くまで、bot の承認でも `reviewDecision=APPROVED` になり得る（§1.5「main の制約」）。main は確認 6（push 制限）と設定画面（§1 の main の表との突き合わせ）で確認する。
+main は CODEOWNERS が届くまで、bot の承認でも `reviewDecision=APPROVED` になり得る（§1.5「main の制約」）。main は設定画面（§1 の main の表との突き合わせ）で確認し、develop → main の PR を作ったときに確認 6（push 制限）を行う。
 
 ### 確認 5: bot が承認してもマージ要件を満たさないこと
 
@@ -234,15 +233,19 @@ develop に CODEOWNERS が入った後に行う（§1.5「設定変更直後の 
 
 ### 確認 6: bot がマージできないこと（push 制限）
 
-1. bot が作成し `oshui0404` が承認した PR について、次を実行し、`reviewDecision=APPROVED` で、`mergeStateStatus` が `BEHIND`・`DIRTY` でなく、承認後に新しいコミットが無いことを確かめる（他の理由でマージに失敗する状態を除くため）:
+1. bot が作成し `oshui0404` が承認した PR について、次を実行し、前提がすべて成り立つことを確かめる（push 制限以外の理由でマージに失敗する状態を除くため）:
    ```bash
-   gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews
+   gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews,statusCheckRollup
    ```
-2. bot でマージを試みる:
+   - `reviewDecision=APPROVED`
+   - `mergeStateStatus` が `BEHIND`・`DIRTY` でない
+   - 最新の承認（`reviews` の最後の `APPROVED`）の `commit.oid` が `headRefOid` と同じ（承認後に新しいコミットが無い）
+   - `statusCheckRollup` の必須チェック 5 件がすべて `SUCCESS`
+2. bot で GitHub のマージ API を直接呼ぶ（`gh pr merge` は API を呼ぶ前に手元で `BLOCKED` を判定し、push 制限と他の理由を区別できない汎用の文で止まるため使わない。`--auto` も付けない）:
    ```bash
-   gh pr merge <PR番号> --merge
+   gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge
    ```
-3. 期待結果: コマンドが失敗し、エラー文に push 権限の不足（`not authorized to push` 等）が示される。`gh pr view <PR番号> --json state` は `OPEN` のまま。その後 `oshui0404` がマージする
+3. 期待結果: API が失敗（HTTP 405 等）し、応答の `message` が push 権限の不足（`not authorized to push` 等）を示す。承認やチェックの不足を示す文の場合は 1 の前提が崩れているので、状態を整えてやり直す。`gh pr view <PR番号> --json state` は `OPEN` のまま。その後 `oshui0404` がマージする
 
 ---
 
@@ -275,7 +278,7 @@ PR を 1 件作成して CI を実行してから再度設定画面を開いて�
 ### 自分が作った PR を承認・マージできない
 
 GitHub では PR の作成者は自分の PR を承認できない。このリポジトリでは bypass も許していないため、ユーザーが作った PR はマージできない。
-PR は bot（Claude）に作らせる。どうしてもユーザーが作った PR をマージする必要がある場合は、対象ブランチのルールを **Edit** して「Do not allow bypassing the above settings」を一時的にオフにし、PR 画面で管理者として要件を迂回してマージした後、すぐにオンに戻す（§5 の I178 全体の戻し手順ではマージできない）。
+PR は bot（Claude）に作らせる。どうしてもユーザーが作った PR をマージする必要がある場合は、対象ブランチのルールを **Edit** して「Do not allow bypassing the above settings」を一時的にオフにし、PR 画面で管理者として要件を迂回してマージした後、すぐにオンに戻す（§5 の I178 全体の戻し手順ではマージできない）。戻した後は、設定画面で対象ブランチのルールを開き、§1 の表と突き合わせて「Do not allow bypassing the above settings」がオンに戻っていることを確かめる（bot は保護設定を読めないため、戻し忘れは画面でしか分からない）。
 
 ### 承認したのに BLOCKED に戻った
 

@@ -137,12 +137,13 @@ bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 - TC-18b（決定論ゲート 17 行目）: 旧 develop 表の `Require approvals（サブオプション）` 行が無い
 - 期待: どちらも exit 0
 
-## TC-19: runbook の develop・main の設定表と手順、close step 5.5 の書き分けを行単位で検証する（AC-6・AC-7）
-- adversarial-review 20261017 第1周 High 対応。TC-05〜TC-12 は文言がファイルのどこかにあるかしか見ないため、表の行や手順を消す・古い設定に戻しても合格してしまう（false-green）。
+## TC-19: runbook の develop・main の設定表と手順、close step 5.5〜6 を節の全文で検証する（AC-6・AC-7）
+- adversarial 第1周 High 対応で新設し、第2周 High 対応で方式を変更した。TC-05〜TC-12 は文言がファイルのどこかにあるかしか見ない。第1周版（行ごとの存在確認）も、親スイッチのオフ・矛盾行の併記・空白の違い・コメントで隠す等の後退を取りこぼした。
 - コマンド: 決定論ゲート 18 行目（`bash scripts/claude/tests/test_i178_branch_protection_doc.sh`）
-- 検証内容: (1) develop 表・main 表それぞれで、計画書 5-5 の各設定の行が完全一致でちょうど 1 回ある（承認数は develop=`**1**`・main=`**1**（本番ゲート）`）(2) 同じ設定項目の行が各表に 1 行だけ（ON と OFF の併記を検知）(3) §3 ステップ 3 の各指示行が完全一致である・Restrict の見出しの直後がオン指示・承認をオフのままにする旧手順が無い (4) close step 5.5 で「develop は Code Owners…、main は承認 1 件…」の順に書き分けている
-- 期待: exit 0（`RESULT: OK (43 assertions)`）
-- 失敗注入（2026-10-17・`RUNBOOK`/`SKILL` で対象を差し替え）: develop の Code Owners を OFF・develop の承認を 0・main の Restrict を OFF・develop の Restrict に bot を追加・main の Code Owners 行を削除・ステップ 3 の Code Owners をオフ・develop 表を旧設定へ・両表と手順から Code Owners と Restrict を削除・develop 表に OFF 行を併記・Restrict の見出し直後をオフ・変更前の runbook・step 5.5 の develop/main 入れ替え・変更前の close スキル・runbook 不在の 14 通りすべてで **exit 1**。無改変の対照は exit 0
+- 検証内容: 次の 5 つの節を、見出し行（完全一致）で切り出し、スクリプト内の期待値と**全文の完全一致**で比較する。開始・終了の見出しのどちらかが無ければ節が空になり NG。(1) runbook §1 develop の表（`### develop ブランチ`〜`### main ブランチ`）(2) runbook §1 main の表（`### main ブランチ`〜`## 1.5 承認者の限定（I178）`）(3) runbook §3 ステップ 3（`### ステップ 3: 各項目を設定`〜`### ステップ 4: 保存`）(4) close step 5.5（`5.5) …`〜step 6 の 1 行目）(5) close step 6 の 2 行
+- 設定を変えるときは、このスクリプトの期待値と計画書 5-5 の表を同時に更新する
+- 期待: exit 0（`RESULT: OK (5 blocks)`）
+- 失敗注入（2026-10-18・`RUNBOOK`/`SKILL` で対象を差し替え）: 第1周の 14 通り（develop の Code Owners を OFF・develop の承認を 0・main の Restrict を OFF・develop の Restrict に bot を追加・main の Code Owners 行を削除・ステップ 3 の Code Owners をオフ・develop 表を旧設定へ・両表と手順から Code Owners と Restrict を削除・develop 表に OFF 行を併記・Restrict の見出し直後をオフ・変更前の runbook・step 5.5 の develop/main 入れ替え・変更前の close スキル・runbook 不在）と、第2周のレビューアが第1周版で合格すると実測した 11 通り（PR 必須の親スイッチをオフ・force push/削除をオン・status checks をオフ・セルの空白を変えた OFF 行の併記・force push の矛盾行の併記・語順を変えた旧手順・ON 行をコメントで隠す・bypass の見出しの差し替え・close スキルに矛盾する文を追加 等）の計 25 通りすべてで **exit 1**。無改変の対照は exit 0
 
 ---
 
@@ -153,4 +154,5 @@ bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 | TC-04 | 2026-10-17 | ✅ exit 0 | /implement ステップ 1 のゲート。CODEOWNERS push 直後（3d6f029）に `{"errors":[]}` を確認してから後続へ進んだ |
 | TC-01〜TC-16・TC-18 | 2026-10-17 | ✅ 全件 exit 0 | /implement 完了時（ステップ 1〜3 反映後）。TC-16 は `RESULT: OK (21/21 cases, 30 assertions)`。/test で再実行する |
 | TC-19 | 2026-10-18 | ✅ exit 0 | adversarial 第1周対応後。`RESULT: OK (43 assertions)`・失敗注入 14 通りすべて exit 1 |
-| TC-17 | | 未実施（マージ後） | |
+| TC-19 | 2026-10-18 | ✅ exit 0 | adversarial 第2周対応後（全文比較に変更）。`RESULT: OK (5 blocks)`・失敗注入 25 通りすべて exit 1 |
+| TC-17 | | 未実施（マージ後） | 手動 No.7 と同時に行い、記録用 PR（`docs(I178): マージ後確認の記録`）で記入する |

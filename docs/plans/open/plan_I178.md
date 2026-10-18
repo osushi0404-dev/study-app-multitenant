@@ -28,7 +28,7 @@
 | AC-2 | develop と main の両方で「Require review from Code Owners」が有効。bot の PR が `reviewDecision=REVIEW_REQUIRED`・`mergeStateStatus=BLOCKED` になる | 手動 No.1・No.2・No.3・No.4・No.7（develop で Code Owners の効き目を区別できるのは、CODEOWNERS が develop に入った後の No.7。No.3・No.4 は承認要件が付いたことの確認） |
 | AC-3 | ユーザーが承認すると、同じ PR が `reviewDecision=APPROVED` になりマージ可能になる | 手動 No.5 |
 | AC-4 | bot が他人の PR を承認しても、マージ要件を満たさない | 手動 No.7（マージ後） |
-| AC-5 | develop・main で「Dismiss stale approvals」「Restrict who can push（`oshui0404` のみ）」「Do not allow bypassing」が有効 | 手動 No.1・No.2・No.6 |
+| AC-5 | develop・main で「Dismiss stale approvals」「Restrict who can push（`oshui0404` のみ）」「Do not allow bypassing」が有効 | 手動 No.1・No.2・No.6・No.8 |
 | AC-6 | `branch-protection-setup.md` に新しい設定・変更の理由・運用（PR は bot が作る）が書かれ、「自己 approve 可」の誤記が無い | TC-05〜TC-12・TC-18・TC-19 |
 | AC-7 | close スキルと pr-base-sync の前提（承認前の正常な状態は BLOCKED）が実際の設定と一致している | TC-13〜TC-16・TC-19 |
 
@@ -164,7 +164,9 @@ GitHub 側の 3 つの設定を組み合わせて、マージの最後の砦を 
 | §1.5 追記 | 「main への反映は develop → main の PR（bot が作成・`oshui0404` が承認・マージ）で行う」と、「設定変更直後の develop」（CODEOWNERS を追加した PR #298 が develop に入るまでは develop でも Code Owners 要件が効かず、Restrict who can push で守る）を追記する（adversarial 第1周 Medium・Low 対応） |
 | §4 確認 4 | 「main への PR で approval なしに…」を「develop への PR で、`oshui0404` の承認なしにマージできないこと」に変え、確認コマンド `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` と期待値（`REVIEW_REQUIRED`・`BLOCKED`）を書く。main は CODEOWNERS が届くまで bot の承認で `APPROVED` になり得るため、確認 6（push 制限）と設定画面で確認する旨を書く（adversarial 第1周 Medium 対応） |
 | §4 確認 5（新規） | bot が承認してもマージ要件を満たさないこと。develop に CODEOWNERS が入った後に行う。手順: ユーザーが develop 宛てに **1 行のファイル変更を含む**確認用 PR を作る（Code Owners の要件はファイル変更を含む PR にだけ働くため、空コミットは不可）→ bot で `gh pr review <PR番号> --approve` → `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` が `REVIEW_REQUIRED`・`BLOCKED` のまま → マージせずに `gh pr close <PR番号>`（adversarial 第1周 Medium 対応） |
-| §4 確認 6（新規） | bot がマージできないこと（push 制限）。前提（`APPROVED`・BEHIND/DIRTY でない・承認後のコミットなし）を `gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews` で確かめてから `gh pr merge <PR番号> --merge` を試し、push 権限の不足を示すエラーで失敗すること（adversarial 第1周 Medium 対応） |
+| §4 確認 6（新規） | bot がマージできないこと（push 制限）。前提（`APPROVED`・BEHIND/DIRTY でない・承認後のコミットなし・必須チェック 5 件 SUCCESS）を `gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews,statusCheckRollup` で確かめてから、GitHub のマージ API（`gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge`）を呼び、応答の `message` が push 権限の不足を示すこと。`gh pr merge` は手元で `BLOCKED` を判定して汎用の文で止まり区別できないため使わない（adversarial 第1周・第2周 Medium 対応） |
+| §4 確認 1・2 | 期待結果を「push が拒否される」に変え、理由の文が実行アカウントで変わること（`oshui0404` は PR 必須の文、Restrict の一覧に無いアカウントは push 権限の不足または PR 必須の文）を書く（adversarial 第2周 Low 対応） |
+| §6 緊急手順の追記 | 「Do not allow bypassing」をオンに戻した後、設定画面で §1 の表と突き合わせて戻っていることを確かめる一文を追加する（adversarial 第2周 Low 対応） |
 | §5 ロールバック | develop・main の「Require review from Code Owners」「Restrict who can push」を OFF にし、develop だけ「Require approvals」「Dismiss stale approvals」も OFF に戻す（main は承認 1・Dismiss stale ON のまま＝元の値）。CODEOWNERS は revert の PR で削除する（8 章と同じ内容。adversarial 第1周 Low 対応で 8 章に合わせた） |
 | §6「main への PR で自分が approve できない」（L194-197） | 見出しを「自分が作った PR を承認・マージできない」に変え、本文を「GitHub では PR の作成者は自分の PR を承認できない。このリポジトリでは bypass も許していないため、ユーザーが作った PR はマージできない。PR は bot（Claude）に作らせる。どうしても必要な場合は、対象ブランチのルールを Edit して『Do not allow bypassing the above settings』を一時的にオフにし、管理者として要件を迂回してマージした後、すぐにオンに戻す（§5 の I178 全体の戻し手順ではマージできない）」に書き換える（adversarial 第1周 Low 対応） |
 | §6（新規）「承認したのに BLOCKED に戻った」 | 「承認の後に新しいコミット（develop への追従など）が入ると、Dismiss stale approvals により承認が取り消される。もう一度承認する」 |
@@ -191,9 +193,9 @@ L156 を次に置き換える:
    承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
 ```
 
-### 5-3b. `scripts/claude/tests/test_i178_branch_protection_doc.sh`（新規・adversarial 第1周 High 対応）
+### 5-3b. `scripts/claude/tests/test_i178_branch_protection_doc.sh`（新規・adversarial 第1周 High 対応・第2周 High で方式変更）
 
-**修正方針**: TC-05〜TC-12 は文言がファイルのどこかにあるかしか見ず、§1 の表や §3 の手順を消す・古い設定に戻しても合格してしまう（false-green）。runbook を節ごと（`### develop ブランチ`〜`### main ブランチ`・`### main ブランチ`〜`## 1.5`・`### ステップ 3`〜`### ステップ 4`）に切り出し、各設定の行が完全一致でちょうど 1 回あること、同じ設定項目の行が各表に 1 行だけであること、ステップ 3 の各指示行、close step 5.5 の develop/main の書き分けの順序を検証する。対象は環境変数 `RUNBOOK`・`SKILL` で差し替え可能にし、失敗注入に使う（`test_pr_base_sync.sh` の `TARGET_SCRIPT` と同じ方式）。決定論ゲートから `bash scripts/claude/tests/test_i178_branch_protection_doc.sh` で実走する（TC-19）。
+**修正方針**: TC-05〜TC-12 は文言がファイルのどこかにあるかしか見ず、§1 の表や §3 の手順を消す・古い設定に戻しても合格してしまう（false-green）。第1周では行ごとの存在確認にしたが、第2周で親スイッチ（Require a pull request before merging）のオフ・矛盾行の併記・空白の違い・コメントで隠す等の後退を取りこぼすと分かった。そのため、runbook と close スキルを見出し行（完全一致）で節ごと（`### develop ブランチ`〜`### main ブランチ`・`### main ブランチ`〜`## 1.5 承認者の限定（I178）`・`### ステップ 3: 各項目を設定`〜`### ステップ 4: 保存`・close の step 5.5〜step 6）に切り出し、スクリプト内の期待値と**全文の完全一致**で比較する。開始・終了の見出しのどちらかが無ければ節は空になり NG。設定を変えるときは、このスクリプトの期待値と 5-5 の表を同時に更新する。対象は環境変数 `RUNBOOK`・`SKILL` で差し替え可能にし、失敗注入に使う（`test_pr_base_sync.sh` の `TARGET_SCRIPT` と同じ方式）。決定論ゲートから `bash scripts/claude/tests/test_i178_branch_protection_doc.sh` で実走する（TC-19）。
 
 ### 5-4. `scripts/claude/pr-base-sync.sh`（変更しない）
 
@@ -238,9 +240,12 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - ユーザーが 5-5 の表のとおり develop・main を設定し、設定画面で確認する。
 - → 手動 No.1〜No.6 参照（PR #298 を使った確認）。
 
-### ステップ 5: マージ後の確認
+### ステップ 5: マージ後の確認と記録
 - PR #298 のマージ後（CODEOWNERS が develop に入った後）に行う。
+- 結果は、bot が作る記録用 PR（`docs(I178): マージ後確認の記録`・develop 宛て）で closed のテスト文書に記入し、ユーザーが承認・マージする（adversarial 第2周 Medium 対応）。
 - → TC-17・手動 No.7 参照。
+
+（マージ前の No.4〜No.6 の結果は /close 中に記入してコミットし、そのコミットで承認が取り消されることを手動 No.8 で確かめた後、ユーザーが再承認してマージする。順番は手動テスト文書の「実施の順番と記録の残し方」を参照）
 
 ---
 
@@ -249,7 +254,7 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 テストレベル: アプリのコード変更が無いため、ユニット/結合/E2E のアプリテストは非該当。検証は (1) ファイル内容とリポジトリ API への決定論チェック（自動テスト文書）、(2) GitHub 上の PR 状態の実地確認（手動テスト文書）で行う。
 
 - 自動: `docs/tests/open/I178_auto_test.md`（TC-01〜TC-19）
-- 手動: `docs/tests/open/I178_manual_test.md`（No.1〜No.7）
+- 手動: `docs/tests/open/I178_manual_test.md`（No.1〜No.8）
 - 認可テスト: 本イシューは「誰がマージできるか」という認可の変更にあたる。手動 No.3〜No.7 で、bot の PR は承認待ちになること（No.3・No.4）、管理者の承認で APPROVED になること（No.5）、bot がマージできないこと（No.6）、bot の承認は数えられないこと（No.7）を確認する。
 - 再発防止: close スキルの step 5.5 の前提（BLOCKED＝承認待ち）に設定の参照先を書き、文書と設定の対応を明示する。ただし、bot は保護設定を読めず、pr-base-sync は CLEAN も合格として扱うため、設定が緩められたことを close の手順で検知する仕組みは**無い**。機械的な検知は本イシューの範囲外（R7）。
 
@@ -300,9 +305,10 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - [ ] `docs/runbooks/workflow.md` は承認要件の前提を書いていないため、変更しない
 - [ ] AC-4 の確認（bot が承認しても数えられないこと）はマージ後に行う（CODEOWNERS が develop に入っている必要があるため）
 - [ ] 設定変更（ステップ 4）は、ステップ 1〜3 の自動テストが通った後、PR #298 のマージ前に行う
-- [ ] 手動 No.6 で、ユーザーの承認後に bot が `gh pr merge 298 --merge` を試し、push 制限で失敗することを確かめる（実行直前に改めて了承を取る）
+- [ ] 手動 No.6 で、ユーザーの承認後に bot が GitHub のマージ API（`gh api -X PUT .../pulls/298/merge`）を呼び、push 制限で拒否されることを確かめる（実行直前に改めて了承を取る。adversarial 第2周で `gh pr merge` から変更）
 
 ## レビュー結果
+- [20261018_1126 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1126.md)
 - [20261017_1926 判定: ✅ 完了](../../reviews/I178_plan_review_20261017_1926.md)
 - [20261017_1921 判定: ✅ 完了](../../reviews/I178_plan_review_20261017_1921.md)
 - [20261017_1916 判定: ✅ 完了](../../reviews/I178_plan_review_20261017_1916.md)
@@ -333,7 +339,7 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 |---|------|---------|---------|------------|----------------|------------|---------|--------|
 | 1 | develop/main へのマージ | bot（write） | bot が自分の PR、または承認済みの PR を自分でマージする | push 制限（`oshui0404` のみ）でマージが拒否される | No（bot は保護設定を読めない） | Yes: 手動 No.6 | なし | Low |
 | 2 | PR の承認 | bot（write） | bot が外部 PR・ユーザーの PR を承認し、develop の承認要件を満たす | Code Owners 必須で、bot の承認は数えられない | No | Yes: 手動 No.7（マージ後） | main は CODEOWNERS が届くまで承認 1 件で満たせる（設計レビュー 1 行目・push 制限で補完） | Low |
-| 3 | 承認後の追加 push | bot（write） | ユーザーの承認後に bot が別の変更を push し、承認済みのままマージさせる | Dismiss stale approvals で承認が取り消される | No | Yes: 手動 No.5 の後の追従時に `reviewDecision` が `REVIEW_REQUIRED` に戻ることを /close で観測 | なし | Low |
+| 3 | 承認後の追加 push | bot（write） | ユーザーの承認後に bot が別の変更を push し、承認済みのままマージさせる | Dismiss stale approvals で承認が取り消される | No | Yes: 手動 No.8（No.4〜No.6 の結果を記録するコミットを承認後に push し、`reviewDecision` が `REVIEW_REQUIRED` に戻ることを確かめる。adversarial 第2周で観測任せから専用の確認に変更） | なし | Low |
 | 4 | 外部（fork）PR | 外部（権限なし） | fork から PR を出し、マージされるのを待つ | 外部は書き込み権限が無くマージ不可。承認も Code Owners ではないので数えられない | No | No（権限上不可能・I146 で close 手順を定義済み） | ユーザーが中身を確認せずに承認・マージする（運用上のリスク） | Low |
 | 5 | CODEOWNERS の改ざん | bot（write） | PR で CODEOWNERS に bot を加える | ベースの CODEOWNERS が使われ、変更自体に `oshui0404` の承認が要る | Yes: TC-02（CODEOWNERS が `* @oshui0404` の 1 行のみ） | No | ユーザーが差分を見ずに承認する | Low |
 | 6 | ワークフローの悪用 | bot（write） | PR にワークフローを追加し、Actions のトークンで develop に push・マージさせる | Actions（`github-actions`）は push 制限の許可対象に入っていない | No | No | 秘密情報の持ち出し等、マージ以外の悪用は本イシューの範囲外（既存のリスク） | Low |

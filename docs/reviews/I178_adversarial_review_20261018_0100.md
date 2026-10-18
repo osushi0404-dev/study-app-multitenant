@@ -42,6 +42,43 @@
 - `docs/tests/open/I178_auto_test.md`（TC-19 追加）・`docs/tests/open/I178_manual_test.md`（No.1〜3・6・7）
 - `docs/plans/open/plan_I178.md`（AC 表・影響範囲・5-2・5-3b・5-5・7・R7）・`docs/issues/open/I178.md`（実装対象・ロールバック）
 
-第 1 周は NEW_HIGH 1 件のため、修正後に第 2 周へ進む。
+第 1 周は NEW_HIGH 1 件のため、修正後に第 2 周へ進む（第1周修正コミット 84b1d76）。修正で計画書を変えたため、第 2 周の前に /plan-issue-review を再実行した（20261018_1126・指摘なし）。
+
+---
+
+## 第 2 周（2026-10-18・3 エージェント並列）
+
+| # | 観点 | NEW_CRITICAL | NEW_HIGH |
+|---|---|---|---|
+| 1 | ロジック回避・実機 repro（固定） | 0 | 0 |
+| 2 | テストの false-green・tautology（固定） | 0 | 1 |
+| 3 | 要件・脅威モデルの網羅漏れ（固定） | 0 | 0 |
+| | **合計** | **0** | **1** |
+
+### findings と対応
+
+| 重大度 | 観点 | 指摘 | 対応 |
+|---|---|---|---|
+| High | false-green | 第1周で新設した test_i178 のステップ 3 検証は Restrict の 1 か所しか見出し直後を見ず、「Require a pull request before merging」（親スイッチ）・status checks のオフ、force push/削除のオン、bypass 見出しの差し替えが合格する（実測 exit 0） | **修正**。test_i178 を全文比較方式に作り直した。runbook の develop 表・main 表・ステップ 3、close の step 5.5・step 6 の 5 節を見出し行で切り出し、期待値と完全一致で比較。開始・終了見出しが無ければ節が空になり NG。第2周レビューアの改変版 11 件（下の Medium・Low の分を含む）と第1周の 14 通りの計 25 通りすべて exit 1・無改変 exit 0 |
+| Medium | false-green | 表の矛盾行の検知が 6 項目だけで、セルの空白の違い・HTML コメントで隠した ON 行・表の外の行でも合格する | **修正**（上と同じ全文比較で解消。改変版 D・E・G・H・J が exit 1） |
+| Medium | ロジック回避 | 確認 6・No.6 の `gh pr merge` は API を呼ぶ前に手元で `BLOCKED` を判定し、汎用の文（base branch policy prohibits the merge）で止まるため、push 制限と他の理由を区別できない。前提に CI 結果も無い | **修正**。前提に必須チェック 5 件 SUCCESS を追加し、GitHub のマージ API（`gh api -X PUT .../pulls/<N>/merge -f merge_method=merge`）を直接呼んで応答の `message` で判定する手順に変更（runbook §4 確認 6・手動 No.6・計画 5-2）。`--auto` を付けないことも明記 |
+| Medium | 要件網羅 | マージ後の No.7・TC-17 の記録先が無い。承認後に No.4〜6 の結果をコミットすると承認が取り消される流れも書かれていない | **修正**。手動テスト文書に「実施の順番と記録の残し方」を追加（No.1〜3 は /test でコミット、No.4〜6 は /close で記入、その記録コミットで承認取り消しを確かめる No.8 を新設、マージ後の No.7・TC-17 は記録用 PR `docs(I178): マージ後確認の記録` で記入）。計画ステップ 5 にも追記 |
+| Medium | 文書整合 | 第1周の「空コミット PR は不可」の修正がイシュー本文（設計確認メモ・AC-4 の確認方法・解決方針の検証）に入っていない | **修正**。設計確認メモの手順 1 に訂正注記（1 行のファイル変更・ブランチ名・後片付け）を追加し、解決方針の検証を 5 点に更新 |
+| Low | 文書整合 | イシューの AC-2 の確認方法が No.7 を含まず、#298 マージ前は Code Owners の効き目を区別できない | **修正**。イシュー AC-2 に設定画面確認と No.7 の位置づけを追記 |
+| Low | 手順の具体性 | No.6 の後に develop が進んだ場合の再承認の流れ、No.7 のブランチ名の確定・後片付けが無い | **修正**。手動テスト文書の冒頭に BEHIND 時の流れを追加。No.7 のブランチ名を `check/I178-codeowners` に確定し、`gh pr close <N> --delete-branch` を追加 |
+| Low | 脅威と検証の対応 | 攻撃シナリオ 3（承認後の追加 push）の確認が「追従時にたまたま観測」で記録先が無い。runbook 確認 4 の「main は確認 6 で確認」に対応する手動テストが無い | **修正**。No.8 で専用に確認。runbook 確認 4 の main の記述を「設定画面で確認し、develop → main の PR を作ったときに確認 6」に変更。計画の攻撃シナリオ 3 を No.8 に更新 |
+| Low | 文書整合 | レビュー文書のステータス・対象表が古い。イシュー AC-1 の表現（「`* @oshui0404` のみ」）が計画・実ファイル（コメント行あり）と食い違う | **修正**。レビュー文書のステータスと対象表（test_i178 追加）を更新。イシュー AC-1 を「コメント以外の行が `* @oshui0404` の 1 行のみ」にそろえた |
+| Low | 確認手順の誤判定 | runbook 確認 1・2 の期待エラー文が PR 必須の文だけで、Restrict の一覧に無い bot が実行すると push 権限不足の文になり得る | **修正**。期待結果を「push が拒否される」にし、理由の文が実行アカウントで変わることを明記 |
+| Low | 第1周修正のリスク | §6 の緊急手順に、bypass 設定を戻した後の確認が無い | **修正**。戻した後に設定画面で §1 の表と突き合わせる一文を追加 |
+| Low | tautology | 旧手順の否定判定の語順固定・close step 5.5 への矛盾文の追加を検知しない | **修正**（全文比較で解消。改変版 F・K が exit 1） |
+
+### 修正内容（コミット）
+
+- `scripts/claude/tests/test_i178_branch_protection_doc.sh`（全文比較方式に作り直し）
+- `docs/runbooks/branch-protection-setup.md`（§4 確認 1・2・4・6、§6）
+- `docs/tests/open/I178_manual_test.md`（記録の流れ・No.6・No.7・No.8 新設）・`docs/tests/open/I178_auto_test.md`（TC-19 の説明・結果）
+- `docs/plans/open/plan_I178.md`（AC-5・5-2・5-3b・ステップ 5・7・承認ポイント・攻撃シナリオ 3）・`docs/issues/open/I178.md`（設計確認メモの訂正・解決方針の検証・AC-1・AC-2・AC-5）・`docs/reviews/open/I178_review.md`
+
+第 2 周は NEW_HIGH 1 件のため、修正後に第 3 周（上限）へ進む。
 
 VERDICT: HIGH
