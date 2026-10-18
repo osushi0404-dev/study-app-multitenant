@@ -27,7 +27,7 @@
 | TC-10 | `pretooluse_guard.py` の構文 | exit 0 | — | 2・3 |
 | TC-11 | 新規テストの構文 | exit 0 | — | 2 |
 | TC-14 | 新規 `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 10 × 書き方 29 を総当たりで生成し、どれも 2 か ASK。計画書 0-12。安全網の前の guard では 23 件が素通しになることを確認済み） | exit 0（最終行 `pass=291 fail=0`） | AC-4・AC-6・AC-14 | fix-loop（0-12） |
-| TC-15 | 新規 `scripts/claude/tests/guard_corpus_diff.py`（作業記録の Bash コマンドを HEAD の guard と作業ツリーの guard で並べて判定し、確認＋停止の増加が記録の 1% 以内。作業記録が無い環境では SKIP。計画書 0-12） | exit 0 | AC-12（承認待ちを増やさない） | fix-loop（0-12） |
+| TC-15 | 新規 `scripts/claude/tests/guard_corpus_diff.py`（ゲートでは `test_guard_corpus_diff.sh` 経由。作業記録の Bash コマンドを HEAD の guard と作業ツリーの guard で並べて判定し、確認＋停止の増加が記録の 1% 以内。作業記録が無い環境と、guard に未コミットの変更が無いとき（コミットの後・コードレビュー時）は SKIP。計画書 0-12） | exit 0 | AC-12（承認待ちを増やさない） | fix-loop（0-12） |
 | TC-12 | I146 マージ後の `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（I146 が足すテスト。DANGER_OK=1 の解除経路があれば期待値を ASK に揃える） | exit 0 | AC-10 | 6 |
 
 TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。
@@ -609,7 +609,7 @@ bash scripts/claude/tests/test_pretooluse_checkout_guard.sh
 bash scripts/claude/tests/test_pretooluse_worktree_guard.sh
 bash scripts/claude/tests/test_adversarial_trigger.sh
 bash scripts/claude/tests/test_pretooluse_guard_matrix.sh
-python3 scripts/claude/tests/guard_corpus_diff.py
+bash scripts/claude/tests/test_guard_corpus_diff.sh
 python3 -m json.tool .claude/settings.json
 ! grep -qF "Bash(git merge *)" .claude/settings.json
 ! grep -qF "Bash(git reset *)" .claude/settings.json

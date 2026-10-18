@@ -91,6 +91,11 @@ def main() -> int:
         with open(base, "w", encoding="utf-8") as fh:
             fh.write(src.stdout)
         cur = os.path.join(REPO, GUARD_REL)
+        with open(cur, encoding="utf-8") as fh:
+            if fh.read() == src.stdout:
+                # コミットの前に使うゲート。変更をコミットした後（コードレビュー時など）は比べるものが無い
+                print(f"SKIP: guard に {a.base} からの変更がありません（コミットの前に流すゲート）")
+                return 0
         with ThreadPoolExecutor(12) as ex:
             b = list(ex.map(lambda c: judge(base, c), cmds))
             w = list(ex.map(lambda c: judge(cur, c), cmds))
