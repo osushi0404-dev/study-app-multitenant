@@ -31,6 +31,7 @@ grep -q "CLEAN は要求しない＝Approve 待ちの BLOCKED は正常" scripts
 bash scripts/claude/tests/test_pr_base_sync.sh
 ! grep -q "Required approvals . 0 ." docs/runbooks/branch-protection-setup.md
 ! grep -qF "Require approvals（サブオプション）" docs/runbooks/branch-protection-setup.md
+bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 ```
 
 **ゲート行の書き方（code-review 20261017_1936 対応）**: code-review.sh は `|`・バッククォート・`$(`・`;`・`&`・`>` を含む行と、`grep` / `! grep` / `bash scripts/claude/tests/*.sh` 等の許可リスト以外のコマンド（`test`・`git diff` 等）を実走せず fail-closed（BLOCKER）にする。そのため、TC-01 は `test -f` の代わりに `grep -q`（ファイルが無いと exit 2）、TC-07 は `|` を使わず 2 行に分割、TC-13・TC-18a は該当文字（バッククォート・`|`）を任意の 1 文字 `.` で表す。TC-15 は完全な無改変確認（`git diff --quiet`）を /test で行い、ゲートでは前提の文言が残っていることを `grep` で確認する。書き換えた 6 行は、変更前のファイル（`origin/develop` の版・前提文言を壊した pr-base-sync・CODEOWNERS 不在）で非ゼロになることを確認済み（2026-10-17）。
@@ -136,6 +137,13 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 - TC-18b（決定論ゲート 17 行目）: 旧 develop 表の `Require approvals（サブオプション）` 行が無い
 - 期待: どちらも exit 0
 
+## TC-19: runbook の develop・main の設定表と手順、close step 5.5 の書き分けを行単位で検証する（AC-6・AC-7）
+- adversarial-review 20261017 第1周 High 対応。TC-05〜TC-12 は文言がファイルのどこかにあるかしか見ないため、表の行や手順を消す・古い設定に戻しても合格してしまう（false-green）。
+- コマンド: 決定論ゲート 18 行目（`bash scripts/claude/tests/test_i178_branch_protection_doc.sh`）
+- 検証内容: (1) develop 表・main 表それぞれで、計画書 5-5 の各設定の行が完全一致でちょうど 1 回ある（承認数は develop=`**1**`・main=`**1**（本番ゲート）`）(2) 同じ設定項目の行が各表に 1 行だけ（ON と OFF の併記を検知）(3) §3 ステップ 3 の各指示行が完全一致である・Restrict の見出しの直後がオン指示・承認をオフのままにする旧手順が無い (4) close step 5.5 で「develop は Code Owners…、main は承認 1 件…」の順に書き分けている
+- 期待: exit 0（`RESULT: OK (43 assertions)`）
+- 失敗注入（2026-10-17・`RUNBOOK`/`SKILL` で対象を差し替え）: develop の Code Owners を OFF・develop の承認を 0・main の Restrict を OFF・develop の Restrict に bot を追加・main の Code Owners 行を削除・ステップ 3 の Code Owners をオフ・develop 表を旧設定へ・両表と手順から Code Owners と Restrict を削除・develop 表に OFF 行を併記・Restrict の見出し直後をオフ・変更前の runbook・step 5.5 の develop/main 入れ替え・変更前の close スキル・runbook 不在の 14 通りすべてで **exit 1**。無改変の対照は exit 0
+
 ---
 
 ## 実行結果
@@ -144,4 +152,5 @@ bash scripts/claude/tests/test_pr_base_sync.sh
 |---|---|---|---|
 | TC-04 | 2026-10-17 | ✅ exit 0 | /implement ステップ 1 のゲート。CODEOWNERS push 直後（3d6f029）に `{"errors":[]}` を確認してから後続へ進んだ |
 | TC-01〜TC-16・TC-18 | 2026-10-17 | ✅ 全件 exit 0 | /implement 完了時（ステップ 1〜3 反映後）。TC-16 は `RESULT: OK (21/21 cases, 30 assertions)`。/test で再実行する |
+| TC-19 | 2026-10-18 | ✅ exit 0 | adversarial 第1周対応後。`RESULT: OK (43 assertions)`・失敗注入 14 通りすべて exit 1 |
 | TC-17 | | 未実施（マージ後） | |

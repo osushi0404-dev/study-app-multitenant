@@ -33,8 +33,9 @@
 | Require status checks to pass before merging | **ON** |
 | Require branches to be up to date before merging | **ON** |
 | Required status checks（5件） | 後述 |
-| Restrict who can push to matching branches | **ON**（`oshui0404` のみ） |
 | Do not allow bypassing the above settings | **ON** |
+| Restrict who can push to matching branches | **ON**（`oshui0404` のみ） |
+| Restrict pushes that create matching branches | **ON**（既定のまま） |
 | Allow force pushes | OFF |
 | Allow deletions | OFF |
 
@@ -49,12 +50,13 @@
 | Require status checks to pass before merging | **ON** |
 | Require branches to be up to date before merging | **ON** |
 | Required status checks（5件） | 後述 |
-| Restrict who can push to matching branches | **ON**（`oshui0404` のみ） |
 | Do not allow bypassing the above settings | **ON** |
+| Restrict who can push to matching branches | **ON**（`oshui0404` のみ） |
+| Restrict pushes that create matching branches | **ON**（既定のまま） |
 | Allow force pushes | OFF |
 | Allow deletions | OFF |
 
-develop と main は同じ設定にする（I178）。
+develop と main は同じ設定にする（I178）。表の並びは GitHub の設定画面（classic branch protection）の並びに合わせている。
 
 ---
 
@@ -78,10 +80,15 @@ Claude 側のガード（I146・`scripts/claude/hooks/pretooluse_guard.py`）は
 **main には CODEOWNERS が無い**（main は初期コミットのみ）。GitHub は PR のベースブランチにある CODEOWNERS を使うため、main の「Require review from Code Owners」は、develop の内容が main に入るまで効かない。
 それまでの間は、2 の Restrict who can push で守る（承認がどう付いても、`oshui0404` 以外は main にマージできない）。
 main から作ったブランチには CI のワークフローが無く必須チェックが報告されないため、CODEOWNERS だけを main に先に入れる PR はマージできない。
+main への反映は develop → main の PR で行う（bot が作成し、`oshui0404` が承認・マージする）。
+
+### 設定変更直後の develop
+
+develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が develop にマージされるまでは「Require review from Code Owners」が効かない（承認 1 件の要件だけが働く）。その間も Restrict who can push により、`oshui0404` 以外はマージできない。
 
 ### 運用
 
-- **PR は必ず bot（Claude）が作成する**。ユーザー自身が作った PR は自分で承認できず、bypass も許していないためマージできない。
+- **PR は必ず bot（Claude）が作成する**。ユーザー自身が作った PR は自分で承認できず、bypass も許していないためマージできない（どうしても必要な場合は §6 を参照）。
 - 承認の後に develop への追従（Update branch）などでコミットが入ると承認が取り消されるので、もう一度承認する。
 - Dependabot の PR も `oshui0404` の承認が必要。
 
@@ -114,7 +121,7 @@ Frontend Tests
 1. GitHub リポジトリのトップページを開く
 2. **Settings** タブをクリック
 3. 左サイドバーの **Code and automation** > **Branches** をクリック
-4. **「Add classic branch rule」** ボタンをクリック
+4. **「Add classic branch rule」** ボタンをクリック（既にルールがある `develop`・`main` を変更する場合は、対象ルール右側の **Edit** をクリックし、ステップ 3 へ進む）
 
 > **注意**: GitHub の UI では「Add rule」「Add branch ruleset」「Add classic branch rule」の3種類が表示される場合があります。
 > 従来の Branch protection rules を設定するには **「Add classic branch rule」** を選んでください。
@@ -144,12 +151,13 @@ Frontend Tests
   - `Frontend Lint & Security`
   - `Frontend Tests`
 
+**Do not allow bypassing the above settings**:
+- チェックボックスをオン（管理者も対象）
+
 **Restrict who can push to matching branches**:
 - チェックボックスをオン
 - 検索ボックスに `oshui0404` を入力して追加する（一覧に `oshui0404` だけが表示されていること）
-
-**Do not allow bypassing the above settings**:
-- チェックボックスをオン（管理者も対象）
+- **Restrict pushes that create matching branches** はオンのまま（既定）
 
 **Allow force pushes**: オフのまま（デフォルト）
 
@@ -157,7 +165,7 @@ Frontend Tests
 
 ### ステップ 4: 保存
 
-- **Create** ボタン（または **Save changes**）をクリック
+- **Create** ボタン（既存ルールを Edit した場合は **Save changes**）をクリック
 
 ### ステップ 5: main ブランチも同様に設定
 
@@ -195,7 +203,7 @@ git push origin HEAD:main
 1. CI が失敗する変更（意図的に flake8 エラーを含むコミット等）で PR を作成する
 2. GitHub の PR 画面でマージボタンが無効になっていること（またはエラーが表示されること）を確認する
 
-### 確認 4: develop・main への PR で、`oshui0404` の承認なしにマージできないこと
+### 確認 4: develop への PR で、`oshui0404` の承認なしにマージできないこと
 
 1. bot が作成した PR（develop 宛て）について、承認前に次を実行する:
    ```bash
@@ -204,9 +212,13 @@ git push origin HEAD:main
 2. 期待結果: `reviewDecision=REVIEW_REQUIRED`・`mergeStateStatus=BLOCKED`
 3. `oshui0404` が承認した後に同じコマンドを実行し、`reviewDecision=APPROVED` になることを確認する
 
+main は CODEOWNERS が届くまで、bot の承認でも `reviewDecision=APPROVED` になり得る（§1.5「main の制約」）。main は確認 6（push 制限）と設定画面（§1 の main の表との突き合わせ）で確認する。
+
 ### 確認 5: bot が承認してもマージ要件を満たさないこと
 
-1. `oshui0404` が develop 宛ての中身のない確認用 PR を作成する（bot は自分の PR を承認できないため）
+develop に CODEOWNERS が入った後に行う（§1.5「設定変更直後の develop」）。
+
+1. `oshui0404` が develop 宛ての確認用 PR を作成する（bot は自分の PR を承認できないため）。Code Owners の要件はファイルの変更を含む PR にだけ働くので、空コミットではなく 1 行のファイル変更（例: `check_codeowners.txt` の追加）を含める
 2. bot で承認する:
    ```bash
    gh pr review <PR番号> --approve
@@ -219,6 +231,18 @@ git push origin HEAD:main
    ```bash
    gh pr close <PR番号>
    ```
+
+### 確認 6: bot がマージできないこと（push 制限）
+
+1. bot が作成し `oshui0404` が承認した PR について、次を実行し、`reviewDecision=APPROVED` で、`mergeStateStatus` が `BEHIND`・`DIRTY` でなく、承認後に新しいコミットが無いことを確かめる（他の理由でマージに失敗する状態を除くため）:
+   ```bash
+   gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews
+   ```
+2. bot でマージを試みる:
+   ```bash
+   gh pr merge <PR番号> --merge
+   ```
+3. 期待結果: コマンドが失敗し、エラー文に push 権限の不足（`not authorized to push` 等）が示される。`gh pr view <PR番号> --json state` は `OPEN` のまま。その後 `oshui0404` がマージする
 
 ---
 
@@ -251,7 +275,7 @@ PR を 1 件作成して CI を実行してから再度設定画面を開いて�
 ### 自分が作った PR を承認・マージできない
 
 GitHub では PR の作成者は自分の PR を承認できない。このリポジトリでは bypass も許していないため、ユーザーが作った PR はマージできない。
-PR は bot（Claude）に作らせる。急ぎで必要な場合は、ブランチ保護を一時的に緩め、作業後すぐ戻す（§5）。
+PR は bot（Claude）に作らせる。どうしてもユーザーが作った PR をマージする必要がある場合は、対象ブランチのルールを **Edit** して「Do not allow bypassing the above settings」を一時的にオフにし、PR 画面で管理者として要件を迂回してマージした後、すぐにオンに戻す（§5 の I178 全体の戻し手順ではマージできない）。
 
 ### 承認したのに BLOCKED に戻った
 
