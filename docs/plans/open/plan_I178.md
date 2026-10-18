@@ -163,8 +163,9 @@ GitHub 側の 3 つの設定を組み合わせて、マージの最後の砦を 
 | §3 ステップ 3 | develop・main ともに「Require approvals: 1」「Require review from Code Owners」「Dismiss stale pull request approvals」「Restrict who can push to matching branches → `oshui0404` を追加」をオンにする手順に書き換える（develop と main で同じ手順）。並びは GitHub の画面（classic branch protection）に合わせ、「Do not allow bypassing」→「Restrict who can push」の順にする。下位項目「Restrict pushes that create matching branches」は **ON（既定のまま）** と明記する（§1 の表も同じ並び・同じ値。adversarial 第1周 Low 対応） |
 | §1.5 追記 | 「main への反映は develop → main の PR（bot が作成・`oshui0404` が承認・マージ）で行う」と、「設定変更直後の develop」（CODEOWNERS を追加した PR #298 が develop に入るまでは develop でも Code Owners 要件が効かず、Restrict who can push で守る）を追記する（adversarial 第1周 Medium・Low 対応） |
 | §4 確認 4 | 「main への PR で approval なしに…」を「develop への PR で、`oshui0404` の承認なしにマージできないこと」に変え、確認コマンド `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` と期待値（`REVIEW_REQUIRED`・`BLOCKED`）を書く。main は CODEOWNERS が届くまで bot の承認で `APPROVED` になり得るため、確認 6（push 制限）と設定画面で確認する旨を書く（adversarial 第1周 Medium 対応） |
-| §4 確認 5（新規） | bot が承認してもマージ要件を満たさないこと。develop に CODEOWNERS が入った後に行う。手順: ユーザーが develop 宛てに **1 行のファイル変更を含む**確認用 PR を作る（Code Owners の要件はファイル変更を含む PR にだけ働くため、空コミットは不可）→ bot で `gh pr review <PR番号> --approve` → `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` が `REVIEW_REQUIRED`・`BLOCKED` のまま → マージせずに `gh pr close <PR番号>`（adversarial 第1周 Medium 対応） |
-| §4 確認 6（新規） | bot がマージできないこと（push 制限）。前提（`APPROVED`・BEHIND/DIRTY でない・承認後のコミットなし・必須チェック 5 件 SUCCESS）を `gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews,statusCheckRollup` で確かめてから、GitHub のマージ API（`gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge`）を呼び、応答の `message` が push 権限の不足を示すこと。`gh pr merge` は手元で `BLOCKED` を判定して汎用の文で止まり区別できないため使わない（adversarial 第1周・第2周 Medium 対応） |
+| §4 確認 5（新規） | bot が承認してもマージ要件を満たさないこと。develop に CODEOWNERS が入った後に行う。手順: ユーザーが develop 宛てに **1 行のファイル変更を含む**確認用 PR を作る（Code Owners の要件はファイル変更を含む PR にだけ働くため、空コミットは不可）→ bot で `gh pr review <PR番号> --approve` → `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` が `REVIEW_REQUIRED`・`BLOCKED` のまま → マージせずに `gh pr close <PR番号> --delete-branch`（adversarial 第1周 Medium 対応・fix-loop 20261018 L1 で `--delete-branch` を追加） |
+| §4 確認 6（新規） | bot がマージできないこと（push 制限）。前提（`APPROVED`・BEHIND/DIRTY でない・承認後のコミットなし・必須チェック 5 件 SUCCESS）を `gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews,statusCheckRollup` で確かめてから、GitHub のマージ API（`gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge`）を呼び、応答の `message` が push 権限の不足を示すこと。`gh pr merge` は手元で `BLOCKED` を判定して汎用の文で止まり区別できないため使わない（adversarial 第1周・第2周 Medium 対応）。fix-loop 20261018 で次を追加: 実行前に `oshui0404` の了承を得る（設定ミス時は実際にマージされるため）・`gh api -i` で HTTP ステータスも記録する・`message` から URL を除いてから判定する・マージは確認の後に行う（手動テストの流れがある場合はそれに従う） |
+| §1.5 Dismiss stale の補足 | 「PR の宛先ブランチの変更（`gh pr edit --base`）では承認が取り消されない可能性がある（未確認・/retro で確認）。宛先が変わった PR は承認の前に差分を確かめ直す」を追記する（fix-loop 20261018 L5・/retro 送り） |
 | §4 確認 1・2 | 期待結果を「push が拒否される」に変え、理由の文が実行アカウントで変わること（`oshui0404` は PR 必須の文、Restrict の一覧に無いアカウントは push 権限の不足または PR 必須の文）を書く（adversarial 第2周 Low 対応） |
 | §6 緊急手順の追記 | 「Do not allow bypassing」をオンに戻した後、設定画面で §1 の表と突き合わせて戻っていることを確かめる一文を追加する（adversarial 第2周 Low 対応） |
 | §5 ロールバック | develop・main の「Require review from Code Owners」「Restrict who can push」を OFF にし、develop だけ「Require approvals」「Dismiss stale approvals」も OFF に戻す（main は承認 1・Dismiss stale ON のまま＝元の値）。CODEOWNERS は revert の PR で削除する（8 章と同じ内容。adversarial 第1周 Low 対応で 8 章に合わせた） |
@@ -191,11 +192,16 @@ L156 を次に置き換える:
 ```
 6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー `oshui0404` だけが行える。
    承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
+   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。
 ```
+
+（3 行目は fix-loop 20261018 H2 対応で追加。I178 の手動テストでは、承認の後・マージの前に No.6・No.8 を行うため、承認と同時にマージされると確認できなくなる。）
 
 ### 5-3b. `scripts/claude/tests/test_i178_branch_protection_doc.sh`（新規・adversarial 第1周 High 対応・第2周 High で方式変更）
 
 **修正方針**: TC-05〜TC-12 は文言がファイルのどこかにあるかしか見ず、§1 の表や §3 の手順を消す・古い設定に戻しても合格してしまう（false-green）。第1周では行ごとの存在確認にしたが、第2周で親スイッチ（Require a pull request before merging）のオフ・矛盾行の併記・空白の違い・コメントで隠す等の後退を取りこぼすと分かった。そのため、runbook と close スキルを見出し行（完全一致）で節ごと（`### develop ブランチ`〜`### main ブランチ`・`### main ブランチ`〜`## 1.5 承認者の限定（I178）`・`### ステップ 3: 各項目を設定`〜`### ステップ 4: 保存`・close の step 5.5〜step 6）に切り出し、スクリプト内の期待値と**全文の完全一致**で比較する。開始・終了の見出しのどちらかが無ければ節は空になり NG。設定を変えるときは、このスクリプトの期待値と 5-5 の表を同時に更新する。対象は環境変数 `RUNBOOK`・`SKILL` で差し替え可能にし、失敗注入に使う（`test_pr_base_sync.sh` の `TARGET_SCRIPT` と同じ方式）。決定論ゲートから `bash scripts/claude/tests/test_i178_branch_protection_doc.sh` で実走する（TC-19）。
+
+**fix-loop 20261018（adversarial 第3周 High・案 A）での追加**: 節の列挙方式では、列挙から漏れた部分（§3 のステップ 2・5、概要、§1.5、§4〜§6、同じ見出しの重複）の後退を検知できなかった。そのため、(1) runbook はファイル全体の SHA-256 をスクリプト内の `RUNBOOK_SHA256` と比較し、一致しなければ NG にする（runbook を正当に直すときは、内容をレビューし、5-5 の表と節の期待値を確かめてから値を更新する）。(2) 節の開始・終了に使う見出し行がファイル内にちょうど 1 回だけであることを確かめる。(3) close step 6 は 3 行（追加した一文を含む）を固定する。close スキルは他のイシューでも変わるため、ファイル全体は固定しない（step 5.5〜6 の外に矛盾する文を足す後退は残余として記録する）。
 
 ### 5-4. `scripts/claude/pr-base-sync.sh`（変更しない）
 
@@ -242,7 +248,9 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 
 ### ステップ 5: マージ後の確認と記録
 - PR #298 のマージ後（CODEOWNERS が develop に入った後）に行う。
-- 結果は、bot が作る記録用 PR（`docs(I178): マージ後確認の記録`・develop 宛て）で closed のテスト文書に記入し、ユーザーが承認・マージする（adversarial 第2周 Medium 対応）。
+- 結果は、bot が作る記録用 PR（`docs(I178): マージ後確認の記録`・develop 宛て）で closed のテスト文書に記入し、ユーザーが承認・マージする（adversarial 第2周 Medium 対応）。記録用 PR の対象は No.7・TC-17・No.8 の結果と、レビュー文書の AC 判定表（AC-2・AC-4・AC-5）（fix-loop 20261018 M3・M4 対応）。
+- No.7 または TC-17 が NG の場合は Issue #297 を開き直し、原因を調べて直す（設定の誤りはユーザーが設定画面で、文書・CODEOWNERS の誤りは bot が作る新しい PR で直す）。直した後にやり直し、結果を記録用 PR で記入する（fix-loop 20261018 M4 対応）。
+- /close step 6 では承認だけを依頼し、ユーザーは No.5 で Approve だけを押す。マージは No.8 の再承認の後（fix-loop 20261018 H2 対応）。
 - → TC-17・手動 No.7 参照。
 
 （マージ前の No.4〜No.6 の結果は /close 中に記入してコミットし、そのコミットで承認が取り消されることを手動 No.8 で確かめた後、ユーザーが再承認してマージする。順番は手動テスト文書の「実施の順番と記録の残し方」を参照）

@@ -2,17 +2,46 @@
 # I178 決定論テスト: branch-protection-setup.md の develop・main の設定表と §3 ステップ 3 の手順、
 # close スキル step 5.5〜6 を、節ごとに期待する全文と完全一致で比較する。
 # 行単位の存在確認では、親スイッチのオフ・矛盾行の併記・空白の違い・コメントで隠す等の後退を
-# 取りこぼすため（adversarial 第2周 High）、節の全文を固定する。設定を変えるときは、この期待値と
-# 計画書 5-5 の表を同時に更新すること。
+# 取りこぼすため（adversarial 第2周 High）、節の全文を固定する。
+# さらに節の列挙から漏れた部分（他のステップ・§1.5・§4〜§6・同じ見出しの重複）の後退も検知するため
+# （adversarial 第3周 High・fix-loop 20261018 案 A）、runbook はファイル全体の SHA-256 も固定する。
+# runbook を正当に直すときは、内容をレビューし、計画書 5-5 の表とこのスクリプトの節の期待値を確かめてから、
+# RUNBOOK_SHA256 を `sha256sum docs/runbooks/branch-protection-setup.md` の値に更新すること。
+# close スキルは他のイシューでも変わるため、ファイル全体は固定せず step 5.5〜6 だけを固定する。
 # 対象は RUNBOOK / SKILL で差し替え可能（失敗注入用・test_pr_base_sync.sh の TARGET_SCRIPT と同方式）。
 set -u
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 RUNBOOK="${RUNBOOK:-docs/runbooks/branch-protection-setup.md}"
 SKILL="${SKILL:-.claude/skills/close/SKILL.md}"
+# 秘密情報ではなく runbook の SHA-256（detect-secrets の誤検知を抑止）
+RUNBOOK_SHA256="909d242adda1212a8faf2cc4302df3dd41139104cc4ed1e86e6ffdbb511177d1"  # pragma: allowlist secret
 
 PASS=0
 FAIL=0
+
+# runbook 全体がレビュー済みの版から変わっていないこと
+actual_sha=$(sha256sum "$RUNBOOK" 2>/dev/null | cut -d' ' -f1)
+if [ "$actual_sha" = "$RUNBOOK_SHA256" ]; then
+  echo "OK: runbook 全体がレビュー済みの版と一致（SHA-256）"
+  PASS=$((PASS + 1))
+else
+  echo "NG: runbook がレビュー済みの版から変わっている（SHA-256: ${actual_sha:-取得失敗}）。内容をレビューし、計画書 5-5 と節の期待値を確かめてから RUNBOOK_SHA256 を更新すること"
+  FAIL=$((FAIL + 1))
+fi
+
+# 見出し行がファイル内にちょうど 1 回だけあること（同じ見出しの重複で節の取り違えを起こさないため）
+expect_heading_once() {
+  local label="$1" file="$2" line="$3" n
+  n=$(grep -cxF -- "$line" "$file" 2>/dev/null)
+  if [ "${n:-0}" -eq 1 ]; then
+    echo "OK: $label の見出しは 1 回"
+    PASS=$((PASS + 1))
+  else
+    echo "NG: $label の見出しが ${n:-0} 回"
+    FAIL=$((FAIL + 1))
+  fi
+}
 
 # 開始行（完全一致）の次の行から、終了行（完全一致）の手前までを出力する。
 # 開始行・終了行のどちらかが無ければ何も出力しない（節の取り違えで誤って合格しないため）。
@@ -138,21 +167,32 @@ MAIN=$(section "$RUNBOOK" "### main ブランチ" "## 1.5 承認者の限定（I
 STEP3=$(section "$RUNBOOK" "### ステップ 3: 各項目を設定" "### ステップ 4: 保存"; echo x); STEP3=${STEP3%x}
 CLOSE=$(section "$SKILL" "5.5) base 追従の最終チェック（マージ依頼の直前・必須）:" "6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー \`oshui0404\` だけが行える。"; echo x); CLOSE=${CLOSE%x}
 
+STEP6_HEAD="6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー \`oshui0404\` だけが行える。"
+
+expect_heading_once "runbook §1 develop" "$RUNBOOK" "### develop ブランチ"
+expect_heading_once "runbook §1 main" "$RUNBOOK" "### main ブランチ"
+expect_heading_once "runbook §1.5" "$RUNBOOK" "## 1.5 承認者の限定（I178）"
+expect_heading_once "runbook §3 ステップ 3" "$RUNBOOK" "### ステップ 3: 各項目を設定"
+expect_heading_once "runbook §3 ステップ 4" "$RUNBOOK" "### ステップ 4: 保存"
+expect_heading_once "close step 5.5" "$SKILL" "5.5) base 追従の最終チェック（マージ依頼の直前・必須）:"
+expect_heading_once "close step 6" "$SKILL" "$STEP6_HEAD"
+
 expect_block "runbook §1 develop の表" "$DEVELOP" "$EXPECTED_DEVELOP"
 expect_block "runbook §1 main の表" "$MAIN" "$EXPECTED_MAIN"
 expect_block "runbook §3 ステップ 3" "$STEP3" "$EXPECTED_STEP3"
 expect_block "close step 5.5" "$CLOSE" "$EXPECTED_CLOSE"
 
-# close step 6 の 2 行（終了行とその次の行）も固定する
-STEP6=$(grep -A1 -xF -- "6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー \`oshui0404\` だけが行える。" "$SKILL" 2>/dev/null)
-EXPECTED_STEP6="6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー \`oshui0404\` だけが行える。
-   承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）"
+# close step 6 の 3 行（見出し行と続く 2 行）も固定する
+STEP6=$(grep -A2 -xF -- "$STEP6_HEAD" "$SKILL" 2>/dev/null)
+EXPECTED_STEP6="${STEP6_HEAD}
+   承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
+   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。"
 expect_block "close step 6" "$STEP6" "$EXPECTED_STEP6"
 
 echo "---"
 if [ "$FAIL" -eq 0 ]; then
-  echo "RESULT: OK (${PASS} blocks)"
+  echo "RESULT: OK (${PASS} checks)"
   exit 0
 fi
-echo "RESULT: NG (${FAIL} failed / $((PASS + FAIL)) blocks)"
+echo "RESULT: NG (${FAIL} failed / $((PASS + FAIL)) checks)"
 exit 1

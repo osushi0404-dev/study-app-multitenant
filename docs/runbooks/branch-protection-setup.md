@@ -73,7 +73,7 @@ Claude 側のガード（I146・`scripts/claude/hooks/pretooluse_guard.py`）は
 
 1. **CODEOWNERS（`* @oshui0404`）＋ Require review from Code Owners**: 承認として数えられるのは `oshui0404` の承認だけになる。bot や外部の人が承認しても、マージ要件を満たさない。
 2. **Restrict who can push to matching branches（`oshui0404` のみ）**: develop・main に push（PR のマージを含む）できる人を `oshui0404` だけにする。承認が付いた後でも、bot や外部の人はマージできない。
-3. **Dismiss stale pull request approvals when new commits are pushed**: 承認の後に新しいコミットが入ったら承認を取り消す。「承認の後に bot が中身を差し替える」抜け道を塞ぐ。
+3. **Dismiss stale pull request approvals when new commits are pushed**: 承認の後に新しいコミットが入ったら承認を取り消す。「承認の後に bot が中身を差し替える」抜け道を塞ぐ。ただし、PR の宛先ブランチの変更（`gh pr edit --base`）では承認が取り消されない可能性がある（未確認・I178 の /retro で確認する）。宛先が変わった PR は、承認の前に差分を確かめ直す。
 
 ### main の制約
 
@@ -226,9 +226,9 @@ develop に CODEOWNERS が入った後に行う（§1.5「設定変更直後の 
    ```bash
    gh pr view <PR番号> --json reviewDecision,mergeStateStatus
    ```
-4. 確認後、マージせずに閉じる:
+4. 確認後、マージせずに閉じ、確認用ブランチも削除する:
    ```bash
-   gh pr close <PR番号>
+   gh pr close <PR番号> --delete-branch
    ```
 
 ### 確認 6: bot がマージできないこと（push 制限）
@@ -241,11 +241,11 @@ develop に CODEOWNERS が入った後に行う（§1.5「設定変更直後の 
    - `mergeStateStatus` が `BEHIND`・`DIRTY` でない
    - 最新の承認（`reviews` の最後の `APPROVED`）の `commit.oid` が `headRefOid` と同じ（承認後に新しいコミットが無い）
    - `statusCheckRollup` の必須チェック 5 件がすべて `SUCCESS`
-2. bot で GitHub のマージ API を直接呼ぶ（`gh pr merge` は API を呼ぶ前に手元で `BLOCKED` を判定し、push 制限と他の理由を区別できない汎用の文で止まるため使わない。`--auto` も付けない）:
+2. **実行前に `oshui0404` の了承を得てから**、bot で GitHub のマージ API を直接呼ぶ（`gh pr merge` は API を呼ぶ前に手元で `BLOCKED` を判定し、push 制限と他の理由を区別できない汎用の文で止まるため使わない。`--auto` も付けない）。push 制限の設定を誤っていると、この操作で実際にマージされる点に注意する。`-i` で HTTP ステータスも表示させ、記録する:
    ```bash
-   gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge
+   gh api -i -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge
    ```
-3. 期待結果: API が失敗し、`gh pr view <PR番号> --json state` は `OPEN` のまま。応答の `message` を次の基準で判定する（大文字小文字は区別しない）。その後 `oshui0404` がマージする
+3. 期待結果: API が失敗し、`gh pr view <PR番号> --json state` は `OPEN` のまま。応答の `message` から URL（`http` で始まる部分）を除いたうえで、次の基準で判定する（大文字小文字は区別しない）。マージは、この確認の後に `oshui0404` が行う（手動テストの流れがある場合はそれに従う）
    - **合格（push 制限による拒否）**: `push` または `authorized` を含み、`review`・`approv`・`status check` を含まない
    - **前提崩れ（やり直し）**: `review`・`approv`・`status check` のいずれかを含む。1 の状態を整えてやり直す
    - **判断保留**: 上のどちらにも当たらない（例: `Resource not accessible by integration`）。文をそのまま記録し、`oshui0404` に確認する
