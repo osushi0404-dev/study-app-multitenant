@@ -41,5 +41,23 @@ NEW_HIGH 合計: 4（重複を除く）→ 修正して第 2 周へ（コミッ�
 NEW_HIGH 合計: 3 → 修正して第 3 周へ
 - 未対応で残す Low: 登録済み入れ子のループ自体は find でも検出されるため単独の TC が無い（二重の検出で、片方を消しても安全側に止まる）
 
-## 第 3 周
-（実施後に記入）
+## 第 3 周（4 エージェント・同じ 4 観点・第 2 周の修正の妥当性を反証対象に含める）
+
+| 重大度 | 観点 | 指摘 | 状態 |
+|-------|------|------|------|
+| High | ①③ | **ガードの後退**: 第 2 周で正規表現を `_docker_volume_wipe`（トークン判定）に**置き換えた**ため、develop の正規表現が止めていた形が素通りする。`true;docker compose down -v`（空白なしの区切りが語にくっつく）・`cd /tmp&&docker …`・`echo a\|docker …`・`echo $(docker …)`・`bash -lc '…'`/`sh -ec`・`timeout 60 …`・`nice -n 5 …`・`sudo -E …`・`env -i/-u X …`・`stdbuf -oL …`・`if …; then docker …; fi`・`for … do docker … done`・関数本体 | **未対応（打ち切り）** |
+| High | ①② | **ヒアドキュメント除外の悪用**: `<<語` を見つけると同じ行の残りを切り捨て、終端行まで後続行を読み飛ばすため、`cat <<EOF && docker compose down -v`・`echo "<<EOF"⏎docker volume rm v1`・`cat <<<x; docker …` で実行されるコマンドが隠れる。ヒアドキュメントの TC が無く、除外処理を壊しても guard テストは全件 PASS | **未対応（打ち切り）** |
+| Medium | ① | `xargs docker volume rm`・`find -exec docker volume rm`・`watch …`・`docker.exe` を見ない（develop の正規表現でも同じ） | 未対応 |
+| Medium | ③ | Danger Ops の契約変更がイシュー（I179.md の受け入れ条件・Danger Ops ほか）・計画 4-6 冒頭と設計判断表・`worktree.md` §5(C)・`danger-ops.md`（ガードが新たに止める `docker volume rm/prune` の例）に反映されていない | 未対応 |
+| Medium | ③ | 戻り値 4（作業フォルダのラベル不一致：Windows 側から起動した `C:\…` 表記・drvfs の大文字小文字の違い・ラベル無し）と同名＋データありは、データが本当に撤去対象のものでも抜け道が無く、文書どおりに進める手順も無い | 未対応 |
+| Medium | ② | R21 は作業フォルダ 1 行の場合だけ（先頭行だけの照合に縮めても PASS）・スタブが常に 1 行。P15 は `=` の前後の空白しか効いておらず、`export`・クォート・`=` 必須の処理を消しても PASS。`_CMD_PREFIXES`・`eval`・`&` の区切りに TC 無し | 未対応 |
+| Medium | ④ | volume だけ残っている（コンテナが無い）とバックアップ案内の `exec`/`start db` が失敗し、リダイレクトで 0 バイトの `backup_*.sql` ができて「バックアップ済み」と誤認しうる | 未対応 |
+| Low | 各 | `compose` より後のどこかに `down` があれば判定（`pytest -k down -v` を誤ブロック）・`DANGER_OK=1` の前置が区切りの後ろまで効く（develop から同じ）・空の作業フォルダのラベルと `pwd -P` の実パス化に TC 無し・`KEEP_DATA=1` を戻り値 2 で通す変異が生き残る・§11 でコピーしない untracked が残ると撤去が止まる・未 push の入れ子で外側が永久に撤去できない・再実行案内が `bash` なし（ext4 の clone では Permission denied）・バックアップ案内のファイル名の直後に全角括弧 | 未対応 |
+
+NEW_HIGH 合計: 2（重複を除く）→ **上限（3 周・12 エージェント）到達・未収束のため打ち切り**
+
+## 最終判定
+- スクリプト FINAL_VERDICT: OK ／ 敵対ステージ: HIGH（上限到達・未収束）→ 最終判定 HIGH
+- 次の対応は `/fix-loop I179`。第 3 周の High 2 件はどちらも第 2 周の修正（正規表現をトークン判定に置き換え・ヒアドキュメント除外）が起こした後退であり、修正方針の候補は「develop の正規表現を残し、トークン判定は追加の検出として重ねる（置き換えない）」「ヒアドキュメント除外をやめる（文字列の誤ブロックは develop から続く既知の種類として受容）」。
+
+VERDICT: HIGH
