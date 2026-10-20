@@ -320,13 +320,13 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - [ ] 手動 No.6 で、ユーザーの承認後に bot が GitHub のマージ API（`gh api -X PUT .../pulls/298/merge`）を呼び、push 制限で拒否されることを確かめる（実行直前に改めて了承を取る。adversarial 第2周で `gh pr merge` から変更）
 
 ## レビュー結果
-- [20261020_2003 判定: ✅ 完了](../../reviews/I178_plan_review_20261020_2003.md)
-- [20261018_1409 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1409.md)
-- [20261018_1145 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1145.md)
-- [20261018_1126 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1126.md)
-- [20261017_1926 判定: ✅ 完了](../../reviews/I178_plan_review_20261017_1926.md)
-- [20261017_1921 判定: ✅ 完了](../../reviews/I178_plan_review_20261017_1921.md)
-- [20261017_1916 判定: ✅ 完了](../../reviews/I178_plan_review_20261017_1916.md)
+- [20261020_2003 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261020_2003.md)
+- [20261018_1409 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1409.md)
+- [20261018_1145 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1145.md)
+- [20261018_1126 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1126.md)
+- [20261017_1926 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261017_1926.md)
+- [20261017_1921 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261017_1921.md)
+- [20261017_1916 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261017_1916.md)
 
 ## セキュリティレビュー結果
 
@@ -371,3 +371,9 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 
 ### 残余リスク処遇
 （/retro で決定する）
+
+## 完了情報
+- **完了日時**: 2026-10-20 20:44 JST
+- **対応者**: Claude Code
+- **レビュー結果**: OK（code-review 20261019_0005・敵対的レビュー再ステージ 20261020_0900 第2周で通過）
+- **残作業**: /close 中の手動 No.4〜No.6・No.8、マージ後の No.7・TC-17（記録用 PR で記入）
