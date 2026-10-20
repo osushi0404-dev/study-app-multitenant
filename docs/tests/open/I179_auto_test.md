@@ -9,6 +9,7 @@
 - frontend: 対象外（コード変更なし）
 - 計画時（実装前・2026-10-20）: 下記「計画時の実行記録」
 - 実装時（2026-10-21・/implement）: guard pass=35・port pass=46・lifecycle pass=78（ロックの R13〜R15・FG4 追加後）・docs pass=12・test_i107 6 PASS・test_next_issue_num pass=21・構文行すべて exit 0（すべて fail=0）。修正前のガードでは G1・G2・G7 が FAIL することを確認済み
+- 敵対的レビュー第 2 周の対応後（2026-10-21）: guard pass=60・port pass=53・lifecycle pass=146・docs pass=15・test_i107 exit 0・test_next_issue_num pass=21（すべて fail=0）。既存のガードのテスト（adversarial_trigger 40・checkout 14・gh_pr 245・push 87）も fail=0
 - 実装後: （/test で記入）
 
 ## ベースライン（実装前・2026-10-20）
@@ -110,6 +111,28 @@
 | FG-DV1 | guard | 旧パターン（compose の直後に down）に戻した複製で DV2 | exit 0（DV2 が回帰を捕まえる証明） |
 | D3 追加 | docs | `git remote set-head origin --auto`・`refs/remotes/origin/HEAD` | worktree.md に在る |
 | FG-D1 追加 | docs | `settings.json`・`issue-bootstrap/SKILL.md`・`worktree.md` を削除した複製 | それぞれ D7・D11・D4 が FAIL（不在チェックがファイル不在で PASS しない） |
+
+### C3. 敵対的レビュー第 2 周（2026-10-21）で追加・変更した TC
+| TC | スクリプト | 内容 | 期待 |
+|----|-----------|------|------|
+| R2（変更） | lifecycle | データあり・`DANGER_OK=1` | 記録に `compose -p wt-app down -v`（`-p` で固定） |
+| R1c2 | lifecycle | docker はあるが `ps -a` が失敗・`DANGER_OK=1` | exit 2・`down` 非実行 |
+| R1f（変更） | lifecycle | compose に `name: x` | 「プロジェクト名を確定できません」 |
+| R1i（変更） | lifecycle | `.env` の行頭に空白のある `COMPOSE_FILE=` | exit 2 |
+| R1j（変更） | lifecycle | compose ファイル 8 種すべてに `name : study`（コロンの前に空白） | すべて exit 2 |
+| R20a | lifecycle | docker 無し・`DANGER_OK=1` だけ | exit 2・「KEEP_DATA=1」の案内・残存 |
+| R20（変更） | lifecycle | docker 無し・`KEEP_DATA=1` | exit 0・「down -v を実行せずに撤去します（KEEP_DATA=1）」 |
+| R20c | lifecycle | docker あり・データあり・`KEEP_DATA=1` | exit 2・`down` 非実行（KEEP_DATA は docker 不在専用） |
+| R21 | lifecycle | コンテナの作業フォルダのラベルが primary・データあり・`DANGER_OK=1` | exit 2・「作業フォルダが撤去対象と違います」・`down` 非実行 |
+| R22 | lifecycle | `COMPOSE_PROJECT_NAME=<primary 名>`・データあり・`DANGER_OK=1` | exit 2・「DANGER_OK=1 でも撤去しません」・`down` 非実行 |
+| R22b | lifecycle | `.env` に `COMPOSE_PROJECT_NAME: prim`（コロン区切り）・`DANGER_OK=1` | exit 2・`down` 非実行 |
+| R23 | lifecycle | 中の入れ子の登録がフォルダごと消えている（prunable） | exit 0・`worktree <撤去対象>` の行が一覧から消える（撤去前の一覧には在ったことも確認） |
+| FG1（変更） | lifecycle | `if [ "${DANGER_OK:-}" != "1" ]` を `if false` にした複製で R1 の条件 | `compose -p wt-app down -v` が呼ばれる |
+| FG5（変更） | lifecycle | `-p` 付き `down -v` の前の `cd` を外した複製 | `cwd=` が撤去対象でない |
+| DV10〜DV19 | guard | `docker --context x compose down -v`・`-H`・クォートした `"down" "-v"`・`-vt 5`・`docker --log-level error volume rm`・`volume remove`・`--context x system prune --volumes`・`bash -c "…down -v"`・改行の後・`sleep 1 & ( … )` | すべて exit 2 |
+| DV20〜DV23 | guard | コミットメッセージ中の文字列・grep の引数と `pytest -k "count down" -v`・`system prune`（`--volumes` なし）・`down --volumes=false` | すべて exit 0 |
+| FG-DV1（変更） | guard | `_docker_volume_wipe` を常に None にした複製 | DV2・DV10 が exit 0 |
+| P15 | ports | 他のワークツリーの `.env` が `export DB_PORT = "5442"` 等の書き方（`BACKEND_PORT2=9` は別の変数） | `--port-offset 10` は衝突で exit 2・自動割当は 8020 |
 
 ### D. 文書・設定（`scripts/claude/tests/test_i179_worktree_docs.sh` 新規）
 検査は関数 `check_all <root>` にまとめ、実物（repo root）に対して実行して全 PASS、続けて失敗注入した複製に対して実行して FAIL を確認する。終了コード 0=全 PASS / 1=FAIL あり。

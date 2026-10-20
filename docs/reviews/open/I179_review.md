@@ -19,6 +19,7 @@
 | 4-8 | `.claude/skills/issue-bootstrap/SKILL.md`・`docs/runbooks/issue-flow.md` | 「（対応 worktree: …）」を外す |
 | 4-9 | `docs/runbooks/worktree.md` | 全面書き直し（§1〜§11） |
 | 4-10 | `docs/runbooks/common-commands.md` | `wt-ports.sh` の案内に置き換え |
+| 敵対的レビュー第 1・2 周 | `wt-remove.sh`・`wt-ports.sh`・`pretooluse_guard.py`・`worktree.md`・テスト 4 本 | 入れ子の検査・`-p` 固定の `down -v`・確定できなければ `DANGER_OK=1` でも中止・`KEEP_DATA=1`・作業フォルダのラベル確認・ガードのトークン判定（`_docker_volume_wipe`）・作る前の確認（origin/HEAD）・移行手順。詳細は計画書「計画変更記録 2・3」と `docs/reviews/I179_adversarial_review_20261021_1200.md` |
 | 4-11 | `test_pretooluse_worktree_guard.sh`・`test_wt_port_offset.sh`・`test_wt_lifecycle.sh`・`test_i179_worktree_docs.sh`（新規） | G1〜G7・FG-G1／P1〜P13・FG-P1・FG-P2／R0〜R12・C1・FG1・FG3／D1〜D11・DOC1・FG-D0・FG-D1 |
 
 ### 実装時の確認記録（2026-10-21）
@@ -41,6 +42,7 @@
 - 手動: （/test で記入）
 
 ## 計画との差分
+- あり（計画変更・2026-10-21・敵対的レビュー）: 第 1 周（High 4 件）・第 2 周（High 3 件）の findings に対応して `wt-remove.sh`・ガード・`wt-ports.sh`・`worktree.md` を改訂（計画書「計画変更記録 2・3」）。Danger Ops の条件も改訂（消す相手を `-p` で固定・確定できなければ許可があっても止める・消さない撤去は `KEEP_DATA=1`）。
 - あり（計画変更・2026-10-21）: 実装ステップ6の実機確認（手動 M1・M4）で、公式 `claude -p --worktree` のワークツリーにセッション終了後もロックが残り、`wt-remove.sh` で撤去できないことが分かった（計画書 S10）。4-6 にロックの扱いを追加し、`worktree.md` §2・§4 とテスト（R13〜R15・FG4・D3）を更新した。計画書「計画変更記録」参照。`/code-review` の前に `/plan-issue-review` を挟む。
 - あり（いずれも計画の意図の範囲内の細部）:
   - 4-8: 「（対応 worktree: wt-harness）」に加え、同じ行の対になる「（対応 worktree: study-app-multitenant）」も外した（トラックとワークツリーを 1 対 1 で結ばないという同じ意図。片方だけ残すと規約が食い違う）。

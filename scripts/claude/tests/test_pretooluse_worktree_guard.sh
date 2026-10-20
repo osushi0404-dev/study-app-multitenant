@@ -115,19 +115,31 @@ ck "DV6 docker volume prune→block"               2 "$(bash_c "docker volume pr
 ck "DV7 compose -p <名前> down（-v なし）→allow"   0 "$(bash_c "docker compose -p wt-harness down")"
 ck "DV8 DANGER_OK=1 compose -p down -v→allow"    0 "$(bash_c "DANGER_OK=1 docker compose -p wt-harness down -v")"
 ck "DV9 docker volume ls→allow"                  0 "$(bash_c "docker volume ls -f dangling=true")"
-# FG-DV1: 旧パターン（compose の直後に down が必要）に戻した複製では DV2 が素通りする
-BROKEN_DV="$TMP/guard_olddown.py"
-python3 - "$GUARD" "$BROKEN_DV" <<'PY'
-import sys
-src = open(sys.argv[1], encoding="utf-8").read()
-new = r"\bdocker(\s+compose|\-compose)\b[^;&|\n]*\sdown\b"
-old = r"\bdocker(\s+compose|\-compose)\s+down\b"
-open(sys.argv[2], "w", encoding="utf-8").write(src.replace(new, old))
-PY
-if ! cmp -s "$GUARD" "$BROKEN_DV"; then
-  ck "FG-DV1 旧パターン複製でDV2=allow" 0 \
-    "$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "docker compose -p wt-harness down -v" \
-       | ( cd "$MAIN" && python3 "$BROKEN_DV" >/dev/null 2>&1 ); echo $?)"
+# コマンド文字列を JSON に安全に埋め込んで叩く（クォート・改行を含むケース用）
+bash_j() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
+             | ( cd "$MAIN" && python3 "${2:-$GUARD}" >/dev/null 2>&1 ); echo $?; }
+# --- 敵対的レビュー第2周: docker 本体のオプション・クォート・短縮結合・ラッパー・区切り（DV10〜DV21） ---
+ck "DV10 docker --context x compose down -v→block" 2 "$(bash_j 'docker --context x compose down -v')"
+ck "DV11 docker -H unix:///s compose down -v→block" 2 "$(bash_j 'docker -H unix:///s compose down -v')"
+ck "DV12 クォートした down/-v→block"               2 "$(bash_j 'docker compose "down" "-v"')"
+ck "DV13 短縮結合 -vt 5→block"                     2 "$(bash_j 'docker compose down -vt 5')"
+ck "DV14 docker --log-level error volume rm→block" 2 "$(bash_j 'docker --log-level error volume rm foo')"
+ck "DV15 docker volume remove→block"               2 "$(bash_j 'docker volume remove foo')"
+ck "DV16 docker system prune --volumes→block"      2 "$(bash_j 'docker --context x system prune --volumes -f')"
+ck "DV17 bash -c の中→block"                       2 "$(bash_j 'bash -c "docker compose -p x down -v"')"
+ck "DV18 改行の後→block"                           2 "$(bash_j "$(printf 'echo hi\ndocker compose down -v')")"
+ck "DV19 サブシェル・& の後→block"                 2 "$(bash_j 'sleep 1 & ( docker compose down -v )')"
+ck "DV20 コミットメッセージ中の文字列→allow"       0 "$(bash_j 'git commit -m "docs: docker volume rm と docker compose down -v の手順"')"
+ck "DV21 grep の引数・pytest -k の down→allow"     0 "$(bash_j 'grep -n "docker volume prune" README.md; docker compose exec backend pytest -k "count down" -v')"
+ck "DV22 system prune（--volumes なし）→allow"     0 "$(bash_j 'docker system prune -f')"
+ck "DV23 down --volumes=false→allow"              0 "$(bash_j 'docker compose down --volumes=false')"
+# FG-DV1: 判定関数を常に None にした複製では DV2・DV10 が素通りする（ブロックの停止要因が判定関数である証明）
+BROKEN_DV="$TMP/guard_nowipe.py"
+sed 's/^def _docker_volume_wipe(cmd: str, depth: int = 0):/def _docker_volume_wipe(cmd: str, depth: int = 0):\n    return None  # FG-DV1/' \
+  "$GUARD" > "$BROKEN_DV"
+if grep -q 'return None  # FG-DV1' "$BROKEN_DV"; then
+  ck "FG-DV1 判定除去複製でDV2=allow"  0 "$(bash_j 'docker compose -p wt-harness down -v' "$BROKEN_DV")"
+  ck "FG-DV1 判定除去複製でDV10=allow" 0 "$(bash_j 'docker --context x compose down -v' "$BROKEN_DV")"
 else
   ck "FG-DV1 注入できた" 0 1
 fi

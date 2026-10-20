@@ -179,39 +179,34 @@ printf 'DB_PORT=%s\nREDIS_PORT=%s\nBACKEND_PORT=%s\nFRONTEND_PORT=%s\n' ... >> "
 - 使い方: `[DANGER_OK=1] bash scripts/claude/wt-remove.sh <ワークツリーのパス>`（旧 `<track>` 指定は廃止）
 - 指定パスの realpath が `git worktree list` のどれとも一致しなければ exit 2（登録外のフォルダは消さない）。
 - 現行の安全策は維持: primary 拒否・撤去対象の内側から実行したら拒否・未コミット変更で中止・未 push で中止・`down -v` 失敗時は remove しない・`--force` を使わない。
-- **データ判定**（新規）:
-  - Compose プロジェクト名＝撤去対象フォルダ名を小文字にし、英数字・`_`・`-` 以外を除いたもの（Compose の既定と同じ規則）。
-  - 次の場合は名前を確定できないので「判定失敗」: 環境変数 `COMPOSE_PROJECT_NAME` がある／撤去対象の直下 `.env` に `COMPOSE_PROJECT_NAME=` がある／撤去対象の `docker-compose.yml` に最上位の `name:` がある。
-  - `docker ps -a -q --filter label=com.docker.compose.project=<名前>` と `docker volume ls -q --filter label=com.docker.compose.project=<名前>` を実行。docker が無い・どちらかが失敗 → 判定失敗。
-  - 両方とも空 → 「データ無し」: `down -v` を実行せず `git worktree remove` へ進む（`DANGER_OK` 不要）。
-  - どちらかが空でない → 「データあり」／判定失敗 → 従来どおり `DANGER_OK=1` 必須 → `docker compose down -v` → `git worktree remove`。
+- **データ判定**（新規・2026-10-21 敵対的レビュー第 1・2 周で改訂）:
+  - Compose プロジェクト名（既定名）＝撤去対象フォルダ名を小文字にし、英数字・`_`・`-` 以外を除き、先頭の `_`・`-` を除いたもの（Compose の既定と同じ規則）。
+  - `docker ps -a -q`・`docker volume ls -q` を `--filter label=com.docker.compose.project=<既定名>` で実行し、戻り値を次の 5 通りにする（`detect_data`）。
+    | 戻り値 | 条件 | 扱い |
+    |-------|------|------|
+    | 0 データ無し | 両方とも空 | `down -v` を実行せず撤去（`DANGER_OK` 不要） |
+    | 1 データあり | どちらかが空でない（かつ下の 4 に当たらない） | `DANGER_OK=1` 必須 → `docker compose -p <既定名> down -v`（撤去対象のフォルダで実行・`-p` で消す相手を固定） |
+    | 2 名前を確定できない | 環境変数 `COMPOSE_PROJECT_NAME`／直下 `.env` の `COMPOSE_PROJECT_NAME`・`COMPOSE_FILE`（`export`・空白・`=`/`:` 区切り）／compose ファイル 8 種の最上位 `name:`／既定名が空 | **`DANGER_OK=1` でも中止**（何も消さない。指定を外して再実行） |
+    | 3 docker が使えない | `docker` コマンドが無い／`ps`・`volume ls` が失敗 | 中止。`KEEP_DATA=1`（`DANGER_OK` とは別の合図）のときだけ `down -v` をせずに撤去（データは残す） |
+    | 4 作業フォルダが別 | コンテナの `com.docker.compose.project.working_dir` ラベルが撤去対象と違う | **`DANGER_OK=1` でも中止** |
+  - 既定名が別のワークツリー（フォルダが存在するもの）の既定名と同じで、戻り値が 1・2・4 のときは **`DANGER_OK=1` でも中止**（データの持ち主を区別できない）。
+  - データありで止めたときのバックアップ案内は、撤去対象のプロジェクトを `-p` で指定した `pg_dump` を primary で実行する具体的なコマンドにする（`scripts/db_backup.sh` は今いるフォルダのプロジェクトが対象のため使えない）。
 - 撤去後にブランチは消さない（`git worktree remove` はブランチを残す・S8）。完了メッセージで「ブランチ `<名前>` は残っています」と表示する。
+- **入れ子の検査**（2026-10-21 追加・敵対的レビュー第 1 周）: 撤去対象の中に、`git worktree list` の登録済みワークツリー（フォルダが存在するもの）か、深さ 2 以上の `.git` があれば中止する（`.claude/worktrees/` は gitignore 済みのため、`git status` にも `git worktree remove` にも引っかからず、中身ごと消えてしまう）。フォルダが既に無い登録（prunable）は数えず、案内に `git worktree prune` を出す。
 - **ロックの扱い**（2026-10-21 追加・S10）: 破壊的操作（`down -v`）より前に、`git worktree list --porcelain` の `locked` 行を調べる。
-  - 理由が `claude session <name> (pid N ...)` で、`ps -p N` でプロセスが見つからない → 終了済みセッションの取り残しとして、`git worktree remove` の直前に `git worktree unlock` する（完了メッセージで解除を表示）。
-  - プロセスが見つかる（使用中。pid の再利用も含め安全側に倒す）／理由がそれ以外・理由なし → exit 2 で中止し、終了または `git worktree unlock <パス>` の手順を表示する（何も消さない）。
+  - 理由が `claude session <name> (pid N ...)` で、`/proc/N` も `ps -p N` も見つからない → 終了済みセッションの取り残しとして、`git worktree remove` の直前に `git worktree unlock` する（完了メッセージで解除を表示）。
+  - プロセスが見つかる（使用中。pid の再利用も含め安全側に倒す）／`ps` が無く確認できない／理由がそれ以外・理由なし → exit 2 で中止し、終了または `git worktree unlock <パス>` の手順を表示する（何も消さない）。
 - **処理の順番**（どこで止まっても、それより後の操作は行わない）:
   1. 引数の検査・登録済みワークツリーとの照合（登録外は exit 2）
   2. primary 拒否・内側からの実行拒否
   3. 未コミット変更・未 push の検査（あれば exit 2）
-  4. ロックの判定（使用中・その他の理由は exit 2。終了済みセッションのロックは「後で外す」と記録するだけ）
-  5. データ判定（無し → 6 を飛ばす／あり・判定失敗 → `DANGER_OK=1` が無ければ exit 2）
-  6. `docker compose down -v`（失敗したら exit 2・remove しない）
-  7. 終了済みセッションのロックを `git worktree unlock`
-  8. `git worktree remove`（`--force` なし）→ 完了メッセージ（ロック解除・残ったブランチ名）
-  - 例: 「データ無し・終了済みのロック」（TC-R13）は 1〜4 → 5 で「無し」→ 7 → 8。
-```bash
-detect_data() {   # 0=データ無し / 1=データあり / 2=判定失敗
-  [ -n "${COMPOSE_PROJECT_NAME:-}" ] && return 2
-  grep -q '^COMPOSE_PROJECT_NAME=' "$WT_PATH/.env" 2>/dev/null && return 2
-  grep -q '^name:' "$WT_PATH/docker-compose.yml" 2>/dev/null && return 2
-  command -v docker >/dev/null 2>&1 || return 2
-  local c v
-  c="$(docker ps -a -q --filter "label=com.docker.compose.project=$PROJECT")" || return 2
-  v="$(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT")" || return 2
-  [ -z "$c$v" ] && return 0
-  return 1
-}
-```
+  4. 入れ子の検査（あれば exit 2）
+  5. ロックの判定（使用中・確認できない・その他の理由は exit 2。終了済みセッションのロックは「後で外す」と記録するだけ）
+  6. データ判定と同名の検査（上の表。0 → 7 を飛ばす／1 → `DANGER_OK=1` が無ければ exit 2／2・4・同名 → exit 2／3 → `KEEP_DATA=1` が無ければ exit 2、あれば 7 を飛ばす）
+  7. `docker compose -p <既定名> down -v`（撤去対象のフォルダで実行。失敗したら exit 2・remove しない）
+  8. 終了済みセッションのロックを `git worktree unlock`
+  9. `git worktree remove`（`--force` なし）→ 完了メッセージ（ロック解除・残ったブランチ名）
+  - 例: 「データ無し・終了済みのロック」（TC-R13）は 1〜5 → 6 で「無し」→ 8 → 9。
 
 ### 4-7. `.claude/skills/plan-issue/SKILL.md`・`docs/runbooks/issue-flow.md` ステップ5（G）
 **修正方針**: develop をチェックアウトせず、取得したリモートの develop から直接ブランチを作る（S7）。`--no-track` で、新ブランチの上流が `origin/develop` に自動設定されるのを防ぐ（直後の `git push -u` で正しい上流が付く）。
@@ -280,17 +275,22 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 | リスク | 回避策 |
 |-------|-------|
 | I174 と `pretooluse_guard.py` が衝突する | 変更は 2 関数の判定部分だけに留める。I174 が先にマージされたら develop を取り込み直してガードのテストを再実行（ステップ1） |
-| `wt-remove.sh` のデータ判定が「無し」と誤判定して volume を消し漏らす／消してはいけないものを消す | 誤判定しても「無し」側は `down -v` を実行しない（データを消さない）だけで、消す操作は常に `DANGER_OK=1` が要る。名前を確定できない条件（`COMPOSE_PROJECT_NAME`・`name:`）と docker の失敗はすべて「判定失敗＝許可必須」にする |
+| `wt-remove.sh` のデータ判定が「無し」と誤判定して volume を消し漏らす／消してはいけないもの（primary・別のワークツリー）を消す | 誤判定しても「無し」側は `down -v` を実行しない（データを消さない）だけで、消す操作は常に `DANGER_OK=1` が要る。`down -v` は `-p <既定名>` で相手を固定し、名前を確定できない・作業フォルダが別・同名の別ワークツリーがある場合は `DANGER_OK=1` でも実行しない（4-6 の表） |
 | Compose のラベルが付かない匿名 volume（`-v` なしで `down` した後など）は判定に出ない | 匿名 volume は Postgres 等の名前付きデータではない。`worktree.md` の取り残しの手順に `docker volume ls -f dangling=true` で確認できることを書き、削除は破壊的操作として `DANGER_OK=1` の手順に従う旨を書く |
 | `.worktreeinclude` は primary に `backend/.env` が無いと黙ってコピーしない | `wt-ports.sh` が Docker 起動前に `backend/.env` の有無を確かめて止める（4-4） |
 | 公式機能の仕様が今後変わる（自動片付けの条件・ブランチ名など） | 手動 M1・M3・M6 で 2.1.304 の挙動を確認して記録。`worktree.md` には公式文書へのリンクを置き、細かい仕様は書き写さない |
 | `claude --worktree` を primary 以外で実行すると、その中に入れ子が作られ、外側を撤去すると巻き込まれる | `worktree.md` §2 に「必ず primary で作る」と理由を書く。~~`git worktree remove` が拒否する~~（誤り。`.claude/worktrees/` は gitignore 済みのため git は拒否せず中身ごと消す・2026-10-21 敵対的レビュー）→ `wt-remove.sh` が撤去前に中の入れ子（登録済み・未登録の `.git`）を検出して止める |
 
 ## Danger Ops（有）
-- **何を**: `wt-remove.sh` の `docker compose down -v`（named volume の削除）に `DANGER_OK=1` を求める条件を「常に」から「当該 Compose プロジェクトのコンテナ・named volume が 1 つでもある場合、または判定に失敗した場合」に変える。
-- **なぜ**: 消すデータが無いワークツリーの撤去にまで破壊的操作の許可を求めており、許可の意味が薄れている。
-- **どう承認**: 本計画書の承認ポイントで明示承認を得る。データがあるときの `DANGER_OK=1` 必須は維持し、`docs/runbooks/danger-ops.md`（破壊的操作は承認制）と矛盾しない。データ無しのときは `down -v` 自体を実行しない（破壊的操作が起きない）。
-- **ロールバック**: 判定分岐を外せば従来挙動に戻る。データには影響しない。
+- **何を**: `wt-remove.sh` の `docker compose down -v`（named volume の削除）の条件を次のように変える（2026-10-21 敵対的レビュー第 1・2 周で改訂）。
+  - データ無し（当該プロジェクトのコンテナ・named volume が 0）→ `down -v` を実行しない（許可不要）。
+  - データあり → 従来どおり `DANGER_OK=1` 必須。実行は `docker compose -p <既定名> down -v` で、消す相手を撤去対象のプロジェクトに固定する。
+  - 消す相手を確定できない（名前の指定・作業フォルダのラベルの不一致・同名の別ワークツリー）→ `DANGER_OK=1` でも実行しない。
+  - docker が使えない → 実行できないので中止。`KEEP_DATA=1` のときだけ、`down -v` をせずにワークツリーだけ撤去する（データは消えずに残る。`DANGER_OK` は「消す」専用の合図のまま、「消さずに撤去」には別の合図を使う）。
+  - ガード（`pretooluse_guard.py`）: `docker compose … down -v`（グローバルオプション・`-p`・クォート・短縮結合・`sh -c` を含む）と `docker volume rm/remove/prune`・`docker system prune --volumes` を `DANGER_OK=1` 必須にする（取り残しの片付け手順の二重ガード）。
+- **なぜ**: 消すデータが無いワークツリーの撤去にまで破壊的操作の許可を求めており、許可の意味が薄れている。一方で、許可を出したときに消える相手が撤去対象以外（primary など）になる経路は、許可の意味を壊すので構造的に無くす。
+- **どう承認**: 本計画書の承認ポイントで明示承認（2026-10-20）。敵対的レビュー対応の改訂は既定基準（理想・最適で問題なければ進めて OK）に基づき実装し事後報告。いずれも「消す範囲を狭める／消す前に止める」方向で、`docs/runbooks/danger-ops.md`（破壊的操作は承認制）と矛盾しない。
+- **ロールバック**: 判定分岐を外せば従来挙動（常に `DANGER_OK=1` 必須）に戻る。データには影響しない。
 - **本イシューで実データは消さない**: 既存 `wt-harness` の実撤去は残作業。テストは docker のスタブで行い、実物のコンテナ・volume には触れない。手動 M4 は Docker を起動していない使い捨てワークツリーで行う。
 
 ## 各観点の該当判定
@@ -363,6 +363,20 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 | `test_i179_worktree_docs.sh` | 不在チェックは対象ファイルの存在も条件にする（ファイル削除で PASS しない）。FG-D1 にファイル削除の注入 3 通りを追加 | Low |
 - **理想基準での評価**: 採用。いずれも「人が気づけない失敗を決定論で止める」方向で、ガードとスクリプトの安全性を上げる。ガードの既知の限界（入れ子での作業フォルダ判定）は、代わりの判定（`CLAUDE_PROJECT_DIR`）がサブエージェントを壊すため、文書で限界を明示して受容する。
 - **承認**: 既定基準（2026-10-20）に基づき実装し事後報告。計画変更のため、敵対的レビュー通過後に `/plan-issue-review I179` を挟む。
+
+### 計画変更記録 3（2026-10-21・敵対的レビュー第 2 周の findings 対応）
+| 変更 | 内容 | 起点 |
+|------|------|------|
+| `wt-remove.sh` の `down -v` | `docker compose -p <既定名> down -v` で消す相手を固定。名前を確定できない（戻り値 2）・作業フォルダのラベルが別（4・新規）・同名の別ワークツリーは `DANGER_OK=1` でも中止 | High（DANGER_OK で別プロジェクトを消す経路） |
+| `wt-remove.sh` の docker 不在 | `DANGER_OK=1` で「消さずに撤去」する経路を廃止し、`KEEP_DATA=1` に分離（`DANGER_OK` は消す専用） | High（合図の二重の意味） |
+| `wt-remove.sh` のバックアップ案内 | `scripts/db_backup.sh`（今いるフォルダが対象）ではなく、撤去対象を `-p` で指定した `pg_dump` を primary で実行するコマンドを表示 | High（バックアップが効かない） |
+| `wt-remove.sh` その他 | prunable な登録を入れ子・同名の検査から除外し `git worktree prune` を案内・`.env` の `:` 区切りも検出・先頭行の取得をパイプから展開に（pipefail の SIGPIPE） | Medium・Low |
+| `pretooluse_guard.py` | Docker の volume 削除の判定を正規表現からトークン判定（`_docker_volume_wipe`）に置き換え。docker 本体のオプション・クォート・短縮結合（`-vt`）・`sh -c`/`eval`・改行/`&`/サブシェルの後を捕捉し、コミットメッセージ・grep の引数・ヒアドキュメントの本文は誤ブロックしない。`docker volume remove`・`system prune --volumes` も対象 | Medium・Low |
+| `wt-ports.sh` | 他のワークツリーの `.env` の `export`・空白・クォート付きの値も読む | Low |
+| `worktree.md` | §2 確認 1 の未設定時（fatal）と共有 ref の注記・確認 2 にガードの確認を追加、§4 を `-p` 固定・中止条件・`KEEP_DATA=1`・バックアップ手順に更新、§11 にクローズ済みイシューの除外・gitignore 済みファイル（`settings.local.json`）の扱い・`--untracked-files=all` | Medium・Low |
+| テスト | R1c2・R20a/R20c・R21・R22/R22b・R23・compose ファイル 8 種と `name :`・行頭空白・DV10〜DV23・FG-DV1（判定関数の除去）・P15、ckhas/cknot をヒアストリング化（pipefail の誤判定防止）、R23 の判定を行全体一致に | Medium・Low |
+- **理想基準での評価**: 採用。破壊的操作は「消す相手を構造的に固定し、確定できなければ許可があっても止める」が原則で、許可（`DANGER_OK`）の意味を「この撤去対象のデータを消す」の 1 つに保つ。
+- **承認**: 既定基準（2026-10-20）に基づき実装し事後報告。
 
 ## レビュー結果
 - [20261021_0031 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0031.md)（計画変更＝ロックの扱いの追加後の再レビュー）

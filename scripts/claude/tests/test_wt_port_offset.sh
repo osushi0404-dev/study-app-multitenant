@@ -21,9 +21,9 @@ ck() { if [ "$2" = "$3" ]; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
 ckt() { local name="$1"; shift
         if "$@"; then printf 'PASS %s\n' "$name"; pass=$((pass+1));
         else printf 'FAIL %s\n' "$name"; fail=$((fail+1)); fi; }
-ckhas() { if printf '%s' "$2" | grep -q -- "$3"; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
+ckhas() { if grep -q -- "$3" <<<"$2"; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
           else printf 'FAIL %s (missing substring: %s)\n' "$1" "$3"; fail=$((fail+1)); fi; }
-cknot() { if printf '%s' "$2" | grep -q -- "$3"; then printf 'FAIL %s (unexpected substring: %s)\n' "$1" "$3"; fail=$((fail+1));
+cknot() { if grep -q -- "$3" <<<"$2"; then printf 'FAIL %s (unexpected substring: %s)\n' "$1" "$3"; fail=$((fail+1));
           else printf 'PASS %s\n' "$1"; pass=$((pass+1)); fi; }
 
 # 隔離環境（globals: TMP ORIGIN PRIMARY）
@@ -110,6 +110,16 @@ add_wt "$TMP/wt-app" b1; run_ports "$TMP/wt-app" --port-offset 0
 ck   "P14 exit2"          2    "$RC"
 ckhas "P14 衝突メッセージ" "$OUT" "既存 worktree と衝突"
 ckt  "P14 .env 非作成"    test ! -e "$TMP/wt-app/.env"
+
+# --- TC-P15: 他のワークツリーの .env が export・空白・クォート付きの書き方 → その値を使用中として数える ---
+new_env; add_wt "$TMP/wt-app" b1
+printf 'export DB_PORT = "5442"\nREDIS_PORT="6389"\nBACKEND_PORT = 8010\nFRONTEND_PORT='"'"'3010'"'"'\nBACKEND_PORT2=9\n' > "$TMP/wt-app/.env"
+add_wt "$TMP/wt-api" b2; run_ports "$TMP/wt-api" --port-offset 10
+ck   "P15 exit2（offset 10 は使用中）" 2 "$RC"
+ckhas "P15 衝突メッセージ" "$OUT" "既存 worktree と衝突"
+run_ports "$TMP/wt-api"
+ck   "P15b 自動割当 exit0"   0    "$RC"
+ck   "P15b BACKEND=8020"     8020 "$(envval "$TMP/wt-api/.env" BACKEND_PORT)"
 
 # ===================== 引数検証 =====================
 # --- TC-P5: --port-offset 非整数 / 値なし → exit2 ---

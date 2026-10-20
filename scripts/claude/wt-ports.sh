@@ -29,7 +29,7 @@ done
 
 WT="$(git rev-parse --show-toplevel)" || { echo "[wt-ports] git のワークツリー内で実行してください" >&2; exit 2; }
 WT_REAL="$(cd "$WT" && pwd -P)"
-PRIMARY="$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -1)"
+PRIMARY="$(git worktree list --porcelain | awk 'sub(/^worktree /, "") {print; exit}')"
 [ -n "$PRIMARY" ] || { echo "[wt-ports] primary checkout を特定できません" >&2; exit 2; }
 if [ "$WT_REAL" = "$(cd "$PRIMARY" && pwd -P)" ]; then
   echo "[wt-ports] primary は既定ポート（offset 0）で使います。割当は不要です" >&2
@@ -52,6 +52,17 @@ fi
 [ -n "${COMPOSE_PROJECT_NAME:-}" ] && \
   echo "[wt-ports] ⚠️ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME が設定されています。worktree 分離が壊れる恐れ（§5C）" >&2
 
+# .env の <変数> のポート値（export・= の前後の空白・クォート付きも読む）。無ければ空
+port_val() {
+  awk -v k="$2" '{
+    line = $0; sub(/^[ \t]*(export[ \t]+)?/, "", line)
+    if (index(line, k) != 1) next
+    rest = substr(line, length(k) + 1); if (sub(/^[ \t]*=[ \t]*/, "", rest) == 0) next   # 変数名の続き（DB_PORT2 等）は別の変数
+    gsub(/["\047]/, "", rest)
+    if (match(rest, /^[0-9]+/)) { print substr(rest, 1, RLENGTH); exit }
+  }' "$1"
+}
+
 # 自分以外のワークツリー（git worktree list・入れ子配置を含む）
 other_worktrees() {
   local wt
@@ -67,7 +78,7 @@ existing_ports() {
     for var in DB_PORT:"$BASE_DB" REDIS_PORT:"$BASE_REDIS" BACKEND_PORT:"$BASE_BACKEND" FRONTEND_PORT:"$BASE_FRONTEND"; do
       base="${var#*:}"; var="${var%%:*}"
       v=""
-      [ -f "$wt/.env" ] && v="$(sed -n "s/^$var=\([0-9]\{1,\}\).*/\1/p" "$wt/.env" | head -1)"
+      [ -f "$wt/.env" ] && v="$(port_val "$wt/.env" "$var")"
       printf '%s\n' "${v:-$base}"
     done
   done
@@ -77,7 +88,7 @@ existing_offsets() {
   local wt bp
   other_worktrees | while IFS= read -r wt; do
     bp=""
-    [ -f "$wt/.env" ] && bp="$(sed -n 's/^BACKEND_PORT=\([0-9]\{1,\}\).*/\1/p' "$wt/.env" | head -1)"
+    [ -f "$wt/.env" ] && bp="$(port_val "$wt/.env" BACKEND_PORT)"
     if [ -n "$bp" ]; then echo $((bp - BASE_BACKEND)); else echo 0; fi
   done
 }

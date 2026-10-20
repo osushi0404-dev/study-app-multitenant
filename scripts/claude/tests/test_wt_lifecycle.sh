@@ -23,9 +23,9 @@ ck() { if [ "$2" = "$3" ]; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
 ckt() { local name="$1"; shift
         if "$@"; then printf 'PASS %s\n' "$name"; pass=$((pass+1));
         else printf 'FAIL %s\n' "$name"; fail=$((fail+1)); fi; }
-ckhas() { if printf '%s' "$2" | grep -qF -- "$3"; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
+ckhas() { if grep -qF -- "$3" <<<"$2"; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
           else printf 'FAIL %s (missing substring: %s)\n' "$1" "$3"; fail=$((fail+1)); fi; }
-cknot() { if printf '%s' "$2" | grep -qF -- "$3"; then printf 'FAIL %s (unexpected substring: %s)\n' "$1" "$3"; fail=$((fail+1));
+cknot() { if grep -qF -- "$3" <<<"$2"; then printf 'FAIL %s (unexpected substring: %s)\n' "$1" "$3"; fail=$((fail+1));
           else printf 'PASS %s\n' "$1"; pass=$((pass+1)); fi; }
 
 # 新しい隔離環境を構築（globals: TMP BIN NODOCKER DOCKER_LOG ORIGIN PRIMARY）
@@ -47,7 +47,13 @@ case "$*" in
 esac
 if [ -n "${DOCKER_FAIL_ON:-}" ] && printf '%s' "$*" | grep -q -- "$DOCKER_FAIL_ON"; then exit 1; fi
 case "$1 ${2:-}" in
-  "ps -a")     [ -n "${STUB_CONTAINERS:-}" ] && printf '%s\n' "$STUB_CONTAINERS" ;;
+  "ps -a")
+    if [ -n "${STUB_CONTAINERS:-}" ]; then
+      case "$*" in
+        *--format*) printf '%s\n' "${STUB_WORKDIR:-$(cd "$STUB_WT" && pwd -P)}" ;;   # working_dir ラベル
+        *)          printf '%s\n' "$STUB_CONTAINERS" ;;
+      esac
+    fi ;;
   "volume ls") [ -n "${STUB_VOLUMES:-}" ]    && printf '%s\n' "$STUB_VOLUMES" ;;
 esac
 exit 0
@@ -129,6 +135,13 @@ ckhas "R1c 判定不能の案内"     "$OUT" "判定できません"
 cknot "R1c down 非実行"        "$(cat "$DOCKER_LOG")" "down"
 ckhas "R1c worktree 残存"      "$(wl)" "/wt-app"
 
+# --- TC-R1c2: docker はあるが判定が失敗・DANGER_OK=1 → down せず中止（DANGER_OK では先へ進まない） ---
+new_env; make_wt
+STUB_CONTAINERS=c1 DOCKER_FAIL_ON="ps -a" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R1c2 exit2"              2    "$RC"
+cknot "R1c2 down 非実行"       "$(cat "$DOCKER_LOG")" "down"
+ckhas "R1c2 worktree 残存"     "$(wl)" "/wt-app"
+
 # --- TC-R1d: 判定失敗（PATH に docker が無い）→ 停止 ---
 new_env; make_wt
 OUT="$( cd "$PRIMARY" && PATH="$NODOCKER" "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
@@ -147,18 +160,18 @@ ckhas "C1 警告出力"            "$OUT" "COMPOSE_PROJECT_NAME=foo が設定さ
 new_env primary named; make_wt
 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R1f exit2"               2    "$RC"
-ckhas "R1f 判定不能の案内"     "$OUT" "判定できません"
+ckhas "R1f 判定不能の案内"     "$OUT" "プロジェクト名を確定できません"
 ckhas "R1f worktree 残存"      "$(wl)" "/wt-app"
 
 # --- TC-R2/R3: データあり・DANGER_OK=1 → down -v → remove の順序 ---
 new_env; make_wt
 STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R2 exit0"                0    "$RC"
-ckhas "R2 down -v 呼出"        "$(cat "$DOCKER_LOG")" "compose down -v"
+ckhas "R2 down -v 呼出（-p で固定）" "$(cat "$DOCKER_LOG")" "compose -p wt-app down -v"
 cknot "R2 worktree 撤去済"     "$(wl)" "/wt-app"
 ckhas "R3 down→remove 順序(present=yes)" "$(cat "$DOCKER_LOG")" "present=yes"
 # down -v は撤去対象のフォルダで実行される（呼び出し元＝primary で走ると primary の volume が消える）
-ckhas "R3b down は撤去対象の中で実行" "$(grep -A1 'compose down -v' "$DOCKER_LOG")" "cwd=$TMP/wt-app"
+ckhas "R3b down は撤去対象の中で実行" "$(grep -A1 'down -v' "$DOCKER_LOG")" "cwd=$TMP/wt-app"
 
 # --- TC-R1g: 判定失敗（docker volume ls が失敗）→ 停止 ---
 new_env; make_wt
@@ -176,15 +189,16 @@ ckhas "R1h worktree 残存"      "$(wl)" "/wt-app"
 
 # --- TC-R1i: 判定失敗（直下 .env の COMPOSE_FILE）→ 停止 ---
 new_env; make_wt
-printf 'COMPOSE_FILE=other.yml\n' > "$WT/.env"
+printf '  COMPOSE_FILE=other.yml\n' > "$WT/.env"   # 行頭に空白がある書き方も
 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R1i exit2"               2    "$RC"
 ckhas "R1i worktree 残存"      "$(wl)" "/wt-app"
 
 # --- TC-R1j: 判定失敗（compose.yaml・override に最上位 name:）→ 停止 ---
-for cf in compose.yaml docker-compose.override.yml; do
+for cf in compose.yaml compose.yml docker-compose.yaml docker-compose.yml \
+          compose.override.yaml compose.override.yml docker-compose.override.yaml docker-compose.override.yml; do
   new_env; make_wt
-  printf 'name: study\nservices: {}\n' > "$WT/$cf"
+  printf 'name : study\nservices: {}\n' > "$WT/$cf"   # コロンの前に空白がある書き方も
   git -C "$WT" add "$cf"; git -C "$WT" commit -qm "add $cf"; git -C "$WT" push -q origin "HEAD:refs/heads/tmp-$cf" 2>/dev/null
   git -C "$WT" fetch -q origin
   run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
@@ -304,7 +318,7 @@ ckhas "R15 worktree 残存"      "$(wl)" "/wt-app"
 new_env; make_wt
 git -C "$PRIMARY" worktree lock --reason "claude session app (pid $DEAD_PID start 1)" "$WT"
 NOPS="$TMP/nops"; mkdir -p "$NOPS"
-for c in git sed head basename tr grep awk find; do ln -s "$(command -v "$c")" "$NOPS/$c"; done
+for c in git sed head basename tr grep awk find bash env; do ln -s "$(command -v "$c")" "$NOPS/$c"; done
 ln -s "$BIN/docker" "$NOPS/docker"
 OUT="$( cd "$PRIMARY" && PATH="$NOPS" DOCKER_LOG="$DOCKER_LOG" "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
 ck   "R16 exit2"               2    "$RC"
@@ -345,9 +359,51 @@ ck   "R19b exit0"              0    "$RC"
 # --- TC-R20: docker が無い・DANGER_OK=1 → down せずに撤去（警告） ---
 new_env; make_wt
 OUT="$( cd "$PRIMARY" && PATH="$NODOCKER" DANGER_OK=1 "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
-ck   "R20 exit0"               0    "$RC"
-ckhas "R20 警告"               "$OUT" "docker が使えないため down -v を実行せずに撤去します"
+ck   "R20a DANGER_OK=1 だけでは exit2" 2  "$RC"
+ckhas "R20a KEEP_DATA の案内"  "$OUT" "KEEP_DATA=1"
+ckhas "R20a worktree 残存"     "$(wl)" "/wt-app"
+OUT="$( cd "$PRIMARY" && PATH="$NODOCKER" KEEP_DATA=1 "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
+ck   "R20 KEEP_DATA=1 exit0"   0    "$RC"
+ckhas "R20 警告"               "$OUT" "down -v を実行せずに撤去します（KEEP_DATA=1）"
 cknot "R20 worktree 撤去済"    "$(wl)" "/wt-app"
+# --- TC-R20c: docker が使える（データあり）ときは KEEP_DATA=1 でも down せず中止（KEEP_DATA は docker 不在専用） ---
+new_env; make_wt
+STUB_CONTAINERS=c1 KEEP_DATA=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R20c exit2"              2    "$RC"
+cknot "R20c down 非実行"       "$(cat "$DOCKER_LOG")" "down"
+ckhas "R20c worktree 残存"     "$(wl)" "/wt-app"
+
+# --- TC-R21: コンテナの作業フォルダ（ラベル）が撤去対象と違う・DANGER_OK=1 → down せず中止 ---
+new_env; make_wt
+STUB_CONTAINERS=c1 STUB_WORKDIR="$PRIMARY" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R21 exit2"               2    "$RC"
+ckhas "R21 作業フォルダの案内" "$OUT" "作業フォルダが撤去対象と違います"
+cknot "R21 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+
+# --- TC-R22: 名前を確定できない（COMPOSE_PROJECT_NAME あり）・DANGER_OK=1 → down せず中止 ---
+new_env; make_wt
+STUB_CONTAINERS=c1 COMPOSE_PROJECT_NAME="$(basename "$PRIMARY")" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R22 exit2"               2    "$RC"
+ckhas "R22 確定できない案内"   "$OUT" "DANGER_OK=1 でも撤去しません"
+cknot "R22 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+# --- TC-R22b: .env にコロン区切りの COMPOSE_PROJECT_NAME → 確定できない ---
+new_env; make_wt
+printf 'COMPOSE_PROJECT_NAME: prim\n' > "$WT/.env"
+STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R22b exit2"              2    "$RC"
+cknot "R22b down 非実行"       "$(cat "$DOCKER_LOG")" "down"
+
+# --- TC-R23: 中の入れ子の登録がフォルダごと消えている（prunable）だけなら撤去できる ---
+new_env; make_wt
+git -C "$WT" worktree add -q "$WT/.claude/worktrees/agent-y" -b worktree-agent-y origin/develop
+# shellcheck disable=SC2016  # 単一引用は意図的（展開せずに渡す）
+"$BASH_BIN" -c 'cd "$1" && find .claude/worktrees/agent-y -mindepth 1 -delete && rmdir .claude/worktrees/agent-y' _ "$WT"
+BEFORE_R23="$(wl)"
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R23 exit0"               0    "$RC"
+LIST_R23="$(wl)"
+ckt  "R23 worktree 撤去済"     test -z "$(grep -x "worktree $TMP/wt-app" <<<"$LIST_R23")"
+ckt  "R23 撤去前は登録されていた（判定の前提）" test -n "$(grep -x "worktree $TMP/wt-app" <<<"$BEFORE_R23")"
 
 # ===================== false-green 注入 =====================
 
@@ -355,10 +411,11 @@ cknot "R20 worktree 撤去済"    "$(wl)" "/wt-app"
 new_env; make_wt
 BROKEN_CD="$TMP/wt-remove-nocd.sh"
 # shellcheck disable=SC2016
-sed 's/( cd "\$WT_PATH" && docker compose down -v )/( docker compose down -v )/' "$WT_REMOVE" > "$BROKEN_CD"
-ck   "FG5 注入成立"            0    "$(grep -q '^  ( docker compose down -v )' "$BROKEN_CD"; echo $?)"
+sed 's/( cd "\$WT_PATH" && docker compose -p "\$PROJECT" down -v )/( docker compose -p "$PROJECT" down -v )/' "$WT_REMOVE" > "$BROKEN_CD"
+# shellcheck disable=SC2016  # 単一引用は意図的（展開せずに渡す）
+ck   "FG5 注入成立"            0    "$(grep -q '^    ( docker compose -p "\$PROJECT" down -v )' "$BROKEN_CD"; echo $?)"
 STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$BROKEN_CD" "$WT"
-cknot "FG5 除去複製=撤去対象の外で down" "$(grep -A1 'compose down -v' "$DOCKER_LOG")" "cwd=$TMP/wt-app"
+cknot "FG5 除去複製=撤去対象の外で down" "$(grep -A1 'down -v' "$DOCKER_LOG")" "cwd=$TMP/wt-app"
 
 # --- TC-FG6: 入れ子の検査を除去した複製では R17 の条件で入れ子の中身が消える ---
 new_env; make_wt
@@ -386,10 +443,10 @@ cknot "FG4 除去複製=撤去済"    "$(wl)" "/wt-app"
 new_env; make_wt
 BROKEN_RM="$TMP/wt-remove-broken.sh"
 # shellcheck disable=SC2016  # 単一引用は意図的（${DANGER_OK:-} を展開せず sed パターンに渡す）
-sed 's/"${DANGER_OK:-}" = "1"/true/' "$WT_REMOVE" > "$BROKEN_RM"
-ck   "FG1 注入成立(if [ true ])" 0 "$(grep -q '\[ true \]' "$BROKEN_RM"; echo $?)"
+sed 's/if \[ "${DANGER_OK:-}" != "1" \]; then/if false; then/' "$WT_REMOVE" > "$BROKEN_RM"
+ck   "FG1 注入成立(if false)"  0    "$(grep -q '^    if false; then' "$BROKEN_RM"; echo $?)"
 STUB_CONTAINERS=c1 run_rm "$PRIMARY" "$BROKEN_RM" "$WT"
-ckhas "FG1 除去複製=未設定でも down" "$(cat "$DOCKER_LOG")" "compose down -v"
+ckhas "FG1 除去複製=未設定でも down" "$(cat "$DOCKER_LOG")" "compose -p wt-app down -v"
 
 # --- TC-FG3: データ判定を常に「無し」にした複製では R1 の条件でも DANGER_OK なしで撤去される ---
 new_env; make_wt
