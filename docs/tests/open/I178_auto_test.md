@@ -160,6 +160,7 @@ bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 | TC-19 | 2026-10-18 | ✅ exit 0 | fix-loop 20261018 対応後（runbook 全体の SHA-256・見出し 1 回・close step 6 の 3 行）。`RESULT: OK (13 checks)`。失敗注入: 第3周の改変を現行ファイルに入れ直した 9 通り（ステップ 5 で main の Restrict をオフ・ステップ 2 のパターン変更・同じ見出しの旧表の追加・§1.5 運用に矛盾文・§6 末尾に矛盾手順・概要の差し替え・確認 5 を空 PR に戻す・close step 6 の一文削除・close step 6 の見出し重複）すべて exit 1。第1周・第2周の 25 通りも引き続きすべて exit 1。close スキルの step 5.5〜6 の外への矛盾文の追加（第3周 E）は exit 0（ファイル全体を固定しない設計上の残余・診断メモ 20261018_1300 で決定） |
 | TC-19 | 2026-10-20 | ✅ exit 0 | adversarial 再ステージ第1周対応後（runbook の確認 1・2・運用・§6 を変更し、SHA-256 を `c41631a4…` に更新）。変更直後は SHA-256 不一致で exit 1 となり、変更の検知が働くことを実地で確認。更新後 `RESULT: OK (13 checks)` |
 | TC-19 | 2026-10-20 | ✅ exit 0 | adversarial 再ステージ第2周の Medium 対応後。`.github/CODEOWNERS` の全文固定を追加（`RESULT: OK (14 checks)`）し、runbook の SHA-256 を `7ca97428…` に更新。CODEOWNERS の失敗注入 6 通り（末尾に bot を所有者として追加・所有者の行を削除・同じ行に bot を併記・行末に空白・docs だけ bot を所有者に・ファイル不在）すべて exit 1。第3周の改変 9 通りも引き続きすべて exit 1 |
+| TC-01〜TC-16・TC-18・TC-19 | 2026-10-20 | ✅ 全件 exit 0 | **/test I178**（HEAD 1d74938・ブランチ保護の設定変更後）。TC-01〜TC-16・TC-18 は `ALL=PASS`（TC-03・TC-04 は GitHub API で実測・TC-16 は `RESULT: OK (21/21 cases, 30 assertions)`）、TC-19 は `RESULT: OK (14 checks)`、決定論ゲート 18 行は code-review.sh の規則で `gates=18 bad=0`。PR #298 の CI は 6 件すべて pass（Backend Lint & Security・Backend Tests・E2E Tests (Playwright)・Frontend Lint & Security・Frontend Tests・Frontend Type Check）。pytest・Jest・E2E のローカル実行は非該当（Backend・Frontend の変更なし・計画 7 章） |
 | TC-17 | | 未実施（マージ後） | 手動 No.7 と同時に行い、記録用 PR（`docs(I178): マージ後確認の記録`）で記入する |
 
 ---

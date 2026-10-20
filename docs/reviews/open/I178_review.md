@@ -3,7 +3,7 @@
 - **関連イシュー**: #297
 - **計画書**: docs/plans/open/plan_I178.md
 - **Draft PR**: #298
-- **ステータス**: 実装済み・/code-review 敵対的レビューステージ中（第2周対応済み・2026-10-18）
+- **ステータス**: /test 完了（2026-10-20）・/close 待ち。手動 No.4〜No.6・No.8 は /close 中、No.7・TC-17 はマージ後
 
 ---
 
@@ -30,14 +30,14 @@
 
 ## 結果
 
-（/code-review・/test 後に記入）
+2026-10-20 `/test I178`（HEAD 1d74938・ブランチ保護の設定変更後・PR #298 の CI 6 件 pass）。code-review 20261019_0005 は OK、敵対的レビュー再ステージ（20261020_0900）は第2周で通過。AC-1 は TC-17（マージ後）、AC-2〜AC-5 は /close 中とマージ後の手動確認で確定させ、記録用 PR で更新する。
 
 | # | 受け入れ条件 | 判定 | 根拠 |
 |---|---|---|---|
-| AC-1 | CODEOWNERS が `* @oshui0404` の 1 行のみ | | |
-| AC-2 | develop・main で Code Owners の承認が必須 | | |
-| AC-3 | ユーザーの承認で APPROVED・マージ可能 | | |
-| AC-4 | bot の承認ではマージ要件を満たさない | | |
-| AC-5 | Dismiss stale・Restrict who can push・bypass 不可が有効 | | |
-| AC-6 | runbook の更新と誤記の除去 | | |
-| AC-7 | close スキル・pr-base-sync の前提が設定と一致 | | |
+| AC-1 | CODEOWNERS が `* @oshui0404` の 1 行のみ | ✅（暫定） | TC-01〜TC-04 exit 0（TC-04: feature ブランチで GitHub の CODEOWNERS 検査 `{"errors":[]}`）・TC-19 で全文一致。develop での検査（TC-17）はマージ後 |
+| AC-2 | develop・main で Code Owners の承認が必須 | ✅（設定）・効き目は確認中 | 手動 No.1・No.2 で設定画面を確認・No.3 で `reviewDecision=REVIEW_REQUIRED`。develop での効き目の区別は No.7（マージ後） |
+| AC-3 | ユーザーの承認で APPROVED・マージ可能 | 未（/close 中） | 手動 No.5 |
+| AC-4 | bot の承認ではマージ要件を満たさない | 未（マージ後） | 手動 No.7 |
+| AC-5 | Dismiss stale・Restrict who can push・bypass 不可が有効 | ✅（設定）・効き目は /close 中 | 手動 No.1・No.2 で設定画面を確認。効き目は No.6（bot のマージ拒否）・No.8（承認取り消し） |
+| AC-6 | runbook の更新と誤記の除去 | ✅ | TC-05〜TC-12・TC-18・TC-19 exit 0（runbook 全体の SHA-256・設定表とステップ 3 の全文一致） |
+| AC-7 | close スキル・pr-base-sync の前提が設定と一致 | ✅ | TC-13〜TC-16・TC-19 exit 0（close step 5.5〜6 の全文一致・pr-base-sync 無改変・既存テスト 21/21） |
