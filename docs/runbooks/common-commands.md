@@ -22,8 +22,8 @@ docker compose up -d
 #   DB_PORT(5432) / REDIS_PORT(6379) / BACKEND_PORT(8000) / FRONTEND_PORT(3000)
 # 規約: オフセット STEP=10（primary=0, 追加 worktree は +10 ずつ）。port = 既定 + offset。
 
-# wt-new が新規 worktree 作成時に直下 .env を自動生成（空きオフセットを自動割当）
-bash scripts/claude/wt-new.sh <track> <番号> <概要> [--port-offset N]
+# Docker 起動前に、今いるワークツリーで 1 回だけ実行（直下 .env に空きオフセットを自動割当・2 回目以降は何も変えない）
+bash scripts/claude/wt-ports.sh [--port-offset N]
 
 # 割当済みの publish ホストポートを確認（.env を読んでレンダリング）
 docker compose config | grep -A1 published

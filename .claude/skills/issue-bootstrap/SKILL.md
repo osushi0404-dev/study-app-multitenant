@@ -67,8 +67,8 @@ gh issue create \
 **ラベル設定（2軸・両方必須）**:
 - **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
 - **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
-  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`（対応 worktree: wt-harness）
-  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`（対応 worktree: study-app-multitenant）
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`
+  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`
   - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
 ### 5. イシューファイルに GitHub Issue 番号を記録

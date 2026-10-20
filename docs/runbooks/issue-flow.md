@@ -58,8 +58,8 @@ gh issue create \
 **ラベル設定（2軸・両方必須）**:
 - **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
 - **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
-  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`（対応 worktree: wt-harness）
-  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`（対応 worktree: study-app-multitenant）
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`
+  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`
   - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
 **注意事項**:
@@ -196,8 +196,8 @@ gh issue create \
 **ラベル設定（2軸・両方必須）**:
 - **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
 - **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
-  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`（対応 worktree: wt-harness）
-  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`（対応 worktree: study-app-multitenant）
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`
+  - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`
   - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
 登録後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
@@ -212,13 +212,13 @@ gh issue create \
 #### フェーズ2: 計画・設計（/plan-issue）
 
 **ステップ5: イシューブランチ作成・コミット・プッシュ・Draft PR 作成**
-- developブランチをベースにfeatureブランチを作成
+- `origin/develop` をベースに feature ブランチを作成（develop はチェックアウトしない。別ワークツリーが develop を使っていても失敗しないため）
 - 命名規則: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
+- イシューファイル以外の未コミット変更は先に片付けてから実行する（`docs/runbooks/worktree.md` §3）
 
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
+git fetch origin
+git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの] origin/develop
 git add docs/issues/open/I${ISSUE_NUM}.md
 git commit -m "docs: create issue I${ISSUE_NUM}"
 git push -u origin feature/I${ISSUE_NUM}-[概要]

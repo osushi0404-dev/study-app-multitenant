@@ -18,12 +18,13 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 イシューファイルを読んで GitHub Issue 番号を確認した後、以下を実行する。
 
 #### 1. ブランチ作成
-developブランチをベースにfeatureブランチを作成：
+`origin/develop` をベースに feature ブランチを作成（develop はチェックアウトしない。別ワークツリーが develop を使っていても失敗しないため）：
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b feature/I${ISSUE_NUM}-[概要を英語化したもの]
+git fetch origin
+git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの] origin/develop
 ```
+- 未コミットのイシューファイルはそのまま新ブランチへ持ち越される。イシューファイル以外の未コミット変更は先に片付けてから実行する（`docs/runbooks/worktree.md` §3）。
+- `--no-track` は上流が `origin/develop` に設定されるのを防ぐ（上流は step 2 の `git push -u` で付く）。
 
 **ブランチ命名規則**:
 - フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`

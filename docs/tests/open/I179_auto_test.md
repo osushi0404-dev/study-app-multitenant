@@ -8,6 +8,7 @@
 - backend: 対象外（コード変更なし）
 - frontend: 対象外（コード変更なし）
 - 計画時（実装前・2026-10-20）: 下記「計画時の実行記録」
+- 実装時（2026-10-21・/implement）: guard pass=35・port pass=46・lifecycle pass=63・docs pass=12・test_i107 6 PASS・test_next_issue_num pass=21・構文行すべて exit 0（すべて fail=0）。修正前のガードでは G1・G2・G7 が FAIL することを確認済み
 - 実装後: （/test で記入）
 
 ## ベースライン（実装前・2026-10-20）
@@ -74,6 +75,7 @@
 | R7 | 撤去対象の内側から実行 | exit 2・「内側からは実行できません」・ワークツリー残存 |
 | R8 | データあり・`DANGER_OK=1`・`down -v` が失敗 | exit 2・「docker compose down -v が失敗しました」・ワークツリー残存 |
 | R9 | 公式配置（`<primary>/.claude/worktrees/app2`）・データ無し | exit 0・撤去済み |
+| R9b | フォルダ名 `Wt.App` のワークツリー・データ無し（Compose の既定と同じ名前変換） | exit 0・docker の呼び出しの filter が `label=com.docker.compose.project=wtapp` |
 | R10 | 撤去後もブランチが残る（R0・R9 の後で `git show-ref --verify refs/heads/<ブランチ>`） | exit 0・stdout に「ブランチ」と残ったブランチ名 |
 | R11 | `git worktree list` に無いフォルダを指定（ただのディレクトリ） | exit 2・stderr に「登録されたワークツリーではありません」・フォルダは残る |
 | R12 | 引数なし | exit 非ゼロ・Usage 表示 |
@@ -97,7 +99,9 @@
 | D9 | `.gitignore` に `.claude/worktrees/` の行がある（行全体一致） | `grep -qx` 成功で PASS |
 | D10 | `docs/runbooks/common-commands.md` に `wt-ports.sh` があり、`wt-new` が無い | 2 条件成立で PASS |
 | D11 | `.claude/skills/issue-bootstrap/SKILL.md`・`docs/runbooks/issue-flow.md` に `対応 worktree: wt-harness` が無い | 不在で PASS |
-| FG-D1 | 失敗注入: repo の対象ファイルを一時ディレクトリへ複製し（D2 が `git grep` を使えるよう複製先で `git init` → `git add -A` する）、次を 1 つずつ注入した複製それぞれで `check_all` が FAIL になる: D1（空の `wt-new.sh` を置く）・D2（除外対象外の `docs/runbooks/onboarding.md` に `wt-new` を追記）・D4（`2026-07 時点` を追記）・D5（`git checkout develop` を追記）・D6（ステップ5範囲に `git checkout develop` を追記）・D7（`"WorktreeCreate"` を追記）・D8（`.worktreeinclude` の `backend/.env` 行を削除）・D9（`.gitignore` の `.claude/worktrees/` 行を削除）・D10（`common-commands.md` に `wt-new` を追記）・D11（`issue-bootstrap/SKILL.md` に `対応 worktree: wt-harness` を追記） | 10 通りすべて FAIL で PASS |
+| DOC1 | （旧 `test_wt_port_offset.sh` から移設）`worktree.md` に `同時`・`BACKEND_PORT`・`port-offset` があり `1 スタックずつ` が無い。`common-commands.md` に `BACKEND_PORT` がある | 全条件成立で PASS |
+| FG-D0 | 注入なしの複製に `check_all` を当てると PASS（複製の作り方そのもので FAIL していないことの確認） | PASS |
+| FG-D1 | 失敗注入: repo の対象ファイルを一時ディレクトリへ複製し（D2 が `git grep` を使えるよう複製先で `git init` → `git add -A` する）、次を 1 つずつ注入した複製それぞれで `check_all` が FAIL になる: D1（空の `wt-new.sh` を置く）・D2（除外対象外の `docs/runbooks/onboarding.md` に `wt-new` を追記）・D4（`2026-07 時点` を追記）・D5（`git checkout develop` を追記）・D6（ステップ5範囲に `git checkout develop` を追記）・D7（`"WorktreeCreate"` を追記）・D8（`.worktreeinclude` の `backend/.env` 行を削除）・D9（`.gitignore` の `.claude/worktrees/` 行を削除）・D10（`common-commands.md` に `wt-new` を追記）・D11（`issue-bootstrap/SKILL.md` に `対応 worktree: wt-harness` を追記） | 10 通りすべてで、注入対象の TC が FAIL に含まれれば PASS |
 
 ### E. 既存の回帰ゲート（変更しないテスト）
 | TC | 内容 | 期待 |
