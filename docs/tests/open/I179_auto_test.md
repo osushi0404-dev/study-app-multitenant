@@ -97,7 +97,7 @@
 | D9 | `.gitignore` に `.claude/worktrees/` の行がある（行全体一致） | `grep -qx` 成功で PASS |
 | D10 | `docs/runbooks/common-commands.md` に `wt-ports.sh` があり、`wt-new` が無い | 2 条件成立で PASS |
 | D11 | `.claude/skills/issue-bootstrap/SKILL.md`・`docs/runbooks/issue-flow.md` に `対応 worktree: wt-harness` が無い | 不在で PASS |
-| FG-D1 | 失敗注入: repo の対象ファイルを一時ディレクトリへ複製し、D1（空の `wt-new.sh` を置く）・D4（`2026-07 時点` を追記）・D5（`git checkout develop` を追記）・D6（ステップ5範囲に `git checkout develop` を追記）・D7（`"WorktreeCreate"` を追記）・D8（`.worktreeinclude` の `backend/.env` 行を削除）を 1 つずつ注入した複製それぞれで `check_all` が FAIL になる | 6 通りすべて FAIL で PASS |
+| FG-D1 | 失敗注入: repo の対象ファイルを一時ディレクトリへ複製し（D2 が `git grep` を使えるよう複製先で `git init` → `git add -A` する）、次を 1 つずつ注入した複製それぞれで `check_all` が FAIL になる: D1（空の `wt-new.sh` を置く）・D2（除外対象外の `docs/runbooks/onboarding.md` に `wt-new` を追記）・D4（`2026-07 時点` を追記）・D5（`git checkout develop` を追記）・D6（ステップ5範囲に `git checkout develop` を追記）・D7（`"WorktreeCreate"` を追記）・D8（`.worktreeinclude` の `backend/.env` 行を削除）・D9（`.gitignore` の `.claude/worktrees/` 行を削除）・D10（`common-commands.md` に `wt-new` を追記）・D11（`issue-bootstrap/SKILL.md` に `対応 worktree: wt-harness` を追記） | 10 通りすべて FAIL で PASS |
 
 ### E. 既存の回帰ゲート（変更しないテスト）
 | TC | 内容 | 期待 |
