@@ -148,9 +148,13 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    bash scripts/claude/pr-base-sync.sh final
    # PR番号は省略可（step 0 と同じ・カレントブランチの PR を自動特定。明示指定も可）
    ```
-   合格条件は「**BEHIND / DIRTY でない ＋ CI 全グリーン**」（CLEAN は要求しない。ユーザーの
-   Approve がマージ条件のため、承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
+   合格条件は「**BEHIND / DIRTY でない ＋ CI 全グリーン**」（CLEAN は要求しない。develop は
+   Code Owners（`oshui0404`）の承認が必須、main は承認 1 件が必須で push・マージできるのは
+   `oshui0404` だけの設定のため（main には CODEOWNERS が無い・`docs/runbooks/branch-protection-setup.md`）、
+   承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
    - exit 0 → step 6 のマージ依頼へ進む
    - exit 1 → STOP してユーザーに報告（マージコンフリクト・CI fail・DRAFT 残留等。自動解決しない）
    - exit 2 → mergeStateStatus=UNKNOWN が継続。値を報告し続行可否をユーザーに確認
-6) ユーザーへ GitHub 上で Approve & Merge を依頼
+6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー `oshui0404` だけが行える。
+   承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
+   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。
