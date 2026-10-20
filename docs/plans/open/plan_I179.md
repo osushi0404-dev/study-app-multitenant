@@ -175,7 +175,7 @@ printf 'DB_PORT=%s\nREDIS_PORT=%s\nBACKEND_PORT=%s\nFRONTEND_PORT=%s\n' ... >> "
 **修正方針**: 作成は公式の `claude --worktree`、設定ファイルのコピーは `.worktreeinclude`、ポートは `wt-ports.sh` が受け持つため、役目が無くなる。`origin/develop` 基点の保証は公式の `worktree.baseRef` 既定（`"fresh"`＝`origin/<既定ブランチ>`）が受け持つ。既定ブランチは手元の `refs/remotes/origin/HEAD` で決まるため、`worktree.md` §2 の「作る前の確認」で `origin/develop` を指すことを確かめる（2026-10-21 敵対的レビューで訂正）。
 
 ### 4-6. `scripts/claude/wt-remove.sh`（E）
-**修正方針**: 消すデータが無いワークツリーは許可なしで撤去でき、データがある（または確かめられない）ときだけ従来どおり `DANGER_OK=1` を求める。撤去対象は「`git worktree list` に登録されたワークツリーのパス」で指定し、公式配置（`<primary>/.claude/worktrees/<name>`）も旧配置（`/mnt/c/app/wt-harness`）も同じ形で扱う。
+**修正方針**: 消すデータが無いワークツリーは許可なしで撤去でき、データがあるときだけ従来どおり `DANGER_OK=1` を求める。消す相手を確定できないとき（名前の指定・作業フォルダが別・同名の別ワークツリー）は `DANGER_OK=1` でも止め、docker が使えないときは止めて `KEEP_DATA=1` でだけ消さずに撤去する（2026-10-21 敵対的レビューで改訂・下の表）。撤去対象は「`git worktree list` に登録されたワークツリーのパス」で指定し、公式配置（`<primary>/.claude/worktrees/<name>`）も旧配置（`/mnt/c/app/wt-harness`）も同じ形で扱う。
 - 使い方: `[DANGER_OK=1] bash scripts/claude/wt-remove.sh <ワークツリーのパス>`（旧 `<track>` 指定は廃止）
 - 指定パスの realpath が `git worktree list` のどれとも一致しなければ exit 2（登録外のフォルダは消さない）。
 - 現行の安全策は維持: primary 拒否・撤去対象の内側から実行したら拒否・未コミット変更で中止・未 push で中止・`down -v` 失敗時は remove しない・`--force` を使わない。
@@ -314,7 +314,7 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 | `.worktreeinclude` に `backend/.env`・`e2e/.env.e2e` | イシューに明記 |
 | WorktreeCreate / WorktreeRemove フックを使わない | イシューに明記 |
 | `wt-new.sh` 廃止・`wt-ports.sh` 新設・規則は I097 のまま | イシューに明記 |
-| `wt-remove.sh` のデータ無しなら許可不要・あり/判定失敗なら必須・ブランチは残す | イシューに明記 |
+| `wt-remove.sh` のデータ無しなら許可不要・あり/判定失敗なら必須・ブランチは残す | イシューに明記（2026-10-21 改訂: 消す相手を確定できなければ許可があっても停止・docker 不在は `KEEP_DATA=1`・`-p` 固定。計画変更記録 2・3・4） |
 | ガードは最長一致 root で判定 | イシューに明記 |
 | `/plan-issue`・ステップ5は `git fetch origin` ＋ `origin/develop` 基点 | イシューに明記 |
 | `.gitignore` に `.claude/worktrees/` | イシューに明記 |
@@ -377,6 +377,17 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 | テスト | R1c2・R20a/R20c・R21・R22/R22b・R23・compose ファイル 8 種と `name :`・行頭空白・DV10〜DV23・FG-DV1（判定関数の除去）・P15、ckhas/cknot をヒアストリング化（pipefail の誤判定防止）、R23 の判定を行全体一致に | Medium・Low |
 - **理想基準での評価**: 採用。破壊的操作は「消す相手を構造的に固定し、確定できなければ許可があっても止める」が原則で、許可（`DANGER_OK`）の意味を「この撤去対象のデータを消す」の 1 つに保つ。
 - **承認**: 既定基準（2026-10-20）に基づき実装し事後報告。
+
+### 計画変更記録 4（2026-10-21・fix-loop＝敵対的レビュー第 3 周の findings 対応）
+- 診断: `docs/reviews/I179_fix_diagnosis_20261021_0220.md`（診断レビュー PASS）。ユーザー指示「理想的・最適なものを基準として問題なければ進めて OK」により案 A を採用。
+| 変更 | 内容 | 起点 |
+|------|------|------|
+| `pretooluse_guard.py` | Docker の volume 削除の判定を「(1) 生の文字列への正規表現 ∪ (2) トークン判定」の和集合にする。(1) は develop の規則を土台に、compose のグローバルオプション・短縮結合・`docker.exe`・`volume rm/remove/prune`・`system prune --volumes` を追加。(2) は (1) が取りこぼす docker 本体のオプション・クォートだけを補う。ヒアドキュメント除外は撤回。トークン判定の `down` はサブコマンドの位置だけを見る | High 2 件（後退・ヒアドキュメントの穴） |
+| テスト | DV-sh（第 3 周の再現入力 28 形）・DV-tok（トークン層でしか捕まらない形を前置コマンド・eval・& の後で）・NOREG（develop のガードで止まる入力は今も止まる）・FG-DV2/FG-DV3（各層が停止要因である証明）・R21b〜d・R22c・P15a〜e・バックアップ案内の検証 | High・Medium |
+| `wt-remove.sh` | バックアップ案内を「`up -d db` → `-p` 付き `pg_dump` → `test -s` で空でないことを確認」の 3 手順に、再実行の案内を `bash <スクリプト>` の形に | Medium・Low |
+| 文書 | イシュー（受け入れ条件・Danger Ops ほか）に改訂を注記・`danger-ops.md` の Docker の例・`worktree.md` §4「止まったときの片付け」・取り残し手順の条件・§5(C)・§11（コピーしない untracked の削除・未 push の入れ子）・計画 4-6 冒頭と設計判断表 | Medium |
+- 受容（誤ブロック）: 正規表現の層は、コミットメッセージや grep の引数の中の文字列でも止める（develop から続く既知の種類。安全装置が後退しないことを優先。`DANGER_OK=1` 前置か言い換えで解ける）。`down --volumes=false` も安全側で止める。
+- 理想基準での評価: 採用。安全装置の判定方式の変更は「旧方式で止まる入力は新方式でも止まる」を機械で保証してから行う（NOREG を常設）。
 
 ## レビュー結果
 - [20261021_0031 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0031.md)（計画変更＝ロックの扱いの追加後の再レビュー）

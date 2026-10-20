@@ -98,7 +98,7 @@ KEEP_DATA=1 bash scripts/claude/wt-remove.sh <primary>/.claude/worktrees/<name>
 
 - 撤去対象は `git worktree list` に登録されたワークツリーのパスで指定する（登録外のフォルダは扱わない）。公式配置も旧配置（`/mnt/c/app/wt-harness` など）も同じ形。
 - 未コミット変更・未 push コミットがあると中止する（作業消失防止）。primary と、撤去対象の内側からの実行は拒否する。`--force` は使わない。
-- **中に別のワークツリー（入れ子）があると中止する**。`.claude/worktrees/` は gitignore 済みなので、未コミット変更の検査にも `git worktree remove` にも引っかからず、そのままだと入れ子の中身（未コミットの作業を含む）ごと消えてしまう。サブエージェントが作った入れ子などは、中のものを先に（同じ `wt-remove.sh` で）撤去してから外側を撤去する。フォルダが既に無い登録（`git worktree list` に `prunable` と出るもの）は数えないので止まらない（登録は `git worktree prune` で消せる）。
+- **中に別のワークツリー（入れ子）があると中止する**。`.claude/worktrees/` は gitignore 済みなので、未コミット変更の検査にも `git worktree remove` にも引っかからず、そのままだと入れ子の中身（未コミットの作業を含む）ごと消えてしまう。サブエージェントが作った入れ子などは、中のものを先に（同じ `wt-remove.sh` で）撤去してから外側を撤去する。中の入れ子が未 push のコミットで止まる場合は、残したい作業ならその入れ子のセッションで push してから撤去し、不要な作業なら外側の撤去を見送る（`--force` は使わない。作業を捨てる判断は人が行う）。フォルダが既に無い登録（`git worktree list` に `prunable` と出るもの）は数えないので止まらない（登録は `git worktree prune` で消せる）。
 - ロック（§2）: 終了済みの Claude セッションが残したロック（pid のプロセスが無い）だけを外して撤去する。使用中のセッションのロックがあれば、何も消さずに止まる（そのセッションを終了してから再実行）。Claude 以外の理由のロックも止まるので、使っている人に確認のうえ `git worktree unlock <パス>` してから再実行する。
 - データの判定: Compose プロジェクト名（フォルダ名を小文字にし、英数字・`_`・`-` 以外を除いたもの＝Compose の既定名）のラベルで `docker ps -a`・`docker volume ls` を調べる。`down -v` は必ず `docker compose -p <既定名> down -v` で、消す相手を既定名に固定して実行する（環境変数・`.env`・親フォルダの compose ファイルで primary など別のプロジェクトが選ばれないようにするため）。
 - **消す相手を確定できないときは、`DANGER_OK=1` でも止まる**（何も消さない）:
@@ -108,6 +108,20 @@ KEEP_DATA=1 bash scripts/claude/wt-remove.sh <primary>/.claude/worktrees/<name>
 - docker が使えない（コマンドが無い・デーモン停止）ときは判定できないので止まる。docker を起動して再実行するか、データを消さずに撤去してよければ `KEEP_DATA=1` を付けて再実行する（`down -v` は実行せず、データは残るので、docker が使えるときに下の「取り残し」の手順で片付ける）。`KEEP_DATA=1` は docker が使えないときだけ効き、データがあると判定できた場合は止まる。
 - **ブランチは消さない**。完了メッセージに残ったブランチ名が出るので、不要なら `git branch -d <ブランチ>` で消す。
 
+**止まったときの片付け（持ち主を確かめてから手で行う）**: コンテナの作業フォルダが撤去対象と違う・同じ名前の別のワークツリーがある、で止まった場合（データが本当に撤去対象のものでも、Windows 側から起動して作業フォルダが `C:\…` の表記になっている場合などに起きる）:
+
+```bash
+# 1. 持ち主を確かめる（コンテナごとの作業フォルダ・名前）
+docker ps -a --filter label=com.docker.compose.project=<名前> --format '{{.Names}} {{.Label "com.docker.compose.project.working_dir"}}'
+# 2. 撤去対象のデータだと確認できたら、必要ならバックアップ（wt-remove.sh の停止メッセージに出る 3 手順）
+# 3. 承認を得て、primary から手で消す（-p で相手を固定）
+DANGER_OK=1 docker compose -p <名前> down -v
+# 4. データが無くなったので、wt-remove.sh を再実行する（今度は「データ無し」で撤去まで進む）
+bash scripts/claude/wt-remove.sh <ワークツリーのパス>
+```
+
+- 持ち主が別のワークツリー・別のクローンなら、手順 3 は行わない（そのワークツリーの持ち主が片付ける）。
+
 **取り残しの発見と削除**:
 
 ```bash
@@ -116,7 +130,7 @@ git worktree list                    # いまあるワークツリー
 docker volume ls -f dangling=true    # どのコンテナにも使われていない volume（ラベルの無い匿名 volume を含む）
 ```
 
-- `docker compose ls -a` にあって、対応するワークツリーが無いプロジェクトは取り残し。`docker compose -p <名前> down -v` で消す。**破壊的操作**（Postgres 開発データの削除）なので `docs/runbooks/danger-ops.md` に従い、承認を得てから `DANGER_OK=1 docker compose -p <名前> down -v` の形で実行する（ガードが `DANGER_OK=1` の無い形を止める）。`<名前>` は `git worktree list` のどのワークツリーのフォルダ名とも違うことを確かめる（primary の `study-app-multitenant` などを指定すると、そのワークツリーのデータが消える）。dangling volume の削除（`docker volume rm`・`docker volume prune`）も同じ扱い。
+- `docker compose ls -a` にあって、対応するワークツリーが無いプロジェクトは取り残し。`docker compose -p <名前> down -v` で消す。**破壊的操作**（Postgres 開発データの削除）なので `docs/runbooks/danger-ops.md` に従い、承認を得てから `DANGER_OK=1 docker compose -p <名前> down -v` の形で実行する（ガードが `DANGER_OK=1` の無い形を止める）。`<名前>` は、上の「止まったときの片付け」の手順 1 で持ち主を確かめたものだけを指定する（確かめずに primary の `study-app-multitenant` などを指定すると、そのワークツリーのデータが消える）。dangling volume の削除（`docker volume rm`・`docker volume prune`）も同じ扱い。
 
 ---
 
@@ -131,7 +145,7 @@ docker compose up -d                 # (2) 起動（正準手順・テスト実�
 ```
 
 - **⚠️ (B) `.env` 欠落は静かに壊れる**: `backend/.env` は `env_file` の `required: false` で参照されるため、無くても `docker compose up` は**失敗しない**。その代わり `SECRET_KEY` / `DB_PASSWORD` などが **insecure な既定値のまま静かに起動**する。→ `wt-ports.sh` は `backend/.env` が無ければ明示エラーで止める（primary に元ファイルが無く `.worktreeinclude` がコピーしなかった場合もここで気づく）。
-- **(C) `COMPOSE_PROJECT_NAME` を global に export しない**: Compose のプロジェクト名は既定でディレクトリ名になり、ワークツリーごとにコンテナ・named volume（Postgres データ含む）が自動的に分離される。global に export すると全ワークツリーが同一プロジェクト名になり、この分離が壊れる。→ `wt-ports.sh` / `wt-remove.sh` は当該変数が設定されていれば警告し、`wt-remove.sh` はデータ判定を「判定できない」に倒して許可を求める。
+- **(C) `COMPOSE_PROJECT_NAME` を global に export しない**: Compose のプロジェクト名は既定でディレクトリ名になり、ワークツリーごとにコンテナ・named volume（Postgres データ含む）が自動的に分離される。global に export すると全ワークツリーが同一プロジェクト名になり、この分離が壊れる。→ `wt-ports.sh` / `wt-remove.sh` は当該変数が設定されていれば警告し、`wt-remove.sh` は消す相手を確定できないとして `DANGER_OK=1` でも止まる（変数を外してから再実行する → §4）。
 - **(D) 掃除**: ワークツリーごとに named volume が増える。Docker を使ったワークツリーは `wt-remove.sh` で撤去し、`down -v` → `git worktree remove` の順で volume を回収する（§4）。
 
 ---
@@ -239,7 +253,7 @@ docker compose config | grep -A1 published
   1. `wt-harness` にしか無い未コミットのファイルを primary へ移す。`/issue-bootstrap` のイシューファイル（`docs/issues/open/I###.md`）とイシューレビュー（`docs/reviews/I###_issue_review_*.md`）は、運用上わざと未コミットにしているので、捨てると起票済みイシューの本文と採番の根拠が消える。**primary のセッションで**、`git -C /mnt/c/app/wt-harness status --porcelain --untracked-files=all` に出る `??` のファイル（`--untracked-files=all` でフォルダではなくファイル単位に出す）のうち primary に無いものを `cp /mnt/c/app/wt-harness/<パス> <パス>` で primary にコピーする（コピー元の読み取りはガードに抵触しない。`wt-harness` のセッションから primary へ書き込むのはガードで止まる）。コピー後、両方の中身が `cmp` で一致することを確かめる。
      - **コピーしないもの**: 同じ番号が既にクローズ済み（develop に `docs/issues/closed/I###.md` がある。`git ls-tree -r --name-only origin/develop docs/issues/closed/` で確認）のイシューファイルは古い版なのでコピーしない（open と closed が内容違いで並ぶのを防ぐ）。
      - gitignore 済みのファイルは `??` に出ないが、撤去で黙って消える。`git -C /mnt/c/app/wt-harness status --porcelain --ignored` の `!!` のうち、`.claude/settings.local.json`（個人の権限設定）など残したいものは、primary の同名ファイルと見比べて必要な行を primary 側へ手で反映する（上書きしない）。
-  2. `wt-harness` の中に入れ子（サブエージェントが作った `.claude/worktrees/agent-*` など）が残っていれば、先に撤去する（§4）。
-  3. primary から `bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness` で撤去する（Docker のデータが無ければ許可は不要）。手順 1 でコピーした untracked のファイルは、`wt-harness` 側では未コミット変更として撤去を止めるので、primary へのコピーを確かめたうえで、**`wt-harness` のセッションで**それらを削除してから実行する。
+  2. `wt-harness` の中に入れ子（サブエージェントが作った `.claude/worktrees/agent-*` など）が残っていれば、先に撤去する（§4。未 push の入れ子の扱いも §4）。
+  3. primary から `bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness` で撤去する（Docker のデータが無ければ許可は不要）。`wt-harness` に残っている untracked のファイル（手順 1 でコピーしたもの・「コピーしないもの」としたクローズ済みイシューの古い版の両方）は、未コミット変更として撤去を止める。primary へのコピーを確かめたうえで、**`wt-harness` のセッションで**それらをすべて削除してから実行する。
   4. 必要なら primary で `claude --worktree harness-<連番>` で作り直す（§2 の「作る前の確認」を先に行う）。
 - **primary は移行しない**（そのまま作成元として使う）。

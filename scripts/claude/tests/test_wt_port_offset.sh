@@ -111,15 +111,21 @@ ck   "P14 exit2"          2    "$RC"
 ckhas "P14 衝突メッセージ" "$OUT" "既存 worktree と衝突"
 ckt  "P14 .env 非作成"    test ! -e "$TMP/wt-app/.env"
 
-# --- TC-P15: 他のワークツリーの .env が export・空白・クォート付きの書き方 → その値を使用中として数える ---
-new_env; add_wt "$TMP/wt-app" b1
-printf 'export DB_PORT = "5442"\nREDIS_PORT="6389"\nBACKEND_PORT = 8010\nFRONTEND_PORT='"'"'3010'"'"'\nBACKEND_PORT2=9\n' > "$TMP/wt-app/.env"
-add_wt "$TMP/wt-api" b2; run_ports "$TMP/wt-api" --port-offset 10
-ck   "P15 exit2（offset 10 は使用中）" 2 "$RC"
-ckhas "P15 衝突メッセージ" "$OUT" "既存 worktree と衝突"
-run_ports "$TMP/wt-api"
-ck   "P15b 自動割当 exit0"   0    "$RC"
-ck   "P15b BACKEND=8020"     8020 "$(envval "$TMP/wt-api/.env" BACKEND_PORT)"
+# --- TC-P15a〜d: 他のワークツリーの .env の書き方ごとに、その値を使用中として数える（1 つの書き方だけで衝突が成立しないよう、
+#     ほかの 3 変数は別の値にしておき、BACKEND_PORT（オフセットの算出元）の書き方だけを変える） ---
+p15() { # $1=TC名 $2=wt-app の .env の内容（printf %b）
+  new_env; add_wt "$TMP/wt-app" b1
+  printf '%b' "DB_PORT=5522\nREDIS_PORT=6469\nFRONTEND_PORT=3090\n$2" > "$TMP/wt-app/.env"
+  add_wt "$TMP/wt-api" b2; run_ports "$TMP/wt-api"
+  ck "$1 自動割当 exit0"     0    "$RC"
+  ck "$1 BACKEND=8060（使用中の 8050 の次）" 8060 "$(envval "$TMP/wt-api/.env" BACKEND_PORT)"
+}
+p15 "P15a export 付き"     'export BACKEND_PORT=8050\n'
+p15 "P15b ダブルクォート"   'BACKEND_PORT="8050"\n'
+p15 "P15c シングルクォート" "BACKEND_PORT='8050'\n"
+p15 "P15d = の前後の空白"   'BACKEND_PORT = 8050\n'
+# --- TC-P15e: 名前の続く別の変数（BACKEND_PORT2）を先に置いても取り違えない ---
+p15 "P15e BACKEND_PORT2 が先" 'BACKEND_PORT2=9\nBACKEND_PORT=8050\n'
 
 # ===================== 引数検証 =====================
 # --- TC-P5: --port-offset 非整数 / 値なし → exit2 ---

@@ -50,7 +50,7 @@ case "$1 ${2:-}" in
   "ps -a")
     if [ -n "${STUB_CONTAINERS:-}" ]; then
       case "$*" in
-        *--format*) printf '%s\n' "${STUB_WORKDIR:-$(cd "$STUB_WT" && pwd -P)}" ;;   # working_dir ラベル
+        *--format*) printf '%s\n' "${STUB_WORKDIR-$(cd "$STUB_WT" && pwd -P)}" ;;   # working_dir ラベル（コンテナごとに 1 行・空も可）
         *)          printf '%s\n' "$STUB_CONTAINERS" ;;
       esac
     fi ;;
@@ -117,6 +117,10 @@ new_env; make_wt
 STUB_CONTAINERS=c1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R1 exit2"                2    "$RC"
 ckhas "R1 破壊的操作の案内"    "$OUT" "破壊的操作"
+ckhas "R1 バックアップ: -p で起動" "$OUT" "docker compose -p 'wt-app' up -d db"
+ckhas "R1 バックアップ: -p でダンプ" "$OUT" "docker compose -p 'wt-app' exec -T db pg_dump"
+ckhas "R1 バックアップ: 空でないこと" "$OUT" "test -s backup_wt-app_"
+ckhas "R1 再実行の案内は bash 付き" "$OUT" "DANGER_OK=1 bash "
 cknot "R1 down 非実行"         "$(cat "$DOCKER_LOG")" "down"
 ckhas "R1 worktree 残存"       "$(wl)" "/wt-app"
 
@@ -379,6 +383,28 @@ STUB_CONTAINERS=c1 STUB_WORKDIR="$PRIMARY" DANGER_OK=1 run_rm "$PRIMARY" "$WT_RE
 ck   "R21 exit2"               2    "$RC"
 ckhas "R21 作業フォルダの案内" "$OUT" "作業フォルダが撤去対象と違います"
 cknot "R21 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+# --- TC-R21b: コンテナ 2 件のうち 2 件目だけが別の場所（先頭行だけの照合では見逃す） ---
+new_env; make_wt
+STUB_CONTAINERS=c1 STUB_WORKDIR="$(cd "$WT" && pwd -P)"$'\n'"$PRIMARY" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R21b exit2"              2    "$RC"
+cknot "R21b down 非実行"       "$(cat "$DOCKER_LOG")" "down"
+# --- TC-R21c: 作業フォルダのラベルが空（古い compose 等）→ 中止 ---
+new_env; make_wt
+STUB_CONTAINERS=c1 STUB_WORKDIR="" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R21c exit2"              2    "$RC"
+cknot "R21c down 非実行"       "$(cat "$DOCKER_LOG")" "down"
+# --- TC-R21d: 作業フォルダのラベルが symlink 経由の同じ場所 → 同じとみなして撤去できる（pwd -P で実パス化） ---
+new_env; make_wt
+ln -s "$WT" "$TMP/wt-link"
+STUB_CONTAINERS=c1 STUB_WORKDIR="$TMP/wt-link" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R21d exit0"              0    "$RC"
+ckhas "R21d down 実行"         "$(cat "$DOCKER_LOG")" "compose -p wt-app down -v"
+# --- TC-R22c: 名前を確定できない（.env の指定）・docker 不在・KEEP_DATA=1 → 中止（KEEP_DATA は戻り値 3 専用） ---
+new_env; make_wt
+printf 'COMPOSE_PROJECT_NAME=x\n' > "$WT/.env"
+OUT="$( cd "$PRIMARY" && PATH="$NODOCKER" KEEP_DATA=1 "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
+ck   "R22c exit2"              2    "$RC"
+ckhas "R22c worktree 残存"     "$(wl)" "/wt-app"
 
 # --- TC-R22: 名前を確定できない（COMPOSE_PROJECT_NAME あり）・DANGER_OK=1 → down せず中止 ---
 new_env; make_wt

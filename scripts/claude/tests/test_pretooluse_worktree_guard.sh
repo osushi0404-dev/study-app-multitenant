@@ -129,19 +129,107 @@ ck "DV16 docker system prune --volumes→block"      2 "$(bash_j 'docker --conte
 ck "DV17 bash -c の中→block"                       2 "$(bash_j 'bash -c "docker compose -p x down -v"')"
 ck "DV18 改行の後→block"                           2 "$(bash_j "$(printf 'echo hi\ndocker compose down -v')")"
 ck "DV19 サブシェル・& の後→block"                 2 "$(bash_j 'sleep 1 & ( docker compose down -v )')"
-ck "DV20 コミットメッセージ中の文字列→allow"       0 "$(bash_j 'git commit -m "docs: docker volume rm と docker compose down -v の手順"')"
-ck "DV21 grep の引数・pytest -k の down→allow"     0 "$(bash_j 'grep -n "docker volume prune" README.md; docker compose exec backend pytest -k "count down" -v')"
+# 文字列の中の記述も止める（develop から続く既知の誤ブロック。安全装置が後退しないことを優先する・DANGER_OK=1 前置か言い換えで解ける）
+ck "DV20 コミットメッセージ中の文字列→block（既知の誤ブロック）" 2 "$(bash_j 'git commit -m "docs: docker volume rm の手順"')"
+ck "DV21 pytest -k down -v（down はサブコマンドでない）→allow" 0 "$(bash_j 'docker compose exec backend pytest -k down -v')"
+ck "DV21b pytest -k \"count down\" -v→allow"                0 "$(bash_j 'docker compose exec backend pytest -k "count down" -v')"
 ck "DV22 system prune（--volumes なし）→allow"     0 "$(bash_j 'docker system prune -f')"
-ck "DV23 down --volumes=false→allow"              0 "$(bash_j 'docker compose down --volumes=false')"
+ck "DV23 down --volumes=false→block（安全側）"     2 "$(bash_j 'docker compose down --volumes=false')"
+
+# --- fix-loop（敵対的レビュー第3周の後退・ヒアドキュメントの穴）: シェルの書き方に関係なく止まる（DV24〜DV45） ---
+while IFS= read -r c; do
+  [ -n "$c" ] || continue
+  ck "DV-sh ${c}→block" 2 "$(bash_j "$(printf '%b' "$c")")"
+done <<'CASES'
+true;docker compose down -v
+cd /tmp&&docker compose down -v
+echo a|docker compose down -v
+echo $(docker compose down -v)
+echo `docker volume rm v1`
+bash -lc 'docker compose down -v'
+sh -ec 'docker volume prune -f'
+timeout 60 docker compose down -v
+nice -n 5 docker compose down -v
+sudo -E docker compose down -v
+env -i docker compose down -v
+env -u X docker compose down -v
+stdbuf -oL docker compose down -v
+if true; then docker compose down -v; fi
+for p in a b; do docker compose -p $p down -v; done
+f(){ docker compose down -v; }; f
+eval docker compose down -v
+sudo docker volume rm v1
+sleep 1 & docker compose down -v
+docker volume ls -q -f dangling=true | xargs -r docker volume rm
+find . -name x -exec docker volume rm {} \;
+docker.exe compose down -v
+docker compose down -vt5
+cat <<EOF && docker compose down -v\nx\nEOF
+echo "<<EOF"\ndocker volume rm v1
+cat <<<x; docker compose -p x down -v
+true <<x && docker volume rm wt-app_postgres_data
+cat <<'EOF'\ndocker compose down -v\nEOF
+CASES
+
+# --- トークン層でしか捕まらない形（docker 本体のオプション付き）を、前置コマンド・eval・& の後でも止める ---
+#     （正規表現の層はこれらを捕まえないので、トークン層の前置き読み飛ばし・eval の再帰・& の区切りが停止要因になる）
+ck "DV-tok sudo の後→block"  2 "$(bash_j 'sudo docker --context x compose down -v')"
+ck "DV-tok env X=1 の後→block" 2 "$(bash_j 'env X=1 docker --context x compose down -v')"
+ck "DV-tok eval の中→block"  2 "$(bash_j 'eval docker --context x compose down -v')"
+ck "DV-tok & の後→block"     2 "$(bash_j 'sleep 1 & docker --context x compose down -v')"
+ck "DV-tok ( の後→block"     2 "$(bash_j '( docker --context x compose down -v )')"
+
+# --- develop のガードとの比較（後退しないこと）: develop で止まっていた入力は、今のガードでも止まる ---
+OLD_GUARD="$TMP/guard_develop.py"
+if git -C "$REPO_ROOT" show origin/develop:scripts/claude/hooks/pretooluse_guard.py > "$OLD_GUARD" 2>/dev/null; then
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    cmd="$(printf '%b' "$c")"
+    old_rc="$(bash_j "$cmd" "$OLD_GUARD")"
+    if [ "$old_rc" = "2" ]; then
+      ck "NOREG ${c}（develop=2）" 2 "$(bash_j "$cmd")"
+    fi
+  done <<'CASES'
+docker compose down -v
+docker compose down --volumes
+true;docker compose down -v
+timeout 60 docker compose down -v
+if true; then docker compose down -v; fi
+cat <<EOF && docker compose down -v\nx\nEOF
+echo "<<EOF"\ndocker compose down -v
+bash -lc 'docker compose down -v'
+docker compose down -v; echo ok
+x=1 docker compose down -v
+CASES
+else
+  echo "SKIP NOREG（origin/develop を取得できない環境）"
+fi
 # FG-DV1: 判定関数を常に None にした複製では DV2・DV10 が素通りする（ブロックの停止要因が判定関数である証明）
 BROKEN_DV="$TMP/guard_nowipe.py"
-sed 's/^def _docker_volume_wipe(cmd: str, depth: int = 0):/def _docker_volume_wipe(cmd: str, depth: int = 0):\n    return None  # FG-DV1/' \
+sed 's/^def _docker_volume_wipe(cmd: str):/def _docker_volume_wipe(cmd: str):\n    return None  # FG-DV1/' \
   "$GUARD" > "$BROKEN_DV"
 if grep -q 'return None  # FG-DV1' "$BROKEN_DV"; then
   ck "FG-DV1 判定除去複製でDV2=allow"  0 "$(bash_j 'docker compose -p wt-harness down -v' "$BROKEN_DV")"
   ck "FG-DV1 判定除去複製でDV10=allow" 0 "$(bash_j 'docker --context x compose down -v' "$BROKEN_DV")"
 else
   ck "FG-DV1 注入できた" 0 1
+fi
+# FG-DV2: (1) 正規表現の層を外した複製では、トークン判定だけでは捕まらない DV-sh の形（true;docker）が素通りする
+#        （和集合の (1) が停止要因である証明＝置き換えると後退することの再現）
+BROKEN_RX="$TMP/guard_norx.py"
+sed 's/^    for rx, reason in _DOCKER_WIPE_RES:$/    for rx, reason in ():/' "$GUARD" > "$BROKEN_RX"
+if grep -q '^    for rx, reason in ():$' "$BROKEN_RX"; then
+  ck "FG-DV2 正規表現の層の除去複製で true;docker=allow" 0 "$(bash_j 'true;docker compose down -v' "$BROKEN_RX")"
+else
+  ck "FG-DV2 注入できた" 0 1
+fi
+# FG-DV3: (2) トークン判定の層を外した複製では、DV10（docker --context x compose）が素通りする（(2) が停止要因である証明）
+BROKEN_TK="$TMP/guard_notok.py"
+sed 's/^    return _docker_volume_wipe_tokens(cmd)$/    return None  # FG-DV3/' "$GUARD" > "$BROKEN_TK"
+if grep -q 'return None  # FG-DV3' "$BROKEN_TK"; then
+  ck "FG-DV3 トークン層の除去複製で DV10=allow" 0 "$(bash_j 'docker --context x compose down -v' "$BROKEN_TK")"
+else
+  ck "FG-DV3 注入できた" 0 1
 fi
 
 # --- 入れ子ワークツリー（I179 TC-G1〜G7・FG-G1） ---

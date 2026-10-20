@@ -142,11 +142,18 @@ DATA=0; detect_data || DATA=$?
 
 if [ "$DATA" -ne 0 ] && [ "$DATA" -ne 3 ] && [ -n "$SAME_NAME" ]; then
   echo "[wt-remove] Compose プロジェクト名 '$PROJECT' が別のワークツリーと同じです: $SAME_NAME" >&2
-  echo "[wt-remove] データがどちらのものか区別できないため、DANGER_OK=1 でも down -v は実行しません。データの持ち主を確認して手動で片付けてください（worktree.md §4）" >&2
+  echo "[wt-remove] データがどちらのものか区別できないため、DANGER_OK=1 でも down -v は実行しません。持ち主の確認と手での片付けは worktree.md §4「止まったときの片付け」に従ってください" >&2
   exit 2
 fi
 
-BACKUP_HINT="バックアップは primary で: ( cd '$WT_PATH' && docker compose -p '$PROJECT' exec -T db pg_dump -U postgres learning_app ) > backup_${PROJECT}_\$(date +%Y%m%d_%H%M%S).sql（db が止まっていれば先に docker compose -p '$PROJECT' start db）。scripts/db_backup.sh は今いるフォルダのプロジェクトを対象にするため撤去対象には使えない"
+# バックアップの案内（撤去対象のプロジェクトを -p で指定。scripts/db_backup.sh は今いるフォルダのプロジェクトが対象のため使えない）
+backup_hint() {
+  local f="backup_${PROJECT}_<日時>.sql"
+  echo "[wt-remove] バックアップは primary で次を順に実行する（scripts/db_backup.sh は今いるフォルダのプロジェクトが対象なので撤去対象には使えない）:" >&2
+  echo "[wt-remove]   1) ( cd '$WT_PATH' && docker compose -p '$PROJECT' up -d db )   # コンテナが無い・止まっていても volume のデータで起動する" >&2
+  echo "[wt-remove]   2) ( cd '$WT_PATH' && docker compose -p '$PROJECT' exec -T db pg_dump -U postgres learning_app ) > $f" >&2
+  echo "[wt-remove]   3) test -s $f && echo ok   # ok と出なければ（空のファイル）バックアップは取れていない" >&2
+}
 case "$DATA" in
   0)
     echo "[wt-remove] Compose プロジェクト '$PROJECT' のコンテナ・volume はありません。docker compose down -v は実行しません" ;;
@@ -154,8 +161,8 @@ case "$DATA" in
     if [ "${DANGER_OK:-}" != "1" ]; then
       echo "[wt-remove] Compose プロジェクト '$PROJECT' のコンテナまたは volume が残っています。" >&2
       echo "[wt-remove] docker compose down -v は破壊的操作です（Postgres 開発データ削除を含む）。" >&2
-      echo "[wt-remove] $BACKUP_HINT" >&2
-      echo "[wt-remove] バックアップのうえ 'DANGER_OK=1 $0 $WT_ARG' で再実行してください。" >&2
+      backup_hint
+      echo "[wt-remove] バックアップのうえ DANGER_OK=1 bash $0 '$WT_ARG' で再実行してください。" >&2
       exit 2
     fi
     # 当該ディレクトリで、プロジェクト名を -p で固定して named volume を回収（§5D）。
@@ -173,12 +180,12 @@ case "$DATA" in
       echo "[wt-remove] ⚠️ docker が使えないため、down -v を実行せずに撤去します（KEEP_DATA=1）。Compose プロジェクト '$PROJECT' のデータが残っていた場合は、docker が使えるときに worktree.md §4「取り残しの発見と削除」で片付けてください" >&2
     else
       echo "[wt-remove] docker が使えない（コマンドが無い・デーモン停止など）ため、データの有無を判定できません。" >&2
-      echo "[wt-remove] docker を起動して再実行するか、データを消さずに撤去してよければ 'KEEP_DATA=1 $0 $WT_ARG' で再実行してください（down -v は実行しません）" >&2
+      echo "[wt-remove] docker を起動して再実行するか、データを消さずに撤去してよければ KEEP_DATA=1 bash $0 '$WT_ARG' で再実行してください（down -v は実行しません）" >&2
       exit 2
     fi ;;
   4)
     echo "[wt-remove] Compose プロジェクト '$PROJECT' のコンテナの作業フォルダが撤去対象と違います（同じ名前の別のプロジェクト・親フォルダの compose ファイルで起動したもの）。" >&2
-    echo "[wt-remove] 別の場所のデータを消してしまうため、DANGER_OK=1 でも down -v は実行しません。docker ps -a --filter label=com.docker.compose.project=$PROJECT で持ち主を確認してください" >&2
+    echo "[wt-remove] 別の場所のデータを消してしまうため、DANGER_OK=1 でも down -v は実行しません。持ち主の確認と手での片付けは worktree.md §4「止まったときの片付け」に従ってください" >&2
     exit 2 ;;
 esac
 

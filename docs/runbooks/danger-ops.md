@@ -5,7 +5,7 @@
 ## 例
 - DB: DROP / TRUNCATE / WHEREなし UPDATE・DELETE / 大量更新・削除 / 破壊的マイグレーション
 - Git: force push / reset --hard / 大規模rebase / **未コミット変更があるファイルへの `git checkout/restore <file>`**（下記注記）
-- Docker: down -v / --volumes（データ消失）
+- Docker: down -v / --volumes・volume rm / prune・system prune --volumes（データ消失。ガードが `DANGER_OK=1` の無い形を止める。ワークツリーの撤去は `scripts/claude/wt-remove.sh` を使い、消す相手を確定できない場合は許可があっても止まる → `docs/runbooks/worktree.md` §4）
 - Files: rm -rf / secrets 操作
 
 ## 未コミット変更の取り消し（`git checkout/restore <file>`）

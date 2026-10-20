@@ -196,11 +196,29 @@ def _push_is_dynamic(cmd: str) -> bool:
                     return True
     return False
 
-# --- Docker の named volume 削除の判定（I179・トークンベース） ---
-# 生の文字列への正規表現では docker 本体のグローバルオプション（--context/-H）・クォート・短縮結合（-vt 5）を
-# 取りこぼし、逆にコミットメッセージや grep の引数中の文字列を誤ブロックする。_segments で実行される語を見る。
-_DOCKER_HEADS = ("docker", "docker-compose")
+# --- Docker の named volume 削除の判定（I179） ---
+# 2 層の和集合（どちらかが一致したらブロック）。
+#  (1) 生の文字列への正規表現（develop から続く層）: シェルの書き方（空白なしの ; && |・前置コマンド・sh -lc・$( )・
+#      予約語・関数・ヒアドキュメント・xargs/find -exec）に関係なく「どこに書かれていても止める」。安全装置が後退しない土台。
+#      コミットメッセージ等の文字列も止める（既知の誤ブロック。DANGER_OK=1 前置か言い換えで解ける）。
+#  (2) トークン判定（_segments）: (1) が取りこぼす docker 本体のグローバルオプション（--context/-H）・クォートした語を追加で捕捉する。
+#  判定方式を置き換えると後退する（I179 敵対的レビュー第 3 周）ため、(2) は (1) を置き換えず重ねるだけにする。
+_COMPOSE_GLOBAL_RE = (r"(?:\s+(?:-[fp]|--file|--project-name|--env-file|--profile|--project-directory|--ansi|--progress|--parallel)"
+                      r"(?:\s+|=)\S+|\s+--(?:compatibility|dry-run|all-resources|verbose))*")
+_DOCKER_WIPE_RES = (
+    (re.compile(r"\bdocker(?:\.exe)?(?:\s+compose|-compose(?:\.exe)?)" + _COMPOSE_GLOBAL_RE
+                + r"\s+down\b.*\s(?:-[A-Za-z]*v[A-Za-z]*(?![A-Za-z])|--volumes\b)", re.I),
+     "docker compose down -v/--volumes requires DANGER_OK=1"),
+    (re.compile(r"\bdocker(?:\.exe)?\b[^;&|\n]*?\bvolume\s+(?:rm|remove|prune)\b", re.I),
+     "docker volume rm/prune requires DANGER_OK=1"),
+    (re.compile(r"\bdocker(?:\.exe)?\b[^;&|\n]*?\bsystem\s+prune\b.*\s--volumes\b", re.I),
+     "docker system prune --volumes requires DANGER_OK=1"),
+)
+_DOCKER_HEADS = ("docker", "docker.exe", "docker-compose", "docker-compose.exe")
 _CMD_PREFIXES = ("env", "sudo", "command", "exec", "time", "nohup", "nice")
+# docker compose のグローバルオプションのうち値を取るもの（サブコマンドの位置を求めるときに値ごと読み飛ばす）
+_COMPOSE_VALUE_OPTS = ("-f", "--file", "-p", "--project-name", "--env-file", "--profile",
+                       "--project-directory", "--ansi", "--progress", "--parallel")
 
 def _is_volumes_flag(tok: str) -> bool:
     """docker compose down の volume 削除フラグ（--volumes[=true]・-v を含む短縮クラスタ -v/-vt/-tv 等）なら True。"""
@@ -210,20 +228,24 @@ def _is_volumes_flag(tok: str) -> bool:
     m = re.match(r"-([A-Za-z]+)", tok)
     return bool(m) and "v" in m.group(1)
 
-def _docker_volume_wipe(cmd: str, depth: int = 0):
-    """named volume を消す docker コマンドなら理由を返す（compose down -v・volume rm/prune・system prune --volumes）。
-    sh/bash -c・eval の中身も 3 段まで再帰で見る。改行・`&`・サブシェルの括弧も区切りとして扱う。非該当は None。"""
-    segs = []
-    heredoc_end = None
-    for line in cmd.replace("\\\n", " ").splitlines():
-        if heredoc_end is not None:          # ヒアドキュメントの本文はデータ（実行されない）なので見ない
-            if line.strip() == heredoc_end:
-                heredoc_end = None
+def _compose_subcommand_index(sub: list):
+    """docker compose の引数列から、サブコマンド（down 等）の位置を返す（グローバルオプションとその値を読み飛ばす）。無ければ None。"""
+    i = 0
+    while i < len(sub):
+        t = sub[i]
+        if t in _COMPOSE_VALUE_OPTS:
+            i += 2
             continue
-        m = re.search(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1", line)
-        if m:
-            heredoc_end = m.group(2)
-            line = line[:m.start()]
+        if t.startswith("-"):
+            i += 1
+            continue
+        return i
+    return None
+
+def _docker_volume_wipe_tokens(cmd: str, depth: int = 0):
+    """(2) トークン判定。sh/bash -c・eval の中身も 3 段まで再帰で見る。改行・`&`・サブシェルの括弧も区切りとして扱う。"""
+    segs = []
+    for line in cmd.replace("\\\n", " ").splitlines():
         for toks in _segments(line):
             seg = []
             for t in toks:
@@ -247,26 +269,27 @@ def _docker_volume_wipe(cmd: str, depth: int = 0):
         head = os.path.basename(rest[0].lstrip("({!"))
         if depth < 3 and head in _WRAP_SHELLS and "-c" in rest:
             ci = rest.index("-c")
-            r = _docker_volume_wipe(rest[ci + 1], depth + 1) if ci + 1 < len(rest) else None
+            r = _docker_volume_wipe_tokens(rest[ci + 1], depth + 1) if ci + 1 < len(rest) else None
             if r:
                 return r
             continue
         if depth < 3 and head == "eval":
-            r = _docker_volume_wipe(" ".join(rest[1:]), depth + 1)
+            r = _docker_volume_wipe_tokens(" ".join(rest[1:]), depth + 1)
             if r:
                 return r
             continue
         if head not in _DOCKER_HEADS:
             continue
         args = rest[1:]
-        if head == "docker-compose":
+        if head.startswith("docker-compose"):
             sub = args
         elif "compose" in args:
             sub = args[args.index("compose") + 1:]
         else:
             sub = None
         if sub is not None:
-            if "down" in sub and any(_is_volumes_flag(a) for a in sub[sub.index("down") + 1:]):
+            k = _compose_subcommand_index(sub)
+            if k is not None and sub[k] == "down" and any(_is_volumes_flag(a) for a in sub[k + 1:]):
                 return "docker compose down -v/--volumes requires DANGER_OK=1"
             continue
         for obj, verbs in (("volume", ("rm", "remove", "prune")), ("system", ("prune",))):
@@ -279,6 +302,13 @@ def _docker_volume_wipe(cmd: str, depth: int = 0):
                     if any(a == "--volumes" or a.startswith("--volumes=") for a in after):
                         return "docker system prune --volumes requires DANGER_OK=1"
     return None
+
+def _docker_volume_wipe(cmd: str):
+    """named volume を消す docker コマンドなら理由を返す（(1) 正規表現 ∪ (2) トークン判定）。非該当は None。"""
+    for rx, reason in _DOCKER_WIPE_RES:
+        if rx.search(cmd):
+            return reason
+    return _docker_volume_wipe_tokens(cmd)
 
 # 高リスク Edit/Write パス（リポジトリルート相対で照合）。
 # 価値判断寄り（依存/スキーマ/インフラ）のため、編集時に ask（プロンプト）を出す。
