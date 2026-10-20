@@ -167,7 +167,8 @@ GitHub 側の 3 つの設定を組み合わせて、マージの最後の砦を 
 | §4 確認 5（新規） | bot が承認してもマージ要件を満たさないこと。develop に CODEOWNERS が入った後に行う。手順: ユーザーが develop 宛てに **1 行のファイル変更を含む**確認用 PR を作る（Code Owners の要件はファイル変更を含む PR にだけ働くため、空コミットは不可）→ bot で `gh pr review <PR番号> --approve` → `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` が `REVIEW_REQUIRED`・`BLOCKED` のまま → マージせずに `gh pr close <PR番号> --delete-branch`（adversarial 第1周 Medium 対応・fix-loop 20261018 L1 で `--delete-branch` を追加） |
 | §4 確認 6（新規） | bot がマージできないこと（push 制限）。前提（`APPROVED`・BEHIND/DIRTY でない・承認後のコミットなし・必須チェック 5 件 SUCCESS）を `gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews,statusCheckRollup` で確かめてから、GitHub のマージ API（`gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge`）を呼び、応答の `message` が push 権限の不足を示すこと。`gh pr merge` は手元で `BLOCKED` を判定して汎用の文で止まり区別できないため使わない（adversarial 第1周・第2周 Medium 対応）。fix-loop 20261018 で次を追加: 実行前に `oshui0404` の了承を得る（設定ミス時は実際にマージされるため）・`gh api -i` で HTTP ステータスも記録する・`message` から URL を除いてから判定する・マージは確認の後に行う（手動テストの流れがある場合はそれに従う） |
 | §1.5 Dismiss stale の補足 | 「PR の宛先ブランチの変更（`gh pr edit --base`）では承認が取り消されない可能性がある（未確認・/retro で確認）。宛先が変わった PR は承認の前に差分を確かめ直す」を追記する（fix-loop 20261018 L5・/retro 送り） |
-| §4 確認 1・2 | 期待結果を「push が拒否される」に変える（adversarial 第2周 Low 対応）。**bot だけが実行し、`oshui0404` は実行しない**と明記する。`oshui0404` は Restrict の一覧に入っているため、「Do not allow bypassing」の設定を誤っていると確認の操作そのものが develop・main への直接 push として通ってしまう（main は初期コミットだけなので、レビューと CI を経ないコミットがすべて入る）。PR 必須と bypass 不可は設定画面で確認する（adversarial 再ステージ第1周 Medium 対応） |
+| §4 確認 1・2 | **I178 以降は直 push の確認を行わない**と書き換える。理由: (a) `oshui0404` が実行すると、Restrict の一覧に入っているため「Do not allow bypassing」の設定ミス時に確認の操作そのものが develop・main への直接 push として通る（main は初期コミットだけなので、レビューと CI を経ないコミットがすべて入る）（adversarial 再ステージ第1周 Medium）。(b) bot（Claude）からの develop・main への push は Claude 側のガードが止めるため実行できず、人の端末ではどのアカウントで push されるか確かめにくい（再ステージ第2周 Medium）。PR 必須・bypass 不可・Restrict は設定画面で確認し、効き目は確認 4〜6 で確かめる |
+| §1.5 運用（自動マージ） | 自動マージはリポジトリ設定で許可していない（`allow_auto_merge=false`・2026-10-20 実測）旨と、許可に変える場合は確認の順番を見直す旨を追記する（再ステージ第2周 Medium 対応・R9） |
 | §1.5 運用・§6「承認したのに BLOCKED に戻った」 | develop への追従のコミットでは、差分が変わらない場合に承認が残ることもある旨を書き、「取り消された場合だけ再承認」とする（adversarial 再ステージ第1周 Low 対応） |
 | §6 緊急手順の追記 | 「Do not allow bypassing」をオンに戻した後、設定画面で §1 の表と突き合わせて戻っていることを確かめる一文を追加する（adversarial 第2周 Low 対応） |
 | §5 ロールバック | develop・main の「Require review from Code Owners」「Restrict who can push」を OFF にし、develop だけ「Require approvals」「Dismiss stale approvals」も OFF に戻す（main は承認 1・Dismiss stale ON のまま＝元の値）。CODEOWNERS は revert の PR で削除する（8 章と同じ内容。adversarial 第1周 Low 対応で 8 章に合わせた） |
@@ -251,7 +252,7 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 ### ステップ 5: マージ後の確認と記録
 - PR #298 のマージ後（CODEOWNERS が develop に入った後）に行う。
 - 結果は、bot が作る記録用 PR（`docs(I178): マージ後確認の記録`・develop 宛て）で closed のテスト文書に記入し、ユーザーが承認・マージする（adversarial 第2周 Medium 対応）。記録用 PR の対象は No.7・TC-17・No.8 の結果と、レビュー文書の AC 判定表のうち未記入のもの（AC-1 は TC-17 で確定、AC-2〜AC-5 は手動確認の結果。AC-6・AC-7 は /test で記入）（fix-loop 20261018 M3・M4 対応・adversarial 再ステージ第1周 Medium 対応）。
-- No.7 または TC-17 が NG の場合は Issue #297 を開き直し、原因を調べて直す（設定の誤りはユーザーが設定画面で、文書・CODEOWNERS の誤りは bot が作る新しい PR で直す）。直した後にやり直し、結果を記録用 PR で記入する（fix-loop 20261018 M4 対応）。
+- No.7 または TC-17 が NG の場合は Issue #297 を開いたまま（閉じていれば開き直し）、原因を調べて直す（#298 の宛先 develop は既定ブランチではないため、マージしても #297 は自動では閉じない）（設定の誤りはユーザーが設定画面で、文書・CODEOWNERS の誤りは bot が作る新しい PR で直す）。直した後にやり直し、結果を記録用 PR で記入する（fix-loop 20261018 M4 対応）。
 - /close step 6 では承認だけを依頼し、ユーザーは No.5 で Approve だけを押す。マージは No.8 の再承認の後（fix-loop 20261018 H2 対応）。
 - → TC-17・手動 No.7 参照。
 
@@ -289,7 +290,8 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 | R3 | main には CODEOWNERS が無く、Code Owners の要件が効かない | Restrict who can push で守る（3-3）。runbook に明記する（TC-10） |
 | R4 | ユーザー自身が作った PR がマージできない | PR は bot が作る運用を runbook に明記する（TC-11）。急ぎの場合の手順も書く（5-2 §6） |
 | R5 | 設定を変えた時点で、作業中の PR（#293 など）に承認が必要になる | ステップ 4 の前にユーザーへ伝える。増える手間は承認ボタン 1 回 |
-| R6 | 承認の後に develop が進むと、追従のコミットで承認が取り消され、再承認が必要になる | grill-me で了承済み。close スキル step 6 と runbook §6 に書く（TC-14・TC-12） |
+| R6 | 承認の後に develop が進むと、追従のコミットで承認が取り消され、再承認が必要になる（差分が変わらない追従では承認が残ることもある） | grill-me で了承済み。close スキル step 6 と runbook §1.5 運用・§6 に書く（TC-14・TC-12）。取り消された場合だけ再承認する |
+| R9 | 自動マージ（auto-merge）が予約されていると、ユーザーが承認しただけでマージが走り、承認の後・マージの前の確認（No.6・No.8）ができなくなる | リポジトリ設定で自動マージは許可されていない（`gh api repos/osushi0404-dev/study-app-multitenant --jq .allow_auto_merge` = `false`・PR #298 の `autoMergeRequest` = `null`・2026-10-20 実測）。手動 No.5 の前提として `autoMergeRequest` が `null` であることを確かめる。runbook §1.5 運用に記載（adversarial 再ステージ第2周 Medium 対応） |
 | R7 | 将来、設定が誰かの操作で緩められても、bot は保護設定を読めないので気づけない | 本イシューの範囲外。現状は検知の仕組みが無い（pr-base-sync は CLEAN も合格として扱い、push 制限のため bot から見た状態が CLEAN になるとも限らない。adversarial 第1周 Medium 対応で、以前の「CLEAN が兆候になる」という記述を取り消した）。機械的な検知は /retro で別イシュー化を判断する |
 | R8 | 「Restrict who can push」は classic branch protection の組織リポジトリ専用の設定 | 所有者が Organization であることを確認済み（3-2 #2） |
 

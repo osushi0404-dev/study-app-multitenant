@@ -15,8 +15,9 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 RUNBOOK="${RUNBOOK:-docs/runbooks/branch-protection-setup.md}"
 SKILL="${SKILL:-.claude/skills/close/SKILL.md}"
+CODEOWNERS="${CODEOWNERS:-.github/CODEOWNERS}"
 # 秘密情報ではなく runbook の SHA-256（detect-secrets の誤検知を抑止）
-RUNBOOK_SHA256="c41631a4deabe372405fb5124f420c80e7e92efa35bbcce227c47bb722732cdd"  # pragma: allowlist secret
+RUNBOOK_SHA256="7ca974289148098c70bfd5445156df8d01cb714a6ccea584b2196467cb3a7740"  # pragma: allowlist secret
 
 PASS=0
 FAIL=0
@@ -189,6 +190,18 @@ EXPECTED_STEP6="${STEP6_HEAD}
    承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
    手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。"
 expect_block "close step 6" "$STEP6" "$EXPECTED_STEP6"
+
+# CODEOWNERS は全文を固定する（後に書いた行が優先されるため、末尾に別の所有者の行を足すだけで
+# 承認者が入れ替わる。存在確認の grep では見逃す・adversarial 再ステージ第2周 Medium）
+IFS= read -r -d '' EXPECTED_CODEOWNERS <<'EOF'
+# 全ファイルの所有者をリポジトリ管理者に限定する（I178）。
+# develop・main のブランチ保護「Require review from Code Owners」と組み合わせ、
+# 管理者以外（bot・外部の人）の承認ではマージ要件を満たさないようにする。
+# 設定と理由: docs/runbooks/branch-protection-setup.md
+* @oshui0404
+EOF
+ACTUAL_CODEOWNERS=$(cat "$CODEOWNERS" 2>/dev/null; echo x); ACTUAL_CODEOWNERS=${ACTUAL_CODEOWNERS%x}
+expect_block ".github/CODEOWNERS 全文" "$ACTUAL_CODEOWNERS" "$EXPECTED_CODEOWNERS"
 
 echo "---"
 if [ "$FAIL" -eq 0 ]; then

@@ -39,6 +39,46 @@
 - `docs/tests/open/I178_manual_test.md`（記録の対象・失敗時の分岐）・`docs/plans/open/plan_I178.md`（5-2・ステップ 4・ステップ 5）
 - 確認: test_i178 `RESULT: OK (13 checks)`・第3周の改変 9 通りは引き続きすべて exit 1・TC-01〜TC-18 全件 exit 0・決定論ゲート 18 行すべて合格
 
-第 1 周は NEW_HIGH 1 件のため、修正後に第 2 周へ進む。
+第 1 周は NEW_HIGH 1 件のため、修正後に第 2 周へ進む（第1周修正コミット a1ae23e）。修正で計画書を変えたため、第 2 周の前に /plan-issue-review を再実行した（20261020_2003・Warning 3 件。修正推奨の 1 件＝計画 3-4 への CONTRIBUTING.md・SECURITY.md の検索結果の追記を 30834f6 で対応。残り 2 件は対応不要と判定済み）。
 
-VERDICT: HIGH
+---
+
+## 第 2 周（2026-10-20・3 エージェント並列）
+
+| # | 観点 | NEW_CRITICAL | NEW_HIGH |
+|---|---|---|---|
+| 1 | ロジック回避・実機 repro（固定） | 0 | 0 |
+| 2 | テストの false-green・tautology（固定） | 0 | 0 |
+| 3 | 要件・脅威モデルの網羅漏れ（固定） | 0 | 0 |
+| | **合計** | **0** | **0** |
+
+サブエージェント総数: 第1周 3 + 第2周 3 = 6（上限 15）。新規 Critical/High 0 件の周回のため**ステージ通過**。
+
+### findings と対応
+
+ステージは通過したが、Medium は確認作業の実行可能性・正確さに関わる具体的な指摘のため、通過後に修正した（修正の確認は失敗注入と全テストの再実行で行った）。
+
+| 重大度 | 観点 | 指摘 | 対応 |
+|---|---|---|---|
+| Medium | ロジック回避（第1周修正の妥当性） | 確認 1・2 を「bot だけ」としたが、bot（Claude）の develop・main への push は Claude 側のガードが止める（実測 exit 2）ため実行できず、誰がどのアカウントで行うかが決まっていない。人の端末で行うと `oshui0404` の資格情報で push され得る | **修正**。runbook 確認 1・2 を「I178 以降は直 push の確認を行わない」に変更。PR 必須・bypass 不可・Restrict は設定画面で確認し、効き目は確認 4〜6 で確かめる |
+| Medium | false-green | CODEOWNERS は後に書いた行が優先されるため、末尾に `* @osushi0404-bot` を足すと承認者が bot に変わるが、決定論ゲートと test_i178 は見逃す（/test の TC-02b だけが検知） | **修正**。test_i178 に `.github/CODEOWNERS` の全文固定を追加。失敗注入 6 通りすべて exit 1 |
+| Medium | 脅威モデル漏れ | 自動マージ（auto-merge）が予約されていると、ユーザーが承認しただけでマージが走り、No.6・No.8 の順番が崩れる。経路が脅威モデルにも確認にも無い | **修正**。実測でリポジトリ設定は `allow_auto_merge=false`・PR #298 の `autoMergeRequest=null`（bot は予約できない）。runbook §1.5 運用に記載し、手動 No.5 の前提に `autoMergeRequest` が `null` であることの確認を追加。計画に R9 を追加 |
+| Medium | 失敗時の分岐が実行できない | No.5 の後に止めて設定を直すと、残った承認が数えられて No.3・No.4 の期待値と合わず、やり直しが合格しない | **修正**。「No.4・No.5 が期待どおりにならない場合」に、ユーザーが PR 画面で自分の承認を取り消す（Dismiss review）手順を追加 |
+| Low | 第1周修正の反映漏れ | 追従のコミットで承認が残ることもある旨が、手動テスト・イシュー・計画 R6 に反映されていない。計画ステップ 5 が「Issue を開き直す」のまま | **修正**。手動テストの BEHIND 時の説明・イシューの制約・計画 R6・計画ステップ 5 をそろえた |
+| Low | 失敗時の分岐が不完全 | No.6 成功時の代わりの確認で、(1) が再びマージに成功した場合の扱いが無い。main（No.2）の見直しも無い | **修正**。develop と main の両方の設定を見直し、新しい記録用 PR で繰り返す手順を追加 |
+| Low | 区別力（未実測） | No.8 は Dismiss stale がオフでも「Require approval of the most recent reviewable push」がオンなら同じ結果になり得る | **残余**（攻撃シナリオ 3 はどちらの設定でも塞がる。設定値は No.1 の画面で確認する） |
+| Low | 行き止まり | No.6 成功時の代わりの確認 (1) で記録用 PR 自体がマージされると (2) ができない | **修正**（上の「繰り返す」手順で解消） |
+
+### 修正内容
+
+- `docs/runbooks/branch-protection-setup.md`（確認 1・2 を「行わない」に・§1.5 運用に自動マージ）。runbook の SHA-256 を `7ca97428…` に更新
+- `scripts/claude/tests/test_i178_branch_protection_doc.sh`（CODEOWNERS の全文固定・RUNBOOK_SHA256 の更新）
+- `docs/tests/open/I178_manual_test.md`（No.5 の前提・失敗時の分岐・BEHIND 時の説明）・`docs/tests/open/I178_auto_test.md`（TC-19）
+- `docs/plans/open/plan_I178.md`（5-2・ステップ 5・R6・R9）・`docs/issues/open/I178.md`（制約）
+- 確認: test_i178 `RESULT: OK (14 checks)`・CODEOWNERS の失敗注入 6 通りと第3周の改変 9 通りはすべて exit 1・TC-01〜TC-18 全件 exit 0・決定論ゲート 18 行すべて合格
+
+### 判定
+
+第 2 周で新規 Critical/High 0 件のため、敵対的レビューステージを通過。
+
+VERDICT: OK

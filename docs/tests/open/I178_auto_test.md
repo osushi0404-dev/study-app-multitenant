@@ -143,7 +143,8 @@ bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 - 検証内容: 次の 5 つの節を、見出し行（完全一致）で切り出し、スクリプト内の期待値と**全文の完全一致**で比較する。開始・終了の見出しのどちらかが無ければ節が空になり NG。(1) runbook §1 develop の表（`### develop ブランチ`〜`### main ブランチ`）(2) runbook §1 main の表（`### main ブランチ`〜`## 1.5 承認者の限定（I178）`）(3) runbook §3 ステップ 3（`### ステップ 3: 各項目を設定`〜`### ステップ 4: 保存`）(4) close step 5.5（`5.5) …`〜step 6 の 1 行目）(5) close step 6 の 2 行
 - 設定を変えるときは、このスクリプトの期待値と計画書 5-5 の表を同時に更新する
 - **fix-loop 20261018 で追加（adversarial 第3周 High・案 A）**: (6) runbook 全体の SHA-256 が `RUNBOOK_SHA256` と一致する（節の列挙から漏れた部分の後退も検知する。runbook を正当に直すときは、内容をレビューしてから値を更新する）(7) 節の切り出しに使う見出し 7 つ（runbook 5・close 2）がファイル内にちょうど 1 回だけ (8) close step 6 は追加した一文を含む 3 行を固定
-- 期待: exit 0（`RESULT: OK (13 checks)`）
+- **再ステージ第2周で追加（Medium）**: (9) `.github/CODEOWNERS` を全文で固定する（後に書いた行が優先されるため、末尾に別の所有者の行を足すだけで承認者が入れ替わる。決定論ゲート 1・2 行目の存在確認では見逃す。`CODEOWNERS` 環境変数で差し替え可能）
+- 期待: exit 0（`RESULT: OK (14 checks)`）
 - 失敗注入（2026-10-18・`RUNBOOK`/`SKILL` で対象を差し替え）: 第1周の 14 通り（develop の Code Owners を OFF・develop の承認を 0・main の Restrict を OFF・develop の Restrict に bot を追加・main の Code Owners 行を削除・ステップ 3 の Code Owners をオフ・develop 表を旧設定へ・両表と手順から Code Owners と Restrict を削除・develop 表に OFF 行を併記・Restrict の見出し直後をオフ・変更前の runbook・step 5.5 の develop/main 入れ替え・変更前の close スキル・runbook 不在）と、第2周のレビューアが第1周版で合格すると実測した 11 通り（PR 必須の親スイッチをオフ・force push/削除をオン・status checks をオフ・セルの空白を変えた OFF 行の併記・force push の矛盾行の併記・語順を変えた旧手順・ON 行をコメントで隠す・bypass の見出しの差し替え・close スキルに矛盾する文を追加 等）の計 25 通りすべてで **exit 1**。無改変の対照は exit 0
 
 ---
@@ -158,6 +159,7 @@ bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 | TC-19 | 2026-10-18 | ✅ exit 0 | adversarial 第2周対応後（全文比較に変更）。`RESULT: OK (5 blocks)`・失敗注入 25 通りすべて exit 1 |
 | TC-19 | 2026-10-18 | ✅ exit 0 | fix-loop 20261018 対応後（runbook 全体の SHA-256・見出し 1 回・close step 6 の 3 行）。`RESULT: OK (13 checks)`。失敗注入: 第3周の改変を現行ファイルに入れ直した 9 通り（ステップ 5 で main の Restrict をオフ・ステップ 2 のパターン変更・同じ見出しの旧表の追加・§1.5 運用に矛盾文・§6 末尾に矛盾手順・概要の差し替え・確認 5 を空 PR に戻す・close step 6 の一文削除・close step 6 の見出し重複）すべて exit 1。第1周・第2周の 25 通りも引き続きすべて exit 1。close スキルの step 5.5〜6 の外への矛盾文の追加（第3周 E）は exit 0（ファイル全体を固定しない設計上の残余・診断メモ 20261018_1300 で決定） |
 | TC-19 | 2026-10-20 | ✅ exit 0 | adversarial 再ステージ第1周対応後（runbook の確認 1・2・運用・§6 を変更し、SHA-256 を `c41631a4…` に更新）。変更直後は SHA-256 不一致で exit 1 となり、変更の検知が働くことを実地で確認。更新後 `RESULT: OK (13 checks)` |
+| TC-19 | 2026-10-20 | ✅ exit 0 | adversarial 再ステージ第2周の Medium 対応後。`.github/CODEOWNERS` の全文固定を追加（`RESULT: OK (14 checks)`）し、runbook の SHA-256 を `7ca97428…` に更新。CODEOWNERS の失敗注入 6 通り（末尾に bot を所有者として追加・所有者の行を削除・同じ行に bot を併記・行末に空白・docs だけ bot を所有者に・ファイル不在）すべて exit 1。第3周の改変 9 通りも引き続きすべて exit 1 |
 | TC-17 | | 未実施（マージ後） | 手動 No.7 と同時に行い、記録用 PR（`docs(I178): マージ後確認の記録`）で記入する |
 
 ---

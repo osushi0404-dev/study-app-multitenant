@@ -91,6 +91,7 @@ develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が d
 - **PR は必ず bot（Claude）が作成する**。ユーザー自身が作った PR は自分で承認できず、bypass も許していないためマージできない（どうしても必要な場合は §6 を参照）。
 - 承認の後に新しいコミットが入ると承認が取り消されるので、もう一度承認する。develop への追従（Update branch）のコミットでは、差分が変わらない場合に承認が残ることもある（取り消された場合だけ再承認すればよい）。
 - Dependabot の PR も `oshui0404` の承認が必要。
+- 自動マージ（auto-merge）はリポジトリ設定で許可していない（`allow_auto_merge=false`・2026-10-20 実測）。bot が `gh pr merge --auto` で承認と同時のマージを予約することはできない。許可に変える場合は、承認の後・マージの前に行う確認の順番が崩れないかを見直す。
 
 ---
 
@@ -177,25 +178,15 @@ Frontend Tests
 
 設定後、以下の確認を実施してください。
 
-### 確認 1: develop への直 push がブロックされること
+### 確認 1・2: develop・main への直 push（I178 以降は行わない）
 
-**bot（Restrict の一覧に無いアカウント）だけが実行する。`oshui0404` は実行しない**。`oshui0404` は Restrict の一覧に入っているため、「Do not allow bypassing」の設定を誤っていると、この確認の操作そのものが develop・main への直接 push として通ってしまう（main は初期コミットだけなので、レビューと CI を経ないコミットがすべて入る）。PR 必須と bypass 不可の設定は、設定画面（§1 の表との突き合わせ）で確認する。
+I032 の当初は `git push origin HEAD:develop`・`git push origin HEAD:main` を実際に試していたが、I178 以降は**行わない**。理由は次のとおり。
 
-```bash
-# 現在のブランチから develop に直 push を試みる（bot で実行）
-git push origin HEAD:develop
-```
+- `oshui0404` が実行すると、Restrict の一覧に入っているため、「Do not allow bypassing」の設定を誤っていた場合に、確認の操作そのものが develop・main への直接 push として通ってしまう（main は初期コミットだけなので、レビューと CI を経ないコミットがすべて入る）。
+- bot（Claude）からの develop・main への push は、Claude 側のガード（`scripts/claude/hooks/pretooluse_guard.py`）が止めるため、bot では実行できない。
+- 人の端末で実行すると、どのアカウントの資格情報で push されるかを確かめにくい。
 
-期待結果: push が拒否される（`remote: error: GH006: Protected branch update failed for refs/heads/develop.` に続けて、拒否の理由が表示される）。理由の文は push 権限の不足（`You're not authorized to push to this branch` 等）または PR 必須（`Changes must be made through a pull request.`）のどちらか。どちらでも拒否されていれば合格
-
-### 確認 2: main への直 push がブロックされること
-
-```bash
-# bot で実行（oshui0404 は実行しない）
-git push origin HEAD:main
-```
-
-期待結果: develop と同様に拒否される
+代わりに、PR 必須・bypass 不可・Restrict の設定は設定画面（§1 の表との突き合わせ）で確認し、効き目は確認 4〜6（PR の承認状態と、bot によるマージ API の拒否）で確かめる。
 
 ### 確認 3: CI 失敗 PR がマージできないこと
 
