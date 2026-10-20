@@ -87,6 +87,7 @@ GitHub は、PR のベースブランチにある CODEOWNERS を使う。main �
 | `scripts/claude/pr-base-sync.sh` | L6・L114 | **変更しない**。「Approve 待ちの BLOCKED は正常」は新しい設定とそのまま一致する（TC-15・TC-16） |
 | `docs/runbooks/workflow.md` | L263-264 | 変更しない。I146 の Claude 側ガードが `review --approve` を ask にするという記述で、承認要件の前提ではない |
 | `docs/runbooks/danger-ops.md` L3・`workflow.md` L42・`implement/SKILL.md` L19 | — | 対象外。`danger-approved` ラベルの話で、ブランチ保護とは関係ない |
+| `CONTRIBUTING.md`・`SECURITY.md` | — | 該当なし（同じパターンの `grep -c -i` で両方 0 件・2026-10-20 実測）。変更しない |
 
 ### 3-5. 環境前提確認
 
@@ -317,6 +318,7 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - [ ] 手動 No.6 で、ユーザーの承認後に bot が GitHub のマージ API（`gh api -X PUT .../pulls/298/merge`）を呼び、push 制限で拒否されることを確かめる（実行直前に改めて了承を取る。adversarial 第2周で `gh pr merge` から変更）
 
 ## レビュー結果
+- [20261020_2003 判定: ✅ 完了](../../reviews/I178_plan_review_20261020_2003.md)
 - [20261018_1409 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1409.md)
 - [20261018_1145 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1145.md)
 - [20261018_1126 判定: ✅ 完了](../../reviews/I178_plan_review_20261018_1126.md)
