@@ -102,7 +102,7 @@ grill-me 中のスパイク（2026-10-19・Claude Code 2.1.302・使い捨てリ
 - Config/Infra:
   - 新規: `.worktreeinclude`・`scripts/claude/wt-ports.sh`・`scripts/claude/tests/test_i179_worktree_docs.sh`
   - 削除: `scripts/claude/wt-new.sh`
-  - 変更: `.gitignore`・`scripts/claude/wt-remove.sh`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/skills/plan-issue/SKILL.md`・`.claude/skills/issue-bootstrap/SKILL.md`・`docs/runbooks/worktree.md`・`docs/runbooks/issue-flow.md`・`docs/runbooks/common-commands.md`・`scripts/claude/tests/test_wt_lifecycle.sh`・`scripts/claude/tests/test_wt_port_offset.sh`・`scripts/claude/tests/test_pretooluse_worktree_guard.sh`
+  - 変更: `.gitignore`・`scripts/claude/wt-remove.sh`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/skills/plan-issue/SKILL.md`・`.claude/skills/issue-bootstrap/SKILL.md`・`docs/runbooks/worktree.md`・`docs/runbooks/issue-flow.md`・`docs/runbooks/common-commands.md`・`docs/runbooks/danger-ops.md`（2026-10-21 追加・4-12）・`scripts/claude/tests/test_wt_lifecycle.sh`・`scripts/claude/tests/test_wt_port_offset.sh`・`scripts/claude/tests/test_pretooluse_worktree_guard.sh`
   - 変更しない: `.claude/settings.json`（フックを足さないことを検査するだけ）・`docker-compose.yml`
 - 依存関係ファイル（requirements*.txt / package*.json）: 変更なし
 - サービス再起動: 不要（Docker のサービスに関わるファイルは変えない。ガードは呼び出しごとに読み込まれるので即時反映）
@@ -239,6 +239,9 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 
 ### 4-10. `docs/runbooks/common-commands.md` 23〜26 行目（F の消費箇所）
 **修正方針**: `wt-new.sh` の例を `bash scripts/claude/wt-ports.sh [--port-offset N]`（Docker 起動前に今いるワークツリーで 1 回）に置き換える。
+
+### 4-12. `docs/runbooks/danger-ops.md`（2026-10-21 追加・計画変更記録 4）
+**修正方針**: 「Docker」の例に、ガードが新たに止める `volume rm / prune`・`system prune --volumes` と、ワークツリーの撤去は `wt-remove.sh` を使い、消す相手を確定できない場合は許可があっても止まること（`worktree.md` §4 への参照）を加える。→ TC-D12
 
 ### 4-11. テスト（詳細は `docs/tests/open/I179_auto_test.md`）
 - `scripts/claude/tests/test_pretooluse_worktree_guard.sh`: 入れ子ワークツリーのケース（G1〜G7・FG-G1）を追加。既存 A1〜A23 は維持。
@@ -390,6 +393,10 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 - 理想基準での評価: 採用。安全装置の判定方式の変更は「旧方式で止まる入力は新方式でも止まる」を機械で保証してから行う（NOREG を常設）。
 
 ## レビュー結果
+- [20261021_0849 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0849.md)
+- [20261021_0849 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0849.md)（fix-loop の計画変更記録 4 の後の再レビュー）
+  - Warning（`danger-ops.md` の更新が §3 影響範囲・§4 変更点一覧に無い）は、§3 に追記し 4-12 を追加して対応済み。
+  - Info（`danger-ops.md` の変更を確かめる決定論ゲートが無い）は、`test_i179_worktree_docs.sh` に D12（失敗注入つき）を追加して対応済み。
 - [20261021_0031 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0031.md)（計画変更＝ロックの扱いの追加後の再レビュー）
   - Warning（ロック確認とデータ判定の順番が分散して追いにくい）は、4-6 に「処理の順番」（1〜8・TC-R13 の流れの例つき）を追記して対応済み。実装（`wt-remove.sh`）はこの順番どおりで変更不要。
   - Info（M6 が未実施）は /test で実施・記録する。

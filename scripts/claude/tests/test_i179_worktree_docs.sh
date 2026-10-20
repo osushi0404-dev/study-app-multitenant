@@ -113,6 +113,12 @@ check_all() {
   has "$C" 'BACKEND_PORT' || rc=1
   res DOC1 "worktree.md・common-commands.md にポート分離の記述" "$rc"
 
+  # D12: danger-ops.md の Docker の例に volume の直接削除と wt-remove.sh への案内がある（2026-10-21・計画 4-12）
+  rc=0
+  has "$R/docs/runbooks/danger-ops.md" 'volume rm / prune' || rc=1
+  has "$R/docs/runbooks/danger-ops.md" 'wt-remove.sh' || rc=1
+  res D12 "danger-ops.md の Docker の例に volume 削除と wt-remove.sh" "$rc"
+
   [ -z "$FAILED" ]
 }
 
@@ -124,7 +130,7 @@ else fail=$((fail+1)); echo "FAIL 実物 check_all:$FAILED"; fi
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 FILES=(docs/runbooks/worktree.md docs/runbooks/common-commands.md docs/runbooks/issue-flow.md
        docs/runbooks/onboarding.md .claude/skills/plan-issue/SKILL.md .claude/skills/issue-bootstrap/SKILL.md
-       .claude/settings.json .worktreeinclude .gitignore)
+       .claude/settings.json .worktreeinclude .gitignore docs/runbooks/danger-ops.md)
 make_copy() { # 対象ファイルを複製し、D2 の git grep が使えるよう git 管理下に置く。stdout=複製先
   local d f
   d="$(mktemp -d "$TMP/$1.XXXX")"   # 同じ TC を複数回注入しても別の複製にする
@@ -171,6 +177,7 @@ fg D11 'printf "%s\n" "対応 worktree: wt-harness" >> "$D/.claude/skills/issue-
 fg D7  'rm "$D/.claude/settings.json"'
 fg D11 'rm "$D/.claude/skills/issue-bootstrap/SKILL.md"'
 fg D4  'rm "$D/docs/runbooks/worktree.md"'
+fg D12 'sed -i "s|volume rm / prune|volume|" "$D/docs/runbooks/danger-ops.md"'
 }
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
