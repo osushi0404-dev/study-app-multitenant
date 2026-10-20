@@ -267,6 +267,14 @@ ck "H14 for の do の shred"     2 "$(runj 'for f in backend/*.sqlite3; do shre
 # shellcheck disable=SC2016  # $f を展開せず、そのまま guard に渡すのが目的
 ck "H15 while の do の dd"      2 "$(runj 'while read f; do dd if=/dev/zero of="$f"; done < list.txt')"
 ck "H16 parallel の shred"      2 "$(runj 'parallel shred -u ::: backend/db.sqlite3')"
+# parallel / watch は後ろの語をつないでシェルで実行する。引用符で 1 語に包んだ形も中を読む（敵対的レビュー第 2 周）
+ck "H17 parallel '<rm -rf />'（解除不可）"         2 "$(runj "DANGER_OK=1 parallel '$RM /' ::: x")"
+ck "H18 parallel 'git reset --hard {}'"           2 "$(runj "parallel 'git reset --hard {}' ::: origin/develop")"
+ck "H19 parallel 'docker compose down -v'"        2 "$(runj "parallel 'docker compose down -v' ::: x")"
+ck "H20 watch '<rm -rf>'"                         2 "$(runj "watch '$RM backend'")"
+ck "H21 watch -n 5 'git reset --hard'"            2 "$(runj "watch -n 5 'git reset --hard origin/develop'")"
+ck "H22 watch 'docker compose ps' は通す"         0 "$(runj "watch -n 2 'docker compose ps'")"
+ck "H23 parallel 'echo {}' は通す"                0 "$(runj "parallel 'echo {}' ::: a b")"
 
 # --- (X) 外部送信（ASK） ---
 ck "X1 send_mail"              ASK "$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])\"")"
@@ -346,7 +354,10 @@ ck "S15 /proc/1/environ"       ASK "$(runj 'docker compose exec -T backend cat /
 ck "S16 echo \$SECRET_KEY"     ASK "$(runj "docker compose exec -T backend sh -c 'echo \$SECRET_KEY'")"
 ck "S17 os.environ"            ASK "$(runj "docker compose exec -T backend python -c \"import os; print(os.environ)\"")"
 ck "S18 open('/app/.env')"     ASK "$(runj "docker compose exec -T backend python -c \"print(open('/app/.env').read())\"")"
-ck "S19 grep -r の設定名"      ASK "$(runj 'grep -rn SECRET_KEY backend')"
+# 秘密ファイルのあるディレクトリは一時ディレクトリに作る（作業ツリーに backend/.env があるかどうかで結果が変わらないように）
+mkdir -p "$TMP/sec"
+: > "$TMP/sec/.env"
+ck "S19 grep -r の設定名"      ASK "$(runj "grep -rn SECRET_KEY $TMP/sec")"
 ck "S20 docker container inspect" ASK "$(runj 'docker container inspect x')"
 ck "S21 docker compose cp"     ASK "$(runj 'docker compose cp backend:/app/.env -')"
 ck "S22 docker cp"             ASK "$(runj 'docker cp c:/app/.env -')"

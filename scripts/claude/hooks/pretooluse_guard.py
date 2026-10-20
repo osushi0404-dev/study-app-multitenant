@@ -108,11 +108,12 @@ def _git_revert_target_on_dirty(cmd: str):
 # --- git push の保護ブランチ宛先判定（I080） ---
 PROTECTED_BRANCHES = ("develop", "main")
 
-def _current_branch():
-    """現ブランチ名を返す。git 不在/失敗は None（fail-open＝既存 HEAD チェックと同方針）。"""
+def _current_branch(path=None):
+    """現ブランチ名を返す（path は git -C / cd の先。None は見張りの作業ディレクトリ）。
+    git 不在/失敗は None（fail-open＝既存 HEAD チェックと同方針）。"""
     try:
         r = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git"] + (["-C", path] if path else []) + ["rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True, text=True
         )
         return r.stdout.strip() if r.returncode == 0 else None
@@ -122,36 +123,78 @@ def _current_branch():
 def _norm_push_dest(token: str, cur_branch):
     """push 宛先トークンを正規化して宛先ブランチ名を返す（判定不能は None）。
     'src:dst' なら dst 採用 → force-shorthand '+'（先頭/dst 側いずれも）除去 →
-    'refs/heads/' 接頭辞除去 → 'HEAD' は現ブランチ解決。"""
+    'refs/heads/' 接頭辞除去 → 'HEAD' / '@' は現ブランチ解決 → glob（refs/heads/*）は保護ブランチに一致すればその名前。"""
     t = token
     if ":" in t:
         t = t.split(":", 1)[1]          # 'src:dst' の dst を採用
     t = t.lstrip("+")                    # force-shorthand '+'（先頭 / dst 側）を除去
     if t.startswith("refs/heads/"):
         t = t[len("refs/heads/"):]
-    if t == "HEAD":
+    if t in ("HEAD", "@"):
         return cur_branch               # None 可（detached/fail-open）
+    if any(ch in t for ch in "*?["):
+        return next((b for b in PROTECTED_BRANCHES if fnmatch.fnmatchcase(b, t)), None)
     return t or None
+
+# I174: 値を取る push のオプション（値を remote と読み違えないため）
+_PUSH_VALUE_OPTS = ("-o", "--push-option", "--receive-pack", "--exec", "--repo")
+
+def _git_push_parts(toks):
+    """単純コマンドが git push なら (git の位置, push の位置) を返す。非該当は None。
+    git は絶対パス・git.exe（WSL）でも同じ（basename で判定）。"""
+    gi = next((i for i, t in enumerate(toks) if os.path.basename(t) in ("git", "git.exe")), None)
+    if gi is None or "push" not in toks[gi + 1:]:
+        return None
+    return gi, toks.index("push", gi + 1)
+
+def _push_positionals(after):
+    """push 以降の位置引数（[0]=remote、以降=refspec）。値を取るオプションの値は除く。"""
+    out, skip = [], False
+    for a in after:
+        if skip:
+            skip = False
+        elif a in _PUSH_VALUE_OPTS:
+            skip = True
+        elif not a.startswith("-"):
+            out.append(a)
+    return out
+
+def _git_dir_opt(toks, gi, pi):
+    """git と push の間の -C（重ねたら連結）を返す。無ければ None。"""
+    path = None
+    for i in range(gi + 1, pi):
+        if toks[i] == "-C" and i + 1 < pi:
+            path = os.path.join(path, toks[i + 1]) if path else toks[i + 1]
+    return path
 
 def _push_protected_target(cmd: str):
     """git push が protected ブランチを名前/refspec で宛先にするなら宛先名を返す。非該当は None。
-    複合コマンドは _segments(I081)で分割して各セグメントを判定。
+    複合コマンドは _segments(I081)で分割して各セグメントを判定。宛先が今のブランチで決まる形は、
+    git -C の先・その前の cd の先のブランチを見る（I174）。
     --all/--mirror・--repo は positional を持たない/前提を崩すため main() 側の独立チェックで扱う。"""
+    cd_dir = None
     for toks in _segments(cmd):
-        if "git" not in toks or "push" not in toks:
+        if toks and toks[0] in ("cd", "pushd") and len(toks) == 2:
+            d = os.path.expanduser(toks[1])
+            cd_dir = os.path.join(cd_dir, d) if cd_dir else d
             continue
-        after = toks[toks.index("push") + 1:]
-        positionals = [a for a in after if not a.startswith("-")]
-        refspecs = positionals[1:] if positionals else []   # [0]=remote、以降=refspec
+        parts = _git_push_parts(toks)
+        if not parts:
+            continue
+        gi, pi = parts
+        refspecs = _push_positionals(toks[pi + 1:])[1:]      # [0]=remote、以降=refspec
+        cdir = _git_dir_opt(toks, gi, pi)
+        if cd_dir:
+            cdir = os.path.join(cd_dir, cdir) if cdir else cd_dir
         cur = None
         if not refspecs:                                     # 宛先明示なし → 現ブランチが宛先
-            cur = _current_branch()
+            cur = _current_branch(cdir)
             if cur in PROTECTED_BRANCHES:
                 return cur
             continue
         for rs in refspecs:
             if cur is None:
-                cur = _current_branch()
+                cur = _current_branch(cdir)
             dest = _norm_push_dest(rs, cur)
             if dest in PROTECTED_BRANCHES:
                 return dest
@@ -175,13 +218,13 @@ def _push_has_force(cmd: str) -> bool:
     複合コマンド・短縮結合形に頑健（_segments でセグメント分割）。protected 宛先の force は
     _push_protected_target が先に block するため、ここで捕捉する漏れは非保護宛に限定される。"""
     for toks in _segments(cmd):
-        if "git" in toks and "push" in toks:
-            after = toks[toks.index("push") + 1:]
+        parts = _git_push_parts(toks)
+        if parts:
+            after = toks[parts[1] + 1:]
             if any(_is_force_flag(t) for t in after):
                 return True
             # 宛先の前の + も force（git push origin +feature/x・+HEAD:x）。[0] は remote
-            positionals = [a for a in after if not a.startswith("-")]
-            if any(rs.startswith("+") or ":+" in rs for rs in positionals[1:]):
+            if any(rs.startswith("+") or ":+" in rs for rs in _push_positionals(after)[1:]):
                 return True
     return False
 
@@ -199,9 +242,13 @@ def _push_is_dynamic(cmd: str) -> bool:
         if not toks:                       # _segments は空セグメントを返さないが防御的に
             continue
         # (i) 直接 push: push 以降の引数領域に動的メタ文字（$(...) の空白で shlex が壊れてもすり抜けない）
-        if "git" in toks and "push" in toks:
-            after = " ".join(toks[toks.index("push") + 1:])
+        parts = _git_push_parts(toks)
+        if parts:
+            after = " ".join(toks[parts[1] + 1:])
             if any(ch in after for ch in "$`{("):
+                return True
+            # git -C・--git-dir・--work-tree の先が読めない（変数・置換）push は、宛先のブランチを確かめられない
+            if any(ch in t for t in toks[parts[0] + 1:parts[1]] for ch in "$`"):
                 return True
         # (ii) 構造的に不透明なラッパー（先頭トークンで判定＝branch/remote 名の偶然一致を排除）
         head = toks[0]
@@ -210,15 +257,20 @@ def _push_is_dynamic(cmd: str) -> bool:
         if head in _WRAP_SHELLS and "-c" in toks:
             ci = toks.index("-c")
             wrapped = toks[ci + 1] if ci + 1 < len(toks) else ""
-            if "push" in wrapped:
+            if re.search(r"\bpush\b", _strip_comments(wrapped)):      # 中のコメントの push は数えない
                 return True
         if head == "git":
             for i, t in enumerate(toks[:-1]):
                 if t == "-c" and toks[i + 1].startswith("alias.") and "push" in toks[i + 1]:
                     return True
+                # push.default=matching は、同じ名前の手元のブランチ（main / develop を含む）をすべて push する
+                if t == "-c" and toks[i + 1].lower().startswith("push.default=") and "push" in toks:
+                    return True
         # (iii) I174: xargs / parallel で包んだ push は、標準入力などの語が宛先として後ろに足される
-        # （`git branch | xargs -n1 git push origin` は main / develop に push しうる）
-        if os.path.basename(head) in ("xargs", "parallel") and "git" in toks and "push" in toks:
+        # （`git branch | xargs -n1 git push origin` は main / develop に push しうる）。
+        # timeout / nice / env で包んだ形・`xargs -I{} sh -c 'git push origin {}'` のように push が引用符の中の形も同じ
+        if any(os.path.basename(t) in ("xargs", "parallel") for t in toks) and any(
+                re.search(r"\bpush\b", t) for t in toks):
             return True
     return False
 
@@ -1287,6 +1339,10 @@ def _expand(c: dict, depth: int) -> list:
         return list(_parse(text, kw.get("ctr", c["ctr"]), depth + 1, kw.get("compose", c["compose"]),
                            (c.get("workdir"), c.get("service"))))
     inner = _wrap_skip(head, rest)
+    if inner is not None and head in ("parallel", "watch"):
+        # parallel / watch は後ろの語をつないでシェルで実行する（`parallel 'rm -rf {}' ::: x`・`watch 'git reset --hard'`）。
+        # 引用符で 1 語に包んだ形もあるので、eval と同じくつないだ文字列を読み直す（I174）
+        return sub(" ".join(inner)) if inner else []
     if inner is not None:
         flock_cmd = _opt_values(rest, ("-c", "--command")) if head == "flock" else []
         return (again(inner) if inner else []) + [e for s in flock_cmd for e in sub(s)]
@@ -1587,7 +1643,7 @@ def _cmd_danger(c: dict) -> list:
     r = []
     if _is_rm_rf(toks):
         r.append("rm -rf requires DANGER_OK=1")
-    if head == "git":
+    if head in ("git", "git.exe"):
         sub, args = _git_sub(toks)
         if sub == "reset" and "--hard" in args:
             r.append("git reset --hard requires DANGER_OK=1")
@@ -1595,6 +1651,8 @@ def _cmd_danger(c: dict) -> list:
         # 単純コマンドごとに同じ判定を当てる（0-13 の bash との差分テストで見つかった見逃し）
         if sub == "push":
             seg = shlex.join(toks)
+            if c.get("cd"):
+                seg = f"cd {shlex.quote(c['cd'])} ; {seg}"
             dest = _push_protected_target(seg)
             if dest:
                 r.append(f"push to protected branch '{dest}' is forbidden "
@@ -1870,7 +1928,14 @@ def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
     res = {"hard": "", "danger": [], "external": [], "container": [], "unsure": []}
+    cd = None
     for c in cmds:
+        # 入れ子のシェルの中の cd も、後ろの push の「今のブランチ」の判定に引き継ぐ（I174）
+        t = c["toks"]
+        if not c["ctr"] and len(t) == 2 and t[0] in ("cd", "pushd"):
+            d = os.path.expanduser(t[1])
+            cd = os.path.join(cd, d) if cd else d
+        c["cd"] = cd
         res["hard"] = res["hard"] or _cmd_hard(c)
         d, e = _cmd_danger(c), _cmd_external(c)
         res["danger"] += d

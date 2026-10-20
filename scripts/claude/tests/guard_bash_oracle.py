@@ -45,6 +45,12 @@ DANGERS = [
     ("git", "push origin $'\\x6dain'"),
     ("git", "push $'\\055\\055force' origin feature/x"),
     (RM.split()[0], "$'-\\x72f' build_tmp"),
+    # STUBS で印を出す別の書き方（第 2 周: 印を広げても、それを通るケースが無ければ測れない）
+    ("rm", "-f" + "r build_tmp"),
+    ("rm", "-f" + "R build_tmp"),
+    ("git", "push -f origin feature/x"),
+    ("git", "push origin +feature/x"),
+    ("git", "push origin HEAD:main"),
 ]
 # 前置きの文脈: (前置き, 使えるつなぎ方)。改行でしかつなげないもの（ヒアドキュメント・コメント）は "\n" だけ
 NL_ONLY = ("\n",)
@@ -102,6 +108,11 @@ def cases():
         yield f'echo "{one}"'
         yield f"echo '{one}'"
         yield f"git commit -m \"docs: {one} の説明\""
+        # 入れ子のシェルの中のコメント・ヒアドキュメントの本文（内側の読み飛ばしが外れたことも余計な停止で検知する）
+        yield f"bash <<'X'\necho ok # {one}\nX"
+        yield f"bash <<'X'\ncat > n.md <<'EOF'\n{one}\nEOF\nX"
+        if "'" not in one:
+            yield f"bash -c 'echo ok # {one}'"
 
 
 def run_bash(script: str) -> bool:
