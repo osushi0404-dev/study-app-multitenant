@@ -105,6 +105,33 @@ ck "A21 falsegreen複製=allow" 0 \
      | ( cd "$MAIN" && python3 "$BROKEN" >/dev/null 2>&1 ); echo $?)"
 ck "A21 falsegreen実体=block" 2 "$(edit Edit "$OTHER/x.py")"
 
+# --- Docker のデータ削除（I179 TC-DV1〜DV8・worktree.md §4 の取り残しの片付け手順の二重ガード） ---
+ck "DV1 compose down -v→block"                    2 "$(bash_c "docker compose down -v")"
+ck "DV2 compose -p <名前> down -v→block"          2 "$(bash_c "docker compose -p wt-harness down -v")"
+ck "DV3 --project-name down --volumes→block"     2 "$(bash_c "docker compose --project-name wt-harness down --volumes")"
+ck "DV4 docker-compose -f x.yml down -v→block"    2 "$(bash_c "docker-compose -f x.yml down -v")"
+ck "DV5 docker volume rm→block"                  2 "$(bash_c "docker volume rm wt-harness_postgres_data")"
+ck "DV6 docker volume prune→block"               2 "$(bash_c "docker volume prune -f")"
+ck "DV7 compose -p <名前> down（-v なし）→allow"   0 "$(bash_c "docker compose -p wt-harness down")"
+ck "DV8 DANGER_OK=1 compose -p down -v→allow"    0 "$(bash_c "DANGER_OK=1 docker compose -p wt-harness down -v")"
+ck "DV9 docker volume ls→allow"                  0 "$(bash_c "docker volume ls -f dangling=true")"
+# FG-DV1: 旧パターン（compose の直後に down が必要）に戻した複製では DV2 が素通りする
+BROKEN_DV="$TMP/guard_olddown.py"
+python3 - "$GUARD" "$BROKEN_DV" <<'PY'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+new = r"\bdocker(\s+compose|\-compose)\b[^;&|\n]*\sdown\b"
+old = r"\bdocker(\s+compose|\-compose)\s+down\b"
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(new, old))
+PY
+if ! cmp -s "$GUARD" "$BROKEN_DV"; then
+  ck "FG-DV1 旧パターン複製でDV2=allow" 0 \
+    "$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "docker compose -p wt-harness down -v" \
+       | ( cd "$MAIN" && python3 "$BROKEN_DV" >/dev/null 2>&1 ); echo $?)"
+else
+  ck "FG-DV1 注入できた" 0 1
+fi
+
 # --- 入れ子ワークツリー（I179 TC-G1〜G7・FG-G1） ---
 # 公式 `claude --worktree` の配置（<primary>/.claude/worktrees/<name>）を再現する。
 # 入れ子のパスは親 root の配下でもあるため、最も内側の root（最長一致）で所有者を決める必要がある。

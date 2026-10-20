@@ -60,15 +60,16 @@ other_worktrees() {
     printf '%s\n' "$wt"
   done
 }
-# 他のワークツリーの使用ポート（.env が在れば各 *_PORT・無ければ既定ポート＝offset 0 相当）
+# 他のワークツリーの使用ポート（各 *_PORT が .env に在ればその値・無ければ既定ポート。.env にポート以外の行しか無い場合も既定ポート扱い）
 existing_ports() {
-  local wt
+  local wt var base v
   other_worktrees | while IFS= read -r wt; do
-    if [ -f "$wt/.env" ]; then
-      sed -n 's/^\(DB_PORT\|REDIS_PORT\|BACKEND_PORT\|FRONTEND_PORT\)=\([0-9]\{1,\}\).*/\2/p' "$wt/.env"
-    else
-      printf '%s\n%s\n%s\n%s\n' "$BASE_DB" "$BASE_REDIS" "$BASE_BACKEND" "$BASE_FRONTEND"
-    fi
+    for var in DB_PORT:"$BASE_DB" REDIS_PORT:"$BASE_REDIS" BACKEND_PORT:"$BASE_BACKEND" FRONTEND_PORT:"$BASE_FRONTEND"; do
+      base="${var#*:}"; var="${var%%:*}"
+      v=""
+      [ -f "$wt/.env" ] && v="$(sed -n "s/^$var=\([0-9]\{1,\}\).*/\1/p" "$wt/.env" | head -1)"
+      printf '%s\n' "${v:-$base}"
+    done
   done
 }
 # 他のワークツリーの使用オフセット（BACKEND_PORT から算出・.env 無しは 0）

@@ -87,6 +87,30 @@
 | FG3 | 失敗注入: データ判定を常に「無し」（`return 0`）にした複製では R1 の条件でも `DANGER_OK` なしで撤去される | 複製で exit 0・撤去済み（＝データ判定が停止要因である証明） |
 | FG4 | 失敗注入: 使用中判定（`ps -p`）を `false` にした複製では R14 の条件（データ無し）でも撤去される | 複製で exit 0・撤去済み（＝使用中判定が停止要因である証明） |
 
+### C2. 敵対的レビュー第 1 周（2026-10-21）で追加した TC
+| TC | スクリプト | 内容 | 期待 |
+|----|-----------|------|------|
+| R3b | lifecycle | `down -v` を実行したフォルダ（スタブが記録する `cwd=`） | 撤去対象のフォルダ |
+| R1g | lifecycle | `docker volume ls` が失敗 | exit 2・残存 |
+| R1h | lifecycle | 直下 `.env` に `export COMPOSE_PROJECT_NAME = study` | exit 2・「プロジェクト名を確定できません」 |
+| R1i | lifecycle | 直下 `.env` に `COMPOSE_FILE=` | exit 2 |
+| R1j | lifecycle | `compose.yaml`・`docker-compose.override.yml` に最上位 `name:`（コミット・push 済み） | どちらも exit 2 |
+| R1k | lifecycle | フォルダ名 `___`（プロジェクト名が空） | exit 2・残存 |
+| R16 | lifecycle | ロックあり・PATH に `ps` が無い | exit 2・「ps が無いため」 |
+| R17 | lifecycle | 中に登録済みの入れ子（未コミットの `work.txt`）・データあり・`DANGER_OK=1` | exit 2・「中に別のワークツリー」・`down` 非実行・`work.txt` が残る |
+| R18 | lifecycle | 中に未登録の `.git`（gitdir ファイル） | exit 2 |
+| R19 | lifecycle | 撤去対象のフォルダ名が primary と同じ（`other/primary`）・データあり・`DANGER_OK=1` | exit 2・「別のワークツリーと同じです」・`down` 非実行 |
+| R19b | lifecycle | R19 と同じ名前・データ無し | exit 0（撤去できる） |
+| R20 | lifecycle | PATH に docker が無い・`DANGER_OK=1` | exit 0・「down -v を実行せずに撤去します」・撤去済み |
+| FG5 | lifecycle | `down -v` の前の `cd` を外した複製 | 記録の `cwd=` が撤去対象でない（R3b が捕まえる証明） |
+| FG6 | lifecycle | 入れ子の検査を `if false` にした複製で R17 の条件 | 入れ子の `work.txt` が消える（R17 が停止要因である証明） |
+| P14 | ports | primary の `.env` が `SOME_VAR=1` だけ・`--port-offset 0` | exit 2・衝突 |
+| DV1〜DV6 | guard | `docker compose down -v`・`-p <名前> down -v`・`--project-name … down --volumes`・`docker-compose -f x.yml down -v`・`docker volume rm`・`docker volume prune` | すべて exit 2 |
+| DV7〜DV9 | guard | `-p <名前> down`（`-v` なし）・`DANGER_OK=1 docker compose -p … down -v`・`docker volume ls` | すべて exit 0 |
+| FG-DV1 | guard | 旧パターン（compose の直後に down）に戻した複製で DV2 | exit 0（DV2 が回帰を捕まえる証明） |
+| D3 追加 | docs | `git remote set-head origin --auto`・`refs/remotes/origin/HEAD` | worktree.md に在る |
+| FG-D1 追加 | docs | `settings.json`・`issue-bootstrap/SKILL.md`・`worktree.md` を削除した複製 | それぞれ D7・D11・D4 が FAIL（不在チェックがファイル不在で PASS しない） |
+
 ### D. 文書・設定（`scripts/claude/tests/test_i179_worktree_docs.sh` 新規）
 検査は関数 `check_all <root>` にまとめ、実物（repo root）に対して実行して全 PASS、続けて失敗注入した複製に対して実行して FAIL を確認する。終了コード 0=全 PASS / 1=FAIL あり。
 

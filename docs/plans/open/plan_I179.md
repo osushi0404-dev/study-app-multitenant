@@ -172,7 +172,7 @@ printf 'DB_PORT=%s\nREDIS_PORT=%s\nBACKEND_PORT=%s\nFRONTEND_PORT=%s\n' ... >> "
 ```
 
 ### 4-5. `scripts/claude/wt-new.sh`（削除・F）
-**修正方針**: 作成は公式の `claude --worktree`、設定ファイルのコピーは `.worktreeinclude`、ポートは `wt-ports.sh` が受け持つため、役目が無くなる。`origin/develop` 基点の保証は公式の `worktree.baseRef` 既定（`"fresh"`＝リモートの既定ブランチ＝`develop`）が受け持つ。
+**修正方針**: 作成は公式の `claude --worktree`、設定ファイルのコピーは `.worktreeinclude`、ポートは `wt-ports.sh` が受け持つため、役目が無くなる。`origin/develop` 基点の保証は公式の `worktree.baseRef` 既定（`"fresh"`＝`origin/<既定ブランチ>`）が受け持つ。既定ブランチは手元の `refs/remotes/origin/HEAD` で決まるため、`worktree.md` §2 の「作る前の確認」で `origin/develop` を指すことを確かめる（2026-10-21 敵対的レビューで訂正）。
 
 ### 4-6. `scripts/claude/wt-remove.sh`（E）
 **修正方針**: 消すデータが無いワークツリーは許可なしで撤去でき、データがある（または確かめられない）ときだけ従来どおり `DANGER_OK=1` を求める。撤去対象は「`git worktree list` に登録されたワークツリーのパス」で指定し、公式配置（`<primary>/.claude/worktrees/<name>`）も旧配置（`/mnt/c/app/wt-harness`）も同じ形で扱う。
@@ -284,7 +284,7 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 | Compose のラベルが付かない匿名 volume（`-v` なしで `down` した後など）は判定に出ない | 匿名 volume は Postgres 等の名前付きデータではない。`worktree.md` の取り残しの手順に `docker volume ls -f dangling=true` で確認できることを書き、削除は破壊的操作として `DANGER_OK=1` の手順に従う旨を書く |
 | `.worktreeinclude` は primary に `backend/.env` が無いと黙ってコピーしない | `wt-ports.sh` が Docker 起動前に `backend/.env` の有無を確かめて止める（4-4） |
 | 公式機能の仕様が今後変わる（自動片付けの条件・ブランチ名など） | 手動 M1・M3・M6 で 2.1.304 の挙動を確認して記録。`worktree.md` には公式文書へのリンクを置き、細かい仕様は書き写さない |
-| `claude --worktree` を primary 以外で実行すると、その中に入れ子が作られ、外側を撤去すると巻き込まれる | `worktree.md` §2 に「必ず primary で作る」と理由を書く。`wt-remove.sh` は `git worktree remove` を `--force` なしで使うため、中に別ワークツリーがあれば git が拒否する |
+| `claude --worktree` を primary 以外で実行すると、その中に入れ子が作られ、外側を撤去すると巻き込まれる | `worktree.md` §2 に「必ず primary で作る」と理由を書く。~~`git worktree remove` が拒否する~~（誤り。`.claude/worktrees/` は gitignore 済みのため git は拒否せず中身ごと消す・2026-10-21 敵対的レビュー）→ `wt-remove.sh` が撤去前に中の入れ子（登録済み・未登録の `.git`）を検出して止める |
 
 ## Danger Ops（有）
 - **何を**: `wt-remove.sh` の `docker compose down -v`（named volume の削除）に `DANGER_OK=1` を求める条件を「常に」から「当該 Compose プロジェクトのコンテナ・named volume が 1 つでもある場合、または判定に失敗した場合」に変える。
@@ -347,6 +347,22 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 - **なぜ**: S10 のとおり、公式方式で作ったワークツリーは終了後もロックが残る場合があり、変更前の計画では受け入れ条件「公式配置も撤去でき」を満たせない。
 - **理想基準での評価**: 採用。ロックは「使用中のワークツリーを消させない」ための公式の安全装置なので、無条件に外す（`remove -f -f`）のは不可。外してよいのは「ロックしたプロセスが存在しない」と機械で確かめられる場合だけにし、それ以外は破壊的操作の前に止める（fail-closed）。pid の再利用で使用中と誤判定しても「止まる」側に倒れるだけで、データは消えない。
 - **承認**: ユーザーの既定基準（「ループエンジニアリング、ハーネスエンジニアリングのベストプラクティスとして、理想的・最適なものを基準として問題なければ進めて OK」・2026-10-20）に基づき実装し、事後報告する。計画変更のため `/code-review` の前に `/plan-issue-review I179` を挟む。
+
+### 計画変更記録 2（2026-10-21・敵対的レビュー第 1 周の findings 対応）
+敵対的レビュー（`docs/reviews/I179_adversarial_review_20261021_*.md`）の High 4 件・Medium・Low への対応。いずれも fail-closed（安全側）の追加で、許可を広げる変更は「docker が使えない環境で `DANGER_OK=1` のとき `down -v` をせずに撤去する」1 点のみ（データは消さずに残す方向）。
+| 変更 | 内容 | 起点 |
+|------|------|------|
+| `worktree.md` §2「作る前の確認」 | 公式の基点は手元の `refs/remotes/origin/HEAD` で決まる（実物は `origin/main`＝空ツリー）。`git symbolic-ref` で確認し、違えば `git remote set-head origin --auto`。primary のブランチが I179 以降であることの確認も追加 | High（基点） |
+| `wt-remove.sh` 撤去前チェック（3）入れ子 | 撤去対象の中に登録済みのワークツリー・未登録の `.git` があれば中止（gitignore 済みの入れ子は git が拒否せず中身ごと消すため。計画 Risk 表の前提を訂正） | High（入れ子の巻き込み） |
+| `pretooluse_guard.py` | `docker compose <グローバルオプション> down -v` と `docker volume rm/prune`・`docker system prune --volumes` を `DANGER_OK=1` 必須にする（取り残しの片付け手順の二重ガード） | High（ガードの抜け） |
+| `test_wt_lifecycle.sh` | docker スタブが実行フォルダを記録し、`down -v` が撤去対象の中で走ることを検証（R3b・FG5） | High（テストの false-green） |
+| `wt-remove.sh` データ判定 | `.env` の `export`/空白付き `COMPOSE_PROJECT_NAME`・`COMPOSE_FILE`、`compose.yaml`・override の `name:` も「名前を確定できない」に。docker が使えない場合を別の戻り値（3）にし、`DANGER_OK=1` なら `down -v` をせずに撤去（データは残る）。同じプロジェクト名の別ワークツリーがあり、データがあれば `DANGER_OK=1` でも中止 | Medium・Low |
+| `wt-remove.sh` ロック | `ps` が無ければ中止（生存を確認できないときに「終了済み」へ倒さない）。`/proc/<pid>` でも生存を確認 | Medium |
+| `wt-ports.sh` | 他のワークツリーの `.env` に無いポート変数は既定ポートとして数える（primary の `.env` にポート以外の行しか無い場合の衝突見逃し） | Low |
+| `worktree.md` §2・§6・§9・§11 | セッションを別ウィンドウで開く手順を復元、§6 の例を各ワークツリーのセッションで実行する形に、§9 に入れ子での作業フォルダ判定の限界、別環境（Windows 側）の Claude のロックの限界、§11 に wt-harness の untracked ファイル（イシューファイル等）を primary へ移す手順 | Medium・Low |
+| `test_i179_worktree_docs.sh` | 不在チェックは対象ファイルの存在も条件にする（ファイル削除で PASS しない）。FG-D1 にファイル削除の注入 3 通りを追加 | Low |
+- **理想基準での評価**: 採用。いずれも「人が気づけない失敗を決定論で止める」方向で、ガードとスクリプトの安全性を上げる。ガードの既知の限界（入れ子での作業フォルダ判定）は、代わりの判定（`CLAUDE_PROJECT_DIR`）がサブエージェントを壊すため、文書で限界を明示して受容する。
+- **承認**: 既定基準（2026-10-20）に基づき実装し事後報告。計画変更のため、敵対的レビュー通過後に `/plan-issue-review I179` を挟む。
 
 ## レビュー結果
 - [20261021_0031 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0031.md)（計画変更＝ロックの扱いの追加後の再レビュー）

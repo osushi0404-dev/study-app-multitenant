@@ -104,6 +104,13 @@ ck   "P6 exit2"           2    "$RC"
 ckhas "P6 衝突メッセージ" "$OUT" "既存 worktree と衝突"
 ckt  "P6 .env 非作成"     test ! -e "$TMP/wt-app/.env"
 
+# --- TC-P14: primary の .env にポート以外の行しか無い → 既定ポート扱いで --port-offset 0 は衝突 ---
+new_env; printf 'SOME_VAR=1\n' > "$PRIMARY/.env"
+add_wt "$TMP/wt-app" b1; run_ports "$TMP/wt-app" --port-offset 0
+ck   "P14 exit2"          2    "$RC"
+ckhas "P14 衝突メッセージ" "$OUT" "既存 worktree と衝突"
+ckt  "P14 .env 非作成"    test ! -e "$TMP/wt-app/.env"
+
 # ===================== 引数検証 =====================
 # --- TC-P5: --port-offset 非整数 / 値なし → exit2 ---
 new_env; add_wt "$TMP/wt-app" b1; run_ports "$TMP/wt-app" --port-offset abc

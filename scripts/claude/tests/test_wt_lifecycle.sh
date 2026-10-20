@@ -39,6 +39,7 @@ new_env() {
   cat > "$BIN/docker" <<'STUB'
 #!/usr/bin/env bash
 echo "docker $*" >> "$DOCKER_LOG"
+echo "cwd=$(pwd -P)" >> "$DOCKER_LOG"   # どのフォルダで実行されたか（down -v が撤去対象で走ることの検証用）
 case "$*" in
   *down*)
     if [ -n "${STUB_WT:-}" ] && [ -e "$STUB_WT/.git" ]; then echo "down present=yes" >> "$DOCKER_LOG";
@@ -156,6 +157,46 @@ ck   "R2 exit0"                0    "$RC"
 ckhas "R2 down -v 呼出"        "$(cat "$DOCKER_LOG")" "compose down -v"
 cknot "R2 worktree 撤去済"     "$(wl)" "/wt-app"
 ckhas "R3 down→remove 順序(present=yes)" "$(cat "$DOCKER_LOG")" "present=yes"
+# down -v は撤去対象のフォルダで実行される（呼び出し元＝primary で走ると primary の volume が消える）
+ckhas "R3b down は撤去対象の中で実行" "$(grep -A1 'compose down -v' "$DOCKER_LOG")" "cwd=$TMP/wt-app"
+
+# --- TC-R1g: 判定失敗（docker volume ls が失敗）→ 停止 ---
+new_env; make_wt
+DOCKER_FAIL_ON="volume ls" run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R1g exit2"               2    "$RC"
+ckhas "R1g worktree 残存"      "$(wl)" "/wt-app"
+
+# --- TC-R1h: 判定失敗（直下 .env に export 付きの COMPOSE_PROJECT_NAME）→ 停止 ---
+new_env; make_wt
+printf 'export COMPOSE_PROJECT_NAME = study\n' > "$WT/.env"
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R1h exit2"               2    "$RC"
+ckhas "R1h 名前を確定できない" "$OUT" "プロジェクト名を確定できません"
+ckhas "R1h worktree 残存"      "$(wl)" "/wt-app"
+
+# --- TC-R1i: 判定失敗（直下 .env の COMPOSE_FILE）→ 停止 ---
+new_env; make_wt
+printf 'COMPOSE_FILE=other.yml\n' > "$WT/.env"
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R1i exit2"               2    "$RC"
+ckhas "R1i worktree 残存"      "$(wl)" "/wt-app"
+
+# --- TC-R1j: 判定失敗（compose.yaml・override に最上位 name:）→ 停止 ---
+for cf in compose.yaml docker-compose.override.yml; do
+  new_env; make_wt
+  printf 'name: study\nservices: {}\n' > "$WT/$cf"
+  git -C "$WT" add "$cf"; git -C "$WT" commit -qm "add $cf"; git -C "$WT" push -q origin "HEAD:refs/heads/tmp-$cf" 2>/dev/null
+  git -C "$WT" fetch -q origin
+  run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+  ck   "R1j $cf exit2"         2    "$RC"
+  ckhas "R1j $cf 名前を確定できない" "$OUT" "プロジェクト名を確定できません"
+done
+
+# --- TC-R1k: 判定失敗（フォルダ名からプロジェクト名が作れない＝空）→ 停止 ---
+new_env; make_wt "$TMP/___" feature/I003-x
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R1k exit2"               2    "$RC"
+ckt  "R1k worktree 残存"       test -d "$TMP/___"
 
 # ===================== 既存の安全策 =====================
 
@@ -259,14 +300,83 @@ ckhas "R15 ロックの案内"       "$OUT" "ロックされています（理�
 cknot "R15 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
 ckhas "R15 worktree 残存"      "$(wl)" "/wt-app"
 
+# --- TC-R16: ps が無い環境でのロック → 生存を確認できないので中止 ---
+new_env; make_wt
+git -C "$PRIMARY" worktree lock --reason "claude session app (pid $DEAD_PID start 1)" "$WT"
+NOPS="$TMP/nops"; mkdir -p "$NOPS"
+for c in git sed head basename tr grep awk find; do ln -s "$(command -v "$c")" "$NOPS/$c"; done
+ln -s "$BIN/docker" "$NOPS/docker"
+OUT="$( cd "$PRIMARY" && PATH="$NOPS" DOCKER_LOG="$DOCKER_LOG" "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
+ck   "R16 exit2"               2    "$RC"
+ckhas "R16 確認できない案内"   "$OUT" "ps が無いため"
+ckhas "R16 worktree 残存"      "$(wl)" "/wt-app"
+
+# ===================== 入れ子・名前の重なり・docker 不在 =====================
+
+# --- TC-R17: 中に登録済みの入れ子ワークツリー（未コミット変更あり）→ 中止・入れ子の中身が残る ---
+new_env; make_wt
+git -C "$WT" worktree add -q "$WT/.claude/worktrees/agent-x" -b worktree-agent-x origin/develop
+printf 'precious\n' > "$WT/.claude/worktrees/agent-x/work.txt"
+STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R17 exit2"               2    "$RC"
+ckhas "R17 入れ子の案内"       "$OUT" "中に別のワークツリー"
+cknot "R17 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+ckt  "R17 入れ子の中身が残る"  test -f "$WT/.claude/worktrees/agent-x/work.txt"
+
+# --- TC-R18: 中に未登録の git（prunable の残骸・入れ子 clone）→ 中止 ---
+new_env; make_wt
+mkdir -p "$WT/.claude/worktrees/stale"; printf 'gitdir: /nowhere\n' > "$WT/.claude/worktrees/stale/.git"
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R18 exit2"               2    "$RC"
+ckhas "R18 入れ子の案内"       "$OUT" "中に別のワークツリー"
+ckhas "R18 worktree 残存"      "$(wl)" "/wt-app"
+
+# --- TC-R19: Compose プロジェクト名が別のワークツリー（primary）と同じ・データあり・DANGER_OK=1 → down せず中止 ---
+new_env; make_wt "$TMP/other/primary" feature/I004-x
+STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R19 exit2"               2    "$RC"
+ckhas "R19 名前の重なりの案内" "$OUT" "別のワークツリーと同じです"
+cknot "R19 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+ckt  "R19 worktree 残存"       test -d "$TMP/other/primary"
+# --- TC-R19b: 名前が重なってもデータが無ければ撤去できる ---
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R19b exit0"              0    "$RC"
+
+# --- TC-R20: docker が無い・DANGER_OK=1 → down せずに撤去（警告） ---
+new_env; make_wt
+OUT="$( cd "$PRIMARY" && PATH="$NODOCKER" DANGER_OK=1 "$BASH_BIN" "$WT_REMOVE" "$WT" 2>&1 )"; RC=$?
+ck   "R20 exit0"               0    "$RC"
+ckhas "R20 警告"               "$OUT" "docker が使えないため down -v を実行せずに撤去します"
+cknot "R20 worktree 撤去済"    "$(wl)" "/wt-app"
+
 # ===================== false-green 注入 =====================
+
+# --- TC-FG5: down -v の前の cd を外した複製では R3b が落ちる（cwd 検証が実際に効く証明） ---
+new_env; make_wt
+BROKEN_CD="$TMP/wt-remove-nocd.sh"
+# shellcheck disable=SC2016
+sed 's/( cd "\$WT_PATH" && docker compose down -v )/( docker compose down -v )/' "$WT_REMOVE" > "$BROKEN_CD"
+ck   "FG5 注入成立"            0    "$(grep -q '^  ( docker compose down -v )' "$BROKEN_CD"; echo $?)"
+STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$BROKEN_CD" "$WT"
+cknot "FG5 除去複製=撤去対象の外で down" "$(grep -A1 'compose down -v' "$DOCKER_LOG")" "cwd=$TMP/wt-app"
+
+# --- TC-FG6: 入れ子の検査を除去した複製では R17 の条件で入れ子の中身が消える ---
+new_env; make_wt
+git -C "$WT" worktree add -q "$WT/.claude/worktrees/agent-x" -b worktree-agent-x origin/develop
+printf 'precious\n' > "$WT/.claude/worktrees/agent-x/work.txt"
+BROKEN_NS="$TMP/wt-remove-nonest.sh"
+# shellcheck disable=SC2016  # 単一引用は意図的（$NESTED を展開せず sed パターンに渡す）
+sed 's/^if \[ -n "\$NESTED" \]; then$/if false; then/' "$WT_REMOVE" > "$BROKEN_NS"
+ck   "FG6 注入成立"            0    "$(grep -q '^if false; then$' "$BROKEN_NS"; echo $?)"
+run_rm "$PRIMARY" "$BROKEN_NS" "$WT"
+ckt  "FG6 除去複製=入れ子の中身が消える" test ! -e "$WT/.claude/worktrees/agent-x/work.txt"
 
 # --- TC-FG4: 使用中判定を除去した複製では R14 の条件でも撤去される（実体の停止要因が使用中判定である反証） ---
 new_env; make_wt
 git -C "$PRIMARY" worktree lock --reason "claude session app (pid $$ start 1)" "$WT"
 BROKEN_LK="$TMP/wt-remove-nolive.sh"
 # shellcheck disable=SC2016  # 単一引用は意図的（$LOCK_PID を展開せず sed パターンに渡す）
-sed 's/if ps -p "$LOCK_PID" >\/dev\/null 2>&1; then/if false; then/' "$WT_REMOVE" > "$BROKEN_LK"
+sed 's/if \[ -e "\/proc\/$LOCK_PID" \] || ps -p "$LOCK_PID" >\/dev\/null 2>&1; then/if false; then/' "$WT_REMOVE" > "$BROKEN_LK"
 ck   "FG4 注入成立"            0    "$(grep -q '^  if false; then' "$BROKEN_LK"; echo $?)"
 run_rm "$PRIMARY" "$BROKEN_LK" "$WT"
 ck   "FG4 除去複製=exit0"      0    "$RC"

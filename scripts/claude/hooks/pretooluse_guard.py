@@ -1257,8 +1257,14 @@ def main():
             _block("git reset --hard requires DANGER_OK=1", raw)
 
         # docker volume wipe requires explicit ack
-        if re.search(r"\bdocker(\s+compose|\-compose)\s+down\b.*\s(-v|--volumes)\b", cmd, re.I):
+        # I179: compose と down の間のグローバルオプション（-p <name>・--project-name・-f 等）を挟んでも捕捉する
+        if re.search(r"\bdocker(\s+compose|\-compose)\b[^;&|\n]*\sdown\b.*\s(-v|--volumes)\b", cmd, re.I):
             _block("docker compose down -v/--volumes requires DANGER_OK=1", raw)
+        # I179: named volume の直接削除（取り残しの片付け手順で使う）も同じく破壊的操作
+        if re.search(r"\bdocker\s+volume\s+(rm|remove|prune)\b", cmd, re.I):
+            _block("docker volume rm/prune requires DANGER_OK=1", raw)
+        if re.search(r"\bdocker\s+system\s+prune\b.*\s--volumes\b", cmd, re.I):
+            _block("docker system prune --volumes requires DANGER_OK=1", raw)
 
         # rm -rf anywhere requires explicit ack
         if re.search(r"\brm\s+-rf\b", cmd, re.I):

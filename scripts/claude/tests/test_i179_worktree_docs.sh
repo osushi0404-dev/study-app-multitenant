@@ -23,6 +23,7 @@ res() { # $1=TC $2=説明 $3=0(成立)/非0
   fi
 }
 has()   { grep -qF -- "$2" "$1" 2>/dev/null; }          # ファイル $1 に固定文字列 $2 がある
+lacks() { [ -f "$1" ] && ! grep -qF -- "$2" "$1"; }     # ファイル $1 が在り、固定文字列 $2 が無い（ファイル不在は不合格）
 hasx()  { grep -qxF -- "$2" "$1" 2>/dev/null; }         # ファイル $1 に行全体一致 $2 がある
 step5() { awk '/^\*\*ステップ5/{f=1} /^\*\*ステップ6/{f=0} f' "$1"; }   # issue-flow.md のステップ5〜6 の範囲
 
@@ -49,7 +50,7 @@ check_all() {
   rc=0
   for t in 'claude --worktree' '.worktreeinclude' 'wt-ports.sh' 'wt-remove.sh' 'git stash push -u -m' \
            'git config' 'docker compose ls -a' 'git worktree list' 'track:harness' 'track:app' \
-           '/plan-issue' '旧方式からの移行' 'grep -r' 'git worktree unlock'; do
+           '/plan-issue' '旧方式からの移行' 'grep -r' 'git worktree unlock' 'git remote set-head origin --auto' 'refs/remotes/origin/HEAD'; do
     has "$W" "$t" || { rc=1; [ "$VERBOSE" -eq 1 ] && printf '  missing: %s\n' "$t"; }
   done
   res D3 "worktree.md に必要な記述がある" "$rc"
@@ -57,13 +58,13 @@ check_all() {
   # D4: worktree.md に旧記述が無い
   rc=0
   for t in '2026-07 時点' 'トラック = 1 作業ツリー' '採番権威でもある' '新設しない'; do
-    has "$W" "$t" && { rc=1; [ "$VERBOSE" -eq 1 ] && printf '  unexpected: %s\n' "$t"; }
+    lacks "$W" "$t" || { rc=1; [ "$VERBOSE" -eq 1 ] && printf '  unexpected: %s\n' "$t"; }
   done
   res D4 "worktree.md に旧記述が無い" "$rc"
 
   # D5: /plan-issue が develop をチェックアウトせず origin/develop 基点で作る
   rc=0
-  has "$S" 'git checkout develop' && rc=1
+  lacks "$S" 'git checkout develop' || rc=1
   has "$S" 'checkout --no-track -b' || rc=1
   has "$S" 'origin/develop' || rc=1
   res D5 "plan-issue/SKILL.md が origin/develop 基点" "$rc"
@@ -77,8 +78,8 @@ check_all() {
 
   # D7: 公式の作成・片付けを置き換えるフックが無い
   rc=0
-  has "$R/.claude/settings.json" 'WorktreeCreate' && rc=1
-  has "$R/.claude/settings.json" 'WorktreeRemove' && rc=1
+  lacks "$R/.claude/settings.json" 'WorktreeCreate' || rc=1
+  lacks "$R/.claude/settings.json" 'WorktreeRemove' || rc=1
   res D7 "settings.json に WorktreeCreate/WorktreeRemove が無い" "$rc"
 
   # D8: .worktreeinclude が設定ファイルをコピー対象にしている
@@ -94,13 +95,13 @@ check_all() {
   # D10: common-commands.md が wt-ports.sh を案内し、廃止スクリプトを案内しない
   rc=0
   has "$C" 'wt-ports.sh' || rc=1
-  has "$C" "$OLD" && rc=1
+  lacks "$C" "$OLD" || rc=1
   res D10 "common-commands.md が wt-ports.sh を案内" "$rc"
 
   # D11: トラックとワークツリーの固定対応が無い
   rc=0
-  has "$R/.claude/skills/issue-bootstrap/SKILL.md" '対応 worktree: wt-harness' && rc=1
-  has "$F" '対応 worktree: wt-harness' && rc=1
+  lacks "$R/.claude/skills/issue-bootstrap/SKILL.md" '対応 worktree: wt-harness' || rc=1
+  lacks "$F" '対応 worktree: wt-harness' || rc=1
   res D11 "issue-bootstrap/SKILL.md・issue-flow.md に wt-harness 固定が無い" "$rc"
 
   # DOC1（I097 から移設）: ポート分離の記述が残る
@@ -108,7 +109,7 @@ check_all() {
   has "$W" '同時' || rc=1
   has "$W" 'BACKEND_PORT' || rc=1
   has "$W" 'port-offset' || rc=1
-  has "$W" '1 スタックずつ' && rc=1
+  lacks "$W" '1 スタックずつ' || rc=1
   has "$C" 'BACKEND_PORT' || rc=1
   res DOC1 "worktree.md・common-commands.md にポート分離の記述" "$rc"
 
@@ -125,8 +126,8 @@ FILES=(docs/runbooks/worktree.md docs/runbooks/common-commands.md docs/runbooks/
        docs/runbooks/onboarding.md .claude/skills/plan-issue/SKILL.md .claude/skills/issue-bootstrap/SKILL.md
        .claude/settings.json .worktreeinclude .gitignore)
 make_copy() { # 対象ファイルを複製し、D2 の git grep が使えるよう git 管理下に置く。stdout=複製先
-  local d="$TMP/$1" f
-  mkdir -p "$d"
+  local d f
+  d="$(mktemp -d "$TMP/$1.XXXX")"   # 同じ TC を複数回注入しても別の複製にする
   for f in "${FILES[@]}"; do mkdir -p "$d/$(dirname "$f")"; cp "$REPO_ROOT/$f" "$d/$f"; done
   git -C "$d" init -q
   git -C "$d" add -A
@@ -166,6 +167,10 @@ fg D8  'sed -i "/^backend\/\.env$/d" "$D/.worktreeinclude"'
 fg D9  'sed -i "/^\.claude\/worktrees\/$/d" "$D/.gitignore"'
 fg D10 'printf "%s\n" "$OLD" >> "$D/docs/runbooks/common-commands.md"'
 fg D11 'printf "%s\n" "対応 worktree: wt-harness" >> "$D/.claude/skills/issue-bootstrap/SKILL.md"'
+# 不在チェックの対象ファイルそのものが無くなった場合も FAIL になる（ファイル不在で「文言なし」と誤って PASS しない）
+fg D7  'rm "$D/.claude/settings.json"'
+fg D11 'rm "$D/.claude/skills/issue-bootstrap/SKILL.md"'
+fg D4  'rm "$D/docs/runbooks/worktree.md"'
 }
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
