@@ -179,6 +179,10 @@ def _push_has_force(cmd: str) -> bool:
             after = toks[toks.index("push") + 1:]
             if any(_is_force_flag(t) for t in after):
                 return True
+            # 宛先の前の + も force（git push origin +feature/x・+HEAD:x）。[0] は remote
+            positionals = [a for a in after if not a.startswith("-")]
+            if any(rs.startswith("+") or ":+" in rs for rs in positionals[1:]):
+                return True
     return False
 
 # --- 動的・不透明 push 判定（ask degrade・I083 欠陥1/R5） ---
@@ -212,6 +216,10 @@ def _push_is_dynamic(cmd: str) -> bool:
             for i, t in enumerate(toks[:-1]):
                 if t == "-c" and toks[i + 1].startswith("alias.") and "push" in toks[i + 1]:
                     return True
+        # (iii) I174: xargs / parallel で包んだ push は、標準入力などの語が宛先として後ろに足される
+        # （`git branch | xargs -n1 git push origin` は main / develop に push しうる）
+        if os.path.basename(head) in ("xargs", "parallel") and "git" in toks and "push" in toks:
+            return True
     return False
 
 # 高リスク Edit/Write パス（リポジトリルート相対で照合）。

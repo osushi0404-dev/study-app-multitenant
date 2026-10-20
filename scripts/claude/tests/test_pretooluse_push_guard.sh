@@ -118,6 +118,14 @@ ck "DOK1 DANGER_OK dynamic escape"     ASK "$(runj 'DANGER_OK=1 git push origin 
 git checkout -q feature/x
 ck "D7 dynamic feature (not exit2)"    ASK "$(runj 'git push origin $(git rev-parse --abbrev-ref HEAD)')"
 ck "D9 dynamic + rm-rf (block wins)"   2   "$(run 'git push origin $VAR && rm -rf x')"
+# I174（0-13 後の敵対的レビュー）: xargs / parallel で包んだ push は宛先が後から足される（feature 上でも main に push しうる）ので確認
+ck "XP5 + を付けた宛先の force push"   2   "$(runj 'git push origin +feature/x')"
+ck "XP6 +HEAD:x の force push"         2   "$(runj 'git push origin +HEAD:feature/x')"
+ck "XP7 + の無い普通の push は通す"     0   "$(runj 'git push origin feature/x')"
+ck "XP1 xargs で宛先を足す push"       ASK "$(runj "git branch --format='%(refname:short)' | xargs -n1 git push origin")"
+ck "XP2 echo main | xargs git push"    ASK "$(runj 'echo main | xargs git push origin')"
+ck "XP3 parallel の push（宛先が見える）" 2 "$(runj 'parallel git push origin ::: main develop')"
+ck "XP4 parallel の push（宛先が見えない）" ASK "$(runj 'git branch | parallel git push origin')"
 # force 取りこぼし → block
 ck "F1 -f short"                       2   "$(run 'git push -f origin x')"
 ck "F2 -uf combined"                   2   "$(run 'git push -uf origin x')"

@@ -6,8 +6,9 @@
     （git と rm は「危険な引数で呼ばれたら印を出すだけ」の関数に置き換えて export -f する。
      ほかに使うのは echo・cat・wc・tr などの無害なコマンドだけ）
 (2) 同じスクリプトを guard に判定させる
-bash が危険なコマンドを実行するのに guard が素通し（0）なら不合格。
-bash が実行しない形で guard が止めた件数は「余計な停止」として表示する（不合格にはしない）。
+bash が危険なコマンドを実行するのに guard が停止（2）しなければ不合格（確認〔ASK〕への格下げも不合格）。
+bash が実行しない形で guard が止めた・確認にした「余計な停止」も不合格（コメント等の読み飛ばしが外れたことを検知する）。
+guard が見つからない・読み込めないときに全件を「停止」と誤読しないよう、先に対照の 2 件を確かめる。
 
 使い方: python3 scripts/claude/tests/guard_bash_oracle.py [-v]
 """
@@ -24,9 +25,11 @@ GUARD = os.environ.get("GUARD") or os.path.join(REPO, "scripts/claude/hooks/pret
 MARK = "__RAN__"
 STUBS = (
     # git: reset --hard・push --force・保護ブランチ（main / develop）への push で印を出す（bash が展開した後の引数で見る）
+    # （-f・--force-with-lease・+参照・HEAD:main の形も印を出す。将来 DANGERS に足したときに「実行しない形」と誤分類しないため）
     'git(){ case "$1" in reset) [ "$2" = "--hard" ] && echo ' + MARK + ';; '
-    'push) case " $* " in *" --force "*|*" main "*|*" develop "*) echo ' + MARK + ';; esac;; esac; }\n'
-    'rm(){ case " $* " in *" -r""f "*) echo ' + MARK + ';; esac; }\n'
+    'push) case " $* " in *" --force "*|*" --force-with-lease"*|*" -f "*|*" +"*|*" main "*|*" develop "*'
+    '|*":main "*|*":develop "*|*"/main "*|*"/develop "*) echo ' + MARK + ';; esac;; esac; }\n'
+    'rm(){ case " $* " in *" -r""f "*|*" -f""r "*|*" -R""f "*|*" -f""R "*) echo ' + MARK + ';; esac; }\n'
     "export -f git rm\n"
 )
 RM = "rm -r" + "f"   # ソース上の連続表記を避ける（このファイルを検索・編集するコマンドへの誤反応防止）
@@ -126,21 +129,30 @@ def main() -> int:
         print("SKIP: bash がありません")
         return 0
     verbose = "-v" in sys.argv
+    if not os.path.isfile(GUARD):
+        print(f"FAIL guard がありません: {GUARD}")
+        return 1
+    # 対照: 無害なコマンドは 0・危険なコマンドは 2。guard が動いていないと終了コード 2 を「停止」と誤読するため
+    control = {"echo ok": "0", "git reset --hard origin/develop": "2"}
+    for c, want in control.items():
+        if run_guard(c) != want:
+            print(f"FAIL 対照 {c!r} が {run_guard(c)}（期待 {want}）: guard が正しく動いていません")
+            return 1
     scripts = list(dict.fromkeys(cases()))
     with ThreadPoolExecutor(12) as ex:
         ran = list(ex.map(run_bash, scripts))
         got = list(ex.map(run_guard, scripts))
-    miss = [(s, g) for s, r, g in zip(scripts, ran, got) if r and g not in ("2", "ASK")]
-    over = [(s, g) for s, r, g in zip(scripts, ran, got) if not r and g in ("2", "ASK")]
-    asked = sum(1 for r, g in zip(ran, got) if r and g == "ASK")
+    miss = [(s, g) for s, r, g in zip(scripts, ran, got) if r and g != "2"]
+    over = [(s, g) for s, r, g in zip(scripts, ran, got) if not r and g != "0"]
     for s, g in miss:
         print(f"FAIL bash は実行するのに guard={g} :: " + s.replace("\n", "⏎"))
-    if verbose:
-        for s, g in over:
-            print(f"  [余計な停止 guard={g}] " + s.replace("\n", "⏎"))
+    for s, g in over:
+        print(f"FAIL bash は実行しないのに guard={g}（余計な停止） :: " + s.replace("\n", "⏎"))
     print("---")
-    print(f"cases={len(scripts)} bash実行={sum(ran)} 見逃し={len(miss)} 確認止まり={asked} 余計な停止={len(over)}")
-    return 1 if miss else 0
+    print(f"cases={len(scripts)} bash実行={sum(ran)} 見逃し={len(miss)} 余計な停止={len(over)}")
+    if verbose:
+        print("（見逃しには確認〔ASK〕への格下げを含む）")
+    return 1 if miss or over else 0
 
 
 if __name__ == "__main__":
