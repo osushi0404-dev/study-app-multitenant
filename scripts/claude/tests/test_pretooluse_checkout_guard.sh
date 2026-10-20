@@ -73,10 +73,42 @@ ck "G13 checkout br; log -- dirty (1 行)"  0 "$(run 'git checkout feat; git log
 ck "G14 log; checkout -- dirty も検出"     2 "$(run 'git log -1; git checkout -- g11.txt')"
 ck "G15 fetch & checkout -- dirty も検出"  2 "$(run 'git fetch & git checkout -- g11.txt')"
 
+# --- 作業場所を変える形（I174 敵対的レビュー第 3 周 H1）: -C・cd・pushd・--work-tree・入れ子の中も同じに止める ---
+mkdir sub
+printf 'orig\n' > sub/s.txt
+git add sub/s.txt
+git commit -qm sub
+printf 'x\n' >> sub/s.txt
+ck "G16 git -C . checkout -- dirty"        2 "$(run 'git -C . checkout -- sub/s.txt')"
+ck "G17 git -C sub restore dirty"          2 "$(run 'git -C sub restore s.txt')"
+ck "G18 cd sub && checkout -- dirty"       2 "$(run 'cd sub && git checkout -- s.txt')"
+ck "G19 cd -- sub && checkout -- dirty"    2 "$(run 'cd -- sub && git checkout -- s.txt')"
+ck "G20 pushd sub && restore dirty"        2 "$(run 'pushd sub && git restore s.txt')"
+ck "G21 bash -c cd sub && restore dirty"   2 "$(run "bash -c 'cd sub && git restore s.txt'")"
+ck "G22 --work-tree=. checkout -- dirty"   2 "$(run 'git --work-tree=. checkout -- sub/s.txt')"
+ck "G23 cd sub && cd .. 後の clean ファイル" 0 "$(run 'cd sub && cd .. && git checkout -- tracked.txt')"
+# --- ステージ済みの変更（第 3 周 M7）: コミットから戻す形は消えるので止める・index から戻す形は残るので通す ---
+printf 'orig\n' > st.txt
+git add st.txt
+git commit -qm st
+printf 'staged\n' >> st.txt
+git add st.txt
+ck "G24 checkout HEAD -- staged"           2 "$(run 'git checkout HEAD -- st.txt')"
+ck "G25 restore -s HEAD -SW staged"        2 "$(run 'git restore -s HEAD -SW st.txt')"
+ck "G26 checkout -- staged（index から）"  0 "$(run 'git checkout -- st.txt')"
+# --- 同じ結果になる別の操作（第 3 周 M9）---
+printf 'sub/s.txt\n' > list.txt
+ck "G27 restore --pathspec-from-file"      2 "$(run 'git restore --pathspec-from-file=list.txt')"
+ck "G28 git rm -rf dirty"                  2 "$(run 'git rm -rf sub')"
+ck "G29 git rm --cached は通す"            0 "$(run 'git rm --cached -r sub')"
+ck "G30 git.exe checkout -- dirty"         2 "$(run 'git.exe checkout -- sub/s.txt')"
+ck "G31 bash -c GIT_WORK_TREE=. checkout"  2 "$(run "bash -c 'GIT_WORK_TREE=. git checkout -- sub/s.txt'")"
+
 # --- FALSEGREEN（自動注入）: 判定呼び出し行を無効化した複製で dirty が素通し /
 #     実体で block。両者の差で「block は判定行に依存」を機械裏取り（false-green 排除） ---
 BROKEN="$TMP/guard_broken.py"
-sed 's/target = _git_revert_target_on_dirty(cmd)/target = None/' "$GUARD" > "$BROKEN"
+# 判定の関数そのものを無効化する（最上位と単純コマンドごとの 2 か所から呼ばれるため・I174）
+sed 's/^def _git_revert_target_on_dirty(cmd: str):$/&\n    return None/' "$GUARD" > "$BROKEN"
 ck "FALSEGREEN injected passes" 0 "$(json 'git checkout -- g11.txt' | python3 "$BROKEN" >/dev/null 2>&1; echo $?)"
 ck "FALSEGREEN real blocks"     2 "$(run 'git checkout -- g11.txt')"
 

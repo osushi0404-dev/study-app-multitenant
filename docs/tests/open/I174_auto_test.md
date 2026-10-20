@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・740 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕で追加） | exit 0（最終行 `pass=740 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・740 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕・2026-10-20〜21 の敵対的レビュー第 2 周と fix-loop〔0-14〕で追加） | exit 0（最終行 `pass=763 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -28,7 +28,7 @@
 | TC-11 | 新規テストの構文 | exit 0 | — | 2 |
 | TC-14 | 新規 `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（危険な操作 10 × 書き方 29 を総当たりで生成し、どれも 2 か ASK。計画書 0-12。安全網の前の guard では 23 件が素通しになることを確認済み） | exit 0（最終行 `pass=301 fail=0`。行の継続 10 を含む） | AC-4・AC-6・AC-14 | fix-loop（0-12） |
 | TC-15 | 新規 `scripts/claude/tests/guard_corpus_diff.py`（ゲートでは `test_guard_corpus_diff.sh` 経由。作業記録の Bash コマンドを HEAD の guard と作業ツリーの guard で並べて判定し、確認＋停止の増加が記録の 1% 以内。作業記録が無い環境と、guard に未コミットの変更が無いとき（コミットの後・コードレビュー時）は SKIP。計画書 0-12） | exit 0 | AC-12（承認待ちを増やさない） | fix-loop（0-12） |
-| TC-16 | 新規 `scripts/claude/tests/guard_bash_oracle.py`（ゲートでは `test_guard_bash_oracle.sh` 経由。危険なコマンド 8〔`$'…'` で書いた引数・保護ブランチへの push を含む〕 × 前置きの文脈 16 × つなぎ方 × 書き方 3 × 包み方 3 と、bash が実行しない形の計 1,844 件を、本物の bash〔git・rm は印を出すだけの関数〕と guard の両方に流し、bash が実行するのに guard が素通しのものが 0 件。計画書 0-13。修正前の guard では見逃し 692 件） | exit 0（最終行 `見逃し=0`） | AC-4・AC-8 | fix-loop（0-13） |
+| TC-16 | 新規 `scripts/claude/tests/guard_bash_oracle.py`（ゲートでは `test_guard_bash_oracle.sh` 経由。危険なコマンド 8〔`$'…'` で書いた引数・保護ブランチへの push を含む〕 × 前置きの文脈 16 × つなぎ方 × 書き方 3 × 包み方 3 と、bash が実行しない形の計 1,844 件を、本物の bash〔git・rm は印を出すだけの関数〕と guard の両方に流し、bash が実行するのに guard が素通しのものが 0 件。計画書 0-13。修正前の guard では見逃し 692 件。2026-10-20〜21 に、確認止まり〔ASK〕も不合格・bash が実行しない形の停止も不合格・guard の存在と対照の確認・`rm -fr`／`push -f`／`+参照`／`HEAD:main`／git.exe／`rm -r` と入れ子の中のコメントを追加して 3,984 件） | exit 0（最終行 `見逃し=0 余計な停止=0`） | AC-4・AC-8 | fix-loop（0-13） |
 | TC-12 | I146 マージ後の `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（I146 が足すテスト。DANGER_OK=1 の解除経路があれば期待値を ASK に揃える） | exit 0 | AC-10 | 6 |
 
 TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。
@@ -252,6 +252,29 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | H14 | for の do の shred | 2 | `"$(runj 'for f in backend/*.sqlite3; do shred -u $f; done')"` |
 | H15 | while の do の dd | 2 | `"$(runj 'while read f; do dd if=/dev/zero of="$f"; done < list.txt')"` |
 | H16 | parallel の shred | 2 | `"$(runj 'parallel shred -u ::: backend/db.sqlite3')"` |
+| H17 | parallel '<rm -rf />'（解除不可） | 2 | `"$(runj "DANGER_OK=1 parallel '$RM /' ::: x")"` |
+| H18 | parallel 'git reset --hard {}' | 2 | `"$(runj "parallel 'git reset --hard {}' ::: origin/develop")"` |
+| H19 | parallel 'docker compose down -v' | 2 | `"$(runj "parallel 'docker compose down -v' ::: x")"` |
+| H20 | watch '<rm -rf>' | 2 | `"$(runj "watch '$RM backend'")"` |
+| H21 | watch -n 5 'git reset --hard' | 2 | `"$(runj "watch -n 5 'git reset --hard origin/develop'")"` |
+| H22 | watch 'docker compose ps' は通す | 0 | `"$(runj "watch -n 2 'docker compose ps'")"` |
+| H23 | parallel 'echo {}' は通す | 0 | `"$(runj "parallel 'echo {}' ::: a b")"` |
+| H24 | git.exe reset --hard | 2 | `"$(runj 'git.exe reset --hard origin/develop')"` |
+| H25 | git.exe clean -fdx | 2 | `"$(runj 'git.exe clean -fdx')"` |
+| H26 | bash -c 'git.exe push origin main' | 2 | `"$(runj "bash -c 'git.exe push origin main'")"` |
+| H27 | /usr/bin/git reset --hard | 2 | `"$(runj '/usr/bin/git reset --hard origin/develop')"` |
+| H28 | xargs --arg-file … rm -rf | 2 | `"$(runj "xargs --arg-file list.txt $RM")"` |
+| H29 | parallel -a … rm -rf | 2 | `"$(runj "parallel -a list.txt $RM")"` |
+| H30 | parallel --halt … git reset --hard | 2 | `"$(runj 'parallel --halt now,fail=1 git reset --hard ::: x')"` |
+| H31 | parallel -I {} rm -rf {} | 2 | `"$(runj "cat list.txt \| parallel -I {} $RM {}")"` |
+| H32 | xargs -a list.txt cat は通す | 0 | `"$(runj 'xargs -a list.txt cat')"` |
+| H33 | rm -r（-f なし） | 2 | `"$(runj 'rm -r backend/media')"` |
+| H34 | rm -R（-f なし） | 2 | `"$(runj 'rm -R backend/media')"` |
+| H35 | find -exec rm {} + | 2 | `"$(runj 'find . -name x -exec rm {} +')"` |
+| H36 | find \| xargs rm | 2 | `"$(runj 'find . -name x \| xargs rm')"` |
+| H37 | rm -f 1 ファイルは対象外 | 0 | `"$(runj 'rm -f a.txt')"` |
+| H38 | find -print は通す | 0 | `"$(runj "find . -name '*.pyc' -print")"` |
+| H39 | -c clean.requireForce=false clean | 2 | `"$(runj 'git -c clean.requireForce=false clean -d')"` |
 
 **(X) 外部送信（ASK）**
 
@@ -332,7 +355,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | S16 | echo \$SECRET_KEY | ASK | `"$(runj "docker compose exec -T backend sh -c 'echo \$SECRET_KEY'")"` |
 | S17 | os.environ | ASK | `"$(runj "docker compose exec -T backend python -c \"import os; print(os.environ)\"")"` |
 | S18 | open('/app/.env') | ASK | `"$(runj "docker compose exec -T backend python -c \"print(open('/app/.env').read())\"")"` |
-| S19 | grep -r の設定名 | ASK | `"$(runj 'grep -rn SECRET_KEY backend')"` |
+| S19 | grep -r の設定名 | ASK | `"$(runj "grep -rn SECRET_KEY $TMP/sec")"` |
 | S20 | docker container inspect | ASK | `"$(runj 'docker container inspect x')"` |
 | S21 | docker compose cp | ASK | `"$(runj 'docker compose cp backend:/app/.env -')"` |
 | S22 | docker cp | ASK | `"$(runj 'docker cp c:/app/.env -')"` |
@@ -341,8 +364,8 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | S25 | inspect -f の状態 | 0 | `"$(runj "docker inspect -f '{{.State.Status}}' study-app-multitenant-backend-1")"` |
 | S26 | grep のパターンの .key | 0 | `"$(runj "grep -E '\\.env\|secrets\|\\.key' .claude/settings.json")"` |
 | S27 | 設定名でない grep -r | 0 | `"$(runj 'grep -rn send_mail backend')"` |
-| S28 | grep -r の . （下の階層） | ASK | `"$(runj 'grep -rn SECRET_KEY .')"` |
-| S29 | grep -r のパス省略 | ASK | `"$(runj 'grep -rn OPENAI_API_KEY')"` |
+| S28 | grep -r の . （下の階層） | ASK | `"$(cd "$TMP/sec" && runj 'grep -rn SECRET_KEY .')"` |
+| S29 | grep -r のパス省略 | ASK | `"$(cd "$TMP/sec" && runj 'grep -rn OPENAI_API_KEY')"` |
 | S30 | ホスト diffsettings | ASK | `"$(runj 'python backend/manage.py diffsettings')"` |
 | S31 | inspect -f Config.Env | ASK | `"$(runj "docker inspect -f '{{json .Config.Env}}' c")"` |
 | S32 | 素の docker echo \$KEY | ASK | `"$(runj "docker exec c sh -c 'echo \$SECRET_KEY'")"` |
@@ -627,7 +650,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G25 | その処理を外すと素通し | 0 | `"$(rungj "$BROKEN_U" 'echo "abc')"` |
 | G26 | 閉じない引用符の後ろの行も確認 | ASK | `"$(runj "echo 'it${NL}ls")"` |
 
-<!-- 行数: 550（危険操作の行 190 件を 2 通りずつ数えると 740 ケース） -->
+<!-- 行数: 573（危険操作の行 190 件を 2 通りずつ数えると 763 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -797,3 +820,26 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 **次回どう防ぐか**
 - 見張りの読み方を変えたら、コミットの前に `test_guard_bash_oracle.sh` を流す（決定論ゲートに入れた）。新しい文脈や書き方の抜けが見つかったら、個別のテストではなく差分テストの CONTEXTS / DANGERS / forms / wraps に足す（本物の bash が正解を決めるので、期待値を人が書かない）。
 - fix-loop の実装レビューで代替サブエージェントを使ったときは、その出力を記録ファイルに保存し、再レビューの「前回 NG」としてそのファイルを渡す（今回は空の SKIP 記録を渡してしまい、やり直した）。
+
+### fix-loop（2026-10-21・/code-review 20261019_0037 の敵対的レビュー 3 周・上限到達への対応・計画書 0-14）の再発防止記録（手順7）
+決定論ゲート全 38 行 exit 0（container `pass=763`・push 143・checkout 34・worktree 30・総当たり `pass=301`・bash との差分テスト 3,984 件 見逃し 0 余計な停止 0・作業記録の再判定 新しく確認・停止 0）。診断 `docs/reviews/I174_fix_diagnosis_20261021_0148.md`（PASS）・実装レビュー `_fix_implementation_review_20261021_0223.md`（OK）→ テストレビュー（`claude -p` 失敗のため代替サブエージェント）`_fix_test_review_20261021_0240.md`（HIGH・実行の不備）→ 修正 → 実装レビュー再実行は `claude -p` 失敗で未実施（`_20261021_0846.md`・SKIP）→ テスト結果 `_fix_test_result_20261021_0851.md`・テストレビュー `_fix_test_review_20261021_0851.md`（OK）。ユーザーは一本化（案 A）ではなく指摘ごとの修正（案 B）を選択。
+
+**なぜ失敗したか**
+- git の判定が「最上位の文字列」と「読み解いた単純コマンド」の 2 経路に分かれ、経路ごとに git の見つけ方・オプションの読み方・実行場所（`cd`・`-C`・`--work-tree`・`GIT_DIR=`）の扱いが違っていた。第 2 周で push の実行場所を直しても checkout/restore には同じ穴が残り、0-13 で入れ子の push の宛先・force を直しても「宛先の読めない push」は最上位にしか無かった。
+- テストが「どちらの経路で止めたか」を区別せず、片方の修正（`_cmd_danger` の git.exe）を外しても他方が止めるので、テストが落ちなかった。
+- 文字列の一致で push を探す判定（`sh -c` の中・xargs の語）を広げた結果、`xargs grep "git push"` のような読み取りまで確認にしていた。
+- 前置きの `GIT_DIR=` は読み解きの途中で外されるため、入れ子の中の判定に届いていなかった（テストレビューの指摘）。
+
+**何を変えたか**
+- 実行場所の共通部品（`_git_find`・`_git_loc`・`_git_run`・`_cd_target`・前置きの代入を控える `genv`）を作り、今のブランチ（push）と未コミット変更（checkout/restore・`git rm -f`）の判定を、両方の経路でこれに通した。コミットから戻す形はステージ済みの変更も数える。
+- 「宛先の読めない push」は `_analyze` が単純コマンドごとに返す（`push_dynamic`）。文字列一致の (ii) `sh -c`・(iii) xargs/parallel は廃止。
+- 一括削除・設定経由の push・`clean.requireForce=false` を危険操作に追加。xargs／parallel の値を取るオプションを追加。
+- テスト: 指摘ごとのケース（XP28〜XP54・G16〜G31・H24〜H39）、差分テストに git.exe と `rm -r`、偽合格の防止の複製（FG-M・FG-I／FALSEGREEN の作り直し）、S28・S29 の環境依存の解消。
+
+**セキュリティ上の考慮点**
+- 実行場所を再現する git の呼び出し（`rev-parse`・`status`）は引数の配列で渡し（`shell=False`）、`cwd` と環境変数だけを変える。判定対象の文字列をシェルとして実行することはない。場所が変数・置換で読めないときは確認にする（素通しにしない）。
+
+**次回どう防ぐか**
+- git の判定を足すときは、最上位と単純コマンドの両方の経路が同じ共通部品（`_git_find`・`_git_loc`）を使っているかを確かめ、テストは入れ子（`bash -c`）の形と、場所を変える形（`-C`・`cd`・`GIT_DIR=`）を必ず 1 件ずつ足す。
+- 判定を 1 つ足したら、その判定だけを外した複製でどれかのテストが落ちることを確かめる（今回のテストレビューは 16 個の複製で確認し、落ちなかった 2 個が実際の見逃しにつながっていた）。
+- 経路が 2 つのままなので、同じ型の穴が再び出る可能性は残る（一本化〔診断メモの案 A〕は見送り）。次の敵対的レビューで同じ型が出たら、案 A を改めて提案する。

@@ -29,8 +29,10 @@ STUBS = (
     'git(){ case "$1" in reset) [ "$2" = "--hard" ] && echo ' + MARK + ';; '
     'push) case " $* " in *" --force "*|*" --force-with-lease"*|*" -f "*|*" +"*|*" main "*|*" develop "*'
     '|*":main "*|*":develop "*|*"/main "*|*"/develop "*) echo ' + MARK + ';; esac;; esac; }\n'
-    'rm(){ case " $* " in *" -r""f "*|*" -f""r "*|*" -R""f "*|*" -f""R "*) echo ' + MARK + ';; esac; }\n'
-    "export -f git rm\n"
+    'rm(){ case " $* " in *" -r""f "*|*" -f""r "*|*" -R""f "*|*" -f""R "*|*" -r "*|*" -R "*) echo ' + MARK + ';; esac; }\n'
+    # git.exe（WSL から Windows の git を呼ぶ形）も同じ印を出す
+    'git.exe(){ git "$@"; }\n'
+    "export -f git rm git.exe\n"
 )
 RM = "rm -r" + "f"   # ソース上の連続表記を避ける（このファイルを検索・編集するコマンドへの誤反応防止）
 
@@ -51,6 +53,10 @@ DANGERS = [
     ("git", "push -f origin feature/x"),
     ("git", "push origin +feature/x"),
     ("git", "push origin HEAD:main"),
+    # 第 3 周: git.exe・-f の無い rm -r
+    ("git.exe", "reset --hard origin/develop"),
+    ("git.exe", "push origin main"),
+    ("rm", "-r build_tmp"),
 ]
 # 前置きの文脈: (前置き, 使えるつなぎ方)。改行でしかつなげないもの（ヒアドキュメント・コメント）は "\n" だけ
 NL_ONLY = ("\n",)

@@ -275,6 +275,25 @@ ck "H20 watch '<rm -rf>'"                         2 "$(runj "watch '$RM backend'
 ck "H21 watch -n 5 'git reset --hard'"            2 "$(runj "watch -n 5 'git reset --hard origin/develop'")"
 ck "H22 watch 'docker compose ps' は通す"         0 "$(runj "watch -n 2 'docker compose ps'")"
 ck "H23 parallel 'echo {}' は通す"                0 "$(runj "parallel 'echo {}' ::: a b")"
+# git.exe（WSL）も git と同じ（第 3 周 H3: 単純コマンドごとの判定〔_cmd_danger〕を通る形）
+ck "H24 git.exe reset --hard"                     2 "$(runj 'git.exe reset --hard origin/develop')"
+ck "H25 git.exe clean -fdx"                       2 "$(runj 'git.exe clean -fdx')"
+ck "H26 bash -c 'git.exe push origin main'"       2 "$(runj "bash -c 'git.exe push origin main'")"
+ck "H27 /usr/bin/git reset --hard"                2 "$(runj '/usr/bin/git reset --hard origin/develop')"
+# 値を取るオプションの値を中のコマンドと読み違えない（第 3 周 M5）
+ck "H28 xargs --arg-file … rm -rf"                2 "$(runj "xargs --arg-file list.txt $RM")"
+ck "H29 parallel -a … rm -rf"                     2 "$(runj "parallel -a list.txt $RM")"
+ck "H30 parallel --halt … git reset --hard"       2 "$(runj 'parallel --halt now,fail=1 git reset --hard ::: x')"
+ck "H31 parallel -I {} rm -rf {}"                 2 "$(runj "cat list.txt | parallel -I {} $RM {}")"
+ck "H32 xargs -a list.txt cat は通す"             0 "$(runj 'xargs -a list.txt cat')"
+# 同じ一括削除になる別の書き方（第 3 周 M10・L12）
+ck "H33 rm -r（-f なし）"                         2 "$(runj 'rm -r backend/media')"
+ck "H34 rm -R（-f なし）"                         2 "$(runj 'rm -R backend/media')"
+ck "H35 find -exec rm {} +"                       2 "$(runj 'find . -name x -exec rm {} +')"
+ck "H36 find | xargs rm"                          2 "$(runj 'find . -name x | xargs rm')"
+ck "H37 rm -f 1 ファイルは対象外"                 0 "$(runj 'rm -f a.txt')"
+ck "H38 find -print は通す"                       0 "$(runj "find . -name '*.pyc' -print")"
+ck "H39 -c clean.requireForce=false clean"        2 "$(runj 'git -c clean.requireForce=false clean -d')"
 
 # --- (X) 外部送信（ASK） ---
 ck "X1 send_mail"              ASK "$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])\"")"
@@ -366,8 +385,9 @@ ck "S24 diffsettings"          ASK "$(runj "$M diffsettings")"
 ck "S25 inspect -f の状態"     0   "$(runj "docker inspect -f '{{.State.Status}}' study-app-multitenant-backend-1")"
 ck "S26 grep のパターンの .key" 0  "$(runj "grep -E '\\.env|secrets|\\.key' .claude/settings.json")"
 ck "S27 設定名でない grep -r"  0   "$(runj 'grep -rn send_mail backend')"
-ck "S28 grep -r の . （下の階層）" ASK "$(runj 'grep -rn SECRET_KEY .')"
-ck "S29 grep -r のパス省略"    ASK "$(runj 'grep -rn OPENAI_API_KEY')"
+# S19 と同じく一時ディレクトリで（作業ツリーの backend/.env の有無で結果が変わらないように）
+ck "S28 grep -r の . （下の階層）" ASK "$(cd "$TMP/sec" && runj 'grep -rn SECRET_KEY .')"
+ck "S29 grep -r のパス省略"    ASK "$(cd "$TMP/sec" && runj 'grep -rn OPENAI_API_KEY')"
 ck "S30 ホスト diffsettings"   ASK "$(runj 'python backend/manage.py diffsettings')"
 ck "S31 inspect -f Config.Env" ASK "$(runj "docker inspect -f '{{json .Config.Env}}' c")"
 ck "S32 素の docker echo \$KEY" ASK "$(runj "docker exec c sh -c 'echo \$SECRET_KEY'")"

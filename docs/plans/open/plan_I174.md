@@ -138,6 +138,15 @@
   - `python3 - < f.py`・`python3 /dev/stdin < f.py` は、流し込むファイルの中身を判定する
 - 残余リスク（追記）: `ssh` / `kubectl exec` の先のコマンドは判定しない（このプロジェクトの作業で使わない）
 
+### 0-14. fix-loop（/code-review 20261019_0037 の敵対的レビュー 3 周・上限到達への対応・2026-10-21・ユーザー決定＝案 B）
+診断メモ `docs/reviews/I174_fix_diagnosis_20261021_0148.md`（診断レビュー PASS）。第 1〜2 周の修正（73fbd19・dd941c5）の後、第 3 周で High 3 が残った。根本原因は「git の判定が最上位の文字列と単純コマンドの 2 経路に分かれている」だが、ユーザーは一本化（案 A）ではなく**指摘ごとの修正（案 B）**を選んだ。経路は 2 つのまま、共通の部品を両方から使う形で直す。
+1. **git の実行場所の共通部品**: `_git_find`（git.exe・絶対パス・前置きの `GIT_DIR=` を含めて git とサブコマンドの位置を返す）・`_git_loc`／`_git_run`（`cd`／`pushd` の先〔`cd --`・`cd -P`・引数なし・`~`〕・`-C`・`--git-dir`・`--work-tree`・`-c`・`GIT_DIR`／`GIT_WORK_TREE` を再現して git を実行）・`_cd_target`。今のブランチ（push）と未コミット変更（checkout/restore）の両方がこれを使う。
+2. **未コミット変更の取り消し**: `_git_revert_target_on_dirty` を、git の前のオプション・cd の先・入れ子の中（`_cmd_danger` から単純コマンドごとに呼ぶ）でも判定する。コミットから戻す形（`git checkout <コミット> -- f`・`git restore -s`・`-S -W`）はステージ済みの変更も数える。`--pathspec-from-file` は対象を読めないので止める。`git rm -f`（`--cached` なし）で変更のあるファイルも止める。
+3. **宛先の読めない push**: `_analyze` が単純コマンドごとに `push_dynamic`（宛先に `$`・`` ` ``・`{`・`(`・置換〔`__SUBST_`〕、xargs／parallel が語を足す形、実行場所が変数）を返し、main が確認にする（`bash -lc`・`sh -ec`・ヒアドキュメント・`timeout … bash -lc` の中も同じ）。第 2 周で入れた文字列一致の (ii) `sh -c`・(iii) xargs/parallel は廃止（`xargs grep "git push"` 等の余計な確認を消す）。
+4. **判定の追加**: `-c remote.*.push=`／`-c push.default=` 付きの push・`git config remote.*.push <値>`／`git config push.default <値>`・`git -c clean.requireForce=false clean`・`rm -r`／`-R`（`-f` なし）・`find -exec rm`・`xargs rm`／`parallel rm` を危険操作（停止）に。
+5. **xargs／parallel の値を取るオプション**: `--arg-file` ほかの長い形、parallel の `-a`・`--halt`・`--colsep`・`-I` など（`_XARGS_VALUE`・`_PARALLEL_VALUE`）。parallel の区切りは `:::` で始まる語（`::::`・`:::+`）。
+6. **テスト**: push（XP28〜XP44）・checkout（G16〜G29）・container（H24〜H39）・差分テスト（git.exe・`rm -r`。3,984 件）。S28・S29 は一時ディレクトリで（作業ツリーの `.env` に依存しない）。偽合格の防止の複製（FG-I・checkout の FALSEGREEN）は新しい経路も外す形に。
+
 ### 0-13. fix-loop（0-12 後のコードレビューの敵対的レビュー・上限到達への対応・2026-10-18・ユーザー決定＝案 B）
 診断メモ `docs/reviews/I174_fix_diagnosis_20261018_1321.md`（診断レビュー PASS）。根本原因は「bash の文法（引用符・コメント・ヒアドキュメント・行の継続）を読む処理が 6 か所に分かれ規則がばらばら」「bash と同じに読めているかを確かめる仕組みがない」「読みきれない形を素通しにする」。
 1. **bash との差分テスト**（新規 `scripts/claude/tests/test_guard_bash_oracle.sh`＋`guard_bash_oracle.py`）: 危険なコマンド（`git reset --hard`・`git push --force`・`rm -rf`）を、前置きの文脈（引用符の中の `#`・`$'…'`・`#` で終わるコメントの `\`・各種ヒアドキュメント・`<<<`・`$(( << ))` 等）× つなぎ方（改行・`&&`・`;`）× 書き方（1 行・継続で折る 2 通り）× 包み方（そのまま・`bash -c '…'`・`bash <<'X'`）で生成する。mktemp -d の中で本物の bash に実行させ（`git` と `rm` は危険な引数で呼ばれたら印を出すだけの関数に置き換えて `export -f`。ほかは echo・cat・wc 等の無害なものだけ）、**bash が危険なコマンドを実行した形で見張りが素通し（0）なら不合格**。bash が実行しない形で見張りが止めた件数は表示する（余計な停止）。
