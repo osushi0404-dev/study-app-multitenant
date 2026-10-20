@@ -105,5 +105,43 @@ ck "A21 falsegreen複製=allow" 0 \
      | ( cd "$MAIN" && python3 "$BROKEN" >/dev/null 2>&1 ); echo $?)"
 ck "A21 falsegreen実体=block" 2 "$(edit Edit "$OTHER/x.py")"
 
+# --- 入れ子ワークツリー（I179 TC-G1〜G7・FG-G1） ---
+# 公式 `claude --worktree` の配置（<primary>/.claude/worktrees/<name>）を再現する。
+# 入れ子のパスは親 root の配下でもあるため、最も内側の root（最長一致）で所有者を決める必要がある。
+cd "$MAIN" || exit 1
+git branch -q nest-b
+git branch -q nest2-b
+NEST="$MAIN/.claude/worktrees/nest"
+NEST2="$MAIN/.claude/worktrees/nest2"
+git worktree add -q "$NEST" nest-b
+git worktree add -q "$NEST2" nest2-b
+
+# cwd を指定してフックを叩き exit code を返す
+edit_in() { printf '{"tool_name":"%s","tool_input":{"file_path":"%s"}}' "$2" "$3" \
+              | ( cd "$1" && python3 "${4:-$GUARD}" >/dev/null 2>&1 ); echo $?; }
+bash_in() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$2" \
+              | ( cd "$1" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?; }
+
+ck "G1 入れ子→自分 edit→allow"     0 "$(edit_in "$NEST" Edit "$NEST/x.py")"
+ck "G2 入れ子→自分 redirect→allow" 0 "$(bash_in "$NEST" "echo x > $NEST/ok.txt")"
+ck "G3 入れ子→親 edit→block"       2 "$(edit_in "$NEST" Edit "$MAIN/x.py")"
+ck "G4 親→入れ子 edit→block"       2 "$(edit_in "$MAIN" Edit "$NEST/x.py")"
+ck "G5 入れ子→兄弟wt edit→block"   2 "$(edit_in "$NEST" Edit "$OTHER/x.py")"
+ck "G6 入れ子→別の入れ子 write→block" 2 "$(edit_in "$NEST" Write "$NEST2/x.py")"
+G7_ERR=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$NEST2/x.py" \
+           | ( cd "$NEST" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
+if printf '%s' "$G7_ERR" | grep -qF "（$(cd "$NEST2" && pwd -P)）"; then
+  ck "G7 所有者=入れ子rootを表示" 0 0; else ck "G7 所有者=入れ子rootを表示" 0 1; fi
+
+# FG-G1: _owning_root を「最初に一致した root」（旧ロジック相当）に戻した複製では G1 がブロックされる
+BROKEN_G="$TMP/guard_firstmatch.py"
+sed 's/^def _owning_root(ap, roots):/def _owning_root(ap, roots):\n    return next((r for r in roots if ap == r or ap.startswith(r + os.sep)), None)  # FIRSTMATCH/' \
+  "$GUARD" > "$BROKEN_G"
+if grep -q FIRSTMATCH "$BROKEN_G"; then
+  ck "FG-G1 旧ロジック複製でG1=block" 2 "$(edit_in "$NEST" Edit "$NEST/x.py" "$BROKEN_G")"
+else
+  ck "FG-G1 注入できた" 0 1
+fi
+
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

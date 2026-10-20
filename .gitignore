@@ -45,6 +45,9 @@ backend_media/
 backend_static/
 frontend_node_modules/
 
+# Claude Code 公式ワークツリー（I179）
+.claude/worktrees/
+
 # Temporary files
 *.tmp
 *.temp

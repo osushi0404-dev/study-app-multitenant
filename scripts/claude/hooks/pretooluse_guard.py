@@ -260,10 +260,20 @@ def _current_worktree_root():
     except Exception:
         return None
 
+def _owning_root(ap, roots):
+    """ap を含むワークツリー root のうち最も内側（最長一致）を返す。どれにも含まれなければ None。
+    入れ子ワークツリー（<primary>/.claude/worktrees/<name>）では、親 root より入れ子 root が優先される（I179）。"""
+    best = None
+    for root in roots:
+        if ap == root or ap.startswith(root + os.sep):
+            if best is None or len(root) > len(best):
+                best = root
+    return best
+
 def _cross_worktree(path):
-    """path が別 worktree 配下なら True / どの別 worktree 配下でもなければ False /
-    境界を確定できなければ None（fail-safe 対象）。境界一致は realpath＋末尾 os.sep 接頭辞で
-    行い、兄弟ディレクトリ名の部分一致（<root>-foo）を誤判定しない。"""
+    """path を所有する（最も内側の）worktree が現 worktree 以外なら True / 現 worktree 所有か
+    どの worktree 配下でもなければ False / 境界を確定できなければ None（fail-safe 対象）。
+    境界一致は realpath＋末尾 os.sep 接頭辞で行い、兄弟ディレクトリ名の部分一致（<root>-foo）を誤判定しない。"""
     if not path or not isinstance(path, str):
         return None
     roots = _worktree_roots()
@@ -271,12 +281,8 @@ def _cross_worktree(path):
     if roots is None or cur is None:
         return None
     ap = os.path.realpath(os.path.abspath(path))
-    for root in roots:
-        if root == cur:
-            continue
-        if ap == root or ap.startswith(root + os.sep):
-            return True
-    return False
+    owner = _owning_root(ap, roots)
+    return owner is not None and owner != cur
 
 def _edit_path(data: dict) -> str:
     """書込ツールの対象パス（Edit/Write/MultiEdit=file_path, NotebookEdit=notebook_path）。"""
@@ -378,7 +384,9 @@ def _block_cross_worktree(kind: str, path: str):
               f"git の状態/入力を確認してください: {path!r}", file=sys.stderr)
         sys.exit(2)
     ap = os.path.realpath(os.path.abspath(path))
-    x_root = next((r for r in roots if r != cur and (ap == r or ap.startswith(r + os.sep))), None)
+    x_root = _owning_root(ap, roots)
+    if x_root == cur:
+        x_root = None
     where = f"別 worktree（{x_root}）" if x_root else "別 worktree"
     print(f"[guard] {where}への{kind}は禁止です。"
           f"トラック境界を越える変更は worktree.md §9 のファイル経由で引き継いでください: {path}",
