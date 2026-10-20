@@ -14,7 +14,7 @@
 | 4-3 | `scripts/claude/hooks/pretooluse_guard.py` | `_owning_root`（最長一致）を追加し、`_cross_worktree`・`_block_cross_worktree` の判定と表示をそれで行う |
 | 4-4 | `scripts/claude/wt-ports.sh`（新規） | wt-new のポート割当を移植。自分自身を走査から除外・primary 拒否・`backend/.env` 検査・割当済みなら不変・既存行を残して追記（末尾改行なしの既存行にも対応） |
 | 4-5 | `scripts/claude/wt-new.sh` | 削除 |
-| 4-6 | `scripts/claude/wt-remove.sh` | 引数を登録済みワークツリーのパスに変更・`detect_data` によるデータ判定・ブランチ名の案内 |
+| 4-6 | `scripts/claude/wt-remove.sh` | 引数を登録済みワークツリーのパスに変更・`detect_data` によるデータ判定・ブランチ名の案内・ロックの扱い（終了済み Claude セッションのロックだけ解除・使用中/その他は破壊的操作の前に中止。2026-10-21 計画変更） |
 | 4-7 | `.claude/skills/plan-issue/SKILL.md`・`docs/runbooks/issue-flow.md` ステップ5 | `git fetch origin` ＋ `git checkout --no-track -b ... origin/develop` |
 | 4-8 | `.claude/skills/issue-bootstrap/SKILL.md`・`docs/runbooks/issue-flow.md` | 「（対応 worktree: …）」を外す |
 | 4-9 | `docs/runbooks/worktree.md` | 全面書き直し（§1〜§11） |
@@ -30,7 +30,7 @@
 
 ## レビュー観点（敵対的レビューで反証を試みる点）
 - ガード: 許可が広がるのは「入れ子ワークツリーが自分自身に書く」場合だけか。親→入れ子・入れ子→親・兄弟間・symlink 経由・fail-safe・`DANGER_OK` 非解除が崩れていないか
-- `wt-remove.sh`: 「データ無し」と誤判定して `DANGER_OK` なしで進む経路が無いか（プロジェクト名の算出・`COMPOSE_PROJECT_NAME`・`name:`・docker の失敗）。登録外のフォルダを消せないか
+- `wt-remove.sh`: 「データ無し」と誤判定して `DANGER_OK` なしで進む経路が無いか（プロジェクト名の算出・`COMPOSE_PROJECT_NAME`・`name:`・docker の失敗）。登録外のフォルダを消せないか。使用中セッションのロックを外してしまう経路（理由文字列の解釈・pid の判定）が無いか、ロック判定が `down -v` より前にあるか
 - `wt-ports.sh`: 入れ子配置のワークツリーを含めて走査しているか・自分自身を除いているか・2 回実行で壊れないか
 - `wt-new` の参照の取り残し（closed の記録類以外）
 - `worktree.md` だけを読んで、文脈の無い人が作成〜撤去〜移行を実行できるか
@@ -41,6 +41,7 @@
 - 手動: （/test で記入）
 
 ## 計画との差分
+- あり（計画変更・2026-10-21）: 実装ステップ6の実機確認（手動 M1・M4）で、公式 `claude -p --worktree` のワークツリーにセッション終了後もロックが残り、`wt-remove.sh` で撤去できないことが分かった（計画書 S10）。4-6 にロックの扱いを追加し、`worktree.md` §2・§4 とテスト（R13〜R15・FG4・D3）を更新した。計画書「計画変更記録」参照。`/code-review` の前に `/plan-issue-review` を挟む。
 - あり（いずれも計画の意図の範囲内の細部）:
   - 4-8: 「（対応 worktree: wt-harness）」に加え、同じ行の対になる「（対応 worktree: study-app-multitenant）」も外した（トラックとワークツリーを 1 対 1 で結ばないという同じ意図。片方だけ残すと規約が食い違う）。
   - D2 の除外に `docs/reviews/I179_*`（`docs/reviews/` 直下に置かれる I179 自身の計画レビュー・コードレビュー記録）を加えた。計画の「I179 自身の記録は除く」の具体化。

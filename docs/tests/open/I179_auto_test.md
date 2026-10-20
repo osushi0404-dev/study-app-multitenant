@@ -8,7 +8,7 @@
 - backend: 対象外（コード変更なし）
 - frontend: 対象外（コード変更なし）
 - 計画時（実装前・2026-10-20）: 下記「計画時の実行記録」
-- 実装時（2026-10-21・/implement）: guard pass=35・port pass=46・lifecycle pass=63・docs pass=12・test_i107 6 PASS・test_next_issue_num pass=21・構文行すべて exit 0（すべて fail=0）。修正前のガードでは G1・G2・G7 が FAIL することを確認済み
+- 実装時（2026-10-21・/implement）: guard pass=35・port pass=46・lifecycle pass=78（ロックの R13〜R15・FG4 追加後）・docs pass=12・test_i107 6 PASS・test_next_issue_num pass=21・構文行すべて exit 0（すべて fail=0）。修正前のガードでは G1・G2・G7 が FAIL することを確認済み
 - 実装後: （/test で記入）
 
 ## ベースライン（実装前・2026-10-20）
@@ -79,9 +79,13 @@
 | R10 | 撤去後もブランチが残る（R0・R9 の後で `git show-ref --verify refs/heads/<ブランチ>`） | exit 0・stdout に「ブランチ」と残ったブランチ名 |
 | R11 | `git worktree list` に無いフォルダを指定（ただのディレクトリ） | exit 2・stderr に「登録されたワークツリーではありません」・フォルダは残る |
 | R12 | 引数なし | exit 非ゼロ・Usage 表示 |
+| R13 | 終了済みセッションのロック（`claude session app (pid 99999999 start 1)`＝存在しない pid）・データ無し（2026-10-21 追加・S10） | exit 0・撤去済み・stdout に「ロックを解除しました」 |
+| R14 | 使用中セッションのロック（pid＝テストのシェル）・データあり・`DANGER_OK=1` | exit 2・「使用中の Claude セッション」・`down` 非実行・ワークツリーとロックが残る |
+| R15 | Claude 以外の理由のロック（`on usb drive`）・データあり・`DANGER_OK=1` | exit 2・「ロックされています（理由: on usb drive）」・`down` 非実行・ワークツリー残存 |
 | C1 | `COMPOSE_PROJECT_NAME` 設定時は警告が出る（R1e と同時に確認） | stderr に `COMPOSE_PROJECT_NAME` |
 | FG1 | 失敗注入: `DANGER_OK` 判定を `true` に置換した複製では R1 の条件でも `down -v` が呼ばれる | 複製で記録に `compose down -v`（＝許可ゲートが停止要因である証明） |
 | FG3 | 失敗注入: データ判定を常に「無し」（`return 0`）にした複製では R1 の条件でも `DANGER_OK` なしで撤去される | 複製で exit 0・撤去済み（＝データ判定が停止要因である証明） |
+| FG4 | 失敗注入: 使用中判定（`ps -p`）を `false` にした複製では R14 の条件（データ無し）でも撤去される | 複製で exit 0・撤去済み（＝使用中判定が停止要因である証明） |
 
 ### D. 文書・設定（`scripts/claude/tests/test_i179_worktree_docs.sh` 新規）
 検査は関数 `check_all <root>` にまとめ、実物（repo root）に対して実行して全 PASS、続けて失敗注入した複製に対して実行して FAIL を確認する。終了コード 0=全 PASS / 1=FAIL あり。
@@ -90,7 +94,7 @@
 |----|------|------|
 | D1 | `scripts/claude/wt-new.sh` が存在しない | `test ! -e` |
 | D2 | `git grep -n wt-new` の結果が、closed の記録類（`docs/{issues,plans,tests,reviews}/closed/`）と I179 自身の記録（`docs/issues/open/I179.md`・`docs/plans/open/plan_I179.md`・`docs/tests/open/I179_*.md`・`docs/reviews/open/I179_review.md`）以外に 0 件 | 0 件で PASS |
-| D3 | `docs/runbooks/worktree.md` に次の文言がすべてある: `claude --worktree`・`.worktreeinclude`・`wt-ports.sh`・`wt-remove.sh`・`git stash push -u -m`・`git config`・`docker compose ls -a`・`git worktree list`・`track:harness`・`track:app`・`/plan-issue`・`wt-harness` の移行節の見出し（`旧方式からの移行`）・`grep -r` | 全件 `grep -qF` 成功で PASS |
+| D3 | `docs/runbooks/worktree.md` に次の文言がすべてある: `claude --worktree`・`.worktreeinclude`・`wt-ports.sh`・`wt-remove.sh`・`git stash push -u -m`・`git config`・`docker compose ls -a`・`git worktree list`・`track:harness`・`track:app`・`/plan-issue`・`wt-harness` の移行節の見出し（`旧方式からの移行`）・`grep -r`・`git worktree unlock`（2026-10-21 追加） | 全件 `grep -qF` 成功で PASS |
 | D4 | `docs/runbooks/worktree.md` に次の文言が無い: `2026-07 時点`・`トラック = 1 作業ツリー`・`採番権威でもある`・`新設しない` | 全件不在で PASS |
 | D5 | `.claude/skills/plan-issue/SKILL.md` に `git checkout develop` が無く、`checkout --no-track -b` と `origin/develop` がある | 3 条件成立で PASS |
 | D6 | `docs/runbooks/issue-flow.md` の「ステップ5」から「ステップ6」までの範囲に `git checkout develop`・`git pull origin develop` が無く、`checkout --no-track -b` がある（範囲外のステップ25 は対象外） | 3 条件成立で PASS |

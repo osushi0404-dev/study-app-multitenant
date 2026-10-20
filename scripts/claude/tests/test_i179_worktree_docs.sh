@@ -49,7 +49,7 @@ check_all() {
   rc=0
   for t in 'claude --worktree' '.worktreeinclude' 'wt-ports.sh' 'wt-remove.sh' 'git stash push -u -m' \
            'git config' 'docker compose ls -a' 'git worktree list' 'track:harness' 'track:app' \
-           '/plan-issue' '旧方式からの移行' 'grep -r'; do
+           '/plan-issue' '旧方式からの移行' 'grep -r' 'git worktree unlock'; do
     has "$W" "$t" || { rc=1; [ "$VERBOSE" -eq 1 ] && printf '  missing: %s\n' "$t"; }
   done
   res D3 "worktree.md に必要な記述がある" "$rc"

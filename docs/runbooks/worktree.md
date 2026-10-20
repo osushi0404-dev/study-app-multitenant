@@ -33,6 +33,7 @@ claude --worktree <track>-<連番>
 - **初期ブランチ**: `worktree-<name>` で作られる。`/plan-issue` で feature ブランチを作った後、不要なら `git branch -d worktree-<name>` で消してよい。
 - **設定ファイル**: gitignore 済みの `backend/.env`・`e2e/.env.e2e` は、リポジトリ直下の `.worktreeinclude` に従って公式機能が自動でコピーする（`--worktree`・サブエージェントの `isolation: worktree`・`EnterWorktree` のどれでも同じ）。**primary に `backend/.env` が無いとコピーされない**（黙って飛ばされる）。Docker を使う前に `wt-ports.sh` がこれを検査して止める（§5）。
 - **終了時の確認**: 対話セッションの終了時に「ワークツリーを残すか」を聞かれたら、続けて使うワークツリーは「残す」を選ぶ。変更が無いワークツリーは公式機能が自動で片付ける。
+- **ロック**: `claude --worktree` はセッションの間、ワークツリーを `claude session <name> (pid N ...)` という理由でロックする（`git worktree list` に `locked` と出る）。`claude -p --worktree` など、セッションが終わってもロックが残る場合がある（2.1.304 で確認）。ロックされたワークツリーは素の `git worktree remove` では消せないので、撤去は §4 の `wt-remove.sh` で行う。
 - サブエージェントに `isolation: worktree` で作業させる場合も同じ仕組み（作成・コピー・自動片付け）が使われる。
 
 **fallback（公式機能が使えない場合の手動手順）**:
@@ -62,7 +63,7 @@ git worktree list                                              # 現在の workt
 | ワークツリーの種類 | 撤去の方法 |
 |------------------|-----------|
 | Docker を起動したことがある | primary から `bash scripts/claude/wt-remove.sh <ワークツリーのパス>` |
-| Docker を使っていない | 公式の自動片付けに任せる（変更が無ければ自動で消える）。残したものは `git worktree remove <パス>` |
+| Docker を使っていない | 公式の自動片付けに任せる（変更が無ければ自動で消える）。残したもの・ロックが残ったものは、同じく primary から `bash scripts/claude/wt-remove.sh <ワークツリーのパス>`（データが無いので許可は不要） |
 
 ```bash
 cd <primary>
@@ -74,6 +75,7 @@ DANGER_OK=1 bash scripts/claude/wt-remove.sh <primary>/.claude/worktrees/<name>
 
 - 撤去対象は `git worktree list` に登録されたワークツリーのパスで指定する（登録外のフォルダは扱わない）。公式配置も旧配置（`/mnt/c/app/wt-harness` など）も同じ形。
 - 未コミット変更・未 push コミットがあると中止する（作業消失防止）。primary と、撤去対象の内側からの実行は拒否する。`--force` は使わない（中に別のワークツリーがあれば git が拒否する）。
+- ロック（§2）: 終了済みの Claude セッションが残したロック（pid のプロセスが無い）だけを外して撤去する。使用中のセッションのロックがあれば、何も消さずに止まる（そのセッションを終了してから再実行）。Claude 以外の理由のロックも止まるので、使っている人に確認のうえ `git worktree unlock <パス>` してから再実行する。
 - データの判定: Compose プロジェクト名（フォルダ名を小文字にし、英数字・`_`・`-` 以外を除いたもの）のラベルで `docker ps -a`・`docker volume ls` を調べる。`COMPOSE_PROJECT_NAME` の指定・compose ファイルの最上位 `name:`・docker が使えない場合は「判定できない」として許可を求める。
 - **ブランチは消さない**。完了メッセージに残ったブランチ名が出るので、不要なら `git branch -d <ブランチ>` で消す。
 

@@ -54,7 +54,7 @@ STUB
   chmod +x "$BIN/docker"
   # docker が無い PATH（R1d 用）: wt-remove.sh が使うコマンドだけを置く
   NODOCKER="$TMP/nodocker"; mkdir -p "$NODOCKER"
-  for c in git sed head basename tr grep; do ln -s "$(command -v "$c")" "$NODOCKER/$c"; done
+  for c in git sed head basename tr grep awk ps; do ln -s "$(command -v "$c")" "$NODOCKER/$c"; done
   # source repo: develop に only-develop-file・.env と公式ワークツリー置き場は gitignore（実 .gitignore と揃える）
   SRC="$TMP/src"
   git init -q -b main "$SRC"
@@ -228,7 +228,49 @@ run_rm "$PRIMARY" "$WT_REMOVE"
 ckt  "R12 exit 非ゼロ"         test "$RC" -ne 0
 ckhas "R12 Usage 表示"         "$OUT" "Usage"
 
+# ===================== ロック（公式 claude --worktree のセッションロック） =====================
+# 存在しない pid（pid_max を超える値）＝終了済みセッション / テストを動かしているシェルの pid＝使用中セッション
+DEAD_PID=99999999
+
+# --- TC-R13: 終了済みセッションのロック・データ無し → ロックを外して撤去 ---
+new_env; make_wt
+git -C "$PRIMARY" worktree lock --reason "claude session app (pid $DEAD_PID start 1)" "$WT"
+run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R13 exit0"               0    "$RC"
+cknot "R13 worktree 撤去済"    "$(wl)" "/wt-app"
+ckhas "R13 ロック解除の案内"   "$OUT" "ロックを解除しました"
+
+# --- TC-R14: 使用中セッションのロック・データあり・DANGER_OK=1 → down せず中止 ---
+new_env; make_wt
+git -C "$PRIMARY" worktree lock --reason "claude session app (pid $$ start 1)" "$WT"
+STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R14 exit2"               2    "$RC"
+ckhas "R14 使用中の案内"       "$OUT" "使用中の Claude セッション"
+cknot "R14 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+ckhas "R14 worktree 残存"      "$(wl)" "/wt-app"
+ckhas "R14 ロック維持"         "$(wl)" "locked claude session app"
+
+# --- TC-R15: Claude 以外の理由のロック → down せず中止 ---
+new_env; make_wt
+git -C "$PRIMARY" worktree lock --reason "on usb drive" "$WT"
+STUB_CONTAINERS=c1 DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R15 exit2"               2    "$RC"
+ckhas "R15 ロックの案内"       "$OUT" "ロックされています（理由: on usb drive）"
+cknot "R15 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+ckhas "R15 worktree 残存"      "$(wl)" "/wt-app"
+
 # ===================== false-green 注入 =====================
+
+# --- TC-FG4: 使用中判定を除去した複製では R14 の条件でも撤去される（実体の停止要因が使用中判定である反証） ---
+new_env; make_wt
+git -C "$PRIMARY" worktree lock --reason "claude session app (pid $$ start 1)" "$WT"
+BROKEN_LK="$TMP/wt-remove-nolive.sh"
+# shellcheck disable=SC2016  # 単一引用は意図的（$LOCK_PID を展開せず sed パターンに渡す）
+sed 's/if ps -p "$LOCK_PID" >\/dev\/null 2>&1; then/if false; then/' "$WT_REMOVE" > "$BROKEN_LK"
+ck   "FG4 注入成立"            0    "$(grep -q '^  if false; then' "$BROKEN_LK"; echo $?)"
+run_rm "$PRIMARY" "$BROKEN_LK" "$WT"
+ck   "FG4 除去複製=exit0"      0    "$RC"
+cknot "FG4 除去複製=撤去済"    "$(wl)" "/wt-app"
 
 # --- TC-FG1: DANGER_OK ゲート除去複製では R1 の条件でも down される（実体の停止要因がゲートである反証） ---
 new_env; make_wt

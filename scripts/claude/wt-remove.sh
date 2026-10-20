@@ -4,6 +4,7 @@ set -euo pipefail
 # Usage: [DANGER_OK=1] wt-remove.sh <ワークツリーのパス>
 #   - 対象は git worktree list に登録されたワークツリーのパス（公式配置 <primary>/.claude/worktrees/<name> も旧配置も同じ形）
 #   - 撤去前チェック: 未コミット変更・未 push コミット（remote に無い HEAD）を検出したら --force を使わず中止
+#   - ロック: 終了済みの Claude セッションが残したロックだけを外して撤去。使用中のセッション・その他の理由のロックは中止
 #   - データ判定: 当該 Compose プロジェクトのコンテナ・named volume が無ければ down -v を実行せず撤去（DANGER_OK 不要）
 #     あり／判定失敗なら docker compose down -v（破壊的＝Postgres 開発データ削除）に DANGER_OK=1 必須（pretooluse_guard.py と同一契約）
 #   - down -v（§5D volume 回収）→ git worktree remove の順で実行。ブランチは消さない
@@ -46,6 +47,24 @@ if [ -z "$(git -C "$WT_PATH" branch -r --contains HEAD 2>/dev/null)" ]; then
 fi
 BRANCH="$(git -C "$WT_PATH" branch --show-current)"
 
+# 撤去前チェック（3）ワークツリーのロック（公式 claude --worktree はセッション中 "claude session <name> (pid N ...)" でロックし、
+# `claude -p` 等ではセッション終了後もロックが残る）。破壊的操作の前に判定し、外してよいのは終了済みセッションのロックだけ。
+LOCK_LINE="$(printf '%s\n' "$LIST" | P="$WT_PATH" awk '$0 == "worktree " ENVIRON["P"] {f=1; next} /^worktree /{f=0} f && /^locked/ {print; exit}')"
+STALE_LOCK=0
+if [ -n "$LOCK_LINE" ]; then
+  LOCK_REASON="${LOCK_LINE#locked}"; LOCK_REASON="${LOCK_REASON# }"
+  LOCK_PID="$(printf '%s' "$LOCK_REASON" | sed -n 's/^claude session .* (pid \([0-9]\{1,\}\)[ )].*/\1/p')"
+  if [ -z "$LOCK_PID" ]; then
+    echo "[wt-remove] ワークツリーがロックされています（理由: ${LOCK_REASON:-なし}）。使っている人・セッションに確認のうえ 'git worktree unlock $WT_PATH' してから再実行してください" >&2
+    exit 2
+  fi
+  if ps -p "$LOCK_PID" >/dev/null 2>&1; then
+    echo "[wt-remove] このワークツリーを使用中の Claude セッション（pid $LOCK_PID）があります。終了してから再実行してください（pid が別のプロセスに再利用されている場合は、終了済みを確認のうえ 'git worktree unlock $WT_PATH'）" >&2
+    exit 2
+  fi
+  STALE_LOCK=1
+fi
+
 # COMPOSE_PROJECT_NAME 検出（§5C）
 [ -n "${COMPOSE_PROJECT_NAME:-}" ] && \
   echo "[wt-remove] ⚠️ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME が設定されています（§5C・分離が壊れている恐れ）" >&2
@@ -85,6 +104,11 @@ else
   exit 2
 fi
 
+# 終了済みセッションのロックを外す（撤去前チェック（3）で使用中でないことを確認済み）
+if [ "$STALE_LOCK" -eq 1 ]; then
+  git worktree unlock "$WT_PATH"
+  echo "[wt-remove] 終了済みの Claude セッション（pid $LOCK_PID）が残したロックを解除しました"
+fi
 # remove（--force は使わない＝撤去前チェックで担保。中に別ワークツリーがあれば git が拒否する）
 git worktree remove "$WT_PATH"
 echo "[wt-remove] 撤去完了: $WT_PATH"

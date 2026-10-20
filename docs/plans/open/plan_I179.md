@@ -39,6 +39,7 @@ grill-me 中のスパイク（2026-10-19・Claude Code 2.1.302・使い捨てリ
 |----|---------|------|------|
 | S7 | G: 別ワークツリーが develop をチェックアウト中に、旧手順（`git checkout develop`）は失敗し、新手順（`git fetch origin` → `git checkout --no-track -b feature/I999-x origin/develop`）は成功するか。未コミットのイシューファイルは持ち越されるか | scratchpad の `spike/g_branch.sh` を bash で実行 | 成立。旧手順 `fatal: 'develop' is already used by worktree at ...`（exit 128）。新手順 exit 0・未コミットファイルは残る・上流ブランチは未設定（`--no-track` の効果。push 時の `-u` で設定される） |
 | S8 | 本体の中の入れ子ワークツリー（`.claude/worktrees/harness-2`）を、gitignore 済みの `backend/.env`・`.env` がある状態で親から `git worktree remove` できるか。親の `git status` にどう出るか。ブランチは残るか | scratchpad の `spike/nested_remove.sh` を bash で実行 | 成立。`.gitignore` に `.claude/worktrees/` が無いと親の `git status` に `?? .claude/` が出る（本体が「未コミット変更あり」に見える）。追加後は出ない。remove は exit 0、ブランチ `worktree-harness-2` は残る |
+| S10 | （実装ステップ6の実機確認・2026-10-21・2.1.304）公式 `claude -p --worktree` で作ったワークツリーを `wt-remove.sh` で撤去できるか | 使い捨て primary 役で `claude -p --worktree harness-2` → `wt-remove.sh` | **不成立（計画変更の起点）**。公式機能はワークツリーを `claude session harness-2 (pid N start M)` の理由で `git worktree lock` し、`-p` のセッション終了後も（pid のプロセスが無くても）ロックが残る。素の `git worktree remove` は `cannot remove a locked working tree` で exit 128。データ有りの場合は `down -v` の後に remove が失敗する順序の問題も生じる。サブエージェント（`isolation: worktree`）のワークツリーはロックされない。→ 4-6 にロックの扱いを追加 |
 | S9 | Compose プロジェクトのコンテナ・named volume をラベルで検出できるか | `docker ps -a -q --filter label=com.docker.compose.project=<名前>`・`docker volume ls -q --filter label=...` を読み取りのみで実行 | 成立。`study-app-multitenant` はコンテナ 7・volume 5 を返し、`wt-harness`（Docker 未使用）は空 |
 
 ### 環境前提確認（2026-10-20）
@@ -87,7 +88,7 @@ grill-me 中のスパイク（2026-10-19・Claude Code 2.1.302・使い捨てリ
 - [ ] `worktree.md` から primary の特別扱いと §10 の手書き表が除かれ、`git worktree list` 案内とトラック⇔ラベル対応が残る → TC-D3・D4・test_i107
 - [ ] `worktree.md` §7 に stash・git config 共有の注意がある → TC-D3
 - [ ] `worktree.md` に撤去の使い分け・取り残しの発見と削除・既存 `wt-harness` の移行手順・入れ子配置の検索の注意がある → TC-D3
-- [ ] `wt-remove.sh` がデータ無しなら `DANGER_OK` なしで撤去、データあり・判定失敗なら停止（3 通り）。公式配置も撤去でき、ブランチが残る → TC-R0〜R11・FG1・FG3・手動 M4
+- [ ] `wt-remove.sh` がデータ無しなら `DANGER_OK` なしで撤去、データあり・判定失敗なら停止（3 通り）。公式配置も撤去でき（終了済みセッションのロックを含む）、ブランチが残る → TC-R0〜R15・FG1・FG3・FG4・手動 M4
 - [ ] `/plan-issue` と `issue-flow.md` ステップ5 が develop をチェックアウトせず `origin/develop` 基点でブランチを作り、別ワークツリーが develop をチェックアウト中でも成功する → TC-D5・D6・手動 M5
 - [ ] ガード: 入れ子ワークツリー自身への書込は許可、親→入れ子・入れ子→親・兄弟間はブロック（失敗注入あり） → TC-G1〜G7・FG-G1
 - [ ] サブエージェント `isolation: worktree` で `.env` コピー・自分のファイルへの書込・変更なしなら自動片付け を実機確認 → 手動 M3
@@ -185,6 +186,9 @@ printf 'DB_PORT=%s\nREDIS_PORT=%s\nBACKEND_PORT=%s\nFRONTEND_PORT=%s\n' ... >> "
   - 両方とも空 → 「データ無し」: `down -v` を実行せず `git worktree remove` へ進む（`DANGER_OK` 不要）。
   - どちらかが空でない → 「データあり」／判定失敗 → 従来どおり `DANGER_OK=1` 必須 → `docker compose down -v` → `git worktree remove`。
 - 撤去後にブランチは消さない（`git worktree remove` はブランチを残す・S8）。完了メッセージで「ブランチ `<名前>` は残っています」と表示する。
+- **ロックの扱い**（2026-10-21 追加・S10）: 破壊的操作（`down -v`）より前に、`git worktree list --porcelain` の `locked` 行を調べる。
+  - 理由が `claude session <name> (pid N ...)` で、`ps -p N` でプロセスが見つからない → 終了済みセッションの取り残しとして、`git worktree remove` の直前に `git worktree unlock` する（完了メッセージで解除を表示）。
+  - プロセスが見つかる（使用中。pid の再利用も含め安全側に倒す）／理由がそれ以外・理由なし → exit 2 で中止し、終了または `git worktree unlock <パス>` の手順を表示する（何も消さない）。
 ```bash
 detect_data() {   # 0=データ無し / 1=データあり / 2=判定失敗
   [ -n "${COMPOSE_PROJECT_NAME:-}" ] && return 2
@@ -327,6 +331,12 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 | `wt-harness` 固定表記の除去・`common-commands.md` 更新 | 採用。規約変更時の消費箇所の全件更新（plan-writing-rules）に従う。残すと文脈ゼロの担当者が旧構成で動く |
 | 文書検査を専用テストに集約 | 採用。手続き（読んで確認）より決定論ゲートを優先する方針。失敗注入を内蔵し false-green を防ぐ |
 | 実機確認は使い捨て clone | 採用。トラック/セッション境界を守りつつ、同じ設定・同じ CLI で実物と同じ挙動を観測できる |
+
+### 計画変更記録（2026-10-21・実装ステップ6で発見）
+- **何を**: 4-6 `wt-remove.sh` に「ロックの扱い」を追加（終了済みの Claude セッションのロックだけ外す・使用中/その他は中止）。`worktree.md` §2・§4 にロックの説明を追加し、Docker を使っていないワークツリーの取り残しも `wt-remove.sh` で撤去する案内に変更。テストに R13〜R15・FG4・D3 の `git worktree unlock` を追加。
+- **なぜ**: S10 のとおり、公式方式で作ったワークツリーは終了後もロックが残る場合があり、変更前の計画では受け入れ条件「公式配置も撤去でき」を満たせない。
+- **理想基準での評価**: 採用。ロックは「使用中のワークツリーを消させない」ための公式の安全装置なので、無条件に外す（`remove -f -f`）のは不可。外してよいのは「ロックしたプロセスが存在しない」と機械で確かめられる場合だけにし、それ以外は破壊的操作の前に止める（fail-closed）。pid の再利用で使用中と誤判定しても「止まる」側に倒れるだけで、データは消えない。
+- **承認**: ユーザーの既定基準（「ループエンジニアリング、ハーネスエンジニアリングのベストプラクティスとして、理想的・最適なものを基準として問題なければ進めて OK」・2026-10-20）に基づき実装し、事後報告する。計画変更のため `/code-review` の前に `/plan-issue-review I179` を挟む。
 
 ## レビュー結果
 - [20261020_1950 判定: ✅ 完了](../../reviews/I179_plan_review_20261020_1950.md)
