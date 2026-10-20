@@ -7,7 +7,8 @@
 # （adversarial 第3周 High・fix-loop 20261018 案 A）、runbook はファイル全体の SHA-256 も固定する。
 # runbook を正当に直すときは、内容をレビューし、計画書 5-5 の表とこのスクリプトの節の期待値を確かめてから、
 # RUNBOOK_SHA256 を `sha256sum docs/runbooks/branch-protection-setup.md` の値に更新すること。
-# close スキルは他のイシューでも変わるため、ファイル全体は固定せず step 5.5〜6 だけを固定する。
+# close スキルは他のイシューでも変わるため、ファイル全体は固定せず、step 5.5 の全文と step 6 の先頭 3 行だけを固定する
+# （step 6 の 4 行目以降や新しい step 7 への追記は検知しない。設計上の残余）。
 # 対象は RUNBOOK / SKILL で差し替え可能（失敗注入用・test_pr_base_sync.sh の TARGET_SCRIPT と同方式）。
 set -u
 
@@ -15,7 +16,7 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 RUNBOOK="${RUNBOOK:-docs/runbooks/branch-protection-setup.md}"
 SKILL="${SKILL:-.claude/skills/close/SKILL.md}"
 # 秘密情報ではなく runbook の SHA-256（detect-secrets の誤検知を抑止）
-RUNBOOK_SHA256="909d242adda1212a8faf2cc4302df3dd41139104cc4ed1e86e6ffdbb511177d1"  # pragma: allowlist secret
+RUNBOOK_SHA256="c41631a4deabe372405fb5124f420c80e7e92efa35bbcce227c47bb722732cdd"  # pragma: allowlist secret
 
 PASS=0
 FAIL=0

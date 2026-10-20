@@ -166,7 +166,8 @@ GitHub 側の 3 つの設定を組み合わせて、マージの最後の砦を 
 | §4 確認 5（新規） | bot が承認してもマージ要件を満たさないこと。develop に CODEOWNERS が入った後に行う。手順: ユーザーが develop 宛てに **1 行のファイル変更を含む**確認用 PR を作る（Code Owners の要件はファイル変更を含む PR にだけ働くため、空コミットは不可）→ bot で `gh pr review <PR番号> --approve` → `gh pr view <PR番号> --json reviewDecision,mergeStateStatus` が `REVIEW_REQUIRED`・`BLOCKED` のまま → マージせずに `gh pr close <PR番号> --delete-branch`（adversarial 第1周 Medium 対応・fix-loop 20261018 L1 で `--delete-branch` を追加） |
 | §4 確認 6（新規） | bot がマージできないこと（push 制限）。前提（`APPROVED`・BEHIND/DIRTY でない・承認後のコミットなし・必須チェック 5 件 SUCCESS）を `gh pr view <PR番号> --json reviewDecision,mergeStateStatus,headRefOid,reviews,statusCheckRollup` で確かめてから、GitHub のマージ API（`gh api -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge`）を呼び、応答の `message` が push 権限の不足を示すこと。`gh pr merge` は手元で `BLOCKED` を判定して汎用の文で止まり区別できないため使わない（adversarial 第1周・第2周 Medium 対応）。fix-loop 20261018 で次を追加: 実行前に `oshui0404` の了承を得る（設定ミス時は実際にマージされるため）・`gh api -i` で HTTP ステータスも記録する・`message` から URL を除いてから判定する・マージは確認の後に行う（手動テストの流れがある場合はそれに従う） |
 | §1.5 Dismiss stale の補足 | 「PR の宛先ブランチの変更（`gh pr edit --base`）では承認が取り消されない可能性がある（未確認・/retro で確認）。宛先が変わった PR は承認の前に差分を確かめ直す」を追記する（fix-loop 20261018 L5・/retro 送り） |
-| §4 確認 1・2 | 期待結果を「push が拒否される」に変え、理由の文が実行アカウントで変わること（`oshui0404` は PR 必須の文、Restrict の一覧に無いアカウントは push 権限の不足または PR 必須の文）を書く（adversarial 第2周 Low 対応） |
+| §4 確認 1・2 | 期待結果を「push が拒否される」に変える（adversarial 第2周 Low 対応）。**bot だけが実行し、`oshui0404` は実行しない**と明記する。`oshui0404` は Restrict の一覧に入っているため、「Do not allow bypassing」の設定を誤っていると確認の操作そのものが develop・main への直接 push として通ってしまう（main は初期コミットだけなので、レビューと CI を経ないコミットがすべて入る）。PR 必須と bypass 不可は設定画面で確認する（adversarial 再ステージ第1周 Medium 対応） |
+| §1.5 運用・§6「承認したのに BLOCKED に戻った」 | develop への追従のコミットでは、差分が変わらない場合に承認が残ることもある旨を書き、「取り消された場合だけ再承認」とする（adversarial 再ステージ第1周 Low 対応） |
 | §6 緊急手順の追記 | 「Do not allow bypassing」をオンに戻した後、設定画面で §1 の表と突き合わせて戻っていることを確かめる一文を追加する（adversarial 第2周 Low 対応） |
 | §5 ロールバック | develop・main の「Require review from Code Owners」「Restrict who can push」を OFF にし、develop だけ「Require approvals」「Dismiss stale approvals」も OFF に戻す（main は承認 1・Dismiss stale ON のまま＝元の値）。CODEOWNERS は revert の PR で削除する（8 章と同じ内容。adversarial 第1周 Low 対応で 8 章に合わせた） |
 | §6「main への PR で自分が approve できない」（L194-197） | 見出しを「自分が作った PR を承認・マージできない」に変え、本文を「GitHub では PR の作成者は自分の PR を承認できない。このリポジトリでは bypass も許していないため、ユーザーが作った PR はマージできない。PR は bot（Claude）に作らせる。どうしても必要な場合は、対象ブランチのルールを Edit して『Do not allow bypassing the above settings』を一時的にオフにし、管理者として要件を迂回してマージした後、すぐにオンに戻す（§5 の I178 全体の戻し手順ではマージできない）」に書き換える（adversarial 第1周 Low 対応） |
@@ -244,11 +245,11 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 ### ステップ 4: ブランチ保護の変更（ユーザー操作・Danger Ops）
 - 事前に、設定を変えると #293 などの作業中 PR にも承認が必要になることをユーザーに伝える。
 - ユーザーが 5-5 の表のとおり develop・main を設定し、設定画面で確認する。
-- → 手動 No.1〜No.6 参照（PR #298 を使った確認）。
+- → 手動 No.1〜No.6・No.8 参照（PR #298 を使った確認）。確認が期待どおりにならない場合の分岐は手動テスト文書の「確認が失敗した場合」に従う（No.4・No.5・No.6・No.8・マージ後の No.7・TC-17 のそれぞれ）。
 
 ### ステップ 5: マージ後の確認と記録
 - PR #298 のマージ後（CODEOWNERS が develop に入った後）に行う。
-- 結果は、bot が作る記録用 PR（`docs(I178): マージ後確認の記録`・develop 宛て）で closed のテスト文書に記入し、ユーザーが承認・マージする（adversarial 第2周 Medium 対応）。記録用 PR の対象は No.7・TC-17・No.8 の結果と、レビュー文書の AC 判定表（AC-2・AC-4・AC-5）（fix-loop 20261018 M3・M4 対応）。
+- 結果は、bot が作る記録用 PR（`docs(I178): マージ後確認の記録`・develop 宛て）で closed のテスト文書に記入し、ユーザーが承認・マージする（adversarial 第2周 Medium 対応）。記録用 PR の対象は No.7・TC-17・No.8 の結果と、レビュー文書の AC 判定表のうち未記入のもの（AC-1 は TC-17 で確定、AC-2〜AC-5 は手動確認の結果。AC-6・AC-7 は /test で記入）（fix-loop 20261018 M3・M4 対応・adversarial 再ステージ第1周 Medium 対応）。
 - No.7 または TC-17 が NG の場合は Issue #297 を開き直し、原因を調べて直す（設定の誤りはユーザーが設定画面で、文書・CODEOWNERS の誤りは bot が作る新しい PR で直す）。直した後にやり直し、結果を記録用 PR で記入する（fix-loop 20261018 M4 対応）。
 - /close step 6 では承認だけを依頼し、ユーザーは No.5 で Approve だけを押す。マージは No.8 の再承認の後（fix-loop 20261018 H2 対応）。
 - → TC-17・手動 No.7 参照。

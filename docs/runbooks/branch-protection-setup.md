@@ -89,7 +89,7 @@ develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が d
 ### 運用
 
 - **PR は必ず bot（Claude）が作成する**。ユーザー自身が作った PR は自分で承認できず、bypass も許していないためマージできない（どうしても必要な場合は §6 を参照）。
-- 承認の後に develop への追従（Update branch）などでコミットが入ると承認が取り消されるので、もう一度承認する。
+- 承認の後に新しいコミットが入ると承認が取り消されるので、もう一度承認する。develop への追従（Update branch）のコミットでは、差分が変わらない場合に承認が残ることもある（取り消された場合だけ再承認すればよい）。
 - Dependabot の PR も `oshui0404` の承認が必要。
 
 ---
@@ -179,19 +179,19 @@ Frontend Tests
 
 ### 確認 1: develop への直 push がブロックされること
 
+**bot（Restrict の一覧に無いアカウント）だけが実行する。`oshui0404` は実行しない**。`oshui0404` は Restrict の一覧に入っているため、「Do not allow bypassing」の設定を誤っていると、この確認の操作そのものが develop・main への直接 push として通ってしまう（main は初期コミットだけなので、レビューと CI を経ないコミットがすべて入る）。PR 必須と bypass 不可の設定は、設定画面（§1 の表との突き合わせ）で確認する。
+
 ```bash
-# 現在のブランチから develop に直 push を試みる
+# 現在のブランチから develop に直 push を試みる（bot で実行）
 git push origin HEAD:develop
 ```
 
-期待結果: push が拒否される（`remote: error: GH006: Protected branch update failed for refs/heads/develop.` に続けて、拒否の理由が表示される）。理由の文は実行するアカウントで変わる。
-
-- `oshui0404` が実行した場合: `Changes must be made through a pull request.`（PR 必須による拒否）
-- bot など Restrict の一覧に無いアカウントが実行した場合: push 権限の不足（`You're not authorized to push to this branch` 等）または上記の PR 必須の文。どちらでも拒否されていれば合格
+期待結果: push が拒否される（`remote: error: GH006: Protected branch update failed for refs/heads/develop.` に続けて、拒否の理由が表示される）。理由の文は push 権限の不足（`You're not authorized to push to this branch` 等）または PR 必須（`Changes must be made through a pull request.`）のどちらか。どちらでも拒否されていれば合格
 
 ### 確認 2: main への直 push がブロックされること
 
 ```bash
+# bot で実行（oshui0404 は実行しない）
 git push origin HEAD:main
 ```
 
@@ -285,7 +285,7 @@ PR は bot（Claude）に作らせる。どうしてもユーザーが作った 
 
 ### 承認したのに BLOCKED に戻った
 
-承認の後に新しいコミット（develop への追従など）が入ると、Dismiss stale approvals により承認が取り消される。もう一度承認する。
+承認の後に新しいコミット（develop への追従など）が入ると、Dismiss stale approvals により承認が取り消される（追従のコミットで差分が変わらない場合は残ることもある）。取り消された場合は、もう一度承認する。
 
 ### 既存の Draft PR への影響
 

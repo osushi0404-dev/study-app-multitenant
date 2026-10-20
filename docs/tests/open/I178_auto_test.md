@@ -157,6 +157,7 @@ bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 | TC-19 | 2026-10-18 | ✅ exit 0 | adversarial 第1周対応後。`RESULT: OK (43 assertions)`・失敗注入 14 通りすべて exit 1 |
 | TC-19 | 2026-10-18 | ✅ exit 0 | adversarial 第2周対応後（全文比較に変更）。`RESULT: OK (5 blocks)`・失敗注入 25 通りすべて exit 1 |
 | TC-19 | 2026-10-18 | ✅ exit 0 | fix-loop 20261018 対応後（runbook 全体の SHA-256・見出し 1 回・close step 6 の 3 行）。`RESULT: OK (13 checks)`。失敗注入: 第3周の改変を現行ファイルに入れ直した 9 通り（ステップ 5 で main の Restrict をオフ・ステップ 2 のパターン変更・同じ見出しの旧表の追加・§1.5 運用に矛盾文・§6 末尾に矛盾手順・概要の差し替え・確認 5 を空 PR に戻す・close step 6 の一文削除・close step 6 の見出し重複）すべて exit 1。第1周・第2周の 25 通りも引き続きすべて exit 1。close スキルの step 5.5〜6 の外への矛盾文の追加（第3周 E）は exit 0（ファイル全体を固定しない設計上の残余・診断メモ 20261018_1300 で決定） |
+| TC-19 | 2026-10-20 | ✅ exit 0 | adversarial 再ステージ第1周対応後（runbook の確認 1・2・運用・§6 を変更し、SHA-256 を `c41631a4…` に更新）。変更直後は SHA-256 不一致で exit 1 となり、変更の検知が働くことを実地で確認。更新後 `RESULT: OK (13 checks)` |
 | TC-17 | | 未実施（マージ後） | 手動 No.7 と同時に行い、記録用 PR（`docs(I178): マージ後確認の記録`）で記入する |
 
 ---
