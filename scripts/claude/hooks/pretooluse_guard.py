@@ -497,256 +497,12 @@ def _bash_uncovered_risk(cmd: str) -> bool:
             return True
     return False
 
-# --- 別ワークツリーの削除・破棄と、相対パス・cd 越しの書込（I179 計画変更記録 5） ---
-# 公式配置では別のワークツリーが primary の中（.claude/worktrees/）にあるため、相対パスや primary 全体への操作で
-# 他のワークツリーの未コミット作業を消せる。シェル文法は細かく再現せず「別ワークツリーのパスを指す破壊的操作」だけを粗く止める。
-# 対象外（worktree.md §9）: 変数・コマンド置換を含むパス、eval / sh -c の中身、xargs 経由。
-_GIT_READONLY_SUBS = ("status", "log", "diff", "show", "rev-parse", "ls-files", "ls-tree", "branch", "config",
-                      "rev-list", "blame", "describe", "shortlog", "cat-file", "grep", "fetch", "remote", "tag",
-                      "reflog", "name-rev", "for-each-ref", "symbolic-ref", "merge-base", "show-ref", "help",
-                      "version", "count-objects", "check-ignore", "var", "worktree")
-_HEAD_SKIP_WORDS = ("{", "}", "!", "if", "then", "else", "elif", "do", "while", "until")
-_DESTROY_PREFIXES = _CMD_PREFIXES + ("timeout", "stdbuf", "ionice", "doas")
-
-def _loose_segments(cmd: str) -> list:
-    """空白なしの ; && | & ( ) と改行（クォートの外）でも区切ったトークン列のリスト。行継続は 1 行につなぐ。
-    `#` はコメント扱いしない（bash では語の途中の # は普通の文字。行頭の # … は先頭語が # になり、どの判定にも当たらない）。
-    クォートが閉じていない（ヒアドキュメント本文の don't・$'…' 等）ときは、区切り文字で粗く分ける（後ろのコマンドを見落とさない）。"""
-    flat = cmd.replace("\\\n", " ")
-    try:
-        lx = shlex.shlex(flat, posix=True, punctuation_chars="();<>|&\n")
-        lx.whitespace = " \t\r"
-        lx.whitespace_split = True
-        lx.commenters = ""
-        toks = list(lx)
-    except ValueError:
-        toks = []
-        for piece in re.split(r"([;&|()\n]+)", flat):
-            toks += [piece] if piece and set(piece) <= set(";&|()\n") else [t.strip("'\"") for t in piece.split()]
-    segs, seg = [], []
-    for t in toks:
-        if t and set(t) <= set(";&|()\n"):
-            if seg:
-                segs.append(seg)
-            seg = []
-        else:
-            seg.append(t)
-    if seg:
-        segs.append(seg)
-    return segs
-
-def _abs_in(cwd, p):
-    """p を cwd 基準の絶対パス（正規化済み）にする。変数・置換を含む・cwd 不明で相対なら None（判定不能＝対象外）。"""
-    if not p or "$" in p or "`" in p:
-        return None
-    p = os.path.expanduser(p)
-    if not p.startswith("/"):
-        if cwd is None:
-            return None
-        p = os.path.join(cwd, p)
-    return os.path.normpath(p)
-
-def _glob_split(p: str):
-    """展開文字（* ? [ {）を含むパスを（手前の固定部分のディレクトリ, 残りのパターン）に分ける。含まなければ（p, None）。
-    パターンの意味（否定・文字クラス・中かっこ・dotglob 等）は解釈しない（bash を再現すると再現漏れが抜け道になる）。"""
-    m = re.search(r"[*?\[{]", p)
-    if not m:
-        return p, None
-    cut = p.rfind("/", 0, m.start())
-    return (p[:cut] or "/", p[cut + 1:]) if cut >= 0 else (".", p)
-
-_KNOWN_HEADS = ("rm", "find", "mv", "cp", "tee", "sed", "git", "cd", "pushd", "popd")
-# 前置き（シェル内・別プロセスを区別しない。後ろの既知のコマンド名の位置をすべて候補にする）
-_ALL_PREFIXES = ("command", "builtin", "time", "env", "sudo", "exec", "nohup", "nice", "timeout",
-                 "stdbuf", "ionice", "doas")
-
-def _head_candidates(seg: list) -> list:
-    """コマンドとして読む候補の（トークン列, 手前の部分）のリスト。先頭の変数代入・予約語は読み飛ばす。
-    前置き（command・time・sudo・env・timeout・exec・nice 等）で始まるときは、オプションの値の取り方を列挙せず、
-    後ろに現れる既知のコマンド名の位置をすべて候補にする（値と同じ名前でも取りこぼさない）。"""
-    i = 0
-    while i < len(seg) and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i]) or seg[i] in _HEAD_SKIP_WORDS):
-        i += 1
-    if i >= len(seg):
-        return []
-    if os.path.basename(seg[i]) in _ALL_PREFIXES:
-        js = [j for j in range(i + 1, len(seg)) if os.path.basename(seg[j]) in _KNOWN_HEADS]
-        return [(seg[j:], seg[:j]) for j in js] or [(seg[i:], seg[:i])]
-    return [(seg[i:], seg[:i])]
-
-def _moves_in(toks: list, lead: list) -> list:
-    """作業フォルダ・対象フォルダを移す指定（固定のパスの文字列）。cd/pushd の引数・前置きの -C/--chdir/-D・
-    GIT_WORK_TREE=/GIT_DIR=・git の -C/--work-tree/--git-dir。"""
-    out = []
-    for j, a in enumerate(lead):
-        if a in ("-C", "--chdir", "-D") and j + 1 < len(lead):
-            out.append(lead[j + 1])
-        elif a.startswith("--chdir="):
-            out.append(a[len("--chdir="):])
-        elif a.startswith("-C") and len(a) > 2:
-            out.append(a[2:])
-        for pre in ("GIT_WORK_TREE=", "GIT_DIR="):
-            if a.startswith(pre):
-                out.append(a[len(pre):])
-    head = os.path.basename(toks[0])
-    args = toks[1:]
-    if head in ("cd", "pushd"):
-        out += [a for a in args if not a.startswith("-")][:1]
-    elif head == "git":
-        for j, a in enumerate(args):
-            if a in ("-C", "--work-tree", "--git-dir") and j + 1 < len(args):
-                out.append(args[j + 1])
-            for pre in ("--work-tree=", "--git-dir="):
-                if a.startswith(pre):
-                    out.append(a[len(pre):])
-    return out
-
-class _Undecidable(Exception):
-    """作業フォルダを確定できず、相対パスの削除・書込・git の変更の宛先を判定できない（I179 第 10 周・fail-closed で止める）。"""
-
-def _bash_destroy_targets(cmd: str) -> list:
-    """別ワークツリーを消す・変更を捨てる・相対パスで書き込む操作の（種類, 絶対パス, 中身も見るか, 展開の残り）のリスト。
-    作業フォルダの連鎖は解釈しない: セッションの作業フォルダと、各移動先（cd・pushd・-C・--chdir・-D・GIT_WORK_TREE=・
-    git -C 等。順番・括弧・パイプ・& に関係なく）をセッションの作業フォルダ基準で 1 回だけ解いたものを「基準の候補」とする
-    （候補は移動先の数＋1 以下＝処理量は線形）。連鎖を解かないと宛先が決まらない形（相対の移動先を含む 2 つ以上の移動先・
-    `cd -`・popd・引数なしの pushd・`~+`/`~-`）は、相対パスの削除・書込と読み取り以外の git 操作を _Undecidable で止める
-    （書いた順の再現は再現漏れの抜け道と候補の爆発を生んだ＝第 8〜10 周。Bash 呼び出しを分ければ通る）。"""
-    try:
-        cwd0 = os.getcwd()
-    except OSError:
-        cwd0 = None
-    segs = [c for seg in _loose_segments(cmd) for c in _head_candidates(seg)]
-    moves = []
-    for toks, lead in segs:
-        for m in _moves_in(toks, lead):
-            if m not in moves:
-                moves.append(m)
-    undecidable = any(m == "-" or m.startswith(("~+", "~-")) for m in moves) or \
-        any(os.path.basename(t[0]) == "popd" or t == ["pushd"] for t, _ in segs) or \
-        (len(moves) >= 2 and any(not os.path.expanduser(m).startswith("/") for m in moves))
-    bases = {cwd0} if cwd0 else set()
-    bases |= {_abs_in(None if undecidable else cwd0, m) for m in moves}   # 判定不能なら絶対パスの移動先だけ
-    bases.discard(None)
-    found = []
-
-    def tgt(kind, p, rec):
-        if p.startswith(("~+", "~-")) or (undecidable and not os.path.expanduser(p).startswith("/")):
-            raise _Undecidable(kind, p)
-        d, pat = _glob_split(p)
-        for b0 in bases:
-            found.append((kind, _abs_in(b0, d), rec, pat))
-
-    for toks, lead in segs:
-        head = os.path.basename(toks[0])
-        args = toks[1:]
-        # 書込（相対パスも対象。絶対パスの書込は既存の _bash_write_targets でも見る）
-        for i, t in enumerate(toks):
-            if t in _REDIR_OPS and i + 1 < len(toks):
-                tgt("Bash 書込", toks[i + 1], False)
-        if head == "tee":
-            for a in args:
-                if not a.startswith("-"):
-                    tgt("Bash 書込", a, False)
-        elif head in ("cp", "mv"):
-            pos = [a for a in args if not a.startswith("-")]
-            # 宛先指定のオプション（-t を含む短いオプションの塊・--t で始まる長いオプション）があれば、どれが宛先かを
-            # 解析せず、位置引数と連結された値（-t<dir>・--target=<dir>・--target-directory=<dir>）をすべて宛先として見る
-            topts = [a for a in args if (a.startswith("-") and not a.startswith("--") and "t" in a[1:])
-                     or a.startswith("--t")]
-            tdir = [a[a.index("t") + 1:] for a in topts if not a.startswith("--") and a.index("t") + 1 < len(a)] + \
-                [a.split("=", 1)[1] for a in topts if a.startswith("--") and "=" in a]
-            dests = (pos + tdir) if topts else (pos[-1:] if len(pos) >= 2 else [])
-            for dst in dests:
-                # 展開を含む宛先は、展開後にフォルダ（別ワークツリーの root を含む）へ書き込む恐れがあるので中身も見る
-                tgt("Bash 書込", dst, bool(re.search(r"[*?\[{]", dst)))
-            if head == "mv":   # mv は移動元も消える。位置で移動元を決めず、すべての引数を移動元として見る（中身も見る）
-                for a in pos + tdir:
-                    tgt("Bash 削除・破棄", a, True)
-        elif head == "sed" and any(a.startswith("-i") or a.startswith("--in-place") for a in args):
-            # スクリプトとファイルを区別しない（スクリプトもパスとして見る＝止める側）
-            for a in args:
-                if not a.startswith("-"):
-                    tgt("Bash 書込", a, False)
-        # 削除
-        if head == "rm":
-            opts, paths, end = [], [], False
-            for a in args:
-                if not end and a == "--":
-                    end = True
-                elif not end and a.startswith("-") and a != "-":
-                    opts.append(a)
-                else:
-                    paths.append(a)
-            rec = any(o == "--recursive" or (not o.startswith("--") and re.search(r"[rR]", o)) for o in opts)
-            for p in paths:
-                tgt("Bash 削除・破棄", p, rec)
-        elif head == "find":
-            if "-delete" in args or any(a in ("-exec", "-execdir", "-ok", "-okdir") for a in args) and \
-                    any(os.path.basename(a) == "rm" for a in args):
-                starts = []
-                for a in args:
-                    if a.startswith("-") or a in ("(", "!"):
-                        break
-                    starts.append(a)
-                for s0 in (starts or ["."]):
-                    tgt("Bash 削除・破棄", s0, True)
-        elif head == "git":
-            # 対象フォルダ: すべての候補（-C・--work-tree・GIT_WORK_TREE= も候補に入っている）
-            sub, rest = None, []
-            i = 0
-            while i < len(args) and args[i].startswith("-"):
-                i += 2 if args[i] in ("-C", "--git-dir", "--work-tree", "-c", "--namespace") else 1
-            if i < len(args):
-                sub, rest = args[i], args[i + 1:]
-            if sub is None:
-                continue
-            if sub == "worktree":
-                # 撤去は wt-remove.sh に一本化する。--force が無くても、中の入れ子（gitignore 済み）は
-                # git の未コミット検査に出ないため中身ごと消える
-                if rest[:1] == ["remove"]:
-                    for a in rest[1:]:
-                        if not a.startswith("-"):
-                            tgt("git worktree remove", a, True)
-                continue
-            if sub == "stash" and rest[:1] in (["list"], ["show"]):
-                continue
-            if sub not in _GIT_READONLY_SUBS:
-                if undecidable:
-                    raise _Undecidable(f"git {sub}", ".")
-                # 読み取り以外の git 操作は、対象フォルダの候補のどれかが別ワークツリーなら止める（中身は見ない）
-                for b0 in bases:
-                    found.append((f"git {sub}", b0, False, None))
-            if sub == "clean":
-                nf = sum(o.count("f") for o in rest if o.startswith("-") and not o.startswith("--"))
-                nf += rest.count("--force")
-                if nf >= 2:   # -ff は中の別リポジトリ（入れ子のワークツリー）まで消す
-                    for b0 in bases:
-                        found.append(("git clean -ff", b0, True, None))
-    return [f for f in found if f[1]]
-
-def _destroy_blocked(path: str, recursive: bool, pattern=None):
-    """path が別ワークツリーのもの、または中に別ワークツリーの root を含むなら True。
-    - recursive（中身も消す）: path の中のどこかに root があれば止める（展開の残りがあっても解釈しない）。
-    - 非再帰で展開の残り（pattern）がある: 展開後の対象はパターンの段数（/ の数＋1）の深さにあるので、
-      それより浅い位置に root があれば止める（パターンの意味は解釈せず段数だけを見る）。
-    境界を確定できなければ None（fail-safe＝ブロック）。自分のワークツリー内・どのワークツリーにも属さなければ False。"""
-    roots = _worktree_roots()
-    cur = _current_worktree_root()
-    if roots is None or cur is None:
-        return None
-    ap = os.path.realpath(path)
-    owner = _owning_root(ap, roots)
-    if owner is not None and _path_key(owner) != _path_key(cur):
-        return True
-    if not recursive and pattern is None:
-        return False
-    k = _path_key(ap).rstrip(os.sep)
-    depth = pattern.strip("/").count("/") + 1 if pattern else None
-    for root in roots:
-        rk = _path_key(root)
-        if rk == _path_key(cur) or not rk.startswith(k + os.sep):
-            continue
-        if recursive or rk[len(k) + 1:].count(os.sep) + 1 < depth:
+def _git_clean_ff(cmd: str) -> bool:
+    """git clean の f が合計 2 つ以上（-ff・-f -f・-ffdx・--force -f 等）なら True（I179）。"""
+    for m in re.finditer(r"\bgit\s+clean\b([^;&|\n]*)", cmd, re.I):
+        opts = m.group(1).split()
+        nf = sum(o.count("f") for o in opts if o.startswith("-") and not o.startswith("--")) + opts.count("--force")
+        if nf >= 2:
             return True
     return False
 
@@ -1595,21 +1351,6 @@ def main():
         x = _cross_worktree(_tgt)
         if x is True or x is None:
             _block_cross_worktree("Bash 書込", _tgt)
-    # I179: 別ワークツリーの削除・破棄と、相対パス・cd 越しの書込（同じく DANGER_OK でも解除しない）。
-    # 判定中の例外は止める側に倒す（exit 2 以外の異常終了はフックが止めず、後ろの危険操作の検査まで素通りになるため）
-    try:
-        for _kind, _tgt, _rec, _pat in _bash_destroy_targets(raw):
-            if _destroy_blocked(_tgt, _rec, _pat) is not False:
-                _block_cross_worktree(_kind, _tgt)
-    except _Undecidable as e:
-        print(f"[guard] cd 等の移動を複数含む（または cd - / popd / ~+ / ~- を使う）コマンドでは、{e.args[0]} の宛先"
-              f"（{e.args[1]}）を判定できないためブロックしました。Bash 呼び出しを分けるか、絶対パスで書いてください"
-              f"（worktree.md §9）", file=sys.stderr)
-        sys.exit(2)
-    except Exception as e:
-        print(f"[guard] 別ワークツリーの判定中にエラー（{type(e).__name__}）が起きたため、fail-safe でブロックしました",
-              file=sys.stderr)
-        sys.exit(2)
     # no silent caps: 絶対パス宛先を抽出できないが cd/変数/ラッパー越しで別 worktree を
     # 指し得る経路のみ限界を明示（読み取り・単純な相対書込では誤警告しない）。
     if not _wt_targets and _bash_uncovered_risk(cmd):
@@ -1647,6 +1388,10 @@ def main():
         # reset --hard requires explicit ack
         if re.search(r"\bgit\s+reset\b.*--hard\b", cmd, re.I):
             _block("git reset --hard requires DANGER_OK=1", raw)
+
+        # I179: git clean で f を 2 つ以上重ねると、中の入れ子ワークツリー（.claude/worktrees/）まで未コミットの作業ごと消す
+        if _git_clean_ff(cmd):
+            _block("git clean -ff (removes nested worktrees) requires DANGER_OK=1", raw)
 
         # docker volume wipe requires explicit ack
         # I179: 正規表現（空白をまとめた文字列）∪ トークン判定（_docker_volume_wipe の説明を参照）。

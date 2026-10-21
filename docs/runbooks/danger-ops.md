@@ -6,7 +6,7 @@
 - DB: DROP / TRUNCATE / WHEREなし UPDATE・DELETE / 大量更新・削除 / 破壊的マイグレーション
 - Git: force push / reset --hard / 大規模rebase / **未コミット変更があるファイルへの `git checkout/restore <file>`**（下記注記）
 - Docker: down -v / --volumes・volume rm / prune・system prune --volumes（データ消失。ガードが `DANGER_OK=1` の無い形を止める。ワークツリーの撤去は `scripts/claude/wt-remove.sh` を使い、消す相手を確定できない場合は許可があっても止まる → `docs/runbooks/worktree.md` §4。docker が使えないときにデータを消さずに撤去する合図は `KEEP_DATA=1` で、`DANGER_OK` とは別＝消す操作の許可ではない）
-- ワークツリー: 別のワークツリー（primary の中の `.claude/worktrees/` を含む）を消す・変更を捨てる操作（`rm`・`find -delete`・`git -C <別ワークツリー> reset/checkout/clean` 等・`git clean -ff`・`git worktree remove`）。ガードが `DANGER_OK=1` でも止める（撤去は `wt-remove.sh`。`docs/runbooks/worktree.md` §9）
+- ワークツリー: 別のワークツリー（primary の中の `.claude/worktrees/` を含む）を消す・変更を捨てる操作（`rm`・`find -delete`・`git -C <別ワークツリー> reset/checkout/clean` 等・`git worktree remove`）はしない（撤去は `wt-remove.sh`。`docs/runbooks/worktree.md` §9）。ガードが止めるのは `git clean` の `f` を 2 つ以上重ねる形（入れ子ごと消す）だけで、`DANGER_OK=1` が必要
 - Files: rm -rf / secrets 操作
 
 ## 未コミット変更の取り消し（`git checkout/restore <file>`）

@@ -284,155 +284,26 @@ else
   ck "FG-G1 注入できた" 0 1
 fi
 
-# --- 別ワークツリーの削除・破棄と相対パス書込（I179 計画変更記録 5・TC-X1〜X38・FG-X1/X2・DO1/DO2） ---
+# --- git clean -ff の承認制（I179 計画変更記録 6。別ワークツリーを消す操作の判定は廃止し、GitHub の保護・こまめな commit/push・wt-remove.sh に任せる） ---
 printf '.claude/worktrees/\n' > "$MAIN/.gitignore"
-SCR="$TMP/scratch-outside"; mkdir -p "$SCR"
 # cwd を指定し、JSON を正しくエスケープしてフックに渡す
 bj_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$2" \
             | ( cd "$1" && python3 "${3:-$GUARD}" >/dev/null 2>&1 ); echo $?; }
-R="r""m"   # このテストを Claude の Bash で組み立て直して試すときに、試す側のコマンドが rm 規則に当たらないように
-while IFS='|' read -r tc where c; do
-  [ -n "$tc" ] || continue
-  case "$where" in main) d="$MAIN" ;; nest) d="$NEST" ;; esac
-  c="${c//@R@/$R}"; c="${c//@MAIN@/$MAIN}"; c="${c//@OTHER@/$OTHER}"
-  ck "$tc ${c}→block" 2 "$(bj_in "$d" "$c")"
-done <<'CASES'
-X1|main|@R@ -r .claude/worktrees/nest
-X2|main|@R@ -fr @MAIN@/.claude/worktrees/nest/x.py
-X3|main|@R@ -r -f .claude/worktrees/nest
-X4|main|cd .claude/worktrees/nest && @R@ x.py
-X5|main|@R@ -r .claude
-X5b|main|@R@ -r .claude/worktrees/*
-X6|nest|@R@ -r @OTHER@/src
-X7|nest|@R@ -r ../nest2
-X8|main|find .claude/worktrees/nest -name '*.py' -delete
-X9|main|find .claude/worktrees/nest -name x -exec @R@ {} +
-X10|main|git -C .claude/worktrees/nest checkout -- .
-X11|main|git -C .claude/worktrees/nest reset --hard
-X12|main|git -C @MAIN@/.claude/worktrees/nest clean -fd
-X13|main|git -C .claude/worktrees/nest stash -u
-X14|main|git --work-tree=.claude/worktrees/nest restore .
-X15|main|git clean -ffdx
-X16|main|git clean -f -f -d
-X17|main|git worktree remove --force .claude/worktrees/nest
-X18|main|git worktree remove -f @OTHER@
-X19|main|echo x > .claude/worktrees/nest/f
-X20|main|cd .claude/worktrees/nest && echo x > f
-X22|main|DANGER_OK=1 @R@ -r .claude/worktrees/nest
-X23|main|true;@R@ -r .claude/worktrees/nest
-X24|main|sudo -E @R@ -r .claude/worktrees/nest
-X25|main|timeout 60 git -C .claude/worktrees/nest reset --hard
-X26|main|mv .claude/worktrees/nest /tmp/x
-X27|main|cd .claude/worktrees && git -C nest reset --hard
-X36|main|git worktree remove .claude/worktrees/nest
-X42|main|echo a#b; @R@ -r .claude/worktrees/nest
-X43|main|git log --format=%h#x; git -C .claude/worktrees/nest checkout -- .
-X44|main|echo $'\''; @R@ -r .claude/worktrees/nest
-X45|main|git worktree remove -ff .claude/worktrees/nest
-X46|main|pushd .claude/worktrees/nest && git checkout -- .
-X47|main|env -C .claude/worktrees/nest git checkout -- .
-X48|main|GIT_WORK_TREE=.claude/worktrees/nest git checkout -- .
-X49|main|@R@ -r .claude/worktrees/*
-X50|main|@R@ -r .*
-X52|main|tee .claude/worktrees/nest/f < /dev/null
-X53|main|cp a.txt .claude/worktrees/nest/a.txt
-X54|main|cp -t .claude/worktrees/nest a.txt
-X55|main|sed -i s/a/b/ .claude/worktrees/nest/f
-X56|main|git clean --force --force -d
-X57|main|git clean -f --force
-X60|main|@R@ -r tmp_*
-X61|main|mv *.md docs/
-X70|main|DANGER_OK=1 @R@ -rf .[^.]*
-X71|main|@R@ -r .claude/worktrees/[^.]*
-X72|main|@R@ -r .claude/worktrees/[[:alpha:]]*
-X73|main|@R@ -r .claude/worktree[^z]
-X74|main|@R@ -r .claude/worktrees/{nest,zz}
-X75|main|@R@ -r {.claude,zz}
-X76|main|@R@ -r .claude/worktree{s,}
-X77|main|mv .claude/{worktrees,old}
-X78|main|@R@ .claude/worktrees/{nest,zz}/f.txt
-X79|main|shopt -s dotglob; @R@ -r *
-X80|main|GLOBIGNORE=x; @R@ -r *
-X81|main|@R@ -r ~+/.claude
-X82|main|(cd /tmp && ls) && git -C .claude/worktrees/nest reset --hard
-X83|main|(cd /tmp) ; @R@ -r .claude/worktrees/nest
-X84|main|timeout -s KILL 60 @R@ -r .claude/worktrees/nest
-X85|main|timeout --signal KILL 5 @R@ -r .claude/worktrees/nest
-X86|main|exec -a foo @R@ -r .claude/worktrees/nest
-X87|main|sudo -D .claude/worktrees @R@ -r nest
-X88|main|env -C.claude/worktrees @R@ -r nest
-X89|main|sudo -u git @R@ -r .claude/worktrees/nest
-X90|main|pushd .claude/worktrees/nest && pushd /tmp && popd && git checkout -- .
-X91|main|cd .claude/worktrees/nest && cd /tmp && cd - && git checkout -- .
-X92|main|GIT_DIR=.claude/worktrees/nest/.git git checkout -- .
-X94|main|{ cd .claude/worktrees/nest; @R@ -r src; }
-X95|main|if true; then cd .claude/worktrees/nest; @R@ -r src; fi
-X96|main|X=1 cd .claude/worktrees/nest; @R@ -r src
-X97|main|command cd .claude/worktrees/nest; @R@ -r src
-X98|main|time cd .claude/worktrees/nest; @R@ -r src
-X99|main|cp f .claude/worktrees/n*
-X100|main|cp -t .claude/worktrees/n* f
-X101|main|env -u cd -C .claude/worktrees @R@ -r nest
-X102|main|cd .claude/worktrees && cd /tmp && @R@ -r ~-/nest
-X103|main|env cd /tmp; @R@ -r .claude/worktrees/nest
-X104|main|sudo cd /tmp && @R@ -r .claude/worktrees/nest
-X105|main|sudo mv .claude/worktrees/nest /tmp/x
-X106|main|timeout 60 find .claude/worktrees/nest -delete
-X107|main|sudo sed -i s/a/b/ .claude/worktrees/nest/f
-X108|main|sudo tee .claude/worktrees/nest/f < /dev/null
-X109|main|sudo cp a .claude/worktrees/nest/f
-X110|main|@R@ -r .claude/worktree?
-X111|main|env --chdir=.claude/worktrees @R@ -r nest
-X112|main|sed -i -e 's/a/b/' .claude/worktrees/nest/f
-X116|main|sed -i -es/a/b/ .claude/worktrees/nest/f
-X117|main|sed -i -e's/.*//' .claude/worktrees/nest/f
-X118|main|sed -i -f/tmp/s.sed .claude/worktrees/nest/f
-X119|main|sed -i --expression=s/a/b/ .claude/worktrees/nest/f
-X120|main|cd /tmp & @R@ -r .claude/worktrees/nest
-X121|main|mv -t /tmp/x .claude/worktrees/nest
-X122|main|mv --target-directory=/tmp/x .claude/worktrees/nest
-X123|main|builtin cd .claude/worktrees/nest; @R@ -r src
-X124|main|time -p cd .claude/worktrees/nest; @R@ -r src
-X125|main|nohup @R@ -r .claude/worktrees/nest
-X126|main|nice -n 5 @R@ -r .claude/worktrees/nest
-X127|main|stdbuf -oL @R@ -r .claude/worktrees/nest
-X128|main|ionice -c3 git -C .claude/worktrees/nest reset --hard
-X129|main|doas @R@ -r .claude/worktrees/nest
-X130|main|cd .claude/worktrees/nest && cd /tmp && (cd /var) ; cd - && @R@ -r src
-X131|main|GIT_WORK_TREE=.claude/worktrees/nest nice git checkout -- .
-X132|main|time xargs @R@ -r .claude/worktrees/nest
-X133|main|cp f .claude/worktrees/nes?
-X134|main|cp -t .claude/worktrees/nes[t] f
-X135|main|cp f .claude/worktrees/{zz,nest}
-X137|main|git --work-tree .claude/worktrees/nest checkout -- .
-X138|main|f(){ cd worktrees/nest && git checkout -- .; }; cd .claude && f
-X139|main|cd ~+/.claude/worktrees/nest; @R@ -r src
-X140|main|git -C ~+/.claude/worktrees/nest checkout -- .
-X141|main|cp --target-directory .claude/worktrees/nest/src f
-X142|main|cp -t.claude/worktrees/nest/src f
-X143|main|cp -vt .claude/worktrees/nest/src f
-X144|main|cp --target=.claude/worktrees/nest/src f
-X145|main|mv --target .claude/worktrees/nest f
-X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
-X113|main|sed -i '2{s/foo/bar/}' f
-X114|main|sed -i -e '1,3{s/a/b/;s/c/d/}' backend/x.py
-X66|main|cd .claude/worktrees/nest && cd - && git checkout -- .
-X146|nest|cd backend && cd .. && git add -A
-X147|nest|cd backend && cd ../frontend && @R@ -r build
-X148|nest|cd docs && cd .. && echo a > x.txt
-X149|nest|cd backend && pytest; cd -; cd ../nest2 && git checkout -- .
-X150|nest|pushd backend && pytest && popd && cd ../nest2 && git checkout -- .
-X151|nest|git -C backend log -1 && cd ../nest2 && @R@ -r src
-X152|main|git -C backend status && cd ../other-wt && git checkout -- .
-X153|main|cd frontend && npm run build && cd ~- && cd ../other-wt && git checkout -- .
-X154|main|cd /tmp && cd /var && @R@ -r .claude/worktrees/nest
-CASES
-# ヒアドキュメント本文にアポストロフィ（閉じていないクォート）があっても、後ろのコマンドを見落とさない
-ck "X51 本文に don't のヒアドキュメントの後→block" 2 \
-  "$(bj_in "$MAIN" "$(printf "cat > /tmp/x <<'X'\ndon't\nX\n%s -r .claude/worktrees/nest" "$R")")"
-ck "X136 パイプの cd の後→block" 2 "$(bj_in "$MAIN" "cd /tmp | :; $R -r .claude/worktrees/nest")"
-# 改行で区切った後のコマンドも止まる
-ck "X28 改行の後→block" 2 "$(bj_in "$MAIN" "$(printf 'echo a\n%s -r .claude/worktrees/nest' "$R")")"
+ck "GC1 git clean -ffdx→block"               2 "$(bj_in "$MAIN" 'git clean -ffdx')"
+ck "GC2 git clean -f -f -d→block"            2 "$(bj_in "$MAIN" 'git clean -f -f -d')"
+ck "GC3 git clean --force -f→block"          2 "$(bj_in "$MAIN" 'git clean --force -f')"
+ck "GC4 cd /tmp && git clean -ffd→block"     2 "$(bj_in "$MAIN" 'cd /tmp && git clean -ffd')"
+ck "GC5 git clean -fdx（f 1 つ）→allow"       0 "$(bj_in "$MAIN" 'git clean -fdx')"
+ck "GC6 DANGER_OK=1 git clean -ffdx→allow"   0 "$(bj_in "$MAIN" 'DANGER_OK=1 git clean -ffdx')"
+ck "GC7 git clean -f; echo -ff→allow（別のコマンドの f は数えない）" 0 "$(bj_in "$MAIN" 'git clean -f; echo -ff')"
+# FG-GC1: 判定関数を常に False にした複製では GC1 が素通りする（停止要因の証明）
+BROKEN_GC="$TMP/guard_nogc.py"
+sed 's/^def _git_clean_ff(cmd: str) -> bool:/&\n    return False  # FG-GC1/' "$GUARD" > "$BROKEN_GC"
+if grep -q '# FG-GC1' "$BROKEN_GC"; then
+  ck "FG-GC1 判定除去複製で GC1=allow" 0 "$(bj_in "$MAIN" 'git clean -ffdx' "$BROKEN_GC")"
+else
+  ck "FG-GC1 注入できた" 0 1
+fi
 # X21: /mnt/<ドライブ>/ 配下（drvfs）では大文字小文字だけ違うパスも別ワークツリーと判定する（実リポジトリの登録で判定のみ）
 REAL_ROOTS="$(git -C "$REPO_ROOT" worktree list --porcelain | sed -n 's/^worktree //p')"
 REAL_OTHER="$(printf '%s\n' "$REAL_ROOTS" | grep -vxF "$REPO_ROOT" | grep -m1 '^/mnt/[a-z]/' || true)"
@@ -441,103 +312,9 @@ if [ -n "$REAL_OTHER" ]; then
   ck "X21 大文字小文字違いの別wt edit→block" 2 \
     "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/zz_probe.txt"}}' "$UP" \
        | ( cd "$REPO_ROOT" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?)"
-  # 削除の判定でも大文字小文字をそろえる（中に別ワークツリーを含む親フォルダの大文字表記。判定のみで実行はしない）
-  ck "X21b 大文字小文字違いの親フォルダの削除→block" 2 "$(bj_in "$REPO_ROOT" "$R -r $(dirname "$UP")")"
 else
   echo "SKIP X21（/mnt/<ドライブ>/ 配下の別ワークツリーが無い環境）"
 fi
-# 通す側
-while IFS='|' read -r tc where c; do
-  [ -n "$tc" ] || continue
-  case "$where" in main) d="$MAIN" ;; nest) d="$NEST" ;; esac
-  c="${c//@R@/$R}"; c="${c//@NEST@/$NEST}"; c="${c//@SCR@/$SCR}"
-  ck "$tc ${c}→allow" 0 "$(bj_in "$d" "$c")"
-done <<'CASES'
-X30|nest|@R@ -r build
-X31|nest|@R@ @NEST@/tmp.txt
-X32|main|@R@ -r @SCR@/x
-X33|main|git -C .claude/worktrees/nest status
-X33b|main|git -C .claude/worktrees/nest log -1
-X33c|main|git -C .claude/worktrees/nest diff
-X33d|main|git -C .claude/worktrees/nest stash list
-X34|main|git clean -fdx
-X35|nest|git clean -ffdx
-X37|main|find .claude/worktrees/nest -name '*.py'
-X38|main|echo x > ok.txt
-X39|main|git commit -m "docs: @R@ -r .claude/worktrees/nest の手順"
-X40|main|git checkout -b feature/x
-X41|main|echo x 2>&1 >/dev/null
-X62|main|@R@ -f tmp_*.log
-X67|main|@R@ *.log
-X68|main|(cd /tmp && ls) && git status
-X93|nest|@R@ -r tmp_*
-X155|nest|cd backend && cd .. && pytest
-X156|nest|cd backend && @R@ -r build
-X157|main|cd a && cd b && @R@ -r @SCR@/x
-X115|main|{ cd /tmp; @R@ -r x; }
-X63|main|# @R@ -r .claude/worktrees/nest
-X64|main|git worktree add ../wt-extra -b feature/y
-X65|main|git worktree prune
-CASES
-# FG-X1: 新しい判定を常に空にした複製では、止める側の代表が素通りする（停止要因の証明）
-BROKEN_X="$TMP/guard_nodestroy.py"
-sed 's/^def _bash_destroy_targets(cmd: str) -> list:/def _bash_destroy_targets(cmd: str) -> list:\n    return []  # FG-X1/' \
-  "$GUARD" > "$BROKEN_X"
-if grep -q 'return \[\]  # FG-X1' "$BROKEN_X"; then
-  for c in "$R -r .claude/worktrees/nest" "find .claude/worktrees/nest -delete" \
-           "git -C .claude/worktrees/nest checkout -- ." "git clean -ffdx" \
-           "git worktree remove --force .claude/worktrees/nest"; do
-    ck "FG-X1 判定除去複製で ${c}=allow" 0 "$(bj_in "$MAIN" "$c" "$BROKEN_X")"
-  done
-else
-  ck "FG-X1 注入できた" 0 1
-fi
-# FG-X2: 相対パスの絶対化を外した複製では、相対パスの削除・書込が素通りする
-BROKEN_REL="$TMP/guard_norel.py"
-sed 's/^def _abs_in(cwd, p):/def _abs_in(cwd, p):\n    if p and not p.startswith("\/"): return None  # FG-X2/' "$GUARD" > "$BROKEN_REL"
-if grep -q '# FG-X2' "$BROKEN_REL"; then
-  ck "FG-X2 絶対化除去複製で X1=allow"  0 "$(bj_in "$MAIN" "$R -r .claude/worktrees/nest" "$BROKEN_REL")"
-  ck "FG-X2 絶対化除去複製で X19=allow" 0 "$(bj_in "$MAIN" "echo x > .claude/worktrees/nest/f" "$BROKEN_REL")"
-else
-  ck "FG-X2 注入できた" 0 1
-fi
-# FG-X3: 中かっこを展開文字から外した複製では、中かっこの削除が素通りする（展開を含むパスの粗い判定が停止要因である証明）
-BROKEN_BR="$TMP/guard_nobrace.py"
-sed 's/m = re.search(r"\[\*?\\\[{\]", p)/m = re.search(r"[*?\\[]", p)  # FG-X3/' "$GUARD" > "$BROKEN_BR"
-if grep -q '# FG-X3' "$BROKEN_BR"; then
-  ck "FG-X3 中かっこ除去複製で X74=allow" 0 "$(bj_in "$MAIN" "$R -r .claude/worktrees/{nest,zz}" "$BROKEN_BR")"
-else
-  ck "FG-X3 注入できた" 0 1
-fi
-# FG-X5: 「判定不能」の検出を外した（常に連鎖なしとして判定する）複製では、移動の連鎖で別ワークツリーへ入る X27・X138 が素通りする
-BROKEN_MV="$TMP/guard_noundecidable.py"
-sed 's/^    bases = {cwd0} if cwd0 else set()$/    undecidable = False  # FG-X5\n&/' "$GUARD" > "$BROKEN_MV"
-if grep -q '# FG-X5' "$BROKEN_MV"; then
-  ck "FG-X5 判定不能の検出除去複製で X27=allow" 0 "$(bj_in "$MAIN" "cd .claude/worktrees && git -C nest reset --hard" "$BROKEN_MV")"
-  ck "FG-X5 判定不能の検出除去複製で X138=allow" 0 \
-    "$(bj_in "$MAIN" "f(){ cd worktrees/nest && git checkout -- .; }; cd .claude && f" "$BROKEN_MV")"
-else
-  ck "FG-X5 注入できた" 0 1
-fi
-# X158/X159: 移動先が多くても処理量は線形（第 10 周 C1: 候補の爆発でメモリを使い切った）。10 秒・メモリ 1GB で打ち切る
-MANY=""; for i in $(seq 1 12); do MANY="${MANY}cd d$i; "; done
-bj_lim() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
-             | ( cd "$MAIN" && ulimit -v 1048576 && timeout 10 python3 "$GUARD" >/dev/null 2>&1 ); echo $?; }
-ck "X158 cd 12 個＋相対の削除→block（10 秒以内）" 2 "$(bj_lim "${MANY}$R -r x")"
-ck "X159 cd 12 個＋読み取りだけ→allow（10 秒以内）" 0 "$(bj_lim "${MANY}ls")"
-# X160: 判定中の例外は止める側に倒す（exit 2 以外の異常終了はフックが止めず、後ろの危険操作の検査まで素通りになる）
-BROKEN_EX="$TMP/guard_raise.py"
-sed 's/^def _bash_destroy_targets(cmd: str) -> list:/&\n    raise MemoryError  # X160/' "$GUARD" > "$BROKEN_EX"
-if grep -q '# X160' "$BROKEN_EX"; then
-  ck "X160 判定中の例外→block" 2 "$(bj_in "$MAIN" "ls" "$BROKEN_EX")"
-else
-  ck "X160 注入できた" 0 1
-fi
-# X161: 判定不能で止めたときは、分けて実行する案内を出す
-X161_ERR=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' \
-             "cd backend && cd .. && git add -A" | ( cd "$NEST" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
-if printf '%s' "$X161_ERR" | grep -q "Bash 呼び出しを分ける"; then
-  ck "X161 判定不能の案内" 0 0; else ck "X161 判定不能の案内" 0 1; fi
 # DO1/DO2: 区切りの後ろの DANGER_OK=1 では解除しない
 ck "DO1 echo DANGER_OK=1; docker compose down -v→block" 2 "$(bj_in "$MAIN" 'echo DANGER_OK=1; docker compose down -v')"
 ck "DO2 echo hi && DANGER_OK=1 git reset --hard→block"   2 "$(bj_in "$MAIN" 'echo hi && DANGER_OK=1 git reset --hard')"
