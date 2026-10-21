@@ -216,6 +216,14 @@ ck "XP85 cd <feature> && git push 2>&1 | tail -5 は通す" 0 "$(runj "cd $TMP &
 ck "XP87 sudo -D <develop> git push（-D の値を読み違えない）" ASK "$(runj "sudo -D $W git push")"
 ck "XP88 env -C <develop> git push"            ASK "$(runj "env -C $W git push -u origin HEAD")"
 ck "XP89 export GIT_DIR=<develop>; git push"   ASK "$(runj 'export GIT_DIR=.git/worktrees/devwt; git push')"
+# code-review 20261021_1559 第 3 周: 前に別の代入がある GIT_DIR・単独の代入・まとめたオプションで git を見落とさない・
+# 行頭の cd と ; の後の push（普段のコミット＋push）・引用符の中の語は場所を変えない
+ck "XP91 X=1 GIT_DIR=<develop>; export GIT_DIR; git push" ASK "$(runj 'X=1 GIT_DIR=.git/worktrees/devwt; export GIT_DIR; git push')"
+ck "XP92 GIT_DIR=<develop>; git push"          ASK "$(runj 'GIT_DIR=.git/worktrees/devwt; git push')"
+ck "XP93 env -vC <場所> git push origin main は停止" 2 "$(runj "env -vC $W git push origin main")"
+ck "XP94 cd <feature> && commit | grep; git push は通す" 0 "$(runj "cd $TMP && git add -A && git commit -q -m x 2>&1 | grep -iE 'failed|error'; git push -q && git log --oneline -1")"
+ck "XP95 commit -m 'env -C … export GIT_DIR=…' && push は通す" 0 "$(runj "git commit -m 'fix: env -C と export GIT_DIR=x の対応' && git push")"
+ck "XP96 cd <feature> && rg env -C 3 && push は通す" 0 "$(runj "cd $TMP && rg env -C 3 a.txt && git push")"
 ck "XP90 sudo -D <develop> git push origin main は停止" 2 "$(runj "sudo -D $W git push origin main")"
 ck "XP86 cd && commit -m \"\$(cat <<'EOF' …)\" && push は通す" 0 "$(runj "$(printf 'cd %s && git commit -m "$(cat <<%sEOF%s\nfix: x\n\nbody\nEOF\n)" && git push -u origin feature/x' "$TMP" "'" "'")")"
 # push の宛先（今のブランチ）は git-dir の HEAD で決まり、作業ディレクトリに依らない（主の .git は feature/x）
@@ -227,9 +235,11 @@ ck "XP81 cd && commit -m '…' && 宛先なし push は通す（安全網の組�
 ck "XP82 cd <feature の場所>; git push（cd が失敗しうる・当たらない）は確認" ASK "$(runj "cd $TMP; git push")"
 # 偽合格の防止: 実行場所が変数かの判定（_git_loc_dynamic）を外すと、変数の場所の push が素通しになる
 BROKEN_LOC="$TMP/guard_noloc.py"
-# 信頼する場所の判定（_git_loc_trusted・security-review の Blocker）も同じ形を確認にするので、両方を外す
+# 信頼する場所の判定（_git_loc_trusted・security-review の Blocker）と GIT_DIR の代入を一意でないとする判定
+# （_other_chdir・code-review 20261021_1559 第 3 周）も同じ形を確認にするので、すべて外す
 sed -e 's/^def _git_loc_dynamic(loc) -> bool:$/&\n    return False/' \
-    -e 's/^def _git_loc_trusted(loc, need_worktree: bool = True) -> bool:$/&\n    return True/' "$GUARD" > "$BROKEN_LOC"
+    -e 's/^def _git_loc_trusted(loc, need_worktree: bool = True) -> bool:$/&\n    return True/' \
+    -e 's/^def _other_chdir(segs) -> bool:$/&\n    return False/' "$GUARD" > "$BROKEN_LOC"
 ck "FG-M 複製に置換が入った"                 YES "$( (! cmp -s "$GUARD" "$BROKEN_LOC") && echo YES || echo NO)"
 ck "FG-M noloc passes GIT_DIR=\$X push"      0   "$(rungj "$BROKEN_LOC" 'GIT_DIR=$X git push origin')"
 # force 取りこぼし → block

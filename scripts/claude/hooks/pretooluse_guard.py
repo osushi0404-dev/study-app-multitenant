@@ -250,9 +250,33 @@ def _revert_from_commit(sub: str, args: list) -> bool:
 _DYN_MARKS = ("$", "`", "__SUBST_")
 _BRACE_RE = re.compile(r"\{[^{}]*(,|\.\.)[^{}]*\}")
 
-_OTHER_CHDIR_RE = re.compile(r"\benv\b[^;&|\n]*\s(-C|--chdir)\b|\bsudo\b[^;&|\n]*\s(-D|--chdir)\b"
-                             r"|\b(export|declare|typeset|readonly)\b[^;&|\n]*\bGIT_(DIR|WORK_TREE)="
-                             r"|(^|[;&|\n]\s*)GIT_(DIR|WORK_TREE)=\S*\s*($|[;&|\n])")
+_CHDIR_WRAPPERS = ("env", "sudo", "nohup", "nice", "ionice", "time", "exec", "command", "timeout", "stdbuf")
+_CHDIR_OPT = {"env": re.compile(r"-[A-Za-z0-9]*C|--chdir"), "sudo": re.compile(r"-[A-Za-z]*D|--chdir")}
+_GIT_LOC_ASSIGN = re.compile(r"GIT_(DIR|WORK_TREE)=")
+
+def _other_chdir(segs) -> bool:
+    """cd 以外で場所を変える書き方があれば True: 前置きの `env -C`／`--chdir`・`sudo -D`／`--chdir`（値をくっつけた
+    `-Cwt`・まとめた `-vC` も）と、GIT_DIR / GIT_WORK_TREE の代入（前置き・export 等・前に別の代入があっても）。
+    区切りごとの語で見るので、引用符の中の文字（コミットメッセージ・検索語）には当たらない。"""
+    for toks, _ in segs:
+        head, prev = None, ""
+        for t in toks:
+            if _GIT_LOC_ASSIGN.match(t):
+                return True
+            if head in _CHDIR_OPT and _CHDIR_OPT[head].match(t):
+                return True
+            if head in ("export", "declare", "typeset", "readonly", "local"):
+                continue
+            # 前置きの語・オプション・その値（`sudo -u root`・`nice -n 10`。値の読み違いは確認に倒れるだけ）は読み進める
+            opt_val = head in _CHDIR_WRAPPERS and prev.startswith("-") and "=" not in prev
+            prev = t
+            if re.match(r"[A-Za-z_]\w*=", t) or t.startswith("-") or opt_val:
+                continue
+            if t in _CHDIR_WRAPPERS or t in ("export", "declare", "typeset", "readonly", "local"):
+                head = t
+                continue
+            break
+    return False
 
 def _loc_ambiguous(text: str, cmds=None) -> bool:
     """git を実行する場所が 1 つに決まらないなら True（I174 0-15。決まらないときは確認。ただし呼び出し側は、書かれた
@@ -263,29 +287,39 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
     すべて `cd [--] <文字どおりの実在する場所>` で、`cd X && …`（成功したときだけ後ろが動く）か最後の cd であり、
     CDPATH・`set -P`／physical を使っていないとき。"""
     cmds = _parse(text) if cmds is None else cmds
-    # cd 以外で場所を変える書き方（env -C・sudo -D・export した GIT_DIR / GIT_WORK_TREE）は場所を読まないので一意でない
-    if _OTHER_CHDIR_RE.search(text):
+    segs = _segments_ops(text)
+    # cd 以外で場所を変える書き方（env -C・sudo -D・GIT_DIR / GIT_WORK_TREE の代入）は場所を読まないので一意でない
+    if _other_chdir(segs):
         return True
     if not any(c["toks"] and c["toks"][0] in ("cd", "pushd", "popd") for c in cmds):
         return False
     if os.environ.get("CDPATH") or re.search(r"\bCDPATH\b|\bset\s+(-\w*P|-o\s+physical)", text):
         return True
-    segs = _segments_ops(text)
     # 最後の cd までの区切りが `&&`／`;`（改行）だけ。最後の cd より後ろの `||`・`|`（`git push || true`・
     # `git push 2>&1 | tail`）は git を実行する場所に関係しない
     cd_idx = [i for i, (sg, _) in enumerate(segs) if _strip_env(sg)[:1] in (["cd"], ["pushd"], ["popd"])]
     if not cd_idx:
         return True
     first_cd, last_cd = cd_idx[0], cd_idx[-1]
-    # 最初の cd より前は `&&`／`;` だけ（`A || cd X`・`A | cd X` は cd が条件付き・サブシェル）
-    if any(op not in ("&&", ";") for _, op in segs[:first_cd]):
+    # 最初の cd より前は `&&`／`;` だけ（`A || cd X`・`A | cd X` は cd が条件付き・サブシェル）。後ろの cd も直前は
+    # `&&`／`;` だけ（`cd a && ls | cd b && git …` の cd b はサブシェル）
+    if any(op not in ("&&", ";") for _, op in segs[:first_cd]) or any(segs[i - 1][1] not in ("&&", ";") for i in cd_idx[1:]):
         return True
-    # 最初の cd より後ろに `;`・`||`・`&` があり、その後ろにさらに git があると、cd が飛ばされたまま（または失敗したまま）
-    # その git が別の場所で動きうる（`A && cd x && ls; cd .. && git …`）。`|`（`git push | tail`）は同じ場所
+    # 飛ばされうる cd（同じつながり〔`;`・`&` で切る〕の中で、前に cd 以外のコマンドか `||` がある: `A && cd x`・
+    # `A || cd x`）があり、最初の cd より後ろに `;`・`||`・`&` があってその後ろにさらに git があると、cd が飛ばされた
+    # まま、その git が別の場所で動きうる（`A && cd x && ls; cd .. && git …`）。行頭の cd（`cd <repo> && git commit …
+    # | grep …; git push`）は飛ばされない（実在する場所への cd の失敗＝権限・同じ行での削除は残余リスク）
     is_git = [_git_find(_strip_env(sg)) is not None for sg, _ in segs]
-    for i in range(first_cd, len(segs)):
-        if segs[i][1] in (";", "||", "&") and any(is_git[i + 1:]):
-            return True
+    skippable, cond = False, False
+    for i, (sg, op) in enumerate(segs):
+        if i in cd_idx and cond:
+            skippable = True
+        if i not in cd_idx or op == "||":
+            cond = True
+        if op in (";", "&", ""):
+            cond = False
+    if skippable and any(segs[i][1] in (";", "||", "&") and any(is_git[i + 1:]) for i in range(first_cd, len(segs))):
+        return True
     # 区切りごとの単純コマンドを、読み解いた列の先頭から順に突き合わせる。読み解いた列の残り（後ろ）は置換・
     # ヒアドキュメントの中（`$(cat <<'EOF' … EOF)` 等。_parse は外側の後ろに並べる）で、その中の cd は外の場所を
     # 変えない。突き合わない（入れ子のシェル・制御構文・`{ }`・関数定義）なら一意でない
@@ -310,6 +344,10 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
             # `cd X; …` は cd が失敗しても（同じ行で先に消した・権限が無い）後ろが元の場所で動く。`A && cd X; …` は
             # A が失敗すると cd されない。一意なのは `cd X && …`（成功したときだけ後ろが動く）と最後の cd だけ
             if op == ";":
+                return True
+            # `cd X | …`・`cd X |& …`・`cd X || …`・`cd X & …` の cd は別のシェル（または失敗したときだけ後ろが動く）で、
+            # 元の場所を変えない。場所が変わるのは `&&` の前と、行の最後の cd だけ（code-review 20261021_1559 第 3 周）
+            if op not in ("&&", ""):
                 return True
             base = _join_dir(base, arg[0])
             if not os.path.isdir(base):
@@ -1508,8 +1546,18 @@ def _skip_opts(toks: list, value_opts: tuple) -> int:
     while i < len(toks) and toks[i].startswith("-") and toks[i] != "-":
         if toks[i] == "--":
             return i + 1
-        i += 2 if (toks[i] in value_opts) else 1
+        i += 2 if (toks[i] in value_opts or _short_bundle_takes_next(toks[i], value_opts)) else 1
     return i
+
+def _short_bundle_takes_next(tok: str, value_opts: tuple) -> bool:
+    """まとめた短いオプション（`-vC`）が次の語を値に取るか（getopt と同じ: 値を取る文字の後ろに文字が残れば
+    それが値〔`-uC`・`-Cwt`〕、残らなければ次の語が値）。"""
+    if tok.startswith("--") or len(tok) < 3:
+        return False
+    for k, ch in enumerate(tok[1:], 1):
+        if "-" + ch in value_opts:
+            return k == len(tok) - 1
+    return False
 
 _DOCKER_GLOBAL_VALUE = ("--context", "-c", "-H", "--host", "--config", "-l", "--log-level")
 _COMPOSE_GLOBAL_VALUE = ("-f", "--file", "-p", "--project-name", "--project-directory", "--env-file",
