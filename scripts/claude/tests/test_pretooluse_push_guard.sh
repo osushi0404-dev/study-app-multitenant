@@ -204,11 +204,15 @@ ck "XP72 cd <develop> && cd - && git push"     ASK "$(runj "cd $W && git status 
 ck "XP73 cd <無い場所>; git push origin HEAD"   ASK "$(runj 'cd nosuch; git push origin HEAD')"
 ck "XP74 一意な cd <develop> && git push は停止" 2 "$(runj "cd $W && git push origin")"
 ck "XP75 cd - の後でも宛先を書いた push は通す" 0   "$(runj "cd $W && cd - && git push origin feature/x")"
+ck "XP76 [ -d … ] || cd <develop>; git push"    ASK "$(runj "[ -d nosuch ] || cd $W; git push origin HEAD")"
+ck "XP77 false && cd <develop>; git push"      ASK "$(runj "false && cd $W; git push")"
+# push の宛先（今のブランチ）は git-dir の HEAD で決まり、作業ディレクトリに依らない（主の .git は feature/x）
+ck "XP78 cd <develop の worktree> && git --git-dir=<主の .git> push は通す" 0 "$(runj "cd $W && git --git-dir=$TMP/.git push")"
 # 偽合格の防止: 実行場所が変数かの判定（_git_loc_dynamic）を外すと、変数の場所の push が素通しになる
 BROKEN_LOC="$TMP/guard_noloc.py"
 # 信頼する場所の判定（_git_loc_trusted・security-review の Blocker）も同じ形を確認にするので、両方を外す
 sed -e 's/^def _git_loc_dynamic(loc) -> bool:$/&\n    return False/' \
-    -e 's/^def _git_loc_trusted(loc) -> bool:$/&\n    return True/' "$GUARD" > "$BROKEN_LOC"
+    -e 's/^def _git_loc_trusted(loc, need_worktree: bool = True) -> bool:$/&\n    return True/' "$GUARD" > "$BROKEN_LOC"
 ck "FG-M 複製に置換が入った"                 YES "$( (! cmp -s "$GUARD" "$BROKEN_LOC") && echo YES || echo NO)"
 ck "FG-M noloc passes GIT_DIR=\$X push"      0   "$(rungj "$BROKEN_LOC" 'GIT_DIR=$X git push origin')"
 # force 取りこぼし → block

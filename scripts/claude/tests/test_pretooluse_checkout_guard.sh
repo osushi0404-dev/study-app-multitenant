@@ -232,6 +232,30 @@ ck "G84 cd <入れ子のリポジトリ> && checkout"         ASK "$(pw 'cd nest
 ck "G85 --git-dir=<中に作った偽の git-dir>"          ASK "$(pw 'git --git-dir=fakegit --work-tree=. checkout -- sub/s.txt')"
 ck "G86 GIT_DIR=<中に作った偽の git-dir>"            ASK "$(pw 'GIT_DIR=fakegit git checkout -- sub/s.txt')"
 ck "G87 cd <外のリポジトリ> && git push"             ASK "$(pw "cd $EV/evil && git push")"
+# 条件付きの cd（実行されないまま後ろが動きうる）は場所が 1 つに決まらない → 確認（code-review 20261021_1509 第 1 周）
+ck "G88 false && cd other; checkout -- dirty"      ASK "$(runj 'false && cd other; git checkout -- sub/s.txt')"
+ck "G89 true || cd other; checkout -- dirty"       ASK "$(runj 'true || cd other; git checkout -- sub/s.txt')"
+ck "G90 cd other || true; checkout -- dirty"       ASK "$(runj 'cd other || true; git checkout -- ../sub/s.txt')"
+ck "G91 cd sub || exit 1; checkout は精密（停止）"  2 "$(run 'cd sub || exit 1; git checkout -- s.txt')"
+ck "G92 git status && cd sub && checkout は精密"   2 "$(run 'git status && cd sub && git checkout -- s.txt')"
+ck "G94 cd sub && git --git-dir=<.git> checkout"  ASK "$(runj "cd sub && git --git-dir=$TMP/.git checkout -- s.txt")"
+ck "G95 git --git-dir=<.git> checkout（最上位）"  2 "$(run "git --git-dir=$TMP/.git checkout -- sub/s.txt")"
+# --work-tree だけが食い違う形（別の場所の変更は読めないので確認）
+ck "G96 --work-tree=<別の場所> checkout"         ASK "$(runj "git --work-tree=$T2 checkout -- s2.txt")"
+# `-` という名前のディレクトリがあっても cd - は元の場所へ戻る（名前の有無ではなく cd - を見分ける）
+mkdir -p "sub/-"
+ck "G97 cd sub; cd -（sub/- がある）; checkout" ASK "$(runj 'cd sub; cd -; git checkout -- sub/s.txt')"
+rmdir "sub/-"
+# 見張りの無害化（信頼するリポジトリの設定の core.fsmonitor）と、見張りの環境の GIT_ 変数を使わないこと（テスト観点）
+git config core.fsmonitor "touch $PW"
+rm -f "$PW"
+ck "G98 信頼するリポジトリの core.fsmonitor も打ち消す" "2:no" "$(run 'git checkout -- sub/s.txt'):$([ -e "$PW" ] && echo PWNED || echo no)"
+git config --unset core.fsmonitor
+ck "G99 見張りの環境の GIT_INDEX_FILE を使わない"  2 "$(json 'git checkout -- sub/s.txt' | GIT_INDEX_FILE="$TMP/noidx" python3 "$GUARD" >/dev/null 2>&1; echo $?)"
+# 信頼する場所の起点はプロジェクト（CLAUDE_PROJECT_DIR）。Bash の作業ディレクトリが入れ子のリポジトリでも信頼しない
+rm -f "$PW"
+r="$(cd "$TMP/nested" && json 'git checkout -- g' | CLAUDE_PROJECT_DIR="$TMP" python3 "$GUARD" 2>/dev/null; echo "rc=$?")"
+ck "G93 作業ディレクトリが入れ子のリポジトリ（実行しない）" "ask:no" "$(printf '%s' "$r" | grep -q '"ask"' && echo ask || echo noask):$([ -e "$PW" ] && echo PWNED || echo no)"
 # 偽合格の防止: 信頼する場所の判定を外すと、外のリポジトリの設定で判定中にコマンドが実行される
 BROKEN_TRUST="$TMP/guard_notrust.py"
 sed 's/^    for root, rgd in _trusted_repos():$/    return (cur, cur, gd or os.path.join(cur, ".git"))\n&/' "$GUARD" > "$BROKEN_TRUST"

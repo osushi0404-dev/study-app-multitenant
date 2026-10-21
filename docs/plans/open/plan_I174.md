@@ -144,6 +144,7 @@
 2. 実行する git には信頼する git-dir と最上位を明示し（探索を使わない）、`-c core.fsmonitor=false -c core.hooksPath=/dev/null` を付け、判定対象の `-c`・環境変数は渡さず、見張りの環境からも `GIT_` で始まる変数を除く。`status` は `--no-renames --untracked-files=no`。
 3. 信頼しない場所での、場所に依存する判定（未コミット変更の取り消し・今のブランチで宛先が決まる push）は確認（0-15 と同じ）。
 4. テスト: checkout G81〜G87（PWNED が作られないこと。仕込みは core.fsmonitor と clean フィルタの 2 種類。clean フィルタは `core.fsmonitor=false` では防げず、信頼する場所に限ることで防ぐことを実測）・FG-TRUST（信頼する場所の判定を外すと判定中に実行される）。G43〜G45 は別のリポジトリを指すので 2 から ASK に。FG-M の複製は `_git_loc_trusted` も外す形に。
+- /code-review 20261021_1509 第 1 周の対応: 信頼の起点をプロジェクト（`CLAUDE_PROJECT_DIR`）に固定（Bash の作業ディレクトリが入れ子のリポジトリでも信頼しない）・`--git-dir` だけの形は作業ディレクトリが最上位と一致するときだけファイルの変更を調べる（今のブランチは git-dir で決まるので問わない）・条件付きの cd（`A && cd X; …`・`A || cd X; …`・`cd X || true; …`）は場所が 1 つに決まらない扱い。
 - 残余リスク: 信頼するこのリポジトリの `.git/config` を、それより前のコマンド（`git config core.fsmonitor …`）で書き換えた場合は、見張りの git でも効く（I174 以前から同じ・本物の git も同じ設定で動く）。
 
 ### 0-15. fix-loop（/code-review 20261021_0905 の敵対的レビュー 3 周・再び上限到達への対応・2026-10-21・ユーザー決定＝「読み切れないときは確認に回す」）

@@ -75,11 +75,14 @@ def _clean_git_env() -> dict:
 
 @functools.lru_cache(maxsize=1)
 def _trusted_repos() -> tuple:
-    """信頼する (最上位, git-dir) の組。見張りの作業ディレクトリの `git worktree list` から得る。"""
+    """信頼する (最上位, git-dir) の組。プロジェクト（Claude Code が渡す CLAUDE_PROJECT_DIR。無ければ見張りの
+    作業ディレクトリ）の `git worktree list` から得る。Bash の作業ディレクトリが入れ子のリポジトリに移っていても、
+    そこを信頼しないため（作業ディレクトリは入れ子の判定〔_nested_git〕で外れる）。"""
     env = _clean_git_env()
+    anchor = os.environ.get("CLAUDE_PROJECT_DIR") or None
     try:
         out = subprocess.run(["git", *_GIT_SAFE_OPTS, "worktree", "list", "--porcelain"],
-                             capture_output=True, text=True, env=env).stdout
+                             capture_output=True, text=True, env=env, cwd=anchor).stdout
         res = []
         for line in out.splitlines():
             if not line.startswith("worktree "):
@@ -105,7 +108,7 @@ def _nested_git(cur: str, root: str) -> bool:
         p = os.path.dirname(p)
     return False
 
-def _git_resolve(loc):
+def _git_resolve(loc, need_worktree: bool = True):
     """判定する場所を、信頼する (作業ディレクトリ, 最上位, git-dir) に解決する。信頼しない場所は None。
     --git-dir・--work-tree・GIT_DIR・GIT_WORK_TREE は信頼する値と一致するときだけ受け入れる（リポジトリの中に
     作った偽の git-dir は一致しない）。指定が無ければ、信頼する最上位の配下で入れ子のリポジトリの外のときだけ。"""
@@ -144,20 +147,23 @@ def _git_resolve(loc):
         if wt is not None and wt != root:
             continue
         if gd is not None:
-            if gd == rgd:
+            # --git-dir だけで --work-tree が無いとき、本物の git は作業ディレクトリを作業ツリーとして扱う。
+            # ファイルの変更を調べるとき（need_worktree）、作業ディレクトリがその git-dir の最上位と一致しなければ
+            # 調べる場所がずれるので信頼しない。今のブランチ（HEAD）は git-dir だけで決まるので問わない
+            if gd == rgd and (wt is not None or cur == root or not need_worktree):
                 return (cur, root, rgd)
             continue
         if _under(cur, root) and not _nested_git(cur, root):
             return (cur, root, rgd)
     return None
 
-def _git_loc_trusted(loc) -> bool:
-    return _git_resolve(loc) is not None
+def _git_loc_trusted(loc, need_worktree: bool = True) -> bool:
+    return _git_resolve(loc, need_worktree) is not None
 
-def _git_run(loc, args):
+def _git_run(loc, args, need_worktree: bool = True):
     """git を判定対象のコマンドと同じ場所で、信頼する git-dir と最上位を明示して実行する（コマンドの -c・環境変数は
     渡さない）。loc は _git_loc の結果（None は見張りの作業ディレクトリ）。信頼しない場所・失敗は None。"""
-    r = _git_resolve(loc)
+    r = _git_resolve(loc, need_worktree)
     if r is None:
         return None
     cur, root, gd = r
@@ -215,6 +221,9 @@ def _scoped(text: str) -> bool:
 
 # パイプ・& の前後の cd（サブシェルで動くので後ろに効かない）
 _CD_PIPE_RE = re.compile(r"\b(cd|pushd)\b[^;&|\n]*(?<![|&>])[|&](?![|&>])|(?<![|&>])[|&](?![|&>])[^;&|\n]*\b(cd|pushd)\b")
+# 条件付きの cd（`A && cd X; git …`・`A || cd X; git …`・`cd X || true; git …`）。cd が実行されないまま後ろが動きうる。
+# `cd X && git …`（cd の成功後にだけ git が動く）・`cd X || exit` は一意
+_CD_COND_RE = re.compile(r"(&&|\|\|)\s*(cd|pushd)\b[^;&|\n]*(;|\n|\|\|)|\b(cd|pushd)\b[^;&|\n]*\|\|(?!\s*(exit|return)\b)")
 # cd を含みうる入れ子のシェル（中の cd は外に効かない）
 _NESTED_SHELL_RE = re.compile(r"\b(ba|z|da)?sh\b\s+(-\w*c\b|<<)|\beval\b|\bxargs\b|\bparallel\b|\bfind\b[^;&|\n]*-exec")
 
@@ -226,7 +235,7 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
     cds = [c for c in cmds if not c["ctr"] and c["toks"] and c["toks"][0] in ("cd", "pushd", "popd")]
     if not cds:
         return False
-    if _scoped(text) or _CD_PIPE_RE.search(text) or _NESTED_SHELL_RE.search(text):
+    if _scoped(text) or _CD_PIPE_RE.search(text) or _NESTED_SHELL_RE.search(text) or _CD_COND_RE.search(text):
         return True
     base = None
     for c in cds:
@@ -351,7 +360,7 @@ def _join_dir(base, d):
 def _current_branch(loc=None):
     """現ブランチ名を返す（loc は _git_loc の結果。None は見張りの作業ディレクトリ）。
     git 不在/失敗は None（fail-open＝既存 HEAD チェックと同方針）。"""
-    out = _git_run(loc, ["rev-parse", "--abbrev-ref", "HEAD"])
+    out = _git_run(loc, ["rev-parse", "--abbrev-ref", "HEAD"], need_worktree=False)
     return out.strip() if out is not None else None
 
 def _norm_push_dest(token: str, cur_branch):
@@ -2241,7 +2250,7 @@ def _analyze(text: str) -> dict:
         if not c["ctr"] and g and t[g[1]] == "push" and (
                 _push_dest_dynamic(t) or c.get("via_xargs") or (amb and _push_dest_on_branch(t))
                 or _git_loc_dynamic(_git_loc(t, g[0], g[1], cd, c.get("genv")))
-                or (_push_dest_on_branch(t) and not _git_loc_trusted(_git_loc(t, g[0], g[1], cd, c.get("genv"))))):
+                or (_push_dest_on_branch(t) and not _git_loc_trusted(_git_loc(t, g[0], g[1], cd, c.get("genv")), False))):
             res["push_dynamic"].append(_describe(c))
         res["hard"] = res["hard"] or _cmd_hard(c)
         d, e = _cmd_danger(c), _cmd_external(c)
