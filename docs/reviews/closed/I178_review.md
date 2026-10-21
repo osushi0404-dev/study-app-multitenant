@@ -3,7 +3,7 @@
 - **関連イシュー**: #297
 - **計画書**: docs/plans/open/plan_I178.md
 - **Draft PR**: #298
-- **ステータス**: /test 完了（2026-10-20）・/close 待ち。手動 No.4〜No.6・No.8 は /close 中、No.7・TC-17 はマージ後
+- **ステータス**: PR #298 マージ済み（2026-10-20・`6c88d9f`）。マージ後確認を記録用 PR #305 で完了（2026-10-21）。AC-4 は一部不成立（作成者がコードオーナー本人の PR）→ 文書の是正が必要
 
 ---
 
@@ -34,10 +34,10 @@
 
 | # | 受け入れ条件 | 判定 | 根拠 |
 |---|---|---|---|
-| AC-1 | CODEOWNERS が `* @oshui0404` の 1 行のみ | ✅（暫定） | TC-01〜TC-04 exit 0（TC-04: feature ブランチで GitHub の CODEOWNERS 検査 `{"errors":[]}`）・TC-19 で全文一致。develop での検査（TC-17）はマージ後 |
-| AC-2 | develop・main で Code Owners の承認が必須 | ✅（設定）・効き目は確認中 | 手動 No.1・No.2 で設定画面を確認・No.3 で `reviewDecision=REVIEW_REQUIRED`。develop での効き目の区別は No.7（マージ後） |
-| AC-3 | ユーザーの承認で APPROVED・マージ可能 | 未（/close 中） | 手動 No.5 |
-| AC-4 | bot の承認ではマージ要件を満たさない | 未（マージ後） | 手動 No.7 |
-| AC-5 | Dismiss stale・Restrict who can push・bypass 不可が有効 | ✅（設定）・効き目は /close 中 | 手動 No.1・No.2 で設定画面を確認。効き目は No.6（bot のマージ拒否）・No.8（承認取り消し） |
+| AC-1 | CODEOWNERS が `* @oshui0404` の 1 行のみ | ✅ | TC-01〜TC-04 exit 0・TC-19 で全文一致・TC-17（マージ後の develop で GitHub の CODEOWNERS 検査 `{"errors":[]}`） |
+| AC-2 | develop・main で Code Owners の承認が必須 | ✅（設定）／⚠️ 効き目は作成者による | 手動 No.1・No.2 で設定画面を確認・No.3 で `reviewDecision=REVIEW_REQUIRED`。No.7 で、作成者がコードオーナー本人の PR には要件がかからないことが判明（AC-4 参照） |
+| AC-3 | ユーザーの承認で APPROVED・マージ可能 | ✅ | 手動 No.5（#298 で `oshui0404` の承認により `APPROVED`、`oshui0404` がマージ） |
+| AC-4 | bot の承認ではマージ要件を満たさない | ❌ 一部不成立 | 手動 No.7: 作成者が `oshui0404`（唯一のコードオーナー）の PR #306 では、bot の承認で `APPROVED` になった。bot 作成の PR #305 では `oshui0404` にレビュー依頼が出て `REVIEW_REQUIRED`。bot・外部による単独マージは Restrict で止まる（No.6 代替で確認）ため、守りたかった経路は維持。文書の記述（ユーザー作成 PR はマージできない）と AC-4 の書き方の是正が必要 |
+| AC-5 | Dismiss stale・Restrict who can push・bypass 不可が有効 | ✅ | 手動 No.1・No.2 で設定画面を確認。効き目は記録用 PR #305 で確認: No.6 代替（bot のマージ API が HTTP 405「You're not authorized to push to this branch」で拒否）・No.8 代替（承認後の push で `DISMISSED`・`REVIEW_REQUIRED`） |
 | AC-6 | runbook の更新と誤記の除去 | ✅ | TC-05〜TC-12・TC-18・TC-19 exit 0（runbook 全体の SHA-256・設定表とステップ 3 の全文一致） |
 | AC-7 | close スキル・pr-base-sync の前提が設定と一致 | ✅ | TC-13〜TC-16・TC-19 exit 0（close step 5.5〜6 の全文一致・pr-base-sync 無改変・既存テスト 21/21） |
