@@ -12,11 +12,11 @@
 ## レビュー観点（計画に対応）
 
 ### 1. 変更の局所性（計画外変更がないこと）
-- [ ] docs 以外の差分が `backend/requirements.txt`（Pillow の 1 行）と `backend/problems/tests/test_I180_image_validation.py`（新規）の 2 ファイルだけである
+- [ ] docs 以外の差分が `backend/requirements.txt`（Pillow の 1 行）・`backend/problems/tests/test_I180_image_validation.py`（新規）・`.claude/skills/retro/SKILL.md`・`scripts/claude/tests/test_i180_retro_triage.sh`（新規）の 4 ファイルだけである（後 2 つは 2026-10-21 追加のステップ 4）
 - [ ] アプリのコード（`backend/problems/utils.py` を含む）に変更がない
 - [ ] `backend/Dockerfile`・`docker-compose.yml`・`.github/workflows/*.yml`・`backend/requirements-dev.txt`・`backend/pytest.ini` に変更がない（計画 §2-8）
 - [ ] マイグレーションの追加がない
-- [ ] コミットが 2 段（依存更新 → テスト追加）に分かれている
+- [ ] コミットが段ごと（依存更新 → テスト追加 → retro スキル）に分かれている
 
 ### 2. 依存更新の正確性
 - [ ] `Pillow==13.0.0` の `==` 完全固定で、12 系の行が残っていない（TC-AUTO-01）
@@ -45,6 +45,15 @@
 - [ ] 画像アップロードの結合テスト（`test_I073_image_update.py`）が全件 pass
 - [ ] CI の全 6 チェックが SUCCESS（TC-AUTO-07）
 - [ ] 手動テスト No.1〜5 が OK（再ビルド後の backend の起動・celery / celery-beat の起動・WebP / JPEG / PNG の処理系）
+
+### 7. retro スキルの要否判定手順（2026-10-21 追加・AC-8）
+- [ ] 手順 2.7 が計画書 §5-5 の文面と一致し、手順 2.5 と 3 の間にある（TC-AUTO-08）
+- [ ] 2 基準（ハーネス・ループエンジニアリングのベストプラクティス／スピード）・4 問・3 区分・新規起票の条件・見送り理由の提示がそろっている
+- [ ] 手順 3 の選定基準の先頭に「2.7 で採用・同梱と判定したものだけを表に載せる」があり、既存の 2 行目以降が変わっていない
+- [ ] 平易化ルールの見出しが「手順2.5/2.7/3/4/5」になり、本文は変わっていない
+- [ ] 既存の retro テスト（I114）が 14/14（TC-AUTO-09）
+- [ ] 新規テストが変更前のスキルで exit 1 になる（false-green でない）
+- [ ] shellcheck（pre-commit）が通っている
 
 ## テスト結果
 - 自動: TC-AUTO-00〜07 すべて合格（2026-10-21・詳細は auto_test の実施記録）。CI は head `db5d205` で 6 チェックすべて SUCCESS
