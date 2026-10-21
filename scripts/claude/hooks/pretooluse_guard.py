@@ -250,32 +250,39 @@ def _revert_from_commit(sub: str, args: list) -> bool:
 _DYN_MARKS = ("$", "`", "__SUBST_")
 _BRACE_RE = re.compile(r"\{[^{}]*(,|\.\.)[^{}]*\}")
 
-_CHDIR_WRAPPERS = ("env", "sudo", "nohup", "nice", "ionice", "time", "exec", "command", "timeout", "stdbuf")
 _CHDIR_OPT = {"env": re.compile(r"-[A-Za-z0-9]*C|--chdir"), "sudo": re.compile(r"-[A-Za-z]*D|--chdir")}
+_ENV_VALUE = ("-u", "--unset", "-C", "--chdir", "-S", "--split-string")
 _GIT_LOC_ASSIGN = re.compile(r"GIT_(DIR|WORK_TREE)=")
 
 def _other_chdir(segs) -> bool:
     """cd 以外で場所を変える書き方があれば True: 前置きの `env -C`／`--chdir`・`sudo -D`／`--chdir`（値をくっつけた
     `-Cwt`・まとめた `-vC` も）と、GIT_DIR / GIT_WORK_TREE の代入（前置き・export 等・前に別の代入があっても）。
-    区切りごとの語で見るので、引用符の中の文字（コミットメッセージ・検索語）には当たらない。"""
+    区切りごとの語で見るので、引用符の中の文字（コミットメッセージ・検索語）には当たらない。前置き（timeout 60・
+    nice -n 5 など）の外し方は、中のコマンドを読む `_wrap_skip` と同じものを使う（読み方を二重にしない）。"""
     for toks, _ in segs:
-        head, prev = None, ""
-        for t in toks:
-            if _GIT_LOC_ASSIGN.match(t):
+        toks = list(toks)
+        while toks:
+            if toks[0] in ("export", "declare", "typeset", "readonly", "local"):
+                if any(_GIT_LOC_ASSIGN.match(t) for t in toks[1:]):
+                    return True
+                break
+            if _ENV_ASSIGN_RE.match(toks[0]):
+                if _GIT_LOC_ASSIGN.match(toks[0]):
+                    return True
+                toks = toks[1:]
+                continue
+            head, rest = toks[0], toks[1:]
+            if head == "env":
+                j = _skip_opts(rest, _ENV_VALUE)
+                inner = rest[j:]
+            else:
+                inner = _wrap_skip(head, rest)
+                if inner is None:
+                    break
+            opts = rest[:len(rest) - len(inner)]
+            if head in _CHDIR_OPT and any(_CHDIR_OPT[head].match(t) for t in opts):
                 return True
-            if head in _CHDIR_OPT and _CHDIR_OPT[head].match(t):
-                return True
-            if head in ("export", "declare", "typeset", "readonly", "local"):
-                continue
-            # 前置きの語・オプション・その値（`sudo -u root`・`nice -n 10`。値の読み違いは確認に倒れるだけ）は読み進める
-            opt_val = head in _CHDIR_WRAPPERS and prev.startswith("-") and "=" not in prev
-            prev = t
-            if re.match(r"[A-Za-z_]\w*=", t) or t.startswith("-") or opt_val:
-                continue
-            if t in _CHDIR_WRAPPERS or t in ("export", "declare", "typeset", "readonly", "local"):
-                head = t
-                continue
-            break
+            toks = inner
     return False
 
 def _loc_ambiguous(text: str, cmds=None) -> bool:
@@ -1738,7 +1745,7 @@ def _expand(c: dict, depth: int) -> list:
         flock_cmd = _opt_values(rest, ("-c", "--command")) if head == "flock" else []
         return (again(inner) if inner else []) + [e for s in flock_cmd for e in sub(s)]
     if head == "env":
-        j = _skip_opts(rest, ("-u", "--unset", "-C", "--chdir", "-S", "--split-string"))
+        j = _skip_opts(rest, _ENV_VALUE)
         k = j
         while k < len(rest) and _ENV_ASSIGN_RE.match(rest[k]):
             k += 1

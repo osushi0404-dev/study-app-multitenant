@@ -285,6 +285,10 @@ ck "G123 cd sub && ls | cd other && checkout"   ASK "$(runj 'cd sub && ls | cd .
 ck "G124 env -vC <場所> git checkout（まとめた形）" ASK "$(runj 'env -vC sub git checkout -- s.txt')"
 ck "G125 env -Csub git checkout（値をくっつけた形）" ASK "$(runj 'env -Csub git checkout -- s.txt')"
 ck "G126 sudo -Dsub git checkout"               ASK "$(runj 'sudo -Dsub git checkout -- s.txt')"
+# 前置きの位置引数（timeout の時間）の後ろの env -C・sudo -D（code-review 20261021_1559 最終確認）
+ck "G127 timeout 60 env -C sub git checkout"    ASK "$(runj 'timeout 60 env -C sub git checkout -- s.txt')"
+ck "G128 timeout -k 5 60 sudo -D sub git restore" ASK "$(runj 'timeout -k 5 60 sudo -D sub git restore s.txt')"
+ck "G129 nice -n 5 env --chdir=sub git checkout" ASK "$(runj 'nice -n 5 env --chdir=sub git checkout -- s.txt')"
 ck "G115 mv sub sub2; cd sub; checkout（cd が失敗しうる）" ASK "$(runj 'mv other other2; cd other; git checkout -- sub/s.txt')"
 ck "G112 見張りの環境の CDPATH"                   ASK "$(json 'cd other && git checkout -- sub/s.txt' | CDPATH=/tmp python3 "$GUARD" 2>/dev/null | grep -q '"ask"' && echo ASK || echo NO)"
 ck "G113 cd sub; checkout（; でも無条件の cd は一意）" 2 "$(run 'cd sub; git checkout -- s.txt')"
