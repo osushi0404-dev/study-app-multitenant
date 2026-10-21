@@ -272,6 +272,11 @@ ck "G111b export CDPATH=…; cd …; checkout"       ASK "$(runj 'export CDPATH=
 ck "G111c CDPATH=… cd … && checkout（前置き・元の場所で当たる）" 2 "$(runj 'CDPATH=/tmp cd other && git checkout -- sub/s.txt')"
 # shellcheck disable=SC2016  # $( ) を展開せず、そのまま guard に渡すのが目的
 ck "G111d 置換の中の cd は外の場所を変えない（一意）" 2 "$(runj 'cd sub && echo $(cd ..) && git checkout -- s.txt')"
+ck "G116 cd other⏎checkout（改行の cd も ; と同じく失敗しうる）" ASK "$(runjq "$(printf 'cd other\ngit checkout -- sub/s.txt')")"
+# 最初の cd より後ろの ; の後の git・cd 以外で場所を変える書き方（code-review 20261021_1559 第 2 周）
+ck "G117 false && cd x && ls; cd .. && checkout" ASK "$(runj 'false && cd sub && ls; cd .. && git checkout -- s.txt')"
+ck "G118 env -C <場所> git checkout"            ASK "$(runj 'env -C sub git checkout -- s.txt')"
+ck "G119 env --chdir <場所> git checkout"       ASK "$(runj 'env --chdir sub git checkout -- s.txt')"
 ck "G115 mv sub sub2; cd sub; checkout（cd が失敗しうる）" ASK "$(runj 'mv other other2; cd other; git checkout -- sub/s.txt')"
 ck "G112 見張りの環境の CDPATH"                   ASK "$(json 'cd other && git checkout -- sub/s.txt' | CDPATH=/tmp python3 "$GUARD" 2>/dev/null | grep -q '"ask"' && echo ASK || echo NO)"
 ck "G113 cd sub; checkout（; でも無条件の cd は一意）" 2 "$(run 'cd sub; git checkout -- s.txt')"

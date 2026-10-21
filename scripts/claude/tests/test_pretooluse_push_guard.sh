@@ -213,6 +213,10 @@ ck "XP77 false && cd <develop>; git push"      2   "$(runj "false && cd $W; git 
 ck "XP83 cd <develop>⏎git push（改行の cd・ありそうな場所で当たる）" 2 "$(runj "$(printf 'cd %s\ngit push' "$W")")"
 ck "XP84 cd <develop> && git push origin HEAD || true" 2 "$(runj "cd $W && git push origin HEAD || true")"
 ck "XP85 cd <feature> && git push 2>&1 | tail -5 は通す" 0 "$(runj "cd $TMP && git push 2>&1 | tail -5")"
+ck "XP87 sudo -D <develop> git push（-D の値を読み違えない）" ASK "$(runj "sudo -D $W git push")"
+ck "XP88 env -C <develop> git push"            ASK "$(runj "env -C $W git push -u origin HEAD")"
+ck "XP89 export GIT_DIR=<develop>; git push"   ASK "$(runj 'export GIT_DIR=.git/worktrees/devwt; git push')"
+ck "XP90 sudo -D <develop> git push origin main は停止" 2 "$(runj "sudo -D $W git push origin main")"
 ck "XP86 cd && commit -m \"\$(cat <<'EOF' …)\" && push は通す" 0 "$(runj "$(printf 'cd %s && git commit -m "$(cat <<%sEOF%s\nfix: x\n\nbody\nEOF\n)" && git push -u origin feature/x' "$TMP" "'" "'")")"
 # push の宛先（今のブランチ）は git-dir の HEAD で決まり、作業ディレクトリに依らない（主の .git は feature/x）
 ck "XP78 cd <develop の worktree> && git --git-dir=<主の .git> push は通す" 0 "$(runj "cd $W && git --git-dir=$TMP/.git push")"

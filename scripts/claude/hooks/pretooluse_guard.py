@@ -250,6 +250,10 @@ def _revert_from_commit(sub: str, args: list) -> bool:
 _DYN_MARKS = ("$", "`", "__SUBST_")
 _BRACE_RE = re.compile(r"\{[^{}]*(,|\.\.)[^{}]*\}")
 
+_OTHER_CHDIR_RE = re.compile(r"\benv\b[^;&|\n]*\s(-C|--chdir)\b|\bsudo\b[^;&|\n]*\s(-D|--chdir)\b"
+                             r"|\b(export|declare|typeset|readonly)\b[^;&|\n]*\bGIT_(DIR|WORK_TREE)="
+                             r"|(^|[;&|\n]\s*)GIT_(DIR|WORK_TREE)=\S*\s*($|[;&|\n])")
+
 def _loc_ambiguous(text: str, cmds=None) -> bool:
     """git を実行する場所が 1 つに決まらないなら True（I174 0-15。決まらないときは確認。ただし呼び出し側は、書かれた
     とおりに cd が成功した「いちばんありそうな場所」で当たれば止める＝停止を確認に格下げしない）。
@@ -259,6 +263,9 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
     すべて `cd [--] <文字どおりの実在する場所>` で、`cd X && …`（成功したときだけ後ろが動く）か最後の cd であり、
     CDPATH・`set -P`／physical を使っていないとき。"""
     cmds = _parse(text) if cmds is None else cmds
+    # cd 以外で場所を変える書き方（env -C・sudo -D・export した GIT_DIR / GIT_WORK_TREE）は場所を読まないので一意でない
+    if _OTHER_CHDIR_RE.search(text):
+        return True
     if not any(c["toks"] and c["toks"][0] in ("cd", "pushd", "popd") for c in cmds):
         return False
     if os.environ.get("CDPATH") or re.search(r"\bCDPATH\b|\bset\s+(-\w*P|-o\s+physical)", text):
@@ -266,22 +273,27 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
     segs = _segments_ops(text)
     # 最後の cd までの区切りが `&&`／`;`（改行）だけ。最後の cd より後ろの `||`・`|`（`git push || true`・
     # `git push 2>&1 | tail`）は git を実行する場所に関係しない
-    last_cd = max((i for i, (sg, _) in enumerate(segs) if _strip_env(sg)[:1] in (["cd"], ["pushd"], ["popd"])),
-                  default=-1)
-    if any(op not in ("&&", ";", "") for _, op in segs[:last_cd + 1]) or last_cd < 0:
+    cd_idx = [i for i, (sg, _) in enumerate(segs) if _strip_env(sg)[:1] in (["cd"], ["pushd"], ["popd"])]
+    if not cd_idx:
         return True
-    # 区切りごとの単純コマンドを、読み解いた列に順に対応づける。対応しない読み解いた分は置換・ヒアドキュメントの中
-    # （`$(cat <<'EOF' … EOF)` 等）で、その中の cd は外の場所を変えない。区切りの側に対応が無い（入れ子のシェル・
-    # 制御構文・`{ }`・関数定義）なら一意でない
-    pairs, k = [], 0
-    for seg, op in segs:
-        head = _strip_env(seg)[:1]
-        while k < len(cmds) and (cmds[k]["ctr"] or cmds[k]["toks"][:1] != head):
-            k += 1
-        if k >= len(cmds):
+    first_cd, last_cd = cd_idx[0], cd_idx[-1]
+    # 最初の cd より前は `&&`／`;` だけ（`A || cd X`・`A | cd X` は cd が条件付き・サブシェル）
+    if any(op not in ("&&", ";") for _, op in segs[:first_cd]):
+        return True
+    # 最初の cd より後ろに `;`・`||`・`&` があり、その後ろにさらに git があると、cd が飛ばされたまま（または失敗したまま）
+    # その git が別の場所で動きうる（`A && cd x && ls; cd .. && git …`）。`|`（`git push | tail`）は同じ場所
+    is_git = [_git_find(_strip_env(sg)) is not None for sg, _ in segs]
+    for i in range(first_cd, len(segs)):
+        if segs[i][1] in (";", "||", "&") and any(is_git[i + 1:]):
             return True
-        pairs.append((seg, op, cmds[k]))
-        k += 1
+    # 区切りごとの単純コマンドを、読み解いた列の先頭から順に突き合わせる。読み解いた列の残り（後ろ）は置換・
+    # ヒアドキュメントの中（`$(cat <<'EOF' … EOF)` 等。_parse は外側の後ろに並べる）で、その中の cd は外の場所を
+    # 変えない。突き合わない（入れ子のシェル・制御構文・`{ }`・関数定義）なら一意でない
+    if len(cmds) < len(segs):
+        return True
+    pairs = list(zip([sg for sg, _ in segs], [op for _, op in segs], cmds))
+    if any(c["ctr"] or c["toks"][:1] != _strip_env(sg)[:1] for sg, _, c in pairs):
+        return True
     base, prev = None, ";"
     for seg, op, c in pairs:
         t = c["toks"]
@@ -1618,7 +1630,9 @@ def _wrap_skip(head: str, rest: list):
     if head == "exec":
         return rest[_skip_opts(rest, ("-a",)):]
     if head == "sudo":
-        return rest[_skip_opts(rest, ("-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t")):]
+        # -D / --chdir（場所）・-R（chroot）・-T（時間）も値を取る。値を中のコマンドと読み違えない（I174）
+        return rest[_skip_opts(rest, ("-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t", "-D", "--chdir", "-R",
+                                      "--chroot", "-T", "--command-timeout", "--user", "--group", "--host")):]
     if head == "nice":
         return rest[_skip_opts(rest, ("-n", "--adjustment")):]
     if head == "ionice":
