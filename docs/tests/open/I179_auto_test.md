@@ -233,7 +233,7 @@
 | TC | 内容 | 合否 |
 |----|------|------|
 | D1 | `scripts/claude/wt-new.sh` が存在しない | `test ! -e` |
-| D2 | `git grep -n wt-new` の結果が、closed の記録類（`docs/{issues,plans,tests,reviews}/closed/`）と I179 自身の記録（`docs/issues/open/I179.md`・`docs/plans/open/plan_I179.md`・`docs/tests/open/I179_*.md`・`docs/reviews/open/I179_review.md`）以外に 0 件 | 0 件で PASS |
+| D2 | `git grep -n wt-new` の結果が、closed の記録類（`docs/{issues,plans,tests,reviews}/closed/`）と I179 自身の記録（`docs/issues/open/I179.md`・`docs/plans/open/plan_I179.md`・`docs/tests/open/I179_*.md`・`docs/reviews/open/I179_review.md`・`docs/reviews/I179_*.md`）以外に 0 件 | 0 件で PASS |
 | D3 | `docs/runbooks/worktree.md` に次の文言がすべてある: `claude --worktree`・`.worktreeinclude`・`wt-ports.sh`・`wt-remove.sh`・`git stash push -u -m`・`git config`・`docker compose ls -a`・`git worktree list`・`track:harness`・`track:app`・`/plan-issue`・`wt-harness` の移行節の見出し（`旧方式からの移行`）・`grep -r`・`git worktree unlock`（2026-10-21 追加） | 全件 `grep -qF` 成功で PASS |
 | D4 | `docs/runbooks/worktree.md` に次の文言が無い: `2026-07 時点`・`トラック = 1 作業ツリー`・`採番権威でもある`・`新設しない` | 全件不在で PASS |
 | D5 | `.claude/skills/plan-issue/SKILL.md` に `git checkout develop` が無く、`checkout --no-track -b` と `origin/develop` がある | 3 条件成立で PASS |
