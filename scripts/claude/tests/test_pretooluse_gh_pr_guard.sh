@@ -126,7 +126,9 @@ ck "G24b 対象外 MCP で gh 未呼出"      0   "$(wc -l < "$GH_LOG" | tr -d '
 unset GH_LOG
 
 # ===== エスケープ・既存ガードとの順序 =====
-ck "G21 DANGER_OK エスケープ"          0   "$(CROSS_VALUE=true runj 'DANGER_OK=1 gh pr merge 257')"
+ck "G21 DANGER_OK は人の承認（I174）"  ASK "$(CROSS_VALUE=true runj 'DANGER_OK=1 gh pr merge 257')"
+ck "G21b DANGER_OK でも checkout は承認" ASK "$(CROSS_VALUE=true runj 'DANGER_OK=1 gh pr checkout 257')"
+ck "G21c DANGER_OK・自前 PR は素通し"   0   "$(CROSS_VALUE=false runj 'DANGER_OK=1 gh pr merge 257')"
 ck "G22 rm -rf 同居は hard-block 優先"  2   "$(CROSS_VALUE=true runj 'gh pr ready 257 && rm -rf x')"  # ask 種別の動詞で順序を検証（merge だと cross ガード自身も exit 2 で順序が見えない）
 ck "G23 mcp pull_number なし=ask"      ASK "$(CROSS_VALUE=true runm mcp__github__merge_pull_request "$MCP_NONUM")"
 

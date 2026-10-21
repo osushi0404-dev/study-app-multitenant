@@ -5,6 +5,8 @@
 # temp repo（＝現worktreeの代役）に linked worktree を生やし、フックへ stdin JSON を
 # 投入して exit code を検証する（実書込はしない＝判定のみ）。0=素通し / 2=ブロック。
 set -uo pipefail
+# 見張りの「信頼する場所」の起点（I174 0-16）。外から渡された値で一時リポジトリが信頼されなくならないよう消す
+unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 
@@ -59,6 +61,10 @@ ck "A10 edit symlink→block"     2 "$(edit Edit "$MAIN/link_to_other/x.py")"
 # --- Bash 書込経路（TC-A11〜A15・A11b） ---
 ck "A11 redirect 別wt→block"       2 "$(bash_c "echo x > $OTHER/f")"
 ck "A11b 埋め込みredirect→block"   2 "$(bash_c "echo x>$OTHER/f")"
+# I174 敵対的レビュー再実施 第 2 周: >| を > とパイプに割らない
+ck "A11c >| redirect→block"        2 "$(bash_c "echo x >| $OTHER/f")"
+ck "A11d 埋め込み>|→block"         2 "$(bash_c "echo x >|$OTHER/f")"
+ck "A11e 2>&1 の後の >|→block"     2 "$(bash_c "echo x 2>&1 >| $OTHER/f")"
 ck "A12 tee 別wt→block"            2 "$(bash_c "tee $OTHER/f")"
 ck "A13 cp dest別wt→block"         2 "$(bash_c "cp a.txt $OTHER/")"
 ck "A14 mv dest別wt→block"         2 "$(bash_c "mv a.txt $OTHER/b.txt")"
@@ -131,8 +137,9 @@ ck "DV16 docker system prune --volumes→block"      2 "$(bash_j 'docker --conte
 ck "DV17 bash -c の中→block"                       2 "$(bash_j 'bash -c "docker compose -p x down -v"')"
 ck "DV18 改行の後→block"                           2 "$(bash_j "$(printf 'echo hi\ndocker compose down -v')")"
 ck "DV19 サブシェル・& の後→block"                 2 "$(bash_j 'sleep 1 & ( docker compose down -v )')"
-# 文字列の中の記述も止める（develop から続く既知の誤ブロック。安全装置が後退しないことを優先する・DANGER_OK=1 前置か言い換えで解ける）
-ck "DV20 コミットメッセージ中の文字列→block（既知の誤ブロック）" 2 "$(bash_j 'git commit -m "docs: docker volume rm の手順"')"
+# 文字列・ヒアドキュメント本文の中の記述は実行されないので止めない（I174 の見張りはコマンドを読み解いて判定する・計画変更記録 7）
+ck "DV20 コミットメッセージ中の文字列→allow" 0 "$(bash_j 'git commit -m "docs: docker volume rm の手順"')"
+ck "DV20b cat のヒアドキュメント本文→allow"  0 "$(bash_j "$(printf "cat <<'EOF'\ndocker compose down -v\nEOF")")"
 ck "DV21 pytest -k down -v（down はサブコマンドでない）→allow" 0 "$(bash_j 'docker compose exec backend pytest -k down -v')"
 ck "DV21b pytest -k \"count down\" -v→allow"                0 "$(bash_j 'docker compose exec backend pytest -k "count down" -v')"
 ck "DV22 system prune（--volumes なし）→allow"     0 "$(bash_j 'docker system prune -f')"
@@ -164,13 +171,11 @@ sudo docker volume rm v1
 sleep 1 & docker compose down -v
 docker volume ls -q -f dangling=true | xargs -r docker volume rm
 find . -name x -exec docker volume rm {} \;
-docker.exe compose down -v
 docker compose down -vt5
 cat <<EOF && docker compose down -v\nx\nEOF
 echo "<<EOF"\ndocker volume rm v1
 cat <<<x; docker compose -p x down -v
 true <<x && docker volume rm wt-app_postgres_data
-cat <<'EOF'\ndocker compose down -v\nEOF
 bash -c "$(cat <<'EOF'\ndocker compose down -v\nEOF\n)"
 docker compose down \\\n  -v
 timeout 120 docker compose down \\\n  --volumes --remove-orphans
@@ -218,33 +223,7 @@ CASES
 else
   echo "SKIP NOREG（origin/develop を取得できない環境）"
 fi
-# FG-DV1: 判定関数を常に None にした複製では DV2・DV10 が素通りする（ブロックの停止要因が判定関数である証明）
-BROKEN_DV="$TMP/guard_nowipe.py"
-sed 's/^def _docker_volume_wipe(cmd: str):/def _docker_volume_wipe(cmd: str):\n    return None  # FG-DV1/' \
-  "$GUARD" > "$BROKEN_DV"
-if grep -q 'return None  # FG-DV1' "$BROKEN_DV"; then
-  ck "FG-DV1 判定除去複製でDV2=allow"  0 "$(bash_j 'docker compose -p wt-harness down -v' "$BROKEN_DV")"
-  ck "FG-DV1 判定除去複製でDV10=allow" 0 "$(bash_j 'docker --context x compose down -v' "$BROKEN_DV")"
-else
-  ck "FG-DV1 注入できた" 0 1
-fi
-# FG-DV2: (1) 正規表現の層を外した複製では、トークン判定だけでは捕まらない DV-sh の形（true;docker）が素通りする
-#        （和集合の (1) が停止要因である証明＝置き換えると後退することの再現）
-BROKEN_RX="$TMP/guard_norx.py"
-sed 's/^    for rx, reason in _DOCKER_WIPE_RES:$/    for rx, reason in ():/' "$GUARD" > "$BROKEN_RX"
-if grep -q '^    for rx, reason in ():$' "$BROKEN_RX"; then
-  ck "FG-DV2 正規表現の層の除去複製で true;docker=allow" 0 "$(bash_j 'true;docker compose down -v' "$BROKEN_RX")"
-else
-  ck "FG-DV2 注入できた" 0 1
-fi
-# FG-DV3: (2) トークン判定の層を外した複製では、DV10（docker --context x compose）が素通りする（(2) が停止要因である証明）
-BROKEN_TK="$TMP/guard_notok.py"
-sed 's/^    return _docker_volume_wipe_tokens(cmd)$/    return None  # FG-DV3/' "$GUARD" > "$BROKEN_TK"
-if grep -q 'return None  # FG-DV3' "$BROKEN_TK"; then
-  ck "FG-DV3 トークン層の除去複製で DV10=allow" 0 "$(bash_j 'docker --context x compose down -v' "$BROKEN_TK")"
-else
-  ck "FG-DV3 注入できた" 0 1
-fi
+# FG-DV1〜DV3 は、I179 の Docker 判定（_docker_volume_wipe）を I174 の見張りの判定に一本化したため削除した（計画変更記録 7）
 
 # --- 入れ子ワークツリー（I179 TC-G1〜G7・FG-G1） ---
 # 公式 `claude --worktree` の配置（<primary>/.claude/worktrees/<name>）を再現する。
@@ -284,7 +263,8 @@ else
   ck "FG-G1 注入できた" 0 1
 fi
 
-# --- git clean -ff の承認制（I179 計画変更記録 6。別ワークツリーを消す操作の判定は廃止し、GitHub の保護・こまめな commit/push・wt-remove.sh に任せる） ---
+# --- git clean -f の承認制（I179 計画変更記録 6・7。別ワークツリーを消す操作の判定は廃止し、GitHub の保護・こまめな commit/push・wt-remove.sh に任せる。
+#     入れ子ごと消える git clean -ff を含め、I174 の見張りが git clean -f を f の数によらず止める） ---
 printf '.claude/worktrees/\n' > "$MAIN/.gitignore"
 # cwd を指定し、JSON を正しくエスケープしてフックに渡す
 bj_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$2" \
@@ -293,17 +273,9 @@ ck "GC1 git clean -ffdx→block"               2 "$(bj_in "$MAIN" 'git clean -ff
 ck "GC2 git clean -f -f -d→block"            2 "$(bj_in "$MAIN" 'git clean -f -f -d')"
 ck "GC3 git clean --force -f→block"          2 "$(bj_in "$MAIN" 'git clean --force -f')"
 ck "GC4 cd /tmp && git clean -ffd→block"     2 "$(bj_in "$MAIN" 'cd /tmp && git clean -ffd')"
-ck "GC5 git clean -fdx（f 1 つ）→allow"       0 "$(bj_in "$MAIN" 'git clean -fdx')"
-ck "GC6 DANGER_OK=1 git clean -ffdx→allow"   0 "$(bj_in "$MAIN" 'DANGER_OK=1 git clean -ffdx')"
-ck "GC7 git clean -f; echo -ff→allow（別のコマンドの f は数えない）" 0 "$(bj_in "$MAIN" 'git clean -f; echo -ff')"
-# FG-GC1: 判定関数を常に False にした複製では GC1 が素通りする（停止要因の証明）
-BROKEN_GC="$TMP/guard_nogc.py"
-sed 's/^def _git_clean_ff(cmd: str) -> bool:/&\n    return False  # FG-GC1/' "$GUARD" > "$BROKEN_GC"
-if grep -q '# FG-GC1' "$BROKEN_GC"; then
-  ck "FG-GC1 判定除去複製で GC1=allow" 0 "$(bj_in "$MAIN" 'git clean -ffdx' "$BROKEN_GC")"
-else
-  ck "FG-GC1 注入できた" 0 1
-fi
+ck "GC5 git clean -fdx（f 1 つ）→block"       2 "$(bj_in "$MAIN" 'git clean -fdx')"
+ck "GC6 DANGER_OK=1 git clean -ffdx→確認（exit 0）" 0 "$(bj_in "$MAIN" 'DANGER_OK=1 git clean -ffdx')"
+ck "GC7 git clean -n -d（試すだけ）→allow"     0 "$(bj_in "$MAIN" 'git clean -n -d')"
 # X21: /mnt/<ドライブ>/ 配下（drvfs）では大文字小文字だけ違うパスも別ワークツリーと判定する（実リポジトリの登録で判定のみ）
 REAL_ROOTS="$(git -C "$REPO_ROOT" worktree list --porcelain | sed -n 's/^worktree //p')"
 REAL_OTHER="$(printf '%s\n' "$REAL_ROOTS" | grep -vxF "$REPO_ROOT" | grep -m1 '^/mnt/[a-z]/' || true)"

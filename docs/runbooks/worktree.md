@@ -241,7 +241,7 @@ docker compose config | grep -A1 published
 - **削除・破棄は技術的には止めない（I179 計画変更記録 6）**: 公式配置では別のワークツリーが primary の中（`.claude/worktrees/`）にあるため、primary での相対パスや全体への操作で他のワークツリーの未コミット作業を消せる。ただしコマンドの文字列からシェルの動きを読み取って止める方式は、どこまで足しても抜け道と止めすぎが出続けた（I179 の敵対的レビュー第 1〜11 周・`docs/reviews/I179_adversarial_review_*.md`）。develop/main は GitHub 側で保護され（bot は PR を出すだけ）、ローカルが壊れても GitHub から復旧できるため、守りは次に任せる。
   - **こまめに commit・push する**（失うのは push していない手元の変更だけにする）。
   - **別のワークツリーの中身を消さない**: primary のセッションで `.claude/worktrees/` 配下を `rm`・`mv`・`git -C <入れ子> reset/checkout/clean/stash` しない。撤去は `bash scripts/claude/wt-remove.sh <パス>`（未コミット・中の入れ子があると止まる）。`git worktree remove` は使わない（中の入れ子は gitignore 済みで、`--force` なしでも作業ごと消える）。
-  - **ガードで止めるのは 1 つだけ**: `git clean` で `f` を 2 つ以上重ねる形（`-ffdx`・`-f -f`・`--force -f`）は、中の入れ子ワークツリーまで未コミットの作業ごと消すので `DANGER_OK=1` が必要（`-fdx` のように `f` が 1 つなら git が入れ子を飛ばすので通る）。既存の `rm -rf`・`git reset --hard`・強制 push の承認制と同じ扱い。
+  - **別ワークツリー専用の判定は持たない**: 中の入れ子ワークツリーまで未コミットの作業ごと消す `git clean -ff`（`f` を 2 つ以上）を含め、`git clean -f`・`rm -r`・`git reset --hard` などは、見張り（I174）が危険操作として場所によらず止める（`docs/runbooks/danger-ops.md`）。
 - **既知の限界（入れ子）**: 「どれが現ワークツリーか」はフックを実行したときの作業フォルダ（`git rev-parse --show-toplevel`）で決まる。入れ子ワークツリーは primary のフォルダの中にあるため、primary のセッションで `cd .claude/worktrees/<name>` すると作業フォルダがそのまま残り、それ以降はそのセッションが入れ子のワークツリーとして扱われる（入れ子への書込が通る）。primary のセッションから入れ子へ `cd` しない。入れ子で作業するときは、そのワークツリーのセッションを使う（§2「セッションを開く」）。サブエージェントのフックは primary の設定で動くため、作業フォルダ以外（`CLAUDE_PROJECT_DIR` 等）で判定すると、サブエージェントが自分の入れ子に書けなくなる。このため作業フォルダでの判定を維持している。
 
 ---
