@@ -224,4 +224,5 @@ backend / celery / celery-beat を、現在の `requirements.txt` で再ビル�
 | /test 再実行（2026-10-21 10:20〜・head `d1cf953`） | ✅ TC-AUTO-00〜07 すべて合格 | 再ビルド後に 00（全サービス Healthy）・02（0 件）・03（3 サービス 13.0.0）・04（9 passed・件数判定 exit 0）・05（判定 1 exit 0・判定 2 exit 1）・06（103 passed・件数判定 exit 0）・07（head `d1cf953` で 6 チェック SUCCESS・判定 2 `ok`）。01 は `/code-review` の決定論ゲートで exit 0 |
 | TC-AUTO-08 | ✅ exit 0 | 2026-10-21・ステップ 4。Red: スキル変更前に 13 件 NG・exit 1。Green: `RESULT: OK (13/13)`。反証: `I180_TEST_SKILL` に develop 版のスキルを渡すと 13 件 NG・exit 1。スクリプトは計画書 §5-6 と diff 0、スキルは §5-5 を当てた scratchpad 版と diff 0 |
 | TC-AUTO-09 | ✅ exit 0 | 2026-10-21・ステップ 4。`RESULT: OK (14/14)` |
+| TC-AUTO-07（ステップ 4 後の再確認） | ✅ exit 0 | head `81b8fd8`・CI run 39529337805 / E2E run 39529337956。6 チェックすべて SUCCESS（判定 2 `ok`） |
 | TC-AUTO-07 | ✅ 判定 1・2 とも exit 0 | head `db5d205`・CI run 39525530289 / E2E run 39525530302。6 チェックすべて SUCCESS（Backend Lint & Security 37s・Backend Tests 1m56s・E2E 4m2s ほか）。判定 2 は `ok` |
