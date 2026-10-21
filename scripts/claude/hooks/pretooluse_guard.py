@@ -607,17 +607,33 @@ def _bash_destroy_targets(cmd: str) -> list:
     GIT_WORK_TREE=・git -C 等。順番・括弧・パイプ・& に関係なく）を「基準の候補」とし、相対パスはすべての候補を基準に判定する
     （どれか 1 つでも別ワークツリーに当たれば止まる＝和集合。シェルの意味を再現しないので再現漏れの抜け道が無い）。"""
     try:
-        bases = {os.getcwd()}
+        cwd0 = os.getcwd()
+        bases = {cwd0}
     except OSError:
-        bases = set()
+        cwd0, bases = None, set()
     segs = [c for seg in _loose_segments(cmd) for c in _head_candidates(seg)]
-    # 移動先は相対パスの連鎖（cd .claude && cd worktrees）もあるので、すべての候補を基準に 2 回まわして集める
-    for _ in range(2):
+    # 移動先は相対パスの連鎖（cd .claude && cd worktrees）もあるので、候補が増えなくなるまでまわして集める（上限 8 回）。
+    # `..` を含む相対の移動先は、書いた順に追った直前の位置だけを基準にする（全候補に当てると、入れ子のセッションで
+    # `cd backend && cd ..` の `..` がセッションの作業フォルダにも当たり、親の primary を候補にしてしまう＝止めすぎ）。
+    # それ以外の相対の移動先は全候補を基準にする（パイプ・& ・括弧の中の cd を書いた順で解釈しない＝取りこぼさない）。
+    for _ in range(8):
+        before, lin = len(bases), cwd0
         for toks, lead in segs:
             for m in _moves_in(toks, lead):
                 if m == "-":
                     continue
-                bases |= {x for x in (_abs_in(b0, m) for b0 in list(bases) or [None]) if x}
+                if m.startswith("~+") or m.startswith("~-"):   # 今・直前のフォルダ＝いずれかの候補
+                    news = {b0 + m[2:] for b0 in bases}
+                elif not m.startswith("/") and ".." in m.split("/"):
+                    news = {_abs_in(lin, m)}
+                else:
+                    news = {_abs_in(b0, m) for b0 in list(bases) or [None]}
+                news.discard(None)
+                bases |= news
+                nxt = _abs_in(lin, m) if not m.startswith("~") else None
+                lin = nxt or lin
+        if len(bases) == before:
+            break
     found = []
 
     def tgt(kind, p, rec, roots_=None):
@@ -641,9 +657,13 @@ def _bash_destroy_targets(cmd: str) -> list:
                     tgt("Bash 書込", a, False)
         elif head in ("cp", "mv"):
             pos = [a for a in args if not a.startswith("-")]
-            tdir = [args[j + 1] for j, a in enumerate(args) if a == "-t" and j + 1 < len(args)] + \
-                [a[len("--target-directory="):] for a in args if a.startswith("--target-directory=")]
-            dests = tdir if tdir else (pos[-1:] if len(pos) >= 2 else [])
+            # 宛先指定のオプション（-t を含む短いオプションの塊・--t で始まる長いオプション）があれば、どれが宛先かを
+            # 解析せず、位置引数と連結された値（-t<dir>・--target=<dir>・--target-directory=<dir>）をすべて宛先として見る
+            topts = [a for a in args if (a.startswith("-") and not a.startswith("--") and "t" in a[1:])
+                     or a.startswith("--t")]
+            tdir = [a[a.index("t") + 1:] for a in topts if not a.startswith("--") and a.index("t") + 1 < len(a)] + \
+                [a.split("=", 1)[1] for a in topts if a.startswith("--") and "=" in a]
+            dests = (pos + tdir) if topts else (pos[-1:] if len(pos) >= 2 else [])
             for dst in dests:
                 # 展開を含む宛先は、展開後にフォルダ（別ワークツリーの root を含む）へ書き込む恐れがあるので中身も見る
                 tgt("Bash 書込", dst, bool(re.search(r"[*?\[{]", dst)))

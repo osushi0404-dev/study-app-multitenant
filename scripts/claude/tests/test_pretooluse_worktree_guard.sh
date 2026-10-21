@@ -404,6 +404,15 @@ X132|main|time xargs @R@ -r .claude/worktrees/nest
 X133|main|cp f .claude/worktrees/nes?
 X134|main|cp -t .claude/worktrees/nes[t] f
 X135|main|cp f .claude/worktrees/{zz,nest}
+X137|main|git --work-tree .claude/worktrees/nest checkout -- .
+X138|main|f(){ cd worktrees/nest && git checkout -- .; }; cd .claude && f
+X139|main|cd ~+/.claude/worktrees/nest; @R@ -r src
+X140|main|git -C ~+/.claude/worktrees/nest checkout -- .
+X141|main|cp --target-directory .claude/worktrees/nest/src f
+X142|main|cp -t.claude/worktrees/nest/src f
+X143|main|cp -vt .claude/worktrees/nest/src f
+X144|main|cp --target=.claude/worktrees/nest/src f
+X145|main|mv --target .claude/worktrees/nest f
 X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
 X113|main|sed -i '2{s/foo/bar/}' f
 X114|main|sed -i -e '1,3{s/a/b/;s/c/d/}' backend/x.py
@@ -453,6 +462,9 @@ X62|main|@R@ -f tmp_*.log
 X67|main|@R@ *.log
 X68|main|(cd /tmp && ls) && git status
 X93|nest|@R@ -r tmp_*
+X146|nest|cd backend && cd .. && git add -A
+X147|nest|cd backend && cd ../frontend && @R@ -r build
+X148|nest|cd docs && cd .. && echo a > x.txt
 X115|main|{ cd /tmp; @R@ -r x; }
 X63|main|# @R@ -r .claude/worktrees/nest
 X64|main|git worktree add ../wt-extra -b feature/y
@@ -490,7 +502,7 @@ else
 fi
 # FG-X5: 移動先を基準の候補に集める処理を外した（セッションの作業フォルダだけを基準にする）複製では X94 が素通りする
 BROKEN_MV="$TMP/guard_nomoves.py"
-sed 's/^    for _ in range(2):$/    for _ in range(0):  # FG-X5/' "$GUARD" > "$BROKEN_MV"
+sed 's/^    for _ in range(8):$/    for _ in range(0):  # FG-X5/' "$GUARD" > "$BROKEN_MV"
 if grep -q '# FG-X5' "$BROKEN_MV"; then
   ck "FG-X5 候補集め除去複製で X94=allow" 0 "$(bj_in "$MAIN" "{ cd .claude/worktrees/nest; $R -r src; }" "$BROKEN_MV")"
 else
