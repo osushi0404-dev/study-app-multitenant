@@ -47,7 +47,8 @@ claude --worktree <track>-<連番>
 - **primary のブランチ**: `.worktreeinclude`・`.gitignore`・ガード（サブエージェントのフックは primary の `pretooluse_guard.py` が動く）は、primary が今チェックアウトしているブランチの内容で決まる。I179 より前に作られたブランチを primary で使っている間は、設定ファイルがコピーされない・primary で `git add -A` すると入れ子が embedded repository として追加される・入れ子が自分のファイルに書けない、が起きる。確認 2 が `ok` にならないときは作らない（primary のブランチに develop を取り込むか、そのブランチの作業が終わってから作る）。
 - **初期ブランチ**: `worktree-<name>` で作られる。`/plan-issue` で feature ブランチを作った後、不要なら `git branch -d worktree-<name>` で消してよい。
 - **設定ファイル**: gitignore 済みの `backend/.env`・`e2e/.env.e2e` は、リポジトリ直下の `.worktreeinclude` に従って公式機能が自動でコピーする（`--worktree`・サブエージェントの `isolation: worktree`・`EnterWorktree` のどれでも同じ）。**primary に `backend/.env` が無いとコピーされない**（黙って飛ばされる）。Docker を使う前に `wt-ports.sh` がこれを検査して止める（§5）。
-- **終了時の確認**: 対話セッションの終了時に「ワークツリーを残すか」を聞かれたら、続けて使うワークツリーは「残す」を選ぶ。変更が無いワークツリーは公式機能が自動で片付ける。
+- **初めて使うフォルダ**: `claude --worktree` は、そのフォルダを Claude Code が信頼済みでないと「Workspace trust not yet accepted」で失敗する。新しく clone した primary などでは、先に `claude` を一度起動して信頼の確認を承認し、終了してから実行する（2.1.306 で確認）。
+- **終了時の確認**: 未コミットの変更があるワークツリーの対話セッションを終えると「Exiting worktree session」の確認が出る。続けて使うワークツリーは「**Keep worktree**」を選ぶ（「Remove worktree」は変更とコミットごと消す）。変更が無いワークツリーは確認なしで自動的に片付けられる（「Worktree removed (no changes)」と出る）。対話セッションを「Keep worktree」で終えた場合、ロックは残らない（2.1.306 で確認）。
 - **ロック**: `claude --worktree` はセッションの間、ワークツリーを `claude session <name> (pid N ...)` という理由でロックする（`git worktree list` に `locked` と出る）。`claude -p --worktree` など、セッションが終わってもロックが残る場合がある（2.1.304 で確認）。ロックされたワークツリーは素の `git worktree remove` では消せないので、撤去は §4 の `wt-remove.sh` で行う。
 - ロックの判定は pid で行うため、同じ環境（同じ WSL ディストリ）で動く Claude のロックだけを正しく判定できる。Windows 側など別の環境で動く Claude からワークツリーを使っている場合、その pid はこの環境に見えないので「終了済み」と判定される。その場合は `wt-remove.sh` を使う前に、そのセッションを終了しておく。
 - サブエージェントに `isolation: worktree` で作業させる場合も同じ仕組み（作成・コピー・自動片付け）が使われる。サブエージェントは、呼び出したセッションのワークツリーの中にさらに入れ子を作る。変更があった入れ子は自動では片付かずに残る（ロックは付かない）。
