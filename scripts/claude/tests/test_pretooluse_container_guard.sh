@@ -297,6 +297,9 @@ ck "H39 -c clean.requireForce=false clean"        2 "$(runj 'git -c clean.requir
 ck "H40 xargs -i rm {}（-i は値を取らない）"       2 "$(runj 'echo junk/a/x | xargs -i rm {}')"
 ck "H41 -c clean.requireForce=off clean"          2 "$(runj 'git -c clean.requireForce=off clean -d')"
 ck "H42 git config clean.requireForce false"      2 "$(runj 'git config clean.requireForce false')"
+ck "H43 -c clean.requireForce=（空の値）clean"     2 "$(runj 'git -c clean.requireForce= clean -d')"
+ck "H44 -c clean.requireForce=no clean"           2 "$(runj 'git -c clean.requireForce=no clean -d')"
+ck "H45 git config clean.requireForce 0"          2 "$(runj 'git config clean.requireForce 0')"
 
 # --- (X) 外部送信（ASK） ---
 ck "X1 send_mail"              ASK "$(runj "$M shell -c \"from django.core.mail import send_mail; send_mail('s','b','a@example.com',['x@example.com'])\"")"

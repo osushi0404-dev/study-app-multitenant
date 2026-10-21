@@ -138,6 +138,37 @@ ck "G45 bash -c 'env GIT_DIR=<別> … checkout'"   2 "$(run "bash -c 'env GIT_D
 ck "G46 checkout -qb <新ブランチ> は通す"         0 "$(run 'git checkout -qb feat2')"
 # shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
 ck "G47 cd \$S; git checkout -qb は通す"          0 "$(run 'cd $S; git checkout -qb feat3')"
+# 止めすぎの解消（code-review 20261021_0905 第 2 周）: 変数で渡す切り替え先・( ) の無い cd の後の別リポジトリ
+# shellcheck disable=SC2016  # $BR 等を展開せず、そのまま guard に渡すのが目的
+ck "G48 git checkout \$BR（切り替え）は通す"      0 "$(run 'git checkout $BR')"
+# shellcheck disable=SC2016  # 同上
+ck "G49 git checkout --detach \$SHA は通す"       0 "$(run 'git checkout --detach $SHA')"
+# shellcheck disable=SC2016  # 同上
+ck "G50 git checkout \$(git diff --name-only)"    2 "$(run 'git checkout $(git diff --name-only)')"
+C2="$T2"   # 変更のある sub/s.txt を持たない別のリポジトリ（s2.txt だけ）
+mkdir -p "$C2/sub"
+printf 'orig\n' > "$C2/sub/s.txt"
+git -C "$C2" add sub/s.txt
+git -C "$C2" commit -qm c2
+ck "G51 cd <別> && checkout -- sub/s.txt は通す"  0 "$(run "cd $C2 && git checkout -- sub/s.txt")"
+ck "G52 (cd <別> && ls) && checkout -- は止める"  2 "$(run "(cd $C2 && ls) && git checkout -- sub/s.txt")"
+# 未コミットの変更を消す別のコマンド（第 2 周 Low）
+ck "G53 git checkout-index -f <dirty>"           2 "$(run 'git checkout-index -f sub/s.txt')"
+ck "G54 git read-tree -u --reset HEAD"           2 "$(run 'git read-tree -u --reset HEAD')"
+ck "G55 git mv -f <x> <dirty>"                   2 "$(run 'git mv -f tracked.txt sub/s.txt')"
+ck "G56 git checkout-index -a（-f なし）は通す"   0 "$(run 'git checkout-index -a')"
+# find -exec で渡す形・中かっこで並べたファイル名（第 2 周）
+ck "G57 find -exec git checkout -- {} +"         2 "$(run 'find sub -name s.txt -exec git checkout -- {} +')"
+ck "G58 git checkout -- sub/{s,t}.txt"           2 "$(run 'git checkout -- sub/{s,t}.txt')"
+ck "G59 find -exec git log -- {} + は通す"       0 "$(run 'find sub -name s.txt -exec git log -1 -- {} +')"
+# 読めないが今の場所を指す cd は元の場所も見る／別の場所へ移る cd は移った先だけ
+# shellcheck disable=SC2016  # $( ) を展開せず、そのまま guard に渡すのが目的
+ck "G60 cd \$(git rev-parse --show-toplevel) && checkout" 2 "$(run "sh -c 'cd \$(git rev-parse --show-toplevel) && git checkout -- sub/s.txt'")"
+# shellcheck disable=SC2016  # 同上
+ck "G61 cd \$(mktemp -d) && … checkout -- . は通す" 0 "$(run 'cd $(mktemp -d) && git init -q && git checkout -- .')"
+# 新しいブランチ名が変数のまとめ書き（-qb）は作成で、変更のある作業場所でも止めない（第 2 周 テスト観点）
+# shellcheck disable=SC2016  # $BR を展開せず、そのまま guard に渡すのが目的
+ck "G62 git checkout -qb \$BR は通す"             0 "$(run 'git checkout -qb $BR')"
 
 # --- FALSEGREEN（自動注入）: 判定呼び出し行を無効化した複製で dirty が素通し /
 #     実体で block。両者の差で「block は判定行に依存」を機械裏取り（false-green 排除） ---
