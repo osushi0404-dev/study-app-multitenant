@@ -2,7 +2,7 @@
 
 - 関連: docs/issues/open/I180.md / docs/plans/open/plan_I180.md / GitHub #301 / Draft PR #303
 - テスト文書: docs/tests/open/I180_auto_test.md / docs/tests/open/I180_manual_test.md
-- レビュー対象コミット: ステップ 1 `9b05819 fix(I180): Pillow を 13.0.0 に更新し既知脆弱性 8 件を解消` / ステップ 2 `f064262 test(I180): 画像アップロード検証の Pillow 依存分岐の再発防止テストを追加`。ほかは docs コミット
+- レビュー対象コミット: ステップ 1 `9b05819 fix(I180): Pillow を 13.0.0 に更新し既知脆弱性 8 件を解消` / ステップ 2 `f064262 test(I180): 画像アップロード検証の Pillow 依存分岐の再発防止テストを追加` / ステップ 4 `docs(I180): retro スキルに改善案の要否判定手順（2.7）を追加`（2026-10-21 追加）。ほかは docs コミット
 
 ## 変更概要
 - Pillow 12.3.0 → 13.0.0（`backend/requirements.txt` の 1 行）
