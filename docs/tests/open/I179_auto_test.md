@@ -95,6 +95,8 @@
 | X82・X83 | `$MAIN` | `(cd /tmp && ls) && git -C <入れ子> reset --hard`・`(cd /tmp) ; rm -r <入れ子>` |
 | X84〜X89 | `$MAIN` | `timeout -s KILL 60 rm …`・`timeout --signal KILL 5 rm …`・`exec -a foo rm …`・`sudo -D .claude/worktrees rm -r nest`・`env -C.claude/worktrees rm -r nest`・`sudo -u git rm …` |
 | X90〜X92 | `$MAIN` | `pushd <入れ子> && pushd /tmp && popd && git checkout -- .`・`cd <入れ子> && cd /tmp && cd - && git checkout -- .`・`GIT_DIR=<入れ子>/.git git checkout -- .` |
+| X94〜X112（第 7 周） | `$MAIN` | `{ cd <入れ子>; rm -r src; }`・`if …; then cd …`・`X=1 cd …`・`command cd …`・`time cd …`（シェル内で cd が効く形）・`cp f .claude/worktrees/n*`・`cp -t .claude/worktrees/n* f`・`env -u cd -C .claude/worktrees rm -r nest`・`rm -r ~-/nest`・`env cd /tmp; rm -r <入れ子>`・`sudo cd /tmp && rm -r <入れ子>`（別プロセスの cd は効かない）・`sudo mv`/`timeout 60 find -delete`/`sudo sed -i`/`sudo tee`/`sudo cp`・`rm -r .claude/worktree?`・`env --chdir=…`・`sed -i -e '…' <入れ子>/f` |
+| X113〜X115（第 7 周・通す側） | `$MAIN` | `sed -i '2{s/foo/bar/}' f`・`sed -i -e '1,3{…}' backend/x.py`（sed のスクリプトはパスとして読まない）・`{ cd /tmp; rm -r x; }` |
 | FG-X3 | — | 中かっこを展開文字から外した複製で X74 が exit 0 |
 | FG-X4 | — | 括弧の目印を捨てた複製で X82 が exit 0 |
 

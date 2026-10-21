@@ -365,6 +365,25 @@ X89|main|sudo -u git @R@ -r .claude/worktrees/nest
 X90|main|pushd .claude/worktrees/nest && pushd /tmp && popd && git checkout -- .
 X91|main|cd .claude/worktrees/nest && cd /tmp && cd - && git checkout -- .
 X92|main|GIT_DIR=.claude/worktrees/nest/.git git checkout -- .
+X94|main|{ cd .claude/worktrees/nest; @R@ -r src; }
+X95|main|if true; then cd .claude/worktrees/nest; @R@ -r src; fi
+X96|main|X=1 cd .claude/worktrees/nest; @R@ -r src
+X97|main|command cd .claude/worktrees/nest; @R@ -r src
+X98|main|time cd .claude/worktrees/nest; @R@ -r src
+X99|main|cp f .claude/worktrees/n*
+X100|main|cp -t .claude/worktrees/n* f
+X101|main|env -u cd -C .claude/worktrees @R@ -r nest
+X102|main|cd .claude/worktrees && cd /tmp && @R@ -r ~-/nest
+X103|main|env cd /tmp; @R@ -r .claude/worktrees/nest
+X104|main|sudo cd /tmp && @R@ -r .claude/worktrees/nest
+X105|main|sudo mv .claude/worktrees/nest /tmp/x
+X106|main|timeout 60 find .claude/worktrees/nest -delete
+X107|main|sudo sed -i s/a/b/ .claude/worktrees/nest/f
+X108|main|sudo tee .claude/worktrees/nest/f < /dev/null
+X109|main|sudo cp a .claude/worktrees/nest/f
+X110|main|@R@ -r .claude/worktree?
+X111|main|env --chdir=.claude/worktrees @R@ -r nest
+X112|main|sed -i -e 's/a/b/' .claude/worktrees/nest/f
 CASES
 # ヒアドキュメント本文にアポストロフィ（閉じていないクォート）があっても、後ろのコマンドを見落とさない
 ck "X51 本文に don't のヒアドキュメントの後→block" 2 \
@@ -410,6 +429,9 @@ X67|main|@R@ *.log
 X68|main|(cd /tmp && ls) && git status
 X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
 X93|nest|@R@ -r tmp_*
+X113|main|sed -i '2{s/foo/bar/}' f
+X114|main|sed -i -e '1,3{s/a/b/;s/c/d/}' backend/x.py
+X115|main|{ cd /tmp; @R@ -r x; }
 X63|main|# @R@ -r .claude/worktrees/nest
 X64|main|git worktree add ../wt-extra -b feature/y
 X65|main|git worktree prune
