@@ -68,3 +68,4 @@
 ## 結果
 - `/code-review`: OK（`docs/reviews/I180_code_review_20261021_1013.md`・決定論ゲート 5 件 exit 0・高リスク No・敵対的レビュー不要）
 - `/test`: OK（2026-10-21・自動 TC-AUTO-00〜07 すべて合格・手動 No.1〜5 すべて OK・Human の手順なし）
+- `/code-review`（ステップ 4 後・2 回目）: OK・`RISK: YES`（`docs/reviews/I180_code_review_20261021_1053.md`・決定論ゲート 7 件 exit 0）。敵対的レビューは**ユーザー判断で省略**（例外・`docs/reviews/I180_adversarial_review_20261021_1120.md` に根拠を記録。起動した 3 体はユーザー指示で停止・findings 受領なし）
