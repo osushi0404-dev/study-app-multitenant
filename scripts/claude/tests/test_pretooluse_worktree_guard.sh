@@ -340,6 +340,31 @@ X54|main|cp -t .claude/worktrees/nest a.txt
 X55|main|sed -i s/a/b/ .claude/worktrees/nest/f
 X56|main|git clean --force --force -d
 X57|main|git clean -f --force
+X60|main|@R@ -r tmp_*
+X61|main|mv *.md docs/
+X70|main|DANGER_OK=1 @R@ -rf .[^.]*
+X71|main|@R@ -r .claude/worktrees/[^.]*
+X72|main|@R@ -r .claude/worktrees/[[:alpha:]]*
+X73|main|@R@ -r .claude/worktree[^z]
+X74|main|@R@ -r .claude/worktrees/{nest,zz}
+X75|main|@R@ -r {.claude,zz}
+X76|main|@R@ -r .claude/worktree{s,}
+X77|main|mv .claude/{worktrees,old}
+X78|main|@R@ .claude/worktrees/{nest,zz}/f.txt
+X79|main|shopt -s dotglob; @R@ -r *
+X80|main|GLOBIGNORE=x; @R@ -r *
+X81|main|@R@ -r ~+/.claude
+X82|main|(cd /tmp && ls) && git -C .claude/worktrees/nest reset --hard
+X83|main|(cd /tmp) ; @R@ -r .claude/worktrees/nest
+X84|main|timeout -s KILL 60 @R@ -r .claude/worktrees/nest
+X85|main|timeout --signal KILL 5 @R@ -r .claude/worktrees/nest
+X86|main|exec -a foo @R@ -r .claude/worktrees/nest
+X87|main|sudo -D .claude/worktrees @R@ -r nest
+X88|main|env -C.claude/worktrees @R@ -r nest
+X89|main|sudo -u git @R@ -r .claude/worktrees/nest
+X90|main|pushd .claude/worktrees/nest && pushd /tmp && popd && git checkout -- .
+X91|main|cd .claude/worktrees/nest && cd /tmp && cd - && git checkout -- .
+X92|main|GIT_DIR=.claude/worktrees/nest/.git git checkout -- .
 CASES
 # ヒアドキュメント本文にアポストロフィ（閉じていないクォート）があっても、後ろのコマンドを見落とさない
 ck "X51 本文に don't のヒアドキュメントの後→block" 2 \
@@ -380,9 +405,11 @@ X38|main|echo x > ok.txt
 X39|main|git commit -m "docs: @R@ -r .claude/worktrees/nest の手順"
 X40|main|git checkout -b feature/x
 X41|main|echo x 2>&1 >/dev/null
-X60|main|@R@ -r tmp_*
-X61|main|mv *.md docs/
 X62|main|@R@ -f tmp_*.log
+X67|main|@R@ *.log
+X68|main|(cd /tmp && ls) && git status
+X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
+X93|nest|@R@ -r tmp_*
 X63|main|# @R@ -r .claude/worktrees/nest
 X64|main|git worktree add ../wt-extra -b feature/y
 X65|main|git worktree prune
@@ -409,6 +436,22 @@ if grep -q '# FG-X2' "$BROKEN_REL"; then
   ck "FG-X2 絶対化除去複製で X19=allow" 0 "$(bj_in "$MAIN" "echo x > .claude/worktrees/nest/f" "$BROKEN_REL")"
 else
   ck "FG-X2 注入できた" 0 1
+fi
+# FG-X3: 中かっこを展開文字から外した複製では、中かっこの削除が素通りする（展開を含むパスの粗い判定が停止要因である証明）
+BROKEN_BR="$TMP/guard_nobrace.py"
+sed 's/m = re.search(r"\[\*?\\\[{\]", p)/m = re.search(r"[*?\\[]", p)  # FG-X3/' "$GUARD" > "$BROKEN_BR"
+if grep -q '# FG-X3' "$BROKEN_BR"; then
+  ck "FG-X3 中かっこ除去複製で X74=allow" 0 "$(bj_in "$MAIN" "$R -r .claude/worktrees/{nest,zz}" "$BROKEN_BR")"
+else
+  ck "FG-X3 注入できた" 0 1
+fi
+# FG-X4: 括弧の目印を捨てる（サブシェルの中の cd を外へ持ち越す）複製では X82 が素通りする
+BROKEN_SUB="$TMP/guard_nosub.py"
+sed 's/^            segs += \[\[ch\] for ch in t if ch in "()"\]$/            pass  # FG-X4/' "$GUARD" > "$BROKEN_SUB"
+if grep -q '# FG-X4' "$BROKEN_SUB"; then
+  ck "FG-X4 括弧目印除去複製で X82=allow" 0 "$(bj_in "$MAIN" '(cd /tmp && ls) && git -C .claude/worktrees/nest reset --hard' "$BROKEN_SUB")"
+else
+  ck "FG-X4 注入できた" 0 1
 fi
 # DO1/DO2: 区切りの後ろの DANGER_OK=1 では解除しない
 ck "DO1 echo DANGER_OK=1; docker compose down -v→block" 2 "$(bj_in "$MAIN" 'echo DANGER_OK=1; docker compose down -v')"

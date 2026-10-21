@@ -60,13 +60,17 @@ claude --worktree <track>-<連番>
 **fallback（公式機能が使えない場合の手動手順）**:
 
 ```bash
+# primary のセッションで作る
 cd <primary>
 git fetch origin
 git worktree add <primary>/.claude/worktrees/<name> -b <ブランチ> origin/develop
-cp backend/.env .claude/worktrees/<name>/backend/.env          # 中身は読まない・存在を確認する
-cp e2e/.env.e2e .claude/worktrees/<name>/e2e/.env.e2e          # E2E を行う場合のみ
 git worktree list                                              # 現在の worktree 一覧を確認
+# 作ったワークツリーのセッション（そのフォルダで起動した claude・ターミナル）で設定ファイルをコピーする
+cp <primary>/backend/.env backend/.env                         # 中身は読まない・存在を確認する
+cp <primary>/e2e/.env.e2e e2e/.env.e2e                         # E2E を行う場合のみ
 ```
+
+- コピーは作ったワークツリーのセッションで行う。primary のセッションから入れ子へ書き込む形（`cp backend/.env .claude/worktrees/<name>/…`）は、別ワークツリーへの書込としてガードが止める（§9。`DANGER_OK=1` でも解除しない）。
 
 ---
 
@@ -99,7 +103,7 @@ KEEP_DATA=1 bash scripts/claude/wt-remove.sh <primary>/.claude/worktrees/<name>
 
 - 撤去対象は `git worktree list` に登録されたワークツリーのパスで指定する（登録外のフォルダは扱わない）。公式配置も旧配置（`/mnt/c/app/wt-harness` など）も同じ形。
 - 未コミット変更・未 push コミットがあると中止する（作業消失防止）。primary と、撤去対象の内側からの実行は拒否する。`--force` は使わない。
-- **中に別のワークツリー（入れ子）があると中止する**。`.claude/worktrees/` は gitignore 済みなので、未コミット変更の検査にも `git worktree remove` にも引っかからず、そのままだと入れ子の中身（未コミットの作業を含む）ごと消えてしまう。サブエージェントが作った入れ子などは、中のものを先に（同じ `wt-remove.sh` で）撤去してから外側を撤去する。中の入れ子が未 push のコミットで止まる場合は、残したい作業ならその入れ子のセッションで push してから撤去し、不要な作業なら外側の撤去を見送る（`--force` は使わない。作業を捨てる判断は人が行う）。フォルダが既に無い登録（`git worktree list` に `prunable` と出るもの）は数えないので止まらない（登録は `git worktree prune` で消せる）。
+- **中に別のワークツリー（入れ子）があると中止する**。`.claude/worktrees/` は gitignore 済みなので、未コミット変更の検査にも `git worktree remove` にも引っかからず、そのままだと入れ子の中身（未コミットの作業を含む）ごと消えてしまう。サブエージェントが作った入れ子などは、中のものを先に（同じ `wt-remove.sh` で）撤去してから外側を撤去する。中の入れ子が未 push のコミットで止まる場合は、残したい作業ならその入れ子のセッションで push してから撤去し、不要な作業なら外側の撤去を見送る（`--force` は使わない。作業を捨てる判断は人が行う）。フォルダが既に無い登録（`git worktree list` に `prunable` と出るもの）は数えないので止まらない（登録は `git worktree prune` で消せる）。中に**登録の無い `.git`**（登録が消えた入れ子のフォルダ・入れ子に置いた clone など）があって止まった場合は、`wt-remove.sh` にもその内側を渡せない（登録されたワークツリーではない）。**外側のワークツリーのセッションで**中身（未コミットの作業が無いか）を確かめ、不要なら `rm -r .claude/worktrees/<内側>` で消してから、primary で `wt-remove.sh` を再実行する（primary のセッションからの削除はガードが止める）。
 - ロック（§2）: 終了済みの Claude セッションが残したロック（pid のプロセスが無い）だけを外して撤去する。使用中のセッションのロックがあれば、何も消さずに止まる（そのセッションを終了してから再実行）。Claude 以外の理由のロックも止まるので、使っている人に確認のうえ `git worktree unlock <パス>` してから再実行する。
 - データの判定: Compose プロジェクト名（フォルダ名を小文字にし、英数字・`_`・`-` 以外を除いたもの＝Compose の既定名）のラベルで `docker ps -a`・`docker volume ls` を調べる。`down -v` は必ず `docker compose -p <既定名> down -v` で、消す相手を既定名に固定して実行する（環境変数・`.env`・親フォルダの compose ファイルで primary など別のプロジェクトが選ばれないようにするため）。
 - **消す相手を確定できないときは、`DANGER_OK=1` でも止まる**（何も消さない）:
@@ -238,8 +242,9 @@ docker compose config | grep -A1 published
   - 別ワークツリーを対象にした git の読み取り以外の操作（`git -C <別ワークツリー>`・`--work-tree`・`--git-dir`・`cd <別ワークツリー>` の後の `reset`・`checkout`・`restore`・`clean`・`stash` 等）。`status`・`log`・`diff`・`show` などの読み取りは通す。
   - 中に別のワークツリーがある場所での `git clean -ff`（`f` を 2 つ重ねると git は中の別リポジトリまで消す。`-f` 1 つなら git が入れ子を飛ばすので通す）。
   - `git worktree remove`（`--force` の有無を問わない）。中の入れ子は gitignore 済みで git の未コミット検査に出ないため、`--force` なしでも入れ子の作業ごと消える。撤去は `bash scripts/claude/wt-remove.sh <パス>` を使う（中に入れ子があると止まる）。
-  - 書込・削除の対象は、相対パスも、同じコマンドの前にある `cd`・`pushd`・`popd`・`cd -`（固定のパス）、`env -C <フォルダ>`、`GIT_WORK_TREE=`／`GIT_DIR=` の前置を反映した作業フォルダを基準に判定する。`/mnt/<ドライブ>/` 配下は大文字小文字の違いを同じパスとみなす。
-  - ワイルドカードは、手前のフォルダの直下でパターンに当たる名前の中に別のワークツリーがあるときだけ止める（primary で `rm -r tmp_*`・`mv *.md docs/` は通る。`rm -r .claude/worktrees/*`・`rm -r .*` は止まる）。`find` は除外の指定に関係なく開始パスの中を見るため、primary で `find . … -delete` は止まる。開始パスを絞る（`find backend …`）。
+  - 書込・削除の対象は、相対パスも、同じコマンドの前にある `cd`・`pushd`・`popd`・`cd -`（固定のパス）、`env -C <フォルダ>`・`sudo -D <フォルダ>`、`GIT_WORK_TREE=`／`GIT_DIR=` の前置を反映した作業フォルダを基準に判定する。括弧（サブシェル）の中の `cd` は括弧の外に持ち越さない。`sudo`・`env`・`timeout`・`exec` などの前置コマンドの後ろは、後ろに現れる既知のコマンド名（`rm`・`git` 等）の位置で読む。`/mnt/<ドライブ>/` 配下は大文字小文字の違いを同じパスとみなす。
+  - **展開を含むパス（`*`・`?`・`[`・`{`）は粗く判定する**。パターンの意味（`[^…]`・文字クラス・中かっこ・`dotglob` 等のシェル設定）は解釈せず、最初の展開文字より手前の固定部分のフォルダを基準にする。中身も消す操作（`rm -r`・`mv`・`find -delete`）は、そのフォルダの中に別のワークツリーがあれば止める。中身を消さない操作（`rm` の非再帰・書込）は、パターンの段数より浅い位置に別のワークツリーがあるときだけ止める（primary で `rm *.log` は通る）。`~+`・`~-` は今のフォルダ・直前のフォルダとして判定する。
+  - **このため primary の直下で展開を含む再帰削除・移動（`rm -r tmp_*`・`mv *.md docs/`・`rm -r .[^.]*`）は止まる**（`DANGER_OK=1` でも解除しない。bash の展開規則を再現すると再現漏れが抜け道になるため、粗い判定を選んでいる＝I179 敵対的レビュー第 5〜6 周）。回避: サブフォルダに移ってから実行する（`cd docs && mv *.md …`）・名前を並べて書く・`find` は開始パスを絞る（`find backend …`）。
 - **止められないもの（既知の限界）**: 変数・コマンド置換を含むパス（`rm -r "$X"`）・`eval`／`sh -c` の中身・`xargs` 経由・rm/find/mv/git 以外の消し方（`rsync --delete`・`truncate`・`unlink`・`busybox rm` 等）・スクリプトの中のコマンド（ガードは Claude が実行するコマンドの文字列だけを見る）・公式の自動片付け（§2 の注意）。ヒアドキュメントの本文やクォートをまたぐ改行の後ろの行も 1 つのコマンドとして読むため、本文に別ワークツリーのパスを含む削除や `cd` の行があると誤って止まる場合がある（`DANGER_OK=1` では解けないので、本文をファイルに書いてから使う・パスの書き方を変える）。
 - **既知の限界（入れ子）**: 「どれが現ワークツリーか」はフックを実行したときの作業フォルダ（`git rev-parse --show-toplevel`）で決まる。入れ子ワークツリーは primary のフォルダの中にあるため、primary のセッションで `cd .claude/worktrees/<name>` すると作業フォルダがそのまま残り、それ以降はそのセッションが入れ子のワークツリーとして扱われる（入れ子への書込が通る）。primary のセッションから入れ子へ `cd` しない。入れ子で作業するときは、そのワークツリーのセッションを使う（§2「セッションを開く」）。サブエージェントのフックは primary の設定で動くため、作業フォルダ以外（`CLAUDE_PROJECT_DIR` 等）で判定すると、サブエージェントが自分の入れ子に書けなくなる。このため作業フォルダでの判定を維持している。
 

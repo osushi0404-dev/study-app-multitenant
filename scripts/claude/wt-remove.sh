@@ -70,6 +70,7 @@ fi
 if [ -n "$NESTED" ]; then
   echo "[wt-remove] 撤去対象の中に別のワークツリー（または git リポジトリ）があります。中のものを先に撤去してください（作業消失防止）: $NESTED" >&2
   echo "[wt-remove] フォルダが既に無い登録が残っているだけなら 'git worktree prune' で消せます" >&2
+  echo "[wt-remove] 登録の無い .git（登録が消えた入れ子・clone）なら、撤去対象のワークツリーのセッションで中身を確かめてから消し、再実行してください（worktree.md §4）" >&2
   exit 2
 fi
 

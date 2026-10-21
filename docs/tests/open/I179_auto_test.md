@@ -82,7 +82,21 @@
 | X37 | `$MAIN` | `find .claude/worktrees/nest -name '*.py'`（`-delete` なし） |
 | X38 | `$MAIN` | `echo x > ok.txt`（自分のワークツリー内の相対書込） |
 | X39〜X41 | `$MAIN` | commit メッセージ中の `rm -r <入れ子>`・`git checkout -b`・`2>&1 >/dev/null` |
-| X60〜X66（第 5 周） | `$MAIN`／nest | `rm -r tmp_*`・`mv *.md docs/`・`rm -f tmp_*.log`（ワイルドカードが入れ子に当たらない）・行頭 `#` のコメント・`git worktree add`・`git worktree prune`・`cd ../nest2 && cd - && git checkout -- .`（`cd -` で自分に戻る） |
+| X62〜X66（第 5 周） | `$MAIN`／nest | `rm -f tmp_*.log`（非再帰）・行頭 `#` のコメント・`git worktree add`・`git worktree prune`・`cd ../nest2 && cd - && git checkout -- .`（`cd -` で自分に戻る）。※ 第 5 周に通す側だった `rm -r tmp_*`・`mv *.md docs/`（X60・X61）は fix-loop 2 回目で止める側へ移した |
+| X67〜X69・X93（fix-loop 2 回目） | `$MAIN`／nest | `rm *.log`（非再帰・浅い）・`(cd /tmp && ls) && git status`・`(cd <入れ子> && git status) ; git commit -m x`（括弧の中の cd を外に持ち越さない）・入れ子のセッションでの `rm -r tmp_*` |
+
+**止める側（fix-loop 2 回目・期待 exit 2・`rm` は `-r` で書き `rm -rf` の既存規則と区別する）**
+| TC | cwd | 入力（Bash） |
+|----|-----|------|
+| X60・X61 | `$MAIN` | `rm -r tmp_*`・`mv *.md docs/`（primary 直下の展開を含む再帰削除・移動＝誤ブロックとして受容） |
+| X70〜X73 | `$MAIN` | `DANGER_OK=1 rm -rf .[^.]*`・`rm -r .claude/worktrees/[^.]*`・`[[:alpha:]]*`・`.claude/worktree[^z]` |
+| X74〜X78 | `$MAIN` | 中かっこ: `rm -r .claude/worktrees/{nest,zz}`・`{.claude,zz}`・`.claude/worktree{s,}`・`mv .claude/{worktrees,old}`・`rm .claude/worktrees/{nest,zz}/f.txt`（非再帰でも段数で止める） |
+| X79〜X81 | `$MAIN` | `shopt -s dotglob; rm -r *`・`GLOBIGNORE=x; rm -r *`・`rm -r ~+/.claude` |
+| X82・X83 | `$MAIN` | `(cd /tmp && ls) && git -C <入れ子> reset --hard`・`(cd /tmp) ; rm -r <入れ子>` |
+| X84〜X89 | `$MAIN` | `timeout -s KILL 60 rm …`・`timeout --signal KILL 5 rm …`・`exec -a foo rm …`・`sudo -D .claude/worktrees rm -r nest`・`env -C.claude/worktrees rm -r nest`・`sudo -u git rm …` |
+| X90〜X92 | `$MAIN` | `pushd <入れ子> && pushd /tmp && popd && git checkout -- .`・`cd <入れ子> && cd /tmp && cd - && git checkout -- .`・`GIT_DIR=<入れ子>/.git git checkout -- .` |
+| FG-X3 | — | 中かっこを展開文字から外した複製で X74 が exit 0 |
+| FG-X4 | — | 括弧の目印を捨てた複製で X82 が exit 0 |
 
 **失敗注入・その他**
 | TC | 内容 | 期待 |
@@ -272,3 +286,9 @@ python3 -m json.tool .claude/settings.json
 - **何を変えたか**: 判定を「(1) 正規表現 ∪ (2) トークン判定」の和集合にし（(2) は (1) を置き換えず重ねるだけ）、ヒアドキュメント除外を撤回した。第 3 周の再現入力（DV-sh 28 形）・トークン層でしか捕まらない形（DV-tok）・develop のガードとの比較（NOREG）・各層が停止要因であることの失敗注入（FG-DV2・FG-DV3）を常設した。あわせて撤去スクリプトのバックアップ案内・止まったときの片付け手順・記録の消費箇所（イシュー・danger-ops.md・計画）を揃えた。
 - **セキュリティ上の考慮点**: 承認なしの破壊的操作（開発 DB の volume 削除）を止める安全装置の後退で、アクセス制御の不備（OWASP A01 相当）。修正後は develop 以上の強さを構造的に保つ（和集合）。誤ブロック（文字列の中の記述でも止める）は develop から続く既知の種類として受容し、`DANGER_OK=1` 前置か言い換えで解ける。
 - **次回どう防ぐか**: 安全装置（ガード・承認ゲート）の判定方式を変えるときは、(a) 旧方式の判定を残して新方式を重ねる（置き換えない）、(b) 旧版（`git show origin/develop:…`）と結果を比べるテスト（NOREG）を同じ変更で入れる、(c) 誤ブロックを減らす変更（除外・例外）は「除外の境界を悪用して本物を隠せないか」を失敗注入で確かめる。レビュー観点: 敵対的レビューの観点①に「旧版との比較で後退が無いか」を必ず含める。
+
+## 再発防止記録（fix-loop 2 回目・2026-10-21）
+- **なぜ失敗したか**: 第 5 周で「primary 直下の `rm -r tmp_*` などを止めない」ために、ワイルドカードを bash の展開規則に近づけて細かく判定する方式（`fnmatch` によるパターン照合）に変えた。bash の展開規則（`[^…]`・文字クラス・中かっこ・`dotglob`/`GLOBIGNORE`・`~+`）を部分的にしか再現できず、再現しなかった部分が抜け道になった（`.[^.]*` を再帰削除すると全入れ子が消える）。中かっこは第 4 周の最初の設計から展開文字に含めていなかった。作業フォルダの追跡はサブシェルの範囲を捨て、前置コマンドは値を取るオプションを列挙する方式で漏れた。第 2〜3 周（Docker 判定の置き換え）と同じく、誤ブロックを減らすための精密化が安全装置を弱めた。
+- **何を変えたか**: 展開を含むパス（`* ? [ {`）はパターンを解釈せず、手前の固定部分のフォルダを基準に粗く判定する（中身も消す操作は中に別ワークツリーがあれば止める・非再帰は段数だけ見る）。`~+`/`~-` を展開。括弧（サブシェル）の目印を残して中の `cd` を外へ持ち越さない。前置コマンドの後ろは既知のコマンド名の位置をすべて候補にする。展開を含む `mv` は全引数を移動元に。§2 の手動手順・§4 の登録の無い `.git` の手順・§9 の回避を追記。primary 直下の `rm -r tmp_*`・`mv *.md docs/` は誤ブロックとして受容。
+- **セキュリティ上の考慮点**: 承認（`DANGER_OK=1` でも解けない）なしに他のワークツリーの未コミット作業を消せる経路（OWASP A01 相当）を塞いだ。誤ブロックは回避手順で解ける方向に倒し、判定不能・解釈しない部分は止める側に倒した。
+- **次回どう防ぐか**: 安全装置の判定は「シェルの文法を再現して精密にする」方向に変えない。誤ブロックを減らしたいときは、判定を緩めるのではなく回避手順（サブフォルダで実行・名前を並べる）を文書化する。敵対的レビューで同種の指摘（再現漏れ）が周回をまたいで出たら、個別に塞がず判定を粗くする（I181・I176 の打ち切り条件の材料）。止める側の TC は既存規則（`rm -rf` の `DANGER_OK`）に当たらない書き方にし、新しい判定が停止要因であることを失敗注入で確かめる。
