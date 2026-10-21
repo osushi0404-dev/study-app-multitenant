@@ -189,4 +189,5 @@ backend / celery / celery-beat を、現在の `requirements.txt` で再ビル�
 | TC-AUTO-04 | ✅ 判定 0〜2 とも exit 0 | `9 passed in 0.21s`。JUnit XML: tests=9・failures=0・errors=0・skipped=0。コードは計画書 §5-2 と diff 0 |
 | TC-AUTO-05 | ✅ 判定 1 exit 0・判定 2 exit 1 | 判定 1: baseline exit 0・4 種すべて exit 1（検知）。判定 2: 中身のないテストで 4 種すべて「見逃し」・exit 1。プローブは計画書 §5-3 と diff 0 |
 | TC-AUTO-06 | ✅ 判定 1・2 とも exit 0 | ステップ 1: `94 passed`（件数 94 判定 exit 0）。ステップ 2: `103 passed`（件数 103 判定 exit 0）。プローブ・フィクスチャは通常収集に混ざっていない |
+| /test 再実行（2026-10-21 10:20〜・head `d1cf953`） | ✅ TC-AUTO-00〜07 すべて合格 | 再ビルド後に 00（全サービス Healthy）・02（0 件）・03（3 サービス 13.0.0）・04（9 passed・件数判定 exit 0）・05（判定 1 exit 0・判定 2 exit 1）・06（103 passed・件数判定 exit 0）・07（head `d1cf953` で 6 チェック SUCCESS・判定 2 `ok`）。01 は `/code-review` の決定論ゲートで exit 0 |
 | TC-AUTO-07 | ✅ 判定 1・2 とも exit 0 | head `db5d205`・CI run 39525530289 / E2E run 39525530302。6 チェックすべて SUCCESS（Backend Lint & Security 37s・Backend Tests 1m56s・E2E 4m2s ほか）。判定 2 は `ok` |
