@@ -384,10 +384,35 @@ X109|main|sudo cp a .claude/worktrees/nest/f
 X110|main|@R@ -r .claude/worktree?
 X111|main|env --chdir=.claude/worktrees @R@ -r nest
 X112|main|sed -i -e 's/a/b/' .claude/worktrees/nest/f
+X116|main|sed -i -es/a/b/ .claude/worktrees/nest/f
+X117|main|sed -i -e's/.*//' .claude/worktrees/nest/f
+X118|main|sed -i -f/tmp/s.sed .claude/worktrees/nest/f
+X119|main|sed -i --expression=s/a/b/ .claude/worktrees/nest/f
+X120|main|cd /tmp & @R@ -r .claude/worktrees/nest
+X121|main|mv -t /tmp/x .claude/worktrees/nest
+X122|main|mv --target-directory=/tmp/x .claude/worktrees/nest
+X123|main|builtin cd .claude/worktrees/nest; @R@ -r src
+X124|main|time -p cd .claude/worktrees/nest; @R@ -r src
+X125|main|nohup @R@ -r .claude/worktrees/nest
+X126|main|nice -n 5 @R@ -r .claude/worktrees/nest
+X127|main|stdbuf -oL @R@ -r .claude/worktrees/nest
+X128|main|ionice -c3 git -C .claude/worktrees/nest reset --hard
+X129|main|doas @R@ -r .claude/worktrees/nest
+X130|main|cd .claude/worktrees/nest && cd /tmp && (cd /var) ; cd - && @R@ -r src
+X131|main|GIT_WORK_TREE=.claude/worktrees/nest nice git checkout -- .
+X132|main|time xargs @R@ -r .claude/worktrees/nest
+X133|main|cp f .claude/worktrees/nes?
+X134|main|cp -t .claude/worktrees/nes[t] f
+X135|main|cp f .claude/worktrees/{zz,nest}
+X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
+X113|main|sed -i '2{s/foo/bar/}' f
+X114|main|sed -i -e '1,3{s/a/b/;s/c/d/}' backend/x.py
+X66|main|cd .claude/worktrees/nest && cd - && git checkout -- .
 CASES
 # ヒアドキュメント本文にアポストロフィ（閉じていないクォート）があっても、後ろのコマンドを見落とさない
 ck "X51 本文に don't のヒアドキュメントの後→block" 2 \
   "$(bj_in "$MAIN" "$(printf "cat > /tmp/x <<'X'\ndon't\nX\n%s -r .claude/worktrees/nest" "$R")")"
+ck "X136 パイプの cd の後→block" 2 "$(bj_in "$MAIN" "cd /tmp | :; $R -r .claude/worktrees/nest")"
 # 改行で区切った後のコマンドも止まる
 ck "X28 改行の後→block" 2 "$(bj_in "$MAIN" "$(printf 'echo a\n%s -r .claude/worktrees/nest' "$R")")"
 # X21: /mnt/<ドライブ>/ 配下（drvfs）では大文字小文字だけ違うパスも別ワークツリーと判定する（実リポジトリの登録で判定のみ）
@@ -427,15 +452,11 @@ X41|main|echo x 2>&1 >/dev/null
 X62|main|@R@ -f tmp_*.log
 X67|main|@R@ *.log
 X68|main|(cd /tmp && ls) && git status
-X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
 X93|nest|@R@ -r tmp_*
-X113|main|sed -i '2{s/foo/bar/}' f
-X114|main|sed -i -e '1,3{s/a/b/;s/c/d/}' backend/x.py
 X115|main|{ cd /tmp; @R@ -r x; }
 X63|main|# @R@ -r .claude/worktrees/nest
 X64|main|git worktree add ../wt-extra -b feature/y
 X65|main|git worktree prune
-X66|nest|cd ../nest2 && cd - && git checkout -- .
 CASES
 # FG-X1: 新しい判定を常に空にした複製では、止める側の代表が素通りする（停止要因の証明）
 BROKEN_X="$TMP/guard_nodestroy.py"
@@ -467,13 +488,13 @@ if grep -q '# FG-X3' "$BROKEN_BR"; then
 else
   ck "FG-X3 注入できた" 0 1
 fi
-# FG-X4: 括弧の目印を捨てる（サブシェルの中の cd を外へ持ち越す）複製では X82 が素通りする
-BROKEN_SUB="$TMP/guard_nosub.py"
-sed 's/^            segs += \[\[ch\] for ch in t if ch in "()"\]$/            pass  # FG-X4/' "$GUARD" > "$BROKEN_SUB"
-if grep -q '# FG-X4' "$BROKEN_SUB"; then
-  ck "FG-X4 括弧目印除去複製で X82=allow" 0 "$(bj_in "$MAIN" '(cd /tmp && ls) && git -C .claude/worktrees/nest reset --hard' "$BROKEN_SUB")"
+# FG-X5: 移動先を基準の候補に集める処理を外した（セッションの作業フォルダだけを基準にする）複製では X94 が素通りする
+BROKEN_MV="$TMP/guard_nomoves.py"
+sed 's/^    for _ in range(2):$/    for _ in range(0):  # FG-X5/' "$GUARD" > "$BROKEN_MV"
+if grep -q '# FG-X5' "$BROKEN_MV"; then
+  ck "FG-X5 候補集め除去複製で X94=allow" 0 "$(bj_in "$MAIN" "{ cd .claude/worktrees/nest; $R -r src; }" "$BROKEN_MV")"
 else
-  ck "FG-X4 注入できた" 0 1
+  ck "FG-X5 注入できた" 0 1
 fi
 # DO1/DO2: 区切りの後ろの DANGER_OK=1 では解除しない
 ck "DO1 echo DANGER_OK=1; docker compose down -v→block" 2 "$(bj_in "$MAIN" 'echo DANGER_OK=1; docker compose down -v')"
