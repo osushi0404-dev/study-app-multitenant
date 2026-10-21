@@ -2,7 +2,7 @@
 
 - 関連: docs/issues/open/I180.md / docs/plans/open/plan_I180.md / GitHub #301 / Draft PR #303
 - テスト文書: docs/tests/open/I180_auto_test.md / docs/tests/open/I180_manual_test.md
-- レビュー対象コミット: （実装後に記入。ステップ 1 `fix(I180): ...` / ステップ 2 `test(I180): ...`）
+- レビュー対象コミット: ステップ 1 `9b05819 fix(I180): Pillow を 13.0.0 に更新し既知脆弱性 8 件を解消` / ステップ 2 `f064262 test(I180): 画像アップロード検証の Pillow 依存分岐の再発防止テストを追加`。ほかは docs コミット
 
 ## 変更概要
 - Pillow 12.3.0 → 13.0.0（`backend/requirements.txt` の 1 行）
@@ -47,11 +47,11 @@
 - [ ] 手動テスト No.1〜5 が OK（再ビルド後の backend の起動・celery / celery-beat の起動・WebP / JPEG / PNG の処理系）
 
 ## テスト結果
-- 自動: （実装後に記入）
-- 手動: （実装後に記入）
+- 自動: TC-AUTO-00〜06 合格（2026-10-21・詳細は auto_test の実施記録）。TC-AUTO-07（CI）は push 後に記入
+- 手動: No.1〜5 すべて OK（Claude 実施・Human の手順なし）
 
 ## 計画との差分
-- （実装後に記入。なし / あり（理由））
+- なし（新規テスト・プローブのコードは計画書 §5-2・§5-3 と diff 0。変更ファイルは計画 §4 のとおり）
 
 ## ロールバック
 - 2 コミットを `git revert`（ステップ 2 → 1 の順）し、backend / celery / celery-beat を再ビルドする。データ・マイグレーションの変更なし（計画 §8）

@@ -182,11 +182,11 @@ backend / celery / celery-beat を、現在の `requirements.txt` で再ビル�
 
 | TC | 結果 | 備考 |
 |---|---|---|
-| TC-AUTO-00 | | |
-| TC-AUTO-01 | | |
-| TC-AUTO-02 | | |
-| TC-AUTO-03 | | |
-| TC-AUTO-04 | | |
-| TC-AUTO-05 | | |
-| TC-AUTO-06 | | |
-| TC-AUTO-07 | | |
+| TC-AUTO-00 | ✅ exit 0 | 2026-10-21・ステップ 1。backend / celery / celery-beat を再ビルド（`RUN pip install -r requirements.txt` 層を再実行）し、全サービス Healthy |
+| TC-AUTO-01 | ✅ 判定 1・2 とも exit 0 | ステップ 1 |
+| TC-AUTO-02 | ✅ exit 0 | `No known vulnerabilities found` |
+| TC-AUTO-03 | ✅ 判定 1〜3 とも exit 0 | backend / celery / celery-beat すべて 13.0.0 |
+| TC-AUTO-04 | ✅ 判定 0〜2 とも exit 0 | `9 passed in 0.21s`。JUnit XML: tests=9・failures=0・errors=0・skipped=0。コードは計画書 §5-2 と diff 0 |
+| TC-AUTO-05 | ✅ 判定 1 exit 0・判定 2 exit 1 | 判定 1: baseline exit 0・4 種すべて exit 1（検知）。判定 2: 中身のないテストで 4 種すべて「見逃し」・exit 1。プローブは計画書 §5-3 と diff 0 |
+| TC-AUTO-06 | ✅ 判定 1・2 とも exit 0 | ステップ 1: `94 passed`（件数 94 判定 exit 0）。ステップ 2: `103 passed`（件数 103 判定 exit 0）。プローブ・フィクスチャは通常収集に混ざっていない |
+| TC-AUTO-07 | | push 後に記入 |
