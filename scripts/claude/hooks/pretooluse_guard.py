@@ -601,47 +601,39 @@ def _moves_in(toks: list, lead: list) -> list:
                     out.append(a[len(pre):])
     return out
 
+class _Undecidable(Exception):
+    """作業フォルダを確定できず、相対パスの削除・書込・git の変更の宛先を判定できない（I179 第 10 周・fail-closed で止める）。"""
+
 def _bash_destroy_targets(cmd: str) -> list:
     """別ワークツリーを消す・変更を捨てる・相対パスで書き込む操作の（種類, 絶対パス, 中身も見るか, 展開の残り）のリスト。
-    作業フォルダを順に追わない: セッションの作業フォルダと、コマンド中のすべての移動先（cd・pushd・-C・--chdir・-D・
-    GIT_WORK_TREE=・git -C 等。順番・括弧・パイプ・& に関係なく）を「基準の候補」とし、相対パスはすべての候補を基準に判定する
-    （どれか 1 つでも別ワークツリーに当たれば止まる＝和集合。シェルの意味を再現しないので再現漏れの抜け道が無い）。"""
+    作業フォルダの連鎖は解釈しない: セッションの作業フォルダと、各移動先（cd・pushd・-C・--chdir・-D・GIT_WORK_TREE=・
+    git -C 等。順番・括弧・パイプ・& に関係なく）をセッションの作業フォルダ基準で 1 回だけ解いたものを「基準の候補」とする
+    （候補は移動先の数＋1 以下＝処理量は線形）。連鎖を解かないと宛先が決まらない形（相対の移動先を含む 2 つ以上の移動先・
+    `cd -`・popd・引数なしの pushd・`~+`/`~-`）は、相対パスの削除・書込と読み取り以外の git 操作を _Undecidable で止める
+    （書いた順の再現は再現漏れの抜け道と候補の爆発を生んだ＝第 8〜10 周。Bash 呼び出しを分ければ通る）。"""
     try:
         cwd0 = os.getcwd()
-        bases = {cwd0}
     except OSError:
-        cwd0, bases = None, set()
+        cwd0 = None
     segs = [c for seg in _loose_segments(cmd) for c in _head_candidates(seg)]
-    # 移動先は相対パスの連鎖（cd .claude && cd worktrees）もあるので、候補が増えなくなるまでまわして集める（上限 8 回）。
-    # `..` を含む相対の移動先は、書いた順に追った直前の位置だけを基準にする（全候補に当てると、入れ子のセッションで
-    # `cd backend && cd ..` の `..` がセッションの作業フォルダにも当たり、親の primary を候補にしてしまう＝止めすぎ）。
-    # それ以外の相対の移動先は全候補を基準にする（パイプ・& ・括弧の中の cd を書いた順で解釈しない＝取りこぼさない）。
-    for _ in range(8):
-        before, lin = len(bases), cwd0
-        for toks, lead in segs:
-            for m in _moves_in(toks, lead):
-                if m == "-":
-                    continue
-                if m.startswith("~+") or m.startswith("~-"):   # 今・直前のフォルダ＝いずれかの候補
-                    news = {b0 + m[2:] for b0 in bases}
-                elif not m.startswith("/") and ".." in m.split("/"):
-                    news = {_abs_in(lin, m)}
-                else:
-                    news = {_abs_in(b0, m) for b0 in list(bases) or [None]}
-                news.discard(None)
-                bases |= news
-                nxt = _abs_in(lin, m) if not m.startswith("~") else None
-                lin = nxt or lin
-        if len(bases) == before:
-            break
+    moves = []
+    for toks, lead in segs:
+        for m in _moves_in(toks, lead):
+            if m not in moves:
+                moves.append(m)
+    undecidable = any(m == "-" or m.startswith(("~+", "~-")) for m in moves) or \
+        any(os.path.basename(t[0]) == "popd" or t == ["pushd"] for t, _ in segs) or \
+        (len(moves) >= 2 and any(not os.path.expanduser(m).startswith("/") for m in moves))
+    bases = {cwd0} if cwd0 else set()
+    bases |= {_abs_in(None if undecidable else cwd0, m) for m in moves}   # 判定不能なら絶対パスの移動先だけ
+    bases.discard(None)
     found = []
 
-    def tgt(kind, p, rec, roots_=None):
-        for b0 in (roots_ if roots_ is not None else bases):
-            q = p
-            if q.startswith("~+") or q.startswith("~-"):   # 今・直前のフォルダ＝いずれかの候補
-                q = b0 + q[2:]
-            d, pat = _glob_split(q)
+    def tgt(kind, p, rec):
+        if p.startswith(("~+", "~-")) or (undecidable and not os.path.expanduser(p).startswith("/")):
+            raise _Undecidable(kind, p)
+        d, pat = _glob_split(p)
+        for b0 in bases:
             found.append((kind, _abs_in(b0, d), rec, pat))
 
     for toks, lead in segs:
@@ -719,6 +711,8 @@ def _bash_destroy_targets(cmd: str) -> list:
             if sub == "stash" and rest[:1] in (["list"], ["show"]):
                 continue
             if sub not in _GIT_READONLY_SUBS:
+                if undecidable:
+                    raise _Undecidable(f"git {sub}", ".")
                 # 読み取り以外の git 操作は、対象フォルダの候補のどれかが別ワークツリーなら止める（中身は見ない）
                 for b0 in bases:
                     found.append((f"git {sub}", b0, False, None))
@@ -1601,10 +1595,21 @@ def main():
         x = _cross_worktree(_tgt)
         if x is True or x is None:
             _block_cross_worktree("Bash 書込", _tgt)
-    # I179: 別ワークツリーの削除・破棄と、相対パス・cd 越しの書込（同じく DANGER_OK でも解除しない）
-    for _kind, _tgt, _rec, _pat in _bash_destroy_targets(raw):
-        if _destroy_blocked(_tgt, _rec, _pat) is not False:
-            _block_cross_worktree(_kind, _tgt)
+    # I179: 別ワークツリーの削除・破棄と、相対パス・cd 越しの書込（同じく DANGER_OK でも解除しない）。
+    # 判定中の例外は止める側に倒す（exit 2 以外の異常終了はフックが止めず、後ろの危険操作の検査まで素通りになるため）
+    try:
+        for _kind, _tgt, _rec, _pat in _bash_destroy_targets(raw):
+            if _destroy_blocked(_tgt, _rec, _pat) is not False:
+                _block_cross_worktree(_kind, _tgt)
+    except _Undecidable as e:
+        print(f"[guard] cd 等の移動を複数含む（または cd - / popd / ~+ / ~- を使う）コマンドでは、{e.args[0]} の宛先"
+              f"（{e.args[1]}）を判定できないためブロックしました。Bash 呼び出しを分けるか、絶対パスで書いてください"
+              f"（worktree.md §9）", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:
+        print(f"[guard] 別ワークツリーの判定中にエラー（{type(e).__name__}）が起きたため、fail-safe でブロックしました",
+              file=sys.stderr)
+        sys.exit(2)
     # no silent caps: 絶対パス宛先を抽出できないが cd/変数/ラッパー越しで別 worktree を
     # 指し得る経路のみ限界を明示（読み取り・単純な相対書込では誤警告しない）。
     if not _wt_targets and _bash_uncovered_risk(cmd):

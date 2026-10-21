@@ -99,9 +99,13 @@
 | X115（第 7 周・通す側） | `$MAIN` | `{ cd /tmp; rm -r x; }`（候補の /tmp・自分のどちらでも別ワークツリーに当たらない） |
 | X116〜X136（fix-loop 3 回目・止める側） | `$MAIN` | sed の続けて書く形（`-es/a/b/`・`-e's/.*//'`・`-f/tmp/s.sed`・`--expression=`）・`cd /tmp & rm -r <入れ子>`・`cd /tmp \| :; rm -r <入れ子>`・`mv -t /tmp/x <入れ子>`・`--target-directory=`・`builtin cd`・`time -p cd`・`nohup`/`nice -n 5`/`stdbuf -oL`/`ionice -c3`/`doas` の後・`(cd /var) ; cd -` の後・`GIT_WORK_TREE=… nice git checkout`・`time xargs rm -r`・`cp f <入れ子>?`/`[t]`/`{zz,nest}` |
 | X66・X69・X113・X114（fix-loop 3 回目で止める側へ・受容した誤ブロック） | `$MAIN` | `cd <入れ子> && cd - && git checkout -- .`・`(cd <入れ子> && git status) ; git commit -m x`（1 つのコマンドで別ワークツリーへ移動してから自分側を変更）・`sed -i '2{s/foo/bar/}' f`・`sed -i -e '1,3{…}' backend/x.py`（primary で展開文字を含む sed のスクリプト） |
-| FG-X5 | — | 移動先を基準の候補に集める処理を外した複製で X94 が exit 0（FG-X4 は括弧の目印の処理ごと削除。fix-loop 4 回目で対象行を `range(8)` に更新） |
+| FG-X5 | — | 「判定不能」の検出を外した（常に連鎖なしとして判定する）複製で X27・X138 が exit 0（FG-X4 は括弧の目印の処理ごと削除。fix-loop 5 回目で候補集めのループを削除したため対象を判定不能の検出に変更） |
 | X137〜X145（fix-loop 4 回目・止める側） | `$MAIN` | `git --work-tree <入れ子> checkout -- .`（空白区切り）・`f(){ cd worktrees/nest && git checkout -- .; }; cd .claude && f`（後ろの移動が手前の相対移動の基準＝2 回目以降のまわり）・`cd ~+/<入れ子>; rm -r src`・`git -C ~+/<入れ子> …`・`cp --target-directory <入れ子>/src f`・`cp -t<入れ子>/src f`・`cp -vt <入れ子>/src f`・`cp --target=…`・`mv --target <入れ子> f` |
-| X146〜X148（fix-loop 4 回目・通す側・止めすぎの解消） | nest | `cd backend && cd .. && git add -A`・`cd backend && cd ../frontend && rm -r build`・`cd docs && cd .. && echo a > x.txt`（自分のワークツリーの中で入って戻るだけ） |
+| X146〜X148（fix-loop 4 回目に通す側で追加 → fix-loop 5 回目で止める側へ・受容した誤ブロック） | nest | `cd backend && cd .. && git add -A`・`cd backend && cd ../frontend && rm -r build`・`cd docs && cd .. && echo a > x.txt`（移動を 2 つ以上含み判定できない。Bash 呼び出しを分ければ通る） |
+| X149〜X154（fix-loop 5 回目・止める側・第 10 周①の後退） | nest / `$MAIN` | `cd backend && pytest; cd -; cd ../nest2 && git checkout -- .`・`pushd backend && … && popd && cd ../nest2 && git checkout -- .`・`git -C backend log -1 && cd ../nest2 && rm -r src`・`git -C backend status && cd ../other-wt && git checkout -- .`・`cd frontend && … && cd ~- && cd ../other-wt && git checkout -- .`・`cd /tmp && cd /var && rm -r <入れ子>`（絶対パスの移動先だけなら通常どおり判定） |
+| X155〜X157（fix-loop 5 回目・通す側） | nest / `$MAIN` | `cd backend && cd .. && pytest`（読み取り・テストだけ）・`cd backend && rm -r build`（移動先 1 つ）・`cd a && cd b && rm -r <リポジトリ外の絶対パス>`（判定不能でも絶対パスの対象は判定する） |
+| X158・X159（fix-loop 5 回目・処理量・第 10 周 C1） | `$MAIN` | `cd` を 12 個並べた後の `rm -r x` が exit 2・`ls` が exit 0。どちらもメモリ 1GB・10 秒の上限内（修正前のガードでは exit 1） |
+| X160・X161（fix-loop 5 回目・fail-closed） | `$MAIN` / nest | 判定関数が例外（`MemoryError`）を出す複製で `ls` が exit 2（修正前は exit 1＝フックが止めない）・判定不能で止めたときに「Bash 呼び出しを分ける」案内が出る |
 | FG-X3 | — | 中かっこを展開文字から外した複製で X74 が exit 0 |
 | FG-X4 | — | 括弧の目印を捨てた複製で X82 が exit 0 |
 
@@ -311,3 +315,9 @@ python3 -m json.tool .claude/settings.json
 - **何を変えたか**: 守る範囲を「Claude が普通の書き方で起こす事故」と §9・計画に明記し、意図的な回避の書き方（CDPATH・coproc・同じコマンドで作るリンク・オプションの省略形・逆順ループ等）は対象外とした。その範囲で、`..` を含む移動先は直前の位置だけを基準にする（止めすぎの解消）・候補集めは増えなくなるまで・`~+` の移動先・cp/mv の宛先指定の書き方（`-t<dir>`・`-vt`・`--target-directory <dir>`）を直した。
 - **セキュリティ上の考慮点**: 過失による他ワークツリーの作業消失は止まる。意図的な回避は、Claude が敵対者ではない前提で対象外（強い境界は OS レベルのサンドボックスで別途。入れ子の配置と両立しない恐れがあり不採用）。
 - **次回どう防ぐか**: 文字列を解析するガードを設計・拡張するときは、計画書に脅威モデル（守る範囲と対象外）を最初に書き、敵対的レビューのプロンプトにも渡す（対象外の回避形は新規に数えない・High は普通の書き方で事故が起きるものに限る）。完全な防御が要る対象は、文字列の解析ではなく OS レベルの仕組みを検討する（I181 の材料）。
+
+## 再発防止記録（fix-loop 5 回目・2026-10-21）
+- **なぜ失敗したか**: fix-loop 3 回目の和集合の候補集め（全移動先を全候補に当て、増えなくなるまで最大 8 回）は、相対の移動先が自分の作った候補にも当たり続けるため、移動先の数に対して指数的に増えた（`cd` 3 個で 1GB を超える）。上限も、ガードを例外から守る仕組みも無く、PreToolUse フックは exit 2 以外の異常終了では止めないため、後ろの危険操作の検査までまとめて素通りになり得た。第 10 周の計測でメモリを使い切り、セッションが落ちた。テストは短いコマンドだけで、処理量を確かめる TC が無かった。fix-loop 4 回目に足した「書いた順の直前の位置」も `cd -`・`popd`・`git -C` でずれる部分的な再現で、後退を生んだ（作業フォルダの扱いで同じ種類の 5 回目）。
+- **何を変えたか**: 作業フォルダの連鎖を解釈しないことにした。基準の候補は、セッションの作業フォルダと、各移動先を 1 回だけ解いたものに限る（線形）。連鎖を解かないと宛先が決まらない形（相対を含む 2 つ以上の移動先・`cd -`・`popd`・`~±`）では、相対パスの削除・書込と git の変更を「判定できない」として止め、分けて実行するよう案内する。判定中の例外も exit 2 で止める。`cd backend && cd .. && git add -A` の誤ブロックは、§9 に回避（Bash 呼び出しを分ける）を書いて受容した。`cp -t` の止めすぎ（Medium）も対象外として §9 に記載した。
+- **セキュリティ上の考慮点**: 防御機構の可用性の欠陥（巨大な入力で落とすと危険操作の検査をまとめて外せる fail-open。OWASP A04/A05 相当）を、処理量の構造的な上限と例外の fail-closed で塞いだ。判定できない形はすべて止める側に倒れる。
+- **次回どう防ぐか**: 安全装置の判定は、入力の大きさに対して処理量の上限が構造的に決まる形（線形・固定回数）だけにし、処理量の TC（大きな入力を時間・メモリの上限付きで流す）を必ず置く。安全装置の判定関数は、例外を止める側（exit 2）に倒す形で呼ぶ。同じ種類の指摘が続いたら、シェルの動きを再現する方向ではなく「判定できない形は止めて分けさせる」方向に倒す。

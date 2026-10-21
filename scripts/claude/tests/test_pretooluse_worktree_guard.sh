@@ -417,6 +417,15 @@ X69|main|(cd .claude/worktrees/nest && git status) ; git commit -m x
 X113|main|sed -i '2{s/foo/bar/}' f
 X114|main|sed -i -e '1,3{s/a/b/;s/c/d/}' backend/x.py
 X66|main|cd .claude/worktrees/nest && cd - && git checkout -- .
+X146|nest|cd backend && cd .. && git add -A
+X147|nest|cd backend && cd ../frontend && @R@ -r build
+X148|nest|cd docs && cd .. && echo a > x.txt
+X149|nest|cd backend && pytest; cd -; cd ../nest2 && git checkout -- .
+X150|nest|pushd backend && pytest && popd && cd ../nest2 && git checkout -- .
+X151|nest|git -C backend log -1 && cd ../nest2 && @R@ -r src
+X152|main|git -C backend status && cd ../other-wt && git checkout -- .
+X153|main|cd frontend && npm run build && cd ~- && cd ../other-wt && git checkout -- .
+X154|main|cd /tmp && cd /var && @R@ -r .claude/worktrees/nest
 CASES
 # ヒアドキュメント本文にアポストロフィ（閉じていないクォート）があっても、後ろのコマンドを見落とさない
 ck "X51 本文に don't のヒアドキュメントの後→block" 2 \
@@ -462,9 +471,9 @@ X62|main|@R@ -f tmp_*.log
 X67|main|@R@ *.log
 X68|main|(cd /tmp && ls) && git status
 X93|nest|@R@ -r tmp_*
-X146|nest|cd backend && cd .. && git add -A
-X147|nest|cd backend && cd ../frontend && @R@ -r build
-X148|nest|cd docs && cd .. && echo a > x.txt
+X155|nest|cd backend && cd .. && pytest
+X156|nest|cd backend && @R@ -r build
+X157|main|cd a && cd b && @R@ -r @SCR@/x
 X115|main|{ cd /tmp; @R@ -r x; }
 X63|main|# @R@ -r .claude/worktrees/nest
 X64|main|git worktree add ../wt-extra -b feature/y
@@ -500,14 +509,35 @@ if grep -q '# FG-X3' "$BROKEN_BR"; then
 else
   ck "FG-X3 注入できた" 0 1
 fi
-# FG-X5: 移動先を基準の候補に集める処理を外した（セッションの作業フォルダだけを基準にする）複製では X94 が素通りする
-BROKEN_MV="$TMP/guard_nomoves.py"
-sed 's/^    for _ in range(8):$/    for _ in range(0):  # FG-X5/' "$GUARD" > "$BROKEN_MV"
+# FG-X5: 「判定不能」の検出を外した（常に連鎖なしとして判定する）複製では、移動の連鎖で別ワークツリーへ入る X27・X138 が素通りする
+BROKEN_MV="$TMP/guard_noundecidable.py"
+sed 's/^    bases = {cwd0} if cwd0 else set()$/    undecidable = False  # FG-X5\n&/' "$GUARD" > "$BROKEN_MV"
 if grep -q '# FG-X5' "$BROKEN_MV"; then
-  ck "FG-X5 候補集め除去複製で X94=allow" 0 "$(bj_in "$MAIN" "{ cd .claude/worktrees/nest; $R -r src; }" "$BROKEN_MV")"
+  ck "FG-X5 判定不能の検出除去複製で X27=allow" 0 "$(bj_in "$MAIN" "cd .claude/worktrees && git -C nest reset --hard" "$BROKEN_MV")"
+  ck "FG-X5 判定不能の検出除去複製で X138=allow" 0 \
+    "$(bj_in "$MAIN" "f(){ cd worktrees/nest && git checkout -- .; }; cd .claude && f" "$BROKEN_MV")"
 else
   ck "FG-X5 注入できた" 0 1
 fi
+# X158/X159: 移動先が多くても処理量は線形（第 10 周 C1: 候補の爆発でメモリを使い切った）。10 秒・メモリ 1GB で打ち切る
+MANY=""; for i in $(seq 1 12); do MANY="${MANY}cd d$i; "; done
+bj_lim() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
+             | ( cd "$MAIN" && ulimit -v 1048576 && timeout 10 python3 "$GUARD" >/dev/null 2>&1 ); echo $?; }
+ck "X158 cd 12 個＋相対の削除→block（10 秒以内）" 2 "$(bj_lim "${MANY}$R -r x")"
+ck "X159 cd 12 個＋読み取りだけ→allow（10 秒以内）" 0 "$(bj_lim "${MANY}ls")"
+# X160: 判定中の例外は止める側に倒す（exit 2 以外の異常終了はフックが止めず、後ろの危険操作の検査まで素通りになる）
+BROKEN_EX="$TMP/guard_raise.py"
+sed 's/^def _bash_destroy_targets(cmd: str) -> list:/&\n    raise MemoryError  # X160/' "$GUARD" > "$BROKEN_EX"
+if grep -q '# X160' "$BROKEN_EX"; then
+  ck "X160 判定中の例外→block" 2 "$(bj_in "$MAIN" "ls" "$BROKEN_EX")"
+else
+  ck "X160 注入できた" 0 1
+fi
+# X161: 判定不能で止めたときは、分けて実行する案内を出す
+X161_ERR=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' \
+             "cd backend && cd .. && git add -A" | ( cd "$NEST" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
+if printf '%s' "$X161_ERR" | grep -q "Bash 呼び出しを分ける"; then
+  ck "X161 判定不能の案内" 0 0; else ck "X161 判定不能の案内" 0 1; fi
 # DO1/DO2: 区切りの後ろの DANGER_OK=1 では解除しない
 ck "DO1 echo DANGER_OK=1; docker compose down -v→block" 2 "$(bj_in "$MAIN" 'echo DANGER_OK=1; docker compose down -v')"
 ck "DO2 echo hi && DANGER_OK=1 git reset --hard→block"   2 "$(bj_in "$MAIN" 'echo hi && DANGER_OK=1 git reset --hard')"
