@@ -42,10 +42,11 @@
 | TC | cwd | 入力 | 期待 |
 |----|-----|------|------|
 | GC1〜GC4 | `$MAIN` | `git clean -ffdx`・`git clean -f -f -d`・`git clean --force -f`・`cd /tmp && git clean -ffd` | 2 |
-| GC5 | `$MAIN` | `git clean -fdx`（f 1 つ＝git が入れ子を飛ばす） | 0 |
-| GC6 | `$MAIN` | `DANGER_OK=1 git clean -ffdx` | 0 |
-| GC7 | `$MAIN` | `git clean -f; echo -ff`（別のコマンドの f は数えない） | 0 |
-| FG-GC1 | — | `_git_clean_ff` を常に False にした複製で GC1 が exit 0（停止要因の証明） | 0 |
+| GC5 | `$MAIN` | `git clean -fdx`（記録 7 で I174 の判定に一本化。f の数によらず止める） | 2 |
+| GC6 | `$MAIN` | `DANGER_OK=1 git clean -ffdx`（I174 では人の確認） | 0 |
+| GC7 | `$MAIN` | `git clean -n -d`（試すだけ。記録 7 で入力を変更） | 0 |
+| ~~FG-GC1~~ | — | 記録 7 で `_git_clean_ff` ごと削除 | — |
+| FG-DV4 | — | I174 の判定から `remove` を外した複製で DV15（`docker volume remove foo`）が exit 0（記録 7 で足した 1 語が停止要因である証明） | 0 |
 
 ### A2. 〔廃止・計画変更記録 6〕別ワークツリーの削除・破棄と相対パス書込（計画変更記録 5・2026-10-21 追加）
 > 計画変更記録 6 で判定ごと廃止し、テスト（X1〜X161・FG-X1〜X5・X21b）も削除した。以下は経緯の記録として残す。

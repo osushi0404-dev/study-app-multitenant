@@ -224,6 +224,14 @@ else
   echo "SKIP NOREG（origin/develop を取得できない環境）"
 fi
 # FG-DV1〜DV3 は、I179 の Docker 判定（_docker_volume_wipe）を I174 の見張りの判定に一本化したため削除した（計画変更記録 7）
+# FG-DV4: I174 の判定から remove（rm の別名）を外した複製では DV15 が素通りする（計画変更記録 7 で足した 1 語が停止要因である証明）
+BROKEN_RM="$TMP/guard_noremove.py"
+sed 's/args\[0\] in ("rm", "remove", "prune")/args[0] in ("rm", "prune")/' "$GUARD" > "$BROKEN_RM"
+if grep -q 'args\[0\] in ("rm", "prune")' "$BROKEN_RM"; then
+  ck "FG-DV4 remove 除去複製で DV15=allow" 0 "$(bash_j 'docker volume remove foo' "$BROKEN_RM")"
+else
+  ck "FG-DV4 注入できた" 0 1
+fi
 
 # --- 入れ子ワークツリー（I179 TC-G1〜G7・FG-G1） ---
 # 公式 `claude --worktree` の配置（<primary>/.claude/worktrees/<name>）を再現する。
