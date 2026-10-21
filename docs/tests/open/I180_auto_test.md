@@ -141,7 +141,7 @@ backend / celery / celery-beat を、現在の `requirements.txt` で再ビル�
 
 - 判定 1: `docker compose exec -T backend python -m pytest --tb=short -q -p no:cacheprovider --junitxml=/tmp/i180_all.xml`
 - 判定 2（ステップ 1・新規テスト追加前）: `docker compose exec -T backend python -c "import sys, xml.etree.ElementTree as E; s = E.parse('/tmp/i180_all.xml').getroot().find('testsuite'); sys.exit(not (s.get('tests') == '94' and s.get('failures') == '0' and s.get('errors') == '0' and s.get('skipped') == '0'))"`
-- 判定 2（ステップ 2 以降）: 上の `'94'` を `'103'` に替えたコマンド（94 + 新規 9）
+- 判定 2（ステップ 2 以降・94 + 新規 9）: `docker compose exec -T backend python -c "import sys, xml.etree.ElementTree as E; s = E.parse('/tmp/i180_all.xml').getroot().find('testsuite'); sys.exit(not (s.get('tests') == '103' and s.get('failures') == '0' and s.get('errors') == '0' and s.get('skipped') == '0'))"`
 - **合格**: 判定 1・2 とも exit 0
 - 件数を固定する理由: skip・削除による緑化と、収集漏れを機械的に検知するため
 
