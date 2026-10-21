@@ -206,7 +206,9 @@ ck "XP74 一意な cd <develop> && git push は停止" 2 "$(runj "cd $W && git p
 ck "XP75 cd - の後でも宛先を書いた push は通す" 0   "$(runj "cd $W && cd - && git push origin feature/x")"
 # 偽合格の防止: 実行場所が変数かの判定（_git_loc_dynamic）を外すと、変数の場所の push が素通しになる
 BROKEN_LOC="$TMP/guard_noloc.py"
-sed 's/^def _git_loc_dynamic(loc) -> bool:$/&\n    return False/' "$GUARD" > "$BROKEN_LOC"
+# 信頼する場所の判定（_git_loc_trusted・security-review の Blocker）も同じ形を確認にするので、両方を外す
+sed -e 's/^def _git_loc_dynamic(loc) -> bool:$/&\n    return False/' \
+    -e 's/^def _git_loc_trusted(loc) -> bool:$/&\n    return True/' "$GUARD" > "$BROKEN_LOC"
 ck "FG-M 複製に置換が入った"                 YES "$( (! cmp -s "$GUARD" "$BROKEN_LOC") && echo YES || echo NO)"
 ck "FG-M noloc passes GIT_DIR=\$X push"      0   "$(rungj "$BROKEN_LOC" 'GIT_DIR=$X git push origin')"
 # force 取りこぼし → block

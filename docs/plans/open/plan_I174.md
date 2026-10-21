@@ -138,6 +138,14 @@
   - `python3 - < f.py`・`python3 /dev/stdin < f.py` は、流し込むファイルの中身を判定する
 - 残余リスク（追記）: `ssh` / `kubectl exec` の先のコマンドは判定しない（このプロジェクトの作業で使わない）
 
+### 0-16. fix-loop（/security-review の Blocker への対応・2026-10-21）
+診断メモ `docs/reviews/I174_fix_diagnosis_20261021_1422.md`（§5 で改訂・診断レビュー PASS）。見張りが判定のために実行する git に、判定対象のコマンドの `-c` や、cd の先のリポジトリの設定が効き、人の承認より前にコマンドが実行されていた（0-14 で入った）。
+1. 見張りが git を実行してよい場所を、見張りの作業ディレクトリの `git worktree list` から得た「このリポジトリとその worktree」に**一致**で限る（`_git_resolve`）。配下でも入れ子のリポジトリは除外。`--git-dir`・`--work-tree`・`GIT_DIR`・`GIT_WORK_TREE` は信頼する値と完全一致のときだけ（worktree の `.git` ファイルは読んで解決）。
+2. 実行する git には信頼する git-dir と最上位を明示し（探索を使わない）、`-c core.fsmonitor=false -c core.hooksPath=/dev/null` を付け、判定対象の `-c`・環境変数は渡さず、見張りの環境からも `GIT_` で始まる変数を除く。`status` は `--no-renames --untracked-files=no`。
+3. 信頼しない場所での、場所に依存する判定（未コミット変更の取り消し・今のブランチで宛先が決まる push）は確認（0-15 と同じ）。
+4. テスト: checkout G81〜G87（PWNED が作られないこと。仕込みは core.fsmonitor と clean フィルタの 2 種類。clean フィルタは `core.fsmonitor=false` では防げず、信頼する場所に限ることで防ぐことを実測）・FG-TRUST（信頼する場所の判定を外すと判定中に実行される）。G43〜G45 は別のリポジトリを指すので 2 から ASK に。FG-M の複製は `_git_loc_trusted` も外す形に。
+- 残余リスク: 信頼するこのリポジトリの `.git/config` を、それより前のコマンド（`git config core.fsmonitor …`）で書き換えた場合は、見張りの git でも効く（I174 以前から同じ・本物の git も同じ設定で動く）。
+
 ### 0-15. fix-loop（/code-review 20261021_0905 の敵対的レビュー 3 周・再び上限到達への対応・2026-10-21・ユーザー決定＝「読み切れないときは確認に回す」）
 診断メモ `docs/reviews/I174_fix_diagnosis_20261021_1226.md`（診断レビュー PASS）。0-14 の後の 3 周で、実行場所（`( … )`・`cd -`・失敗する cd・読めない cd の先）と対象（`$(…)`・xargs・find・中かっこ）の推測が「止める側に倒す → 止めすぎを緩める → 緩めすぎ」と往復した。根本原因は、bash がどこで何を実行するかを静的に推測して、通す・止めるを決めていたこと。
 1. **場所が一意か（`_loc_ambiguous`）**: cd / pushd / popd が無ければ一意。あれば、`( … )`・popd・パイプ・`&`・入れ子のシェル（`sh -c`・`bash <<`・eval・xargs・parallel・`find -exec`）の中にありうる・元へ戻る（`cd -`・`~-`・`$OLDPWD`）・先が読めない（変数・`$(…)`）・先が存在しない、のどれかで一意でない。

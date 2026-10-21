@@ -121,7 +121,8 @@ ck "G40 bash -c (cd other && ls) && status は通す" 0 "$(run "bash -c '(cd oth
 # まとめて書いた -SW / -WS（-s なし）もステージ済みを戻す形（code-review 20261021_0905 第 1 周・テスト観点）
 ck "G41 restore -SW <staged>（-s なし）"          2 "$(run 'git restore -SW st.txt')"
 ck "G42 restore -WS <staged>（-s なし）"          2 "$(run 'git restore -WS st.txt')"
-# 見張りの作業ディレクトリとは別のリポジトリを GIT_DIR / GIT_WORK_TREE で指す形（G31 は同じ場所を指すので測れない）
+# 見張りの作業ディレクトリとは別のリポジトリを GIT_DIR / GIT_WORK_TREE で指す形（G31 は同じ場所を指すので測れない）。
+# 信頼しない場所（このリポジトリと worktree の外）なので git を実行せず確認（security-review の Blocker）
 T2="$(mktemp -d)"
 trap 'rm -rf "$TMP" "$T2"' EXIT
 git -C "$T2" init -q
@@ -131,9 +132,9 @@ printf 'orig\n' > "$T2/s2.txt"
 git -C "$T2" add s2.txt
 git -C "$T2" commit -qm i
 printf 'x\n' >> "$T2/s2.txt"
-ck "G43 GIT_DIR=<別> GIT_WORK_TREE=<別> checkout" 2 "$(run "GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt")"
-ck "G44 env GIT_DIR=<別> … checkout"             2 "$(run "env GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt")"
-ck "G45 bash -c 'env GIT_DIR=<別> … checkout'"   2 "$(run "bash -c 'env GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt'")"
+ck "G43 GIT_DIR=<別> GIT_WORK_TREE=<別> checkout" ASK "$(runj "GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt")"
+ck "G44 env GIT_DIR=<別> … checkout"             ASK "$(runj "env GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt")"
+ck "G45 bash -c 'env GIT_DIR=<別> … checkout'"   ASK "$(runj "bash -c 'env GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt'")"
 # 作業記録の再判定で見つかった余計な停止: まとめ書きの -qb（ブランチ作成）・場所が変数の cd の後
 ck "G46 checkout -qb <新ブランチ> は通す"         0 "$(run 'git checkout -qb feat2')"
 # shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
@@ -206,6 +207,38 @@ ck "G78 <( ) の中の checkout -- \$F"            ASK "$(runj 'cat <(git checko
 ck "G79 git -C \$X restore <file>"              ASK "$(runj 'git -C $X restore sub/s.txt')"
 # shellcheck disable=SC2016  # 同上
 ck "G80 git --work-tree=\$X checkout -- <file>" ASK "$(runj 'git --work-tree=$X checkout -- sub/s.txt')"
+# 見張りが判定のために実行する git で、コマンドや外部リポジトリの設定によるコマンド実行が起きない（security-review の Blocker）
+PW="$TMP/PWNED"
+# 仕込みは 2 種類: core.fsmonitor（見張りの打ち消しで防げる）と clean フィルタ（同じ大きさの変更で status が中身を
+# 読むときに動く。打ち消しでは防げず、信頼する場所に限ることで防ぐ）
+mkevil() { mkdir -p "$1"; git -C "$1" init -q; printf 'x\n' > "$1/g"
+           git -C "$1" add g; git -C "$1" -c user.email=t@e -c user.name=t commit -qm i
+           git -C "$1" config core.fsmonitor "touch $PW"
+           printf '* filter=pw\n' > "$1/.git/info/attributes"
+           git -C "$1" config filter.pw.clean "sh -c 'touch $PW; cat'"
+           printf 'z\n' > "$1/g"; touch -d '2001-01-01' "$1/g"; }
+EV="$(mktemp -d)"
+trap 'rm -rf "$TMP" "$T2" "$EV"' EXIT
+mkevil "$EV/evil"
+mkevil "$TMP/nested"
+mkdir -p "$TMP/fakegit"
+cp -r "$TMP/.git/." "$TMP/fakegit/"
+git --git-dir="$TMP/fakegit" config core.fsmonitor "touch $PW"
+pw() { rm -f "$PW"; local r; r="$(runj "$1")"; [ -e "$PW" ] && echo "PWNED:$r" || echo "$r"; }
+ck "G81 -c core.fsmonitor=… checkout（実行しない）"  2   "$(pw "git -c core.fsmonitor='touch $PW' checkout -- sub/s.txt")"
+ck "G82 cd <外のリポジトリ> && checkout（実行しない）" ASK "$(pw "cd $EV/evil && git checkout -- g")"
+ck "G83 git -C <外のリポジトリ> checkout"            ASK "$(pw "git -C $EV/evil checkout -- g")"
+ck "G84 cd <入れ子のリポジトリ> && checkout"         ASK "$(pw 'cd nested && git checkout -- g')"
+ck "G85 --git-dir=<中に作った偽の git-dir>"          ASK "$(pw 'git --git-dir=fakegit --work-tree=. checkout -- sub/s.txt')"
+ck "G86 GIT_DIR=<中に作った偽の git-dir>"            ASK "$(pw 'GIT_DIR=fakegit git checkout -- sub/s.txt')"
+ck "G87 cd <外のリポジトリ> && git push"             ASK "$(pw "cd $EV/evil && git push")"
+# 偽合格の防止: 信頼する場所の判定を外すと、外のリポジトリの設定で判定中にコマンドが実行される
+BROKEN_TRUST="$TMP/guard_notrust.py"
+sed 's/^    for root, rgd in _trusted_repos():$/    return (cur, cur, gd or os.path.join(cur, ".git"))\n&/' "$GUARD" > "$BROKEN_TRUST"
+ck "FG-TRUST 複製に置換が入った" YES "$( (! cmp -s "$GUARD" "$BROKEN_TRUST") && echo YES || echo NO)"
+rm -f "$PW"
+json "cd $EV/evil && git checkout -- g" | python3 "$BROKEN_TRUST" >/dev/null 2>&1
+ck "FG-TRUST notrust は判定中に実行してしまう" YES "$([ -e "$PW" ] && echo YES || echo NO)"
 # 偽合格の防止: 場所が一意かの判定（_loc_ambiguous）を外すと、cd - の後の checkout が素通しになる
 BROKEN_AMB="$TMP/guard_noamb.py"
 sed 's/^def _loc_ambiguous(text: str, cmds=None) -> bool:$/&\n    return False/' "$GUARD" > "$BROKEN_AMB"

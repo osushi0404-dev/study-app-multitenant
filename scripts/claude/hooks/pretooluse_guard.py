@@ -63,14 +63,108 @@ def _segments(cmd: str) -> list:
         segs.append(seg)
     return segs
 
-def _git_run(loc, args):
-    """git を判定対象のコマンドと同じ場所（cd の先・-C・--git-dir・--work-tree・GIT_DIR=）で実行する。
-    loc は _git_loc の結果（None は見張りの作業ディレクトリ）。失敗は None。"""
-    cwd, opts, env = loc or (None, [], {})
+# --- 見張りが判定のために実行する git（I174 security-review の Blocker） ---
+# git は設定（core.fsmonitor・フィルタ等）や、実行した場所のリポジトリの .git/config でコマンドを実行する。
+# 見張りが人の承認より前にコマンドを実行しないよう、git を実行してよい場所を「このリポジトリとその worktree」
+# に一致で限り、判定対象のコマンドの -c・環境変数は渡さない。git の探索（近い .git）も使わず、git-dir を明示する。
+_GIT_SAFE_OPTS = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null")
+
+def _clean_git_env() -> dict:
+    """見張りの環境から GIT_ で始まる変数を除いたもの（紛れ込んだ GIT_DIR・GIT_CONFIG_* 等の影響を受けない）。"""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+@functools.lru_cache(maxsize=1)
+def _trusted_repos() -> tuple:
+    """信頼する (最上位, git-dir) の組。見張りの作業ディレクトリの `git worktree list` から得る。"""
+    env = _clean_git_env()
     try:
-        r = subprocess.run(["git"] + opts + args, capture_output=True, text=True, cwd=cwd or None,
-                           env=dict(os.environ, **env) if env else None)
-        return r.stdout if r.returncode == 0 else None
+        out = subprocess.run(["git", *_GIT_SAFE_OPTS, "worktree", "list", "--porcelain"],
+                             capture_output=True, text=True, env=env).stdout
+        res = []
+        for line in out.splitlines():
+            if not line.startswith("worktree "):
+                continue
+            root = os.path.realpath(line[len("worktree "):])
+            gd = subprocess.run(["git", "-C", root, *_GIT_SAFE_OPTS, "rev-parse", "--absolute-git-dir"],
+                                capture_output=True, text=True, env=env).stdout.strip()
+            if gd:
+                res.append((root, os.path.realpath(gd)))
+        return tuple(res)
+    except Exception:
+        return ()
+
+def _under(path: str, root: str) -> bool:
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+def _nested_git(cur: str, root: str) -> bool:
+    """cur から root（含まない）までのあいだに別の .git（入れ子のリポジトリ）があるなら True。"""
+    p = cur
+    while _under(p, root) and p != root:
+        if os.path.lexists(os.path.join(p, ".git")):
+            return True
+        p = os.path.dirname(p)
+    return False
+
+def _git_resolve(loc):
+    """判定する場所を、信頼する (作業ディレクトリ, 最上位, git-dir) に解決する。信頼しない場所は None。
+    --git-dir・--work-tree・GIT_DIR・GIT_WORK_TREE は信頼する値と一致するときだけ受け入れる（リポジトリの中に
+    作った偽の git-dir は一致しない）。指定が無ければ、信頼する最上位の配下で入れ子のリポジトリの外のときだけ。"""
+    cwd, opts, env = loc or (None, [], {})
+    cur = os.path.realpath(cwd) if cwd else os.getcwd()
+    gd = wt = None
+    i = 0
+    while i < len(opts):
+        o = opts[i]
+        v = opts[i + 1] if i + 1 < len(opts) else ""
+        if o == "-C":
+            cur = os.path.realpath(os.path.join(cur, v))
+        elif o == "--git-dir":
+            gd = os.path.realpath(os.path.join(cur, v))
+        elif o == "--work-tree":
+            wt = os.path.realpath(os.path.join(cur, v))
+        elif o.startswith("--git-dir="):
+            gd = os.path.realpath(os.path.join(cur, o.split("=", 1)[1]))
+        elif o.startswith("--work-tree="):
+            wt = os.path.realpath(os.path.join(cur, o.split("=", 1)[1]))
+        i += 2 if o in ("-C", "--git-dir", "--work-tree", "-c") else 1
+    if gd is None and env.get("GIT_DIR"):
+        gd = os.path.realpath(os.path.join(cur, env["GIT_DIR"]))
+    if gd is not None and os.path.isfile(gd):
+        # worktree の .git は「gitdir: <置き場所>」を書いたファイル（読むだけで実行はしない）
+        try:
+            with open(gd, encoding="utf-8") as f:
+                line = f.readline().strip()
+            if line.startswith("gitdir:"):
+                gd = os.path.realpath(os.path.join(os.path.dirname(gd), line[len("gitdir:"):].strip()))
+        except OSError:
+            return None
+    if wt is None and env.get("GIT_WORK_TREE"):
+        wt = os.path.realpath(os.path.join(cur, env["GIT_WORK_TREE"]))
+    for root, rgd in _trusted_repos():
+        if wt is not None and wt != root:
+            continue
+        if gd is not None:
+            if gd == rgd:
+                return (cur, root, rgd)
+            continue
+        if _under(cur, root) and not _nested_git(cur, root):
+            return (cur, root, rgd)
+    return None
+
+def _git_loc_trusted(loc) -> bool:
+    return _git_resolve(loc) is not None
+
+def _git_run(loc, args):
+    """git を判定対象のコマンドと同じ場所で、信頼する git-dir と最上位を明示して実行する（コマンドの -c・環境変数は
+    渡さない）。loc は _git_loc の結果（None は見張りの作業ディレクトリ）。信頼しない場所・失敗は None。"""
+    r = _git_resolve(loc)
+    if r is None:
+        return None
+    cur, root, gd = r
+    try:
+        p = subprocess.run(["git", f"--git-dir={gd}", f"--work-tree={root}", *_GIT_SAFE_OPTS] + args,
+                           capture_output=True, text=True, cwd=cur, env=_clean_git_env())
+        return p.stdout if p.returncode == 0 else None
     except Exception:
         return None
 
@@ -78,7 +172,7 @@ def _worktree_dirty(path: str, loc=None, staged: bool = False) -> bool:
     """<path>（'.' 可）にワークツリー変更があれば True。untracked('??')は除外。
     staged=True（コミットから戻す形）はステージ済みの変更も数える（I174）。
     git 不在/失敗は False（fail-open＝既存方針と同じ）。"""
-    out = _git_run(loc, ["status", "--porcelain", "--", path])
+    out = _git_run(loc, ["status", "--porcelain", "--no-renames", "--untracked-files=no", "--", path])
     if out is None:
         return False
     for line in out.splitlines():
@@ -184,7 +278,9 @@ def _git_revert_check(cmd: str, opaque: bool = False, ambiguous: bool = False):
             continue
         if not targets and not unreadable:
             continue
-        if ambiguous or _git_loc_dynamic(loc):
+        # 場所が 1 つに決まらない・読めない・信頼しない場所（このリポジトリと worktree の外・入れ子のリポジトリ・
+        # 偽の git-dir）では git を実行せず確認（security-review の Blocker）
+        if ambiguous or _git_loc_dynamic(loc) or not _git_loc_trusted(loc):
             return ("ask", f"git {sub} を実行する場所が 1 つに決まらない（cd の範囲・戻り先・-C 等の先が読めない）")
         # 中かっこ（sub/{b,c}.py）は bash が展開するので、文字どおりの名前では調べられない
         unreadable = unreadable or any(m in t for t in targets for m in _DYN_MARKS) or \
@@ -2144,7 +2240,8 @@ def _analyze(text: str) -> dict:
         g = _git_find(t)
         if not c["ctr"] and g and t[g[1]] == "push" and (
                 _push_dest_dynamic(t) or c.get("via_xargs") or (amb and _push_dest_on_branch(t))
-                or _git_loc_dynamic(_git_loc(t, g[0], g[1], cd, c.get("genv")))):
+                or _git_loc_dynamic(_git_loc(t, g[0], g[1], cd, c.get("genv")))
+                or (_push_dest_on_branch(t) and not _git_loc_trusted(_git_loc(t, g[0], g[1], cd, c.get("genv"))))):
             res["push_dynamic"].append(_describe(c))
         res["hard"] = res["hard"] or _cmd_hard(c)
         d, e = _cmd_danger(c), _cmd_external(c)
