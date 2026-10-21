@@ -36,6 +36,56 @@
 | FG-G1 | 失敗注入: ガードの複製で `_owning_root` を「最初に一致した root を返す」（旧ロジック相当）に書き換えると、G1 が 2（ブロック）になる | nest | `nest/x.py` | 2（＝G1 が回帰を捕まえる証明） |
 | A1〜A23 | 既存ケース（fail-safe・DANGER_OK 非解除・symlink・兄弟名 decoy 等）が全て従来どおり | — | — | 既存の期待値 |
 
+### A2. 別ワークツリーの削除・破棄と相対パス書込（計画変更記録 5・2026-10-21 追加）
+テスト環境は A と同じ（`$MAIN`・`$OTHER`・`$MAIN/.claude/worktrees/nest`・`nest2`）。`$MAIN` の `.gitignore` に `.claude/worktrees/` を入れる。cwd 欄の `$MAIN` は primary 役。すべて判定のみ（実際の削除はしない）。
+
+**止める側（期待 exit 2）**
+| TC | cwd | 入力（Bash） |
+|----|-----|------|
+| X1 | `$MAIN` | `rm -r .claude/worktrees/nest`（相対パス） |
+| X2 | `$MAIN` | `rm -fr $MAIN/.claude/worktrees/nest/x.py`（絶対パス・`-fr`） |
+| X3 | `$MAIN` | `rm -r -f .claude/worktrees/nest`（オプションを分けた形） |
+| X4 | `$MAIN` | `cd .claude/worktrees/nest && rm x.py`（非再帰・前のセグメントの `cd` を反映） |
+| X5 | `$MAIN` | `rm -r .claude`（中に別のワークツリーの root を含む） |
+| X6 | nest | `rm -r $OTHER/src`（兄弟） |
+| X7 | nest | `rm -r ../nest2`（入れ子 → 別の入れ子・相対） |
+| X8 | `$MAIN` | `find .claude/worktrees/nest -name '*.py' -delete` |
+| X9 | `$MAIN` | `find .claude/worktrees/nest -name x -exec rm {} +` |
+| X10 | `$MAIN` | `git -C .claude/worktrees/nest checkout -- .` |
+| X11 | `$MAIN` | `git -C .claude/worktrees/nest reset --hard` |
+| X12 | `$MAIN` | `git -C $MAIN/.claude/worktrees/nest clean -fd` |
+| X13 | `$MAIN` | `git -C .claude/worktrees/nest stash -u` |
+| X14 | `$MAIN` | `git --work-tree=.claude/worktrees/nest restore .` |
+| X15 | `$MAIN` | `git clean -ffdx`（中に nest がある） |
+| X16 | `$MAIN` | `git clean -f -f -d` |
+| X17 | `$MAIN` | `git worktree remove --force .claude/worktrees/nest` |
+| X18 | `$MAIN` | `git worktree remove -f $OTHER` |
+| X19 | `$MAIN` | `echo x > .claude/worktrees/nest/f`（相対パスの書込） |
+| X20 | `$MAIN` | `cd .claude/worktrees/nest && echo x > f`（`cd` 越しの書込） |
+| X21 | `$MAIN` | `rm -r <$MAIN の表記を大文字にした /mnt/c/… パス>/.claude/worktrees/nest`（`/mnt/<ドライブ>/` 配下で実行できる環境のみ。それ以外は SKIP を表示） |
+| X22 | `$MAIN` | `DANGER_OK=1 rm -r .claude/worktrees/nest`（`DANGER_OK` でも解除しない） |
+
+**通す側（期待 exit 0）**
+| TC | cwd | 入力（Bash） |
+|----|-----|------|
+| X30 | nest | `rm -r build`（自分のワークツリー内・相対） |
+| X31 | nest | `rm $MAIN/.claude/worktrees/nest/tmp.txt`（自分のワークツリー内・絶対） |
+| X32 | `$MAIN` | `rm -r <scratch の一時フォルダ>/x`（どのワークツリーにも属さない） |
+| X33 | `$MAIN` | `git -C .claude/worktrees/nest status`・`log -1`・`diff`（読み取り） |
+| X34 | `$MAIN` | `git clean -fdx`（`f` が 1 個＝git が入れ子を飛ばす） |
+| X35 | nest | `git clean -ffdx`（中に別のワークツリーが無い） |
+| X36 | `$MAIN` | `git worktree remove .claude/worktrees/nest`（`--force` なし＝git が未コミット変更を拒否する） |
+| X37 | `$MAIN` | `find .claude/worktrees/nest -name '*.py'`（`-delete` なし） |
+| X38 | `$MAIN` | `echo x > ok.txt`（自分のワークツリー内の相対書込） |
+
+**失敗注入・その他**
+| TC | 内容 | 期待 |
+|----|------|------|
+| FG-X1 | ガードの複製で `_bash_destroy_targets` を常に空リストを返すように書き換えると、X1・X8・X10・X15・X17 が exit 0 になる | 5 件とも 0（＝止める側の停止要因が新しい判定である証明） |
+| FG-X2 | ガードの複製で相対パスの絶対化を外す（相対パスを対象から除く）と、X1・X19 が exit 0 になる | 2 件とも 0 |
+| DO1 | `echo DANGER_OK=1; docker compose down -v`（区切りの後ろの `DANGER_OK=1` では解除しない） | 2 |
+| DO2 | `echo hi && DANGER_OK=1 git reset --hard`（同上） | 2 |
+
 ### B. ポート割当（`scripts/claude/tests/test_wt_port_offset.sh` を `wt-ports.sh` 対象に書き換え）
 テスト環境: 使い捨ての primary 役（`backend/.env` あり・直下 `.env` なし）。追加ワークツリーは `git worktree add` で作り、`backend/.env` を置いてから、そのワークツリーを cwd にして `wt-ports.sh` を実行する。
 
@@ -134,6 +184,16 @@
 | DV-sh 行継続（敵対的レビュー第 4 周） | guard | `docker compose down \⏎ -v`・前置コマンド（`timeout`・`sudo -E`）・空白なしの区切り（`true;`）・`bash -lc`・`$( )` の後の行継続、`docker \⏎ volume rm`・`system prune -af \⏎ --volumes`、`bash -c "$(cat <<'EOF' … EOF)"` | すべて exit 2（正規表現の層は空白をまとめた文字列に当てる）。NOREG にも行継続 3 形を追加 |
 | FG-DV1（変更） | guard | `_docker_volume_wipe` を常に None にした複製 | DV2・DV10 が exit 0 |
 | P15 | ports | 他のワークツリーの `.env` が `export DB_PORT = "5442"` 等の書き方（`BACKEND_PORT2=9` は別の変数） | `--port-offset 10` は衝突で exit 2・自動割当は 8020 |
+
+### C4. 計画変更記録 5（2026-10-21）で追加した TC
+| TC | ファイル | 条件 | 期待 |
+|----|---------|------|------|
+| R1b2 | lifecycle | volume のみあり（コンテナなし）・`DANGER_OK` なし | exit 2・stderr に「持ち主を機械で確かめられない」と volume 名・作成日時（スタブの `volume inspect` の値）・バックアップ手順が出る・`down` 非実行 |
+| R1b3 | lifecycle | volume のみあり（コンテナなし）・`DANGER_OK=1` | exit 0・`compose -p <既定名> down -v` が撤去対象の中で 1 回だけ呼ばれる（許可を出す人には R1b2 の表示で判断材料を渡したうえで、許可どおり消す） |
+| R21e | lifecycle | 戻り値 4（作業フォルダのラベルが別）・`DANGER_OK=1` | exit 2・stderr にバックアップ手順（`pg_dump`・`test -s`）が出る・`down` 非実行 |
+| R24 | lifecycle | 同名の別ワークツリーあり＋データあり・`DANGER_OK=1` | exit 2・stderr にバックアップ手順が出る・`down` 非実行 |
+| R25 | lifecycle | 戻り値 2（compose に `name:`） | exit 2・stderr に「コミットして push」と「元の名前のデータは worktree.md §4『取り残し』で片付ける」が出る |
+| P16 | ports | 自分の `.env` に `export BACKEND_PORT=8010` の形で 4 変数が割当済み | exit 0・`.env` が変わらない（4 行を重ねて書き足さない） |
 
 ### D. 文書・設定（`scripts/claude/tests/test_i179_worktree_docs.sh` 新規）
 検査は関数 `check_all <root>` にまとめ、実物（repo root）に対して実行して全 PASS、続けて失敗注入した複製に対して実行して FAIL を確認する。終了コード 0=全 PASS / 1=FAIL あり。
