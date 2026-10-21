@@ -85,7 +85,7 @@ ck "G16 git -C . checkout -- dirty"        2 "$(run 'git -C . checkout -- sub/s.
 ck "G17 git -C sub restore dirty"          2 "$(run 'git -C sub restore s.txt')"
 ck "G18 cd sub && checkout -- dirty"       2 "$(run 'cd sub && git checkout -- s.txt')"
 ck "G19 cd -- sub && checkout -- dirty"    2 "$(run 'cd -- sub && git checkout -- s.txt')"
-ck "G20 pushd sub && restore dirty"        2 "$(run 'pushd sub && git restore s.txt')"
+ck "G20 pushd sub && restore dirty"        ASK "$(runj 'pushd sub && git restore s.txt')"
 ck "G21 bash -c cd sub && restore dirty"   ASK "$(runj "bash -c 'cd sub && git restore s.txt'")"
 ck "G22 --work-tree=. checkout -- dirty"   2 "$(run 'git --work-tree=. checkout -- sub/s.txt')"
 ck "G23 cd sub && cd .. 後の clean ファイル" 0 "$(run 'cd sub && cd .. && git checkout -- tracked.txt')"
@@ -238,7 +238,7 @@ ck "G87 cd <外のリポジトリ> && git push"             ASK "$(pw "cd $EV/ev
 ck "G88 false && cd other; checkout -- dirty"      ASK "$(runj 'false && cd other; git checkout -- sub/s.txt')"
 ck "G89 true || cd other; checkout -- dirty"       ASK "$(runj 'true || cd other; git checkout -- sub/s.txt')"
 ck "G90 cd other || true; checkout -- dirty"       ASK "$(runj 'cd other || true; git checkout -- ../sub/s.txt')"
-ck "G91 cd sub || exit 1; checkout は精密（停止）"  2 "$(run 'cd sub || exit 1; git checkout -- s.txt')"
+ck "G91 cd sub || exit 1; checkout は精密（停止）"  ASK "$(runj 'cd sub || exit 1; git checkout -- s.txt')"
 ck "G92 git status && cd sub && checkout は精密"   2 "$(run 'git status && cd sub && git checkout -- s.txt')"
 ck "G94 cd sub && git --git-dir=<.git> checkout"  ASK "$(runj "cd sub && git --git-dir=$TMP/.git checkout -- s.txt")"
 ck "G95 git --git-dir=<.git> checkout（最上位）"  2 "$(run "git --git-dir=$TMP/.git checkout -- sub/s.txt")"
@@ -256,6 +256,21 @@ git config --unset core.fsmonitor
 # リダイレクト付きの条件付き cd・シンボリックリンクと ..（code-review 20261021_1509 第 2 周）
 ck "G100 false && cd other 2>&1; checkout"       ASK "$(runj 'false && cd other 2>&1; git checkout -- sub/s.txt')"
 ck "G101 false && cd other &>/dev/null; checkout" ASK "$(runj 'false && cd other &>/dev/null; git checkout -- sub/s.txt')"
+ck "G105 cd other 2>&1 || true; checkout"         ASK "$(runj 'cd other 2>&1 || true; git checkout -- ../sub/s.txt')"
+# 改行・引用符を含むコマンドは python で JSON にする（json() は単純な printf で、エスケープしない）
+runjq() { local out code; out=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" | python3 "$GUARD" 2>/dev/null); code=$?
+          if [ "$code" = "0" ] && printf '%s' "$out" | grep -q '"permissionDecision":[[:space:]]*"ask"'; then echo "ASK"; else echo "$code"; fi; }
+# 場所が 1 つに決まる形は許可リストで決める（code-review 20261021_1509 第 3 周: 決まらない書き方の列挙は終わらない）
+# shellcheck disable=SC2016  # 引用符・$ を展開せず、そのまま guard に渡すのが目的
+ck "G106 エスケープした引用符の後のパイプの中の cd" ASK "$(runjq "echo it\\'s ; cd other | true ; git checkout -- sub/s.txt ; echo 'x'")"
+ck "G107 改行で書いた if の中の cd"              ASK "$(runjq "$(printf 'if false\nthen\ncd other\nfi\ngit checkout -- sub/s.txt')")"
+ck "G108 改行で書いた関数の中の cd"              ASK "$(runjq "$(printf 'f() {\ncd other\n}\ngit checkout -- sub/s.txt')")"
+ck "G109 cd -P lnk/..; checkout"                  ASK "$(runj 'cd -P other/..; git checkout -- sub/s.txt')"
+ck "G110 set -P; cd …; checkout"                  ASK "$(runj 'set -P; cd other; git checkout -- ../sub/s.txt')"
+ck "G111 CDPATH=…; cd …; checkout"                ASK "$(runj 'CDPATH=/tmp; cd other; git checkout -- ../sub/s.txt')"
+ck "G112 見張りの環境の CDPATH"                   ASK "$(json 'cd sub && git checkout -- s.txt' | CDPATH=/tmp python3 "$GUARD" 2>/dev/null | grep -q '"ask"' && echo ASK || echo NO)"
+ck "G113 cd sub; checkout（; でも無条件の cd は一意）" 2 "$(run 'cd sub; git checkout -- s.txt')"
+ck "G114 git status && cd sub; checkout（条件付き）" ASK "$(runj 'git status && cd sub; git checkout -- s.txt')"
 mkdir -p other/deep
 ln -s other/deep lnk
 ck "G102 cd lnk/..（bash では元の場所）; checkout" 2 "$(run 'cd lnk/..; git checkout -- sub/s.txt')"

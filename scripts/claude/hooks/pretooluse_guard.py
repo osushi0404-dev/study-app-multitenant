@@ -62,24 +62,6 @@ def _segments_ops(cmd: str) -> list:
     out.append((seg, ""))
     return [(sg, op) for sg, op in out if sg]
 
-def _cd_conditional(text: str) -> bool:
-    """条件付きの cd（`A && cd X; …`・`A || cd X; …`・`cd X || true; …`）があれば True。cd が実行されないまま
-    後ろの git が動きうる。`cd X && git …`（成功後にだけ動く）・`cd X || exit` は一意。リダイレクト付きの cd も同じ。"""
-    segs = _segments_ops(text.replace("\n", " ; "))
-    prev = ";"
-    for k, (seg, op) in enumerate(segs):
-        if seg and seg[0] in ("cd", "pushd"):
-            # 左が && / || なら、cd 自体が実行されないことがある。右が && なら後ろも一緒に止まるので一意
-            if prev in ("&&", "||") and op not in ("&&", ""):
-                return True
-            # cd X || <exit・return 以外>: cd が失敗しても後ろが動く
-            if op == "||":
-                nxt = segs[k + 1][0] if k + 1 < len(segs) else []
-                if not nxt or nxt[0] not in ("exit", "return"):
-                    return True
-        prev = op
-    return False
-
 def _segments(cmd: str) -> list:
     """コマンドをクォート対応で分割し、shell 演算子区切りごとのトークン列リストを返す。
     クォート不整合（実シェルでもエラー）の場合は素朴分割にフォールバック。
@@ -269,36 +251,43 @@ def _revert_from_commit(sub: str, args: list) -> bool:
 _DYN_MARKS = ("$", "`", "__SUBST_")
 _BRACE_RE = re.compile(r"\{[^{}]*(,|\.\.)[^{}]*\}")
 
-def _scoped(text: str) -> bool:
-    """`( … )`（サブシェル）・popd があり、cd の効く範囲が読み解いた列から分からないなら True。
-    `$( )`・`$(( ))`・`<( )`・`f()` は場所の範囲を変えないので数えない。"""
-    return bool(re.search(r"(?<![$<>(])\((?![()])", text) or re.search(r"\bpopd\b", text))
-
-# パイプ・& の前後の cd（サブシェルで動くので後ろに効かない）
-_CD_PIPE_RE = re.compile(r"\b(cd|pushd)\b[^;&|\n]*(?<![|&>])[|&](?![|&>])|(?<![|&>])[|&](?![|&>])[^;&|\n]*\b(cd|pushd)\b")
-# cd を含みうる入れ子のシェル（中の cd は外に効かない）
-_NESTED_SHELL_RE = re.compile(r"\b(ba|z|da)?sh\b\s+(-\w*c\b|<<)|\beval\b|\bxargs\b|\bparallel\b|\bfind\b[^;&|\n]*-exec")
-
 def _loc_ambiguous(text: str, cmds=None) -> bool:
-    """git を実行する場所が 1 つに決まらないなら True（I174 0-15: 推測で通す・止めるをせず確認にする）。
-    cd / pushd / popd が無ければ一意。あれば、`( … )`・パイプ・`&`・入れ子のシェルの中にありうる・
-    元へ戻る（`cd -`・`~-`・`$OLDPWD`）・先が読めない（変数・`$(…)`）・先が存在しない（失敗して留まる）のどれかで一意でない。"""
+    """git を実行する場所が 1 つに決まらないなら True（I174 0-15。推測で通す・止めるをせず確認にする）。
+    「1 つに決まる」と言い切れる形だけを許可リストで決める（code-review 20261021_1509 第 3 周: 決まらない書き方を
+    列挙していくと、`( … )`・パイプ・条件付き・制御構文・`cd -P`・CDPATH… と終わらないため）。
+    一意: cd / pushd / popd が無い。または、コマンド全体が `&&` だけでつながった単純コマンドの列で（`;`・`||`・`|`・
+    `&`・改行・`( … )`・制御構文・入れ子のシェルが無い）、cd はすべて `cd <文字どおりの実在するディレクトリ>`（オプション・
+    `-`・`~-`・変数・置換なし）で、CDPATH・`set -P`／physical を使っていないとき。"""
     cmds = _parse(text) if cmds is None else cmds
-    # 引用符の中（コミットメッセージの `fix(I179):`・`eval` 等）は場所の範囲に関係しないので除いて見る
-    text = re.sub(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"", "''", text)
-    cds = [c for c in cmds if not c["ctr"] and c["toks"] and c["toks"][0] in ("cd", "pushd", "popd")]
-    if not cds:
+    if not any(c["toks"] and c["toks"][0] in ("cd", "pushd", "popd") for c in cmds):
         return False
-    if _scoped(text) or _CD_PIPE_RE.search(text) or _NESTED_SHELL_RE.search(text) or _cd_conditional(text):
+    if os.environ.get("CDPATH") or re.search(r"\bCDPATH\b|\bset\s+(-\w*P|-o\s+physical)", text):
         return True
-    base = None
-    for c in cds:
-        d = _cd_target(c["toks"])
-        if d is None or d in ("-", "~-") or "OLDPWD" in d or any(m in d for m in _DYN_MARKS):
+    segs = _segments_ops(text)
+    # `&&` と `;`（改行）だけでつながり、読み解いた単純コマンドと区切りの列が 1 対 1（入れ子のシェル・置換・
+    # ヒアドキュメント・制御構文が無い）
+    if any(op not in ("&&", ";", "") for _, op in segs) or len(segs) != len(cmds):
+        return True
+    base, prev = None, ";"
+    for (seg, op), c in zip(segs, cmds):
+        t = c["toks"]
+        if c["ctr"] or not t or _strip_env(seg)[:1] != t[:1]:
             return True
-        base = _join_dir(base, d)
-        if not os.path.isdir(base):
+        if t[0] in ("pushd", "popd"):
             return True
+        if t[0] == "cd":
+            arg = t[1:]
+            if arg[:1] == ["--"]:
+                arg = arg[1:]
+            if len(arg) != 1 or arg[0].startswith(("-", "~")) or any(m in arg[0] for m in _DYN_MARKS):
+                return True
+            # `A && cd X; …` は A が失敗すると cd されないまま後ろが動く（cd が条件付き）
+            if prev == "&&" and op == ";":
+                return True
+            base = _join_dir(base, arg[0])
+            if not os.path.isdir(base):
+                return True
+        prev = op
     return False
 
 def _git_revert_check(cmd: str, opaque: bool = False, ambiguous: bool = False):
@@ -2334,7 +2323,8 @@ def _sn_judge(seg: list, cds: tuple = ()) -> dict:
     if any("$(" in t or "`" in t or "__HEREDOC_" in t for t in seg):
         return {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": []}
     # 手前の cd を付けて、git の場所の判定に引き継ぐ（場所が 1 つに決まらなければ _analyze が確認側に倒す）
-    return _analyze(" ; ".join([shlex.join(c) for c in cds] + [shlex.join(seg)]))
+    # `&&` でつなぐ（`;` だと、組み立て直した文字列が「cd が条件付き」の形に見えて余計な確認になる）
+    return _analyze(" && ".join([shlex.join(c) for c in cds] + [shlex.join(seg)]))
 
 def _safety_net(text: str) -> dict:
     """文法に依存しない区切り（区切り記号・予約語・包むコマンド）でコマンドの位置を見つけ、そこから始まる各コマンドを

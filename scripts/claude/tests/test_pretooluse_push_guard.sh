@@ -157,10 +157,10 @@ ck "XP28 bash -lc の \$() 宛先 push"        ASK "$(runj "bash -lc 'git push -
 ck "XP29 timeout bash -lc の \$() 宛先"     ASK "$(runj "timeout 60 bash -lc 'git push origin \$(git branch --show-current)'")"
 ck "XP30 ヒアドキュメントの \$() 宛先"      ASK "$(runj "$(printf "bash <<'EOF'\nset -e\ngit push -u origin \"\$(git branch --show-current)\"\nEOF")")"
 ck "XP31 cd -- <develop> && git push"     2   "$(runj "cd -- $W && git push origin")"
-ck "XP32 cd -P <develop> && git push"     2   "$(runj "cd -P $W && git push origin")"
+ck "XP32 cd -P <develop> && git push"     ASK   "$(runj "cd -P $W && git push origin")"
 ck "XP33 --git-dir/--work-tree <develop>" 2   "$(runj "git --git-dir=$W/.git --work-tree=$W push origin")"
 ck "XP34 GIT_DIR=<develop の worktree>"   2   "$(runj 'GIT_DIR=.git/worktrees/devwt git push origin')"
-ck "XP35 pushd <develop> && git push"     2   "$(runj "pushd $W && git push")"
+ck "XP35 pushd <develop> && git push"     ASK   "$(runj "pushd $W && git push")"
 ck "XP36 -c remote.origin.push=HEAD:main" 2   "$(runj 'git -c remote.origin.push=HEAD:main push origin')"
 ck "XP37 git config remote.origin.push"   2   "$(runj 'git config remote.origin.push HEAD:main')"
 ck "XP38 git config push.default matching" 2  "$(runj 'git config push.default matching')"
@@ -168,8 +168,8 @@ ck "XP39 git config user.name は通す"      0   "$(runj 'git config user.name 
 ck "XP40 xargs grep \"git push\" は通す"   0   "$(runj 'git diff --name-only | xargs grep -n "git push"')"
 ck "XP41 bash -c grep \"git push\" は通す" 0   "$(runj "bash -c 'grep -rn \"git push\" docs'")"
 ck "XP42 bash -c の普通の push は通す"     0   "$(runj "bash -c 'git push -u origin feature/x'")"
-ck "XP43 cd ~（HOME が develop）&& git push" 2 "$(HOME="$W" runj 'cd ~ && git push')"
-ck "XP44 cd（引数なし＝HOME）&& git push"    2 "$(HOME="$W" runj 'cd && git push')"
+ck "XP43 cd ~（HOME が develop）&& git push" ASK "$(HOME="$W" runj 'cd ~ && git push')"
+ck "XP44 cd（引数なし＝HOME）&& git push"    ASK "$(HOME="$W" runj 'cd && git push')"
 # 入れ子の中の前置き GIT_DIR=・実行場所が変数の push（fix-loop テストレビューの指摘）
 ck "XP45 bash -c 'GIT_DIR=<develop> git push'" 2  "$(runj "bash -c 'GIT_DIR=.git/worktrees/devwt git push origin'")"
 ck "XP46 env GIT_DIR=<develop> git push"      2   "$(runj 'env GIT_DIR=.git/worktrees/devwt git push origin')"
@@ -212,6 +212,9 @@ ck "XP77 false && cd <develop>; git push"      ASK "$(runj "false && cd $W; git 
 ck "XP78 cd <develop の worktree> && git --git-dir=<主の .git> push は通す" 0 "$(runj "cd $W && git --git-dir=$TMP/.git push")"
 # 引用符の中（コミットメッセージ）の ( や eval は場所の範囲に関係しない（第 2 周 要件観点）
 ck "XP79 cd && commit -m \"fix(I1): eval\" && push は通す" 0 "$(runj "cd $TMP && git commit -m \"fix(I1): eval の説明\" && git push -u origin feature/x")"
+ck "XP80 cd && commit -m \"fix(I1): eval\" && 宛先なし push は通す" 0 "$(runj "cd $TMP && git commit -m \"fix(I1): eval の説明\" && git push")"
+ck "XP81 cd && commit -m '…' && 宛先なし push は通す（安全網の組み立て直し）" 0 "$(runj "cd $TMP && git commit -m 'fix x' && git push")"
+ck "XP82 cd <feature の場所>; git push は通す"  0   "$(runj "cd $TMP; git push")"
 # 偽合格の防止: 実行場所が変数かの判定（_git_loc_dynamic）を外すと、変数の場所の push が素通しになる
 BROKEN_LOC="$TMP/guard_noloc.py"
 # 信頼する場所の判定（_git_loc_trusted・security-review の Blocker）も同じ形を確認にするので、両方を外す
