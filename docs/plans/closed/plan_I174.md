@@ -502,11 +502,11 @@ _CODE_EXTERNAL = [
 - [ ] マージ順（I146 の後）と作業場所（primary・例外）
 
 ## レビュー結果
-- [20261021_1336 判定: ✅ 完了（Blocker 0 件）](../../reviews/I174_plan_review_20261021_1336.md)
-- [20261021_0900 判定: ✅ 完了](../../reviews/I174_plan_review_20261021_0900.md)
-- [20261019_0005 判定: ✅ 完了](../../reviews/I174_plan_review_20261019_0005.md)
-- [20261017_1220 判定: ✅ 完了](../../reviews/I174_plan_review_20261017_1220.md)
-- [20261016_1621 判定: ✅ 完了](../../reviews/I174_plan_review_20261016_1621.md)
+- [20261021_1336 判定: ✅ 完了（Blocker 0 件）](../../reviews/closed/I174_plan_review_20261021_1336.md)
+- [20261021_0900 判定: ✅ 完了](../../reviews/closed/I174_plan_review_20261021_0900.md)
+- [20261019_0005 判定: ✅ 完了](../../reviews/closed/I174_plan_review_20261019_0005.md)
+- [20261017_1220 判定: ✅ 完了](../../reviews/closed/I174_plan_review_20261017_1220.md)
+- [20261016_1621 判定: ✅ 完了](../../reviews/closed/I174_plan_review_20261016_1621.md)
 
 ## セキュリティレビュー結果
 
@@ -590,3 +590,9 @@ _CODE_EXTERNAL = [
 
 ### 残余リスク処遇
 （/retro で決定する）
+
+## 完了情報
+- **完了日時**: Wed Oct 21 20:55:50 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（最新の /code-review 20261021_2038 は OK・RISK: YES。ステップ 6 の後の敵対的レビューはユーザー判断で省略＝docs/reviews/closed/I174_adversarial_review_20261021_2045.md）
+- **未決のまま引き継ぐもの**: 残余リスクの処遇と /retro の改善案（P1〜P4・C1〜C3）はユーザーの判断待ち。対象は、0-11〜0-13 の先送り一覧、0-17 の `_pr_is_cross_repo` に `--` を挟む件、R10 の Claude Code への報告
