@@ -138,6 +138,14 @@
   - `python3 - < f.py`・`python3 /dev/stdin < f.py` は、流し込むファイルの中身を判定する
 - 残余リスク（追記）: `ssh` / `kubectl exec` の先のコマンドは判定しない（このプロジェクトの作業で使わない）
 
+### 0-17. ステップ 6 の実施（I146 マージ後の取り込み・2026-10-21）
+I146（PR #261）は 2026-10-17 にマージ済みだった（/close の 0) で PR #293 が DIRTY と判明）。develop を取り込み、`pretooluse_guard.py` の衝突を解消した。`.claude/settings.json` は自動マージ（I146 の MCP 用フック登録 1 件）。
+1. 解消の方針: I174 の guard を土台にし、I146 の gh pr 判定（`_GH_PR_SPECS`〜`_guard_gh_pr_targets`・`import bisect`）を**無改変のまま**ブロックごと main の直前に置いた（I146 側で敵対的レビュー 8 周を通った判定を書き換えない）。main への差し込みは I146 と同じ 2 か所: MCP 経路（Edit/Write の後・Bash の前）と、Bash の危険操作の判定の直後（同居する危険操作を ask で先食いしない・I083 の順序方針）。I146 では DANGER_OK=1 付きのとき gh pr 判定自体を通らなかったが、I174 では DANGER_OK=1 でも通す。
+2. 解除経路（本ステップの本題）: fork PR の merge/checkout（block 種別）に DANGER_OK=1 が付いていたら、block の代わりに「DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: …」の ask にする（`_guard_gh_pr_targets(…, danger_ok)`・4-2 (1) と同じ入口）。I146 のテスト G21 を 0 → ASK に変え、G21b（checkout）・G21c（自前 PR は素通しのまま）を追加。
+3. **計画からの変更（取り込みで見つかった I174 の不具合の修正）**: I146 のテスト G165（`echo $$'x\' ' #' ; gh pr merge 257`）が ASK で不合格。原因は I174 の `_join_continuations` が `$$`（プロセス番号）の直後の `'` を `$'…'` の始まりと読み違えること。I174 自身の判定でも `echo $$'x\' ' #' ; git push --force origin main` や `… ; rm -rf ../wt-harness` が素通し（exit 0）になっていた（bash は実行する）。`_second_of_pid`（直前に続く `$` の数が奇数なら `$$` の 2 文字目・`\$` は数えない）で直した。本物の bash との差分テストに前置き 2 種（`echo $$'x\' ' #'`・`echo $$$'x\' ' #'`）を加え、4,560 件で見逃し 0（修正前の guard では見逃し 192）。TC-12 を合格させる（R4）ために必要な修正として扱う。
+4. 決定論ゲートに TC-12（`bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`）を加えた（39 行）。
+- 観察（I146 の既存の判定・本ステップでは変えない）: `_pr_is_cross_repo` は判定対象のコマンドの識別子・`--repo` をそのまま `gh pr view` に渡す。`gh pr merge -- --web` のように識別子が `-` で始まると `gh pr view --web …` になりうる（`--json` と併用したときの gh の振る舞いは未確認。ブラウザを開く操作のため実測していない）。0-16 の「判定器は副作用を持たない」の観点では `--` を挟むのが望ましい。/close 時の先送り一覧の起票判断に含める。
+
 ### 0-16. fix-loop（/security-review の Blocker への対応・2026-10-21）
 診断メモ `docs/reviews/I174_fix_diagnosis_20261021_1422.md`（§5 で改訂・診断レビュー PASS）。見張りが判定のために実行する git に、判定対象のコマンドの `-c` や、cd の先のリポジトリの設定が効き、人の承認より前にコマンドが実行されていた（0-14 で入った）。
 1. 見張りが git を実行してよい場所を、見張りの作業ディレクトリの `git worktree list` から得た「このリポジトリとその worktree」に**一致**で限る（`_git_resolve`）。配下でも入れ子のリポジトリは除外。`--git-dir`・`--work-tree`・`GIT_DIR`・`GIT_WORK_TREE` は信頼する値と完全一致のときだけ（worktree の `.git` ファイルは読んで解決）。

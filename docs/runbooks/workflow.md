@@ -243,3 +243,24 @@ git branch -d hotfix/critical-bug-description
 3. **ユーザーが明示的に指示**: 「ブランチ作成不要」等の指示がある場合
 
 ただし、**イシューファイル作成依頼の場合は必ずブランチを作成**すること。
+
+## 外部（fork）からの PR の扱い
+
+public リポジトリのため、第三者（自律 AI エージェントを含む）から fork 経由の PR が届くことがある。
+外部からのコード寄稿は受け付けない（`CONTRIBUTING.md`）。届いた場合は次の手順で処理する。
+
+1. head リポジトリを確認する: `gh pr view <PR番号> --json isCrossRepository -q .isCrossRepository` → `true` なら外部 PR。
+2. **Actions の実行を承認しない**（fork PR には repository secrets が渡らず、E2E は原理的に失敗する）。
+3. **base 追従・CI 対応・レビューをしない**（マージしない PR に投じる意味がない）。
+   **手元に checkout しない**（`.claude/` と hook 本体が相手の版に置き換わり、次の操作でそのコードが実行されるため）。中身は `gh pr diff <PR番号>` / `gh pr view <PR番号>` で確認する。
+   `gh pr checkout` と既定エイリアス `gh co` は PreToolUse ガードで block されるが、`git fetch origin pull/<N>/head` → `git checkout`・`gh pr diff <N> | git apply` などの別経路はガードの対象外なので、手順として行わないこと。
+4. 方針コメントを付けて close する: `gh pr comment <PR番号> --body-file <file>` → `gh pr close <PR番号>`。
+5. 対象のイシューは OPEN のまま残し、必要なら通常のハーネス手順（/plan-issue 以降）で自前実装する。
+
+判定は `scripts/claude/pr-base-sync.sh`（/close step 0）と PreToolUse ガード
+（`scripts/claude/hooks/pretooluse_guard.py`）でも自動検知されるが、上記は人が最初に見たときの手順である。
+ガードは外部 PR への `gh pr merge` / `gh pr checkout`（`gh co`）と MCP の `merge_pull_request` を block、
+`gh pr ready` / `edit` / `update-branch` / `review --approve` と MCP の `update_pull_request_branch` /
+`create_pull_request_review`（APPROVE）を ask にする。読み取りと `close` / `comment` は断るために必要なので素通しする。
+実行されるコマンドの中に `gh pr merge` 等があるのに判定しきれない場合は、block ではなく ask になる。
+引用符の中の文字列やヒアドキュメントの本文（コミットメッセージ・文書・テスト用の文字列）には反応しない。

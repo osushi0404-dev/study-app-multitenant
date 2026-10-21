@@ -14,6 +14,12 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 
 0) PR のベースブランチ確認と base 追従（必須）:
    ```bash
+   # cross-repo チェック（I146）: 自前の PR であることを最初に確認する
+   gh pr view <PR番号> --json isCrossRepository -q .isCrossRepository
+   # → "false" であること。"true"（fork 由来の外部 PR）なら **STOP**。
+   #   base 追従も CI 対応もせず、CONTRIBUTING.md の方針に沿って方針コメント付きで close する
+   #   （手順: docs/runbooks/workflow.md「外部（fork）からの PR の扱い」）。
+
    gh pr view --json baseRefName --jq '.baseRefName'
    # → "develop" であること。"main" の場合は以下で修正してから続行:
    # gh pr edit <PR番号> --base develop
@@ -142,9 +148,13 @@ allowed-tools: Read, Bash, Write, Edit, Glob, Grep
    bash scripts/claude/pr-base-sync.sh final
    # PR番号は省略可（step 0 と同じ・カレントブランチの PR を自動特定。明示指定も可）
    ```
-   合格条件は「**BEHIND / DIRTY でない ＋ CI 全グリーン**」（CLEAN は要求しない。ユーザーの
-   Approve がマージ条件のため、承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
+   合格条件は「**BEHIND / DIRTY でない ＋ CI 全グリーン**」（CLEAN は要求しない。develop は
+   Code Owners（`oshui0404`）の承認が必須、main は承認 1 件が必須で push・マージできるのは
+   `oshui0404` だけの設定のため（main には CODEOWNERS が無い・`docs/runbooks/branch-protection-setup.md`）、
+   承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
    - exit 0 → step 6 のマージ依頼へ進む
    - exit 1 → STOP してユーザーに報告（マージコンフリクト・CI fail・DRAFT 残留等。自動解決しない）
    - exit 2 → mergeStateStatus=UNKNOWN が継続。値を報告し続行可否をユーザーに確認
-6) ユーザーへ GitHub 上で Approve & Merge を依頼
+6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー `oshui0404` だけが行える。
+   承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
+   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。

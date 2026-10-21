@@ -31,7 +31,7 @@
 | TC-16 | 新規 `scripts/claude/tests/guard_bash_oracle.py`（ゲートでは `test_guard_bash_oracle.sh` 経由。危険なコマンド 8〔`$'…'` で書いた引数・保護ブランチへの push を含む〕 × 前置きの文脈 16 × つなぎ方 × 書き方 3 × 包み方 3 と、bash が実行しない形の計 1,844 件を、本物の bash〔git・rm は印を出すだけの関数〕と guard の両方に流し、bash が実行するのに guard が素通しのものが 0 件。計画書 0-13。修正前の guard では見逃し 692 件。2026-10-20〜21 に、確認止まり〔ASK〕も不合格・bash が実行しない形の停止も不合格・guard の存在と対照の確認・`rm -fr`／`push -f`／`+参照`／`HEAD:main`／git.exe／`rm -r` と入れ子の中のコメントを追加して 3,984 件） | exit 0（最終行 `見逃し=0 余計な停止=0`） | AC-4・AC-8 | fix-loop（0-13） |
 | TC-12 | I146 マージ後の `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（I146 が足すテスト。DANGER_OK=1 の解除経路があれば期待値を ASK に揃える） | exit 0 | AC-10 | 6 |
 
-TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。
+TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無いので、下の決定論ゲートには入れない。ステップ 6 の取り込み後に、この文書のゲートへ `bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh` を加えて実行する。→ 2026-10-21 のステップ 6 で追加済み（G21 を 0 → ASK・G21b/G21c を追加・247 件）。TC-16 は同じステップで前置き 2 種（`$$'…'`・`$$$'…'`）を加え 4,560 件。
 
 ### TC-01 のケース表（`test_pretooluse_container_guard.sh` から自動生成・1 対 1）
 
@@ -669,6 +669,7 @@ bash scripts/claude/tests/test_adversarial_trigger.sh
 bash scripts/claude/tests/test_pretooluse_guard_matrix.sh
 bash scripts/claude/tests/test_guard_corpus_diff.sh
 bash scripts/claude/tests/test_guard_bash_oracle.sh
+bash scripts/claude/tests/test_pretooluse_gh_pr_guard.sh
 python3 -m json.tool .claude/settings.json
 ! grep -qF "Bash(git merge *)" .claude/settings.json
 ! grep -qF "Bash(git reset *)" .claude/settings.json
@@ -903,4 +904,20 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 | TC-12 | 未実施（I146 のマージ後・ステップ 6） |
 
 - 1 回目の /test（17:45 開始）は、並行していた I179 の敵対的レビューのエージェントが I179 側の guard に流した計測（python3 が約 13GB）で WSL ごと落ち、記録が残らなかった。I174 の処理が原因ではないことを確かめるため、再実行では 1 プロセス 4GB の上限を付けた。主要 8 本の最大メモリは 22〜28MB、I174 の guard に cd を 20 個並べても 0.14 秒・22MB で停止（exit 2）した。
-- 手動テストの補強（Claude・guard に直接入力）: No.2 は exit 0（ask なし）、No.3 は ask「DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: destructive SQL requires DANGER_OK=1」、No.4 は ask「外部への送信・秘密情報の表示を伴う操作です。確認してください: メール送信（django.core.mail） / メール送信（send_mail）」。承認画面が出るかどうかは Human の新しいセッションで確かめる（No.2〜4）。
+- 手動テストの補強（Claude・guard に直接入力）（ステップ 6 前の記録）: No.2 は exit 0（ask なし）、No.3 は ask「DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: destructive SQL requires DANGER_OK=1」、No.4 は ask「外部への送信・秘密情報の表示を伴う操作です。確認してください: メール送信（django.core.mail） / メール送信（send_mail）」。承認画面が出るかどうかは Human の新しいセッションで確かめる（No.2〜4）。
+
+### ステップ 6（2026-10-21・I146 マージ後の取り込み・計画書 0-17）
+develop（I146・I178・I180）を取り込み、決定論ゲート全 39 行（TC-12 を追加）を 1 行ずつ実行し、**すべて exit 0**。
+
+| TC | 結果 |
+|---|---|
+| TC-01 container | pass=769 fail=0 |
+| TC-13 settings | pass=12 fail=0（I146 の MCP 用フック登録も guard を呼ぶ） |
+| TC-02〜TC-05 | push 185・checkout 140・worktree 30・adversarial 40 |
+| TC-14 総当たり | pass=301 fail=0 |
+| TC-15 作業記録の再判定 | 新しく確認・停止 0 件 |
+| TC-16 bash との差分 | cases=4560 bash実行=4212 見逃し=0 余計な停止=0（取り込み前の guard では見逃し 192） |
+| TC-12 gh pr（I146） | pass=247 fail=0（G21 は 0 → ASK・G21b/G21c 追加） |
+| TC-06〜TC-11 | すべて exit 0 |
+
+- 取り込み直後、TC-12 の G165（`echo $$'x\' ' #' ; gh pr merge 257`）だけが ASK で不合格。I174 の前処理が `$$` の直後の `'` を `$'…'` と読み違えていた（I174 自身の判定でも同じ前置きの強制 push・別 worktree の削除が素通し）。`_second_of_pid` で修正し、TC-16 に前置き 2 種を追加した。

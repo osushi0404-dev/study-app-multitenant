@@ -66,6 +66,8 @@ CONTEXTS = [
     ('echo "fix #293"', ANY),
     ("echo 'fix #293'", ANY),
     ("echo $'it\\'s'", ANY),
+    ("echo $$'x\\' ' #'", ANY),        # $$ の後の ' は $'…' ではない（I174 ステップ 6・I146 の G165）
+    ("echo $$$'x\\' ' #'", ANY),       # $$ の後の $'…' は ANSI-C（\' で閉じず、後ろの # はコメント）
     ("echo PR#293", ANY),
     ('echo "C:\\\\"', ANY),
     ("echo $((1 << 2))", ANY),

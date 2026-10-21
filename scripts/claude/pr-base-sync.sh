@@ -20,6 +20,21 @@ CI_INTERVAL="${PBS_CI_INTERVAL:-15}"        # CI ポーリング間隔（秒）�
 CI_TIMEOUT="${PBS_CI_TIMEOUT:-600}"         # CI 待機上限（秒）＝code-review.sh と同値
 LOOP_MAX="${PBS_LOOP_MAX:-3}"               # final の BEHIND 追従再チェック上限
 
+# I146: cross-repo（fork）PR ガード。MODE 分岐より前＝sync/final 共通で必ず走る。
+# 自前でない PR に base 追従・push をしない（fail-closed: 取得失敗・空値・想定外値も STOP）。
+CROSS=$(gh pr view "$PR_NUM" --json isCrossRepository -q .isCrossRepository) \
+  || { echo "⛔ isCrossRepository の取得に失敗しました。STOP してユーザーに報告"; exit 1; }
+case "$CROSS" in
+  false) ;;   # 自前 PR → 続行
+  true)
+    echo "⛔ PR #${PR_NUM} は fork（外部リポジトリ）由来です。base 追従・push・CI 対応はしません。"
+    echo "   外部からのコード寄稿は受け付けていません（CONTRIBUTING.md）。"
+    echo "   方針コメント付きで close してください（docs/runbooks/workflow.md）。"
+    exit 1 ;;
+  *)
+    echo "⛔ isCrossRepository が想定外の値です: '${CROSS}'。STOP してユーザーに報告"; exit 1 ;;
+esac
+
 BASE=$(gh pr view "$PR_NUM" --json baseRefName -q .baseRefName) || { echo "⚠️ baseRefName 取得失敗"; exit 1; }
 
 # 取得失敗・空値は return 1（fail-closed）。エラーメッセージは >&2（$() にキャプチャさせない）

@@ -1,0 +1,5 @@
+# 全ファイルの所有者をリポジトリ管理者に限定する（I178）。
+# develop・main のブランチ保護「Require review from Code Owners」と組み合わせ、
+# 管理者以外（bot・外部の人）の承認ではマージ要件を満たさないようにする。
+# 設定と理由: docs/runbooks/branch-protection-setup.md
+* @oshui0404
