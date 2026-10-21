@@ -5,7 +5,7 @@
 - **関連イシュー**: #301
 - **Draft PR**: #303
 - **作成根拠資料**: docs/issues/open/I180.md（起点イシュー）
-- **実装後評価**: docs/reviews/open/I180_review.md
+- **実装後評価**: docs/reviews/closed/I180_review.md
 - **作成日**: 2026-10-21
 - **ブランチ**: `feature/I180-update-pillow-13`（`origin/develop` 起点）
 - **テスト文書**: docs/tests/open/I180_auto_test.md / docs/tests/open/I180_manual_test.md
@@ -627,5 +627,10 @@ echo "RESULT: OK (13/13)"
 - [ ] （2026-10-21 追加）retro スキルに手順 2.7「改善案ごとに本当に対応すべきかを判定する」を追加する（§5-5・§5-6・ステップ 4）
 
 ## レビュー結果
-- [20261021_1039 判定: ✅ 完了](../../reviews/I180_plan_review_20261021_1039.md)
-- [20261021_0958 判定: ✅ 完了](../../reviews/I180_plan_review_20261021_0958.md)
+- [20261021_1039 判定: ✅ 完了](../../reviews/closed/I180_plan_review_20261021_1039.md)
+- [20261021_0958 判定: ✅ 完了](../../reviews/closed/I180_plan_review_20261021_0958.md)
+
+## 完了情報
+- **完了日時**: Wed Oct 21 11:24:34 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（/code-review 2 回とも OK。2 回目は RISK: YES で、敵対的レビューはユーザー判断で省略＝docs/reviews/closed/I180_adversarial_review_20261021_1120.md）
