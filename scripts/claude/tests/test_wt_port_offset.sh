@@ -126,6 +126,13 @@ p15 "P15c シングルクォート" "BACKEND_PORT='8050'\n"
 p15 "P15d = の前後の空白"   'BACKEND_PORT = 8050\n'
 # --- TC-P15e: 名前の続く別の変数（BACKEND_PORT2）を先に置いても取り違えない ---
 p15 "P15e BACKEND_PORT2 が先" 'BACKEND_PORT2=9\nBACKEND_PORT=8050\n'
+# --- TC-P16: 自分の .env が export 付きの書き方で割当済み → 変更しない（4 行を重ねて書き足さない） ---
+new_env; add_wt "$TMP/wt-app" b1
+printf 'export DB_PORT=5442\nexport REDIS_PORT=6389\nexport BACKEND_PORT=8010\nexport FRONTEND_PORT=3010\n' > "$TMP/wt-app/.env"
+P16_BEFORE="$(cat "$TMP/wt-app/.env")"
+run_ports "$TMP/wt-app"
+ck   "P16 exit0"              0    "$RC"
+ck   "P16 .env が変わらない"  "$P16_BEFORE" "$(cat "$TMP/wt-app/.env")"
 
 # ===================== 引数検証 =====================
 # --- TC-P5: --port-offset 非整数 / 値なし → exit2 ---

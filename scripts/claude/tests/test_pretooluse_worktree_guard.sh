@@ -81,11 +81,13 @@ ck "A19 DANGER_OK 別wt bash→block" 2 "$(bash_c "DANGER_OK=1 echo x > $OTHER/f
 ck "A20a 現wt redirect→allow" 0 "$(bash_c "echo x > $MAIN/ok.txt")"
 ck "A20b force push→block"    2 "$(bash_c "git push --force origin x")"
 
-# --- 未カバー経路の no-silent-caps 警告（TC-A22） ---
-A22_CODE=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd %s && echo x > f"}}' "$OTHER" \
+# --- 未カバー経路の no-silent-caps 警告（TC-A22）。固定パスの cd は I179 で判定対象になった（X20）ため、変数越しの cd で見る ---
+# shellcheck disable=SC2016  # $WT はガードに渡すコマンド文字列の一部（展開させない）
+A22_CODE=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd $WT && echo x > f"}}' \
              | ( cd "$MAIN" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?)
 ck "A22 cd経由 未カバー exit0" 0 "$A22_CODE"
-A22_ERR=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd %s && echo x > f"}}' "$OTHER" \
+# shellcheck disable=SC2016  # 同上
+A22_ERR=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd $WT && echo x > f"}}' \
              | ( cd "$MAIN" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
 if printf '%s' "$A22_ERR" | grep -q "絶対パス宛先のみ検査"; then
   ck "A22 未カバー警告出力" 0 0; else ck "A22 未カバー警告出力" 0 1; fi
@@ -281,6 +283,109 @@ if grep -q FIRSTMATCH "$BROKEN_G"; then
 else
   ck "FG-G1 注入できた" 0 1
 fi
+
+# --- 別ワークツリーの削除・破棄と相対パス書込（I179 計画変更記録 5・TC-X1〜X38・FG-X1/X2・DO1/DO2） ---
+printf '.claude/worktrees/\n' > "$MAIN/.gitignore"
+SCR="$TMP/scratch-outside"; mkdir -p "$SCR"
+# cwd を指定し、JSON を正しくエスケープしてフックに渡す
+bj_in() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$2" \
+            | ( cd "$1" && python3 "${3:-$GUARD}" >/dev/null 2>&1 ); echo $?; }
+R="r""m"   # このテストを Claude の Bash で組み立て直して試すときに、試す側のコマンドが rm 規則に当たらないように
+while IFS='|' read -r tc where c; do
+  [ -n "$tc" ] || continue
+  case "$where" in main) d="$MAIN" ;; nest) d="$NEST" ;; esac
+  c="${c//@R@/$R}"; c="${c//@MAIN@/$MAIN}"; c="${c//@OTHER@/$OTHER}"
+  ck "$tc ${c}→block" 2 "$(bj_in "$d" "$c")"
+done <<'CASES'
+X1|main|@R@ -r .claude/worktrees/nest
+X2|main|@R@ -fr @MAIN@/.claude/worktrees/nest/x.py
+X3|main|@R@ -r -f .claude/worktrees/nest
+X4|main|cd .claude/worktrees/nest && @R@ x.py
+X5|main|@R@ -r .claude
+X5b|main|@R@ -r .claude/worktrees/*
+X6|nest|@R@ -r @OTHER@/src
+X7|nest|@R@ -r ../nest2
+X8|main|find .claude/worktrees/nest -name '*.py' -delete
+X9|main|find .claude/worktrees/nest -name x -exec @R@ {} +
+X10|main|git -C .claude/worktrees/nest checkout -- .
+X11|main|git -C .claude/worktrees/nest reset --hard
+X12|main|git -C @MAIN@/.claude/worktrees/nest clean -fd
+X13|main|git -C .claude/worktrees/nest stash -u
+X14|main|git --work-tree=.claude/worktrees/nest restore .
+X15|main|git clean -ffdx
+X16|main|git clean -f -f -d
+X17|main|git worktree remove --force .claude/worktrees/nest
+X18|main|git worktree remove -f @OTHER@
+X19|main|echo x > .claude/worktrees/nest/f
+X20|main|cd .claude/worktrees/nest && echo x > f
+X22|main|DANGER_OK=1 @R@ -r .claude/worktrees/nest
+X23|main|true;@R@ -r .claude/worktrees/nest
+X24|main|sudo -E @R@ -r .claude/worktrees/nest
+X25|main|timeout 60 git -C .claude/worktrees/nest reset --hard
+X26|main|mv .claude/worktrees/nest /tmp/x
+X27|main|cd .claude/worktrees && git -C nest reset --hard
+CASES
+# 改行で区切った後のコマンドも止まる
+ck "X28 改行の後→block" 2 "$(bj_in "$MAIN" "$(printf 'echo a\n%s -r .claude/worktrees/nest' "$R")")"
+# X21: /mnt/<ドライブ>/ 配下（drvfs）では大文字小文字だけ違うパスも別ワークツリーと判定する（実リポジトリの登録で判定のみ）
+REAL_ROOTS="$(git -C "$REPO_ROOT" worktree list --porcelain | sed -n 's/^worktree //p')"
+REAL_OTHER="$(printf '%s\n' "$REAL_ROOTS" | grep -vxF "$REPO_ROOT" | grep -m1 '^/mnt/[a-z]/' || true)"
+if [ -n "$REAL_OTHER" ]; then
+  UP="$(printf '%s' "$REAL_OTHER" | tr '[:lower:]' '[:upper:]' | sed 's#^/MNT/\(.\)/#/mnt/\L\1/#')"
+  ck "X21 大文字小文字違いの別wt edit→block" 2 \
+    "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/zz_probe.txt"}}' "$UP" \
+       | ( cd "$REPO_ROOT" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?)"
+else
+  echo "SKIP X21（/mnt/<ドライブ>/ 配下の別ワークツリーが無い環境）"
+fi
+# 通す側
+while IFS='|' read -r tc where c; do
+  [ -n "$tc" ] || continue
+  case "$where" in main) d="$MAIN" ;; nest) d="$NEST" ;; esac
+  c="${c//@R@/$R}"; c="${c//@NEST@/$NEST}"; c="${c//@SCR@/$SCR}"
+  ck "$tc ${c}→allow" 0 "$(bj_in "$d" "$c")"
+done <<'CASES'
+X30|nest|@R@ -r build
+X31|nest|@R@ @NEST@/tmp.txt
+X32|main|@R@ -r @SCR@/x
+X33|main|git -C .claude/worktrees/nest status
+X33b|main|git -C .claude/worktrees/nest log -1
+X33c|main|git -C .claude/worktrees/nest diff
+X33d|main|git -C .claude/worktrees/nest stash list
+X34|main|git clean -fdx
+X35|nest|git clean -ffdx
+X36|main|git worktree remove .claude/worktrees/nest
+X37|main|find .claude/worktrees/nest -name '*.py'
+X38|main|echo x > ok.txt
+X39|main|git commit -m "docs: @R@ -r .claude/worktrees/nest の手順"
+X40|main|git checkout -b feature/x
+X41|main|echo x 2>&1 >/dev/null
+CASES
+# FG-X1: 新しい判定を常に空にした複製では、止める側の代表が素通りする（停止要因の証明）
+BROKEN_X="$TMP/guard_nodestroy.py"
+sed 's/^def _bash_destroy_targets(cmd: str) -> list:/def _bash_destroy_targets(cmd: str) -> list:\n    return []  # FG-X1/' \
+  "$GUARD" > "$BROKEN_X"
+if grep -q 'return \[\]  # FG-X1' "$BROKEN_X"; then
+  for c in "$R -r .claude/worktrees/nest" "find .claude/worktrees/nest -delete" \
+           "git -C .claude/worktrees/nest checkout -- ." "git clean -ffdx" \
+           "git worktree remove --force .claude/worktrees/nest"; do
+    ck "FG-X1 判定除去複製で ${c}=allow" 0 "$(bj_in "$MAIN" "$c" "$BROKEN_X")"
+  done
+else
+  ck "FG-X1 注入できた" 0 1
+fi
+# FG-X2: 相対パスの絶対化を外した複製では、相対パスの削除・書込が素通りする
+BROKEN_REL="$TMP/guard_norel.py"
+sed 's/^def _abs_in(cwd, p):/def _abs_in(cwd, p):\n    if p and not p.startswith("\/"): return None  # FG-X2/' "$GUARD" > "$BROKEN_REL"
+if grep -q '# FG-X2' "$BROKEN_REL"; then
+  ck "FG-X2 絶対化除去複製で X1=allow"  0 "$(bj_in "$MAIN" "$R -r .claude/worktrees/nest" "$BROKEN_REL")"
+  ck "FG-X2 絶対化除去複製で X19=allow" 0 "$(bj_in "$MAIN" "echo x > .claude/worktrees/nest/f" "$BROKEN_REL")"
+else
+  ck "FG-X2 注入できた" 0 1
+fi
+# DO1/DO2: 区切りの後ろの DANGER_OK=1 では解除しない
+ck "DO1 echo DANGER_OK=1; docker compose down -v→block" 2 "$(bj_in "$MAIN" 'echo DANGER_OK=1; docker compose down -v')"
+ck "DO2 echo hi && DANGER_OK=1 git reset --hard→block"   2 "$(bj_in "$MAIN" 'echo hi && DANGER_OK=1 git reset --hard')"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

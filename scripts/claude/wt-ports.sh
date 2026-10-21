@@ -41,7 +41,8 @@ fi
 }
 
 # 割当済みなら何も変えない（冪等）
-PORT_LINE_RE='^(DB|REDIS|BACKEND|FRONTEND)_PORT='
+# 他のワークツリーの値を読む port_val と同じく、export・= の前の空白付きの書き方も割当済みとみなす
+PORT_LINE_RE='^[[:space:]]*(export[[:space:]]+)?(DB|REDIS|BACKEND|FRONTEND)_PORT[[:space:]]*='
 if [ -f "$WT/.env" ] && grep -Eq "$PORT_LINE_RE" "$WT/.env"; then
   echo "[wt-ports] 割当済みのため変更しません:"
   grep -E "$PORT_LINE_RE" "$WT/.env"

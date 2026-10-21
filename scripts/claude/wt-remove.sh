@@ -111,7 +111,8 @@ $WT_PATHS
 EOF
 
 detect_data() {   # 0=データ無し / 1=データあり / 2=名前を確定できない / 3=docker が使えない / 4=コンテナの作業フォルダが別の場所
-  local f c v w d
+  local f w d
+  c=""; v=""   # 停止メッセージで使うため関数の外にも残す
   [ -n "$PROJECT" ] || return 2
   [ -n "${COMPOSE_PROJECT_NAME:-}" ] && return 2
   # 直下 .env でプロジェクト名・compose ファイルを変えている（export・空白付きの書き方も含む）
@@ -138,13 +139,8 @@ EOF2
   fi
   return 1
 }
+c=""; v=""
 DATA=0; detect_data || DATA=$?
-
-if [ "$DATA" -ne 0 ] && [ "$DATA" -ne 3 ] && [ -n "$SAME_NAME" ]; then
-  echo "[wt-remove] Compose プロジェクト名 '$PROJECT' が別のワークツリーと同じです: $SAME_NAME" >&2
-  echo "[wt-remove] データがどちらのものか区別できないため、DANGER_OK=1 でも down -v は実行しません。持ち主の確認と手での片付けは worktree.md §4「止まったときの片付け」に従ってください" >&2
-  exit 2
-fi
 
 # バックアップの案内（撤去対象のプロジェクトを -p で指定。scripts/db_backup.sh は今いるフォルダのプロジェクトが対象のため使えない）
 backup_hint() {
@@ -154,6 +150,13 @@ backup_hint() {
   echo "[wt-remove]   2) ( cd '$WT_PATH' && docker compose -p '$PROJECT' exec -T db pg_dump -U postgres learning_app ) > $f" >&2
   echo "[wt-remove]   3) test -s $f && echo ok   # ok と出なければ（空のファイル）バックアップは取れていない" >&2
 }
+
+if [ "$DATA" -ne 0 ] && [ "$DATA" -ne 3 ] && [ -n "$SAME_NAME" ]; then
+  echo "[wt-remove] Compose プロジェクト名 '$PROJECT' が別のワークツリーと同じです: $SAME_NAME" >&2
+  echo "[wt-remove] データがどちらのものか区別できないため、DANGER_OK=1 でも down -v は実行しません。持ち主の確認と手での片付けは worktree.md §4「止まったときの片付け」に従ってください" >&2
+  backup_hint
+  exit 2
+fi
 case "$DATA" in
   0)
     echo "[wt-remove] Compose プロジェクト '$PROJECT' のコンテナ・volume はありません。docker compose down -v は実行しません" ;;
@@ -161,6 +164,17 @@ case "$DATA" in
     if [ "${DANGER_OK:-}" != "1" ]; then
       echo "[wt-remove] Compose プロジェクト '$PROJECT' のコンテナまたは volume が残っています。" >&2
       echo "[wt-remove] docker compose down -v は破壊的操作です（Postgres 開発データ削除を含む）。" >&2
+      if [ -z "$c" ]; then
+        # volume には作業フォルダのラベルが無いため、持ち主（このワークツリーのものか）を機械で確かめられない
+        echo "[wt-remove] コンテナが無く volume だけが残っています。volume には作業フォルダの記録が無いため、このワークツリーのものかを機械で確かめられません。" >&2
+        echo "[wt-remove] 名前と作成日時がこのワークツリーを使っていた時期と合うか確かめてから許可してください:" >&2
+        while IFS= read -r vol; do
+          [ -n "$vol" ] || continue
+          echo "[wt-remove]   $vol（作成: $(docker volume inspect -f '{{.CreatedAt}}' "$vol" 2>/dev/null || echo 不明)）" >&2
+        done <<EOF3
+$v
+EOF3
+      fi
       backup_hint
       echo "[wt-remove] バックアップのうえ DANGER_OK=1 bash $0 '$WT_ARG' で再実行してください。" >&2
       exit 2
@@ -172,7 +186,8 @@ case "$DATA" in
       exit 2; } ;;
   2)
     echo "[wt-remove] Compose のプロジェクト名を確定できません（COMPOSE_PROJECT_NAME・.env の COMPOSE_PROJECT_NAME/COMPOSE_FILE・compose の name: 指定・フォルダ名のいずれか）。" >&2
-    echo "[wt-remove] 消す相手を確定できないため、DANGER_OK=1 でも撤去しません。指定を外す（unset COMPOSE_PROJECT_NAME・.env や compose の該当行を消してコミット）か、worktree.md §4 の手順で手動で片付けてください" >&2
+    echo "[wt-remove] 消す相手を確定できないため、DANGER_OK=1 でも撤去しません。指定を外して（unset COMPOSE_PROJECT_NAME・.env や compose の該当行を消してコミットし push）から再実行してください。" >&2
+    echo "[wt-remove] 指定していた名前のプロジェクトのデータは、このスクリプトでは消えずに残ります。docker volume ls で確かめ、worktree.md §4「取り残しの発見と削除」で片付けてください" >&2
     exit 2 ;;
   3)
     if [ "${KEEP_DATA:-}" = "1" ]; then
@@ -186,6 +201,7 @@ case "$DATA" in
   4)
     echo "[wt-remove] Compose プロジェクト '$PROJECT' のコンテナの作業フォルダが撤去対象と違います（同じ名前の別のプロジェクト・親フォルダの compose ファイルで起動したもの）。" >&2
     echo "[wt-remove] 別の場所のデータを消してしまうため、DANGER_OK=1 でも down -v は実行しません。持ち主の確認と手での片付けは worktree.md §4「止まったときの片付け」に従ってください" >&2
+    backup_hint
     exit 2 ;;
 esac
 

@@ -55,6 +55,7 @@ case "$1 ${2:-}" in
       esac
     fi ;;
   "volume ls") [ -n "${STUB_VOLUMES:-}" ]    && printf '%s\n' "$STUB_VOLUMES" ;;
+  "volume inspect") printf '%s\n' "2026-10-01T09:00:00Z" ;;   # 作成日時（volume だけのときの表示の検証用）
 esac
 exit 0
 STUB
@@ -130,6 +131,16 @@ STUB_VOLUMES=wt-app_postgres_data run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R1b exit2"               2    "$RC"
 cknot "R1b down 非実行"        "$(cat "$DOCKER_LOG")" "down"
 ckhas "R1b worktree 残存"      "$(wl)" "/wt-app"
+# --- TC-R1b2: volume のみ → 持ち主を確かめられない旨と volume 名・作成日時・バックアップ手順を表示 ---
+ckhas "R1b2 確かめられない案内" "$OUT" "機械で確かめられません"
+ckhas "R1b2 volume 名と作成日時" "$OUT" "wt-app_postgres_data（作成: 2026-10-01T09:00:00Z）"
+ckhas "R1b2 バックアップ手順"  "$OUT" "test -s backup_wt-app_"
+# --- TC-R1b3: volume のみ・DANGER_OK=1 → 許可どおり -p 付きで down -v（撤去対象の中で 1 回だけ） ---
+new_env; make_wt
+STUB_VOLUMES=wt-app_postgres_data DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
+ck   "R1b3 exit0"              0    "$RC"
+ck   "R1b3 down -v は 1 回"    1    "$(grep -c 'compose -p wt-app down -v' "$DOCKER_LOG")"
+ckhas "R1b3 撤去対象の中で実行" "$(grep -A1 'compose -p wt-app down -v' "$DOCKER_LOG")" "cwd=$(cd "$TMP" && pwd -P)/wt-app"
 
 # --- TC-R1c: 判定失敗（docker ps が失敗）→ 停止 ---
 new_env; make_wt
@@ -166,6 +177,9 @@ run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R1f exit2"               2    "$RC"
 ckhas "R1f 判定不能の案内"     "$OUT" "プロジェクト名を確定できません"
 ckhas "R1f worktree 残存"      "$(wl)" "/wt-app"
+# --- TC-R25: 戻り値 2 の案内は「コミットして push」と、元の名前のデータの片付け先 ---
+ckhas "R25 push まで案内"      "$OUT" "コミットし push"
+ckhas "R25 元の名前のデータ"   "$OUT" "取り残しの発見と削除"
 
 # --- TC-R2/R3: データあり・DANGER_OK=1 → down -v → remove の順序 ---
 new_env; make_wt
@@ -356,6 +370,7 @@ ck   "R19 exit2"               2    "$RC"
 ckhas "R19 名前の重なりの案内" "$OUT" "別のワークツリーと同じです"
 cknot "R19 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
 ckt  "R19 worktree 残存"       test -d "$TMP/other/primary"
+ckhas "R24 同名で止まってもバックアップ手順" "$OUT" "test -s backup_primary_"
 # --- TC-R19b: 名前が重なってもデータが無ければ撤去できる ---
 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
 ck   "R19b exit0"              0    "$RC"
@@ -383,6 +398,7 @@ STUB_CONTAINERS=c1 STUB_WORKDIR="$PRIMARY" DANGER_OK=1 run_rm "$PRIMARY" "$WT_RE
 ck   "R21 exit2"               2    "$RC"
 ckhas "R21 作業フォルダの案内" "$OUT" "作業フォルダが撤去対象と違います"
 cknot "R21 down 非実行"        "$(cat "$DOCKER_LOG")" "down"
+ckhas "R21e 戻り値 4 でもバックアップ手順" "$OUT" "test -s backup_wt-app_"
 # --- TC-R21b: コンテナ 2 件のうち 2 件目だけが別の場所（先頭行だけの照合では見逃す） ---
 new_env; make_wt
 STUB_CONTAINERS=c1 STUB_WORKDIR="$(cd "$WT" && pwd -P)"$'\n'"$PRIMARY" DANGER_OK=1 run_rm "$PRIMARY" "$WT_REMOVE" "$WT"
