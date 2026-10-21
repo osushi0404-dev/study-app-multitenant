@@ -5,6 +5,8 @@
 # temp repo（＝現worktreeの代役）に linked worktree を生やし、フックへ stdin JSON を
 # 投入して exit code を検証する（実書込はしない＝判定のみ）。0=素通し / 2=ブロック。
 set -uo pipefail
+# 見張りの「信頼する場所」の起点（I174 0-16）。外から渡された値で一時リポジトリが信頼されなくならないよう消す
+unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 

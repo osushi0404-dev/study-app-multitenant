@@ -8,6 +8,8 @@
 #   0   = 素通し（exit 0・ask なし）
 # ケースの一覧は docs/tests/open/I174_auto_test.md の「TC-01 のケース表」と 1 対 1 で対応する。
 set -uo pipefail
+# 見張りの「信頼する場所」の起点（I174 0-16）。外から渡された値で一時リポジトリが信頼されなくならないよう消す
+unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 cd "$REPO_ROOT" || exit 1

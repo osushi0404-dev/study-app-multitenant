@@ -30,6 +30,56 @@ def _norm(s: str) -> str:
 # `git checkout -- "my file.py"` のような空白パスを取りこぼし黙って素通し（データ消失）する。
 _SHELL_OPS = ("&&", "||", "|", ";")
 
+def _segments_ops(cmd: str) -> list:
+    """_segments と同じ区切り方で、(トークン列, その後ろの演算子) の列を返す（最後は ""）。
+    リダイレクトの一部（`2>&1`・`&>`・`>&2`）は区切りとして数えない（_segments と同じ扱い）。"""
+    try:
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|")
+        lex.whitespace_split = True
+        lex.commenters = ""
+        lex.whitespace = " \t\r"
+        toks = list(lex)
+    except ValueError:
+        toks = cmd.split()
+    out, seg, glue = [], [], False
+    for t in toks:
+        if seg and t in ("|", "&") and seg[-1].endswith((">", "<")):
+            seg[-1] += t
+            glue = t == "&"
+            continue
+        if glue:
+            seg[-1] += t
+            glue = False
+            continue
+        if t == "\n" or t in _SHELL_OPS or (t and set(t) <= set(";&|")):
+            out.append((seg, ";" if t == "\n" else t))
+            seg = []
+        elif "\n" in t:
+            out.append((seg, ";"))
+            seg = [t.replace("\n", "")] if t.strip() else []
+        else:
+            seg.append(t)
+    out.append((seg, ""))
+    return [(sg, op) for sg, op in out if sg]
+
+def _cd_conditional(text: str) -> bool:
+    """条件付きの cd（`A && cd X; …`・`A || cd X; …`・`cd X || true; …`）があれば True。cd が実行されないまま
+    後ろの git が動きうる。`cd X && git …`（成功後にだけ動く）・`cd X || exit` は一意。リダイレクト付きの cd も同じ。"""
+    segs = _segments_ops(text.replace("\n", " ; "))
+    prev = ";"
+    for k, (seg, op) in enumerate(segs):
+        if seg and seg[0] in ("cd", "pushd"):
+            # 左が && / || なら、cd 自体が実行されないことがある。右が && なら後ろも一緒に止まるので一意
+            if prev in ("&&", "||") and op not in ("&&", ""):
+                return True
+            # cd X || <exit・return 以外>: cd が失敗しても後ろが動く
+            if op == "||":
+                nxt = segs[k + 1][0] if k + 1 < len(segs) else []
+                if not nxt or nxt[0] not in ("exit", "return"):
+                    return True
+        prev = op
+    return False
+
 def _segments(cmd: str) -> list:
     """コマンドをクォート対応で分割し、shell 演算子区切りごとのトークン列リストを返す。
     クォート不整合（実シェルでもエラー）の場合は素朴分割にフォールバック。
@@ -67,7 +117,7 @@ def _segments(cmd: str) -> list:
 # git は設定（core.fsmonitor・フィルタ等）や、実行した場所のリポジトリの .git/config でコマンドを実行する。
 # 見張りが人の承認より前にコマンドを実行しないよう、git を実行してよい場所を「このリポジトリとその worktree」
 # に一致で限り、判定対象のコマンドの -c・環境変数は渡さない。git の探索（近い .git）も使わず、git-dir を明示する。
-_GIT_SAFE_OPTS = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null")
+_GIT_SAFE_OPTS = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "submodule.recurse=false")
 
 def _clean_git_env() -> dict:
     """見張りの環境から GIT_ で始まる変数を除いたもの（紛れ込んだ GIT_DIR・GIT_CONFIG_* 等の影響を受けない）。"""
@@ -113,7 +163,9 @@ def _git_resolve(loc, need_worktree: bool = True):
     --git-dir・--work-tree・GIT_DIR・GIT_WORK_TREE は信頼する値と一致するときだけ受け入れる（リポジトリの中に
     作った偽の git-dir は一致しない）。指定が無ければ、信頼する最上位の配下で入れ子のリポジトリの外のときだけ。"""
     cwd, opts, env = loc or (None, [], {})
-    cur = os.path.realpath(cwd) if cwd else os.getcwd()
+    # cd の先は bash（cd -L・既定）と同じく、文字の上で `..` を畳んでからシンボリックリンクを解決する
+    # （`cd link/..` は元の場所に戻る）。-C は git が chdir するので、そのまま realpath で解決する
+    cur = os.path.realpath(os.path.normpath(os.path.join(os.getcwd(), cwd))) if cwd else os.getcwd()
     gd = wt = None
     i = 0
     while i < len(opts):
@@ -178,7 +230,10 @@ def _worktree_dirty(path: str, loc=None, staged: bool = False) -> bool:
     """<path>（'.' 可）にワークツリー変更があれば True。untracked('??')は除外。
     staged=True（コミットから戻す形）はステージ済みの変更も数える（I174）。
     git 不在/失敗は False（fail-open＝既存方針と同じ）。"""
-    out = _git_run(loc, ["status", "--porcelain", "--no-renames", "--untracked-files=no", "--", path])
+    # サブモジュール（索引に入った入れ子のリポジトリ）の中には入らない。中の設定の clean フィルタが判定中に動くうえ、
+    # checkout / restore はサブモジュールの中身を戻さない（code-review 20261021_1509 第 2 周）
+    out = _git_run(loc, ["status", "--porcelain", "--no-renames", "--untracked-files=no", "--ignore-submodules=all",
+                         "--", path])
     if out is None:
         return False
     for line in out.splitlines():
@@ -221,9 +276,6 @@ def _scoped(text: str) -> bool:
 
 # パイプ・& の前後の cd（サブシェルで動くので後ろに効かない）
 _CD_PIPE_RE = re.compile(r"\b(cd|pushd)\b[^;&|\n]*(?<![|&>])[|&](?![|&>])|(?<![|&>])[|&](?![|&>])[^;&|\n]*\b(cd|pushd)\b")
-# 条件付きの cd（`A && cd X; git …`・`A || cd X; git …`・`cd X || true; git …`）。cd が実行されないまま後ろが動きうる。
-# `cd X && git …`（cd の成功後にだけ git が動く）・`cd X || exit` は一意
-_CD_COND_RE = re.compile(r"(&&|\|\|)\s*(cd|pushd)\b[^;&|\n]*(;|\n|\|\|)|\b(cd|pushd)\b[^;&|\n]*\|\|(?!\s*(exit|return)\b)")
 # cd を含みうる入れ子のシェル（中の cd は外に効かない）
 _NESTED_SHELL_RE = re.compile(r"\b(ba|z|da)?sh\b\s+(-\w*c\b|<<)|\beval\b|\bxargs\b|\bparallel\b|\bfind\b[^;&|\n]*-exec")
 
@@ -232,10 +284,12 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
     cd / pushd / popd が無ければ一意。あれば、`( … )`・パイプ・`&`・入れ子のシェルの中にありうる・
     元へ戻る（`cd -`・`~-`・`$OLDPWD`）・先が読めない（変数・`$(…)`）・先が存在しない（失敗して留まる）のどれかで一意でない。"""
     cmds = _parse(text) if cmds is None else cmds
+    # 引用符の中（コミットメッセージの `fix(I179):`・`eval` 等）は場所の範囲に関係しないので除いて見る
+    text = re.sub(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"", "''", text)
     cds = [c for c in cmds if not c["ctr"] and c["toks"] and c["toks"][0] in ("cd", "pushd", "popd")]
     if not cds:
         return False
-    if _scoped(text) or _CD_PIPE_RE.search(text) or _NESTED_SHELL_RE.search(text) or _CD_COND_RE.search(text):
+    if _scoped(text) or _CD_PIPE_RE.search(text) or _NESTED_SHELL_RE.search(text) or _cd_conditional(text):
         return True
     base = None
     for c in cds:

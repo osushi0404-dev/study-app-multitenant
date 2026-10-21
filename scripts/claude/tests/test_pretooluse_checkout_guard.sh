@@ -5,6 +5,8 @@
 # temp git repo を立て、フックへ stdin JSON を投入して exit code を検証する
 # （実 checkout は実行しない＝フックの判定のみを見る）。
 set -uo pipefail
+# 見張りの「信頼する場所」の起点（I174 0-16）。外から渡された値で一時リポジトリが信頼されなくならないよう消す
+unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 
@@ -251,6 +253,22 @@ git config core.fsmonitor "touch $PW"
 rm -f "$PW"
 ck "G98 信頼するリポジトリの core.fsmonitor も打ち消す" "2:no" "$(run 'git checkout -- sub/s.txt'):$([ -e "$PW" ] && echo PWNED || echo no)"
 git config --unset core.fsmonitor
+# リダイレクト付きの条件付き cd・シンボリックリンクと ..（code-review 20261021_1509 第 2 周）
+ck "G100 false && cd other 2>&1; checkout"       ASK "$(runj 'false && cd other 2>&1; git checkout -- sub/s.txt')"
+ck "G101 false && cd other &>/dev/null; checkout" ASK "$(runj 'false && cd other &>/dev/null; git checkout -- sub/s.txt')"
+mkdir -p other/deep
+ln -s other/deep lnk
+ck "G102 cd lnk/..（bash では元の場所）; checkout" 2 "$(run 'cd lnk/..; git checkout -- sub/s.txt')"
+rm -f lnk
+# 索引に入った入れ子のリポジトリ（サブモジュール）の中へ status が入らない（中の clean フィルタを判定中に動かさない）
+mkevil "$TMP/smod"
+git add smod 2>/dev/null
+git commit -qm smod
+printf 'w\n' > "$TMP/smod/g"
+touch -d '2002-02-02' "$TMP/smod/g"
+ck "G103 サブモジュールの中の clean フィルタ（. を戻す）" "2:no" "$(pw 'git checkout -- .'):$([ -e "$PW" ] && echo PWNED || echo no)"
+# shellcheck disable=SC2016  # $( ) を展開せず、そのまま guard に渡すのが目的
+ck "G104 サブモジュールの中の clean フィルタ（対象が読めない）" "ASK:no" "$(pw 'git checkout -- $(echo sub/s.txt)'):$([ -e "$PW" ] && echo PWNED || echo no)"
 ck "G99 見張りの環境の GIT_INDEX_FILE を使わない"  2 "$(json 'git checkout -- sub/s.txt' | GIT_INDEX_FILE="$TMP/noidx" python3 "$GUARD" >/dev/null 2>&1; echo $?)"
 # 信頼する場所の起点はプロジェクト（CLAUDE_PROJECT_DIR）。Bash の作業ディレクトリが入れ子のリポジトリでも信頼しない
 rm -f "$PW"

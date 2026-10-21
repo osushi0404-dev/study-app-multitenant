@@ -4,6 +4,8 @@
 # 実行: bash scripts/claude/tests/test_pretooluse_guard_matrix.sh
 # 新しい危険な操作・書き方は、下の OPS / TPLS に 1 行足すと表が広がる。
 set -uo pipefail
+# 見張りの「信頼する場所」の起点（I174 0-16）。外から渡された値で一時リポジトリが信頼されなくならないよう消す
+unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 cd "$REPO_ROOT" || exit 1

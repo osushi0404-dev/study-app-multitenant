@@ -10,6 +10,8 @@
 # 本テストは動的 push 形（$(...)/$VAR/${...}/バッククォート）を**展開させず**リテラルで
 # フックへ渡すのが目的。単一引用符内の非展開は意図的なので SC2016 を全体抑制する。
 set -uo pipefail
+# 見張りの「信頼する場所」の起点（I174 0-16）。外から渡された値で一時リポジトリが信頼されなくならないよう消す
+unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 
@@ -208,6 +210,8 @@ ck "XP76 [ -d … ] || cd <develop>; git push"    ASK "$(runj "[ -d nosuch ] || 
 ck "XP77 false && cd <develop>; git push"      ASK "$(runj "false && cd $W; git push")"
 # push の宛先（今のブランチ）は git-dir の HEAD で決まり、作業ディレクトリに依らない（主の .git は feature/x）
 ck "XP78 cd <develop の worktree> && git --git-dir=<主の .git> push は通す" 0 "$(runj "cd $W && git --git-dir=$TMP/.git push")"
+# 引用符の中（コミットメッセージ）の ( や eval は場所の範囲に関係しない（第 2 周 要件観点）
+ck "XP79 cd && commit -m \"fix(I1): eval\" && push は通す" 0 "$(runj "cd $TMP && git commit -m \"fix(I1): eval の説明\" && git push -u origin feature/x")"
 # 偽合格の防止: 実行場所が変数かの判定（_git_loc_dynamic）を外すと、変数の場所の push が素通しになる
 BROKEN_LOC="$TMP/guard_noloc.py"
 # 信頼する場所の判定（_git_loc_trusted・security-review の Blocker）も同じ形を確認にするので、両方を外す
