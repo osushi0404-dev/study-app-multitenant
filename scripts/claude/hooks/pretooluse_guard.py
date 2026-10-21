@@ -703,10 +703,26 @@ def _current_worktree_root():
     except Exception:
         return None
 
+def _path_key(p: str) -> str:
+    """パス比較用のキー。/mnt/<ドライブ>/ 配下（drvfs）は大文字小文字を区別しないため小文字にそろえる（I179）。"""
+    return p.lower() if re.match(r"^/mnt/[A-Za-z]/", p) else p
+
+def _owning_root(ap, roots):
+    """ap を含むワークツリー root のうち最も内側（最長一致）を返す。どれにも含まれなければ None。
+    入れ子ワークツリー（<primary>/.claude/worktrees/<name>）では、親 root より入れ子 root が優先される（I179）。"""
+    best = None
+    k = _path_key(ap)
+    for root in roots:
+        rk = _path_key(root)
+        if k == rk or k.startswith(rk + os.sep):
+            if best is None or len(root) > len(best):
+                best = root
+    return best
+
 def _cross_worktree(path):
-    """path が別 worktree 配下なら True / どの別 worktree 配下でもなければ False /
-    境界を確定できなければ None（fail-safe 対象）。境界一致は realpath＋末尾 os.sep 接頭辞で
-    行い、兄弟ディレクトリ名の部分一致（<root>-foo）を誤判定しない。"""
+    """path を所有する（最も内側の）worktree が現 worktree 以外なら True / 現 worktree 所有か
+    どの worktree 配下でもなければ False / 境界を確定できなければ None（fail-safe 対象）。
+    境界一致は realpath＋末尾 os.sep 接頭辞で行い、兄弟ディレクトリ名の部分一致（<root>-foo）を誤判定しない。"""
     if not path or not isinstance(path, str):
         return None
     roots = _worktree_roots()
@@ -714,12 +730,8 @@ def _cross_worktree(path):
     if roots is None or cur is None:
         return None
     ap = os.path.realpath(os.path.abspath(path))
-    for root in roots:
-        if root == cur:
-            continue
-        if ap == root or ap.startswith(root + os.sep):
-            return True
-    return False
+    owner = _owning_root(ap, roots)
+    return owner is not None and _path_key(owner) != _path_key(cur)
 
 def _edit_path(data: dict) -> str:
     """書込ツールの対象パス（Edit/Write/MultiEdit=file_path, NotebookEdit=notebook_path）。"""
@@ -821,10 +833,13 @@ def _block_cross_worktree(kind: str, path: str):
               f"git の状態/入力を確認してください: {path!r}", file=sys.stderr)
         sys.exit(2)
     ap = os.path.realpath(os.path.abspath(path))
-    x_root = next((r for r in roots if r != cur and (ap == r or ap.startswith(r + os.sep))), None)
+    x_root = _owning_root(ap, roots)
+    if x_root == cur:
+        x_root = None
     where = f"別 worktree（{x_root}）" if x_root else "別 worktree"
     print(f"[guard] {where}への{kind}は禁止です。"
-          f"トラック境界を越える変更は worktree.md §9 のファイル経由で引き継いでください: {path}",
+          f"トラック境界を越える変更は worktree.md §9 のファイル経由で引き継いでください"
+          f"（ワークツリーの撤去は bash scripts/claude/wt-remove.sh <パス>）: {path}",
           file=sys.stderr)
     sys.exit(2)
 
@@ -2110,7 +2125,7 @@ def _cmd_danger(c: dict) -> list:
             r.append("docker compose down -v/--volumes requires DANGER_OK=1")
         if subs[:2] == ["compose", "rm"] and _has_short(args, "v", "--volumes"):
             r.append("ボリュームごと削除（docker compose rm -v）requires DANGER_OK=1")
-        if subs[:1] == ["volume"] and args[:1] and args[0] in ("rm", "prune"):
+        if subs[:1] == ["volume"] and args[:1] and args[0] in ("rm", "remove", "prune"):   # remove は rm の別名
             r.append(f"ボリュームの削除（docker volume {args[0]}）requires DANGER_OK=1")
         if subs[:1] == ["system"] and args[:1] == ["prune"] and "--volumes" in args:
             r.append("ボリュームの削除（docker system prune --volumes）requires DANGER_OK=1")

@@ -8,8 +8,9 @@
   - ダンプ・SQL ファイルの流し込み（`psql -f <ファイル>` / `psql ... < <ファイル>`・`dbshell < <ファイル>`・`pg_restore --clean`）・`dropdb`
   - `manage.py shell` / `python -c` / ヒアドキュメントで渡す Python の `.delete()`・QuerySet の一括 `update()`・`bulk_update()`・`call_command('flush')` など
 - Git: force push / reset --hard / 大規模rebase / `git clean -f`（`-d`・`-x` の有無を問わない。追跡されていないファイルの削除）/ **未コミット変更があるファイルへの `git checkout/restore <file>`**（下記注記。コミットから戻す形〔`git checkout HEAD <file>`・`git restore -s`〕はステージ済みの変更も対象・`git rm -f`・`git checkout-index -f`・`git read-tree -u --reset`・`git mv -f` の上書きを含む）/ push の宛先・強制を変える設定（`remote.*.push` を保護ブランチ・`+`・`:` に・`push.default` を `matching`／`upstream`／`tracking` に・`remote.*.mirror true`）/ `clean.requireForce` を偽にする設定
-- Docker: down -v / --volumes（データ消失）・`docker compose rm -v`・`docker volume rm|prune`・`docker system prune --volumes`・`redis-cli FLUSHALL` / `FLUSHDB`（ログイン状態・celery の待ち行列・レート制限カウンタの全消去）
+- Docker: down -v / --volumes（データ消失）・`docker compose rm -v`・volume rm / prune（`docker volume rm|prune`）・`docker system prune --volumes`・`redis-cli FLUSHALL` / `FLUSHDB`（ログイン状態・celery の待ち行列・レート制限カウンタの全消去）。ワークツリーの撤去は `scripts/claude/wt-remove.sh` を使い、消す相手を確定できない場合は許可があっても止まる → `docs/runbooks/worktree.md` §4。docker が使えないときにデータを消さずに撤去する合図は `KEEP_DATA=1` で、`DANGER_OK` とは別＝消す操作の許可ではない
 - Files: rm -rf（`-f` の無い `rm -r` も同じ。端末につながっていない実行では確認が出ずに全部消える）/ `find -delete`・`find -exec rm`・`xargs rm` / secrets 操作
+- ワークツリー（I179）: 別のワークツリー（primary の中の `.claude/worktrees/` を含む）を消す・変更を捨てる操作（`rm`・`find -delete`・`git -C <別ワークツリー> reset/checkout/clean` 等・`git worktree remove`）はしない（撤去は `wt-remove.sh`。`docs/runbooks/worktree.md` §9）。中の入れ子ごと消える `git clean -ff` を含め、見張りは上の Git・Files の各操作として止める（別ワークツリー専用の判定は持たない）
 
 ## 見張り（pretooluse_guard.py）の扱い（I174）
 
