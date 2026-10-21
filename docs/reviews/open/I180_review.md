@@ -47,7 +47,7 @@
 - [ ] 手動テスト No.1〜5 が OK（再ビルド後の backend の起動・celery / celery-beat の起動・WebP / JPEG / PNG の処理系）
 
 ## テスト結果
-- 自動: TC-AUTO-00〜06 合格（2026-10-21・詳細は auto_test の実施記録）。TC-AUTO-07（CI）は push 後に記入
+- 自動: TC-AUTO-00〜07 すべて合格（2026-10-21・詳細は auto_test の実施記録）。CI は head `db5d205` で 6 チェックすべて SUCCESS
 - 手動: No.1〜5 すべて OK（Claude 実施・Human の手順なし）
 
 ## 計画との差分
