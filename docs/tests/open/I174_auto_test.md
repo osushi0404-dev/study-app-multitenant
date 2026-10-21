@@ -884,3 +884,23 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 **次回どう防ぐか**
 - 見張り（フック）が外部コマンドを実行する変更は、その引数・作業ディレクトリ・環境変数が判定対象のコマンドから来ていないかを確認する（判定器は副作用を持たない）。来ている場合は、実行する場所と引数を信頼できる値に固定する。
 - 見張りの判定を変えたら、/code-review の敵対的レビューだけでなく、攻撃シナリオの観点（/security-review）でも見る。
+
+### /test（2026-10-21・f2a6765・/code-review 完了後）
+決定論ゲート全 38 行を 1 行ずつ実行し、**すべて exit 0**。pytest・Jest・E2E は対象外（冒頭の「テストレベル」のとおり、アプリのコード変更なし）。
+
+| TC | 結果 |
+|---|---|
+| TC-01 `test_pretooluse_container_guard.sh` | pass=769 fail=0 |
+| TC-13 `test_settings_permissions.sh` | pass=12 fail=0 |
+| TC-02 `test_pretooluse_push_guard.sh` | pass=185 fail=0 |
+| TC-03 `test_pretooluse_checkout_guard.sh` | pass=140 fail=0 |
+| TC-04 `test_pretooluse_worktree_guard.sh` | pass=30 fail=0 |
+| TC-05 `test_adversarial_trigger.sh` | pass=40 fail=0 |
+| TC-14 `test_pretooluse_guard_matrix.sh` | pass=301 fail=0 |
+| TC-15 `test_guard_corpus_diff.sh` | 作業記録 3,701 件（基準 f2a6765^）・確認＋停止 173→173・新しく確認・停止 0 件 |
+| TC-16 `test_guard_bash_oracle.sh` | cases=3984 bash実行=3828 見逃し=0 余計な停止=0 |
+| TC-06〜TC-11 | すべて exit 0 |
+| TC-12 | 未実施（I146 のマージ後・ステップ 6） |
+
+- 1 回目の /test（17:45 開始）は、並行していた I179 の敵対的レビューのエージェントが I179 側の guard に流した計測（python3 が約 13GB）で WSL ごと落ち、記録が残らなかった。I174 の処理が原因ではないことを確かめるため、再実行では 1 プロセス 4GB の上限を付けた。主要 8 本の最大メモリは 22〜28MB、I174 の guard に cd を 20 個並べても 0.14 秒・22MB で停止（exit 2）した。
+- 手動テストの補強（Claude・guard に直接入力）: No.2 は exit 0（ask なし）、No.3 は ask「DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: destructive SQL requires DANGER_OK=1」、No.4 は ask「外部への送信・秘密情報の表示を伴う操作です。確認してください: メール送信（django.core.mail） / メール送信（send_mail）」。承認画面が出るかどうかは Human の新しいセッションで確かめる（No.2〜4）。

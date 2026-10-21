@@ -26,6 +26,7 @@
 
 ## テスト結果
 - 自動: 決定論ゲート全 30 行 exit 0（`docs/tests/open/I174_auto_test.md` の実施記録）。TC-12 は I146 マージ後
+- 自動（/test・2026-10-21・f2a6765）: 決定論ゲート全 38 行 exit 0（container 769・settings 12・push 185・checkout 140・worktree 30・adversarial 40・総当たり 301・bash との差分 3,984 件 見逃し 0・作業記録の再判定 新しく確認・停止 0）。pytest・Jest・E2E は対象外（アプリのコード変更なし）
 - 手動: No.1（スパイク）OK（auto mode）。No.2〜No.4 はステップ 7（新しいセッション）で実施
 
 ## 計画との差分
