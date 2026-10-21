@@ -17,3 +17,4 @@
 結論: OK（全 5 項目。Human の手順なし）
 
 - `/test` 再実施（2026-10-21 10:20〜・再ビルド後）: No.1 `200`・No.2 `celery@dc3f9891e921 ready.`・エラー行 0 件・タスク `succeeded`・No.3 `beat: Starting...`・エラー行 0 件・No.4 `True True True`・No.5 は計画書から変更なし → すべて OK
+- `/test` 再実施 2 回目（2026-10-21 11:16〜・ステップ 4 後・再ビルド後）: No.1 `200`・No.2 `celery@e8291528caf2 ready.`・エラー行 0 件・タスク（`analyze_mistake_patterns_task` を含む）すべて `succeeded`・No.3 `beat: Starting...`・エラー行 0 件・No.4 `True True True`・No.5 は §2-3・§2-4 に変更なし → すべて OK
