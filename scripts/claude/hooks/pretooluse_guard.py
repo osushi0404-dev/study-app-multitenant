@@ -112,71 +112,96 @@ def _revert_from_commit(sub: str, args: list) -> bool:
     return has_staged or any(a in ("-s", "--source") or a.startswith("--source=") for a in args)
 
 _DYN_MARKS = ("$", "`", "__SUBST_")
-# 変更のあるファイルの一覧を出すコマンド（`git checkout $(git diff --name-only)` は -- が無くてもファイルを戻す形）
-# 今の場所（リポジトリの最上位・作業ディレクトリ）を指す、読めない cd の先
-_CD_HERE_RE = re.compile(r"\b(cd|pushd)\s+[\"']?(\$\((git rev-parse --show-toplevel|pwd)\)|`(git rev-parse --show-toplevel|pwd)`|\$\{?PWD\b)")
 _BRACE_RE = re.compile(r"\{[^{}]*(,|\.\.)[^{}]*\}")
-_FILE_LIST_RE = re.compile(r"\b(diff|ls-files|status)\b")
 
 def _scoped(text: str) -> bool:
     """`( … )`（サブシェル）・popd があり、cd の効く範囲が読み解いた列から分からないなら True。
     `$( )`・`$(( ))`・`<( )`・`f()` は場所の範囲を変えないので数えない。"""
     return bool(re.search(r"(?<![$<>(])\((?![()])", text) or re.search(r"\bpopd\b", text))
 
-def _git_revert_target_on_dirty(cmd: str, opaque: bool = False, cds=None):
-    """複合コマンドを分割し、git checkout/restore（と git rm -f）の pathspec が dirty なら最初の該当パスを返す。
-    I174: git の前のオプション（-C・-c・--work-tree）・その前の cd の先でも同じに判定する。
-    cd が `( … )` の中かどうかは分からないので、それまでに通った場所（cd の前・途中・後）のどこかで当たれば止める。
-    対象が読めない（`$(…)`・変数・xargs が語を足す〔opaque〕）ときは、その場所に変更があれば止める。
-    cds は入れ子の読み解き（_analyze）が渡す、それまでに通った場所の候補。
-    `( … )`・popd が無いコマンドでは、cd の後は cd の先だけを見る（止めすぎない・code-review 第 2 周）。"""
-    cands = list(cds) if cds else [None]
-    scoped = cds is not None or _scoped(cmd)
+# パイプ・& の前後の cd（サブシェルで動くので後ろに効かない）
+_CD_PIPE_RE = re.compile(r"\b(cd|pushd)\b[^;&|\n]*(?<![|&>])[|&](?![|&>])|(?<![|&>])[|&](?![|&>])[^;&|\n]*\b(cd|pushd)\b")
+# cd を含みうる入れ子のシェル（中の cd は外に効かない）
+_NESTED_SHELL_RE = re.compile(r"\b(ba|z|da)?sh\b\s+(-\w*c\b|<<)|\beval\b|\bxargs\b|\bparallel\b|\bfind\b[^;&|\n]*-exec")
+
+def _loc_ambiguous(text: str, cmds=None) -> bool:
+    """git を実行する場所が 1 つに決まらないなら True（I174 0-15: 推測で通す・止めるをせず確認にする）。
+    cd / pushd / popd が無ければ一意。あれば、`( … )`・パイプ・`&`・入れ子のシェルの中にありうる・
+    元へ戻る（`cd -`・`~-`・`$OLDPWD`）・先が読めない（変数・`$(…)`）・先が存在しない（失敗して留まる）のどれかで一意でない。"""
+    cmds = _parse(text) if cmds is None else cmds
+    cds = [c for c in cmds if not c["ctr"] and c["toks"] and c["toks"][0] in ("cd", "pushd", "popd")]
+    if not cds:
+        return False
+    if _scoped(text) or _CD_PIPE_RE.search(text) or _NESTED_SHELL_RE.search(text):
+        return True
+    base = None
+    for c in cds:
+        d = _cd_target(c["toks"])
+        if d is None or d in ("-", "~-") or "OLDPWD" in d or any(m in d for m in _DYN_MARKS):
+            return True
+        base = _join_dir(base, d)
+        if not os.path.isdir(base):
+            return True
+    return False
+
+def _git_revert_check(cmd: str, opaque: bool = False, ambiguous: bool = False):
+    """複合コマンドを分割し、未コミットの変更を消しうる git の操作（checkout/restore のファイル指定・git rm -f・
+    checkout-index -f・read-tree -u --reset・mv -f）を判定する。
+    ("block", パス): 文字どおりの対象に変更がある（停止）。("ask", 理由): 場所が 1 つに決まらない（ambiguous）、
+    または対象が読めず（`$(…)`・変数・xargs／find〔opaque〕・中かっこ・--pathspec-from-file）その場所に変更がある（確認）。
+    I174 0-15: 場所や対象を推測して通す・止めるをしない。"""
     cd_dir = None
     for toks in _segments(cmd):
         d = _cd_target(toks)
         if d is not None:
             cd_dir = _join_dir(cd_dir, d)
-            # cd の先が読めないが今の場所を指す形（`cd "$(git rev-parse --show-toplevel)"`）は、元の場所も候補に残す
-            dyn = any(m in d for m in _DYN_MARKS) and _CD_HERE_RE.search(cmd)
-            cands = cands + [cd_dir] if scoped or dyn else [cd_dir]
             continue
         g = _git_find(toks)
         if not g:
             continue
         gi, si = g
         sub, args = toks[si], toks[si + 1:]
-        locs = [_git_loc(toks, gi, si, x) for x in dict.fromkeys(cands)]
+        loc = _git_loc(toks, gi, si, cd_dir)
         pos = [a for a in args if not a.startswith("-")]
+        unreadable = opaque
         if sub in ("checkout", "restore"):
-            if any(a.startswith("--pathspec-from-file") for a in args):
-                return "--pathspec-from-file で渡したファイル"       # 中身のパスを読めないので戻す対象として扱う
             staged = _revert_from_commit(sub, args)
             targets = _revert_targets(sub, args)
-            # `git checkout "$BR"`・`--detach "$SHA"`・`-t "origin/$B"` は切り替え（変更を上書きするなら git 自身が止める）。
-            # -- が無く、変更ファイルの一覧（diff / ls-files / status）を渡していない checkout は対象が読めなくても通す
-            if sub == "checkout" and "--" not in args and not opaque and not _FILE_LIST_RE.search(" ".join(pos)):
-                targets = [t for t in targets if not any(m in t for m in _DYN_MARKS)]
+            unreadable = unreadable or any(a.startswith("--pathspec-from-file") for a in args)
         elif sub == "rm" and _has_short(args, "f", "--force") and "--cached" not in args:
             staged, targets = True, pos
         elif sub == "checkout-index" and _has_short(args, "f", "--force"):
             staged, targets = False, [":/"] if _has_short(args, "a", "--all") else pos
-        elif sub == "read-tree" and _has_short(args, "u") and ("--reset" in args or _has_short(args, "m")):
-            staged, targets = True, [":/"]
-        elif sub == "mv" and _has_short(args, "f", "--force") and pos:
-            staged, targets = True, pos[-1:]                     # 上書きされる移動先
+        elif sub == "read-tree" and _has_short(args, "u") and "--reset" in args:
+            staged, targets = True, [":/"]                       # -m は変更を残す（消えるのは --reset）
+        elif sub == "mv" and _has_short(args, "f", "--force") and len(pos) >= 2:
+            dst = pos[-1]
+            base = os.path.join(loc[0] or ".", dst)
+            # 移動先がディレクトリなら、その中の同じ名前のファイルが上書きされる
+            staged, targets = True, [os.path.join(dst, os.path.basename(x)) for x in pos[:-1]] \
+                if os.path.isdir(base) else [dst]
         else:
             continue
-        # cd の先が読めない（cd_dyn）だけなら、対象の名前は読めるので候補の場所で名前を調べる（下の通常の判定）
+        if not targets and not unreadable:
+            continue
+        if ambiguous or _git_loc_dynamic(loc):
+            return ("ask", f"git {sub} を実行する場所が 1 つに決まらない（cd の範囲・戻り先・-C 等の先が読めない）")
         # 中かっこ（sub/{b,c}.py）は bash が展開するので、文字どおりの名前では調べられない
-        if opaque or any(m in t for t in targets for m in _DYN_MARKS) or any(_BRACE_RE.search(t) for t in targets):
-            if any(_worktree_dirty(":/", loc, staged) for loc in locs):
-                return "コマンドや変数で渡した対象（どれを戻すか読めない・変更のあるファイルがある）"
+        unreadable = unreadable or any(m in t for t in targets for m in _DYN_MARKS) or \
+            any(_BRACE_RE.search(t) for t in targets)
+        if unreadable:
+            if _worktree_dirty(":/", loc, staged):
+                return ("ask", f"git {sub} で戻す対象が読めない（コマンド・変数・xargs 等で渡している）うえ、変更のあるファイルがある")
             continue
         for t in targets:
-            if any(_worktree_dirty(t, loc, staged) for loc in locs):
-                return t
+            if _worktree_dirty(t, loc, staged):
+                return ("block", t)
     return None
+
+def _git_revert_target_on_dirty(cmd: str, opaque: bool = False, ambiguous: bool = False):
+    """_git_revert_check のうち停止するもの（文字どおりの対象に変更がある）の対象のパスを返す。無ければ None。"""
+    r = _git_revert_check(cmd, opaque, ambiguous)
+    return r[1] if r and r[0] == "block" else None
 
 # --- git push の保護ブランチ宛先判定（I080） ---
 PROTECTED_BRANCHES = ("develop", "main")
@@ -260,6 +285,14 @@ def _git_push_parts(toks):
         return None
     return gi, toks.index("push", gi + 1)
 
+def _push_dest_on_branch(toks) -> bool:
+    """git push の宛先が今のブランチで決まる（宛先を書かない・HEAD・@）なら True。"""
+    parts = _git_push_parts(toks)
+    if not parts:
+        return False
+    refspecs = _push_positionals(toks[parts[1] + 1:])[1:]
+    return not refspecs or any(r.lstrip("+") in ("HEAD", "@") for r in refspecs)
+
 def _push_dest_dynamic(toks) -> bool:
     """git push の宛先・実行場所が変数・置換・xargs の {} などで決まり、静的に確かめられないなら True。"""
     parts = _git_push_parts(toks)
@@ -280,7 +313,7 @@ def _push_positionals(after):
             out.append(a)
     return out
 
-def _push_protected_target(cmd: str):
+def _push_protected_target(cmd: str, ambiguous: bool = False):
     """git push が protected ブランチを名前/refspec で宛先にするなら宛先名を返す。非該当は None。
     複合コマンドは _segments(I081)で分割して各セグメントを判定。宛先が今のブランチで決まる形は、
     git -C の先・その前の cd の先のブランチを見る（I174）。
@@ -299,6 +332,8 @@ def _push_protected_target(cmd: str):
         cdir = _git_loc(toks, gi, pi, cd_dir)
         cur = None
         if not refspecs:                                     # 宛先明示なし → 現ブランチが宛先
+            if ambiguous:
+                continue                                     # 場所が 1 つに決まらない → 確認（push_dynamic）
             cur = _current_branch(cdir)
             if cur in PROTECTED_BRANCHES:
                 return cur
@@ -306,7 +341,7 @@ def _push_protected_target(cmd: str):
         for rs in refspecs:
             if rs.lstrip("+") == ":":
                 return "main / develop（: は同じ名前のブランチをすべて push する）"
-            if cur is None:
+            if cur is None and not ambiguous:
                 cur = _current_branch(cdir)
             dest = _norm_push_dest(rs, cur)
             if dest in PROTECTED_BRANCHES:
@@ -1795,14 +1830,17 @@ def _cmd_danger(c: dict) -> list:
         seg = shlex.join(toks)
         if c.get("genv"):
             seg = " ".join(f"{k}={shlex.quote(v)}" for k, v in c["genv"].items()) + " " + seg
-        # 通った場所の候補（`( … )` の中の cd かどうか分からないため・I174）ごとの判定用の文字列
-        segs = [f"cd {shlex.quote(d)} ; {seg}" if d else seg for d in (c.get("cds") or [c.get("cd")])]
+        amb = bool(c.get("loc_ambiguous"))
+        if c.get("cd") and not amb:
+            seg = f"cd {shlex.quote(c['cd'])} ; {seg}"
         gopts = toks[1:toks.index(sub)] if sub in toks else []
         cfg = [gopts[i + 1] for i, t in enumerate(gopts[:-1]) if t == "-c"]
         if sub in ("checkout", "restore", "rm", "checkout-index", "read-tree", "mv"):
-            target = _git_revert_target_on_dirty(seg, bool(c.get("via_xargs") or c.get("via_find")), c.get("cds"))
-            if target:
-                r.append(_revert_reason(target))
+            chk = _git_revert_check(seg, bool(c.get("via_xargs") or c.get("via_find")), amb)
+            if chk and chk[0] == "block":
+                r.append(_revert_reason(chk[1]))
+            elif chk:
+                c["git_ask"] = chk[1]                        # 確認にする理由（_analyze が "git_unsure" に集める）
         # 設定で保護ブランチへの push・強制 push・確認なしの clean を起こす形
         pos = args[_skip_opts(args, ("-f", "--file", "--blob", "--type", "--default", "--comment"))
                     if sub == "config" else 0:]
@@ -1815,7 +1853,7 @@ def _cmd_danger(c: dict) -> list:
         if sub in ("push", "clean") and any(_risky_git_cfg(*(x.split("=", 1) if "=" in x else (x, "true"))) for x in cfg):
             r.append(f"push の宛先・clean の確認を変える設定（-c）付きの git {sub} requires DANGER_OK=1")
         if sub == "push":
-            dest = next((x for x in (_push_protected_target(sg) for sg in segs) if x), None)
+            dest = _push_protected_target(seg, amb)
             if dest:
                 r.append(f"push to protected branch '{dest}' is forbidden "
                          f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
@@ -2089,32 +2127,36 @@ def _describe(c: dict) -> str:
 def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
-    res = {"hard": "", "danger": [], "external": [], "container": [], "unsure": [], "push_dynamic": []}
-    cd, cds, scoped = None, [None], _scoped(text)
+    res = {"hard": "", "danger": [], "external": [], "container": [], "unsure": [], "push_dynamic": [],
+           "git_unsure": []}
+    # git を実行する場所が 1 つに決まるか（I174 0-15）。決まらなければ、場所に依存する git の判定は確認にする
+    amb = _loc_ambiguous(text, cmds)
+    cd = None
     for c in cmds:
-        # 入れ子のシェルの中の cd も、後ろの git の「今のブランチ」「変更のあるファイル」の判定に引き継ぐ（I174）。
-        # `( … )` を抜けると元の場所に戻るが、読み解いた列からは分からないので、通った場所をすべて候補にする
         t = c["toks"]
         d = None if c["ctr"] else _cd_target(t)
         if d is not None:
             cd = _join_dir(cd, d)
-            cds = cds + [cd] if scoped or (any(m in d for m in _DYN_MARKS) and _CD_HERE_RE.search(text)) else [cd]
         c["cd"] = cd
-        c["cds"] = list(dict.fromkeys(cds))
-        # 宛先・実行場所が静的に決まらない push（入れ子の $(…)・xargs / parallel が語を足す形も含む）は確認
+        c["loc_ambiguous"] = amb
+        # 宛先・実行場所が静的に決まらない push（入れ子の $(…)・xargs / parallel が語を足す形・
+        # 場所が 1 つに決まらないのに今のブランチで宛先が決まる形）は確認
         g = _git_find(t)
         if not c["ctr"] and g and t[g[1]] == "push" and (
-                _push_dest_dynamic(t) or c.get("via_xargs") or _git_loc_dynamic(_git_loc(t, g[0], g[1], cd, c.get("genv")))):
+                _push_dest_dynamic(t) or c.get("via_xargs") or (amb and _push_dest_on_branch(t))
+                or _git_loc_dynamic(_git_loc(t, g[0], g[1], cd, c.get("genv")))):
             res["push_dynamic"].append(_describe(c))
         res["hard"] = res["hard"] or _cmd_hard(c)
         d, e = _cmd_danger(c), _cmd_external(c)
+        if c.get("git_ask"):
+            res["git_unsure"].append(c["git_ask"])
         res["danger"] += d
         res["external"] += e
         if c["compose"] and not d and not e and not _container_safe(c):
             res["container"].append(_describe(c))
         if c["note"] == "引用符が閉じていない":
             res["unsure"].append("引用符が閉じていない")   # 読み取りが代替経路に落ちた（0-13: 素通しにしない）
-    for k in ("danger", "external", "container", "unsure", "push_dynamic"):
+    for k in ("danger", "external", "container", "unsure", "push_dynamic", "git_unsure"):
         res[k] = list(dict.fromkeys(res[k]))
     return res
 
@@ -2130,8 +2172,8 @@ def _sn_judge(seg: list, cds: tuple = ()) -> dict:
     引用符の中の $( )・`...`・ヒアドキュメントを含むコマンドは、組み直すと意味が変わる（中身が見えない扱いになる）うえ、
     精密判定が中身を読んで判定済みなので、かけ直さない。"""
     if any("$(" in t or "`" in t or "__HEREDOC_" in t for t in seg):
-        return {"hard": "", "danger": [], "external": [], "container": []}
-    # 手前の cd（`( … )`・popd の無いコマンドのときだけ渡される）を付けて、git の場所の判定に引き継ぐ
+        return {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": []}
+    # 手前の cd を付けて、git の場所の判定に引き継ぐ（場所が 1 つに決まらなければ _analyze が確認側に倒す）
     return _analyze(" ; ".join([shlex.join(c) for c in cds] + [shlex.join(seg)]))
 
 def _safety_net(text: str) -> dict:
@@ -2150,8 +2192,9 @@ def _safety_net(text: str) -> dict:
             toks += _split_ops(t)
     except ValueError:
         toks = body.split()
-    res, i, at_cmd = {"hard": "", "danger": [], "external": [], "container": []}, 0, True
-    scoped, cds = _scoped(text), []
+    # git_unsure / push_dynamic（確認）も集める。捨てると、確認に回した形が安全網の経路で素通しになる（I174 0-15）
+    res, i, at_cmd = {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": []}, 0, True
+    cds = []
     while i < len(toks):
         t = toks[i]
         if t in ("<", ">") and i + 1 < len(toks) and toks[i + 1] == "(":
@@ -2184,15 +2227,15 @@ def _safety_net(text: str) -> dict:
         j = i
         while j < len(toks) and toks[j] not in _SN_SEPS:
             j += 1
-        if not scoped and _cd_target(toks[i:j]) is not None:
+        if _cd_target(toks[i:j]) is not None:
             cds.append(toks[i:j])
         an = _sn_judge(toks[i:j], tuple(cds))
         res["hard"] = res["hard"] or an["hard"]
-        for k in ("danger", "external", "container"):
-            res[k] += an[k]
+        for k in ("danger", "external", "container", "git_unsure", "push_dynamic"):
+            res[k] += an.get(k, [])
         at_cmd = False
         i += 1
-    for k in ("danger", "external", "container"):
+    for k in ("danger", "external", "container", "git_unsure", "push_dynamic"):
         res[k] = list(dict.fromkeys(res[k]))
     return res
 
@@ -2206,7 +2249,8 @@ def _danger_reasons(cmd: str, pcmd: str) -> list:
     push 系の既存判定は、ヒアドキュメントの本文を除き、改行を区切りにしたテキストで行う（本文の誤反応を防ぐ）。"""
     cmd = _norm(re.sub(r"__HEREDOC_\d+__", " ", _strip_comments(_cut_heredocs(pcmd))).replace("\n", " ; "))
     reasons = []
-    dest = _push_protected_target(cmd)
+    amb = _loc_ambiguous(pcmd)
+    dest = _push_protected_target(cmd, amb)
     if dest:
         reasons.append(f"push to protected branch '{dest}' is forbidden "
                        f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
@@ -2219,7 +2263,7 @@ def _danger_reasons(cmd: str, pcmd: str) -> list:
     # I083: pure _segments ベース。protected 宛先は上で先に理由化済み。
     if _push_has_force(cmd):
         reasons.append("force push requires DANGER_OK=1")
-    target = _git_revert_target_on_dirty(cmd)
+    target = _git_revert_target_on_dirty(cmd, ambiguous=amb)
     if target:
         reasons.append(_revert_reason(target))
     reasons += _analyze(pcmd)["danger"]
@@ -2405,6 +2449,9 @@ def main():
     # 危険操作の判定の後に置くことで、rm -rf 等の同居 danger-op を ask で先食いしない。
     # I174: DANGER_OK=1 でも ask にする（宛先が保護ブランチに解決し得るため）。
     # コメントとヒアドキュメントの本文は判定しない（_danger_reasons の push の判定と同じ前処理）
+    # I174 0-15: 場所・対象が 1 つに決まらない、未コミットの変更を消しうる git の操作は確認
+    if an["git_unsure"]:
+        _ask("未コミットの変更を消すかもしれない git の操作です（" + " / ".join(an["git_unsure"]) + "）。確認してください。")
     if an["push_dynamic"] or _push_is_dynamic(
             _norm(re.sub(r"__HEREDOC_\d+__", " ", _strip_comments(_cut_heredocs(pcmd))).replace("\n", " ; "))):
         _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
@@ -2421,9 +2468,9 @@ def main():
         if danger_ok:
             _ask("DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: " + " / ".join(net["danger"]))
         _block(net["danger"][0], raw)
-    if net["external"] or net["container"]:
+    if net["external"] or net["container"] or net["git_unsure"] or net["push_dynamic"]:
         _ask("見張りが読み落としかけた書き方の中に、確認が必要な操作があります: "
-             + " / ".join(net["external"] + net["container"]))
+             + " / ".join(net["external"] + net["container"] + net["git_unsure"] + net["push_dynamic"]))
     # I174 0-13: 読み取りが代替経路に落ちた形（引用符が閉じていない等）は、何も見つからなくても確認にする
     if an["unsure"]:
         _ask("見張りがコマンドを読みきれませんでした（" + " / ".join(an["unsure"]) + "）。確認してください。")

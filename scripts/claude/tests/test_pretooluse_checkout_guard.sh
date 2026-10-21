@@ -84,7 +84,7 @@ ck "G17 git -C sub restore dirty"          2 "$(run 'git -C sub restore s.txt')"
 ck "G18 cd sub && checkout -- dirty"       2 "$(run 'cd sub && git checkout -- s.txt')"
 ck "G19 cd -- sub && checkout -- dirty"    2 "$(run 'cd -- sub && git checkout -- s.txt')"
 ck "G20 pushd sub && restore dirty"        2 "$(run 'pushd sub && git restore s.txt')"
-ck "G21 bash -c cd sub && restore dirty"   2 "$(run "bash -c 'cd sub && git restore s.txt'")"
+ck "G21 bash -c cd sub && restore dirty"   ASK "$(runj "bash -c 'cd sub && git restore s.txt'")"
 ck "G22 --work-tree=. checkout -- dirty"   2 "$(run 'git --work-tree=. checkout -- sub/s.txt')"
 ck "G23 cd sub && cd .. 後の clean ファイル" 0 "$(run 'cd sub && cd .. && git checkout -- tracked.txt')"
 # --- ステージ済みの変更（第 3 周 M7）: コミットから戻す形は消えるので止める・index から戻す形は残るので通す ---
@@ -98,21 +98,21 @@ ck "G25 restore -s HEAD -SW staged"        2 "$(run 'git restore -s HEAD -SW st.
 ck "G26 checkout -- staged（index から）"  0 "$(run 'git checkout -- st.txt')"
 # --- 同じ結果になる別の操作（第 3 周 M9）---
 printf 'sub/s.txt\n' > list.txt
-ck "G27 restore --pathspec-from-file"      2 "$(run 'git restore --pathspec-from-file=list.txt')"
+ck "G27 restore --pathspec-from-file"      ASK "$(runj 'git restore --pathspec-from-file=list.txt')"
 ck "G28 git rm -rf dirty"                  2 "$(run 'git rm -rf sub')"
 ck "G29 git rm --cached は通す"            0 "$(run 'git rm --cached -r sub')"
 ck "G30 git.exe checkout -- dirty"         2 "$(run 'git.exe checkout -- sub/s.txt')"
 ck "G31 bash -c GIT_WORK_TREE=. checkout"  2 "$(run "bash -c 'GIT_WORK_TREE=. git checkout -- sub/s.txt'")"
 # 対象をコマンド・変数・xargs で渡す形（どれを戻すか読めない）は、その場所に変更があれば止める（code-review 20261021_0905 第 1 周）
-ck "G32 git diff --name-only | xargs git checkout --" 2 "$(run 'git diff --name-only | xargs git checkout --')"
+ck "G32 git diff --name-only | xargs git checkout --" ASK "$(runj 'git diff --name-only | xargs git checkout --')"
 # shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
-ck "G33 git restore \$(git diff --name-only)"      2 "$(run 'git restore $(git diff --name-only)')"
+ck "G33 git restore \$(git diff --name-only)"      ASK "$(runj 'git restore $(git diff --name-only)')"
 # shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
-ck "G34 for f in \$(…); do git checkout -- \$f"    2 "$(run 'for f in $(git diff --name-only); do git checkout -- $f; done')"
+ck "G34 for f in \$(…); do git checkout -- \$f"    ASK "$(runj 'for f in $(git diff --name-only); do git checkout -- $f; done')"
 # ( ) の中の cd は抜けると戻る。どちらの場所でも当たれば止める
 mkdir -p other
-ck "G35 bash -c (cd other && ls) && checkout"      2 "$(run "bash -c '(cd other && ls) && git checkout -- sub/s.txt'")"
-ck "G36 bash -c pushd; popd; checkout"            2 "$(run "bash -c 'pushd other; popd; git checkout -- sub/s.txt'")"
+ck "G35 bash -c (cd other && ls) && checkout"      ASK "$(runj "bash -c '(cd other && ls) && git checkout -- sub/s.txt'")"
+ck "G36 bash -c pushd; popd; checkout"            ASK "$(runj "bash -c 'pushd other; popd; git checkout -- sub/s.txt'")"
 # -- なしのコミットから戻す形もステージ済みの変更を数える
 ck "G37 checkout HEAD <staged>（-- なし）"         2 "$(run 'git checkout HEAD st.txt')"
 ck "G38 checkout HEAD .（-- なし）"                2 "$(run 'git checkout HEAD .')"
@@ -144,37 +144,80 @@ ck "G48 git checkout \$BR（切り替え）は通す"      0 "$(run 'git checkou
 # shellcheck disable=SC2016  # 同上
 ck "G49 git checkout --detach \$SHA は通す"       0 "$(run 'git checkout --detach $SHA')"
 # shellcheck disable=SC2016  # 同上
-ck "G50 git checkout \$(git diff --name-only)"    2 "$(run 'git checkout $(git diff --name-only)')"
+ck "G50 git checkout \$(git diff --name-only)"    ASK "$(runj 'git checkout $(git diff --name-only)')"
 C2="$T2"   # 変更のある sub/s.txt を持たない別のリポジトリ（s2.txt だけ）
 mkdir -p "$C2/sub"
 printf 'orig\n' > "$C2/sub/s.txt"
 git -C "$C2" add sub/s.txt
 git -C "$C2" commit -qm c2
 ck "G51 cd <別> && checkout -- sub/s.txt は通す"  0 "$(run "cd $C2 && git checkout -- sub/s.txt")"
-ck "G52 (cd <別> && ls) && checkout -- は止める"  2 "$(run "(cd $C2 && ls) && git checkout -- sub/s.txt")"
+ck "G52 (cd <別> && ls) && checkout -- は止める"  ASK "$(runj "(cd $C2 && ls) && git checkout -- sub/s.txt")"
 # 未コミットの変更を消す別のコマンド（第 2 周 Low）
 ck "G53 git checkout-index -f <dirty>"           2 "$(run 'git checkout-index -f sub/s.txt')"
 ck "G54 git read-tree -u --reset HEAD"           2 "$(run 'git read-tree -u --reset HEAD')"
 ck "G55 git mv -f <x> <dirty>"                   2 "$(run 'git mv -f tracked.txt sub/s.txt')"
 ck "G56 git checkout-index -a（-f なし）は通す"   0 "$(run 'git checkout-index -a')"
 # find -exec で渡す形・中かっこで並べたファイル名（第 2 周）
-ck "G57 find -exec git checkout -- {} +"         2 "$(run 'find sub -name s.txt -exec git checkout -- {} +')"
-ck "G58 git checkout -- sub/{s,t}.txt"           2 "$(run 'git checkout -- sub/{s,t}.txt')"
+ck "G57 find -exec git checkout -- {} +"         ASK "$(runj 'find sub -name s.txt -exec git checkout -- {} +')"
+ck "G58 git checkout -- sub/{s,t}.txt"           ASK "$(runj 'git checkout -- sub/{s,t}.txt')"
 ck "G59 find -exec git log -- {} + は通す"       0 "$(run 'find sub -name s.txt -exec git log -1 -- {} +')"
 # 読めないが今の場所を指す cd は元の場所も見る／別の場所へ移る cd は移った先だけ
 # shellcheck disable=SC2016  # $( ) を展開せず、そのまま guard に渡すのが目的
-ck "G60 cd \$(git rev-parse --show-toplevel) && checkout" 2 "$(run "sh -c 'cd \$(git rev-parse --show-toplevel) && git checkout -- sub/s.txt'")"
+ck "G60 cd \$(git rev-parse --show-toplevel) && checkout" ASK "$(runj "sh -c 'cd \$(git rev-parse --show-toplevel) && git checkout -- sub/s.txt'")"
 # shellcheck disable=SC2016  # 同上
 ck "G61 cd \$(mktemp -d) && … checkout -- . は通す" 0 "$(run 'cd $(mktemp -d) && git init -q && git checkout -- .')"
 # 新しいブランチ名が変数のまとめ書き（-qb）は作成で、変更のある作業場所でも止めない（第 2 周 テスト観点）
 # shellcheck disable=SC2016  # $BR を展開せず、そのまま guard に渡すのが目的
 ck "G62 git checkout -qb \$BR は通す"             0 "$(run 'git checkout -qb $BR')"
+# 場所が 1 つに決まらない（元へ戻る cd・失敗する cd・読めない cd の先・パイプの中の cd）は確認（I174 0-15・第 3 周 H1・H3）
+# shellcheck disable=SC2016  # $OLDPWD・$X・$( ) を展開せず、そのまま guard に渡すのが目的
+ck "G63 cd sub; cd - ; checkout -- dirty"          ASK "$(runj 'cd sub; ls; cd -; git checkout -- sub/s.txt')"
+# shellcheck disable=SC2016  # 同上
+ck "G64 cd sub; cd \$OLDPWD; restore dirty"       ASK "$(runj 'cd sub; cd $OLDPWD; git restore sub/s.txt')"
+ck "G65 cd sub; cd ~-; checkout -- dirty"          ASK "$(runj 'cd sub; cd ~-; git checkout -- sub/s.txt')"
+ck "G66 cd <無い場所>; checkout -- dirty"          ASK "$(runj 'cd nosuchdir; git checkout -- sub/s.txt')"
+# shellcheck disable=SC2016  # 同上
+ck "G67 cd \$X && checkout -- dirty"               ASK "$(runj 'cd $X && git checkout -- sub/s.txt')"
+# shellcheck disable=SC2016  # 同上
+ck "G68 cd \$(git rev-parse …)/sub && checkout"    ASK "$(runj 'cd $(git rev-parse --show-toplevel)/sub && git checkout -- s.txt')"
+ck "G69 cd sub | true; checkout -- dirty"          ASK "$(runj 'cd sub | true; git checkout -- sub/s.txt')"
+# 対象が読めない checkout（-- なしでも）は変更があれば確認（第 3 周 H2）
+# shellcheck disable=SC2016  # 同上
+ck "G70 git checkout \$(git rev-parse --show-toplevel)" ASK "$(runj 'git checkout $(git rev-parse --show-toplevel)')"
+# shellcheck disable=SC2016  # 同上
+ck "G71 git checkout \$(git grep -l x)"            ASK "$(runj 'git checkout $(git grep -l x)')"
+# 一意な場所・読める対象は今までどおり精密に（第 3 周 H4・L6・L7）
+ck "G72 git checkout-index -f -a"                  2 "$(run 'git checkout-index -f -a')"
+ck "G73 git checkout-index -fa"                    2 "$(run 'git checkout-index -fa')"
+ck "G74 git read-tree -u -m HEAD は通す"           0 "$(run 'git read-tree -u -m HEAD')"
+printf 'o\n' > other/o.txt
+git add other/o.txt
+git commit -qm o
+ck "G75 git mv -f <x> <関係ない変更のあるディレクトリ>/ は通す" 0 "$(run 'git mv -f other/o.txt sub/')"
+# 安全網だけが拾う書き方（function の本体・coproc・<( ) の中）でも、対象が読めない取り消しは確認（実装レビューの指摘）
+# shellcheck disable=SC2016  # $1・$F を展開せず、そのまま guard に渡すのが目的
+ck "G76 function の本体の checkout -- \"\$1\""   ASK "$(runj 'function f { git checkout -- $1; }; f sub/s.txt')"
+# shellcheck disable=SC2016  # 同上
+ck "G77 coproc の中の restore -- \$F"           ASK "$(runj 'coproc { git restore -- $F; }')"
+# shellcheck disable=SC2016  # 同上
+ck "G78 <( ) の中の checkout -- \$F"            ASK "$(runj 'cat <(git checkout -- $F)')"
+# 場所が読めない -C・--work-tree も確認（cd ではない書き方）
+# shellcheck disable=SC2016  # 同上
+ck "G79 git -C \$X restore <file>"              ASK "$(runj 'git -C $X restore sub/s.txt')"
+# shellcheck disable=SC2016  # 同上
+ck "G80 git --work-tree=\$X checkout -- <file>" ASK "$(runj 'git --work-tree=$X checkout -- sub/s.txt')"
+# 偽合格の防止: 場所が一意かの判定（_loc_ambiguous）を外すと、cd - の後の checkout が素通しになる
+BROKEN_AMB="$TMP/guard_noamb.py"
+sed 's/^def _loc_ambiguous(text: str, cmds=None) -> bool:$/&\n    return False/' "$GUARD" > "$BROKEN_AMB"
+ck "FG-AMB 複製に置換が入った" YES "$( (! cmp -s "$GUARD" "$BROKEN_AMB") && echo YES || echo NO)"
+ck "FG-AMB noamb passes cd - checkout" 0 "$(json 'cd sub; ls; cd -; git checkout -- sub/s.txt' | python3 "$BROKEN_AMB" >/dev/null 2>&1; echo $?)"
 
 # --- FALSEGREEN（自動注入）: 判定呼び出し行を無効化した複製で dirty が素通し /
 #     実体で block。両者の差で「block は判定行に依存」を機械裏取り（false-green 排除） ---
 BROKEN="$TMP/guard_broken.py"
-# 判定の関数そのものを無効化する（最上位と単純コマンドごとの 2 か所から呼ばれるため・I174）
-sed 's/^def _git_revert_target_on_dirty(cmd: str, opaque: bool = False, cds=None):$/&\n    return None/' "$GUARD" > "$BROKEN"
+# 判定の関数そのものを無効化する（最上位と単純コマンドごとの 2 か所から呼ばれるため・I174）。
+# 場所・対象が 1 つに決まらない形は確認（ASK）にする（I174 0-15。G21 ほか ASK の行）
+sed 's/^def _git_revert_check(cmd: str, opaque: bool = False, ambiguous: bool = False):$/&\n    return None/' "$GUARD" > "$BROKEN"
 ck "FALSEGREEN 複製に置換が入った" YES "$( (! cmp -s "$GUARD" "$BROKEN") && echo YES || echo NO)"
 ck "FALSEGREEN injected passes" 0 "$(json 'git checkout -- g11.txt' | python3 "$BROKEN" >/dev/null 2>&1; echo $?)"
 ck "FALSEGREEN real blocks"     2 "$(run 'git checkout -- g11.txt')"

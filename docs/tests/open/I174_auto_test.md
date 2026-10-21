@@ -14,7 +14,7 @@
 
 | TC | 内容 | 合格条件 | 対応 AC | ステップ |
 |---|---|---|---|---|
-| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・740 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕・2026-10-20〜21 の敵対的レビュー第 2 周と fix-loop〔0-14〕で追加） | exit 0（最終行 `pass=763 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
+| TC-01 | 新規 `scripts/claude/tests/test_pretooluse_container_guard.sh`（下の TC-01 のケース表を全件・740 ケース。2026-10-16 の設計変更〔計画書 0 章・0-9〕と 2026-10-17 の fix-loop〔0-10〕で作り直し。敵対的レビューやり直しの第 1・2 周〔0-11〕・2026-10-20〜21 の敵対的レビュー第 2 周と fix-loop〔0-14〕で追加） | exit 0（最終行 `pass=769 fail=0`） | AC-4〜AC-9・AC-13・AC-14 | 2・3 |
 | TC-13 | 新規 `scripts/claude/tests/test_settings_permissions.sh`（settings.json の ask・allow・deny の中身を JSON として確認。後退を注入した 11 の複製で不合格になることも確認。Bash の PreToolUse フック登録・権限モード・広すぎる allow・disableAllHooks・guard を呼ばないフックも確認） | exit 0 | AC-1〜AC-3・AC-14 | 4 |
 | TC-02 | `scripts/claude/tests/test_pretooluse_push_guard.sh`（DOK1〜3・P6・P7・P23・P24・P26・P31 を ASK に更新） | exit 0 | AC-5・AC-10 | 2 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_checkout_guard.sh`（`runj` を追加し G7 を ASK に更新。語にくっついた `;`・`&` の区切りの G12〜G15 を追加） | exit 0 | AC-5・AC-10 | 2 |
@@ -275,6 +275,12 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | H37 | rm -f 1 ファイルは対象外 | 0 | `"$(runj 'rm -f a.txt')"` |
 | H38 | find -print は通す | 0 | `"$(runj "find . -name '*.pyc' -print")"` |
 | H39 | -c clean.requireForce=false clean | 2 | `"$(runj 'git -c clean.requireForce=false clean -d')"` |
+| H40 | xargs -i rm {}（-i は値を取らない） | 2 | `"$(runj 'echo junk/a/x \| xargs -i rm {}')"` |
+| H41 | -c clean.requireForce=off clean | 2 | `"$(runj 'git -c clean.requireForce=off clean -d')"` |
+| H42 | git config clean.requireForce false | 2 | `"$(runj 'git config clean.requireForce false')"` |
+| H43 | -c clean.requireForce=（空の値）clean | 2 | `"$(runj 'git -c clean.requireForce= clean -d')"` |
+| H44 | -c clean.requireForce=no clean | 2 | `"$(runj 'git -c clean.requireForce=no clean -d')"` |
+| H45 | git config clean.requireForce 0 | 2 | `"$(runj 'git config clean.requireForce 0')"` |
 
 **(X) 外部送信（ASK）**
 
@@ -650,7 +656,7 @@ TC-12 は、I146 のマージ前は対象ファイルが本ブランチに無い
 | G25 | その処理を外すと素通し | 0 | `"$(rungj "$BROKEN_U" 'echo "abc')"` |
 | G26 | 閉じない引用符の後ろの行も確認 | ASK | `"$(runj "echo 'it${NL}ls")"` |
 
-<!-- 行数: 573（危険操作の行 190 件を 2 通りずつ数えると 763 ケース） -->
+<!-- 行数: 579（危険操作の行 190 件を 2 通りずつ数えると 769 ケース） -->
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -843,3 +849,22 @@ TC-07・TC-08・TC-09 は「違反がある状態で不合格になる」こと�
 - git の判定を足すときは、最上位と単純コマンドの両方の経路が同じ共通部品（`_git_find`・`_git_loc`）を使っているかを確かめ、テストは入れ子（`bash -c`）の形と、場所を変える形（`-C`・`cd`・`GIT_DIR=`）を必ず 1 件ずつ足す。
 - 判定を 1 つ足したら、その判定だけを外した複製でどれかのテストが落ちることを確かめる（今回のテストレビューは 16 個の複製で確認し、落ちなかった 2 個が実際の見逃しにつながっていた）。
 - 経路が 2 つのままなので、同じ型の穴が再び出る可能性は残る（一本化〔診断メモの案 A〕は見送り）。次の敵対的レビューで同じ型が出たら、案 A を改めて提案する。
+
+### fix-loop（2026-10-21・/code-review 20261021_0905 の敵対的レビュー 3 周・再び上限到達への対応・計画書 0-15）の再発防止記録（手順7）
+決定論ゲート全 38 行 exit 0（container `pass=769`・push 164・checkout 86・worktree 30・総当たり `pass=301`・bash との差分テスト 3,984 件 見逃し 0 余計な停止 0・作業記録の再判定 新しく確認 2 件〔レビュー役のテスト用リポジトリの再現スクリプト〕）。診断 `docs/reviews/I174_fix_diagnosis_20261021_1226.md`（PASS）・実装レビュー（`claude -p` 失敗のため代替）`_fix_implementation_review_20261021_1245.md`（BLOCKER・実行の不備）→ 修正 → `_fix_implementation_review_20261021_1254.md`（OK）・テスト結果 `_fix_test_result_20261021_1259.md`・テストレビュー `_fix_test_review_20261021_1259.md`（OK）。
+
+**なぜ失敗したか**
+- bash がどの場所で git を実行するか（`( … )`・パイプ・`cd -`・失敗する cd・読めない cd の先）と、どのファイルを渡すか（`$(…)`・xargs・find・中かっこ）を見張りが推測して、通す・止めるを決めていた。推測の向きを変えるたびに逆側の穴が出た（第 1 周で止める側に倒す → 第 2 周で止めすぎを緩める → 第 3 周で緩めすぎ）。
+- 実装の途中では、新しく「確認」に回した結果を安全網が捨てており、精密判定が読み落とす書き方（function の本体・coproc・`<( )`）で素通しになっていた（実装レビューの指摘）。
+
+**何を変えたか**
+- 場所が 1 つに決まるか（`_loc_ambiguous`）を判定し、決まらなければ場所に依存する git の判定（未コミット変更の取り消し・今のブランチで宛先が決まる push）は推測せず確認にした。`-C`・`--work-tree` の先が読めない形も同じ。場所に依存しない危険操作は停止のまま。
+- 戻す対象が読めないときは、その場所に変更があれば確認（以前は停止、または一部を通していた）。
+- 推測の部品（通った場所すべてを候補にする処理・今の場所を指す cd の正規表現・一覧のコマンドの正規表現）を廃止。安全網も確認の結果（git_unsure・push_dynamic）を集める。
+
+**セキュリティ上の考慮点**
+- 推測で通す経路を無くし、読み切れないものは人の確認にする（fail-safe）。git の呼び出しは引数の配列（`shell=False`）のまま。
+
+**次回どう防ぐか**
+- 見張りの判定で「場所」「対象」「宛先」を静的に決めきれないときは、推測の分岐を足すのではなく確認に回す（0-13 の「読みきれない形は確認」・0-15 と同じ方針）。止める・通すの向きを変える修正を 2 回続けたら、推測をやめる設計に切り替える合図とする。
+- 新しく「確認」の結果を足したら、main と安全網の両方がその結果を確認にしているか、安全網だけが拾う書き方（function・coproc・`<( )`）のテストを 1 件ずつ足す。
