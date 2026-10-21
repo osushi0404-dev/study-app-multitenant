@@ -86,7 +86,7 @@ ck "Pregr1 force push exit2"           2 "$(run 'git push --force origin x')"
 # ===== false-green 注入（判定行ごと独立に裏取り） =====
 # protected 判定行を無効化（dest を常に None 化）
 BROKEN_PROT="$TMP/guard_noprot.py"
-sed -e 's/dest = _push_protected_target(cmd)/dest = None/' -e 's/dest = _push_protected_target(seg)/dest = None/' "$GUARD" > "$BROKEN_PROT"
+sed -e 's/dest = _push_protected_target(cmd)/dest = None/' -e 's/(_push_protected_target(sg) for sg in segs)/(None for sg in segs)/' "$GUARD" > "$BROKEN_PROT"
 ck "FG-A noprot passes develop"        0 "$(rung "$BROKEN_PROT" 'git push origin develop')"
 ck "FG-B real blocks develop"          2 "$(run 'git push origin develop')"
 # --all/--mirror 判定行を無効化（regex を非マッチ化）
@@ -138,7 +138,8 @@ ck "XP13 bash -c 'cd <develop の場所> && git push'" 2 "$(runj "bash -c 'cd $W
 ck "XP14 -o の値を remote と読み違えない" 2   "$(runj "cd $W && git push -o ci.skip origin")"
 ck "XP15 @ は今のブランチ"               2   "$(runj "cd $W && git push origin @")"
 ck "XP16 git -C の先が読めない push"      ASK "$(runj 'git -C "$WT" push')"
-ck "XP17 cd で戻った先の push は通す"     0   "$(runj "cd $W && cd .. && git push")"
+# ( ) の中の cd かどうかは読み解いた列から分からないので、通った場所（develop を含む）のどこかで当たれば止める（止める側に倒す）
+ck "XP17 develop を通った後の push も止める" 2   "$(runj "cd $W && cd .. && git push")"
 ck "XP18 git -C <develop の場所> status は通す" 0 "$(runj "git -C $W status")"
 ck "XP19 絶対パスの git で main へ push"   2   "$(runj '/usr/bin/git push origin main')"
 ck "XP20 git.exe の force push"          2   "$(runj 'git.exe push --force origin feature/x')"
@@ -179,6 +180,13 @@ ck "XP51 bash -c 'git -C \"\$D\" push'"       ASK "$(runj "bash -c 'git -C \"\$D
 ck "XP52 git config --get push.default は通す" 0  "$(runj 'git config --get push.default')"
 ck "XP53 git branch | xargs -n1 echo は通す"  0   "$(runj 'git branch | xargs -n1 echo')"
 ck "XP54 cd <develop> && git status は通す"   0   "$(runj "cd $W && git status")"
+# 強制 push になる設定・安全な push の設定（code-review 20261021_0905 第 1 周）
+ck "XP55 -c remote.origin.mirror=true push"   2   "$(runj 'git -c remote.origin.mirror=true push origin')"
+ck "XP56 git config remote.origin.mirror true" 2  "$(runj 'git config remote.origin.mirror true')"
+ck "XP57 git config push.default simple は通す" 0 "$(runj 'git config push.default simple')"
+ck "XP58 remote.origin.push を feature に は通す" 0 "$(runj 'git config remote.origin.push refs/heads/feature/x:refs/heads/feature/x')"
+ck "XP59 -c push.default=simple push は通す"  0   "$(runj 'git -c push.default=simple push -u origin feature/x')"
+ck "XP60 bash -c (cd <develop> && ls) && git push" 2 "$(runj "bash -c '(cd $W && ls) && git push origin'")"
 # 偽合格の防止: 実行場所が変数かの判定（_git_loc_dynamic）を外すと、変数の場所の push が素通しになる
 BROKEN_LOC="$TMP/guard_noloc.py"
 sed 's/^def _git_loc_dynamic(loc) -> bool:$/&\n    return False/' "$GUARD" > "$BROKEN_LOC"

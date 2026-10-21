@@ -103,12 +103,48 @@ ck "G28 git rm -rf dirty"                  2 "$(run 'git rm -rf sub')"
 ck "G29 git rm --cached は通す"            0 "$(run 'git rm --cached -r sub')"
 ck "G30 git.exe checkout -- dirty"         2 "$(run 'git.exe checkout -- sub/s.txt')"
 ck "G31 bash -c GIT_WORK_TREE=. checkout"  2 "$(run "bash -c 'GIT_WORK_TREE=. git checkout -- sub/s.txt'")"
+# 対象をコマンド・変数・xargs で渡す形（どれを戻すか読めない）は、その場所に変更があれば止める（code-review 20261021_0905 第 1 周）
+ck "G32 git diff --name-only | xargs git checkout --" 2 "$(run 'git diff --name-only | xargs git checkout --')"
+# shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
+ck "G33 git restore \$(git diff --name-only)"      2 "$(run 'git restore $(git diff --name-only)')"
+# shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
+ck "G34 for f in \$(…); do git checkout -- \$f"    2 "$(run 'for f in $(git diff --name-only); do git checkout -- $f; done')"
+# ( ) の中の cd は抜けると戻る。どちらの場所でも当たれば止める
+mkdir -p other
+ck "G35 bash -c (cd other && ls) && checkout"      2 "$(run "bash -c '(cd other && ls) && git checkout -- sub/s.txt'")"
+ck "G36 bash -c pushd; popd; checkout"            2 "$(run "bash -c 'pushd other; popd; git checkout -- sub/s.txt'")"
+# -- なしのコミットから戻す形もステージ済みの変更を数える
+ck "G37 checkout HEAD <staged>（-- なし）"         2 "$(run 'git checkout HEAD st.txt')"
+ck "G38 checkout HEAD .（-- なし）"                2 "$(run 'git checkout HEAD .')"
+ck "G39 ブランチの切り替えは通す"                  0 "$(run 'git checkout develop')"
+ck "G40 bash -c (cd other && ls) && status は通す" 0 "$(run "bash -c '(cd other && ls) && git status'")"
+# まとめて書いた -SW / -WS（-s なし）もステージ済みを戻す形（code-review 20261021_0905 第 1 周・テスト観点）
+ck "G41 restore -SW <staged>（-s なし）"          2 "$(run 'git restore -SW st.txt')"
+ck "G42 restore -WS <staged>（-s なし）"          2 "$(run 'git restore -WS st.txt')"
+# 見張りの作業ディレクトリとは別のリポジトリを GIT_DIR / GIT_WORK_TREE で指す形（G31 は同じ場所を指すので測れない）
+T2="$(mktemp -d)"
+trap 'rm -rf "$TMP" "$T2"' EXIT
+git -C "$T2" init -q
+git -C "$T2" config user.email t@example.com
+git -C "$T2" config user.name tester
+printf 'orig\n' > "$T2/s2.txt"
+git -C "$T2" add s2.txt
+git -C "$T2" commit -qm i
+printf 'x\n' >> "$T2/s2.txt"
+ck "G43 GIT_DIR=<別> GIT_WORK_TREE=<別> checkout" 2 "$(run "GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt")"
+ck "G44 env GIT_DIR=<別> … checkout"             2 "$(run "env GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt")"
+ck "G45 bash -c 'env GIT_DIR=<別> … checkout'"   2 "$(run "bash -c 'env GIT_DIR=$T2/.git GIT_WORK_TREE=$T2 git checkout -- s2.txt'")"
+# 作業記録の再判定で見つかった余計な停止: まとめ書きの -qb（ブランチ作成）・場所が変数の cd の後
+ck "G46 checkout -qb <新ブランチ> は通す"         0 "$(run 'git checkout -qb feat2')"
+# shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
+ck "G47 cd \$S; git checkout -qb は通す"          0 "$(run 'cd $S; git checkout -qb feat3')"
 
 # --- FALSEGREEN（自動注入）: 判定呼び出し行を無効化した複製で dirty が素通し /
 #     実体で block。両者の差で「block は判定行に依存」を機械裏取り（false-green 排除） ---
 BROKEN="$TMP/guard_broken.py"
 # 判定の関数そのものを無効化する（最上位と単純コマンドごとの 2 か所から呼ばれるため・I174）
-sed 's/^def _git_revert_target_on_dirty(cmd: str):$/&\n    return None/' "$GUARD" > "$BROKEN"
+sed 's/^def _git_revert_target_on_dirty(cmd: str, opaque: bool = False, cds=None):$/&\n    return None/' "$GUARD" > "$BROKEN"
+ck "FALSEGREEN 複製に置換が入った" YES "$( (! cmp -s "$GUARD" "$BROKEN") && echo YES || echo NO)"
 ck "FALSEGREEN injected passes" 0 "$(json 'git checkout -- g11.txt' | python3 "$BROKEN" >/dev/null 2>&1; echo $?)"
 ck "FALSEGREEN real blocks"     2 "$(run 'git checkout -- g11.txt')"
 

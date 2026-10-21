@@ -88,8 +88,9 @@ def _worktree_dirty(path: str, loc=None, staged: bool = False) -> bool:
 
 def _revert_targets(sub: str, args: list) -> list:
     """checkout/restore のうちワークツリーを破壊し得る pathspec を返す。破壊しない形は []。"""
-    if sub == "checkout" and any(a in ("-b", "-B", "--orphan") for a in args):
-        return []  # ブランチ作成
+    if sub == "checkout" and any(a in ("-b", "-B", "--orphan") or _has_short([a], "b") or _has_short([a], "B")
+                                 for a in args):
+        return []  # ブランチ作成（`-qb` のようにまとめて書いた形も）
     if sub == "restore":
         has_staged = ("--staged" in args) or ("-S" in args)
         has_worktree = ("--worktree" in args) or ("-W" in args)
@@ -102,37 +103,53 @@ def _revert_from_commit(sub: str, args: list) -> bool:
     """コミットから戻す形（ステージ済みの変更も消える）なら True。
     `git checkout <コミット> -- <file>`・`git restore -s/--source …`・`git restore -S -W …`。"""
     if sub == "checkout":
-        return "--" in args and any(not a.startswith("-") for a in args[:args.index("--")])
+        if "--" in args:
+            return any(not a.startswith("-") for a in args[:args.index("--")])
+        # `git checkout HEAD <path>`（-- なし）も、位置引数が 2 つ以上なら先頭はコミット（I174）
+        return len([a for a in args if not a.startswith("-")]) >= 2
     has_staged = ("--staged" in args) or ("-S" in args) or any(
         a.startswith("-") and not a.startswith("--") and "S" in a for a in args)
     return has_staged or any(a in ("-s", "--source") or a.startswith("--source=") for a in args)
 
-def _git_revert_target_on_dirty(cmd: str):
+_DYN_MARKS = ("$", "`", "__SUBST_")
+
+def _git_revert_target_on_dirty(cmd: str, opaque: bool = False, cds=None):
     """複合コマンドを分割し、git checkout/restore（と git rm -f）の pathspec が dirty なら最初の該当パスを返す。
-    I174: git の前のオプション（-C・-c・--work-tree）・その前の cd の先でも同じに判定する。"""
+    I174: git の前のオプション（-C・-c・--work-tree）・その前の cd の先でも同じに判定する。
+    cd が `( … )` の中かどうかは分からないので、それまでに通った場所（cd の前・途中・後）のどこかで当たれば止める。
+    対象が読めない（`$(…)`・変数・xargs が語を足す〔opaque〕）ときは、その場所に変更があれば止める。
+    cds は入れ子の読み解き（_analyze）が渡す、それまでに通った場所の候補。"""
+    cands = list(cds) if cds else [None]
     cd_dir = None
     for toks in _segments(cmd):
         d = _cd_target(toks)
         if d is not None:
             cd_dir = _join_dir(cd_dir, d)
+            cands.append(cd_dir)
             continue
         g = _git_find(toks)
         if not g:
             continue
         gi, si = g
         sub, args = toks[si], toks[si + 1:]
-        loc = _git_loc(toks, gi, si, cd_dir)
+        locs = [_git_loc(toks, gi, si, x) for x in dict.fromkeys(cands)]
         if sub in ("checkout", "restore"):
             if any(a.startswith("--pathspec-from-file") for a in args):
                 return "--pathspec-from-file で渡したファイル"       # 中身のパスを読めないので戻す対象として扱う
             staged = _revert_from_commit(sub, args)
-            for t in _revert_targets(sub, args):
-                if _worktree_dirty(t, loc, staged):
-                    return t
+            targets = _revert_targets(sub, args)
         elif sub == "rm" and _has_short(args, "f", "--force") and "--cached" not in args:
-            for t in [a for a in args if not a.startswith("-")]:
-                if _worktree_dirty(t, loc, True):
-                    return t
+            staged, targets = True, [a for a in args if not a.startswith("-")]
+        else:
+            continue
+        # cd の先が読めない（cd_dyn）だけなら、対象の名前は読めるので候補の場所で名前を調べる（下の通常の判定）
+        if opaque or any(m in t for t in targets for m in _DYN_MARKS):
+            if any(_worktree_dirty(":/", loc, staged) for loc in locs):
+                return "コマンドや変数で渡した対象（どれを戻すか読めない・変更のあるファイルがある）"
+            continue
+        for t in targets:
+            if any(_worktree_dirty(t, loc, staged) for loc in locs):
+                return t
     return None
 
 # --- git push の保護ブランチ宛先判定（I080） ---
@@ -1346,7 +1363,7 @@ def _unknown(c: dict, note: str, toks=None) -> dict:
     return d
 
 # 値を 1 つ取るオプション（値を中のコマンドと読み違えないため・I174）
-_XARGS_VALUE = ("-I", "-i", "-n", "-L", "-P", "-d", "-a", "-E", "-s", "--arg-file", "--delimiter", "--max-args",
+_XARGS_VALUE = ("-I", "-n", "-L", "-P", "-d", "-a", "-E", "-s", "--arg-file", "--delimiter", "--max-args",
                 "--max-lines", "--max-procs", "--max-chars", "--eof", "--process-slot-var")
 _PARALLEL_VALUE = ("-j", "--jobs", "-S", "--sshlogin", "-a", "--arg-file", "--halt", "--colsep", "-C", "-I",
                    "-n", "-N", "--max-args", "-L", "--max-lines", "--delay", "--timeout", "--results", "--joblog",
@@ -1713,6 +1730,21 @@ def _git_sub(toks: list):
     j = _skip_opts(rest, ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"))
     return (rest[j], rest[j + 1:]) if j < len(rest) else ("", [])
 
+def _risky_git_cfg(key: str, val: str) -> bool:
+    """push の宛先を保護ブランチ・全ブランチに向ける設定、強制 push になる設定、clean の確認を外す設定なら True。
+    安全な値（push.default=simple/current/upstream・保護ブランチ以外への remote.*.push）は通す（I174）。"""
+    k, v = key.lower(), val.strip().lower()
+    if k == "push.default":
+        return v == "matching"
+    if re.match(r"remote\.[^.]+\.push$", k):
+        dst = _norm_push_dest(val.strip(), None)
+        return v.startswith("+") or dst in PROTECTED_BRANCHES or ":" not in v and v in ("main", "develop")
+    if re.match(r"remote\.[^.]+\.mirror$", k):
+        return v in ("true", "yes", "on", "1")
+    if k == "clean.requireforce":
+        return v in ("false", "no", "off", "0")
+    return False
+
 def _cmd_danger(c: dict) -> list:
     """単純コマンドの危険操作の理由（DANGER_OK=1 で人の承認）。"""
     toks = c["toks"]
@@ -1733,30 +1765,31 @@ def _cmd_danger(c: dict) -> list:
         seg = shlex.join(toks)
         if c.get("genv"):
             seg = " ".join(f"{k}={shlex.quote(v)}" for k, v in c["genv"].items()) + " " + seg
-        if c.get("cd"):
-            seg = f"cd {shlex.quote(c['cd'])} ; {seg}"
+        # 通った場所の候補（`( … )` の中の cd かどうか分からないため・I174）ごとの判定用の文字列
+        segs = [f"cd {shlex.quote(d)} ; {seg}" if d else seg for d in (c.get("cds") or [c.get("cd")])]
         gopts = toks[1:toks.index(sub)] if sub in toks else []
-        cfg = [gopts[i + 1].lower() for i, t in enumerate(gopts[:-1]) if t == "-c"]
+        cfg = [gopts[i + 1] for i, t in enumerate(gopts[:-1]) if t == "-c"]
         if sub in ("checkout", "restore", "rm"):
-            target = _git_revert_target_on_dirty(seg)
+            target = _git_revert_target_on_dirty(seg, bool(c.get("via_xargs")), c.get("cds"))
             if target:
                 r.append(_revert_reason(target))
-        # 設定で保護ブランチへの push を起こす形（remote.*.push・push.default）
-        if sub == "config" and any(re.match(r"(remote\.[^.]+\.push|push\.default)$", a.lower()) for a in args) \
-                and len([a for a in args if not a.startswith("-")]) >= 2:
-            r.append("push の宛先を変える設定（remote.*.push / push.default）requires DANGER_OK=1")
-        if sub == "push" and any(re.match(r"(remote\.[^.]+\.push|push\.default)=", x) for x in cfg):
-            r.append("push の宛先を変える設定（-c remote.*.push / push.default）付きの push requires DANGER_OK=1")
+        # 設定で保護ブランチへの push・強制 push・確認なしの clean を起こす形
+        pos = [a for a in args if not a.startswith("-")]
+        if sub == "config" and len(pos) >= 2 and pos[0] in ("set",):
+            pos = pos[1:]
+        if sub == "config" and len(pos) >= 2 and _risky_git_cfg(pos[0], pos[1]):
+            r.append(f"push の宛先・clean の確認を変える設定（{pos[0]}）requires DANGER_OK=1")
+        if sub in ("push", "clean") and any("=" in x and _risky_git_cfg(*x.split("=", 1)) for x in cfg):
+            r.append(f"push の宛先・clean の確認を変える設定（-c）付きの git {sub} requires DANGER_OK=1")
         if sub == "push":
-            dest = _push_protected_target(seg)
+            dest = next((x for x in (_push_protected_target(sg) for sg in segs) if x), None)
             if dest:
                 r.append(f"push to protected branch '{dest}' is forbidden "
                          f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
             if _push_has_force(seg):
                 r.append("force push requires DANGER_OK=1")
         # -d / -x が無くても、追跡済みのディレクトリの中の追跡されていないファイル（未コミットの記録等）は消える
-        if sub == "clean" and (_has_short(args, "f", "--force") or "clean.requireforce=false" in cfg) \
-                and not _has_short(args, "n", "--dry-run"):
+        if sub == "clean" and _has_short(args, "f", "--force") and not _has_short(args, "n", "--dry-run"):
             r.append("追跡されていないファイルの削除（git clean -f）requires DANGER_OK=1")
     dp = c.get("docker")
     if dp:
@@ -2024,14 +2057,17 @@ def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
     res = {"hard": "", "danger": [], "external": [], "container": [], "unsure": [], "push_dynamic": []}
-    cd = None
+    cd, cds = None, [None]
     for c in cmds:
-        # 入れ子のシェルの中の cd も、後ろの git の「今のブランチ」「変更のあるファイル」の判定に引き継ぐ（I174）
+        # 入れ子のシェルの中の cd も、後ろの git の「今のブランチ」「変更のあるファイル」の判定に引き継ぐ（I174）。
+        # `( … )` を抜けると元の場所に戻るが、読み解いた列からは分からないので、通った場所をすべて候補にする
         t = c["toks"]
         d = None if c["ctr"] else _cd_target(t)
         if d is not None:
             cd = _join_dir(cd, d)
+            cds.append(cd)
         c["cd"] = cd
+        c["cds"] = list(dict.fromkeys(cds))
         # 宛先・実行場所が静的に決まらない push（入れ子の $(…)・xargs / parallel が語を足す形も含む）は確認
         g = _git_find(t)
         if not c["ctr"] and g and t[g[1]] == "push" and (
