@@ -124,6 +124,7 @@ ckhas "R1 バックアップ: 空でないこと" "$OUT" "test -s backup_wt-app_
 ckhas "R1 再実行の案内は bash 付き" "$OUT" "DANGER_OK=1 bash "
 cknot "R1 down 非実行"         "$(cat "$DOCKER_LOG")" "down"
 ckhas "R1 worktree 残存"       "$(wl)" "/wt-app"
+cknot "R1 コンテナがあれば volume だけの案内は出ない" "$OUT" "機械で確かめられません"
 
 # --- TC-R1b: volume のみあり・DANGER_OK なし → 停止 ---
 new_env; make_wt

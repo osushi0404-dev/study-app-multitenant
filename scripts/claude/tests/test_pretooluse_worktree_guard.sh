@@ -324,7 +324,26 @@ X24|main|sudo -E @R@ -r .claude/worktrees/nest
 X25|main|timeout 60 git -C .claude/worktrees/nest reset --hard
 X26|main|mv .claude/worktrees/nest /tmp/x
 X27|main|cd .claude/worktrees && git -C nest reset --hard
+X36|main|git worktree remove .claude/worktrees/nest
+X42|main|echo a#b; @R@ -r .claude/worktrees/nest
+X43|main|git log --format=%h#x; git -C .claude/worktrees/nest checkout -- .
+X44|main|echo $'\''; @R@ -r .claude/worktrees/nest
+X45|main|git worktree remove -ff .claude/worktrees/nest
+X46|main|pushd .claude/worktrees/nest && git checkout -- .
+X47|main|env -C .claude/worktrees/nest git checkout -- .
+X48|main|GIT_WORK_TREE=.claude/worktrees/nest git checkout -- .
+X49|main|@R@ -r .claude/worktrees/*
+X50|main|@R@ -r .*
+X52|main|tee .claude/worktrees/nest/f < /dev/null
+X53|main|cp a.txt .claude/worktrees/nest/a.txt
+X54|main|cp -t .claude/worktrees/nest a.txt
+X55|main|sed -i s/a/b/ .claude/worktrees/nest/f
+X56|main|git clean --force --force -d
+X57|main|git clean -f --force
 CASES
+# ヒアドキュメント本文にアポストロフィ（閉じていないクォート）があっても、後ろのコマンドを見落とさない
+ck "X51 本文に don't のヒアドキュメントの後→block" 2 \
+  "$(bj_in "$MAIN" "$(printf "cat > /tmp/x <<'X'\ndon't\nX\n%s -r .claude/worktrees/nest" "$R")")"
 # 改行で区切った後のコマンドも止まる
 ck "X28 改行の後→block" 2 "$(bj_in "$MAIN" "$(printf 'echo a\n%s -r .claude/worktrees/nest' "$R")")"
 # X21: /mnt/<ドライブ>/ 配下（drvfs）では大文字小文字だけ違うパスも別ワークツリーと判定する（実リポジトリの登録で判定のみ）
@@ -335,6 +354,8 @@ if [ -n "$REAL_OTHER" ]; then
   ck "X21 大文字小文字違いの別wt edit→block" 2 \
     "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/zz_probe.txt"}}' "$UP" \
        | ( cd "$REPO_ROOT" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?)"
+  # 削除の判定でも大文字小文字をそろえる（中に別ワークツリーを含む親フォルダの大文字表記。判定のみで実行はしない）
+  ck "X21b 大文字小文字違いの親フォルダの削除→block" 2 "$(bj_in "$REPO_ROOT" "$R -r $(dirname "$UP")")"
 else
   echo "SKIP X21（/mnt/<ドライブ>/ 配下の別ワークツリーが無い環境）"
 fi
@@ -354,12 +375,18 @@ X33c|main|git -C .claude/worktrees/nest diff
 X33d|main|git -C .claude/worktrees/nest stash list
 X34|main|git clean -fdx
 X35|nest|git clean -ffdx
-X36|main|git worktree remove .claude/worktrees/nest
 X37|main|find .claude/worktrees/nest -name '*.py'
 X38|main|echo x > ok.txt
 X39|main|git commit -m "docs: @R@ -r .claude/worktrees/nest の手順"
 X40|main|git checkout -b feature/x
 X41|main|echo x 2>&1 >/dev/null
+X60|main|@R@ -r tmp_*
+X61|main|mv *.md docs/
+X62|main|@R@ -f tmp_*.log
+X63|main|# @R@ -r .claude/worktrees/nest
+X64|main|git worktree add ../wt-extra -b feature/y
+X65|main|git worktree prune
+X66|nest|cd ../nest2 && cd - && git checkout -- .
 CASES
 # FG-X1: 新しい判定を常に空にした複製では、止める側の代表が素通りする（停止要因の証明）
 BROKEN_X="$TMP/guard_nodestroy.py"

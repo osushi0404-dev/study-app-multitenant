@@ -64,6 +64,11 @@
 | X20 | `$MAIN` | `cd .claude/worktrees/nest && echo x > f`（`cd` 越しの書込） |
 | X21 | `$MAIN` | `rm -r <$MAIN の表記を大文字にした /mnt/c/… パス>/.claude/worktrees/nest`（`/mnt/<ドライブ>/` 配下で実行できる環境のみ。それ以外は SKIP を表示） |
 | X22 | `$MAIN` | `DANGER_OK=1 rm -r .claude/worktrees/nest`（`DANGER_OK` でも解除しない） |
+| X21b | 実リポジトリ | 中に別ワークツリーを含む親フォルダを大文字表記で `rm -r`（削除の判定でも大文字小文字をそろえる。X21 と同じ条件で SKIP） |
+| X23〜X28 | `$MAIN` | 空白なしの `;`・`sudo -E`・`timeout 60 git -C …`・`mv <入れ子> /tmp/x`・`cd .claude/worktrees && git -C nest …`・改行の後 |
+| X36（第 5 周で通す側から移動） | `$MAIN` | `git worktree remove .claude/worktrees/nest`（`--force` なしでも入れ子の作業ごと消えるため止める。撤去は `wt-remove.sh`） |
+| X42〜X51（第 5 周） | `$MAIN` | 語の途中の `#` の後（`echo a#b; rm …`・`--format=%h#x; git -C …`）・閉じていないクォート（`$'\''`・ヒアドキュメント本文の `don't` の後）・`git worktree remove -ff`・`pushd`・`env -C`・`GIT_WORK_TREE=`・`rm -r .claude/worktrees/*`・`rm -r .*` |
+| X52〜X57（第 5 周） | `$MAIN` | 相対パスの `tee`・`cp`・`cp -t`・`sed -i`、`git clean --force --force`・`-f --force` |
 
 **通す側（期待 exit 0）**
 | TC | cwd | 入力（Bash） |
@@ -74,9 +79,10 @@
 | X33 | `$MAIN` | `git -C .claude/worktrees/nest status`・`log -1`・`diff`（読み取り） |
 | X34 | `$MAIN` | `git clean -fdx`（`f` が 1 個＝git が入れ子を飛ばす） |
 | X35 | nest | `git clean -ffdx`（中に別のワークツリーが無い） |
-| X36 | `$MAIN` | `git worktree remove .claude/worktrees/nest`（`--force` なし＝git が未コミット変更を拒否する） |
 | X37 | `$MAIN` | `find .claude/worktrees/nest -name '*.py'`（`-delete` なし） |
 | X38 | `$MAIN` | `echo x > ok.txt`（自分のワークツリー内の相対書込） |
+| X39〜X41 | `$MAIN` | commit メッセージ中の `rm -r <入れ子>`・`git checkout -b`・`2>&1 >/dev/null` |
+| X60〜X66（第 5 周） | `$MAIN`／nest | `rm -r tmp_*`・`mv *.md docs/`・`rm -f tmp_*.log`（ワイルドカードが入れ子に当たらない）・行頭 `#` のコメント・`git worktree add`・`git worktree prune`・`cd ../nest2 && cd - && git checkout -- .`（`cd -` で自分に戻る） |
 
 **失敗注入・その他**
 | TC | 内容 | 期待 |
@@ -188,6 +194,7 @@
 ### C4. 計画変更記録 5（2026-10-21）で追加した TC
 | TC | ファイル | 条件 | 期待 |
 |----|---------|------|------|
+| R1（追加） | lifecycle | コンテナあり・`DANGER_OK` なし | 「volume だけ」の案内（機械で確かめられません）が出ない |
 | R1b2 | lifecycle | volume のみあり（コンテナなし）・`DANGER_OK` なし | exit 2・stderr に「持ち主を機械で確かめられない」と volume 名・作成日時（スタブの `volume inspect` の値）・バックアップ手順が出る・`down` 非実行 |
 | R1b3 | lifecycle | volume のみあり（コンテナなし）・`DANGER_OK=1` | exit 0・`compose -p <既定名> down -v` が撤去対象の中で 1 回だけ呼ばれる（許可を出す人には R1b2 の表示で判断材料を渡したうえで、許可どおり消す） |
 | R21e | lifecycle | 戻り値 4（作業フォルダのラベルが別）・`DANGER_OK=1` | exit 2・stderr にバックアップ手順（`pg_dump`・`test -s`）が出る・`down` 非実行 |
