@@ -34,7 +34,8 @@ def _segments_ops(cmd: str) -> list:
     """_segments と同じ区切り方で、(トークン列, その後ろの演算子) の列を返す（最後は ""）。
     リダイレクトの一部（`2>&1`・`&>`・`>&2`）は区切りとして数えない（_segments と同じ扱い）。"""
     try:
-        lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|")
+        # 改行は引用符の外のものだけを区切りにする（コミットメッセージの中の改行で区切らない）
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|\n")
         lex.whitespace_split = True
         lex.commenters = ""
         lex.whitespace = " \t\r"
@@ -51,12 +52,10 @@ def _segments_ops(cmd: str) -> list:
             seg[-1] += t
             glue = False
             continue
-        if t == "\n" or t in _SHELL_OPS or (t and set(t) <= set(";&|")):
-            out.append((seg, ";" if t == "\n" else t))
+        if t and set(t) <= set(";&|\n"):
+            # 改行だけ・`;` を含む区切りは `;`、それ以外（&&・||・|・&）はそのまま
+            out.append((seg, t if t in _SHELL_OPS and t != ";" else (";" if set(t) <= set(";\n") else t)))
             seg = []
-        elif "\n" in t:
-            out.append((seg, ";"))
-            seg = [t.replace("\n", "")] if t.strip() else []
         else:
             seg.append(t)
     out.append((seg, ""))
@@ -252,26 +251,41 @@ _DYN_MARKS = ("$", "`", "__SUBST_")
 _BRACE_RE = re.compile(r"\{[^{}]*(,|\.\.)[^{}]*\}")
 
 def _loc_ambiguous(text: str, cmds=None) -> bool:
-    """git を実行する場所が 1 つに決まらないなら True（I174 0-15。推測で通す・止めるをせず確認にする）。
-    「1 つに決まる」と言い切れる形だけを許可リストで決める（code-review 20261021_1509 第 3 周: 決まらない書き方を
-    列挙していくと、`( … )`・パイプ・条件付き・制御構文・`cd -P`・CDPATH… と終わらないため）。
-    一意: cd / pushd / popd が無い。または、コマンド全体が `&&` だけでつながった単純コマンドの列で（`;`・`||`・`|`・
-    `&`・改行・`( … )`・制御構文・入れ子のシェルが無い）、cd はすべて `cd <文字どおりの実在するディレクトリ>`（オプション・
-    `-`・`~-`・変数・置換なし）で、CDPATH・`set -P`／physical を使っていないとき。"""
+    """git を実行する場所が 1 つに決まらないなら True（I174 0-15。決まらないときは確認。ただし呼び出し側は、書かれた
+    とおりに cd が成功した「いちばんありそうな場所」で当たれば止める＝停止を確認に格下げしない）。
+    「1 つに決まる」と言い切れる形だけを許可リストで決める（決まらない書き方の列挙は終わらないため）。
+    一意: cd / pushd / popd が無い。または、最後の cd までの区切りが `&&`／`;`（引用符の外の改行）だけで、区切りの
+    単純コマンドが読み解いた列に順に対応し（対応しない分は置換・ヒアドキュメントの中で、外の場所を変えない）、cd は
+    すべて `cd [--] <文字どおりの実在する場所>` で、`cd X && …`（成功したときだけ後ろが動く）か最後の cd であり、
+    CDPATH・`set -P`／physical を使っていないとき。"""
     cmds = _parse(text) if cmds is None else cmds
     if not any(c["toks"] and c["toks"][0] in ("cd", "pushd", "popd") for c in cmds):
         return False
     if os.environ.get("CDPATH") or re.search(r"\bCDPATH\b|\bset\s+(-\w*P|-o\s+physical)", text):
         return True
     segs = _segments_ops(text)
-    # `&&` と `;`（改行）だけでつながり、読み解いた単純コマンドと区切りの列が 1 対 1（入れ子のシェル・置換・
-    # ヒアドキュメント・制御構文が無い）
-    if any(op not in ("&&", ";", "") for _, op in segs) or len(segs) != len(cmds):
+    # 最後の cd までの区切りが `&&`／`;`（改行）だけ。最後の cd より後ろの `||`・`|`（`git push || true`・
+    # `git push 2>&1 | tail`）は git を実行する場所に関係しない
+    last_cd = max((i for i, (sg, _) in enumerate(segs) if _strip_env(sg)[:1] in (["cd"], ["pushd"], ["popd"])),
+                  default=-1)
+    if any(op not in ("&&", ";", "") for _, op in segs[:last_cd + 1]) or last_cd < 0:
         return True
+    # 区切りごとの単純コマンドを、読み解いた列に順に対応づける。対応しない読み解いた分は置換・ヒアドキュメントの中
+    # （`$(cat <<'EOF' … EOF)` 等）で、その中の cd は外の場所を変えない。区切りの側に対応が無い（入れ子のシェル・
+    # 制御構文・`{ }`・関数定義）なら一意でない
+    pairs, k = [], 0
+    for seg, op in segs:
+        head = _strip_env(seg)[:1]
+        while k < len(cmds) and (cmds[k]["ctr"] or cmds[k]["toks"][:1] != head):
+            k += 1
+        if k >= len(cmds):
+            return True
+        pairs.append((seg, op, cmds[k]))
+        k += 1
     base, prev = None, ";"
-    for (seg, op), c in zip(segs, cmds):
+    for seg, op, c in pairs:
         t = c["toks"]
-        if c["ctr"] or not t or _strip_env(seg)[:1] != t[:1]:
+        if not t:
             return True
         if t[0] in ("pushd", "popd"):
             return True
@@ -281,8 +295,9 @@ def _loc_ambiguous(text: str, cmds=None) -> bool:
                 arg = arg[1:]
             if len(arg) != 1 or arg[0].startswith(("-", "~")) or any(m in arg[0] for m in _DYN_MARKS):
                 return True
-            # `A && cd X; …` は A が失敗すると cd されないまま後ろが動く（cd が条件付き）
-            if prev == "&&" and op == ";":
+            # `cd X; …` は cd が失敗しても（同じ行で先に消した・権限が無い）後ろが元の場所で動く。`A && cd X; …` は
+            # A が失敗すると cd されない。一意なのは `cd X && …`（成功したときだけ後ろが動く）と最後の cd だけ
+            if op == ";":
                 return True
             base = _join_dir(base, arg[0])
             if not os.path.isdir(base):
@@ -332,8 +347,17 @@ def _git_revert_check(cmd: str, opaque: bool = False, ambiguous: bool = False):
             continue
         # 場所が 1 つに決まらない・読めない・信頼しない場所（このリポジトリと worktree の外・入れ子のリポジトリ・
         # 偽の git-dir）では git を実行せず確認（security-review の Blocker）
-        if ambiguous or _git_loc_dynamic(loc) or not _git_loc_trusted(loc):
-            return ("ask", f"git {sub} を実行する場所が 1 つに決まらない（cd の範囲・戻り先・-C 等の先が読めない）")
+        if _git_loc_dynamic(loc) or not _git_loc_trusted(loc):
+            return ("ask", f"git {sub} を実行する場所が 1 つに決まらない（-C・cd 等の先が読めない・信頼しない場所）")
+        if ambiguous:
+            # 場所が 1 つに決まらなくても、書かれたとおりに cd が成功した場所（いちばんありそうな場所）で当たれば止める
+            # （停止を確認に格下げしない）。当たらなければ、場所を推測で通さず確認
+            if not unreadable and not any(m in t for t in targets for m in _DYN_MARKS) and \
+                    not any(_BRACE_RE.search(t) for t in targets):
+                hit = next((t for t in targets if _worktree_dirty(t, loc, staged)), None)
+                if hit:
+                    return ("block", hit)
+            return ("ask", f"git {sub} を実行する場所が 1 つに決まらない（cd の範囲・戻り先・失敗しうる cd）")
         # 中かっこ（sub/{b,c}.py）は bash が展開するので、文字どおりの名前では調べられない
         unreadable = unreadable or any(m in t for t in targets for m in _DYN_MARKS) or \
             any(_BRACE_RE.search(t) for t in targets)
@@ -480,8 +504,7 @@ def _push_protected_target(cmd: str, ambiguous: bool = False):
         cdir = _git_loc(toks, gi, pi, cd_dir)
         cur = None
         if not refspecs:                                     # 宛先明示なし → 現ブランチが宛先
-            if ambiguous:
-                continue                                     # 場所が 1 つに決まらない → 確認（push_dynamic）
+            # 場所が 1 つに決まらなくても、書かれたとおりの場所で保護ブランチなら止める（決まらない分は push_dynamic で確認）
             cur = _current_branch(cdir)
             if cur in PROTECTED_BRANCHES:
                 return cur
@@ -489,7 +512,7 @@ def _push_protected_target(cmd: str, ambiguous: bool = False):
         for rs in refspecs:
             if rs.lstrip("+") == ":":
                 return "main / develop（: は同じ名前のブランチをすべて push する）"
-            if cur is None and not ambiguous:
+            if cur is None:
                 cur = _current_branch(cdir)
             dest = _norm_push_dest(rs, cur)
             if dest in PROTECTED_BRANCHES:
@@ -1979,8 +2002,8 @@ def _cmd_danger(c: dict) -> list:
         if c.get("genv"):
             seg = " ".join(f"{k}={shlex.quote(v)}" for k, v in c["genv"].items()) + " " + seg
         amb = bool(c.get("loc_ambiguous"))
-        if c.get("cd") and not amb:
-            seg = f"cd {shlex.quote(c['cd'])} ; {seg}"
+        if c.get("cd"):
+            seg = f"cd {shlex.quote(c['cd'])} ; {seg}"      # いちばんありそうな場所（書かれたとおりの cd の先）
         gopts = toks[1:toks.index(sub)] if sub in toks else []
         cfg = [gopts[i + 1] for i, t in enumerate(gopts[:-1]) if t == "-c"]
         if sub in ("checkout", "restore", "rm", "checkout-index", "read-tree", "mv"):
