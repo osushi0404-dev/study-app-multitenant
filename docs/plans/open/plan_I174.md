@@ -249,6 +249,8 @@
   - `scripts/claude/tests/test_pretooluse_push_guard.sh`・`scripts/claude/tests/test_pretooluse_checkout_guard.sh`（DANGER_OK=1 の期待値を ASK に）
   - `.claude/settings.json`（ask・allow・deny の整理）
   - `docs/runbooks/danger-ops.md`（追記）
+  - fix-loop で追加したテスト（0-12〜0-15）: `scripts/claude/tests/test_pretooluse_guard_matrix.sh`（総当たり）・`guard_corpus_diff.py`＋`test_guard_corpus_diff.sh`（作業記録の再判定）・`guard_bash_oracle.py`＋`test_guard_bash_oracle.sh`（本物の bash との差分テスト）・`test_settings_permissions.sh`（settings.json の中身）
+  - 先送り（0-12 の一覧）は、安全網で確認になる保証が無い。個別の評価（どれが素通しになりうるか）は /close の時の起票で行う（2026-10-21 計画レビュー Warning）
   - 波及: Claude Code の全セッション（primary と wt-harness の両方。settings.json と guard は commit で共有される）。新しいセッションから効く
 
 ## 4. 変更点一覧（具体）
@@ -479,6 +481,7 @@ _CODE_EXTERNAL = [
 - [ ] マージ順（I146 の後）と作業場所（primary・例外）
 
 ## レビュー結果
+- [20261021_1336 判定: ✅ 完了（Blocker 0 件）](../../reviews/I174_plan_review_20261021_1336.md)
 - [20261021_0900 判定: ✅ 完了](../../reviews/I174_plan_review_20261021_0900.md)
 - [20261019_0005 判定: ✅ 完了](../../reviews/I174_plan_review_20261019_0005.md)
 - [20261017_1220 判定: ✅ 完了](../../reviews/I174_plan_review_20261017_1220.md)
