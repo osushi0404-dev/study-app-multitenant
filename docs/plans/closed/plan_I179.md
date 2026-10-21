@@ -439,22 +439,29 @@ SKILL.md の見出し説明「developブランチをベースに」は「`origin
 - 承認: ユーザー判断（I179 の中で直す）＋既定基準。計画変更のため `/plan-issue-review I179` を挟んでから実装し、敵対的レビューの第 2 周（固定 3 観点）へ進む。
 
 ## レビュー結果
-- [20261022_0159 判定: ✅ 完了](../../reviews/I179_plan_review_20261022_0159.md)
-- [20261021_2038 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_2038.md)
-- [20261021_1846 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_1846.md)
-- [20261021_1632 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_1632.md)
-- [20261021_1540 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_1540.md)
-- [20261021_1426 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_1426.md)
-- [20261021_1230 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_1230.md)
-- [20261021_1224 判定: 差し戻し（Blocker 1件）](../../reviews/I179_plan_review_20261021_1224.md)
-- [20261021_0849 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0849.md)
-- [20261021_0849 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0849.md)（fix-loop の計画変更記録 4 の後の再レビュー）
+- [20261022_0159 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261022_0159.md)
+- [20261021_2038 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_2038.md)
+- [20261021_1846 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_1846.md)
+- [20261021_1632 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_1632.md)
+- [20261021_1540 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_1540.md)
+- [20261021_1426 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_1426.md)
+- [20261021_1230 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_1230.md)
+- [20261021_1224 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I179_plan_review_20261021_1224.md)
+- [20261021_0849 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_0849.md)
+- [20261021_0849 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_0849.md)（fix-loop の計画変更記録 4 の後の再レビュー）
   - Warning（`danger-ops.md` の更新が §3 影響範囲・§4 変更点一覧に無い）は、§3 に追記し 4-12 を追加して対応済み。
   - Info（`danger-ops.md` の変更を確かめる決定論ゲートが無い）は、`test_i179_worktree_docs.sh` に D12（失敗注入つき）を追加して対応済み。
-- [20261021_0031 判定: ✅ 完了](../../reviews/I179_plan_review_20261021_0031.md)（計画変更＝ロックの扱いの追加後の再レビュー）
+- [20261021_0031 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261021_0031.md)（計画変更＝ロックの扱いの追加後の再レビュー）
   - Warning（ロック確認とデータ判定の順番が分散して追いにくい）は、4-6 に「処理の順番」（1〜8・TC-R13 の流れの例つき）を追記して対応済み。実装（`wt-remove.sh`）はこの順番どおりで変更不要。
   - Info（M6 が未実施）は /test で実施・記録する。
   - Info（M7 の実施者欄が空）は誤り。`I179_manual_test.md` No.7 の実施者欄は「Claude」と記載済みのため変更不要。
-- [20261020_1950 判定: ✅ 完了](../../reviews/I179_plan_review_20261020_1950.md)
+- [20261020_1950 判定: ✅ 完了](../../reviews/closed/I179_plan_review_20261020_1950.md)
   - Warning（D2・D10・D11 の不在チェックに失敗注入が無い）と Info（D9 に失敗注入が無い）は、`I179_auto_test.md` の FG-D1 に 4 通りの注入を追加して対応済み（6 → 10 通り）。
   - Info（実機確認をステップ6に置く理由）は計画書の記載どおりで変更不要。
+
+## 完了情報
+- **完了日時**: Thu Oct 22 02:23:56 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（最終の /code-review〔docs/reviews/closed/I179_code_review_20261022_0219.md〕は FINAL_VERDICT OK・RISK YES。敵対的レビューは第 1〜11 周を実施後、計画変更記録 6 で削除・破棄ガードを廃止し、以降はユーザー方針〔GitHub が最後の守り〕で省略＝docs/reviews/closed/I179_adversarial_review_20261021_2052.md・_20261022_0222.md）
+- **テスト**: /test で決定論ゲート 13 件 PASS・手動 M1〜M7 OK（M6 は Human）・M8 は /close で確認 OK。/close 前に develop（I174）を取り込み（計画変更記録 7）、scripts/claude/tests の全 26 本のうち 25 本 PASS（test_guard_corpus_diff.sh は比べる相手の制約で不合格・--base origin/develop で新しい確認・停止 0 件）
+- **残作業**: docs/reviews/closed/I179_review.md の「残作業」（wt-harness の移行・2 つ目のハーネス用ワークツリーの作成・GitHub ラベル説明文・I181 同梱分）

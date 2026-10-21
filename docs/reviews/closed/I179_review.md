@@ -75,6 +75,8 @@
 - 既存 `wt-harness`（`/mnt/c/app/wt-harness`）の移行: I178・I179 が完了・クローズした後に、primary から `bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness` で撤去し、必要なら primary で `claude --worktree harness-<連番>` で作り直す
 - ハーネス改善用 2 つ目のワークツリーの作成（本イシューの起点の要望）: 本 PR のマージ後、primary で `claude --worktree harness-2`
 - GitHub ラベル `track:harness`・`track:app` の説明文からワークツリー名を外す（`gh label edit track:harness --description "ハーネス改善トラック"`・`gh label edit track:app --description "学習アプリ開発トラック"`）。`wt-harness` の移行と同時に行う
+- `wt-harness` の Docker の後始末: 移行時の `wt-remove.sh` が、上の「このワークツリーの Docker の準備」で作った Compose プロジェクト（`wt-harness`）のデータを判定する（データがあれば停止メッセージのバックアップ手順に従う）
+- I181 に同梱済み（参照のみ）: レビュー工程の重さを「GitHub が最後の守り」前提で決める・イシュー全体の周回上限・やり直し時の差分のみ再レビュー・ガードの棚卸し（秘密情報の漏えい対策・確認待ちの削減・異常終了で素通りにしない）・I179 retro の予防処置 3 件。あわせて、`test_guard_corpus_diff.sh` がマージコミットの直後に第 1 親（取り込み前の guard）と比べてしまう制約（I179 の /close 前の取り込みで発見・`--base origin/develop` で回避）も I181 のガードの棚卸しで扱う
 
 ## ロールバック
 - PR を revert（`wt-new.sh` も履歴から戻る）。個別には計画書「7. ロールバック」のとおり
