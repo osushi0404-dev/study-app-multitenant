@@ -305,8 +305,11 @@ def _docker_volume_wipe_tokens(cmd: str, depth: int = 0):
 
 def _docker_volume_wipe(cmd: str):
     """named volume を消す docker コマンドなら理由を返す（(1) 正規表現 ∪ (2) トークン判定）。非該当は None。"""
+    # (1) は develop と同じく空白（改行・行継続を含む）をまとめた文字列に当てる。生の文字列のままだと
+    # `docker compose down \⏎ -v` のような折り返しで `.`・`[^…\n]` が改行で切れて素通りする（I179 敵対的レビュー）
+    flat = _norm(cmd)
     for rx, reason in _DOCKER_WIPE_RES:
-        if rx.search(cmd):
+        if rx.search(flat):
             return reason
     return _docker_volume_wipe_tokens(cmd)
 
@@ -1371,8 +1374,8 @@ def main():
             _block("git reset --hard requires DANGER_OK=1", raw)
 
         # docker volume wipe requires explicit ack
-        # I179: 実行される語で判定（グローバルオプション・-p <name>・クォート・短縮結合・sh -c を捕捉し、
-        # コミットメッセージ等の文字列は誤ブロックしない）。named volume の直接削除・system prune --volumes も同じ扱い
+        # I179: 正規表現（空白をまとめた文字列）∪ トークン判定（_docker_volume_wipe の説明を参照）。
+        # コミットメッセージ等の文字列も止める（既知の誤ブロック）。named volume の直接削除・system prune --volumes も同じ扱い
         wipe = _docker_volume_wipe(raw)
         if wipe:
             _block(wipe, raw)

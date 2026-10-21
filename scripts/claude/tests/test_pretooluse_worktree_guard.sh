@@ -169,6 +169,15 @@ echo "<<EOF"\ndocker volume rm v1
 cat <<<x; docker compose -p x down -v
 true <<x && docker volume rm wt-app_postgres_data
 cat <<'EOF'\ndocker compose down -v\nEOF
+bash -c "$(cat <<'EOF'\ndocker compose down -v\nEOF\n)"
+docker compose down \\\n  -v
+timeout 120 docker compose down \\\n  --volumes --remove-orphans
+true;docker compose down \\\n -v
+bash -lc 'docker compose down \\\n  -v'
+sudo -E docker compose down \\\n  -v
+echo $(docker compose down \\\n -v)
+timeout 60 docker \\\n volume rm wt-app_postgres_data
+timeout 5 docker system prune -af \\\n --volumes
 CASES
 
 # --- トークン層でしか捕まらない形（docker 本体のオプション付き）を、前置コマンド・eval・& の後でも止める ---
@@ -200,6 +209,9 @@ echo "<<EOF"\ndocker compose down -v
 bash -lc 'docker compose down -v'
 docker compose down -v; echo ok
 x=1 docker compose down -v
+timeout 120 docker compose down \\\n  -v
+true;docker compose down \\\n -v
+env -i docker compose down \\\n -v
 CASES
 else
   echo "SKIP NOREG（origin/develop を取得できない環境）"

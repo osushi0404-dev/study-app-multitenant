@@ -130,7 +130,8 @@
 | FG1（変更） | lifecycle | `if [ "${DANGER_OK:-}" != "1" ]` を `if false` にした複製で R1 の条件 | `compose -p wt-app down -v` が呼ばれる |
 | FG5（変更） | lifecycle | `-p` 付き `down -v` の前の `cd` を外した複製 | `cwd=` が撤去対象でない |
 | DV10〜DV19 | guard | `docker --context x compose down -v`・`-H`・クォートした `"down" "-v"`・`-vt 5`・`docker --log-level error volume rm`・`volume remove`・`--context x system prune --volumes`・`bash -c "…down -v"`・改行の後・`sleep 1 & ( … )` | すべて exit 2 |
-| DV20〜DV23 | guard | コミットメッセージ中の文字列・grep の引数と `pytest -k "count down" -v`・`system prune`（`--volumes` なし）・`down --volumes=false` | すべて exit 0 |
+| DV20〜DV23 | guard | コミットメッセージ中の文字列（DV20）・`pytest -k down -v`／`pytest -k "count down" -v`（DV21/DV21b）・`system prune`（`--volumes` なし・DV22）・`down --volumes=false`（DV23） | DV20・DV23 は exit 2（fix-loop 案 A で文字列も止める・`--volumes=false` は安全側）、DV21・DV21b・DV22 は exit 0 |
+| DV-sh 行継続（敵対的レビュー第 4 周） | guard | `docker compose down \⏎ -v`・前置コマンド（`timeout`・`sudo -E`）・空白なしの区切り（`true;`）・`bash -lc`・`$( )` の後の行継続、`docker \⏎ volume rm`・`system prune -af \⏎ --volumes`、`bash -c "$(cat <<'EOF' … EOF)"` | すべて exit 2（正規表現の層は空白をまとめた文字列に当てる）。NOREG にも行継続 3 形を追加 |
 | FG-DV1（変更） | guard | `_docker_volume_wipe` を常に None にした複製 | DV2・DV10 が exit 0 |
 | P15 | ports | 他のワークツリーの `.env` が `export DB_PORT = "5442"` 等の書き方（`BACKEND_PORT2=9` は別の変数） | `--port-offset 10` は衝突で exit 2・自動割当は 8020 |
 
