@@ -167,6 +167,7 @@
    - 結果（実装時）: 作業記録 3,701 件で、確認＋停止は 182 件（4.92%）→ 182 件（増減 0）。総当たりの表は安全網の前の guard で 23 件が素通し → 0 件
    - 診断メモからの変更: 作業記録はリポジトリに**入れない**（このリポジトリは公開のため、作業のコマンド約 3,400 件を公開しない）。基準の判定結果も保存せず、HEAD の guard との並列比較にした（変更の有無などの環境の差が結果に混ざらないため）。
 - 先送り（Medium・Low。この周の通過条件外。/close の時に、まとめて別イシューとして起票するかを判断する）: 多対多の `.clear()`・変数に入れた SQL / `executemany` / `raw` / `WHERE 1=1`・素の docker exec の `dumpdata` / `remove_stale_contenttypes` / `get_connection_params()` / `ps auxeww`・`git worktree remove --force` / `git stash clear|drop`・`settings.DATABASES['default']['HOST']` と `getenv('DEBUG')` の余計な確認・`wget` / httpie / `node fetch` での登録 API・キャッシュの別名と `delete_pattern('*')`・`import os as o`・`vars(connection)`・`call_command('generate_ai_problems' | 'sendtestemail')`・`/proc/1/task/1/environ`・`env -u X`・`ps -o user` の余計な確認・frontend の `npm audit | node -e`・`psql -lqt`・（第 3 周）`export -p` / `declare -x` / `set`・パス無しの `dotenv_values()`・`column` / `paste` / `iconv` / `node readFileSync` での `.env`・`'->' &` の直後の結合・F17 / `2>&1` の結合のテストの覆い隠し
+  - 注（2026-10-21 計画レビュー Warning）: これらが安全網で確認になる保証は無い（安全網は精密判定のかけ直しなので、精密判定が見ない書き方は安全網でも素通しになりうる）。受け入れる残余リスクとして扱い、/close の時に別イシューとして起票するかを判断する。
 
 ## 1. 背景/目的
 
@@ -456,8 +457,8 @@ _CODE_EXTERNAL = [
 | R5 | 権限の変更が今のセッションに効かず、「直った」と誤認する | 手動テスト No.2〜No.4 は新しいセッションで行う |
 | R6 | compose のマウントを変えると、(6) の読み替え表が古くなる | 表を guard の定数にまとめ、`docker-compose.yml:48-49` を参照するコメントを付ける |
 | R7 | `DANGER_OK=1 bash scripts/claude/wt-remove.sh` の中の `down -v` は、guard から見えない（既存の挙動のまま） | 本計画では変えない（スクリプト自身が DANGER_OK=1 を要求する）。気づいた点としてレビュー文書に記録する |
-| R9 | celery の起動（`.delay(` / `.apply_async(`・`celery ... call`）は、メールや OpenAI と関係のないタスクにも反応する。今後タスクが増えると確認が増えうる（2026-10-16 計画レビュー Warning 2） | 現状、shell から celery タスクを起動する作業はまれで、送信の有無はタスクの中を見ないと分からないため、広めに確認を出すほうを選ぶ。確認が頻繁に出るようになったら、送信するタスクの名前の一覧で判定する形に絞る（その時点で別イシュー） |
-| R10 | ステップ 1 で、対話セッションの一部（wt-harness・版 2.1.300・permissionMode default）では、guard が ask を返しても承認画面が出ずに実行されると分かった（auto mode の対話セッションと、非対話の 3 モードでは承認が求められた。手動テスト No.1 の実結果） | 本計画の前提（auto mode）は成り立つので進める。ただし、DANGER_OK=1 の ask 化と外部送信の ask は、この条件のセッションでは効かない。手動テスト No.3・No.4 は auto mode で行う。原因（版・モード・セッション固有のどれか）の切り分けと Claude Code への報告は、本イシューの範囲外としてユーザーに引き継ぐ（I146 の手動テストの「gh pr 系が止まらない」も同じ現象の可能性が高い） |
+| R9 | celery の起動（`.delay(` / `.apply_async(`・`celery ... call`）は、メールや OpenAI と関係のないタスクにも反応する。今後タスクが増えると確認が増えうる（2026-10-16 計画レビュー Warning 2） | 現状、shell から celery タスクを起動する作業はまれで、送信の有無はタスクの中を見ないと分からないため、広めに確認を出すほうを選ぶ。確認が頻繁に出るようになったら、送信するタスクの名前の一覧で判定する形に絞る（その時点で別イシュー）。発動の目安: 送信しないタスクへの確認が 1 セッションで 5 回以上出たら、または作業記録の再判定（TC-15）で celery の確認が記録の 0.5% を超えたら起票する（2026-10-21 計画レビュー Warning） |
+| R10 | ステップ 1 で、対話セッションの一部（wt-harness・版 2.1.300・permissionMode default）では、guard が ask を返しても承認画面が出ずに実行されると分かった（auto mode の対話セッションと、非対話の 3 モードでは承認が求められた。手動テスト No.1 の実結果） | 本計画の前提（auto mode）は成り立つので進める。ただし、DANGER_OK=1 の ask 化と外部送信の ask は、この条件のセッションでは効かない。手動テスト No.3・No.4 は auto mode で行う。原因（版・モード・セッション固有のどれか）の切り分けと Claude Code への報告は、本イシューの範囲外としてユーザーに引き継ぐ（I146 の手動テストの「gh pr 系が止まらない」も同じ現象の可能性が高い）。手動テスト No.3・No.4 で承認画面が出ずに実行された場合は、見張りの判定そのものを非対話で確かめる（`claude -p` の非対話モード、または JSON を `python3 scripts/claude/hooks/pretooluse_guard.py` に渡して出力の `permissionDecision: ask` を確認）。この場合は「見張り側 OK・画面側の現象」として記録する（2026-10-21 計画レビュー Warning） |
 | R8 | `\bdd\b`（437 行目）が `dd` という単語にも反応する止めすぎ | 2026-10-17 に範囲へ入れて解消（0-11）。当初は範囲外としたが、敵対的レビューで High とされ、`YYYY-MM-DD`・grep の検索語で DANGER_OK=1 でも解除できない停止が作業中に実際に起きたため |
 
 ## 9. 承認ポイント
@@ -469,6 +470,7 @@ _CODE_EXTERNAL = [
 - [ ] マージ順（I146 の後）と作業場所（primary・例外）
 
 ## レビュー結果
+- [20261021_0900 判定: ✅ 完了](../../reviews/I174_plan_review_20261021_0900.md)
 - [20261019_0005 判定: ✅ 完了](../../reviews/I174_plan_review_20261019_0005.md)
 - [20261017_1220 判定: ✅ 完了](../../reviews/I174_plan_review_20261017_1220.md)
 - [20261016_1621 判定: ✅ 完了](../../reviews/I174_plan_review_20261016_1621.md)
