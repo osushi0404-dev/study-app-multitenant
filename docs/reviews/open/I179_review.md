@@ -51,6 +51,26 @@
   - テストの追加: R9b（フォルダ名の変換）・FG-D0（注入なしの複製が PASS すること＝複製の作り方で FAIL していないことの確認）。旧 `test_wt_port_offset.sh` の runbook 文言検査（DOC1）は計画どおり `test_i179_worktree_docs.sh` へ移した。
 - 計画外の消費箇所を 1 件発見（未対応・残作業へ）: GitHub ラベルの説明文（`track:harness`「ハーネス改善トラック（worktree: wt-harness）」・`track:app`「学習アプリ開発トラック（worktree: study-app-multitenant）」）。リポジトリ設定の外部変更のため本 PR では変えない。
 
+## 再開メモ（2026-10-21・I180 対応のため中断）
+文脈ゼロのセッションが、このメモだけで I179 を再開できるように書く。
+
+**現在地**
+- 実装・fix-loop まで完了し、すべてコミット・push 済み（ブランチ `feature/I179-worktree-operation-review`・PR #300）。
+- 経緯: `/code-review`（1 回目）→ 敵対的レビュー 3 周で未収束・HIGH（`docs/reviews/I179_adversarial_review_20261021_1200.md`）→ `/fix-loop`（診断 `docs/reviews/I179_fix_diagnosis_20261021_0220.md`・3 ゲート PASS・72a5edc）→ `/plan-issue-review` OK（`docs/reviews/I179_plan_review_20261021_0849.md`・指摘対応 9b4172f）→ `/code-review`（2 回目）は **CI の確認で停止**（レビュー未実施）。
+- 停止の原因は I179 と無関係: CI「Backend Lint & Security」の `pip-audit` が Pillow 12.3.0 の既知脆弱性 8 件（2026-10-20 以降に公開）で失敗。I179 は `backend/`・依存ファイルを変更していない。対応は **I180（GitHub #301・track:app）**「Pillow を 13.0.0 に更新」で、同じ `wt-harness` で先に行う。
+
+**再開の手順（I180 が develop にマージされた後）**
+1. `wt-harness` が I180 のブランチなら、Docker を `docker compose down` で止め（`-v` は付けない）、tracked な変更が無いことを `git status` で確かめてから `git checkout feature/I179-worktree-operation-review`。
+2. `git fetch origin` → `git merge origin/develop`（Pillow の更新を取り込む。衝突は無い見込み）→ `git push origin feature/I179-worktree-operation-review`。
+3. `/code-review I179` を実行する。CI が緑になってから基本レビュー → 高リスクのため敵対的レビューステージが自動で走る。既知の指摘は上の敵対的レビューの記録に全件ある（受容済みの限界: ガードが作業フォルダで現ワークツリーを決める・別環境の Claude の pid・別クローンの volume だけの同名・文字列の中の記述での誤ブロック）。
+4. 通過したら `/test I179`。手動テスト M6（対話の `claude --worktree` の終了時の画面とロックの残り方）は Human が行う。M1〜M5 は実施済み（`docs/tests/open/I179_manual_test.md`）。
+
+**ユーザーに確認が要ること（再開後）**
+- 実物の `refs/remotes/origin/HEAD` が `origin/main` を指している（公式 `claude --worktree` が空のワークツリーを作る原因）。`git remote set-head origin --auto` で `origin/develop` に合わせる必要があるが、全ワークツリー共有の参照なのでユーザーの了承を得てから行う（`worktree.md` §2「作る前の確認」）。
+
+**このワークツリーの Docker の準備（I180 のために作成・gitignore 済み）**
+- `backend/.env`（primary からコピー）と直下 `.env`（`wt-ports.sh` で offset 10: DB 5442・Redis 6389・backend 8010・frontend 3010）。I179 の再開後も残してよい（撤去時に `wt-remove.sh` が Compose のデータを判定する）。
+
 ## 残作業（/close 時に確定）
 - 既存 `wt-harness`（`/mnt/c/app/wt-harness`）の移行: I178・I179 が完了・クローズした後に、primary から `bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness` で撤去し、必要なら primary で `claude --worktree harness-<連番>` で作り直す
 - ハーネス改善用 2 つ目のワークツリーの作成（本イシューの起点の要望）: 本 PR のマージ後、primary で `claude --worktree harness-2`
