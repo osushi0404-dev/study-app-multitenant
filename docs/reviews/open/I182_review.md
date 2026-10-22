@@ -24,5 +24,10 @@
 ## レビューの重さ（イシュー「制約・引き継ぎ情報」）
 秘密情報の push と GitHub Actions に関わる変更（4-3 の `--no-verify`・ワークフローの確認、4-4、4-9）は「GitHub が最後の守り」の対象外。この範囲は敵対的レビューを 1 周・時間上限付きで回す。それ以外（4-1・4-2・4-5〜4-7）は決定論ゲートが緑で基本レビューが OK なら先へ進む。
 
+## /code-review の CI ゲートでの停止（2026-10-23）
+- `bash scripts/claude/code-review.sh I182` が CI ゲートで停止: `Backend Lint & Security` の `pip-audit -r requirements.txt` が失敗（CI run 39856491985）。原因は I182 と無関係の新しい脆弱性で、`djangorestframework 3.18.0` に CVE-2026-114136・114137・114138（修正版 3.18.2）。I182 の変更（ハーネス・ワークフローの `permissions`）は関係しない（同じ run のほかの 5 件と E2E は成功）。
+- ユーザー判断: 別イシュー（track:app）で DRF を 3.18.2 に更新して先にマージし、I182 はそれを取り込んで CI を緑にしてから `/code-review I182` をやり直す。起票コマンドは `/issue-bootstrap djangorestframework を 3.18.0 から 3.18.2 に更新する — …（track:app）`。
+- 根本の是正（既存の脆弱性で無関係な PR が全面停止しない PR ゲート）は I152（#268）。
+
 ## 実装後評価
 （/code-review・/test の後に記入）
