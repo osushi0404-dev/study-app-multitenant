@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [develop, main]
 
+# I182: PR 側の e2e テストも CI の中で動くので、GITHUB_TOKEN は読み取りだけにする（最小権限）
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: E2E Tests (Playwright)

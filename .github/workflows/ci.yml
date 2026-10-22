@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [develop, main]
 
+# I182: PR 側のテスト・スクリプトも CI の中で動くので、GITHUB_TOKEN は読み取りだけにする（最小権限）
+permissions:
+  contents: read
+
 jobs:
   backend-lint:
     name: Backend Lint & Security
