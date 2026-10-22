@@ -107,7 +107,7 @@
 | DOC3 | `danger-ops.md` の「見張り（pretooluse_guard.py）の扱い」の節に `--no-verify`・`20 秒`・`512MB` がある | exit 0 |
 | DOC4 | `docs/runbooks/review-rules.md` に見出し `## GitHub から復旧できない変更のレビュー観点（I182）` があり、その節に `pull_request_target`・`.secrets.baseline` がある | exit 0 |
 | DOC5 | `docs/runbooks/worktree.md` に `GitHub から復旧できる範囲` がある | exit 0 |
-| DOC6 | DOC1〜DOC4 の新しい節の中でバッククォートで書いたパス（`/` を含む、または `.md`・`.py`・`.sh`・`.yml`・`.yaml`・`.json` で終わるもの。`<…>`・`*` を含むものは除く）が、すべてリポジトリに実在する（`test -e`） | exit 0 |
+| DOC6 | DOC1〜DOC4 の新しい節の中でバッククォートで書いたパス（`/` を含むもの。`<…>`・`*`・空白を含むもの・gitignore 済みのもの〔`backend/.env` 等〕は除く。実装時に、`/` を含まないファイル名だけの言及〔`ci.yml` 等〕は対象外に変更）が、すべてリポジトリに実在する（`test -e`） | exit 0 |
 | FG-DOC1 | 失敗注入: danger-ops.md の複製から見出し `## GitHub から復旧できる範囲（I182）` を消す → DOC1 の判定 | 非ゼロ |
 | FG-DOC2 | 失敗注入: danger-ops.md の複製の新しい節に `` `docs/runbooks/no_such_file.md` `` を足す → DOC6 の判定 | 非ゼロ |
 ### R. 既存の見張りのテスト（回帰）

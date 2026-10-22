@@ -51,6 +51,14 @@
 - 通常（高リスク判定 NO）の変更は従来の単発 code-review のまま（比例性）。
 - ステージ上限（最大 3 周・サブエージェント総数 15）到達時は自動 OK にせず、打ち切り・FINAL VERDICT HIGH 以上・ユーザーエスカレーションとする。
 
+## GitHub から復旧できない変更のレビュー観点（I182）
+
+公開リポジトリでは、次の変更は**マージしなくても PR を出した（push した）時点で**影響が出る。PR を出す前に確かめる（一覧と理由は `docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲」）。
+
+- **ワークフロー（`.github/workflows/`）の変更**: PR 側のワークフローが secrets 付きで動く。secrets を出力・外部へ送信していないか、`pull_request_target` を足していないか、`permissions` を広げていないか（最上位は `contents: read`）、pre-commit の `SKIP` に `detect-secrets` を足していないかを見る。
+- **秘密情報の検査設定（`.pre-commit-config.yaml`・`.secrets.baseline`）の変更**: detect-secrets を外していないか、新しい秘密情報を baseline に足していないか（行番号の更新だけか）を見る。
+- **コミットに秘密情報が入っていないか**: push protection は既知の形式の鍵しか拾わないので、`.env` の値・パスワード・トークンらしい文字列が差分に無いかを見る。
+
 ---
 
 ## レビュー作成の必須ルール
