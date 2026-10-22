@@ -675,37 +675,6 @@ def _push_is_dynamic(cmd: str) -> bool:
     # 判定する（"push_dynamic"）。文字列の一致で判定すると `xargs grep "git push"` まで確認になる（I174 第 3 周）
     return False
 
-# 高リスク Edit/Write パス（リポジトリルート相対で照合）。
-# 価値判断寄り（依存/スキーマ/インフラ）のため、編集時に ask（プロンプト）を出す。
-# 注: ハードブロック(exit 2)ではなく ask。承認すれば編集可（I079 案D）。
-HIGH_RISK_EDIT_PATTERNS = [
-    r"(?:^|/)(?:backend|frontend)/Dockerfile(?:\.dev)?$",   # コンテナ定義
-    r"(?:^|/)frontend/nginx\.conf$",                        # 配信設定
-    r"(?:^|/)backend/requirements[^/]*\.txt$",              # 依存マニフェスト
-    r"(?:^|/)backend/pyproject\.toml$",                     # 依存/ビルド設定
-    r"(?:^|/)frontend/package(?:-lock)?\.json$",            # 依存/ロックファイル
-    r"(?:^|/)[^/]+/migrations/[^/]*\.py$",                  # DBマイグレーション(手書き)
-    r"(?:^|/)backend/init-db\.sql$",                        # DB初期化SQL
-]
-
-def _repo_relative(path: str) -> str:
-    """file_path を可能ならリポジトリルート相対に正規化する（絶対/相対・`./`・OS差を吸収）。"""
-    p = path.replace("\\", "/")
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True
-        )
-        if r.returncode == 0:
-            root = r.stdout.strip().replace("\\", "/")
-            if root and p.startswith(root + "/"):
-                p = p[len(root) + 1:]
-    except Exception:
-        pass  # git 不在環境では生のパスで照合
-    while p.startswith("./"):
-        p = p[2:]
-    return p
-
 # --- worktree 横断書込のブロック（I095） ---
 # 別トラック（別 worktree）の作業ツリーへの直接書込を技術強制で禁止する（worktree.md §9）。
 # 読み取りは許可・書込のみブロック。fail-safe（境界確定不能はブロック）・エスケープ無し（DANGER_OK 非解除）。
@@ -888,18 +857,6 @@ def _ask(reason: str):
             "permissionDecisionReason": reason,
         }
     }))
-    sys.exit(0)
-
-def _check_edit_write(data: dict):
-    """Edit/Write の対象が高リスクパスなら ask を返す。非該当は素通り(exit 0)。"""
-    tool_input = data.get("tool_input") or {}
-    path = tool_input.get("file_path") or ""
-    if not isinstance(path, str) or not path.strip():
-        sys.exit(0)
-    rel = _repo_relative(path)
-    for pat in HIGH_RISK_EDIT_PATTERNS:
-        if re.search(pat, rel):
-            _ask(f"高リスクファイル（依存/スキーマ/インフラ）の編集です。確認してください: {rel}")
     sys.exit(0)
 
 # --- I174: 危険操作・外部送信・秘密情報・コンテナ内操作の判定 ---
@@ -3467,8 +3424,8 @@ def main():
         x = _cross_worktree(path) if path else None
         if x is True or x is None:
             _block_cross_worktree("編集", path)
-        if tool_name in ("Edit", "Write"):
-            _check_edit_write(data)  # 既存の高リスク ask は Edit/Write のみ（現状維持）
+        # I182: 高リスクファイル・ワークフロー・秘密情報の検査設定の編集の確認は、settings.json の ask（公式の権限ルール
+        # Edit(...)。Edit・Write・NotebookEdit すべてに効く）で行う。見張りは別 worktree への書込の停止だけを行う
         sys.exit(0)
     # I146: MCP 経由の PR 取り込み操作（Bash を通らない経路）
     if str(tool_name or "").startswith("mcp__github__"):
