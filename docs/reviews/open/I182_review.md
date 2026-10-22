@@ -17,6 +17,7 @@
 | 4-5 | `.claude/settings.json`・`scripts/claude/tests/test_settings_permissions.sh` | ask から rm・mv・cp・chmod・chown を外し allow へ |
 | 4-6 | `docs/runbooks/danger-ops.md` | 復旧できる範囲・漏れたときの手順・見張りの扱いの追記 |
 | 4-7 | `docs/runbooks/review-rules.md`・`docs/runbooks/worktree.md`・`docs/issues/open/I181.md`（ローカル）・`test_pretooluse_guard_matrix.sh` | レビュー観点・前提の参照・I181 の注記・マトリクスの 3 行 |
+| 計画変更記録 3 | `.secrets.baseline` | `ci.yml` の行ずれに伴う `line_number` の自動更新のみ（新しい検出なし） |
 | 計画変更記録 2 | `scripts/claude/tests/test_pretooluse_container_guard.sh` | 安全網の差し替え値に `remote_ask` を追加（結果の形を合わせるだけ） |
 | テスト | `test_i182_corpus_base.sh`・`test_i182_guard_failsafe.sh`・`test_i182_docs.sh`（新規） | B・F・DOC 群 |
 
