@@ -177,18 +177,16 @@ def _commit_no_verify(args: list) -> bool:
         if a in _COMMIT_VALUE_LONG:
             i += 2
             continue
+        step = 1
         if a.startswith("-") and not a.startswith("--") and len(a) > 1:
             for k, ch in enumerate(a[1:], 1):
                 if ch == "n":
                     return True
                 if ch in _COMMIT_VALUE_SHORT:
                     # getopt と同じ: 値を取る文字の後ろに文字が残ればそれが値、残らなければ次の語が値
-                    i += 1 if k < len(a) - 1 else 2
+                    step = 1 if k < len(a) - 1 else 2
                     break
-            else:
-                i += 1
-            continue
-        i += 1
+        i += step                        # 進めるのはここ 1 か所だけ（-a -n のように分けて書いた形も 1 語ずつ見る）
     return False
 ```
 `_cmd_danger` の git の分岐に追加:
@@ -258,7 +256,7 @@ for pat in SECRET_GATE_EDIT_PATTERNS:
 ## 5. 実装手順
 1. **ステップ 1: 記録突き合わせの比べる相手（4-1）** → TC B1〜B4・FG-B1・R3。後のステップで見張りを変えたときのゲート（`test_guard_corpus_diff.sh`）を正しく動かすため最初に行う。
 2. **ステップ 2: 見張りの失敗を確認に倒す（4-2）** → TC F1〜F6・FG-F1。ステップ 1 の後（ゲートで異常終了・新しい確認が増えないことを見る）。
-3. **ステップ 3: 見張りの規則の追加（4-3）とマトリクスの追加（4-7 の最後）** → TC N1〜N9・D1〜D7・E1〜E6・FG-N1・R1〜R6。ステップ 2 の後（同じファイルを変えるため順に行う）。
+3. **ステップ 3: 見張りの規則の追加（4-3）とマトリクスの追加（4-7 の最後）** → TC N1〜N10・D1〜D7・E1〜E6・FG-N1・FG-D1・FG-E1・R1〜R6。ステップ 2 の後（同じファイルを変えるため順に行う）。
 4. **ステップ 4: CI の検査のテスト（4-4）** → TC C1〜C3・FG-C1〜FG-C3。ステップ 1〜3 と並行して行ってよい。
 5. **ステップ 5: 確認待ちの削減（4-5）** → TC S1〜S12・手動 M3。ステップ 3 の後（危険な `rm` は見張りが止めることを先に確かめてから外す）。
 6. **ステップ 6: 手順書・文書（4-6・4-7）** → TC DOC1〜DOC6・FG-DOC1・FG-DOC2・手動 M4・M5。ステップ 3・5 の後（書く内容が確定してから）。
@@ -294,3 +292,9 @@ for pat in SECRET_GATE_EDIT_PATTERNS:
 ## 計画時の変更記録
 - **計画時の変更 1（2026-10-22）**: イシューの設計確認メモ「③ CI に detect-secrets のジョブを足し、develop の必須チェックにする」は、既存の `Backend Lint & Security` ジョブが detect-secrets を全ファイルに実行しており必須チェックでもあるため、「既存の検査が外されないことを決定論テストで守る」に置き換えた。イシュー本文（受け入れ条件・実装対象・制約）も同時に更新した。
 - **計画時の変更 2（2026-10-22）**: 設計確認メモの「`resource.setrlimit(RLIMIT_AS)`」は、スパイクで `gh` が起動できなくなることが分かったため `RLIMIT_DATA` に変更した（イシュー本文も更新）。
+
+## レビュー結果
+- [20261022_2231 判定: ✅ 完了](../../reviews/I182_plan_review_20261022_2231.md)
+  - Warning 1（`_commit_no_verify` の `-a -n`）: 計画のコードでは `-a` で 1 つだけ進むため見逃さない（指摘の「2 増加」は for-else 後の `continue` を読み違えたもの）が、`i` を進める場所を 1 か所にまとめて読みやすくし、TC N10（`git commit -a -n -m x` → 2）を追加した。Info（冗長な `continue`）も同じ修正で解消
+  - Warning 2（FG-N1 が 1 回だけの記録）: スクリプト内で毎回、複製から規則を外して N・D・E が不合格になることを確かめる形（FG-N1・FG-D1・FG-E1）に変更した
+  - 高リスク判定 Yes（見張りの最上位の包み直し）: `/security-review I182` を実行してから `/implement` に進む

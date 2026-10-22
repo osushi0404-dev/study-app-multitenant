@@ -63,6 +63,7 @@
 | N7 | `DANGER_OK=1 git commit --no-verify -m x` | ASK |
 | N8 | `git commit -m "fix -n option"` | 0 |
 | N9 | `git push -n origin feature/x` | 0（`-n` は push の `--dry-run`） |
+| N10 | `git commit -a -n -m x` | 2（分けて書いた形。プランレビュー 20261022_2231 Warning 1） |
 
 **D. リモートブランチの削除の確認**
 | TC | 入力（Bash） | 期待 |
@@ -95,7 +96,7 @@
 | FG-C2 | 失敗注入: .pre-commit-config.yaml の複製から detect-secrets の repo を消す → C2 の判定 | 非ゼロ |
 | FG-C3 | 失敗注入: ci.yml の複製から pre-commit/action のステップを消す → C1 の判定 | 非ゼロ |
 
-**FG-N1（実装時に 1 回だけ記録）**: 実装前の見張り（ステップ 3 の着手時に `git show HEAD:scripts/claude/hooks/pretooluse_guard.py` で取り出した複製）に N1・N2・N3・N6・D1〜D4・D7・E1〜E4 を当てると、すべて期待と違う結果（0）になる＝これらの TC が規則の欠落を捕まえることの証明。結果をこの文書の「実装時」に記録する。
+**FG-N1・FG-D1・FG-E1（スクリプト内で毎回確かめる）**: 見張りを一時ディレクトリへ複製し、複製だけで新しい規則を外す（`_commit_no_verify(args)` の呼び出しを `False` に・`"--no-verify" in args` を `False` に・`_push_deletes(args)` の呼び出しを `False` に・`SECRET_GATE_EDIT_PATTERNS` の中身を空に）。置き換えがそれぞれ 1 か所以上で起きたことを確かめ（起きなければその FG 自体を不合格にする）、複製に N1・N2・N3・N6・N10（FG-N1）・D1〜D4・D7（FG-D1）・E1〜E4（FG-E1）を当てて、**すべて期待と違う結果（0）になる**ことを確かめる＝これらの TC が規則の欠落を捕まえることの証明（プランレビュー 20261022_2231 Warning 2 で、1 回だけの記録から変更）。
 
 ### S. 確認待ちの削減（`scripts/claude/tests/test_settings_permissions.sh` を更新）
 | TC | 内容 | 期待 |
