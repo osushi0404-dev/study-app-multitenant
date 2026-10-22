@@ -68,7 +68,7 @@
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra: `.claude/settings.json`（ask の整理）。`.github/workflows/` は変更しない（テストで守るだけ）。GitHub の設定（push protection の有効化・必須チェックの確認）はユーザーの UI 操作
+- Config/Infra: `.claude/settings.json`（ask の整理）・`.github/workflows/ci.yml`・`.github/workflows/e2e.yml`（最上位に `permissions: contents: read` を足すだけ・4-9。ジョブの中身は変えない）。GitHub の設定（push protection の有効化・必須チェックの確認）はユーザーの UI 操作
 - Harness: `scripts/claude/hooks/pretooluse_guard.py`・`scripts/claude/tests/`（既存 2 本の更新・新規 3 本）・`scripts/claude/tests/guard_corpus_diff.py`・`docs/runbooks/danger-ops.md`・`docs/runbooks/review-rules.md`・`docs/runbooks/worktree.md`・`docs/issues/open/I181.md`（ローカル・未コミットのまま）
 
 ## 4. 変更点一覧
@@ -81,6 +81,7 @@ GitHub から復旧できない操作だけを、単純で安い規則で止め�
 |------|-------------------|------|
 | 秘密情報を含むコミットの push | 公開リポジトリなので、push した時点で全世界に公開される。消しても複製・キャッシュが残る | ① push protection（GitHub が push を拒否。ユーザーが有効化）② 見張りが `git commit --no-verify`／`-n`・`git push --no-verify` を停止（4-3）③ CI の `Backend Lint & Security` の detect-secrets（既存の必須チェック。push 後の検出）④ 漏れたときの手順（4-6） |
 | ワークフロー（`.github/workflows/`）・秘密情報の検査設定（`.pre-commit-config.yaml`・`.secrets.baseline`）の書き換え | PR を出した時点で PR 側のワークフローが secrets（`E2E_TEST_PASSWORD`・`GITHUB_TOKEN`）付きで動く。検査設定を外すと CI の検出も効かなくなる | 見張りが Edit/Write を確認にする（4-3）・レビュー観点に追加（4-7）・CI の検査が外されていないことを決定論テストで守る（4-4） |
+| ワークフローが実行するコード（`backend/` のテスト・`e2e/` のテスト・`package.json` の scripts・`manage.py` のコマンド 等）の変更（/security-review で追加） | ワークフローを書き換えなくても、PR 側のこれらのコードが CI の中で動き、そのジョブの `GITHUB_TOKEN` と（e2e では）`E2E_TEST_PASSWORD` に触れられる。`ci.yml`・`e2e.yml` には `permissions:` が無く、`GITHUB_TOKEN` の権限はリポジトリの既定（bot からは読めない）に任されている | ① `ci.yml`・`e2e.yml` の最上位に `permissions: contents: read` を書き、`GITHUB_TOKEN` を読み取りだけに絞る（4-9）② `E2E_TEST_PASSWORD` は E2E 用の試験アカウントのパスワード（`seed_e2e` で作る）で、ログでは GitHub が伏せ字にする→ 残余リスクとして記録（対処は /retro で決める） |
 | リモートブランチの削除（`git push --delete`・`-d`・`<remote> :<ブランチ>`・`--prune`） | 手元に無い（別ワークツリー・別セッションの）ブランチの push 済みの作業は戻せない。PR も閉じる | 見張りが確認にする（4-3） |
 | イシュー・PR への書き込み（`gh issue edit --body-file` 等） | 公開されるが、bot 自身が編集・削除できる | 対策しない。書くのは Claude が書いた記録ファイルで、秘密情報を扱わない。同期の前の detect-secrets も足さない（費用に見合わない。必要になったら決定論ゲートとして別途足す） |
 | リポジトリ設定の変更・リリースの作成・ワークフローの手動実行（`gh api`・`gh release`・`gh workflow run`） | — | 対策不要。bot に管理権限が無い、または `settings.json` の allow に無く、ふだんの権限確認が出る |
@@ -153,6 +154,7 @@ if __name__ == "__main__":
 ```
 - `_ask`・`_block`・`_block_cross_worktree` の先頭で `signal.alarm(0)` を呼ぶ（出力の途中で打ち切られて、壊れた JSON が出ないように）。
 - 既存の `_analyze`・`_safety_net` の try（確認に倒す）はそのまま残す（理由の表示が具体的なため）。
+- 確認の理由には例外の**型名だけ**を出し、例外のメッセージ・コマンドの中身は出さない（コマンドに秘密情報が含まれうるため。/security-review の必須防御条件。TC F1 で `i182` という注入メッセージが理由に出ないことも確かめる）。
 - 停止（exit 2）ではなく確認にする理由: 見張りの不具合で全操作が止まり、作業できなくなるのを避ける。人が内容を見て決める。
 - 残余リスク: 途中の `except Exception`（`_trusted_repos` 等）が `MemoryError` を飲むと、その判定は「信頼しない場所」側（確認）に倒れる。素通しの側には倒れない。
 
@@ -249,6 +251,15 @@ for pat in SECRET_GATE_EDIT_PATTERNS:
 - `docs/issues/open/I181.md`（ローカル・未コミット。I181 の計画時にコミットされる）: 「前提」の「この前提には穴がある」の段落を、I182 の結論（例外の一覧は `danger-ops.md`「GitHub から復旧できる範囲」・そこに当たる変更は「GitHub が最後の守り」の対象外）に書き換える。「記録突き合わせの比べる相手」の項目（68 行目）は「I182 で対応済み」と書き換える。
 - `scripts/claude/tests/test_pretooluse_guard_matrix.sh` の `OPS` に 3 行を足す: `"2|git commit --no-verify -m wip"`・`"2|git commit -anm wip"`・`"ASK|git push origin --delete feature/old"`（29 の書き方すべてで同じ結果になること）。
 
+### 4-9. ワークフローの `GITHUB_TOKEN` を読み取りだけにする（`.github/workflows/ci.yml`・`.github/workflows/e2e.yml`・/security-review で追加）
+**修正方針**: 最小権限の原則に沿って、2 つのワークフローの最上位（`on:` の後・`jobs:` の前）に次を足す。どちらのジョブも `actions/checkout`・`actions/setup-*`・`actions/upload-artifact`（`GITHUB_TOKEN` ではなく実行環境の別の権限で動く）しか使わず、書き込みの権限は要らない。`dependency-audit.yml` はすでに `permissions:` を持つので変えない。
+```yaml
+permissions:
+  contents: read
+```
+- 効き目: PR 側のテスト・スクリプトが CI の中で動いても、`GITHUB_TOKEN` でブランチへの push・イシューや PR への書き込み・リリースの作成ができない。
+- 確認: TC C4・FG-C4（両方のファイルの最上位の `permissions` が `{contents: read}` だけ）と、この PR の CI がすべて緑のまま（TC R7）。
+
 ### 4-8. GitHub の設定（ユーザーの UI 操作）
 - **push protection の有効化**（計画の承認時に依頼する。以降の push を守るため早いほどよい）: リポジトリの Settings → Advanced Security（または Code security）→ 「Secret Protection」（Secret scanning）を Enable → 「Push protection」を Enable。
 - **必須チェックの確認**（新しい設定は無い）: Settings → Branches（または Rules）→ develop の規則の「Require status checks to pass」に `Backend Lint & Security` が入っていることを確かめる。
@@ -257,7 +268,7 @@ for pat in SECRET_GATE_EDIT_PATTERNS:
 1. **ステップ 1: 記録突き合わせの比べる相手（4-1）** → TC B1〜B4・FG-B1・R3。後のステップで見張りを変えたときのゲート（`test_guard_corpus_diff.sh`）を正しく動かすため最初に行う。
 2. **ステップ 2: 見張りの失敗を確認に倒す（4-2）** → TC F1〜F6・FG-F1。ステップ 1 の後（ゲートで異常終了・新しい確認が増えないことを見る）。
 3. **ステップ 3: 見張りの規則の追加（4-3）とマトリクスの追加（4-7 の最後）** → TC N1〜N10・D1〜D7・E1〜E6・FG-N1・FG-D1・FG-E1・R1〜R6。ステップ 2 の後（同じファイルを変えるため順に行う）。
-4. **ステップ 4: CI の検査のテスト（4-4）** → TC C1〜C3・FG-C1〜FG-C3。ステップ 1〜3 と並行して行ってよい。
+4. **ステップ 4: CI の検査のテスト（4-4）とワークフローの権限（4-9）** → TC C1〜C4・FG-C1〜FG-C4・R7。ステップ 1〜3 と並行して行ってよい。ワークフローの変更は push で CI が動くので、R7 はこのステップの push の後に見る。
 5. **ステップ 5: 確認待ちの削減（4-5）** → TC S1〜S12・手動 M3。ステップ 3 の後（危険な `rm` は見張りが止めることを先に確かめてから外す）。
 6. **ステップ 6: 手順書・文書（4-6・4-7）** → TC DOC1〜DOC6・FG-DOC1・FG-DOC2・手動 M4・M5。ステップ 3・5 の後（書く内容が確定してから）。
 7. **ステップ 7: GitHub の設定の確認（4-8）** → 手動 M1・M2（Human）。push protection の有効化は承認時に依頼し、ここで結果を記録する。
@@ -292,9 +303,46 @@ for pat in SECRET_GATE_EDIT_PATTERNS:
 ## 計画時の変更記録
 - **計画時の変更 1（2026-10-22）**: イシューの設計確認メモ「③ CI に detect-secrets のジョブを足し、develop の必須チェックにする」は、既存の `Backend Lint & Security` ジョブが detect-secrets を全ファイルに実行しており必須チェックでもあるため、「既存の検査が外されないことを決定論テストで守る」に置き換えた。イシュー本文（受け入れ条件・実装対象・制約）も同時に更新した。
 - **計画時の変更 2（2026-10-22）**: 設計確認メモの「`resource.setrlimit(RLIMIT_AS)`」は、スパイクで `gh` が起動できなくなることが分かったため `RLIMIT_DATA` に変更した（イシュー本文も更新）。
+- **計画時の変更 3（2026-10-23・/security-review）**: ワークフローを書き換えなくても、PR 側のテスト・スクリプトが CI の中で `GITHUB_TOKEN` に触れられることが分かったため、`ci.yml`・`e2e.yml` の最上位に `permissions: contents: read` を足す（4-9・TC C4・FG-C4・R7）。4-0 の表に 1 行を足し、イシュー本文・テスト文書・レビュー文書も同時に更新した。`.github/workflows/` を変えるので、Actions に関わる範囲の敵対的レビュー（1 周・時間上限付き）の対象に入る。
 
 ## レビュー結果
 - [20261022_2231 判定: ✅ 完了](../../reviews/I182_plan_review_20261022_2231.md)
   - Warning 1（`_commit_no_verify` の `-a -n`）: 計画のコードでは `-a` で 1 つだけ進むため見逃さない（指摘の「2 増加」は for-else 後の `continue` を読み違えたもの）が、`i` を進める場所を 1 か所にまとめて読みやすくし、TC N10（`git commit -a -n -m x` → 2）を追加した。Info（冗長な `continue`）も同じ修正で解消
   - Warning 2（FG-N1 が 1 回だけの記録）: スクリプト内で毎回、複製から規則を外して N・D・E が不合格になることを確かめる形（FG-N1・FG-D1・FG-E1）に変更した
   - 高リスク判定 Yes（見張りの最上位の包み直し）: `/security-review I182` を実行してから `/implement` に進む
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-23
+
+対象: アプリ（backend / frontend）のコード変更なし。対象はハーネス（見張り・テスト・設定）と GitHub Actions の設定。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 認証・認可／外部通信 | `ci.yml`・`e2e.yml` に `permissions:` が無く、`GITHUB_TOKEN` の権限がリポジトリの既定に任されている。ワークフローを書き換えなくても、PR 側のテスト・`package.json` の scripts・`manage.py` のコマンドが CI の中で動き、そのトークン（既定が書き込み可なら push・イシュー/PR への書き込み）に触れられる。4-3 の「ワークフローの編集を確認」では防げない | **必須防御条件**: 両ファイルの最上位に `permissions: contents: read`（4-9）。ジョブ単位で広げない。TC C4・FG-C4 で守り、R7 で CI が緑のままを確かめる |
+| Low | 機密情報 | 見張りの失敗時の確認の理由に、例外のメッセージやコマンドの中身（秘密情報を含みうる）が出る | **禁止事項**: 理由に例外のメッセージ・コマンドを出さない（型名だけ）。TC F1 で注入メッセージが出ないことを確かめる |
+| Low | 機密情報 | `e2e.yml` の `E2E_TEST_PASSWORD` は、PR 側の e2e テストのコードから読める（GitHub の仕様）。失敗時に上げる Playwright のレポート（artifact）に、入力したパスワードが記録されうる | 値は E2E 用の試験アカウント（`seed_e2e` で作る）のもので、ログでは GitHub が伏せ字にする。残余リスクとして記録（下の「残余リスク処遇」） |
+| Low | セキュリティ設定ミス | 見張りの失敗を「停止」ではなく「確認」に倒すため、本来止める操作が、判定の失敗で確認に下がりうる | 人が内容を見て承認する経路は残る（素通しにはならない）。設計どおり（4-2 の理由）。既存の `_analyze` の失敗時と同じ扱い |
+| Low | ファイル操作 | `rm`・`mv` を allow にすると、git で管理していない秘密ファイル（`backend/.env`・`e2e/.env.e2e`）を確認なしで消す・動かすことがある。これは GitHub からも戻せない | `rm -r` 系は見張りが止める。単発の削除で失うのは手元のファイルで、作り直しと鍵の再発行で戻せる。残余リスクとして記録（見張りで `_secret_path` に当たる `rm`／`mv` を確認にするかは /retro で決める） |
+| Low | セキュリティ設定ミス | ワークフロー・検査設定を Bash（`sed -i`・`cat >`）で書き換えると、Edit/Write の確認を通らない | 対象外として記録済み（脅威モデルは事故・4-0）。レビュー観点（4-7）で PR の前に見る |
+
+入力検証・マルチテナント・依存ライブラリ: なし（アプリのコードと依存の変更なし）。
+
+### 攻撃シナリオレビュー
+
+アプリのエンドポイントの追加・変更は無い。見張り・CI の変更について、「事故・誤操作」と「PR 側のコードが CI で動く」場面を想定する。
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | Bash（見張り） | Claude（bot） | `git commit --no-verify`／`-n` で pre-commit の detect-secrets を飛ばしてコミットし push | 停止（`DANGER_OK=1` でも人の承認） | Yes: N1〜N10・FG-N1・マトリクス | Yes: M3（新しいセッションで止まる） | `SKIP=`・`core.hooksPath` の書き換え（意図的な回避・対象外） | Medium |
+| 2 | git push | Claude（bot） | 秘密情報を含むコミットを feature ブランチへ push | GitHub が push を拒否（push protection）／CI の detect-secrets が検出 | Yes: C1〜C3・FG-C1〜C3（CI の検査が外されない） | Yes: M1（push protection 有効）・M2（必須チェック） | push protection は既知の形式の鍵だけ。CI は push の後（公開後）の検出 | Medium |
+| 3 | PR 側のコード（テスト・scripts） | PR を出せる者（bot） | CI の中で `GITHUB_TOKEN` を使ってブランチ・イシュー・リリースを書き換える | `GITHUB_TOKEN` が読み取りだけ | Yes: C4・FG-C4・R7 | No | `E2E_TEST_PASSWORD` は読める（試験アカウント・伏せ字） | Medium |
+| 4 | Edit/Write | Claude（bot） | ワークフローや検査設定を書き換えて PR を出す（secrets の出力・`pull_request_target` の追加・`SKIP` の追加） | 編集時に確認・PR 前のレビュー観点 | Yes: E1〜E6・FG-E1 | No | Bash での書き換え（対象外） | Medium |
+| 5 | Bash（見張り） | Claude（bot） | `git push origin --delete <他のセッションのブランチ>` | 確認 | Yes: D1〜D7・FG-D1 | No | `gh api -X DELETE`（allow に無くふだんの確認が出る） | Low |
+| 6 | 見張りへの入力 | Claude（bot） | 判定に時間・メモリのかかる書き方や、判定の例外を起こす書き方で、止めるはずの操作を素通りさせる | 失敗・20 秒超え・512MB 超えは確認 | Yes: F1〜F6・FG-F1 | No | 途中の `except Exception` に飲まれた `MemoryError` は、その判定が「信頼しない場所」側（確認）に倒れる | Medium |
+| 7 | Bash（`rm`・`mv` の allow） | Claude（bot） | 確認なしで `rm backend/.env` | — | No | No | 手元の秘密ファイルを失う（GitHub からも戻せない）。上の設計レビューの Low | Low |
+
+### 残余リスク処遇
+（/retro で決定する）

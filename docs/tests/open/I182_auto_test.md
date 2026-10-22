@@ -40,7 +40,7 @@
 
 | TC | 注入（複製のみ） | 入力 | 期待 |
 |----|----------------|------|------|
-| F1 | `main()` の先頭に `raise RuntimeError("i182")` | Bash `ls` | `ASK`・理由に `RuntimeError` |
+| F1 | `main()` の先頭に `raise RuntimeError("i182")` | Bash `ls` | `ASK`・理由に `RuntimeError` があり、注入したメッセージ `i182` は無い（例外のメッセージを出さない） |
 | F2 | `main()` の先頭に `time.sleep(60)`・`_TIME_LIMIT_SEC = 2` | Bash `ls` | `ASK`・理由に「時間の上限」・10 秒未満で終わる |
 | F3 | `main()` の先頭に `bytearray(1024 ** 3)`（1GB） | Bash `ls` | `ASK`・理由に「メモリの上限」 |
 | F4 | `_edit_path()` の先頭に `raise ValueError("i182")` | Edit `docs/x.md` | `ASK`・理由に `ValueError` |
@@ -86,12 +86,14 @@
 | E5 | Edit `docs/runbooks/danger-ops.md` | 0 |
 | E6 | Edit `.github/CODEOWNERS` | 0 |
 
-**C. CI の秘密情報の検査が残っていること**（PyYAML で読む。`on` は YAML 1.1 で `True` に読まれるので両方を見る）
+**C. CI の秘密情報の検査が残っていること・ワークフローの権限**（PyYAML で読む。`on` は YAML 1.1 で `True` に読まれるので両方を見る）
 | TC | 内容 | 期待 |
 |----|------|------|
 | C1 | `.github/workflows/ci.yml` の `name: Backend Lint & Security` のジョブに `uses: pre-commit/action@…` のステップがあり、その `env.SKIP`（カンマ区切り）に `detect-secrets` が無い | exit 0 |
 | C2 | `.pre-commit-config.yaml` に `id: detect-secrets` のフックがあり、`args` に `--baseline` と `.secrets.baseline` がある | exit 0 |
 | C3 | `ci.yml` の `on.pull_request.branches` に `develop` がある | exit 0 |
+| C4 | `.github/workflows/ci.yml` と `.github/workflows/e2e.yml` の最上位の `permissions` が `{"contents": "read"}` だけ（ジョブ単位で `permissions` を広げていない＝どのジョブにも `permissions` が無いか、あっても `read`／`none` だけ） | exit 0 |
+| FG-C4 | 失敗注入: e2e.yml の複製から最上位の `permissions` を消す／ci.yml の複製の 1 ジョブに `permissions: {contents: write}` を足す → C4 の判定 | どちらも非ゼロ |
 | FG-C1 | 失敗注入: ci.yml の複製で `SKIP: eslint,detect-secrets` にする → C1 の判定 | 非ゼロ |
 | FG-C2 | 失敗注入: .pre-commit-config.yaml の複製から detect-secrets の repo を消す → C2 の判定 | 非ゼロ |
 | FG-C3 | 失敗注入: ci.yml の複製から pre-commit/action のステップを消す → C1 の判定 | 非ゼロ |
@@ -127,6 +129,7 @@
 | R3 | `bash scripts/claude/tests/test_guard_corpus_diff.sh` | `OK:`（新しく確認・停止が記録の 1% 以下・異常終了 0 件。exit 0）。新しく停止・確認になったコマンドの一覧を実装時に記録し、意図どおり（`--no-verify`・リモートブランチの削除）かを確かめる |
 | R4 | `bash scripts/claude/tests/test_pretooluse_push_guard.sh` | pass=185 fail=0（exit 0） |
 | R5 | `test_pretooluse_checkout_guard.sh`・`test_pretooluse_container_guard.sh`・`test_pretooluse_gh_pr_guard.sh`・`test_pretooluse_worktree_guard.sh` | すべて fail=0（exit 0） |
+| R7 | ステップ 4 の push の後、`gh pr checks 308 --required` | 必須チェック 5 件がすべて `pass`（exit 0）。`permissions: contents: read` で CI が壊れていない |
 | R6 | `python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py scripts/claude/tests/guard_corpus_diff.py`・`python3 -m json.tool .claude/settings.json` | exit 0 |
 
 ## 計画時の自己検証
