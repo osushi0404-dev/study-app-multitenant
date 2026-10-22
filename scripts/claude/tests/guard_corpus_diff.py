@@ -22,6 +22,22 @@ from concurrent.futures import ThreadPoolExecutor
 REPO = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
 GUARD_REL = "scripts/claude/hooks/pretooluse_guard.py"
 CACHE_DIR = os.path.expanduser("~/.cache/claude-guard-corpus")
+UPSTREAM = "origin/develop"
+
+
+def base_rev(git) -> tuple:
+    """未コミットの変更が無いときの比べる相手 (rev, 説明)。無ければ (None, 理由)。
+    I182: develop を取り込んだマージコミットが見張りの最終変更でも、取り込んだ側の変更を数えないよう、
+    ブランチが develop から分かれた点と比べる。develop の上（ブランチ固有のコミットが無い）ときだけ、
+    第 1 親をたどって「見張りを最後に変えたコミットの直前」と比べる。"""
+    head = git("rev-parse", "HEAD").stdout.strip()
+    mb = git("merge-base", "HEAD", UPSTREAM).stdout.strip()
+    if mb and mb != head:
+        return mb, f"{mb[:7]}（{UPSTREAM} との分かれた点）"
+    last = git("log", "-1", "--first-parent", "--format=%H", "--", GUARD_REL).stdout.strip()
+    if not last:
+        return None, "比べる前の版の guard がありません"
+    return f"{last}^1", f"{last[:7]}^1（guard を最後に変えたコミットの直前）"
 
 
 def _project_dir() -> str:
@@ -98,13 +114,13 @@ def main() -> int:
         with open(cur, encoding="utf-8") as fh:
             same = fh.read() == src.stdout
         if same and a.base == "HEAD":
-            # 未コミットの変更が無い（コミットの後・コードレビュー時）: guard を最後に変えたコミットの直前と比べる
-            last = git("log", "-1", "--format=%H", "--", GUARD_REL).stdout.strip()
-            src = git("show", f"{last}^:{GUARD_REL}") if last else src
-            if not last or src.returncode != 0:
-                print("SKIP: 比べる前の版の guard がありません")
+            # 未コミットの変更が無い（コミットの後・コードレビュー時）: develop との分かれた点などと比べる（base_rev）
+            rev, why = base_rev(git)
+            src = git("show", f"{rev}:{GUARD_REL}") if rev else src
+            if not rev or src.returncode != 0:
+                print(f"SKIP: {why if not rev else '比べる前の版の guard がありません'}")
                 return 0
-            a.base = f"{last[:7]}^（guard を最後に変えたコミットの直前）"
+            a.base = why
         with open(base, "w", encoding="utf-8") as fh:
             fh.write(src.stdout)
         with ThreadPoolExecutor(12) as ex:
