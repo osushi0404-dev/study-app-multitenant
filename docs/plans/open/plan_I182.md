@@ -386,3 +386,7 @@ permissions:
 計画時の変更 3（4-9）で計画を変えたため、計画レビュー（`/plan-issue-review I182`）をやり直す。実装中の計画変更もまとめて見るため、**`/code-review` の直前に 1 回だけ**行う（2026-10-23 ユーザー判断）。
 - 2026-10-23 にユーザーが実装前に再実行し、✅ 完了（`docs/reviews/I182_plan_review_20261023_0036.md`）。計画時の変更 3 までは確認済み。`/code-review` の直前の再レビューは、実装中に計画を変えたときだけ行う。
 - 同レビューの Info（`--base` を明示したときの決定論テストが B 群に無い）: 対応しない。`--base` を明示した経路は今回変えない（`base_rev()` は `--base` が既定の `HEAD` で未コミットの変更が無いときだけ呼ぶ）ため、回帰の入り口が無い。
+- 2026-10-23 の計画変更記録 1〜3 の後の再レビュー（`docs/reviews/I182_plan_review_20261023_0615.md`・✅ 完了）:
+  - Warning（「GitHub が最後の守り」の前提に触れた記述が、4 ファイル以外の runbook にも残っていないか）: `docs/runbooks`・`.claude`・`rules`・`CLAUDE.md`・`docs/issues/open` を「最後の守り」「GitHub から復旧」「GitHub から戻せ」「GitHub は壊れない」「復旧でき」「GitHub 側で保護」「GitHub 側の保護」「push していない手元」で検索した。当たったのは `danger-ops.md`・`review-rules.md`・`worktree.md`・`I181.md`（すべて更新済み）と I182 自身だけで、ほかの消費箇所は無い。DOC5 を増やす必要は無い
+  - Info（M6 の 20 秒の実証は /test で行う）: 計画どおり手動 M6 で確かめる
+  - Info（DOC6 の除外範囲）: 自動テスト文書の DOC6 に除外範囲（`/` を含まないもの・`<…>`・`*`・空白・gitignore 済み）を明記済み
