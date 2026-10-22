@@ -41,7 +41,7 @@
 | TC | 注入（複製のみ） | 入力 | 期待 |
 |----|----------------|------|------|
 | F1 | `main()` の先頭に `raise RuntimeError("i182")` | Bash `ls` | `ASK`・理由に `RuntimeError` があり、注入したメッセージ `i182` は無い（例外のメッセージを出さない） |
-| F2 | `main()` の先頭に `time.sleep(60)`・`_TIME_LIMIT_SEC = 2` | Bash `ls` | `ASK`・理由に「時間の上限」・10 秒未満で終わる |
+| ~~F2~~ | （計画変更記録 1 で削除: 時間の上限は自作の `SIGALRM` をやめ、公式の `timeout: 20`＋`onFailure: "block"` にした。設定は S13、停止する挙動は手動 M6 で確かめる） | — | — |
 | F3 | `main()` の先頭に `bytearray(1024 ** 3)`（1GB） | Bash `ls` | `ASK`・理由に「メモリの上限」 |
 | F4 | `_edit_path()` の先頭に `raise ValueError("i182")` | Edit `docs/x.md` | `ASK`・理由に `ValueError` |
 | F5 | `_danger_reasons()` の先頭に `raise KeyError("i182")`（今まで包まれていなかった判定） | Bash `ls` | `ASK` |
@@ -76,19 +76,13 @@
 | D6 | `git push origin feature/x` | 0 |
 | D7 | `bash -c "git push origin --delete feature/x"` | ASK（入れ子のシェルでも同じ） |
 
-**E. ワークフロー・秘密情報の検査設定の Edit/Write の確認**
-| TC | 入力 | 期待 |
-|----|------|------|
-| E1 | Edit `.github/workflows/ci.yml` | ASK |
-| E2 | Write `<リポジトリの絶対パス>/.github/workflows/new.yml` | ASK |
-| E3 | Edit `.pre-commit-config.yaml` | ASK |
-| E4 | Edit `.secrets.baseline` | ASK |
-| E5 | Edit `docs/runbooks/danger-ops.md` | 0 |
-| E6 | Edit `.github/CODEOWNERS` | 0 |
+**E. ワークフロー・秘密情報の検査設定・高リスクファイルの Edit/Write の確認**（計画変更記録 1 で、見張りではなく `.claude/settings.json` の `ask`〔公式の権限ルール〕で行う形に置き換えた。旧 E1〜E6 と FG-E1 は削除し、設定の中身を S14・S15 で、効き目を E7 と手動 M3 で確かめる）
 
-**C. CI の秘密情報の検査が残っていること・ワークフローの権限**（PyYAML で読む。`on` は YAML 1.1 で `True` に読まれるので両方を見る）
 | TC | 内容 | 期待 |
 |----|------|------|
+| E7 | 見張りに Edit/Write の入力（`.github/workflows/ci.yml`・`.pre-commit-config.yaml`・`backend/requirements.txt`・`docs/x.md`）を渡す | どれも 0（見張りは別ワークツリーへの書き込みの停止だけを行い、編集の確認は settings.json の `ask` に任せる＝二重に判定しない） |
+
+**C. CI の秘密情報の検査が残っていること・ワークフローの権限**（PyYAML で読む。`on` は YAML 1.1 で `True` に読まれるので両方を見る）
 | C1 | `.github/workflows/ci.yml` の `name: Backend Lint & Security` のジョブに `uses: pre-commit/action@…` のステップがあり、その `env.SKIP`（カンマ区切り）に `detect-secrets` が無い | exit 0 |
 | C2 | `.pre-commit-config.yaml` に `id: detect-secrets` のフックがあり、`args` に `--baseline` と `.secrets.baseline` がある | exit 0 |
 | C3 | `ci.yml` の `on.pull_request.branches` に `develop` がある | exit 0 |
@@ -97,21 +91,17 @@
 | FG-C1 | 失敗注入: ci.yml の複製で `SKIP: eslint,detect-secrets` にする → C1 の判定 | 非ゼロ |
 | FG-C2 | 失敗注入: .pre-commit-config.yaml の複製から detect-secrets の repo を消す → C2 の判定 | 非ゼロ |
 | FG-C3 | 失敗注入: ci.yml の複製から pre-commit/action のステップを消す → C1 の判定 | 非ゼロ |
-
-**FG-N1・FG-D1・FG-E1（スクリプト内で毎回確かめる）**: 見張りを一時ディレクトリへ複製し、複製だけで新しい規則を外す（`_commit_no_verify(args)` の呼び出しを `False` に・`"--no-verify" in args` を `False` に・`_push_deletes(args)` の呼び出しを `False` に・`SECRET_GATE_EDIT_PATTERNS` の中身を空に）。置き換えがそれぞれ 1 か所以上で起きたことを確かめ（起きなければその FG 自体を不合格にする）、複製に N1・N2・N3・N6・N10（FG-N1）・D1〜D4・D7（FG-D1）・E1〜E4（FG-E1）を当てて、**すべて期待と違う結果（0）になる**ことを確かめる＝これらの TC が規則の欠落を捕まえることの証明（プランレビュー 20261022_2231 Warning 2 で、1 回だけの記録から変更）。
-
+**FG-N1・FG-D1（スクリプト内で毎回確かめる）**: 見張りを一時ディレクトリへ複製し、複製だけで新しい規則を外す（`_commit_no_verify(args)` の呼び出しを `False` に・`"--no-verify" in args` を `False` に・`_push_deletes(args)` の呼び出しを `False` に）。置き換えがそれぞれ 1 か所以上で起きたことを確かめ（起きなければその FG 自体を不合格にする）、複製に N1・N2・N3・N6・N10（FG-N1）・D1〜D4・D7（FG-D1）を当てて、**すべて期待と違う結果（0）になる**ことを確かめる＝これらの TC が規則の欠落を捕まえることの証明（プランレビュー 20261022_2231 Warning 2 で、1 回だけの記録から変更）。
 ### S. 確認待ちの削減（`scripts/claude/tests/test_settings_permissions.sh` を更新）
-| TC | 内容 | 期待 |
-|----|------|------|
 | S1 | 実体の settings.json: `ask` が `Bash(git rebase *)`・`Bash(psql *)` の 2 つだけ・`Bash(rm *)`・`Bash(mv *)`・`Bash(cp *)`・`Bash(chmod *)`・`Bash(chown *)` が allow にあり ask に無い・既存の条件（deny・フック登録・広すぎる allow なし 等） | exit 0 |
 | S2 | 失敗注入: `Bash(rm *)` を ask に戻す | 不合格（1） |
 | S2a | 失敗注入: `Bash(psql *)` を ask から外す | 不合格（1） |
 | S2b | 失敗注入: `Bash(chmod *)` を allow から外す（どちらにも無い＝既定の確認が出る） | 不合格（1） |
 | S3〜S12 | 既存の注入（exec の ask を戻す・Write(...)・.env の deny・Bash(*)・bypass・フック登録の削除 等） | 不合格（1）（既存どおり） |
-
+| S13 | 実体の settings.json: 見張り（`pretooluse_guard.py`）を呼ぶ PreToolUse フック 3 つ（Edit 系・Bash・MCP）すべてに `"timeout": 20` と `"onFailure": "block"` がある。失敗注入: どれか 1 つの `onFailure` を消す／`timeout` を 600 にする | 実体は合格（0）・注入はどちらも不合格（1）（計画変更記録 1） |
+| S14 | 実体の settings.json の `ask` に、4-3(c) の `Edit(...)` 14 行（`Edit(.github/workflows/**)`・`Edit(.pre-commit-config.yaml)`・`Edit(.secrets.baseline)`・Dockerfile 4 つ・`frontend/nginx.conf`・`backend/requirements*.txt`・`backend/pyproject.toml`・`frontend/package.json`・`frontend/package-lock.json`・`**/migrations/*.py`・`backend/init-db.sql`）がすべてある。失敗注入: `Edit(.github/workflows/**)` を消す | 実体は合格（0）・注入は不合格（1） |
+| S15 | `ask`・`deny` に `Write(`・`NotebookEdit(`・`MultiEdit(` で始まる行が無い（公式は `Edit(...)` だけを見るため）。失敗注入: `ask` に `Write(.github/workflows/**)` を足す | 実体は合格（0）・注入は不合格（1） |
 ### DOC. 文書（新規 `scripts/claude/tests/test_i182_docs.sh`）
-| TC | 内容 | 期待 |
-|----|------|------|
 | DOC1 | `docs/runbooks/danger-ops.md` に見出し `## GitHub から復旧できる範囲（I182）` があり、その節に `秘密情報`・`.github/workflows/`・`リモートブランチの削除`・`イシュー・PR への書き込み` がある | exit 0 |
 | DOC2 | `danger-ops.md` に見出し `## 秘密情報を push してしまったとき（I182）` があり、その節に `無効化`・`push protection` がある | exit 0 |
 | DOC3 | `danger-ops.md` の「見張り（pretooluse_guard.py）の扱い」の節に `--no-verify`・`20 秒`・`512MB` がある | exit 0 |
@@ -120,10 +110,7 @@
 | DOC6 | DOC1〜DOC4 の新しい節の中でバッククォートで書いたパス（`/` を含む、または `.md`・`.py`・`.sh`・`.yml`・`.yaml`・`.json` で終わるもの。`<…>`・`*` を含むものは除く）が、すべてリポジトリに実在する（`test -e`） | exit 0 |
 | FG-DOC1 | 失敗注入: danger-ops.md の複製から見出し `## GitHub から復旧できる範囲（I182）` を消す → DOC1 の判定 | 非ゼロ |
 | FG-DOC2 | 失敗注入: danger-ops.md の複製の新しい節に `` `docs/runbooks/no_such_file.md` `` を足す → DOC6 の判定 | 非ゼロ |
-
 ### R. 既存の見張りのテスト（回帰）
-| TC | コマンド | 期待 |
-|----|---------|------|
 | R1 | `bash scripts/claude/tests/test_guard_bash_oracle.sh` | 見逃し=0・余計な停止=0（exit 0） |
 | R2 | `bash scripts/claude/tests/test_pretooluse_guard_matrix.sh`（OPS に 3 行追加後） | pass=391 fail=0（13 操作 × 30 + 偽合格の防止 1。exit 0） |
 | R3 | `bash scripts/claude/tests/test_guard_corpus_diff.sh` | `OK:`（新しく確認・停止が記録の 1% 以下・異常終了 0 件。exit 0）。新しく停止・確認になったコマンドの一覧を実装時に記録し、意図どおり（`--no-verify`・リモートブランチの削除）かを確かめる |
@@ -131,7 +118,6 @@
 | R5 | `test_pretooluse_checkout_guard.sh`・`test_pretooluse_container_guard.sh`・`test_pretooluse_gh_pr_guard.sh`・`test_pretooluse_worktree_guard.sh` | すべて fail=0（exit 0） |
 | R7 | ステップ 4 の push の後、`gh pr checks 308 --required` | 必須チェック 5 件がすべて `pass`（exit 0）。`permissions: contents: read` で CI が壊れていない |
 | R6 | `python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py scripts/claude/tests/guard_corpus_diff.py`・`python3 -m json.tool .claude/settings.json` | exit 0 |
-
 ## 計画時の自己検証
 - B・F・N・D・E・C・S・DOC のスクリプトは実装ステップで作る（計画時点では対象の実装が無いので実行できない）。各 FG（失敗注入）は、スクリプトの中で注入した複製に当てて非ゼロになることを毎回確かめる形にしてある（正常系だけで合格する false-green を防ぐ）。
 - 計画時に実行できたものはベースライン（上表）とスパイク（計画書「調査結果」）。

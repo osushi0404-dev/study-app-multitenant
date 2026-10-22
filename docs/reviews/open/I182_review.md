@@ -10,8 +10,8 @@
 | 計画 | 対象ファイル | 内容 |
 |------|-------------|------|
 | 4-1 | `scripts/claude/tests/guard_corpus_diff.py` | 比べる相手を develop との分かれた点にする（`base_rev()`） |
-| 4-2 | `scripts/claude/hooks/pretooluse_guard.py` | 最上位の包み・時間 20 秒／メモリ 512MB（`RLIMIT_DATA`）の上限・失敗は確認 |
-| 4-3 | `scripts/claude/hooks/pretooluse_guard.py` | `--no-verify` の停止・リモートブランチの削除の確認・ワークフロー／検査設定の Edit/Write の確認 |
+| 4-2 | `scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json` | 最上位の包み（例外は確認）・メモリ 512MB（`RLIMIT_DATA`）の上限。時間 20 秒と異常終了は公式の `timeout`＋`onFailure: "block"`（計画変更記録 1） |
+| 4-3 | `scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json` | `--no-verify` の停止・リモートブランチの削除の確認（見張り）。ワークフロー／検査設定／高リスクファイルの Edit/Write の確認は settings.json の `ask` へ移し、見張りの `_check_edit_write` を削除（計画変更記録 1） |
 | 4-4 | `scripts/claude/tests/test_i182_secret_gates.sh`（新規） | CI の detect-secrets が外されていないことのテスト（N・D・E 群も同じファイル） |
 | 4-9 | `.github/workflows/ci.yml`・`.github/workflows/e2e.yml` | 最上位に `permissions: contents: read`（/security-review で追加） |
 | 4-5 | `.claude/settings.json`・`scripts/claude/tests/test_settings_permissions.sh` | ask から rm・mv・cp・chmod・chown を外し allow へ |

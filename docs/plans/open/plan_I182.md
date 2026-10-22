@@ -80,7 +80,7 @@ GitHub から復旧できない操作だけを、単純で安い規則で止め�
 | 操作 | なぜ復旧できないか | 対策 |
 |------|-------------------|------|
 | 秘密情報を含むコミットの push | 公開リポジトリなので、push した時点で全世界に公開される。消しても複製・キャッシュが残る | ① push protection（GitHub が push を拒否。ユーザーが有効化）② 見張りが `git commit --no-verify`／`-n`・`git push --no-verify` を停止（4-3）③ CI の `Backend Lint & Security` の detect-secrets（既存の必須チェック。push 後の検出）④ 漏れたときの手順（4-6） |
-| ワークフロー（`.github/workflows/`）・秘密情報の検査設定（`.pre-commit-config.yaml`・`.secrets.baseline`）の書き換え | PR を出した時点で PR 側のワークフローが secrets（`E2E_TEST_PASSWORD`・`GITHUB_TOKEN`）付きで動く。検査設定を外すと CI の検出も効かなくなる | 見張りが Edit/Write を確認にする（4-3）・レビュー観点に追加（4-7）・CI の検査が外されていないことを決定論テストで守る（4-4） |
+| ワークフロー（`.github/workflows/`）・秘密情報の検査設定（`.pre-commit-config.yaml`・`.secrets.baseline`）の書き換え | PR を出した時点で PR 側のワークフローが secrets（`E2E_TEST_PASSWORD`・`GITHUB_TOKEN`）付きで動く。検査設定を外すと CI の検出も効かなくなる | settings.json の `ask`（公式の権限ルール・計画変更記録 1）で編集時に確認（4-3(c)）・レビュー観点に追加（4-7）・CI の検査が外されていないことを決定論テストで守る（4-4） |
 | ワークフローが実行するコード（`backend/` のテスト・`e2e/` のテスト・`package.json` の scripts・`manage.py` のコマンド 等）の変更（/security-review で追加） | ワークフローを書き換えなくても、PR 側のこれらのコードが CI の中で動き、そのジョブの `GITHUB_TOKEN` と（e2e では）`E2E_TEST_PASSWORD` に触れられる。`ci.yml`・`e2e.yml` には `permissions:` が無く、`GITHUB_TOKEN` の権限はリポジトリの既定（bot からは読めない）に任されている | ① `ci.yml`・`e2e.yml` の最上位に `permissions: contents: read` を書き、`GITHUB_TOKEN` を読み取りだけに絞る（4-9）② `E2E_TEST_PASSWORD` は E2E 用の試験アカウントのパスワード（`seed_e2e` で作る）で、ログでは GitHub が伏せ字にする→ 対応不要（セキュリティレビュー結果の「残余リスク処遇」で確定） |
 | リモートブランチの削除（`git push --delete`・`-d`・`<remote> :<ブランチ>`・`--prune`） | 手元に無い（別ワークツリー・別セッションの）ブランチの push 済みの作業は戻せない。PR も閉じる | 見張りが確認にする（4-3） |
 | イシュー・PR への書き込み（`gh issue edit --body-file` 等） | 公開されるが、bot 自身が編集・削除できる | 対策しない。書くのは Claude が書いた記録ファイルで、秘密情報を扱わない。同期の前の detect-secrets も足さない（費用に見合わない。必要になったら決定論ゲートとして別途足す） |
@@ -110,8 +110,16 @@ def base_rev(git) -> tuple:
 - `main()` の `if same and a.base == "HEAD":` の中身を `base_rev(git)` の呼び出しに置き換える。`git show <rev>:<GUARD_REL>` が失敗したら今までどおり SKIP。
 - `--base` を明示したときの動きは変えない。
 
-### 4-2. 見張りの失敗を確認に倒す（`pretooluse_guard.py`）
-**修正方針**: 見張り全体を最上位で包み、どこで失敗しても「確認」を返す。時間とメモリの上限を見張りの内側に設け、外からの時間切れ（素通りになる）より先に自分で打ち切る。値は定数にする。
+### 4-2. 見張りの失敗を素通りにしない（`pretooluse_guard.py`・`.claude/settings.json`）
+> **計画変更記録 1（2026-10-23・実装中・ユーザー指示「公式のツールをなるべく使う」）で下記に置き換えた**。時間の上限（自作の `SIGALRM`・`_GuardTimeout`）はやめ、公式のフック設定 `"timeout": 20` と `"onFailure": "block"`（Claude Code 2.1.295 以降・手元は 2.1.308）を、見張りを呼ぶ 3 つの PreToolUse フックすべてに付ける。時間切れ・起動失敗・異常終了（exit 0/2 以外）は公式の仕組みで**停止**になる。見張りの中は、①最上位の包み（例外は**確認**＝見張りの不具合で全操作が止まり Claude が見張りを直せなくなるのを避ける・理由は型名だけ）と、②メモリの上限（`RLIMIT_DATA` 512MB。公式に同等の機能が無い。超えると `MemoryError` → ①で確認）だけを持つ。下のコード例のうち `_GuardTimeout`・`_on_alarm`・`signal.alarm`・`_ask` 等の先頭の `signal.alarm(0)` は作らない。
+>
+> ```json
+> {"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py",
+>  "timeout": 20, "onFailure": "block"}
+> ```
+> - 見張りが起動できない（構文の誤り等）と、公式の仕組みで Edit も止まり、Claude が見張りを直せない。そのときはユーザーが端末で `! git restore scripts/claude/hooks/pretooluse_guard.py`（`!` はツールを通らないのでフックが動かない）を実行して戻す。手順を `danger-ops.md` に書く（4-6）。
+
+**修正方針（当初）**: 見張り全体を最上位で包み、どこで失敗しても「確認」を返す。時間とメモリの上限を見張りの内側に設け、外からの時間切れ（素通りになる）より先に自分で打ち切る。値は定数にする。
 
 ```python
 _TIME_LIMIT_SEC = 20                  # 見張りの所要時間の上限（計測の最大 1.59 秒の 10 倍以上）
@@ -213,6 +221,12 @@ def _push_deletes(args: list) -> bool:
 - 保護ブランチの削除（`:develop`）・`git push origin :`（全部）は既存の判定で停止のまま（確認に格下げしない。判定の順は危険操作が先）。
 
 (c) **ワークフロー・秘密情報の検査設定の Edit/Write の確認**:
+> **計画変更記録 1 で下記に置き換えた**。見張りの `SECRET_GATE_EDIT_PATTERNS` は作らず、公式の権限ルール（`.claude/settings.json` の `ask` に `Edit(...)`）で確認にする。`Edit(...)` は Edit・Write・NotebookEdit すべてに効き、auto mode・acceptEdits でも確認が出る（スパイクで確認）。同じ仕組みの既存の「高リスクファイルの編集の確認」（`HIGH_RISK_EDIT_PATTERNS`・`_check_edit_write`・`_repo_relative`）も同じ `ask` に移し、見張りから消す（見張りの Edit/Write の分岐は別ワークツリーへの書き込みの停止だけになる）。追加する `ask`:
+> `Edit(.github/workflows/**)`・`Edit(.pre-commit-config.yaml)`・`Edit(.secrets.baseline)`・`Edit(backend/Dockerfile)`・`Edit(backend/Dockerfile.dev)`・`Edit(frontend/Dockerfile)`・`Edit(frontend/Dockerfile.dev)`・`Edit(frontend/nginx.conf)`・`Edit(backend/requirements*.txt)`・`Edit(backend/pyproject.toml)`・`Edit(frontend/package.json)`・`Edit(frontend/package-lock.json)`・`Edit(**/migrations/*.py)`・`Edit(backend/init-db.sql)`
+> - 書き方は作業ディレクトリからの相対（先頭に `/` を付けない）。スパイクで `docs/spike_i182/**` は効き、`/docs/spike_i182/**`（`--settings` で渡した場合）は効かなかった。既存の deny（`**/.env` 等）と同じ書き方にそろえる。
+> - 失うもの: 確認の画面に出る理由の文言（公式の確認画面の文言になる）。得るもの: NotebookEdit も対象になる・自作の判定コードが減る。
+
+**当初の案**:
 ```python
 # PR を出した時点で secrets 付きで動くワークフローと、秘密情報の検査の設定（I182）。編集時に確認する
 SECRET_GATE_EDIT_PATTERNS = [
@@ -236,13 +250,14 @@ for pat in SECRET_GATE_EDIT_PATTERNS:
 **修正方針**: `ask` から `Bash(rm *)`・`Bash(mv *)`・`Bash(cp *)`・`Bash(chmod *)`・`Bash(chown *)` を外し、`allow` に移す（`ask` から外すだけだと、既定の権限確認が出て減らないため）。`ask` には `Bash(git rebase *)`・`Bash(psql *)` を残す。
 - `rm -r`／`rm -rf`・`find -delete`・`xargs rm`・`git reset --hard` は見張りが危険操作として止める（`DANGER_OK=1` で人の承認）ので、CLAUDE.md の絶対ルール 4 は崩れない。別ワークツリーへの書き込み（絶対パス）も見張りが止める。
 - 既存の allow `Bash(mv docs/*/open/* docs/*/closed/)`・`Bash(rm docs/*/open/*)` は `Bash(mv *)`・`Bash(rm *)` に含まれるので消す（重複の整理）。
+- （計画変更記録 1）見張りを呼ぶ 3 つの PreToolUse フックに `"timeout": 20`・`"onFailure": "block"` を付け、`ask` に 4-3(c) の `Edit(...)` 14 行を足す。`test_settings_permissions.sh` でこれも確かめる（TC S1・S13〜S15）。
 - `test_settings_permissions.sh` の期待を変える: `keep_ask = ["Bash(git rebase *)", "Bash(psql *)"]`・新しく `to_allow = ["Bash(rm *)", "Bash(mv *)", "Bash(cp *)", "Bash(chmod *)", "Bash(chown *)"]` が allow にあり ask に無いこと。S2 の注入を「`Bash(rm *)` を ask に戻すと不合格」「`Bash(psql *)` を ask から外すと不合格」に置き換える（TC S1〜S2b・既存の S3〜S12）。
 
 ### 4-6. 手順書（`docs/runbooks/danger-ops.md`）
 **修正方針**: 前提（復旧できる範囲）と漏れたときの手順を、ここに 1 か所でまとめる。
 - 新しい節「## GitHub から復旧できる範囲（I182）」: 「develop/main は GitHub 側で保護され bot はマージできないので、ローカルで壊しても GitHub から復旧できる。失いうるのは push していない手元の変更だけ」という前提と、**その例外**（4-0 の表を移す）を書く。
 - 新しい節「## 秘密情報を push してしまったとき（I182）」: 1) すぐにユーザーへ報告し、作業を止める 2) その鍵を発行元で無効化・再発行する（OpenAI・SendGrid は管理画面で失効、Django の `SECRET_KEY`・DB のパスワードは値を変えて `.env` と本番の設定を更新）。履歴を書き換えても公開は取り消せないので、無効化が先 3) その後でコミットから消す（push 前なら `git commit --amend`・未 push のコミットの作り直し。push 済みの書き換えは強制 push＝危険操作なので、計画書と承認で行う） 4) push protection に拒否されたとき（`GH013`・`push protection` の文言）は、拒否を回避しない（GitHub の「bypass」を使わない）。push 前なのでまだ公開されていない→ 該当のコミットから秘密情報を消してから push し直す。
-- 「見張りの扱い（I174）」の 2. に `git commit --no-verify`／`-n`・`git push --no-verify` を、3. に「リモートブランチの削除」と「`.github/workflows/`・`.pre-commit-config.yaml`・`.secrets.baseline` の編集」を足す。新しい箇条書き: 「見張りが判定中に失敗した・20 秒を超えた・メモリが 512MB を超えたときは、素通しにせず確認にする」。
+- 「見張りの扱い（I174）」の 2. に `git commit --no-verify`／`-n`・`git push --no-verify` を、3. に「リモートブランチの削除」と「`.github/workflows/`・`.pre-commit-config.yaml`・`.secrets.baseline` の編集」を足す。新しい箇条書き: 「見張りが判定中に失敗した・メモリが 512MB を超えたときは、素通しにせず確認にする。20 秒を超えた・起動できない・異常終了したときは、公式の `onFailure: "block"` で停止する。見張りが起動できず Edit まで止まったら、ユーザーが `! git restore scripts/claude/hooks/pretooluse_guard.py` で戻す」（計画変更記録 1）。3. の「`.github/workflows/`・`.pre-commit-config.yaml`・`.secrets.baseline` の編集」は、見張りではなく settings.json の `ask`（公式の権限ルール）で確認にすると書く。既存の高リスクファイル（Dockerfile・依存マニフェスト・マイグレーション 等）の編集の確認も同じく settings.json の `ask` に移ったと書く。
 - 「例」の Git の行に `git commit --no-verify`／`-n` を足す。
 
 ### 4-7. その他の文書
@@ -266,10 +281,10 @@ permissions:
 
 ## 5. 実装手順
 1. **ステップ 1: 記録突き合わせの比べる相手（4-1）** → TC B1〜B4・FG-B1・R3。後のステップで見張りを変えたときのゲート（`test_guard_corpus_diff.sh`）を正しく動かすため最初に行う。
-2. **ステップ 2: 見張りの失敗を確認に倒す（4-2）** → TC F1〜F6・FG-F1。ステップ 1 の後（ゲートで異常終了・新しい確認が増えないことを見る）。
-3. **ステップ 3: 見張りの規則の追加（4-3）とマトリクスの追加（4-7 の最後）** → TC N1〜N10・D1〜D7・E1〜E6・FG-N1・FG-D1・FG-E1・R1〜R6。ステップ 2 の後（同じファイルを変えるため順に行う）。
+2. **ステップ 2: 見張りの失敗を素通りにしない（4-2・計画変更記録 1）** → TC F1・F3〜F6・FG-F1・S13・手動 M6。ステップ 1 の後（ゲートで異常終了・新しい確認が増えないことを見る）。
+3. **ステップ 3: 見張りの規則の追加（4-3）とマトリクスの追加（4-7 の最後）** → TC N1〜N10・D1〜D7・FG-N1・FG-D1・R1〜R6（(c) は計画変更記録 1 でステップ 5 の settings.json に移した）。ステップ 2 の後（同じファイルを変えるため順に行う）。
 4. **ステップ 4: CI の検査のテスト（4-4）とワークフローの権限（4-9）** → TC C1〜C4・FG-C1〜FG-C4・R7。ステップ 1〜3 と並行して行ってよい。ワークフローの変更は push で CI が動くので、R7 はこのステップの push の後に見る。
-5. **ステップ 5: 確認待ちの削減（4-5）** → TC S1〜S12・手動 M3。ステップ 3 の後（危険な `rm` は見張りが止めることを先に確かめてから外す）。
+5. **ステップ 5: 確認待ちの削減と公式の確認ルール（4-5・4-3(c)）** → TC S1〜S15・E7・手動 M3。ステップ 3 の後（危険な `rm` は見張りが止めることを先に確かめてから外す）。
 6. **ステップ 6: 手順書・文書（4-6・4-7）** → TC DOC1〜DOC6・FG-DOC1・FG-DOC2・手動 M4・M5。ステップ 3・5 の後（書く内容が確定してから）。
 7. **ステップ 7: GitHub の設定の確認（4-8）** → 手動 M1・M2（Human）。push protection の有効化は承認時に依頼し、ここで結果を記録する。
 
@@ -288,6 +303,7 @@ permissions:
 |------|--------|
 | 見張りの新しい規則が、ふだんのコマンドを止める（例: `git commit -m "-n …"`） | `_commit_no_verify` は値を取るオプションの値を見ない（N4・N5）。記録突き合わせ（R3）で新しい確認・停止が記録の 1% を超えないことを見る |
 | 20 秒・512MB の上限に、ふだんのコマンドで当たる | 計測の最大の 10 倍以上の値。R3（2,939 件）で新しい確認が増えないことを見る |
+| 見張りが起動できない（構文の誤り等）と、公式の `onFailure: "block"` で Edit まで止まり、Claude が見張りを直せない（計画変更記録 1） | 見張りを変えたらコミットの前に R1〜R6 を流す（構文の誤りは R6 で見つかる）。それでも起きたら、ユーザーが `! git restore scripts/claude/hooks/pretooluse_guard.py` で戻す（`danger-ops.md`） |
 | `RLIMIT_DATA` が環境によって効かない・設定できない | 設定に失敗したら上限なしで続ける（今と同じ）。時間の上限と最上位の包みは別に効く |
 | `rm *` を allow にして、ローカルの未コミットの作業を消す | `rm -r` 系は見張りが止める。単発の `rm` で消えるのは「push していない手元の変更」だけで、前提（復旧できる範囲）の内側。こまめな commit・push（`worktree.md`）で小さくする |
 | Bash（`sed -i`・`cat >`）でワークフローを書き換える | 対象外（意図的な回避・脅威モデルは事故）として記録。レビュー観点（4-7）で PR 前に見る |
@@ -311,6 +327,14 @@ permissions:
   - Warning 1（`_commit_no_verify` の `-a -n`）: 計画のコードでは `-a` で 1 つだけ進むため見逃さない（指摘の「2 増加」は for-else 後の `continue` を読み違えたもの）が、`i` を進める場所を 1 か所にまとめて読みやすくし、TC N10（`git commit -a -n -m x` → 2）を追加した。Info（冗長な `continue`）も同じ修正で解消
   - Warning 2（FG-N1 が 1 回だけの記録）: スクリプト内で毎回、複製から規則を外して N・D・E が不合格になることを確かめる形（FG-N1・FG-D1・FG-E1）に変更した
   - 高リスク判定 Yes（見張りの最上位の包み直し）: `/security-review I182` を実行してから `/implement` に進む
+
+## 計画変更記録
+- **計画変更記録 1（2026-10-23・実装中・ステップ 1 の後）**: ユーザー指示「今回の修正に関係するもので、Claude が公式のツールを提供しているのに自作で行っているものは、なるべく公式のツールに合わせて直す」。公式文書（hooks・permissions・permission-modes・sandboxing）を調べ、スパイクで確かめた結果:
+  - **フックの時間切れ・異常終了**: 公式の `onFailure: "block"` で停止になる（スパイク: 30 秒眠るフック〔`timeout: 3`〕と例外で落ちるフックを `claude -p --settings` で付けると、`onFailure` なしは `ls` が素通りで実行され、`"block"` ありは「timed out; blocking because onFailure is "block"」「failed; blocking because onFailure is "block"」で止まった）。→ 自作の時間の上限（`SIGALRM`）をやめ、公式の `timeout: 20`＋`onFailure: "block"` にする。時間切れは確認ではなく停止になる（公式どおり）。
+  - **編集時の確認**: 公式の `ask` の `Edit(...)` は Write にも効き、acceptEdits でも確認が出る（スパイク: `ask: Edit(docs/spike_i182/**)` で Write が「requested permissions … you haven't granted it yet」で止まり、acceptEdits でもファイルは作られなかった。対照の設定なしは作られた）。→ ワークフロー・検査設定の確認（4-3(c)）と、既存の高リスクファイルの確認（`HIGH_RISK_EDIT_PATTERNS`）を settings.json の `ask` に移し、見張りから消す。
+  - **見張りに残すもの**（公式に同等の機能が無い、または公式文書が不向きと書いている）: `--no-verify` の停止・リモートブランチの削除の確認（公式の Bash ルールは「引数を絞る形は壊れやすい」と書かれ、`bash -c`・`git -c … commit`・`-an` のまとめ書きを拾えない）・メモリの上限（`RLIMIT_DATA`）・最上位の包み（例外は確認。公式の停止に任せると、見張りの不具合で Edit も止まり Claude が直せなくなるため）。
+  - **採らないもの**: 公式のサンドボックス（`sandbox.*`）。Bash の書き込み先・通信先を OS で絞る仕組みで、push の中身（秘密情報）は見ない。見張りの別ワークツリーへの書き込みの判定などを置き換えられる可能性はあるが、Docker・別ワークツリーの運用への影響が大きく、本イシューの範囲を超える。
+  - 同時に更新: イシュー本文（解決方針・実装対象・受け入れ条件）・自動テスト（F2 を削除し S13〜S15・E7 を追加・E 群と FG-E1 を settings の検査に置き換え）・手動テスト（M3 に Write の確認・M6 を追加）・レビュー文書。計画を変えたので `/code-review` の前に `/plan-issue-review` を行う。
 
 ## セキュリティレビュー結果
 
