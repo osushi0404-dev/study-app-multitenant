@@ -7,6 +7,7 @@ import json
 import os
 import posixpath
 import re
+import resource
 import shlex
 import subprocess
 import sys
@@ -3522,5 +3523,33 @@ def main():
 
     sys.exit(0)
 
+# --- 見張りの失敗を素通しにしない（I182 plan_I182.md 4-2） ---
+# 時間切れ・起動失敗・異常終了（exit 0/2 以外）は、settings.json のフック設定（"timeout": 20・"onFailure": "block"）で
+# Claude Code が止める（公式の仕組み）。ここでは、公式に同等の機能が無いメモリの上限と、例外を確認に倒す包みだけを持つ。
+_MEM_LIMIT_BYTES = 512 * 1024 * 1024  # データ領域の上限（計測の最大 41MB の 10 倍以上）
+
+def _install_limits():
+    try:
+        # RLIMIT_AS は見張りが呼ぶ gh（Go）が起動できなくなるので使わない（plan_I182.md 調査結果のスパイク）
+        _, hard = resource.getrlimit(resource.RLIMIT_DATA)
+        resource.setrlimit(resource.RLIMIT_DATA, (_MEM_LIMIT_BYTES, hard))
+    except (ValueError, OSError):
+        pass
+
+def _fail_safe(e: BaseException):
+    """判定中の例外を確認にする。理由は型名だけ（例外のメッセージにはコマンドの中身＝秘密情報が入りうる）。
+    停止にしないのは、見張りの不具合で Edit まで止まり、Claude が見張りを直せなくなるのを避けるため。"""
+    if isinstance(e, MemoryError):
+        why = f"メモリの上限（{_MEM_LIMIT_BYTES // 1024 // 1024}MB）を超えた"
+    else:
+        why = f"判定中に失敗した（{type(e).__name__}）"
+    _ask(f"見張りが{why}ため、判定できませんでした。内容を確認してください。")
+
 if __name__ == "__main__":
-    main()
+    _install_limits()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException as e:   # 例外・メモリ不足を素通し（exit 0/2 以外）にしない
+        _fail_safe(e)

@@ -32,6 +32,13 @@ for h in pre:
             if x.get("type") != "command" or not x.get("command", "").startswith("python3 ") \
                     or "pretooluse_guard.py" not in x.get("command", ""):
                 errs.append(f"Bash のフックが guard を正しく呼んでいない: {x}")
+# I182（計画変更記録 1）: 見張りの時間切れ・起動失敗・異常終了は、公式の onFailure で止める（素通しにしない）
+guard_hooks = [x for h in pre for x in h.get("hooks", []) if "pretooluse_guard.py" in x.get("command", "")]
+if len(guard_hooks) != 3:
+    errs.append(f"見張りを呼ぶ PreToolUse フックが 3 つでない: {len(guard_hooks)}")
+for x in guard_hooks:
+    if x.get("timeout") != 20 or x.get("onFailure") != "block":
+        errs.append(f"見張りのフックに timeout 20 / onFailure block が無い: {x}")
 for wide in ("Bash(*)", "Bash", "Bash(docker *)", "Bash(docker compose *)", "Bash(docker-compose *)"):
     if wide in allow:
         errs.append(f"allow に広すぎる {wide} がある")
@@ -104,6 +111,12 @@ for h in d["hooks"]["PreToolUse"]:
     if h.get("matcher") == "Bash":
         h["hooks"].append({"type": "command", "command": "true # pretooluse_guard.py"})
 json.dump(d, open(f"{tmp}/neutered_hook.json", "w", encoding="utf-8"))
+d = copy.deepcopy(base)
+d["hooks"]["PreToolUse"][1]["hooks"][0].pop("onFailure", None)
+json.dump(d, open(f"{tmp}/no_onfailure.json", "w", encoding="utf-8"))
+d = copy.deepcopy(base)
+d["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] = 600
+json.dump(d, open(f"{tmp}/long_timeout.json", "w", encoding="utf-8"))
 PY
 ck "S2 rm を ask から allow へ移すと不合格"   1 "$(run_check "$TMP/rm_to_allow.json")"
 ck "S3 exec の ask を戻すと不合格"            1 "$(run_check "$TMP/exec_back.json")"
@@ -116,6 +129,8 @@ ck "S9 Bash のフック登録を消すと不合格"      1 "$(run_check "$TMP/d
 ck "S10 hooks を丸ごと消すと不合格"          1 "$(run_check "$TMP/drop_all_hooks.json")"
 ck "S11 disableAllHooks を足すと不合格"      1 "$(run_check "$TMP/disable_all_hooks.json")"
 ck "S12 guard を呼ばないフックを足すと不合格" 1 "$(run_check "$TMP/neutered_hook.json")"
+ck "S13a 見張りのフックの onFailure を消すと不合格" 1 "$(run_check "$TMP/no_onfailure.json")"
+ck "S13b 見張りのフックの timeout を 600 にすると不合格" 1 "$(run_check "$TMP/long_timeout.json")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
