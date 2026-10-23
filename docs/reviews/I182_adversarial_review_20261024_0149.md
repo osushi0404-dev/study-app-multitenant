@@ -26,6 +26,12 @@
 | Low | `pre-commit/action@v3.0.1` と pre-commit の `rev` が SHA で固定されていない | — | 見送り: 今回の差分の外（以前からの設定）。`permissions: contents: read` で被害は小さい |
 | Low | `dependency-audit.yml` の `issues: write` がワークフロー全体に付いている | — | 見送り: 今回の差分の外。`ref: develop` 固定で PR から悪用する経路は無い |
 
+### 見送った Low の処遇（2026-10-24 ユーザー判断で確定）
+判断基準: ループエンジニアリング・ハーネスエンジニアリングのベストプラクティス、かつサクサク進める。
+- `--no-verif`: 対応しない。見張りの守る範囲は「普通の書き方の事故」で、省略形まで足すと文字列の判定を作り込み続けることになる（I179 の教訓）。後ろに push protection と CI の detect-secrets が残る
+- `.gitignore` の `.env` 除外: 対応しない。消しても `.env` の鍵は手元の detect-secrets・push protection・CI の detect-secrets の 3 段で捕まる。編集のたびの確認は手間に見合わない
+- `pre-commit/action` の SHA 固定・`dependency-audit.yml` の `issues: write` の絞り込み: I152（#268）に同梱（同じ 2 つのワークフローを作り直すイシューのため。新しいイシューは立てない）
+
 ### 修正の確認（決定論）
 - `test_i182_secret_gates.sh`: pass=54 fail=0（N11〜N13・FG-C5 8 件を含む）
 - 見張りの回帰: matrix pass=391・oracle 見逃し=0／余計な停止=0・corpus_diff 新しく確認・停止 0 件・push_guard pass=185・failsafe pass=12・docs pass=9
