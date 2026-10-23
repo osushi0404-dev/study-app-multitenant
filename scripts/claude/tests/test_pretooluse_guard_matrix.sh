@@ -30,6 +30,10 @@ OPS=(
   "ASK|cat backend/.env"
   "ASK|printenv"
   "ASK|docker compose exec -T backend python manage.py shell -c \"from django.core.mail import send_mail; send_mail(1,2,3,[4])\""
+  # I182: 秘密情報の検査を飛ばすコミット（停止）・リモートブランチの削除（確認）
+  "2|git commit --no-verify -m wip"
+  "2|git commit -anm wip"
+  "ASK|git push origin --delete feature/old"
 )
 # 書き方（@@ が操作に置き換わる）
 TPLS=(

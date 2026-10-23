@@ -7,6 +7,7 @@ import json
 import os
 import posixpath
 import re
+import resource
 import shlex
 import subprocess
 import sys
@@ -543,6 +544,44 @@ def _push_positionals(after):
             out.append(a)
     return out
 
+def _push_deletes(args: list) -> bool:
+    """git push がリモートのブランチを消す形（--delete・-d・--prune・<remote> :<ブランチ>）なら True（I182）。"""
+    if "--delete" in args or "--prune" in args or _has_short([a for a in args if not a.startswith("--")], "d"):
+        return True
+    return any(r.lstrip("+").startswith(":") and r.lstrip("+") != ":" for r in _push_positionals(args)[1:])
+
+# --- git commit --no-verify / -n（秘密情報の検査〔pre-commit〕を飛ばす）の判定（I182） ---
+_COMMIT_VALUE_SHORT = "mFCct"    # git commit で値を取る短いオプション（-m msg・-F file・-C/-c commit・-t file）
+_COMMIT_OPTVAL_SHORT = "Su"      # 値を省略できる短いオプション（-S<keyid>・-u<mode>）: くっつけた分だけが値で、次の語は値にしない
+_COMMIT_VALUE_LONG = ("--message", "--file", "--reuse-message", "--reedit-message", "--author", "--date",
+                      "--template", "--fixup", "--squash", "--trailer", "--cleanup", "--pathspec-from-file")
+
+def _commit_no_verify(args: list) -> bool:
+    """git commit の引数に --no-verify / -n（まとめた短縮形 -an も）があれば True。値（-m の本文など）は見ない。"""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            return False
+        if a == "--no-verify":
+            return True
+        if a in _COMMIT_VALUE_LONG:
+            i += 2
+            continue
+        step = 1
+        if a.startswith("-") and not a.startswith("--") and len(a) > 1:
+            for k, ch in enumerate(a[1:], 1):
+                if ch == "n":
+                    return True
+                if ch in _COMMIT_OPTVAL_SHORT:
+                    break                # 残りは値（-uno の n は -n ではない）。次の語は 1 語として見る
+                if ch in _COMMIT_VALUE_SHORT:
+                    # getopt と同じ: 値を取る文字の後ろに文字が残ればそれが値、残らなければ次の語が値
+                    step = 1 if k < len(a) - 1 else 2
+                    break
+        i += step                        # 進めるのはここ 1 か所だけ（-a -n のように分けて書いた形も 1 語ずつ見る）
+    return False
+
 def _push_protected_target(cmd: str, ambiguous: bool = False):
     """git push が protected ブランチを名前/refspec で宛先にするなら宛先名を返す。非該当は None。
     複合コマンドは _segments(I081)で分割して各セグメントを判定。宛先が今のブランチで決まる形は、
@@ -638,37 +677,6 @@ def _push_is_dynamic(cmd: str) -> bool:
     # sh -c・bash -lc・ヒアドキュメント・xargs / parallel の中の push は、_analyze が読み解いた単純コマンドごとに
     # 判定する（"push_dynamic"）。文字列の一致で判定すると `xargs grep "git push"` まで確認になる（I174 第 3 周）
     return False
-
-# 高リスク Edit/Write パス（リポジトリルート相対で照合）。
-# 価値判断寄り（依存/スキーマ/インフラ）のため、編集時に ask（プロンプト）を出す。
-# 注: ハードブロック(exit 2)ではなく ask。承認すれば編集可（I079 案D）。
-HIGH_RISK_EDIT_PATTERNS = [
-    r"(?:^|/)(?:backend|frontend)/Dockerfile(?:\.dev)?$",   # コンテナ定義
-    r"(?:^|/)frontend/nginx\.conf$",                        # 配信設定
-    r"(?:^|/)backend/requirements[^/]*\.txt$",              # 依存マニフェスト
-    r"(?:^|/)backend/pyproject\.toml$",                     # 依存/ビルド設定
-    r"(?:^|/)frontend/package(?:-lock)?\.json$",            # 依存/ロックファイル
-    r"(?:^|/)[^/]+/migrations/[^/]*\.py$",                  # DBマイグレーション(手書き)
-    r"(?:^|/)backend/init-db\.sql$",                        # DB初期化SQL
-]
-
-def _repo_relative(path: str) -> str:
-    """file_path を可能ならリポジトリルート相対に正規化する（絶対/相対・`./`・OS差を吸収）。"""
-    p = path.replace("\\", "/")
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True
-        )
-        if r.returncode == 0:
-            root = r.stdout.strip().replace("\\", "/")
-            if root and p.startswith(root + "/"):
-                p = p[len(root) + 1:]
-    except Exception:
-        pass  # git 不在環境では生のパスで照合
-    while p.startswith("./"):
-        p = p[2:]
-    return p
 
 # --- worktree 横断書込のブロック（I095） ---
 # 別トラック（別 worktree）の作業ツリーへの直接書込を技術強制で禁止する（worktree.md §9）。
@@ -852,18 +860,6 @@ def _ask(reason: str):
             "permissionDecisionReason": reason,
         }
     }))
-    sys.exit(0)
-
-def _check_edit_write(data: dict):
-    """Edit/Write の対象が高リスクパスなら ask を返す。非該当は素通り(exit 0)。"""
-    tool_input = data.get("tool_input") or {}
-    path = tool_input.get("file_path") or ""
-    if not isinstance(path, str) or not path.strip():
-        sys.exit(0)
-    rel = _repo_relative(path)
-    for pat in HIGH_RISK_EDIT_PATTERNS:
-        if re.search(pat, rel):
-            _ask(f"高リスクファイル（依存/スキーマ/インフラ）の編集です。確認してください: {rel}")
     sys.exit(0)
 
 # --- I174: 危険操作・外部送信・秘密情報・コンテナ内操作の判定 ---
@@ -2115,6 +2111,13 @@ def _cmd_danger(c: dict) -> list:
                          f"(release/hotfix は計画書明記＋danger-approved＋DANGER_OK=1 のみ)")
             if _push_has_force(seg):
                 r.append("force push requires DANGER_OK=1")
+            if "--no-verify" in args:
+                r.append("git push --no-verify requires DANGER_OK=1")
+            if _push_deletes(args):
+                # 確認にする理由（_analyze が "remote_ask" に集める）。手元に無いブランチの push 済みの作業は戻せない
+                c["remote_ask"] = "リモートブランチの削除（git push --delete / -d / :<ブランチ> / --prune）"
+        if sub == "commit" and _commit_no_verify(args):
+            r.append("秘密情報の検査（pre-commit）を飛ばす git commit --no-verify / -n requires DANGER_OK=1")
         # -d / -x が無くても、追跡済みのディレクトリの中の追跡されていないファイル（未コミットの記録等）は消える
         if sub == "clean" and _has_short(args, "f", "--force") and not _has_short(args, "n", "--dry-run"):
             r.append("追跡されていないファイルの削除（git clean -f）requires DANGER_OK=1")
@@ -2384,7 +2387,7 @@ def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
     res = {"hard": "", "danger": [], "external": [], "container": [], "unsure": [], "push_dynamic": [],
-           "git_unsure": []}
+           "git_unsure": [], "remote_ask": []}
     # git を実行する場所が 1 つに決まるか（I174 0-15）。決まらなければ、場所に依存する git の判定は確認にする
     amb = _loc_ambiguous(text, cmds)
     cd = None
@@ -2407,13 +2410,15 @@ def _analyze(text: str) -> dict:
         d, e = _cmd_danger(c), _cmd_external(c)
         if c.get("git_ask"):
             res["git_unsure"].append(c["git_ask"])
+        if c.get("remote_ask"):
+            res["remote_ask"].append(c["remote_ask"])
         res["danger"] += d
         res["external"] += e
         if c["compose"] and not d and not e and not _container_safe(c):
             res["container"].append(_describe(c))
         if c["note"] == "引用符が閉じていない":
             res["unsure"].append("引用符が閉じていない")   # 読み取りが代替経路に落ちた（0-13: 素通しにしない）
-    for k in ("danger", "external", "container", "unsure", "push_dynamic", "git_unsure"):
+    for k in ("danger", "external", "container", "unsure", "push_dynamic", "git_unsure", "remote_ask"):
         res[k] = list(dict.fromkeys(res[k]))
     return res
 
@@ -2429,7 +2434,8 @@ def _sn_judge(seg: list, cds: tuple = ()) -> dict:
     引用符の中の $( )・`...`・ヒアドキュメントを含むコマンドは、組み直すと意味が変わる（中身が見えない扱いになる）うえ、
     精密判定が中身を読んで判定済みなので、かけ直さない。"""
     if any("$(" in t or "`" in t or "__HEREDOC_" in t for t in seg):
-        return {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": []}
+        return {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": [],
+                "remote_ask": []}
     # 手前の cd を付けて、git の場所の判定に引き継ぐ（場所が 1 つに決まらなければ _analyze が確認側に倒す）
     # `&&` でつなぐ（`;` だと、組み立て直した文字列が「cd が条件付き」の形に見えて余計な確認になる）
     return _analyze(" && ".join([shlex.join(c) for c in cds] + [shlex.join(seg)]))
@@ -2451,7 +2457,8 @@ def _safety_net(text: str) -> dict:
     except ValueError:
         toks = body.split()
     # git_unsure / push_dynamic（確認）も集める。捨てると、確認に回した形が安全網の経路で素通しになる（I174 0-15）
-    res, i, at_cmd = {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": []}, 0, True
+    res, i, at_cmd = {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": [],
+                      "remote_ask": []}, 0, True
     cds = []
     while i < len(toks):
         t = toks[i]
@@ -2489,11 +2496,11 @@ def _safety_net(text: str) -> dict:
             cds.append(toks[i:j])
         an = _sn_judge(toks[i:j], tuple(cds))
         res["hard"] = res["hard"] or an["hard"]
-        for k in ("danger", "external", "container", "git_unsure", "push_dynamic"):
+        for k in ("danger", "external", "container", "git_unsure", "push_dynamic", "remote_ask"):
             res[k] += an.get(k, [])
         at_cmd = False
         i += 1
-    for k in ("danger", "external", "container", "git_unsure", "push_dynamic"):
+    for k in ("danger", "external", "container", "git_unsure", "push_dynamic", "remote_ask"):
         res[k] = list(dict.fromkeys(res[k]))
     return res
 
@@ -3420,8 +3427,8 @@ def main():
         x = _cross_worktree(path) if path else None
         if x is True or x is None:
             _block_cross_worktree("編集", path)
-        if tool_name in ("Edit", "Write"):
-            _check_edit_write(data)  # 既存の高リスク ask は Edit/Write のみ（現状維持）
+        # I182: 高リスクファイル・ワークフロー・秘密情報の検査設定の編集の確認は、settings.json の ask（公式の権限ルール
+        # Edit(...)。Edit・Write・NotebookEdit すべてに効く）で行う。見張りは別 worktree への書込の停止だけを行う
         sys.exit(0)
     # I146: MCP 経由の PR 取り込み操作（Bash を通らない経路）
     if str(tool_name or "").startswith("mcp__github__"):
@@ -3497,6 +3504,9 @@ def main():
     # I174 0-15: 場所・対象が 1 つに決まらない、未コミットの変更を消しうる git の操作は確認
     if an["git_unsure"]:
         _ask("未コミットの変更を消すかもしれない git の操作です（" + " / ".join(an["git_unsure"]) + "）。確認してください。")
+    # I182: リモートブランチの削除は、手元に無いブランチの push 済みの作業を戻せないことがあるので確認
+    if an["remote_ask"]:
+        _ask("GitHub から戻せないことがある操作です（" + " / ".join(an["remote_ask"]) + "）。確認してください。")
     if an["push_dynamic"] or _push_is_dynamic(
             _norm(re.sub(r"__HEREDOC_\d+__", " ", _strip_comments(_cut_heredocs(pcmd))).replace("\n", " ; "))):
         _ask("動的・不透明な宛先の push です。protected ブランチに解決し得るため確認してください。")
@@ -3513,14 +3523,43 @@ def main():
         if danger_ok:
             _ask("DANGER_OK=1 付きの危険操作です。内容を確認して承認してください: " + " / ".join(net["danger"]))
         _block(net["danger"][0], raw)
-    if net["external"] or net["container"] or net["git_unsure"] or net["push_dynamic"]:
+    if net["external"] or net["container"] or net["git_unsure"] or net["push_dynamic"] or net["remote_ask"]:
         _ask("見張りが読み落としかけた書き方の中に、確認が必要な操作があります: "
-             + " / ".join(net["external"] + net["container"] + net["git_unsure"] + net["push_dynamic"]))
+             + " / ".join(net["external"] + net["container"] + net["git_unsure"] + net["push_dynamic"]
+                          + net["remote_ask"]))
     # I174 0-13: 読み取りが代替経路に落ちた形（引用符が閉じていない等）は、何も見つからなくても確認にする
     if an["unsure"]:
         _ask("見張りがコマンドを読みきれませんでした（" + " / ".join(an["unsure"]) + "）。確認してください。")
 
     sys.exit(0)
 
+# --- 見張りの失敗を素通しにしない（I182 plan_I182.md 4-2） ---
+# 時間切れ・起動失敗・異常終了（exit 0/2 以外）は、settings.json のフック設定（"timeout": 20・"onFailure": "block"）で
+# Claude Code が止める（公式の仕組み）。ここでは、公式に同等の機能が無いメモリの上限と、例外を確認に倒す包みだけを持つ。
+_MEM_LIMIT_BYTES = 512 * 1024 * 1024  # データ領域の上限（計測の最大 41MB の 10 倍以上）
+
+def _install_limits():
+    try:
+        # RLIMIT_AS は見張りが呼ぶ gh（Go）が起動できなくなるので使わない（plan_I182.md 調査結果のスパイク）
+        _, hard = resource.getrlimit(resource.RLIMIT_DATA)
+        resource.setrlimit(resource.RLIMIT_DATA, (_MEM_LIMIT_BYTES, hard))
+    except (ValueError, OSError):
+        pass
+
+def _fail_safe(e: BaseException):
+    """判定中の例外を確認にする。理由は型名だけ（例外のメッセージにはコマンドの中身＝秘密情報が入りうる）。
+    停止にしないのは、見張りの不具合で Edit まで止まり、Claude が見張りを直せなくなるのを避けるため。"""
+    if isinstance(e, MemoryError):
+        why = f"メモリの上限（{_MEM_LIMIT_BYTES // 1024 // 1024}MB）を超えた"
+    else:
+        why = f"判定中に失敗した（{type(e).__name__}）"
+    _ask(f"見張りが{why}ため、判定できませんでした。内容を確認してください。")
+
 if __name__ == "__main__":
-    main()
+    _install_limits()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException as e:   # 例外・メモリ不足を素通し（exit 0/2 以外）にしない
+        _fail_safe(e)

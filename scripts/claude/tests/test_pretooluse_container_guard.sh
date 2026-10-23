@@ -665,7 +665,7 @@ ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---
 # D / X / C は安全網（0-12）も外す（外さないと、外した判定を安全網が確認として拾い直すため。それは G11〜G13 で確かめる）
-NO_NET='s/net = _safety_net(pcmd)/net = {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": []}/'
+NO_NET='s/net = _safety_net(pcmd)/net = {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": [], "remote_ask": []}/'
 BROKEN_D="$TMP/guard_no_danger.py"
 sed -e 's/reasons += _analyze(pcmd)\["danger"\]/pass/' -e "$NO_NET" "$GUARD" > "$BROKEN_D"
 BROKEN_X="$TMP/guard_no_external.py"
