@@ -35,6 +35,7 @@
 - 自動: TC-01〜TC-07 **全 PASS**（2026-10-23）。pip-audit 0 件・コンテナの版 3.18.2・pytest 103 passed（ベースライン同数）・pip check 整合・マイグレーション差分なし。
 - 手動: M1/M2 は push 後の CI で確認（未実施）。M3 は I182 側の作業（対象外）。
 - code review: VERDICT OK・高リスク No（Low 1 件＝M1/M2 の実結果欄が空白・/test で記録するフロー上の正常状態）。
+  - 注記（/retro I183 の是正 C1）: code-review.sh の CI 待機は 600 秒で時間切れ（E2E 10m55s）になり、CI 未完了のまま `FINAL_VERDICT: OK` を出力した。CI はその後 `gh pr checks 310` で全 6 チェック pass を手動確認済み。ゲートの fail-closed 化は I160（#278）に同梱。
 - /test（2026-10-24）: 自動 TC-01〜TC-07 全 PASS（実装時と同値）。手動 M1 OK（PR #310 の全 6 チェック pass・E2E 9m59s）・M2 OK（CI の pip-audit 出力 `No known vulnerabilities found`）。Human 実施項目なし。
 
 ## 計画との差分
