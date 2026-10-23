@@ -14,7 +14,8 @@
   - B1 の修正前（旧ロジック）は FG-B1 で c1 を選ぶ＝誤不合格を再現することを確認。R3 は修正前 FAIL（99 件）→ 修正後 OK
   - 計画変更記録 2: R5 の container_guard が一時 fail=6（安全網の差し替え値に `remote_ask` が無く KeyError → 包みで ASK）。差し替え値を合わせて fail=0
   - R7: ステップ 6 の push（7feff4f）の CI で、`gh pr checks 308 --required` の必須 5 件がすべて pass（CI run 39812749694）。必須ではない `E2E Tests (Playwright)` も成功（run 39812749726）＝`permissions: contents: read` で CI・E2E とも壊れていない
-- 実装後: （/test で記入）
+- 実装後（2026-10-24・/test・敵対的レビューの修正 a843b9f の後）: corpus_base pass=5・guard_failsafe pass=12・secret_gates pass=54（N1〜N13・D1〜D7・FG-N1・FG-D1・E7・C1〜C4・FG-C1〜FG-C5）・settings_permissions pass=18・docs pass=9・R1 cases=4560 見逃し=0／余計な停止=0・R2 pass=391・R3 OK（新しく確認・停止 0 件・差し引き +0）・R4 pass=185・R5 checkout 140／container 769／gh_pr 247／worktree 127・R6 exit 0。すべて fail=0
+  - R7: c73e317 の CI（run 39991410014・E2E run 39991410626）で 6 件すべて pass（必須 5 件＋E2E）
 
 ## ベースライン（実装前・2026-10-22）
 | テスト | 結果 |

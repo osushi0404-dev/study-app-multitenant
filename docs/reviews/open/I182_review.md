@@ -29,5 +29,9 @@
 - ユーザー判断: 別イシュー（track:app）で DRF を 3.18.2 に更新して先にマージし、I182 はそれを取り込んで CI を緑にしてから `/code-review I182` をやり直す。起票コマンドは `/issue-bootstrap djangorestframework を 3.18.0 から 3.18.2 に更新する — …（track:app）`。
 - 根本の是正（既存の脆弱性で無関係な PR が全面停止しない PR ゲート）は I152（#268）。
 
+## /code-review のやり直し（2026-10-24）
+- I183（PR #310）マージ後に develop を取り込み（d5934f4）、CI 6 件すべて pass。基本レビュー OK（`docs/reviews/I182_code_review_20261024_0134.md`・高リスク YES）
+- 敵対的レビュー（Actions・秘密情報の範囲だけ・1 周・3 体）: High 1・Medium 3 を修正（a843b9f）、Low 4 は処遇を確定（2 件は I152 に同梱・c73e317）。`docs/reviews/I182_adversarial_review_20261024_0149.md`・VERDICT: OK
+
 ## 実装後評価
-（/code-review・/test の後に記入）
+- /test（2026-10-24）: 自動テストはすべて fail=0（内訳は `docs/tests/open/I182_auto_test.md`「実装後」）・c73e317 の CI 6 件 pass。手動の Claude 実施分（No.3・3b・4・5・6）はすべて OK。Human 実施分（No.1・2）はユーザー確認待ち
