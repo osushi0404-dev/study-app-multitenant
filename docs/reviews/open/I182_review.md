@@ -34,4 +34,5 @@
 - 敵対的レビュー（Actions・秘密情報の範囲だけ・1 周・3 体）: High 1・Medium 3 を修正（a843b9f）、Low 4 は処遇を確定（2 件は I152 に同梱・c73e317）。`docs/reviews/I182_adversarial_review_20261024_0149.md`・VERDICT: OK
 
 ## 実装後評価
-- /test（2026-10-24）: 自動テストはすべて fail=0（内訳は `docs/tests/open/I182_auto_test.md`「実装後」）・c73e317 の CI 6 件 pass。手動の Claude 実施分（No.3・3b・4・5・6）はすべて OK。Human 実施分（No.1・2）はユーザー確認待ち
+- /test（2026-10-24）: 自動テストはすべて fail=0（内訳は `docs/tests/open/I182_auto_test.md`「実装後」）・c73e317 の CI 6 件 pass。手動の Claude 実施分（No.3・3b・4・5・6）はすべて OK。No.2 は `gh pr checks 308 --required` で代替確認し OK。No.1 は画面確認で Push protection が Off と判明（10-23 の有効化は Secret Protection までだった）→ ユーザーがオンにして再確認し OK。手動テストの結論 OK
+- /retro の材料: 10-23 の「有効化を実施」をユーザー報告だけで ✅ にしており、Push protection の状態を画面で見ていなかった（/test の再確認で発見）
