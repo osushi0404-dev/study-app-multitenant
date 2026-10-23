@@ -322,9 +322,9 @@ permissions:
 - **計画時の変更 3（2026-10-23・/security-review）**: ワークフローを書き換えなくても、PR 側のテスト・スクリプトが CI の中で `GITHUB_TOKEN` に触れられることが分かったため、`ci.yml`・`e2e.yml` の最上位に `permissions: contents: read` を足す（4-9・TC C4・FG-C4・R7）。4-0 の表に 1 行を足し、イシュー本文・テスト文書・レビュー文書も同時に更新した。`.github/workflows/` を変えるので、Actions に関わる範囲の敵対的レビュー（1 周・時間上限付き）の対象に入る。
 
 ## レビュー結果
-- [20261023_0615 判定: ✅ 完了](../../reviews/I182_plan_review_20261023_0615.md)
-- [20261023_0036 判定: ✅ 完了](../../reviews/I182_plan_review_20261023_0036.md)
-- [20261022_2231 判定: ✅ 完了](../../reviews/I182_plan_review_20261022_2231.md)
+- [20261023_0615 判定: ✅ 完了](../../reviews/closed/I182_plan_review_20261023_0615.md)
+- [20261023_0036 判定: ✅ 完了](../../reviews/closed/I182_plan_review_20261023_0036.md)
+- [20261022_2231 判定: ✅ 完了](../../reviews/closed/I182_plan_review_20261022_2231.md)
   - Warning 1（`_commit_no_verify` の `-a -n`）: 計画のコードでは `-a` で 1 つだけ進むため見逃さない（指摘の「2 増加」は for-else 後の `continue` を読み違えたもの）が、`i` を進める場所を 1 か所にまとめて読みやすくし、TC N10（`git commit -a -n -m x` → 2）を追加した。Info（冗長な `continue`）も同じ修正で解消
   - Warning 2（FG-N1 が 1 回だけの記録）: スクリプト内で毎回、複製から規則を外して N・D・E が不合格になることを確かめる形（FG-N1・FG-D1・FG-E1）に変更した
   - 高リスク判定 Yes（見張りの最上位の包み直し）: `/security-review I182` を実行してから `/implement` に進む
