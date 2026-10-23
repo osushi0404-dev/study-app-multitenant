@@ -15,6 +15,9 @@
   - TC-05: exit 0・**103 passed**, 5 warnings（19.96s・ベースラインと同数）。警告は `imghdr` 非推奨 1 件と DRF pagination の `UnorderedObjectListWarning` 4 件（Subject の並び順未指定・既存）
   - TC-06: exit 0・`No broken requirements found.`
   - TC-07: exit 0・`No changes detected`
+- **/test 再実行（2026-10-24）: 全 TC PASS（実装時と同値）**
+  - TC-01: exit 0 / TC-02: exit 0 / TC-03: `No known vulnerabilities found` / TC-04: `3.18.2` / TC-05: 103 passed, 5 warnings（19.60s・警告は実装時と同じ既存 5 件） / TC-06: `No broken requirements found.` / TC-07: `No changes detected`
+  - E2E: 計画どおり CI で確認（PR #310 の `E2E Tests (Playwright)` pass・9m59s・手動テスト M1）
 
 ## テストケース
 
