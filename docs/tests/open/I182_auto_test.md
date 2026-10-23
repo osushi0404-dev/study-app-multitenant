@@ -67,6 +67,9 @@
 | N8 | `git commit -m "fix -n option"` | 0 |
 | N9 | `git push -n origin feature/x` | 0（`-n` は push の `--dry-run`） |
 | N10 | `git commit -a -n -m x` | 2（分けて書いた形。プランレビュー 20261022_2231 Warning 1） |
+| N11 | `git commit -S -n -m x` | 2（`-S` は値を省略できる。次の語を値として読み飛ばさない。敵対的レビュー 20261024） |
+| N12 | `git commit -uno -m x` | 0（`no` は `-u` の値。`-n` ではない。敵対的レビュー 20261024） |
+| N13 | `git commit -Skeyid -m x` | 0（くっつけた `keyid` は `-S` の値） |
 
 **D. リモートブランチの削除の確認**
 | TC | 入力（Bash） | 期待 |
@@ -86,15 +89,16 @@
 | E7 | 見張りに Edit/Write の入力（`.github/workflows/ci.yml`・`.pre-commit-config.yaml`・`backend/requirements.txt`・`docs/x.md`）を渡す | どれも 0（見張りは別ワークツリーへの書き込みの停止だけを行い、編集の確認は settings.json の `ask` に任せる＝二重に判定しない） |
 
 **C. CI の秘密情報の検査が残っていること・ワークフローの権限**（PyYAML で読む。`on` は YAML 1.1 で `True` に読まれるので両方を見る）
-| C1 | `.github/workflows/ci.yml` の `name: Backend Lint & Security` のジョブに `uses: pre-commit/action@…` のステップがあり、その `env.SKIP`（カンマ区切り）に `detect-secrets` が無い | exit 0 |
-| C2 | `.pre-commit-config.yaml` に `id: detect-secrets` のフックがあり、`args` に `--baseline` と `.secrets.baseline` がある | exit 0 |
-| C3 | `ci.yml` の `on.pull_request.branches` に `develop` がある | exit 0 |
+| C1 | `.github/workflows/ci.yml` の `name: Backend Lint & Security` のジョブに `uses: pre-commit/action@…` のステップがあり、その `env.SKIP`（カンマ区切り）に `detect-secrets` が無い。ジョブのキーは `name`・`runs-on`・`steps` だけ、ステップのキーは `name`・`uses`・`env`（`env` は `SKIP` だけ）＝許可リスト（敵対的レビュー 20261024 で追加） | exit 0 |
+| C2 | `.pre-commit-config.yaml` の最上位のキーは `repos` だけで、detect-secrets のフックが `{id: detect-secrets, args: [--baseline, .secrets.baseline], exclude: package-lock\.json}` と完全一致（`stages`・`files` 等を足すと不合格。敵対的レビュー 20261024 で追加） | exit 0 |
+| C3 | `ci.yml` の `on.pull_request` のキーは `branches` だけで、`branches` に `develop` がある（`paths` 等で絞らない。敵対的レビュー 20261024 で追加） | exit 0 |
 | C4 | `.github/workflows/ci.yml` と `.github/workflows/e2e.yml` の最上位の `permissions` が `{"contents": "read"}` だけ（ジョブ単位で `permissions` を広げていない＝どのジョブにも `permissions` が無いか、あっても `read`／`none` だけ） | exit 0 |
 | FG-C4 | 失敗注入: e2e.yml の複製から最上位の `permissions` を消す／ci.yml の複製の 1 ジョブに `permissions: {contents: write}` を足す → C4 の判定 | どちらも非ゼロ |
 | FG-C1 | 失敗注入: ci.yml の複製で `SKIP: eslint,detect-secrets` にする → C1 の判定 | 非ゼロ |
 | FG-C2 | 失敗注入: .pre-commit-config.yaml の複製から detect-secrets の repo を消す → C2 の判定 | 非ゼロ |
 | FG-C3 | 失敗注入: ci.yml の複製から pre-commit/action のステップを消す → C1 の判定 | 非ゼロ |
-**FG-N1・FG-D1（スクリプト内で毎回確かめる）**: 見張りを一時ディレクトリへ複製し、複製だけで新しい規則を外す（`_commit_no_verify(args)` の呼び出しを `False` に・`"--no-verify" in args` を `False` に・`_push_deletes(args)` の呼び出しを `False` に）。置き換えがそれぞれ 1 か所以上で起きたことを確かめ（起きなければその FG 自体を不合格にする）、複製に N1・N2・N3・N6・N10（FG-N1）・D1〜D4・D7（FG-D1）を当てて、**すべて期待と違う結果（0）になる**ことを確かめる＝これらの TC が規則の欠落を捕まえることの証明（プランレビュー 20261022_2231 Warning 2 で、1 回だけの記録から変更）。
+| FG-C5 | 失敗注入（検査を事実上外す書き方・敵対的レビュー 20261024）: pre-commit/action のステップに `continue-on-error: true`／`if: false`／`with: {extra_args: ruff --all-files}`、ジョブに `if`（→ C1）、detect-secrets のフックに `stages: [manual]`／`files: ^backend/`、pre-commit の最上位に `exclude`（→ C2）、`pull_request` に `paths`（→ C3） | 8 件とも非ゼロ |
+**FG-N1・FG-D1（スクリプト内で毎回確かめる）**: 見張りを一時ディレクトリへ複製し、複製だけで新しい規則を外す（`_commit_no_verify(args)` の呼び出しを `False` に・`"--no-verify" in args` を `False` に・`_push_deletes(args)` の呼び出しを `False` に）。置き換えがそれぞれ 1 か所以上で起きたことを確かめ（起きなければその FG 自体を不合格にする）、複製に N1・N2・N3・N6・N10・N11（FG-N1）・D1〜D4・D7（FG-D1）を当てて、**すべて期待と違う結果（0）になる**ことを確かめる＝これらの TC が規則の欠落を捕まえることの証明（プランレビュー 20261022_2231 Warning 2 で、1 回だけの記録から変更）。
 ### S. 確認待ちの削減（`scripts/claude/tests/test_settings_permissions.sh` を更新）
 | S1 | 実体の settings.json: `ask` が `Bash(git rebase *)`・`Bash(psql *)` の 2 つだけ・`Bash(rm *)`・`Bash(mv *)`・`Bash(cp *)`・`Bash(chmod *)`・`Bash(chown *)` が allow にあり ask に無い・既存の条件（deny・フック登録・広すぎる allow なし 等） | exit 0 |
 | S2 | 失敗注入: `Bash(rm *)` を ask に戻す | 不合格（1） |

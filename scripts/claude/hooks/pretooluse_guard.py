@@ -551,7 +551,8 @@ def _push_deletes(args: list) -> bool:
     return any(r.lstrip("+").startswith(":") and r.lstrip("+") != ":" for r in _push_positionals(args)[1:])
 
 # --- git commit --no-verify / -n（秘密情報の検査〔pre-commit〕を飛ばす）の判定（I182） ---
-_COMMIT_VALUE_SHORT = "mFCcSt"   # git commit で値を取る短いオプション（-m msg・-F file・-C/-c commit・-S keyid・-t file）
+_COMMIT_VALUE_SHORT = "mFCct"    # git commit で値を取る短いオプション（-m msg・-F file・-C/-c commit・-t file）
+_COMMIT_OPTVAL_SHORT = "Su"      # 値を省略できる短いオプション（-S<keyid>・-u<mode>）: くっつけた分だけが値で、次の語は値にしない
 _COMMIT_VALUE_LONG = ("--message", "--file", "--reuse-message", "--reedit-message", "--author", "--date",
                       "--template", "--fixup", "--squash", "--trailer", "--cleanup", "--pathspec-from-file")
 
@@ -572,6 +573,8 @@ def _commit_no_verify(args: list) -> bool:
             for k, ch in enumerate(a[1:], 1):
                 if ch == "n":
                     return True
+                if ch in _COMMIT_OPTVAL_SHORT:
+                    break                # 残りは値（-uno の n は -n ではない）。次の語は 1 語として見る
                 if ch in _COMMIT_VALUE_SHORT:
                     # getopt と同じ: 値を取る文字の後ろに文字が残ればそれが値、残らなければ次の語が値
                     step = 1 if k < len(a) - 1 else 2
