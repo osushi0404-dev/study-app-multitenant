@@ -65,7 +65,7 @@
 | 安全なコンテキスト | `QuizSession.tsx`・e2e の設定 | e2e コンテナは `http://frontend:3000` を開くので安全なコンテキストにならない（`crypto.randomUUID` などが使えない。`QuizSession.tsx` は代わりの処理を持つ）。Chromium の起動オプション `--unsafely-treat-insecure-origin-as-secure=<origin>` で、その origin を安全なコンテキストとして扱える |
 | E2E の失敗時の記録 | `playwright.config.ts`・`e2e.yml` | 今は `trace: 'on-first-retry'` だけで画面キャプチャを撮らない。CI は失敗時に `e2e/playwright-report/` を 7 日上げる設定だが、reporter に html を指定していないため、このフォルダは作られず何も上がっていない。仮に html レポートを作ると trace が中に入る（trace にはログイン時に入力したパスワードが残る） |
 | 型チェック・lint のコマンドを使っている場所 | リポジトリ全体を grep（`tsc --noEmit`・`eslint src`） | `.github/workflows/ci.yml`（108・125 行目）・`.pre-commit-config.yaml`（44 行目・`npx eslint src/ --ext .ts,.tsx --max-warnings 0`）。文書では `docs/runbooks/onboarding.md:62`（説明文のみ・変更不要）・`plan-writing-rules.md:143`（lint 件数の計測例・変更不要） |
-| 変更するスキルの行数 | `wc -l` | `.claude/skills/test/SKILL.md` 119 行・`.claude/skills/plan-issue/SKILL.md` 185 行。追記はそれぞれ 10 行程度・1 行の書き換えで、公式の目安（500 行以内）に収まるため分割しない |
+| 変更するスキルの行数 | `wc -l` | `.claude/skills/test/SKILL.md` 119 行・`.claude/skills/plan-issue/SKILL.md` 185 行・`.claude/review-agents/code-reviewer.md` 227 行。追記はそれぞれ 10 行程度・1 行の書き換え・1 項目で、公式の目安（500 行以内）に収まるため分割しない |
 | 「Human = ブラウザ操作」の基準を書いている場所（今回の決定を消費する箇所） | grep（`ブラウザ操作`・`画面目視`） | `.claude/skills/plan-issue/SKILL.md:95`・`docs/runbooks/plan-writing-rules.md:506`・`docs/tests/templates/manual_test_template.md:9` の 3 か所。このままだと、今後の計画で画面確認がすべて「Human」になり、目的（Claude が自分で確かめる）と食い違う |
 | レビューの観点の置き場所 | `.claude/skills/code-review/SKILL.md`・`scripts/claude/code-review.sh` | SKILL.md は流れ（スクリプト実行と分岐）だけを書いており、基本レビューの観点はスクリプトが読む `.claude/review-agents/code-reviewer.md` にある。観点はここに足す |
 | 関連イシューとの重なり | イシュー・メモリ | I188（公式機能への置き換え）は計画前・未マージ。I185 の P6（`/test` を CI 確認に置き換え）・P15（見張りの絞り込み）は未起票。重なるファイルは今の develop に合わせて変え、後から入る側が合わせる |
@@ -134,7 +134,7 @@
 8. 画像が消えるタイミング: ワークツリーの片付け（`wt-remove.sh`・公式の自動片付け）で一緒に消える。`/close` では消さない（Approve & Merge の前にユーザーが見られる）。primary で作業した場合は、次のイシューの `/plan-issue` で前のイシューの `.evidence/I###/` を消す
 9. E2E の落とし穴 4 件と避け方（5-2-4）
 10. 公式と自作の分担: 公式（Playwright MCP・`@playwright/test`・`actions/upload-artifact`・公式 `/run`）をそのまま使う。自作は判定スクリプトだけ。根拠: 「変えたファイルの種類に応じて、テスト記録の決まった行と手元の画像の実在を突き合わせる」機能は Claude Code・Playwright のどちらの公式機能にも無い（Claude Code の hooks は「いつ動かすか」を決める仕組みで判定の中身は持たない。Playwright の記録は失敗時の成果物で、記録の有無は判定しない）
-11. 安全上の注意: `--allowed-origins` は境界ではない・画像やパスワードを git や外部に出さない・任意コードを動かす操作は確認が出る
+11. 安全上の注意: `--allowed-origins` は境界ではない（リダイレクトには効かないので、外部へリダイレクトする URL〔OAuth のコールバックなど〕は開かない）・`browser_network_requests`（複数形・一覧だけ・許可）と `browser_network_request`（単数形・ヘッダーと本文・確認が出る）を取り違えない・画像やパスワードを git や外部に出さない・任意コードを動かす操作は確認が出る
 12. MCP のバージョンを上げるとき: `.mcp.json` の 1 語を変える PR で行い、公開から 2 週間以上たった版を選び、`npm audit`（high/critical が 0）を確かめる
 
 #### 5-2-3. 型チェック・lint（変更点 12〜14）
@@ -318,4 +318,5 @@
 （ステップ 7 で記入する）
 
 ## レビュー結果
+- [20261024_2023 判定: ✅ 完了](../../reviews/I187_plan_review_20261024_2023.md)
 - [20261024_2014 判定: 差し戻し（Blocker 1件）](../../reviews/I187_plan_review_20261024_2014.md)
