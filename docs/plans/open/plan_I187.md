@@ -81,7 +81,7 @@
 | # | ファイル | 変更内容 | 修正方針（何を達成するか） |
 |---|---|---|---|
 | 1 | `.mcp.json` | `playwright` サーバーを追加（下のコード例） | Claude が 1 手ずつ画面を見て操作できるようにする。開ける先を手元だけにし、状態を残さず、パスワードを Claude に見せない |
-| 2 | `.claude/settings.json` | allow に Playwright MCP の操作 20 個・`Bash(docker compose port *)`・`Bash(docker compose --profile e2e run --rm e2e*)`・`Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e*)` を追加（計画変更記録 2） | 画面確認を承認なしで回せるようにする。任意コードを動かす 2 つ・ファイルを渡す 2 つ・通信の中身を返す 1 つは allow に入れず、使うたびに確認が出るままにする（最小権限） |
+| 2 | `.claude/settings.json` | allow に Playwright MCP の操作 20 個・`Bash(docker compose port *)`・e2e の既定コマンド `Bash(docker compose --profile e2e run --rm e2e)` と `Bash(docker compose --profile e2e run --rm e2e npx playwright test *)`（`RATELIMIT_ENABLE=false ` の前置きあり版も同じ 2 つ）を追加（計画変更記録 2・3） | 画面確認を承認なしで回せるようにする。任意コードを動かす 2 つ・ファイルを渡す 2 つ・通信の中身を返す 1 つは allow に入れず、使うたびに確認が出るままにする（最小権限） |
 | 3 | `.gitignore` | `.evidence/` を追加 | 画像をコミットしない |
 | 4 | `docs/runbooks/frontend-verify.md`（新規） | 画面確認の手順・エビデンスの残し方・消えるタイミング・落とし穴 4 件の避け方・公式と自作の分担 | 毎回その場で組み立てている手順を 1 か所に決める |
 | 5 | `CLAUDE.md`・`docs/runbooks/workflow.md` | 参照先の一覧に `frontend-verify.md` を 1 行足す | 公式 `/run` を含め、どのセッションからも手順にたどり着けるようにする（新しいスキルは作らない） |
@@ -407,3 +407,4 @@ High 1 件（MCP の書き先）は、必須防御条件として変更点 17・
   - TC-05 の C67 を `rm -r` から `npm install` に変えた（`rm -r` は危険操作として先に停止になり、確かめたい「一覧外は通さない」に届かないため）。TC-07 にケース E13〜E15 を足した
   - ステップ 1 のゲートの進め方: ブラウザの起動（最大の未知リスク）は、ユーザーの `install-deps` のあと、`.mcp.json` と同じ引数で MCP を標準入出力で直接動かして確かめた（画面を開く・画像を保存する・外部サイトが `ERR_BLOCKED_BY_CLIENT` で止まる）。Claude Code からの読み込みと許可の確認（M-01・M-18）は開き直しが要るため、MCP を使わないステップ 2〜7 を先に進め、開き直しを 1 回にまとめた
   - `/plan-issue-review` の再実行は挟まない（方式・範囲・受け入れ条件は変えていない。手段の置き換えと追随の修正だけ）
+- 計画変更記録 3（2026-10-24・/code-review の敵対的レビュー 1 周目）: High「e2e の実行の許可が末尾を何でも受けるので、`npx playwright test` で止めている選択肢が `npm test -- <選択肢>` で承認なしに通る」（2 観点が独立に指摘）への対処。計画変更記録 2 の前提「中身の危ないコマンドは見張りが確認を出す」は誤りだった（見張りは `npm test`・`npx jest`・`e2e-init` での `migrate` などを判断せずに通し、そのまま allow に一致していた。見張りに直接入力して確かめた）。settings の allow を `Bash(docker compose --profile e2e run --rm e2e)`（既定コマンドそのもの）と `Bash(docker compose --profile e2e run --rm e2e npx playwright test *)`（前置きあり版も同じ 2 つ）に絞り、それ以外の e2e・e2e-init の実行は通常の確認に戻した。`npx playwright test` の選択肢は引き続き見張りが確かめる。TC-03 ⑤b を 4 つの完全一致に変え、⑤b'（それ以外の e2e の許可が無い）を足した。受け入れ条件・方式・範囲は変えていない（AC「npx playwright test 以外は確認が出る」に合わせる修正）ので `/plan-issue-review` は挟まない

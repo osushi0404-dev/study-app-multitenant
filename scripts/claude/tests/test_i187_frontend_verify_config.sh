@@ -86,9 +86,16 @@ ck(f"④b サーバー全体・ワイルドカードの許可が無い（あっ�
 # ⑤ Bash の許可
 ck("⑤a docker compose port が allow にある", "Bash(docker compose port *)" in allow)
 # e2e の実行は、依存先の backend を今の環境で作り直すため、回数制限を切るときは実行コマンド自体に前置する（計画変更記録 2）
-ck("⑤b e2e サービスの実行（前置きなし・あり）が allow にある",
-   "Bash(docker compose --profile e2e run --rm e2e*)" in allow
-   and "Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e*)" in allow)
+E2E_ALLOW = [
+    f"Bash({pre}docker compose --profile e2e run --rm e2e{tail})"
+    for pre in ("", "RATELIMIT_ENABLE=false ")
+    for tail in ("", " npx playwright test *")
+]
+missing5 = [r for r in E2E_ALLOW if r not in allow]
+ck(f"⑤b e2e サービスの実行（既定コマンドと npx playwright test・前置きなし・あり）が allow にある（無い: {missing5}）", not missing5)
+# 見張りは npm test・npx jest・e2e-init などを判断せずに通すため、末尾を何でも受ける許可は置かない（敵対的レビュー 1 周目）
+wide5 = [r for r in allow if "run --rm e2e" in r and r not in E2E_ALLOW]
+ck(f"⑤b' e2e の実行で上の 4 つ以外の許可が無い（あった: {wide5}）", not wide5)
 ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無い",
    "Bash(RATELIMIT_ENABLE=false docker compose up *)" not in allow)
 
