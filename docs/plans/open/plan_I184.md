@@ -123,7 +123,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | 4 | **危険操作の承認を得る**（下の「Danger Ops」の内容を提示）。承認後、4-11 で `danger-approved` ラベルを作って PR #313 に付ける（→ TC-9 参照）。バックアップは取らない（D4） | Claude（承認は Human） | 3 |
 | 5 | ユーザーが wt-harness のターミナル（wt-harness で開いている Claude セッションがあれば終了してから）で、untracked の 39 件を削除する: `cd /mnt/c/app/wt-harness && git status --porcelain --untracked-files=all \| sed -n 's/^?? //p' \| xargs -d '\n' rm --`。続けて primary のセッションで `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`（見張りが承認画面を出す）。完了メッセージに出たブランチを `git branch -d feature/I181-slim-review-process` で消す。→ TC-2a・TC-6 参照 | Human（削除）・Claude（撤去） | 3・4 |
 | 6 | ラベル: `gh label edit track:harness --description "ハーネス改善トラック"`・`gh label edit track:app --description "学習アプリ開発トラック"`。404（権限不足）ならユーザーが GitHub の Labels 画面で同じ文言に変える。`worktree.md` に 4-9・4-10 を入れ、ステップ 1〜5 で手順どおりに進まなかった箇所があれば直す（無ければ `I184_review.md` に「無し」）。→ TC-5・TC-7 参照 | Claude（ラベルの UI 操作は Human） | 5（4-10 以外の手順の修正はステップ 5 までの結果で決まる） |
-| 7 | 自動テスト全件を実行して記録し、計画書・テスト・レビュー文書をコミットして push。→ auto_test 全件 | Claude | 1〜6 |
+| 7 | 自動テスト全件（TC-4a を除く。TC-4a は撤去前のステップ 3 でだけ実行し、その結果を記録とする）を実行して記録し、計画書・テスト・レビュー文書をコミットして push。→ auto_test 全件 | Claude | 1〜6 |
 
 - サービスの再起動は不要（primary の Docker には触れない。wt-harness のコンテナは無く、volume だけを手順 5 の `down -v` で消す）。
 - 未コミットのイシューファイル・イシューレビュー（コピーした 37 件）はコミットしない（運用上わざと未コミット）。
@@ -190,3 +190,6 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 - P6 影響なし（UI・性能に関わる変更なし）。
 - P9 影響なし（個人情報・テナントデータを扱う変更なし。開発 DB のダンプは作らない）。
 - 設計品質: 新しい仕組みを作らず、既存の手順（§2・§4・§11）とスクリプトを使う。設定値のハードコードなし。
+
+## レビュー結果
+- [20261024_1235 判定: ✅ 完了](../../reviews/I184_plan_review_20261024_1235.md)
