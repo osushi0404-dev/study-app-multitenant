@@ -28,6 +28,8 @@
   - `CLAUDE.md`・`docs/runbooks/`（workflow・issue-flow・onboarding・review-rules・plan-writing-rules・danger-ops・mcp-usage・worktree）
   - `docs/plans/templates/plan_template.md`・`docs/tests/templates/auto_test_template.md`・`docs/claude-code-structure.md`・`scripts/migration_verify/lint_skills.py`（必要な場合）
   - `docs/proposals/I193_official_base_flow.md`（新設の設計書）
+  - `docs/runbooks/branch-protection-setup.md`（計画変更記録 4）
+  - `docs/runbooks/frontend-verify.md`・`docs/tests/templates/manual_test_template.md`・`.claude/agents/code-reviewer.md`・`scripts/claude/tests/test_settings_permissions.sh`（計画変更記録 5・§5.9。develop の取り込みで入った I187 のファイル）
 - 変更しないもの: `.claude/settings.json`（今の許可・フックで足りる。変更が要るとわかったら計画変更記録に書いてから行う）・`scripts/claude/hooks/`・アプリのコード・他のイシューの記録（`docs/issues/open/I043.md`・`I044.md` などの古い計画や提案書は当時の記録なので書き換えない）
 
 ## 4. 調査結果
@@ -313,6 +315,7 @@ Claude が決めた（技術的な選択。理由は本計画・設計書）:
 - P9: 個人情報・未成年データ・テナントデータを扱わない
 
 ## レビュー結果
+- [20261025_0310 判定: ✅ 完了](../../reviews/I193_plan_review_20261025_0310.md)
 - [20261024_2313 判定: ✅ 完了](../../reviews/I193_plan_review_20261024_2313.md)
 - [20261024_2239 判定: ✅ 完了](../../reviews/I193_plan_review_20261024_2239.md)
 
@@ -332,6 +335,7 @@ Claude が決めた（技術的な選択。理由は本計画・設計書）:
    - `docs/claude-code-structure.md` は全体が I193 より前の書き方（`in_progress`・`/plan` など）で古いため、スキルの構成・呼び出しの規則・古いコマンドの記載だけ直し、先頭に「正は workflow.md」と書いた（全面の書き直しは本イシューの範囲外）
    - `docs/runbooks/branch-protection-setup.md` の必須チェックの一覧に `Harness Tests` を足した（§5.7 の「必須チェックへの登録」の手順を書く場所のため）
 5. 2026-10-25 develop を取り込んだ（I187・PR #323 が先にマージされ、PR が衝突して CI が動かなくなったため）。衝突は、I187 の決まりを新しい流れの言い方に直して両方を残す形で解いた（`.gitignore` は両方・`plan-writing-rules.md` は I187 の実施者の基準を test-gate の言い方で・`workflow.md` は本イシューの版に frontend-verify.md の参照を足す・古い `/test` スキルは削除のまま）。あわせてユーザーの指示（「I187 と I193 の整合をとる。I187 の MCP でのフロントの自動化を取り込み、公式の道具やベストプラクティスがあるものはそれを土台にする」）で、受け入れ条件 15 と §5.9・ステップ 8 を足した（I195 の内容を本イシューで行う）。範囲と受け入れ条件を変えたので、計画レビューをやり直す
+6. 2026-10-25 再レビュー（`I193_plan_review_20261025_0310.md`・HIGHRISK・Blocker なし）の Warning に対応した: TC-01 の項目に S13〜S21 と R6 の対象（frontend-verify.md）を足した／§3 に §5.9 と計画変更記録 4 のファイルを足した／手動 No.1 の手順をパイプ無しの形にした／No.5・No.6 の Human の理由は §5.9 の実装で書く。gate-check が計画書の受け入れ条件の変更を通す件は、残余リスクとして自律判断の記録に書き、retro で扱う（決定論で止めるには新しい比べ方が要り、本イシューの範囲を広げるため）。方式・範囲・受け入れ条件は変えていないため、計画レビューはやり直さない
 
 ## セキュリティレビュー結果
 

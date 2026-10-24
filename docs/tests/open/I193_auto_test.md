@@ -34,7 +34,7 @@ R: 名前と置き場所
 - R3 `plan-issue`・`grill-me` は `disable-model-invocation: true`。`proceed`・`issue-bootstrap` は `disable-model-invocation` が無い
 - R4 `.claude/agents/` に 7 本があり、それぞれ frontmatter の `tools:` が `Read, Grep, Glob` だけ。`.claude/review-agents/` が無い
 - R5 `scripts/claude/*.sh` と `.github/workflows/*.yml` に `ultra`・`claude-code-action` が無い
-- R6 古い流れの参照が無い: `CLAUDE.md`・`docs/runbooks/*.md`（`legacy/` を除く）・`.claude/skills/*/SKILL.md`・`.claude/agents/*.md`・`scripts/claude/*.sh`・`scripts/migration_verify/*.py`・`docs/*/templates/*.md`・`docs/claude-code-structure.md` に、`/implement I`・`/code-review I`・`/test I`・`/fix-loop I`・`/retro I`・`/close I`・`/security-review I`・`/plan-issue-review`・`review-agents` のどれも無い（同じ語を `$ARGUMENTS` で書いた形も含む）
+- R6 古い流れの参照が無い: `CLAUDE.md`・`docs/runbooks/*.md`（`legacy/` を除く）・`.claude/skills/*/SKILL.md`・`.claude/agents/*.md`・`scripts/claude/*.sh`・`scripts/migration_verify/*.py`・`docs/*/templates/*.md`・`docs/claude-code-structure.md`（2026-10-25 計画変更記録 5 で `docs/runbooks/frontend-verify.md` の `/test`・`/code-review`・`/close` の書き方〔`` `/test` `` の形〕も対象に足す）に、`/implement I`・`/code-review I`・`/test I`・`/fix-loop I`・`/retro I`・`/close I`・`/security-review I`・`/plan-issue-review`・`review-agents` のどれも無い（同じ語を `$ARGUMENTS` で書いた形も含む）
   - R6 の FG: 検索対象を一時フォルダに写し、`docs/runbooks/workflow.md` の写しに `/test I123` を 1 行、`.claude/skills/close/SKILL.md` の写しに `review-agents/` を 1 行足して R6 を実行し、それぞれ非ゼロで終わることを確かめる（検索対象のパスを引数で差し替えられる形にする）
 - R7 `scripts/claude/*.sh` の `claude -p` の行はすべて `timeout` を伴い、`--system-prompt` と `claude-sonnet-4-6` が無い
 
@@ -72,6 +72,8 @@ S: スキルの中身（守りの文が消えたら落ちる。各項目に FG�
 - S10 `review-gate` が `code-review.sh` を `run_in_background` で実行し、exit 3 は 1 回だけやり直すと書いてある
 - S11 `retro`・`issue-bootstrap` に「コマンドの出力・ログ・環境変数・記録の中身を貼らない」がある
 - S12 `docs/runbooks/workflow.md` の止める条件 2 に、安全装置の集合（`.claude/settings.json`・`scripts/claude/hooks/`・`.github/`・`.pre-commit-config.yaml`・`.secrets.baseline`）があり、`code-review.sh` の `path_risk_trigger` の集合と一致する（集合の一致を比べる。片方だけに足すと落ちる）
+- S13〜S20 fix-loop 1〜4 回目で足した守り（詳細は「再発防止記録」1〜4。タイマーと PR コメントはスクリプト経由・`CI_WAIT: NO_PR`・繰り返しの上限〔4 回目・5 回目の文言〕・test-gate の dirty は fix-loop へ）。いずれも FG 付き
+- S21 I187 の決まりの組み込み（受け入れ条件 15）: `implement` に `docs/runbooks/frontend-verify.md` の手順で Playwright MCP を使って画面を確かめる手順がある。`test-gate` に `check-frontend-evidence.sh`・`check-manual-test-executor.sh`・`check-permission-prompt.sh` の 3 本と、その判定が 0 以外のとき「fix-loop に回さない」がある。FG: それぞれの写しから 1 つずつ消すと不合格になる
 
 D: 文書
 - D1 設計書 `docs/proposals/I193_official_base_flow.md` に §2〜§7 の見出しがあり、§2 に `https://code.claude.com/docs/en/best-practices` がある
