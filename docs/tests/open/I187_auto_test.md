@@ -32,11 +32,11 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | TC-22 | `e2e.yml` の失敗時アップロードが `path: e2e/test-results/**/*.png`・`retention-days: 14` で、`playwright-report` が残っていない（3 件） | 合格=0 |
 | TC-23 | `code-reviewer.md` に観点「E2E か単体テストを追加・更新」がある | 合格=0 |
 | TC-25 | （/security-review で追加）`test_i187_mcp_filename_guard.sh`（新規）: 下の表の 11 ケースが期待どおり。見張りの複製から `mcp__playwright__` の分岐を外すと F3 が不合格（0 が返る）になる | 合格=0 |
-| TC-26 | （計画変更記録 7）`test_check_permission_prompt.sh`（新規）: 下の表の 9 ケースが期待どおり | 合格=0 |
+| TC-26 | （計画変更記録 7）`test_check_permission_prompt.sh`（新規）: 下の表の 11 ケースが期待どおり | 合格=0 |
 | TC-27 | （計画変更記録 7）`check-permission-prompt.sh`・`check-manual-test-executor.sh` が bash として正しい（2 件） | 合格=0 |
-| TC-28 | （計画変更記録 7）`test_check_manual_test_executor.sh`（新規）: 下の表の 8 ケースが期待どおり | 合格=0 |
-| TC-29 | （計画変更記録 7）`plan-issue/SKILL.md`・`test/SKILL.md` が `check-manual-test-executor.sh` と `check-permission-prompt.sh` を呼ぶ（4 件）。`plan-writing-rules.md` が `check-permission-prompt.sh` を参照し、テンプレートに `Claude で確かめられない理由:` がある（2 件）。実施者の基準 3 か所に「承認画面が出るかどうか」が残っていない（3 件） | 合格=0 |
-| TC-30 | （計画変更記録 7）`check-manual-test-executor.sh I187` が exit 0（本イシューの手動テストに、理由の無い Human の行・承認画面を Human に振った行が無い） | 合格=0 |
+| TC-28 | （計画変更記録 7）`test_check_manual_test_executor.sh`（新規）: 下の表の 9 ケースが期待どおり | 合格=0 |
+| TC-29 | （計画変更記録 7）`plan-issue/SKILL.md`・`test/SKILL.md` が `check-manual-test-executor.sh` を呼び、`check-permission-prompt.sh` の呼び方を書いている（4 件・5-2-8 の「スキルからの呼び方」）。`plan-writing-rules.md` が `check-permission-prompt.sh` を参照し、テンプレートに `Claude で確かめられない理由:` がある（2 件）。実施者の基準 3 か所に「承認画面が出るかどうか」が残っていない（3 件） | 合格=0 |
+| TC-30 | （計画変更記録 7）`check-manual-test-executor.sh I187` が exit 0（本イシューの手動テストに、理由の無い Human の行・承認画面を Human に振った行が無い）。`/code-review` が自動で流せる形にするため、TC-28 のテストスクリプトの X9 として流す | 合格=0 |
 | TC-24 | 計画書の「16. フロント開発設定の点検結果」が記入済み（`（ステップ 7 で記入する）` が残っていない）で、見出し `### 別イシューのタイトル案` がある（2 件） | 合格=0 |
 
 ### /test に委譲（heavy）
@@ -119,6 +119,8 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | Q7 | `init` の `permissionMode` が `default` でない（例 `auto`） | exit 2 |
 | Q8 | 引数なし／種類が `bash`・`mcp` 以外 | exit 2 |
 | Q9 | 出力に `result` の行が無い（途中で落ちた） | exit 2 |
+| Q10 | （実装時に追加）本物の形の拒否: `message` が文字列の `system`（`permission_denied`）の行を含む | exit 10 |
+| Q11 | （実装時に追加）`result` の `permission_denials` が配列でない | exit 2 |
 
 ### TC-28: 実施者の判定のケース（`test_check_manual_test_executor.sh`）
 一時フォルダに `docs/tests/open/I999_manual_test.md` を作って実行する。
@@ -133,6 +135,7 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | X6 | 「実施環境」の列が増えた表でも、実施者の列を見出しから見つけて X2 と同じく exit 1 | exit 1 |
 | X7 | 文書が無い | exit 2 |
 | X8 | 引数なし／`I99` のような形 | exit 2 |
+| X9 | （TC-30）このリポジトリの `I187_manual_test.md` | exit 0 |
 
 ## false-green の確認
 - 計画時（2026-10-24・実装前）: 下の決定論ゲートのうち grep・json.tool の行を非対話の bash で実走し、**実装前の今の状態ではすべて不合格（exit≠0）**になることを確認した（どれも「まだ変更していない状態」＝失敗条件を注入した状態に当たる）。結果は「計画時の実行結果」を参照。`TC-01`（`.mcp.json` は今も正しい JSON）・`TC-02`・`TC-06` は、今も合格するのが正しい（構文の確認）。
@@ -209,7 +212,6 @@ grep -qF "Claude で確かめられない理由:" docs/tests/templates/manual_te
 ! grep -qF "承認画面が出るかどうか" .claude/skills/plan-issue/SKILL.md
 ! grep -qF "承認画面が出るかどうか" docs/runbooks/plan-writing-rules.md
 ! grep -qF "承認画面が出るかどうか" docs/tests/templates/manual_test_template.md
-bash scripts/claude/check-manual-test-executor.sh I187
 ```
 
 ## 実行結果（/test・2026-10-24）
@@ -218,3 +220,4 @@ bash scripts/claude/check-manual-test-executor.sh I187
 - TC-H2: `docker compose exec -T frontend npm run typecheck`・`npm run lint` ともに exit 0（exit 0 だけの確認。承認画面が出ずに流れるかは M-19 で確かめる・計画変更記録 5）
 - 画面確認の判定: `check-frontend-evidence.sh I187` は「対象外（frontend/src を変えていません）」で exit 0
 - 再実行（/test・2026-10-24・`7f5c67f`）: 決定論ゲート 46/46 合格。TC-H1 は push 済みの HEAD `2964b03` で CI 6 ジョブすべて pass（`7f5c67f` は記録だけの変更）。M-01 ②・M-12・M-19 は `claude -p` で承認の要否を判定して OK（計画変更記録 6）
+- 計画変更記録 7 の実装後（2026-10-25）: 決定論ゲート 59/59 合格（TC-30 は TC-28 の X9 に移したため 1 行減）。TC-26・TC-28 は、本体が無い状態（exit 127）と常に exit 0 の偽物で不合格になることを先に確かめた（TC-26 は 8/10・TC-28 は 7/9 が不合格）。Q10・Q11 は実装時に足し、足す前の本体で不合格（exit 1）になることを確かめた

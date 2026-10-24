@@ -98,7 +98,12 @@ app/非app の区別では分岐しない。Backend/Frontend 変更が無いイ�
    - テスト計画書（`I###_manual_test.md`）の「実施者」欄を必ず確認する
    - **実施者: Claude** の項目 → 自分で Bash/Read ツールを使って実行し、結果を記録する（ユーザーに依頼しない）
      - 画面の表示・遷移・入力の結果・コンソールの確認は、Playwright MCP で `docs/runbooks/frontend-verify.md` の手順（`docker compose up -d` → `docker compose port frontend 3000` の URL → `docker compose exec frontend npm run typecheck` → E2E 用アカウントでログイン → 画面キャプチャを `.evidence/$ARGUMENTS/` に保存して Read で見る → `browser_console_messages`）で行い、テスト記録の「## 画面確認」の表に 1 行ずつ書く
-   - **実施者: Human** の項目のみ → ユーザーに確認を依頼する
+     - 承認画面が出るか／承認なしで通るかの確認は、操作ごとに `bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`（MCP の操作は `mcp <操作名> '<入力の JSON>'`）を実行し、終了コード（0=承認なしで実行された・10=承認画面が出る・2=判定できない）を記録する。ユーザーに「画面が出たか」を聞かない。承認なしで通る操作は実際に実行されるので、実行して困るものには使わない
+   - **実施者: Human** の項目のみ → ユーザーに確認を依頼する。その前に、実施者の振り分けを判定する（Claude で確かめられる項目を人に頼まないため）:
+     ```bash
+     bash scripts/claude/check-manual-test-executor.sh $ARGUMENTS
+     ```
+     - 0 以外: 即 STOP。出力された行を、Claude で確かめる形（上の手段）に直してテスト記録を更新し、自分で実施してから続ける（コードの不具合ではないので `/fix-loop` には回さない）。本当に Claude で確かめられない場合だけ、備考に `Claude で確かめられない理由: …` を書く
 
    Claude 実施項目をすべて自己実行したら、画面確認の判定を実行する（`frontend/src` を変えていないイシューは「対象外」で合格する）:
    ```bash
