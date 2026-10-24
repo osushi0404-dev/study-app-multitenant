@@ -570,4 +570,7 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 | Low     | 4件 | 9件 |
 
 ### 残余リスク処遇
-（/retro で決定する）
+（2026-10-24 /retro で決定）
+- Medium（`submit_answer`・`end` の全列保存による `is_active` の書き戻し）: 修正項目 8 で是正済み（TC-18・TC-19。TC-18 は敵対的レビュー第 1 周で実ビュー経由に強化）。
+- Low（マルチテナント: 開始時の他組織 `subject` 指定・科目なしセッションの全組織出題）: I166（#284・優先度高）で是正。I166 の引き継ぎメモを I158 マージ後の構造（`QuizService.start_session`・再挑戦の科目引き継ぎ）に更新済み。
+- Low（`Idempotency-Key` の入力検証・キーのユーザー単位照合・開始連打時の自ユーザー行ロック・管理画面の制約違反）: 対策済み（TC-05・TC-16・DRF ユーザー単位スロットル・ModelForm の制約検証）のため受け入れ。
