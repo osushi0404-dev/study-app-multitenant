@@ -85,8 +85,12 @@ ck(f"④b サーバー全体・ワイルドカードの許可が無い（あっ�
 
 # ⑤ Bash の許可
 ck("⑤a docker compose port が allow にある", "Bash(docker compose port *)" in allow)
-ck("⑤b RATELIMIT_ENABLE=false docker compose up が allow にある",
-   "Bash(RATELIMIT_ENABLE=false docker compose up *)" in allow)
+# e2e の実行は、依存先の backend を今の環境で作り直すため、回数制限を切るときは実行コマンド自体に前置する（計画変更記録 2）
+ck("⑤b e2e サービスの実行（前置きなし・あり）が allow にある",
+   "Bash(docker compose --profile e2e run --rm e2e*)" in allow
+   and "Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e*)" in allow)
+ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無い",
+   "Bash(RATELIMIT_ENABLE=false docker compose up *)" not in allow)
 
 # ⑥ .env.e2e の読み取り禁止が残っている
 ck("⑥ deny の Read(**/.env.e2e) が残っている", "Read(**/.env.e2e)" in deny)

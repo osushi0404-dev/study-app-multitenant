@@ -34,8 +34,9 @@ for h in pre:
                 errs.append(f"Bash のフックが guard を正しく呼んでいない: {x}")
 # I182（計画変更記録 1）: 見張りの時間切れ・起動失敗・異常終了は、公式の onFailure で止める（素通しにしない）
 guard_hooks = [x for h in pre for x in h.get("hooks", []) if "pretooluse_guard.py" in x.get("command", "")]
-if len(guard_hooks) != 3:
-    errs.append(f"見張りを呼ぶ PreToolUse フックが 3 つでない: {len(guard_hooks)}")
+# I187: Edit 系・Bash・GitHub MCP に加え、Playwright MCP（保存の書き先の制限）で 4 つ
+if len(guard_hooks) != 4:
+    errs.append(f"見張りを呼ぶ PreToolUse フックが 4 つでない: {len(guard_hooks)}")
 for x in guard_hooks:
     if x.get("timeout") != 20 or x.get("onFailure") != "block":
         errs.append(f"見張りのフックに timeout 20 / onFailure block が無い: {x}")
