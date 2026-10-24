@@ -321,8 +321,8 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - [ ] 手動 No.6 で、ユーザーの承認後に bot が GitHub のマージ API（`gh api -X PUT .../pulls/298/merge`）を呼び、push 制限で拒否されることを確かめる（実行直前に改めて了承を取る。adversarial 第2周で `gh pr merge` から変更）
 
 ## レビュー結果
-- [20261024_1516 判定: ✅ 完了](../../reviews/I178_plan_review_20261024_1516.md)
-- [20261024_1452 判定: ✅ 完了](../../reviews/I178_plan_review_20261024_1452.md)
+- [20261024_1516 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261024_1516.md)
+- [20261024_1452 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261024_1452.md)
 - [20261020_2003 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261020_2003.md)
 - [20261018_1409 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1409.md)
 - [20261018_1145 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1145.md)
@@ -582,3 +582,9 @@ gh pr create --base develop --head hotfix/critical-bug-description --title "hotf
 - **承認日時**: 2026-10-24
 - **承認者**: ユーザー
 - **承認内容**: 「ループエンジニアリング、ハーネスエンジニアリングのベストプラクティスと開発をサクサク進めるという観点で問題なければ OK」→ 問題なしと判断して承認として記録（承認ポイントの「私が決めた点」4 件を含む）
+
+## 完了情報（再オープン分）
+- **完了日時**: 2026-10-24
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review 20261024_1516・code-review 20261024_1521・敵対的レビュー不要〔RISK: NO〕・/test 全合格）
+- **残作業**: PR #314 のユーザー承認・マージ。GitHub の設定変更は無し
