@@ -13,7 +13,7 @@
 - 目的: 計画からクローズまでを、公式の道具を土台に組み直す。自作は公式だけでは止まらない漏れを止める部分だけにする。ユーザーの確認は「人がやる手動テスト」と「マージ」だけにし、途中で止めて聞くのは 3 つの条件のときだけにする（イシュー I193 設計確認メモ）。
 
 ## 2. 受け入れ条件
-イシュー I193 の「受け入れ条件」14 項目をそのまま採用する（この計画で項目を足したり削ったりしない）。各項目と確かめ方の対応は §6 の表に書く。
+イシュー I193 の「受け入れ条件」15 項目をそのまま採用する（この計画で項目を足したり削ったりしない。15 項目目は 2026-10-25 にユーザーの指示でイシューに追加。計画変更記録 5）。各項目と確かめ方の対応は §6 の表に書く。
 
 ## 3. 影響範囲
 - Backend: なし
@@ -199,6 +199,17 @@
 - 更新: `test_review_verdict.sh`（VERDICT 無し → BLOCKER・REVIEWED_COMMIT）・`test_review_gates.sh`・`test_adversarial_trigger.sh`・`test_fix_review.sh`・`test_i181_review_slim.sh`（パスの改名・D8）・`test_i182_docs.sh`（DOC6）・`test_i185_harness_docs.sh` と `fixtures/i185/*`（文言の固定）・`test_i114_retro_plain_output.sh`・`test_i180_retro_triage.sh`・`test_review_commit_lifecycle.sh`・`test_auto_test_template_lint.sh`（テンプレの文言）
 - 文書の文言を固定するテストは、守りの部分を消す・反転する・挿入するで落ちることを、各テストの中の失敗注入（FG）で確かめる（I185 種類 A の反省）
 
+### 5.9 I187 の画面確認・承認画面の確認・実施者の判定を新しい流れに組み込む（受け入れ条件 15・計画変更記録 5）
+I187（PR #323・先に develop へマージ）は、古い `/test` スキルに決まりを足していた。本イシューは `/test` を消すので、そのままでは決まりが流れから外れる。公式の道具をそのまま使い、自作は I187 の判定スクリプト 3 本（公式に無い「記録と画像の突き合わせ」「Human の行の理由の判定」「承認画面が出るかの観測」）だけにする（I187 の「公式と自作の分担」のまま）。新しいスキル・スクリプトは作らない。
+
+| 置き場所 | 変えること |
+|---|---|
+| `implement` | 1) の後に「`frontend/src` の画面の動きを変えたら、`docs/runbooks/frontend-verify.md` の手順で Playwright MCP（公式）を使って画面を確かめ、動きを E2E か単体テストにも固定する」を足す（Anthropic のベストプラクティス「Claude に自分の仕事を確かめる手段を渡す」を実装の中で回す。画面確認は手元の早い確かめで、長く残す証拠は CI のテスト） |
+| `test-gate` | 4. の手動テストに、I187 の `/test` の決まりを移す: Claude の行の画面確認は frontend-verify.md の手順で行い「## 画面確認」に書く／承認画面が出るかは `check-permission-prompt.sh` で確かめる（ユーザーに聞かない）／Claude の分を終えたら `check-frontend-evidence.sh`、Human の分を出す前に `check-manual-test-executor.sh`。どちらも 0 以外なら、コードの不具合ではないので fix-loop に回さず、自分で画面確認・記録の直しをしてやり直す（書くのは記録の場所と gitignore 済みの `.evidence/` だけ）。直せないとき（MCP が使えないなど）は止める条件 3 の判定へ |
+| `docs/runbooks/frontend-verify.md`・`docs/tests/templates/manual_test_template.md`・`.claude/agents/code-reviewer.md` | `/test`・`/code-review`・`/implement`・`/close` を、implement・review-gate・test-gate・close の段階の名前に直す（受け入れ条件 14） |
+| `docs/tests/open/I193_manual_test.md` | Human の行（No.5・No.6）に「Claude で確かめられない理由: …」を書き、`check-manual-test-executor.sh I193` を通す |
+| `scripts/claude/tests/test_i193_official_flow.sh` | S21（implement に frontend-verify.md の手順・test-gate に判定スクリプト 3 本と「fix-loop に回さない」）・R6 の対象に frontend-verify.md を足す。FG を付ける |
+
 ## 5-2. 実装手順（ステップ）
 未知リスク先行で、仕組みの土台（レビュー役・同名スキル・段階のつなぎ）から始める。
 
@@ -209,6 +220,7 @@
 5. **段階のスキルとユーザー用スキルの書き直し**（§5.4・§5.5）→ TC-01（S 系）・TC-09・TC-11。ステップ 3・4 の後
 6. **ルールと手順書**（§5.6）→ TC-01（D 系）・TC-06〜TC-08・TC-12。ステップ 5 の後（書いた流れに合わせるため）
 7. **ハーネスのテストを CI で動かす**（§5.7・§5.8）→ TC-13・TC-14、手動テスト No.6。ステップ 6 の後（全テストが緑になってから CI に載せる）
+8. **I187 の決まりの組み込み**（§5.9）→ TC-01 S21・R6、`check-manual-test-executor.sh I193`。develop（I187）を取り込んだ後
 
 ファイルの削除（改名で元の場所が無くなる）はあるが、サービスの停止は無い。サービスの再起動は不要。スキルの読み込みはセッション開始時に決まるため、新しいスキルの確認は新しいセッション（`claude -p`）で行う（手動テスト）。
 
@@ -234,6 +246,7 @@
 | 12 これまで止めていた漏れが止まる（失敗を入れて） | TC-01 の FG 系・TC-02〜TC-05・TC-13 |
 | 13 同名スキルが残っていない | TC-01 R1・手動 No.3 |
 | 14 古い流れの参照が残っていない | TC-01 R6 |
+| 15 I187 の決まりが新しい流れの段階で動く | TC-01 S21・R6・`check-manual-test-executor.sh I193` |
 | （計画で足した守り）L13・L14 | TC-01 G 系・TC-02 |
 
 ### 手動（詳細は `docs/tests/open/I193_manual_test.md`）
@@ -318,6 +331,7 @@ Claude が決めた（技術的な選択。理由は本計画・設計書）:
    - D8 の修正は、テスト側で「`.gitignore` にある手元のファイル（`.claude/settings.local.json`）は存在しないパスとして数えない」にした（文書の記載は正しく、ワークツリーと CI に無いだけのため）
    - `docs/claude-code-structure.md` は全体が I193 より前の書き方（`in_progress`・`/plan` など）で古いため、スキルの構成・呼び出しの規則・古いコマンドの記載だけ直し、先頭に「正は workflow.md」と書いた（全面の書き直しは本イシューの範囲外）
    - `docs/runbooks/branch-protection-setup.md` の必須チェックの一覧に `Harness Tests` を足した（§5.7 の「必須チェックへの登録」の手順を書く場所のため）
+5. 2026-10-25 develop を取り込んだ（I187・PR #323 が先にマージされ、PR が衝突して CI が動かなくなったため）。衝突は、I187 の決まりを新しい流れの言い方に直して両方を残す形で解いた（`.gitignore` は両方・`plan-writing-rules.md` は I187 の実施者の基準を test-gate の言い方で・`workflow.md` は本イシューの版に frontend-verify.md の参照を足す・古い `/test` スキルは削除のまま）。あわせてユーザーの指示（「I187 と I193 の整合をとる。I187 の MCP でのフロントの自動化を取り込み、公式の道具やベストプラクティスがあるものはそれを土台にする」）で、受け入れ条件 15 と §5.9・ステップ 8 を足した（I195 の内容を本イシューで行う）。範囲と受け入れ条件を変えたので、計画レビューをやり直す
 
 ## セキュリティレビュー結果
 
