@@ -24,6 +24,7 @@
 | M-15 | 計画書の「16. フロント開発設定の点検結果」を読む | 起動（初回・2 回目）・再コンパイル・Jest・型チェック・lint の所要時間が秒で書かれ、別イシューのタイトル案（Vite への移行など）に数字が付いている。点検にかけた時間が 30 分以内と書かれている | Claude | — |  |  |
 | M-16 | `git diff origin/develop...HEAD --name-only` の一覧を、I185・I186・I188 のイシュー（範囲・実装対象）と突き合わせる | I185 の範囲（工程・スキル・フック・ゲート・権限の総点検）・I186（定期見直し）・I188（公式機能への置き換え）の作業が含まれていない。重なるファイル（`.claude/settings.json`・スキル）は、今の develop に対する追記だけになっている | Claude | — |  |  |
 | M-17 | 公式 `/run` を実行する（このワークツリーで「アプリを起動して画面を見せて」と頼む） | `/run` が CLAUDE.md の参照から `docs/runbooks/frontend-verify.md` の手順（`docker compose up -d`・`docker compose port frontend 3000` の URL）で起動・画面確認をする | Claude | — |  |  |
+| M-18 | （/security-review で追加）新しいセッションで `browser_take_screenshot` をファイル名 `backend/.env` で呼ぶ。続けて `.evidence/I187/guard-ok.png` で呼ぶ | 1 つ目は見張りに止められ、`backend/.env` の更新日時（`stat -c %y backend/.env`）が呼ぶ前と変わらない。2 つ目は保存される | Claude | 設定変更後の新規セッション |  |  |
 
 ## 画面確認
 <!-- 列: 日時・コミット・画面と操作・アカウント・期待した結果・実際の結果・画像（.evidence/I187/ のファイル名。カンマ区切り。確認できない場合は「理由: …」） -->

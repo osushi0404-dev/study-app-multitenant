@@ -10,7 +10,7 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 |---|---|---|
 | TC-01 | `.mcp.json` が JSON として正しい | 合格=0 |
 | TC-02 | `.claude/settings.json` が JSON として正しい | 合格=0 |
-| TC-03 | `test_i187_frontend_verify_config.sh`（新規）: ①`.mcp.json` の `playwright` の `command` が `npx`、`args` が計画 5-2-1 の 12 語と完全一致（順番を含む） ②`github` の設定が変わっていない（`@modelcontextprotocol/server-github@2025.4.8`） ③`.claude/settings.json` の allow に計画 5-2-1 の 20 個（`mcp__playwright__<名前>`）がすべてある ④allow に `browser_run_code_unsafe`・`browser_evaluate`・`browser_file_upload`・`browser_drop`・`browser_network_request` が無い（`mcp__playwright` だけ・`mcp__playwright__*` などサーバー全体を許す書き方も無い） ⑤allow に `Bash(docker compose port *)`・`Bash(RATELIMIT_ENABLE=false docker compose up *)` がある ⑥deny の `Read(**/.env.e2e)` が残っている | 合格=0 |
+| TC-03 | `test_i187_frontend_verify_config.sh`（新規）: ①`.mcp.json` の `playwright` の `command` が `npx`、`args` が計画 5-2-1 の 12 語と完全一致（順番を含む） ②`github` の設定が変わっていない（`@modelcontextprotocol/server-github@2025.4.8`） ③`.claude/settings.json` の allow に計画 5-2-1 の 20 個（`mcp__playwright__<名前>`）がすべてある ④allow に `browser_run_code_unsafe`・`browser_evaluate`・`browser_file_upload`・`browser_drop`・`browser_network_request` が無い（`mcp__playwright` だけ・`mcp__playwright__*` などサーバー全体を許す書き方も無い） ⑤allow に `Bash(docker compose port *)`・`Bash(RATELIMIT_ENABLE=false docker compose up *)` がある ⑥deny の `Read(**/.env.e2e)` が残っている ⑦（/security-review で追加）`hooks.PreToolUse` に matcher `mcp__playwright__.*` で `pretooluse_guard.py` が登録されている | 合格=0 |
 | TC-04 | `.gitignore` に `.evidence/` だけの行がある（行全体で一致） | 合格=0 |
 | TC-05 | `test_pretooluse_container_guard.sh`: 既存のケースすべてに加え、I187 のケース（下の表）が期待どおり | 合格=0 |
 | TC-06 | `pretooluse_guard.py` が Python として正しい | 合格=0 |
@@ -31,6 +31,7 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 | TC-21 | `playwright.config.ts` に `screenshot: 'only-on-failure'`・`isCI ? 'off' : 'retain-on-failure'`・`unsafely-treat-insecure-origin-as-secure` があり、`on-first-retry` が残っていない（4 件） | 合格=0 |
 | TC-22 | `e2e.yml` の失敗時アップロードが `path: e2e/test-results/**/*.png`・`retention-days: 14` で、`playwright-report` が残っていない（3 件） | 合格=0 |
 | TC-23 | `code-reviewer.md` に観点「E2E か単体テストを追加・更新」がある | 合格=0 |
+| TC-25 | （/security-review で追加）`test_i187_mcp_filename_guard.sh`（新規）: 下の表の 11 ケースが期待どおり。見張りの複製から `mcp__playwright__` の分岐を外すと F3 が不合格（0 が返る）になる | 合格=0 |
 | TC-24 | 計画書の「16. フロント開発設定の点検結果」が記入済み（`（ステップ 7 で記入する）` が残っていない）で、見出し `### 別イシューのタイトル案` がある（2 件） | 合格=0 |
 
 ### /test に委譲（heavy）
@@ -77,6 +78,23 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 | E10 | 変更あり・画像 2 つ（`a.png, b.png`）がどちらも実在 | exit 0 |
 | E11 | 変更あり・テスト記録が `docs/tests/closed/` にだけある（画像あり） | exit 0 |
 | E12 | 引数なし／`I99` のような形 | exit 2 |
+
+### TC-25: MCP の書き先のケース（`test_i187_mcp_filename_guard.sh`）
+見張りに `{"tool_name": <操作>, "tool_input": {...}}` を渡し、終了コードを見る（2 = 止める・0 = 通す）。
+
+| ケース | 操作 | `filename` | 期待 |
+|---|---|---|---|
+| F1 | `mcp__playwright__browser_take_screenshot` | `.evidence/I187/login-a-1.png` | 0 |
+| F2 | `mcp__playwright__browser_take_screenshot` | （なし） | 0 |
+| F3 | `mcp__playwright__browser_take_screenshot` | `backend/.env` | 2 |
+| F4 | `mcp__playwright__browser_take_screenshot` | `.evidence/I187/../../backend/.env` | 2 |
+| F5 | `mcp__playwright__browser_take_screenshot` | `/tmp/x.png` | 2 |
+| F6 | `mcp__playwright__browser_take_screenshot` | `.evidence/x.png`（イシューのフォルダなし） | 2 |
+| F7 | `mcp__playwright__browser_snapshot` | `.claude/settings.json` | 2 |
+| F8 | `mcp__playwright__browser_console_messages` | `.evidence/I187/console.txt` | 0 |
+| F9 | `mcp__playwright__browser_network_requests` | `e2e/.env.e2e` | 2 |
+| F10 | `mcp__playwright__browser_find` | `.evidence/I187/sub/x.txt`（フォルダの入れ子） | 2 |
+| F11 | `mcp__playwright__browser_navigate` | （なし・`url` だけ） | 0 |
 
 ## false-green の確認
 - 計画時（2026-10-24・実装前）: 下の決定論ゲートのうち grep・json.tool の行を非対話の bash で実走し、**実装前の今の状態ではすべて不合格（exit≠0）**になることを確認した（どれも「まだ変更していない状態」＝失敗条件を注入した状態に当たる）。結果は「計画時の実行結果」を参照。`TC-01`（`.mcp.json` は今も正しい JSON）・`TC-02`・`TC-06` は、今も合格するのが正しい（構文の確認）。
@@ -139,4 +157,5 @@ grep -qF "retention-days: 14" .github/workflows/e2e.yml
 grep -qF "E2E か単体テストを追加・更新" .claude/review-agents/code-reviewer.md
 ! grep -qF "（ステップ 7 で記入する）" docs/plans/open/plan_I187.md
 grep -qx "### 別イシューのタイトル案" docs/plans/open/plan_I187.md
+bash scripts/claude/tests/test_i187_mcp_filename_guard.sh
 ```
