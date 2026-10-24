@@ -27,12 +27,16 @@ grep -qxF "### 自分が作った PR をマージしたい" docs/runbooks/branch
 grep -qxF "### 確認 5: （I178 の再オープンで廃止）" docs/runbooks/branch-protection-setup.md
 grep -q "bot に承認を頼む" docs/runbooks/branch-protection-setup.md
 grep -q "効き目は確認 4・6" docs/runbooks/branch-protection-setup.md
-! grep -q "^git push origin develop" docs/runbooks/issue-flow.md
+! grep -q "確認 4〜6" docs/runbooks/branch-protection-setup.md
+! grep -q "git push.*develop" docs/runbooks/issue-flow.md
+! grep -q "git push.*main" docs/runbooks/issue-flow.md
 ! grep -q "^git merge" docs/runbooks/issue-flow.md
 ! grep -qx "git checkout develop" docs/runbooks/issue-flow.md
 grep -q "oshui0404 が GitHub の PR 画面で承認・マージする" docs/runbooks/issue-flow.md
-! grep -q "^git push origin main" docs/runbooks/workflow.md
-! grep -q "^git push origin develop" docs/runbooks/workflow.md
+! grep -q "git push.*main" docs/runbooks/workflow.md
+! grep -q "git push.*develop" docs/runbooks/workflow.md
+! grep -q "git push.*develop" docs/runbooks/onboarding.md
+! grep -q "git push.*main" docs/runbooks/onboarding.md
 ! grep -q "^git merge" docs/runbooks/workflow.md
 ! grep -q "^git checkout main" docs/runbooks/workflow.md
 grep -q "gh pr create --base main --head develop" docs/runbooks/workflow.md
@@ -40,6 +44,7 @@ grep -q "gh pr create --base develop --head hotfix/" docs/runbooks/workflow.md
 grep -q "main がまだ初期コミットだけの間は" docs/runbooks/workflow.md
 grep -q "develop → main の PR を作り" docs/runbooks/onboarding.md
 grep -q "I032" docs/plans/closed/plan_I032.md
+# docs/tests・docs/plans・docs/reviews にある過去の記録は検索の対象外（RTC-21）
 ! grep -rq "test_i178_branch_protection_doc" scripts .claude .github docs/runbooks
 grep -qxF '* @oshui0404' .github/CODEOWNERS
 ```
@@ -52,10 +57,11 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
 
 | TC | 実測 exit | 判定 |
 |---|---|---|
-| ゲート 1〜23 行目（RTC-01〜RTC-17） | すべて 1 | ✅ Red（旧記述が残り、新記述が無い） |
-| ゲート 24 行目（RTC-18） | 0 | 既存状態（`docs/plans/closed/plan_I032.md` は open 側と同じ内容で既にある＝重複）。**注入版**（存在しないファイルを指定）= **2** ✅ |
-| ゲート 25 行目（RTC-21） | 0 | 既存状態（参照 0 件）。**注入版**（`test_i178_branch_protection_doc.sh` を呼ぶ行を書いた一時ディレクトリを検索）= **1** ✅ |
-| ゲート 26 行目（RTC-22） | 0 | 既存状態。**注入版**（所有者を `@osushi0404-bot` に差し替えた CODEOWNERS）= **1** ✅ |
+| ゲート 1〜13・15〜19・22〜27 行目 | すべて 1 | ✅ Red（旧記述が残り、新記述が無い） |
+| ゲート 14・20・21 行目（RTC-09b・RTC-17b・RTC-17c） | 0 | 既存状態（issue-flow.md・onboarding.md に該当の push 行がもともと無い＝再発防止の行）。**注入版**（`git push origin HEAD:develop`・行頭に空白のある `git push -u origin main` を書いた一時ファイルを検索）= どちらも **1** ✅（2026-10-24・plan-review 20261024_1452 Warning 対応で追加） |
+| ゲート 28 行目（RTC-18） | 0 | 既存状態（`docs/plans/closed/plan_I032.md` は open 側と同じ内容で既にある＝重複）。**注入版**（存在しないファイルを指定）= **2** ✅ |
+| ゲート 29 行目（RTC-21） | 0 | 既存状態（参照 0 件）。**注入版**（`test_i178_branch_protection_doc.sh` を呼ぶ行を書いた一時ディレクトリを検索）= **1** ✅ |
+| ゲート 30 行目（RTC-22） | 0 | 既存状態。**注入版**（所有者を `@osushi0404-bot` に差し替えた CODEOWNERS）= **1** ✅ |
 | RTC-19 | 1 | ✅ Red（open に重複が残っている） |
 | RTC-20 | 1 | ✅ Red（テストがまだある） |
 | RTC-23 | 0 | 既存状態。**注入版**（比較先を CODEOWNERS 追加前の `6c88d9f^1` にした）= **1** ✅ |
@@ -77,30 +83,36 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
 - RTC-08b: §4 の見出し「### 確認 5: （I178 の再オープンで廃止）」（行の完全一致） / ゲート 9 行目
 - RTC-08c: §6 に「bot に承認を頼む」手順 / ゲート 10 行目
 - RTC-08d: §4 確認 1・2 の段落が「効き目は確認 4・6」 / ゲート 11 行目
+- RTC-08e: 旧文「確認 4〜6」が無い（新旧の併記を検知・plan-review 20261024_1452 Info 対応） / ゲート 12 行目
 - 期待: すべて exit 0（バッククォートはゲート行に書けないため、任意の 1 文字 `.` で表す）
 
+**直 push の検知の形（RTC-09・RTC-12・RTC-13・RTC-17b/c）**: 行頭に限らず、`git push` の後に `develop`・`main` が出る行をすべて不合格にする（`git push origin HEAD:develop`・`git push -u origin main` 等の別の書き方も検知する・plan-review 20261024_1452 Warning 対応）。対象は書き換える 3 ファイルだけ。`branch-protection-setup.md` と `danger-ops.md` には「行わない」「止める」の説明として同じ文字列があるため対象外とし、手動 RNo.1 で分類する。3 ファイルで当たる行は、書き換え前は書き換え対象の 4 行だけ（2026-10-24 実測）。
+
 ## RTC-09〜RTC-11: issue-flow.md ステップ 25 が PR 経由になっている（AC-R2・AC-R3）
-- RTC-09: 行頭の `git push origin develop` が無い / ゲート 12 行目
-- RTC-10a: 行頭の `git merge` が無い / ゲート 13 行目
-- RTC-10b: `git checkout develop` だけの行が無い / ゲート 14 行目（L221 の `git checkout --no-track -b feature/…` は行の完全一致なので当たらない）
-- RTC-11: 「oshui0404 が GitHub の PR 画面で承認・マージする」がある / ゲート 15 行目
+- RTC-09a: `git push` の後に `develop` が出る行が無い / ゲート 13 行目
+- RTC-09b: `git push` の後に `main` が出る行が無い / ゲート 14 行目
+- RTC-10a: 行頭の `git merge` が無い / ゲート 15 行目
+- RTC-10b: `git checkout develop` だけの行が無い / ゲート 16 行目（L221 の `git checkout --no-track -b feature/…` は行の完全一致なので当たらない）
+- RTC-11: 「oshui0404 が GitHub の PR 画面で承認・マージする」がある / ゲート 17 行目
 - 期待: すべて exit 0
 
 ## RTC-12〜RTC-16: workflow.md のリリース・hotfix が PR 経由になっている（AC-R2・AC-R3）
-- RTC-12: 行頭の `git push origin main` が無い / ゲート 16 行目
-- RTC-13: 行頭の `git push origin develop` が無い / ゲート 17 行目
-- RTC-14a: 行頭の `git merge` が無い / ゲート 18 行目
-- RTC-14b: 行頭の `git checkout main` が無い / ゲート 19 行目（hotfix は `git checkout --no-track -b hotfix/… origin/main` にする）
-- RTC-15: リリースの `gh pr create --base main --head develop` がある / ゲート 20 行目
-- RTC-16a: hotfix の develop への反映 `gh pr create --base develop --head hotfix/` がある / ゲート 21 行目
-- RTC-16b: main への hotfix の制約「main がまだ初期コミットだけの間は」がある / ゲート 22 行目
-- 期待: すべて exit 0。タグの push（`git push origin vX.X.X`）は行頭が `git push origin v` なので RTC-12・RTC-13 に当たらない
+- RTC-12: `git push` の後に `main` が出る行が無い / ゲート 18 行目
+- RTC-13: `git push` の後に `develop` が出る行が無い / ゲート 19 行目
+- RTC-14a: 行頭の `git merge` が無い / ゲート 22 行目
+- RTC-14b: 行頭の `git checkout main` が無い / ゲート 23 行目（hotfix は `git checkout --no-track -b hotfix/… origin/main` にする）
+- RTC-15: リリースの `gh pr create --base main --head develop` がある / ゲート 24 行目
+- RTC-16a: hotfix の develop への反映 `gh pr create --base develop --head hotfix/` がある / ゲート 25 行目
+- RTC-16b: main への hotfix の制約「main がまだ初期コミットだけの間は」がある / ゲート 26 行目
+- 期待: すべて exit 0。タグの push（`git push origin vX.X.X`）・hotfix ブランチの push（`git push -u origin hotfix/…`）には `develop`・`main` が出ないので当たらない
 
-## RTC-17: onboarding.md の main へのマージが PR 経由（AC-R3）
-- ゲート 23 行目 / 期待: exit 0
+## RTC-17: onboarding.md の main へのマージが PR 経由（AC-R2・AC-R3）
+- RTC-17a: 「develop → main の PR を作り」がある / ゲート 27 行目
+- RTC-17b・RTC-17c: `git push` の後に `develop`・`main` が出る行が無い / ゲート 20・21 行目
+- 期待: すべて exit 0
 
 ## RTC-18・RTC-19: plan_I032.md が closed にある（AC-R4）
-- RTC-18: `docs/plans/closed/plan_I032.md` がある（ファイルが無いと grep は exit 2。closed 側は計画時点で既にあり、open 側は同じ内容の重複。誤って closed 側を消す事故を防ぐ） / ゲート 24 行目
+- RTC-18: `docs/plans/closed/plan_I032.md` がある（ファイルが無いと grep は exit 2。closed 側は計画時点で既にあり、open 側は同じ内容の重複。誤って closed 側を消す事故を防ぐ） / ゲート 28 行目
 - RTC-19（/test で実行）: open に残っていない
   ```bash
   [ ! -e docs/plans/open/plan_I032.md ]
@@ -112,11 +124,11 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
   ```bash
   [ ! -e scripts/claude/tests/test_i178_branch_protection_doc.sh ]
   ```
-- RTC-21: `scripts`・`.claude`・`.github`・`docs/runbooks` に名前の参照が無い / ゲート 25 行目（docs/tests・docs/plans・docs/reviews の過去の記録は対象外）
+- RTC-21: `scripts`・`.claude`・`.github`・`docs/runbooks` に名前の参照が無い / ゲート 29 行目（docs/tests・docs/plans・docs/reviews の過去の記録は対象外）
 - 期待: どちらも exit 0
 
 ## RTC-22・RTC-23: 変えないものが変わっていない（AC-R6）
-- RTC-22: CODEOWNERS に `* @oshui0404` の行がある / ゲート 26 行目
+- RTC-22: CODEOWNERS に `* @oshui0404` の行がある / ゲート 30 行目
 - RTC-23（/test で実行）: CODEOWNERS・pr-base-sync・close スキル・review-rules が develop から無改変
   ```bash
   git diff --quiet origin/develop -- .github/CODEOWNERS scripts/claude/pr-base-sync.sh .claude/skills/close/SKILL.md docs/runbooks/review-rules.md

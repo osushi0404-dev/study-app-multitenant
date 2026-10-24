@@ -321,6 +321,7 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - [ ] 手動 No.6 で、ユーザーの承認後に bot が GitHub のマージ API（`gh api -X PUT .../pulls/298/merge`）を呼び、push 制限で拒否されることを確かめる（実行直前に改めて了承を取る。adversarial 第2周で `gh pr merge` から変更）
 
 ## レビュー結果
+- [20261024_1452 判定: ✅ 完了](../../reviews/I178_plan_review_20261024_1452.md)
 - [20261020_2003 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261020_2003.md)
 - [20261018_1409 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1409.md)
 - [20261018_1145 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1145.md)
@@ -401,8 +402,8 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 | AC | 内容 | 検証 |
 |---|---|---|
 | AC-R1 | runbook に「ユーザー自身が作った PR はマージできない」「bypass を一時的にオフにしてマージする」の記述が無く、No.7 の事実と、ユーザー作成 PR は bot に承認させてマージする手順が書かれている。§4 確認 5 に No.7 と逆の期待結果が残っていない | RTC-01〜RTC-08 |
-| AC-R2 | `docs/runbooks/`（`legacy/` を除く）に develop・main へ直接 push する手順が、禁止や「行わない」の説明以外で残っていない | RTC-09〜RTC-15・手動 RNo.1 |
-| AC-R3 | issue-flow.md ステップ 25・workflow.md の本番リリース／hotfix・onboarding.md の main へのマージが PR 経由で書かれている | RTC-11・RTC-15〜RTC-17 |
+| AC-R2 | `docs/runbooks/`（`legacy/` を除く）に develop・main へ直接 push する手順が、禁止や「行わない」の説明以外で残っていない | RTC-09〜RTC-14・RTC-17b・RTC-17c・手動 RNo.1 |
+| AC-R3 | issue-flow.md ステップ 25・workflow.md の本番リリース／hotfix・onboarding.md の main へのマージが PR 経由で書かれている | RTC-11・RTC-15・RTC-16・RTC-17a |
 | AC-R4 | `docs/plans/open/plan_I032.md` が無く、`docs/plans/closed/plan_I032.md` がある | RTC-18・RTC-19 |
 | AC-R5 | `scripts/claude/tests/test_i178_branch_protection_doc.sh` が無く、実行対象として参照されていない | RTC-20・RTC-21 |
 | AC-R6 | GitHub のブランチ保護設定と `.github/CODEOWNERS` は変更されていない | RTC-22・RTC-23 |
@@ -571,6 +572,9 @@ gh pr create --base develop --head hotfix/critical-bug-description --title "hotf
 - [ ] workflow.md の hotfix に「main が初期コミットだけの間は develop 経由」の注意書きを足す（調査で判明した制約）
 - [ ] test_i178_branch_protection_doc.sh は削除する（ユーザー了承）
 - [ ] 保護設定の後退検知（pr-base-sync の判定）は作らない（ユーザー了承）
+
+## 計画変更記録（再オープン分）
+1. 2026-10-24 plan-review 20261024_1452 の指摘対応（方式・範囲・AC は変えない）: 直 push の否定判定を行頭限定から「`git push` の後に develop・main が出る行」に広げ、issue-flow.md の main・onboarding.md の develop・main にも同じ判定を追加（Warning）。旧文「確認 4〜6」の否定判定を追加（Info）。ゲート内に RTC-21 の検索対象外のコメントを追加（Info）。テスト文書の追記だけなので、プランレビューのやり直しは不要。
 
 ## ユーザー承認（再オープン分）
 - **承認日時**: 2026-10-24
