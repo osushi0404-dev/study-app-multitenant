@@ -31,6 +31,7 @@
 - [review-gate] 3 回目の基本レビュー（`I193_code_review_20261025_0111.md`）も HIGH（High 2・Medium 6・Low 3）なので fix-loop へ回した（3 回目の review-gate の STAGE_DONE は、修正の後に結線の行と一緒に書いた）
 - [fix-loop] 訂正: 2 回目の M4（背景の実行が 10 分で止まる）を「実測した」として採らなかったが、確かめていない主張だった（実際の背景の実行は約 7 分で終わっていた）。3 回目で 700 秒の背景の実行を実測し（止まらない）、それでも判定行が無ければやり直して止まる側に倒した（診断メモ `I193_fix_diagnosis_20261025_0125.md`）
 - [fix-loop] 3 回目は診断メモを先に書いた。1 回目の診断レビューは「スパイクの結果が無い・未報告を 0 と数える穴が残る」で差し戻し（正しい指摘）、直して PASS。「比べ方に無関係な変化が混ざる」が 2 回続いたので、精密化をやめて粗く確実な形（blob の比較＋develop が同じファイルに触れたら止まる側）に倒した
+- [review-gate] 4 回目の基本レビュー（`I193_code_review_20261025_0158.md`）も HIGH（High 2・Medium 5・Low 3）。review-gate ⇄ fix-loop の繰り返しに上限が無いこと自体が設計の穴（敵対的レビューにだけ上限を置いていた）と判断し、止める条件 3 の安全側（範囲を狭める）を選んだ: 今回は High 2 件と、1 行で直る Medium 3 件（gate-check の pipefail・F10 の実リポジトリ依存・test-gate の dirty の文言）だけを直し、効率の Medium（記録だけの push で CI が走り直す・背景の起動の順・ライブラリの分け方）と Low は retro に回す。あわせて「基本レビューが 3 回続けて HIGH 以上なら 4 回目からは High だけを直し、5 回続けば止める」上限を review-gate に足す
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -55,3 +56,5 @@ STAGE_DONE: fix-loop NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: fix-loop
