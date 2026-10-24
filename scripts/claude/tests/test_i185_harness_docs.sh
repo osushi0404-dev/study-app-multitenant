@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# I185 P2〜P4: スキル・手順書の書き換えを決定論検証する（docker/pytest 非依存）。
+# I185 P2・P4: スキル・手順書の書き換えを決定論検証する（docker/pytest 非依存）。
 # 実行: bash scripts/claude/tests/test_i185_harness_docs.sh
+#       bash scripts/claude/tests/test_i185_harness_docs.sh --update   # 固定した文章（fixtures）を今の内容で作り直す
 #
 # P2: 計画レビューを人の承認の前に済ませる（plan-issue が plan-issue-review.sh を実行する）
-# P3: fix-loop 手順 4 は条件を満たすときだけ推奨案で進む（3 つの関所は残す）
 # P4: スキルの allowed-tools（事前許可）を外し、制限は disallowed-tools で書く
-# 検証するリポジトリのルートは環境変数 ROOT で差し替えられる（変更前のファイルに当てて不合格になることの確認用）。
+# P3（fix-loop の自動進行）はこのイシューから外した（敵対的レビュー 2 周で穴が続いたため・別イシュー）。
+#
+# 守りの部分は、文字列の一部ではなく「ブロックを丸ごと固定」して照合する（敵対的レビューで、部分一致の
+# 照合は削除・反転・挿入を見逃すと 2 周続けて分かったため。粗くても確実に止まる側に倒す）。
+# 守りの部分を変えるときは --update で fixtures を作り直し、その差分をレビューで見る。
+# 検証するリポジトリのルートは環境変数 ROOT で差し替えられる（壊した版に当てて不合格になることの確認用）。
 # 0=全 PASS / 1=FAIL あり。
 # shellcheck disable=SC2016  # 単一引用符内の $ARGUMENTS・バッククォートは文書の文字どおりの照合用（展開させない意図）
 set -uo pipefail
 
-ROOT="${ROOT:-$(git rev-parse --show-toplevel)}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ROOT="${ROOT:-$REPO_ROOT}"
+FIXTURES="$REPO_ROOT/scripts/claude/tests/fixtures/i185"
 SKILLS="$ROOT/.claude/skills"
 PLAN_ISSUE="$SKILLS/plan-issue/SKILL.md"
 FIX_LOOP="$SKILLS/fix-loop/SKILL.md"
@@ -18,82 +25,130 @@ SEC_REVIEW="$SKILLS/security-review/SKILL.md"
 WORKFLOW="$ROOT/docs/runbooks/workflow.md"
 ISSUE_FLOW="$ROOT/docs/runbooks/issue-flow.md"
 ONBOARDING="$ROOT/docs/runbooks/onboarding.md"
+REVIEW_RULES="$ROOT/docs/runbooks/review-rules.md"
+PLAN_REVIEWER="$ROOT/.claude/review-agents/plan-reviewer.md"
+LINT_SKILLS="$ROOT/scripts/migration_verify/lint_skills.py"
+
+# block <file> <開始行の先頭> <終了行の先頭|EOF>: 開始行から終了行の手前まで（EOF なら最後まで）を出す。
+# 開始行・終了行が見つからなければ非 0。
+block() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import sys
+path, start, end = sys.argv[1:]
+try:
+    lines = open(path, encoding="utf-8").read().split("\n")
+except OSError:
+    sys.exit(2)
+s = next((i for i, l in enumerate(lines) if l.startswith(start)), None)
+if s is None:
+    sys.exit(1)
+if end == "EOF":
+    e = len(lines)
+else:
+    e = next((i for i in range(s + 1, len(lines)) if lines[i].startswith(end)), None)
+    if e is None:
+        sys.exit(1)
+sys.stdout.write("\n".join(lines[s:e]).rstrip("\n") + "\n")
+PY
+}
+
+# 固定するブロックの一覧: 名前|ファイル|開始行の先頭|終了行の先頭（EOF は最後まで）
+PINS=(
+  "plan_issue_review_section@@$PLAN_ISSUE@@**計画レビュー（承認ポイント提示の前に実施@@EOF"
+  "security_review_frontmatter@@$SEC_REVIEW@@---@@# /security-review"
+  "workflow_flow_2_3@@$WORKFLOW@@2. /plan-issue I### →@@3.5. /security-review"
+  "workflow_transition_rows@@$WORKFLOW@@| 計画書承認後（高リスク判定 No）@@| security-review Blocker なし後"
+  "issue_flow_8_5@@$ISSUE_FLOW@@8.5. \`/plan-issue\` の中で計画レビュー@@=== フェーズ3"
+  "issue_flow_step_8_5@@$ISSUE_FLOW@@**ステップ8.5: 計画レビュー@@#### フェーズ3"
+)
+
+# split_pin <エントリ>: 「@@」区切り（表の行の先頭の「|」とぶつからないように）を name/file/start/end に分ける
+split_pin() {
+  local rest="$1"
+  name="${rest%%@@*}"; rest="${rest#*@@}"
+  file="${rest%%@@*}"; rest="${rest#*@@}"
+  start="${rest%%@@*}"; end="${rest#*@@}"
+}
+
+if [ "${1:-}" = "--update" ]; then
+  mkdir -p "$FIXTURES"
+  for p in "${PINS[@]}"; do
+    split_pin "$p"
+    block "$file" "$start" "$end" > "$FIXTURES/$name.txt" || { echo "取り出せません: $name"; exit 1; }
+    echo "updated: $FIXTURES/$name.txt"
+  done
+  exit 0
+fi
 
 pass=0; fail=0
 ckt() { local name="$1"; shift
         if "$@"; then printf 'PASS %s\n' "$name"; pass=$((pass+1));
         else printf 'FAIL %s\n' "$name"; fail=$((fail+1)); fi; }
-has()    { grep -qF -- "$2" "$1"; }          # 文字どおり含む
-hasnt()  { [ -f "$1" ] && ! grep -qF -- "$2" "$1"; }   # ファイルがあり、文字どおり含まない
+has_line() { grep -qxF -- "$2" "$1"; }            # その 1 行が丸ごとある
+hasnt()    { [ -f "$1" ] && ! grep -qF -- "$2" "$1"; }   # ファイルがあり、文字どおり含まない
 
-no_allowed_tools() {
-  local f found=0 n=0
-  for f in "$SKILLS"/*/SKILL.md; do
-    [ -f "$f" ] || continue
-    n=$((n+1))
-    if grep -q '^allowed-tools:' "$f"; then printf '  allowed-tools が残っている: %s\n' "$f"; found=1; fi
-  done
-  [ "$n" -gt 0 ] && [ "$found" -eq 0 ]
+pinned() {  # pinned <name> <file> <start> <end>: ブロックが固定した文章と 1 文字も違わない
+  local got
+  got="$(block "$2" "$3" "$4")" || return 1
+  [ -f "$FIXTURES/$1.txt" ] && [ "$got" = "$(cat "$FIXTURES/$1.txt")" ]
 }
 
-# frontmatter（先頭の --- と次の --- の間）に、その 1 行がそのまま入っているか
-in_frontmatter() {
-  python3 - "$1" "$2" <<'PY'
-import sys
-lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
-if not lines or lines[0] != "---" or "---" not in lines[1:]:
-    sys.exit(1)
-sys.exit(0 if sys.argv[2] in lines[1:lines.index("---", 1)] else 1)
+no_allowed_tools_in_frontmatter() {
+  python3 - "$SKILLS" <<'PY'
+import glob, os, sys
+files = sorted(glob.glob(os.path.join(sys.argv[1], "*", "SKILL.md")))
+bad = []
+for f in files:
+    lines = open(f, encoding="utf-8").read().split("\n")
+    if lines[:1] != ["---"] or "---" not in lines[1:]:
+        bad.append(f); continue
+    fm = lines[1:lines.index("---", 1)]
+    if any(l.split(":", 1)[0].strip() == "allowed-tools" for l in fm):
+        bad.append(f)
+for f in bad:
+    print("  allowed-tools が残っている（または frontmatter が無い）:", f)
+sys.exit(0 if files and not bad else 1)
 PY
 }
 
-# 文字列 A を含む最初の行が、文字列 B を含む最初の行より前にあるか（両方あること）
-before() {
-  python3 - "$1" "$2" "$3" <<'PY'
+stop_only_in_review_section() {  # 計画レビューの節より前に「停止」の指示がない（承認の前に止まる手順を差し込ませない）
+  python3 - "$PLAN_ISSUE" <<'PY'
 import sys
 lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
-a = next((i for i, l in enumerate(lines) if sys.argv[2] in l), None)
-b = next((i for i, l in enumerate(lines) if sys.argv[3] in l), None)
-sys.exit(0 if a is not None and b is not None and a < b else 1)
+s = next((i for i, l in enumerate(lines) if l.startswith("**計画レビュー（承認ポイント提示の前に実施")), None)
+sys.exit(0 if s is not None and not any("停止" in l for l in lines[:s]) else 1)
 PY
 }
 
-# ① ②（P4）
-ckt "TC-14① どの SKILL.md にも allowed-tools 行がない" no_allowed_tools
-ckt "TC-14② security-review の frontmatter に disallowed-tools がある" in_frontmatter "$SEC_REVIEW" 'disallowed-tools: Write, NotebookEdit'
-# ③ ④（P2）
-ckt "TC-14③a plan-issue が plan-issue-review.sh を実行する" has "$PLAN_ISSUE" 'bash scripts/claude/plan-issue-review.sh $ARGUMENTS'
-ckt "TC-14③b plan-issue に「承認後に /plan-issue-review」の案内がない" hasnt "$PLAN_ISSUE" '承認後の次のステップ: `/plan-issue-review'
-ckt "TC-14③c 計画レビューの実行が、承認ポイントの提示より前にある" before "$PLAN_ISSUE" 'bash scripts/claude/plan-issue-review.sh $ARGUMENTS' '承認ポイントに含めて提示し、停止する'
-ckt "TC-14③d 「完了したら承認ポイントを提示して停止」（レビュー前の停止）がない" hasnt "$PLAN_ISSUE" '完了したら「承認ポイント」を提示して停止する'
-ckt "TC-14③e スクリプトの「/implement を実行」の案内を承認前に伝えない" has "$PLAN_ISSUE" 'ここではユーザーに伝えない'
-ckt "TC-14③f スクリプトが判定前に失敗したら承認ポイントを出さない" has "$PLAN_ISSUE" '承認ポイントを出さずに停止し、失敗したことを報告する'
+lint_does_not_require_allowed_tools() {  # 書式によらず REQUIRED_FIELDS の中身を読む
+  python3 - "$LINT_SKILLS" <<'PY'
+import ast, sys
+tree = ast.parse(open(sys.argv[1], encoding="utf-8").read())
+for node in ast.walk(tree):
+    if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "REQUIRED_FIELDS" for t in node.targets):
+        value = ast.literal_eval(node.value)
+        sys.exit(0 if "allowed-tools" not in value and {"name", "description"} <= set(value) else 1)
+sys.exit(1)
+PY
+}
+
+# 固定したブロック（P2・P4）
+for p in "${PINS[@]}"; do
+  split_pin "$p"
+  ckt "TC-14pin $name が固定した文章と一致" pinned "$name" "$file" "$start" "$end"
+done
+ckt "TC-14③ 計画レビューの節より前に「停止」の指示がない" stop_only_in_review_section
 ckt "TC-14④ workflow.md に「計画書承認後 → /plan-issue-review を入力」がない" hasnt "$WORKFLOW" '| 計画書承認後 | 「`/plan-issue-review I###` を入力してください」'
-# ⑤ ⑥（P3）
-ckt "TC-14⑤a fix-loop 手順 4 に推奨案で進む条件がある" has "$FIX_LOOP" '次の 6 つを**すべて**満たすときは、推奨案で進めて手順 5 へ'
-ckt "TC-14⑤b 条件 ⑥（守りの仕組みに触れない）がある" has "$FIX_LOOP" '認証・認可・テナント境界・秘密情報の扱い・権限設定・フック・GitHub Actions'
-ckt "TC-14⑤b2 条件 ⑥ がレビュー・判定の仕組みも除外する" has "$FIX_LOOP" 'レビュー・判定の仕組み（'
-ckt "TC-14⑤f 条件 ① 診断レビューが PASS" has "$FIX_LOOP" '1. 手順3.5 が `FIX_GATE: PASS`（SKIP ではない）'
-ckt "TC-14⑤g 条件 ② 価値判断でない" has "$FIX_LOOP" '2. 推奨案が 1 つに決まり、他案との違いが価値判断'
-ckt "TC-14⑤h 条件 ③ 計画を変えない" has "$FIX_LOOP" '3. 計画の方式・範囲・受け入れ条件を変えない'
-ckt "TC-14⑤i 条件 ④ 危険操作を含まない" has "$FIX_LOOP" '4. 危険操作'
-ckt "TC-14⑤j 条件 ⑤ 簡略化を使わない" has "$FIX_LOOP" '5. 軽微例外による実装/テストレビューの簡略化を使わない'
-ckt "TC-14⑤k 満たさないときは停止する" has "$FIX_LOOP" '1 つでも満たさないときは承認待ちで停止する'
-ckt "TC-14⑤l 絶対ルール 2 との関係が fix-loop に書かれている" has "$FIX_LOOP" 'CLAUDE.md の絶対ルール 2 の承認を満たすものとみなす'
-ckt "TC-14⑤m 絶対ルール 2 との関係が workflow.md に書かれている" has "$WORKFLOW" '### fix-loop での承認の扱い（I185 P3）'
-ckt "TC-14⑤n workflow.md の fix-loop の説明が「必ず承認」のままでない" hasnt "$WORKFLOW" 'NG/失敗時の原因整理→差分計画→承認→修正→再テスト'
-ckt "TC-14⑤c 診断レビューの関所が残る" has "$FIX_LOOP" 'fix-diagnosis-review.sh'
-ckt "TC-14⑤d 実装レビューの関所が残る" has "$FIX_LOOP" 'fix-implementation-review.sh'
-ckt "TC-14⑤e テストレビューの関所が残る" has "$FIX_LOOP" 'fix-test-review.sh'
-ckt "TC-14⑥a 共通ルール (b) が新しい言い方になっている" has "$FIX_LOOP" '手順4（新案なので条件を判定し直す）'
-ckt "TC-14⑥b 共通ルール (b) に古い言い方が残っていない" hasnt "$FIX_LOOP" '手順4 ユーザー承認（新案のため）'
-# ⑧（P4 の消費箇所: allowed-tools を必須・最小権限として扱う古い基準が残っていない）
-ckt "TC-14⑧a review-rules.md に古い基準がない" hasnt "$ROOT/docs/runbooks/review-rules.md" '`allowed-tools` で最小権限が設定されているか'
-ckt "TC-14⑧b plan-reviewer.md に古い基準がない" hasnt "$ROOT/.claude/review-agents/plan-reviewer.md" '`allowed-tools` で最小権限が設定されているか'
-ckt "TC-14⑧c lint_skills.py が allowed-tools を必須にしていない" hasnt "$ROOT/scripts/migration_verify/lint_skills.py" 'REQUIRED_FIELDS = ["name", "description", "allowed-tools"]'
-# ⑦（P2 の消費箇所）
-ckt "TC-14⑦a issue-flow.md に新しい順番の説明がある" has "$ISSUE_FLOW" '`/plan-issue` の中で計画レビュー'
-ckt "TC-14⑦b onboarding.md に新しい順番の説明がある" has "$ONBOARDING" '`/plan-issue` の中で計画レビュー'
+ckt "TC-14⑦ onboarding.md の流れが新しい順番" has_line "$ONBOARDING" '/issue-bootstrap → /grill-me → /plan-issue（計画レビューまで）'
+# P4
+ckt "TC-14① どの SKILL.md の frontmatter にも allowed-tools がない" no_allowed_tools_in_frontmatter
+ckt "TC-14⑧a review-rules.md のスキル変更チェック 1 が新しい基準" has_line "$REVIEW_RULES" '| 1 | 使えるツールを絞る必要があるスキルは `disallowed-tools` で制限しているか。`allowed-tools` は「確認なしで使ってよい」事前許可で制限にはならないので、付けるなら本当に事前許可が要るものだけに絞っているか（素の `Bash` を事前許可していないか）（I185 P4） | セキュリティ |'
+ckt "TC-14⑧b plan-reviewer.md の観点が新しい基準" has_line "$PLAN_REVIEWER" '- 使えるツールを絞る必要があるスキルは `disallowed-tools` で制限しているか（`allowed-tools` は事前許可で制限にはならない。付けるなら本当に事前許可が要るものだけで、素の `Bash` を事前許可していないか）'
+ckt "TC-14⑧c lint_skills.py の必須項目に allowed-tools がない" lint_does_not_require_allowed_tools
+# P3 を外したこと（fix-loop は人が案を選ぶ形のまま）
+ckt "TC-14⑤a fix-loop 手順 4 は承認待ちで停止" has_line "$FIX_LOOP" '4) 承認待ちで停止（ユーザーが案を選択。軽微例外による実装/テストレビュー簡略化の可否もここで判断）'
+ckt "TC-14⑤b fix-loop に推奨案で自動に進む手順がない" hasnt "$FIX_LOOP" '推奨案で進めて'
+ckt "TC-14⑤c 共通ルール (b) は新案のユーザー承認のまま" grep -qF '手順4 ユーザー承認（新案のため）' "$FIX_LOOP"
 
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

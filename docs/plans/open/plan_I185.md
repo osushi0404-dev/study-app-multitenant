@@ -219,6 +219,16 @@
 - 影響範囲の追加: `scripts/migration_verify/lint_skills.py`・`docs/runbooks/review-rules.md`・`.claude/review-agents/plan-reviewer.md`・`.claude/skills/security-review/SKILL.md`・`.claude/skills/retro/SKILL.md`（いずれも P2・P4 の消費箇所）。
 - 指摘への対応を足しただけで、方式・範囲・受け入れ条件は変えていない（P3 の解釈の明記は、承認の判定基準を文書にしたもの）ため、/plan-issue-review のやり直しは不要。High を直したので、直した差分を敵対的レビューの 2 周目で見直す。
 
+### 変更 7（2026-10-24・敵対的レビュー 2 周で上限到達・未収束 → ユーザーが「方式の見直し」を選択）
+記録: `docs/reviews/I185_adversarial_review_20261024_1905.md`。種類 A（文字列照合のテストが守りの部分の書き換えを見逃す）と種類 B（P3 の自己判定の穴）が 2 周続いたため、細かく塞ぐのをやめ、確実に止まる側に倒した。ユーザーの一任（2026-10-24）。
+- **P3 をこのイシューから外した（範囲の変更）**: `fix-loop/SKILL.md`（手順 4・共通ルール (b)・description）と `workflow.md`（fix-loop の説明 3 か所・「fix-loop での承認の扱い」の節）を変更前に戻した。fix-loop は今までどおりユーザーが案を選ぶ。P3 は、実際の差分を機械で確かめるゲートと一緒に設計し直す別イシューにする（報告書 §6）。受け入れ条件「本イシューで実装とした改善案」は P1・P2・P4・P5 になる。
+- **種類 A**: `test_i185_harness_docs.sh` を、守りの部分のブロックを丸ごと固定して照合する形に作り直した（固定した文章は `scripts/claude/tests/fixtures/i185/`。変えるときは `--update` で作り直し、差分をレビューで見る）。固定するのは、plan-issue の計画レビューの節・security-review の frontmatter・workflow.md の流れ 2〜3 と移行表・issue-flow.md の 8.5 とステップ 8.5。あわせて、計画レビューの節より前に「停止」の指示がないこと、lint_skills.py の必須項目を構文として読むこと、fix-loop が承認待ちのままであることを確かめる。2 周目で見逃された書き換え（手順 1 での承認待ちの挿入・書式を変えた必須項目・節の前の停止 など）7 種類で不合格になることを確認した。
+- **種類 C**: `scripts/claude/plan-issue-review.sh` の `detect_plan_verdict` は、VERDICT 行も「## 判定: ✅」も無いとき `UNKNOWN` を返し、スクリプトは「判定できませんでした」と出して終了コード 1 で止まる（今までは OK に倒れていた）。`test_review_verdict.sh` に TC-17b・17c・25b を足し、旧来の寛容な動きを前提にしていた TC-21b・25・26 の期待値を UNKNOWN に変えた。plan-issue の「判定の前の失敗」の条件を「どれか 1 つでも当たれば止める」に書き直した。
+- **TC-11g**: matcher がセッション開始で発火すること（無い・`*`・`startup` に一致）と、コマンドが完全に一致することを確かめる。TC-11e に ASCII 以外の数字の日付を足した。最新イシューの応答の形が壊れているときは「取得できませんでした」と出す。
+- **Low**: `docs/claude-code-structure.md` の `allowed-tools` の説明を直した。open の I044・I040 の計画・イシューにある「allowed-tools 最小権限」の記述は、それぞれのイシューの着手時に直す（他のイシューの記録のため本イシューでは変えない）。
+- 影響範囲の追加: `scripts/claude/plan-issue-review.sh`・`scripts/claude/tests/test_review_verdict.sh`・`scripts/claude/tests/fixtures/i185/`（新規）・`docs/claude-code-structure.md`。
+- **範囲を変えた（P3 を外した・スクリプトを変えた）ため、`/plan-issue-review` を通す**。敵対的レビューはイシュー全体の上限（2 周）に達しているので 3 周目は行わず、上の壊した版での決定論の確認を根拠にする（ユーザーが選んだ「方式の見直し」の内容）。
+
 ## セキュリティレビュー結果
 
 **実施日**: 2026-10-24

@@ -36,6 +36,13 @@
 - TC-14⑧: `allowed-tools` を必須・最小権限として扱う古い基準が残っていない
 - 結果: TC-11 は 7/7、TC-14 は 31/31 合格
 
+敵対的レビュー 2 周目（`docs/reviews/I185_adversarial_review_20261024_1905.md`・上限到達）を受けた作り直し（計画変更記録 7）:
+- TC-14 は、守りの部分のブロックを丸ごと固定して照合する形に変えた（固定した文章は `scripts/claude/tests/fixtures/i185/`。TC-14pin×6・③・④・⑦・①・⑧a〜c・⑤a〜c の 16 件）。P3 を外したので、fix-loop は承認待ちのままであることを確かめる（⑤a〜c）
+- 壊した版 7 種類（手順 1 での承認待ちの挿入・節の前の停止・frontmatter の外へ移動・書式を変えた必須項目・fix-loop の自動進行・移行表の書き換え・2 回 NG の停止の削除）で、7 種類とも不合格（rc=1）になることを確認した
+- TC-11g は matcher（無い・`*`・`startup` に一致）とコマンドの完全一致を確かめる。matcher を `compact` にした設定・コマンドを `true # …` にした設定で不合格。TC-11e は `\d` に戻した日付の判定で不合格
+- TC-16（新規の決定論ゲート）: `test_review_verdict.sh`。VERDICT 行も「## 判定: ✅」も無いレビュー記録は UNKNOWN（判定不能）になる（TC-17b・17c・25b を追加、TC-21b・25・26 の期待値を UNKNOWN に変更）。58 件合格
+- 結果: TC-11 は 7/7、TC-14 は 16/16、TC-16 は 58/58 合格
+
 false-green の確認（2026-10-24・実装時に実施）:
 - TC-10: テストを先に書き、変更前のフック（exit 1）に当てて実行 → TC-10a・10b が不合格（rc=1）、全体 exit 1。直した後は 6 件すべて合格。
 - TC-11: 常に exit 1 で終わり、タイトルをそのまま出すおとり（`SCRIPT` で指定）に当てて実行 → 5 件中 4 件が不合格、全体 exit 1。フックを書く前（ファイルなし）も 4 件不合格。
@@ -67,4 +74,5 @@ python3 -m json.tool .claude/settings.json
 grep -q "sessionstart_context\.py" .claude/settings.json
 bash scripts/claude/tests/test_i185_harness_docs.sh
 python3 -m py_compile scripts/claude/hooks/sessionstart_context.py
+bash scripts/claude/tests/test_review_verdict.sh
 ```

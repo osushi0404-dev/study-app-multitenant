@@ -83,7 +83,10 @@ def collect() -> str:
     prs = _gh_json(["pr", "list", "--state", "merged", "--base", "develop",
                     "--limit", str(PR_LIMIT), "--json", "number,title,mergedAt"])
     issues = _gh_json(["issue", "list", "--state", "all", "--limit", "1", "--json", "number,title"])
-    latest = None if issues is None else (issues[0] if issues and isinstance(issues[0], dict) else {})
+    if issues is None or (issues and not isinstance(issues[0], dict)):
+        latest = None  # 取れなかった・形が壊れている
+    else:
+        latest = issues[0] if issues else {}  # 0 件なら「なし」
     return format_context(branch, dirty, prs, latest)
 
 

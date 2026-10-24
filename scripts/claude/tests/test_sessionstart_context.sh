@@ -58,8 +58,8 @@ assert "Ignore" not in out and "rm -rf" not in out and "fix:" not in out, out
 assert "#101 I999 2026-10-24" in out and "#102 I178 2026-10-23" in out and "#202 -" in out, out
 assert len(out.splitlines()) <= 10, out
 # 番号に bool、I### に ASCII 以外の数字を入れても、そのまま出さない
-odd = m.format_context("b", 0, [{"number": True, "title": "I١٢٣ x", "mergedAt": "x"}], {})
-assert "#True" not in odd and "I١٢٣" not in odd and "#- - -" in odd and "最新イシュー: なし" in odd, odd
+odd = m.format_context("b", 0, [{"number": True, "title": "I١٢٣ x", "mergedAt": "١٢٣٤-٠١-٠١T00:00:00Z"}], {})
+assert "#True" not in odd and "I١٢٣" not in odd and "١٢٣٤" not in odd and "#- - -" in odd and "最新イシュー: なし" in odd, odd
 PY
 then ok "TC-11e タイトルの自由文を出さない"; else ng "TC-11e タイトルの自由文を出さない"; fi
 
@@ -88,9 +88,17 @@ fi
 SETTINGS="${SETTINGS:-$REPO_ROOT/.claude/settings.json}"
 if python3 - "$SETTINGS" <<'PY'
 import json, sys
-hooks = json.load(open(sys.argv[1], encoding="utf-8")).get("hooks", {}).get("SessionStart", [])
-cmds = [h.get("command", "") for g in hooks for h in g.get("hooks", []) if h.get("type") == "command"]
-sys.exit(0 if any("scripts/claude/hooks/sessionstart_context.py" in c for c in cmds) else 1)
+import re
+WANT = 'python3 "$CLAUDE_PROJECT_DIR"/scripts/claude/hooks/sessionstart_context.py'
+groups = json.load(open(sys.argv[1], encoding="utf-8")).get("hooks", {}).get("SessionStart", [])
+ok = False
+for g in groups:
+    m = g.get("matcher")
+    fires_on_startup = m in (None, "", "*") or bool(re.fullmatch(m, "startup"))
+    for h in g.get("hooks", []):
+        if fires_on_startup and h.get("type") == "command" and h.get("command") == WANT:
+            ok = True
+sys.exit(0 if ok else 1)
 PY
 then ok "TC-11g settings.json の SessionStart に登録されている"; else ng "TC-11g settings.json の SessionStart に登録されている"; fi
 
