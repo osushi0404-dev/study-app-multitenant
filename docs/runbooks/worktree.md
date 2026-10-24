@@ -198,6 +198,11 @@ docker compose config | grep -A1 published
 
 同一リポジトリを共有するため、**コミット済みの内容は全ワークツリーで共有**される。一方で gitignore 対象・コンテナ管理のものは共有されない。
 
+**ワークツリー間の反映のタイミング**: 「共有される」のはコミットの履歴であって、作業中のファイルではない。各ワークツリーのファイル（スキル・手順書・`.claude/settings.json` を含む）は、そのワークツリーが今チェックアウトしているブランチの内容で動く。
+- 別のワークツリーで直したスキル・手順書は、PR で develop にマージされ、さらに自分のワークツリーがそれを取り込むまで反映されない（どこかで直せば即全体に効く、ではない）。新しいイシューは `/plan-issue` が最新の `origin/develop` からブランチを作るので自然に入る。
+- 作業途中のワークツリーに取り込むときは、そのワークツリーのセッションで `git fetch origin` → `git merge origin/develop` を行う（未コミットの変更は先にコミットしておく）。
+- 例外（ブランチによらない）: `~/.claude` の個人設定・メモリ、git config、git stash は 1 つで全ワークツリーに即効く（下の「共有される」）。サブエージェントのフック（ガード）と `.worktreeinclude` は、作業しているワークツリーではなく primary が今チェックアウトしているブランチの内容で決まる（§2「primary のブランチ」）。
+
 **共有される（コミット済み / `.git`）**:
 - `.git` 履歴・コミット済みファイル全般
 - `CLAUDE.md`・`docs/runbooks`（この runbook 含む）
@@ -261,6 +266,8 @@ docker compose config | grep -A1 published
 
 ## 11. 旧方式からの移行
 
+**wt-harness の移行は I184（2026-10-24）で完了した。以下は手順の記録として残す。**
+
 - **既存の `wt-harness`（`/mnt/c/app/wt-harness`・I179 より前の自作スクリプト方式で primary の外に作ったワークツリー）**: そこで進めているイシュー（I178・I179）が完了・クローズした後に、次の順で移す。
   1. `wt-harness` にしか無い未コミットのファイルを primary へ移す。`/issue-bootstrap` のイシューファイル（`docs/issues/open/I###.md`）とイシューレビュー（`docs/reviews/I###_issue_review_*.md`）は、運用上わざと未コミットにしているので、捨てると起票済みイシューの本文と採番の根拠が消える。**primary のセッションで**、`git -C /mnt/c/app/wt-harness status --porcelain --untracked-files=all` に出る `??` のファイル（`--untracked-files=all` でフォルダではなくファイル単位に出す）のうち primary に無いものを `cp /mnt/c/app/wt-harness/<パス> <パス>` で primary にコピーする（コピー元の読み取りはガードに抵触しない。`wt-harness` のセッションから primary へ書き込むのはガードで止まる）。コピー後、両方の中身が `cmp` で一致することを確かめる。**primary にも同じパスのファイルがあるもの**は、コピーせずに `cmp` で中身を比べる。違っていれば（以前に primary へ写した後、`wt-harness` 側で追記した等）どちらが新しいかを確かめ、`wt-harness` 側が新しければ primary のセッションで差分を反映してから手順 3 に進む（手順 3 で `wt-harness` 側を削除するため、確かめずに進めると新しい版が消える）。
      - **コピーしないもの**: 同じ番号が既にクローズ済み（develop に `docs/issues/closed/I###.md` がある。`git ls-tree -r --name-only origin/develop docs/issues/closed/` で確認）のイシューファイルは古い版なのでコピーしない（open と closed が内容違いで並ぶのを防ぐ）。
@@ -268,4 +275,5 @@ docker compose config | grep -A1 published
   2. `wt-harness` の中に入れ子（サブエージェントが作った `.claude/worktrees/agent-*` など）が残っていれば、先に撤去する（§4。未 push の入れ子の扱いも §4）。
   3. primary から `bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness` で撤去する（Docker のデータが無ければ許可は不要）。`wt-harness` に残っている untracked のファイル（手順 1 でコピーしたもの・「コピーしないもの」としたクローズ済みイシューの古い版の両方）は、未コミット変更として撤去を止める。primary へのコピーを確かめたうえで、**`wt-harness` のセッションで**それらをすべて削除してから実行する。
   4. 必要なら primary で `claude --worktree harness-<連番>` で作り直す（§2 の「作る前の確認」を先に行う）。
+     作った直後のワークツリーは変更が無いので、そのセッションを終えると確認なしで自動的に消える（§2「終了時の確認」）。使うときに作ればよく、残しておきたいときはセッションを開いたままにする（消えても同じコマンドで作り直せる）。
 - **primary は移行しない**（そのまま作成元として使う）。
