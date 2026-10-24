@@ -79,6 +79,7 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 - ファイルに保存する操作の書き先は `.evidence/I###/` の直下だけ（見張りが止める）。名前なしの保存は `.evidence/` 直下に入る
 - `--secrets` の伏せ字は文字の出力だけに効き、画像には効かない。秘密の名前はパスワード欄（`type=password`・表示は伏せ字）にだけ入力する
 - `browser_network_requests`（複数形・通信の一覧だけ）は確認なし、`browser_network_request`（単数形・ヘッダーと本文）は使うたびに確認が出る。任意のコードを動かす `browser_evaluate`・`browser_run_code_unsafe`、ファイルを渡す `browser_file_upload`・`browser_drop` も確認が出る
+- 上の「確認が出る」は通常モードのときだけ。自動承認モード（auto mode）では確認が自動の判断になり、任意のコードを動かす操作も通ることがある。画面確認は通常モードで行い、承認画面が出るかは稼働中のセッションではなく `scripts/claude/check-permission-prompt.sh` で確かめる
 - 画像・trace・パスワードを git や外部に出さない
 
 ## 10. MCP のバージョンを上げるとき
