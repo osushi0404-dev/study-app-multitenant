@@ -12,6 +12,7 @@
 - 計画時（実装前・2026-10-24）: 下記「ベースライン」
 - 実装前の赤（ステップ 1・2026-10-24）: テストを先に書き、本体が古いまま実行 → `test_adversarial_trigger.sh` pass=34 fail=26（P1 の 5 件・P2 の 10 件・P3・P4 の `pretooluse_guard.py.orig`・P5・P6・FG-P1 の 6 件〔case 行がまだ無く複製を作れない〕・P7）、`test_i181_review_slim.sh` pass=6 fail=23（D1〜D10 と、注入先の語がまだ無い FG 8 件）。どちらも新しい期待の TC だけが不合格で、既存の risk・combine・decision・emit・wire の TC は合格のまま
 - 実装時（2026-10-24・/implement）: `test_adversarial_trigger.sh` pass=60 fail=0（P1〜P7・FG-P1 6 通り・FG-P2 を含む）・`test_i181_review_slim.sh` pass=29 fail=0（D1〜D10・FG-D1〜FG-D10）・R2 PASS=67・R3 PASS=55・R4 pass=97・R5 PASS=30（SKIP 1）・R6 pass=9・R7 `bash -n` 3 本とも exit 0。すべて fail=0
+- 実装後（2026-10-24・/test・048d3bc）: `test_adversarial_trigger.sh` pass=60・`test_i181_review_slim.sh` pass=29・R2 PASS=67・R3 PASS=55・R4 pass=97・R5 PASS=30（SKIP 1）・R6 pass=9・R7 `bash -n` 3 本 exit 0。すべて fail=0。CI（PR #311）6 件 pass
   - D8 は初回 2 件不合格: `/code-review` 等のスラッシュコマンドと `origin/develop` をパスとして数えていた（判定の誤り。本物のパス切れは無し）。除外に追加して合格（上の D8 の行に追記）
 
 ## ベースライン（実装前・2026-10-24）
