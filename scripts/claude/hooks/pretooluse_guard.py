@@ -2666,6 +2666,7 @@ def _join_continuations(text: str) -> str:
 # 相手の版に置き換わり、次のツール呼び出しでそのコードが実行される（R10・2026-10-16 承認）。
 # 対象サブコマンドと種別は下の _GH_PR_SPECS に集約する（R8: 追加は 1 エントリ）。
 
+_EVIDENCE_FILE_RE = re.compile(r"\.evidence/I[0-9]{3}/[A-Za-z0-9._-]+")   # I187: Playwright MCP の書き先
 _MCP_PR_BLOCK_TOOLS = ("mcp__github__merge_pull_request",)
 _MCP_PR_ASK_TOOLS = (
     "mcp__github__update_pull_request_branch",
@@ -3429,6 +3430,15 @@ def main():
             _block_cross_worktree("編集", path)
         # I182: 高リスクファイル・ワークフロー・秘密情報の検査設定の編集の確認は、settings.json の ask（公式の権限ルール
         # Edit(...)。Edit・Write・NotebookEdit すべてに効く）で行う。見張りは別 worktree への書込の停止だけを行う
+        sys.exit(0)
+    # I187: Playwright MCP の保存（filename）はワークスペース内のどこにでも書け、Edit/Write の deny も効かない。
+    # git に無い秘密情報（backend/.env 等）を上書きで失わないよう、書き先を .evidence/I###/ の直下に限る
+    if str(tool_name or "").startswith("mcp__playwright__"):
+        fname = (data.get("tool_input") or {}).get("filename")
+        if fname is not None and (not isinstance(fname, str) or ".." in fname
+                                  or not _EVIDENCE_FILE_RE.fullmatch(fname)):
+            _block("Playwright MCP がファイルを書けるのは .evidence/I###/<名前> だけです"
+                   "（docs/runbooks/frontend-verify.md）。", f"{tool_name} filename={fname!r}")
         sys.exit(0)
     # I146: MCP 経由の PR 取り込み操作（Bash を通らない経路）
     if str(tool_name or "").startswith("mcp__github__"):
