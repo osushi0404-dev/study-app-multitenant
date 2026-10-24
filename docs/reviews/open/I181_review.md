@@ -13,7 +13,7 @@
 | 4-2 | `.claude/review-agents/code-reviewer.md` | harness 固有の高リスク条件を同じ集合に・一覧以外は汎用条件で Yes にしない |
 | 4-3 | `.claude/review-agents/plan-reviewer.md` | 高リスク判定に同じ集合・P8 に I179 retro P1 |
 | 4-4 | `.claude/skills/code-review/SKILL.md` | §3 の上限（1 体 15 分・攻め筋 3・1 周 3 体・イシュー全体 2 周・差分だけ）・タイマー＋`TaskStop`・上限到達時の種類別集計・動的観点の廃止 |
-| 4-5 | `.claude/review-agents/adversarial-reviewer.md` | `{REVIEW_BASE}`・時間と攻め筋の上限・資源の上限（I179 retro P2） |
+| 4-5 | `.claude/review-agents/adversarial-reviewer.md` | `{REVIEW_BASE}`・時間と攻め筋の上限・資源の上限（I179 retro P2）・守る範囲（ガードは普通の書き方の事故まで・わざと回避は Low で件数外。A10） |
 | 4-6・4-9 | `docs/runbooks/review-rules.md` | GitHub が最後の守り・対象・上限・上限到達時・計画レビューのやり直しの条件 |
 | 4-7 | `.claude/skills/fix-loop/SKILL.md` | 手順 3 に新しい安全装置を足す前の確認（I179 retro P1） |
 | 4-8 | `scripts/claude/tests/test_adversarial_trigger.sh`（更新）・`scripts/claude/tests/test_i181_review_slim.sh`（新規） | P 群・D 群 |

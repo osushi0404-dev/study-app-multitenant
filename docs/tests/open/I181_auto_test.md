@@ -48,7 +48,7 @@
 | D1 | `.claude/skills/code-review/SKILL.md` の `## 3.` の節に `15 分`・`攻め筋は 1 体 3 本`・`1 周 3 体`・`イシュー全体で 2 周`・`REVIEWED_COMMIT`・`ROUNDS:`・`{REVIEW_BASE}`・`run_in_background`・`sleep 900`・`TaskStop`・`時間切れ` がある | exit 0 |
 | D2 | `.claude/skills/code-review/SKILL.md` と `docs/runbooks/review-rules.md` に `最大 3 周`・`総数 15`・`loop-until-dry`・`動的観点`・`最大 5 エージェント` が無い（`! grep -q`） | exit 0 |
 | D3 | SKILL.md の `## 3.` の節と、review-rules.md の `## 高リスク変更の敵対的レビューステージ` の節の両方に `種類ごと`・`止める場所・方式の見直し` がある | exit 0 |
-| D4 | `.claude/review-agents/adversarial-reviewer.md` に `{REVIEW_BASE}`・`攻め筋は最大 3 本`・`12 分`・`15 分`・`ulimit -v`・`timeout 60`・`処理量の欠陥` がある | exit 0 |
+| D4 | `.claude/review-agents/adversarial-reviewer.md` に `{REVIEW_BASE}`・`攻め筋は最大 3 本`・`12 分`・`15 分`・`ulimit -v`・`timeout 60`・`処理量の欠陥` がある。「守る範囲（脅威モデル）」の節（A10）に `普通の書き方による事故`・`わざと回避する書き方`・`Low`・`件数に数えない`・`danger-ops.md` がある | exit 0 |
 | D5 | review-rules.md の `## 高リスク変更の敵対的レビューステージ` の節に `GitHub が最後の守り`・`danger-ops.md`・`path_risk_trigger`・例外の 6 パターン（`.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`）がある | exit 0 |
 | D6 | 集合の一致: `code-review.sh` の `path_risk_trigger` の `case` 行のパターン集合 ＝ `code-reviewer.md` の「【harness 固有】GitHub から復旧できない例外」の行のバッククォートのパターン集合（`scripts/claude/code-review.sh` などの参照用のパスは、`(正は` 以降を除いて比べる）＝ `plan-reviewer.md` の同じ行のパターン集合 | exit 0 |
 | D7 | `.claude/skills/fix-loop/SKILL.md` の手順 3（`3) 対応方法` から `3.5)` の前まで）と、`plan-reviewer.md` の `### P8.` の節の両方に `新しい安全装置`・`復旧`・`最後の守り`・`danger-ops.md`・`I179 retro P1` がある | exit 0 |
@@ -59,7 +59,7 @@
 | FG-D1 | SKILL.md の複製から `sleep 900` を消す → D1 | 非ゼロ |
 | FG-D2 | review-rules.md の複製に `最大 3 周` を足す → D2 | 非ゼロ |
 | FG-D3 | review-rules.md の複製の対象の節から `止める場所・方式の見直し` を消す → D3 | 非ゼロ |
-| FG-D4 | adversarial-reviewer.md の複製から `ulimit -v` を消す → D4 | 非ゼロ |
+| FG-D4 | adversarial-reviewer.md の複製から `ulimit -v` を消す → D4／複製の「守る範囲」の節から `件数に数えない` を消す → D4 | どちらも非ゼロ |
 | FG-D5 | review-rules.md の複製の対象の節から `.secrets.baseline` を消す → D5 | 非ゼロ |
 | FG-D6 | code-reviewer.md の複製の例外の行から `.github/*` を消す → D6／plan-reviewer.md の複製の例外の行に `CLAUDE.md` を足す → D6 | どちらも非ゼロ |
 | FG-D7 | fix-loop/SKILL.md の複製から追加した 1 項目を消す → D7 | 非ゼロ |
