@@ -1,0 +1,54 @@
+---
+name: test-gate
+description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。レビュー済みの HEAD かを gate-check.sh で確かめ、計画書が指定した重いテスト・Claude 担当の手動テストを行い、人の手動テストがあればそこで止まる。pytest・Jest・E2E の手元での流し直しはしない（CI が正）。最後に STAGE_DONE を書く。"
+argument-hint: "I###"
+user-invocable: false
+---
+
+# test-gate（テスト段階）
+
+止めてユーザーに聞くのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるとき（と、下の 4. の人の手動テスト）だけ。それ以外で決めたことは `docs/reviews/open/$ARGUMENTS_review.md` の「## 自律判断の記録」に `- [test-gate] 決めたこと — 理由` で書く。
+
+この段階が書いてよいのは `docs/tests/`・`docs/reviews/`・`docs/issues/`・`docs/plans/` だけ。コードや手順書を直す必要が出たら、直さずに `NEXT: fix-loop` で終わる（直した後はレビューを通り直す）。
+
+## 1. レビュー済みの HEAD か（必須・決定論）
+
+```bash
+bash scripts/claude/gate-check.sh "$ARGUMENTS"
+```
+
+- exit 0: 2. へ
+- exit 1: レビューを通っていない変更がある。`STAGE_DONE: test-gate NEXT: review-gate` を書いて終わる
+
+## 2. 自動テスト（計画駆動）
+
+実行する自動テストは **計画書のテスト計画（`docs/tests/open/$ARGUMENTS_auto_test.md`）が正**。
+
+- pytest・Jest・E2E は CI（`.github/workflows/ci.yml`・`e2e.yml`）が PR ごとに流しており、review-gate の `code-review.sh` が CI の完了と成功を確かめている。**手元では流し直さない**
+- auto_test.md の「## 決定論ゲート（自動実走）」のうち、`code-review.sh` が「/test に委譲（heavy）」と記録したもの（docker・npm・pytest など）と、テストケースの表で「/test で実行する」と書かれたものは、ここで 1 つずつ実行する
+- 1 件でも失敗したら、失敗したテスト名と内容（期待値 / 実際値 / ログの抜粋）を記録して `STAGE_DONE: test-gate NEXT: fix-loop` を書いて終わる
+
+## 3. 記録
+
+`docs/tests/open/$ARGUMENTS_auto_test.md` の「実行記録」に、実行したコマンド・終了コード・日時を書く。`docs/reviews/open/$ARGUMENTS_review.md` の「## テスト結果」も更新する。
+
+## 4. 手動テスト
+
+テスト計画書（`docs/tests/open/$ARGUMENTS_manual_test.md`）の「実施者」欄を必ず確認する。
+
+- **実施者: Claude** の項目 → 自分で Bash/Read ツールを使って実行し、結果を表に記録する（ユーザーに依頼しない）
+- **実施者: Human** の項目だけ → Claude の分を全部終えてから、まとめてユーザーに提示する
+
+Claude の分で NG があれば、記録して `STAGE_DONE: test-gate NEXT: fix-loop` を書いて終わる。
+
+## 5. 結線（必須）
+
+commit/push してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に 1 行足して commit/push する:
+- Human の項目がある: `STAGE_DONE: test-gate NEXT: human-test` を書き、次の形で提示して止まる
+  ```
+  ## 手動テスト確認項目（Human 実施分）
+  | # | 確認内容 | 操作手順 | 期待結果 | 結果(OK/NG) |
+  |---|---------|---------|---------|------------|
+  ```
+  あわせて、ここまでに Claude が自分で決めたこと（「## 自律判断の記録」）を平易な言葉でまとめて伝え、「結果（OK、または NG と内容）を返信してください」と案内する
+- Human の項目が無い: `STAGE_DONE: test-gate NEXT: retro`

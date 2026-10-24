@@ -1,8 +1,8 @@
 ---
-# .claude/review-agents/plan-reviewer.md
-# サブエージェント専用・計画書レビュー指示ファイル
-# 呼び出し元: .claude/skills/plan-issue-review/SKILL.md（親エージェントのみ）
-# ユーザーが直接呼び出すものではない
+name: plan-reviewer
+description: 計画書・テスト文書のレビューと高リスク判定。scripts/claude/plan-issue-review.sh（plan-review 段階）から claude -p --agent で呼ぶ。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 <instructions>

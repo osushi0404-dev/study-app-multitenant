@@ -26,13 +26,102 @@ find_plan_file() {
 }
 
 # レビュー結果の重大度判定: 一次=機械可読 VERDICT 行 / 保険=装飾許容 grep（旧出力の後方互換）
+# I193（I185 種類 C）: VERDICT 行も表の印も無い（レビューが正常に終わっていない）ときは OK にせず BLOCKER（fail-closed）
 detect_code_verdict() {
   local file="$1" v
   v=$(grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$file" 2>/dev/null | tail -1 | grep -oE '(BLOCKER|HIGH|OK)' || true)
   if [ -n "$v" ]; then echo "$v"; return; fi
   if grep -qE '^\|\s*\*{0,2}Blocker\b' "$file"; then echo "BLOCKER"; return; fi
   if grep -qE '^\|\s*\*{0,2}High\b'    "$file"; then echo "HIGH"; return; fi
-  echo "OK"
+  echo "BLOCKER"
+}
+
+# I193（L13）: 最後の VERDICT 行の前に `REVIEWED_COMMIT: <sha>` を 1 行入れる（既存の REVIEWED_COMMIT 行は消す）。
+# gate-check.sh が「このレビューが見た HEAD から今の HEAD までにコードの変更が無いか」を確かめるのに使う。
+# 最後の VERDICT 行の直前が RISK 行なら、RISK 行のさらに前に入れる（detect_risk_flag は「直後が VERDICT の RISK 行」
+# だけを採用するため、RISK と VERDICT を離すと RISK が読めず常に YES になる）。
+add_reviewed_commit() {
+  local file="$1" sha="$2" tmp
+  tmp=$(mktemp)
+  awk -v sha="$sha" '
+    NR == FNR {
+      if ($0 ~ /^REVIEWED_COMMIT:/) next
+      n++; line[n] = $0
+      if ($0 ~ /^VERDICT:/) last = n
+      next
+    }
+    END {
+      at = last
+      if (at > 1 && line[at - 1] ~ /^RISK:/) at = at - 1
+      for (i = 1; i <= n; i++) {
+        if (i == at) print "REVIEWED_COMMIT: " sha
+        print line[i]
+      }
+      if (last == 0) print "REVIEWED_COMMIT: " sha
+    }
+  ' "$file" /dev/null > "$tmp"
+  mv "$tmp" "$file"
+}
+
+# I193（S5 の反省）: 組み込みレビューの出力が「対象を読めた結果」に見えるか（exit 0＝読めたとみなす）。
+# 読めたとみなすのは、指摘の配列（"file": を持つ JSON）・空の配列だけの行・「指摘なし」に当たる文のどれかがあるときだけ。
+# ファイル名が出てくるだけ・行頭が [ なだけ（Markdown のリンクなど）では読めたとみなさない（I193 の組み込みレビューの指摘）。
+official_output_readable() {
+  local out="$1"
+  printf '%s\n' "$out" | grep -qE '"file"[[:space:]]*:' && return 0
+  printf '%s\n' "$out" | grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' && return 0
+  printf '%s\n' "$out" | grep -qE '指摘(は)?(なし|ありません|見つかりません)|[Nn]o (findings|issues|bugs)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' && return 0
+  return 1
+}
+
+# I193: 組み込みのレビュー（/code-review・/security-review）を読み取り専用（plan モード）・時間上限つきで実行する。
+# plan モードにするのは、claude -p にはプロジェクトの settings の許可（git push・rm など）がそのまま効くため
+# （差分の中の文章に誘導された書き込み・push を仕組みで止める）。失敗・時間切れは本文に書いて返す（呼び出し元は止めない）。
+run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD）
+  local prompt="$1" out rc=0
+  out=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan "$prompt" 2>&1 < /dev/null) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf '(実行できず: exit=%s。124 は時間切れ)\n' "$rc"
+    return 0
+  fi
+  if ! official_output_readable "$out"; then
+    printf '(注意: 出力に指摘の配列も「指摘なし」も無く、対象を読めていない可能性がある。この出力は判定の根拠にしない)\n'
+  fi
+  printf '%s\n' "$out" | neutralize_machine_lines
+}
+
+# I193: 機械が読む行（VERDICT: など）を行頭から外す。組み込みのレビューの出力を記録に貼るとき、
+# その中の行（差分の中の文章を引用したものを含む）が判定の行として読まれないようにする。
+neutralize_machine_lines() {
+  sed -E 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|ROUNDS|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|CI_WAIT):/\1> \2:/'
+}
+
+# I193: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 600）まで CI_POLL_INTERVAL 秒（既定 15）ごとに
+# `gh pr checks --json bucket` を見る（bucket は pass / fail / pending / skipping / cancel）。
+# - チェックが 1 つも無い（push 直後で CI が始まっていない）・gh が失敗した → まだ終わっていないとみなして待つ
+# - fail か cancel が 1 つでもある → 失敗
+# - pending が 1 つでもある → 待つ
+# - 全部 pass か skipping → 成功
+# 戻り値: 0=成功（CI_WAIT: OK）/ 1=失敗あり（CI_WAIT: FAIL）/ 3=時間切れ（CI_WAIT: TIMEOUT）
+wait_ci() {
+  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-600}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0 buckets=""
+  while [ "$elapsed" -lt "$timeout_s" ]; do
+    buckets=$(gh pr checks "$pr" --json bucket --jq '.[].bucket' 2>/dev/null || true)
+    if printf '%s\n' "$buckets" | grep -qxE 'fail|cancel'; then
+      gh pr checks "$pr" 2>&1 || true
+      echo "CI_WAIT: FAIL"
+      return 1
+    fi
+    if [ -n "$buckets" ] && ! printf '%s\n' "$buckets" | grep -qx 'pending'; then
+      echo "CI_WAIT: OK"
+      return 0
+    fi
+    echo "  pending... ${elapsed}s / ${timeout_s}s"
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+  echo "CI_WAIT: TIMEOUT"
+  return 3
 }
 
 # I086: 高リスク判定の機械可読解析。
@@ -263,38 +352,21 @@ cd "$REPO_ROOT"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}.md"
-REVIEWER=".claude/review-agents/code-reviewer.md"
+REVIEWER_AGENT="code-reviewer"   # 定義: .claude/agents/code-reviewer.md（tools: Read, Grep, Glob）
 
-# CI 待機（最大 10 分）
-PR_NUM=$(gh pr view --json number -q .number 2>/dev/null || echo "")
-CI_OUTPUT=""
-if [ -n "$PR_NUM" ]; then
-  echo "CI を確認しています (PR #${PR_NUM})..."
-  TIMEOUT=600
-  ELAPSED=0
-  while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-    CI_OUTPUT=$(gh pr checks "$PR_NUM" 2>&1 || true)
-    if ! echo "$CI_OUTPUT" | grep -q "pending"; then
-      break
-    fi
-    echo "  pending... ${ELAPSED}s / ${TIMEOUT}s"
-    sleep 15
-    ELAPSED=$((ELAPSED + 15))
-  done
-  if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-    echo "⚠️ CI タイムアウト（${TIMEOUT}秒）。"
-  fi
-  if echo "$CI_OUTPUT" | grep -q "fail"; then
-    echo "⛔ CI が失敗しています。修正後に再 push してください。"
-    echo "$CI_OUTPUT"
-    exit 1
-  fi
+# I193: 比べる相手（origin/develop）を最新にする（古い develop と比べて無関係の差分を見ないため）
+if ! git fetch -q origin develop; then
+  echo "⛔ git fetch origin develop に失敗しました。比べる相手が古いままなので止めます。"
+  exit 1
 fi
 
 ISSUE_FILE=$(find_file "issues" "${ISSUE}.md")
 PLAN_FILE=$(find_plan_file "$ISSUE")
 
 [ -z "$ISSUE_FILE" ] && { echo "⚠️ イシューファイルが見つかりません"; exit 1; }
+
+# このレビューが見る HEAD（記録の REVIEWED_COMMIT になる）
+REVIEWED_HEAD=$(git rev-parse HEAD)
 
 # git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）
 GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400 || true)
@@ -306,6 +378,46 @@ GIT_LOG=$(git log origin/develop...HEAD --oneline)
 # 監視しているファイルを外へ移す変更が path_risk_trigger をすり抜けるため）。
 GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only --no-renames)
 
+# I193: 組み込みのレビュー（公式）を背景で同時に走らせ、CI 待ちと重ねる（互いに依存しないため）。
+# パス判定（決定論）が YES のときは組み込みの /security-review も走らせる。結果は自作のレビュー役に渡す。
+RISK_PATH=$(path_risk_trigger "$GIT_FILES")
+OFFICIAL_DIR=$(mktemp -d)
+OFFICIAL_PIDS=()
+cleanup_official() {
+  local p
+  for p in "${OFFICIAL_PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
+  rm -rf "$OFFICIAL_DIR"
+}
+trap cleanup_official EXIT
+echo "組み込みの /code-review を背景で実行しています..."
+run_official_review "/code-review medium origin/develop...HEAD" > "$OFFICIAL_DIR/code" &
+OFFICIAL_PIDS+=("$!")
+if [ "$RISK_PATH" = "YES" ]; then
+  # /security-review は「origin の既定のブランチ」との差分を見る。手元の origin/HEAD が develop でなければ記録に残す
+  if [ "$(git symbolic-ref -q refs/remotes/origin/HEAD || true)" != "refs/remotes/origin/develop" ]; then
+    echo "(注意: 手元の origin/HEAD が origin/develop を指していないため、/security-review が develop 以外と比べた可能性がある)" > "$OFFICIAL_DIR/security_note"
+  fi
+  echo "組み込みの /security-review を背景で実行しています..."
+  run_official_review "/security-review" > "$OFFICIAL_DIR/security" &
+  OFFICIAL_PIDS+=("$!")
+fi
+
+# CI 待機（I193: 時間切れは exit 3・失敗は exit 1。打ち切った後に先へ進まない）
+PR_NUM=$(gh pr view --json number -q .number 2>/dev/null || echo "")
+if [ -n "$PR_NUM" ]; then
+  echo "CI を確認しています (PR #${PR_NUM})..."
+  CI_RC=0
+  wait_ci "$PR_NUM" || CI_RC=$?
+  if [ "$CI_RC" -eq 3 ]; then
+    echo "⛔ CI が ${CI_WAIT_TIMEOUT:-600} 秒で終わりませんでした。"
+    exit 3
+  fi
+  if [ "$CI_RC" -ne 0 ]; then
+    echo "⛔ CI が失敗しています。"
+    exit 1
+  fi
+fi
+
 # I084: auto_test.md の決定論ゲートをスクリプト自身で実走し、実 exit code を証跡化する。
 # 直呼び（$() 不可）で GATE_EVIDENCE / GATE_VERDICT をグローバル設定する（W1）。
 AUTO_TEST_FILE=$(find_file "tests" "${ISSUE}_auto_test.md")
@@ -313,6 +425,16 @@ GATE_VERDICT=OK; OMISSION_VERDICT=OK; GATE_EVIDENCE="(決定論ゲート宣言�
 if [ -n "$AUTO_TEST_FILE" ]; then
   run_declared_gates "$AUTO_TEST_FILE"
   OMISSION_VERDICT=$(omission_lint "$AUTO_TEST_FILE")
+fi
+
+# 組み込みのレビューの終わりを待って結果を受け取る（それぞれ OFFICIAL_REVIEW_TIMEOUT で止まる）
+wait "${OFFICIAL_PIDS[@]}" 2>/dev/null || true
+OFFICIAL_PIDS=()
+OFFICIAL_CODE=$(cat "$OFFICIAL_DIR/code" 2>/dev/null || echo "(実行できず: 結果のファイルが無い)")
+OFFICIAL_SECURITY="(実行していない: パス判定 NO)"
+if [ "$RISK_PATH" = "YES" ]; then
+  OFFICIAL_SECURITY="$(cat "$OFFICIAL_DIR/security_note" 2>/dev/null || true)
+$(cat "$OFFICIAL_DIR/security" 2>/dev/null || echo "(実行できず: 結果のファイルが無い)")"
 fi
 
 # コンテキスト組み立て
@@ -337,26 +459,41 @@ ${GIT_FILES}
 ### git diff (origin/develop...HEAD, max 100KB)
 \`\`\`diff
 ${GIT_DIFF}
-\`\`\`"
+\`\`\`
 
-# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
-REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
-  --model claude-sonnet-4-6 \
-  --system-prompt "$(cat "$REVIEWER")" \
-  --tools "Read,Grep,Glob")
+### 組み込み /code-review の指摘（公式・plan モード。file・line・summary・failure_scenario）
+${OFFICIAL_CODE}
 
-[ -z "$REVIEW" ] && { echo "⚠️ claude -p が空を返しました。終了します。"; exit 1; }
+### 組み込み /security-review の指摘（公式・plan モード。パス判定 YES のときだけ実行）
+${OFFICIAL_SECURITY}"
+
+# claude -p でレビュー実行（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）
+# 時間上限 REVIEW_TIMEOUT（既定 900 秒）。時間切れ・失敗・空は、その旨の記録を残して BLOCKER にする（fail-closed）
+REVIEW_RC=0
+REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob") || REVIEW_RC=$?
+if [ "$REVIEW_RC" -ne 0 ] || [ -z "$REVIEW" ]; then
+  echo "⚠️ レビュー役が終わりませんでした（claude -p exit=${REVIEW_RC}。124 は時間切れ）。BLOCKER として記録します。"
+  REVIEW="# コードレビュー [${ISSUE}]（未完了）
+
+レビュー役の claude -p が正常に終わらなかった（exit=${REVIEW_RC}。124 は時間切れ・0 は空の出力）。判定できないため BLOCKER とする。
+
+RISK: YES
+VERDICT: BLOCKER"
+fi
 
 # 出力正規化
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 
-# ファイル保存
+# ファイル保存（組み込みのレビューの出力も記録に残す）
 mkdir -p "$(dirname "$REVIEW_FILE")"
-printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
+{
+  printf '%s\n' "$REVIEW_CLEAN"
+  printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
+    "$OFFICIAL_CODE" "$OFFICIAL_SECURITY"
+} > "$REVIEW_FILE"
 
 # I086: 高リスク判定（LLM RISK 行 OR パス決定論トリガ）。証跡は注入セクションに残す。
 RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")
-RISK_PATH=$(path_risk_trigger "$GIT_FILES")
 RISK_FINAL=$(combine_risk "$RISK_LLM" "$RISK_PATH")
 GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（LLM=${RISK_LLM} / path=${RISK_PATH}）"$'\n'
 
@@ -365,6 +502,8 @@ GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（LLM=${RISK_LLM} / path=${R
 LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
 FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LLM_VERDICT")
 inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_VERDICT"
+# I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
+add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
 
 # 案A(I069): 生産物（レビュー記録）を生産者がコミットする（feature ブランチ時のみ・path-scoped）。
 commit_review_artifact "$REVIEW_FILE" "$ISSUE" "code-review"
@@ -378,20 +517,16 @@ fi
 # I086: SKILL（オーケストレーション層）が解析する機械可読行（emit を関数に集約・H6 対応）
 emit_decision_lines "$REVIEW_FILE" "$RISK_FINAL" "$FINAL_VERDICT"
 
-# 判定とユーザー案内（一次=VERDICT 行 / 保険=装飾許容 grep）
+echo "REVIEWED_COMMIT: ${REVIEWED_HEAD}"
+
+# 判定の要約（次の段階は review-gate スキルが FINAL_VERDICT・ADVERSARIAL_STAGE の行で決める。I193）
 case "$(detect_code_verdict "$REVIEW_FILE")" in
-  BLOCKER)
-    # shellcheck disable=SC2016
-    printf '\n⛔ Blocker が残っています。`/fix-loop %s` で修正後、`/code-review %s` を再実行してください。\n' "$ISSUE" "$ISSUE" ;;
-  HIGH)
-    # shellcheck disable=SC2016
-    printf '\n❌ レビュー NG。`/fix-loop %s` を実行してください。fix-loop 完了後は `/code-review %s` に戻ってください。\n' "$ISSUE" "$ISSUE" ;;
+  BLOCKER) printf '\n⛔ Blocker が残っています（修正へ）。\n' ;;
+  HIGH)    printf '\n❌ レビュー NG（修正へ）。\n' ;;
   *)
     if [ "$RISK_FINAL" = "YES" ]; then
-      # shellcheck disable=SC2016
-      printf '\n⚠️ 高リスク判定 YES。敵対的レビューステージの通過後に `/test %s` へ進んでください（ステージは SKILL が自動実行します）。\n' "$ISSUE"
+      printf '\n⚠️ 高リスク判定 YES（敵対的レビューへ）。\n'
     else
-      # shellcheck disable=SC2016
-      printf '\n✅ コードレビュー完了。`/test %s` を実行してください。\n' "$ISSUE"
+      printf '\n✅ コードレビュー完了（テストへ）。\n'
     fi ;;
 esac

@@ -1,8 +1,8 @@
 ---
-# .claude/review-agents/fix-diagnosis-reviewer.md
-# サブエージェント専用・/fix-loop 手順3.5「診断レビュー」（修正前）指示ファイル（I074）。
-# 呼び出し元: scripts/claude/fix-diagnosis-review.sh
-# ユーザーが直接呼び出すものではない。
+name: fix-diagnosis-reviewer
+description: fix-loop 手順3.5「診断レビュー」（修正前）。scripts/claude/fix-diagnosis-review.sh から claude -p --agent で呼ぶ。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 <instructions>

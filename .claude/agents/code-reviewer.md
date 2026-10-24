@@ -1,8 +1,8 @@
 ---
-# .claude/review-agents/code-reviewer.md
-# サブエージェント専用・コードレビュー指示ファイル
-# 呼び出し元: .claude/skills/code-review/SKILL.md（親エージェントのみ）
-# ユーザーが直接呼び出すものではない
+name: code-reviewer
+description: I### のコードレビュー（受け入れ条件・計画・セキュリティ・BP の照合）。scripts/claude/code-review.sh（review-gate 段階）から claude -p --agent で呼ぶ。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 <instructions>

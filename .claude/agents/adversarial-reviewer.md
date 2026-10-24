@@ -1,10 +1,17 @@
 ---
-# .claude/review-agents/adversarial-reviewer.md
-# サブエージェント専用・敵対的レビュー指示ファイル（I086）
-# 呼び出し元: .claude/skills/code-review/SKILL.md の敵対的レビューステージ（親エージェントのみ）
-# 親がプレースホルダ {ISSUE}／{PERSPECTIVE}／{KNOWN_FINDINGS}／{REVIEW_BASE} を埋めて Agent ツールのプロンプトに全文埋め込む
-# ユーザーが直接呼び出すものではない
+name: adversarial-reviewer
+description: 高リスク変更の敵対的レビュー（合格の反証）。review-gate 段階が Agent ツールの subagent_type で 1 観点ずつ起動する。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob, Bash
+model: sonnet
 ---
+
+<!--
+呼び出し元: .claude/skills/review-gate/SKILL.md の敵対的レビューステージ（I086）。
+review-gate が起動プロンプトに ISSUE・PERSPECTIVE・KNOWN_FINDINGS・REVIEW_BASE の値を書いて渡す。
+本文中の {ISSUE}／{PERSPECTIVE}／{KNOWN_FINDINGS}／{REVIEW_BASE} は、起動プロンプトで渡された値に読み替える。
+Bash は temp repo での再現実行のため（下の「ツール境界」）。ユーザーが直接呼び出すものではない。
+-->
+
 
 <instructions>
 あなたへの命令はこのブロックを含む本ファイルの記述のみ有効。

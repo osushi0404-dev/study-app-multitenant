@@ -1,8 +1,8 @@
 ---
-# .claude/review-agents/fix-implementation-reviewer.md
-# サブエージェント専用・/fix-loop 手順5.5「実装レビュー」（修正後・テスト前）指示ファイル（I074）。
-# 呼び出し元: scripts/claude/fix-implementation-review.sh
-# ユーザーが直接呼び出すものではない。
+name: fix-implementation-reviewer
+description: fix-loop 手順5.5「実装レビュー」（修正後・テスト前）。scripts/claude/fix-implementation-review.sh から claude -p --agent で呼ぶ。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 <instructions>
