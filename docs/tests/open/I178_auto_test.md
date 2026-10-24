@@ -143,6 +143,7 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
 | ゲート 30 行（RTC-01〜RTC-18・RTC-21・RTC-22） | 2026-10-24 | ✅ 全件 exit 0 | /implement 完了時（ステップ R1〜R4 反映後）。code-review.sh と同じ抽出規則・`! grep` の扱いで実行。/test で再実行する |
 | RTC-19・RTC-20・RTC-23 | 2026-10-24 | ✅ 全件 exit 0 | /implement 完了時。RTC-23 の注入版（比較先 `6c88d9f^1`）は引き続き exit 1 |
 | ゲート 6・8・10 行目（計画変更 2 で差し替え） | 2026-10-24 | ✅ develop 版の runbook で 3 行とも exit 1（Red）・現行版で 3 行とも exit 0 | 差し替え後のゲート 30 行も全件 exit 0 |
+| ゲート 30 行・RTC-19・RTC-20・RTC-23 | 2026-10-24 | ✅ 全件 exit 0 | **/test I178**（HEAD `7f156eb`）。失敗注入（RTC-21・RTC-22・RTC-23）は引き続き exit 1。/code-review 20261024_1521 の決定論ゲートも 30 行すべて exit 0。PR #314 の CI は 6 件すべて pass（Backend Lint & Security・Backend Tests・E2E Tests (Playwright)・Frontend Lint & Security・Frontend Tests・Frontend Type Check）。pytest・Jest・E2E のローカル実行は非該当（Backend・Frontend の変更なし・計画 R7） |
 
 ---
 

@@ -48,7 +48,7 @@
 
 - **計画書**: docs/plans/open/plan_I178.md「R. 再オープン分」
 - **Draft PR**: #314
-- **ステータス**: 計画中
+- **ステータス**: /test 完了（2026-10-24・HEAD `7f156eb`）。code-review 20261024_1521 OK・敵対的レビュー不要（RISK: NO）
 
 ### レビュー対象
 
@@ -74,9 +74,9 @@
 
 | # | 受け入れ条件 | 判定 | 根拠 |
 |---|---|---|---|
-| AC-R1 | runbook の No.7 との矛盾の是正 | | |
-| AC-R2 | 直 push 手順が残っていない | | |
-| AC-R3 | ステップ 25・リリース・hotfix・onboarding が PR 経由 | | |
-| AC-R4 | open に plan_I032.md が無い | | |
-| AC-R5 | test_i178 が無く参照も無い | | |
-| AC-R6 | CODEOWNERS・設定が無改変 | | |
+| AC-R1 | runbook の No.7 との矛盾の是正（ユーザー作成 PR の扱いは書かない・計画変更 2） | ✅ | RTC-01〜RTC-08（ゲート 1〜12）exit 0 |
+| AC-R2 | 直 push 手順が残っていない | ✅ | RTC-09〜RTC-14・RTC-17b/c（ゲート 13〜23）exit 0・手動 RNo.1 OK（該当 2 行はどちらも説明） |
+| AC-R3 | ステップ 25・リリース・hotfix・onboarding が PR 経由 | ✅ | RTC-11・RTC-15・RTC-16・RTC-17a exit 0 |
+| AC-R4 | open に plan_I032.md が無い | ✅ | RTC-18・RTC-19 exit 0 |
+| AC-R5 | test_i178 が無く参照も無い | ✅ | RTC-20・RTC-21 exit 0 |
+| AC-R6 | CODEOWNERS・設定が無改変 | ✅ | RTC-22・RTC-23 exit 0（GitHub の設定は手順に変更が無いことで担保） |

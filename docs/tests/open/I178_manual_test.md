@@ -6,7 +6,7 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| R1 | `git grep -n -E "git push.*(develop\|main)" -- docs/runbooks ':!docs/runbooks/legacy'` を実行し、出た行を 1 行ずつ読んで「手順として実行させる行」か「禁止・止める・行わないの説明」かに分ける | 出た行がすべて「説明」に分類される（2026-10-24 時点の想定: `branch-protection-setup.md` の「I178 以降は行わない」の行と、`danger-ops.md` の「止める」の行の 2 行）。手順として実行させる行は 0 行 | Claude | | AC-R2。文の意味で分ける判定は grep の機械判定ではできないため、手動で行う（機械判定は RTC-09・RTC-12・RTC-13 が行頭の手順の形だけを見る） |
+| R1 | `git grep -n -E "git push.*(develop\|main)" -- docs/runbooks ':!docs/runbooks/legacy'` を実行し、出た行を 1 行ずつ読んで「手順として実行させる行」か「禁止・止める・行わないの説明」かに分ける | 出た行がすべて「説明」に分類される（2026-10-24 時点の想定: `branch-protection-setup.md` の「I178 以降は行わない」の行と、`danger-ops.md` の「止める」の行の 2 行）。手順として実行させる行は 0 行 | Claude | ✅ OK (2026-10-24・HEAD `7f156eb`) 該当は 2 行: `branch-protection-setup.md:183`（「I032 の当初は `git push origin HEAD:develop`・`HEAD:main` を試していたが、I178 以降は行わない」＝説明）・`danger-ops.md:20`（「場所に依存しない `git push origin main`・`--force`…も停止のまま」＝見張りが止める説明）。手順として実行させる行は 0 行 | AC-R2。文の意味で分ける判定は grep の機械判定ではできないため、手動で行う（機械判定は RTC-09・RTC-12・RTC-13 が行頭の手順の形だけを見る） |
 
 ---
 
