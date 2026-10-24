@@ -23,6 +23,7 @@ app/非app の区別では分岐しない。Backend/Frontend 変更が無いイ�
 - 計画書（auto_test.md）が指定する専用自動テストが1件でも失敗した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
   - 計画書が pytest/Jest/E2E を正のテストとして指定している場合は両条件に該当し得るが、いずれも STOP のため扱いは同じ。
 - 手動テスト確認でユーザーが NG を返した場合: STOP。`/fix-loop $ARGUMENTS` を案内する。`/retro` および `/close` は案内しない。
+- 手順 5) の画面確認の判定（`check-frontend-evidence.sh`）が 0 以外で終わった場合: STOP。コードの不具合ではないので `/fix-loop` には回さず、画面確認をして記録を足してから `/test $ARGUMENTS` をやり直すよう案内する。`/retro` および `/close` は案内しない。
 
 ### 既定の自動テスト（auto_test.md に指定が無い場合のフォールバック）
 
@@ -96,9 +97,21 @@ app/非app の区別では分岐しない。Backend/Frontend 変更が無いイ�
    **【重要】実施者の区別**
    - テスト計画書（`I###_manual_test.md`）の「実施者」欄を必ず確認する
    - **実施者: Claude** の項目 → 自分で Bash/Read ツールを使って実行し、結果を記録する（ユーザーに依頼しない）
+     - 画面の表示・遷移・入力の結果・コンソールの確認は、Playwright MCP で `docs/runbooks/frontend-verify.md` の手順（`docker compose up -d` → `docker compose port frontend 3000` の URL → `docker compose exec frontend npm run typecheck` → E2E 用アカウントでログイン → 画面キャプチャを `.evidence/$ARGUMENTS/` に保存して Read で見る → `browser_console_messages`）で行い、テスト記録の「## 画面確認」の表に 1 行ずつ書く
    - **実施者: Human** の項目のみ → ユーザーに確認を依頼する
 
-   Claude 実施項目をすべて自己実行してから、Human 実施項目のみ以下の形式でユーザーに提示する:
+   Claude 実施項目をすべて自己実行したら、画面確認の判定を実行する（`frontend/src` を変えていないイシューは「対象外」で合格する）:
+   ```bash
+   bash scripts/claude/check-frontend-evidence.sh $ARGUMENTS
+   ```
+   - exit 0: Human 実施項目の提示へ進む
+   - 0 以外: 即 STOP。出力された不足（どの行の・何が足りないか）を報告し、以下を出してユーザー待機:
+     ```
+     ⛔ 画面確認の記録が足りません（frontend/src を変えたイシューでは「## 画面確認」の行と .evidence/$ARGUMENTS/ の画像、または「理由: …」の行が要ります）。
+     👉 docs/runbooks/frontend-verify.md の手順で画面確認をして記録を足してから、`/test $ARGUMENTS` をやり直してください。
+     ```
+
+   判定が合格したら、Human 実施項目のみ以下の形式でユーザーに提示する:
    ```
    ## 手動テスト確認項目（Human 実施分）
    | # | 確認内容 | 操作手順 | 期待結果 | 結果(OK/NG) |

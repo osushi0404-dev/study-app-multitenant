@@ -24,6 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - レビュールール: docs/runbooks/review-rules.md
 - テンプレート同期: docs/runbooks/template-sync.md
 - pre-commit 運用: docs/runbooks/pre-commit.md
+- フロントの画面確認（アプリ起動・Playwright MCP）: docs/runbooks/frontend-verify.md
 
 セットアップ・環境構築:
 - オンボーディング（全体の進め方）: docs/runbooks/onboarding.md

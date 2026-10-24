@@ -36,6 +36,7 @@
 7. OK の場合 /retro I###（必須）→ /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。
+フロントの画面確認（Claude が Playwright MCP で起動・ログイン・操作・画面キャプチャ・コンソール確認をする手順と、`/test` の判定）は docs/runbooks/frontend-verify.md を参照。
 
 ## ゲート
 - 計画承認（OK）前にコード変更を開始しない
