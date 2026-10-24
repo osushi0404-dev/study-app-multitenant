@@ -6,6 +6,18 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y", "@playwright/mcp@0.0.83",
+        "--browser", "chromium",
+        "--headless",
+        "--isolated",
+        "--allowed-origins", "http://localhost:*;http://127.0.0.1:*",
+        "--output-dir", ".evidence",
+        "--secrets", "e2e/.env.e2e"
+      ]
     }
   }
 }
