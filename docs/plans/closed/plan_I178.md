@@ -7,6 +7,7 @@
 - **作成根拠資料**: docs/issues/open/I178.md（起点イシュー・設計確認メモ確定済み）
 - **実装後評価**: docs/reviews/open/I178_review.md
 - **作成日**: 2026-10-17
+- **再オープン**: 2026-10-24（手動 No.7 の結果を受けた文書の是正。範囲は末尾の「R. 再オープン分」・Draft PR #314）
 
 ---
 
@@ -320,6 +321,8 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - [ ] 手動 No.6 で、ユーザーの承認後に bot が GitHub のマージ API（`gh api -X PUT .../pulls/298/merge`）を呼び、push 制限で拒否されることを確かめる（実行直前に改めて了承を取る。adversarial 第2周で `gh pr merge` から変更）
 
 ## レビュー結果
+- [20261024_1516 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261024_1516.md)
+- [20261024_1452 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261024_1452.md)
 - [20261020_2003 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261020_2003.md)
 - [20261018_1409 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1409.md)
 - [20261018_1145 判定: ✅ 完了](../../reviews/closed/I178_plan_review_20261018_1145.md)
@@ -377,3 +380,211 @@ Settings → Branches → develop・main それぞれのルールの **Edit** �
 - **対応者**: Claude Code
 - **レビュー結果**: OK（code-review 20261019_0005・敵対的レビュー再ステージ 20261020_0900 第2周で通過）
 - **残作業**: /close 中の手動 No.4〜No.6・No.8、マージ後の No.7・TC-17（記録用 PR で記入）
+
+---
+
+# R. 再オープン分（2026-10-24）
+
+## R1. 背景/目的
+
+**背景**: 初回分（PR #298・#305）のマージ後、手動 No.7 で次のことが分かった（2026-10-21・#297 のコメント）。
+- 作成者が唯一のコードオーナー `oshui0404` 本人の PR（確認用 #306）では、Code Owners へのレビュー依頼が出ず、bot の承認 1 件で `reviewDecision=APPROVED` になった。
+- bot が作った PR（#305）では `oshui0404` にレビュー依頼が出て、承認前は `REVIEW_REQUIRED`。
+- bot のマージは Restrict who can push で拒否された（#305・HTTP 405）。bot・外部の単独マージを止める目的は保たれている。
+
+このため、runbook の「ユーザー自身が作った PR はマージできない」・§6 の「bypass を一時的にオフにしてマージする」・§4 確認 5 の期待結果が事実と合わない。あわせて /retro で、他の runbook に develop・main へ直接 push する手順が残っていることが分かった（ブランチ保護で必ず止まるので、書かれたとおりには実行できない）。
+
+**目的**: 文書を実際の GitHub の挙動にそろえ、実行できない手順をなくす。GitHub の設定と `.github/CODEOWNERS` は変えない（2026-10-24 /grill-me・承認は残す）。
+
+## R2. 受け入れ条件（再オープン分）
+
+イシュー I178「受け入れ条件（再オープン分）」と同一。
+
+| AC | 内容 | 検証 |
+|---|---|---|
+| AC-R1 | runbook に「ユーザー自身が作った PR はマージできない」「bypass を一時的にオフにしてマージする」の記述と「自分が作った PR」の節が無く、「PR は bot が作成する（ユーザーは PR を作らない）」と書かれている。§4 確認 5 に No.7 と逆の期待結果と bot に承認させる手順が残っていない（計画変更 2） | RTC-01〜RTC-08 |
+| AC-R2 | `docs/runbooks/`（`legacy/` を除く）に develop・main へ直接 push する手順が、禁止や「行わない」の説明以外で残っていない | RTC-09〜RTC-14・RTC-17b・RTC-17c・手動 RNo.1 |
+| AC-R3 | issue-flow.md ステップ 25・workflow.md の本番リリース／hotfix・onboarding.md の main へのマージが PR 経由で書かれている | RTC-11・RTC-15・RTC-16・RTC-17a |
+| AC-R4 | `docs/plans/open/plan_I032.md` が無く、`docs/plans/closed/plan_I032.md` がある | RTC-18・RTC-19 |
+| AC-R5 | `scripts/claude/tests/test_i178_branch_protection_doc.sh` が無く、実行対象として参照されていない | RTC-20・RTC-21 |
+| AC-R6 | GitHub のブランチ保護設定と `.github/CODEOWNERS` は変更されていない | RTC-22・RTC-23 |
+
+## R3. 調査結果
+
+### R3-1. 原因の概要
+初回分は「作成者がコードオーナー本人の PR」を想定せずに文書と確認手順を書いた。GitHub は、作成者自身をレビュー依頼の対象にしないため、作成者が唯一のコードオーナーの PR には Code Owners の要件がかからない（No.7 で実測。GitHub の公式説明は未確認）。また、ブランチ保護を入れた後も、古い runbook の直 push 手順を見直していなかった。
+
+### R3-2. 消費箇所の全件列挙（2026-10-24 実測）
+
+| 検索 | 結果と扱い |
+|---|---|
+| `grep -n -E "自分で承認できず\|ユーザーが作った PR はマージできない\|一時的にオフ\|I178 の /retro で確認する\|のままであることを確認する" -r docs/runbooks scripts .claude .github` | branch-protection-setup.md の L76・L91・L216・L274・L275 の 5 行だけ → すべて R5-1 で書き換える |
+| `git grep -n -E "git push.*(develop\|main)" -- docs/runbooks ':!docs/runbooks/legacy'` | 6 行。書き換え 4 行（issue-flow.md:384・workflow.md:206/226/230）・説明のみ 2 行（branch-protection-setup.md:183「I178 以降は行わない」・danger-ops.md:20「止める」の説明）→ 説明のみの 2 行は変えない |
+| `grep -n -E "^git (checkout\|merge\|push\|tag\|branch)" docs/runbooks/issue-flow.md docs/runbooks/workflow.md docs/runbooks/onboarding.md` | issue-flow.md の L369・L371・L384（ステップ 25）、workflow.md の L203〜L207（リリース）・L221〜L231（hotfix）を書き換える。issue-flow.md L221・L224（feature ブランチの作成と push）と workflow.md L186（ブランチ確認）は対象外 |
+| `grep -rn "test_i178_branch_protection_doc" scripts .claude .github docs/runbooks` | 0 件（テスト自身にも名前は無い）。docs/tests・docs/plans・docs/reviews にある参照は過去の記録なので残す |
+| `git grep -n -i -E "approve\|承認\|BLOCKED\|CODEOWNERS" -- scripts/claude/pr-base-sync.sh .claude/skills/close/SKILL.md docs/runbooks/review-rules.md docs/runbooks/onboarding.md` | pr-base-sync の合格条件は承認の状態に依存しない（L6・L114）。close step 5.5・6、review-rules.md L49「承認必須」、onboarding.md L55「レビューなしにマージ不可」は、設定を変えないため事実のまま → 変更しない |
+
+### R3-3. 調査で判明した制約: main への hotfix は最初のリリースまでマージできない
+main は初期コミット（`README.md`）だけで CI のワークフローが無い。main から作った hotfix ブランチでは必須チェック 5 件が報告されず、bypass 不可の設定ではマージできない（runbook §1.5「main の制約」と同じ理由）。そのため workflow.md の hotfix 手順に「最初のリリース（develop → main）より前は、緊急の修正も develop 経由で行い、リリースで main に入れる」と書く。
+
+### R3-4. 環境前提確認
+| 確認項目 | コマンド | 実測結果 |
+|---|---|---|
+| 実行環境 | ワークツリー `harness-1`（track:harness・ホスト） | コンテナ・DB・フロントエンドのビルドは使わない |
+| GitHub の設定 | （bot は保護設定を読めない） | 変更しないため確認不要。初回分の手動 No.1・No.2（2026-10-20）の状態のまま |
+| 既存テスト | `bash scripts/claude/tests/test_pr_base_sync.sh` | pr-base-sync を変えないため実行対象外 |
+
+### R3-5. スパイク実証
+不確実な外部挙動への依存は無い（文書の書き換えと、ファイルの移動・削除だけ）。No.7 の挙動は 2026-10-21 に実測済み。
+
+## R4. 影響範囲
+
+| 区分 | 内容 |
+|---|---|
+| Backend / Frontend / DB | なし |
+| Config/Infra | なし（GitHub の設定・`.github/CODEOWNERS` は変えない） |
+| ハーネス文書 | `docs/runbooks/branch-protection-setup.md`・`docs/runbooks/issue-flow.md`・`docs/runbooks/workflow.md`・`docs/runbooks/onboarding.md`・`docs/plans/open/plan_I032.md`（closed に同じ内容があるため削除） |
+| ハーネステスト | `scripts/claude/tests/test_i178_branch_protection_doc.sh`（削除） |
+| 運用 | 変わらない（PR は bot が作り、ユーザーは PR を作らない。設定を一時的に外す手順は削除する） |
+
+## R5. 変更点一覧
+
+### 修正アプローチ
+設定は変えず、文書だけを実際の挙動にそろえる。実行できない手順（直 push）は PR 経由に置き換え、要らない手順（設定を一時的に外す）は削除する（計画変更 2）。runbook 全体を固定していたテストは、手順書を直すたびに手間だけを生むので削除する。
+
+### R5-1. `docs/runbooks/branch-protection-setup.md`
+
+**修正方針**: No.7 の事実（作成者が `oshui0404` 本人の PR には Code Owners の要件がかからない）を書き、それと矛盾する記述と確認手順を直す。
+
+| 箇所 | 変更前 | 変更後 |
+|---|---|---|
+| §概要 の 5 つ目 | `develop は `oshui0404` が承認しない限りマージできない（Code Owners 必須・`.github/CODEOWNERS`）` | `develop は、bot や外部の人が作った PR を `oshui0404` が承認しない限りマージできない（Code Owners 必須・`.github/CODEOWNERS`）` |
+| §1.5 役割 1 の末尾 | `bot や外部の人が承認しても、マージ要件を満たさない。` | `bot や外部の人が作った PR では、bot や外部の人が承認しても、マージ要件を満たさない。` |
+| §1.5 役割 3 | `（未確認・I178 の /retro で確認する）` | `（未確認）`（/retro で対応不要と決まったため） |
+| §1.5 運用 の 1 つ目 | `**PR は必ず bot（Claude）が作成する**。ユーザー自身が作った PR は自分で承認できず、bypass も許していないためマージできない（どうしても必要な場合は §6 を参照）。` | `**PR は bot（Claude）が作成する**（ユーザーは PR を作らない）。bot が作った PR では `oshui0404` に自動でレビュー依頼が出て、`oshui0404` の承認が必要になる。` |
+| §4 確認 1・2 の最後の段落 | `効き目は確認 4〜6（PR の承認状態と、bot によるマージ API の拒否）で確かめる。` | `効き目は確認 4・6（PR の承認状態と、bot によるマージ API の拒否）で確かめる。` |
+| §4 確認 5 | 見出し `### 確認 5: bot が承認してもマージ要件を満たさないこと` と手順 1〜4 | 見出しを `### 確認 5: （I178 の再オープンで廃止）` にし、本文を次の 1 段落にする: `bot の承認が数えられないことを確かめる手順だったが、期待どおりに確かめられなかったため廃止した（I178 手動 No.7・2026-10-21）。bot・外部の単独マージは確認 6（push 制限）で止まることを確かめる。` |
+| §6 の「自分が作った PR を承認・マージできない」 | 見出しと、bypass を一時的にオフにする手順 | 節ごと削除する（ユーザーは PR を作らない・計画変更 2） |
+
+### R5-2. `docs/runbooks/issue-flow.md`
+
+**修正方針**: ステップ 25 のローカルマージと直 push を、PR 経由のマージに置き換える。
+
+- L164 の一覧 `25. featureブランチをdevelopにマージ` → `25. PR を develop にマージ（oshui0404 が GitHub で承認・マージ）`
+- L367 の見出し `**ステップ25: featureブランチをdevelopにマージ**` → `**ステップ25: PR を develop にマージ**`
+- L368〜L385 のコードブロック（`git checkout develop`〜`git push origin develop`）を、次の本文とコードブロックに置き換える:
+  - 本文: `/close が PR 本文を整え、Ready にしてからマージを依頼する（.claude/skills/close/SKILL.md）。oshui0404 が GitHub の PR 画面で承認・マージする。develop・main へのローカルマージと直接 push は行わない（ブランチ保護で止まる・docs/runbooks/branch-protection-setup.md）。`
+  - コード: `gh pr ready <PR番号>`
+
+### R5-3. `docs/runbooks/workflow.md`
+
+**修正方針**: 本番リリースと hotfix を PR 経由にする。main への hotfix の制約（R3-3）を書く。
+
+本番リリースフロー（L202〜L208）のコードブロックを次に置き換える:
+```
+# 1. bot が develop → main の PR を作る
+gh pr create --base main --head develop --title "Release: vX.X.X" --body-file <リリースノートのファイル>
+# 2. oshui0404 が GitHub の PR 画面で承認・マージする
+# 3. マージ後、main の先頭にタグを付ける
+git fetch origin main
+git tag -a vX.X.X origin/main -m "バージョンX.X.Xリリース"
+git push origin vX.X.X
+```
+
+hotfix（L220〜L232）のコードブロックを次に置き換え、直後に注意書きを 1 つ足す:
+```
+git fetch origin
+git checkout --no-track -b hotfix/critical-bug-description origin/main
+# 修正・コミット
+git push -u origin hotfix/critical-bug-description
+# 1. bot が main 宛ての PR を作り、oshui0404 が承認・マージする
+gh pr create --base main --title "hotfix: ..." --body-file <ファイル>
+# 2. develop にも反映する（必須）。bot が develop 宛ての PR を作り、oshui0404 が承認・マージする
+gh pr create --base develop --head hotfix/critical-bug-description --title "hotfix: ...（develop へ反映）" --body-file <ファイル>
+# 3. 両方のマージ後、GitHub の PR 画面の Delete branch でブランチを消す
+```
+注意書き: `**main がまだ初期コミットだけの間は、main への hotfix はマージできない**（main から作ったブランチには CI のワークフローが無く、必須チェックが報告されないため。docs/runbooks/branch-protection-setup.md §1.5「main の制約」）。最初のリリース（develop → main）より前は、緊急の修正も develop 宛ての PR で行い、リリースで main に入れる。`
+
+### R5-4. `docs/runbooks/onboarding.md`
+
+「Q: main にはどうマージする？」の回答を次にする: `→ develop に十分な機能が溜まったタイミングで、bot が develop → main の PR を作り、oshui0404 が承認・マージする（週1・月1等）。マージ後にバージョンタグを必ず付ける。手順は docs/runbooks/workflow.md「本番リリースフロー」。`
+
+### R5-5. `docs/plans/open/plan_I032.md`（重複を削除）
+`git rm` で消す。`docs/plans/closed/plan_I032.md` に同じ内容のファイルが既にある（`git diff --no-index` で差分なし・2026-10-24 実測）ため、移すのではなく open 側の重複を消す。I032（ブランチ保護の設定）は完了済み。
+
+### R5-6. `scripts/claude/tests/test_i178_branch_protection_doc.sh`（削除）
+`git rm` で消す。CI からは呼ばれておらず（R3-2）、I178 の作業中にしか使わない。runbook 全体の SHA-256 を固定しているため、runbook を 1 文字直すたびに固定値の更新が要る。実際の設定は bot から読めないため、守れるのは文書の字面だけ（2026-10-24 /grill-me・ユーザー了承）。
+
+### R5-7. 変えないもの
+`.github/CODEOWNERS`・GitHub のブランチ保護設定・`scripts/claude/pr-base-sync.sh`・`.claude/skills/close/SKILL.md`・`docs/runbooks/review-rules.md`（R3-2 の理由）。
+
+## R6. 実装手順
+
+依存関係: ステップ R1〜R4 は互いに独立（同じコミット系列で行う）。ステップ R5 は R1〜R4 の後。
+
+### ステップ R1: branch-protection-setup.md を書き換える
+- R5-1 のとおり変更する。→ RTC-01〜RTC-08 参照。
+
+### ステップ R2: issue-flow.md・workflow.md・onboarding.md を書き換える
+- R5-2〜R5-4 のとおり変更する。→ RTC-09〜RTC-17・手動 RNo.1 参照。
+
+### ステップ R3: open に残る plan_I032.md の重複を消す
+- R5-5 のとおり。→ RTC-18・RTC-19 参照。
+
+### ステップ R4: test_i178_branch_protection_doc.sh を削除する
+- R5-6 のとおり。→ RTC-20・RTC-21 参照。
+
+### ステップ R5: 変えないものが変わっていないことを確かめる
+- → RTC-22・RTC-23 参照。
+
+## R7. テスト計画
+
+テストレベル: アプリのコード変更が無いため、ユニット/結合/E2E は非該当。検証は文書とファイルへの決定論チェック（自動テスト文書の RTC）と、直 push 手順の目視分類（手動 RNo.1）で行う。
+- 自動: `docs/tests/open/I178_auto_test.md`（RTC-01〜RTC-23。計画時ベースラインで Red と失敗注入を実測済み）
+- 手動: `docs/tests/open/I178_manual_test.md`（RNo.1）
+- 認可テスト: 認可の設定は変えないため新しい確認は無い（初回分の No.6・No.8 の結果のまま）。
+- 再発防止: 文書の否定判定（RTC-01〜RTC-05・RTC-09〜RTC-14・RTC-21）で、矛盾する記述と直 push 手順が戻ったら検知する。
+
+## R8. ロールバック
+この PR を revert する（文書・移動・削除だけなので、revert で完全に戻る）。設定は変えていないので、設定の戻しは不要。
+
+## R9. Risk & 回避策
+
+| # | リスク | 回避策 |
+|---|---|---|
+| RR1 | 将来ユーザーが自分で PR を作ると、bot の承認 1 件でマージ要件を満たしてしまう（No.7 の事実を runbook に書かないため、気づきにくい） | ユーザーは PR を作らない運用（2026-10-24 ユーザー判断）。マージできるのは `oshui0404` だけなので、bot・外部の単独マージは止まる。事実は I178 の手動テスト記録（No.7）に残る |
+| RR2 | CODEOWNERS のコメント「管理者以外（bot・外部の人）の承認ではマージ要件を満たさない」は、作成者が `oshui0404` 本人の PR では成り立たない | CODEOWNERS は変えない決定（AC-R6）。ユーザーは PR を作らないので、運用上は成り立つ |
+| RR3 | hotfix 手順が、main に CI が無い間は使えない | R3-3 の注意書きで、最初のリリースまでは develop 経由にすると書く |
+| RR4 | 手順書の固定テストを消すので、runbook が黙って緩められても気づけない | runbook は手順の説明で、守りは GitHub の設定にある（review-rules.md「GitHub が最後の守り」）。否定判定の RTC で、今回直した矛盾の再発だけを検知する |
+
+## R10〜R15. 条件付きセクション
+- 10 データ整合性: DB 変更なし（該当なし）
+- 11 運用設計: 外部 API・非同期処理・バッチなし（該当なし）
+- 12 コスト・保守: 新しいインフラなし。運用の手作業は増えない（ユーザー作成 PR の手順はむしろ減る）
+- 13 性能・UX: フロントエンド変更なし（P6 影響なし）
+- 14 学習効果: 該当なし
+- 15 プライバシー: 個人情報・テナントデータを扱わない（P9 影響なし）
+- セキュリティ影響: アプリのコード変更なし。認可の設定も変えない（文書を実際の挙動にそろえるだけ）
+
+## R16. 承認ポイント（再オープン分）
+- [ ] GitHub の設定と `.github/CODEOWNERS` は変えない（承認は残す）
+- [ ] ユーザー作成 PR の扱い（bot の承認で満たす事実・bot に承認を頼む手順）は書かず、「PR は bot が作成する（ユーザーは PR を作らない）」とだけ書く。設定を一時的に外す手順（§6 の節）は消す（計画変更 2・ユーザー判断）
+- [ ] runbook §4 確認 5 は廃止と理由を書く（番号は残し、確認 6 の番号は変えない）（コード調査で決めた）
+- [ ] workflow.md の hotfix に「main が初期コミットだけの間は develop 経由」の注意書きを足す（調査で判明した制約）
+- [ ] test_i178_branch_protection_doc.sh は削除する（ユーザー了承）
+- [ ] 保護設定の後退検知（pr-base-sync の判定）は作らない（ユーザー了承）
+
+## 計画変更記録（再オープン分）
+1. 2026-10-24 plan-review 20261024_1452 の指摘対応（方式・範囲・AC は変えない）: 直 push の否定判定を行頭限定から「`git push` の後に develop・main が出る行」に広げ、issue-flow.md の main・onboarding.md の develop・main にも同じ判定を追加（Warning）。旧文「確認 4〜6」の否定判定を追加（Info）。ゲート内に RTC-21 の検索対象外のコメントを追加（Info）。テスト文書の追記だけなので、プランレビューのやり直しは不要。
+2. 2026-10-24 /code-review（20261024_1502・OK）の後、ユーザー判断で方式を変更: ユーザーは自分で PR を作らないため、ユーザー作成 PR の扱い（bot の承認でマージ要件を満たす事実と、bot に承認を頼む手順）を runbook に書かない。§1.5 運用は「PR は bot が作成する（ユーザーは PR を作らない）」だけにし、§6 の節を削除、§4 確認 5 は「廃止」の一文にする。§概要・§1.5 役割 1 は「bot や外部の人が作った PR では」と対象を限定する。AC-R1 とゲート 6・8・10 行目（RTC-06・RTC-08a・RTC-08c）を差し替えた。方式と AC を変えたため、/code-review の前に /plan-issue-review をやり直す。
+
+## ユーザー承認（再オープン分）
+- **承認日時**: 2026-10-24
+- **承認者**: ユーザー
+- **承認内容**: 「ループエンジニアリング、ハーネスエンジニアリングのベストプラクティスと開発をサクサク進めるという観点で問題なければ OK」→ 問題なしと判断して承認として記録（承認ポイントの「私が決めた点」4 件を含む）
+
+## 完了情報（再オープン分）
+- **完了日時**: 2026-10-24
+- **対応者**: Claude Code
+- **レビュー結果**: OK（plan-review 20261024_1516・code-review 20261024_1521・敵対的レビュー不要〔RISK: NO〕・/test 全合格）
+- **残作業**: PR #314 のユーザー承認・マージ。GitHub の設定変更は無し

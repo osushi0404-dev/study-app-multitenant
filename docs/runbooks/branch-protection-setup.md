@@ -15,7 +15,7 @@
 - `develop`・`main` への直接 push を GitHub 側でもブロック（二重ガード）
 - CI（5ジョブ）が全通過しないと PR のマージを GitHub がブロック
 - 管理者も上記ルールを迂回不可
-- develop は `oshui0404` が承認しない限りマージできない（Code Owners 必須・`.github/CODEOWNERS`）
+- develop は、bot や外部の人が作った PR を `oshui0404` が承認しない限りマージできない（Code Owners 必須・`.github/CODEOWNERS`）
 - develop・main に push・マージできるのは `oshui0404` だけ（main は CODEOWNERS が届くまでこれで守る）
 
 ---
@@ -71,9 +71,9 @@ Claude 側のガード（I146・`scripts/claude/hooks/pretooluse_guard.py`）は
 
 ### 3 つの設定の役割
 
-1. **CODEOWNERS（`* @oshui0404`）＋ Require review from Code Owners**: 承認として数えられるのは `oshui0404` の承認だけになる。bot や外部の人が承認しても、マージ要件を満たさない。
+1. **CODEOWNERS（`* @oshui0404`）＋ Require review from Code Owners**: 承認として数えられるのは `oshui0404` の承認だけになる。bot や外部の人が作った PR では、bot や外部の人が承認しても、マージ要件を満たさない。
 2. **Restrict who can push to matching branches（`oshui0404` のみ）**: develop・main に push（PR のマージを含む）できる人を `oshui0404` だけにする。承認が付いた後でも、bot や外部の人はマージできない。
-3. **Dismiss stale pull request approvals when new commits are pushed**: 承認の後に新しいコミットが入ったら承認を取り消す。「承認の後に bot が中身を差し替える」抜け道を塞ぐ。ただし、PR の宛先ブランチの変更（`gh pr edit --base`）では承認が取り消されない可能性がある（未確認・I178 の /retro で確認する）。宛先が変わった PR は、承認の前に差分を確かめ直す。
+3. **Dismiss stale pull request approvals when new commits are pushed**: 承認の後に新しいコミットが入ったら承認を取り消す。「承認の後に bot が中身を差し替える」抜け道を塞ぐ。ただし、PR の宛先ブランチの変更（`gh pr edit --base`）では承認が取り消されない可能性がある（未確認）。宛先が変わった PR は、承認の前に差分を確かめ直す。
 
 ### main の制約
 
@@ -88,7 +88,7 @@ develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が d
 
 ### 運用
 
-- **PR は必ず bot（Claude）が作成する**。ユーザー自身が作った PR は自分で承認できず、bypass も許していないためマージできない（どうしても必要な場合は §6 を参照）。
+- **PR は bot（Claude）が作成する**（ユーザーは PR を作らない）。bot が作った PR では `oshui0404` に自動でレビュー依頼が出て、`oshui0404` の承認が必要になる。
 - 承認の後に新しいコミットが入ると承認が取り消されるので、もう一度承認する。develop への追従（Update branch）のコミットでは、差分が変わらない場合に承認が残ることもある（取り消された場合だけ再承認すればよい）。
 - Dependabot の PR も `oshui0404` の承認が必要。
 - 自動マージ（auto-merge）はリポジトリ設定で許可していない（`allow_auto_merge=false`・2026-10-20 実測）。bot が `gh pr merge --auto` で承認と同時のマージを予約することはできない。許可に変える場合は、承認の後・マージの前に行う確認の順番が崩れないかを見直す。
@@ -186,7 +186,7 @@ I032 の当初は `git push origin HEAD:develop`・`git push origin HEAD:main` �
 - bot（Claude）からの develop・main への push は、Claude 側のガード（`scripts/claude/hooks/pretooluse_guard.py`）が止めるため、bot では実行できない。
 - 人の端末で実行すると、どのアカウントの資格情報で push されるかを確かめにくい。
 
-代わりに、PR 必須・bypass 不可・Restrict の設定は設定画面（§1 の表との突き合わせ）で確認し、効き目は確認 4〜6（PR の承認状態と、bot によるマージ API の拒否）で確かめる。
+代わりに、PR 必須・bypass 不可・Restrict の設定は設定画面（§1 の表との突き合わせ）で確認し、効き目は確認 4・6（PR の承認状態と、bot によるマージ API の拒否）で確かめる。
 
 ### 確認 3: CI 失敗 PR がマージできないこと
 
@@ -204,23 +204,9 @@ I032 の当初は `git push origin HEAD:develop`・`git push origin HEAD:main` �
 
 main は CODEOWNERS が届くまで、bot の承認でも `reviewDecision=APPROVED` になり得る（§1.5「main の制約」）。main は設定画面（§1 の main の表との突き合わせ）で確認し、develop → main の PR を作ったときに確認 6（push 制限）を行う。
 
-### 確認 5: bot が承認してもマージ要件を満たさないこと
+### 確認 5: （I178 の再オープンで廃止）
 
-develop に CODEOWNERS が入った後に行う（§1.5「設定変更直後の develop」）。
-
-1. `oshui0404` が develop 宛ての確認用 PR を作成する（bot は自分の PR を承認できないため）。Code Owners の要件はファイルの変更を含む PR にだけ働くので、空コミットではなく 1 行のファイル変更（例: `check_codeowners.txt` の追加）を含める
-2. bot で承認する:
-   ```bash
-   gh pr review <PR番号> --approve
-   ```
-3. 次を実行し、`reviewDecision=REVIEW_REQUIRED`・`mergeStateStatus=BLOCKED` のままであることを確認する:
-   ```bash
-   gh pr view <PR番号> --json reviewDecision,mergeStateStatus
-   ```
-4. 確認後、マージせずに閉じ、確認用ブランチも削除する:
-   ```bash
-   gh pr close <PR番号> --delete-branch
-   ```
+bot の承認が数えられないことを確かめる手順だったが、期待どおりに確かめられなかったため廃止した（I178 手動 No.7・2026-10-21）。bot・外部の単独マージは確認 6（push 制限）で止まることを確かめる。
 
 ### 確認 6: bot がマージできないこと（push 制限）
 
@@ -268,11 +254,6 @@ I178 の変更を元に戻す場合:
 CI が一度も実行されていないと候補に表示されません。
 PR を 1 件作成して CI を実行してから再度設定画面を開いてください。
 または、検索ボックスにジョブ名を直接入力することでも登録できます。
-
-### 自分が作った PR を承認・マージできない
-
-GitHub では PR の作成者は自分の PR を承認できない。このリポジトリでは bypass も許していないため、ユーザーが作った PR はマージできない。
-PR は bot（Claude）に作らせる。どうしてもユーザーが作った PR をマージする必要がある場合は、対象ブランチのルールを **Edit** して「Do not allow bypassing the above settings」を一時的にオフにし、PR 画面で管理者として要件を迂回してマージした後、すぐにオンに戻す（§5 の I178 全体の戻し手順ではマージできない）。戻した後は、設定画面で対象ブランチのルールを開き、§1 の表と突き合わせて「Do not allow bypassing the above settings」がオンに戻っていることを確かめる（bot は保護設定を読めないため、戻し忘れは画面でしか分からない）。
 
 ### 承認したのに BLOCKED に戻った
 

@@ -41,3 +41,50 @@
 | AC-5 | Dismiss stale・Restrict who can push・bypass 不可が有効 | ✅ | 手動 No.1・No.2 で設定画面を確認。効き目は記録用 PR #305 で確認: No.6 代替（bot のマージ API が HTTP 405「You're not authorized to push to this branch」で拒否）・No.8 代替（承認後の push で `DISMISSED`・`REVIEW_REQUIRED`） |
 | AC-6 | runbook の更新と誤記の除去 | ✅ | TC-05〜TC-12・TC-18・TC-19 exit 0（runbook 全体の SHA-256・設定表とステップ 3 の全文一致） |
 | AC-7 | close スキル・pr-base-sync の前提が設定と一致 | ✅ | TC-13〜TC-16・TC-19 exit 0（close step 5.5〜6 の全文一致・pr-base-sync 無改変・既存テスト 21/21） |
+
+---
+
+## 再オープン分（2026-10-24）
+
+- **計画書**: docs/plans/open/plan_I178.md「R. 再オープン分」
+- **Draft PR**: #314
+- **ステータス**: /test 完了（2026-10-24・HEAD `7f156eb`）。code-review 20261024_1521 OK・敵対的レビュー不要（RISK: NO）
+
+### レビュー対象
+
+| # | 対象 | 種別 |
+|---|---|---|
+| 1 | `docs/runbooks/branch-protection-setup.md` | 変更（§概要・§1.5・§4 確認 1・2 と確認 5・§6 の「自分が作った PR」の節を削除） |
+| 2 | `docs/runbooks/issue-flow.md` | 変更（ステップ 25） |
+| 3 | `docs/runbooks/workflow.md` | 変更（本番リリースフロー・hotfix） |
+| 4 | `docs/runbooks/onboarding.md` | 変更（main へのマージの Q&A） |
+| 5 | `docs/plans/open/plan_I032.md` | 削除（closed に同じ内容がある重複） |
+| 6 | `scripts/claude/tests/test_i178_branch_protection_doc.sh` | 削除 |
+| 7 | `.github/CODEOWNERS`・GitHub の設定・`pr-base-sync.sh`・close スキル・review-rules.md | 無改変の確認 |
+
+### 重点レビュー観点
+
+1. **事実との一致**: runbook の記述が手動 No.7 の結果（作成者が `oshui0404` 本人の PR には Code Owners の要件がかからない・マージは `oshui0404` だけ）と矛盾しないか。ユーザー作成 PR の扱いは書かない（ユーザーは PR を作らない・計画変更 2）ので、書いてある文が bot・外部が作った PR に限って正しいことを見る。
+2. **実行できる手順か**: 書き換えたリリース・hotfix・ステップ 25 の手順が、ブランチ保護（PR 必須・承認 1・Restrict・bypass 不可・必須チェック）の下でそのまま実行できるか。main に CI が無い間の hotfix の制約が書かれているか。
+3. **取りこぼし**: 直 push 手順・矛盾する記述が、対象の 4 ファイル以外に残っていないか（計画書 R3-2 の検索）。
+4. **変えないものを変えていないか**: CODEOWNERS・設定・pr-base-sync・close スキル。
+5. **false-green でないこと**: 合格している既存状態の TC が、失敗注入で不合格になることを確認しているか。
+
+### 結果
+
+| # | 受け入れ条件 | 判定 | 根拠 |
+|---|---|---|---|
+| AC-R1 | runbook の No.7 との矛盾の是正（ユーザー作成 PR の扱いは書かない・計画変更 2） | ✅ | RTC-01〜RTC-08（ゲート 1〜12）exit 0 |
+| AC-R2 | 直 push 手順が残っていない | ✅ | RTC-09〜RTC-14・RTC-17b/c（ゲート 13〜23）exit 0・手動 RNo.1 OK（該当 2 行はどちらも説明） |
+| AC-R3 | ステップ 25・リリース・hotfix・onboarding が PR 経由 | ✅ | RTC-11・RTC-15・RTC-16・RTC-17a exit 0 |
+| AC-R4 | open に plan_I032.md が無い | ✅ | RTC-18・RTC-19 exit 0 |
+| AC-R5 | test_i178 が無く参照も無い | ✅ | RTC-20・RTC-21 exit 0 |
+| AC-R6 | CODEOWNERS・設定が無改変 | ✅ | RTC-22・RTC-23 exit 0（GitHub の設定は手順に変更が無いことで担保） |
+
+### /retro（2026-10-24・再オープン分）
+
+- **良かった点**: 「承認を外す」案をユーザーと比較し、承認を残す＝設定・CODEOWNERS 無変更に確定（bot から読めない設定の変更・検証が不要）。計画時の Red 確認で `plan_I032.md` の open/closed 重複を発見し、移動を重複削除に是正。test_i178（runbook 全体の SHA-256 固定）を削除。
+- **是正処置**: なし（計画変更 2 として本 PR 内で対応済み）。
+- **予防処置 P1**: grill-me の「自己解決できる疑問は質問を省略してよい」に、人の操作手順・運用の新設や変更は質問する、という線引きを追加する。既存イシュー I128（#233）に同梱（2026-10-24 にコメントで引き継ぎ・ユーザー了承）。
+- **見送り**: 誤解を招く説明（同じやりとりで是正・手戻りなし）／plan-review Warning（その場で検出）／closed 文書の再利用（問題なく進行）。
+- security-review は未実施（高リスク判定 No）のため、残余リスク処遇・設計ルール昇格はスキップ。
