@@ -12,7 +12,7 @@
 | 4-1 | primary `refs/remotes/origin/HEAD` | `origin/develop` に合わせる |
 | 4-2 | harness-1・harness-2 | 公式 `claude --worktree` で作成 |
 | 4-3 | primary の `docs/issues/open/`・`docs/reviews/` | wt-harness から 37 件をコピー（未コミット） |
-| 4-4〜4-7 | wt-harness・Docker volume 4 つ・I181 ブランチ | バックアップ → 削除（危険操作）→ 撤去 |
+| 4-5〜4-7 | wt-harness・Docker volume 4 つ・I181 ブランチ | untracked の削除 → volume の削除（危険操作・バックアップなし＝D4）→ 撤去 |
 | 4-8 | ラベル `track:harness`・`track:app` | 説明文からワークツリー名を外す |
 | 4-11 | ラベル `danger-approved`（新規）・PR #313 | 危険操作の承認の印として作成・付与 |
 | 4-9・4-10 | `docs/runbooks/worktree.md` | §7 反映のタイミング・§11 手順 4 の注意・手順の不足の修正 |

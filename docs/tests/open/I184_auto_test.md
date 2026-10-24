@@ -29,7 +29,7 @@
 | TC-6 | wt-harness の Compose プロジェクト・コンテナ・volume が無い | `! docker compose ls -a \| grep -q '^wt-harness ' && [ -z "$(docker ps -aq --filter label=com.docker.compose.project=wt-harness)" ] && [ -z "$(docker volume ls -q --filter label=com.docker.compose.project=wt-harness)" ]` | exit 0 |
 | TC-7 | `worktree.md` §7 に反映のタイミングの補足（見出し語・取り込みコマンド・例外の参照）がある | `S=$(awk '/^## 7\./{f=1;next} /^## /{f=0} f' docs/runbooks/worktree.md); for k in 'ワークツリー間の反映のタイミング' 'git fetch origin' 'git merge origin/develop' '~/.claude' '.worktreeinclude' 'primary が今チェックアウトしているブランチ'; do printf '%s\n' "$S" \| grep -qF -- "$k" \|\| exit 1; done` | exit 0 |
 | TC-9 | PR #313 に `danger-approved` ラベルが付いている（取得に失敗したら不合格） | `l=$(gh pr view 313 --json labels -q '.labels[].name') && printf '%s\n' "$l" \| grep -qx danger-approved` | exit 0 |
-| TC-8 | バックアップが空でない | `ls backup_wt-harness_*.sql >/dev/null 2>&1 && for f in backup_wt-harness_*.sql; do test -s "$f" \|\| exit 1; done` | exit 0 |
+| TC-8 | 廃止（バックアップを取らない＝計画 D4。2026-10-24 計画承認時のユーザー判断） | — | — |
 
 ### TC-4a のスクリプト
 ```bash
@@ -55,7 +55,6 @@ done
 | FG-3m | TC-3 | `.worktreeinclude` の確認を外し、HEAD を `origin/main` に置き換えた形（`git merge-base --is-ancestor origin/main origin/develop`）が合格してしまうことを確かめる（＝`.worktreeinclude` の確認が要る理由） | exit 0（この形だけでは main 基点を弾けない） |
 | FG-4b | TC-4b | 一覧に存在しないパス `docs/issues/open/I999.md` を 1 行足した複製（scratchpad）に対して実行 | 非ゼロ |
 | FG-7 | TC-7 | （移行前の `worktree.md` §7 がそのまま失敗条件） | 非ゼロ |
-| FG-8 | TC-8 | 空ファイル `backup_wt-harness_fg.sql` を scratchpad で作り、そこで実行 | 非ゼロ |
 
 ## 計画時の実行記録（移行前・2026-10-24）
 各 TC を `bash -c` で 1 つずつ実行（TC-3 の `H1`・`H2` は実パス）。
@@ -72,7 +71,7 @@ done
 | TC-5 | 1 | 説明文に `wt-harness`・`study-app-multitenant` がある（移行前の失敗条件） |
 | TC-6 | 1 | wt-harness の volume 4 つが残っている（移行前の失敗条件。`docker compose ls -a` だけなら合格していた） |
 | TC-7 | 1 | §7 に補足が無い（＝FG-7） |
-| TC-8 | 2 | バックアップファイルが無い（`ls` が失敗） |
+| TC-8 | 2 | （後に廃止＝D4）バックアップファイルが無い（`ls` が失敗） |
 | TC-9 | 1 | PR #313 にラベルが無い（移行前の失敗条件。D8 決定後に追加して実行） |
 | FG-9 | 1 | ラベル一覧を `track:harness`・`danger-approved-x` に差し替えると不合格（似た名前に当たらない完全一致） |
 | FG-2b | 1 | 存在しないパスで不合格 |
@@ -81,6 +80,6 @@ done
 | FG-4b | 1 | 存在しないパスを含む一覧で不合格 |
 | FG-4b（対照） | 0 | 実在する 37 行の一覧なら合格（判定の書き方自体は通る） |
 | FG-7 | 1 | 補足の無い §7 で不合格 |
-| FG-8 | 1 | 空のバックアップで不合格 |
+| FG-8 | 1 | （後に廃止＝D4）空のバックアップで不合格 |
 
 TC-7 の合格側（補足を入れた後に exit 0 になること）と TC-4a の合格側は、実装時に確かめる。

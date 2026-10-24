@@ -79,7 +79,6 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | Config/Infra | primary の `refs/remotes/origin/HEAD`・ワークツリー構成（wt-harness 撤去・harness-1/2 作成）・wt-harness の Docker volume 4 つの削除（危険操作）・GitHub ラベル説明文 2 件・GitHub ラベル `danger-approved` の新規作成と PR #313 への付与 |
 | ドキュメント | `docs/runbooks/worktree.md`（§7 の補足・§11 手順 4 の注意・実行中に見つかった不足） |
 | primary の未コミットファイル | `docs/issues/open/`（17 件）・`docs/reviews/`（20 件）を追加（未コミットのまま） |
-| primary の gitignore 済みファイル | `backup_wt-harness_<日時>.sql`（`.gitignore` の `backup_*.sql` に当たる） |
 | ローカルブランチ | `feature/I181-slim-review-process`（マージ済み）を `git branch -d` で消す |
 | 依存関係ファイル | 変更なし |
 
@@ -89,7 +88,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | 4-1 | primary `refs/remotes/origin/HEAD` | `git remote set-head origin --auto` → `refs/remotes/origin/develop` |
 | 4-2 | `<primary>/.claude/worktrees/harness-1`・`harness-2` | ユーザーが primary で `claude --worktree harness-1`・`claude --worktree harness-2` |
 | 4-3 | primary `docs/issues/open/`・`docs/reviews/` | wt-harness から 37 件を `cp`（§2 調査結果の表） |
-| 4-4 | primary 直下 `backup_wt-harness_<YYYYmmdd_HHMM>.sql` | wt-harness の Postgres のバックアップ（`wt-remove.sh` が示す 3 手順） |
+| 4-4 | （行わない）wt-harness の Postgres のバックアップ | ユーザー判断で取らない（2026-10-24「古いデータはたぶん削除してよい」。D4） |
 | 4-5 | wt-harness の untracked 39 件 | wt-harness 側で削除（ユーザーのターミナル） |
 | 4-6 | `/mnt/c/app/wt-harness`・Docker volume 4 つ | `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`（`docker compose -p wt-harness down -v` → `git worktree remove`） |
 | 4-7 | ローカルブランチ `feature/I181-slim-review-process` | `git branch -d`（マージ済み。未マージなら -d が拒否するので消えない） |
@@ -121,24 +120,24 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | 1 | primary で `git fetch origin` → `git remote set-head origin --auto`。→ TC-1・TC-0 参照 | Claude | なし |
 | 2 | ユーザーが primary（`/mnt/c/app/study-app-multitenant`）の別のターミナルで `claude --worktree harness-1`、さらに別のターミナルで `claude --worktree harness-2` を起動し、どちらも**セッションを開いたまま**にする（ステップ 7 の確認が終わるまで）。Docker は使わないので `wt-ports.sh` は実行しない（使うときに §5・§6 で行う）。→ TC-2b・TC-3 参照 | Human | 1 |
 | 3 | primary のセッションで、§2 の表の「コピー」37 件を `cp /mnt/c/app/wt-harness/<パス> <パス>` でコピーする（primary に同じパスのファイルが無いことは調査で確認済み。コピー直前にもう一度 `test ! -e <パス>` を見て、あれば止まって `cmp`）。コピーした一覧・コピーしなかった 2 件と理由を `I184_review.md` の一覧に書く。→ TC-4a・TC-4b 参照 | Claude | なし（1・2 と並行可） |
-| 4 | **危険操作の承認を得る**（下の「Danger Ops」の内容を提示）。承認後、4-11 で `danger-approved` ラベルを作って PR #313 に付け（→ TC-9 参照）、primary で `wt-remove.sh` が示すバックアップの 3 手順を行う: `( cd '/mnt/c/app/wt-harness' && docker compose -p 'wt-harness' up -d db )` → `( cd '/mnt/c/app/wt-harness' && docker compose -p 'wt-harness' exec -T db pg_dump -U postgres learning_app ) > backup_wt-harness_<YYYYmmdd_HHMM>.sql`。→ TC-8 参照 | Claude（承認は Human） | 3 |
+| 4 | **危険操作の承認を得る**（下の「Danger Ops」の内容を提示）。承認後、4-11 で `danger-approved` ラベルを作って PR #313 に付ける（→ TC-9 参照）。バックアップは取らない（D4） | Claude（承認は Human） | 3 |
 | 5 | ユーザーが wt-harness のターミナル（wt-harness で開いている Claude セッションがあれば終了してから）で、untracked の 39 件を削除する: `cd /mnt/c/app/wt-harness && git status --porcelain --untracked-files=all \| sed -n 's/^?? //p' \| xargs -d '\n' rm --`。続けて primary のセッションで `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`（見張りが承認画面を出す）。完了メッセージに出たブランチを `git branch -d feature/I181-slim-review-process` で消す。→ TC-2a・TC-6 参照 | Human（削除）・Claude（撤去） | 3・4 |
 | 6 | ラベル: `gh label edit track:harness --description "ハーネス改善トラック"`・`gh label edit track:app --description "学習アプリ開発トラック"`。404（権限不足）ならユーザーが GitHub の Labels 画面で同じ文言に変える。`worktree.md` に 4-9・4-10 を入れ、ステップ 1〜5 で手順どおりに進まなかった箇所があれば直す（無ければ `I184_review.md` に「無し」）。→ TC-5・TC-7 参照 | Claude（ラベルの UI 操作は Human） | 5（4-10 以外の手順の修正はステップ 5 までの結果で決まる） |
 | 7 | 自動テスト全件を実行して記録し、計画書・テスト・レビュー文書をコミットして push。→ auto_test 全件 | Claude | 1〜6 |
 
-- サービスの再起動は不要（primary の Docker には触れない。wt-harness の db は手順 4 で起動し、手順 5 の `down -v` で止まる）。
+- サービスの再起動は不要（primary の Docker には触れない。wt-harness のコンテナは無く、volume だけを手順 5 の `down -v` で消す）。
 - 未コミットのイシューファイル・イシューレビュー（コピーした 37 件）はコミットしない（運用上わざと未コミット）。
 
 ### Danger Ops（ステップ 4・5）
 - **対象**: Compose プロジェクト `wt-harness` の named volume 4 つ（Postgres・Redis の開発データ・ログ・static）の削除（`docker compose -p wt-harness down -v`）と、wt-harness フォルダの撤去（gitignore 済みの `.env`・`backend/.env`・キャッシュも消える）。primary（`study-app-multitenant`）のデータには触れない（`-p wt-harness` で固定・`wt-remove.sh` が作業フォルダのラベルと同名の検査を行う）。
 - **代替案**: volume を消さずに撤去する（`KEEP_DATA=1` は docker が使えるときは効かず止まる）→ 使わないデータが残り続けるため採らない。
-- **ロールバック**: Postgres はステップ 4 のバックアップから戻せる（`docker compose -p <名前> exec -T db psql -U postgres learning_app < backup_…sql`）。Redis・ログ・static は開発用の一時データで戻さない。ワークツリーはブランチが残る（I181 のブランチは develop にマージ済み）ので `git worktree add` で作り直せる。untracked のファイルは primary 側のコピーから戻す。
+- **ロールバック**: volume のデータ（Postgres・Redis・ログ・static）は戻せない。I179/I181 の作業中に使った開発用の一時データで、ユーザー判断でバックアップを取らずに消す（D4）。ワークツリーはブランチが残る（I181 のブランチは develop にマージ済み）ので `git worktree add` で作り直せる。untracked のファイルは primary 側のコピーから戻す。
 - **実行コマンド**: `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`
 - **承認の記録**: ユーザーの明示承認を `I184_review.md` に記録し、PR #313 に `danger-approved` ラベルを付ける（D8・4-11）。
 
 ## 6. テスト計画
 - アプリのコード変更が無いため pytest・Jest・E2E は対象外。
-- 自動（`docs/tests/open/I184_auto_test.md`）: 環境の状態を見る決定論 TC（TC-0〜TC-8）。合否は exit code。否定・不在の TC（TC-2a・TC-4a・TC-5・TC-6・TC-7）は、計画時点で実際に不合格になることを確かめた（いまの環境そのものが失敗条件＝移行前の状態）。存在を見る TC（TC-2b・TC-3・TC-4b・TC-8）は欠けた対象を与えて不合格になることを確かめた（FG）。
+- 自動（`docs/tests/open/I184_auto_test.md`）: 環境の状態を見る決定論 TC（TC-0〜TC-9。TC-8 は D4 で廃止）。合否は exit code。否定・不在の TC（TC-2a・TC-4a・TC-5・TC-6・TC-7）は、計画時点で実際に不合格になることを確かめた（いまの環境そのものが失敗条件＝移行前の状態）。存在を見る TC（TC-2b・TC-3・TC-4b・TC-9）は欠けた対象を与えて不合格になることを確かめた（FG）。
 - 手動（`docs/tests/open/I184_manual_test.md`）: `claude --worktree` の作成・終了時の挙動（Human）、コピーしなかったものの妥当性、手順の不足の記録、ラベルの見た目。
 - テストレベル: すべて環境・文書の確認（結合相当）。認可・テナント境界の変更は無い。
 
@@ -160,13 +159,13 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | `origin/HEAD` を直す前に `claude --worktree` を実行し、main 基点の空ワークツリーができる | ステップ 2 は TC-1 の合格後。TC-3 で `.worktreeinclude` の有無を見る（できていたら `wt-remove.sh` で消して作り直す） |
 | 作った直後のワークツリーがセッション終了で消え、AC を確かめられない | 確認が終わるまでセッションを開いたままにする（ステップ 2）。消えても同じコマンドで作り直す |
 | `down -v` が primary のデータを消す | `wt-remove.sh` が `-p wt-harness` で固定し、作業フォルダ・同名を検査する。手で `down -v` は打たない |
-| バックアップが空のまま削除に進む | TC-8（`test -s`）が合格するまでステップ 5 に進まない |
+| 消した後で volume のデータが必要だと分かる | 戻せない。ユーザーが不要と判断済み（D4）。実行直前の最終承認でもう一度確かめる |
 | wt-harness で Claude セッションが開いたまま撤去し、そのセッションが壊れる | ステップ 5 の前にユーザーが wt-harness のセッションを終了する |
 | ラベル編集が 404 | ユーザーの UI 操作に切り替える |
 
 ## 9. 承認ポイント
 - [ ] コピーする 37 件・コピーしない 2 件（I121・I151 のイシューファイル）の仕分け（I100・I121・I151 のイシューレビューはコピーする）
-- [ ] wt-harness の Docker volume 4 つを、バックアップのうえ `DANGER_OK=1` で削除する（危険操作。実行直前にもう一度承認をもらう）
+- [ ] wt-harness の Docker volume 4 つを、バックアップを取らずに `DANGER_OK=1` で削除する（危険操作。実行直前にもう一度承認をもらう）
 - [ ] `danger-approved` ラベルを作って PR #313 に付ける（D8・計画時にユーザー選択済み）
 - [ ] harness-1・harness-2 の作成はユーザーが別ターミナルで行い、確認が終わるまで開いたままにする
 - [ ] `worktree.md` §7（4-9）と §11 手順 4（4-10）の文案
@@ -178,7 +177,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | D1 | 着手は I181 完了後（今は完了済み） | イシューに明記（設計確認メモ） |
 | D2 | closed 済みイシューのイシューファイルはコピーしない／イシューレビューはコピーする | イシュー・§11 に明記（「コピーしないもの」はイシューファイルだけ） |
 | D3 | gitignore 済みのファイルは反映しない（`settings.local.json` は primary が上位集合） | §11 の手順で比べた結果 |
-| D4 | wt-harness の volume はバックアップしてから `DANGER_OK=1` で消す | イシュー（Danger Ops「`wt-remove.sh` の停止メッセージにあるバックアップ手順と danger-ops.md の承認を経て」）に明記 |
+| D4 | wt-harness の volume はバックアップを取らずに `DANGER_OK=1` で消す | イシューの Danger Ops はバックアップ手順を経る想定だったが、計画承認時にユーザーが「古いデータはたぶん削除してよい」と判断（2026-10-24）。「たぶん」なので実行直前の最終承認で確定する |
 | D5 | harness-1/2 の作成はユーザーが行い、`wt-ports.sh` は今は実行しない | イシュー（§5・§6 に従う＝Docker を使う前に実行）と `claude --worktree` が対話セッションであること |
 | D6 | マージ済みの I181 ブランチを `git branch -d` で消す | §4「不要なら `git branch -d` で消す」 |
 | D7 | §11 手順 4 に「作った直後は終了で消える」注意を足す | イシューのスコープ「実行中に見つかった手順の不足の修正」。§2 の既知事項を §11 から参照できていない |
@@ -186,8 +185,8 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 
 ## セルフチェック
 - 要件適合性: AC の範囲内。Docker volume の削除はイシューの「あれば」の分岐。§11 手順 4 の注意（4-10）はスコープ「手順の不足の修正」に入る。マルチテナント・ステータス遷移は該当なし。
-- セキュリティ影響なし（アプリのコード変更なし）。`backend/.env` は中身を読まない。バックアップ（開発 DB のダンプ）は gitignore 済みの名前で primary 直下にのみ置き、コミット・共有しない。依存の追加なし。bandit・npm audit の対象変更なし。
+- セキュリティ影響なし（アプリのコード変更なし）。`backend/.env` は中身を読まない。開発 DB のダンプは作らない（D4）。依存の追加なし。bandit・npm audit の対象変更なし。
 - P3/P5/P8 影響なし（DB スキーマ変更・外部 API・新規インフラなし。Docker volume の削除は Danger Ops として扱う）。
 - P6 影響なし（UI・性能に関わる変更なし）。
-- P9 影響なし（個人情報・テナントデータを扱う変更なし。開発 DB のダンプは手元のみ）。
+- P9 影響なし（個人情報・テナントデータを扱う変更なし。開発 DB のダンプは作らない）。
 - 設計品質: 新しい仕組みを作らず、既存の手順（§2・§4・§11）とスクリプトを使う。設定値のハードコードなし。
