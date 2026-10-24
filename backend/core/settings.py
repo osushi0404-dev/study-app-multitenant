@@ -202,6 +202,7 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
     'x-user-actions',  # カスタムヘッダーを追加
+    'idempotency-key',  # クイズ開始の重複送信防止（I158）
 ]
 
 # Redis Configuration

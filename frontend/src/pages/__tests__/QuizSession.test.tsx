@@ -195,6 +195,37 @@ describe('QuizSession Component', () => {
     expect(submitButton).toBeInTheDocument();
   });
 
+  it('完了画面の「もう一度挑戦」は Idempotency-Key 付きで新しいセッションを開始する（I158）', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValueOnce({
+      data: { ...mockSession, is_active: false },
+    });
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: { ...mockSession, id: 'new-session-id' },
+    });
+
+    render(
+      <BrowserRouter>
+        <QuizSessionPage />
+      </BrowserRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'もう一度挑戦' }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/quiz/',
+        { subject: '1' },
+        {
+          headers: {
+            'Idempotency-Key': expect.stringMatching(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+            ),
+          },
+        }
+      );
+    });
+  });
+
   it('difficulty と problem_type が正しく表示される', async () => {
     (apiClient.get as jest.Mock).mockResolvedValueOnce({
       data: mockSession,

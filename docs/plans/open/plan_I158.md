@@ -89,7 +89,8 @@
 | `backend/problems/views.py` | `QuizSessionViewSet`（808 行目〜）・`create`（820〜845 行目）・`submit_answer`（942 行目）・`end`（969〜971 行目） | `http_method_names` の限定。`create` は `Idempotency-Key` の解析・入力検証・サービス呼び出し・例外→HTTP 応答の対応付けのみにする。`submit_answer`・`end` の `session.save()` を `update_fields` 指定にする（修正項目 8・security-review 由来） |
 | `backend/problems/serializers.py` | `QuizSessionSerializer.Meta.read_only_fields`（320〜323 行目） | `is_active`・`started_at` を追加 |
 | `backend/core/settings.py` | `CORS_ALLOW_HEADERS`（193〜205 行目） | `'idempotency-key'` を追加 |
-| `frontend/src/pages/QuizSession.tsx` | `createNewSession`（108〜130 行目）・開始 effect（203〜211 行目） | `useRef` ガード・`Idempotency-Key` ヘッダの送信 |
+| `frontend/src/pages/QuizSession.tsx` | `createNewSession`（108〜130 行目）・開始 effect（203〜211 行目）・完了画面の「もう一度挑戦」ボタン（計画変更 2） | `useRef` ガード・`Idempotency-Key` ヘッダの送信 |
+| `frontend/src/pages/__tests__/QuizSession.test.tsx` | — | TC-34（「もう一度挑戦」からの開始にキーが付く・計画変更 2） |
 | `frontend/src/setupTests.ts` | — | `crypto.randomUUID` が無い Jest 環境で Node の `crypto.webcrypto` を割り当てる |
 | `backend/problems/tests/test_I158_quiz_session_start.py`（新規） | — | TC-01〜TC-18 |
 | `frontend/src/pages/__tests__/QuizSession.start.test.tsx`（新規） | — | TC-30・TC-31 |
@@ -518,6 +519,9 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 
 ## 計画変更記録
 - **変更 1（2026-10-24・security-review 由来）**: 修正項目 8（`submit_answer`・`end` の `update_fields` 化）と TC-18・TC-19 を追加。理由: 制約の追加後、別タブの開始と回答送信が重なると、回答送信の全列保存が `is_active=True` を書き戻して `IntegrityError`（500）になる経路があるため。範囲が広がる変更のため、/code-review の前に /plan-issue-review をやり直す。
+- **変更 2（2026-10-24・/implement 中に発見）**: `createNewSession` の呼び出し元がもう 1 か所あった（完了画面の「もう一度挑戦」ボタン・`QuizSession.tsx` の `onClick={createNewSession}`）。調査時の grep が `navigate(` だけで呼び出し元を全件洗っていなかった。引数を足したことで型エラーになり発覚。`onClick={() => createNewSession(generateIdempotencyKey())}` に変更し（クリックごとに新しいキー＝意図的なやり直しは後勝ち）、既存の `QuizSession.test.tsx` に TC-34 を追加。方式・AC は変わらない（呼び出し元の追従のみ）ため plan-review のやり直しは不要と判断。ユーザー指示「承認なしで進めて」（2026-10-24）により事後記録。
+- **変更 3（2026-10-24・/implement 中に発見）**: TC-40 の期待値を「安全なコンテキストならキー付き・そうでなければキー無し」に変更。compose 内の e2e コンテナは `http://frontend:3000`（安全なコンテキストでない）で開くため `crypto.randomUUID` が無く、計画どおりの代替動作（キー無しで送る）になることを実測した。CI（`http://localhost:3000`）ではキー付きの経路を検証する。POST 1 回の判定は両環境で同じ。
+- **変更 4（2026-10-24・/implement 中に発見）**: TC-14 は関数実行後に制約を付け直さず、有効件数で解消を確かめる形に変更（auto_test の注に理由を記録）。
 
 ## セキュリティレビュー結果
 

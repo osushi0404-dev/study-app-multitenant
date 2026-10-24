@@ -71,7 +71,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 
 注:
 - ヘッダは Django テストクライアントの書式 `HTTP_IDEMPOTENCY_KEY=...`（`request.headers["Idempotency-Key"]` として届く）で渡す。
-- TC-14 の制約の外し方: テスト内で `connection.schema_editor()` を使い `QuizSession._meta.constraints` の `uniq_active_quizsession_per_user` を `remove_constraint` → データ作成 → 関数実行 → `add_constraint` で戻す（`transaction=True` は不要・テストのトランザクション内で完結し、最後にロールバックされる）。関数の実行後に制約を戻せること自体が「重複が解消された」証拠になる。
+- TC-14 の制約の外し方: テスト内で `connection.schema_editor()` を使い `QuizSession._meta.constraints` の `uniq_active_quizsession_per_user` を `remove_constraint` → データ作成 → 関数実行（`transaction=True` は不要・テストのトランザクション内で完結し、最後のロールバックで制約も元に戻る）。重複の解消は `QuizSession.objects.filter(user=user, is_active=True).count() == 1` で確かめる。（/implement 時に変更: 当初は関数実行後に `add_constraint` で戻して解消の証拠にする予定だったが、行の更新と同じトランザクションで制約を足すと PostgreSQL が `cannot CREATE INDEX ... pending trigger events` で拒否することを実測したため。これは本番のマイグレーションを 0020/0021 に分けた理由そのもの）
 - 期待値の status は `rest_framework.status` の定数で assert する（規約準拠）。
 - TC-07・TC-08 の応答の集め方: スレッド関数の中で `results.append((response.status_code, response.data.get("id")))` とし、`results` は外側で用意したリスト（`list.append` は GIL 下で単体として安全）。例外も握りつぶさず `errors.append(exc)` で集め、最後に `assert errors == []` とする。`thread.join(timeout=30)` の後に `assert not thread.is_alive()` でハングを検出する。
 - TC-10 だけ `unittest.mock.patch` を使う理由: ロックがある限り実際には起きない守りの分岐で、実 DB で決定論的に起こす方法が無いため（計画「設計判断の明示」）。
@@ -93,6 +93,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 |----|------|------|--------|--------|
 | TC-30 | StrictMode でも開始 POST は 1 回・キー付き（本バグの再発防止） | `apiClient.post` を `{ data: { id: 's1', is_active: true, ... } }` で解決、`apiClient.get`（next_problem）を問題データで解決 → 描画 → 問題文の表示を待つ | `apiClient.post` の `/api/quiz/` 宛て呼び出しが **ちょうど 1 回**。引数が `('/api/quiz/', { subject: '1' }, { headers: { 'Idempotency-Key': expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) } })` | Claude |
 | TC-31 | 開始失敗時は現行どおりトースト＋ダッシュボードへ | `apiClient.post` を `{ response: { status: 409 } }` で reject → 描画 | `toast.error` が `'クイズセッションの作成に失敗しました'` で呼ばれる。`mockNavigate` が `'/dashboard'` で呼ばれる。`apiClient.post` は 1 回 | Claude |
+| TC-34 | 完了画面の「もう一度挑戦」からの開始にもキーが付く（計画変更 2） | 既存 `QuizSession.test.tsx`（`useParams` = `{ id: 'test-session-id' }`）に追加。`apiClient.get` を `is_active: false` のセッションで解決 → 完了画面の「もう一度挑戦」ボタンをクリック | `apiClient.post` が `('/api/quiz/', { subject: '1' }, { headers: { 'Idempotency-Key': UUID v4 } })` で呼ばれる | Claude |
 | TC-32 | 既存の読み込み経路に退行なし | `CI=true npx react-scripts test --watchAll=false src/pages/__tests__/QuizSession.test.tsx` | exit 0（既存 6 件合格） | Claude |
 | TC-33 | Frontend 全体回帰・型・lint | ① `CI=true npx react-scripts test --watchAll=false` ② `npx tsc --noEmit` ③ `npx eslint src/pages/QuizSession.tsx src/setupTests.ts src/pages/__tests__/QuizSession.start.test.tsx` | ①〜③ すべて exit 0。①は既存 **10 件**（baseline 2026-10-24）＋新規すべて合格 | Claude |
 
@@ -100,14 +101,16 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 
 | TC | 内容 | 手順 | 期待値 | 実施者 |
 |----|------|------|--------|--------|
-| TC-40 | 実ブラウザ（開発サーバー = StrictMode 有効）で開始 POST は 1 回・キー付き | 既存テストと同じ流れ（ダッシュボード → 「クイズを始める」→ E2E Quiz Subject）。その前に `page.on('request')` で `method() === 'POST'` かつ URL のパスが `/api/quiz/` と完全一致するリクエストを配列に記録する。選択肢の表示を待った後に判定 | 記録件数が `1`。そのリクエストの `headers()['idempotency-key']` が TC-30 と同じ UUID v4 の正規表現に一致 | Claude |
+| TC-40 | 実ブラウザ（開発サーバー = StrictMode 有効）で開始 POST は 1 回・キー付き | 既存テストと同じ流れ（ダッシュボード → 「クイズを始める」→ E2E Quiz Subject）。その前に `page.on('request')` で `method() === 'POST'` かつ URL のパスが `/api/quiz/` と完全一致するリクエストを配列に記録する。選択肢の表示を待った後に判定 | 記録件数が `1`。`window.isSecureContext` が true（CI の `http://localhost:3000`）なら `headers()['idempotency-key']` が TC-30 と同じ UUID v4 の正規表現に一致、false（compose 内 e2e コンテナの `http://frontend:3000`）ならヘッダ無し（代替動作・計画変更 3） | Claude |
 | TC-41 | E2E 全体回帰 | ローカル: `cd e2e && npx playwright test`／CI: `E2E Tests (Playwright)` ジョブ | exit 0（全件合格）。CI のジョブが成功 | Claude |
 
 ## TDD RED 確認（実装前に実施）
 テストを書いた後、**実装前の現行コード**に対して実行し、RED/GREEN の内訳を記録してから実装する。
 - 想定 RED: TC-03（2 回目も 201）・TC-05（キーを無視して 201）・TC-06（201）・TC-07（有効 2 件）・TC-08（2 件作成）・TC-09（制約が無く例外にならない）・TC-10（`create` の後に例外 → 500）・TC-11（PUT/PATCH が 200・DELETE が 204）・TC-12（`is_active=False` で作成される）・TC-13（`idempotency-key` が許可ヘッダに無い）・TC-14（マイグレーションファイルが無く import できない）・TC-15（201）・TC-18（`QuizService.start_session` が無い）・TC-19（exit 1）・TC-30（POST 2 回）
 - 想定 GREEN（現行でも通る・振る舞いを固定する TC）: TC-01・TC-02・TC-04・TC-16・TC-17・TC-31
-- 記録欄: （/implement で記入）
+- 記録欄（2026-10-24・実装前）:
+  - Backend: **15 failed / 4 passed**。GREEN は TC-02・TC-04・TC-16・TC-17（想定どおり）。TC-01 は想定と違い RED（応答・行に `client_request_id` が無く `AttributeError`＝新しい振る舞いの部分）。TC-07 は `assert 2 == 1`（**有効セッション 2 件＝本バグを並行テストで再現**）、TC-08 は `[201, 201]`（2 件作成）。並行テストが pytest-django（`transaction=True`）＋ PostgreSQL で競合を再現できることを確認（計画の最大の未知リスク＝成立）。
+  - Frontend: TC-30・TC-31 とも **RED**（`/api/quiz/` への POST が 2 回＝StrictMode の二重送信を再現）。TC-31 は想定（GREEN）と違い POST 回数の assert で RED。
 
 ## 決定論 TC の事前検証
 - TC-19: 計画時（2026-10-24・実装前）に exit 1（NG）を確認済み。実装後に exit 0 へ転じることで判定する。
@@ -119,4 +122,18 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 - **TC-20**: `QuizSession` に一時的なフィールド（例 `tmp_i158 = models.IntegerField(default=0)`）を足す → exit 1 になることを確認 → 復元。
 - **TC-30**: `startedSubjectRef` のガード（`if (startedSubjectRef.current === subjectId) return;`）を一時的に削除 → POST 2 回で RED を確認 → 復元。
 - **TC-40**: TC-30 と同じ注入で、ローカル E2E が記録件数 2 で RED になることを確認 → 復元。
-- 記録欄: （/implement で記入）
+- 記録欄（2026-10-24）:
+  - TC-07 / TC-08: `select_for_update` の行を削除 → 3 回連続で **2 failed**（TC-07 `[201, 409]`＝ロック無しで制約違反が 409 に変換されることも同時に実証・TC-08 `[201, 409]`）→ Edit で復元 → 19 passed。
+  - TC-20: `tmp_i158` フィールドを追加 → **exit 1**（`0022_quizsession_tmp_i158.py` を検出・`--dry-run` のためファイルは作られない）→ Edit で復元 → `No changes detected`。
+  - TC-30: ガードの `if` を削除 → **2 failed**（TC-30・TC-31）→ Edit で復元 → 2 passed。
+  - TC-40: （E2E の再実行時に記入）
+  - 復元後の `git diff` は実装差分のみ（注入の残りなし）を確認済み。
+
+## 実施記録（2026-10-24 /implement）
+- Backend I158: **19 passed**（TC-01〜TC-18・TC-05 は 2 パターン）。並行テスト（TC-07・TC-08）は 10 回連続実行で全回合格（不安定さなし）。
+- TC-19: `! grep -qE "session\.save\(\)" backend/problems/views.py` → **exit 0**（実装前 exit 1 → 実装後 exit 0）。
+- TC-20: `makemigrations --check --dry-run` → **exit 0**（`No changes detected`）。
+- TC-21: `pytest --migrations --create-db` → **19 passed**（まっさらな DB に 0001〜0021 を適用）。
+- TC-22: Backend 全体 **122 passed**（baseline 103＋新規 19）。
+- TC-33: Frontend 全体 **4 suites / 13 passed**（baseline 10＋TC-30・TC-31・TC-34）・`npx tsc --noEmit` exit 0・`npx eslint`（変更 4 ファイル）exit 0・`react-scripts build` は `Compiled successfully.`（`frontend/build` がコンテナ作成の root 所有で書けないため `BUILD_PATH` をスクラッチ領域に向けて実行）。
+- TC-40 / TC-41: （E2E の再実行時に記入）
