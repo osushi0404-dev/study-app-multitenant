@@ -139,3 +139,12 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 - TC-40 / TC-41: `docker compose --profile e2e run --rm e2e` → **8 passed**（既存 7＋TC-40）。compose 内の e2e コンテナは安全なコンテキストでないため、TC-40 は「キー無しの代替動作」側を検証（キー付きの側は CI の `localhost` で検証される）。
   - 初回は 2 回つまずいた（いずれもコード外）: ① dev DB が未マイグレーションで、かつ「もう一度挑戦」ボタンの型エラー（計画変更 2）で開発サーバーにエラー表示が重なりログインできなかった ② 連続実行でログインのレート制限（django-ratelimit・403）に当たった → 5 分待って再実行。
   - ホストの Playwright（`cd e2e && npx playwright test`）は chromium の起動に必要なライブラリが無く起動できなかったため、compose の e2e コンテナで実行した。
+
+## /test 実施記録（2026-10-24・最終確認）
+- TC-22 Backend 全体（Docker）: **123 passed**（baseline 103＋I158 の 20）
+- TC-20 `makemigrations --check --dry-run`: **exit 0**（`No changes detected`）
+- TC-21 `pytest --migrations --create-db problems/tests/test_I158_quiz_session_start.py`: **20 passed**（まっさらな DB に 0001〜0021 を適用）
+- TC-33 Frontend 全体（Jest）: **4 suites / 13 passed**・`npx tsc --noEmit` exit 0・`npx eslint`（変更 4 ファイル）exit 0
+- TC-41 E2E（`docker compose --profile e2e run --rm e2e`）: **8 passed**（TC-40 含む・compose 内のため非安全コンテキスト側＝キー無しの代替動作を検証）
+- CI（PR #317・最新 push）: Backend Lint & Security / Backend Tests / Frontend Lint & Security / Frontend Tests / Frontend Type Check / **E2E Tests (Playwright)** すべて pass。CI の E2E は `http://localhost:3000`（安全なコンテキスト）で実行されるため、TC-40 のキー付き側（UUID v4 の `Idempotency-Key`）もここで検証済み
+- 停止条件該当なし
