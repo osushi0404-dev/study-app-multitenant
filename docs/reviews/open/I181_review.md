@@ -25,5 +25,9 @@
 - テストを先に書いて赤を確認（パス判定 fail=26・記述 fail=23）→ 本体を変えて緑（パス判定 pass=60・記述 pass=29・回帰 R2〜R7 すべて fail=0）。内訳は `docs/tests/open/I181_auto_test.md`「結果」
 - 計画変更記録 1: `code-review/SKILL.md` の `allowed-tools` に `TaskStop` を追加（手順を成り立たせるための付け足し。計画レビューのやり直しは不要）
 
+## /code-review（2026-10-24）
+- 基本レビュー OK・指摘なし（`docs/reviews/I181_code_review_20261024_1136.md`）。決定論ゲート 10 本すべて exit 0・CI 6 件 pass
+- 高リスク判定 NO（LLM=NO / path=NO）→ `ADVERSARIAL_STAGE: NOT_REQUIRED`。計画書「レビューの重さ」の見込みどおりで、敵対的レビューは走っていない（手動 No.1 で記録）
+
 ## 実装後評価
 （/test 以降に記録）
