@@ -86,12 +86,12 @@
 | `backend/problems/migrations/0020_deactivate_duplicate_active_quizsessions.py`（新規） | — | `RunPython(deactivate_duplicate_active_sessions, RunPython.noop)`（データマイグレーション） |
 | `backend/problems/migrations/0021_quizsession_constraints.py`（新規） | — | `AddConstraint` × 2 |
 | `backend/problems/services/quiz_service.py` | `QuizService` | `start_session()`・例外クラス `IdempotencyKeyReusedError`・`ActiveSessionConflictError` を追加 |
-| `backend/problems/views.py` | `QuizSessionViewSet`（808 行目〜）・`create`（820〜845 行目） | `http_method_names` の限定。`create` は `Idempotency-Key` の解析・入力検証・サービス呼び出し・例外→HTTP 応答の対応付けのみにする |
+| `backend/problems/views.py` | `QuizSessionViewSet`（808 行目〜）・`create`（820〜845 行目）・`submit_answer`（942 行目）・`end`（969〜971 行目） | `http_method_names` の限定。`create` は `Idempotency-Key` の解析・入力検証・サービス呼び出し・例外→HTTP 応答の対応付けのみにする。`submit_answer`・`end` の `session.save()` を `update_fields` 指定にする（修正項目 8・security-review 由来） |
 | `backend/problems/serializers.py` | `QuizSessionSerializer.Meta.read_only_fields`（320〜323 行目） | `is_active`・`started_at` を追加 |
 | `backend/core/settings.py` | `CORS_ALLOW_HEADERS`（193〜205 行目） | `'idempotency-key'` を追加 |
 | `frontend/src/pages/QuizSession.tsx` | `createNewSession`（108〜130 行目）・開始 effect（203〜211 行目） | `useRef` ガード・`Idempotency-Key` ヘッダの送信 |
 | `frontend/src/setupTests.ts` | — | `crypto.randomUUID` が無い Jest 環境で Node の `crypto.webcrypto` を割り当てる |
-| `backend/problems/tests/test_I158_quiz_session_start.py`（新規） | — | TC-01〜TC-17 |
+| `backend/problems/tests/test_I158_quiz_session_start.py`（新規） | — | TC-01〜TC-18 |
 | `frontend/src/pages/__tests__/QuizSession.start.test.tsx`（新規） | — | TC-30・TC-31 |
 | `e2e/tests/quiz-session.spec.ts` | — | TC-40（開始時の POST 回数とヘッダ）を追加 |
 
@@ -388,13 +388,28 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 }
 ```
 
+### 修正項目 8: 回答送信・終了の保存を必要な列だけにする（security-review 由来・2026-10-24 追加）
+**修正方針**: `submit_answer` と `end` は、読み込んだセッションを `session.save()`（全列の上書き）で保存している。別タブでの開始がその間に割り込んで同じセッションを終了させると、回答送信の保存が `is_active=True` を書き戻す。これまでは「有効セッションが 2 件」に黙って戻っていたが、制約を足した後は `IntegrityError` で回答送信が 500 になる。保存する列を明示して、開始処理が終了させた状態を書き戻さないようにする。
+
+```python
+        # submit_answer（942 行目）
+        session.save(update_fields=['completed_problems', 'correct_answers'])
+
+        # end（969〜971 行目）
+        session.is_active = False
+        session.ended_at = timezone.now()
+        session.save(update_fields=['is_active', 'ended_at'])
+```
+- `completed_problems += 1` の同時更新での取りこぼし（2 タブで同時に回答）は以前からある別問題で、本イシューでは扱わない（`F()` 式化は対象外）。
+- `QuizSessionViewSet` 内に全列保存の `session.save()` が残っていないことを TC-19 で決定論的に固定する。
+
 ## 5. 実装手順（TDD・垂直スライス）
 
 - **ステップ1: サーバーの不変条件（未知リスク先行・DB → サービス → API を 1 本で貫通）**
   1. `backend/problems/tests/test_I158_quiz_session_start.py` に TC-01〜TC-17 を書き、現行コードで実行して RED を記録する → auto_test「TDD RED 確認」参照。最大の未知リスクは「スレッド 2 本の同時実行テストが pytest-django（`transaction=True`）＋ PostgreSQL で決定論的に動くか」なので、TC-07・TC-08 を最初に書いて現行コードで RED（有効 2 件）になることを確かめる。決定論的に再現できなければ実装を中断して計画を見直す。
-  2. 修正項目 1（モデル）・3（サービス）・4（ビュー）・5（シリアライザ）・6（CORS）を実装する。
+  2. 修正項目 1（モデル）・3（サービス）・4（ビュー）・5（シリアライザ）・6（CORS）・8（回答送信・終了の保存列）を実装する。
   3. 修正項目 2 のマイグレーション 3 本を作る（`0019`・`0021` は `makemigrations`、`0020` は手書き）。
-  4. → TC-01〜TC-17・TC-20・TC-21 参照。false-green 注入検証 → auto_test「false-green 自己検証」参照。
+  4. → TC-01〜TC-19・TC-20・TC-21 参照。false-green 注入検証 → auto_test「false-green 自己検証」参照。
 - **ステップ2: フロントの重複送信防止（ステップ1 の完了が前提・UI まで貫通）**
   1. `frontend/src/pages/__tests__/QuizSession.start.test.tsx` に TC-30・TC-31 を書き、現行コードで TC-30 が RED（POST 2 回）になることを記録する。
   2. `setupTests.ts` と修正項目 7 を実装する → TC-30〜TC-33 参照。
@@ -498,3 +513,52 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 ## レビュー結果
 - [20261024_1636 判定: ✅ 完了](../../reviews/I158_plan_review_20261024_1636.md)
 - 指摘への対応（2026-10-24）: ① Warning（`client_request_id` の応答除外）→ `fields` が明示リストのため足さないことで除外される旨を修正項目 5 に追記し、TC-01 に「応答に `client_request_id` が無い」を追加。② Warning（TC-01 の問題数が 0 件一致になり得る）→ fixture で subject_a に未削除 2 件＋削除済み 1 件、subject_b に 1 件の問題を作り、TC-01 の期待値を `total_problems == 2` に具体化。③ Info（context なしのシリアライズ）→ `self.get_serializer(session).data` に変更（create アクションでは `QuizSessionSerializer` が返るため応答の形は同じ）。
+
+## 計画変更記録
+- **変更 1（2026-10-24・security-review 由来）**: 修正項目 8（`submit_answer`・`end` の `update_fields` 化）と TC-18・TC-19 を追加。理由: 制約の追加後、別タブの開始と回答送信が重なると、回答送信の全列保存が `is_active=True` を書き戻して `IntegrityError`（500）になる経路があるため。範囲が広がる変更のため、/code-review の前に /plan-issue-review をやり直す。
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-24
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | OWASP Top 10（整合性・可用性） | `submit_answer`・`end` が読み込んだセッションを `session.save()`（全列上書き）で保存する。別タブの開始が間に割り込むと `is_active=True` を書き戻し、制約追加後は回答送信が 500 になる（追加前は有効 2 件に黙って戻っていた） | **必須防御条件**: 両アクションの保存を `update_fields` 指定にする（修正項目 8）。TC-18（書き戻さない）・TC-19（全列保存の不在を決定論 grep で固定・現行で exit 1 を確認済み）で担保 |
+| Low | マルチテナント | 開始時の `subject` に他組織の科目 ID を指定できる・科目未指定の `total_problems` が全組織を数える（以前からの不備） | 本変更で悪化しない（サービスへ移すだけで判定は変えない）。I166（#284・優先度高）で是正。**禁止事項**: 本イシューで組織判定を部分的に足して I166 と二重実装にしない |
+| Low | 入力検証 | `Idempotency-Key` に長大・不正な値が来る | `uuid.UUID()` で解釈できない値は 400（空文字含む・TC-05）。値は DB にだけ保存し、応答・ログに出さない（**禁止事項**: キーの値をログ出力しない） |
+| Low | 認証・認可 | 同じキーの照合で他人のセッションが返る | 照合は必ず `user` で絞る（`filter(user=user, client_request_id=...)`）。制約もユーザー単位。TC-16 で担保 |
+| Low | OWASP Top 10（DoS） | 開始の連打で自分のユーザー行のロックが続き、同じユーザーの他の更新（`last_login` 等）が待たされる | ロック範囲は同一ユーザーの行のみ・1 回の開始処理（数クエリ）で解放。既存の DRF ユーザー単位スロットル（I127）が連打を抑える |
+| — | 機密情報 | なし（新規の個人情報なし。`client_request_id` は応答に含めない） | — |
+| — | ファイル操作 | なし | — |
+| — | 外部通信 | なし | — |
+| — | 依存ライブラリ | なし（追加なし・UUID は標準機能） | — |
+| — | セキュリティ設定（CORS） | 許可ヘッダに `idempotency-key` を足すのみ。許可オリジン・`CORS_ALLOW_CREDENTIALS` は不変更 | TC-13 |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/quiz/` | 未認証 | セッションを作る | 401・作成されない | Yes: TC-17 | No | なし | Low |
+| 2 | `POST /api/quiz/` | 一般 | 他人が使った（推測した）キーで再送し、他人のセッションを取得する | キー照合はユーザー単位。他人のセッションは返らず、自分の新規セッションになる | Yes: TC-16 | No | なし | Low |
+| 3 | `POST /api/quiz/` | 一般 | 同時に大量送信して有効セッションを 2 件以上作る | 行ロックで直列化・部分ユニーク制約で拒否・違反は 409 | Yes: TC-07・TC-08・TC-09・TC-10 | No | なし | Low |
+| 4 | `PUT`/`PATCH /api/quiz/<id>/` | 一般 | 終了済みセッションを `is_active=true` に戻す・集計値を改ざんする | 405・`is_active` は読み取り専用 | Yes: TC-11・TC-12 | No | なし | Low |
+| 5 | `DELETE /api/quiz/<id>/` | 一般 | 自分の学習履歴を消す | 405 | Yes: TC-11 | No | なし | Low |
+| 6 | `POST /api/quiz/<id>/submit_answer/` と別タブの `POST /api/quiz/` | 一般 | 回答送信と開始を重ねて、終了済みセッションを有効に戻す／500 を起こす | 回答送信・終了は必要な列だけ保存し `is_active` を書き戻さない | Yes: TC-18・TC-19 | No | 終了直後の古いセッションに回答が 1 件記録され得る（以前からの挙動・有効化はしない） | Medium（対処後 Low） |
+| 7 | `POST /api/quiz/`（`Idempotency-Key` ヘッダ） | 一般 | 不正形式・空・巨大な値を送る | 400・作成されない | Yes: TC-05 | No | なし | Low |
+| 8 | `POST /api/quiz/`（`subject`） | 一般 | 他組織の科目 ID を指定する | （本イシューでは変更なし） | No（I166 で追加） | No | 以前からの不備が残る（I166 で是正） | Low |
+| 9 | `OPTIONS /api/quiz/`（別オリジン） | 未認証 | 許可外オリジンから preflight を通す | 許可オリジンは不変更・ヘッダのみ追加 | Yes: TC-13（許可オリジンでヘッダが許可される） | No | なし | Low |
+| 10 | Django 管理画面（QuizSession の編集） | 管理者 | 終了済みセッションを有効に戻して制約違反 | Django 5.2 の ModelForm が `UniqueConstraint`（条件付き含む）を検証し、フォームエラーで止まる（500 にならない） | No（フレームワーク標準の挙動） | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 1件 | 1件（#6・設計レビューの Medium と同一。計画に対処を反映済み） |
+| Low     | 4件 | 9件 |
+
+### 残余リスク処遇
+（/retro で決定する）

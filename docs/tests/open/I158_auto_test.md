@@ -67,6 +67,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 | TC-15 | 同じキーのセッションが終了済みでもそのまま返す | `KEY` で POST（201）→ `POST /api/quiz/{id}/end/` → `KEY` で再 POST | 3 回目 `status.HTTP_200_OK`・同じ id・`response.data["is_active"] is False`。セッション総数 1 | Claude |
 | TC-16 | キーはユーザーごと（他人のセッションは返らない） | user が `KEY` で POST（201）→ other が同じ `KEY` で POST | other も 201・id が異なる・`response.data` の id が other のセッション。user のセッションは `is_active is True` のまま | Claude |
 | TC-17 | 未認証は 401 | 認証なしの `APIClient()` で `POST QUIZ_URL` | `status.HTTP_401_UNAUTHORIZED`・`QuizSession.objects.count() == 0` | Claude |
+| TC-18 | 回答送信・終了は開始処理が終了させた状態を書き戻さない（security-review 由来） | 有効セッション S を作成し、`stale = QuizSession.objects.get(pk=S.pk)` で古い実体を保持 → `QuizService.start_session(user=user, subject=subject_a, client_request_id=None)` で新規開始（S は終了）→ `stale.completed_problems += 1` の後、計画 修正項目 8 と同じ `stale.save(update_fields=['completed_problems', 'correct_answers'])` | 例外なし。S を再取得して `is_active is False`・`completed_problems == 1`。有効セッションは新規の 1 件のみ | Claude |
 
 注:
 - ヘッダは Django テストクライアントの書式 `HTTP_IDEMPOTENCY_KEY=...`（`request.headers["Idempotency-Key"]` として届く）で渡す。
@@ -78,6 +79,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 
 | TC | 内容 | コマンド | 合否（exit code） | 実施者 |
 |----|------|---------|------------------|--------|
+| TC-19 | `QuizSessionViewSet` に全列保存の `session.save()` が残っていない（TC-18 の書き方が実コードで守られていることの固定） | `! grep -qE "session\.save\(\)" backend/problems/views.py` | exit 0（合格）。**計画時（2026-10-24・実装前）の実行で exit 1（NG）を確認済み**（現行の 840・942・971 行目を検出）＝失敗注入は現行コードそのもの | Claude |
 | TC-20 | モデルとマイグレーションが一致 | `docker compose exec -T backend python manage.py makemigrations --check --dry-run` | exit 0（合格）。計画時点（実装前）の実行で exit 0・`No changes detected` を確認済み（2026-10-24）。失敗注入は下記「false-green 自己検証」 | Claude |
 | TC-21 | まっさらな DB で全マイグレーションが通る | `docker compose exec -T backend python -m pytest --migrations --create-db -q problems/tests/test_I158_quiz_session_start.py` | exit 0（テスト DB を作り直して 0001〜0021 を適用し、そのうえで TC-01〜17 が合格） | Claude |
 | TC-22 | Backend 全体回帰 | `docker compose exec -T backend python -m pytest --tb=short -q` | exit 0。既存 **103 件**（baseline 2026-10-24）＋新規すべて合格 | Claude |
@@ -102,11 +104,12 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 
 ## TDD RED 確認（実装前に実施）
 テストを書いた後、**実装前の現行コード**に対して実行し、RED/GREEN の内訳を記録してから実装する。
-- 想定 RED: TC-03（2 回目も 201）・TC-05（キーを無視して 201）・TC-06（201）・TC-07（有効 2 件）・TC-08（2 件作成）・TC-09（制約が無く例外にならない）・TC-10（`create` の後に例外 → 500）・TC-11（PUT/PATCH が 200・DELETE が 204）・TC-12（`is_active=False` で作成される）・TC-13（`idempotency-key` が許可ヘッダに無い）・TC-14（マイグレーションファイルが無く import できない）・TC-15（201）・TC-30（POST 2 回）
+- 想定 RED: TC-03（2 回目も 201）・TC-05（キーを無視して 201）・TC-06（201）・TC-07（有効 2 件）・TC-08（2 件作成）・TC-09（制約が無く例外にならない）・TC-10（`create` の後に例外 → 500）・TC-11（PUT/PATCH が 200・DELETE が 204）・TC-12（`is_active=False` で作成される）・TC-13（`idempotency-key` が許可ヘッダに無い）・TC-14（マイグレーションファイルが無く import できない）・TC-15（201）・TC-18（`QuizService.start_session` が無い）・TC-19（exit 1）・TC-30（POST 2 回）
 - 想定 GREEN（現行でも通る・振る舞いを固定する TC）: TC-01・TC-02・TC-04・TC-16・TC-17・TC-31
 - 記録欄: （/implement で記入）
 
 ## 決定論 TC の事前検証
+- TC-19: 計画時（2026-10-24・実装前）に exit 1（NG）を確認済み。実装後に exit 0 へ転じることで判定する。
 - TC-20: 計画時（2026-10-24・実装前）に exit 0 を確認済み。実装後の失敗注入は下記。
 
 ## false-green 自己検証（実装後に失敗条件を注入して RED を確認）

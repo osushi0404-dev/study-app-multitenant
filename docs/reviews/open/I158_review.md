@@ -9,6 +9,7 @@
 - [ ] 部分ユニーク制約 `uniq_active_quizsession_per_user` がモデルとマイグレーション `0021` にある（TC-09・TC-20）
 - [ ] 開始処理が `transaction.atomic` 内でユーザー行を `select_for_update` してから、キー照合 → 既存終了 → 新規作成を行う（TC-07・TC-08・false-green 注入済み）
 - [ ] `IntegrityError` が 409 に変換され、500 にならない（TC-10）
+- [ ] `submit_answer`・`end` が `update_fields` 指定で保存し、開始処理が終了させた `is_active` を書き戻さない（TC-18・TC-19）
 
 ### 2. 冪等性（Idempotency-Key）
 - [ ] 同じキーは 200 で同じセッション、異なるキーは後勝ちで 201、キー無しも受け付ける（TC-01〜TC-04）
