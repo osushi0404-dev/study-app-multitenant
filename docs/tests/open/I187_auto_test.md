@@ -167,5 +167,5 @@ bash scripts/claude/tests/test_i187_mcp_filename_guard.sh
 ## 実行結果（/test・2026-10-24）
 - 決定論ゲート: 46/46 合格（`1a04245`・auto_test.md の「決定論ゲート」を 1 行ずつ実行）。計画変更記録 4 の後も TC-03 は 14/14 合格
 - TC-H1: PR #323 の HEAD `1a04245` で CI 6 ジョブ（Backend Lint & Security・Backend Tests・E2E Tests (Playwright)・Frontend Lint & Security・Frontend Tests・Frontend Type Check）すべて pass（`gh pr checks 323`）。計画変更記録 4 のコミットで再実行される CI も確認する
-- TC-H2: `docker compose exec -T frontend npm run typecheck`・`npm run lint` ともに exit 0
+- TC-H2: `docker compose exec -T frontend npm run typecheck`・`npm run lint` ともに exit 0（exit 0 だけの確認。承認画面が出ずに流れるかは M-19 で確かめる・計画変更記録 5）
 - 画面確認の判定: `check-frontend-evidence.sh I187` は「対象外（frontend/src を変えていません）」で exit 0
