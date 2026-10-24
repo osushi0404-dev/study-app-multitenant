@@ -5,7 +5,7 @@
 - **関連イシュー**: #304
 - **Draft PR**: #311
 - **作成根拠資料**: docs/issues/open/I181.md（起点イシュー・設計確認メモ 2026-10-24）
-- **実装後評価**: docs/reviews/open/I181_review.md
+- **実装後評価**: docs/reviews/closed/I181_review.md
 - **作成日**: 2026-10-24
 
 ---
@@ -267,8 +267,8 @@ GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only -
 ---
 
 ## 6. テスト計画
-- 自動: `docs/tests/open/I181_auto_test.md`（P 群＝パス判定、D 群＝指示ファイルの記述、R 群＝回帰）。すべて exit code で合否を決める決定論テストで、否定・不在の TC には失敗注入（FG）を付ける。
-- 手動: `docs/tests/open/I181_manual_test.md`（本イシュー自身の `/code-review` で判定が NO になること、手順書を文脈なしで読んで実行できること）。
+- 自動: `docs/tests/closed/I181_auto_test.md`（P 群＝パス判定、D 群＝指示ファイルの記述、R 群＝回帰）。すべて exit code で合否を決める決定論テストで、否定・不在の TC には失敗注入（FG）を付ける。
+- 手動: `docs/tests/closed/I181_manual_test.md`（本イシュー自身の `/code-review` で判定が NO になること、手順書を文脈なしで読んで実行できること）。
 - テストレベル: すべてユニット（関数を source して呼ぶ・ファイルの記述を読む）。アプリのコード変更が無いので pytest・Jest・E2E は対象外。
 - 再発防止: I180 と同じ形の変更で NO（TC-P3）・名前変更のすり抜け（TC-P5・FG-P2）。
 
@@ -333,5 +333,11 @@ GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only -
 2. **（2026-10-24・/test）3-6 の表の 6・4-9 の「fix-loop の 3 ゲートを統合する別イシュー」を撤回**: ユーザーから「3 回のチェック自体は必要で、過剰だったのは中身では。漏れ防止の観点で集約しないほうがよい」と指摘。記録を見直し、3 つはそれぞれ別の漏れを止めていて、重さの原因は回数ではなかったため撤回した。本イシューで変えるものは無く（もともと「本イシューでは変えない」）、方式・範囲・受け入れ条件は変わらないため計画レビューはやり直さない（A9）。
 
 ## レビュー結果
-- [20261024_1122 判定: ✅ 完了](../../reviews/I181_plan_review_20261024_1122.md)
+- [20261024_1122 判定: ✅ 完了](../../reviews/closed/I181_plan_review_20261024_1122.md)
   - Warning（`ROUNDS:` 行の無い旧記録の数え方）・Info（`TaskStop` に渡す ID の控え方）を 4-4 §3-1 の手順 1・5 と auto_test D1 に反映した。手順の書き足しだけで方式・範囲・受け入れ条件は変えないため、計画レビューはやり直さない（4-9・A9）
+- [20261024_1136 コードレビュー: OK・高リスク NO](../../reviews/closed/I181_code_review_20261024_1136.md)
+
+## 完了情報
+- **完了日時**: 2026-10-24
+- **対応者**: Claude Code
+- **レビュー結果**: OK（プランレビュー ✅・コードレビュー OK〔高リスク NO・敵対的レビュー対象外〕・/test 自動テスト全件 pass・手動テスト OK・/retro 改善案なし）
