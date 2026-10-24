@@ -1,0 +1,172 @@
+# 開発環境の点検報告（I185）
+
+- **作成日**: 2026-10-24
+- **関連イシュー**: I185 / #315
+- **点検対象**: develop の 3ca7375（I181 マージ後）以降の状態。ブランチ `feature/I185-dev-env-review-improve`
+- **進め方**: 観点ごとに独立した 4 本の調査（A ループの設計／B ハーネス／C 速さ／D 公式機能との差分・各 30 分上限）を並行させ、主な指摘は Claude が自分でファイル・記録・公式ドキュメントを見て裏を取った（裏が取れたものだけ載せる）
+- **除外**: 既存の起票済みイシューの棚卸し、I181 の範囲（敵対的レビューの線引き・時間上限・打ち切り条件）、アプリのコード
+- **材料にした公式機能**: `/insights`（2026-10-24 17:09・直近 23 セッション）、`/skill-doctor`（`claude -p` で実行）、`claude doctor`
+
+## 0. 要点
+
+- **承認の回数は、すでに大きく減っている**。10 件で人が承認した回数は 456 回だが、うち 163 回は I151 の `docker compose` の一律確認（I174 で解消済み）。I180 以降の 5 件は 0〜7 回。
+- **いま一番時間を食っているのは「工程の切れ目ごとの人の入力待ち」と「レビュー・修正の周回」**。1 イシューで人がコマンドを打つ回数は 10〜12 回あり、価値判断と言えるのはそのうち 4〜5 回。返答までの時間は中央値 80 秒・平均 231 秒（`/insights`）。周回は記録 243 件のうち 77% が I174・I179・I151 の 3 件に集中している。
+- **決定論ゲートと思っていたものに、実際には効いていない所がある**。
+  - 編集直後の構文チェックの終わり方が、公式の「Claude に伝わる」方式ではない
+  - スキルの `allowed-tools` は「制限」ではなく「事前許可」だった
+  - ハーネスの自動テスト 32 本が CI で 1 本も動いていない
+- **毎ターン載る情報が重い**。個人メモの索引（MEMORY.md）が 22.7KB で、読み込みの上限 25KB に近い。使っていない claude.ai 同期スキル 9 本も毎ターン載っている。
+
+## 1. ベストプラクティスの観点
+
+| # | 観点 | ベストプラクティスの内容 | 出典 |
+|---|---|---|---|
+| B1 | 自分で検証できる手段を渡す | 合否を返すチェック（テスト・exit code）があれば、AI が作業→確認→修正を自分で回せる。無ければ人が検証役になる | https://code.claude.com/docs/en/best-practices.md （Give Claude a way to verify its work） |
+| B2 | 必ず守ることは決定論で | CLAUDE.md の指示は助言にとどまる。例外なく毎回必要なことはフックで守る | https://code.claude.com/docs/en/best-practices.md ・ https://code.claude.com/docs/en/hooks-guide.md |
+| B3 | 人が止める点は価値判断だけ | 人が関わるのはチェックポイントか行き詰まったときだけにし、繰り返しに上限を置く | https://www.anthropic.com/engineering/building-effective-agents |
+| B4 | 段の間に機械の関所 | 処理をつなぐ段の間に、機械で判定する関所を置く | https://www.anthropic.com/engineering/building-effective-agents （Prompt chaining） |
+| B5 | 単純に保つ | 結果が良くなると示せたときだけ複雑さを足す | https://www.anthropic.com/engineering/building-effective-agents |
+| B6 | 失敗を早く見せる | フィードバックは短く。行き詰まった試行が文脈に溜まると質が落ちる。関係ない作業の間は `/clear` | https://code.claude.com/docs/en/best-practices.md （Course-correct early and often） |
+| B7 | 書いた本人以外が検証する | 新しい文脈のサブエージェントや `claude -p` で検証する | https://code.claude.com/docs/en/best-practices.md （Writer/Reviewer） |
+| B8 | 毎回載る指示は短く | CLAUDE.md は「消したら間違えるか」で残す。MEMORY.md は先頭 200 行か 25KB までしか読まれないので、1 行 1 項目にし、詳細は別ファイルへ | https://code.claude.com/docs/en/best-practices.md ・ https://code.claude.com/docs/en/memory.md |
+| B9 | スキルの載り方 | `disable-model-invocation: true` のスキルは説明文が載らない。`allowed-tools` は「そのターンは確認なしで使ってよい」という事前許可で、制限ではない（制限は `disallowed-tools`）。claude.ai の同期スキルは `syncClaudeAiSkills: false` で止められる | https://code.claude.com/docs/en/skills.md |
+| B10 | フックの終了コード | PostToolUse で Claude に stderr を届けるには exit 2。exit 0 では Claude は stderr を見ない。それ以外（exit 1 など）は止めないエラーで、Claude に届くとは書かれていない | https://code.claude.com/docs/en/hooks.md |
+| B11 | 権限ルール | `Write(path)`・`Glob(path)` のルールはどれにも一致しない（`Edit`/`Read` を使う）。ask ルールは `&&`・サブシェル・`$(...)` の中にも当たる | https://code.claude.com/docs/en/permissions.md |
+| B12 | 自動モード | 広すぎる allow は自動モードで外れる。ask ルールとフックの確認は自動モードでも出る。信頼する接続先などは `autoMode.environment`（`/auto-mode-setup`）で教える | https://code.claude.com/docs/en/permission-modes.md |
+| B13 | サブエージェント定義 | `.claude/agents/` に置くと `tools`・`disallowedTools`・`model`・`maxTurns` を仕組みで固定できる | https://code.claude.com/docs/en/sub-agents.md |
+| B14 | スクリプトから呼ぶ `claude -p` | 何も付けないと、対話セッションと同じくフック・CLAUDE.md・auto memory を読み込む | https://code.claude.com/docs/en/headless.md |
+
+外部の事例は使っていない。
+
+## 2. 作業記録の数字
+
+対象は直近に完了した 10 件。I175〜I177 は未着手で記録がないため、I151・I159 を加えた。
+
+| イシュー | plan_review | code_review | adversarial | fix-loop（fix_diagnosis） | 作成→close | 人が実際に承認した回数 | 人の拒否 | 見張り（フック）の停止 |
+|---|---:|---:|---:|---:|---|---:|---:|---:|
+| I151 | 8 | 6 | 4 | 4 | 08-22→10-16（約 55 日・I159 と CVE の待ちを含む） | 208 | 0 | 8 |
+| I159 | 1 | 2 | 0 | 0 | 10-15 内 | 2 | 1 | ― |
+| I174 | 5 | 9 | 23 | 6 | 10-16→10-21（5.2 日） | 137 | 1 | 40 |
+| I178 | 9 | 5 | 2 | 1 | 10-17→10-24（再オープンを含む） | 12 | 1 | ― |
+| I179 | 11 | 9 | 8 | 5 | 10-19→10-22（3.1 日） | 75 | 2 | 52 |
+| I180 | 2 | 2 | 1 | 0 | 10-21 内（1.8 時間） | 7 | 0 | ― |
+| I181 | 1 | 1 | 0 | 0 | 10-24 内（1.1 時間） | 0 | 0 | ― |
+| I182 | 3 | 1 | 1 | 0 | 10-22→10-24（1.7 日・security-review と CVE 待ち） | 7 | 0 | ― |
+| I183 | 1 | 1 | 0 | 0 | 10-23→10-24（I182 との順番待ち） | 5 | 0 | ― |
+| I184 | 1 | 3 | 0 | 1 | 10-24 内（1.7 時間） | 3 | 0 | ― |
+| **合計** | **42** | **39** | **39** | **17** | | **456** | **5** | **106** |
+
+- fix 系の記録の内訳: 診断レビュー 22・実装レビュー 38・テスト結果 16・テストレビュー 19。実装レビューは fix-loop 1 回あたり平均 2.2 回で、周回の主な原因になっている。
+- 承認 456 回のうち、上位は次のとおり。
+  - I151 の `docker compose` が 163 回（I174 で解消済みの種類）
+  - 先頭がふつうの語でない Bash（環境変数の代入・引用符・`$(...)`・`(` で始まる形）が 130 回
+  - `cd ... &&` が 42 回、`git -C` が 11 回
+- 工程の切れ目での人の入力待ち: 1 イシューあたり 10〜12 回。`/insights` によると、返答までの時間は中央値 80.7 秒・平均 231.3 秒。
+- 公式 `/insights`（直近 23 セッション）: User Rejected 6・Command Failed 122・並行セッションの重なり 17 回。うまくいかなかった点として、次が挙がっている。
+  - 見張りの作り込みが周回を生んだ
+  - 自分でできる確認を人に返した
+  - 並行ワークツリーで状態が古くなった（例: I181 のマージを見落とした）
+
+### 数え方
+
+#### リポジトリ内の記録で数えるもの
+- 周回数: `docs/reviews/closed/` と `docs/reviews/` のファイル名を `^(I\d{3})_([a-z_]+?)_(\d{8})_(\d{4})\.md$` で分け、イシュー×種類で数える（種類: plan_review・code_review・adversarial_review・fix_diagnosis・fix_diagnosis_review・fix_implementation_review・fix_test_result・fix_test_review など）。
+- 工程の日時:
+  - 作成: `git log --all --format='%H %aI %s'` で件名に「create issue」とイシュー番号を含む最初のコミット
+  - close: 件名に `close(I###)` を含む最後のコミット
+  - 計画・レビュー: plan_review・code_review の最初と最後のファイル名の日時
+  - マージ: `gh pr list --state merged --json number,title,mergedAt`（読み取りのみ）
+- 前提: 区間には、CI・別イシュー・人の操作の待ち時間を含む（実作業時間ではない）。
+- 2026-10-24 に Claude が同じ手順で数え直し、上の表の周回数・日時と一致することを確かめた。
+- この数え方は、クラウドの 1 回限りの予約（効果測定）でも同じように実行できる。
+
+#### 手元の記録でしか数えられないもの
+- 対象: `~/.claude/projects/` の 4 ディレクトリ（primary・wt-harness・harness-1・harness-2）の `*.jsonl` と `<session>/subagents/*.jsonl`（計 478 ファイル）。tool_use の id が同じものは 1 件として数える。
+- **人が実際に承認した回数**: tool_result の行にある `permissionDecision` の `source` が `user_temporary`・`user_permanent` のもの。
+  - 計画時には「承認の印は記録に無い」としていたが、この項目があると分かったため、これを主な数え方にした。
+  - 項目の形は `{decision, source, reasonType}` で、記録全体で 14,883 行ある。
+- **人の拒否**: `permissionDecision.decision == "reject"` かつ `source == "user_reject"`。
+- **見張りの停止**: `source == "hook"` で拒否されたもの。
+- **イシューへの割り当て**（推定）: 記録を時刻順にたどり、次の 3 つで「今のイシュー」を更新する。
+  - ユーザーのコマンド（`/implement I174` など）
+  - Edit/Write の対象ファイル名に出る `I###`
+  - サブエージェントの最初の指示文で一番多く出る番号
+
+  どれにも当たらない tool_use 3,007 件は対象外にした。
+- **参考**: 今の見張りで記録の Bash を判定し直す方法（`scripts/claude/hooks/pretooluse_guard.py` に `{"tool_name":"Bash","tool_input":{"command":...}}` を渡し、exit 2 を停止、exit 0 で出力に `"ask"` を含むものを確認とみなす）。ただしこれは今の見張りの判定であり、当時の実数ではない。
+- 注意: 記録（JSONL）の形式は内部仕様で変わりうる。I186 で公式の読み方（フックの `transcript_path`・`claude -p --resume` 等）へ寄せる。
+- 記録の中身（コマンド本文・ファイル内容）は、この報告書に転記していない。
+
+## 3. 止めている漏れとかかる手間
+
+| 工程・仕組み | 今の状態（根拠） | 止めている漏れ | かかる手間 | ベストプラクティスとの差 |
+|---|---|---|---|---|
+| 工程のつなぎ方 | 11 工程すべてを人がスラッシュコマンドで起動する（`docs/runbooks/workflow.md:46-75`） | AI が勝手に先へ進む暴走、計画承認前の実装 | 1 イシューで人の入力が 10〜12 回。価値判断はそのうち 4〜5 回 | B3。機械の関所で決まる切れ目まで、人がつないでいる |
+| 計画承認とプランレビューの順番 | 人が計画を OK した後で `/plan-issue-review` が走る（`workflow.md:25-28`）。レビューで直ると、人が見た版と違うものが実装される | 計画の抜け | 人の確認が実質 2 回（計画 OK と `/plan-issue-review` の入力）。高リスク時はさらに `/security-review` の入力 | B3・B4 |
+| `/test` の既定テスト | CI が PR の HEAD で回した pytest・Jest・E2E を、手元でもう一度回す（`.claude/skills/test/SKILL.md:28-91`・`.github/workflows/ci.yml`・`e2e.yml`） | 「CI で緑」と「手元で緑」の差（E2E は CI も docker compose なので差は小さい） | 毎イシュー、手元の E2E（docker）1 回分 | 別の漏れを止めているとは言いにくい重複。ただし `code-review.sh` の CI 待ちは、10 分で打ち切った後も先へ進み、判定は `gh pr checks` の文字列に「pending」「fail」が含まれるかだけで見ている（`scripts/claude/code-review.sh:440-458`） |
+| ハーネスの自動テスト | `scripts/claude/tests/` の 32 本が、どの CI ワークフローからも呼ばれていない（`.github/workflows/` を検索して 0 件） | 見張りやスクリプトの退行 | 退行は、auto_test.md に宣言したテストでしか見つからない。過去に塞いだ穴が、後の周回で再発見されている（`/insights`） | B1・B6 |
+| fix-loop の 3 つの関所 | 診断・実装・テストを、それぞれ `claude -p` の exit code で判定する（`.claude/skills/fix-loop/SKILL.md:13-30`） | 方針の誤り・実装の誤り・テストの誤り（別々の漏れ） | 段ごとに `claude -p` 1 回 | 良い（B4・B7）。**残す** |
+| fix-loop 手順 4 | 診断レビューが PASS しても、毎回人が案を選ぶまで止まる（`fix-loop/SKILL.md:51`） | 修正方針の価値判断 | fix-loop 1 回ごとに停止 1 回（10 件で 17 回） | B3。価値判断が要るときだけ止めればよい |
+| fix-loop が回らないとき | `claude -p` が使えないと、SKIP として exit 0 で先へ進む（`scripts/claude/fix-review-lib.sh:14,77-84`）。`/close` の事前確認は散文 | レビューされないまま進むこと | 小 | B2（最後に機械で止める関所がない） |
+| レビューの時間上限 | `fix-review-lib.sh` には 300 秒の timeout がある。`code-review.sh:343` と `plan-issue-review.sh:126` の `claude -p` には上限がない | ― | 固まったら無限に待つ | B3 |
+| 編集直後の構文チェック | `scripts/claude/hooks/posttooluse_check.py:66-67` は構文エラーで exit 1 | .py・.json・.yaml の構文崩れ | ― | **B10 と食い違う**。公式で Claude に届くのは exit 2。今は構文エラーを Claude が見ないまま進みうる |
+| スキルの frontmatter | 11 本すべての `allowed-tools` が「使ってよいツールの制限」のように書かれている（例: `security-review` は `Read, Glob, Grep, Edit`、多くは素の `Bash`） | （制限のつもりだった） | ― | **B9 と食い違う**。`allowed-tools` は事前許可で、制限にはならない。素の `Bash` を事前許可したターンで、ask ルールがどう効くかは未確認 |
+| 毎ターン載る情報 | CLAUDE.md は 54 行で良好。MEMORY.md は 81 行・22,688 バイト（上限 25KB の 91%）。完了済みイシューの長い状態記録が目次に残っている。claude.ai 同期のスキル 9 本は 7 日間で 0 回利用 | 前回の状態の引き継ぎ | 毎ターン約 2.2 万バイト。上限を超えた分は黙って読まれなくなる | B8・B9 |
+| 権限ルール | `.claude/settings.local.json`（primary・リポジトリ外）に、効かない `Write(...)` 2 件（`claude -p` のたびに警告が出る原因）、settings.json の細かい git 許可を打ち消す `Bash(git *)`、古い一時フォルダへの許可がある。`.claude/settings.json` には、効かない `Glob(*)`、重複した `Edit(docs/issues/**)`、無条件の `rm`・`mv`・`cp`・`chmod`・`chown` がある。`autoMode` の設定はない | 秘密ファイルの読み書き（deny）、高リスクファイルの編集（ask） | 毎回の警告。どれが効いているかの読み違い | B11・B12 |
+| 危険操作の見張り | `pretooluse_guard.py` は 3,565 行。確認を出す種類が 7 つある。10 件で 106 回止めた | 別ワークツリーへの書き込み、保護ブランチへの push、fork PR、コンテナ内の危険操作 ほか | 保守が重い。見張りを作り替えるイシュー（I174・I179）で、停止と周回が集中した | B5。公式の自動モードと ask ルールで代われる部分がある（§4） |
+| 状態の取り違え | 並行ワークツリーで、マージ済みかどうか・次のイシュー番号の認識が古くなる（I181 のマージ見落とし・I187 の番号衝突、`/insights`） | ― | 手戻りと確認の往復 | B2（セッション開始時に状態を機械で渡していない） |
+| 散文の古いルール | `workflow.md:79-158` に、承認を `echo` で記録する手順、TodoWrite に実在しない項目、「コマンドの前に必ず説明する」がある。`workflow.md:46-77` の「Skill ツールで呼ばない」は `disable-model-invocation` と重複。`test/SKILL.md:113` は「直接 /close も可」で、workflow.md の「/retro 必須」と食い違う | ほぼ無い | 読むたびに文脈を食う。自律で進める方針と食い違う | B8 |
+
+## 4. 公式機能との差分
+
+| 自作の仕組み | 置き換えられる公式機能 | 置き換えて得るもの | 置き換えて失うもの | 判定 |
+|---|---|---|---|---|
+| 危険操作の見張り（`pretooluse_guard.py`） | 自動モードの判定役・permissions の ask/deny・sandbox（https://code.claude.com/docs/en/permission-modes.md ・ permissions.md ・ sandboxing.md） | force push・`reset --hard`・承認のないマージなどは、自動モードが最初から止める。保守が要らない | 別ワークツリーへの書き込みの禁止（公式の隔離はメインの checkout だけ）、コンテナ内の許可リスト（sandbox は docker と両立しない）、`--no-verify`・動的な宛先の push の決定論の停止（自動モードは確率で判定する）、手動モード・`-p` での守り | **残す**。重なる部分の削減は別イシューで、記録を使って判断する |
+| 編集直後の構文チェック | （仕組みはすでに公式の PostToolUse） | ― | ― | **残す**（exit 2 に直す） |
+| レビュー役の定義（`.claude/review-agents/*.md` を `--system-prompt` で渡す・Agent に貼る） | `.claude/agents/` のサブエージェント定義と `claude -p --agent`（https://code.claude.com/docs/en/sub-agents.md） | 書き込み禁止が `disallowedTools` で仕組みとして効く（今は文章で頼んでいるだけ）。モデルの固定 4 か所を減らせる | description を手がかりに、メインの Claude が勝手に任せる対象になる。置き換え変数を呼び出し側に移す必要がある。`--agent` での CLAUDE.md の読み込みの違いは未確認 | **一部だけ**（別イシュー） |
+| `/code-review`（`code-review.sh`） | 組み込みの `/code-review`（`/review`）（https://code.claude.com/docs/en/commands.md） | 公式が保守する。インラインコメントが付く | 決定論ゲートの実走と VERDICT の上書き、パスで決める高リスク判定、計画・受け入れ条件への適合確認、記録の保存 | **残す** |
+| `/plan-issue-review`・`/security-review`（実装前） | 計画をレビューする公式機能はない。組み込みの `/security-review` は実装後の差分を見るもので、役割が違う | ― | 実装前の設計レビュー | **残す**。ただし自作の `security-review` が組み込みと同じ名前で、組み込みを使えなくしている |
+| スキルの `allowed-tools` | `disallowed-tools`（https://code.claude.com/docs/en/skills.md） | 制限のつもりだったものが実際に効く | なし | **直す** |
+| 採番・base 追従・文書の整合チェック・記録の置き方・ワークツリーの後始末 | なし、または公式は一部のみ（https://code.claude.com/docs/en/worktrees.md） | ― | 公式の後始末はブランチまで消し、Docker の volume は見ない | **残す** |
+| 定期の見直し | `/insights`・`/skill-doctor`・`/doctor`・`/fewer-permission-prompts`・定期実行 | ― | ― | I186 で土台にする |
+
+## 5. 改善案
+
+評価の 3 軸: **速さ**＝速くなる量、**漏れ**＝今止めている漏れを失わないか、**手間**＝直す手間（小/中/大）。
+「対象」は承認の回数（承）・レビューと修正の周回（周）・その他（他）のどれを減らすか。
+
+| ID | 改善案 | 種類 | 速さ | 漏れ | 手間 | 対象 | 優先度 | タイトル案 |
+|---|---|---|---|---|---|---|---|---|
+| P1 | 編集直後の構文チェックを、構文エラーのとき exit 2 で終わるように直す | 直す | 中（構文崩れを CI や後の工程で見つけて戻る周回が消える） | 塞ぐ（今は漏れている） | 小 | 周 | **高** | 編集直後の構文チェックが Claude に届くよう終了コードを 2 に直す |
+| P2 | 計画のレビューを、人の計画承認の前に移す。`/plan-issue` の最後に `plan-issue-review.sh` を実行し、直せる指摘は自分で直して再実行する。高リスクなら実装前のセキュリティレビューまで続けてから人に見せる。人の承認は「レビュー済みの版を見て `/implement` を打つ」1 回にする | まとめる（順番の入れ替え） | 高（人の入力が 1 イシューあたり 1〜2 回減る。人が見た版＝実装する版になる） | 失わない（レビューの中身は同じ） | 中 | 承 | **高** | 計画のレビューを人の承認の前に済ませ、人はレビュー済みの計画を 1 回だけ承認する |
+| P3 | fix-loop 手順 4 で、診断レビューが PASS して推奨案が 1 つに決まるときは、その案で進めて事後報告する。複数案から選ぶことが価値判断になるときだけ止める | やめる | 中（fix-loop 1 回ごとに停止 1 回が減る。10 件で 17 回） | 失わない（3 つの関所は残す） | 小 | 承 | **高** | fix-loop の方針選びで、推奨案が 1 つに決まるときは止まらずに進める |
+| P4 | スキルの frontmatter を公式の意味に合わせる。制限したいスキル（`security-review` など）は `disallowed-tools` で書く。`allowed-tools` は本当に事前許可したいものだけにする（素の `Bash` は外す） | 直す | 低〜中 | 塞ぐ（制限のつもりで効いていなかった。素の `Bash` の事前許可がなくなる） | 小 | 他（安全） | **高** | スキルの allowed-tools を「制限」ではなく「事前許可」として書き直し、制限は disallowed-tools にする |
+| P5 | セッション開始のフック（SessionStart）で、今のブランチ・未コミットの変更・直近にマージされた PR・GitHub 上の最新イシュー番号を Claude に渡す | 足す | 中（マージ済みの見落としや番号衝突による手戻りが減る。2026-10-24 にも I181 の見落としがあった） | 失わない（追加のみ） | 小 | 他 | **高** | セッション開始時に、ブランチ・直近のマージ・最新イシュー番号をフックで渡す |
+| P6 | `/test` の既定の pytest・Jest・E2E の手元での再実行をやめ、「PR の HEAD のコミットで CI の必須チェックが全部緑か」を JSON で確かめる決定論チェックに置き換える。あわせて `code-review.sh` の CI 待ちも同じ判定にし、打ち切った後に先へ進む動きをやめる。手元で回すのは、CI に無い決定論ゲートと手動テストだけにする | 置き換える | 高（毎イシュー手元の E2E 1 回分が消える） | 失わない（CI も docker compose で同じテストを回している。先に CI 待ちを固めること） | 中 | 周 | 中 | /test のテスト再実行を「HEAD の CI が全部緑か」の確認に置き換え、CI 待ちの判定を固める |
+| P7 | `/implement` が終わったら `code-review.sh` を続けて実行し、OK なら `/test` 相当まで止まらずに進める。人が入るのは手動テスト（Human）と設計判断が要る NG のときだけにする | やめる（人がつなぐのをやめる） | 高（人の入力が 2 回減る） | 失わない（関所はすべてスクリプトの exit code のまま） | 中 | 承 | 中 | 実装→コードレビュー→テストを、関所が通る限り止まらずに続ける |
+| P8 | ハーネスの自動テスト（`scripts/claude/tests/*.sh`）を CI で毎回実行する | 足す | 中〜高（退行が push 直後に分かる） | 失わない | 小〜中 | 周 | 中 | ハーネスの自動テストを CI で毎回実行する |
+| P9 | MEMORY.md を目次に戻す。長い状態記録は各トピックファイルへ移し、完了済みのものは目次から外す（目標 8KB 以下） | まとめる | 中（毎ターンの消費が減り、上限超えで黙って切れる事故を防ぐ） | 失わない（トピックファイルは残る） | 小 | 他 | 中 | 個人メモの索引（MEMORY.md）を 1 行 1 項目の目次に戻す |
+| P10 | 権限ルールの片付け。効かない・重複・古いルールを消す（settings.local.json の `Write(...)`・古いパス・`Bash(git *)`、settings.json の `Glob(*)`・重複行）。そのうえで `/auto-mode-setup` で自動モードに環境を教え、無条件の `rm`・`mv`・`chmod`・`chown` の許可を外して判定役に任せる | やめる・置き換える | 低〜中（毎回の警告が消える。取り消せない削除を判定役が見るようになる） | 失わない（deny・ask・見張り・GitHub の保護はそのまま）。`Bash(git *)` を外すと確認が増える可能性がある | 小 | 承 | 中 | 効かない・重複した権限ルールを片付け、自動モードに環境を教える |
+| P11 | `/close` の最初に決定論チェックを足し、このイシューの記録に `FIX_GATE: SKIP` や OK でない最後の判定が残っていれば止める。あわせて `code-review.sh`・`plan-issue-review.sh` の `claude -p` に timeout を付ける | 置き換える | 低（漏れ止めが主） | 塞ぐ | 小 | 他 | 中 | レビュー未実施のまま close できないよう close の前に機械で確かめ、レビューに時間上限を付ける |
+| P12 | `workflow.md` の古い散文（承認の echo 記録・実在しない TodoWrite 項目・Skill 禁止の重複）を消し、`test/SKILL.md` の「直接 /close」を「/retro 必須」に揃える。`plan-issue` の自己チェックのうち決定論にできる項目はスクリプトに移す | やめる・まとめる | 低〜中 | 失わない（同じ漏れを二重に止めているだけ） | 小 | 他 | 中 | 運用手順書の古いルールを消し、工程間の食い違いを揃える |
+| P13 | claude.ai 同期のスキル 9 本を止める（ユーザー設定 `syncClaudeAiSkills: false`） | やめる | 低 | 失わない（7 日間の利用 0 回） | 小 | 他 | 低 | 使っていない claude.ai 同期スキルの読み込みを止める |
+| P14 | レビュー役を `.claude/agents/` の定義に移し、`disallowedTools` で書き込みを仕組みとして止める。`claude -p` のモデル指定を別名にし、作業用の読み込みを絞る | 置き換える | 低〜中 | 塞ぐ（書き込み禁止が文章頼みでなくなる） | 中 | 他 | 低 | レビュー役を公式のサブエージェント定義に移し、書き込み禁止を仕組みで効かせる |
+| P15 | 見張りの確認のうち「読み切れなかった」系を公式の ask ルールと自動モードに任せ、見張りを公式で代われない止め（別ワークツリー・fork PR・保護ブランチ・コンテナ内）に絞る。自分のワークツリーを指す `cd`・`git -C` を見張りが通せるようにする（承認 53 回） | まとめる・置き換える | 中〜高 | どれを外すかは記録で確かめてから決める | 大 | 承・周 | 中 | 見張りを公式で代われない止めに絞り、自分のワークツリーを指す cd・git -C を通す |
+| P16 | 自作の `security-review` を改名し（例: `/plan-security-review`）、組み込みの `/security-review`（実装後の差分）も使えるようにする | 足す | 低 | 失わない（参照の置き換え漏れに注意） | 小〜中 | 他 | 低 | 自作の security-review を改名し、組み込みの実装後セキュリティレビューを使えるようにする |
+| P17 | 工程の切れ目（例: `/implement` → `/code-review`）で `/clear` することを手順書に書く（状態はファイルに残っている） | 足す | 低〜中（前の工程の本文と記録が文脈に溜まらない） | 失わない | 小 | 他 | 低 | 工程の切れ目で文脈を片付ける手順を足す |
+
+- 「承認の回数」を減らす案: P2・P3・P7・P10・P15
+- 「レビュー・修正の周回」を減らす案: P1・P6・P8・P15
+- I185 の中で実装できる範囲（権限設定・フック・スキル・手順書）のうち、優先度「高」かつ手間「小〜中」なのは P1〜P5。
+  - P8 は GitHub Actions の変更なので別イシューにする
+  - P10・P13 はリポジトリ外のユーザー設定を含む
+  - P15 は手間「大」
+- 見送ったもの: 組み込みレビューを補助で使うときに比べる相手を明示する手順（今は組み込みを使っていない）、定型の読み取りを `` !`command` `` で差し込む案（失敗するとスキル全体が止まるので、止めない設計の箇所に合わない。効果も小さい）。
+
+## 6. 採否
+
+（ユーザーの選択を記入する）
+
+## 7. 進行中のイシューへの適用
+
+（工程の順番や必須チェックを変える改善を採用した場合に記入する）
