@@ -158,6 +158,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install test dependencies
+        # ワークフロー・pre-commit の設定を読むテスト（test_i109・test_i182）が PyYAML を使う
+        run: pip install pyyaml
       - name: Configure git identity for temporary test repositories
         run: |
           git config --global user.name "harness-tests"

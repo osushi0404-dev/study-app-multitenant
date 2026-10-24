@@ -9,13 +9,17 @@ cd "$REPO_ROOT" || exit 1
 TEST_DIR="${TEST_DIR:-scripts/claude/tests}"
 
 pass=0; fail=0; failed=()
+LOG="$(mktemp)"
+trap 'rm -f "$LOG"' EXIT
 for t in "$TEST_DIR"/test_*.sh; do
   [ -f "$t" ] || continue
-  if bash "$t" >/dev/null 2>&1; then
+  if bash "$t" >"$LOG" 2>&1; then
     pass=$((pass + 1))
   else
     fail=$((fail + 1)); failed+=("$t")
     echo "FAIL $t"
+    # CI のログで原因が分かるよう、失敗した項目と最後の数行を出す（PASS の行は出さない）
+    grep -vE '^(PASS|OK:)' "$LOG" | tail -20 | sed 's/^/    /'
   fi
 done
 
