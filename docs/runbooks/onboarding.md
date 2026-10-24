@@ -21,16 +21,18 @@ Claude Code に実装を委任しながら、人間がゲートキーパーに�
 作業はスラッシュコマンドを打つだけで進む。Claude が次のコマンドを都度案内してくれる。
 
 ```
-/issue-bootstrap → /grill-me → /plan-issue → /plan-issue-review
+/issue-bootstrap → /grill-me → /plan-issue（計画レビューまで）
 → /implement → /code-review → /test → /retro → /close
 ```
+
+`/plan-issue` の中で計画レビューまで行い、ユーザーはレビュー済みの計画を 1 回だけ承認する（I185 P2）。`/plan-issue-review` は、計画の方式・範囲・受け入れ条件を変えたときの再レビューに使う。
 
 | スキル | 内容 |
 |---|---|
 | `/issue-bootstrap [title]` | 採番・イシューファイル作成・ブランチ作成・Draft PR 作成 |
 | `/grill-me I###` | 計画書作成前の設計インタビュー（推奨。設計判断の多いイシューで実行） |
-| `/plan-issue I###` | 計画書・テスト文書・レビュー文書を作成（承認待ち） |
-| `/plan-issue-review I###` | 計画書をBP・セキュリティ・モダン開発観点でレビュー |
+| `/plan-issue I###` | 計画書・テスト文書・レビュー文書を作成し、計画レビューまで実行（レビュー済みの計画で承認待ち） |
+| `/plan-issue-review I###` | 計画の方式・範囲・受け入れ条件を変えたときの再レビュー（BP・セキュリティ・モダン開発観点） |
 | `/implement I###` | 承認済み計画に沿って実装・型チェック・push |
 | `/code-review I###` | CI 確認・受け入れ条件照合 |
 | `/test I###` | 自動テスト（pytest + Jest）・手動テスト確認 |
@@ -71,8 +73,7 @@ CI の内容（全部 pass しないとマージ不可）:
 ローカル                          GitHub
 ─────────────────────────────────────────────
 /issue-bootstrap ──────────────→ Draft PR 作成
-/plan-issue      （計画書作成）
-/plan-issue-review（計画書レビュー）
+/plan-issue      （計画書作成＋計画レビュー）
 /implement ────────────────────→ push → CI 実行
 /code-review     （CI 結果確認）
 /test            （テスト確認）
