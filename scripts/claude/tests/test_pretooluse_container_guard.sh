@@ -513,6 +513,17 @@ ck "C57 一覧外の import だけ"   ASK "$(runj "$M shell -c \"import shutil; 
 ck "C58 書き込みの open だけ"   ASK "$(runj "docker compose exec -T backend python -c \"f = open('/app/x', 'w')\"")"
 ck "C59 多対多の .set([])"      ASK "$(runj "$M shell -c \"from accounts.models import User; u = User.objects.first(); u.groups.set([])\"")"
 ck "C56 ( )# の次の一覧外"     ASK "$(runj "(cd /tmp)#<<X${NL}docker compose exec backend some_unknown_cmd")"
+# I187: e2e サービスの npx playwright test は、範囲・表示だけを変える選択肢のときだけ通す（docs/tests/open/I187_auto_test.md TC-05）
+E='docker compose --profile e2e run --rm e2e'
+ck "C60 playwright --config"            ASK "$(runj "$E npx playwright test --config other.config.ts")"
+ck "C61 playwright --update-snapshots"  ASK "$(runj "$E npx playwright test --update-snapshots")"
+ck "C62 playwright --reporter=パス"     ASK "$(runj "$E npx playwright test --reporter=./my-reporter.js")"
+ck "C63 playwright install"             ASK "$(runj "$E npx playwright install")"
+ck "C64 e2e で npm install"             ASK "$(runj "$E npm install left-pad")"
+ck "C65 frontend で playwright test"    ASK "$(runj 'docker compose exec frontend npx playwright test')"
+ck "C66 backend で playwright test"     ASK "$(runj 'docker compose run --rm backend npx playwright test')"
+ck "C67 中のシェルで連結"               ASK "$(runj "$E sh -c \"npx playwright test; npm install left-pad\"")"
+ck "C68 playwright --output"            ASK "$(runj "$E npx playwright test --output /tmp/x")"
 
 # --- (F) 実行ファイルの中身 ---
 printf 'from problems.models import Problem\nProblem.objects.all().delete()\n' > "$TMP/del.py"
@@ -661,6 +672,20 @@ ck "P97 Python の '*'"               0 "$(runj "python3 -c \"print('*' * 40)\""
 ck "P98 ALLOWED_HOSTS の '*'"        0 "$(runj "$M shell -c \"from django.conf import settings; print(settings.ALLOWED_HOSTS == ['*'])\"")"
 ck "P99 glob.glob の docs/*"         0 "$(runj "$M shell -c \"import glob; print(glob.glob('docs/reviews/*'))\"")"
 ck "P90 environ の別名の setdefault" 0 "$(runj "$M shell -c \"from os import environ; environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings'); print(1)\"")"
+# I187: e2e サービスで 1 ファイルだけ流す E2E（docs/tests/open/I187_auto_test.md TC-05）
+ck "P100 e2e で 1 ファイル"          0 "$(runj "$E npx playwright test tests/auth.spec.ts --retries=0")"
+ck "P101 --retries 0 --reporter=line" 0 "$(runj "$E npx playwright test tests/auth.spec.ts --retries 0 --reporter=line")"
+ck "P102 -g と --project"            0 "$(runj "$E npx playwright test -g ログイン --project chromium-unauthed")"
+ck "P103 複数ファイル・-x など"      0 "$(runj "$E npx playwright test tests/a.spec.ts tests/b.spec.ts --workers=1 -x --max-failures=1 --timeout=60000")"
+ck "P104 --list"                     0 "$(runj "$E npx playwright test --list")"
+ck "P105 ホスト側の 2>&1 | tail"     0 "$(runj "$E npx playwright test tests/auth.spec.ts --retries=0 2>&1 | tail -30")"
+ck "P106 回数制限を切る前置き"       0 "$(runj "RATELIMIT_ENABLE=false $E npx playwright test tests/auth.spec.ts --retries=0")"
+# false-green の確認: e2e のサービス名の確認を外した複製では C65・C66 が素通しになる
+BROKEN_SVC="$TMP/guard_no_e2e_service.py"
+sed 's/c\.get("service") in _SAFE_COMPOSE_DEFAULT and _playwright_test_args_safe/_playwright_test_args_safe/' "$GUARD" > "$BROKEN_SVC"
+ck "G27 複製に置換が入った（e2e の確認）"   YES "$( (! cmp -s "$GUARD" "$BROKEN_SVC") && echo YES || echo NO)"
+ck "G28 確認を外すと frontend でも素通し"   0   "$(rungj "$BROKEN_SVC" 'docker compose exec frontend npx playwright test')"
+ck "G29 確認を外すと backend でも素通し"    0   "$(rungj "$BROKEN_SVC" 'docker compose run --rm backend npx playwright test')"
 ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare -f json runj); GUARD='$GUARD'; runj 'echo \"\$(cat /dev/zero)\"'" || echo TIMEOUT)"
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---
