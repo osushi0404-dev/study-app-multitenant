@@ -401,7 +401,20 @@ s5() { s_has "$1" 'bash scripts/claude/code-review.sh' && s_has "$1" 'run_in_bac
 s6() { s_has "$1" 'Skill ツールで `issue-bootstrap` を呼ぶ' && s_not "$1" 'ユーザーの判断を待つ:'; }
 s7() { local f; for f in "$@"; do s_has "$f" '「止めて聞く条件」' || return 1; done; }
 s8() { grep -qE 'claude -p --permission-mode plan' "$1" && s_has "$1" '"/code-review medium origin/develop...HEAD"' && s_has "$1" '"/security-review"' && s_has "$1" 'git fetch -q origin develop'; }
-s11() { local f; for f in "$@"; do s_has "$f" 'コマンドの出力・ログ・環境変数・記録' || return 1; done; }
+s11() { local f; for f in "$@"; do s_has "$f" 'コマンドの出力・ログ・環境変数・記録' && s_has "$f" '画面キャプチャ・コンソールの記録' || return 1; done; }
+# S21: I187 の決まり（画面確認・承認画面の確認・実施者の判定）が新しい流れの段階で動く（受け入れ条件 15・計画 §5.9）
+s21_impl() { s_has "$1" 'docs/runbooks/frontend-verify.md` の手順（§9 の安全上の注意を含む）' && s_has "$1" 'Playwright MCP'; }
+s21_test() {
+  local p
+  for p in 'docs/runbooks/frontend-verify.md` の手順（§9 の安全上の注意を含む）' 'bash scripts/claude/check-frontend-evidence.sh' \
+           'bash scripts/claude/check-manual-test-executor.sh' 'bash scripts/claude/check-permission-prompt.sh' \
+           'コードの不具合ではないので fix-loop に回さない' '実行されても困らない代わりの操作'; do
+    s_has "$1" "$p" || return 1
+  done
+}
+# 後ろにイシュー番号の無い古い書き方（`/test` など）。R6 はイシュー番号つきの形をリポジトリ全体で見る。組み込みの
+# /code-review を正しく指す文書があるので、この検査は I187 から来た 2 つの文書だけを見る
+s21_old() { ! grep -qE '(^|[^a-z-])/(test|close|implement|code-review)([^a-z-]|$)' "$@"; }
 # 止める条件 2 の安全装置の集合が path_risk_trigger の case 行と一致する
 s12() {
   python3 - "$1" "$2" <<'PY'
@@ -428,7 +441,11 @@ STOP_REF_SKILLS=()
 for s in "${STAGE_SKILLS[@]}" plan-issue proceed; do STOP_REF_SKILLS+=("$SK/$s/SKILL.md"); done
 ck "S7 段階とユーザー用のスキルが止める条件を workflow.md で参照" 0 "$(rc s7 "${STOP_REF_SKILLS[@]}")"
 ck "S8 code-review.sh は fetch し、組み込み 2 本を plan モードで呼ぶ" 0 "$(rc s8 scripts/claude/code-review.sh)"
-ck "S11 retro・issue-bootstrap に自動起票の本文の決まり" 0 "$(rc s11 $SK/retro/SKILL.md $SK/issue-bootstrap/SKILL.md)"
+ck "S11 retro・issue-bootstrap に自動起票の本文の決まり（画面キャプチャ・コンソールの記録も貼らない）" 0 "$(rc s11 $SK/retro/SKILL.md $SK/issue-bootstrap/SKILL.md)"
+ck "S21 implement に frontend-verify.md の手順で Playwright MCP を使う画面確認がある" 0 "$(rc s21_impl $SK/implement/SKILL.md)"
+ck "S21 test-gate に判定スクリプト 3 本・fix-loop に回さない・代わりの操作" 0 "$(rc s21_test $SK/test-gate/SKILL.md)"
+ck "S21 frontend-verify.md・手動テストのテンプレートに古いコマンド名が無い" 0 "$(rc s21_old docs/runbooks/frontend-verify.md docs/tests/templates/manual_test_template.md)"
+ck "S21 I193 の手動テストの実施者の振り分けが判定を通る" 0 "$(rc bash scripts/claude/check-manual-test-executor.sh I193)"
 ck "S12 止める条件 2 の集合が path_risk_trigger と一致" 0 "$(rc s12 scripts/claude/code-review.sh docs/runbooks/workflow.md)"
 
 sed 's#bash scripts/claude/gate-check.sh#bash scripts/claude/no-check.sh#' $SK/test-gate/SKILL.md > "$TMP/s3.md"
@@ -441,6 +458,14 @@ sed 's#`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`#`scripts
 ck "FG-S12 止める条件 2 から .secrets.baseline を消すと S12 不合格" 1 "$(rc s12 scripts/claude/code-review.sh "$TMP/s12.md")"
 sed 's#^止めてユーザーに聞くのは `docs/runbooks/workflow.md`「止めて聞く条件」#止めてユーザーに聞くのは次のとき#' $SK/review-gate/SKILL.md > "$TMP/s7.md"
 ck "FG-S7 review-gate から止める条件の参照を消すと S7 不合格" 1 "$(rc s7 "$TMP/s7.md")"
+grep -vF "check-frontend-evidence.sh" $SK/test-gate/SKILL.md > "$TMP/s21_test.md"
+ck "FG-S21 test-gate から check-frontend-evidence.sh を消すと不合格" 1 "$(rc s21_test "$TMP/s21_test.md")"
+grep -vF "Playwright MCP" $SK/implement/SKILL.md > "$TMP/s21_impl.md"
+ck "FG-S21 implement から Playwright MCP を消すと不合格" 1 "$(rc s21_impl "$TMP/s21_impl.md")"
+printf '対象: `/test` の判定\n' > "$TMP/s21_old.md"
+ck "FG-S21 古いコマンド名 \`/test\` を書くと不合格" 1 "$(rc s21_old "$TMP/s21_old.md")"
+sed 's#・画面キャプチャ・コンソールの記録##' $SK/retro/SKILL.md > "$TMP/s11.md"
+ck "FG-S11 retro から画面キャプチャ・コンソールの記録を消すと不合格" 1 "$(rc s11 "$TMP/s11.md")"
 
 # ---------------- D: 文書 ----------------
 DS=docs/proposals/I193_official_base_flow.md; WF=docs/runbooks/workflow.md

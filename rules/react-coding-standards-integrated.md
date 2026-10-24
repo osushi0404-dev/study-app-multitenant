@@ -14,7 +14,7 @@
 
 ## 手動レビュー対象（linter が検出できない項目）
 
-以下は AI レビュー（/plan-issue-review・/code-review）および人間によるレビューの対象です:
+以下は AI レビュー（plan-review・review-gate 段階）および人間によるレビューの対象です:
 
 - コンポーネント設計（Props drilling 排除・責務分離）
 - マルチテナント制約（組織スコープ・閲覧範囲の制御）

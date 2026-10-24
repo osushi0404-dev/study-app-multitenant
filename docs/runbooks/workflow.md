@@ -218,7 +218,7 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 4. 方針コメントを付けて close する: `gh pr comment <PR番号> --body-file <file>` → `gh pr close <PR番号>`。
 5. 対象のイシューは OPEN のまま残し、必要なら通常のハーネス手順（/plan-issue 以降）で自前実装する。
 
-判定は `scripts/claude/pr-base-sync.sh`（/close step 0）と PreToolUse ガード
+判定は `scripts/claude/pr-base-sync.sh`（close 段階の最初）と PreToolUse ガード
 （`scripts/claude/hooks/pretooluse_guard.py`）でも自動検知されるが、上記は人が最初に見たときの手順である。
 ガードは外部 PR への `gh pr merge` / `gh pr checkout`（`gh co`）と MCP の `merge_pull_request` を block、
 `gh pr ready` / `edit` / `update-branch` / `review --approve` と MCP の `update_pull_request_branch` /

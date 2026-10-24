@@ -41,9 +41,21 @@ bash scripts/claude/gate-check.sh "$ARGUMENTS"
 テスト計画書（`docs/tests/open/$ARGUMENTS_manual_test.md`）の「実施者」欄を必ず確認する。
 
 - **実施者: Claude** の項目 → 自分で Bash/Read ツールを使って実行し、結果を表に記録する（ユーザーに依頼しない）
+  - 画面の表示・遷移・入力の結果・コンソールは、`docs/runbooks/frontend-verify.md` の手順（§9 の安全上の注意を含む）で Playwright MCP を使って確かめ、同じ手順書の「画面確認」の書き方でテスト記録に書く（コミットはこのレビュー済みの HEAD）
+  - 承認画面が出るか／承認なしで通るかは `bash scripts/claude/check-permission-prompt.sh` で確かめる（使い方と終了コードはスクリプトの冒頭。2 ならもう 1 回流し、それでも 2 なら NG）。ユーザーに「画面が出たか」を聞かない。承認なしで通る操作は実際に実行されるので、危ない操作は、同じ許可ルール・見張りに当たり、実行されても困らない代わりの操作で確かめる。同じ許可ルールに当たる操作は 1 回の確認でまとめる
 - **実施者: Human** の項目だけ → Claude の分を全部終えてから、まとめてユーザーに提示する
 
 Claude の分で NG があれば、記録して `STAGE_DONE: test-gate NEXT: fix-loop` を書いて終わる。
+
+Claude の分を終えたら、次の 2 つの判定を実行する（I187。どちらも記録の判定）:
+```bash
+bash scripts/claude/check-frontend-evidence.sh $ARGUMENTS
+```
+```bash
+bash scripts/claude/check-manual-test-executor.sh $ARGUMENTS
+```
+- どちらも exit 0: 5. へ
+- 0 以外: コードの不具合ではないので fix-loop に回さない。出力された不足を、自分で直してから判定をやり直す（画面確認が足りなければ上の手順で確かめて行と画像を足す。Claude で確かめられる項目が Human になっていれば Claude の行に直して自分で行う。本当に Claude で確かめられない Human の行だけ、備考に `Claude で確かめられない理由: …` を書く）。書くのは記録の場所と gitignore 済みの `.evidence/` だけ。直せないとき（MCP が使えないなど）は止める条件 3 に当たるかを判定する
 
 ## 5. 結線（必須）
 

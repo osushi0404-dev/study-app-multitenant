@@ -17,7 +17,7 @@
 | 2 |  |  | Human |  | Claude で確かめられない理由: |
 
 ## 画面確認
-<!-- frontend/src を変えたイシューでは 1 行以上必要（/test の check-frontend-evidence.sh が確かめる）。
+<!-- frontend/src を変えたイシューでは 1 行以上必要（test-gate 段階の check-frontend-evidence.sh が確かめる）。
      画像の列は .evidence/I###/ 直下のファイル名（カンマ区切り）。確かめられない理由があるときは「理由: …」。
      書き方: docs/runbooks/frontend-verify.md -->
 | 日時 | コミット | 画面と操作 | アカウント | 期待した結果 | 実際の結果 | 画像 |
