@@ -139,6 +139,8 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
 
 | TC | 実行日 | 結果 | 備考 |
 |---|---|---|---|
+| ゲート 30 行（RTC-01〜RTC-18・RTC-21・RTC-22） | 2026-10-24 | ✅ 全件 exit 0 | /implement 完了時（ステップ R1〜R4 反映後）。code-review.sh と同じ抽出規則・`! grep` の扱いで実行。/test で再実行する |
+| RTC-19・RTC-20・RTC-23 | 2026-10-24 | ✅ 全件 exit 0 | /implement 完了時。RTC-23 の注入版（比較先 `6c88d9f^1`）は引き続き exit 1 |
 
 ---
 

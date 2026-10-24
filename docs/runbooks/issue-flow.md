@@ -161,7 +161,7 @@ GitHubイシュー登録後、必ず以下を報告：
 22. エラー管理ファイル → closed/（該当する場合）
 23. 計画書 → closed/（エラー対応計画書含む全て）
 24. イシューファイル → closed/
-25. featureブランチをdevelopにマージ
+25. PR を develop にマージ（oshui0404 が GitHub で承認・マージ）
 26. レビューファイル → closed/
 27. GitHubイシューをクローズ
 ```
@@ -364,24 +364,12 @@ EOF
 mv docs/issues/open/XXX.md docs/issues/closed/
 ```
 
-**ステップ25: featureブランチをdevelopにマージ**
+**ステップ25: PR を develop にマージ**
+
+/close が PR 本文を整え、Ready にしてからマージを依頼する（.claude/skills/close/SKILL.md）。oshui0404 が GitHub の PR 画面で承認・マージする。develop・main へのローカルマージと直接 push は行わない（ブランチ保護で止まる・docs/runbooks/branch-protection-setup.md）。
+
 ```bash
-git checkout develop
-
-git merge feature/IXXX-[概要] --no-ff -m "$(cat <<'EOF'
-Merge feature/IXXX: [イシュータイトル]
-
-- 実施内容の要約
-- 関連ファイル
-- テスト結果: OK
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-EOF
-)"
-
-git push origin develop
+gh pr ready <PR番号>
 ```
 
 **ステップ26: レビューファイルをclosedに移動**

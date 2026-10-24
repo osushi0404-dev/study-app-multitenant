@@ -200,11 +200,13 @@ git branch --show-current
 **developの複数機能を本番環境（main）にリリースする場合のみ実行**:
 
 ```bash
-git checkout main
-git merge develop --no-ff -m "Release: vX.X.X ..."
-git tag -a v1.0.0 -m "バージョン1.0.0リリース"
-git push origin main
-git push origin v1.0.0
+# 1. bot が develop → main の PR を作る
+gh pr create --base main --head develop --title "Release: vX.X.X" --body-file <リリースノートのファイル>
+# 2. oshui0404 が GitHub の PR 画面で承認・マージする
+# 3. マージ後、main の先頭にタグを付ける
+git fetch origin main
+git tag -a vX.X.X origin/main -m "バージョンX.X.Xリリース"
+git push origin vX.X.X
 ```
 
 **重要な注意事項**:
@@ -218,18 +220,18 @@ git push origin v1.0.0
 本番環境で緊急のバグ修正が必要な場合：
 
 ```bash
-git checkout main
-git checkout -b hotfix/critical-bug-description
+git fetch origin
+git checkout --no-track -b hotfix/critical-bug-description origin/main
 # 修正・コミット
-git checkout main
-git merge hotfix/critical-bug-description --no-ff
-git push origin main
-# developにもマージ（必須）
-git checkout develop
-git merge hotfix/critical-bug-description --no-ff
-git push origin develop
-git branch -d hotfix/critical-bug-description
+git push -u origin hotfix/critical-bug-description
+# 1. bot が main 宛ての PR を作り、oshui0404 が承認・マージする
+gh pr create --base main --title "hotfix: ..." --body-file <ファイル>
+# 2. develop にも反映する（必須）。bot が develop 宛ての PR を作り、oshui0404 が承認・マージする
+gh pr create --base develop --head hotfix/critical-bug-description --title "hotfix: ...（develop へ反映）" --body-file <ファイル>
+# 3. 両方のマージ後、GitHub の PR 画面の Delete branch でブランチを消す
 ```
+
+**main がまだ初期コミットだけの間は、main への hotfix はマージできない**（main から作ったブランチには CI のワークフローが無く、必須チェックが報告されないため。docs/runbooks/branch-protection-setup.md §1.5「main の制約」）。最初のリリース（develop → main）より前は、緊急の修正も develop 宛ての PR で行い、リリースで main に入れる。
 
 **hotfixの重要ポイント**: mainとdevelop**両方**にマージすること。
 - mainとdevelop**両方**にマージすること（忘れると修正が失われる）
