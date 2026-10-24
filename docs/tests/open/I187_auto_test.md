@@ -32,6 +32,11 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | TC-22 | `e2e.yml` の失敗時アップロードが `path: e2e/test-results/**/*.png`・`retention-days: 14` で、`playwright-report` が残っていない（3 件） | 合格=0 |
 | TC-23 | `code-reviewer.md` に観点「E2E か単体テストを追加・更新」がある | 合格=0 |
 | TC-25 | （/security-review で追加）`test_i187_mcp_filename_guard.sh`（新規）: 下の表の 11 ケースが期待どおり。見張りの複製から `mcp__playwright__` の分岐を外すと F3 が不合格（0 が返る）になる | 合格=0 |
+| TC-26 | （計画変更記録 7）`test_check_permission_prompt.sh`（新規）: 下の表の 9 ケースが期待どおり | 合格=0 |
+| TC-27 | （計画変更記録 7）`check-permission-prompt.sh`・`check-manual-test-executor.sh` が bash として正しい（2 件） | 合格=0 |
+| TC-28 | （計画変更記録 7）`test_check_manual_test_executor.sh`（新規）: 下の表の 8 ケースが期待どおり | 合格=0 |
+| TC-29 | （計画変更記録 7）`plan-issue/SKILL.md`・`test/SKILL.md` が `check-manual-test-executor.sh` と `check-permission-prompt.sh` を呼ぶ（4 件）。`plan-writing-rules.md` が `check-permission-prompt.sh` を参照し、テンプレートに `Claude で確かめられない理由:` がある（2 件）。実施者の基準 3 か所に「承認画面が出るかどうか」が残っていない（3 件） | 合格=0 |
+| TC-30 | （計画変更記録 7）`check-manual-test-executor.sh I187` が exit 0（本イシューの手動テストに、理由の無い Human の行・承認画面を Human に振った行が無い） | 合格=0 |
 | TC-24 | 計画書の「16. フロント開発設定の点検結果」が記入済み（`（ステップ 7 で記入する）` が残っていない）で、見出し `### 別イシューのタイトル案` がある（2 件） | 合格=0 |
 
 ### /test に委譲（heavy）
@@ -100,6 +105,35 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | F10 | `mcp__playwright__browser_find` | `.evidence/I187/sub/x.txt`（フォルダの入れ子） | 2 |
 | F11 | `mcp__playwright__browser_navigate` | （なし・`url` だけ） | 0 |
 
+### TC-26: 承認画面の判定のケース（`test_check_permission_prompt.sh`）
+`CHECK_PERMISSION_PROMPT_LOG` に作り置きの出力（stream-json）を渡し、`claude` を起動せずに読み取りだけを確かめる。
+
+| ケース | 状況 | 期待 |
+|---|---|---|
+| Q1 | bash・頼んだコマンドの `tool_use` があり、`permission_denials` が空で `tool_result` あり | exit 0 |
+| Q2 | bash・頼んだコマンドの `tool_use` の id が `permission_denials` にある | exit 10 |
+| Q3 | `tool_use` が 1 つも無い | exit 2 |
+| Q4 | bash・`tool_use` の `command` が頼んだものと違う（書き換えられた） | exit 2 |
+| Q5 | mcp・頼んだ操作名の `tool_use` があり、拒否されていない | exit 0 |
+| Q6 | mcp・頼んだ操作名の `tool_use` が拒否されている | exit 10 |
+| Q7 | `init` の `permissionMode` が `default` でない（例 `auto`） | exit 2 |
+| Q8 | 引数なし／種類が `bash`・`mcp` 以外 | exit 2 |
+| Q9 | 出力に `result` の行が無い（途中で落ちた） | exit 2 |
+
+### TC-28: 実施者の判定のケース（`test_check_manual_test_executor.sh`）
+一時フォルダに `docs/tests/open/I999_manual_test.md` を作って実行する。
+
+| ケース | 状況 | 期待 |
+|---|---|---|
+| X1 | Human の行の備考に `Claude で確かめられない理由: 実機の操作感のため` | exit 0 |
+| X2 | Human の行に理由が無い | exit 1 |
+| X3 | Human の行に「承認画面」を含む（理由あり） | exit 1 |
+| X4 | Claude の行だけ | exit 0 |
+| X5 | `Claude で確かめられない理由:` の後ろが空 | exit 1 |
+| X6 | 「実施環境」の列が増えた表でも、実施者の列を見出しから見つけて X2 と同じく exit 1 | exit 1 |
+| X7 | 文書が無い | exit 2 |
+| X8 | 引数なし／`I99` のような形 | exit 2 |
+
 ## false-green の確認
 - 計画時（2026-10-24・実装前）: 下の決定論ゲートのうち grep・json.tool の行を非対話の bash で実走し、**実装前の今の状態ではすべて不合格（exit≠0）**になることを確認した（どれも「まだ変更していない状態」＝失敗条件を注入した状態に当たる）。結果は「計画時の実行結果」を参照。`TC-01`（`.mcp.json` は今も正しい JSON）・`TC-02`・`TC-06` は、今も合格するのが正しい（構文の確認）。
 - 実装時に行うこと:
@@ -162,6 +196,20 @@ grep -qF "E2E か単体テストを追加・更新" .claude/review-agents/code-r
 ! grep -qF "（ステップ 7 で記入する）" docs/plans/open/plan_I187.md
 grep -qx "### 別イシューのタイトル案" docs/plans/open/plan_I187.md
 bash scripts/claude/tests/test_i187_mcp_filename_guard.sh
+bash scripts/claude/tests/test_check_permission_prompt.sh
+bash -n scripts/claude/check-permission-prompt.sh
+bash -n scripts/claude/check-manual-test-executor.sh
+bash scripts/claude/tests/test_check_manual_test_executor.sh
+grep -qF "check-manual-test-executor.sh" .claude/skills/plan-issue/SKILL.md
+grep -qF "check-permission-prompt.sh" .claude/skills/plan-issue/SKILL.md
+grep -qF "check-manual-test-executor.sh" .claude/skills/test/SKILL.md
+grep -qF "check-permission-prompt.sh" .claude/skills/test/SKILL.md
+grep -qF "check-permission-prompt.sh" docs/runbooks/plan-writing-rules.md
+grep -qF "Claude で確かめられない理由:" docs/tests/templates/manual_test_template.md
+! grep -qF "承認画面が出るかどうか" .claude/skills/plan-issue/SKILL.md
+! grep -qF "承認画面が出るかどうか" docs/runbooks/plan-writing-rules.md
+! grep -qF "承認画面が出るかどうか" docs/tests/templates/manual_test_template.md
+bash scripts/claude/check-manual-test-executor.sh I187
 ```
 
 ## 実行結果（/test・2026-10-24）

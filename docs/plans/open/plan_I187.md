@@ -22,7 +22,7 @@
 | Frontend | `frontend/package.json`（scripts に `typecheck`・`lint` を追加。依存の追加・更新はしない） |
 | DB | なし |
 | Config/Infra | `.mcp.json`・`.claude/settings.json`・`.gitignore`・`e2e/playwright.config.ts`・`.github/workflows/ci.yml`・`.github/workflows/e2e.yml`・`.pre-commit-config.yaml` |
-| ハーネス | `scripts/claude/check-frontend-evidence.sh`（新規）・`scripts/claude/tests/test_check_frontend_evidence.sh`（新規）・`scripts/claude/hooks/pretooluse_guard.py`・`scripts/claude/tests/test_pretooluse_container_guard.sh`・`.claude/skills/test/SKILL.md`・`.claude/skills/plan-issue/SKILL.md`・`.claude/review-agents/code-reviewer.md` |
+| ハーネス | `scripts/claude/check-frontend-evidence.sh`（新規）・`scripts/claude/tests/test_check_frontend_evidence.sh`（新規）・`scripts/claude/hooks/pretooluse_guard.py`・`scripts/claude/tests/test_pretooluse_container_guard.sh`・`.claude/skills/test/SKILL.md`・`.claude/skills/plan-issue/SKILL.md`・`.claude/review-agents/code-reviewer.md`・（計画変更記録 7）`scripts/claude/check-permission-prompt.sh`・`scripts/claude/check-manual-test-executor.sh` とそれぞれのテスト（新規） |
 | 文書 | `docs/runbooks/frontend-verify.md`（新規）・`docs/runbooks/workflow.md`・`CLAUDE.md`・`docs/tests/templates/manual_test_template.md`・`docs/runbooks/plan-writing-rules.md` |
 | ホスト環境（リポジトリ外） | chromium の起動に要る OS ライブラリ（`libnss3`・`libnspr4`・`libasound2t64` など）を `sudo npx -y playwright@1.59.1 install-deps chromium` で入れる（sudo が要るのでユーザーが `!` で実行）。Playwright MCP 用の chromium（revision 1247）を `~/.cache/ms-playwright/` に取得する |
 | 変更しない（読むだけ） | `e2e/.env.e2e`（Playwright MCP の `--secrets` で読み込ませる。Claude は中身を読まない） |
@@ -97,6 +97,9 @@
 | 15 | `e2e/playwright.config.ts` | `screenshot: 'only-on-failure'`、`trace` は手元 `retain-on-failure`・CI（`process.env.CI`）では `'off'`、Chromium の起動オプションに `--unsafely-treat-insecure-origin-as-secure=<baseURL の origin>`、`channel: 'chromium'`（計画変更記録 2） | 失敗時に原因を追える記録を手元に残し、CI では trace を作らない。e2e コンテナでも CI と同じく安全なコンテキストで動かす |
 | 16 | `.github/workflows/e2e.yml` | 失敗時のアップロードを `e2e/test-results/**/*.png`（画面キャプチャだけ）・`retention-days: 14`・`if-no-files-found: ignore` に置き換える（今の `playwright-report` のアップロードは削除） | CI では画面キャプチャだけを 14 日残し、trace やレポートを公開しない |
 | 17 | `scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`scripts/claude/tests/test_i187_mcp_filename_guard.sh`（新規） | （/security-review で追加・計画変更記録 1）見張りに `mcp__playwright__` の分岐を足す。操作の入力に `filename` があるときは `^\.evidence/I[0-9]{3}/[A-Za-z0-9._-]+$` に一致し、`..` を含まない場合だけ通し、それ以外は止める（exit 2）。`filename` が無ければ素通し。settings の PreToolUse に matcher `mcp__playwright__.*` で見張りを登録する | 許可した 5 つの操作（`browser_take_screenshot`・`browser_snapshot`・`browser_console_messages`・`browser_network_requests`・`browser_find`）は `filename` でワークスペース内の任意の場所に書ける。Edit/Write の deny（`Edit(**/.env)` など）も見張りも通らないため、`backend/.env` などの git に無い秘密情報を上書きで失いうる。書き先を `.evidence/I###/` に固定して塞ぐ |
+| 18 | `scripts/claude/check-permission-prompt.sh`（新規）・`scripts/claude/tests/test_check_permission_prompt.sh`（新規） | （計画変更記録 7）承認画面が出るかを Claude が確かめるスクリプト（5-2-8）とそのテスト | 「承認画面が出るかどうか」を人に頼まずに確かめる。公式の `claude -p` の指定（`--permission-mode manual`・`--permission-prompts none`）と出力（`permission_denials`）だけを使い、自作は呼び出しと読み取りだけにする |
+| 19 | `scripts/claude/check-manual-test-executor.sh`（新規）・`scripts/claude/tests/test_check_manual_test_executor.sh`（新規） | （計画変更記録 7）手動テスト文書の Human の行を確かめる判定（5-2-8）とそのテスト | Claude が自分でできる確認を Human に振る漏れを、決まった判定で止める |
+| 20 | `.claude/skills/plan-issue/SKILL.md`・`.claude/skills/test/SKILL.md`・`docs/runbooks/plan-writing-rules.md`・`docs/tests/templates/manual_test_template.md`・`docs/tests/open/I187_manual_test.md` | （計画変更記録 7）実施者の基準から「承認画面が出るかどうか＝Human」を消し、変更点 18 で Claude が確かめる形に改める。Human にするのは、Claude で確かめる手段（公式の機能を含む）を探して無かったときだけとし、備考に理由を書く。`/plan-issue` はテスト文書を作ったあと、`/test` は Human の項目を出す前に、変更点 19 の判定を流す。本イシューの手動テストの Human の行も Claude に直す | 次のイシューから、Claude が確かめられるものを人に頼まない |
 
 ### 5-2. 各修正項目の詳細
 
@@ -203,6 +206,15 @@
 #### 5-2-7. レビューの観点（変更点 10）
 `.claude/review-agents/code-reviewer.md` の観点に 1 項目を足す: 「`frontend/src` の画面の動き（表示・遷移・入力の結果）を変えた場合、E2E か単体テストを追加・更新しているか。テストにしにくい見た目（配置・色など）だけを画面キャプチャで確かめているか。手で確かめただけで終わっていれば High」。
 
+#### 5-2-8. 承認画面の確かめ方と実施者の判定（変更点 18・19・計画変更記録 7）
+- `check-permission-prompt.sh bash '<コマンド>'`・`check-permission-prompt.sh mcp <操作名> '<入力の JSON>'`:
+  - `claude -p` を `--model haiku --permission-mode manual --permission-prompts none --settings .claude/settings.json --mcp-config .mcp.json --no-session-persistence --max-budget-usd 1 --output-format stream-json --verbose` で起動し、「その操作を 1 回だけ、書き換えずに呼ぶ」よう頼む。`--settings` でワークツリーの許可を読ませる（ワークツリーのセッションの許可は元のリポジトリの設定で判定されるため。計画変更記録 5）。
+  - 出力の読み取り: 初めの `system`（`init`）の `permissionMode` が `default` でなければ判定できない。頼んだ操作と同じ名前（bash なら `Bash` で `command` が完全一致・mcp なら操作名が一致）の `tool_use` を探し、その id が最後の `result` の `permission_denials` にあれば「承認画面が出る」、無くて `tool_result` が返っていれば「承認なしで実行された」。
+  - 終了コード: 0 = 承認なしで実行された・10 = 承認画面が出る（自動で拒否された）・2 = 判定できない（引数の誤り・操作が呼ばれない・コマンドが書き換えられた・モードが違う・`claude` の失敗）。見張りが止めた（exit 2）操作は承認画面を出さないので 0 側になり、`tool_result` の先頭を表示して見分けられるようにする。
+  - 注意: 承認なしで通る操作は **実際に実行される**。実行して困るもの（データの削除・外部への送信など）には使わない。承認が要る操作は実行されない。
+  - テストのため、環境変数 `CHECK_PERMISSION_PROMPT_LOG=<保存した出力>` があれば `claude` を起動せずにその出力を読む（読み取りの部分だけを決まったテストで確かめる）。
+- `check-manual-test-executor.sh I###`: `docs/tests/{open,closed}/I###_manual_test.md` の表のうち、見出し行に「実施者」の列がある表を読む。実施者の列が `Human` で始まる行について、①行に「承認画面」を含む → 不合格（変更点 18 で Claude が確かめる） ②行に `Claude で確かめられない理由:` と、その後ろに 1 文字以上の理由が無い → 不合格。終了コード: 0 = 合格・1 = 不合格（どの行の何が足りないかを出す）・2 = 引数の誤り・文書が無い。文字列の判定は「普通の書き方の事故」を止めるもので、わざと避ける書き方は対象にしない。
+
 ## 6. テスト計画
 - テストレベルの使い分け: 判定スクリプト・見張り・設定ファイルは **決定論テスト（bash のテストスクリプト・grep・json.tool）**。npm コマンドと CI の呼び出しは **CI の実行結果**。Playwright MCP・画面確認・E2E の失敗時の記録・`/run` は **手動テスト（実施者は主に Claude）**。アプリのコード変更は無いので pytest・Jest・E2E の新しいテストは追加しない（既存の E2E は CI で回る）。
 - 認証・認可・テナント境界の変更はない（E2E 用アカウントの使い方を文書化するだけ）。
@@ -225,6 +237,7 @@
 | 12. 公式優先・自作の根拠 | TC-13・M-17 |
 | 13. 点検結果・所要時間・タイトル案 | TC-24・M-15 |
 | 14. I185・I186・I188 と重ならない | M-16 |
+| （計画変更記録 7）承認画面の確かめ方・実施者の判定 | TC-26〜TC-30・M-20 |
 
 ## 7. 実装手順
 各ステップの確認は自動テスト文書・手動テスト文書の TC で行う（ステップ本文には検証コマンドを書かない）。
@@ -265,6 +278,11 @@
   - `npm test -- --watchAll=false`・`npm run typecheck`・`npm run lint` の時間（コンテナ内）
   - 設定の点検: CRA（`react-scripts` 5.0.1）・TypeScript 4.9・CI の Node 18・`/mnt/c` 上のマウントとファイル監視のポーリング（`CHOKIDAR_USEPOLLING`・`WATCHPACK_POLLING`）
 - 大きな改善（Vite への移行など）は実装せず、数字つきのタイトル案にする。
+
+### ステップ 8（計画変更記録 7）: 承認画面の確かめ方と実施者の判定
+1. 変更点 18・19 のテストを先に書き、スクリプトが無い状態・常に exit 0 で終わる偽物で不合格になることを確かめてから本体を書く → TC-26〜TC-28 参照。
+2. 変更点 20 の文書を変え、本イシューの手動テストの Human の行を Claude に直す → TC-29・TC-30 参照。
+3. 変更点 18 を実際に流し、承認なしで通る操作と承認が要る操作を 1 つずつ以上見分けられることを確かめる → M-20 参照。
 
 - サービスの再起動: ステップ 1 で Claude Code の再起動が要る。ステップ 4 で backend を `RATELIMIT_ENABLE=false` で起動し直した場合は、終わったら `docker compose up -d backend` で元に戻す。
 
@@ -411,3 +429,4 @@ High 1 件（MCP の書き先）は、必須防御条件として変更点 17・
 - 計画変更記録 4（2026-10-24・/test）: `/test` で `docker compose exec frontend npm run typecheck`・`npm run lint` を流したところ、通常モードでは毎回承認画面が出た（ユーザーの画面で確認）。手順書では画面確認の前に毎回型チェックを流すため、「Claude が人に頼まずサクサク確かめる」という目的に反する。どちらもコードを読んで結果を返すだけで書き換えはせず、見張りも安全として通している（直接入力して確かめた）。settings の allow に、この 2 つの完全一致（`-T` あり・なし）の 4 つを足した。TC-03 の ⑤b'' に 4 つを足し、⑤d（frontend の exec に末尾を何でも受ける許可が無い）を足した。変更前の設定では ⑤b'' が不合格になることを確かめた。受け入れ条件・方式・範囲は変えていないので `/plan-issue-review` は挟まない
 - 計画変更記録 5（2026-10-24・/test の見直し）: M-12 を通常モードで流したところ承認画面が出た。見張りに同じ入力を渡すと何も返さず通り、`/permissions` の docker compose の許可は元のリポジトリ（develop 側）の `.claude/settings.json` の 5 行と一致し、ワークツリーで足した `port`・typecheck・lint・e2e の行が無かった。ワークツリーのセッションの許可は元のリポジトリの設定で判定されるため、このブランチで足した allow はマージまで効かない。計画変更記録 4 の「承認なしで流せるようにした」と M-01 ② の OK は、確認なしで流れることを実証しておらず根拠にならない（M-01 ② は自動承認モードで動いたものと考えられる）。TC-03 ⑤b''（許可の行の文字の一致）と TC-H2（exit 0）は設定の文字と実行結果を見るだけなので合格のまま。M-01 ②・M-12 を「再確認待ち」に戻し、typecheck・lint の確認なし実行を M-19 として足した。マージ前の確かめ方は、ワークツリーで `claude --settings .claude/settings.json` で開き直し、ワークツリーの許可を読ませた新しいセッション（通常モード）で M-01 ②・M-12・M-19 を流す。受け入れ条件・方式・範囲は変えていないので `/plan-issue-review` は挟まない
 - 計画変更記録 6（2026-10-24・/test）: M-01 ②・M-12・M-19 の実施者を Human から Claude に変えた（ユーザーの指摘「その確認を Claude 自身にやってほしくてこのイシューをやっている」）。承認画面が出るかどうかは、公式の `claude -p` に `--permission-mode manual`（通常モード）・`--permission-prompts none`（承認が要る操作は画面を出さずに拒否する）・`--settings .claude/settings.json`（ワークツリーの許可を読ませる）・`--mcp-config .mcp.json` を付けた新しいセッションで 1 操作ずつ流し、出力の `permission_denials` に入るか（＝通常のセッションなら承認画面が出る）で判定できる。期待どおり拒否される操作（`npx playwright install`・`npm run build`・`browser_evaluate`）を同じ方法で流し、判定方法そのものが拒否を捕まえられることも確かめた。受け入れ条件・方式・範囲は変えていない（確かめ方の実施者だけ）ので `/plan-issue-review` は挟まない
+- 計画変更記録 7（2026-10-25・/test の後・ユーザー指示）: ユーザーの指摘「画面操作のテストを人に求めてきた原因を調べて。このイシューで実現したいことができていないことになる」を受けて原因を調べた。原因は、「承認画面が出るかどうかは Claude には確かめられない」という思い込みを確かめないまま、本イシューで実施者の基準 3 か所（`plan-issue/SKILL.md:95`・`plan-writing-rules.md:506`・テンプレート 9 行目）に書き足したこと。`plan-writing-rules.md` の 90・514〜519 行目の「ハーネスの挙動は人が新しいセッションで目で確かめる」もそれを後押しした。その結果、M-01 ②・M-12・M-19 が Human として作られ、レビューもそこを疑わなかった。ユーザーの指示「次から Claude 自身で実施できるものは Claude 自身で実施する。次のイシュー以降でも確実にできるようにスキルなどに書く」に従い、変更点 18〜20・5-2-8・ステップ 8・TC-26〜TC-30・M-20 を足した。範囲を足す変更なので `/plan-issue-review` を挟む。受け入れ条件 14 項目は変えない（目的「Claude が人に頼まずに確かめる」をハーネスの確認にも行き渡らせる追加）
