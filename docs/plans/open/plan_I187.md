@@ -208,7 +208,7 @@
 
 #### 5-2-8. 承認画面の確かめ方と実施者の判定（変更点 18・19・計画変更記録 7）
 - `check-permission-prompt.sh bash '<コマンド>'`・`check-permission-prompt.sh mcp <操作名> '<入力の JSON>'`:
-  - `claude -p` を `--model haiku --permission-mode manual --permission-prompts none --settings .claude/settings.json --mcp-config .mcp.json --no-session-persistence --max-budget-usd 1 --output-format stream-json --verbose` で起動し、「その操作を 1 回だけ、書き換えずに呼ぶ」よう頼む。`--settings` でワークツリーの許可を読ませる（ワークツリーのセッションの許可は元のリポジトリの設定で判定されるため。計画変更記録 5）。
+  - （敵対的レビュー 3 周目で `--setting-sources user` を追加: 元のリポジトリの設定・手元の `settings.local.json` が混ざり、マージ後の develop と違う判定になるのを防ぐ）`claude -p` を `--model haiku --permission-mode manual --permission-prompts none --setting-sources user --settings .claude/settings.json --mcp-config .mcp.json --no-session-persistence --max-budget-usd 1 --output-format stream-json --verbose` で起動し、「その操作を 1 回だけ、書き換えずに呼ぶ」よう頼む。`--settings` でワークツリーの許可を読ませる（ワークツリーのセッションの許可は元のリポジトリの設定で判定されるため。計画変更記録 5）。
   - 出力の読み取り: 初めの `system`（`init`）の `permissionMode` が `default` でなければ判定できない。頼んだ操作と同じ名前（bash なら `Bash` で `command` が完全一致・mcp なら操作名が一致）の `tool_use` を探し、その id が最後の `result` の `permission_denials` にあれば「承認画面が出る」、無くて `tool_result` が返っていれば「承認なしで実行された」。
   - 終了コード: 0 = 承認なしで実行された・10 = 承認画面が出る（自動で拒否された）・2 = 判定できない（引数の誤り・操作が呼ばれない・コマンドが書き換えられた・モードが違う・`claude` の失敗）。見張りが止めた（exit 2）操作は承認画面を出さないので 0 側になり、`tool_result` の先頭を表示して見分けられるようにする。
   - 注意: 承認なしで通る操作は **実際に実行される**。実行して困るもの（データの削除・外部への送信など）には使わない。承認が要る操作は実行されない。

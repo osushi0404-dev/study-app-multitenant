@@ -32,9 +32,9 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | TC-22 | `e2e.yml` の失敗時アップロードが `path: e2e/test-results/**/*.png`・`retention-days: 14` で、`playwright-report` が残っていない（3 件） | 合格=0 |
 | TC-23 | `code-reviewer.md` に観点「E2E か単体テストを追加・更新」がある | 合格=0 |
 | TC-25 | （/security-review で追加）`test_i187_mcp_filename_guard.sh`（新規）: 下の表の 11 ケースが期待どおり。見張りの複製から `mcp__playwright__` の分岐を外すと F3 が不合格（0 が返る）になる | 合格=0 |
-| TC-26 | （計画変更記録 7）`test_check_permission_prompt.sh`（新規）: 下の表の 11 ケースが期待どおり | 合格=0 |
+| TC-26 | （計画変更記録 7）`test_check_permission_prompt.sh`（新規）: 下の表のケースがすべて期待どおり | 合格=0 |
 | TC-27 | （計画変更記録 7）`check-permission-prompt.sh`・`check-manual-test-executor.sh` が bash として正しい（2 件） | 合格=0 |
-| TC-28 | （計画変更記録 7）`test_check_manual_test_executor.sh`（新規）: 下の表の 9 ケースが期待どおり | 合格=0 |
+| TC-28 | （計画変更記録 7）`test_check_manual_test_executor.sh`（新規）: 下の表のケースがすべて期待どおり | 合格=0 |
 | TC-29 | （計画変更記録 7）`plan-issue/SKILL.md`・`test/SKILL.md` が `check-manual-test-executor.sh` を呼び、`check-permission-prompt.sh` の呼び方を書いている（4 件・5-2-8 の「スキルからの呼び方」）。`plan-writing-rules.md` が `check-permission-prompt.sh` を参照し、テンプレートに `Claude で確かめられない理由:` がある（2 件）。実施者の基準 3 か所に「承認画面が出るかどうか」が残っていない（3 件） | 合格=0 |
 | TC-30 | （計画変更記録 7）`check-manual-test-executor.sh I187` が exit 0（本イシューの手動テストに、理由の無い Human の行・承認画面を Human に振った行が無い）。`/code-review` が自動で流せる形にするため、TC-28 のテストスクリプトの X9 として流す | 合格=0 |
 | TC-24 | 計画書の「16. フロント開発設定の点検結果」が記入済み（`（ステップ 7 で記入する）` が残っていない）で、見出し `### 別イシューのタイトル案` がある（2 件） | 合格=0 |
@@ -121,6 +121,8 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | Q9 | 出力に `result` の行が無い（途中で落ちた） | exit 2 |
 | Q10 | （実装時に追加）本物の形の拒否: `message` が文字列の `system`（`permission_denied`）の行を含む | exit 10 |
 | Q11 | （実装時に追加）`result` の `permission_denials` が配列でない | exit 2 |
+| Q12〜Q16 | （敵対的レビュー 3 周目）`permission_denials` が無い・null・要素に `tool_use_id` が無い・`subtype` が success でない・拒否の行があるのに `permission_denials` に無い | exit 2 |
+| Q17 | （敵対的レビュー 3 周目）コマンドが失敗しただけ（`is_error`・拒否なし）＝ `is_error` ではなく `permission_denials` で判定していること | exit 0 |
 
 ### TC-28: 実施者の判定のケース（`test_check_manual_test_executor.sh`）
 一時フォルダに `docs/tests/open/I999_manual_test.md` を作って実行する。
@@ -136,6 +138,10 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | X7 | 文書が無い | exit 2 |
 | X8 | 引数なし／`I99` のような形 | exit 2 |
 | X9 | （TC-30）このリポジトリの `I187_manual_test.md` | exit 0 |
+| X10・X11 | （敵対的レビュー 3 周目）セルに `\|` がある行でも列がずれない（理由なし → 1・理由の中の `\|` → 0） | 1・0 |
+| X12 | （同上）Human の行に承認の確認の言い換え（承認なし・確認プロンプト・確認が出・確認画面・確認なし・ダイアログ） | exit 1 |
+| X13 | （同上）「実施者」の列がある表が無い | exit 2 |
+| X14・X15 | （同上）実施者が `**Human**`（太字）・「ユーザー」 | exit 1 |
 
 ## false-green の確認
 - 計画時（2026-10-24・実装前）: 下の決定論ゲートのうち grep・json.tool の行を非対話の bash で実走し、**実装前の今の状態ではすべて不合格（exit≠0）**になることを確認した（どれも「まだ変更していない状態」＝失敗条件を注入した状態に当たる）。結果は「計画時の実行結果」を参照。`TC-01`（`.mcp.json` は今も正しい JSON）・`TC-02`・`TC-06` は、今も合格するのが正しい（構文の確認）。

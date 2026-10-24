@@ -39,6 +39,13 @@ ck "Q8b 種類が違う"             2  "$( { init; done_ok; } | run q8b shell "
 ck "Q9 result の行が無い"       2  "$( { init; use Bash "$(bash_in "$CMD")"; res false; } | run q9 bash "$CMD")"
 ck "Q10 本物の形の拒否（message が文字列の行あり）" 10 "$( { init; use Bash "$(bash_in "$CMD")"; denied_ev Bash; res true; done_ng Bash; } | run q10 bash "$CMD")"
 ck "Q11 読めない形の result"    2  "$( { init; use Bash "$(bash_in "$CMD")"; res false; printf '{"type":"result","permission_denials":"x"}\n'; } | run q11 bash "$CMD")"
+# 以下は敵対的レビュー 3 周目で足したケース（出力の形がずれたら 0 ではなく 2 にする・permission_denials で判定していること）
+ck "Q12 permission_denials が無い" 2 "$( { init; use Bash "$(bash_in "$CMD")"; res true; printf '{"type":"result","subtype":"success"}\n'; } | run q12 bash "$CMD")"
+ck "Q13 permission_denials が null" 2 "$( { init; use Bash "$(bash_in "$CMD")"; res true; printf '{"type":"result","subtype":"success","permission_denials":null}\n'; } | run q13 bash "$CMD")"
+ck "Q14 拒否の要素に tool_use_id が無い" 2 "$( { init; use Bash "$(bash_in "$CMD")"; res true; printf '{"type":"result","subtype":"success","permission_denials":[{"tool_name":"Bash"}]}\n'; } | run q14 bash "$CMD")"
+ck "Q15 result の subtype が success でない" 2 "$( { init; use Bash "$(bash_in "$CMD")"; res true; printf '{"type":"result","subtype":"error_during_execution","permission_denials":[]}\n'; } | run q15 bash "$CMD")"
+ck "Q16 拒否の行があるのに permission_denials に無い" 2 "$( { init; use Bash "$(bash_in "$CMD")"; denied_ev Bash; res true; done_ok; } | run q16 bash "$CMD")"
+ck "Q17 コマンドが失敗しただけ（is_error・拒否なし）" 0 "$( { init; use Bash "$(bash_in "$CMD")"; res true; done_ok; } | run q17 bash "$CMD")"
 
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

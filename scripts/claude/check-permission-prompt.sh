@@ -5,9 +5,11 @@ set -uo pipefail
 #        check-permission-prompt.sh mcp <操作名> ['<入力の JSON>']
 #   - 公式の claude -p を通常モード（--permission-mode manual）・承認は誰も答えない（--permission-prompts none）で起動し、
 #     その操作を 1 回だけ呼ばせる。承認が要る操作は画面を出さずに拒否され、出力の permission_denials に入る
-#   - --settings .claude/settings.json でワークツリーの許可を読ませる（ワークツリーのセッションの許可は
-#     元のリポジトリの設定で判定されるため、ブランチで足した allow を確かめるのに要る）
-#   - 承認なしで通る操作は実際に実行される。実行して困るもの（データの削除・外部への送信など）には使わない
+#   - --setting-sources user と --settings .claude/settings.json で、ユーザー全体の設定とこのブランチの設定ファイルだけを読ませる
+#     （ワークツリーのセッションは元のリポジトリの設定・手元の settings.local.json を読み、元のリポジトリが今いるブランチや
+#     手元で足した許可で判定が変わるため。マージ後の develop と同じ判定にする）
+#   - 承認なしで通る操作は実際に実行される（設定が壊れていれば、承認画面が出るはずの操作も実行される）。
+#     危ない操作は、同じ許可ルール・見張りに当たり、実行されても困らない代わりの操作で確かめる
 #   - 見張り（PreToolUse）が止めた操作は承認画面を出さないので 0 になる。出力の先頭を見て見分ける
 # 終了コード: 0=承認なしで実行された・10=承認画面が出る（自動で拒否された）
 #             2=判定できない（引数の誤り・操作が呼ばれない・コマンドが書き換えられた・モードが違う・claude の失敗）
@@ -41,6 +43,7 @@ else
       --model haiku \
       --permission-mode manual \
       --permission-prompts none \
+      --setting-sources user \
       --settings .claude/settings.json \
       --mcp-config .mcp.json \
       --no-session-persistence \
@@ -65,7 +68,7 @@ sys.excepthook = lambda tp, e, tb: unknown(f"出力を読めません（{tp.__na
 
 log, kind, target = sys.argv[1:4]
 want_name = "Bash" if kind == "bash" else target
-mode, use_id, other, result_seen, denied_ids, output = None, None, [], False, set(), ""
+mode, use_id, other, result, denied_events, output = None, None, [], None, set(), ""
 with open(log, encoding="utf-8") as f:
     for line in f:
         try:
@@ -77,10 +80,10 @@ with open(log, encoding="utf-8") as f:
         t = d.get("type")
         if t == "system" and d.get("subtype") == "init":
             mode = d.get("permissionMode")
+        elif t == "system" and d.get("subtype") == "permission_denied":
+            denied_events.add(d.get("tool_use_id"))
         elif t == "result":
-            result_seen = True
-            denied_ids = {x["tool_use_id"] for x in d.get("permission_denials") or [] if isinstance(x, dict) and "tool_use_id" in x} \
-                if isinstance(d.get("permission_denials") or [], list) else None
+            result = d
         msg = d.get("message")
         for c in (msg.get("content") or [] if isinstance(msg, dict) else []):
             if not isinstance(c, dict):
@@ -97,10 +100,17 @@ with open(log, encoding="utf-8") as f:
 
 if mode != "default":
     unknown(f"モードが default ではありません（{mode}）")
-if not result_seen:
+if result is None:
     unknown("最後の result の行がありません（途中で終わった）")
-if denied_ids is None:
+if result.get("subtype") != "success":
+    unknown(f"result が success ではありません（{result.get('subtype')}）")
+# 出力の形が変わったら「承認なし」と言わずに止める（permission_denials が無い・配列でない・要素に tool_use_id が無い）
+denials = result.get("permission_denials")
+if not isinstance(denials, list) or not all(isinstance(x, dict) and x.get("tool_use_id") for x in denials):
     unknown("result の permission_denials を読めません")
+denied_ids = {x["tool_use_id"] for x in denials}
+if not denied_events <= denied_ids:
+    unknown("拒否の行と result の permission_denials が食い違っています")
 if use_id is None:
     unknown("頼んだ操作が、そのままの形で呼ばれませんでした", other)
 if use_id in denied_ids:

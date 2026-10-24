@@ -126,9 +126,17 @@ MUST_ALLOW += [
 ]
 miss5 = [c for c in MUST_ALLOW if not allowed(c)]
 ck(f"⑤b'' 既定コマンド・npx playwright test・frontend の typecheck/lint は許可に一致する（不一致: {miss5}）", not miss5)
-# frontend の許可は typecheck・lint の完全一致だけ（exec frontend の何でも、は置かない）
-wide_fe = [r for r in allow if "exec" in r and "frontend" in r and r.endswith("*)")]
-ck(f"⑤d frontend の exec に末尾を何でも受ける許可が無い（あった: {wide_fe}）", not wide_fe)
+# exec の許可は frontend の typecheck・lint の完全一致だけ。許可の書き方ではなく、exec での代表のコマンドに
+# 一致する許可が無いかで判定する（`Bash(docker compose exec *)` のような frontend を含まない広い許可も捕まえる・敵対的レビュー 3 周目）
+EXEC_MUST_ASK = [
+    f"{dc} exec{t} {svc} {tail}"
+    for dc in ("docker compose", "docker-compose")
+    for t in ("", " -T")
+    for svc in ("frontend", "backend")
+    for tail in ("npm run build", "npm run lint -- --fix", "npm install left-pad", "sh", "python manage.py migrate")
+]
+wide_fe = [(c, allowed(c)) for c in EXEC_MUST_ASK if allowed(c)]
+ck(f"⑤d exec での build・--fix・install・sh・migrate に一致する許可が無い（一致: {wide_fe[:3]}）", not wide_fe)
 ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無い",
    "Bash(RATELIMIT_ENABLE=false docker compose up *)" not in allow)
 
