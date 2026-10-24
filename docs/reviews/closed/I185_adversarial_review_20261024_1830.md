@@ -3,7 +3,7 @@
 - **実施日**: 2026-10-24
 - **見直した範囲**: `git diff origin/develop...93d5199`
 - **体制**: 固定 3 観点 × 1 体（各 15 分上限・攻め筋 3 本まで）。3 体とも時間内に報告（時間切れなし）。タイマーは 3 体の完了後に止めた
-- **基本レビュー**: `docs/reviews/I185_code_review_20261024_1805.md`（FINAL_VERDICT: OK・RISK: YES）
+- **基本レビュー**: `docs/reviews/closed/I185_code_review_20261024_1805.md`（FINAL_VERDICT: OK・RISK: YES）
 
 ## 観点 1: ロジック回避・実機 repro
 

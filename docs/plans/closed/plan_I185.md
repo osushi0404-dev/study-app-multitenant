@@ -4,8 +4,8 @@
 - **計画書ID**: plan_I185
 - **関連イシュー**: #315
 - **Draft PR**: #320
-- **作成根拠資料**: docs/issues/open/I185.md（起点イシュー）
-- **実装後評価**: docs/reviews/open/I185_review.md
+- **作成根拠資料**: docs/issues/closed/I185.md（起点イシュー）
+- **実装後評価**: docs/reviews/closed/I185_review.md
 - **作成日**: 2026-10-24
 
 ## 1. 背景/目的
@@ -14,7 +14,7 @@
 - **計画は 2 段にする**。実装する改善の中身は点検が終わるまで決まらないため、本計画で承認を得るのは**段 A（点検〜採否の決定）**まで。**段 B（改善の実装）**は、採否が決まった時点で計画変更記録として本計画書に追記し、`/plan-issue-review` を通してから実装する。
 
 ## 2. 受け入れ条件
-イシューの受け入れ条件をそのまま使う（docs/issues/open/I185.md）。段ごとの対応:
+イシューの受け入れ条件をそのまま使う（docs/issues/closed/I185.md）。段ごとの対応:
 - 段 A: 報告書の観点一覧（出典つき）・記録の数字と数え方・漏れと手間の一覧・公式機能との差分・改善案の 3 軸評価と優先度とタイトル案・承認の回数と周回を減らす案（各 1 件以上）・採否の記録・数え方の分け書き
 - 段 B: 「本イシューで実装」とした案（5 件以下・権限設定／フック／スキル／手順書の範囲）の実装・進行中イシューへの適用の明記
 - /close 時: 効果測定イシューの起票と、クローズ 1 週間後のクラウドの 1 回限りの予約
@@ -70,7 +70,7 @@
     - `## 5. 改善案`（3 軸評価・優先度・タイトル案。承認の回数／周回を減らす案に印を付ける）
     - `## 6. 採否`（ユーザーが選んだ「本イシューで実装／別イシュー／見送り」）
     - `## 7. 進行中のイシューへの適用`（工程の順番や必須チェックを変える場合のみ）
-  - `docs/issues/open/I185.md`: 対象イシュー 10 件の表記を調査結果どおりに直す
+  - `docs/issues/closed/I185.md`: 対象イシュー 10 件の表記を調査結果どおりに直す
 - 段 B: 計画変更記録で確定（本計画の承認範囲外）
 
 ## 5. 実装手順（ステップ）
@@ -116,10 +116,10 @@
 
 ## 6. テスト計画
 ### 自動
-- docs/tests/open/I185_auto_test.md の決定論ゲート（報告書の必須見出しの存在）。段 A の完了時に実走する。段 B の TC は計画変更記録で追加する。
+- docs/tests/closed/I185_auto_test.md の決定論ゲート（報告書の必須見出しの存在）。段 A の完了時に実走する。段 B の TC は計画変更記録で追加する。
 - テストレベル: 文書の構造は決定論ゲート（grep）、中身（出典・数字の再現・3 軸評価）は手動テストで Claude が確かめる。
 ### 手動
-- docs/tests/open/I185_manual_test.md（No.1〜No.6）。
+- docs/tests/closed/I185_manual_test.md（No.1〜No.6）。
 
 ## 7. ロールバック
 - 段 A: 報告書の追加だけなので、該当コミットを `git revert` する。
@@ -149,9 +149,9 @@
 - [ ] テスト計画（自動 TC-01〜TC-09・手動 No.1〜No.6）
 
 ## レビュー結果
-- [20261024_1842 判定: ✅ 完了](../../reviews/I185_plan_review_20261024_1842.md)
-- [20261024_1729 判定: ✅ 完了](../../reviews/I185_plan_review_20261024_1729.md)
-- [20261024_1702 判定: ✅ 完了](../../reviews/I185_plan_review_20261024_1702.md)
+- [20261024_1842 判定: ✅ 完了](../../reviews/closed/I185_plan_review_20261024_1842.md)
+- [20261024_1729 判定: ✅ 完了](../../reviews/closed/I185_plan_review_20261024_1729.md)
+- [20261024_1702 判定: ✅ 完了](../../reviews/closed/I185_plan_review_20261024_1702.md)
 
 ## 計画変更記録
 
@@ -184,8 +184,8 @@
 - 改善ごとにコミットを分ける（ロールバックを改善単位でできるように）。
 
 #### テスト（段 B）
-- 自動: TC-10〜TC-15 を `docs/tests/open/I185_auto_test.md` に追加する。
-- 手動: No.7〜No.8 を `docs/tests/open/I185_manual_test.md` に追加する。
+- 自動: TC-10〜TC-15 を `docs/tests/closed/I185_auto_test.md` に追加する。
+- 手動: No.7〜No.8 を `docs/tests/closed/I185_manual_test.md` に追加する。
 
 #### 影響・リスク（段 B）
 - 高リスク判定: `.claude/settings.json` と `scripts/claude/hooks/` を変えるため、ハーネス固有の高リスクファイルに当たる見込み。`/plan-issue-review` の判定が Yes なら、`/security-review I185` を通してから実装する。
@@ -209,7 +209,7 @@
 - 方式・範囲・受け入れ条件は変えていないため、/plan-issue-review のやり直しは不要。
 
 ### 変更 6（2026-10-24・/code-review の敵対的レビュー 1 周目への対応）
-記録: `docs/reviews/I185_adversarial_review_20261024_1830.md`。High 1・Medium 10・Low 4。High と、High に直結する Medium、手間の小さい Medium・Low を直した。
+記録: `docs/reviews/closed/I185_adversarial_review_20261024_1830.md`。High 1・Medium 10・Low 4。High と、High に直結する Medium、手間の小さい Medium・Low を直した。
 - テスト（High 1・Medium 4）: TC-14⑤ に停止の行と条件 ①〜⑤ を足した。TC-14② は frontmatter の中だけを見る。TC-14③ に順番（レビューの実行が承認ポイントの提示より前）を足した。TC-11 に偽の gh を使って GitHub の値が出ることの確認（11f）と、settings.json の `hooks.SessionStart` の構造の確認（11g）を足した。
 - P4 の消費箇所（Medium）: `scripts/migration_verify/lint_skills.py` の必須項目から `allowed-tools` を外した。`docs/runbooks/review-rules.md` のスキル変更チェックリスト 1 と `.claude/review-agents/plan-reviewer.md` の観点を「制限は disallowed-tools・allowed-tools は事前許可」に書き換えた（TC-14⑧）。
 - P4 の security-review（Medium）: この環境は検索専用のツールがなく、ファイル探しを Bash で行うため、`disallowed-tools` から Bash を外し、`Write, NotebookEdit` だけにした。
@@ -221,7 +221,7 @@
 - 指摘への対応を足しただけで、方式・範囲・受け入れ条件は変えていない（P3 の解釈の明記は、承認の判定基準を文書にしたもの）ため、/plan-issue-review のやり直しは不要。High を直したので、直した差分を敵対的レビューの 2 周目で見直す。
 
 ### 変更 7（2026-10-24・敵対的レビュー 2 周で上限到達・未収束 → ユーザーが「方式の見直し」を選択）
-記録: `docs/reviews/I185_adversarial_review_20261024_1905.md`。種類 A（文字列照合のテストが守りの部分の書き換えを見逃す）と種類 B（P3 の自己判定の穴）が 2 周続いたため、細かく塞ぐのをやめ、確実に止まる側に倒した。ユーザーの一任（2026-10-24）。
+記録: `docs/reviews/closed/I185_adversarial_review_20261024_1905.md`。種類 A（文字列照合のテストが守りの部分の書き換えを見逃す）と種類 B（P3 の自己判定の穴）が 2 周続いたため、細かく塞ぐのをやめ、確実に止まる側に倒した。ユーザーの一任（2026-10-24）。
 - **P3 をこのイシューから外した（範囲の変更）**: `fix-loop/SKILL.md`（手順 4・共通ルール (b)・description）と `workflow.md`（fix-loop の説明 3 か所・「fix-loop での承認の扱い」の節）を変更前に戻した。fix-loop は今までどおりユーザーが案を選ぶ。P3 は、実際の差分を機械で確かめるゲートと一緒に設計し直す別イシューにする（報告書 §6）。受け入れ条件「本イシューで実装とした改善案」は P1・P2・P4・P5 になる。
 - **種類 A**: `test_i185_harness_docs.sh` を、守りの部分のブロックを丸ごと固定して照合する形に作り直した（固定した文章は `scripts/claude/tests/fixtures/i185/`。変えるときは `--update` で作り直し、差分をレビューで見る）。固定するのは、plan-issue の計画レビューの節・security-review の frontmatter・workflow.md の流れ 2〜3 と移行表・issue-flow.md の 8.5 とステップ 8.5。あわせて、計画レビューの節より前に「停止」の指示がないこと、lint_skills.py の必須項目を構文として読むこと、fix-loop が承認待ちのままであることを確かめる。2 周目で見逃された書き換え（手順 1 での承認待ちの挿入・書式を変えた必須項目・節の前の停止 など）7 種類で不合格になることを確認した。
 - **種類 C**: `scripts/claude/plan-issue-review.sh` の `detect_plan_verdict` は、VERDICT 行も「## 判定: ✅」も無いとき `UNKNOWN` を返し、スクリプトは「判定できませんでした」と出して終了コード 1 で止まる（今までは OK に倒れていた）。`test_review_verdict.sh` に TC-17b・17c・25b を足し、旧来の寛容な動きを前提にしていた TC-21b・25・26 の期待値を UNKNOWN に変えた。plan-issue の「判定の前の失敗」の条件を「どれか 1 つでも当たれば止める」に書き直した。
@@ -270,4 +270,11 @@
 Medium 2 件の対処は、計画変更記録 4 として計画に反映済み。
 
 ### 残余リスク処遇
-（/retro で決定する）
+/retro（2026-10-24）で決定: Medium 2 件は対処済み（P5 は GitHub のタイトルの自由文を出さない・P3 はこのイシューから外した）。Low 4 件は受け入れ。新規イシューなし（`docs/reviews/closed/I185_review.md`「振り返り」）。
+
+## 完了情報
+- **完了日時**: 2026-10-24
+- **対応者**: Claude Code
+- **レビュー結果**: OK（基本レビュー `I185_code_review_20261024_1846.md`・敵対的レビューは 2 周で上限到達の後、ユーザー一任で方式を見直し `I185_adversarial_review_20261024_1950.md`）
+- **実装した改善**: P1・P2・P4・P5（P3 は別イシューへ）
+- **/close 時の作業**: 効果測定のクラウドの 1 回限りの予約を作成（`trig_017ZUQwuQpo59JzVXsokdh8c`・2026-10-31 10:30Z＝19:30 JST・https://claude.ai/code/routines/trig_017ZUQwuQpo59JzVXsokdh8c）。予約は、タイトルに「I185 の効果測定」を含む open のイシューを探してコメントする（無ければ #315）。完了イシューが 3 件未満・I185 が未マージなら、その旨をコメントして終わる（予約の作り直しはローカルの Claude が行う）。効果測定イシューの起票はユーザーの `/issue-bootstrap` で行う
