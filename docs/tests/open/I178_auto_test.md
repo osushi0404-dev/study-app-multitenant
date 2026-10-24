@@ -1,38 +1,142 @@
 # I178 自動テスト: CODEOWNERS で承認者を管理者に限定し、develop・main で Code Owners の承認を必須にする
 
-対象: `.github/CODEOWNERS`・`docs/runbooks/branch-protection-setup.md`・`.claude/skills/close/SKILL.md`・`scripts/claude/pr-base-sync.sh`（無改変の確認）
+対象（再オープン分・2026-10-24）: `docs/runbooks/branch-protection-setup.md`・`docs/runbooks/issue-flow.md`・`docs/runbooks/workflow.md`・`docs/runbooks/onboarding.md`・`docs/plans/closed/plan_I032.md`（移動）・`scripts/claude/tests/test_i178_branch_protection_doc.sh`（削除）・`.github/CODEOWNERS` ほか（無改変の確認）
 
 **合否判定インターフェース**: すべて exit code に統一する（合格 = exit 0 / 不合格 = 非ゼロ）。出力値の目視比較は合否基準にしない。不在判定は `! grep -q ...` の形で書き、合格時に exit 0 を返す。
 
-**実行環境**: ホスト（ワークツリー `/mnt/c/app/wt-harness`）。gh 2.88.1。GitHub API を使う TC（TC-03・TC-04・TC-17）は bot アカウント（write 権限）で実行できることを確認済み。
+**実行環境**: ホスト（ワークツリー `harness-1`）。GitHub API は使わない。
+
+初回分（2026-10-17〜2026-10-21）の TC・結果は、このファイル後半の「初回分の記録」に残す。初回分の決定論ゲートは、再オープンで書き換える文言と削除する `test_i178_branch_protection_doc.sh` を検証していたため、実走をやめる。
 
 ---
 
 ## 決定論ゲート（自動実走）
 <!--
   /code-review（code-review.sh）がこのブロックを 1 行 1 コマンドで実走し、実 exit code を VERDICT に注入する。
-  コマンド置換を含む検証（TC-02b・TC-03・TC-04・TC-17）は allowlist 外のため /test で実施する。
+  ファイルの不在・無改変の検証（RTC-19・RTC-20・RTC-23）は allowlist 外のため /test で実施する。
 -->
 ```bash
-grep -q "oshui0404" .github/CODEOWNERS
+! grep -q "自分で承認できず" docs/runbooks/branch-protection-setup.md
+! grep -q "ユーザーが作った PR はマージできない" docs/runbooks/branch-protection-setup.md
+! grep -q "一時的にオフ" docs/runbooks/branch-protection-setup.md
+! grep -q "I178 の /retro で確認する" docs/runbooks/branch-protection-setup.md
+! grep -q "のままであることを確認する" docs/runbooks/branch-protection-setup.md
+grep -q "作成者が .oshui0404. 本人の PR では Code Owners の要件がかからず" docs/runbooks/branch-protection-setup.md
+grep -q "bot や外部の人が作った PR を .oshui0404. が承認しない限りマージできない" docs/runbooks/branch-protection-setup.md
+grep -qxF "### 自分が作った PR をマージしたい" docs/runbooks/branch-protection-setup.md
+grep -qxF "### 確認 5: （I178 の再オープンで廃止）" docs/runbooks/branch-protection-setup.md
+grep -q "bot に承認を頼む" docs/runbooks/branch-protection-setup.md
+grep -q "効き目は確認 4・6" docs/runbooks/branch-protection-setup.md
+! grep -q "^git push origin develop" docs/runbooks/issue-flow.md
+! grep -q "^git merge" docs/runbooks/issue-flow.md
+! grep -qx "git checkout develop" docs/runbooks/issue-flow.md
+grep -q "oshui0404 が GitHub の PR 画面で承認・マージする" docs/runbooks/issue-flow.md
+! grep -q "^git push origin main" docs/runbooks/workflow.md
+! grep -q "^git push origin develop" docs/runbooks/workflow.md
+! grep -q "^git merge" docs/runbooks/workflow.md
+! grep -q "^git checkout main" docs/runbooks/workflow.md
+grep -q "gh pr create --base main --head develop" docs/runbooks/workflow.md
+grep -q "gh pr create --base develop --head hotfix/" docs/runbooks/workflow.md
+grep -q "main がまだ初期コミットだけの間は" docs/runbooks/workflow.md
+grep -q "develop → main の PR を作り" docs/runbooks/onboarding.md
+grep -q "I032" docs/plans/closed/plan_I032.md
+! grep -rq "test_i178_branch_protection_doc" scripts .claude .github docs/runbooks
 grep -qxF '* @oshui0404' .github/CODEOWNERS
-grep -q "Require review from Code Owners" docs/runbooks/branch-protection-setup.md
-grep -q "Restrict who can push to matching branches" docs/runbooks/branch-protection-setup.md
-! grep -q "自己 approve" docs/runbooks/branch-protection-setup.md
-! grep -q "セルフ approve" docs/runbooks/branch-protection-setup.md
-! grep -q "承認不要" docs/runbooks/branch-protection-setup.md
-grep -q "承認者の限定（I178）" docs/runbooks/branch-protection-setup.md
-grep -q "main には CODEOWNERS が無い" docs/runbooks/branch-protection-setup.md
-grep -q "PR は必ず bot（Claude）が作成する" docs/runbooks/branch-protection-setup.md
-grep -q "承認が取り消される" docs/runbooks/branch-protection-setup.md
-grep -q "Code Owners（.oshui0404.）の承認が必須" .claude/skills/close/SKILL.md
-grep -q "再承認を依頼する" .claude/skills/close/SKILL.md
-grep -q "CLEAN は要求しない＝Approve 待ちの BLOCKED は正常" scripts/claude/pr-base-sync.sh
-bash scripts/claude/tests/test_pr_base_sync.sh
-! grep -q "Required approvals . 0 ." docs/runbooks/branch-protection-setup.md
-! grep -qF "Require approvals（サブオプション）" docs/runbooks/branch-protection-setup.md
-bash scripts/claude/tests/test_i178_branch_protection_doc.sh
 ```
+
+---
+
+## 計画時ベースライン（Red・失敗注入・再オープン分）
+
+2026-10-24 /plan-issue で実測（書き換え前の状態）。ゲートは code-review.sh と同じ抽出規則・`! grep` の扱い（内側の exit 1 だけを合格）で実行した。
+
+| TC | 実測 exit | 判定 |
+|---|---|---|
+| ゲート 1〜23 行目（RTC-01〜RTC-17） | すべて 1 | ✅ Red（旧記述が残り、新記述が無い） |
+| ゲート 24 行目（RTC-18） | 0 | 既存状態（`docs/plans/closed/plan_I032.md` は open 側と同じ内容で既にある＝重複）。**注入版**（存在しないファイルを指定）= **2** ✅ |
+| ゲート 25 行目（RTC-21） | 0 | 既存状態（参照 0 件）。**注入版**（`test_i178_branch_protection_doc.sh` を呼ぶ行を書いた一時ディレクトリを検索）= **1** ✅ |
+| ゲート 26 行目（RTC-22） | 0 | 既存状態。**注入版**（所有者を `@osushi0404-bot` に差し替えた CODEOWNERS）= **1** ✅ |
+| RTC-19 | 1 | ✅ Red（open に重複が残っている） |
+| RTC-20 | 1 | ✅ Red（テストがまだある） |
+| RTC-23 | 0 | 既存状態。**注入版**（比較先を CODEOWNERS 追加前の `6c88d9f^1` にした）= **1** ✅ |
+
+---
+
+## RTC-01〜RTC-05: runbook から No.7 と矛盾する記述が消えている（AC-R1）
+- RTC-01: 「自分で承認できず」が無い（§1.5 運用の旧文） / ゲート 1 行目
+- RTC-02: 「ユーザーが作った PR はマージできない」が無い（§6 の旧文） / ゲート 2 行目
+- RTC-03: 「一時的にオフ」が無い（§6 の bypass を外す旧手順） / ゲート 3 行目
+- RTC-04: 「I178 の /retro で確認する」が無い（§1.5 役割 3 の旧注記） / ゲート 4 行目
+- RTC-05: 「のままであることを確認する」が無い（§4 確認 5 の旧期待結果） / ゲート 5 行目
+- 期待: すべて exit 0
+
+## RTC-06〜RTC-08: runbook に No.7 の事実と新しい手順がある（AC-R1）
+- RTC-06: §1.5 運用に「作成者が `oshui0404` 本人の PR では Code Owners の要件がかからず」 / ゲート 6 行目
+- RTC-07: §概要に「bot や外部の人が作った PR を `oshui0404` が承認しない限りマージできない」 / ゲート 7 行目
+- RTC-08a: §6 の見出し「### 自分が作った PR をマージしたい」（行の完全一致） / ゲート 8 行目
+- RTC-08b: §4 の見出し「### 確認 5: （I178 の再オープンで廃止）」（行の完全一致） / ゲート 9 行目
+- RTC-08c: §6 に「bot に承認を頼む」手順 / ゲート 10 行目
+- RTC-08d: §4 確認 1・2 の段落が「効き目は確認 4・6」 / ゲート 11 行目
+- 期待: すべて exit 0（バッククォートはゲート行に書けないため、任意の 1 文字 `.` で表す）
+
+## RTC-09〜RTC-11: issue-flow.md ステップ 25 が PR 経由になっている（AC-R2・AC-R3）
+- RTC-09: 行頭の `git push origin develop` が無い / ゲート 12 行目
+- RTC-10a: 行頭の `git merge` が無い / ゲート 13 行目
+- RTC-10b: `git checkout develop` だけの行が無い / ゲート 14 行目（L221 の `git checkout --no-track -b feature/…` は行の完全一致なので当たらない）
+- RTC-11: 「oshui0404 が GitHub の PR 画面で承認・マージする」がある / ゲート 15 行目
+- 期待: すべて exit 0
+
+## RTC-12〜RTC-16: workflow.md のリリース・hotfix が PR 経由になっている（AC-R2・AC-R3）
+- RTC-12: 行頭の `git push origin main` が無い / ゲート 16 行目
+- RTC-13: 行頭の `git push origin develop` が無い / ゲート 17 行目
+- RTC-14a: 行頭の `git merge` が無い / ゲート 18 行目
+- RTC-14b: 行頭の `git checkout main` が無い / ゲート 19 行目（hotfix は `git checkout --no-track -b hotfix/… origin/main` にする）
+- RTC-15: リリースの `gh pr create --base main --head develop` がある / ゲート 20 行目
+- RTC-16a: hotfix の develop への反映 `gh pr create --base develop --head hotfix/` がある / ゲート 21 行目
+- RTC-16b: main への hotfix の制約「main がまだ初期コミットだけの間は」がある / ゲート 22 行目
+- 期待: すべて exit 0。タグの push（`git push origin vX.X.X`）は行頭が `git push origin v` なので RTC-12・RTC-13 に当たらない
+
+## RTC-17: onboarding.md の main へのマージが PR 経由（AC-R3）
+- ゲート 23 行目 / 期待: exit 0
+
+## RTC-18・RTC-19: plan_I032.md が closed にある（AC-R4）
+- RTC-18: `docs/plans/closed/plan_I032.md` がある（ファイルが無いと grep は exit 2。closed 側は計画時点で既にあり、open 側は同じ内容の重複。誤って closed 側を消す事故を防ぐ） / ゲート 24 行目
+- RTC-19（/test で実行）: open に残っていない
+  ```bash
+  [ ! -e docs/plans/open/plan_I032.md ]
+  ```
+- 期待: どちらも exit 0
+
+## RTC-20・RTC-21: test_i178_branch_protection_doc.sh が無く、参照もされていない（AC-R5）
+- RTC-20（/test で実行）:
+  ```bash
+  [ ! -e scripts/claude/tests/test_i178_branch_protection_doc.sh ]
+  ```
+- RTC-21: `scripts`・`.claude`・`.github`・`docs/runbooks` に名前の参照が無い / ゲート 25 行目（docs/tests・docs/plans・docs/reviews の過去の記録は対象外）
+- 期待: どちらも exit 0
+
+## RTC-22・RTC-23: 変えないものが変わっていない（AC-R6）
+- RTC-22: CODEOWNERS に `* @oshui0404` の行がある / ゲート 26 行目
+- RTC-23（/test で実行）: CODEOWNERS・pr-base-sync・close スキル・review-rules が develop から無改変
+  ```bash
+  git diff --quiet origin/develop -- .github/CODEOWNERS scripts/claude/pr-base-sync.sh .claude/skills/close/SKILL.md docs/runbooks/review-rules.md
+  ```
+- 期待: どちらも exit 0。GitHub の設定は bot から読めないため、変えていないことは計画書 R5-7 と手順に設定変更が無いことで担保する
+
+## 実行結果（再オープン分）
+
+| TC | 実行日 | 結果 | 備考 |
+|---|---|---|---|
+
+---
+
+# 初回分の記録（2026-10-17〜2026-10-21）
+
+対象: `.github/CODEOWNERS`・`docs/runbooks/branch-protection-setup.md`・`.claude/skills/close/SKILL.md`・`scripts/claude/pr-base-sync.sh`（無改変の確認）
+
+**実行環境**: ホスト（ワークツリー `/mnt/c/app/wt-harness`）。gh 2.88.1。GitHub API を使う TC（TC-03・TC-04・TC-17）は bot アカウント（write 権限）で実行できることを確認済み。
+
+**初回分の決定論ゲート（18 行・実走をやめた）**: TC-01〜TC-16・TC-18・TC-19 を 1 行ずつ並べたもの。行の一覧は、初回の /test 時点（commit `1d74938`）のこのファイルを参照（`git show 1d74938:docs/tests/open/I178_auto_test.md`）。
 
 **ゲート行の書き方（code-review 20261017_1936 対応）**: code-review.sh は `|`・バッククォート・`$(`・`;`・`&`・`>` を含む行と、`grep` / `! grep` / `bash scripts/claude/tests/*.sh` 等の許可リスト以外のコマンド（`test`・`git diff` 等）を実走せず fail-closed（BLOCKER）にする。そのため、TC-01 は `test -f` の代わりに `grep -q`（ファイルが無いと exit 2）、TC-07 は `|` を使わず 2 行に分割、TC-13・TC-18a は該当文字（バッククォート・`|`）を任意の 1 文字 `.` で表す。TC-15 は完全な無改変確認（`git diff --quiet`）を /test で行い、ゲートでは前提の文言が残っていることを `grep` で確認する。書き換えた 6 行は、変更前のファイル（`origin/develop` の版・前提文言を壊した pr-base-sync・CODEOWNERS 不在）で非ゼロになることを確認済み（2026-10-17）。
 
