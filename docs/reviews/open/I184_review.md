@@ -72,5 +72,13 @@ docs/reviews/I177_issue_review_20261017_1232.md
 - 使用箇所の確認（承認時にユーザーの依頼で実施）: 4 つの volume を使うコンテナは停止中を含めて 0 件（`docker ps -a --filter volume=…`）。稼働中は primary（`study-app-multitenant`）のコンテナだけで別の volume を使う。tracked ファイルでの名前の出現は計画書の説明とガードのテスト文字列（`scripts/claude/tests/test_pretooluse_worktree_guard.sh:121`）だけ。primary の `.env`・`e2e/.env.e2e` は秘密情報を含むため読めず未確認（wt-harness のポートは wt-harness の `.env` にだけ書かれる）
 - `danger-approved` ラベルを新規作成し PR #313 に付与（TC-9 exit 0）
 
-## 手順の不足（ステップ 6 で記入）
-- 未実施
+## 撤去（ステップ 5・2026-10-24）
+- ユーザーが wt-harness の untracked 39 件を削除（`git status --porcelain` が空）→ primary で `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`（承認画面でユーザーが許可）→ volume 4 つ Removed・「撤去完了」→ `git branch -d feature/I181-slim-review-process`（26d06ec・マージ済み）
+
+## 手順の不足（ステップ 6・2026-10-24）
+- §11 手順 4 の「作った直後は終了で消える」注意の欠け（計画時に発見・4-10 で追記済み）
+- それ以外は無し（§2 確認 1〜2・§11 手順 1〜3・§4 の volume だけ残っている場合の停止と `DANGER_OK=1` の再実行は、書かれたとおりに進んだ）
+
+## 実装（2026-10-24・/implement）
+- ステップ 1〜6 を計画どおり実施。計画外の変更なし。自動テストの結果は `docs/tests/open/I184_auto_test.md`「実装時」
+- /retro の材料: wt-harness 側の 39 件の削除をユーザーに依頼したが、ユーザーから「あなた自身で実施できなかったか」と指摘。§11 手順 3・§9 の「別のワークツリーの中身を消さない」に従ったためで、技術的には primary から消せた（I179 で削除のガードは廃止済み）。コピーの一致（TC-4a）を確かめた後の削除なので、実害の無い手間を人に回していた可能性がある
