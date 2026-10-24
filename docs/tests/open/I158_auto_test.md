@@ -21,6 +21,11 @@ def setup(db):
         name="組織I158", slug="org-i158", type="school", category=cat, is_active=True)
     subject_a = Subject.objects.create(name="科目I158A", slug="subj-i158-a", organization=org)
     subject_b = Subject.objects.create(name="科目I158B", slug="subj-i158-b", organization=org)
+    # total_problems の検証用: subject_a に未削除 2 件＋削除済み 1 件、subject_b に 1 件
+    Problem.objects.create(subject=subject_a, organization=org, question="A1", ...)
+    Problem.objects.create(subject=subject_a, organization=org, question="A2", ...)
+    Problem.objects.create(subject=subject_a, organization=org, question="A3", is_deleted=True, ...)
+    Problem.objects.create(subject=subject_b, organization=org, question="B1", ...)
     user = User.objects.create_user(...)   # 組織 org 所属
     other = User.objects.create_user(...)  # 同じ組織の別ユーザー
     return {...}
@@ -45,7 +50,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 
 | TC | 内容 | 手順 | 期待値 | 実施者 |
 |----|------|------|--------|--------|
-| TC-01 | キー無しの新規開始 | `user` で `POST QUIZ_URL`・`{"subject": subject_a.id}`・`format='json'` | `status_code == status.HTTP_201_CREATED`。`QuizSession.objects.filter(user=user, is_active=True).count() == 1`。作成行の `client_request_id is None`・`total_problems` が subject_a の未削除問題数 | Claude |
+| TC-01 | キー無しの新規開始 | `user` で `POST QUIZ_URL`・`{"subject": subject_a.id}`・`format='json'` | `status_code == status.HTTP_201_CREATED`。`QuizSession.objects.filter(user=user, is_active=True).count() == 1`。作成行の `client_request_id is None`・`response.data["total_problems"] == 2`（subject_a の未削除問題数・削除済みと subject_b の問題を数えない）・`"client_request_id" not in response.data` | Claude |
 | TC-02 | キー無しの開始は後勝ち（既存の有効セッションを終了） | 事前に `user` の有効セッション S0 を作成 → TC-01 と同じリクエスト | 201。S0 を再取得して `is_active is False` かつ `ended_at is not None`。有効セッションは新規の 1 件のみ（`count() == 1`・id が S0 と異なる） | Claude |
 | TC-03 | 同じキーの再送は既存を返す（冪等） | ヘッダ `HTTP_IDEMPOTENCY_KEY=KEY` 付きで同じ POST を 2 回 | 1 回目 201・2 回目 `status.HTTP_200_OK`。2 回の `response.data["id"]` が同じ。`QuizSession.objects.filter(user=user).count() == 1` | Claude |
 | TC-04 | 異なるキーは後勝ち | `KEY` で POST（201）→ 別の UUID で POST | 2 回目も 201・id が異なる。1 回目のセッションは `is_active is False`。有効セッションは 1 件 | Claude |

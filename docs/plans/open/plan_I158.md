@@ -298,7 +298,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
             )
 
         return Response(
-            QuizSessionSerializer(session).data,
+            self.get_serializer(session).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 ```
@@ -316,7 +316,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
 `QuizSessionSerializer` の応答フィールドは変更なし（`client_request_id` は応答に含めない）。
 
 ### 修正項目 5: シリアライザ
-**修正方針**: `is_active` をクライアントから書き換えられないようにする（405 化と二重の守り）。
+**修正方針**: `is_active` をクライアントから書き換えられないようにする（405 化と二重の守り）。`client_request_id` は応答に含めない。`QuizSessionSerializer.Meta.fields` は明示リスト（`serializers.py:315-319`・`'__all__'` ではない）のため、`fields` に足さないことで応答・入力のどちらにも出ない（`QuizSessionDetailSerializer` も同じ `fields` を継承）。TC-01 で応答に `client_request_id` が無いことを固定する。
 ```python
         read_only_fields = [
             'total_problems', 'completed_problems', 'correct_answers',
@@ -494,3 +494,7 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 - [ ] UI: 見た目・配置・ラベルの変更なし。エラー時は現行どおり「クイズセッションの作成に失敗しました」＋ダッシュボードへ戻る — でよいか
 - [ ] 手動テスト: すべて Claude 実施（dev DB の件数確認・migrate・E2E のローカル実行）・Human の目視なし — でよいか
 - [ ] 高リスク判定 Yes（plan-review の後に security-review） — でよいか
+
+## レビュー結果
+- [20261024_1636 判定: ✅ 完了](../../reviews/I158_plan_review_20261024_1636.md)
+- 指摘への対応（2026-10-24）: ① Warning（`client_request_id` の応答除外）→ `fields` が明示リストのため足さないことで除外される旨を修正項目 5 に追記し、TC-01 に「応答に `client_request_id` が無い」を追加。② Warning（TC-01 の問題数が 0 件一致になり得る）→ fixture で subject_a に未削除 2 件＋削除済み 1 件、subject_b に 1 件の問題を作り、TC-01 の期待値を `total_problems == 2` に具体化。③ Info（context なしのシリアライズ）→ `self.get_serializer(session).data` に変更（create アクションでは `QuizSessionSerializer` が返るため応答の形は同じ）。
