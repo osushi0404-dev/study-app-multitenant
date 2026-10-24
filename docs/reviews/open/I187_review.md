@@ -9,7 +9,12 @@
 - レビューの観点・実施者の基準の更新、フロント開発設定の点検と所要時間の計測
 
 ## 変更点
-- （実装後に記入）
+- ステップ 1: `.mcp.json`（playwright・0.0.83）・`.claude/settings.json`（MCP 操作 20 個・`docker compose port`・`RATELIMIT_ENABLE=false docker compose up` の許可、`mcp__playwright__.*` の見張り登録）・`.gitignore`（`.evidence/`）・`pretooluse_guard.py`（MCP の保存の書き先を `.evidence/I###/` に限る）・テスト 2 本（`test_i187_frontend_verify_config.sh`・`test_i187_mcp_filename_guard.sh`）
+- ステップ 2: `docs/runbooks/frontend-verify.md`（新規）・`CLAUDE.md`・`workflow.md` の参照・テンプレートの「## 画面確認」・実施者の基準 3 か所・`check-frontend-evidence.sh`（新規）とテスト・`/test` の SKILL.md
+- ステップ 3: `frontend/package.json`（`typecheck`・`lint`）・`ci.yml`・`.pre-commit-config.yaml`
+- ステップ 4: `e2e/playwright.config.ts`（失敗時の画面キャプチャ・手元だけ trace・安全なコンテキスト）・`e2e.yml`（画面キャプチャだけ 14 日）
+- ステップ 5: `pretooluse_guard.py`（e2e サービスの `npx playwright test`）・`test_pretooluse_container_guard.sh`（P100〜P105・C60〜C68・G27〜G29）
+- ステップ 6: `.claude/review-agents/code-reviewer.md`（画面の動きの回帰テストの観点）
 
 ## 影響範囲
 - Backend/DB: なし

@@ -10,11 +10,11 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 |---|---|---|
 | TC-01 | `.mcp.json` が JSON として正しい | 合格=0 |
 | TC-02 | `.claude/settings.json` が JSON として正しい | 合格=0 |
-| TC-03 | `test_i187_frontend_verify_config.sh`（新規）: ①`.mcp.json` の `playwright` の `command` が `npx`、`args` が計画 5-2-1 の 12 語と完全一致（順番を含む） ②`github` の設定が変わっていない（`@modelcontextprotocol/server-github@2025.4.8`） ③`.claude/settings.json` の allow に計画 5-2-1 の 20 個（`mcp__playwright__<名前>`）がすべてある ④allow に `browser_run_code_unsafe`・`browser_evaluate`・`browser_file_upload`・`browser_drop`・`browser_network_request` が無い（`mcp__playwright` だけ・`mcp__playwright__*` などサーバー全体を許す書き方も無い） ⑤allow に `Bash(docker compose port *)`・`Bash(RATELIMIT_ENABLE=false docker compose up *)` がある ⑥deny の `Read(**/.env.e2e)` が残っている ⑦（/security-review で追加）`hooks.PreToolUse` に matcher `mcp__playwright__.*` で `pretooluse_guard.py` が登録されている | 合格=0 |
+| TC-03 | `test_i187_frontend_verify_config.sh`（新規）: ①`.mcp.json` の `playwright` の `command` が `npx`、`args` が計画 5-2-1 の 12 語と完全一致（順番を含む） ②`github` の設定が変わっていない（`@modelcontextprotocol/server-github@2025.4.8`） ③`.claude/settings.json` の allow に計画 5-2-1 の 20 個（`mcp__playwright__<名前>`）がすべてある ④allow に `browser_run_code_unsafe`・`browser_evaluate`・`browser_file_upload`・`browser_drop`・`browser_network_request` が無い（`mcp__playwright` だけ・`mcp__playwright__*` などサーバー全体を許す書き方も無い） ⑤allow に `Bash(docker compose port *)` がある（⑤a）。e2e サービスの実行 `Bash(docker compose --profile e2e run --rm e2e*)`・`Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e*)` がある（⑤b）。効かない `Bash(RATELIMIT_ENABLE=false docker compose up *)` が無い（⑤c・計画変更記録 2） ⑥deny の `Read(**/.env.e2e)` が残っている ⑦（/security-review で追加）`hooks.PreToolUse` に matcher `mcp__playwright__.*` で `pretooluse_guard.py` が登録されている | 合格=0 |
 | TC-04 | `.gitignore` に `.evidence/` だけの行がある（行全体で一致） | 合格=0 |
 | TC-05 | `test_pretooluse_container_guard.sh`: 既存のケースすべてに加え、I187 のケース（下の表）が期待どおり | 合格=0 |
 | TC-06 | `pretooluse_guard.py` が Python として正しい | 合格=0 |
-| TC-07 | `test_check_frontend_evidence.sh`（新規）: 下の表の 12 ケースが期待どおり | 合格=0 |
+| TC-07 | `test_check_frontend_evidence.sh`（新規）: 下の表の 16 ケース（E1〜E15・E12 は 2 つ）が期待どおり | 合格=0 |
 | TC-08 | `check-frontend-evidence.sh` が bash として正しい | 合格=0 |
 | TC-09 | runbook に URL の求め方 `docker compose port frontend 3000` がある | 合格=0 |
 | TC-10 | runbook に画像の保存先 `.evidence/I###/` がある | 合格=0 |
@@ -51,6 +51,7 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 | P103 | `$E npx playwright test tests/a.spec.ts tests/b.spec.ts --workers=1 -x --max-failures=1 --timeout=60000` | 0 |
 | P104 | `$E npx playwright test --list` | 0 |
 | P105 | `$E npx playwright test tests/auth.spec.ts --retries=0 2>&1 \| tail -30` | 0（ホスト側のパイプ・リダイレクトはコンテナ内の判定に入らない。計画 5-2-6・既存の P37・P40 と同じ） |
+| P106 | （実装時に追加・計画変更記録 2）`RATELIMIT_ENABLE=false $E npx playwright test tests/auth.spec.ts --retries=0` | 0 |
 | C60 | `$E npx playwright test --config other.config.ts` | ASK |
 | C61 | `$E npx playwright test --update-snapshots` | ASK |
 | C62 | `$E npx playwright test --reporter=./my-reporter.js` | ASK |
@@ -58,7 +59,7 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 | C64 | `$E npm install left-pad` | ASK |
 | C65 | `docker compose exec frontend npx playwright test` | ASK（e2e 以外のサービス） |
 | C66 | `docker compose run --rm backend npx playwright test` | ASK（e2e 以外のサービス） |
-| C67 | `$E sh -c "npx playwright test; rm -r /e2e/tests"` | ASK（中のシェルに一覧外の操作） |
+| C67 | `$E sh -c "npx playwright test; npm install left-pad"` | ASK（中のシェルに一覧外の操作。実装時に `rm -r` から変更: `rm -r` は危険操作として先に停止〔exit 2〕になり、確かめたい「一覧外は通さない」の判定に届かないため） |
 | C68 | `$E npx playwright test --output /tmp/x` | ASK |
 
 ### TC-07: 判定スクリプトのケース（`test_check_frontend_evidence.sh`）
@@ -77,7 +78,10 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 | E9 | 変更あり・合格の行と不合格の行が 1 行ずつ | exit 1 |
 | E10 | 変更あり・画像 2 つ（`a.png, b.png`）がどちらも実在 | exit 0 |
 | E11 | 変更あり・テスト記録が `docs/tests/closed/` にだけある（画像あり） | exit 0 |
-| E12 | 引数なし／`I99` のような形 | exit 2 |
+| E12 | 引数なし（E12a）／`I99` のような形（E12b） | exit 2 |
+| E13 | （実装時に追加）変更あり・テスト記録が無い | exit 1 |
+| E14 | （実装時に追加）基準のブランチが無い（`git diff` が失敗） | exit 2 |
+| E15 | （実装時に追加）`## 画面確認` の表は空で、後ろの別の節の表に合格の行がある | exit 1（別の節は数えない） |
 
 ### TC-25: MCP の書き先のケース（`test_i187_mcp_filename_guard.sh`）
 見張りに `{"tool_name": <操作>, "tool_input": {...}}` を渡し、終了コードを見る（2 = 止める・0 = 通す）。

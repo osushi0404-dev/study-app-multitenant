@@ -81,7 +81,7 @@
 | # | ファイル | 変更内容 | 修正方針（何を達成するか） |
 |---|---|---|---|
 | 1 | `.mcp.json` | `playwright` サーバーを追加（下のコード例） | Claude が 1 手ずつ画面を見て操作できるようにする。開ける先を手元だけにし、状態を残さず、パスワードを Claude に見せない |
-| 2 | `.claude/settings.json` | allow に Playwright MCP の操作 20 個・`Bash(docker compose port *)`・`Bash(RATELIMIT_ENABLE=false docker compose up *)` を追加 | 画面確認を承認なしで回せるようにする。任意コードを動かす 2 つ・ファイルを渡す 2 つ・通信の中身を返す 1 つは allow に入れず、使うたびに確認が出るままにする（最小権限） |
+| 2 | `.claude/settings.json` | allow に Playwright MCP の操作 20 個・`Bash(docker compose port *)`・`Bash(docker compose --profile e2e run --rm e2e*)`・`Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e*)` を追加（計画変更記録 2） | 画面確認を承認なしで回せるようにする。任意コードを動かす 2 つ・ファイルを渡す 2 つ・通信の中身を返す 1 つは allow に入れず、使うたびに確認が出るままにする（最小権限） |
 | 3 | `.gitignore` | `.evidence/` を追加 | 画像をコミットしない |
 | 4 | `docs/runbooks/frontend-verify.md`（新規） | 画面確認の手順・エビデンスの残し方・消えるタイミング・落とし穴 4 件の避け方・公式と自作の分担 | 毎回その場で組み立てている手順を 1 か所に決める |
 | 5 | `CLAUDE.md`・`docs/runbooks/workflow.md` | 参照先の一覧に `frontend-verify.md` を 1 行足す | 公式 `/run` を含め、どのセッションからも手順にたどり着けるようにする（新しいスキルは作らない） |
@@ -94,7 +94,7 @@
 | 12 | `frontend/package.json` | scripts に `"typecheck": "tsc --noEmit"`・`"lint": "eslint src/ --ext .ts,.tsx --max-warnings 0"` | 手元と CI で同じコマンドを使う |
 | 13 | `.github/workflows/ci.yml` | `npx tsc --noEmit` → `npm run typecheck`、`npx eslint ... -f github-actions` → `npm run lint -- -f github-actions` | CI も同じコマンドを呼ぶ |
 | 14 | `.pre-commit-config.yaml` | ESLint フックの entry を `bash -c 'cd frontend && npm run lint'` にする | lint の定義を `package.json` の 1 か所にまとめる（今は CI と pre-commit に同じ文字列が 2 つあり、片方だけ変わるとずれる） |
-| 15 | `e2e/playwright.config.ts` | `screenshot: 'only-on-failure'`、`trace` は手元 `retain-on-failure`・CI（`process.env.CI`）では `'off'`、Chromium の起動オプションに `--unsafely-treat-insecure-origin-as-secure=<baseURL の origin>` | 失敗時に原因を追える記録を手元に残し、CI では trace を作らない。e2e コンテナでも CI と同じく安全なコンテキストで動かす |
+| 15 | `e2e/playwright.config.ts` | `screenshot: 'only-on-failure'`、`trace` は手元 `retain-on-failure`・CI（`process.env.CI`）では `'off'`、Chromium の起動オプションに `--unsafely-treat-insecure-origin-as-secure=<baseURL の origin>`、`channel: 'chromium'`（計画変更記録 2） | 失敗時に原因を追える記録を手元に残し、CI では trace を作らない。e2e コンテナでも CI と同じく安全なコンテキストで動かす |
 | 16 | `.github/workflows/e2e.yml` | 失敗時のアップロードを `e2e/test-results/**/*.png`（画面キャプチャだけ）・`retention-days: 14`・`if-no-files-found: ignore` に置き換える（今の `playwright-report` のアップロードは削除） | CI では画面キャプチャだけを 14 日残し、trace やレポートを公開しない |
 | 17 | `scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`scripts/claude/tests/test_i187_mcp_filename_guard.sh`（新規） | （/security-review で追加・計画変更記録 1）見張りに `mcp__playwright__` の分岐を足す。操作の入力に `filename` があるときは `^\.evidence/I[0-9]{3}/[A-Za-z0-9._-]+$` に一致し、`..` を含まない場合だけ通し、それ以外は止める（exit 2）。`filename` が無ければ素通し。settings の PreToolUse に matcher `mcp__playwright__.*` で見張りを登録する | 許可した 5 つの操作（`browser_take_screenshot`・`browser_snapshot`・`browser_console_messages`・`browser_network_requests`・`browser_find`）は `filename` でワークスペース内の任意の場所に書ける。Edit/Write の deny（`Edit(**/.env)` など）も見張りも通らないため、`backend/.env` などの git に無い秘密情報を上書きで失いうる。書き先を `.evidence/I###/` に固定して塞ぐ |
 
@@ -159,6 +159,8 @@
     screenshot: 'only-on-failure',
     trace: isCI ? 'off' : 'retain-on-failure',
     // e2e コンテナは http://frontend:3000 を開くため、CI（localhost）と同じく安全なコンテキストとして扱う
+    // この起動オプションは画面なし専用版（headless shell）では効かないため、通常版の chromium を使う（計画変更記録 2）
+    channel: 'chromium',
     launchOptions: { args: [`--unsafely-treat-insecure-origin-as-secure=${new URL(baseURL).origin}`] },
   },
   ```
@@ -176,7 +178,7 @@
   | 落とし穴 | 避け方 |
   |---|---|
   | ホストで `npx playwright test` を動かすと chromium が起動しない | 原因は OS ライブラリ不足。初回準備で `install-deps` を入れれば起動する。ただし E2E はこれまでどおり e2e コンテナで流す（`docker compose --profile e2e run --rm e2e`・1 ファイルなら `... e2e npx playwright test tests/<file>.spec.ts --retries=0`）。ホストの e2e には node_modules が無く、CI と揃える意味もないため |
-  | 続けて流すとログインのレート制限（403）に当たる | E2E を続けて流すときは `RATELIMIT_ENABLE=false docker compose up -d backend` で backend を起動し直す（CI と同じ方法・本番の設定は変えない）。元に戻すときは `docker compose up -d backend`。レート制限そのものを確かめる画面確認は、元に戻してから行う |
+  | 続けて流すとログインのレート制限（403）に当たる | E2E を続けて流すときは実行コマンド自体に前置する `RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e`（CI と同じ方法・本番の設定は変えない。先に `docker compose up` で切る方法は効かない＝計画変更記録 2）。元に戻すときは `docker compose up -d backend`。レート制限そのものを確かめる画面確認は、元に戻してから行う |
   | e2e コンテナでは安全なコンテキストにならない | `playwright.config.ts` の起動オプションで baseURL の origin を安全なコンテキストとして扱う（CI と同じ動きになる）。Playwright MCP は `localhost` で開くのでもともと問題ない |
   | 型エラーのオーバーレイが画面を覆う | 画面確認・E2E の前に `docker compose exec frontend npm run typecheck` を通す。オーバーレイが出たら、その画面キャプチャを撮って原因（型エラー・実行時エラー）を直す |
 
@@ -313,14 +315,39 @@
 - [ ] 実施者の基準を「画面の表示・遷移・コンソールは Claude、観測できないものだけ Human」に改める（plan-issue・plan-writing-rules・テンプレートの 3 か所）
 - [ ] lint の定義を `package.json` に 1 本化し、CI と pre-commit がそれを呼ぶ
 - [ ] CI では trace を作らず、失敗時の画面キャプチャだけを 14 日残す（今の playwright-report のアップロードは削除）
-- [ ] e2e コンテナを安全なコンテキストとして扱う起動オプションを入れる・E2E を続けて流すときは `RATELIMIT_ENABLE=false` で backend を起動
+- [ ] e2e コンテナを安全なコンテキストとして扱う起動オプションを入れる（通常版の chromium）・E2E を続けて流すときは実行コマンドに `RATELIMIT_ENABLE=false` を前置する
 - [ ] 見張りは e2e サービスの `npx playwright test`（列挙した選択肢だけ）を通す
 - [ ] （/security-review で追加）MCP の操作がファイルを書けるのは `.evidence/I###/` の中だけ（見張りで止める）
 - [ ] レビューの観点は `code-reviewer.md` に足す（イシューの表では code-review の SKILL.md だが、観点の置き場所が code-reviewer.md のため）
 - [ ] `.github/workflows/`・`.claude/settings.json`・見張りを変えるので高リスク判定の対象（`/security-review` → `/implement`）
 
 ## 16. フロント開発設定の点検結果
-（ステップ 7 で記入する）
+2026-10-24・harness-2 ワークツリー（frontend は `localhost:3010`）・点検にかけた時間は約 15 分（上限 30 分以内）。
+
+### 所要時間（実測）
+| 項目 | 時間 | 測り方 |
+|---|---|---|
+| 開発サーバーの起動（初回） | 約 37 秒 | コンテナ開始（`State.StartedAt` 12:16:47.6）→ ログの `Compiled successfully!`（12:17:24.7） |
+| 開発サーバーの起動（2 回目・`docker compose restart frontend`） | 約 32 秒 | `[entrypoint] Clearing webpack/TypeScript cache...`（12:23:04.7）→ `Compiled successfully!`（12:23:36.8） |
+| ファイル 1 つの保存から再コンパイル完了まで | 約 5.4 秒（うち変化の検知まで約 4.0 秒・コンパイル約 1.4 秒） | `touch frontend/src/App.tsx`（12:23:53.2）→ `Compiling...`（12:23:57.3）→ `Compiled successfully!`（12:23:58.7） |
+| `npm run typecheck`（コンテナ内） | 5.5 秒 | `time docker compose exec -T frontend npm run typecheck`（エラー 0） |
+| `npm run lint`（コンテナ内） | 2.7 秒 | `time docker compose exec -T frontend npm run lint`（エラー・警告 0） |
+| Jest（`npm test -- --watchAll=false`・コンテナ内） | 10.4 秒（Jest の表示 9.5 秒・4 スイート 13 件合格） | `time docker compose exec -T frontend npm test -- --watchAll=false` |
+| E2E 全体（e2e コンテナ・8 件） | 本体 8〜9 秒（`channel: 'chromium'` にした後は 9.4 秒） | `docker compose --profile e2e run --rm e2e` |
+| アプリ全体の起動（このワークツリーで初回・イメージ作成込み） | 約 2 分（119 秒） | `docker compose up -d --wait db backend frontend` の前後の時刻 |
+
+### 点検で見つけたこと
+- 開発サーバーは起動のたびにキャッシュを消している（`frontend/docker-entrypoint.sh` の `rm -rf /app/node_modules/.cache`）。そのため 2 回目の起動も初回とほぼ同じ約 32 秒かかる
+- ファイルの変化の検知に約 4 秒かかる。リポジトリが Windows 側（`/mnt/c`）にあり、bind mount 越しの変化をポーリング（`CHOKIDAR_USEPOLLING`・`WATCHPACK_POLLING`）で見ているため
+- Node は開発コンテナ（`frontend/Dockerfile.dev` の `node:18-alpine`・実測 v18.20.8）も CI（`setup-node` の `'18'`）も 18 系で、2025-04 にサポートが終わっている
+- CRA（`react-scripts` 5.0.1）は保守が止まっており、開発サーバーの非推奨の警告（`onAfterSetupMiddleware` など）が毎回出る。TypeScript は 4.9 系
+- 型チェック・lint・Jest は合わせて 20 秒弱で、確認 1 回あたりの待ちの主因ではない。待ちの主因は開発サーバーの起動（約 32〜37 秒）と変化の検知（約 4 秒）
+
+### 別イシューのタイトル案
+優先度の高い順（どれも本イシューでは実装しない）。
+1. 「フロントの開発コンテナと CI の Node を 18（2025-04 サポート終了）から 22 LTS に上げる」— 安全面の負債。影響は `frontend/Dockerfile.dev`・`ci.yml`・`e2e.yml`
+2. 「CRA（react-scripts 5.0.1・保守停止）から Vite へ移行し、開発サーバーの起動（今 約 32〜37 秒）と再コンパイル（今 約 1.4 秒）を短くする」— 起動時にキャッシュを毎回消している処理（`docker-entrypoint.sh`）の見直しも含める
+3. 「開発中のファイルの変化の検知（今 約 4 秒・`/mnt/c` 上のポーリング）を速くするため、リポジトリを WSL のファイルシステムへ移すかを検討する」— 開発環境全体に関わるので、移すかどうかの判断から
 
 ## レビュー結果
 - [20261024_2023 判定: ✅ 完了](../../reviews/I187_plan_review_20261024_2023.md)
@@ -372,3 +399,11 @@ High 1 件（MCP の書き先）は、必須防御条件として変更点 17・
 
 ## 計画変更記録
 - 計画変更記録 1（2026-10-24・/security-review）: High「MCP の操作がワークスペース内の任意の場所に書ける」への必須防御として、変更点 17（見張りの `mcp__playwright__` 分岐・settings への登録・テスト）・ステップ 1 の 3b・TC-03 ⑦・TC-25・M-18・Risk の 2 行・runbook の安全上の注意を追加した。受け入れ条件・方式（Playwright MCP をホストで動かす）・範囲は変えていない。findings 対応の追記なので `/plan-issue-review` の再実行は挟まない（指摘への対処そのものは `/code-review` の敵対的レビューで反証対象になる）。
+- 計画変更記録 2（2026-10-24・/implement）: 実装中に、計画の書き方のままでは目的を満たせないことがわかったものを、方式・範囲・受け入れ条件を変えずに直した。
+  - 回数制限の切り方: 計画は「先に `RATELIMIT_ENABLE=false docker compose up -d backend` で起動し直す」だったが、`docker compose --profile e2e run` は依存先の backend を前置きの無い今の環境で作り直すため、制限ありに戻ることを確かめた（作り直し後の backend の環境に `RATELIMIT_ENABLE` が無く、2 回目の E2E で 403）。実行コマンド自体に前置する `RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e` に変え、2 回続けて流して 2 回とも合格することを確かめた。settings の allow は `Bash(RATELIMIT_ENABLE=false docker compose up *)` をやめ、`Bash(docker compose --profile e2e run --rm e2e*)`・`Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e*)` にした（中身の危ないコマンドは見張りが確認を出す。見張りの判定は allow より優先される）。TC-03 ⑤b・⑤c、TC-05 P106 を追加
+  - 安全なコンテキスト: `--unsafely-treat-insecure-origin-as-secure` は Playwright 既定の画面なし専用版（headless shell）では効かず、通常版の chromium（`channel: 'chromium'`）でだけ効くことを確かめた（e2e コンテナで比べた: 専用版は起動オプションの有無にかかわらず `isSecureContext=false`、通常版＋起動オプションで `true`）。`playwright.config.ts` に `channel: 'chromium'` を足した。CI の `npx playwright install --with-deps chromium` は通常版も入れる。既存の E2E 8 件は合格（8.2 秒 → 9.4 秒）
+  - 追随の修正: `scripts/claude/tests/test_settings_permissions.sh` が「見張りを呼ぶフックがちょうど 3 つ」を固定していたため、変更点 17 の登録で 4 つになったことに合わせて 4 に直した（変更点の表に無かったファイル）
+  - 手順書に足した落とし穴: ワークツリーで初めて 1 ファイルだけ流すと、e2e コンテナの node_modules（ワークツリーごとの named volume）が空のため `MODULE_NOT_FOUND` で落ちる。最初に既定コマンドを 1 回流す
+  - TC-05 の C67 を `rm -r` から `npm install` に変えた（`rm -r` は危険操作として先に停止になり、確かめたい「一覧外は通さない」に届かないため）。TC-07 にケース E13〜E15 を足した
+  - ステップ 1 のゲートの進め方: ブラウザの起動（最大の未知リスク）は、ユーザーの `install-deps` のあと、`.mcp.json` と同じ引数で MCP を標準入出力で直接動かして確かめた（画面を開く・画像を保存する・外部サイトが `ERR_BLOCKED_BY_CLIENT` で止まる）。Claude Code からの読み込みと許可の確認（M-01・M-18）は開き直しが要るため、MCP を使わないステップ 2〜7 を先に進め、開き直しを 1 回にまとめた
+  - `/plan-issue-review` の再実行は挟まない（方式・範囲・受け入れ条件は変えていない。手段の置き換えと追随の修正だけ）
