@@ -27,6 +27,7 @@
 - [review-gate] 2 回目の基本レビュー（`I193_code_review_20261025_0050.md`）も HIGH（High 2・Medium 5・Low 3。1 回目の修正で足した仕組みの細部の穴）なので fix-loop へ回した
 - [fix-loop] 2 回目は H1・H2・M1〜M3・M5・L1・L2 を直した（診断メモ `I193_fix_diagnosis_20261025_0130.md`・3 つのレビューはすべて PASS）。M4（背景の実行が 10 分で止まる）は採らなかった — 1 回目の review-gate で 10 分を超える背景の実行が正常に終わったことを実測したため
 - [fix-loop] 2 回目は、修正を先に書いてから診断メモを書いた（手順の順序の誤り）— 診断レビューは修正の後になったが、案の妥当性は診断・実装・テストのレビューと次の review-gate で確かめる。次の回からは手順どおり診断メモを先に書く
+- [review-gate] 2 回目の review-gate の終わりに `STAGE_DONE: review-gate NEXT: fix-loop` を書き忘れた（手順の漏れ）— 流れの決定には影響しない（次の STAGE_DONE は fix-loop が書いた）が、記録の段階の数は 1 つ少ない。実地の通しで見つかった漏れとして retro で扱う
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
