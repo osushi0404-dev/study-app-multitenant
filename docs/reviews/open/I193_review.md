@@ -35,3 +35,5 @@
 
 ## ロールバック
 - ステップごとのコミットを `git revert`（改名は `git mv` なので元に戻る）。必須チェックに登録した `Harness Tests` は、ユーザーがブランチ保護の設定から外す
+
+STAGE_DONE: implement NEXT: review-gate
