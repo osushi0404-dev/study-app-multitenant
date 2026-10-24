@@ -266,6 +266,8 @@ docker compose config | grep -A1 published
 
 ## 11. 旧方式からの移行
 
+**wt-harness の移行は I184（2026-10-24）で完了した。以下は手順の記録として残す。**
+
 - **既存の `wt-harness`（`/mnt/c/app/wt-harness`・I179 より前の自作スクリプト方式で primary の外に作ったワークツリー）**: そこで進めているイシュー（I178・I179）が完了・クローズした後に、次の順で移す。
   1. `wt-harness` にしか無い未コミットのファイルを primary へ移す。`/issue-bootstrap` のイシューファイル（`docs/issues/open/I###.md`）とイシューレビュー（`docs/reviews/I###_issue_review_*.md`）は、運用上わざと未コミットにしているので、捨てると起票済みイシューの本文と採番の根拠が消える。**primary のセッションで**、`git -C /mnt/c/app/wt-harness status --porcelain --untracked-files=all` に出る `??` のファイル（`--untracked-files=all` でフォルダではなくファイル単位に出す）のうち primary に無いものを `cp /mnt/c/app/wt-harness/<パス> <パス>` で primary にコピーする（コピー元の読み取りはガードに抵触しない。`wt-harness` のセッションから primary へ書き込むのはガードで止まる）。コピー後、両方の中身が `cmp` で一致することを確かめる。**primary にも同じパスのファイルがあるもの**は、コピーせずに `cmp` で中身を比べる。違っていれば（以前に primary へ写した後、`wt-harness` 側で追記した等）どちらが新しいかを確かめ、`wt-harness` 側が新しければ primary のセッションで差分を反映してから手順 3 に進む（手順 3 で `wt-harness` 側を削除するため、確かめずに進めると新しい版が消える）。
      - **コピーしないもの**: 同じ番号が既にクローズ済み（develop に `docs/issues/closed/I###.md` がある。`git ls-tree -r --name-only origin/develop docs/issues/closed/` で確認）のイシューファイルは古い版なのでコピーしない（open と closed が内容違いで並ぶのを防ぐ）。
