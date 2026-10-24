@@ -12,7 +12,7 @@
 - frontend: 対象外（コード変更なし）
 - 計画時（移行前・2026-10-24）: 下記「計画時の実行記録」
 - 実装時（2026-10-24・/implement）: TC-0・TC-1・TC-2a・TC-2b・TC-3・TC-4b・TC-5・TC-6・TC-7・TC-9 すべて exit 0。TC-4a は撤去前（ステップ 3 の後・2026-10-24）に exit 0（撤去後は計画どおり実行しない＝実行すると exit 1）。TC-8 は廃止（D4）。FG-2b・FG-3・FG-4b は引き続き exit 1（不合格を返す）。FG-7 は §7 に補足を入れた後なので exit 0（＝TC-7 の合格側の確認）
-- 実装後（/test）: 未実施
+- 実装後（2026-10-24・/test・abec165）: TC-0・TC-1・TC-2a・TC-4b・TC-5・TC-6・TC-7・TC-9 すべて exit 0。決定論ゲート 3 行は `/code-review`（`docs/reviews/I184_code_review_20261024_1339.md`）で実走し 3 行とも exit 0。TC-2b・TC-3 は exit 1（harness-2 は手動 No.4 で自動片付け済み＝注記どおり。合否は実装時の exit 0 で判断）、TC-4a は撤去後のため実行対象外（撤去前に exit 0）、TC-8 は廃止。FG-2b・FG-3・FG-4b は exit 1 のまま。CI（PR #313）6 件 pass
 
 ## テストケース
 

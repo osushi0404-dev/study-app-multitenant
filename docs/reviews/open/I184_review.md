@@ -83,6 +83,12 @@ docs/reviews/I177_issue_review_20261017_1232.md
 - 1 回目（`docs/reviews/I184_code_review_20261024_1256.md`）: HIGH 1 件＝手動 No.4（harness-2 終了時の自動片付けの観察）が未実施のまま 4-10 の文案をコミットしていた。→ ユーザーが harness-2 を終了し、登録・フォルダ・ブランチがすべて消えたことを確認（手動 No.4）。文案と一致したため `worktree.md` は変更なし。Low 1 件（§11 手順 3 の「wt-harness のセッションで削除」）は /retro で扱う
 - AC 1 の「harness-1・harness-2 がある」は TC-2b・TC-3 の時点（2026-10-24）で成立。その後 harness-2 は手動 No.4 の観察で片付いた（4-10 のとおり、使うときに作り直す）
 
+- 2 回目（`I184_code_review_20261024_1307.md`）: omission-lint HIGH（TC-4a の fenced ブロックの `grep -qx`）→ /fix-loop（案 A・`docs/reviews/I184_fix_diagnosis_20261024_1326.md`・`I184_fix_test_result_20261024_1326.md`）。fix-loop の実装・テストレビューは `claude -p` が SKIP（未追跡ファイル 145 件を入力に足すため）→ 独立サブエージェントで代替し OK
+- 3 回目（`I184_code_review_20261024_1339.md`）: OK・指摘なし。決定論ゲート 3 行 exit 0・omission-lint OK・高リスク NO（`ADVERSARIAL_STAGE: NOT_REQUIRED`）
+
+## 実装後評価
+- /test（2026-10-24・abec165）: 自動テストは `docs/tests/open/I184_auto_test.md`「実装後」のとおり（合格すべきものはすべて exit 0・CI 6 件 pass）。手動テスト No.1〜No.5 すべて OK（結論 OK）。pytest・Jest・E2E は対象外（アプリのコード変更なし）
+
 ## 実装（2026-10-24・/implement）
 - ステップ 1〜6 を計画どおり実施。計画外の変更なし。自動テストの結果は `docs/tests/open/I184_auto_test.md`「実装時」
 - /retro の材料: wt-harness 側の 39 件の削除をユーザーに依頼したが、ユーザーから「あなた自身で実施できなかったか」と指摘。§11 手順 3・§9 の「別のワークツリーの中身を消さない」に従ったためで、技術的には primary から消せた（I179 で削除のガードは廃止済み）。コピーの一致（TC-4a）を確かめた後の削除なので、実害の無い手間を人に回していた可能性がある
