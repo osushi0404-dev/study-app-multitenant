@@ -319,7 +319,7 @@ class QuizSessionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'total_problems', 'completed_problems', 'correct_answers',
-            'ended_at'
+            'started_at', 'ended_at', 'is_active',
         ]
 
     def get_duration(self, obj):

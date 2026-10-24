@@ -204,9 +204,23 @@ class QuizSession(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    # 開始リクエストの重複判定用（Idempotency-Key ヘッダの値）
+    client_request_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         ordering = ['-started_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(is_active=True),
+                name='uniq_active_quizsession_per_user',
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'client_request_id'],
+                condition=models.Q(client_request_id__isnull=False),
+                name='uniq_quizsession_user_request_id',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.username} - {self.started_at}"

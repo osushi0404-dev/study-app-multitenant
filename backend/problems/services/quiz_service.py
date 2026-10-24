@@ -1,11 +1,71 @@
 # backend/problems/services/quiz_service.py
+import uuid
 from typing import Optional, Tuple
 
-from problems.models import Problem, QuizSession
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+
+from problems.models import Problem, QuizSession, Subject
+
+
+class IdempotencyKeyReusedError(Exception):
+    """同じ Idempotency-Key が別の内容（科目）で再利用された"""
+
+
+class ActiveSessionConflictError(Exception):
+    """有効セッションの一意制約に違反した（直列化をすり抜けた同時開始）"""
 
 
 class QuizService:
     """クイズセッション関連のビジネスロジック"""
+
+    @staticmethod
+    def start_session(
+        *,
+        user,
+        subject: Optional[Subject],
+        client_request_id: Optional[uuid.UUID],
+    ) -> Tuple[QuizSession, bool]:
+        """
+        クイズセッションを開始する
+
+        同一ユーザーの開始処理はユーザー行のロックで直列化する。
+        同じ client_request_id の再送には作成済みのセッションを返す（冪等）。
+
+        Returns:
+            (セッション, 新規作成したかどうか)
+        """
+        try:
+            with transaction.atomic():
+                get_user_model().objects.select_for_update().only('pk').get(pk=user.pk)
+
+                if client_request_id is not None:
+                    existing = QuizSession.objects.filter(
+                        user=user, client_request_id=client_request_id
+                    ).first()
+                    if existing is not None:
+                        if existing.subject_id != (subject.pk if subject else None):
+                            raise IdempotencyKeyReusedError()
+                        return existing, False
+
+                QuizSession.objects.filter(user=user, is_active=True).update(
+                    is_active=False, ended_at=timezone.now()
+                )
+
+                problems_queryset = Problem.objects.filter(is_deleted=False)
+                if subject is not None:
+                    problems_queryset = problems_queryset.filter(subject=subject)
+
+                session = QuizSession.objects.create(
+                    user=user,
+                    subject=subject,
+                    client_request_id=client_request_id,
+                    total_problems=problems_queryset.count(),
+                )
+                return session, True
+        except IntegrityError as exc:
+            raise ActiveSessionConflictError() from exc
 
     @staticmethod
     def get_next_problem(

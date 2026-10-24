@@ -24,7 +24,8 @@ jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
   useParams: () => ({ id: 'test-session-id' }),
-  useSearchParams: () => [new URLSearchParams('subject=1&count=10')],
+  // 既存セッションの URL（/quiz/<id>）には ?subject が付かない（アプリ内の遷移は /quiz?subject= だけ）
+  useSearchParams: () => [new URLSearchParams('')],
 }));
 
 describe('QuizSession Component', () => {
@@ -193,6 +194,43 @@ describe('QuizSession Component', () => {
     // 「回答する」ボタンが存在することを確認
     const submitButton = screen.getByRole('button', { name: '回答する' });
     expect(submitButton).toBeInTheDocument();
+  });
+
+  it('完了画面の「もう一度挑戦」は終えたセッションの科目で Idempotency-Key 付きの新しいセッションを開始する（I158）', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValueOnce({
+      data: { ...mockSession, subject: '7', is_active: false },
+    });
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: { ...mockSession, id: 'new-session-id' },
+    });
+    (apiClient.get as jest.Mock).mockResolvedValueOnce({
+      data: mockProblem,
+    });
+
+    render(
+      <BrowserRouter>
+        <QuizSessionPage />
+      </BrowserRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'もう一度挑戦' }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/quiz/',
+        { subject: '7' },
+        {
+          headers: {
+            'Idempotency-Key': expect.stringMatching(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+            ),
+          },
+        }
+      );
+    });
+    // 完了画面から問題画面へ切り替わる
+    expect(await screen.findByText('テスト問題文')).toBeInTheDocument();
+    expect(screen.queryByText('クイズ完了！')).not.toBeInTheDocument();
   });
 
   it('difficulty と problem_type が正しく表示される', async () => {

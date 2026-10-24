@@ -37,6 +37,14 @@ import {
 import { useQuizDisplayStats } from '../hooks/useQuizDisplayStats';
 import ImageModal from '../components/ImageModal';
 
+const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
+
+// crypto.randomUUID は安全なコンテキスト（HTTPS・localhost）でのみ使える
+const generateIdempotencyKey = (): string | undefined =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : undefined;
+
 const QuizSessionPage: React.FC = () => {
   const [session, setSession] = useState<QuizSession | null>(null);
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
@@ -53,6 +61,8 @@ const QuizSessionPage: React.FC = () => {
   const [isReviewMode, setIsReviewMode] = useState<boolean>(false);  // 追加
   const isReviewModeRef = useRef(isReviewMode);
   useLayoutEffect(() => { isReviewModeRef.current = isReviewMode; }, [isReviewMode]);
+  // 開始リクエストを科目ごとに 1 回へ限定する（StrictMode の effect 再実行でも送らない）
+  const startedSubjectRef = useRef<string | null | undefined>(undefined);
 
   const { id } = useParams();
   const navigate = useNavigate();
@@ -105,17 +115,26 @@ const QuizSessionPage: React.FC = () => {
     }
   }, [navigate]);
 
-  const createNewSession = useCallback(async () => {
+  const createNewSession = useCallback(async (
+    subject: string | null | undefined,
+    idempotencyKey: string | undefined
+  ) => {
     try {
       setLoading(true);
+      // 完了画面の「もう一度挑戦」から開始した場合に、完了表示を解除する
+      setSessionComplete(false);
       const sessionData: any = {};
 
-      if (subjectId) {
-        sessionData.subject = subjectId;
+      if (subject) {
+        sessionData.subject = subject;
       }
       // problem_count パラメータは送信しない（バックエンドが全問題数を設定）
 
-      const response = await apiClient.post('/api/quiz/', sessionData);
+      const response = await apiClient.post(
+        '/api/quiz/',
+        sessionData,
+        idempotencyKey ? { headers: { [IDEMPOTENCY_KEY_HEADER]: idempotencyKey } } : undefined
+      );
       setSession(response.data);
 
       // 最初の問題を取得
@@ -127,7 +146,7 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [subjectId, navigate, loadNextProblem]);
+  }, [navigate, loadNextProblem]);
 
   const loadSession = useCallback(async (sessionId: string) => {
     try {
@@ -204,11 +223,15 @@ const QuizSessionPage: React.FC = () => {
     if (id) {
       // 既存のセッションを取得
       loadSession(id);
-    } else {
-      // 新しいセッションを作成
-      createNewSession();
+      return;
     }
-  }, [id, loadSession, createNewSession]);
+    if (startedSubjectRef.current === subjectId) {
+      return;
+    }
+    startedSubjectRef.current = subjectId;
+    // 新しいセッションを作成
+    createNewSession(subjectId, generateIdempotencyKey());
+  }, [id, subjectId, loadSession, createNewSession]);
 
   // 単一選択問題の即時回答機能（UX改善）
   useEffect(() => {
@@ -322,7 +345,8 @@ const QuizSessionPage: React.FC = () => {
                 <Button
                   variant="contained"
                   startIcon={<Refresh />}
-                  onClick={createNewSession}
+                  // 完了画面の URL（/quiz/<id>）には ?subject が無いため、終えたセッションの科目で再挑戦する
+                  onClick={() => createNewSession(subjectId ?? session?.subject, generateIdempotencyKey())}
                 >
                   もう一度挑戦
                 </Button>
