@@ -11,11 +11,13 @@ user-invocable: false
 
 ## 1. レビュー
 
-計画書・テスト文書・レビュー文書を commit/push してから実行する:
+計画書・テスト文書・レビュー文書を commit/push してから、Bash ツールの `run_in_background: true` で実行し、完了の通知で結果を受け取る（レビュー役に最大 900 秒〔`REVIEW_TIMEOUT`〕を許すので、前面の実行の上限 10 分を超えうる）:
 
 ```bash
 bash scripts/claude/plan-issue-review.sh "$ARGUMENTS"
 ```
+
+出力に `PLAN_VERDICT:` 行が無い（途中で止まった）ときは、1 回だけ実行し直す。2 回続けば止める（止める条件 3）。
 
 次のどれか 1 つでも当たるときは、スクリプトが判定の前に失敗したとみなす: 終了コードが 0 以外で、かつ Blocker の案内（`⛔ Blocker が残っています`）が出ていない／レビュー記録 `docs/reviews/$ARGUMENTS_plan_review_<ts>.md` が作られていない／レビュー記録のどの行にも `VERDICT:` で始まる行が無い。原因を直せるなら直して実行し直し、直せないときは止める（止める条件 3）。
 

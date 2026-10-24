@@ -29,6 +29,7 @@ bash scripts/claude/gate-check.sh "$ARGUMENTS"
 
 - pytest・Jest・E2E は CI（`.github/workflows/ci.yml`・`e2e.yml`）が PR ごとに流しており、review-gate の `code-review.sh` が CI の完了と成功を確かめている。**手元では流し直さない**
 - auto_test.md の「## 決定論ゲート（自動実走）」のうち、`code-review.sh` が「test-gate に委譲（heavy）」と記録したもの（docker・npm・pytest など）と、テストケースの表で「/test で実行する」と書かれたものは、ここで 1 つずつ実行する
+  - 10 分を超えうるもの（`bash scripts/claude/tests/run-all.sh`・docker の E2E など）は、Bash ツールの `run_in_background: true` で実行し、完了の通知で結果を受け取る（前面の実行の上限 10 分で打ち切られないように）。終了コードが取れないまま終わったときは、失敗として扱う
 - 1 件でも失敗したら、失敗したテスト名と内容（期待値 / 実際値 / ログの抜粋）を記録して `STAGE_DONE: test-gate NEXT: fix-loop` を書いて終わる
 
 ## 3. 記録

@@ -3,8 +3,8 @@
 # 呼び出し元: .claude/skills/test-gate/SKILL.md・.claude/skills/close/SKILL.md（どちらも最初の手順）
 # 合格（exit 0）の条件をすべて満たすこと（どれかが欠ける・読めない・違うときは理由を出して exit 1＝fail-closed）:
 #   1. 最新の docs/reviews/[closed/]I###_code_review_*.md の最後の VERDICT が OK で、
-#      その REVIEWED_COMMIT の時点と今とで「ブランチ自身の変更」（比べる相手 GATE_BASE〔既定 origin/develop〕との
-#      merge-base からの差・記録の場所を除く）が同じ。auto_test.md の決定論ゲートの節も同じ
+#      その REVIEWED_COMMIT の時点と今とで「ブランチ自身が変えたファイル」（比べる相手 GATE_BASE〔既定 origin/develop〕との
+#      merge-base からの差・記録の場所を除く）の中身（blob）が同じ。auto_test.md の決定論ゲートの節も同じ
 #   2. 高リスク（記録の RISK 行 OR このスクリプトが再評価するパス判定 path_risk_trigger）なら、最新の
 #      I###_adversarial_review_*.md の最後の VERDICT が OK で、1 と同じ比べ方で後から変わっていない（OK の周の後に足した差分を通さない）
 #   3. 作業ツリーに、記録の場所の外のコミットしていない変更（未追跡を含む）が無い
@@ -27,10 +27,7 @@ cd "$REPO_ROOT" || exit 1
 REVIEW_LIB_SOURCE_ONLY=1 . "${GATE_CHECK_LIB:-scripts/claude/code-review.sh}" || { echo "⛔ code-review.sh を読み込めません"; exit 1; }
 set +e   # code-review.sh の set -e を引き継がない（失敗の理由を出してから終わるため）
 
-# 記録の場所。テンプレート（docs/plans/templates・docs/tests/templates）は次のイシューの決まりなので含めない（I193 M2）
-RECORD_RE='^docs/(reviews|issues)/|^docs/(tests|plans)/(open|closed)/'
-RECORD_EXCLUDES=(':(exclude)docs/reviews' ':(exclude)docs/issues' ':(exclude)docs/tests/open' ':(exclude)docs/tests/closed'
-                 ':(exclude)docs/plans/open' ':(exclude)docs/plans/closed')
+# 記録の場所は code-review.sh の is_record_path（docs/{issues,reviews,tests,plans}/ のうち templates/ 以外）を使う
 # 比べる相手（既定は origin/develop。テストでは一時リポジトリの枝を渡す）。パス判定と「ブランチ自身の変更」の両方に使う
 GATE_BASE="${GATE_BASE:-origin/develop}"
 
@@ -53,21 +50,21 @@ reviewed_commit() {   # $1=ファイル → SHA/空
   grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$1" | tail -1 | grep -oE '[0-9a-f]{7,40}' || true
 }
 
-# ブランチ自身の変更（比べる相手との merge-base から rev まで・記録の場所を除く）の、ファイルごとの中身。
-# 行番号（@@）と index 行は除く（develop を取り込むと、同じ変更でも行番号や blob の ID がずれるため）
+# ブランチ自身が変えたファイル（比べる相手との merge-base から rev まで・記録の場所を除く）の一覧
 branch_files() {   # $1=rev
-  local mb; mb=$(git merge-base "$GATE_BASE" "$1") || return 1
-  git -c core.quotePath=false diff --name-only --no-renames "$mb" "$1" -- . "${RECORD_EXCLUDES[@]}"
+  local mb f; mb=$(git merge-base "$GATE_BASE" "$1") || return 1
+  while IFS= read -r -d '' f; do
+    is_record_path "$f" || printf '%s\n' "$f"
+  done < <(git -c core.quotePath=false diff -z --name-only --no-renames "$mb" "$1")
 }
-branch_patch_of() {   # $1=rev $2=ファイル
-  local mb; mb=$(git merge-base "$GATE_BASE" "$1") || return 1
-  git -c core.quotePath=false diff --no-color --no-renames "$mb" "$1" -- "$2" | grep -vE '^(index |@@)' || true
-}
+# rev でのファイルの中身の ID（blob）。無ければ「(なし)」
+blob_of() { git rev-parse -q --verify "$1:$2" 2>/dev/null || echo "(なし)"; }
 
-# $1=SHA。レビューの後に、記録の場所の外で「ブランチ自身の変更」が変わっていれば、そのファイル名を出して exit 1。
-# レビューした時点と今で、ブランチ自身の変更（比べる相手との差）をファイルごとに比べる。develop の取り込み
-# （close の base 追従）で入った develop 側の変更は、ブランチ自身の変更ではないので数えない。取り込みのときに
-# 食い違いを直した場合は、ブランチ自身の変更が変わるので数える（I193 H2）
+# $1=SHA。レビューの後に「ブランチ自身が変えたファイル」の中身が変わっていれば、そのファイル名を出して exit 1。
+# レビュー時点と今の一覧の和集合のファイルごとに、REVIEWED_COMMIT と HEAD での中身（blob）を比べる（差分の文字ではなく
+# 中身そのものなので、バイナリも行番号・文脈行のずれも関係しない。I193 3 回目 M3・M5）。develop の取り込みで入った
+# develop 側だけの変更は、ブランチが変えたファイルではないので数えない。ブランチが変えたファイルを develop も
+# 変えていたときは、取り込み後の中身が変わるので数える（粗く、止まる側。そのときは review-gate を通り直す）
 diff_outside_records() {
   local sha="$1" before after f out=""
   git cat-file -e "${sha}^{commit}" 2>/dev/null || { echo "(REVIEWED_COMMIT ${sha} がこのリポジトリにありません)"; return 1; }
@@ -75,8 +72,20 @@ diff_outside_records() {
   after=$(branch_files HEAD) || { echo "(比べる相手 ${GATE_BASE} との差分を取れません)"; return 1; }
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    [ "$(branch_patch_of "$sha" "$f")" = "$(branch_patch_of HEAD "$f")" ] || out+="${f}"$'\n'
+    [ "$(blob_of "$sha" "$f")" = "$(blob_of HEAD "$f")" ] || out+="${f}"$'\n'
   done < <(printf '%s\n%s\n' "$before" "$after" | LC_ALL=C sort -u)
+  # 粗く止まる側: レビューの後に取り込んだ比べる相手（develop）の進み分が、ブランチの変えたファイルにも触れていたら数える。
+  # 取り込みでブランチ側の中身を残す（develop の変更を捨てる）と、中身は同じでも PR の差分に「develop の変更の取り消し」が
+  # 入り、それは誰もレビューしていないため（I193 3 回目・G19）
+  local mb_then mb_now
+  if ! mb_then=$(git merge-base "$GATE_BASE" "$sha") || ! mb_now=$(git merge-base "$GATE_BASE" HEAD); then
+    echo "(比べる相手 ${GATE_BASE} との merge-base を取れません)"; return 1
+  fi
+  if [ "$mb_then" != "$mb_now" ]; then
+    while IFS= read -r -d '' f; do
+      printf '%s\n%s\n' "$before" "$after" | grep -qxF -- "$f" && out+="${f}（develop 側も変えていた）"$'\n'
+    done < <(git -c core.quotePath=false diff -z --name-only --no-renames "$mb_then" "$mb_now")
+  fi
   # 計画書が宣言する決定論ゲート（auto_test.md の「## 決定論ゲート（自動実走）」）は、記録の場所にあっても
   # 実行するコマンドの正なので、レビューの後に変えたら数える（I193 M2）
   local gate_now gate_then path
@@ -112,7 +121,7 @@ trap 'rm -rf "$GC_TMP"' EXIT
 DIRTY=""
 while IFS= read -r -d '' entry; do
   p="${entry:3}"
-  printf '%s\n' "$p" | grep -qE "$RECORD_RE" || DIRTY+="${p}"$'\n'
+  is_record_path "$p" || DIRTY+="${p}"$'\n'
 done < <(git status --porcelain=v1 -z --untracked-files=all --no-renames)
 [ -z "$DIRTY" ] || fail dirty "記録の場所の外に、コミットしていない変更があります:
 ${DIRTY}"

@@ -125,6 +125,10 @@ fs_dir f11 '## 自律判断の記録\n- a\n\nSTAGE_DONE: plan NEXT: plan-review\
 C_BEFORE=$(fs_out f11 | sed -n 3p)
 printf '%b' '## 自律判断の記録\n- a\n- b（止める前に足した行）\n\nSTAGE_DONE: plan NEXT: plan-review\n' > "$TMP/f11/open/I999_review.md"
 ck "F11 自律判断の記録に行を足しても STAGE_COUNT は同じ" "$C_BEFORE" "$(fs_out f11 | sed -n 3p)"
+ck "S14 review-gate は判定行が無いとき 1 回だけやり直す" 0 "$(rc grep -qF '出力に `FINAL_VERDICT:` 行が無い（途中で止まった・背景の実行が打ち切られた）' .claude/skills/review-gate/SKILL.md)"
+ck "S15 review-gate は報告の無い観点を合格に数えない" 0 "$(rc grep -qF '**報告の無い観点を合格に数えない**' .claude/skills/review-gate/SKILL.md)"
+ck "S16 plan-review は背景で実行し、判定行が無いときやり直す" 0 "$(rc grep -qF '出力に `PLAN_VERDICT:` 行が無い（途中で止まった）' .claude/skills/plan-review/SKILL.md)"
+ck "FG-S15 「時間切れの体は新規 Critical/High 0 として数える」を戻すと S15 不合格" 1 "$(sed 's#\*\*報告の無い観点を合格に数えない\*\*#時間切れの体は新規 Critical/High 0 として数える#' .claude/skills/review-gate/SKILL.md > "$TMP/s15.md"; rc grep -qF '**報告の無い観点を合格に数えない**' "$TMP/s15.md")"
 ck "S13 proceed は STAGE_COUNT で見分ける（LAST_LINE を見分けに使わない）" 0 "$(rc grep -qF '`STAGE_COUNT:`（`STAGE_DONE:` 行の数）が増えていなければ' .claude/skills/proceed/SKILL.md)"
 fs_dir f3 '# x\n\n本文だけ\n'
 ck "F3 STAGE_DONE 行が無いと exit 2" 2 "$(fs_rc f3)"
@@ -231,6 +235,21 @@ ck "G16 レビューの後にテンプレートを変えた → 1" 1 "$(g_rc g16
 g_init g17; g_record g17 code_review 20260101_0000 OK NO
 printf 'x\n' > "$TMP/g17/docs/reviews/I998 issue review.md"
 ck "G17 記録の場所の空白を含む名前の未追跡ファイル → 0" 0 "$(g_rc g17)"
+# G18: レビューの後にバイナリのファイルの中身を差し替えたら数える（中身〔blob〕で比べる。I193 3 回目 M3）
+g_init g18; printf '\x00\x01\x02' > "$TMP/g18/scripts/b.bin"; g_commit g18 "binary"; g_record g18 code_review 20260101_0000 OK NO
+printf '\x00\x09\x02' > "$TMP/g18/scripts/b.bin"; g_commit g18 "binary changed"
+ck "G18 レビューの後にバイナリの中身を差し替えた → 1" 1 "$(g_rc g18)"
+# G19: develop がブランチと同じファイルを変えて取り込んだときは、止まる側（review-gate を通り直す）
+g_init g19; g_record g19 code_review 20260101_0000 OK NO
+git -C "$TMP/g19" checkout -q main; printf 'echo f\n' > "$TMP/g19/scripts/f.sh"; printf 'echo a2\n' > "$TMP/g19/scripts/a.sh"; g_commit g19 "develop touches a.sh"
+git -C "$TMP/g19" checkout -q feature; printf 'echo a-feature\n' > "$TMP/g19/scripts/a.sh"; g_commit g19 "feature touches a.sh"
+g_record g19 code_review 20260101_0100 OK NO
+git -C "$TMP/g19" -c user.name=t -c user.email=t@example.invalid merge -q --no-edit -X ours main
+ck "G19 develop も同じファイルを変えていて取り込んだ → 1（止まる側）" 1 "$(g_rc g19)"
+# G20: docs/issues/templates・docs/reviews/templates は記録の場所ではない（I193 3 回目 M4）
+g_init g20; g_record g20 code_review 20260101_0000 OK NO
+mkdir -p "$TMP/g20/docs/issues/templates"; printf 'x\n' > "$TMP/g20/docs/issues/templates/issue_template.md"; g_commit g20 "issue template"
+ck "G20 レビューの後に docs/issues/templates を変えた → 1" 1 "$(g_rc g20)"
 
 # ---------------- C: code-review.sh の関数 ----------------
 # shellcheck source=scripts/claude/code-review.sh
@@ -276,6 +295,19 @@ ck "C8 ファイル名が出てくるだけは読めた結果にしない" 1 "$(
 ck "C8 行頭の [ のリンクだけは読めた結果にしない" 1 "$(rc official_output_readable '[注意] 許可がありません')"
 ck "C9 組み込みの出力の VERDICT 行は行頭から外す" "> VERDICT: OK" "$(printf 'VERDICT: OK\n' | neutralize_machine_lines)"
 ck "C12 「脆弱性は見つかりませんでした」は読めた結果" 0 "$(rc official_output_readable '確信度の高い脆弱性（重大度 HIGH・MEDIUM）は見つかりませんでした。')"
+ck "C13 is_record_path: docs/reviews/templates は記録の場所ではない" 1 "$(rc is_record_path docs/reviews/templates/review_template.md)"
+ck "C13 is_record_path: docs/tests/open は記録の場所" 0 "$(rc is_record_path docs/tests/open/I999_auto_test.md)"
+C14R="$TMP/c14"; mkdir -p "$C14R/docs/reviews" "$C14R/scripts"; git -C "$C14R" init -q -b main
+printf 'a\n' > "$C14R/scripts/a.sh"; git -C "$C14R" add -A; git -C "$C14R" -c user.name=t -c user.email=t@example.invalid commit -q -m base
+C14A=$(git -C "$C14R" rev-parse HEAD); printf 'r\n' > "$C14R/docs/reviews/I999_adversarial_review_x.md"
+git -C "$C14R" add -A; git -C "$C14R" -c user.name=t -c user.email=t@example.invalid commit -q -m rec
+ck "C14 記録だけのコミットは HEAD の移動として数えない（HEAD_DRIFT・I193 3 回目 M2）" 0 "$( (cd "$C14R" && changed_outside_records "$C14A" HEAD >/dev/null); echo $?)"
+printf 'b\n' >> "$C14R/scripts/a.sh"; git -C "$C14R" add -A; git -C "$C14R" -c user.name=t -c user.email=t@example.invalid commit -q -m code
+ck "C14 記録の場所の外のファイルが動いたら数える" 1 "$( (cd "$C14R" && changed_outside_records "$C14A" HEAD >/dev/null); echo $?)"
+# C15: 判定（VERDICT・RISK）は、組み込みのレビューの出力を足す前に行う（足すのは add_reviewed_commit の後。I193 3 回目 M6）
+C15_DETECT=$(grep -n 'LLM_VERDICT=$(detect_code_verdict' scripts/claude/code-review.sh | head -1 | cut -d: -f1)
+C15_APPEND=$(grep -n '"$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"' scripts/claude/code-review.sh | head -1 | cut -d: -f1)
+ck "C15 組み込みの出力は判定の後に足す" yes "$([ -n "$C15_DETECT" ] && [ -n "$C15_APPEND" ] && [ "$C15_DETECT" -lt "$C15_APPEND" ] && echo yes || echo no)"
 ck "C12 claude の設定の警告行は除く" "本文" "$(printf 'Permission allow rule (../x.json): Write(a) is not matched\n本文\n' | drop_cli_warnings)"
 
 # ---------------- S: スキルの中身 ----------------

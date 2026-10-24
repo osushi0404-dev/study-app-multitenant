@@ -63,9 +63,11 @@ run_fix_review() {
   local issue="$1" kind="$2" reviewer="$3" context="$4" remand="$5"
   local ts review_file review v g pr
 
-  # 1) reviewer 不在 → 非ブロック SKIP
-  if [ ! -f "$reviewer" ]; then
-    echo "⚠️ reviewer 定義が見つかりません: ${reviewer}。${kind} レビューを skip します。"
+  # 1) reviewer 不在 → 非ブロック SKIP。claude -p --agent に渡す名前（ファイル名）で、公式の置き場所の定義を確かめる
+  #    （パスと名前がずれて、確かめたファイルと呼ぶ定義が違うことにならないように。I193 3 回目 L1）
+  local agent_name; agent_name=$(basename "$reviewer" .md)
+  if [ ! -f ".claude/agents/${agent_name}.md" ]; then
+    echo "⚠️ reviewer 定義が見つかりません: .claude/agents/${agent_name}.md。${kind} レビューを skip します。"
     echo "FIX_GATE: SKIP"; return 0
   fi
 
@@ -76,7 +78,7 @@ run_fix_review() {
   # 3) タイムアウト付き起動。失敗・空・タイムアウト(exit124) は全て非ブロック SKIP＋未実施記録
   # I193: 公式のサブエージェント定義（.claude/agents/<name>.md）を --agent で呼ぶ。名前はファイル名から取る
   if ! review=$(printf '%s' "$context" | timeout "${FIX_REVIEW_TIMEOUT:-300}" claude -p \
-        --agent "$(basename "$reviewer" .md)" --tools "Read,Grep,Glob") || [ -z "$review" ]; then
+        --agent "$agent_name" --tools "Read,Grep,Glob") || [ -z "$review" ]; then
     printf '# %s fix-%s レビュー（未実施）\n\nclaude -p の失敗/空/タイムアウトのためレビュー未実施（非ブロック skip）。\n\nFIX_GATE: SKIP\n' \
       "$issue" "$kind" > "$review_file"
     commit_review_artifact "$review_file" "$issue" "fix-${kind}-review"

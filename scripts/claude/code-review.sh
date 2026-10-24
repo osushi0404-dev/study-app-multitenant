@@ -81,7 +81,28 @@ drop_cli_warnings() {
   grep -vE '^Permission allow rule \(' || true
 }
 
-# I193: 指定した PID と、その子孫のプロセスをすべて止める（背景の組み込みレビューの timeout・claude まで届かせる）
+# I193: 「記録の場所」（レビューの後に変えてもレビューを通り直さなくてよい場所）。gate-check.sh もこの関数を使う。
+# docs/{issues,reviews,tests,plans}/ の下のうち templates/ 以外（テンプレートは次のイシューの決まりなので含めない）
+is_record_path() {   # $1=パス → 記録の場所なら exit 0
+  case "$1" in
+    docs/issues/templates/*|docs/reviews/templates/*|docs/tests/templates/*|docs/plans/templates/*) return 1 ;;
+    docs/issues/*|docs/reviews/*|docs/tests/*|docs/plans/*) return 0 ;;
+  esac
+  return 1
+}
+
+# I193: 2 つのコミットの間で、記録の場所の外のファイルが変わったか（変わったファイル名を出して exit 1）
+changed_outside_records() {   # $1=from $2=to
+  local f out=""
+  while IFS= read -r -d '' f; do
+    is_record_path "$f" || out+="${f}"$'\n'
+  done < <(git -c core.quotePath=false diff -z --name-only --no-renames "$1" "$2")
+  if [ -n "$out" ]; then printf '%s' "$out"; return 1; fi
+  return 0
+}
+
+# I193: 指定した PID と、その子孫のプロセスをすべて止める（背景の組み込みレビューの timeout・claude まで届かせる）。
+# ps --ppid は Linux（procps）のもの。このリポジトリの実行環境（WSL・CI の ubuntu）は Linux だけ
 kill_tree() {
   local pid="$1" child
   for child in $(ps -o pid= --ppid "$pid" 2>/dev/null); do kill_tree "$child"; done
@@ -124,14 +145,14 @@ for path in sys.argv[1:]:
 PY
 }
 
-# I193: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 600）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
+# I193: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 1200。直近の実測は最長 5.5 分）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
 # - PR の最新のコミット（headRefOid）が手元の HEAD と違う → 手元のコミットを CI が見ていない（CI_WAIT: NOT_PUSHED・失敗）
 # - fail か cancel が 1 つでもある → 失敗
 # - PR で動くワークフローのジョブ（expected_ci_jobs）が全部、pass か skipping で出そろったときだけ成功。
 #   チェックがまだ無い・一部しか登録されていない（push 直後）・ジョブ名を読めない・gh が失敗した → 待つ（時間切れで止まる）
 # 戻り値: 0=成功（CI_WAIT: OK）/ 1=失敗（CI_WAIT: FAIL・NOT_PUSHED）/ 3=時間切れ（CI_WAIT: TIMEOUT）
 wait_ci() {
-  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-600}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0
+  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-1200}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0
   local head pr_head checks expected name state missing
   head=$(git rev-parse HEAD)
   pr_head=$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null || true)
@@ -457,7 +478,7 @@ if [ -n "$PR_NUM" ]; then
   CI_RC=0
   wait_ci "$PR_NUM" || CI_RC=$?
   if [ "$CI_RC" -eq 3 ]; then
-    echo "⛔ CI が ${CI_WAIT_TIMEOUT:-600} 秒で終わりませんでした。"
+    echo "⛔ CI が ${CI_WAIT_TIMEOUT:-1200} 秒で終わりませんでした。"
     exit 3
   fi
   if [ "$CI_RC" -ne 0 ]; then
@@ -483,12 +504,6 @@ OFFICIAL_SECURITY="(実行していない: パス判定 NO)"
 if [ "$RISK_PATH" = "YES" ]; then
   OFFICIAL_SECURITY="$(cat "$OFFICIAL_DIR/security_note" 2>/dev/null || true)
 $(cat "$OFFICIAL_DIR/security" 2>/dev/null || echo "(実行できず: 結果のファイルが無い)")"
-fi
-
-# I193 F6: レビューの間に HEAD が動いたら、組み込みのレビューと記録の対象がずれるので BLOCKER にする
-HEAD_DRIFT=""
-if [ "$(git rev-parse HEAD)" != "$REVIEWED_HEAD" ]; then
-  HEAD_DRIFT="レビューを始めた後に HEAD が ${REVIEWED_HEAD} から $(git rev-parse HEAD) に動いた"
 fi
 
 # コンテキスト組み立て
@@ -535,26 +550,24 @@ RISK: YES
 VERDICT: BLOCKER"
 fi
 
-# I193 F6: レビュー役の後にも HEAD を確かめる。動いていたら決定論で BLOCKER（記録の REVIEWED_COMMIT と中身がずれるため）
-if [ -z "$HEAD_DRIFT" ] && [ "$(git rev-parse HEAD)" != "$REVIEWED_HEAD" ]; then
-  HEAD_DRIFT="レビューを始めた後に HEAD が ${REVIEWED_HEAD} から $(git rev-parse HEAD) に動いた"
-fi
-if [ -n "$HEAD_DRIFT" ]; then
-  echo "⛔ ${HEAD_DRIFT}。BLOCKER として記録します（動かしてから review-gate をやり直してください）。"
-  GATE_EVIDENCE+="- ⛔ ${HEAD_DRIFT}（BLOCKER）"$'\n'
+# I193: レビューの間に、記録の場所の外のファイルが動いたら（組み込みのレビューと記録の REVIEWED_COMMIT の
+# 対象がずれるので）決定論で BLOCKER にする。記録だけのコミット（敵対的レビューの記録など）は数えない（gate-check と同じ）
+if DRIFT_FILES=$(changed_outside_records "$REVIEWED_HEAD" HEAD); then
+  :
+else
+  echo "⛔ レビューを始めた後に、記録の場所の外のファイルが変わりました。BLOCKER として記録します（動かしてから review-gate をやり直してください）:"
+  printf '%s' "$DRIFT_FILES"
+  GATE_EVIDENCE+="- ⛔ レビューを始めた後に HEAD が ${REVIEWED_HEAD} から $(git rev-parse HEAD) に動き、記録の場所の外が変わった（BLOCKER）"$'\n'
   GATE_VERDICT=BLOCKER
 fi
 
 # 出力正規化
 REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 
-# ファイル保存（組み込みのレビューの出力も記録に残す）
+# ファイル保存。判定（RISK・VERDICT）は自作のレビュー役の本文だけで行い、組み込みのレビューの出力は判定の後に足す
+# （組み込みの出力の中の表の「| High |」などを、VERDICT 行が無いときの代わりの判定が拾わないように。I193 M6）
 mkdir -p "$(dirname "$REVIEW_FILE")"
-{
-  printf '%s\n' "$REVIEW_CLEAN"
-  printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
-    "$OFFICIAL_CODE" "$OFFICIAL_SECURITY"
-} > "$REVIEW_FILE"
+printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
 # I086: 高リスク判定（LLM RISK 行 OR パス決定論トリガ）。証跡は注入セクションに残す。
 RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")
@@ -568,6 +581,9 @@ FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LLM_VERDIC
 inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_VERDICT"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
+# 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
+printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
+  "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"
 
 # 案A(I069): 生産物（レビュー記録）を生産者がコミットする（feature ブランチ時のみ・path-scoped）。
 commit_review_artifact "$REVIEW_FILE" "$ISSUE" "code-review"
