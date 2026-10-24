@@ -511,6 +511,8 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 - [ ] 高リスク判定 Yes（plan-review の後に security-review） — でよいか
 
 ## レビュー結果
+- [20261024_1648 判定: ✅ 完了](../../reviews/I158_plan_review_20261024_1648.md)（計画変更記録 1 のやり直しレビュー）
+- 指摘への対応（2026-10-24・1648 分）: ① Warning（TC-10 のロールバック確認が弱い）→ 事前に有効セッション S0 を作り、409 の後も S0 が有効のまま（`create` の前の `update` が取り消されている）ことを確かめる形に変更。② Info（TC-07・TC-08 の応答の集め方）→ 共有リストへの追加・例外の収集・`join(timeout)` 後のハング検出を auto_test の注に明記。
 - [20261024_1636 判定: ✅ 完了](../../reviews/I158_plan_review_20261024_1636.md)
 - 指摘への対応（2026-10-24）: ① Warning（`client_request_id` の応答除外）→ `fields` が明示リストのため足さないことで除外される旨を修正項目 5 に追記し、TC-01 に「応答に `client_request_id` が無い」を追加。② Warning（TC-01 の問題数が 0 件一致になり得る）→ fixture で subject_a に未削除 2 件＋削除済み 1 件、subject_b に 1 件の問題を作り、TC-01 の期待値を `total_problems == 2` に具体化。③ Info（context なしのシリアライズ）→ `self.get_serializer(session).data` に変更（create アクションでは `QuizSessionSerializer` が返るため応答の形は同じ）。
 

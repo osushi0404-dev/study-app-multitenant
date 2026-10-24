@@ -59,7 +59,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 | TC-07 | 同時 2 回（キー無し）でも有効は 1 件（本バグの再発防止） | `transaction=True`。`threading.Barrier(2)` で揃えた 2 スレッドから、それぞれ `force_authenticate(user)` した `APIClient` で `POST QUIZ_URL`。各スレッドの最後で `connection.close()` | 2 応答とも 201。`QuizSession.objects.filter(user=user, is_active=True).count() == 1`・`QuizSession.objects.filter(user=user).count() == 2` | Claude |
 | TC-08 | 同時 2 回（同じキー）は 1 件だけ作成 | TC-07 と同じ方法で、両スレッドとも `HTTP_IDEMPOTENCY_KEY=KEY` | 応答コードの組が `{201, 200}`。2 応答の `id` が同じ。`QuizSession.objects.filter(user=user).count() == 1` | Claude |
 | TC-09 | DB 制約で有効 2 件目を拒否 | `QuizSession.objects.create(user=user, is_active=True)` の後、`transaction.atomic()` 内で同じ create | 2 回目が `django.db.IntegrityError`（`pytest.raises`） | Claude |
-| TC-10 | 制約違反は 500 ではなく 409 | `unittest.mock.patch.object(QuizSession.objects, "create", side_effect=IntegrityError)` 下で TC-01 と同じ POST | `status.HTTP_409_CONFLICT`・`response.json() == BODY_409`。有効セッションの件数が POST 前と同じ（ロールバック済み） | Claude |
+| TC-10 | 制約違反は 500 ではなく 409・途中の更新は取り消される | 事前に `user` の有効セッション S0 を作成 → `unittest.mock.patch.object(QuizSession.objects, "create", side_effect=IntegrityError)` 下で TC-01 と同じ POST | `status.HTTP_409_CONFLICT`・`response.json() == BODY_409`。S0 を再取得して `is_active is True`・`ended_at is None`（`create` の前に走った `update(is_active=False)` が `transaction.atomic` の例外終了で取り消されている）。`QuizSession.objects.filter(user=user).count() == 1` | Claude |
 | TC-11 | 書き換え・削除は 405 | 有効セッション S を作成 → `PUT`・`PATCH`（body `{"is_active": False}`）・`DELETE` を `/api/quiz/{S.id}/` に送る | 3 つとも `status.HTTP_405_METHOD_NOT_ALLOWED`。S を再取得して `is_active is True`・行が存在する | Claude |
 | TC-12 | 作成時に `is_active` を送っても無視される | `POST QUIZ_URL`・`{"subject": subject_a.id, "is_active": False}` | 201・`response.data["is_active"] is True`・DB の行も `is_active is True` | Claude |
 | TC-13 | CORS preflight で `idempotency-key` が許可される | `APIClient().options(QUIZ_URL, HTTP_ORIGIN="http://localhost:3000", HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST", HTTP_ACCESS_CONTROL_REQUEST_HEADERS="authorization,content-type,idempotency-key")` | `status_code == 200`。`"idempotency-key" in response["Access-Control-Allow-Headers"].lower()` | Claude |
@@ -73,6 +73,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 - ヘッダは Django テストクライアントの書式 `HTTP_IDEMPOTENCY_KEY=...`（`request.headers["Idempotency-Key"]` として届く）で渡す。
 - TC-14 の制約の外し方: テスト内で `connection.schema_editor()` を使い `QuizSession._meta.constraints` の `uniq_active_quizsession_per_user` を `remove_constraint` → データ作成 → 関数実行 → `add_constraint` で戻す（`transaction=True` は不要・テストのトランザクション内で完結し、最後にロールバックされる）。関数の実行後に制約を戻せること自体が「重複が解消された」証拠になる。
 - 期待値の status は `rest_framework.status` の定数で assert する（規約準拠）。
+- TC-07・TC-08 の応答の集め方: スレッド関数の中で `results.append((response.status_code, response.data.get("id")))` とし、`results` は外側で用意したリスト（`list.append` は GIL 下で単体として安全）。例外も握りつぶさず `errors.append(exc)` で集め、最後に `assert errors == []` とする。`thread.join(timeout=30)` の後に `assert not thread.is_alive()` でハングを検出する。
 - TC-10 だけ `unittest.mock.patch` を使う理由: ロックがある限り実際には起きない守りの分岐で、実 DB で決定論的に起こす方法が無いため（計画「設計判断の明示」）。
 
 ## テストケース（決定論コマンド・Backend）
