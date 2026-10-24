@@ -12,7 +12,7 @@
 - frontend: 対象外（コード変更なし）
 - 計画時（移行前・2026-10-24）: 下記「計画時の実行記録」
 - 実装時（2026-10-24・/implement）: TC-0・TC-1・TC-2a・TC-2b・TC-3・TC-4b・TC-5・TC-6・TC-7・TC-9 すべて exit 0。TC-4a は撤去前（ステップ 3 の後・2026-10-24）に exit 0（撤去後は計画どおり実行しない＝実行すると exit 1）。TC-8 は廃止（D4）。FG-2b・FG-3・FG-4b は引き続き exit 1（不合格を返す）。FG-7 は §7 に補足を入れた後なので exit 0（＝TC-7 の合格側の確認）
-- 実装後（2026-10-24・/test・abec165）: TC-0・TC-1・TC-2a・TC-4b・TC-5・TC-6・TC-7・TC-9 すべて exit 0。決定論ゲート 3 行は `/code-review`（`docs/reviews/I184_code_review_20261024_1339.md`）で実走し 3 行とも exit 0。TC-2b・TC-3 は exit 1（harness-2 は手動 No.4 で自動片付け済み＝注記どおり。合否は実装時の exit 0 で判断）、TC-4a は撤去後のため実行対象外（撤去前に exit 0）、TC-8 は廃止。FG-2b・FG-3・FG-4b は exit 1 のまま。CI（PR #313）6 件 pass
+- 実装後（2026-10-24・/test・abec165）: TC-0・TC-1・TC-2a・TC-4b・TC-5・TC-6・TC-7・TC-9 すべて exit 0。決定論ゲート 3 行は `/code-review`（`docs/reviews/closed/I184_code_review_20261024_1339.md`）で実走し 3 行とも exit 0。TC-2b・TC-3 は exit 1（harness-2 は手動 No.4 で自動片付け済み＝注記どおり。合否は実装時の exit 0 で判断）、TC-4a は撤去後のため実行対象外（撤去前に exit 0）、TC-8 は廃止。FG-2b・FG-3・FG-4b は exit 1 のまま。CI（PR #313）6 件 pass
 
 ## テストケース
 
@@ -32,7 +32,7 @@
 | TC-8 | 廃止（バックアップを取らない＝計画 D4。2026-10-24 計画承認時のユーザー判断） | — | — |
 
 ### TC-4a のスクリプト
-撤去前に 1 回だけ実行する TC（wt-harness 撤去後は `git -C` が失敗して必ず不合格になる）なので、下の「決定論ゲート（自動実走）」には載せない。実行と結果はステップ 3 の記録（2026-10-24・exit 0）。再実行用ではない記録として、インデントのコードブロックで残す（fix-loop 2026-10-24 の診断 `docs/reviews/I184_fix_diagnosis_20261024_1326.md`）。
+撤去前に 1 回だけ実行する TC（wt-harness 撤去後は `git -C` が失敗して必ず不合格になる）なので、下の「決定論ゲート（自動実走）」には載せない。実行と結果はステップ 3 の記録（2026-10-24・exit 0）。再実行用ではない記録として、インデントのコードブロックで残す（fix-loop 2026-10-24 の診断 `docs/reviews/closed/I184_fix_diagnosis_20261024_1326.md`）。
 
     P=/mnt/c/app/study-app-multitenant; W=/mnt/c/app/wt-harness
     closed=$(git -C "$P" ls-tree -r --name-only origin/develop docs/issues/closed/) || exit 1
@@ -96,6 +96,6 @@ TC-7 の合格側（補足を入れた後に exit 0 になること）と TC-4a 
 
 ## 再発防止記録（fix-loop・2026-10-24）
 - **なぜ失敗したか**: `/code-review` の omission-lint（`scripts/claude/code-review.sh` の `omission_lint()`）は、「## 決定論ゲート（自動実走）」節の外の fenced コードブロックに `grep -q` 等があると HIGH にする。TC-4a のスクリプトを fenced ```bash で書き（中に `grep -qx`）、ゲート節も無かったため、`/code-review` が 2 回とも FINAL VERDICT: HIGH になった（LLM のレビューは原因を「/test 未実施」と取り違えていた）
-- **何を変えたか**: TC-4a のスクリプトを、ゲートに載せない理由（撤去前に 1 回だけ・撤去後は必ず失敗）を明記したうえでインデントのコードブロックにした。`## 決定論ゲート（自動実走）` 節を作り、PR に入る `worktree.md` の追記 3 つを `grep -qF` で毎回実走する。TC-2b・TC-3 に harness-2 の自動片付け後の扱いを注記。詳細は `docs/reviews/I184_fix_diagnosis_20261024_1326.md`・`docs/reviews/I184_fix_test_result_20261024_1326.md`
+- **何を変えたか**: TC-4a のスクリプトを、ゲートに載せない理由（撤去前に 1 回だけ・撤去後は必ず失敗）を明記したうえでインデントのコードブロックにした。`## 決定論ゲート（自動実走）` 節を作り、PR に入る `worktree.md` の追記 3 つを `grep -qF` で毎回実走する。TC-2b・TC-3 に harness-2 の自動片付け後の扱いを注記。詳細は `docs/reviews/closed/I184_fix_diagnosis_20261024_1326.md`・`docs/reviews/closed/I184_fix_test_result_20261024_1326.md`
 - **セキュリティ上の考慮点**: なし（テスト文書だけの変更。ゲートのコマンドは読み取りだけの `grep -qF` で `classify_gate` の ALLOW）
 - **次回どう防ぐか**: auto_test.md で検証コマンドを fenced に書くときは、ゲート節に宣言して実走させるか、一回限りの記録ならゲートに載せない理由を書いて fenced 以外で残す。/retro の材料: (1) fix-loop の実装・テストレビューのスクリプトが未追跡ファイルの中身を全部入力に足すため、未コミットのイシューファイルが多い primary では `claude -p` が失敗して SKIP になる（本 fix-loop では独立サブエージェントで代替）。(2) 計画時に omission-lint を通していれば `/code-review` 1 回目で捕まえずに済んだ
