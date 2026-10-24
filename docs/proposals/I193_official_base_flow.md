@@ -116,7 +116,7 @@ Claude が採否を決める。小さな直しはそのイシューで直し、�
 | 段階 | `fix-loop` | 同じ | ユーザー承認の待ちをなくし、止める条件 3 つに合わせる。戻り先は `review-gate` 1 か所 |
 | 段階 | `retro` | 同じ | 改善案の採否・起票を Claude が行う |
 | 段階 | `close` | 同じ | 振り返りを先に呼び、技術的な問題（develop との食い違いなど）は自分で解決し、マージ依頼で止まる |
-| レビュー役 | `.claude/agents/*.md`（7 本） | `.claude/review-agents/*.md` | 移動・`tools: Read, Grep, Glob`・`model: sonnet`。スクリプトは `claude -p --agent <name>` と `timeout` で呼ぶ |
+| レビュー役 | `.claude/agents/*.md`（7 本） | `.claude/review-agents/*.md` | 移動・`tools: Read, Grep, Glob`（敵対的レビュー役だけは temp repo での再現実行のため `Read, Grep, Glob, Bash`）・`model: sonnet`。スクリプトは `claude -p --agent <name> --tools "Read,Grep,Glob"` と `timeout` で呼ぶ |
 
 ## 8. 移行
 

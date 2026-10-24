@@ -10,7 +10,18 @@
 - ハーネスのテストを CI で動かす（`run-all.sh`・`Harness Tests` ジョブ）と、落ちていた 2 本の修正
 
 ## 変更点
-- （実装後に記入）
+- レビュー役 7 本を `.claude/agents/` へ移動（frontmatter: name・description・tools・model）。スクリプトは `claude -p --agent <name> --tools "Read,Grep,Glob"`・`timeout` で呼ぶ
+- スキル: 改名 4（review-gate・design-security-review・test-gate・plan-review）・新設 1（proceed）・段階のスキル 8 本を `user-invocable: false` に・承認待ちをなくす書き直し（plan-issue・implement・fix-loop・retro・close・issue-bootstrap・grill-me）
+- `scripts/claude/code-review.sh`: fetch・CI 待ちの fail-closed（exit 3/1）・組み込み `/code-review`・`/security-review` を plan モードで背景実行・VERDICT 無しは BLOCKER・`REVIEWED_COMMIT`・機械判定行の無害化
+- 新設: `scripts/claude/flow-stage.sh`・`scripts/claude/gate-check.sh`・`scripts/claude/tests/run-all.sh`・`scripts/claude/tests/test_i193_official_flow.sh`
+- `.github/workflows/ci.yml` に `Harness Tests` ジョブ
+- CLAUDE.md 絶対ルール 1・2、workflow.md（止めて聞く条件・つなぎ・移行）、issue-flow・onboarding・review-rules・plan-writing-rules・mcp-usage・danger-ops（DOC6）・branch-protection-setup・テンプレート・claude-code-structure
+- 既存テストの更新（新しい置き場所・新しい流れの守りの文に付け替え）と、落ちていた D8・DOC6 の修正
+
+## 自律判断の記録
+- [implement] I193 自身の残りの段階は新しい流れ（`/proceed I193`）で進める — このワークツリーでは本変更で古い `/code-review`・`/test` が無くなったため。新しい流れの初めての実地の通しにもなる
+- [implement] 敵対的レビュー役だけ `tools` に Bash を残した — temp repo での再現実行に要る（計画変更記録 4）
+- [implement] retro がその場で直すのは記録の場所だけにした — それ以外を直すとレビューと人の手動テストをやり直すことになるため（計画変更記録 4）
 
 ## 影響範囲
 - Backend/Frontend/DB: なし

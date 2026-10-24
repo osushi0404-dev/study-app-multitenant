@@ -307,6 +307,17 @@ Claude が決めた（技術的な選択。理由は本計画・設計書）:
 1. 2026-10-24 計画レビュー（`I193_plan_review_20261024_2239.md`・HIGHRISK・Blocker なし）の Warning 4 件・Info 2 件に対応した: R6 の検索対象に `scripts/migration_verify/` を追加／受け入れ条件 8 の実地の通しをマージ後の最初のイシューで確かめるリスクを §8 に追加／`gate-check.sh` がレビュー後に変えてよい場所を絞る意図と、`docs/proposals/` などを変えたら通り直すことを §5.3 に明記／`plan-review` の終わり方を 3 通りで明記／段階のスキルと `proceed` に `argument-hint` を付ける／`proceed` の description で呼ぶ場面を限定。あわせて §2 の受け入れ条件の数を 14 に直した（イシューの項目数どおり）。方式・範囲・受け入れ条件は変えていないため、計画レビューはやり直さない
 2. 2026-10-24 /security-review で、(a) 組み込みのレビュー（`/review`・plan モード）が出した設計の抜け 10 件（計画 §4.2 S8）と、(b) セキュリティ設計レビューの指摘（下の「セキュリティレビュー結果」）を取り込んだ。主な変更: 組み込みのレビューを plan モードで動かす／`code-review.sh` の最初に fetch／CI 待ちの時間切れを exit 3 にして review-gate が 1 回やり直す／`code-review.sh` を背景で実行する（Bash ツールの 10 分上限）／敵対的レビューの記録にも `REVIEWED_COMMIT` を求め、OK の周の後に差分を足さない／gate-check がコミットしていない変更も見る・ファイル名を `core.quotePath=false --no-renames` で取る／止める条件 2 に安全装置そのものの変更を含める／自動の起票にログ・出力を貼らない／書き換えるメモに `feedback_skill_tool_usage.md` ほかを明記／設計書の L13 の書き方とテストの本数を計画にそろえた。止める条件 2 の範囲を広げたので、計画レビューをやり直す（`plan-issue-review.sh`）
 3. 2026-10-24 再レビュー（`I193_plan_review_20261024_2313.md`・HIGHRISK・Blocker なし）の Warning 2 件に対応した: TC-01 R6 の検索対象に `docs/claude-code-structure.md` を追加／R6 の失敗注入の手順を auto_test.md に明記。Info（スキルが 500 行を超えそうなら補助ファイルに分ける）は実装時に確かめて自律判断の記録に残す。方式・範囲・受け入れ条件は変えていないため、計画レビューはやり直さない
+4. 2026-10-25 実装中に計画から変えたこと（いずれも方式・範囲・受け入れ条件は変えない細部のため、計画レビューはやり直さない。/code-review で確かめる）:
+   - 敵対的レビュー役（`adversarial-reviewer`）の `tools` は `Read, Grep, Glob, Bash` にした（§5.1 は 7 本とも `Read, Grep, Glob` としていた）。定義の「ツール境界」が temp repo での再現実行に Bash を使うと決めており、外すと実機での反証（固定 3 観点の 1）ができなくなるため。Edit・Write は持たない。TC-01 R4 もこの形で確かめる
+   - レビュー役の呼び出しは `--agent` に加えて `--tools "Read,Grep,Glob"` も渡した（定義の名前が見つからなかったときにも読み取り専用を保つ二重の守り。実装中の組み込み `/code-review` の指摘）
+   - 組み込みの `/code-review`・`/security-review` は CI 待ちと重ねて背景で同時に実行するようにした（最悪の待ち時間を縮める。同じ指摘）。CI 待ちは `gh pr checks --json bucket` で見て、チェックがまだ 1 つも無いときは成功にしない（同じ指摘）。組み込みの出力の「読めたか」の判定は、ファイル名の一致では読めたとみなさないように絞った（同じ指摘）。組み込みの出力の中の `VERDICT:` などの行は、記録に貼るときに行頭から外す（判定の行として読まれないように）
+   - `REVIEWED_COMMIT:` は RISK 行の前に入れる（RISK と VERDICT が隣り合わないと `detect_risk_flag` が RISK を読めず YES になるため。同じ指摘）
+   - 止める条件 2 の安全装置の集合は `path_risk_trigger` と同じにした（`scripts/claude/hooks/` 全体ではなく `pretooluse_guard.py`。1 か所を正にして TC-01 S12 で一致を確かめる）
+   - retro がその場で直すのは記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）だけにした（それ以外を直すとレビューとテストを通り直すことになり、人の手動テストも依頼し直すため。手順書・スキルの直しは既存イシューへの同梱か起票にする）
+   - `flow-stage.sh` は close の後の記録（`docs/reviews/closed/`）も読む（close が記録を closed へ移した後に `STAGE_DONE: close NEXT: merge` を書くため）
+   - D8 の修正は、テスト側で「`.gitignore` にある手元のファイル（`.claude/settings.local.json`）は存在しないパスとして数えない」にした（文書の記載は正しく、ワークツリーと CI に無いだけのため）
+   - `docs/claude-code-structure.md` は全体が I193 より前の書き方（`in_progress`・`/plan` など）で古いため、スキルの構成・呼び出しの規則・古いコマンドの記載だけ直し、先頭に「正は workflow.md」と書いた（全面の書き直しは本イシューの範囲外）
+   - `docs/runbooks/branch-protection-setup.md` の必須チェックの一覧に `Harness Tests` を足した（§5.7 の「必須チェックへの登録」の手順を書く場所のため）
 
 ## セキュリティレビュー結果
 

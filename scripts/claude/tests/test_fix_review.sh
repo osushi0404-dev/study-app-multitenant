@@ -15,9 +15,9 @@ LIB="scripts/claude/fix-review-lib.sh"
 DIAG_SH="scripts/claude/fix-diagnosis-review.sh"
 IMPL_SH="scripts/claude/fix-implementation-review.sh"
 TEST_SH="scripts/claude/fix-test-review.sh"
-DIAG_AGENT=".claude/review-agents/fix-diagnosis-reviewer.md"
-IMPL_AGENT=".claude/review-agents/fix-implementation-reviewer.md"
-TEST_AGENT=".claude/review-agents/fix-test-reviewer.md"
+DIAG_AGENT=".claude/agents/fix-diagnosis-reviewer.md"
+IMPL_AGENT=".claude/agents/fix-implementation-reviewer.md"
+TEST_AGENT=".claude/agents/fix-test-reviewer.md"
 SKILL=".claude/skills/fix-loop/SKILL.md"
 
 pass=0; fail=0
@@ -109,7 +109,7 @@ for s in "$LIB" "$DIAG_SH" "$IMPL_SH" "$TEST_SH"; do
 done
 ck_grep TC-16-claude "$LIB" 'claude -p'
 ck_grep TC-16-tools  "$LIB" '\-\-tools[[:space:]]+"Read,Grep,Glob"'
-ck_grep TC-16-model  "$LIB" 'claude-sonnet-4-6'
+ck_grep TC-16-agent  "$LIB" '\-\-agent[[:space:]]+"\$\(basename'   # I193: モデルはサブエージェント定義（model: sonnet）で決める
 # TC-17: --tools 引用符内に書込ツールが無い（コメントで false-positive しない）
 for s in "$LIB" "$DIAG_SH" "$IMPL_SH" "$TEST_SH"; do
   ck_ngrep "TC-17-nowrite $(basename "$s")" "$s" '\-\-tools[[:space:]]+"[^"]*(Write|Edit|Bash|MultiEdit)[^"]*"'

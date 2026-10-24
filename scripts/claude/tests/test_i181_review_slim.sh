@@ -8,9 +8,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
 TMP="$(mktemp -d)"
 trap 'rm -r "$TMP"' EXIT
-SK=.claude/skills/code-review/SKILL.md; RR=docs/runbooks/review-rules.md
-AR=.claude/review-agents/adversarial-reviewer.md; CR=.claude/review-agents/code-reviewer.md
-PR=.claude/review-agents/plan-reviewer.md; FL=.claude/skills/fix-loop/SKILL.md
+SK=.claude/skills/review-gate/SKILL.md; RR=docs/runbooks/review-rules.md
+AR=.claude/agents/adversarial-reviewer.md; CR=.claude/agents/code-reviewer.md
+PR=.claude/agents/plan-reviewer.md; FL=.claude/skills/fix-loop/SKILL.md
 CRS=scripts/claude/code-review.sh
 
 # 判定本体: sec <ファイル> <開始行の前方一致> <終了行の正規表現> <必須の語...>
@@ -31,8 +31,12 @@ PY
 # 節の中のバッククォートのパス（`/` を含むもの。<…>・*・{・空白・: を含むもの、`/` で始まるスラッシュコマンド、
 # `origin/` で始まる git の参照は除く）が実在するか
 cat > "$TMP/paths.py" <<'PY'
-import os, re, sys
+import os, re, subprocess, sys
 path, head, end_re = sys.argv[1:4]
+def ignored(p):
+    # リポジトリに置かない手元のファイル（.gitignore にあるもの。例: .claude/settings.local.json）は、
+    # ワークツリーや CI に無くても「存在しないパス」として数えない（I193: D8 が手元にしか無いファイルで落ちていた）
+    return subprocess.run(["git", "check-ignore", "-q", "--no-index", p.rstrip("/")]).returncode == 0
 lines = open(path, encoding="utf-8").read().split("\n")
 start = next((i for i, l in enumerate(lines) if l.startswith(head)), None)
 if start is None:
@@ -42,7 +46,7 @@ bad = []
 for p in re.findall(r"`([^`]+)`", "\n".join(lines[start:end])):
     if any(c in p for c in "<>*{ :") or "/" not in p or p.startswith(("http", "-", "/", "origin/")):
         continue
-    if not os.path.exists(p.rstrip("/")):
+    if not os.path.exists(p.rstrip("/")) and not ignored(p):
         bad.append(p)
 if bad:
     print(f"実在しないパス: {bad}"); sys.exit(1)
