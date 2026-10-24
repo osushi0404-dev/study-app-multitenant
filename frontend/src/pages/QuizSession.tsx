@@ -115,15 +115,18 @@ const QuizSessionPage: React.FC = () => {
     }
   }, [navigate]);
 
-  const createNewSession = useCallback(async (idempotencyKey: string | undefined) => {
+  const createNewSession = useCallback(async (
+    subject: string | null | undefined,
+    idempotencyKey: string | undefined
+  ) => {
     try {
       setLoading(true);
       // 完了画面の「もう一度挑戦」から開始した場合に、完了表示を解除する
       setSessionComplete(false);
       const sessionData: any = {};
 
-      if (subjectId) {
-        sessionData.subject = subjectId;
+      if (subject) {
+        sessionData.subject = subject;
       }
       // problem_count パラメータは送信しない（バックエンドが全問題数を設定）
 
@@ -143,7 +146,7 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [subjectId, navigate, loadNextProblem]);
+  }, [navigate, loadNextProblem]);
 
   const loadSession = useCallback(async (sessionId: string) => {
     try {
@@ -227,7 +230,7 @@ const QuizSessionPage: React.FC = () => {
     }
     startedSubjectRef.current = subjectId;
     // 新しいセッションを作成
-    createNewSession(generateIdempotencyKey());
+    createNewSession(subjectId, generateIdempotencyKey());
   }, [id, subjectId, loadSession, createNewSession]);
 
   // 単一選択問題の即時回答機能（UX改善）
@@ -342,7 +345,8 @@ const QuizSessionPage: React.FC = () => {
                 <Button
                   variant="contained"
                   startIcon={<Refresh />}
-                  onClick={() => createNewSession(generateIdempotencyKey())}
+                  // 完了画面の URL（/quiz/<id>）には ?subject が無いため、終えたセッションの科目で再挑戦する
+                  onClick={() => createNewSession(subjectId ?? session?.subject, generateIdempotencyKey())}
                 >
                   もう一度挑戦
                 </Button>

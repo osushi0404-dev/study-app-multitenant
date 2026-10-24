@@ -24,7 +24,8 @@ jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
   useParams: () => ({ id: 'test-session-id' }),
-  useSearchParams: () => [new URLSearchParams('subject=1&count=10')],
+  // 既存セッションの URL（/quiz/<id>）には ?subject が付かない（アプリ内の遷移は /quiz?subject= だけ）
+  useSearchParams: () => [new URLSearchParams('')],
 }));
 
 describe('QuizSession Component', () => {
@@ -195,9 +196,9 @@ describe('QuizSession Component', () => {
     expect(submitButton).toBeInTheDocument();
   });
 
-  it('完了画面の「もう一度挑戦」は Idempotency-Key 付きで新しいセッションを開始する（I158）', async () => {
+  it('完了画面の「もう一度挑戦」は終えたセッションの科目で Idempotency-Key 付きの新しいセッションを開始する（I158）', async () => {
     (apiClient.get as jest.Mock).mockResolvedValueOnce({
-      data: { ...mockSession, is_active: false },
+      data: { ...mockSession, subject: '7', is_active: false },
     });
     (apiClient.post as jest.Mock).mockResolvedValueOnce({
       data: { ...mockSession, id: 'new-session-id' },
@@ -217,7 +218,7 @@ describe('QuizSession Component', () => {
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
         '/api/quiz/',
-        { subject: '1' },
+        { subject: '7' },
         {
           headers: {
             'Idempotency-Key': expect.stringMatching(
