@@ -1,14 +1,14 @@
 ---
 name: security-review
-description: Pre-implementation security deep-dive for high-risk changes. Run when /plan-issue-review outputs 高リスク判定 Yes, before /implement. Reviews design risks + attack scenarios, appends results to plan document, stops if Blocker found.
+description: Pre-implementation security deep-dive for high-risk changes. Run when the plan review (inside /plan-issue, or /plan-issue-review) outputs 高リスク判定 Yes, before /implement. Reviews design risks + attack scenarios, appends results to plan document, stops if Blocker found.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Edit
+disallowed-tools: Write, NotebookEdit
 ---
 
 # /security-review
 
-前提: `/plan-issue-review` で高リスク判定 Yes が出ている。`/implement` の前に実行する。
+前提: 計画レビュー（`/plan-issue` の中、または `/plan-issue-review`）で高リスク判定 Yes が出ている。`/implement` の前に実行する。
 
 ## 手順
 

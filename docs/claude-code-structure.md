@@ -183,7 +183,7 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 `/コマンド名` で呼び出せるプロンプトテンプレート。各 `SKILL.md` に Claude が実行すべき手順が記述されており、呼び出すと Claude がその手順に従って自動的に処理を進める。
 
-すべてのスキルは `disable-model-invocation: true`（追加の AI 呼び出しを防ぐ）および `allowed-tools: Read, Bash, Write, Edit, Glob, Grep` で動作する。
+すべてのスキルは `disable-model-invocation: true`（Claude が自分の判断でスキルを呼ばない。ユーザーが `/名前` を入力したときだけ動く）で動作する。`allowed-tools`（そのターンは確認なしで使ってよいという事前許可で、制限ではない）は付けない。使えるツールを絞りたいスキルは `disallowed-tools` で制限する（例: security-review は `Write, NotebookEdit` を使わない）（I185 P4）。
 
 ---
 

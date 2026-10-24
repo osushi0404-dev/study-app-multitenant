@@ -3,7 +3,6 @@ name: code-review
 description: "/test の前に実行。CI 完了を待機し、実装が受け入れ条件・セキュリティ・ベストプラクティスを満たしているかレビューする。高リスク判定 YES かつ FINAL_VERDICT OK の場合は敵対的レビューステージ（反証マンデートの多観点サブエージェント）を自動起動する。Blocker があれば差し戻す。"
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write, Agent, TaskStop
 ---
 
 # /code-review

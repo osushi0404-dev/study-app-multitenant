@@ -90,6 +90,9 @@ printf 'VERDICT: HIGHRISK\n'                  > "$TMP/p2"; ck TC-14 HIGHRISK "$(
 printf 'VERDICT: OK\n'                        > "$TMP/p3"; ck TC-15 OK       "$(detect_plan_verdict "$TMP/p3")"
 printf '## 判定: 差し戻し（Blocker 2件）\n'   > "$TMP/p4"; ck TC-16 BLOCKER  "$(detect_plan_verdict "$TMP/p4")"
 printf '## 判定: ✅ 完了\n指摘なし\n'         > "$TMP/p5"; ck TC-17 OK       "$(detect_plan_verdict "$TMP/p5")"
+# I185: VERDICT 行も「## 判定: ✅」も無い出力（API エラー文・途中で切れた出力）は OK にせず判定不能
+printf 'API Error: Request timed out.\n'     > "$TMP/p6"; ck TC-17b UNKNOWN "$(detect_plan_verdict "$TMP/p6")"
+printf -- '- [Blocker] 認可が未定義\n'        > "$TMP/p7"; ck TC-17c UNKNOWN "$(detect_plan_verdict "$TMP/p7")"
 
 echo "== TC-11/TC-15w: スクリプトが detect_* を一次判定に配線していること =="
 # shellcheck disable=SC2016  # 単一引用符はリテラル文字列を grep する意図（展開不要）
@@ -110,7 +113,7 @@ ck_true TC-18c-plan-p1gate   grep -q '消費箇所' "$PLAN_AGENT"
 echo "== TC-21〜23: retro C1（末尾アンカー）・P1（do/gate） =="
 # C1: 隣接値の部分一致誤読を末尾アンカーで排除
 printf 'x\nVERDICT: HIGHRISK\n' > "$TMP/r1"; ck TC-21a OK "$(detect_code_verdict "$TMP/r1")"   # code側に HIGHRISK 混入 → HIGH 誤読しない
-printf 'x\nVERDICT: HIGH\n'     > "$TMP/r2"; ck TC-21b OK "$(detect_plan_verdict "$TMP/r2")"   # plan側に HIGH 混入 → HIGHRISK 部分一致しない
+printf 'x\nVERDICT: HIGH\n'     > "$TMP/r2"; ck TC-21b UNKNOWN "$(detect_plan_verdict "$TMP/r2")"   # plan側に HIGH 混入 → HIGHRISK 部分一致しない（I185 以降は OK に倒さず判定不能）
 printf 'x\nVERDICT: OK\n'       > "$TMP/r3"; ck TC-21c OK "$(detect_code_verdict "$TMP/r3")"   # 正常系がアンカー後も壊れない
 # P1 gate: code-reviewer.md にシェルテスト決定論性観点
 ck_true TC-22-gate grep -q 'シェルスクリプト検証の決定論性' "$CODE_AGENT"
@@ -120,9 +123,10 @@ ck_true TC-23-do   grep -q 'シェルスクリプトのロジック検証' "$RUN
 echo "== TC-24〜27: detect_plan_verdict 高リスク保険の多行対応（VERDICT 行なし・I066 #1） =="
 # 実出力書式: 「## 高リスク判定」見出し + 次行「判定: Yes/No」（別行）。VERDICT 行を持たない旧形式を想定。
 printf '## 高リスク判定\n判定: Yes\n該当条件: 認可変更\n' > "$TMP/hr1"; ck TC-24 HIGHRISK "$(detect_plan_verdict "$TMP/hr1")"
-printf '## 高リスク判定\n判定: No\n該当条件: なし\n'      > "$TMP/hr2"; ck TC-25 OK       "$(detect_plan_verdict "$TMP/hr2")"
-# アンカリング: 高リスク判定ブロックは No、別セクションに 判定: Yes → 誤検出しない
-printf '## 高リスク判定\n判定: No\n## その他\n判定: Yes\n' > "$TMP/hr3"; ck TC-26 OK       "$(detect_plan_verdict "$TMP/hr3")"
+printf '## 高リスク判定\n判定: No\n該当条件: なし\n'      > "$TMP/hr2"; ck TC-25 UNKNOWN  "$(detect_plan_verdict "$TMP/hr2")"   # I185: 「## 判定: ✅」が無ければ OK にしない
+printf '## 判定: ✅ 完了\n## 高リスク判定\n判定: No\n'   > "$TMP/hr2b"; ck TC-25b OK     "$(detect_plan_verdict "$TMP/hr2b")"
+# アンカリング: 高リスク判定ブロックは No、別セクションに 判定: Yes → HIGHRISK と誤検出しない
+printf '## 高リスク判定\n判定: No\n## その他\n判定: Yes\n' > "$TMP/hr3"; ck TC-26 UNKNOWN  "$(detect_plan_verdict "$TMP/hr3")"
 # TC-27: 旧行単位 grep が多行 Yes に非マッチ（バグの存在＝修正の前提を固定化）
 ck_false TC-27-old-grep-nonmatch grep -qiE "高リスク判定.*Yes" "$TMP/hr1"
 # TC-27b: 大文字小文字を無視（旧 grep -i パリティ）— 小文字 yes も HIGHRISK

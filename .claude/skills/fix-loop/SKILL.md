@@ -3,7 +3,6 @@ name: fix-loop
 description: When NG or tests fail: record facts, propose delta plan, get approval, fix, re-test.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /fix-loop

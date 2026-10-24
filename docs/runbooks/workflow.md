@@ -3,9 +3,9 @@
 ## 使うスキル（/ で実行）
 - /issue-bootstrap [title] : 採番、イシューファイル作成、issue-review による自己完結度レビュー（ソフト）、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
 - /grill-me I### : 計画書作成前の設計インタビュー（推奨。複雑なイシューや設計判断が多いイシューで実行する）
-- /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成（承認待ち）
-- /plan-issue-review I### : 計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK かつ高リスク判定 Yes → /security-review、No → /implement へ）
-- /security-review I### : 高リスク変更の実装前セキュリティ深掘り（設計レビュー + 攻撃シナリオ）。/plan-issue-review で高リスク判定 Yes 時のみ実行（Blocker なし → /implement へ）
+- /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成 → 計画レビュー（`plan-issue-review.sh`）まで実行し、レビュー済みの計画で承認待ち（高リスク判定 Yes → /security-review、No → /implement へ）
+- /plan-issue-review I### : 計画の方式・範囲・受け入れ条件を変えたときの再レビュー。計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK かつ高リスク判定 Yes → /security-review、No → /implement へ）
+- /security-review I### : 高リスク変更の実装前セキュリティ深掘り（設計レビュー + 攻撃シナリオ）。計画レビューで高リスク判定 Yes 時のみ実行（Blocker なし → /implement へ）
 - /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
 - /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
 - /test I### : 自動テスト（pytest + Jest）+ 手動テスト確認（OK なら /close へ）
@@ -22,11 +22,11 @@
 ## フロー（あなたの運用をそのまま型にする）
 1. /issue-bootstrap → issue-review で自己完結度レビュー（ソフト・判定で grill-me 要否を案内）→ ユーザーがイシューファイル確認（OK/NG）
 1.5. /grill-me I### → 設計上の疑問点を解消（推奨・任意。issue-review 判定「十分」ならスキップ可）
-2. /plan-issue I### → ユーザーが計画書確認（OK/NG）
-3. /plan-issue-review I### → 計画書・テスト文書レビュー（OK/NG）
-   - NG（Edit/Write で修正可能）: Claude が自分で修正 → /plan-issue-review に戻る
-   - NG（設計判断が必要）: 選択肢を提示してユーザー確認 → 承認後修正 → /plan-issue-review に戻る
-   - OK かつ高リスク判定 Yes: /security-review へ
+2. /plan-issue I### → 計画書作成 → Claude が計画レビュー（`plan-issue-review.sh`）まで実行 → ユーザーがレビュー済みの計画を確認（OK/NG）
+   - レビュー NG（Edit/Write で修正可能）: Claude が自分で修正して再実行（同じゲートで 2 回続けて NG なら停止して報告）
+   - レビュー NG（設計判断が必要）: 選択肢を承認ポイントに含めて提示 → ユーザーが選ぶ
+   - 高リスク判定 Yes: 承認後に /security-review へ
+3. /plan-issue-review I###（計画の方式・範囲・受け入れ条件を変えたときだけ）→ 再レビュー（OK/NG。NG の扱いは 2 と同じ）
 3.5. /security-review I###（高リスク判定 Yes の場合のみ）→ Blocker 解消後 /implement へ
 4. /implement I### → 実装・型チェック・push
 5. /code-review I### → CI 確認＋要件照合（OK/NG）
@@ -56,7 +56,9 @@
 | イシュー作成依頼を受けた後 | 「`/issue-bootstrap [タイトル]` を入力してください」と案内 |
 | イシュー承認後 | 「`/grill-me I###` を実行することを推奨します（複雑なイシューの場合）。準備ができたら `/plan-issue I###` を入力してください」と案内 |
 | grill-me 完了後 | 「`/plan-issue I###` を入力してください」と案内 |
-| 計画書承認後 | 「`/plan-issue-review I###` を入力してください」と案内 |
+| 計画書承認後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内（計画レビューは `/plan-issue` の中で済んでいる） |
+| 計画書承認後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |
+| 計画の方式・範囲・受け入れ条件を変えた後 | 「`/plan-issue-review I###` を入力してください」と案内 |
 | plan-issue-review OK 後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内 |
 | plan-issue-review OK 後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |
 | security-review Blocker なし後 | 「`/implement I###` を入力してください」と案内 |

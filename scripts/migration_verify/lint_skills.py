@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = ROOT / ".claude/skills"
 OUTPUT = ROOT / "docs/migration/reports/skills_lint_report.json"
 
-REQUIRED_FIELDS = ["name", "description", "allowed-tools"]
+# allowed-tools は「確認なしで使ってよい」事前許可で制限ではないため必須にしない（I185 P4・skills.md）
+REQUIRED_FIELDS = ["name", "description"]
 
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 

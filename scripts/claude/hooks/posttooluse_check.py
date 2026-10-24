@@ -64,7 +64,8 @@ def main() -> None:
 
     if error:
         print(f"[posttooluse] syntax error in {path}:\n{error}", file=sys.stderr)
-        sys.exit(1)
+        # PostToolUse で stderr を Claude に届けるのは exit 2 だけ（exit 1 は届かない・hooks.md）
+        sys.exit(2)
 
 
 if __name__ == "__main__":

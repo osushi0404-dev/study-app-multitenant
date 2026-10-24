@@ -3,7 +3,6 @@ name: plan-issue
 description: Create branch, push, draft PR, then plan + tests + review docs for an issue.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /plan-issue
@@ -171,6 +170,16 @@ Draft PR 番号をイシューファイルの「## 関連資料」セクショ�
 - [ ] 決定論 TC の合否判定インターフェースが exit code に統一されているか（合格=exit 0・不合格=非ゼロ終了。出力値の目視比較を合否基準にせず、不在判定は `! grep -q` 等の合格=exit 0 形で書かれているか）
 - [ ] 新しいテストケース（auto_test.md の TC）を追加したステップがある場合、そのTCをすべて実行・記録してから承認ポイントを提示しているか
 
-完了したら「承認ポイント」を提示して停止する。
+**計画レビュー（承認ポイント提示の前に実施・必須・I185 P2）**
+上の文書品質ゲートを満たしたら、ユーザーの入力を待たずに計画レビューまで済ませる。ユーザーが見るのは、レビュー済みの計画 1 回だけにする。
+1. 計画書・テスト文書・レビュー文書を commit/push する。
+2. `bash scripts/claude/plan-issue-review.sh $ARGUMENTS` を実行する。スクリプトが最後に出す次の案内（「`/implement` を実行してください」など）は、承認の後に使う案内なので、ここではユーザーに伝えない（承認ポイントの後に、下の「承認後の次のステップ」で案内する）。
+3. 指摘のうち Edit/Write で直せるものは自分で直し、commit/push して 2 を再実行する。同じゲートで 2 回続けて NG（Blocker が残る）なら、それ以上回さずに停止し、残った指摘を報告する（ユーザーが方針を決めたら、計画を直して 2 から再開する）。
+   - 次のどれか 1 つでも当たるときは、スクリプトが判定の前に失敗したとみなし、承認ポイントを出さずに停止し、失敗したことを報告する: 終了コードが 0 以外で、かつ Blocker の案内（`⛔ Blocker が残っています`）が出ていない／レビュー記録 `docs/reviews/$ARGUMENTS_plan_review_<ts>.md` が作られていない／レビュー記録のどの行にも `VERDICT:` で始まる行が無い（スクリプトはこのとき「判定できませんでした」と出して終了コード 1 で終わる）。
+4. 設計判断が要る指摘は、選択肢として承認ポイントに含める。
+5. 判定が OK または HIGHRISK になったら、スクリプトが計画書に追記したレビュー記録へのリンクを commit/push し、レビュー記録のパスと高リスク判定を承認ポイントに含めて提示し、停止する。
 
-承認後の次のステップ: `/plan-issue-review $ARGUMENTS` を実行して計画書・テスト文書をレビューしてください。
+承認後の次のステップ:
+- 高リスク判定 No: `/implement $ARGUMENTS` を実行してください。
+- 高リスク判定 Yes: `/security-review $ARGUMENTS` を実行してから `/implement $ARGUMENTS` へ進んでください。
+- 承認の前後で計画の方式・範囲・受け入れ条件を変えた場合は、`/plan-issue-review $ARGUMENTS` で再レビューしてください。

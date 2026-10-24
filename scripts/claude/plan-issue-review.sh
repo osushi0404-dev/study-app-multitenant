@@ -40,7 +40,10 @@ detect_plan_verdict() {
     inblock && toupper($0) ~ /^判定:[[:space:]]*YES[[:space:]]*$/ { found=1 }
     END { exit(found?0:1) }
   ' "$file"; then echo "HIGHRISK"; return; fi
-  echo "OK"
+  # OK とみなすのは、はっきり「## 判定: ✅」と書かれているときだけ。VERDICT 行も判定も無い出力
+  # （API エラー文・途中で切れた出力）は判定不能として止める（I185: 人がスクリプトの出力を直接見なくなったため fail-closed）
+  if grep -qE '^## 判定:[[:space:]]*✅' "$file"; then echo "OK"; return; fi
+  echo "UNKNOWN"
 }
 
 # 計画書の「## レビュー結果」へリンク行を冪等追記（重複見出しを作らない・履歴保持）。
@@ -161,6 +164,9 @@ case "$(detect_plan_verdict "$REVIEW_FILE")" in
   HIGHRISK)
     # shellcheck disable=SC2016
     printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE" ;;
+  UNKNOWN)
+    printf '\n⛔ 判定できませんでした（レビュー記録に VERDICT 行も「## 判定: ✅」もありません）: %s\n   レビューが正常に終わっていない可能性があります。記録を確かめてから再実行してください。\n' "$REVIEW_FILE"
+    exit 1 ;;
   *)
     # shellcheck disable=SC2016
     printf '\n✅ プランレビュー完了。`/implement %s` を実行してください。\n' "$ISSUE" ;;

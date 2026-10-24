@@ -3,7 +3,6 @@ name: implement
 description: Implement an approved plan, run type checks, push to PR.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /implement

@@ -3,7 +3,6 @@ name: issue-bootstrap
 description: Create issue doc, run issue-review (self-completeness), then register GitHub Issue. Branch creation is handled by /plan-issue.
 argument-hint: "[title]"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /issue-bootstrap

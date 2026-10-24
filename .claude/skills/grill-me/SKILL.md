@@ -3,7 +3,6 @@ name: grill-me
 description: Interview the user about design ambiguities before plan creation.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Glob, Grep, Edit
 ---
 
 # /grill-me
