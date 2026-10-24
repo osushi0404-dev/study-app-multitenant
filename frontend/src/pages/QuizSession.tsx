@@ -118,6 +118,8 @@ const QuizSessionPage: React.FC = () => {
   const createNewSession = useCallback(async (idempotencyKey: string | undefined) => {
     try {
       setLoading(true);
+      // 完了画面の「もう一度挑戦」から開始した場合に、完了表示を解除する
+      setSessionComplete(false);
       const sessionData: any = {};
 
       if (subjectId) {

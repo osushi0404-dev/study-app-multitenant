@@ -449,6 +449,7 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 - **リスク4（`crypto.randomUUID` が無い環境）**: 非 HTTPS・古いブラウザで例外になる。→ 回避: `generateIdempotencyKey()` で存在を確かめ、無ければヘッダを付けずに送る（サーバーは後勝ちで受け付ける）。
 - **リスク5（I166 との衝突）**: I166 も `create` を変更する。→ 回避: 後からマージする側が develop を取り込んで統合する（grill-me で決定済み）。本計画では開始処理をサービスへ移すため、I166 の組織チェックはサービスに足す形になる。
 - **リスク6（API 契約の変化）**: 405 化・応答コードの追加で既存の呼び出し元が壊れる。→ 回避: PUT/PATCH/DELETE の利用箇所が無いことを grep で確認済み。画面は 200 と 201 を区別せず `response.data` だけを使う。
+- **リスク7（デプロイ時の旧コードと新スキーマの共存・敵対的レビュー第 1 周 Low）**: `0021` の適用後に旧コードが動いている間は、旧 `create`（ロック無し）の同時開始が新しい制約で `IntegrityError`（500）になり得る。`0020` と `0021` の間に重複ができると `0021` が失敗し得る（数ミリ秒の窓）。→ 回避: どちらも一時的でデータは壊れない。本番はコードの入れ替えとマイグレーションを同じデプロイで行い、`0021` が失敗した場合は `migrate problems` を再実行する（`0020` が再び重複を解消してから制約を足す）。
 - **補足（スコープ外の既知事項）**: 409/422 のとき、共通のエラーハンドラ（`frontend/src/services/api.ts:197-204`）も「予期しないエラーが発生しました」を表示し、画面のトーストと合わせて 2 つ出る。これは既存の未対応ステータスと同じ挙動で、本イシューでは変えない（409 は直列化により通常は起きない）。
 
 ## 10. データ整合性設計
@@ -522,6 +523,7 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 - **変更 2（2026-10-24・/implement 中に発見）**: `createNewSession` の呼び出し元がもう 1 か所あった（完了画面の「もう一度挑戦」ボタン・`QuizSession.tsx` の `onClick={createNewSession}`）。調査時の grep が `navigate(` だけで呼び出し元を全件洗っていなかった。引数を足したことで型エラーになり発覚。`onClick={() => createNewSession(generateIdempotencyKey())}` に変更し（クリックごとに新しいキー＝意図的なやり直しは後勝ち）、既存の `QuizSession.test.tsx` に TC-34 を追加。方式・AC は変わらない（呼び出し元の追従のみ）ため plan-review のやり直しは不要と判断。ユーザー指示「承認なしで進めて」（2026-10-24）により事後記録。
 - **変更 3（2026-10-24・/implement 中に発見）**: TC-40 の期待値を「安全なコンテキストならキー付き・そうでなければキー無し」に変更。compose 内の e2e コンテナは `http://frontend:3000`（安全なコンテキストでない）で開くため `crypto.randomUUID` が無く、計画どおりの代替動作（キー無しで送る）になることを実測した。CI（`http://localhost:3000`）ではキー付きの経路を検証する。POST 1 回の判定は両環境で同じ。
 - **変更 4（2026-10-24・/implement 中に発見）**: TC-14 は関数実行後に制約を付け直さず、有効件数で解消を確かめる形に変更（auto_test の注に理由を記録）。
+- **変更 5（2026-10-24・/code-review と敵対的レビュー第 1 周の指摘対応）**: ① code-review Medium: 完了画面の「もう一度挑戦」の後も `sessionComplete` が true のままで完了画面が出続ける（以前からの不具合だが今回触った経路）→ `createNewSession` の冒頭で `setSessionComplete(false)`、TC-34 に「問題画面へ切り替わる」を追加。② 敵対的 High: TC-18 がテスト内で `update_fields` を書いているだけで `views.py` の回帰を検出できない → 実際の `submit_answer` を通す形に変更。TC-19 の grep を pytest（`inspect.getsource`）に移し CI で毎回実行。③ 敵対的 Low: デプロイ順序の注意を「8. Risk & 回避策」に追記。方式・AC は変わらないため plan-review のやり直しは不要と判断。
 
 ## セキュリティレビュー結果
 

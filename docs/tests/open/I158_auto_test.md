@@ -67,7 +67,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 | TC-15 | 同じキーのセッションが終了済みでもそのまま返す | `KEY` で POST（201）→ `POST /api/quiz/{id}/end/` → `KEY` で再 POST | 3 回目 `status.HTTP_200_OK`・同じ id・`response.data["is_active"] is False`。セッション総数 1 | Claude |
 | TC-16 | キーはユーザーごと（他人のセッションは返らない） | user が `KEY` で POST（201）→ other が同じ `KEY` で POST | other も 201・id が異なる・`response.data` の id が other のセッション。user のセッションは `is_active is True` のまま | Claude |
 | TC-17 | 未認証は 401 | 認証なしの `APIClient()` で `POST QUIZ_URL` | `status.HTTP_401_UNAUTHORIZED`・`QuizSession.objects.count() == 0` | Claude |
-| TC-18 | 回答送信・終了は開始処理が終了させた状態を書き戻さない（security-review 由来） | 有効セッション S を作成し、`stale = QuizSession.objects.get(pk=S.pk)` で古い実体を保持 → `QuizService.start_session(user=user, subject=subject_a, client_request_id=None)` で新規開始（S は終了）→ `stale.completed_problems += 1` の後、計画 修正項目 8 と同じ `stale.save(update_fields=['completed_problems', 'correct_answers'])` | 例外なし。S を再取得して `is_active is False`・`completed_problems == 1`。有効セッションは新規の 1 件のみ | Claude |
+| TC-18 | 回答送信は開始処理が終了させた状態を書き戻さない（security-review 由来・敵対的レビュー第 1 周で実ビュー経由に変更） | 有効セッション S を作成し、`stale = QuizSession.objects.get(pk=S.pk)` で古い実体を保持 → `QuizService.start_session(...)` で新規開始（S は終了）→ `mock.patch.object(QuizSessionViewSet, "get_object", return_value=stale)` 下で `POST /api/quiz/{S.id}/submit_answer/`（`problem_id` = subject_a の未削除問題・`selected_choice_ids: []`）＝「get_object の直後に別タブの開始が割り込んだ」状態を実際の `submit_answer` で再現 | `status.HTTP_200_OK`。S を再取得して `is_active is False`・`completed_problems == 1`。有効セッションは新規の 1 件のみ。`submit_answer` を `session.save()` に戻すと `IntegrityError` で RED（注入確認済み） | Claude |
 
 注:
 - ヘッダは Django テストクライアントの書式 `HTTP_IDEMPOTENCY_KEY=...`（`request.headers["Idempotency-Key"]` として届く）で渡す。
@@ -80,7 +80,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 
 | TC | 内容 | コマンド | 合否（exit code） | 実施者 |
 |----|------|---------|------------------|--------|
-| TC-19 | `QuizSessionViewSet` に全列保存の `session.save()` が残っていない（TC-18 の書き方が実コードで守られていることの固定） | `! grep -qE "session\.save\(\)" backend/problems/views.py` | exit 0（合格）。**計画時（2026-10-24・実装前）の実行で exit 1（NG）を確認済み**（現行の 840・942・971 行目を検出）＝失敗注入は現行コードそのもの | Claude |
+| TC-19 | `QuizSessionViewSet` に全列保存の `session.save()` が残っていない（敵対的レビュー第 1 周で pytest に移し CI で毎回実行） | pytest `test_quiz_session_viewset_saves_only_needed_columns`: `"session.save()" not in inspect.getsource(QuizSessionViewSet)` | 合格。`submit_answer` を `session.save()` に戻すと RED（注入確認済み）。旧形式（`! grep -qE "session\.save\(\)" backend/problems/views.py`）は計画時に現行コードで exit 1 を確認済み | Claude |
 | TC-20 | モデルとマイグレーションが一致 | `docker compose exec -T backend python manage.py makemigrations --check --dry-run` | exit 0（合格）。計画時点（実装前）の実行で exit 0・`No changes detected` を確認済み（2026-10-24）。失敗注入は下記「false-green 自己検証」 | Claude |
 | TC-21 | まっさらな DB で全マイグレーションが通る | `docker compose exec -T backend python -m pytest --migrations --create-db -q problems/tests/test_I158_quiz_session_start.py` | exit 0（テスト DB を作り直して 0001〜0021 を適用し、そのうえで TC-01〜17 が合格） | Claude |
 | TC-22 | Backend 全体回帰 | `docker compose exec -T backend python -m pytest --tb=short -q` | exit 0。既存 **103 件**（baseline 2026-10-24）＋新規すべて合格 | Claude |
@@ -93,7 +93,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 |----|------|------|--------|--------|
 | TC-30 | StrictMode でも開始 POST は 1 回・キー付き（本バグの再発防止） | `apiClient.post` を `{ data: { id: 's1', is_active: true, ... } }` で解決、`apiClient.get`（next_problem）を問題データで解決 → 描画 → 問題文の表示を待つ | `apiClient.post` の `/api/quiz/` 宛て呼び出しが **ちょうど 1 回**。引数が `('/api/quiz/', { subject: '1' }, { headers: { 'Idempotency-Key': expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) } })` | Claude |
 | TC-31 | 開始失敗時は現行どおりトースト＋ダッシュボードへ | `apiClient.post` を `{ response: { status: 409 } }` で reject → 描画 | `toast.error` が `'クイズセッションの作成に失敗しました'` で呼ばれる。`mockNavigate` が `'/dashboard'` で呼ばれる。`apiClient.post` は 1 回 | Claude |
-| TC-34 | 完了画面の「もう一度挑戦」からの開始にもキーが付く（計画変更 2） | 既存 `QuizSession.test.tsx`（`useParams` = `{ id: 'test-session-id' }`）に追加。`apiClient.get` を `is_active: false` のセッションで解決 → 完了画面の「もう一度挑戦」ボタンをクリック | `apiClient.post` が `('/api/quiz/', { subject: '1' }, { headers: { 'Idempotency-Key': UUID v4 } })` で呼ばれる | Claude |
+| TC-34 | 完了画面の「もう一度挑戦」からの開始にもキーが付く（計画変更 2） | 既存 `QuizSession.test.tsx`（`useParams` = `{ id: 'test-session-id' }`）に追加。`apiClient.get` を `is_active: false` のセッションで解決 → 完了画面の「もう一度挑戦」ボタンをクリック | `apiClient.post` が `('/api/quiz/', { subject: '1' }, { headers: { 'Idempotency-Key': UUID v4 } })` で呼ばれる。続けて問題文が表示され、「クイズ完了！」が消える（code-review Medium 対応で追加・`setSessionComplete(false)` を外すと RED を確認済み） | Claude |
 | TC-32 | 既存の読み込み経路に退行なし | `CI=true npx react-scripts test --watchAll=false src/pages/__tests__/QuizSession.test.tsx` | exit 0（既存 6 件合格） | Claude |
 | TC-33 | Frontend 全体回帰・型・lint | ① `CI=true npx react-scripts test --watchAll=false` ② `npx tsc --noEmit` ③ `npx eslint src/pages/QuizSession.tsx src/setupTests.ts src/pages/__tests__/QuizSession.start.test.tsx` | ①〜③ すべて exit 0。①は既存 **10 件**（baseline 2026-10-24）＋新規すべて合格 | Claude |
 

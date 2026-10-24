@@ -6,9 +6,10 @@ I158: クイズ開始時のセッション二重作成の是正（開始の冪�
 - PUT/PATCH/DELETE は 405・is_active は読み取り専用
 - 回答送信・終了は開始処理が終了させた is_active を書き戻さない
 
-TC-01〜TC-18（docs/tests/open/I158_auto_test.md）に対応。
+TC-01〜TC-19（docs/tests/open/I158_auto_test.md）に対応。
 """
 import importlib
+import inspect
 import threading
 import uuid
 from unittest import mock
@@ -24,6 +25,7 @@ from rest_framework.test import APIClient
 from accounts.models import Organization, OrganizationCategory
 from problems.models import Problem, QuizSession, Subject
 from problems.services.quiz_service import QuizService
+from problems.views import QuizSessionViewSet
 
 User = get_user_model()
 
@@ -350,17 +352,29 @@ def test_unauthenticated_start_returns_401(setup):
     assert QuizSession.objects.count() == 0
 
 
-# ---- TC-18: 回答送信の保存は開始処理が終了させた状態を書き戻さない ----
-def test_answer_save_does_not_reactivate_ended_session(setup):
+# ---- TC-18: 回答送信は開始処理が終了させた状態を書き戻さない ----
+def test_submit_answer_does_not_reactivate_session_ended_by_start(setup):
     session = QuizSession.objects.create(user=setup["user"], subject=setup["subject_a"])
+    problem = Problem.objects.filter(subject=setup["subject_a"], is_deleted=False).first()
+    # submit_answer が get_object で読んだ直後に、別タブの開始が割り込んだ状態を再現する
     stale = QuizSession.objects.get(pk=session.pk)
-
     QuizService.start_session(
         user=setup["user"], subject=setup["subject_a"], client_request_id=None)
-    stale.completed_problems += 1
-    stale.save(update_fields=["completed_problems", "correct_answers"])
 
+    with mock.patch.object(QuizSessionViewSet, "get_object", return_value=stale):
+        response = _client(setup["user"]).post(
+            f"{QUIZ_URL}{session.id}/submit_answer/",
+            {"problem_id": problem.id, "selected_choice_ids": []}, format="json")
+
+    assert response.status_code == status.HTTP_200_OK
     session.refresh_from_db()
     assert session.is_active is False
     assert session.completed_problems == 1
     assert _active_count(setup["user"]) == 1
+
+
+# ---- TC-19: QuizSessionViewSet に全列保存の session.save() が残っていない ----
+def test_quiz_session_viewset_saves_only_needed_columns():
+    source = inspect.getsource(QuizSessionViewSet)
+
+    assert "session.save()" not in source

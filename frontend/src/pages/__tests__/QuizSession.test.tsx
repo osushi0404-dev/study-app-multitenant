@@ -202,6 +202,9 @@ describe('QuizSession Component', () => {
     (apiClient.post as jest.Mock).mockResolvedValueOnce({
       data: { ...mockSession, id: 'new-session-id' },
     });
+    (apiClient.get as jest.Mock).mockResolvedValueOnce({
+      data: mockProblem,
+    });
 
     render(
       <BrowserRouter>
@@ -224,6 +227,9 @@ describe('QuizSession Component', () => {
         }
       );
     });
+    // 完了画面から問題画面へ切り替わる
+    expect(await screen.findByText('テスト問題文')).toBeInTheDocument();
+    expect(screen.queryByText('クイズ完了！')).not.toBeInTheDocument();
   });
 
   it('difficulty と problem_type が正しく表示される', async () => {
