@@ -1,0 +1,13 @@
+# I184 手動テスト: I179 のワークツリー運用を既存の環境に適用する
+
+**共通の準備**: primary（`/mnt/c/app/study-app-multitenant`）の Claude セッションから wt-harness・harness-1/2 へ書き込まない（§9）。Docker の操作は計画書「Danger Ops」の承認の後だけ行う。
+
+| No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
+|---:|------|----------|--------|--------|------|
+| 1 | 計画書ステップ 2: primary のフォルダで新しいターミナルを開き `claude --worktree harness-1` を実行。別のターミナルで `claude --worktree harness-2` を実行。どちらも閉じずに置いておく | どちらも「Workspace trust not yet accepted」などのエラーが出ずに Claude Code の対話画面が開く。それぞれの画面で `git branch --show-current` を聞くと `worktree-harness-1`・`worktree-harness-2` と答える | Human | | 作成直後の確認は TC-2b・TC-3（Claude が primary から実行） |
+| 2 | 計画書ステップ 5 の前半: wt-harness で Claude セッションを開いていれば終了する。wt-harness のフォルダでターミナルを開き、`cd /mnt/c/app/wt-harness && git status --porcelain --untracked-files=all \| sed -n 's/^?? //p' \| xargs -d '\n' rm --` を実行し、続けて `git status --porcelain` を実行する | `git status --porcelain` の出力が空（何も表示されない） | Human | | TC-4a が exit 0 になった後でだけ行う |
+| 3 | `I184_review.md` の「コピーの一覧」で、コピーしなかった 2 件（`docs/issues/open/I121.md`・`I151.md`）について `git ls-tree -r --name-only origin/develop docs/issues/closed/` に `I121.md`・`I151.md` が出ることを見る | 2 件とも closed 側にあり、一覧の「理由」欄に「develop に closed 版あり（§11 コピーしないもの）」と書かれている | Claude | | |
+| 4 | ステップ 1〜6 を通して、`worktree.md` の手順どおりに進まなかった箇所（コマンドの失敗・書かれていない確認画面・順序の矛盾）を `I184_review.md` の「手順の不足」に書き出す。harness-1/2 の確認が終わった後、ユーザーが harness-2 のセッションを終了し、「Worktree removed (no changes)」と出るか（＝4-10 の注意の裏付け）を見る | 「手順の不足」に、見つかった箇所と直した `worktree.md` の場所が書かれている（無ければ「無し」）。harness-2 の終了時の表示が記録されている（消えた場合は同じコマンドで作り直すかをユーザーが決める） | Human（終了の観察）・Claude（記録） | | 4-10 の文案は観察結果に合わせて直す |
+| 5 | GitHub のリポジトリの Labels 画面（`https://github.com/osushi0404-dev/study-app-multitenant/labels`）を開く | `track:harness` の説明が「ハーネス改善トラック」、`track:app` の説明が「学習アプリ開発トラック」と表示され、括弧書きのワークツリー名が無い | Claude | | `gh label list --search track` の出力で確認する（TC-5 と同じ内容を目視の文言でも見る） |
+
+結論: 未実施
