@@ -17,8 +17,8 @@ import sys
 TIMEOUT_SEC = 5
 PR_LIMIT = 5
 UNAVAILABLE = "取得できませんでした"
-ISSUE_ID = re.compile(r"\b(I\d{3})\b")  # PR は「fix: I178 …」の形なので先頭に限らず最初の 1 つ
-DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+ISSUE_ID = re.compile(r"\b(I[0-9]{3})\b", re.ASCII)  # PR は「fix: I178 …」の形なので先頭に限らず最初の 1 つ
+DATE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})", re.ASCII)
 
 
 def _run(args: list[str]) -> str | None:
@@ -42,7 +42,7 @@ def _gh_json(args: list[str]) -> list | None:
 
 def _number(item: dict) -> str:
     value = item.get("number")
-    return f"#{value}" if isinstance(value, int) else "#-"
+    return f"#{value}" if isinstance(value, int) and not isinstance(value, bool) else "#-"
 
 
 def _issue_id(item: dict) -> str:
@@ -68,6 +68,8 @@ def format_context(branch: str | None, dirty: int | None,
         lines.append("直近にマージされた PR（develop 宛て）: " + ("、".join(items) or "なし"))
     if latest_issue is None:
         lines.append(f"GitHub の最新イシュー: {UNAVAILABLE}")
+    elif not latest_issue:
+        lines.append("GitHub の最新イシュー: なし")
     else:
         lines.append(f"GitHub の最新イシュー: {_number(latest_issue)} {_issue_id(latest_issue)}")
     return "\n".join(lines)

@@ -163,7 +163,7 @@ disable-model-invocation: true
    **現イシューのスコープ内で対応できるもの**（軽微なルール・ドキュメント更新等）:
    → 現イシューの `/plan-issue` または既存計画書の更新で対応
 
-   どちらの場合も `/plan-issue-review` → `/implement` → `/test` の正規フローを経由してマージする。
+   どちらの場合も `/plan-issue`（計画レビューまで）→ `/implement` → `/test` の正規フローを経由してマージする。
    禁止: インライン修正（その場での Edit/Write）は禁止。必ず正規フローを使う。
    ```
 

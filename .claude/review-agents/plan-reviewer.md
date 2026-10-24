@@ -99,7 +99,7 @@ Blocker 判定を下すことを恐れるな。
 
 ### Claude Code ベストプラクティス（`.claude/skills/`・`docs/runbooks/`・`.claude/review-agents/` 等の指示ファイル変更を含む場合のみ）
 変更対象に指示ファイル（`.claude/skills/` 等）が含まれる場合に確認する（対象外なら「対象外」と記載）:
-- `allowed-tools` で最小権限が設定されているか
+- 使えるツールを絞る必要があるスキルは `disallowed-tools` で制限しているか（`allowed-tools` は事前許可で制限にはならない。付けるなら本当に事前許可が要るものだけで、素の `Bash` を事前許可していないか）
 - 副作用のある操作（commit・push・デプロイ等）に `disable-model-invocation: true` が設定されているか
 - `argument-hint` が記載されているか
 - `description` に「いつ使うか」が含まれているか（250文字以内）
