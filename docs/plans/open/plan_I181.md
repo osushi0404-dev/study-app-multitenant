@@ -193,11 +193,11 @@ GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only -
 
 - **3-0. 対象と上限（新設）**: 対象は `ADVERSARIAL_STAGE: REQUIRED` のときだけ（判定の正は `code-review.sh`。アプリの高リスク条件、またはハーネスの例外の一覧）。上限は **1 体 15 分・攻め筋は 1 体 3 本まで・1 周 3 体（固定 3 観点）・イシュー全体で 2 周まで**（`/code-review` をやり直しても数え直さない）。
 - **3-1. 起動**:
-  1. 周回の残りを数える: 同じイシューの `docs/reviews/I###_adversarial_review_*.md` をすべて Read し、各記録の `ROUNDS:` 行の数を合計する。合計が 2 以上なら起動せず、3-2 の「上限到達」へ進む。
+  1. 周回の残りを数える: 同じイシューの `docs/reviews/I###_adversarial_review_*.md` をすべて Read し、各記録の `ROUNDS:` 行の数を合計する（`ROUNDS:` 行が無い記録〔本イシューより前の形式〕は、記録の中の周の見出しの数を数える。見出しも無ければ 1 周として数える）。合計が 2 以上なら起動せず、3-2 の「上限到達」へ進む。
   2. 見直す範囲を決める: 過去の記録があれば、いちばん新しい記録の `REVIEWED_COMMIT:` の SHA を `{REVIEW_BASE}` にする（2 周目は前回からの差分だけ）。無ければ `origin/develop`。
   3. この周の開始時の HEAD を `git rev-parse HEAD` で控える（記録の `REVIEWED_COMMIT` になる）。
   4. `adversarial-reviewer.md` のプレースホルダ（`{ISSUE}`・`{PERSPECTIVE}`・`{KNOWN_FINDINGS}`・`{REVIEW_BASE}`）を埋め、固定 3 観点のサブエージェントを **1 メッセージで `run_in_background: true` で起動**し、同じメッセージでタイマー `sleep 900` を Bash の `run_in_background: true` で起動する。固定 3 観点は現行どおり（①ロジック回避・実機 repro ②テストの false-green・tautology ③要件・脅威モデルの網羅漏れ）。動的観点は廃止する。
-  5. 結果は完了通知で受け取る。タイマーの完了通知が先に来たら、まだ動いているサブエージェントを `TaskStop` で止め、その観点を記録に「時間切れ（報告なし）」と書く（新規 Critical/High は 0 として数えるが、時間切れであることを最終報告に必ず書く）。3 体とも先に終わったら、タイマーを `TaskStop` で止める。
+  5. 起動時に返った 3 体のエージェント ID とタイマーのタスク ID を控えておく。結果は完了通知で受け取る。タイマーの完了通知が先に来たら、完了通知がまだ来ていないエージェントの ID を `TaskStop` の `task_id` に渡して止め、その観点を記録に「時間切れ（報告なし）」と書く（新規 Critical/High は 0 として数えるが、時間切れであることを最終報告に必ず書く）。3 体とも先に終わったら、タイマーのタスク ID を `TaskStop` に渡して止める。
 - **3-2. 周回と上限**:
   - 3 体の `NEW_CRITICAL`＋`NEW_HIGH` の合計が 0 → ステージ通過。
   - 1 以上 → 3-3 で修正。修正後、通算の周回（過去の記録の `ROUNDS:` の合計＋この記録の周回）が 2 未満なら、`{REVIEW_BASE}` をこの周の `REVIEWED_COMMIT` にして 2 周目を起動する（修正した差分だけを見る）。
@@ -326,3 +326,7 @@ GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only -
 - **P3/P5/P8 影響なし**（DB・外部 API・非同期・インフラの変更なし）。**P6 影響なし**（UI・性能要件なし）。**P9 影響なし**（個人情報・テナントデータを扱わない）。
 - **設計品質**: 上限の値（15 分・3 本・3 体・2 周・`sleep 900`・2GB・60 秒）は SKILL.md・adversarial-reviewer.md・review-rules.md に書き、正を SKILL.md §3 に一本化する（runbook は参照）。例外のパスの正は `path_risk_trigger()` で、ほかの 2 か所との一致を TC-D6 で機械検証する。
 - **文書品質ゲート**: API・permission_classes・DB は該当なし。自動テストの期待値は YES/NO・exit code で具体的。手動テストの期待結果は具体的な出力・文言。実装ステップ本文に検証コマンドは無い（TC 参照のみ）。否定・不在の TC（D2・P2〜P4 等）には失敗注入（FG）を付けた。合否は exit code に統一。新しい TC（P・D 群）はステップ 1 で作る（計画時点では対象の実装が無いので実行できない＝`I182` と同じ扱い。auto_test「計画時の自己検証」）。
+
+## レビュー結果
+- [20261024_1122 判定: ✅ 完了](../../reviews/I181_plan_review_20261024_1122.md)
+  - Warning（`ROUNDS:` 行の無い旧記録の数え方）・Info（`TaskStop` に渡す ID の控え方）を 4-4 §3-1 の手順 1・5 と auto_test D1 に反映した。手順の書き足しだけで方式・範囲・受け入れ条件は変えないため、計画レビューはやり直さない（4-9・A9）

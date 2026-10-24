@@ -45,7 +45,7 @@
 
 | TC | 内容 | 期待 |
 |----|------|------|
-| D1 | `.claude/skills/code-review/SKILL.md` の `## 3.` の節に `15 分`・`攻め筋は 1 体 3 本`・`1 周 3 体`・`イシュー全体で 2 周`・`REVIEWED_COMMIT`・`ROUNDS:`・`{REVIEW_BASE}`・`run_in_background`・`sleep 900`・`TaskStop`・`時間切れ` がある | exit 0 |
+| D1 | `.claude/skills/code-review/SKILL.md` の `## 3.` の節に `15 分`・`攻め筋は 1 体 3 本`・`1 周 3 体`・`イシュー全体で 2 周`・`REVIEWED_COMMIT`・`ROUNDS:`・`{REVIEW_BASE}`・`run_in_background`・`sleep 900`・`TaskStop`・`task_id`・`時間切れ`・`行が無い記録` がある | exit 0 |
 | D2 | `.claude/skills/code-review/SKILL.md` と `docs/runbooks/review-rules.md` に `最大 3 周`・`総数 15`・`loop-until-dry`・`動的観点`・`最大 5 エージェント` が無い（`! grep -q`） | exit 0 |
 | D3 | SKILL.md の `## 3.` の節と、review-rules.md の `## 高リスク変更の敵対的レビューステージ` の節の両方に `種類ごと`・`止める場所・方式の見直し` がある | exit 0 |
 | D4 | `.claude/review-agents/adversarial-reviewer.md` に `{REVIEW_BASE}`・`攻め筋は最大 3 本`・`12 分`・`15 分`・`ulimit -v`・`timeout 60`・`処理量の欠陥` がある。「守る範囲（脅威モデル）」の節（A10）に `普通の書き方による事故`・`わざと回避する書き方`・`Low`・`件数に数えない`・`danger-ops.md` がある | exit 0 |
