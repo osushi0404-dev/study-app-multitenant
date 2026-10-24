@@ -49,7 +49,7 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 | P102 | `$E npx playwright test -g ログイン --project chromium-unauthed` | 0 |
 | P103 | `$E npx playwright test tests/a.spec.ts tests/b.spec.ts --workers=1 -x --max-failures=1 --timeout=60000` | 0 |
 | P104 | `$E npx playwright test --list` | 0 |
-| P105 | `$E npx playwright test tests/auth.spec.ts --retries=0 2>&1 \| tail -30` | 0 |
+| P105 | `$E npx playwright test tests/auth.spec.ts --retries=0 2>&1 \| tail -30` | 0（ホスト側のパイプ・リダイレクトはコンテナ内の判定に入らない。計画 5-2-6・既存の P37・P40 と同じ） |
 | C60 | `$E npx playwright test --config other.config.ts` | ASK |
 | C61 | `$E npx playwright test --update-snapshots` | ASK |
 | C62 | `$E npx playwright test --reporter=./my-reporter.js` | ASK |

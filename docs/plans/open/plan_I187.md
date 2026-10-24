@@ -46,6 +46,7 @@
 | 確かめたこと | 方法 | 結果 |
 |---|---|---|
 | 採用するバージョン | `npm view @playwright/mcp time` | 最新の安定版は **0.0.83**（2026-09-28 公開・4 週間前）。中で使う playwright は `1.64.0-alpha-1790635538000`（chromium revision **1247**。手元の 1217 とは別に取得が要る） |
+| 既知の脆弱性 | スクラッチパッドに `@playwright/mcp@0.0.83` だけを依存に持つ package.json を作り、`npm install --package-lock-only --ignore-scripts` → `npm audit` | `found 0 vulnerabilities`（exit 0・2026-10-24）。バージョンを上げるときも同じ確認をする（runbook に書く） |
 | オプション名 | `npx -y @playwright/mcp@0.0.83 --help` | `--headless`・`--isolated`（プロファイルをメモリに置き、ディスクに残さない）・`--allowed-origins`（`;` 区切り）・`--output-dir`・`--secrets`（dotenv 形式）・`--browser` が存在 |
 | `--allowed-origins` の挙動 | パッケージのソース（`originOrHostGlob`・`_setupRequestInterception`）を読んだ | 指定があると、まず全リクエストを `blockedbyclient` で止め、指定した origin だけ通す。`http://localhost:*` のように **ポートを `*` にできる**ので、ワークツリーごとにポートが違っても 1 つの設定で足りる。ただし公式の説明どおり「セキュリティの境界ではなく、リダイレクトには効かない」 |
 | `--secrets` の挙動 | 同上（`redactSecrets`） | 操作の入力に秘密の **名前**（例 `E2E_TEST_PASSWORD`）を書くと本当の値に置き換えて入力し、ツールの出力に値が出たら `<secret>名前</secret>` に置き換える。→ Claude はパスワードを読まず・見ずにログインできる |
@@ -64,6 +65,7 @@
 | 安全なコンテキスト | `QuizSession.tsx`・e2e の設定 | e2e コンテナは `http://frontend:3000` を開くので安全なコンテキストにならない（`crypto.randomUUID` などが使えない。`QuizSession.tsx` は代わりの処理を持つ）。Chromium の起動オプション `--unsafely-treat-insecure-origin-as-secure=<origin>` で、その origin を安全なコンテキストとして扱える |
 | E2E の失敗時の記録 | `playwright.config.ts`・`e2e.yml` | 今は `trace: 'on-first-retry'` だけで画面キャプチャを撮らない。CI は失敗時に `e2e/playwright-report/` を 7 日上げる設定だが、reporter に html を指定していないため、このフォルダは作られず何も上がっていない。仮に html レポートを作ると trace が中に入る（trace にはログイン時に入力したパスワードが残る） |
 | 型チェック・lint のコマンドを使っている場所 | リポジトリ全体を grep（`tsc --noEmit`・`eslint src`） | `.github/workflows/ci.yml`（108・125 行目）・`.pre-commit-config.yaml`（44 行目・`npx eslint src/ --ext .ts,.tsx --max-warnings 0`）。文書では `docs/runbooks/onboarding.md:62`（説明文のみ・変更不要）・`plan-writing-rules.md:143`（lint 件数の計測例・変更不要） |
+| 変更するスキルの行数 | `wc -l` | `.claude/skills/test/SKILL.md` 119 行・`.claude/skills/plan-issue/SKILL.md` 185 行。追記はそれぞれ 10 行程度・1 行の書き換えで、公式の目安（500 行以内）に収まるため分割しない |
 | 「Human = ブラウザ操作」の基準を書いている場所（今回の決定を消費する箇所） | grep（`ブラウザ操作`・`画面目視`） | `.claude/skills/plan-issue/SKILL.md:95`・`docs/runbooks/plan-writing-rules.md:506`・`docs/tests/templates/manual_test_template.md:9` の 3 か所。このままだと、今後の計画で画面確認がすべて「Human」になり、目的（Claude が自分で確かめる）と食い違う |
 | レビューの観点の置き場所 | `.claude/skills/code-review/SKILL.md`・`scripts/claude/code-review.sh` | SKILL.md は流れ（スクリプト実行と分岐）だけを書いており、基本レビューの観点はスクリプトが読む `.claude/review-agents/code-reviewer.md` にある。観点はここに足す |
 | 関連イシューとの重なり | イシュー・メモリ | I188（公式機能への置き換え）は計画前・未マージ。I185 の P6（`/test` を CI 確認に置き換え）・P15（見張りの絞り込み）は未起票。重なるファイルは今の develop に合わせて変え、後から入る側が合わせる |
@@ -133,6 +135,7 @@
 9. E2E の落とし穴 4 件と避け方（5-2-4）
 10. 公式と自作の分担: 公式（Playwright MCP・`@playwright/test`・`actions/upload-artifact`・公式 `/run`）をそのまま使う。自作は判定スクリプトだけ。根拠: 「変えたファイルの種類に応じて、テスト記録の決まった行と手元の画像の実在を突き合わせる」機能は Claude Code・Playwright のどちらの公式機能にも無い（Claude Code の hooks は「いつ動かすか」を決める仕組みで判定の中身は持たない。Playwright の記録は失敗時の成果物で、記録の有無は判定しない）
 11. 安全上の注意: `--allowed-origins` は境界ではない・画像やパスワードを git や外部に出さない・任意コードを動かす操作は確認が出る
+12. MCP のバージョンを上げるとき: `.mcp.json` の 1 語を変える PR で行い、公開から 2 週間以上たった版を選び、`npm audit`（high/critical が 0）を確かめる
 
 #### 5-2-3. 型チェック・lint（変更点 12〜14）
 - `frontend/package.json` の scripts:
@@ -192,6 +195,7 @@
   - 値を取らないもの: `-x`・`--list`
 - それ以外の選択肢（`--config`・`--update-snapshots`・`--output`・`--ui`・`--debug` など）や、e2e 以外のサービス、`npx playwright install` などは、これまでどおり確認が出る（列挙に無いものは安全としない＝fail-closed）。
 - 文字列の判定を作り込まない方針（ローカルの安全装置は最小限）に従い、足すのはこの 1 分岐だけにする。
+- ホスト側のパイプ・リダイレクト（P105 の `2>&1 | tail -30`）は、上の「後ろの語」の判定に入らない。見張りはコマンドを `|` などの区切りで単純コマンドに分けてから判定し（`_raw_commands`）、`|` の印（`piped`）は区切りの**後ろ**のコマンド（`tail -30`）にだけ付く（1530 行目）。ホスト側のリダイレクトはコンテナ内の書き込みとして引き継がない（1823〜1824 行目）。そのため `_container_safe()` に渡るのは `npx playwright test tests/auth.spec.ts --retries=0` だけで、P105 は通る（0）。既存の P37（`... pytest -q 2>&1 | tail -5`）・P40（`... e2e 2>&1 | tail -30`）と同じ扱い。一方、コンテナの**中**のシェルに書いた連結（C67 の `sh -c "npx playwright test; rm -r ..."`）は、中の各コマンドが判定され、`rm` が一覧外なので確認になる。
 
 #### 5-2-7. レビューの観点（変更点 10）
 `.claude/review-agents/code-reviewer.md` の観点に 1 項目を足す: 「`frontend/src` の画面の動き（表示・遷移・入力の結果）を変えた場合、E2E か単体テストを追加・更新しているか。テストにしにくい見た目（配置・色など）だけを画面キャプチャで確かめているか。手で確かめただけで終わっていれば High」。
@@ -270,7 +274,7 @@
 |---|---|
 | ホストで chromium が起動しない（ライブラリ以外の原因） | ステップ 1 のゲートで止める。代わりの案は公式 Docker イメージの MCP |
 | `--allowed-origins` は境界ではない（リダイレクト・WebSocket には効かない） | 手元のアプリだけを開く用途に限り、runbook に「境界ではない」と書く。任意コードを動かす操作は allow に入れない |
-| MCP のパッケージに問題のある版が出る | バージョン固定。上げるときは PR で行い、`npm view` で公開日を確かめる |
+| MCP のパッケージに問題のある版が出る | バージョン固定（0.0.83 は `npm audit` で 0 件を確認済み）。上げるときは PR で行い、`npm view` で公開日（2 週間以上前）と、上と同じ `npm audit`（high/critical が 0）を確かめる |
 | パスワードが会話の記録に残る | `--secrets` で名前だけを入力し、出力も伏せ字にする。`.env.e2e` は settings で Read が deny 済み |
 | trace・レポートが CI の成果物で公開される | CI では trace を作らず、上げるのは `*.png` だけ（TC-21・TC-22・M-14） |
 | 見張りの許可を広げすぎる | e2e サービス・`npx playwright test`・列挙した選択肢に限る。列挙外は確認（TC-05 の通らない例） |
@@ -312,3 +316,6 @@
 
 ## 16. フロント開発設定の点検結果
 （ステップ 7 で記入する）
+
+## レビュー結果
+- [20261024_2014 判定: 差し戻し（Blocker 1件）](../../reviews/I187_plan_review_20261024_2014.md)
