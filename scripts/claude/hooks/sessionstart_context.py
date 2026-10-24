@@ -6,7 +6,7 @@ stdout はそのまま Claude の文脈に入る（hooks.md）。
 
 GitHub のタイトルの自由文は出さない。公開リポジトリのイシューは誰でも作れ、
 そのタイトルが毎セッションの文脈に入ると指示の書き込みの入口になるため
-（I185 security-review Medium）。出すのは番号・日付・タイトル先頭の I### だけ。
+（I185 security-review Medium）。出すのは番号・日付・タイトル中の最初の I### だけ。
 どのコマンドが失敗・タイムアウトしても exit 0（セッションの開始を止めない）。
 """
 import json
@@ -17,7 +17,7 @@ import sys
 TIMEOUT_SEC = 5
 PR_LIMIT = 5
 UNAVAILABLE = "取得できませんでした"
-ISSUE_ID = re.compile(r"^(I\d{3})\b")
+ISSUE_ID = re.compile(r"\b(I\d{3})\b")  # PR は「fix: I178 …」の形なので先頭に限らず最初の 1 つ
 DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
 
@@ -46,7 +46,7 @@ def _number(item: dict) -> str:
 
 
 def _issue_id(item: dict) -> str:
-    match = ISSUE_ID.match(str(item.get("title") or ""))
+    match = ISSUE_ID.search(str(item.get("title") or ""))
     return match.group(1) if match else "-"
 
 

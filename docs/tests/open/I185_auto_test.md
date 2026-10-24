@@ -27,10 +27,10 @@
 | TC-14 | P2〜P4 | `test_i185_harness_docs.sh`: ①どの `SKILL.md` にも `allowed-tools:` 行がない ②`security-review` に `disallowed-tools: Bash, Write, NotebookEdit` がある ③`plan-issue` の手順に `bash scripts/claude/plan-issue-review.sh $ARGUMENTS` があり、「承認後の次のステップ: `/plan-issue-review`」がない ④`workflow.md` の移行表に「計画書承認後 → `/plan-issue-review` を入力」がない ⑤`fix-loop` の手順 4 に「推奨案で進めて手順 5 へ」と 6 つの条件（⑥ 認証・認可・テナント境界・秘密情報の扱い・権限設定・フック・GitHub Actions に触れない、を含む）があり、3 つの関所のスクリプト名（fix-diagnosis-review.sh・fix-implementation-review.sh・fix-test-review.sh）が残っている ⑥`fix-loop` の共通ルール (b) に「手順4（新案なので条件を判定し直す）」があり、「手順4 ユーザー承認（新案のため）」がない ⑦`issue-flow.md` と `onboarding.md` に「`/plan-issue` の中で計画レビュー」の説明がある | 合格=0 |
 | TC-15 | P5 | `sessionstart_context.py` が Python として正しい | 合格=0 |
 
-false-green の確認（実装時に行い、結果をここに書く）:
-- TC-10 は、環境変数 `HOOK` で変更前のフック（`git show` で取り出した旧版）を指定して実行し、不合格（非 0）になることを確かめる。
-- TC-11 は、環境変数 `SCRIPT` で、常に exit 1 で終わるおとりを指定して実行し、不合格になることを確かめる。
-- TC-14 は、環境変数 `ROOT` で変更前のファイル一式を置いた一時ディレクトリを指定して実行し、不合格になることを確かめる。
+false-green の確認（2026-10-24・実装時に実施）:
+- TC-10: テストを先に書き、変更前のフック（exit 1）に当てて実行 → TC-10a・10b が不合格（rc=1）、全体 exit 1。直した後は 6 件すべて合格。
+- TC-11: 常に exit 1 で終わり、タイトルをそのまま出すおとり（`SCRIPT` で指定）に当てて実行 → 5 件中 4 件が不合格、全体 exit 1。フックを書く前（ファイルなし）も 4 件不合格。
+- TC-14: テストを先に書き、変更前のスキル・手順書に当てて実行 → 14 件中 11 件が不合格（関所のスクリプト名 3 件は変更前から存在するので合格）、全体 exit 1。直した後は 14 件すべて合格。
 
 ### 計画時の false-green 確認（2026-10-24）
 - 見出しは行頭・行末を固定（`^...$`）して判定する。最初の案（固定なし）は、似た見出し「## 6. 採否の候補」でも合格してしまうことを、非対話の bash（`/usr/bin/grep`）で確かめたため直した。
