@@ -28,6 +28,7 @@
 | TC-5 | ラベル説明文にワークツリー名が無い（取得に失敗したら不合格） | `out=$(gh label list --search track) && [ -n "$out" ] && ! printf '%s\n' "$out" \| grep -qE 'wt-harness\|study-app-multitenant'` | exit 0 |
 | TC-6 | wt-harness の Compose プロジェクト・コンテナ・volume が無い | `! docker compose ls -a \| grep -q '^wt-harness ' && [ -z "$(docker ps -aq --filter label=com.docker.compose.project=wt-harness)" ] && [ -z "$(docker volume ls -q --filter label=com.docker.compose.project=wt-harness)" ]` | exit 0 |
 | TC-7 | `worktree.md` §7 に反映のタイミングの補足（見出し語・取り込みコマンド・例外の参照）がある | `S=$(awk '/^## 7\./{f=1;next} /^## /{f=0} f' docs/runbooks/worktree.md); for k in 'ワークツリー間の反映のタイミング' 'git fetch origin' 'git merge origin/develop' '~/.claude' '.worktreeinclude' 'primary が今チェックアウトしているブランチ'; do printf '%s\n' "$S" \| grep -qF -- "$k" \|\| exit 1; done` | exit 0 |
+| TC-9 | PR #313 に `danger-approved` ラベルが付いている（取得に失敗したら不合格） | `l=$(gh pr view 313 --json labels -q '.labels[].name') && printf '%s\n' "$l" \| grep -qx danger-approved` | exit 0 |
 | TC-8 | バックアップが空でない | `ls backup_wt-harness_*.sql >/dev/null 2>&1 && for f in backup_wt-harness_*.sql; do test -s "$f" \|\| exit 1; done` | exit 0 |
 
 ### TC-4a のスクリプト
@@ -72,6 +73,8 @@ done
 | TC-6 | 1 | wt-harness の volume 4 つが残っている（移行前の失敗条件。`docker compose ls -a` だけなら合格していた） |
 | TC-7 | 1 | §7 に補足が無い（＝FG-7） |
 | TC-8 | 2 | バックアップファイルが無い（`ls` が失敗） |
+| TC-9 | 1 | PR #313 にラベルが無い（移行前の失敗条件。D8 決定後に追加して実行） |
+| FG-9 | 1 | ラベル一覧を `track:harness`・`danger-approved-x` に差し替えると不合格（似た名前に当たらない完全一致） |
 | FG-2b | 1 | 存在しないパスで不合格 |
 | FG-3 | 1 | 空のディレクトリで不合格 |
 | FG-3m | 0 | `origin/main` は develop の祖先なので、`merge-base` だけでは main 基点を弾けない → TC-3 の `.worktreeinclude` 確認が必要 |

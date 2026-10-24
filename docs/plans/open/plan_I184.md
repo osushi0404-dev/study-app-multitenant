@@ -60,7 +60,7 @@ I179 でワークツリーの運用を見直した（人が使うワークツリ
 
 ### ラベル
 - `track:app`「学習アプリ開発トラック（worktree: study-app-multitenant）」・`track:harness`「ハーネス改善トラック（worktree: wt-harness）」。
-- `danger-ops.md` 3 行目の「PR に danger-approved」のラベルは GitHub に無い（`gh label list --search danger` が空）。→ 扱いは承認ポイントで確認（設計判断 D8）。
+- `danger-ops.md` 3 行目の「PR に danger-approved」のラベルは GitHub に無い（`gh label list --search danger` が空）。→ ユーザーの選択で、作成して PR #313 に付ける（設計判断 D8・4-11）。
 
 ### `claude --worktree` の注意（worktree.md §2 の既知事項）
 - 対話セッションとして起動する（Bash ツールからは実行できない）→ 作成はユーザーが別のターミナルで行う。
@@ -76,7 +76,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | 区分 | 内容 |
 |------|------|
 | Backend / Frontend / DB（アプリ） | なし |
-| Config/Infra | primary の `refs/remotes/origin/HEAD`・ワークツリー構成（wt-harness 撤去・harness-1/2 作成）・wt-harness の Docker volume 4 つの削除（危険操作）・GitHub ラベル説明文 2 件 |
+| Config/Infra | primary の `refs/remotes/origin/HEAD`・ワークツリー構成（wt-harness 撤去・harness-1/2 作成）・wt-harness の Docker volume 4 つの削除（危険操作）・GitHub ラベル説明文 2 件・GitHub ラベル `danger-approved` の新規作成と PR #313 への付与 |
 | ドキュメント | `docs/runbooks/worktree.md`（§7 の補足・§11 手順 4 の注意・実行中に見つかった不足） |
 | primary の未コミットファイル | `docs/issues/open/`（17 件）・`docs/reviews/`（20 件）を追加（未コミットのまま） |
 | primary の gitignore 済みファイル | `backup_wt-harness_<日時>.sql`（`.gitignore` の `backup_*.sql` に当たる） |
@@ -95,6 +95,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | 4-7 | ローカルブランチ `feature/I181-slim-review-process` | `git branch -d`（マージ済み。未マージなら -d が拒否するので消えない） |
 | 4-8 | ラベル `track:harness`・`track:app` | 説明文を「ハーネス改善トラック」「学習アプリ開発トラック」に |
 | 4-9 | `docs/runbooks/worktree.md` §7 | 冒頭の 1 文の後に「ワークツリー間の反映のタイミング」を追記（下の文案） |
+| 4-11 | GitHub ラベル `danger-approved`（新規）・PR #313 | 危険操作の承認後に `gh label create danger-approved --description "危険操作（danger-ops.md）をユーザーが承認済み" --color b60205` → `gh pr edit 313 --add-label danger-approved`。404（権限不足）ならユーザーが Labels 画面で同じ名前・説明で作り、PR に付ける |
 | 4-10 | `docs/runbooks/worktree.md` §11 手順 4 | 作った直後は変更が無く、セッションを終えると自動で消える注意を追記（下の文案）。ほかに実行中に手順どおりに進まなかった箇所があれば同じく直す |
 
 **4-9 の文案（§7 の冒頭の段落の直後に入れる）**:
@@ -120,7 +121,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | 1 | primary で `git fetch origin` → `git remote set-head origin --auto`。→ TC-1・TC-0 参照 | Claude | なし |
 | 2 | ユーザーが primary（`/mnt/c/app/study-app-multitenant`）の別のターミナルで `claude --worktree harness-1`、さらに別のターミナルで `claude --worktree harness-2` を起動し、どちらも**セッションを開いたまま**にする（ステップ 7 の確認が終わるまで）。Docker は使わないので `wt-ports.sh` は実行しない（使うときに §5・§6 で行う）。→ TC-2b・TC-3 参照 | Human | 1 |
 | 3 | primary のセッションで、§2 の表の「コピー」37 件を `cp /mnt/c/app/wt-harness/<パス> <パス>` でコピーする（primary に同じパスのファイルが無いことは調査で確認済み。コピー直前にもう一度 `test ! -e <パス>` を見て、あれば止まって `cmp`）。コピーした一覧・コピーしなかった 2 件と理由を `I184_review.md` の一覧に書く。→ TC-4a・TC-4b 参照 | Claude | なし（1・2 と並行可） |
-| 4 | **危険操作の承認を得る**（下の「Danger Ops」の内容を提示）。承認後、primary で `wt-remove.sh` が示すバックアップの 3 手順を行う: `( cd '/mnt/c/app/wt-harness' && docker compose -p 'wt-harness' up -d db )` → `( cd '/mnt/c/app/wt-harness' && docker compose -p 'wt-harness' exec -T db pg_dump -U postgres learning_app ) > backup_wt-harness_<YYYYmmdd_HHMM>.sql`。→ TC-8 参照 | Claude（承認は Human） | 3 |
+| 4 | **危険操作の承認を得る**（下の「Danger Ops」の内容を提示）。承認後、4-11 で `danger-approved` ラベルを作って PR #313 に付け（→ TC-9 参照）、primary で `wt-remove.sh` が示すバックアップの 3 手順を行う: `( cd '/mnt/c/app/wt-harness' && docker compose -p 'wt-harness' up -d db )` → `( cd '/mnt/c/app/wt-harness' && docker compose -p 'wt-harness' exec -T db pg_dump -U postgres learning_app ) > backup_wt-harness_<YYYYmmdd_HHMM>.sql`。→ TC-8 参照 | Claude（承認は Human） | 3 |
 | 5 | ユーザーが wt-harness のターミナル（wt-harness で開いている Claude セッションがあれば終了してから）で、untracked の 39 件を削除する: `cd /mnt/c/app/wt-harness && git status --porcelain --untracked-files=all \| sed -n 's/^?? //p' \| xargs -d '\n' rm --`。続けて primary のセッションで `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`（見張りが承認画面を出す）。完了メッセージに出たブランチを `git branch -d feature/I181-slim-review-process` で消す。→ TC-2a・TC-6 参照 | Human（削除）・Claude（撤去） | 3・4 |
 | 6 | ラベル: `gh label edit track:harness --description "ハーネス改善トラック"`・`gh label edit track:app --description "学習アプリ開発トラック"`。404（権限不足）ならユーザーが GitHub の Labels 画面で同じ文言に変える。`worktree.md` に 4-9・4-10 を入れ、ステップ 1〜5 で手順どおりに進まなかった箇所があれば直す（無ければ `I184_review.md` に「無し」）。→ TC-5・TC-7 参照 | Claude（ラベルの UI 操作は Human） | 5（4-10 以外の手順の修正はステップ 5 までの結果で決まる） |
 | 7 | 自動テスト全件を実行して記録し、計画書・テスト・レビュー文書をコミットして push。→ auto_test 全件 | Claude | 1〜6 |
@@ -133,7 +134,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 - **代替案**: volume を消さずに撤去する（`KEEP_DATA=1` は docker が使えるときは効かず止まる）→ 使わないデータが残り続けるため採らない。
 - **ロールバック**: Postgres はステップ 4 のバックアップから戻せる（`docker compose -p <名前> exec -T db psql -U postgres learning_app < backup_…sql`）。Redis・ログ・static は開発用の一時データで戻さない。ワークツリーはブランチが残る（I181 のブランチは develop にマージ済み）ので `git worktree add` で作り直せる。untracked のファイルは primary 側のコピーから戻す。
 - **実行コマンド**: `DANGER_OK=1 bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness`
-- **承認の記録**: ユーザーの明示承認を `I184_review.md` に記録する（`danger-approved` の扱いは設計判断 D8）。
+- **承認の記録**: ユーザーの明示承認を `I184_review.md` に記録し、PR #313 に `danger-approved` ラベルを付ける（D8・4-11）。
 
 ## 6. テスト計画
 - アプリのコード変更が無いため pytest・Jest・E2E は対象外。
@@ -149,6 +150,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | コピーした 37 件 | primary で `rm <パス>`（wt-harness 撤去後は primary が唯一の写しなので戻さない） |
 | wt-harness・volume | 「Danger Ops」のロールバック |
 | ラベル説明文 | `gh label edit` で元の文言に戻す |
+| `danger-approved` ラベル | 残す（以後の危険操作でも使う）。不要なら `gh pr edit 313 --remove-label danger-approved` → `gh label delete danger-approved` |
 | `worktree.md` | PR を戻す（revert） |
 
 ## 8. Risk & 回避策
@@ -165,7 +167,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 ## 9. 承認ポイント
 - [ ] コピーする 37 件・コピーしない 2 件（I121・I151 のイシューファイル）の仕分け（I100・I121・I151 のイシューレビューはコピーする）
 - [ ] wt-harness の Docker volume 4 つを、バックアップのうえ `DANGER_OK=1` で削除する（危険操作。実行直前にもう一度承認をもらう）
-- [ ] `danger-approved` の扱い（D8）
+- [ ] `danger-approved` ラベルを作って PR #313 に付ける（D8・計画時にユーザー選択済み）
 - [ ] harness-1・harness-2 の作成はユーザーが別ターミナルで行い、確認が終わるまで開いたままにする
 - [ ] `worktree.md` §7（4-9）と §11 手順 4（4-10）の文案
 - [ ] マージ済みの `feature/I181-slim-review-process` をローカルから消す
@@ -180,7 +182,7 @@ I179 は wt-harness の中で進めたので、自分の作業場所を移せな
 | D5 | harness-1/2 の作成はユーザーが行い、`wt-ports.sh` は今は実行しない | イシュー（§5・§6 に従う＝Docker を使う前に実行）と `claude --worktree` が対話セッションであること |
 | D6 | マージ済みの I181 ブランチを `git branch -d` で消す | §4「不要なら `git branch -d` で消す」 |
 | D7 | §11 手順 4 に「作った直後は終了で消える」注意を足す | イシューのスコープ「実行中に見つかった手順の不足の修正」。§2 の既知事項を §11 から参照できていない |
-| D8 | `danger-approved` ラベルが GitHub に無い件の扱い | **仮定**（イシューに記載なし）→ ユーザーに確認 |
+| D8 | `danger-approved` ラベルが GitHub に無いので、作成して PR #313 に付ける（4-11） | 計画時にユーザーが選択（2026-10-24。選択肢は「ラベルを作って付ける」／「会話の承認を記録するだけ」） |
 
 ## セルフチェック
 - 要件適合性: AC の範囲内。Docker volume の削除はイシューの「あれば」の分岐。§11 手順 4 の注意（4-10）はスコープ「手順の不足の修正」に入る。マルチテナント・ステータス遷移は該当なし。
