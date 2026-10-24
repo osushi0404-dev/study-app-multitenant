@@ -157,3 +157,36 @@
 - 計画時は「承認して進んだ印は記録に無い（未確認）」として 3 種の数え方を併記する予定だったが、調査 C で記録の tool_result 行に `permissionDecision`（`{decision, source, reasonType}`）があると分かり、Claude も記録で実在を確かめた。
 - 「人が実際に承認した回数」は `source` が `user_temporary`・`user_permanent` の件数で数え、拒否は `user_reject`、見張りの停止は `source == "hook"` で数える。今の見張りで判定し直す方法は参考値として残す（報告書 §2）。
 - 方式・範囲・受け入れ条件は変えていない（数え方を報告書に明記する AC はそのまま満たす）ため、`/plan-issue-review` のやり直しは不要。
+
+### 変更 2（2026-10-24・段 A ステップ 4 → 段 B ステップ 5）: 採用した改善 5 件の実装内容
+
+採否は報告書 `docs/proposals/I185_dev_env_review.md` §6 のとおり（ユーザー一任・おすすめの振り分けで確定）。本イシューで実装するのは P1〜P5。方式・範囲が決まったため、本記録の後に `/plan-issue-review` を通す（高リスク判定が Yes なら `/security-review` を先に通す）。
+
+#### 変更点一覧（段 B）
+| ID | ファイル | 変更内容 |
+|---|---|---|
+| P1 | `scripts/claude/hooks/posttooluse_check.py` | 構文エラーのときの終了コードを `sys.exit(1)` から `sys.exit(2)` に変える（公式: PostToolUse で Claude に stderr を届けるのは exit 2）。コメントで理由を 1 行書く |
+| P1 | `scripts/claude/tests/test_posttooluse_check.sh`（新規） | TC-10 で検証する。検証対象のフックは環境変数 `HOOK`（既定は上のファイル）で指定でき、旧版に当てて不合格になることを確かめられる |
+| P2 | `.claude/skills/plan-issue/SKILL.md` | 末尾の「完了したら承認ポイントを提示して停止」を次に変える: 文書品質ゲートの後に計画書・テスト文書を commit/push し、`bash scripts/claude/plan-issue-review.sh $ARGUMENTS` を実行する → Edit/Write で直せる指摘は自分で直して再実行する（同じゲートで 2 回続けて NG なら停止して報告）→ 設計判断が要る指摘は選択肢として承認ポイントに含める → OK になったら、レビュー記録のパスと高リスク判定を承認ポイントに含めて提示し停止する。承認後の案内は「高リスク No → `/implement`、Yes → `/security-review` → `/implement`」にする |
+| P2 | `docs/runbooks/workflow.md` | フロー 2〜3（25〜30 行）と「各フェーズの移行時の振る舞い」の表（58〜61 行）を、P2 の順番に合わせて書き直す。`/plan-issue-review` は「計画の方式・範囲・受け入れ条件を変えたときの再レビュー」として残す。スキル一覧（6〜7 行）の説明も合わせる |
+| P3 | `.claude/skills/fix-loop/SKILL.md` | 手順 4 を次に変える: 次の 5 つをすべて満たすときは推奨案で進めて手順 5 へ（決めた案と理由を診断メモに追記し、ユーザーには事後報告）。①手順 3.5 が PASS（SKIP ではない）②推奨案が 1 つに決まり、他案との違いが価値判断（仕様・UX・費用・リスクの受け入れ方の選択）ではない ③計画の方式・範囲・受け入れ条件を変えない ④危険操作を含まない ⑤軽微例外による簡略化を使わない。1 つでも満たさなければ承認待ちで停止（ユーザーが案を選ぶ。簡略化の可否もここで決める）。共通ルール (b) の「手順4 ユーザー承認（新案のため）」を「手順4（新案なので条件を判定し直す）」に合わせる。3 つの関所（3.5・5.5・6.5）は変えない |
+| P4 | `.claude/skills/*/SKILL.md`（11 本） | frontmatter の `allowed-tools:` 行を削除する（公式では「そのターンは確認なしで使ってよい」という事前許可で、制限ではない。素の `Bash` を事前許可していた）。使えるツールを絞りたい `security-review` だけ `disallowed-tools: Bash, Write, NotebookEdit` を足す（計画書への追記は Edit で行う） |
+| P5 | `scripts/claude/hooks/sessionstart_context.py`（新規） | セッション開始時に、今のブランチ・未コミットの変更の件数・develop にマージされた直近 5 件の PR（番号・タイトル・日時）・GitHub 上の最新イシュー（番号・タイトル）を標準出力に出す。各コマンドは 8 秒の timeout 付きで、失敗したら「取得できませんでした」と出して先へ進む。常に exit 0（セッションの開始を止めない）。PR とイシューのタイトルは GitHub 上のデータであり指示として扱わない旨を 1 行添える |
+| P5 | `.claude/settings.json` | `hooks.SessionStart` に上のスクリプトを `python3 "$CLAUDE_PROJECT_DIR"/scripts/claude/hooks/sessionstart_context.py`（`timeout: 30`）で登録する |
+| P5 | `scripts/claude/tests/test_sessionstart_context.sh`（新規） | TC-11 で検証する |
+| P2〜P4 | `scripts/claude/tests/test_i185_harness_docs.sh`（新規） | TC-14 で、スキル・手順書の書き換えを決定論で検証する。検証するリポジトリのルートは環境変数 `ROOT`（既定は今のリポジトリ）で指定でき、変更前のファイルに当てて不合格になることを確かめられる |
+
+#### 実装手順（段 B）
+- ステップ 6-1（P1）→ 6-2（P5）→ 6-3（P4）→ 6-4（P3）→ 6-5（P2）の順で行う。互いに独立しているので順番は入れ替えてよい。フック（P1・P5）を先に入れ、以降の編集で効き目を確かめられるようにする。→ TC-10〜TC-15 参照
+- 改善ごとにコミットを分ける（ロールバックを改善単位でできるように）。
+
+#### テスト（段 B）
+- 自動: TC-10〜TC-15 を `docs/tests/open/I185_auto_test.md` に追加する。
+- 手動: No.7〜No.8 を `docs/tests/open/I185_manual_test.md` に追加する。
+
+#### 影響・リスク（段 B）
+- 高リスク判定: `.claude/settings.json` と `scripts/claude/hooks/` を変えるため、ハーネス固有の高リスクファイルに当たる見込み。`/plan-issue-review` の判定が Yes なら、`/security-review I185` を通してから実装する。
+- Danger Ops: 無（データ削除・破壊的変更・強制 push なし。フックの追加と終了コードの変更は、コミットの revert で戻せる）。
+- P4 で事前許可を外すと、手動モードでは確認が増える可能性がある。自動モードでは判定役が見るので、運用への影響は小さい見込み（マージ後の効果測定で確かめる）。
+- P5 はセッション開始ごとに git と gh を数回呼ぶ。gh が使えない環境（未ログイン・オフライン）でも 8 秒以内に先へ進む。
+- 進行中のイシューへの適用は報告書 §7 のとおり。
