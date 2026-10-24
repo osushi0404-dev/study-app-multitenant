@@ -83,7 +83,7 @@ diff_outside_records() {
   fi
   if [ "$mb_then" != "$mb_now" ]; then
     while IFS= read -r -d '' f; do
-      printf '%s\n%s\n' "$before" "$after" | grep -qxF -- "$f" && out+="${f}（develop 側も変えていた）"$'\n'
+      grep -qxF -- "$f" <<< "${before}"$'\n'"${after}" && out+="${f}（develop 側も変えていた）"$'\n'
     done < <(git -c core.quotePath=false diff -z --name-only --no-renames "$mb_then" "$mb_now")
   fi
   # 計画書が宣言する決定論ゲート（auto_test.md の「## 決定論ゲート（自動実走）」）は、記録の場所にあっても

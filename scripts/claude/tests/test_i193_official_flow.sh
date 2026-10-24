@@ -129,6 +129,17 @@ ck "S14 review-gate は判定行が無いとき 1 回だけやり直す" 0 "$(rc
 ck "S15 review-gate は報告の無い観点を合格に数えない" 0 "$(rc grep -qF '**報告の無い観点を合格に数えない**' .claude/skills/review-gate/SKILL.md)"
 ck "S16 plan-review は背景で実行し、判定行が無いときやり直す" 0 "$(rc grep -qF '出力に `PLAN_VERDICT:` 行が無い（途中で止まった）' .claude/skills/plan-review/SKILL.md)"
 ck "FG-S15 「時間切れの体は新規 Critical/High 0 として数える」を戻すと S15 不合格" 1 "$(sed 's#\*\*報告の無い観点を合格に数えない\*\*#時間切れの体は新規 Critical/High 0 として数える#' .claude/skills/review-gate/SKILL.md > "$TMP/s15.md"; rc grep -qF '**報告の無い観点を合格に数えない**' "$TMP/s15.md")"
+ck "S17 review-gate の手順に sleep を直接書かない（承認画面が出る・I193 4 回目 H2）" 0 "$(rc bash -c '! grep -qE "^[[:space:]]*sleep [0-9]" .claude/skills/review-gate/SKILL.md')"
+ck "S17 review-gate のタイマーと PR コメントはスクリプト経由" 0 "$(rc bash -c 'grep -qF "bash scripts/claude/review-timer.sh 900" .claude/skills/review-gate/SKILL.md && grep -qF "bash scripts/claude/post-review-comment.sh" .claude/skills/review-gate/SKILL.md && ! grep -qE "^[[:space:]]*gh pr review" .claude/skills/review-gate/SKILL.md')"
+ck "S17 review-timer.sh は数字でない引数を受け付けない" 2 "$(rc bash scripts/claude/review-timer.sh abc)"
+ck "S17 review-timer.sh は 1 秒待って終わる" 0 "$(rc bash scripts/claude/review-timer.sh 1)"
+ck "S18 code-review.sh は PR を取れないとき CI_WAIT: NO_PR で止まる（CI 待ちを飛ばさない・I193 4 回目 H1）" 0 "$(rc bash -c 'grep -qF "CI_WAIT: NO_PR" scripts/claude/code-review.sh && grep -qF "gh pr list --head" scripts/claude/code-review.sh && ! grep -qF "PR_NUM=\$(gh pr view --json number" scripts/claude/code-review.sh')"
+sed 's#^   bash scripts/claude/review-timer.sh 900$#   sleep 900#' .claude/skills/review-gate/SKILL.md > "$TMP/s17.md"
+ck "FG-S17 review-gate の手順に sleep 900 を戻すと S17 不合格" 1 "$(rc bash -c '! grep -qE "^[[:space:]]*sleep [0-9]" "$1"' _ "$TMP/s17.md")"
+ck "S18 review-gate に NO_PR の扱いがある" 0 "$(rc grep -qF '`CI_WAIT: NO_PR` がある' .claude/skills/review-gate/SKILL.md)"
+ck "S19 review-gate に review-gate ⇄ fix-loop の繰り返しの上限がある" 0 "$(rc grep -qF '**繰り返しの上限**' .claude/skills/review-gate/SKILL.md)"
+ck "S19 繰り返しの上限: 4 回目から High・Blocker だけ直し、5 回目は止める" 0 "$(rc bash -c 'grep -qF "今回で 4 回目以上になるときは" "$1" && grep -qF "fix-loop で直すのは Blocker・High だけ" "$1" && grep -qF "5 回目になるときは、fix-loop へ回さずに止める" "$1"' _ .claude/skills/review-gate/SKILL.md)"
+ck "S20 test-gate: dirty は記録の場所の外をコミットせず fix-loop へ（I193 4 回目 M3）" 0 "$(rc bash -c 'grep -qF "この段階は記録の場所の外をコミットしない" "$1" && grep -qF "実装の一部（コミットし忘れ）なら \`STAGE_DONE: test-gate NEXT: fix-loop\`" "$1"' _ .claude/skills/test-gate/SKILL.md)"
 ck "S13 proceed は STAGE_COUNT で見分ける（LAST_LINE を見分けに使わない）" 0 "$(rc grep -qF '`STAGE_COUNT:`（`STAGE_DONE:` 行の数）が増えていなければ' .claude/skills/proceed/SKILL.md)"
 fs_dir f3 '# x\n\n本文だけ\n'
 ck "F3 STAGE_DONE 行が無いと exit 2" 2 "$(fs_rc f3)"
@@ -141,7 +152,10 @@ ck "F6 行頭でない STAGE_DONE は数えない" "NEXT_STAGE: plan-review" "$(
 mkdir -p "$TMP/f7/closed"; printf 'STAGE_DONE: close NEXT: merge\n' > "$TMP/f7/closed/I999_review.md"
 ck "F7 close の後は closed の記録を読む" "NEXT_STAGE: merge" "$(fs_out f7 | head -1)"
 ck "F8 I### でない引数は exit 2" 2 "$(rc bash "$FS" 'I99;rm')"
-ck "F10 サブディレクトリから実行してもリポジトリのルートの記録を読む" 0 "$( (cd "$REPO_ROOT/scripts" && bash ../scripts/claude/flow-stage.sh I193 >/dev/null 2>&1); echo $?)"
+# F10: サブディレクトリから実行しても、そのリポジトリのルートの記録を読む（一時のリポジトリで確かめる。本物の記録に頼らない）
+F10R="$TMP/f10repo"; mkdir -p "$F10R/docs/reviews/open" "$F10R/sub"; git -C "$F10R" init -q -b main
+printf 'STAGE_DONE: plan NEXT: plan-review\n' > "$F10R/docs/reviews/open/I999_review.md"
+ck "F10 サブディレクトリから実行してもリポジトリのルートの記録を読む" "NEXT_STAGE: plan-review" "$( (cd "$F10R/sub" && bash "$FS" I999 2>/dev/null | head -1) )"
 mkdir -p "$TMP/f9"; printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/f9/test_ok.sh"; printf '#!/usr/bin/env bash\nexit 1\n' > "$TMP/f9/test_ng.sh"
 ck "F9 run-all.sh は失敗するテストが 1 本あれば非ゼロ" 1 "$(TEST_DIR="$TMP/f9" rc bash scripts/claude/tests/run-all.sh)"
 rm "$TMP/f9/test_ng.sh"
@@ -150,7 +164,7 @@ mkdir -p "$TMP/f9b"
 ck "F9 run-all.sh はテストが 1 本も無いと非ゼロ" 1 "$(TEST_DIR="$TMP/f9b" rc bash scripts/claude/tests/run-all.sh)"
 
 # ---------------- G: gate-check.sh ----------------
-GC="$REPO_ROOT/scripts/claude/gate-check.sh"; LIB="$REPO_ROOT/scripts/claude/code-review.sh"
+GC="${GC_SCRIPT:-$REPO_ROOT/scripts/claude/gate-check.sh}"; LIB="$REPO_ROOT/scripts/claude/code-review.sh"
 g_init() {   # g_init <dir>: main（比べる相手）から切った feature ブランチ。scripts/a.sh と docs/ を持つ
   local d="$TMP/$1"; mkdir -p "$d/scripts" "$d/docs/reviews"
   git -C "$d" init -q -b main
@@ -250,6 +264,16 @@ ck "G19 develop も同じファイルを変えていて取り込んだ → 1（�
 g_init g20; g_record g20 code_review 20260101_0000 OK NO
 mkdir -p "$TMP/g20/docs/issues/templates"; printf 'x\n' > "$TMP/g20/docs/issues/templates/issue_template.md"; g_commit g20 "issue template"
 ck "G20 レビューの後に docs/issues/templates を変えた → 1" 1 "$(g_rc g20)"
+# G21: ブランチのファイルが多く（一覧が 64KB を超える）、develop も同じファイルを変えていた → 1。
+# 一覧をパイプで grep -q に渡すと、先頭で一致した後の書き込みが SIGPIPE になり、pipefail で 141 → 「重ならない」に倒れる（I193 4 回目 M1）
+g_init g21; mkdir -p "$TMP/g21/scripts/many"
+for i in $(seq 1 3000); do printf 'x\n' > "$TMP/g21/scripts/many/file_with_a_long_name_for_the_pipe_buffer_$i.sh"; done
+printf 'echo a-feature\n' > "$TMP/g21/scripts/a.sh"; g_commit g21 "feature touches a.sh and many files"
+g_record g21 code_review 20260101_0000 OK NO
+git -C "$TMP/g21" checkout -q main; printf 'echo a2\n' > "$TMP/g21/scripts/a.sh"; g_commit g21 "develop touches a.sh"
+git -C "$TMP/g21" checkout -q feature
+git -C "$TMP/g21" -c user.name=t -c user.email=t@example.invalid merge -q --no-edit -X ours main
+ck "G21 一覧が大きくても、develop と重なったファイルを数える → 1" 1 "$(g_rc g21)"
 
 # ---------------- C: code-review.sh の関数 ----------------
 # shellcheck source=scripts/claude/code-review.sh
@@ -309,6 +333,62 @@ C15_DETECT=$(grep -n 'LLM_VERDICT=$(detect_code_verdict' scripts/claude/code-rev
 C15_APPEND=$(grep -n '"$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"' scripts/claude/code-review.sh | head -1 | cut -d: -f1)
 ck "C15 組み込みの出力は判定の後に足す" yes "$([ -n "$C15_DETECT" ] && [ -n "$C15_APPEND" ] && [ "$C15_DETECT" -lt "$C15_APPEND" ] && echo yes || echo no)"
 ck "C12 claude の設定の警告行は除く" "本文" "$(printf 'Permission allow rule (../x.json): Write(a) is not matched\n本文\n' | drop_cli_warnings)"
+
+# C16〜C18: code-review.sh を一時のリポジトリで丸ごと実行する（I193 4 回目 H1）。PR を取れない・PR が無いときは
+# CI 待ちを飛ばさず exit 1 と CI_WAIT: NO_PR で止まる。PR があれば CI 待ちへ進む（ここでは PR の HEAD を違えて NOT_PUSHED で止める）
+CR="$TMP/cr"; CR_ORIGIN="$TMP/cr_origin.git"; CRSTUB="$TMP/crstub"; mkdir -p "$CR/docs/issues/open" "$CRSTUB"
+git init -q --bare "$CR_ORIGIN"; git -C "$CR" init -q -b develop
+printf '# I900\n' > "$CR/docs/issues/open/I900.md"; printf 'a\n' > "$CR/a.txt"
+git -C "$CR" add -A; git -C "$CR" -c user.name=t -c user.email=t@example.invalid commit -q -m base
+git -C "$CR" remote add origin "$CR_ORIGIN"; git -C "$CR" push -q origin develop 2>/dev/null
+git -C "$CR" checkout -q -b feature/I900-x; printf 'b\n' >> "$CR/a.txt"
+git -C "$CR" add -A; git -C "$CR" -c user.name=t -c user.email=t@example.invalid commit -q -m change
+cat > "$CRSTUB/gh" <<'SH'
+#!/usr/bin/env bash
+# テスト用の gh:
+#   gh pr list ... → GH_PR_MODE（fail=失敗 / none=PR 無し / それ以外=PR 7）
+#   gh pr view ... headRefOid → 手元と違う HEAD
+#   gh pr review ... --body-file <f> → <f> を GH_BODY_OUT に写す（GH_REVIEW_FAIL=1 なら失敗）
+case "$*" in
+  "pr list"*) case "${GH_PR_MODE:-}" in fail) exit 1;; none) exit 0;; *) echo 7;; esac ;;
+  *headRefOid*) echo deadbeef ;;
+  "pr review"*)
+    while [ $# -gt 0 ]; do [ "$1" = "--body-file" ] && cp "$2" "${GH_BODY_OUT:?}"; shift; done
+    [ "${GH_REVIEW_FAIL:-}" = "1" ] && exit 1; exit 0 ;;
+  *) exit 0 ;;
+esac
+SH
+printf '#!/usr/bin/env bash\nexit 0\n' > "$CRSTUB/claude"
+chmod +x "$CRSTUB/gh" "$CRSTUB/claude"
+CR_SCRIPT="${CR_SCRIPT:-$REPO_ROOT/scripts/claude/code-review.sh}"   # 失敗注入: 古い版を渡すと不合格になる
+cr_run() { (cd "$CR" && PATH="$CRSTUB:$PATH" GH_PR_MODE="$1" CI_WORKFLOWS="$TMP/wf.yml" CI_WAIT_TIMEOUT=2 CI_POLL_INTERVAL=1 bash "$CR_SCRIPT" I900 2>&1; echo "EXIT=$?"); }
+has_line() { grep -qxF -- "$2" <<< "$1" && echo yes || echo no; }
+CR_FAIL=$(cr_run fail); CR_NONE=$(cr_run none); CR_HAS=$(cr_run has)
+ck "C16 gh pr list が失敗 → exit 1" yes "$(has_line "$CR_FAIL" 'EXIT=1')"
+ck "C16 そのとき CI_WAIT: NO_PR を出す" yes "$(has_line "$CR_FAIL" 'CI_WAIT: NO_PR')"
+ck "C17 開いている PR が無い → exit 1" yes "$(has_line "$CR_NONE" 'EXIT=1')"
+ck "C17 そのとき CI_WAIT: NO_PR を出す" yes "$(has_line "$CR_NONE" 'CI_WAIT: NO_PR')"
+ck "C18 PR があれば CI 待ちへ進む（NO_PR を出さない）" no "$(has_line "$CR_HAS" 'CI_WAIT: NO_PR')"
+ck "C18 PR があれば CI 待ちへ進む（PR の HEAD を確かめる）" yes "$(has_line "$CR_HAS" 'CI_WAIT: NOT_PUSHED')"
+fp_rc() { (cd "$CR" && PATH="$CRSTUB:$PATH" GH_PR_MODE="$1" find_pr_num >/dev/null 2>&1; echo $?); }
+ck "C18 find_pr_num: gh の失敗は 1" 1 "$(fp_rc fail)"
+ck "C18 find_pr_num: PR 無しは 2" 2 "$(fp_rc none)"
+ck "C18 find_pr_num: PR ありは番号を出す" 7 "$(cd "$CR" && PATH="$CRSTUB:$PATH" GH_PR_MODE=has find_pr_num)"
+
+# C19〜C22: post-review-comment.sh（I193 4 回目 H2）。どの場合も exit 0（流れを止めない）
+pc_run() { (cd "$CR" && PATH="$CRSTUB:$PATH" GH_PR_MODE="$1" GH_BODY_OUT="$TMP/pc_body" GH_REVIEW_FAIL="${3:-}" bash "${PC_SCRIPT:-$REPO_ROOT/scripts/claude/post-review-comment.sh}" "$2" 2>&1; echo "EXIT=$?"); }
+rm -f "$TMP/pc_body"; PC=$(pc_run has "$TMP/no-such.md")
+ck "C19 記録ファイルが無い → exit 0・投稿しない" "yes no" "$(has_line "$PC" 'EXIT=0') $([ -e "$TMP/pc_body" ] && echo yes || echo no)"
+printf '# small\nVERDICT: OK\n' > "$TMP/pc_small.md"
+rm -f "$TMP/pc_body"; PC=$(pc_run none "$TMP/pc_small.md")
+ck "C20 開いている PR が無い → exit 0・投稿しない" "yes no" "$(has_line "$PC" 'EXIT=0') $([ -e "$TMP/pc_body" ] && echo yes || echo no)"
+rm -f "$TMP/pc_body"; PC=$(pc_run has "$TMP/pc_small.md")
+ck "C21 小さい記録はそのまま投稿する" "yes 0" "$(has_line "$PC" 'EXIT=0') $(rc cmp -s "$TMP/pc_small.md" "$TMP/pc_body")"
+head -c 70000 /dev/zero | tr '\0' 'a' > "$TMP/pc_big.md"
+rm -f "$TMP/pc_body"; PC=$(pc_run has "$TMP/pc_big.md")
+ck "C22 60000 バイトを超える記録は切り詰めて投稿する" yes "$([ -s "$TMP/pc_body" ] && [ "$(wc -c < "$TMP/pc_body")" -le 60000 ] && grep -qF "全文は $TMP/pc_big.md" "$TMP/pc_body" && echo yes || echo no)"
+rm -f "$TMP/pc_body"; PC=$(pc_run has "$TMP/pc_small.md" 1)
+ck "C22 投稿に失敗しても exit 0" yes "$(has_line "$PC" 'EXIT=0')"
 
 # ---------------- S: スキルの中身 ----------------
 s_has() { grep -qF -- "$2" "$1"; }

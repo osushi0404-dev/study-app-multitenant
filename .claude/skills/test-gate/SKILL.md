@@ -19,7 +19,7 @@ bash scripts/claude/gate-check.sh "$ARGUMENTS"
 
 - exit 0: 2. へ
 - exit 1: 出力の `GATE_CHECK: FAIL REASON=<理由>` で分ける
-  - `REASON=dirty`（記録の場所の外にコミットしていない変更・未追跡のファイルがある）: review-gate に戻しても直らない。この流れで作った一時ファイルなら消し、変更の一部ならコミットして `STAGE_DONE: test-gate NEXT: review-gate` を書いて終わる。どちらとも決められないときは止める（止める条件 3）
+  - `REASON=dirty`（記録の場所の外にコミットしていない変更・未追跡のファイルがある）: review-gate に戻しても直らない。この段階は記録の場所の外をコミットしない。この流れで作った一時ファイルなら消してやり直す。実装の一部（コミットし忘れ）なら `STAGE_DONE: test-gate NEXT: fix-loop` を書いて終わる（fix-loop がコミットし、review-gate に戻す）。どちらとも決められないときは止める（止める条件 3）
   - それ以外（`unreviewed`・`verdict`・`missing`）: `STAGE_DONE: test-gate NEXT: review-gate` を書いて終わる。ただし、記録の最後から 2 番目の `STAGE_DONE:` 行が `STAGE_DONE: test-gate NEXT: review-gate`（＝前回もこの段階が gate-check で戻し、その後の review-gate を通っても、また gate-check で落ちた。戻すのが 2 回続く）のときは、戻さずに止める（止める条件 3。review-gate ⇄ test-gate を繰り返さない）
   - `REASON=base`（比べる相手 origin/develop が無い）: `git fetch origin develop` をしてからもう一度実行する。それでも落ちれば止める（止める条件 3）
 

@@ -101,6 +101,16 @@ changed_outside_records() {   # $1=from $2=to
   return 0
 }
 
+# I193 4 回目 H1: 今のブランチの開いている PR の番号を出す。戻り値: 0=見つかった / 1=gh の失敗 / 2=開いている PR が無い。
+# 「PR を取れない」と「PR が無い」を区別し、どちらも呼び出し元が止める（CI 待ちを飛ばさない）
+find_pr_num() {
+  local branch num
+  branch=$(git rev-parse --abbrev-ref HEAD) || return 1
+  num=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty' 2>/dev/null) || return 1
+  [ -n "$num" ] || return 2
+  printf '%s\n' "$num"
+}
+
 # I193: 指定した PID と、その子孫のプロセスをすべて止める（背景の組み込みレビューの timeout・claude まで届かせる）。
 # ps --ppid は Linux（procps）のもの。このリポジトリの実行環境（WSL・CI の ubuntu）は Linux だけ
 kill_tree() {
@@ -471,20 +481,30 @@ if [ "$RISK_PATH" = "YES" ]; then
   OFFICIAL_PIDS+=("$!")
 fi
 
-# CI 待機（I193: 時間切れは exit 3・失敗は exit 1。打ち切った後に先へ進まない）
-PR_NUM=$(gh pr view --json number -q .number 2>/dev/null || echo "")
-if [ -n "$PR_NUM" ]; then
-  echo "CI を確認しています (PR #${PR_NUM})..."
-  CI_RC=0
-  wait_ci "$PR_NUM" || CI_RC=$?
-  if [ "$CI_RC" -eq 3 ]; then
-    echo "⛔ CI が ${CI_WAIT_TIMEOUT:-1200} 秒で終わりませんでした。"
-    exit 3
+# CI 待機（I193: 時間切れは exit 3・失敗は exit 1。打ち切った後に先へ進まない）。
+# PR を取れない（gh の失敗）・PR が無いときも、CI を確かめられないので止める（I193 4 回目 H1。新しい流れでは
+# /plan-issue が Draft PR を作るので、PR が無いのは異常。前は PR を取れないと CI 待ちを丸ごと飛ばしていた）
+PR_RC=0
+PR_NUM=$(find_pr_num) || PR_RC=$?
+if [ "$PR_RC" -ne 0 ]; then
+  if [ "$PR_RC" -eq 2 ]; then
+    echo "⛔ ブランチ $(git rev-parse --abbrev-ref HEAD) の開いている PR がありません。CI を確かめられないので止めます。"
+  else
+    echo "⛔ PR を調べられませんでした（gh の失敗。認証・ネットワークを確かめてください）。CI を確かめられないので止めます。"
   fi
-  if [ "$CI_RC" -ne 0 ]; then
-    echo "⛔ CI が失敗しています。"
-    exit 1
-  fi
+  echo "CI_WAIT: NO_PR"
+  exit 1
+fi
+echo "CI を確認しています (PR #${PR_NUM})..."
+CI_RC=0
+wait_ci "$PR_NUM" || CI_RC=$?
+if [ "$CI_RC" -eq 3 ]; then
+  echo "⛔ CI が ${CI_WAIT_TIMEOUT:-1200} 秒で終わりませんでした。"
+  exit 3
+fi
+if [ "$CI_RC" -ne 0 ]; then
+  echo "⛔ CI が失敗しています。"
+  exit 1
 fi
 
 # I084: auto_test.md の決定論ゲートをスクリプト自身で実走し、実 exit code を証跡化する。

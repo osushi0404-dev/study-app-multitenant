@@ -24,6 +24,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
 - exit 1 で出力に `CI_WAIT: FAIL` がある: CI の失敗を直すため `STAGE_DONE: review-gate NEXT: fix-loop` を書いて終わる
 - exit 1 で出力に `CI_WAIT: NOT_PUSHED` がある（PR の最新のコミットが手元の HEAD と違う）: push してから 1 回だけ実行し直す。それでも同じなら止める（止める条件 3）
 - exit 1 で出力に `CI_WAIT: NO_JOBS` がある（ワークフローのジョブ名を読めない。python3 の PyYAML が無いなど）: 原因を直して 1 回だけ実行し直す。直せなければ止める（止める条件 3）
+- exit 1 で出力に `CI_WAIT: NO_PR` がある（PR を調べられない・開いている PR が無い）: 原因（gh の認証・ネットワーク・PR が閉じている）を直して 1 回だけ実行し直す。直せなければ止める（止める条件 3）。CI を確かめないまま先へ進まない
 - それ以外の exit 1（fetch の失敗・イシューファイルが無いなど）: 出力を記録に書き、止める条件 3 に当たるかを判定する（直せる原因なら直して実行し直す）
 
 ## 2. 出力の機械判定
@@ -31,6 +32,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
 スクリプト stdout の固定行（`ADVERSARIAL_STAGE:` と `FINAL_VERDICT:`）で分岐する:
 
 - `FINAL_VERDICT: BLOCKER` または `FINAL_VERDICT: HIGH` → 4. の結線で `NEXT: fix-loop`（修正の後は fix-loop が必ずこの段階に戻す）
+  - **繰り返しの上限**（review-gate ⇄ fix-loop が終わらないことを防ぐ・I193）: 記録の最後の `STAGE_DONE: review-gate NEXT: fix-loop` の行が、途中に `STAGE_DONE: review-gate NEXT: test-gate` を挟まずに数えて、今回で 4 回目以上になるときは、止める条件 3 の安全側（範囲を狭める）として、fix-loop で直すのは Blocker・High だけにし、Medium 以下は自律判断の記録に書いて retro に回す。5 回目になるときは、fix-loop へ回さずに止める（止める条件 3。ここまで直しても新しい High が出続けるのは、止める場所・方式の見直しが要る兆し）
 - `FINAL_VERDICT: OK` かつ `ADVERSARIAL_STAGE: NOT_REQUIRED` → 4. の結線で `NEXT: test-gate`
 - `FINAL_VERDICT: OK` かつ `ADVERSARIAL_STAGE: REQUIRED` → 3. の敵対的レビューステージを実行する
 
@@ -53,8 +55,9 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
    ```
 4. 固定 3 観点のサブエージェントを Agent ツールの `subagent_type: adversarial-reviewer`（定義は `.claude/agents/adversarial-reviewer.md`）で **1 メッセージで `run_in_background: true` で起動**し、同じメッセージでタイマーを Bash ツールの `run_in_background: true` で起動する。起動プロンプトには ISSUE・PERSPECTIVE・KNOWN_FINDINGS・REVIEW_BASE の値を書く（定義の本文の {ISSUE} などはこの値に読み替えられる）:
    ```bash
-   sleep 900
+   bash scripts/claude/review-timer.sh 900
    ```
+   （`sleep` を直接書くと settings の許可に当たらず承認画面が出るので、スクリプトで待つ）
    - 固定 3 観点（毎周必須・動的な観点の追加はしない）:
      1. ロジック回避・実機 repro（ガード・判定・分岐の抜け道を temp repo で実測）
      2. テストの false-green・tautology（失敗条件で本当に落ちるか・実装の再確認になっていないか）
@@ -92,11 +95,10 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
   ```bash
   git commit -m "docs(I###): adversarial-review 記録"
   ```
-- PR コメント（失敗しても止めない）:
+- PR コメント（失敗しても止めない。GitHub のコメントの上限を超えるときは、スクリプトが一部と記録への参照だけを載せる）:
   ```bash
-  gh pr review <PR#> --comment --body-file docs/reviews/I###_adversarial_review_<ts>.md
+  bash scripts/claude/post-review-comment.sh docs/reviews/I###_adversarial_review_<ts>.md
   ```
-  記録が GitHub コメント上限 65,536 文字を超える場合は、サマリ（最終判定・周回数・findings 見出し）のみを一時ファイル経由で投稿し、詳細は記録ファイルへの参照を書く。
 - 最終判定 = max(スクリプト FINAL_VERDICT, 敵対ステージ VERDICT)
 
 ## 4. 結線（必須）
