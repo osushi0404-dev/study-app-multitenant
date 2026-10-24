@@ -140,6 +140,7 @@ Blocker 判定を下すことを恐れるな。
 - 運用者の手作業が増えすぎないか
 - 要件規模に対して過剰な構成を採用していないか
 - 長期保守で属人化しやすい構造になっていないか
+- 新しい安全装置（ガード・検出・確認・拒否リスト）を足す・強める計画（計画変更を含む）は、守る対象が GitHub から復旧できるか（`docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲（I182）」）と最後の守りが先に書かれているか。復旧できる対象に、コマンドの文字列からシェルの動きを読むような精密な判定を使っていないか（単純な規則だけにする）。欠けていれば High（I179 retro P1: 復旧できる対象に精密なガードを作り込み、敵対的レビュー 11 周・7 時間超の末に廃止した）
 
 ### P9. プライバシー・コンプライアンス
 個人情報・未成年データ・テナントデータを扱う変更がある場合に確認する（含まれない場合は「対象外」と記載）。設計思想 C2 を設計段階で検知する観点:
@@ -211,6 +212,8 @@ Blocker 判定を下すことを恐れるな。
 - DBスキーマ重要変更
 - 既存事故の再発リスクが高い変更
 - 画面制御していてもAPI直叩きで事故りうる変更
+- 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
+- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/review-agents/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
 
 ---
 

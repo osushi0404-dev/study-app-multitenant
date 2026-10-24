@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # I086 回帰テスト: 高リスク判定の機械可読化（detect_risk_flag の fail-closed／
 #                  path_risk_trigger のパス決定論トリガ）と敵対ステージ結線行の存在を検証する。
+# I181: path_risk_trigger の対象を「GitHub から復旧できない例外」に絞った（P1〜P7・FG-P1・FG-P2）。
 #
 # 実行（必ずスクリプトとして bash 実行すること。対話シェルへ貼らない）:
 #   bash scripts/claude/tests/test_adversarial_trigger.sh
@@ -65,26 +66,97 @@ ck "risk: 引用 NO より正規 VERDICT 直前 YES を優先" "YES" "$(detect_r
 printf 'RISK: NO\nVERDICT: OK\n' > "$TMP/r_regnO.md"
 ck "risk: VERDICT 直前の正規 NO は NO" "NO" "$(detect_risk_flag "$TMP/r_regnO.md")"
 
-# ---- path_risk_trigger: 監視パスの決定論トリガ ----
-ck "path: hooks 配下" "YES" "$(path_risk_trigger "scripts/claude/hooks/pretooluse_guard.py")"
-ck "path: git-hooks 配下" "YES" "$(path_risk_trigger "scripts/git-hooks/pre-push")"
-ck "path: settings.json" "YES" "$(path_risk_trigger ".claude/settings.json")"
-ck "path: settings.local.json" "YES" "$(path_risk_trigger ".claude/settings.local.json")"
-ck "path: claude 直下 .sh" "YES" "$(path_risk_trigger "scripts/claude/code-review.sh")"
-ck "path: skills 配下" "YES" "$(path_risk_trigger ".claude/skills/code-review/SKILL.md")"
-ck "path: review-agents 配下" "YES" "$(path_risk_trigger ".claude/review-agents/code-reviewer.md")"
-ck "path: tests 配下 .sh も一致（glob が / を跨ぐ仕様の固定化）" "YES" \
-   "$(path_risk_trigger "scripts/claude/tests/test_review_gates.sh")"
-# H4 対応: 指示階層ファイル（レビュー/ガードの挙動を規定する上位文書）も監視対象。
-ck "path: CLAUDE.md（最上位指示）" "YES" "$(path_risk_trigger "CLAUDE.md")"
-ck "path: workflow.md（フロー定義）" "YES" "$(path_risk_trigger "docs/runbooks/workflow.md")"
-ck "path: review-rules.md（非権威化規定）" "YES" "$(path_risk_trigger "docs/runbooks/review-rules.md")"
-ck "path: .claude/agents 配下（構造制限の昇格先）" "YES" "$(path_risk_trigger ".claude/agents/reviewer.md")"
-ck "path: アプリコードのみは NO" "NO" "$(path_risk_trigger "backend/app/views.py")"
-ck "path: 他の runbook は NO（監視は中核文書に限定）" "NO" "$(path_risk_trigger "docs/runbooks/common-commands.md")"
-ck "path: 空入力は NO" "NO" "$(path_risk_trigger "")"
-MIXED="$(printf 'backend/app/views.py\nfrontend/src/App.tsx\nscripts/claude/hooks/guard.py')"
-ck "path: 通常＋監視パスの混在は YES" "YES" "$(path_risk_trigger "$MIXED")"
+# ---- path_risk_trigger: 監視パスの決定論トリガ（I181: GitHub から復旧できない例外だけ） ----
+# P1: 例外の各パスは YES（I182 の danger-ops.md「GitHub から復旧できる範囲」が出典）
+EXCEPTION_PATHS=(
+  ".github/workflows/ci.yml"
+  ".github/workflows/e2e.yml"
+  ".github/CODEOWNERS"
+  ".pre-commit-config.yaml"
+  ".secrets.baseline"
+  "scripts/claude/hooks/pretooluse_guard.py"
+  ".claude/settings.json"
+  ".claude/settings.local.json"
+)
+for p in "${EXCEPTION_PATHS[@]}"; do
+  ck "path P1: 例外 $p は YES" "YES" "$(path_risk_trigger "$p")"
+done
+
+# P2: 例外に当たらないハーネスは NO（GitHub が最後の守り。旧判定では YES だったもの）
+for p in scripts/git-hooks/pre-push scripts/claude/code-review.sh scripts/claude/tests/test_review_gates.sh \
+         scripts/claude/hooks/posttooluse_check.py .claude/skills/code-review/SKILL.md \
+         .claude/review-agents/code-reviewer.md .claude/agents/reviewer.md CLAUDE.md \
+         docs/runbooks/workflow.md docs/runbooks/review-rules.md; do
+  ck "path P2: 例外外のハーネス $p は NO" "NO" "$(path_risk_trigger "$p")"
+done
+
+# P3: I180 と同じ形（関所ではないスキルの変更＋テストの新規追加）は NO（再発防止）
+I180_SHAPE="$(printf '.claude/skills/retro/SKILL.md\nscripts/claude/tests/test_i180_retro_triage.sh')"
+ck "path P3: I180 と同じ形は NO" "NO" "$(path_risk_trigger "$I180_SHAPE")"
+
+# P4: 似た名前は NO（先頭一致・完全一致）
+for p in docs/.github/x.md backend/.pre-commit-config.yaml .secrets.baseline.bak \
+         scripts/claude/hooks/pretooluse_guard.py.orig .claude/settings.json.bak backend/app/views.py; do
+  ck "path P4: 似た名前 $p は NO" "NO" "$(path_risk_trigger "$p")"
+done
+ck "path P4: 空入力は NO" "NO" "$(path_risk_trigger "")"
+
+# P6: 通常＋例外の混在は YES
+MIXED="$(printf 'backend/app/views.py\nfrontend/src/App.tsx\n.github/workflows/ci.yml')"
+ck "path P6: 通常＋例外の混在は YES" "YES" "$(path_risk_trigger "$MIXED")"
+
+# P5 / FG-P2: 名前変更で元の場所が落ちない（code-review.sh の GIT_FILES と同じ git コマンド）
+RREPO="$TMP/rename_repo"
+mkdir -p "$RREPO/.github/workflows"
+(
+  cd "$RREPO" || exit 1
+  git init -q -b develop
+  echo a > .github/workflows/ci.yml
+  git add -A
+  git -c user.email=t@t -c user.name=t commit -qm c0
+  git checkout -qb feat
+  git mv .github/workflows/ci.yml off.yml
+  git -c user.email=t@t -c user.name=t commit -qm c1
+)
+RENAMED_NO_RENAMES="$(git -C "$RREPO" -c core.quotePath=false diff develop...HEAD --name-only --no-renames)"
+RENAMED_DEFAULT="$(git -C "$RREPO" -c core.quotePath=false diff develop...HEAD --name-only)"
+ck "path P5: 名前変更（--no-renames）で元の場所が残り YES" "YES" "$(path_risk_trigger "$RENAMED_NO_RENAMES")"
+ck "path FG-P2: --no-renames なしは元の場所が落ちて NO（P5 の前提の証明）" "NO" "$(path_risk_trigger "$RENAMED_DEFAULT")"
+
+# FG-P1: case 行から例外のパターンを 1 つずつ外した複製では、そのパスが NO になる
+#        （P1 が一覧の欠落を捕まえることの証明。外せなければその FG 自体を不合格にする）
+CASE_LINE="$(grep -nE '^[[:space:]]+\.github/\*\|' "$CODE_REVIEW" | head -1)"
+CASE_NO="${CASE_LINE%%:*}"
+for pat in '.github/*' '.pre-commit-config.yaml' '.secrets.baseline' \
+           'scripts/claude/hooks/pretooluse_guard.py' '.claude/settings.json' '.claude/settings.local.json'; do
+  case "$pat" in
+    '.github/*') probe=".github/workflows/ci.yml" ;;
+    *) probe="$pat" ;;
+  esac
+  copy="$TMP/cr_fg.sh"
+  if [ -z "$CASE_NO" ]; then
+    ck "path FG-P1: $pat を外した複製を作れる" "ok" "ng"
+    continue
+  fi
+  if ! python3 - "$CODE_REVIEW" "$copy" "$CASE_NO" "$pat" <<'PY'
+import sys
+src, dst, line_no, pat = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+lines = open(src, encoding="utf-8").read().split("\n")
+head, sep, tail = lines[line_no - 1].partition(")")
+alts = head.strip().split("|")
+if pat not in alts:
+    sys.exit(3)
+indent = head[: len(head) - len(head.lstrip())]
+lines[line_no - 1] = indent + "|".join(a for a in alts if a != pat) + sep + tail
+open(dst, "w", encoding="utf-8").write("\n".join(lines))
+PY
+  then
+    ck "path FG-P1: $pat を外した複製を作れる" "ok" "ng"
+    continue
+  fi
+  got="$(REVIEW_LIB_SOURCE_ONLY=1 bash -c 'source "$1" >/dev/null 2>&1; path_risk_trigger "$2"' _ "$copy" "$probe")"
+  ck "path FG-P1: $pat を外すと $probe が NO" "NO" "$got"
+done
 
 # ---- H5 対応: 配線ロジックの挙動（OR 合成・ステージ要否）を関数として固定化 ----
 # 本体フローに直書きすると OR→AND 変異や REQUIRED/NOT_REQUIRED 反転を文字列 grep が検出できず
@@ -113,6 +185,9 @@ ck_true "emit: risk_final=NO → ADVERSARIAL_STAGE: NOT_REQUIRED" grep -qx 'ADVE
 ck_true "wire: 本体 RISK_LLM の取得元" grep -qF 'RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")' "$CODE_REVIEW"
 # shellcheck disable=SC2016
 ck_true "wire: 本体 RISK_PATH の取得元（GIT_FILES 固定）" grep -qF 'RISK_PATH=$(path_risk_trigger "$GIT_FILES")' "$CODE_REVIEW"
+# P7（I181）: GIT_FILES は --no-renames で名前変更の元の場所も出す
+# shellcheck disable=SC2016
+ck_true "wire P7: GIT_FILES に --no-renames" grep -qF 'GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only --no-renames)' "$CODE_REVIEW"
 # shellcheck disable=SC2016
 ck_true "wire: 本体 RISK_FINAL の合成" grep -qF 'RISK_FINAL=$(combine_risk "$RISK_LLM" "$RISK_PATH")' "$CODE_REVIEW"
 # shellcheck disable=SC2016
