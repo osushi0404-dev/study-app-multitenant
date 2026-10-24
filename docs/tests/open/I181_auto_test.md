@@ -10,8 +10,9 @@
 - backend: 対象外（コード変更なし）
 - frontend: 対象外（コード変更なし）
 - 計画時（実装前・2026-10-24）: 下記「ベースライン」
-- 実装前の赤（ステップ 1）: （実装時に記録）
-- 実装時: （実装時に記録）
+- 実装前の赤（ステップ 1・2026-10-24）: テストを先に書き、本体が古いまま実行 → `test_adversarial_trigger.sh` pass=34 fail=26（P1 の 5 件・P2 の 10 件・P3・P4 の `pretooluse_guard.py.orig`・P5・P6・FG-P1 の 6 件〔case 行がまだ無く複製を作れない〕・P7）、`test_i181_review_slim.sh` pass=6 fail=23（D1〜D10 と、注入先の語がまだ無い FG 8 件）。どちらも新しい期待の TC だけが不合格で、既存の risk・combine・decision・emit・wire の TC は合格のまま
+- 実装時（2026-10-24・/implement）: `test_adversarial_trigger.sh` pass=60 fail=0（P1〜P7・FG-P1 6 通り・FG-P2 を含む）・`test_i181_review_slim.sh` pass=29 fail=0（D1〜D10・FG-D1〜FG-D10）・R2 PASS=67・R3 PASS=55・R4 pass=97・R5 PASS=30（SKIP 1）・R6 pass=9・R7 `bash -n` 3 本とも exit 0。すべて fail=0
+  - D8 は初回 2 件不合格: `/code-review` 等のスラッシュコマンドと `origin/develop` をパスとして数えていた（判定の誤り。本物のパス切れは無し）。除外に追加して合格（上の D8 の行に追記）
 
 ## ベースライン（実装前・2026-10-24）
 | テスト | 結果 |
@@ -52,7 +53,7 @@
 | D5 | review-rules.md の `## 高リスク変更の敵対的レビューステージ` の節に `GitHub が最後の守り`・`danger-ops.md`・`path_risk_trigger`・例外の 6 パターン（`.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`）がある | exit 0 |
 | D6 | 集合の一致: `code-review.sh` の `path_risk_trigger` の `case` 行のパターン集合 ＝ `code-reviewer.md` の「【harness 固有】GitHub から復旧できない例外」の行のバッククォートのパターン集合（`scripts/claude/code-review.sh` などの参照用のパスは、`(正は` 以降を除いて比べる）＝ `plan-reviewer.md` の同じ行のパターン集合 | exit 0 |
 | D7 | `.claude/skills/fix-loop/SKILL.md` の手順 3（`3) 対応方法` から `3.5)` の前まで）と、`plan-reviewer.md` の `### P8.` の節の両方に `新しい安全装置`・`復旧`・`最後の守り`・`danger-ops.md`・`I179 retro P1` がある | exit 0 |
-| D8 | D1・D3・D4・D5 の節の中でバッククォートで書いたパス（`/` を含むもの。`<…>`・`*`・`{`・空白を含むものは除く）が実在する（`test_i182_docs.sh` の DOC6 と同じ方式） | exit 0 |
+| D8 | D1・D3・D4・D5 の節の中でバッククォートで書いたパス（`/` を含むもの。`<…>`・`*`・`{`・空白・`:` を含むもの、`/` で始まるスラッシュコマンド〔`/code-review` 等〕、`origin/` で始まる git の参照は除く。実装時に後ろの 2 つを除外に追加）が実在する（`test_i182_docs.sh` の DOC6 と同じ方式） | exit 0 |
 | D9 | `code-reviewer.md` の「高リスク判定の条件」の節に、アプリの条件 11 項目（`認証・認可・ロール変更` 〜 `画面制御していてもAPI直叩きで事故りうる変更`）が残り、`【harness 固有・Yes にしない】` の行がある。旧行 `【harness 固有】hooks・ガード・権限設定・レビュー基盤` と `【harness 固有】指示階層` が無い | exit 0 |
 | D10 | 4-9（棚卸しで減らすもの）: review-rules.md の `## 高リスク変更の敵対的レビューステージ` の節に `計画レビューのやり直しは、計画の方式・範囲・受け入れ条件を変えたときだけ` がある（動的観点の削除は D2 で見る） | exit 0 |
 | FG-D10 | review-rules.md の複製の対象の節からその 1 項目を消す → D10 | 非ゼロ |

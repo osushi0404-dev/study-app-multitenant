@@ -54,16 +54,17 @@ detect_risk_flag() {
   echo "YES"
 }
 
-# I086: パス決定論トリガ。レビュー基盤・ガード・権限設定・指示階層の変更は LLM 判定に関わらず強制 YES。
-# case glob の * は / にも一致するため scripts/claude/*.sh は tests/ 等の配下にも一致する（意図どおり＝レビュー基盤の一部）。
-# 監視集合には指示階層（CLAUDE.md・workflow.md・review-rules.md・.claude/agents/）も含む
-# （I086 敵対レビュー H4 対応: これらの自己改変で安全網を弱める変更を機械検出する）。
+# I086→I181: パス決定論トリガ。「GitHub から復旧できない例外」（docs/runbooks/danger-ops.md
+# 「GitHub から復旧できる範囲（I182）」）に関わるファイルの変更だけを強制 YES にする。
+# それ以外の手元のハーネス（スキル・スクリプト・レビュー指示・中核文書・テスト）は GitHub が最後の守り
+# （docs/runbooks/review-rules.md）なので対象外。LLM 側（code-reviewer.md・plan-reviewer.md）も同じ集合。
+# case glob の * は / にも一致するため .github/* はワークフロー・CODEOWNERS を含む配下すべてに一致する。
 path_risk_trigger() {
   local files="$1" f
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     case "$f" in
-      scripts/claude/hooks/*|scripts/git-hooks/*|.claude/settings.json|.claude/settings.local.json|scripts/claude/*.sh|.claude/skills/*|.claude/review-agents/*|.claude/agents/*|CLAUDE.md|docs/runbooks/workflow.md|docs/runbooks/review-rules.md) echo YES; return;;
+      .github/*|.pre-commit-config.yaml|.secrets.baseline|scripts/claude/hooks/pretooluse_guard.py|.claude/settings.json|.claude/settings.local.json) echo YES; return;;
     esac
   done <<< "$files"
   echo NO
@@ -301,7 +302,9 @@ GIT_LOG=$(git log origin/develop...HEAD --oneline)
 # I086 敵対レビュー H3 対応: core.quotePath=false で取得する。git 既定（true）は非 ASCII を含む
 # パスを "..."（八進エスケープ）で丸ごとクォートし、path_risk_trigger の先頭リテラル glob が
 # 不一致になって監視パスを NO に落とす（日本語ファイル名で安全網が fail-open する）ため。
-GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only)
+# I181: --no-renames で名前変更を「元の場所の削除＋新しい場所の追加」として両方出す（既定は新しい名前だけで、
+# 監視しているファイルを外へ移す変更が path_risk_trigger をすり抜けるため）。
+GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only --no-renames)
 
 # I084: auto_test.md の決定論ゲートをスクリプト自身で実走し、実 exit code を証跡化する。
 # 直呼び（$() 不可）で GATE_EVIDENCE / GATE_VERDICT をグローバル設定する（W1）。

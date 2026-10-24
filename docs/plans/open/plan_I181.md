@@ -327,6 +327,9 @@ GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only -
 - **設計品質**: 上限の値（15 分・3 本・3 体・2 周・`sleep 900`・2GB・60 秒）は SKILL.md・adversarial-reviewer.md・review-rules.md に書き、正を SKILL.md §3 に一本化する（runbook は参照）。例外のパスの正は `path_risk_trigger()` で、ほかの 2 か所との一致を TC-D6 で機械検証する。
 - **文書品質ゲート**: API・permission_classes・DB は該当なし。自動テストの期待値は YES/NO・exit code で具体的。手動テストの期待結果は具体的な出力・文言。実装ステップ本文に検証コマンドは無い（TC 参照のみ）。否定・不在の TC（D2・P2〜P4 等）には失敗注入（FG）を付けた。合否は exit code に統一。新しい TC（P・D 群）はステップ 1 で作る（計画時点では対象の実装が無いので実行できない＝`I182` と同じ扱い。auto_test「計画時の自己検証」）。
 
+## 計画変更記録
+1. **（2026-10-24・/implement）`code-review/SKILL.md` の frontmatter の `allowed-tools` に `TaskStop` を追加**: 4-4 の手順（時間切れの体・タイマーを `TaskStop` で止める）を、権限の確認待ちなしに実行できるようにするため。計画の手順を成り立たせるための付け足しで、方式・範囲・受け入れ条件は変えない（計画レビューはやり直さない。4-9・A9）。`description` は計画どおり変えていない。
+
 ## レビュー結果
 - [20261024_1122 判定: ✅ 完了](../../reviews/I181_plan_review_20261024_1122.md)
   - Warning（`ROUNDS:` 行の無い旧記録の数え方）・Info（`TaskStop` に渡す ID の控え方）を 4-4 §3-1 の手順 1・5 と auto_test D1 に反映した。手順の書き足しだけで方式・範囲・受け入れ条件は変えないため、計画レビューはやり直さない（4-9・A9）
