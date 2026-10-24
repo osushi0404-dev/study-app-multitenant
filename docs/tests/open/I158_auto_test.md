@@ -126,7 +126,7 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
   - TC-07 / TC-08: `select_for_update` の行を削除 → 3 回連続で **2 failed**（TC-07 `[201, 409]`＝ロック無しで制約違反が 409 に変換されることも同時に実証・TC-08 `[201, 409]`）→ Edit で復元 → 19 passed。
   - TC-20: `tmp_i158` フィールドを追加 → **exit 1**（`0022_quizsession_tmp_i158.py` を検出・`--dry-run` のためファイルは作られない）→ Edit で復元 → `No changes detected`。
   - TC-30: ガードの `if` を削除 → **2 failed**（TC-30・TC-31）→ Edit で復元 → 2 passed。
-  - TC-40: （E2E の再実行時に記入）
+  - TC-40: ガードの `if` を削除 → compose 内 e2e コンテナで `quiz-session.spec.ts` を `--retries=0` で実行 → **TC-40 が RED**（`Expected length: 1 / Received length: 2`＝開発サーバーの StrictMode による二重送信を実ブラウザで検出）・既存テストは合格 → Edit で復元。
   - 復元後の `git diff` は実装差分のみ（注入の残りなし）を確認済み。
 
 ## 実施記録（2026-10-24 /implement）
@@ -136,4 +136,6 @@ BODY_422 = {"error": {"main_message": "Idempotency-Key が別の内容で使用�
 - TC-21: `pytest --migrations --create-db` → **19 passed**（まっさらな DB に 0001〜0021 を適用）。
 - TC-22: Backend 全体 **122 passed**（baseline 103＋新規 19）。
 - TC-33: Frontend 全体 **4 suites / 13 passed**（baseline 10＋TC-30・TC-31・TC-34）・`npx tsc --noEmit` exit 0・`npx eslint`（変更 4 ファイル）exit 0・`react-scripts build` は `Compiled successfully.`（`frontend/build` がコンテナ作成の root 所有で書けないため `BUILD_PATH` をスクラッチ領域に向けて実行）。
-- TC-40 / TC-41: （E2E の再実行時に記入）
+- TC-40 / TC-41: `docker compose --profile e2e run --rm e2e` → **8 passed**（既存 7＋TC-40）。compose 内の e2e コンテナは安全なコンテキストでないため、TC-40 は「キー無しの代替動作」側を検証（キー付きの側は CI の `localhost` で検証される）。
+  - 初回は 2 回つまずいた（いずれもコード外）: ① dev DB が未マイグレーションで、かつ「もう一度挑戦」ボタンの型エラー（計画変更 2）で開発サーバーにエラー表示が重なりログインできなかった ② 連続実行でログインのレート制限（django-ratelimit・403）に当たった → 5 分待って再実行。
+  - ホストの Playwright（`cd e2e && npx playwright test`）は chromium の起動に必要なライブラリが無く起動できなかったため、compose の e2e コンテナで実行した。
