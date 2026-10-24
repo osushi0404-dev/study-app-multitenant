@@ -1,0 +1,7 @@
+---
+name: design-security-review
+description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。計画レビューで高リスク判定 Yes のとき、実装の前に設計のリスクと攻撃シナリオを確かめ、計画書に追記する。実装後の差分のセキュリティは組み込みの /security-review（review-gate の中）が見る。"
+argument-hint: "I###"
+user-invocable: false
+disallowed-tools: Write, NotebookEdit
+---

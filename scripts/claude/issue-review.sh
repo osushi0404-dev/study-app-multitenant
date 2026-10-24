@@ -12,10 +12,10 @@ cd "$REPO_ROOT"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_issue_review_${TIMESTAMP}.md"
-REVIEWER=".claude/review-agents/issue-reviewer.md"
+REVIEWER_AGENT="issue-reviewer"   # 定義: .claude/agents/issue-reviewer.md（tools: Read, Grep, Glob）
 
-# reviewer 指示ファイルの存在確認（非ブロック・防御的）
-if [ ! -f "$REVIEWER" ]; then
+# reviewer 定義の存在確認（非ブロック・防御的）
+if [ ! -f ".claude/agents/${REVIEWER_AGENT}.md" ]; then
   echo "⚠️ issue-reviewer.md が見つかりません。issue-review をスキップします。"
   exit 0
 fi
@@ -35,12 +35,10 @@ CONTEXT="イシュー番号: ${ISSUE}
 ### イシューファイル
 $(cat "$ISSUE_FILE")"
 
-# claude -p で第三者レビュー（読み取り専用ツールに制限）。失敗しても起票フローを止めない
-if ! REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
-  --model claude-sonnet-4-6 \
-  --system-prompt "$(cat "$REVIEWER")" \
-  --tools "Read,Grep,Glob"); then
-  echo "⚠️ issue-review をスキップしました（claude -p 失敗）。"
+# claude -p で第三者レビュー（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）。
+# 失敗・時間切れ（REVIEW_TIMEOUT・既定 900 秒）でも起票フローを止めない
+if ! REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob"); then
+  echo "⚠️ issue-review をスキップしました（claude -p 失敗または時間切れ）。"
   exit 0
 fi
 

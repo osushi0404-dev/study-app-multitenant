@@ -144,3 +144,23 @@ jobs:
       - name: Jest
         run: CI=true npm test
         working-directory: frontend
+
+  # I193（I185 P8）: ハーネス（スキル・スクリプト・見張り）の回帰テストを PR ごとに流す。
+  # ユーザーの確認を減らした流れで、ハーネスの退行を GitHub で止めるため。秘密情報は使わない。
+  harness-tests:
+    name: Harness Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 履歴を見るテスト（採番・レビュー記録など）があるため
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Configure git identity for temporary test repositories
+        run: |
+          git config --global user.name "harness-tests"
+          git config --global user.email "harness-tests@example.invalid"
+      - name: Run harness tests
+        run: bash scripts/claude/tests/run-all.sh

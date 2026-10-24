@@ -1,14 +1,16 @@
 ---
-name: security-review
-description: Pre-implementation security deep-dive for high-risk changes. Run when the plan review (inside /plan-issue, or /plan-issue-review) outputs 高リスク判定 Yes, before /implement. Reviews design risks + attack scenarios, appends results to plan document, stops if Blocker found.
+name: design-security-review
+description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。計画レビューで高リスク判定 Yes のとき、実装の前に設計のリスクと攻撃シナリオを確かめ、計画書に追記する。実装後の差分のセキュリティは組み込みの /security-review（review-gate の中）が見る。"
 argument-hint: "I###"
-disable-model-invocation: true
+user-invocable: false
 disallowed-tools: Write, NotebookEdit
 ---
 
-# /security-review
+# design-security-review（実装前のセキュリティ設計レビュー）
 
-前提: 計画レビュー（`/plan-issue` の中、または `/plan-issue-review`）で高リスク判定 Yes が出ている。`/implement` の前に実行する。
+前提: 計画レビュー（plan-review 段階）で高リスク判定 Yes が出ている（`STAGE_DONE: plan-review NEXT: design-security-review`）。実装の前に実行する。
+
+止めてユーザーに聞くのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるときだけ。それ以外で決めたことは `docs/reviews/open/$ARGUMENTS_review.md` の「## 自律判断の記録」に `- [design-security-review] 決めたこと — 理由` で書く。
 
 ## 手順
 
@@ -124,27 +126,19 @@ disallowed-tools: Write, NotebookEdit
 [手順3の出力をそのまま貼る]
 
 ### 残余リスク処遇
-（/retro で決定する）
+（retro 段階で決定する）
 ````
 
 ---
 
-### 6. 停止条件チェック
+### 6. 停止条件チェックと結線
 
-**Blocker が1件でも残っている場合**:
-
-⛔ STOP。以下を出力して停止する。
-
-```
-Blocker が残っています。
-計画書または設計を修正してから `/security-review $ARGUMENTS` を再実行してください。
-`/implement` へは進まないでください。
-```
+**Blocker が 1 件でも残っている場合**:
+1. 計画書（・設計書）を直して Blocker を解消する。直した後は Skill ツールで `plan-review` を呼び（計画レビューのやり直し）、その結果のあとでこの段階を手順 1 からやり直す
+2. 直すには要件・基本設計・UI/UX を変える必要があるとき、または直し方が無いときだけ止める（止める条件 1・3）。`STAGE_DONE:` は書かない
 
 **Blocker がない場合**:
-
-✅ セキュリティレビュー完了。
-
+`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する（Write は使えないので Edit で足す）:
 ```
-`/implement $ARGUMENTS` を実行してください。
+STAGE_DONE: design-security-review NEXT: implement
 ```

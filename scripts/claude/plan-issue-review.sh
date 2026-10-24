@@ -96,7 +96,7 @@ cd "$REPO_ROOT"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_plan_review_${TIMESTAMP}.md"
-REVIEWER=".claude/review-agents/plan-reviewer.md"
+REVIEWER_AGENT="plan-reviewer"   # 定義: .claude/agents/plan-reviewer.md（tools: Read, Grep, Glob）
 
 ISSUE_FILE=$(find_file "issues" "${ISSUE}.md")
 PLAN_FILE=$(find_plan_file "$ISSUE")
@@ -125,11 +125,14 @@ $(cat "$AUTO_TEST")"
 ### 手動テスト
 $(cat "$MANUAL_TEST")"
 
-# claude -p でレビュー実行（--tools でホワイトリスト制限: Read/Grep/Glob のみ）
-REVIEW=$(printf '%s' "$CONTEXT" | claude -p \
-  --model claude-sonnet-4-6 \
-  --system-prompt "$(cat "$REVIEWER")" \
-  --tools "Read,Grep,Glob")
+# claude -p でレビュー実行（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）
+# 時間上限 REVIEW_TIMEOUT（既定 900 秒）。時間切れ・失敗は判定できないので exit 1（fail-closed）
+REVIEW_RC=0
+REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob") || REVIEW_RC=$?
+if [ "$REVIEW_RC" -ne 0 ]; then
+  echo "⛔ 計画レビューが終わりませんでした（claude -p exit=${REVIEW_RC}。124 は時間切れ）。判定できないため止めます。"
+  exit 1
+fi
 
 [ -z "$REVIEW" ] && { echo "⚠️ claude -p が空を返しました。終了します。"; exit 1; }
 
@@ -156,18 +159,18 @@ if [ -f "$PLAN_FILE" ]; then
   append_review_link "$PLAN_FILE" "$TIMESTAMP" "$VERDICT" "$(basename "$REVIEW_FILE")"
 fi
 
-# 判定とユーザー案内（一次=VERDICT 行 / 保険=既存プレーン判定）
-case "$(detect_plan_verdict "$REVIEW_FILE")" in
+# 判定（一次=VERDICT 行 / 保険=既存プレーン判定）。次の段階は plan-review スキルが PLAN_VERDICT 行で決める（I193）
+PLAN_VERDICT=$(detect_plan_verdict "$REVIEW_FILE")
+echo "REVIEW_FILE: ${REVIEW_FILE}"
+echo "PLAN_VERDICT: ${PLAN_VERDICT}"
+case "$PLAN_VERDICT" in
   BLOCKER)
-    # shellcheck disable=SC2016
-    printf '\n⛔ Blocker が残っています。修正後に `/plan-issue-review %s` を再実行してください。\n' "$ISSUE" ;;
+    printf '\n⛔ Blocker が残っています。計画を直してから計画レビューをやり直してください。\n' ;;
   HIGHRISK)
-    # shellcheck disable=SC2016
-    printf '\n✅ プランレビュー完了。`/security-review %s` を実行してから `/implement %s` へ進んでください。\n' "$ISSUE" "$ISSUE" ;;
+    printf '\n✅ プランレビュー完了（高リスク判定 Yes。実装前のセキュリティ設計レビューへ）。\n' ;;
   UNKNOWN)
     printf '\n⛔ 判定できませんでした（レビュー記録に VERDICT 行も「## 判定: ✅」もありません）: %s\n   レビューが正常に終わっていない可能性があります。記録を確かめてから再実行してください。\n' "$REVIEW_FILE"
     exit 1 ;;
   *)
-    # shellcheck disable=SC2016
-    printf '\n✅ プランレビュー完了。`/implement %s` を実行してください。\n' "$ISSUE" ;;
+    printf '\n✅ プランレビュー完了（実装へ）。\n' ;;
 esac

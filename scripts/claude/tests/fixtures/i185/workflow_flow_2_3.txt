@@ -1,5 +1,0 @@
-2. /plan-issue I### → 計画書作成 → Claude が計画レビュー（`plan-issue-review.sh`）まで実行 → ユーザーがレビュー済みの計画を確認（OK/NG）
-   - レビュー NG（Edit/Write で修正可能）: Claude が自分で修正して再実行（同じゲートで 2 回続けて NG なら停止して報告）
-   - レビュー NG（設計判断が必要）: 選択肢を承認ポイントに含めて提示 → ユーザーが選ぶ
-   - 高リスク判定 Yes: 承認後に /security-review へ
-3. /plan-issue-review I###（計画の方式・範囲・受け入れ条件を変えたときだけ）→ 再レビュー（OK/NG。NG の扱いは 2 と同じ）

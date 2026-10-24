@@ -1,11 +1,16 @@
 ---
 name: issue-bootstrap
-description: Create issue doc, run issue-review (self-completeness), then register GitHub Issue. Branch creation is handled by /plan-issue.
+description: イシューを採番・作成し、自己完結度レビューを通して GitHub に登録する（ブランチは /plan-issue が作る）。使うのは、ユーザーが /issue-bootstrap を打ったときと、retro 段階が改善案を起票するときだけ。
 argument-hint: "[title]"
-disable-model-invocation: true
 ---
 
 # /issue-bootstrap
+
+## 呼ばれ方
+- **ユーザーが打ったとき**: 下の手順をすべて行う。要件・基本設計・UI/UX で決めてもらうことがあるときだけ、手順 6 で質問して止まる（`docs/runbooks/workflow.md`「止めて聞く条件」1）
+- **retro 段階から呼ばれたとき**: 質問しない。未確定のことは「未定・grill-me で確認」と書いて最後まで進める。起点のイシュー番号を「関連資料」に書く
+
+どちらのときも、イシューの本文にコマンドの出力・ログ・環境変数・記録（JSONL）の中身を貼らない。要約と `ファイル:行` の参照だけにする（公開リポジトリのため）。
 
 ## 自動実行フロー（必須）
 
@@ -87,7 +92,9 @@ GITHUB_ISSUE_NUM=$(gh issue list --state open --limit 1 --json number --jq '.[0]
 
 ### 6. ユーザーへの報告
 
-step 3.5 の issue-review 判定に応じて次ステップ案内を出し分ける。
+retro 段階から呼ばれたときは、下の報告の代わりに「起票した I### と GitHub の番号」を retro 段階に返して終わる（ユーザーへの報告は close 段階がまとめて行う）。
+
+ユーザーが打ったときは、step 3.5 の issue-review 判定に応じて次ステップ案内を出し分ける。未確定のセクションのうち、要件・基本設計・UI/UX の価値判断が要るもの（受け入れ条件・仕様・画面の配置/文言/操作の流れ）があれば、案内の前にその質問を一括で出して止まる（技術的な未確定は計画で Claude が決めるので質問しない）。回答はイシューファイルの「## 設計確認メモ（/grill-me）」に書き、本文と GitHub の本文にも反映する（grill-me と同じ手順）。
 
 **(A) 判定=`要補足` / 「未特定・未定」プレースホルダが残っている場合**:
 ```

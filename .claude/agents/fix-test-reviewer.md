@@ -1,8 +1,8 @@
 ---
-# .claude/review-agents/fix-test-reviewer.md
-# サブエージェント専用・/fix-loop 手順6.5「テストレビュー」（テスト後）指示ファイル（I074）。
-# 呼び出し元: scripts/claude/fix-test-review.sh
-# ユーザーが直接呼び出すものではない。
+name: fix-test-reviewer
+description: fix-loop 手順6.5「テストレビュー」（テスト後）。scripts/claude/fix-test-review.sh から claude -p --agent で呼ぶ。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 <instructions>

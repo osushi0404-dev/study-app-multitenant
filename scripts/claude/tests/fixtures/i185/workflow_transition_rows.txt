@@ -1,5 +1,0 @@
-| 計画書承認後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内（計画レビューは `/plan-issue` の中で済んでいる） |
-| 計画書承認後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |
-| 計画の方式・範囲・受け入れ条件を変えた後 | 「`/plan-issue-review I###` を入力してください」と案内 |
-| plan-issue-review OK 後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内 |
-| plan-issue-review OK 後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |

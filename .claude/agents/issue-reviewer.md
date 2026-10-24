@@ -1,8 +1,8 @@
 ---
-# .claude/review-agents/issue-reviewer.md
-# サブエージェント専用・イシュー自己完結度レビュー指示ファイル
-# 呼び出し元: scripts/claude/issue-review.sh（issue-bootstrap の step 3.5 から起動）
-# ユーザーが直接呼び出すものではない
+name: issue-reviewer
+description: イシューの自己完結度レビュー。scripts/claude/issue-review.sh（issue-bootstrap の step 3.5）から claude -p --agent で呼ぶ。自分から仕事を任せる相手にしない。
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 <instructions>

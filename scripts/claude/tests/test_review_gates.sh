@@ -134,7 +134,7 @@ ck_true TC-WIRE1c grep -q 'combine_verdict' "$CODE_REVIEW"
 ck_true TC-WIRE1d grep -q 'inject_gate_result' "$CODE_REVIEW"
 ck_true TC-WIRE2  bash scripts/claude/tests/test_review_verdict.sh
 lr=$(grep -n 'run_declared_gates "$AUTO_TEST_FILE"' "$CODE_REVIEW" | head -1 | cut -d: -f1)
-lc=$(grep -n '| claude -p' "$CODE_REVIEW" | head -1 | cut -d: -f1)   # コメント行でなく実呼び出し（パイプ形）を anchor
+lc=$(grep -n 'claude -p --agent "$REVIEWER_AGENT"' "$CODE_REVIEW" | head -1 | cut -d: -f1)   # コメント行でなく実呼び出し（I193: --agent 形）を anchor
 li=$(grep -n 'inject_gate_result' "$CODE_REVIEW" | tail -1 | cut -d: -f1)
 ck TC-WIRE3 yes "$([ -n "$lr" ] && [ -n "$lc" ] && [ -n "$li" ] && [ "$lr" -lt "$lc" ] && [ "$lc" -lt "$li" ] && echo yes || echo no)"
 # shellcheck disable=SC2016  # 単一引用符は literal grep パターン（$() を展開させない意図）
