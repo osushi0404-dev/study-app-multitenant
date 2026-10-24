@@ -98,7 +98,7 @@ app/非app の区別では分岐しない。Backend/Frontend 変更が無いイ�
    - テスト計画書（`I###_manual_test.md`）の「実施者」欄を必ず確認する
    - **実施者: Claude** の項目 → 自分で Bash/Read ツールを使って実行し、結果を記録する（ユーザーに依頼しない）
      - 画面の表示・遷移・入力の結果・コンソールの確認は、Playwright MCP で `docs/runbooks/frontend-verify.md` の手順（`docker compose up -d` → `docker compose port frontend 3000` の URL → `docker compose exec frontend npm run typecheck` → E2E 用アカウントでログイン → 画面キャプチャを `.evidence/$ARGUMENTS/` に保存して Read で見る → `browser_console_messages`）で行い、テスト記録の「## 画面確認」の表に 1 行ずつ書く
-     - 承認画面が出るか／承認なしで通るかの確認は、操作ごとに `bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`（MCP の操作は `mcp <操作名> '<入力の JSON>'`）を実行し、終了コード（0=承認なしで実行された・10=承認画面が出る・2=判定できない）を記録する。ユーザーに「画面が出たか」を聞かない。承認なしで通る操作は実際に実行される（設定が壊れていれば、承認画面が出るはずの操作も実行される）。危ない操作を確かめるときは、同じ許可ルール・見張りに当たり、実行されても困らない代わりの操作（存在しない設定ファイルの指定など）で流す
+     - 承認画面が出るか／承認なしで通るかの確認は、操作ごとに `bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`（MCP の操作は `mcp <操作名> '<入力の JSON>'`）を実行し、終了コード（0=承認なしで実行された・10=承認画面が出る・2=判定できない）を記録する。2 のときは、もう 1 回流す（それでも 2 なら、その項目を NG として止め、出力を添えて報告する）。ユーザーに「画面が出たか」を聞かない。承認なしで通る操作は実際に実行される（設定が壊れていれば、承認画面が出るはずの操作も実行される）。危ない操作を確かめるときは、同じ許可ルール・見張りに当たり、実行されても困らない代わりの操作（存在しない設定ファイルの指定など）で流す
    - **実施者: Human** の項目のみ → ユーザーに確認を依頼する。その前に、実施者の振り分けを判定する（Claude で確かめられる項目を人に頼まないため）:
      ```bash
      bash scripts/claude/check-manual-test-executor.sh $ARGUMENTS

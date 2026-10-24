@@ -47,5 +47,22 @@ ck "Q15 result の subtype が success でない" 2 "$( { init; use Bash "$(bash
 ck "Q16 拒否の行があるのに permission_denials に無い" 2 "$( { init; use Bash "$(bash_in "$CMD")"; denied_ev Bash; res true; done_ok; } | run q16 bash "$CMD")"
 ck "Q17 コマンドが失敗しただけ（is_error・拒否なし）" 0 "$( { init; use Bash "$(bash_in "$CMD")"; res true; done_ok; } | run q17 bash "$CMD")"
 
+# Q18（BP 周）: claude に渡す引数を守る。CLAUDE_BIN に、受け取った引数を書き出して作り置きのログを返す偽物を渡す
+fake="$TMP/fake-claude.sh"; args="$TMP/args.txt"; { init; use Bash "$(bash_in "$CMD")"; res false; done_ok; } > "$TMP/q18.jsonl"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > %q\ncat %q\n' "$args" "$TMP/q18.jsonl" > "$fake"; chmod +x "$fake"
+rc="$(CLAUDE_BIN="$fake" bash "$CHECK" bash "$CMD" >/dev/null 2>&1; echo $?)"
+got="$(tr '\n' ' ' < "$args" 2>/dev/null)"
+ok=1
+for want in "--permission-mode manual" "--permission-prompts none" "--setting-sources user" "--settings .claude/settings.json" "--strict-mcp-config" "--output-format stream-json"; do
+  [[ " $got " == *" $want "* ]] || { ok=0; echo "  Q18 引数が無い: $want" >&2; }
+done
+[[ " $got " == *" --mcp-config "* ]] && { ok=0; echo "  Q18 bash の判定で MCP を読み込んでいる" >&2; }
+ck "Q18 claude に渡す引数（bash）" "0 1" "$rc $ok"
+rm -f "$args"
+{ init; use mcp__playwright__browser_navigate '{"url":"x"}'; res false; done_ok; } > "$TMP/q18.jsonl"
+rc="$(CLAUDE_BIN="$fake" bash "$CHECK" mcp mcp__playwright__browser_navigate '{"url":"x"}' >/dev/null 2>&1; echo $?)"
+got="$(tr '\n' ' ' < "$args" 2>/dev/null)"
+ck "Q18 claude に渡す引数（mcp は .mcp.json を読む）" "0 yes yes" "$rc $([[ " $got " == *" --mcp-config .mcp.json "* ]] && echo yes || echo no) $([[ " $got " == *" --setting-sources user "* ]] && echo yes || echo no)"
+
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

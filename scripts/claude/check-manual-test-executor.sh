@@ -4,8 +4,9 @@ set -uo pipefail
 # Usage: check-manual-test-executor.sh I###
 #   - docs/tests/{open,closed}/I###_manual_test.md の表のうち、見出し行に「実施者」の列がある表を読む
 #   - 実施者の列が Human（太字・「ユーザー」「人」を含む）の行について
-#     ・行に「承認」「確認プロンプト」「確認が出」「確認画面」「確認なし」「ダイアログ」を含む → 不合格
-#       （承認画面が出るかは check-permission-prompt.sh で Claude が確かめる）
+#     ・行に「承認」「確認プロンプト」「確認が出」「確認画面」「確認なし」「ダイアログ」を含み、理由に
+#       check-permission-prompt.sh では確かめられないわけ（スクリプトの名前を含む）が無い → 不合格
+#       （承認画面が出るかは check-permission-prompt.sh で Claude が確かめる。考えずに Human に振った行を止める）
 #     ・「Claude で確かめられない理由:」の後ろに理由が無い → 不合格
 #   - 文字列の判定は普通の書き方の事故を止めるためのもので、わざと避ける書き方は対象にしない
 # 終了コード: 0=合格・1=不合格・2=使い方の誤り／文書が無い
@@ -59,13 +60,15 @@ PROMPT_WORDS='承認|確認プロンプト|確認が出|確認画面|確認な�
 ng=0
 while IFS=$'\t' read -r no line; do
   [ -n "$line" ] || continue
-  if [[ "$line" =~ $PROMPT_WORDS ]]; then
-    ng=$((ng + 1)); echo "  ${no}: 承認画面が出るかの確認（「${BASH_REMATCH[0]}」）を Human にしています。check-permission-prompt.sh で Claude が確かめる行にしてください" >&2
-  fi
   reason=""
   if [[ "$line" =~ Claude\ で確かめられない理由[:：]([^|]*) ]]; then
     reason="${BASH_REMATCH[1]}"
     reason="${reason//[[:space:]]/}"
+  fi
+  # 言葉が当たっても、check-permission-prompt.sh では確かめられない理由まで書いてあれば通す
+  # （GitHub の Approve・アプリのダイアログの操作感など、Claude Code の承認画面ではない正当な Human の行を止めない）
+  if [[ "$line" =~ $PROMPT_WORDS ]] && [[ "$reason" != *check-permission-prompt.sh* ]]; then
+    ng=$((ng + 1)); echo "  ${no}: 承認画面が出るかの確認（「${BASH_REMATCH[0]}」）を Human にしているように見えます。check-permission-prompt.sh で Claude が確かめる行にしてください（Claude Code の承認画面の話ではない場合は、理由に check-permission-prompt.sh では確かめられないわけを書く）" >&2
   fi
   if [ -z "$reason" ]; then
     ng=$((ng + 1)); echo "  ${no}: Human の行に「Claude で確かめられない理由: …」がありません（Claude で確かめる手段を公式の機能まで探し、無かった理由を書く）" >&2

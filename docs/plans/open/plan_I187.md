@@ -209,11 +209,12 @@
 #### 5-2-8. 承認画面の確かめ方と実施者の判定（変更点 18・19・計画変更記録 7）
 - `check-permission-prompt.sh bash '<コマンド>'`・`check-permission-prompt.sh mcp <操作名> '<入力の JSON>'`:
   - （敵対的レビュー 3 周目で `--setting-sources user` を追加: 元のリポジトリの設定・手元の `settings.local.json` が混ざり、マージ後の develop と違う判定になるのを防ぐ）`claude -p` を `--model haiku --permission-mode manual --permission-prompts none --setting-sources user --settings .claude/settings.json --mcp-config .mcp.json --no-session-persistence --max-budget-usd 1 --output-format stream-json --verbose` で起動し、「その操作を 1 回だけ、書き換えずに呼ぶ」よう頼む。`--settings` でワークツリーの許可を読ませる（ワークツリーのセッションの許可は元のリポジトリの設定で判定されるため。計画変更記録 5）。
+  - （BP 周）bash の判定では `--mcp-config` の代わりに `--strict-mcp-config` を付け、MCP サーバーを起動しない（判定に要らず遅くなるだけ）。起動する claude は `CLAUDE_BIN` で差し替えられ、渡す引数をテスト Q18 で守る。2 が出たらもう 1 回流し、それでも 2 なら NG として止めて報告する（`/test` の手順）。
   - 出力の読み取り: 初めの `system`（`init`）の `permissionMode` が `default` でなければ判定できない。頼んだ操作と同じ名前（bash なら `Bash` で `command` が完全一致・mcp なら操作名が一致）の `tool_use` を探し、その id が最後の `result` の `permission_denials` にあれば「承認画面が出る」、無くて `tool_result` が返っていれば「承認なしで実行された」。
   - 終了コード: 0 = 承認なしで実行された・10 = 承認画面が出る（自動で拒否された）・2 = 判定できない（引数の誤り・操作が呼ばれない・コマンドが書き換えられた・モードが違う・`claude` の失敗）。見張りが止めた（exit 2）操作は承認画面を出さないので 0 側になり、`tool_result` の先頭を表示して見分けられるようにする。
   - 注意: 承認なしで通る操作は **実際に実行される**。実行して困るもの（データの削除・外部への送信など）には使わない。承認が要る操作は実行されない。
   - テストのため、環境変数 `CHECK_PERMISSION_PROMPT_LOG=<保存した出力>` があれば `claude` を起動せずにその出力を読む（読み取りの部分だけを決まったテストで確かめる）。
-- `check-manual-test-executor.sh I###`: `docs/tests/{open,closed}/I###_manual_test.md` の表のうち、見出し行に「実施者」の列がある表を読む。実施者の列が `Human` で始まる行について、①行に「承認画面」を含む → 不合格（変更点 18 で Claude が確かめる） ②行に `Claude で確かめられない理由:` と、その後ろに 1 文字以上の理由が無い → 不合格。終了コード: 0 = 合格・1 = 不合格（どの行の何が足りないかを出す）・2 = 引数の誤り・文書が無い。文字列の判定は「普通の書き方の事故」を止めるもので、わざと避ける書き方は対象にしない。
+- `check-manual-test-executor.sh I###`: `docs/tests/{open,closed}/I###_manual_test.md` の表のうち、見出し行に「実施者」の列がある表を読む。実施者の列が `Human` で始まる行について、①行に「承認画面」を含む → 不合格（変更点 18 で Claude が確かめる。敵対的レビュー 3 周目で言い換え〔承認・確認プロンプト・確認が出・確認画面・確認なし・ダイアログ〕に広げ、BP 周で「理由に check-permission-prompt.sh では確かめられないわけ〔スクリプトの名前〕があれば通す」に変えた。GitHub の Approve など正当な Human の行を止めないため） ②行に `Claude で確かめられない理由:` と、その後ろに 1 文字以上の理由が無い → 不合格。終了コード: 0 = 合格・1 = 不合格（どの行の何が足りないかを出す）・2 = 引数の誤り・文書が無い。文字列の判定は「普通の書き方の事故」を止めるもので、わざと避ける書き方は対象にしない。
 - スキルからの呼び方（計画レビューの Warning を受けて明記）: `check-manual-test-executor.sh` は `/plan-issue`（テスト文書を作った後）と `/test`（Human の項目を出す前）が **毎回自動で実行** し、0 以外なら止める。`check-permission-prompt.sh` は、手動テストに「承認画面が出るか」を確かめる行があるときに、`/test` の Claude がその行ごとに **実行して結果を記録する**（確かめる操作は行ごとに違うため、スキルは手順と呼び方を書き、決まった 1 コマンドとしては流さない）。`/plan-issue` には、そうした行を実施者 Claude で書き、この呼び方を手順に書くよう記す。
 
 ## 6. テスト計画

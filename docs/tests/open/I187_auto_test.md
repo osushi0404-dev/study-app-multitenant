@@ -123,6 +123,7 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | Q11 | （実装時に追加）`result` の `permission_denials` が配列でない | exit 2 |
 | Q12〜Q16 | （敵対的レビュー 3 周目）`permission_denials` が無い・null・要素に `tool_use_id` が無い・`subtype` が success でない・拒否の行があるのに `permission_denials` に無い | exit 2 |
 | Q17 | （敵対的レビュー 3 周目）コマンドが失敗しただけ（`is_error`・拒否なし）＝ `is_error` ではなく `permission_denials` で判定していること | exit 0 |
+| Q18 | （BP 周）`CLAUDE_BIN` に引数を書き出す偽物を渡し、`--permission-mode manual`・`--permission-prompts none`・`--setting-sources user`・`--settings .claude/settings.json`・`--output-format stream-json` が渡ること。bash の判定では `--strict-mcp-config`（MCP を起動しない）、mcp の判定では `--mcp-config .mcp.json` | 引数がそろう |
 
 ### TC-28: 実施者の判定のケース（`test_check_manual_test_executor.sh`）
 一時フォルダに `docs/tests/open/I999_manual_test.md` を作って実行する。
@@ -142,6 +143,7 @@ pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。ア
 | X12 | （同上）Human の行に承認の確認の言い換え（承認なし・確認プロンプト・確認が出・確認画面・確認なし・ダイアログ） | exit 1 |
 | X13 | （同上）「実施者」の列がある表が無い | exit 2 |
 | X14・X15 | （同上）実施者が `**Human**`（太字）・「ユーザー」 | exit 1 |
+| X16・X17 | （BP 周）言葉が当たる正当な Human の行（PR の Approve）: 理由に `check-permission-prompt.sh` では確かめられないわけがあれば 0、無ければ 1 | 0・1 |
 
 ## false-green の確認
 - 計画時（2026-10-24・実装前）: 下の決定論ゲートのうち grep・json.tool の行を非対話の bash で実走し、**実装前の今の状態ではすべて不合格（exit≠0）**になることを確認した（どれも「まだ変更していない状態」＝失敗条件を注入した状態に当たる）。結果は「計画時の実行結果」を参照。`TC-01`（`.mcp.json` は今も正しい JSON）・`TC-02`・`TC-06` は、今も合格するのが正しい（構文の確認）。

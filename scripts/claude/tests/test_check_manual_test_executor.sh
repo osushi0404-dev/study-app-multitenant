@@ -66,6 +66,13 @@ for w in 承認なし 確認プロンプト 確認が出 確認画面 確認な�
 $SEP
 | 1 | コマンドを流す | ${w}で通る | Human |  | Claude で確かめられない理由: 新しいセッションでないと見えない |")")"
 done
+# 言葉が当たっても、check-permission-prompt.sh では確かめられない理由まで書いてあれば通す（BP 周の High: 正当な Human の行が止まる）
+ck "X16 PR の Approve（理由にスクリプトで確かめられないわけ）" 0 "$(run "$(setup x16 "$HDR
+$SEP
+| 1 | PR を Approve する | 承認される | Human |  | Claude で確かめられない理由: bot は自分の PR を承認できない。check-permission-prompt.sh は Claude Code の承認画面だけを見るので使えない |")")"
+ck "X17 言葉が当たり、理由にスクリプトの名前が無い" 1 "$(run "$(setup x17 "$HDR
+$SEP
+| 1 | PR を Approve する | 承認される | Human |  | Claude で確かめられない理由: bot は自分の PR を承認できない |")")"
 ck "X13 実施者の列がある表が無い"  2 "$(run "$(setup x13 "| No | 手順 | 期待結果 |
 |---|---|---|
 | 1 | 画面を開く | 一覧が出る |")")"

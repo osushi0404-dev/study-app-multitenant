@@ -14,6 +14,8 @@ set -uo pipefail
 # 終了コード: 0=承認なしで実行された・10=承認画面が出る（自動で拒否された）
 #             2=判定できない（引数の誤り・操作が呼ばれない・コマンドが書き換えられた・モードが違う・claude の失敗）
 # テスト用: CHECK_PERMISSION_PROMPT_LOG=<保存した stream-json> があれば claude を起動せずにそれを読む
+#           CLAUDE_BIN=<コマンド> で起動する claude を差し替えられる（渡す引数を確かめる）
+# 2 が出たら: もう 1 回流す。それでも 2 なら、その確認は NG として止めて報告する（ユーザーに「画面が出たか」を聞かない）
 # 計画: docs/plans/open/plan_I187.md 5-2-8
 
 KIND="${1:-}"
@@ -39,13 +41,15 @@ else
   cd "$ROOT" || exit 2
   LOG="$(mktemp)"
   trap 'rm -f "$LOG"' EXIT
-  if ! claude -p "$PROMPT" \
+  # bash の判定では MCP サーバーを起動しない（判定に要らず、起動の分だけ遅くなる）
+  if [ "$KIND" = "mcp" ]; then MCP_ARGS=(--mcp-config .mcp.json); else MCP_ARGS=(--strict-mcp-config); fi
+  if ! "${CLAUDE_BIN:-claude}" -p "$PROMPT" \
       --model haiku \
       --permission-mode manual \
       --permission-prompts none \
       --setting-sources user \
       --settings .claude/settings.json \
-      --mcp-config .mcp.json \
+      "${MCP_ARGS[@]}" \
       --no-session-persistence \
       --max-budget-usd 1 \
       --output-format stream-json --verbose > "$LOG"; then
