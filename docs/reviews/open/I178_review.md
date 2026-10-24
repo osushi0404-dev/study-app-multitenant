@@ -54,7 +54,7 @@
 
 | # | 対象 | 種別 |
 |---|---|---|
-| 1 | `docs/runbooks/branch-protection-setup.md` | 変更（§概要・§1.5・§4 確認 1・2 と確認 5・§6） |
+| 1 | `docs/runbooks/branch-protection-setup.md` | 変更（§概要・§1.5・§4 確認 1・2 と確認 5・§6 の「自分が作った PR」の節を削除） |
 | 2 | `docs/runbooks/issue-flow.md` | 変更（ステップ 25） |
 | 3 | `docs/runbooks/workflow.md` | 変更（本番リリースフロー・hotfix） |
 | 4 | `docs/runbooks/onboarding.md` | 変更（main へのマージの Q&A） |
@@ -64,7 +64,7 @@
 
 ### 重点レビュー観点
 
-1. **事実との一致**: runbook の記述が手動 No.7 の結果（作成者が `oshui0404` 本人の PR には Code Owners の要件がかからない・マージは `oshui0404` だけ）と矛盾しないか。
+1. **事実との一致**: runbook の記述が手動 No.7 の結果（作成者が `oshui0404` 本人の PR には Code Owners の要件がかからない・マージは `oshui0404` だけ）と矛盾しないか。ユーザー作成 PR の扱いは書かない（ユーザーは PR を作らない・計画変更 2）ので、書いてある文が bot・外部が作った PR に限って正しいことを見る。
 2. **実行できる手順か**: 書き換えたリリース・hotfix・ステップ 25 の手順が、ブランチ保護（PR 必須・承認 1・Restrict・bypass 不可・必須チェック）の下でそのまま実行できるか。main に CI が無い間の hotfix の制約が書かれているか。
 3. **取りこぼし**: 直 push 手順・矛盾する記述が、対象の 4 ファイル以外に残っていないか（計画書 R3-2 の検索）。
 4. **変えないものを変えていないか**: CODEOWNERS・設定・pr-base-sync・close スキル。

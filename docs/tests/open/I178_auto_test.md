@@ -21,11 +21,11 @@
 ! grep -q "一時的にオフ" docs/runbooks/branch-protection-setup.md
 ! grep -q "I178 の /retro で確認する" docs/runbooks/branch-protection-setup.md
 ! grep -q "のままであることを確認する" docs/runbooks/branch-protection-setup.md
-grep -q "作成者が .oshui0404. 本人の PR では Code Owners の要件がかからず" docs/runbooks/branch-protection-setup.md
+grep -q "ユーザーは PR を作らない" docs/runbooks/branch-protection-setup.md
 grep -q "bot や外部の人が作った PR を .oshui0404. が承認しない限りマージできない" docs/runbooks/branch-protection-setup.md
-grep -qxF "### 自分が作った PR をマージしたい" docs/runbooks/branch-protection-setup.md
+! grep -q "自分が作った PR" docs/runbooks/branch-protection-setup.md
 grep -qxF "### 確認 5: （I178 の再オープンで廃止）" docs/runbooks/branch-protection-setup.md
-grep -q "bot に承認を頼む" docs/runbooks/branch-protection-setup.md
+! grep -q "gh pr review" docs/runbooks/branch-protection-setup.md
 grep -q "効き目は確認 4・6" docs/runbooks/branch-protection-setup.md
 ! grep -q "確認 4〜6" docs/runbooks/branch-protection-setup.md
 ! grep -q "git push.*develop" docs/runbooks/issue-flow.md
@@ -76,12 +76,13 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
 - RTC-05: 「のままであることを確認する」が無い（§4 確認 5 の旧期待結果） / ゲート 5 行目
 - 期待: すべて exit 0
 
-## RTC-06〜RTC-08: runbook に No.7 の事実と新しい手順がある（AC-R1）
-- RTC-06: §1.5 運用に「作成者が `oshui0404` 本人の PR では Code Owners の要件がかからず」 / ゲート 6 行目
+## RTC-06〜RTC-08: runbook が「PR は bot が作る・ユーザーは PR を作らない」前提で書かれている（AC-R1）
+2026-10-24 の計画変更 2 で、ユーザー作成 PR の扱い（bot の承認でマージ要件を満たす事実と、bot に承認を頼む手順）を書かないことにした（ユーザーは PR を作らない）。
+- RTC-06: §1.5 運用に「ユーザーは PR を作らない」 / ゲート 6 行目
 - RTC-07: §概要に「bot や外部の人が作った PR を `oshui0404` が承認しない限りマージできない」 / ゲート 7 行目
-- RTC-08a: §6 の見出し「### 自分が作った PR をマージしたい」（行の完全一致） / ゲート 8 行目
+- RTC-08a: 「自分が作った PR」を扱う節（§6 の旧見出し「自分が作った PR を承認・マージできない」）が無い / ゲート 8 行目
 - RTC-08b: §4 の見出し「### 確認 5: （I178 の再オープンで廃止）」（行の完全一致） / ゲート 9 行目
-- RTC-08c: §6 に「bot に承認を頼む」手順 / ゲート 10 行目
+- RTC-08c: bot に承認させる手順（`gh pr review`。旧 §4 確認 5 の手順 2）が無い / ゲート 10 行目
 - RTC-08d: §4 確認 1・2 の段落が「効き目は確認 4・6」 / ゲート 11 行目
 - RTC-08e: 旧文「確認 4〜6」が無い（新旧の併記を検知・plan-review 20261024_1452 Info 対応） / ゲート 12 行目
 - 期待: すべて exit 0（バッククォートはゲート行に書けないため、任意の 1 文字 `.` で表す）
@@ -141,6 +142,7 @@ grep -qxF '* @oshui0404' .github/CODEOWNERS
 |---|---|---|---|
 | ゲート 30 行（RTC-01〜RTC-18・RTC-21・RTC-22） | 2026-10-24 | ✅ 全件 exit 0 | /implement 完了時（ステップ R1〜R4 反映後）。code-review.sh と同じ抽出規則・`! grep` の扱いで実行。/test で再実行する |
 | RTC-19・RTC-20・RTC-23 | 2026-10-24 | ✅ 全件 exit 0 | /implement 完了時。RTC-23 の注入版（比較先 `6c88d9f^1`）は引き続き exit 1 |
+| ゲート 6・8・10 行目（計画変更 2 で差し替え） | 2026-10-24 | ✅ develop 版の runbook で 3 行とも exit 1（Red）・現行版で 3 行とも exit 0 | 差し替え後のゲート 30 行も全件 exit 0 |
 
 ---
 
