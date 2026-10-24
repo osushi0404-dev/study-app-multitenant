@@ -15,7 +15,9 @@ from .serializers import (
     SubmitAnswerSerializer, MediaAssetSerializer
 )
 from .services import QuizService
+from .services.quiz_service import ActiveSessionConflictError, IdempotencyKeyReusedError
 from core.cache_service import cache_service
+from core.exceptions import create_error_response
 from core.subject_service import subject_service
 from core.storage_service import StorageService
 from common.mixins import MultipartFormDataMixin
@@ -805,9 +807,14 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             )
 
 
+IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key'
+
+
 class QuizSessionViewSet(viewsets.ModelViewSet):
     serializer_class = QuizSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    # セッションの書き換え・削除は API として提供しない（終了は end アクションのみ）
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
         return QuizSession.objects.filter(user=self.request.user)
@@ -818,30 +825,41 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
         return QuizSessionSerializer
 
     def create(self, request):
-        # End any active sessions first
-        QuizSession.objects.filter(
-            user=request.user,
-            is_active=True
-        ).update(is_active=False, ended_at=timezone.now())
+        raw_key = request.headers.get(IDEMPOTENCY_KEY_HEADER)
+        try:
+            client_request_id = uuid.UUID(raw_key) if raw_key is not None else None
+        except ValueError:
+            return create_error_response(
+                '入力内容にエラーがあります',
+                'Idempotency-Key は UUID 形式で指定してください',
+                status.HTTP_400_BAD_REQUEST,
+            )
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        session = serializer.save(user=request.user)
-
-        # Get total problem count for the subject (no limit)
-        problems_queryset = Problem.objects.filter(is_deleted=False)
-        if session.subject:
-            problems_queryset = problems_queryset.filter(subject=session.subject)
-
-        # Set total_problems to the actual count in the subject
-        # 無制限クイズのため、problem_countパラメータは無視
-        session.total_problems = problems_queryset.count()
-        session.save()
+        try:
+            session, created = QuizService.start_session(
+                user=request.user,
+                subject=serializer.validated_data.get('subject'),
+                client_request_id=client_request_id,
+            )
+        except IdempotencyKeyReusedError:
+            return create_error_response(
+                'Idempotency-Key が別の内容で使用されています',
+                '新しいキーで再度お試しください',
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except ActiveSessionConflictError:
+            return create_error_response(
+                'クイズの開始が競合しました',
+                'しばらくしてから再度お試しください',
+                status.HTTP_409_CONFLICT,
+            )
 
         return Response(
-            QuizSessionSerializer(session).data,
-            status=status.HTTP_201_CREATED
+            self.get_serializer(session).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=['get'])
@@ -939,7 +957,8 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
 
         # 無制限クイズのため、セッション完了チェックを削除
         # ユーザーが中断するまで問題を出し続ける
-        session.save()
+        # 集計列だけを保存する（別タブの開始が終了させた is_active を書き戻さない）
+        session.save(update_fields=['completed_problems', 'correct_answers'])
 
         # Return result with explanation and updated session
         return Response({
@@ -968,7 +987,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
 
         session.is_active = False
         session.ended_at = timezone.now()
-        session.save()
+        session.save(update_fields=['is_active', 'ended_at'])
 
         serializer = QuizSessionDetailSerializer(session)
         return Response(serializer.data)
