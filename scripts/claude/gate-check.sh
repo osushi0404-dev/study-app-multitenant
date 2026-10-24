@@ -3,12 +3,12 @@
 # 呼び出し元: .claude/skills/test-gate/SKILL.md・.claude/skills/close/SKILL.md（どちらも最初の手順）
 # 合格（exit 0）の条件をすべて満たすこと（どれかが欠ける・読めない・違うときは理由を出して exit 1＝fail-closed）:
 #   1. 最新の docs/reviews/[closed/]I###_code_review_*.md の最後の VERDICT が OK で、
-#      その REVIEWED_COMMIT から HEAD までの差分が「記録の場所」の中だけ
-#   2. 高リスク（記録の RISK 行 OR このスクリプトが再評価するパス判定 path_risk_trigger。比べる相手は GATE_BASE・
-#      既定 origin/develop）なら、最新の I###_adversarial_review_*.md の最後の VERDICT が OK で、
-#      その REVIEWED_COMMIT から HEAD までの差分も記録の場所の中だけ（OK の周の後に足した差分を通さない）
+#      その REVIEWED_COMMIT の時点と今とで「ブランチ自身の変更」（比べる相手 GATE_BASE〔既定 origin/develop〕との
+#      merge-base からの差・記録の場所を除く）が同じ。auto_test.md の決定論ゲートの節も同じ
+#   2. 高リスク（記録の RISK 行 OR このスクリプトが再評価するパス判定 path_risk_trigger）なら、最新の
+#      I###_adversarial_review_*.md の最後の VERDICT が OK で、1 と同じ比べ方で後から変わっていない（OK の周の後に足した差分を通さない）
 #   3. 作業ツリーに、記録の場所の外のコミットしていない変更（未追跡を含む）が無い
-# 記録の場所: docs/reviews/・docs/tests/・docs/issues/・docs/plans/
+# 記録の場所: docs/reviews/・docs/issues/・docs/tests/{open,closed}/・docs/plans/{open,closed}/（テンプレートは含めない）
 # 失敗のときは `GATE_CHECK: FAIL REASON=<dirty|unreviewed|verdict|missing|base>` を出す（test-gate・close が戻り先を決める）
 # ファイル名は core.quotePath=false・--no-renames で取る（日本語名・名前の変更ですり抜けない。I086・I181）
 set -uo pipefail
@@ -27,8 +27,11 @@ cd "$REPO_ROOT" || exit 1
 REVIEW_LIB_SOURCE_ONLY=1 . "${GATE_CHECK_LIB:-scripts/claude/code-review.sh}" || { echo "⛔ code-review.sh を読み込めません"; exit 1; }
 set +e   # code-review.sh の set -e を引き継がない（失敗の理由を出してから終わるため）
 
-RECORD_RE='^docs/(reviews|tests|issues|plans)/'
-# 高リスクのパス判定で比べる相手（既定は origin/develop。テストでは一時リポジトリの枝を渡す）
+# 記録の場所。テンプレート（docs/plans/templates・docs/tests/templates）は次のイシューの決まりなので含めない（I193 M2）
+RECORD_RE='^docs/(reviews|issues)/|^docs/(tests|plans)/(open|closed)/'
+RECORD_EXCLUDES=(':(exclude)docs/reviews' ':(exclude)docs/issues' ':(exclude)docs/tests/open' ':(exclude)docs/tests/closed'
+                 ':(exclude)docs/plans/open' ':(exclude)docs/plans/closed')
+# 比べる相手（既定は origin/develop。テストでは一時リポジトリの枝を渡す）。パス判定と「ブランチ自身の変更」の両方に使う
 GATE_BASE="${GATE_BASE:-origin/develop}"
 
 # fail <理由の種類> <説明>: 種類は dirty（作業ツリーの汚れ）/ unreviewed（レビューの後の変更）/
@@ -50,13 +53,40 @@ reviewed_commit() {   # $1=ファイル → SHA/空
   grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$1" | tail -1 | grep -oE '[0-9a-f]{7,40}' || true
 }
 
-# $1=SHA。SHA から HEAD までに記録の場所の外の変更があれば、そのファイル名を出して exit 1
+# ブランチ自身の変更（比べる相手との merge-base から rev まで・記録の場所を除く）の、ファイルごとの中身。
+# 行番号（@@）と index 行は除く（develop を取り込むと、同じ変更でも行番号や blob の ID がずれるため）
+branch_files() {   # $1=rev
+  local mb; mb=$(git merge-base "$GATE_BASE" "$1") || return 1
+  git -c core.quotePath=false diff --name-only --no-renames "$mb" "$1" -- . "${RECORD_EXCLUDES[@]}"
+}
+branch_patch_of() {   # $1=rev $2=ファイル
+  local mb; mb=$(git merge-base "$GATE_BASE" "$1") || return 1
+  git -c core.quotePath=false diff --no-color --no-renames "$mb" "$1" -- "$2" | grep -vE '^(index |@@)' || true
+}
+
+# $1=SHA。レビューの後に、記録の場所の外で「ブランチ自身の変更」が変わっていれば、そのファイル名を出して exit 1。
+# レビューした時点と今で、ブランチ自身の変更（比べる相手との差）をファイルごとに比べる。develop の取り込み
+# （close の base 追従）で入った develop 側の変更は、ブランチ自身の変更ではないので数えない。取り込みのときに
+# 食い違いを直した場合は、ブランチ自身の変更が変わるので数える（I193 H2）
 diff_outside_records() {
-  local sha="$1" files outside
+  local sha="$1" before after f out=""
   git cat-file -e "${sha}^{commit}" 2>/dev/null || { echo "(REVIEWED_COMMIT ${sha} がこのリポジトリにありません)"; return 1; }
-  files=$(git -c core.quotePath=false diff --name-only --no-renames "$sha" HEAD) || { echo "(git diff に失敗)"; return 1; }
-  outside=$(printf '%s\n' "$files" | grep -vE "$RECORD_RE" | grep -v '^$' || true)
-  if [ -n "$outside" ]; then printf '%s\n' "$outside"; return 1; fi
+  before=$(branch_files "$sha") || { echo "(比べる相手 ${GATE_BASE} との差分を取れません)"; return 1; }
+  after=$(branch_files HEAD) || { echo "(比べる相手 ${GATE_BASE} との差分を取れません)"; return 1; }
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ "$(branch_patch_of "$sha" "$f")" = "$(branch_patch_of HEAD "$f")" ] || out+="${f}"$'\n'
+  done < <(printf '%s\n%s\n' "$before" "$after" | LC_ALL=C sort -u)
+  # 計画書が宣言する決定論ゲート（auto_test.md の「## 決定論ゲート（自動実走）」）は、記録の場所にあっても
+  # 実行するコマンドの正なので、レビューの後に変えたら数える（I193 M2）
+  local gate_now gate_then path
+  for path in "docs/tests/open/${ISSUE}_auto_test.md" "docs/tests/closed/${ISSUE}_auto_test.md"; do
+    [ -f "$path" ] || continue
+    gate_now=$(extract_gate_commands "$path")
+    gate_then=$( { git show "${sha}:docs/tests/open/${ISSUE}_auto_test.md" 2>/dev/null || git show "${sha}:docs/tests/closed/${ISSUE}_auto_test.md" 2>/dev/null; } > "$GC_TMP/auto_then.md"; extract_gate_commands "$GC_TMP/auto_then.md")
+    [ "$gate_now" = "$gate_then" ] || out+="${path}（決定論ゲートの節）"$'\n'
+  done
+  if [ -n "$out" ]; then printf '%s' "$out"; return 1; fi
   return 0
 }
 
@@ -74,11 +104,19 @@ ${out}"
   echo "✅ ${label}: ${file}（VERDICT OK・REVIEWED_COMMIT ${sha} 以降は記録の場所だけ）"
 }
 
-# コミットしていない変更（未追跡を含む）。porcelain の 4 文字目以降がパス。
+GC_TMP=$(mktemp -d)
+trap 'rm -rf "$GC_TMP"' EXIT
+
+# コミットしていない変更（未追跡を含む）。-z で読む（空白や引用符を含むパスも、そのままの名前で比べる。I193 M3）。
 # 先に確かめる（汚れはレビューをやり直しても直らないので、理由を dirty として区別する）
-DIRTY=$(git -c core.quotePath=false status --porcelain --untracked-files=all --no-renames | cut -c4- | grep -vE "$RECORD_RE" | grep -v '^$' || true)
+DIRTY=""
+while IFS= read -r -d '' entry; do
+  p="${entry:3}"
+  printf '%s\n' "$p" | grep -qE "$RECORD_RE" || DIRTY+="${p}"$'\n'
+done < <(git status --porcelain=v1 -z --untracked-files=all --no-renames)
 [ -z "$DIRTY" ] || fail dirty "記録の場所の外に、コミットしていない変更があります:
 ${DIRTY}"
+git rev-parse -q --verify "$GATE_BASE" >/dev/null || fail base "比べる相手 ${GATE_BASE} がありません（git fetch origin develop をしてから）"
 
 CODE_REVIEW=$(latest_record code_review)
 check_record "コードレビュー" "$CODE_REVIEW"

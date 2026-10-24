@@ -68,9 +68,10 @@ add_reviewed_commit() {
 # ファイル名が出てくるだけ・行頭が [ なだけ（Markdown のリンクなど）では読めたとみなさない（I193 の組み込みレビューの指摘）。
 official_output_readable() {
   local out="$1"
-  printf '%s\n' "$out" | grep -qE '"file"[[:space:]]*:' && return 0
-  printf '%s\n' "$out" | grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' && return 0
-  printf '%s\n' "$out" | grep -qE '指摘(は)?(なし|ありません|見つかりません)|(脆弱性|問題|指摘)[^。]*見つかりませんでした|[Nn]o (findings|issues|bugs|vulnerabilities)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' && return 0
+  # here-string で渡す（printf | grep -q だと、大きな出力で grep が先に終わり、pipefail の下で 141 になって誤判定する。I193 L1）
+  grep -qE '"file"[[:space:]]*:' <<< "$out" && return 0
+  grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' <<< "$out" && return 0
+  grep -qE '指摘(は)?(なし|ありません|見つかりません)|(脆弱性|問題|指摘)[^。]*見つかりませんでした|[Nn]o (findings|issues|bugs|vulnerabilities)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' <<< "$out" && return 0
   return 1
 }
 
@@ -140,6 +141,12 @@ wait_ci() {
     return 1
   fi
   expected=$(expected_ci_jobs)
+  if [ -z "$expected" ]; then
+    # 握りつぶして待ち続けると、CI が全部緑でも時間切れになるだけなので、理由を出して止める（I193 M5）
+    echo "⛔ PR で動くワークフローのジョブ名を読めません（${CI_WORKFLOWS:-.github/workflows/ci.yml .github/workflows/e2e.yml}。python3 と PyYAML が要る）。"
+    echo "CI_WAIT: NO_JOBS"
+    return 1
+  fi
   while [ "$elapsed" -lt "$timeout_s" ]; do
     checks=$(gh pr checks "$pr" --json name,bucket --jq '.[] | "\(.bucket)\t\(.name)"' 2>/dev/null || true)
     if printf '%s\n' "$checks" | grep -qE '^(fail|cancel)	'; then
@@ -148,15 +155,11 @@ wait_ci() {
       return 1
     fi
     missing=""
-    if [ -z "$expected" ]; then
-      missing="(ワークフローのジョブ名を読めない)"
-    else
-      while IFS= read -r name; do
-        [ -n "$name" ] || continue
-        state=$(printf '%s\n' "$checks" | awk -F'\t' -v n="$name" '$2 == n { print $1 }' | head -1)
-        case "$state" in pass|skipping) ;; *) missing="${missing} ${name}" ;; esac
-      done <<< "$expected"
-    fi
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      state=$(printf '%s\n' "$checks" | awk -F'\t' -v n="$name" '$2 == n { print $1 }' | head -1)
+      case "$state" in pass|skipping) ;; *) missing="${missing} ${name}" ;; esac
+    done <<< "$expected"
     if [ -z "$missing" ]; then
       echo "CI_WAIT: OK"
       return 0
@@ -569,10 +572,16 @@ add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
 # 案A(I069): 生産物（レビュー記録）を生産者がコミットする（feature ブランチ時のみ・path-scoped）。
 commit_review_artifact "$REVIEW_FILE" "$ISSUE" "code-review"
 
-# PR コメント投稿
+# PR コメント投稿（GitHub のコメントの上限 65,536 文字を超えるときは、組み込みのレビューの出力の前までと記録への参照だけにする。I193 L2）
 if [ -n "$PR_NUM" ]; then
-  gh pr review "$PR_NUM" --comment --body "$(cat "$REVIEW_FILE")" \
-    || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body \"\$(cat $REVIEW_FILE)\""
+  PR_BODY=$(cat "$REVIEW_FILE")
+  if [ "${#PR_BODY}" -gt 60000 ]; then
+    PR_BODY="$(sed '/^## 組み込みのレビューの出力（公式・参考）/,$d' "$REVIEW_FILE" | head -c 58000)
+
+（長いため一部だけを載せた。全文は ${REVIEW_FILE}）"
+  fi
+  gh pr review "$PR_NUM" --comment --body "$PR_BODY" \
+    || echo "⚠️ PR コメント投稿失敗。手動で実行: gh pr review $PR_NUM --comment --body-file $REVIEW_FILE"
 fi
 
 # I086: SKILL（オーケストレーション層）が解析する機械可読行（emit を関数に集約・H6 対応）

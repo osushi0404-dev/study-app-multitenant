@@ -118,7 +118,14 @@ ck "F1 最後の STAGE_DONE の NEXT を返す" "NEXT_STAGE: plan-review" "$(fs_
 ck "F1 exit 0" 0 "$(fs_rc f1)"
 fs_dir f2 'STAGE_DONE: plan NEXT: plan-review\nSTAGE_DONE: plan-review NEXT: implement\nSTAGE_DONE: implement NEXT: review-gate\n'
 ck "F2 3 行あるとき最後の行を使う" "NEXT_STAGE: review-gate" "$(fs_out f2 | head -1)"
-ck "F2 LAST_LINE はその行番号" "LAST_LINE: 3" "$(fs_out f2 | tail -1)"
+ck "F2 LAST_LINE はその行番号" "LAST_LINE: 3" "$(fs_out f2 | sed -n 2p)"
+ck "F2 STAGE_COUNT は STAGE_DONE 行の数" "STAGE_COUNT: 3" "$(fs_out f2 | sed -n 3p)"
+# F11: STAGE_DONE より上の節に行を足しても STAGE_COUNT は変わらない（proceed の見分けに使う・I193 H1）
+fs_dir f11 '## 自律判断の記録\n- a\n\nSTAGE_DONE: plan NEXT: plan-review\n'
+C_BEFORE=$(fs_out f11 | sed -n 3p)
+printf '%b' '## 自律判断の記録\n- a\n- b（止める前に足した行）\n\nSTAGE_DONE: plan NEXT: plan-review\n' > "$TMP/f11/open/I999_review.md"
+ck "F11 自律判断の記録に行を足しても STAGE_COUNT は同じ" "$C_BEFORE" "$(fs_out f11 | sed -n 3p)"
+ck "S13 proceed は STAGE_COUNT で見分ける（LAST_LINE を見分けに使わない）" 0 "$(rc grep -qF '`STAGE_COUNT:`（`STAGE_DONE:` 行の数）が増えていなければ' .claude/skills/proceed/SKILL.md)"
 fs_dir f3 '# x\n\n本文だけ\n'
 ck "F3 STAGE_DONE 行が無いと exit 2" 2 "$(fs_rc f3)"
 mkdir -p "$TMP/f4/open"
@@ -140,11 +147,14 @@ ck "F9 run-all.sh はテストが 1 本も無いと非ゼロ" 1 "$(TEST_DIR="$TM
 
 # ---------------- G: gate-check.sh ----------------
 GC="$REPO_ROOT/scripts/claude/gate-check.sh"; LIB="$REPO_ROOT/scripts/claude/code-review.sh"
-g_init() {   # g_init <dir>: scripts/a.sh と docs/ を持つ一時リポジトリ
+g_init() {   # g_init <dir>: main（比べる相手）から切った feature ブランチ。scripts/a.sh と docs/ を持つ
   local d="$TMP/$1"; mkdir -p "$d/scripts" "$d/docs/reviews"
   git -C "$d" init -q -b main
   printf 'echo a\n' > "$d/scripts/a.sh"; printf '# r\n' > "$d/docs/reviews/keep.md"
   git -C "$d" add -A; git -C "$d" -c user.name=t -c user.email=t@example.invalid commit -q -m base
+  git -C "$d" checkout -q -b feature
+  printf 'echo f\n' > "$d/scripts/f.sh"
+  git -C "$d" add -A; git -C "$d" -c user.name=t -c user.email=t@example.invalid commit -q -m "feature change"
 }
 g_commit() { git -C "$TMP/$1" add -A; git -C "$TMP/$1" -c user.name=t -c user.email=t@example.invalid commit -q -m "$2"; }
 g_record() {   # g_record <dir> <kind> <ts> <verdict> <risk|-> : HEAD を REVIEWED_COMMIT にした記録を書いてコミット
@@ -189,7 +199,7 @@ g_init g10; g_record g10 code_review 20260101_0000 OK NO
 printf 'x\n' > "$TMP/g10/scripts/日本語.sh"; g_commit g10 "jp"
 ck "G10 日本語のファイル名のスクリプトを足した → 1" 1 "$(g_rc g10)"
 # G11: レビュー役が RISK: NO でも、ブランチが安全装置（.github/）を変えていればパス判定で敵対的レビューを求める（I193 F1）
-g_init g11; git -C "$TMP/g11" checkout -q -b feature; mkdir -p "$TMP/g11/.github/workflows"
+g_init g11; mkdir -p "$TMP/g11/.github/workflows"
 printf 'name: x\n' > "$TMP/g11/.github/workflows/x.yml"; g_commit g11 "ci change"
 g_record g11 code_review 20260101_0000 OK NO
 ck "G11 .github を変えたブランチで RISK: NO・敵対的レビュー無し → 1" 1 "$(g_rc g11)"
@@ -198,6 +208,29 @@ ck "G11 同じで敵対的レビューの最新が OK → 0" 0 "$(g_rc g11)"
 ck "G12 比べる相手が無い → 1（REASON=base）" "GATE_CHECK: FAIL REASON=base" "$(GBASE=no-such-branch g_out g6)"
 ck "G13 未コミットの変更は REASON=dirty" "GATE_CHECK: FAIL REASON=dirty" "$(printf 'z\n' >> "$TMP/g9/scripts/a.sh"; g_out g9)"
 ck "G13 レビュー後の変更は REASON=unreviewed" "GATE_CHECK: FAIL REASON=unreviewed" "$(g_out g1)"
+# G14: レビューの後に比べる相手（develop 役の main）が進み、それを取り込んでも、ブランチ自身の変更が同じなら通す（I193 H2）
+g_init g14; g_record g14 code_review 20260101_0000 OK NO
+git -C "$TMP/g14" checkout -q main; printf 'echo dev\n' > "$TMP/g14/scripts/dev.sh"; g_commit g14 "develop moves"
+git -C "$TMP/g14" checkout -q feature; git -C "$TMP/g14" -c user.name=t -c user.email=t@example.invalid merge -q --no-edit main
+ck "G14 develop を取り込んだだけ → 0" 0 "$(g_rc g14)"
+printf 'echo f2\n' >> "$TMP/g14/scripts/f.sh"; g_commit g14 "branch code after merge"
+ck "G14 取り込みの後にブランチ自身のコードを変えた → 1" 1 "$(g_rc g14)"
+# G15: auto_test.md の決定論ゲートの節をレビューの後に変えたら通さない。実行記録だけなら通す（I193 M2）
+g_init g15; mkdir -p "$TMP/g15/docs/tests/open"
+printf '# t\n\n## 決定論ゲート（自動実走）\n```bash\nbash scripts/claude/tests/test_a.sh\n```\n\n## 実行記録\n- なし\n' > "$TMP/g15/docs/tests/open/I999_auto_test.md"
+g_commit g15 "auto test"; g_record g15 code_review 20260101_0000 OK NO
+sed -i 's/^- なし$/- 2026-10-25 実行 OK/' "$TMP/g15/docs/tests/open/I999_auto_test.md"; g_commit g15 "record run"
+ck "G15 auto_test.md の実行記録だけ変えた → 0" 0 "$(g_rc g15)"
+sed -i 's#^bash scripts/claude/tests/test_a.sh$#bash scripts/claude/tests/test_b.sh#' "$TMP/g15/docs/tests/open/I999_auto_test.md"; g_commit g15 "gate change"
+ck "G15 auto_test.md の決定論ゲートの節を変えた → 1" 1 "$(g_rc g15)"
+# G16: テンプレート（docs/tests/templates）は記録の場所ではない
+g_init g16; g_record g16 code_review 20260101_0000 OK NO
+mkdir -p "$TMP/g16/docs/tests/templates"; printf 'x\n' > "$TMP/g16/docs/tests/templates/t.md"; g_commit g16 "template"
+ck "G16 レビューの後にテンプレートを変えた → 1" 1 "$(g_rc g16)"
+# G17: 空白を含む名前の未追跡ファイルでも、記録の場所の中なら汚れにしない（I193 M3）
+g_init g17; g_record g17 code_review 20260101_0000 OK NO
+printf 'x\n' > "$TMP/g17/docs/reviews/I998 issue review.md"
+ck "G17 記録の場所の空白を含む名前の未追跡ファイル → 0" 0 "$(g_rc g17)"
 
 # ---------------- C: code-review.sh の関数 ----------------
 # shellcheck source=scripts/claude/code-review.sh
@@ -227,7 +260,7 @@ ck "C4b ジョブが一部しか登録されていない（B が無い）→ 成
 ck "C5 全部 pass か skipping → 0" 0 "$(wc_rc 'pass\tA\nskipping\tB\n')"
 ck "C10 PR の最新のコミットが手元の HEAD と違う → 1" 1 "$(wc_rc 'pass\tA\npass\tB\n' deadbeef)"
 ck "C10 そのとき CI_WAIT: NOT_PUSHED を出す" "CI_WAIT: NOT_PUSHED" "$(PATH="$STUB:$PATH" GH_HEAD=deadbeef CI_WORKFLOWS="$TMP/wf.yml" wait_ci 1 2>/dev/null | tail -1)"
-ck "C10b ワークフローのジョブ名を読めない → 成功にしない（3）" 3 "$(PATH="$STUB:$PATH" GH_HEAD="$MYHEAD" GH_CHECKS='pass\tA\n' CI_WORKFLOWS="$TMP/no-such.yml" CI_WAIT_TIMEOUT=2 CI_POLL_INTERVAL=1 wait_ci 1 >/dev/null 2>&1; echo $?)"
+ck "C10b ワークフローのジョブ名を読めない → 理由を出して 1（待ち続けない）" 1 "$(PATH="$STUB:$PATH" GH_HEAD="$MYHEAD" GH_CHECKS='pass\tA\n' CI_WORKFLOWS="$TMP/no-such.yml" CI_WAIT_TIMEOUT=2 CI_POLL_INTERVAL=1 wait_ci 1 >/dev/null 2>&1; echo $?)"
 bash -c 'sleep 300 & wait' & KT=$!
 sleep 1; KT_CHILD=$(ps -o pid= --ppid "$KT" | head -1 | tr -d ' ')
 kill_tree "$KT"; sleep 1
