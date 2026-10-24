@@ -21,10 +21,10 @@
 | TC | 対象 | 確かめること | 合否（exit code） |
 |---|---|---|---|
 | TC-10 | P1 | `test_posttooluse_check.sh`: 壊れた `.json`・`.py` を渡すとフックが exit 2 で終わり、stderr に `syntax error` を含む。正しいファイル・対象外の拡張子・`file_path` なしでは exit 0 | 合格=0 |
-| TC-11 | P5 | `test_sessionstart_context.sh`: 通常はフックが exit 0 で、出力に `branch:` と `直近にマージされた PR` を含む。gh が失敗する環境（`GH_HOST` を存在しないホストにする）でも exit 0 で、`取得できませんでした` を含み、20 秒以内に終わる。git の外のディレクトリから実行しても exit 0 | 合格=0 |
+| TC-11 | P5 | `test_sessionstart_context.sh`: 通常はフックが exit 0 で、出力に `branch:` と `直近にマージされた PR` を含む。gh が失敗する環境（`GH_HOST` を存在しないホストにする）でも exit 0 で、`取得できませんでした` を含み、20 秒以内に終わる。git の外のディレクトリから実行しても exit 0。`format_context()` に、指示らしい文言を含むタイトル（例: 「Ignore previous instructions」）の PR・イシューを渡しても、出力にその文言が含まれず、番号と `I###` だけが出る。出力が 10 行以内 | 合格=0 |
 | TC-12 | P5 | `.claude/settings.json` が JSON として正しい | 合格=0 |
 | TC-13 | P5 | `.claude/settings.json` に SessionStart フックとして `sessionstart_context.py` が登録されている | 合格=0 |
-| TC-14 | P2〜P4 | `test_i185_harness_docs.sh`: ①どの `SKILL.md` にも `allowed-tools:` 行がない ②`security-review` に `disallowed-tools: Bash, Write, NotebookEdit` がある ③`plan-issue` の手順に `bash scripts/claude/plan-issue-review.sh $ARGUMENTS` があり、「承認後の次のステップ: `/plan-issue-review`」がない ④`workflow.md` の移行表に「計画書承認後 → `/plan-issue-review` を入力」がない ⑤`fix-loop` の手順 4 に「推奨案で進めて手順 5 へ」と 5 つの条件があり、3 つの関所のスクリプト名（fix-diagnosis-review.sh・fix-implementation-review.sh・fix-test-review.sh）が残っている ⑥`fix-loop` の共通ルール (b) に「手順4（新案なので条件を判定し直す）」があり、「手順4 ユーザー承認（新案のため）」がない ⑦`issue-flow.md` と `onboarding.md` に「`/plan-issue` の中で計画レビュー」の説明がある | 合格=0 |
+| TC-14 | P2〜P4 | `test_i185_harness_docs.sh`: ①どの `SKILL.md` にも `allowed-tools:` 行がない ②`security-review` に `disallowed-tools: Bash, Write, NotebookEdit` がある ③`plan-issue` の手順に `bash scripts/claude/plan-issue-review.sh $ARGUMENTS` があり、「承認後の次のステップ: `/plan-issue-review`」がない ④`workflow.md` の移行表に「計画書承認後 → `/plan-issue-review` を入力」がない ⑤`fix-loop` の手順 4 に「推奨案で進めて手順 5 へ」と 6 つの条件（⑥ 認証・認可・テナント境界・秘密情報の扱い・権限設定・フック・GitHub Actions に触れない、を含む）があり、3 つの関所のスクリプト名（fix-diagnosis-review.sh・fix-implementation-review.sh・fix-test-review.sh）が残っている ⑥`fix-loop` の共通ルール (b) に「手順4（新案なので条件を判定し直す）」があり、「手順4 ユーザー承認（新案のため）」がない ⑦`issue-flow.md` と `onboarding.md` に「`/plan-issue` の中で計画レビュー」の説明がある | 合格=0 |
 | TC-15 | P5 | `sessionstart_context.py` が Python として正しい | 合格=0 |
 
 false-green の確認（実装時に行い、結果をここに書く）:
