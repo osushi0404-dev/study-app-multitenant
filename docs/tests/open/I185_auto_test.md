@@ -38,6 +38,8 @@ false-green の確認（2026-10-24・実装時に実施）:
 
 結果:
 - 段 A（報告書作成時・2026-10-24）: TC-01〜TC-09 すべて exit=0（非対話 bash の `/usr/bin/grep` で実走）
+- 段 B（実装時・2026-10-24）: TC-10（6/6）・TC-11（5/5）・TC-12・TC-13・TC-14（14/14）・TC-15 すべて合格
+- 既存のハーネスのテスト（`scripts/claude/tests/*.sh` 全 33 本）: 31 本合格。`test_i181_review_slim.sh`（D8）と `test_i182_docs.sh`（DOC6）の 2 本が不合格だが、今回の変更とは関係ない（develop の時点から同じ）。どちらも、今回変えていない `review-rules.md`・`danger-ops.md` に書かれたパスの実在チェックで、harness-1 のワークツリーには無いパス（`.claude/worktrees/`・`.claude/settings.local.json`）と、I181 のクローズで closed へ移った `docs/issues/open/I181.md` を指している。是正は P12（手順書の整理）の別イシューに入れる
 
 ## 決定論ゲート（自動実走）
 ```bash
