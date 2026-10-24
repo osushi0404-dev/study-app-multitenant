@@ -221,7 +221,7 @@ extract_gate_commands() {
   ' "$f"
 }
 
-# ゲートコマンドを ALLOW（副作用なし・実走）/ HEAVY（/test 委譲・実走しない）/
+# ゲートコマンドを ALLOW（副作用なし・実走）/ HEAVY（test-gate 委譲・実走しない）/
 # UNSAFE（allowlist 不一致・チェーン系＝実走しない fail-closed）に分類する。
 # 判定順: HEAVY(先頭コマンド anchored) → allowlist(チェーンメタ文字ガード付き)ALLOW → UNSAFE。
 classify_gate() {
@@ -285,7 +285,7 @@ run_declared_gates() {
           GATE_VERDICT=BLOCKER   # I084-RUN-FAIL: ALLOW 実走 FAIL は fail-closed
         fi ;;
       HEAVY)
-        GATE_EVIDENCE+="- \`${cmd}\` → ⏭ /test に委譲（heavy・code-review では実走しない）"$'\n' ;;
+        GATE_EVIDENCE+="- \`${cmd}\` → ⏭ test-gate に委譲（heavy・code-review では実走しない）"$'\n' ;;
       UNSAFE)
         GATE_EVIDENCE+="- \`${cmd}\` → ⚠️ 実走対象外（allowlist 不一致/チェーン系・fail-closed）"$'\n'
         GATE_VERDICT=BLOCKER ;;

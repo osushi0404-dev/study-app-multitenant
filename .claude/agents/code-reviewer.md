@@ -111,7 +111,7 @@ Blocker 判定を下すことを恐れるな。
 - モック過多で実態を検証できていない状態になっていないか
 - 認可テスト（テナント境界・ロール別アクセス制御の検証）が実装されているか（認可変更がある場合）
 - 否定・不在・回帰・無改変を検証する合否判定 TC（grep 等の決定論テスト・lint 異常系を含む）が、失敗条件で実際に不合格になることが確認されているか（正常系で合格するだけの false-green な常時 OK でないか）
-- **テスト結果文書（I###_auto_test.md）の結果欄が空白の場合**: CI が全ジョブ pass していれば `/test` スキル実施前の正常状態として Low 以下で扱う。CI 未 pass またはテスト結果空白かつ CI 状況不明の場合は従来通り Medium 以上で指摘する（フロー順序: `/implement → /code-review → /test` のため `/code-review` 時点では空白が正常）
+- **テスト結果文書（I###_auto_test.md）の結果欄が空白の場合**: CI が全ジョブ pass していれば test-gate 段階の実施前の正常状態として Low 以下で扱う。CI 未 pass またはテスト結果空白かつ CI 状況不明の場合は従来通り Medium 以上で指摘する（流れの順序: implement → review-gate → test-gate のため review-gate 時点では空白が正常）
 - **シェルスクリプト検証の決定論性**: シェルスクリプトのロジックを検証するテストが、実行コンテキスト依存（対話シェルでのコマンド置換等）に影響されず、`bash` 実行で決定論的に再現可能な形か（フルパス指定・スクリプトファイル実行）
 - **AI 生成コード固有チェック**:
   - Tautological Test: テストが「仕様の検証」ではなく「実装の再確認」になっていないか（`assertEqual(result, func(input))` パターン）
@@ -166,7 +166,7 @@ Blocker 判定を下すことを恐れるな。
 - 既存事故の再発リスクが高い変更
 - 画面制御していてもAPI直叩きで事故りうる変更
 - 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
-- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/review-agents/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
+- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
 
 ---
 
@@ -207,11 +207,8 @@ Blocker 判定を下すことを恐れるな。
 該当条件: [リスト、なければ「なし」]
 
 ---
-（Blocker / High ありの場合）
-Blocker: 「Blocker が残っています。`/fix-loop [I###]` で修正後、`/code-review [I###]` を再実行してください。」
-High のみ: 「`/fix-loop [I###]` を実行してください。fix-loop 完了後は `/code-review [I###]` に戻ってください。」
-（Blocker / High なしの場合）
-「✅ コードレビュー完了。`/test [I###]` を実行してください。」
+（Blocker / High ありの場合）「修正へ（fix-loop 段階）」 ／ （Blocker / High なしの場合）「✅ コードレビュー完了（テスト段階へ）」
+（次の段階は review-gate 段階が下の機械判定行で決める。コマンド名は書かない）
 
 RISK: <YES|NO>
 VERDICT: <BLOCKER|HIGH|OK>

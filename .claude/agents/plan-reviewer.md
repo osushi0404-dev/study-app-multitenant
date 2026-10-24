@@ -97,7 +97,7 @@ Blocker 判定を下すことを恐れるな。
 - 破壊的操作（削除等）に確認導線の設計があるか（Frontend変更がある場合）
 - キャッシュ戦略が妥当か（パフォーマンス要件がある場合）
 
-### Claude Code ベストプラクティス（`.claude/skills/`・`docs/runbooks/`・`.claude/review-agents/` 等の指示ファイル変更を含む場合のみ）
+### Claude Code ベストプラクティス（`.claude/skills/`・`docs/runbooks/`・`.claude/agents/` 等の指示ファイル変更を含む場合のみ）
 変更対象に指示ファイル（`.claude/skills/` 等）が含まれる場合に確認する（対象外なら「対象外」と記載）:
 - 使えるツールを絞る必要があるスキルは `disallowed-tools` で制限しているか（`allowed-tools` は事前許可で制限にはならない。付けるなら本当に事前許可が要るものだけで、素の `Bash` を事前許可していないか）
 - 副作用のある操作（commit・push・デプロイ等）に `disable-model-invocation: true` が設定されているか
@@ -213,7 +213,7 @@ Blocker 判定を下すことを恐れるな。
 - 既存事故の再発リスクが高い変更
 - 画面制御していてもAPI直叩きで事故りうる変更
 - 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
-- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/review-agents/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
+- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
 
 ---
 
@@ -238,12 +238,13 @@ Blocker 判定を下すことを恐れるな。
 ## 高リスク判定
 判定: Yes / No
 該当条件: [リスト、なければ「なし」]
-推奨: （Yes の場合）`/security-review [I###]` を実行してから `/implement [I###]` へ進んでください。
-     （No の場合）`/implement [I###]` を実行してください。
+推奨: （Yes の場合）実装前のセキュリティ設計レビュー（design-security-review 段階）へ。
+     （No の場合）実装（implement 段階）へ。
 
 ---
 （差し戻しの場合のみ）
-明確化後に再度 `/plan-issue-review [I###]` を実施してください。
+指摘を直してから計画レビュー（plan-review 段階）をやり直す。
+（次の段階は plan-review 段階が下の VERDICT 行で決める。コマンド名は書かない）
 
 VERDICT: <BLOCKER|HIGHRISK|OK>
 ```

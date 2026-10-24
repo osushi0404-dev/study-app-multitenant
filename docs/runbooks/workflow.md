@@ -1,17 +1,14 @@
-# Vibe Coding 運用フロー（安全寄り）
+# Vibe Coding 運用フロー（公式の道具を土台にした自律の流れ・I193）
 
-## 使うスキル（/ で実行）
-- /issue-bootstrap [title] : 採番、イシューファイル作成、issue-review による自己完結度レビュー（ソフト）、GitHub Issue 作成（ブランチ作成は /plan-issue で行う）
-- /grill-me I### : 計画書作成前の設計インタビュー（推奨。複雑なイシューや設計判断が多いイシューで実行する）
-- /plan-issue I### : ブランチ作成・プッシュ・Draft PR 作成 + 計画書 + テスト文書 + レビュー文書 作成 → 計画レビュー（`plan-issue-review.sh`）まで実行し、レビュー済みの計画で承認待ち（高リスク判定 Yes → /security-review、No → /implement へ）
-- /plan-issue-review I### : 計画の方式・範囲・受け入れ条件を変えたときの再レビュー。計画書・テスト文書をベストプラクティス・セキュリティ・モダン開発観点でレビュー（OK かつ高リスク判定 Yes → /security-review、No → /implement へ）
-- /security-review I### : 高リスク変更の実装前セキュリティ深掘り（設計レビュー + 攻撃シナリオ）。計画レビューで高リスク判定 Yes 時のみ実行（Blocker なし → /implement へ）
-- /implement I### : 承認済み計画に沿って実装 + 型チェック + push（/code-review へ続く）
-- /code-review I### : CI 確認 + 受け入れ条件照合（OK なら /test へ、NG なら /fix-loop へ）
-- /test I### : 自動テスト（pytest + Jest）+ 手動テスト確認（OK なら /close へ）
-- /fix-loop I### : NG/失敗時の原因整理→差分計画→承認→修正→再テスト
-- /retro I### : テスト OK 後の振り返り（成果・プロセス・技術・スキル規約の改善点確認）。実施は必須・抽出した改善点に着手するか否かは内容に応じて判断する
-- /close I### : open→closed へ整理、PR 説明整備、クローズ作業
+## 使うスキル（ユーザーが / で打つもの）
+- /issue-bootstrap [title] : 採番、イシューファイル作成、issue-review による自己完結度レビュー（ソフト）、GitHub Issue 作成。要件・基本設計・UI/UX で決めてもらうことがあるときだけ質問して止まる（ブランチ作成は /plan-issue で行う）
+- /grill-me I### : 計画書作成前に、要件・基本設計・UI/UX の曖昧な点だけを聞く（任意。issue-review 判定「十分」ならスキップ可）
+- /plan-issue I### : ブランチ・Draft PR・計画書・テスト文書・レビュー文書を作り、そのまま下の段階を順に進めて、人の手動テストの手前（人の分が無ければマージ依頼）で止まる
+- /proceed I### : 途中で止まったとき・新しいセッションで、記録の最後の `STAGE_DONE:` から続きを再開する
+
+段階のスキル（`plan-review`・`design-security-review`・`implement`・`review-gate`・`test-gate`・`fix-loop`・`retro`・`close`）は `user-invocable: false` で、ユーザーは打たない（`/` の候補にも出ない）。`/plan-issue` と `/proceed` の中で Claude が Skill ツールで呼ぶ。
+
+組み込み（公式）の `/code-review`・`/security-review`・`/simplify` は、段階の中で Claude が使う（review-gate・implement）。ユーザーが自分で打ってもよい（このプロジェクトのスキルは同じ名前を使わない）。
 
 ## ディレクトリ規約
 - docs/issues/open, docs/issues/closed
@@ -19,62 +16,71 @@
 - docs/tests/open, docs/tests/closed
 - docs/reviews/open, docs/reviews/closed
 
-## フロー（あなたの運用をそのまま型にする）
-1. /issue-bootstrap → issue-review で自己完結度レビュー（ソフト・判定で grill-me 要否を案内）→ ユーザーがイシューファイル確認（OK/NG）
-1.5. /grill-me I### → 設計上の疑問点を解消（推奨・任意。issue-review 判定「十分」ならスキップ可）
-2. /plan-issue I### → 計画書作成 → Claude が計画レビュー（`plan-issue-review.sh`）まで実行 → ユーザーがレビュー済みの計画を確認（OK/NG）
-   - レビュー NG（Edit/Write で修正可能）: Claude が自分で修正して再実行（同じゲートで 2 回続けて NG なら停止して報告）
-   - レビュー NG（設計判断が必要）: 選択肢を承認ポイントに含めて提示 → ユーザーが選ぶ
-   - 高リスク判定 Yes: 承認後に /security-review へ
-3. /plan-issue-review I###（計画の方式・範囲・受け入れ条件を変えたときだけ）→ 再レビュー（OK/NG。NG の扱いは 2 と同じ）
-3.5. /security-review I###（高リスク判定 Yes の場合のみ）→ Blocker 解消後 /implement へ
-4. /implement I### → 実装・型チェック・push
-5. /code-review I### → CI 確認＋要件照合（OK/NG）
-   - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /code-review に戻る
-6. /test I### → 自動テスト＋手動テスト確認（OK/NG）
-   - NG の場合 /fix-loop I###（差分計画→承認→修正）→ /test に戻る
-7. OK の場合 /retro I###（必須）→ /close I###（open→closed へ移動、PR説明を整備、マージ依頼）
+## フロー
+1. /issue-bootstrap → issue-review で自己完結度レビュー（ソフト）。要件・基本設計・UI/UX の質問があればそこで止まる
+1.5. /grill-me I###（任意）→ 要件・基本設計・UI/UX の疑問点を解消
+2. /plan-issue I### → 計画書・テスト文書・レビュー文書 → 以下を Claude が順に進める（`proceed` が `scripts/claude/flow-stage.sh` で次の段階を決める）
+   1. plan-review: 自作の計画レビュー（`plan-issue-review.sh`・`.claude/agents/plan-reviewer.md`）。Blocker は自分で直して再レビュー。高リスク判定 Yes → design-security-review、No → implement
+   2. design-security-review（高リスクのときだけ）: 実装前の設計レビュー＋攻撃シナリオ。Blocker は計画を直して plan-review からやり直す
+   3. implement: 実装・TDD → 組み込みの `/simplify` で整理 → push
+   4. review-gate: CI 待ち（失敗・時間切れで止まる）＋組み込みの `/code-review`（高リスク時は `/security-review` も。どちらも読み取り専用の plan モード）＋自作のレビュー役（受け入れ条件・計画・文書の照合）＋決定論ゲートの実走。高リスクなら敵対的レビュー。NG → fix-loop
+   5. fix-loop: 診断レビューを通した案で直し、実装・テストのレビューを通して、**必ず review-gate に戻る**（戻り先は 1 か所）
+   6. test-gate: `gate-check.sh`（最新のレビューが今の HEAD を見て OK か）→ 計画書が指定した重いテスト・Claude 担当の手動テスト（pytest・Jest・E2E は CI が正で、手元では流し直さない）→ 人の手動テストがあれば**ここで止まる**
+3. ユーザーが人の手動テストの結果を返信（OK、または NG と内容）→ Claude が記録して続ける（会話が切れたら /proceed I###）
+   - OK → retro → close
+   - NG → fix-loop → review-gate → test-gate → もう一度人の手動テストを依頼して止まる
+4. retro: 改善案の採否を Claude が決め、直す（記録の場所だけ）・既存イシューに同梱・起票（`issue-bootstrap`）まで行う
+5. close: `gate-check.sh` → 記録を closed へ → PR 説明 → Ready → base 追従 → **Approve & Merge を依頼して止まる**（自律判断の記録と振り返りの結果をまとめて報告する）
+6. ユーザーが GitHub で Approve & Merge
 
-詳細なイシューフローは docs/runbooks/issue-flow.md を参照。
+詳細なイシューフローは docs/runbooks/issue-flow.md を参照。設計の根拠は docs/proposals/I193_official_base_flow.md。
+
+## 止めて聞く条件（この 3 つだけ・各スキルはここを参照する）
+
+ユーザーの確認は「人がやる手動テスト」と「マージ」に加えて、次のどれかに当たるときだけ。
+
+1. **要件・基本設計・UI/UX の価値判断が要るとき**: 受け入れ条件・仕様・画面の配置/文言/操作の流れを変えないと進めないとき。複数の案のどれを選ぶかで仕様や画面が変わるとき
+2. **取り消せない操作・安全装置そのものを変える操作**: CLAUDE.md の危険操作（Danger Ops・`DANGER_OK=1`）・秘密情報が push されうる操作・GitHub Actions の変更、および安全装置そのものを変える操作。安全装置の集合は `scripts/claude/code-review.sh` の `path_risk_trigger` と同じ: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（安全装置は人の承認を外した流れで最後に残る守りなので、Claude が自分で緩めない）
+3. **周回の上限に達し、安全側の選択肢も取れないとき**: レビュー・修正の周回が上限に達したら、まず安全側の選択肢（確認を厳しめに倒す・範囲を狭める・別イシューに切り出す）を選んで記録して進む。それも取れないときだけ止める。セキュリティの Blocker・敵対的レビューで残った Critical/High を「受け入れて進む」判断は Claude だけではしない
+
+それ以外（技術的な設計の選択・直せる指摘の直し方・CI の失敗の直し方・develop との食い違いの解決など）は Claude が決め、`docs/reviews/open/I###_review.md` の「## 自律判断の記録」に `- [段階] 決めたこと — 理由` で書く。止まったとき（人の手動テストの手前・マージ依頼）に、その要点を平易にまとめて報告する。
+
+## 記録とつなぎ（決定論）
+- 各段階は、終わりに `docs/reviews/open/I###_review.md`（close の後は closed）の末尾へ `STAGE_DONE: <段階> NEXT: <次の段階>` を 1 行足して commit/push する。止める条件で止まるときは書かない
+- `scripts/claude/flow-stage.sh I###` が最後の `STAGE_DONE:` 行から次の段階を返す（`STAGE_DONE:` が無い・読めないときは exit 2 で止める）
+- `scripts/claude/gate-check.sh I###` が、test-gate・close の最初に「最新のコードレビュー記録（高リスク時は敵対的レビュー記録も）が VERDICT OK で、その `REVIEWED_COMMIT` から HEAD まで・作業ツリーに、記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）の外の変更が無い」ことを確かめる。直した後は必ずレビューを通り直す
+- 段階のスキルのうち test-gate・retro・close が書いてよいのは記録の場所だけ。それ以外を直す必要が出たら fix-loop・review-gate を通す
 
 ## ゲート
-- 計画承認（OK）前にコード変更を開始しない
-- Danger Ops は明示承認（danger-approved + DANGER_OK=1）なしに実行しない
+- 計画レビュー（plan-review）を通す前にコード変更を開始しない
+- Danger Ops は明示承認（danger-approved + DANGER_OK=1）なしに実行しない（止める条件 2）
 - develop/main への直 push を禁止（PR経由）
 - イシューのスコープ・受け入れ条件が変更された場合は、docs/issues/open/[番号].md も必ず更新する
+- 計画の方式・範囲・受け入れ条件を変えたら plan-review を通り直す（findings への対応を計画変更記録に足しただけなら通り直さない。どちらに当たるかは計画変更記録に 1 行で書く）
 
-## スキル呼び出しルール（絶対厳守）
+## スキル呼び出しルール
 
-ワークフロースキル（`/issue-bootstrap` `/grill-me` `/plan-issue` `/plan-issue-review` `/security-review` `/implement` `/code-review` `/test` `/fix-loop` `/retro` `/close`）は **ユーザーがスラッシュコマンドを入力することでのみ起動する**。
+- **ユーザーが打つスキル**（`/issue-bootstrap`・`/grill-me`・`/plan-issue`・`/proceed`）は、ユーザーがスラッシュコマンドを入力したときに使う。Claude が自分から呼んでよいのは次だけ:
+  - `proceed`: `/plan-issue` の最後と、ユーザーが人の手動テストの結果を返信したとき
+  - `issue-bootstrap`: retro 段階が改善案を起票するとき
+- **段階のスキル**は、`/plan-issue`・`/proceed` の流れの中でだけ Claude が呼ぶ。会話の流れで単独に呼ばない（呼んでも `flow-stage.sh` と `gate-check.sh` が順番を外れた進行を止める）
+- `/plan-issue`・`/grill-me` は `disable-model-invocation: true`（Claude からは呼べない）
 
-**Claude は絶対に `Skill` ツールでこれらのスキルを自律呼び出ししてはならない。**
+### 各段階で止まったときの案内
 
-### 各フェーズの移行時の振る舞い
-
-| タイミング | Claude がやること |
+| 止まったところ | Claude がやること |
 |-----------|-----------------|
 | イシュー作成依頼を受けた後 | 「`/issue-bootstrap [タイトル]` を入力してください」と案内 |
-| イシュー承認後 | 「`/grill-me I###` を実行することを推奨します（複雑なイシューの場合）。準備ができたら `/plan-issue I###` を入力してください」と案内 |
-| grill-me 完了後 | 「`/plan-issue I###` を入力してください」と案内 |
-| 計画書承認後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内（計画レビューは `/plan-issue` の中で済んでいる） |
-| 計画書承認後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |
-| 計画の方式・範囲・受け入れ条件を変えた後 | 「`/plan-issue-review I###` を入力してください」と案内 |
-| plan-issue-review OK 後（高リスク判定 No） | 「`/implement I###` を入力してください」と案内 |
-| plan-issue-review OK 後（高リスク判定 Yes） | 「`/security-review I###` を実行してから `/implement I###` へ進んでください」と案内 |
-| security-review Blocker なし後 | 「`/implement I###` を入力してください」と案内 |
-| security-review Blocker あり後 | Blocker を解消してから `/security-review I###` を再実行するよう案内。`/implement` は案内しない |
-| plan-issue-review NG 後 | Edit/Write で修正可能なものは自分で修正してレビューを再実行する。設計判断が必要な問題のみユーザーに選択肢を提示して確認する |
-| implement 完了後 | 「`/code-review I###` を入力してください」と案内 |
-| code-review OK 後 | 「`/test I###` を入力してください」と案内 |
-| code-review NG 後 | 「`/fix-loop I###` を入力してください（fix-loop 完了後は `/code-review I###` に戻る）」と案内 |
-| test NG 後 | 「`/fix-loop I###` を入力してください（fix-loop 完了後は `/test I###` に戻る）」と案内 |
-| test OK 後 | 「`/retro I###` を入力してください（必須）。完了後 `/close I###` を入力してください」と案内 |
+| イシュー作成後 | 要件・基本設計・UI/UX の質問があればそれを聞く。無ければ「`/plan-issue I###` を入力してください」と案内（設計を詰めたいときは `/grill-me I###`） |
+| 人の手動テストの手前 | Human の項目と、ここまでの自律判断の要点を平易に提示し、「結果（OK、または NG と内容）を返信してください」と案内 |
+| マージ依頼 | 変更の概要・自律判断の要点・振り返りの結果をまとめて報告し、GitHub での Approve & Merge を依頼 |
+| 止める条件に当たったとき | どの条件に当たったか・選択肢と推奨を平易に示して聞く。回答の後は「`/proceed I###`」で続ける（同じ会話なら Claude がそのまま続けてよい） |
+| 会話が切れた・新しいセッション | 「`/proceed I###` を入力してください」と案内 |
 
-**NG例**（やってはいけない）:
-- ユーザーが「承認します」「OK」「進めて」と言った直後に `Skill("implement")` を呼び出す
-- 会話の流れでスキルが必要と判断して自律的に呼び出す
-
-**理由**: `disable-model-invocation: true` の設定はワークフロースキルの暴走防止のためのものであり、この設定を尊重してユーザーが明示的にトリガーする運用を維持する。
+## 移行（I193 のマージ前に着手したイシュー）
+- I193 のマージ前に着手したイシューは、古い流れのまま最後まで進める。スキルは各ワークツリーで checkout しているブランチから読み込まれるため、そのブランチが develop を取り込むまでは古いスキル（`/implement`・`/code-review`・`/test`・`/retro`・`/close`）が動く
+- 古い流れのイシューで `/proceed` を打つと、`STAGE_DONE:` が無いので止まる（新しい流れで誤って進めない）
+- I193 のマージ後に /plan-issue するイシューから新しい流れにする。新しい流れの最初のイシューを実地の通しとし、その振り返り（retro）で「`/plan-issue` だけで人の手動テストの手前まで進んだか」を確かめる
 
 ---
 
@@ -93,69 +99,19 @@
 
 ## 作業実行前の確認ルール
 
-### 必須承認ワークフロー
-指示を受けた際は、必ず以下のワークフローに従う：
+指示を受けた際は、次の順で進める（ユーザーの承認は待たない。止めるのは「止めて聞く条件」に当たるときだけ）:
 
 1. **調査・分析**: 問題特定とログ確認
 2. **対応方針検討**: 調査結果に基づいて具体的な対応方針を検討
 3. **計画書作成**: `docs/plans/open/plan_I###.md`（再作成時は `plan_I###_2.md`…）に詳細記録
-4. **承認待ち宣言**: 以下のメッセージを必ず出力
-   ```
-   📋 計画書完了: [ファイルパス]
-   ⏸️ **承認待ち中** - 修正作業は開始しません
-   ✅「OK」で承認、❌ 修正指示をお願いします
-   ```
-5. **承認確認**: 「OK」「承認」「進めてください」等の明示的指示まで待機
-6. **承認記録**: 計画書に承認情報を追記
-7. **作業開始宣言**: 修正作業開始を明示
-8. **修正実施**: 実際の修正・テスト・検証
+4. **計画レビュー**: plan-review 段階（Blocker は自分で直す）
+5. **修正実施**: 実際の修正・テスト・検証（段階のスキルに沿う）
 
 ### 修正ツール使用前チェック（必須）
 Edit/Write/MultiEdit等の実行前に必ず確認：
-- 計画書作成済み？
-- ユーザー承認取得済み？
-- 承認記録が計画書に記載済み？
-
-### 承認記録ルール
-ユーザーから承認を得た場合は、必ず以下を実行：
-
-1. **計画書への承認記録**
-```bash
-echo "## ユーザー承認" >> "$LATEST_PLAN"
-echo "- **承認日時**: $(date)" >> "$LATEST_PLAN"
-echo "- **承認者**: ユーザー" >> "$LATEST_PLAN"
-echo "- **承認内容**: OK/承認を確認" >> "$LATEST_PLAN"
-```
-
-2. **作業開始宣言**
-```
-✅ 承認を確認しました
-🚀 修正作業を開始します
-```
-
-### TodoWrite連携ルール
-TodoWriteツール使用時は承認ステータスも管理：
-
-```javascript
-{
-  "content": "計画書の承認待ち",
-  "status": "in_progress",
-  "activeForm": "承認待ち中",
-  "approval_required": true,
-  "approval_status": "pending"
-}
-```
-
-承認後に修正タスクのステータスを更新：
-```javascript
-{
-  "content": "修正作業実施",
-  "status": "in_progress",
-  "activeForm": "修正作業中",
-  "approval_required": true,
-  "approval_status": "approved"
-}
-```
+- 計画書作成済み？（計画書・テスト文書・レビュー文書そのものの作成は除く）
+- 計画レビュー（plan-review）を通した？
+- 変更が計画書に書いてある？（無ければ計画書を先に直す）
 
 ---
 

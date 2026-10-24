@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 学習アプリ - Django REST Framework + React TypeScript
 
 このリポジトリでは Claude Code（Cursor 経由）に実装を委任します。
-安全性と再現性のため、作業は「イシュー → 計画 → 実装 → テスト → レビュー → マージ」の順でのみ進めます。
+安全性と再現性のため、作業は「イシュー → 計画（レビュー） → 実装 → レビュー → テスト → 振り返り → クローズ → マージ」の順でのみ進めます。ユーザーが打つのは `/issue-bootstrap`・`/plan-issue`（・任意の `/grill-me`・途中から再開する `/proceed`）だけで、その間の段階は Claude が順に進めます（docs/runbooks/workflow.md）。
 
 ## 0. 参照先（このファイルは短く保つ）
 詳細ルールは以下へ集約します（この CLAUDE.md にルールを増やさないこと）。
@@ -39,8 +39,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 良い学習アプリの品質基準（C1〜C8）: docs/proposals/learning_app_quality_criteria.md
 
 ## 1. 絶対ルール（破ったら中断）
-1) 計画書に書いていない実装は禁止（より良い案がある場合は提案→承認→計画書更新が先）。
-2) ユーザー承認なしにコード変更（Edit/Write/MultiEdit 等）を開始しない（読み取り・調査は可）。
+1) 計画書に書いていない実装はしない。必要になったら計画書を先に直し、計画レビューを通してから行う。
+2) ユーザーに確認するのは「人がやる手動テスト」「マージ」と、docs/runbooks/workflow.md「止めて聞く条件」に当たるとき（要件・基本設計・UI/UX の価値判断／取り消せない操作・安全装置そのものの変更／安全側の選択肢も取れない上限到達）だけ。それ以外は Claude が決めて「自律判断の記録」に残す。
 3) develop/main への直 push 禁止。イシューごとにブランチを作り、PR 経由で develop にマージする。
 4) 危険操作は承認制（例：データ削除/トランケート/破壊的マイグレーション/大量更新/強制 push 等）。
 5) すべての作業は「記録（plan / tests / review）」が残る形で進める。

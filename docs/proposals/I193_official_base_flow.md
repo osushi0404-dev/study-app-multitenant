@@ -80,7 +80,7 @@
 ### 5.2 止めて聞く条件（この 3 つだけ）
 
 1. 要件・基本設計・UI/UX の価値判断が要るとき（受け入れ条件・仕様・画面の配置/文言/操作の流れを変えないと進めないとき）
-2. 取り消せない操作（CLAUDE.md の危険操作・秘密情報が push されうる操作・GitHub Actions の変更）と、安全装置そのものを変える操作（`.claude/settings.json`・`.claude/settings.local.json` の permissions・hooks、`scripts/claude/hooks/`、`.github/`、`.pre-commit-config.yaml`、`.secrets.baseline`。`code-review.sh` の `path_risk_trigger` と同じ集合）。安全装置は人の承認を外した流れで最後に残る守りなので、Claude が自分で緩められないようにする（I193 の security-review で追加。ユーザーが「止める条件はベストプラクティスの観点で Claude が評価して決めてよい」と一任した範囲での追加）
+2. 取り消せない操作（CLAUDE.md の危険操作・秘密情報が push されうる操作・GitHub Actions の変更）と、安全装置そのものを変える操作（集合は `code-review.sh` の `path_risk_trigger` と同じ: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`）。安全装置は人の承認を外した流れで最後に残る守りなので、Claude が自分で緩められないようにする（I193 の security-review で追加。ユーザーが「止める条件はベストプラクティスの観点で Claude が評価して決めてよい」と一任した範囲での追加）
 3. レビューや修正の周回が上限に達し、安全側の選択肢（fail-closed に倒す・範囲を狭める・別イシューに切り出す）も取れないとき
 
 それ以外（技術的な設計の選択・上限到達で安全側が取れる場合・直せるセキュリティの Blocker）は Claude が決め、`docs/reviews/open/I###_review.md` の「## 自律判断の記録」に理由を書き、止まったときにまとめて報告する。セキュリティの Blocker を「受け入れて進む」判断は Claude だけではしない。

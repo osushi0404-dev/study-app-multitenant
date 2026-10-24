@@ -25,7 +25,7 @@ bash scripts/claude/gate-check.sh "$ARGUMENTS"
 実行する自動テストは **計画書のテスト計画（`docs/tests/open/$ARGUMENTS_auto_test.md`）が正**。
 
 - pytest・Jest・E2E は CI（`.github/workflows/ci.yml`・`e2e.yml`）が PR ごとに流しており、review-gate の `code-review.sh` が CI の完了と成功を確かめている。**手元では流し直さない**
-- auto_test.md の「## 決定論ゲート（自動実走）」のうち、`code-review.sh` が「/test に委譲（heavy）」と記録したもの（docker・npm・pytest など）と、テストケースの表で「/test で実行する」と書かれたものは、ここで 1 つずつ実行する
+- auto_test.md の「## 決定論ゲート（自動実走）」のうち、`code-review.sh` が「test-gate に委譲（heavy）」と記録したもの（docker・npm・pytest など）と、テストケースの表で「/test で実行する」と書かれたものは、ここで 1 つずつ実行する
 - 1 件でも失敗したら、失敗したテスト名と内容（期待値 / 実際値 / ログの抜粋）を記録して `STAGE_DONE: test-gate NEXT: fix-loop` を書いて終わる
 
 ## 3. 記録

@@ -2,6 +2,8 @@
 
 このプロジェクトで Claude Code（バイブコーディング）が参照するファイルの全体像をまとめたリファレンスです。
 
+> **I193（2026-10）で開発の流れを組み直しました。** スキルの構成・呼び出し方・止める条件の正は `docs/runbooks/workflow.md`、設計の根拠は `docs/proposals/I193_official_base_flow.md` です。この文書の後半（各スキルの詳細・フロー図）には I193 より前の書き方が残っている箇所があり、食い違うときは workflow.md を正とします。
+
 ---
 
 ## ディレクトリ構成（全体図）
@@ -14,12 +16,20 @@ study-app-multitenant/
 ├── .claude/                                 ← Claude Code 設定ディレクトリ
 │   ├── settings.json                        ← 権限設定（allow / ask / deny）+ hooks
 │   ├── settings.local.json                  ← ローカル権限の一時的な追加許可
-│   └── skills/                              ← カスタムスキル（スラッシュコマンド）
-│       ├── issue-bootstrap/SKILL.md         ← /issue-bootstrap コマンド定義
-│       ├── plan/SKILL.md                    ← /plan コマンド定義
-│       ├── implement/SKILL.md               ← /implement コマンド定義
-│       ├── fix-loop/SKILL.md                ← /fix-loop コマンド定義
-│       └── close/SKILL.md                   ← /close コマンド定義
+│   ├── agents/                              ← レビュー役（公式のサブエージェント定義・tools で読み取り専用）
+│   └── skills/                              ← カスタムスキル
+│       ├── issue-bootstrap/SKILL.md         ← /issue-bootstrap（ユーザーが打つ）
+│       ├── grill-me/SKILL.md                ← /grill-me（ユーザーが打つ・任意）
+│       ├── plan-issue/SKILL.md              ← /plan-issue（ユーザーが打つ）
+│       ├── proceed/SKILL.md                 ← /proceed（ユーザーが打つ・途中から再開）
+│       ├── plan-review/SKILL.md             ← 段階（以下、ユーザーは打たない）
+│       ├── design-security-review/SKILL.md
+│       ├── implement/SKILL.md
+│       ├── review-gate/SKILL.md
+│       ├── test-gate/SKILL.md
+│       ├── fix-loop/SKILL.md
+│       ├── retro/SKILL.md
+│       └── close/SKILL.md
 │
 ├── docs/
 │   ├── runbooks/                            ← 詳細ルール集（CLAUDE.md から参照）
@@ -183,7 +193,7 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 `/コマンド名` で呼び出せるプロンプトテンプレート。各 `SKILL.md` に Claude が実行すべき手順が記述されており、呼び出すと Claude がその手順に従って自動的に処理を進める。
 
-すべてのスキルは `disable-model-invocation: true`（Claude が自分の判断でスキルを呼ばない。ユーザーが `/名前` を入力したときだけ動く）で動作する。`allowed-tools`（そのターンは確認なしで使ってよいという事前許可で、制限ではない）は付けない。使えるツールを絞りたいスキルは `disallowed-tools` で制限する（例: security-review は `Write, NotebookEdit` を使わない）（I185 P4）。
+ユーザーが打つスキル（`/issue-bootstrap`・`/grill-me`・`/plan-issue`・`/proceed`）と、段階のスキル（`user-invocable: false`。`/plan-issue`・`/proceed` の中で Claude が Skill ツールで呼ぶ）に分かれる（I193）。`/plan-issue`・`/grill-me` は `disable-model-invocation: true`（Claude からは呼べない）。`allowed-tools`（そのターンは確認なしで使ってよいという事前許可で、制限ではない）は付けない。使えるツールを絞りたいスキルは `disallowed-tools` で制限する（例: security-review は `Write, NotebookEdit` を使わない）（I185 P4）。
 
 ---
 
@@ -238,7 +248,7 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 #### /implement（実装・テスト・記録）
 
-**呼び出し**: `/implement I###`
+**呼び出し**: implement 段階（`/plan-issue`・`/proceed` が呼ぶ）
 **役割**: 承認済み計画書に従って実装し、テスト・記録・PR 更新までを完結させる。
 
 **必読ファイル（実装前に参照）**:
@@ -264,7 +274,7 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 #### /fix-loop（NG 時の修正ループ）
 
-**呼び出し**: `/fix-loop I###`
+**呼び出し**: fix-loop 段階（`/plan-issue`・`/proceed` が呼ぶ）
 **役割**: テスト NG や実装失敗時に原因を記録し、差分計画を立てて承認後に修正する。
 
 | ステップ | 処理内容 |
@@ -281,7 +291,7 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 #### /close（クローズ処理）
 
-**呼び出し**: `/close I###`
+**呼び出し**: close 段階（`/plan-issue`・`/proceed` が呼ぶ）
 **前提**: ユーザー検証 OK が出ていること。
 
 | ステップ | 処理内容 |
@@ -578,7 +588,7 @@ docs/reviews/templates/review_template.md
       │
       ▼ ユーザー「OK」
       │
-/implement I###
+implement 段階
   ├─ 計画書再読 + 改善案の検討（必須）
   ├─ コード実装（計画書の範囲内のみ）
   ├─ 自動テスト実行（test_IXXX_auto.md に基づく）
@@ -589,7 +599,7 @@ docs/reviews/templates/review_template.md
       │
       ├─ NG ──────────────────────────────┐
       │                                   │
-      │  /fix-loop I###                   │
+      │  fix-loop 段階                    │
       │   ├─ NG 内容を再現手順/期待/実際/ログで記録 │
       │   ├─ docs/tests/open/error_IXXX.md に追記 │
       │   ├─ 差分計画書を新規作成（連番）         │
@@ -597,7 +607,7 @@ docs/reviews/templates/review_template.md
       │
       ▼ ユーザー「OK」
       │
-/close I###
+close 段階
   ├─ test_IXXX_*.md → closed/（完了情報追記）
   ├─ error_IXXX.md → closed/（存在する場合）
   ├─ plan_IXXX_*.md（全関連）→ closed/
