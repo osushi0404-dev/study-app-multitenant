@@ -3,7 +3,7 @@
 - **関連イシュー**: #275
 - **Draft PR**: #317
 - **作成根拠資料**: docs/issues/open/I158.md（起点イシュー・grill-me 2 回実施済み）
-- **実装後評価**: docs/reviews/open/I158_review.md
+- **実装後評価**: docs/reviews/closed/I158_review.md
 - **作成日**: 2026-10-24
 
 ---
@@ -513,9 +513,9 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 - [ ] 高リスク判定 Yes（plan-review の後に security-review） — でよいか
 
 ## レビュー結果
-- [20261024_1648 判定: ✅ 完了](../../reviews/I158_plan_review_20261024_1648.md)（計画変更記録 1 のやり直しレビュー）
+- [20261024_1648 判定: ✅ 完了](../../reviews/closed/I158_plan_review_20261024_1648.md)（計画変更記録 1 のやり直しレビュー）
 - 指摘への対応（2026-10-24・1648 分）: ① Warning（TC-10 のロールバック確認が弱い）→ 事前に有効セッション S0 を作り、409 の後も S0 が有効のまま（`create` の前の `update` が取り消されている）ことを確かめる形に変更。② Info（TC-07・TC-08 の応答の集め方）→ 共有リストへの追加・例外の収集・`join(timeout)` 後のハング検出を auto_test の注に明記。
-- [20261024_1636 判定: ✅ 完了](../../reviews/I158_plan_review_20261024_1636.md)
+- [20261024_1636 判定: ✅ 完了](../../reviews/closed/I158_plan_review_20261024_1636.md)
 - 指摘への対応（2026-10-24）: ① Warning（`client_request_id` の応答除外）→ `fields` が明示リストのため足さないことで除外される旨を修正項目 5 に追記し、TC-01 に「応答に `client_request_id` が無い」を追加。② Warning（TC-01 の問題数が 0 件一致になり得る）→ fixture で subject_a に未削除 2 件＋削除済み 1 件、subject_b に 1 件の問題を作り、TC-01 の期待値を `total_problems == 2` に具体化。③ Info（context なしのシリアライズ）→ `self.get_serializer(session).data` に変更（create アクションでは `QuizSessionSerializer` が返るため応答の形は同じ）。
 
 ## 計画変更記録
@@ -574,3 +574,8 @@ if (typeof globalThis.crypto?.randomUUID !== 'function') {
 - Medium（`submit_answer`・`end` の全列保存による `is_active` の書き戻し）: 修正項目 8 で是正済み（TC-18・TC-19。TC-18 は敵対的レビュー第 1 周で実ビュー経由に強化）。
 - Low（マルチテナント: 開始時の他組織 `subject` 指定・科目なしセッションの全組織出題）: I166（#284・優先度高）で是正。I166 の引き継ぎメモを I158 マージ後の構造（`QuizService.start_session`・再挑戦の科目引き継ぎ）に更新済み。
 - Low（`Idempotency-Key` の入力検証・キーのユーザー単位照合・開始連打時の自ユーザー行ロック・管理画面の制約違反）: 対策済み（TC-05・TC-16・DRF ユーザー単位スロットル・ModelForm の制約検証）のため受け入れ。
+
+## 完了情報
+- **完了日時**: 2026-10-24 18:42
+- **対応者**: Claude Code
+- **レビュー結果**: OK（code-review 20261024_1738・敵対的レビュー 2 周通過 20261024_1830・/test 全合格・CI 全 pass）
