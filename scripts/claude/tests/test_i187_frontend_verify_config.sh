@@ -119,8 +119,16 @@ MUST_ALLOW = [
     "docker compose --profile e2e run --rm e2e npx playwright test tests/auth.spec.ts --retries=0",
     "RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e npx playwright test tests/auth.spec.ts --retries=0",
 ]
+# 画面確認の前に毎回流す型チェック・lint も承認なしで通す（/test で承認画面が出ることがわかった・計画変更記録 4）
+MUST_ALLOW += [
+    f"docker compose exec{t} frontend npm run {s}"
+    for t in ("", " -T") for s in ("typecheck", "lint")
+]
 miss5 = [c for c in MUST_ALLOW if not allowed(c)]
-ck(f"⑤b'' 既定コマンドと npx playwright test は許可に一致する（不一致: {miss5}）", not miss5)
+ck(f"⑤b'' 既定コマンド・npx playwright test・frontend の typecheck/lint は許可に一致する（不一致: {miss5}）", not miss5)
+# frontend の許可は typecheck・lint の完全一致だけ（exec frontend の何でも、は置かない）
+wide_fe = [r for r in allow if "exec" in r and "frontend" in r and r.endswith("*)")]
+ck(f"⑤d frontend の exec に末尾を何でも受ける許可が無い（あった: {wide_fe}）", not wide_fe)
 ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無い",
    "Bash(RATELIMIT_ENABLE=false docker compose up *)" not in allow)
 

@@ -2,7 +2,7 @@
 
 実行コマンド: 下の「決定論ゲート」を `/code-review` が実走する。heavy なもの（下の「/test に委譲」）は `/test` で確かめる。
 
-pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の pytest・Jest・E2E は PR の CI で回り、全部緑であることを TC-H1 で確かめる）
+pytest・Jest・E2E: 手元では流さず、CI で確かめる（TC-H1）。アプリのコード（`backend/`・`frontend/src/`）は変えていないが、E2E の設定（`playwright.config.ts`）と CI の定義は変えているため、PR の HEAD で pytest・Jest・E2E が全部緑であることを TC-H1 で確かめる。実装中に手元の E2E 8 件も合格している（M-13）
 
 ## TC 一覧
 
@@ -10,7 +10,7 @@ pytest・Jest・E2E: 非該当（アプリのコード変更なし。既存の p
 |---|---|---|
 | TC-01 | `.mcp.json` が JSON として正しい | 合格=0 |
 | TC-02 | `.claude/settings.json` が JSON として正しい | 合格=0 |
-| TC-03 | `test_i187_frontend_verify_config.sh`（新規）: ①`.mcp.json` の `playwright` の `command` が `npx`、`args` が計画 5-2-1 の 12 語と完全一致（順番を含む） ②`github` の設定が変わっていない（`@modelcontextprotocol/server-github@2025.4.8`） ③`.claude/settings.json` の allow に計画 5-2-1 の 20 個（`mcp__playwright__<名前>`）がすべてある ④allow に `browser_run_code_unsafe`・`browser_evaluate`・`browser_file_upload`・`browser_drop`・`browser_network_request` が無い（`mcp__playwright` だけ・`mcp__playwright__*` などサーバー全体を許す書き方も無い） ⑤allow に `Bash(docker compose port *)` がある（⑤a）。e2e サービスの実行は既定コマンド `Bash(docker compose --profile e2e run --rm e2e)` と `Bash(docker compose --profile e2e run --rm e2e npx playwright test *)`（`RATELIMIT_ENABLE=false ` の前置きあり版も同じ 2 つ）の 4 つがある（⑤b）。e2e・e2e-init での `npm test -- --output=.`・`npx jest`・`migrate` を、よくある書き方（`--rm` なし・順番違い・`--service-ports`・`exec`・`docker-compose`・前置きあり）で並べた代表コマンドのどれにも、allow のどのルールもワイルドカードとして一致しない（⑤b'・計画変更記録 3）。既定コマンドと `npx playwright test tests/auth.spec.ts --retries=0` は allow に一致する（⑤b''）。効かない `Bash(RATELIMIT_ENABLE=false docker compose up *)` が無い（⑤c・計画変更記録 2） ⑥deny の `Read(**/.env.e2e)` が残っている ⑦（/security-review で追加）`hooks.PreToolUse` に matcher `mcp__playwright__.*` で `pretooluse_guard.py` が登録されている | 合格=0 |
+| TC-03 | `test_i187_frontend_verify_config.sh`（新規）: ①`.mcp.json` の `playwright` の `command` が `npx`、`args` が計画 5-2-1 の 12 語と完全一致（順番を含む） ②`github` の設定が変わっていない（`@modelcontextprotocol/server-github@2025.4.8`） ③`.claude/settings.json` の allow に計画 5-2-1 の 20 個（`mcp__playwright__<名前>`）がすべてある ④allow に `browser_run_code_unsafe`・`browser_evaluate`・`browser_file_upload`・`browser_drop`・`browser_network_request` が無い（`mcp__playwright` だけ・`mcp__playwright__*` などサーバー全体を許す書き方も無い） ⑤allow に `Bash(docker compose port *)` がある（⑤a）。e2e サービスの実行は既定コマンド `Bash(docker compose --profile e2e run --rm e2e)` と `Bash(docker compose --profile e2e run --rm e2e npx playwright test *)`（`RATELIMIT_ENABLE=false ` の前置きあり版も同じ 2 つ）の 4 つがある（⑤b）。e2e・e2e-init での `npm test -- --output=.`・`npx jest`・`migrate` を、よくある書き方（`--rm` なし・順番違い・`--service-ports`・`exec`・`docker-compose`・前置きあり）で並べた代表コマンドのどれにも、allow のどのルールもワイルドカードとして一致しない（⑤b'・計画変更記録 3）。既定コマンドと `npx playwright test tests/auth.spec.ts --retries=0`、`docker compose exec [-T] frontend npm run typecheck`・`lint` は allow に一致する（⑤b''・計画変更記録 4）。frontend の exec に末尾を何でも受ける許可が無い（⑤d）。効かない `Bash(RATELIMIT_ENABLE=false docker compose up *)` が無い（⑤c・計画変更記録 2） ⑥deny の `Read(**/.env.e2e)` が残っている ⑦（/security-review で追加）`hooks.PreToolUse` に matcher `mcp__playwright__.*` で `pretooluse_guard.py` が登録されている | 合格=0 |
 | TC-04 | `.gitignore` に `.evidence/` だけの行がある（行全体で一致） | 合格=0 |
 | TC-05 | `test_pretooluse_container_guard.sh`: 既存のケースすべてに加え、I187 のケース（下の表）が期待どおり | 合格=0 |
 | TC-06 | `pretooluse_guard.py` が Python として正しい | 合格=0 |
@@ -163,3 +163,9 @@ grep -qF "E2E か単体テストを追加・更新" .claude/review-agents/code-r
 grep -qx "### 別イシューのタイトル案" docs/plans/open/plan_I187.md
 bash scripts/claude/tests/test_i187_mcp_filename_guard.sh
 ```
+
+## 実行結果（/test・2026-10-24）
+- 決定論ゲート: 46/46 合格（`1a04245`・auto_test.md の「決定論ゲート」を 1 行ずつ実行）。計画変更記録 4 の後も TC-03 は 14/14 合格
+- TC-H1: PR #323 の HEAD `1a04245` で CI 6 ジョブ（Backend Lint & Security・Backend Tests・E2E Tests (Playwright)・Frontend Lint & Security・Frontend Tests・Frontend Type Check）すべて pass（`gh pr checks 323`）。計画変更記録 4 のコミットで再実行される CI も確認する
+- TC-H2: `docker compose exec -T frontend npm run typecheck`・`npm run lint` ともに exit 0
+- 画面確認の判定: `check-frontend-evidence.sh I187` は「対象外（frontend/src を変えていません）」で exit 0
