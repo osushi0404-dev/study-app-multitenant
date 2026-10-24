@@ -70,8 +70,21 @@ official_output_readable() {
   local out="$1"
   printf '%s\n' "$out" | grep -qE '"file"[[:space:]]*:' && return 0
   printf '%s\n' "$out" | grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' && return 0
-  printf '%s\n' "$out" | grep -qE '指摘(は)?(なし|ありません|見つかりません)|[Nn]o (findings|issues|bugs)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' && return 0
+  printf '%s\n' "$out" | grep -qE '指摘(は)?(なし|ありません|見つかりません)|(脆弱性|問題|指摘)[^。]*見つかりませんでした|[Nn]o (findings|issues|bugs|vulnerabilities)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' && return 0
   return 1
+}
+
+# I193: claude が先頭に出す手元の設定の警告（「Permission allow rule (…) is not matched …」）を除く。
+# レビューの中身ではないので、記録にも「読めたか」の判定にも混ぜない
+drop_cli_warnings() {
+  grep -vE '^Permission allow rule \(' || true
+}
+
+# I193: 指定した PID と、その子孫のプロセスをすべて止める（背景の組み込みレビューの timeout・claude まで届かせる）
+kill_tree() {
+  local pid="$1" child
+  for child in $(ps -o pid= --ppid "$pid" 2>/dev/null); do kill_tree "$child"; done
+  kill "$pid" 2>/dev/null || true
 }
 
 # I193: 組み込みのレビュー（/code-review・/security-review）を読み取り専用（plan モード）・時間上限つきで実行する。
@@ -84,6 +97,7 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
     printf '(実行できず: exit=%s。124 は時間切れ)\n' "$rc"
     return 0
   fi
+  out=$(printf '%s\n' "$out" | drop_cli_warnings)
   if ! official_output_readable "$out"; then
     printf '(注意: 出力に指摘の配列も「指摘なし」も無く、対象を読めていない可能性がある。この出力は判定の根拠にしない)\n'
   fi
@@ -96,27 +110,58 @@ neutralize_machine_lines() {
   sed -E 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|ROUNDS|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|CI_WAIT):/\1> \2:/'
 }
 
-# I193: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 600）まで CI_POLL_INTERVAL 秒（既定 15）ごとに
-# `gh pr checks --json bucket` を見る（bucket は pass / fail / pending / skipping / cancel）。
-# - チェックが 1 つも無い（push 直後で CI が始まっていない）・gh が失敗した → まだ終わっていないとみなして待つ
+# I193: PR で動くワークフローのジョブ名（jobs.<id>.name。無ければ id）を 1 行ずつ出す。
+# 対象は CI_WORKFLOWS（空白区切り・既定 .github/workflows/ci.yml .github/workflows/e2e.yml）。読めなければ何も出さない。
+expected_ci_jobs() {
+  # shellcheck disable=SC2086  # CI_WORKFLOWS は空白区切りの一覧として分ける
+  python3 - ${CI_WORKFLOWS:-.github/workflows/ci.yml .github/workflows/e2e.yml} <<'PY' 2>/dev/null || true
+import sys, yaml
+for path in sys.argv[1:]:
+    d = yaml.safe_load(open(path, encoding="utf-8")) or {}
+    for jid, job in (d.get("jobs") or {}).items():
+        print((job or {}).get("name") or jid)
+PY
+}
+
+# I193: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 600）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
+# - PR の最新のコミット（headRefOid）が手元の HEAD と違う → 手元のコミットを CI が見ていない（CI_WAIT: NOT_PUSHED・失敗）
 # - fail か cancel が 1 つでもある → 失敗
-# - pending が 1 つでもある → 待つ
-# - 全部 pass か skipping → 成功
-# 戻り値: 0=成功（CI_WAIT: OK）/ 1=失敗あり（CI_WAIT: FAIL）/ 3=時間切れ（CI_WAIT: TIMEOUT）
+# - PR で動くワークフローのジョブ（expected_ci_jobs）が全部、pass か skipping で出そろったときだけ成功。
+#   チェックがまだ無い・一部しか登録されていない（push 直後）・ジョブ名を読めない・gh が失敗した → 待つ（時間切れで止まる）
+# 戻り値: 0=成功（CI_WAIT: OK）/ 1=失敗（CI_WAIT: FAIL・NOT_PUSHED）/ 3=時間切れ（CI_WAIT: TIMEOUT）
 wait_ci() {
-  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-600}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0 buckets=""
+  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-600}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0
+  local head pr_head checks expected name state missing
+  head=$(git rev-parse HEAD)
+  pr_head=$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null || true)
+  if [ "$pr_head" != "$head" ]; then
+    echo "⛔ PR の最新のコミット（${pr_head:-取得できず}）が手元の HEAD（${head}）と違います。push してから実行してください。"
+    echo "CI_WAIT: NOT_PUSHED"
+    return 1
+  fi
+  expected=$(expected_ci_jobs)
   while [ "$elapsed" -lt "$timeout_s" ]; do
-    buckets=$(gh pr checks "$pr" --json bucket --jq '.[].bucket' 2>/dev/null || true)
-    if printf '%s\n' "$buckets" | grep -qxE 'fail|cancel'; then
+    checks=$(gh pr checks "$pr" --json name,bucket --jq '.[] | "\(.bucket)\t\(.name)"' 2>/dev/null || true)
+    if printf '%s\n' "$checks" | grep -qE '^(fail|cancel)	'; then
       gh pr checks "$pr" 2>&1 || true
       echo "CI_WAIT: FAIL"
       return 1
     fi
-    if [ -n "$buckets" ] && ! printf '%s\n' "$buckets" | grep -qx 'pending'; then
+    missing=""
+    if [ -z "$expected" ]; then
+      missing="(ワークフローのジョブ名を読めない)"
+    else
+      while IFS= read -r name; do
+        [ -n "$name" ] || continue
+        state=$(printf '%s\n' "$checks" | awk -F'\t' -v n="$name" '$2 == n { print $1 }' | head -1)
+        case "$state" in pass|skipping) ;; *) missing="${missing} ${name}" ;; esac
+      done <<< "$expected"
+    fi
+    if [ -z "$missing" ]; then
       echo "CI_WAIT: OK"
       return 0
     fi
-    echo "  pending... ${elapsed}s / ${timeout_s}s"
+    echo "  待ち${missing:+（未完了:${missing}）}... ${elapsed}s / ${timeout_s}s"
     sleep "$interval"
     elapsed=$((elapsed + interval))
   done
@@ -385,7 +430,7 @@ OFFICIAL_DIR=$(mktemp -d)
 OFFICIAL_PIDS=()
 cleanup_official() {
   local p
-  for p in "${OFFICIAL_PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
+  for p in "${OFFICIAL_PIDS[@]}"; do kill_tree "$p"; done   # 子の timeout・claude まで止める（I193 F5）
   rm -rf "$OFFICIAL_DIR"
 }
 trap cleanup_official EXIT
@@ -437,6 +482,12 @@ if [ "$RISK_PATH" = "YES" ]; then
 $(cat "$OFFICIAL_DIR/security" 2>/dev/null || echo "(実行できず: 結果のファイルが無い)")"
 fi
 
+# I193 F6: レビューの間に HEAD が動いたら、組み込みのレビューと記録の対象がずれるので BLOCKER にする
+HEAD_DRIFT=""
+if [ "$(git rev-parse HEAD)" != "$REVIEWED_HEAD" ]; then
+  HEAD_DRIFT="レビューを始めた後に HEAD が ${REVIEWED_HEAD} から $(git rev-parse HEAD) に動いた"
+fi
+
 # コンテキスト組み立て
 CONTEXT="イシュー番号: ${ISSUE}
 
@@ -479,6 +530,16 @@ if [ "$REVIEW_RC" -ne 0 ] || [ -z "$REVIEW" ]; then
 
 RISK: YES
 VERDICT: BLOCKER"
+fi
+
+# I193 F6: レビュー役の後にも HEAD を確かめる。動いていたら決定論で BLOCKER（記録の REVIEWED_COMMIT と中身がずれるため）
+if [ -z "$HEAD_DRIFT" ] && [ "$(git rev-parse HEAD)" != "$REVIEWED_HEAD" ]; then
+  HEAD_DRIFT="レビューを始めた後に HEAD が ${REVIEWED_HEAD} から $(git rev-parse HEAD) に動いた"
+fi
+if [ -n "$HEAD_DRIFT" ]; then
+  echo "⛔ ${HEAD_DRIFT}。BLOCKER として記録します（動かしてから review-gate をやり直してください）。"
+  GATE_EVIDENCE+="- ⛔ ${HEAD_DRIFT}（BLOCKER）"$'\n'
+  GATE_VERDICT=BLOCKER
 fi
 
 # 出力正規化

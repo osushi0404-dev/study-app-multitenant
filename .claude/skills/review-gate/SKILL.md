@@ -21,6 +21,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
 - exit 0: 2. へ
 - exit 3（CI 待ちの時間切れ）: 1 回だけ実行し直す。2 回続けば止める（止める条件 3: 安全側の選択肢が無い）
 - exit 1 で出力に `CI_WAIT: FAIL` がある: CI の失敗を直すため `STAGE_DONE: review-gate NEXT: fix-loop` を書いて終わる
+- exit 1 で出力に `CI_WAIT: NOT_PUSHED` がある（PR の最新のコミットが手元の HEAD と違う）: push してから 1 回だけ実行し直す。それでも同じなら止める（止める条件 3）
 - それ以外の exit 1（fetch の失敗・イシューファイルが無いなど）: 出力を記録に書き、止める条件 3 に当たるかを判定する（直せる原因なら直して実行し直す）
 
 ## 2. 出力の機械判定

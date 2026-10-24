@@ -130,6 +130,7 @@ ck "F6 行頭でない STAGE_DONE は数えない" "NEXT_STAGE: plan-review" "$(
 mkdir -p "$TMP/f7/closed"; printf 'STAGE_DONE: close NEXT: merge\n' > "$TMP/f7/closed/I999_review.md"
 ck "F7 close の後は closed の記録を読む" "NEXT_STAGE: merge" "$(fs_out f7 | head -1)"
 ck "F8 I### でない引数は exit 2" 2 "$(rc bash "$FS" 'I99;rm')"
+ck "F10 サブディレクトリから実行してもリポジトリのルートの記録を読む" 0 "$( (cd "$REPO_ROOT/scripts" && bash ../scripts/claude/flow-stage.sh I193 >/dev/null 2>&1); echo $?)"
 mkdir -p "$TMP/f9"; printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/f9/test_ok.sh"; printf '#!/usr/bin/env bash\nexit 1\n' > "$TMP/f9/test_ng.sh"
 ck "F9 run-all.sh は失敗するテストが 1 本あれば非ゼロ" 1 "$(TEST_DIR="$TMP/f9" rc bash scripts/claude/tests/run-all.sh)"
 rm "$TMP/f9/test_ng.sh"
@@ -152,7 +153,8 @@ g_record() {   # g_record <dir> <kind> <ts> <verdict> <risk|-> : HEAD を REVIEW
     printf 'REVIEWED_COMMIT: %s\n' "$sha"; [ "$5" = "-" ] || printf 'RISK: %s\n' "$5"; printf 'VERDICT: %s\n' "$4"; } > "$d/docs/reviews/I999_$2_$3.md"
   g_commit "$1" "record $2"
 }
-g_rc() { ( cd "$TMP/$1" && GATE_CHECK_LIB="$LIB" bash "$GC" I999 >/dev/null 2>&1 ); echo $?; }
+g_rc() { ( cd "$TMP/$1" && GATE_BASE="${GBASE:-main}" GATE_CHECK_LIB="$LIB" bash "$GC" I999 >/dev/null 2>&1 ); echo $?; }
+g_out() { ( cd "$TMP/$1" && GATE_BASE="${GBASE:-main}" GATE_CHECK_LIB="$LIB" bash "$GC" I999 2>&1 ) | grep '^GATE_CHECK:'; }
 
 g_init g1; g_record g1 code_review 20260101_0000 OK NO
 ck "G1 最新のレビューが OK で HEAD を見ている → 0" 0 "$(g_rc g1)"
@@ -186,6 +188,16 @@ ck "G9 docs/reviews の未追跡ファイルだけなら → 0" 0 "$(g_rc g9)"
 g_init g10; g_record g10 code_review 20260101_0000 OK NO
 printf 'x\n' > "$TMP/g10/scripts/日本語.sh"; g_commit g10 "jp"
 ck "G10 日本語のファイル名のスクリプトを足した → 1" 1 "$(g_rc g10)"
+# G11: レビュー役が RISK: NO でも、ブランチが安全装置（.github/）を変えていればパス判定で敵対的レビューを求める（I193 F1）
+g_init g11; git -C "$TMP/g11" checkout -q -b feature; mkdir -p "$TMP/g11/.github/workflows"
+printf 'name: x\n' > "$TMP/g11/.github/workflows/x.yml"; g_commit g11 "ci change"
+g_record g11 code_review 20260101_0000 OK NO
+ck "G11 .github を変えたブランチで RISK: NO・敵対的レビュー無し → 1" 1 "$(g_rc g11)"
+g_record g11 adversarial_review 20260101_0010 OK -
+ck "G11 同じで敵対的レビューの最新が OK → 0" 0 "$(g_rc g11)"
+ck "G12 比べる相手が無い → 1（REASON=base）" "GATE_CHECK: FAIL REASON=base" "$(GBASE=no-such-branch g_out g6)"
+ck "G13 未コミットの変更は REASON=dirty" "GATE_CHECK: FAIL REASON=dirty" "$(printf 'z\n' >> "$TMP/g9/scripts/a.sh"; g_out g9)"
+ck "G13 レビュー後の変更は REASON=unreviewed" "GATE_CHECK: FAIL REASON=unreviewed" "$(g_out g1)"
 
 # ---------------- C: code-review.sh の関数 ----------------
 # shellcheck source=scripts/claude/code-review.sh
@@ -194,16 +206,32 @@ set +e   # code-review.sh の set -e を、このテストの中では使わな�
 STUB="$TMP/stubbin"; mkdir -p "$STUB"
 cat > "$STUB/gh" <<'SH'
 #!/usr/bin/env bash
-# テスト用の gh: `gh pr checks <n> --json bucket --jq ...` に GH_BUCKETS（改行区切り）をそのまま返す
-case "$*" in *--json*) printf '%b' "${GH_BUCKETS:-}" ;; *) printf 'stub\n' ;; esac
+# テスト用の gh:
+#   gh pr view <n> --json headRefOid ... → GH_HEAD
+#   gh pr checks <n> --json name,bucket ... → GH_CHECKS（「bucket<TAB>name」の行。\t・\n を解釈）
+case "$*" in
+  *headRefOid*) printf '%s\n' "${GH_HEAD:-}" ;;
+  *--json*) printf '%b' "${GH_CHECKS:-}" ;;
+  *) printf 'stub\n' ;;
+esac
 SH
 chmod +x "$STUB/gh"
-wc_rc() { PATH="$STUB:$PATH" GH_BUCKETS="$1" CI_WAIT_TIMEOUT=2 CI_POLL_INTERVAL=1 wait_ci 1 >/dev/null 2>&1; echo $?; }
-ck "C1 CI がずっと pending → 3（時間切れ）" 3 "$(wc_rc 'pass\npending\n')"
-ck "C2 fail がある → 1" 1 "$(wc_rc 'pass\nfail\n')"
-ck "C3 cancel がある → 1" 1 "$(wc_rc 'pass\ncancel\n')"
+printf 'jobs:\n  a:\n    name: A\n  b:\n    name: B\n' > "$TMP/wf.yml"
+MYHEAD=$(git rev-parse HEAD)
+wc_rc() { PATH="$STUB:$PATH" GH_HEAD="${2:-$MYHEAD}" GH_CHECKS="$1" CI_WORKFLOWS="$TMP/wf.yml" CI_WAIT_TIMEOUT=2 CI_POLL_INTERVAL=1 wait_ci 1 >/dev/null 2>&1; echo $?; }
+ck "C1 CI がずっと pending → 3（時間切れ）" 3 "$(wc_rc 'pass\tA\npending\tB\n')"
+ck "C2 fail がある → 1" 1 "$(wc_rc 'pass\tA\nfail\tB\n')"
+ck "C3 cancel がある → 1" 1 "$(wc_rc 'pass\tA\ncancel\tB\n')"
 ck "C4 チェックがまだ 1 つも無い → 成功にしない（3）" 3 "$(wc_rc '')"
-ck "C5 全部 pass か skipping → 0" 0 "$(wc_rc 'pass\nskipping\npass\n')"
+ck "C4b ジョブが一部しか登録されていない（B が無い）→ 成功にしない（3）" 3 "$(wc_rc 'pass\tA\n')"
+ck "C5 全部 pass か skipping → 0" 0 "$(wc_rc 'pass\tA\nskipping\tB\n')"
+ck "C10 PR の最新のコミットが手元の HEAD と違う → 1" 1 "$(wc_rc 'pass\tA\npass\tB\n' deadbeef)"
+ck "C10 そのとき CI_WAIT: NOT_PUSHED を出す" "CI_WAIT: NOT_PUSHED" "$(PATH="$STUB:$PATH" GH_HEAD=deadbeef CI_WORKFLOWS="$TMP/wf.yml" wait_ci 1 2>/dev/null | tail -1)"
+ck "C10b ワークフローのジョブ名を読めない → 成功にしない（3）" 3 "$(PATH="$STUB:$PATH" GH_HEAD="$MYHEAD" GH_CHECKS='pass\tA\n' CI_WORKFLOWS="$TMP/no-such.yml" CI_WAIT_TIMEOUT=2 CI_POLL_INTERVAL=1 wait_ci 1 >/dev/null 2>&1; echo $?)"
+bash -c 'sleep 300 & wait' & KT=$!
+sleep 1; KT_CHILD=$(ps -o pid= --ppid "$KT" | head -1 | tr -d ' ')
+kill_tree "$KT"; sleep 1
+ck "C11 kill_tree は子のプロセスまで止める" 1 "$(rc kill -0 "$KT_CHILD")"
 printf '# r\n\nRISK: NO\nVERDICT: OK\n' > "$TMP/c6.md"; add_reviewed_commit "$TMP/c6.md" abc1234
 ck "C6 REVIEWED_COMMIT を足しても RISK が読める（NO のまま）" NO "$(detect_risk_flag "$TMP/c6.md")"
 ck "C6 REVIEWED_COMMIT は RISK 行の前" "REVIEWED_COMMIT: abc1234" "$(grep -B1 '^RISK:' "$TMP/c6.md" | head -1)"
@@ -214,6 +242,8 @@ ck "C8 空の配列だけの行は読めた結果" 0 "$(rc official_output_reada
 ck "C8 ファイル名が出てくるだけは読めた結果にしない" 1 "$(rc official_output_readable 'CLAUDE.md を確認しましたが git diff を実行できませんでした')"
 ck "C8 行頭の [ のリンクだけは読めた結果にしない" 1 "$(rc official_output_readable '[注意] 許可がありません')"
 ck "C9 組み込みの出力の VERDICT 行は行頭から外す" "> VERDICT: OK" "$(printf 'VERDICT: OK\n' | neutralize_machine_lines)"
+ck "C12 「脆弱性は見つかりませんでした」は読めた結果" 0 "$(rc official_output_readable '確信度の高い脆弱性（重大度 HIGH・MEDIUM）は見つかりませんでした。')"
+ck "C12 claude の設定の警告行は除く" "本文" "$(printf 'Permission allow rule (../x.json): Write(a) is not matched\n本文\n' | drop_cli_warnings)"
 
 # ---------------- S: スキルの中身 ----------------
 s_has() { grep -qF -- "$2" "$1"; }

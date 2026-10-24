@@ -23,6 +23,7 @@
 - [implement] 敵対的レビュー役だけ `tools` に Bash を残した — temp repo での再現実行に要る（計画変更記録 4）
 - [implement] retro がその場で直すのは記録の場所だけにした — それ以外を直すとレビューと人の手動テストをやり直すことになるため（計画変更記録 4）
 - [review-gate] 基本レビュー（`I193_code_review_20261025_0030.md`）が FINAL_VERDICT HIGH（High 1・Medium 5・Low 3）なので、敵対的レビューの前に fix-loop へ回した — review-gate の手順どおり（敵対的レビューは基本レビュー OK の後）。指摘の多くは組み込み `/code-review` が出し、自作レビュー役が採用した
+- [fix-loop] High 1・Medium 5 は全部、Low 3 は 1 行で直せるので一緒に直した（診断メモ `I193_fix_diagnosis_20261025_0045.md`・診断・実装・テストのレビューはすべて PASS）— どれも流れが止まる・確認をすり抜ける実害がある。各指摘は診断で推奨した案 A で直した（例: gate-check はパス判定を記録の文字に頼らず自分で再評価する。注入に強いため）
 
 ## 影響範囲
 - Backend/Frontend/DB: なし

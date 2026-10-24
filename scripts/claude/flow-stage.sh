@@ -12,6 +12,9 @@ if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then
   exit 2
 fi
 
+# どのフォルダから実行しても、リポジトリのルートの記録を読む（REVIEW_DIR を相対で渡したときもルートから解決する）
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "⛔ git リポジトリの中で実行してください"; exit 2; }
+cd "$REPO_ROOT" || exit 2
 REVIEW_DIR="${REVIEW_DIR:-docs/reviews}"
 FILE=""
 for d in open closed; do

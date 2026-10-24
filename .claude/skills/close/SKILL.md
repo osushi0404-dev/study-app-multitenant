@@ -15,7 +15,7 @@ user-invocable: false
 ```bash
 bash scripts/claude/gate-check.sh I###
 ```
-exit 1 なら、レビューを通っていない変更がある。`docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: review-gate` を書いて終わる（review-gate からやり直す）。
+exit 1 のときは、出力の `GATE_CHECK: FAIL REASON=<理由>` で test-gate の手順 1 と同じに分ける（`dirty` は片付けてから、`base` は fetch してからやり直す。それ以外は `docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: review-gate` を書いて終わる。gate-check で review-gate に戻すのが 2 回続くときは止める〔止める条件 3〕）。
 
 0) PR のベースブランチ確認と base 追従（必須）:
    ```bash
@@ -160,7 +160,7 @@ exit 1 なら、レビューを通っていない変更がある。`docs/reviews
    `oshui0404` だけの設定のため（main には CODEOWNERS が無い・`docs/runbooks/branch-protection-setup.md`）、
    承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
    - exit 0 → step 6 のマージ依頼へ進む
-   - exit 1 → 原因を見て直す。マージコンフリクトは step 0 と同じ扱い。CI fail は `STAGE_DONE: close NEXT: fix-loop` を書いて終わる。DRAFT 残留は step 5 をやり直す
+   - exit 1 → 原因を見て直す。マージコンフリクトは step 0 と同じ扱い。DRAFT 残留は step 5 をやり直す。CI fail は、記録を 1 か所に保つため、step 1 で closed へ移したこのイシューの記録（`docs/issues/closed/I###.md`・`docs/plans/closed/plan_I###*.md`・`docs/tests/closed/I###_*.md`・`docs/reviews/closed/I###_review.md`）を `git mv` で open へ戻し（計画書のレビュー結果のリンクも step 1 の逆に戻す）、commit/push してから、`docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: fix-loop` を書いて終わる（後の段階は open の記録を読み書きする）
    - exit 2 → mergeStateStatus=UNKNOWN が継続。1 回だけ実行し直し、続けば報告に書いて step 6 へ進む
 6) 結線とマージ依頼（必須）:
    - `docs/reviews/closed/I###_review.md` の末尾に `STAGE_DONE: close NEXT: merge` を足して commit/push する
