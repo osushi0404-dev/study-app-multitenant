@@ -93,9 +93,34 @@ E2E_ALLOW = [
 ]
 missing5 = [r for r in E2E_ALLOW if r not in allow]
 ck(f"⑤b e2e サービスの実行（既定コマンドと npx playwright test・前置きなし・あり）が allow にある（無い: {missing5}）", not missing5)
-# 見張りは npm test・npx jest・e2e-init などを判断せずに通すため、末尾を何でも受ける許可は置かない（敵対的レビュー 1 周目）
-wide5 = [r for r in allow if "run --rm e2e" in r and r not in E2E_ALLOW]
-ck(f"⑤b' e2e の実行で上の 4 つ以外の許可が無い（あった: {wide5}）", not wide5)
+# 見張りは npm test・npx jest・e2e-init などを判断せずに通すため、これらに一致する許可は置かない（敵対的レビュー 1・2 周目）。
+# 許可の書き方ではなく、代表のコマンドに一致するかをワイルドカードとして判定する（`:*` は `*` と同じに扱う）
+import fnmatch
+def allowed(cmd):
+    for r in allow:
+        if r.startswith("Bash(") and r.endswith(")"):
+            pat = r[5:-1].replace(":*", "*")
+            if fnmatch.fnmatchcase(cmd, pat):
+                return r
+    return None
+MUST_ASK = [
+    f"{pre}{dc} {mid} {tail}"
+    for pre in ("", "RATELIMIT_ENABLE=false ")
+    for dc in ("docker compose", "docker-compose")
+    for mid in ("--profile e2e run --rm e2e", "--profile e2e run e2e", "--profile e2e run e2e --rm",
+                "--profile e2e run --rm --service-ports e2e",
+                "run --profile e2e --rm e2e", "--profile e2e exec e2e", "run --rm e2e", "--profile e2e run --rm e2e-init")
+    for tail in ("npm test -- --output=.", "npx jest", "python manage.py migrate")
+]
+hit5 = [(c, allowed(c)) for c in MUST_ASK if allowed(c)]
+ck(f"⑤b' e2e・e2e-init の npm test・npx jest・migrate などに一致する許可が無い（一致: {hit5[:3]}）", not hit5)
+MUST_ALLOW = [
+    "docker compose --profile e2e run --rm e2e",
+    "docker compose --profile e2e run --rm e2e npx playwright test tests/auth.spec.ts --retries=0",
+    "RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e npx playwright test tests/auth.spec.ts --retries=0",
+]
+miss5 = [c for c in MUST_ALLOW if not allowed(c)]
+ck(f"⑤b'' 既定コマンドと npx playwright test は許可に一致する（不一致: {miss5}）", not miss5)
 ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無い",
    "Bash(RATELIMIT_ENABLE=false docker compose up *)" not in allow)
 
