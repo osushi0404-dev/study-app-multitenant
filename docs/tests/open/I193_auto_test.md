@@ -34,7 +34,7 @@ R: 名前と置き場所
 - R3 `plan-issue`・`grill-me` は `disable-model-invocation: true`。`proceed`・`issue-bootstrap` は `disable-model-invocation` が無い
 - R4 `.claude/agents/` に 7 本があり、それぞれ frontmatter の `tools:` が `Read, Grep, Glob` だけ。`.claude/review-agents/` が無い
 - R5 `scripts/claude/*.sh` と `.github/workflows/*.yml` に `ultra`・`claude-code-action` が無い
-- R6 古い流れの参照が無い: `CLAUDE.md`・`docs/runbooks/*.md`（`legacy/` を除く）・`.claude/skills/*/SKILL.md`・`.claude/agents/*.md`・`scripts/claude/*.sh`・`docs/*/templates/*.md` に、`/implement I`・`/code-review I`・`/test I`・`/fix-loop I`・`/retro I`・`/close I`・`/security-review I`・`/plan-issue-review`・`review-agents` のどれも無い（同じ語を `$ARGUMENTS` で書いた形も含む）
+- R6 古い流れの参照が無い: `CLAUDE.md`・`docs/runbooks/*.md`（`legacy/` を除く）・`.claude/skills/*/SKILL.md`・`.claude/agents/*.md`・`scripts/claude/*.sh`・`scripts/migration_verify/*.py`・`docs/*/templates/*.md` に、`/implement I`・`/code-review I`・`/test I`・`/fix-loop I`・`/retro I`・`/close I`・`/security-review I`・`/plan-issue-review`・`review-agents` のどれも無い（同じ語を `$ARGUMENTS` で書いた形も含む）
 - R7 `scripts/claude/*.sh` の `claude -p` の行はすべて `timeout` を伴い、`--system-prompt` と `claude-sonnet-4-6` が無い
 
 F: `flow-stage.sh`（fixtures の記録を一時フォルダに置いて実行）

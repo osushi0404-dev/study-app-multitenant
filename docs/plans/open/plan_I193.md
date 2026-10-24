@@ -13,7 +13,7 @@
 - 目的: 計画からクローズまでを、公式の道具を土台に組み直す。自作は公式だけでは止まらない漏れを止める部分だけにする。ユーザーの確認は「人がやる手動テスト」と「マージ」だけにし、途中で止めて聞くのは 3 つの条件のときだけにする（イシュー I193 設計確認メモ）。
 
 ## 2. 受け入れ条件
-イシュー I193 の「受け入れ条件」16 項目をそのまま採用する（この計画で項目を足したり削ったりしない）。各項目と確かめ方の対応は §6 の表に書く。
+イシュー I193 の「受け入れ条件」14 項目をそのまま採用する（この計画で項目を足したり削ったりしない）。各項目と確かめ方の対応は §6 の表に書く。
 
 ## 3. 影響範囲
 - Backend: なし
@@ -140,14 +140,15 @@
   - 最新の `docs/reviews/I###_code_review_*.md` の最後の `VERDICT:` が `OK` で、`REVIEWED_COMMIT:` から HEAD までの差分が `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` の中だけなら exit 0
   - その記録の `RISK:` が `YES` なら、最新の `docs/reviews/I###_adversarial_review_*.md` の `VERDICT:` が `OK` であることも求める
   - どれかが欠ける・読めない・違うときは理由を出して exit 1（fail-closed）
+  - レビューの後に変えてよい場所を 4 つに絞るのは意図どおり（それ以外〔`docs/proposals/`・`docs/runbooks/`・`.claude/`・`scripts/` など〕を変えたら、レビューを通り直す）。`test-gate`・`retro`・`close` が書くのは `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` だけと各スキルに書き、振り返りで手順書や設計書を直すときは、直した後に `review-gate` を通り直す
   - `test-gate` と `close` の最初に実行し、exit 1 なら `review-gate` に戻る
 
 ### 5.4 段階のスキルの書き直し（承認待ちをなくす）
-共通: 各スキルの frontmatter は `user-invocable: false`（`disable-model-invocation` は外す）、description に「/plan-issue・/proceed の流れの中でだけ呼ぶ」と書く。最後に `STAGE_DONE:` を書いて終わる。途中で止めて聞くのは、設計確認メモの 3 条件に当たるときだけ（3 条件の文はスキルごとに書かず `docs/runbooks/workflow.md` の 1 か所に置き、各スキルからそこを指す）。
+共通: 各スキルの frontmatter は `user-invocable: false`（`disable-model-invocation` は外す）・`argument-hint: "I###"`、description に「/plan-issue・/proceed の流れの中でだけ呼ぶ」と書く。最後に `STAGE_DONE:` を書いて終わる。途中で止めて聞くのは、設計確認メモの 3 条件に当たるときだけ（3 条件の文はスキルごとに書かず `docs/runbooks/workflow.md` の 1 か所に置き、各スキルからそこを指す）。
 
 | スキル | 変えること |
 |---|---|
-| `plan-review` | 今の `plan-issue-review`（スクリプト実行）を引き継ぐ。Blocker は自分で直して再実行、同じゲートで 2 回続けて NG なら止める条件 3 の判定へ。OK なら `NEXT: implement`、HIGHRISK なら `NEXT: design-security-review` |
+| `plan-review` | 今の `plan-issue-review`（スクリプト実行）を引き継ぐ。終わり方は 3 通り: ① OK → `NEXT: implement` ② HIGHRISK → `NEXT: design-security-review` ③ BLOCKER → 自分で直して再実行し、その結果で①②③を判定し直す。同じゲートで 2 回続けて BLOCKER なら止める条件 3 の判定へ（安全側が取れればそれを選んで記録） |
 | `implement` | 「/plan-issue の承認だけでは開始しない・/implement を待つ」（:22-24）を消す。計画外の実装が要るときは、計画書を直して `plan-review` を呼び直す（要件・基本設計・UI/UX を変えるときだけ止める）。テストのフレームワークの導入・形式の変更の承認（:19-20）は、依存関係の追加（`requirements*.txt`・`package*.json` は settings の ask）を伴うので残す。最後に組み込み `/simplify` を Skill ツールで呼び、直したものを含めて commit/push。`NEXT: review-gate` |
 | `test-gate` | 最初に `gate-check.sh`。既定の pytest・Jest・E2E の手元の流し直しをやめる（CI が正。CI 待ちは `code-review.sh` が fail-closed で行う）。auto_test.md の「決定論ゲート」で HEAVY（docker・npm・pytest など）と分類されたものだけここで実行する。Claude 担当の手動テストを実行して記録する。人の分があれば提示して `NEXT: human-test` で止まる。無ければ `NEXT: retro` |
 | `fix-loop` | 手順 4 のユーザー承認待ち・軽微例外の承認をやめ、診断レビュー（3.5）が PASS した案で進める。複数案の選択が要件・基本設計・UI/UX の価値判断になるときだけ止める。終わりは必ず `NEXT: review-gate`（戻り先を 1 か所にする。今の「/code-review に戻る／/test に戻る」の 2 通りをやめる） |
@@ -158,7 +159,7 @@
 | スキル | 変えること |
 |---|---|
 | `plan-issue` | 承認ポイントを提示して止めるのをやめる。計画書・テスト文書・レビュー文書を作り、`STAGE_DONE: plan NEXT: plan-review` を書いたら、`proceed` を Skill ツールで呼ぶ。「仮定で決めた設計判断は先にユーザーへ確認」は、要件・基本設計・UI/UX の仮定に絞る。計画書の「## 9. 承認ポイント」は「## 9. 確定事項と自律判断」にする |
-| `proceed`（新設） | `flow-stage.sh` を実行し、NEXT_STAGE の段階のスキルを Skill ツールで呼ぶことを、NEXT が `human-test`・`merge` になるか、止める条件に当たるまで繰り返す。`human-test` のときは人の手動テスト項目を提示して止まる。exit 2（古い流れのイシューなど）なら理由を報告して止まる。`disable-model-invocation` は付けない（ユーザーが手動テストの結果を返信したら、Claude が結果を記録して `STAGE_DONE: human-test NEXT: retro`〔NG なら `NEXT: fix-loop`〕を書き、`proceed` を呼んで続ける） |
+| `proceed`（新設） | `flow-stage.sh` を実行し、NEXT_STAGE の段階のスキルを Skill ツールで呼ぶことを、NEXT が `human-test`・`merge` になるか、止める条件に当たるまで繰り返す。`human-test` のときは人の手動テスト項目を提示して止まる。exit 2（古い流れのイシューなど）なら理由を報告して止まる。`disable-model-invocation` は付けない（ユーザーが手動テストの結果を返信したら、Claude が結果を記録して `STAGE_DONE: human-test NEXT: retro`〔NG なら `NEXT: fix-loop`〕を書き、`proceed` を呼んで続ける）。`argument-hint: "I###"`。description に「ユーザーが /proceed を打ったとき、`/plan-issue` から呼ばれたとき、ユーザーが手動テストの結果を返信したときだけ使う。それ以外で自分から呼ばない」と書く（誤って呼んでも `flow-stage.sh` が記録の順番どおりにしか進めない） |
 | `issue-bootstrap` | `disable-model-invocation` を外す（`retro` から呼ぶため）。最後の「ユーザーがイシューファイルを確認」をやめ、要件・基本設計・UI/UX で決めてもらうことがあるときだけ、その質問をして止まる。`retro` から呼ばれたときは質問せず、未確定は「未定・grill-me で確認」と書く |
 | `grill-me` | 質問を要件・基本設計・UI/UX の価値判断に絞る（技術的なことは計画で Claude が決める）と明記する。最後の案内は `/plan-issue I###` のまま |
 
@@ -245,6 +246,7 @@
 | 段階のスキルを Claude が流れの外で勝手に呼ぶ | description に「流れの中でだけ呼ぶ」と書く。呼んでも `gate-check.sh` と `flow-stage.sh` が順番を外れた進行を止める |
 | 文言を固定するテストが守りの削除を見逃す（I185 種類 A） | 守りの部分は、できるだけ挙動のテスト（`flow-stage.sh`・`gate-check.sh`・`detect_code_verdict` の単体テスト）で確かめる。文言のテストには失敗注入を付ける |
 | CI でハーネスのテストが手元と違う結果になる | ステップ 7 で CI の結果を見て直す。直せないものは計画変更記録に書く |
+| 受け入れ条件 8（`/plan-issue` だけで手動テストの手前まで進む）の通しを、マージ前に実地で確かめられない（GitHub のイシュー・PR の作成を伴うため、練習用リポジトリでは段階のつなぎ〔手動 No.7〕までしか通せない） | マージ前は、つなぎの決定論（`flow-stage.sh`・`gate-check.sh`・TC-01 F・G 系）と、段階のスキルを呼べること（手動 No.2・S6 のスパイク）で確かめる。マージ後の最初のイシューを実地の通しとし、その振り返りで結果を確かめることを `docs/runbooks/workflow.md` の移行の節に書く（自律判断の記録にも残す） |
 | メモ（Claude の記憶）が古い承認ルールのまま残り、新しい流れでも止まってしまう | /close で、承認・コマンド待ちを前提にしたメモを新しいルールに書き換える（`feedback_implement_after_explicit_command.md`・`feedback_wait_for_explicit_command.md` ほか） |
 
 ## 9. 確定事項と自律判断
@@ -283,3 +285,9 @@ Claude が決めた（技術的な選択。理由は本計画・設計書）:
 - P3/P5/P8: DB・依存関係ファイルの変更なし。Dockerfile・docker-compose.yml への波及なし
 - P6: 画面・データ量の変更なし
 - P9: 個人情報・未成年データ・テナントデータを扱わない
+
+## レビュー結果
+- [20261024_2239 判定: ✅ 完了](../../reviews/I193_plan_review_20261024_2239.md)
+
+## 計画変更記録
+1. 2026-10-24 計画レビュー（`I193_plan_review_20261024_2239.md`・HIGHRISK・Blocker なし）の Warning 4 件・Info 2 件に対応した: R6 の検索対象に `scripts/migration_verify/` を追加／受け入れ条件 8 の実地の通しをマージ後の最初のイシューで確かめるリスクを §8 に追加／`gate-check.sh` がレビュー後に変えてよい場所を絞る意図と、`docs/proposals/` などを変えたら通り直すことを §5.3 に明記／`plan-review` の終わり方を 3 通りで明記／段階のスキルと `proceed` に `argument-hint` を付ける／`proceed` の description で呼ぶ場面を限定。あわせて §2 の受け入れ条件の数を 14 に直した（イシューの項目数どおり）。方式・範囲・受け入れ条件は変えていないため、計画レビューはやり直さない
