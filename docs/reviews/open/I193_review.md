@@ -22,6 +22,7 @@
 - [implement] I193 自身の残りの段階は新しい流れ（`/proceed I193`）で進める — このワークツリーでは本変更で古い `/code-review`・`/test` が無くなったため。新しい流れの初めての実地の通しにもなる
 - [implement] 敵対的レビュー役だけ `tools` に Bash を残した — temp repo での再現実行に要る（計画変更記録 4）
 - [implement] retro がその場で直すのは記録の場所だけにした — それ以外を直すとレビューと人の手動テストをやり直すことになるため（計画変更記録 4）
+- [review-gate] 基本レビュー（`I193_code_review_20261025_0030.md`）が FINAL_VERDICT HIGH（High 1・Medium 5・Low 3）なので、敵対的レビューの前に fix-loop へ回した — review-gate の手順どおり（敵対的レビューは基本レビュー OK の後）。指摘の多くは組み込み `/code-review` が出し、自作レビュー役が採用した
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -37,3 +38,5 @@
 - ステップごとのコミットを `git revert`（改名は `git mv` なので元に戻る）。必須チェックに登録した `Harness Tests` は、ユーザーがブランチ保護の設定から外す
 
 STAGE_DONE: implement NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: fix-loop
