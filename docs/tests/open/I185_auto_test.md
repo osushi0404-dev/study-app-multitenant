@@ -27,6 +27,15 @@
 | TC-14 | P2〜P4 | `test_i185_harness_docs.sh`: ①どの `SKILL.md` にも `allowed-tools:` 行がない ②`security-review` に `disallowed-tools: Bash, Write, NotebookEdit` がある ③`plan-issue` の手順に `bash scripts/claude/plan-issue-review.sh $ARGUMENTS` があり、「承認後の次のステップ: `/plan-issue-review`」がない ④`workflow.md` の移行表に「計画書承認後 → `/plan-issue-review` を入力」がない ⑤`fix-loop` の手順 4 に「推奨案で進めて手順 5 へ」と 6 つの条件（⑥ 認証・認可・テナント境界・秘密情報の扱い・権限設定・フック・GitHub Actions に触れない、を含む）があり、3 つの関所のスクリプト名（fix-diagnosis-review.sh・fix-implementation-review.sh・fix-test-review.sh）が残っている ⑥`fix-loop` の共通ルール (b) に「手順4（新案なので条件を判定し直す）」があり、「手順4 ユーザー承認（新案のため）」がない ⑦`issue-flow.md` と `onboarding.md` に「`/plan-issue` の中で計画レビュー」の説明がある | 合格=0 |
 | TC-15 | P5 | `sessionstart_context.py` が Python として正しい | 合格=0 |
 
+敵対的レビュー 1 周目（`docs/reviews/I185_adversarial_review_20261024_1830.md`）を受けた追加:
+- TC-11f: 偽の gh を PATH の先頭に置き、PR・最新イシューの値が「#番号 I### 日付」で出る（GitHub を呼ばない版で不合格になることを確認）
+- TC-11g: `.claude/settings.json` の `hooks.SessionStart[*].hooks[*].command` にフックが登録されている（イベント名を打ち間違えた設定で不合格になることを確認。TC-13 の grep より厳しい）
+- TC-14②: frontmatter の中だけを見る（本文へ移した版で不合格）
+- TC-14③c〜③f: 計画レビューの実行が承認ポイントの提示より前・古い停止文がない・スクリプトの案内を承認前に伝えない・判定前の失敗で承認ポイントを出さない（レビューを承認の後に戻した版で不合格）
+- TC-14⑤b2・⑤f〜⑤n: 条件 ①〜⑥（レビュー・判定の仕組みの除外を含む）・満たさないときの停止・絶対ルール 2 との関係（停止の行を壊した版で不合格）
+- TC-14⑧: `allowed-tools` を必須・最小権限として扱う古い基準が残っていない
+- 結果: TC-11 は 7/7、TC-14 は 31/31 合格
+
 false-green の確認（2026-10-24・実装時に実施）:
 - TC-10: テストを先に書き、変更前のフック（exit 1）に当てて実行 → TC-10a・10b が不合格（rc=1）、全体 exit 1。直した後は 6 件すべて合格。
 - TC-11: 常に exit 1 で終わり、タイトルをそのまま出すおとり（`SCRIPT` で指定）に当てて実行 → 5 件中 4 件が不合格、全体 exit 1。フックを書く前（ファイルなし）も 4 件不合格。

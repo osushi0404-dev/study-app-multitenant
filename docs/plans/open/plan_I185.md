@@ -207,6 +207,18 @@
 - 手動 No.7 で、PR のタイトルは「fix: I178 …」の形のため、「先頭の `I###`」だけを拾うと番号が「-」になると分かった。タイトル中の最初の `I###`（正規表現 `\bI\d{3}\b`）を拾うように変えた。出すのは一致した番号の部分だけなので、タイトルの自由文を出さない守り（セキュリティレビュー Medium の対処）は変わらない。TC-11e に「fix: I178 …」の例を足した。
 - 方式・範囲・受け入れ条件は変えていないため、/plan-issue-review のやり直しは不要。
 
+### 変更 6（2026-10-24・/code-review の敵対的レビュー 1 周目への対応）
+記録: `docs/reviews/I185_adversarial_review_20261024_1830.md`。High 1・Medium 10・Low 4。High と、High に直結する Medium、手間の小さい Medium・Low を直した。
+- テスト（High 1・Medium 4）: TC-14⑤ に停止の行と条件 ①〜⑤ を足した。TC-14② は frontmatter の中だけを見る。TC-14③ に順番（レビューの実行が承認ポイントの提示より前）を足した。TC-11 に偽の gh を使って GitHub の値が出ることの確認（11f）と、settings.json の `hooks.SessionStart` の構造の確認（11g）を足した。
+- P4 の消費箇所（Medium）: `scripts/migration_verify/lint_skills.py` の必須項目から `allowed-tools` を外した。`docs/runbooks/review-rules.md` のスキル変更チェックリスト 1 と `.claude/review-agents/plan-reviewer.md` の観点を「制限は disallowed-tools・allowed-tools は事前許可」に書き換えた（TC-14⑧）。
+- P4 の security-review（Medium）: この環境は検索専用のツールがなく、ファイル探しを Bash で行うため、`disallowed-tools` から Bash を外し、`Write, NotebookEdit` だけにした。
+- P2（Medium・Low）: `plan-issue-review.sh` が最後に出す「`/implement` を実行」の案内を承認前に伝えない・スクリプトが判定前に失敗したら承認ポイントを出さない・レビューへのリンク追記を commit/push してから提示する、を `plan-issue/SKILL.md` に書いた（TC-14③e・③f）。`security-review/SKILL.md` と `retro/SKILL.md` に残っていた古い順番の書き方を直した。
+- P3（Medium）: 条件 ⑥ に「レビュー・判定の仕組み（`scripts/claude/` のレビュー用スクリプト・`.claude/review-agents/`・`scripts/claude/tests/`・`.pre-commit-config.yaml`・`.secrets.baseline`）」を足した（TC-14⑤b2）。
+- P3 と CLAUDE.md 絶対ルール 2 の食い違い（Medium）: ユーザーの一任（「ベストプラクティスとサクサク進む観点で問題ないやり方で」）を受け、「ユーザーが `/fix-loop` を入力し、承認済みの計画の方式・範囲・受け入れ条件を変えない修正は、絶対ルール 2 の承認を満たすとみなす」と `fix-loop/SKILL.md` 手順 4 と `workflow.md`「fix-loop での承認の扱い」に明記した。CLAUDE.md そのものは変えない（CLAUDE.md にルールを増やさない決まりのため）。workflow.md の fix-loop の説明 3 か所と fix-loop の description も合わせた（TC-14⑤l・⑤m・⑤n）。
+- P5（Low）: I### と日付の判定を ASCII の数字だけにし、番号に bool が入った場合は出さない。最新イシューが 0 件のときは「なし」と出す（TC-11e）。
+- 影響範囲の追加: `scripts/migration_verify/lint_skills.py`・`docs/runbooks/review-rules.md`・`.claude/review-agents/plan-reviewer.md`・`.claude/skills/security-review/SKILL.md`・`.claude/skills/retro/SKILL.md`（いずれも P2・P4 の消費箇所）。
+- 指摘への対応を足しただけで、方式・範囲・受け入れ条件は変えていない（P3 の解釈の明記は、承認の判定基準を文書にしたもの）ため、/plan-issue-review のやり直しは不要。High を直したので、直した差分を敵対的レビューの 2 周目で見直す。
+
 ## セキュリティレビュー結果
 
 **実施日**: 2026-10-24

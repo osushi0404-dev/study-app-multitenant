@@ -1,6 +1,6 @@
 ---
 name: fix-loop
-description: When NG or tests fail: record facts, propose delta plan, get approval, fix, re-test.
+description: When NG or tests fail: record facts, propose delta plan, get approval (or proceed with the recommended fix and report afterwards when all step-4 conditions hold), fix, re-test.
 argument-hint: "I###"
 disable-model-invocation: true
 ---
@@ -48,6 +48,7 @@ fix-loop の各成果物は**記録され、対応するゲートで審査され
    - exit 0（`FIX_GATE: PASS`）→ 手順4 へ。exit 1（`FIX_GATE: REMAND`）→ **NG 内容をユーザーに提示して停止**（手順2 で再診断・手順3 で別案）。`FIX_GATE: SKIP`（未実施）→ その旨を手順4 で報告しユーザーが実施可否を判断。
 
 4) 方針の決定（I185 P3）:
+   - ユーザーが `/fix-loop` を入力し、修正が承認済みの計画の方式・範囲・受け入れ条件を変えないときは、CLAUDE.md の絶対ルール 2 の承認を満たすものとみなす（`docs/runbooks/workflow.md`「fix-loop での承認の扱い」）。下の 6 つの条件がその判定基準。
    - 次の 6 つを**すべて**満たすときは、推奨案で進めて手順 5 へ（決めた案と、6 つを満たす理由を診断メモに追記し、ユーザーには事後報告する）:
      1. 手順3.5 が `FIX_GATE: PASS`（SKIP ではない）
      2. 推奨案が 1 つに決まり、他案との違いが価値判断（仕様・UX・費用・リスクの受け入れ方の選択）ではない
