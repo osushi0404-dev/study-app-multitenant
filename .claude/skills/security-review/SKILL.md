@@ -3,7 +3,7 @@ name: security-review
 description: Pre-implementation security deep-dive for high-risk changes. Run when /plan-issue-review outputs 高リスク判定 Yes, before /implement. Reviews design risks + attack scenarios, appends results to plan document, stops if Blocker found.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Edit
+disallowed-tools: Bash, Write, NotebookEdit
 ---
 
 # /security-review

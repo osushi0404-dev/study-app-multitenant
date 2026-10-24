@@ -3,7 +3,6 @@ name: retro
 description: Retrospective after user test OK. Review issue handling and identify improvements to skills/runbooks/workflow.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /retro

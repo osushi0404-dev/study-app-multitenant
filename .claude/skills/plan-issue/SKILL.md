@@ -3,7 +3,6 @@ name: plan-issue
 description: Create branch, push, draft PR, then plan + tests + review docs for an issue.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /plan-issue

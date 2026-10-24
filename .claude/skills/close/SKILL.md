@@ -3,7 +3,6 @@ name: close
 description: Move docs open→closed and finalize PR description; request merge.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /close

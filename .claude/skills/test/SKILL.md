@@ -3,7 +3,6 @@ name: test
 description: Run the plan-specified automated tests (default: pytest + Jest + E2E) and prompt manual test verification.
 argument-hint: "I###"
 disable-model-invocation: true
-allowed-tools: Read, Bash, Write, Edit, Glob, Grep
 ---
 
 # /test
