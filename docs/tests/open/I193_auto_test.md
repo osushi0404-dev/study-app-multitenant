@@ -54,6 +54,9 @@ G: `gate-check.sh`（一時の git リポジトリで、記録とコミットを
 - G5 `REVIEWED_COMMIT` 行が無い → exit 1
 - G6 `RISK: YES` で、敵対的レビュー記録が無い／最新が `VERDICT: HIGH` → exit 1。最新が `VERDICT: OK` → exit 0
 - G7 コードレビュー記録が 1 本も無い → exit 1
+- G8 `RISK: YES` で、敵対的レビュー記録は `VERDICT: OK` だが、その `REVIEWED_COMMIT` の後に `scripts/` を変えたコミットがある → exit 1
+- G9 コードレビュー記録は OK で HEAD と一致しているが、作業ツリーに `scripts/` のコミットしていない変更（または未追跡のファイル）がある → exit 1。`docs/reviews/` の未追跡ファイルだけなら exit 0
+- G10 日本語のファイル名（`scripts/日本語.sh`）をレビューの後に足したコミット → exit 1（ファイル名の引用符で判定をすり抜けない）
 
 S: スキルの中身（守りの文が消えたら落ちる。各項目に FG）
 - S1 `plan-issue` に「承認ポイントを提示して停止」が無く、`proceed` を呼ぶ手順がある
@@ -63,7 +66,11 @@ S: スキルの中身（守りの文が消えたら落ちる。各項目に FG�
 - S5 `review-gate` が `code-review.sh` を実行し、敵対的レビューの修正の後に `code-review.sh` を実行し直すと書いてある
 - S6 `retro` が `issue-bootstrap` を呼ぶ手順を持ち、「ユーザーの判断を待つ」が無い
 - S7 段階のスキルとユーザー用スキルが、止める条件を `docs/runbooks/workflow.md` の節を指して参照している
-- S8 `code-review.sh` に `/code-review medium origin/develop...HEAD` と `/security-review` の実行があり、CI 待ちの打ち切りで exit 1 する
+- S8 `code-review.sh` の組み込み `/code-review medium origin/develop...HEAD` と `/security-review` の実行行が、どちらも `--permission-mode plan` と `timeout` を伴う。最初に `git fetch origin develop` がある
+- S9 `code-review.sh` の CI 待ち: `gh` の偽物（PATH に置いたスタブ）で「ずっと pending」を返すと `CI_WAIT: TIMEOUT`・exit 3、「fail」を返すと `CI_WAIT: FAIL`・exit 1（待ち時間は環境変数で数秒に縮める）
+- S10 `review-gate` が `code-review.sh` を `run_in_background` で実行し、exit 3 は 1 回だけやり直すと書いてある
+- S11 `retro`・`issue-bootstrap` に「コマンドの出力・ログ・環境変数・記録の中身を貼らない」がある
+- S12 `docs/runbooks/workflow.md` の止める条件 2 に、安全装置の集合（`.claude/settings.json`・`scripts/claude/hooks/`・`.github/`・`.pre-commit-config.yaml`・`.secrets.baseline`）があり、`code-review.sh` の `path_risk_trigger` の集合と一致する（集合の一致を比べる。片方だけに足すと落ちる）
 
 D: 文書
 - D1 設計書 `docs/proposals/I193_official_base_flow.md` に §2〜§7 の見出しがあり、§2 に `https://code.claude.com/docs/en/best-practices` がある

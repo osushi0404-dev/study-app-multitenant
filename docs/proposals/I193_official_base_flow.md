@@ -47,7 +47,7 @@
 | L10 | 採番・base 追従・文書の整合チェック・ワークツリーの後始末 | 止まらない | **残す**（公式に相当なし。I185 §4） |
 | L11 | 実装前のセキュリティ設計レビュー（高リスク時） | 止まらない | **載せる**: 名前を `design-security-review` に変え、公式 `/security-review`（実装後）と分ける |
 | L12 | 途中で止まったときの再開（長い自律実行は途中で切れうる） | ― | **載せる**: 各段階が記録に `STAGE_DONE:` を書き、`/proceed` が続きから再開する |
-| L13 | 自動の修正が、実際の差分を誰もレビューしないまま先へ進む（I185 敵対的レビューの種類 B。人の承認をなくすと人も見なくなる） | 一部（マージはユーザー） | **載せる（決定論）**: レビュー記録に `REVIEWED_COMMIT:` を書き、テスト段階・クローズの前に `gate-check.sh` が「最新のコードレビュー記録が VERDICT OK で、その `REVIEWED_COMMIT` が今の HEAD と同じ」を確かめる。修正の後は必ずレビュー段階を通り直さないと先へ進めない（I185 P11 の「close 前の機械確認」も兼ねる） |
+| L13 | 自動の修正が、実際の差分を誰もレビューしないまま先へ進む（I185 敵対的レビューの種類 B。人の承認をなくすと人も見なくなる） | 一部（マージはユーザー） | **載せる（決定論）**: レビュー記録に `REVIEWED_COMMIT:` を書き、テスト段階・クローズの前に `gate-check.sh` が「最新のコードレビュー記録（高リスク時は敵対的レビュー記録も）が VERDICT OK で、その `REVIEWED_COMMIT` から今の HEAD までの差分とコミットしていない変更が、記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）の中だけ」を確かめる（詳細は計画書 §5.3）。修正の後は必ずレビュー段階を通り直さないと先へ進めない（I185 P11 の「close 前の機械確認」も兼ねる） |
 | L14 | レビューの判定行（VERDICT）が無い出力が OK 扱いになる（I185 種類 C。`code-review.sh` の `detect_code_verdict` は VERDICT も表の印も無いと OK を返す） | 止まらない | **直す（決定論）**: VERDICT が読めないときは BLOCKER に倒す（`plan-issue-review.sh` は I185 で直し済み） |
 
 ## 4. 公式の道具ごとの採否（実証つき）
@@ -80,7 +80,7 @@
 ### 5.2 止めて聞く条件（この 3 つだけ）
 
 1. 要件・基本設計・UI/UX の価値判断が要るとき（受け入れ条件・仕様・画面の配置/文言/操作の流れを変えないと進めないとき）
-2. 取り消せない操作（CLAUDE.md の危険操作・秘密情報が push されうる操作・GitHub Actions の変更）
+2. 取り消せない操作（CLAUDE.md の危険操作・秘密情報が push されうる操作・GitHub Actions の変更）と、安全装置そのものを変える操作（`.claude/settings.json`・`.claude/settings.local.json` の permissions・hooks、`scripts/claude/hooks/`、`.github/`、`.pre-commit-config.yaml`、`.secrets.baseline`。`code-review.sh` の `path_risk_trigger` と同じ集合）。安全装置は人の承認を外した流れで最後に残る守りなので、Claude が自分で緩められないようにする（I193 の security-review で追加。ユーザーが「止める条件はベストプラクティスの観点で Claude が評価して決めてよい」と一任した範囲での追加）
 3. レビューや修正の周回が上限に達し、安全側の選択肢（fail-closed に倒す・範囲を狭める・別イシューに切り出す）も取れないとき
 
 それ以外（技術的な設計の選択・上限到達で安全側が取れる場合・直せるセキュリティの Blocker）は Claude が決め、`docs/reviews/open/I###_review.md` の「## 自律判断の記録」に理由を書き、止まったときにまとめて報告する。セキュリティの Blocker を「受け入れて進む」判断は Claude だけではしない。
@@ -89,9 +89,11 @@
 
 Claude が採否を決める。小さな直しはそのイシューで直し、起票が要るものはまず既存イシューへの同梱を探し、無理なものだけ新規に起票する（`/issue-bootstrap` を Claude が呼ぶ）。見送りも含めてマージ依頼のときに一覧で報告する。
 
+リポジトリは公開なので、Claude が自動で書くイシューの本文・イシューへのコメントには、コマンドの出力・ログ・環境変数・記録（JSONL）の中身を貼らない。要約と `ファイル:行` の参照だけにする（今の `/issue-bootstrap` と同じ扱いを、人が目を通さない自動の起票でも守る）。
+
 ## 6. GitHub を最後の守りにするための追加
 
-ハーネスのテスト（`scripts/claude/tests/` の 35 本）は、CI でも pre-commit でも動いていない（棚卸しで確認）。各イシューの auto_test.md に宣言されたときだけ動く。ユーザーの確認を減らす以上、ハーネスの回帰は CI で止める。
+ハーネスのテスト（`scripts/claude/tests/test_*.sh` の 33 本）は、CI でも pre-commit でも動いていない（棚卸しで確認）。各イシューの auto_test.md に宣言されたときだけ動く。ユーザーの確認を減らす以上、ハーネスの回帰は CI で止める。
 
 - `scripts/claude/tests/run-all.sh`（全テストを順に流し、1 本でも失敗なら非ゼロで終わる）を足す
 - `.github/workflows/ci.yml` に「Harness Tests」ジョブを足す（GitHub Actions の変更なので、計画の承認を取ってから行う＝止める条件 2）

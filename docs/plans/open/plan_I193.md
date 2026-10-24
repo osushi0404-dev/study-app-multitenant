@@ -51,6 +51,7 @@
 | S4 | 組み込み `/simplify` を `claude -p --permission-mode acceptEdits` で動かす | 重複した関数 2 つを自動で整理して書き換えた。正しさのバグは「`/code-review` の対象」として触らなかった |
 | S5 | 組み込み `/verify` を `claude -p` で動かす | 動いたが、実行の許可が無く、コードを読んだ判断だけになった（「許可が却下され、ランタイムの出力は取れていません」）。`.claude/skills/verify/SKILL.md` を書いて組み込みを置き換える仕様（skills.md） |
 | S6 | ユーザー用スキルから `user-invocable: false` のスキルを Skill ツールで呼べるか／ユーザーが直接打つと動くか／ファイル定義のサブエージェントを `claude -p --agent` で呼べるか／標準入力で文脈を渡せるか | 呼べた（`INNER_STAGE_RAN args=I999`）。直接打つと何も動かなかった（出力なし）。`.claude/agents/ro-file.md` を `--agent ro-file` で呼べ、最終行 `VERDICT: HIGH` を返した。標準入力の文脈も読めた（`VERDICT: OK`） |
+| S8 | 組み込みのレビューを plan モード（読み取り専用）で動かせるか: このワークツリーで `claude -p --permission-mode plan "/review medium origin/develop...HEAD"`（`/review` は組み込みの別名で、自作の同名スキルに隠されない） | 動いた。差分（計画書・設計書・イシュー）を読み、設計の抜け 10 件を file・line・failure_scenario つきで返した（文書も読んだ）。書き込みは起きていない。指摘 10 件は本計画に取り込んだ（計画変更記録 2） |
 | S7 | このリポジトリで `claude -p "/code-review medium origin/develop...HEAD"` を実行 | **自作の `/code-review`（code-review.sh）が動いた**。同名の自作スキルは、`claude -p` で打っても組み込みを隠す。自作がレビュー記録をコミットし、PR #327 にレビューコメントを投稿した（ローカルのコミットは push 前に取り消し、記録ファイルは削除。PR のコメントは残っている） |
 
 公式文書で確かめたこと（出典は設計書）:
@@ -105,23 +106,30 @@
   | `.claude/skills/test/` | `.claude/skills/test-gate/` | 段階 |
   | `.claude/skills/plan-issue-review/` | `.claude/skills/plan-review/` | 段階 |
 - `scripts/claude/code-review.sh` に足す・直すこと:
-  1. CI 待ちが 10 分で終わらなければ exit 1（今は先へ進む）
-  2. 組み込み `/code-review` を実行し、出力を記録に残して自作レビュー役に渡す:
+  0. 最初に `git fetch origin develop` を実行する（比べる相手を最新にする。S1 で古い develop と比べた反省）。fetch に失敗したら exit 1
+  1. CI 待ちが 10 分で終わらなければ `CI_WAIT: TIMEOUT` を出して exit 3、CI が失敗していれば `CI_WAIT: FAIL` を出して exit 1（今は打ち切り後に先へ進む）。直近の CI は CI 約 2 分・E2E 約 3.5 分（`gh run list` で確認）なので 10 分で足りる。待ち時間と確認の間隔は環境変数（`CI_WAIT_TIMEOUT`・`CI_POLL_INTERVAL`、既定 600・15 秒）で変えられるようにする（テスト S9 で数秒に縮めるため）
+  2. 組み込み `/code-review` を **plan モード（読み取り専用）** で実行し、出力を記録に残して自作レビュー役に渡す:
      ```bash
      run_official_review() {   # 出力: グローバル OFFICIAL_FINDINGS（失敗・時間切れは "(実行できず: <理由>)"）
-       OFFICIAL_FINDINGS=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p "/code-review medium origin/develop...HEAD" 2>&1) \
-         || OFFICIAL_FINDINGS="(実行できず: exit=$?)"
+       OFFICIAL_FINDINGS=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan \
+         "/code-review medium origin/develop...HEAD" 2>&1) || OFFICIAL_FINDINGS="(実行できず: exit=$?)"
      }
      ```
-     自作レビュー役への文脈に「### 組み込み /code-review の指摘（file・line・summary・failure_scenario）」として入れる。`code-reviewer.md` に「指摘ごとに、採用（重大度をつけて表に載せる）か、理由つきで不採用かを書く。組み込みが実行できなかったときは、その旨を記録に書いて自分のレビューだけで判定する」を足す
-  3. 高リスク判定 YES のとき、組み込み `/security-review` を `timeout` つきで実行し、出力を記録の「### 組み込み /security-review の指摘」に残す。指摘の扱いは 2 と同じく自作レビュー役が判定に入れる（実行の順は、自作レビュー役の前に 2 と 3 をそろえてから渡す。RISK のパス判定は LLM の前に決まるので、パス判定が YES のときに実行する）
+     - `--permission-mode plan` にする理由: `claude -p` にはプロジェクトの settings の許可（`Bash(git push *)`・`Bash(rm *)` など）がそのまま効くので、差分の中の文章に誘導されて書き込み・push をしないよう、編集と実行を仕組みで止める。plan モードでも組み込みのレビューが差分を読んで指摘を返すことは、このワークツリーで `/review`（組み込みの別名）を使って確かめた（計画 §4.2 S8）
+     - 終了コード 0 でも、出力に変更ファイルの名前が 1 つも出てこず、指摘の配列（`[`）も「指摘なし」に当たる文も無いときは、「対象を読めていない可能性」と記録に書く（S5 のように、許可が無く読めなかった出力を「指摘なし」と取り違えないため）
+     - 自作レビュー役への文脈に「### 組み込み /code-review の指摘（file・line・summary・failure_scenario）」として入れる。`code-reviewer.md` に「指摘ごとに、採用（重大度をつけて表に載せる）か、理由つきで不採用かを書く。組み込みが実行できなかった・読めていない可能性があるときは、その旨を記録に書き、自分のレビュー（文書・スキルを含む全ファイル）だけで判定する」を足す。受け入れ条件・計画・文書の確認（L1・L2）は自作レビュー役が主で、組み込みは補助
+  3. 高リスク判定 YES のとき、組み込み `/security-review` を同じく `--permission-mode plan`・`timeout` つきで実行し、出力を記録の「### 組み込み /security-review の指摘」に残す。指摘の扱いは 2 と同じく自作レビュー役が判定に入れる（実行の順は、自作レビュー役の前に 2 と 3 をそろえてから渡す。RISK のパス判定は LLM の前に決まるので、パス判定が YES のときに実行する）
   4. `detect_code_verdict`: VERDICT 行も表の印も無いときは `BLOCKER` を返す（今は `OK`。L14）
   5. 記録の末尾に `REVIEWED_COMMIT: <レビューした HEAD>` を書く（L13）
   6. 最後の案内文から `/test`・`/fix-loop`・`/code-review` のコマンド名を消し、段階のスキルが読む機械可読行（`FINAL_VERDICT:` など）だけにする
 - `review-gate/SKILL.md`: 今の `code-review/SKILL.md` の 1〜3（基本レビュー・機械判定・敵対的レビュー）を引き継ぐ。変えるのは次のとおり
-  - `ADVERSARIAL_STAGE: REQUIRED` の上限到達時は、選択肢を出して止めるのをやめ、止める条件 3（安全側の選択肢も取れない）に当たるかを判定する。範囲を狭める・別イシューに切り出すなど安全側が取れれば、それを選んで「## 自律判断の記録」に書く
+  - `code-review.sh` は Bash ツールの `run_in_background: true` で実行し、完了の通知で結果を受け取る（CI 待ち 10 分＋組み込み 2 本＋自作レビューで、Bash ツールの上限 10 分を超えうるため）
+  - `code-review.sh` の終了コードの扱い: exit 3（CI 待ちの時間切れ）は 1 回だけ実行し直す。2 回続けば止める条件 3（安全側の選択肢が無い）として止める。exit 1 で `CI_WAIT: FAIL` なら `NEXT: fix-loop`（CI の失敗を直す）。それ以外の exit 1 はスクリプトの失敗として記録し、止める条件 3 の判定へ
+  - 敵対的レビュー（`ADVERSARIAL_STAGE: REQUIRED`）の周回:
+    - 周で Critical/High が出て直したら、`code-review.sh` を実行し直し（直した差分を基本レビューに通す。L13）、上限（通算 2 周。I181 のまま）の範囲で次の周を、直した差分に対して起動する
+    - Critical/High が 0 の周（VERDICT OK）の後に差分を足してはいけない（足すと、その差分を見た OK の周が無くなる）。High に直結する Medium を直したいときは、上限が残っていれば次の周に回す。上限が残っていなければ直さずに記録し、振り返りで扱う
+    - 通算 2 周で Critical/High が残ったら止める（止める条件 3。セキュリティにかかわる指摘を受け入れて進む判断は Claude だけではしない）。選択肢を出すときの並べ方は今の `code-review/SKILL.md` 3-2 のまま
   - 設計判断が要る指摘は、要件・基本設計・UI/UX に関わるときだけ止める（止める条件 1）
-  - 敵対的レビューで直した後は、`code-review.sh` を実行し直す（直した差分を基本レビューに通す。L13）。周回の上限（通算 2 周）は I181 のまま
   - 最後に `STAGE_DONE: review-gate NEXT: test-gate`（OK）か `NEXT: fix-loop`（BLOCKER・HIGH）を書く
 - `design-security-review/SKILL.md`: 今の `security-review` の中身（実装前の設計レビュー）を引き継ぎ、`user-invocable: false` にする。Blocker が残ったときは、計画を直して `plan-review` を呼び直し、直せないときだけ止める（止める条件 1〜3 のどれかとして）。最後に `STAGE_DONE: design-security-review NEXT: implement`
 
@@ -137,9 +145,14 @@
   - `docs/reviews/open/I###_review.md` の最後の `STAGE_DONE:` 行から NEXT を取り出し、`NEXT_STAGE: <名前>` を出して exit 0
   - `STAGE_DONE:` 行が無い（古い流れのイシュー）・ファイルが無い・NEXT が上の一覧に無いときは、理由を出して exit 2
 - `scripts/claude/gate-check.sh I###`（新設・約 60 行）:
-  - 最新の `docs/reviews/I###_code_review_*.md` の最後の `VERDICT:` が `OK` で、`REVIEWED_COMMIT:` から HEAD までの差分が `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` の中だけなら exit 0
-  - その記録の `RISK:` が `YES` なら、最新の `docs/reviews/I###_adversarial_review_*.md` の `VERDICT:` が `OK` であることも求める
+  - 「レビューの後に変えてよい場所」を `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` の 4 つとする（以下「記録の場所」）
+  - 次を全部満たせば exit 0:
+    1. 最新の `docs/reviews/I###_code_review_*.md` の最後の `VERDICT:` が `OK` で、その `REVIEWED_COMMIT:` から HEAD までの差分が記録の場所の中だけ
+    2. その記録の `RISK:` が `YES` なら、最新の `docs/reviews/I###_adversarial_review_*.md` の最後の `VERDICT:` が `OK` で、その `REVIEWED_COMMIT:` から HEAD までの差分も記録の場所の中だけ（OK の周の後に足した差分を通さない）
+    3. 作業ツリーに、記録の場所の外のコミットしていない変更（未追跡のファイルを含む。`git status --porcelain`）が無い
+  - 差分のファイル名は `git -c core.quotePath=false diff --name-only --no-renames` で取る（日本語のファイル名・名前の変更で判定をすり抜けない。`code-review.sh` の `path_risk_trigger` と同じ。I086・I181）
   - どれかが欠ける・読めない・違うときは理由を出して exit 1（fail-closed）
+  - `docs/plans/` をレビューの後に変えてよい場所に入れる理由: close の open→closed の移動と、レビュー記録へのリンク・完了情報の追記があるため。計画書の中身（方式・範囲・受け入れ条件）を変えたときは、`plan-review` → `review-gate` を通り直す（各段階のスキルに書く）。計画書の中身の変更そのものは gate-check では止めない（止めるのはコードの変更）
   - レビューの後に変えてよい場所を 4 つに絞るのは意図どおり（それ以外〔`docs/proposals/`・`docs/runbooks/`・`.claude/`・`scripts/` など〕を変えたら、レビューを通り直す）。`test-gate`・`retro`・`close` が書くのは `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` だけと各スキルに書き、振り返りで手順書や設計書を直すときは、直した後に `review-gate` を通り直す
   - `test-gate` と `close` の最初に実行し、exit 1 なら `review-gate` に戻る
 
@@ -152,7 +165,7 @@
 | `implement` | 「/plan-issue の承認だけでは開始しない・/implement を待つ」（:22-24）を消す。計画外の実装が要るときは、計画書を直して `plan-review` を呼び直す（要件・基本設計・UI/UX を変えるときだけ止める）。テストのフレームワークの導入・形式の変更の承認（:19-20）は、依存関係の追加（`requirements*.txt`・`package*.json` は settings の ask）を伴うので残す。最後に組み込み `/simplify` を Skill ツールで呼び、直したものを含めて commit/push。`NEXT: review-gate` |
 | `test-gate` | 最初に `gate-check.sh`。既定の pytest・Jest・E2E の手元の流し直しをやめる（CI が正。CI 待ちは `code-review.sh` が fail-closed で行う）。auto_test.md の「決定論ゲート」で HEAVY（docker・npm・pytest など）と分類されたものだけここで実行する。Claude 担当の手動テストを実行して記録する。人の分があれば提示して `NEXT: human-test` で止まる。無ければ `NEXT: retro` |
 | `fix-loop` | 手順 4 のユーザー承認待ち・軽微例外の承認をやめ、診断レビュー（3.5）が PASS した案で進める。複数案の選択が要件・基本設計・UI/UX の価値判断になるときだけ止める。終わりは必ず `NEXT: review-gate`（戻り先を 1 か所にする。今の「/code-review に戻る／/test に戻る」の 2 通りをやめる） |
-| `retro` | 予防処置・是正処置の「ユーザーの判断を待つ」（:150・:172-186）をやめ、Claude が採否を決める。直すものはこのイシューで直し、起票が要るものは既存イシューへのコメント同梱を先に探し、無理なものだけ `issue-bootstrap` を Skill ツールで呼ぶ。採否の一覧（見送りを含む）を「## 自律判断の記録」に書く。`NEXT: close` |
+| `retro` | 予防処置・是正処置の「ユーザーの判断を待つ」（:150・:172-186）をやめ、Claude が採否を決める。直すものはこのイシューで直し、起票が要るものは既存イシューへのコメント同梱を先に探し、無理なものだけ `issue-bootstrap` を Skill ツールで呼ぶ。採否の一覧（見送りを含む）を「## 自律判断の記録」に書く。自動で書くイシューの本文・コメントには、コマンドの出力・ログ・環境変数・記録（JSONL）の中身を貼らず、要約と `ファイル:行` だけにする（公開リポジトリのため）。`NEXT: close` |
 | `close` | 最初に `gate-check.sh`。`pr-base-sync.sh` の exit 1（食い違いなど）は自分で解決を試み、要件に関わるときだけ止める。exit 2（状態が分からない）は 1 回やり直し、続けば報告に書いて進める。最後に、自律判断の記録と振り返りの一覧をまとめて Approve & Merge を依頼し、`NEXT: merge` |
 
 ### 5.5 ユーザーが打つスキル
@@ -160,7 +173,7 @@
 |---|---|
 | `plan-issue` | 承認ポイントを提示して止めるのをやめる。計画書・テスト文書・レビュー文書を作り、`STAGE_DONE: plan NEXT: plan-review` を書いたら、`proceed` を Skill ツールで呼ぶ。「仮定で決めた設計判断は先にユーザーへ確認」は、要件・基本設計・UI/UX の仮定に絞る。計画書の「## 9. 承認ポイント」は「## 9. 確定事項と自律判断」にする |
 | `proceed`（新設） | `flow-stage.sh` を実行し、NEXT_STAGE の段階のスキルを Skill ツールで呼ぶことを、NEXT が `human-test`・`merge` になるか、止める条件に当たるまで繰り返す。`human-test` のときは人の手動テスト項目を提示して止まる。exit 2（古い流れのイシューなど）なら理由を報告して止まる。`disable-model-invocation` は付けない（ユーザーが手動テストの結果を返信したら、Claude が結果を記録して `STAGE_DONE: human-test NEXT: retro`〔NG なら `NEXT: fix-loop`〕を書き、`proceed` を呼んで続ける）。`argument-hint: "I###"`。description に「ユーザーが /proceed を打ったとき、`/plan-issue` から呼ばれたとき、ユーザーが手動テストの結果を返信したときだけ使う。それ以外で自分から呼ばない」と書く（誤って呼んでも `flow-stage.sh` が記録の順番どおりにしか進めない） |
-| `issue-bootstrap` | `disable-model-invocation` を外す（`retro` から呼ぶため）。最後の「ユーザーがイシューファイルを確認」をやめ、要件・基本設計・UI/UX で決めてもらうことがあるときだけ、その質問をして止まる。`retro` から呼ばれたときは質問せず、未確定は「未定・grill-me で確認」と書く |
+| `issue-bootstrap` | `disable-model-invocation` を外す（`retro` から呼ぶため）。最後の「ユーザーがイシューファイルを確認」をやめ、要件・基本設計・UI/UX で決めてもらうことがあるときだけ、その質問をして止まる。`retro` から呼ばれたときは質問せず、未確定は「未定・grill-me で確認」と書く。本文にコマンドの出力・ログ・環境変数・記録の中身を貼らない（`retro` と同じ） |
 | `grill-me` | 質問を要件・基本設計・UI/UX の価値判断に絞る（技術的なことは計画で Claude が決める）と明記する。最後の案内は `/plan-issue I###` のまま |
 
 ### 5.6 ルールと手順書
@@ -168,7 +181,7 @@
   - 1) 「計画書に書いていない実装は禁止（より良い案がある場合は提案→承認→計画書更新が先）」→「計画書に書いていない実装はしない。必要になったら計画書を先に直し、計画レビューを通してから行う」
   - 2) 「ユーザー承認なしにコード変更（Edit/Write/MultiEdit 等）を開始しない」→「ユーザーに確認するのは、人がやる手動テスト・マージと、止める 3 条件（`docs/runbooks/workflow.md`）に当たるときだけ。それ以外は Claude が決めて記録する」
   - 3)〜5) は変えない（直 push 禁止・危険操作の承認・記録）
-- `docs/runbooks/workflow.md`: 「使うスキル」「フロー」「ゲート」「スキル呼び出しルール」「各フェーズの移行時の振る舞い」「作業実行前の確認ルール（承認の echo 記録・TodoWrite 連携）」を新しい流れで書き直す。止める 3 条件・`STAGE_DONE:`・自律判断の記録・移行（着手済みイシューは各ワークツリーの古いスキルで最後まで）を書く
+- `docs/runbooks/workflow.md`: 「使うスキル」「フロー」「ゲート」「スキル呼び出しルール」「各フェーズの移行時の振る舞い」「作業実行前の確認ルール（承認の echo 記録・TodoWrite 連携）」を新しい流れで書き直す。止める 3 条件（条件 2 は安全装置そのものの変更を含む。集合は `path_risk_trigger` と同じにし、TC-01 S12 で一致を確かめる）・`STAGE_DONE:`・自律判断の記録・移行（着手済みイシューは各ワークツリーの古いスキルで最後まで）を書く
 - `docs/runbooks/issue-flow.md`・`onboarding.md`・`review-rules.md`・`plan-writing-rules.md`（承認待ち宣言・ストップワード・承認ポイント・「より良い方法は提案して承認」の節）・`mcp-usage.md`・`worktree.md`（:123）: 承認・コマンド名の記載を新しい流れに合わせる。`plan-writing-rules.md` の「計画書と実装の一致性保証」は残し、「ユーザーの承認」を「計画書の更新と計画レビュー」に置き換える
 - `docs/runbooks/danger-ops.md`: `docs/issues/open/I181.md` → `docs/issues/closed/I181.md`（DOC6）。危険操作の承認（DANGER_OK）は変えない
 - `docs/runbooks/review-rules.md`: D8 が落ちる `.claude/settings.local.json` の扱いを直す（テスト側で「リポジトリに置かない手元のファイル」として除外するか、文書で別の書き方にするかは、実装時に D8 の意図を読んで決め、自律判断の記録に書く）
@@ -247,7 +260,7 @@
 | 文言を固定するテストが守りの削除を見逃す（I185 種類 A） | 守りの部分は、できるだけ挙動のテスト（`flow-stage.sh`・`gate-check.sh`・`detect_code_verdict` の単体テスト）で確かめる。文言のテストには失敗注入を付ける |
 | CI でハーネスのテストが手元と違う結果になる | ステップ 7 で CI の結果を見て直す。直せないものは計画変更記録に書く |
 | 受け入れ条件 8（`/plan-issue` だけで手動テストの手前まで進む）の通しを、マージ前に実地で確かめられない（GitHub のイシュー・PR の作成を伴うため、練習用リポジトリでは段階のつなぎ〔手動 No.7〕までしか通せない） | マージ前は、つなぎの決定論（`flow-stage.sh`・`gate-check.sh`・TC-01 F・G 系）と、段階のスキルを呼べること（手動 No.2・S6 のスパイク）で確かめる。マージ後の最初のイシューを実地の通しとし、その振り返りで結果を確かめることを `docs/runbooks/workflow.md` の移行の節に書く（自律判断の記録にも残す） |
-| メモ（Claude の記憶）が古い承認ルールのまま残り、新しい流れでも止まってしまう | /close で、承認・コマンド待ちを前提にしたメモを新しいルールに書き換える（`feedback_implement_after_explicit_command.md`・`feedback_wait_for_explicit_command.md` ほか） |
+| メモ（Claude の記憶）が古い承認ルールのまま残り、新しい流れでも止まってしまう | /close で、承認・コマンド待ちを前提にしたメモを新しいルールに書き換える。対象: `feedback_skill_tool_usage.md`（「プロジェクトスキルを Skill ツールで呼ばない」。段階のスキルを Skill ツールで呼ぶ新しい流れと正面から食い違う。ユーザーが打つスキルは今までどおり自分から呼ばない、段階のスキルは流れの中で呼ぶ、に書き換える）・`feedback_implement_after_explicit_command.md`・`feedback_wait_for_explicit_command.md`・`feedback_user_test_before_code_review.md`・`feedback_target_operating_model.md`（「ユーザーに残る: スキルコマンドの起動」の項）・`feedback_no_per_edit_confirmation_during_impl.md`。書き換えた一覧を自律判断の記録に残す |
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
@@ -291,3 +304,46 @@ Claude が決めた（技術的な選択。理由は本計画・設計書）:
 
 ## 計画変更記録
 1. 2026-10-24 計画レビュー（`I193_plan_review_20261024_2239.md`・HIGHRISK・Blocker なし）の Warning 4 件・Info 2 件に対応した: R6 の検索対象に `scripts/migration_verify/` を追加／受け入れ条件 8 の実地の通しをマージ後の最初のイシューで確かめるリスクを §8 に追加／`gate-check.sh` がレビュー後に変えてよい場所を絞る意図と、`docs/proposals/` などを変えたら通り直すことを §5.3 に明記／`plan-review` の終わり方を 3 通りで明記／段階のスキルと `proceed` に `argument-hint` を付ける／`proceed` の description で呼ぶ場面を限定。あわせて §2 の受け入れ条件の数を 14 に直した（イシューの項目数どおり）。方式・範囲・受け入れ条件は変えていないため、計画レビューはやり直さない
+2. 2026-10-24 /security-review で、(a) 組み込みのレビュー（`/review`・plan モード）が出した設計の抜け 10 件（計画 §4.2 S8）と、(b) セキュリティ設計レビューの指摘（下の「セキュリティレビュー結果」）を取り込んだ。主な変更: 組み込みのレビューを plan モードで動かす／`code-review.sh` の最初に fetch／CI 待ちの時間切れを exit 3 にして review-gate が 1 回やり直す／`code-review.sh` を背景で実行する（Bash ツールの 10 分上限）／敵対的レビューの記録にも `REVIEWED_COMMIT` を求め、OK の周の後に差分を足さない／gate-check がコミットしていない変更も見る・ファイル名を `core.quotePath=false --no-renames` で取る／止める条件 2 に安全装置そのものの変更を含める／自動の起票にログ・出力を貼らない／書き換えるメモに `feedback_skill_tool_usage.md` ほかを明記／設計書の L13 の書き方とテストの本数を計画にそろえた。止める条件 2 の範囲を広げたので、計画レビューをやり直す（`plan-issue-review.sh`）
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-24
+
+### セキュリティ設計レビュー
+コード変更（backend・frontend）なし。対象はハーネス（スキル・スクリプト・CI・ルール）。
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| High | 認証・認可（最小権限） | `code-review.sh` から `claude -p` で組み込みのレビューを動かすと、プロジェクトの settings の許可（`Bash(git push *)`・`Bash(rm *)`・`gh pr edit` など）がそのまま効く。差分の中の文章（プロンプトインジェクション）に誘導されると、レビューの途中で書き込み・push が起きうる | 組み込みの `/code-review`・`/security-review` は `--permission-mode plan` で動かす（必須）。plan モードで差分を読めることは S8 で確かめた。TC-01 S8 で、呼び出しの行に `--permission-mode plan` があることを確かめる |
+| High | 認証・認可（自己変更） | 人の承認を外した流れでは、Claude が安全装置そのもの（settings の deny・hooks、見張り、CI、pre-commit、secrets の基準）を緩める変更を自分で進めうる。緩めた設定はマージ前でも手元ですぐ効く | 止める条件 2 に「安全装置そのものを変える操作」を含める（集合は `path_risk_trigger` と同じ）。TC-01 S12 で 2 つの集合の一致を確かめる。`.claude/**` の Edit は今も settings の allow に無く、権限の確認が出る（変えない） |
+| Medium | 機密情報 | 振り返りが公開リポジトリにイシュー・コメントを自動で書く。人が目を通さないので、コマンドの出力・ログ・記録に混じった秘密情報や手元のパスがそのまま公開されうる | 自動で書く本文には、コマンドの出力・ログ・環境変数・記録（JSONL）の中身を貼らない。要約と `ファイル:行` だけにする（retro・issue-bootstrap に書く。TC-01 S11） |
+| Medium | 入力検証 | `gate-check.sh` が差分のファイル名を読むとき、git の既定（`core.quotePath=true`）では日本語のファイル名が引用符つきになり、名前の変更は新しい名前だけが出る。判定をすり抜ける（I086・I181 で同じ穴があった） | `git -c core.quotePath=false diff --name-only --no-renames` で取る（TC-01 G10） |
+| Medium | セキュリティ設定ミス | 自動の修正の後、実際の差分を誰も見ないまま先へ進む（I185 種類 B）。敵対的レビューの OK の後に足した差分・コミットしていない変更も同じ | gate-check で、コードレビューと敵対的レビューの `REVIEWED_COMMIT` から HEAD までと作業ツリーに、記録の場所の外の変更が無いことを確かめる（TC-01 G1〜G10） |
+| Low | 外部通信（CI） | 追加する `Harness Tests` ジョブで、fork からの PR の中身が CI 上で動く | `pull_request` のイベント（`pull_request_target` は使わない）・`permissions: contents: read`・秘密情報を使わない。fork PR の Actions は今までどおり承認しない（workflow.md「外部（fork）からの PR の扱い」）。actions/checkout は今の ci.yml と同じ版にそろえる |
+| Low | 認証・認可 | `.claude/agents/` に置いたレビュー役を、メインの Claude が自分から仕事を任せる相手に選びうる | レビュー役は `tools: Read, Grep, Glob` だけなので、任されても書き込みはできない。description に「スクリプトとレビュー段階から呼ぶ」と書く |
+| Low | 依存ライブラリ | ― | 追加なし |
+
+マルチテナント・ファイル操作（アップロード）: 該当なし。
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | 差分の中の文章（コメント・文書） | リポジトリに書ける者（自分たちの PR） | 組み込みレビューへの指示の注入で、push・ファイル削除をさせる | 組み込みのレビューは plan モードで動き、編集・実行ができない | Yes: TC-01 S8（呼び出しの行） | Yes: 手動 No.4（plan モードで動き、ファイルが増えない） | 自作レビュー役の判定（VERDICT）を注入で OK に誘導されうる。決定論ゲートの実走と gate-check、マージ前のユーザーで受ける | High→対処済み |
+| 2 | 自律の流れ（Claude 自身） | ― | 修正のついでに settings の deny・hooks・見張り・CI を緩める | 止める条件 2 で止まる。`.claude/**` の編集は権限の確認が出る。高リスク判定で敵対的レビューが走る | Yes: TC-01 S12 | No | 止める条件はスキルの手順（文章）なので、Claude が守らない可能性は残る。権限の確認とパス判定（決定論）で二重に受ける | High→対処済み |
+| 3 | 自律の流れ | ― | 敵対的レビューの OK の後にコードを足し、レビューを通さずにクローズする | gate-check が敵対的レビューの `REVIEWED_COMMIT` 以降のコード変更で止める | Yes: TC-01 G8 | No | なし | Medium→対処済み |
+| 4 | 振り返りの自動起票 | ― | 記録・ログに混じった秘密情報や手元のパスを公開イシューに書く | 本文に出力・ログ・記録を貼らない | Yes: TC-01 S11（手順の文） | No | 手順の文なので守られない可能性は残る（検査する仕組みは無い） | Medium |
+| 5 | fork からの PR | 外部の第三者 | `Harness Tests` で任意のスクリプトを動かす | `pull_request`・`contents: read`・秘密情報なし・Actions を承認しない | No（ワークフローの設定） | No | なし（今の CI と同じ扱い） | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 2件（対処を計画に反映済み） | 2件（同じ。対処済み） |
+| Medium  | 3件（対処を計画に反映済み） | 2件 |
+| Low     | 3件 | 1件 |
+
+### 残余リスク処遇
+（/retro で決定する）
