@@ -34,8 +34,9 @@ for h in pre:
                 errs.append(f"Bash のフックが guard を正しく呼んでいない: {x}")
 # I182（計画変更記録 1）: 見張りの時間切れ・起動失敗・異常終了は、公式の onFailure で止める（素通しにしない）
 guard_hooks = [x for h in pre for x in h.get("hooks", []) if "pretooluse_guard.py" in x.get("command", "")]
-if len(guard_hooks) != 3:
-    errs.append(f"見張りを呼ぶ PreToolUse フックが 3 つでない: {len(guard_hooks)}")
+# I187: Edit 系・Bash・GitHub MCP に加え、Playwright MCP（保存の書き先の制限）で 4 つ
+if len(guard_hooks) != 4:
+    errs.append(f"見張りを呼ぶ PreToolUse フックが 4 つでない: {len(guard_hooks)}")
 for x in guard_hooks:
     if x.get("timeout") != 20 or x.get("onFailure") != "block":
         errs.append(f"見張りのフックに timeout 20 / onFailure block が無い: {x}")
@@ -65,8 +66,12 @@ for r in keep_ask:
 for r in removed:
     if r in ask or r in allow:
         errs.append(f"外したはずの {r} が残っている")
-if any(e.startswith(("Bash(docker compose exec", "Bash(docker-compose exec")) for e in allow + ask):
-    errs.append("docker compose exec 系の行が残っている")
+# I187: frontend の型チェック・lint の 4 行だけは allow に置く（コマンドまで固定した行）。それ以外の exec 系は置かない
+exec_ok = ["Bash(docker compose exec frontend npm run typecheck)", "Bash(docker compose exec frontend npm run lint)",
+           "Bash(docker compose exec -T frontend npm run typecheck)", "Bash(docker compose exec -T frontend npm run lint)"]
+if any(e.startswith(("Bash(docker compose exec", "Bash(docker-compose exec")) and not (e in exec_ok and e in allow)
+       for e in allow + ask):
+    errs.append("docker compose exec 系の行が残っている（I187 の型チェック・lint の 4 行の allow だけ置いてよい）")
 if any(e.startswith(("Write(", "NotebookEdit(", "MultiEdit(")) for e in allow + ask + deny):
     errs.append("効かない Write(...)・NotebookEdit(...)・MultiEdit(...) ルールが残っている（公式は Edit(...) だけを見る）")
 for r in ["Read(**/.env)", "Read(**/.env.e2e)", "Edit(**/.env)", "Edit(**/.env.e2e)",
@@ -106,6 +111,8 @@ write("chmod_nowhere", lambda p: p["allow"].remove("Bash(chmod *)"))
 write("no_workflow_ask", lambda p: p["ask"].remove("Edit(.github/workflows/**)"))
 write("write_rule_ask", lambda p: p["ask"].append("Write(.github/workflows/**)"))
 write("exec_back", lambda p: p["ask"].append("Bash(docker compose exec *)"))
+write("exec_allow_wide", lambda p: p["allow"].append("Bash(docker compose exec frontend npm run *)"))
+write("exec_ok_in_ask", lambda p: p["ask"].append("Bash(docker compose exec frontend npm run lint)"))
 write("write_back", lambda p: p["deny"].append("Write(./.env)"))
 write("env_root_only", lambda p: (p["deny"].remove("Read(**/.env)"), p["deny"].append("Read(./.env)")))
 write("allow_bash_star", lambda p: p["allow"].append("Bash(*)"))
@@ -138,6 +145,8 @@ ck "S2b chmod を allow から外すと不合格"       1 "$(run_check "$TMP/chm
 ck "S14 ask から Edit(.github/workflows/**) を消すと不合格" 1 "$(run_check "$TMP/no_workflow_ask.json")"
 ck "S15 ask に Write(...) を足すと不合格"      1 "$(run_check "$TMP/write_rule_ask.json")"
 ck "S3 exec の ask を戻すと不合格"            1 "$(run_check "$TMP/exec_back.json")"
+ck "S3a allow に広い exec（npm run *）を足すと不合格" 1 "$(run_check "$TMP/exec_allow_wide.json")"
+ck "S3b I187 の exec の行を ask に置くと不合格" 1 "$(run_check "$TMP/exec_ok_in_ask.json")"
 ck "S4 Write(...) を戻すと不合格"             1 "$(run_check "$TMP/write_back.json")"
 ck "S5 .env の deny をルート固定に戻すと不合格" 1 "$(run_check "$TMP/env_root_only.json")"
 ck "S6 allow に Bash(*) を足すと不合格"      1 "$(run_check "$TMP/allow_bash_star.json")"

@@ -62,7 +62,36 @@
       "Bash(docker-compose logs *)",
       "Bash(docker-compose up *)",
       "Bash(docker-compose build *)",
-      "Bash(docker-compose restart *)"
+      "Bash(docker-compose restart *)",
+      "Bash(docker compose port *)",
+      "Bash(docker compose exec frontend npm run typecheck)",
+      "Bash(docker compose exec frontend npm run lint)",
+      "Bash(docker compose exec -T frontend npm run typecheck)",
+      "Bash(docker compose exec -T frontend npm run lint)",
+      "Bash(docker compose --profile e2e run --rm e2e)",
+      "Bash(docker compose --profile e2e run --rm e2e npx playwright test *)",
+      "Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e)",
+      "Bash(RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e npx playwright test *)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_navigate_back",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_find",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_hover",
+      "mcp__playwright__browser_drag",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_fill_form",
+      "mcp__playwright__browser_select_option",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_tabs",
+      "mcp__playwright__browser_resize",
+      "mcp__playwright__browser_emulate_media",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_network_requests"
     ],
     "ask": [
       "Bash(git rebase *)",
@@ -152,6 +181,17 @@
       },
       {
         "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py",
+            "timeout": 20,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__playwright__.*",
         "hooks": [
           {
             "type": "command",

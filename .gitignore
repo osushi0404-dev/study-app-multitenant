@@ -51,6 +51,9 @@ frontend_node_modules/
 # Claude Code の個人ごとの設定（コミットしない。I193: 文書のパス検査が CI でも同じ結果になるように明示）
 .claude/settings.local.json
 
+# 画面確認の画像（I187・コミットしない。ワークツリーの片付けで消える）
+.evidence/
+
 # Temporary files
 *.tmp
 *.temp

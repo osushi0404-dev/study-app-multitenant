@@ -34,6 +34,7 @@
 6. ユーザーが GitHub で Approve & Merge
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。設計の根拠は docs/proposals/I193_official_base_flow.md。
+フロントの画面確認（Claude が Playwright MCP で起動・ログイン・操作・画面キャプチャ・コンソール確認をする手順と、test-gate 段階の判定）は docs/runbooks/frontend-verify.md を参照。
 
 ## 止めて聞く条件（この 3 つだけ・各スキルはここを参照する）
 

@@ -1276,6 +1276,10 @@ _SAFE_READ_CMDS = ("ls", "pwd", "cat", "head", "tail", "grep", "wc", "which", "w
                    "jq", "diff", "cmp", "basename", "dirname", "realpath", "readlink", "cd", "env")
 _PIPE_FILTERS = ("grep", "head", "tail", "wc", "sort", "cut", "tr", "jq", "uniq", "cat")
 _SAFE_COMPOSE_DEFAULT = ("e2e",)    # コンテナ内のコマンドを書かず既定コマンドで動かしてよいサービス
+# I187: e2e サービスの `npx playwright test` で使ってよい選択肢（値を取るもの・取らないもの）
+_PW_TEST_VALUE_OPTS = ("--retries", "--reporter", "--grep", "-g", "--grep-invert", "--project", "--workers", "-j",
+                       "--max-failures", "--timeout")
+_PW_TEST_FLAGS = ("-x", "--list")
 _CURL_FLAGS = set("sSfIiLkv")
 _CURL_VALUE_OPTS = ("-H", "--header", "-w", "--write-out", "-m", "--max-time", "--connect-timeout", "-o",
                     "--output", "-X", "--request", "-A", "--user-agent", "-e", "--referer")
@@ -2269,6 +2273,31 @@ def _code_safe(c: dict) -> bool:
     f = _code_findings(c)
     return bool(f) and f[0] and not f[1] and not f[2] and not f[3]
 
+def _playwright_test_args_safe(args: list) -> bool:
+    """`npx playwright test` の後ろが、位置引数（ファイル・絞り込み）と範囲・表示だけを変える選択肢なら True（I187）。
+    別のコード・書き先を指定する選択肢（--config・--output・--update-snapshots 等）や一覧外は False。"""
+    k = 0
+    while k < len(args):
+        a = args[k]
+        if not a.startswith("-"):
+            k += 1
+            continue
+        name, eq, val = a.partition("=")
+        if name in _PW_TEST_FLAGS and not eq:
+            k += 1
+            continue
+        if name not in _PW_TEST_VALUE_OPTS:
+            return False
+        if not eq:
+            if k + 1 >= len(args):
+                return False
+            val = args[k + 1]
+            k += 1
+        if name == "--reporter" and not re.fullmatch(r"[a-z,]+", val):   # 組み込みの reporter 名だけ
+            return False
+        k += 1
+    return True
+
 def _container_safe(c: dict) -> bool:
     """docker compose exec|run の中の単純コマンドが許可リストに入るなら True（plan_I174.md 0-5・0-9）。"""
     toks = c["toks"]
@@ -2317,6 +2346,8 @@ def _container_safe(c: dict) -> bool:
         return rest[:1] in (["test"], ["ls"], ["outdated"], ["view"], ["--version"]) or \
             rest[:2] in (["run", "lint"], ["run", "typecheck"], ["run", "build"], ["run", "test"])
     if head == "npx":
+        if rest[:2] == ["playwright", "test"]:          # I187: e2e サービスで範囲・表示だけを変えて流す E2E
+            return c["compose"] and c.get("service") in _SAFE_COMPOSE_DEFAULT and _playwright_test_args_safe(rest[2:])
         return rest[:1] in (["tsc"], ["eslint"], ["jest"]) and "--fix" not in rest
     if head == "psql":
         if _opt_values(rest, ("-o", "--output", "-L", "--log-file", "-f", "--file")) or c["stdin"]:
@@ -2666,6 +2697,7 @@ def _join_continuations(text: str) -> str:
 # 相手の版に置き換わり、次のツール呼び出しでそのコードが実行される（R10・2026-10-16 承認）。
 # 対象サブコマンドと種別は下の _GH_PR_SPECS に集約する（R8: 追加は 1 エントリ）。
 
+_EVIDENCE_FILE_RE = re.compile(r"\.evidence/I[0-9]{3}/[A-Za-z0-9._-]+")   # I187: Playwright MCP の書き先
 _MCP_PR_BLOCK_TOOLS = ("mcp__github__merge_pull_request",)
 _MCP_PR_ASK_TOOLS = (
     "mcp__github__update_pull_request_branch",
@@ -3429,6 +3461,15 @@ def main():
             _block_cross_worktree("編集", path)
         # I182: 高リスクファイル・ワークフロー・秘密情報の検査設定の編集の確認は、settings.json の ask（公式の権限ルール
         # Edit(...)。Edit・Write・NotebookEdit すべてに効く）で行う。見張りは別 worktree への書込の停止だけを行う
+        sys.exit(0)
+    # I187: Playwright MCP の保存（filename）はワークスペース内のどこにでも書け、Edit/Write の deny も効かない。
+    # git に無い秘密情報（backend/.env 等）を上書きで失わないよう、書き先を .evidence/I###/ の直下に限る
+    if str(tool_name or "").startswith("mcp__playwright__"):
+        fname = (data.get("tool_input") or {}).get("filename")
+        if fname is not None and (not isinstance(fname, str) or ".." in fname
+                                  or not _EVIDENCE_FILE_RE.fullmatch(fname)):
+            _block("Playwright MCP がファイルを書けるのは .evidence/I###/<名前> だけです"
+                   "（docs/runbooks/frontend-verify.md）。", f"{tool_name} filename={fname!r}")
         sys.exit(0)
     # I146: MCP 経由の PR 取り込み操作（Bash を通らない経路）
     if str(tool_name or "").startswith("mcp__github__"):
