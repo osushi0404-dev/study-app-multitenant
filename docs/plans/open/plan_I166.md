@@ -285,5 +285,6 @@ class QuizSessionSerializer(serializers.ModelSerializer):
 - [ ] 高リスク判定 Yes（承認の後に `/security-review I166`）— でよいか
 
 ## レビュー結果
+- [20261025_1150 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1150.md)
 - [20261025_1145 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1145.md)（VERDICT: HIGHRISK・Blocker 0・Info 1）
 - 指摘への対応（2026-10-25）: Info（false-green 自己検証の「開始の検査」に TC-10 ② の記載が無い）→ auto_test の該当行に TC-10 ② を追記。記録の補完のみで方式・範囲・AC は変わらないため、再レビューはしない。
