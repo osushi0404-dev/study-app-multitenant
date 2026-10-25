@@ -125,6 +125,11 @@ def test_start_with_other_org_subject_is_rejected_like_missing(setup):
     assert _masked(other, other_id) == _masked(missing, missing_id)
     assert list(other.json()["error"]["details"].keys()) == ["subject"]
 
+    # 全体共有科目（organization が空）も組織に属するユーザーは指定できない
+    shared = _start(client, {"subject": setup["subject_shared"].id})
+    assert shared.status_code == status.HTTP_400_BAD_REQUEST
+    assert QuizSession.objects.filter(user=setup["user_a"]).count() == 0
+
 
 # ---- TC-02: 自組織の科目での開始は従来どおり ----
 def test_start_with_own_subject_succeeds(setup):

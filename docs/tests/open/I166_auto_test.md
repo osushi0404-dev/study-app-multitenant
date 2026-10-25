@@ -52,7 +52,7 @@ BODY_404_PROBLEM = {"error": "Problem not found"}
 
 | TC | 内容 | 手順 | 期待値 | 実施者 |
 |----|------|------|--------|--------|
-| TC-01 | 他組織の科目での開始は「存在しない科目」と同じ 400・セッションを作らない（本バグの再発防止） | `user_a` で `POST QUIZ_URL`・`{"subject": subject_b.id}`・`format="json"`。続けて `{"subject": <存在しない ID>}` で同じ POST | どちらも `status.HTTP_400_BAD_REQUEST`。`QuizSession.objects.filter(user=user_a).count() == 0`。2 つの `response.json()` を `json.dumps(..., ensure_ascii=False)` した文字列で、それぞれの ID を `"<pk>"` に置き換えると完全一致する。`response.json()["error"]["details"]` のキーが `["subject"]` | Claude |
+| TC-01 | 他組織の科目での開始は「存在しない科目」と同じ 400・セッションを作らない（本バグの再発防止） | `user_a` で `POST QUIZ_URL`・`{"subject": subject_b.id}`・`format="json"`。続けて `{"subject": <存在しない ID>}` で同じ POST | どちらも `status.HTTP_400_BAD_REQUEST`。`QuizSession.objects.filter(user=user_a).count() == 0`。2 つの `response.json()` を `json.dumps(..., ensure_ascii=False)` した文字列で、それぞれの ID を `"<pk>"` に置き換えると完全一致する。`response.json()["error"]["details"]` のキーが `["subject"]`。続けて `{"subject": subject_shared.id}`（全体共有科目）で POST しても 400・セッション 0 件（敵対的レビュー第 2 周の Medium で追加） | Claude |
 | TC-02 | 自組織の科目での開始は従来どおり（無退行） | `user_a` で `POST QUIZ_URL`・`{"subject": subject_a1.id}` | `status.HTTP_201_CREATED`・`response.data["subject"] == subject_a1.id`・`response.data["total_problems"] == 1`（subject_a1 の未削除の問題数・削除済みを数えない） | Claude |
 | TC-03 | 科目なしの開始は受け付け、問題数は自組織の未削除の問題数（本バグの再発防止） | `user_a` で `POST QUIZ_URL`・`{}` と `{"subject": None}` の 2 通り（2 回目の前に 1 回目のセッションは後勝ちで終了する） | どちらも 201・`response.data["subject"] is None`・`response.data["total_problems"] == 2`（組織 A の未削除 2 件。組織 B の 3 件・全体共有科目の 1 件・削除済みを数えない） | Claude |
 | TC-04 | 科目なしのセッションでは他組織の問題が出ない（本バグの再発防止・乱数に頼らない判定） | `user_a` で科目なしで開始 → `problem_a1`・`problem_a2` に `submit_answer` で回答（正解の選択肢）→ `GET /api/quiz/<id>/next_problem/` を 3 回 | 3 回とも `status.HTTP_200_OK`・`response.data["id"] in {problem_a1.id, problem_a2.id}`・`response.data["is_review_mode"] is True`・`response.data["total_problems_in_subject"] == 2`。（現行コードは組織 B の未回答の問題を `is_review_mode False` で必ず返すため RED になる） | Claude |
@@ -102,3 +102,6 @@ BODY_404_PROBLEM = {"error": "Problem not found"}
 - TC-21: Backend 全体 **135 passed**（baseline 123＋新規 12）。注: `-p no:logging` を付けると既存の `test_I140_personal_org_fallback.py` が `caplog` を使えずエラーになるため、全体実行では付けない。
 - TC-22: `pre-commit run --files`（変更 4 ファイル）→ ruff・bandit を含む全フック Passed（exit 0）。
 - TC-23: `docker compose --profile e2e run --rm e2e` → **8 passed**（既存 E2E 全件・クイズの開始と回答・組織の分離を含む）。
+
+## 敵対的レビュー第 2 周の対応（2026-10-25）
+- Medium（組織に属するユーザーが全体共有科目で開始する経路がテストされていない）→ TC-01 に共有科目での開始（400・セッション 0 件）を追加。`available_subjects` に `| Subject.objects.filter(organization__isnull=True)` を混ぜる注入で **TC-01 が RED**（`201 == 400`）になることを確認 → Edit で復元。TC-20 **12 passed**・TC-21 **135 passed**。
