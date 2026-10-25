@@ -52,6 +52,7 @@
 
 ## テスト結果
 - 2026-10-25 test-gate 1 回目: 自動（TC-01〜TC-14）は全部合格（run-all 39 本・CI 7 ジョブ pass）。手動は Claude の分の No.1〜No.4・No.7 が OK、No.6 は CI の確認だけ OK。No.8 が NG（設計書で fix-loop のレビュー役と I187 の判定スクリプトの根拠の行が無い）→ fix-loop
+- 2026-10-25 test-gate 2 回目: 自動は全部合格（run-all 39 本・CI 7 ジョブ pass）。手動の Claude の分は No.1〜No.4・No.7・No.8 が OK、No.6 は CI の確認が OK。Human の分（No.5・No.6 の必須チェックの登録）をユーザーに依頼して止まる
 
 ## 計画との差分
 - （実装後に記入）
