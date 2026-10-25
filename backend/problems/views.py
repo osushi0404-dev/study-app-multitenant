@@ -909,7 +909,9 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
         time_taken = serializer.validated_data.get('time_taken', 0)
 
         try:
-            problem = Problem.objects.get(id=problem_id, is_deleted=False)
+            problem = QuizService.available_problems(
+                session.user, session.subject
+            ).get(id=problem_id)
         except Problem.DoesNotExist:
             return Response(
                 {'error': 'Problem not found'},

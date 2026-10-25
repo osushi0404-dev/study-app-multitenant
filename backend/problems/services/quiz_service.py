@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from problems.models import Problem, QuizSession, Subject
@@ -19,6 +20,33 @@ class ActiveSessionConflictError(Exception):
 
 class QuizService:
     """クイズセッション関連のビジネスロジック"""
+
+    @staticmethod
+    def available_subjects(user) -> QuerySet[Subject]:
+        """
+        クイズで指定してよい科目（ユーザーの組織の科目）
+
+        組織に属さないユーザーは空。境界の判定のためキャッシュは使わない。
+        """
+        if user.organization_id is None:
+            return Subject.objects.none()
+        return Subject.objects.filter(organization_id=user.organization_id)
+
+    @staticmethod
+    def available_problems(user, subject: Optional[Subject]) -> QuerySet[Problem]:
+        """
+        クイズで出題・回答してよい問題（ユーザーの組織の未削除の問題・科目の指定があればその科目）
+
+        問題の組織は subject 経由で判定する（Problem.organization は null 可のため使わない）。
+        """
+        if user.organization_id is None:
+            return Problem.objects.none()
+        problems = Problem.objects.filter(
+            is_deleted=False, subject__organization_id=user.organization_id
+        )
+        if subject is not None:
+            problems = problems.filter(subject=subject)
+        return problems
 
     @staticmethod
     def start_session(
@@ -53,15 +81,11 @@ class QuizService:
                     is_active=False, ended_at=timezone.now()
                 )
 
-                problems_queryset = Problem.objects.filter(is_deleted=False)
-                if subject is not None:
-                    problems_queryset = problems_queryset.filter(subject=subject)
-
                 session = QuizSession.objects.create(
                     user=user,
                     subject=subject,
                     client_request_id=client_request_id,
-                    total_problems=problems_queryset.count(),
+                    total_problems=QuizService.available_problems(user, subject).count(),
                 )
                 return session, True
         except IntegrityError as exc:
@@ -86,12 +110,10 @@ class QuizService:
             'problem_id', flat=True
         )
 
-        # 科目の全問題を取得
-        total_problems_queryset = Problem.objects.filter(is_deleted=False)
-        if session.subject:
-            total_problems_queryset = total_problems_queryset.filter(
-                subject=session.subject
-            )
+        # 出題対象（セッション所有者の組織の問題・科目の指定があればその科目）
+        total_problems_queryset = QuizService.available_problems(
+            session.user, session.subject
+        )
 
         total_problems_in_subject = total_problems_queryset.count()
 

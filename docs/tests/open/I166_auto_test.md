@@ -82,7 +82,7 @@ BODY_404_PROBLEM = {"error": "Problem not found"}
 テストを書いた後、**実装前の現行コード**に対して実行し、RED / GREEN の内訳を記録してから実装する。これが「否定・回帰の判定が実際に不合格を返す」ことの確認（失敗条件の注入）を兼ねる。
 - 想定 RED: TC-01（201 で作成される）・TC-03（`total_problems == 6`）・TC-04（組織 B か共有科目の問題が `is_review_mode False` で返る）・TC-05（200 で正解・解説が返る）・TC-06（200）・TC-08 ②（201）・TC-09（組織 B の問題が返る・200）・TC-10（`total_problems == 6`・問題が返る・② ③ は 201）・TC-11 ①（`True`）
 - 想定 GREEN（現行でも通る・振る舞いを固定する TC）: TC-02・TC-07・TC-08 ①・TC-11 ②
-- 記録欄（実装前）: （/implement で記入）
+- 記録欄（2026-10-25・実装前）: **10 failed / 2 passed**（12 件＝TC-03 は 2 パターン）。GREEN は TC-02・TC-07（想定どおり）。RED の理由はすべて想定どおり: TC-01 `201 == 400`・TC-03 ×2 `6 == 2`（全組織＋共有科目を数える）・TC-04 `33 in {29, 31}`（他組織か共有科目の未回答の問題が返る＝乱数に頼らず RED）・TC-05 / TC-06 `200 == 404`・TC-08 ② `201 == 400`（① は通過）・TC-09 `200 == 404`・TC-10 `6 == 0`・TC-11 ① `True is False`。
 
 ## false-green 自己検証（実装後に失敗条件を注入して RED を確認）
 復元は必ず Edit ツールで行い、`git restore` は使わない（実装差分の保護）。復元後に `git diff` が実装差分のみであることを確認する。
@@ -90,4 +90,15 @@ BODY_404_PROBLEM = {"error": "Problem not found"}
 - **回答の照合（TC-05・TC-06）**: `submit_answer` の取得を一時的に `Problem.objects.get(id=problem_id, is_deleted=False)` に戻す → TC-05・TC-06 が RED を確認 → 復元。
 - **開始の検査（TC-01・TC-08 ②・TC-10 ②）**: `QuizSessionSerializer` の `subject = QuizSubjectField(...)` の行を一時的に削除（`ModelSerializer` が全科目を受け付ける自動のフィールドに戻る）→ TC-01・TC-08 ②・TC-10 ② が RED（201）を確認 → 復元。
 - **組織なしの fail-closed（TC-10）**: `available_problems` と `available_subjects` の `if user.organization_id is None` の分岐を一時的に削除 → 組織の無いユーザーに全体共有科目（`organization` が空）が一致し、TC-10 ①（`total_problems == 1`）と ③（201）が RED になることを確認 → 復元。
-- 記録欄: （/implement で記入）
+- 記録欄（2026-10-25）:
+  - 出題: `get_next_problem` の絞り込みを元に戻す → **3 failed**（TC-04・TC-09・TC-10）→ Edit で復元。
+  - 回答: `submit_answer` の取得を `Problem.objects.get(id=problem_id, is_deleted=False)` に戻す → **3 failed**（TC-05・TC-06・TC-09）→ Edit で復元。
+  - 開始: `subject = QuizSubjectField(...)` の行を削除 → **4 failed**（TC-01・TC-08・TC-10・TC-11）→ Edit で復元。
+  - 組織なし: `available_subjects`・`available_problems` の `organization_id is None` の分岐を削除 → **1 failed**（TC-10 `1 == 0`＝共有科目が数えられる）→ Edit で復元。
+  - 復元後の `git diff` は実装差分のみ（注入の残りなし）・12 passed を確認済み。
+
+## 実施記録（2026-10-25 /implement）
+- TC-20: **12 passed**。
+- TC-21: Backend 全体 **135 passed**（baseline 123＋新規 12）。注: `-p no:logging` を付けると既存の `test_I140_personal_org_fallback.py` が `caplog` を使えずエラーになるため、全体実行では付けない。
+- TC-22: `pre-commit run --files`（変更 4 ファイル）→ ruff・bandit を含む全フック Passed（exit 0）。
+- TC-23: `docker compose --profile e2e run --rm e2e` → **8 passed**（既存 E2E 全件・クイズの開始と回答・組織の分離を含む）。
