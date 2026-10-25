@@ -1,15 +1,17 @@
 ---
 name: close
-description: Move docs open→closed and finalize PR description; request merge.
+description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。振り返りの後、記録を closed へ移し、PR 説明を整え、自律判断と振り返りをまとめてユーザーに Approve & Merge を依頼する。最後に STAGE_DONE を書く。"
 argument-hint: "I###"
-disable-model-invocation: true
+user-invocable: false
 ---
 
-# /close
+# close（クローズ段階）
 
-前提: ユーザー検証OK。
+前提: 人の手動テストが OK（または人の分が無い）で、retro 段階が済んでいる（`STAGE_DONE: retro NEXT: close`）。
 
-（事前チェック）直近のコードレビューで Medium 以上の指摘が未対応のまま残っていないか確認する。未対応がある場合は、計画書に是正ステップを追記するかインライン修正を先に完了させてから以降のステップに進む。
+止めてユーザーに聞くのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるときだけ（マージの依頼は別。ユーザーだけが行える）。技術的な問題（develop との食い違いなど）は自分で解決し、決めたことは `docs/reviews/open/I###_review.md` の「## 自律判断の記録」に `- [close] 決めたこと — 理由` で書く。この段階が書いてよいのは `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` だけ。
+
+順番の決まり: HEAD を動かす base 追従（step 0）を先に行い、その後で gate-check（レビュー済みの HEAD か）を確かめる（I193 5 回目 H1。確かめた後に develop を取り込むと、取り込んだ後の中身がレビューを通らないまま進む）。
 
 0) PR のベースブランチ確認と base 追従（必須）:
    ```bash
@@ -26,9 +28,17 @@ disable-model-invocation: true
    # base 追従チェック（I113）: BEHIND なら origin/develop を取り込む（push/CI はしない。
    # push は step 3 の close コミットに相乗りさせ、CI 実行を1回にまとめる）
    bash scripts/claude/pr-base-sync.sh sync
-   # exit 0 → 続行 / exit 1 → STOP してユーザーに報告（マージコンフリクト等・自動解決しない）
-   # exit 2 → mergeStateStatus=UNKNOWN が継続。値を報告し続行可否をユーザーに確認
+   # exit 0 → 続行
+   # exit 1 → マージコンフリクト等。解決を試みる（下）
+   # exit 2 → mergeStateStatus=UNKNOWN が継続。1 回だけ実行し直し、続けば自律判断の記録に書いて続行する
    ```
+   exit 1 のとき: 食い違いを解決して commit する。解決のために要件・基本設計・UI/UX の判断が要るとき（どちらの変更を残すかで仕様や画面が変わるとき）だけ止める（止める条件 1）。記録の場所の外を直した・取り込んだときは、`STAGE_DONE: close NEXT: review-gate` を書いて終わる（取り込んだ変更を含めてレビューを通り直す）
+
+0.5)（必須・決定論）レビュー済みの HEAD か（base 追従の後の HEAD を見る）:
+   ```bash
+   bash scripts/claude/gate-check.sh I###
+   ```
+   exit 1 のときは、出力の `GATE_CHECK: FAIL REASON=<理由>` で test-gate の手順 1 と同じに分ける（`dirty` は片付けてから、`base` は fetch してからやり直す。それ以外は `docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: review-gate` を書いて終わる。取り込んだ develop がブランチの変えたファイルにも触れていたときもここで落ち、レビューを通り直す。gate-check で review-gate に戻すのが 2 回続くときは止める〔止める条件 3〕）。
 1) docs/*/open の対象 I### ファイルを closed へ移動（以下を順番に実行）:
    ```bash
    ISSUE_NUM="###"  # 実際のイシュー番号（3桁）に置き換える
@@ -152,8 +162,14 @@ disable-model-invocation: true
    `oshui0404` だけの設定のため（main には CODEOWNERS が無い・`docs/runbooks/branch-protection-setup.md`）、
    承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
    - exit 0 → step 6 のマージ依頼へ進む
-   - exit 1 → STOP してユーザーに報告（マージコンフリクト・CI fail・DRAFT 残留等。自動解決しない）
-   - exit 2 → mergeStateStatus=UNKNOWN が継続。値を報告し続行可否をユーザーに確認
-6) ユーザーへ GitHub 上で Approve & Merge を依頼（承認とマージはユーザー `oshui0404` だけが行える。
-   承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）
-   手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。
+   - exit 1 → 原因を見て直す。マージコンフリクトは step 0 と同じ扱い。DRAFT 残留は step 5 をやり直す。CI fail は、記録を 1 か所に保つため、step 1 で closed へ移したこのイシューの記録（`docs/issues/closed/I###.md`・`docs/plans/closed/plan_I###*.md`・`docs/tests/closed/I###_*.md`・`docs/reviews/closed/I###_review.md`）を `git mv` で open へ戻し（計画書のレビュー結果のリンクも step 1 の逆に戻す）、commit/push してから、`docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: fix-loop` を書いて終わる（後の段階は open の記録を読み書きする）
+   - exit 2 → mergeStateStatus=UNKNOWN が継続。1 回だけ実行し直し、続けば報告に書いて step 6 へ進む
+6) 結線とマージ依頼（必須）:
+   - `docs/reviews/closed/I###_review.md` の末尾に `STAGE_DONE: close NEXT: merge` を足して commit/push する
+   - ユーザーへ GitHub 上で Approve & Merge を依頼する（承認とマージはユーザー `oshui0404` だけが行える。
+     承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）。
+     手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。
+   - 依頼と一緒に、平易な言葉で次をまとめて報告する（retro の平易化ルール）:
+     1. 何を変えたか（PR の概要）
+     2. Claude が自分で決めたこと（「## 自律判断の記録」の要点。止めずに進めた判断と理由）
+     3. 振り返りの結果（直したもの・同梱したイシュー・起票したイシュー・見送りと理由）

@@ -8,9 +8,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
 TMP="$(mktemp -d)"
 trap 'rm -r "$TMP"' EXIT
-SK=.claude/skills/code-review/SKILL.md; RR=docs/runbooks/review-rules.md
-AR=.claude/review-agents/adversarial-reviewer.md; CR=.claude/review-agents/code-reviewer.md
-PR=.claude/review-agents/plan-reviewer.md; FL=.claude/skills/fix-loop/SKILL.md
+SK=.claude/skills/review-gate/SKILL.md; RR=docs/runbooks/review-rules.md
+AR=.claude/agents/adversarial-reviewer.md; CR=.claude/agents/code-reviewer.md
+PR=.claude/agents/plan-reviewer.md; FL=.claude/skills/fix-loop/SKILL.md
 CRS=scripts/claude/code-review.sh
 
 # 判定本体: sec <ファイル> <開始行の前方一致> <終了行の正規表現> <必須の語...>
@@ -31,8 +31,12 @@ PY
 # 節の中のバッククォートのパス（`/` を含むもの。<…>・*・{・空白・: を含むもの、`/` で始まるスラッシュコマンド、
 # `origin/` で始まる git の参照は除く）が実在するか
 cat > "$TMP/paths.py" <<'PY'
-import os, re, sys
+import os, re, subprocess, sys
 path, head, end_re = sys.argv[1:4]
+def ignored(p):
+    # リポジトリに置かない手元のファイル（.gitignore にあるもの。例: .claude/settings.local.json）は、
+    # ワークツリーや CI に無くても「存在しないパス」として数えない（I193: D8 が手元にしか無いファイルで落ちていた）
+    return subprocess.run(["git", "check-ignore", "-q", "--no-index", p.rstrip("/")]).returncode == 0
 lines = open(path, encoding="utf-8").read().split("\n")
 start = next((i for i, l in enumerate(lines) if l.startswith(head)), None)
 if start is None:
@@ -42,7 +46,7 @@ bad = []
 for p in re.findall(r"`([^`]+)`", "\n".join(lines[start:end])):
     if any(c in p for c in "<>*{ :") or "/" not in p or p.startswith(("http", "-", "/", "origin/")):
         continue
-    if not os.path.exists(p.rstrip("/")):
+    if not os.path.exists(p.rstrip("/")) and not ignored(p):
         bad.append(p)
 if bad:
     print(f"実在しないパス: {bad}"); sys.exit(1)
@@ -88,7 +92,7 @@ H_P8="### P8."; E_H3='^(### |## |---)'
 H_FL="3) 対応方法"; E_FL='^3\.5\)'
 
 D1_WORDS=('15 分' '攻め筋は 1 体 3 本' '1 周 3 体' 'イシュー全体で 2 周' 'REVIEWED_COMMIT' 'ROUNDS:' '{REVIEW_BASE}'
-          'run_in_background' 'sleep 900' 'TaskStop' 'task_id' '時間切れ' '行が無い記録')
+          'run_in_background' 'review-timer.sh 900' 'TaskStop' 'task_id' '時間切れ' '行が無い記録')
 OLD_WORDS=('最大 3 周' '総数 15' 'loop-until-dry' '動的観点' '最大 5 エージェント')
 D3_WORDS=('種類ごと' '止める場所・方式の見直し')
 D4_WORDS=('{REVIEW_BASE}' '攻め筋は最大 3 本' '12 分' '15 分' 'ulimit -v' 'timeout 60' '処理量の欠陥')
@@ -138,7 +142,7 @@ fg() { # fg <name> <src> <dst> <expr> <検査コマンド...> : 注入が起き�
   if ! inject "$src" "$dst" "$expr"; then ck "$name（注入が起きた）" ok ng; return; fi
   ck "$name" 1 "$("$@")"
 }
-fg "FG-D1 sleep 900 を消すと D1 不合格" "$SK" "$TMP/sk1.md" 's.replace("sleep 900", "")' \
+fg "FG-D1 タイマーの 900 秒を消すと D1 不合格" "$SK" "$TMP/sk1.md" 's.replace("review-timer.sh 900", "review-timer.sh")' \
    sec "$TMP/sk1.md" "$H_SK" "$E_H2" "${D1_WORDS[@]}"
 fg "FG-D2 最大 3 周 を足すと D2 不合格" "$RR" "$TMP/rr2.md" 's + "\n最大 3 周\n"' \
    absent "$SK" "$TMP/rr2.md" -- "${OLD_WORDS[@]}"

@@ -14,7 +14,7 @@ source "$REPO_ROOT/scripts/claude/fix-review-lib.sh"
 ISSUE="${1:?Usage: $0 I### <test_result_path> [prior_ng_review_path]}"
 RESULT="${2:?テスト実行結果ファイルのパスを渡してください（手順6.5(a) で保存した docs/reviews/${ISSUE}_fix_test_result_<ts>.md）}"
 PRIOR="${3:-}"
-REVIEWER=".claude/review-agents/fix-test-reviewer.md"
+REVIEWER=".claude/agents/fix-test-reviewer.md"
 
 if [ ! -f "$RESULT" ]; then
   echo "⚠️ テスト実行結果ファイルが見つかりません: ${RESULT}。テストレビューを skip します。"

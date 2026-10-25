@@ -24,16 +24,16 @@
 
 ## 決定論ゲート（自動実走）
 <!--
-  I084: `/code-review`（code-review.sh）がこの見出し直後の**単一 ```bash ブロック**を
+  I084: review-gate 段階（code-review.sh）がこの見出し直後の**単一 ```bash ブロック**を
   1 行 1 コマンドで抽出し、実走して実 exit code を VERDICT に注入する。
   - 許可（実走）: `bash scripts/claude/tests/*.sh` / `grep -q 文言 file`（存在）/ `grep -L 文言 dir/*`（不在ファイル一覧）/
     `! grep -q 文言 file`（不在）/ `python3 -m json.tool file` / `bash -n file` / `python3 -m py_compile file`
   - 1 行 1 コマンド・チェーン（; && || | ` $( > 等）不可。
-  - heavy（pytest/Jest/E2E・docker/npm）はここに書かず /test に委譲する。
+  - heavy（pytest/Jest/E2E・docker/npm）を書くと code-review.sh は実走せず test-gate 段階に回す（pytest/Jest/E2E は CI が PR ごとに流すので、ふつうは書かない）。
   - このセクション外の fenced ```bash に許可コマンドを書くと omission-lint が HIGH を出す（宣言漏れ防止）。
   - 決定論ゲートが無いイシューはこのセクションを空（または省略）にしてよい。
 -->
 ```bash
 # 例: bash scripts/claude/tests/test_xxx.sh  ← 実ゲートに置換。決定論ゲートが無ければこのブロックごと削除。
-# （未編集のままだと code-review はゲート抽出 0 件として扱い、実走・BLOCKER は起きない）
+# （未編集のままだと review-gate はゲート抽出 0 件として扱い、実走・BLOCKER は起きない）
 ```

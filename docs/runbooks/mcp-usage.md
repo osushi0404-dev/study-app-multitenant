@@ -27,7 +27,7 @@ Claude Code には `WebSearch` ツールが組み込み機能として存在し�
 | `/plan-issue` | 使用ライブラリの最新バージョン確認 |
 | `/plan-issue` | CVE・既知脆弱性の確認（`pip-audit` 補完として） |
 | `/plan-issue` | Django・React の最新推奨パターン確認 |
-| `/fix-loop` | エラーメッセージの最新情報・Stack Overflow 調査 |
+| fix-loop 段階 | エラーメッセージの最新情報・Stack Overflow 調査 |
 
 ### 使い方
 
@@ -59,9 +59,9 @@ WebSearch ツールを使って [ライブラリ名] の既知 CVE を確認し�
 
 | フェーズ | 利用例 |
 |---------|-------|
-| `/code-review` | PR に付いたレビューコメントを直接参照 |
+| review-gate 段階 | PR に付いたレビューコメントを直接参照 |
 | `/plan-issue` | 関連 issue のコメント・経緯を参照して精度の高い計画書を作成 |
-| `/close` | issue への完了コメント投稿 |
+| close 段階 | issue への完了コメント投稿 |
 
 ---
 

@@ -14,8 +14,8 @@ cd "$REPO_ROOT" || exit 1
 
 CODE_REVIEW="scripts/claude/code-review.sh"
 PLAN_REVIEW="scripts/claude/plan-issue-review.sh"
-CODE_AGENT=".claude/review-agents/code-reviewer.md"
-PLAN_AGENT=".claude/review-agents/plan-reviewer.md"
+CODE_AGENT=".claude/agents/code-reviewer.md"
+PLAN_AGENT=".claude/agents/plan-reviewer.md"
 RUNBOOK="docs/runbooks/common-commands.md"
 
 pass=0; fail=0
@@ -80,7 +80,7 @@ printf '| **Blocker** | 説明 |\n指摘あり\n'  > "$TMP/c5"; ck TC-05 BLOCKER
 printf '| Blocker | x |\n'                  > "$TMP/c7"; ck TC-07 BLOCKER "$(detect_code_verdict "$TMP/c7")"
 printf '| High | x |\n'                     > "$TMP/c8"; ck TC-08 HIGH    "$(detect_code_verdict "$TMP/c8")"
 printf '| **High** | x |\n'                 > "$TMP/c9"; ck TC-09 HIGH    "$(detect_code_verdict "$TMP/c9")"
-printf '# clean review\n指摘なし\n'         > "$TMP/c10"; ck TC-10 OK     "$(detect_code_verdict "$TMP/c10")"
+printf '# clean review\n指摘なし\n'         > "$TMP/c10"; ck TC-10 BLOCKER     "$(detect_code_verdict "$TMP/c10")"
 # TC-12: 旧プレーン grep が太字 Blocker に非マッチ（バグの存在＝修正の前提を固定化）
 ck_false TC-12-old-grep-nonmatch grep -qE '^\| Blocker \|' "$TMP/c5"
 
@@ -98,7 +98,7 @@ echo "== TC-11/TC-15w: スクリプトが detect_* を一次判定に配線し�
 # shellcheck disable=SC2016  # 単一引用符はリテラル文字列を grep する意図（展開不要）
 ck_true TC-11-code-wired grep -q 'case "$(detect_code_verdict' "$CODE_REVIEW"
 # shellcheck disable=SC2016
-ck_true TC-15-plan-wired grep -q 'case "$(detect_plan_verdict' "$PLAN_REVIEW"
+ck_true TC-15-plan-wired grep -q 'PLAN_VERDICT=$(detect_plan_verdict' "$PLAN_REVIEW"
 
 echo "== TC-18: エージェント定義の VERDICT 契約・P1 gate 観点 =="
 ck_true TC-18a-code-blocker  grep -q 'VERDICT: BLOCKER'  "$CODE_AGENT"
@@ -112,7 +112,7 @@ ck_true TC-18c-plan-p1gate   grep -q '消費箇所' "$PLAN_AGENT"
 
 echo "== TC-21〜23: retro C1（末尾アンカー）・P1（do/gate） =="
 # C1: 隣接値の部分一致誤読を末尾アンカーで排除
-printf 'x\nVERDICT: HIGHRISK\n' > "$TMP/r1"; ck TC-21a OK "$(detect_code_verdict "$TMP/r1")"   # code側に HIGHRISK 混入 → HIGH 誤読しない
+printf 'x\nVERDICT: HIGHRISK\n' > "$TMP/r1"; ck TC-21a BLOCKER "$(detect_code_verdict "$TMP/r1")"   # code側に HIGHRISK 混入 → HIGH 誤読しない（I193: 読めない VERDICT は BLOCKER）
 printf 'x\nVERDICT: HIGH\n'     > "$TMP/r2"; ck TC-21b UNKNOWN "$(detect_plan_verdict "$TMP/r2")"   # plan側に HIGH 混入 → HIGHRISK 部分一致しない（I185 以降は OK に倒さず判定不能）
 printf 'x\nVERDICT: OK\n'       > "$TMP/r3"; ck TC-21c OK "$(detect_code_verdict "$TMP/r3")"   # 正常系がアンカー後も壊れない
 # P1 gate: code-reviewer.md にシェルテスト決定論性観点

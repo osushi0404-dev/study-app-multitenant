@@ -12,7 +12,7 @@ source "$REPO_ROOT/scripts/claude/fix-review-lib.sh"
 
 ISSUE="${1:?Usage: $0 I### [prior_ng_review_path]}"
 PRIOR="${2:-}"
-REVIEWER=".claude/review-agents/fix-implementation-reviewer.md"
+REVIEWER=".claude/agents/fix-implementation-reviewer.md"
 
 # 追跡ファイルの差分（unstaged + staged）
 DIFF="$(git diff; git diff --staged)"

@@ -97,7 +97,7 @@ develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が d
 
 ## 2. 必須 CI チェック名
 
-`.github/workflows/ci.yml` で定義されている以下の 5 ジョブをすべて Required status checks に登録します。
+`.github/workflows/ci.yml` で定義されている以下の 6 ジョブをすべて Required status checks に登録します。
 
 ```
 Backend Lint & Security
@@ -105,7 +105,10 @@ Backend Tests
 Frontend Type Check
 Frontend Lint & Security
 Frontend Tests
+Harness Tests
 ```
+
+`Harness Tests`（I193）は、ハーネス（スキル・スクリプト・見張り）の回帰テスト `scripts/claude/tests/run-all.sh` を流す。ユーザーの確認を手動テストとマージだけにした流れで、ハーネスの退行を GitHub で止めるために必須チェックにする（登録はリポジトリ管理者が設定画面で行う。bot には権限が無い）。
 
 > **注意**: status checks の名前は `jobs.<job_id>.name` の値です。
 > GitHub の UI に候補が表示されない場合は、先に PR を 1 件作成・CI を実行してから登録してください。

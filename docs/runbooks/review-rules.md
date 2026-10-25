@@ -27,11 +27,11 @@
 
 | 種別 | 命名 | 生成者 | 保存先・ライフサイクル |
 |------|------|--------|----------------------|
-| ライフサイクルレビュー | `I###_review.md` | `/plan-issue` | `docs/reviews/open/` → `docs/reviews/closed/`（`/close` が移動） |
-| コードレビュー監査記録 | `I###_code_review_<timestamp>.md` | `scripts/claude/code-review.sh` | issue が open の間は `docs/reviews/` 直下に時系列で蓄積。`/close` 実行時に当該 issue 分を `closed/` へ回収（I065） |
+| ライフサイクルレビュー | `I###_review.md` | `/plan-issue` | `docs/reviews/open/` → `docs/reviews/closed/`（close 段階が移動） |
+| コードレビュー監査記録 | `I###_code_review_<timestamp>.md` | `scripts/claude/code-review.sh` | issue が open の間は `docs/reviews/` 直下に時系列で蓄積。close 段階で当該 issue 分を `closed/` へ回収（I065） |
 | プランレビュー監査記録 | `I###_plan_review_<timestamp>.md` | `scripts/claude/plan-issue-review.sh` | 同上 |
 | イシューレビュー監査記録 | `I###_issue_review_<timestamp>.md` | `scripts/claude/issue-review.sh` | 同上 |
-| 敵対的レビュー監査記録 | `I###_adversarial_review_<timestamp>.md` | `/code-review` スキル（敵対ステージ） | 同上 |
+| 敵対的レビュー監査記録 | `I###_adversarial_review_<timestamp>.md` | review-gate 段階（敵対ステージ） | 同上 |
 
 - `<timestamp>` は `YYYYMMDD_HHMM` 形式。
 - 旧形式 `review001〜003`（旧通し番号方式）は**廃止・履歴**。`docs/reviews/closed/` にそのまま残す（**リネーム不要**）。新規作成しない。
@@ -39,22 +39,22 @@
 ### 状態管理（open / closed の2系統）
 状態は `open` / `closed` の2つのみ（旧来の3状態管理は廃止）。
 
-- `I###_review.md`: `docs/reviews/open/` で作成し、issue クローズ時に `/close` が `docs/reviews/closed/` へ移動する。
-- timestamped 監査記録（`I###_{code,plan,issue}_review_<timestamp>.md`）: issue が open の間は `docs/reviews/` 直下に蓄積し、`/close` が当該 issue 分を `closed/` へ回収する（スクリプトの保存先は直下のまま・移動は `/close` が担当）。
+- `I###_review.md`: `docs/reviews/open/` で作成し、issue クローズ時に close 段階が `docs/reviews/closed/` へ移動する。
+- timestamped 監査記録（`I###_{code,plan,issue}_review_<timestamp>.md`）: issue が open の間は `docs/reviews/` 直下に蓄積し、close 段階が当該 issue 分を `closed/` へ回収する（スクリプトの保存先は直下のまま・移動は close 段階が担当）。
 
 ---
 
 ## 高リスク変更の敵対的レビューステージ（自己認証の非権威化・I086／対象と上限・I181）
 
 - **前提（GitHub が最後の守り）**: develop/main は GitHub 側で保護され（ブランチ保護・CODEOWNERS・承認必須）、bot はマージできない。手元のハーネスが壊れても GitHub から復旧できるので、手元のハーネスの変更は決定論ゲートと基本レビューで先へ進む。例外（GitHub から復旧できない操作）は `docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲（I182）」。
-- **対象**: 高リスク判定 YES の変更は、敵対的レビューステージ（反証マンデート×多観点サブエージェント・対応後再レビュー）の通過を合格条件とする（`/code-review` スキルが自動起動する）。高リスク判定 YES になるのは次のどちらか:
-  - (a) アプリの高リスク条件（`.claude/review-agents/code-reviewer.md`「高リスク判定の条件」）に当たる変更
+- **対象**: 高リスク判定 YES の変更は、敵対的レビューステージ（反証マンデート×多観点サブエージェント・対応後再レビュー）の通過を合格条件とする（review-gate 段階が自動起動する）。高リスク判定 YES になるのは次のどちらか:
+  - (a) アプリの高リスク条件（`.claude/agents/code-reviewer.md`「高リスク判定の条件」）に当たる変更
   - (b) ハーネスでは、例外に関わるファイルの変更だけ: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`）
 - **実装者（実装セッション）が書く実装後レビュー・自己レビューは判定根拠にしない**（自己認証の非権威化）。合否は独立ステージ（基本 code-review＋敵対ステージ）の結論を正とする。
 - 通常（高リスク判定 NO）の変更は従来の単発 code-review のまま（比例性）。
-- **上限**: 1 体 15 分・攻め筋 3 本・1 周 3 体・イシュー全体で 2 周（`/code-review` のやり直しで数え直さない）。2 周目は記録の `REVIEWED_COMMIT` からの差分だけ。ガード・見張りは「普通の書き方による事故」までを Critical/High にする。手順の正は `.claude/skills/code-review/SKILL.md` §3。
-- **上限到達**: 自動 OK にせず、FINAL VERDICT HIGH 以上で停止してユーザーにエスカレーションする。残った指摘と過去の周の指摘を種類ごとに集計し、同じ種類が 2 周続いていれば「止める場所・方式の見直し」を選択肢の先頭に置く（I176 から移管）。
-- **計画レビューのやり直しは、計画の方式・範囲・受け入れ条件を変えたときだけ**: findings への対応を計画変更記録に足しただけ（方式・範囲・受け入れ条件は変えない）なら `/plan-issue-review` を挟まずに次の工程へ進む。どちらに当たるかは計画変更記録に 1 行で書く（I181 の棚卸し: I179 は 11 回、I151 は 8 回、敵対的レビューの周ごとに挟んでいた）。
+- **上限**: 1 体 15 分・攻め筋 3 本・1 周 3 体・イシュー全体で 2 周（review-gate のやり直しで数え直さない）。2 周目は記録の `REVIEWED_COMMIT` からの差分だけ。ガード・見張りは「普通の書き方による事故」までを Critical/High にする。手順の正は `.claude/skills/review-gate/SKILL.md` §3。
+- **上限到達**: 自動 OK にせず、FINAL VERDICT HIGH 以上で停止してユーザーにエスカレーションする（`docs/runbooks/workflow.md`「止めて聞く条件」3。セキュリティにかかわる指摘を受け入れて進む判断は Claude だけではしない）。残った指摘と過去の周の指摘を種類ごとに集計し、同じ種類が 2 周続いていれば「止める場所・方式の見直し」を選択肢の先頭に置く（I176 から移管）。
+- **計画レビューのやり直しは、計画の方式・範囲・受け入れ条件を変えたときだけ**: findings への対応を計画変更記録に足しただけ（方式・範囲・受け入れ条件は変えない）なら plan-review 段階を通り直さずに次の工程へ進む。どちらに当たるかは計画変更記録に 1 行で書く（I181 の棚卸し: I179 は 11 回、I151 は 8 回、敵対的レビューの周ごとに挟んでいた）。
 
 ## GitHub から復旧できない変更のレビュー観点（I182）
 
@@ -69,7 +69,7 @@
 ## レビュー作成の必須ルール
 
 ### 基本方針
-**全ての対応完了後は必ずレビューを残し、品質向上と継続的改善を実現する。** イシュー対応は `I###_review.md`（`/plan-issue` 作成）に実装後評価を記録し、`/code-review` 等が生成する監査記録（timestamped）と併せて完了の証跡とする。
+**全ての対応完了後は必ずレビューを残し、品質向上と継続的改善を実現する。** イシュー対応は `I###_review.md`（/plan-issue が作成）に実装後評価を記録し、review-gate 等が生成する監査記録（timestamped）と併せて完了の証跡とする。
 
 ### レビュー実施タイミング
 - **イシュー対応完了後**: 必須（`I###_review.md` に実装後評価を記録）
@@ -153,4 +153,4 @@
 | 6 | `$ARGUMENTS` 等の変数が一貫して使われているか | 一貫性 |
 | 7 | SKILL.md が 500行以内か（超える場合は supporting files への分割を推奨） | コンテキスト効率 |
 
-このチェックは `/plan-issue-review` のレビュー観点に組み込まれている。
+このチェックは計画レビュー（plan-review 段階・`.claude/agents/plan-reviewer.md`）のレビュー観点に組み込まれている。

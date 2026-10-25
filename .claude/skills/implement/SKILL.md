@@ -1,11 +1,11 @@
 ---
 name: implement
-description: Implement an approved plan, run type checks, push to PR.
+description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。レビュー済みの計画に沿って実装し、組み込みの /simplify で整理して push する。最後に STAGE_DONE を書く。"
 argument-hint: "I###"
-disable-model-invocation: true
+user-invocable: false
 ---
 
-# /implement
+# implement（実装段階）
 
 必読:
 - docs/plans/open/plan_$ARGUMENTS.md
@@ -13,26 +13,23 @@ disable-model-invocation: true
 - docs/tests/open/$ARGUMENTS_manual_test.md
 - docs/reviews/open/$ARGUMENTS_review.md
 
-ルール:
-- 計画書に書いていない実装は禁止。必要なら停止→提案→承認→計画更新。
-- Danger Ops は danger-approved + DANGER_OK=1 が必須。
-- テストフレームワーク（pytest 等）が存在しない・追加が必要な場合はユーザーに承認を得てからインストールする。
-- 既存テストファイルのフレームワーク・形式（pytest / Django TestCase 等）を変更する場合もユーザーの承認が必須。承認なしの形式変更は禁止。
+止めてユーザーに聞くのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるときだけ。それ以外で決めたことは `docs/reviews/open/$ARGUMENTS_review.md` の「## 自律判断の記録」に `- [implement] 決めたこと — 理由` で書く。
 
-前提:
-- /plan-issue の承認（「OK」「承認」等）だけでは実装を開始しない
-- ユーザーが明示的に /implement を実行して初めて実装を開始する
+ルール:
+- 計画書に書いていない実装はしない。必要になったら計画書を先に直し（計画変更記録に書く）、方式・範囲・受け入れ条件を変えたときは Skill ツールで `plan-review` を呼んで計画レビューを通してから実装する。要件・基本設計・UI/UX を変える必要があるときだけ止める（止める条件 1）。
+- Danger Ops は danger-approved + DANGER_OK=1 が必須（止める条件 2）。
+- テストフレームワーク（pytest 等）が存在しない・追加が必要な場合、既存テストファイルのフレームワーク・形式（pytest / Django TestCase 等）を変更する場合は、依存関係ファイル（`requirements*.txt`・`package*.json`。settings の ask）の変更を伴うのでユーザーの承認を得る。
 
 手順:
 ━━ 【新規の振る舞いを追加する場合】新しいエンドポイント・ビジネスロジック・コンポーネントの追加が対象 ━━
-先に TDD サイクルを完了してから 1) へ進む（強制。テストを書かずに 1) を開始した場合は STOP）。
+先に TDD サイクルを完了してから 1) へ進む（強制。テストを書かずに 1) を始めない）。
 
 [Red フェーズ]
 - `docs/tests/open/$ARGUMENTS_auto_test.md` を読み、対象の振る舞いに対応するテストコードを先に実装する
 - 認証・認可・テナント境界を検証するテストも必ずこの時点で実装する
 - Backend（ローカル）: `python -m pytest <対象テストファイル> --tb=short` を実行し、テストが失敗することを確認する
 - Frontend（ローカル）: `npm test -- --watchAll=false --testPathPattern=<対象テスト>` を実行し、テストが失敗することを確認する
-- テストが失敗しない場合は STOP → ユーザーに報告してテスト内容を確認する
+- テストが失敗しない場合は、テストが仕様を確かめていない（false-green）ので、テストを直して失敗することを確かめ直す。直し方が計画のテスト方針から外れるときは計画書を直して `plan-review` を通す
 
 [Green フェーズ]
 - テストを通過させる最小限の実装を行う
@@ -40,10 +37,10 @@ disable-model-invocation: true
 
 [Refactor フェーズ]
 - 可読性改善・重複削除など内部整理のみ行う
-- 新機能追加・設計変更は計画書更新が必要（STOP → 提案 → 承認 → 計画書更新）
+- 新機能追加・設計変更は、計画書を先に直して `plan-review` を通してから行う（上の「ルール」と同じ）
 
 **注**: TDD サイクル中のテスト実行は「高速フィードバック確認」が目的でローカル実行で十分。
-     `/test` スキルは「環境パリティを含む最終確認」が目的であり役割が異なる。
+     環境パリティを含む最終確認は CI（review-gate が完了と成功を確かめる）が受け持つ。
 
 ━━ 【それ以外（バグ修正・リファクタ・既存コード変更）】TDD は任意。1) から開始する ━━
 
@@ -85,21 +82,19 @@ DB変更なし・外部API/非同期処理なし・フロントエンド変更�
 
 1) 計画どおり実装
    - セキュリティ・ベストプラクティス・モダン開発の観点で最適な実装を採用する
-   - より良い方法がある場合は plan-writing-rules.md の「改善提案フォーマット」に従い提案してから実装する
+   - より良い方法がある場合は、計画書を直して（計画変更記録に理由を書く）、方式・範囲・受け入れ条件を変えるなら `plan-review` を通してから実装する
+   - **画面の確かめ（`frontend/src` の画面の動きを変えたとき・I187）**: `docs/runbooks/frontend-verify.md` の手順（§9 の安全上の注意を含む）で、Playwright MCP（公式）を使って自分で画面を確かめる（人に頼まない）。確かめた動きは E2E か単体テストにも固定する（長く残す証拠は CI のテスト）
+1.5) 組み込みの `/simplify` で整理する: commit の前に、Skill ツールで `simplify` を呼ぶ（引数なし。push していない変更とコミットしていない変更が対象になる）。`/simplify` は重複・無駄の整理だけを自動で書き換え、正しさのバグは扱わない（それは review-gate の組み込み `/code-review` が見る）。書き換えが計画の範囲を外れていないかを差分で確かめ、外れていれば戻す
 2) ビルド・型チェック・リント・セキュリティスキャンを実行してクリーンを確認:
    - lint・セキュリティスキャン・依存関係 CVE チェックは pre-commit（commit 時）と CI（PR 時）が自動実行する。手動実行は不要。
    - ビルド確認: react-scripts build（型エラーが出た場合は修正してから次のステップへ）
    - 修正対象の警告・エラーがある場合は修正してから次のステップへ
    - **例外 — 新規 pre-commit フックを `.pre-commit-config.yaml` に追加した場合**: `pre-commit run <hook-id> --all-files` を実行し、スコープ内の既存ファイル全体が hook を PASS することを確認してからコミットする（commit 時の自動実行はステージ済みファイルのみを対象とするため、既存ファイルの違反は自動では検出されない）
-2.5) コードレビュー指摘（fix-loop 等）を修正した場合:
-- **Medium 以上**（セキュリティ・要件・ロジックに関わる修正）後は commit/push 前に `/code-review $ARGUMENTS` を再実行する
-- **Low / Warning のみ**（静的解析・フォーマット・コメント等の機械的チェック相当）の修正のみの場合は CI で十分（再レビュー不要）
 3) commit/push して PR を更新
-3.5) **完了前の反映検証（必須・失敗時ハード STOP）**:
-   - 完了案内を出す**前に** `git diff origin/develop...HEAD --name-only` を確認し、計画書の実装対象に対応する**意図した変更ファイルがブランチに反映されている**ことを検証する。
-   - 意図した変更ファイルが現れない場合（作業ツリーにあるだけで未コミット、または未 push の可能性）は、**完了案内（push 完了・/code-review 案内）を出さず停止**し、「未コミット/未 push の可能性」を報告してユーザーの指示を待つ。空 diff のまま後工程（/code-review）に渡すと「未実装/Blocker」誤判定になるため、この安全ゲートを必ず通す。
-4) 停止し以下を案内:
+3.5) **完了前の反映検証（必須）**:
+   - 結線の**前に** `git diff origin/develop...HEAD --name-only` を確認し、計画書の実装対象に対応する**意図した変更ファイルがブランチに反映されている**ことを検証する。
+   - 意図した変更ファイルが現れない場合（作業ツリーにあるだけで未コミット、または未 push の可能性）は、commit/push し直してから確かめ直す。それでも現れないときは原因を記録して止める（止める条件 3）。空 diff のまま review-gate に渡すと「未実装/Blocker」誤判定になるため、この安全ゲートを必ず通す。
+4) 結線（必須）: `docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する（修正の後のレビューのやり直しは、fix-loop が必ず review-gate に戻すことで行う）
    ```
-   ✅ push 完了。
-   👉 `/code-review $ARGUMENTS` を実行してください。
+   STAGE_DONE: implement NEXT: review-gate
    ```

@@ -16,36 +16,31 @@ Claude Code に実装を委任しながら、人間がゲートキーパーに�
 
 ## 4つの特徴
 
-### 1. スキル駆動のフロー（コマンドで進む）
+### 1. スキル駆動のフロー（打つコマンドは少ない）
 
-作業はスラッシュコマンドを打つだけで進む。Claude が次のコマンドを都度案内してくれる。
+ユーザーが打つのは `/issue-bootstrap` と `/plan-issue` だけ。`/plan-issue` の後は、Claude が計画レビュー → 実装 → レビュー → テストまで段階を順に進め、人の手動テストの手前で止まる（I193）。
 
 ```
-/issue-bootstrap → /grill-me → /plan-issue（計画レビューまで）
-→ /implement → /code-review → /test → /retro → /close
+/issue-bootstrap →（任意で /grill-me）→ /plan-issue
+   └→ plan-review →（高リスク時）design-security-review → implement → review-gate ⇄ fix-loop → test-gate
+       → 人の手動テスト（結果を返信）→ retro → close → GitHub で Approve & Merge
 ```
 
-`/plan-issue` の中で計画レビューまで行い、ユーザーはレビュー済みの計画を 1 回だけ承認する（I185 P2）。`/plan-issue-review` は、計画の方式・範囲・受け入れ条件を変えたときの再レビューに使う。
-
-| スキル | 内容 |
+| ユーザーが打つスキル | 内容 |
 |---|---|
-| `/issue-bootstrap [title]` | 採番・イシューファイル作成・ブランチ作成・Draft PR 作成 |
-| `/grill-me I###` | 計画書作成前の設計インタビュー（推奨。設計判断の多いイシューで実行） |
-| `/plan-issue I###` | 計画書・テスト文書・レビュー文書を作成し、計画レビューまで実行（レビュー済みの計画で承認待ち） |
-| `/plan-issue-review I###` | 計画の方式・範囲・受け入れ条件を変えたときの再レビュー（BP・セキュリティ・モダン開発観点） |
-| `/implement I###` | 承認済み計画に沿って実装・型チェック・push |
-| `/code-review I###` | CI 確認・受け入れ条件照合 |
-| `/test I###` | 自動テスト（pytest + Jest）・手動テスト確認 |
-| `/fix-loop I###` | NG 時の原因整理→差分計画→承認→修正→再テスト |
-| `/retro I###` | テスト OK 後の振り返り |
-| `/close I###` | open→closed へ整理・PR 説明整備・クローズ |
+| `/issue-bootstrap [title]` | 採番・イシューファイル作成・自己完結度レビュー・GitHub 登録（要件・基本設計・UI/UX の質問があるときだけ止まる） |
+| `/grill-me I###` | 計画書作成前に、要件・基本設計・UI/UX の曖昧な点だけを聞く（任意） |
+| `/plan-issue I###` | ブランチ・Draft PR・計画書・テスト文書・レビュー文書を作り、手動テストの手前まで進める |
+| `/proceed I###` | 途中で止まったとき・新しいセッションで、続きから再開する |
 
-### 2. 承認ゲート付きの安全設計
+段階のスキル（`plan-review`・`design-security-review`・`implement`・`review-gate`・`test-gate`・`fix-loop`・`retro`・`close`）はユーザーが打たない。組み込み（公式）の `/code-review`・`/security-review`・`/simplify` は段階の中で Claude が使う。詳細は docs/runbooks/workflow.md。
 
-- 計画書への OK を出すまで Claude はコードを一切書かない
+### 2. 止める条件を絞った安全設計
+
+- ユーザーの確認は「人がやる手動テスト」と「マージ」と、3 つの止める条件（要件・基本設計・UI/UX の価値判断／取り消せない操作・安全装置そのものの変更／安全側の選択肢も取れない上限到達）だけ。それ以外で Claude が決めたことは「自律判断の記録」に残り、止まったときにまとめて報告される
+- 計画レビューを通すまで Claude はコードを書かない。修正の後は必ずレビューを通り直す（`scripts/claude/gate-check.sh` が決定論で確かめる）
 - hooks（`scripts/claude/hooks/pretooluse_guard.py`）が危険操作を物理的にブロック（PreToolUse）
 - hooks（`scripts/claude/hooks/posttooluse_check.py`）が Edit/Write 直後の `.py`/`.json`/`.yaml` 構文を検証（PostToolUse）
-- Claude が「勝手に次フェーズへ進む」ことを禁止
 
 ### 3. GitHub が品質ゲートになっている
 
@@ -72,13 +67,14 @@ CI の内容（全部 pass しないとマージ不可）:
 ```
 ローカル                          GitHub
 ─────────────────────────────────────────────
-/issue-bootstrap ──────────────→ Draft PR 作成
-/plan-issue      （計画書作成＋計画レビュー）
-/implement ────────────────────→ push → CI 実行
-/code-review     （CI 結果確認）
-/test            （テスト確認）
-/retro           （振り返り・必須）
-/close ────────────────────────→ PR 本文整備 → develop へマージ
+/issue-bootstrap ──────────────→ GitHub Issue 登録
+/plan-issue ───────────────────→ Draft PR 作成
+  plan-review       （計画レビュー）
+  implement ───────────────────→ push → CI 実行
+  review-gate       （CI 結果確認・組み込み /code-review・自作レビュー）
+  test-gate         （テスト確認）→ 人の手動テスト（結果を返信）
+  retro             （振り返り・必須）
+  close ───────────────────────→ PR 本文整備 → Approve & Merge の依頼 → develop へマージ
                                   （main へは定期リリース時のみ）
 ```
 
@@ -118,13 +114,13 @@ docs/
 → 実装前から変更が GitHub 上に見えるようにするため。CI も早めに回せる。
 
 **Q: CI が落ちたらどうする？**
-→ `/fix-loop I###` で差分計画 → 承認 → 修正のサイクルを回す。
+→ review-gate 段階が CI の失敗を見て fix-loop 段階に回し、Claude が直して review-gate に戻す（ユーザーの操作は要らない）。
 
 **Q: main にはどうマージする？**
 → develop に十分な機能が溜まったタイミングで、bot が develop → main の PR を作り、oshui0404 が承認・マージする（週1・月1等）。マージ後にバージョンタグを必ず付ける。手順は docs/runbooks/workflow.md「本番リリースフロー」。
 
 **Q: 計画書なしに実装できる？**
-→ できない。計画書への承認が最初のゲート。より良い案があれば「提案 → 承認 → 計画書更新」が先。
+→ できない。計画書と計画レビュー（plan-review 段階）が最初のゲート。より良い案があれば、計画書を先に直して計画レビューを通してから実装する。
 
 ---
 
