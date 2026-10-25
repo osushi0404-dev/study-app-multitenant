@@ -100,11 +100,12 @@
 
 処理の流れ:
 1. 引数 `I###` を確かめる。`REVIEW_LIB_SOURCE_ONLY=1` で `scripts/claude/code-review.sh` を読み込み、`neutralize_machine_lines`・`commit_review_artifact`・`is_record_path` を使う（同じ規則を 2 か所に書かない）。新しいライブラリ `scripts/claude/review-process-lib.sh`（§4.4）も読み込む。
+   - このスクリプト自身も、関数の定義の後・本体の前に `if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi` を置き、テストと手動 No.2 が関数だけを読み込めるようにする（code-review.sh・fix-review-lib.sh と同じ形）。主な関数: `read_checklist <計画書>`（一覧を `V<n>\t<観点>\t<確かめ方>\t<内容>` で出す・形の誤りで 2）・`run_reviewer <観点> <入力> <ログ> [<session_id>]`（レビュー役の 1 回の呼び出し）・`run_experiment_agent <観点> <実験の一覧ファイル> <ログ>`（実験役の 1 回の呼び出し）・`parse_report <本文>`（`ITEM:`・実験案・`NEW_*` を取り出す）・`item_verdict`・`final_verdict`・`write_record`
 2. 周回の数え方（今の SKILL 3-1 の 1・2 をスクリプトに移す）: `docs/reviews/[closed/]I###_adversarial_review_*.md` の `ROUNDS:` の合計（行が無い記録は 1）が `ADV_ROUND_LIMIT`（既定 2。ユーザーが延長を承認したときだけ SKILL が 3 を渡す）以上なら、起動せずに `ADVERSARIAL_VERDICT: LIMIT` を出して exit 4。見る範囲 `REVIEW_BASE` は最新の記録の `REVIEWED_COMMIT`、無ければ `origin/develop`。
-3. 前提の確認: 計画書 `docs/plans/open/plan_I###.md`（無ければ closed）の `## 必ず確かめる項目` の表を読む。1 行の形は `| V<n> | <観点 1〜3> | <実験必須 か 読んで可> | <内容> |`。表が無い・0 行・形の違う行がある → `ADVERSARIAL_ERROR: CHECKLIST` を出して exit 2（記録は作らない。gate-check は記録が無いので通さない）。記録の場所の外にコミットしていない変更がある → exit 2（実験役が作業ツリーを変えたかを比べられないため）。HEAD を `REVIEWED_COMMIT` として控える。
+3. 前提の確認: 計画書 `docs/plans/open/plan_I###.md`（無ければ closed）の一覧の節を読む。節の見出しは、コードブロック（```）の外の行で、行全体が `## 必ず確かめる項目` か、その直後に全角の `（` で始まる括弧書きが続くもの（例: `## 必ず確かめる項目（I197 自身の敵対的レビューが使う）`）だけを認める（`###` などの別の階層・文言の違いは認めない）。節は次の `## ` の見出しまで。その中の表の行（見出しと区切りの行を除く）を読む。1 行の形は `| V<n> | <観点 1〜3> | <実験必須 か 読んで可> | <内容> |`。表が無い・0 行・形の違う行がある → `ADVERSARIAL_ERROR: CHECKLIST` を出して exit 2（記録は作らない。gate-check は記録が無いので通さない）。記録の場所の外にコミットしていない変更がある → exit 2（実験役が作業ツリーを変えたかを比べられないため）。HEAD を `REVIEWED_COMMIT` として控える。
 4. 3 観点（今の固定 3 観点: 1 ロジック回避・実機 repro／2 テストの false-green・tautology／3 要件・脅威モデルの網羅漏れ）を並列に起動する（スクリプト内の background。親の会話は 1 本の background の Bash を待つだけ）。各観点:
-   - レビュー役: `claude -p --agent adversarial-reviewer --tools "Read,Grep,Glob" --permission-mode manual --permission-prompts none --output-format stream-json --verbose --max-budget-usd ${ADV_REVIEW_BUDGET:-3}`。入力は ISSUE・PERSPECTIVE・REVIEW_BASE・その観点の項目・全項目・過去の記録のパス（既知 findings として Read させる）・実験の約束。
-   - 実験案があり、往復が `ADV_EXPERIMENT_ROUNDS`（既定 2）未満で、締め切りまで `ADV_MIN_STEP`（既定 60 秒）以上残っていれば、実験役を起動する: `claude -p --model haiku --tools "Bash" --permission-mode auto --permission-prompts none --setting-sources user --settings .claude/settings.json --strict-mcp-config --no-session-persistence --max-budget-usd ${ADV_EXEC_BUDGET:-1} --output-format stream-json --verbose`（S3 と同じ形）。入力は「各実験のコマンドを、変えずに Bash で 1 回ずつ実行し、ほかの道具は使わない」。
+   - レビュー役: `claude -p --agent adversarial-reviewer --tools "Read,Grep,Glob" --permission-mode manual --permission-prompts none --output-format stream-json --verbose --max-budget-usd ${ADV_REVIEW_BUDGET:-2}`。入力（標準入力に渡す 1 つの文章）は ISSUE・PERSPECTIVE・REVIEW_BASE・その観点の項目・全項目・過去の記録のパス（既知 findings として Read させる）・実験の約束に加えて、スクリプトが取った「変更ファイルの一覧」（`git -c core.quotePath=false diff --name-status --no-renames <REVIEW_BASE>...HEAD`）と「差分」（`git diff <REVIEW_BASE>...HEAD` の先頭 100KB。切ったときは「差分は 100KB で切った。続きは一覧のファイルを Read で読む」と書き足す）を含める（レビュー役は Bash を持たず `git diff` を実行できないため。code-review.sh が code-reviewer に差分を渡す形と同じ）。イシューファイルと計画書のパスも渡し、Read で読ませる。
+   - 実験案があり、往復が `ADV_EXPERIMENT_ROUNDS`（既定 2）未満で、締め切りまで `ADV_MIN_STEP`（既定 60 秒）以上残っていれば、実験役を起動する: `claude -p --model haiku --tools "Bash" --permission-mode auto --permission-prompts none --setting-sources user --settings .claude/settings.json --strict-mcp-config --no-session-persistence --max-budget-usd ${ADV_EXEC_BUDGET:-0.5} --output-format stream-json --verbose`（S3 と同じ形）。入力は「各実験のコマンドを、変えずに Bash で 1 回ずつ実行し、ほかの道具は使わない」。
    - 実験の結果（実験ごとに 実行した／拒否された／呼ばれなかった、出力の先頭 2000 字、`is_error`）を、`claude -p --resume <session_id>`（レビュー役と同じ引数）で渡して続きを書かせる。
    - 各呼び出しの時間上限は「締め切りまでの残り」と `ADV_STEP_TIMEOUT`（既定 300 秒）の小さい方。締め切りは起動から `ADV_DEADLINE`（既定 600 秒＝1 周 10 分）。
 5. 実験役の後に作業ツリーを比べ、記録の場所の外が変わっていたら、その観点の実験をすべて「無効（作業ツリーを変えた）」にし、変わったファイルを記録に書く（消さない・戻さない。VERDICT は HIGH）。
@@ -182,18 +183,8 @@ VERDICT: <BLOCKER|HIGH|OK>
 - I194（#328・敵対的レビューの範囲を例外ファイルに絞る）: 統合して取り下げる。理由: 「何を確かめるか」を例外ファイルで決める考え方は、本イシューの「計画の段階で確かめる項目の一覧を作り、その項目だけを判定に使う」に含まれる（範囲は一覧で絞られる）。実装の最後に #328 にコメント（統合先 #332 と理由）を書き、`not planned` で閉じる。I194 のイシューファイルは harness-2 ワークツリーに未追跡で残っているため、このセッションからは触らない（トラックの境界。close の報告でユーザーに伝える）。
 - レビュー時間の原因調査（I193 後に起票予定）: 起票しない。理由: 新しい記録が観点ごとの所要時間・往復・最後の呼び出しを毎回残すので、上限（10 分）と比べれば原因が記録から分かる。デスクトップの起票コマンドの扱いは close の報告でユーザーに伝える。
 
-### 4.7 必ず確かめる項目（I197 自身の敵対的レビューが使う）
-| 項目 | 観点 | 確かめ方 | 内容 |
-|---|---|---|---|
-| V1 | 1 | 実験必須 | `RESULT=experiment` と報告しても、実験役の記録で実行されていない（拒否・不一致・呼ばれない）なら未検証になり VERDICT が OK にならない（スタブの claude で adversarial-review.sh を動かして確かめる。TC-01 A3・A4） |
-| V2 | 1 | 実験必須 | 観点の 1 つが時間切れ（124）・空・機械可読行なしのとき、exit 3・`ROUNDS: 0`・VERDICT HIGH になり、記録に最後のツール呼び出し・結果・経過が出る（TC-01 A5） |
-| V3 | 1 | 実験必須 | 実験役が作業ツリーを変えたとき、その観点の実験が無効になり VERDICT が HIGH になる（TC-01 A8） |
-| V4 | 1 | 読んで可 | 周回の数え方（ROUNDS の合計・行の無い記録は 1・`ADV_ROUND_LIMIT`）と `REVIEW_BASE` の決め方が今の SKILL 3-1 の 1・2 と同じ（TC-01 A9） |
-| V5 | 2 | 実験必須 | TC-01 の判定の要の行（未検証を HIGH にする・実験の照合・報告なしを未検証にする）を一時コピーで壊すと TC-01 が落ちる（FG） |
-| V6 | 2 | 読んで可 | TC-02（全部の `claude -p` に `--permission-prompts none`）が、1 か所外した写しで落ちる |
-| V7 | 3 | 読んで可 | 受け入れ条件 AC1〜AC11 のすべてに、TC か手動テストの行が対応している |
-| V8 | 3 | 読んで可 | レビュー役の本文・実験の出力に `VERDICT: OK`・`ITEM:` などを書かれても、判定と gate-check の読む行がすり替わらない（無害化・アンカー・最後の行だけ） |
-| V9 | 3 | 読んで可 | 実験役（auto・Bash あり）が実行してよい範囲の決まり（見張り・settings の deny・auto の判定・作業ツリーの比較）が、レビュー役の書いた実験案による事故（push・削除・作業ツリーの書き換え）を普通の書き方で止める |
+### 4.7 I197 自身の一覧
+- I197 自身の敵対的レビューが使う一覧は、スクリプトが読む形のまま、この計画書の `## 必ず確かめる項目（I197 自身の敵対的レビューが使う）` の節（計画変更記録の前）に置く。
 
 ## 5. 実装手順（ステップ）
 未知リスク（S1〜S4）は計画の前にスパイクで成立を確かめた（調査結果）。手順は「1 周を通しで動かす最小の形」を先に作る（垂直スライス）。
@@ -232,7 +223,7 @@ VERDICT: <BLOCKER|HIGH|OK>
 | claude の出力の形（`stream-json`・`permission_denials`）が変わる | 読めないときは「拒否なし」「実行した」と言わず、判定できない側（未検証・報告なし）に倒す（check-permission-prompt.sh と同じ考え方） |
 | 10 分では足りず未検証が増え、サクサク進まない | 往復・上限は環境変数で調整できる。未検証の直し方（決定論の TC で覆う）を SKILL に書く。実測は手動 No.1 で記録し、retro で見直す |
 | レビュー役が `ITEM:` 行を書き忘れる | 未検証になり HIGH（止まる側）。定義に出力の約束を明記し、入力にも項目の一覧と行の書き方を毎回渡す |
-| 3 観点の並列で費用が増える | 1 呼び出しごとに `--max-budget-usd`（レビュー役 3・実験役 1）。今の Agent ツールの 3 体と同じ数。追加の有料サービスは無い |
+| 3 観点の並列で費用が増える | 1 呼び出しごとに `--max-budget-usd`（レビュー役 2・実験役 0.5。最悪の合計は §12）。今の Agent ツールの 3 体と同じ数。追加の有料サービスは無い |
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
@@ -272,8 +263,33 @@ Danger Ops（有無/手順/ロールバック）:
 - 無。`review-timer.sh` の削除は feature ブランチのファイル削除（revert で戻る）。#328 を閉じるのは設計確認メモでユーザーが決めた取り下げ（再オープンで戻る）
 
 ## 12. コスト・保守見積もり
-- 実行の費用: 1 周で レビュー役 3 観点 ×（最初＋往復 2 回まで）＋実験役 最大 6 回。上限は呼び出しごとの `--max-budget-usd`（レビュー役 3・実験役 1）。今の Agent ツールの 3 体と同じ契約の範囲で、追加の有料サービスは無い。S1・S2 は 1 回 $0.07 前後
+- 実行の費用: 1 周で レビュー役 3 観点 ×（最初＋往復 2 回まで）＋実験役 最大 6 回。上限は呼び出しごとの `--max-budget-usd`（レビュー役 2・実験役 0.5）。最悪の合計は 2×3 観点×3 呼び出し＋0.5×6 回＝$21（実際は S1・S2 の 1 回 $0.07 前後から見てずっと小さい見込み。手動 No.1 で実際の値を記録し、retro で既定を見直す）。今の Agent ツールの 3 体と同じ契約の範囲で、追加の有料サービスは無い
 - 保守: 自作はスクリプト 2 本（段取り・ライブラリ）とテスト 1 本。claude の出力の形の変化はライブラリ 1 か所で受ける。運用者の手作業は増えない（親は 1 本の background の実行を待つだけ）
 
+## 必ず確かめる項目（I197 自身の敵対的レビューが使う）
+| 項目 | 観点 | 確かめ方 | 内容 |
+|---|---|---|---|
+| V1 | 1 | 実験必須 | `RESULT=experiment` と報告しても、実験役の記録で実行されていない（拒否・不一致・呼ばれない）なら未検証になり VERDICT が OK にならない（スタブの claude で adversarial-review.sh を動かして確かめる。TC-01 A3・A4） |
+| V2 | 1 | 実験必須 | 観点の 1 つが時間切れ（124）・空・機械可読行なしのとき、exit 3・`ROUNDS: 0`・VERDICT HIGH になり、記録に最後のツール呼び出し・結果・経過が出る（TC-01 A5） |
+| V3 | 1 | 実験必須 | 実験役が作業ツリーを変えたとき、その観点の実験が無効になり VERDICT が HIGH になる（TC-01 A8） |
+| V4 | 1 | 読んで可 | 周回の数え方（ROUNDS の合計・行の無い記録は 1・`ADV_ROUND_LIMIT`）と `REVIEW_BASE` の決め方が今の SKILL 3-1 の 1・2 と同じ（TC-01 A9） |
+| V5 | 2 | 実験必須 | TC-01 の判定の要の行（未検証を HIGH にする・実験の照合・報告なしを未検証にする）を一時コピーで壊すと TC-01 が落ちる（FG） |
+| V6 | 2 | 読んで可 | TC-02（全部の `claude -p` に `--permission-prompts none`）が、1 か所外した写しで落ちる |
+| V7 | 3 | 読んで可 | 受け入れ条件 AC1〜AC11 のすべてに、TC か手動テストの行が対応している |
+| V8 | 3 | 読んで可 | レビュー役の本文・実験の出力に `VERDICT: OK`・`ITEM:` などを書かれても、判定と gate-check の読む行がすり替わらない（無害化・アンカー・最後の行だけ） |
+| V9 | 3 | 読んで可 | 実験役（auto・Bash あり）が実行してよい範囲の決まり（見張り・settings の deny・auto の判定・作業ツリーの比較）が、レビュー役の書いた実験案による事故（push・削除・作業ツリーの書き換え）を普通の書き方で止める。守る範囲は「普通の書き方の事故」（I181）で、作業ツリーの外（/tmp など）の書き込みは対象外（S3 と同じ前提・計画変更記録 1） |
+| V10 | 3 | 読んで可 | レビュー役の入力に、変更ファイルの一覧と差分（100KB まで・切ったときの注記）が入っていて、レビュー役が Bash 無しで変更箇所を特定できる（TC-01 A12） |
+
 ## 計画変更記録
-（なし）
+1. 2026-10-26 計画レビュー（`I197_plan_review_20261026_0711.md`・BLOCKER 2・Warning 4・Info 1）への対応
+   - B1（一覧の見出しが読む形と違う）: I197 自身の一覧を `## 必ず確かめる項目（…）` の節としてトップレベルに移し、見出しの照合規則（コードブロックの外・`## ` の階層・`必ず確かめる項目` の直後は行末か全角の `（`）を §4.3 の 3 に書いた。TC-01 A10 に見出し違い（`###`・文言違い）を足した
+   - B2（レビュー役に差分を渡す方法が無い）: スクリプトが変更ファイルの一覧と差分（100KB まで）を入力に入れる、と §4.3 の 4 に書いた。一覧に V10・TC-01 A12 に確かめる項目を足した
+   - W（実験役の作業ツリーの外への影響）: 守る範囲は I181 の「普通の書き方の事故」のまま（作業ツリーの外は見張り・settings の deny・auto の判定に任せる。I166 延長周で親〔auto〕が同じ実験を実行していた範囲と同じ）。精密な検知は作らない（`feedback_local_guard_github_last_line`）。V9 にその前提を書いた
+   - W（手動 No.2 の関数名・読み込み方）: §4.3 の 1 に source-only の形と主な関数名（`run_experiment_agent` など）を書いた
+   - W（S6 の比べる相手）: S6 を「比べる相手との merge-base から HEAD まで」に変えた（I200 が先にマージされても落ちない）
+   - W（費用の上限）: 既定をレビュー役 2・実験役 0.5（ドル・1 呼び出し）に下げ、最悪の合計を §12 に書いた。実際の費用は手動 No.1 で記録し、retro で既定を見直す
+   - Info（計画変更記録）: この記録を足した
+   - 計画レビューのやり直し: 要（一覧の形・入力の仕様を変えたため）
+
+## レビュー結果
+- [20261026_0711 判定: 差し戻し（Blocker 2件）](../../reviews/I197_plan_review_20261026_0711.md)
