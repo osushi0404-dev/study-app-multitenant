@@ -64,7 +64,7 @@
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra: `.claude/skills/review-gate/SKILL.md`・`.claude/agents/adversarial-reviewer.md`・`.claude/agents/plan-reviewer.md`（1 行）・`scripts/claude/`（新規 2・変更 5・削除 1）・`scripts/claude/tests/`（新規 1・変更 2）・`docs/runbooks/review-rules.md`・`docs/runbooks/workflow.md`・`docs/plans/templates/plan_template.md`。`.claude/settings.json` と見張りは変えない（I200 が担当）
+- Config/Infra: `.claude/skills/review-gate/SKILL.md`・`.claude/agents/adversarial-reviewer.md`・`.claude/agents/plan-reviewer.md`（1 行）・`scripts/claude/`（新規 2・変更 4・削除 1）・`scripts/claude/tests/`（新規 1・変更 2）・`docs/runbooks/review-rules.md`・`docs/runbooks/workflow.md`・`docs/plans/templates/plan_template.md`。`.claude/settings.json` と見張りは変えない（I200 が担当）
 - 依存関係ファイル（requirements*.txt / package*.json）: 変更なし
 
 ## 4. 変更点一覧（具体）
@@ -290,6 +290,8 @@ Danger Ops（有無/手順/ロールバック）:
    - W（費用の上限）: 既定をレビュー役 2・実験役 0.5（ドル・1 呼び出し）に下げ、最悪の合計を §12 に書いた。実際の費用は手動 No.1 で記録し、retro で既定を見直す
    - Info（計画変更記録）: この記録を足した
    - 計画レビューのやり直し: 要（一覧の形・入力の仕様を変えたため）
+2. 2026-10-26 2 回目の計画レビュー（`I197_plan_review_20261026_0713.md`・OK・Warning 4・Info 2）への対応: FG-A8・FG-A9・FG-A10 を auto_test に足した。S1 を行末の `\` でつないだ論理行で見る形にした。§3 の変更の数を 4 に直した。費用の実測は手動 No.1 で記録する（済み）。auto の挙動の差は init のモードで止まる側に倒す設計のまま。節番号の飛び（§10・§11 は条件付きの節で該当なし）はそのまま。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない、テストの追加と数の訂正だけ）
 
 ## レビュー結果
+- [20261026_0713 判定: ✅ 完了](../../reviews/I197_plan_review_20261026_0713.md)
 - [20261026_0711 判定: 差し戻し（Blocker 2件）](../../reviews/I197_plan_review_20261026_0711.md)

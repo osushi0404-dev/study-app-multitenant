@@ -47,7 +47,7 @@ L: `review-process-lib.sh`
 - L5 `claude_log_last_tool` は最後の `tool_use` の名前・入力の先頭・その結果の先頭・経過秒を出す。`tool_use` が無いログでは名前の欄が「(なし)」
 
 S: 静的な検査
-- S1 `scripts/claude/*.sh`（`tests/` を除く）の `claude -p` を含む行がすべて `--permission-prompts none` を含むか、`run_claude_logged` の呼び出しである。FG-S1: `scripts/claude/` を一時フォルダに写し、`plan-issue-review.sh` の写しから `--permission-prompts none` を消すと S1 が非ゼロ
+- S1 `scripts/claude/*.sh`（`tests/` を除く）を、行末の `\` で続く行をつないで 1 つの論理行にしてから、`claude -p` を含む論理行がすべて `--permission-prompts none` を含むか、`run_claude_logged` の呼び出しである。FG-S1: `scripts/claude/` を一時フォルダに写し、`plan-issue-review.sh` の写しから `--permission-prompts none` を消すと S1 が非ゼロ
 - S2 `.claude/agents/adversarial-reviewer.md` の frontmatter の `tools:` が `Read, Grep, Glob` だけ。本文に `EXPERIMENT_BEGIN`・`ITEM:`・`10 分` がある
 - S3 `.claude/skills/review-gate/SKILL.md` §3 に `bash scripts/claude/adversarial-review.sh` があり、`subagent_type`・`review-timer.sh`・`TaskStop` が無い。`scripts/claude/review-timer.sh` が無い。FG-S3: SKILL の写しに `subagent_type: adversarial-reviewer` を 1 行足すと非ゼロ
 - S4 `docs/runbooks/review-rules.md` に `## 検証の全体設計（I197）` の節があり、`docs/plans/templates/plan_template.md` に `## 必ず確かめる項目` と表の見出し `| 項目 | 観点 | 確かめ方 | 内容 |` があり、`.claude/agents/plan-reviewer.md` に `必ず確かめる項目` がある
@@ -59,6 +59,9 @@ FG（判定の要を壊すと落ちること。adversarial-review.sh を一時�
 - FG-A3 実験の照合（`claude_log_ran` の結果）を見ずにレビュー役の `RESULT=experiment` を信じる → A3 が不合格になる
 - FG-A5 「報告なしの観点を未検証・exit 3 にする」を消す → A5 が不合格になる
 - FG-A14 持ち主の観点以外の `ITEM:` 行も読む → A14 が不合格になる
+- FG-A8 実験役の後の作業ツリーの比較を消す → A8 が不合格になる
+- FG-A9 周回の上限の比較を消す → A9 が不合格になる（上限を超えても実行する）
+- FG-A10 一覧の形の検査（確かめ方の値・見出しの階層）を消す → A10 が不合格になる
 
 ## 決定論ゲート（自動実走）
 ```bash
