@@ -288,3 +288,50 @@ class QuizSessionSerializer(serializers.ModelSerializer):
 - [20261025_1150 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1150.md)
 - [20261025_1145 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1145.md)（VERDICT: HIGHRISK・Blocker 0・Info 1）
 - 指摘への対応（2026-10-25）: Info（false-green 自己検証の「開始の検査」に TC-10 ② の記載が無い）→ auto_test の該当行に TC-10 ② を追記。記録の補完のみで方式・範囲・AC は変わらないため、再レビューはしない。
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-25
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | マルチテナント | 判定を 1 か所に集めても、クイズの経路に `Problem.objects` / `Subject.objects` を直接使う取得が残ると、そこから他組織の問題・正解・解説が漏れる（今回の不具合と同じ型の再発） | **必須防御条件**: `QuizSessionViewSet` と `QuizService` で科目・問題を取るときは必ず `available_subjects` / `available_problems` を通す。TC-04・TC-05・TC-06・TC-09 と false-green 注入（取得を元に戻すと RED）で固定。**禁止事項**: クイズの経路に組織で絞らない `Problem.objects.get/filter`・`Subject.objects.get/filter` を新たに書かない（code-review・敵対的レビューの観点 1・4 で確認） |
+| Low | マルチテナント | 問題の組織を `Problem.organization_id` で判定すると、null の問題（データ移行中・既存テストも空）で判定が崩れる。`Problem.organization` と `Subject.organization` が食い違うデータがあると判定が割れる | 判定は `subject__organization_id` に統一する（計画の修正項目 1）。dev DB の食い違い 0 件を確認済み。**禁止事項**: 境界の判定に `Problem.organization_id` を使わない |
+| Low | マルチテナント | `retrieve`（`QuizSessionDetailSerializer` の `answers.problem` は `ProblemSerializer` で解説を含む）は、セッションに他組織の問題への回答が既にあると、それを返す | 本変更で他組織の問題への回答は作られなくなる（TC-05・TC-06・TC-09）。既存データは dev DB で 0 件（手動 No.1 で再確認）。本番など別の環境へ出す前に、手動 No.1 と同じ件数確認を行う（0 でなければ扱いを決めてから出す） |
+| Low | 認証・認可 | 組織に属さないユーザー・context の無いシリアライザで、判定が「組織の無い科目」と一致して全体共有科目が使えてしまう（`organization_id=None` どうしの一致） | `organization_id is None` は `none()` を返す（fail-closed）。context なしは `Subject.objects.none()`。TC-10・TC-11 と false-green 注入で固定 |
+| Low | 入力検証 | `subject` に文字列・負数・巨大な数・配列などを送る | DRF の `PrimaryKeyRelatedField` の型検証で 400（`incorrect_type` / `does_not_exist`）。`problem_id` は既存の `IntegerField`（不正は 400）。ORM のみで SQL を組み立てない |
+| Low | 機密情報（存在の秘匿） | 他組織の科目・問題と存在しない ID で応答が違うと、ID を総当たりして他組織のデータの有無が分かる | 両者を同じ応答にする（400 `does_not_exist`・404 `{"error": "Problem not found"}`）。TC-01・TC-05 で応答の同一性を固定。応答時間の差は 1 件取得のクエリ 1 本どうしで実質なし |
+| — | OWASP Top 10 | A01（Broken Access Control・IDOR）の是正が本変更の目的。SQLi: ORM のみ。XSS: 表示の変更なし。CSRF: JWT（Authorization ヘッダ）の API で変更なし。セキュリティ設定の変更なし | — |
+| — | ファイル操作 | なし（`explanation_image` の URL を返す処理は変えず、他組織の問題では返さなくなる） | — |
+| — | 外部通信 | なし | — |
+| — | 依存ライブラリ | なし（追加なし） | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/quiz/` | 一般（組織 A） | 組織 B の科目 ID を送って開始し、組織 B の問題を出させる | 存在しない ID と同じ 400・セッションを作らない | Yes: TC-01 | No | なし | Low |
+| 2 | `POST /api/quiz/` → `GET .../next_problem/` | 一般（組織 A） | 科目なし（省略・`null`）で開始し、全組織の問題を出させる | 問題数・出題は自組織の未削除の問題だけ | Yes: TC-03・TC-04 | Yes: 手動 No.3（画面の「クイズを実行」） | なし | Low |
+| 3 | `POST /api/quiz/<id>/submit_answer/` | 一般（組織 A） | 自分のセッションに組織 B の `problem_id` を送り、正解と解説を取る | 存在しない問題と同じ 404・回答を保存しない・正解と解説を返さない | Yes: TC-05 | No | なし | Low |
+| 4 | `POST /api/quiz/<id>/submit_answer/` | 一般（組織 A） | 科目ありのセッションで同じ組織の別の科目の問題に回答し、集計を水増しする | セッションの科目外は 404 | Yes: TC-06 | No | なし | Low |
+| 5 | `POST /api/quiz/`（完了画面の「もう一度挑戦」と同じ送り方） | 一般（組織 A） | 他組織の科目を持つ終了済みセッションの `subject` を送って開始し直す | 他組織の科目は 400 | Yes: TC-08 | Yes: 手動 No.4（自組織の再挑戦が動く） | なし | Low |
+| 6 | `GET .../next_problem/`・`POST .../submit_answer/` | 一般（組織 A） | 何かの経路で他組織の科目を持つセッションができた状態で出題・回答させる | 取り出しでも自組織に絞る（多層防御）・404 | Yes: TC-09 | No | なし | Low |
+| 7 | `POST /api/quiz/`・`next_problem` | 一般（組織なし） | 組織に属さないユーザーで、全体共有科目（`organization` が空）を使う | 何も使えない（問題数 0・出題 404・科目指定は 400） | Yes: TC-10 | No | なし | Low |
+| 8 | `POST /api/quiz/`・`submit_answer` | 一般（組織 A） | ID を順に変えて送り、応答の違いから組織 B の科目・問題の有無を調べる | 他組織と存在しないで同じ応答 | Yes: TC-01・TC-05（応答の同一性） | No | 応答時間の差は実質なし（どちらも 1 件取得 1 本） | Low |
+| 9 | `GET /api/quiz/<id>/`（`retrieve`）・`GET /api/quiz/` | 一般（組織 A） | 他人のセッション ID を指定して回答・解説を見る | `get_queryset` で本人のセッションだけ（404・変更なし） | No（既存の挙動・本変更で触らない） | No | なし | Low |
+| 10 | `GET /api/quiz/<id>/`（`retrieve`） | 一般（組織 A） | 過去に作られた他組織の問題への回答の解説を見る | 他組織の問題への回答が存在しない | Yes: TC-05・TC-06・TC-09（新たに作られない） | Yes: 手動 No.1（既存データ 0 件） | 別の環境の既存データは未確認（出す前に No.1 と同じ確認） | Low |
+| 11 | `POST /api/quiz/` | 未認証 | 開始・出題・回答を呼ぶ | 401（`IsAuthenticated`・変更なし） | No（I158 の TC-17 で固定済み） | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 1件 | 0件 |
+| Low     | 5件 | 11件 |
+
+### 残余リスク処遇
+（/retro で決定する）
