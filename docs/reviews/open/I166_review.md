@@ -36,4 +36,18 @@
 - 「判定は 1 か所」を反証せよ: クイズの経路で `available_subjects` / `available_problems` を通らない科目・問題の取得が残っていないか。
 
 ## 結果
-（/code-review・/test で記入）
+（2026-10-26 記入）
+
+### 実装結果評価
+- 観点 1〜4 全項目 OK。エビデンス: 基本レビュー `docs/reviews/I166_code_review_20261025_1230.md`（AC 7 件すべて実装済み・Blocker/High 0・Low 2・VERDICT: OK）、敵対的レビュー 3 記録（`I166_adversarial_review_20261025_1249.md`＝第 1 周・3 体とも確認画面で止まり報告なし／`_1450.md`＝第 2 周・Medium 1 を修正・親による再実証つき／`_1820.md`＝ユーザー承認の延長周・読むだけのレビュー役＋親が実験を実行・範囲内 High 1 を TC-12 で修正）。
+- 観点 1「クイズの経路に組織で絞らない取得が残っていない」: `QuizSessionViewSet` と `quiz_service.py` の中で `Problem`／`Subject` を取り出すのは `available_problems`／`available_subjects` だけ（親が読んで確認・延長周の観点 1 も静的に確定）。
+- 範囲外で見つかったもの: 学習記録 API（間隔反復のカード作成）の他組織データの漏れ（High・以前からの別経路・実測済み）→ ユーザー決定で別イシュー・最優先。適応的な問題選択（Low）・解説画像がある問題への回答で 500（Low）も別イシューの候補。起票コマンドはデスクトップ。
+- 計画外の変更: なし（実装コードは計画どおり。テストの追加〔TC-01 の共有科目・TC-12〕はレビュー指摘への対応で、テスト文書に記録）。
+
+### テスト結果
+- 自動（/test 2026-10-26）: TC-20 **14 passed**・TC-21 **137 passed**・TC-22 全 Passed・TC-23 E2E **8 passed**・CI 7 ジョブすべて pass。
+- TDD RED（実装前 10 failed / 2 passed）・false-green 注入（出題・回答・開始・組織なし・共有科目・復習モードの 2 分岐）を確認済み（`docs/tests/open/I166_auto_test.md`）。
+- 手動: No.1〜4 すべて OK（すべて Claude 実施・Playwright MCP で画面確認・画像は `.evidence/I166/`）。
+
+### 総合判定
+OK — 残作業は /retro・/close と PR #330 の Approve & Merge。retro の材料: 敵対的レビューの第 1 周が確認画面で止まり「通過」になった件（検証の仕組みを白紙から作り直すイシューを I166 のクローズ後に起票・ユーザー指示）。

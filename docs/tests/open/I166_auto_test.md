@@ -107,5 +107,12 @@ BODY_404_PROBLEM = {"error": "Problem not found"}
 ## 敵対的レビュー第 2 周の対応（2026-10-25）
 - Medium（組織に属するユーザーが全体共有科目で開始する経路がテストされていない）→ TC-01 に共有科目での開始（400・セッション 0 件）を追加。`available_subjects` に `| Subject.objects.filter(organization__isnull=True)` を混ぜる注入で **TC-01 が RED**（`201 == 400`）になることを確認 → Edit で復元。TC-20 **12 passed**・TC-21 **135 passed**。
 
+## /test 実施記録（2026-10-26・最終確認）
+- TC-20: **14 passed**（TC-01〜TC-12・TC-03 と TC-12 は 2 パターン）
+- TC-21: Backend 全体 **137 passed**（baseline 123＋新規 14）
+- TC-22: `pre-commit run --files`（変更 4 ファイル）→ ruff・bandit を含む全フック Passed
+- TC-23: ローカル `docker compose --profile e2e run --rm e2e` → **8 passed**・CI（PR #330・ae65835）: Backend Lint & Security / Backend Tests / E2E Tests (Playwright) / Frontend Lint & Security / Frontend Tests / Frontend Type Check / Harness Tests すべて pass
+- 停止条件該当なし
+
 ## 敵対的レビュー延長周の対応（2026-10-25）
 - High（復習モードの選び直しを確かめるテストが無い。2 か所を `Problem.objects.filter(id__in=answered)` に簡略化しても 12 件合格）→ TC-12（2 パターン）を追加。注入結果: レビュー役の注入 `fg_review.py`（2 か所とも壊す）→ **TC-12 の 2 件が RED**。分岐を片方ずつ壊す `fg_branch.py` → `BRANCH=1` で `exclude-recent-branch` だけ RED・`BRANCH=2` で `fallback-branch` だけ RED（各パターンが狙った分岐を通っている）。注入は pytest のプラグイン（`-p`）で読み込み、作業ツリーは変えていない。TC-20 **14 passed**・TC-21 **137 passed**。
