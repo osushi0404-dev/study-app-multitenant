@@ -283,3 +283,7 @@ class QuizSessionSerializer(serializers.ModelSerializer):
 - [ ] UI: 見た目・配置・ラベルの変更なし（科目なしで始めたクイズの「全 N 問」が自組織の数になる）— でよいか
 - [ ] 手動テスト: すべて Claude 実施（dev DB の読み取り・Playwright MCP での画面確認）・Human の目視なし — でよいか
 - [ ] 高リスク判定 Yes（承認の後に `/security-review I166`）— でよいか
+
+## レビュー結果
+- [20261025_1145 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1145.md)（VERDICT: HIGHRISK・Blocker 0・Info 1）
+- 指摘への対応（2026-10-25）: Info（false-green 自己検証の「開始の検査」に TC-10 ② の記載が無い）→ auto_test の該当行に TC-10 ② を追記。記録の補完のみで方式・範囲・AC は変わらないため、再レビューはしない。

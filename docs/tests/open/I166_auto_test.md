@@ -88,6 +88,6 @@ BODY_404_PROBLEM = {"error": "Problem not found"}
 復元は必ず Edit ツールで行い、`git restore` は使わない（実装差分の保護）。復元後に `git diff` が実装差分のみであることを確認する。
 - **出題の多層防御（TC-04・TC-09）**: `get_next_problem` の `QuizService.available_problems(...)` を一時的に `Problem.objects.filter(is_deleted=False)`（＋`session.subject` の絞り込み）に戻す → TC-04・TC-09 が RED になることを確認 → 復元。
 - **回答の照合（TC-05・TC-06）**: `submit_answer` の取得を一時的に `Problem.objects.get(id=problem_id, is_deleted=False)` に戻す → TC-05・TC-06 が RED を確認 → 復元。
-- **開始の検査（TC-01・TC-08 ②）**: `QuizSessionSerializer` の `subject = QuizSubjectField(...)` の行を一時的に削除 → TC-01・TC-08 ② が RED を確認 → 復元。
+- **開始の検査（TC-01・TC-08 ②・TC-10 ②）**: `QuizSessionSerializer` の `subject = QuizSubjectField(...)` の行を一時的に削除（`ModelSerializer` が全科目を受け付ける自動のフィールドに戻る）→ TC-01・TC-08 ②・TC-10 ② が RED（201）を確認 → 復元。
 - **組織なしの fail-closed（TC-10）**: `available_problems` と `available_subjects` の `if user.organization_id is None` の分岐を一時的に削除 → 組織の無いユーザーに全体共有科目（`organization` が空）が一致し、TC-10 ①（`total_problems == 1`）と ③（201）が RED になることを確認 → 復元。
 - 記録欄: （/implement で記入）
