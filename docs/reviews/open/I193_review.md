@@ -44,6 +44,7 @@
 - [fix-loop] 6 回目は案 A（設計書 §3 に L15・L16 を足す）。案 B（fix 系のレビュー役を消す）は、直しの診断・テストの空振りを止める場所が無くなるので採らなかった。診断・実装・テストのレビューはすべて PASS
 - [review-gate] 7 回目の基本レビュー（`I193_code_review_20261025_1121.md`）は HIGH（High 2・Medium 5・Low 2）。test-gate を通った後なので上限の数え方では 1 回目。直すのは High 2 件だけにし、Medium 5 件（レビュー役の失敗を BLOCKER に合成して fix-loop を消費する・レビュー開始時の作業ツリーの確認・背景実行の上限・待つワークフローの決め打ち・組み込みのレビューを plan モードだけで読み取り専用にしている）と Low 2 件は retro に回す — どれも High に直結しない。基本レビューが毎回ブランチ全体を見て、100KB で切れた差分の別の場所から新しい指摘を出す（7 回目の High 2 件も以前からある部分）のは、retro で「2 回目以降は差分に絞る」を扱う
 - [fix-loop] 7 回目は診断メモ `I193_fix_diagnosis_20261025_1135.md`。H1 は案 A（ユーザーが選んだときだけ受け入れの記録を作る。gate-check は変えない）、H2 は案 A（高リスクで /security-review が動かなければ HIGH・基盤の失敗は 1 回だけ実行し直す）。診断・実装・テストのレビューはすべて PASS。全体のテストの 1 回目が関係の無いテストまで一斉に落ちたが、単体では合格・流し直しで全部合格（一時的な環境の揺れ）
+- [review-gate] 8 回目の基本レビューは OK。敵対的レビュー 2 周目（通算 2 周で上限。`I193_adversarial_review_20261025_1200.md`）は 1 周目からの差分だけを見て、3 体とも新規 High 0 → 通過。上限を使い切ったので直さず、Medium 4 件（失敗の印の部分一致で止まりすぎる・失敗の文言が 2 か所・実行し直しの回数を数える手順が無い・受け入れの記録の書き手を決定論で確かめない）と Low は retro に回す
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -90,3 +91,5 @@ STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 
 STAGE_DONE: fix-loop NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
