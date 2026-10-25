@@ -30,7 +30,7 @@
    - OK → retro → close
    - NG → fix-loop → review-gate → test-gate → もう一度人の手動テストを依頼して止まる
 4. retro: 改善案の採否を Claude が決め、直す（記録の場所だけ）・既存イシューに同梱・起票（`issue-bootstrap`）まで行う
-5. close: `gate-check.sh` → 記録を closed へ → PR 説明 → Ready → base 追従 → **Approve & Merge を依頼して止まる**（自律判断の記録と振り返りの結果をまとめて報告する）
+5. close: base 追従 → `gate-check.sh`（取り込んだ後の HEAD を見る）→ 記録を closed へ → PR 説明 → Ready → 追従と CI の最終確認 → **Approve & Merge を依頼して止まる**（自律判断の記録と振り返りの結果をまとめて報告する）
 6. ユーザーが GitHub で Approve & Merge
 
 詳細なイシューフローは docs/runbooks/issue-flow.md を参照。設計の根拠は docs/proposals/I193_official_base_flow.md。

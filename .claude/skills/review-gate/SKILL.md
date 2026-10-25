@@ -32,7 +32,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
 スクリプト stdout の固定行（`ADVERSARIAL_STAGE:` と `FINAL_VERDICT:`）で分岐する:
 
 - `FINAL_VERDICT: BLOCKER` または `FINAL_VERDICT: HIGH` → 4. の結線で `NEXT: fix-loop`（修正の後は fix-loop が必ずこの段階に戻す）
-  - **繰り返しの上限**（review-gate ⇄ fix-loop が終わらないことを防ぐ・I193）: 記録の最後の `STAGE_DONE: review-gate NEXT: fix-loop` の行が、途中に `STAGE_DONE: review-gate NEXT: test-gate` を挟まずに数えて、今回で 4 回目以上になるときは、止める条件 3 の安全側（範囲を狭める）として、fix-loop で直すのは Blocker・High だけにし、Medium 以下は自律判断の記録に書いて retro に回す。5 回目になるときは、fix-loop へ回さずに止める（止める条件 3。ここまで直しても新しい High が出続けるのは、止める場所・方式の見直しが要る兆し）
+  - **繰り返しの上限**（review-gate ⇄ fix-loop が終わらないことを防ぐ・I193）: 記録の最後の `STAGE_DONE: review-gate NEXT: fix-loop` の行が、途中に `STAGE_DONE: review-gate NEXT: test-gate` か `STAGE_DONE: implement` の行を挟まずに数えて（実装をやり直したら数え直す）、今回で 4 回目以上になるときは、止める条件 3 の安全側（範囲を狭める）として、fix-loop で直すのは Blocker・High だけにし、Medium 以下は自律判断の記録に書いて retro に回す。5 回目になるときは、fix-loop へ回さずに止める（止める条件 3。ここまで直しても新しい High が出続けるのは、止める場所・方式の見直しが要る兆し）
 - `FINAL_VERDICT: OK` かつ `ADVERSARIAL_STAGE: NOT_REQUIRED` → 4. の結線で `NEXT: test-gate`
 - `FINAL_VERDICT: OK` かつ `ADVERSARIAL_STAGE: REQUIRED` → 3. の敵対的レビューステージを実行する
 

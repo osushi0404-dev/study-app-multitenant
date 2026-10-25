@@ -38,6 +38,7 @@
 - [implement] §5.9 は、スキル側に手順を書き写さず `docs/runbooks/frontend-verify.md`・`check-permission-prompt.sh` の冒頭を参照する形にした（/simplify の 4 観点の指摘。同じ決まりが 3〜4 か所にあるとずれる）。スキルに残したのは段階に固有のこと（判定スクリプトを流す順・0 以外でも fix-loop に回さない・危ない操作は代わりの操作で確かめる）だけ。見送り: 公開リポジトリに貼らないものの一覧を 1 か所にまとめる（もともと retro・issue-bootstrap の 2 か所にあり、まとめ先の手順書を新しく決めるのは範囲の外）・R6 と S21 の古い名前の検査の統合（R6 はイシュー番号つきの形をリポジトリ全体で見る。番号無しの形を全体に広げると、組み込みの `/code-review` を正しく指す文書まで落ちる）。あわせて `workflow.md` の「/close step 0」と `rules/*.md` の「/plan-issue-review・/code-review」を段階の名前に直した（受け入れ条件 14）
 - [review-gate] ユーザーの指示（2026-10-25「5 回目で止まっても延長していいので進めて」）: 繰り返しの上限の 5 回目に当たっても止めずに fix-loop へ回す（延長はこのイシューに限る）
 - [review-gate] 5 回目の基本レビュー（`I193_code_review_20261025_0326.md`）は HIGH（High 1・Medium 6・Low 2）。上の延長で fix-loop へ回す。4 回目以降の決まりで直すのは High（close が gate-check の後に develop を取り込み、きれいに取り込めたときにレビューを通り直さない）と、それに直結する Medium 1 件（繰り返しの上限が計画のやり直しより前の周まで数える。今回の延長の判断にかかわるため）だけ。採らない: design-security-review の `disallowed-tools` が効かないという Medium — この会話の design-security-review 段階で Write が実際に使えなくなったのを見ている（効いている）。残りの Medium 4 件（/security-review がパス判定 YES のときだけ・記録だけのコミットで NOT_PUSHED・ジョブ名の完全一致・run-all.sh の分類）と Low 2 件は retro に回す
+- [fix-loop] 5 回目は診断メモ `I193_fix_diagnosis_20261025_0345.md` を先に書き、診断・実装・テストのレビューはすべて PASS。H1 は案 A（close の順番を入れ替え、base 追従の後に gate-check）— 新しい判定を足さず、今ある gate-check の G19 を正しい位置で使えるため。M1 は区切りに `STAGE_DONE: implement` を足した
 
 ## 影響範囲
 - Backend/Frontend/DB: なし

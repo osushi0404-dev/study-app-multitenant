@@ -11,11 +11,7 @@ user-invocable: false
 
 止めてユーザーに聞くのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるときだけ（マージの依頼は別。ユーザーだけが行える）。技術的な問題（develop との食い違いなど）は自分で解決し、決めたことは `docs/reviews/open/I###_review.md` の「## 自律判断の記録」に `- [close] 決めたこと — 理由` で書く。この段階が書いてよいのは `docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/` だけ。
 
-（事前チェック・必須・決定論）レビュー済みの HEAD か:
-```bash
-bash scripts/claude/gate-check.sh I###
-```
-exit 1 のときは、出力の `GATE_CHECK: FAIL REASON=<理由>` で test-gate の手順 1 と同じに分ける（`dirty` は片付けてから、`base` は fetch してからやり直す。それ以外は `docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: review-gate` を書いて終わる。gate-check で review-gate に戻すのが 2 回続くときは止める〔止める条件 3〕）。
+順番の決まり: HEAD を動かす base 追従（step 0）を先に行い、その後で gate-check（レビュー済みの HEAD か）を確かめる（I193 5 回目 H1。確かめた後に develop を取り込むと、取り込んだ後の中身がレビューを通らないまま進む）。
 
 0) PR のベースブランチ確認と base 追従（必須）:
    ```bash
@@ -37,6 +33,12 @@ exit 1 のときは、出力の `GATE_CHECK: FAIL REASON=<理由>` で test-gate
    # exit 2 → mergeStateStatus=UNKNOWN が継続。1 回だけ実行し直し、続けば自律判断の記録に書いて続行する
    ```
    exit 1 のとき: 食い違いを解決して commit する。解決のために要件・基本設計・UI/UX の判断が要るとき（どちらの変更を残すかで仕様や画面が変わるとき）だけ止める（止める条件 1）。記録の場所の外を直した・取り込んだときは、`STAGE_DONE: close NEXT: review-gate` を書いて終わる（取り込んだ変更を含めてレビューを通り直す）
+
+0.5)（必須・決定論）レビュー済みの HEAD か（base 追従の後の HEAD を見る）:
+   ```bash
+   bash scripts/claude/gate-check.sh I###
+   ```
+   exit 1 のときは、出力の `GATE_CHECK: FAIL REASON=<理由>` で test-gate の手順 1 と同じに分ける（`dirty` は片付けてから、`base` は fetch してからやり直す。それ以外は `docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: review-gate` を書いて終わる。取り込んだ develop がブランチの変えたファイルにも触れていたときもここで落ち、レビューを通り直す。gate-check で review-gate に戻すのが 2 回続くときは止める〔止める条件 3〕）。
 1) docs/*/open の対象 I### ファイルを closed へ移動（以下を順番に実行）:
    ```bash
    ISSUE_NUM="###"  # 実際のイシュー番号（3桁）に置き換える

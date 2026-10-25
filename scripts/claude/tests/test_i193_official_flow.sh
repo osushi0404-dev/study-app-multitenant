@@ -140,6 +140,18 @@ ck "S18 review-gate に NO_PR の扱いがある" 0 "$(rc grep -qF '`CI_WAIT: NO
 ck "S19 review-gate に review-gate ⇄ fix-loop の繰り返しの上限がある" 0 "$(rc grep -qF '**繰り返しの上限**' .claude/skills/review-gate/SKILL.md)"
 ck "S19 繰り返しの上限: 4 回目から High・Blocker だけ直し、5 回目は止める" 0 "$(rc bash -c 'grep -qF "今回で 4 回目以上になるときは" "$1" && grep -qF "fix-loop で直すのは Blocker・High だけ" "$1" && grep -qF "5 回目になるときは、fix-loop へ回さずに止める" "$1"' _ .claude/skills/review-gate/SKILL.md)"
 ck "S20 test-gate: dirty は記録の場所の外をコミットせず fix-loop へ（I193 4 回目 M3）" 0 "$(rc bash -c 'grep -qF "この段階は記録の場所の外をコミットしない" "$1" && grep -qF "実装の一部（コミットし忘れ）なら \`STAGE_DONE: test-gate NEXT: fix-loop\`" "$1"' _ .claude/skills/test-gate/SKILL.md)"
+ck "S19 繰り返しの上限は、実装をやり直した（STAGE_DONE: implement）後から数え直す（I193 5 回目 M1）" 0 "$(rc grep -qF '`STAGE_DONE: review-gate NEXT: test-gate` か `STAGE_DONE: implement` の行を挟まずに数えて' .claude/skills/review-gate/SKILL.md)"
+# S22: close は base 追従（HEAD を動かす）を先に、gate-check（レビュー済みの HEAD か）を後にする（I193 5 回目 H1）
+s22() {
+  local sync gate
+  sync=$(grep -n 'bash scripts/claude/pr-base-sync.sh sync' "$1" | head -1 | cut -d: -f1)
+  gate=$(grep -n 'bash scripts/claude/gate-check.sh' "$1" | head -1 | cut -d: -f1)
+  [ -n "$sync" ] && [ -n "$gate" ] && [ "$sync" -lt "$gate" ]
+}
+ck "S22 close は develop を取り込んでから gate-check する" 0 "$(rc s22 .claude/skills/close/SKILL.md)"
+printf 'bash scripts/claude/gate-check.sh I###\nbash scripts/claude/pr-base-sync.sh sync\n' > "$TMP/s22.md"
+ck "FG-S22 gate-check の後に取り込む順だと不合格" 1 "$(rc s22 "$TMP/s22.md")"
+ck "S22 workflow.md の close も取り込みが gate-check より先" 0 "$(rc grep -qF '5. close: base 追従 → `gate-check.sh`' docs/runbooks/workflow.md)"
 ck "S13 proceed は STAGE_COUNT で見分ける（LAST_LINE を見分けに使わない）" 0 "$(rc grep -qF '`STAGE_COUNT:`（`STAGE_DONE:` 行の数）が増えていなければ' .claude/skills/proceed/SKILL.md)"
 fs_dir f3 '# x\n\n本文だけ\n'
 ck "F3 STAGE_DONE 行が無いと exit 2" 2 "$(fs_rc f3)"
