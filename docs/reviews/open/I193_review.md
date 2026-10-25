@@ -94,3 +94,5 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: fix-loop NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: test-gate
+
+STAGE_DONE: test-gate NEXT: human-test
