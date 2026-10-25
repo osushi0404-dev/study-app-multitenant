@@ -155,3 +155,5 @@ STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
