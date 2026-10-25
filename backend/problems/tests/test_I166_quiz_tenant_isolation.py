@@ -7,12 +7,14 @@ I166: クイズの全経路（開始・出題・回答・再挑戦）で組織�
 - 他組織の科目を持つセッションが既にあっても、他組織の問題は出ない・答えられない（多層防御）
 - 組織に属さないユーザー・context の無いシリアライザは何も受け付けない（fail-closed）
 
-TC-01〜TC-11（docs/tests/open/I166_auto_test.md）に対応。
+TC-01〜TC-12（docs/tests/open/I166_auto_test.md）に対応。
 """
 import json
+from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -252,6 +254,39 @@ def test_existing_foreign_subject_session_does_not_leak(setup):
     assert answered.status_code == status.HTTP_404_NOT_FOUND
     assert answered.json() == BODY_404_PROBLEM
     assert QuizAnswer.objects.filter(session=session).count() == 0
+
+
+# ---- TC-12: 他組織の問題への過去の回答があっても、復習モードで他組織の問題は出ない（多層防御） ----
+# 復習モードは回答済みの問題から選び直す。回答済みに他組織の問題が混ざっていても、
+# 出題対象（自組織・科目）の中からしか選ばないことを、復習モードの 2 つの分岐それぞれで確かめる。
+# 選び方は乱数のため、他組織の問題を候補の多数にして 20 回出題する（絞り込みが外れると見逃す確率は 1e-8 未満）。
+@pytest.mark.parametrize("extra_own", [0, 4], ids=["fallback-branch", "exclude-recent-branch"])
+def test_review_mode_ignores_foreign_answers(setup, extra_own):
+    user = setup["user_a"]
+    client = _client(user)
+    session_id = _start(client, {}).data["id"]
+    session = QuizSession.objects.get(pk=session_id)
+
+    # 他組織の問題への回答（I166 より前のデータを想定）を古い日時で直接入れる
+    for problem in setup["problems_b"]:
+        QuizAnswer.objects.create(session=session, problem=problem)
+    QuizAnswer.objects.filter(session=session).update(
+        answered_at=timezone.now() - timedelta(days=1))
+
+    # 自組織の問題にすべて回答して復習モードにする。extra_own=4 では自組織の回答を 6 件にし、
+    # 「最近の 5 問を除外する」分岐（他組織の 3 件と自組織の 1 件が候補）を通す。
+    # extra_own=0 では回答が 5 件以下になり、除外した後の候補が空になって後段の分岐を通す。
+    own = [setup["problem_a1"], setup["problem_a2"]]
+    own += [_problem(setup["subject_a2"], user, f"A追加{i}") for i in range(extra_own)]
+    for problem in own:
+        assert _answer(client, session_id, problem).status_code == status.HTTP_200_OK
+
+    own_ids = {problem.id for problem in own}
+    for _ in range(20):
+        response = client.get(f"{QUIZ_URL}{session_id}/next_problem/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["is_review_mode"] is True
+        assert response.data["id"] in own_ids
 
 
 # ---- TC-10: 組織に属さないユーザーは何も使えない（fail-closed） ----
