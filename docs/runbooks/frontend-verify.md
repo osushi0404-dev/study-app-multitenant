@@ -4,8 +4,8 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 
 ## 1. 目的と範囲
 - Claude が Playwright MCP で、起動・ログイン・入力・画面遷移・画面キャプチャ・コンソールエラーの確認まで自分で行う。人に頼むのは、公式の機能まで探しても Claude で確かめる手段が無いもの（操作感・外部ツールの操作など）だけ。承認画面が出るかは `scripts/claude/check-permission-prompt.sh` で Claude が確かめる。
-- 画像は git に入れない。長く残す証拠は「CI で毎回動くテスト（E2E・単体テスト）」と「文章の記録（テスト記録の 1 行）」。画面の動きを変えたら、手で確かめるだけで終わらせず E2E か単体テストを追加・更新する（`/code-review` の観点）。
-- 対象: `frontend/src` を変えたイシュー（`/test` の判定スクリプトが確認のし忘れを止める）。`/implement` の途中で使ってもよい。
+- 画像は git に入れない。長く残す証拠は「CI で毎回動くテスト（E2E・単体テスト）」と「文章の記録（テスト記録の 1 行）」。画面の動きを変えたら、手で確かめるだけで終わらせず E2E か単体テストを追加・更新する（review-gate 段階のレビュー役〔`.claude/agents/code-reviewer.md`〕の観点）。
+- 対象: `frontend/src` を変えたイシュー（implement 段階で確かめ、test-gate 段階の判定スクリプトが確認のし忘れを止める）。
 
 ## 2. 初回だけの準備
 1. chromium の起動に要る OS の部品（ユーザーが WSL のターミナルで実行。`!` からは sudo のパスワードを入力できない。`sudo npx` は PATH が変わって `npx` が見つからないので、公式コマンドの中身を出してから実行する）:
@@ -50,11 +50,11 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 | 2026-10-24 21:30 | d2a16eb | `/quiz-management` を開き、検索欄に「英語」と入力 | e2e_user_a | 問題管理の一覧が出て、権限エラーが出ない | 一覧が出た・権限エラーなし | quiz-management-a-1.png |
 
 - 画像の列は `.evidence/I###/` 直下のファイル名（複数はカンマ区切り）。確かめられない理由があるときは `理由: …` と書く（例: `理由: バックエンドだけの不具合で画面に出ない`）
-- `/test` で `bash scripts/claude/check-frontend-evidence.sh I###` が、`frontend/src` を変えたイシューでこの行と画像の実在を確かめる。無ければ不合格で止まる
+- test-gate 段階で `bash scripts/claude/check-frontend-evidence.sh I###` が、`frontend/src` を変えたイシューでこの行と画像の実在を確かめる。無ければ不合格（不合格のときの扱いは `.claude/skills/test-gate/SKILL.md`）
 
 ## 7. 画像が消えるタイミング
 - `.evidence/` は gitignore 済み。ワークツリーの片付け（`wt-remove.sh`・公式の自動片付け）で一緒に消える（`git worktree remove` は gitignore 済みのファイルを変更とみなさず、フォルダごと消す）
-- `/close` では消さない（Approve & Merge の前にユーザーが見られる）。ただしワークツリーのセッションを終えると、公式の自動片付けで消えることがある
+- close 段階では消さない（Approve & Merge の前にユーザーが見られる）。ただしワークツリーのセッションを終えると、公式の自動片付けで消えることがある
 - primary で作業した場合は、次のイシューの `/plan-issue` で前のイシューの `.evidence/I###/` を消す
 
 ## 8. E2E の落とし穴と避け方

@@ -1,0 +1,8 @@
+**この先へ続ける（必須・止まらない）**
+上の文書品質ゲートを満たしたら、ユーザーの入力を待たずに先へ進む（計画の承認は待たない。計画は plan-review 段階のレビューで確かめる）。
+1. 計画書・テスト文書・レビュー文書を commit/push する。
+2. `docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する:
+   ```
+   STAGE_DONE: plan NEXT: plan-review
+   ```
+3. Skill ツールで `proceed` を呼ぶ（引数 `$ARGUMENTS`）。proceed が plan-review → （高リスクなら）design-security-review → implement → review-gate → test-gate を順に進め、人の手動テストの手前（人の分が無ければ retro・close を経てマージ依頼）で止まる。

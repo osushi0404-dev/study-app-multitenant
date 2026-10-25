@@ -32,7 +32,7 @@ PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）は、コマ
 
 ## GitHub から復旧できる範囲（I182）
 
-**前提**: develop/main は GitHub 側で保護され（ブランチ保護・CODEOWNERS・承認必須）、bot は PR を出すだけでマージできない。このため Claude がローカルで壊しても GitHub から復旧でき、失いうるのは push していない手元の変更だけである。手元の見張りやレビューの重さは、この前提で決める（`docs/issues/open/I181.md` の「前提」）。
+**前提**: develop/main は GitHub 側で保護され（ブランチ保護・CODEOWNERS・承認必須）、bot は PR を出すだけでマージできない。このため Claude がローカルで壊しても GitHub から復旧でき、失いうるのは push していない手元の変更だけである。手元の見張りやレビューの重さは、この前提で決める（`docs/issues/closed/I181.md` の「前提」）。
 
 **例外（GitHub から復旧できない操作）**: 次の操作は、マージしなくても GitHub 側に取り返しのつかない影響が出る。この範囲の変更は「GitHub が最後の守り」の対象外として扱う。
 

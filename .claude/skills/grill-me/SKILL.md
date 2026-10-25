@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Interview the user about design ambiguities before plan creation.
+description: ユーザーが /grill-me I### を打ったときだけ使う。計画書の作成前に、要件・基本設計・UI/UX の曖昧な点だけをユーザーに確認し、イシューファイルに記録する。
 argument-hint: "I###"
 disable-model-invocation: true
 ---
@@ -8,6 +8,8 @@ disable-model-invocation: true
 # /grill-me
 
 計画書作成前に、イシューの設計上の曖昧な点をユーザーに確認する。
+
+**聞くのは、ユーザーが判断すべきことだけ**（`docs/runbooks/workflow.md`「止めて聞く条件」1）: 要件・基本設計・UI/UX の価値判断（何を作るか・受け入れ条件・仕様・画面の配置/文言/操作の流れ・費用やスコープの方針）。技術的な選択（実装の方式・ファイル構成・ライブラリ・テストの組み方など）は、計画の段階で Claude が決めて理由を書くので、ここでは聞かない（聞いたほうがよい技術的な前提は、選択肢と推奨をつけて 1 問にまとめる）。
 
 ## 実施手順
 
