@@ -139,7 +139,17 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
 # I193: 機械が読む行（VERDICT: など）を行頭から外す。組み込みのレビューの出力を記録に貼るとき、
 # その中の行（差分の中の文章を引用したものを含む）が判定の行として読まれないようにする。
 neutralize_machine_lines() {
-  sed -E 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|ROUNDS|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|CI_WAIT):/\1> \2:/'
+  sed -E 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|ROUNDS|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|CI_WAIT|OFFICIAL_SECURITY):/\1> \2:/'
+}
+
+# I193 7 回目 H2: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（実行できず・読めていない）ら HIGH。
+# 公式のセキュリティレビューは高リスクのときの多層防御の 1 枚なので、抜けたまま OK にしない（止まる側）
+official_security_verdict() {   # $1=RISK_PATH（YES/NO） $2=組み込みの /security-review の出力
+  if [ "$1" = "YES" ] && [[ "$2" == *"(実行できず"* || "$2" == *"(注意: 出力に指摘の配列も"* ]]; then
+    echo HIGH
+  else
+    echo OK
+  fi
 }
 
 # I193: PR で動くワークフローのジョブ名（jobs.<id>.name。無ければ id）を 1 行ずつ出す。
@@ -525,6 +535,12 @@ if [ "$RISK_PATH" = "YES" ]; then
   OFFICIAL_SECURITY="$(cat "$OFFICIAL_DIR/security_note" 2>/dev/null || true)
 $(cat "$OFFICIAL_DIR/security" 2>/dev/null || echo "(実行できず: 結果のファイルが無い)")"
 fi
+SECURITY_VERDICT=$(official_security_verdict "$RISK_PATH" "$OFFICIAL_SECURITY")
+if [ "$SECURITY_VERDICT" != "OK" ]; then
+  echo "⛔ 高リスクの変更で、組み込みの /security-review が動きませんでした（実行できず・読めていない）。HIGH として記録します。"
+  echo "OFFICIAL_SECURITY: FAILED"
+  GATE_EVIDENCE+="- ⛔ 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（HIGH。直すものは無いので review-gate が 1 回だけ実行し直す）"$'\n'
+fi
 
 # コンテキスト組み立て
 CONTEXT="イシュー番号: ${ISSUE}
@@ -597,7 +613,7 @@ GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（LLM=${RISK_LLM} / path=${R
 # I084: 決定論ゲート結果で VERDICT を決定論的に上書きする（LLM 出力非依存）。
 # FINAL = max(gate, omission, LLM)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
 LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
-FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LLM_VERDICT")
+FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LLM_VERDICT" "$SECURITY_VERDICT")
 inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_VERDICT"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"

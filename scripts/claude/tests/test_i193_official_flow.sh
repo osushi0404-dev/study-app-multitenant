@@ -151,6 +151,8 @@ s22() {
 ck "S22 close は develop を取り込んでから gate-check する" 0 "$(rc s22 .claude/skills/close/SKILL.md)"
 printf 'bash scripts/claude/gate-check.sh I###\nbash scripts/claude/pr-base-sync.sh sync\n' > "$TMP/s22.md"
 ck "FG-S22 gate-check の後に取り込む順だと不合格" 1 "$(rc s22 "$TMP/s22.md")"
+ck "S23 review-gate: 受け入れはユーザーが選んだときだけ・ROUNDS: 0・VERDICT: OK の記録を作る（I193 7 回目 H1）" 0 "$(rc bash -c 'grep -qF "ユーザーが 3 を選んだときだけ" "$1" && grep -qF "\`ROUNDS: 0\`" "$1" && grep -qF "Claude が自分で受け入れを書くことはしない" "$1"' _ .claude/skills/review-gate/SKILL.md)"
+ck "S23 review-gate: OFFICIAL_SECURITY: FAILED は fix-loop に回さず 1 回だけ実行し直す（I193 7 回目 H2）" 0 "$(rc grep -qF '出力に `OFFICIAL_SECURITY: FAILED` がある' .claude/skills/review-gate/SKILL.md)"
 ck "S22 workflow.md の close も取り込みが gate-check より先" 0 "$(rc grep -qF '5. close: base 追従 → `gate-check.sh`' docs/runbooks/workflow.md)"
 ck "S13 proceed は STAGE_COUNT で見分ける（LAST_LINE を見分けに使わない）" 0 "$(rc grep -qF '`STAGE_COUNT:`（`STAGE_DONE:` 行の数）が増えていなければ' .claude/skills/proceed/SKILL.md)"
 fs_dir f3 '# x\n\n本文だけ\n'
@@ -345,6 +347,13 @@ C15_DETECT=$(grep -n 'LLM_VERDICT=$(detect_code_verdict' scripts/claude/code-rev
 C15_APPEND=$(grep -n '"$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"' scripts/claude/code-review.sh | head -1 | cut -d: -f1)
 ck "C15 組み込みの出力は判定の後に足す" yes "$([ -n "$C15_DETECT" ] && [ -n "$C15_APPEND" ] && [ "$C15_DETECT" -lt "$C15_APPEND" ] && echo yes || echo no)"
 ck "C12 claude の設定の警告行は除く" "本文" "$(printf 'Permission allow rule (../x.json): Write(a) is not matched\n本文\n' | drop_cli_warnings)"
+# C23: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかったら HIGH（I193 7 回目 H2）
+ck "C23 YES で「実行できず」→ HIGH" HIGH "$(official_security_verdict YES '(実行できず: exit=124。124 は時間切れ)')"
+ck "C23 YES で「読めていない」注意 → HIGH" HIGH "$(official_security_verdict YES $'(注意: 出力に指摘の配列も「指摘なし」も無く、対象を読めていない可能性がある。この出力は判定の根拠にしない)\n本文')"
+ck "C23 YES で読めた結果 → OK" OK "$(official_security_verdict YES '確信度の高い脆弱性は見つかりませんでした。')"
+ck "C23 NO なら（実行していない）→ OK" OK "$(official_security_verdict NO '(実行していない: パス判定 NO)')"
+ck "C23 FINAL の合成に組み込みのセキュリティの判定が入る" 0 "$(rc grep -qF 'FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LLM_VERDICT" "$SECURITY_VERDICT")' scripts/claude/code-review.sh)"
+ck "C23 組み込みの出力の OFFICIAL_SECURITY: 行は行頭から外す" "> OFFICIAL_SECURITY: FAILED" "$(printf 'OFFICIAL_SECURITY: FAILED\n' | neutralize_machine_lines)"
 
 # C16〜C18: code-review.sh を一時のリポジトリで丸ごと実行する（I193 4 回目 H1）。PR を取れない・PR が無いときは
 # CI 待ちを飛ばさず exit 1 と CI_WAIT: NO_PR で止まる。PR があれば CI 待ちへ進む（ここでは PR の HEAD を違えて NOT_PUSHED で止める）
