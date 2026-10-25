@@ -483,7 +483,7 @@ ck "FG-S11 retro から画面キャプチャ・コンソールの記録を消す
 DS=docs/proposals/I193_official_base_flow.md; WF=docs/runbooks/workflow.md
 d1() { local h; for h in "## 2." "## 3." "## 4." "## 5." "## 6." "## 7."; do grep -q "^$h" "$1" || return 1; done
        s_has "$1" "https://code.claude.com/docs/en/best-practices"; }
-d2() { local i; for i in $(seq 1 14); do grep -qE "^\| L${i} \|" "$1" || return 1; done; }
+d2() { local i; for i in $(seq 1 16); do grep -qE "^\| L${i} \|" "$1" || return 1; done; }
 d3() { local t; for t in '/code-review' '/security-review' '/simplify' '/verify'; do
          grep -E "^\| \`${t}\`" "$1" | grep -qE '\*\*(入れる|入れない)\*\*' || return 1; done; }
 d4() { s_has "$1" "## 止めて聞く条件" && s_has "$1" "要件・基本設計・UI/UX" && s_has "$1" "取り消せない操作" && s_has "$1" "安全側の選択肢" && s_has "$1" "## 自律判断の記録"; }
@@ -492,7 +492,7 @@ d6() { s_has "$1" "古い流れのまま最後まで進める" && s_has "$1" "�
 d7() { local c; for c in '/issue-bootstrap' '/grill-me' '/plan-issue' '/proceed'; do s_has "$1" "- ${c}" || return 1; done
        s_has "$1" "ユーザーは打たない"; }
 ck "D1 設計書に §2〜§7 と出典" 0 "$(rc d1 $DS)"
-ck "D2 設計書 §3 に L1〜L14" 0 "$(rc d2 $DS)"
+ck "D2 設計書 §3 に L1〜L16（L15 fix-loop のレビュー役・L16 I187 の判定スクリプト）" 0 "$(rc d2 $DS)"
 ck "D3 設計書 §4 に 4 つの道具の採否" 0 "$(rc d3 $DS)"
 ck "D4 workflow.md に止める 3 条件と自律判断の記録" 0 "$(rc d4 $WF)"
 ck "D5 CLAUDE.md に旧承認ルールが無く止める条件を参照" 0 "$(rc d5 CLAUDE.md)"

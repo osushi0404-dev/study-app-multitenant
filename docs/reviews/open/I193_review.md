@@ -41,6 +41,7 @@
 - [fix-loop] 5 回目は診断メモ `I193_fix_diagnosis_20261025_0345.md` を先に書き、診断・実装・テストのレビューはすべて PASS。H1 は案 A（close の順番を入れ替え、base 追従の後に gate-check）— 新しい判定を足さず、今ある gate-check の G19 を正しい位置で使えるため。M1 は区切りに `STAGE_DONE: implement` を足した
 - [review-gate] 6 回目の基本レビューは OK。敵対的レビュー 1 周目（`I193_adversarial_review_20261025_1110.md`）は、I194 までの暫定の決まりで範囲を例外ファイル（ci.yml の Harness Tests）とその結果を使う CI 待ちに絞り、3 体とも報告して新規 High 0 → 通過。Medium（ワークフローのファイルの一部が読めないと、読めた分だけで CI 待ちが OK になる）と Low 2 件は retro に回す — GitHub の必須チェックが最後の守りで、High に直結しない
 - [test-gate] 手動 No.8 の NG は設計書（`docs/proposals/`。記録の場所の外）の直しなので、自分では直さず fix-loop へ回した
+- [fix-loop] 6 回目は案 A（設計書 §3 に L15・L16 を足す）。案 B（fix 系のレビュー役を消す）は、直しの診断・テストの空振りを止める場所が無くなるので採らなかった。診断・実装・テストのレビューはすべて PASS
 
 ## 影響範囲
 - Backend/Frontend/DB: なし

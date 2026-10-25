@@ -49,6 +49,8 @@
 | L12 | 途中で止まったときの再開（長い自律実行は途中で切れうる） | ― | **載せる**: 各段階が記録に `STAGE_DONE:` を書き、`/proceed` が続きから再開する |
 | L13 | 自動の修正が、実際の差分を誰もレビューしないまま先へ進む（I185 敵対的レビューの種類 B。人の承認をなくすと人も見なくなる） | 一部（マージはユーザー） | **載せる（決定論）**: レビュー記録に `REVIEWED_COMMIT:` を書き、テスト段階・クローズの前に `gate-check.sh` が「最新のコードレビュー記録（高リスク時は敵対的レビュー記録も）が VERDICT OK で、その `REVIEWED_COMMIT` から今の HEAD までの差分とコミットしていない変更が、記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）の中だけ」を確かめる（詳細は計画書 §5.3）。修正の後は必ずレビュー段階を通り直さないと先へ進めない（I185 P11 の「close 前の機械確認」も兼ねる） |
 | L14 | レビューの判定行（VERDICT）が無い出力が OK 扱いになる（I185 種類 C。`code-review.sh` の `detect_code_verdict` は VERDICT も表の印も無いと OK を返す） | 止まらない | **直す（決定論）**: VERDICT が読めないときは BLOCKER に倒す（`plan-issue-review.sh` は I185 で直し済み） |
+| L15 | 直しの診断の誤り（原因を取り違えた・別案を比べていない）と、直した後のテストの空振り（壊れていても通るテスト）。公式に「直しの前後をレビューする」仕組みは無い | 止まらない（CI はテストが通るかだけを見る） | **載せる**: fix-loop の 3 つのレビュー役（`fix-diagnosis-reviewer`・`fix-implementation-reviewer`・`fix-test-reviewer`）を、診断 → 実装 → テストの順のゲートとして残す（I193 でもテストのレビューが 2 回、文字の検査だけで振る舞いを確かめていないテストを正しく差し戻した） |
+| L16 | 画面の動きを誰も見ないまま進む・Claude で確かめられる確認を人に振る・承認画面が出るかを人に聞く（Playwright MCP と `claude -p` は確かめる手段で、記録の有無や振り分けは判定しない。2026-10-25 計画変更記録 5 で I187 から取り込み） | 止まらない | **載せる**: I187 の判定スクリプト 3 本（`check-frontend-evidence.sh`・`check-manual-test-executor.sh`・`check-permission-prompt.sh`）を test-gate で流す。確かめるのは公式の Playwright MCP・`claude -p` のまま（`docs/runbooks/frontend-verify.md`「公式と自作の分担」） |
 
 ## 4. 公式の道具ごとの採否（実証つき）
 
@@ -112,11 +114,11 @@ Claude が採否を決める。小さな直しはそのイシューで直し、�
 | 段階 | `design-security-review` | `security-review` | 改名（組み込みとの重なりを解消）・`user-invocable: false` |
 | 段階 | `implement` | 同じ | 最後に `/simplify` を呼ぶ・`user-invocable: false` |
 | 段階 | `review-gate` | `code-review` | 改名（組み込みとの重なりを解消）。公式 `/code-review`・（高リスク時）公式 `/security-review`・自作レビュー・敵対的レビュー |
-| 段階 | `test-gate` | `test` | 改名。手元での pytest/Jest/E2E の既定の流し直しをやめ（CI が正）、計画書が宣言した重いテスト・Claude 担当の手動テストを行い、人の分で止まる |
+| 段階 | `test-gate` | `test` | 改名。手元での pytest/Jest/E2E の既定の流し直しをやめ（CI が正）、計画書が宣言した重いテスト・Claude 担当の手動テスト（画面は Playwright MCP）を行い、I187 の判定スクリプト 3 本（L16）を流し、人の分で止まる |
 | 段階 | `fix-loop` | 同じ | ユーザー承認の待ちをなくし、止める条件 3 つに合わせる。戻り先は `review-gate` 1 か所 |
 | 段階 | `retro` | 同じ | 改善案の採否・起票を Claude が行う |
 | 段階 | `close` | 同じ | 振り返りを先に呼び、技術的な問題（develop との食い違いなど）は自分で解決し、マージ依頼で止まる |
-| レビュー役 | `.claude/agents/*.md`（7 本） | `.claude/review-agents/*.md` | 移動・`tools: Read, Grep, Glob`（敵対的レビュー役だけは temp repo での再現実行のため `Read, Grep, Glob, Bash`）・`model: sonnet`。スクリプトは `claude -p --agent <name> --tools "Read,Grep,Glob"` と `timeout` で呼ぶ |
+| レビュー役 | `.claude/agents/*.md`（7 本） | `.claude/review-agents/*.md` | 移動・`tools: Read, Grep, Glob`（敵対的レビュー役だけは temp repo での再現実行のため `Read, Grep, Glob, Bash`）・`model: sonnet`。スクリプトは `claude -p --agent <name> --tools "Read,Grep,Glob"` と `timeout` で呼ぶ。残す理由: `issue-reviewer`・`plan-reviewer` は L3、`code-reviewer` は L1・L2、`adversarial-reviewer` は L13（高リスク時の反証）、fix 系 3 本は L15 |
 
 ## 8. 移行
 
