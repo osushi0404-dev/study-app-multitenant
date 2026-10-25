@@ -1,7 +1,7 @@
 # I166 敵対的レビュー記録（高リスク・code-review ステージ）
 
-- 関連: docs/issues/open/I166.md / docs/plans/open/plan_I166.md / Draft PR #330
-- 基本レビュー: docs/reviews/I166_code_review_20261025_1230.md（FINAL_VERDICT: OK・RISK: YES）
+- 関連: docs/issues/closed/I166.md / docs/plans/closed/plan_I166.md / Draft PR #330
+- 基本レビュー: docs/reviews/closed/I166_code_review_20261025_1230.md（FINAL_VERDICT: OK・RISK: YES）
 - 見直し範囲: `git diff origin/develop...HEAD`（初回）
 
 ## 第 1 周（2026-10-25）

@@ -1,7 +1,7 @@
 # I166 敵対的レビュー記録 延長周（高リスク・code-review ステージ）
 
-- 関連: docs/issues/open/I166.md / docs/plans/open/plan_I166.md / Draft PR #330
-- 前の記録: docs/reviews/I166_adversarial_review_20261025_1249.md（第 1 周・3 体とも報告なし）・docs/reviews/I166_adversarial_review_20261025_1450.md（第 2 周）
+- 関連: docs/issues/closed/I166.md / docs/plans/closed/plan_I166.md / Draft PR #330
+- 前の記録: docs/reviews/closed/I166_adversarial_review_20261025_1249.md（第 1 周・3 体とも報告なし）・docs/reviews/closed/I166_adversarial_review_20261025_1450.md（第 2 周）
 - 実施理由: 第 1 周は確認画面で 3 体とも止まり反証の結果が得られず、第 2 周も 1 体は実測できなかった。ユーザーが「問題があったのはコードレビュー」と指摘し、延長の 1 周を承認（2026-10-25「その形で延長の 1 周を回して」）
 - 見直し範囲: origin/develop からの変更全体（独立した検証のやり直しのため）
 

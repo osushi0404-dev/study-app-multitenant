@@ -1,6 +1,6 @@
 # I166 自動テスト（クイズの組織境界）
 
-- 関連: docs/issues/open/I166.md / docs/plans/open/plan_I166.md / GitHub #284 / Draft PR #330
+- 関連: docs/issues/closed/I166.md / docs/plans/closed/plan_I166.md / GitHub #284 / Draft PR #330
 - 対象: `backend/problems/tests/test_I166_quiz_tenant_isolation.py`（新規）
 - 実行: `docker compose exec -T backend python -m pytest problems/tests/test_I166_quiz_tenant_isolation.py -q`（app-1 ワークツリーのコンテナ）
 

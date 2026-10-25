@@ -2,8 +2,8 @@
 - **計画書ID**: plan_I166
 - **関連イシュー**: #284
 - **Draft PR**: #330
-- **作成根拠資料**: docs/issues/open/I166.md（起点イシュー・grill-me 実施済み 2026-10-25）
-- **実装後評価**: docs/reviews/open/I166_review.md
+- **作成根拠資料**: docs/issues/closed/I166.md（起点イシュー・grill-me 実施済み 2026-10-25）
+- **実装後評価**: docs/reviews/closed/I166_review.md
 - **作成日**: 2026-10-25
 
 ---
@@ -210,14 +210,14 @@ class QuizSessionSerializer(serializers.ModelSerializer):
 
 ## 6. テスト計画
 
-### 自動テスト（詳細: `docs/tests/open/I166_auto_test.md`）
+### 自動テスト（詳細: `docs/tests/closed/I166_auto_test.md`）
 - **テストレベル**:
   - API 結合（DRF `APIClient`・PostgreSQL のテスト DB）: 開始・出題・回答・再挑戦の各経路の越境と無退行（TC-01〜TC-11）。境界はサーバー側にあるため、API を直接呼ぶ結合テストで決定論的に固定する（grill-me で確定）。
   - E2E（Playwright）: 新規テストは足さない。既存 E2E の全件 pass で、画面からのクイズの無退行を確かめる（TC-23）。
 - **再発防止**: TC-01・TC-03・TC-04・TC-05・TC-06・TC-09・TC-10 は現行コードで RED になることを記録してから実装する。
 - **認可・テナント境界**: 他組織の科目での開始（TC-01）・科目なしの出題と問題数（TC-03・TC-04）・他組織／科目外の問題への回答（TC-05・TC-06）・他組織の科目を持つセッションが既にある場合（TC-09・多層防御）・組織に属さないユーザー（TC-10）・応答が「存在しない」と区別できないこと（TC-01・TC-05）。
 
-### 手動テスト（詳細: `docs/tests/open/I166_manual_test.md`）
+### 手動テスト（詳細: `docs/tests/closed/I166_manual_test.md`）
 - すべて Claude 実施（dev DB の読み取り・Playwright MCP での画面確認）。画面の見た目は変わらないため、Human の目視は不要。
 
 ## 7. ロールバック
@@ -285,8 +285,8 @@ class QuizSessionSerializer(serializers.ModelSerializer):
 - [ ] 高リスク判定 Yes（承認の後に `/security-review I166`）— でよいか
 
 ## レビュー結果
-- [20261025_1150 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1150.md)
-- [20261025_1145 判定: ✅ 完了](../../reviews/I166_plan_review_20261025_1145.md)（VERDICT: HIGHRISK・Blocker 0・Info 1）
+- [20261025_1150 判定: ✅ 完了](../../reviews/closed/I166_plan_review_20261025_1150.md)
+- [20261025_1145 判定: ✅ 完了](../../reviews/closed/I166_plan_review_20261025_1145.md)（VERDICT: HIGHRISK・Blocker 0・Info 1）
 - 指摘への対応（2026-10-25）: Info（false-green 自己検証の「開始の検査」に TC-10 ② の記載が無い）→ auto_test の該当行に TC-10 ② を追記。記録の補完のみで方式・範囲・AC は変わらないため、再レビューはしない。
 
 ## セキュリティレビュー結果
@@ -339,3 +339,8 @@ class QuizSessionSerializer(serializers.ModelSerializer):
 - Low（`retrieve` は、過去に作られた他組織の問題への回答があればその解説を返す）: 受け入れ。dev DB の該当データは 0 件（手動 No.1・2026-10-26 に再確認）。**条件**: 本番など別の環境へ出す前に、手動 No.1 と同じ件数確認（①他組織の科目のセッション ②他組織の問題への回答 ③セッションの科目外の問題への回答）を行い、0 でなければ扱いを決めてから出す。
 - Low（`Problem.organization_id` ではなく `subject__organization_id` で判定・全体共有科目と組織なしユーザーの扱い・入力の型・存在の秘匿）: 対策済み（設計どおり・TC-01・TC-10・TC-11）のため受け入れ。
 - 範囲外で見つかった High（学習記録 API の他組織データの漏れ・以前からの別経路）: 別イシューで最優先（ユーザー決定 2026-10-25）。起票コマンドはデスクトップ。
+
+## 完了情報
+- **完了日時**: 2026-10-26
+- **対応者**: Claude Code
+- **レビュー結果**: OK（code-review 20261025_1230・敵対的レビュー 第 1 周〔報告なし〕／第 2 周／延長周〔ユーザー承認〕で範囲内の High・Medium を修正・/test 全合格・CI 全 pass）

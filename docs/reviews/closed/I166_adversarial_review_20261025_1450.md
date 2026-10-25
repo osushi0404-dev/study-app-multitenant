@@ -1,7 +1,7 @@
 # I166 敵対的レビュー記録 第 2 周（高リスク・code-review ステージ）
 
-- 関連: docs/issues/open/I166.md / docs/plans/open/plan_I166.md / Draft PR #330
-- 前の記録: docs/reviews/I166_adversarial_review_20261025_1249.md（第 1 周・3 体とも時間切れで報告なし）
+- 関連: docs/issues/closed/I166.md / docs/plans/closed/plan_I166.md / Draft PR #330
+- 前の記録: docs/reviews/closed/I166_adversarial_review_20261025_1249.md（第 1 周・3 体とも時間切れで報告なし）
 - 実施理由: 第 1 周は反証の結果が得られておらず実質未レビューのため、ユーザー指示「もう 1 周回して」（2026-10-25）で実施（通算 2 周目＝上限）
 - 見直し範囲: `git diff origin/develop...HEAD`（決まりでは前回の REVIEWED_COMMIT からの差分だが、第 1 周の結果が無いため全体を見直した）
 

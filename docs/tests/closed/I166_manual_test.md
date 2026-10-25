@@ -1,6 +1,6 @@
 # I166 手動テスト（dev DB の調査と画面からのクイズの確認）
 
-- 関連: docs/issues/open/I166.md / docs/plans/open/plan_I166.md / GitHub #284 / Draft PR #330
+- 関連: docs/issues/closed/I166.md / docs/plans/closed/plan_I166.md / GitHub #284 / Draft PR #330
 - 前提: app-1 ワークツリーで `docker compose up -d db redis backend frontend`（ポートは `wt-ports.sh` の割当: backend 8020・frontend 3020）。画面の確認は Playwright MCP で `http://localhost:3020` を開く（`docs/runbooks/frontend-verify.md`）。
 - 補足: 画面の見た目は変わらないため、Human の目視確認は不要。dev DB への書き込みは app-1 の dev DB（このワークツリー専用・I166 の確認用データ）にだけ行い、primary の dev DB は読み取りのみ。
 - 使用アカウント: E2E 用のシードユーザー `e2e_user_a@example.com`（組織 E2E Org A・role=admin。パスワードは `e2e/.env.e2e` の `E2E_TEST_PASSWORD`）。No.2 で app-1 の dev DB に作る。ログインの失敗が続くと 5 分のログイン制限がかかるため、パスワードは `e2e/.env.e2e` から読んで 1 回で入れる。
