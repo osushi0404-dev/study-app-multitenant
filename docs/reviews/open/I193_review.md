@@ -39,13 +39,15 @@
 - [review-gate] ユーザーの指示（2026-10-25「5 回目で止まっても延長していいので進めて」）: 繰り返しの上限の 5 回目に当たっても止めずに fix-loop へ回す（延長はこのイシューに限る）
 - [review-gate] 5 回目の基本レビュー（`I193_code_review_20261025_0326.md`）は HIGH（High 1・Medium 6・Low 2）。上の延長で fix-loop へ回す。4 回目以降の決まりで直すのは High（close が gate-check の後に develop を取り込み、きれいに取り込めたときにレビューを通り直さない）と、それに直結する Medium 1 件（繰り返しの上限が計画のやり直しより前の周まで数える。今回の延長の判断にかかわるため）だけ。採らない: design-security-review の `disallowed-tools` が効かないという Medium — この会話の design-security-review 段階で Write が実際に使えなくなったのを見ている（効いている）。残りの Medium 4 件（/security-review がパス判定 YES のときだけ・記録だけのコミットで NOT_PUSHED・ジョブ名の完全一致・run-all.sh の分類）と Low 2 件は retro に回す
 - [fix-loop] 5 回目は診断メモ `I193_fix_diagnosis_20261025_0345.md` を先に書き、診断・実装・テストのレビューはすべて PASS。H1 は案 A（close の順番を入れ替え、base 追従の後に gate-check）— 新しい判定を足さず、今ある gate-check の G19 を正しい位置で使えるため。M1 は区切りに `STAGE_DONE: implement` を足した
+- [review-gate] 6 回目の基本レビューは OK。敵対的レビュー 1 周目（`I193_adversarial_review_20261025_1110.md`）は、I194 までの暫定の決まりで範囲を例外ファイル（ci.yml の Harness Tests）とその結果を使う CI 待ちに絞り、3 体とも報告して新規 High 0 → 通過。Medium（ワークフローのファイルの一部が読めないと、読めた分だけで CI 待ちが OK になる）と Low 2 件は retro に回す — GitHub の必須チェックが最後の守りで、High に直結しない
+- [test-gate] 手動 No.8 の NG は設計書（`docs/proposals/`。記録の場所の外）の直しなので、自分では直さず fix-loop へ回した
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
 - Config: `.claude/skills/`・`.claude/agents/`（`.claude/review-agents/` から移動）・`scripts/claude/`・`scripts/claude/tests/`・`.github/workflows/ci.yml`・`CLAUDE.md`・`docs/runbooks/`・`docs/*/templates/`・`docs/claude-code-structure.md`・`docs/proposals/I193_official_base_flow.md`
 
 ## テスト結果
-- （/test 時に記入）
+- 2026-10-25 test-gate 1 回目: 自動（TC-01〜TC-14）は全部合格（run-all 39 本・CI 7 ジョブ pass）。手動は Claude の分の No.1〜No.4・No.7 が OK、No.6 は CI の確認だけ OK。No.8 が NG（設計書で fix-loop のレビュー役と I187 の判定スクリプトの根拠の行が無い）→ fix-loop
 
 ## 計画との差分
 - （実装後に記入）

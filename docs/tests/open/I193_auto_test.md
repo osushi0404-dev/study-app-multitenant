@@ -141,3 +141,4 @@ TC-13（`run-all.sh`）はゲートの既定の時間上限（120 秒）を超�
 
 ## 実行記録
 - 計画時（2026-10-24）: 新設の TC-01 と、更新する TC-02〜TC-11 は実装前のため未実行。既存のテスト 33 本の現状は 31 合格・2 不合格（TC-06 の D8・TC-07 の DOC6。計画 §4.1）
+- test-gate（2026-10-25 11:15・HEAD 102d990 の後は記録だけのコミット）: `bash scripts/claude/gate-check.sh I193` → exit 0（GATE_CHECK: OK）。TC-13 `bash scripts/claude/tests/run-all.sh`（背景）→ exit 0（pass=39 fail=0。TC-01〜TC-12 を含む）。TC-14 `gh pr checks 327` → `Harness Tests` を含む 7 ジョブすべて pass。手動 No.8 が NG（設計書 §3 に fix-loop のレビュー役と I187 の判定スクリプトの行が無い）のため fix-loop へ
