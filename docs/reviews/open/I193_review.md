@@ -37,6 +37,7 @@
 - [plan-review] ユーザーの指示（2026-10-25「I187 と I193 の整合をとる。I187 の MCP でのフロントの自動化を取り込み、公式の道具やベストプラクティスがあるものはそれを土台にする」）で受け入れ条件 15・計画 §5.9 を足し、計画レビューを通した（`I193_plan_review_20261025_0310.md`・HIGHRISK・Warning は計画変更記録 6 で対応）。残余リスク: gate-check は計画書をレビュー後に変えてよい場所に含めるので、受け入れ条件を緩める計画書の変更を決定論では止めない（各スキルの文で plan-review を通り直す）— retro で扱う
 - [implement] §5.9 は、スキル側に手順を書き写さず `docs/runbooks/frontend-verify.md`・`check-permission-prompt.sh` の冒頭を参照する形にした（/simplify の 4 観点の指摘。同じ決まりが 3〜4 か所にあるとずれる）。スキルに残したのは段階に固有のこと（判定スクリプトを流す順・0 以外でも fix-loop に回さない・危ない操作は代わりの操作で確かめる）だけ。見送り: 公開リポジトリに貼らないものの一覧を 1 か所にまとめる（もともと retro・issue-bootstrap の 2 か所にあり、まとめ先の手順書を新しく決めるのは範囲の外）・R6 と S21 の古い名前の検査の統合（R6 はイシュー番号つきの形をリポジトリ全体で見る。番号無しの形を全体に広げると、組み込みの `/code-review` を正しく指す文書まで落ちる）。あわせて `workflow.md` の「/close step 0」と `rules/*.md` の「/plan-issue-review・/code-review」を段階の名前に直した（受け入れ条件 14）
 - [review-gate] ユーザーの指示（2026-10-25「5 回目で止まっても延長していいので進めて」）: 繰り返しの上限の 5 回目に当たっても止めずに fix-loop へ回す（延長はこのイシューに限る）
+- [review-gate] 5 回目の基本レビュー（`I193_code_review_20261025_0326.md`）は HIGH（High 1・Medium 6・Low 2）。上の延長で fix-loop へ回す。4 回目以降の決まりで直すのは High（close が gate-check の後に develop を取り込み、きれいに取り込めたときにレビューを通り直さない）と、それに直結する Medium 1 件（繰り返しの上限が計画のやり直しより前の周まで数える。今回の延長の判断にかかわるため）だけ。採らない: design-security-review の `disallowed-tools` が効かないという Medium — この会話の design-security-review 段階で Write が実際に使えなくなったのを見ている（効いている）。残りの Medium 4 件（/security-review がパス判定 YES のときだけ・記録だけのコミットで NOT_PUSHED・ジョブ名の完全一致・run-all.sh の分類）と Low 2 件は retro に回す
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -71,3 +72,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: fix-loop
