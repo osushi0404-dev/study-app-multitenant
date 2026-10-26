@@ -609,6 +609,8 @@ cd "$REPO_ROOT"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}.md"
+# I197: 同じ分のうちにもう一度流しても前の記録を上書きしない（台帳の前の周が消えるため）
+n=1; while [ -e "$REVIEW_FILE" ]; do n=$(( n + 1 )); REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}_${n}.md"; done
 REVIEWER_AGENT="code-reviewer"   # 定義: .claude/agents/code-reviewer.md（tools: Read, Grep, Glob）
 
 # I193: 比べる相手（origin/develop）を最新にする（古い develop と比べて無関係の差分を見ないため）
@@ -626,8 +628,11 @@ PLAN_FILE=$(find_plan_file "$ISSUE")
 REVIEWED_HEAD=$(git rev-parse HEAD)
 
 # I197 §4.8: 全体のレビューか差分のレビューか（台帳のある最新の記録の REVIEWED_COMMIT が HEAD の祖先なら差分）
-IFS=$'\t' read -r REVIEW_KIND LEDGER_N SINCE PREV_LEDGER_FILE <<< "$(review_mode "$ISSUE")"
+IFS=$'\t' read -r REVIEW_KIND LEDGER_N SINCE PREV_LEDGER_REC <<< "$(review_mode "$ISSUE")"
 SCOPE_FILE=$(mktemp)
+# 前の周の台帳は、始めた時点で写しておく（以後に記録が変わっても、読んだ台帳を使う）
+PREV_LEDGER_FILE=""
+if [ -n "$PREV_LEDGER_REC" ]; then PREV_LEDGER_FILE=$(mktemp); grep -E '^LEDGER: ' "$PREV_LEDGER_REC" > "$PREV_LEDGER_FILE" || true; fi
 if [ "$REVIEW_KIND" = "delta" ]; then
   delta_files origin/develop "$SINCE" > "$SCOPE_FILE" || { echo "⛔ 差分のレビューの範囲を取れません（起点 ${SINCE}）"; exit 1; }
   REVIEW_RANGE="${SINCE}...HEAD"
@@ -733,7 +738,8 @@ if [ "$SECURITY_VERDICT" != "OK" ]; then
   GATE_EVIDENCE+="- ⛔ 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（HIGH。直すものは無いので review-gate が 1 回だけ実行し直す）"$'\n'
 fi
 
-# コンテキスト組み立て
+# コンテキスト組み立て（条件で空になる語は先に変数にする。$( [ … ] && … ) は偽で 1 を返し set -e で止まるため）
+FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲）"
 CONTEXT="イシュー番号: ${ISSUE}
 
 ### イシューファイル
@@ -760,7 +766,7 @@ omission-lint: ${OMISSION_VERDICT}
 ### git log (${REVIEW_RANGE})
 ${GIT_LOG}
 
-### 変更ファイル一覧$([ "$REVIEW_KIND" = "delta" ] && echo "（差分のレビューの範囲）")
+### 変更ファイル一覧${FILES_NOTE}
 $(if [ "$REVIEW_KIND" = "delta" ]; then cat "$SCOPE_FILE"; else printf '%s' "$GIT_FILES"; fi)
 
 ### git diff (${REVIEW_RANGE}, max 100KB)
@@ -829,7 +835,9 @@ if [ "$REVIEW_KIND" = "delta" ]; then
 else
   REVIEWER_VERDICT="$LLM_VERDICT"
 fi
-GATE_EVIDENCE+="- 台帳（${REVIEW_KIND}・${LEDGER_N} 周目）: ${LEDGER_VERDICT}（code-reviewer の VERDICT=${LLM_VERDICT}$([ "$REVIEW_KIND" = "delta" ] && echo "・差分のレビューでは合否に使わない")）"$'\n'
+# 条件で空になる語は変数にしておく（$( [ … ] && echo … ) は偽のとき 1 を返し、set -e の下で代入ごとスクリプトを止める）
+VERDICT_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && VERDICT_NOTE="・差分のレビューでは合否に使わない"
+GATE_EVIDENCE+="- 台帳（${REVIEW_KIND}・${LEDGER_N} 周目）: ${LEDGER_VERDICT}（code-reviewer の VERDICT=${LLM_VERDICT}${VERDICT_NOTE}）"$'\n'
 
 # I084: 決定論ゲート結果で VERDICT を決定論的に上書きする（LLM 出力非依存）。
 # FINAL = max(gate, omission, 台帳, code-reviewer〔全体のときだけ〕, 組み込みのセキュリティ)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
@@ -839,7 +847,7 @@ inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_V
 set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
-rm -f "$LEDGER_FILE" "$SCOPE_FILE"
+rm -f "$LEDGER_FILE" "$SCOPE_FILE" "${PREV_LEDGER_FILE:-}"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"

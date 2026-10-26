@@ -188,6 +188,70 @@ B9=$(broken 'RISK_FINAL=$(combine_risk "$RISK_PLAN" "$RISK_PATH")' 'RISK_FINAL=$
 ck "FG-R9 RISK_LLM に戻すと R9 が不合格" 1 "$(rc r9 "$B9")"
 { cat "$FL"; printf '\nbash scripts/claude/fix-test-review.sh I###\n'; } > "$TMP/fl10.md"
 ck "FG-R10 fix-loop に fix-test-review を足すと R10 が不合格" 1 "$(rc r10 "$TMP/fl10.md")"
+# ---------------- R14 本体を丸ごと動かす（全体のレビュー → 直す → 差分のレビュー）。gh・claude はスタブ ----------------
+# 関数だけのテストでは、本体の配線の誤り（I197: set -e の下で条件が偽の $( [ … ] && … ) が代入ごと止めた）を捕まえられないため
+E="$TMP/e2e"; EO="$TMP/e2e_origin.git"; ES="$TMP/e2e_stub"; mkdir -p "$E/scripts/claude" "$E/docs/issues/open" "$E/docs/reviews" "$ES/calls"
+cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$E/scripts/claude/"
+printf '# I900\n' > "$E/docs/issues/open/I900.md"; printf 'a\n' > "$E/a.sh"
+printf '# 計画レビュー\n\n## 高リスク判定\n判定: No\n' > "$E/docs/reviews/I900_plan_review_20260101_0000.md"
+printf 'jobs:\n  j:\n    name: J\n' > "$ES/wf.yml"
+git init -q --bare "$EO"; git -C "$E" init -q -b develop; git -C "$E" add -A; git -C "$E" commit -qm base
+git -C "$E" remote add origin "$EO"; git -C "$E" push -q origin develop 2>/dev/null
+git -C "$E" checkout -q -b feature/I900-x; printf 'a2\n' >> "$E/a.sh"; git -C "$E" add -A; git -C "$E" commit -qm change
+cat > "$ES/gh" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  "pr list"*) echo 7 ;;
+  *headRefOid*) git rev-parse HEAD ;;
+  "pr checks"*"--json"*) printf 'pass\tJ\n' ;;
+  *) exit 0 ;;
+esac
+SH
+cat > "$ES/claude" <<'PY'
+#!/usr/bin/env python3
+# code-reviewer（--agent）には $STUB/review_<n>.txt を stream-json で返す。組み込みのレビュー（plan モード）には「指摘なし」
+import json, os, sys
+st = os.environ["E2E_STUB"]; args = sys.argv[1:]
+n = len([f for f in os.listdir(st + "/calls") if f.endswith(".args")])
+open(f"{st}/calls/{n}.args", "w").write("\n".join(args))
+if "--agent" in args:
+    open(f"{st}/calls/{n}.in", "w").write(sys.stdin.read())
+    k = len([f for f in os.listdir(st + "/calls") if f.endswith(".in")])
+    body = open(f"{st}/review_{k}.txt").read()
+    print(json.dumps({"type": "system", "subtype": "init", "session_id": "s"}))
+    print(json.dumps({"type": "result", "subtype": "success", "result": body, "permission_denials": []}))
+else:
+    print("指摘なし")
+PY
+chmod +x "$ES/gh" "$ES/claude"
+printf '# コードレビュー [I900]\n\n## 台帳\nFINDING: F1 SEV=High STATUS=open FILE=a.sh SECURITY=no | a.sh の穴\nFINDING: F2 SEV=Medium STATUS=open FILE=a.sh SECURITY=no | 軽い\n\nRISK: YES\nVERDICT: HIGH\n' > "$ES/review_1.txt"
+printf '# コードレビュー [I900]\n\n## 台帳\nFINDING: F1 SEV=High STATUS=resolved FILE=a.sh SECURITY=no | a.sh の穴\n\nVERDICT: HIGH\n' > "$ES/review_2.txt"
+e2e() { (cd "$E" && PATH="$ES:$PATH" CLAUDE_BIN="$ES/claude" E2E_STUB="$ES" CI_WORKFLOWS="$ES/wf.yml" CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 \
+          bash scripts/claude/code-review.sh I900 > "$1" 2>&1; echo $? >> "$1.rc"); }
+e2e "$TMP/e2e1.out"
+E1_REC=$(find "$E/docs/reviews" -name 'I900_code_review_*.md' | LC_ALL=C sort | tail -1)
+ck "R14 全体のレビュー: 最後まで動き FINAL_VERDICT: HIGH（台帳の F1 High）" "HIGH" "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e1.out")"
+ck "R14 全体: 記録に LEDGER_ROUND: 1・LEDGER: F1・RISK: NO（計画レビュー No・パス NO）" "yes yes yes" \
+  "$(grep -qx 'LEDGER_ROUND: 1' "$E1_REC" && echo yes || echo no) $(grep -q '^LEDGER: F1 SEV=High STATUS=open SCOPE=delta' "$E1_REC" && echo yes || echo no) $(grep -qx 'RISK: NO' "$E1_REC" && echo yes || echo no)"
+ck "R14 全体: 組み込みの /code-review には origin/develop...HEAD" yes "$(grep -lx '/code-review medium origin/develop...HEAD' "$ES"/calls/*.args >/dev/null 2>&1 && echo yes || echo no)"
+git -C "$E" checkout -q feature/I900-x; printf 'a3\n' >> "$E/a.sh"; git -C "$E" add -A; git -C "$E" commit -qm fix
+E1_SHA=$(sed -n 's/^REVIEWED_COMMIT: //p' "$E1_REC" | tail -1)
+e2e "$TMP/e2e2.out"
+E2_REC=$(find "$E/docs/reviews" -name 'I900_code_review_*.md' | LC_ALL=C sort | tail -1)
+ck "R14 差分のレビュー: F1 が resolved なら OK（code-reviewer の VERDICT: HIGH は差分では使わない）" OK "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e2.out")"
+ck "R14 差分: 記録に LEDGER_ROUND: 2・F1 は resolved・Medium の F2 は台帳に残る" "yes yes yes" \
+  "$(grep -qx 'LEDGER_ROUND: 2' "$E2_REC" && echo yes || echo no) $(grep -q '^LEDGER: F1 SEV=High STATUS=resolved' "$E2_REC" && echo yes || echo no) $(grep -q '^LEDGER: F2 SEV=Medium STATUS=open' "$E2_REC" && echo yes || echo no)"
+E2_IN=$(find "$ES/calls" -name '*.in' | LC_ALL=C sort -V | tail -1)
+ck "R14 差分: 入力に差分のレビューの指示・止める指摘 F1・範囲の a.sh" "yes yes yes" \
+  "$(grep -qF '差分のレビュー（台帳の 2 周目）' "$E2_IN" && echo yes || echo no) $(grep -q '^LEDGER: F1 SEV=High STATUS=open' "$E2_IN" && echo yes || echo no) $(grep -qx 'a.sh' "$E2_IN" && echo yes || echo no)"
+ck "R14 差分: 組み込みの /code-review には <起点>...HEAD" yes "$(grep -lx "/code-review medium ${E1_SHA}...HEAD" "$ES"/calls/*.args >/dev/null 2>&1 && echo yes || echo no)"
+
+# FG-R14: 条件が偽の $( [ … ] && … ) を本体の代入に戻すと、R14 が不合格（FINAL_VERDICT の行が出ない）
+B14=$(broken 'VERDICT_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && VERDICT_NOTE="・差分のレビューでは合否に使わない"' 'VERDICT_NOTE="$([ "$REVIEW_KIND" = "delta" ] && echo x)"')
+cp "$B14" "$E/scripts/claude/code-review.sh"; rm -f "$E"/docs/reviews/I900_code_review_*.md
+git -C "$E" add -A; git -C "$E" commit -qm reset
+e2e "$TMP/e2e_fg.out"
+ck "FG-R14 本体の set -e の誤りを戻すと R14 が不合格（FINAL_VERDICT が出ない）" no "$(grep -q '^FINAL_VERDICT:' "$TMP/e2e_fg.out" && echo yes || echo no)"
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"

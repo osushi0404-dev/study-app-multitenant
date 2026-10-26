@@ -100,6 +100,13 @@ bash scripts/claude/tests/test_i197_review_ledger.sh
 
 - 2026-10-27（implement・§4.8 の後）: TC-09 `test_i197_review_ledger.sh` pass=43 fail=0（FG を含む・FG の写しが作れないと不合格）。関係するテスト: TC-01 pass=113・`test_i193_official_flow.sh` pass=160・`test_adversarial_trigger.sh` pass=60・`test_fix_review.sh` pass=66・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58・`test_i181_review_slim.sh` pass=29・`test_review_commit_lifecycle.sh` PASS=31（shellcheck あり・TC-C1 も実行）。すべて fail=0。全体（run-all）は CI の Harness Tests で確かめる
 
+## 再発防止記録（review-gate で code-review.sh が途中で止まった・2026-10-27）
+- なぜ失敗したか: ①本体の `GATE_EVIDENCE+="…$([ "$REVIEW_KIND" = "delta" ] && echo …)…"` が、全体のレビューのとき（条件が偽）に 1 を返し、`set -e` の下で代入ごとスクリプトを止めた（CI_WAIT: OK の後に理由を出さずに exit 1）。②記録のファイル名が分までなので、同じ分に 2 回流すと前の記録を上書きし、差分のレビューが前の台帳を上書きの後に読んで失っていた（新しい end-to-end のテストで見つけた）。TC-09 は関数だけを確かめ、本体を丸ごと動かしていなかった
+- 何を変えたか: 条件で空になる語を先に変数にした（2 か所）。記録の名前が既にあれば `_<n>` を付けて上書きしない。前の周の台帳は始めた時点で一時ファイルに写して使う。TC-09 に R14（スタブの gh・claude で本体を丸ごと、全体 → 直す → 差分の 2 周）と FG-R14（①を戻すと R14 が不合格）を足した。止まった周の書きかけの記録 2 本（未追跡）は消した
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: スクリプトの本体の配線を変えたら、関数のテストに加えて本体を丸ごと動かすテストを足す（R14）。`$( [ … ] && … )` を代入・文字列の中に書かない
+- 確かめた結果: TC-09 pass=51 fail=0（R14・FG-R14 を含む）。変えたファイル名で検索して選んだ 16 本がすべて rc=0
+
 ## 再発防止記録（fix-loop 5 回目・§4.8 の後の CI の Harness Tests の失敗）
 - なぜ失敗したか: fix-loop の SKILL を書き直した（実装・テストのレビューをやめた）のに、その文章を固定している `test_i185_harness_docs.sh`（TC-14pin・TC-14⑤c）を直していなかった。手元で流す関係するテストを記憶で選び、このテストを流していなかった
 - 何を変えたか: `fixtures/i185/fix_loop_return.txt` を新しい「8) 結線」以降に更新し、TC-14⑤c を新しい差し戻しの文（診断レビューの NG は再診断して通り直す）に付け替えた
