@@ -41,6 +41,7 @@
 - [plan-review] 計画変更記録 7 の計画レビュー（`I197_plan_review_20261027_0016.md`）は OK。Warning 4 件は計画変更記録 8 で直し、再レビューはしない（方式・範囲・受け入れ条件を変えない）。組み込み `/code-review` に範囲を渡せるかは、実装の前にスパイク S6 で確かめる
 - [implement] スパイク S6 は成立（範囲のファイルだけを見た）。範囲が計画書だったので組み込みのレビューが §4.8 の設計の穴を 10 件出し、9 件を実装の前に計画へ取り込んだ（計画変更記録 9）。I197 の高リスク判定は計画レビューの「No」のまま（I181 の方針どおり。4 周目の YES は揺れ）
 - [implement] §4.8 を実装した（台帳・差分のレビュー・Blocker と High だけ止める・高リスクは計画の段階・fix-loop の実装/テストのレビューと 4 ファイルを削除）。/simplify（1 観点 5 分の上限）の指摘のうち、判定の重複（止める指摘）・記録の書き換えの重なり・使わない RISK 行・使わない引数は直し、gate-check.sh との共有は範囲外として retro に回した（計画変更記録 10）。手元では関係するテストだけを流した
+- [fix-loop] 5 回目（§4.8 の後の CI の失敗・test_i185_harness_docs の固定の文章）は、テストを新しい fix-loop の文に合わせて直した（診断レビュー PASS）。手元の関係するテストは、変えたファイルの名前で検索して 16 本を選んで流した（記憶で選んで取りこぼした反省）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -55,3 +56,5 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate

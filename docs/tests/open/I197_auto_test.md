@@ -100,6 +100,13 @@ bash scripts/claude/tests/test_i197_review_ledger.sh
 
 - 2026-10-27（implement・§4.8 の後）: TC-09 `test_i197_review_ledger.sh` pass=43 fail=0（FG を含む・FG の写しが作れないと不合格）。関係するテスト: TC-01 pass=113・`test_i193_official_flow.sh` pass=160・`test_adversarial_trigger.sh` pass=60・`test_fix_review.sh` pass=66・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58・`test_i181_review_slim.sh` pass=29・`test_review_commit_lifecycle.sh` PASS=31（shellcheck あり・TC-C1 も実行）。すべて fail=0。全体（run-all）は CI の Harness Tests で確かめる
 
+## 再発防止記録（fix-loop 5 回目・§4.8 の後の CI の Harness Tests の失敗）
+- なぜ失敗したか: fix-loop の SKILL を書き直した（実装・テストのレビューをやめた）のに、その文章を固定している `test_i185_harness_docs.sh`（TC-14pin・TC-14⑤c）を直していなかった。手元で流す関係するテストを記憶で選び、このテストを流していなかった
+- 何を変えたか: `fixtures/i185/fix_loop_return.txt` を新しい「8) 結線」以降に更新し、TC-14⑤c を新しい差し戻しの文（診断レビューの NG は再診断して通り直す）に付け替えた
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: 手元で流す関係するテストは、変えたファイルの名前で `scripts/claude/tests/` を検索して選ぶ（fix-loop SKILL 手順 6 の「直したところに関係するテスト」の選び方。retro で SKILL に書く）
+- 確かめた結果: 変えたファイルの名前で検索して選んだ 16 本がすべて rc=0（test_i185_harness_docs pass=17・TC-09 pass=43・TC-01 pass=113 ほか）
+
 ## 再発防止記録（fix-loop 1 回目・CI の Harness Tests の失敗）
 - なぜ失敗したか: code-review.sh に足したライブラリの読み込み行に、`-x` なしの shellcheck（`test_review_commit_lifecycle.sh` の TC-C1）が SC1091 を出した。手元に shellcheck が無く TC-C1 が SKIP になるため、手元の run-all（pass=40）では気づけず、CI で初めて見つかった
 - 何を変えたか: code-review.sh・adversarial-review.sh の読み込み行の `# shellcheck source=…` に `disable=SC1091` を足した（挙動は変えない）
