@@ -100,6 +100,13 @@ bash scripts/claude/tests/test_i197_review_ledger.sh
 
 - 2026-10-27（implement・§4.8 の後）: TC-09 `test_i197_review_ledger.sh` pass=43 fail=0（FG を含む・FG の写しが作れないと不合格）。関係するテスト: TC-01 pass=113・`test_i193_official_flow.sh` pass=160・`test_adversarial_trigger.sh` pass=60・`test_fix_review.sh` pass=66・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58・`test_i181_review_slim.sh` pass=29・`test_review_commit_lifecycle.sh` PASS=31（shellcheck あり・TC-C1 も実行）。すべて fail=0。全体（run-all）は CI の Harness Tests で確かめる
 
+## 再発防止記録（fix-loop 7 回目・台帳の 2 周目の止める指摘 F2）
+- なぜ失敗したか: 6 回目の F2 の修正が表記の形（`./`・`:行番号`）を列挙して直す方式で、絶対パス・`..` が残った
+- 何を変えたか: `:行番号` を除いてリポジトリからの相対パスに揃え、outside は「リポジトリの中の実在のファイルで範囲に無い」ときだけ（それ以外は止める側）
+- セキュリティ上の考慮点: 範囲の中の High が通る偽 OK を止める側に倒した
+- 次回どう防ぐか: TC-09 の R16（絶対パス・`..`・リポジトリの外・絶対パス＋行番号の範囲の外）と FG-R16。形を列挙する直し方をしない
+- 確かめた結果: TC-09 pass=64。変えたファイル名で選んだ 16 本がすべて rc=0。台帳の 2 周目は F1・F3・F4 が resolved、新しい F11〜F15 は Medium・Low（止めない）
+
 ## 再発防止記録（fix-loop 6 回目・台帳の 1 周目の止める指摘 F1〜F4）
 - なぜ失敗したか: どれも「判定に迷ったら止めない側に倒れる」経路だった。F1 新しい指摘が入力に見せていない既存の番号に合流した／F2 FILE の表記のずれが outside になった／F3 敵対的レビューの続きが exit 0 で success でないとき前の報告を消した／F4 差分のレビューで FINDING 行が読めないのに VERDICT: HIGH を無視した
 - 何を変えたか: F1 入力に見せていない既存の番号の行は新しい指摘として振り直す・入力に台帳の最大の番号を書く。F2 `./`・`:行番号` を正規化し、リポジトリに無いパスは delta。F3 成功＝exit 0 かつ success。F4 差分で VERDICT が NG なのに FINDING 行が無ければ BLOCKER

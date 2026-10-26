@@ -137,6 +137,15 @@ body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFI
 body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=scripts/no_such.sh SECURITY=no | 無い' r16b.md
 ck "R16 ./・:行番号 のずれは範囲の中として止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16a.md" "$TMP/scope")"
 ck "R16 リポジトリに無いパスは範囲の中として止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16b.md" "$TMP/scope")"
+# 台帳の 2 周目 F2: 絶対パス・.. を含むパスも、リポジトリからの相対パスに揃えて範囲の中なら止める。リポジトリの外の絶対パスは止める側
+body "FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=$R/scripts/a.sh SECURITY=no | 絶対" r16c.md
+body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=scripts/../scripts/a.sh SECURITY=no | ..' r16d.md
+body "FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=$REPO_ROOT/CLAUDE.md SECURITY=no | 外の実在" r16e.md
+body "FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=$R/scripts/b.sh:3 SECURITY=no | 範囲の外の実在" r16f.md
+ck "R16 絶対パスで範囲の中 → 止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16c.md" "$TMP/scope")"
+ck "R16 .. を含むパスで範囲の中 → 止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16d.md" "$TMP/scope")"
+ck "R16 リポジトリの外の実在のファイル → 止める側" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16e.md" "$TMP/scope")"
+ck "R16 絶対パス＋:行番号 で範囲の外の実在のファイル（b.sh）→ 止めない" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/r16f.md" "$TMP/scope")"
 
 # ---------------- R8 plan_risk ----------------
 P="$TMP/prisk"; mkdir -p "$P/docs/reviews"
@@ -271,7 +280,7 @@ ck "R14 差分: VERDICT: HIGH なのに FINDING 行が無い → BLOCKER" BLOCKE
 # FG-R15・FG-R16・R17（F4 の止め方の配線）とその FG
 B15=$(broken '        if fid in led and fid not in shown:' '        if False:')
 ck "FG-R15 振り直しを消すと R15 が不合格（F2 に合流して止まらない）" OK "$(verdict_of delta "$TMP/r15_round1.md" "$TMP/r15_delta.md" "$TMP/scope" "$B15")"
-B16=$(broken 'if norm in in_scope or not os.path.exists(norm):' 'if norm in in_scope:')
+B16=$(broken 'if norm in in_scope or norm.startswith("..") or not os.path.isfile(norm):' 'if norm in in_scope:')
 ck "FG-R16 存在しないパスを止める側に倒さないと R16 が不合格" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/r16b.md" "$TMP/scope" "$B16")"
 r17() { grep -qF 'if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '"'"'^FINDING: '"'"' "$REVIEW_FILE"; then' "$1"; }
 ck "R17 差分で VERDICT が NG なのに FINDING 行が無いときに止める配線がある" 0 "$(rc r17 "$CR")"

@@ -542,12 +542,12 @@ elif mode == "update":
     in_scope = set(l for l in open(scope_file, encoding="utf-8").read().split("\n") if l) if kind == "delta" else None
     next_id = max([int(k[1:]) for k in led] or [0]) + 1
     def scope_of(path):
-        # 表記のずれ（先頭の ./・:行番号）を正規化して範囲と比べる。リポジトリに無いパスは delta（止める側）
+        # 表記の形を列挙せず、:行番号 を除いてリポジトリのルート（cwd）からの相対パスに揃えて範囲と比べる。
+        # outside にするのは「揃えたパスがリポジトリの中の実在のファイルで、範囲に無い」ときだけ。それ以外は delta（止める側）
         if in_scope is None or path == "-":
             return "delta"
-        norm = path[2:] if path.startswith("./") else path
-        norm = norm.split(":", 1)[0]
-        if norm in in_scope or not os.path.exists(norm):
+        norm = os.path.relpath(os.path.normpath(os.path.abspath(path.split(":", 1)[0])))
+        if norm in in_scope or norm.startswith("..") or not os.path.isfile(norm):
             return "delta"
         return "outside"
     for fid, sev, st, path, sec, title in read_findings(cur):

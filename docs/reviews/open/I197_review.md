@@ -45,6 +45,8 @@
 - [review-gate] 新しい code-review.sh が CI_WAIT: OK の後に理由を出さずに止まった（set -e の下の `$( [ … ] && … )`）。review-gate の「それ以外の exit 1」として、直せる原因なので直して実行し直す。あわせて追加した本体を丸ごと動かすテスト（R14）が、同じ分の 2 回目の実行で前の記録を上書きして台帳を失う不具合も見つけたので直した（auto_test の再発防止記録）
 - [review-gate] 新しい仕組みの全体のレビュー（`I197_code_review_20261027_0102.md`・台帳の 1 周目）は HIGH。台帳は F1〜F10（High 4・Medium 3・Low 3）。fix-loop で直すのは止める指摘の F1〜F4 だけ。Medium 以下（F5〜F10）は台帳に残り retro で扱う
 - [fix-loop] F1〜F4 を診断メモ `I197_fix_diagnosis_20261027_0110.md`（診断レビュー PASS）の推奨案で直した。どれも「迷ったら止めない側」の経路を止める側に倒す粗い規則。F1 の修正で、前の周に範囲の外だった指摘でも、その周に該当ファイルを直していれば新しい指摘として止める（R6 の期待を合わせた）
+- [review-gate] 差分のレビュー（`I197_code_review_20261027_0118.md`・台帳の 2 周目・範囲 4 ファイル）は HIGH。止める指摘は F2 だけ（F1・F3・F4 は resolved）。新しい F11〜F15 は Medium・Low で止めない。止める指摘は 4 → 1 に減った（収束している）
+- [fix-loop] F2 は、形を列挙せずリポジトリからの相対パスに揃える粗い規則で直した（診断メモ `I197_fix_diagnosis_20261027_0125.md`・診断レビュー PASS）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -59,6 +61,8 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
