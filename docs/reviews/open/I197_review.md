@@ -32,6 +32,7 @@
 - [fix-loop] 案 A（読み込み行に `disable=SC1091` を足す）で直した。診断・実装・テストのレビューはすべて PASS。直したファイルは 2 本なので軽微例外は使わなかった — 既存の書き方と同じで挙動を変えない。手元と CI の検査の食い違い（手元に shellcheck が無いと黙って SKIP）と、コメントだけの修正にも 3 つのレビューがかかる重さは、ユーザーとの対話（10-26）を踏まえて retro で扱う
 - [review-gate] 基本レビュー 2 回目（`I197_code_review_20261026_2124.md`）は BLOCKER（Blocker 1・High 1・Medium 6・Low 2。RISK: NO で敵対的レビューの対象外）— fix-loop へ（review-gate ⇄ fix-loop は 2 回目）
 - [fix-loop] 2 回目は診断メモ `I197_fix_diagnosis_20261026_2140.md` の推奨案で、指摘 1〜5・7〜9 を直した（診断・実装・テストのレビューはすべて PASS）。指摘 6（非ゼロで終わった実験を未検証にする）は採らなかった — 反証の実験は非ゼロの終了を期待する形が多く、誤った未検証が増える。結果の解釈はレビュー役の読みで、出力は記録に残る。指摘 10 は retro
+- [review-gate] 基本レビュー 3 回目（`I197_code_review_20261026_2159.md`）は HIGH（High 1・Medium 6・Low 2）— fix-loop へ（3 回目）。直すのは High 1 と、それに直結する Medium 3（コマンド末尾の改行で「呼ばれなかった」になり周を空費・last_tool の欄ずれで記録が誤る・実験が記録の場所〔計画書・過去の記録〕を書き換えても気づかない）。見送り: 非ゼロ終了の区別（2 回目で採らない判断済み）・auto の関門の記録（計画 §8 に記載済み・手動 No.2 で確かめる）・最後の比較の後の子プロセス（全観点の wait の後に比べており、残るのは timeout 後の孫プロセスだけで普通の書き方の事故の範囲外）・Low 2 件（retro）— `feedback_fixloop_not_excessive`
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -40,3 +41,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
