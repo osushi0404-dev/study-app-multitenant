@@ -104,6 +104,8 @@
 - [review-gate] 差分のレビュー（`I197_code_review_20261027_0140.md`・台帳の 3 周目・範囲 2 ファイル）は OK。F2 は resolved、新しい F16〜F19 は Medium・Low で止めない。止める指摘は 4 → 1 → 0 で収束した（§4.8 の実地の確認・手動 No.5）。高リスク判定 NO（計画レビュー No・パス NO）なので敵対的レビューのステージは無し。敵対的レビューの実地の通し（AC6）は test-gate の手動 No.1 で行う
 - [test-gate] 手動テスト No.1〜5 はすべて Claude が実施し OK。No.1 の記録で「報告あり（）」と空の括弧が出る見た目の不具合を見つけた（note のファイルが改行だけでも中身ありと判定）。判定には影響しないので直さずに retro で扱う（この段階はコードを直さない）
 - [retro] 改善案の振り分け: 予防 P1（手元のテストの選び方・CI の道具の有無の食い違い）→ 新規起票 I201（#337。実害あり〔CI で 3 回落ちた〕・同梱先が無い・決定論のスクリプトで直せる）。是正 C1（台帳の Medium・Low〔F5〜F19〕と見送った共通化）→ 新規起票 I202（#338。セキュリティの F5・F16 を含む・同梱先が無い）。見送り: 本体を丸ごと動かすテストが無かった（その場で捕まり R14 を足して手戻り小）・PC のスリープ（仕組みの問題でない）・PATH の取り違え（P1 で起きなくなる）。イシューファイル I201・I202 は未コミットのまま（各自の /plan-issue が初コミットする）
+- [close] base 追従は不要（BLOCKED）・gate-check OK・PR #336 を Ready に。最終チェックは 1 回目が E2E の実行中で 600 秒の時間切れ（失敗ではない）→ 1 回だけ実行し直して CI 全グリーン
+- [close] ユーザーの質問（1 コンテキスト 1 イシューの決まり）から I203（#339）を起票したが、ユーザーの判断（「次のイシューに勝手に移らないのであれば問題ない」「イシュー対応すら要らない」）で not planned で閉じ、手元のファイルも消した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -127,3 +129,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
