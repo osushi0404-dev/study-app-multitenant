@@ -99,3 +99,10 @@ bash scripts/claude/tests/test_check_permission_prompt.sh
 - セキュリティ上の考慮点: 実験による判定の材料の書き換えを、記録の場所を含めて内容まで捕まえる（周全体を無効・HIGH。消さない・戻さない）
 - 次回どう防ぐか: TC-01 の A23〜A26 と FG-A23・FG-A26。「前の結果で判定する」逃げ道を足すときは、その結果が前提にしていた後続の処理（実験の結果を読むこと）が済んでいるかを判定に入れる
 - 確かめた結果: TC-01 pass=108 fail=0（`docs/reviews/I197_fix_test_result_20261026_2220.md`）。全体は CI の Harness Tests
+
+## 再発防止記録（fix-loop 4 回目・基本レビュー 4 回目の High 2 件）
+- なぜ失敗したか: ROUNDS: 0 の記録の扱いを、既知 findings の一覧（3 か所目の消費箇所）に入れ忘れた。見張りのブロックの判定は permission_denials だけに頼っていた（今の claude では入ることを S5 で実測）
+- 何を変えたか: `counted_records` を起点と既知 findings で共有・`claude_log_ran` でフックのブロックの形を拒否とみなす・FG の写しが作れないとき全体を不合格にする（計画変更記録 6）
+- セキュリティ上の考慮点: 実行されていない実験を「確認済み」としない二重の守り
+- 次回どう防ぐか: TC-01 の A27・L6 と FG。同じ記録の規則（ROUNDS）を読む処理は `counted_records` を通す
+- 確かめた結果: TC-01 pass=113 fail=0（`docs/reviews/I197_fix_test_result_20261027_0005.md`）。全体は CI の Harness Tests

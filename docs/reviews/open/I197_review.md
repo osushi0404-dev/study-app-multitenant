@@ -36,6 +36,7 @@
 - [fix-loop] 3 回目は診断メモ `I197_fix_diagnosis_20261026_2210.md` で直した。診断レビュー 1 回目は差し戻し（status の文字列の比較では、起動前から変更済みの計画書の上書きを見逃す。正しい指摘）→ 中身のハッシュも比べる案に直して PASS。実装・テストのレビューは PASS
 - [fix-loop] 手元の全体のテスト（run-all）は流さず、直したところの TC-01 だけを流した — push の後に CI の Harness Tests が同じものを流し、review-gate がその合格を待つため（ユーザーの指摘 10-26「意味あるか？」）。手元で全体を流すのは、push の前に失敗に気づける見込みが高いときだけにする
 - [review-gate] 基本レビュー 4 回目（`I197_code_review_20261026_2347.md`）は HIGH（High 2・Medium 4・Low 3。RISK: YES）— fix-loop へ。review-gate ⇄ fix-loop は 4 回目なので、決まりどおり直すのは High 2 件だけにし、Medium・Low は retro に回す（実験 id の上書きの拒否・実験役の時間の取り分・背景の実行の timeout の明示・拒否を読めないときの「不明」・ignored のファイル・auto が使えない環境・記録の走査の共通化）。直した後は敵対的レビューの段階へ進む
+- [fix-loop] 4 回目は High 2 件だけを診断メモ `I197_fix_diagnosis_20261027_0000.md` で直した（診断・実装・テストのレビューはすべて PASS）。High 2（見張りのブロックが permission_denials に入らないおそれ）は、実際の claude で試して（スパイク S5）入ることを確かめたうえで、出力の形の変化に備える二重の守りだけを足した。あわせて、TC-01 の FG-A16 が置き換え前の文字列の不一致で空振りしていたのを見つけ、FG の写しが作れないときは TC-01 全体を不合格にする形にした
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

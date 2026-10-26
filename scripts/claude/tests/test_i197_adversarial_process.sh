@@ -314,6 +314,12 @@ ck "A15 実験役のモードが auto でない → V1 未検証・記録に理�
   touch "$E/stub/deny_E2"
   STUB_DIR="$E/stub" STUB_CALLS="$E/calls" run_claude_logged 10 "$E/log" "$E/in" --tools Bash --permission-prompts none
   printf 'echo a' > "$E/c1"; printf 'echo b' > "$E/c2"; printf 'echo c' > "$E/c3"; printf ' echo a' > "$E/c4"
+  # L6: permission_denials に無くても、結果の本文が見張りのブロックの形なら拒否（10）
+  { printf '1\t%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"h1","name":"Bash","input":{"command":"echo h"}}]}}'
+    printf '1\t%s\n' '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"h1","is_error":true,"content":"PreToolUse:Bash hook error: [guard] blocked"}]}}'
+    printf '1\t%s\n' '{"type":"result","subtype":"success","result":"DONE","permission_denials":[]}'; } > "$L/l6"
+  printf 'echo h' > "$L/c6"
+  ck "L6 見張りのブロックの形の結果は、permission_denials に無くても拒否（10）" 10 "$(claude_log_ran "$L/l6" "$L/c6" >/dev/null; echo $?)"
   ck "L4 実行した=0・拒否=10・呼ばれていない=1・前後の空白違いは不一致" "0 10 1 1" \
     "$(claude_log_ran "$E/log" "$E/c1" >/dev/null; printf '%s ' $?; claude_log_ran "$E/log" "$E/c2" >/dev/null; printf '%s ' $?; claude_log_ran "$E/log" "$E/c3" >/dev/null; printf '%s ' $?; claude_log_ran "$E/log" "$E/c4" >/dev/null; printf '%s' $?)"
   ck "L5 最後のツール呼び出し（名前・入力・結果・秒）" yes "$(yn bash -c 'IFS="	" read -r n i r s <<< "$1"; [ "$n" = Read ] && [[ "$i" == *p1_0.txt* ]] && [[ "$r" == *"中身 p1 0"* ]] && [[ "$s" =~ ^[0-9]+$ ]]' _ "$(claude_log_last_tool "$L/l2")")"
@@ -408,6 +414,8 @@ for old, new in zip(pairs[0::2], pairs[1::2]):
     s = s.replace(old, new)
 open(dst, "w", encoding="utf-8").write(s)
 PY2
+  # 置き換え前の文字列が無い（本体が変わった）ときは印を残し、最後に不合格にする（否定の FG が空振りで通らないように）
+  [ -f "$f" ] || : > "$TMP/fg_copy_failed"
   echo "$f"
 }
 with_src() { local saved="$SRC_SCRIPT"; SRC_SCRIPT="$1"; shift; "$@"; SRC_SCRIPT="$saved"; }
@@ -486,8 +494,10 @@ ck "A22 コマンドの中の VERDICT: は無害化（> VERDICT:）・行頭の 
 
 fga16() { mk fga16; local x; x=$(git -C "$TMP/fga16/repo" rev-parse HEAD); prev_rec fga16 20260101_0000 'ROUNDS: 1' "$x"
   prev_rec fga16 20260101_0001 'ROUNDS: 0' "$(git -C "$TMP/fga16/repo" rev-parse HEAD)"; echo "$x" > "$TMP/fga16/x"; run fga16; }
-with_src "$(fg_copy '[ "${r:-1}" -ge 1 ] || continue' ':')" fga16
-ck "FG-A16 ROUNDS: 0 を飛ばさないと A16 が不合格" no "$(yn grep -qF "見る範囲（REVIEW_BASE）: $(cat "$TMP/fga16/x")...HEAD" "$(grep -l 'あなたの観点: 1' "$TMP"/fga16/calls/*.in | head -1)")"
+with_src "$(fg_copy '[ "${r:-1}" -ge 1 ] && printf' 'printf')" fga16
+# 写しが作れずに実行されなかった（呼び出しの記録が無い）ときは不合格にする（FG 自体の空振りを通さない）
+fga16_in=$(grep -l 'あなたの観点: 1' "$TMP"/fga16/calls/*.in 2>/dev/null | head -1)
+ck "FG-A16 ROUNDS: 0 を飛ばさないと A16 が不合格" "ran no" "$([ -n "$fga16_in" ] && echo ran || echo not-run) $(yn grep -qF "見る範囲（REVIEW_BASE）: $(cat "$TMP/fga16/x")...HEAD" "$fga16_in")"
 fga17() { mk fga17; echo 30 > "$TMP/fga17/stub/p1_1.sleep"; run fga17 ADV_STEP_TIMEOUT=3; }
 with_src "$(fg_copy 'if [ -z "$good_log" ]; then' 'if [ "$rc" -ne 0 ]; then')" fga17
 ck "FG-A17 続きの失敗で前の報告を使わないと A17 が不合格（exit 1 にならない）" no "$([ "$(rcode fga17)" = 1 ] && echo yes || echo no)"
@@ -526,5 +536,19 @@ fga26() { mk fga26; printf '\n（作業中のメモ）\n' >> "$TMP/fga26/repo/do
 with_src "$(fg_copy 'h=$(git hash-object -- "$p" 2>/dev/null)' 'h=x')" fga26
 ck "FG-A26 中身のハッシュを比べないと A26（変更済みの上書き）が不合格（OK が出る）" yes "$(yn out_has fga26 'ADVERSARIAL_VERDICT: OK')"
 
+# ---------------- 基本レビュー 4 回目（I197_code_review_20261026_2347.md）の指摘の再発防止 ----------------
+# A27 既知 findings に渡すのは周に数えた記録だけ（ROUNDS: 0 の記録の未修正の指摘を既知にしない）
+mk a27; prev_rec a27 20260101_0000 'ROUNDS: 1' "$(git -C "$TMP/a27/repo" rev-parse HEAD)"; prev_rec a27 20260101_0001 'ROUNDS: 0' "$(git -C "$TMP/a27/repo" rev-parse HEAD)"; run a27
+A27_IN=$(grep -l 'あなたの観点: 1' "$TMP"/a27/calls/*.in | head -1)
+known_line() { grep -m1 '^既知 findings' "$1"; }   # 入力の「既知 findings」の行だけ（差分にも記録のファイル名が出るため）
+ck "A27 既知 findings に ROUNDS: 1 の記録は渡し、ROUNDS: 0 の記録は渡さない" "yes no" "$(yn grep -qF 'I900_adversarial_review_20260101_0000.md' <<< "$(known_line "$A27_IN")") $(yn grep -qF 'I900_adversarial_review_20260101_0001.md' <<< "$(known_line "$A27_IN")")"
+fga27() { mk fga27; prev_rec fga27 20260101_0000 'ROUNDS: 1' "$(git -C "$TMP/fga27/repo" rev-parse HEAD)"; prev_rec fga27 20260101_0001 'ROUNDS: 0' "$(git -C "$TMP/fga27/repo" rev-parse HEAD)"; run fga27; }
+with_src "$(fg_copy "PREV_RECORDS=\$(counted_records | paste -sd' ' -)" "PREV_RECORDS=\$(adversarial_records | paste -sd' ' -)")" fga27
+ck "FG-A27 すべての記録を渡すと A27 が不合格（ROUNDS: 0 の記録が入る）" yes "$(yn grep -qF 'I900_adversarial_review_20260101_0001.md' <<< "$(known_line "$(grep -l 'あなたの観点: 1' "$TMP"/fga27/calls/*.in | head -1)")")"
+# FG-L6: 見張りのブロックの形を見ないと L6 が不合格（実行したの 0 になる）
+mkdir -p "$TMP/fgl6"; sed 's/            if body.startswith("PreToolUse:") and "hook error" in body:/            if False:/' scripts/claude/review-process-lib.sh > "$TMP/fgl6/lib.sh"
+ck "FG-L6 見張りのブロックの形を見ないと L6 が不合格（0 を返す）" 0 "$(bash -c '. "$1"; claude_log_ran "$2" "$3" >/dev/null; echo $?' _ "$TMP/fgl6/lib.sh" "$TMP/lib/l6" "$TMP/lib/c6")"
+
+ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/fg_copy_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

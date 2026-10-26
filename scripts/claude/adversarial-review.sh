@@ -82,19 +82,28 @@ count_rounds() {
   echo "$total"
 }
 
-# 見る範囲の起点: 周に数えた（ROUNDS: 1 以上。行が無い古い記録は 1）最新の記録の REVIEWED_COMMIT。
-# ROUNDS: 0 の記録（報告の無い周・受け入れの記録）は飛ばす（count_rounds と同じ規則。飛ばさないと、
-# 報告の無い周のやり直しが空の差分を見て OK を出す）。無ければ比べる相手（origin/develop）
-review_base() {
-  local f r sha base="${ADV_BASE}"
+# 周に数えた記録（ROUNDS: 1 以上。行が無い古い記録は 1）を時刻順に出す。ROUNDS: 0 の記録（報告の無い周・
+# 受け入れの記録）は「周として成立していない」ので、見る範囲の起点にも既知 findings にも使わない
+# （起点に使うと、やり直しの周が空の差分を見て OK を出す。既知に使うと、未修正の指摘が再報告されずに消える）
+counted_records() {
+  local f r
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     r=$(grep -oE '^ROUNDS:[[:space:]]*[0-9]+[[:space:]]*$' "$f" | tail -1 | grep -oE '[0-9]+')
-    [ "${r:-1}" -ge 1 ] || continue
-    sha=$(grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$f" | tail -1 | grep -oE '[0-9a-f]{7,40}')
-    [ -n "$sha" ] && base="$sha"
+    [ "${r:-1}" -ge 1 ] && printf '%s\n' "$f"
   done < <(adversarial_records)
-  echo "$base"
+  return 0
+}
+
+# 見る範囲の起点: 周に数えた最新の記録の REVIEWED_COMMIT。無ければ比べる相手（origin/develop）
+review_base() {
+  local last sha
+  last=$(counted_records | tail -1)
+  if [ -n "$last" ]; then
+    sha=$(grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9a-f]{7,40}')
+    if [ -n "$sha" ]; then echo "$sha"; return; fi
+  fi
+  echo "${ADV_BASE}"
 }
 
 # 記録の場所の外の、コミットしていない変更（未追跡を含む）の一覧
@@ -370,7 +379,7 @@ REVIEW_BASE=$(review_base)
 REVIEWED_HEAD=$(git rev-parse HEAD)
 REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 worktree_state > "$RUN/state0"
-PREV_RECORDS=$(adversarial_records | paste -sd' ' -)
+PREV_RECORDS=$(counted_records | paste -sd' ' -)
 if ! git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" \
    || ! git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt"; then
   echo "⛔ 見る範囲 ${REVIEW_BASE}...HEAD の差分を取れません（比べる相手が無い・REVIEWED_COMMIT が無い）。"

@@ -131,6 +131,11 @@ elif mode == "ran":
             r = results.get(c.get("id"))
             if r is None:
                 fail(1)
+            # 見張り（PreToolUse）のブロックは、今の claude では permission_denials に入る（I197 スパイク S5）。
+            # 出力の形が変わっても「実行した」と言わないよう、結果の本文がフックのブロックの形なら拒否とみなす
+            body = text_of(r[1])
+            if body.startswith("PreToolUse:") and "hook error" in body:
+                fail(10)
             print("is_error=" + str(bool(r[1].get("is_error"))).lower())
             sys.stdout.write(text_of(r[1])[:2000])
             sys.exit(0)
