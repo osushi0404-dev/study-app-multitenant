@@ -28,7 +28,9 @@
 - [implement] I194（#328）を GitHub でコメントして not planned で閉じた — 設計確認メモでユーザーが決めた統合・取り下げ（計画 §4.6）。I194 のイシューファイルは harness-2 にあり、このセッションからは触らない
 - [implement] 07:23〜20:32（JST）の約 13 時間、作業が止まっていた — 記録では、Claude の次の返事を作る通信を出したまま進んでいない。ユーザーによると PC のスリープ。確認画面やテストの待ちではない
 - [implement] /simplify（4 観点）の指摘のうち、動きを変えない整理（既定値の一元化・run_step・exp_ids の廃止・判定の分け方・テストの重複）は直した。費用の列を記録に足した。範囲を外れる・方式を変える指摘は見送り、retro で扱う（計画変更記録 3）
+- [review-gate] 基本レビュー 1 回目は CI の Harness Tests が失敗（test_review_commit_lifecycle.sh の TC-C1-shellcheck。手元に shellcheck が無く、手元の run-all ではこの項目が通っていた）— 手順どおり fix-loop へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
