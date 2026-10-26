@@ -77,8 +77,9 @@ run_fix_review() {
 
   # 3) タイムアウト付き起動。失敗・空・タイムアウト(exit124) は全て非ブロック SKIP＋未実施記録
   # I193: 公式のサブエージェント定義（.claude/agents/<name>.md）を --agent で呼ぶ。名前はファイル名から取る
+  # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none）
   if ! review=$(printf '%s' "$context" | timeout "${FIX_REVIEW_TIMEOUT:-300}" claude -p \
-        --agent "$agent_name" --tools "Read,Grep,Glob") || [ -z "$review" ]; then
+        --agent "$agent_name" --tools "Read,Grep,Glob" --permission-prompts none) || [ -z "$review" ]; then
     printf '# %s fix-%s レビュー（未実施）\n\nclaude -p の失敗/空/タイムアウトのためレビュー未実施（非ブロック skip）。\n\nFIX_GATE: SKIP\n' \
       "$issue" "$kind" > "$review_file"
     commit_review_artifact "$review_file" "$issue" "fix-${kind}-review"

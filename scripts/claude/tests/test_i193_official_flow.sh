@@ -59,7 +59,7 @@ r4() { local d="$1" old="$2" a want; [ ! -e "$old" ] || return 1
        for a in "${AGENTS[@]}"; do
          [ -f "$d/$a.md" ] || return 1
          [ "$(fm "$d/$a.md" name)" = "$a" ] || return 1
-         want="Read, Grep, Glob"; [ "$a" = "adversarial-reviewer" ] && want="Read, Grep, Glob, Bash"
+         want="Read, Grep, Glob"   # I197: 敵対的レビュー役も読むだけ（実験は実験役が別プロセスで実行する）
          [ "$(fm "$d/$a.md" tools)" = "$want" ] || return 1
        done; }
 r5() { ! grep -qE 'ultra|claude-code-action' "$@"; }
@@ -130,11 +130,10 @@ ck "S15 review-gate は報告の無い観点を合格に数えない" 0 "$(rc gr
 ck "S16 plan-review は背景で実行し、判定行が無いときやり直す" 0 "$(rc grep -qF '出力に `PLAN_VERDICT:` 行が無い（途中で止まった）' .claude/skills/plan-review/SKILL.md)"
 ck "FG-S15 「時間切れの体は新規 Critical/High 0 として数える」を戻すと S15 不合格" 1 "$(sed 's#\*\*報告の無い観点を合格に数えない\*\*#時間切れの体は新規 Critical/High 0 として数える#' .claude/skills/review-gate/SKILL.md > "$TMP/s15.md"; rc grep -qF '**報告の無い観点を合格に数えない**' "$TMP/s15.md")"
 ck "S17 review-gate の手順に sleep を直接書かない（承認画面が出る・I193 4 回目 H2）" 0 "$(rc bash -c '! grep -qE "^[[:space:]]*sleep [0-9]" .claude/skills/review-gate/SKILL.md')"
-ck "S17 review-gate のタイマーと PR コメントはスクリプト経由" 0 "$(rc bash -c 'grep -qF "bash scripts/claude/review-timer.sh 900" .claude/skills/review-gate/SKILL.md && grep -qF "bash scripts/claude/post-review-comment.sh" .claude/skills/review-gate/SKILL.md && ! grep -qE "^[[:space:]]*gh pr review" .claude/skills/review-gate/SKILL.md')"
-ck "S17 review-timer.sh は数字でない引数を受け付けない" 2 "$(rc bash scripts/claude/review-timer.sh abc)"
-ck "S17 review-timer.sh は 1 秒待って終わる" 0 "$(rc bash scripts/claude/review-timer.sh 1)"
+# I197: 敵対的レビューは adversarial-review.sh を 1 回呼ぶ（この会話でサブエージェント・タイマーを起動しない）
+ck "S17 review-gate の敵対的レビューと PR コメントはスクリプト経由" 0 "$(rc bash -c 'grep -qF "bash scripts/claude/adversarial-review.sh" .claude/skills/review-gate/SKILL.md && grep -qF "bash scripts/claude/post-review-comment.sh" .claude/skills/review-gate/SKILL.md && ! grep -qE "^[[:space:]]*gh pr review|subagent_type|review-timer|TaskStop" .claude/skills/review-gate/SKILL.md')"
 ck "S18 code-review.sh は PR を取れないとき CI_WAIT: NO_PR で止まる（CI 待ちを飛ばさない・I193 4 回目 H1）" 0 "$(rc bash -c 'grep -qF "CI_WAIT: NO_PR" scripts/claude/code-review.sh && grep -qF "gh pr list --head" scripts/claude/code-review.sh && ! grep -qF "PR_NUM=\$(gh pr view --json number" scripts/claude/code-review.sh')"
-sed 's#^   bash scripts/claude/review-timer.sh 900$#   sleep 900#' .claude/skills/review-gate/SKILL.md > "$TMP/s17.md"
+{ cat .claude/skills/review-gate/SKILL.md; printf '\n   sleep 900\n'; } > "$TMP/s17.md"
 ck "FG-S17 review-gate の手順に sleep 900 を戻すと S17 不合格" 1 "$(rc bash -c '! grep -qE "^[[:space:]]*sleep [0-9]" "$1"' _ "$TMP/s17.md")"
 ck "S18 review-gate に NO_PR の扱いがある" 0 "$(rc grep -qF '`CI_WAIT: NO_PR` がある' .claude/skills/review-gate/SKILL.md)"
 ck "S19 review-gate に review-gate ⇄ fix-loop の繰り返しの上限がある" 0 "$(rc grep -qF '**繰り返しの上限**' .claude/skills/review-gate/SKILL.md)"

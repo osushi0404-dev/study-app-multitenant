@@ -291,6 +291,13 @@ Danger Ops（有無/手順/ロールバック）:
    - Info（計画変更記録）: この記録を足した
    - 計画レビューのやり直し: 要（一覧の形・入力の仕様を変えたため）
 2. 2026-10-26 2 回目の計画レビュー（`I197_plan_review_20261026_0713.md`・OK・Warning 4・Info 2）への対応: FG-A8・FG-A9・FG-A10 を auto_test に足した。S1 を行末の `\` でつないだ論理行で見る形にした。§3 の変更の数を 4 に直した。費用の実測は手動 No.1 で記録する（済み）。auto の挙動の差は init のモードで止まる側に倒す設計のまま。節番号の飛び（§10・§11 は条件付きの節で該当なし）はそのまま。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない、テストの追加と数の訂正だけ）
+3. 2026-10-26 implement（/simplify の 4 観点の後）:
+   - 計画書の記載: §4.5 code-review.sh「code-reviewer の呼び出しを run_claude_logged に変える」。採った方法: review-process-lib.sh の読み込みは code-review.sh の本体（関数だけを読み込む使い方の後）に置いた。理由: 既存のテスト（test_adversarial_trigger.sh の FG-P1）は code-review.sh を別の場所に写して関数だけを読み込むため、写し先にライブラリが無く読み込みが失敗した。関数だけを使う側（gate-check・adversarial-review.sh・テスト）は、要るときに自分でライブラリを読む
+   - 記録の「観点ごとの実行」の表に「費用」（各ログの total_cost_usd の合計）の列を足した。理由: 手動 No.1 で費用を記録する計画だったが、ログは一時フォルダにあり実行の後に消えるため、記録に残さないと見直しの材料が残らない
+   - `scripts/claude/tests/test_review_gates.sh`（計画の一覧に無かった）の TC-WIRE3 は、code-reviewer の呼び出しの行（`claude -p --agent "$REVIEWER_AGENT"`）を目印に順番を確かめていたので、目印を `--agent "$REVIEWER_AGENT" --tools` の行に付け替えた（確かめる中身は同じ）
+   - 既定値を冒頭で 1 回だけ決める・`run_step` に締め切りの処理をまとめる・重複した状態のファイル（exp_ids）をやめる、の整理をした（動きは変えない）
+   - 見送り（retro で扱う）: 全部の `claude -p` を 1 つの起動口に寄せる・`neutralize_machine_lines` を語の一覧でなく形で無害化する・記録の探し方と REVIEWED_COMMIT の読み方を gate-check.sh と共有する・check-permission-prompt.sh の記録の読み方をライブラリに寄せる・実験役を使い捨てのワークツリーで動かす・テストの並列化。どれも計画の範囲（他のスクリプトの作り直し・gate-check.sh は変えない）を外れるか、方式の変更になる
+   - 計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
 - [20261026_0713 判定: ✅ 完了](../../reviews/I197_plan_review_20261026_0713.md)

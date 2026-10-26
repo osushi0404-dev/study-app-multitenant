@@ -128,7 +128,7 @@ $(cat "$MANUAL_TEST")"
 # claude -p でレビュー実行（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）
 # 時間上限 REVIEW_TIMEOUT（既定 900 秒）。時間切れ・失敗は判定できないので exit 1（fail-closed）
 REVIEW_RC=0
-REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob") || REVIEW_RC=$?
+REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --permission-prompts none) || REVIEW_RC=$?
 if [ "$REVIEW_RC" -ne 0 ]; then
   echo "⛔ 計画レビューが終わりませんでした（claude -p exit=${REVIEW_RC}。124 は時間切れ）。判定できないため止めます。"
   exit 1

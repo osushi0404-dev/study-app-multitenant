@@ -25,6 +25,9 @@
 - [plan] I197 は track:harness だが app-1 で計画した — `docs/runbooks/worktree.md` §10「ワークツリーはトラックに固定しない」。ユーザーが app-1 で /plan-issue を実行した
 - [plan] 「親が実験を実行」は、親の会話ではなく、スクリプトが起動する実験役の別プロセス（auto＋承認なし）で行う — 親の会話で実行すると確認画面で人を待ちうる。設計確認メモの形（レビュー役は読むだけ・実験は別が実行）は変えない（計画 §9）
 - [plan-review] 1 回目 BLOCKER 2 件（一覧の見出し・差分の受け渡し）を直して 2 回目 OK。2 回目の Warning のうち FG の追加・S1 の論理行・数の訂正は直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため（計画変更記録 2）。高リスク判定 No なので design-security-review は通らない
+- [implement] I194（#328）を GitHub でコメントして not planned で閉じた — 設計確認メモでユーザーが決めた統合・取り下げ（計画 §4.6）。I194 のイシューファイルは harness-2 にあり、このセッションからは触らない
+- [implement] 07:23〜20:32（JST）の約 13 時間、作業が止まっていた — 記録では、Claude の次の返事を作る通信を出したまま進んでいない。ユーザーによると PC のスリープ。確認画面やテストの待ちではない
+- [implement] /simplify（4 観点）の指摘のうち、動きを変えない整理（既定値の一元化・run_step・exp_ids の廃止・判定の分け方・テストの重複）は直した。費用の列を記録に足した。範囲を外れる・方式を変える指摘は見送り、retro で扱う（計画変更記録 3）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

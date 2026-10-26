@@ -3,6 +3,26 @@ set -euo pipefail
 
 # ---- helper functions (テストは REVIEW_LIB_SOURCE_ONLY=1 で source して利用) ----
 
+# I197: レビュー役が正常に終わらなかったときの記録（BLOCKER）。最後のツール呼び出し・その結果・経過を残す。
+# claude_log_last_tool は review-process-lib.sh の関数（本体と、この関数を使う呼び出し元が読み込む）
+reviewer_failure_record() {   # $1=イシュー $2=claude の終了コード $3=ログ
+  local issue="$1" rc="$2" log="$3" last name inp res secs
+  last=$(claude_log_last_tool "$log" 2>/dev/null || true)
+  IFS=$'\t' read -r name inp res secs <<< "${last:-(読めない)}"
+  cat <<EOF
+# コードレビュー [${issue}]（未完了）
+
+レビュー役の claude -p が正常に終わらなかった（exit=${rc}。124 は時間切れ・0 は空の出力）。判定できないため BLOCKER とする。
+
+- 最後のツール呼び出し: ${name:-(なし)} ${inp:-}
+- その結果（先頭）: ${res:-(なし)}
+- 最後の出来事から止まるまで: ${secs:-?} 秒
+
+RISK: YES
+VERDICT: BLOCKER
+EOF
+}
+
 # open/closed 両方を検索してパスを返す（issues/tests/reviews 等の単一パターン用）
 find_file() {
   local dir="$1" pattern="$2"
@@ -124,7 +144,8 @@ kill_tree() {
 # （差分の中の文章に誘導された書き込み・push を仕組みで止める）。失敗・時間切れは本文に書いて返す（呼び出し元は止めない）。
 run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD）
   local prompt="$1" out rc=0
-  out=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan "$prompt" 2>&1 < /dev/null) || rc=$?
+  # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none。黙って止まる経路を作らない）
+  out=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none "$prompt" 2>&1 < /dev/null) || rc=$?
   if [ "$rc" -ne 0 ]; then
     printf '(実行できず: exit=%s。124 は時間切れ)\n' "$rc"
     return 0
@@ -138,8 +159,10 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
 
 # I193: 機械が読む行（VERDICT: など）を行頭から外す。組み込みのレビューの出力を記録に貼るとき、
 # その中の行（差分の中の文章を引用したものを含む）が判定の行として読まれないようにする。
+# I197: 敵対的レビューの記録が読む行（ITEM・EXPERIMENT_BEGIN/END・合計の行）も対象にする
 neutralize_machine_lines() {
-  sed -E 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|ROUNDS|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|CI_WAIT|OFFICIAL_SECURITY):/\1> \2:/'
+  sed -E -e 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|NEW_CRITICAL_TOTAL|NEW_HIGH_TOTAL|UNVERIFIED|ROUNDS|ITEM|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|ADVERSARIAL_VERDICT|CI_WAIT|OFFICIAL_SECURITY):/\1> \2:/' \
+    -e 's/^([[:space:]]*)(EXPERIMENT_BEGIN|EXPERIMENT_END)([[:space:]]|$)/\1> \2\3/'
 }
 
 # I193 7 回目 H2: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（実行できず・読めていない）ら HIGH。
@@ -435,6 +458,11 @@ inject_gate_result() {
 # テストから関数のみを source するためのガード（本体は実行しない）
 if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 
+# I197: 別プロセスのレビュー役を「時間上限つき・承認なし・途中の出力を残す」で起動し、記録を読む関数
+# （関数だけを読み込む使い方〔gate-check・テストの写し〕には要らないので、本体でだけ読む）
+# shellcheck source=scripts/claude/review-process-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/review-process-lib.sh"
+
 ISSUE="${1:?Usage: $0 I###}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
@@ -574,16 +602,16 @@ ${OFFICIAL_SECURITY}"
 
 # claude -p でレビュー実行（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）
 # 時間上限 REVIEW_TIMEOUT（既定 900 秒）。時間切れ・失敗・空は、その旨の記録を残して BLOCKER にする（fail-closed）
+# I197: 承認なし（--permission-prompts none）・途中の出力を残す形で起動し、本文は記録の result から受け取る
 REVIEW_RC=0
-REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob") || REVIEW_RC=$?
+REVIEW_IN="$OFFICIAL_DIR/reviewer_in.txt"; REVIEW_LOG="$OFFICIAL_DIR/reviewer.jsonl"
+printf '%s' "$CONTEXT" > "$REVIEW_IN"
+run_claude_logged "${REVIEW_TIMEOUT:-900}" "$REVIEW_LOG" "$REVIEW_IN" \
+  --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --permission-prompts none || REVIEW_RC=$?
+REVIEW=$(claude_log_result "$REVIEW_LOG" 2>/dev/null) || REVIEW=""
 if [ "$REVIEW_RC" -ne 0 ] || [ -z "$REVIEW" ]; then
   echo "⚠️ レビュー役が終わりませんでした（claude -p exit=${REVIEW_RC}。124 は時間切れ）。BLOCKER として記録します。"
-  REVIEW="# コードレビュー [${ISSUE}]（未完了）
-
-レビュー役の claude -p が正常に終わらなかった（exit=${REVIEW_RC}。124 は時間切れ・0 は空の出力）。判定できないため BLOCKER とする。
-
-RISK: YES
-VERDICT: BLOCKER"
+  REVIEW=$(reviewer_failure_record "$ISSUE" "$REVIEW_RC" "$REVIEW_LOG")
 fi
 
 # I193: レビューの間に、記録の場所の外のファイルが動いたら（組み込みのレビューと記録の REVIEWED_COMMIT の

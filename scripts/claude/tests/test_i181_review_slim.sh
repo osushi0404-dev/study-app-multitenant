@@ -91,11 +91,12 @@ H_CR="## 高リスク判定の条件"; E_CR='^(## |---)'
 H_P8="### P8."; E_H3='^(### |## |---)'
 H_FL="3) 対応方法"; E_FL='^3\.5\)'
 
-D1_WORDS=('15 分' '攻め筋は 1 体 3 本' '1 周 3 体' 'イシュー全体で 2 周' 'REVIEWED_COMMIT' 'ROUNDS:' '{REVIEW_BASE}'
-          'run_in_background' 'review-timer.sh 900' 'TaskStop' 'task_id' '時間切れ' '行が無い記録')
-OLD_WORDS=('最大 3 周' '総数 15' 'loop-until-dry' '動的観点' '最大 5 エージェント')
+# I197: 敵対的レビューは adversarial-review.sh が 1 周を行う（1 周 10 分・実験の往復 2 回・周回の数え方はスクリプト）
+D1_WORDS=('1 周 10 分' '攻め筋は 1 観点 3 本' '実験の往復は 1 観点 2 回' '1 周 3 観点' 'イシュー全体で 2 周' 'REVIEWED_COMMIT' 'ROUNDS:'
+          'run_in_background' 'bash scripts/claude/adversarial-review.sh' '報告の無い観点を合格に数えない' '行の無い記録は 1')
+OLD_WORDS=('最大 3 周' '総数 15' 'loop-until-dry' '動的観点' '最大 5 エージェント' 'review-timer.sh' '1 体 15 分')
 D3_WORDS=('種類ごと' '止める場所・方式の見直し')
-D4_WORDS=('{REVIEW_BASE}' '攻め筋は最大 3 本' '12 分' '15 分' 'ulimit -v' 'timeout 60' '処理量の欠陥')
+D4_WORDS=('攻め筋は最大 3 本' '1 周 10 分' '実験の往復は 2 回まで' 'EXPERIMENT_BEGIN' 'ITEM: V<n>' 'ulimit -v' 'timeout 60' '処理量の欠陥')
 D4_SCOPE_WORDS=('普通の書き方による事故' 'わざと回避する書き方' 'Low' '件数に数えない' 'danger-ops.md')
 D5_WORDS=('GitHub が最後の守り' 'danger-ops.md' 'path_risk_trigger' '.github/*' '.pre-commit-config.yaml' '.secrets.baseline'
           'scripts/claude/hooks/pretooluse_guard.py' '.claude/settings.json' '.claude/settings.local.json')
@@ -142,7 +143,7 @@ fg() { # fg <name> <src> <dst> <expr> <検査コマンド...> : 注入が起き�
   if ! inject "$src" "$dst" "$expr"; then ck "$name（注入が起きた）" ok ng; return; fi
   ck "$name" 1 "$("$@")"
 }
-fg "FG-D1 タイマーの 900 秒を消すと D1 不合格" "$SK" "$TMP/sk1.md" 's.replace("review-timer.sh 900", "review-timer.sh")' \
+fg "FG-D1 adversarial-review.sh の呼び出しを消すと D1 不合格" "$SK" "$TMP/sk1.md" 's.replace("bash scripts/claude/adversarial-review.sh", "")' \
    sec "$TMP/sk1.md" "$H_SK" "$E_H2" "${D1_WORDS[@]}"
 fg "FG-D2 最大 3 周 を足すと D2 不合格" "$RR" "$TMP/rr2.md" 's + "\n最大 3 周\n"' \
    absent "$SK" "$TMP/rr2.md" -- "${OLD_WORDS[@]}"

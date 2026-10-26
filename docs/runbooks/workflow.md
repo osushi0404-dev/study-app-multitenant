@@ -23,7 +23,7 @@
    1. plan-review: 自作の計画レビュー（`plan-issue-review.sh`・`.claude/agents/plan-reviewer.md`）。Blocker は自分で直して再レビュー。高リスク判定 Yes → design-security-review、No → implement
    2. design-security-review（高リスクのときだけ）: 実装前の設計レビュー＋攻撃シナリオ。Blocker は計画を直して plan-review からやり直す
    3. implement: 実装・TDD → 組み込みの `/simplify` で整理 → push
-   4. review-gate: CI 待ち（失敗・時間切れで止まる）＋組み込みの `/code-review`（高リスク時は `/security-review` も。どちらも読み取り専用の plan モード）＋自作のレビュー役（受け入れ条件・計画・文書の照合）＋決定論ゲートの実走。高リスクなら敵対的レビュー。NG → fix-loop
+   4. review-gate: CI 待ち（失敗・時間切れで止まる）＋組み込みの `/code-review`（高リスク時は `/security-review` も。どちらも読み取り専用の plan モード）＋自作のレビュー役（受け入れ条件・計画・文書の照合）＋決定論ゲートの実走。高リスクなら敵対的レビュー（別プロセス・読むだけ・1 周 10 分・確かめる項目の一覧で判定。`scripts/claude/adversarial-review.sh`）。NG → fix-loop
    5. fix-loop: 診断レビューを通した案で直し、実装・テストのレビューを通して、**必ず review-gate に戻る**（戻り先は 1 か所）
    6. test-gate: `gate-check.sh`（最新のレビューが今の HEAD を見て OK か）→ 計画書が指定した重いテスト・Claude 担当の手動テスト（pytest・Jest・E2E は CI が正で、手元では流し直さない）→ 人の手動テストがあれば**ここで止まる**
 3. ユーザーが人の手動テストの結果を返信（OK、または NG と内容）→ Claude が記録して続ける（会話が切れたら /proceed I###）

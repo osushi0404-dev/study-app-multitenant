@@ -77,3 +77,4 @@ bash scripts/claude/tests/test_check_permission_prompt.sh
 
 ## 実行記録
 - 2026-10-26（計画作成時）: TC-01・TC-02・TC-08 は実装前のため未実行（テスト本体が未作成）。TC-03〜TC-07 は今の develop でベースライン pass（`run-all.sh` pass=39 fail=0）。付け替え後の TC-03・TC-04 は実装後に実行する
+- 2026-10-26（implement・/simplify の後）: TC-01 `test_i197_adversarial_process.sh` pass=86 fail=0（TC-02・TC-08・FG を含む）。TC-03 pass=29 fail=0。TC-04 pass=160 fail=0。TC-05 の `test_review_gates.sh` は TC-WIRE3 の目印を付け替えて PASS=67 FAIL=0（計画変更記録 3）。TC-07 `run-all.sh` pass=40 fail=0・exit 0
