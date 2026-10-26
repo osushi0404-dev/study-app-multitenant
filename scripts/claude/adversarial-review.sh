@@ -106,14 +106,26 @@ dirty_outside_records() {
   done < <(git status --porcelain=v1 -z --untracked-files=all --no-renames)
 }
 
-# 実験が作業ツリーを変えたか（記録の場所の外のファイル・HEAD・ブランチ）。変えていたら周全体のフラグ $RUN/dirty に足す。
+# 作業ツリーの状態: status の各行と、そのファイルの中身のハッシュ（消えたものは -）。記録の場所も含める
+# （起動前から変更済み・未追跡のファイル〔作業中の計画書・記録〕を実験がさらに書き換えても、ハッシュの違いで捕まえる）
+worktree_state() {
+  local entry p h
+  while IFS= read -r -d '' entry; do
+    p="${entry:3}"
+    h="-"; [ -f "$p" ] && h=$(git hash-object -- "$p" 2>/dev/null)
+    printf '%s\t%s\n' "$entry" "$h"
+  done < <(git status --porcelain=v1 -z --untracked-files=all --no-renames)
+}
+
+# 実験が作業ツリーを変えたか（起動時の状態〔$RUN/state0〕・HEAD・ブランチと比べる）。変えていたら周全体のフラグ $RUN/dirty に足す。
+# 実験中はこのスクリプトもリポジトリに書かないので、記録の場所を含むどのファイルの変化も実験のせいとみなす。
 # 実験は同じ作業ツリーで並列に動くので、どの観点が変えたかは決めず、周全体の実験を無効にする（消さない・戻さない）
 check_worktree() {
-  local now head branch
-  now=$(dirty_outside_records)
+  local head branch changed
   head=$(git rev-parse HEAD 2>/dev/null)
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-  [ -n "$now" ] && printf '%s\n' "$now" >> "$RUN/dirty"
+  changed=$(worktree_state | diff "$RUN/state0" - | sed -nE 's/^[<>] ...([^	]*)	.*$/\1/p' | sort -u)
+  [ -n "$changed" ] && printf '%s\n' "$changed" >> "$RUN/dirty"
   [ "$head" = "$REVIEWED_HEAD" ] || printf 'HEAD が %s から %s に動いた\n' "$REVIEWED_HEAD" "${head:-不明}" >> "$RUN/dirty"
   [ "$branch" = "$REVIEWED_BRANCH" ] || printf 'ブランチが %s から %s に変わった\n' "$REVIEWED_BRANCH" "${branch:-不明}" >> "$RUN/dirty"
   return 0
@@ -163,6 +175,10 @@ for line in open(body, encoding="utf-8", errors="replace").read().split("\n"):
         cur, buf = m.group(1), []
         continue
     if cur is not None and re.fullmatch(r"EXPERIMENT_END " + re.escape(cur) + r"\s*", line):
+        while buf and not buf[0].strip():
+            buf.pop(0)
+        while buf and not buf[-1].strip():
+            buf.pop()
         path = os.path.join(out, cur + ".cmd")
         if cur not in seen and buf and not os.path.exists(path):
             seen.add(cur)
@@ -207,11 +223,15 @@ run_perspective() {
   run_reviewer "$d/in0.txt" "$log"; rc=$?
   sid=$(claude_log_session "$log" 2>/dev/null)
   # 判定に使うのは、最後に成功した呼び出しの本文（続きの呼び出しが時間切れ・失敗しても、前の報告を消さない）
-  local good_log="" note=""
+  local good_log="" note="" last_ids=""
   : > "$d/body.txt"
   while :; do
     if [ "$rc" -ne 0 ]; then
-      [ -n "$good_log" ] && note="続きの呼び出しが終わらなかった（exit=${rc}）ため、前の報告で判定（その後の実験の結果は反映されていない）"
+      if [ -n "$good_log" ]; then
+        note="続きの呼び出しが終わらなかった（exit=${rc}）ため、前の報告で判定（その後の実験の結果は読まれていない）"
+        # 結果をレビュー役が読んでいない実験は「実行した」に数えない（exp_status は最後の行を採る）
+        for id in $last_ids; do printf '%s\t%s\n' "$id" "unread" >> "$d/exp_status"; done
+      fi
       break
     fi
     claude_log_result "$log" > "$d/body.txt" 2>/dev/null || : > "$d/body.txt"
@@ -246,6 +266,7 @@ run_perspective() {
       printf '%s\n' "$out" > "$d/exp/$id.out"
       printf '\n### %s: %s\n~~~\n%s\n~~~\n' "$id" "$st" "$out" >> "$next_in"
     done
+    last_ids="$ids"
     # 実験役の後に作業ツリー（ファイル・HEAD・ブランチ）を比べる（変えていたら周全体の実験を無効にする）
     check_worktree
     printf '\n上の結果を踏まえ、最終報告を出力の形どおりに全部書き直せ（担当の項目すべてに ITEM 行を書く）。まだ実験が要るなら EXPERIMENT 行で出せ（残りの往復: %s）。\n' \
@@ -348,6 +369,7 @@ fi
 REVIEW_BASE=$(review_base)
 REVIEWED_HEAD=$(git rev-parse HEAD)
 REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+worktree_state > "$RUN/state0"
 PREV_RECORDS=$(adversarial_records | paste -sd' ' -)
 if ! git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" \
    || ! git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt"; then
@@ -416,7 +438,7 @@ n=1; while [ -e "$RECORD" ]; do n=$(( n + 1 )); RECORD="docs/reviews/${ISSUE}_ad
     [ -s "$d/exp_status" ] || continue
     printf '\n### 観点 %s\n' "$p"
     while IFS=$'\t' read -r id st; do
-      case "$st" in ran) label="実行した" ;; denied) label="拒否された" ;; notcalled) label="呼ばれなかった（同じコマンドの実行が無い）" ;; mode) label="実行していない（実験役のモードが auto でない）" ;; deadline) label="実行していない（締め切り）" ;; limit) label="実行していない（往復の上限）" ;; *) label="判定できない（実験役の記録を読めない）" ;; esac
+      case "$st" in ran) label="実行した" ;; unread) label="実行した（続きの呼び出しが終わらず、結果は読まれていない）" ;; denied) label="拒否された" ;; notcalled) label="呼ばれなかった（同じコマンドの実行が無い）" ;; mode) label="実行していない（実験役のモードが auto でない）" ;; deadline) label="実行していない（締め切り）" ;; limit) label="実行していない（往復の上限）" ;; *) label="判定できない（実験役の記録を読めない）" ;; esac
       printf '\n#### %s: %s\n~~~\n%s\n~~~\n' "$id" "$label" "$(neutralize_machine_lines < "$d/exp/$id.cmd" 2>/dev/null)"
       [ -s "$d/exp/$id.out" ] && printf '出力の先頭:\n~~~\n%s\n~~~\n' "$(neutralize_machine_lines < "$d/exp/$id.out")"
     done < "$d/exp_status"

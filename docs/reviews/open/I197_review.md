@@ -33,6 +33,8 @@
 - [review-gate] 基本レビュー 2 回目（`I197_code_review_20261026_2124.md`）は BLOCKER（Blocker 1・High 1・Medium 6・Low 2。RISK: NO で敵対的レビューの対象外）— fix-loop へ（review-gate ⇄ fix-loop は 2 回目）
 - [fix-loop] 2 回目は診断メモ `I197_fix_diagnosis_20261026_2140.md` の推奨案で、指摘 1〜5・7〜9 を直した（診断・実装・テストのレビューはすべて PASS）。指摘 6（非ゼロで終わった実験を未検証にする）は採らなかった — 反証の実験は非ゼロの終了を期待する形が多く、誤った未検証が増える。結果の解釈はレビュー役の読みで、出力は記録に残る。指摘 10 は retro
 - [review-gate] 基本レビュー 3 回目（`I197_code_review_20261026_2159.md`）は HIGH（High 1・Medium 6・Low 2）— fix-loop へ（3 回目）。直すのは High 1 と、それに直結する Medium 3（コマンド末尾の改行で「呼ばれなかった」になり周を空費・last_tool の欄ずれで記録が誤る・実験が記録の場所〔計画書・過去の記録〕を書き換えても気づかない）。見送り: 非ゼロ終了の区別（2 回目で採らない判断済み）・auto の関門の記録（計画 §8 に記載済み・手動 No.2 で確かめる）・最後の比較の後の子プロセス（全観点の wait の後に比べており、残るのは timeout 後の孫プロセスだけで普通の書き方の事故の範囲外）・Low 2 件（retro）— `feedback_fixloop_not_excessive`
+- [fix-loop] 3 回目は診断メモ `I197_fix_diagnosis_20261026_2210.md` で直した。診断レビュー 1 回目は差し戻し（status の文字列の比較では、起動前から変更済みの計画書の上書きを見逃す。正しい指摘）→ 中身のハッシュも比べる案に直して PASS。実装・テストのレビューは PASS
+- [fix-loop] 手元の全体のテスト（run-all）は流さず、直したところの TC-01 だけを流した — push の後に CI の Harness Tests が同じものを流し、review-gate がその合格を待つため（ユーザーの指摘 10-26「意味あるか？」）。手元で全体を流すのは、push の前に失敗に気づける見込みが高いときだけにする
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

@@ -139,13 +139,15 @@ elif mode == "last_tool":
     closed = max([ts for ts, d in events if d.get("type") == "__log_closed__"] or [0])
     last_ev = max([ts for ts, d in events if d.get("type") != "__log_closed__"] or [closed])
     if not uses:
-        print("(なし)\t\t\t" + str(max(0, closed - last_ev)))
+        print("(なし)\t-\t-\t" + str(max(0, closed - last_ev)))
     else:
         ts, c = uses[-1]
         inp = json.dumps(c.get("input"), ensure_ascii=False).replace("\n", " ")[:120]
         r = results.get(c.get("id"))
         res = text_of(r[1]).replace("\n", " ").replace("\t", " ")[:120] if r else "(結果なし)"
-        name = c.get("name")
+        name = c.get("name") or "-"
+        # 空の欄は - で埋める（呼び出し側は IFS=タブで読むので、空の欄があると連続するタブが 1 つにまとまり欄がずれる）
+        inp, res = inp.replace("\t", " ") or "-", res or "-"
         print(f"{name}\t{inp}\t{res}\t{max(0, closed - last_ev)}")
 else:
     fail(2)

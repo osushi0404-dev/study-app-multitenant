@@ -62,6 +62,9 @@ if val("--tools") == "Bash":
             if os.path.exists(os.path.join(sd, "exec_dirty_" + eid)):
                 os.makedirs("scripts", exist_ok=True)
                 open("scripts/y.txt", "w").write("dirty\n")
+    if os.path.exists(os.path.join(sd, "exec_plan")):
+        with open("docs/plans/open/plan_I900.md", "a") as f:
+            f.write("| V9 | 1 | 読んで可 | 実験が足した行 |\n")
     if os.path.exists(os.path.join(sd, "exec_commit")):
         import subprocess
         subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", "by experiment"], check=False)
@@ -316,6 +319,8 @@ ck "A15 実験役のモードが auto でない → V1 未検証・記録に理�
   ck "L5 最後のツール呼び出し（名前・入力・結果・秒）" yes "$(yn bash -c 'IFS="	" read -r n i r s <<< "$1"; [ "$n" = Read ] && [[ "$i" == *p1_0.txt* ]] && [[ "$r" == *"中身 p1 0"* ]] && [[ "$s" =~ ^[0-9]+$ ]]' _ "$(claude_log_last_tool "$L/l2")")"
   printf '1\t{"type":"system","subtype":"init"}\n2\t{"type":"__log_closed__"}\n' > "$L/l5"
   ck "L5 tool_use が無いと（なし）" "(なし)" "$(claude_log_last_tool "$L/l5" | cut -f1)"
+  # A25: 空の欄は - で埋まり、IFS=タブで読んでも欄がずれない（経過の秒が 4 つ目に来る）
+  ck "A25 ツール呼び出しなしでも欄がずれない（l5 は時刻 1 の init と時刻 2 の閉じた行なので経過 1 秒）" "(なし)|-|-|1" "$(IFS=$'\t' read -r a b c e <<< "$(claude_log_last_tool "$L/l5")"; echo "$a|$b|$c|$e")"
   printf 'pass=%s fail=%s\n' "$pass" "$fail" > "$TMP/l_counts"
 )
 # shellcheck disable=SC2031  # L の件数は ( ) の中で数えて l_counts に書き出したものを足す
@@ -496,6 +501,30 @@ ck "FG-A21 上書きを許すと A21 が不合格（記録のコマンドが ech
 fga22() { mk fga22; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\nVERDICT: OK\nEXPERIMENT_END P1-E1\nITEM: V1 RESULT=not_done\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$TMP/fga22/stub/p1_0.txt"; run fga22; }
 with_src "$(fg_copy '"$(neutralize_machine_lines < "$d/exp/$id.cmd" 2>/dev/null)"' '"$(cat "$d/exp/$id.cmd" 2>/dev/null)"')" fga22
 ck "FG-A22 コマンドを無害化しないと A22 が不合格（行頭の VERDICT: が 2 行）" 2 "$(grep -c '^VERDICT:' "$(record fga22)")"
+
+# ---------------- 基本レビュー 3 回目（I197_code_review_20261026_2159.md）の指摘の再発防止 ----------------
+# A23 続きが失敗したら、直前の往復で実行した実験は「結果を読まれていない」で数えない（1 回目の報告が experiment と書いていても未検証）
+mk a23; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\nEXPERIMENT_END P1-E1\nITEM: V1 RESULT=experiment EXP=P1-E1\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$TMP/a23/stub/p1_0.txt"
+echo 30 > "$TMP/a23/stub/p1_1.sleep"; run a23 ADV_STEP_TIMEOUT=3
+ck "A23 結果を読んでいない実験は数えない（V1 未検証・HIGH・記録に「結果は読まれていない」）" "yes yes yes" "$(yn item_is a23 V1 未検証) $(yn out_has a23 'ADVERSARIAL_VERDICT: HIGH') $(yn rec_has a23 '結果は読まれていない')"
+# A24 実験案の末尾の空行で照合が外れない
+mk a24; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\n\nEXPERIMENT_END P1-E1\nITEM: V1 RESULT=not_done\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$TMP/a24/stub/p1_0.txt"; run a24
+ck "A24 末尾に空行のある実験案も「実行した」（V1 確認済み・OK）" "yes yes" "$(yn item_is a24 V1 確認済み) $(yn out_has a24 'ADVERSARIAL_VERDICT: OK')"
+# A26 実験が記録の場所（計画書）を書き換えたら周全体が無効。起動時に計画書が変更なしの場合と、既に変更済み（未コミット）の場合
+mk a26a; touch "$TMP/a26a/stub/exec_plan"; run a26a
+ck "A26 変更なしの計画書を実験が書き換える → HIGH・V1 未検証" "yes yes" "$(yn out_has a26a 'ADVERSARIAL_VERDICT: HIGH') $(yn item_is a26a V1 未検証)"
+mk a26b; printf '\n（作業中のメモ）\n' >> "$TMP/a26b/repo/docs/plans/open/plan_I900.md"; touch "$TMP/a26b/stub/exec_plan"; run a26b
+ck "A26 起動時に変更済みの計画書をさらに書き換える → HIGH・記録に計画書のパス" "yes yes" "$(yn out_has a26b 'ADVERSARIAL_VERDICT: HIGH') $(yn rec_has a26b 'docs/plans/open/plan_I900.md')"
+mk a26c; printf '\n（作業中のメモ）\n' >> "$TMP/a26c/repo/docs/plans/open/plan_I900.md"; run a26c
+ck "A26 起動時に変更済みでも、実験が書き換えなければ OK" 0 "$(rcode a26c)"
+
+fga23() { mk fga23; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\nEXPERIMENT_END P1-E1\nITEM: V1 RESULT=experiment EXP=P1-E1\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$TMP/fga23/stub/p1_0.txt"
+  echo 30 > "$TMP/fga23/stub/p1_1.sleep"; run fga23 ADV_STEP_TIMEOUT=3; }
+with_src "$(fg_copy 'for id in $last_ids; do printf' 'for id in ; do printf')" fga23
+ck "FG-A23 「読まれていない」にしないと A23 が不合格（V1 が確認済み）" yes "$(yn item_is fga23 V1 確認済み)"
+fga26() { mk fga26; printf '\n（作業中のメモ）\n' >> "$TMP/fga26/repo/docs/plans/open/plan_I900.md"; touch "$TMP/fga26/stub/exec_plan"; run fga26; }
+with_src "$(fg_copy 'h=$(git hash-object -- "$p" 2>/dev/null)' 'h=x')" fga26
+ck "FG-A26 中身のハッシュを比べないと A26（変更済みの上書き）が不合格（OK が出る）" yes "$(yn out_has fga26 'ADVERSARIAL_VERDICT: OK')"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
