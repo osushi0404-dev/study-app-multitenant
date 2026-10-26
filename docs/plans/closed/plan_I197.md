@@ -382,6 +382,6 @@ Danger Ops（有無/手順/ロールバック）:
 10. 2026-10-27 implement（§4.8 の実装と /simplify の後）: 台帳は「前の記録の台帳に今回を重ねたものを、記録の後ろに全部書く」形にした（全記録を読み直すより単純で同じ結果）。止める指摘の判定は `_LEDGER_PY` の `blocking()` 1 か所にし、差分のレビューの入力の一覧も同じ関数で出す。code-reviewer は RISK 行と「## 高リスク判定」の節を出さない（判定はスクリプト。古い重大度の説明〔止めるのは Blocker のみ〕も「Blocker・High」に直した）。`/security-review` の起動は今のまま（パスの判定）。`plan_risk` の読み方を計画レビュー側の `detect_plan_verdict` に合わせた（大文字・小文字を区別しない）。既存テストの配線の確認（`test_adversarial_trigger.sh`・`test_i193_official_flow.sh` の S8・S19・C23・R4）を新しい形に付け替えた。見送り（retro）: 記録の探し方・REVIEWED_COMMIT の読み方・ブランチが変えたファイルの定義を gate-check.sh・adversarial-review.sh と共有する（gate-check.sh は変えない範囲）・`set_risk_line` と `add_reviewed_commit` の共通化・範囲が空の差分のレビューで claude を呼ばない近道。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
-- [20261027_0016 判定: ✅ 完了](../../reviews/I197_plan_review_20261027_0016.md)
-- [20261026_0713 判定: ✅ 完了](../../reviews/I197_plan_review_20261026_0713.md)
-- [20261026_0711 判定: 差し戻し（Blocker 2件）](../../reviews/I197_plan_review_20261026_0711.md)
+- [20261027_0016 判定: ✅ 完了](../../reviews/closed/I197_plan_review_20261027_0016.md)
+- [20261026_0713 判定: ✅ 完了](../../reviews/closed/I197_plan_review_20261026_0713.md)
+- [20261026_0711 判定: 差し戻し（Blocker 2件）](../../reviews/closed/I197_plan_review_20261026_0711.md)
