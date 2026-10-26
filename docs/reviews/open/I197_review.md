@@ -43,6 +43,8 @@
 - [implement] §4.8 を実装した（台帳・差分のレビュー・Blocker と High だけ止める・高リスクは計画の段階・fix-loop の実装/テストのレビューと 4 ファイルを削除）。/simplify（1 観点 5 分の上限）の指摘のうち、判定の重複（止める指摘）・記録の書き換えの重なり・使わない RISK 行・使わない引数は直し、gate-check.sh との共有は範囲外として retro に回した（計画変更記録 10）。手元では関係するテストだけを流した
 - [fix-loop] 5 回目（§4.8 の後の CI の失敗・test_i185_harness_docs の固定の文章）は、テストを新しい fix-loop の文に合わせて直した（診断レビュー PASS）。手元の関係するテストは、変えたファイルの名前で検索して 16 本を選んで流した（記憶で選んで取りこぼした反省）
 - [review-gate] 新しい code-review.sh が CI_WAIT: OK の後に理由を出さずに止まった（set -e の下の `$( [ … ] && … )`）。review-gate の「それ以外の exit 1」として、直せる原因なので直して実行し直す。あわせて追加した本体を丸ごと動かすテスト（R14）が、同じ分の 2 回目の実行で前の記録を上書きして台帳を失う不具合も見つけたので直した（auto_test の再発防止記録）
+- [review-gate] 新しい仕組みの全体のレビュー（`I197_code_review_20261027_0102.md`・台帳の 1 周目）は HIGH。台帳は F1〜F10（High 4・Medium 3・Low 3）。fix-loop で直すのは止める指摘の F1〜F4 だけ。Medium 以下（F5〜F10）は台帳に残り retro で扱う
+- [fix-loop] F1〜F4 を診断メモ `I197_fix_diagnosis_20261027_0110.md`（診断レビュー PASS）の推奨案で直した。どれも「迷ったら止めない側」の経路を止める側に倒す粗い規則。F1 の修正で、前の周に範囲の外だった指摘でも、その周に該当ファイルを直していれば新しい指摘として止める（R6 の期待を合わせた）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -57,5 +59,7 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate

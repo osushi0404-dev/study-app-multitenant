@@ -91,7 +91,9 @@ if os.path.exists(sl):
     sys.exit(0)
 bf = os.path.join(sd, f"p{k}_{i}.txt")
 body = open(bf).read() if os.path.exists(bf) else "反証失敗（新規指摘なし）\nNEW_CRITICAL: 0\nNEW_HIGH: 0"
-out({"type": "result", "subtype": "success", "result": body, "session_id": sid, "permission_denials": [], "total_cost_usd": 0.02})
+sf = os.path.join(sd, f"p{k}_{i}.subtype")   # あれば result の subtype をこの値にする（success でない終わり方）
+sub = open(sf).read().strip() if os.path.exists(sf) else "success"
+out({"type": "result", "subtype": sub, "result": body, "session_id": sid, "permission_denials": [], "total_cost_usd": 0.02})
 PY
 chmod +x "$STUB"
 
@@ -548,6 +550,17 @@ ck "FG-A27 すべての記録を渡すと A27 が不合格（ROUNDS: 0 の記録
 # FG-L6: 見張りのブロックの形を見ないと L6 が不合格（実行したの 0 になる）
 mkdir -p "$TMP/fgl6"; sed 's/            if body.startswith("PreToolUse:") and "hook error" in body:/            if False:/' scripts/claude/review-process-lib.sh > "$TMP/fgl6/lib.sh"
 ck "FG-L6 見張りのブロックの形を見ないと L6 が不合格（0 を返す）" 0 "$(bash -c '. "$1"; claude_log_ran "$2" "$3" >/dev/null; echo $?' _ "$TMP/fgl6/lib.sh" "$TMP/lib/l6" "$TMP/lib/c6")"
+
+# ---------------- 台帳の 1 周目（I197_code_review_20261027_0102.md）の F3 の再発防止 ----------------
+# A28 続きの呼び出しが exit 0 でも result が success でないときは、前の成功した報告で判定する（本文を空で上書きしない）
+mk a28; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\nEXPERIMENT_END P1-E1\nITEM: V1 RESULT=experiment EXP=P1-E1\nNEW_CRITICAL: 0\nNEW_HIGH: 1\n' > "$TMP/a28/stub/p1_0.txt"
+echo error_max_budget_usd > "$TMP/a28/stub/p1_1.subtype"; run a28
+ck "A28 続きが success でなくても観点 1 は報告あり（NEW_HIGH: 1 が残り HIGH・exit 1・前の報告で判定と記録）" "1 yes yes" \
+  "$(rcode a28) $(yn out_has a28 'NEW_HIGH: 1') $(yn rec_has a28 'result が success でない')"
+fga28() { mk fga28; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\nEXPERIMENT_END P1-E1\nITEM: V1 RESULT=experiment EXP=P1-E1\nNEW_CRITICAL: 0\nNEW_HIGH: 1\n' > "$TMP/fga28/stub/p1_0.txt"
+  echo error_max_budget_usd > "$TMP/fga28/stub/p1_1.subtype"; run fga28; }
+with_src "$(fg_copy 'if [ "$rc" -ne 0 ] || [ "$sub" != "success" ]; then' 'if [ "$rc" -ne 0 ]; then')" fga28
+ck "FG-A28 subtype を見ないと A28 が不合格（前の報告が消え NEW_HIGH: 1 が残らない）" no "$(yn out_has fga28 'NEW_HIGH: 1')"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/fg_copy_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"

@@ -77,8 +77,9 @@ ck "R3 FILE の欄が無い行 → 2" 2 "$(rc lib "$CR" parse_findings "$TMP/f_b
 
 # ---------------- R4〜R7 ledger_update・ledger_verdict ----------------
 # verdict_of <kind> <前の記録|""> <今回の本文> <範囲>: 台帳を作って合否を出す。台帳は $TMP/last_ledger に残す
+# 一時のリポジトリ（scripts/a.sh・scripts/b.sh がある）の中で動かす（範囲の外かどうかは、ファイルがあるかも見るため）
 verdict_of() { local src="${5:-$CR}"
-  lib "$src" ledger_update "$1" "$2" "$3" "$4" > "$TMP/last_ledger" || { echo "PARSE_ERROR"; return; }
+  (cd "$R" && lib "$src" ledger_update "$1" "$2" "$3" "$4") > "$TMP/last_ledger" || { echo "PARSE_ERROR"; return; }
   lib "$src" ledger_verdict "$TMP/last_ledger"; }
 printf 'scripts/a.sh\n' > "$TMP/scope"
 body() { printf '%b\n' "$1" > "$TMP/$2"; }
@@ -116,11 +117,26 @@ ck "R6 範囲の外・Blocker・SECURITY=no → OK" OK "$(verdict_of delta "$TMP
 ck "R6 FILE=- → 範囲の中とみなして HIGH" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/d_new_dash.md" "$TMP/scope")"
 body 'FINDING: F2 SEV=High STATUS=open FILE=scripts/b.sh SECURITY=no | 外' d_out_again.md
 printf 'scripts/b.sh\n' > "$TMP/scope_b"
-ck "R6 前の周で範囲の外だった High は、次の周に b.sh が範囲に入っても止めない（SCOPE は前のまま）" OK "$(verdict_of delta "$TMP/round2_out.md" "$TMP/d_out_again.md" "$TMP/scope_b")"
+ck "R6 前の周で範囲の外だった High（止めない・入力に見せない）は、次の周も範囲の外なら止めない" OK "$(verdict_of delta "$TMP/round2_out.md" "$TMP/d_out_again.md" "$TMP/scope")"
+# 台帳の 1 周目 F1 の修正: 入力に見せていない番号を書いた行は新しい指摘。その周に b.sh を直していれば（範囲の中）止める
+ck "R6 同じ指摘でも、その周に b.sh を直していれば（範囲の中の新しい指摘として）止める" HIGH "$(verdict_of delta "$TMP/round2_out.md" "$TMP/d_out_again.md" "$TMP/scope_b")"
 body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=Medium STATUS=open FILE=scripts/a.sh SECURITY=yes | m' d_med.md
 ck "R7 差分: 範囲の中の Medium（SECURITY=yes でも）→ OK" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/d_med.md" "$TMP/scope")"
 body 'FINDING: F1 SEV=High STATUS=resolved FILE=a SECURITY=no\nFINDING: F9 SEV=Bad STATUS=open FILE=a SECURITY=no' d_broken.md
 ck "R3 形の崩れた FINDING 行があると台帳を作らない" PARSE_ERROR "$(verdict_of delta "$TMP/round1.md" "$TMP/d_broken.md" "$TMP/scope")"
+
+# ---------------- R15・R16（台帳の 1 周目の F1・F2 の再発防止） ----------------
+# R15: 入力に見せていない既存の番号（止めない F2・Medium）を新しい High に使っても、新しい指摘として振り直し、範囲の中なら止める
+# 前の台帳: F1（High・範囲の中・open）と F2（Medium・範囲の外）。F2 は止めない指摘なので入力に見せない
+printf 'LEDGER: F1 SEV=High STATUS=open SCOPE=delta SECURITY=no | h\nLEDGER: F2 SEV=Medium STATUS=open SCOPE=outside SECURITY=no | m\n' > "$TMP/r15_round1.md"
+body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=scripts/a.sh SECURITY=no | 新しい穴' r15_delta.md
+ck "R15 止めない既存の番号の再利用は新しい指摘（F3）として振り直し、範囲の中の High で止める" "HIGH yes yes" \
+  "$(verdict_of delta "$TMP/r15_round1.md" "$TMP/r15_delta.md" "$TMP/scope") $(grep -q '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta' "$TMP/last_ledger" && echo yes || echo no) $(grep -q '^LEDGER: F2 SEV=Medium' "$TMP/last_ledger" && echo yes || echo no)"
+# R16: FILE の表記のずれ（./・:行番号）は正規化して範囲の中。リポジトリに無いパスは delta（止める側）
+body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=./scripts/a.sh:12 SECURITY=no | ずれ' r16a.md
+body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=scripts/no_such.sh SECURITY=no | 無い' r16b.md
+ck "R16 ./・:行番号 のずれは範囲の中として止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16a.md" "$TMP/scope")"
+ck "R16 リポジトリに無いパスは範囲の中として止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16b.md" "$TMP/scope")"
 
 # ---------------- R8 plan_risk ----------------
 P="$TMP/prisk"; mkdir -p "$P/docs/reviews"
@@ -245,6 +261,21 @@ E2_IN=$(find "$ES/calls" -name '*.in' | LC_ALL=C sort -V | tail -1)
 ck "R14 差分: 入力に差分のレビューの指示・止める指摘 F1・範囲の a.sh" "yes yes yes" \
   "$(grep -qF '差分のレビュー（台帳の 2 周目）' "$E2_IN" && echo yes || echo no) $(grep -q '^LEDGER: F1 SEV=High STATUS=open' "$E2_IN" && echo yes || echo no) $(grep -qx 'a.sh' "$E2_IN" && echo yes || echo no)"
 ck "R14 差分: 組み込みの /code-review には <起点>...HEAD" yes "$(grep -lx "/code-review medium ${E1_SHA}...HEAD" "$ES"/calls/*.args >/dev/null 2>&1 && echo yes || echo no)"
+
+# R14 3 周目（台帳の 1 周目の F4 の再発防止）: 差分のレビューで、VERDICT: HIGH なのに読める FINDING 行が無い → BLOCKER
+printf '# コードレビュー [I900]\n\n| High | 表の中にだけ書いた指摘 |\n\nVERDICT: HIGH\n' > "$ES/review_3.txt"
+printf 'a4\n' >> "$E/a.sh"; git -C "$E" add -A; git -C "$E" commit -qm fix2
+e2e "$TMP/e2e3.out"
+ck "R14 差分: VERDICT: HIGH なのに FINDING 行が無い → BLOCKER" BLOCKER "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e3.out")"
+
+# FG-R15・FG-R16・R17（F4 の止め方の配線）とその FG
+B15=$(broken '        if fid in led and fid not in shown:' '        if False:')
+ck "FG-R15 振り直しを消すと R15 が不合格（F2 に合流して止まらない）" OK "$(verdict_of delta "$TMP/r15_round1.md" "$TMP/r15_delta.md" "$TMP/scope" "$B15")"
+B16=$(broken 'if norm in in_scope or not os.path.exists(norm):' 'if norm in in_scope:')
+ck "FG-R16 存在しないパスを止める側に倒さないと R16 が不合格" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/r16b.md" "$TMP/scope" "$B16")"
+r17() { grep -qF 'if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '"'"'^FINDING: '"'"' "$REVIEW_FILE"; then' "$1"; }
+ck "R17 差分で VERDICT が NG なのに FINDING 行が無いときに止める配線がある" 0 "$(rc r17 "$CR")"
+ck "FG-R17 その配線を消すと R17 が不合格" 1 "$(rc r17 "$(broken 'if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE' 'if false && ! grep -qE')")"
 
 # FG-R14: 条件が偽の $( [ … ] && … ) を本体の代入に戻すと、R14 が不合格（FINAL_VERDICT の行が出ない）
 B14=$(broken 'VERDICT_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && VERDICT_NOTE="・差分のレビューでは合否に使わない"' 'VERDICT_NOTE="$([ "$REVIEW_KIND" = "delta" ] && echo x)"')

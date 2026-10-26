@@ -234,10 +234,14 @@ run_perspective() {
   # 判定に使うのは、最後に成功した呼び出しの本文（続きの呼び出しが時間切れ・失敗しても、前の報告を消さない）
   local good_log="" note="" last_ids=""
   : > "$d/body.txt"
+  local sub why
   while :; do
-    if [ "$rc" -ne 0 ]; then
+    # 成功＝exit 0 かつ result が success（exit 0 でも success でなければ失敗として、前の成功した報告を消さない）
+    sub=$(claude_log_subtype "$log" 2>/dev/null)
+    if [ "$rc" -ne 0 ] || [ "$sub" != "success" ]; then
+      if [ "$rc" -ne 0 ]; then why="exit=${rc}"; else why="result が success でない（${sub:-なし}）"; fi
       if [ -n "$good_log" ]; then
-        note="続きの呼び出しが終わらなかった（exit=${rc}）ため、前の報告で判定（その後の実験の結果は読まれていない）"
+        note="続きの呼び出しが終わらなかった（${why}）ため、前の報告で判定（その後の実験の結果は読まれていない）"
         # 結果をレビュー役が読んでいない実験は「実行した」に数えない（exp_status は最後の行を採る）
         for id in $last_ids; do printf '%s\t%s\n' "$id" "unread" >> "$d/exp_status"; done
       fi
@@ -286,8 +290,7 @@ run_perspective() {
   # 終わり方: 報告あり = 最後に成功した呼び出しの result が success・本文に NEW_CRITICAL と NEW_HIGH の行
   local state
   if [ -z "$good_log" ]; then
-    if [ "$rc" -eq 124 ]; then state="時間切れ"; else state="失敗（exit=${rc}）"; fi
-  elif [ "$(claude_log_subtype "$good_log")" != "success" ]; then state="失敗（result が success でない）"
+    if [ "$rc" -eq 124 ]; then state="時間切れ"; else state="失敗（${why:-exit=${rc}}）"; fi
   elif [ -z "$(new_count "$d/body.txt" NEW_CRITICAL)" ] || [ -z "$(new_count "$d/body.txt" NEW_HIGH)" ]; then state="報告なし（NEW_CRITICAL・NEW_HIGH の行が無い）"
   else state="報告あり"; fi
   printf '%s\n' "$state" > "$d/state"

@@ -499,7 +499,7 @@ delta_files() {   # $1=比べる相手 $2=起点の SHA
 }
 
 _LEDGER_PY='
-import re, sys
+import os, re, sys
 FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) SECURITY=(yes|no)(?: \| (.*))?")
 LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside) SECURITY=(yes|no)(?: \| (.*))?")
 RANK = {"Low": 0, "Medium": 1, "High": 2, "Blocker": 3}
@@ -538,16 +538,31 @@ elif mode == "update":
     # update <full|delta> <前の記録|""> <今回のレビュー> <差分の範囲のファイル一覧>
     kind, prev, cur, scope_file = sys.argv[2:6]
     led = read_ledger(prev) if kind == "delta" else {}
+    shown = set(k for k, e in led.items() if blocking(e))   # 差分のレビューの入力に見せた（止める）指摘
     in_scope = set(l for l in open(scope_file, encoding="utf-8").read().split("\n") if l) if kind == "delta" else None
+    next_id = max([int(k[1:]) for k in led] or [0]) + 1
+    def scope_of(path):
+        # 表記のずれ（先頭の ./・:行番号）を正規化して範囲と比べる。リポジトリに無いパスは delta（止める側）
+        if in_scope is None or path == "-":
+            return "delta"
+        norm = path[2:] if path.startswith("./") else path
+        norm = norm.split(":", 1)[0]
+        if norm in in_scope or not os.path.exists(norm):
+            return "delta"
+        return "outside"
     for fid, sev, st, path, sec, title in read_findings(cur):
+        if fid in led and fid not in shown:
+            # 入力に見せていない既存の番号（止めない指摘・直った指摘）を使った行は、新しい指摘として振り直す
+            fid = f"F{next_id}"
+            next_id += 1
         if fid in led:
             old = led[fid]
             # 既にある指摘: SCOPE は前のまま（今回の範囲で決め直すと、触っていないファイルの未解決の High が消える）。
             # 重大度は下げない（下げて止めないようにする逃げ道を作らない）
             led[fid] = [sev if RANK[sev] > RANK[old[0]] else old[0], st, old[2], "yes" if "yes" in (sec, old[3]) else "no", title or old[4]]
         else:
-            scope = "delta" if (in_scope is None or path == "-" or path in in_scope) else "outside"
-            led[fid] = [sev, st, scope, sec, title or ""]
+            led[fid] = [sev, st, scope_of(path), sec, title or ""]
+            next_id = max(next_id, int(fid[1:]) + 1)
     for fid in sorted(led, key=lambda x: int(x[1:])):
         sev, st, scope, sec, title = led[fid]
         print(f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} SECURITY={sec}" + (f" | {title}" if title else ""))
@@ -752,6 +767,7 @@ $([ -n "$PLAN_FILE" ] && cat "$PLAN_FILE" || echo "(計画書なし)")
 $(if [ "$REVIEW_KIND" = "delta" ]; then
   printf '差分のレビュー（台帳の %s 周目）。見るのは下の「git diff」（起点 %s から HEAD までの、直した差分）と、次の「止める指摘（前の周まで）」が直ったかだけ。\n' "$LEDGER_N" "$SINCE"
   printf '下の止める指摘のすべてについて、FINDING 行を同じ id で書き直す（STATUS=resolved か open）。新しい指摘は続きの番号で書く（差分の外で見つけたものも書いてよいが、止めるかどうかはスクリプトが FILE から決める）。\n'
+  printf '\n台帳の最大の番号: F%s（新しい指摘はこの次から）\n' "$(grep -oE '^LEDGER: F[0-9]+' "$PREV_LEDGER_FILE" | grep -oE '[0-9]+' | sort -n | tail -1 || true)"
   printf '\n#### 止める指摘（前の周まで）\n'
   ledger_blocking "$PREV_LEDGER_FILE" || true
   printf '\n#### 差分のレビューの範囲のファイル\n'; cat "$SCOPE_FILE"
@@ -832,6 +848,11 @@ LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
 if [ "$REVIEW_KIND" = "delta" ]; then
   # 差分のレビューでは code-reviewer の VERDICT 行は使わない（差分の外の指摘で止めない）。VERDICT 行が無い＝出力が壊れているときだけ止める
   grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$REVIEW_FILE" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER
+  # レビュー役が止めると言うのに、読める FINDING 行が 1 行も無い（表の中・箇条書きなどで書いた）→ 食い違いは止める側
+  if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '^FINDING: ' "$REVIEW_FILE"; then
+    REVIEWER_VERDICT=BLOCKER
+    GATE_EVIDENCE+="- ⛔ 差分のレビューで code-reviewer の VERDICT は ${LLM_VERDICT} なのに、読める FINDING 行が無い（BLOCKER）"$'\n'
+  fi
 else
   REVIEWER_VERDICT="$LLM_VERDICT"
 fi
