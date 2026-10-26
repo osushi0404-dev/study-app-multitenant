@@ -460,7 +460,7 @@ if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 
 # I197: 別プロセスのレビュー役を「時間上限つき・承認なし・途中の出力を残す」で起動し、記録を読む関数
 # （関数だけを読み込む使い方〔gate-check・テストの写し〕には要らないので、本体でだけ読む）
-# shellcheck source=scripts/claude/review-process-lib.sh
+# shellcheck source=scripts/claude/review-process-lib.sh disable=SC1091  # -x なしの単体の検査（TC-C1）でもたどらない。ライブラリは別に検査される
 . "$(dirname "${BASH_SOURCE[0]}")/review-process-lib.sh"
 
 ISSUE="${1:?Usage: $0 I###}"

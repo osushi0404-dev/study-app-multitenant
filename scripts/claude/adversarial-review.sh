@@ -18,10 +18,10 @@ set -uo pipefail
 
 ADV_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 記録の場所・無害化・記録のコミットは code-review.sh と同じ関数を使う（同じ規則を 2 か所に書かない）
-# shellcheck source=scripts/claude/code-review.sh
+# shellcheck source=scripts/claude/code-review.sh disable=SC1091  # -x なしの単体の検査でもたどらない（読み込み先は別に検査される）
 REVIEW_LIB_SOURCE_ONLY=1 . "$ADV_SCRIPT_DIR/code-review.sh" || { echo "⛔ code-review.sh を読み込めません"; exit 2; }
 set +e
-# shellcheck source=scripts/claude/review-process-lib.sh
+# shellcheck source=scripts/claude/review-process-lib.sh disable=SC1091
 . "$ADV_SCRIPT_DIR/review-process-lib.sh" || { echo "⛔ review-process-lib.sh を読み込めません"; exit 2; }
 
 # 既定値はここで 1 回だけ決める（記録に書く値と実際に効く値をそろえる）
