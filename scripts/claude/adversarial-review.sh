@@ -82,15 +82,19 @@ count_rounds() {
   echo "$total"
 }
 
-# 見る範囲の起点: 最新の記録の REVIEWED_COMMIT。無ければ比べる相手（origin/develop）
+# 見る範囲の起点: 周に数えた（ROUNDS: 1 以上。行が無い古い記録は 1）最新の記録の REVIEWED_COMMIT。
+# ROUNDS: 0 の記録（報告の無い周・受け入れの記録）は飛ばす（count_rounds と同じ規則。飛ばさないと、
+# 報告の無い周のやり直しが空の差分を見て OK を出す）。無ければ比べる相手（origin/develop）
 review_base() {
-  local last sha
-  last=$(adversarial_records | tail -1)
-  if [ -n "$last" ]; then
-    sha=$(grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9a-f]{7,40}')
-    if [ -n "$sha" ]; then echo "$sha"; return; fi
-  fi
-  echo "${ADV_BASE}"
+  local f r sha base="${ADV_BASE}"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    r=$(grep -oE '^ROUNDS:[[:space:]]*[0-9]+[[:space:]]*$' "$f" | tail -1 | grep -oE '[0-9]+')
+    [ "${r:-1}" -ge 1 ] || continue
+    sha=$(grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$f" | tail -1 | grep -oE '[0-9a-f]{7,40}')
+    [ -n "$sha" ] && base="$sha"
+  done < <(adversarial_records)
+  echo "$base"
 }
 
 # 記録の場所の外の、コミットしていない変更（未追跡を含む）の一覧
@@ -100,6 +104,19 @@ dirty_outside_records() {
     p="${entry:3}"
     is_record_path "$p" || printf '%s\n' "$p"
   done < <(git status --porcelain=v1 -z --untracked-files=all --no-renames)
+}
+
+# 実験が作業ツリーを変えたか（記録の場所の外のファイル・HEAD・ブランチ）。変えていたら周全体のフラグ $RUN/dirty に足す。
+# 実験は同じ作業ツリーで並列に動くので、どの観点が変えたかは決めず、周全体の実験を無効にする（消さない・戻さない）
+check_worktree() {
+  local now head branch
+  now=$(dirty_outside_records)
+  head=$(git rev-parse HEAD 2>/dev/null)
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  [ -n "$now" ] && printf '%s\n' "$now" >> "$RUN/dirty"
+  [ "$head" = "$REVIEWED_HEAD" ] || printf 'HEAD が %s から %s に動いた\n' "$REVIEWED_HEAD" "${head:-不明}" >> "$RUN/dirty"
+  [ "$branch" = "$REVIEWED_BRANCH" ] || printf 'ブランチが %s から %s に変わった\n' "$REVIEWED_BRANCH" "${branch:-不明}" >> "$RUN/dirty"
+  return 0
 }
 
 remaining() { echo $(( ADV_START + ADV_DEADLINE - $(date +%s) )); }
@@ -133,7 +150,8 @@ run_experiment_agent() {
     --max-budget-usd "${ADV_EXEC_BUDGET}"
 }
 
-# 本文から実験案を取り出し、<出力先>/<id>.cmd に書いて id を 1 行ずつ出す（EXPERIMENT_BEGIN <id> 〜 EXPERIMENT_END <id>）
+# 本文から実験案を取り出し、<出力先>/<id>.cmd に書いて id を 1 行ずつ出す（EXPERIMENT_BEGIN <id> 〜 EXPERIMENT_END <id>）。
+# 既に .cmd がある id（扱い済み）は書き直さず出さない（記録のコマンドと実行したコマンドを食い違わせない）
 extract_experiments() {   # $1=本文のファイル $2=出力先
   python3 -I - "$1" "$2" <<'PY'
 import re, sys, os
@@ -145,9 +163,10 @@ for line in open(body, encoding="utf-8", errors="replace").read().split("\n"):
         cur, buf = m.group(1), []
         continue
     if cur is not None and re.fullmatch(r"EXPERIMENT_END " + re.escape(cur) + r"\s*", line):
-        if cur not in seen and buf:
+        path = os.path.join(out, cur + ".cmd")
+        if cur not in seen and buf and not os.path.exists(path):
             seen.add(cur)
-            with open(os.path.join(out, cur + ".cmd"), "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(buf))
             print(cur)
         cur = None
@@ -187,15 +206,23 @@ run_perspective() {
   log="$d/log0.jsonl"
   run_reviewer "$d/in0.txt" "$log"; rc=$?
   sid=$(claude_log_session "$log" 2>/dev/null)
+  # 判定に使うのは、最後に成功した呼び出しの本文（続きの呼び出しが時間切れ・失敗しても、前の報告を消さない）
+  local good_log="" note=""
+  : > "$d/body.txt"
   while :; do
+    if [ "$rc" -ne 0 ]; then
+      [ -n "$good_log" ] && note="続きの呼び出しが終わらなかった（exit=${rc}）ため、前の報告で判定（その後の実験の結果は反映されていない）"
+      break
+    fi
     claude_log_result "$log" > "$d/body.txt" 2>/dev/null || : > "$d/body.txt"
-    [ "$rc" -eq 0 ] || break
+    good_log="$log"
     # まだ扱っていない実験案（exp_status の 1 列目にない id）だけを実行する
     ids=$(extract_experiments "$d/body.txt" "$d/exp" | while IFS= read -r id; do cut -f1 "$d/exp_status" 2>/dev/null | grep -qxF -- "$id" || echo "$id"; done)
     [ -n "$ids" ] || break
     reason=""
     if [ "$r" -ge "${ADV_EXPERIMENT_ROUNDS}" ] || [ -z "$sid" ]; then reason=limit
-    elif [ "$(remaining)" -lt "${ADV_MIN_STEP}" ]; then reason=deadline; fi
+    # 往復を始めるのは、実験役と続きの 2 回分（2 × ADV_MIN_STEP）の時間が残っているときだけ
+    elif [ "$(remaining)" -lt $(( 2 * ADV_MIN_STEP )) ]; then reason=deadline; fi
     if [ -n "$reason" ]; then
       for id in $ids; do printf '%s\t%s\n' "$id" "$reason" >> "$d/exp_status"; done
       break
@@ -219,22 +246,22 @@ run_perspective() {
       printf '%s\n' "$out" > "$d/exp/$id.out"
       printf '\n### %s: %s\n~~~\n%s\n~~~\n' "$id" "$st" "$out" >> "$next_in"
     done
-    # 実験役の後に作業ツリーを比べる（変えていたら、この観点の実験はすべて無効。消さない・戻さない）
-    dirty_outside_records > "$d/dirty_now"
-    if [ -s "$d/dirty_now" ]; then cp "$d/dirty_now" "$d/dirty"; fi
+    # 実験役の後に作業ツリー（ファイル・HEAD・ブランチ）を比べる（変えていたら周全体の実験を無効にする）
+    check_worktree
     printf '\n上の結果を踏まえ、最終報告を出力の形どおりに全部書き直せ（担当の項目すべてに ITEM 行を書く）。まだ実験が要るなら EXPERIMENT 行で出せ（残りの往復: %s）。\n' \
       "$(( ADV_EXPERIMENT_ROUNDS - r ))" >> "$next_in"
     log="$d/log$r.jsonl"
     run_reviewer "$next_in" "$log" "$sid"; rc=$?
   done
-  # 終わり方: 報告あり = 最後の呼び出しが exit 0・result が success・本文に NEW_CRITICAL と NEW_HIGH の行
+  # 終わり方: 報告あり = 最後に成功した呼び出しの result が success・本文に NEW_CRITICAL と NEW_HIGH の行
   local state
-  if [ "$rc" -eq 124 ]; then state="時間切れ"
-  elif [ "$rc" -ne 0 ]; then state="失敗（exit=${rc}）"
-  elif [ "$(claude_log_subtype "$log")" != "success" ]; then state="失敗（result が success でない）"
+  if [ -z "$good_log" ]; then
+    if [ "$rc" -eq 124 ]; then state="時間切れ"; else state="失敗（exit=${rc}）"; fi
+  elif [ "$(claude_log_subtype "$good_log")" != "success" ]; then state="失敗（result が success でない）"
   elif [ -z "$(new_count "$d/body.txt" NEW_CRITICAL)" ] || [ -z "$(new_count "$d/body.txt" NEW_HIGH)" ]; then state="報告なし（NEW_CRITICAL・NEW_HIGH の行が無い）"
   else state="報告あり"; fi
   printf '%s\n' "$state" > "$d/state"
+  printf '%s\n' "$note" > "$d/note"
   printf '%s\n' "$(( $(date +%s) - t0 ))" > "$d/secs"
   printf '%s\n' "$r" > "$d/rounds"
   claude_log_last_tool "$log" > "$d/last_tool" 2>/dev/null
@@ -259,7 +286,7 @@ item_verdict() {
     for e in ${exps//,/ }; do
       local st; st=$(awk -F'\t' -v e="$e" '$1 == e { s = $2 } END { print s }' "$d/exp_status" 2>/dev/null)
       shown+="${e}=${st:-なし} "
-      [ "$st" = "ran" ] && [ ! -s "$d/dirty" ] && ok=1
+      [ "$st" = "ran" ] && [ ! -s "$RUN/dirty" ] && ok=1
     done
     if [ "$ok" -eq 1 ]; then printf '実験で確認\t%s\t確認済み（実験）\n' "$shown"
     else printf '実験で確認\t%s\t未検証（実験が実行されていない・無効）\n' "${shown:-EXP なし}"; fi
@@ -299,7 +326,12 @@ PLAN_FILE=$(find_plan_file "$ISSUE")
 if [ -z "$ISSUE_FILE" ] || [ -z "$PLAN_FILE" ]; then echo "⛔ イシューファイルか計画書がありません"; echo "ADVERSARIAL_ERROR: FILES"; exit 2; fi
 
 RUN=$(mktemp -d)
-trap 'rm -rf "$RUN"' EXIT
+PIDS=()
+# 止められたときも、背景の観点と子プロセス（claude・実験役の Bash）を止めてから一時フォルダを消す（code-review.sh の kill_tree）
+# shellcheck disable=SC2317  # trap から呼ぶ
+cleanup_adv() { local q; for q in "${PIDS[@]}"; do kill_tree "$q"; done; rm -rf "$RUN"; }
+trap cleanup_adv EXIT
+trap 'exit 130' INT TERM
 if ! read_checklist "$PLAN_FILE" > "$RUN/checklist.tsv"; then
   echo "⛔ ${PLAN_FILE} の「## 必ず確かめる項目」を読めません（上の理由）。一覧を直してからやり直してください。"
   echo "ADVERSARIAL_ERROR: CHECKLIST"
@@ -315,18 +347,24 @@ fi
 
 REVIEW_BASE=$(review_base)
 REVIEWED_HEAD=$(git rev-parse HEAD)
+REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 PREV_RECORDS=$(adversarial_records | paste -sd' ' -)
-git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" 2>&1
-git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt" 2>&1
+if ! git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" \
+   || ! git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt"; then
+  echo "⛔ 見る範囲 ${REVIEW_BASE}...HEAD の差分を取れません（比べる相手が無い・REVIEWED_COMMIT が無い）。"
+  echo "ADVERSARIAL_ERROR: DIFF"
+  exit 2
+fi
 head -c 102400 "$RUN/diff_full.txt" > "$RUN/diff.txt"
 if [ "$(wc -c < "$RUN/diff_full.txt")" -gt 102400 ]; then
   printf '\n（差分は 100KB で切った。続きは一覧のファイルを Read で読む）\n' >> "$RUN/diff.txt"
 fi
 
 echo "敵対的レビューを 3 観点で起動しました（締め切り ${ADV_DEADLINE} 秒・見る範囲 ${REVIEW_BASE}...HEAD）..."
-PIDS=()
 for p in 1 2 3; do run_perspective "$p" & PIDS+=("$!"); done
 wait "${PIDS[@]}"
+PIDS=()
+check_worktree   # 全観点が終わった後にもう一度比べる
 ELAPSED=$(( $(date +%s) - ADV_START ))
 
 # ---- 判定（決定論） ----
@@ -347,11 +385,12 @@ for p in 1 2 3; do
     UNREPORTED=$(( UNREPORTED + 1 ))
     lt=$(cut -f1,2 "$d/last_tool" | tr '\t' ' ' | cell); lr=$(cut -f3 "$d/last_tool" | cell); le="$(cut -f4 "$d/last_tool") 秒"
   fi
-  [ -s "$d/dirty" ] && DIRTY_ANY=1
   DENIALS=$(( DENIALS + $(cat "$d/denials") ))
+  [ -s "$d/note" ] && st+="（$(cat "$d/note")）"
   PERSP_ROWS+="| ${p} | ${st} | $(cat "$d/secs") 秒 | $(cat "$d/rounds") | $(cat "$d/denials") | \$$(cat "$d/cost") | ${lt} | ${lr} | ${le} |"$'\n'
 done
 
+[ -s "$RUN/dirty" ] && DIRTY_ANY=1
 if [ "$CRIT" -gt 0 ]; then VERDICT=BLOCKER
 elif [ "$HIGHN" -gt 0 ] || [ "$UNVERIFIED" -gt 0 ] || [ "$UNREPORTED" -gt 0 ] || [ "$DIRTY_ANY" -eq 1 ]; then VERDICT=HIGH
 else VERDICT=OK; fi
@@ -371,14 +410,14 @@ n=1; while [ -e "$RECORD" ]; do n=$(( n + 1 )); RECORD="docs/reviews/${ISSUE}_ad
   printf '\n## 確かめる項目の結果\n| 項目 | 観点 | 確かめ方 | 報告 | 実験 | 判定 |\n|---|---|---|---|---|---|\n%s' "$ITEM_ROWS"
   printf '\n## 観点ごとの実行\n| 観点 | 終わり方 | 所要 | 実験の往復 | 拒否 | 費用 | 最後のツール呼び出し | その結果（先頭） | 最後の出来事からの経過 |\n|---|---|---|---|---|---|---|---|---|\n%s' "$PERSP_ROWS"
   printf '\n## 実験\n'
+  if [ -s "$RUN/dirty" ]; then printf -- '- ⛔ 実験の後に作業ツリーが変わった（この周の実験はすべて無効。ファイルは消していない・戻していない）: %s\n' "$(sort -u "$RUN/dirty" | paste -sd' ' -)"; fi
   for p in 1 2 3; do
     d="$RUN/p$p"
     [ -s "$d/exp_status" ] || continue
     printf '\n### 観点 %s\n' "$p"
-    if [ -s "$d/dirty" ]; then printf -- '- ⛔ 実験の後に作業ツリーが変わった（この観点の実験はすべて無効。ファイルは消していない）: %s\n' "$(paste -sd' ' "$d/dirty")"; fi
     while IFS=$'\t' read -r id st; do
       case "$st" in ran) label="実行した" ;; denied) label="拒否された" ;; notcalled) label="呼ばれなかった（同じコマンドの実行が無い）" ;; mode) label="実行していない（実験役のモードが auto でない）" ;; deadline) label="実行していない（締め切り）" ;; limit) label="実行していない（往復の上限）" ;; *) label="判定できない（実験役の記録を読めない）" ;; esac
-      printf '\n#### %s: %s\n~~~\n%s\n~~~\n' "$id" "$label" "$(cat "$d/exp/$id.cmd" 2>/dev/null)"
+      printf '\n#### %s: %s\n~~~\n%s\n~~~\n' "$id" "$label" "$(neutralize_machine_lines < "$d/exp/$id.cmd" 2>/dev/null)"
       [ -s "$d/exp/$id.out" ] && printf '出力の先頭:\n~~~\n%s\n~~~\n' "$(neutralize_machine_lines < "$d/exp/$id.out")"
     done < "$d/exp_status"
   done

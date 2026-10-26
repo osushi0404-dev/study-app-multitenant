@@ -85,3 +85,10 @@ bash scripts/claude/tests/test_check_permission_prompt.sh
 - セキュリティ上の考慮点: なし
 - 次回どう防ぐか: 手元でも CI と同じ shellcheck の検査が動くようにする（pre-commit が入れた shellcheck を使う／無いときは SKIP ではなく不合格にする）。I197 の retro で扱う
 - 確かめた結果: CI と同じ版・呼び方の shellcheck で exit 0、shellcheck を使える状態の run-all で pass=40 fail=0（`docs/reviews/I197_fix_test_result_20261026_2125.md`）
+
+## 再発防止記録（fix-loop 2 回目・基本レビュー 2 回目の BLOCKER）
+- なぜ失敗したか: 「周に数えない記録（ROUNDS: 0）」を周回の数え方だけから外し、見る範囲の起点の決め方から外し忘れた（概念の変更の消費箇所の取りこぼし）。ほかに、往復の前の時間の確かめ・続きの失敗時の前の報告の保持・HEAD の比較・周全体での無効化・後始末・扱い済みの id の保護・git diff の失敗・コマンドの無害化が抜けていた
+- 何を変えたか: adversarial-review.sh の review_base・run_perspective・check_worktree（新規）・extract_experiments・trap・差分の取得・記録（計画変更記録 4）
+- セキュリティ上の考慮点: 実験役の git commit・reset などで HEAD が動いても見逃さない（周全体の実験を無効・HIGH。消さない・戻さない）
+- 次回どう防ぐか: TC-01 の A16〜A22 と FG。新しい「数えない／読まない」規則を足すときは、同じ記録を読む関数（count_rounds・review_base・gate-check）をすべて grep で洗う
+- 確かめた結果: TC-01 pass=100 fail=0・run-all pass=40 fail=0（`docs/reviews/I197_fix_test_result_20261026_2150.md`）

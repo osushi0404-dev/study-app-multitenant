@@ -31,6 +31,7 @@
 - [review-gate] 基本レビュー 1 回目は CI の Harness Tests が失敗（test_review_commit_lifecycle.sh の TC-C1-shellcheck。手元に shellcheck が無く、手元の run-all ではこの項目が通っていた）— 手順どおり fix-loop へ
 - [fix-loop] 案 A（読み込み行に `disable=SC1091` を足す）で直した。診断・実装・テストのレビューはすべて PASS。直したファイルは 2 本なので軽微例外は使わなかった — 既存の書き方と同じで挙動を変えない。手元と CI の検査の食い違い（手元に shellcheck が無いと黙って SKIP）と、コメントだけの修正にも 3 つのレビューがかかる重さは、ユーザーとの対話（10-26）を踏まえて retro で扱う
 - [review-gate] 基本レビュー 2 回目（`I197_code_review_20261026_2124.md`）は BLOCKER（Blocker 1・High 1・Medium 6・Low 2。RISK: NO で敵対的レビューの対象外）— fix-loop へ（review-gate ⇄ fix-loop は 2 回目）
+- [fix-loop] 2 回目は診断メモ `I197_fix_diagnosis_20261026_2140.md` の推奨案で、指摘 1〜5・7〜9 を直した（診断・実装・テストのレビューはすべて PASS）。指摘 6（非ゼロで終わった実験を未検証にする）は採らなかった — 反証の実験は非ゼロの終了を期待する形が多く、誤った未検証が増える。結果の解釈はレビュー役の読みで、出力は記録に残る。指摘 10 は retro
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

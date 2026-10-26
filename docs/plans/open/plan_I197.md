@@ -101,14 +101,14 @@
 処理の流れ:
 1. 引数 `I###` を確かめる。`REVIEW_LIB_SOURCE_ONLY=1` で `scripts/claude/code-review.sh` を読み込み、`neutralize_machine_lines`・`commit_review_artifact`・`is_record_path` を使う（同じ規則を 2 か所に書かない）。新しいライブラリ `scripts/claude/review-process-lib.sh`（§4.4）も読み込む。
    - このスクリプト自身も、関数の定義の後・本体の前に `if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi` を置き、テストと手動 No.2 が関数だけを読み込めるようにする（code-review.sh・fix-review-lib.sh と同じ形）。主な関数: `read_checklist <計画書>`（一覧を `V<n>\t<観点>\t<確かめ方>\t<内容>` で出す・形の誤りで 2）・`run_reviewer <観点> <入力> <ログ> [<session_id>]`（レビュー役の 1 回の呼び出し）・`run_experiment_agent <観点> <実験の一覧ファイル> <ログ>`（実験役の 1 回の呼び出し）・`parse_report <本文>`（`ITEM:`・実験案・`NEW_*` を取り出す）・`item_verdict`・`final_verdict`・`write_record`
-2. 周回の数え方（今の SKILL 3-1 の 1・2 をスクリプトに移す）: `docs/reviews/[closed/]I###_adversarial_review_*.md` の `ROUNDS:` の合計（行が無い記録は 1）が `ADV_ROUND_LIMIT`（既定 2。ユーザーが延長を承認したときだけ SKILL が 3 を渡す）以上なら、起動せずに `ADVERSARIAL_VERDICT: LIMIT` を出して exit 4。見る範囲 `REVIEW_BASE` は最新の記録の `REVIEWED_COMMIT`、無ければ `origin/develop`。
+2. 周回の数え方（今の SKILL 3-1 の 1・2 をスクリプトに移す）: `docs/reviews/[closed/]I###_adversarial_review_*.md` の `ROUNDS:` の合計（行が無い記録は 1）が `ADV_ROUND_LIMIT`（既定 2。ユーザーが延長を承認したときだけ SKILL が 3 を渡す）以上なら、起動せずに `ADVERSARIAL_VERDICT: LIMIT` を出して exit 4。見る範囲 `REVIEW_BASE` は、周に数えた（`ROUNDS:` が 1 以上・行が無い記録は 1）最新の記録の `REVIEWED_COMMIT`、無ければ `origin/develop`（`ROUNDS: 0` の記録は飛ばす。計画変更記録 4）。`git diff` が失敗したら `ADVERSARIAL_ERROR: DIFF` で exit 2。
 3. 前提の確認: 計画書 `docs/plans/open/plan_I###.md`（無ければ closed）の一覧の節を読む。節の見出しは、コードブロック（```）の外の行で、行全体が `## 必ず確かめる項目` か、その直後に全角の `（` で始まる括弧書きが続くもの（例: `## 必ず確かめる項目（I197 自身の敵対的レビューが使う）`）だけを認める（`###` などの別の階層・文言の違いは認めない）。節は次の `## ` の見出しまで。その中の表の行（見出しと区切りの行を除く）を読む。1 行の形は `| V<n> | <観点 1〜3> | <実験必須 か 読んで可> | <内容> |`。表が無い・0 行・形の違う行がある → `ADVERSARIAL_ERROR: CHECKLIST` を出して exit 2（記録は作らない。gate-check は記録が無いので通さない）。記録の場所の外にコミットしていない変更がある → exit 2（実験役が作業ツリーを変えたかを比べられないため）。HEAD を `REVIEWED_COMMIT` として控える。
 4. 3 観点（今の固定 3 観点: 1 ロジック回避・実機 repro／2 テストの false-green・tautology／3 要件・脅威モデルの網羅漏れ）を並列に起動する（スクリプト内の background。親の会話は 1 本の background の Bash を待つだけ）。各観点:
    - レビュー役: `claude -p --agent adversarial-reviewer --tools "Read,Grep,Glob" --permission-mode manual --permission-prompts none --output-format stream-json --verbose --max-budget-usd ${ADV_REVIEW_BUDGET:-2}`。入力（標準入力に渡す 1 つの文章）は ISSUE・PERSPECTIVE・REVIEW_BASE・その観点の項目・全項目・過去の記録のパス（既知 findings として Read させる）・実験の約束に加えて、スクリプトが取った「変更ファイルの一覧」（`git -c core.quotePath=false diff --name-status --no-renames <REVIEW_BASE>...HEAD`）と「差分」（`git diff <REVIEW_BASE>...HEAD` の先頭 100KB。切ったときは「差分は 100KB で切った。続きは一覧のファイルを Read で読む」と書き足す）を含める（レビュー役は Bash を持たず `git diff` を実行できないため。code-review.sh が code-reviewer に差分を渡す形と同じ）。イシューファイルと計画書のパスも渡し、Read で読ませる。
    - 実験案があり、往復が `ADV_EXPERIMENT_ROUNDS`（既定 2）未満で、締め切りまで `ADV_MIN_STEP`（既定 60 秒）以上残っていれば、実験役を起動する: `claude -p --model haiku --tools "Bash" --permission-mode auto --permission-prompts none --setting-sources user --settings .claude/settings.json --strict-mcp-config --no-session-persistence --max-budget-usd ${ADV_EXEC_BUDGET:-0.5} --output-format stream-json --verbose`（S3 と同じ形）。入力は「各実験のコマンドを、変えずに Bash で 1 回ずつ実行し、ほかの道具は使わない」。
    - 実験の結果（実験ごとに 実行した／拒否された／呼ばれなかった、出力の先頭 2000 字、`is_error`）を、`claude -p --resume <session_id>`（レビュー役と同じ引数）で渡して続きを書かせる。
    - 各呼び出しの時間上限は「締め切りまでの残り」と `ADV_STEP_TIMEOUT`（既定 300 秒）の小さい方。締め切りは起動から `ADV_DEADLINE`（既定 600 秒＝1 周 10 分）。
-5. 実験役の後に作業ツリーを比べ、記録の場所の外が変わっていたら、その観点の実験をすべて「無効（作業ツリーを変えた）」にし、変わったファイルを記録に書く（消さない・戻さない。VERDICT は HIGH）。
+5. 実験役の後と全観点の終了後に、作業ツリー（記録の場所の外のファイル・HEAD・ブランチ）を起動時と比べ、変わっていたら周全体の実験をすべて「無効（作業ツリーを変えた）」にし、変わったものを記録に書く（実験は同じ作業ツリーで並列に動くので、どの観点が変えたかは決めない。消さない・戻さない。VERDICT は HIGH。計画変更記録 4）。往復を始めるのは、実験役と続きの 2 回分（`2 × ADV_MIN_STEP`）の時間が残っているときだけ。続きの呼び出しが終わらなかったときは、前に成功した呼び出しの本文で判定する。止められたとき（EXIT・INT・TERM）は背景の観点と子プロセスを `kill_tree` で止める。
 6. 判定（決定論。§4.3.1）を出し、記録 `docs/reviews/I###_adversarial_review_<YYYYMMDD_HHMM>.md` を書いて `commit_review_artifact` でコミットする。標準出力の最後に機械可読行 `ADVERSARIAL_RECORD: <path>`・`UNVERIFIED: <件数>`・`NEW_CRITICAL: <合計>`・`NEW_HIGH: <合計>`・`ADVERSARIAL_VERDICT: <OK|HIGH|BLOCKER>` を出す。
 7. 終了コード: 0=OK／1=HIGH か BLOCKER（指摘・未検証あり。3 観点とも報告した）／3=報告の無い観点がある（時間切れ・失敗・機械可読行が無い。記録は `ROUNDS: 0`）／4=周回の上限／2=実行できない（引数・一覧・作業ツリー）。
 
@@ -119,7 +119,7 @@
   - 最後の 2 行: `NEW_CRITICAL: <数>`・`NEW_HIGH: <数>`
 - 観点の終わり方: 「報告あり」＝最後の呼び出しが exit 0 で、`result` の行の `subtype` が `success`、本文に `NEW_CRITICAL:`・`NEW_HIGH:` の行がある。それ以外（時間切れ 124・失敗・空・行が無い）は「報告なし」で、その観点の項目はすべて未検証。
 - 項目ごとの判定（項目の持ち主は一覧の観点の列）:
-  - `実験必須`: 持ち主の報告が `RESULT=experiment` で、`EXP=` の実験のうち 1 つ以上が、実験役の記録で「実行した」（`tool_use` の `command` がコマンドと完全一致し、その `tool_use_id` が `permission_denials` に無く、`tool_result` がある）、かつ作業ツリーを変えていない → 確認済み（実験）。それ以外 → 未検証。
+  - `実験必須`: 持ち主の報告が `RESULT=experiment` で、`EXP=` の実験のうち 1 つ以上が、実験役の記録で「実行した」（`tool_use` の `command` がコマンドと完全一致し、その `tool_use_id` が `permission_denials` に無く、`tool_result` がある）、かつこの周の実験が作業ツリーを変えていない → 確認済み（実験）。実験のコマンドが非ゼロで終わった（`is_error=true`）ことは未検証の理由にしない（反証の実験は「拒否されることを確かめる」形が多く、結果の解釈はレビュー役の読み。出力の先頭は記録に残る）。それ以外 → 未検証。
   - `読んで可`: 持ち主の報告が `RESULT=read` か、上の条件を満たす `RESULT=experiment` → 確認済み。それ以外 → 未検証。
   - 報告に項目の行が無い・`not_done` → 未検証。
 - VERDICT: `NEW_CRITICAL` の合計が 1 以上 → BLOCKER。そうでなく `NEW_HIGH` の合計が 1 以上・未検証が 1 件以上・報告なしの観点がある・作業ツリーを変えた → HIGH。どれも無ければ OK。
@@ -298,6 +298,11 @@ Danger Ops（有無/手順/ロールバック）:
    - 既定値を冒頭で 1 回だけ決める・`run_step` に締め切りの処理をまとめる・重複した状態のファイル（exp_ids）をやめる、の整理をした（動きは変えない）
    - 見送り（retro で扱う）: 全部の `claude -p` を 1 つの起動口に寄せる・`neutralize_machine_lines` を語の一覧でなく形で無害化する・記録の探し方と REVIEWED_COMMIT の読み方を gate-check.sh と共有する・check-permission-prompt.sh の記録の読み方をライブラリに寄せる・実験役を使い捨てのワークツリーで動かす・テストの並列化。どれも計画の範囲（他のスクリプトの作り直し・gate-check.sh は変えない）を外れるか、方式の変更になる
    - 計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+4. 2026-10-26 fix-loop 2 回目（基本レビュー 2 回目 `I197_code_review_20261026_2124.md` の BLOCKER・診断メモ `I197_fix_diagnosis_20261026_2140.md`）:
+   - 起点は `ROUNDS: 0` の記録を飛ばす（Blocker: 報告の無い周のやり直しが空の差分で OK を出しうる）。往復の前に 2 回分の時間を見る・続きの失敗で前の報告を消さない（High）。作業ツリーの比較に HEAD・ブランチを足し、観点ごとではなく周全体で無効にする。`trap` で背景の観点を止める。扱い済みの実験の id を上書きしない。`git diff` の失敗で止める。記録に貼るコマンドも無害化する（Medium・Low）。§4.3 の 2・5 と §4.3.1 の文を合わせて直した
+   - 採らなかった指摘: 非ゼロで終わった実験を未検証にする（Medium 6）— 反証の実験は非ゼロの終了を期待する形が多く、誤った未検証が増えるため。gate-check.sh との共有（Low 10）— 計画変更記録 3 のとおり retro
+   - テスト: TC-01 に A16〜A22 と FG-A16・A17・A18・A21・A22 を足した。FG-A3・FG-A8 の置き換え前の文字列を新しい形に合わせた
+   - 計画レビューのやり直し: 不要（指摘への対応で、方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
 - [20261026_0713 判定: ✅ 完了](../../reviews/I197_plan_review_20261026_0713.md)
