@@ -37,6 +37,8 @@
 - [fix-loop] 手元の全体のテスト（run-all）は流さず、直したところの TC-01 だけを流した — push の後に CI の Harness Tests が同じものを流し、review-gate がその合格を待つため（ユーザーの指摘 10-26「意味あるか？」）。手元で全体を流すのは、push の前に失敗に気づける見込みが高いときだけにする
 - [review-gate] 基本レビュー 4 回目（`I197_code_review_20261026_2347.md`）は HIGH（High 2・Medium 4・Low 3。RISK: YES）— fix-loop へ。review-gate ⇄ fix-loop は 4 回目なので、決まりどおり直すのは High 2 件だけにし、Medium・Low は retro に回す（実験 id の上書きの拒否・実験役の時間の取り分・背景の実行の timeout の明示・拒否を読めないときの「不明」・ignored のファイル・auto が使えない環境・記録の走査の共通化）。直した後は敵対的レビューの段階へ進む
 - [fix-loop] 4 回目は High 2 件だけを診断メモ `I197_fix_diagnosis_20261027_0000.md` で直した（診断・実装・テストのレビューはすべて PASS）。High 2（見張りのブロックが permission_denials に入らないおそれ）は、実際の claude で試して（スパイク S5）入ることを確かめたうえで、出力の形の変化に備える二重の守りだけを足した。あわせて、TC-01 の FG-A16 が置き換え前の文字列の不一致で空振りしていたのを見つけ、FG の写しが作れないときは TC-01 全体を不合格にする形にした
+- [review-gate] 5 回目の基本レビューを途中で止めた — ユーザーの指示（10-27「レビュー構成の見直しをしているのに悪化している。レビューが正常化するように根本解決したい」）で、基本レビューと fix-loop を収束する形に作り直すことにしたため（古い形の結果になる）。範囲は I197 に含める・差分の外の新しい指摘はセキュリティの Blocker だけ止める、はユーザーが選んだ（設計確認メモに追記）
+- [plan-review] 計画変更記録 7 の計画レビュー（`I197_plan_review_20261027_0016.md`）は OK。Warning 4 件は計画変更記録 8 で直し、再レビューはしない（方式・範囲・受け入れ条件を変えない）。組み込み `/code-review` に範囲を渡せるかは、実装の前にスパイク S6 で確かめる
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -49,3 +51,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: plan-review NEXT: implement

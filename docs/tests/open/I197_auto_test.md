@@ -20,8 +20,8 @@
 | TC-06 | `bash scripts/claude/tests/test_check_permission_prompt.sh`（変えない） | exit 0 |
 | TC-07 | `bash scripts/claude/tests/run-all.sh`（全テスト。ベースラインは pass=39 fail=0） | exit 0・`fail=0` |
 | TC-08 | TC-01 の S6（見張り `scripts/claude/hooks/pretooluse_guard.py` と `.claude/settings.json` が比べる相手 `origin/develop` と同じ）と FG-S6 | TC-01 に含む |
-
 | TC-09（2026-10-27 追加） | `bash scripts/claude/tests/test_i197_review_ledger.sh`（新設）。下の R の各項目と FG | exit 0・`fail=0` |
+
 
 ### TC-09 の項目（基本レビューの台帳・差分のレビュー・高リスクの判定・fix-loop。計画 §4.8）
 code-review.sh を `REVIEW_LIB_SOURCE_ONLY=1` で読み込み、関数を一時の git リポジトリと手書きの記録で確かめる
@@ -36,7 +36,7 @@ code-review.sh を `REVIEW_LIB_SOURCE_ONLY=1` で読み込み、関数を一時�
 - R9 配線（静的）: code-review.sh の本体が `review_mode`・`ledger_verdict`・`plan_risk` を使い、`RISK_LLM` を RISK_FINAL の計算に使っていない。差分のレビューでは組み込み `/code-review` に `<起点>...HEAD` を渡す
 - R10 fix-loop（静的）: `fix-implementation-review.sh`・`fix-test-review.sh`・`fix-implementation-reviewer.md`・`fix-test-reviewer.md` が無い。fix-loop SKILL に `fix-implementation-review`・`fix-test-review` の語が無く、`fix-diagnosis-review.sh` がある
 - R11 code-reviewer の定義に `FINDING:` 行の形（SEV・STATUS・SCOPE・SECURITY）がある。review-gate SKILL に差分のレビュー・台帳・Medium 以下は止めない、がある
-- FG: `ledger_verdict` の「前回 open の解決を確かめる」を消すと R5 が不合格。「outside は SECURITY=yes の Blocker だけ」をゆるめると R6 が不合格。`plan_risk` の既定（YES）を NO にすると R8 が不合格。`delta_files` の「ブランチが変えたファイルに限る」を消すと R2 が不合格
+- FG: `review_mode` の「LEDGER_ROUND があれば delta」を消すと R1 が不合格。`parse_findings` の形の検査を消すと R3 が不合格。fix-loop SKILL に `fix-test-review` の 1 行を足すと R10 が不合格。`ledger_verdict` の「前回 open の解決を確かめる」を消すと R5 が不合格。「outside は SECURITY=yes の Blocker だけ」をゆるめると R6 が不合格。`plan_risk` の既定（YES）を NO にすると R8 が不合格。`delta_files` の「ブランチが変えたファイルに限る」を消すと R2 が不合格
 
 ### TC-01 の項目
 A: `adversarial-review.sh`（一時の git リポジトリに、このブランチの `scripts/claude/`・`.claude/agents/` を写し、ダミーのイシュー・計画書〔`## 必ず確かめる項目` に V1=観点 1・実験必須、V2=観点 2・読んで可、V3=観点 3・読んで可〕を置いて実行。`ADV_DEADLINE` などは短くする）
