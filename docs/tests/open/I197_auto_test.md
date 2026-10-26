@@ -21,6 +21,23 @@
 | TC-07 | `bash scripts/claude/tests/run-all.sh`（全テスト。ベースラインは pass=39 fail=0） | exit 0・`fail=0` |
 | TC-08 | TC-01 の S6（見張り `scripts/claude/hooks/pretooluse_guard.py` と `.claude/settings.json` が比べる相手 `origin/develop` と同じ）と FG-S6 | TC-01 に含む |
 
+| TC-09（2026-10-27 追加） | `bash scripts/claude/tests/test_i197_review_ledger.sh`（新設）。下の R の各項目と FG | exit 0・`fail=0` |
+
+### TC-09 の項目（基本レビューの台帳・差分のレビュー・高リスクの判定・fix-loop。計画 §4.8）
+code-review.sh を `REVIEW_LIB_SOURCE_ONLY=1` で読み込み、関数を一時の git リポジトリと手書きの記録で確かめる
+- R1 `review_mode`: 最新のコードレビュー記録に `LEDGER_ROUND:` が無い（無い・古い形式）→ `full`・n=1。`LEDGER_ROUND: 2` と `REVIEWED_COMMIT: <sha>` がある → `delta`・起点 sha・n=3
+- R2 `delta_files`: 起点の後にブランチが変えたファイル（`scripts/a.sh`）は入り、起点の後に develop を取り込んで入った develop 側だけのファイル（`backend/x.py`）は入らない。起点の後に変えていないブランチのファイルも入らない
+- R3 `parse_findings`: `FINDING: F1 SEV=High STATUS=open SCOPE=delta SECURITY=no | 要約` を読む。`SEV=Huge` など形の崩れた行があると 2
+- R4 `ledger_verdict` 全体: High 1 件 → HIGH、Blocker 1 件 → BLOCKER、Medium・Low だけ → OK
+- R5 `ledger_verdict` 差分: 前回 open の F1（High）が今回 `STATUS=resolved` → OK。今回 F1 の行が無い／`STATUS=open` → HIGH
+- R6 `ledger_verdict` 差分: 新しい `SCOPE=delta SEV=High` → HIGH。新しい `SCOPE=outside SEV=High SECURITY=no` → OK（止めない）。新しい `SCOPE=outside SEV=Blocker SECURITY=yes` → BLOCKER。新しい `SCOPE=outside SEV=Blocker SECURITY=no` → OK
+- R7 `ledger_verdict`: Medium・Low は全体でも差分でも止めない
+- R8 `plan_risk`: 最新の計画レビュー記録の「## 高リスク判定」の `判定: Yes` → YES、`判定: No` → NO、記録が無い・節が無い → YES
+- R9 配線（静的）: code-review.sh の本体が `review_mode`・`ledger_verdict`・`plan_risk` を使い、`RISK_LLM` を RISK_FINAL の計算に使っていない。差分のレビューでは組み込み `/code-review` に `<起点>...HEAD` を渡す
+- R10 fix-loop（静的）: `fix-implementation-review.sh`・`fix-test-review.sh`・`fix-implementation-reviewer.md`・`fix-test-reviewer.md` が無い。fix-loop SKILL に `fix-implementation-review`・`fix-test-review` の語が無く、`fix-diagnosis-review.sh` がある
+- R11 code-reviewer の定義に `FINDING:` 行の形（SEV・STATUS・SCOPE・SECURITY）がある。review-gate SKILL に差分のレビュー・台帳・Medium 以下は止めない、がある
+- FG: `ledger_verdict` の「前回 open の解決を確かめる」を消すと R5 が不合格。「outside は SECURITY=yes の Blocker だけ」をゆるめると R6 が不合格。`plan_risk` の既定（YES）を NO にすると R8 が不合格。`delta_files` の「ブランチが変えたファイルに限る」を消すと R2 が不合格
+
 ### TC-01 の項目
 A: `adversarial-review.sh`（一時の git リポジトリに、このブランチの `scripts/claude/`・`.claude/agents/` を写し、ダミーのイシュー・計画書〔`## 必ず確かめる項目` に V1=観点 1・実験必須、V2=観点 2・読んで可、V3=観点 3・読んで可〕を置いて実行。`ADV_DEADLINE` などは短くする）
 - A1 正常: 3 観点とも報告あり。観点 1 は 1 回目に `EXPERIMENT_BEGIN P1-E1`〜`END` を返し、実験役のスタブがそのコマンドの `tool_use`・`tool_result` を返し、続き（`--resume`）で `ITEM: V1 RESULT=experiment EXP=P1-E1` を返す。観点 2・3 は `RESULT=read` → exit 0、出力に `ADVERSARIAL_VERDICT: OK`・`UNVERIFIED: 0`。記録の最後の 3 行が `REVIEWED_COMMIT: <HEAD>`・`ROUNDS: 1`・`VERDICT: OK` の順。記録に「確かめる項目の結果」「観点ごとの実行」「実験」の節がある。記録がコミットされている
@@ -73,6 +90,7 @@ bash scripts/claude/tests/test_review_verdict.sh
 bash scripts/claude/tests/test_review_gates.sh
 bash scripts/claude/tests/test_fix_review.sh
 bash scripts/claude/tests/test_check_permission_prompt.sh
+bash scripts/claude/tests/test_i197_review_ledger.sh
 ```
 
 ## 実行記録

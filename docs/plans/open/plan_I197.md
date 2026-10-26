@@ -59,12 +59,17 @@
 - [ ] AC9 公式の道具を土台にする方針に沿う（自作は公式に無い部分だけ・根拠が計画書にある）→ §4.2・§9
 - [ ] AC10 既存のハーネステスト（`run-all.sh`）・CI がすべて pass → TC-07・CI
 - [ ] AC11 見張り（`scripts/claude/hooks/pretooluse_guard.py`）と `.claude/settings.json` を変えていない → TC-08
+- [ ] AC12（2026-10-27 追加）基本レビューのやり直しは差分と台帳だけを見て、合否は台帳から決定論で出す → §4.8・TC-09
+- [ ] AC13（同）Medium 以下は合否を止めず台帳に retro として残る → §4.8・TC-09
+- [ ] AC14（同）fix-loop の実装・テストのレビューが無くなり、診断と決定論のテストだけが残る → §4.8・TC-09（S 系）
+- [ ] AC15（同）高リスクの判定は計画レビューとパスの判定で決まり、周ごとに変わらない → §4.8・TC-09
 
 ## 3. 影響範囲
 - Backend: なし
 - Frontend: なし
 - DB: なし
 - Config/Infra: `.claude/skills/review-gate/SKILL.md`・`.claude/agents/adversarial-reviewer.md`・`.claude/agents/plan-reviewer.md`（1 行）・`scripts/claude/`（新規 2・変更 4・削除 1）・`scripts/claude/tests/`（新規 1・変更 2）・`docs/runbooks/review-rules.md`・`docs/runbooks/workflow.md`・`docs/plans/templates/plan_template.md`。`.claude/settings.json` と見張りは変えない（I200 が担当）
+- Config/Infra（2026-10-27 追加・§4.8）: `scripts/claude/code-review.sh`・`.claude/agents/code-reviewer.md`・`.claude/skills/review-gate/SKILL.md` §1・§2・`.claude/skills/fix-loop/SKILL.md`・`scripts/claude/fix-review-lib.sh`（コメント）・削除 4（`fix-implementation-review.sh`・`fix-test-review.sh`・`fix-implementation-reviewer.md`・`fix-test-reviewer.md`）・テスト（新規 1・変更 2）・`docs/proposals/I193_official_base_flow.md`
 - 依存関係ファイル（requirements*.txt / package*.json）: 変更なし
 
 ## 4. 変更点一覧（具体）
@@ -186,6 +191,55 @@ VERDICT: <BLOCKER|HIGH|OK>
 ### 4.7 I197 自身の一覧
 - I197 自身の敵対的レビューが使う一覧は、スクリプトが読む形のまま、この計画書の `## 必ず確かめる項目（I197 自身の敵対的レビューが使う）` の節（計画変更記録の前）に置く。
 
+### 4.8 基本レビューと fix-loop を収束する形に作り直す（2026-10-27 追加・AC12〜AC15・設計確認メモの追加分）
+
+#### 調査結果（収束しない原因・記録の数え上げ）
+| イシュー | 基本レビュー | 敵対的レビュー | fix-loop の診断 |
+|---|---|---|---|
+| I179 | 9 回 | 8 回 | 5 回 |
+| I193 | 8 回 | 2 回 | 7 回 |
+| I197（実装後〜2026-10-27） | 4 回（5 回目は止めた） | 0 | 4 回 |
+
+原因（I197 の 4 周の指摘の中身から）:
+1. やり直しのたびに、組み込み `/code-review` と code-reviewer が `origin/develop...HEAD`（ブランチ全体）を「欠陥を探せ」で見直す。新しい自作のコードが大きいと、前の周に見ていなかった穴が毎回見つかり、数が減らない（4 周目の指摘の多くは 1 周目からあったコード）。
+2. 合格の基準が先に決まっていない（基本レビューは BP 全般の終わりの無い探索）。
+3. 同じ修正を、fix-loop の 3 つのレビュー（診断・実装・テスト）と review-gate の 2 つ（組み込み・code-reviewer）が重ねて見る。
+4. Medium まで直すので修正のコードが増え、それが次の周の High になる（I197 の 2 回目の修正が 3 回目の High の原因）。
+5. 高リスクの判定を周ごとに code-reviewer（LLM）が出すので揺れる（I197 の 4 周目で突然 YES）。
+
+#### 修正方針（ループの基本: 終わりの条件を先に決める・やり直しは差分だけ・決定論で判定する・目を重ねない）
+自作は最小にする（I179・I193・I197 のように大きな自作のコードを足すこと自体が収束しない原因なので）。差分のレビューは組み込み `/code-review` に範囲を渡すだけにし、自作は「台帳の行の読み取りと合否の関数」と「範囲の決め方」だけにする。
+
+1. **台帳（指摘の一覧）**: code-reviewer の出力に、指摘 1 件ごとに機械可読行を 1 行足す。
+   `FINDING: F<n> SEV=<Blocker|High|Medium|Low> STATUS=<open|resolved> SCOPE=<delta|outside> SECURITY=<yes|no> | <指摘の要約 1 行>`
+   - 1 回目（全体のレビュー）: すべての指摘が `STATUS=open SCOPE=delta`（ブランチ全体が差分）。
+   - やり直し（差分のレビュー）: 入力に前回の台帳（`STATUS=open` の行）を渡す。code-reviewer は前回の各 id について `STATUS=resolved` か `open` を書き、新しい指摘は続きの番号で書く（直した差分の中なら `SCOPE=delta`、外なら `SCOPE=outside`）。
+   - code-review.sh は記録に `LEDGER_ROUND: <n>`（1 から数える）を書く。
+2. **全体か差分かの決め方（決定論）**: 最新の `I###_code_review_*.md` に `LEDGER_ROUND:` 行があれば差分のレビュー（起点＝その記録の `REVIEWED_COMMIT`、n は +1）。無ければ（初回・I197 より前の形式の記録）全体のレビュー（n=1）。
+3. **差分のレビューの範囲**: 「ブランチ自身が変えたファイル」（比べる相手との merge-base から HEAD まで）のうち、起点から HEAD までに変わったものの差分（`git diff <起点> HEAD -- <それらのファイル>`）。develop の取り込みで入った develop 側だけの変更は含めない。組み込み `/code-review` には `/code-review medium <起点>...HEAD` を渡し、`/security-review` は今のまま（高リスク時・全体）。
+4. **合否（決定論・`ledger_verdict`）**:
+   - 全体のレビュー: Blocker の行が 1 件以上 → BLOCKER、High の行が 1 件以上 → HIGH、それ以外 OK。Medium・Low は止めない（台帳に残り retro で扱う）。
+   - 差分のレビュー: 前回の台帳の `open` の Blocker・High の id がすべて `STATUS=resolved` で出ている（無い・`open` は未解決）／新しい `SCOPE=delta` の Blocker・High が無い／新しい `SCOPE=outside` は `SEV=Blocker SECURITY=yes` だけが止める。満たせば OK、未解決か新しい止める指摘が High なら HIGH、Blocker なら BLOCKER。`SCOPE=outside` のそれ以外は止めずに台帳に残す（retro）。
+   - code-reviewer の `VERDICT:` 行は、全体のレビューでは max(台帳, VERDICT 行)、差分のレビューでは使わない（差分の外の指摘で止めないため）。`FINDING:` の形の崩れた行・`VERDICT:` 行が無い出力は今どおり BLOCKER（fail-closed）。
+   - 最終 = max(決定論ゲート, omission-lint, 台帳の合否, 組み込み `/security-review` の失敗)。
+5. **止めるのは High 以上**: 上の合否のとおり、Medium・Low はどの回も止めない。review-gate SKILL の「4 回目から High だけ」の決まりは、最初から High だけになるので「5 回目で止める」だけを残す。
+6. **高リスクの判定（周ごとに変えない）**: `RISK_FINAL = 計画レビューの判定 OR パスの判定（path_risk_trigger）`。計画レビューの判定は、最新の `I###_plan_review_*.md` の「## 高リスク判定」の節の `判定: Yes|No`（読めない・記録が無いときは YES＝止まる側）。code-reviewer の `RISK:` 行は判定に使わず、code-review.sh が記録の `RISK:` 行を RISK_FINAL に書き直す（gate-check はこの行とパスの判定を読むので、変えずに揃う）。
+7. **fix-loop**: 手順 5.5（実装レビュー）と 6.5（テストレビュー）をやめる（直した差分は直後の review-gate の差分のレビューが見るので重複）。診断レビュー（3.5）と決定論のテスト（6）は残す。`scripts/claude/fix-implementation-review.sh`・`scripts/claude/fix-test-review.sh`・`.claude/agents/fix-implementation-reviewer.md`・`.claude/agents/fix-test-reviewer.md` は削除。`docs/proposals/I193_official_base_flow.md` の L15 に「I197 で実装・テストのレビューをやめ、review-gate の差分のレビューで見る」と書き足す（I193 でテストのレビューが空振りのテストを差し戻した 2 回は、差分のレビューが直したテストの差分を見ることで覆う）。
+8. **敵対的レビュー（adversarial-review.sh）**: 追加の作り込みはしない。起動の条件だけが 6 の RISK_FINAL になる。
+
+#### 変更点一覧
+| ファイル | 変更内容 |
+|---|---|
+| `scripts/claude/code-review.sh` | 関数 `review_mode`（全体か差分か・起点・n）・`delta_files`（差分のレビューの範囲）・`parse_findings`（`FINDING:` 行の読み取り。崩れた行は 2）・`ledger_verdict`（4 の合否）・`plan_risk`（6）を足し、本体の範囲・入力（前回の台帳）・合否・`RISK:` 行・`LEDGER_ROUND:` 行を差し替える。`neutralize_machine_lines` の対象に `FINDING`・`LEDGER_ROUND` を足す |
+| `.claude/agents/code-reviewer.md` | 出力の形に `FINDING:` 行（全体・差分の書き方・SCOPE・SECURITY）を足す。差分のレビューでは「入力の差分と前回の台帳だけを見る。差分の外は SCOPE=outside で書くだけ」。`RISK:` 行は参考（判定はスクリプトが計画レビューとパスで出す） |
+| `.claude/skills/review-gate/SKILL.md` §1・§2 | 全体／差分のレビュー・台帳・Medium 以下は止めない・繰り返しの上限（5 回目で止める）を書き直す |
+| `.claude/skills/fix-loop/SKILL.md` | 5.5・6.5 と軽微例外（実装・テストのレビューの簡略化）を消し、成果物とレビューの対応の表・共通ルールを直す |
+| `scripts/claude/fix-implementation-review.sh`・`scripts/claude/fix-test-review.sh`・`.claude/agents/fix-implementation-reviewer.md`・`.claude/agents/fix-test-reviewer.md` | 削除 |
+| `scripts/claude/fix-review-lib.sh` | 呼び出し元のコメントを診断だけに直す（関数は変えない） |
+| `scripts/claude/tests/test_fix_review.sh`・`scripts/claude/tests/test_i193_official_flow.sh` | 削除したスクリプト・定義の確認を外す（AGENTS は 5 本） |
+| `scripts/claude/tests/test_i197_review_ledger.sh`（新規） | 下の TC-09 |
+| `docs/runbooks/review-rules.md`（検証の全体設計の節）・`docs/proposals/I193_official_base_flow.md`（L15） | 台帳・差分のレビュー・止めるのは High 以上・高リスクは計画の段階、を書く |
+
 ## 5. 実装手順（ステップ）
 未知リスク（S1〜S4）は計画の前にスパイクで成立を確かめた（調査結果）。手順は「1 周を通しで動かす最小の形」を先に作る（垂直スライス）。
 
@@ -197,6 +251,7 @@ VERDICT: <BLOCKER|HIGH|OK>
 6. **既存テストの付け替え**: `test_i181_review_slim.sh`・`test_i193_official_flow.sh`（→ TC-03・TC-04）。全テスト（→ TC-07）。
 7. **I194 の取り下げ**: #328 にコメントして閉じる（§4.6。→ 手動 No.4）。
 8. 実地の通し（AC6）は test-gate の手動テスト No.1・No.2 で行う（実装の後でないと動かない）。
+9. （2026-10-27 追加）§4.8: code-review.sh の関数と本体の差し替え・code-reviewer の出力の形・review-gate §1・§2・fix-loop の書き直しと 4 ファイルの削除・テストの付け替えと TC-09（→ TC-09）。I197 自身の次の review-gate は、このブランチの新しい code-review.sh で動く（前の記録に `LEDGER_ROUND:` が無いので 1 回目は全体のレビュー、2 回目から差分のレビュー）
 
 ## 6. テスト計画
 ### 自動（詳細は docs/tests/open/I197_auto_test.md）
@@ -210,6 +265,7 @@ VERDICT: <BLOCKER|HIGH|OK>
 - No.2 実験役に、許可される実験（波かっこを含む heredoc）と見張りが確認を求める実験を渡し、待たずに実行／拒否が記録される（AC3・AC7）
 - No.3 review-gate の手順を読み、終了コードごとの分岐が §4.5 と一致する
 - No.4 #328 のコメントと閉じた状態（AC8）
+- No.5（2026-10-27 追加）I197 自身の review-gate で、全体のレビューの後のやり直しが差分のレビュー（`LEDGER_ROUND: 2` 以降・範囲が直した差分だけ）になり、台帳の合否で終わる（AC12。review-gate の記録で確かめる）
 
 ## 7. ロールバック
 - PR を revert する（ハーネスの文書・スクリプトだけ。データの変更なし）。revert で `review-timer.sh` と今の SKILL §3 が戻る。
@@ -316,6 +372,7 @@ Danger Ops（有無/手順/ロールバック）:
    - テスト: TC-01 に A27・L6 と FG-A27・FG-L6。FG の写しが作れないとき（置き換え前の文字列が本体に無い）は TC-01 全体を不合格にする（否定の FG が空振りで通らないように。FG-A16 が実際に空振りしていたのを見つけて直した）
    - 見送り（retro）: 基本レビュー 4 回目の Medium 4・Low 3
    - 計画レビューのやり直し: 不要（指摘への対応で、方式・範囲・受け入れ条件を変えない）
+7. 2026-10-27 ユーザーの指示（「レビュー構成の見直しをしているのに悪化している。レビューが正常化するように根本解決したい」）で、基本レビューと fix-loop を収束する形に作り直す §4.8 を足し、受け入れ条件 AC12〜AC15・手動 No.5・TC-09 を足した（イシューの設計確認メモ・範囲・受け入れ条件も更新）。5 回目の基本レビューは古い形の結果になるので止めた。計画レビューのやり直し: 要（範囲・受け入れ条件を変えた）
 
 ## レビュー結果
 - [20261026_0713 判定: ✅ 完了](../../reviews/I197_plan_review_20261026_0713.md)

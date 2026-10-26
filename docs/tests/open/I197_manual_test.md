@@ -9,4 +9,6 @@
 | 3 | `.claude/skills/review-gate/SKILL.md` §3 を読み、計画 §4.5 の review-gate の行と突き合わせる | 終了コード 0・1・2・3・4 と `ADVERSARIAL_VERDICT:` 行が無いときの扱いが、計画の表と一致する。Agent ツールでの起動・タイマー・`TaskStop` の手順が無い。未検証の直し方（決定論の TC で覆う・確かめ方を下げるのはそのときだけ）が書かれている | Claude | ― |  | |
 | 4 | 実装の後、`gh issue view 328 --json state,stateReason,comments` を実行する | `state` が `CLOSED`・`stateReason` が `NOT_PLANNED`。最新のコメントに統合先 `#332` と理由（確かめる項目の一覧に含まれる）がある | Claude | ― |  | |
 
+| 5 | （2026-10-27 追加）I197 自身の review-gate の記録（`docs/reviews/I197_code_review_*.md`）を時刻順に読む | §4.8 を入れた後の最初の記録が `LEDGER_ROUND: 1`（全体のレビュー）。それ以降にやり直しがあれば `LEDGER_ROUND: 2` 以降で、記録の「見た範囲」が前の記録の `REVIEWED_COMMIT` からの直した差分だけ、前回の open の指摘ごとに `STATUS=resolved` か `open` の行があり、VERDICT が台帳の合否と一致する。やり直しが無く 1 回で OK なら、そのことを記録する | Claude | ― |  | AC12 の実地の確認 |
+
 結論: （test-gate 段階で記入）
