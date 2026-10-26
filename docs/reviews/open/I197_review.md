@@ -47,6 +47,7 @@
 - [fix-loop] F1〜F4 を診断メモ `I197_fix_diagnosis_20261027_0110.md`（診断レビュー PASS）の推奨案で直した。どれも「迷ったら止めない側」の経路を止める側に倒す粗い規則。F1 の修正で、前の周に範囲の外だった指摘でも、その周に該当ファイルを直していれば新しい指摘として止める（R6 の期待を合わせた）
 - [review-gate] 差分のレビュー（`I197_code_review_20261027_0118.md`・台帳の 2 周目・範囲 4 ファイル）は HIGH。止める指摘は F2 だけ（F1・F3・F4 は resolved）。新しい F11〜F15 は Medium・Low で止めない。止める指摘は 4 → 1 に減った（収束している）
 - [fix-loop] F2 は、形を列挙せずリポジトリからの相対パスに揃える粗い規則で直した（診断メモ `I197_fix_diagnosis_20261027_0125.md`・診断レビュー PASS）
+- [review-gate] 差分のレビュー（`I197_code_review_20261027_0140.md`・台帳の 3 周目・範囲 2 ファイル）は OK。F2 は resolved、新しい F16〜F19 は Medium・Low で止めない。止める指摘は 4 → 1 → 0 で収束した（§4.8 の実地の確認・手動 No.5）。高リスク判定 NO（計画レビュー No・パス NO）なので敵対的レビューのステージは無し。敵対的レビューの実地の通し（AC6）は test-gate の手動 No.1 で行う
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -67,3 +68,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
