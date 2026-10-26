@@ -13,7 +13,10 @@
 - ハーネス（`.claude/`・`scripts/claude/`・`docs/runbooks/`・テンプレート）。アプリのコード・DB・`.claude/settings.json`・見張りは変えない
 
 ## テスト結果
-- （test-gate 段階で記入）
+- gate-check: OK（`I197_code_review_20261027_0140.md`・VERDICT OK・REVIEWED_COMMIT 36d24b1 以降は記録の場所だけ）
+- CI: review-gate の 3 周目で全ジョブ OK（Harness Tests を含む）。test-gate に回された重いテストは無し
+- 手動テスト（すべて Claude）: No.1〜5 OK（`docs/tests/open/I197_manual_test.md`）。No.1 は新しい敵対的レビューを I197 自身に通し、人の応答待ち 0・188 秒・11 項目すべて確認済み・VERDICT OK（`I197_adversarial_review_20261027_0153.md`）。No.5 で台帳が 4 → 1 → 0 で収束したことを確かめた
+- 判定の記録: check-frontend-evidence は対象外（frontend/src を変えていない）・check-manual-test-executor は合格
 
 ## 計画との差分
 - （実装後に記入）
@@ -48,6 +51,7 @@
 - [review-gate] 差分のレビュー（`I197_code_review_20261027_0118.md`・台帳の 2 周目・範囲 4 ファイル）は HIGH。止める指摘は F2 だけ（F1・F3・F4 は resolved）。新しい F11〜F15 は Medium・Low で止めない。止める指摘は 4 → 1 に減った（収束している）
 - [fix-loop] F2 は、形を列挙せずリポジトリからの相対パスに揃える粗い規則で直した（診断メモ `I197_fix_diagnosis_20261027_0125.md`・診断レビュー PASS）
 - [review-gate] 差分のレビュー（`I197_code_review_20261027_0140.md`・台帳の 3 周目・範囲 2 ファイル）は OK。F2 は resolved、新しい F16〜F19 は Medium・Low で止めない。止める指摘は 4 → 1 → 0 で収束した（§4.8 の実地の確認・手動 No.5）。高リスク判定 NO（計画レビュー No・パス NO）なので敵対的レビューのステージは無し。敵対的レビューの実地の通し（AC6）は test-gate の手動 No.1 で行う
+- [test-gate] 手動テスト No.1〜5 はすべて Claude が実施し OK。No.1 の記録で「報告あり（）」と空の括弧が出る見た目の不具合を見つけた（note のファイルが改行だけでも中身ありと判定）。判定には影響しないので直さずに retro で扱う（この段階はコードを直さない）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -69,3 +73,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

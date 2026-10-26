@@ -100,6 +100,8 @@ bash scripts/claude/tests/test_i197_review_ledger.sh
 
 - 2026-10-27（implement・§4.8 の後）: TC-09 `test_i197_review_ledger.sh` pass=43 fail=0（FG を含む・FG の写しが作れないと不合格）。関係するテスト: TC-01 pass=113・`test_i193_official_flow.sh` pass=160・`test_adversarial_trigger.sh` pass=60・`test_fix_review.sh` pass=66・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58・`test_i181_review_slim.sh` pass=29・`test_review_commit_lifecycle.sh` PASS=31（shellcheck あり・TC-C1 も実行）。すべて fail=0。全体（run-all）は CI の Harness Tests で確かめる
 
+- 2026-10-27（test-gate）: gate-check.sh I197 → exit 0（GATE_CHECK: OK）。test-gate に回された重いテスト（docker・npm・pytest）は無し。CI は review-gate の 3 周目（HEAD 36d24b1 の時点）で全ジョブ OK
+
 ## 再発防止記録（fix-loop 7 回目・台帳の 2 周目の止める指摘 F2）
 - なぜ失敗したか: 6 回目の F2 の修正が表記の形（`./`・`:行番号`）を列挙して直す方式で、絶対パス・`..` が残った
 - 何を変えたか: `:行番号` を除いてリポジトリからの相対パスに揃え、outside は「リポジトリの中の実在のファイルで範囲に無い」ときだけ（それ以外は止める側）
