@@ -8,7 +8,6 @@
 | 2 | `REVIEW_LIB_SOURCE_ONLY=1` で `scripts/claude/adversarial-review.sh` を読み込むスクリプトを scratchpad に書き、実験役の関数に 2 つの実験を渡して実行する: (a) 波かっこを含む heredoc で scratchpad に Python のファイルを書いて実行する（`cat > <scratchpad>/i197_m2.py <<'EOF'` ／ `d = {1: 2}` ／ `print(d[1])` ／ `EOF` ／ `python3 <scratchpad>/i197_m2.py`）(b) 見張りが確認を求める、実行されても困らない代わりの操作 `docker compose cp /nonexistent-i197-m2 backend:/tmp/i197-m2` | (a) は「実行した」で出力の先頭に `2`。(b) は「拒否された」でコマンドが記録に出る。どちらも待たずに終わる（全体が 120 秒以内）。本体のワークツリー隔離チェック（「too complex to verify」）の拒否は出ない | Claude | claude -p の判定（スクリプトが起動する別プロセス） |  | (b) は S3 で拒否を確かめた操作。もし実行されても、存在しないファイルのコピーが失敗するだけ |
 | 3 | `.claude/skills/review-gate/SKILL.md` §3 を読み、計画 §4.5 の review-gate の行と突き合わせる | 終了コード 0・1・2・3・4 と `ADVERSARIAL_VERDICT:` 行が無いときの扱いが、計画の表と一致する。Agent ツールでの起動・タイマー・`TaskStop` の手順が無い。未検証の直し方（決定論の TC で覆う・確かめ方を下げるのはそのときだけ）が書かれている | Claude | ― |  | |
 | 4 | 実装の後、`gh issue view 328 --json state,stateReason,comments` を実行する | `state` が `CLOSED`・`stateReason` が `NOT_PLANNED`。最新のコメントに統合先 `#332` と理由（確かめる項目の一覧に含まれる）がある | Claude | ― |  | |
-
 | 5 | （2026-10-27 追加）I197 自身の review-gate の記録（`docs/reviews/I197_code_review_*.md`）を時刻順に読む | §4.8 を入れた後の最初の記録が `LEDGER_ROUND: 1`（全体のレビュー）。それ以降にやり直しがあれば `LEDGER_ROUND: 2` 以降で、記録の「見た範囲」が前の記録の `REVIEWED_COMMIT` からの直した差分だけ、前回の open の指摘ごとに `STATUS=resolved` か `open` の行があり、VERDICT が台帳の合否と一致する。やり直しが無く 1 回で OK なら、実地の差分のレビューは「未確認（TC-09 の R1・R5・R6 で決定論に確かめた）」と書く（合格にしない） | Claude | ― |  | AC12 の実地の確認 |
 
 結論: （test-gate 段階で記入）
