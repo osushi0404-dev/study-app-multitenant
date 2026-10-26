@@ -98,6 +98,8 @@ bash scripts/claude/tests/test_i197_review_ledger.sh
 - 2026-10-26（計画作成時）: TC-01・TC-02・TC-08 は実装前のため未実行（テスト本体が未作成）。TC-03〜TC-07 は今の develop でベースライン pass（`run-all.sh` pass=39 fail=0）。付け替え後の TC-03・TC-04 は実装後に実行する
 - 2026-10-26（implement・/simplify の後）: TC-01 `test_i197_adversarial_process.sh` pass=86 fail=0（TC-02・TC-08・FG を含む）。TC-03 pass=29 fail=0。TC-04 pass=160 fail=0。TC-05 の `test_review_gates.sh` は TC-WIRE3 の目印を付け替えて PASS=67 FAIL=0（計画変更記録 3）。TC-07 `run-all.sh` pass=40 fail=0・exit 0
 
+- 2026-10-27（implement・§4.8 の後）: TC-09 `test_i197_review_ledger.sh` pass=43 fail=0（FG を含む・FG の写しが作れないと不合格）。関係するテスト: TC-01 pass=113・`test_i193_official_flow.sh` pass=160・`test_adversarial_trigger.sh` pass=60・`test_fix_review.sh` pass=66・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58・`test_i181_review_slim.sh` pass=29・`test_review_commit_lifecycle.sh` PASS=31（shellcheck あり・TC-C1 も実行）。すべて fail=0。全体（run-all）は CI の Harness Tests で確かめる
+
 ## 再発防止記録（fix-loop 1 回目・CI の Harness Tests の失敗）
 - なぜ失敗したか: code-review.sh に足したライブラリの読み込み行に、`-x` なしの shellcheck（`test_review_commit_lifecycle.sh` の TC-C1）が SC1091 を出した。手元に shellcheck が無く TC-C1 が SKIP になるため、手元の run-all（pass=40）では気づけず、CI で初めて見つかった
 - 何を変えたか: code-review.sh・adversarial-review.sh の読み込み行の `# shellcheck source=…` に `disable=SC1091` を足した（挙動は変えない）

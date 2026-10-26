@@ -11,6 +11,8 @@ user-invocable: false
 
 ## 1. 基本レビュー（CI 待ち・組み込みのレビュー・決定論ゲート実走つき）
 
+**全体のレビューと差分のレビュー（台帳・I197）**: 1 回目はブランチ全体を見て、指摘を台帳（番号・重大度・状態）にする。やり直し（fix-loop の後）は、前の記録の `REVIEWED_COMMIT` からの直した差分と、台帳の止める指摘が直ったかだけを見る（全体を探し直さない）。合否はスクリプトが台帳から決定論で出す: 止めるのは High 以上だけで、Medium 以下は止めない（台帳に残り retro で扱う）。差分の外で新しく見つかった指摘は、セキュリティの Blocker だけが止める。どちらにするか・範囲・台帳はスクリプト（`scripts/claude/code-review.sh`）が決める（台帳のある最新の記録の `REVIEWED_COMMIT` が HEAD の祖先なら差分のレビュー）。高リスクかどうか（3. を走らせるか）は計画レビューの判定とパスの判定で決まり、周ごとに変わらない。
+
 Bash ツールの `run_in_background: true` で実行し、完了の通知で結果を受け取る（CI 待ちと組み込みのレビューで、前面の実行の上限 10 分を超えうるため。背景の実行が 10 分を超えても止まらないことは 2026-10-25 に 700 秒で実測した。それより長い上限があっても、下の「判定行が無いとき」の扱いで止まる側に倒れる）:
 
 ```bash
@@ -33,7 +35,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
 スクリプト stdout の固定行（`ADVERSARIAL_STAGE:` と `FINAL_VERDICT:`）で分岐する:
 
 - `FINAL_VERDICT: BLOCKER` または `FINAL_VERDICT: HIGH` → 4. の結線で `NEXT: fix-loop`（修正の後は fix-loop が必ずこの段階に戻す）
-  - **繰り返しの上限**（review-gate ⇄ fix-loop が終わらないことを防ぐ・I193）: 記録の最後の `STAGE_DONE: review-gate NEXT: fix-loop` の行が、途中に `STAGE_DONE: review-gate NEXT: test-gate` か `STAGE_DONE: implement` の行を挟まずに数えて（実装をやり直したら数え直す）、今回で 4 回目以上になるときは、止める条件 3 の安全側（範囲を狭める）として、fix-loop で直すのは Blocker・High だけにし、Medium 以下は自律判断の記録に書いて retro に回す。5 回目になるときは、fix-loop へ回さずに止める（止める条件 3。ここまで直しても新しい High が出続けるのは、止める場所・方式の見直しが要る兆し）
+  - **繰り返しの上限**（review-gate ⇄ fix-loop が終わらないことを防ぐ・I193）: 記録の最後の `STAGE_DONE: review-gate NEXT: fix-loop` の行が、途中に `STAGE_DONE: review-gate NEXT: test-gate` か `STAGE_DONE: implement` の行を挟まずに数えて（実装をやり直したら数え直す）、今回で 5 回目になるときは、fix-loop へ回さずに止める（止める条件 3。差分のレビューで新しい High が出続けるのは、止める場所・方式の見直しが要る兆し）。fix-loop で直すのは最初から台帳の止める指摘（Blocker・High）だけで、Medium 以下は直さない（台帳に残り retro。直して新しい穴を生む回り道をしない・I197）
 - `FINAL_VERDICT: OK` かつ `ADVERSARIAL_STAGE: NOT_REQUIRED` → 4. の結線で `NEXT: test-gate`
 - `FINAL_VERDICT: OK` かつ `ADVERSARIAL_STAGE: REQUIRED` → 3. の敵対的レビューステージを実行する
 

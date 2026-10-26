@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fix-review-lib.sh — /fix-loop 多段サブエージェントレビュー（診断/実装/テスト）の共有ライブラリ（I074）。
 #
-# 呼び出し元: fix-diagnosis-review.sh / fix-implementation-review.sh / fix-test-review.sh
+# 呼び出し元: fix-diagnosis-review.sh（I197 で実装・テストのレビューは廃止。直した差分は review-gate の差分のレビューが見る）
 #   （各エントリポイントが本 lib を source し run_fix_review を呼ぶ）。
 # テスト:   REVIEW_LIB_SOURCE_ONLY=1 source して helper 関数のみを取り出す（本体なし・ガードは末尾）。
 #
