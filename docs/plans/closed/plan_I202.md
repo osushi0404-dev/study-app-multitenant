@@ -271,4 +271,4 @@ FINDING: F<n> SEV=… STATUS=… FILE=… LINE=… SECURITY=… STOP=… [RISK=u
 3. （implement）auto_test の G5 を、振る舞いのテストから静的な確認に変えた。理由: スパイク（scratchpad の `gt.sh`）で、git は `x[1].txt` の pathspec を glob として `x1.txt` にも当てることを確かめた。しかし `delta_hunks` の塊は「対象のファイルの一覧」と「2 本の diff の重なり」で作るので、glob で余分に拾ったファイルは出力に出ない（どの組み合わせでも結果が変わらない）。`--literal-pathspecs` は守りとして付け、3 か所すべてに付いていることを G5 で確かめ、1 か所外すと不合格になる FG-G5 を付けた。計画レビューのやり直し: 不要（テストの確かめ方の変更で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
-- [20261027_1526 判定: ✅ 完了](../../reviews/I202_plan_review_20261027_1526.md)
+- [20261027_1526 判定: ✅ 完了](../../reviews/closed/I202_plan_review_20261027_1526.md)
