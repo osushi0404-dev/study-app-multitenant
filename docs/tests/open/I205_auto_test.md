@@ -12,7 +12,7 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/test_i205_stop_criteria.sh`（新設）。下の H・L・K・B・W・D の各項目と FG | exit 0・`fail=0` | implement で実行: pass=78 fail=0（2026-10-27。CI でも確かめる） |
+| TC-01 | `bash scripts/claude/tests/test_i205_stop_criteria.sh`（新設）。下の H・L・K・B・W・D の各項目と FG | exit 0・`fail=0` | implement で実行: pass=78 fail=0（2026-10-27。CI でも確かめる）。H7〜H9（計画変更記録 2）は実装前のため未実行 |
 | TC-02 | `bash scripts/claude/tests/test_i197_review_ledger.sh`（FINDING 行を新しい形に付け替え。項目の意味は変えない。R11 の語を新しい決まりに付け替え） | exit 0・`fail=0`（ベースライン pass=64 fail=0） | implement で実行: pass=64 fail=0 |
 | TC-03 | 影響を受けうるテスト: `bash scripts/claude/tests/test_adversarial_trigger.sh`・`test_i114_retro_plain_output.sh`・`test_i180_retro_triage.sh`・`test_i181_review_slim.sh`・`test_fix_review.sh`・`test_i193_official_flow.sh`・`test_i185_harness_docs.sh`・`test_i197_adversarial_process.sh`・`test_i182_docs.sh`・`test_review_verdict.sh` | どれも exit 0 | implement で実行: すべて exit 0（`test_fix_review.sh` の TC-22・TC-26 と `test_i193_official_flow.sh` の S19 は語を付け替えた後） |
 | TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | OK: review-gate の CI 待ちで Harness Tests を含む全ジョブが pass（`CI_WAIT: OK`・HEAD 7f3167e） |
@@ -31,6 +31,9 @@ H `delta_hunks`（行の塊）:
 - H4 バイナリのファイルを変えた → `\t1\t999999999`
 - H5 差分のレビュー（起点あり）: 起点の後に develop を取り込んで入った行は塊に入らない。起点の後にブランチが変えた行だけが入る
 - H6 全体のレビュー（起点なし）: merge-base からブランチが変えた行だけ（develop 側だけの変更は入らない）
+- H7（計画 4.11・F1）一時のリポジトリに `git config diff.noprefix true` と `diff.mnemonicPrefix true` を設定しても、H1 と同じ塊（`backend/x.py\t10\t10`）が出る
+- H8（4.11・F6）中身が `++ /dev/null` の行（diff では `+++ /dev/null`）と `-- a` の行を足したファイルでも、そのファイルの塊が消えず、足した行が塊に入る
+- H9（4.11・F2）`hunks_from_diff` に、対象のファイル `a.txt`・`b.txt` と、`a.txt` だけの塊を含む diff を渡す → `b.txt\t1\t999999999` が出る。差分のレビュー（diff を 2 つ）で、両方に出て重なりが無いファイルは塊なしのまま
 
 L 行で決める範囲（`ledger_update` の SCOPE）:
 - L1 塊（10〜10）の中の行 `LINE=10` → delta
@@ -93,6 +96,9 @@ FG（失敗注入。一時コピーを壊すと、その項目が不合格にな
 - FG-L9 全体のレビューで範囲を作らない（今の `in_scope is None` の形に戻す）→ L9 が delta になる
 - FG-K1 harness の場所の一覧から `.claude/` を外す → K1 の `.claude/skills/x/SKILL.md` が app になる
 - FG-W2 全体のレビューで LLM の VERDICT を合否に使う形に戻す → W2 が HIGH になる
+- FG-H7 `--src-prefix=a/ --dst-prefix=b/` を外す → H7 で塊が出ない
+- FG-H8 見出しを読むのを最初の `@@` までに限る判定を外す → H8 でそのファイルの塊が消える
+- FG-H9 読めなかった対象のファイルをファイル全体にする処理を外す → H9 で `b.txt` が出ない
 - FG-D1〜D5 対象のファイルの写しから語を 1 つ消す → その D が不合格
 
 ## 決定論ゲート（自動実走）

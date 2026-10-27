@@ -81,6 +81,7 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 - [retro] 台帳の残り（`docs/reviews/I205_code_review_20261027_1123.md`）の 10 件 F1〜F10 → すべて #338（I202）に同梱（コメント 6432355581）。判定の仕組みの指摘（F1・F2・F4・F6）を含むので「次のハーネスの作業で最優先」と明記 — 同じ仕組みの残りを片付ける既存のイシューがあり、1 件ずつ起票しないため。KIND=app の指摘は 0 件
 - [retro] I202 の F11・F16 は I205 で直したと #338 に記載（計画 4.10）
 - [retro] 改善案 2 件は見送り（その場で捕まり手戻りなし）。新規起票なし
+- [close の後・ユーザー決定] F1・F2・F6（行の塊の読み取りが見逃し側に倒れる穴）を、I202 に回さずこの PR で直す（計画 4.11・計画変更記録 2）。記録を open に戻し、計画レビューから通り直す — 次のアプリのイシュー（I196）がこの判定を使うため、develop に入れる前に直す（ユーザーが評価を経て合意）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -89,3 +90,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review
