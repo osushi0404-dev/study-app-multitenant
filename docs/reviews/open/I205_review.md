@@ -96,3 +96,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
