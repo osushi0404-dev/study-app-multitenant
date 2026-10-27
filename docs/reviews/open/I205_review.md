@@ -87,6 +87,7 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 - [plan-review] 追記分の計画レビュー（`docs/reviews/I205_plan_review_20261027_1300.md`）OK・高リスク No。Warning 3 件・Info 2 件は計画に反映し、再レビューはしない（計画変更記録 2）
 - [implement] 計画 4.11 を実装（F1・F2・F6）。/simplify は今回の追加分では呼ばなかった — 変えたのは 1 回目の /simplify で整理済みの同じ関数の約 40 行で、見出しの読み方・オプション・読めなかったときの扱いだけ（新しい重複・無駄を生む形の変更ではない）。整理の点検は review-gate の組み込み /code-review が受け持つ
 - [review-gate] 差分のレビュー（`docs/reviews/I205_code_review_20261027_1307.md`・台帳 2 周目）は HIGH。止める指摘は F11（`STOP=flow`・再現あり: 空白を含むパスで git が `+++ b/<パス>` の後ろにタブを付け、塊の行が 4 列になって台帳の作成が落ちる）の 1 件だけ。F12〜F17 は `STOP=-` で止めない（retro が I202 に回す） — I205 の決まりのとおり
+- [fix-loop] F11 は再現を確かめた（scratchpad の f11.sh で 4 列の行が出た）うえで、案 A（行末のタブを取り除く）＋案 B（塊の行を後ろから 2 列で読む）で直した。診断レビュー PASS（`docs/reviews/I205_fix_diagnosis_review_20261027_1318.md`） — 原因を直し、同じ種類の列のずれでも流れを止めないため。どちらも 1 行で新しいコードをほとんど足さない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

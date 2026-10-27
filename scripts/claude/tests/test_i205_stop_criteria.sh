@@ -79,6 +79,14 @@ printf 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -2 +2 @@\n-x\n+
 printf 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -5 +5 @@\n-x\n+y\n' > "$TMP/h9_b"
 ck "H9 diff に出てこない b.txt はファイル全体・a.txt は 2〜2" "a.txt	2	2|b.txt	1	999999999" "$(lib "$CR" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" | paste -sd'|' -)"
 ck "H9 差分のレビューで両方に出て重ならない a.txt は塊なし" "b.txt	1	999999999" "$(lib "$CR" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" "$TMP/h9_b" | paste -sd'|' -)"
+# H10（F11）: 空白を含むパスでも、3 列の塊が 1 行だけ出て、台帳が作れる
+printf 's1\ns2\ns3\n' > "$R/sp ace.md"; git -C "$R" add -A; git -C "$R" commit -qm "sp base"
+sed -i '3s/.*/S3/' "$R/sp ace.md"; git -C "$R" commit -qam "sp change"
+inR lib "$CR" delta_hunks develop "" > "$TMP/h_sp" 2>/dev/null
+ck "H10 空白を含むパス: 塊は 3 列で、sp ace.md の行は 1〜3（新しいファイル）の 1 行だけ" "sp ace.md	1	3" "$(grep '^sp ace.md' "$TMP/h_sp")"
+printf 'FINDING: F1 SEV=Low STATUS=open FILE=backend/x.py LINE=1 SECURITY=no STOP=- | s\n' > "$TMP/h10.md"
+printf 'sp ace.md\t\t3\t3\n' > "$TMP/h10_hunks"
+ck "H10 4 列の塊の行（パスにタブ）があっても台帳の作成が落ちない" 0 "$(rc inR lib "$CR" ledger_update full "" "$TMP/h10.md" "$TMP/h10_hunks")"
 
 # ---------------- L 行で決める範囲 ----------------
 printf 'backend/x.py\t10\t10\nscripts/claude/a.sh\t10\t10\ndocs/up.md\t5\t5\n.claude/settings.json\t1\t1\n' > "$TMP/hunks"
@@ -285,6 +293,11 @@ ck "FG-H8 見出しを最初の @@ までに限る判定を外すと H8 が不�
   "$(inR lib "$(broken '        elif head and line.startswith("+++ "):' '        elif line.startswith("+++ "):')" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'old.txt\t8\t8')" && echo yes || echo no)"
 ck "FG-H9 読めなかったファイルをファイル全体にする処理を外すと H9 が不合格" no \
   "$(lib "$(broken '        a[p] = b[p] = WHOLE' '        pass')" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" | grep -q '^b.txt' && echo yes || echo no)"
+BH10=$(broken '[len("+++ b/"):].rstrip("\t")' '[len("+++ b/"):]')
+ck "FG-H10 行末のタブを取り除く処理を外すと H10 が不合格（3 列の 1 行にならない）" no \
+  "$([ "$(inR lib "$BH10" delta_hunks develop "" 2>/dev/null | grep '^sp ace.md')" = "$(printf 'sp ace.md\t1\t3')" ] && echo yes || echo no)"
+ck "FG-H10b 列を後ろから読む処理を外すと H10 が不合格（台帳の作成が落ちる）" 1 \
+  "$(rc inR lib "$(broken 'p, s, e = l.rsplit("\t", 2)' 'p, s, e = l.split("\t")')" ledger_update full "" "$TMP/h10.md" "$TMP/h10_hunks")"
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"

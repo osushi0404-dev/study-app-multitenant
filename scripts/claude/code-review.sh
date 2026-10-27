@@ -548,7 +548,8 @@ def hunks(path):
         elif head and line.startswith("+++ "):
             # 見出しとして読むのは diff --git の後、最初の @@ までだけ（追加した行の中身「++ …」と取り違えない）
             if line.startswith("+++ b/"):
-                cur = line[len("+++ b/"):]; out.setdefault(cur, [])
+                # 空白を含むパスでは、git が行末にタブを付ける（I205 F11）
+                cur = line[len("+++ b/"):].rstrip("\t"); out.setdefault(cur, [])
         elif cur is not None and line.startswith("@@ "):
             head = False
             m = HUNK.match(line)
@@ -674,7 +675,7 @@ elif mode == "update":
     shown = set(k for k, e in led.items() if blocking(e))   # 差分のレビューの入力に見せた（止める）指摘
     hunks = {}
     for l in read_lines(hunk_file):
-        p, s, e = l.split("\t")
+        p, s, e = l.rsplit("\t", 2)   # 後ろの 2 列が行番号（パスにタブが入っても落ちない・I205 F11）
         hunks.setdefault(p.casefold(), []).append((int(s), int(e)))
     next_id = max([int(k[1:]) for k in led] or [0]) + 1
     def scope_of(path, line, stop):
