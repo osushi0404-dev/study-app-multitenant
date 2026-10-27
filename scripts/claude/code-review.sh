@@ -461,7 +461,7 @@ inject_gate_result() {
 }
 
 # ---- I197 §4.8: 基本レビューの台帳（やり直しは差分と台帳だけを見て、合否は台帳から決定論で出す） ----
-# 台帳の行（スクリプトが書く）: `LEDGER: F<n> SEV=… STATUS=<open|resolved> SCOPE=<delta|outside> KIND=<app|harness|guard> STOP=<…> REPRO=<yes|no> SECURITY=<yes|no> | 要約`
+# 台帳の行（スクリプトが書く）: `LEDGER: F<n> SEV=… STATUS=<open|resolved> SCOPE=<delta|outside> KIND=<app|harness|guard> STOP=<…> REPRO=<yes|no> RISK=<up|-> SECURITY=<yes|no> FILE=<パス|-> | 要約`
 # レビュー役の行（code-reviewer が書く・I205）:
 #   `FINDING: F<n> SEV=… STATUS=… FILE=<パス|-> LINE=<n|n-m|-> SECURITY=… STOP=<flow|leak|github|ac:<番号>|-> | 要約 | 再現: …`
 # SCOPE（行で決める）と KIND（FILE のパスで決める）はレビュー役に書かせず、スクリプトが決める。止めるかは blocking()（I205: 変更の種類ごと）。
@@ -488,12 +488,14 @@ ledger_records() {   # $1=I###
   done < <(review_records "$1" code_review)
   return 0
 }
+# 台帳のある最新のコードレビューの記録（無ければ空）。review_mode と --route（I208）が使う
+latest_ledger_record() { ledger_records "$1" | tail -1; }
 
 # 全体か差分か: "full<TAB>1<TAB><TAB>" か "delta<TAB><n><TAB><起点の SHA><TAB><前の記録>"。
 # 差分にするのは、台帳のある最新の記録の REVIEWED_COMMIT が今の HEAD の祖先のときだけ（rebase などで祖先でなければ全体）
 review_mode() {   # $1=I###
   local last n sha
-  last=$(ledger_records "$1" | tail -1)
+  last=$(latest_ledger_record "$1")
   if [ -n "$last" ]; then
     n=$(grep -oE '^LEDGER_ROUND:[[:space:]]*[0-9]+[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9]+' || true)
     sha=$(record_reviewed_commit "$last")
@@ -600,8 +602,9 @@ _LEDGER_PY='
 import os, re, sys
 # I202 F5: STOP= の後ろに任意の目印 RISK=up（計画の見立てを超えた高リスクの変更。止めるかどうかとは別で、敵対的レビューを必須にする）
 FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) LINE=(\S+) SECURITY=(yes|no) STOP=(\S+)(?: RISK=(up))?(?: \| (.*))?")
-# 前の形（I197・KIND などの欄なし／I205・RISK の欄なし）の行も読む。足りない欄は止める側の既定値（app・STOP=-・REPRO=yes）。RISK は -
-LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside)(?: KIND=(app|harness|guard) STOP=(\S+) REPRO=(yes|no)(?: RISK=(up|-))?)? SECURITY=(yes|no)(?: \| (.*))?")
+# 前の形（I197・KIND などの欄なし／I205・RISK の欄なし／I202・FILE の欄なし）の行も読む。足りない欄は止める側の既定値（app・STOP=-・REPRO=yes）。
+# RISK・FILE は -（I208: FILE はその指摘のファイル。一覧の行に出す）
+LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside)(?: KIND=(app|harness|guard) STOP=(\S+) REPRO=(yes|no)(?: RISK=(up|-))?)? SECURITY=(yes|no)(?: FILE=(\S+))?(?: \| (.*))?")
 REPRO_MARK = re.compile(r"(?:^|\s*\|)\s*再現:")   # 要約の後ろの「| 再現: …」の印（最後のものを使う）
 NO_REPRO = {"なし", "無し", "-", "none", "n/a"}   # 「再現: なし」などは再現なし（I205-F5）
 # 「なし（理由）」「なし。」のように、先頭が「なし」などで直後が句読点・括弧・コロンでも再現なし（I206 F7）。
@@ -671,13 +674,13 @@ def read_ledger(path):
         for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
             m = LEDG.fullmatch(line.rstrip())
             if m:
-                fid, sev, st, scope, kind, stop, repro, risk, sec, title = m.groups()
-                led[fid] = [sev, st, scope, kind or "app", stop or "-", repro or "yes", sec, title or "", risk or "-"]
+                fid, sev, st, scope, kind, stop, repro, risk, sec, file, title = m.groups()
+                led[fid] = [sev, st, scope, kind or "app", stop or "-", repro or "yes", sec, title or "", risk or "-", file or "-"]
     return led
 
 def ledger_line(fid, e):
-    sev, st, scope, kind, stop, repro, sec, title, risk = e
-    return f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} KIND={kind} STOP={stop} REPRO={repro} RISK={risk} SECURITY={sec}" + (f" | {title}" if title else "")
+    sev, st, scope, kind, stop, repro, sec, title, risk, file = e
+    return f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} KIND={kind} STOP={stop} REPRO={repro} RISK={risk} SECURITY={sec} FILE={file}" + (f" | {title}" if title else "")
 
 def blocking(e):
     sev, st, scope, kind, stop, repro, sec = e[:7]
@@ -699,6 +702,22 @@ def blocking(e):
 def is_rest(e):
     # 台帳の残り: open で止めない指摘（差分のレビューの入力に見せ、直ったら resolved と書いてよい・I202）
     return e[1] == "open" and not blocking(e)
+
+def route_reasons(e):
+    # I208: open の指摘を後続イシューにする理由（欄の値だけで決める。要約は見ない）。空なら軽い指摘の一覧
+    sev, kind, repro, sec = e[0], e[3], e[5], e[6]
+    r = []
+    if blocking(e):
+        r.append("止める指摘")
+    if RANK[sev] >= 1 and repro == "yes":
+        r.append("再現のある Medium 以上")
+    if sec == "yes":
+        r.append("SECURITY=yes")
+    if kind == "app":
+        r.append("アプリ本体")
+    if kind == "guard" and RANK[sev] >= 1:
+        r.append("guard の Medium 以上")   # GitHub から復旧できない例外: blocking() と同じく再現を問わない
+    return r
 
 mode = sys.argv[1]
 if mode == "parse":
@@ -746,30 +765,33 @@ elif mode == "update":
             if a <= e + HUNK_MARGIN and b >= s - HUNK_MARGIN:
                 return "delta"
         return "outside"
-    def merged(o, sev, st, stop, repro, sec, title, risk):
+    def merged(o, sev, st, stop, repro, sec, title, risk, file):
         # 既にある行への書き直し: SCOPE・KIND は前のまま（今回の範囲で決め直すと、触っていない行の未解決の指摘が消える）。
-        # 止める側の値は残す（重大度は下げない・SECURITY・REPRO は yes が残る・一覧に当たる STOP は残る・RISK は up が残る）
+        # 止める側の値は残す（重大度は下げない・SECURITY・REPRO は yes が残る・一覧に当たる STOP は残る・RISK は up が残る）。
+        # FILE は前のまま（I208。前の形の行の - だけ今回の値で埋める）
         return [sev if RANK[sev] > RANK[o[0]] else o[0], st, o[2], o[3],
                 o[4] if STOP_RE.fullmatch(o[4]) else stop, "yes" if "yes" in (repro, o[5]) else "no",
-                "yes" if "yes" in (sec, o[6]) else "no", title or o[7], "up" if "up" in (risk, o[8]) else "-"]
+                "yes" if "yes" in (sec, o[6]) else "no", title or o[7], "up" if "up" in (risk, o[8]) else "-",
+                o[9] if o[9] != "-" else file]
     for fid, sev, st, path, line, sec, stop, risk, rest in findings:
         stop = stop if STOP_RE.fullmatch(stop) else "-"
         risk = risk or "-"
         title, repro = split_repro(rest or "")
         # この行だけで決めた台帳の行（新しい指摘のときと、台帳の残りの行が止める中身かの判定に使う。既にある指摘の書き直しでは使わない）
-        kind = branch_kind(branch_files) if path == "-" else kind_of(norm_path(path))
-        fresh = [sev, st, scope_of(path, line, stop), kind, stop, repro, sec, title, risk]
+        file = "-" if path == "-" else norm_path(path)   # I208: 一覧の行に出すファイル（kind_of と同じく :行番号 を除いて揃える）
+        kind = branch_kind(branch_files) if path == "-" else kind_of(file)
+        fresh = [sev, st, scope_of(path, line, stop), kind, stop, repro, sec, title, risk, file]
         if fid in rest_ids:
             # I207: 台帳の残りの番号の行は、同じ回の何行目でも、その行の中身だけで決める（同じ回の前の行に左右されない・F2）
             if st == "resolved":
                 # 直った: 前の行を resolved にする（振り直し先には付けない）
-                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk)
+                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file)
                 continue
             if not blocking(fresh):
                 # 止めない中身（「直していない」の書き直しなど）: 新しい行を作らず（I206 F8）、STATUS・要約は前のまま、
                 # 止める側の値だけ前の行へ合流する（F1）
                 o = led[fid]
-                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk)
+                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk, file)
                 continue
             # 止める中身の open は、下で新しい指摘として振り直す（前の SCOPE を引き継いで止まらなくなるのを防ぐ・I197-F1 の守り）
         keep = fid in seen or fid in shown
@@ -782,7 +804,7 @@ elif mode == "update":
             next_id += 1
         seen.add(fid)
         if fid in led:
-            led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk)   # 既にある指摘の書き直し
+            led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file)   # 既にある指摘の書き直し
         else:
             led[fid] = fresh
     for fid in sorted(led, key=lambda x: int(x[1:])):
@@ -799,6 +821,32 @@ elif mode == "open":
     for fid in sorted(led, key=lambda x: int(x[1:])):
         if is_rest(led[fid]):
             print(ledger_line(fid, led[fid]))
+elif mode == "route":
+    # I208: route <issue|backlog> <台帳のファイル>: open の指摘（止める指摘も含む）を欄の値だけで振り分け、retro がそのまま使う行を出す。
+    # issue は後続イシューにする行（理由つき）、backlog は軽い指摘の一覧（docs/reviews/backlog/）に貼る行
+    side = sys.argv[2]
+    if side not in ("issue", "backlog"):
+        print("route の種類は issue か backlog: " + side, file=sys.stderr)
+        sys.exit(2)
+    led = read_ledger(sys.argv[3])
+    for fid in sorted(led, key=lambda x: int(x[1:])):
+        e = led[fid]
+        if e[1] != "open":
+            continue
+        r = route_reasons(e)
+        head = f"- {fid} SEV={e[0]} REPRO={e[5]} KIND={e[3]}"
+        if side == "issue" and r:
+            print(f"{head} SECURITY={e[6]} FILE={e[9]} | {e[7]} | 後続イシューにする理由: " + "・".join(r))
+        elif side == "backlog" and not r:
+            why = []
+            if e[0] == "Low":
+                why.append("Low")
+            if e[5] == "no":
+                why.append("再現なし")
+            if not why:   # route_reasons() の条件を変えて、一覧に回す理由の無い行ができたら止める（黙って一覧に落とさない）
+                print("一覧に回す理由の無い行: " + fid, file=sys.stderr)
+                sys.exit(2)
+            print(f"{head} FILE={e[9]} | {e[7]} | 一覧に回した理由: " + "／".join(why))
 elif mode == "risk":
     # risk <台帳のファイル…>: どれかの台帳の行に RISK=up があれば YES（計画の見立てを超えた高リスク・I202 F5）。
     # 数えるのは KIND=app の行だけ（ハーネスだけの変更では付けない決まりをスクリプトで強制・guard はパスの判定で YES になる・I206 F6）
@@ -820,6 +868,8 @@ ledger_verdict() { python3 -I -c "$_LEDGER_PY" verdict "$1"; }
 ledger_blocking() { python3 -I -c "$_LEDGER_PY" blocking "$1"; }
 # 台帳の残り（open で止めない指摘）の LEDGER 行だけを出す（I202）
 ledger_open_rest() { python3 -I -c "$_LEDGER_PY" open "$1"; }
+# open の指摘の振り分け（I208）: <issue|backlog> <台帳のファイル>。種類の誤りは 2
+ledger_route() { python3 -I -c "$_LEDGER_PY" route "$@"; }
 # 台帳（ファイルをいくつでも）に計画の見立てを超えた高リスクの目印（RISK=up）があれば YES（I202 F5）
 ledger_risk() { python3 -I -c "$_LEDGER_PY" risk "$@"; }
 
@@ -848,6 +898,17 @@ set_risk_line() {   # $1=ファイル $2=YES|NO
 
 # テストから関数のみを source するためのガード（本体は実行しない）
 if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
+
+# I208: 台帳の残りの振り分け（retro 4-0 が使う）: --route <issue|backlog> <I###>。レビューは動かさない。
+# 台帳のある最新のコードレビューの記録（latest_ledger_record）を読み、記録のパスは標準エラーに出す。記録が無ければ 2
+if [ "${1:-}" = "--route" ]; then
+  [ $# -eq 3 ] || { echo "Usage: $0 --route <issue|backlog> I###" >&2; exit 2; }
+  cd "$(git rev-parse --show-toplevel)" || exit 2
+  rec=$(latest_ledger_record "$3")
+  [ -n "$rec" ] || { echo "台帳のあるコードレビューの記録がありません: $3" >&2; exit 2; }
+  echo "記録: $rec" >&2
+  ledger_route "$2" "$rec"; exit $?
+fi
 
 # I197: 別プロセスのレビュー役を「時間上限つき・承認なし・途中の出力を残す」で起動し、記録を読む関数
 # （関数だけを読み込む使い方〔gate-check・テストの写し〕には要らないので、本体でだけ読む）

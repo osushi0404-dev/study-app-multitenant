@@ -12,8 +12,8 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（I207 の節の D1〜D3 を書き換え・「I208」の節 Q1〜Q9 を足す）。既存の R・L・W・A・G・D・N・P も | exit 0・`fail=0`（ベースライン pass=128） | 実装前のため未実行 |
-| TC-02 | 影響を受けうるテスト: `test_i205_stop_criteria.sh`（D4 を `--route` に変える）・`test_i197_review_ledger.sh`（台帳の更新・前の形の行）・`test_i180_retro_triage.sh`・`test_i114_retro_plain_output.sh`・`test_i193_official_flow.sh`（retro の文言） | どれも exit 0 | 実装前のため未実行 |
+| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（I207 の節の D1〜D3 を書き換え・「I208」の節 Q1〜Q9 を足す）。既存の R・L・W・A・G・D・N・P も | exit 0・`fail=0`（ベースライン pass=128） | implement で実行（2026-10-27）: 実装前（Red）pass=123 fail=25（R1・N2・N3・P1・P6〔FILE の欄〕・D1・D3・Q1〜Q9 と「FG の写しがすべて作れた」）→ 実装後 pass=148 fail=0 |
+| TC-02 | 影響を受けうるテスト: `test_i205_stop_criteria.sh`（D4 を `--route` に変える）・`test_i197_review_ledger.sh`（台帳の更新・前の形の行）・`test_i180_retro_triage.sh`・`test_i114_retro_plain_output.sh`・`test_i193_official_flow.sh`（retro の文言） | どれも exit 0 | implement で実行（2026-10-27）: pass=91・pass=64・13/13・14/14・pass=160（fail=0） |
 | TC-03 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
 
 ### TC-01 の項目（I208 の節）
@@ -36,7 +36,8 @@
 既存の項目の照合の更新（期待の意味は変えない）:
 - R1: `RISK=up SECURITY=no FILE=backend/x.py \| 目印$`
 - P1: `… RISK=up SECURITY=yes FILE=backend/x.py \| 残り$`（前の `p_app` は前の形〔FILE なし＝`-`〕なので、止めない中身の合流で今回の値に埋まる）
-- `f2_same`: F2 の行が、前の台帳（`l6_prev`・前の形）の F2 の行の ` | ` の前に、書き直しの FINDING 行の FILE（` FILE=scripts/claude/a.sh`）が入った形と 1 字も違わない（要約・STATUS は前のまま）
+- `f2_same [<FILE>]`: F2 の行が、前の台帳（`l6_prev`・前の形）の F2 の行の ` | ` の前に ` FILE=<FILE>`（既定 `-`）が入った形と 1 字も違わない（要約・STATUS は前のまま）。N2（書き直しが `FILE=-`）・N3（F2 は書き直さない）は `-`、P6（止めない中身の `FILE=scripts/claude/a.sh` が前の `-` を埋める）は `scripts/claude/a.sh`
+- FG-P1〜P3 の置き換え前の文字列（`merged(…)` の呼び出し）に、新しい引数 `file` を足す（期待値は変えない）
 - `test_i205_stop_criteria.sh` の D4・FG-D4: `grep -h '^LEDGER: .*STATUS=open'` → `bash scripts/claude/code-review.sh --route`
 
 ## 決定論ゲート（自動実走）

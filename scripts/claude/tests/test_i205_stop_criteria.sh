@@ -264,7 +264,7 @@ d1() { grep -qF 'LINE=' "$1" && grep -qF 'STOP=' "$1" && grep -qF '| 再現:' "$
        && grep -qF 'github' "$1" && grep -qF 'ac:' "$1" && ! grep -qF '## コード品質・セキュリティ指摘' "$1"; }
 d2() { grep -qF '最後の安全網' "$1" && grep -qF '止める指摘（スクリプトが決めた' "$1" && grep -qF 'イシューに関係する Medium' "$1"; }
 d3() { grep -qF '止める指摘（スクリプトが決めた' "$1" && ! grep -qF '止める指摘（Blocker・High）' "$1"; }
-d4() { grep -qF "grep -h '^LEDGER: .*STATUS=open'" "$1" && grep -qF '最優先' "$1"; }
+d4() { grep -qF 'bash scripts/claude/code-review.sh --route' "$1" && grep -qF '最優先' "$1"; }   # I208: 拾う・振り分けるはスクリプト
 d5() { grep -qF '関所の穴' "$1" && grep -qF '最後の安全網' "$1" && ! grep -qF '止めるのは High 以上だけ' "$1"; }
 ck "D1 code-reviewer に新しい FINDING 行の欄と止める条件があり、指摘の表が無い" 0 "$(rc d1 "$CRV")"
 ck "D2 review-gate に最後の安全網・止める指摘の節・アプリ本体の Medium の扱い" 0 "$(rc d2 "$RG")"
@@ -276,7 +276,7 @@ without() { local o="$TMP/w_$RANDOM$RANDOM"; grep -vF -- "$2" "$1" > "$o"; echo 
 ck "FG-D1 code-reviewer から LINE= を消すと不合格" 1 "$(rc d1 "$(without "$CRV" 'LINE=')")"
 ck "FG-D2 review-gate から最後の安全網を消すと不合格" 1 "$(rc d2 "$(without "$RG" '最後の安全網')")"
 ck "FG-D3 fix-loop から止める指摘の節を消すと不合格" 1 "$(rc d3 "$(without "$FL" '止める指摘（スクリプトが決めた')")"
-ck "FG-D4 retro からコマンドを消すと不合格" 1 "$(rc d4 "$(without "$RT" "grep -h '^LEDGER: .*STATUS=open'")")"
+ck "FG-D4 retro からコマンドを消すと不合格" 1 "$(rc d4 "$(without "$RT" 'bash scripts/claude/code-review.sh --route')")"
 ck "FG-D5 review-rules から関所の穴を消すと不合格" 1 "$(rc d5 "$(without "$RR" '関所の穴')")"
 
 # ---------------- FG（判定の要） ----------------
