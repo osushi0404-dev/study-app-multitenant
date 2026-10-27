@@ -456,9 +456,11 @@ inject_gate_result() {
 }
 
 # ---- I197 §4.8: 基本レビューの台帳（やり直しは差分と台帳だけを見て、合否は台帳から決定論で出す） ----
-# 台帳の行（スクリプトが書く）: `LEDGER: F<n> SEV=<Blocker|High|Medium|Low> STATUS=<open|resolved> SCOPE=<delta|outside> SECURITY=<yes|no> | 要約`
-# レビュー役の行（code-reviewer が書く）: `FINDING: F<n> SEV=… STATUS=… FILE=<パス|-> SECURITY=… | 要約`
-# SCOPE はレビュー役に書かせず、スクリプトが FILE と差分のレビューの範囲から決める。台帳は最新の記録に累積で全部書く
+# 台帳の行（スクリプトが書く）: `LEDGER: F<n> SEV=… STATUS=<open|resolved> SCOPE=<delta|outside> KIND=<app|harness|guard> STOP=<…> REPRO=<yes|no> SECURITY=<yes|no> | 要約`
+# レビュー役の行（code-reviewer が書く・I205）:
+#   `FINDING: F<n> SEV=… STATUS=… FILE=<パス|-> LINE=<n|n-m|-> SECURITY=… STOP=<flow|leak|github|ac:<番号>|-> | 要約 | 再現: …`
+# SCOPE（行で決める）と KIND（FILE のパスで決める）はレビュー役に書かせず、スクリプトが決める。止めるかは blocking()（I205: 変更の種類ごと）。
+# 台帳は最新の記録に累積で全部書く
 
 # LEDGER_ROUND: のある（＝レビュー役が正常に終わった）コードレビュー記録を、ファイル名の時刻順に出す
 ledger_records() {   # $1=I###
@@ -488,21 +490,117 @@ review_mode() {   # $1=I###
 # 差分のレビューの範囲: ブランチ自身が変えたファイル（比べる相手との merge-base から HEAD）のうち、起点から HEAD までに
 # 変わったもの（記録の場所を除く）。develop の取り込みで入った develop 側だけの変更は含めない
 delta_files() {   # $1=比べる相手 $2=起点の SHA
+  local own
+  own=$(branch_own_files "$1") || return 2
+  LC_ALL=C comm -12 <(printf '%s\n' "$own" | LC_ALL=C sort) \
+    <(git -c core.quotePath=false diff --name-only --no-renames "$2" HEAD | LC_ALL=C sort) | grep -v '^$' || true
+  return 0
+}
+
+# I205: ブランチ自身が変えたファイル（比べる相手との merge-base から HEAD・記録の場所を除く）。delta_files の土台
+branch_own_files() {   # $1=比べる相手
   local mb f
   mb=$(git merge-base "$1" HEAD) || return 2
   while IFS= read -r f; do
     [ -n "$f" ] && ! is_record_path "$f" && printf '%s\n' "$f"
-  done < <(LC_ALL=C comm -12 \
-             <(git -c core.quotePath=false diff --name-only --no-renames "$mb" HEAD | LC_ALL=C sort) \
-             <(git -c core.quotePath=false diff --name-only --no-renames "$2" HEAD | LC_ALL=C sort))
+  done < <(git -c core.quotePath=false diff --name-only --no-renames "$mb" HEAD)
   return 0
 }
 
+# I205: 差分の中かどうかを行で決めるための、行の塊「<パス>\t<始め>\t<終わり>」（HEAD の行番号）。
+# 全体のレビュー（起点が空）: ブランチが変えた行（merge-base から HEAD）。
+# 差分のレビュー: 起点から HEAD までに変わった行のうち、ブランチが変えた行（develop の取り込みで入った行は入れない）。
+# 消しただけの塊は消した位置の 1 行、塊の無い変更（バイナリなど）はファイル全体
+delta_hunks() {   # $1=比べる相手 $2=起点の SHA（空なら全体のレビュー）
+  local mb files a b
+  mb=$(git merge-base "$1" HEAD) || return 2
+  if [ -n "$2" ]; then files=$(delta_files "$1" "$2") || return 2; else files=$(branch_own_files "$1") || return 2; fi
+  [ -n "$files" ] || return 0
+  a=$(mktemp); b=$(mktemp)
+  printf '%s\n' "$files" | xargs -d '\n' git -c core.quotePath=false diff -U0 --no-renames --no-color "$mb" HEAD -- > "$a" || { rm -f "$a" "$b"; return 2; }
+  if [ -n "$2" ]; then
+    # 起点からの塊と、ブランチ自身の塊（merge-base から）の重なりだけ
+    printf '%s\n' "$files" | xargs -d '\n' git -c core.quotePath=false diff -U0 --no-renames --no-color "$2" HEAD -- > "$b" || { rm -f "$a" "$b"; return 2; }
+    python3 -I -c "$_HUNKS_PY" "$a" "$b"
+  else
+    python3 -I -c "$_HUNKS_PY" "$a"
+  fi
+  local rc=$?; rm -f "$a" "$b"; return "$rc"
+}
+
+_HUNKS_PY='
+import re, sys
+HUNK = re.compile(r"@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@")
+def hunks(path):
+    out, cur = {}, None
+    for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
+        if line.startswith("diff --git "):
+            cur = line[len("diff --git "):].rsplit(" b/", 1)[-1]
+            out.setdefault(cur, [])
+        elif line.startswith("+++ "):
+            if line == "+++ /dev/null":       # 消したファイルは HEAD に無い
+                out.pop(cur, None); cur = None
+            elif line.startswith("+++ b/"):
+                cur = line[len("+++ b/"):]; out.setdefault(cur, [])
+        elif cur is not None and line.startswith("@@ "):
+            m = HUNK.match(line)
+            if m:
+                c, d = int(m.group(1)), int(m.group(2) if m.group(2) is not None else 1)
+                out[cur].append((max(c, 1), max(c, 1)) if d == 0 else (c, c + d - 1))
+    # 塊の無い変更（バイナリ・モード）はファイル全体
+    return {p: (r or [(1, 999999999)]) for p, r in out.items()}
+a = hunks(sys.argv[1])
+if len(sys.argv) < 3:   # 全体のレビュー: そのまま出す
+    for p in sorted(a):
+        for s, e in a[p]:
+            print(f"{p}\t{s}\t{e}")
+    sys.exit(0)
+b = hunks(sys.argv[2])
+for p in sorted(set(a) & set(b)):
+    for s1, e1 in a[p]:
+        for s2, e2 in b[p]:
+            s, e = max(s1, s2), min(e1, e2)
+            if s <= e:
+                print(f"{p}\t{s}\t{e}")
+'
+
 _LEDGER_PY='
 import os, re, sys
-FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) SECURITY=(yes|no)(?: \| (.*))?")
-LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside) SECURITY=(yes|no)(?: \| (.*))?")
+FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) LINE=(\S+) SECURITY=(yes|no) STOP=(\S+)(?: \| (.*))?")
+# 前の形（I197・KIND などの欄なし）の行も読む。足りない欄は止める側の既定値（app・STOP=-・REPRO=yes）
+LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside)(?: KIND=(app|harness|guard) STOP=(\S+) REPRO=(yes|no))? SECURITY=(yes|no)(?: \| (.*))?")
 RANK = {"Low": 0, "Medium": 1, "High": 2, "Blocker": 3}
+# ハーネスの止める条件の一覧（I205）: ① flow 流れが動かなくなる ② leak 秘密情報・個人情報が外に出る
+# ③ github develop・main を直接壊す／GitHub から戻せない設定を壊す ④ ac:<番号> 受け入れ条件の未達
+STOP_RE = re.compile(r"flow|leak|github|ac:[0-9]+")
+LINE_RE = re.compile(r"([0-9]+)(?:-([0-9]+))?")
+REPRO_RE = re.compile(r"(?:^|\s*\|)\s*再現:(.*)$")   # 要約の後ろの「| 再現: …」（中身があれば再現あり）
+HUNK_MARGIN = 3   # 塊の前後の行数（git の既定の前後の行数と同じ）
+# 変更の種類（I205）。guard は path_risk_trigger() と同じ集合（テスト R-K2 で一致を固定）。どれでもないものは app（厳しい側）
+GUARD_PREFIX = (".github/",)
+GUARD_FILES = {".pre-commit-config.yaml", ".secrets.baseline", "scripts/claude/hooks/pretooluse_guard.py",
+               ".claude/settings.json", ".claude/settings.local.json"}
+HARNESS_PREFIX = (".claude/", "scripts/claude/", "docs/", "rules/")
+HARNESS_FILES = {"CLAUDE.md", ".mcp.json", ".worktreeinclude"}
+
+def norm_path(path):
+    # 表記の形を列挙せず、:行番号 を除いてリポジトリのルート（cwd）からの相対パスに揃える
+    return os.path.relpath(os.path.normpath(os.path.abspath(path.split(":", 1)[0])))
+
+def kind_of(path):
+    if path in GUARD_FILES or path.startswith(GUARD_PREFIX):
+        return "guard"
+    if path in HARNESS_FILES or path.startswith(HARNESS_PREFIX):
+        return "harness"
+    return "app"
+
+def branch_kind(paths):
+    # FILE=- の指摘の種類: ブランチが変えたファイルに guard があれば guard、無くて app があれば app、どちらも無ければ harness
+    ks = set(kind_of(p) for p in paths)
+    return "guard" if "guard" in ks else "app" if ("app" in ks or not paths) else "harness"
+
+def read_lines(path):
+    return [l for l in open(path, encoding="utf-8", errors="replace").read().split("\n") if l] if path else []
 
 def read_findings(path):
     out = []
@@ -522,67 +620,109 @@ def read_ledger(path):
         for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
             m = LEDG.fullmatch(line.rstrip())
             if m:
-                fid, sev, st, scope, sec, title = m.groups()
-                led[fid] = [sev, st, scope, sec, title or ""]
+                fid, sev, st, scope, kind, stop, repro, sec, title = m.groups()
+                led[fid] = [sev, st, scope, kind or "app", stop or "-", repro or "yes", sec, title or ""]
     return led
 
+def ledger_line(fid, e):
+    sev, st, scope, kind, stop, repro, sec, title = e
+    return f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} KIND={kind} STOP={stop} REPRO={repro} SECURITY={sec}" + (f" | {title}" if title else "")
+
 def blocking(e):
-    sev, st, scope, sec = e[0], e[1], e[2], e[3]
-    return st == "open" and RANK[sev] >= 2 and (scope == "delta" or (sev == "Blocker" and sec == "yes"))
+    sev, st, scope, kind, stop, repro, sec = e[:7]
+    if st != "open":
+        return False
+    sec_blocker = sev == "Blocker" and sec == "yes"
+    if kind == "guard":           # GitHub から復旧できない例外: I197 のまま（再現は問わない）
+        return RANK[sev] >= 2 and (scope == "delta" or sec_blocker)
+    if repro != "yes":            # 再現の無い指摘は止めない（アプリ本体・ハーネス共通）
+        return False
+    if sec_blocker:               # 差分の外でもセキュリティの Blocker は止める（共通）
+        return True
+    if scope != "delta":
+        return False
+    if kind == "app":             # アプリ本体: Blocker・High・Medium。受け入れ条件の未達（ac:<番号>）は重大度に関係なく止める
+        return RANK[sev] >= 1 or stop.startswith("ac:")
+    return bool(STOP_RE.fullmatch(stop))   # それ以外のハーネス: 止める条件の一覧に当たるものだけ（重大度は見ない）
 
 mode = sys.argv[1]
 if mode == "parse":
     for g in read_findings(sys.argv[2]):
         print("\t".join(x or "" for x in g))
+elif mode == "kinds":
+    # kinds <パスの一覧>: 「種類\tパス」を出す（レビュー役の入力の「変更の種類」の節）
+    for p in read_lines(sys.argv[2]):
+        print(f"{kind_of(p)}\t{p}")
 elif mode == "update":
-    # update <full|delta> <前の記録|""> <今回のレビュー> <差分の範囲のファイル一覧>
-    kind, prev, cur, scope_file = sys.argv[2:6]
-    led = read_ledger(prev) if kind == "delta" else {}
+    # update <full|delta> <前の記録|""> <今回のレビュー> <行の塊の一覧（delta_hunks）> [<ブランチが変えたファイルの一覧>]
+    review_kind, prev, cur, hunk_file = sys.argv[2:6]
+    branch_files = read_lines(sys.argv[6]) if len(sys.argv) > 6 else []
+    led = read_ledger(prev) if review_kind == "delta" else {}
     shown = set(k for k, e in led.items() if blocking(e))   # 差分のレビューの入力に見せた（止める）指摘
-    in_scope = set(l for l in open(scope_file, encoding="utf-8").read().split("\n") if l) if kind == "delta" else None
+    hunks = {}
+    for l in read_lines(hunk_file):
+        p, s, e = l.split("\t")
+        hunks.setdefault(p.casefold(), []).append((int(s), int(e)))
     next_id = max([int(k[1:]) for k in led] or [0]) + 1
-    def scope_of(path):
-        # 表記の形を列挙せず、:行番号 を除いてリポジトリのルート（cwd）からの相対パスに揃えて範囲と比べる。
-        # outside にするのは「揃えたパスがリポジトリの中の実在のファイルで、範囲に無い」ときだけ。それ以外は delta（止める側）
-        if in_scope is None or path == "-":
+    def scope_of(path, line, stop):
+        # delta（止める側）: 受け入れ条件の未達・FILE=-・行が読めない・リポジトリの外・実在しないファイル・塊と重なる行。
+        # outside にするのは「リポジトリの中の実在のファイルで、どの塊（前後 HUNK_MARGIN 行）とも重ならない行」だけ
+        if stop.startswith("ac:") or path == "-":
             return "delta"
-        norm = os.path.relpath(os.path.normpath(os.path.abspath(path.split(":", 1)[0])))
-        if norm in in_scope or norm.startswith("..") or not os.path.isfile(norm):
+        m = LINE_RE.fullmatch(line)
+        if not m:
             return "delta"
+        norm = norm_path(path)
+        if norm.startswith("..") or not os.path.isfile(norm):
+            return "delta"
+        a = int(m.group(1)); b = int(m.group(2) or a)
+        a, b = min(a, b), max(a, b)
+        # 大文字・小文字を区別しないファイルシステムでの表記違いも同じファイルとして比べる（I202 F16）
+        for s, e in hunks.get(norm.casefold(), []):
+            if a <= e + HUNK_MARGIN and b >= s - HUNK_MARGIN:
+                return "delta"
         return "outside"
-    for fid, sev, st, path, sec, title in read_findings(cur):
+    for fid, sev, st, path, line, sec, stop, rest in read_findings(cur):
+        rest = rest or ""
+        stop = stop if STOP_RE.fullmatch(stop) else "-"
+        m = REPRO_RE.search(rest)
+        repro = "yes" if m and m.group(1).strip() else "no"
+        title = (rest[:m.start()] if m else rest).strip()
         if fid in led and fid not in shown:
             # 入力に見せていない既存の番号（止めない指摘・直った指摘）を使った行は、新しい指摘として振り直す
             fid = f"F{next_id}"
             next_id += 1
         if fid in led:
-            old = led[fid]
-            # 既にある指摘: SCOPE は前のまま（今回の範囲で決め直すと、触っていないファイルの未解決の High が消える）。
-            # 重大度は下げない（下げて止めないようにする逃げ道を作らない）
-            led[fid] = [sev if RANK[sev] > RANK[old[0]] else old[0], st, old[2], "yes" if "yes" in (sec, old[3]) else "no", title or old[4]]
+            o = led[fid]
+            # 既にある指摘: SCOPE・KIND は前のまま（今回の範囲で決め直すと、触っていない行の未解決の指摘が消える）。
+            # 止める側の値は残す（重大度は下げない・SECURITY・REPRO は yes が残る・一覧に当たる STOP は残る）
+            led[fid] = [sev if RANK[sev] > RANK[o[0]] else o[0], st, o[2], o[3],
+                        o[4] if STOP_RE.fullmatch(o[4]) else stop, "yes" if "yes" in (repro, o[5]) else "no",
+                        "yes" if "yes" in (sec, o[6]) else "no", title or o[7]]
         else:
-            led[fid] = [sev, st, scope_of(path), sec, title or ""]
+            k = branch_kind(branch_files) if path == "-" else kind_of(norm_path(path))
+            led[fid] = [sev, st, scope_of(path, line, stop), k, stop, repro, sec, title]
             next_id = max(next_id, int(fid[1:]) + 1)
     for fid in sorted(led, key=lambda x: int(x[1:])):
-        sev, st, scope, sec, title = led[fid]
-        print(f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} SECURITY={sec}" + (f" | {title}" if title else ""))
+        print(ledger_line(fid, led[fid]))
 elif mode == "blocking":
-    # 止める指摘の LEDGER 行だけを出す（差分のレビューの入力に使う。合否と同じ blocking() で選ぶ）
+    # 止める指摘の LEDGER 行だけを出す（差分のレビューの入力・記録の「止める指摘」の節。合否と同じ blocking() で選ぶ）
     led = read_ledger(sys.argv[2])
     for fid in sorted(led, key=lambda x: int(x[1:])):
         if blocking(led[fid]):
-            sev, st, scope, sec, title = led[fid]
-            print(f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} SECURITY={sec}" + (f" | {title}" if title else ""))
+            print(ledger_line(fid, led[fid]))
 elif mode == "verdict":
-    led = read_ledger(sys.argv[2])
-    worst = max([RANK[e[0]] for e in led.values() if blocking(e)] or [-1])
-    print("BLOCKER" if worst == 3 else "HIGH" if worst == 2 else "OK")
+    stops = [e for e in read_ledger(sys.argv[2]).values() if blocking(e)]
+    print("BLOCKER" if any(e[0] == "Blocker" for e in stops) else "HIGH" if stops else "OK")
 '
-# FINDING 行を「id\tSEV\tSTATUS\tFILE\tSECURITY\t要約」で出す。形の崩れた FINDING 行があれば 2
+# FINDING 行を「id\tSEV\tSTATUS\tFILE\tLINE\tSECURITY\tSTOP\t要約（と再現）」で出す。形の崩れた FINDING 行があれば 2
 parse_findings() { python3 -I -c "$_LEDGER_PY" parse "$1"; }
-# 累積の台帳（LEDGER 行）を出す: <full|delta> <前の記録|""> <今回のレビュー> <差分の範囲のファイル一覧>。形の崩れた FINDING 行があれば 2
-ledger_update() { python3 -I -c "$_LEDGER_PY" update "$1" "$2" "$3" "$4"; }
-# 台帳の合否: 止める指摘（open の Blocker・High で SCOPE=delta、または outside の SECURITY=yes の Blocker）の最大
+# パスの一覧（ファイル）の各行を「種類\tパス」で出す（I205: app / harness / guard）
+ledger_kinds() { python3 -I -c "$_LEDGER_PY" kinds "$1"; }
+# 累積の台帳（LEDGER 行）を出す: <full|delta> <前の記録|""> <今回のレビュー> <行の塊の一覧> [<ブランチが変えたファイルの一覧>]。
+# 形の崩れた FINDING 行があれば 2
+ledger_update() { python3 -I -c "$_LEDGER_PY" update "$@"; }
+# 台帳の合否: 止める指摘（blocking()・変更の種類ごと）に Blocker があれば BLOCKER、ほかの止める指摘があれば HIGH、無ければ OK
 ledger_verdict() { python3 -I -c "$_LEDGER_PY" verdict "$1"; }
 # 止める指摘（合否と同じ規則）の LEDGER 行だけを出す
 ledger_blocking() { python3 -I -c "$_LEDGER_PY" blocking "$1"; }
@@ -656,6 +796,10 @@ else
   REVIEW_RANGE="origin/develop...HEAD"
   echo "全体のレビュー（台帳の 1 周目）"
 fi
+# I205: 差分の中かどうかを行で決める（全体のレビューでもブランチが変えた行だけ）。FILE=- の種類にブランチが変えたファイルを使う
+HUNKS_FILE=$(mktemp); BRANCH_OWN_FILE=$(mktemp)
+delta_hunks origin/develop "$SINCE" > "$HUNKS_FILE" || { echo "⛔ 差分の行の塊を取れません（起点 ${SINCE:-merge-base}）"; exit 1; }
+branch_own_files origin/develop > "$BRANCH_OWN_FILE" || { echo "⛔ ブランチが変えたファイルを取れません"; exit 1; }
 
 # git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）。差分のレビューは範囲のファイルの起点からの差分だけ
 if [ "$REVIEW_KIND" = "delta" ]; then
@@ -766,14 +910,17 @@ $([ -n "$PLAN_FILE" ] && cat "$PLAN_FILE" || echo "(計画書なし)")
 ### レビューの種類（I197 §4.8）
 $(if [ "$REVIEW_KIND" = "delta" ]; then
   printf '差分のレビュー（台帳の %s 周目）。見るのは下の「git diff」（起点 %s から HEAD までの、直した差分）と、次の「止める指摘（前の周まで）」が直ったかだけ。\n' "$LEDGER_N" "$SINCE"
-  printf '下の止める指摘のすべてについて、FINDING 行を同じ id で書き直す（STATUS=resolved か open）。新しい指摘は続きの番号で書く（差分の外で見つけたものも書いてよいが、止めるかどうかはスクリプトが FILE から決める）。\n'
+  printf '下の止める指摘のすべてについて、FINDING 行を同じ id で書き直す（STATUS=resolved か open）。新しい指摘は続きの番号で書く（差分の外で見つけたものも書いてよいが、止めるかどうかはスクリプトが FILE・LINE・STOP・再現の欄と変更の種類から決める）。\n'
   printf '\n台帳の最大の番号: F%s（新しい指摘はこの次から）\n' "$(grep -oE '^LEDGER: F[0-9]+' "$PREV_LEDGER_FILE" | grep -oE '[0-9]+' | sort -n | tail -1 || true)"
   printf '\n#### 止める指摘（前の周まで）\n'
   ledger_blocking "$PREV_LEDGER_FILE" || true
   printf '\n#### 差分のレビューの範囲のファイル\n'; cat "$SCOPE_FILE"
 else
-  printf '全体のレビュー（台帳の 1 周目）。ブランチ全体を見て、指摘ごとに FINDING 行を書く。\n'
+  printf '全体のレビュー（台帳の 1 周目）。ブランチ全体を見て、指摘ごとに FINDING 行を書く（止めるかどうかはスクリプトが FILE・LINE・STOP・再現の欄と変更の種類から決める。ブランチで触っていない行の指摘は止めない）。\n'
 fi)
+
+### 変更の種類（I205・スクリプトが決めた。種類ごとの止め方は code-reviewer の定義の「止める指摘の書き方」）
+$(if [ "$REVIEW_KIND" = "delta" ]; then ledger_kinds "$SCOPE_FILE"; else ledger_kinds "$BRANCH_OWN_FILE"; fi)
 
 ### 決定論ゲート実行結果（スクリプト実走済み・実 exit code／読解で上書きしないこと）
 ${GATE_EVIDENCE}
@@ -836,39 +983,37 @@ GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（計画レビュー=${RISK_
 
 # I197 §4.8: 台帳（累積）と合否。レビュー役が正常に終わり FINDING 行を読めたときだけ台帳の周に数える
 LEDGER_FILE=$(mktemp)
-if [ "$REVIEW_OK" = "1" ] && ledger_update "$REVIEW_KIND" "${PREV_LEDGER_FILE:-}" "$REVIEW_FILE" "$SCOPE_FILE" > "$LEDGER_FILE"; then
+if [ "$REVIEW_OK" = "1" ] && ledger_update "$REVIEW_KIND" "${PREV_LEDGER_FILE:-}" "$REVIEW_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" > "$LEDGER_FILE"; then
   LEDGER_VERDICT=$(ledger_verdict "$LEDGER_FILE")
-  # 累積の台帳と台帳の周を本文の後ろに足す（正常に終わった周だけ。失敗した周は台帳に入れない）
-  { printf '\n## 台帳（累積・スクリプトが書く）\n'; cat "$LEDGER_FILE"; printf 'LEDGER_ROUND: %s\n' "$LEDGER_N"; } >> "$REVIEW_FILE"
+  # 累積の台帳と台帳の周を本文の後ろに足す（正常に終わった周だけ。失敗した周は台帳に入れない）。
+  # I205: 止める指摘（スクリプトが決めた）も書く。fix-loop が直すのはこの節の指摘だけ
+  { printf '\n## 台帳（累積・スクリプトが書く）\n'; cat "$LEDGER_FILE"; printf 'LEDGER_ROUND: %s\n' "$LEDGER_N"
+    printf '\n## 止める指摘（スクリプトが決めた・fix-loop が直すのはこれだけ）\n'
+    ledger_blocking "$LEDGER_FILE" | sed 's/^LEDGER: /- /'; } >> "$REVIEW_FILE"
 else
   [ "$REVIEW_OK" = "1" ] && GATE_EVIDENCE+="- ⛔ code-reviewer の FINDING 行の形が崩れている（BLOCKER・台帳の周に数えない）"$'\n'
   REVIEW_OK=0; : > "$LEDGER_FILE"; LEDGER_VERDICT=BLOCKER
 fi
 LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
-if [ "$REVIEW_KIND" = "delta" ]; then
-  # 差分のレビューでは code-reviewer の VERDICT 行は使わない（差分の外の指摘で止めない）。VERDICT 行が無い＝出力が壊れているときだけ止める
-  grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$REVIEW_FILE" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER
-  # レビュー役が止めると言うのに、読める FINDING 行が 1 行も無い（表の中・箇条書きなどで書いた）→ 食い違いは止める側
-  if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '^FINDING: ' "$REVIEW_FILE"; then
-    REVIEWER_VERDICT=BLOCKER
-    GATE_EVIDENCE+="- ⛔ 差分のレビューで code-reviewer の VERDICT は ${LLM_VERDICT} なのに、読める FINDING 行が無い（BLOCKER）"$'\n'
-  fi
-else
-  REVIEWER_VERDICT="$LLM_VERDICT"
+# I205: code-reviewer の VERDICT 行は、全体のレビューでも差分のレビューでも合否に使わない（止めるかはスクリプトが FINDING 行の欄から決める）。
+# VERDICT 行が無い＝出力が壊れているときだけ止める
+grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$REVIEW_FILE" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER
+# レビュー役が止めると言うのに、読める FINDING 行が 1 行も無い（表の中・箇条書きなどで書いた）→ 食い違いは止める側
+if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '^FINDING: ' "$REVIEW_FILE"; then
+  REVIEWER_VERDICT=BLOCKER
+  GATE_EVIDENCE+="- ⛔ code-reviewer の VERDICT は ${LLM_VERDICT} なのに、読める FINDING 行が無い（BLOCKER）"$'\n'
 fi
-# 条件で空になる語は変数にしておく（$( [ … ] && echo … ) は偽のとき 1 を返し、set -e の下で代入ごとスクリプトを止める）
-VERDICT_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && VERDICT_NOTE="・差分のレビューでは合否に使わない"
-GATE_EVIDENCE+="- 台帳（${REVIEW_KIND}・${LEDGER_N} 周目）: ${LEDGER_VERDICT}（code-reviewer の VERDICT=${LLM_VERDICT}${VERDICT_NOTE}）"$'\n'
+GATE_EVIDENCE+="- 台帳（${REVIEW_KIND}・${LEDGER_N} 周目）: ${LEDGER_VERDICT}（code-reviewer の VERDICT=${LLM_VERDICT}・合否に使わない）"$'\n'
 
 # I084: 決定論ゲート結果で VERDICT を決定論的に上書きする（LLM 出力非依存）。
-# FINAL = max(gate, omission, 台帳, code-reviewer〔全体のときだけ〕, 組み込みのセキュリティ)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
+# FINAL = max(gate, omission, 台帳, code-reviewer の出力の壊れ, 組み込みのセキュリティ)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
 FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LEDGER_VERDICT" "$REVIEWER_VERDICT" "$SECURITY_VERDICT")
 inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_VERDICT"
 # 記録の RISK 行はスクリプトの判定で書き直す（gate-check はこの行とパスの判定を読む）
 set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
-rm -f "$LEDGER_FILE" "$SCOPE_FILE" "${PREV_LEDGER_FILE:-}"
+rm -f "$LEDGER_FILE" "$SCOPE_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" "${PREV_LEDGER_FILE:-}"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"
