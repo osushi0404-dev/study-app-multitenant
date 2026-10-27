@@ -182,14 +182,14 @@ ck_true "emit: risk_final=NO → ADVERSARIAL_STAGE: NOT_REQUIRED" grep -qx 'ADVE
 
 # ---- 本体の配線行を厳密文字列で固定（引数レベルの誤配線＝path→GIT_LOG 取り違え等を捕捉） ----
 # shellcheck disable=SC2016  # スクリプト内リテラルの配線行を検索（展開させない）
-ck_true "wire: 本体 RISK_LLM の取得元" grep -qF 'RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")' "$CODE_REVIEW"
+ck_true "wire: 本体の高リスクの計画レビューの判定（I197: code-reviewer の RISK 行は使わない）" grep -qF 'RISK_PLAN=$(plan_risk "$ISSUE")' "$CODE_REVIEW"
 # shellcheck disable=SC2016
 ck_true "wire: 本体 RISK_PATH の取得元（GIT_FILES 固定）" grep -qF 'RISK_PATH=$(path_risk_trigger "$GIT_FILES")' "$CODE_REVIEW"
 # P7（I181）: GIT_FILES は --no-renames で名前変更の元の場所も出す
 # shellcheck disable=SC2016
 ck_true "wire P7: GIT_FILES に --no-renames" grep -qF 'GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only --no-renames)' "$CODE_REVIEW"
 # shellcheck disable=SC2016
-ck_true "wire: 本体 RISK_FINAL の合成" grep -qF 'RISK_FINAL=$(combine_risk "$RISK_LLM" "$RISK_PATH")' "$CODE_REVIEW"
+ck_true "wire: 本体 RISK_FINAL の合成（I197: 計画レビューの判定 OR パス。code-reviewer の RISK は使わない）" grep -qF 'RISK_FINAL=$(combine_risk "$RISK_PLAN" "$RISK_PATH")' "$CODE_REVIEW"
 # shellcheck disable=SC2016
 ck_true "wire: 本体 emit の引数配線" grep -qF 'emit_decision_lines "$REVIEW_FILE" "$RISK_FINAL" "$FINAL_VERDICT"' "$CODE_REVIEW"
 

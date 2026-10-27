@@ -151,7 +151,8 @@ ckt "TC-14⑧c lint_skills.py の必須項目に allowed-tools がない" lint_d
 # P3 を I193 で入れたこと（fix-loop は止まらずに推奨案で進むが、案は診断レビューを通し、直した後は必ず review-gate に戻る）
 ckt "TC-14⑤a fix-loop 手順 4 は診断レビューを通った推奨案で止まらずに進む" grep -qF '4) 案を決める（止まらない）: 診断レビューを通った推奨案で進め' "$FIX_LOOP"
 ckt "TC-14⑤b fix-loop に承認待ちの停止がない" hasnt "$FIX_LOOP" '承認待ちで停止'
-ckt "TC-14⑤c 共通ルール (b) は診断レビューを通り直す" grep -qF '手順2 へ環流して再診断 → 手順3 → 手順3.5 診断レビュー → 手順4 → 手順5' "$FIX_LOOP"
+# I197: 実装・テストのレビューをやめたので、差し戻しは診断レビューの NG だけ（再診断して診断レビューを通り直す）
+ckt "TC-14⑤c 診断レビューの NG は再診断して診断レビューを通り直す" grep -qF '手順2 で再診断・手順3 で別案を作って手順3.5 をやり直す' "$FIX_LOOP"
 
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -37,7 +37,7 @@ $(cat "$ISSUE_FILE")"
 
 # claude -p で第三者レビュー（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）。
 # 失敗・時間切れ（REVIEW_TIMEOUT・既定 900 秒）でも起票フローを止めない
-if ! REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob"); then
+if ! REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --permission-prompts none); then
   echo "⚠️ issue-review をスキップしました（claude -p 失敗または時間切れ）。"
   exit 0
 fi

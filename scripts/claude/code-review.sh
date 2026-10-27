@@ -3,6 +3,26 @@ set -euo pipefail
 
 # ---- helper functions (テストは REVIEW_LIB_SOURCE_ONLY=1 で source して利用) ----
 
+# I197: レビュー役が正常に終わらなかったときの記録（BLOCKER）。最後のツール呼び出し・その結果・経過を残す。
+# claude_log_last_tool は review-process-lib.sh の関数（本体と、この関数を使う呼び出し元が読み込む）
+reviewer_failure_record() {   # $1=イシュー $2=claude の終了コード $3=ログ
+  local issue="$1" rc="$2" log="$3" last name inp res secs
+  last=$(claude_log_last_tool "$log" 2>/dev/null || true)
+  IFS=$'\t' read -r name inp res secs <<< "${last:-(読めない)}"
+  cat <<EOF
+# コードレビュー [${issue}]（未完了）
+
+レビュー役の claude -p が正常に終わらなかった（exit=${rc}。124 は時間切れ・0 は空の出力）。判定できないため BLOCKER とする。
+
+- 最後のツール呼び出し: ${name:-(なし)} ${inp:-}
+- その結果（先頭）: ${res:-(なし)}
+- 最後の出来事から止まるまで: ${secs:-?} 秒
+
+RISK: YES
+VERDICT: BLOCKER
+EOF
+}
+
 # open/closed 両方を検索してパスを返す（issues/tests/reviews 等の単一パターン用）
 find_file() {
   local dir="$1" pattern="$2"
@@ -124,7 +144,8 @@ kill_tree() {
 # （差分の中の文章に誘導された書き込み・push を仕組みで止める）。失敗・時間切れは本文に書いて返す（呼び出し元は止めない）。
 run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD）
   local prompt="$1" out rc=0
-  out=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan "$prompt" 2>&1 < /dev/null) || rc=$?
+  # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none。黙って止まる経路を作らない）
+  out=$(timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none "$prompt" 2>&1 < /dev/null) || rc=$?
   if [ "$rc" -ne 0 ]; then
     printf '(実行できず: exit=%s。124 は時間切れ)\n' "$rc"
     return 0
@@ -138,8 +159,10 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
 
 # I193: 機械が読む行（VERDICT: など）を行頭から外す。組み込みのレビューの出力を記録に貼るとき、
 # その中の行（差分の中の文章を引用したものを含む）が判定の行として読まれないようにする。
+# I197: 敵対的レビューの記録が読む行（ITEM・EXPERIMENT_BEGIN/END・合計の行）も対象にする
 neutralize_machine_lines() {
-  sed -E 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|ROUNDS|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|CI_WAIT|OFFICIAL_SECURITY):/\1> \2:/'
+  sed -E -e 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|NEW_CRITICAL_TOTAL|NEW_HIGH_TOTAL|UNVERIFIED|ROUNDS|ITEM|FINDING|LEDGER|LEDGER_ROUND|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|ADVERSARIAL_VERDICT|CI_WAIT|OFFICIAL_SECURITY):/\1> \2:/' \
+    -e 's/^([[:space:]]*)(EXPERIMENT_BEGIN|EXPERIMENT_END)([[:space:]]|$)/\1> \2\3/'
 }
 
 # I193 7 回目 H2: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（実行できず・読めていない）ら HIGH。
@@ -432,8 +455,168 @@ inject_gate_result() {
   mv "$tmp" "$file"
 }
 
+# ---- I197 §4.8: 基本レビューの台帳（やり直しは差分と台帳だけを見て、合否は台帳から決定論で出す） ----
+# 台帳の行（スクリプトが書く）: `LEDGER: F<n> SEV=<Blocker|High|Medium|Low> STATUS=<open|resolved> SCOPE=<delta|outside> SECURITY=<yes|no> | 要約`
+# レビュー役の行（code-reviewer が書く）: `FINDING: F<n> SEV=… STATUS=… FILE=<パス|-> SECURITY=… | 要約`
+# SCOPE はレビュー役に書かせず、スクリプトが FILE と差分のレビューの範囲から決める。台帳は最新の記録に累積で全部書く
+
+# LEDGER_ROUND: のある（＝レビュー役が正常に終わった）コードレビュー記録を、ファイル名の時刻順に出す
+ledger_records() {   # $1=I###
+  local f
+  while IFS= read -r f; do
+    grep -qE '^LEDGER_ROUND:[[:space:]]*[0-9]+[[:space:]]*$' "$f" && printf '%s\n' "$f"
+  done < <(find docs/reviews -maxdepth 2 -type f -name "${1}_code_review_*.md" 2>/dev/null \
+             | awk -F/ '{ print $NF "\t" $0 }' | LC_ALL=C sort | cut -f2)
+  return 0
+}
+
+# 全体か差分か: "full<TAB>1<TAB><TAB>" か "delta<TAB><n><TAB><起点の SHA><TAB><前の記録>"。
+# 差分にするのは、台帳のある最新の記録の REVIEWED_COMMIT が今の HEAD の祖先のときだけ（rebase などで祖先でなければ全体）
+review_mode() {   # $1=I###
+  local last n sha
+  last=$(ledger_records "$1" | tail -1)
+  if [ -n "$last" ]; then
+    n=$(grep -oE '^LEDGER_ROUND:[[:space:]]*[0-9]+[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9]+' || true)
+    sha=$(grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9a-f]{7,40}' || true)
+    if [ -n "$n" ] && [ -n "$sha" ] && git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+      printf 'delta\t%s\t%s\t%s\n' "$(( n + 1 ))" "$sha" "$last"; return 0
+    fi
+  fi
+  printf 'full\t1\t\t\n'
+}
+
+# 差分のレビューの範囲: ブランチ自身が変えたファイル（比べる相手との merge-base から HEAD）のうち、起点から HEAD までに
+# 変わったもの（記録の場所を除く）。develop の取り込みで入った develop 側だけの変更は含めない
+delta_files() {   # $1=比べる相手 $2=起点の SHA
+  local mb f
+  mb=$(git merge-base "$1" HEAD) || return 2
+  while IFS= read -r f; do
+    [ -n "$f" ] && ! is_record_path "$f" && printf '%s\n' "$f"
+  done < <(LC_ALL=C comm -12 \
+             <(git -c core.quotePath=false diff --name-only --no-renames "$mb" HEAD | LC_ALL=C sort) \
+             <(git -c core.quotePath=false diff --name-only --no-renames "$2" HEAD | LC_ALL=C sort))
+  return 0
+}
+
+_LEDGER_PY='
+import os, re, sys
+FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) SECURITY=(yes|no)(?: \| (.*))?")
+LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside) SECURITY=(yes|no)(?: \| (.*))?")
+RANK = {"Low": 0, "Medium": 1, "High": 2, "Blocker": 3}
+
+def read_findings(path):
+    out = []
+    for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
+        if not line.startswith("FINDING:"):
+            continue
+        m = FIND.fullmatch(line.rstrip())
+        if not m:
+            print("形の崩れた FINDING 行: " + line[:120], file=sys.stderr)
+            sys.exit(2)
+        out.append(m.groups())
+    return out
+
+def read_ledger(path):
+    led = {}
+    if path:
+        for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
+            m = LEDG.fullmatch(line.rstrip())
+            if m:
+                fid, sev, st, scope, sec, title = m.groups()
+                led[fid] = [sev, st, scope, sec, title or ""]
+    return led
+
+def blocking(e):
+    sev, st, scope, sec = e[0], e[1], e[2], e[3]
+    return st == "open" and RANK[sev] >= 2 and (scope == "delta" or (sev == "Blocker" and sec == "yes"))
+
+mode = sys.argv[1]
+if mode == "parse":
+    for g in read_findings(sys.argv[2]):
+        print("\t".join(x or "" for x in g))
+elif mode == "update":
+    # update <full|delta> <前の記録|""> <今回のレビュー> <差分の範囲のファイル一覧>
+    kind, prev, cur, scope_file = sys.argv[2:6]
+    led = read_ledger(prev) if kind == "delta" else {}
+    shown = set(k for k, e in led.items() if blocking(e))   # 差分のレビューの入力に見せた（止める）指摘
+    in_scope = set(l for l in open(scope_file, encoding="utf-8").read().split("\n") if l) if kind == "delta" else None
+    next_id = max([int(k[1:]) for k in led] or [0]) + 1
+    def scope_of(path):
+        # 表記の形を列挙せず、:行番号 を除いてリポジトリのルート（cwd）からの相対パスに揃えて範囲と比べる。
+        # outside にするのは「揃えたパスがリポジトリの中の実在のファイルで、範囲に無い」ときだけ。それ以外は delta（止める側）
+        if in_scope is None or path == "-":
+            return "delta"
+        norm = os.path.relpath(os.path.normpath(os.path.abspath(path.split(":", 1)[0])))
+        if norm in in_scope or norm.startswith("..") or not os.path.isfile(norm):
+            return "delta"
+        return "outside"
+    for fid, sev, st, path, sec, title in read_findings(cur):
+        if fid in led and fid not in shown:
+            # 入力に見せていない既存の番号（止めない指摘・直った指摘）を使った行は、新しい指摘として振り直す
+            fid = f"F{next_id}"
+            next_id += 1
+        if fid in led:
+            old = led[fid]
+            # 既にある指摘: SCOPE は前のまま（今回の範囲で決め直すと、触っていないファイルの未解決の High が消える）。
+            # 重大度は下げない（下げて止めないようにする逃げ道を作らない）
+            led[fid] = [sev if RANK[sev] > RANK[old[0]] else old[0], st, old[2], "yes" if "yes" in (sec, old[3]) else "no", title or old[4]]
+        else:
+            led[fid] = [sev, st, scope_of(path), sec, title or ""]
+            next_id = max(next_id, int(fid[1:]) + 1)
+    for fid in sorted(led, key=lambda x: int(x[1:])):
+        sev, st, scope, sec, title = led[fid]
+        print(f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} SECURITY={sec}" + (f" | {title}" if title else ""))
+elif mode == "blocking":
+    # 止める指摘の LEDGER 行だけを出す（差分のレビューの入力に使う。合否と同じ blocking() で選ぶ）
+    led = read_ledger(sys.argv[2])
+    for fid in sorted(led, key=lambda x: int(x[1:])):
+        if blocking(led[fid]):
+            sev, st, scope, sec, title = led[fid]
+            print(f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} SECURITY={sec}" + (f" | {title}" if title else ""))
+elif mode == "verdict":
+    led = read_ledger(sys.argv[2])
+    worst = max([RANK[e[0]] for e in led.values() if blocking(e)] or [-1])
+    print("BLOCKER" if worst == 3 else "HIGH" if worst == 2 else "OK")
+'
+# FINDING 行を「id\tSEV\tSTATUS\tFILE\tSECURITY\t要約」で出す。形の崩れた FINDING 行があれば 2
+parse_findings() { python3 -I -c "$_LEDGER_PY" parse "$1"; }
+# 累積の台帳（LEDGER 行）を出す: <full|delta> <前の記録|""> <今回のレビュー> <差分の範囲のファイル一覧>。形の崩れた FINDING 行があれば 2
+ledger_update() { python3 -I -c "$_LEDGER_PY" update "$1" "$2" "$3" "$4"; }
+# 台帳の合否: 止める指摘（open の Blocker・High で SCOPE=delta、または outside の SECURITY=yes の Blocker）の最大
+ledger_verdict() { python3 -I -c "$_LEDGER_PY" verdict "$1"; }
+# 止める指摘（合否と同じ規則）の LEDGER 行だけを出す
+ledger_blocking() { python3 -I -c "$_LEDGER_PY" blocking "$1"; }
+
+# 高リスクの判定（計画の段階で決める・周ごとに変えない）: 最新の計画レビュー記録の「## 高リスク判定」の `判定: Yes|No`。
+# 読めない・記録が無いときは YES（止まる側）
+plan_risk() {   # $1=I###
+  local f v
+  # set -euo pipefail の下でも、見つからないときに止まらず空になるよう || true を付ける
+  f=$(find docs/reviews -maxdepth 2 -type f -name "${1}_plan_review_*.md" 2>/dev/null | awk -F/ '{ print $NF "\t" $0 }' | LC_ALL=C sort | tail -1 | cut -f2 || true)
+  [ -n "$f" ] || { echo YES; return; }
+  # 読み方は plan-issue-review.sh の detect_plan_verdict の保険と同じ（大文字・小文字を区別しない・行末まで Yes か No だけ）
+  v=$(awk '/^## 高リスク判定/ { s=1; next } s && /^## / { s=0 } s && /^判定:/ { print toupper($0); exit }' "$f" \
+        | grep -oE '^判定:[[:space:]]*(YES|NO)[[:space:]]*$' | grep -oE '(YES|NO)' || true)
+  if [ "$v" = "NO" ]; then echo NO; else echo YES; fi
+}
+
+# 記録の RISK 行を 1 行にして、最後の VERDICT 行の直前に置く（code-reviewer の RISK 行は使わず、スクリプトの判定で書き直す）
+set_risk_line() {   # $1=ファイル $2=YES|NO
+  local tmp; tmp=$(mktemp)
+  awk -v r="$2" '
+    NR == FNR { if ($0 ~ /^RISK:/) next; n++; line[n] = $0; if ($0 ~ /^VERDICT:/) last = n; next }
+    END { for (i = 1; i <= n; i++) { if (i == last) print "RISK: " r; print line[i] } if (last == 0) print "RISK: " r }
+  ' "$1" /dev/null > "$tmp"
+  mv "$tmp" "$1"
+}
+
 # テストから関数のみを source するためのガード（本体は実行しない）
 if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
+
+# I197: 別プロセスのレビュー役を「時間上限つき・承認なし・途中の出力を残す」で起動し、記録を読む関数
+# （関数だけを読み込む使い方〔gate-check・テストの写し〕には要らないので、本体でだけ読む）
+# shellcheck source=scripts/claude/review-process-lib.sh disable=SC1091  # -x なしの単体の検査（TC-C1）でもたどらない。ライブラリは別に検査される
+. "$(dirname "${BASH_SOURCE[0]}")/review-process-lib.sh"
 
 ISSUE="${1:?Usage: $0 I###}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -441,6 +624,8 @@ cd "$REPO_ROOT"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}.md"
+# I197: 同じ分のうちにもう一度流しても前の記録を上書きしない（台帳の前の周が消えるため）
+n=1; while [ -e "$REVIEW_FILE" ]; do n=$(( n + 1 )); REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}_${n}.md"; done
 REVIEWER_AGENT="code-reviewer"   # 定義: .claude/agents/code-reviewer.md（tools: Read, Grep, Glob）
 
 # I193: 比べる相手（origin/develop）を最新にする（古い develop と比べて無関係の差分を見ないため）
@@ -457,9 +642,32 @@ PLAN_FILE=$(find_plan_file "$ISSUE")
 # このレビューが見る HEAD（記録の REVIEWED_COMMIT になる）
 REVIEWED_HEAD=$(git rev-parse HEAD)
 
-# git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）
-GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400 || true)
-GIT_LOG=$(git log origin/develop...HEAD --oneline)
+# I197 §4.8: 全体のレビューか差分のレビューか（台帳のある最新の記録の REVIEWED_COMMIT が HEAD の祖先なら差分）
+IFS=$'\t' read -r REVIEW_KIND LEDGER_N SINCE PREV_LEDGER_REC <<< "$(review_mode "$ISSUE")"
+SCOPE_FILE=$(mktemp)
+# 前の周の台帳は、始めた時点で写しておく（以後に記録が変わっても、読んだ台帳を使う）
+PREV_LEDGER_FILE=""
+if [ -n "$PREV_LEDGER_REC" ]; then PREV_LEDGER_FILE=$(mktemp); grep -E '^LEDGER: ' "$PREV_LEDGER_REC" > "$PREV_LEDGER_FILE" || true; fi
+if [ "$REVIEW_KIND" = "delta" ]; then
+  delta_files origin/develop "$SINCE" > "$SCOPE_FILE" || { echo "⛔ 差分のレビューの範囲を取れません（起点 ${SINCE}）"; exit 1; }
+  REVIEW_RANGE="${SINCE}...HEAD"
+  echo "差分のレビュー（台帳の ${LEDGER_N} 周目・起点 ${SINCE}・範囲のファイル $(grep -c . "$SCOPE_FILE") 本）"
+else
+  REVIEW_RANGE="origin/develop...HEAD"
+  echo "全体のレビュー（台帳の 1 周目）"
+fi
+
+# git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）。差分のレビューは範囲のファイルの起点からの差分だけ
+if [ "$REVIEW_KIND" = "delta" ]; then
+  if [ -s "$SCOPE_FILE" ]; then
+    GIT_DIFF=$(xargs -d '\n' git diff "$SINCE" HEAD -- < "$SCOPE_FILE" | head -c 102400 || true)
+  else
+    GIT_DIFF="(起点の後に、記録の場所の外でブランチが変えたファイルは無い)"
+  fi
+else
+  GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400 || true)
+fi
+GIT_LOG=$(git log "$REVIEW_RANGE" --oneline)
 # I086 敵対レビュー H3 対応: core.quotePath=false で取得する。git 既定（true）は非 ASCII を含む
 # パスを "..."（八進エスケープ）で丸ごとクォートし、path_risk_trigger の先頭リテラル glob が
 # 不一致になって監視パスを NO に落とす（日本語ファイル名で安全網が fail-open する）ため。
@@ -470,6 +678,9 @@ GIT_FILES=$(git -c core.quotePath=false diff origin/develop...HEAD --name-only -
 # I193: 組み込みのレビュー（公式）を背景で同時に走らせ、CI 待ちと重ねる（互いに依存しないため）。
 # パス判定（決定論）が YES のときは組み込みの /security-review も走らせる。結果は自作のレビュー役に渡す。
 RISK_PATH=$(path_risk_trigger "$GIT_FILES")
+# I197 §4.8: 高リスクは計画の段階（計画レビューの判定）とパスの判定で決める（周ごとの code-reviewer の判定は使わない）
+RISK_PLAN=$(plan_risk "$ISSUE")
+RISK_FINAL=$(combine_risk "$RISK_PLAN" "$RISK_PATH")
 OFFICIAL_DIR=$(mktemp -d)
 OFFICIAL_PIDS=()
 cleanup_official() {
@@ -479,7 +690,7 @@ cleanup_official() {
 }
 trap cleanup_official EXIT
 echo "組み込みの /code-review を背景で実行しています..."
-run_official_review "/code-review medium origin/develop...HEAD" > "$OFFICIAL_DIR/code" &
+run_official_review "/code-review medium ${REVIEW_RANGE}" > "$OFFICIAL_DIR/code" &
 OFFICIAL_PIDS+=("$!")
 if [ "$RISK_PATH" = "YES" ]; then
   # /security-review は「origin の既定のブランチ」との差分を見る。手元の origin/HEAD が develop でなければ記録に残す
@@ -542,7 +753,8 @@ if [ "$SECURITY_VERDICT" != "OK" ]; then
   GATE_EVIDENCE+="- ⛔ 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（HIGH。直すものは無いので review-gate が 1 回だけ実行し直す）"$'\n'
 fi
 
-# コンテキスト組み立て
+# コンテキスト組み立て（条件で空になる語は先に変数にする。$( [ … ] && … ) は偽で 1 を返し set -e で止まるため）
+FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲）"
 CONTEXT="イシュー番号: ${ISSUE}
 
 ### イシューファイル
@@ -551,17 +763,29 @@ $(cat "$ISSUE_FILE")
 ### 計画書
 $([ -n "$PLAN_FILE" ] && cat "$PLAN_FILE" || echo "(計画書なし)")
 
+### レビューの種類（I197 §4.8）
+$(if [ "$REVIEW_KIND" = "delta" ]; then
+  printf '差分のレビュー（台帳の %s 周目）。見るのは下の「git diff」（起点 %s から HEAD までの、直した差分）と、次の「止める指摘（前の周まで）」が直ったかだけ。\n' "$LEDGER_N" "$SINCE"
+  printf '下の止める指摘のすべてについて、FINDING 行を同じ id で書き直す（STATUS=resolved か open）。新しい指摘は続きの番号で書く（差分の外で見つけたものも書いてよいが、止めるかどうかはスクリプトが FILE から決める）。\n'
+  printf '\n台帳の最大の番号: F%s（新しい指摘はこの次から）\n' "$(grep -oE '^LEDGER: F[0-9]+' "$PREV_LEDGER_FILE" | grep -oE '[0-9]+' | sort -n | tail -1 || true)"
+  printf '\n#### 止める指摘（前の周まで）\n'
+  ledger_blocking "$PREV_LEDGER_FILE" || true
+  printf '\n#### 差分のレビューの範囲のファイル\n'; cat "$SCOPE_FILE"
+else
+  printf '全体のレビュー（台帳の 1 周目）。ブランチ全体を見て、指摘ごとに FINDING 行を書く。\n'
+fi)
+
 ### 決定論ゲート実行結果（スクリプト実走済み・実 exit code／読解で上書きしないこと）
 ${GATE_EVIDENCE}
 omission-lint: ${OMISSION_VERDICT}
 
-### git log (origin/develop...HEAD)
+### git log (${REVIEW_RANGE})
 ${GIT_LOG}
 
-### 変更ファイル一覧
-${GIT_FILES}
+### 変更ファイル一覧${FILES_NOTE}
+$(if [ "$REVIEW_KIND" = "delta" ]; then cat "$SCOPE_FILE"; else printf '%s' "$GIT_FILES"; fi)
 
-### git diff (origin/develop...HEAD, max 100KB)
+### git diff (${REVIEW_RANGE}, max 100KB)
 \`\`\`diff
 ${GIT_DIFF}
 \`\`\`
@@ -574,16 +798,18 @@ ${OFFICIAL_SECURITY}"
 
 # claude -p でレビュー実行（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）
 # 時間上限 REVIEW_TIMEOUT（既定 900 秒）。時間切れ・失敗・空は、その旨の記録を残して BLOCKER にする（fail-closed）
+# I197: 承認なし（--permission-prompts none）・途中の出力を残す形で起動し、本文は記録の result から受け取る
 REVIEW_RC=0
-REVIEW=$(printf '%s' "$CONTEXT" | timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob") || REVIEW_RC=$?
+REVIEW_IN="$OFFICIAL_DIR/reviewer_in.txt"; REVIEW_LOG="$OFFICIAL_DIR/reviewer.jsonl"
+printf '%s' "$CONTEXT" > "$REVIEW_IN"
+run_claude_logged "${REVIEW_TIMEOUT:-900}" "$REVIEW_LOG" "$REVIEW_IN" \
+  --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --permission-prompts none || REVIEW_RC=$?
+REVIEW=$(claude_log_result "$REVIEW_LOG" 2>/dev/null) || REVIEW=""
+REVIEW_OK=1
 if [ "$REVIEW_RC" -ne 0 ] || [ -z "$REVIEW" ]; then
+  REVIEW_OK=0
   echo "⚠️ レビュー役が終わりませんでした（claude -p exit=${REVIEW_RC}。124 は時間切れ）。BLOCKER として記録します。"
-  REVIEW="# コードレビュー [${ISSUE}]（未完了）
-
-レビュー役の claude -p が正常に終わらなかった（exit=${REVIEW_RC}。124 は時間切れ・0 は空の出力）。判定できないため BLOCKER とする。
-
-RISK: YES
-VERDICT: BLOCKER"
+  REVIEW=$(reviewer_failure_record "$ISSUE" "$REVIEW_RC" "$REVIEW_LOG")
 fi
 
 # I193: レビューの間に、記録の場所の外のファイルが動いたら（組み込みのレビューと記録の REVIEWED_COMMIT の
@@ -598,25 +824,51 @@ else
 fi
 
 # 出力正規化
-REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
+REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed -E 's/[[:space:]]*$//; s/^([[:space:]]*)(LEDGER|LEDGER_ROUND):/\1> \2:/')
 
 # ファイル保存。判定（RISK・VERDICT）は自作のレビュー役の本文だけで行い、組み込みのレビューの出力は判定の後に足す
 # （組み込みの出力の中の表の「| High |」などを、VERDICT 行が無いときの代わりの判定が拾わないように。I193 M6）
 mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
-# I086: 高リスク判定（LLM RISK 行 OR パス決定論トリガ）。証跡は注入セクションに残す。
-RISK_LLM=$(detect_risk_flag "$REVIEW_FILE")
-RISK_FINAL=$(combine_risk "$RISK_LLM" "$RISK_PATH")
-GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（LLM=${RISK_LLM} / path=${RISK_PATH}）"$'\n'
+# I197 §4.8: 高リスク判定は計画レビューとパス（code-reviewer は判定しない）。証跡は注入セクションに残す
+GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（計画レビュー=${RISK_PLAN} / path=${RISK_PATH}）"$'\n'
+
+# I197 §4.8: 台帳（累積）と合否。レビュー役が正常に終わり FINDING 行を読めたときだけ台帳の周に数える
+LEDGER_FILE=$(mktemp)
+if [ "$REVIEW_OK" = "1" ] && ledger_update "$REVIEW_KIND" "${PREV_LEDGER_FILE:-}" "$REVIEW_FILE" "$SCOPE_FILE" > "$LEDGER_FILE"; then
+  LEDGER_VERDICT=$(ledger_verdict "$LEDGER_FILE")
+  # 累積の台帳と台帳の周を本文の後ろに足す（正常に終わった周だけ。失敗した周は台帳に入れない）
+  { printf '\n## 台帳（累積・スクリプトが書く）\n'; cat "$LEDGER_FILE"; printf 'LEDGER_ROUND: %s\n' "$LEDGER_N"; } >> "$REVIEW_FILE"
+else
+  [ "$REVIEW_OK" = "1" ] && GATE_EVIDENCE+="- ⛔ code-reviewer の FINDING 行の形が崩れている（BLOCKER・台帳の周に数えない）"$'\n'
+  REVIEW_OK=0; : > "$LEDGER_FILE"; LEDGER_VERDICT=BLOCKER
+fi
+LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
+if [ "$REVIEW_KIND" = "delta" ]; then
+  # 差分のレビューでは code-reviewer の VERDICT 行は使わない（差分の外の指摘で止めない）。VERDICT 行が無い＝出力が壊れているときだけ止める
+  grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$REVIEW_FILE" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER
+  # レビュー役が止めると言うのに、読める FINDING 行が 1 行も無い（表の中・箇条書きなどで書いた）→ 食い違いは止める側
+  if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '^FINDING: ' "$REVIEW_FILE"; then
+    REVIEWER_VERDICT=BLOCKER
+    GATE_EVIDENCE+="- ⛔ 差分のレビューで code-reviewer の VERDICT は ${LLM_VERDICT} なのに、読める FINDING 行が無い（BLOCKER）"$'\n'
+  fi
+else
+  REVIEWER_VERDICT="$LLM_VERDICT"
+fi
+# 条件で空になる語は変数にしておく（$( [ … ] && echo … ) は偽のとき 1 を返し、set -e の下で代入ごとスクリプトを止める）
+VERDICT_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && VERDICT_NOTE="・差分のレビューでは合否に使わない"
+GATE_EVIDENCE+="- 台帳（${REVIEW_KIND}・${LEDGER_N} 周目）: ${LEDGER_VERDICT}（code-reviewer の VERDICT=${LLM_VERDICT}${VERDICT_NOTE}）"$'\n'
 
 # I084: 決定論ゲート結果で VERDICT を決定論的に上書きする（LLM 出力非依存）。
-# FINAL = max(gate, omission, LLM)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
-LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
-FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LLM_VERDICT" "$SECURITY_VERDICT")
+# FINAL = max(gate, omission, 台帳, code-reviewer〔全体のときだけ〕, 組み込みのセキュリティ)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
+FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LEDGER_VERDICT" "$REVIEWER_VERDICT" "$SECURITY_VERDICT")
 inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_VERDICT"
+# 記録の RISK 行はスクリプトの判定で書き直す（gate-check はこの行とパスの判定を読む）
+set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
+rm -f "$LEDGER_FILE" "$SCOPE_FILE" "${PREV_LEDGER_FILE:-}"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"

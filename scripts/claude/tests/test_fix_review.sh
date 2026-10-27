@@ -13,11 +13,7 @@ cd "$REPO_ROOT" || exit 1
 
 LIB="scripts/claude/fix-review-lib.sh"
 DIAG_SH="scripts/claude/fix-diagnosis-review.sh"
-IMPL_SH="scripts/claude/fix-implementation-review.sh"
-TEST_SH="scripts/claude/fix-test-review.sh"
 DIAG_AGENT=".claude/agents/fix-diagnosis-reviewer.md"
-IMPL_AGENT=".claude/agents/fix-implementation-reviewer.md"
-TEST_AGENT=".claude/agents/fix-test-reviewer.md"
 SKILL=".claude/skills/fix-loop/SKILL.md"
 
 pass=0; fail=0
@@ -91,20 +87,17 @@ ck TC-12-real   "REMAND" "$(verdict_to_gate HIGH)"
 ck TC-13-high   "1" "$(gate_exit_code "$(verdict_to_gate HIGH)")"
 ck TC-13-ok     "0" "$(gate_exit_code "$(verdict_to_gate OK)")"
 
-echo "== TC-14/15: reviewer 3 定義の存在・契約・観点 =="
-for a in "$DIAG_AGENT" "$IMPL_AGENT" "$TEST_AGENT"; do
-  ck_true "TC-14-exists $(basename "$a")" test -f "$a"
-  ck_grep "TC-14-verdict $(basename "$a")" "$a" 'VERDICT:.*(BLOCKER|HIGH|OK)'
-  ck_grep "TC-14-readonly $(basename "$a")" "$a" 'Read.*Grep.*Glob'
-done
+echo "== TC-14/15: 診断レビュー役の定義の存在・契約・観点（I197: 実装・テストのレビュー役は廃止） =="
+ck_true "TC-14-exists $(basename "$DIAG_AGENT")" test -f "$DIAG_AGENT"
+ck_grep "TC-14-verdict $(basename "$DIAG_AGENT")" "$DIAG_AGENT" 'VERDICT:.*(BLOCKER|HIGH|OK)'
+ck_grep "TC-14-readonly $(basename "$DIAG_AGENT")" "$DIAG_AGENT" 'Read.*Grep.*Glob'
 ck_grep TC-15-diag "$DIAG_AGENT" '影響調査'
 ck_grep TC-15-diag2 "$DIAG_AGENT" '同型'
-ck_grep TC-15-impl "$IMPL_AGENT" '回帰'
-ck_grep TC-15-impl2 "$IMPL_AGENT" '副作用'
-ck_grep TC-15-test "$TEST_AGENT" 'false-green|否定|異常系'
+ck_true TC-15-noimpl test ! -e .claude/agents/fix-implementation-reviewer.md
+ck_true TC-15-notest test ! -e .claude/agents/fix-test-reviewer.md
 
 echo "== TC-16/17/18: スクリプトの存在・起動契約・最小権限・入力 =="
-for s in "$LIB" "$DIAG_SH" "$IMPL_SH" "$TEST_SH"; do
+for s in "$LIB" "$DIAG_SH"; do
   ck_true "TC-16-exists $(basename "$s")" test -f "$s"
 done
 ck_grep TC-16-claude "$LIB" 'claude -p'
@@ -112,55 +105,34 @@ ck_grep TC-16-tools  "$LIB" '\-\-tools[[:space:]]+"Read,Grep,Glob"'
 # shellcheck disable=SC2016  # 単一引用符の $agent_name は文字どおりの照合用
 ck_grep TC-16-agent  "$LIB" '\-\-agent[[:space:]]+"\$agent_name"'   # I193: モデルはサブエージェント定義（model: sonnet）で決める
 # TC-17: --tools 引用符内に書込ツールが無い（コメントで false-positive しない）
-for s in "$LIB" "$DIAG_SH" "$IMPL_SH" "$TEST_SH"; do
+for s in "$LIB" "$DIAG_SH"; do
   ck_ngrep "TC-17-nowrite $(basename "$s")" "$s" '\-\-tools[[:space:]]+"[^"]*(Write|Edit|Bash|MultiEdit)[^"]*"'
 done
 # TC-17 反証: 注入文字列は検出される
 printf '%s\n' '  --tools "Read,Write,Glob"' > "$TMP/inject.txt"
 ck_grep TC-17-decoy "$TMP/inject.txt" '\-\-tools[[:space:]]+"[^"]*(Write|Edit|Bash|MultiEdit)[^"]*"'
-# TC-18: fix-test-review が全差分＋結果＋untracked を入力にする
-ck_grep TC-18-diff "$TEST_SH" 'git diff'
-ck_grep TC-18-untracked "$TEST_SH" 'ls-files --others --exclude-standard'
-
 echo "== TC-19〜22: SKILL.md の手順・ゲート・導線・fail-safe =="
 ck_grep TC-19-35 "$SKILL" '3\.5'
-ck_grep TC-19-55 "$SKILL" '5\.5'
-ck_grep TC-19-65 "$SKILL" '6\.5'
+# I197: 5.5（実装レビュー）・6.5（テストレビュー）は無い
+ck_ngrep TC-19-no55 "$SKILL" 'fix-implementation-review|5\.5\)'
+ck_ngrep TC-19-no65 "$SKILL" 'fix-test-review|6\.5\)'
 ck_grep TC-20-blocker "$SKILL" 'BLOCKER'
 ck_grep TC-20-high "$SKILL" 'HIGH'
 ck_grep TC-20-cap "$SKILL" '連続 NG.*2|2 *回'
 ck_grep TC-21-diag "$SKILL" '診断'
 ck_grep TC-21-remand "$SKILL" '差し戻し'
-ck_grep TC-22-failsafe "$SKILL" 'fail-safe|実 diff|再判定'
-ck_grep TC-22-minor "$SKILL" '軽微例外'
+ck_grep TC-22-delta "$SKILL" '差分のレビュー'
+ck_grep TC-22-ledger "$SKILL" '止める指摘（Blocker・High）'
 ck_grep TC-22-skip "$SKILL" '未実施'
 
-echo "== TC-26〜29: REMAND 分類駆動・前回NG検証・回帰（案1 追加分） =="
-# TC-26: SKILL.md に分類駆動＋前回NG＋回帰(無影響)＋環流の記述
-ck_grep TC-26-exec "$SKILL" '実行の不備'
-ck_grep TC-26-approach "$SKILL" '方針の誤り'
-ck_grep TC-26-prior "$SKILL" '前回NG'
-ck_grep TC-26-regress "$SKILL" '回帰|無影響'
-# TC-21 非後退: 実行の不備ルートで実装 NG は依然 手順5 に至る（環流で消えていない）
-ck_grep TC-26-step5 "$SKILL" '実行の不備.*手順5|手順5.*再修正'
-# TC-27: entrypoint が前回NGパス（オプション）を受理し context に付加
-ck_grep TC-27-impl "$IMPL_SH" 'PRIOR|前回NG|prior_ng_review_path'
-ck_grep TC-27-test "$TEST_SH" 'PRIOR|前回NG|prior_ng_review_path'
-# TC-28: 実装/テスト reviewer が前回NGを fail-closed 検証＋実行/方針を分類
-ck_grep TC-28-impl-prior "$IMPL_AGENT" '前回NG'
-ck_grep TC-28-impl-failclosed "$IMPL_AGENT" 'fail-closed'
-ck_grep TC-28-impl-class "$IMPL_AGENT" '実行の不備|方針の誤り'
-ck_grep TC-28-test-prior "$TEST_AGENT" '前回NG'
-ck_grep TC-28-test-failclosed "$TEST_AGENT" 'fail-closed'
-ck_grep TC-28-test-class "$TEST_AGENT" '実行の不備|方針の誤り'
+echo "== TC-26/29: 直す範囲・診断 reviewer =="
+ck_grep TC-26-medium "$SKILL" 'Medium 以下は直さない'
 # TC-29: 診断 reviewer が再診断時の分類・手順4 再承認要否を評価
 ck_grep TC-29-diag-class "$DIAG_AGENT" '実行の不備|方針の誤り'
 ck_grep TC-29-diag-reapprove "$DIAG_AGENT" '再承認|手順4'
 
 echo "== TC-30: 成果物のレビュー対応表＋手順1/2/3 の記録先明示（No5 記述品質） =="
 ck_grep TC-30-map-diag "$SKILL" '手順3.5 診断レビュー'
-ck_grep TC-30-map-impl "$SKILL" '手順5.5 実装レビュー'
-ck_grep TC-30-map-test "$SKILL" '手順6.5 テストレビュー'
 ck_grep TC-30-origin  "$SKILL" '原因調査結果'
 ck_grep TC-30-record  "$SKILL" '診断メモ「失敗分解」'
 # 手順1/2/3 それぞれの記録先明示を全件検査（手順1だけでなく2・3も）
@@ -177,24 +149,7 @@ ck_absent TC-30-decoy  '診断メモ「失敗分解」'
 ck_absent TC-30-decoy2 '診断メモ「根本原因」'
 ck_absent TC-30-decoy3 '診断メモ「対応方針'
 ck_absent TC-30-decoy-mapdiag '手順3.5 診断レビュー'
-ck_absent TC-30-decoy-mapimpl '手順5.5 実装レビュー'
-ck_absent TC-30-decoy-maptest '手順6.5 テストレビュー'
 ck_absent TC-30-decoy-origin  '原因調査結果'
-# TC-29 反証: 前回NG検証キーワードを削除した SKILL 複製は TC-26-prior を満たさない（機構が実体である反証）
-sed 's/前回NG//g' "$SKILL" > "$TMP/skill_noprior.md"
-if grep -qE '前回NG' "$TMP/skill_noprior.md"; then
-  printf 'FAIL TC-29-decoy (broken copy still matched)\n'; fail=$((fail+1))
-else
-  printf 'PASS TC-29-decoy\n'; pass=$((pass+1))
-fi
-# TC-28-test-class 反証: TEST_AGENT から分類キーワードを除去した複製は TC-28-test-class を満たさない
-sed 's/実行の不備//g; s/方針の誤り//g' "$TEST_AGENT" > "$TMP/testagent_noclass.md"
-if grep -qE '実行の不備|方針の誤り' "$TMP/testagent_noclass.md"; then
-  printf 'FAIL TC-28-test-class-decoy (broken copy still matched)\n'; fail=$((fail+1))
-else
-  printf 'PASS TC-28-test-class-decoy\n'; pass=$((pass+1))
-fi
-
 echo "== TC-23/24: 既存手順1〜7 の非後退（回帰）＋反証 =="
 regress_ok() { # $1=file : 既存 lint/scan キーワードが全て残っているか
   local f="$1"
