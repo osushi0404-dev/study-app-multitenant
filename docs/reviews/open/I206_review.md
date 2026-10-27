@@ -41,7 +41,10 @@
 - [implement] I196 への引き継ぎに「計画レビューが Yes のときは付けない決まりなので 0 件が期待値」「スクリプトは KIND=app の目印だけを数える」を足した — I196 は高リスク Yes の見込みなので、測る人が 0 件を正常と読めるように
 - [implement] /simplify の指摘のうち、変数名 `k`→`kind`・古い経緯のコメントの削除・テストの重複の関数化（`f2_same`）・`basename` を `${c##*/}` に、を直した — 読みやすさと速さ
 - [implement] /simplify の指摘のうち見送り: ①`changed_outside_records` を `wait $!` にする案 → 一時ファイルの方が失敗の受け方が明示的で、計画レビューを通した形 ②`branch_own_files` と共通の関数に切り出す案 → `gate-check.sh` が使う関数に手が入り、イシューの「gate-check の挙動を変えない」に触れる ③`NO_REPRO` と `NO_REPRO_HEAD` を 1 本の正規表現にする案 → I205 からの既存の判定を書き換える範囲の広がり ④`RISK=up` を書く側で落とす案 → 前の記録（rebase 後に読む）にも効かせるには読む側の条件が要る ⑤N10 の時間を縮める・N12 のリンクを必要なコマンドだけにする案 → CI での揺れの余裕と、必要なコマンドの列挙の壊れやすさを優先（テスト全体は約 58 秒で上限 120 秒に収まる） ⑥`fresh` を必要なときだけ計算する案 → 指摘は数件で負担はごくわずか
+- [review-gate] 1 周目で FINAL OK・敵対的レビュー不要（`docs/reviews/I206_code_review_20261027_1815.md`）。止めない指摘 F1〜F6 は台帳に残し retro で扱う — ハーネスの止める条件の一覧に当たらない。F5 の「再現: なし（推測。…）」が REPRO=no になり、F7 の直しが実物で効いた
+- [review-gate] issue-bootstrap が作った `docs/reviews/I206_issue_review_20261027_1701.md`（未追跡）をこのブランチでコミットした — I206 の記録の一部
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
