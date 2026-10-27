@@ -22,14 +22,15 @@
 
 | 項目 | 入力 | 期待値 | FG（失敗注入） |
 |---|---|---|---|
-| T1（AC1） | `--wait 0 '/plan-'` | exit 0。標準出力に `/plan-issue`。記録に `new-session -d -s tui-capture-<数> -x 200 -y 50 -c <ルート> claude --permission-mode default`・`send-keys -t tui-capture-<数> -l /plan-`・`capture-pane -p -t tui-capture-<数>`・`kill-session -t tui-capture-<数>` がこの順に 1 回ずつ | FG-T1: `trap` の `kill-session` を消した写しで、記録に `kill-session` が無く不合格 |
+| T1（AC1） | `--wait 0 '/plan-'` | exit 0。標準出力に `/plan-issue`。記録に `new-session -d -s tui-capture-<数> -x 200 -y 50 -c <ルート> claude --permission-mode default`・`send-keys -t tui-capture-<数> -l -- /plan-`・`capture-pane -p -t tui-capture-<数>`・`kill-session -t tui-capture-<数>` がこの順に 1 回ずつ | FG-T1: `trap` の `kill-session` を消した写しで、記録に `kill-session` が無く不合格 |
 | T2（AC1） | `'!ls'`・`'  !ls'`・`'/plan-' '!ls'` | どれも exit 2。記録に `new-session` が無い（何も起動しない） | FG-T2: `!` の判定を消した写しで、exit 0（不合格） |
 | T3 | 入力なし・`--wait abc '/x'`・`--start-timeout -1 '/x'` | どれも exit 2。記録に `new-session` が無い | — （使い方の誤り。FG は T2 と同じ形で足りる） |
-| T4（AC1） | `--wait 0 '/config' '{Down}' '{Enter}' '{Escape}'` | exit 0。記録に `send-keys -t … -l /config`・`send-keys -t … Down`・`send-keys -t … Enter`・`send-keys -t … Escape`（キーの 3 つは `-l` なし） | FG-T4: キーの判定を消した写し（全部 `-l`）で、`send-keys -t … Down` が無く不合格 |
-| T5 | `--wait 0 '{Foo}'` | exit 0。記録に `send-keys -t … -l {Foo}`（決まった 6 つ以外は文字として送る） | — |
+| T4（AC1） | `--wait 0 '/config' '{Down}' '{Enter}' '{Escape}'` | exit 0。記録に `send-keys -t … -l -- /config`・`send-keys -t … Down`・`send-keys -t … Enter`・`send-keys -t … Escape`（キーの 3 つは `-l` なし） | FG-T4: キーの判定を消した写し（全部 `-l`）で、`send-keys -t … Down` が無く不合格 |
+| T5 | `--wait 0 '{Foo}'` | exit 0。記録に `send-keys -t … -l -- {Foo}`（決まった 6 つ以外は文字として送る） | — |
 | T6（AC1） | `TUI_FAKE_NOPROMPT=1` で `--start-timeout 1 --wait 0 '/x'` | exit 2。記録に `send-keys` が無く、`kill-session` がある（起動しても画面が出なければ閉じる） | FG-T6: 待ちの時間切れの判定を消した写しで、exit 0（不合格） |
-| T7 | PATH に偽物の `claude` だけを置き、`tmux` の無い PATH（`/usr/bin:/bin` から tmux を除くため、一時のフォルダの `bash`・`sleep` などへのリンクだけ）で流す。`claude` の無い場合も同じ | どちらも exit 2 | — |
+| T7 | PATH を一時のフォルダ 1 つだけにする。そこに置くのは本物の `git`・`sleep` へのリンク（スクリプトが外のコマンドとして使うのはこの 2 つと `tmux`・`claude` だけ）と偽物の `claude`（tmux なしの場合）、または偽物の `tmux`（claude なしの場合）。スクリプトは本物の `bash` の絶対パスで流す | どちらも exit 2。tmux なしの場合は何も起動しない | — |
 | T8（AC1） | スクリプト本体 | 起動の行が `claude --permission-mode default` の固定の文字で、引数から組み立てていない（`new-session` を含む行に `$1`・`$@`・`$*` が無い） | FG-T8: 起動の行に `"$@"` を足した写しで不合格 |
+| T9（AC1） | `--wait 0 '-x hello'` | exit 0。記録に `send-keys -t … -l -- -x hello`（`-` で始まる入力もオプションにならない） | FG-T9: `--` を消した写しで、記録が `send-keys -t … -l -x hello` になり不合格 |
 
 ### TC-02 の項目（`test_check_manual_test_executor.sh`。変える・足すものだけ）
 | 項目 | 備考の書き方 | 期待値 |
