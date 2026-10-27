@@ -25,3 +25,5 @@
 ## 自律判断の記録
 - [plan] 対話画面のスクリプトの成立を計画の前にスパイクで確かめた（tmux で claude を起動し `/plan-` の候補を読めた）— 未知リスクを計画の前に潰すため（plan-writing-rules.md のスパイク (1)）
 - [plan] テストは偽物の tmux・claude を PATH の先頭に置いて確かめ、本物は手動テストで Claude が確かめる — CI に tmux・claude があるか分からず、`.github/` は変えないため
+
+STAGE_DONE: plan NEXT: plan-review
