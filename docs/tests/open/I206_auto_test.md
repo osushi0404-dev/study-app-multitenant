@@ -12,8 +12,8 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（「I206」の節を足す）。下の N1〜N14 と FG、既存の R・L・W・A・G・D | exit 0・`fail=0`（ベースライン pass=72） | 実装前のため未実行 |
-| TC-02 | 影響を受けうるテスト: `test_i197_review_ledger.sh`（299 行の置き換え前の文字列を直す・R15 の振り直し）・`test_i205_stop_criteria.sh`（`split_repro`・`blocking`）・`test_i193_official_flow.sh`（C14 の `changed_outside_records`）・`test_i197_adversarial_process.sh`（`adversarial-review.sh`） | どれも exit 0（ベースライン 2026-10-27・develop 0d8cbf3: 64・91・160・115 項目・fail=0） | 実装前のため未実行 |
+| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（「I206」の節を足す）。下の N1〜N14 と FG、既存の R・L・W・A・G・D | exit 0・`fail=0`（ベースライン pass=72） | implement で実行（2026-10-27）: 実装前（Red）pass=82 fail=22（新しい振る舞いの項目と FG がすべて不合格・N3 は前の振り直しでも合格）→ 実装後 pass=106 fail=0（約 58 秒）。N9 は実装後も不合格だったため計画変更記録 3 で直した |
+| TC-02 | 影響を受けうるテスト: `test_i197_review_ledger.sh`（299 行の置き換え前の文字列を直す・R15 の振り直し）・`test_i205_stop_criteria.sh`（`split_repro`・`blocking`）・`test_i193_official_flow.sh`（C14 の `changed_outside_records`）・`test_i197_adversarial_process.sh`（`adversarial-review.sh`） | どれも exit 0（ベースライン 2026-10-27・develop 0d8cbf3: 64・91・160・115 項目・fail=0） | implement で実行（2026-10-27）: `test_i197_review_ledger.sh` pass=64・`test_i205_stop_criteria.sh` pass=91・`test_i193_official_flow.sh` pass=160・`test_i197_adversarial_process.sh` pass=115（どれも fail=0・ベースラインと同じ件数） |
 | TC-03 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
 
 ### TC-01 の項目（I206 の節）
@@ -52,7 +52,7 @@ A adversarial-review.sh（claude はスタブ）:
 - FG-N12: 存在確認の行を外した写しでは、exit 2 にならない
 
 D 指示ファイル:
-- N13（F9）: `.claude/skills/review-gate/SKILL.md`・`docs/runbooks/workflow.md`・`docs/runbooks/review-rules.md` に `パスの判定が YES のときは` があり、`高リスク時は /security-review`・``高リスク時は `/security-review` `` が無い
+- N13（F9）: `.claude/skills/review-gate/SKILL.md`・`docs/runbooks/workflow.md`・`docs/runbooks/review-rules.md`・`docs/runbooks/issue-flow.md`（計画変更記録 2）に `パスの判定が YES のときは` があり、`高リスク時は /security-review`・``高リスク時は `/security-review` `` が無い
 - FG-N13: 各ファイルから `パスの判定が YES のときは` の行を除いた写しでは不合格
 - N14b（4.10）: `.claude/agents/code-reviewer.md` に `直していないものは書かない` があり、`この番号を open で書くと新しい指摘として振り直される` が無い
 - FG-N14: `直していないものは書かない` の行を除いた写しでは不合格

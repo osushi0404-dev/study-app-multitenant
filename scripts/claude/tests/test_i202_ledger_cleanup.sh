@@ -99,7 +99,7 @@ ck "L3 「なし」「-」「None」「 N/A 」「（空）」は再現なし・
 BL3=$(broken '    m = ms[-1]' '    m = ms[0]')
 ledger "$BL3" full "" 'FINDING: F1 SEV=Low STATUS=open FILE=backend/x.py LINE=10 SECURITY=no STOP=- | 要約 A | 再現: x の中身 | 再現: 本当の再現' >/dev/null
 ck "FG-L3a 最初の「| 再現:」で分けると L3 が不合格（要約が切れる）" no "$(led_has '\| 要約 A \| 再現: x の中身$')"
-BL3b=$(broken 'if (not body or body.casefold() in NO_REPRO)' 'if (not body)')
+BL3b=$(broken 'if (not body or body.casefold() in NO_REPRO or NO_REPRO_HEAD.match(body.casefold()))' 'if (not body)')
 ledger "$BL3b" full "" 'FINDING: F1 SEV=Low STATUS=open FILE=backend/x.py LINE=10 SECURITY=no STOP=- | s | 再現: なし' >/dev/null
 ck "FG-L3b 「なし」の判定を外すと L3 が不合格（REPRO=yes）" yes "$(led_has 'REPRO=yes')"
 # L4 I197-F12: 1 回のレビューで同じ新しい番号を 2 回書いても 1 件
@@ -141,7 +141,7 @@ printf 'jobs:\n  j:\n    name: J\n' > "$ES/wf.yml"
 cat > "$ES/gh" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
-  "pr list"*) echo 7 ;;
+  "pr list"*) [ -n "${E2E_NO_PR:-}" ] || echo 7 ;;
   *headRefOid*) git rev-parse HEAD ;;
   "pr checks"*"--json"*) printf 'pass\tJ\n' ;;
   *) exit 0 ;;
@@ -277,7 +277,7 @@ ck "FG-W4b 範囲が空かで決める形に戻すと W4b が不合格（呼ば�
 # mixed <名前>: 1 周目の後に、develop で c.txt を変えて取り込み、a.py を develop の中身に戻し、b.sh を足す
 mixed() { local E="$TMP/e_$1"
   git -C "$E" checkout -q develop; printf 'c\n' > "$E/c.txt"; git -C "$E" add c.txt; git -C "$E" commit -qm "develop c"
-  git -C "$E" push -q origin develop 2>/dev/null; git -C "$E" checkout -q feature/I900-x; git -C "$E" merge -q --no-edit develop
+  git -C "$E" push -q origin develop; git -C "$E" checkout -q feature/I900-x; git -C "$E" merge -q --no-edit develop
   git -C "$E" checkout -q origin/develop -- a.py; printf 'b\n' > "$E/b.sh"; git -C "$E" add -A; git -C "$E" commit -qm "revert a.py + b.sh"; }
 setup w4c
 rename_rec w4c "$(round w4c w4c1 "$B_APP_HIGH")" 0001 >/dev/null
@@ -285,8 +285,8 @@ mixed w4c
 round w4c w4c2 "$B_APP_RES" >/dev/null
 ck "W4c 混在: 入力に a.py の取り消し（-l2）と b.sh があり、c.txt は無い・F1 が resolved で OK" "yes yes no OK" \
   "$(yn grep -qx -- '-l2' "$TMP/in_w4c2.txt") $(yn grep -qx 'b.sh' "$TMP/in_w4c2.txt") $(yn grep -qx 'c.txt' "$TMP/in_w4c2.txt") $(fv w4c2)"
-setup fw4c "$(broken '  { cat "$SCOPE_FILE"
-    LC_ALL=C comm -12' '  { cat "$SCOPE_FILE"; false &&
+setup fw4c "$(broken '  { cat "$SCOPE_FILE" &&
+    LC_ALL=C comm -12' '  { cat "$SCOPE_FILE"; : ||
     LC_ALL=C comm -12')"
 rename_rec fw4c "$(round fw4c fw4c1 "$B_APP_HIGH")" 0001 >/dev/null
 mixed fw4c
@@ -429,6 +429,108 @@ ck "D3 review-rules.md" yes "$(yn d3 "$RR")"
 ck "FG-D1 RISK=up の語を消すと D1 が不合格" no "$(yn d1 "$(without "$CRV" 'RISK=up')")"
 ck "FG-D2 台帳の目印の語を消すと D2 が不合格" no "$(yn d2 "$(without "$RG" '台帳の目印')")"
 ck "FG-D3 台帳の目印の語を消すと D3 が不合格" no "$(yn d3 "$(without "$RR" '台帳の目印')")"
+
+# ---------------- I206: 台帳の番号の合流・中身の無い指摘の増え方と、I202 の台帳の残り（plan_I206.md §4・auto_test TC-01） ----------------
+# N1（F1・AC1）: 振り直し先の番号は、今回のレビューの番号とも重ならない
+printf 'LEDGER: F1 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no | 残り\nLEDGER: F2 SEV=High STATUS=resolved SCOPE=delta KIND=harness STOP=flow REPRO=yes RISK=- SECURITY=no | 直った\n' > "$TMP/n1_prev"
+N1B='FINDING: F2 SEV=High STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=flow | 中身 B | 再現: r'
+N1A='FINDING: F3 SEV=High STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=flow | 中身 A | 再現: r'
+ledger "$CR" delta "$TMP/n1_prev" "$N1B" "$N1A" >/dev/null
+ck "N1 振り直し先（F4・中身 B）とレビュー役の新しい F3（中身 A）が合流しない" "yes yes" \
+  "$(led_has '^LEDGER: F3 .*\| 中身 A$') $(led_has '^LEDGER: F4 .*\| 中身 B$')"
+ledger "$(broken '    next_id = max([int(k[1:]) for k in led] + [int(g[0][1:]) for g in findings] or [0]) + 1' '    next_id = max([int(k[1:]) for k in led] or [0]) + 1')" \
+  delta "$TMP/n1_prev" "$N1B" "$N1A" >/dev/null
+ck "FG-N1 前の台帳だけから振ると N1 が不合格（F4 が無い＝合流する）" no "$(led_has '^LEDGER: F4 ')"
+# N2（F8・AC2）: 台帳の残りを直さずに open で書き直しても、中身の無い指摘は増えず、前の行のまま（I202 の実物の形）
+N2_F1='FINDING: F1 SEV=High STATUS=resolved FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=flow | 直した'
+N2_F2='FINDING: F2 SEV=Low STATUS=open FILE=- LINE=- SECURITY=no STOP=- | 今回の差分では直していない。'
+# F2 の行が前の台帳（l6_prev）の F2 の行と 1 字も違わない
+f2_same() { yn grep -qxF "$(grep '^LEDGER: F2 ' "$TMP/l6_prev")" "$TMP/led"; }
+ledger "$CR" delta "$TMP/l6_prev" "$N2_F1" "$N2_F2" >/dev/null
+ck "N2 F3 ができない・F2 の行は前の台帳と同じ・F1 は resolved" "no yes yes" \
+  "$(led_has '^LEDGER: F3 ') $(f2_same) $(led_has '^LEDGER: F1 SEV=High STATUS=resolved')"
+ledger "$(broken '        if fid in rest_ids and st == "open" and fid not in remap and fid not in seen and not blocking(fresh):' '        if False:')" \
+  delta "$TMP/l6_prev" "$N2_F1" "$N2_F2" >/dev/null
+ck "FG-N2 捨てる条件を外すと N2 が不合格（中身の無い F3 ができる）" yes "$(led_has '^LEDGER: F3 ')"
+# N3（I197-F1 の守り・AC2）: 台帳の残りの番号を止める中身で書けば、新しい指摘として振り直して止める
+N3_F2='FINDING: F2 SEV=High STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=flow | 新しい穴 | 再現: r'
+ledger "$CR" delta "$TMP/l6_prev" "$N2_F1" "$N3_F2" >/dev/null
+ck "N3 新しい F3（High・open・delta）・HIGH・F2 は前の行のまま" "yes HIGH yes" \
+  "$(led_has '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta') $(verdict) $(f2_same)"
+ledger "$(broken 'fid not in seen and not blocking(fresh):' 'fid not in seen:')" delta "$TMP/l6_prev" "$N2_F1" "$N3_F2" >/dev/null
+ck "FG-N3 止める中身かを見ずに捨てると N3 が不合格（OK＝新しい止める指摘が消える）" OK "$(verdict)"
+# N4（F6）: 台帳の目印は KIND=app の行だけを数える
+for k in harness guard app; do
+  printf 'LEDGER: F1 SEV=Low STATUS=open SCOPE=delta KIND=%s STOP=- REPRO=yes RISK=up SECURITY=no | m\n' "$k" > "$TMP/n4_$k"
+done
+ck "N4 ledger_risk: harness・guard の目印は NO・app は YES" "NO NO YES" \
+  "$(lib "$CR" ledger_risk "$TMP/n4_harness") $(lib "$CR" ledger_risk "$TMP/n4_guard") $(lib "$CR" ledger_risk "$TMP/n4_app")"
+ck "FG-N4 種類の条件を外すと N4 が不合格（harness で YES）" YES \
+  "$(lib "$(broken 'any(e[8] == "up" and e[3] == "app"' 'any(e[8] == "up"')" ledger_risk "$TMP/n4_harness")"
+# N5（F7）: 「なし（理由）」「なし。」などは再現なし。直後が文字・空白なら再現あり
+ck "N5 なし（理由）・なし。・None（x）・n/a: x は再現なし／なしでも落ちる・なし 入力 x・- 入力 x は再現あり" "no no no no yes yes yes" \
+  "$(l3 ' なし（理由）') $(l3 ' なし。') $(l3 ' None（x）') $(l3 ' n/a: x') $(l3 ' なしでも落ちる') $(l3 ' なし 入力 x') $(l3 ' - 入力 x')"
+ledger "$(broken ' or NO_REPRO_HEAD.match(body.casefold())' '')" full "" 'FINDING: F1 SEV=Low STATUS=open FILE=backend/x.py LINE=10 SECURITY=no STOP=- | s | 再現: なし（理由）' >/dev/null
+ck "FG-N5 先頭の判定を外すと N5 が不合格（なし（理由）が REPRO=yes）" yes "$(led_has 'REPRO=yes')"
+# N6（F12）: changed_outside_records は git の失敗で 2（前は process substitution で 0＝fail-open）
+N6R="$TMP/n6"; mkdir -p "$N6R/docs/issues"
+printf 'a\n' > "$N6R/a.txt"; git -C "$N6R" init -q -b develop; git -C "$N6R" add -A; git -C "$N6R" commit -qm A
+printf 'r\n' > "$N6R/docs/issues/x.md"; git -C "$N6R" add -A; git -C "$N6R" commit -qm B
+printf 'b\n' >> "$N6R/a.txt"; git -C "$N6R" add -A; git -C "$N6R" commit -qm C
+cor() { (cd "$N6R" && lib "$1" changed_outside_records "$2" "$3" >/dev/null 2>&1); echo $?; }
+ck "N6 存在しない SHA → 2・記録の場所だけ → 0・外が変わった → 1" "2 0 1" \
+  "$(cor "$CR" 0000000000000000000000000000000000000000 HEAD) $(cor "$CR" HEAD~2 HEAD~1) $(cor "$CR" HEAD~1 HEAD)"
+git -C "$REPO_ROOT" show 0d8cbf3:scripts/claude/code-review.sh > "$TMP/cr_0d8cbf3.sh"
+ck "FG-N6 前の形（process substitution）では存在しない SHA で 0（N6 が不合格）" 0 "$(cor "$TMP/cr_0d8cbf3.sh" 0000000000000000000000000000000000000000 HEAD)"
+# N8（F20）・N14a（4.10）: 差分のレビューの入力（通し m の 2 周目）
+ck "N8 入力の見出しが「変更ファイル一覧（差分のレビューの範囲と、取り消したファイル）」" yes \
+  "$(yn grep -qxF '### 変更ファイル一覧（差分のレビューの範囲と、取り消したファイル）' "$TMP/in_m2.txt")"
+ck "N14a 入力の台帳の残りの節に「直していないものは書かない」があり、「open で書くと新しい指摘として振り直される」が無い" "yes no" \
+  "$(yn grep -qF '直していないものは書かない' "$TMP/in_m2.txt") $(yn grep -qF 'この番号を open で書くと新しい指摘として振り直される' "$TMP/in_m2.txt")"
+# N7（F14）: 早く終わっても（PR 無し）一時ファイルが残らない
+mkdir -p "$TMP/n7tmp" "$TMP/fn7tmp"
+setup n7; round n7 n7 "$B_NONE" E2E_NO_PR=1 TMPDIR="$TMP/n7tmp" >/dev/null
+ck "N7 PR 無しで止まり（CI_WAIT: NO_PR）、TMPDIR が空" "yes yes" \
+  "$(yn grep -qx 'CI_WAIT: NO_PR' "$TMP/out_n7") $([ -z "$(ls -A "$TMP/n7tmp")" ] && echo yes || echo no)"
+setup fn7 "$(broken 'trap cleanup_official EXIT' ':')"; round fn7 fn7 "$B_NONE" E2E_NO_PR=1 TMPDIR="$TMP/fn7tmp" >/dev/null
+ck "FG-N7 後片付けの trap を外すと N7 が不合格（TMPDIR にファイルが残る）" yes "$([ -n "$(ls -A "$TMP/fn7tmp")" ] && echo yes || echo no)"
+# N9（F21）: 見せるファイルの一覧を作れなければ止まる（握りつぶさない）
+N9_FAIL='  { cat "$SCOPE_FILE" /nonexistent-I206'
+n9() { setup "$1" "$2"; rename_rec "$1" "$(round "$1" "${1}a" "$B_NONE")" 0001 >/dev/null; change "$1" l3; round "$1" "${1}b" "$B_NONE" >/dev/null
+  echo "$(yn grep -qF '⛔ 差分のレビューで見せるファイルの一覧を作れません' "$TMP/out_${1}b") $(yn grep -q '^FINAL_VERDICT:' "$TMP/out_${1}b")"; }
+ck "N9 一覧の作成の失敗で ⛔・FINAL_VERDICT が出ない" "yes no" "$(n9 n9 "$(broken '  { cat "$SCOPE_FILE"' "$N9_FAIL")")"
+ck "FG-N9 失敗を || true で握りつぶす形では N9 が不合格（⛔ が無く先へ進む）" "no yes" \
+  "$(n9 fn9 "$(broken_of "$(broken '  { cat "$SCOPE_FILE"' "$N9_FAIL")" '|| { echo "⛔ 差分のレビューで見せるファイルの一覧を作れません（起点 ${SINCE}）"; exit 1; }' '|| true')")"
+# N10（F5）: 鍵を取った後も 2 回分の時間が無ければ実験役を呼ばない（締め切り）
+amk n10; echo 9 > "$TMP/a_n10/sd/exec_sleep"; arun n10 ADV_DEADLINE=20 ADV_MIN_STEP=6
+ck "N10 実験役は 1 回だけ・記録に「実行していない（締め切り）」" "1 yes" \
+  "$(grep -c . "$TMP/a_n10/sd/spans") $(yn grep -qF '実行していない（締め切り）' "$(arec n10)")"
+amk fn10 "$(broken_of "$ADV" 'if [ "$(remaining)" -lt $(( 2 * ADV_MIN_STEP )) ]; then waited_out=1' 'if [ "$(remaining)" -lt "${ADV_MIN_STEP}" ]; then waited_out=1')"
+echo 9 > "$TMP/a_fn10/sd/exec_sleep"; arun fn10 ADV_DEADLINE=20 ADV_MIN_STEP=6
+ck "FG-N10 鍵の後を 1 回分で比べると N10 が不合格（締め切りにならない）" no "$(yn grep -qF '実行していない（締め切り）' "$(arec fn10)")"
+# N11（F3）: check_worktree は鍵の中（flock 9 から } 9> までの間）で呼ぶ
+n11() { awk '/^      flock 9$/ { f = 1 } f && /check_worktree/ { hit = 1 } /^    } 9>"\$RUN\/exp\.lock"$/ { f = 0 } END { exit !hit }' "$1"; }
+ck "N11 check_worktree が鍵の中にある" yes "$(yn n11 "$ADV")"
+ck "FG-N11 鍵の外へ戻すと N11 が不合格" no "$(yn n11 "$(broken_of "$ADV" '        check_worktree; fi' '        fi')")"
+# N12（F10）: flock が無ければ実行できない（exit 2・ADVERSARIAL_ERROR: FLOCK）
+NF="$TMP/noflock"; mkdir -p "$NF"
+for c in /usr/bin/* /usr/local/bin/*; do
+  [ "${c##*/}" = flock ] && continue
+  [ -e "$NF/${c##*/}" ] || ln -s "$c" "$NF/${c##*/}"
+done
+amk n12; arun n12 PATH="$NF"
+ck "N12 flock の無い PATH → exit 2・ADVERSARIAL_ERROR: FLOCK" "2 yes" "$(cat "$TMP/a_n12/rc") $(yn grep -qx 'ADVERSARIAL_ERROR: FLOCK' "$TMP/a_n12/out")"
+amk fn12 "$(broken_of "$ADV" 'if ! command -v flock >/dev/null 2>&1; then' 'if false; then')"; arun fn12 PATH="$NF"
+ck "FG-N12 存在確認を外すと N12 が不合格（exit 2 にならない）" no "$([ "$(cat "$TMP/a_fn12/rc")" = 2 ] && echo yes || echo no)"
+# N13（F9）・N14b（4.10）: 指示ファイル
+n13() { grep -qF 'パスの判定が YES のときは' "$1" && ! grep -qF '高リスク時は /security-review' "$1" && ! grep -qF '高リスク時は `/security-review`' "$1"; }
+for f in "$RG" "$RR" docs/runbooks/workflow.md docs/runbooks/issue-flow.md; do
+  ck "N13 ${f}: /security-review はパスの判定が YES のとき" yes "$(yn n13 "$f")"
+  ck "FG-N13 ${f}: 「パスの判定が YES のときは」の行を除くと不合格" no "$(yn n13 "$(without "$f" 'パスの判定が YES のときは')")"
+done
+n14() { grep -qF '直していないものは書かない' "$1" && ! grep -qF 'この番号を open で書くと新しい指摘として振り直される' "$1"; }
+ck "N14b code-reviewer.md: 直していないものは書かない" yes "$(yn n14 "$CRV")"
+ck "FG-N14 「直していないものは書かない」の行を除くと不合格" no "$(yn n14 "$(without "$CRV" '直していないものは書かない')")"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
