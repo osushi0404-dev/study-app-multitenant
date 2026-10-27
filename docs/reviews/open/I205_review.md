@@ -86,6 +86,7 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 - [close の後・ユーザー決定] F1・F2・F6（行の塊の読み取りが見逃し側に倒れる穴）を、I202 に回さずこの PR で直す（計画 4.11・計画変更記録 2）。記録を open に戻し、計画レビューから通り直す — 次のアプリのイシュー（I196）がこの判定を使うため、develop に入れる前に直す（ユーザーが評価を経て合意）
 - [plan-review] 追記分の計画レビュー（`docs/reviews/I205_plan_review_20261027_1300.md`）OK・高リスク No。Warning 3 件・Info 2 件は計画に反映し、再レビューはしない（計画変更記録 2）
 - [implement] 計画 4.11 を実装（F1・F2・F6）。/simplify は今回の追加分では呼ばなかった — 変えたのは 1 回目の /simplify で整理済みの同じ関数の約 40 行で、見出しの読み方・オプション・読めなかったときの扱いだけ（新しい重複・無駄を生む形の変更ではない）。整理の点検は review-gate の組み込み /code-review が受け持つ
+- [review-gate] 差分のレビュー（`docs/reviews/I205_code_review_20261027_1307.md`・台帳 2 周目）は HIGH。止める指摘は F11（`STOP=flow`・再現あり: 空白を含むパスで git が `+++ b/<パス>` の後ろにタブを付け、塊の行が 4 列になって台帳の作成が落ちる）の 1 件だけ。F12〜F17 は `STOP=-` で止めない（retro が I202 に回す） — I205 の決まりのとおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -97,3 +98,4 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
