@@ -20,7 +20,8 @@
 ハーネスだけ（`scripts/claude/code-review.sh`・`.claude/agents/code-reviewer.md`・`.claude/skills/review-gate/`・`.claude/skills/fix-loop/`・`.claude/skills/retro/`・`docs/runbooks/review-rules.md`・`scripts/claude/tests/`）。アプリ本体・DB・GitHub の設定は変えない。
 
 ## テスト結果
-（test-gate 段階で記入）
+- 自動: 決定論ゲート 12 本すべて exit 0（review-gate・HEAD 7f3167e）。CI 全ジョブ pass（Harness Tests を含む）。gate-check OK
+- 手動: No.1〜3 すべて OK（実施者はすべて Claude・Human の項目なし）。実物のレビュー役が新しい FINDING 行の形で 10 行を書き、形の崩れは 0 件
 
 ## 計画との差分
 - `delta_files` を `branch_own_files` の上に作り直した（/simplify の指摘。挙動は同じで、R2・FG-R2 で確かめた）。計画の範囲（code-review.sh の範囲の決め方）の中の整理
@@ -45,3 +46,4 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

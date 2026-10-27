@@ -15,7 +15,11 @@
 | TC-01 | `bash scripts/claude/tests/test_i205_stop_criteria.sh`（新設）。下の H・L・K・B・W・D の各項目と FG | exit 0・`fail=0` | implement で実行: pass=78 fail=0（2026-10-27。CI でも確かめる） |
 | TC-02 | `bash scripts/claude/tests/test_i197_review_ledger.sh`（FINDING 行を新しい形に付け替え。項目の意味は変えない。R11 の語を新しい決まりに付け替え） | exit 0・`fail=0`（ベースライン pass=64 fail=0） | implement で実行: pass=64 fail=0 |
 | TC-03 | 影響を受けうるテスト: `bash scripts/claude/tests/test_adversarial_trigger.sh`・`test_i114_retro_plain_output.sh`・`test_i180_retro_triage.sh`・`test_i181_review_slim.sh`・`test_fix_review.sh`・`test_i193_official_flow.sh`・`test_i185_harness_docs.sh`・`test_i197_adversarial_process.sh`・`test_i182_docs.sh`・`test_review_verdict.sh` | どれも exit 0 | implement で実行: すべて exit 0（`test_fix_review.sh` の TC-22・TC-26 と `test_i193_official_flow.sh` の S19 は語を付け替えた後） |
-| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
+| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | OK: review-gate の CI 待ちで Harness Tests を含む全ジョブが pass（`CI_WAIT: OK`・HEAD 7f3167e） |
+
+## 実行記録
+- 2026-10-27 review-gate（`code-review.sh` の決定論ゲート実走・HEAD 7f3167e）: 「## 決定論ゲート（自動実走）」の 12 本すべて exit=0（heavy で test-gate に委譲したものは無い）。記録 `docs/reviews/I205_code_review_20261027_1123.md`
+- 2026-10-27 test-gate: `bash scripts/claude/gate-check.sh I205` → exit 0（GATE_CHECK: OK）
 
 ### TC-01 の項目
 一時の git リポジトリ（develop に `backend/x.py`〔20 行〕・`scripts/claude/a.sh`〔20 行〕・`Docs/up.md`〔大文字の場所。casefold の確認用〕を置き、feature ブランチで行を変える）と、手書きの FINDING 行・台帳で確かめる。
