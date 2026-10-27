@@ -19,7 +19,9 @@
 - ハーネスだけ（`scripts/claude/code-review.sh`・テスト 2 本・retro・plan-issue・review-rules・`docs/reviews/backlog/I207.md`）。アプリ本体・DB・設定の変更なし
 
 ## テスト結果
-（test-gate で書く）
+- 自動: TC-01 `test_i202_ledger_cleanup.sh` pass=148 fail=0（実装前 fail=25）・TC-02 関係する 5 本すべて合格・TC-03 CI 全緑（Harness Tests を含む）
+- gate-check: GATE_CHECK OK（2026-10-27）
+- 手動: No.1〜3 すべて OK（Claude 実施・Human の項目なし）。実物の I207 の記録で F2 が欄どおり一覧側に出ること、retro のコマンドが承認なしで通ること、計画で一覧を見る新しいコマンドが前方一致せずに当たることを確かめた
 
 ## 計画との差分
 - 計画変更記録 2（`f2_same` に FILE の値を渡す）・3（`/simplify` の整理: `latest_ledger_record()`・理由の無い一覧の行で exit 2）。どちらも方式・範囲・受け入れ条件は変えない
@@ -38,3 +40,4 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
