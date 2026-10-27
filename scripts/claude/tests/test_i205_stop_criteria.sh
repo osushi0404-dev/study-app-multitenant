@@ -69,6 +69,8 @@ ck "H6 全体のレビュー: ブランチが変えた行（3・10・16〜17）�
 git -C "$R" config diff.noprefix true; git -C "$R" config diff.mnemonicPrefix true
 ck "H7 diff.noprefix・diff.mnemonicPrefix を設定しても backend/x.py 10〜10" yes \
   "$(inR lib "$CR" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'backend/x.py\t10\t10')" && echo yes || echo no)"
+# 後の項目が設定の残ったまま動かないように外す（FG-H7 のときだけ付け直す・I205-F15）
+git -C "$R" config --unset diff.noprefix; git -C "$R" config --unset diff.mnemonicPrefix
 # H8（4.11・F6）: 追加した行の中身が「++ b/…」（diff では「+++ b/…」）でも、見出しと取り違えず後ろの塊が残る
 sed -i '1s/.*/++ b\/zz.txt/; 8s/.*/o8-changed/' "$R/old.txt"; git -C "$R" add -A; git -C "$R" commit -qm "F6"
 inR lib "$CR" delta_hunks develop "" > "$TMP/h_f6" 2>/dev/null
@@ -81,9 +83,13 @@ ck "H9 diff に出てこない b.txt はファイル全体・a.txt は 2〜2" "a
 ck "H9 差分のレビューで両方に出て重ならない a.txt は塊なし" "b.txt	1	999999999" "$(lib "$CR" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" "$TMP/h9_b" | paste -sd'|' -)"
 # H10（F11）: 空白を含むパスでも、3 列の塊が 1 行だけ出て、台帳が作れる
 printf 's1\ns2\ns3\n' > "$R/sp ace.md"; git -C "$R" add -A; git -C "$R" commit -qm "sp base"
+SP_BASE=$(git -C "$R" rev-parse HEAD)
 sed -i '3s/.*/S3/' "$R/sp ace.md"; git -C "$R" commit -qam "sp change"
 inR lib "$CR" delta_hunks develop "" > "$TMP/h_sp" 2>/dev/null
 ck "H10 空白を含むパス: 塊は 3 列で、sp ace.md の行は 1〜3（新しいファイル）の 1 行だけ" "sp ace.md	1	3" "$(grep '^sp ace.md' "$TMP/h_sp")"
+# H10b（I202・I205-F19）: 差分のレビュー（起点あり）で、起点にあった空白を含むパスのファイルの一部（3 行目）だけを変えた
+inR lib "$CR" delta_hunks develop "$SP_BASE" > "$TMP/h_sp2" 2>/dev/null
+ck "H10b 空白を含むパス・起点あり・一部だけの変更: sp ace.md の行は 3〜3 の 1 行だけ" "sp ace.md	3	3" "$(grep '^sp ace.md' "$TMP/h_sp2")"
 printf 'FINDING: F1 SEV=Low STATUS=open FILE=backend/x.py LINE=1 SECURITY=no STOP=- | s\n' > "$TMP/h10.md"
 printf 'sp ace.md\t\t3\t3\n' > "$TMP/h10_hunks"
 ck "H10 4 列の塊の行（パスにタブ）があっても台帳の作成が落ちない" 0 "$(rc inR lib "$CR" ledger_update full "" "$TMP/h10.md" "$TMP/h10_hunks")"
@@ -287,8 +293,10 @@ BW2=$(broken "grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*\$' \"
 e2e fgw2 "$BW2" a.py "$W2_BODY" >/dev/null
 ck "FG-W2 LLM の VERDICT を合否に使うと W2 が不合格（HIGH）" HIGH "$(fv fgw2)"
 BH7=$(broken '--src-prefix=a/ --dst-prefix=b/ "$mb" HEAD' '"$mb" HEAD')
+git -C "$R" config diff.noprefix true; git -C "$R" config diff.mnemonicPrefix true
 ck "FG-H7 接頭辞の固定を外すと H7 が不合格（10〜10 が出ない）" no \
   "$(inR lib "$BH7" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'backend/x.py\t10\t10')" && echo yes || echo no)"
+git -C "$R" config --unset diff.noprefix; git -C "$R" config --unset diff.mnemonicPrefix
 ck "FG-H8 見出しを最初の @@ までに限る判定を外すと H8 が不合格" no \
   "$(inR lib "$(broken '        elif head and line.startswith("+++ "):' '        elif line.startswith("+++ "):')" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'old.txt\t8\t8')" && echo yes || echo no)"
 ck "FG-H9 読めなかったファイルをファイル全体にする処理を外すと H9 が不合格" no \

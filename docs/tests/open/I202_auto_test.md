@@ -12,9 +12,9 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（新設）。下の R・L・W・A・G・D の各項目と FG | exit 0・`fail=0` | 実装前のため未実行 |
-| TC-02 | `bash scripts/claude/tests/test_i197_review_ledger.sh`（R17・FG-R17 を消し、R14 の 3 周目に FG・R16 のコメントと FG の分割）・`bash scripts/claude/tests/test_i205_stop_criteria.sh`（H7 の設定の後片付け・H10 の追加） | どちらも exit 0・`fail=0`（ベースライン: 64・90 項目） | 実装前のため未実行（ベースラインは計画の調査結果のとおり pass=64・pass=90） |
-| TC-03 | 影響を受けうるテスト: `test_adversarial_trigger.sh`・`test_i193_official_flow.sh`・`test_i181_review_slim.sh`・`test_i197_adversarial_process.sh`・`test_review_commit_lifecycle.sh`・`test_review_gates.sh`・`test_review_verdict.sh` | どれも exit 0 | 実装前のため変更後は未実行。ベースライン（2026-10-27・develop 33d2e29）: `test_adversarial_trigger.sh` pass=60・`test_i193_official_flow.sh` pass=160・`test_i181_review_slim.sh` pass=29・`test_i197_adversarial_process.sh` pass=115・`test_review_commit_lifecycle.sh` PASS=30 SKIP=1・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58（どれも fail=0） |
+| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（新設）。下の R・L・W・A・G・D の各項目と FG | exit 0・`fail=0` | implement で実行: pass=67 fail=0（2026-10-27） |
+| TC-02 | `bash scripts/claude/tests/test_i197_review_ledger.sh`（R17・FG-R17 を消し、R14 の 3 周目に FG・R16 のコメントと FG の分割）・`bash scripts/claude/tests/test_i205_stop_criteria.sh`（H7 の設定の後片付け・H10 の追加） | どちらも exit 0・`fail=0`（ベースライン: 64・90 項目） | implement で実行: `test_i197_review_ledger.sh` pass=64 fail=0（R17・FG-R17 を消し、FG-R16 を 2 本に分け、FG-R14c を足した）・`test_i205_stop_criteria.sh` pass=91 fail=0（H10b を足した） |
+| TC-03 | 影響を受けうるテスト: `test_adversarial_trigger.sh`・`test_i193_official_flow.sh`・`test_i181_review_slim.sh`・`test_i197_adversarial_process.sh`・`test_review_commit_lifecycle.sh`・`test_review_gates.sh`・`test_review_verdict.sh` | どれも exit 0 | implement で実行: すべて exit 0（`test_i197_adversarial_process.sh` は S5 の grep を字下げに合わせた後 pass=115・ほかはベースラインと同じ件数）。ベースライン（2026-10-27・develop 33d2e29）: `test_adversarial_trigger.sh` pass=60・`test_i193_official_flow.sh` pass=160・`test_i181_review_slim.sh` pass=29・`test_i197_adversarial_process.sh` pass=115・`test_review_commit_lifecycle.sh` PASS=30 SKIP=1・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58（どれも fail=0） |
 | TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
 
 ### TC-01 の項目
@@ -38,7 +38,7 @@ L 判定の穴（AC2）:
 - L3 I205-F5: 要約に `| 再現:` を含む行 `… | 要約 A | 再現: x の中身 | 再現: 本当の再現` → 台帳の要約が `要約 A | 再現: x の中身`・REPRO=yes。`| 再現: なし`・`| 再現: -`・`| 再現: None`・`| 再現:  N/A ` → REPRO=no。`| 再現: なしでも落ちる` → REPRO=yes
 - L4 I197-F12: 1 回のレビューで新しい番号 `F3` を 2 回書く → 台帳に F3 が 1 行だけ（`F4` に振り直されない）。前の周の resolved の番号を使った行は、今までどおり新しい番号に振り直す
 - L5 I197-F18: リポジトリの中の実在のファイル `..foo.sh`（ブランチで変えていない）への High → outside。`../x` → delta
-- L6 台帳の限界: 前の周に止めない open の指摘 F2（harness・`STOP=-`）がある差分のレビューで、レビュー役が `FINDING: F2 … STATUS=resolved` と書く → 台帳の F2 が resolved（新しい番号に振り直されない）。書かなければ open のまま
+- L6 台帳の限界: 前の周に止めない open の指摘 F2（harness・`STOP=-`）がある差分のレビューで、レビュー役が `FINDING: F2 … STATUS=resolved` と書く → 台帳の F2 が resolved（新しい番号に振り直されない）。書かなければ open のまま。F2 を open で書くと新しい F3 に振り直す（範囲で決め直す・I197-F1 の守り。計画変更記録 2）
 - L7 `ledger_open_rest <台帳>`: `STATUS=open` で止めない行だけを出す（止める行・resolved の行は出ない）
 
 W 本体の細部（スタブで通し）:
@@ -60,7 +60,7 @@ G 共通化（gate-check の挙動を変えない）:
 - G2 `record_reviewed_commit`: 最後の `REVIEWED_COMMIT:` の SHA。無ければ空
 - G3 `branch_own_files develop <rev>`: 改行・引用符を含まないが空白・`[` を含むパス（`docs2/a [b].md`）がそのままの名前で出る。記録の場所は出ない
 - G4 一時リポジトリで、OK の記録・レビューの後の変更あり・高リスクで敵対的レビューなし、の 3 つの状態の `gate-check.sh` の出力（`GATE_CHECK:` の行と終了コード）が、付け替える前の `gate-check.sh`（テストの中で develop 33d2e29 の版の `gate-check.sh` と `code-review.sh` を `git show` で取り出し、`GATE_CHECK_LIB` で組み合わせたもの）と同じ
-- G5 I205-F12: `[` を含むファイル名 `x[1].txt` と `x1.txt` があり、ブランチが `x[1].txt` だけを変えた → `delta_hunks` の塊に `x1.txt` が出ない
+- G5 I205-F12: `delta_hunks` の 2 本と差分のレビューの `GIT_DIFF` の、3 か所の `git diff` すべてに `--literal-pathspecs` が付いている（計画変更記録 3: glob で余分に拾っても塊の出力は変わらないので、振る舞いではなく付いていることを確かめる）
 
 D 指示ファイル（静的）:
 - D1 `.claude/agents/code-reviewer.md` に `RISK=up`・`台帳の残り`・`消した位置の HEAD の行番号` があり、`触れていれば Blocker として FINDING 行に書く` が無い
@@ -76,12 +76,13 @@ FG（失敗注入。一時コピーを壊すと、その項目が不合格にな
 - FG-L2 `kind_of` の casefold を外す → L2 の 1 つ目が app
 - FG-L3 最後の `| 再現:` で分けずに最初で分ける → L3 の要約が切れる。「なし」の判定を外す → `再現: なし` が REPRO=yes
 - FG-L4 `seen` を外す → L4 で F4 に振り直される
-- FG-L6 `shown` を止める指摘だけに戻す → L6 で F2 が新しい番号に振り直され、F2 は open のまま
+- FG-L6 台帳の残りの resolved を受け付ける条件を外す → L6 で F2 が新しい番号に振り直され、F2 は open のまま
+- FG-R15・FG-R16a・FG-R16b・FG-R14c（TC-02 の `test_i197_review_ledger.sh`）: 振り直し・リポジトリの外の検査・実在の検査・3 周目の食い違いの検査を、それぞれ外すと不合格
 - FG-W3 食い違いの検査の `REVIEWER_RAN` の条件を外す → W3 に `読める FINDING 行が無い` が出る
 - FG-W4 空の範囲の扱いを外す → W4 でレビュー役が呼ばれる
 - FG-A1 `flock` を外す → A1 の区間が重なる
 - FG-A2 祖先の確認を外す → A2 で祖先でない SHA が返る
-- FG-G5 `--literal-pathspecs` を外す → G5 で `x1.txt` が出る
+- FG-G5 `--literal-pathspecs` を 1 か所外す → G5 が不合格
 - FG-D1〜D3 対象のファイルの写しから語を 1 つ消す → その D が不合格
 
 ## 決定論ゲート（自動実走）

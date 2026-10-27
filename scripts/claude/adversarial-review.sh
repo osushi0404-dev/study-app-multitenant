@@ -65,11 +65,8 @@ read_checklist() {
   ' "$1"
 }
 
-# 過去の記録（docs/reviews/[closed/]I###_adversarial_review_*.md）をファイル名の時刻順に出す
-adversarial_records() {
-  find docs/reviews -maxdepth 2 -type f -name "${ISSUE}_adversarial_review_*.md" 2>/dev/null \
-    | awk -F/ '{ print $NF "\t" $0 }' | LC_ALL=C sort | cut -f2
-}
+# 過去の記録（docs/reviews/[closed/]I###_adversarial_review_*.md）をファイル名の時刻順に出す（code-review.sh の review_records）
+adversarial_records() { review_records "$ISSUE" adversarial_review; }
 
 # 周回の合計（記録ごとの最後の ROUNDS: 行。行が無い記録は 1）
 count_rounds() {
@@ -95,13 +92,14 @@ counted_records() {
   return 0
 }
 
-# 見る範囲の起点: 周に数えた最新の記録の REVIEWED_COMMIT。無ければ比べる相手（origin/develop）
+# 見る範囲の起点: 周に数えた最新の記録の REVIEWED_COMMIT。無い・HEAD の祖先でない（rebase の後など）ときは
+# 比べる相手（origin/develop）。祖先でないコミットとの差分は HEAD の歴史と食い違うので、広い側で見る（I202 F7）
 review_base() {
   local last sha
   last=$(counted_records | tail -1)
   if [ -n "$last" ]; then
-    sha=$(grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9a-f]{7,40}')
-    if [ -n "$sha" ]; then echo "$sha"; return; fi
+    sha=$(record_reviewed_commit "$last")
+    if [ -n "$sha" ] && git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then echo "$sha"; return; fi
   fi
   echo "${ADV_BASE}"
 }
@@ -265,7 +263,19 @@ run_perspective() {
       printf '次の実験を、書かれたコマンドを一字も変えずに、Bash ツールで 1 つずつ 1 回だけ実行せよ。ほかの道具は使わない。拒否されたら再試行せず次へ進む。全部終わったら DONE とだけ答えよ。\n'
       for id in $ids; do printf '\n<<<COMMAND %s\n%s\nCOMMAND>>>\n' "$id" "$(cat "$d/exp/$id.cmd")"; done
     } > "$d/exec_in$r.txt"
-    run_experiment_agent "$d/exec_in$r.txt" "$d/exec$r.jsonl"
+    # 実験役は観点をまたいで同時に 1 本だけ（同じ作業ツリーで「壊して戻す」実験が重ならないように・I202 F6）。
+    # 待った後に締め切りが迫っていれば、呼ばずに締め切りとして扱う（未検証）
+    local waited_out=0
+    {
+      flock 9
+      if [ "$(remaining)" -lt "${ADV_MIN_STEP}" ]; then waited_out=1
+      else run_experiment_agent "$d/exec_in$r.txt" "$d/exec$r.jsonl"; fi
+    } 9>"$RUN/exp.lock"
+    if [ "$waited_out" -eq 1 ]; then
+      for id in $ids; do printf '%s\t%s\n' "$id" deadline >> "$d/exp_status"; done
+      r=$(( r - 1 ))   # 往復は始めていない
+      break
+    fi
     local mode; mode=$(claude_log_mode "$d/exec$r.jsonl")
     next_in="$d/in$r.txt"
     printf '## 実験の結果（往復 %s）\n' "$r" > "$next_in"
@@ -294,14 +304,16 @@ run_perspective() {
   elif [ -z "$(new_count "$d/body.txt" NEW_CRITICAL)" ] || [ -z "$(new_count "$d/body.txt" NEW_HIGH)" ]; then state="報告なし（NEW_CRITICAL・NEW_HIGH の行が無い）"
   else state="報告あり"; fi
   printf '%s\n' "$state" > "$d/state"
-  printf '%s\n' "$note" > "$d/note"
+  printf '%s' "$note" > "$d/note"   # 空なら空のファイル（改行だけで「報告あり（）」と出さない）
   printf '%s\n' "$(( $(date +%s) - t0 ))" > "$d/secs"
   printf '%s\n' "$r" > "$d/rounds"
   claude_log_last_tool "$log" > "$d/last_tool" 2>/dev/null
   # 拒否の件数と費用（total_cost_usd）の合計。費用は既定の予算を見直す材料（plan_I197.md 手動 No.1）
-  local n=0 cost=0 f c; for f in "$d"/log*.jsonl "$d"/exec*.jsonl; do
+  # 拒否の一覧を読めないログが 1 つでもあれば印のファイル denials_unreadable を作る（黙って 0 件にしない・I202 F8。判定は合格にしない）
+  local n=0 cost=0 f c ds; for f in "$d"/log*.jsonl "$d"/exec*.jsonl; do
     [ -f "$f" ] || continue
-    n=$(( n + $(claude_log_denials "$f" 2>/dev/null | grep -c .) ))
+    if ds=$(claude_log_denials "$f" 2>/dev/null); then n=$(( n + $(printf '%s' "$ds" | grep -c .) ))
+    else : > "$d/denials_unreadable"; fi
     c=$(claude_log_cost "$f"); cost=$(awk -v a="$cost" -v b="${c:-0}" 'BEGIN { printf "%.4f", a + b }')
   done
   printf '%s\n' "$n" > "$d/denials"
@@ -379,6 +391,10 @@ if [ -n "$DIRTY0" ]; then
 fi
 
 REVIEW_BASE=$(review_base)
+REVIEW_BASE_NOTE=""
+if [ "$REVIEW_BASE" = "$ADV_BASE" ] && [ -n "$(counted_records | tail -1)" ]; then
+  REVIEW_BASE_NOTE="前の記録の REVIEWED_COMMIT が無い・HEAD の祖先ではないため、比べる相手（${ADV_BASE}）から見た"
+fi
 REVIEWED_HEAD=$(git rev-parse HEAD)
 REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 worktree_state > "$RUN/state0"
@@ -402,7 +418,7 @@ check_worktree   # 全観点が終わった後にもう一度比べる
 ELAPSED=$(( $(date +%s) - ADV_START ))
 
 # ---- 判定（決定論） ----
-UNVERIFIED=0; CRIT=0; HIGHN=0; UNREPORTED=0; DIRTY_ANY=0; DENIALS=0
+UNVERIFIED=0; CRIT=0; HIGHN=0; UNREPORTED=0; DIRTY_ANY=0; DENIALS=0; DENIALS_UNREADABLE=0
 ITEM_ROWS=""
 while IFS=$'\t' read -r id p m c; do
   IFS=$'\t' read -r rep exps ver <<< "$(item_verdict "$id" "$p" "$m")"
@@ -420,13 +436,15 @@ for p in 1 2 3; do
     lt=$(cut -f1,2 "$d/last_tool" | tr '\t' ' ' | cell); lr=$(cut -f3 "$d/last_tool" | cell); le="$(cut -f4 "$d/last_tool") 秒"
   fi
   DENIALS=$(( DENIALS + $(cat "$d/denials") ))
+  dn="$(cat "$d/denials")"
+  if [ -e "$d/denials_unreadable" ]; then DENIALS_UNREADABLE=1; dn="${dn}（読めない記録あり）"; fi
   [ -s "$d/note" ] && st+="（$(cat "$d/note")）"
-  PERSP_ROWS+="| ${p} | ${st} | $(cat "$d/secs") 秒 | $(cat "$d/rounds") | $(cat "$d/denials") | \$$(cat "$d/cost") | ${lt} | ${lr} | ${le} |"$'\n'
+  PERSP_ROWS+="| ${p} | ${st} | $(cat "$d/secs") 秒 | $(cat "$d/rounds") | ${dn} | \$$(cat "$d/cost") | ${lt} | ${lr} | ${le} |"$'\n'
 done
 
 [ -s "$RUN/dirty" ] && DIRTY_ANY=1
 if [ "$CRIT" -gt 0 ]; then VERDICT=BLOCKER
-elif [ "$HIGHN" -gt 0 ] || [ "$UNVERIFIED" -gt 0 ] || [ "$UNREPORTED" -gt 0 ] || [ "$DIRTY_ANY" -eq 1 ]; then VERDICT=HIGH
+elif [ "$HIGHN" -gt 0 ] || [ "$UNVERIFIED" -gt 0 ] || [ "$UNREPORTED" -gt 0 ] || [ "$DIRTY_ANY" -eq 1 ] || [ "$DENIALS_UNREADABLE" -eq 1 ]; then VERDICT=HIGH
 else VERDICT=OK; fi
 if [ "$UNREPORTED" -gt 0 ]; then ROUNDS=0; else ROUNDS=1; fi
 
@@ -439,6 +457,8 @@ n=1; while [ -e "$RECORD" ]; do n=$(( n + 1 )); RECORD="docs/reviews/${ISSUE}_ad
   printf -- '- 見た範囲: %s...%s\n' "$REVIEW_BASE" "$REVIEWED_HEAD"
   printf -- '- 所要時間: %s 秒（上限 %s）\n' "$ELAPSED" "${ADV_DEADLINE}"
   printf -- '- 人の応答待ち: 0（レビュー役・実験役はすべて --permission-prompts none で起動。拒否 %s 件は下の表）\n' "$DENIALS"
+  [ "$DENIALS_UNREADABLE" -eq 1 ] && printf -- '- ⛔ 拒否の一覧を読めない記録がある（承認が要る操作で止まったかを確かめられないので、この周は合格にしない）\n'
+  [ -n "$REVIEW_BASE_NOTE" ] && printf -- '- %s\n' "$REVIEW_BASE_NOTE"
   printf -- '- 一覧: %s の「## 必ず確かめる項目」（%s 項目）\n' "$PLAN_FILE" "$(grep -c . "$RUN/checklist.tsv")"
   [ "$UNREPORTED" -gt 0 ] && printf -- '- 報告の無い観点が %s 件ある（この周は ROUNDS: 0。review-gate が 1 回だけやり直す）\n' "$UNREPORTED"
   printf '\n## 確かめる項目の結果\n| 項目 | 観点 | 確かめ方 | 報告 | 実験 | 判定 |\n|---|---|---|---|---|---|\n%s' "$ITEM_ROWS"
