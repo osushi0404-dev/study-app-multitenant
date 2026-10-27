@@ -30,3 +30,4 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 - [plan-review] 計画レビュー OK（高リスク判定 No）。Warning 4 件は計画に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記のため（計画変更記録 1）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
