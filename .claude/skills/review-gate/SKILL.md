@@ -1,6 +1,6 @@
 ---
 name: review-gate
-description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。CI を待ち、組み込みの /code-review（高リスク時は /security-review も）と自作のレビュー役で実装を照合し、高リスク判定 YES なら敵対的レビューを起動する。最後に STAGE_DONE を書く。"
+description: "/plan-issue・/proceed の流れの中でだけ呼ぶ段階のスキル（自分から呼ばない）。CI を待ち、組み込みの /code-review（パスの判定が YES のときは /security-review も）と自作のレビュー役で実装を照合し、高リスク判定 YES なら敵対的レビューを起動する。最後に STAGE_DONE を書く。"
 argument-hint: "I###"
 user-invocable: false
 ---

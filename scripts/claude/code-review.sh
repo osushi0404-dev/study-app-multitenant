@@ -111,12 +111,17 @@ is_record_path() {   # $1=パス → 記録の場所なら exit 0
   return 1
 }
 
-# I193: 2 つのコミットの間で、記録の場所の外のファイルが変わったか（変わったファイル名を出して exit 1）
-changed_outside_records() {   # $1=from $2=to
-  local f out=""
+# I193: 2 つのコミットの間で、記録の場所の外のファイルが変わったか（変わったファイル名を出して exit 1）。
+# git の失敗は 2（I206 F12。呼び出し元は「0 のときだけ変わっていない」の形なので、止める側に倒れる）
+changed_outside_records() {   # $1=from $2=to → 0=変わっていない / 1=変わった / 2=git の失敗
+  local f out="" names
+  names=$(mktemp) || return 2
+  # git の失敗を戻り値で受けるため、一時ファイルに受ける（process substitution は失敗を返さない）
+  git -c core.quotePath=false diff -z --name-only --no-renames "$1" "$2" > "$names" || { rm -f "$names"; return 2; }
   while IFS= read -r -d '' f; do
     is_record_path "$f" || out+="${f}"$'\n'
-  done < <(git -c core.quotePath=false diff -z --name-only --no-renames "$1" "$2")
+  done < "$names"
+  rm -f "$names"
   if [ -n "$out" ]; then printf '%s' "$out"; return 1; fi
   return 0
 }
@@ -599,6 +604,9 @@ FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(ope
 LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside)(?: KIND=(app|harness|guard) STOP=(\S+) REPRO=(yes|no)(?: RISK=(up|-))?)? SECURITY=(yes|no)(?: \| (.*))?")
 REPRO_MARK = re.compile(r"(?:^|\s*\|)\s*再現:")   # 要約の後ろの「| 再現: …」の印（最後のものを使う）
 NO_REPRO = {"なし", "無し", "-", "none", "n/a"}   # 「再現: なし」などは再現なし（I205-F5）
+# 「なし（理由）」「なし。」のように、先頭が「なし」などで直後が句読点・括弧・コロンでも再現なし（I206 F7）。
+# 直後が文字・空白（「なしでも落ちる」「なし 入力 x」）は再現あり。「-」は完全一致だけ（箇条書きの「- 入力…」を外さない）
+NO_REPRO_HEAD = re.compile(r"(?:なし|無し|none|n/a)(?:$|[（(。、.,:：])")
 RANK = {"Low": 0, "Medium": 1, "High": 2, "Blocker": 3}
 # ハーネスの止める条件の一覧（I205）: ① flow 流れが動かなくなる ② leak 秘密情報・個人情報が外に出る
 # ③ github develop・main を直接壊す／GitHub から戻せない設定を壊す ④ ac:<番号> 受け入れ条件の未達
@@ -635,7 +643,7 @@ def split_repro(rest):
         return rest.strip(), "no"
     m = ms[-1]
     body = rest[m.end():].strip()
-    return rest[:m.start()].strip(), "no" if (not body or body.casefold() in NO_REPRO) else "yes"
+    return rest[:m.start()].strip(), "no" if (not body or body.casefold() in NO_REPRO or NO_REPRO_HEAD.match(body.casefold())) else "yes"
 
 def branch_kind(paths):
     # FILE=- の指摘の種類: ブランチが変えたファイルに guard があれば guard、無くて app があれば app、どちらも無ければ harness
@@ -706,8 +714,8 @@ elif mode == "update":
     branch_files = read_lines(sys.argv[6]) if len(sys.argv) > 6 else []
     led = read_ledger(prev) if review_kind == "delta" else {}
     # 差分のレビューの入力に見せた指摘: 止める指摘（書き直す）と「台帳の残り」（止めない open の指摘。直ったときだけ
-    # resolved と書いてよい・I202 台帳の限界）。台帳の残りの番号を open で書いた行は、新しい指摘として振り直す
-    # （前の SCOPE を引き継いで、差分の中の新しい指摘が止まらなくなるのを防ぐ・I197-F1 のまま）
+    # resolved と書いてよい・I202 台帳の限界）。台帳の残りの番号を open で書いた行は、止める中身なら新しい指摘として振り直し
+    # （前の SCOPE を引き継いで、差分の中の新しい指摘が止まらなくなるのを防ぐ・I197-F1 のまま）、それ以外は捨てる（I206 F8）
     shown = set(k for k, e in led.items() if blocking(e))
     rest_ids = set(k for k, e in led.items() if is_rest(e))
     remap, seen = {}, set()   # 今回のレビューの中で振り直した番号・読んだ番号（同じ番号の 2 回目は同じ指摘の書き直し・I197-F12）
@@ -715,7 +723,9 @@ elif mode == "update":
     for l in read_lines(hunk_file):
         p, s, e = l.rsplit("\t", 2)   # 後ろの 2 列が行番号（パスにタブが入っても落ちない・I205 F11）
         hunks.setdefault(p.casefold(), []).append((int(s), int(e)))
-    next_id = max([int(k[1:]) for k in led] or [0]) + 1
+    findings = read_findings(cur)
+    # 振り直し先は、前の台帳と今回のレビューの番号のどちらとも重ならない番号から振る（I206 F1: 合流を防ぐ）
+    next_id = max([int(k[1:]) for k in led] + [int(g[0][1:]) for g in findings] or [0]) + 1
     def scope_of(path, line, stop):
         # delta（止める側）: 受け入れ条件の未達・FILE=-・行が読めない・リポジトリの外・実在しないファイル・塊と重なる行。
         # outside にするのは「リポジトリの中の実在のファイルで、どの塊（前後 HUNK_MARGIN 行）とも重ならない行」だけ
@@ -737,10 +747,17 @@ elif mode == "update":
             if a <= e + HUNK_MARGIN and b >= s - HUNK_MARGIN:
                 return "delta"
         return "outside"
-    for fid, sev, st, path, line, sec, stop, risk, rest in read_findings(cur):
+    for fid, sev, st, path, line, sec, stop, risk, rest in findings:
         stop = stop if STOP_RE.fullmatch(stop) else "-"
         risk = risk or "-"
         title, repro = split_repro(rest or "")
+        # この行だけで決めた台帳の行（新しい指摘のときと、台帳の残りを捨てるかの判定に使う。既にある指摘の書き直しでは使わない）
+        kind = branch_kind(branch_files) if path == "-" else kind_of(norm_path(path))
+        fresh = [sev, st, scope_of(path, line, stop), kind, stop, repro, sec, title, risk]
+        # I206 F8: 台帳の残りを open で書いた行は、止める中身のときだけ新しい指摘として振り直す（I197-F1 の守り）。
+        # 止めない中身（「直していない」の書き直しなど）は捨てて、前の行のまま残す（中身の無い指摘を増やさない）
+        if fid in rest_ids and st == "open" and fid not in remap and fid not in seen and not blocking(fresh):
+            continue
         keep = fid in seen or fid in shown or (fid in rest_ids and st == "resolved")
         if fid in remap:
             fid = remap[fid]
@@ -758,9 +775,7 @@ elif mode == "update":
                         o[4] if STOP_RE.fullmatch(o[4]) else stop, "yes" if "yes" in (repro, o[5]) else "no",
                         "yes" if "yes" in (sec, o[6]) else "no", title or o[7], "up" if "up" in (risk, o[8]) else "-"]
         else:
-            k = branch_kind(branch_files) if path == "-" else kind_of(norm_path(path))
-            led[fid] = [sev, st, scope_of(path, line, stop), k, stop, repro, sec, title, risk]
-            next_id = max(next_id, int(fid[1:]) + 1)
+            led[fid] = fresh
     for fid in sorted(led, key=lambda x: int(x[1:])):
         print(ledger_line(fid, led[fid]))
 elif mode == "blocking":
@@ -776,8 +791,9 @@ elif mode == "open":
         if is_rest(led[fid]):
             print(ledger_line(fid, led[fid]))
 elif mode == "risk":
-    # risk <台帳のファイル…>: どれかの台帳の行に RISK=up があれば YES（計画の見立てを超えた高リスク・I202 F5）
-    print("YES" if any(e[8] == "up" for p in sys.argv[2:] for e in read_ledger(p).values()) else "NO")
+    # risk <台帳のファイル…>: どれかの台帳の行に RISK=up があれば YES（計画の見立てを超えた高リスク・I202 F5）。
+    # 数えるのは KIND=app の行だけ（ハーネスだけの変更では付けない決まりをスクリプトで強制・guard はパスの判定で YES になる・I206 F6）
+    print("YES" if any(e[8] == "up" and e[3] == "app" for p in sys.argv[2:] for e in read_ledger(p).values()) else "NO")
 elif mode == "verdict":
     stops = [e for e in read_ledger(sys.argv[2]).values() if blocking(e)]
     print("BLOCKER" if any(e[0] == "Blocker" for e in stops) else "HIGH" if stops else "OK")
@@ -833,6 +849,16 @@ ISSUE="${1:?Usage: $0 I###}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# 一時ファイルはすべてこのフォルダに作り、途中で止まっても消す（I206 F14）
+OFFICIAL_DIR=$(mktemp -d)
+OFFICIAL_PIDS=()
+cleanup_official() {
+  local p
+  for p in "${OFFICIAL_PIDS[@]}"; do kill_tree "$p"; done   # 子の timeout・claude まで止める（I193 F5）
+  rm -rf "$OFFICIAL_DIR"
+}
+trap cleanup_official EXIT
+
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}.md"
 # I197: 同じ分のうちにもう一度流しても前の記録を上書きしない（台帳の前の周が消えるため）
@@ -855,10 +881,10 @@ REVIEWED_HEAD=$(git rev-parse HEAD)
 
 # I197 §4.8: 全体のレビューか差分のレビューか（台帳のある最新の記録の REVIEWED_COMMIT が HEAD の祖先なら差分）
 IFS=$'\t' read -r REVIEW_KIND LEDGER_N SINCE PREV_LEDGER_REC <<< "$(review_mode "$ISSUE")"
-SCOPE_FILE=$(mktemp)
+SCOPE_FILE="$OFFICIAL_DIR/scope"
 # 前の周の台帳は、始めた時点で写しておく（以後に記録が変わっても、読んだ台帳を使う）
 PREV_LEDGER_FILE=""
-if [ -n "$PREV_LEDGER_REC" ]; then PREV_LEDGER_FILE=$(mktemp); grep -E '^LEDGER: ' "$PREV_LEDGER_REC" > "$PREV_LEDGER_FILE" || true; fi
+if [ -n "$PREV_LEDGER_REC" ]; then PREV_LEDGER_FILE="$OFFICIAL_DIR/prev_ledger"; grep -E '^LEDGER: ' "$PREV_LEDGER_REC" > "$PREV_LEDGER_FILE" || true; fi
 if [ "$REVIEW_KIND" = "delta" ]; then
   delta_files origin/develop "$SINCE" > "$SCOPE_FILE" || { echo "⛔ 差分のレビューの範囲を取れません（起点 ${SINCE}）"; exit 1; }
   REVIEW_RANGE="${SINCE}...HEAD"
@@ -868,14 +894,14 @@ else
   echo "全体のレビュー（台帳の 1 周目）"
 fi
 # I205: 差分の中かどうかを行で決める（全体のレビューでもブランチが変えた行だけ）。FILE=- の種類にブランチが変えたファイルを使う
-HUNKS_FILE=$(mktemp); BRANCH_OWN_FILE=$(mktemp)
+HUNKS_FILE="$OFFICIAL_DIR/hunks"; BRANCH_OWN_FILE="$OFFICIAL_DIR/branch_own"
 delta_hunks origin/develop "$SINCE" > "$HUNKS_FILE" || { echo "⛔ 差分の行の塊を取れません（起点 ${SINCE:-merge-base}）"; exit 1; }
 branch_own_files origin/develop > "$BRANCH_OWN_FILE" || { echo "⛔ ブランチが変えたファイルを取れません"; exit 1; }
 # I202: 差分のレビューで、起点の後に記録の場所の外が 1 つも変わっていない（直したものが無い）なら、レビュー役も組み込みの
 # レビューも呼ばない。台帳は前の周のまま引き継ぐ（止める指摘が残っていれば合否も前と同じ）。
 # 範囲（delta_files）で決めないのは、変更を develop の中身に戻す直し・ファイルを消す直しは、ブランチが変えたファイルから
 # 外れて範囲が空に見えるため（I202 review-gate 1 周目 F2。直したのにレビュー役が呼ばれず、止める指摘が resolved にならない）
-NO_DELTA=0; OUTSIDE_SINCE_FILE=$(mktemp)
+NO_DELTA=0; OUTSIDE_SINCE_FILE="$OFFICIAL_DIR/outside_since"
 if [ "$REVIEW_KIND" = "delta" ]; then
   if changed_outside_records "$SINCE" HEAD > "$OUTSIDE_SINCE_FILE"; then
     NO_DELTA=1; echo "起点の後に記録の場所の外は変わっていないため、レビュー役は呼ばずに台帳を引き継ぎます。"
@@ -884,13 +910,14 @@ fi
 # レビュー役に見せるファイル（差分のレビュー）: 範囲 ∪ 取り消したファイル。取り消したファイル＝起点の時点でブランチが変えていて、
 # 起点の後に変わり、今は範囲に無いもの（develop の中身に戻した・消した。範囲から外れるので、別に足さないと差分が見えない・
 # I202 review-gate 2 周目 F11）。develop の取り込みだけで変わったファイルは入らない。行の塊・台帳の SCOPE には使わない
-SHOWN_FILES_FILE=$(mktemp)
+SHOWN_FILES_FILE="$OFFICIAL_DIR/shown_files"; : > "$SHOWN_FILES_FILE"
 if [ "$REVIEW_KIND" = "delta" ]; then
   OWN_AT_SINCE=$(branch_own_files origin/develop "$SINCE") || { echo "⛔ 起点の時点でブランチが変えたファイルを取れません（起点 ${SINCE}）"; exit 1; }
-  { cat "$SCOPE_FILE"
+  # 作れなければ止める（I206 F21）。{ } の終了コードは最後のコマンドのものなので、cat と comm を && でつなぐ
+  { cat "$SCOPE_FILE" &&
     LC_ALL=C comm -12 <(printf '%s\n' "$OWN_AT_SINCE" | LC_ALL=C sort) <(LC_ALL=C sort "$OUTSIDE_SINCE_FILE") \
       | LC_ALL=C comm -23 - <(LC_ALL=C sort "$SCOPE_FILE")
-  } | grep -v '^$' > "$SHOWN_FILES_FILE" || true
+  } | sed '/^$/d' > "$SHOWN_FILES_FILE" || { echo "⛔ 差分のレビューで見せるファイルの一覧を作れません（起点 ${SINCE}）"; exit 1; }
 fi
 
 # git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）。差分のレビューは見せるファイルの起点からの差分だけ
@@ -918,14 +945,6 @@ RISK_PATH=$(path_risk_trigger "$GIT_FILES")
 # I202 F5: レビュー役の後に、台帳の目印（RISK=up）でも YES にする（下の台帳の後）
 RISK_PLAN=$(plan_risk "$ISSUE")
 RISK_FINAL=$(combine_risk "$RISK_PLAN" "$RISK_PATH")
-OFFICIAL_DIR=$(mktemp -d)
-OFFICIAL_PIDS=()
-cleanup_official() {
-  local p
-  for p in "${OFFICIAL_PIDS[@]}"; do kill_tree "$p"; done   # 子の timeout・claude まで止める（I193 F5）
-  rm -rf "$OFFICIAL_DIR"
-}
-trap cleanup_official EXIT
 if [ "$NO_DELTA" = "1" ]; then
   echo "(実行していない: 差分なし)" > "$OFFICIAL_DIR/code"
   [ "$RISK_PATH" = "YES" ] && echo "(実行していない: 差分なし)" > "$OFFICIAL_DIR/security"
@@ -996,7 +1015,7 @@ if [ "$SECURITY_VERDICT" != "OK" ]; then
 fi
 
 # コンテキスト組み立て（条件で空になる語は先に変数にする。$( [ … ] && … ) は偽で 1 を返し set -e で止まるため）
-FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲）"
+FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲と、取り消したファイル）"
 CONTEXT="イシュー番号: ${ISSUE}
 
 ### イシューファイル
@@ -1014,7 +1033,7 @@ $(if [ "$REVIEW_KIND" = "delta" ]; then
   else printf '\n台帳の最大の番号: なし（新しい指摘は F1 から）\n'; fi
   printf '\n#### 止める指摘（前の周まで）\n'
   ledger_blocking "$PREV_LEDGER_FILE" || true
-  printf '\n#### 台帳の残り（止めない open の指摘。直したと差分から分かるものだけ、同じ番号で STATUS=resolved の FINDING 行を書く。書かなければ open のまま。この番号を open で書くと新しい指摘として振り直される）\n'
+  printf '\n#### 台帳の残り（止めない open の指摘。直したと差分から分かるものだけ、同じ番号で STATUS=resolved の FINDING 行を書く。直していないものは書かない〔open で書いても台帳は変わらない〕。新しい指摘は新しい番号で書く）\n'
   ledger_open_rest "$PREV_LEDGER_FILE" || true
   printf '\n#### 差分のレビューの範囲のファイル（範囲と、取り消したファイル）\n'; cat "$SHOWN_FILES_FILE"
 else
@@ -1095,7 +1114,7 @@ mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
 
 # I197 §4.8: 台帳（累積）と合否。レビュー役が正常に終わり FINDING 行を読めたときだけ台帳の周に数える
-LEDGER_FILE=$(mktemp)
+LEDGER_FILE="$OFFICIAL_DIR/ledger"
 if [ "$REVIEW_OK" = "1" ] && ledger_update "$REVIEW_KIND" "${PREV_LEDGER_FILE:-}" "$REVIEW_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" > "$LEDGER_FILE"; then
   LEDGER_VERDICT=$(ledger_verdict "$LEDGER_FILE")
   # 累積の台帳と台帳の周を本文の後ろに足す（正常に終わった周だけ。失敗した周は台帳に入れない）。
@@ -1136,7 +1155,6 @@ inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_V
 set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
-rm -f "$LEDGER_FILE" "$SCOPE_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" "$OUTSIDE_SINCE_FILE" "$SHOWN_FILES_FILE" "${PREV_LEDGER_FILE:-}"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"

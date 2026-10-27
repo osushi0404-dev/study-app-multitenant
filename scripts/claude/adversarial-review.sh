@@ -266,10 +266,13 @@ run_perspective() {
     # 実験役は観点をまたいで同時に 1 本だけ（同じ作業ツリーで「壊して戻す」実験が重ならないように・I202 F6）。
     # 待った後に締め切りが迫っていれば、呼ばずに締め切りとして扱う（未検証）
     local waited_out=0
+    # 鍵を取った後も、鍵の前と同じく実験役と続きの 2 回分の時間で比べる（I206 F5）。
+    # 実験役の後の作業ツリーの比較（ファイル・HEAD・ブランチ）も鍵を持ったまま行う（ほかの観点の実験の途中を拾わない・I206 F3）
     {
       flock 9
-      if [ "$(remaining)" -lt "${ADV_MIN_STEP}" ]; then waited_out=1
-      else run_experiment_agent "$d/exec_in$r.txt" "$d/exec$r.jsonl"; fi
+      if [ "$(remaining)" -lt $(( 2 * ADV_MIN_STEP )) ]; then waited_out=1
+      else run_experiment_agent "$d/exec_in$r.txt" "$d/exec$r.jsonl"
+        check_worktree; fi
     } 9>"$RUN/exp.lock"
     if [ "$waited_out" -eq 1 ]; then
       for id in $ids; do printf '%s\t%s\n' "$id" deadline >> "$d/exp_status"; done
@@ -290,8 +293,6 @@ run_perspective() {
       printf '\n### %s: %s\n~~~\n%s\n~~~\n' "$id" "$st" "$out" >> "$next_in"
     done
     last_ids="$ids"
-    # 実験役の後に作業ツリー（ファイル・HEAD・ブランチ）を比べる（変えていたら周全体の実験を無効にする）
-    check_worktree
     printf '\n上の結果を踏まえ、最終報告を出力の形どおりに全部書き直せ（担当の項目すべてに ITEM 行を書く）。まだ実験が要るなら EXPERIMENT 行で出せ（残りの往復: %s）。\n' \
       "$(( ADV_EXPERIMENT_ROUNDS - r ))" >> "$next_in"
     log="$d/log$r.jsonl"
@@ -353,6 +354,8 @@ if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 
 ISSUE="${1:-}"
 if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then echo "⛔ 使い方: $0 I###（受け取った値: '${ISSUE}'）"; echo "ADVERSARIAL_ERROR: USAGE"; exit 2; fi
+# 実験役を観点をまたいで 1 本ずつにする flock が無ければ実行できない（黙って鍵なしで走らせない・I206 F10）
+if ! command -v flock >/dev/null 2>&1; then echo "⛔ flock がありません（実験役を 1 本ずつにできない）。util-linux を入れてください。"; echo "ADVERSARIAL_ERROR: FLOCK"; exit 2; fi
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリの中で実行してください"; exit 2; }
 cd "$REPO_ROOT" || exit 2
 ADV_START=$(date +%s)

@@ -128,7 +128,7 @@ GitHubイシュー登録後、必ず以下を報告：
 === フェーズ3: 実装・レビュー・テスト（段階のスキル・ユーザーは打たない） ===
 11. implement 段階: 実装 → 組み込みの /simplify で整理 → push
     ↓
-12. review-gate 段階: CI 待ち・組み込みの /code-review（高リスク時は /security-review）・自作のレビュー役・決定論ゲート（NG → fix-loop 段階 → 12 に戻る）
+12. review-gate 段階: CI 待ち・組み込みの /code-review（パスの判定が YES のときは /security-review）・自作のレビュー役・決定論ゲート（NG → fix-loop 段階 → 12 に戻る）
     ↓
 13. test-gate 段階: gate-check.sh → 計画書が指定したテスト・Claude 担当の手動テスト → レビューファイルに結果を記入
     ↓

@@ -296,7 +296,7 @@ ck "FG-R14c 食い違いの検査を外すと R14 の 3 周目が不合格（BLO
   "$(grep -q '^FINAL_VERDICT:' "$TMP/e2e3fg.out" && [ "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e3fg.out")" != BLOCKER ] && echo yes || echo no)"
 
 # FG-R14: 条件が偽の $( [ … ] && … ) を本体の代入に戻すと、R14 が不合格（FINAL_VERDICT の行が出ない）
-B14=$(broken 'FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲）"' 'FILES_NOTE="$([ "$REVIEW_KIND" = "delta" ] && echo x)"')
+B14=$(broken 'FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲と、取り消したファイル）"' 'FILES_NOTE="$([ "$REVIEW_KIND" = "delta" ] && echo x)"')
 cp "$B14" "$E/scripts/claude/code-review.sh"; rm -f "$E"/docs/reviews/I900_code_review_*.md
 git -C "$E" add -A; git -C "$E" commit -qm reset
 e2e "$TMP/e2e_fg.out"
