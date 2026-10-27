@@ -247,11 +247,30 @@ round f8 f8b "$B_NONE" >/dev/null
 ck "FG-R8 前の記録の台帳を見ないと R8 が不合格（rebase の後に NOT_REQUIRED）" NOT_REQUIRED "$(stage f8b)"
 setup f3 "$(broken 'if [ "$REVIEWER_RAN" = "1" ] && [ "$LLM_VERDICT"' 'if [ "$LLM_VERDICT"')"
 ck "FG-W3 REVIEWER_RAN の条件を外すと W3 が不合格（誤った原因が出る）" yes "$(yn grep -qF '読める FINDING 行が無い' "$(round f3 f3 'x' E2E_FAIL=1)")"
-setup f4 "$(broken 'if [ "$REVIEW_KIND" = "delta" ] && [ ! -s "$SCOPE_FILE" ]; then NO_DELTA=1;' 'if false; then NO_DELTA=1;')"
+setup f4 "$(broken '    NO_DELTA=1; echo "起点の後に' '    NO_DELTA=0; echo "起点の後に')"
 rename_rec f4 "$(round f4 f4a "$B_NONE")" 0001 >/dev/null
 record_only f4
 round f4 f4b "$B_NONE" >/dev/null
 ck "FG-W4 空の範囲の扱いを外すと W4 が不合格（レビュー役が呼ばれる）" yes "$(yn grep -qx agent "$TMP/calls_f4b")"
+
+# W4b（fix-loop F2）: 変更を develop の中身に戻す直しは、範囲（delta_files）が空でもレビュー役を呼び、取り消しの差分を見せる。
+# 止める指摘が resolved になって OK に進める
+B_APP_HIGH='# r\n\n## 台帳\nFINDING: F1 SEV=High STATUS=open FILE=a.py LINE=2 SECURITY=no STOP=- | 穴 | 再現: r\n\nVERDICT: HIGH\n'
+B_APP_RES='# r\n\n## 台帳\nFINDING: F1 SEV=High STATUS=resolved FILE=a.py LINE=2 SECURITY=no STOP=- | 取り消した\n\nVERDICT: OK\n'
+# revert_app <名前>: a.py を develop の中身に戻してコミットする
+revert_app() { git -C "$TMP/e_$1" checkout -q origin/develop -- a.py; git -C "$TMP/e_$1" commit -qam "revert a.py"; }
+setup w4b
+rename_rec w4b "$(round w4b w4b1 "$B_APP_HIGH")" 0001 >/dev/null
+ck "W4b 1 周目: アプリの High（再現あり）で HIGH" HIGH "$(fv w4b1)"
+revert_app w4b
+round w4b w4b2 "$B_APP_RES" >/dev/null
+ck "W4b 取り消しの直し: レビュー役が呼ばれ、入力に a.py の取り消しの差分があり、F1 が resolved で OK" "yes yes OK" \
+  "$(yn grep -qx agent "$TMP/calls_w4b2") $(yn grep -qx -- '-l2' "$TMP/in_w4b2.txt") $(fv w4b2)"
+setup fw4b "$(broken 'if changed_outside_records "$SINCE" HEAD > "$OUTSIDE_SINCE_FILE"; then' 'if [ ! -s "$SCOPE_FILE" ]; then')"
+rename_rec fw4b "$(round fw4b fw4b1 "$B_APP_HIGH")" 0001 >/dev/null
+revert_app fw4b
+round fw4b fw4b2 "$B_APP_RES" >/dev/null
+ck "FG-W4b 範囲が空かで決める形に戻すと W4b が不合格（呼ばれずに HIGH のまま）" "no HIGH" "$(yn grep -qx agent "$TMP/calls_fw4b2") $(fv fw4b2)"
 
 # ---------------- A adversarial-review.sh の細部（claude はスタブ） ----------------
 AS="$TMP/adv_stub"
@@ -371,9 +390,10 @@ ck "G4 レビューの後の変更: 前と同じ（unreviewed）" "yes:GATE_CHEC
 mkdir -p "$GR/.github"; printf 'x\n' > "$GR/.github/x.yml"; git -C "$GR" add -A; git -C "$GR" commit -qm guard
 printf 'REVIEWED_COMMIT: %s\nRISK: NO\nVERDICT: OK\n' "$(git -C "$GR" rev-parse HEAD)" > "$GR/docs/reviews/I900_code_review_20260101_0001.md"
 ck "G4 高リスク（パス）で敵対的レビューなし: 前と同じ（missing）" "yes:GATE_CHECK: FAIL REASON=missing rc=1" "$(same)"
-# G5（I205-F12）: 行の塊と差分のレビューの git diff は、パスを glob として読まない（3 か所すべて --literal-pathspecs）
-g5() { [ "$(grep -c "xargs -d '\\\\n' git --literal-pathspecs" "$1")" -eq 3 ]; }
-ck "G5 3 か所の git diff に --literal-pathspecs" yes "$(yn g5 "$CR")"
+# G5（I205-F12）: 行の塊と差分のレビューの git diff は、パスを glob として読まない（4 か所すべて --literal-pathspecs。
+# 行の塊の 2 本・差分のレビューの範囲のファイル・範囲が空で記録の場所の外が変わったとき〔fix-loop F2〕）
+g5() { [ "$(grep -c "xargs -d '\\\\n' git --literal-pathspecs" "$1")" -eq 4 ]; }
+ck "G5 4 か所の git diff に --literal-pathspecs" yes "$(yn g5 "$CR")"
 ck "FG-G5 1 か所外すと G5 が不合格" no "$(yn g5 "$(broken 'GIT_DIFF=$(xargs -d '"'"'\n'"'"' git --literal-pathspecs diff' 'GIT_DIFF=$(xargs -d '"'"'\n'"'"' git diff')")"
 
 # ---------------- D 指示ファイル ----------------

@@ -871,17 +871,26 @@ fi
 HUNKS_FILE=$(mktemp); BRANCH_OWN_FILE=$(mktemp)
 delta_hunks origin/develop "$SINCE" > "$HUNKS_FILE" || { echo "⛔ 差分の行の塊を取れません（起点 ${SINCE:-merge-base}）"; exit 1; }
 branch_own_files origin/develop > "$BRANCH_OWN_FILE" || { echo "⛔ ブランチが変えたファイルを取れません"; exit 1; }
-# I202: 差分のレビューで範囲が空（起点の後に記録の場所の外は変わっていない）なら、レビュー役も組み込みのレビューも呼ばない。
-# 直したものが無いので、台帳は前の周のまま引き継ぐ（止める指摘が残っていれば合否も前と同じ）
-NO_DELTA=0
-if [ "$REVIEW_KIND" = "delta" ] && [ ! -s "$SCOPE_FILE" ]; then NO_DELTA=1; echo "範囲が空のため、レビュー役は呼ばずに台帳を引き継ぎます。"; fi
+# I202: 差分のレビューで、起点の後に記録の場所の外が 1 つも変わっていない（直したものが無い）なら、レビュー役も組み込みの
+# レビューも呼ばない。台帳は前の周のまま引き継ぐ（止める指摘が残っていれば合否も前と同じ）。
+# 範囲（delta_files）で決めないのは、変更を develop の中身に戻す直し・ファイルを消す直しは、ブランチが変えたファイルから
+# 外れて範囲が空に見えるため（I202 review-gate 1 周目 F2。直したのにレビュー役が呼ばれず、止める指摘が resolved にならない）
+NO_DELTA=0; OUTSIDE_SINCE_FILE=$(mktemp)
+if [ "$REVIEW_KIND" = "delta" ]; then
+  if changed_outside_records "$SINCE" HEAD > "$OUTSIDE_SINCE_FILE"; then
+    NO_DELTA=1; echo "起点の後に記録の場所の外は変わっていないため、レビュー役は呼ばずに台帳を引き継ぎます。"
+  fi
+fi
 
 # git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）。差分のレビューは範囲のファイルの起点からの差分だけ
 if [ "$REVIEW_KIND" = "delta" ]; then
   if [ -s "$SCOPE_FILE" ]; then
     GIT_DIFF=$(xargs -d '\n' git --literal-pathspecs diff "$SINCE" HEAD -- < "$SCOPE_FILE" | head -c 102400 || true)
+  elif [ "$NO_DELTA" = "0" ]; then
+    # 範囲は空だが記録の場所の外は変わった（変更の取り消し・ファイルの削除）: その差分を見せる
+    GIT_DIFF=$(grep -v '^$' "$OUTSIDE_SINCE_FILE" | xargs -d '\n' git --literal-pathspecs diff "$SINCE" HEAD -- | head -c 102400 || true)
   else
-    GIT_DIFF="(起点の後に、記録の場所の外でブランチが変えたファイルは無い)"
+    GIT_DIFF="(起点の後に、記録の場所の外で変わったファイルは無い)"
   fi
 else
   GIT_DIFF=$(git diff origin/develop...HEAD | head -c 102400 || true)
@@ -1119,7 +1128,7 @@ inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_V
 set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
-rm -f "$LEDGER_FILE" "$SCOPE_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" "${PREV_LEDGER_FILE:-}"
+rm -f "$LEDGER_FILE" "$SCOPE_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" "$OUTSIDE_SINCE_FILE" "${PREV_LEDGER_FILE:-}"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"

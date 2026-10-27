@@ -17,6 +17,13 @@
 | TC-03 | 影響を受けうるテスト: `test_adversarial_trigger.sh`・`test_i193_official_flow.sh`・`test_i181_review_slim.sh`・`test_i197_adversarial_process.sh`・`test_review_commit_lifecycle.sh`・`test_review_gates.sh`・`test_review_verdict.sh` | どれも exit 0 | implement で実行: すべて exit 0（`test_i197_adversarial_process.sh` は S5 の grep を字下げに合わせた後 pass=115・ほかはベースラインと同じ件数）。ベースライン（2026-10-27・develop 33d2e29）: `test_adversarial_trigger.sh` pass=60・`test_i193_official_flow.sh` pass=160・`test_i181_review_slim.sh` pass=29・`test_i197_adversarial_process.sh` pass=115・`test_review_commit_lifecycle.sh` PASS=30 SKIP=1・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58（どれも fail=0） |
 | TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
 
+## 再発防止記録（fix-loop・review-gate 1 周目 F2・2026-10-27）
+- なぜ失敗したか: I202 で足した「範囲が空ならレビュー役を呼ばない」（NO_DELTA）の判定に、行の範囲を決めるための集合（`delta_files`＝ブランチが変えたファイル ∩ 起点の後に変わったファイル）を使った。変更を develop の中身に戻す直し・ファイルを消す直しは、ブランチが変えたファイルから外れるので、直したのに範囲が空に見え、レビュー役が呼ばれず止める指摘が resolved にならない（流れが進まない）。診断: `docs/reviews/I202_fix_diagnosis_20261027_1630.md`
+- 何を変えたか: NO_DELTA を「起点の後に記録の場所の外が 1 つも変わっていない」（既にある `changed_outside_records`）で決める。範囲が空でも記録の場所の外が変わったときは、そのファイルの起点からの差分をレビュー役に見せる
+- セキュリティ: 関係しない（止まり続ける向きの崩れ）
+- 次回どう防ぐか: TC-01 の W4b（取り消しの直しでレビュー役が呼ばれ、差分が見え、resolved で OK）と FG-W4b（範囲で決める形に戻すと不合格）。G5 は `--literal-pathspecs` の箇所が 4 か所になった
+- 確かめた結果: `test_i202_ledger_cleanup.sh` pass=70 fail=0・`test_i197_review_ledger.sh` pass=64 fail=0・`test_i205_stop_criteria.sh` pass=91 fail=0
+
 ### TC-01 の項目
 一時の git リポジトリ（develop に `backend/x.py`〔20 行〕・`scripts/claude/a.sh`〔20 行〕・`.github/workflows/ci.yml`〔20 行〕を置き、feature ブランチで行を変える）と、手書きの FINDING 行・台帳で確かめる。
 
@@ -46,6 +53,7 @@ W 本体の細部（スタブで通し）:
 - W2 I197-F13: 前の台帳が空の差分のレビューの入力に `台帳の最大の番号: なし（新しい指摘は F1 から）` があり、`台帳の最大の番号: F` の行が無い
 - W3 I197-F14: レビュー役が失敗（スタブが exit 1）→ 証跡に `読める FINDING 行が無い` が無い。FINAL_VERDICT は BLOCKER
 - W4 空の範囲: 起点の後に記録の場所だけを変えた差分のレビュー → レビュー役（`--agent code-reviewer`）も組み込みの `/code-review` も呼ばれない。前の周の止める指摘が残っていれば FINAL_VERDICT は HIGH、無ければ OK。記録に `LEDGER_ROUND: 2`
+- W4b（fix-loop F2）変更を develop の中身に戻す直しの差分のレビュー → 範囲が空でもレビュー役が呼ばれ、入力に取り消しの差分があり、F1 が resolved で OK。FG-W4b: 範囲が空かで決める形に戻すと、呼ばれずに HIGH のまま
 - W5 I205-F9: 記録の「## 止める指摘」の節の見出しの次に `（再現は本文の同じ番号の FINDING 行）`
 
 A 敵対的レビュー（`adversarial-review.sh`・claude のスタブ）:
@@ -60,7 +68,7 @@ G 共通化（gate-check の挙動を変えない）:
 - G2 `record_reviewed_commit`: 最後の `REVIEWED_COMMIT:` の SHA。無ければ空
 - G3 `branch_own_files develop <rev>`: 改行・引用符を含まないが空白・`[` を含むパス（`docs2/a [b].md`）がそのままの名前で出る。記録の場所は出ない
 - G4 一時リポジトリで、OK の記録・レビューの後の変更あり・高リスクで敵対的レビューなし、の 3 つの状態の `gate-check.sh` の出力（`GATE_CHECK:` の行と終了コード）が、付け替える前の `gate-check.sh`（テストの中で develop 33d2e29 の版の `gate-check.sh` と `code-review.sh` を `git show` で取り出し、`GATE_CHECK_LIB` で組み合わせたもの）と同じ
-- G5 I205-F12: `delta_hunks` の 2 本と差分のレビューの `GIT_DIFF` の、3 か所の `git diff` すべてに `--literal-pathspecs` が付いている（計画変更記録 3: glob で余分に拾っても塊の出力は変わらないので、振る舞いではなく付いていることを確かめる）
+- G5 I205-F12: `delta_hunks` の 2 本と差分のレビューの `GIT_DIFF` の 2 本（範囲のファイル・範囲が空で記録の場所の外が変わったとき）の、4 か所の `git diff` すべてに `--literal-pathspecs` が付いている（計画変更記録 3: glob で余分に拾っても塊の出力は変わらないので、振る舞いではなく付いていることを確かめる）
 
 D 指示ファイル（静的）:
 - D1 `.claude/agents/code-reviewer.md` に `RISK=up`・`台帳の残り`・`消した位置の HEAD の行番号` があり、`触れていれば Blocker として FINDING 行に書く` が無い
