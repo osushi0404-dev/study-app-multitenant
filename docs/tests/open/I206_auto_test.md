@@ -30,7 +30,7 @@ N 台帳の更新（AC1・AC2）:
 N 判定の細部:
 - N4（F6）: `ledger_risk`: `KIND=harness RISK=up` だけの台帳 → NO・`KIND=guard RISK=up` だけ → NO・`KIND=app RISK=up` → YES
 - FG-N4: 種類の条件（`and e[3] == "app"`）を外した写しでは、harness の台帳で YES
-- N5（F7）: `| 再現: なし（理由）`・`| 再現: なし。`・`| 再現: None (x)`・`| 再現: n/a: x` → `REPRO=no`。`| 再現: なしでも落ちる`・`| 再現: - 入力 x` → `REPRO=yes`（既存の L3 も合格のまま）
+- N5（F7）: `| 再現: なし（理由）`・`| 再現: なし。`・`| 再現: None（x）`・`| 再現: n/a: x` → `REPRO=no`。`| 再現: なしでも落ちる`・`| 再現: なし 入力 x`・`| 再現: - 入力 x` → `REPRO=yes`（既存の L3 も合格のまま）
 - FG-N5: 先頭の判定（`or NO_REPRO_HEAD.match(body.casefold())`）を外した写しでは、`なし（理由）` が `REPRO=yes`
 - N6（F12）: `changed_outside_records <存在しない SHA> HEAD` → 2。記録の場所だけが変わったコミット間 → 0。記録の場所の外が変わったコミット間 → 1
 - FG-N6: git の出力を process substitution で読む形（今の形）に戻した写しでは、存在しない SHA で 0（fail-open）
