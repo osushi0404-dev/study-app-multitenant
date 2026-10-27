@@ -133,7 +133,8 @@ printf 'LEDGER: F1 SEV=High STATUS=open SCOPE=delta SECURITY=no | h\nLEDGER: F2 
 body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=scripts/a.sh SECURITY=no | 新しい穴' r15_delta.md
 ck "R15 止めない既存の番号の再利用は新しい指摘（F3）として振り直し、範囲の中の High で止める" "HIGH yes yes" \
   "$(verdict_of delta "$TMP/r15_round1.md" "$TMP/r15_delta.md" "$TMP/scope") $(grep -q '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta' "$TMP/last_ledger" && echo yes || echo no) $(grep -q '^LEDGER: F2 SEV=Medium' "$TMP/last_ledger" && echo yes || echo no)"
-# R16: FILE の表記のずれ（./・:行番号）は正規化して範囲の中。リポジトリに無いパスは delta（止める側）
+# R16: FILE は :行番号 を除いてリポジトリのルートからの相対パスにそろえて範囲と比べる（./・絶対パス・.. も同じファイル）。
+# リポジトリの外・実在しないファイルは delta（止める側）
 body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=./scripts/a.sh:12 SECURITY=no | ずれ' r16a.md
 body 'FINDING: F1 SEV=High STATUS=resolved FILE=scripts/a.sh SECURITY=no | h\nFINDING: F2 SEV=High STATUS=open FILE=scripts/no_such.sh SECURITY=no | 無い' r16b.md
 ck "R16 ./・:行番号 のずれは範囲の中として止める" HIGH "$(verdict_of delta "$TMP/round1.md" "$TMP/r16a.md" "$TMP/scope")"
@@ -278,14 +279,21 @@ printf 'a4\n' >> "$E/a.sh"; git -C "$E" add -A; git -C "$E" commit -qm fix2
 e2e "$TMP/e2e3.out"
 ck "R14 差分: VERDICT: HIGH なのに FINDING 行が無い → BLOCKER" BLOCKER "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e3.out")"
 
-# FG-R15・FG-R16・R17（F4 の止め方の配線）とその FG
-B15=$(broken '        if fid in led and fid not in shown:' '        if False:')
+# FG-R15・FG-R16（I202 F19: .. の検査と isfile の検査を別々に壊す）
+B15=$(broken '        elif fid in led and not keep:' '        elif False:')
 ck "FG-R15 振り直しを消すと R15 が不合格（F2 に合流して止まらない）" OK "$(verdict_of delta "$TMP/r15_round1.md" "$TMP/r15_delta.md" "$TMP/scope" "$B15")"
-B16=$(broken 'if norm.startswith("..") or not os.path.isfile(norm):' 'if False:')
-ck "FG-R16 存在しないパスを止める側に倒さないと R16 が不合格" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/r16b.md" "$TMP/scope" "$B16")"
-r17() { grep -qF 'if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '"'"'^FINDING: '"'"' "$REVIEW_FILE"; then' "$1"; }
-ck "R17 差分で VERDICT が NG なのに FINDING 行が無いときに止める配線がある" 0 "$(rc r17 "$CR")"
-ck "FG-R17 その配線を消すと R17 が不合格" 1 "$(rc r17 "$(broken 'if [ "$LLM_VERDICT" != "OK" ] && ! grep -qE' 'if false && ! grep -qE')")"
+B16=$(broken 'if norm == ".." or norm.startswith("../") or not os.path.isfile(norm):' 'if not os.path.isfile(norm):')
+ck "FG-R16a リポジトリの外の検査を外すと R16 が不合格（外の実在のファイルが止まらない）" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/r16e.md" "$TMP/scope" "$B16")"
+B16b=$(broken 'if norm == ".." or norm.startswith("../") or not os.path.isfile(norm):' 'if norm == ".." or norm.startswith("../"):')
+ck "FG-R16b 実在の検査を外すと R16 が不合格（存在しないパスが止まらない）" OK "$(verdict_of delta "$TMP/round1.md" "$TMP/r16b.md" "$TMP/scope" "$B16b")"
+
+# FG-R14c（I202 F15: R17 の文字列の検査の代わり）: 3 周目の食い違いの検査を外した写しでは、同じ 3 周目が BLOCKER にならない
+cp "$(broken 'if [ "$REVIEWER_RAN" = "1" ] && [ "$LLM_VERDICT" != "OK" ] && ! grep -qE' 'if false && ! grep -qE')" "$E/scripts/claude/code-review.sh"
+cp "$ES/review_3.txt" "$ES/review_4.txt"
+printf 'a5\n' >> "$E/a.sh"; git -C "$E" add -A; git -C "$E" commit -qm fg3
+e2e "$TMP/e2e3fg.out"
+ck "FG-R14c 食い違いの検査を外すと R14 の 3 周目が不合格（BLOCKER にならない）" yes \
+  "$(grep -q '^FINAL_VERDICT:' "$TMP/e2e3fg.out" && [ "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e3fg.out")" != BLOCKER ] && echo yes || echo no)"
 
 # FG-R14: 条件が偽の $( [ … ] && … ) を本体の代入に戻すと、R14 が不合格（FINAL_VERDICT の行が出ない）
 B14=$(broken 'FILES_NOTE=""; [ "$REVIEW_KIND" = "delta" ] && FILES_NOTE="（差分のレビューの範囲）"' 'FILES_NOTE="$([ "$REVIEW_KIND" = "delta" ] && echo x)"')

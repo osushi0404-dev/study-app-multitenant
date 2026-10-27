@@ -36,27 +36,19 @@ GATE_BASE="${GATE_BASE:-origin/develop}"
 fail() { local reason="$1"; shift; echo "⛔ gate-check NG: $*"; echo "GATE_CHECK: FAIL REASON=${reason}"; exit 1; }
 
 # 最新の記録（ファイル名の <YYYYMMDD_HHMM> で並べた最後）。docs/reviews/ と docs/reviews/closed/ の両方を見る
+# （並べ方は code-review.sh の review_records。I202 の共通化）
 latest_record() {   # $1=種類（code_review / adversarial_review）
-  local kind="$1"
-  find docs/reviews -maxdepth 2 -type f -name "${ISSUE}_${kind}_*.md" 2>/dev/null \
-    | awk -F/ '{ print $NF "\t" $0 }' | LC_ALL=C sort | tail -1 | cut -f2
+  review_records "$ISSUE" "$1" | tail -1
 }
 
 last_verdict() {   # $1=ファイル → BLOCKER/HIGH/OK/空
   grep -oE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*$' "$1" | tail -1 | grep -oE '(BLOCKER|HIGH|OK)' || true
 }
 
-reviewed_commit() {   # $1=ファイル → SHA/空
-  grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$1" | tail -1 | grep -oE '[0-9a-f]{7,40}' || true
-}
+reviewed_commit() { record_reviewed_commit "$1"; }   # $1=ファイル → SHA/空（code-review.sh の関数）
 
-# ブランチ自身が変えたファイル（比べる相手との merge-base から rev まで・記録の場所を除く）の一覧
-branch_files() {   # $1=rev
-  local mb f; mb=$(git merge-base "$GATE_BASE" "$1") || return 1
-  while IFS= read -r -d '' f; do
-    is_record_path "$f" || printf '%s\n' "$f"
-  done < <(git -c core.quotePath=false diff -z --name-only --no-renames "$mb" "$1")
-}
+# ブランチ自身が変えたファイル（比べる相手との merge-base から rev まで・記録の場所を除く）の一覧（code-review.sh の関数）
+branch_files() { branch_own_files "$GATE_BASE" "$1"; }   # $1=rev
 # rev でのファイルの中身の ID（blob）。無ければ「(なし)」
 blob_of() { git rev-parse -q --verify "$1:$2" 2>/dev/null || echo "(なし)"; }
 

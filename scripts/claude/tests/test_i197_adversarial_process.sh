@@ -388,7 +388,7 @@ ck "S4 全体設計の節・テンプレートの一覧・計画レビュー役�
 ck "S4 テンプレートの一覧は read_checklist で読める" 0 "$(REVIEW_LIB_SOURCE_ONLY=1 bash -c '. scripts/claude/adversarial-review.sh; read_checklist docs/plans/templates/plan_template.md >/dev/null 2>&1; echo $?' | tail -1 | grep -qx 2 && echo 0 || echo 1)"
 
 # S5: code-review.sh の code-reviewer の呼び出しと、失敗時の記録
-ck "S5 code-reviewer の呼び出しは run_claude_logged" yes "$(yn bash -c 'grep -A1 "^run_claude_logged" scripts/claude/code-review.sh | grep -qF -- "--agent \"\$REVIEWER_AGENT\""')"
+ck "S5 code-reviewer の呼び出しは run_claude_logged" yes "$(yn bash -c 'grep -A1 "^[[:space:]]*run_claude_logged" scripts/claude/code-review.sh | grep -qF -- "--agent \"\$REVIEWER_AGENT\""')"
 S5=$(REVIEW_LIB_SOURCE_ONLY=1 bash -c '. scripts/claude/code-review.sh; . scripts/claude/review-process-lib.sh; reviewer_failure_record I900 124 "$1"' _ "$TMP/lib/l2")
 ck "S5 失敗の記録に最後のツール呼び出し・VERDICT: BLOCKER" yes "$(yn bash -c 'grep -qF "最後のツール呼び出し: Read" <<< "$1" && grep -qxF "VERDICT: BLOCKER" <<< "$1"' _ "$S5")"
 
