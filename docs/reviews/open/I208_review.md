@@ -32,7 +32,9 @@
 - [implement] `f2_same` に FILE の値を引数で渡す — P6 では止めない中身の書き直しが前の形の `-` を埋める（計画 4.1 の規則どおり）ので `-` 固定では合わない（計画変更記録 2）
 - [implement] /simplify の指摘のうち 4 件を採用（使わない欄を展開しない・一覧と後続イシューの行の共通部分を 1 回だけ作る・理由の無い一覧の行で exit 2・`latest_ledger_record()` にまとめる）— 出力・判定は同じで、止める側に倒す守りが増える（計画変更記録 3）
 - [implement] /simplify の指摘のうち見送り: 台帳の項目を namedtuple にする（既存の作りへの上乗せで範囲外）・テストの route の二重起動（数秒の差）・一覧のフォルダの写しを作る小関数（D3 だけで使う）・「止める指摘」の理由の重なり（止める指摘を必ず後続イシューに回す安全側の重ね書き）— 範囲外か、効果が小さい
+- [review-gate] 基本レビュー（`docs/reviews/I208_code_review_20261027_2304.md`・全体の 1 周目）は CI 全緑・FINAL_VERDICT OK・敵対的レビュー不要（高リスク NO）。台帳の Low 6 件（F1〜F6）は直さず retro に回す — 止める指摘ではなく、レビュー後に差分を足さない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
