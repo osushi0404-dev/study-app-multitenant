@@ -50,6 +50,7 @@ B 止める基準（`ledger_verdict`・`ledger_blocking`。SCOPE は L のとお
 - B3 app・Low・delta・再現あり → OK
 - B4 app・Medium・outside・再現あり → OK（台帳に `STATUS=open SCOPE=outside` で残る）
 - B5 app・High・delta・再現なし → OK（台帳に残る）
+- B5b app・`SEV=Low STOP=ac:1`・触っていない行・再現あり → HIGH（受け入れ条件の未達は重大度に関係なく止める）
 - B6 app・Blocker・SECURITY=yes・outside・再現あり → BLOCKER
 - B7 app・Blocker・SECURITY=yes・outside・再現なし → OK
 - B8 harness・`SEV=Low STOP=flow`・delta・再現あり → HIGH（重大度を見ない）
