@@ -24,6 +24,13 @@
 - 次回どう防ぐか: TC-01 の W4b（取り消しの直しでレビュー役が呼ばれ、差分が見え、resolved で OK）と FG-W4b（範囲で決める形に戻すと不合格）。G5 は `--literal-pathspecs` の箇所が 4 か所になった
 - 確かめた結果: `test_i202_ledger_cleanup.sh` pass=70 fail=0・`test_i197_review_ledger.sh` pass=64 fail=0・`test_i205_stop_criteria.sh` pass=91 fail=0
 
+## 再発防止記録（fix-loop・review-gate 2 周目 F11・2026-10-27）
+- なぜ失敗したか: F2 の直しで、取り消しの差分を見せるのを「範囲が空のとき」だけにした。取り消しと別のファイルの直しが同じ周に混ざると、範囲は別のファイルだけになり、取り消しの差分がレビュー役に見えない（止める指摘が resolved にならず収束しない）。診断: `docs/reviews/I202_fix_diagnosis_20261027_1645.md`
+- 何を変えたか: レビュー役に見せるファイルを「範囲 ∪ 取り消したファイル（起点の時点でブランチが変えていて、起点の後に変わり、今は範囲に無いもの）」の一覧にし、git diff・入力の範囲のファイル・変更の種類・変更ファイル一覧に使う。develop の取り込みだけで変わったファイルは入らない。行の塊・台帳の SCOPE は変えない
+- セキュリティ: 関係しない
+- 次回どう防ぐか: TC-01 の W4c（取り消し＋別のファイル＋develop の取り込みの混在で、取り消しの差分が見え、取り込みのファイルは見えず、resolved で OK）と FG-W4c。G5 は 3 か所に戻った（範囲が空のときの分岐を一覧に統合）
+- 確かめた結果: `test_i202_ledger_cleanup.sh` pass=72 fail=0・`test_i197_review_ledger.sh` pass=64 fail=0・`test_i205_stop_criteria.sh` pass=91 fail=0
+
 ### TC-01 の項目
 一時の git リポジトリ（develop に `backend/x.py`〔20 行〕・`scripts/claude/a.sh`〔20 行〕・`.github/workflows/ci.yml`〔20 行〕を置き、feature ブランチで行を変える）と、手書きの FINDING 行・台帳で確かめる。
 
@@ -54,6 +61,7 @@ W 本体の細部（スタブで通し）:
 - W3 I197-F14: レビュー役が失敗（スタブが exit 1）→ 証跡に `読める FINDING 行が無い` が無い。FINAL_VERDICT は BLOCKER
 - W4 空の範囲: 起点の後に記録の場所だけを変えた差分のレビュー → レビュー役（`--agent code-reviewer`）も組み込みの `/code-review` も呼ばれない。前の周の止める指摘が残っていれば FINAL_VERDICT は HIGH、無ければ OK。記録に `LEDGER_ROUND: 2`
 - W4b（fix-loop F2）変更を develop の中身に戻す直しの差分のレビュー → 範囲が空でもレビュー役が呼ばれ、入力に取り消しの差分があり、F1 が resolved で OK。FG-W4b: 範囲が空かで決める形に戻すと、呼ばれずに HIGH のまま
+- W4c（fix-loop F11）取り消しと別のファイルの直しと develop の取り込みが混ざった差分のレビュー → 取り消しの差分と別のファイルが入力にあり、取り込みだけのファイルは無い・resolved で OK。FG-W4c: 取り消したファイルを足さないと取り消しが見えない
 - W5 I205-F9: 記録の「## 止める指摘」の節の見出しの次に `（再現は本文の同じ番号の FINDING 行）`
 
 A 敵対的レビュー（`adversarial-review.sh`・claude のスタブ）:
@@ -68,7 +76,7 @@ G 共通化（gate-check の挙動を変えない）:
 - G2 `record_reviewed_commit`: 最後の `REVIEWED_COMMIT:` の SHA。無ければ空
 - G3 `branch_own_files develop <rev>`: 改行・引用符を含まないが空白・`[` を含むパス（`docs2/a [b].md`）がそのままの名前で出る。記録の場所は出ない
 - G4 一時リポジトリで、OK の記録・レビューの後の変更あり・高リスクで敵対的レビューなし、の 3 つの状態の `gate-check.sh` の出力（`GATE_CHECK:` の行と終了コード）が、付け替える前の `gate-check.sh`（テストの中で develop 33d2e29 の版の `gate-check.sh` と `code-review.sh` を `git show` で取り出し、`GATE_CHECK_LIB` で組み合わせたもの）と同じ
-- G5 I205-F12: `delta_hunks` の 2 本と差分のレビューの `GIT_DIFF` の 2 本（範囲のファイル・範囲が空で記録の場所の外が変わったとき）の、4 か所の `git diff` すべてに `--literal-pathspecs` が付いている（計画変更記録 3: glob で余分に拾っても塊の出力は変わらないので、振る舞いではなく付いていることを確かめる）
+- G5 I205-F12: `delta_hunks` の 2 本と差分のレビューの `GIT_DIFF`（範囲と取り消したファイル）の、3 か所の `git diff` すべてに `--literal-pathspecs` が付いている（計画変更記録 3: glob で余分に拾っても塊の出力は変わらないので、振る舞いではなく付いていることを確かめる）
 
 D 指示ファイル（静的）:
 - D1 `.claude/agents/code-reviewer.md` に `RISK=up`・`台帳の残り`・`消した位置の HEAD の行番号` があり、`触れていれば Blocker として FINDING 行に書く` が無い

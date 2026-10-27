@@ -272,6 +272,27 @@ revert_app fw4b
 round fw4b fw4b2 "$B_APP_RES" >/dev/null
 ck "FG-W4b 範囲が空かで決める形に戻すと W4b が不合格（呼ばれずに HIGH のまま）" "no HIGH" "$(yn grep -qx agent "$TMP/calls_fw4b2") $(fv fw4b2)"
 
+# W4c（fix-loop F11）: 取り消しと同時に別のファイル（b.sh）も直す → 範囲は b.sh だけでも、a.py の取り消しの差分を見せる。
+# develop の取り込みだけで変わったファイル（c.txt）は見せない
+# mixed <名前>: 1 周目の後に、develop で c.txt を変えて取り込み、a.py を develop の中身に戻し、b.sh を足す
+mixed() { local E="$TMP/e_$1"
+  git -C "$E" checkout -q develop; printf 'c\n' > "$E/c.txt"; git -C "$E" add c.txt; git -C "$E" commit -qm "develop c"
+  git -C "$E" push -q origin develop 2>/dev/null; git -C "$E" checkout -q feature/I900-x; git -C "$E" merge -q --no-edit develop
+  git -C "$E" checkout -q origin/develop -- a.py; printf 'b\n' > "$E/b.sh"; git -C "$E" add -A; git -C "$E" commit -qm "revert a.py + b.sh"; }
+setup w4c
+rename_rec w4c "$(round w4c w4c1 "$B_APP_HIGH")" 0001 >/dev/null
+mixed w4c
+round w4c w4c2 "$B_APP_RES" >/dev/null
+ck "W4c 混在: 入力に a.py の取り消し（-l2）と b.sh があり、c.txt は無い・F1 が resolved で OK" "yes yes no OK" \
+  "$(yn grep -qx -- '-l2' "$TMP/in_w4c2.txt") $(yn grep -qx 'b.sh' "$TMP/in_w4c2.txt") $(yn grep -qx 'c.txt' "$TMP/in_w4c2.txt") $(fv w4c2)"
+setup fw4c "$(broken '  { cat "$SCOPE_FILE"
+    LC_ALL=C comm -12' '  { cat "$SCOPE_FILE"; false &&
+    LC_ALL=C comm -12')"
+rename_rec fw4c "$(round fw4c fw4c1 "$B_APP_HIGH")" 0001 >/dev/null
+mixed fw4c
+round fw4c fw4c2 "$B_APP_RES" >/dev/null
+ck "FG-W4c 取り消したファイルを足さないと W4c が不合格（a.py の取り消しが見えない）" no "$(yn grep -qx -- '-l2' "$TMP/in_fw4c2.txt")"
+
 # ---------------- A adversarial-review.sh の細部（claude はスタブ） ----------------
 AS="$TMP/adv_stub"
 cat > "$AS" <<'PY'
@@ -390,10 +411,10 @@ ck "G4 レビューの後の変更: 前と同じ（unreviewed）" "yes:GATE_CHEC
 mkdir -p "$GR/.github"; printf 'x\n' > "$GR/.github/x.yml"; git -C "$GR" add -A; git -C "$GR" commit -qm guard
 printf 'REVIEWED_COMMIT: %s\nRISK: NO\nVERDICT: OK\n' "$(git -C "$GR" rev-parse HEAD)" > "$GR/docs/reviews/I900_code_review_20260101_0001.md"
 ck "G4 高リスク（パス）で敵対的レビューなし: 前と同じ（missing）" "yes:GATE_CHECK: FAIL REASON=missing rc=1" "$(same)"
-# G5（I205-F12）: 行の塊と差分のレビューの git diff は、パスを glob として読まない（4 か所すべて --literal-pathspecs。
-# 行の塊の 2 本・差分のレビューの範囲のファイル・範囲が空で記録の場所の外が変わったとき〔fix-loop F2〕）
-g5() { [ "$(grep -c "xargs -d '\\\\n' git --literal-pathspecs" "$1")" -eq 4 ]; }
-ck "G5 4 か所の git diff に --literal-pathspecs" yes "$(yn g5 "$CR")"
+# G5（I205-F12）: 行の塊と差分のレビューの git diff は、パスを glob として読まない（3 か所すべて --literal-pathspecs。
+# 行の塊の 2 本・差分のレビューで見せるファイル〔範囲と取り消したファイル・fix-loop F2・F11〕）
+g5() { [ "$(grep -c "xargs -d '\\\\n' git --literal-pathspecs" "$1")" -eq 3 ]; }
+ck "G5 3 か所の git diff に --literal-pathspecs" yes "$(yn g5 "$CR")"
 ck "FG-G5 1 か所外すと G5 が不合格" no "$(yn g5 "$(broken 'GIT_DIFF=$(xargs -d '"'"'\n'"'"' git --literal-pathspecs diff' 'GIT_DIFF=$(xargs -d '"'"'\n'"'"' git diff')")"
 
 # ---------------- D 指示ファイル ----------------

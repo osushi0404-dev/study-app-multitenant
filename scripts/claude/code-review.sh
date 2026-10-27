@@ -881,14 +881,22 @@ if [ "$REVIEW_KIND" = "delta" ]; then
     NO_DELTA=1; echo "起点の後に記録の場所の外は変わっていないため、レビュー役は呼ばずに台帳を引き継ぎます。"
   fi
 fi
-
-# git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）。差分のレビューは範囲のファイルの起点からの差分だけ
+# レビュー役に見せるファイル（差分のレビュー）: 範囲 ∪ 取り消したファイル。取り消したファイル＝起点の時点でブランチが変えていて、
+# 起点の後に変わり、今は範囲に無いもの（develop の中身に戻した・消した。範囲から外れるので、別に足さないと差分が見えない・
+# I202 review-gate 2 周目 F11）。develop の取り込みだけで変わったファイルは入らない。行の塊・台帳の SCOPE には使わない
+SHOWN_FILES_FILE=$(mktemp)
 if [ "$REVIEW_KIND" = "delta" ]; then
-  if [ -s "$SCOPE_FILE" ]; then
-    GIT_DIFF=$(xargs -d '\n' git --literal-pathspecs diff "$SINCE" HEAD -- < "$SCOPE_FILE" | head -c 102400 || true)
-  elif [ "$NO_DELTA" = "0" ]; then
-    # 範囲は空だが記録の場所の外は変わった（変更の取り消し・ファイルの削除）: その差分を見せる
-    GIT_DIFF=$(grep -v '^$' "$OUTSIDE_SINCE_FILE" | xargs -d '\n' git --literal-pathspecs diff "$SINCE" HEAD -- | head -c 102400 || true)
+  OWN_AT_SINCE=$(branch_own_files origin/develop "$SINCE") || { echo "⛔ 起点の時点でブランチが変えたファイルを取れません（起点 ${SINCE}）"; exit 1; }
+  { cat "$SCOPE_FILE"
+    LC_ALL=C comm -12 <(printf '%s\n' "$OWN_AT_SINCE" | LC_ALL=C sort) <(LC_ALL=C sort "$OUTSIDE_SINCE_FILE") \
+      | LC_ALL=C comm -23 - <(LC_ALL=C sort "$SCOPE_FILE")
+  } | grep -v '^$' > "$SHOWN_FILES_FILE" || true
+fi
+
+# git 情報取得（最大 100KB、|| true で SIGPIPE による pipefail を抑制）。差分のレビューは見せるファイルの起点からの差分だけ
+if [ "$REVIEW_KIND" = "delta" ]; then
+  if [ -s "$SHOWN_FILES_FILE" ]; then
+    GIT_DIFF=$(xargs -d '\n' git --literal-pathspecs diff "$SINCE" HEAD -- < "$SHOWN_FILES_FILE" | head -c 102400 || true)
   else
     GIT_DIFF="(起点の後に、記録の場所の外で変わったファイルは無い)"
   fi
@@ -1008,13 +1016,13 @@ $(if [ "$REVIEW_KIND" = "delta" ]; then
   ledger_blocking "$PREV_LEDGER_FILE" || true
   printf '\n#### 台帳の残り（止めない open の指摘。直したと差分から分かるものだけ、同じ番号で STATUS=resolved の FINDING 行を書く。書かなければ open のまま。この番号を open で書くと新しい指摘として振り直される）\n'
   ledger_open_rest "$PREV_LEDGER_FILE" || true
-  printf '\n#### 差分のレビューの範囲のファイル\n'; cat "$SCOPE_FILE"
+  printf '\n#### 差分のレビューの範囲のファイル（範囲と、取り消したファイル）\n'; cat "$SHOWN_FILES_FILE"
 else
   printf '全体のレビュー（台帳の 1 周目）。ブランチ全体を見て、指摘ごとに FINDING 行を書く（止めるかどうかはスクリプトが FILE・LINE・STOP・再現の欄と変更の種類から決める。ブランチで触っていない行の指摘は止めない）。\n'
 fi)
 
 ### 変更の種類（I205・スクリプトが決めた。種類ごとの止め方は code-reviewer の定義の「止める指摘の書き方」）
-$(if [ "$REVIEW_KIND" = "delta" ]; then ledger_kinds "$SCOPE_FILE"; else ledger_kinds "$BRANCH_OWN_FILE"; fi)
+$(if [ "$REVIEW_KIND" = "delta" ]; then ledger_kinds "$SHOWN_FILES_FILE"; else ledger_kinds "$BRANCH_OWN_FILE"; fi)
 
 ### 決定論ゲート実行結果（スクリプト実走済み・実 exit code／読解で上書きしないこと）
 ${GATE_EVIDENCE}
@@ -1024,7 +1032,7 @@ omission-lint: ${OMISSION_VERDICT}
 ${GIT_LOG}
 
 ### 変更ファイル一覧${FILES_NOTE}
-$(if [ "$REVIEW_KIND" = "delta" ]; then cat "$SCOPE_FILE"; else printf '%s' "$GIT_FILES"; fi)
+$(if [ "$REVIEW_KIND" = "delta" ]; then cat "$SHOWN_FILES_FILE"; else printf '%s' "$GIT_FILES"; fi)
 
 ### git diff (${REVIEW_RANGE}, max 100KB)
 \`\`\`diff
@@ -1128,7 +1136,7 @@ inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_V
 set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
-rm -f "$LEDGER_FILE" "$SCOPE_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" "$OUTSIDE_SINCE_FILE" "${PREV_LEDGER_FILE:-}"
+rm -f "$LEDGER_FILE" "$SCOPE_FILE" "$HUNKS_FILE" "$BRANCH_OWN_FILE" "$OUTSIDE_SINCE_FILE" "$SHOWN_FILES_FILE" "${PREV_LEDGER_FILE:-}"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"
