@@ -50,8 +50,9 @@ W 本体の細部（スタブで通し）:
 
 A 敵対的レビュー（`adversarial-review.sh`・claude のスタブ）:
 - A1 F6: 2 観点の実験役のスタブが、それぞれ始まりと終わりの時刻をファイルに書く（1 秒待つ）→ 区間が重ならない
+- A1b F6: ロックの待ちの間に締め切りが迫った（ロックを取った後の残り時間が `ADV_MIN_STEP` 未満）→ 待った側の観点の実験役は呼ばれず、その実験が `exp_status` に `deadline`、記録に「実行していない（締め切り）」・VERDICT は OK にならない（`HIGH`）
 - A2 F7: 前の記録の `REVIEWED_COMMIT` が HEAD の祖先でない → `review_base` が `ADV_BASE` を返す。祖先なら SHA を返す
-- A3 F8: 拒否の件数を読めない（`claude_log_denials` が失敗するログ）→ その観点の拒否が `読めない`・VERDICT が OK にならない
+- A3 F8: 拒否の件数を読めない（`claude_log_denials` が失敗するログ）→ その観点の拒否が `読めない`・`ADVERSARIAL_VERDICT: HIGH`・終了コード 1（今の語彙 `BLOCKER`・`HIGH`・`OK` のまま）
 - A4 空の括弧: note が空の観点の「観点ごとの実行」の行に `報告あり（）` が無い
 
 G 共通化（gate-check の挙動を変えない）:

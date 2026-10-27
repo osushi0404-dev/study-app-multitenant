@@ -23,5 +23,7 @@
 計画書 §7 のとおり（PR の revert。レビューの途中のイシューがあれば、新しい形の記録を退避して全体のレビューからやり直す）。
 
 ## 自律判断の記録
+- [plan-review] 計画レビューの Warning 3 件（V3 の文言・F14 の条件・F6 の締め切りと F8 の語彙）を計画書・auto_test に反映し、再レビューはしない — findings への対応の追記で、方式・範囲・受け入れ条件を変えないため（計画変更記録 1）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
