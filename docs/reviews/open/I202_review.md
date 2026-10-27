@@ -39,3 +39,4 @@ F5（計画の見立てを超えた高リスクの変更が敵対的レビュー
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
