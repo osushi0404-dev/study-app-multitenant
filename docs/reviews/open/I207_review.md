@@ -28,5 +28,7 @@
 - [plan] 台帳の残りの番号の行は、同じ回の前の行に関係なく行の中身だけで決める（`seen` の近道を外す）— F2 と同じ箇所の止まらない向きの穴 2 つ（resolved → 止める中身・止める中身 → resolved）も同じ根本で消える（計画書 4.1・9）
 - [plan] 一覧は `docs/reviews/backlog/<起点のイシュー>.md`、見る場所は plan-issue のスキル — 並行のワークツリーで衝突せず、close の glob にも当たらない。計画を作るスキルなので必ず通る（計画書 9）
 - [plan] 手動テストは一覧と計画のコマンドの 1 件だけ。このイシューの retro で新しい振り分けを使ったことは retro・close で記録する — test-gate は retro の前なので確かめられない
+- [plan-review] 計画レビュー OK（高リスク判定 No）。Warning 1 は表を行ごとの規則に揃えてテスト P6 を足し、Warning 2 はパイプの grep が承認なしで通ることを check-permission-prompt.sh で確かめて形を変えなかった — 方式・範囲・受け入れ条件は変えないので再レビューなし（計画変更記録 1）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
