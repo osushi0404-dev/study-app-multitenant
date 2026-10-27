@@ -23,6 +23,8 @@
 - 自動: 決定論ゲート 12 本すべて exit 0（review-gate・HEAD 7f3167e）。CI 全ジョブ pass（Harness Tests を含む）。gate-check OK
 - 手動: No.1〜3 すべて OK（実施者はすべて Claude・Human の項目なし）。実物のレビュー役が新しい FINDING 行の形で 10 行を書き、形の崩れは 0 件
 
+- （計画変更記録 2）`scripts/claude/code-review.sh`: `delta_hunks` の git diff に `--no-ext-diff --no-textconv --no-relative --src-prefix=a/ --dst-prefix=b/` を付けた（F1）。塊を読む処理を `hunks_from_diff` にし、見出しは最初の `@@` までだけ読む（F6）。対象のファイルのうち diff に出てこなかったものはファイル全体にした（F2）。テストに H7〜H9・B7 の追加・FG-H7〜H9 を足した
+
 ## 計画との差分
 - `delta_files` を `branch_own_files` の上に作り直した（/simplify の指摘。挙動は同じで、R2・FG-R2 で確かめた）。計画の範囲（code-review.sh の範囲の決め方）の中の整理
 - 計画 §5 のステップ 6 の「語の付け替え」で、`test_i193_official_flow.sh`（S19）・`test_fix_review.sh`（TC-22・TC-26）も直した（スキルの語を変えたため）
@@ -82,6 +84,8 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 - [retro] I202 の F11・F16 は I205 で直したと #338 に記載（計画 4.10）
 - [retro] 改善案 2 件は見送り（その場で捕まり手戻りなし）。新規起票なし
 - [close の後・ユーザー決定] F1・F2・F6（行の塊の読み取りが見逃し側に倒れる穴）を、I202 に回さずこの PR で直す（計画 4.11・計画変更記録 2）。記録を open に戻し、計画レビューから通り直す — 次のアプリのイシュー（I196）がこの判定を使うため、develop に入れる前に直す（ユーザーが評価を経て合意）
+- [plan-review] 追記分の計画レビュー（`docs/reviews/I205_plan_review_20261027_1300.md`）OK・高リスク No。Warning 3 件・Info 2 件は計画に反映し、再レビューはしない（計画変更記録 2）
+- [implement] 計画 4.11 を実装（F1・F2・F6）。/simplify は今回の追加分では呼ばなかった — 変えたのは 1 回目の /simplify で整理済みの同じ関数の約 40 行で、見出しの読み方・オプション・読めなかったときの扱いだけ（新しい重複・無駄を生む形の変更ではない）。整理の点検は review-gate の組み込み /code-review が受け持つ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

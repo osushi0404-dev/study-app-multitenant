@@ -510,52 +510,65 @@ branch_own_files() {   # $1=比べる相手
 # I205: 差分の中かどうかを行で決めるための、行の塊「<パス>\t<始め>\t<終わり>」（HEAD の行番号）。
 # 全体のレビュー（起点が空）: ブランチが変えた行（merge-base から HEAD）。
 # 差分のレビュー: 起点から HEAD までに変わった行のうち、ブランチが変えた行（develop の取り込みで入った行は入れない）。
-# 消しただけの塊は消した位置の 1 行、塊の無い変更（バイナリなど）はファイル全体
+# 消しただけの塊は消した位置の 1 行、塊の無い変更（バイナリなど）はファイル全体。
+# 読み取りが崩れても見逃し側に倒れないよう（I205 計画 4.11）: git の設定（接頭辞・外部 diff・相対パス）に左右されない
+# オプションで取り、対象のファイルのうち diff に出てこなかったものはファイル全体にする。git が失敗したら 2（本体は止める）
 delta_hunks() {   # $1=比べる相手 $2=起点の SHA（空なら全体のレビュー）
-  local mb files a b
+  local mb files a b l rc
   mb=$(git merge-base "$1" HEAD) || return 2
   if [ -n "$2" ]; then files=$(delta_files "$1" "$2") || return 2; else files=$(branch_own_files "$1") || return 2; fi
   [ -n "$files" ] || return 0
-  a=$(mktemp); b=$(mktemp)
-  printf '%s\n' "$files" | xargs -d '\n' git -c core.quotePath=false diff -U0 --no-renames --no-color "$mb" HEAD -- > "$a" || { rm -f "$a" "$b"; return 2; }
+  a=$(mktemp); b=$(mktemp); l=$(mktemp)
+  printf '%s\n' "$files" > "$l"
+  xargs -d '\n' git -c core.quotePath=false diff -U0 --no-renames --no-color --no-ext-diff --no-textconv --no-relative \
+    --src-prefix=a/ --dst-prefix=b/ "$mb" HEAD -- < "$l" > "$a" || { rm -f "$a" "$b" "$l"; return 2; }
   if [ -n "$2" ]; then
     # 起点からの塊と、ブランチ自身の塊（merge-base から）の重なりだけ
-    printf '%s\n' "$files" | xargs -d '\n' git -c core.quotePath=false diff -U0 --no-renames --no-color "$2" HEAD -- > "$b" || { rm -f "$a" "$b"; return 2; }
-    python3 -I -c "$_HUNKS_PY" "$a" "$b"
+    xargs -d '\n' git -c core.quotePath=false diff -U0 --no-renames --no-color --no-ext-diff --no-textconv --no-relative \
+      --src-prefix=a/ --dst-prefix=b/ "$2" HEAD -- < "$l" > "$b" || { rm -f "$a" "$b" "$l"; return 2; }
+    hunks_from_diff "$l" "$a" "$b"
   else
-    python3 -I -c "$_HUNKS_PY" "$a"
+    hunks_from_diff "$l" "$a"
   fi
-  local rc=$?; rm -f "$a" "$b"; return "$rc"
+  rc=$?; rm -f "$a" "$b" "$l"; return "$rc"
 }
+# diff（-U0）から行の塊を出す: <対象のファイルの一覧> <diff A> [<diff B>（あれば A と重なる行だけ）]
+hunks_from_diff() { python3 -I -c "$_HUNKS_PY" "$@"; }
 
 _HUNKS_PY='
 import re, sys
 HUNK = re.compile(r"@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@")
+WHOLE = [(1, 999999999)]
 def hunks(path):
-    out, cur = {}, None
+    out, cur, head = {}, None, False
     for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
         if line.startswith("diff --git "):
             cur = line[len("diff --git "):].rsplit(" b/", 1)[-1]
-            out.setdefault(cur, [])
-        elif line.startswith("+++ "):
-            if line == "+++ /dev/null":       # 消したファイルは HEAD に無い
-                out.pop(cur, None); cur = None
-            elif line.startswith("+++ b/"):
+            out.setdefault(cur, []); head = True
+        elif head and line.startswith("+++ "):
+            # 見出しとして読むのは diff --git の後、最初の @@ までだけ（追加した行の中身「++ …」と取り違えない）
+            if line.startswith("+++ b/"):
                 cur = line[len("+++ b/"):]; out.setdefault(cur, [])
         elif cur is not None and line.startswith("@@ "):
+            head = False
             m = HUNK.match(line)
             if m:
                 c, d = int(m.group(1)), int(m.group(2) if m.group(2) is not None else 1)
                 out[cur].append((max(c, 1), max(c, 1)) if d == 0 else (c, c + d - 1))
     # 塊の無い変更（バイナリ・モード）はファイル全体
-    return {p: (r or [(1, 999999999)]) for p, r in out.items()}
-a = hunks(sys.argv[1])
-if len(sys.argv) < 3:   # 全体のレビュー: そのまま出す
+    return {p: (r or WHOLE) for p, r in out.items()}
+expected = [l for l in open(sys.argv[1], encoding="utf-8").read().split("\n") if l]
+a = hunks(sys.argv[2])
+b = hunks(sys.argv[3]) if len(sys.argv) > 3 else a
+# 対象のファイルなのに diff に出てこなかった（読み取りが崩れた）ものは、ファイル全体（止める側）
+for p in expected:
+    if p not in a or p not in b:
+        a[p] = b[p] = WHOLE
+if b is a:   # 全体のレビュー: そのまま出す
     for p in sorted(a):
         for s, e in a[p]:
             print(f"{p}\t{s}\t{e}")
     sys.exit(0)
-b = hunks(sys.argv[2])
 for p in sorted(set(a) & set(b)):
     for s1, e1 in a[p]:
         for s2, e2 in b[p]:

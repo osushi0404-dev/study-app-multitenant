@@ -65,6 +65,20 @@ ck "H5 差分のレビュー: 起点の後にブランチが変えた行（3 行
 inR lib "$CR" delta_hunks develop "" > "$TMP/h_full2" 2>/dev/null
 ck "H6 全体のレビュー: ブランチが変えた行（3・10・16〜17）があり、develop の行（22 行目）は無い" "yes yes yes no" \
   "$(hk "$(printf 'backend/x.py\t3\t3')" "$TMP/h_full2") $(hk "$(printf 'backend/x.py\t10\t10')" "$TMP/h_full2") $(hk "$(printf 'backend/x.py\t16\t17')" "$TMP/h_full2") $(grep -q "$(printf '\t22\t22')" "$TMP/h_full2" && echo yes || echo no)"
+# H7（計画 4.11・F1）: git の接頭辞の設定を変えても塊が同じ
+git -C "$R" config diff.noprefix true; git -C "$R" config diff.mnemonicPrefix true
+ck "H7 diff.noprefix・diff.mnemonicPrefix を設定しても backend/x.py 10〜10" yes \
+  "$(inR lib "$CR" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'backend/x.py\t10\t10')" && echo yes || echo no)"
+# H8（4.11・F6）: 追加した行の中身が「++ b/…」（diff では「+++ b/…」）でも、見出しと取り違えず後ろの塊が残る
+sed -i '1s/.*/++ b\/zz.txt/; 8s/.*/o8-changed/' "$R/old.txt"; git -C "$R" add -A; git -C "$R" commit -qm "F6"
+inR lib "$CR" delta_hunks develop "" > "$TMP/h_f6" 2>/dev/null
+ck "H8 中身が「++ b/zz.txt」の行の後ろの塊（old.txt 8〜8）が残る" yes "$(hk "$(printf 'old.txt\t8\t8')" "$TMP/h_f6")"
+# H9（4.11・F2）: 対象のファイルなのに diff に出てこないものはファイル全体
+printf 'a.txt\nb.txt\n' > "$TMP/h9_list"
+printf 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -2 +2 @@\n-x\n+y\n' > "$TMP/h9_a"
+printf 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -5 +5 @@\n-x\n+y\n' > "$TMP/h9_b"
+ck "H9 diff に出てこない b.txt はファイル全体・a.txt は 2〜2" "a.txt	2	2|b.txt	1	999999999" "$(lib "$CR" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" | paste -sd'|' -)"
+ck "H9 差分のレビューで両方に出て重ならない a.txt は塊なし" "b.txt	1	999999999" "$(lib "$CR" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" "$TMP/h9_b" | paste -sd'|' -)"
 
 # ---------------- L 行で決める範囲 ----------------
 printf 'backend/x.py\t10\t10\nscripts/claude/a.sh\t10\t10\ndocs/up.md\t5\t5\n.claude/settings.json\t1\t1\n' > "$TMP/hunks"
@@ -142,6 +156,7 @@ ck "B5 台帳に REPRO=no で残る" yes "$(grep -q 'REPRO=no' "$TMP/led" && ech
 ck "B5b app・Low・STOP=ac:1・触っていない行・再現あり → HIGH" HIGH "$(v "$CR" "$(fl Low backend/x.py 1 no ac:1 yes)")"
 ck "B6 app・Blocker・SECURITY=yes・outside・再現あり → BLOCKER" BLOCKER "$(v "$CR" "$(fl Blocker backend/x.py 1 yes - yes)")"
 ck "B7 app・Blocker・SECURITY=yes・outside・再現なし → OK" OK "$(v "$CR" "$(fl Blocker backend/x.py 1 yes - no)")"
+ck "B7 台帳に STATUS=open・SECURITY=yes で残る（retro 4-0 が拾い最優先にする）" yes "$(grep -q '^LEDGER: F1 SEV=Blocker STATUS=open .*SECURITY=yes' "$TMP/led" && echo yes || echo no)"
 ck "B8 harness・Low・STOP=flow・delta・再現あり → HIGH（重大度を見ない）" HIGH "$(v "$CR" "$(fl Low scripts/claude/a.sh 10 no flow yes)")"
 ck "B9 harness・High・STOP=-・delta・再現あり → OK" OK "$(v "$CR" "$(fl High scripts/claude/a.sh 10 no - yes)")"
 ck "B9 台帳に KIND=harness STOP=- で残る" yes "$(grep -q 'STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=yes' "$TMP/led" && echo yes || echo no)"
@@ -263,6 +278,13 @@ ck "FG-K1 harness の場所から .claude/ を外すと K1 が不合格（app）
 BW2=$(broken "grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*\$' \"\$REVIEW_FILE\" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER" 'REVIEWER_VERDICT="$LLM_VERDICT"')
 e2e fgw2 "$BW2" a.py "$W2_BODY" >/dev/null
 ck "FG-W2 LLM の VERDICT を合否に使うと W2 が不合格（HIGH）" HIGH "$(fv fgw2)"
+BH7=$(broken '--src-prefix=a/ --dst-prefix=b/ "$mb" HEAD' '"$mb" HEAD')
+ck "FG-H7 接頭辞の固定を外すと H7 が不合格（10〜10 が出ない）" no \
+  "$(inR lib "$BH7" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'backend/x.py\t10\t10')" && echo yes || echo no)"
+ck "FG-H8 見出しを最初の @@ までに限る判定を外すと H8 が不合格" no \
+  "$(inR lib "$(broken '        elif head and line.startswith("+++ "):' '        elif line.startswith("+++ "):')" delta_hunks develop "" 2>/dev/null | grep -qxF "$(printf 'old.txt\t8\t8')" && echo yes || echo no)"
+ck "FG-H9 読めなかったファイルをファイル全体にする処理を外すと H9 が不合格" no \
+  "$(lib "$(broken '        a[p] = b[p] = WHOLE' '        pass')" hunks_from_diff "$TMP/h9_list" "$TMP/h9_a" | grep -q '^b.txt' && echo yes || echo no)"
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
