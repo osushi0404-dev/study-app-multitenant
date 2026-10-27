@@ -714,8 +714,7 @@ elif mode == "update":
     branch_files = read_lines(sys.argv[6]) if len(sys.argv) > 6 else []
     led = read_ledger(prev) if review_kind == "delta" else {}
     # 差分のレビューの入力に見せた指摘: 止める指摘（書き直す）と「台帳の残り」（止めない open の指摘。直ったときだけ
-    # resolved と書いてよい・I202 台帳の限界）。台帳の残りの番号を open で書いた行は、止める中身なら新しい指摘として振り直し
-    # （前の SCOPE を引き継いで、差分の中の新しい指摘が止まらなくなるのを防ぐ・I197-F1 のまま）、それ以外は捨てる（I206 F8）
+    # resolved と書いてよい・I202 台帳の限界）。台帳の残りの番号の行の扱いは下のループの中（I207）
     shown = set(k for k, e in led.items() if blocking(e))
     rest_ids = set(k for k, e in led.items() if is_rest(e))
     remap, seen = {}, set()   # 今回のレビューの中で振り直した番号・読んだ番号（同じ番号の 2 回目は同じ指摘の書き直し・I197-F12）
@@ -747,18 +746,33 @@ elif mode == "update":
             if a <= e + HUNK_MARGIN and b >= s - HUNK_MARGIN:
                 return "delta"
         return "outside"
+    def merged(o, sev, st, stop, repro, sec, title, risk):
+        # 既にある行への書き直し: SCOPE・KIND は前のまま（今回の範囲で決め直すと、触っていない行の未解決の指摘が消える）。
+        # 止める側の値は残す（重大度は下げない・SECURITY・REPRO は yes が残る・一覧に当たる STOP は残る・RISK は up が残る）
+        return [sev if RANK[sev] > RANK[o[0]] else o[0], st, o[2], o[3],
+                o[4] if STOP_RE.fullmatch(o[4]) else stop, "yes" if "yes" in (repro, o[5]) else "no",
+                "yes" if "yes" in (sec, o[6]) else "no", title or o[7], "up" if "up" in (risk, o[8]) else "-"]
     for fid, sev, st, path, line, sec, stop, risk, rest in findings:
         stop = stop if STOP_RE.fullmatch(stop) else "-"
         risk = risk or "-"
         title, repro = split_repro(rest or "")
-        # この行だけで決めた台帳の行（新しい指摘のときと、台帳の残りを捨てるかの判定に使う。既にある指摘の書き直しでは使わない）
+        # この行だけで決めた台帳の行（新しい指摘のときと、台帳の残りの行が止める中身かの判定に使う。既にある指摘の書き直しでは使わない）
         kind = branch_kind(branch_files) if path == "-" else kind_of(norm_path(path))
         fresh = [sev, st, scope_of(path, line, stop), kind, stop, repro, sec, title, risk]
-        # I206 F8: 台帳の残りを open で書いた行は、止める中身のときだけ新しい指摘として振り直す（I197-F1 の守り）。
-        # 止めない中身（「直していない」の書き直しなど）は捨てて、前の行のまま残す（中身の無い指摘を増やさない）
-        if fid in rest_ids and st == "open" and fid not in remap and fid not in seen and not blocking(fresh):
-            continue
-        keep = fid in seen or fid in shown or (fid in rest_ids and st == "resolved")
+        if fid in rest_ids:
+            # I207: 台帳の残りの番号の行は、同じ回の何行目でも、その行の中身だけで決める（同じ回の前の行に左右されない・F2）
+            if st == "resolved":
+                # 直った: 前の行を resolved にする（振り直し先には付けない）
+                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk)
+                continue
+            if not blocking(fresh):
+                # 止めない中身（「直していない」の書き直しなど）: 新しい行を作らず（I206 F8）、STATUS・要約は前のまま、
+                # 止める側の値だけ前の行へ合流する（F1）
+                o = led[fid]
+                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk)
+                continue
+            # 止める中身の open は、下で新しい指摘として振り直す（前の SCOPE を引き継いで止まらなくなるのを防ぐ・I197-F1 の守り）
+        keep = fid in seen or fid in shown
         if fid in remap:
             fid = remap[fid]
         elif fid in led and not keep:
@@ -768,12 +782,7 @@ elif mode == "update":
             next_id += 1
         seen.add(fid)
         if fid in led:
-            o = led[fid]
-            # 既にある指摘: SCOPE・KIND は前のまま（今回の範囲で決め直すと、触っていない行の未解決の指摘が消える）。
-            # 止める側の値は残す（重大度は下げない・SECURITY・REPRO は yes が残る・一覧に当たる STOP は残る・RISK は up が残る）
-            led[fid] = [sev if RANK[sev] > RANK[o[0]] else o[0], st, o[2], o[3],
-                        o[4] if STOP_RE.fullmatch(o[4]) else stop, "yes" if "yes" in (repro, o[5]) else "no",
-                        "yes" if "yes" in (sec, o[6]) else "no", title or o[7], "up" if "up" in (risk, o[8]) else "-"]
+            led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk)   # 既にある指摘の書き直し
         else:
             led[fid] = fresh
     for fid in sorted(led, key=lambda x: int(x[1:])):

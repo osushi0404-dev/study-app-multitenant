@@ -154,10 +154,19 @@ user-invocable: false
      ```bash
      grep -h '^LEDGER: .*STATUS=open' <最新のコードレビューの記録>
      ```
-   - 拾った指摘は、1 件ずつ起票せず、まとめて 1 か所に振り分ける: 1 件の後続イシュー（手順 4 の「採用（新規起票）」。タイトルに「$ARGUMENTS のレビューの残り」）にまとめるか、合う既存のイシューへのコメント（手順 4 の「既存イシューに同梱」）に入れる。`KIND=app` で `SCOPE=outside`（アプリ本体の差分の外）の指摘も必ず入れる。
-   - 判定の仕組み（`scripts/claude/code-review.sh`・`scripts/claude/adversarial-review.sh`・`scripts/claude/gate-check.sh`・`.claude/agents/`）に関わる指摘、または `SECURITY=yes` の指摘が入っていれば、その後続のイシュー（同梱ならコメント）に「次のハーネスの作業で最優先」と書く。
-   - 「## 自律判断の記録」に、指摘の番号ごとの振り分け先（`#番号`）を書く。0 件なら「台帳の残り 0 件」と書く。
-   - 手順 2.7 の 4 問による見送りは、この台帳の残りには使わない（判定は後続のイシューの計画で行う）。
+   - 拾った指摘は、重さで 2 つに振り分ける（I207。判定は行の欄 `SEV`・`REPRO`・`SECURITY`・`KIND` だけで機械的に決める）:
+     - **後続イシュー**: 再現のある Medium 以上（`SEV=Blocker|High|Medium` かつ `REPRO=yes`）・`SECURITY=yes`（重さに関係なく）・`KIND=app`（アプリ本体。`SCOPE=outside` も）のどれかに当たる行。1 件ずつ起票せず、1 件の後続イシュー（手順 4 の「採用（新規起票）」。タイトルに「$ARGUMENTS のレビューの残り」）にまとめるか、合う既存のイシューへのコメント（手順 4 の「既存イシューに同梱」）に入れる:
+       ```bash
+       grep -h '^LEDGER: .*STATUS=open' <最新のコードレビューの記録> | grep -E 'KIND=app|SECURITY=yes|SEV=(Blocker|High|Medium) .*REPRO=yes'
+       ```
+     - **一覧**: それ以外（Low、または再現なし）。イシューにせず、`docs/reviews/backlog/$ARGUMENTS.md`（起点のイシューごとに 1 ファイル。無ければ作る。形は `docs/reviews/backlog/I206.md` と同じ）に 1 行ずつ追記し、手順 4 の「このイシューで直す」と同じく commit/push する:
+       ```bash
+       grep -h '^LEDGER: .*STATUS=open' <最新のコードレビューの記録> | grep -vE 'KIND=app|SECURITY=yes|SEV=(Blocker|High|Medium) .*REPRO=yes'
+       ```
+       行の形: `- <番号> SEV=<…> REPRO=<…> KIND=<…> FILE=<パス|-> | <要約> | 一覧に回した理由: Low／再現なし`。`FILE=` は、その番号の FINDING 行（同じイシューのコードレビューの記録を新しい順に見て最初のもの）の値。見つからなければ `FILE=-`。一覧は計画（`/plan-issue` の「台帳の残りの一覧」）で、実装対象のファイルに当たる行を見る
+   - 後続イシューに回した行に、判定の仕組み（`scripts/claude/code-review.sh`・`scripts/claude/adversarial-review.sh`・`scripts/claude/gate-check.sh`・`.claude/agents/`）に関わる指摘、または `SECURITY=yes` の指摘が入っていれば、その後続のイシュー（同梱ならコメント）に「次のハーネスの作業で最優先」と書く。
+   - 「## 自律判断の記録」に、指摘の番号ごとの振り分け先（`#番号` か `docs/reviews/backlog/$ARGUMENTS.md`）を書く。0 件なら「台帳の残り 0 件」と書く。
+   - 手順 2.7 の 4 問による見送りは、この台帳の残りには使わない（判定は後続のイシューの計画、または一覧を見る計画で行う）。
 
 4) 振り分けに従って対応する（ユーザーの判断は待たない）:
    - **このイシューで直す**: 記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）だけで済むものは、その場で直して commit/push する

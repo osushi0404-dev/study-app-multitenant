@@ -208,6 +208,8 @@ Claude が決めた（技術的な選択と理由。要件・基本設計・UI/U
 - 振り分けはスクリプトにせず、retro に `grep` の 2 本を書く（仮定で決めた）。理由: イシューの制約「大きな自作のコードを足さない」。正規表現はテストで実物の行に当てて固定する（D2）
 - テストは新しいファイルを作らず、`test_i202_ledger_cleanup.sh` に「I207」の節を足す（仮定で決めた）。理由: 一時のリポジトリ・`ledger`・`broken`・`without` をそのまま使える
 - 一覧の確認（plan-issue の新しい節）: このイシューの計画の時点では一覧がまだ無いので「一覧の該当なし」
+- 一覧 docs/reviews/backlog/I206.md F4: 残す — このイシューで作った一覧に、実装対象の `scripts/claude/code-review.sh` が当たった（implement で確認）。イシューの設計確認メモで F3〜F6 は直さず受け入れと決まっている
+- 一覧 docs/reviews/backlog/I206.md F5: 残す — 同上（`scripts/claude/tests/test_i202_ledger_cleanup.sh`）
 - 高リスク判定: `scripts/claude/code-review.sh` は判定の仕組み（台帳）だが、`path_risk_trigger()` の集合（`.github/`・`.pre-commit-config.yaml`・`.secrets.baseline`・見張り・settings）に触れない。アプリの高リスクの条件（認証・認可・テナント境界・個人情報・決済など）にも当たらない。変更は止める側に倒す向きだけ → No の見立て（判定は plan-review）
 
 セキュリティ・ベストプラクティス:
@@ -237,6 +239,7 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
 - 1（計画レビュー 20261027_1925 の Warning 対応・2026-10-27）: Warning 1（表とコードの食い違い）は (b) を採り、4.1 の表を「2 回目が止めない中身なら元の行へ合流」に直し、テスト P6（止める中身の open → 止めない open の順で、F3 は open のまま・F2 に合流・F4 なし）を足した。理由: 行ごとに 1 つの規則（計画書 9）のまま揃い、止める側は弱まらない。Warning 2（パイプの grep）は `check-permission-prompt.sh` で 4.2 の `grep -h … | grep -vE …` を確かめ、承認なしで実行された（0）ので形は変えない。Info 2 件は対応不要（guard の再現なしの High は 4.4 の計画の段階で拾える）。方式・範囲・受け入れ条件は変えないので再レビューはしない
+- 2（implement・2026-10-27）: 計画書の記載「auto_test P3・P4・P6 の前の台帳は `l6_prev`」。採った方法: 3 つとも同じ回に `F1 … STATUS=resolved`（既存の `N2_F1`）を先に書く。理由: `l6_prev` の F1（High・STOP=flow）が止めるので、合否が F3 に関係なく HIGH になり、FG-P4 が不合格を捕まえられなかった（実装後に判明）。あわせて FG-P4 の写しは「resolved を振り直し先へ付ける」形（`fid = remap[fid]` を足す）にした（auto_test の `fid not in remap` の形では止めない中身の分岐へ流れて F3 が open のまま）。FG-L6・FG-N2・FG-N3 の置き換えは新しいコードの分岐に合わせた（期待値は同じ）。一覧の確認（9 の F4・F5）も足した。計画レビューのやり直し: 不要（テストの入力の細部だけで、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261027_1925 判定: ✅ 完了](../../reviews/I207_plan_review_20261027_1925.md)

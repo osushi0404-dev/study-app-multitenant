@@ -129,7 +129,7 @@ ck "L6 台帳の残りの番号を open で書く → 新しい F3（範囲で�
   "$(led_has '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta') $(led_has '^LEDGER: F2 SEV=Low STATUS=open')"
 ledger "$CR" delta "$TMP/l6_prev" >/dev/null
 ck "L6 書かなければ F2 は open のまま" yes "$(led_has '^LEDGER: F2 SEV=Low STATUS=open')"
-ledger "$(broken 'keep = fid in seen or fid in shown or (fid in rest_ids and st == "resolved")' 'keep = fid in seen or fid in shown')" delta "$TMP/l6_prev" "$L6_RES" >/dev/null
+ledger "$(broken '        if fid in rest_ids:' '        if fid in rest_ids and st == "open":')" delta "$TMP/l6_prev" "$L6_RES" >/dev/null
 ck "FG-L6 台帳の残りの resolved を受け付けないと L6 が不合格（F2 は open・F3 に振り直し）" "yes yes" "$(led_has '^LEDGER: F2 SEV=Low STATUS=open') $(led_has '^LEDGER: F3 ')"
 # L7 ledger_open_rest
 printf '%s\nLEDGER: F3 SEV=Low STATUS=resolved SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no | 済\n' "$(cat "$TMP/l6_prev")" > "$TMP/l7"
@@ -449,7 +449,7 @@ f2_same() { yn grep -qxF "$(grep '^LEDGER: F2 ' "$TMP/l6_prev")" "$TMP/led"; }
 ledger "$CR" delta "$TMP/l6_prev" "$N2_F1" "$N2_F2" >/dev/null
 ck "N2 F3 ができない・F2 の行は前の台帳と同じ・F1 は resolved" "no yes yes" \
   "$(led_has '^LEDGER: F3 ') $(f2_same) $(led_has '^LEDGER: F1 SEV=High STATUS=resolved')"
-ledger "$(broken '        if fid in rest_ids and st == "open" and fid not in remap and fid not in seen and not blocking(fresh):' '        if False:')" \
+ledger "$(broken '            if not blocking(fresh):' '            if False:')" \
   delta "$TMP/l6_prev" "$N2_F1" "$N2_F2" >/dev/null
 ck "FG-N2 捨てる条件を外すと N2 が不合格（中身の無い F3 ができる）" yes "$(led_has '^LEDGER: F3 ')"
 # N3（I197-F1 の守り・AC2）: 台帳の残りの番号を止める中身で書けば、新しい指摘として振り直して止める
@@ -457,7 +457,8 @@ N3_F2='FINDING: F2 SEV=High STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURIT
 ledger "$CR" delta "$TMP/l6_prev" "$N2_F1" "$N3_F2" >/dev/null
 ck "N3 新しい F3（High・open・delta）・HIGH・F2 は前の行のまま" "yes HIGH yes" \
   "$(led_has '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta') $(verdict) $(f2_same)"
-ledger "$(broken 'fid not in seen and not blocking(fresh):' 'fid not in seen:')" delta "$TMP/l6_prev" "$N2_F1" "$N3_F2" >/dev/null
+ledger "$(broken '            if not blocking(fresh):' '            if True:
+                continue')" delta "$TMP/l6_prev" "$N2_F1" "$N3_F2" >/dev/null
 ck "FG-N3 止める中身かを見ずに捨てると N3 が不合格（OK＝新しい止める指摘が消える）" OK "$(verdict)"
 # N4（F6）: 台帳の目印は KIND=app の行だけを数える
 for k in harness guard app; do
@@ -531,6 +532,85 @@ done
 n14() { grep -qF '直していないものは書かない' "$1" && ! grep -qF 'この番号を open で書くと新しい指摘として振り直される' "$1"; }
 ck "N14b code-reviewer.md: 直していないものは書かない" yes "$(yn n14 "$CRV")"
 ck "FG-N14 「直していないものは書かない」の行を除くと不合格" no "$(yn n14 "$(without "$CRV" '直していないものは書かない')")"
+
+# ---------------- I207: 台帳の残りの行の扱い（F1・F2）と、軽い指摘の一覧への振り分け（plan_I207.md §4・auto_test TC-01） ----------------
+# P1（F1・AC1）: 台帳の残りを止めない中身で書き直しても、止める側の値（重大度・SECURITY・RISK）は前の行に残る
+printf 'LEDGER: F2 SEV=Low STATUS=open SCOPE=outside KIND=app STOP=- REPRO=yes RISK=- SECURITY=no | 残り\n' > "$TMP/p_app"
+P1_F2='FINDING: F2 SEV=Medium STATUS=open FILE=backend/x.py LINE=15 SECURITY=yes STOP=- RISK=up | 書き直し | 再現: r'
+MERGE_REST='                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk)'
+B_NOMERGE=$(broken "$MERGE_REST" '                pass')   # 合流を外した写し（FG-P1・FG-P5）
+p1() { ledger "$1" delta "$TMP/p_app" "$P1_F2" >/dev/null
+  echo "$(led_has '^LEDGER: F3 ') $(led_has '^LEDGER: F2 SEV=Medium STATUS=open SCOPE=outside KIND=app STOP=- REPRO=yes RISK=up SECURITY=yes \| 残り$') $(lib "$CR" ledger_risk "$TMP/led") $(verdict)"; }
+ck "P1 F3 なし・F2 に Medium・RISK=up・SECURITY=yes が残る（要約は前のまま）・risk YES・OK" "no yes YES OK" "$(p1 "$CR")"
+ck "FG-P1 合流を外すと P1 が不合格（RISK=-・risk NO）" "no no NO OK" "$(p1 "$B_NOMERGE")"
+# P2（F2・AC2）: 同じ回に resolved と書いた後の止めない open で、open に戻らない
+P_RES='FINDING: F2 SEV=Low STATUS=resolved FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=- | 直した'
+P_OPEN='FINDING: F2 SEV=Low STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=- | まだ'
+P_BLOCK='FINDING: F2 SEV=High STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=flow | 新しい穴 | 再現: r'
+p2() { ledger "$1" delta "$TMP/l6_prev" "$P_RES" "$P_OPEN" >/dev/null
+  echo "$(led_has '^LEDGER: F2 SEV=Low STATUS=resolved .*\| 直した$') $(led_has '^LEDGER: F3 ')"; }
+ck "P2 F2 は resolved のまま・F3 なし" "yes no" "$(p2 "$CR")"
+ck "FG-P2 合流で STATUS を書き直すと P2 が不合格（open に戻る）" "no no" \
+  "$(p2 "$(broken "$MERGE_REST" '                led[fid] = merged(o, sev, st, stop, repro, sec, o[7], risk)')")"
+# P3（I197-F1 の守り）: resolved の後の止める中身の open は、新しい指摘として振り直して止める（P3・P4・P6 は前の F1 を直した形にして、合否を F3 だけで決める）
+p3() { ledger "$1" delta "$TMP/l6_prev" "$N2_F1" "$P_RES" "$P_BLOCK" >/dev/null
+  echo "$(led_has '^LEDGER: F2 SEV=Low STATUS=resolved') $(led_has '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta') $(verdict)"; }
+ck "P3 F2 は resolved・新しい F3（High・open・delta）・HIGH" "yes yes HIGH" "$(p3 "$CR")"
+ck "FG-P3 resolved で seen に入れる（前の近道）と P3 が不合格（F3 なし）" no \
+  "$(p3 "$(broken '                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk)
+                continue' '                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk)
+                seen.add(fid)
+                continue')" | cut -d' ' -f2)"
+# P4: 止める中身の open の後の resolved は、振り直した新しい指摘を resolved にしない
+p4() { ledger "$1" delta "$TMP/l6_prev" "$N2_F1" "$P_BLOCK" "$P_RES" >/dev/null
+  echo "$(led_has '^LEDGER: F2 SEV=Low STATUS=resolved') $(led_has '^LEDGER: F3 SEV=High STATUS=open') $(verdict)"; }
+ck "P4 F2 は resolved・F3 は open のまま・HIGH" "yes yes HIGH" "$(p4 "$CR")"
+ck "FG-P4 resolved を振り直し先へ付けると P4 が不合格（F3 が resolved・OK）" "no no OK" \
+  "$(p4 "$(broken '            if st == "resolved":' '            if st == "resolved" and fid in remap:
+                fid = remap[fid]
+            if st == "resolved":')")"
+# P5: 合流は止める側に倒れる（前の行の REPRO=yes と書き直しの STOP=flow で止める）
+printf 'LEDGER: F2 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=yes RISK=- SECURITY=no | 残り\n' > "$TMP/p5_prev"
+p5() { ledger "$1" delta "$TMP/p5_prev" 'FINDING: F2 SEV=Low STATUS=open FILE=scripts/claude/a.sh LINE=10 SECURITY=no STOP=flow | 書き直し' >/dev/null
+  echo "$(led_has '^LEDGER: F3 ') $(led_has '^LEDGER: F2 .* STOP=flow REPRO=yes ') $(verdict)"; }
+ck "P5 F3 なし・F2 が STOP=flow REPRO=yes・HIGH" "no yes HIGH" "$(p5 "$CR")"
+ck "FG-P5 合流を外すと P5 が不合格（OK）" "no no OK" "$(p5 "$B_NOMERGE")"
+# P6: 止める中身の open の後の止めない open は、元の行へ合流し、振り直し先はそのまま
+p6() { ledger "$1" delta "$TMP/l6_prev" "$N2_F1" "$P_BLOCK" "$P_OPEN" >/dev/null
+  echo "$(led_has '^LEDGER: F3 SEV=High STATUS=open .*\| 新しい穴$') $(f2_same) $(led_has '^LEDGER: F4 ') $(verdict)"; }
+ck "P6 F3 は High・open・新しい穴・F2 は前の行のまま・F4 なし・HIGH" "yes yes no HIGH" "$(p6 "$CR")"
+ck "FG-P6 2 行目を振り直し先へ流すと P6 が不合格（F3 の要約が まだ）" no \
+  "$(p6 "$(broken '            if not blocking(fresh):' '            if not blocking(fresh) and fid not in remap:')" | cut -d' ' -f1)"
+# D1（AC3）: retro 4-0 の振り分け
+RT=.claude/skills/retro/SKILL.md
+ROUTE='KIND=app|SECURITY=yes|SEV=(Blocker|High|Medium) .*REPRO=yes'
+d1_207() { grep -qF "grep -h '^LEDGER: .*STATUS=open'" "$1" && grep -qF "grep -E '${ROUTE}'" "$1" && grep -qF "grep -vE '${ROUTE}'" "$1" \
+  && grep -qF 'docs/reviews/backlog/$ARGUMENTS.md' "$1" && grep -qF '最優先' "$1" && ! grep -qF 'まとめて 1 か所に振り分ける' "$1"; }
+ck "D1 retro に拾うコマンド・振り分けの grep -E と grep -vE・一覧のパス・最優先があり、前の文が無い" yes "$(yn d1_207 "$RT")"
+ck "FG-D1 grep -vE の行を消すと不合格" no "$(yn d1_207 "$(without "$RT" "grep -vE '${ROUTE}'")")"
+ck "FG-D1 一覧のパスの行を消すと不合格" no "$(yn d1_207 "$(without "$RT" 'docs/reviews/backlog/$ARGUMENTS.md')")"
+# D2（AC3・C8）: 振り分けの正規表現が、実物の台帳の行と代表の行を正しく分ける（後続イシュー=I・一覧=B）
+I206_REC=docs/reviews/closed/I206_code_review_20261027_1815.md
+{ grep -h '^LEDGER: .*STATUS=open' "$I206_REC"
+  printf '%s\n' 'LEDGER: F7 SEV=Low STATUS=open SCOPE=outside KIND=app STOP=- REPRO=no RISK=- SECURITY=no | app の Low' \
+    'LEDGER: F8 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=yes | 秘密の Low' \
+    'LEDGER: F9 SEV=High STATUS=open SCOPE=outside KIND=guard STOP=- REPRO=yes RISK=- SECURITY=no | guard の High' \
+    'LEDGER: F10 SEV=Medium STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no | 再現なしの Medium' \
+    'LEDGER: F11 SEV=Low STATUS=open SCOPE=delta KIND=guard STOP=- REPRO=yes RISK=- SECURITY=no | guard の Low'; } > "$TMP/d2_led"
+# retro に書いた 2 本（grep -E・grep -vE）をそのまま流し、当たった番号を並べる
+route() { echo "I:$(grep -E "$1" "$TMP/d2_led" | cut -d' ' -f2 | paste -sd, -) B:$(grep -vE "$1" "$TMP/d2_led" | cut -d' ' -f2 | paste -sd, -)"; }
+D2_WANT='I:F1,F7,F8,F9 B:F2,F3,F4,F5,F6,F10,F11'
+ck "D2 I206 の F1 と app・SECURITY=yes・再現のある High は後続イシュー、ほかは一覧" "$D2_WANT" "$(route "$ROUTE")"
+ck "FG-D2 SECURITY=yes を外すと D2 が不合格（F8 が一覧に落ちる）" no "$(yn [ "$(route 'KIND=app|SEV=(Blocker|High|Medium) .*REPRO=yes')" = "$D2_WANT" ])"
+# D3（AC4）: 一覧ファイル・計画で見る決まり・review-rules
+BL=docs/reviews/backlog/I206.md; PI=.claude/skills/plan-issue/SKILL.md
+d3_bl() { [ "$(grep -cE '^- F[3-6] SEV=Low REPRO=(yes|no) KIND=harness FILE=\S+ \| .* \| 受け入れ: ' "$1")" -eq 4 ] && ! grep -qE '^- F[12] ' "$1"; }
+d3_pi() { grep -qF '台帳の残りの一覧' "$1" && grep -qF 'grep -rnF -e "FILE=' "$1" && grep -qF 'docs/reviews/backlog/' "$1"; }
+ck "D3 一覧に F3〜F6 の 4 行（受け入れの理由つき）・F1・F2 なし" yes "$(yn d3_bl "$BL")"
+ck "D3 plan-issue に台帳の残りの一覧を見る節とコマンド" yes "$(yn d3_pi "$PI")"
+ck "D3 review-rules に一覧のパス" yes "$(yn grep -qF 'docs/reviews/backlog/' "$RR")"
+ck "FG-D3 一覧から F6 の行を消すと不合格" no "$(yn d3_bl "$(without "$BL" '- F6 ')")"
+ck "FG-D3 plan-issue から一覧のパスの行を消すと不合格" no "$(yn d3_pi "$(without "$PI" 'docs/reviews/backlog/')")"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
