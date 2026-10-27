@@ -27,6 +27,8 @@
 ## 実行記録
 - 2026-10-27 review-gate（`code-review.sh` の決定論ゲート実走・HEAD 7f3167e）: 「## 決定論ゲート（自動実走）」の 12 本すべて exit=0（heavy で test-gate に委譲したものは無い）。記録 `docs/reviews/I205_code_review_20261027_1123.md`
 - 2026-10-27 test-gate: `bash scripts/claude/gate-check.sh I205` → exit 0（GATE_CHECK: OK）
+- 2026-10-27 review-gate 3 周目（HEAD 6e58f73・計画変更記録 2 と F11 の修正の後）: 決定論ゲート 12 本すべて exit=0・CI 全ジョブ pass。記録 `docs/reviews/I205_code_review_20261027_1322.md`
+- 2026-10-27 test-gate（2 回目）: `bash scripts/claude/gate-check.sh I205` → exit 0（GATE_CHECK: OK）
 
 ### TC-01 の項目
 一時の git リポジトリ（develop に `backend/x.py`〔20 行〕・`scripts/claude/a.sh`〔20 行〕・`Docs/up.md`〔大文字の場所。casefold の確認用〕を置き、feature ブランチで行を変える）と、手書きの FINDING 行・台帳で確かめる。

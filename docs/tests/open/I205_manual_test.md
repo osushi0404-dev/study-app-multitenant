@@ -9,3 +9,5 @@
 | 3 | `.claude/skills/retro/SKILL.md` の「4-0) 台帳の残り」のコマンドを、I197 の最後のコードレビューの記録（`docs/reviews/closed/I197_code_review_20261027_0140.md`）に当てて実行する | I197 の台帳の `STATUS=open` の行（F5〜F19 の Medium・Low）が出る。出た番号が I202（#338）の本文の F5〜F19 と一致する | Claude | OK（2026-10-27）: `grep -h '^LEDGER: .*STATUS=open' docs/reviews/closed/I197_code_review_20261027_0140.md` で F5〜F19 の 15 行（Medium 7・Low 8）が出た。I202 の本文の F5〜F19 と番号・内容が一致 | 手順のコマンドが実物の記録で動くかの確認 |
 
 結論: OK（No.1〜3 すべて OK・2026-10-27。Human の項目なし）
+
+再確認（計画変更記録 2・F11 の修正の後・2026-10-27）: No.1 は差分のレビューの記録 `docs/reviews/I205_code_review_20261027_1307.md`（F11〜F17 の 7 行）・`_1322.md`（F11・F18・F19）でも、形の崩れは 0 件・止める指摘の節あり・合否は台帳と一致（1307 は止める指摘 F11 で HIGH、1322 は 0 件で OK）。No.2・No.3 が見る関数（`kind_of`）と手順（retro 4-0）は今回の修正で変えていないので、結果は同じ
