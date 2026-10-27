@@ -87,6 +87,7 @@
 - [retro] 台帳の残り: `--route issue I208` は 0 件・`--route backlog I208` は F1〜F6 の 6 件 → F1〜F6 は `docs/reviews/backlog/I208.md`（出力の行をそのまま貼った）
 - [retro] 改善案 P1（見張りが一時フォルダの片付けを止める）→ I200（#335）に同梱コメント — 実害は数分の回り道。同じ根本（操作の種類で決め、消す先の重さを見ない）を I200 が扱うので新規起票しない
 - [retro] 見送り 5 件（テストの補助関数の誤り・FG の古い文字列・`f2_same` の想定・組み込みの隔離の拒否・レビュー観点の追加）— どれもその場で捕まり手戻りなし、または公式の機能（振り返りの「見送り」に理由）
+- [close] 最終チェックの 1 回目が CI の実行待ち（ランナー待ち・失敗ではない）で 600 秒の時間切れ → もう 1 回流して CI 全緑を確認した — 落ちたジョブが無く、待つのが安全側
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -94,3 +95,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
