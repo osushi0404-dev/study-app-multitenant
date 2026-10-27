@@ -23,3 +23,5 @@
 - PR を revert する（計画書 7。周の途中のイシューが無いときに行う）
 
 ## 自律判断の記録
+
+STAGE_DONE: plan NEXT: plan-review
