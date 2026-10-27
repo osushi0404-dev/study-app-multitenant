@@ -84,6 +84,7 @@
 - [retro] 棚卸しを I209（#349）として起票 — I207 のイシューの制約（ユーザー指示）。I188（#319）・I192（#325）の取り下げ判断も I209 に含めた
 - [retro] 予防処置は新規なし — テストの入力の不備はその場で捕まり手戻りなし（feedback: 見逃しに手順を足さない）
 - [retro] I208・I209 のイシューファイルはローカル未コミットのまま（ハンドオフ invariant）
+- [close] base 追従は不要（BLOCKED）・gate-check OK・最終チェックで CI 全緑。PR #347 を Ready にした
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -91,3 +92,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
