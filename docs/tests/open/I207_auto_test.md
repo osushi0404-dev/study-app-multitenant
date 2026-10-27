@@ -14,7 +14,7 @@
 |---|---|---|---|
 | TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（「I207」の節を足す）。下の P1〜P6・D1〜D3 と FG、既存の R・L・W・A・G・D・N | exit 0・`fail=0`（ベースライン pass=106） | implement で実行（2026-10-27）: 実装前（Red）pass=115 fail=13（P1〜P6・D1・D3・FG-L6・FG-N2 と「FG の写しがすべて作れた」。D2 は正規表現だけの確認なので実装前でも合格）→ 実装後 pass=128 fail=0。P3・P4・P6 の入力は計画変更記録 2 で直した |
 | TC-02 | 影響を受けうるテスト: `test_i205_stop_criteria.sh`（D4: retro の拾うコマンドと「最優先」）・`test_i197_review_ledger.sh`（台帳の更新）・`test_i180_retro_triage.sh`（retro の文言） | どれも exit 0（ベースライン 2026-10-27・develop 8b8c923: pass=91・pass=64・13/13） | implement で実行（2026-10-27）: pass=91・pass=64・13/13（fail=0）。文言を読むほかのテスト 7 本（i193・i181・i185・i114・i182_docs・i179・adversarial_trigger）も `TEST_DIR` で選んで流し、すべて合格 |
-| TC-03 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
+| TC-03 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | review-gate で確認（2026-10-27）: `CI_WAIT: OK`（Harness Tests を含む全ジョブ pass・HEAD 538aa78） |
 
 ### TC-01 の項目（I207 の節）
 一時の git リポジトリ（既存の `$R`: `backend/x.py`・`scripts/claude/a.sh`・`.github/workflows/ci.yml`〔20 行ずつ〕。行の塊は各 10 行目）と、手書きの FINDING 行・台帳で確かめる。前の台帳は次の 2 つを使う。
@@ -47,3 +47,4 @@ bash scripts/claude/tests/test_i180_retro_triage.sh
 ```
 
 ## 実行記録
+- 2026-10-27 test-gate: `bash scripts/claude/gate-check.sh I207` → exit 0（GATE_CHECK: OK）。決定論ゲート 4 本は review-gate（`docs/reviews/I207_code_review_20261027_1942.md`）で実走し、すべて exit 0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（`CI_WAIT: OK`）

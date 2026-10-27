@@ -20,7 +20,9 @@
 - Config/Infra: ハーネスだけ（`scripts/claude/code-review.sh`・`scripts/claude/tests/test_i202_ledger_cleanup.sh`・`.claude/skills/retro/SKILL.md`・`.claude/skills/plan-issue/SKILL.md`・`.claude/skills/review-gate/SKILL.md`・`.claude/agents/code-reviewer.md`・`docs/runbooks/review-rules.md`・`docs/reviews/backlog/I206.md`〔新規〕）
 
 ## テスト結果
-（test-gate の後に書く）
+- 自動: 決定論ゲート 4 本すべて exit 0（review-gate 1 周目・HEAD 538aa78）。CI 全ジョブ pass（Harness Tests を含む）。gate-check OK。`test_i202_ledger_cleanup.sh` は実装前 fail=13（Red）→ 実装後 pass=128 fail=0
+- 手動: No.1 OK（一覧の中身と計画のコマンドの当たり）。実施者はすべて Claude・Human の項目なし
+- review-gate は 1 周で OK（止めない指摘 F1〜F8 は台帳に残し retro へ）
 
 ## 計画との差分
 - 計画変更記録 1: 計画レビューの Warning（表を行ごとの規則に揃えて P6 を追加）
@@ -39,8 +41,10 @@
 - [implement] /simplify の指摘のうち、D2 のテストを retro の grep 2 本をそのまま流す形にする・FG-P1/P5 の写しを 1 つにする・書き方の揃え（yn・FG-D3）を直した — 重複・起動回数が減り、retro の実際のコマンドを確かめられる
 - [implement] /simplify の指摘のうち、振り分けをスクリプトのモードにする・台帳の行に FILE を持たせる・既にある番号全般の書き直し規則を 2 通りにまとめる・`seen` を前の台帳の番号の集合に置き換える・2 つの分岐をまとめる、は見送り — 前の 3 つは計画で採らないと決めた方式の変更（計画書 8・9「大きな自作のコードを足さない」）で、止める指摘の書き直しの挙動も変わる。後の 2 つは挙動は同じだが既存の FG の置き換え前の文字列の書き直しが増えるだけ
 - [review-gate] 基本レビュー 1 周で OK（CI 全緑・敵対的レビュー NOT_REQUIRED・docs/reviews/I207_code_review_20261027_1942.md）。止めない指摘 F1〜F8（Medium 2・Low 6、すべて再現なし・ハーネス）は台帳に残し retro へ — 止める条件に当たらない
+- [test-gate] gate-check OK・委譲された重いテストなし・手動 No.1 は Claude が実施して OK。Human の項目なし — CI（Harness Tests）が全テストを流しているので手元では流し直さない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
