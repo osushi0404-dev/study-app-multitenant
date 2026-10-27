@@ -23,5 +23,7 @@
 - PR を revert する（計画書 7。周の途中のイシューが無いときに行う）
 
 ## 自律判断の記録
+- [plan-review] 計画レビューの Warning 2 件を直し、再レビューはしない — 引数不足の終了コードと revert 前の確認の追記だけで、方式・範囲・受け入れ条件は変えない（計画変更記録 1）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
