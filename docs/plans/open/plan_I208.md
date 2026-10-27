@@ -90,8 +90,9 @@ def route_reasons(e):
 # I208: 台帳の残りの振り分け（retro 4-0 が使う）: --route <issue|backlog> <I###>。レビューは動かさない。
 # 台帳のある最新のコードレビューの記録（ledger_records の最後）を読み、記録のパスは標準エラーに出す。記録が無ければ 2
 if [ "${1:-}" = "--route" ]; then
+  [ $# -eq 3 ] || { echo "Usage: $0 --route <issue|backlog> I###" >&2; exit 2; }
   cd "$(git rev-parse --show-toplevel)" || exit 2
-  rec=$(ledger_records "${3:?Usage: $0 --route <issue|backlog> I###}" | tail -1)
+  rec=$(ledger_records "$3" | tail -1)
   [ -n "$rec" ] || { echo "台帳のあるコードレビューの記録がありません: $3" >&2; exit 2; }
   echo "記録: $rec" >&2
   ledger_route "$2" "$rec"; exit $?
@@ -147,7 +148,7 @@ grep -rnF -e "FILE=<実装対象のパス1> |" -e "FILE=<実装対象のパス2>
 - No.3: 行を消した後の一覧で、plan-issue の新しいコマンドが当たる行
 
 ## 7. ロールバック
-- PR を revert する（ハーネスのスクリプト・テスト・文書・一覧ファイルだけ。データ・設定の変更は無い）。revert の後、このイシューの間に書かれた `FILE=` の欄のある台帳の行は、前の `LEDG` では全体一致しない（読まれない）ので、revert は周の途中のイシューが無いときに行う
+- PR を revert する（ハーネスのスクリプト・テスト・文書・一覧ファイルだけ。データ・設定の変更は無い）。revert の後、このイシューの間に書かれた `FILE=` の欄のある台帳の行は、前の `LEDG` では全体一致しない（読まれない）ので、revert は周の途中のイシューが無いときに行う。revert の前に `grep -l '^LEDGER: .*STATUS=open.* FILE=' docs/reviews/*_code_review_*.md` で、open の記録（closed へ移していない）に新しい形の open の行が無いことを確かめる
 
 ## 8. Risk & 回避策
 - 新しい形の台帳の行を `LEDG` が読めないと、前の周の止める指摘が消える（見逃し側） → 新しい形の行の読み戻し（Q4: 止める指摘の行が HIGH になる）と、通しの既存テスト（W・R の 2 周目以降）で固定。FG-Q4 で `FILE` の欄を読まない写しが不合格になることを確かめる
@@ -210,5 +211,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
+- 1（計画レビュー 20261027_2245 の Warning 対応・2026-10-27）: Warning 1 は 4.3 の入口で引数の数を先に確かめて exit 2 にし、auto_test Q9 に引数不足の場合を足した。Warning 2 は 7 に revert の前の確認を 1 行足した。Info 2 件は対応不要（高リスクは No の見立て・手動テストの期待は一致）。方式・範囲・受け入れ条件は変えないので再レビューはしない
 
 ## レビュー結果
+- [20261027_2245 判定: ✅ 完了](../../reviews/I208_plan_review_20261027_2245.md)
