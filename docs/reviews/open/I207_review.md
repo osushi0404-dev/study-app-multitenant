@@ -38,7 +38,9 @@
 - [implement] 一覧の F4（code-review.sh）・F5（test_i202）が実装対象に当たったが残す — イシューで F3〜F6 は受け入れと決まっている（計画書 9）
 - [implement] /simplify の指摘のうち、D2 のテストを retro の grep 2 本をそのまま流す形にする・FG-P1/P5 の写しを 1 つにする・書き方の揃え（yn・FG-D3）を直した — 重複・起動回数が減り、retro の実際のコマンドを確かめられる
 - [implement] /simplify の指摘のうち、振り分けをスクリプトのモードにする・台帳の行に FILE を持たせる・既にある番号全般の書き直し規則を 2 通りにまとめる・`seen` を前の台帳の番号の集合に置き換える・2 つの分岐をまとめる、は見送り — 前の 3 つは計画で採らないと決めた方式の変更（計画書 8・9「大きな自作のコードを足さない」）で、止める指摘の書き直しの挙動も変わる。後の 2 つは挙動は同じだが既存の FG の置き換え前の文字列の書き直しが増えるだけ
+- [review-gate] 基本レビュー 1 周で OK（CI 全緑・敵対的レビュー NOT_REQUIRED・docs/reviews/I207_code_review_20261027_1942.md）。止めない指摘 F1〜F8（Medium 2・Low 6、すべて再現なし・ハーネス）は台帳に残し retro へ — 止める条件に当たらない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
