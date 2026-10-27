@@ -38,7 +38,10 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 - [implement] I197 のテストでは、アプリ本体の Medium で「止めない」を確かめていた項目（R5・R7・R13・R14 の F2）を Low に置き換えた — I205 でアプリ本体の Medium は止まるようになり、その確かめは test_i205 の B2 が持つため。FINDING 行は body() で新しい形に直して、I197 の項目の意味を保った
 - [implement] /simplify を適用した: delta_files を branch_own_files の上に作り直した・全体のレビューの塊は 1 回だけ読む・変数名 review_kind・再現の読み取りを 1 つの正規表現に・code-reviewer.md の重複の 1 文を削除・K2 のテストを 1 回の読み込みに — 重複と無駄を減らすため
 - [implement] /simplify の指摘のうち次は見送った: guard の集合を bash 側で決める（言語をまたぐ受け渡しが増える。R-K2 の一致テストで固定する計画の判断のまま）／台帳の項目の名前付き化（手を入れる量に見合わない）／delta_hunks にファイル一覧を渡す（数十ミリ秒の差で、関数を単体で確かめられる形を保つ）／敵対的レビューの Medium の扱いを blocking() に通す（ユーザー決定で止め方を揃えない）／テストの補助関数の共通化（テストを 1 本で完結させる既存の慣例）
+- [review-gate] 基本レビュー（`docs/reviews/I205_code_review_20261027_1123.md`・全体・台帳 1 周目）は OK・高リスク NO で敵対的レビューは不要。指摘 F1〜F10 はすべてハーネスで `STOP=-`（一覧に当たらない）なので止めず、直さない — I205 の新しい決まりのとおり。F1（git の diff の設定で塊がずれうる）・F2（塊が見つからないときに outside になる）・F4・F6 は判定の仕組みの穴（fail-open の向き）なので、retro が後続のイシューで「次のハーネスの作業で最優先」にする。F5 の要約が台帳で途中で切れている（要約の中に `| 再現:` の文字が含まれ、そこで切った）のも同じ後続に入れる
+- [review-gate] 新しい FINDING 行の形で実物のレビュー役が 10 行を書き、形の崩れは 0 件（手動 No.1 の材料）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
