@@ -27,3 +27,5 @@
 - [plan] テストは偽物の tmux・claude を PATH の先頭に置いて確かめ、本物は手動テストで Claude が確かめる — CI に tmux・claude があるか分からず、`.github/` は変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: implement
