@@ -70,3 +70,6 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 bash scripts/claude/tests/test_i193_official_flow.sh
 bash scripts/claude/tests/test_i197_adversarial_process.sh
 ```
+
+## 実行記録
+- 2026-10-27 test-gate: `bash scripts/claude/gate-check.sh I206` → exit 0（GATE_CHECK: OK）。決定論ゲート 5 本は review-gate（`docs/reviews/I206_code_review_20261027_1815.md`）で実走し、すべて exit 0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（`CI_WAIT: OK`・HEAD 3f66d57）

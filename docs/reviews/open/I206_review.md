@@ -19,8 +19,9 @@
 - Backend/Frontend/DB/Config: ハーネスだけ（`scripts/claude/`・`.claude/agents/code-reviewer.md`・`.claude/skills/review-gate/SKILL.md`・`docs/runbooks/`）
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: 決定論ゲート 5 本すべて exit 0（review-gate 1 周目・HEAD 3f66d57）。CI 全ジョブ pass（Harness Tests を含む）。gate-check OK。`test_i202_ledger_cleanup.sh` は実装前 fail=22（Red）→ 実装後 pass=106 fail=0
+- 手動: No.1 該当なし（差分のレビューの周が無い）・No.2 OK（I196.md と #331 に引き継ぎ）。実施者はすべて Claude・Human の項目なし
+- review-gate は 1 周で OK（止めない指摘 F1〜F6 は台帳に残し retro へ）
 
 ## 計画との差分
 - なし
@@ -48,3 +49,4 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
