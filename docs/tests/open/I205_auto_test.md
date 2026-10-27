@@ -73,7 +73,7 @@ W 本体の通し（gh・claude はスタブ）:
 
 D 指示ファイル（静的）:
 - D1 `.claude/agents/code-reviewer.md` に `LINE=`・`STOP=`・`| 再現:`・`flow`・`leak`・`github`・`ac:` があり、`## コード品質・セキュリティ指摘` の見出しが無い
-- D2 `.claude/skills/review-gate/SKILL.md` に `最後の安全網` と `止める指摘（スクリプトが決めた` がある
+- D2 `.claude/skills/review-gate/SKILL.md` に `最後の安全網` と `止める指摘（スクリプトが決めた` と、§3-2 のアプリ本体の Medium の扱い（`イシューに関係する Medium`）がある
 - D3 `.claude/skills/fix-loop/SKILL.md` に `止める指摘（スクリプトが決めた` があり、`止める指摘（Blocker・High）` が無い
 - D4 `.claude/skills/retro/SKILL.md` に `grep -h '^LEDGER: .*STATUS=open'` と `最優先` がある
 - D5 `docs/runbooks/review-rules.md` に `関所の穴` と `最後の安全網` があり、`止めるのは High 以上だけ` が無い
