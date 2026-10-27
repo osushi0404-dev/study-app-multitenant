@@ -41,3 +41,4 @@ PR を revert する。レビューの途中のイシューがあれば、新し
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
