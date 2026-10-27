@@ -15,7 +15,7 @@
 | TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（新設）。下の R・L・W・A・G・D の各項目と FG | exit 0・`fail=0` | implement で実行: pass=67 fail=0（2026-10-27） |
 | TC-02 | `bash scripts/claude/tests/test_i197_review_ledger.sh`（R17・FG-R17 を消し、R14 の 3 周目に FG・R16 のコメントと FG の分割）・`bash scripts/claude/tests/test_i205_stop_criteria.sh`（H7 の設定の後片付け・H10 の追加） | どちらも exit 0・`fail=0`（ベースライン: 64・90 項目） | implement で実行: `test_i197_review_ledger.sh` pass=64 fail=0（R17・FG-R17 を消し、FG-R16 を 2 本に分け、FG-R14c を足した）・`test_i205_stop_criteria.sh` pass=91 fail=0（H10b を足した） |
 | TC-03 | 影響を受けうるテスト: `test_adversarial_trigger.sh`・`test_i193_official_flow.sh`・`test_i181_review_slim.sh`・`test_i197_adversarial_process.sh`・`test_review_commit_lifecycle.sh`・`test_review_gates.sh`・`test_review_verdict.sh` | どれも exit 0 | implement で実行: すべて exit 0（`test_i197_adversarial_process.sh` は S5 の grep を字下げに合わせた後 pass=115・ほかはベースラインと同じ件数）。ベースライン（2026-10-27・develop 33d2e29）: `test_adversarial_trigger.sh` pass=60・`test_i193_official_flow.sh` pass=160・`test_i181_review_slim.sh` pass=29・`test_i197_adversarial_process.sh` pass=115・`test_review_commit_lifecycle.sh` PASS=30 SKIP=1・`test_review_gates.sh` PASS=67・`test_review_verdict.sh` PASS=58（どれも fail=0） |
-| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
+| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | OK: review-gate の CI 待ちで Harness Tests を含む全ジョブが pass（`CI_WAIT: OK`・HEAD cd1539b） |
 
 ## 再発防止記録（fix-loop・review-gate 1 周目 F2・2026-10-27）
 - なぜ失敗したか: I202 で足した「範囲が空ならレビュー役を呼ばない」（NO_DELTA）の判定に、行の範囲を決めるための集合（`delta_files`＝ブランチが変えたファイル ∩ 起点の後に変わったファイル）を使った。変更を develop の中身に戻す直し・ファイルを消す直しは、ブランチが変えたファイルから外れるので、直したのに範囲が空に見え、レビュー役が呼ばれず止める指摘が resolved にならない（流れが進まない）。診断: `docs/reviews/I202_fix_diagnosis_20261027_1630.md`
@@ -100,6 +100,12 @@ FG（失敗注入。一時コピーを壊すと、その項目が不合格にな
 - FG-A2 祖先の確認を外す → A2 で祖先でない SHA が返る
 - FG-G5 `--literal-pathspecs` を 1 か所外す → G5 が不合格
 - FG-D1〜D3 対象のファイルの写しから語を 1 つ消す → その D が不合格
+
+## 実行記録
+- 2026-10-27 review-gate 1 周目（HEAD 05b2dce・`docs/reviews/I202_code_review_20261027_1615.md`）: 決定論ゲート 10 本すべて exit=0・CI 全ジョブ pass。止める指摘 F2 で HIGH → fix-loop
+- 2026-10-27 review-gate 2 周目（`_1630.md`）: 決定論ゲートすべて exit=0・CI pass。止める指摘 F11 で HIGH → fix-loop
+- 2026-10-27 review-gate 3 周目（HEAD cd1539b・`_1645.md`）: 決定論ゲートすべて exit=0・CI 全ジョブ pass・止める指摘 0 で OK
+- 2026-10-27 test-gate: `bash scripts/claude/gate-check.sh I202` → exit 0（GATE_CHECK: OK）。heavy で委譲されたゲートは無い。`check-frontend-evidence.sh` 対象外（exit 0）・`check-manual-test-executor.sh` 合格
 
 ## 決定論ゲート（自動実走）
 ```bash

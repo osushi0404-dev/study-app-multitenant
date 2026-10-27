@@ -18,7 +18,9 @@ F5（計画の見立てを超えた高リスクの変更が敵対的レビュー
 ハーネスだけ（`scripts/claude/code-review.sh`・`scripts/claude/adversarial-review.sh`・`scripts/claude/gate-check.sh`〔関数の置き場所だけ〕・`.claude/agents/code-reviewer.md`・`.claude/skills/review-gate/SKILL.md`・`docs/runbooks/review-rules.md`・`scripts/claude/tests/`）。アプリ本体・DB・GitHub の設定は変えない。
 
 ## テスト結果
-（test-gate で記入）
+- 自動: 決定論ゲート 10 本すべて exit 0（review-gate 3 周目・HEAD cd1539b）。CI 全ジョブ pass（Harness Tests を含む）。gate-check OK
+- 手動: No.1・No.2 とも OK（実施者はすべて Claude・Human の項目なし）。実物のレビュー役は `RISK=` の欄を足しても形を崩さず、ハーネスだけの変更で目印を付けなかった。No.2 の観察（台帳の残りの open の書き直しで中身の無い指摘 F15〜F19 が増え、番号が合流した）は retro で扱う
+- review-gate は 3 周（止める指摘 1→1→0）。止めたのは I202 で足した「範囲が空ならレビュー役を呼ばない」の穴 2 件（F2・F11）
 
 ## 計画との差分
 - 計画変更記録 2: 台帳の残りの番号は resolved のときだけ受け付ける（open の受け付けは I197-F1 の穴を戻すため）
