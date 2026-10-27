@@ -122,11 +122,11 @@ ck_grep TC-20-cap "$SKILL" '連続 NG.*2|2 *回'
 ck_grep TC-21-diag "$SKILL" '診断'
 ck_grep TC-21-remand "$SKILL" '差し戻し'
 ck_grep TC-22-delta "$SKILL" '差分のレビュー'
-ck_grep TC-22-ledger "$SKILL" '止める指摘（Blocker・High）'
+ck_grep TC-22-ledger "$SKILL" '止める指摘（スクリプトが決めた'
 ck_grep TC-22-skip "$SKILL" '未実施'
 
 echo "== TC-26/29: 直す範囲・診断 reviewer =="
-ck_grep TC-26-medium "$SKILL" 'Medium 以下は直さない'
+ck_grep TC-26-medium "$SKILL" 'それ以外の台帳の指摘は直さない'
 # TC-29: 診断 reviewer が再診断時の分類・手順4 再承認要否を評価
 ck_grep TC-29-diag-class "$DIAG_AGENT" '実行の不備|方針の誤り'
 ck_grep TC-29-diag-reapprove "$DIAG_AGENT" '再承認|手順4'

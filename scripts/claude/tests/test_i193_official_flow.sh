@@ -138,7 +138,7 @@ ck "FG-S17 review-gate の手順に sleep 900 を戻すと S17 不合格" 1 "$(r
 ck "S18 review-gate に NO_PR の扱いがある" 0 "$(rc grep -qF '`CI_WAIT: NO_PR` がある' .claude/skills/review-gate/SKILL.md)"
 ck "S19 review-gate に review-gate ⇄ fix-loop の繰り返しの上限がある" 0 "$(rc grep -qF '**繰り返しの上限**' .claude/skills/review-gate/SKILL.md)"
 # I197: 最初から High・Blocker だけ直す（台帳）・5 回目は止める
-ck "S19 繰り返しの上限: 最初から High・Blocker だけ直し、5 回目は止める" 0 "$(rc bash -c 'grep -qF "fix-loop で直すのは最初から台帳の止める指摘（Blocker・High）だけ" "$1" && grep -qF "5 回目になるときは、fix-loop へ回さずに止める" "$1"' _ .claude/skills/review-gate/SKILL.md)"
+ck "S19 繰り返しの上限: 止める指摘（スクリプトが決めた）だけ直し、5 回目は止める（I205）" 0 "$(rc bash -c 'grep -qF "fix-loop で直すのは、記録の \`## 止める指摘（スクリプトが決めた" "$1" && grep -qF "5 回目になるときは、fix-loop へ回さずに止める" "$1"' _ .claude/skills/review-gate/SKILL.md)"
 ck "S20 test-gate: dirty は記録の場所の外をコミットせず fix-loop へ（I193 4 回目 M3）" 0 "$(rc bash -c 'grep -qF "この段階は記録の場所の外をコミットしない" "$1" && grep -qF "実装の一部（コミットし忘れ）なら \`STAGE_DONE: test-gate NEXT: fix-loop\`" "$1"' _ .claude/skills/test-gate/SKILL.md)"
 ck "S19 繰り返しの上限は、実装をやり直した（STAGE_DONE: implement）後から数え直す（I193 5 回目 M1）" 0 "$(rc grep -qF '`STAGE_DONE: review-gate NEXT: test-gate` か `STAGE_DONE: implement` の行を挟まずに数えて' .claude/skills/review-gate/SKILL.md)"
 # S22: close は base 追従（HEAD を動かす）を先に、gate-check（レビュー済みの HEAD か）を後にする（I193 5 回目 H1）
