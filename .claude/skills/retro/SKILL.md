@@ -150,20 +150,16 @@ user-invocable: false
      - ✅ 「grill-me の『運用設計』確認観点に『新しいネットワークホップを導入する場合、各ホップでの downstream サービスへの影響（ヘッダー・IP・設定要件）を分析する』を追加する（対象: grill-me/SKILL.md）」（スキルへの具体的な追加として表現）
 
 4-0) 台帳の残り（必須・I205）: レビューで止めなかった指摘（止める条件に当たらない・再現が無い・差分の外）を埋もれさせない。
-   - 最新のコードレビューの記録（`docs/reviews/` と `docs/reviews/closed/` の `$ARGUMENTS_code_review_*.md` のうち、ファイル名の時刻が最後のもの）の、`STATUS=open` の台帳の行をすべて拾う:
-     ```bash
-     grep -h '^LEDGER: .*STATUS=open' <最新のコードレビューの記録>
-     ```
-   - 拾った指摘は、重さで 2 つに振り分ける（I207。判定は行の欄 `SEV`・`REPRO`・`SECURITY`・`KIND` だけで機械的に決める）:
-     - **後続イシュー**: 再現のある Medium 以上（`SEV=Blocker|High|Medium` かつ `REPRO=yes`）・`SECURITY=yes`（重さに関係なく）・`KIND=app`（アプリ本体。`SCOPE=outside` も）のどれかに当たる行。1 件ずつ起票せず、1 件の後続イシュー（手順 4 の「採用（新規起票）」。タイトルに「$ARGUMENTS のレビューの残り」）にまとめるか、合う既存のイシューへのコメント（手順 4 の「既存イシューに同梱」）に入れる:
+   - 台帳のある最新のコードレビューの記録の `STATUS=open` の指摘を、スクリプトが重さで 2 つに振り分けて出す（I208。判定は台帳の欄の値だけで、要約の文字は見ない。読んだ記録のパスは標準エラーに「記録: …」で出る。exit 2 は記録が無い・引数の誤りなので、止めて調べる）:
+     - **後続イシュー**: 止める指摘・再現のある Medium 以上・`SECURITY=yes`（重さに関係なく）・アプリ本体（`KIND=app`。`SCOPE=outside` も）・guard の Medium 以上（再現を問わない。止める判定と同じく GitHub から復旧できない例外）のどれかに当たる行。出力の各行の最後に理由が付く。1 件ずつ起票せず、1 件の後続イシュー（手順 4 の「採用（新規起票）」。タイトルに「$ARGUMENTS のレビューの残り」）にまとめるか、合う既存のイシューへのコメント（手順 4 の「既存イシューに同梱」）に入れる:
        ```bash
-       grep -h '^LEDGER: .*STATUS=open' <最新のコードレビューの記録> | grep -E 'KIND=app|SECURITY=yes|SEV=(Blocker|High|Medium) .*REPRO=yes'
+       bash scripts/claude/code-review.sh --route issue $ARGUMENTS
        ```
-     - **一覧**: それ以外（Low、または再現なし）。イシューにせず、`docs/reviews/backlog/$ARGUMENTS.md`（起点のイシューごとに 1 ファイル。無ければ作る。形は `docs/reviews/backlog/I206.md` と同じ）に 1 行ずつ追記し、手順 4 の「このイシューで直す」と同じく commit/push する:
+     - **一覧**: それ以外（Low、または再現なし）。イシューにせず、出力の行をそのまま `docs/reviews/backlog/$ARGUMENTS.md`（起点のイシューごとに 1 ファイル。無ければ作り、見出しは `docs/reviews/backlog/I206.md` と同じ形で「記録:」に標準エラーの記録のパスを書く）に貼り、手順 4 の「このイシューで直す」と同じく commit/push する:
        ```bash
-       grep -h '^LEDGER: .*STATUS=open' <最新のコードレビューの記録> | grep -vE 'KIND=app|SECURITY=yes|SEV=(Blocker|High|Medium) .*REPRO=yes'
+       bash scripts/claude/code-review.sh --route backlog $ARGUMENTS
        ```
-       行の形: `- <番号> SEV=<…> REPRO=<…> KIND=<…> FILE=<パス|-> | <要約> | 一覧に回した理由: Low／再現なし`。`FILE=` は、その番号の FINDING 行（同じイシューのコードレビューの記録を新しい順に見て最初のもの）の値。見つからなければ `FILE=-`。一覧は計画（`/plan-issue` の「台帳の残りの一覧」）で、実装対象のファイルに当たる行を見る
+       出力の行の形: `- <番号> SEV=<…> REPRO=<…> KIND=<…> FILE=<パス|-> | <要約> | 一覧に回した理由: <Low／再現なし>`（`FILE=` は台帳の行の値。手で組み立てない）。一覧は計画（`/plan-issue` の「台帳の残りの一覧」）で、実装対象のファイルに当たる行を見る
    - 後続イシューに回した行に、判定の仕組み（`scripts/claude/code-review.sh`・`scripts/claude/adversarial-review.sh`・`scripts/claude/gate-check.sh`・`.claude/agents/`）に関わる指摘、または `SECURITY=yes` の指摘が入っていれば、その後続のイシュー（同梱ならコメント）に「次のハーネスの作業で最優先」と書く。
    - 「## 自律判断の記録」に、指摘の番号ごとの振り分け先（`#番号` か `docs/reviews/backlog/$ARGUMENTS.md`）を書く。0 件なら「台帳の残り 0 件」と書く。
    - 手順 2.7 の 4 問による見送りは、この台帳の残りには使わない（判定は後続のイシューの計画、または一覧を見る計画で行う）。
