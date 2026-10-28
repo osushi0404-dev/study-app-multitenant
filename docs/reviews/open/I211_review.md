@@ -91,6 +91,7 @@
 - [close の後・マージ前] ユーザーの見直し（「BP 的に最適なのは？」→「OK」）で、揃える python を 3.11.18 から 3.12.3（見張り・スクリプトが実際に動く OS の python・CI の runner の python）に変える。記録を open に戻し、計画変更記録 4 を書いて計画レビューから通り直す — 受け入れ条件 AC1 を変えるため。OS の python の更新を自動で止める確かめは足さない（手元と CI の runner の更新時期のずれで CI が揺れるため。runbook に書く・計画書 D4）
 - [plan-review 2] HIGHRISK・Blocker なし。Warning 1（セキュリティの記載が古い `@v10`）は計画書を直した。Warning 2（テストの結果欄が 3.11.18 のまま）は test-gate で書き直す。Warning 3（3.12.3 の取得が未実証）は implement で `uv lock`・`uv run --locked` を流して記録し、CI で確定する。Info（OS の python の更新は人が気づく）は D4 のまま — 直した内容は記載の整合だけで、方式・範囲・受け入れ条件は変えないので再レビューはしない
 - [implement 2] python を 3.12.3 に変え `uv lock` を作り直した（計画変更記録 5）。/simplify は呼ばなかった — 変更は版の数字 2 行・自動で作り直したロックファイル・runbook の 1 行だけで、整理の対象になるコードが無い（前回の実装で /simplify 済み）
+- [review-gate 2] 基本レビューの 1 回目（`docs/reviews/I211_code_review_20261029_0155.md`）は組み込みの /security-review が動かず HIGH（基盤の失敗）。やり直し（`_0204.md`）は失敗した回の `REVIEWED_COMMIT` を起点に「範囲 0 本」と判断し、/security-review を通さずに OK を出した（レビューの仕組みの穴。retro で扱う）。3.12.3 の変更が一度もセキュリティレビューを通らないのを避けるため、組み込みの /security-review を直接実行して補った → 指摘なし（ワークフローの起動条件・権限・秘密情報の参照なし・uv.lock のハッシュと `--locked`・run-all.sh の流し直しの引数・check-tools.sh の probe の出どころを確認）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
