@@ -11,7 +11,7 @@
 （実装後に書く）
 
 ## 影響範囲
-- ハーネスだけ（`scripts/claude/adversarial-review.sh`・`scripts/claude/check-frontend-evidence.sh`・テスト 4 本の書き換えと 2 本の新規・`docs/reviews/backlog/I206.md`・`docs/reviews/backlog/I195.md`）。アプリ本体・DB・設定の変更なし
+- ハーネスだけ（`scripts/claude/adversarial-review.sh`・`scripts/claude/check-frontend-evidence.sh`・テスト 4 本の書き換えと 3 本の新規・`docs/reviews/backlog/I206.md`・`docs/reviews/backlog/I195.md`）。アプリ本体・DB・設定の変更なし
 
 ## テスト結果
 （test-gate の後に書く）
@@ -28,4 +28,7 @@
 - [plan] 規則（`! … | grep -q`）を実物で流したら 4 か所（grill-me の時点の見立ては 3 か所）。`test_i202` の `d3_bl` も同じ見逃しの向きなので直す。`test_i193` 527 行は一覧 I195 F11 を同梱して消す — 規則に除外の印を作らないため
 - [plan] AC1 の負荷は CPU の数だけのループ（`stress-repeat.sh`）にした — I195 で落ちたのは CPU が埋まっていたとき。新しい道具を入れずに手元と CI で同じ形にできる
 
+- [plan-review] 判定 OK（高リスク No）。Warning 2 件（stress-repeat.sh の失敗注入・表示の経過の秒）は計画に足し、規則の誤検知の Warning は許容した — 方式・範囲・受け入れ条件は変わらないので再レビューはしない
+
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement

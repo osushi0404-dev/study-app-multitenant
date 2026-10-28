@@ -69,7 +69,7 @@
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra（ハーネス）: `scripts/claude/adversarial-review.sh`・`scripts/claude/check-frontend-evidence.sh`・`scripts/claude/tests/test_i202_ledger_cleanup.sh`・`scripts/claude/tests/test_check_frontend_evidence.sh`・`scripts/claude/tests/test_posttooluse_check.sh`・`scripts/claude/tests/test_i193_official_flow.sh`・新規 `scripts/claude/tests/test_pipefail_negated_grep.sh`・新規 `scripts/claude/tests/stress-repeat.sh`・`docs/reviews/backlog/I206.md`・`docs/reviews/backlog/I195.md`
+- Config/Infra（ハーネス）: `scripts/claude/adversarial-review.sh`・`scripts/claude/check-frontend-evidence.sh`・`scripts/claude/tests/test_i202_ledger_cleanup.sh`・`scripts/claude/tests/test_check_frontend_evidence.sh`・`scripts/claude/tests/test_posttooluse_check.sh`・`scripts/claude/tests/test_i193_official_flow.sh`・新規 `scripts/claude/tests/test_pipefail_negated_grep.sh`・新規 `scripts/claude/tests/stress-repeat.sh`・新規 `scripts/claude/tests/test_stress_repeat.sh`・`docs/reviews/backlog/I206.md`・`docs/reviews/backlog/I195.md`
 - `path_risk_trigger()` の集合（`.github/`・`.pre-commit-config.yaml`・`.secrets.baseline`・見張り・settings）には触れない
 
 ## 4. 変更点一覧（具体）
@@ -93,7 +93,7 @@ remaining() { local n; n=$(adv_now) || { echo 0; return; }; echo $(( ADV_START +
 ```
 - 141 行の `remaining()` を上の 2 つに置き換える
 - 361 行: `ADV_START=$(adv_now) || { echo "⛔ 今の時刻を読めません（ADV_CLOCK_FILE=${ADV_CLOCK_FILE}）"; echo "ADVERSARIAL_ERROR: CLOCK"; exit 2; }`
-- 214 行 `t0=$(date +%s)`・309 行 `$(( $(date +%s) - t0 ))`・421 行 `ELAPSED=$(( $(date +%s) - ADV_START ))` も `adv_now` にする（記録の「所要」「所要時間（上限）」を締め切りと同じ時計で数える）。記録のファイル名・見出しの日時（455・459 行の `date +%Y%m%d_%H%M` など）は実際の日時のまま
+- 214 行 `t0=$(date +%s)`・309 行 `$(( $(date +%s) - t0 ))`・421 行 `ELAPSED=$(( $(date +%s) - ADV_START ))` も `adv_now` にする（記録の「所要」「所要時間（上限）」を締め切りと同じ時計で数える）。表示だけに使う値なので、時刻を読めなければ経過は 0 とする: `elapsed_since() { local n; n=$(adv_now) || { echo 0; return; }; echo $(( n - $1 )); }` を足し、309 行は `$(elapsed_since "$t0")`・421 行は `ELAPSED=$(elapsed_since "$ADV_START")`、214 行は `t0=$(adv_now) || t0=$ADV_START`（判定は `remaining()` が止める側に倒す）。記録のファイル名・見出しの日時（455・459 行の `date +%Y%m%d_%H%M` など）は実際の日時のまま
 - 先頭の「環境変数」の説明（13〜15 行）に `ADV_CLOCK_FILE（テスト用。今の時刻〔整数の秒〕を読むファイル。既定は date +%s）` を足す
 - 既定値の行（28〜29 行）・判定の式（256・273 行の `2 * ADV_MIN_STEP`）は変えない
 
@@ -195,6 +195,7 @@ sys.exit(1 if bad else 0)' "$1" "$BL_FORM"; }
 新規 `scripts/claude/tests/stress-repeat.sh`（`test_` で始まらないので `run-all.sh` は流さない）:
 - 使い方: `bash scripts/claude/tests/stress-repeat.sh <回数> <テストのスクリプト> [<負荷のプロセスの数（既定 nproc）>]`
 - CPU を使い切るループ（`while :; do :; done`）を負荷の数だけ背景で動かし、テストを回数だけ順に流す。毎回 `RUN <n>: PASS|FAIL` を出し、最後に `STRESS: <合格>/<回数>`。全部合格で exit 0、1 回でも失敗で 1、使い方の誤りで 2。終わったとき・止められたとき（trap）に負荷のプロセスを止める
+- 道具そのもののテスト: 新規 `scripts/claude/tests/test_stress_repeat.sh`（項目は auto_test の TC-01c。必ず合格するスクリプト・必ず落ちるスクリプト・2 回目だけ落ちるスクリプト・引数の誤りを当て、終了コードと `STRESS:` の行を確かめる。終わった後に負荷のプロセスが残らない）。AC1 の合否を決める道具が「いつも合格」にならないことを固定する（計画レビュー 20261028_1213 の Warning）
 - 負荷のかけ方の理由: I195 で落ちたのは、裏でサブエージェント 4 つが動いて CPU が埋まっていたとき。CPU の数だけ回り続けるループで同じ状態（どのプロセスもすぐには走れない）を作る。新しい道具を入れずに CI と手元で同じ形にできる
 
 ### 4.9 一覧の行の削除（AC5・一覧 I195 F11）
@@ -283,5 +284,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
+- 1（計画レビュー 20261028_1213 の Warning 対応・2026-10-28）: Warning 1 は 4.8 に `stress-repeat.sh` の失敗注入つきテスト（`test_stress_repeat.sh`・TC-01c）を足した。Warning 2 は 4.1 に、表示だけの経過の秒は時刻を読めなければ 0 とする `elapsed_since()` を書いた。Warning 3（規則の誤検知）は許容（イシューに「粗い規則でよい」・除外の印を作らない方針）。Info 2 件は対応不要。方式・範囲・受け入れ条件は変えないので再レビューはしない
 
 ## レビュー結果
+- [20261028_1213 判定: ✅ 完了](../../reviews/I210_plan_review_20261028_1213.md)

@@ -14,6 +14,7 @@
 |---|---|---|---|
 | TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（A1・FG-A1・A1b・N10・FG-N10 の書き換え・`d3_bl` の書き換え・「I210」の節 N15〜N19 を足す）。既存の R・L・W・A・G・D・N・P・Q も | exit 0・`fail=0`（ベースライン pass=148） | 実装前のため未実行 |
 | TC-01b | `bash scripts/claude/tests/test_pipefail_negated_grep.sh`（新規。項目は下の表） | exit 0・`fail=0`。実装前（4.4〜4.7 の前）は G1 が 4 か所に当たって不合格 | 実装前のため未実行 |
+| TC-01c | `bash scripts/claude/tests/test_stress_repeat.sh`（新規。`stress-repeat.sh` の失敗注入。項目は下の表） | exit 0・`fail=0` | 実装前のため未実行 |
 | TC-02 | `bash scripts/claude/tests/test_check_frontend_evidence.sh`（E16〜E18 を足す） | exit 0・`fail=0`（ベースライン pass=16） | 実装前のため未実行 |
 | TC-03 | 影響を受けうるテスト: `test_posttooluse_check.sh`（32 行の書き換え）・`test_i193_official_flow.sh`（527・528 行を消す）・`test_i197_adversarial_process.sh`（`adversarial-review.sh` の時計の差し替え・実時間の既定の動き） | どれも exit 0（ベースライン pass=6・175・115） | 実装前のため未実行 |
 | TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
@@ -48,6 +49,17 @@
 | G4 | pipefail の無いスクリプトに FG-G3a の行 | 当たらない（反転しない） |
 | G5 | pipefail のスクリプトに、コメントの行 `# ! a \| grep -q b`・直した形（`[[ $'\n'"$X" != *$'\n'a/* ]]`・`awk '…' f`・`! grep -q a f`〔パイプなし〕） | 当たらない |
 
+### TC-01c の項目（`test_stress_repeat.sh`）
+一時のフォルダに小さなテストのスクリプトを作り、`stress-repeat.sh <回数> <スクリプト> 1`（負荷 1 本）で流す。
+
+| 項目 | 入力 | 期待値 |
+|---|---|---|
+| S1 | 必ず exit 0 のスクリプトを 2 回 | exit 0・`STRESS: 2/2`・`RUN 1: PASS`・`RUN 2: PASS` |
+| FG-S2 | 必ず exit 1 のスクリプトを 2 回 | exit 1・`STRESS: 0/2` |
+| FG-S3 | 2 回目だけ exit 1 のスクリプト（回数をファイルに数える）を 2 回 | exit 1・`STRESS: 1/2`・`RUN 2: FAIL` |
+| S4 | 引数の誤り（回数が `x`・回数が `0`・スクリプトが無い・引数なし） | どれも exit 2 |
+| S5 | S1 の後 | 負荷のループ（`stress-repeat.sh` が起こした子のプロセス）が残っていない |
+
 ### TC-02 の項目（`test_check_frontend_evidence.sh`）
 | 項目 | 入力 | 期待値 |
 |---|---|---|
@@ -59,6 +71,7 @@
 ```bash
 bash scripts/claude/tests/test_i202_ledger_cleanup.sh
 bash scripts/claude/tests/test_pipefail_negated_grep.sh
+bash scripts/claude/tests/test_stress_repeat.sh
 bash scripts/claude/tests/test_check_frontend_evidence.sh
 bash scripts/claude/tests/test_posttooluse_check.sh
 bash scripts/claude/tests/test_i193_official_flow.sh
