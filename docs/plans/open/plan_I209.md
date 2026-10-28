@@ -57,7 +57,13 @@
 
 ### 4.3 GitHub への反映（AC2・AC3）
 順番（途中で失敗しても、反映した分が一覧の「反映の結果」で分かるようにする）:
-1. 残す 11 件の本文の先頭に「今の流れでの読み替え」を足す: 1 件ずつ、`gh issue view <番号> --json body --jq .body` で今の本文を `docs/reviews/open/I209_original_bodies/<番号>.md` に取り（追記の前の本文の記録。手動 No.2 の比べる相手・ロールバックの元。commit する）、Write で「読み替えの節（一覧の『残すイシューの先頭に足す』の表の行から作る）＋ `---` ＋元の本文」のファイルを作って、`gh issue edit <番号> --body-file <ファイル>` で更新する。本文が既に「## 今の流れでの読み替え（I209」で始まっていれば足さない（やり直しで二重にしない）
+1. 残す 11 件の本文の先頭に「今の流れでの読み替え」を足す。1 件ずつ、次の単体のコマンドを順に流す（D = `docs/reviews/open/I209_original_bodies`）:
+   1. `gh issue view <番号> --json body --template "{{.body}}" > D/<番号>.md`（追記の前の本文の記録。手動 No.2 の比べる相手・ロールバックの元。commit する）。本文が既に「## 今の流れでの読み替え（I209」で始まっていれば、この件は足さずに飛ばす（やり直しで二重にしない）
+   2. Write で `D/<番号>.header.md` を作る（中身は読み替えの節〔一覧の『残すイシューの先頭に足す』の表の行から作る〕と、最後の行に `---` と空行。commit する）
+   3. `cat D/<番号>.header.md D/<番号>.md > D/<番号>.new.md`（元の本文を書き写さず、そのままつなげる）
+   4. `gh issue edit <番号> --body-file D/<番号>.new.md`
+   5. `gh issue view <番号> --json body --template "{{.body}}" > D/<番号>.after.md` → `cmp D/<番号>.new.md D/<番号>.after.md` が exit 0（送った本文が 1 字も違わず GitHub に入った）。合えば `.new.md`・`.after.md` を消す（`.md` と `.header.md` から作り直せる）
+   - スパイク（2026-10-28・計画レビューの Warning 2 への対応）: `--jq .body` は末尾に改行を 1 つ足すので比べると食い違う。`--template "{{.body}}"` は足さず、#349 で `gh issue edit --body-file` で送ったファイルと `cmp` が exit 0。リポジトリの中へのリダイレクト（`> docs/...`）と `cat a b > docs/...` は `check-permission-prompt.sh` で承認なしを確認（スクラッチ〔`/tmp`〕へのリダイレクトは承認画面が出る）
 2. 統合 4 件: `gh issue close <番号> --duplicate-of <統合先> --comment "<コメント>"`。統合先の本文には 1. で中身を同梱済み
 3. 閉じる 37 件: `gh issue close <番号> --reason "<completed|not planned>" --comment "<コメント>"`（② → completed、① ④ → not planned。②と①④の両方に当たるものは completed）
 - コメントの形（1 件ずつ一覧の行から作る）:
@@ -164,5 +170,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
+- 1（計画レビュー 20261028_1922 の Warning 対応・2026-10-28）: Warning 1 は一覧（`I209_triage.md`）の「反映の仕方」と「行き先」の列を計画書 4.3 の「統合先の本文の読み替えに同梱・別のコメントは足さない」にそろえた。Warning 2 は 4.3 の 1. を単体のコマンドの列（`--template "{{.body}}"` で取る・`cat` でつなげる・送った後に `cmp` で確かめる）に書き直し、手動 No.2 も `cmp` の形にした（スパイクで完全一致と承認画面なしを確認）。Warning 3 は TC-03 の失敗注入を実装のときに流して結果欄に書く。方式・範囲・受け入れ条件は変えないので再レビューはしない
 
 ## レビュー結果
+- [20261028_1922 判定: ✅ 完了](../../reviews/I209_plan_review_20261028_1922.md)
