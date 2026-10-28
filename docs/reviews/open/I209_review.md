@@ -39,3 +39,5 @@
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] code-review.sh: CI_WAIT OK・FINAL_VERDICT OK・ADVERSARIAL_STAGE NOT_REQUIRED（docs/reviews/I209_code_review_20261028_1955.md）。台帳は Low 8 件（F1〜F8・記録の書き方）で止める指摘なし — 決まりどおり retro が扱う
+STAGE_DONE: review-gate NEXT: test-gate
