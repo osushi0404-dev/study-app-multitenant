@@ -136,7 +136,9 @@ ck "K2 pyproject.toml と uv.lock が合っている" 0 "$rc"
 mkdir -p "$TMP/k2"
 cp "$PROJ/pyproject.toml" "$PROJ/uv.lock" "$PROJ/.python-version" "$TMP/k2/"
 sed -i 's/"PyYAML>=6.0", //' "$TMP/k2/pyproject.toml"
-OUT="$(uv lock --check --offline --project "$TMP/k2" 2>&1)"; rc=$?
+# --offline は付けない: 解決し直しには索引の情報が要り、新しいキャッシュ（CI）では「ネットワークを使えない」という
+# 別の理由で落ちる（その失敗を合格にしないよう update の文言まで見る・I211 fix-loop 2）
+OUT="$(uv lock --check --project "$TMP/k2" 2>&1)"; rc=$?
 ck "FG-K2 pyproject.toml と uv.lock がずれれば不合格" "yes yes" \
    "$([ "$rc" -ne 0 ] && echo yes || echo no) $(has "$OUT" 'update')"
 

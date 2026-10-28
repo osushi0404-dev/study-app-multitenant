@@ -43,7 +43,7 @@
 | FG-X7（D6） | X6 と同じで、引数 `t/test_nothing.sh`（無いファイル） | exit 1・`⛔` |
 | K1（AC2） | 実物の `scripts/claude/tests/pyproject.toml`・`.python-version` | `required-version` が `==<数>.<数>.<数>`・`.python-version` が `<数>.<数>.<数>`・`requires-python` が `.python-version` と同じマイナー版の `==<数>.<数>.*` |
 | K2（AC2・AC5） | `uv lock --check --offline --project scripts/claude/tests` | exit 0 |
-| FG-K2 | 実物の `pyproject.toml`・`uv.lock`・`.python-version` を一時のフォルダに写し、`dependencies` から `PyYAML>=6.0` を消して `uv lock --check --offline --project <写し>` | exit 0 以外・出力に `update` |
+| FG-K2 | 実物の `pyproject.toml`・`uv.lock`・`.python-version` を一時のフォルダに写し、`dependencies` から `PyYAML>=6.0` を消して `uv lock --check --project <写し>`（`--offline` は付けない） | exit 0 以外・出力に `update` |
 | K3（AC2） | 実物 | `scripts/claude/tests/uv.lock`・`pyproject.toml`・`.python-version` が git で追跡されている・`scripts/claude/tests/.venv` が `.gitignore` で除かれる |
 | K4（AC2） | 実物の一覧 | `python3`・`PyYAML`・`pre-commit` の版の列が `lock`・`uv` の行がある |
 
@@ -79,3 +79,9 @@ bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lif
   - セキュリティ上の考慮点: 細かい版のタグは動くタグより差し替えの余地が小さい（設計レビューの Medium の対象が小さくなる）。SHA 固定はリポジトリ全体の方針として残余リスクのまま
   - 次回どう防ぐか: 第三者の action を足すときは、`uses` に書く版のタグがあることを `gh api repos/<owner>/<repo>/git/matching-refs/tags/<版>` で確かめる（スパイクで action.yml を読むだけでは足りない）。CI のテストは版の形まで確かめる
   - 確かめた結果: `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i204_tool_sync.sh` → exit 0・fail=0（`uv_major_tag` の写しは不合格）
+- 2026-10-29 fix-loop 2（CI の Harness Tests の FG-K2 の失敗・run 40715048373）
+  - なぜ失敗したか: /simplify で FG-K2 の `uv lock --check` に `--offline` を付けた。CI の新しいキャッシュには解決し直しに要る索引の情報が無く、「ネットワークを使えない」という別の理由で失敗し、`update` の文言が出なかった（テストが理由まで見ていたので合格にしなかった）。手元はキャッシュが温まっていて通った
+  - 何を変えたか: FG-K2 だけ `--offline` を外した（K2 の正の確認は CI でも `--offline` で合格したので残す）
+  - セキュリティ上の考慮点: なし
+  - 次回どう防ぐか: キャッシュやネットワークに頼る指定（`--offline` など）を足すときは、新しいキャッシュの環境（CI）で通るかを push で確かめてから整理を終える。否定のテストは失敗の理由まで見る（今回それで偽の合格を防げた）
+  - 確かめた結果: 下の手元の実行と、push 後の CI の Harness Tests
