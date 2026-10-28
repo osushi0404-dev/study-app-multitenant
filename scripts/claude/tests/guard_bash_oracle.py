@@ -144,9 +144,6 @@ def run_guard(script: str) -> str:
 
 
 def main() -> int:
-    if not shutil.which("bash"):
-        print("SKIP: bash がありません")
-        return 0
     verbose = "-v" in sys.argv
     if not os.path.isfile(GUARD):
         print(f"FAIL guard がありません: {GUARD}")

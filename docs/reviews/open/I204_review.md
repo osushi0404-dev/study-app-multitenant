@@ -34,3 +34,9 @@ STAGE_DONE: plan NEXT: plan-review
 - [design-security-review] Blocker・High・Medium なし（Low 4 件・シナリオ 3 件はすべて計画の防御とテストで覆う）。取得元の版の固定は後続のイシューへ — 今の `pip install pyyaml` と同じ水準で、ジョブに secrets が無い
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+
+- [implement] ステップ 1 を先に push し、CI の runner で pre-commit が shellcheck を入れられること・docker compose があることを確かめた（Harness Tests pass・一覧の確認 6 行 OK・`run-all: pass=46 fail=0`） — 計画の未知リスク先行
+- [implement] shellcheck の行の確認を、通らないとき pre-commit の出力を出す形にし、一覧の誤りの文言は標準エラーに出した（計画変更記録 2） — 原因が見える・CI の pip に誤りの文言を渡さない
+- [implement] /simplify の指摘のうち、確認の重複を減らす（FG-L3 を小さな写しに）・重なったコメント・同じ計算の整理は採り、shellcheck の行を一覧から外す・CI のキャッシュ・並行の確認は採らなかった（計画変更記録 3） — 前者は振る舞いを変えない整理、後者はイシュー・計画で決めた形を変えるため
+- [implement] ワークフローの書き換えで承認画面が出ることを事前に予告しなかった（ユーザーから「この承認は必須か？」と質問あり）。確認は settings.json の `Edit(.github/workflows/**)` の意図した確認と説明した — retro で扱う
+STAGE_DONE: implement NEXT: review-gate

@@ -7,7 +7,6 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)" || exit 1
 cd "$REPO_ROOT" || exit 1
-# ハーネスのテストが頼る道具を一覧で先に確かめる（I204）。CI も手元も同じこの確認を通る
 if ! bash scripts/claude/tests/check-tools.sh; then
   echo "⛔ ハーネスのテストが頼る道具がそろっていません（一覧: scripts/claude/tests/required-tools.txt）。テストは流していません"
   exit 1

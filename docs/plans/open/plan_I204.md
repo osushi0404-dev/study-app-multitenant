@@ -75,7 +75,7 @@ PyYAML | python3 -c 'import yaml; print(yaml.__version__)' | 6.0 | PyYAML>=6.0 |
 git | git --version | - | - | sudo apt install git（CI は runner に最初からある）
 docker compose | docker compose version | - | - | Docker Desktop の WSL 連携を有効にする（CI は runner に最初からある）
 pre-commit | pre-commit --version | 4.0 | pre-commit>=4.0 | pipx install pre-commit（docs/runbooks/pre-commit.md）
-shellcheck | out=$(pre-commit run shellcheck --files scripts/claude/tests/check-tools.sh 2>&1) && grep -E '^shellcheck\.+Passed$' <<< "$out" | - | - | pre-commit 経由（版は .pre-commit-config.yaml の shellcheck-py。初回はネットワークから入る）
+shellcheck | out=$(pre-commit run shellcheck --files scripts/claude/tests/check-tools.sh 2>&1); grep -E '^shellcheck\.+Passed$' <<< "$out" && exit 0; printf '%s\n' "$out"; exit 1 | - | - | pre-commit 経由（版は .pre-commit-config.yaml の shellcheck-py。初回はネットワークから入る）
 ```
 - 確かめるコマンドに `|` は書かない（列の区切りと区別できないため。check-tools.sh が列の数で止める）
 
@@ -237,6 +237,8 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
 - 1（計画レビュー 20261028_1616 の Warning・Info 対応・2026-10-28）: Warning 1 は 4.1 の shellcheck の行の確かめるコマンドを、`Passed` の行まで見る形（`out=$(…) && grep -E '^shellcheck\.+Passed$' <<< "$out"`。`|` を使わない）にした。Warning 2 は 9「依存の追加」に監査の対象に足さない理由を書いた。Warning 3 は対応不要（ステップ 1 に前倒し済み）。Info 1: `timeout 300` は 1 行の上限で、CI のジョブの `timeout-minutes: 30` の中に収まる（6 行がすべて上限まで待っても 30 分）。Info 2: TC-02 の期待値を `PASS=31 FAIL=0` の形にした。方式・範囲・受け入れ条件は変えないので再レビューはしない
+- 2（implement・2026-10-28）: 計画書の記載「4.1 shellcheck の行 `out=$(…) && grep -E '^shellcheck\.+Passed$' <<< "$out"`」「4.2 形の誤りは `⛔ 一覧の行の形が違います` を出して exit 2」。採った方法: shellcheck の行は `out=$(…); grep -E '…' <<< "$out" && exit 0; printf '%s\n' "$out"; exit 1`（通らないとき pre-commit の出力〔どの指摘か〕が `⛔` の下に出る。前の形は grep が何も出さず原因が見えなかった）。形の誤りの文言は標準エラーに出す（`--pip-specs` の出力〔CI が pip に渡すファイル〕に混ぜない。FG-L6b の「stdout が空」を満たすため）。あわせて 4.8 のテストは `test_i204_tool_sync.sh` に計画どおり置き、FG-L6a に名前の空の行・FG-L6b に版の後ろに pip の指定を続けた形を足した。理由: 失敗の原因が見える・CI の pip に誤りの文言を渡さない。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 3（implement の /simplify・2026-10-28）: 計画書・テスト文書の記載「FG-L3 は実物の一覧に通らない行を足す・OK が 6 つ」「L2 は OK が 6 つ」。採った方法: FG-L3 は `bash` の行と通らない行の 2 行の写し（本物の pre-commit・docker の確認は L2 の 1 回だけにする）、L2 の数は一覧の行の数から出す。あわせて `run-all.sh` の重なったコメントを 1 つに、`check-tools.sh` の `cd` の失敗を `bad_list` に、`ci_check` の同じ計算を 1 回に、S3 の写しの空行を配列に、SC2016 の注記を足した。採らなかったもの: shellcheck の行を一覧から外す（イシューの解決方針 a・計画 9 で一覧に入れると決めた）・CI に pre-commit のキャッシュを足す（計画 8）・確認を並行にする（1 秒未満）・`ci_check` の最後の step の確認を外す（計画 4.8 の ④）・FG-P の本体のテストを 2 回流す形（実物の TC-C1 を確かめるため）。理由: 確認の重複を減らす・読みやすさ。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261028_1616 判定: ✅ 完了](../../reviews/I204_plan_review_20261028_1616.md)

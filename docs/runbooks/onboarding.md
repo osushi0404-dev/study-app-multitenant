@@ -55,6 +55,7 @@ CI の内容（全部 pass しないとマージ不可）:
 
 - Backend: `flake8`（lint）+ `bandit`（セキュリティ）+ `pytest`
 - Frontend: `tsc --noEmit`（型チェック）+ `ESLint` + `Jest`
+- ハーネス: `scripts/claude/tests/run-all.sh`（道具は `scripts/claude/tests/required-tools.txt`）
 
 ### 4. すべてドキュメントが残る
 
@@ -105,6 +106,19 @@ docs/
 ├── tests/       open / closed / templates                 # テスト文書（自動・手動）
 └── reviews/     open / closed / templates                 # レビュー文書
 ```
+
+---
+
+## 手元の準備（ハーネスのテスト）
+
+ハーネスのテスト（`scripts/claude/tests/run-all.sh`）が頼る道具と版の正は `scripts/claude/tests/required-tools.txt`（I204）。CI の Harness Tests も同じ一覧を使い、`run-all.sh` の冒頭で確かめる（足りなければテストを流さずに不合格）。
+
+```
+bash scripts/claude/tests/check-tools.sh
+```
+
+- `⛔` の行が出たら、その行の「入れ方」に沿って入れ、もう一度流す（全部 `OK:` で終了コード 0）
+- 道具を足す・変えるときは一覧を書き換える。CI の `ci.yml` に直に足すと `scripts/claude/tests/test_i204_tool_sync.sh` が止める
 
 ---
 

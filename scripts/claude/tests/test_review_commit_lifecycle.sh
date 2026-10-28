@@ -157,7 +157,7 @@ ck_true TC-B3-gate grep -qF 'grep -vE "I${ISSUE_NUM}' "$CLOSE_SKILL"
 
 echo "== TC-C1: shellcheck（.pre-commit-config.yaml の固定の版を pre-commit 経由で使う・I204） =="
 # 道具がそろっているかは run-all.sh の冒頭（check-tools.sh）で確かめる。ここで飛ばさない。
-# 対象外（Skipped）でも exit 0 になるので、Passed の行まで合格の条件にする
+# 対象外（Skipped）でも exit 0 になるので、Passed の行まで合格の条件にする（required-tools.txt の shellcheck の行と同じ判定）
 C1_OUT="$(pre-commit run shellcheck --files "$PLAN_REVIEW" "$CODE_REVIEW" "$ISSUE_REVIEW" "$TEST_SELF" 2>&1)"; C1_RC=$?
 C1_PASSED=no; grep -qE '^shellcheck\.+Passed$' <<< "$C1_OUT" && C1_PASSED=yes
 ck TC-C1-shellcheck "0 yes" "$C1_RC $C1_PASSED"

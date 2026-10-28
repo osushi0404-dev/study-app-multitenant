@@ -12,12 +12,12 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/test_i204_tool_sync.sh`（新規。項目は下の表） | exit 0・`fail=0`。ステップ 3 の前（4.5・4.6 の前）は S1 が `test_compose_ports.sh`・`guard_bash_oracle.py` に当たって不合格 | 実装前のため未実行 |
-| TC-02 | `bash scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 の書き換え） | exit 0・`FAIL=0`・出力に `SKIP` の行が無く `PASS TC-C1-shellcheck` がある（ベースライン `PASS=30 FAIL=0 SKIP=1` → 最終行が `PASS=31 FAIL=0`） | 実装前のため未実行 |
-| TC-03 | `bash scripts/claude/tests/test_compose_ports.sh`（SKIP の分岐を消す） | exit 0・`pass=13 fail=0`（ベースラインと同じ） | 実装前のため未実行 |
-| TC-04 | `bash scripts/claude/tests/test_guard_bash_oracle.sh`（`guard_bash_oracle.py` の SKIP を消す） | exit 0・`見逃し=0 余計な停止=0`（ベースラインと同じ） | 実装前のため未実行 |
-| TC-05 | `bash scripts/claude/tests/test_i193_official_flow.sh`（F9 が `TEST_DIR` で `run-all.sh` を流す。冒頭の確認が入っても期待値が変わらない） | exit 0・`fail=0` | 実装前のため未実行 |
-| TC-06 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
+| TC-01 | `bash scripts/claude/tests/test_i204_tool_sync.sh`（新規。項目は下の表） | exit 0・`fail=0`。ステップ 3 の前（4.5・4.6 の前）は S1 が `test_compose_ports.sh`・`guard_bash_oracle.py` に当たって不合格 | implement で実行（2026-10-28）: 4.5・4.6 の前（Red）pass=28 fail=1（S1 が `test_compose_ports.sh:11`・`guard_bash_oracle.py:147` に当たった）→ 実装後・/simplify の後 pass=29 fail=0 |
+| TC-02 | `bash scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 の書き換え） | exit 0・`FAIL=0`・出力に `SKIP` の行が無く `PASS TC-C1-shellcheck` がある（ベースライン `PASS=30 FAIL=0 SKIP=1` → 最終行が `PASS=31 FAIL=0`） | implement で実行（2026-10-28）: `PASS=31 FAIL=0`・`PASS TC-C1-shellcheck`・SKIP の行なし |
+| TC-03 | `bash scripts/claude/tests/test_compose_ports.sh`（SKIP の分岐を消す） | exit 0・`pass=13 fail=0`（ベースラインと同じ） | implement で実行（2026-10-28）: pass=13 fail=0 |
+| TC-04 | `bash scripts/claude/tests/test_guard_bash_oracle.sh`（`guard_bash_oracle.py` の SKIP を消す） | exit 0・`見逃し=0 余計な停止=0`（ベースラインと同じ） | implement で実行（2026-10-28）: exit 0・cases=4560 見逃し=0 余計な停止=0 |
+| TC-05 | `bash scripts/claude/tests/test_i193_official_flow.sh`（F9 が `TEST_DIR` で `run-all.sh` を流す。冒頭の確認が入っても期待値が変わらない） | exit 0・`fail=0` | implement で実行（2026-10-28）: pass=174 fail=0 |
+| TC-06 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | implement のステップ 1 の push（b61f6c1）で Harness Tests pass（`run-all: pass=46 fail=0`・一覧の確認 6 行 OK）。最終の HEAD は review-gate で確認 |
 
 ### TC-01 の項目（`test_i204_tool_sync.sh`）
 写しの一覧・写しの `ci.yml` は一時のフォルダに作る。規則の文字列と写しは分けた文字列をつないで作る（テストの行が規則に当たらないように。除外の印は作らない）。
@@ -25,8 +25,8 @@
 | 項目 | 入力 | 期待値 |
 |---|---|---|
 | L1（AC1） | 実物の `scripts/claude/tests/required-tools.txt` | 形が正しい（`check-tools.sh --pip-specs` が exit 0）・名前の列に `python3`・`PyYAML`・`git`・`docker compose`・`pre-commit`・`shellcheck` の 6 つがちょうどある |
-| L2（AC2） | 実物の一覧で `check-tools.sh` | exit 0・`OK:` の行が 6 つ |
-| FG-L3（AC2） | 写しの一覧に `no-such-tool-i204 \| no-such-tool-i204 --version \| - \| - \| 入れ方の例` を足す | exit 1・出力に `⛔ 足りない道具: no-such-tool-i204` と `入れ方: 入れ方の例`。ほかの行の `OK:` も出る（全部確かめてから返す） |
+| L2（AC2） | 実物の一覧で `check-tools.sh` | exit 0・`OK:` の行が一覧の行の数（今は 6） |
+| FG-L3（AC2） | 写しの一覧 `bash \| bash --version \| - \| - \| -` と `no-such-tool-i204 \| no-such-tool-i204 --version \| - \| - \| 入れ方の例` の 2 行 | exit 1・出力に `⛔ 足りない道具: no-such-tool-i204` と `入れ方: 入れ方の例`。bash の行の `OK:` も出る（全部確かめてから返す） |
 | FG-L4（AC4） | 写しの一覧の python3 の下限を `99.0` にする | exit 1・出力に `⛔ 版が古い道具: python3` |
 | FG-L5 | 写しの一覧に、下限 `1.0` で数字を出さないコマンド（`echo none`）の行 | exit 1・出力に `⛔ 版を読めない道具` |
 | FG-L6a | 写しの一覧に列が 4 つの行／下限が `abc` の行 | どちらも exit 2・出力に `⛔ 一覧の行の形が違います` |

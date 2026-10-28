@@ -17,9 +17,11 @@ VER_RE='^[0-9]+(\.[0-9]+)*$'
 PIP_RE='^[A-Za-z0-9][A-Za-z0-9._-]*(>=|==)[0-9]+(\.[0-9]+)*$'
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
-bad_line() { echo "⛔ 一覧の行の形が違います: $1"; exit 2; }
+# 一覧の誤りは標準エラーに出す（--pip-specs の出力〔CI が pip に渡す〕に混ぜない）
+bad_list() { echo "⛔ $1" >&2; exit 2; }
+bad_line() { bad_list "一覧の行の形が違います: $1"; }
 
-if [ ! -f "$LIST" ] || [ ! -r "$LIST" ]; then echo "⛔ 一覧を読めません: $LIST"; exit 2; fi
+if [ ! -f "$LIST" ] || [ ! -r "$LIST" ]; then bad_list "一覧を読めません: $LIST"; fi
 
 # 先に全部の行の形を確かめる（形の崩れた一覧で途中まで確かめない・--pip-specs で一部だけ出さない）
 NAMES=(); PROBES=(); MINS=(); PIPS=(); HOWS=()
@@ -36,14 +38,14 @@ while IFS= read -r line || [ -n "$line" ]; do
   [ "${cols[3]}" = "-" ] || [[ "${cols[3]}" =~ $PIP_RE ]] || bad_line "$t"
   NAMES+=("${cols[0]}"); PROBES+=("${cols[1]}"); MINS+=("${cols[2]}"); PIPS+=("${cols[3]}"); HOWS+=("${cols[4]}")
 done < "$LIST"
-[ "${#NAMES[@]}" -gt 0 ] || { echo "⛔ 一覧に道具の行がありません: $LIST"; exit 2; }
+[ "${#NAMES[@]}" -gt 0 ] || bad_list "一覧に道具の行がありません: $LIST"
 
 if [ "$MODE" = pip ]; then
   for p in "${PIPS[@]}"; do [ "$p" = "-" ] || printf '%s\n' "$p"; done
   exit 0
 fi
 
-cd "$ROOT" || { echo "⛔ リポジトリのルートに移れません: $ROOT"; exit 2; }
+cd "$ROOT" || bad_list "リポジトリのルートに移れません: $ROOT"
 missing=0
 for i in "${!NAMES[@]}"; do
   name="${NAMES[$i]}"; probe="${PROBES[$i]}"; min="${MINS[$i]}"; how="${HOWS[$i]}"
