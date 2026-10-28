@@ -447,7 +447,12 @@ s21_rules_plan() { s21_ref "$1" 'bash scripts/claude/check-manual-test-executor.
 s21_rules_test() { s21_ref "$1" 'bash scripts/claude/tui-capture.sh'; }
 s21_rules_tpl() { s21_ref "$1"; }
 # 「承認画面が出るか」を Human にする書き方が無い（Human と承認画面の両方がある行は check-permission-prompt.sh も書いてある）
-s21_rules_prompt() { ! grep -hE 'Human.*承認画面|承認画面.*Human' "$@" | grep -qvF 'check-permission-prompt.sh'; }
+# パイプと ! を使わない（pipefail の下で前の grep が SIGPIPE で終わると、見つけた結果が合格に反転する・I195 台帳 F3）。
+# 読めないファイルは不合格（止める側）
+s21_rules_prompt() {
+  local f; for f in "$@"; do [ -r "$f" ] || return 1; done
+  awk '/Human.*承認画面|承認画面.*Human/ && !/check-permission-prompt\.sh/ { f = 1 } END { exit f }' "$@"
+}
 s21_rules_review() { s_has "$1" '試した手段:' && s_has "$1" '実施者の区別'; }
 # 止める条件 2 の安全装置の集合が path_risk_trigger の case 行と一致する
 s12() {
@@ -514,6 +519,13 @@ ck "FG-S21 test-gate から tui-capture.sh を消すと不合格" 1 "$(rc s21_ru
 ck "FG-S21 テンプレートに前の書き方を足すと不合格" 1 "$(rc s21_rules_tpl "$TMP/r_tpl.md")"
 { cat $PWR; printf '\n- Human: 承認画面が出るかどうかの確認\n'; } > "$TMP/r_prompt.md"
 ck "FG-S21 承認画面を Human にする行を足すと不合格" 1 "$(rc s21_rules_prompt $SK/plan-issue/SKILL.md "$TMP/r_prompt.md" $TPL)"
+# I195 台帳 F3: 違反の行の後に一致する行が 64KB を超えて続いても見逃さない（前の形〔! grep | grep -qvF〕は 200 回とも見逃した）
+{ echo '- Human: 承認画面が出るかどうかの確認'
+  for i in $(seq 1 20000); do echo "- Human: 承認画面 $i の行 check-permission-prompt.sh"; done; } > "$TMP/r_prompt_big.md"
+ck "S21 rules-prompt 大きな入力でも違反を見逃さない" 1 "$(rc s21_rules_prompt "$TMP/r_prompt_big.md")"
+ck "S21 rules-prompt 読めないファイルは不合格" 1 "$(rc s21_rules_prompt "$TMP/no-such-file.md")"
+s21_rules_prompt_old() { ! grep -hE 'Human.*承認画面|承認画面.*Human' "$@" | grep -qvF 'check-permission-prompt.sh'; }
+ck "FG-S21 前の形（パイプと !）では大きな入力の違反を見逃す" 0 "$(rc s21_rules_prompt_old "$TMP/r_prompt_big.md")"
 grep -vF "試した手段:" .claude/agents/plan-reviewer.md > "$TMP/r_review.md"
 ck "FG-S21 plan-reviewer から試した手段の観点を消すと不合格" 1 "$(rc s21_rules_review "$TMP/r_review.md")"
 printf '対象: `/test` の判定\n' > "$TMP/s21_old.md"

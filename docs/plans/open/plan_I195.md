@@ -180,6 +180,7 @@ Danger Ops（有無/手順/ロールバック）:
 （実装中に計画と違うことをするときに書く）
 - 1（計画レビュー 20261028_0836 の Warning 対応・2026-10-28）: Warning 1 は auto_test の T7 で、PATH に置くリンクを `git`・`sleep` の 2 つに固定した（スクリプトが外のコマンドとして使うのはこの 2 つと `tmux`・`claude` だけ）。Warning 2 は手動 No.3 の `tmux ls` に「読むだけのコマンドで、許可に無いので承認画面が出うる」ことを書いた（tmux の広い許可は足さない方針のまま。後始末は TC-01 の T1・T6 と FG で決定論に固定済みで、No.3 は本物での念押し）。Warning 3 は 4.1 で文字の入力を `send-keys -t <名前> -l -- <入力>` にし、auto_test の T1・T4・T5 の期待の記録に `--` を足し、`-` で始まる入力の T9 を足した。Info は対応不要。方式・範囲・受け入れ条件は変えないので再レビューはしない
 - 2（implement の /simplify・2026-10-28）: (a) 4.1 の起動を `--permission-mode default` から `manual` にした（`claude --help` の公式の選択肢は `manual` で、`check-permission-prompt.sh` も `manual`。動きは同じ通常モード）。(b) 観測手段の一覧（Playwright MCP・`check-permission-prompt.sh`・`claude -p`・`tui-capture.sh`）を 4.4 の plan-issue の要約・4.5 の plan-reviewer の行・4.2 の判定のメッセージ・4.3 の Human の行に書かず、`plan-writing-rules.md`「実施者の区別」の `Claude` の行だけに置いて、ほかは参照にした（基準を 1 か所にする方針の徹底）。(c) テストの整理: TC-03 の S21 は前の決まった言い回しの禁止の一覧をやめ、各文書が「実施者の区別」を参照し `試した手段:` があって前の書き方（`Claude で確かめられない理由`）が無いことを 1 つの関数で確かめる。`rules-review` は `tui-capture.sh` ではなく「実施者の区別」の参照を確かめる。TC-02 の X18 は X19 と同じ規則なので消し、FG は X19 に当てる。TC-01 の T6・FG-T6 は `--start-timeout 0`（1 秒の待ちを省く）・T7 は実行の関数を共通にした。理由: /simplify の指摘（写しの残り・重複・待ち時間）。方式・範囲・受け入れ条件は変えないので再レビューはしない
+- 3（fix-loop・2026-10-28）: 台帳 F3（`s21_rules_prompt` が pipefail の下で違反を見逃す）が再現したので、ユーザーの指示でマージ前に直した。判定を awk 1 回にし、読めないファイルは不合格にした。TC-03 に 3 項目を足した。方式・範囲・受け入れ条件は変えない（AC3・AC6 の判定を正しく効かせる直し）ので計画レビューは通り直さない
 
 ## レビュー結果
 - [20261028_0836 判定: ✅ 完了](../../reviews/I195_plan_review_20261028_0836.md)

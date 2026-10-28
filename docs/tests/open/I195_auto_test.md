@@ -58,6 +58,20 @@
 | S21 rules-review（AC5） | `.claude/agents/plan-reviewer.md` | `試した手段:` と「実施者の区別」（観測手段の参照）を含む | 写しから `試した手段:` を含む行を消すと不合格 |
 | （消す）470 行 | `check-manual-test-executor.sh I193` | 終わったイシュー（I193）の記録を判定にかけない（AC7） | — |
 
+### TC-03 に足した項目（fix-loop・台帳 F3）
+| 項目 | 入力 | 期待値 |
+|---|---|---|
+| S21 rules-prompt 大きな入力 | 違反の行 1 行の後に、Human・承認画面・`check-permission-prompt.sh` を含む行を 20000 行続けた一時のファイル | 不合格（exit 1） |
+| S21 rules-prompt 読めないファイル | 無いファイル | 不合格（exit 1） |
+| FG-S21 前の形 | 前の形（`! grep \| grep -qvF`）を同じ大きな入力に当てる | 合格（exit 0）＝前の形は見逃す（新しい項目が回帰を捕まえることの確認） |
+
+## 再発防止記録（fix-loop・2026-10-28・台帳 F3）
+- なぜ失敗したか: `s21_rules_prompt` を `! grep … | grep -qvF …` で書いた。`pipefail` の下では、後ろの `grep -q` が一致で先に終わると前の grep が SIGPIPE（141）で終わり、パイプの終了コードが 0 以外になって `!` で合格に反転する。出力が 64KB を超えると起きる（再現: 大きな入力で 200 回中 200 回見逃し）
+- 何を変えたか: パイプと `!` をやめて awk 1 回で判定し、読めないファイルは不合格にした（`scripts/claude/tests/test_i193_official_flow.sh`）
+- セキュリティ: 該当なし
+- 次回どう防ぐか: 否定の判定（「無いこと」）を `! A | grep -q` の形で書かない。同じ形が `scripts/claude/check-frontend-evidence.sh:27` にもあり、変更ファイルが約 2000 件を超えると同じく反転する（scratchpad で再現）。I195 の範囲外なので retro で扱う
+- 確かめた結果: `bash scripts/claude/tests/test_i193_official_flow.sh` → pass=175 fail=0（足した 3 項目を含む）
+
 ## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_tui_capture.sh
