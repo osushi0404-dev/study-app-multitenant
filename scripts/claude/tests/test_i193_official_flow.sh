@@ -524,8 +524,6 @@ ck "FG-S21 承認画面を Human にする行を足すと不合格" 1 "$(rc s21_
   for i in $(seq 1 20000); do echo "- Human: 承認画面 $i の行 check-permission-prompt.sh"; done; } > "$TMP/r_prompt_big.md"
 ck "S21 rules-prompt 大きな入力でも違反を見逃さない" 1 "$(rc s21_rules_prompt "$TMP/r_prompt_big.md")"
 ck "S21 rules-prompt 読めないファイルは不合格" 1 "$(rc s21_rules_prompt "$TMP/no-such-file.md")"
-s21_rules_prompt_old() { ! grep -hE 'Human.*承認画面|承認画面.*Human' "$@" | grep -qvF 'check-permission-prompt.sh'; }
-ck "FG-S21 前の形（パイプと !）では大きな入力の違反を見逃す" 0 "$(rc s21_rules_prompt_old "$TMP/r_prompt_big.md")"
 grep -vF "試した手段:" .claude/agents/plan-reviewer.md > "$TMP/r_review.md"
 ck "FG-S21 plan-reviewer から試した手段の観点を消すと不合格" 1 "$(rc s21_rules_review "$TMP/r_review.md")"
 printf '対象: `/test` の判定\n' > "$TMP/s21_old.md"

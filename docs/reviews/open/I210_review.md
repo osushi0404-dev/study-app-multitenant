@@ -5,10 +5,15 @@
 - Draft PR: #353
 
 ## 変更概要
-（実装後に書く）
+敵対的レビューの締め切りの計算が読む時刻を `adv_now` 1 か所に集め、テストは `ADV_CLOCK_FILE`（偽の時計）で待たずに境目の前後を作るようにした。N10・FG-N10・A1b は偽の時計、A1・FG-A1 は相手の開始を待つ形で、実時間の速さに左右されない。あわせて、pipefail の下の `! … | grep -q` が大きな入力で結果を反転させる 4 か所を直し、その形を止める規則のテストを足した。負荷をかけてテストを繰り返す道具 `stress-repeat.sh` も足した。
 
 ## 変更点
-（実装後に書く）
+- `scripts/claude/adversarial-review.sh`: `adv_now`（`ADV_CLOCK_FILE` があれば中身の整数の秒・無ければ `date +%s`）・`remaining`（読めなければ 0）・`elapsed_since`（表示用）。起動時に時刻を読めなければ exit 2（`ADVERSARIAL_ERROR: CLOCK`）。既定値・判定の式は変えていない
+- `scripts/claude/tests/test_i202_ledger_cleanup.sh`: 偽物の実験役を「順番の印を待つ・偽の時計を進める」形に。A1・FG-A1・A1b・N10・FG-N10 を書き換え、I210 の節（N15〜N19）を足した。`d3_bl` の反転を直した
+- `scripts/claude/check-frontend-evidence.sh`: 27 行の反転をヒアストリングの `grep -q` に。`test_check_frontend_evidence.sh` に E16〜E18
+- `scripts/claude/tests/test_posttooluse_check.sh`: 32 行を同じ形に。`test_i193_official_flow.sh`: 前の形の写しと、それを合格の条件にする FG を消した
+- 新規 `scripts/claude/tests/test_pipefail_negated_grep.sh`（規則）・`scripts/claude/tests/stress-repeat.sh`（負荷をかけて繰り返す道具）・`scripts/claude/tests/test_stress_repeat.sh`（道具のテスト）
+- `docs/reviews/backlog/I206.md` の F5・`docs/reviews/backlog/I195.md` の F11 の行を消した
 
 ## 影響範囲
 - ハーネスだけ（`scripts/claude/adversarial-review.sh`・`scripts/claude/check-frontend-evidence.sh`・テスト 4 本の書き換えと 3 本の新規・`docs/reviews/backlog/I206.md`・`docs/reviews/backlog/I195.md`）。アプリ本体・DB・設定の変更なし
@@ -17,7 +22,7 @@
 （test-gate の後に書く）
 
 ## 計画との差分
-（実装後に書く）
+- 計画変更記録 1（計画レビューの Warning 対応）・2（`/simplify` の整理: 反転の直し方をリポジトリのヒアストリングの形にそろえた・`d3_bl` は grep のまま全部読む形・E16/E17 は 1000 個など）。どちらも方式・範囲・受け入れ条件は変えない
 
 ## ロールバック
 - PR を revert する（計画書 7）
@@ -29,6 +34,10 @@
 - [plan] AC1 の負荷は CPU の数だけのループ（`stress-repeat.sh`）にした — I195 で落ちたのは CPU が埋まっていたとき。新しい道具を入れずに手元と CI で同じ形にできる
 
 - [plan-review] 判定 OK（高リスク No）。Warning 2 件（stress-repeat.sh の失敗注入・表示の経過の秒）は計画に足し、規則の誤検知の Warning は許容した — 方式・範囲・受け入れ条件は変わらないので再レビューはしない
+- [implement] 計画のステップ 2 の「N15〜N19 を先に書いて落ちることを確かめる」は、ステップ 1 で 4.1 をまとめて入れたので Red を見ていない。代わりに N15・N16・N18・N19 は壊した写しで不合格になる FG を付けて効き目を確かめた — 計画の目的（偽の合格を防ぐ）は FG で満たせる
+- [implement] 手動 No.2（前の `check-frontend-evidence.sh` で E16 が落ちる）は implement で実施して記録した — test-gate を待たずに確かめられ、/simplify で一覧を 1000 個に減らした後にもう一度流して同じ結果
+- [implement] /simplify の指摘のうち、本体に実験の場所を渡す環境変数（`ADV_RUN_DIR`）・A1 の待ちのやり方の作り直しは採らなかった — 計画で決めた形で、順番の印の時間切れは N10 が毎回落とす。本番の本体にテストのための値を増やさない
+- [implement] /simplify が挙げた「`!` の無い `cmd | grep -q`（pipefail の下で、見つけたのに見つからない側に倒れる）が `code-review.sh:221`・`pr-base-sync.sh`・`wt-ports.sh` に残る」は、このイシューの範囲（`!` の形）の外なので直していない — retro で扱いを決める
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

@@ -24,7 +24,8 @@ if ! CHANGED="$(git diff --name-only "$BASE"...HEAD 2>/dev/null)"; then
   echo "[check-frontend-evidence] 変更ファイルを取得できません（基準: $BASE）。判定できないので不合格にします" >&2
   exit 2
 fi
-if ! printf '%s\n' "$CHANGED" | grep -q '^frontend/src/'; then
+# パイプで渡さない（pipefail の下で grep -q が先に終わると前の printf が SIGPIPE で終わり、「対象外」に反転する・I210）
+if ! grep -q '^frontend/src/' <<< "$CHANGED"; then
   echo "[check-frontend-evidence] 対象外: frontend/src を変えていません（基準: $BASE）"
   exit 0
 fi

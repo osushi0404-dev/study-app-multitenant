@@ -101,5 +101,26 @@ $HDR
 $SEP
 $(row a.png)" 'a.png')")"
 
+# I210: 変更ファイルの一覧が 64KB を超えても、行の先頭の frontend/src/ を見逃さない（前の ! printf | grep -q は、
+# pipefail の下で grep が先に終わると printf が SIGPIPE で終わり「対象外」に反転した）。記録は置かない
+# setup_big <名前> <frontend/src/App.tsx を変えるか yes|no> <余分のファイルの数> [<ほかに変えるファイル>]
+setup_big() {
+  local d="$TMP/$1" pad i
+  mkdir -p "$d/frontend/src" "$d/zz"
+  git -C "$d" init -q; git -C "$d" checkout -q -b base
+  echo "base" > "$d/frontend/src/App.tsx"
+  git -C "$d" add -A; git -C "$d" -c user.email=t@example.com -c user.name=t commit -qm base
+  git -C "$d" checkout -q -b feature
+  [ "$2" = yes ] && echo "change" >> "$d/frontend/src/App.tsx"
+  pad=$(printf 'x%.0s' $(seq 1 80))
+  for i in $(seq 1 "$3"); do : > "$d/zz/${pad}_${i}.txt"; done
+  if [ -n "${4:-}" ]; then mkdir -p "$d/$(dirname "$4")"; echo "change" > "$d/$4"; fi
+  git -C "$d" add -A; git -C "$d" -c user.email=t@example.com -c user.name=t commit -qm change
+  echo "$d"
+}
+ck "E16 frontend/src と大きな一覧（記録なし）は対象で不合格" 1 "$(run "$(setup_big e16 yes 1000)")"
+ck "E17 大きな一覧だけ（frontend/src を変えない）は対象外" 0 "$(run "$(setup_big e17 no 1000)")"
+ck "E18 行の途中の frontend/src/（docs/frontend/src/a.md）は対象外" 0 "$(run "$(setup_big e18 no 0 docs/frontend/src/a.md)")"
+
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

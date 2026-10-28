@@ -29,7 +29,7 @@ expect() {  # expect <name> <want_rc> <want_stderr_substring or empty>
   if [ "$RC" -ne "$2" ]; then
     printf 'FAIL %s expected rc=%s got rc=%s\n' "$1" "$2" "$RC"; fail=$((fail+1)); return
   fi
-  if [ -n "$3" ] && ! printf '%s' "$ERR" | grep -q "$3"; then
+  if [ -n "$3" ] && ! grep -q "$3" <<< "$ERR"; then
     printf 'FAIL %s stderr に "%s" がない\n' "$1" "$3"; fail=$((fail+1)); return
   fi
   printf 'PASS %s\n' "$1"; pass=$((pass+1))

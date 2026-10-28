@@ -298,14 +298,33 @@ AS="$TMP/adv_stub"
 cat > "$AS" <<'PY'
 #!/usr/bin/env python3
 # レビュー役: 観点 1・2 は 1 回目に実験案、2 回目に ITEM を返す。観点 3 は ITEM だけ。$SD/nodenials_p<k> があれば permission_denials を出さない
-# 実験役: 始まりと終わりの時刻を $SD/spans に書き、$SD/exec_sleep 秒眠る
-import json, os, re, sys, time
+# 実験役: 始まりと終わりの時刻を $SD/spans に書く。眠らずに、順番の印を待つ（上限 $SD/exec_wait 秒・既定 0。I210）
+#   偽の時計（ADV_CLOCK_FILE）のとき: 実験する 2 観点が往復を始めると決めた（鍵の手前の $RUN/p<n>/exec_in1.txt を書いた）のを待ち、
+#     待てたかを $SD/barrier に ok/timeout で書いてから、時計を $SD/exec_advance 秒進める（もう一方は必ず鍵の後に進んだ時計を読む）
+#   実時間のとき: ほかの実験役が始まる（$SD/start_*）のを待つ（鍵があれば始まらないので上限で終わる。鍵が無ければ必ず重なる）
+import glob, json, os, re, sys, time
 args = sys.argv[1:]; sd = os.environ["SD"]; stdin = sys.stdin.read()
 def out(d): print(json.dumps(d, ensure_ascii=False), flush=True)
 def val(flag): return args[args.index(flag) + 1] if flag in args else None
+def num(name):
+    p = os.path.join(sd, name)
+    return float(open(p).read()) if os.path.exists(p) else 0
 if val("--tools") == "Bash":
     t0 = time.time()
-    time.sleep(float(open(os.path.join(sd, "exec_sleep")).read()) if os.path.exists(os.path.join(sd, "exec_sleep")) else 0.5)
+    open(os.path.join(sd, f"start_{os.getpid()}"), "w").close()
+    until = time.time() + num("exec_wait")
+    clock = os.environ.get("ADV_CLOCK_FILE")
+    if clock:
+        run = os.path.dirname(os.readlink("/proc/self/fd/9"))   # 鍵のファイル（$RUN/exp.lock）の場所
+        ready = lambda: len(glob.glob(os.path.join(run, "p*", "exec_in1.txt"))) >= 2
+        while not ready() and time.time() < until:
+            time.sleep(0.05)
+        open(os.path.join(sd, "barrier"), "a").write("ok\n" if ready() else "timeout\n")
+        now = int(open(clock).read()) + int(num("exec_advance"))
+        open(clock + ".tmp", "w").write(f"{now}\n"); os.replace(clock + ".tmp", clock)
+    else:
+        while len(glob.glob(os.path.join(sd, "start_*"))) < 2 and time.time() < until:
+            time.sleep(0.05)
     open(os.path.join(sd, "spans"), "a").write(f"{t0} {time.time()}\n")
     out({"type": "system", "subtype": "init", "session_id": "exec", "permissionMode": "auto"})
     for m in re.finditer(r"<<<COMMAND ([A-Za-z0-9_-]+)\n(.*?)\nCOMMAND>>>", stdin, re.S):
@@ -356,14 +375,17 @@ arec() { sed -n 's/^ADVERSARIAL_RECORD: //p' "$TMP/a_$1/out" | head -1 | sed "s#
 av() { sed -n 's/^ADVERSARIAL_VERDICT: //p' "$TMP/a_$1/out"; }
 # 区間が重ならないか（始まりの順に並べ、前の終わり <= 次の始まり）
 no_overlap() { sort -n "$1" | awk 'NR > 1 && $1 < pe { bad = 1 } { pe = $2 } END { exit bad }'; }
-amk a1; echo 1 > "$TMP/a_a1/sd/exec_sleep"; arun a1
+# A1・FG-A1 は実時間（区間の重なりは実際の時刻でしか測れない）。実験役は相手の開始を最大 10 秒待つ（I210）
+amk a1; echo 10 > "$TMP/a_a1/sd/exec_wait"; arun a1
 ck "A1 2 観点の実験役が両方動き（区間 2 つ）、重ならない・判定 OK" "2 yes OK" \
   "$(grep -c . "$TMP/a_a1/sd/spans") $(yn no_overlap "$TMP/a_a1/sd/spans") $(av a1)"
 ck "A4 note が空の観点の行に「報告あり（）」が無い" no "$(grep -qF '報告あり（）' "$(arec a1)" && echo yes || echo no)"
-amk fa1 "$(broken_of "$ADV" '      flock 9' '      :')"; echo 1 > "$TMP/a_fa1/sd/exec_sleep"; arun fa1
+amk fa1 "$(broken_of "$ADV" '      flock 9' '      :')"; echo 10 > "$TMP/a_fa1/sd/exec_wait"; arun fa1
 ck "FG-A1 flock を外すと A1 が不合格（区間が重なる）" no "$(yn no_overlap "$TMP/a_fa1/sd/spans")"
-# A1b: ロックの待ちの間に締め切りが迫る（残りが ADV_MIN_STEP 未満）→ 待った側は実験役を呼ばずに締め切り
-amk a1b; echo 7 > "$TMP/a_a1b/sd/exec_sleep"; arun a1b ADV_DEADLINE=10 ADV_MIN_STEP=4
+# aclock <名前> <進める秒>: 偽の時計（中身 1000000 から）と順番の待ち（上限 15 秒）を用意し、arun に渡す引数を出す（I210）
+aclock() { local s="$TMP/a_$1/sd"; echo 1000000 > "$s/clock"; echo "$2" > "$s/exec_advance"; echo 15 > "$s/exec_wait"; echo "ADV_CLOCK_FILE=$s/clock"; }
+# A1b: ロックの待ちの間に締め切りが迫る（残りが ADV_MIN_STEP 未満）→ 待った側は実験役を呼ばずに締め切り（偽の時計・鍵の後の残り 30）
+amk a1b; arun a1b "$(aclock a1b 70)" ADV_DEADLINE=100 ADV_MIN_STEP=40
 ck "A1b 実験役は 1 回だけ・締め切りの実験が記録にある・判定 HIGH" "1 yes HIGH" \
   "$(grep -c . "$TMP/a_a1b/sd/spans") $(grep -qF '実行していない（締め切り）' "$(arec a1b)" && echo yes || echo no) $(av a1b)"
 # A3: 拒否の一覧を読めない（観点 3 の記録に permission_denials が無い）→ 読めない・HIGH・exit 1
@@ -502,12 +524,13 @@ n9() { setup "$1" "$2"; rename_rec "$1" "$(round "$1" "${1}a" "$B_NONE")" 0001 >
 ck "N9 一覧の作成の失敗で ⛔・FINAL_VERDICT が出ない" "yes no" "$(n9 n9 "$(broken '  { cat "$SCOPE_FILE"' "$N9_FAIL")")"
 ck "FG-N9 失敗を || true で握りつぶす形では N9 が不合格（⛔ が無く先へ進む）" "no yes" \
   "$(n9 fn9 "$(broken_of "$(broken '  { cat "$SCOPE_FILE"' "$N9_FAIL")" '|| { echo "⛔ 差分のレビューで見せるファイルの一覧を作れません（起点 ${SINCE}）"; exit 1; }' '|| true')")"
-# N10（F5）: 鍵を取った後も 2 回分の時間が無ければ実験役を呼ばない（締め切り）
-amk n10; echo 9 > "$TMP/a_n10/sd/exec_sleep"; arun n10 ADV_DEADLINE=20 ADV_MIN_STEP=6
-ck "N10 実験役は 1 回だけ・記録に「実行していない（締め切り）」" "1 yes" \
-  "$(grep -c . "$TMP/a_n10/sd/spans") $(yn grep -qF '実行していない（締め切り）' "$(arec n10)")"
+# N10（F5）: 鍵を取った後も 2 回分の時間が無ければ実験役を呼ばない（締め切り）。偽の時計で、鍵の後の残りは 100 − 45 = 55
+# （2 回分の 60 未満・1 回分の 30 以上）。順番の印が ok（もう一方が鍵の前の判定を通ってから時計が進んだ）ことも確かめる（I210）
+amk n10; arun n10 "$(aclock n10 45)" ADV_DEADLINE=100 ADV_MIN_STEP=30
+ck "N10 実験役は 1 回だけ・記録に「実行していない（締め切り）」・順番の印は ok だけ" "1 yes yes" \
+  "$(grep -c . "$TMP/a_n10/sd/spans") $(yn grep -qF '実行していない（締め切り）' "$(arec n10)") $([ "$(sort -u "$TMP/a_n10/sd/barrier" 2>/dev/null)" = ok ] && echo yes || echo no)"
 amk fn10 "$(broken_of "$ADV" 'if [ "$(remaining)" -lt $(( 2 * ADV_MIN_STEP )) ]; then waited_out=1' 'if [ "$(remaining)" -lt "${ADV_MIN_STEP}" ]; then waited_out=1')"
-echo 9 > "$TMP/a_fn10/sd/exec_sleep"; arun fn10 ADV_DEADLINE=20 ADV_MIN_STEP=6
+arun fn10 "$(aclock fn10 45)" ADV_DEADLINE=100 ADV_MIN_STEP=30
 ck "FG-N10 鍵の後を 1 回分で比べると N10 が不合格（締め切りにならない）" no "$(yn grep -qF '実行していない（締め切り）' "$(arec fn10)")"
 # N11（F3）: check_worktree は鍵の中（flock 9 から } 9> までの間）で呼ぶ
 n11() { awk '/^      flock 9$/ { f = 1 } f && /check_worktree/ { hit = 1 } /^    } 9>"\$RUN\/exp\.lock"$/ { f = 0 } END { exit !hit }' "$1"; }
@@ -532,6 +555,40 @@ done
 n14() { grep -qF '直していないものは書かない' "$1" && ! grep -qF 'この番号を open で書くと新しい指摘として振り直される' "$1"; }
 ck "N14b code-reviewer.md: 直していないものは書かない" yes "$(yn n14 "$CRV")"
 ck "FG-N14 「直していないものは書かない」の行を除くと不合格" no "$(yn n14 "$(without "$CRV" '直していないものは書かない')")"
+
+# ---------------- I210: 締め切りの計算の時計（adv_now・ADV_CLOCK_FILE。plan_I210.md 4.1・4.3・auto_test TC-01） ----------------
+# N15: 時計を読めなければ起動しない（exit 2・ADVERSARIAL_ERROR: CLOCK）
+amk n15; echo abc > "$TMP/a_n15/sd/clock"; arun n15 ADV_CLOCK_FILE="$TMP/a_n15/sd/clock"
+ck "N15 時計の中身が整数でない → exit 2・ADVERSARIAL_ERROR: CLOCK" "2 yes" "$(cat "$TMP/a_n15/rc") $(yn grep -qx 'ADVERSARIAL_ERROR: CLOCK' "$TMP/a_n15/out")"
+amk fn15 "$(broken_of "$ADV" 'ADV_START=$(adv_now) || { echo "⛔ 今の時刻を読めません（ADV_CLOCK_FILE=${ADV_CLOCK_FILE}）"; echo "ADVERSARIAL_ERROR: CLOCK"; exit 2; }' 'ADV_START=$(adv_now)')"
+echo abc > "$TMP/a_fn15/sd/clock"; arun fn15 ADV_CLOCK_FILE="$TMP/a_fn15/sd/clock"
+ck "FG-N15 起動時の確かめを外すと N15 が不合格（exit 2 にならない）" no "$([ "$(cat "$TMP/a_fn15/rc")" = 2 ] && echo yes || echo no)"
+# N16: remaining は時計を読めなければ 0（締め切りの側）、読めれば ADV_START + ADV_DEADLINE − 今（関数だけを読み込む）
+echo x > "$TMP/clk_bad"; echo 120 > "$TMP/clk_120"
+rem() { ADV_START=100 ADV_DEADLINE=50 ADV_CLOCK_FILE="$2" lib "$1" remaining 2>/dev/null; }
+ck "N16 remaining: 読めない中身 → 0・120 → 30・ファイルなし → 0" "0 30 0" \
+  "$(rem "$ADV" "$TMP/clk_bad") $(rem "$ADV" "$TMP/clk_120") $(rem "$ADV" "$TMP/no-such-clock")"
+# 壊した写しは、読み込む code-review.sh・review-process-lib.sh と同じ場所に置く
+mkdir -p "$TMP/n16"; cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$TMP/n16/"
+cp "$(broken_of "$ADV" 'remaining() { local n; n=$(adv_now) || { echo 0; return; }; echo' 'remaining() { local n; n=$(adv_now); echo')" "$TMP/n16/adv.sh"
+ck "FG-N16 読めないときの 0 を外すと N16 が不合格（0 にならない）" no \
+  "$([ "$(rem "$TMP/n16/adv.sh" "$TMP/clk_bad")" = 0 ] && echo yes || echo no)"
+# N17: ADV_CLOCK_FILE が空なら adv_now は date +%s（本番の動きは変わらない）
+N17_A=$(ADV_CLOCK_FILE='' lib "$ADV" adv_now); N17_B=$(date +%s)
+ck "N17 ADV_CLOCK_FILE なしの adv_now は date +%s と 1 秒以内" yes \
+  "$([[ "$N17_A" =~ ^[0-9]+$ ]] && [ $(( N17_B - N17_A )) -ge 0 ] && [ $(( N17_B - N17_A )) -le 1 ] && echo yes || echo no)"
+# N18: 既定値の 2 行が前と 1 字も違わない
+# shellcheck disable=SC1003  # 行末の \ は既定値の行の文字どおりの照合用
+n18() { grep -qxF ': "${ADV_DEADLINE:=600}" "${ADV_STEP_TIMEOUT:=300}" "${ADV_MIN_STEP:=60}" "${ADV_EXPERIMENT_ROUNDS:=2}" \' "$1" \
+  && grep -qxF '  "${ADV_ROUND_LIMIT:=2}" "${ADV_REVIEW_BUDGET:=2}" "${ADV_EXEC_BUDGET:=0.5}" "${ADV_BASE:=origin/develop}"' "$1"; }
+ck "N18 既定値の 2 行が変わらない" yes "$(yn n18 "$ADV")"
+ck "FG-N18 ADV_MIN_STEP の既定を変えた写しは不合格" no "$(yn n18 "$(broken_of "$ADV" '"${ADV_MIN_STEP:=60}"' '"${ADV_MIN_STEP:=30}"')")"
+# N19: 実際の時計（date +%s）を読むのは adv_now の中の 1 か所だけ（締め切りの計算が実際の時計を直に読まない・根本原因）
+n19() { [ "$(grep -cE '^[^#]*date \+%s' "$1")" -eq 1 ] \
+  && awk '/^adv_now\(\) \{$/ { f = 1 } f && /^[^#]*date \+%s/ { hit = 1 } f && /^\}$/ { f = 0 } END { exit !hit }' "$1"; }
+ck "N19 date +%s は adv_now の中の 1 か所だけ" yes "$(yn n19 "$ADV")"
+ck "FG-N19 remaining を前の形（date +%s を直に読む）に戻すと不合格" no \
+  "$(yn n19 "$(broken_of "$ADV" 'remaining() { local n; n=$(adv_now) || { echo 0; return; }; echo $(( ADV_START + ADV_DEADLINE - n )); }' 'remaining() { echo $(( ADV_START + ADV_DEADLINE - $(date +%s) )); }')")"
 
 # ---------------- I207: 台帳の残りの行の扱い（F1・F2）と、軽い指摘の一覧への振り分け（plan_I207.md §4・auto_test TC-01） ----------------
 # P1（F1・AC1）: 台帳の残りを止めない中身で書き直しても、止める側の値（重大度・SECURITY・RISK）は前の行に残る
@@ -592,7 +649,9 @@ cp "$RT" "$TMP/rt_old"; printf "%s\n" "grep -h '^LEDGER: .*STATUS=open' x | grep
 ck "FG-D1 前の grep -vE の行を足すと不合格" no "$(yn d1_208 "$TMP/rt_old")"
 # D3（I207 AC4 → I208 AC5）: 一覧は形だけを確かめ、実物の行数に依存しない。計画で見る決まり・review-rules
 BL_FORM='^- F[0-9]+ SEV=(Blocker|High|Medium|Low) REPRO=(yes|no) KIND=(app|harness|guard) FILE=\S+ \| .* \| (一覧に回した理由|受け入れ): '
-d3_bl() { [ -d "$1" ] || return 0; ! cat "$1"/*.md 2>/dev/null | grep -E '^- F' | grep -qvE "$BL_FORM"; }
+# 崩れた行を全部読んで出し、空かで決める（! と grep -q を使わない。pipefail の下で grep -q が先に終わると、見つけた崩れが合格に反転する・I210）
+# shellcheck disable=SC2143  # 勧めの ! grep -q は、この反転を起こす形そのもの
+d3_bl() { [ -d "$1" ] || return 0; [ -z "$(cat "$1"/*.md 2>/dev/null | grep -E '^- F' | grep -vE "$BL_FORM")" ]; }
 PI=.claude/skills/plan-issue/SKILL.md
 d3_pi() { grep -qF '台帳の残りの一覧' "$1" && grep -qF -- '-e "FILE=<実装対象のパス1> |"' "$1" && grep -qF -- '-e "FILE=- |"' "$1" && grep -qF 'docs/reviews/backlog/' "$1"; }
 d3_rr() { grep -qF 'code-review.sh --route' "$1" && grep -qF 'guard' "$1" && grep -qF 'docs/reviews/backlog/' "$1"; }

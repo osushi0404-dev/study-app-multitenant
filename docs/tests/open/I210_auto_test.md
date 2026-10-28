@@ -12,11 +12,11 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（A1・FG-A1・A1b・N10・FG-N10 の書き換え・`d3_bl` の書き換え・「I210」の節 N15〜N19 を足す）。既存の R・L・W・A・G・D・N・P・Q も | exit 0・`fail=0`（ベースライン pass=148） | 実装前のため未実行 |
-| TC-01b | `bash scripts/claude/tests/test_pipefail_negated_grep.sh`（新規。項目は下の表） | exit 0・`fail=0`。実装前（4.4〜4.7 の前）は G1 が 4 か所に当たって不合格 | 実装前のため未実行 |
-| TC-01c | `bash scripts/claude/tests/test_stress_repeat.sh`（新規。`stress-repeat.sh` の失敗注入。項目は下の表） | exit 0・`fail=0` | 実装前のため未実行 |
-| TC-02 | `bash scripts/claude/tests/test_check_frontend_evidence.sh`（E16〜E18 を足す） | exit 0・`fail=0`（ベースライン pass=16） | 実装前のため未実行 |
-| TC-03 | 影響を受けうるテスト: `test_posttooluse_check.sh`（32 行の書き換え）・`test_i193_official_flow.sh`（527・528 行を消す）・`test_i197_adversarial_process.sh`（`adversarial-review.sh` の時計の差し替え・実時間の既定の動き） | どれも exit 0（ベースライン pass=6・175・115） | 実装前のため未実行 |
+| TC-01 | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`（A1・FG-A1・A1b・N10・FG-N10 の書き換え・`d3_bl` の書き換え・「I210」の節 N15〜N19 を足す）。既存の R・L・W・A・G・D・N・P・Q も | exit 0・`fail=0`（ベースライン pass=148） | implement で実行（2026-10-28）: pass=157 fail=0（ステップ 1 の後に負荷をかけて 5 回: `STRESS: 5/5`） |
+| TC-01b | `bash scripts/claude/tests/test_pipefail_negated_grep.sh`（新規。項目は下の表） | exit 0・`fail=0`。実装前（4.4〜4.7 の前）は G1 が 4 か所に当たって不合格 | implement で実行（2026-10-28）: 実装前（Red）pass=9 fail=1（G1 が計画どおりの 4 か所に当たった）→ 実装後 pass=10 fail=0 |
+| TC-01c | `bash scripts/claude/tests/test_stress_repeat.sh`（新規。`stress-repeat.sh` の失敗注入。項目は下の表） | exit 0・`fail=0` | implement で実行（2026-10-28）: pass=5 fail=0。S5 の効き目は、`stop_load` を空にした写しで負荷のプロセスが残る（pgrep が当たる）ことで 1 回確かめた |
+| TC-02 | `bash scripts/claude/tests/test_check_frontend_evidence.sh`（E16〜E18 を足す） | exit 0・`fail=0`（ベースライン pass=16） | implement で実行（2026-10-28）: pass=19 fail=0 |
+| TC-03 | 影響を受けうるテスト: `test_posttooluse_check.sh`（32 行の書き換え）・`test_i193_official_flow.sh`（527・528 行を消す）・`test_i197_adversarial_process.sh`（`adversarial-review.sh` の時計の差し替え・実時間の既定の動き） | どれも exit 0（ベースライン pass=6・175・115） | implement で実行（2026-10-28）: pass=6・174（FG-S21 の前の形の 1 項目を消した）・115（fail=0） |
 | TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
 
 ### TC-01 の項目（書き換え・I210 の節）
@@ -63,8 +63,8 @@
 ### TC-02 の項目（`test_check_frontend_evidence.sh`）
 | 項目 | 入力 | 期待値 |
 |---|---|---|
-| E16（AC6） | `frontend/src/App.tsx` と `zz/` の下に名前の長い（約 90 バイト）ファイル 3000 個を変えたブランチ・テストの記録なし | exit 1（対象。記録が無いので不合格） |
-| E17 | `zz/` の下の 3000 個だけを変えた（`frontend/src/` を変えない）・記録なし | exit 0（対象外） |
+| E16（AC6） | `frontend/src/App.tsx` と `zz/` の下に名前の長い（約 90 バイト）ファイル 1000 個（一覧 約 9 万バイト）を変えたブランチ・テストの記録なし | exit 1（対象。記録が無いので不合格） |
+| E17 | `zz/` の下の 1000 個だけを変えた（`frontend/src/` を変えない）・記録なし | exit 0（対象外） |
 | E18 | `docs/frontend/src/a.md` だけを変えた・記録なし | exit 0（対象外。行の先頭の `frontend/src/` だけを見る） |
 
 ## 決定論ゲート（自動実走）
