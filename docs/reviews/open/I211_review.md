@@ -28,6 +28,8 @@
 - [plan-review] Warning（setup-uv を SHA に固定していない）は直さない — 既存の `actions/*@v4` と同じ運用。SHA 固定はリポジトリ全体の方針として扱う
 - [plan-review] Info（`OK: uv uv 0.13.6` の名前の重複表示）は直さない — 既存の git の行（`OK: git git version`）と同じ表示で、見た目だけ
 - [design-security-review] Blocker・High なし。Medium（setup-uv の浮動タグ）は残余リスクとして retro へ — 既存の action と同じ運用で、harness-tests は秘密情報を持たない
+- [implement] 手元に `pipx install uv==0.13.6` で uv を入れた — 計画の D3 どおり（`pipx uninstall uv` で戻せる）
+- [implement] /simplify の点検（4 観点）で、テスト専用の抜け道（`pyproject.toml` が無ければ流し直さない）を消し、場所の書き方・変数の渡し方・K1・`--offline`・runbook を整理した（計画変更記録 3）。見送り: 版の確かめを uv に任せて `check-tools.sh` の lock の行をやめる案（AC4 の止まり方と CI のログでの版の確認〔手動 No.1〕が無くなる）／install の検出をやめる案（AC7 と I204 の敵対的レビューの指摘に反する）／setup-uv の `with` を緩める案（版の正を迂回する入力を通さないため今の固定のまま）／テストの一時のリポジトリの準備を共通にする案（テストのファイルは自分の中で完結させるのがこのリポジトリの書き方）／CI で python もキャッシュする案（数秒のための ci.yml の変更は範囲外）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

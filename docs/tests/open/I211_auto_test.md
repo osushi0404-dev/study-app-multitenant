@@ -12,11 +12,11 @@
 
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
-| TC-01 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i211_version_pin.sh`（新規。項目は下の表） | exit 0・`fail=0`。実装の前（ステップ 2 の Red）は V・X の項目が不合格 | 実装前のため未実行 |
-| TC-02 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i204_tool_sync.sh`（書き換え。項目は下の表） | exit 0・`fail=0`。実装の前（Red）は L・C の新しい項目が不合格 | 実装前のため未実行 |
-| TC-03 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i193_official_flow.sh`（F9 が `TEST_DIR` で `run-all.sh` を流す。流し直しが入っても期待値が変わらない） | exit 0・`fail=0` | 実装前のため未実行 |
-| TC-04 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 が uv の環境の pre-commit で shellcheck を流す） | exit 0・`FAIL=0`・`PASS TC-C1-shellcheck` | 実装前のため未実行 |
-| TC-05 | ステップ 1 の後に `uv lock --check --project scripts/claude/tests` | exit 0（`pyproject.toml` と `uv.lock` が合っている）。TC-01 の K2 に含めて決定論ゲートで流す | 実装前のため未実行 |
+| TC-01 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i211_version_pin.sh`（新規。項目は下の表） | exit 0・`fail=0`。実装の前（ステップ 2 の Red）は V・X の項目が不合格 | implement（2026-10-29）: Red（直す前の check-tools.sh・run-all.sh）pass=5 fail=17（V・X・K3・K4 が不合格）→ 実装・/simplify の後、commit 18a0fb5 で pass=22 fail=0 |
+| TC-02 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i204_tool_sync.sh`（書き換え。項目は下の表） | exit 0・`fail=0`。実装の前（Red）は L・C の新しい項目が不合格 | implement（2026-10-29）: 実装と同時に書き換えたので、書き換えた後の形での Red は流していない（否定の項目は写しの一覧・写しの `ci.yml` を不合格にする FG で確かめている）→ 実装・/simplify の後 exit 0・fail=0 |
+| TC-03 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i193_official_flow.sh`（F9 が `TEST_DIR` で `run-all.sh` を流す。流し直しが入っても期待値が変わらない） | exit 0・`fail=0` | implement（2026-10-29）: exit 0・fail=0 |
+| TC-04 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 が uv の環境の pre-commit で shellcheck を流す） | exit 0・`FAIL=0`・`PASS TC-C1-shellcheck` | implement（2026-10-29）: exit 0・FAIL=0 |
+| TC-05 | ステップ 1 の後に `uv lock --check --project scripts/claude/tests` | exit 0（`pyproject.toml` と `uv.lock` が合っている）。TC-01 の K2 に含めて決定論ゲートで流す | implement（2026-10-29）: exit 0（`Resolved 12 packages`） |
 | TC-06 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では全体を流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
 
 ### TC-01 の項目（`test_i211_version_pin.sh`）
