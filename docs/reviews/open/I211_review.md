@@ -88,6 +88,7 @@
 - [fix-loop] ユーザーの指示（Actions の承認は秘密・個人情報が出うる書き換えだけに）を I200（#335）の設計確認メモ・解決方針・受け入れ条件に同梱した — I200 が「見張りの確認を本当に危ない操作だけに絞る」イシューで目的が同じ。I211 の範囲（版揃え）は変えない
 - [retro] 台帳の残り: F1〜F6 と敵対的レビューの Low（A1）は `docs/reviews/backlog/I211.md` へ（後続イシュー行きは 0 件）
 - [retro] 改善案の振り分け: C1・C2 は直した（fix-loop）／C3 は I201（#337）に同梱（コメント済み）／C4 はユーザーが起票予定の Dependabot の点検のイシューの候補 ⑦ に追記（scratchpad の起票コマンド）／予防処置は無し（見送り 3 件・理由は「## 振り返り」）
+- [close の後・マージ前] ユーザーの見直し（「BP 的に最適なのは？」→「OK」）で、揃える python を 3.11.18 から 3.12.3（見張り・スクリプトが実際に動く OS の python・CI の runner の python）に変える。記録を open に戻し、計画変更記録 4 を書いて計画レビューから通り直す — 受け入れ条件 AC1 を変えるため。OS の python の更新を自動で止める確かめは足さない（手元と CI の runner の更新時期のずれで CI が揺れるため。runbook に書く・計画書 D4）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -101,3 +102,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review

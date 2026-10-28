@@ -32,7 +32,7 @@
 
 ## 2. 受け入れ条件
 イシューの AC を、uv を使う形に読み替えた対応（読み替えの理由は 9 の D1）:
-- [ ] AC1: python は 3.11（CI・アプリと同じ）の 1 つのパッチ版に揃い、手元は `bash scripts/claude/tests/run-all.sh` の 1 コマンドで、uv が python 3.11 と PyYAML・pre-commit を決めた版で作り直してから流す（OS の python は入れ替えない）
+- [ ] AC1: python は 3.12.3（見張り・スクリプトが実際に動く OS の python と同じ。計画変更記録 4）に揃い、手元は `bash scripts/claude/tests/run-all.sh` の 1 コマンドで、uv が python 3.12.3 と PyYAML・pre-commit を決めた版で作り直してから流す（OS の python は入れ替えない）
 - [ ] AC2: 版を書く場所が道具ごとに 1 か所で、CI と手元の両方がそこを読む。python は `scripts/claude/tests/.python-version`、PyYAML・pre-commit は `scripts/claude/tests/uv.lock`、uv 自身は `scripts/claude/tests/pyproject.toml` の `required-version`
 - [ ] AC3: `check-tools.sh` を uv の環境で流すと、3 つの道具が `.python-version`・`uv.lock` の版とぴったり一致して OK。CI の Harness Tests も同じ版で緑
 - [ ] AC4: 版が違う（上でも下でも）と `check-tools.sh` が止まり、入れ方（`bash scripts/claude/tests/run-all.sh` で流す）を示す
@@ -61,7 +61,7 @@ uv の「プロジェクト」をハーネスのテスト専用に `scripts/clau
 [project]
 name = "harness-tests"
 version = "0"
-requires-python = "==3.11.*"
+requires-python = "==3.12.*"
 dependencies = ["PyYAML>=6.0", "pre-commit>=4.0"]
 
 [tool.uv]
@@ -71,7 +71,7 @@ required-version = "==0.13.6"
 - ぴったりの版は `uv.lock` が持つ（`dependencies` は範囲。上げるときは `uv lock --upgrade-package <名前>`）
 
 ### 4-2. 新規: `scripts/claude/tests/.python-version`
-- 中身は `3.11.18` の 1 行（uv で取れる 3.11 の最新。CI の setup-python が今入れる 3.11.17 とも違うので、ここで 1 つに決める）
+- 中身は `3.12.3` の 1 行（見張り〔`.claude/settings.json` のフックの `python3`〕が動く手元の OS の python と、CI の runner〔Ubuntu 24.04〕にもともと入っている python の版。計画変更記録 4。当初は `3.11.18`）
 
 ### 4-3. 新規: `scripts/claude/tests/uv.lock`
 - `uv lock --project scripts/claude/tests` が作る（手で書かない）。今日の解決では PyYAML 6.0.3・pre-commit 4.7.0（実装時に lock が決めた版を計画変更記録に書く）
@@ -184,8 +184,8 @@ shellcheck | （今のまま）
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
-- 版は 3.11 に揃える（手元を CI・アプリに合わせる）
-- 手元は uv で python 3.11 と PyYAML・pre-commit を固定した版で入れる。OS の python は入れ替えない。公式の `astral-sh/setup-uv` を使う
+- 版は 3.12.3 に揃える（見張り・スクリプトが実際に動く OS の python に合わせる。2026-10-29 に 3.11 から変更）
+- 手元は uv で python 3.12.3 と PyYAML・pre-commit を固定した版で入れる。OS の python は入れ替えない。公式の `astral-sh/setup-uv` を使う
 - 範囲はハーネスのテストだけ。アプリの python の版上げは別イシュー
 - Dependabot は別イシュー（`.github/dependabot.yml` は変えない）
 
@@ -193,7 +193,7 @@ Claude が決めた（技術的な選択と理由）:
 - D1: 版の正を「一覧の列」ではなく uv の公式のファイル（`.python-version`・`uv.lock`・`required-version`）にする。理由: 公式の仕組みがずれを止めてくれる（スパイク 3・4）。一覧の列に書くと、CI に渡すために自作の読み出しが要り、Dependabot（後続）も読めない。AC の「1 か所」は道具ごとに 1 か所と読む（python・道具・uv の 3 つのファイルは同じフォルダに並ぶ）。I204 の「一覧が正」は「どの道具をどう確かめるか」の正として残し、「CI は一覧を通して揃える」は「CI は版の正のファイルだけを読み、install を書かない」に置き換える（イシューの制約の形を変えるが、狙い〔CI と手元が同じ正を読む・install が 1 つの経路だけ〕は同じ）
 - D2: 入口は今までどおり `bash scripts/claude/tests/run-all.sh` にし、`run-all.sh` が uv の環境の外なら `uv run --locked` で自分を流し直す。理由: CI・手元・test-gate・許可ルール（`Bash(bash scripts/claude/*)`）がそのまま使え、版の違う python で全体を流す道が無くなる。`uv run` を CI と手元に直に書く案は、許可ルールの追加（安全装置の変更）が要り、呼び出しの書き忘れでずれる
 - D3: 手元の uv は Claude が実装のステップ 1 で `pipx install uv==0.13.6` で入れる。理由: pipx はこのリポジトリで pre-commit を入れる方法（`docs/runbooks/pre-commit.md`）と同じで、uv の公式の入れ方の 1 つ。版を指定して入れられ、`pipx uninstall uv` で戻せる。ユーザーの作業を減らせる（設計確認メモの「ユーザーが 1 回入れる」より手間が少ない側。入れ方の手順は runbook に残す）
-- D4: python は 3.11 の最新パッチ 3.11.18 に固定する（CI の setup-python が今入れる 3.11.17 とも違う）。`requires-python = "==3.11.*"` で uv がマイナー版のずれも止める
+- D4: python は 3.12.3 に固定する（見張りが動く OS の python と同じ版。uv の 3.12 の最新〔3.12.16〕ではなく OS に合わせるのは、テストする環境を実際に動く環境と一致させるため）。`requires-python = "==3.12.*"` で uv がマイナー版のずれも止める。OS の python が更新されたときに自動で止める確かめは足さない（手元の OS と CI の runner の更新の時期がずれると、パッチ版の違いで CI が揺れて止まるため）。代わりに runbook に「OS の python のマイナー版が変わったら `.python-version` を合わせる」と書く（当初の D4 は 3.11.18）
 - D5: lint ジョブの `pre-commit/action`・git の pre-commit フック・ほかの CI ジョブの python は範囲外（イシューの「含む」はハーネスのテストだけ）
 - D6: `run-all.sh` に「引数で渡したテストだけ流す」を足す。理由: 手元で一部のテストを流すときも同じ版の環境に入るため（AC1・AC3 の「手元で通れば CI でも通る」を一部のテストにも効かせる）。決定論ゲートもこの形で書く。変えたファイルから選ぶ仕組みは I201 の範囲
 - D7: `check-tools.sh` の「下限」の比較は消す（使う行が無くなる。必要になったら足す）
@@ -226,6 +226,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 1（implement・2026-10-29）: 計画書の記載「4-4 `run-all.sh`」→ 採った方法: 失敗したテストの案内（`bash <テスト>` で個別に流す）を `bash scripts/claude/tests/run-all.sh <テスト>` に変えた。理由: 案内どおりに直に流すと OS の python になり、R3 のずれを自分で案内してしまう。計画レビューのやり直し: 不要（D6 の範囲の案内文だけ）
 - 2（implement）: ロックが決めた版は PyYAML 6.0.3・pre-commit 4.7.0（4-3）。`uv lock --check` は exit 0（TC-05）
 - 3（implement・/simplify）: 計画書の記載「4-4 `pyproject.toml` が無いリポジトリ（テストの一時のリポジトリ）では流し直さない」→ 採った方法: その条件を消し、uv の環境の外なら必ず流し直す（無ければ `uv run --locked` が止める）。テストの一時のリポジトリは `VIRTUAL_ENV` をその場の `.venv` にして中から流す（TC-01 の X6・FG-X7、TC-02 の R）。理由: テストのためだけの抜け道で、正のファイルが消えたときに OS の python で流れる道が残る（点検の簡潔さ・直す深さの 2 観点が指摘）。ほかに: `run-all.sh` の場所を `$PROJ` にそろえた／`check-tools.sh` の正の版とファイルをタブでつないで渡すのをやめ 2 つの変数にした／K1 を「3.11 の決め打ち」から「`.python-version` と `requires-python` のマイナー版が揃っている」に変えた（マイナー版を上げるときにテストを書き換えずに済む）／K2・FG-K2 の `uv lock --check` に `--offline` を付けた（ネットワークに頼らない）／runbook の uv の上げ方に `uv self update` を足した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。抜け道を閉じる側の変更と、テスト・案内の整理）
+- 4（close の後・マージ前・2026-10-29・ユーザーの「OK」）: 計画書の記載「4-2 `.python-version` は `3.11.18`」「AC1 python は 3.11」→ 採った方法: `3.12.3`・`requires-python = "==3.12.*"` に変え、`uv lock` を作り直す。理由: ハーネスのテストが確かめる見張り・スクリプトは、アプリの Docker（3.11）ではなく手元の OS の `python3`（3.12.3）で動き、CI の runner の python も 3.12.3。テストする環境を実際に動く環境に合わせる（BP）。変えるもの: `scripts/claude/tests/.python-version`・`pyproject.toml`・`uv.lock`、runbook（OS の python のマイナー版が変わったら合わせる旨）、手動テスト No.1〜No.3 の期待値（No.3 は OS の python が正と一致するので python3 の行は OK になり、PyYAML・pre-commit の行で止まる）。仕組み（版の正・入口・止める場所）は変えない。計画レビューのやり直し: 要（受け入れ条件 AC1 を変える）
 
 ## セキュリティレビュー結果
 
