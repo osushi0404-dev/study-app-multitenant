@@ -13,7 +13,7 @@
 | TC | 内容 | 期待値 | 結果 |
 |---|---|---|---|
 | TC-01 | `bash scripts/claude/tests/test_i204_tool_sync.sh`（新規。項目は下の表） | exit 0・`fail=0`。ステップ 3 の前（4.5・4.6 の前）は S1 が `test_compose_ports.sh`・`guard_bash_oracle.py` に当たって不合格 | 実装前のため未実行 |
-| TC-02 | `bash scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 の書き換え） | exit 0・`FAIL=0`・出力に `SKIP` の行が無く `PASS TC-C1-shellcheck` がある（ベースライン PASS=30 SKIP=1 → PASS=31） | 実装前のため未実行 |
+| TC-02 | `bash scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 の書き換え） | exit 0・`FAIL=0`・出力に `SKIP` の行が無く `PASS TC-C1-shellcheck` がある（ベースライン `PASS=30 FAIL=0 SKIP=1` → 最終行が `PASS=31 FAIL=0`） | 実装前のため未実行 |
 | TC-03 | `bash scripts/claude/tests/test_compose_ports.sh`（SKIP の分岐を消す） | exit 0・`pass=13 fail=0`（ベースラインと同じ） | 実装前のため未実行 |
 | TC-04 | `bash scripts/claude/tests/test_guard_bash_oracle.sh`（`guard_bash_oracle.py` の SKIP を消す） | exit 0・`見逃し=0 余計な停止=0`（ベースラインと同じ） | 実装前のため未実行 |
 | TC-05 | `bash scripts/claude/tests/test_i193_official_flow.sh`（F9 が `TEST_DIR` で `run-all.sh` を流す。冒頭の確認が入っても期待値が変わらない） | exit 0・`fail=0` | 実装前のため未実行 |

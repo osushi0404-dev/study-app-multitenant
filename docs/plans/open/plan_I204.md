@@ -75,7 +75,7 @@ PyYAML | python3 -c 'import yaml; print(yaml.__version__)' | 6.0 | PyYAML>=6.0 |
 git | git --version | - | - | sudo apt install git（CI は runner に最初からある）
 docker compose | docker compose version | - | - | Docker Desktop の WSL 連携を有効にする（CI は runner に最初からある）
 pre-commit | pre-commit --version | 4.0 | pre-commit>=4.0 | pipx install pre-commit（docs/runbooks/pre-commit.md）
-shellcheck | pre-commit run shellcheck --files scripts/claude/tests/check-tools.sh | - | - | pre-commit 経由（版は .pre-commit-config.yaml の shellcheck-py。初回はネットワークから入る）
+shellcheck | out=$(pre-commit run shellcheck --files scripts/claude/tests/check-tools.sh 2>&1) && grep -E '^shellcheck\.+Passed$' <<< "$out" | - | - | pre-commit 経由（版は .pre-commit-config.yaml の shellcheck-py。初回はネットワークから入る）
 ```
 - 確かめるコマンドに `|` は書かない（列の区切りと区別できないため。check-tools.sh が列の数で止める）
 
@@ -213,7 +213,7 @@ Claude が決めた（技術的な選択と理由。要件・基本設計・UI/U
 - アプリのコード・認証認可・個人情報は変えない（bandit・npm audit の対象の変更なし）
 - ワークフローの変更（`docs/runbooks/review-rules.md`「GitHub から復旧できない変更のレビュー観点」）: 変えるのは Harness Tests の 1 step だけ。`on:`・`permissions`（最上位 `contents: read`）・`pull_request_target`・secrets の参照・pre-commit の `SKIP` は変えない・足さない
 - 入力の扱い: pip の列は「名前＋`>=`/`==`＋版」の形だけを通す（pip の取得元の指定・URL を入れられない）。版の下限は数字と `.` だけ
-- 依存の追加: CI の Harness Tests に pre-commit（PyPI）が増える。pre-commit が入れる shellcheck-py は `.pre-commit-config.yaml` の固定の rev（手元の pre-commit と同じ）。依存の脆弱性の監査（`docs/runbooks/dependency-audit.md`）の対象の requirements は変えない
+- 依存の追加: CI の Harness Tests に pre-commit（PyPI）が増える。pre-commit が入れる shellcheck-py は `.pre-commit-config.yaml` の固定の rev（手元の pre-commit と同じ）。依存の脆弱性の監査（`docs/runbooks/dependency-audit.md`）の対象の requirements は変えない。pre-commit・PyYAML は監査の対象に足さない — CI のテストの道具で、アプリ（backend・frontend のイメージ）に入らず、Harness Tests のジョブは secrets を持たない。手元では前から使っている道具（pre-commit は pipx・PyYAML は apt）で、CI に入れる版も PyPI の最新（下限以上）になる。版をぴったり固定する後続のイシューで、監査に入れるかを一緒に決める
 
 P3/P5/P8 影響なし（DB・外部 API・非同期処理・新しいインフラの追加なし。依存関係ファイルの変更なし。CI に pip の 1 パッケージが増えるだけ）。P6 影響なし（UI・データ量の懸念なし）。P9 影響なし（個人情報・未成年データ・テナントデータを扱わない）
 
@@ -236,5 +236,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
+- 1（計画レビュー 20261028_1616 の Warning・Info 対応・2026-10-28）: Warning 1 は 4.1 の shellcheck の行の確かめるコマンドを、`Passed` の行まで見る形（`out=$(…) && grep -E '^shellcheck\.+Passed$' <<< "$out"`。`|` を使わない）にした。Warning 2 は 9「依存の追加」に監査の対象に足さない理由を書いた。Warning 3 は対応不要（ステップ 1 に前倒し済み）。Info 1: `timeout 300` は 1 行の上限で、CI のジョブの `timeout-minutes: 30` の中に収まる（6 行がすべて上限まで待っても 30 分）。Info 2: TC-02 の期待値を `PASS=31 FAIL=0` の形にした。方式・範囲・受け入れ条件は変えないので再レビューはしない
 
 ## レビュー結果
+- [20261028_1616 判定: ✅ 完了](../../reviews/I204_plan_review_20261028_1616.md)
