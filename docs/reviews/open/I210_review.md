@@ -39,6 +39,9 @@
 - [implement] /simplify の指摘のうち、本体に実験の場所を渡す環境変数（`ADV_RUN_DIR`）・A1 の待ちのやり方の作り直しは採らなかった — 計画で決めた形で、順番の印の時間切れは N10 が毎回落とす。本番の本体にテストのための値を増やさない
 - [implement] /simplify が挙げた「`!` の無い `cmd | grep -q`（pipefail の下で、見つけたのに見つからない側に倒れる）が `code-review.sh:221`・`pr-base-sync.sh`・`wt-ports.sh` に残る」は、このイシューの範囲（`!` の形）の外なので直していない — retro で扱いを決める
 
+- [review-gate] 基本レビュー OK（`docs/reviews/I210_code_review_20261028_1236.md`・CI_WAIT: OK・RISK: NO・敵対的レビューは不要）。台帳の F1〜F7 はすべて Low・再現なしで止めない — retro が一覧か後続イシューへ回す
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
