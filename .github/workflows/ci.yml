@@ -155,7 +155,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # 履歴を見るテスト（採番・レビュー記録など）があるため
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3   # 配布元は細かい版のタグだけを出す（v10 のような動くタグは無い）
         with:
           # uv の版は pyproject.toml の required-version、python は .python-version、道具は uv.lock が正（I211）。
           # run-all.sh が uv run --locked で入れて流す。ここに python-version・version を書かない・install を足さない

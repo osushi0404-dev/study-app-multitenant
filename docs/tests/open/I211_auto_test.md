@@ -59,7 +59,7 @@
 | FG-R1・R2 | （I204 と同じ。写しの一覧を 4 列に・`VIRTUAL_ENV` を一時のリポジトリの `.venv` にして uv の環境の中として流す） | （I204 と同じ） |
 | FG-P1・FG-P2 | （I204 と同じ） | （I204 と同じ） |
 | C1（AC5） | 実物の `.github/workflows/ci.yml` | uses は `actions/checkout`・`astral-sh/setup-uv` だけ・setup-uv はちょうど 1 つで `with` が `version-file: scripts/claude/tests/pyproject.toml` だけ・install が 0 個・最後の step が `bash scripts/claude/tests/run-all.sh` → exit 0 |
-| FG-C（AC5） | 写しの `ci.yml`: setup-uv に `python-version: '3.12'`／`version: 0.9.0`／`version-file` を消す／`actions/setup-python@v5` を足す／`some/setup-tool@v1` を足す | どれも不合格（exit 1） |
+| FG-C（AC5） | 写しの `ci.yml`: setup-uv に `python-version: '3.12'`／`version: 0.9.0`／`version-file` を消す／setup-uv を動くタグ `@v10` にする／`actions/setup-python@v5` を足す／`some/setup-tool@v1` を足す | どれも不合格（exit 1） |
 | FG-C（AC7） | 写しの `ci.yml` の Harness Tests に `run:` で `pip install foo`／`sudo apt-get -y install foo`／`npm i foo`／`uv pip install foo`／`python -m pip install foo`／`uv sync` | どれも不合格（exit 1） |
 | C2（AC7） | `ci_check` の install の検出に `uv run --locked --project scripts/claude/tests bash x.sh`・`echo install` の `run:` を足した写し | 合格（exit 0。uv run・単なる語は install として数えない） |
 | S1・FG-S2・S3 | （I204 と同じ） | （I204 と同じ） |
@@ -73,3 +73,9 @@ bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lif
 ```
 
 ## 実行記録
+- 2026-10-29 fix-loop（CI の Harness Tests の失敗・run 40713387394）
+  - なぜ失敗したか: `astral-sh/setup-uv@v10` と書いたが、setup-uv は `v10` のような動くタグを出さず細かい版（`v10.3.3` など）だけを出す。CI が action を取れずに 3 秒で落ちた。`ci_check` は `uses` の名前だけを見ていたので、無い版でも合格した
+  - 何を変えたか: `.github/workflows/ci.yml` を `astral-sh/setup-uv@v10.3.3` にした。`ci_check` に「setup-uv の版は `vX.Y.Z`」を足し、写しの `ci.yml` を `@v10` にすると不合格になる失敗注入（FG-C の `uv_major_tag`）を足した
+  - セキュリティ上の考慮点: 細かい版のタグは動くタグより差し替えの余地が小さい（設計レビューの Medium の対象が小さくなる）。SHA 固定はリポジトリ全体の方針として残余リスクのまま
+  - 次回どう防ぐか: 第三者の action を足すときは、`uses` に書く版のタグがあることを `gh api repos/<owner>/<repo>/git/matching-refs/tags/<版>` で確かめる（スパイクで action.yml を読むだけでは足りない）。CI のテストは版の形まで確かめる
+  - 確かめた結果: `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i204_tool_sync.sh` → exit 0・fail=0（`uv_major_tag` の写しは不合格）

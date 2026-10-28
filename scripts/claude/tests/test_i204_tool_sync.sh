@@ -109,6 +109,9 @@ for s in steps:
 if len(uv_steps) != 1:
     errs.append(f"astral-sh/setup-uv はちょうど 1 つ（今 {len(uv_steps)} 個）")
 for s in uv_steps:
+    # setup-uv は細かい版のタグだけを出す（v10 のような動くタグは無く、書くと CI が action を取れずに落ちる・I211 fix-loop）
+    if not re.fullmatch(r"astral-sh/setup-uv@v\d+\.\d+\.\d+", s["uses"]):
+        errs.append(f"setup-uv の版は vX.Y.Z の細かい版で書く（今 {s['uses']}）")
     w = s.get("with") or {}
     if w != {"version-file": "scripts/claude/tests/pyproject.toml"}:
         errs.append(f"setup-uv の with は version-file: scripts/claude/tests/pyproject.toml だけ（今 {w}）")
@@ -139,6 +142,8 @@ elif kind == "uv_ver":
     uv[0]["with"]["version"] = "0.9.0"
 elif kind == "no_version_file":
     del uv[0]["with"]["version-file"]
+elif kind == "uv_major_tag":
+    uv[0]["uses"] = "astral-sh/setup-uv@v10"
 elif kind == "setup_python":
     steps.insert(1, {"uses": "actions/setup-python@v5", "with": {"python-version": "3.11"}})
 elif kind == "extra_uses":
@@ -150,7 +155,7 @@ PY
 }
 OUT="$(ci_check "$CI")"; rc=$?
 ck "C1 CI の Harness Tests は版の正だけを読む" "0 []" "$rc [$OUT]"
-for kind in py312 uv_ver no_version_file setup_python extra_uses; do
+for kind in py312 uv_ver no_version_file uv_major_tag setup_python extra_uses; do
   ci_mut "$kind" "$TMP/ci_$kind.yml"
   ci_check "$TMP/ci_$kind.yml" >/dev/null; rc=$?
   ck "FG-C 写しの ci.yml（${kind}）は不合格" 1 "$rc"

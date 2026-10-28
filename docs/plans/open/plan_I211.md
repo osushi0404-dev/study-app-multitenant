@@ -122,7 +122,7 @@ shellcheck | （今のまま）
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3   # 配布元は細かい版のタグだけを出す
         with:
           # uv の版は pyproject.toml の required-version、python は .python-version、道具は uv.lock が正（I211）。
           # ここに python-version・version を書かない・install を足さない（test_i204_tool_sync.sh が止める）
