@@ -86,3 +86,4 @@ bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lif
   - 次回どう防ぐか: キャッシュやネットワークに頼る指定（`--offline` など）を足すときは、新しいキャッシュの環境（CI）で通るかを push で確かめてから整理を終える。否定のテストは失敗の理由まで見る（今回それで偽の合格を防げた）
   - 確かめた結果: 下の手元の実行と、push 後の CI の Harness Tests
 - 2026-10-29 test-gate: `bash scripts/claude/gate-check.sh I211` → exit 0（GATE_CHECK: OK）。決定論ゲート 4 本は review-gate（`docs/reviews/I211_code_review_20261029_0032.md`）で実走しすべて exit 0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（run 40717058976・`run-all: pass=48 fail=0`）→ TC-06 合格
+- 2026-10-29 test-gate 2（python 3.12.3）: `bash scripts/claude/gate-check.sh I211` → exit 0（GATE_CHECK: OK）。決定論ゲート 4 本は implement 2 で `run-all: pass=4 fail=0`、review-gate 2 の差分のレビューは記録の場所以外の変更なしで台帳を引き継ぎ（`docs/reviews/I211_code_review_20261029_0204.md`）。CI は Harness Tests を含む全ジョブ pass（run 40732184953・`Using CPython 3.12.3 interpreter at: /usr/bin/python3.12`・`run-all: pass=48 fail=0`）→ TC-06 合格（3.12.3）

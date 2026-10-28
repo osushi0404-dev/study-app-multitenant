@@ -17,8 +17,8 @@
 - Config: `.github/workflows/ci.yml`（harness-tests ジョブ）・手元の開発環境（pipx の uv）
 
 ## テスト結果
-- 自動: 決定論ゲート 4 本 exit 0（review-gate）。CI 全ジョブ pass（run 40717058976・Harness Tests `run-all: pass=48 fail=0`）。基本レビュー OK（止める指摘 0・Low 6）・敵対的レビュー OK（未検証 0・新しい Critical/High 0）
-- 手動: No.1〜No.4 OK（すべて Claude・Human の項目なし）
+- 自動: 決定論ゲート 4 本 exit 0。CI 全ジョブ pass（3.11.18: run 40717058976／3.12.3: run 40732184953・どちらも Harness Tests `run-all: pass=48 fail=0`）。3.12.3 の差分は組み込みの /security-review を直接実行して指摘なし・敵対的レビュー 2 周目 OK。基本レビュー OK（止める指摘 0・Low 6）・敵対的レビュー OK（未検証 0・新しい Critical/High 0）
+- 手動: No.1〜No.4 OK（3.12.3 でやり直し・すべて Claude・Human の項目なし）
 
 ## 計画との差分
 - あり: 計画変更記録 1〜3（失敗したテストの案内の形・ロックの版の記録・/simplify の整理）と fix-loop 2 回（setup-uv の版を細かい版のタグで書く・FG-K2 の `--offline` を外す）。方式・範囲・受け入れ条件は変えていない
