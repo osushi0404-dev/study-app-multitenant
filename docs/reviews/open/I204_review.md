@@ -5,19 +5,27 @@
 - Draft PR: #354
 
 ## 変更概要
-（実装後に書く）
+ハーネスのテストが頼る道具と版の一覧（`scripts/claude/tests/required-tools.txt`）を正にし、`run-all.sh` の冒頭で `check-tools.sh` が確かめる（足りなければテストを流さずに不合格・入れ方を出す）。CI の Harness Tests は一覧の pip の列を読んで入れる。道具が無ければ黙って SKIP する 3 か所をやめ、shellcheck は pre-commit 経由で `.pre-commit-config.yaml` の固定の版を使う。一覧と CI の食い違い・SKIP の分岐の再発を止めるテストを足した。
 
 ## 変更点
-（実装後に書く）
+- 新規 `scripts/claude/tests/required-tools.txt`（6 つの道具・版の下限・CI で pip で入れるもの・入れ方）・`scripts/claude/tests/check-tools.sh`（確かめる・`--pip-specs`）
+- `scripts/claude/tests/run-all.sh`: 冒頭で `check-tools.sh`
+- `scripts/claude/tests/test_review_commit_lifecycle.sh`: TC-C1 を `pre-commit run shellcheck`（`Passed` の行まで見る）に。SKIP を消した
+- `scripts/claude/tests/test_compose_ports.sh`・`scripts/claude/tests/guard_bash_oracle.py`: 道具が無ければ SKIP する分岐を消した
+- `.github/workflows/ci.yml`: Harness Tests の「Install test dependencies」の 1 step を、一覧から読んで入れる形に
+- 新規 `scripts/claude/tests/test_i204_tool_sync.sh`（一覧・`run-all.sh` の冒頭・TC-C1・CI との食い違い・SKIP の分岐の規則。失敗注入つき）
+- `docs/runbooks/onboarding.md`: 「手元の準備（ハーネスのテスト）」
 
 ## 影響範囲
 - ハーネスだけ（計画書 3）。アプリ本体・DB の変更なし。`.github/workflows/ci.yml` は Harness Tests の 1 step だけ
 
 ## テスト結果
-（test-gate の後に書く）
+- 自動: TC-01 `test_i204_tool_sync.sh` pass=29（4.5・4.6 の前は S1 が 2 か所に当たって不合格）・TC-02 `PASS=31 FAIL=0`（SKIP なし）・TC-03 pass=13・TC-04 見逃し=0・TC-05 pass=174・TC-06 CI 全緑（Harness Tests `run-all: pass=47 fail=0`）
+- gate-check: GATE_CHECK OK（2026-10-28）
+- 手動: No.1 CI のログで一覧の確認 6 行 OK（python 3.11.17・pre-commit 4.7.0・固定の shellcheck が Passed）・No.2 docker が通らないとテストを流さず exit 1・No.3 手元で 6 行 OK。すべて Claude 実施・Human の項目なし
 
 ## 計画との差分
-（実装後に書く）
+- 計画変更記録 1（計画レビューの Warning 対応）・2（shellcheck の行の確認の形・一覧の誤りを標準エラーへ）・3（`/simplify` の整理）。どれも方式・範囲・受け入れ条件は変えない
 
 ## ロールバック
 - PR を revert する（計画書 7）
@@ -44,3 +52,6 @@ STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 基本レビュー OK（`docs/reviews/I204_code_review_20261028_1644.md`・CI_WAIT: OK・RISK: YES）。台帳の F1〜F6 はすべて Low・再現なしで止めない — retro が一覧か後続イシューへ回す
 - [review-gate] 敵対的レビュー 1 周目 OK（`docs/reviews/I204_adversarial_review_20261028_1656.md`・V1〜V5 すべて確認済み・未検証 0）。ハーネスの Medium 1 件（`ci_check` の install の検出が `apt-get -y install` などオプションを挟む形を拾わない）は次の周に進む理由にせず記録に残す — review-gate の決まり（ハーネスの Medium は retro へ）。OK の周の後に差分を足さない
 STAGE_DONE: review-gate NEXT: test-gate
+
+- [test-gate] 手動 3 件はすべて Claude で実施し OK。No.1 は最後のコードのコミット（c14293c。その後は記録だけ）の CI のログで確かめた — HEAD の CI は記録だけの変更で中身が同じ。Human の項目は無いので retro へ
+STAGE_DONE: test-gate NEXT: retro

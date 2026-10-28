@@ -55,3 +55,4 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 ```
 
 ## 実行記録
+- 2026-10-28 test-gate: `bash scripts/claude/gate-check.sh I204` → exit 0（GATE_CHECK: OK）。決定論ゲート 5 本は review-gate（`docs/reviews/I204_code_review_20261028_1644.md`）で実走しすべて exit 0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（run 40652000911・`run-all: pass=47 fail=0`）→ TC-06 合格
