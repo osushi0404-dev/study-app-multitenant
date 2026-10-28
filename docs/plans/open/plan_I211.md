@@ -222,5 +222,42 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 2 | 読んで可 | `ci_check` の install の検出が `apt-get -y install`・`npm i`・`uv pip install`・`python -m pip install`・`uv sync` を拾い、`uv run` は拾わない（TC-02 の FG-C） |
 | V5 | 3 | 読んで可 | 版を上げる手順（onboarding.md）に沿うと、手元と CI が同じ版のまま上がる（手動 No.4） |
 
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-28
+
+バックエンド・フロントエンドのコード変更なし（認証・認可・シリアライザ・モデル・URL は読む対象なし）。対象は CI の harness-tests ジョブ・ハーネスのテストの道具の取り込み経路・`run-all.sh` の流し直し。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 依存ライブラリ（CI の部品） | 第三者の action `astral-sh/setup-uv@v10` を足す。浮動タグなので、タグが差し替えられると CI で別の中身が動きうる | 必須: harness-tests の `uses` は `actions/checkout`・`astral-sh/setup-uv` の 2 つだけ（TC-02 の C1・FG-C が固定）。SHA 固定は既存の `actions/*@v4` と同じくリポジトリ全体の方針で扱う（残余リスク） |
+| Low | 依存ライブラリ（道具） | uv が PyPI から PyYAML・pre-commit と依存を、python-build-standalone から python を取る | 必須: `uv.lock` のハッシュ付きで入れ、`--locked` で lock とずれたら止める（今の `pip install`〔版もハッシュも固定なし〕より安全側）。新しいライブラリは足さない（PyYAML・pre-commit は今も使用中） |
+| Low | 依存ライブラリ（手元） | 手元に `pipx install uv==0.13.6` で uv を入れる | 必須: 版を指定して入れる。uv 自身の版は `required-version` で uv が確かめる |
+| Low | セキュリティ設定ミス（CI） | setup-uv のキャッシュ（enable-cache の既定）を PR の実行が書き換える | GitHub のキャッシュはブランチごとに分かれ、PR からは既定ブランチのキャッシュを上書きできない。ジョブの権限・秘密情報は今と同じ（harness-tests は秘密情報を使わない） |
+| Low | 入力検証 | `run-all.sh` が `VIRTUAL_ENV`・`HARNESS_UV_REEXEC` を読んで流し直しを決める | 手元・CI の自分の環境の変数で、権限の境目をまたがない。誤った値でも「流し直さない → `check-tools.sh` がぴったりの版で止める」か「`⛔` で止める」で、違う版のまま合格にならない（TC-01 X1〜X5・V） |
+| — | 認証・認可／マルチテナント／機密情報／ファイル操作／外部通信 | なし（エンドポイント・データ・秘密情報・アップロード・Webhook の変更なし） | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | PR の `uv.lock`・`pyproject.toml` | PR を出せる人 | 悪い版・別の配布元のパッケージを lock に入れる | CI は lock のとおりにしか入れず、マージにはユーザーの承認が要る。harness-tests は秘密情報を持たない | Yes: `uv lock --check`（K2）で pyproject と lock の食い違いを止める | No（中身の妥当性は PR のレビュー） | lock の中身の差分を人が読まないと、正しい形の悪い版は通る（今の `pip install` の最新取り込みより狭い） | Low |
+| 2 | PR の `.github/workflows/ci.yml` | PR を出せる人 | harness-tests に別の action・install を足し、版の正を迂回する | `uses` は 2 つだけ・install 0 個・setup-uv に `python-version`・`version` を書かない | Yes: TC-02 の C1・FG-C | No | ci.yml 自体の変更は高リスク判定（path_risk_trigger）で敵対的レビューに回る | Low |
+| 3 | `astral-sh/setup-uv@v10` のタグ | 第三者（action の配布元） | タグを差し替えて CI で別の中身を動かす | harness-tests は秘密情報を持たず、書き込み権限の要る操作をしない | No | No | SHA 固定していない（既存の action と同じ） | Medium |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 1件 | 1件 |
+| Low     | 4件 | 2件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
+
 ## レビュー結果
 - [20261028_2336 判定: ✅ 完了](../../reviews/I211_plan_review_20261028_2336.md)

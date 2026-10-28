@@ -27,6 +27,8 @@
 - [plan-review] Warning（setup-uv が runner で required-version と python を読めるか未実証）は計画のステップ 3・手動 No.1・R1 のまま進める — 実際の runner でしか確かめられず、確かめる手順と失敗時の対応が計画にある
 - [plan-review] Warning（setup-uv を SHA に固定していない）は直さない — 既存の `actions/*@v4` と同じ運用。SHA 固定はリポジトリ全体の方針として扱う
 - [plan-review] Info（`OK: uv uv 0.13.6` の名前の重複表示）は直さない — 既存の git の行（`OK: git git version`）と同じ表示で、見た目だけ
+- [design-security-review] Blocker・High なし。Medium（setup-uv の浮動タグ）は残余リスクとして retro へ — 既存の action と同じ運用で、harness-tests は秘密情報を持たない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
