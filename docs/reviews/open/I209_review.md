@@ -16,7 +16,10 @@
 - GitHub のイシュー（`track:harness`）と記録のファイルだけ。Backend・Frontend・DB・ハーネスのスクリプト・設定は変えない
 
 ## テスト結果
-（test-gate で記入）
+- 2026-10-28 test-gate（HEAD 1dc998e4・gate-check OK）
+- 自動: CI（Harness Tests を含む）が pass（review-gate で CI_WAIT OK）。TC-01（52 件の番号）・TC-03（F1〜F9）は exit 0、失敗注入は exit 1。TC-02 は CI の D3
+- 手動（実施者はすべて Claude）: No.1〜No.5 すべて OK（閉じた 41 件の状態・理由のコメント／残す 11 件の本文の完全一致／統合先への同梱／ユーザー確認が閉じる操作より前／開いているのは #349 と残す 11 件だけ）
+- check-frontend-evidence.sh・check-manual-test-executor.sh とも exit 0
 
 ## 計画との差分
 （implement 以降で記入）
@@ -41,3 +44,4 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 - [review-gate] code-review.sh: CI_WAIT OK・FINAL_VERDICT OK・ADVERSARIAL_STAGE NOT_REQUIRED（docs/reviews/I209_code_review_20261028_1955.md）。台帳は Low 8 件（F1〜F8・記録の書き方）で止める指摘なし — 決まりどおり retro が扱う
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 手動 No.1 は理由の文の完全一致ではなく「判定の語・理由の行・統合先の番号」の有無で照らした — #172 は見張りに止められて言い換えたため（台帳 F4）。No.2 の一時ファイルはスクラッチに作った（台帳 F8）
