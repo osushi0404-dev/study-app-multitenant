@@ -17,7 +17,7 @@ ISSUE_REVIEW="scripts/claude/issue-review.sh"
 CLOSE_SKILL=".claude/skills/close/SKILL.md"
 TEST_SELF="scripts/claude/tests/test_review_commit_lifecycle.sh"
 
-pass=0; fail=0; skip=0
+pass=0; fail=0
 ck() { # name expected actual
   if [ "$2" = "$3" ]; then printf 'PASS %s\n' "$1"; pass=$((pass+1))
   else printf 'FAIL %s  expected[%s] got[%s]\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
@@ -155,12 +155,13 @@ ck_true TC-B3-scoped-add grep -qF 'git add -u' "$CLOSE_SKILL"
 # shellcheck disable=SC2016  # 単一引用符はリテラル grep の意図（$ISSUE_NUM を展開しない）
 ck_true TC-B3-gate grep -qF 'grep -vE "I${ISSUE_NUM}' "$CLOSE_SKILL"
 
-echo "== TC-C1: shellcheck（pre-commit 同等。未インストール環境は SKIP） =="
-if command -v shellcheck >/dev/null 2>&1; then
-  ck_true TC-C1-shellcheck shellcheck "$PLAN_REVIEW" "$CODE_REVIEW" "$ISSUE_REVIEW" "$TEST_SELF"
-else
-  printf 'SKIP TC-C1-shellcheck (shellcheck 未インストール・pre-commit/CI で検査)\n'; skip=$((skip+1))
-fi
+echo "== TC-C1: shellcheck（.pre-commit-config.yaml の固定の版を pre-commit 経由で使う・I204） =="
+# 道具がそろっているかは run-all.sh の冒頭（check-tools.sh）で確かめる。ここで飛ばさない。
+# 対象外（Skipped）でも exit 0 になるので、Passed の行まで合格の条件にする
+C1_OUT="$(pre-commit run shellcheck --files "$PLAN_REVIEW" "$CODE_REVIEW" "$ISSUE_REVIEW" "$TEST_SELF" 2>&1)"; C1_RC=$?
+C1_PASSED=no; grep -qE '^shellcheck\.+Passed$' <<< "$C1_OUT" && C1_PASSED=yes
+ck TC-C1-shellcheck "0 yes" "$C1_RC $C1_PASSED"
+[ "$C1_RC $C1_PASSED" = "0 yes" ] || printf '%s\n' "$C1_OUT" | tail -20
 
 echo "== TC-C2: bash -n 構文チェック（変更4スクリプト） =="
 ck_true TC-C2-syntax-plan  bash -n "$PLAN_REVIEW"
@@ -171,5 +172,5 @@ ck_true TC-C2-syntax-self  bash -n "$TEST_SELF"
 echo "== TC-C3: 既存テスト（test_review_verdict.sh）非退行 =="
 ck_true TC-C3-verdict-regression bash scripts/claude/tests/test_review_verdict.sh
 
-printf '\n==== I069 commit-lifecycle tests: PASS=%d FAIL=%d SKIP=%d ====\n' "$pass" "$fail" "$skip"
+printf '\n==== I069 commit-lifecycle tests: PASS=%d FAIL=%d ====\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

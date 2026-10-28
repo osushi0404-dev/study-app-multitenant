@@ -2,10 +2,16 @@
 # run-all.sh: ハーネスのテスト（scripts/claude/tests/test_*.sh）を順に全部流す（I193・I185 P8）。
 # 呼び出し元: .github/workflows/ci.yml の Harness Tests ジョブ・test-gate
 # 終了コード: 全部合格で 0、1 本でも失敗すれば 1。TEST_DIR で対象のフォルダを差し替えられる（失敗を入れた確認用）
+# 最初に、テストが頼る道具を一覧（required-tools.txt）で確かめ、足りなければテストを流さずに 1（I204。TEST_DIR によらない）
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)" || exit 1
 cd "$REPO_ROOT" || exit 1
+# ハーネスのテストが頼る道具を一覧で先に確かめる（I204）。CI も手元も同じこの確認を通る
+if ! bash scripts/claude/tests/check-tools.sh; then
+  echo "⛔ ハーネスのテストが頼る道具がそろっていません（一覧: scripts/claude/tests/required-tools.txt）。テストは流していません"
+  exit 1
+fi
 TEST_DIR="${TEST_DIR:-scripts/claude/tests}"
 
 pass=0; fail=0; failed=()

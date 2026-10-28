@@ -159,8 +159,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install test dependencies
-        # ワークフロー・pre-commit の設定を読むテスト（test_i109・test_i182）が PyYAML を使う
-        run: pip install pyyaml
+        # 道具は一覧（scripts/claude/tests/required-tools.txt）が正（I204）。pip で入れるものは一覧の列から読む。
+        # 道具を足す・変えるときは一覧を書き換える（test_i204_tool_sync.sh が一覧とこのジョブの食い違いを止める）
+        run: |
+          bash scripts/claude/tests/check-tools.sh --pip-specs > "$RUNNER_TEMP/harness-requirements.txt"
+          pip install -r "$RUNNER_TEMP/harness-requirements.txt"
       - name: Configure git identity for temporary test repositories
         run: |
           git config --global user.name "harness-tests"
