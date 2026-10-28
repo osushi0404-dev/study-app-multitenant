@@ -102,3 +102,6 @@ STAGE_DONE: test-gate NEXT: retro
 - 根本原因: 文字列で判定する規則の写し（FG）に、同じ意味の書き方の揺れ（オプションの位置・短縮形）を入れる手順が無い。ただし敵対的レビューの観点 3（網羅漏れ）がその場で見つけており、既存の工程で捕まっている → 新しい手順は足さない（是正だけ）
 
 STAGE_DONE: retro NEXT: close
+
+- [close] base 追従は不要（BLOCKED）・gate-check OK・最終チェックで CI 全緑を確認した
+STAGE_DONE: close NEXT: merge
