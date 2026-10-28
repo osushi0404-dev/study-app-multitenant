@@ -40,3 +40,7 @@ STAGE_DONE: design-security-review NEXT: implement
 - [implement] /simplify の指摘のうち、確認の重複を減らす（FG-L3 を小さな写しに）・重なったコメント・同じ計算の整理は採り、shellcheck の行を一覧から外す・CI のキャッシュ・並行の確認は採らなかった（計画変更記録 3） — 前者は振る舞いを変えない整理、後者はイシュー・計画で決めた形を変えるため
 - [implement] ワークフローの書き換えで承認画面が出ることを事前に予告しなかった（ユーザーから「この承認は必須か？」と質問あり）。確認は settings.json の `Edit(.github/workflows/**)` の意図した確認と説明した — retro で扱う
 STAGE_DONE: implement NEXT: review-gate
+
+- [review-gate] 基本レビュー OK（`docs/reviews/I204_code_review_20261028_1644.md`・CI_WAIT: OK・RISK: YES）。台帳の F1〜F6 はすべて Low・再現なしで止めない — retro が一覧か後続イシューへ回す
+- [review-gate] 敵対的レビュー 1 周目 OK（`docs/reviews/I204_adversarial_review_20261028_1656.md`・V1〜V5 すべて確認済み・未検証 0）。ハーネスの Medium 1 件（`ci_check` の install の検出が `apt-get -y install` などオプションを挟む形を拾わない）は次の周に進む理由にせず記録に残す — review-gate の決まり（ハーネスの Medium は retro へ）。OK の周の後に差分を足さない
+STAGE_DONE: review-gate NEXT: test-gate
