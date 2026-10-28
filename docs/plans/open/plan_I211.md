@@ -203,7 +203,7 @@ Claude が決めた（技術的な選択と理由）:
 - 一覧 docs/reviews/backlog/I204.md F4: 残す — S3 のテスト名と中身の話で版揃えと関係しない
 - 一覧 docs/reviews/backlog/I204.md F5: 同梱 — `names()` を触るので一緒に直す
 - 要件適合性: AC の範囲を超える仕様追加は D6（一部のテストを流す引数）だけで、AC1・AC3 を一部のテストにも効かせるための最小の追加。マルチテナント・ステータス遷移は非該当
-- セキュリティ: セキュリティ影響なし（アプリのコード変更なし）。CI に足す第三者の action は Astral の公式 `astral-sh/setup-uv@v10`（`uses` の許可は `test_i204_tool_sync.sh` が 2 つに固定）。uv が入れる python は uv の公式の配布物（python-build-standalone）、道具は PyPI のものを `uv.lock` のハッシュ付きで入れる（今の `pip install` は版もハッシュも固定していないので、取り込みの安全性は上がる）。`uv.lock` は detect-secrets に誤検出されない（スパイク 7）。bandit・npm audit の対象の変更なし。追加する依存（PyYAML・pre-commit）は今も入れているもので新しくない
+- セキュリティ: セキュリティ影響なし（アプリのコード変更なし）。CI に足す第三者の action は Astral の公式 `astral-sh/setup-uv@v10.3.3`（細かい版のタグ・fix-loop 1）（`uses` の許可は `test_i204_tool_sync.sh` が 2 つに固定）。uv が入れる python は uv の公式の配布物（python-build-standalone）、道具は PyPI のものを `uv.lock` のハッシュ付きで入れる（今の `pip install` は版もハッシュも固定していないので、取り込みの安全性は上がる）。`uv.lock` は detect-secrets に誤検出されない（スパイク 7）。bandit・npm audit の対象の変更なし。追加する依存（PyYAML・pre-commit）は今も入れているもので新しくない
 - P3/P5/P8 影響なし（DB 変更・外部 API・非同期処理なし。新しいインフラ・費用なし〔uv・setup-uv は無料〕）
 - P6 影響なし（UI なし）
 - P9 影響なし（個人情報・テナントデータを扱わない）
@@ -238,7 +238,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 | 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
 |--------|------|--------------|-------------------------------|
-| Medium | 依存ライブラリ（CI の部品） | 第三者の action `astral-sh/setup-uv@v10` を足す。浮動タグなので、タグが差し替えられると CI で別の中身が動きうる | 必須: harness-tests の `uses` は `actions/checkout`・`astral-sh/setup-uv` の 2 つだけ（TC-02 の C1・FG-C が固定）。SHA 固定は既存の `actions/*@v4` と同じくリポジトリ全体の方針で扱う（残余リスク） |
+| Medium | 依存ライブラリ（CI の部品） | 第三者の action `astral-sh/setup-uv@v10.3.3` を足す（fix-loop 1 で細かい版のタグにした。配布元は動くタグを出さない）。コミットの SHA ではないので、タグが付け替えられると CI で別の中身が動きうる（動くタグより余地は小さい） | 必須: harness-tests の `uses` は `actions/checkout`・`astral-sh/setup-uv` の 2 つだけ（TC-02 の C1・FG-C が固定）。SHA 固定は既存の `actions/*@v4` と同じくリポジトリ全体の方針で扱う（残余リスク） |
 | Low | 依存ライブラリ（道具） | uv が PyPI から PyYAML・pre-commit と依存を、python-build-standalone から python を取る | 必須: `uv.lock` のハッシュ付きで入れ、`--locked` で lock とずれたら止める（今の `pip install`〔版もハッシュも固定なし〕より安全側）。新しいライブラリは足さない（PyYAML・pre-commit は今も使用中） |
 | Low | 依存ライブラリ（手元） | 手元に `pipx install uv==0.13.6` で uv を入れる | 必須: 版を指定して入れる。uv 自身の版は `required-version` で uv が確かめる |
 | Low | セキュリティ設定ミス（CI） | setup-uv のキャッシュ（enable-cache の既定）を PR の実行が書き換える | GitHub のキャッシュはブランチごとに分かれ、PR からは既定ブランチのキャッシュを上書きできない。ジョブの権限・秘密情報は今と同じ（harness-tests は秘密情報を使わない） |
@@ -251,7 +251,7 @@ Danger Ops（有無/手順/ロールバック）:
 |---|------|---------|---------|------------|----------------|------------|---------|--------|
 | 1 | PR の `uv.lock`・`pyproject.toml` | PR を出せる人 | 悪い版・別の配布元のパッケージを lock に入れる | CI は lock のとおりにしか入れず、マージにはユーザーの承認が要る。harness-tests は秘密情報を持たない | Yes: `uv lock --check`（K2）で pyproject と lock の食い違いを止める | No（中身の妥当性は PR のレビュー） | lock の中身の差分を人が読まないと、正しい形の悪い版は通る（今の `pip install` の最新取り込みより狭い） | Low |
 | 2 | PR の `.github/workflows/ci.yml` | PR を出せる人 | harness-tests に別の action・install を足し、版の正を迂回する | `uses` は 2 つだけ・install 0 個・setup-uv に `python-version`・`version` を書かない | Yes: TC-02 の C1・FG-C | No | ci.yml 自体の変更は高リスク判定（path_risk_trigger）で敵対的レビューに回る | Low |
-| 3 | `astral-sh/setup-uv@v10` のタグ | 第三者（action の配布元） | タグを差し替えて CI で別の中身を動かす | harness-tests は秘密情報を持たず、書き込み権限の要る操作をしない | No | No | SHA 固定していない（既存の action と同じ） | Medium |
+| 3 | `astral-sh/setup-uv@v10.3.3` のタグ | 第三者（action の配布元） | タグを差し替えて CI で別の中身を動かす | harness-tests は秘密情報を持たず、書き込み権限の要る操作をしない | No | No | SHA 固定していない（既存の action と同じ） | Medium |
 
 ### レビュー結果サマリー
 
@@ -266,4 +266,5 @@ Danger Ops（有無/手順/ロールバック）:
 （retro 段階で決定する）
 
 ## レビュー結果
+- [20261029_0148 判定: ✅ 完了](../../reviews/I211_plan_review_20261029_0148.md)
 - [20261028_2336 判定: ✅ 完了](../../reviews/closed/I211_plan_review_20261028_2336.md)
