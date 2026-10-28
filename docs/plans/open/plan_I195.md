@@ -99,7 +99,7 @@
 
 ### 4.6 テスト（AC1・AC4・AC6・AC7）
 - `scripts/claude/tests/test_tui_capture.sh`（新規）: 偽物の `tmux`（呼ばれた引数を記録し、`capture-pane` では決まった画面を出す）と `claude`（何もしない）を一時のフォルダに置いて PATH の先頭にし、本物は使わない。項目は auto_test の TC-01
-- `scripts/claude/tests/test_check_manual_test_executor.sh`: 例の書き方を `試した手段:` に変え（X1・X3・X5・X11・X12・X16・X17）、X18〜X20 と FG を足す。X9（`check-manual-test-executor.sh I187`）は消す（終わった記録に新しい書き方を求めることになる。AC7 と同じ理由）。項目は TC-02
+- `scripts/claude/tests/test_check_manual_test_executor.sh`: 例の書き方を `試した手段:` に変え（X1・X3・X5・X11・X12・X16・X17）、X19・X20 と FG を足す（X18 は計画変更記録 2 で消した）。X9（`check-manual-test-executor.sh I187`）は消す（終わった記録に新しい書き方を求めることになる。AC7 と同じ理由）。項目は TC-02
 - `scripts/claude/tests/test_i193_official_flow.sh` の S21: 470 行（`check-manual-test-executor.sh I193`）を消し、`s21_rules` と FG を足す。項目は TC-03
 
 ## 5. 実装手順（ステップ）
@@ -174,7 +174,7 @@ Danger Ops（有無/手順/ロールバック）:
 |---|---|
 | 1. `tui-capture.sh` は `claude --permission-mode manual`（計画変更記録 2）以外を起動できず、`!` で始まる入力を送る前に止まる | 読んで可（TC-01 の T2・T8・FG） |
 | 2. `tui-capture.sh` は失敗しても tmux のセッションを残さない | 読んで可（TC-01 の T1・T6・FG） |
-| 3. `check-manual-test-executor.sh` は `試した手段:` の中身の無い Human の行・前の書き方だけの行を不合格にする | 読んで可（TC-02 の X5・X18・X19・FG） |
+| 3. `check-manual-test-executor.sh` は `試した手段:` の中身の無い Human の行・前の書き方だけの行を不合格にする | 読んで可（TC-02 の X5・X19・FG-X19） |
 
 ## 計画変更記録
 （実装中に計画と違うことをするときに書く）
