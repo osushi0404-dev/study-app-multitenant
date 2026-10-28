@@ -15,7 +15,7 @@
 | TC-01 | `bash scripts/claude/tests/test_tui_capture.sh`（新規。下の T1〜T9・FG） | exit 0・`fail=0` | implement で実行（2026-10-28）: 実装前（Red）はスクリプトが無く fail=1 → 実装後 pass=37 fail=0（/simplify の後も同じ） |
 | TC-02 | `bash scripts/claude/tests/test_check_manual_test_executor.sh`（例の書き方を `試した手段:` に変え、X19・X20・FG を足し、X9 を消す） | exit 0・`fail=0`（ベースライン pass=23） | implement で実行（2026-10-28）: 実装前（Red）pass=19 fail=9 → 実装後 pass=28 fail=0 → /simplify で X18・FG-X18 を消して pass=26 fail=0 |
 | TC-03 | `bash scripts/claude/tests/test_i193_official_flow.sh`（S21 に `s21_rules`・FG を足し、470 行の I193 の記録の判定を消す） | exit 0・`fail=0`（ベースライン pass=160） | implement で実行（2026-10-28）: 実装前（Red）pass=166 fail=6 → 実装後 pass=172 fail=0（/simplify の後も同じ） |
-| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | review-gate で確認 |
+| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | review-gate で確認（2026-10-28）: `CI_WAIT: OK`（Harness Tests を含む全ジョブ pass） |
 
 ### TC-01 の項目（`test_tui_capture.sh`）
 一時のフォルダに偽物の `tmux`（呼ばれた引数を 1 行ずつ記録する。`capture-pane` では `❯ /plan-` と候補の 1 行 `/plan-issue  説明` を出す。`TUI_FAKE_NOPROMPT=1` のときは `❯` の無い画面を出す）と `claude`（何もしない）を置き、`PATH="<一時のフォルダ>:$PATH"` で `bash scripts/claude/tui-capture.sh` を流す。`which tmux` が無い環境でも動く。
@@ -66,3 +66,4 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 ```
 
 ## 実行記録
+- 2026-10-28 test-gate: `bash scripts/claude/gate-check.sh I195` → exit 0（GATE_CHECK: OK）。決定論ゲート 3 本は review-gate（`docs/reviews/I195_code_review_20261028_0907.md`）で実走し、すべて exit=0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（`CI_WAIT: OK`）→ TC-04 合格

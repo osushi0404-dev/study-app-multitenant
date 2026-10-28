@@ -19,7 +19,9 @@ Claude で確かめられる手動テストを人に振らないよう、手順�
 - ハーネスだけ（`scripts/claude/tui-capture.sh`〔新規〕・`check-manual-test-executor.sh`・`plan-writing-rules.md`・plan-issue・test-gate・手動テストのテンプレート・`plan-reviewer.md`・テスト 3 本）。アプリ本体・DB・設定（`.claude/settings.json`・`.github/`）の変更なし
 
 ## テスト結果
-（test-gate で書く）
+- 自動: TC-01（pass=37）・TC-02（pass=26）・TC-03（pass=172）すべて fail=0。CI は Harness Tests を含む全ジョブ pass（TC-04）
+- 手動: No.1〜4 すべて OK（Claude が実施。本物の tmux と claude で `/plan-` の候補を読めた・承認画面なしで通る・`!` の入力を止める・セッションが残らない）。Human の項目なし
+- `check-manual-test-executor.sh I195`・`check-frontend-evidence.sh I195`（対象外）とも exit 0
 
 ## 計画との差分
 - 計画変更記録 1（計画レビューの Warning 対応）・2（/simplify: 起動の指定を `manual` に・観測手段の一覧の写しをやめる・テストの整理）
