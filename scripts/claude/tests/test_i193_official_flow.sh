@@ -437,6 +437,18 @@ s21_test() {
 # 後ろにイシュー番号の無い古い書き方（`/test` など）。R6 はイシュー番号つきの形をリポジトリ全体で見る。組み込みの
 # /code-review を正しく指す文書があるので、この検査は I187 から来た 2 つの文書だけを見る
 s21_old() { ! grep -qE '(^|[^a-z-])/(test|close|implement|code-review)([^a-z-]|$)' "$@"; }
+# I195: 実施者の基準の正は plan-writing-rules.md「実施者の区別」の 1 か所。ほかは要約と参照だけ。Human の行は「試した手段:」
+s21_rules_pw() { s_has "$1" 'tui-capture.sh' && s_has "$1" '試した手段:' && s_has "$1" '実施者の区別' && s_has "$1" 'この基準の正はこの節'; }
+# 参照・新しい書き方がある・前の書き方（Claude で確かめられない理由）が無い。$2 以降はファイルごとに足す語
+s21_ref() { local f="$1" p; shift
+            s_has "$f" '実施者の区別' && s_has "$f" '試した手段:' && s_not "$f" 'Claude で確かめられない理由' || return 1
+            for p in "$@"; do s_has "$f" "$p" || return 1; done; }
+s21_rules_plan() { s21_ref "$1" 'bash scripts/claude/check-manual-test-executor.sh' 'plan-writing-rules.md`「実施者の区別」'; }
+s21_rules_test() { s21_ref "$1" 'bash scripts/claude/tui-capture.sh'; }
+s21_rules_tpl() { s21_ref "$1"; }
+# 「承認画面が出るか」を Human にする書き方が無い（Human と承認画面の両方がある行は check-permission-prompt.sh も書いてある）
+s21_rules_prompt() { ! grep -hE 'Human.*承認画面|承認画面.*Human' "$@" | grep -qvF 'check-permission-prompt.sh'; }
+s21_rules_review() { s_has "$1" '試した手段:' && s_has "$1" '実施者の区別'; }
 # 止める条件 2 の安全装置の集合が path_risk_trigger の case 行と一致する
 s12() {
   python3 - "$1" "$2" <<'PY'
@@ -467,7 +479,13 @@ ck "S11 retro・issue-bootstrap に自動起票の本文の決まり（画面キ
 ck "S21 implement に frontend-verify.md の手順で Playwright MCP を使う画面確認がある" 0 "$(rc s21_impl $SK/implement/SKILL.md)"
 ck "S21 test-gate に判定スクリプト 3 本・fix-loop に回さない・代わりの操作" 0 "$(rc s21_test $SK/test-gate/SKILL.md)"
 ck "S21 frontend-verify.md・手動テストのテンプレートに古いコマンド名が無い" 0 "$(rc s21_old docs/runbooks/frontend-verify.md docs/tests/templates/manual_test_template.md)"
-ck "S21 I193 の手動テストの実施者の振り分けが判定を通る" 0 "$(rc bash scripts/claude/check-manual-test-executor.sh I193)"
+PWR=docs/runbooks/plan-writing-rules.md; TPL=docs/tests/templates/manual_test_template.md
+ck "S21 rules-pw plan-writing-rules に tui-capture.sh・試した手段・基準の正" 0 "$(rc s21_rules_pw $PWR)"
+ck "S21 rules-plan plan-issue は要約と参照・判定の実行" 0 "$(rc s21_rules_plan $SK/plan-issue/SKILL.md)"
+ck "S21 rules-test test-gate に tui-capture.sh・試した手段" 0 "$(rc s21_rules_test $SK/test-gate/SKILL.md)"
+ck "S21 rules-tpl テンプレートは参照と試した手段" 0 "$(rc s21_rules_tpl $TPL)"
+ck "S21 rules-prompt 承認画面を Human にする書き方が無い" 0 "$(rc s21_rules_prompt $SK/plan-issue/SKILL.md $PWR $TPL)"
+ck "S21 rules-review plan-reviewer に Human の行の観点" 0 "$(rc s21_rules_review .claude/agents/plan-reviewer.md)"
 ck "S12 止める条件 2 の集合が path_risk_trigger と一致" 0 "$(rc s12 scripts/claude/code-review.sh docs/runbooks/workflow.md)"
 
 sed 's#bash scripts/claude/gate-check.sh#bash scripts/claude/no-check.sh#' $SK/test-gate/SKILL.md > "$TMP/s3.md"
@@ -484,6 +502,20 @@ grep -vF "check-frontend-evidence.sh" $SK/test-gate/SKILL.md > "$TMP/s21_test.md
 ck "FG-S21 test-gate から check-frontend-evidence.sh を消すと不合格" 1 "$(rc s21_test "$TMP/s21_test.md")"
 grep -vF "Playwright MCP" $SK/implement/SKILL.md > "$TMP/s21_impl.md"
 ck "FG-S21 implement から Playwright MCP を消すと不合格" 1 "$(rc s21_impl "$TMP/s21_impl.md")"
+grep -vF "tui-capture.sh" $PWR > "$TMP/r_pw.md"
+ck "FG-S21 plan-writing-rules から tui-capture.sh を消すと不合格" 1 "$(rc s21_rules_pw "$TMP/r_pw.md")"
+{ cat $SK/plan-issue/SKILL.md; printf '\nHuman の行の備考には `Claude で確かめられない理由: …` を書く\n'; } > "$TMP/r_plan1.md"
+ck "FG-S21 plan-issue に前の書き方を足すと不合格" 1 "$(rc s21_rules_plan "$TMP/r_plan1.md")"
+grep -vF "check-manual-test-executor.sh" $SK/plan-issue/SKILL.md > "$TMP/r_plan2.md"
+ck "FG-S21 plan-issue から判定の実行を消すと不合格" 1 "$(rc s21_rules_plan "$TMP/r_plan2.md")"
+grep -vF "tui-capture.sh" $SK/test-gate/SKILL.md > "$TMP/r_test.md"
+ck "FG-S21 test-gate から tui-capture.sh を消すと不合格" 1 "$(rc s21_rules_test "$TMP/r_test.md")"
+{ cat $TPL; printf '| 3 |  |  | Human |  | Claude で確かめられない理由: |\n'; } > "$TMP/r_tpl.md"
+ck "FG-S21 テンプレートに前の書き方を足すと不合格" 1 "$(rc s21_rules_tpl "$TMP/r_tpl.md")"
+{ cat $PWR; printf '\n- Human: 承認画面が出るかどうかの確認\n'; } > "$TMP/r_prompt.md"
+ck "FG-S21 承認画面を Human にする行を足すと不合格" 1 "$(rc s21_rules_prompt $SK/plan-issue/SKILL.md "$TMP/r_prompt.md" $TPL)"
+grep -vF "試した手段:" .claude/agents/plan-reviewer.md > "$TMP/r_review.md"
+ck "FG-S21 plan-reviewer から試した手段の観点を消すと不合格" 1 "$(rc s21_rules_review "$TMP/r_review.md")"
 printf '対象: `/test` の判定\n' > "$TMP/s21_old.md"
 ck "FG-S21 古いコマンド名 \`/test\` を書くと不合格" 1 "$(rc s21_old "$TMP/s21_old.md")"
 sed 's#・画面キャプチャ・コンソールの記録##' $SK/retro/SKILL.md > "$TMP/s11.md"

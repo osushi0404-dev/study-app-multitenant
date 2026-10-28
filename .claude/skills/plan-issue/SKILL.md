@@ -90,9 +90,7 @@ Draft PR 番号をイシューファイルの「## 関連資料」セクショ�
 - docs/tests/open/$ARGUMENTS_auto_test.md
 - docs/reviews/open/$ARGUMENTS_review.md
 
-テスト文書（`$ARGUMENTS_manual_test.md`）の「実施者」欄は以下の基準で判定する（原則 Claude。Claude で確かめられるものを人に頼まない）:
-- **Claude で実施可**: ファイルの内容確認（Read ツール）・コマンド実行・ログ確認（Bash ツール）・ファイル間の比較・差分確認・Playwright MCP で観測できる画面の表示・遷移・入力の結果・画面キャプチャ・コンソール（`docs/runbooks/frontend-verify.md`）・承認画面が出るか／承認なしで通るか（`bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`／`mcp <操作名> '<入力>'`。0=承認なし・10=承認画面が出る。承認なしで通る操作は実際に実行される。承認画面が出るはずの危ない操作を確かめるときは、同じ許可ルール・見張りに当たり、実行されても困らない代わりの操作〔存在しない設定ファイルの指定など〕を手順に書く）・新しいセッションでの設定やフックの効き方（`claude -p` を新しく起動して確かめる）
-- **Human のみ可**: Claude で確かめる手段を公式の機能まで探して無かったものだけ（外部ツール〔Figma・Slack 等〕の操作・操作感・UX の感覚的な確認・ユーザー本人の判断が要るもの）。Human の行の備考には `Claude で確かめられない理由: …` を必ず書く
+テスト文書（`$ARGUMENTS_manual_test.md`）の「実施者」欄は `docs/runbooks/plan-writing-rules.md`「実施者の区別」で決める（要約: 原則 Claude。Claude で確かめられるものを人に頼まない。Human にするのは、そこに挙げた観測手段を試して、どれでも観測できなかったものだけ。Human の行の備考には `試した手段: …` を必ず書く）。
 
 テスト文書を作ったら、実施者の振り分けを判定する（0 以外なら Human の行を直してからやり直す）:
 ```bash

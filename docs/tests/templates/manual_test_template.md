@@ -4,9 +4,7 @@
   例: ✗「正常に保存できること」→ ✅「成功トースト『保存しました』が2秒表示され、一覧ページへ遷移する」
 - 権限別の動作差異がある場合は各ロールの期待結果を明記すること
   例: 「admin: 削除ボタンが表示 / member: 削除ボタンが非表示（DOM上も存在しない）」
-- 実施者の区別:
-  - Claude（原則こちら）: ファイル存在確認・コマンド実行・ログ確認など Read/Bash で実施できるもの、Playwright MCP で観測できる画面の表示・遷移・入力の結果・コンソール（docs/runbooks/frontend-verify.md）、承認画面が出るか（scripts/claude/check-permission-prompt.sh）
-  - Human: Claude で確かめる手段を公式の機能まで探して無かったものだけ（操作感・見た目の好み、外部ツールの操作など）。備考に「Claude で確かめられない理由: …」を必ず書く（scripts/claude/check-manual-test-executor.sh が確かめる）
+- 実施者: docs/runbooks/plan-writing-rules.md「実施者の区別」で決める（原則 Claude。Human の行は備考に「試した手段: …」が必須。scripts/claude/check-manual-test-executor.sh が確かめる）
 -->
 
 # I### 手動テスト: <title>
@@ -14,7 +12,7 @@
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
 | 1 |  |  | Claude |  |  |
-| 2 |  |  | Human |  | Claude で確かめられない理由: |
+| 2 |  |  | Human |  | 試した手段: |
 
 ## 画面確認
 <!-- frontend/src を変えたイシューでは 1 行以上必要（test-gate 段階の check-frontend-evidence.sh が確かめる）。
