@@ -265,6 +265,11 @@ Danger Ops（有無/手順/ロールバック）:
 ### 残余リスク処遇
 （retro 段階で決定する）
 
+### 再レビュー（2026-10-29・計画変更記録 4）
+- 変更は python の版（`.python-version`・`requires-python`・`uv.lock` の作り直し）だけ。CI の部品（setup-uv@v10.3.3）・取り込みの経路（`uv.lock` のハッシュ付き・`--locked`）・ジョブの権限・秘密情報の扱いは変わらない
+- python 3.12.3 は uv の公式の配布物（python-build-standalone）から入れる。古いパッチ版だが、ハーネスのテストの環境だけで使い、見張りが実際に動く OS の python と同じ版にするのが目的。アプリ・本番には入らない
+- 新しいリスク: なし。セキュリティ設計レビュー・攻撃シナリオの表は変わらない（Blocker 0・High 0・Medium 1〔setup-uv のタグ〕・Low は同じ）
+
 ## レビュー結果
 - [20261029_0148 判定: ✅ 完了](../../reviews/I211_plan_review_20261029_0148.md)
 - [20261028_2336 判定: ✅ 完了](../../reviews/closed/I211_plan_review_20261028_2336.md)
