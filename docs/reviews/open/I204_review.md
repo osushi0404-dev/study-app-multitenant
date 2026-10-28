@@ -31,4 +31,6 @@
 - [plan-review] 判定 HIGHRISK（`.github/workflows/ci.yml` の変更）。Warning 2 件（一覧の shellcheck の確認が Skipped を見逃す・依存の監査の扱い）と Info 2 件は計画に足し、runner の挙動の Warning はステップ 1 に前倒し済みで対応不要とした — 方式・範囲・受け入れ条件は変わらないので再レビューはしない
 
 STAGE_DONE: plan NEXT: plan-review
+- [design-security-review] Blocker・High・Medium なし（Low 4 件・シナリオ 3 件はすべて計画の防御とテストで覆う）。取得元の版の固定は後続のイシューへ — 今の `pip install pyyaml` と同じ水準で、ジョブに secrets が無い
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
