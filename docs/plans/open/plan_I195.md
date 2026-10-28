@@ -182,4 +182,4 @@ Danger Ops（有無/手順/ロールバック）:
 - 2（implement の /simplify・2026-10-28）: (a) 4.1 の起動を `--permission-mode default` から `manual` にした（`claude --help` の公式の選択肢は `manual` で、`check-permission-prompt.sh` も `manual`。動きは同じ通常モード）。(b) 観測手段の一覧（Playwright MCP・`check-permission-prompt.sh`・`claude -p`・`tui-capture.sh`）を 4.4 の plan-issue の要約・4.5 の plan-reviewer の行・4.2 の判定のメッセージ・4.3 の Human の行に書かず、`plan-writing-rules.md`「実施者の区別」の `Claude` の行だけに置いて、ほかは参照にした（基準を 1 か所にする方針の徹底）。(c) テストの整理: TC-03 の S21 は前の決まった言い回しの禁止の一覧をやめ、各文書が「実施者の区別」を参照し `試した手段:` があって前の書き方（`Claude で確かめられない理由`）が無いことを 1 つの関数で確かめる。`rules-review` は `tui-capture.sh` ではなく「実施者の区別」の参照を確かめる。TC-02 の X18 は X19 と同じ規則なので消し、FG は X19 に当てる。TC-01 の T6・FG-T6 は `--start-timeout 0`（1 秒の待ちを省く）・T7 は実行の関数を共通にした。理由: /simplify の指摘（写しの残り・重複・待ち時間）。方式・範囲・受け入れ条件は変えないので再レビューはしない
 
 ## レビュー結果
-- [20261028_0836 判定: ✅ 完了](../../reviews/closed/I195_plan_review_20261028_0836.md)
+- [20261028_0836 判定: ✅ 完了](../../reviews/I195_plan_review_20261028_0836.md)
