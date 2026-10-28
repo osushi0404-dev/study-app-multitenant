@@ -110,3 +110,5 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
