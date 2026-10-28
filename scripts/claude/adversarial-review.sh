@@ -12,7 +12,8 @@
 # 終了コード: 0=OK / 1=HIGH・BLOCKER（3 観点とも報告あり）/ 3=報告の無い観点がある（ROUNDS: 0）/ 4=周回の上限 / 2=実行できない
 # 環境変数: ADV_DEADLINE（既定 600）・ADV_STEP_TIMEOUT（300）・ADV_MIN_STEP（60）・ADV_EXPERIMENT_ROUNDS（2）・
 #           ADV_ROUND_LIMIT（2。ユーザーが延長を承認したときだけ 3）・ADV_REVIEW_BUDGET（2）・ADV_EXEC_BUDGET（0.5）・
-#           ADV_BASE（比べる相手。既定 origin/develop）・CLAUDE_BIN（テスト用）
+#           ADV_BASE（比べる相手。既定 origin/develop）・CLAUDE_BIN（テスト用）・
+#           ADV_CLOCK_FILE（テスト用。今の時刻〔整数の秒〕を読むファイル。既定は date +%s）
 # 計画: docs/plans/open/plan_I197.md §4.3
 set -uo pipefail
 
@@ -138,7 +139,19 @@ check_worktree() {
   return 0
 }
 
-remaining() { echo $(( ADV_START + ADV_DEADLINE - $(date +%s) )); }
+# 今の時刻（秒）。締め切りの計算はすべてこれを通す（I210）。ADV_CLOCK_FILE があれば中身（整数の秒）を読む
+# （テストが実時間を待たずに締め切りの前後を作るため。既定は date +%s で、本番の動きは変わらない）。読めなければ 1
+adv_now() {
+  if [ -z "${ADV_CLOCK_FILE:-}" ]; then date +%s; return; fi
+  local n=""
+  { read -r n < "$ADV_CLOCK_FILE"; } 2>/dev/null
+  [[ "$n" =~ ^[0-9]+$ ]] || return 1
+  echo "$n"
+}
+# 時刻を読めなければ残り 0（締め切りの側に倒す。実験役を呼ばず、呼び出しも始めない）
+remaining() { local n; n=$(adv_now) || { echo 0; return; }; echo $(( ADV_START + ADV_DEADLINE - n )); }
+# 表示だけに使う経過の秒（時刻を読めなければ 0。判定は remaining が止める側に倒す）
+elapsed_since() { local n; n=$(adv_now) || { echo 0; return; }; echo $(( n - $1 )); }
 step_timeout() { local r; r=$(remaining); local s="${ADV_STEP_TIMEOUT}"; [ "$r" -lt "$s" ] && s="$r"; echo "$s"; }
 
 # 締め切りまでの残りで 1 回呼ぶ: <入力> <ログ> <claude の引数…>（残りが無ければ呼ばずに 124）
@@ -211,7 +224,7 @@ new_count() { grep -oE "^$2:[[:space:]]*[0-9]+[[:space:]]*\$" "$1" | tail -1 | g
 run_perspective() {
   local p="$1" d="$RUN/p$1" r=0 log rc sid ids id st out next_in reason
   mkdir -p "$d/exp"
-  local t0; t0=$(date +%s)
+  local t0; t0=$(adv_now) || t0=$ADV_START
   {
     printf '対象イシュー: %s\nあなたの観点: %s. %s\n' "$ISSUE" "$p" "${PERSPECTIVE_NAMES[$p]}"
     printf '見る範囲（REVIEW_BASE）: %s...HEAD（下に変更ファイルの一覧と差分）\n' "$REVIEW_BASE"
@@ -306,7 +319,7 @@ run_perspective() {
   else state="報告あり"; fi
   printf '%s\n' "$state" > "$d/state"
   printf '%s' "$note" > "$d/note"   # 空なら空のファイル（改行だけで「報告あり（）」と出さない）
-  printf '%s\n' "$(( $(date +%s) - t0 ))" > "$d/secs"
+  printf '%s\n' "$(elapsed_since "$t0")" > "$d/secs"
   printf '%s\n' "$r" > "$d/rounds"
   claude_log_last_tool "$log" > "$d/last_tool" 2>/dev/null
   # 拒否の件数と費用（total_cost_usd）の合計。費用は既定の予算を見直す材料（plan_I197.md 手動 No.1）
@@ -358,7 +371,7 @@ if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then echo "⛔ 使い方: $0 I###（受け�
 if ! command -v flock >/dev/null 2>&1; then echo "⛔ flock がありません（実験役を 1 本ずつにできない）。util-linux を入れてください。"; echo "ADVERSARIAL_ERROR: FLOCK"; exit 2; fi
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリの中で実行してください"; exit 2; }
 cd "$REPO_ROOT" || exit 2
-ADV_START=$(date +%s)
+ADV_START=$(adv_now) || { echo "⛔ 今の時刻を読めません（ADV_CLOCK_FILE=${ADV_CLOCK_FILE}）"; echo "ADVERSARIAL_ERROR: CLOCK"; exit 2; }
 
 # 周回の上限（今の周を始める前に数える）
 USED=$(count_rounds)
@@ -418,7 +431,7 @@ for p in 1 2 3; do run_perspective "$p" & PIDS+=("$!"); done
 wait "${PIDS[@]}"
 PIDS=()
 check_worktree   # 全観点が終わった後にもう一度比べる
-ELAPSED=$(( $(date +%s) - ADV_START ))
+ELAPSED=$(elapsed_since "$ADV_START")
 
 # ---- 判定（決定論） ----
 UNVERIFIED=0; CRIT=0; HIGHN=0; UNREPORTED=0; DIRTY_ANY=0; DENIALS=0; DENIALS_UNREADABLE=0
