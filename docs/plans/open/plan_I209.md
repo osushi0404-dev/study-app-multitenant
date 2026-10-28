@@ -26,7 +26,7 @@
   - `gh` 2.88.1。`gh issue close` は `--reason {completed|not planned|duplicate}`・`--duplicate-of <番号>`・`--comment` を持つ（`gh issue close --help`）
   - 承認画面: `bash scripts/claude/check-permission-prompt.sh bash 'gh issue view 349 --json number'` → 「承認なしで実行された」。`.claude/settings.json:52` の `Bash(gh issue *)` に当たるので、`gh issue close`・`gh issue edit` も同じ規則で承認画面は出ない。見張り（`pretooluse_guard.py`）に `gh issue` の判定は無い（grep で 0 件）
 - イシューのローカルのファイル: 判定対象のイシューのファイルは、このリポジトリに追跡済みのものが無い。他のワークツリーの未追跡ファイルはトラック境界のため触らない（設計確認メモ）
-- 参照先の実在（棚卸し系の決まり）: 一覧の根拠に書いたファイル（`gate-check.sh`・`flow-stage.sh`・`pr-base-sync.sh`・`check-manual-test-executor.sh`・`check-permission-prompt.sh`・`next-issue-num.sh`・`wt-ports.sh`・`wt-remove.sh`・`docs/runbooks/worktree.md`・`docs/runbooks/frontend-verify.md`・`docs/runbooks/dependency-audit.md`・`.claude/agents/*.md`）は実在する（`ls scripts/claude/`・`ls docs/runbooks/` で確認）。全件の機械確認は TC-01
+- 参照先の実在（棚卸し系の決まり）: 一覧の根拠に書いたファイル（`gate-check.sh`・`flow-stage.sh`・`pr-base-sync.sh`・`check-manual-test-executor.sh`・`check-permission-prompt.sh`・`next-issue-num.sh`・`wt-ports.sh`・`wt-remove.sh`・`docs/runbooks/worktree.md`・`docs/runbooks/frontend-verify.md`・`docs/runbooks/dependency-audit.md`・`.claude/agents/*.md`）は実在する（`ls scripts/claude/`・`ls docs/runbooks/` で確認）。TC-01 が機械で確かめるのは一覧の番号 52 件がそろうことだけで、根拠のファイルの実在は計画レビューと review-gate が読んで確かめた（台帳 F2・retro で訂正）
 
 ## 2. 受け入れ条件
 イシューの AC と同じ（番号を振る）。
@@ -120,7 +120,7 @@
 
 ## 8. Risk & 回避策
 - 判定の誤りでまだ要るイシューを閉じる → 計画レビューが一覧を見る・ユーザーが全件を見て OK を出す（AC2）・開き直せる（7）
-- 本文の追記で元の本文を壊す → 元の本文は `gh issue view --json body --jq .body` で取ったものをそのまま後ろに付ける。追記の前の本文を `docs/reviews/open/I209_original_bodies/` に残し、手動 No.2 で「元の本文が後ろにそのまま残っている」を確かめる
+- 本文の追記で元の本文を壊す → 元の本文は `gh issue view --json body --template "{{.body}}"` で取ったもの（4.3 の 1.。`--jq .body` は末尾に改行を足すので使わない・台帳 F1 で訂正）をそのまま後ろに付ける。追記の前の本文を `docs/reviews/open/I209_original_bodies/` に残し、手動 No.2 で「元の本文が後ろにそのまま残っている」を確かめる
 - 途中で失敗して半端に残る → 一覧の「反映の結果」に 1 件ずつ書く。やり直しは状態を見て飛ばす（4.3。二重の追記・二重のコメントを作らない）
 - 小さな指摘が消える → 先に `docs/reviews/backlog/I209.md` を commit/push してから閉じる（5 の 2）
 
