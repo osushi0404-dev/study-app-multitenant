@@ -4,7 +4,7 @@
 [project]
 name = "harness-tests"
 version = "0"
-requires-python = "==3.11.*"
+requires-python = "==3.12.*"
 dependencies = ["PyYAML>=6.0", "pre-commit>=4.0"]
 
 [tool.uv]

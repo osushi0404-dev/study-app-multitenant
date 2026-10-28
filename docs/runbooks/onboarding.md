@@ -115,6 +115,7 @@ docs/
 
 - どの道具をどう確かめるかの正: `scripts/claude/tests/required-tools.txt`（`run-all.sh` の冒頭で `check-tools.sh` が確かめ、合わなければテストを流さずに不合格）
 - 版の正（道具ごとに 1 か所。どれも `scripts/claude/tests/`）: python は `.python-version`、PyYAML・pre-commit は `uv.lock`、uv 自身は `pyproject.toml` の `required-version`
+- python の版は、見張り（`.claude/settings.json` のフック）が実際に動く手元の OS の `python3` に合わせてある（アプリの Docker の python とは別）。OS の更新で `python3 --version` のマイナー版が変わったら、下の「python のマイナー版」の手順で `.python-version` を合わせる（パッチ版の違いは自動では止めない。手元と CI の runner の更新時期がずれて CI が揺れるため）
 
 ### 初回
 ```
