@@ -35,5 +35,7 @@
 - [implement] 本文の記録（`.md`・`.header.md`）を先に commit して整形を済ませてから組み立てた — 記録のファイルと GitHub の本文を 1 字も違わずそろえるため（11 件とも `cmp` 一致）
 - [implement] #172 を閉じるコメントが見張りに誤ブロックされた（#172 の不具合の再現）ので、オプション名を言い換えて閉じ直し、実例を #335 にコメントした — 計画にないコメントだが、統合先で直すときの回帰テストの入力として残す価値がある
 - [implement] 反映の結果は全件を流した後に GitHub から取り直してまとめて書いた — 状態は GitHub が正
+- [implement] /simplify は呼ばなかった — コードの変更が無く（記録のファイルだけ）、未 push・未コミットの変更も無いので対象が空。反映の検証（3.5）では計画書の実装対象の記録ファイルがすべてブランチにあることを確かめた
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
