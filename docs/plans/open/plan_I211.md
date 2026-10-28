@@ -221,3 +221,6 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 2 | 実験必須 | `check-tools.sh` の `lock` の比較が、版が上でも下でも、正のファイルが無くても合格にしない（TC-01 の FG-V2〜FG-V7） |
 | V4 | 2 | 読んで可 | `ci_check` の install の検出が `apt-get -y install`・`npm i`・`uv pip install`・`python -m pip install`・`uv sync` を拾い、`uv run` は拾わない（TC-02 の FG-C） |
 | V5 | 3 | 読んで可 | 版を上げる手順（onboarding.md）に沿うと、手元と CI が同じ版のまま上がる（手動 No.4） |
+
+## レビュー結果
+- [20261028_2336 判定: ✅ 完了](../../reviews/I211_plan_review_20261028_2336.md)
