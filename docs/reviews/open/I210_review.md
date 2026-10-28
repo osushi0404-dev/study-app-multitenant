@@ -19,7 +19,9 @@
 - ハーネスだけ（`scripts/claude/adversarial-review.sh`・`scripts/claude/check-frontend-evidence.sh`・テスト 4 本の書き換えと 3 本の新規・`docs/reviews/backlog/I206.md`・`docs/reviews/backlog/I195.md`）。アプリ本体・DB・設定の変更なし
 
 ## テスト結果
-（test-gate の後に書く）
+- 自動: TC-01 `test_i202_ledger_cleanup.sh` pass=157・TC-01b 規則のテスト pass=10（実装前は 4 か所に当たって不合格）・TC-01c pass=5・TC-02 pass=19・TC-03 関係する 3 本すべて合格・TC-04 CI 全緑（Harness Tests を含む）
+- gate-check: GATE_CHECK OK（2026-10-28）
+- 手動: No.1 負荷をかけて 20 回 → `STRESS: 20/20`（AC1）・No.2 前の `check-frontend-evidence.sh` では E16 だけが落ちる（AC6 の失敗注入）。どちらも Claude 実施・Human の項目なし
 
 ## 計画との差分
 - 計画変更記録 1（計画レビューの Warning 対応）・2（`/simplify` の整理: 反転の直し方をリポジトリのヒアストリングの形にそろえた・`d3_bl` は grep のまま全部読む形・E16/E17 は 1000 個など）。どちらも方式・範囲・受け入れ条件は変えない
@@ -40,6 +42,8 @@
 - [implement] /simplify が挙げた「`!` の無い `cmd | grep -q`（pipefail の下で、見つけたのに見つからない側に倒れる）が `code-review.sh:221`・`pr-base-sync.sh`・`wt-ports.sh` に残る」は、このイシューの範囲（`!` の形）の外なので直していない — retro で扱いを決める
 
 - [review-gate] 基本レビュー OK（`docs/reviews/I210_code_review_20261028_1236.md`・CI_WAIT: OK・RISK: NO・敵対的レビューは不要）。台帳の F1〜F7 はすべて Low・再現なしで止めない — retro が一覧か後続イシューへ回す
+
+- [test-gate] 手動はどちらも Claude で実施し OK（No.1 は 20/20）。Human の項目は無いので retro へ進む — 計画の実施者のとおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

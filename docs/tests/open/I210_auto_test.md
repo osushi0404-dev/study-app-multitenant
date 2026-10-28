@@ -17,7 +17,7 @@
 | TC-01c | `bash scripts/claude/tests/test_stress_repeat.sh`（新規。`stress-repeat.sh` の失敗注入。項目は下の表） | exit 0・`fail=0` | implement で実行（2026-10-28）: pass=5 fail=0。S5 の効き目は、`stop_load` を空にした写しで負荷のプロセスが残る（pgrep が当たる）ことで 1 回確かめた |
 | TC-02 | `bash scripts/claude/tests/test_check_frontend_evidence.sh`（E16〜E18 を足す） | exit 0・`fail=0`（ベースライン pass=16） | implement で実行（2026-10-28）: pass=19 fail=0 |
 | TC-03 | 影響を受けうるテスト: `test_posttooluse_check.sh`（32 行の書き換え）・`test_i193_official_flow.sh`（527・528 行を消す）・`test_i197_adversarial_process.sh`（`adversarial-review.sh` の時計の差し替え・実時間の既定の動き） | どれも exit 0（ベースライン pass=6・175・115） | implement で実行（2026-10-28）: pass=6・174（FG-S21 の前の形の 1 項目を消した）・115（fail=0） |
-| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
+| TC-04 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では流し直さない） | CI の Harness Tests が pass | review-gate で確認（2026-10-28）: `CI_WAIT: OK`（Harness Tests を含む全ジョブ pass） |
 
 ### TC-01 の項目（書き換え・I210 の節）
 一時の git リポジトリ（既存の `amk`）と偽物の claude（`$AS`）で `adversarial-review.sh` を流す。偽の時計は `ADV_CLOCK_FILE="$TMP/a_<名前>/sd/clock"`（中身 `1000000` から）。偽物の実験役は、偽の時計のときは「実験する 2 観点の `exec_in1.txt` がそろう」のを待って（上限 `exec_wait` 秒）時計を `exec_advance` だけ進め、印 `barrier` に `ok`／`timeout` を書く。実時間のときは「ほかの実験役が始まる」のを待つ（上限 `exec_wait` 秒）。
@@ -79,3 +79,5 @@ bash scripts/claude/tests/test_i197_adversarial_process.sh
 ```
 
 ## 実行記録
+- 2026-10-28 test-gate: `bash scripts/claude/gate-check.sh I210` → exit 0（GATE_CHECK: OK）。決定論ゲート 7 本は review-gate（`docs/reviews/I210_code_review_20261028_1236.md`）で実走した。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（`CI_WAIT: OK`）→ TC-04 合格
+- 2026-10-28 test-gate: 手動 No.1 `bash scripts/claude/tests/stress-repeat.sh 20 scripts/claude/tests/test_i202_ledger_cleanup.sh` → exit 0・`STRESS: 20/20`（AC1）
