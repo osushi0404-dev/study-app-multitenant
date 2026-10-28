@@ -80,4 +80,5 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 ```
 
 ## 実行記録
+- 2026-10-28 test-gate（fix-loop の後）: `bash scripts/claude/gate-check.sh I195` → exit 0。差分のレビュー（`docs/reviews/I195_code_review_20261028_0950.md`）で決定論ゲート 3 本が exit=0、CI 全ジョブ pass。変えたのはテストのファイル 1 つだけで、手動テストの対象（`tui-capture.sh`・判定スクリプト）は変わっていないので、手動 No.1〜3 は前の結果のまま。No.4（`check-manual-test-executor.sh I195`）は流し直して exit 0
 - 2026-10-28 test-gate: `bash scripts/claude/gate-check.sh I195` → exit 0（GATE_CHECK: OK）。決定論ゲート 3 本は review-gate（`docs/reviews/I195_code_review_20261028_0907.md`）で実走し、すべて exit=0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（`CI_WAIT: OK`）→ TC-04 合格

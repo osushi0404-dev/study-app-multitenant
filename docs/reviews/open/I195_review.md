@@ -22,6 +22,7 @@ Claude で確かめられる手動テストを人に振らないよう、手順�
 - 自動: TC-01（pass=37）・TC-02（pass=26）・TC-03（pass=172）すべて fail=0。CI は Harness Tests を含む全ジョブ pass（TC-04）
 - 手動: No.1〜4 すべて OK（Claude が実施。本物の tmux と claude で `/plan-` の候補を読めた・承認画面なしで通る・`!` の入力を止める・セッションが残らない）。Human の項目なし
 - `check-manual-test-executor.sh I195`・`check-frontend-evidence.sh I195`（対象外）とも exit 0
+- fix-loop（台帳 F3）の後: 差分のレビュー OK・CI 全ジョブ pass・TC-03 pass=175。手動テストの対象は変わらず、No.4 を流し直して exit 0
 
 ## 計画との差分
 - 計画変更記録 1（計画レビューの Warning 対応）・2（/simplify: 起動の指定を `manual` に・観測手段の一覧の写しをやめる・テストの整理）
