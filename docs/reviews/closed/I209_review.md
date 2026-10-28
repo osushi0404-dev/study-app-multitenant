@@ -100,3 +100,4 @@ STAGE_DONE: test-gate NEXT: retro
 - [retro] 台帳の残り（docs/reviews/I209_code_review_20261028_1955.md の F1〜F8・すべて Low・後続イシュー 0 件）: 一覧（docs/reviews/backlog/I209.md）には貼らず、このイシューで直した — 8 件ともこのイシュー自身の記録（closed へ移り、後の計画が実装対象として拾うことは無い）の書き方の話で、記録の場所の中で直せる。F1・F2（計画書）・F3（レビュー文書）・F5（一覧）は retro で直した。F4・F8 は test-gate で手順の読み方を記録、F6 は test-gate で記入済み。F7 は意図どおり（読み替えの無い 3 件には共通の文を入れない設計）
 - [retro] 改善案 P1（Bash ツールが test・[・grep の終了コード 1 を表示しない）を #337 I201 に同梱した（コメント #issuecomment-6467430049）— 決定論の道具で塞げるため、手順・観点は足さない。ほか 3 件は見送り（理由は「## 振り返り」）
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
