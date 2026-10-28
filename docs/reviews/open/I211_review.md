@@ -1,21 +1,27 @@
 # I211 レビュー: ハーネスのテストの python・PyYAML・pre-commit の版を CI と手元でぴったり揃える
 
 ## 変更概要
-- ハーネスのテストの python の道具の版の正を uv の公式のファイル（`scripts/claude/tests/.python-version`・`uv.lock`・`pyproject.toml` の `required-version`）にし、手元も CI も `bash scripts/claude/tests/run-all.sh` が uv の環境で流す（計画中）
+- ハーネスのテストの python の道具の版の正を uv の公式のファイル（`scripts/claude/tests/.python-version`・`uv.lock`・`pyproject.toml` の `required-version`）にし、手元も CI も `bash scripts/claude/tests/run-all.sh` が uv の環境で流す
 
 ## 変更点
-- （実装後に記入）
+- 新規 `scripts/claude/tests/pyproject.toml`・`.python-version`（3.11.18）・`uv.lock`（PyYAML 6.0.3・pre-commit 4.7.0）・`test_i211_version_pin.sh`
+- `run-all.sh`: uv の環境の外なら `uv run --locked` で流し直す・引数で一部のテストを流す
+- `check-tools.sh`・`required-tools.txt`: 版の列を `-`／`lock`（正とぴったり）にし、`--pip-specs` をやめた。出力が空のときの字下げの空行を出さない
+- `.github/workflows/ci.yml`（Harness Tests）: setup-python と pip install をやめ、`astral-sh/setup-uv@v10.3.3`（`version-file: scripts/claude/tests/pyproject.toml`）に
+- `test_i204_tool_sync.sh`: 4 列の一覧・CI が版の正だけを読むことの確かめ（install の検出の強化・setup-uv の版の形）
+- `docs/runbooks/onboarding.md`: 初回の準備・一部のテストの流し方・版を上げる手順
+- `docs/reviews/backlog/I204.md`: F2・F3・F5 を同梱して消した
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
 - Config: `.github/workflows/ci.yml`（harness-tests ジョブ）・手元の開発環境（pipx の uv）
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: 決定論ゲート 4 本 exit 0（review-gate）。CI 全ジョブ pass（run 40717058976・Harness Tests `run-all: pass=48 fail=0`）。基本レビュー OK（止める指摘 0・Low 6）・敵対的レビュー OK（未検証 0・新しい Critical/High 0）
+- 手動: No.1〜No.4 OK（すべて Claude・Human の項目なし）
 
 ## 計画との差分
-- なし / あり（理由）
+- あり: 計画変更記録 1〜3（失敗したテストの案内の形・ロックの版の記録・/simplify の整理）と fix-loop 2 回（setup-uv の版を細かい版のタグで書く・FG-K2 の `--offline` を外す）。方式・範囲・受け入れ条件は変えていない
 
 ## ロールバック
 - PR を revert。手元の uv は `pipx uninstall uv`

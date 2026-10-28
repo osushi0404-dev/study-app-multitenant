@@ -17,7 +17,7 @@
 | TC-03 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i193_official_flow.sh`（F9 が `TEST_DIR` で `run-all.sh` を流す。流し直しが入っても期待値が変わらない） | exit 0・`fail=0` | implement（2026-10-29）: exit 0・fail=0 |
 | TC-04 | `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lifecycle.sh`（TC-C1 が uv の環境の pre-commit で shellcheck を流す） | exit 0・`FAIL=0`・`PASS TC-C1-shellcheck` | implement（2026-10-29）: exit 0・FAIL=0 |
 | TC-05 | ステップ 1 の後に `uv lock --check --project scripts/claude/tests` | exit 0（`pyproject.toml` と `uv.lock` が合っている）。TC-01 の K2 に含めて決定論ゲートで流す | implement（2026-10-29）: exit 0（`Resolved 12 packages`） |
-| TC-06 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では全体を流し直さない） | CI の Harness Tests が pass | 実装前のため未実行 |
+| TC-06 | `bash scripts/claude/tests/run-all.sh`（CI の Harness Tests ジョブで確かめる。手元では全体を流し直さない） | CI の Harness Tests が pass | test-gate（2026-10-29）: CI run 40717058976 の Harness Tests pass（`run-all: pass=48 fail=0`） |
 
 ### TC-01 の項目（`test_i211_version_pin.sh`）
 写しの一覧・`.python-version`・`uv.lock` は一時のフォルダに並べて作る（`check-tools.sh` は一覧と同じフォルダの正を読む）。`PY` は `python3 --version` から取った今の版。
@@ -85,3 +85,4 @@ bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_review_commit_lif
   - セキュリティ上の考慮点: なし
   - 次回どう防ぐか: キャッシュやネットワークに頼る指定（`--offline` など）を足すときは、新しいキャッシュの環境（CI）で通るかを push で確かめてから整理を終える。否定のテストは失敗の理由まで見る（今回それで偽の合格を防げた）
   - 確かめた結果: 下の手元の実行と、push 後の CI の Harness Tests
+- 2026-10-29 test-gate: `bash scripts/claude/gate-check.sh I211` → exit 0（GATE_CHECK: OK）。決定論ゲート 4 本は review-gate（`docs/reviews/I211_code_review_20261029_0032.md`）で実走しすべて exit 0。test-gate に委譲された heavy のゲートは無し。CI は Harness Tests を含む全ジョブ pass（run 40717058976・`run-all: pass=48 fail=0`）→ TC-06 合格
