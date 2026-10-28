@@ -81,7 +81,7 @@ required-version = "==0.13.6"
 ```bash
 PROJ="scripts/claude/tests"
 # uv の環境（scripts/claude/tests/.venv）の外なら、uv で版をそろえてから流し直す（I211）
-if [ -f "$PROJ/pyproject.toml" ] && [ "${VIRTUAL_ENV:-}" != "$REPO_ROOT/$PROJ/.venv" ]; then
+if [ "${VIRTUAL_ENV:-}" != "$REPO_ROOT/$PROJ/.venv" ]; then
   if [ -n "${HARNESS_UV_REEXEC:-}" ]; then
     echo "⛔ uv で流し直しても uv の環境に入れませんでした（VIRTUAL_ENV=${VIRTUAL_ENV:-}）"; exit 1
   fi
@@ -93,7 +93,7 @@ fi
 ```
 - 引数があるときは `for t in "$@"`、無いときは今までどおり `"$TEST_DIR"/test_*.sh`。引数のファイルが無ければ `⛔` で exit 1
 - `REPO_ROOT` は `git rev-parse --show-toplevel` の値を `cd … && pwd -P` でそろえて比べる（WSL のパスの表記ゆれで流し直しが止まらなくなるのを防ぐ）
-- `pyproject.toml` が無いリポジトリ（テストの一時のリポジトリ）では流し直さない
+- `pyproject.toml` が無くても流し直す（`uv run --locked` が止める。テストの一時のリポジトリは `VIRTUAL_ENV` をその場の `.venv` にする。計画変更記録 3）
 
 ### 4-5. `scripts/claude/tests/check-tools.sh`
 修正方針: 一覧の列を 4 つにし（CI で pip で入れるものの列と `--pip-specs` を消す。CI は pip を使わなくなる）、版の列は `-`（問わない）か `lock`（正のファイルとぴったり一致）だけにする。
@@ -221,6 +221,11 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 2 | 実験必須 | `check-tools.sh` の `lock` の比較が、版が上でも下でも、正のファイルが無くても合格にしない（TC-01 の FG-V2〜FG-V7） |
 | V4 | 2 | 読んで可 | `ci_check` の install の検出が `apt-get -y install`・`npm i`・`uv pip install`・`python -m pip install`・`uv sync` を拾い、`uv run` は拾わない（TC-02 の FG-C） |
 | V5 | 3 | 読んで可 | 版を上げる手順（onboarding.md）に沿うと、手元と CI が同じ版のまま上がる（手動 No.4） |
+
+## 計画変更記録
+- 1（implement・2026-10-29）: 計画書の記載「4-4 `run-all.sh`」→ 採った方法: 失敗したテストの案内（`bash <テスト>` で個別に流す）を `bash scripts/claude/tests/run-all.sh <テスト>` に変えた。理由: 案内どおりに直に流すと OS の python になり、R3 のずれを自分で案内してしまう。計画レビューのやり直し: 不要（D6 の範囲の案内文だけ）
+- 2（implement）: ロックが決めた版は PyYAML 6.0.3・pre-commit 4.7.0（4-3）。`uv lock --check` は exit 0（TC-05）
+- 3（implement・/simplify）: 計画書の記載「4-4 `pyproject.toml` が無いリポジトリ（テストの一時のリポジトリ）では流し直さない」→ 採った方法: その条件を消し、uv の環境の外なら必ず流し直す（無ければ `uv run --locked` が止める）。テストの一時のリポジトリは `VIRTUAL_ENV` をその場の `.venv` にして中から流す（TC-01 の X6・FG-X7、TC-02 の R）。理由: テストのためだけの抜け道で、正のファイルが消えたときに OS の python で流れる道が残る（点検の簡潔さ・直す深さの 2 観点が指摘）。ほかに: `run-all.sh` の場所を `$PROJ` にそろえた／`check-tools.sh` の正の版とファイルをタブでつないで渡すのをやめ 2 つの変数にした／K1 を「3.11 の決め打ち」から「`.python-version` と `requires-python` のマイナー版が揃っている」に変えた（マイナー版を上げるときにテストを書き換えずに済む）／K2・FG-K2 の `uv lock --check` に `--offline` を付けた（ネットワークに頼らない）／runbook の uv の上げ方に `uv self update` を足した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。抜け道を閉じる側の変更と、テスト・案内の整理）
 
 ## セキュリティレビュー結果
 

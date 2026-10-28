@@ -1,11 +1,12 @@
-# ハーネスのテスト（scripts/claude/tests/run-all.sh）が頼る道具の一覧（I204）。CI（.github/workflows/ci.yml の Harness Tests）と手元の正。
-# run-all.sh の冒頭で check-tools.sh がこの一覧を確かめ、足りなければテストを流さずに不合格にする。
-# CI は「CI で pip で入れるもの」の列を check-tools.sh --pip-specs で読んで入れる。道具を足す・変えるときはこの一覧を書き換える。
-# 列: 名前 | 確かめるコマンド | 版の下限（- は問わない） | CI で pip で入れるもの（- は入れない） | 入れ方（手元）
-# 確かめるコマンドに縦棒（列の区切り）は書かない。
-python3 | python3 --version | 3.11 | - | python 3.11 以上（CI は actions/setup-python の python-version。版をぴったり揃えるのは後続のイシュー）
-PyYAML | python3 -c 'import yaml; print(yaml.__version__)' | 6.0 | PyYAML>=6.0 | sudo apt install python3-yaml
-git | git --version | - | - | sudo apt install git（CI は runner に最初からある）
-docker compose | docker compose version | - | - | Docker Desktop の WSL 連携を有効にする（CI は runner に最初からある）
-pre-commit | pre-commit --version | 4.0 | pre-commit>=4.0 | pipx install pre-commit（docs/runbooks/pre-commit.md）
-shellcheck | out=$(pre-commit run shellcheck --files scripts/claude/tests/check-tools.sh 2>&1); grep -E '^shellcheck\.+Passed$' <<< "$out" && exit 0; printf '%s\n' "$out"; exit 1 | - | - | pre-commit 経由（版は .pre-commit-config.yaml の shellcheck-py。初回はネットワークから入る）
+# ハーネスのテスト（scripts/claude/tests/run-all.sh）が頼る道具の一覧（I204・I211）。どの道具をどう確かめるかの正（CI の Harness Tests と手元で同じ）。
+# run-all.sh は uv の環境（scripts/claude/tests/.venv）で流れ、冒頭で check-tools.sh がこの一覧を確かめ、合わなければテストを流さずに不合格にする。
+# 版の正は同じフォルダの .python-version（python3）・uv.lock（python の道具）・pyproject.toml の required-version（uv）。CI はこれらだけを読む（install を書かない）。
+# 列: 名前 | 確かめるコマンド | 版（- は問わない・lock は .python-version / uv.lock とぴったり） | 入れ方（手元）
+# 確かめるコマンドに縦棒（列の区切り）は書かない。版を上げる手順: docs/runbooks/onboarding.md「手元の準備（ハーネスのテスト）」
+python3 | python3 --version | lock | bash scripts/claude/tests/run-all.sh で流す（uv が .python-version の python を入れる）
+PyYAML | python3 -c 'import yaml; print(yaml.__version__)' | lock | bash scripts/claude/tests/run-all.sh で流す（uv が uv.lock の版を入れる）
+uv | uv --version | - | pipx install uv==<pyproject.toml の required-version の版>（docs/runbooks/onboarding.md）
+git | git --version | - | sudo apt install git（CI は runner に最初からある）
+docker compose | docker compose version | - | Docker Desktop の WSL 連携を有効にする（CI は runner に最初からある）
+pre-commit | pre-commit --version | lock | bash scripts/claude/tests/run-all.sh で流す（uv が uv.lock の版を入れる）
+shellcheck | out=$(pre-commit run shellcheck --files scripts/claude/tests/check-tools.sh 2>&1); grep -E '^shellcheck\.+Passed$' <<< "$out" && exit 0; printf '%s\n' "$out"; exit 1 | - | pre-commit 経由（版は .pre-commit-config.yaml の shellcheck-py。初回はネットワークから入る）

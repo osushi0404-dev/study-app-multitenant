@@ -34,16 +34,16 @@
 | FG-V8 | 版の列が `3.11`（前の下限の形） | exit 2・`⛔ 一覧の行の形が違います` |
 | V9（AC8） | 一覧 `quiet \| false \| - \| x`（出力が空で通らない） | exit 1・`⛔ 足りない道具: quiet`・字下げだけの行（`^    $`）が無い |
 | FG-V10 | 一覧 `loud \| echo boom; false \| - \| x`（出力があって通らない） | exit 1・`    boom` の行がある（空のときだけ消したことを確かめる） |
-| X1（AC1） | 一時の git リポジトリに `run-all.sh`・`check-tools.sh`（実物の写し）・`scripts/claude/tests/pyproject.toml`（中身は空でよい）・一覧 `bash \| bash --version \| - \| -`・印を書く `test_mark.sh` を置き、引数を記録して exit 0 する偽物の `uv` を PATH の先頭にして、`VIRTUAL_ENV` を消して `run-all.sh` を流す | exit 0・偽物の `uv` の引数がちょうど `run --locked --project scripts/claude/tests bash scripts/claude/tests/run-all.sh`・印のファイルが無い（外側では流さない） |
+| X1（AC1） | 一時の git リポジトリに `run-all.sh`・`check-tools.sh`（実物の写し）（`pyproject.toml` は置かない。無くても流し直すことも見る）・一覧 `bash \| bash --version \| - \| -`・印を書く `test_mark.sh` を置き、引数を記録して exit 0 する偽物の `uv` を PATH の先頭にして、`VIRTUAL_ENV` を消して `run-all.sh` を流す | exit 0・偽物の `uv` の引数がちょうど `run --locked --project scripts/claude/tests bash scripts/claude/tests/run-all.sh`・印のファイルが無い（外側では流さない） |
 | X2（AC1） | X1 と同じで、引数 `t/test_mark.sh` を付けて流す | 偽物の `uv` の引数の最後が `t/test_mark.sh`（引数をそのまま渡す） |
 | FG-X3（AC1） | X1 と同じで、PATH から `uv` のあるフォルダを除き、偽物も置かない | exit 1・`⛔ uv がありません`・`テストは流していません`・印のファイルが無い |
 | FG-X4 | X1 と同じで、`HARNESS_UV_REEXEC=1` を付ける（流し直した後なのに uv の環境に入れていない） | exit 1・`⛔ uv で流し直しても uv の環境に入れませんでした`・偽物の `uv` を呼んでいない |
 | X5 | X1 と同じで、`VIRTUAL_ENV=<一時のリポジトリ>/scripts/claude/tests/.venv` | 偽物の `uv` を呼んでいない・印のファイルがある（uv の環境の中では流し直さない） |
-| X6（D6） | 一時のリポジトリで、`pyproject.toml` を消し（流し直さない）、`t/test_a.sh`・`t/test_b.sh`（それぞれ印を書く）を置いて引数 `t/test_a.sh` で流す | exit 0・`test_a` の印だけある・`run-all: pass=1 fail=0` |
+| X6（D6） | 一時のリポジトリで、`VIRTUAL_ENV=<一時のリポジトリ>/scripts/claude/tests/.venv`（uv の環境の中）で、`t/test_a.sh`・`t/test_b.sh`（それぞれ印を書く）を置いて引数 `t/test_a.sh` で流す | exit 0・`test_a` の印だけある・`run-all: pass=1 fail=0` |
 | FG-X7（D6） | X6 と同じで、引数 `t/test_nothing.sh`（無いファイル） | exit 1・`⛔` |
-| K1（AC2） | 実物の `scripts/claude/tests/pyproject.toml`・`.python-version` | `required-version` が `==<数>.<数>.<数>`・`.python-version` が `3.11.<数>` の 1 行・`requires-python` が `==3.11.*` |
-| K2（AC2・AC5） | `uv lock --check --project scripts/claude/tests` | exit 0 |
-| FG-K2 | 実物の `pyproject.toml`・`uv.lock`・`.python-version` を一時のフォルダに写し、`dependencies` から `PyYAML>=6.0` を消して `uv lock --check --project <写し>` | exit 0 以外・出力に `update` |
+| K1（AC2） | 実物の `scripts/claude/tests/pyproject.toml`・`.python-version` | `required-version` が `==<数>.<数>.<数>`・`.python-version` が `<数>.<数>.<数>`・`requires-python` が `.python-version` と同じマイナー版の `==<数>.<数>.*` |
+| K2（AC2・AC5） | `uv lock --check --offline --project scripts/claude/tests` | exit 0 |
+| FG-K2 | 実物の `pyproject.toml`・`uv.lock`・`.python-version` を一時のフォルダに写し、`dependencies` から `PyYAML>=6.0` を消して `uv lock --check --offline --project <写し>` | exit 0 以外・出力に `update` |
 | K3（AC2） | 実物 | `scripts/claude/tests/uv.lock`・`pyproject.toml`・`.python-version` が git で追跡されている・`scripts/claude/tests/.venv` が `.gitignore` で除かれる |
 | K4（AC2） | 実物の一覧 | `python3`・`PyYAML`・`pre-commit` の版の列が `lock`・`uv` の行がある |
 
@@ -56,7 +56,7 @@
 | FG-L3 | 写しの一覧 `bash \| bash --version \| - \| -` と `no-such-tool-i204 \| no-such-tool-i204 --version \| - \| 入れ方の例` | exit 1・`⛔ 足りない道具: no-such-tool-i204`・`入れ方: 入れ方の例`・bash の `OK:` も出る |
 | FG-L5 | 写しの一覧 `nover \| echo none \| lock \| x`・`uv.lock` に `nover` | exit 1・`⛔ 版を読めない道具: nover` |
 | FG-L6a | 列が 3 つの行／版の列が `abc`／名前が空の行 | どれも exit 2・`⛔ 一覧の行の形が違います` |
-| FG-R1・R2 | （I204 と同じ。写しの一覧を 4 列に） | （I204 と同じ） |
+| FG-R1・R2 | （I204 と同じ。写しの一覧を 4 列に・`VIRTUAL_ENV` を一時のリポジトリの `.venv` にして uv の環境の中として流す） | （I204 と同じ） |
 | FG-P1・FG-P2 | （I204 と同じ） | （I204 と同じ） |
 | C1（AC5） | 実物の `.github/workflows/ci.yml` | uses は `actions/checkout`・`astral-sh/setup-uv` だけ・setup-uv はちょうど 1 つで `with` が `version-file: scripts/claude/tests/pyproject.toml` だけ・install が 0 個・最後の step が `bash scripts/claude/tests/run-all.sh` → exit 0 |
 | FG-C（AC5） | 写しの `ci.yml`: setup-uv に `python-version: '3.12'`／`version: 0.9.0`／`version-file` を消す／`actions/setup-python@v5` を足す／`some/setup-tool@v1` を足す | どれも不合格（exit 1） |

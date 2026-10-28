@@ -1,0 +1,12 @@
+# ハーネスのテスト（scripts/claude/tests/run-all.sh）の python の道具の版の正（I211）。
+# python は .python-version、PyYAML・pre-commit のぴったりの版は uv.lock、uv 自身は下の required-version が正。
+# 版を上げる手順: docs/runbooks/onboarding.md「手元の準備（ハーネスのテスト）」
+[project]
+name = "harness-tests"
+version = "0"
+requires-python = "==3.11.*"
+dependencies = ["PyYAML>=6.0", "pre-commit>=4.0"]
+
+[tool.uv]
+package = false
+required-version = "==0.13.6"

@@ -23,59 +23,50 @@ has() { if grep -qF -- "$2" <<< "$1"; then echo yes; else echo no; fi; }
 oks() { grep -c '^OK: ' <<< "$1"; }
 # 写しの一覧を作る（$1=名前・残りの引数=行）
 mklist() { local f="$TMP/$1.txt"; shift; printf '%s\n' "$@" > "$f"; echo "$f"; }
-# 一覧の名前の列（コメント・空行を除く）
-names() { local l; while IFS= read -r l; do [[ -z "$l" || "$l" == \#* ]] && continue; printf '%s\n' "${l%% | *}"; done < "$1"; }
+# 一覧の名前の列（前後の空白を除いてから、コメント・空行を除く。check-tools.sh と同じ見方）
+names() { local l t; while IFS= read -r l; do t="${l#"${l%%[![:space:]]*}"}"; [[ -z "$t" || "$t" == \#* ]] && continue; printf '%s\n' "${t%% | *}"; done < "$1"; }
 
 # ---------- L: 一覧と check-tools.sh ----------
-SPECS="$(bash "$CHECK" --pip-specs)"; rc=$?
-ck "L1 実物の一覧の形が正しい（--pip-specs が exit 0）" 0 "$rc"
-ck "L1 道具は 6 つ" "$(printf '%s\n' python3 PyYAML git 'docker compose' pre-commit shellcheck)" "$(names "$LIST")"
+ck "L1 道具は 7 つ" "$(printf '%s\n' python3 PyYAML uv git 'docker compose' pre-commit shellcheck)" "$(names "$LIST")"
+L1B="$(mklist l1b '  # 字下げしたコメント' 'bash | bash --version | - | -')"
+ck "FG-L1b 字下げしたコメントは名前に入らない" "bash" "$(names "$L1B")"
 
 OUT="$(bash "$CHECK" 2>&1)"; rc=$?
 ck "L2 実物の一覧で全部そろう（一覧の行の数だけ OK）" "0 $(names "$LIST" | wc -l)" "$rc $(oks "$OUT")"
+[ "$rc" -eq 0 ] || printf '%s\n' "$OUT"
 
 # 本物の道具の確認（pre-commit・docker）は L2 の 1 回だけにする。ほかの行も確かめることは bash の行で見る
-L3="$(mklist l3 'bash | bash --version | - | - | -' 'no-such-tool-i204 | no-such-tool-i204 --version | - | - | 入れ方の例')"
+L3="$(mklist l3 'bash | bash --version | - | -' 'no-such-tool-i204 | no-such-tool-i204 --version | - | 入れ方の例')"
 OUT="$(bash "$CHECK" "$L3" 2>&1)"; rc=$?
 ck "FG-L3 通らない道具は exit 1・名前と入れ方・ほかは OK" "1 yes yes 1" \
    "$rc $(has "$OUT" '⛔ 足りない道具: no-such-tool-i204') $(has "$OUT" '入れ方: 入れ方の例') $(oks "$OUT")"
 
-L4="$(mklist l4 'python3 | python3 --version | 99.0 | - | 入れ方の例')"
-OUT="$(bash "$CHECK" "$L4" 2>&1)"; rc=$?
-ck "FG-L4 下限より古い python3 は exit 1" "1 yes" "$rc $(has "$OUT" '⛔ 版が古い道具: python3')"
-
-L5="$(mklist l5 'nover | echo none | 1.0 | - | 入れ方の例')"
+L5="$(mklist l5 'nover | echo none | lock | 入れ方の例')"
+printf '%s\n' '[[package]]' 'name = "nover"' 'version = "1.0"' > "$TMP/uv.lock"
 OUT="$(bash "$CHECK" "$L5" 2>&1)"; rc=$?
 ck "FG-L5 版を読めない道具は exit 1" "1 yes" "$rc $(has "$OUT" '⛔ 版を読めない道具: nover')"
 
-for bad in 'a | true | - | -' 'a | true | abc | - | x' ' | true | - | - | x'; do
+for bad in 'a | true | -' 'a | true | abc | x' ' | true | - | x'; do
   L6="$(mklist l6 "$bad")"
   OUT="$(bash "$CHECK" "$L6" 2>&1)"; rc=$?
   ck "FG-L6a 形の崩れた行は exit 2（${bad}）" "2 yes" "$rc $(has "$OUT" '⛔ 一覧の行の形が違います')"
 done
-
-for spec in '--extra-index-url=http://example.invalid' 'PyYAML @ https://example.invalid/x.whl' '-e git+https://example.invalid/x' 'PyYAML>=6.0 --index-url=http://example.invalid'; do
-  L6B="$(mklist l6b "x | true | - | ${spec} | x")"
-  OUT="$(bash "$CHECK" --pip-specs "$L6B" 2>/dev/null)"; rc=$?
-  ck "FG-L6b pip の指定は通さない（${spec}）" "2 []" "$rc [$OUT]"
-done
-
-ck "L7 --pip-specs は一覧の pip の列だけ" "$(printf '%s\n' 'PyYAML>=6.0' 'pre-commit>=4.0')" "$SPECS"
 
 # ---------- R: run-all.sh の冒頭 ----------
 R="$TMP/repo"
 mkdir -p "$R/scripts/claude/tests" "$R/t"
 git -C "$R" init -q
 cp scripts/claude/tests/run-all.sh "$CHECK" "$R/scripts/claude/tests/"
+RVENV="$(cd "$R" && pwd -P)/scripts/claude/tests/.venv"   # uv の環境の中として流す（流し直しは test_i211 の X で見る）
 printf '#!/usr/bin/env bash\ntouch "%s"\n' "$TMP/mark" > "$R/t/test_mark.sh"
-printf '%s\n' 'no-such-tool-i204 | no-such-tool-i204 --version | - | - | 入れ方の例' > "$R/scripts/claude/tests/required-tools.txt"
-OUT="$(cd "$R" && TEST_DIR=t bash scripts/claude/tests/run-all.sh 2>&1)"; rc=$?
+printf '%s\n' 'no-such-tool-i204 | no-such-tool-i204 --version | - | 入れ方の例' > "$R/scripts/claude/tests/required-tools.txt"
+OUT="$(cd "$R" && VIRTUAL_ENV="$RVENV" TEST_DIR=t bash scripts/claude/tests/run-all.sh 2>&1)"; rc=$?
 MARK=no; [ -e "$TMP/mark" ] && MARK=yes
 ck "FG-R1 道具が足りなければテストを流さず exit 1" "1 no yes yes" \
    "$rc $MARK $(has "$OUT" '⛔ 足りない道具: no-such-tool-i204') $(has "$OUT" 'テストは流していません')"
 
-printf '%s\n' 'bash | bash --version | - | - | -' > "$R/scripts/claude/tests/required-tools.txt"
-OUT="$(cd "$R" && TEST_DIR=t bash scripts/claude/tests/run-all.sh 2>&1)"; rc=$?
+printf '%s\n' 'bash | bash --version | - | -' > "$R/scripts/claude/tests/required-tools.txt"
+OUT="$(cd "$R" && VIRTUAL_ENV="$RVENV" TEST_DIR=t bash scripts/claude/tests/run-all.sh 2>&1)"; rc=$?
 MARK=no; [ -e "$TMP/mark" ] && MARK=yes
 ck "R2 道具がそろえばテストを流す" "0 yes" "$rc $MARK"
 
@@ -92,36 +83,41 @@ OUT="$(PATH="$TMP/p2:$PATH" bash "$LIFECYCLE" 2>&1)"; rc=$?
 ck "FG-P2 Skipped（対象外）でも TC-C1 は不合格" "no yes" \
    "$([ "$rc" -eq 0 ] && echo yes || echo no) $(has "$OUT" 'FAIL TC-C1-shellcheck')"
 
-# ---------- C: CI の Harness Tests と一覧の食い違い ----------
-# $1=ci.yml $2=一覧。食い違いを出して 1、無ければ 0
+# ---------- C: CI の Harness Tests が版の正だけを読むこと（I211） ----------
+# 版は scripts/claude/tests/ の pyproject.toml（uv）・.python-version（python）・uv.lock（道具）が正。
+# CI はそれを setup-uv と run-all.sh（uv run --locked で流し直す）で読むだけにし、版の指定・install を書かない。
+# $1=ci.yml。食い違いを出して 1、無ければ 0
 ci_check() {
-  python3 -I - "$1" "$2" <<'PY'
+  python3 -I - "$1" <<'PY'
 import re, sys, yaml
-ci_path, list_path = sys.argv[1], sys.argv[2]
-py_min = None
-for line in open(list_path, encoding="utf-8"):
-    cols = [c.strip() for c in line.strip().split(" | ")]
-    if cols[0] == "python3" and len(cols) == 5:
-        py_min = cols[2]
 errs = []
-job = (yaml.safe_load(open(ci_path, encoding="utf-8")).get("jobs") or {}).get("harness-tests") or {}
+job = (yaml.safe_load(open(sys.argv[1], encoding="utf-8")).get("jobs") or {}).get("harness-tests") or {}
 steps = job.get("steps") or []
 if not steps:
     errs.append("Harness Tests（harness-tests）のジョブの step がありません")
-allowed = {"actions/checkout", "actions/setup-python"}
+allowed = {"actions/checkout", "astral-sh/setup-uv"}
+uv_steps = []
 for s in steps:
     uses = s.get("uses")
-    if uses and uses.split("@")[0] not in allowed:
-        errs.append(f"一覧を通らない uses: {uses}")
-    pv = str((s.get("with") or {}).get("python-version"))
-    if uses and uses.startswith("actions/setup-python") and pv != py_min:
-        errs.append(f"python-version {pv} が一覧の python3 の下限 {py_min} と違う")
-INSTALL = re.compile(r"\b(?:pip3?|pipx|apt|apt-get|brew|npm|conda)\s+install\b")
+    if not uses:
+        continue
+    name = uses.split("@")[0]
+    if name not in allowed:
+        errs.append(f"版の正を通らない uses: {uses}")
+    if name == "astral-sh/setup-uv":
+        uv_steps.append(s)
+if len(uv_steps) != 1:
+    errs.append(f"astral-sh/setup-uv はちょうど 1 つ（今 {len(uv_steps)} 個）")
+for s in uv_steps:
+    w = s.get("with") or {}
+    if w != {"version-file": "scripts/claude/tests/pyproject.toml"}:
+        errs.append(f"setup-uv の with は version-file: scripts/claude/tests/pyproject.toml だけ（今 {w}）")
+# install の検出: 道具の名前の後に、オプション（- で始まる語）と pip・tool の語を挟んで install の動詞が来る形
+INSTALL = re.compile(r"\b(?:pip3?|pipx|uv|apt-get|apt|brew|npm|pnpm|yarn|conda)(?:\s+(?:-\S+|pip|tool))*\s+(?:install|i|ci|add|sync)\b")
 runs = [s.get("run") or "" for s in steps]
-installs = [r for r in runs if INSTALL.search(r)]
 n = sum(len(INSTALL.findall(r)) for r in runs)
-if n != 1 or "check-tools.sh --pip-specs" not in installs[0] or "pip install -r" not in installs[0]:
-    errs.append(f"install は一覧を読む 1 つ（check-tools.sh --pip-specs と pip install -r）だけにする（今 {n} 個）")
+if n:
+    errs.append(f"install を書かない（版の正を通らずに入る。今 {n} 個）")
 if not steps or (steps[-1].get("run") or "").strip() != "bash scripts/claude/tests/run-all.sh":
     errs.append("最後の step が bash scripts/claude/tests/run-all.sh ではない")
 for e in errs:
@@ -129,34 +125,45 @@ for e in errs:
 sys.exit(1 if errs else 0)
 PY
 }
-# 写しの ci.yml を作る（$1=種類 $2=出力）
+# 写しの ci.yml を作る（$1=種類 $2=出力 $3=足す run の中身）
 ci_mut() {
-  python3 -I - "$CI" "$2" "$1" <<'PY'
+  python3 -I - "$CI" "$2" "$1" "${3:-}" <<'PY'
 import sys, yaml
-src, dst, kind = sys.argv[1:4]
+src, dst, kind, extra = sys.argv[1:5]
 d = yaml.safe_load(open(src, encoding="utf-8"))
 steps = d["jobs"]["harness-tests"]["steps"]
+uv = [s for s in steps if (s.get("uses") or "").startswith("astral-sh/setup-uv")]
 if kind == "py312":
-    for s in steps:
-        if (s.get("uses") or "").startswith("actions/setup-python"):
-            s["with"]["python-version"] = "3.12"
-elif kind == "extra_pip":
-    steps.insert(-1, {"name": "extra", "run": "pip install foo"})
+    uv[0]["with"]["python-version"] = "3.12"
+elif kind == "uv_ver":
+    uv[0]["with"]["version"] = "0.9.0"
+elif kind == "no_version_file":
+    del uv[0]["with"]["version-file"]
+elif kind == "setup_python":
+    steps.insert(1, {"uses": "actions/setup-python@v5", "with": {"python-version": "3.11"}})
 elif kind == "extra_uses":
     steps.insert(-1, {"uses": "some/setup-tool@v1"})
-elif kind == "old_install":
-    for s in steps:
-        if "check-tools.sh --pip-specs" in (s.get("run") or ""):
-            s["run"] = "pip install pyyaml"
+elif kind == "run":
+    steps.insert(-1, {"name": "extra", "run": extra})
 yaml.safe_dump(d, open(dst, "w", encoding="utf-8"), allow_unicode=True, sort_keys=False)
 PY
 }
-OUT="$(ci_check "$CI" "$LIST")"; rc=$?
-ck "C1 CI の Harness Tests は一覧に従う" "0 []" "$rc [$OUT]"
-for kind in py312 extra_pip extra_uses old_install; do
+OUT="$(ci_check "$CI")"; rc=$?
+ck "C1 CI の Harness Tests は版の正だけを読む" "0 []" "$rc [$OUT]"
+for kind in py312 uv_ver no_version_file setup_python extra_uses; do
   ci_mut "$kind" "$TMP/ci_$kind.yml"
-  ci_check "$TMP/ci_$kind.yml" "$LIST" >/dev/null; rc=$?
-  ck "FG-C 写しの ci.yml（${kind}）は食い違いで不合格" 1 "$rc"
+  ci_check "$TMP/ci_$kind.yml" >/dev/null; rc=$?
+  ck "FG-C 写しの ci.yml（${kind}）は不合格" 1 "$rc"
+done
+for extra in 'pip install foo' 'sudo apt-get -y install foo' 'npm i foo' 'uv pip install foo' 'python -m pip install foo' 'uv sync'; do
+  ci_mut run "$TMP/ci_run.yml" "$extra"
+  ci_check "$TMP/ci_run.yml" >/dev/null; rc=$?
+  ck "FG-C 写しの ci.yml に install（${extra}）を足すと不合格" 1 "$rc"
+done
+for extra in 'uv run --locked --project scripts/claude/tests bash x.sh' 'echo install'; do
+  ci_mut run "$TMP/ci_ok.yml" "$extra"
+  ci_check "$TMP/ci_ok.yml" >/dev/null; rc=$?
+  ck "C2 install ではない run（${extra}）は数えない" 0 "$rc"
 done
 
 # ---------- S: 「道具が無ければ SKIP」の分岐の規則 ----------
