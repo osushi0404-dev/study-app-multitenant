@@ -11,7 +11,7 @@
 |---|---|---|---|---|---|
 | TC-01 | AC1: 一覧の番号が 52 件そろう | 下の「TC-01 の確かめ」をスクラッチに置き、`bash <スクリプト> docs/reviews/open/I209_triage.md` | exit 0・`OK: 52 件一致` | `#233` の行を消した写しで exit 1・`NG: 不一致`（2026-10-28 確認済み） | 2026-10-28 計画時に実行: exit 0（OK: 52 件一致） |
 | TC-02 | AC4: 小さな指摘の一覧の行の形 | CI の Harness Tests（`test_i202_ledger_cleanup.sh` の D3「実物の一覧のどの行も決まった形」）が `docs/reviews/backlog/I209.md` を含めて確かめる | D3 が pass | FG-D3（同じテストの中で、形の崩れた行を足した写しが不合格になる）が既にある | 実装前のため未実行 |
-| TC-03 | AC4: 一覧に F1〜F9 がある | `grep -c '^- F[1-9] SEV=' docs/reviews/backlog/I209.md` の値が 9（`[ "$(grep -c … )" -eq 9 ]` の形で exit code に畳む） | exit 0 | F9 の行を消した写しで exit 1（実装のときに実際に流して結果欄に書く） | 実装前のため未実行 |
+| TC-03 | AC4: 一覧に F1〜F9 がある | `bash -c '[ "$(grep -c "^- F[1-9] SEV=" docs/reviews/backlog/I209.md)" -eq 9 ]'`（Bash ツールで `[ … ]` を直接書くと終了コードが返らなかったので `bash -c` で包む） | exit 0 | F9 の行を消した写しで exit 1 | 2026-10-28 implement: exit 0。失敗注入（F9 を消した写し・8 行）は exit 1。あわせて `BL_FORM` に合わない行は 0 行 |
 
 ### TC-01 の確かめ（スクラッチに置くスクリプト）
 ```text
