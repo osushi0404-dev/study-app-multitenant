@@ -2,16 +2,11 @@
 # I097: docker compose config で publish ホストポートの変数化・同時 up 非衝突を検証する。
 # 実行: bash scripts/claude/tests/test_compose_ports.sh
 #
-# docker compose config は Docker デーモン不要（パース/展開のみ）。docker 未使用環境では SKIP（exit 0）。
+# docker compose config は Docker デーモン不要（パース/展開のみ）。docker compose があることは run-all.sh の冒頭（check-tools.sh）で確かめる（I204）。
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 COMPOSE="$REPO_ROOT/docker-compose.yml"
-
-if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
-  echo "SKIP: docker compose 未使用環境のためスキップ（決定論ロジックは test_wt_port_offset.sh が担保）"
-  exit 0
-fi
 
 ALL_TMP=()
 cleanup() { local f; for f in "${ALL_TMP[@]:-}"; do [ -n "$f" ] && rm -f "$f"; done; }
