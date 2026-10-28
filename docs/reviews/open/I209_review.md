@@ -30,3 +30,4 @@
 - [plan] ユーザーの確認は implement の最初で取る — 計画レビューで判定が変わっても見せ直しにならない
 - [plan] 追記の前の本文を `docs/reviews/open/I209_original_bodies/` に残す — test-gate が別のセッションでも元の本文と比べられ、ロールバックの元にもなる
 - [plan] `python3 -c` の承認画面について — ユーザーに問われた。許可にない書き方だったので、以後は `gh` の `--jq` と読み取りの道具を使う（設定は変えない）
+STAGE_DONE: plan NEXT: plan-review
