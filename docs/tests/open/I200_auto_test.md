@@ -148,3 +148,11 @@
   - `test_i187_frontend_verify_config.sh`（2 項目）: ⑤b'・⑤d「コンテナ内の npm test・migrate・install などに一致する許可が無い」→「一致する許可は I200 の `Bash(docker compose exec|run *)` の行だけ（ほかの場当たりの広い許可が無い）」（見張りの判定に一本化したため）
   - `test_i182_docs.sh`: 期待値は変えていない（danger-ops.md のコンテナの中のパス `/app/` を、手元のパスと取り違えないよう地の文に書き直した）
   - `test_settings_permissions.sh`: ask が `Edit(.secrets.baseline)` だけ・allow に足した行・exec 系は `Bash(docker compose exec *)` だけ（TC-06）。FG の S2a・S3・S3a・S3b・S14 を新しい基準の後退に置き換えた
+
+## 再発防止記録
+### fix-loop 1（2026-10-29・CI の Harness Tests の失敗）
+- なぜ失敗したか: `test_i197_adversarial_process.sh` の S6（「このブランチで見張りと settings.json を変えていない」）が、I197 の間だけのブランチの範囲の決まりなのに、マージ後も run-all に残っていた。見張り・設定を変える I200 では必ず落ちる。実装の段階の手元の run-all は、変更が未コミットのまま流したので、コミットの差分を見る S6 が偽合格になり気づけなかった
+- 何を変えたか: S6 と FG-S6 を消し、理由をコメントに残した（診断メモ `docs/reviews/I200_fix_diagnosis_20261029_2230.md`・診断レビュー OK）
+- セキュリティ上の考慮点: なし（S6 は見張りと設定の正しさを確かめるものではない。正しさは `test_i200_guard_narrowing.sh`・`test_settings_permissions.sh`・`test_pretooluse_container_guard.sh` などが確かめる）
+- 次回どう防ぐか: 手元の run-all はコミットの後に流す（retro で扱う）。イシューの範囲を守る確かめは、そのイシューの記録（計画のゲート）に置き、run-all に残さない
+- 確かめた結果: `bash scripts/claude/tests/test_i197_adversarial_process.sh` → `pass=113 fail=0`（コミット済みの見張り・設定の変更がある状態で）

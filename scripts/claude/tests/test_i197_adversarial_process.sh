@@ -392,16 +392,9 @@ ck "S5 code-reviewer の呼び出しは run_claude_logged" yes "$(yn bash -c 'gr
 S5=$(REVIEW_LIB_SOURCE_ONLY=1 bash -c '. scripts/claude/code-review.sh; . scripts/claude/review-process-lib.sh; reviewer_failure_record I900 124 "$1"' _ "$TMP/lib/l2")
 ck "S5 失敗の記録に最後のツール呼び出し・VERDICT: BLOCKER" yes "$(yn bash -c 'grep -qF "最後のツール呼び出し: Read" <<< "$1" && grep -qxF "VERDICT: BLOCKER" <<< "$1"' _ "$S5")"
 
-# S6: 見張りと settings.json を変えていない（比べる相手との merge-base から HEAD まで）
-s6() { local base="${1:-${GATE_BASE:-origin/develop}}" repo="${2:-.}" mb
-       mb=$(git -C "$repo" merge-base "$base" HEAD) || return 2
-       git -C "$repo" diff --quiet "$mb" HEAD -- scripts/claude/hooks/pretooluse_guard.py .claude/settings.json; }
-ck "S6 見張りと settings.json を変えていない" 0 "$(rc s6)"
-S6R="$TMP/s6"; mkdir -p "$S6R/.claude"; git -C "$S6R" init -q -b develop; printf '{}\n' > "$S6R/.claude/settings.json"
-git -C "$S6R" add -A; git -C "$S6R" commit -q -m base
-git -C "$S6R" checkout -q -b f; printf '{"a":1}\n' > "$S6R/.claude/settings.json"
-git -C "$S6R" add -A; git -C "$S6R" commit -q -m change
-ck "FG-S6 settings.json を変えると S6 不合格" 1 "$(rc s6 develop "$S6R")"
+# S6（I197 のブランチで見張りと settings.json を変えていない）は I200 で消した。I197 の間だけのブランチの範囲の
+# 決まりで、マージ後も残ると、見張り・設定を変える後のイシュー（I200 など）が必ず落ちるため
+# （docs/reviews/I200_fix_diagnosis_20261029_2230.md）
 
 # ---------------- FG: 判定の要を壊すと A が落ちる ----------------
 fg_copy() {   # <置き換え前> <置き換え後> [<置き換え前> <置き換え後> …] → 壊した写しのパス（置き換え前が無ければ失敗）
