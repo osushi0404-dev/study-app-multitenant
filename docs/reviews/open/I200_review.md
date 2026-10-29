@@ -38,6 +38,7 @@
 - [review-gate] 1 回目（`docs/reviews/I200_code_review_20261029_2240.md`）が `OFFICIAL_SECURITY: FAILED` で HIGH。記録の本文では組み込みの /security-review は実際に動き、ブランチ全体（settings.json・見張り・開始のフック・check-permission-prompt.sh）を見て「報告する脆弱性はありません」と日本語の文で書いていた（判定が文の形を読めない・I212 の同梱 2 と同じ）。決まりどおり 1 回だけやり直すと（途中で記録のコミットの push 漏れ〔NOT_PUSHED〕を push して実行し直した）、`..._2252.md` は差分なしで、/security-review を動かさずに OK（I212 の穴）— 進む根拠は 1 回目の本文の全体のセキュリティレビュー。台帳の Medium F1（見張りの例外のときに別 worktree への書き込みの停止まで飛ばす）は今回の変更でできた後退なので、敵対的レビューの結果と合わせて直す方向で扱う
 - [review-gate] 敵対的レビュー 1 周目（`docs/reviews/I200_adversarial_review_20261029_2318.md`）は HIGH。3 観点とも所要 920〜990 秒で、実験の案を出した時点で締め切りに達し、実験が 1 本も走らなかった（新しい Critical・High は 0）。§3-3 のとおり、未検証の V1〜V4・V6 を決定論の TC で覆って「読んで可」に下げた（計画変更記録 5）。あわせて、I200 でできた後退（台帳の F1）と、小さく直せる Medium・Low（F2・F3・F4・F6）を直した — 2 周目で直した差分も反証にかける。I206 の②（締め切りによる未検証）が 1 件以上あるので、retro で締め切りの見直しを起票する
 - [fix-loop] CI の 2 回目の失敗（03j が CI に別の worktree が無くて不合格）は、テストが環境の worktree の数に依存していたのが原因。案 A（一時のディレクトリに主とワークツリーを作る）で直した — 診断レビュー OK
+- [review-gate] 敵対的レビュー 2 周目（`docs/reviews/I200_adversarial_review_20261029_2349.md`）は OK（V1〜V8 確認済み・V6 は実験で確認・新しい Critical／High 0）。残った Low（`cp -t` の書き先・コンテナ内の psql の WHERE なしの UPDATE・danger-ops.md 29 行目の「リダイレクトで」の言い回しが F3 の範囲に追いついていない・ホストの psql は見張りだけが判定）は、OK の周の後に差分を足さない決まりのため直さず、retro が台帳の残りとして扱う
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -54,3 +55,5 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
