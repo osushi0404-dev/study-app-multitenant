@@ -89,10 +89,11 @@ if inject "$TMP/g_analyze.py" "def _analyze(text: str) -> dict:" 'raise ValueErr
   ck 03e ASK "$(b 'git push origin feature/x' "$TMP/g_analyze.py")"
   ck 03i ASK "$(b 'docker compose down -v' "$TMP/g_analyze.py")"
   # コードレビューの F1: 読み解きが例外でも、別 worktree への書き込みの停止は外さない（語の判定より前で止める）
-  OTHER_WT="$(git worktree list --porcelain | sed -n 's/^worktree //p' | grep -vxF "$REPO_ROOT" | head -1)"
-  if [ -n "$OTHER_WT" ]; then
-    ck 03j 2 "$(b "cp README.md $OTHER_WT/i200_probe_never_written.txt" "$TMP/g_analyze.py")"
-  else ck "03j 別の worktree が無い" ok SKIP; fi
+  # 一時のリポジトリに主とワークツリーを作り、主の中から別のワークツリーへの書き込みを渡す（CI にも別の worktree が無いため）
+  WTR="$TMP/wtr"; mkdir -p "$WTR/main"; git -C "$WTR/main" init -q
+  git -C "$WTR/main" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m base
+  git -C "$WTR/main" worktree add -q "$WTR/other" -b other
+  ck 03j 2 "$(judge "$TMP/g_analyze.py" "$(bash_json "cp a.txt $WTR/other/i200_probe_never_written.txt")" "$WTR/main")"
 else ck "03d-e,i 差し込み" ok NOINJECT; fi
 if inject "$TMP/g_main.py" "    data = _load()" 'raise RuntimeError("i200")'; then
   ck 03f 0   "$(b 'echo ok' "$TMP/g_main.py")"

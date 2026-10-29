@@ -161,3 +161,10 @@
 - セキュリティ上の考慮点: なし（S6 は見張りと設定の正しさを確かめるものではない。正しさは `test_i200_guard_narrowing.sh`・`test_settings_permissions.sh`・`test_pretooluse_container_guard.sh` などが確かめる）
 - 次回どう防ぐか: 手元の run-all はコミットの後に流す（retro で扱う）。イシューの範囲を守る確かめは、そのイシューの記録（計画のゲート）に置き、run-all に残さない
 - 確かめた結果: `bash scripts/claude/tests/test_i197_adversarial_process.sh` → `pass=113 fail=0`（コミット済みの見張り・設定の変更がある状態で）
+
+### fix-loop 2（2026-10-29・CI の Harness Tests の失敗）
+- なぜ失敗したか: 03j（読み解きが例外でも別 worktree への書き込みの停止を外さない）が、このリポジトリのほかの worktree を書き先に使っていた。CI の checkout には worktree が 1 つしかなく、見つからないときの分岐が不合格になった（手元には worktree が 4 つあるので通った）
+- 何を変えたか: 一時のディレクトリに主とワークツリーを作り、見張りの作業フォルダを主にして、もう一方への書き込みを渡す形にした（診断メモ `docs/reviews/I200_fix_diagnosis_20261029_2355.md`・診断レビュー OK）
+- セキュリティ上の考慮点: なし（テストの組み方の誤り。F1 の守りを CI でも毎回確かめられるようになった）
+- 次回どう防ぐか: 決定論のテストは環境（worktree の数・ネットワーク・ホーム）に依存させず、一時のディレクトリで作る
+- 確かめた結果: `bash scripts/claude/tests/test_i200_guard_narrowing.sh` → `pass=75 fail=0`（03j は 2）
