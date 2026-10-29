@@ -51,6 +51,17 @@ ck FG-01d ASK "$(b 'docker compose exec -T backend sh -c "echo x > /app/manage.p
 ck FG-01e ASK "$(b 'docker compose cp backend:/app/.env /tmp/x')"
 ck FG-01f 2   "$(b "docker compose run --rm backend sh -c \"python -c \\\"import shutil; shutil.rmtree('/app/x')\\\"\"")"
 ck FG-01g ASK "$(b "docker compose cp $TMP/ok.py backend:/app/manage.py")"
+# 敵対的レビュー 1 周目・コードレビューの F3／F4／F6（リダイレクト以外の書き込み・/tmp/../・ダンプと環境変数の表示）
+ck FG-01h ASK "$(b 'docker compose exec -T backend sed -i s/a/b/ /app/config/settings.py')"
+ck FG-01i ASK "$(b 'docker compose exec -T backend tee /app/manage.py')"
+ck FG-01j ASK "$(b 'docker compose exec -T backend cp /tmp/x /app/manage.py')"
+ck FG-01k ASK "$(b 'docker compose exec -T backend mv /tmp/x /app/manage.py')"
+ck FG-01l ASK "$(b 'docker compose exec -T backend sh -c "echo x > /tmp/../app/manage.py"')"
+ck FG-01m ASK "$(b "docker compose cp $TMP/ok.py backend:/tmp/../app/manage.py")"
+ck FG-01n ASK "$(b 'docker compose exec -T db pg_dump -U postgres learning_app')"
+ck FG-01o ASK "$(b 'docker compose exec -T backend sh -c set')"
+ck FG-01p ASK "$(b 'docker compose exec -T backend sh -c "export -p"')"
+ck 01i 0   "$(b 'docker compose exec -T backend cp /app/manage.py /tmp/x')"
 
 # ---- TC-02 (A)〜(C) の代表は今までどおり停止・確認 ----
 ck 02a 2   "$(b 'git push --force origin feature/x')"
@@ -77,6 +88,11 @@ if inject "$TMP/g_analyze.py" "def _analyze(text: str) -> dict:" 'raise ValueErr
   ck 03d 0   "$(b 'echo ok' "$TMP/g_analyze.py")"
   ck 03e ASK "$(b 'git push origin feature/x' "$TMP/g_analyze.py")"
   ck 03i ASK "$(b 'docker compose down -v' "$TMP/g_analyze.py")"
+  # コードレビューの F1: 読み解きが例外でも、別 worktree への書き込みの停止は外さない（語の判定より前で止める）
+  OTHER_WT="$(git worktree list --porcelain | sed -n 's/^worktree //p' | grep -vxF "$REPO_ROOT" | head -1)"
+  if [ -n "$OTHER_WT" ]; then
+    ck 03j 2 "$(b "cp README.md $OTHER_WT/i200_probe_never_written.txt" "$TMP/g_analyze.py")"
+  else ck "03j 別の worktree が無い" ok SKIP; fi
 else ck "03d-e,i 差し込み" ok NOINJECT; fi
 if inject "$TMP/g_main.py" "    data = _load()" 'raise RuntimeError("i200")'; then
   ck 03f 0   "$(b 'echo ok' "$TMP/g_main.py")"

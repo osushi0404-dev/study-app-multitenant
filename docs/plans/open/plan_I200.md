@@ -272,12 +272,12 @@
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
-| V1 | 1 | 実験必須 | (A)〜(C) の代表（force push・保護ブランチへの push・`git push --delete`・`git reset --hard`・`docker compose down -v`・コンテナ内の `DROP TABLE`・`rm -rf`・`.env` の表示・コンテナ内の `requests.post`・`send_mail`）が、新しい見張りでも今までどおり停止か確認になる（TC-02。ホストの `curl`・`wget`・`ssh` は設定の deny が止め、I200 では変えない） |
-| V2 | 1 | 実験必須 | コンテナ内・読みきれない書き方・`docker compose cp` で中身を送る形で、危ない語を含む普通の書き方（`os.remove`・`shutil.rmtree`・`.delete()`・`send_mail`）が素通りしない（TC-01 の FG・TC-03） |
-| V3 | 1 | 実験必須 | ワークフローの編集で `secrets.`・`permissions` の `write`・`pull_request_target`・`github.event.` を新しく書き足すと確認になり、action の版の書き換えだけなら通る。Edit・MultiEdit・Write のどれでも同じ（TC-04） |
-| V4 | 1 | 実験必須 | `.pre-commit-config.yaml` で detect-secrets のフックを消す・`exclude` を足すと確認になる（TC-05） |
-| V5 | 2 | 読んで可 | 既存のテストで期待値を変えたケースが、見張りの 3・7・9 による確認だけで、停止（2）の期待値を 1 件も変えていない（auto_test の変更の一覧と差分） |
-| V6 | 2 | 実験必須 | primary の早送りが、未コミットの変更がある・develop 以外・早送りできないときに動かず、未追跡のファイルを消さない（TC-07 の一時のリポジトリ） |
+| V1 | 1 | 読んで可 | (A)〜(C) の代表（force push・保護ブランチへの push・`git push --delete`・`git reset --hard`・`docker compose down -v`・コンテナ内の `DROP TABLE`・`rm -rf`・`.env` の表示・コンテナ内の `requests.post`・`send_mail`）が、新しい見張りでも今までどおり停止か確認になる（TC-02。ホストの `curl`・`wget`・`ssh` は設定の deny が止め、I200 では変えない）（決定論の TC-02 の 14 件で覆った。変更の前後で同じ期待値・計画変更記録 5） |
+| V2 | 1 | 読んで可 | コンテナ内・読みきれない書き方・`docker compose cp` で中身を送る形で、危ない語を含む普通の書き方（`os.remove`・`shutil.rmtree`・`.delete()`・`send_mail`）が素通りしない（TC-01 の FG・TC-03）（決定論の TC-01 の FG-01a〜FG-01p・TC-03 の 03b〜03j・FG-03 で覆った・計画変更記録 5） |
+| V3 | 1 | 読んで可 | ワークフローの編集で `secrets.`・`permissions` の `write`・`pull_request_target`・`github.event.` を新しく書き足すと確認になり、action の版の書き換えだけなら通る。Edit・MultiEdit・Write のどれでも同じ（TC-04）（決定論の TC-04 の 04a〜04q で覆った。Edit・MultiEdit・Write・パスの書き方・大文字小文字・計画変更記録 5） |
+| V4 | 1 | 読んで可 | `.pre-commit-config.yaml` で detect-secrets のフックを消す・`exclude` を足すと確認になる（TC-05）（決定論の TC-05 の 05a〜05h で覆った・計画変更記録 5） |
+| V5 | 2 | 読んで可 | 既存のテストで期待値を変えたケースが、見張りの 3・7・9 による確認だけで、停止（2）の期待値を 1 件も変えていない（auto_test の変更の一覧と差分）（既存のテストの差分で、旧期待値が 2 の行の変更が 0 件・auto_test の TC-08 の一覧） |
+| V6 | 2 | 読んで可 | primary の早送りが、未コミットの変更がある・develop 以外・早送りできないときに動かず、未追跡のファイルを消さない（TC-07 の一時のリポジトリ）（決定論の TC-07 の 07a〜07i と FG-07 で覆った。一時のリポジトリ・計画変更記録 5） |
 | V7 | 3 | 読んで可 | 許可の設定の allow に足した行が `docker compose exec|run|cp`・`docker-compose` の同じもの・`git rebase *`・`psql *`・`Edit(.github/workflows/**)`・`Edit(.github/dependabot.yml)`・`Edit(.pre-commit-config.yaml)`・`Edit(docker-compose.yml)` だけで、`Bash(docker compose *)` のような広い行が無い。`ask` が `Edit(.secrets.baseline)` だけ。秘密ファイルの deny が残っている（`test_settings_permissions.sh`） |
 | V8 | 3 | 読んで可 | danger-ops.md の確認の基準が、見張りと設定の実物と食い違わない（M-05） |
 
@@ -286,6 +286,7 @@
 - 2（plan-review・計画レビュー 2 の Warning 4 件）: TC-02 に WHERE なしの `DELETE`（ホストとコンテナ）を足した／フックの時間の上限（15 秒・22 秒）と TC-07i を足した／書き込みの判定をコンテナ内の単純コマンドだけに使うと 5-1 に明記した／`docker compose run` が 5-2 の対象に入ることを明記し、TC-01 に `run` の FG-01f・01h を足した。Info: 期待値を変えた既存ケースの一覧（TC-08）は実装で追記し、review-gate の前に埋める／誤って確認になる量が corpus diff の 1% を超えたら、広い語（`git`・`token` など）から絞る。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 - 3（design-security-review・2026-10-29・Medium 5 件）: ワークフローの語を `secrets` に広げた／危ない語に `down`・`volume`・`prune`・`kill` を足した／`docker compose cp` のコピー先が `/tmp/` 以外なら確認／pre-commit の語に `files:`・`types` を足した／確かめの道具 `write` に上書きの防止を足した。TC-01・TC-03・TC-04・TC-05・TC-06b にケースを足した。計画レビューのやり直し: 不要（語・条件の細部で、方式・範囲・受け入れ条件は変えない）
 - 4（implement・2026-10-29）: 実装で分かったことに合わせた細部。(a) 既存のテストの見直しで、一律の確認をやめると (C) に当たるのに通ってしまう 3 つ（`ps auxe` の環境変数の表示・`dumpdata`・`pg_read_file`）が見つかったので、`_RISKY_WORDS` に `dumpdata`・`pg_read` を、`_container_risky` に環境変数の表示（`ps` の e・引数なしの `env`）を足した（確認のまま）。(b) FG-01b・01c・01f は確認ではなく既存のコードの判定で停止になった（確認より強いので期待値を 2 にした）。(c) 5-5 の「e2e の 2 行も消す」は誤り: `Bash(docker compose --profile e2e run …)` は `--profile` が前にあり `Bash(docker compose run *)` に含まれないので残した（消したのは型チェック・lint の 4 行だけ）。(d) `_fail_safe` の語の判定は Bash だけにした（Edit 系の失敗を通すと、別 worktree への書き込みの停止を素通しにしうるため。計画の 5-2 の「編集の中身を取り出せれば」より安全側）。(e) 5-4 の照合は realpath で正規化したパスに `/.github/workflows/` が含まれるか・名前が `.pre-commit-config.yaml` かで行い、リポジトリの root を求めない（root の外も同じ扱いになり、計画の「名前で照合（安全側）」と一本化）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 5（review-gate・敵対的レビュー 1 周目の後・2026-10-29）: 1 周目は 3 観点とも実験の案を出した時点で 1 周の締め切りに達し、実験が 1 本も走らず、V1〜V4・V6 が未検証（新しい Critical・High は 0）。review-gate §3-3 のとおり、それぞれを決定論の TC（失敗注入つき）で覆い、一覧の確かめ方を「読んで可」に下げて TC の番号を書いた（V5 も差分の確認を書いた）。あわせて、レビュー役の暫定の疑いとコードレビューの台帳の Medium のうち、I200 でできた後退と小さく直せるものを直した: F1（読み解きが例外のとき別 worktree への書き込みの停止まで飛ばす → 停止を読み解きの前へ）・F3（コンテナ内の `sed -i`・`tee`・`cp`・`mv` の書き込み先も /tmp/ 以外なら確認）・F4（/tmp/ の判定を `..` を正規化してから）・F6（`pg_dump`・`set`・`export -p`・`declare -p` を確認）・F2（primary の fetch・merge の打ち切りを SIGTERM にして git が .lock を片付けられるように。時間の上限を 12 秒・15 秒に下げ、最悪 27 秒）。TC-01 に FG-01h〜FG-01p・01i、TC-03 に 03j を足した。コンテナのテストの C17（`sed -i core/settings.py`）は確認に戻した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。止める範囲を元の計画の 5-1 の「/tmp/ 以外への書き込みは確認」に合わせて広げただけ）
 
 ## レビュー結果
 - [20261029_1923 判定: ✅ 完了](../../reviews/I200_plan_review_20261029_1923.md)

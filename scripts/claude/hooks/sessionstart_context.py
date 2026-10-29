@@ -79,8 +79,30 @@ def format_context(branch: str | None, dirty: int | None,
     return "\n".join(lines)
 
 
-PRIMARY_SKIP_AFTER_SEC = 15   # 既存の行を集めた後、これを過ぎていたら primary をそろえない
-PRIMARY_STOP_AFTER_SEC = 22   # sync_primary の中で、git を呼ぶ前にこれを過ぎていたらやめる（22＋5＝27 秒 < フックの 30 秒）
+PRIMARY_SKIP_AFTER_SEC = 12   # 既存の行を集めた後、これを過ぎていたら primary をそろえない
+# sync_primary の中で fetch・merge の前にこれを過ぎていたらやめる。fetch・merge は打ち切りに SIGTERM の後 2 秒待つので
+# 最長 7 秒、merge の後の rev-parse が 5 秒で、15＋7＋5＝27 秒 < フックの 30 秒
+PRIMARY_STOP_AFTER_SEC = 15
+
+
+def _run_git_soft(args: list[str]) -> str | None:
+    """primary を書き換える git（fetch・merge）用。打ち切りは SIGTERM で行い、git が自分で .lock を片付けられる
+    ようにする（subprocess.run の timeout は SIGKILL で、index.lock 等が残り以後の git が失敗する・コードレビューの F2）。"""
+    try:
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except OSError:
+        return None
+    try:
+        out, _ = p.communicate(timeout=TIMEOUT_SEC)
+    except subprocess.TimeoutExpired:
+        p.terminate()
+        try:
+            p.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.communicate()
+        return None
+    return out if p.returncode == 0 else None
 
 
 def _primary_path() -> str | None:
@@ -119,11 +141,11 @@ def sync_primary(start: float) -> str:
         return "primary: 未コミットの変更があるのでそろえません"
     if late(PRIMARY_STOP_AFTER_SEC):
         return "primary: 時間が足りないのでそろえません"
-    _run(["git", "-C", primary, "fetch", "--quiet", "origin", "develop"])  # 失敗しても手元の origin/develop で続ける
+    _run_git_soft(["git", "-C", primary, "fetch", "--quiet", "origin", "develop"])  # 失敗しても手元の origin/develop で続ける
     if late(PRIMARY_STOP_AFTER_SEC):
         return "primary: 時間が足りないのでそろえません"
     before = _run(["git", "-C", primary, "rev-parse", "--short", "HEAD"])
-    if _run(["git", "-C", primary, "merge", "--ff-only", "--quiet", "origin/develop"]) is None:
+    if _run_git_soft(["git", "-C", primary, "merge", "--ff-only", "--quiet", "origin/develop"]) is None:
         return f"primary: そろえられませんでした（早送りできない・ファイルがぶつかる・ロック中など）。{manual}"
     after = _run(["git", "-C", primary, "rev-parse", "--short", "HEAD"])
     if before is None or after is None or before.strip() == after.strip():

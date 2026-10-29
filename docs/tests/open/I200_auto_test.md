@@ -33,6 +33,10 @@
 | FG-01f | `docker compose run --rm backend sh -c "python -c \"import shutil; shutil.rmtree('/app/x')\""`（新しいコンテナを起動する `run` の中・危ない語） | 2（同上） |
 | 01h | `docker compose run --rm backend python manage.py check`（`run` の中・許可リストに入る） | 0 |
 | FG-01g | `docker compose cp <一時のファイル（中身 print("ok")）> backend:/app/manage.py`（コピー先が `/tmp/` 以外＝手元のファイルの上書き） | ASK |
+| FG-01h〜01k | コンテナ内の `sed -i s/a/b/ /app/config/settings.py`・`tee /app/manage.py`・`cp /tmp/x /app/manage.py`・`mv /tmp/x /app/manage.py`（リダイレクト以外の書き込み・計画変更記録 5） | ASK |
+| FG-01l・01m | `sh -c "echo x > /tmp/../app/manage.py"`・`docker compose cp <ok> backend:/tmp/../app/manage.py`（`..` を正規化） | ASK |
+| FG-01n〜01p | コンテナ内の `pg_dump`・`sh -c set`・`sh -c "export -p"`（ダンプ・環境変数の表示） | ASK |
+| 01i | コンテナ内の `cp /app/manage.py /tmp/x`（書き先が /tmp/） | 0 |
 
 ## TC-02 (A)〜(C) の代表は今までどおり停止・確認
 | ID | コマンド | 期待 |
@@ -66,6 +70,7 @@
 | 03f | 見張りの失敗（`_fail_safe`）: 複製の `def main():` の直後に `raise RuntimeError("i200")` を差し込み、`echo ok` を渡す | 0 |
 | 03g | 03f と同じ複製に `rm -rf x` を渡す | ASK |
 | 03i | 03d と同じ複製（読み解きの例外）に `docker compose down -v` を渡す | ASK |
+| 03j | 03d と同じ複製に `cp README.md <別の worktree>/i200_probe_never_written.txt`（危ない語なし・別 worktree への書き込み。コードレビューの F1） | 2（停止は読み解きより前） |
 | 03h | 語の境界: `echo "add odd`（引用符が閉じていない・`dd` を含むが語ではない） | 0 |
 | FG-03 | 見張りの複製で `_RISKY_WORDS` から `rm` を消し、03b を流す | 0（＝03b の期待 ASK と食い違い、テストが不合格になることを確かめる） |
 
@@ -138,8 +143,8 @@
 - `bash scripts/claude/tests/run-all.sh`（全件 pass）
 - `bash scripts/claude/tests/test_guard_bash_oracle.sh`・`test_pretooluse_guard_matrix.sh`・`test_guard_corpus_diff.sh`（danger-ops.md「見張りを直したら流す 3 つ」）
 - 期待値を変えた既存のケースの一覧（実装で追記する。各行に変えた理由＝見張りの 3・7・9 のどれか。停止 `2` の期待値を変えた行が 0 件であること）:
-  - `test_pretooluse_container_guard.sh`（59 件・すべて ASK→0。`git diff` で旧期待値が `2` の行は 0 件と確認）:
-    - 見張りの 3（コンテナ内の一覧外・危ない語なし）: C1 createsuperuser・C2 npm install・C6 dbshell（対話）・C7 一覧にないコマンド・C10 bash -lc 一覧外・C11 python -m pip install・C14 redis-cli DEL・C15／C16 celery purge・C17 sed -i・C18 sed -n の e コマンド・C19 find -fprint・C24 ruff --fix・C25 npm audit fix・C26 npx 一覧外・C27 makemigrations・C28 psql \!・C29／C30 EXPLAIN ANALYZE・C31 \gexec・C32 psql -o・C37 sort -o・C38 uniq IN OUT・C39 collectstatic・C40 未知の compose オプション・C42 一覧外の呼び出し・C43 一覧外の import・C44 書き込みの open・C46 pg_terminate_backend・C48 ruff format・C49 npx eslint --fix・C52 migrate --fake・C55／C56 コメントの後ろの一覧外・C57 一覧外の import だけ・C58 書き込みの open だけ・C59 多対多の .set([])・C60〜C68 playwright の選択肢・install・別サービス・中のシェルで連結・F5 存在しないファイル・F17 中身の見えない書き換え・F24 cp で上書きして流し込み・G6 実体では C7
+  - `test_pretooluse_container_guard.sh`（58 件・すべて ASK→0。C17 sed -i は敵対的レビュー 1 周目の後に確認へ戻した〔コンテナ内の /tmp/ 以外への書き込み〕。`git diff` で旧期待値が `2` の行は 0 件と確認）:
+    - 見張りの 3（コンテナ内の一覧外・危ない語なし）: C1 createsuperuser・C2 npm install・C6 dbshell（対話）・C7 一覧にないコマンド・C10 bash -lc 一覧外・C11 python -m pip install・C14 redis-cli DEL・C15／C16 celery purge・C18 sed -n の e コマンド・C19 find -fprint・C24 ruff --fix・C25 npm audit fix・C26 npx 一覧外・C27 makemigrations・C28 psql \!・C29／C30 EXPLAIN ANALYZE・C31 \gexec・C32 psql -o・C37 sort -o・C38 uniq IN OUT・C39 collectstatic・C40 未知の compose オプション・C42 一覧外の呼び出し・C43 一覧外の import・C44 書き込みの open・C46 pg_terminate_backend・C48 ruff format・C49 npx eslint --fix・C52 migrate --fake・C55／C56 コメントの後ろの一覧外・C57 一覧外の import だけ・C58 書き込みの open だけ・C59 多対多の .set([])・C60〜C68 playwright の選択肢・install・別サービス・中のシェルで連結・F5 存在しないファイル・F17 中身の見えない書き換え・F24 cp で上書きして流し込み・G6 実体では C7
     - 見張りの 3（パイプ・中身の見えない形・危ない語なし）: C33 パイプで python・C51 パイプで sh・C35 読めないスクリプト・C53 構文として読めない・C54 中身の見えない $( )
     - 見張りの 7（読みきれない・危ない語なし）: C34・G24・G26 引用符が閉じていない
     - 見張りの 9（例外・危ない語なし）: G10 例外のときは確認に倒す

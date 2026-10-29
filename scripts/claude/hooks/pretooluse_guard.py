@@ -2320,7 +2320,7 @@ _RISKY_WORDS = (
     "curl", "wget", "nc", "ncat", "ssh", "scp", "rsync", "requests", "urllib", "http.client", "httpx", "socket",
     "smtplib", "send_mail", "mail_admins", "email_user", "emailmessage", ".delay(", "apply_async", "openai",
     ".env", "environ", "printenv", "secret", "password", "token", "api_key",
-    "dumpdata", "pg_read",   # DB の中身をまとめて出す・DB のコンテナのファイルを読む（(C) 個人情報・秘密）
+    "dumpdata", "pg_dump", "pg_read",   # DB の中身をまとめて出す・DB のコンテナのファイルを読む（(C) 個人情報・秘密）
 )
 # 英数字で終わる短い語は、後ろも語の切れ目のときだけ当たる（dd が add に、git が digit に当たらないように）
 _RISKY_SHORT = frozenset(("rm", "dd", "git", "gh", "nc", "ssh", "scp", "down", "kill"))
@@ -2382,14 +2382,38 @@ def _container_risky(c: dict, text: str) -> list:
     found = _risky_words("\n".join(parts))
     if found:
         reasons.append("危ない語: " + "・".join(found))
-    if any(not t.startswith(_CTR_SCRATCH) for t in c["write_to"]):
-        reasons.append("コンテナの /tmp/ 以外への書き込み")
     toks = c["toks"]
     head = os.path.basename(toks[0]) if toks else ""
-    # 環境変数（backend/.env の値）をまとめて表示する形（(C)）。ps の BSD 形式の e・引数なしの env
-    if (head == "ps" and any(not a.startswith("-") and "e" in a for a in toks[1:])) or (head == "env" and len(toks) == 1):
+    if any(not _in_scratch(t) for t in c["write_to"] + _ctr_write_targets(toks)):
+        reasons.append("コンテナの /tmp/ 以外への書き込み")
+    # 環境変数（backend/.env の値）をまとめて表示する形（(C)）。ps の BSD 形式の e・引数なしの env・set、
+    # export -p・declare -p／-x（コードレビューの F6）
+    if (head == "ps" and any(not a.startswith("-") and "e" in a for a in toks[1:])) \
+            or (head in ("env", "set") and len(toks) == 1) \
+            or (head in ("export", "declare", "typeset") and any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:])):
         reasons.append("環境変数（秘密情報）の表示")
     return reasons
+
+
+def _in_scratch(path: str) -> bool:
+    """コンテナのパスが /tmp/ の下か（.. を正規化してから見る。/tmp/../app/x は /tmp/ の外・コードレビューの F4）。"""
+    return posixpath.normpath(path).startswith(_CTR_SCRATCH)
+
+
+def _ctr_write_targets(toks: list) -> list:
+    """リダイレクト以外でファイルに書き込むコマンドの書き先（tee・sed -i・cp／mv／install／ln／rsync の最後の引数。
+    _record_writes と同じ見分け方）。コンテナの /app/ は手元に bind mount されているので、/tmp/ 以外は確認（F3）。"""
+    if not toks:
+        return []
+    head = os.path.basename(toks[0])
+    pos = [a for a in toks[1:] if not a.startswith("-")]
+    if head == "tee":
+        return pos
+    if head == "sed" and _has_short(toks[1:], "i", "--in-place"):
+        return pos[1:]
+    if head in ("cp", "mv", "install", "ln", "rsync") and len(pos) >= 2:
+        return [pos[-1]]
+    return []
 
 
 def _docker_cp_positional(args: list) -> list:
@@ -2412,7 +2436,7 @@ def _docker_cp_in_risky(args: list) -> list:
         return []
     reasons = []
     dst_path = dst.split(":", 1)[1] if _is_container_ref(dst) else dst
-    if not dst_path.startswith(_CTR_SCRATCH):
+    if not _in_scratch(dst_path):
         reasons.append("コンテナの /tmp/ 以外への書き込み")
     body = _read_limited(src, _CP_READ_LIMIT)
     if body is None:
@@ -3702,18 +3726,9 @@ def main():
     cmd = re.sub(r"^DANGER_OK=1\s+", "", _norm(raw))
     # I174: 読み解き（_analyze）は改行を保ったコマンドで行う（ヒアドキュメントの本文と区切りを失わないため）。
     pcmd = re.sub(r"^\s*DANGER_OK=1[ \t]+", "", raw)
-    try:
-        an = _analyze(pcmd)
-    except Exception as e:                       # I200: 読み解けないときは、危ない語があるときだけ確認
-        _ask_if_risky(raw, f"見張りがコマンドを読み解けませんでした（{type(e).__name__}）")
-        sys.exit(0)
-
-    # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
-    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。mkfs・dd・shred はコマンド名で判定する。
-    if an["hard"]:
-        _block(an["hard"], raw)
 
     # I095: worktree 横断書込のブロック（DANGER_OK でも解除しない＝danger_ok ゲートの外）。
+    # I200: 読み解き（_analyze）より前に置く。読み解きが例外になって語の判定だけで通す経路でも、この停止は外さない
     _wt_targets = _bash_write_targets(cmd)
     for _tgt in _wt_targets:
         x = _cross_worktree(_tgt)
@@ -3724,6 +3739,17 @@ def main():
     if not _wt_targets and _bash_uncovered_risk(cmd):
         print("[guard] worktree ガードは絶対パス宛先のみ検査します（cd/変数展開越しの宛先は非対象）",
               file=sys.stderr)
+
+    try:
+        an = _analyze(pcmd)
+    except Exception as e:                       # I200: 読み解けないときは、危ない語があるときだけ確認
+        _ask_if_risky(raw, f"見張りがコマンドを読み解けませんでした（{type(e).__name__}）")
+        sys.exit(0)
+
+    # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
+    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。mkfs・dd・shred はコマンド名で判定する。
+    if an["hard"]:
+        _block(an["hard"], raw)
 
     # 危険操作（danger-ops.md）。I174: DANGER_OK=1 は素通しではなく人の承認（ask）に切り替える。
     # settings.json の ask ルールに頼らず、決定論的に人の承認を求める（CLAUDE.md 絶対ルール 4）。
