@@ -9,28 +9,50 @@ GitHub のタイトルの自由文は出さない。公開リポジトリのイ�
 （I185 security-review Medium）。出すのは番号・日付・タイトル中の最初の I### だけ。
 どのコマンドが失敗・タイムアウトしても exit 0（セッションの開始を止めない）。
 
-I200: 許可の判定の一部は primary（元のフォルダ）の設定で行われるため、primary を origin/develop へ早送りする
-（develop にいて追跡済みファイルがきれいで、早送りだけで済むときだけ。何も消さない・sync_primary）。
+I200・I219: 許可の判定の一部は primary（元のフォルダ）の設定で行われるため、primary を origin/develop へ早送りする
+（develop にいて追跡済みファイルがきれいで、早送りだけで済むときだけ。何も消さない）。早送りは裏の処理
+（`--sync-primary`）で行い、開始時のフックは前回の結果を 1 行出して裏の処理を起動するだけで、待たない（I219）。
 """
+import datetime
+import fcntl
+import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
-import time
 
 TIMEOUT_SEC = 5
 PR_LIMIT = 5
 UNAVAILABLE = "取得できませんでした"
 ISSUE_ID = re.compile(r"\b(I[0-9]{3})\b", re.ASCII)  # PR は「fix: I178 …」の形なので先頭に限らず最初の 1 つ
 DATE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})", re.ASCII)
+# I219: 読み取りの git は索引の書き直し（optional lock）をしない。打ち切られても .git/index.lock を残さない
+GIT_ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
 
 
-def _run(args: list[str]) -> str | None:
+def _run(args: list[str], timeout: float = TIMEOUT_SEC, grace: float = 0) -> str | None:
+    """コマンドを動かして stdout を返す（失敗・打ち切りは None）。grace が 0 より大きいときは、打ち切りを SIGTERM で
+    行い grace 秒待ってから SIGKILL（必須のロックを取る fetch・merge 用。SIGKILL だけだと git が .lock を片付けられない）。
+    読み取りは GIT_OPTIONAL_LOCKS=0 でロックを取らないので、すぐ打ち切る（開始時のフックの最悪の時間を延ばさない・I219）。"""
     try:
-        result = subprocess.run(args, capture_output=True, text=True, timeout=TIMEOUT_SEC)
-    except (OSError, subprocess.TimeoutExpired):
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=GIT_ENV)
+    except OSError:
         return None
-    return result.stdout if result.returncode == 0 else None
+    try:
+        out, _ = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        if grace > 0:
+            p.terminate()
+            try:
+                p.communicate(timeout=grace)
+                return None
+            except subprocess.TimeoutExpired:
+                pass
+        p.kill()
+        p.communicate()
+        return None
+    return out if p.returncode == 0 else None
 
 
 def _gh_json(args: list[str]) -> list | None:
@@ -79,30 +101,17 @@ def format_context(branch: str | None, dirty: int | None,
     return "\n".join(lines)
 
 
-PRIMARY_SKIP_AFTER_SEC = 12   # 既存の行を集めた後、これを過ぎていたら primary をそろえない
-# sync_primary の中で fetch・merge の前にこれを過ぎていたらやめる。fetch・merge は打ち切りに SIGTERM の後 2 秒待つので
-# 最長 7 秒、merge の後の rev-parse が 5 秒で、15＋7＋5＝27 秒 < フックの 30 秒
-PRIMARY_STOP_AFTER_SEC = 15
+# --- I219: primary の早送り（裏の処理）と、その結果の受け渡し ---
+BG_GIT_TIMEOUT_SEC = 60   # 裏の処理の git 1 回の打ち切り（実際の primary の status は 1〜5 秒・plan_I219.md 調査結果）
 
 
-def _run_git_soft(args: list[str]) -> str | None:
-    """primary を書き換える git（fetch・merge）用。打ち切りは SIGTERM で行い、git が自分で .lock を片付けられる
-    ようにする（subprocess.run の timeout は SIGKILL で、index.lock 等が残り以後の git が失敗する・コードレビューの F2）。"""
+def _bg_timeout() -> float:
+    """裏の処理の打ち切り。CLAUDE_PRIMARY_SYNC_TIMEOUT はテスト用（短くするだけ。判定は変えない）。"""
     try:
-        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    except OSError:
-        return None
-    try:
-        out, _ = p.communicate(timeout=TIMEOUT_SEC)
-    except subprocess.TimeoutExpired:
-        p.terminate()
-        try:
-            p.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            p.kill()
-            p.communicate()
-        return None
-    return out if p.returncode == 0 else None
+        v = float(os.environ.get("CLAUDE_PRIMARY_SYNC_TIMEOUT", ""))
+        return v if 0 < v <= BG_GIT_TIMEOUT_SEC else BG_GIT_TIMEOUT_SEC
+    except ValueError:
+        return BG_GIT_TIMEOUT_SEC
 
 
 def _primary_path() -> str | None:
@@ -116,45 +125,86 @@ def _primary_path() -> str | None:
     return None
 
 
-def sync_primary(start: float) -> str:
-    """I200: primary を origin/develop へ早送りする。develop にいて追跡済みファイルがきれいで、
-    早送りだけで済むときだけ動き、何も消さない（未追跡のファイルを上書きしうるときは git 自身が止める）。
-    合わないとき・失敗したときは理由と手で行うコマンドを 1 行で返すだけ（docs/runbooks/worktree.md §9）。"""
-    def late(limit: float) -> bool:
-        return time.monotonic() - start > limit
+def _state_paths(primary: str) -> tuple[str, str]:
+    """結果のファイルと排他の .lock の場所（リポジトリの外）。CLAUDE_PRIMARY_SYNC_DIR はテスト用（置き場所だけ）。"""
+    base = os.environ.get("CLAUDE_PRIMARY_SYNC_DIR") or os.path.join(
+        os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "claude-primary-sync")
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    key = hashlib.sha1(primary.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(base, key + ".json"), os.path.join(base, key + ".lock")
 
-    if late(PRIMARY_SKIP_AFTER_SEC):
-        return "primary: 時間が足りないのでそろえません"
+
+def _write_result(path: str, message: str) -> None:
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"at": datetime.datetime.now().strftime("%m-%d %H:%M"), "message": message}, f, ensure_ascii=False)
+    os.replace(tmp, path)   # 読む側が書きかけを読まない
+
+
+def _sync_primary_steps(primary: str) -> str:
+    """I200 の条件のまま早送りする（develop にいる・追跡済みファイルがきれい・早送りだけ。何も消さない。
+    未追跡のファイルを上書きしうるときは git 自身が止める）。結果を 1 行で返す。"""
+    t = _bg_timeout()
+    manual = f"手で: cd {primary} && git switch develop && git pull --ff-only"
+    head = _run(["git", "-C", primary, "symbolic-ref", "--short", "HEAD"], t)
+    if head is None:
+        return f"develop にいないのでそろえません（今: ブランチなし）。{manual}"
+    if head.strip() != "develop":
+        return f"develop にいないのでそろえません（今: {head.strip()}）"
+    status = _run(["git", "-C", primary, "status", "--porcelain", "--untracked-files=no"], t)
+    if status is None:
+        return f"状態を読めませんでした。{manual}"
+    if status.strip():
+        return "未コミットの変更があるのでそろえません"
+    _run(["git", "-C", primary, "fetch", "--quiet", "origin", "develop"], t, grace=2)  # 失敗しても手元の origin/develop で続ける
+    before = _run(["git", "-C", primary, "rev-parse", "--short", "HEAD"], t)
+    if _run(["git", "-C", primary, "merge", "--ff-only", "--quiet", "origin/develop"], t, grace=2) is None:
+        return f"そろえられませんでした（早送りできない・ファイルがぶつかる・ロック中・時間切れなど）。{manual}"
+    after = _run(["git", "-C", primary, "rev-parse", "--short", "HEAD"], t)
+    if before is None or after is None or before.strip() == after.strip():
+        return "最新です"
+    return f"develop を origin/develop へ早送りしました（{before.strip()}..{after.strip()}）"
+
+
+def sync_primary_bg() -> None:
+    """裏の処理（--sync-primary）。1 本ずつ動き（flock）、結果をファイルに書く。何があっても exit 0。"""
     primary = _primary_path()
     if not primary:
-        return "primary: 確かめられませんでした"
-    manual = f"手で: cd {primary} && git switch develop && git pull --ff-only"
-    head = _run(["git", "-C", primary, "symbolic-ref", "--short", "HEAD"])
-    if head is None:
-        return f"primary: develop にいないのでそろえません（今: ブランチなし）。{manual}"
-    if head.strip() != "develop":
-        return f"primary: develop にいないのでそろえません（今: {head.strip()}）"
-    status = _run(["git", "-C", primary, "status", "--porcelain", "--untracked-files=no"])
-    if status is None:
-        return f"primary: 状態を読めませんでした。{manual}"
-    if status.strip():
-        return "primary: 未コミットの変更があるのでそろえません"
-    if late(PRIMARY_STOP_AFTER_SEC):
-        return "primary: 時間が足りないのでそろえません"
-    _run_git_soft(["git", "-C", primary, "fetch", "--quiet", "origin", "develop"])  # 失敗しても手元の origin/develop で続ける
-    if late(PRIMARY_STOP_AFTER_SEC):
-        return "primary: 時間が足りないのでそろえません"
-    before = _run(["git", "-C", primary, "rev-parse", "--short", "HEAD"])
-    if _run_git_soft(["git", "-C", primary, "merge", "--ff-only", "--quiet", "origin/develop"]) is None:
-        return f"primary: そろえられませんでした（早送りできない・ファイルがぶつかる・ロック中など）。{manual}"
-    after = _run(["git", "-C", primary, "rev-parse", "--short", "HEAD"])
-    if before is None or after is None or before.strip() == after.strip():
-        return "primary: 最新です"
-    return f"primary: develop を origin/develop へ早送りしました（{before.strip()}..{after.strip()}）"
+        return
+    result_path, lock_path = _state_paths(primary)
+    with open(lock_path, "a", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return   # ほかの裏の処理が動いている
+        try:
+            message = _sync_primary_steps(primary)
+        except Exception as e:  # noqa: BLE001 — 結果に理由を残して終わる
+            message = f"確かめられませんでした（{type(e).__name__}）"
+        _write_result(result_path, message)
+
+
+def primary_line_and_spawn() -> str:
+    """開始時のフック用。前回の結果を 1 行にし、裏の処理を起動してすぐ戻る（待たない・I219）。"""
+    primary = _primary_path()
+    line = "primary: 確かめられませんでした"
+    if primary:
+        result_path, _ = _state_paths(primary)
+        try:
+            with open(result_path, encoding="utf-8") as f:
+                data = json.load(f)
+            line = f"primary: 前回（{data.get('at', '-')}）: {data.get('message', '-')}"
+        except (OSError, ValueError):
+            line = "primary: まだ結果がありません（裏でそろえています）"
+    try:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "--sync-primary"], start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        line += "（裏の処理を起動できませんでした）"
+    return line
 
 
 def collect() -> str:
-    start = time.monotonic()
     branch_out = _run(["git", "branch", "--show-current"])
     branch = None if branch_out is None else (branch_out.strip() or "(detached HEAD)")
     status_out = _run(["git", "status", "--porcelain"])
@@ -168,12 +218,18 @@ def collect() -> str:
         latest = issues[0] if issues else {}  # 0 件なら「なし」
     text = format_context(branch, dirty, prs, latest)  # 既存の行を先に組み立てておく（primary の失敗で失わない）
     try:
-        return text + "\n" + sync_primary(start)
+        return text + "\n" + primary_line_and_spawn()
     except Exception:  # noqa: BLE001 — primary の行の失敗で既存の行を失わない
         return text + "\nprimary: 確かめられませんでした"
 
 
 def main() -> None:
+    if sys.argv[1:] == ["--sync-primary"]:
+        try:
+            sync_primary_bg()
+        except Exception:  # noqa: BLE001 — 裏の処理は何があっても静かに終わる
+            pass
+        sys.exit(0)
     try:
         print(collect())
     except Exception:  # noqa: BLE001 — セッションの開始は決して止めない
