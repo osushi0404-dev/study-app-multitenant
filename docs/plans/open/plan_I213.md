@@ -224,6 +224,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V6 | 3 | 読んで可 | uv を見張らない理由・Dependabot の PR の受け取り方が runbook にあり、イシューの決定と食い違わない（TC-01 M） |
 
 ## 計画変更記録
-（なし）
+- 1（plan-review・2026-10-29）: 計画レビューの Warning 3 件への対応。(a) 手動 No.4 の「7 か所」を「6 種類」に直して列挙した。(b) TC-01 W2 の `secrets.GITHUB_TOKEN` も禁止する件: 計画時に `grep -rn "secrets\." .github/workflows/` で使用箇所は e2e.yml の `E2E_TEST_PASSWORD` の 2 行だけと確認済み（GITHUB_TOKEN を明示的に使う箇所は無い。dependency-audit.yml は `GH_TOKEN: ${{ github.token }}` の形で `secrets.` を使わず、そもそも pull_request で動かない）。実装ステップ 1 の Red/Green で実物を見る。(c) 手動 No.1 の DB 名・ユーザー名・テーブル名を `docker compose config`・`backend/accounts/models.py:142` と照合し、テーブル名を `users` に直した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
+- [20261029_0939 判定: ✅ 完了](../../reviews/I213_plan_review_20261029_0939.md)
