@@ -30,6 +30,12 @@ repos:
         files: ^backend/
         exclude: ^backend/.*/migrations/|^backend/.*/tests/
 
+  # .github/dependabot.yml の書き間違いを公式のスキーマで止める（I213。0.39.0 は出たばかりなので待つ日数に合わせて 1 つ前）
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.2
+    hooks:
+      - id: check-dependabot
+
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.10.0.1
     hooks:

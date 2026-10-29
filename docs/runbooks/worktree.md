@@ -149,7 +149,7 @@ docker volume ls -f dangling=true    # どのコンテナにも使われてい�
 ```bash
 # 対象のワークツリーで実行する（backend/.env・e2e/.env.e2e は .worktreeinclude で自動コピー済み）
 bash scripts/claude/wt-ports.sh      # (1) 直下 .env にポートを割り当てる（Docker 起動前に 1 回・→ §6）
-docker compose up -d                 # (2) 起動（正準手順・テスト実行方法は common-commands.md を参照）
+docker compose up -d --build --renew-anon-volumes   # (2) 起動（正準手順・作り直しの理由とテスト実行方法は common-commands.md を参照）
 ```
 
 - **⚠️ (B) `.env` 欠落は静かに壊れる**: `backend/.env` は `env_file` の `required: false` で参照されるため、無くても `docker compose up` は**失敗しない**。その代わり `SECRET_KEY` / `DB_PASSWORD` などが **insecure な既定値のまま静かに起動**する。→ `wt-ports.sh` は `backend/.env` が無ければ明示エラーで止める（primary に元ファイルが無く `.worktreeinclude` がコピーしなかった場合もここで気づく）。
@@ -185,8 +185,8 @@ docker compose up -d                 # (2) 起動（正準手順・テスト実�
 ```bash
 # 例: 2 つのワークツリーを同時起動。それぞれのワークツリーのセッション（そのフォルダで起動した claude・ターミナル）で実行する
 # （1 つのセッションから cd して別のワークツリーの .env を書くのは §9 の「他のワークツリーを直接編集しない」に反する）
-bash scripts/claude/wt-ports.sh && docker compose up -d    # app-2 のセッションで → offset=10 → backend 8010 等
-bash scripts/claude/wt-ports.sh && docker compose up -d    # app-3 のセッションで → offset=20 → backend 8020 等
+bash scripts/claude/wt-ports.sh && docker compose up -d --build --renew-anon-volumes    # app-2 のセッションで → offset=10 → backend 8010 等
+bash scripts/claude/wt-ports.sh && docker compose up -d --build --renew-anon-volumes    # app-3 のセッションで → offset=20 → backend 8020 等
 
 # 割当ポートの確認（publish されるホストポートをレンダリングして確認）
 docker compose config | grep -A1 published

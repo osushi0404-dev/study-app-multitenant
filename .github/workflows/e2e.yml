@@ -15,7 +15,15 @@ jobs:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Generate one-time E2E password
+        # I213: CI の使い捨ての DB の試験アカウントだけに使う値をジョブごとに作る。secrets にしない
+        # （Dependabot の PR には secrets が渡らない）。伏せ字（add-mask）を GITHUB_ENV への書き込みより先に置く
+        run: |
+          pw="$(openssl rand -hex 24)"
+          echo "::add-mask::$pw"
+          echo "E2E_TEST_PASSWORD=$pw" >> "$GITHUB_ENV"
 
       - name: Start services and wait for healthy
         run: docker compose up -d --wait db backend frontend
@@ -29,10 +37,8 @@ jobs:
           docker compose exec -T backend python manage.py migrate --noinput
           docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario tenant_isolation --password "$E2E_TEST_PASSWORD"
           docker compose exec -T -e E2E_TEST_PASSWORD backend python manage.py seed_e2e --scenario quiz_session --password "$E2E_TEST_PASSWORD"
-        env:
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '18'
           cache: 'npm'
@@ -47,7 +53,6 @@ jobs:
         working-directory: e2e
         env:
           BASE_URL: http://localhost:3000
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Show service logs on failure
         if: failure()
@@ -57,7 +62,7 @@ jobs:
           echo "=== docker compose ps ===" && docker compose ps
 
       # I187: 失敗時は画面キャプチャだけを上げる（trace・レポートにはログイン時のパスワードが残りうるため上げない）
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-screenshots

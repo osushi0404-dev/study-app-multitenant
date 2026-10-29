@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// .env.e2e をローカル開発用に読み込む。CI では GitHub Secrets から直接 process.env に注入される。
+// .env.e2e をローカル開発用に読み込む。CI では e2e.yml がジョブごとに作る値が process.env に入る（secrets は使わない・I213）。
 dotenv.config({ path: path.resolve(__dirname, '.env.e2e') });
 
 const baseURL = process.env.BASE_URL || 'http://localhost:3000';

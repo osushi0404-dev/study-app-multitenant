@@ -8,13 +8,13 @@ const AUTH_DIR = path.join(__dirname, '.auth');
 
 async function globalSetup(_config: FullConfig) {
   // E2E_TEST_PASSWORD は playwright.config.ts で dotenv.config() により .env.e2e から読み込まれる。
-  // CI では GitHub Actions Secrets から直接 process.env に注入される。
+  // CI では e2e.yml がジョブごとに作る使い捨ての値が process.env に入る（secrets は使わない・I213）。
   const e2ePassword = process.env.E2E_TEST_PASSWORD;
   if (!e2ePassword) {
     throw new Error(
       'E2E_TEST_PASSWORD is not set. ' +
       'For local dev: copy e2e/.env.e2e.example to e2e/.env.e2e and set the password. ' +
-      'For CI: add E2E_TEST_PASSWORD to GitHub Actions Secrets.',
+      'For CI: .github/workflows/e2e.yml generates it per job (check the "Generate one-time E2E password" step).',
     );
   }
 

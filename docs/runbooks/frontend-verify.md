@@ -16,7 +16,7 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 5. `.mcp.json` を変えたあとは Claude Code を開き直す（MCP はセッション開始時に読まれる）。初回は `playwright` サーバーを使うか確認が出るので許可する
 
 ## 3. 起動と URL
-- `docker compose up -d`（frontend を含む）
+- `docker compose up -d --build --renew-anon-volumes`（frontend を含む。標準の起動コマンド・理由は common-commands.md）
 - URL のポートは `docker compose port frontend 3000` の出力を使い、`http://localhost:<ポート>` を開く（`localhost:3000` 固定にしない。`.env` を読まずに済む）
 
 ## 4. 確かめる前に
