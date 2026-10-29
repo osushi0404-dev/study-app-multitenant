@@ -102,5 +102,103 @@ sys.exit(0 if ok else 1)
 PY
 then ok "TC-11g settings.json の SessionStart に登録されている"; else ng "TC-11g settings.json の SessionStart に登録されている"; fi
 
+# TC-07（I200）: primary の自動の早送り。一時のディレクトリに bare の origin・primary（develop）・primary から作った
+# ワークツリーを作り、ワークツリーの中からフックを実行する（gh は偽物ですぐ失敗させる）
+mkdir -p "$TMP/nogh"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$TMP/nogh/gh"; chmod +x "$TMP/nogh/gh"
+G() { git -c user.name=t -c user.email=t@example.com -c init.defaultBranch=develop -c advice.detachedHead=false "$@"; }
+# setup <名前>: $TMP/<名前>/{origin.git,primary,wt,other} を作る。origin の develop は primary より 1 コミット進める
+setup() {
+  local d="$TMP/$1"; mkdir -p "$d"
+  G init -q --bare "$d/origin.git"
+  G clone -q "$d/origin.git" "$d/primary" 2>/dev/null
+  (cd "$d/primary" && G checkout -q -b develop && echo a > a.txt && G add a.txt && G commit -qm a && G push -q origin develop)
+  (cd "$d/primary" && G worktree add -q "$d/wt" -b wt-branch)
+  G clone -q -b develop "$d/origin.git" "$d/other"
+  (cd "$d/other" && echo b > b.txt && G add b.txt && G commit -qm b && G push -q origin develop)
+}
+hook() {  # hook <ワークツリー> [スクリプト] → 出力（終了コードは $TMP/hook_rc）
+  local s="${2:-$SCRIPT}" out rc
+  out="$(cd "$1" && printf '{"source":"startup"}' | PATH="$TMP/nogh:$PATH" GH_HOST=nonexistent.invalid python3 "$s")"; rc=$?
+  echo "$rc" > "$TMP/hook_rc"; printf '%s' "$out"
+}
+head_of() { git -C "$1" rev-parse HEAD; }
+origin_dev() { git -C "$1" rev-parse refs/remotes/origin/develop 2>/dev/null || git --git-dir="$1" rev-parse develop; }
+lines_ok() { [ "$(cat "$TMP/hook_rc")" = 0 ] && [ "$(printf '%s\n' "$1" | wc -l)" -le 10 ]; }
+
+setup c07a; D="$TMP/c07a"
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: develop を origin/develop へ早送りしました" \
+   && [ "$(head_of "$D/primary")" = "$(git --git-dir="$D/origin.git" rev-parse develop)" ]; then
+  ok "TC-07a origin が進んでいれば primary を早送りする"
+else ng "TC-07a origin が進んでいれば primary を早送りする: $OUT"; fi
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: 最新です"; then ok "TC-07b 2 回目は最新です"
+else ng "TC-07b 2 回目は最新です: $OUT"; fi
+
+setup c07c; D="$TMP/c07c"; B="$(head_of "$D/primary")"
+echo changed > "$D/primary/a.txt"
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: 未コミットの変更" \
+   && [ "$(head_of "$D/primary")" = "$B" ] && [ "$(cat "$D/primary/a.txt")" = changed ]; then
+  ok "TC-07c 未コミットの変更があれば動かず、変更が残る"
+else ng "TC-07c 未コミットの変更があれば動かず、変更が残る: $OUT"; fi
+# FG-07: 「未コミットの変更なら止める」判定を消した写しでは 07c が不合格（HEAD が動く）になる
+python3 - "$SCRIPT" "$TMP/fg07.py" <<'PY'
+import sys
+s = open(sys.argv[1], encoding="utf-8").read()
+old = '    if status.strip():\n        return "primary: 未コミットの変更があるのでそろえません"\n'
+assert s.count(old) == 1
+open(sys.argv[2], "w", encoding="utf-8").write(s.replace(old, ""))
+PY
+setup c07fg; D="$TMP/c07fg"; B="$(head_of "$D/primary")"
+echo changed > "$D/primary/x_untracked_then_add.txt"; (cd "$D/primary" && G add x_untracked_then_add.txt)
+hook "$D/wt" "$TMP/fg07.py" >/dev/null
+if [ "$(head_of "$D/primary")" != "$B" ]; then ok "FG-07 判定を消すと 07c の条件で HEAD が動く（TC-07c が捕まえる）"
+else ng "FG-07 判定を消すと 07c の条件で HEAD が動く（TC-07c が捕まえる）"; fi
+
+setup c07d; D="$TMP/c07d"; B="$(head_of "$D/primary")"
+(cd "$D/primary" && G checkout -q -b other)
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: develop にいないので" && [ "$(head_of "$D/primary")" = "$B" ]; then
+  ok "TC-07d develop 以外にいれば動かない"
+else ng "TC-07d develop 以外にいれば動かない: $OUT"; fi
+
+setup c07e; D="$TMP/c07e"
+(cd "$D/primary" && echo c > c.txt && G add c.txt && G commit -qm c); B="$(head_of "$D/primary")"
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: そろえられませんでした" \
+   && printf '%s' "$OUT" | grep -qF "git pull --ff-only" && [ "$(head_of "$D/primary")" = "$B" ]; then
+  ok "TC-07e 早送りできなければ動かず、手で行うコマンドを出す"
+else ng "TC-07e 早送りできなければ動かず、手で行うコマンドを出す: $OUT"; fi
+
+setup c07f; D="$TMP/c07f"
+echo keep > "$D/primary/untracked.txt"
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: develop を origin/develop へ早送りしました" \
+   && [ "$(cat "$D/primary/untracked.txt")" = keep ]; then
+  ok "TC-07f 未追跡のファイルは残して早送りする"
+else ng "TC-07f 未追跡のファイルは残して早送りする: $OUT"; fi
+
+setup c07g; D="$TMP/c07g"; B="$(head_of "$D/primary")"
+echo mine > "$D/primary/b.txt"   # origin の新しいコミットが足す b.txt と同じ名前の未追跡のファイル
+OUT="$(hook "$D/wt")"
+if lines_ok "$OUT" && printf '%s' "$OUT" | grep -q "^primary: そろえられませんでした" \
+   && [ "$(head_of "$D/primary")" = "$B" ] && [ "$(cat "$D/primary/b.txt")" = mine ]; then
+  ok "TC-07g 未追跡のファイルとぶつかるなら動かず、中身が残る"
+else ng "TC-07g 未追跡のファイルとぶつかるなら動かず、中身が残る: $OUT"; fi
+
+# TC-07i: git が遅くても、既存の行を失わずに 25 秒以内に終わる（各 git を 6 秒待たせる＝5 秒の打ち切りに当たる）
+setup c07i; D="$TMP/c07i"; mkdir -p "$TMP/slowgit"
+REAL_GIT="$(command -v git)"
+printf '#!/usr/bin/env bash\nsleep 6\nexec %q "$@"\n' "$REAL_GIT" > "$TMP/slowgit/git"; chmod +x "$TMP/slowgit/git"
+START=$(date +%s)
+OUT="$(cd "$D/wt" && printf '{"source":"startup"}' | PATH="$TMP/slowgit:$TMP/nogh:$PATH" GH_HOST=nonexistent.invalid python3 "$SCRIPT")"; RC=$?
+ELAPSED=$(( $(date +%s) - START ))
+if [ "$RC" -eq 0 ] && [ "$ELAPSED" -le 25 ] && printf '%s' "$OUT" | grep -q "^branch: " \
+   && printf '%s' "$OUT" | grep -q "直近にマージされた PR" && printf '%s' "$OUT" | grep -q "^primary: "; then
+  ok "TC-07i git が遅くても ${ELAPSED} 秒で終わり、既存の行と primary の行を出す"
+else ng "TC-07i git が遅くても 25 秒以内・既存の行を失わない (rc=$RC elapsed=$ELAPSED): $OUT"; fi
+
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

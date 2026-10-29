@@ -13,9 +13,14 @@ import subprocess
 import sys
 import textwrap
 
+_INPUT = {}   # I200: 見張りが失敗したとき（_fail_safe）に、Bash のコマンドを語の判定にかけるため取っておく
+
+
 def _load():
+    global _INPUT
     try:
-        return json.load(sys.stdin)
+        _INPUT = json.load(sys.stdin)
+        return _INPUT
     except Exception as e:
         print(f"[guard] invalid hook input: {e}", file=sys.stderr)
         return {}
@@ -2265,7 +2270,10 @@ def _cmd_external(c: dict) -> list:
             if not fmt or any(re.search(r"\bEnv\b|json\s+\.\s*\}\}|json\s+\.Config\s*\}\}", x) for x in fmt):
                 r.append("環境変数（秘密情報を含む）の表示（docker inspect）")
         if subs[-1:] == ["cp"]:
-            r.append("コンテナからのファイルの取り出し（docker cp）")
+            # I200 5-3: 取り出しはコピー元がコンテナ側のときだけ（ホスト→コンテナは _docker_cp_in_risky が見る）
+            pos = _docker_cp_positional(args)
+            if not pos or _is_container_ref(pos[0]):
+                r.append("コンテナからのファイルの取り出し（docker cp）")
     return r
 
 def _code_safe(c: dict) -> bool:
@@ -2297,6 +2305,217 @@ def _playwright_test_args_safe(args: list) -> bool:
             return False
         k += 1
     return True
+
+# --- I200: 危ない語の判定（docs/plans/open/plan_I200.md 5-1） ---
+# 「安全と確認できない」だけを理由に一律で確認するのをやめ、(A) GitHub の破壊・(B) 復旧できない状態・(C) 秘密や
+# 個人情報の流出につながる語が文字列のどこかにあるときだけ確認にする。粗い文字の一致で、シェルの動きは読まない
+# （I179 の教訓）。脅威モデルは「事故」（意図的な回避は対象外・danger-ops.md）。語を足すのは事故の例が出たときだけ。
+_RISKY_WORDS = (
+    # (B) 消す・壊す（後ろ 4 つは、見張りの例外の経路で docker compose down -v 等を取りこぼさないため）
+    "rm", "rmdir", "unlink", "rmtree", "remove(", "truncate", "drop", "delete", "flush", "destroy", "wipe",
+    "shred", "mkfs", "dd", ".update(", "bulk_update", "down", "volume", "prune", "kill",
+    # (A) GitHub
+    "git", "gh", "push",
+    # (C) 外部への送信・秘密情報
+    "curl", "wget", "nc", "ncat", "ssh", "scp", "rsync", "requests", "urllib", "http.client", "httpx", "socket",
+    "smtplib", "send_mail", "mail_admins", "email_user", "emailmessage", ".delay(", "apply_async", "openai",
+    ".env", "environ", "printenv", "secret", "password", "token", "api_key",
+    "dumpdata", "pg_dump", "pg_read",   # DB の中身をまとめて出す・DB のコンテナのファイルを読む（(C) 個人情報・秘密）
+)
+# 英数字で終わる短い語は、後ろも語の切れ目のときだけ当たる（dd が add に、git が digit に当たらないように）
+_RISKY_SHORT = frozenset(("rm", "dd", "git", "gh", "nc", "ssh", "scp", "down", "kill"))
+
+
+def _word_re(w: str, short: bool) -> str:
+    """語の正規表現。英数字で始まる語は前が語の切れ目のときだけ、short なら後ろも切れ目のときだけ当たる。"""
+    pre = r"(?<![A-Za-z0-9_])" if w[0].isalnum() else ""
+    post = r"(?![A-Za-z0-9_])" if short else ""
+    return pre + re.escape(w) + post
+
+
+_RISKY_RE = [(w, re.compile(_word_re(w, w in _RISKY_SHORT), re.IGNORECASE)) for w in _RISKY_WORDS]
+
+
+def _risky_words(text) -> list:
+    """text に当たった危ない語の一覧（大文字・小文字を区別しない。引用符の中・本文・コメントも見る）。"""
+    if not isinstance(text, str) or not text:
+        return []
+    return [w for w, rx in _RISKY_RE if rx.search(text)]
+
+
+def _ask_if_risky(text: str, why: str):
+    """I200: 読みきれない・判定に失敗したときの共通の扱い。危ない語があれば確認（_ask は戻らない）、無ければ戻る。"""
+    found = _risky_words(text)
+    if found:
+        _ask(f"{why}。危ない語（" + "・".join(found) + "）があるので、内容を確認してください。")
+
+
+def _read_limited(path: str, limit: int):
+    """普通のファイルで limit 以下なら中身（utf-8・読めない文字は置き換え）。それ以外・読めなければ None。"""
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) > limit:
+            return None
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+_CTR_SCRATCH = "/tmp/"   # コンテナの中で書いてよい場所（/app/ は手元の backend/・frontend/ に bind mount されている）
+_CP_READ_LIMIT = 1024 * 1024
+
+
+def _container_risky(c: dict, text: str) -> list:
+    """I200: 許可リストに入らないコンテナ内の単純コマンドを確認にする理由（無ければ []）。
+    コマンドの語・ヒアドキュメント・here-string・読める Python コードに危ない語があるか、/tmp/ 以外へ書き込むとき。
+    パイプ・標準入力・読みきれない書き方では、流し込まれる中身が見えないので、コマンド全体の文字列も見る。"""
+    parts = [" ".join(c["toks"]), c["heredoc"] or "", c["herestr"] or ""]
+    try:
+        code = _python_code_raw(c)
+    except Exception:  # noqa: BLE001 — 読めなければ語の判定だけにする（コード全体の文字列は parts に入っている）
+        code = None
+    if isinstance(code, str):
+        parts.append(code)
+    if c["piped"] or c["stdin"] or c["note"]:
+        parts.append(text)
+    reasons = []
+    found = _risky_words("\n".join(parts))
+    if found:
+        reasons.append("危ない語: " + "・".join(found))
+    toks = c["toks"]
+    head = os.path.basename(toks[0]) if toks else ""
+    if any(not _in_scratch(t) for t in c["write_to"] + _ctr_write_targets(toks)):
+        reasons.append("コンテナの /tmp/ 以外への書き込み")
+    # 環境変数（backend/.env の値）をまとめて表示する形（(C)）。ps の BSD 形式の e・引数なしの env・set、
+    # export -p・declare -p／-x（コードレビューの F6）
+    if (head == "ps" and any(not a.startswith("-") and "e" in a for a in toks[1:])) \
+            or (head in ("env", "set") and len(toks) == 1) \
+            or (head in ("export", "declare", "typeset") and any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:])):
+        reasons.append("環境変数（秘密情報）の表示")
+    return reasons
+
+
+def _in_scratch(path: str) -> bool:
+    """コンテナのパスが /tmp/ の下か（.. を正規化してから見る。/tmp/../app/x は /tmp/ の外・コードレビューの F4）。"""
+    return posixpath.normpath(path).startswith(_CTR_SCRATCH)
+
+
+def _ctr_write_targets(toks: list) -> list:
+    """リダイレクト以外でファイルに書き込むコマンドの書き先（tee・sed -i・cp／mv／install／ln／rsync の最後の引数。
+    _record_writes と同じ見分け方）。コンテナの /app/ は手元に bind mount されているので、/tmp/ 以外は確認（F3）。"""
+    if not toks:
+        return []
+    head = os.path.basename(toks[0])
+    pos = [a for a in toks[1:] if not a.startswith("-")]
+    if head == "tee":
+        return pos
+    if head == "sed" and _has_short(toks[1:], "i", "--in-place"):
+        return pos[1:]
+    if head in ("cp", "mv", "install", "ln", "rsync") and len(pos) >= 2:
+        return [pos[-1]]
+    return []
+
+
+def _docker_cp_positional(args: list) -> list:
+    return [a for a in args if not a.startswith("-")]
+
+
+def _is_container_ref(arg: str) -> bool:
+    """docker cp の <コンテナかサービス>:<パス> の形か（Windows のドライブ C:\\ は除く）。"""
+    return ":" in arg and not re.match(r"^[A-Za-z]:[\\/]", arg)
+
+
+def _docker_cp_in_risky(args: list) -> list:
+    """I200 5-3: ホスト→コンテナの docker cp を確認にする理由（無ければ []）。取り出し（コンテナ→ホスト）は
+    _cmd_external が扱うのでここでは見ない。コピー先が /tmp/ 以外・コピー元の中身に危ない語・中身を読めないとき。"""
+    pos = _docker_cp_positional(args)
+    if len(pos) < 2:
+        return ["コピーの向きを読めない"]
+    src, dst = pos[0], pos[-1]
+    if _is_container_ref(src):
+        return []
+    reasons = []
+    dst_path = dst.split(":", 1)[1] if _is_container_ref(dst) else dst
+    if not _in_scratch(dst_path):
+        reasons.append("コンテナの /tmp/ 以外への書き込み")
+    body = _read_limited(src, _CP_READ_LIMIT)
+    if body is None:
+        reasons.append("コピー元の中身を読めない")
+    elif _risky_words(body):
+        reasons.append("コピー元の中身の危ない語: " + "・".join(_risky_words(body)))
+    return reasons
+
+
+# --- I200 5-4: ワークフローと pre-commit の設定の編集は、前と後の中身を比べて、語が増えた（減った）ときだけ確認 ---
+_EDIT_READ_LIMIT = 2 * 1024 * 1024
+_WF_WORDS = ("secrets", "write", "id-token", "pull_request_target", "workflow_run", "curl", "wget", "nc",
+             "github.event.", "github.head_ref")
+_WF_SHORT = frozenset(("nc", "curl", "wget", "secrets"))
+_PC_MORE = ("exclude", "skip", "stages", "files:", "types")
+
+
+def _count(word: str, text: str, short: bool = False) -> int:
+    return len(re.findall(_word_re(word, short), text or "", re.IGNORECASE))
+
+
+def _edit_kind(path: str):
+    """'wf'（.github/workflows/ の yml）・'pc'（.pre-commit-config.yaml）・None。パスは realpath で正規化し、
+    小文字にそろえて照合する（/mnt/c の上は大文字・小文字を区別しないので、.GitHub/Workflows/ci.YML でも同じファイル。
+    区別するファイルシステムでは確認が少し増えるだけ＝安全側）。"""
+    ap = os.path.realpath(os.path.abspath(path)).replace(os.sep, "/").lower()
+    if "/.github/workflows/" in ap and ap.endswith((".yml", ".yaml")):
+        return "wf"
+    if posixpath.basename(ap) == ".pre-commit-config.yaml":
+        return "pc"
+    return None
+
+
+def _edit_before_after(tool: str, ti: dict, path: str):
+    """書き換えの前と後の中身。今の中身を読めない・置き換えの前の文字が見つからないときは、
+    前を空・後を書き足す文字だけにする（語が新しく出れば確認＝安全側）。"""
+    cur = "" if not os.path.lexists(path) else _read_limited(path, _EDIT_READ_LIMIT)
+    if tool == "Write":
+        content = ti.get("content") if isinstance(ti.get("content"), str) else ""
+        return cur or "", content
+    if tool == "MultiEdit":
+        edits = ti.get("edits") if isinstance(ti.get("edits"), list) else []
+    else:
+        edits = [ti]
+    news = "\n".join(str(e.get("new_string") or "") for e in edits if isinstance(e, dict))
+    if cur is None:
+        return "", news
+    after = cur
+    for e in edits:
+        old, new = (e.get("old_string"), e.get("new_string")) if isinstance(e, dict) else (None, None)
+        if not isinstance(old, str) or not isinstance(new, str) or (old and old not in after):
+            return "", news
+        after = after.replace(old, new) if e.get("replace_all") else after.replace(old, new, 1)
+    return cur, after
+
+
+def _edit_risky(tool: str, ti: dict, path: str):
+    """I200 5-4: 確認にする理由（無ければ None）。"""
+    kind = _edit_kind(path)
+    if kind is None:
+        return None
+    before, after = _edit_before_after(tool, ti, path)
+    if kind == "wf":
+        more = [w for w in _WF_WORDS if _count(w, after, w in _WF_SHORT) > _count(w, before, w in _WF_SHORT)]
+        if more:
+            return ("ワークフローの書き換えで、秘密情報・権限・外部送信・外から入る値に関わる語が増えました（"
+                    + "・".join(more) + "）。秘密情報が外に出うる書き換えか確認してください（I200）。")
+        return None
+    reasons = []
+    if _count("detect-secrets", after) < _count("detect-secrets", before):
+        reasons.append("detect-secrets が減った")
+    reasons += [f"{w} が増えた" for w in _PC_MORE if _count(w, after) > _count(w, before)]
+    if _count(".secrets.baseline", after) != _count(".secrets.baseline", before):
+        reasons.append(".secrets.baseline の指定が変わった")
+    if reasons:
+        return ("pre-commit の設定の書き換えで、秘密の検査を弱めうる変更があります（" + "・".join(reasons)
+                + "）。確認してください（I200）。")
+    return None
+
 
 def _container_safe(c: dict) -> bool:
     """docker compose exec|run の中の単純コマンドが許可リストに入るなら True（plan_I174.md 0-5・0-9）。"""
@@ -2445,10 +2664,21 @@ def _analyze(text: str) -> dict:
             res["remote_ask"].append(c["remote_ask"])
         res["danger"] += d
         res["external"] += e
+        # I200: 許可リストに入らないコンテナ内の操作は、危ない語・/tmp/ 以外への書き込みがあるときだけ確認
         if c["compose"] and not d and not e and not _container_safe(c):
-            res["container"].append(_describe(c))
+            why = _container_risky(c, text)
+            if why:
+                res["container"].append(_describe(c) + "（" + "／".join(why) + "）")
+        dp = c.get("docker")
+        if not c["ctr"] and dp and dp["subs"][-1:] == ["cp"] and not e:
+            why = _docker_cp_in_risky(dp["args"])
+            if why:
+                res["container"].append(_describe(c) + "（" + "／".join(why) + "）")
+        # I200: 読み取りが代替経路に落ちた形（0-13）は、危ない語があるときだけ確認
         if c["note"] == "引用符が閉じていない":
-            res["unsure"].append("引用符が閉じていない")   # 読み取りが代替経路に落ちた（0-13: 素通しにしない）
+            found = _risky_words(text)
+            if found:
+                res["unsure"].append("引用符が閉じていない・危ない語: " + "・".join(found))
     for k in ("danger", "external", "container", "unsure", "push_dynamic", "git_unsure", "remote_ask"):
         res[k] = list(dict.fromkeys(res[k]))
     return res
@@ -3459,8 +3689,11 @@ def main():
         x = _cross_worktree(path) if path else None
         if x is True or x is None:
             _block_cross_worktree("編集", path)
-        # I182: 高リスクファイル・ワークフロー・秘密情報の検査設定の編集の確認は、settings.json の ask（公式の権限ルール
-        # Edit(...)。Edit・Write・NotebookEdit すべてに効く）で行う。見張りは別 worktree への書込の停止だけを行う
+        # I200: ワークフローと pre-commit の設定は、前と後の中身を比べて、秘密が外に出うる語・検査を弱める語が
+        # 増えた（減った）ときだけ確認（設定の ask の一律の確認から移した）。.secrets.baseline は settings.json の ask
+        why = _edit_risky(tool_name, data.get("tool_input") or {}, path) if path else None
+        if why:
+            _ask(why)
         sys.exit(0)
     # I187: Playwright MCP の保存（filename）はワークスペース内のどこにでも書け、Edit/Write の deny も効かない。
     # git に無い秘密情報（backend/.env 等）を上書きで失わないよう、書き先を .evidence/I###/ の直下に限る
@@ -3493,17 +3726,9 @@ def main():
     cmd = re.sub(r"^DANGER_OK=1\s+", "", _norm(raw))
     # I174: 読み解き（_analyze）は改行を保ったコマンドで行う（ヒアドキュメントの本文と区切りを失わないため）。
     pcmd = re.sub(r"^\s*DANGER_OK=1[ \t]+", "", raw)
-    try:
-        an = _analyze(pcmd)
-    except Exception as e:                       # 判定の失敗で素通しにしない（fail-safe）
-        _ask(f"見張りがコマンドを読み解けませんでした（{type(e).__name__}）。内容を確認してください。")
-
-    # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
-    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。mkfs・dd・shred はコマンド名で判定する。
-    if an["hard"]:
-        _block(an["hard"], raw)
 
     # I095: worktree 横断書込のブロック（DANGER_OK でも解除しない＝danger_ok ゲートの外）。
+    # I200: 読み解き（_analyze）より前に置く。読み解きが例外になって語の判定だけで通す経路でも、この停止は外さない
     _wt_targets = _bash_write_targets(cmd)
     for _tgt in _wt_targets:
         x = _cross_worktree(_tgt)
@@ -3514,6 +3739,17 @@ def main():
     if not _wt_targets and _bash_uncovered_risk(cmd):
         print("[guard] worktree ガードは絶対パス宛先のみ検査します（cd/変数展開越しの宛先は非対象）",
               file=sys.stderr)
+
+    try:
+        an = _analyze(pcmd)
+    except Exception as e:                       # I200: 読み解けないときは、危ない語があるときだけ確認
+        _ask_if_risky(raw, f"見張りがコマンドを読み解けませんでした（{type(e).__name__}）")
+        sys.exit(0)
+
+    # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
+    # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。mkfs・dd・shred はコマンド名で判定する。
+    if an["hard"]:
+        _block(an["hard"], raw)
 
     # 危険操作（danger-ops.md）。I174: DANGER_OK=1 は素通しではなく人の承認（ask）に切り替える。
     # settings.json の ask ルールに頼らず、決定論的に人の承認を求める（CLAUDE.md 絶対ルール 4）。
@@ -3533,9 +3769,10 @@ def main():
     if external:
         _ask("外部への送信・秘密情報の表示を伴う操作です。確認してください: " + " / ".join(external))
 
-    # I174: コンテナ内の操作は、許可リストに入るものだけ素通しにする（それ以外は人の確認＝fail-safe）。
+    # I174→I200: コンテナ内の操作は、許可リストに入らず、危ない語か /tmp/ 以外への書き込みがあるときだけ確認
+    # （docker compose cp のホスト→コンテナも同じ基準）
     if an["container"]:
-        _ask("コンテナ内の操作を安全と確認できませんでした（許可リストにない・流し込み・読めない書き方）。"
+        _ask("コンテナ内の操作・コンテナへのコピーに、危ない語か /tmp/ 以外への書き込みがあります。"
              "確認してください: " + " / ".join(an["container"]))
 
     # I083 欠陥1: 動的・不透明な宛先の push は静的に安全と断言できないため ask に degrade する。
@@ -3556,8 +3793,10 @@ def main():
     # 精密判定と同じ扱いにする（解除不可は停止・危険操作は停止〔DANGER_OK=1 なら確認〕・外部送信等は確認）。
     try:
         net = _safety_net(pcmd)
-    except Exception as e:                       # 安全網の失敗でも素通しにしない
-        _ask(f"見張りが内容を読み切れませんでした（安全網の読み取りに失敗: {type(e).__name__}）。確認してください。")
+    except Exception as e:                       # I200: 安全網が読めないときは、危ない語があるときだけ確認
+        # 語が無ければここで通す（下の an["unsure"] も危ない語があるときだけ入るので、見落としは無い）
+        _ask_if_risky(raw, f"見張りが内容を読み切れませんでした（安全網の読み取りに失敗: {type(e).__name__}）")
+        sys.exit(0)
     if net["hard"]:
         _block(net["hard"], raw)
     if net["danger"]:
@@ -3568,7 +3807,7 @@ def main():
         _ask("見張りが読み落としかけた書き方の中に、確認が必要な操作があります: "
              + " / ".join(net["external"] + net["container"] + net["git_unsure"] + net["push_dynamic"]
                           + net["remote_ask"]))
-    # I174 0-13: 読み取りが代替経路に落ちた形（引用符が閉じていない等）は、何も見つからなくても確認にする
+    # I174 0-13→I200: 読み取りが代替経路に落ちた形（引用符が閉じていない等）は、危ない語があるときだけ確認
     if an["unsure"]:
         _ask("見張りがコマンドを読みきれませんでした（" + " / ".join(an["unsure"]) + "）。確認してください。")
 
@@ -3594,6 +3833,17 @@ def _fail_safe(e: BaseException):
         why = f"メモリの上限（{_MEM_LIMIT_BYTES // 1024 // 1024}MB）を超えた"
     else:
         why = f"判定中に失敗した（{type(e).__name__}）"
+    # I200: Bash のコマンドが取り出せれば、危ない語が無いときは通す（読みきれないときと同じ基準）。
+    # Edit 系・MCP・取り出せないとき・語の判定自体の失敗は、今までどおり確認（別 worktree への書き込みを素通しにしない）
+    try:
+        cmd = (_INPUT.get("tool_input") or {}).get("command") if _INPUT.get("tool_name") == "Bash" else None
+        if isinstance(cmd, str) and cmd.strip():
+            _ask_if_risky(cmd, f"見張りが{why}ため、判定できませんでした")
+            sys.exit(0)
+    except SystemExit:
+        raise
+    except BaseException:  # noqa: BLE001 — 語の判定が失敗したら確認
+        pass
     _ask(f"見張りが{why}ため、判定できませんでした。内容を確認してください。")
 
 if __name__ == "__main__":
