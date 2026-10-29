@@ -11,7 +11,9 @@
 - harness（計画時・2026-10-29・変更前の見張り）: TC-02 の 12 件を今の見張りで流して全件合格（scratchpad の一時スクリプト。02a〜02i・02k〜02m）。TC-01 の I166 の 3 件と seed_e2e が ASK、`pytest -p`・`psql select`・`git rebase --help` が 0（計画書「調査結果」）。TC-01・TC-03〜TC-05・TC-07 は実装前のため未実行（テストのファイルがまだ無い）。TC-08 は実装後
 
 ## 実行記録
-（実装・review-gate・test-gate で追記する）
+- 2026-10-29（implement）: `bash scripts/claude/tests/run-all.sh` → `run-all: pass=50 fail=0`（exit 0）。見張りの 3 つ（oracle・matrix・corpus diff）も exit 0
+- CI（PR #397・レビュー済みの HEAD 5e9884a4 の前後）: Backend Lint & Security・Backend Tests・Frontend Lint & Security・Frontend Tests・Frontend Type Check・E2E Tests (Playwright)・Harness Tests すべて success（2 回の失敗は fix-loop 1・2 で直した）
+- 2026-10-29（test-gate）: `bash scripts/claude/gate-check.sh I200` → `GATE_CHECK: OK`。heavy として委譲されたゲートは無い（pytest・Jest・E2E は CI が正）
 
 ## TC-01 普通の操作が通る（見張り）＋ FG
 新規 `scripts/claude/tests/test_i200_guard_narrowing.sh`。
