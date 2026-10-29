@@ -1,20 +1,31 @@
 # I213 レビュー: Dependabot を点検し、動いて役に立つ形に直す
 
 ## 変更概要
-（実装後に記入）
+Dependabot が動かなかった原因（リポジトリの設定で無効）を記録し、設定を「8 つの対象を見張る・小さい版上げはまとめる・出たばかりの版は待つ・セキュリティの修正にも設定が効く」形に書き直した。Dependabot の PR を CI だけで判定できるよう、CI から秘密情報を無くし（E2E のパスワードをジョブごとに作る）、action を SHA・土台イメージを指紋で固定した。手元は標準の起動コマンドで毎回作り直す形にし、受け取り方を runbook に書いた。決定論テストの選び方をルール化した。
 
 ## 変更点
-（実装後に記入。計画書 docs/plans/open/plan_I213.md の 4 と対応させる）
+（計画書 `docs/plans/closed/plan_I213.md` の 4 と対応）
+- 4-1 `.github/dependabot.yml`: 8 対象（pip・npm /frontend・npm /e2e・docker /backend・docker /frontend・docker-compose・github-actions・pre-commit）・groups（version と security の両方で minor・patch をまとめる）・cooldown 7 日（pip・npm の major 14 日）・ignore（環境の版）・ラベル・`target-branch` を消した
+- 4-2 ワークフロー 3 つの全 action を SHA＋版のコメントで固定
+- 4-3 `e2e.yml`: パスワードをジョブごとに作り `::add-mask::` で伏せる（secrets を使わない）
+- 4-4 Dockerfile 3 つ・compose の土台イメージを「タグ＋指紋」で固定
+- 4-5 compose の e2e: 起動時に `npx playwright install chromium`
+- 4-6 pre-commit に `check-dependabot`（0.38.2）
+- 4-7 新規 `scripts/claude/tests/test_i213_dependabot.sh`（6 項目・FG 付き）／4-8 `test_i204_tool_sync.sh` の setup-uv の書き方の確かめを W1 に一本化
+- 4-9 runbook（dependency-audit.md に Dependabot の節・起動コマンド 3 か所・danger-ops）・e2e の説明 3 ファイル・CLAUDE.md の見出し・台帳 I211 F6 を消した
+- 4-11 `plan-writing-rules.md` に「決定論テストの対象の選び方」・計画レビュー役とコードレビュー役に 1 行ずつ
 
 ## 影響範囲
-（実装後に記入）
+- アプリのコードの変更なし。実行環境は同じイメージを指紋で固定しただけ（入る部品は同じ）
+- CI: E2E のパスワードの作り方・action の固定。手元: 標準の起動コマンドが `docker compose up -d --build --renew-anon-volumes`
+- GitHub の設定（ユーザーの操作で済み）: Dependabot alerts・security updates・Malware alerts を On
 
 ## テスト結果
 - 自動: 決定論ゲート 7 本 exit=0・check-dependabot Passed・PR #374 の CI すべて success（E2E は secrets なしで 8 passed・パスワードは `***`）
 - 手動（2026-10-29・すべて Claude）: No.1〜No.5・No.9 OK（DB の中身は起動し直しても残り、frontend の node_modules だけ作り直された／手元の E2E 8 passed でブラウザの取り直し 0／指紋 6 種類が引ける）。No.6〜No.8 はマージ後に Claude が行う。Human の項目なし
 
 ## 計画との差分
-（実装後に記入）
+- 計画変更記録 1〜7（`docs/plans/closed/plan_I213.md`）。主なもの: テストを 15→6 項目に絞った（2）・テストの選び方のルール化を範囲に足した（3・計画レビューをやり直し）・/simplify の採否（5）・CI の services のイメージは固定しない例外（6）・敵対的レビューの確かめ方（6・7）
 
 ## ロールバック
 - PR を revert する（設定・ワークフロー・Dockerfile の書き方・文書の変更だけ。データの変更なし）。secrets `E2E_TEST_PASSWORD` は残すので戻せる。閉じた Dependabot の PR は開き直せる
