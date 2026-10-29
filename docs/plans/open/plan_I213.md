@@ -143,7 +143,7 @@ Dependabot の設定を「見張る対象を全部入れ、小さい版上げは
 - `:113` の setup-uv の形を `astral-sh/setup-uv@[0-9a-f]{40}` に変え、メッセージを「setup-uv はコミットの SHA で固定する（版は行末のコメント・I213）」にする。FG の `uv_major_tag`（`@v10`）は引き続き不合格。SHA でない細かい版のタグ（`@v10.3.3`）も不合格にする FG を足す
 
 ### 4-9. runbook・説明の文言
-- `docs/runbooks/dependency-audit.md`: 見出しを「依存監査と Dependabot の運用」にし、「## Dependabot（版上げの PR）」の節を足す（AC12 の中身。届いた PR の流れ: CI 緑の minor・patch・security → ユーザーがマージ／CI 赤・major → `/issue-bootstrap` でイシュー〔タイトルに PR 番号〕・PR は閉じずに通知として残す／取り込んだあと: 標準の起動コマンドだけ／見張らないもの: ハーネスの uv〔理由〕・環境の版を変える版上げ〔別イシュー〕／役割分担: 監査は「今の版の穴を毎日見つける」、Dependabot は「直した版を PR で届ける」。監査が fail してセキュリティの修正の PR が来ていればそれを通す／止まったとき: Settings → Advanced Security・Actions の「Dependabot Updates」の実行記録／新しい action・イメージを足すときは SHA・指紋で書く）
+- `docs/runbooks/dependency-audit.md`: 見出しを「依存監査と Dependabot の運用」にし、「## Dependabot（版上げの PR）」の節を足す（AC12 の中身。届いた PR の流れ: CI 緑の minor・patch・security → ユーザーがマージ／CI 赤・major → `/issue-bootstrap` でイシュー〔タイトルに PR 番号〕・PR は閉じずに通知として残す／取り込んだあと: 標準の起動コマンドだけ／見張らないもの: ハーネスの uv〔理由〕・環境の版を変える版上げ〔別イシュー〕／役割分担: 監査は「今の版の穴を毎日見つける」、Dependabot は「直した版を PR で届ける」。監査が fail してセキュリティの修正の PR が来ていればそれを通す／止まったとき: Settings → Advanced Security・Actions の「Dependabot Updates」の実行記録／新しい action・イメージを足すときは SHA・指紋で書く／土台イメージの OS の修正を急ぐときは手で指紋を上げてよい〔`docker buildx imagetools inspect <タグ>` の `Digest:`〕／既定のブランチを変えると Dependabot の PR の宛先も変わる〔`target-branch` は戻さない〕・セキュリティ設計レビュー）
 - `docs/runbooks/common-commands.md:14`・`docs/runbooks/frontend-verify.md:19`・`docs/runbooks/worktree.md:152,188,189`: `docker compose up -d` → `docker compose up -d --build --renew-anon-volumes`（理由を 1 行: 依存・イメージの変更を毎回取り込む。名前の無い保存領域は frontend の node_modules だけで、DB は消えない）
 - `docs/runbooks/danger-ops.md:43`: 「`E2E_TEST_PASSWORD` は試験アカウントの値でログは伏せ字」→「CI の E2E のパスワードはジョブごとに作る使い捨ての値（secrets を使わない・ログは伏せ字・I213）」
 - `e2e/global-setup.ts:17`・`e2e/playwright.config.ts:5`・`e2e/.env.e2e.example:4`: 「CI は GitHub Secrets」→「CI は e2e.yml がジョブごとに作る」
@@ -228,3 +228,45 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## レビュー結果
 - [20261029_0939 判定: ✅ 完了](../../reviews/I213_plan_review_20261029_0939.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-29
+
+バックエンド・フロントエンドのコード変更なし（認証・認可・シリアライザ・モデル・URL は読む対象なし）。対象は Dependabot の設定・CI のワークフロー（action の固定・E2E のパスワード）・土台イメージの固定・手元の起動の仕方・pre-commit のフック。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 依存ライブラリ（供給網） | 受け取り方を「minor・patch・security は CI が緑ならユーザーがマージ」にするので、CI を通る形で悪い中身を持つ版が入ると、develop と手元のコンテナに入る | 必須: 待つ日数（7 日・pip/npm の major 14 日）・Malware alerts On・action は SHA、土台イメージは指紋で固定（タグの付け替えで中身が変わらない）・major は流れを通す。CI は読み取りだけの権限で secrets を持たない（下の 2 行）。残余は受け入れる（BP と同じ水準） |
+| Medium | 依存ライブラリ（土台イメージ） | 土台イメージを指紋で固定すると、OS の修正が入った新しいイメージの取り込みが「Dependabot の週 1 の確認＋待つ日数 7 日」だけ遅れる（今はタグのまま CI が毎回最新を取る）。Dependabot のセキュリティの修正は土台イメージには来ない | 受け入れる: 中身の再現性とタグの付け替えへの耐性を優先する（OpenSSF Scorecard の Pinned-Dependencies と同じ考え）。指紋の更新は minor・patch のまとめ PR か 1 件ずつの PR で届く（R8）。急ぐ修正は手で指紋を上げてよい（runbook に書く） |
+| Low | 機密情報 | E2E のパスワードがログに出る（`echo` の写し・失敗時の `docker compose logs backend`・`seed_e2e --password` の引数） | 必須: `::add-mask::` を `$GITHUB_ENV` への書き込みより前に置く（TC-01 W3・FG）。伏せ字はジョブの全ログ（後の step・失敗時のログ）に効く。値は使い捨ての DB の試験アカウントにだけ効き、ジョブが終われば DB ごと消える。成果物は画面キャプチャだけ（I187・今のまま） |
+| Low | セキュリティ設定ミス（CI） | pull_request で動くワークフローに将来 secrets が足されると、Dependabot の PR で CI が赤くなる／PR の新しい版のコードに secrets を渡す道ができる | 必須: ci.yml・e2e.yml に `secrets.` を置かない（TC-01 W2・FG）。`permissions: contents: read` は今のまま（test_i182_secret_gates.sh） |
+| Low | セキュリティ設定ミス（Dependabot） | `target-branch` を消したので、既定のブランチを main に戻すと Dependabot の PR が main 宛てになる | runbook（dependency-audit.md）に「既定のブランチを変えるときは Dependabot の宛先も変わる」と書く。`target-branch` を戻すとセキュリティの修正に設定が効かなくなるので戻さない（TC-01 D2） |
+| Low | セキュリティ設定ミス（手元） | `--renew-anon-volumes` が、将来どこかに足された名前の無い保存領域（例: DB）を起動のたびに消す | 必須: 名前の無い保存領域は frontend の `/app/node_modules` だけ（TC-01 V1・FG） |
+| Low | 依存ライブラリ（新規） | pre-commit に第三者のフック `check-jsonschema`（0.38.2）を足す | 版を固定・出て 7 日以上の版（0.39.0 は使わない）。スキーマは同梱のもので、検証のときに外へ取りに行かない（`--builtin-schema`）。CI の lint ジョブは secrets を持たない |
+| — | 認証・認可／マルチテナント／入力検証／ファイル操作／外部通信 | なし（エンドポイント・データ・アップロード・Webhook の変更なし） | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | Dependabot の PR（乗っ取られた版の部品） | 第三者（部品の配布元） | CI の中で動いて secrets・トークンを盗む | pull_request で動くワークフローに secrets が無い・トークンは読み取りだけ | Yes: TC-01 W2・test_i182_secret_gates.sh C4 | Yes: No.3（PR の CI が secrets なしで緑） | CI で盗めるのは使い捨ての試験パスワード（伏せ字・すぐ消える）だけ | Low |
+| 2 | 第三者の action のタグ | 第三者（action の配布元） | タグを付け替えて CI で別の中身を動かす | すべての `uses:` が 40 桁の SHA | Yes: TC-01 W1・TC-02 | No | SHA の中身そのものが悪い場合（固定の前から悪い）は防げない | Low |
+| 3 | 土台イメージのタグ | 第三者（イメージの配布元・レジストリ） | 同じタグに悪いイメージを押し込む | すべての土台イメージが指紋付き | Yes: TC-01 I1 | Yes: No.4（指紋が引ける） | 指紋の更新 PR の中身を CI だけで判定する（シナリオ 4 と同じ） | Low |
+| 4 | Dependabot の minor・patch のまとめ PR | 第三者（部品の配布元） | CI を通る悪い版を出し、マージされるのを待つ | 待つ日数・Malware alerts・major は流れを通す | Yes: TC-01 D3（待つ日数が設定されている） | No | 待つ日数の間に見つからなかった悪い版は入る（受け入れる・BP と同じ水準） | Medium |
+| 5 | PR の `.github/dependabot.yml` | PR を出せる人 | 待つ日数・まとめ・ignore を外す／書き間違いでセキュリティの修正のまとめを無効にする | 形の検証と決まりのテストが CI で止める | Yes: TC-03（check-dependabot）・TC-01 D1〜D6 | No | `.github/` の変更は高リスク判定で敵対的レビューに回る | Low |
+| 6 | E2E のジョブのログ | PR を見られる人（公開リポジトリなので誰でも） | ログからパスワードを読む | `::add-mask::` が先・成果物に trace を上げない | Yes: TC-01 W3 | Yes: No.3（ログが `***`） | 読めても使い捨ての DB の試験アカウントだけ | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 2件 | 1件 |
+| Low     | 5件 | 5件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）

@@ -24,5 +24,8 @@
 - [plan] Playwright の 2 つの版を同じ PR で上げる設定は使わず、e2e のコンテナの起動時にブラウザを入れる — 公式の種類をまたぐまとめ方は動きが文書化されておらず試せない。起動時に入れる形は CI と同じ方法で、版がずれても動くことを確かめた
 - [plan] `target-branch` を消す — 書くとセキュリティの修正の PR に設定が効かない（公式）。既定のブランチが develop なので宛先は同じ
 - [plan] 書き間違いの検証に公式の `check-dependabot`（0.38.2）を使う — 誤りを 4 種とも止めた。0.39.0 は出て 3 日なので待つ日数に合わせて 1 つ前
+- [plan-review] Warning 3 件（手動 No.4 の数・W2 の GITHUB_TOKEN・No.1 のテーブル名）は直し、計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えない
+- [design-security-review] 土台イメージの指紋固定で OS の修正の取り込みが最大で週 1＋7 日遅れるのを受け入れる — 再現性とタグの付け替えへの耐性を優先（OpenSSF の Pinned-Dependencies と同じ考え）。急ぐときは手で上げてよいと runbook に書く
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
