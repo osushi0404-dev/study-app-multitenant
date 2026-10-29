@@ -112,8 +112,13 @@ MUST_ASK = [
                 "run --profile e2e --rm e2e", "--profile e2e exec e2e", "run --rm e2e", "--profile e2e run --rm e2e-init")
     for tail in ("npm test -- --output=.", "npx jest", "python manage.py migrate")
 ]
-hit5 = [(c, allowed(c)) for c in MUST_ASK if allowed(c)]
-ck(f"⑤b' e2e・e2e-init の npm test・npx jest・migrate などに一致する許可が無い（一致: {hit5[:3]}）", not hit5)
+# I200: コンテナ内の操作は allow の Bash(docker compose exec|run *) に置き、見張りが判定する（危ない語・/tmp/ 以外への
+# 書き込みのときだけ確認。test_i200_guard_narrowing.sh・test_pretooluse_container_guard.sh）。ここでは、一致する許可が
+# その I200 の行だけで、ほかの場当たりの広い許可（npm test * など）が無いことを確かめる
+I200_RULES = {"Bash(docker compose exec *)", "Bash(docker compose run *)",
+              "Bash(docker-compose exec *)", "Bash(docker-compose run *)"}
+hit5 = [(c, allowed(c)) for c in MUST_ASK if allowed(c) and allowed(c) not in I200_RULES]
+ck(f"⑤b' e2e・e2e-init の npm test・npx jest・migrate などに一致する許可は I200 の行だけ（ほかの一致: {hit5[:3]}）", not hit5)
 MUST_ALLOW = [
     "docker compose --profile e2e run --rm e2e",
     "docker compose --profile e2e run --rm e2e npx playwright test tests/auth.spec.ts --retries=0",
@@ -135,8 +140,8 @@ EXEC_MUST_ASK = [
     for svc in ("frontend", "backend")
     for tail in ("npm run build", "npm run lint -- --fix", "npm install left-pad", "sh", "python manage.py migrate")
 ]
-wide_fe = [(c, allowed(c)) for c in EXEC_MUST_ASK if allowed(c)]
-ck(f"⑤d exec での build・--fix・install・sh・migrate に一致する許可が無い（一致: {wide_fe[:3]}）", not wide_fe)
+wide_fe = [(c, allowed(c)) for c in EXEC_MUST_ASK if allowed(c) and allowed(c) not in I200_RULES]
+ck(f"⑤d exec での build・--fix・install・sh・migrate に一致する許可は I200 の行だけ（ほかの一致: {wide_fe[:3]}）", not wide_fe)
 ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無い",
    "Bash(RATELIMIT_ENABLE=false docker compose up *)" not in allow)
 

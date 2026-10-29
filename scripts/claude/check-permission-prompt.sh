@@ -3,6 +3,8 @@ set -uo pipefail
 # check-permission-prompt: 操作に承認画面が出るかを、Claude が人に頼まずに確かめる（I187）。
 # Usage: check-permission-prompt.sh bash '<コマンド>'
 #        check-permission-prompt.sh mcp <操作名> ['<入力の JSON>']
+#        check-permission-prompt.sh write <リポジトリの中の相対パス> <中身のファイル>（I200: Edit・Write の許可の確かめ。
+#          書き先が無いか中身が同じときだけ動く。通ると実際に書かれるので、確かめ用の新しいファイルで行い後で消す）
 #   - 公式の claude -p を通常モード（--permission-mode manual）・承認は誰も答えない（--permission-prompts none）で起動し、
 #     その操作を 1 回だけ呼ばせる。承認が要る操作は画面を出さずに拒否され、出力の permission_denials に入る
 #   - --setting-sources user と --settings .claude/settings.json で、ユーザー全体の設定とこのブランチの設定ファイルだけを読ませる
@@ -27,11 +29,33 @@ $TARGET
 Do not call any other tool. Then reply with only DONE." ;;
   mcp) PROMPT="Call the tool $TARGET exactly once${INPUT:+ with this input: $INPUT}.
 Do not call any other tool. Then reply with only DONE." ;;
+  write) ;;   # I200: 下で書き先を確かめてから組み立てる
   *) KIND="" ;;
 esac
-if [ -z "$KIND" ] || [ -z "$TARGET" ]; then
-  echo "[check-permission-prompt] 使い方: $0 bash '<コマンド>' ／ $0 mcp <操作名> ['<入力の JSON>']" >&2
+if [ -z "$KIND" ] || [ -z "$TARGET" ] || { [ "$KIND" = write ] && [ -z "$INPUT" ]; }; then
+  echo "[check-permission-prompt] 使い方: $0 bash '<コマンド>' ／ $0 mcp <操作名> ['<入力の JSON>'] ／ $0 write <リポジトリの中の相対パス> <中身のファイル>" >&2
   exit 2
+fi
+MATCH="$TARGET"
+# I200: write は承認なしで通ると実際に書き込む。誤って既存のファイルを上書きしないよう、書き先が存在しないか、
+# 渡した中身が今の中身と同じときだけ claude を起動する。書き先はリポジトリの中の相対パスだけ（絶対パス・.. は断る）
+if [ "$KIND" = write ]; then
+  WROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "[check-permission-prompt] git のワークツリー内で実行してください" >&2; exit 2; }
+  case "$TARGET" in
+    /*|..|../*|*/..|*/../*) echo "[check-permission-prompt] 判定できない: write の書き先はリポジトリの中の相対パスだけです: $TARGET" >&2; exit 2 ;;
+  esac
+  if [ ! -f "$INPUT" ]; then
+    echo "[check-permission-prompt] 判定できない: 中身のファイルがありません: $INPUT" >&2; exit 2
+  fi
+  if [ -e "$WROOT/$TARGET" ] && ! cmp -s "$WROOT/$TARGET" "$INPUT"; then
+    echo "[check-permission-prompt] 判定できない: 書き先が既にあり中身が違うので、上書きしないよう断りました: $TARGET" >&2; exit 2
+  fi
+  MATCH="$WROOT/$TARGET"
+  PROMPT="Use the Write tool exactly once to write the file $MATCH with exactly the content between the BEGIN and END lines below (not including those two lines).
+-----BEGIN-----
+$(cat "$INPUT")
+-----END-----
+Do not call any other tool. Then reply with only DONE."
 fi
 
 if [ -n "${CHECK_PERMISSION_PROMPT_LOG:-}" ]; then
@@ -58,8 +82,8 @@ else
   fi
 fi
 
-python3 -I - "$LOG" "$KIND" "$TARGET" <<'PY'
-import json, sys
+python3 -I - "$LOG" "$KIND" "$MATCH" <<'PY'
+import json, os, sys
 
 def unknown(msg, other=()):
     print(f"[check-permission-prompt] 判定できない: {msg}", file=sys.stderr)
@@ -71,7 +95,19 @@ def unknown(msg, other=()):
 sys.excepthook = lambda tp, e, tb: unknown(f"出力を読めません（{tp.__name__}: {e}）")
 
 log, kind, target = sys.argv[1:4]
-want_name = "Bash" if kind == "bash" else target
+want_name = {"bash": "Bash", "write": "Write"}.get(kind, target)
+
+
+def wanted(name, inp):
+    if name != want_name:
+        return False
+    if kind == "bash":
+        return inp.get("command") == target
+    if kind == "write":   # I200: 頼んだ書き先に書いたか（パスは正規化して比べる）
+        p = inp.get("file_path")
+        return isinstance(p, str) and os.path.realpath(p) == os.path.realpath(target)
+    return True
+
 mode, use_id, other, result, denied_events, output = None, None, [], None, set(), ""
 with open(log, encoding="utf-8") as f:
     for line in f:
@@ -94,7 +130,7 @@ with open(log, encoding="utf-8") as f:
                 continue
             if c.get("type") == "tool_use":
                 name, inp = c.get("name"), c.get("input") or {}
-                if use_id is None and name == want_name and (kind != "bash" or inp.get("command") == target):
+                if use_id is None and wanted(name, inp):
                     use_id = c.get("id")
                 else:
                     other.append(f"{name} {json.dumps(inp, ensure_ascii=False)[:120]}")

@@ -43,21 +43,22 @@ for x in guard_hooks:
 for wide in ("Bash(*)", "Bash", "Bash(docker *)", "Bash(docker compose *)", "Bash(docker-compose *)"):
     if wide in allow:
         errs.append(f"allow に広すぎる {wide} がある")
-# I182: ローカルで直せるファイル操作は allow（rm -r 等の危険操作は見張りが止める）。ask は rebase・psql と、
-# 編集時に確認するファイル（公式の権限ルール Edit(...)。見張りの HIGH_RISK_EDIT_PATTERNS から移した）
-to_allow = ["Bash(rm *)", "Bash(mv *)", "Bash(cp *)", "Bash(chmod *)", "Bash(chown *)"]
-edit_ask = ["Edit(.github/workflows/**)", "Edit(.pre-commit-config.yaml)", "Edit(.secrets.baseline)",
-            "Edit(backend/Dockerfile)", "Edit(backend/Dockerfile.dev)", "Edit(frontend/Dockerfile)",
-            "Edit(frontend/Dockerfile.dev)", "Edit(frontend/nginx.conf)", "Edit(backend/requirements*.txt)",
-            "Edit(backend/pyproject.toml)", "Edit(frontend/package.json)", "Edit(frontend/package-lock.json)",
-            "Edit(**/migrations/*.py)", "Edit(backend/init-db.sql)"]
-keep_ask = ["Bash(git rebase *)", "Bash(psql *)"] + edit_ask
+# I182: ローカルで直せるファイル操作は allow（rm -r 等の危険操作は見張りが止める）。
+# I200: 確認は (A) GitHub の破壊・(B) 復旧できない状態・(C) 秘密や個人情報の流出だけ。ask は秘密の検査の基準の
+# ファイル（.secrets.baseline）だけにし、コンテナ内の操作・rebase・psql・ワークフローと pre-commit の設定の編集は
+# allow に置いて見張りが判定する（git push * と同じ形。docs/plans/open/plan_I200.md 5-5）
+to_allow = ["Bash(rm *)", "Bash(mv *)", "Bash(cp *)", "Bash(chmod *)", "Bash(chown *)",
+            "Bash(docker compose exec *)", "Bash(docker compose run *)", "Bash(docker compose cp *)",
+            "Bash(docker-compose exec *)", "Bash(docker-compose run *)", "Bash(docker-compose cp *)",
+            "Bash(git rebase *)", "Bash(psql *)",
+            "Edit(.github/workflows/**)", "Edit(.github/dependabot.yml)", "Edit(.pre-commit-config.yaml)",
+            "Edit(docker-compose.yml)"]
+keep_ask = ["Edit(.secrets.baseline)"]
 for r in to_allow:
     if r not in allow or r in ask:
         errs.append(f"{r} が allow に無い、または ask に残っている")
 removed = ["Bash(git merge *)", "Bash(git reset *)", "Bash(git cherry-pick *)",
-           "Bash(docker compose exec *)", "Bash(docker compose run *)", "Bash(docker compose down *)",
-           "Bash(docker-compose exec *)", "Bash(docker-compose run *)", "Bash(docker-compose down *)"]
+           "Bash(docker compose down *)", "Bash(docker-compose down *)"]
 if sorted(ask) != sorted(keep_ask):
     errs.append(f"ask が期待と違う: {ask}")
 for r in keep_ask:
@@ -66,12 +67,11 @@ for r in keep_ask:
 for r in removed:
     if r in ask or r in allow:
         errs.append(f"外したはずの {r} が残っている")
-# I187: frontend の型チェック・lint の 4 行だけは allow に置く（コマンドまで固定した行）。それ以外の exec 系は置かない
-exec_ok = ["Bash(docker compose exec frontend npm run typecheck)", "Bash(docker compose exec frontend npm run lint)",
-           "Bash(docker compose exec -T frontend npm run typecheck)", "Bash(docker compose exec -T frontend npm run lint)"]
+# I200: docker compose exec の行は、全体を見張りに任せる Bash(docker compose exec *) だけ（コマンドを固定した行は重複）
+exec_ok = ["Bash(docker compose exec *)", "Bash(docker-compose exec *)"]
 if any(e.startswith(("Bash(docker compose exec", "Bash(docker-compose exec")) and not (e in exec_ok and e in allow)
        for e in allow + ask):
-    errs.append("docker compose exec 系の行が残っている（I187 の型チェック・lint の 4 行の allow だけ置いてよい）")
+    errs.append("docker compose exec 系の行が Bash(docker compose exec *) 以外にある（重複・ask への置き直し）")
 if any(e.startswith(("Write(", "NotebookEdit(", "MultiEdit(")) for e in allow + ask + deny):
     errs.append("効かない Write(...)・NotebookEdit(...)・MultiEdit(...) ルールが残っている（公式は Edit(...) だけを見る）")
 for r in ["Read(**/.env)", "Read(**/.env.e2e)", "Edit(**/.env)", "Edit(**/.env.e2e)",
@@ -106,11 +106,11 @@ def write(name, mut):
     mut(d["permissions"])
     json.dump(d, open(f"{tmp}/{name}.json", "w", encoding="utf-8"))
 write("rm_back_to_ask", lambda p: (p["allow"].remove("Bash(rm *)"), p["ask"].append("Bash(rm *)")))
-write("psql_off_ask", lambda p: p["ask"].remove("Bash(psql *)"))
+write("psql_back_to_ask", lambda p: (p["allow"].remove("Bash(psql *)"), p["ask"].append("Bash(psql *)")))
 write("chmod_nowhere", lambda p: p["allow"].remove("Bash(chmod *)"))
-write("no_workflow_ask", lambda p: p["ask"].remove("Edit(.github/workflows/**)"))
+write("no_baseline_ask", lambda p: p["ask"].remove("Edit(.secrets.baseline)"))
 write("write_rule_ask", lambda p: p["ask"].append("Write(.github/workflows/**)"))
-write("exec_back", lambda p: p["ask"].append("Bash(docker compose exec *)"))
+write("exec_back", lambda p: (p["allow"].remove("Bash(docker compose exec *)"), p["ask"].append("Bash(docker compose exec *)")))
 write("exec_allow_wide", lambda p: p["allow"].append("Bash(docker compose exec frontend npm run *)"))
 write("exec_ok_in_ask", lambda p: p["ask"].append("Bash(docker compose exec frontend npm run lint)"))
 write("write_back", lambda p: p["deny"].append("Write(./.env)"))
@@ -140,13 +140,13 @@ d["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] = 600
 json.dump(d, open(f"{tmp}/long_timeout.json", "w", encoding="utf-8"))
 PY
 ck "S2 rm を allow から ask へ戻すと不合格"   1 "$(run_check "$TMP/rm_back_to_ask.json")"
-ck "S2a psql を ask から外すと不合格"          1 "$(run_check "$TMP/psql_off_ask.json")"
+ck "S2a psql を allow から ask へ戻すと不合格"  1 "$(run_check "$TMP/psql_back_to_ask.json")"
 ck "S2b chmod を allow から外すと不合格"       1 "$(run_check "$TMP/chmod_nowhere.json")"
-ck "S14 ask から Edit(.github/workflows/**) を消すと不合格" 1 "$(run_check "$TMP/no_workflow_ask.json")"
+ck "S14 ask から Edit(.secrets.baseline) を消すと不合格" 1 "$(run_check "$TMP/no_baseline_ask.json")"
 ck "S15 ask に Write(...) を足すと不合格"      1 "$(run_check "$TMP/write_rule_ask.json")"
-ck "S3 exec の ask を戻すと不合格"            1 "$(run_check "$TMP/exec_back.json")"
-ck "S3a allow に広い exec（npm run *）を足すと不合格" 1 "$(run_check "$TMP/exec_allow_wide.json")"
-ck "S3b I187 の exec の行を ask に置くと不合格" 1 "$(run_check "$TMP/exec_ok_in_ask.json")"
+ck "S3 exec を allow から ask へ戻すと不合格"  1 "$(run_check "$TMP/exec_back.json")"
+ck "S3a allow に重複の exec（npm run *）を足すと不合格" 1 "$(run_check "$TMP/exec_allow_wide.json")"
+ck "S3b exec の行を ask に置くと不合格"        1 "$(run_check "$TMP/exec_ok_in_ask.json")"
 ck "S4 Write(...) を戻すと不合格"             1 "$(run_check "$TMP/write_back.json")"
 ck "S5 .env の deny をルート固定に戻すと不合格" 1 "$(run_check "$TMP/env_root_only.json")"
 ck "S6 allow に Bash(*) を足すと不合格"      1 "$(run_check "$TMP/allow_bash_star.json")"

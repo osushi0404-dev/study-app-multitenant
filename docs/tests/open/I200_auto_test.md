@@ -26,11 +26,11 @@
 | 01f | `docker compose exec -T db psql -U postgres -d learning_app -tAc 'select 1'` | 0 |
 | 01g | `git rebase --help` | 0 |
 | FG-01a | 01a のコピー元の中身を `import shutil; shutil.rmtree('/app/x')` にする | ASK |
-| FG-01b | `docker compose exec -T backend python -c "import os; os.remove('/app/x')"` | ASK |
-| FG-01c | `docker compose exec -T backend python manage.py shell -c "User.objects.all().delete()"` | ASK |
+| FG-01b | `docker compose exec -T backend python -c "import os; os.remove('/app/x')"` | 2（既存のコードの判定が停止にする。確認より強いので可・計画変更記録 4） |
+| FG-01c | `docker compose exec -T backend python manage.py shell -c "User.objects.all().delete()"` | 2（同上） |
 | FG-01d | `docker compose exec -T backend sh -c "echo x > /app/manage.py"`（`/tmp/` 以外への書き込み） | ASK |
 | FG-01e | `docker compose cp backend:/app/.env /tmp/x`（コンテナからの取り出し） | ASK |
-| FG-01f | `docker compose run --rm backend sh -c "python -c \"import shutil; shutil.rmtree('/app/x')\""`（新しいコンテナを起動する `run` の中・危ない語） | ASK |
+| FG-01f | `docker compose run --rm backend sh -c "python -c \"import shutil; shutil.rmtree('/app/x')\""`（新しいコンテナを起動する `run` の中・危ない語） | 2（同上） |
 | 01h | `docker compose run --rm backend python manage.py check`（`run` の中・許可リストに入る） | 0 |
 | FG-01g | `docker compose cp <一時のファイル（中身 print("ok")）> backend:/app/manage.py`（コピー先が `/tmp/` 以外＝手元のファイルの上書き） | ASK |
 
@@ -89,6 +89,7 @@
 | 04o | Edit: `env: X: ${{ secrets['X'] }}` を足す | ASK |
 | 04p | Edit: `run: echo '${{ toJSON(secrets) }}'` を足す | ASK |
 | 04m | Edit: `file_path` を `<一時のリポジトリ>/./.github/../.github/workflows/x.yml` にして 04c と同じ書き足し | ASK |
+| 04q | Edit: `file_path` を `<一時のリポジトリ>/.GitHub/Workflows/x.YML`（大文字・小文字を変えた書き方）にして 04c と同じ書き足し | ASK |
 | 04n | Edit: `file_path` を一時のリポジトリの中から見た相対パス `.github/workflows/x.yml` にして 04c と同じ書き足し（見張りの作業フォルダを一時のリポジトリにする） | ASK |
 
 ## TC-05 pre-commit の設定の編集
@@ -137,6 +138,13 @@
 - `bash scripts/claude/tests/run-all.sh`（全件 pass）
 - `bash scripts/claude/tests/test_guard_bash_oracle.sh`・`test_pretooluse_guard_matrix.sh`・`test_guard_corpus_diff.sh`（danger-ops.md「見張りを直したら流す 3 つ」）
 - 期待値を変えた既存のケースの一覧（実装で追記する。各行に変えた理由＝見張りの 3・7・9 のどれか。停止 `2` の期待値を変えた行が 0 件であること）:
-  - `test_pretooluse_container_guard.sh`: （実装で追記）
-  - `test_i182_guard_failsafe.sh`: （実装で追記）
-  - `test_settings_permissions.sh`: ask の一覧・exec 系の行の扱い（TC-06）
+  - `test_pretooluse_container_guard.sh`（59 件・すべて ASK→0。`git diff` で旧期待値が `2` の行は 0 件と確認）:
+    - 見張りの 3（コンテナ内の一覧外・危ない語なし）: C1 createsuperuser・C2 npm install・C6 dbshell（対話）・C7 一覧にないコマンド・C10 bash -lc 一覧外・C11 python -m pip install・C14 redis-cli DEL・C15／C16 celery purge・C17 sed -i・C18 sed -n の e コマンド・C19 find -fprint・C24 ruff --fix・C25 npm audit fix・C26 npx 一覧外・C27 makemigrations・C28 psql \!・C29／C30 EXPLAIN ANALYZE・C31 \gexec・C32 psql -o・C37 sort -o・C38 uniq IN OUT・C39 collectstatic・C40 未知の compose オプション・C42 一覧外の呼び出し・C43 一覧外の import・C44 書き込みの open・C46 pg_terminate_backend・C48 ruff format・C49 npx eslint --fix・C52 migrate --fake・C55／C56 コメントの後ろの一覧外・C57 一覧外の import だけ・C58 書き込みの open だけ・C59 多対多の .set([])・C60〜C68 playwright の選択肢・install・別サービス・中のシェルで連結・F5 存在しないファイル・F17 中身の見えない書き換え・F24 cp で上書きして流し込み・G6 実体では C7
+    - 見張りの 3（パイプ・中身の見えない形・危ない語なし）: C33 パイプで python・C51 パイプで sh・C35 読めないスクリプト・C53 構文として読めない・C54 中身の見えない $( )
+    - 見張りの 7（読みきれない・危ない語なし）: C34・G24・G26 引用符が閉じていない
+    - 見張りの 9（例外・危ない語なし）: G10 例外のときは確認に倒す
+    - 確認のまま残したもの（(C) に当たる）: S62 `ps auxe`（環境変数の表示）・C13 dumpdata・C47 pg_read_file（実装で `_RISKY_WORDS` に `dumpdata`・`pg_read`、`_container_risky` に環境変数の表示を足した・計画変更記録 4）
+  - `test_i182_guard_failsafe.sh`（1 件）: F5 今まで包まれていなかった判定の例外（`ls`・危ない語なし）→ 0（見張りの 9）
+  - `test_i187_frontend_verify_config.sh`（2 項目）: ⑤b'・⑤d「コンテナ内の npm test・migrate・install などに一致する許可が無い」→「一致する許可は I200 の `Bash(docker compose exec|run *)` の行だけ（ほかの場当たりの広い許可が無い）」（見張りの判定に一本化したため）
+  - `test_i182_docs.sh`: 期待値は変えていない（danger-ops.md のコンテナの中のパス `/app/` を、手元のパスと取り違えないよう地の文に書き直した）
+  - `test_settings_permissions.sh`: ask が `Edit(.secrets.baseline)` だけ・allow に足した行・exec 系は `Bash(docker compose exec *)` だけ（TC-06）。FG の S2a・S3・S3a・S3b・S14 を新しい基準の後退に置き換えた

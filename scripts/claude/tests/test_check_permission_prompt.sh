@@ -64,5 +64,22 @@ rc="$(CLAUDE_BIN="$fake" bash "$CHECK" mcp mcp__playwright__browser_navigate '{"
 got="$(tr '\n' ' ' < "$args" 2>/dev/null)"
 ck "Q18 claude に渡す引数（mcp は .mcp.json を読む）" "0 yes yes" "$rc $([[ " $got " == *" --mcp-config .mcp.json "* ]] && echo yes || echo no) $([[ " $got " == *" --setting-sources user "* ]] && echo yes || echo no)"
 
+# I200 TC-06b: write（Edit・Write の許可の確かめ）。書き先はリポジトリの中の相対パス・無いか同じ中身のときだけ動く
+WT=".i200_probe_$$.yml"; WABS="$REPO_ROOT/$WT"; printf 'x: 1\n' > "$TMP/body.txt"
+write_in(){ printf '{"file_path":"%s","content":"x: 1\\n"}' "$1"; }
+ck "06b-1 write・承認なしで実行" 0  "$( { init; use Write "$(write_in "$WABS")"; res false; done_ok; } | run w1 write "$WT" "$TMP/body.txt")"
+ck "06b-2 write・拒否された"     10 "$( { init; use Write "$(write_in "$WABS")"; denied_ev Write; res true; done_ng Write; } | run w2 write "$WT" "$TMP/body.txt")"
+ck "06b-3 write・別のパスに書いた" 2 "$( { init; use Write "$(write_in "$REPO_ROOT/other.yml")"; res false; done_ok; } | run w3 write "$WT" "$TMP/body.txt")"
+# 06b-4/5: claude を起動せずに断る（CLAUDE_BIN を呼ばれたら印を残す偽物にする）
+called="$TMP/called"; printf '#!/usr/bin/env bash\ntouch %q\nexit 1\n' "$called" > "$TMP/never.sh"; chmod +x "$TMP/never.sh"
+printf 'different\n' > "$TMP/diff.txt"
+rc="$(CLAUDE_BIN="$TMP/never.sh" bash "$CHECK" write README.md "$TMP/diff.txt" >/dev/null 2>&1; echo $?)"
+ck "06b-4 既にあり中身が違う書き先は断る" "2 no" "$rc $([ -e "$called" ] && echo yes || echo no)"
+rc1="$(CLAUDE_BIN="$TMP/never.sh" bash "$CHECK" write ../outside.txt "$TMP/body.txt" >/dev/null 2>&1; echo $?)"
+rc2="$(CLAUDE_BIN="$TMP/never.sh" bash "$CHECK" write "$TMP/outside.txt" "$TMP/body.txt" >/dev/null 2>&1; echo $?)"
+ck "06b-5 リポジトリの外の書き先は断る" "2 2 no" "$rc1 $rc2 $([ -e "$called" ] && echo yes || echo no)"
+cp "$REPO_ROOT/README.md" "$TMP/same.txt"
+ck "06b-6 既にあり中身が同じなら判定に進む" 0 "$( { init; use Write "$(write_in "$REPO_ROOT/README.md")"; res false; done_ok; } | run w6 write README.md "$TMP/same.txt")"
+
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

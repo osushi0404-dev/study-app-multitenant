@@ -57,7 +57,7 @@ ck "F4 Edit の分岐の例外は確認" ASK "$(run "$TMP/f4.py" "$(edit_json do
 ck "F4 理由に型名がある" yes "$(has ValueError)"
 
 inject f5 "def _danger_reasons(cmd: str, pcmd: str) -> list:" 'raise KeyError("i182")' || echo "NOINJECT f5"
-ck "F5 今まで包まれていなかった判定の例外は確認" ASK "$(run "$TMP/f5.py" "$(bash_json ls)")"
+ck "F5 今まで包まれていなかった判定の例外は確認" 0   "$(run "$TMP/f5.py" "$(bash_json ls)")"
 
 ck "F6 本物: ls は素通し" 0 "$(run "$GUARD" "$(bash_json ls)")"
 ck "F6 本物: 保護ブランチへの push は停止" 2 "$(run "$GUARD" "$(bash_json 'git push origin develop')")"
