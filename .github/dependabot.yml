@@ -1,22 +1,152 @@
+# Dependabot の設定（I028・I213）。届いた PR の受け取り方は docs/runbooks/dependency-audit.md「Dependabot」。
+# - target-branch は書かない（書くとセキュリティの修正の PR にこの設定が効かない。既定のブランチ develop 宛てになる）
+# - minor・patch は対象ごとに 1 つの PR にまとめ（普段の版上げとセキュリティの修正の両方）、major は 1 件ずつ
+# - cooldown: 出たばかりの版は 7 日待つ（pip・npm の major は 14 日。ほかの対象は版の大きさ別の日数に対応していない）
+# - ハーネスの uv（scripts/claude/tests）は見張らない: Dependabot の uv と pyproject.toml の required-version（ぴったりの版）が
+#   ぶつかり、ロックファイルを作り直せない。版を上げる手順は docs/runbooks/onboarding.md「手元の準備（ハーネスのテスト）」
 version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule:
       interval: "weekly"
-    target-branch: "develop"
     open-pull-requests-limit: 5
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
-    target-branch: "develop"
     open-pull-requests-limit: 5
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
 
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+
+  # 土台イメージは「タグ＋指紋（@sha256:）」で書き、同じ版の中の更新（指紋）を受け取る。
+  # 動かす環境の版を変える版上げ（python の minor 以上・node・postgres・redis の major）は出させず、別のイシューで扱う
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+
+  # action はコミットの SHA で固定し、行末に版を書く（Dependabot は SHA と版のコメントを一緒に上げる）
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    target-branch: "develop"
     open-pull-requests-limit: 5
+    labels: ["dependencies", "track:harness"]
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "track:harness"]
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]

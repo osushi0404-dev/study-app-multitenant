@@ -11,6 +11,8 @@
 | 7 | （マージ後）開いている Dependabot の PR を一覧し、新しい設定のまとめ PR に含まれたもの・ignore に当たるものを、理由をコメントして閉じる | #360〜#373 のうち置き換わったものが閉じられ、コメントに置き換え先の PR 番号か ignore の理由がある。major で残るものの一覧を close の報告に書く | Claude |  | 閉じた PR は開き直せる |
 | 8 | （マージ後）新しい設定で届いた Dependabot の PR の CI を `gh pr checks <番号>` で読む | `E2E Tests (Playwright)` が pass（パスワード未設定で落ちない） | Claude |  | 新しい PR が来るまで待つ（待つ日数の後になることがある） |
 
+| 9 | `docs/runbooks/plan-writing-rules.md` の「決定論テストの対象の選び方」を、I213 の最初の案の 15 項目（D1〜D6・W1〜W3・I1・V1・P1・R1・K1・M1）に当てはめる | 残すのが D2・W1・W2・W3・I1・V1 の 6 項目、作らないのが残り 9 項目、と迷わず決まる。`.claude/agents/plan-reviewer.md`・`.claude/agents/code-reviewer.md` の観点の行がこの節を名前で参照している | Claude |  | 計画変更記録 3 |
+
 ## 画面確認
 <!-- frontend/src を変えないので画面確認は不要 -->
 | 日時 | コミット | 画面と操作 | アカウント | 期待した結果 | 実際の結果 | 画像 |

@@ -1,7 +1,7 @@
 services:
   # PostgreSQL Database
   db:
-    image: postgres:15-alpine
+    image: postgres:15-alpine@sha256:54e0dd8e8cddcdbb9156c2486eed5a43eccb7214d7c6828097d41ce049fb3984
     environment:
       POSTGRES_DB: learning_app
       POSTGRES_USER: postgres
@@ -22,7 +22,7 @@ services:
 
   # Redis Cache
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -169,7 +169,7 @@ services:
 
   # E2E Tests (Playwright): e2e-init 完了後に起動する
   e2e:
-    image: mcr.microsoft.com/playwright:v1.59.1-jammy
+    image: mcr.microsoft.com/playwright:v1.59.1-jammy@sha256:8a0360d39d1973be506dd59002904a774f6d697d4946c94063b3fd006461c8ff
     working_dir: /e2e
     volumes:
       - ./e2e:/e2e
@@ -188,11 +188,13 @@ services:
       - BASE_URL=http://frontend:3000
     profiles:
       - e2e
-    command: sh -c "npm install && npm test"   # npm install: named volume のキャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
+    # npm install: named volume のキャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
+    # npx playwright install chromium: イメージと @playwright/test の版がずれても、その版のブラウザを入れてから流す（版が同じなら何もしない・I213）
+    command: sh -c "npm install && npx playwright install chromium && npm test"
 
   # Nginx (Production only)
   nginx:
-    image: nginx:alpine
+    image: nginx:alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606
     ports:
       - "80:80"
       - "443:443"
