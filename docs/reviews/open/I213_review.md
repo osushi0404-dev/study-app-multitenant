@@ -31,6 +31,7 @@
 - [implement] 承認画面を減らす変更は I213 に入れず、マージ直後に I200（#335）で行う（ユーザーが選択） — I200 が同じ中身の設計確認を済ませている。設定は develop の版で効くので、どちらで入れてもマージ後に効く
 - [implement] /simplify の 4 観点のうち 4 件を採り、4 件を見送った — 計画変更記録 5（見送りの理由も同じ所）
 - [implement] 計画レビューの実行中に `e2e/playwright.config.ts`・`e2e/.env.e2e.example` の直しが元の文言に戻っていた（原因は特定できず。スクリプトに戻す処理は無い）。直し直して git の差分で載ったことを確かめた
+- [review-gate] 1 回目（20261029_1009）は `OFFICIAL_SECURITY: FAILED` で HIGH。中身を読むと組み込みの /security-review は動いていて、ワークフロー 3 つ・SHA 固定・パスワードの伏せ字・成果物まで確かめて「報告対象の脆弱性なし」と書いていた（判定の仕組みが想定する書き方〔指摘の配列か決まった「指摘なし」〕でなかったため「読めていない」扱い）。決まりどおり 1 回だけやり直した（20261029_1020）。やり直しは「差分のレビュー・範囲のファイル 0 本」で /security-review を動かさずに OK になった — これは起票済みの I212（#358）の穴そのもの。今回 OK として進む根拠は、1 回目の /security-review の本文がブランチ全体を見て指摘なしだったことと、この後の敵対的レビュー（独立した 3 観点）を通すこと。I212 の事例として retro で I212 に記録する
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
