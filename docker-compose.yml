@@ -169,7 +169,7 @@ services:
 
   # E2E Tests (Playwright): e2e-init 完了後に起動する
   e2e:
-    image: mcr.microsoft.com/playwright:v1.59.1-jammy@sha256:8a0360d39d1973be506dd59002904a774f6d697d4946c94063b3fd006461c8ff
+    image: mcr.microsoft.com/playwright:v1.64.1-jammy@sha256:6075bd984554db82aee96bcdde53197f091dfe8c4b89322c61da77b86308b810
     working_dir: /e2e
     volumes:
       - ./e2e:/e2e
