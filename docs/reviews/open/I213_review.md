@@ -25,3 +25,4 @@
 - [plan] `target-branch` を消す — 書くとセキュリティの修正の PR に設定が効かない（公式）。既定のブランチが develop なので宛先は同じ
 - [plan] 書き間違いの検証に公式の `check-dependabot`（0.38.2）を使う — 誤りを 4 種とも止めた。0.39.0 は出て 3 日なので待つ日数に合わせて 1 つ前
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
