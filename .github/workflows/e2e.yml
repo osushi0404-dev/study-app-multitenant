@@ -57,7 +57,7 @@ jobs:
           echo "=== docker compose ps ===" && docker compose ps
 
       # I187: 失敗時は画面キャプチャだけを上げる（trace・レポートにはログイン時のパスワードが残りうるため上げない）
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-screenshots
