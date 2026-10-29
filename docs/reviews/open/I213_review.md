@@ -10,7 +10,8 @@
 （実装後に記入）
 
 ## テスト結果
-（test-gate 段階で記入）
+- 自動: 決定論ゲート 7 本 exit=0・check-dependabot Passed・PR #374 の CI すべて success（E2E は secrets なしで 8 passed・パスワードは `***`）
+- 手動（2026-10-29・すべて Claude）: No.1〜No.5・No.9 OK（DB の中身は起動し直しても残り、frontend の node_modules だけ作り直された／手元の E2E 8 passed でブラウザの取り直し 0／指紋 6 種類が引ける）。No.6〜No.8 はマージ後に Claude が行う。Human の項目なし
 
 ## 計画との差分
 （実装後に記入）

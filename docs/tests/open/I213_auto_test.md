@@ -9,6 +9,11 @@
 - frontend: 非該当
 - harness（計画時・2026-10-29・変更前の基準）: TC-02・TC-04 の 6 本は `run-all: pass=6 fail=0`。TC-01 は実装前のため未実行（テストのファイルがまだ無い）。TC-03 は実装前のため未実行（フックがまだ無い。スキーマの FG は計画のスパイク 3 で確認済み）
 
+## 実行記録
+- 2026-10-29（review-gate・`code-review.sh` が決定論ゲートを実走）: 決定論ゲート 7 本すべて exit=0（`docs/reviews/I213_code_review_20261029_1009.md`）
+- 2026-10-29（test-gate・aaf603bc）: `pre-commit run check-dependabot --files .github/dependabot.yml` → `Validate Dependabot Config (v2)...Passed`（exit 0・TC-03）
+- CI（PR #374・aaf603bc）: Backend Lint & Security（check-dependabot を含む）・Backend Tests・Frontend Lint & Security・Frontend Tests・Frontend Type Check・Harness Tests・E2E Tests (Playwright) すべて success
+
 ## TC-01 `scripts/claude/tests/test_i213_dependabot.sh`（新規）
 実物のファイルで合格（exit 0）し、写しを壊した FG ではそれぞれ不合格になること。合否は終了コード（合格 0・不合格 1）。
 確かめるのは「壊れても気づきにくく、壊れると被害が大きい決まり」だけ（計画変更記録 2）。dependabot.yml の中身（対象・待つ日数・まとめ・ラベル・ignore）・runbook の文言・フックの有無・e2e の command の並びは、テストに写さない（実物と check-dependabot・コードレビューで見る）。
