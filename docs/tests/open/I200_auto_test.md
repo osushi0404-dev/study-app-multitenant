@@ -32,6 +32,7 @@
 | FG-01e | `docker compose cp backend:/app/.env /tmp/x`（コンテナからの取り出し） | ASK |
 | FG-01f | `docker compose run --rm backend sh -c "python -c \"import shutil; shutil.rmtree('/app/x')\""`（新しいコンテナを起動する `run` の中・危ない語） | ASK |
 | 01h | `docker compose run --rm backend python manage.py check`（`run` の中・許可リストに入る） | 0 |
+| FG-01g | `docker compose cp <一時のファイル（中身 print("ok")）> backend:/app/manage.py`（コピー先が `/tmp/` 以外＝手元のファイルの上書き） | ASK |
 
 ## TC-02 (A)〜(C) の代表は今までどおり停止・確認
 | ID | コマンド | 期待 |
@@ -64,6 +65,7 @@
 | 03e | 03d と同じ複製に `git push origin feature/x` を渡す | ASK |
 | 03f | 見張りの失敗（`_fail_safe`）: 複製の `def main():` の直後に `raise RuntimeError("i200")` を差し込み、`echo ok` を渡す | 0 |
 | 03g | 03f と同じ複製に `rm -rf x` を渡す | ASK |
+| 03i | 03d と同じ複製（読み解きの例外）に `docker compose down -v` を渡す | ASK |
 | 03h | 語の境界: `echo "add odd`（引用符が閉じていない・`dd` を含むが語ではない） | 0 |
 | FG-03 | 見張りの複製で `_RISKY_WORDS` から `rm` を消し、03b を流す | 0（＝03b の期待 ASK と食い違い、テストが不合格になることを確かめる） |
 
@@ -84,6 +86,8 @@
 | 04j | MultiEdit: 1 つ目は版の書き換え、2 つ目で `secrets.X` を足す | ASK |
 | 04k | Edit: `old_string` が今の中身に無い（置き換えられない）＋ `new_string` に `secrets.X` | ASK |
 | 04l | Edit: 既に `secrets.X` がある step の別の行を書き換える（`secrets.` の数は増えない） | 0 |
+| 04o | Edit: `env: X: ${{ secrets['X'] }}` を足す | ASK |
+| 04p | Edit: `run: echo '${{ toJSON(secrets) }}'` を足す | ASK |
 | 04m | Edit: `file_path` を `<一時のリポジトリ>/./.github/../.github/workflows/x.yml` にして 04c と同じ書き足し | ASK |
 | 04n | Edit: `file_path` を一時のリポジトリの中から見た相対パス `.github/workflows/x.yml` にして 04c と同じ書き足し（見張りの作業フォルダを一時のリポジトリにする） | ASK |
 
@@ -96,6 +100,8 @@
 | 05d | Edit: 任意のフックに `exclude: ^backend/` を足す | ASK |
 | 05e | Edit: detect-secrets の `args` の `.secrets.baseline` を別の名前にする | ASK |
 | 05f | Write: 中身から detect-secrets を消す | ASK |
+| 05g | Edit: detect-secrets のフックに `files: ^docs/` を足す | ASK |
+| 05h | Edit: 任意のフックに `types_or: [python]` を足す | ASK |
 
 ## TC-06 許可の設定
 既存 `scripts/claude/tests/test_settings_permissions.sh` の期待値を 5-5 に合わせる（`ask` は `Edit(.secrets.baseline)` だけ・`docker compose exec|run|cp` と `docker-compose` の同じものの allow を許し、`Bash(docker compose *)` などの広い行は今までどおり禁止）。新しい写しのテストは作らない（計画書 9）。
@@ -107,6 +113,9 @@
 | 06b-1 | Write の呼び出しが 1 回・permission_denials が空 | exit 0（承認なしで実行された） |
 | 06b-2 | Write の呼び出しが permission_denials に入っている | exit 10（承認画面が出る） |
 | 06b-3 | Write が呼ばれていない・別のパスに書いた | exit 2（判定できない） |
+| 06b-4 | 書き先が既にあり、渡した中身が今の中身と違う（claude は起動しない。`CLAUDE_BIN` を呼ばれたら失敗するコマンドにして確かめる） | exit 2・claude が起動されない |
+| 06b-5 | 書き先が `../outside.txt`・リポジトリの外の絶対パス | exit 2・claude が起動されない |
+| 06b-6 | 書き先が既にあり、中身が同じ | 判定に進む（記録の中身で 06b-1・06b-2 と同じ） |
 
 ## TC-07 primary の自動の早送り（`scripts/claude/tests/test_sessionstart_context.sh` に追加）
 一時のディレクトリに、bare の origin・primary（develop をチェックアウト）・primary から作ったワークツリーを作り、ワークツリーの中から `sessionstart_context.py` を実行する（`GH_HOST=nonexistent.invalid` で gh を速く失敗させる）。

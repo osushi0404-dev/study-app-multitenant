@@ -23,7 +23,10 @@
 - [plan] イシューで「計画の最初に確定」としていた、確認を出している層を実測した（check-permission-prompt.sh と見張りの単体の判定）。見張りを直すだけでは足りず、許可の設定に `docker compose exec|run|cp` を足す必要があると分かったので範囲に入れた — 受け入れ条件（I166 の操作が通常モードで確認なしで通る）を満たすのに必要。`git push *` と同じ「allow＋見張りが判定」の形
 - [plan] `docker compose cp` のホスト→コンテナを「取り出し」と判定する誤りを見つけ、範囲に入れた — 同じく受け入れ条件に必要
 - [plan-review] 計画レビュー 1 は BLOCKER（Edit の allow 不足・Edit を確かめる道具が無い）。範囲を足して直し（計画変更記録 1）、2 回目は HIGHRISK。2 回目の Warning 4 件は方式を変えずに直した（計画変更記録 2）— 再レビューは不要と判断
+- [design-security-review] Blocker・High は 0 件。Medium 5 件（ワークフローの `secrets` の書き方の取りこぼし・例外の経路での `down -v`・`docker compose cp` の `/app/` への上書き・pre-commit の `files:`／`types`・確かめの道具の上書き）は、方式を変えずに計画の細部とテストに入れた（計画変更記録 3）— 計画レビューのやり直しは不要と判断（語と条件の細部だけ）。Low 3 件（コンテナ内の `pip install`・`github.token`・git の hook）は受け入れ、retro で残余リスクとして扱う
 
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: design-security-review
+
+STAGE_DONE: design-security-review NEXT: implement

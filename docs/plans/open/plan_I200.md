@@ -92,7 +92,7 @@
 **修正方針**: 「安全と確認できない」操作を、一律に確認するのをやめ、(A)〜(C) につながる語が文字列のどこかにあるときだけ確認にする。粗い文字の一致にとどめ、シェルの動きを読む精密な判定は作らない（I179 の教訓）。見張りの脅威モデルは「事故」（意図的な回避は対象外。danger-ops.md）。
 
 - 関数 `_risky_words(text) -> list[str]`: 大文字・小文字を区別せず、次の語を探して、当たった語を返す。英数字で始まる語は、直前が英数字・`_` でないときだけ当たる（`(?<![A-Za-z0-9_])` を前に付けた正規表現。`dd` が `add`・`odd` に当たらないように。計画レビュー 1 の Warning）。英数字で終わる短い語（`rm`・`dd`・`git`・`gh`・`nc`・`ssh`・`scp`）は直後も英数字・`_` でないときだけ当たる。引用符の中・ヒアドキュメントの本文・コメントも含めて見る（読みきれない書き方では区切りが当てにならないため、文字列全体を見る）
-  - (B) 消す・壊す: `rm`・`rmdir`・`unlink`・`rmtree`・`remove(`・`truncate`・`drop`・`delete`・`flush`・`destroy`・`wipe`・`shred`・`mkfs`・`dd`・`.update(`・`bulk_update`
+  - (B) 消す・壊す: `rm`・`rmdir`・`unlink`・`rmtree`・`remove(`・`truncate`・`drop`・`delete`・`flush`・`destroy`・`wipe`・`shred`・`mkfs`・`dd`・`.update(`・`bulk_update`・`down`・`volume`・`prune`・`kill`（後ろ 4 つは、見張りの例外の経路で `docker compose down -v` などの停止の操作を取りこぼさないため・セキュリティ設計レビュー）
   - (A) GitHub: `git`・`gh`・`push`
   - (C) 外部・秘密: `curl`・`wget`・`nc`・`ncat`・`ssh`・`scp`・`rsync`・`requests`・`urllib`・`http.client`・`httpx`・`socket`・`smtplib`・`send_mail`・`mail_admins`・`email_user`・`EmailMessage`・`.delay(`・`apply_async`・`openai`・`.env`・`environ`・`printenv`・`secret`・`password`・`token`・`api_key`
   - 広すぎて普通の書き方を確認にしやすい `reset`・`clean`・`email` は入れない（`git reset`・`git clean` は `git` で、メールの送信は `send_mail` などで拾う）
@@ -109,21 +109,21 @@
 
 ### 5-3. `docker compose cp` の向き（見張りの 2 の誤判定の是正）
 - `docker cp`・`docker compose cp` の「取り出し」は、コピー元がコンテナ側（`<サービスかコンテナ>:<パス>` の形）のときだけにする（コンテナの中の秘密ファイル・データを手元に出しうるため確認のまま）
-- ホスト→コンテナ（コピー先がコンテナ側）は外部送信ではない。コピー元の手元のファイルが読めるときは、その中身に `_risky_words` をかけ、当たれば確認（コピーしてからコンテナで実行する形〔danger-ops.md「見張りを避ける書き方」〕の中身を、コピーの時点で見る）。読めない（存在しない・ディレクトリ・1MB を超える）ときは確認
+- ホスト→コンテナ（コピー先がコンテナ側）は外部送信ではない。ただしコピー先のコンテナのパスが `/tmp/` の下でなければ確認（`/app/` は手元の `backend/`・`frontend/` に bind mount されていて、未コミットのファイルを上書きしうる・(B)。セキュリティ設計レビュー）。コピー元の手元のファイルが読めるときは、その中身に `_risky_words` をかけ、当たれば確認（コピーしてからコンテナで実行する形〔danger-ops.md「見張りを避ける書き方」〕の中身を、コピーの時点で見る）。読めない（存在しない・ディレクトリ・1MB を超える）ときは確認
 
 ### 5-4. ワークフローと pre-commit の設定の編集（見張りの Edit／Write の分岐・`main()` 3456〜3464 行）
 **修正方針**: 設定の `ask` の一律の確認をやめ、書き換えの前と後の中身を比べて、秘密が外に出うる語・検査を弱める語が**増えた**ときだけ確認にする。action の版の書き換えなど、語が増えない編集は通す。
 
 - 前後の中身の作り方: Edit は今のファイルの中身に `old_string` → `new_string` の置き換え（`replace_all` を含む）をかけたもの、MultiEdit は順にかけたもの、Write は `content`。今のファイルが無ければ前は空。今のファイルが読めない・置き換えの前の文字が見つからないときは、`new_string`（Write は `content`）だけを「後」、空を「前」として比べる（語が新しく出れば確認＝安全側）
 - `.github/workflows/` 配下（`*.yml`・`*.yaml`）: 次の語の出現数が前より後で増えたら確認
-  - `secrets.`・`secrets: inherit`（秘密情報を使う・広げる）
+  - `secrets`（語の境界つき・ドットなし。`secrets.X`・`secrets['X']`・`toJSON(secrets)`・`secrets: inherit` をまとめて拾う。秘密情報を使う・広げる・セキュリティ設計レビュー）
   - `write`・`id-token`（権限を広げる。`permissions:` の `contents: write`・`write-all` を粗く拾う）
   - `pull_request_target`・`workflow_run`（外の人の PR の中身を秘密情報つきで動かせるきっかけ）
   - `curl`・`wget`・`nc `（外部への送信）
   - `github.event.`・`github.head_ref`（外から入る値の埋め込み。`run:` の中かどうかは見ない＝粗い判定）
 - `.pre-commit-config.yaml`: 次のどれかで確認
   - `detect-secrets` の出現数が減った（秘密の検査のフックを消す・外す）
-  - `exclude`・`skip`・`stages` の出現数が増えた（検査の対象を減らしうる）
+  - `exclude`・`skip`・`stages`・`files:`・`types`（`types_or` を含む）の出現数が増えた（検査の対象を減らしうる。`files:`・`types` はセキュリティ設計レビュー）
   - `.secrets.baseline` の出現数が変わった（検査の基準のファイルの差し替え）
   - それ以外（フックの追加・`rev` の版の書き換え）は通す
 - `.secrets.baseline`: 設定の `ask` に残す（5-5。編集はほぼ「許す秘密を足す」＝検査を弱める方向で、めったに編集しないため、中身の比較は作らない）
@@ -142,7 +142,7 @@
 - `Edit(.secrets.baseline)` の ask は Write・MultiEdit にも効く（上の公式の扱い。計画レビュー 1 の Info への回答）
 
 ### 5-5b. 承認の仕組み全体で Edit を確かめる道具（`check-permission-prompt.sh`）
-- 今の `scripts/claude/check-permission-prompt.sh` は `bash`・`mcp` だけで、Edit・Write に承認画面が出るかを確かめられない（計画レビュー 1 の Blocker）。種類 `write <パス> <中身のファイル>` を足す: claude -p に「Write ツールで <パス> に <中身> を書く」を 1 回だけ呼ばせ、承認画面が出れば自動で拒否されて permission_denials に入る（既存の bash・mcp と同じ判定）。承認なしで通ると実際に書かれるので、確かめは新しいファイル（`.github/workflows/i200-probe.yml` など）で行い、終わったら消す（M-03）
+- 今の `scripts/claude/check-permission-prompt.sh` は `bash`・`mcp` だけで、Edit・Write に承認画面が出るかを確かめられない（計画レビュー 1 の Blocker）。種類 `write <パス> <中身のファイル>` を足す: claude -p に「Write ツールで <パス> に <中身> を書く」を 1 回だけ呼ばせ、承認画面が出れば自動で拒否されて permission_denials に入る（既存の bash・mcp と同じ判定）。承認なしで通ると実際に書かれるので、確かめは新しいファイル（`.github/workflows/i200-probe.yml` など）で行い、終わったら消す（M-03）。誤って既存のファイルを上書きしないよう、`write` は「書き先が存在しない」か「渡した中身が今の中身と同じ」ときだけ claude を起動し、それ以外と、書き先がリポジトリの外（`..` を含む・絶対パスがリポジトリの外）は exit 2 にする（セキュリティ設計レビュー）
 - `scripts/claude/tests/test_check_permission_prompt.sh` に、保存した stream-json（`CHECK_PERMISSION_PROMPT_LOG`）で `write` の判定を確かめるケースを足す（既存の bash・mcp のケースと同じ形）
 
 ### 5-6. primary の自動の早送り（`sessionstart_context.py`）
@@ -225,6 +225,50 @@
 - 設計品質: 語の一覧・行き先の許可（`/tmp/`・`/dev/null`）は定数に置く。例外は「確認」か「通す」に倒す方向を明記（5-2）
 - 要件・基本設計・UI/UX の価値判断で仮定したものは無い（基準はすべて設計確認メモにある）
 
+## セキュリティレビュー結果
+
+**実施日**: 2026-10-29
+
+アプリのコード（backend・frontend）の変更なし。対象はハーネスの安全装置（見張り・許可の設定・開始のフック・確かめの道具）。脅威モデルは「事故」（意図的な回避は対象外・danger-ops.md）。ここで見つけた Medium は、方式を変えずに計画の細部へ入れた（計画変更記録 3）。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 機密情報 | 5-4 のワークフローの語 `secrets.` は、`secrets['X']`・`toJSON(secrets)` の書き方を拾わない。普通の書き方の 1 つで秘密情報の使用が確認なしで入る | 語を `secrets`（語の境界つき・ドットなし）にする。`secrets: inherit` も含まれる。TC-04 に `secrets['X']` と `toJSON(secrets)` を足す |
+| Medium | セキュリティ設定ミス | 5-2 で見張りの例外のときに語の判定へ寄せると、ふだんは停止になる `docker compose down -v` が、例外の経路では語に当たらず通る（`down`・`volume`・`prune` が一覧に無い） | (B) の語に `down`・`volume`・`prune`・`kill` を足す（語の境界つき）。TC-03 に「例外の注入＋`docker compose down -v`」→ ASK を足す |
+| Medium | ファイル操作 | 5-3 で `docker compose cp` のホスト→コンテナを通すと、コピー先がコンテナの `/app/`（＝手元の `backend/`・`frontend/` に bind mount）のとき、未コミットのファイルを上書きしうる（(B)） | コピー先が `/tmp/` 以外のコンテナのパスなら確認（コンテナ内のリダイレクトの書き込みと同じ基準）。TC-01 に `docker compose cp x backend:/app/manage.py` → ASK を足す |
+| Medium | セキュリティ設定ミス | 5-4 の `.pre-commit-config.yaml` で、`files:`・`types:` を足して検査の対象を狭める書き換えが確認にならない | 「増えたら確認」の語に `files:`・`types`（`types_or` を含む）を足す。TC-05 に detect-secrets へ `files: ^docs/` を足す → ASK |
+| Medium | ファイル操作 | 5-5b の `check-permission-prompt.sh write` は、承認なしで通ると実際に書き込む。既存のファイル（秘密ファイル・`.secrets.baseline` など）を誤って指定すると上書きする | `write` は、書き先が存在しないか、渡した中身が今の中身と同じときだけ動かす（それ以外は exit 2 で claude を起動しない）。書き先はリポジトリの中に限る（`..`・絶対パスの外は exit 2）。TC-06b に「既存のファイル・中身が違う」→ exit 2 を足す |
+| Low | 依存ライブラリ | コンテナ内の `pip install`・`npm install` は語に当たらず通る。悪意のある部品を入れると、コンテナの環境変数（`backend/.env` の値）を外へ出しうる | 受け入れる（脅威モデルは事故。入れる部品はふだん依存のファイルと PR・Dependabot・CI の監査を通る。直接の `pip install <名前>` は普通の作業で使わない）。残余リスクとして retro で扱う |
+| Low | 機密情報 | ワークフローで `github.token` を step に渡す書き換えは確認にならない | 受け入れる（ワークフローの最上位は `permissions: contents: read` で、権限を広げる書き換えは `write`・`id-token` で確認になる） |
+| Low | セキュリティ設定ミス | 開始のフックの `git merge --ff-only` は、リポジトリの git の hook（post-merge など）を動かしうる | 受け入れる（このリポジトリ自身の hook で、ワークツリーでのふだんの git の操作と同じ。外のリポジトリの設定は使わない） |
+| なし | 認証・認可／マルチテナント／入力検証（アプリ）／外部通信（アプリ） | アプリの API・データの扱いは変えない | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | Bash（`docker compose exec`） | Claude（通常モード・事故） | コンテナ内で ORM・SQL・ファイル操作で dev DB や手元のファイルを消す | 停止の判定（DROP・TRUNCATE・WHERE なしの DELETE・`rm -r`）はそのまま。それ以外は危ない語で確認 | Yes: TC-01 FG・TC-02 | Yes: M-02 | 語の一覧の漏れ（GitHub が最後の守り・失うのは dev DB と未コミットの変更） | Medium |
+| 2 | Bash（コンテナ内の Python） | Claude（事故） | コンテナの環境変数（API キー等）を外へ送る | `requests`・`urllib`・`socket`・`curl`・`openai`・`send_mail`・`environ` などで確認 | Yes: TC-02k・02l・TC-01 FG | Yes: M-02 | `pip install` した部品の中の送信（Low・上の表） | Medium |
+| 3 | Edit（ワークフロー） | Claude（事故） | 秘密情報を使う step・権限の拡大・`pull_request_target` を書き足す | 語が増えたら確認（`secrets`・`write`・`id-token`・`pull_request_target`・`workflow_run`・`github.event.`） | Yes: TC-04 | Yes: M-03 | Bash でのワークフローの書き換え（I182 から対象外のまま） | Medium |
+| 4 | Edit（pre-commit の設定） | Claude（事故） | detect-secrets を外す・対象を狭める | detect-secrets の減少・`exclude`・`files:`・`types`・`stages`・`skip` の増加で確認。CI の検査が外されないことは `test_i182_secret_gates.sh` が別に止める | Yes: TC-05 | No | 語に当たらない絞り方 | Low |
+| 5 | 開始のフック | どのワークツリーのセッションでも | primary の未コミットの変更・未追跡のファイルを消す | 追跡済みがきれい・develop・早送りだけのときしか動かない。git 自身が上書きを拒む | Yes: TC-07 | Yes: M-04a・M-04b | 別のセッションが primary で同時に git を使うとロックで失敗（メッセージだけ） | Low |
+| 6 | Bash（読みきれない書き方・見張りの例外） | Claude（事故） | 停止になるはずの操作が、例外の経路で語に当たらず通る | 停止の操作の代表語（`rm`・`git`・`down`・`volume`・`drop`・`truncate`・`delete` など）で確認 | Yes: TC-03 | No | 語の無い停止の操作（例外の経路だけ・見張りの例外は I182 以降の記録で 0 件に近い） | Low |
+| 7 | 確かめの道具（`write`） | Claude | 既存のファイルを上書き | 存在しないか同じ中身のときだけ・リポジトリの中だけ | Yes: TC-06b | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 5件 | 3件 |
+| Low     | 3件 | 4件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
+
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
@@ -240,6 +284,7 @@
 ## 計画変更記録
 - 1（plan-review・2026-10-29・計画レビュー 1 の Blocker 2・Warning 4・Info 1）: (a) Edit の allow（`.github/workflows/**`・`.github/dependabot.yml`・`.pre-commit-config.yaml`・`docker-compose.yml`）を 5-5 に足した（ask から外すだけでは既定の確認が出る）。(b) Edit・Write に承認画面が出るかを確かめる道具が無いので、`check-permission-prompt.sh` に種類 `write` を足す 5-5b を範囲に入れ、M-03 をそれで行う形に書き直した（このセッションは primary の設定で判定されるため、承認画面の有無はこのセッションでは確かめない）。(c) フックが Claude Code 本体の隔離に止められないかを、実装ステップ 1 の M-04a（マージ前・このブランチの設定の新しいセッション）で先に確かめる。(d) 危ない語に語の境界を付け、`reset`・`clean`・`email` を外した。(e) TC-03d・03e の注入の方法を具体化した。(f) 5-4 のパスの正規化を足した。(g) `.secrets.baseline` の ask が Write にも効く根拠を書いた。計画レビューのやり直し: 要（範囲〔5-5b・Edit の allow〕を変える）→ 実施（20261029_1923・Blocker 0・判定 HIGHRISK）
 - 2（plan-review・計画レビュー 2 の Warning 4 件）: TC-02 に WHERE なしの `DELETE`（ホストとコンテナ）を足した／フックの時間の上限（15 秒・22 秒）と TC-07i を足した／書き込みの判定をコンテナ内の単純コマンドだけに使うと 5-1 に明記した／`docker compose run` が 5-2 の対象に入ることを明記し、TC-01 に `run` の FG-01f・01h を足した。Info: 期待値を変えた既存ケースの一覧（TC-08）は実装で追記し、review-gate の前に埋める／誤って確認になる量が corpus diff の 1% を超えたら、広い語（`git`・`token` など）から絞る。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 3（design-security-review・2026-10-29・Medium 5 件）: ワークフローの語を `secrets` に広げた／危ない語に `down`・`volume`・`prune`・`kill` を足した／`docker compose cp` のコピー先が `/tmp/` 以外なら確認／pre-commit の語に `files:`・`types` を足した／確かめの道具 `write` に上書きの防止を足した。TC-01・TC-03・TC-04・TC-05・TC-06b にケースを足した。計画レビューのやり直し: 不要（語・条件の細部で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261029_1923 判定: ✅ 完了](../../reviews/I200_plan_review_20261029_1923.md)
