@@ -282,4 +282,8 @@ Danger Ops（有無/手順/ロールバック）:
 | Low     | 5件 | 5件 |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+（retro・2026-10-29。High 以上は 0 件）
+- Medium（設計 1・シナリオ 4）CI が緑の minor・patch をユーザーがマージする運用で、待つ日数の間に見つからなかった悪い版が入りうる: 受け入れる。待つ日数・Malware alerts・SHA と指紋の固定・CI に secrets が無いことで、BP と同じ水準まで下げている
+- Medium（設計 2）土台イメージを指紋で固定するので、OS の修正の取り込みが最大で週 1＋7 日遅れる: 受け入れる。runbook に「急ぐときは手で指紋を上げてよい」を書いた
+- Low（CI の services の例外・台帳 F10・F11）: 一覧（`docs/reviews/backlog/I213.md`）に回した
+- 設計ルールへの昇格: 「pull_request で動くワークフローに secrets を置かない（自動の PR に secrets は渡らない）」は、決定論のテスト（TC-01 W2）で守るので、grill-me・計画レビューの観点には足さない（手順より機械）
