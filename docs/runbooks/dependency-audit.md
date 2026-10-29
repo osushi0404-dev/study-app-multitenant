@@ -74,6 +74,7 @@ gh run list --workflow=dependency-audit.yml
 ### 固定の決まり（新しく足すときも）
 - action はコミットの SHA で書き、行末に版を書く（例: `actions/checkout@<40 桁の SHA> # v4.4.0`）。Dependabot は SHA と版のコメントを一緒に上げる（W1 が止める）
 - 土台イメージは「タグ＋指紋」で書く（例: `python:3.11-slim@sha256:<64 桁>`）。Dependabot は指紋の更新を PR にする（I1 が止める）。指紋は `docker buildx imagetools inspect <タグ>` の `Digest:` の値。OS の修正を急ぐときは、この値で手で上げてよい
+- 例外: CI のワークフローの `services:` のイメージ（`ci.yml` の postgres・redis）は指紋で固定しない。Dependabot はワークフローの services を更新しないので、固定すると更新が届かず古いまま止まる。CI の services は毎回使い捨てで secrets を持たないので、タグのまま毎回新しいものを取る
 
 ### 止まったときに見る場所
 - PR が来ない: Settings → Advanced Security の「Dependabot alerts」「Dependabot security updates」が On か（I213 の原因はここが無効だったこと）。Actions の「Dependabot Updates」の実行記録（対象ごとの成否とエラーの文言）
