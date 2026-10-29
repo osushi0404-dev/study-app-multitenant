@@ -56,8 +56,10 @@ I200 で入れた「セッションの開始時に primary を develop へ早送
 ### 5-1. 開始時のフックは裏の処理を起動するだけ
 **修正方針**: 開始時のフックは、前回の早送りの結果を 1 行読んで出し、裏の早送りを起動してすぐ戻る。待たない・打ち切らない。
 - `collect()` の最後の `sync_primary(start)` を、`primary_line_and_spawn()` に置き換える:
+  0. primary のパスを `git worktree list --porcelain` の最初の `worktree` 行から取り（5-2 と同じ関数）、結果のファイルの場所（5-3）を決める。取れなければ「primary: 確かめられませんでした」の 1 行にして、裏の処理だけ起動する
   1. 結果のファイル（5-3）があれば、その 1 行を「primary: 前回（<時刻>）: <結果>」として返す。無ければ「primary: まだ結果がありません（裏でそろえています）」
-  2. 裏の処理を起動する: `subprocess.Popen([sys.executable, <このファイル>, "--sync-primary"], start_new_session=True, stdin/stdout/stderr=DEVNULL)`。起動に失敗しても、その旨を 1 行に足すだけ（開始を止めない）
+  2. 裏の処理を起動する: `subprocess.Popen([sys.executable, <このファイル>, "--sync-primary"], start_new_session=True, stdin/stdout/stderr=DEVNULL)`。起動に失敗したら、同じ 1 行の文末に「（裏の処理を起動できませんでした）」を足すだけ（開始を止めない・行は増やさない）
+  - 開始時のフックに残る git は、今のワークツリーの `branch`・`status` と `worktree list` の 3 回（各 5 秒で打ち切り・SIGTERM）。gh 2 回（各 5 秒）と合わせ最悪 25 秒で、フックの `timeout: 30` の内に収まる（計画レビュー 1 の Warning）。打ち切りはどれも SIGTERM の後に SIGKILL の形にそろえる（`_run` を `_run_git_soft` と同じ形にする）
 - 時間の上限の定数（`PRIMARY_SKIP_AFTER_SEC`・`PRIMARY_STOP_AFTER_SEC`）と、開始時の経過を見る仕組みは消す（裏の処理には要らない）
 - 出力は 10 行以内のまま（1 行）
 
@@ -75,7 +77,7 @@ I200 で入れた「セッションの開始時に primary を develop へ早送
 
 ### 5-3. 結果のファイルの置き場所と、読み取りの git の指定
 - 置き場所: `${XDG_CACHE_HOME:-~/.cache}/claude-primary-sync/<primary のパスの sha1 の先頭 16 桁>.json`（リポジトリの外。primary にもワークツリーにも書かない）。テストのために、環境変数 `CLAUDE_PRIMARY_SYNC_DIR` があればその場所を使う（置き場所を変えるだけで、判定には効かない）
-- 書き込みは一時のファイルに書いてから `os.replace`（読む側が書きかけを読まない）
+- 書き込みは一時のファイルに書いてから `os.replace`（読む側が書きかけを読まない）。置き場所のディレクトリは `mode=0o700` で作る（計画レビュー 1 の Info）
 - フックの中の読み取りの git（今のワークツリーの `branch`・`status`、primary の `worktree list`・`symbolic-ref`・`status`・`rev-parse`）は、すべて `GIT_OPTIONAL_LOCKS=0` を付けて呼ぶ（`_run` で付ける）
 - テストのために、環境変数 `CLAUDE_PRIMARY_SYNC_TIMEOUT` があれば `BG_GIT_TIMEOUT_SEC` の代わりに使う（打ち切りのテスト用。短くするだけ）
 
@@ -142,4 +144,7 @@ PR を revert する（フック・テスト・手順書だけ）。結果のフ
 | V4 | 3 | 読んで可 | 開始時のフックが待たずに戻り、既存の行と結果の 1 行を出す（TC-08・M-01） |
 
 ## 計画変更記録
-（実装中に計画を変えたら、ここに追記する）
+- 1（plan-review・2026-10-30・計画レビュー 1 は OK。Warning 5・Info 2）: 5-1 に primary のパスの取り方と、開始時のフックに残る git・gh の最悪の時間（25 秒）を書いた／`_run` の打ち切りも SIGTERM にそろえる／M-01 の基準を数値（フックの所要 5 秒以内）にした／TC-10b の偽の git は `exec sleep` で SIGTERM を受けて記録できる形にした／置き場所を `0o700` で作る／起動失敗は同じ 1 行の文末に足す。「フックから切り離した裏の処理が、フックの終了や `claude -p` の終了で殺されない」前提は、実装ステップの最後と M-01・M-02 で実環境で確かめる（殺されるなら計画を直す）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261030_0829 判定: ✅ 完了](../../reviews/I219_plan_review_20261030_0829.md)

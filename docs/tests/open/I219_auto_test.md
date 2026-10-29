@@ -42,7 +42,7 @@
 | ID | 状態 | 期待 |
 |---|---|---|
 | 10a | `git` の偽物（受け取った `GIT_OPTIONAL_LOCKS` の値を記録してから本物を呼ぶ）でフックと `--sync-primary` を動かす | `status`・`branch`・`worktree list`・`symbolic-ref`・`rev-parse` の呼び出しすべてで `GIT_OPTIONAL_LOCKS=0` |
-| 10b | `CLAUDE_PRIMARY_SYNC_TIMEOUT=2` と、`merge` のときだけ 10 秒待ってから本物を呼ぶ偽物で `--sync-primary` を動かす（打ち切りに当たる） | 結果に「そろえられませんでした」・primary に `.git/index.lock` が無い・SIGTERM で終わった（偽物が SIGTERM を受け取った記録） |
+| 10b | `CLAUDE_PRIMARY_SYNC_TIMEOUT=2` と、`merge` のときだけ `exec sleep 10`（SIGTERM を受け取ったら記録する形は、偽物の中で trap を張ってから `sleep 10 & wait` で待つ）にした偽物で `--sync-primary` を動かす（打ち切りに当たる） | 結果に「そろえられませんでした」・primary に `.git/index.lock` が無い・SIGTERM で終わった（偽物が SIGTERM を受け取った記録） |
 | FG-10 | 読み取りの `GIT_OPTIONAL_LOCKS=0` を外した写しで 10a | 不合格（＝10a が指定を確かめている） |
 
 ## TC-11 既存のテスト
