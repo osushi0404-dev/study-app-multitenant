@@ -1,0 +1,11 @@
+# I200 手動テスト: 見張りの確認を「本当に危ない操作」だけに絞る
+
+承認画面が出るかは、`bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`（通常モード・承認は誰も答えない・このブランチの `.claude/settings.json` を読む）で確かめる。exit 0＝承認なしで実行された・10＝承認画面が出る・2＝判定できない（もう 1 回流す）。承認なしで通る操作は実際に実行されるので、危ない操作は、同じ規則に当たり実行されても困らない代わりの操作で確かめる。
+
+| No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
+|---:|------|----------|--------|--------|------|
+| M-01 | I166 の普通の操作 6 つを `check-permission-prompt.sh` で流す: `docker compose cp <scratchpad の print だけのファイル> backend:/tmp/i200x.py`／`docker compose exec -T backend python /tmp/i200x.py`／`docker compose exec -T backend python manage.py shell -c "exec(open('/tmp/i200x.py').read())"`／`docker compose exec -T -e PYTHONPATH=/tmp backend python -m pytest --co -q -p i200x accounts/tests.py`／`docker compose exec -T db psql -U postgres -d learning_app -tAc 'select 1'`／`git rebase --help` | 6 つとも exit 0（承認画面が出ない）。変更前は 6 つとも exit 10（計画書「調査結果」） | Claude | | 中身は print と読み取りだけで、実行されても困らない |
+| M-02 | 残す確認の代表を `check-permission-prompt.sh` で流す（実行されても困らない代わりの操作）: `git push origin --delete i200-no-such-branch`（リモートのブランチの削除・存在しない名前）／`printenv HOME`（秘密情報の表示に当たる `printenv`）／`docker compose exec -T backend python -c "import requests"`（外部送信の語・import だけ）／`docker compose exec -T backend python -c "print('rm -rf')"`（危ない語・中身は表示だけ） | 4 つとも exit 10（承認画面が出る） | Claude | | 承認画面が出る操作は自動で拒否され、実行されない |
+| M-03 | このブランチで `.github/workflows/ci.yml` の action のコメントの空白だけを Edit で書き換え、すぐ戻す（Claude のこのセッション）。続けて同じファイルに `# secrets.X` の 1 行を書き足す Edit を試す | 1 つ目は承認画面なしで通る。2 つ目は見張りの確認（承認画面）になる。2 つ目は承認しない | Claude | | 1 つ目は直後に元へ戻す（差分を残さない）。2 つ目は拒否するので書かれない。Edit は check-permission-prompt.sh で確かめられない（bash・mcp だけ）ため、このセッションで行う。このセッションの許可の判定は primary の設定で行われるため、見張り（フック）の確認だけを見る（許可の設定の ask を外した効果は M-01 で見る） |
+| M-04 | （マージ後）primary が develop にいて、マージで develop が進んだ状態で、どれかのワークツリーで新しく `claude` のセッションを始め、開始時の文脈を読む | 「primary: develop を origin/develop へ早送りしました」が出て、`git worktree list` の primary の行の HEAD が `git rev-parse origin/develop` と同じになる | Claude | | ワークツリーのセッションから primary の git を直接見られない（Claude Code 本体の隔離）ため、新しいセッションの開始時の文脈の 1 行と、`git worktree list` の primary の行の HEAD で確かめる |
+| M-05 | `docs/runbooks/danger-ops.md` の確認の基準を、見張り（`_RISKY_WORDS`・`main()` の確認の分岐）と `.claude/settings.json` の ask・allow と突き合わせて読む | 基準（(A)〜(C)＋残すもの）が 1 か所にまとまり、見張りと設定の実物と食い違わない。危ない語の一覧を runbook に写していない | Claude | | |
