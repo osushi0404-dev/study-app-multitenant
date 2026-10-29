@@ -11,8 +11,10 @@ python manage.py analyze_logs --last-errors=1
 
 ### 開発環境起動
 ```bash
-docker compose up -d
+docker compose up -d --build --renew-anon-volumes
 ```
+- 毎回この形で起動する（I213）。依存の一覧（`requirements*.txt`・`package-lock.json`）や土台イメージの指紋が変わっていれば作り直し、変わっていなければキャッシュで数秒で終わる。Dependabot の PR を取り込んだあとも、これだけで手元が新しい版になる
+- `--renew-anon-volumes` が作り直すのは名前の無い保存領域（frontend の `/app/node_modules`）だけ。DB（`postgres_data`）・redis の中身は名前付きなので消えない（`scripts/claude/tests/test_i213_dependabot.sh` の V1 が固定）
 
 ### worktree ごとのポート分離（同時起動・I097）
 複数 worktree のスタックを同時に up する場合、ホストポートを直下 `.env` で分離する（詳細: `worktree.md` §6）。

@@ -2,7 +2,7 @@
 # I213: 壊れても気づきにくく、壊れると被害が大きい決まりだけを確かめる（設定の中身の写しはしない。書き間違いは pre-commit の check-dependabot）。
 #   D2 dependabot.yml に target-branch を書かない（書くとセキュリティの修正の PR に設定が効かない）
 #   W1 action は 40 桁の SHA＋版のコメントで固定 / W2 pull_request で動くワークフローに secrets が無い（Dependabot の PR に secrets は渡らない）
-#   W3 E2E のパスワードは ::add-mask:: の後で $GITHUB_ENV に書く / I1 土台イメージは指紋（@sha256:）で固定
+#   W3 E2E のパスワードを $GITHUB_ENV に書く前に ::add-mask:: で伏せる / I1 土台イメージは指紋（@sha256:）で固定
 #   V1 名前の無い保存領域は frontend の /app/node_modules だけ（標準の起動コマンドの --renew-anon-volumes が消すのはこれだけ）
 # 項目は docs/tests/open/I213_auto_test.md の TC-01。各項目に写しで失敗注入（FG）を付ける。
 # 実行: bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i213_dependabot.sh
@@ -54,17 +54,16 @@ elif item == "W2":
         if trig & {"pull_request", "pull_request_target"} and "secrets." in t:
             errs.append(f"{os.path.basename(f)}: pull_request で動くワークフローで secrets を使っている")
 elif item == "W3":
+    # E2E_TEST_PASSWORD を $GITHUB_ENV に書く行より前に、同じ step で ::add-mask:: があること（作り方・step の名前は問わない）
     steps = load(".github/workflows/e2e.yml")["jobs"]["e2e"]["steps"]
-    gen = [i for i, s in enumerate(steps) if "openssl rand -hex" in (s.get("run") or "")]
-    init = [i for i, s in enumerate(steps) if s.get("name") == "Initialize E2E database"]
-    if len(gen) != 1 or not init or gen[0] > init[0]:
-        errs.append(f"パスワードを作る step がちょうど 1 つで、DB の初期化より前（今 {gen}・{init}）")
-    else:
-        ls = steps[gen[0]]["run"].split("\n")
-        mask = [i for i, l in enumerate(ls) if "::add-mask::" in l]
-        env = [i for i, l in enumerate(ls) if '>> "$GITHUB_ENV"' in l]
-        if not mask or not env or mask[0] > env[0]:
-            errs.append("::add-mask:: を $GITHUB_ENV への書き込みより前に置く")
+    writers = []
+    for s in steps:
+        ls = (s.get("run") or "").split("\n")
+        env = [i for i, l in enumerate(ls) if "E2E_TEST_PASSWORD=" in l and "GITHUB_ENV" in l]
+        if env:
+            writers.append(any("::add-mask::" in l for l in ls[:env[0]]))
+    if writers != [True]:
+        errs.append(f"E2E_TEST_PASSWORD を GITHUB_ENV に書く step がちょうど 1 つで、その前に ::add-mask:: がある（今 {writers}）")
 elif item == "I1":
     FROM = re.compile(r"\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+as\s+(\S+))?", re.I)
     for df in ("backend/Dockerfile", "frontend/Dockerfile", "frontend/Dockerfile.dev"):
@@ -116,19 +115,12 @@ R="$(mkroot d2)"; sed -i '0,/^\(  *\)schedule:/s//\1target-branch: "develop"\n\1
 R="$(mkroot w1a)"; sed -i 's#actions/checkout@[0-9a-f]\{40\}#actions/checkout@v4#' "$R/.github/workflows/ci.yml"; fg W1a W1 "$R"
 R="$(mkroot w1b)"; sed -i 's#astral-sh/setup-uv@[0-9a-f]\{40\}#astral-sh/setup-uv@v10.3.3#' "$R/.github/workflows/ci.yml"; fg W1b W1 "$R"
 R="$(mkroot w1c)"; sed -i 's#\(actions/setup-node@[0-9a-f]\{40\}\) *\# v[0-9.]*#\1#' "$R/.github/workflows/e2e.yml"; fg W1c W1 "$R"
+R="$(mkroot w1ok)"; sed -i 's#\(actions/setup-node@[0-9a-f]\{40\} *\# v[0-9.]*\)#\1 （説明）#' "$R/.github/workflows/e2e.yml"
+chk W1 "$R" >/dev/null; ck "W1ok 版のコメントの後ろに説明があっても合格" 0 "$?"
 # shellcheck disable=SC2016  # 写しに書く文字列そのもの（${{ }} を展開しない）
 R="$(mkroot w2)"; sed -i 's#BASE_URL: http://localhost:3000#BASE_URL: http://localhost:3000\n          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}#' "$R/.github/workflows/e2e.yml"; fg W2 W2 "$R"
 R="$(mkroot w3a)"; sed -i '/::add-mask::/d' "$R/.github/workflows/e2e.yml"; fg W3a W3 "$R"
-R="$(mkroot w3b)"; python3 -I - "$R/.github/workflows/e2e.yml" <<'PY'
-import sys
-f = sys.argv[1]
-ls = open(f, encoding="utf-8").read().split("\n")
-i = next(n for n, l in enumerate(ls) if "::add-mask::" in l)
-j = next(n for n, l in enumerate(ls) if '>> "$GITHUB_ENV"' in l)
-ls[i], ls[j] = ls[j], ls[i]
-open(f, "w", encoding="utf-8").write("\n".join(ls))
-PY
-fg W3b W3 "$R"
+R="$(mkroot w3b)"; sed -i '/::add-mask::/{h;d};/GITHUB_ENV/G' "$R/.github/workflows/e2e.yml"; fg W3b W3 "$R"   # 伏せ字を書き込みの後へ動かす
 R="$(mkroot i1a)"; sed -i 's/@sha256:[0-9a-f]*//' "$R/backend/Dockerfile"; fg I1a I1 "$R"
 R="$(mkroot i1b)"; sed -i '0,/@sha256:[0-9a-f]*/s///' "$R/docker-compose.yml"; fg I1b I1 "$R"
 R="$(mkroot v1)"; sed -i 's#^\(\( *\)- postgres_data:/var/lib/postgresql/data\)$#\1\n\2- /var/lib/postgresql/extra#' "$R/docker-compose.yml"; fg V1 V1 "$R"

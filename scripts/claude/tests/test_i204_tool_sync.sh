@@ -109,9 +109,7 @@ for s in steps:
 if len(uv_steps) != 1:
     errs.append(f"astral-sh/setup-uv はちょうど 1 つ（今 {len(uv_steps)} 個）")
 for s in uv_steps:
-    # setup-uv はコミットの SHA で固定する（版は行末のコメント・I213）。タグは付け替えられる
-    if not re.fullmatch(r"astral-sh/setup-uv@[0-9a-f]{40}", s["uses"]):
-        errs.append(f"setup-uv はコミットの SHA で固定する（版は行末のコメント・今 {s['uses']}）")
+    # uses の書き方（コミットの SHA＋版のコメント）は test_i213_dependabot.sh の W1 が全ワークフローで見る（I213）
     w = s.get("with") or {}
     if w != {"version-file": "scripts/claude/tests/pyproject.toml"}:
         errs.append(f"setup-uv の with は version-file: scripts/claude/tests/pyproject.toml だけ（今 {w}）")
@@ -142,10 +140,6 @@ elif kind == "uv_ver":
     uv[0]["with"]["version"] = "0.9.0"
 elif kind == "no_version_file":
     del uv[0]["with"]["version-file"]
-elif kind == "uv_major_tag":
-    uv[0]["uses"] = "astral-sh/setup-uv@v10"
-elif kind == "uv_minor_tag":
-    uv[0]["uses"] = "astral-sh/setup-uv@v10.3.3"
 elif kind == "setup_python":
     steps.insert(1, {"uses": "actions/setup-python@v5", "with": {"python-version": "3.11"}})
 elif kind == "extra_uses":
@@ -157,7 +151,7 @@ PY
 }
 OUT="$(ci_check "$CI")"; rc=$?
 ck "C1 CI の Harness Tests は版の正だけを読む" "0 []" "$rc [$OUT]"
-for kind in py312 uv_ver no_version_file uv_major_tag uv_minor_tag setup_python extra_uses; do
+for kind in py312 uv_ver no_version_file setup_python extra_uses; do
   ci_mut "$kind" "$TMP/ci_$kind.yml"
   ci_check "$TMP/ci_$kind.yml" >/dev/null; rc=$?
   ck "FG-C 写しの ci.yml（${kind}）は不合格" 1 "$rc"

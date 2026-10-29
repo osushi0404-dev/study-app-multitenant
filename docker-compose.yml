@@ -189,7 +189,7 @@ services:
     profiles:
       - e2e
     # npm install: named volume のキャッシュを活かし差分のみ更新（2回目以降は数秒）。CI では e2e.yml が npm ci を使い決定論的インストールを保証
-    # npx playwright install chromium: イメージと @playwright/test の版がずれても、その版のブラウザを入れてから流す（版が同じなら何もしない・I213）
+    # npx playwright install chromium: イメージと @playwright/test の版がずれても、その版のブラウザを入れてから流す（版が同じなら何もしない。ずれている間は実行のたびに取り直す〔約 150MB〕が、Dependabot の次のイメージの PR でそろう・I213）
     command: sh -c "npm install && npx playwright install chromium && npm test"
 
   # Nginx (Production only)

@@ -40,7 +40,7 @@ PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）は、コマ
 |------|-------------------|------|
 | 秘密情報を含むコミットの push | リポジトリは公開なので、push した時点で全世界に公開される。消しても複製・キャッシュが残る | GitHub の push protection（push を拒否）・見張りが `git commit --no-verify`／`-n`・`git push --no-verify` を停止・CI の `Backend Lint & Security`（必須チェック）の detect-secrets（push 後の検出）・下の「秘密情報を push してしまったとき」 |
 | ワークフロー（`.github/workflows/`）・秘密情報の検査設定（`.pre-commit-config.yaml`・`.secrets.baseline`）の書き換え | PR を出した時点で、PR 側のワークフローが secrets 付きで動く。検査設定を外すと CI の検出も効かない | settings.json の `ask`（編集時に確認）・レビュー観点（`docs/runbooks/review-rules.md`）・CI の検査が外されないことの決定論テスト（`scripts/claude/tests/test_i182_secret_gates.sh`） |
-| ワークフローが実行するコード（テスト・`package.json` の scripts・`manage.py` のコマンド 等）の変更 | ワークフローを書き換えなくても、PR 側のコードが CI の中で `GITHUB_TOKEN` に触れる | `ci.yml`・`e2e.yml` の最上位の `permissions: contents: read`（読み取りだけ）。`E2E_TEST_PASSWORD` は試験アカウントの値でログは伏せ字（対応不要） |
+| ワークフローが実行するコード（テスト・`package.json` の scripts・`manage.py` のコマンド 等）の変更 | ワークフローを書き換えなくても、PR 側のコードが CI の中で `GITHUB_TOKEN` に触れる | `ci.yml`・`e2e.yml` の最上位の `permissions: contents: read`（読み取りだけ）。CI の E2E のパスワード（`E2E_TEST_PASSWORD`）は e2e.yml がジョブごとに作る使い捨ての値で、secrets を使わずログは伏せ字（I213・対応不要） |
 | リモートブランチの削除（`git push --delete`・`-d`・`<remote> :<ブランチ>`・`--prune`） | 手元に無い（別ワークツリー・別セッションの）ブランチの push 済みの作業は戻せない。PR も閉じる | 見張りが確認にする |
 | イシュー・PR への書き込み（`gh issue edit --body-file` 等） | 公開されるが、bot 自身が編集・削除できる | 対策しない（書くのは Claude が書いた記録ファイルで、秘密情報を扱わない） |
 | リポジトリ設定の変更・リリースの作成・ワークフローの手動実行 | — | 対策不要（bot に管理権限が無い、または allow に無くふだんの確認が出る） |

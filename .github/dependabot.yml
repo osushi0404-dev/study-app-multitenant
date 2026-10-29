@@ -10,7 +10,6 @@ updates:
     directory: "/backend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:app"]
     cooldown:
       default-days: 7
@@ -27,7 +26,6 @@ updates:
     directory: "/frontend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:app"]
     cooldown:
       default-days: 7
@@ -44,7 +42,6 @@ updates:
     directory: "/e2e"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:app"]
     cooldown:
       default-days: 7
@@ -63,7 +60,6 @@ updates:
     directory: "/backend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:app"]
     cooldown:
       default-days: 7
@@ -82,7 +78,6 @@ updates:
     directory: "/frontend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:app"]
     cooldown:
       default-days: 7
@@ -101,7 +96,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:app"]
     cooldown:
       default-days: 7
@@ -123,7 +117,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:harness"]
     cooldown:
       default-days: 7
@@ -139,7 +132,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
     labels: ["dependencies", "track:harness"]
     cooldown:
       default-days: 7

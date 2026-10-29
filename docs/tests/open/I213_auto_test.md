@@ -16,15 +16,15 @@
 | ID | 確かめること | 合格の条件 | FG（写しを壊すと不合格） |
 |---|---|---|---|
 | D2 | `target-branch` が無い | どの対象にも `target-branch` キーが無い | 1 つに `target-branch: "develop"` を足す |
-| W1 | action の固定 | `.github/workflows/*.yml` の `uses:` の行がすべて `uses: <owner>/<repo>@<40 桁の 16 進> # v<数字と点>` | 写しの 1 行を `@v4`／`@v10.3.3`／SHA のまま版のコメントを消す |
+| W1 | action の固定 | `.github/workflows/*.yml` の `uses:` の行がすべて `uses: <owner>/<repo>@<40 桁の 16 進> # v<数字と点>`（版のコメントの後ろは、空白で区切った任意の文字を許す。例: `# v4.4.0 （説明）`） | 写しの 1 行を `@v4`／`@v10.3.3`／SHA のまま版のコメントを消す（不合格）。版のコメントの後ろに説明を足した行は合格（W1ok） |
 | W2 | secrets を使わない | `on:` に `pull_request` がある workflow に `secrets.` の文字列が無い（`secrets.GITHUB_TOKEN` も含めて無い） | e2e.yml の写しに `${{ secrets.E2E_TEST_PASSWORD }}` を戻す |
-| W3 | パスワードの作り方 | e2e.yml のある step の `run` が `openssl rand -hex` を含み、`::add-mask::` の行が `>> "$GITHUB_ENV"` の行より前。その step が `Initialize E2E database` より前 | add-mask の行を消す／add-mask と GITHUB_ENV の行の順を入れ替える |
+| W3 | パスワードの伏せ字 | e2e.yml で `E2E_TEST_PASSWORD=` を `GITHUB_ENV` に書く step がちょうど 1 つあり、その行より前に同じ step で `::add-mask::` がある（作り方・step の名前は問わない・/simplify） | add-mask の行を消す／add-mask の行を書き込みの後へ動かす |
 | I1 | 土台イメージの指紋 | `backend/Dockerfile`・`frontend/Dockerfile`・`frontend/Dockerfile.dev` の `FROM` のうち、前の段の名前（`base` など）でないものと、`docker-compose.yml` のすべての `image:` が `@sha256:<64 桁の 16 進>` で終わる | 写しの 1 つから `@sha256:…` を消す（Dockerfile・compose それぞれ） |
 | V1 | 名前の無い保存領域 | `docker-compose.yml` の全サービスの volumes のうち名前の無いもの（短い書き方で `:` を含まない・長い書き方で `source` が無い）が、frontend の `/app/node_modules` ちょうど 1 つ | db に名前の無い保存領域（`- /var/lib/postgresql/extra`）を足す |
 
 ## TC-02 `scripts/claude/tests/test_i204_tool_sync.sh`（書き換え）
 - 実物の `ci.yml`（setup-uv を SHA で固定）で合格
-- FG: setup-uv を `@v10`（今の uv_major_tag）・`@v10.3.3`（新しい FG）にすると不合格。ほかの既存の FG（python-version・version・version-file を消す・setup-python・別の uses・install）は今のまま不合格
+- setup-uv の `uses` の書き方の確かめ（I211 の `@vX.Y.Z`）と FG の `uv_major_tag` は消す。書き方は TC-01 の W1 が全ワークフローで見る（2 か所で同じ決まりを持たない・/simplify）。ほかの既存の FG（python-version・version・version-file を消す・setup-python・別の uses・install）は今のまま不合格
 
 ## TC-03 `check-dependabot`（pre-commit）
 - `pre-commit run check-dependabot --files .github/dependabot.yml` が Passed（test-gate で実行し記録する）。CI の `Backend Lint & Security` でも走る

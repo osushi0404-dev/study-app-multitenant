@@ -66,7 +66,7 @@ Dependabot の設定を「見張る対象を全部入れ、小さい版上げは
 
 ### 4-1. `.github/dependabot.yml`（書き直し）
 修正方針: 8 つの対象を同じ形で並べる。`target-branch` は書かない（既定のブランチ develop 宛てになる）。
-- 共通: `schedule: {interval: "weekly"}`・`open-pull-requests-limit: 5`・`cooldown.default-days: 7`・`groups`（下）
+- 共通: `schedule: {interval: "weekly"}`・`cooldown.default-days: 7`・`groups`（下）。PR の上限は既定の 5 のまま（書かない・計画変更記録 5）
 - `groups`（全部の対象）:
   ```yaml
   groups:
@@ -92,7 +92,7 @@ Dependabot の設定を「見張る対象を全部入れ、小さい版上げは
 
 ### 4-2. `.github/workflows/ci.yml`・`e2e.yml`・`dependency-audit.yml`（SHA 固定）
 修正方針: すべての `uses:` を `<owner>/<repo>@<40 桁の SHA> # <版>` にする（版は今と同じ系列の最新。スパイク 5）。
-- `actions/checkout@v4` → `@11d5960a… # v4.4.0`、`actions/setup-python@v5` → `@a26af69b… # v5.6.0`、`actions/setup-node@v4` → `@49933ea5… # v4.4.0`、`actions/upload-artifact@v4` → `@ea165f8d… # v4.6.2`、`pre-commit/action@v3.0.1` → `@2c7b3805… # v3.0.1`、`astral-sh/setup-uv@v10.3.3` → `@68559e99… # v10.3.3`（今の行末のコメントは版のコメントの後ろに残す）
+- `actions/checkout@v4` → `@11d5960a… # v4.4.0`、`actions/setup-python@v5` → `@a26af69b… # v5.6.0`、`actions/setup-node@v4` → `@49933ea5… # v4.4.0`、`actions/upload-artifact@v4` → `@ea165f8d… # v4.6.2`、`pre-commit/action@v3.0.1` → `@2c7b3805… # v3.0.1`、`astral-sh/setup-uv@v10.3.3` → `@68559e99… # v10.3.3`（今の行末のコメントは、意味が残るものだけ版のコメントの後ろに残す。setup-uv の「配布元は細かい版のタグだけを出す」はタグの書き方の説明で SHA にすると意味が無いので消す・計画レビュー 2 の Warning）
 - 版を上げる（v4 → v7 など）のは固定の後に Dependabot の PR で受け取る（設計確認メモ Q7）
 
 ### 4-3. `.github/workflows/e2e.yml`（パスワードを毎回作る）
@@ -232,9 +232,12 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 - 1（plan-review・2026-10-29）: 計画レビューの Warning 3 件への対応。(a) 手動 No.4 の「7 か所」を「6 種類」に直して列挙した。(b) TC-01 W2 の `secrets.GITHUB_TOKEN` も禁止する件: 計画時に `grep -rn "secrets\." .github/workflows/` で使用箇所は e2e.yml の `E2E_TEST_PASSWORD` の 2 行だけと確認済み（GITHUB_TOKEN を明示的に使う箇所は無い。dependency-audit.yml は `GH_TOKEN: ${{ github.token }}` の形で `secrets.` を使わず、そもそも pull_request で動かない）。実装ステップ 1 の Red/Green で実物を見る。(c) 手動 No.1 の DB 名・ユーザー名・テーブル名を `docker compose config`・`backend/accounts/models.py:142` と照合し、テーブル名を `users` に直した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 - 2（implement・2026-10-29・ユーザーの「BP 的に適切？過剰？」を受けて）: 計画書の記載「4-7 新規 test_i213_dependabot.sh（D・W・I・V・P・R・K・M）」→ 採った方法: 「壊れても気づきにくく、壊れると被害が大きい決まり」の 6 項目（D2 target-branch なし・W1 SHA 固定・W2 secrets なし・W3 伏せ字の順・I1 指紋・V1 名前の無い保存領域）に絞る。D1・D3〜D6（dependabot.yml の中身の照合）・R1・M1（runbook の文言）・K1（フックの有無）・P1（e2e の command の並び）は消す。理由: 設定の中身をテストにもう一度書く「写し」のテストは、設定を変えるたびに両方を直す手間だけが増え、守りの力が無い（書き間違いは公式の check-dependabot が止める）。文言・フックの有無・並びは消すのが意図的な変更で、普通の書き方の事故ではない。AC4〜AC6・AC10〜AC13 は、実物の設定（dependabot.yml・compose・runbook・pre-commit）と check-dependabot・コードレビューで確かめる。計画レビューのやり直し: 不要（受け入れ条件・方式は変えず、テストの数を減らすだけ）
-- 3（implement・2026-10-29・ユーザーの指示「ルールなどにも反映して」）: 範囲に 4-11 を足す（`docs/runbooks/plan-writing-rules.md` に決定論テストの対象の選び方の節・計画レビュー役とコードレビュー役に 1 行ずつ）。AC16 を足す。理由: 計画変更記録 2 の判断（写しのテストを作らない）は I213 だけの話ではなく、テストを書く・レビューするたびに要る基準。正を 1 か所に置き、レビュー役は参照だけを持つ。計画レビューのやり直し: 要（範囲と受け入れ条件を変える）
+- 3（implement・2026-10-29・ユーザーの指示「ルールなどにも反映して」）: 範囲に 4-11 を足す（`docs/runbooks/plan-writing-rules.md` に決定論テストの対象の選び方の節・計画レビュー役とコードレビュー役に 1 行ずつ）。AC16 を足す。理由: 計画変更記録 2 の判断（写しのテストを作らない）は I213 だけの話ではなく、テストを書く・レビューするたびに要る基準。正を 1 か所に置き、レビュー役は参照だけを持つ。計画レビューのやり直し: 要（範囲と受け入れ条件を変える）→ 実施（20261029_1000・Blocker 0・Warning 4・判定 HIGHRISK〔`.github/*` を含むので前回と同じ〕）
+- 4（implement・計画レビュー 2 の Warning 4 件への対応）: 手動 No.9 を表の中に入れた／TC-01 W1 の合格条件に「版のコメントの後ろの説明を許す」を明記し、合格側の W1ok を足した／手動 No.1 のコマンドを `docker compose exec -T frontend ...` に具体化した／イシューの受け入れ条件を読み替え後の内容（uv は見張らない・指紋・e2e のブラウザ・テストの選び方・`--pull` 不要）に直し、#359 を同期した。追加のセキュリティ設計レビュー: 不要（計画変更 3 は文書・レビュー役の観点の 1 行だけで、権限・秘密・供給網の扱いを変えない）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 5（implement・/simplify・4 観点）: 採った: dependabot.yml の `open-pull-requests-limit: 5`（既定の値）を消した／`test_i204_tool_sync.sh` の setup-uv の `uses` の書き方の確かめと FG（`uv_major_tag`・`uv_minor_tag`）を消し、TC-01 W1 に一本化した（2 か所で同じ決まりを持たない）／TC-01 W3 を「`E2E_TEST_PASSWORD` を `GITHUB_ENV` に書く step で、その前に `::add-mask::`」だけにし、`openssl rand -hex` と step の名前への依存を外した（4-11 の「写しのテストを作らない」に当たる）・FG の写しを sed 1 行にした／e2e の command のコメントに「版がずれている間は毎回取り直す」を足した。見送った: (a) dependabot.yml の共通部分の YAML アンカー化（Dependabot が読めると確かめられない）・`directories:` での対象の統合（PR が対象ごとに分かれなくなる）、(b) 起動コマンドの `--renew-anon-volumes` をやめて frontend の起動時に `npm install` する案（backend のために `--build` 付きの起動コマンドはどのみち要り、`--renew-anon-volumes` はこの状況のための Docker の公式の仕組み。V1 で安全を固定済み）、(c) Playwright を種類をまたいでまとめる案（9 の D4 で検討済み）、(d) テストの写しの作り方の効率（合計 2〜4 秒）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
+- [20261029_1000 判定: ✅ 完了](../../reviews/I213_plan_review_20261029_1000.md)
 - [20261029_0939 判定: ✅ 完了](../../reviews/I213_plan_review_20261029_0939.md)
 
 ## セキュリティレビュー結果

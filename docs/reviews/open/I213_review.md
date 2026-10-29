@@ -26,6 +26,11 @@
 - [plan] 書き間違いの検証に公式の `check-dependabot`（0.38.2）を使う — 誤りを 4 種とも止めた。0.39.0 は出て 3 日なので待つ日数に合わせて 1 つ前
 - [plan-review] Warning 3 件（手動 No.4 の数・W2 の GITHUB_TOKEN・No.1 のテーブル名）は直し、計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えない
 - [design-security-review] 土台イメージの指紋固定で OS の修正の取り込みが最大で週 1＋7 日遅れるのを受け入れる — 再現性とタグの付け替えへの耐性を優先（OpenSSF の Pinned-Dependencies と同じ考え）。急ぐときは手で上げてよいと runbook に書く
+- [implement] 決まりのテストを 15 項目から 6 項目に絞った（ユーザーの「BP 的に適切？過剰？」を受けて） — 設定の写し・意図的な変更でしか壊れないものの検知は守りの力が無く手間だけ増える。計画変更記録 2
+- [implement] テストの選び方を plan-writing-rules.md とレビュー役 2 つに反映した（ユーザーの指示）。範囲が変わるので計画レビューをやり直した（Blocker 0・Warning 4 を直した） — 計画変更記録 3・4
+- [implement] 承認画面を減らす変更は I213 に入れず、マージ直後に I200（#335）で行う（ユーザーが選択） — I200 が同じ中身の設計確認を済ませている。設定は develop の版で効くので、どちらで入れてもマージ後に効く
+- [implement] /simplify の 4 観点のうち 4 件を採り、4 件を見送った — 計画変更記録 5（見送りの理由も同じ所）
+- [implement] 計画レビューの実行中に `e2e/playwright.config.ts`・`e2e/.env.e2e.example` の直しが元の文言に戻っていた（原因は特定できず。スクリプトに戻す処理は無い）。直し直して git の差分で載ったことを確かめた
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
