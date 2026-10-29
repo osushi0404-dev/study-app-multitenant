@@ -4,10 +4,13 @@ I140: 登録 API の personal 組織自動作成フォールバック廃止の�
 - slug なし登録で personal 組織（type='personal'・is_active=True）が不在の場合、
   従来は Organization.objects.create()（category 未指定）が IntegrityError となり
   広域 except で 400「エラーが発生しました」に丸められていた（潜在バグ）。
-- 修正後は自動作成せず None を返し、既存 400 分岐「組織の設定に失敗しました」
-  （views.py:78-84）に載る。組織は新規作成されず、error ログで環境異常が残る。
+- 修正後は自動作成せず、組織は新規作成されず error ログで環境異常が残る。
+- I142 で応答を再分類: personal 不在は環境異常（サーバー起因）のため
+  `EnvironmentMisconfiguredError` を raise し、統一 JSON の 500 で顕在化する
+  （クライアント起因の 400 とは区別する）。
 
-TC-AUTO-01/02/03/04（docs/tests/open/I140_auto_test.md）に対応。
+TC-AUTO-01/02/03/04（docs/tests/closed/I140_auto_test.md）に対応。
+期待値の 400→500 更新は I142 の TC-AUTO-11/12（docs/tests/open/I142_auto_test.md）に対応。
 """
 import logging
 
@@ -47,24 +50,26 @@ def _payload(user_id, subject_id):
     }
 
 
-# views.py:78-84 の既存分岐の body（完全一致 = 広域 except 経由の 400 と区別）
-EXPECTED_400_BODY = {
+# EnvironmentMisconfiguredError → custom_exception_handler が返す統一 JSON（I142）
+# body 完全一致 = クライアント起因の 400 と明確に区別する
+EXPECTED_500_BODY = {
     "error": {
-        "main_message": "組織の設定に失敗しました",
-        "sub_message": "無効な組織URLまたはシステムエラー",
+        "main_message": "サーバーエラー",
+        "sub_message": "しばらく時間をおいて再度お試しください",
+        "details": {},
     }
 }
 
 
-# ---- TC-AUTO-01: personal 不在・slug なし登録 400（本バグの再発防止） ----
+# ---- TC-AUTO-01: personal 不在・slug なし登録 500（本バグの再発防止・I142 で 400→500） ----
 @pytest.mark.django_db
-def test_register_without_personal_org_returns_400(setup):
+def test_register_without_personal_org_returns_500(setup):
     client = APIClient()
     resp = client.post(
         "/api/auth/register/", _payload("i140_user_a", setup["subject"].id),
         format="json")
-    assert resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert resp.json() == EXPECTED_400_BODY
+    assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert resp.json() == EXPECTED_500_BODY
 
 
 # ---- TC-AUTO-02: 組織が新規作成されない（自動作成廃止の固定） ----
@@ -92,9 +97,9 @@ def test_register_without_personal_org_logs_error(setup, caplog):
         for r in caplog.records)
 
 
-# ---- TC-AUTO-04: personal が非アクティブのみ存在しても同挙動 ----
+# ---- TC-AUTO-04: personal が非アクティブのみ存在しても同挙動（I142 で 400→500） ----
 @pytest.mark.django_db
-def test_register_with_only_inactive_personal_org_returns_400(setup):
+def test_register_with_only_inactive_personal_org_returns_500(setup):
     Organization.objects.create(
         name="個人利用I140", slug="personal", type="personal",
         category=setup["cat"], is_active=False)
@@ -103,8 +108,8 @@ def test_register_with_only_inactive_personal_org_returns_400(setup):
     resp = client.post(
         "/api/auth/register/", _payload("i140_user_d", setup["subject"].id),
         format="json")
-    assert resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert resp.json() == EXPECTED_400_BODY
+    assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert resp.json() == EXPECTED_500_BODY
     # 非アクティブ personal を active 化・複製していないこと
     assert Organization.objects.count() == count_before
     assert not Organization.objects.filter(slug="personal", is_active=True).exists()
