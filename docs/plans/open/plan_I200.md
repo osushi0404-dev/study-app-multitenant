@@ -75,7 +75,8 @@
 | ファイル | 変更 |
 |---|---|
 | `scripts/claude/hooks/pretooluse_guard.py` | 5-1〜5-4（危ない語の判定の追加・コンテナ内と読みきれないときの一律の確認をやめる・`docker compose cp` の向き・ワークフローと pre-commit の設定の編集の中身の確認） |
-| `.claude/settings.json` | 5-5（ask を 1 件に・allow に `docker compose exec|run|cp`・`docker-compose` の同じもの・`git rebase *`・`psql *` を足す） |
+| `.claude/settings.json` | 5-5（ask を 1 件に・allow に `docker compose exec|run|cp`・`docker-compose` の同じもの・`git rebase *`・`psql *`、Edit の `.github/workflows/**`・`.github/dependabot.yml`・`.pre-commit-config.yaml`・`docker-compose.yml` を足す） |
+| `scripts/claude/check-permission-prompt.sh`・`scripts/claude/tests/test_check_permission_prompt.sh` | 5-5b（Write に承認画面が出るかを確かめる種類 `write` を足す） |
 | `scripts/claude/hooks/sessionstart_context.py` | 5-6（primary の早送り） |
 | `scripts/claude/tests/test_i200_guard_narrowing.sh`（新規） | TC-01〜TC-05 |
 | `scripts/claude/tests/test_sessionstart_context.sh` | TC-07 を足す |
@@ -90,10 +91,12 @@
 ### 5-1. 危ない語の判定（新設・見張りの中に 1 つ）
 **修正方針**: 「安全と確認できない」操作を、一律に確認するのをやめ、(A)〜(C) につながる語が文字列のどこかにあるときだけ確認にする。粗い文字の一致にとどめ、シェルの動きを読む精密な判定は作らない（I179 の教訓）。見張りの脅威モデルは「事故」（意図的な回避は対象外。danger-ops.md）。
 
-- 関数 `_risky_words(text) -> list[str]`: 大文字・小文字を区別せず、次の語の部分一致を探して、当たった語を返す。引用符の中・ヒアドキュメントの本文・コメントも含めて見る（読みきれない書き方では区切りが当てにならないため、文字列全体を見る）
-  - (B) 消す・壊す: `rm `・`rmdir`・`unlink`・`rmtree`・`remove(`・`truncate`・`drop `・`delete`・`flush`・`destroy`・`wipe`・`shred`・`mkfs`・`dd `・`.update(`・`bulk_update`・`reset`・`clean`
-  - (A) GitHub: `git `・`gh `・`push`
-  - (C) 外部・秘密: `curl`・`wget`・`nc `・`ncat`・`ssh`・`scp`・`rsync`・`requests`・`urllib`・`http.client`・`httpx`・`socket`・`smtplib`・`send_mail`・`email`・`.delay(`・`apply_async`・`openai`・`.env`・`environ`・`printenv`・`secret`・`password`・`token`・`api_key`
+- 関数 `_risky_words(text) -> list[str]`: 大文字・小文字を区別せず、次の語を探して、当たった語を返す。英数字で始まる語は、直前が英数字・`_` でないときだけ当たる（`(?<![A-Za-z0-9_])` を前に付けた正規表現。`dd` が `add`・`odd` に当たらないように。計画レビュー 1 の Warning）。英数字で終わる短い語（`rm`・`dd`・`git`・`gh`・`nc`・`ssh`・`scp`）は直後も英数字・`_` でないときだけ当たる。引用符の中・ヒアドキュメントの本文・コメントも含めて見る（読みきれない書き方では区切りが当てにならないため、文字列全体を見る）
+  - (B) 消す・壊す: `rm`・`rmdir`・`unlink`・`rmtree`・`remove(`・`truncate`・`drop`・`delete`・`flush`・`destroy`・`wipe`・`shred`・`mkfs`・`dd`・`.update(`・`bulk_update`
+  - (A) GitHub: `git`・`gh`・`push`
+  - (C) 外部・秘密: `curl`・`wget`・`nc`・`ncat`・`ssh`・`scp`・`rsync`・`requests`・`urllib`・`http.client`・`httpx`・`socket`・`smtplib`・`send_mail`・`mail_admins`・`email_user`・`EmailMessage`・`.delay(`・`apply_async`・`openai`・`.env`・`environ`・`printenv`・`secret`・`password`・`token`・`api_key`
+  - 広すぎて普通の書き方を確認にしやすい `reset`・`clean`・`email` は入れない（`git reset`・`git clean` は `git` で、メールの送信は `send_mail` などで拾う）
+  - 誤って確認になる量は、既存の `test_guard_corpus_diff.sh`（過去の作業コマンドで、新しく確認・停止になったものが記録の 1% を超えないか）で測る（TC-08）
 - 一覧は定数 `_RISKY_WORDS` に置き、理由ごとに分けたコメントを付ける。語を足すのは事故の例が出たときだけ（作り込まない）
 - 書き込みのリダイレクト（`>`・`>>`）は、行き先が `/tmp/` か `/dev/null` 以外なら確認（コンテナの `/app/` はリポジトリの `backend/` で、未コミットの変更を上書きしうる・(B)）。既存の `c["writes"]` を使う
 
@@ -124,15 +127,23 @@
   - `.secrets.baseline` の出現数が変わった（検査の基準のファイルの差し替え）
   - それ以外（フックの追加・`rev` の版の書き換え）は通す
 - `.secrets.baseline`: 設定の `ask` に残す（5-5。編集はほぼ「許す秘密を足す」＝検査を弱める方向で、めったに編集しないため、中身の比較は作らない）
+- 対象かどうかは、`file_path` を `os.path.realpath` で正規化し、リポジトリの root（見張りの既存の worktree の判定と同じ求め方）からの相対パスにしてから照合する（相対パス・`..`・シンボリックリンク・別の書き方の絶対パスで取りこぼさない。計画レビュー 1 の Warning）。root が求められない・root の外のときは、名前（`.github/workflows/` を含むか・`.pre-commit-config.yaml` で終わるか）で照合する（安全側）
 - 別 worktree への書き込みの停止（I095）はこの判定より前のまま
 - 確認の理由の文に、当たった語と「設計確認メモ 2026-10-29 の基準」を書く
 
 ### 5-5. 許可の設定（`.claude/settings.json`）
 - `permissions.ask` から 15 件を外す: `Bash(git rebase *)`・`Bash(psql *)`・`Edit(.github/workflows/**)`・`Edit(.pre-commit-config.yaml)`・`Edit(backend/Dockerfile)`・`Edit(backend/Dockerfile.dev)`・`Edit(frontend/Dockerfile)`・`Edit(frontend/Dockerfile.dev)`・`Edit(frontend/nginx.conf)`・`Edit(backend/requirements*.txt)`・`Edit(backend/pyproject.toml)`・`Edit(frontend/package.json)`・`Edit(frontend/package-lock.json)`・`Edit(**/migrations/*.py)`・`Edit(backend/init-db.sql)`。残るのは `Edit(.secrets.baseline)` だけ
-- `permissions.allow` に足す: `Bash(git rebase *)`・`Bash(psql *)`・`Bash(docker compose exec *)`・`Bash(docker compose run *)`・`Bash(docker compose cp *)`・`Bash(docker-compose exec *)`・`Bash(docker-compose run *)`・`Bash(docker-compose cp *)`。どれも見張りが判定する（危険操作は停止・(A)〜(C) は確認）
+- `permissions.allow` に足す（Bash）: `Bash(git rebase *)`・`Bash(psql *)`・`Bash(docker compose exec *)`・`Bash(docker compose run *)`・`Bash(docker compose cp *)`・`Bash(docker-compose exec *)`・`Bash(docker-compose run *)`・`Bash(docker-compose cp *)`。どれも見張りが判定する（危険操作は停止・(A)〜(C) は確認）
   - 既存の I187 の 4 行（型チェック・lint）と e2e の 2 行は、上の行に含まれるので消す（重複を残さない）
   - `Bash(docker compose *)` のような広すぎる行は足さない（`down`・`rm` などは見張りが止めるが、許可の設定でも default の確認を残す）
-- Edit の外した 13 件は `ask` から行を消すだけで、ファイル自体は編集しない（イシューのとおり）。Edit は既定で確認なし（acceptEdits の範囲）か、既存の `Edit(...)` の allow に従う
+- `permissions.allow` に足す（Edit）: `Edit(.github/workflows/**)`・`Edit(.github/dependabot.yml)`・`Edit(.pre-commit-config.yaml)`・`Edit(docker-compose.yml)`。今の allow の `Edit(...)` は `docs/**`・`backend/**`・`frontend/**`・`scripts/claude/**` だけで、リポジトリ直下と `.github/` の yml は、ask から外しても通常モードでは既定の確認が出るため（計画レビュー 1 の Blocker）。ワークフローと pre-commit の設定は、見張り（5-4）が中身を比べて危ない書き換えだけ確認にする。`.github/dependabot.yml`・`docker-compose.yml` はユーザーの「yml の修正の確認は必須か」（設計確認メモ 2026-10-29）に当たり、git と CI（`check-dependabot`・E2E）で戻せる・捕まる
+  - `Edit(...)` のルールは Edit・Write・MultiEdit・NotebookEdit のすべてに効く（公式。`.claude/settings.json` の読み込み時の警告「only Edit(path) rules are」でも確認）。`deny`（`Edit(**/.env)` など）は `allow` より優先される（公式の評価順 deny → ask → allow）ので、足した allow が秘密ファイルの deny に勝つことは無い
+- Edit の外した 13 件は `ask` から行を消すだけで、ファイル自体は編集しない（イシューのとおり）。Dockerfile・依存のファイル・マイグレーション・nginx.conf・init-db.sql は既存の `Edit(backend/**)`・`Edit(frontend/**)` の allow に入るので、ask を外せば通る
+- `Edit(.secrets.baseline)` の ask は Write・MultiEdit にも効く（上の公式の扱い。計画レビュー 1 の Info への回答）
+
+### 5-5b. 承認の仕組み全体で Edit を確かめる道具（`check-permission-prompt.sh`）
+- 今の `scripts/claude/check-permission-prompt.sh` は `bash`・`mcp` だけで、Edit・Write に承認画面が出るかを確かめられない（計画レビュー 1 の Blocker）。種類 `write <パス> <中身のファイル>` を足す: claude -p に「Write ツールで <パス> に <中身> を書く」を 1 回だけ呼ばせ、承認画面が出れば自動で拒否されて permission_denials に入る（既存の bash・mcp と同じ判定）。承認なしで通ると実際に書かれるので、確かめは新しいファイル（`.github/workflows/i200-probe.yml` など）で行い、終わったら消す（M-03）
+- `scripts/claude/tests/test_check_permission_prompt.sh` に、保存した stream-json（`CHECK_PERMISSION_PROMPT_LOG`）で `write` の判定を確かめるケースを足す（既存の bash・mcp のケースと同じ形）
 
 ### 5-6. primary の自動の早送り（`sessionstart_context.py`）
 **修正方針**: セッションの開始のたびに、primary が develop にいて追跡済みファイルがきれいなら、`origin/develop` へ早送りする。何も消さない。合わないときは理由と手で行うコマンドを出すだけ。
@@ -152,11 +163,12 @@
 - `docs/runbooks/worktree.md`: §9 に「例外: セッションの開始のフックが primary を develop へ早送りする（develop にいる・追跡済みファイルがきれい・早送りだけのとき。何も消さない）」、§2 か §7 に「primary は開始時に自動でそろう。そろわないときはフックの出力の手順で」
 
 ### ステップの順と依存
-1. 5-6（primary の早送り）と TC-07（独立。先に終えられる）
+1. 5-6（primary の早送り）と TC-07。続けて、このブランチの設定で新しいセッションを始め（`claude -p --settings .claude/settings.json`）、開始時の文脈に「primary:」の行が出て、Claude Code 本体の隔離に止められないことを確かめる（M-04a。**未実証の前提を最初に確かめる**。止められたら「知らせるだけ」に落として計画変更記録に書く）
 2. 5-1 → 5-2 → 5-3（見張りの Bash の分岐。5-1 が前提）と TC-01〜TC-03・既存テストの期待値の更新
 3. 5-4 と TC-04・TC-05
-4. 5-5（許可の設定）と `test_settings_permissions.sh` の更新。**最後に置く**（見張りの判定が先に整っていないと、allow を広げた分だけ素通しになるため）
-5. 5-7（runbook）
+4. 5-5b（確かめの道具の `write`）とそのテスト
+5. 5-5（許可の設定）と `test_settings_permissions.sh` の更新。**見張りの後に置く**（見張りの判定が先に整っていないと、allow を広げた分だけ素通しになるため）
+6. 5-7（runbook）
 → 各ステップの確かめは auto_test の TC 参照
 
 ## 6. テスト計画
@@ -168,10 +180,10 @@
 | 基準が runbook に書かれている | M-05（読んで確かめる） |
 | (A)〜(C)＋残すものは確認・停止 | TC-02・TC-04・TC-05・M-02 |
 | I166 の普通の操作が確認なしで通る | TC-01（見張り）・M-01（承認の仕組み全体） |
-| ワークフローの編集は危ない書き換えだけ確認 | TC-04 |
+| ワークフローの編集は危ない書き換えだけ確認 | TC-04（見張り）・M-03（承認の仕組み全体） |
 | ask が `.secrets.baseline` だけ・`psql` の危ない使い方は止まる | `test_settings_permissions.sh`・TC-02 |
 | 読みきれないコマンドは危ない語のときだけ確認 | TC-03 |
-| primary の自動の早送り | TC-07・M-04（マージ後） |
+| primary の自動の早送り | TC-07・M-04a（マージ前・実際のセッションの開始でフックが動く）・M-04b（マージ後・実際に早送りされる） |
 | 既存のハーネステスト・CI | TC-08 |
 
 ## 7. ロールバック
@@ -222,8 +234,11 @@
 | V4 | 1 | 実験必須 | `.pre-commit-config.yaml` で detect-secrets のフックを消す・`exclude` を足すと確認になる（TC-05） |
 | V5 | 2 | 読んで可 | 既存のテストで期待値を変えたケースが、見張りの 3・7・9 による確認だけで、停止（2）の期待値を 1 件も変えていない（auto_test の変更の一覧と差分） |
 | V6 | 2 | 実験必須 | primary の早送りが、未コミットの変更がある・develop 以外・早送りできないときに動かず、未追跡のファイルを消さない（TC-07 の一時のリポジトリ） |
-| V7 | 3 | 読んで可 | 許可の設定の allow に足した行が `docker compose exec|run|cp`・`docker-compose` の同じもの・`git rebase *`・`psql *` だけで、`Bash(docker compose *)` のような広い行が無い。`ask` が `Edit(.secrets.baseline)` だけ（`test_settings_permissions.sh`） |
+| V7 | 3 | 読んで可 | 許可の設定の allow に足した行が `docker compose exec|run|cp`・`docker-compose` の同じもの・`git rebase *`・`psql *`・`Edit(.github/workflows/**)`・`Edit(.github/dependabot.yml)`・`Edit(.pre-commit-config.yaml)`・`Edit(docker-compose.yml)` だけで、`Bash(docker compose *)` のような広い行が無い。`ask` が `Edit(.secrets.baseline)` だけ。秘密ファイルの deny が残っている（`test_settings_permissions.sh`） |
 | V8 | 3 | 読んで可 | danger-ops.md の確認の基準が、見張りと設定の実物と食い違わない（M-05） |
 
 ## 計画変更記録
-（実装中に計画を変えたら、ここに追記する）
+- 1（plan-review・2026-10-29・計画レビュー 1 の Blocker 2・Warning 4・Info 1）: (a) Edit の allow（`.github/workflows/**`・`.github/dependabot.yml`・`.pre-commit-config.yaml`・`docker-compose.yml`）を 5-5 に足した（ask から外すだけでは既定の確認が出る）。(b) Edit・Write に承認画面が出るかを確かめる道具が無いので、`check-permission-prompt.sh` に種類 `write` を足す 5-5b を範囲に入れ、M-03 をそれで行う形に書き直した（このセッションは primary の設定で判定されるため、承認画面の有無はこのセッションでは確かめない）。(c) フックが Claude Code 本体の隔離に止められないかを、実装ステップ 1 の M-04a（マージ前・このブランチの設定の新しいセッション）で先に確かめる。(d) 危ない語に語の境界を付け、`reset`・`clean`・`email` を外した。(e) TC-03d・03e の注入の方法を具体化した。(f) 5-4 のパスの正規化を足した。(g) `.secrets.baseline` の ask が Write にも効く根拠を書いた。計画レビューのやり直し: 要（範囲〔5-5b・Edit の allow〕を変える）
+
+## レビュー結果
+- [20261029_1918 判定: 差し戻し（Blocker 2件）](../../reviews/I200_plan_review_20261029_1918.md)

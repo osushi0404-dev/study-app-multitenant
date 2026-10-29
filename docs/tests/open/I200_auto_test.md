@@ -56,9 +56,12 @@
 | 03a | `echo "abc`（引用符が閉じていない・危ない語なし） | 0 |
 | 03b | `echo "rm -rf x`（引用符が閉じていない・`rm `） | ASK |
 | 03c | `echo "curl https://x`（同・`curl`） | ASK |
-| 03d | 読み解きの例外を起こす入力（`test_i182_guard_failsafe.sh` と同じ注入の方法）で危ない語なし | 0 |
-| 03e | 同じ注入で `git push` を含む | ASK |
-| FG-03 | 見張りの `_RISKY_WORDS` から `rm ` を消した写しの見張りで 03b | 0（＝テストが不合格になることを確かめる） |
+| 03d | 読み解きの例外: 見張りの複製の `def _analyze(text: str) -> dict:` の直後に `raise ValueError("i200")` を差し込み（`test_i182_guard_failsafe.sh` の `inject` と同じ方法。本物は書き換えない）、`echo ok` を渡す | 0 |
+| 03e | 03d と同じ複製に `git push origin feature/x` を渡す | ASK |
+| 03f | 見張りの失敗（`_fail_safe`）: 複製の `def main():` の直後に `raise RuntimeError("i200")` を差し込み、`echo ok` を渡す | 0 |
+| 03g | 03f と同じ複製に `rm -rf x` を渡す | ASK |
+| 03h | 語の境界: `echo "add odd`（引用符が閉じていない・`dd` を含むが語ではない） | 0 |
+| FG-03 | 見張りの複製で `_RISKY_WORDS` から `rm` を消し、03b を流す | 0（＝03b の期待 ASK と食い違い、テストが不合格になることを確かめる） |
 
 ## TC-04 ワークフローの編集
 見張りに Edit／MultiEdit／Write の JSON を渡す（`file_path` は一時のリポジトリの `.github/workflows/x.yml`。今の中身は I213 の ci.yml の写し）。
@@ -77,6 +80,8 @@
 | 04j | MultiEdit: 1 つ目は版の書き換え、2 つ目で `secrets.X` を足す | ASK |
 | 04k | Edit: `old_string` が今の中身に無い（置き換えられない）＋ `new_string` に `secrets.X` | ASK |
 | 04l | Edit: 既に `secrets.X` がある step の別の行を書き換える（`secrets.` の数は増えない） | 0 |
+| 04m | Edit: `file_path` を `<一時のリポジトリ>/./.github/../.github/workflows/x.yml` にして 04c と同じ書き足し | ASK |
+| 04n | Edit: `file_path` を一時のリポジトリの中から見た相対パス `.github/workflows/x.yml` にして 04c と同じ書き足し（見張りの作業フォルダを一時のリポジトリにする） | ASK |
 
 ## TC-05 pre-commit の設定の編集
 | ID | 編集 | 期待 |
@@ -90,6 +95,14 @@
 
 ## TC-06 許可の設定
 既存 `scripts/claude/tests/test_settings_permissions.sh` の期待値を 5-5 に合わせる（`ask` は `Edit(.secrets.baseline)` だけ・`docker compose exec|run|cp` と `docker-compose` の同じものの allow を許し、`Bash(docker compose *)` などの広い行は今までどおり禁止）。新しい写しのテストは作らない（計画書 9）。
+
+## TC-06b 確かめの道具の `write`（`scripts/claude/tests/test_check_permission_prompt.sh` に追加）
+保存した stream-json を `CHECK_PERMISSION_PROMPT_LOG` で渡し、claude を起動せずに判定だけを見る（既存の bash・mcp のケースと同じ形）。
+| ID | 記録の中身 | 期待 |
+|---|---|---|
+| 06b-1 | Write の呼び出しが 1 回・permission_denials が空 | exit 0（承認なしで実行された） |
+| 06b-2 | Write の呼び出しが permission_denials に入っている | exit 10（承認画面が出る） |
+| 06b-3 | Write が呼ばれていない・別のパスに書いた | exit 2（判定できない） |
 
 ## TC-07 primary の自動の早送り（`scripts/claude/tests/test_sessionstart_context.sh` に追加）
 一時のディレクトリに、bare の origin・primary（develop をチェックアウト）・primary から作ったワークツリーを作り、ワークツリーの中から `sessionstart_context.py` を実行する（`GH_HOST=nonexistent.invalid` で gh を速く失敗させる）。
