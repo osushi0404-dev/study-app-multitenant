@@ -223,9 +223,9 @@ Danger Ops（有無/手順/ロールバック）:
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
 | V1 | 1 | 読んで可 | pull_request で動くワークフロー（ci.yml・e2e.yml）に `secrets.` が無く、E2E のパスワードは `::add-mask::` の後で `$GITHUB_ENV` に書かれる（決定論の TC-01 W2・W3 と、それぞれを壊して不合格になる FG-W2・FG-W3a・FG-W3b で覆った・計画変更記録 6。手動 No.3 でログが伏せ字） |
-| V2 | 1 | 実験必須 | すべての `uses:` が 40 桁の SHA＋版のコメントで、SHA でない書き方（`@v4`・`@v10.3.3`・`@main`）を入れると不合格（TC-01 W1・TC-02） |
-| V3 | 1 | 実験必須 | 土台イメージがすべて指紋付きで、指紋を外すと不合格（TC-01 I） |
-| V4 | 2 | 実験必須 | `--renew-anon-volumes` で消えるのが frontend の node_modules だけで、DB・redis の中身が残る（TC-01 V・手動 No.1） |
+| V2 | 1 | 読んで可 | すべての `uses:` が 40 桁の SHA＋版のコメントで、SHA でない書き方（`@v4`・`@v10.3.3`）を入れると不合格（決定論の TC-01 W1 と FG-W1a・FG-W1b・FG-W1c で覆った。敵対的レビュー 1 周目で実験済み・計画変更記録 7） |
+| V3 | 1 | 読んで可 | 土台イメージ（Dockerfile と docker-compose.yml）がすべて指紋付きで、指紋を外すと不合格（決定論の TC-01 I1 と FG-I1a・FG-I1b で覆った。1 周目で実験済み。CI の services は例外・計画変更記録 6・7） |
+| V4 | 2 | 読んで可 | `--renew-anon-volumes` で消えるのが frontend の node_modules だけで、DB・redis の中身が残る（決定論の TC-01 V1 と FG-V1 で覆った。1 周目で実験済み。実地は手動 No.1・計画変更記録 7） |
 | V5 | 2 | 読んで可 | dependabot.yml に `target-branch` が無く、groups がセキュリティの修正にも効く形（TC-01 D2・TC-03・実物の設定を読む） |
 | V6 | 3 | 読んで可 | uv を見張らない理由・Dependabot の PR の受け取り方が runbook にあり、イシューの決定と食い違わない（runbook を読む・手動 No.5） |
 
@@ -236,6 +236,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 4（implement・計画レビュー 2 の Warning 4 件への対応）: 手動 No.9 を表の中に入れた／TC-01 W1 の合格条件に「版のコメントの後ろの説明を許す」を明記し、合格側の W1ok を足した／手動 No.1 のコマンドを `docker compose exec -T frontend ...` に具体化した／イシューの受け入れ条件を読み替え後の内容（uv は見張らない・指紋・e2e のブラウザ・テストの選び方・`--pull` 不要）に直し、#359 を同期した。追加のセキュリティ設計レビュー: 不要（計画変更 3 は文書・レビュー役の観点の 1 行だけで、権限・秘密・供給網の扱いを変えない）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 - 5（implement・/simplify・4 観点）: 採った: dependabot.yml の `open-pull-requests-limit: 5`（既定の値）を消した／`test_i204_tool_sync.sh` の setup-uv の `uses` の書き方の確かめと FG（`uv_major_tag`・`uv_minor_tag`）を消し、TC-01 W1 に一本化した（2 か所で同じ決まりを持たない）／TC-01 W3 を「`E2E_TEST_PASSWORD` を `GITHUB_ENV` に書く step で、その前に `::add-mask::`」だけにし、`openssl rand -hex` と step の名前への依存を外した（4-11 の「写しのテストを作らない」に当たる）・FG の写しを sed 1 行にした／e2e の command のコメントに「版がずれている間は毎回取り直す」を足した。見送った: (a) dependabot.yml の共通部分の YAML アンカー化（Dependabot が読めると確かめられない）・`directories:` での対象の統合（PR が対象ごとに分かれなくなる）、(b) 起動コマンドの `--renew-anon-volumes` をやめて frontend の起動時に `npm install` する案（backend のために `--build` 付きの起動コマンドはどのみち要り、`--renew-anon-volumes` はこの状況のための Docker の公式の仕組み。V1 で安全を固定済み）、(c) Playwright を種類をまたいでまとめる案（9 の D4 で検討済み）、(d) テストの写しの作り方の効率（合計 2〜4 秒）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 - 6（review-gate・敵対的レビュー 1 周目〔20261029_1032〕）: (a) V1 が「実験必須」を読んで確認しただけで未検証 → 決定論の TC-01 W2・W3 と FG-W2・FG-W3a・FG-W3b で覆っているので、確かめ方を「読んで可」に下げた（review-gate 3-3 の決まり）。(b) Medium「ci.yml の services の postgres・redis が指紋なし」→ 固定しない例外として runbook（dependency-audit.md の固定の決まり）に書いた。理由: Dependabot はワークフローの services のイメージを更新しないので、指紋で固定すると更新が二度と届かず古いまま止まる。CI の services は毎回使い捨てで secrets を持たず、タグのまま毎回新しいものを取るほうが安全。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 7（review-gate・敵対的レビュー 2 周目〔20261029_1044〕・上限到達でユーザーが「もう 1 周だけ延長」を選択）: 2 周目は 1 周目の後の差分（計画書の一覧と runbook の文言だけ）を見たため、V2・V3・V4 を実験せず未検証になった（新しい High・Critical は 0）。V2〜V4 は 1 周目に実験で確認済みで、その後に中身のファイルは変わっていない（`git diff --stat d4dc801d HEAD` は計画書・runbook・記録だけ）。どれも決定論の TC と FG で覆っているので、V1 と同じく確かめ方を「読んで可」に下げた（review-gate 3-3 の決まり）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261029_1000 判定: ✅ 完了](../../reviews/I213_plan_review_20261029_1000.md)
