@@ -59,7 +59,7 @@ I200 で入れた「セッションの開始時に primary を develop へ早送
   0. primary のパスを `git worktree list --porcelain` の最初の `worktree` 行から取り（5-2 と同じ関数）、結果のファイルの場所（5-3）を決める。取れなければ「primary: 確かめられませんでした」の 1 行にして、裏の処理だけ起動する
   1. 結果のファイル（5-3）があれば、その 1 行を「primary: 前回（<時刻>）: <結果>」として返す。無ければ「primary: まだ結果がありません（裏でそろえています）」
   2. 裏の処理を起動する: `subprocess.Popen([sys.executable, <このファイル>, "--sync-primary"], start_new_session=True, stdin/stdout/stderr=DEVNULL)`。起動に失敗したら、同じ 1 行の文末に「（裏の処理を起動できませんでした）」を足すだけ（開始を止めない・行は増やさない）
-  - 開始時のフックに残る git は、今のワークツリーの `branch`・`status` と `worktree list` の 3 回（各 5 秒で打ち切り・SIGTERM）。gh 2 回（各 5 秒）と合わせ最悪 25 秒で、フックの `timeout: 30` の内に収まる（計画レビュー 1 の Warning）。打ち切りはどれも SIGTERM の後に SIGKILL の形にそろえる（`_run` を `_run_git_soft` と同じ形にする）
+  - 開始時のフックに残る git は、今のワークツリーの `branch`・`status` と `worktree list` の 3 回（各 5 秒で打ち切り・読み取りはロックを取らないのですぐ SIGKILL）。gh 2 回（各 5 秒）と合わせ最悪 25 秒で、フックの `timeout: 30` の内に収まる（計画レビュー 1 の Warning・計画変更記録 2 で直した形）
 - 時間の上限の定数（`PRIMARY_SKIP_AFTER_SEC`・`PRIMARY_STOP_AFTER_SEC`）と、開始時の経過を見る仕組みは消す（裏の処理には要らない）
 - 出力は 10 行以内のまま（1 行）
 
@@ -72,7 +72,7 @@ I200 で入れた「セッションの開始時に primary を develop へ早送
   2. `status --porcelain --untracked-files=no`（`GIT_OPTIONAL_LOCKS=0`）が空でなければ「未コミットの変更があるのでそろえません」
   3. `fetch --quiet origin develop`（失敗しても手元の origin/develop で続ける）
   4. `merge --ff-only --quiet origin/develop`。HEAD が動けば「develop を origin/develop へ早送りしました（前..後）」、動かなければ「最新です」、失敗は「そろえられませんでした（…）。手で: cd <primary> && git switch develop && git pull --ff-only」
-- 各 git の打ち切りは 60 秒（定数 `BG_GIT_TIMEOUT_SEC`）。打ち切りは SIGTERM → 2 秒待って SIGKILL（I200 の `_run_git_soft` と同じ形にそろえ、すべての git をこれで呼ぶ）
+- 各 git の打ち切りは 60 秒（定数 `BG_GIT_TIMEOUT_SEC`）。必須のロックを取る fetch・merge の打ち切りは SIGTERM → 2 秒待って SIGKILL（`_run` の `grace=2`）。読み取りはロックを取らないのですぐ打ち切る（計画変更記録 2）
 - 結果（時刻と 1 行）を 5-3 のファイルに書いて終わる。例外は結果「確かめられませんでした（例外の型名）」にして書く
 
 ### 5-3. 結果のファイルの置き場所と、読み取りの git の指定
