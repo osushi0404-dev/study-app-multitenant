@@ -10,7 +10,9 @@
 - 変更前（2026-10-30）: `pass=16 fail=0`。TC-07 は同期の形の前提なので書き直す。ほかは実装前のため未実行
 
 ## 実行記録
-（実装・review-gate・test-gate で追記する）
+- 2026-10-30（implement・コミットの後）: `bash scripts/claude/tests/test_sessionstart_context.sh` → `pass=24 fail=0`。`bash scripts/claude/tests/run-all.sh` → `run-all: pass=50 fail=0`
+- CI（PR #403）: すべて success（review-gate の `code-review.sh` の CI_WAIT: OK）
+- 2026-10-30（test-gate）: `bash scripts/claude/gate-check.sh I219` → `GATE_CHECK: OK`
 
 ## TC-07 裏の早送りの判定（`python3 sessionstart_context.py --sync-primary` を直接呼ぶ）
 | ID | 状態 | 期待 |
