@@ -77,6 +77,8 @@
 - [retro] P2（番号の衝突の再現・止まる位置の統一）は I221（#401）にコメントで同梱 — I221 が起票のスキルと採番を作り直すため
 - [retro] grill-me の説明の取り違え・固定の文章の見落としは見送り — どちらも計画の段階でその場で捕まり、手戻りが無い
 - [close の後] マージ依頼の後にユーザーから「起票する前に聞くもの」に「対応中のイシューを進めるために別イシューの起票・対応が必要な場合」を足す指示があった。新しいイシューにせずこの PR で対応する — 同じ決まりの 1 行の追加で、分けると決まりが 2 つの PR に割れる。記録を open に戻し、PR を下書きに戻し、計画変更記録 3 を書いて plan-review からやり直す（受け入れ条件・仕様が変わるため）
+- [plan-review] GitHub の作業用アカウントが止められている間（10-30）、ユーザーの「進めて」で、GitHub に触れない段階を手元で進める。コミットは手元にためて、解除後にまとめて push する — push・CI・PR が使えないだけで、計画レビューと実装は手元で完結する。review-gate（CI を待つ）の手前で止まる
+- [plan-review] 計画の再レビュー OK（`docs/reviews/I220_plan_review_20261030_2052.md`・Warning 4・Info 2。PR へのコメントは停止中で付かない）。Warning 4 件と Info 1 件を直し、再レビューはしなかった — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録）。Info 2 は見送り（理由は計画変更記録）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -86,3 +88,4 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
