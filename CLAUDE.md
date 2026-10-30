@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 学習アプリ - Django REST Framework + React TypeScript
 
 このリポジトリでは Claude Code（Cursor 経由）に実装を委任します。
-安全性と再現性のため、作業は「イシュー → 計画（レビュー） → 実装 → レビュー → テスト → 振り返り → クローズ → マージ」の順でのみ進めます。ユーザーが打つのは `/issue-bootstrap`・`/plan-issue`（・任意の `/grill-me`・途中から再開する `/proceed`）だけで、その間の段階は Claude が順に進めます（docs/runbooks/workflow.md）。
+安全性と再現性のため、作業は「イシュー → 計画（レビュー） → 実装 → レビュー → テスト → 振り返り → クローズ → マージ」の順でのみ進めます。ユーザーが打つのは `/plan-issue`（・任意の `/grill-me`・途中から再開する `/proceed`）だけで、その間の段階は Claude が順に進めます（docs/runbooks/workflow.md）。起票（`issue-bootstrap`）は、会話の中で別イシューにすると決まったら Claude が自分で行い、後で報告します（ユーザーが `/issue-bootstrap` を打ってもよい）。
 
 ## 0. 参照先（このファイルは短く保つ）
 詳細ルールは以下へ集約します（この CLAUDE.md にルールを増やさないこと）。
