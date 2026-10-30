@@ -50,3 +50,11 @@
 ## TC-11 既存のテスト
 - TC-11a〜11g（I185 の開始時のフックの確かめ）がそのまま合格
 - `bash scripts/claude/tests/run-all.sh`・CI がすべて合格
+
+## 再発防止記録
+### fix-loop 1（2026-10-30・close の最終確認の CI 失敗）
+- なぜ失敗したか: retro で作った `docs/reviews/backlog/I219.md` の注記が「- F7（…」で始まり、`test_i202_ledger_cleanup.sh` の D3（一覧の「- F」で始まる行はすべて決まった形）に崩れた行として捕まった
+- 何を変えたか: 注記を「- 台帳の F7 …」に書き直した（診断メモ `docs/reviews/I219_fix_diagnosis_20261030_0925.md`・診断レビュー OK）
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: 一覧の見出しの注記は「- F」で始めない（retro の決まりの形に合わせる）。close の前の CI が捕まえるので新しい決まりは足さない
+- 確かめた結果: `bash scripts/claude/tests/test_i202_ledger_cleanup.sh` → `pass=157 fail=0`（D3 PASS）
