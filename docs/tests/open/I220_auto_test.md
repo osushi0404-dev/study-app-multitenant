@@ -17,6 +17,7 @@
 ## 実行記録
 - 2026-10-30 13:04・review-gate（`code-review.sh` の自動実走・HEAD dc3ac482）: 決定論ゲートの 4 本とも exit 0（`docs/reviews/I220_code_review_20261030_1304.md`）。CI（Harness Tests を含む）は全緑（`CI_WAIT: OK`）
 - 2026-10-30・test-gate: test-gate に回された重いテストは無い（pytest・Jest・E2E は CI が正で流し直さない）
+- 2026-10-30 21 時ごろ・implement（計画変更記録 3 の反映の後・手元・未コミットの作業ツリー）: TC-01 の 4 本を 1 本ずつ流し、すべて fail=0（i193 174 件・i185 17 件〔TC-14pin の固定の文章 7 本も一致〕・i107 6 件・i179 16 件）。固定の文章の作り直しは不要だった（TC-02 の対象の変化なし）。GitHub の作業用アカウントの停止中のため、CI はまだ流れていない（解除後の review-gate が確かめる）
 
 ## 決定論ゲート（自動実走）
 ```bash
