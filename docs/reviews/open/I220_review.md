@@ -27,3 +27,4 @@
 - [plan-review] 計画レビュー OK（Warning 4・Info 2）。Warning 4 件と Info 1 件を直し、再レビューはしなかった — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録）。「明らかに価値が低いものは起票せず、直すか同梱して報告」はユーザーの指示「価値が低いもの以外は起票」の裏側を書いたもので、新しい仕様ではない。Info 2（スキルを Skill ツールで呼ぶ件）は対応不要 — retro からの呼び出しと同じ形で、M-03 で確かめる
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
