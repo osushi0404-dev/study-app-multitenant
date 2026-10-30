@@ -76,6 +76,7 @@
 - [retro] P1（`claude -p` のテストが記憶を書き換える）は I222（#402）にコメントで同梱 — 実害の芽があり、自作の部品と運用の点検が同梱先として合う。新規起票はしない
 - [retro] P2（番号の衝突の再現・止まる位置の統一）は I221（#401）にコメントで同梱 — I221 が起票のスキルと採番を作り直すため
 - [retro] grill-me の説明の取り違え・固定の文章の見落としは見送り — どちらも計画の段階でその場で捕まり、手戻りが無い
+- [close の後] マージ依頼の後にユーザーから「起票する前に聞くもの」に「対応中のイシューを進めるために別イシューの起票・対応が必要な場合」を足す指示があった。新しいイシューにせずこの PR で対応する — 同じ決まりの 1 行の追加で、分けると決まりが 2 つの PR に割れる。記録を open に戻し、PR を下書きに戻し、計画変更記録 3 を書いて plan-review からやり直す（受け入れ条件・仕様が変わるため）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -84,3 +85,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review
