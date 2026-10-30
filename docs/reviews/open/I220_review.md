@@ -4,7 +4,10 @@
 - 会話の中で別イシューにすると決まったとき、Claude が `issue-bootstrap` を自分で呼んで起票し、後で報告する決まりを `workflow.md`・`issue-bootstrap/SKILL.md` に書き、`CLAUDE.md`・`onboarding.md` の 1 文を合わせる
 
 ## 変更点
-- （実装後に記入）
+- `docs/runbooks/workflow.md`: 使うスキル・フロー 1・スキル呼び出しルールに「会話の中で別イシューにすると決まったら Claude が呼ぶ」を足し、新しい節「Claude が会話の中で起票するとき（I220）」を置いた。止まったときの案内の表の「`/issue-bootstrap [タイトル]` を入力してください」を、Claude が起票して報告する形にした
+- `.claude/skills/issue-bootstrap/SKILL.md`: description と「呼ばれ方」に会話の中の起票を足し、手順 4 の前で止まって聞くこと・手順 6 の 1 行の報告を書いた
+- `CLAUDE.md:9`・`docs/runbooks/onboarding.md:21`: 「ユーザーが打つのは…」の 1 文を、起票は Claude が行う形に合わせた
+- `scripts/claude/tests/fixtures/i185/workflow_stop_guidance.txt`: 案内の表の変更に合わせて固定の文章を作り直した（他の 6 本は変わらない）
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: 手順書・スキルの文と、手順書の文を固定するテストの固定の文章 1 本だけ。アプリ・安全装置の変更なし
@@ -25,6 +28,7 @@
 - [plan] `CLAUDE.md:9`・`onboarding.md:21`・固定の文章 1 本を実装対象に足した — 同じ決まりの消費箇所と、文言を 1 文字ずつ固定している既存のテスト（plan_I220.md 調査結果）
 - [plan] 新しい決定論テストは作らない — 文言は意図的な変更でしか消えない。効き目は `claude -p` の実走（M-03・M-04）で確かめる
 - [plan-review] 計画レビュー OK（Warning 4・Info 2）。Warning 4 件と Info 1 件を直し、再レビューはしなかった — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録）。「明らかに価値が低いものは起票せず、直すか同梱して報告」はユーザーの指示「価値が低いもの以外は起票」の裏側を書いたもので、新しい仕様ではない。Info 2（スキルを Skill ツールで呼ぶ件）は対応不要 — retro からの呼び出しと同じ形で、M-03 で確かめる
+- [implement] `/simplify` の 4 観点の指摘のうち、文の重複を減らすもの（表の行の短縮・括弧の重複・「どのときも」）と、案内と報告の重なりを避ける 1 文を入れた。挙動を変える案（迷うものも聞かない・止まる位置を揃える）と、自動で読まれる場所から文を消す案は見送った — 詳細と理由は計画変更記録
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
