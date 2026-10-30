@@ -29,7 +29,9 @@
 - [plan] 新しい決定論テストは作らない — 文言は意図的な変更でしか消えない。効き目は `claude -p` の実走（M-03・M-04）で確かめる
 - [plan-review] 計画レビュー OK（Warning 4・Info 2）。Warning 4 件と Info 1 件を直し、再レビューはしなかった — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録）。「明らかに価値が低いものは起票せず、直すか同梱して報告」はユーザーの指示「価値が低いもの以外は起票」の裏側を書いたもので、新しい仕様ではない。Info 2（スキルを Skill ツールで呼ぶ件）は対応不要 — retro からの呼び出しと同じ形で、M-03 で確かめる
 - [implement] `/simplify` の 4 観点の指摘のうち、文の重複を減らすもの（表の行の短縮・括弧の重複・「どのときも」）と、案内と報告の重なりを避ける 1 文を入れた。挙動を変える案（迷うものも聞かない・止まる位置を揃える）と、自動で読まれる場所から文を消す案は見送った — 詳細と理由は計画変更記録
+- [review-gate] 1 回目（`docs/reviews/I220_code_review_20261030_1304.md`）: CI OK・RISK NO・FINAL_VERDICT OK・敵対的レビュー不要。止めない指摘 6 件（F1 Medium: 手順 4 の前で止まった後の再開手順が無く、呼び直すと別の番号を採る恐れ／F2〜F6 Low）は直さずに台帳に残す — ハーネスの止める条件の一覧に当たらない（スクリプトの判定）。OK の周の後に差分を足すと、その差分を見た OK の周が無くなるため。F1 は retro で扱う
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
