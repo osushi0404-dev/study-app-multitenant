@@ -65,6 +65,9 @@
 - [retro] 台帳の残り: 後続のイシューにする行は 0 件。F1〜F6 → `docs/reviews/backlog/I219.md`。F7（計画書の本文のずれ）は記録の場所なので retro で直した
 - [retro] 改善案の振り分け: P1（手順書に実装の細部を写してずれる・I200 の M-05 に続き 2 回目）→ I218（#398）にコメントと本文で同梱／見送り: 見積もりの誤り（整理の点検がその場で捕まえ手戻りなし）・コミットを裏に続けて流して止まりに気づくのが遅れた（その場で直し手戻り小）— retro の 4 問の 2
 - [fix-loop] close の最終確認の CI 失敗（一覧の注記の行が「- F」で始まり形の確かめに捕まった）は、案 A（注記の書き直し）で直した — 診断レビュー OK
+- [test-gate] fix-loop 1 の後の 2 回目: 変わったのは記録の場所（一覧の注記）だけで、コード・フックは M-01〜M-03 を確かめたときのままなので、手動テストの結果はそのまま使う。CI はすべて pass・GATE_CHECK OK
+- [retro] fix-loop 1 の後の 2 回目: 振り返りの中身は変わらない（一覧の注記の書き方の誤りは close の前の CI がその場で捕まえ、手戻りが小さいので決まりは足さない）
+- [close] 2 回目の close で、test-gate・retro の 2 回目の記録を書くコマンドが Claude Code 本体の隔離の判定で実行されないまま、記録の移動が先に進んだ。移動の後に、この記録に 2 回目の test-gate・retro の行を書き足した（記録の中身と順番は変わらない）
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -85,3 +88,7 @@ STAGE_DONE: close NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: test-gate
+
+STAGE_DONE: test-gate NEXT: retro
+
+STAGE_DONE: retro NEXT: close
