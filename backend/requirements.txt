@@ -14,5 +14,5 @@ sendgrid==6.12.5
 pydantic==2.14.1
 openai==3.36.1
 gunicorn==22.0.0
-psutil==5.9.6
+psutil==7.2.2
 python-magic==0.4.27
