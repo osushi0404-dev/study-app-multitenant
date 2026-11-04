@@ -81,6 +81,7 @@
 - [plan-review] 計画の再レビュー OK（`docs/reviews/I220_plan_review_20261030_2052.md`・Warning 4・Info 2。PR へのコメントは停止中で付かない）。Warning 4 件と Info 1 件を直し、再レビューはしなかった — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録）。Info 2 は見送り（理由は計画変更記録）
 - [implement] 計画変更記録 3 を反映（`workflow.md` の新しい節に 3 つ目を足し「3 つだけ」に）。`/simplify` の 4 観点の指摘のうち、括弧の言い直しを削ることと「2 つ以上に当たるときは 1 回にまとめて聞く」を入れ、順番を Claude が決める案・範囲が変わる場合だけに絞る案・上限到達の切り出しを除く案は見送った — 前の 2 つはユーザーの指示を変える。最後は節の見出しで対象外と読める（詳細は計画変更記録）。案内の表は変えていないので固定の文章は作り直していない（TC-01 の 4 本は fail=0）
 - [implement] GitHub の作業用アカウントの停止中のため push せず、コミットを手元にためた。review-gate は CI の完了を待つので、解除まで進めない
+- [review-gate の前] ユーザーの決定で GitHub の操作を GitHub App（`osushi0404-claude`）に切り替えた（11-05）。停止中の bot が作った PR #404 は GitHub に隠されていて、同じブランチからは新しい PR を作れなかった（「すでにある」と断られた）ので、ユーザーの選んだ案でブランチを `feature/I220-claude-files-issues-app` に改名して push し、PR #411 を作った。#404 と古いブランチは、bot が戻ったら閉じて消す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
