@@ -82,6 +82,8 @@
 - [implement] 計画変更記録 3 を反映（`workflow.md` の新しい節に 3 つ目を足し「3 つだけ」に）。`/simplify` の 4 観点の指摘のうち、括弧の言い直しを削ることと「2 つ以上に当たるときは 1 回にまとめて聞く」を入れ、順番を Claude が決める案・範囲が変わる場合だけに絞る案・上限到達の切り出しを除く案は見送った — 前の 2 つはユーザーの指示を変える。最後は節の見出しで対象外と読める（詳細は計画変更記録）。案内の表は変えていないので固定の文章は作り直していない（TC-01 の 4 本は fail=0）
 - [implement] GitHub の作業用アカウントの停止中のため push せず、コミットを手元にためた。review-gate は CI の完了を待つので、解除まで進めない
 - [review-gate の前] ユーザーの決定で GitHub の操作を GitHub App（`osushi0404-claude`）に切り替えた（11-05）。停止中の bot が作った PR #404 は GitHub に隠されていて、同じブランチからは新しい PR を作れなかった（「すでにある」と断られた）ので、ユーザーの選んだ案でブランチを `feature/I220-claude-files-issues-app` に改名して push し、PR #411 を作った。#404 と古いブランチは、bot が戻ったら閉じて消す
+- [review-gate] 1 回目は CI 待ちの時間切れ（exit 3）。Harness Tests だけが 20 分を超えた（いつもは 10 分ほど）が、その後 success で終わったので、手順どおり 1 回だけ実行し直した — 変更は手順書の文だけで、遅れは GitHub 側の実行の遅さと見た
+- [review-gate] 2 回目（`docs/reviews/I220_code_review_20261105_0242.md`・差分のレビュー）: CI OK・RISK NO・FINAL_VERDICT OK・敵対的レビュー不要。新しい指摘 F7・F8（どちらも Low・止めない）は台帳に残し、retro で一覧へ回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -93,3 +95,4 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
