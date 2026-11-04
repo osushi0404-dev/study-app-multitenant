@@ -14,6 +14,7 @@
 
 ## テスト結果
 - 自動: 決定論ゲート 4 本 exit 0・CI 全緑（`docs/reviews/I220_code_review_20261030_1304.md`）
+- 計画変更記録 3 の後（11-05・PR #411）: CI 全緑（`docs/reviews/I220_code_review_20261105_0242.md`）。M-02 をやり直して OK、M-06（`claude -p`・対応中のイシューを進めるのに別イシューが先に要る場面）OK：起票の前に、起票するか・どの順で進めるかを聞いて止まった。記憶の書き換えなし
 - 手動: M-01〜M-05 すべて OK（Claude。`claude -p` の新しいセッションで、会話の中の起票では Skill で `issue-bootstrap` を呼び、UI の判断が要るときは GitHub に登録する前に質問して止まることを観測。本物のイシューは作っていない）。Human の項目なし
 
 ## 計画との差分
@@ -84,6 +85,7 @@
 - [review-gate の前] ユーザーの決定で GitHub の操作を GitHub App（`osushi0404-claude`）に切り替えた（11-05）。停止中の bot が作った PR #404 は GitHub に隠されていて、同じブランチからは新しい PR を作れなかった（「すでにある」と断られた）ので、ユーザーの選んだ案でブランチを `feature/I220-claude-files-issues-app` に改名して push し、PR #411 を作った。#404 と古いブランチは、bot が戻ったら閉じて消す
 - [review-gate] 1 回目は CI 待ちの時間切れ（exit 3）。Harness Tests だけが 20 分を超えた（いつもは 10 分ほど）が、その後 success で終わったので、手順どおり 1 回だけ実行し直した — 変更は手順書の文だけで、遅れは GitHub 側の実行の遅さと見た
 - [review-gate] 2 回目（`docs/reviews/I220_code_review_20261105_0242.md`・差分のレビュー）: CI OK・RISK NO・FINAL_VERDICT OK・敵対的レビュー不要。新しい指摘 F7・F8（どちらも Low・止めない）は台帳に残し、retro で一覧へ回す
+- [test-gate] M-06 の一時ワークツリーは `run_m06.sh`（スクラッチパッド）経由で流した — この環境では一時ワークツリーへの `cd` が次のコマンドに持ち越されないため。記憶の場所への書き込みは計画どおり `--disallowedTools` で止め、印のファイルで書き換えが無いことを確かめた
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -96,3 +98,4 @@ STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
