@@ -46,6 +46,7 @@ I223 で Claude の GitHub の名義を GitHub App にし、テスト用のセ�
 - `gh` 2.88.1: `auth status` に `-a`・`-h`・`--json hosts`・`--jq`・`--template`・`-t` がある。`--json hosts` の各要素の欄は `active`・`gitProtocol`・`host`・`login`・`state`・`tokenSource`（失敗時は `error`）で、鍵の欄は `--show-token` を付けたときだけ入る
 - スパイク（成立）: `gh auth status -a -h github.com --json hosts --jq '.hosts[][] | .host + " " + .login + " " + .tokenSource + " " + .state + (if .active then " (active)" else "" end)'` → `github.com osushi0404-claude[bot] GH_TOKEN success (active)`（鍵は出ない。`-a`・`-h` は `--json` と併用できる）
 - `--json` を付けると、`auth status` は認証の問題があっても終了コード 0（`gh auth status --help`）。置き換えでは終了コードを自分で決める（4-1）
+- スパイク（成立・2026-11-06・計画レビューの Warning を受けて）: `bash scripts/claude/test-session.sh "Reply with only OK" --model haiku --strict-mcp-config --mcp-config .mcp.json --output-format stream-json --verbose …` の init の行の `mcp_servers` が `[('playwright','connected')]`。`--mcp-config` なしで `--strict-mcp-config` だけなら `[]`。どちらも結果は success。`--strict-mcp-config` と `--mcp-config` の併用で、渡した MCP だけを読む（4-5 の前提）。tmux の中の `claude`（対話）も同じオプションの読み方で、実物は M-03 で確かめる
 - 元のリポジトリの `.mcp.json` に `github` は無い（`grep -c github` が 0）。F7 の今の実害は小さいが、手元の設定に GitHub の MCP が戻ったときの抜け道として塞ぐ
 - tmux 3.4（`-e` は 3.2 以上）・`python3`・`/usr/bin/gh` あり
 - 既存テストのベースライン（実装前・develop の 2026-11-06 時点）: `test_i223_gh_app.sh` 18/18・`test_tui_capture.sh` 37/37・`test_check_permission_prompt.sh` 26/26・`test_i197_adversarial_process.sh` 113/113・`test_fix_review.sh` 66/66・`test_i193_official_flow.sh` 174/174。CI は `scripts/claude/tests/run-all.sh`（`.github/workflows/ci.yml:169`）
@@ -84,10 +85,11 @@ I223 で Claude の GitHub の名義を GitHub App にし、テスト用のセ�
 ### 4-2. 失効のスクリプトを足し、手順書を直す（F13・受け入れ条件 3）
 **修正方針**: `scripts/claude/gh-app/revoke.sh` を新しく作る。控えのフォルダ（`GH_APP_CACHE_DIR`、既定 `~/.cache/github-app`）の `token`・`token-readonly` の 2 つについて、控えの鍵を `GH_TOKEN` にして本物の `gh`（`GH_APP_REAL_GH`、既定 `/usr/bin/gh`。入口を通さない＝入口が別の鍵に差し替えない）で `api -X DELETE installation/token` を呼ぶ。続けて同じ鍵で `api installation/repositories` を呼び、失敗する（＝鍵が無効）ことを確かめてから控えを消す。
 
-- 鍵の値は引数・画面に出さない（`GH_TOKEN` の環境変数で渡す・出力は控えの名前と結果だけ）
+- **漏れた鍵そのものを失効させる口（`--stdin`）**: `bash scripts/claude/gh-app/revoke.sh --stdin` は、漏れた鍵の値を標準入力から 1 行読み（端末なら `read -rs` で画面に出さない）、その鍵で同じく DELETE → 無効の確認を行う。控えは触らない。控えが取り直された後に見つかった鍵・テスト用のセッションで出た鍵など、控えに無い鍵はこちらで失効させる（F13 の再現ケース）。値は引数に取らない（`ps`・シェルの履歴に残さない）
+- 鍵の値は引数・画面に出さない（`GH_TOKEN` の環境変数で渡す・出力は控えの名前と結果だけ。`--stdin` は「渡された鍵」とだけ出す）
 - 結果: 各控えについて `token: 失効を確認して控えを消しました`／`控えがありません`。DELETE の後も読めた（無効にならなかった）控えがあれば、控えは消さずに exit 1 で「App の設定画面で確かめる」よう案内する（`github-app-setup.md`「8.」）
-- 終了コード: 0=すべて無効を確認（控えが無いものを含む）・1=無効にならなかった鍵がある・2=使い方の誤り（引数を取らない）
-- 手順書 `docs/runbooks/github-app-setup.md`「5.」: 鍵が画面・記録に出たら `bash scripts/claude/gh-app/revoke.sh` を流すことにする。控えが取り直された後に気づいたときの古い鍵は、取り直しの決まり（残り 10 分で取り直す）から残り 10 分未満で切れることを書く。秘密の鍵ファイル（`app.pem`）が漏れたときは「8.」の作り直し
+- 終了コード: 0=すべて無効を確認（控えが無いものを含む）・1=無効にならなかった鍵がある・2=使い方の誤り（`--stdin` 以外の引数・`--stdin` で空の入力）
+- 手順書 `docs/runbooks/github-app-setup.md`「5.」: 鍵が画面・記録に出たら、まず `bash scripts/claude/gh-app/revoke.sh`（控えの 2 つ）を流し、出た鍵が控えの鍵と違う（取り直しの後に気づいた・別のセッションで出た）ときは `bash scripts/claude/gh-app/revoke.sh --stdin` に出た鍵を貼って失効させる。秘密の鍵ファイル（`app.pem`）が漏れたときは「8.」の作り直し
 - 入口と同じく `install.sh` では入れない（リポジトリから流す。鍵が出たときだけ使うため）
 - → TC-02 の G9 参照
 
@@ -161,7 +163,7 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 
 ### Claude が技術的に決めたこと（理由）
 - 失効を手順書の散文ではなくスクリプト `revoke.sh` にする — 取り違え（F13）は手で手順を追うと起きる。1 コマンドなら Claude も人も同じ手順になり、偽物の `gh` でテスト（G9）できる。新しいファイルはイシューの実装対象に無いが、F13 の直し方の具体化で範囲は変えない
-- `revoke.sh` は控えの鍵だけを失効させ、画面に出た鍵の値を受け取らない — 鍵の値をコマンドの引数・入力に渡すと、もう一度記録に出る。出た鍵はほぼ控えの鍵（控えは 1 時間・残り 10 分で取り直す）で、取り直された後の古い鍵は 10 分未満で切れる
+- `revoke.sh` は既定で控えの 2 つの鍵を失効させ、控えに無い漏れた鍵は `--stdin` で値を受けて失効させる — 確定事項（漏れた鍵そのものを失効させる）を、控えに無い鍵の場合も満たすため（計画レビュー 20261106_0028 の Blocker）。値を引数で受けると `ps`・履歴に残るので標準入力だけにする
 - 失効の確かめに `api installation/repositories` を使う — App の鍵で読める最小の API。無効なら 401 で失敗する
 - 入口の置き換えで `error` の欄を出さない — 文言に鍵の一部が入りうる（`state` で失敗は分かる）
 - 静的な検査の対象から個々のイシューの記録（`docs/tests/open/` など）を外す — この計画書・テスト文書自体が「`--json` なしの書き方」を名指しする必要がある（M-01 は置き換えを確かめるために `--json` なしで流す）。打ったときは入口が置き換えるので、記録に書かれても鍵は出ない。I223 の事故の元は手順書の確かめ方で、手順書は対象に入る。grill-me のメモ（open のテスト文書を含む）からの絞り込みなので、イシューの受け入れ条件 2 も同じ範囲に直す（技術的な範囲の具体化で、価値判断は変わらない）
@@ -193,4 +195,7 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 - 設計品質: 設定値は環境変数で上書きできる既定値（`GH_APP_REAL_GH`・`GH_APP_CACHE_DIR`）を使い、新しい定数を増やさない。エラー時は鍵を出さない側に倒す（入口: 本物の `gh` の失敗はその終了コードで返す・失効: 無効を確かめられなければ控えを消さず exit 1）
 
 ## 計画変更記録
-（なし）
+- 計画変更記録 1（plan-review・2026-11-06・`docs/reviews/I225_plan_review_20261106_0028.md`）: Blocker「控えの鍵だけでは、控えに無い漏れた鍵が失効しない」→ `revoke.sh --stdin`（標準入力で値を受け、その鍵を失効させる）を足し、G9 に入れた（4-2・§9）。Warning: `--strict-mcp-config` と `--mcp-config` の併用をスパイクで実証（調査結果）／M-01 の判定を `! grep -q`（合格=exit 0）にし、コマンドを分けた／イシューの Danger Ops を M-02 の失効に合わせた。Info（変更点の散らばり）は §9 の台帳の判断どおり同梱のまま。計画レビューのやり直し: 要（Blocker の対応で 4-2 の方式を足した）
+
+## レビュー結果
+- [20261106_0028 判定: 差し戻し（Blocker 1件）](../../reviews/I225_plan_review_20261106_0028.md)
