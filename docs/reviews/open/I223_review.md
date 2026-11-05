@@ -42,7 +42,9 @@
 - [implement] すべての起動を `test-session.sh` に通す案は採らず、各起動の行に指定を付けて G6 で守る — 起動の形を既存のテスト（i193 R7・S8・i197 S1）が見ていて、通し方を変えると守りの検査を作り直すことになるため
 - [implement] `/simplify` の簡素化・無駄の指摘のうち、ムダな行の削除・環境変数の二重の名前・PATH の確かめの単純化・ファイルの一覧の 1 か所化・リポジトリ名の変数化・時刻と `dirname` のプロセスを起こさない形・壊した写しの確かめで該当のケースだけを流す、を反映した。見送り: `user.name`・`user.email` の確かめのループ化と G1 の読み方の統一（2 行で、ループにしても読みやすくならない）／入口で控えを直接読む案（鍵の扱いが 2 か所に分かれる）／既定値を共有のファイルにまとめる案（2 本のために読み込みの仕組みを足すことになる）
 - [implement] M-03 は計画レビューの指摘どおり前倒しで流し、新しいセッションの Bash の `gh` の書き込みが GitHub に 403 で拒否されたことを確かめた（M-03 の実結果）
+- [review-gate] CI の Harness Tests が失敗した（CI_WAIT: FAIL・run 41968150448）ので fix-loop に回す — 決まりどおり（CI の失敗は fix-loop が直す）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
