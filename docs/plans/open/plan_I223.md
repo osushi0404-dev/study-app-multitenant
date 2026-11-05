@@ -146,7 +146,7 @@ exec "${CLAUDE_BIN:-claude}" -p "$@"
 2. App の設定（作り方の要点と今の値）: 組織 `osushi0404-dev` の下・このリポジトリだけに入れる・権限は Contents・Issues・Pull requests・Workflows を読み書き、Actions・Checks・Commit statuses を読み取り、それ以外はなし・App の番号（Client ID・Installation ID）は `gh-app-token` の既定値。develop・main の push 制限の一覧に App を入れない
 3. 秘密の鍵ファイルを置く: App の設定画面で鍵を作り、`~/.config/github-app/app.pem` に置いて `chmod 600`（フォルダは 700）。リポジトリの中に置かない・コマンドの引数や履歴に鍵の中身を出さない
 4. `bash scripts/claude/gh-app/install.sh` を流す → `bash scripts/claude/gh-app/install.sh --check` が exit 0
-5. 確かめる: `gh auth status` に `osushi0404-claude[bot] (GH_TOKEN)`・`git push` が通る
+5. 確かめる: `gh auth status --json hosts --jq '.hosts["github.com"][] | select(.active) | .login + " " + .tokenSource + " " + .state'` が `osushi0404-claude[bot] GH_TOKEN success`・`git push` が通る（`--json` なしの `gh auth status` は鍵の大部分を出すので使わない・計画変更記録 5）
 6. テスト用のセッション: `bash scripts/claude/test-session.sh …` で起こす（読み取りだけの鍵）。決まりの正は `plan-writing-rules.md`
 7. 困ったとき: 鍵を受け取れない（鍵ファイルの場所・権限・App の Installation の有無）／`GH_APP_DISABLE=1` は退避で、今は保存されたログイン（bot）が無効なので使えない
 8. 守ること: 秘密の鍵ファイル・控え（`~/.cache/github-app/`）をリポジトリや他人と共有しない／漏れたら App の設定画面で鍵を消して作り直す／控えの書き込みの鍵は同じ端末のプログラムからは読めるので、テスト用のセッションでわざと読む書き方は守りの対象外（文字列ガードと同じく「普通の書き方の事故」を止めるもの）
@@ -204,7 +204,7 @@ exec "${CLAUDE_BIN:-claude}" -p "$@"
 - テストレベル: シェルスクリプトの単体（偽物の差し替え）＋手動の実走（本物の GitHub に対する読み取り・拒否の観測）。認可の変更は GitHub の側（鍵の権限）で、M-03 で確かめる
 ### 手動（すべて Claude）
 - M-01: 一時の `HOME` に `install.sh` で入れ、そこから `gh` で読める（新しい端末の再現）
-- M-02: この端末に入れ直した後、`install.sh --check` が exit 0・`gh auth status` が App・push が通る
+- M-02: この端末に入れ直した後、`install.sh --check` が exit 0・`--json` で取り出した名義が App・push が通る
 - M-03: `test-session.sh` で起こしたセッションで、書き込み（リアクションの追加・`git push --dry-run`）が GitHub に 403 で拒否され、読み取りは通る
 - M-04: `check-permission-prompt.sh` で起こしたセッションでも、書き込みが GitHub に拒否される
 - M-05: 手順書に `osushi0404-bot` を前提にした記述・PAT の手順・`gh auth login` の前提が無い
@@ -292,6 +292,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 計画変更記録 3（implement の `/simplify`・直す深さの観点・2026-11-05）: 調査結果の「テスト用のセッションを起こす所」に漏れがあった。`claude -p` を起こす所は、ほかに `scripts/claude/code-review.sh:153`（組み込みの /code-review・plan モード）・`scripts/claude/plan-issue-review.sh:131`・`scripts/claude/issue-review.sh:40`・`scripts/claude/fix-review-lib.sh:81`（どれもレビュー役）の 4 か所あり、そこから起きるセッションには書き込みの鍵が渡る（`grep -rnE 'CLAUDE_BIN:-claude\}"? -p|claude -p ' scripts/claude --include=*.sh` で確認）。採った方法: 4 か所にも `GH_APP_READONLY=1` を付け（4-5）、「`scripts/claude/*.sh` の `claude -p` の呼び出しの行はすべて `GH_APP_READONLY=1` を持つ（`test-session.sh` のように `export GH_APP_READONLY=1` するファイルを除く）」を静的なテスト G6 で守る（4-6。起動の所が増えても付け忘れを CI で止める）。PR へのレビューのコメントは、これらのスクリプト自身（`claude -p` の外）が書くので書き込みの鍵のまま動く。見送り: すべての起動を `test-session.sh` に通す案 — 各スクリプトの起動の形（`timeout … claude -p --agent`・`claude -p --permission-mode plan`）を既存のテスト（`test_i193_official_flow.sh` R7・S8・`test_i197_adversarial_process.sh` S1）が見ていて、通し方を変えると守りの検査を作り直すことになる。付け忘れは G6 で止まるので、置き場所を 1 つにしなくても漏れない。あわせて `/simplify` の簡素化・無駄の指摘を反映する（4-1・4-2・4-3・4-6 の中の整理だけ）。計画レビューのやり直し: 要（実装対象のファイルと決定論テストを足し、範囲を変える）
 - 計画レビュー（20261105_1315・OK・高リスク No）の Warning 4 件への対応: §9 と auto_test の「G1〜G5」を「G1〜G6」に直し、§5 ステップ 2 に G6 を足した（W1）／ステップ 2 の直後に M-03 を前倒しで流す（W2）／`code-review.sh:153` の組み込みのレビューが読み取りだけの鍵でも動くことを、review-gate の実走で確かめる M-10 を足した（W3）／M-08 ② を単体のコマンドにした（W4）。Info 2（`test-session.sh` の承認画面が出うる）は、M-03 の前に予告する。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - 計画変更記録 4（fix-loop・2026-11-05・review-gate 20261105_1353 の止める指摘 F1）: tmux の中で `claude` を起こす `tui-capture.sh:44` もテスト用のセッションを起こす所だったので、`tmux new-session -e GH_APP_READONLY=1` を付け、G6 の対象を「tmux で claude を起こす行」にも広げた（FG を 1 本足した）。`test_tui_capture.sh:68` の起動の行の照合を直した。手順書（`github-app-setup.md`「1.」・`plan-writing-rules.md` (2)）の起こす所の書き方を、一覧から「Claude を起こす行はすべて・付け忘れは G6」の決まりにした。計画レビューのやり直し: 不要（findings への対応で、方式〔読み取りだけの指定を起動の行に付けて G6 で守る〕・受け入れ条件は変えない）
+- 計画変更記録 5（fix-loop・2026-11-05・test-gate の M-02 の NG）: 手順書と M-02 の確かめ方 `gh auth status` が、App の新しい形式の長い鍵の大部分を画面に出した（`gh` は最後の部分しか伏せない）。出た鍵は失効させ済み。確かめ方を `gh auth status --json hosts --jq …`（名義・鍵の出どころ・状態の欄だけを取り出す）にした（`github-app-setup.md`「5.」・同型の `harness-audit.md` の古い鍵の行・4-8 の 5.・M-02）。診断メモ `docs/reviews/I223_fix_diagnosis_20261105_1450.md`（診断レビュー PASS）。見張りで `gh auth status` を確認にする案は安全装置の変更なので採らず、retro で扱う。計画レビューのやり直し: 不要（手動テストの NG への対応で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261105_1315 判定: ✅ 完了](../../reviews/I223_plan_review_20261105_1315.md)

@@ -43,7 +43,8 @@ bash scripts/claude/gh-app/install.sh --check
 
 ## 5. 確かめる
 
-- `gh auth status` に `Logged in to github.com account osushi0404-claude[bot] (GH_TOKEN)` が出る
+- 名義: `gh auth status --json hosts --jq '.hosts["github.com"][] | select(.active) | .login + " " + .tokenSource + " " + .state'` が `osushi0404-claude[bot] GH_TOKEN success` を出す
+  - `--json` を付けない `gh auth status` は使わない（App の鍵は長く、`gh` は最後の部分しか伏せないので、鍵の大部分が画面に出る・I223 の手動テストで発生）。出してしまったら `gh api -X DELETE installation/token` で失効させ、`~/.cache/github-app/token` を消して取り直す
 - `git push` が通る
 
 ## 6. テスト用のセッション

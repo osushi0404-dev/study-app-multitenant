@@ -26,5 +26,5 @@ Claude が GitHub を操作する名義と鍵は、リポジトリの外にも�
 | テスト用のセッションが読み取りだけの鍵で起きるか | `scripts/claude/test-session.sh`・`scripts/claude/tests/test_i223_gh_app.sh` |
 | リポジトリの協力者の一覧と権限 | `gh api repos/osushi0404-dev/study-app-multitenant/collaborators` |
 | ブランチの守りの設定 | `docs/runbooks/branch-protection-setup.md` |
-| 手元に残る古い鍵（個人の鍵〔PAT〕・本物の `gh` に保存されたログイン） | `~/.bashrc` などの `export`・`/usr/bin/gh auth status` |
+| 手元に残る古い鍵（個人の鍵〔PAT〕・本物の `gh` に保存されたログイン） | `~/.bashrc` などの `export`（値は出さず `grep -c` で数える）・`GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["github.com"][] \| .login + " " + .state'`（`--json` なしは鍵を画面に出しうるので使わない） |
 | 自動化の量（書き込みの回数・頻度）が、名義の使い方と GitHub の利用の制限に合っているか | 直近の作業の push・コメント・イシューの書き換えの回数 |
