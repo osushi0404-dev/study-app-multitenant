@@ -181,6 +181,7 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 - 一覧 I223 F6: 残す — G6 の検出の形の狭さ。G7 も同じ読み方で、広げるのは別の作業（Low・再現なし）
 - 一覧 I223 F10: 残す — tmux 3.2 未満。この端末は 3.4（Low・再現なし）
 - 一覧 I195 F1・F2・F4: 残す — `tui-capture.sh` の入力・起動の待ちの件で、鍵の抜け道ではない（再現なし）
+- 一覧 I195 F9（`scripts/claude/tests/test_tui_capture.sh`。計画の段階の grep で拾い漏れ、implement で見つけた）: 残す — T7a の `no_start`・ダイアログ画面のテストの件で、T1 の照合の直しと関係しない（Low・再現なし）
 - 一覧 I200 F7（`check-permission-prompt.sh`）: 残す — write の上書き防止の件で、このイシューと関係しない
 - 一覧 I208 F1〜F3・F5・I206 F4・I207 F6・F7（`code-review.sh`）: 残す — 台帳の読み方の件で、起動の行と関係しない
 - 一覧 I209 F6（`fix-review-lib.sh`）: 残す — 診断レビューの SKIP の扱いで、起動の行と関係しない
@@ -198,6 +199,7 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 ## 計画変更記録
 - 計画変更記録 1（plan-review・2026-11-06・`docs/reviews/I225_plan_review_20261106_0028.md`）: Blocker「控えの鍵だけでは、控えに無い漏れた鍵が失効しない」→ `revoke.sh --stdin`（標準入力で値を受け、その鍵を失効させる）を足し、G9 に入れた（4-2・§9）。Warning: `--strict-mcp-config` と `--mcp-config` の併用をスパイクで実証（調査結果）／M-01 の判定を `! grep -q`（合格=exit 0）にし、コマンドを分けた／イシューの Danger Ops を M-02 の失効に合わせた。Info（変更点の散らばり）は §9 の台帳の判断どおり同梱のまま。計画レビューのやり直し: 要（Blocker の対応で 4-2 の方式を足した）→ 20261106_0031 で OK
 - 計画変更記録 2（plan-review・2026-11-06・`docs/reviews/I225_plan_review_20261106_0031.md` の Warning）: TC-03 の合否を exit code だけにした／M-03 の期待結果を「一覧に playwright・github が出ない」にし、実際の文言は実結果に写す形にした／4-1 にグローバルオプションを前に置く書き方は置き換えない旨を足した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 計画変更記録 3（implement・2026-11-06）: 4-2 の「無効の確認」を「`api installation/repositories` が失敗する」から「その標準エラーに `HTTP 401` が出る」に具体化した。理由: 通信の失敗でも `gh api` は失敗するので、失敗だけでは「無効を確認」と取り違える（失効できていないのに控えを消す・fail-open）。2026-11-06 に本物の `gh` で無効な鍵を渡し、`gh: Bad credentials (HTTP 401)`・exit 1 を確かめた。G9 の偽物も 401 の文言を出し、通信の失敗（401 なし）では控えを残して exit 1 になることを足す。計画レビューのやり直し: 不要（4-2 の方式の中の具体化）
 
 ## レビュー結果
 - [20261106_0031 判定: ✅ 完了](../../reviews/I225_plan_review_20261106_0031.md)

@@ -8,7 +8,7 @@ Claude は GitHub App `osushi0404-claude`（GitHub 上の名前は `osushi0404-c
 
 - App の鍵は 1 時間で切れる。`gh` の入口（`scripts/claude/gh-app/gh` を `~/.local/bin/gh` として入れる）が、`gh` を呼ぶたびに `gh-app-token` から鍵を受け取り、`GH_TOKEN` で本物の `gh`（`/usr/bin/gh`）に渡す。受け取った鍵は `~/.cache/github-app/` に控え、残り 10 分を切ったら取り直す
 - `git push` なども同じ入口を通る（git の credential helper を `!~/.local/bin/gh auth git-credential` にする）
-- テスト用のセッション（`claude -p`）には読み取りだけの鍵を渡す（`GH_APP_READONLY=1`）。`gh issue`・`gh pr`・`gh api`・`git push` のどの書き方でも、書き込みは GitHub が拒否する（HTTP 403）。手で起こすときの入口は `scripts/claude/test-session.sh`。`scripts/claude/` のスクリプトが Claude を起こす行（`claude -p`・tmux の中の `claude`）にはすべて `GH_APP_READONLY=1` を付ける（レビュー役も同じ。付け忘れは `scripts/claude/tests/test_i223_gh_app.sh` の G6 が CI で止める）。決まりの正は `docs/runbooks/plan-writing-rules.md`
+- テスト用のセッション（`claude -p`）には読み取りだけの鍵を渡す（`GH_APP_READONLY=1`）。`gh issue`・`gh pr`・`gh api`・`git push` のどの書き方でも、書き込みは GitHub が拒否する（HTTP 403）。手で起こすときの入口は `scripts/claude/test-session.sh`。`scripts/claude/` のスクリプトが Claude を起こす行（`claude -p`・tmux の中の `claude`）にはすべて `GH_APP_READONLY=1` と `--strict-mcp-config`（MCP は `--mcp-config` で渡したものだけ。手元の設定の MCP が読み取りだけの鍵を迂回しないように・I225）を付ける（レビュー役も同じ）。tmux の中の `claude` には、入口のある `PATH`（`~/.local/bin` が先頭）も渡す（先に立っていた tmux サーバーの `PATH` で入口を通らないことがないように・I225）。付け忘れは `scripts/claude/tests/test_i223_gh_app.sh` の G6・G7 が CI で止める（見るのは `scripts/claude/` 直下の `.sh` の、`claude -p` の呼び出しと、tmux で `claude` を起こす行。それ以外の形の起動は見ない）。決まりの正は `docs/runbooks/plan-writing-rules.md`
 - GitHub の MCP は使わない（I223 で外した。`docs/runbooks/mcp-usage.md`）
 
 ## 2. App の設定（今の値）
@@ -44,8 +44,22 @@ bash scripts/claude/gh-app/install.sh --check
 ## 5. 確かめる
 
 - 名義: `gh auth status --json hosts --jq '.hosts["github.com"][] | select(.active) | .login + " " + .tokenSource + " " + .state'` が `osushi0404-claude[bot] GH_TOKEN success` を出す
-  - `--json` を付けない `gh auth status` は使わない（App の鍵は長く、`gh` は最後の部分しか伏せないので、鍵の大部分が画面に出る・I223 の手動テストで発生）。出してしまったら `gh api -X DELETE installation/token` で失効させ、`~/.cache/github-app/token` を消して取り直す
+  - 名義の確かめの `auth status` は、上のように `--json` で要る欄だけを取り出す。`--json` を付けないと、App の長い鍵の大部分が画面に出る（`gh` は最後の部分しか伏せない・I223 の手動テストで発生）。入口（`~/.local/bin/gh`）は、`--json` も `-t`/`--show-token` も無い `auth status` を、鍵の欄の無い表示（`<host> <login> <鍵の出どころ> <状態>`）に置き換える（I225）。本物の `gh`（`/usr/bin/gh`）を直接呼ぶと置き換わらない。手順書・スキル・スクリプトに `--json` なし（または `-t`/`--show-token` 付き）の書き方があると、`test_i223_gh_app.sh` の G10 が CI で止める
 - `git push` が通る
+
+### 鍵が画面・記録に出てしまったら
+1. 控えの 2 つの鍵（`~/.cache/github-app/` の `token`・`token-readonly`）を失効させる:
+   ```bash
+   bash scripts/claude/gh-app/revoke.sh
+   ```
+   各控えについて「失効を確認して控えを消しました」か「控えがありません」が出て exit 0 になれば終わり。次の `gh` で新しい鍵を取り直す（そのとき App の鍵を環境変数で持っている別のセッションは、GitHub の操作が 401 になる）
+2. 出た鍵が控えの鍵と違うとき（控えが取り直された後に気づいた・別のセッションで出た）は、その鍵を標準入力で渡して失効させる（引数には書かない。画面にも出ない）:
+   ```bash
+   bash scripts/claude/gh-app/revoke.sh --stdin
+   ```
+   出た鍵を貼って Enter を押す。「渡された鍵: 失効を確認しました」で終わり
+3. 「無効を確かめられませんでした」（exit 1）のときは、GitHub に届くかを確かめて流し直す（失効が確かめられるまで控えは消さない）
+4. 秘密の鍵ファイル（`app.pem`）が漏れたときは「8.」で鍵を作り直す
 
 ## 6. テスト用のセッション
 

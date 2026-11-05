@@ -10,4 +10,28 @@ if [ -n "${GH_APP_READONLY:-}" ] || [ -z "${GH_APP_DISABLE:-}" ]; then
   GH_TOKEN="$(bash "$dir/gh-app-token")" || { echo "gh-app-token: 鍵を受け取れませんでした" >&2; exit 1; }
   export GH_TOKEN
 fi
+# I225: --json なしの auth status は、App の長い鍵の大部分を画面に出す（gh の伏せ字は昔の短い鍵向け）。
+# --json・--jq・--template・-t/--show-token のどれも無いときは、鍵の欄の無い --json hosts で取り、名義の行だけを出す。
+# わざと鍵を見る -t/--show-token は置き換えない。見るのは引数の 1・2 番目だけ（ふつうの書き方の事故を止めるためのもの）
+if [ "${1:-}" = auth ] && [ "${2:-}" = status ]; then
+  plain=1
+  for a in "${@:3}"; do
+    case "$a" in --json*|--jq*|--template*|--show-token|-t|-[!-]*t*) plain=0 ;; esac
+  done
+  if [ "$plain" = 1 ]; then
+    echo "gh: 鍵を画面に出さないよう、auth status を --json の形で表示しました（I225）" >&2
+    json="$("$REAL_GH" auth status "${@:3}" --json hosts)" || exit $?
+    # 1 アカウント 1 行。error の欄は出さない（文言に鍵の一部が入りうる）。state がすべて success なら 0（--json なしの終了コードに合わせる）
+    printf '%s' "$json" | python3 -I -c '
+import json, sys
+ok = True
+for accounts in json.load(sys.stdin).get("hosts", {}).values():
+    for a in accounts:
+        ok = ok and a.get("state") == "success"
+        print(" ".join(str(a.get(k, "")) for k in ("host", "login", "tokenSource", "state")) + (" (active)" if a.get("active") else ""))
+sys.exit(0 if ok else 1)
+'
+    exit $?
+  fi
+fi
 exec "$REAL_GH" "$@"

@@ -26,7 +26,7 @@ run_claude_logged() {
     echo "[review-process-lib] --permission-prompts none の無い claude -p は起動しません" >&2
     return 2
   fi
-  GH_APP_READONLY=1 timeout "$secs" "${CLAUDE_BIN:-claude}" -p "$@" --output-format stream-json --verbose < "$input" 2> "${log}.err" \
+  GH_APP_READONLY=1 timeout "$secs" "${CLAUDE_BIN:-claude}" -p --strict-mcp-config "$@" --output-format stream-json --verbose < "$input" 2> "${log}.err" \
     | python3 -I -u -c '
 import json, sys, time
 for line in sys.stdin:

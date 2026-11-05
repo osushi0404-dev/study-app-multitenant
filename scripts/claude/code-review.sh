@@ -151,7 +151,7 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
   local prompt="$1" out rc=0
   # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none。黙って止まる経路を作らない）
   # I223: GitHub へは読み取りだけの App の鍵（GH_APP_READONLY=1。書き込みは GitHub が拒否する）
-  out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none "$prompt" 2>&1 < /dev/null) || rc=$?
+  out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none --strict-mcp-config "$prompt" 2>&1 < /dev/null) || rc=$?
   if [ "$rc" -ne 0 ]; then
     printf '(実行できず: exit=%s。124 は時間切れ)\n' "$rc"
     return 0

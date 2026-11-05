@@ -26,5 +26,15 @@ Claude が GitHub を操作する名義と鍵は、リポジトリの外にも�
 | テスト用のセッションが読み取りだけの鍵で起きるか | `scripts/claude/test-session.sh`・`scripts/claude/tests/test_i223_gh_app.sh` |
 | リポジトリの協力者の一覧と権限 | `gh api repos/osushi0404-dev/study-app-multitenant/collaborators` |
 | ブランチの守りの設定 | `docs/runbooks/branch-protection-setup.md` |
-| 手元に残る古い鍵（個人の鍵〔PAT〕・本物の `gh` に保存されたログイン） | `~/.bashrc` などの `export`（値は出さず `grep -c` で数える）・`GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["github.com"][] \| .login + " " + .state'`（`--json` なしは鍵を画面に出しうるので使わない） |
+| 手元に残る古い鍵（個人の鍵〔PAT〕・本物の `gh` に保存されたログイン） | 表の下の「古い鍵の点検コマンド」 |
 | 自動化の量（書き込みの回数・頻度）が、名義の使い方と GitHub の利用の制限に合っているか | 直近の作業の push・コメント・イシューの書き換えの回数 |
+
+### 古い鍵の点検コマンド
+
+```bash
+grep -c -E '^[[:space:]]*export[[:space:]]+(GITHUB_PERSONAL_ACCESS_TOKEN|GH_TOKEN|GITHUB_TOKEN)=' ~/.bashrc ~/.profile
+GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["github.com"][] | .login + " " + .tokenSource + " " + .state'
+```
+
+- 1 行目: 古い鍵を `export` する行を、値を出さずにファイルごとに数える（0 でないファイルの行を消す。`docs/runbooks/github-app-setup.md`「9.」）。ファイルが無いときのエラーは無視してよい
+- 2 行目: 入口から App の鍵を渡さずに（`GH_APP_DISABLE=1`。読み取りだけの指定があると無視されるので空にする）、本物の `gh` が使う鍵を、名義・鍵の出どころ（環境変数か、保存されたログインのファイルか）・状態で出す。`--json` で要る欄だけを取り出すので鍵は出ない。`env -u` の形はワークツリーのセッションの見張りが止めるので使わない
