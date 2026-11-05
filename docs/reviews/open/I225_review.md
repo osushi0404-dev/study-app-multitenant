@@ -17,8 +17,8 @@
 - Config: `scripts/claude/gh-app/`・`scripts/claude/` の Claude の起動の行・`scripts/claude/tui-capture.sh`・`scripts/claude/tests/`・`docs/runbooks/github-app-setup.md`・`docs/runbooks/harness-audit.md`
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: review-gate（fb4b563a）で CI 全緑・決定論ゲート 6 本とも exit 0（`test_i223_gh_app.sh` 33/33 ほか）。TC-03 OK
+- 手動（test-gate・22ae10d4）: M-01〜M-04 すべて OK（すべて Claude。Human の項目なし）
 
 ## 計画との差分
 - なし
@@ -45,3 +45,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

@@ -33,5 +33,7 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 - 確かめた結果: `grep -c "^## 決定論ゲート（自動実走）"` が 1。6 本のゲートの実走は次の review-gate が行う（implement の手元ではすべて exit 0）
 
 ## 実行記録
+- 2026-11-06・review-gate（CI・fb4b563a）: CI 全緑。決定論ゲート 6 本とも exit 0（`docs/reviews/I225_code_review_20261106_0057.md`）
+- 2026-11-06・test-gate（22ae10d4）: test-gate に回された重いテストは無い（pytest・Jest・E2E は CI が正で流し直さない）。TC-03: 手順書のコードブロックの 2 行目をそのまま流し `osushi0404-bot /home/tacic/.config/gh/hosts.yml error`・exit 0・標準エラーなし → OK
 - 2026-11-06・plan（実装前）: TC-01 の 5 本と `test_i223_gh_app.sh`（G1〜G6）すべて exit 0。TC-03 のコマンドは計画の段階で OK
 - 2026-11-06・implement（手元）: テストを先に書いて Red を確認（`test_i223_gh_app.sh` 22/33・G7〜G10 と新しい FG が不合格。G10 は手順書 `github-app-setup.md:47` の書き方を見つけた）→ 実装後 33/33。TC-01: `test_tui_capture.sh` 39/39（FG-T1b を含む）・`test_check_permission_prompt.sh` 26/26・`test_i197_adversarial_process.sh` 113/113・`test_fix_review.sh` 66/66・`test_i193_official_flow.sh` 174/174。途中で S1・FG-S1・FG-T8 の照合が起動の行の変更でずれたので、`--strict-mcp-config` を置く位置を既存の照合に合わせた（テストは直していない。FG-T8 の置き換え前の文字列だけ新しい起動の行に合わせた）
