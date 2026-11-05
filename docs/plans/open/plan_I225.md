@@ -3,7 +3,7 @@
 ## 基本情報
 - **計画書ID**: plan_I225
 - **関連イシュー**: #415
-- **Draft PR**: （作成後に追記）
+- **Draft PR**: #416
 - **作成根拠資料**: docs/issues/open/I225.md（I223 の retro からの起票。台帳 `docs/reviews/closed/I223_code_review_20261105_1440.md` の F7・F9・F13・F14・F15）
 - **実装後評価**: docs/reviews/open/I225_review.md
 - **作成日**: 2026-11-06
