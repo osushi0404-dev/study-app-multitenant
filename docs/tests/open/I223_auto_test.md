@@ -20,6 +20,9 @@
 - 2026-11-05・implement（手元・c55471f1 の前）: `test_i223_gh_app.sh` は実装前に 5 件不合格（Red）→ 実装後 16/16。TC-01 の既存のテスト（i187 14・check_permission_prompt 26・i197 113・i193 174・fix_review 66）すべて fail=0
 - 2026-11-05・review-gate（CI・run 41968150448・c55471f1）: Harness Tests で `test_i223_gh_app.sh` の G4 だけ不合格（15/16）。ほかの 50 本とほかのジョブは合格
 
+- 2026-11-05・review-gate（CI・aca29350）: 全緑。決定論ゲート 10 本とも exit 0（`docs/reviews/I223_code_review_20261105_1440.md`）
+- 2026-11-05・test-gate: test-gate に回された重いテストは無い（pytest・Jest・E2E は CI が正で流し直さない）
+
 ## 再発防止記録（fix-loop・2026-11-05）
 - なぜ失敗したか: この端末のリポジトリは `/mnt/c`（`core.filemode=false`）で、新しいスクリプトの実行権が git に記録されず 100644 で入った。`gh` の入口が `gh-app-token` を直接実行していたので、CI の checkout（実行権なし）では `Permission denied` で鍵を受け取れなかった。手元はすべて実行できるように見えるので、手元のテストでは捕まらなかった（診断メモ `docs/reviews/I223_fix_diagnosis_20261105_1348.md`）
 - 何を変えたか: 入口が `bash "$dir/gh-app-token"` で起こすようにした（実行権に頼らない）。テストの写しを `chmod 644` で CI と同じ条件にし、FG「入口が gh-app-token を bash に渡さない」を足した

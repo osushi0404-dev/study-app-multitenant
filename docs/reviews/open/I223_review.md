@@ -22,6 +22,7 @@
 ## テスト結果
 - 自動: 決定論ゲート 10 本すべて exit 0・CI 全緑（`docs/reviews/I223_code_review_20261105_1410.md`）。test-gate に回された重いテストは無い
 - 手動（test-gate・ccaef3d0）: M-02 が NG（`gh auth status` が App の鍵の大部分を画面に出した。出た鍵は `gh api -X DELETE installation/token` で失効させ、控えを取り直した）。M-01・M-03・M-05・M-07・M-09・M-10 OK、M-04 は代わりの確かめで OK、M-06 は ① OK・② はマージの後（ワークツリーは元のリポジトリの `.mcp.json` を読む）、M-08 は記録だけ。Human の項目なし
+- 手動のやり直し（test-gate・aca29350）: M-02 は鍵を出さない確かめ方で OK（`osushi0404-claude[bot] GH_TOKEN success`）。結論 OK
 
 ## 計画との差分
 - 計画変更記録 2: `~/.bashrc` の PAT の行の削除は Claude ではできなかった（自動の判定に止められた）ので、close でユーザーにお願いする
@@ -65,3 +66,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
