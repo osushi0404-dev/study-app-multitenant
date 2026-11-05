@@ -20,7 +20,8 @@
 - Config/Infra: `scripts/claude/`・`.mcp.json`・`.gitignore`・`CLAUDE.md`（参照先）・`docs/runbooks/`・`.claude/agents/plan-reviewer.md`・`docs/reviews/backlog/I223.md`。この端末のリポジトリの外の設定（`~/.local/bin/`・`~/.bashrc`）。安全装置（`path_risk_trigger` の集合）には触らない
 
 ## テスト結果
-- （test-gate で記入）
+- 自動: 決定論ゲート 10 本すべて exit 0・CI 全緑（`docs/reviews/I223_code_review_20261105_1410.md`）。test-gate に回された重いテストは無い
+- 手動（test-gate・ccaef3d0）: M-02 が NG（`gh auth status` が App の鍵の大部分を画面に出した。出た鍵は `gh api -X DELETE installation/token` で失効させ、控えを取り直した）。M-01・M-03・M-05・M-07・M-09・M-10 OK、M-04 は代わりの確かめで OK、M-06 は ① OK・② はマージの後（ワークツリーは元のリポジトリの `.mcp.json` を読む）、M-08 は記録だけ。Human の項目なし
 
 ## 計画との差分
 - 計画変更記録 2: `~/.bashrc` の PAT の行の削除は Claude ではできなかった（自動の判定に止められた）ので、close でユーザーにお願いする
@@ -47,6 +48,9 @@
 - [review-gate] 2 回目（20261105_1353）は CI 全緑・FINAL_VERDICT: HIGH・敵対的レビューは不要。止める指摘は F1（`tui-capture.sh` が tmux で起こすセッションに読み取りだけの指定が無い）だけで、fix-loop に回す。F2〜F8（Low）は台帳に残し retro へ
 - [fix-loop] F1 は診断レビュー（20261105_1420・PASS）を通った案 A（`tmux new-session -e GH_APP_READONLY=1`）で直し、G6 の対象を tmux の起動にも広げた — 起動のコマンドの文字列を変えないので既存の失敗の注入（test_tui_capture.sh 148 行目）が使え、`-e` は tmux サーバーの環境に関係なく効くため
 - [review-gate] 3 回目（20261105_1410・差分のレビュー）は CI 全緑・FINAL_VERDICT: OK・敵対的レビューは不要。F1 は resolved。F9〜F12（Low）は台帳に残し retro へ — 止める条件に当たらないため
+- [test-gate] M-02 の `gh auth status` で App の鍵の大部分が画面に出たので、すぐに GitHub で失効させ（`gh api -X DELETE installation/token`・その後 401 を確認）、控えを消して取り直した — 書き込みのできる 1 時間の鍵で、会話の記録に残ったため。手順書の確かめ方の不具合なので fix-loop に回す（この段階は手順書を直さない）
+- [test-gate] M-04 は、変数を含むコマンドが承認の要る側で値を直接見られないため、G5 と M-03 ② を合わせた代わりの確かめで OK とした — 指定が claude に渡ることと、claude の中の gh に届くことを別々に確かめているため
+- [test-gate] M-06 ② は、ワークツリーのセッションが元のリポジトリの `.mcp.json` を読むので、マージの後に元のリポジトリで確かめる — このブランチの設定の確かめにならないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -56,3 +60,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: fix-loop
