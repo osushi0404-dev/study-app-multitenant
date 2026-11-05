@@ -52,6 +52,7 @@
 - [test-gate] M-04 は、変数を含むコマンドが承認の要る側で値を直接見られないため、G5 と M-03 ② を合わせた代わりの確かめで OK とした — 指定が claude に渡ることと、claude の中の gh に届くことを別々に確かめているため
 - [test-gate] M-06 ② は、ワークツリーのセッションが元のリポジトリの `.mcp.json` を読むので、マージの後に元のリポジトリで確かめる — このブランチの設定の確かめにならないため
 - [fix-loop] M-02 の NG は、診断レビュー（20261105_1450・PASS）を通った案 A（`gh auth status --json hosts --jq …` で要る欄だけを取り出す）で手順書 2 か所と M-02 を直した — 表示の伏せ字に頼らず、gh の公式の `--json` で鍵の欄を出さないため。`grep -v Token:` の案は表示の形に頼る（形が変わると出る）ので採らない
+- [review-gate] 4 回目（20261105_1440・差分のレビュー）は CI 全緑・FINAL_VERDICT: OK・敵対的レビューは不要。F13・F14（Medium・ハーネスで止める条件に当たらない）・F15（Low）は台帳に残し retro へ — 止める指摘はスクリプトが決め、自分で増やさないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -63,3 +64,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
