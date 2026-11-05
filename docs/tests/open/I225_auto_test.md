@@ -15,7 +15,7 @@
 
 新しい決定論テストは G7〜G10 と T1 の照合の直しだけにする（plan_I225.md §9: どれも、壊れても気づきにくく、壊れると鍵が画面に出る・読み取りだけの鍵を迂回する所）。手順書の文言（失効の手順の説明・総点検の一覧の並び）はレビューで見る。
 
-## 決定論ゲート
+## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_i223_gh_app.sh
 bash scripts/claude/tests/test_tui_capture.sh
@@ -24,6 +24,13 @@ bash scripts/claude/tests/test_i197_adversarial_process.sh
 bash scripts/claude/tests/test_fix_review.sh
 bash scripts/claude/tests/test_i193_official_flow.sh
 ```
+
+## 再発防止記録（fix-loop・2026-11-06・review-gate 20261106_0045 の HIGH）
+- なぜ失敗したか: 見出しを `## 決定論ゲート` と書き、テンプレートの `## 決定論ゲート（自動実走）` と違った。`code-review.sh` は見出しを完全な文字列で探すので、ゲートを宣言していないと読み、宣言の外のテストのコマンドを omission-lint が HIGH にした（診断メモ `docs/reviews/I225_fix_diagnosis_20261106_0100.md`・診断レビュー PASS）
+- 何を変えたか: 見出しをテンプレートどおりに直した（1 行）
+- セキュリティ上の考慮点: なし（記録の書式）
+- 次回どう防ぐか: auto_test は前のイシューの文書でなく `docs/tests/templates/auto_test_template.md` から作る
+- 確かめた結果: `grep -c "^## 決定論ゲート（自動実走）"` が 1。6 本のゲートの実走は次の review-gate が行う（implement の手元ではすべて exit 0）
 
 ## 実行記録
 - 2026-11-06・plan（実装前）: TC-01 の 5 本と `test_i223_gh_app.sh`（G1〜G6）すべて exit 0。TC-03 のコマンドは計画の段階で OK

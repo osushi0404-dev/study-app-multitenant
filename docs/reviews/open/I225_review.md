@@ -36,8 +36,11 @@
 - [implement] 失効の確かめを「読みに行って失敗」でなく「HTTP 401 が出る」にした（計画変更記録 3） — 通信の失敗を「無効」と取り違えて控えを消さないため。本物の `gh` で 401 の文言を確かめた
 - [implement] `--strict-mcp-config` を置く位置を、既存のテスト（S1・FG-S1）が前提にする形に合わせた（`"$@"` の前・`--permission-prompts none)` の前・複数行の呼び出しは 1 行目） — テストを直すより起動の行を合わせるほうが変更が小さく、既存の守りをそのまま使える
 - [implement] /simplify の指摘のうち、G6・G7 の重複（共通の関数にした）と G9 の使わない代入を直した。見送り: 起動を 1 つの入口にまとめる案（直す深さの指摘。8 か所の起動の形と既存テストを作り直すことになり、計画の方式を変えるので retro で扱う）・控えの名前と形を共通のファイルにまとめる案（`revoke.sh` の名前の一覧は FG が守り、控えの形は 1 か所でしか書かない）・G10 を狭める案（計画 §9 で決めた範囲）・失効を並行にする案（効果が 1 秒未満）
+- [review-gate] 1 回目は FINAL_VERDICT: HIGH。止める指摘は 0 件で、HIGH は自動テスト文書の決定論ゲートの見出し違い（宣言なし・omission-lint）によるもの。決まりどおり fix-loop に回した — 判定はスクリプトの決定論の出力に従う
+- [fix-loop] 見出しを `## 決定論ゲート（自動実走）` に直した（診断メモ 20261106_0100 の案 A・診断レビュー PASS） — テンプレートどおりの 1 行の直しで、次の review-gate がゲートを実走して証跡を残す。台帳の F1〜F7 は止める指摘ではないので直さない（retro）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
