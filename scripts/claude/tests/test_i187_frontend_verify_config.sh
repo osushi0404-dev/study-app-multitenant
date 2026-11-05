@@ -53,10 +53,8 @@ EXPECTED_ARGS = [
 ck("①a playwright の command が npx", pw.get("command") == "npx")
 ck("①b playwright の args が計画と完全一致", pw.get("args") == EXPECTED_ARGS)
 
-# ② github は変えていない
-gh = servers.get("github", {})
-ck("② github の args が変わっていない",
-   gh.get("args") == ["-y", "@modelcontextprotocol/server-github@2025.4.8"])
+# ② github の MCP は無い（I223 で外した。GitHub の操作は gh〔App の鍵〕だけ）
+ck("② github の MCP が無い", "github" not in servers)
 
 allow = settings.get("permissions", {}).get("allow", [])
 deny = settings.get("permissions", {}).get("deny", [])

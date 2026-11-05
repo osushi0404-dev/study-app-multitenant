@@ -12,6 +12,7 @@ set -uo pipefail
 #     手元で足した許可で判定が変わるため。マージ後の develop と同じ判定にする）
 #   - 承認なしで通る操作は実際に実行される（設定が壊れていれば、承認画面が出るはずの操作も実行される）。
 #     危ない操作は、同じ許可ルール・見張りに当たり、実行されても困らない代わりの操作で確かめる
+#   - GitHub へは読み取りだけの App の鍵を渡す（GH_APP_READONLY=1・I223）。GitHub への書き込みは通っても GitHub が拒否する
 #   - 見張り（PreToolUse）が止めた操作は承認画面を出さないので 0 になる。出力の先頭を見て見分ける
 # 終了コード: 0=承認なしで実行された・10=承認画面が出る（自動で拒否された）
 #             2=判定できない（引数の誤り・操作が呼ばれない・コマンドが書き換えられた・モードが違う・claude の失敗）
@@ -67,7 +68,8 @@ else
   trap 'rm -f "$LOG"' EXIT
   # bash の判定では MCP サーバーを起動しない（判定に要らず、起動の分だけ遅くなる）
   if [ "$KIND" = "mcp" ]; then MCP_ARGS=(--mcp-config .mcp.json); else MCP_ARGS=(--strict-mcp-config); fi
-  if ! "${CLAUDE_BIN:-claude}" -p "$PROMPT" \
+  # I223: GitHub へは読み取りだけの App の鍵（承認なしで通る判定でも、GitHub への書き込みは GitHub が拒否する）
+  if ! GH_APP_READONLY=1 "${CLAUDE_BIN:-claude}" -p "$PROMPT" \
       --model haiku \
       --permission-mode manual \
       --permission-prompts none \

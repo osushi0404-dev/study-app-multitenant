@@ -65,7 +65,7 @@ t1() {
   [ "$(grep -cxF "kill-session -t $S" "$LOG")" -eq 1 ] || return 1
   # 4 つの行がこの順にある（どれかが無ければ行番号が空で不合格）: new-session < send-keys < 最後の capture-pane < kill-session
   local n s c k
-  n=$(grep -nxF "new-session -d -s $S -x 200 -y 50 -c $REPO_ROOT claude --permission-mode manual" "$LOG" | cut -d: -f1)
+  n=$(grep -nxF "new-session -d -s $S -e GH_APP_READONLY=1 -x 200 -y 50 -c $REPO_ROOT claude --permission-mode manual" "$LOG" | cut -d: -f1)
   s=$(grep -nxF "send-keys -t $S -l -- /plan-" "$LOG" | cut -d: -f1)
   c=$(grep -nxF "capture-pane -p -t $S" "$LOG" | tail -1 | cut -d: -f1)
   k=$(grep -nxF "kill-session -t $S" "$LOG" | cut -d: -f1)

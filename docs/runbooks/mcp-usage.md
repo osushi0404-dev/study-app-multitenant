@@ -8,7 +8,8 @@
 
 | MCP | 評価結果 | 根拠 |
 |-----|---------|------|
-| GitHub MCP | ✅ 導入済み（I030） | PR/issue 高度操作の実現。`docs/runbooks/mcp-github-setup.md` 参照 |
+| GitHub MCP | ❌ 廃止（I223・I030 で導入） | GitHub の操作は `gh`（GitHub App の鍵）だけにする。名義と鍵を 1 つにまとめ、長く効く個人の鍵を持たないため。`docs/runbooks/github-app-setup.md` |
+| Playwright MCP | ✅ 導入済み（I187） | Claude が画面を確かめる。`docs/runbooks/frontend-verify.md` |
 | Sequential Thinking MCP | ❌ 導入不要（I035） | Claude 4.x では冗長。供給チェーンリスクあり（詳細は後述） |
 | Web Search MCP | ❌ 導入不要（I035） | built-in `WebSearch` ツールで対応可能。外部 API キー管理不要 |
 
@@ -51,17 +52,9 @@ WebSearch ツールを使って [ライブラリ名] の既知 CVE を確認し�
 
 ---
 
-## 3. GitHub MCP
+## 3. GitHub MCP（I223 で廃止）
 
-セットアップ手順・利用方法は `docs/runbooks/mcp-github-setup.md` を参照。
-
-### 主な利用場面
-
-| フェーズ | 利用例 |
-|---------|-------|
-| review-gate 段階 | PR に付いたレビューコメントを直接参照 |
-| `/plan-issue` | 関連 issue のコメント・経緯を参照して精度の高い計画書を作成 |
-| close 段階 | issue への完了コメント投稿 |
+I223 で `.mcp.json` から外した。スキル・スクリプトは GitHub の MCP を使っておらず、すべて `gh` で動いていた。MCP は別の個人の鍵（PAT）で動いていて、名義と鍵が 2 つになっていた。GitHub の操作は `gh`（GitHub App の鍵）だけを使う。設定は `docs/runbooks/github-app-setup.md`。見張りの MCP 向けの部分（`.claude/settings.json`・`pretooluse_guard.py`）は、戻したときにも効くように残している。
 
 ---
 
@@ -83,7 +76,7 @@ npx -y @modelcontextprotocol/server-sequential-thinking
 ### 導入不要の根拠
 
 1. **Claude 4.x では冗長**: このMCPはClaude 2/3向けの補助ツールとして設計された。Claude claude-sonnet-4-6（本プロジェクト使用中）はモデル内部で高精度の段階的推論を行っており、外部ツールで補う必要がない
-2. **供給チェーンリスク**: バージョン未固定（`npx -y`）で実行すると、パッケージの悪意ある更新が自動適用されるリスクがある。既存の GitHub MCP は `@2025.4.8` と固定しており、一貫性がなく安全でない
+2. **供給チェーンリスク**: バージョン未固定（`npx -y`）で実行すると、パッケージの悪意ある更新が自動適用されるリスクがある。既存の MCP（当時の GitHub MCP の `@2025.4.8`・今の Playwright MCP の `@0.0.83`）は版を固定しており、一貫性がなく安全でない
 3. **依存増加のコスト超過**: 実質的な品質向上なしに npm 依存・保守コスト・攻撃面が増加する
 
 ---

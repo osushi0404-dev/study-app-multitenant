@@ -65,7 +65,7 @@ gh issue create \
 **注意事項**:
 - GitHubイシュー番号とローカルイシュー番号は異なる場合がある（GitHub側は自動採番）
 - ローカルイシュー番号（例: I035）をタイトルに含めることで紐づけを明確にする
-- `gh auth login`で認証済みであることが前提
+- `gh` が GitHub App の鍵で動くことが前提（`docs/runbooks/github-app-setup.md`）
 
 ### 4. イシューファイルに GitHub Issue 番号を記録
 GitHub Issue 作成後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:

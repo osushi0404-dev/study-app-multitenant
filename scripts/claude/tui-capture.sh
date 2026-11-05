@@ -41,7 +41,8 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || err "git のワークツ�
 
 S="tui-capture-$$"
 trap 'tmux kill-session -t "$S" >/dev/null 2>&1' EXIT
-tmux new-session -d -s "$S" -x 200 -y 50 -c "$ROOT" "claude --permission-mode manual" || err "tmux のセッションを起動できません"
+# I223: テスト用のセッションなので GitHub へは読み取りだけの App の鍵（-e で渡す。tmux サーバーの環境に関係なく入る）
+tmux new-session -d -s "$S" -e GH_APP_READONLY=1 -x 200 -y 50 -c "$ROOT" "claude --permission-mode manual" || err "tmux のセッションを起動できません"
 
 PROMPT_RE=$'(^|\n)❯'
 waited=0

@@ -25,11 +25,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - テンプレート同期: docs/runbooks/template-sync.md
 - pre-commit 運用: docs/runbooks/pre-commit.md
 - フロントの画面確認（アプリ起動・Playwright MCP）: docs/runbooks/frontend-verify.md
+- ハーネスの総点検の範囲: docs/runbooks/harness-audit.md
 
 セットアップ・環境構築:
 - オンボーディング（全体の進め方）: docs/runbooks/onboarding.md
 - ブランチ保護設定: docs/runbooks/branch-protection-setup.md
-- GitHub MCP セットアップ: docs/runbooks/mcp-github-setup.md
+- GitHub の名義（App）と鍵の設定: docs/runbooks/github-app-setup.md
 - MCP 利用ガイドライン: docs/runbooks/mcp-usage.md
 
 コーディング規約（必読）:

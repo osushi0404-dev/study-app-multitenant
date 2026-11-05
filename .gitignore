@@ -89,3 +89,6 @@ push_to_github.sh
 .github_tokenbackup_migration.sql
 celerybeat-schedule
 backup_*.sql
+
+# I223: 秘密の鍵ファイル（GitHub App の鍵など）を誤って置いても入らないように
+*.pem
