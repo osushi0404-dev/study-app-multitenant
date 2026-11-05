@@ -8,6 +8,7 @@
 #   - 記録の各行の先頭に受け取り時刻（epoch 秒）とタブを付け、最後に「閉じた」行を足す。時間切れで止めても、
 #     最後のツール呼び出し・その結果・そこからの経過を後から取り出せる
 #   - 出力の形が読めないときは「拒否なし」「実行した」と言わない（呼び出し元が止まる側に倒す）
+#   - GitHub へは読み取りだけの App の鍵を渡す（GH_APP_READONLY=1・I223。検証役は GitHub に書き込まない）
 # テスト用: CLAUDE_BIN=<コマンド> で起動する claude を差し替えられる
 # 計画: docs/plans/open/plan_I197.md §4.4
 
@@ -25,7 +26,7 @@ run_claude_logged() {
     echo "[review-process-lib] --permission-prompts none の無い claude -p は起動しません" >&2
     return 2
   fi
-  timeout "$secs" "${CLAUDE_BIN:-claude}" -p "$@" --output-format stream-json --verbose < "$input" 2> "${log}.err" \
+  GH_APP_READONLY=1 timeout "$secs" "${CLAUDE_BIN:-claude}" -p "$@" --output-format stream-json --verbose < "$input" 2> "${log}.err" \
     | python3 -I -u -c '
 import json, sys, time
 for line in sys.stdin:

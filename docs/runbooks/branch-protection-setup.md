@@ -65,7 +65,7 @@ develop と main は同じ設定にする（I178）。表の並びは GitHub の
 ### 理由
 
 このリポジトリは public で、外部（fork）の PR が届く（前例: PR #257）。
-bot アカウント `osushi0404-bot` は書き込み権限を持つため、承認者を限定しないと、bot の承認や bot 自身の操作でマージ要件を満たせてしまう。
+Claude の名義（GitHub App `osushi0404-claude[bot]`・I223 より前は bot アカウント）は書き込み権限を持つため、承認者を限定しないと、bot の承認や bot 自身の操作でマージ要件を満たせてしまう。
 以前の develop は承認の要件が無く、main は承認 1 件が必要でも承認者が限定されていなかった。
 Claude 側のガード（I146・`scripts/claude/hooks/pretooluse_guard.py`）は補助の層で、マージは GitHub の権限で止める。
 
@@ -88,6 +88,7 @@ develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が d
 
 ### 運用
 
+- この手順書の「bot」は、Claude が GitHub を操作する名義のこと（I223 から GitHub App `osushi0404-claude[bot]`。設定は `docs/runbooks/github-app-setup.md`）。
 - **PR は bot（Claude）が作成する**（ユーザーは PR を作らない）。bot が作った PR では `oshui0404` に自動でレビュー依頼が出て、`oshui0404` の承認が必要になる。
 - 承認の後に新しいコミットが入ると承認が取り消されるので、もう一度承認する。develop への追従（Update branch）のコミットでは、差分が変わらない場合に承認が残ることもある（取り消された場合だけ再承認すればよい）。
 - Dependabot の PR も `oshui0404` の承認が必要。

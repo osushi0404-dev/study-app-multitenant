@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# gh を GitHub App の鍵で動かす入口（I223）。~/.local/bin/gh として入れ、git の credential helper もここを通す。
+# GH_APP_READONLY=1 なら読み取りだけの鍵（テスト用のセッション。書き込みは GitHub が拒否する）。
+# GH_APP_DISABLE=1（読み取りだけの指定が無いとき）は鍵を渡さずに本物の gh を動かす（App が使えないときの退避）。
+REAL_GH="${GH_APP_REAL_GH:-/usr/bin/gh}"
+if [ -n "${GH_APP_READONLY:-}" ] || [ -z "${GH_APP_DISABLE:-}" ]; then
+  src="${BASH_SOURCE[0]}"
+  [[ "$src" == */* ]] && dir="${src%/*}" || dir=.   # dirname のプロセスを起こさない（gh・git を呼ぶたびに通る）
+  GH_TOKEN="$("$dir/gh-app-token")" || { echo "gh-app-token: 鍵を受け取れませんでした" >&2; exit 1; }
+  export GH_TOKEN
+fi
+exec "$REAL_GH" "$@"

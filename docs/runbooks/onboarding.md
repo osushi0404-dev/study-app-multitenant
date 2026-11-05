@@ -109,6 +109,12 @@ docs/
 
 ---
 
+## 手元の準備（GitHub の名義）
+
+Claude は GitHub App の名義で GitHub を操作する（I223）。新しい端末では `docs/runbooks/github-app-setup.md` の手順で設定する。
+
+---
+
 ## 手元の準備（ハーネスのテスト）
 
 ハーネスのテスト（`scripts/claude/tests/run-all.sh`）は、手元も CI の Harness Tests も同じ版の道具で流す（I204・I211）。
