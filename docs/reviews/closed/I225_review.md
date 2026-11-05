@@ -79,6 +79,7 @@
 - [retro] 台帳の残りの振り分け: F1・F5・F6（SECURITY=yes）→ 後続イシュー I226（#417・次のハーネスの作業で最優先）／F2・F3・F4（Low）→ `docs/reviews/backlog/I225.md`／F7 → 振り分けない（fix-loop の見出しの直しで解消済み。2 周目の記録にゲート 6 本の exit 0 の証跡がある。台帳の STATUS だけが open のまま） — 台帳の行の欄の値で `code-review.sh --route` が振り分けた結果に従い、F7 だけ中身が解消済みのため除いた
 - [retro] 改善案の振り分け: 是正 C1 は fix-loop で直し済み。予防は P1 を I226 で起票。見送り 5 件（自動テスト文書の見出しの予防・計画レビューの Blocker・`env -u` の件・起動を 1 つの入口にまとめる案・台帳の F7 の閉じ方）は「## 振り返り」の 2.7 の判定に理由を書いた — どれも既存の工程がその場で捕まえ手戻りが小さいか、実害が出ていないため
 - [retro] I226 のイシューファイルは未コミットのまま app-1 に残した（plan-issue の初コミットの決まり）
+- [close] 最初の push と PR の説明の更新が GitHub に拒まれた（`fatal error in commit_refs`・`EOF`。読み取りは通り、githubstatus は Operational）。書き込みを重ねず 2 回で止めてユーザーに伝え、時間を置いて 1 回だけやり直して通った — 書き込みの集中で名義が止められるおそれ（I224）を避けるため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -88,3 +89,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
