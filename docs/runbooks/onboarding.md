@@ -18,7 +18,7 @@ Claude Code に実装を委任しながら、人間がゲートキーパーに�
 
 ### 1. スキル駆動のフロー（打つコマンドは少ない）
 
-ユーザーが打つのは `/issue-bootstrap` と `/plan-issue` だけ。`/plan-issue` の後は、Claude が計画レビュー → 実装 → レビュー → テストまで段階を順に進め、人の手動テストの手前で止まる（I193）。
+ユーザーが打つのは `/plan-issue`（と、自分で起票したいときの `/issue-bootstrap`）だけ。会話の中で別イシューにすると決まったら、起票は Claude が行って報告する（I220）。`/plan-issue` の後は、Claude が計画レビュー → 実装 → レビュー → テストまで段階を順に進め、人の手動テストの手前で止まる（I193）。
 
 ```
 /issue-bootstrap →（任意で /grill-me）→ /plan-issue
