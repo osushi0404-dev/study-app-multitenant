@@ -50,7 +50,7 @@
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra: `scripts/claude/gh-app/`（新規 3 本）・`scripts/claude/test-session.sh`（新規）・`scripts/claude/check-permission-prompt.sh`・`scripts/claude/review-process-lib.sh`・`scripts/claude/tests/test_i223_gh_app.sh`（新規）・`scripts/claude/tests/test_i187_frontend_verify_config.sh`・`.mcp.json`・`.gitignore`・`CLAUDE.md`（参照先の行）・`docs/runbooks/`（`github-app-setup.md`〔`mcp-github-setup.md` から改名〕・`harness-audit.md`〔新規〕・`mcp-usage.md`・`branch-protection-setup.md`・`issue-flow.md`・`onboarding.md`・`plan-writing-rules.md`）・`.claude/agents/plan-reviewer.md`・`docs/reviews/backlog/I223.md`（新規）
+- Config/Infra: `scripts/claude/gh-app/`（新規 3 本）・`scripts/claude/test-session.sh`（新規）・`scripts/claude/check-permission-prompt.sh`・`scripts/claude/review-process-lib.sh`・`scripts/claude/code-review.sh`・`scripts/claude/plan-issue-review.sh`・`scripts/claude/issue-review.sh`・`scripts/claude/fix-review-lib.sh`（計画変更記録 3）・`scripts/claude/tests/test_i223_gh_app.sh`（新規）・`scripts/claude/tests/test_i187_frontend_verify_config.sh`・`.mcp.json`・`.gitignore`・`CLAUDE.md`（参照先の行）・`docs/runbooks/`（`github-app-setup.md`〔`mcp-github-setup.md` から改名〕・`harness-audit.md`〔新規〕・`mcp-usage.md`・`branch-protection-setup.md`・`issue-flow.md`・`onboarding.md`・`plan-writing-rules.md`）・`.claude/agents/plan-reviewer.md`・`docs/reviews/backlog/I223.md`（新規）
 - リポジトリの外（この端末）: `~/.local/bin/gh-app-token`・`~/.local/bin/gh` をリポジトリの版で置き換える／`~/.bashrc` の `GITHUB_PERSONAL_ACCESS_TOKEN` の行を消す
 - 安全装置（`path_risk_trigger` の集合: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`）には触らない
 - 依存関係ファイルの変更なし（Dockerfile・docker-compose.yml への波及なし）
@@ -125,13 +125,14 @@ export GH_APP_READONLY=1
 exec "${CLAUDE_BIN:-claude}" -p "$@"
 ```
 
-### 4-5. `scripts/claude/check-permission-prompt.sh`・`scripts/claude/review-process-lib.sh`
-修正方針: 新しいセッションを起こす 2 か所を読み取りだけの鍵にする。
+### 4-5. `scripts/claude/check-permission-prompt.sh`・`scripts/claude/review-process-lib.sh`（と、計画変更記録 3 の 4 か所）
+修正方針: 新しいセッションを起こす所をすべて読み取りだけの鍵にする。
+- 計画変更記録 3: `code-review.sh:153`（`out=$(GH_APP_READONLY=1 timeout …`）・`plan-issue-review.sh:131`・`issue-review.sh:40`・`fix-review-lib.sh:81`（どれも `| GH_APP_READONLY=1 timeout … claude -p`）にも同じ指定を付ける
 - `check-permission-prompt.sh`: `"${CLAUDE_BIN:-claude}" -p …`（70 行目）の前に `GH_APP_READONLY=1` を付ける（`if ! GH_APP_READONLY=1 "${CLAUDE_BIN:-claude}" -p …`）。冒頭の説明に「GitHub への書き込みは読み取りだけの鍵で GitHub が拒否する（承認なしで通る判定でも書き込まれない・I223）」を 1 行足す
 - `review-process-lib.sh`: `timeout "$secs" "${CLAUDE_BIN:-claude}" -p …`（28 行目）を `GH_APP_READONLY=1 timeout …` にする。冒頭の「考え方」に 1 行足す
 
 ### 4-6. `scripts/claude/tests/test_i223_gh_app.sh`（新規）
-修正方針: 壊れても気づきにくく、壊れると本物の書き込みが起きるところだけを見る（plan-writing-rules.md「決定論テストの対象の選び方」）。`curl`・`openssl`・本物の `gh`・`claude` は、一時フォルダの偽物に差し替える（`PATH`・`GH_APP_REAL_GH`・`CLAUDE_BIN`・`GH_APP_CACHE_DIR`・`GH_APP_KEY`）。秘密の鍵ファイルも本物の GitHub も使わない。ケースは auto_test の TC-02 の G1〜G5。各ケースに、スクリプトの写しを `sed` で壊して不合格になることを確かめる FG を付ける
+修正方針: 壊れても気づきにくく、壊れると本物の書き込みが起きるところだけを見る（plan-writing-rules.md「決定論テストの対象の選び方」）。`curl`・`openssl`・本物の `gh`・`claude` は、一時フォルダの偽物に差し替える（`PATH`・`GH_APP_REAL_GH`・`CLAUDE_BIN`・`GH_APP_CACHE_DIR`・`GH_APP_KEY`）。秘密の鍵ファイルも本物の GitHub も使わない。ケースは auto_test の TC-02 の G1〜G6（G6 は計画変更記録 3: `scripts/claude/*.sh` の `claude -p` の呼び出しの論理行がすべて `GH_APP_READONLY=1` を持つ静的な検査。`export GH_APP_READONLY=1` するファイルは除く）。各ケースに、スクリプトの写しを `sed` で壊して不合格になることを確かめる FG を付ける
 
 ### 4-7. GitHub の MCP を外す
 - `.mcp.json`: `mcpServers.github` を消す（`playwright` はそのまま）
@@ -190,14 +191,14 @@ exec "${CLAUDE_BIN:-claude}" -p "$@"
 2. テスト用のセッションの入口（4-4・4-5）と G5 を書く（ステップ 1 の後）→ TC-02・TC-01 参照
 3. この端末に入れ直す（4-14 の前半。ステップ 1 の後）。以後の push・`gh` はリポジトリの版で動く → M-01・M-02 参照
 4. GitHub の MCP を外す（4-7）・手順書を書く・直す（4-8・4-9・4-10・4-11・4-12）・計画レビュー役の観点（4-13）（ステップ 1〜3 と並行可）→ TC-01・TC-03・M-05〜M-07 参照
-5. `~/.bashrc` の PAT の行を消す（4-14 の後半。ステップ 4 の後）→ M-08 参照
+5. ~~`~/.bashrc` の PAT の行を消す~~ → close でユーザーにお願いする（計画変更記録 2）→ M-08 参照
 6. やり残しの一覧を書く（4-15）→ M-09 参照
 7. 組み込みの `/simplify` で整理し、push する
 
 ## 6. テスト計画
 ### 自動
-- TC-01: 実装対象のファイルを見ている既存のテスト（`test_i187_frontend_verify_config.sh`・`test_check_permission_prompt.sh`・`test_i197_adversarial_process.sh`・`test_i107_track_label_docs.sh`・`test_i179_worktree_docs.sh`・`test_i185_harness_docs.sh`・`test_next_issue_num.sh`）と新しい `test_i223_gh_app.sh` が exit 0（決定論ゲート）。全体（`run-all.sh`）は CI の Harness Tests
-- TC-02: `test_i223_gh_app.sh` の G1〜G5（読み取りだけの鍵の本文・控えの分離・書き込みの権限が返ったら止まる・`GH_APP_DISABLE` で外せない・テスト用のセッションを起こす 3 か所が読み取りだけの指定を渡す）と FG
+- TC-01: 実装対象のファイルを見ている既存のテスト（`test_i187_frontend_verify_config.sh`・`test_check_permission_prompt.sh`・`test_i197_adversarial_process.sh`・`test_i107_track_label_docs.sh`・`test_i179_worktree_docs.sh`・`test_i185_harness_docs.sh`・`test_next_issue_num.sh`）と新しい `test_i223_gh_app.sh`、計画変更記録 3 で触る起動の行を見ている `test_i193_official_flow.sh`・`test_fix_review.sh` が exit 0（決定論ゲート）。全体（`run-all.sh`）は CI の Harness Tests
+- TC-02: `test_i223_gh_app.sh` の G1〜G6（G6 はすべての `claude -p` の起動の行に読み取りだけの指定があること・計画変更記録 3。読み取りだけの鍵の本文・控えの分離・書き込みの権限が返ったら止まる・`GH_APP_DISABLE` で外せない・テスト用のセッションを起こす 3 か所が読み取りだけの指定を渡す）と FG
 - TC-03: 秘密の鍵ファイルと鍵の形の文字列を、コミットの前の検査（detect-secrets・今の `.secrets.baseline`）が見つける（一時フォルダの偽の鍵で 1 回流す。受け入れ条件 2 の決定論のチェックは今ある detect-secrets（コミットの前と CI）で、それが App の鍵の形も見つけることをここで確かめる）
 - テストレベル: シェルスクリプトの単体（偽物の差し替え）＋手動の実走（本物の GitHub に対する読み取り・拒否の観測）。認可の変更は GitHub の側（鍵の権限）で、M-03 で確かめる
 ### 手動（すべて Claude）
@@ -286,6 +287,8 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 計画レビュー（20261105_1259・OK・高リスク No）の Warning 4 件への対応: M-05・M-08 ① を複合のコマンドでなく単体の `grep` にした（W1）／手で書く `claude -p` が入口を通らないと止まらない残りの範囲は、R3 のとおり対象外とし、close の報告に書く（W2）／4-1 は実装で今のファイルの全文をもとにリポジトリへ入れる（W3・計画どおり）／M-03 ② の `--permission-prompts none` は `check-permission-prompt.sh:73`・`review-process-lib.sh` が今使っていて動く（I187・I197 の実走）ので実在は確かめ済みとし、M-03 の前に `claude -p --help` も見る（W4）。計画レビューのやり直し: 不要（findings への対応の追記だけで、方式・範囲・受け入れ条件は変えない）
+- 計画変更記録 2（implement・2026-11-05）: 4-14 後半の「`~/.bashrc` の PAT の行を Claude が消す」は、自動の判定（auto mode）に「取り消せない手元の削除」として止められた。回避はせず、PAT の失効と一緒に close でユーザーにお願いする（手順は `github-app-setup.md`「9.」）。受け入れ条件 7 は `.mcp.json` と手順書が対象で、この行の削除を含まないので、受け入れ条件は変わらない。手動テスト M-08 は「ユーザーへのお願いに回したことの記録」に変え、合否には使わない。計画レビューのやり直し: 不要（リポジトリの外の手作業を 1 つお願いに回すだけで、方式・範囲・受け入れ条件は変えない）
+- 計画変更記録 3（implement の `/simplify`・直す深さの観点・2026-11-05）: 調査結果の「テスト用のセッションを起こす所」に漏れがあった。`claude -p` を起こす所は、ほかに `scripts/claude/code-review.sh:153`（組み込みの /code-review・plan モード）・`scripts/claude/plan-issue-review.sh:131`・`scripts/claude/issue-review.sh:40`・`scripts/claude/fix-review-lib.sh:81`（どれもレビュー役）の 4 か所あり、そこから起きるセッションには書き込みの鍵が渡る（`grep -rnE 'CLAUDE_BIN:-claude\}"? -p|claude -p ' scripts/claude --include=*.sh` で確認）。採った方法: 4 か所にも `GH_APP_READONLY=1` を付け（4-5）、「`scripts/claude/*.sh` の `claude -p` の呼び出しの行はすべて `GH_APP_READONLY=1` を持つ（`test-session.sh` のように `export GH_APP_READONLY=1` するファイルを除く）」を静的なテスト G6 で守る（4-6。起動の所が増えても付け忘れを CI で止める）。PR へのレビューのコメントは、これらのスクリプト自身（`claude -p` の外）が書くので書き込みの鍵のまま動く。見送り: すべての起動を `test-session.sh` に通す案 — 各スクリプトの起動の形（`timeout … claude -p --agent`・`claude -p --permission-mode plan`）を既存のテスト（`test_i193_official_flow.sh` R7・S8・`test_i197_adversarial_process.sh` S1）が見ていて、通し方を変えると守りの検査を作り直すことになる。付け忘れは G6 で止まるので、置き場所を 1 つにしなくても漏れない。あわせて `/simplify` の簡素化・無駄の指摘を反映する（4-1・4-2・4-3・4-6 の中の整理だけ）。計画レビューのやり直し: 要（実装対象のファイルと決定論テストを足し、範囲を変える）
 
 ## レビュー結果
 - [20261105_1259 判定: ✅ 完了](../../reviews/I223_plan_review_20261105_1259.md)

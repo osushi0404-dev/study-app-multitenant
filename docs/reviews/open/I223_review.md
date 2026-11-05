@@ -26,6 +26,8 @@
 - [plan] この端末の入れ直しと `~/.bashrc` の PAT の行の削除は Claude が行い、PAT の失効だけ close でお願いする — 手元の設定は前の版の写し・作り直しで戻せ、失効は持ち主の画面でしかできないため
 - [plan-review] 計画レビュー（20261105_1259）は OK・高リスク No。Warning 4 件は findings への対応の追記だけ（M-05・M-08 を単体のコマンドに・残りの範囲は close で報告）で、やり直しはしない — 方式・範囲・受け入れ条件を変えないため
 - [plan-review] push は段階ごとにせず、review-gate の CI 待ちの前にまとめる — 書き込みの回数を減らす今の方針（I224 まで）のため
+- [implement] `~/.bashrc` の PAT の行の削除は、自動の判定に止められたので回避せず、close でユーザーにお願いする（計画変更記録 2）— 受け入れ条件に含まれない手元の作業で、止められた操作を別の書き方で通すのは判定の意図に反するため
+- [implement] この端末の `~/.local/bin/gh-app-token`・`~/.local/bin/gh` を `install.sh` でリポジトリの版に入れ替えた（前の版は `~/.cache/github-app/backup/`）— 以後の push と `gh` をレビュー対象の版で動かすため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
