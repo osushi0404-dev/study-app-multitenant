@@ -6,7 +6,8 @@ REAL_GH="${GH_APP_REAL_GH:-/usr/bin/gh}"
 if [ -n "${GH_APP_READONLY:-}" ] || [ -z "${GH_APP_DISABLE:-}" ]; then
   src="${BASH_SOURCE[0]}"
   [[ "$src" == */* ]] && dir="${src%/*}" || dir=.   # dirname のプロセスを起こさない（gh・git を呼ぶたびに通る）
-  GH_TOKEN="$("$dir/gh-app-token")" || { echo "gh-app-token: 鍵を受け取れませんでした" >&2; exit 1; }
+  # bash に渡して起こす（実行権に頼らない。core.filemode=false の端末では git が実行権を記録しない・I223 fix-loop）
+  GH_TOKEN="$(bash "$dir/gh-app-token")" || { echo "gh-app-token: 鍵を受け取れませんでした" >&2; exit 1; }
   export GH_TOKEN
 fi
 exec "$REAL_GH" "$@"

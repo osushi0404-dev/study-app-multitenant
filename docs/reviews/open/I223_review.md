@@ -43,6 +43,7 @@
 - [implement] `/simplify` の簡素化・無駄の指摘のうち、ムダな行の削除・環境変数の二重の名前・PATH の確かめの単純化・ファイルの一覧の 1 か所化・リポジトリ名の変数化・時刻と `dirname` のプロセスを起こさない形・壊した写しの確かめで該当のケースだけを流す、を反映した。見送り: `user.name`・`user.email` の確かめのループ化と G1 の読み方の統一（2 行で、ループにしても読みやすくならない）／入口で控えを直接読む案（鍵の扱いが 2 か所に分かれる）／既定値を共有のファイルにまとめる案（2 本のために読み込みの仕組みを足すことになる）
 - [implement] M-03 は計画レビューの指摘どおり前倒しで流し、新しいセッションの Bash の `gh` の書き込みが GitHub に 403 で拒否されたことを確かめた（M-03 の実結果）
 - [review-gate] CI の Harness Tests が失敗した（CI_WAIT: FAIL・run 41968150448）ので fix-loop に回す — 決まりどおり（CI の失敗は fix-loop が直す）
+- [fix-loop] G4 の CI だけの失敗は、実行権が git に記録されない（core.filemode=false）のに入口が `gh-app-token` を直接実行していたため。診断レビュー（20261105_1348・PASS）を通った案 A（`bash` で起こす）で直し、テストの写しを実行権なしにして FG を足した — 実行権に頼らない作りが根治で、git に実行権を記録する案 B はリポジトリの他のスクリプトの決まり（`bash` に渡す）と揃わず、写すたびに落ちるため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

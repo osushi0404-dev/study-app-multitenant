@@ -155,6 +155,8 @@ copy_scripts() {  # copy_scripts <先>（scripts/claude/*.sh と gh-app/ の写�
   mkdir -p "$1/gh-app"
   cp "$REPO_ROOT/scripts/claude/gh-app/gh-app-token" "$REPO_ROOT/scripts/claude/gh-app/gh" "$1/gh-app/" 2>/dev/null
   cp "$REPO_ROOT"/scripts/claude/*.sh "$1/" 2>/dev/null
+  # git は実行権を記録しない（core.filemode=false の端末から入る）ので、CI と同じく実行権なしの写しで確かめる（I223 fix-loop）
+  chmod 644 "$1"/gh-app/* "$1"/*.sh 2>/dev/null
 }
 
 # ---- 本物（リポジトリの版）----
@@ -186,6 +188,9 @@ fg G3 "権限の確かめを消す" gh-app/gh-app-token 's/if os.environ.get("GH
 # sed の式なので $ をそのまま渡す
 # shellcheck disable=SC2016
 fg G4 "GH_APP_READONLY の条件を消す" gh-app/gh 's/\[ -n "\${GH_APP_READONLY:-}" \] || //'
+# 入口が gh-app-token を直接実行すると、実行権の無い写し（CI と同じ）で鍵を受け取れない（I223 fix-loop の再発防止）
+# shellcheck disable=SC2016
+fg G4 "入口が gh-app-token を bash に渡さない" gh-app/gh 's#"$(bash "$dir/gh-app-token")"#"$("$dir/gh-app-token")"#'
 fg G5 "test-session.sh の指定を消す" test-session.sh 's/^export GH_APP_READONLY=1$/:/'
 fg G5 "check-permission-prompt.sh の指定を消す" check-permission-prompt.sh 's/GH_APP_READONLY=1 //'
 fg G5 "review-process-lib.sh の指定を消す" review-process-lib.sh 's/GH_APP_READONLY=1 //'
