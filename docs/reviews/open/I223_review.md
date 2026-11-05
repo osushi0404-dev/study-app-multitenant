@@ -46,6 +46,7 @@
 - [fix-loop] G4 の CI だけの失敗は、実行権が git に記録されない（core.filemode=false）のに入口が `gh-app-token` を直接実行していたため。診断レビュー（20261105_1348・PASS）を通った案 A（`bash` で起こす）で直し、テストの写しを実行権なしにして FG を足した — 実行権に頼らない作りが根治で、git に実行権を記録する案 B はリポジトリの他のスクリプトの決まり（`bash` に渡す）と揃わず、写すたびに落ちるため
 - [review-gate] 2 回目（20261105_1353）は CI 全緑・FINAL_VERDICT: HIGH・敵対的レビューは不要。止める指摘は F1（`tui-capture.sh` が tmux で起こすセッションに読み取りだけの指定が無い）だけで、fix-loop に回す。F2〜F8（Low）は台帳に残し retro へ
 - [fix-loop] F1 は診断レビュー（20261105_1420・PASS）を通った案 A（`tmux new-session -e GH_APP_READONLY=1`）で直し、G6 の対象を tmux の起動にも広げた — 起動のコマンドの文字列を変えないので既存の失敗の注入（test_tui_capture.sh 148 行目）が使え、`-e` は tmux サーバーの環境に関係なく効くため
+- [review-gate] 3 回目（20261105_1410・差分のレビュー）は CI 全緑・FINAL_VERDICT: OK・敵対的レビューは不要。F1 は resolved。F9〜F12（Low）は台帳に残し retro へ — 止める条件に当たらないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -54,3 +55,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
