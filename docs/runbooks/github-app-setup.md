@@ -8,7 +8,7 @@ Claude は GitHub App `osushi0404-claude`（GitHub 上の名前は `osushi0404-c
 
 - App の鍵は 1 時間で切れる。`gh` の入口（`scripts/claude/gh-app/gh` を `~/.local/bin/gh` として入れる）が、`gh` を呼ぶたびに `gh-app-token` から鍵を受け取り、`GH_TOKEN` で本物の `gh`（`/usr/bin/gh`）に渡す。受け取った鍵は `~/.cache/github-app/` に控え、残り 10 分を切ったら取り直す
 - `git push` なども同じ入口を通る（git の credential helper を `!~/.local/bin/gh auth git-credential` にする）
-- テスト用のセッション（`claude -p`）には読み取りだけの鍵を渡す（`GH_APP_READONLY=1`）。`gh issue`・`gh pr`・`gh api`・`git push` のどの書き方でも、書き込みは GitHub が拒否する（HTTP 403）。入口は `scripts/claude/test-session.sh`。`check-permission-prompt.sh`・検証役の起動（`review-process-lib.sh`）も同じ。決まりの正は `docs/runbooks/plan-writing-rules.md`
+- テスト用のセッション（`claude -p`）には読み取りだけの鍵を渡す（`GH_APP_READONLY=1`）。`gh issue`・`gh pr`・`gh api`・`git push` のどの書き方でも、書き込みは GitHub が拒否する（HTTP 403）。手で起こすときの入口は `scripts/claude/test-session.sh`。`scripts/claude/` のスクリプトが Claude を起こす行（`claude -p`・tmux の中の `claude`）にはすべて `GH_APP_READONLY=1` を付ける（レビュー役も同じ。付け忘れは `scripts/claude/tests/test_i223_gh_app.sh` の G6 が CI で止める）。決まりの正は `docs/runbooks/plan-writing-rules.md`
 - GitHub の MCP は使わない（I223 で外した。`docs/runbooks/mcp-usage.md`）
 
 ## 2. App の設定（今の値）

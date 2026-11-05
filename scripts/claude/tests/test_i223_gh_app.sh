@@ -49,7 +49,8 @@ printf '{"token":"ro-token","permissions":%s}' "$RO_PERMS" > "$T/resp_ro.json"
 printf '{"token":"rw-token","permissions":{"contents":"write","issues":"write"}}' > "$T/resp_rw.json"
 printf '{"token":"bad-token","permissions":{"contents":"read","issues":"write"}}' > "$T/resp_bad.json"
 
-# G6: claude -p の呼び出しの論理行（行末の \ でつなぐ・コメントは除く）がすべて GH_APP_READONLY=1 を持つ
+# G6: claude -p の呼び出しと、tmux で claude を起こす行（tui-capture.sh・fix-loop で追加）の論理行
+#     （行末の \ でつなぐ・コメントは除く）がすべて GH_APP_READONLY=1 を持つ
 #     （export GH_APP_READONLY=1 するファイルは除く）。起動の所が増えても付け忘れを止める（計画変更記録 3）
 g6() {
   python3 -I - "$@" <<'PY'
@@ -68,7 +69,8 @@ for path in sys.argv[1:]:
     for l in logical:
         if l.lstrip().startswith("#"):
             continue
-        if re.search(r'claude(\}")? -p\s+(--|"\$)', l) and "GH_APP_READONLY=1 " not in l:
+        launch = re.search(r'claude(\}")? -p\s+(--|"\$)', l) or re.search(r'tmux new-session\b.*\bclaude\b', l)
+        if launch and "GH_APP_READONLY=1 " not in l:
             bad.append(f"{path}: {l.strip()[:120]}")
 for b in bad:
     print(b)
@@ -197,6 +199,7 @@ fg G5 "review-process-lib.sh の指定を消す" review-process-lib.sh 's/GH_APP
 fg G6 "plan-issue-review.sh の指定を消す" plan-issue-review.sh 's/GH_APP_READONLY=1 //'
 fg G6 "複数行の呼び出し（fix-review-lib.sh）の指定を消す" fix-review-lib.sh 's/GH_APP_READONLY=1 //'
 fg G6 "code-review.sh の指定を消す" code-review.sh 's/GH_APP_READONLY=1 //'
+fg G6 "tmux で起こす tui-capture.sh の指定を消す" tui-capture.sh 's/-e GH_APP_READONLY=1 //'
 
 echo "---"
 echo "pass=$pass fail=$fail"

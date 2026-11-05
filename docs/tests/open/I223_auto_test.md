@@ -27,6 +27,13 @@
 - 次回どう防ぐか: リポジトリのスクリプトから別のスクリプトを起こすときは `bash <パス>` で起こす（このリポジトリの決まりと同じ）。テストの写しは実行権を落として CI と同じ条件にする
 - 確かめた結果: `test_i223_gh_app.sh` 17/17（新しい FG を含む。直す前の形に戻した写しでは G4 が不合格）。`install.sh` で入れ直し、疎通を確認
 
+## 再発防止記録（fix-loop 2 回目・2026-11-05・review-gate 20261105_1353 の F1）
+- なぜ失敗したか: tmux の中で `claude` を起こす `tui-capture.sh` もテスト用のセッションの入口だったが、計画の調査と G6 が `claude -p` の形だけを数えていて、読み取りだけの指定が渡っていなかった（診断メモ `docs/reviews/I223_fix_diagnosis_20261105_1420.md`）
+- 何を変えたか: `tmux new-session -e GH_APP_READONLY=1`（tmux サーバーの環境に関係なく新しいセッションに入る）。G6 の対象を「tmux で claude を起こす行」にも広げ、FG を足した。`test_tui_capture.sh` の起動の行の照合を直した
+- セキュリティ上の考慮点: テスト用のセッションから本物の書き込みが起きる経路を 1 つ塞いだ。最後の守りは GitHub の権限（App は develop・main に push・マージできない）
+- 次回どう防ぐか: Claude を起こす行は形を問わず G6 が見る。手順書は「Claude を起こす行はすべて」の決まりの形にして、一覧を持たない
+- 確かめた結果: `test_i223_gh_app.sh` 18/18（tui-capture の FG を含む）・`test_tui_capture.sh` 37/37
+
 ## TC-03 の手順（1 回だけ流す。`bash <このスクリプト> <リポジトリのルート>`）
 ```bash
 set -uo pipefail
