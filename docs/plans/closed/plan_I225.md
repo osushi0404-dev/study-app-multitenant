@@ -202,5 +202,5 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 - 計画変更記録 3（implement・2026-11-06）: 4-2 の「無効の確認」を「`api installation/repositories` が失敗する」から「その標準エラーに `HTTP 401` が出る」に具体化した。理由: 通信の失敗でも `gh api` は失敗するので、失敗だけでは「無効を確認」と取り違える（失効できていないのに控えを消す・fail-open）。2026-11-06 に本物の `gh` で無効な鍵を渡し、`gh: Bad credentials (HTTP 401)`・exit 1 を確かめた。G9 の偽物も 401 の文言を出し、通信の失敗（401 なし）では控えを残して exit 1 になることを足す。計画レビューのやり直し: 不要（4-2 の方式の中の具体化）
 
 ## レビュー結果
-- [20261106_0031 判定: ✅ 完了](../../reviews/I225_plan_review_20261106_0031.md)
-- [20261106_0028 判定: 差し戻し（Blocker 1件）](../../reviews/I225_plan_review_20261106_0028.md)
+- [20261106_0031 判定: ✅ 完了](../../reviews/closed/I225_plan_review_20261106_0031.md)
+- [20261106_0028 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I225_plan_review_20261106_0028.md)
