@@ -26,4 +26,7 @@
 - [plan] 総点検の点検コマンドは `env -u GH_APP_READONLY` でなく `GH_APP_READONLY=`（空）にした — 計画の段階で流したら、ワークツリーの見張りが `env` の形を止めた。入口は空を「指定なし」と読む
 - [plan] GitHub への書き込みをまとめた: ブランチの push・Draft PR の作成は、計画の記録を全部コミットしてから 1 回で行う（I224 の当面の運用。段階ごとに push しない）
 
+- [plan-review] 1 回目の Blocker（控えに無い漏れた鍵が失効しない）は revoke.sh --stdin を足して直し、2 回目で OK。残りの Warning 3 件は計画変更記録 2 で直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない直しのため
+
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement

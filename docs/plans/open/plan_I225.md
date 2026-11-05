@@ -60,6 +60,7 @@ I223 で Claude の GitHub の名義を GitHub App にし、テスト用のセ�
 **修正方針**: 引数が `auth status` で、`--json`・`--jq`・`--template`・`-t`・`--show-token`（`-at` のように短いオプションをまとめた中の `t` を含む）のどれも無いときだけ、本物の `gh` を `auth status <元の引数> --json hosts` で呼び、名義の行だけを出す。`-t`/`--show-token` はわざと鍵を見る操作なので置き換えない（Claude からは見張りの S23・S35 が確認にする）。
 
 - 対象: `scripts/claude/gh-app/gh`（鍵を受け取った後、`exec` の前に足す）
+- 見るのは引数の 1・2 番目が `auth`・`status` のときだけ。`gh -R x auth status` のようにグローバルオプションを前に置く書き方は置き換えない（ふつうの書き方の事故が対象・手順書への書き戻しは G10 が止める。わざと避ける書き方は対象外）
 - 表示: 1 アカウント 1 行 `<host> <login> <tokenSource> <state>`、使用中のものには ` (active)`。`error` の欄は出さない（文言に鍵の一部が入りうるため）
 - 標準エラーに 1 行: `gh: 鍵を画面に出さないよう、auth status を --json の形で表示しました（I225）`
 - 終了コード: `state` がすべて `success` なら 0、1 つでも違えば 1（`--json` なしの元の動きに合わせる。`gh auth status` の終了コードで認証を確かめる書き方を壊さない）。本物の `gh` が失敗したらその終了コード
@@ -195,7 +196,9 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 - 設計品質: 設定値は環境変数で上書きできる既定値（`GH_APP_REAL_GH`・`GH_APP_CACHE_DIR`）を使い、新しい定数を増やさない。エラー時は鍵を出さない側に倒す（入口: 本物の `gh` の失敗はその終了コードで返す・失効: 無効を確かめられなければ控えを消さず exit 1）
 
 ## 計画変更記録
-- 計画変更記録 1（plan-review・2026-11-06・`docs/reviews/I225_plan_review_20261106_0028.md`）: Blocker「控えの鍵だけでは、控えに無い漏れた鍵が失効しない」→ `revoke.sh --stdin`（標準入力で値を受け、その鍵を失効させる）を足し、G9 に入れた（4-2・§9）。Warning: `--strict-mcp-config` と `--mcp-config` の併用をスパイクで実証（調査結果）／M-01 の判定を `! grep -q`（合格=exit 0）にし、コマンドを分けた／イシューの Danger Ops を M-02 の失効に合わせた。Info（変更点の散らばり）は §9 の台帳の判断どおり同梱のまま。計画レビューのやり直し: 要（Blocker の対応で 4-2 の方式を足した）
+- 計画変更記録 1（plan-review・2026-11-06・`docs/reviews/I225_plan_review_20261106_0028.md`）: Blocker「控えの鍵だけでは、控えに無い漏れた鍵が失効しない」→ `revoke.sh --stdin`（標準入力で値を受け、その鍵を失効させる）を足し、G9 に入れた（4-2・§9）。Warning: `--strict-mcp-config` と `--mcp-config` の併用をスパイクで実証（調査結果）／M-01 の判定を `! grep -q`（合格=exit 0）にし、コマンドを分けた／イシューの Danger Ops を M-02 の失効に合わせた。Info（変更点の散らばり）は §9 の台帳の判断どおり同梱のまま。計画レビューのやり直し: 要（Blocker の対応で 4-2 の方式を足した）→ 20261106_0031 で OK
+- 計画変更記録 2（plan-review・2026-11-06・`docs/reviews/I225_plan_review_20261106_0031.md` の Warning）: TC-03 の合否を exit code だけにした／M-03 の期待結果を「一覧に playwright・github が出ない」にし、実際の文言は実結果に写す形にした／4-1 にグローバルオプションを前に置く書き方は置き換えない旨を足した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
+- [20261106_0031 判定: ✅ 完了](../../reviews/I225_plan_review_20261106_0031.md)
 - [20261106_0028 判定: 差し戻し（Blocker 1件）](../../reviews/I225_plan_review_20261106_0028.md)
