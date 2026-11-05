@@ -295,5 +295,5 @@ Danger Ops（有無/手順/ロールバック）:
 - 計画変更記録 5（fix-loop・2026-11-05・test-gate の M-02 の NG）: 手順書と M-02 の確かめ方 `gh auth status` が、App の新しい形式の長い鍵の大部分を画面に出した（`gh` は最後の部分しか伏せない）。出た鍵は失効させ済み。確かめ方を `gh auth status --json hosts --jq …`（名義・鍵の出どころ・状態の欄だけを取り出す）にした（`github-app-setup.md`「5.」・同型の `harness-audit.md` の古い鍵の行・4-8 の 5.・M-02）。診断メモ `docs/reviews/I223_fix_diagnosis_20261105_1450.md`（診断レビュー PASS）。見張りで `gh auth status` を確認にする案は安全装置の変更なので採らず、retro で扱う。計画レビューのやり直し: 不要（手動テストの NG への対応で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
-- [20261105_1315 判定: ✅ 完了](../../reviews/I223_plan_review_20261105_1315.md)
-- [20261105_1259 判定: ✅ 完了](../../reviews/I223_plan_review_20261105_1259.md)
+- [20261105_1315 判定: ✅ 完了](../../reviews/closed/I223_plan_review_20261105_1315.md)
+- [20261105_1259 判定: ✅ 完了](../../reviews/closed/I223_plan_review_20261105_1259.md)

@@ -101,6 +101,7 @@
 - [retro] 台帳の残り（`code-review.sh --route`・記録 20261105_1440）: F7・F9・F13・F14・F15 → I225（#415）にまとめて起票（「次のハーネスの作業で最優先」と書いた。SECURITY=yes を含むため）／F2・F3・F4・F5・F6・F8・F10・F11・F12 → `docs/reviews/backlog/I223.md`（B1〜B4 と同じファイル）
 - [retro] 予防処置 P1（秘密を出す確かめ方を決定論で締め出す・計画レビュー役の観点）は、台帳の残りと同じ仕組みの話なので I225（#415）に入れた（新規起票）— 同梱先の既存イシューが無く、実害（鍵の露出）が出たため
 - [retro] 見送り 4 件（起動の所の数え漏らし・実行権・`~/.bashrc`・M-01 の見張り）— どれもその場で捕まり、決定論のチェックがある・手戻りが小さいため（「## 振り返り」の見送り）
+- [close] base 追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。診断メモ（`docs/reviews/I223_fix_diagnosis_<ts>.md`）は close の回収の対象の形（`_review_`）に当たらないので `docs/reviews/` に残る（今の決まりどおり）
 - [retro] I225 のイシューファイル（`docs/issues/open/I225.md`）と自己完結度レビューの記録は未コミットのまま残す — 起票のハンドオフの決まり（I225 の `/plan-issue` が初コミットする）
 
 STAGE_DONE: plan NEXT: plan-review
