@@ -257,4 +257,4 @@ Danger Ops（有無/手順/ロールバック）:
 2. 実装と /simplify での形の整理（振る舞いは計画どおり）: (a) `revoke_one` は変数 `before`/`after` を使わず `token_state "$1"; case $? in 0) ;; 1) return 3 ;; *) return 1 ;; esac` の形にし、G9 の FG の sed もこの形に合わせた (b) G10 は論理行のループを作らず、`gh auth (status|token)` の後ろを「バッククォートか、`\` の付かない改行まで」で切ってから `\`＋改行を空白にする形にした（同じファイルの `launch_lines_missing` の結合を写さない） (c) フックの出口は 1 か所のまま、文の頭（`syntax error`／`auto_test の宣言漏れ`）だけを変える (d) 偽の gh の `FAKE_NET_AFTER_DELETE` は、最初の DELETE の後に目印のファイルを 1 つ置き、それ以後の読みを通信の失敗にする (e) 既存の FG「--stdin で読んだ値を使わず控えの鍵を使う」の sed を、呼び出しの新しい形（`revoke_one "$leaked"; rc=$?`）に合わせた。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
-- [20261106_2128 判定: ✅ 完了](../../reviews/I226_plan_review_20261106_2128.md)
+- [20261106_2128 判定: ✅ 完了](../../reviews/closed/I226_plan_review_20261106_2128.md)
