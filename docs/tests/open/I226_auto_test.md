@@ -34,6 +34,7 @@
 | 2026-11-06 | TC-02（テストを先に書き、本体を直す前） | 期待どおり NG | `test_i223_gh_app.sh` pass=29 fail=8（G8・G9 がリポジトリの版で NG、新しい FG の sed が当たらない 4 件、G10 の 2 つの `g10_fg` が期待と逆） |
 | 2026-11-06 | TC-03（テストを先に書き、フックを直す前） | 期待どおり NG | `test_posttooluse_check.sh` pass=8 fail=1（TC-10g が rc=0） |
 | 2026-11-06 | TC-01〜TC-05（実装と /simplify の後） | OK | `test_i223_gh_app.sh`・`test_posttooluse_check.sh`（pass=9）・`test_review_gates.sh`・`grep -q` 2 本・`bash -n` 3 本・`py_compile` がすべて exit 0 |
+| 2026-11-06 | TC-01〜TC-05（review-gate の実走・cce1536e） | OK | `code-review.sh` がゲート 9 本を実走しすべて exit=0（`docs/reviews/I226_code_review_20261106_2139.md`）。test-gate に回された重いゲートは無い。gate-check OK（39e3b553） |
 | 2026-11-06 | TC-03 の FG | 期待どおり NG | `HOOK=<develop の posttooluse_check.py の写し>` で pass=8 fail=1（TC-10g が rc=0） |
 
 ## 決定論ゲート（自動実走）

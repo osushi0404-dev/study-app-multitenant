@@ -20,8 +20,8 @@
 - Config: `scripts/claude/gh-app/revoke.sh`・`scripts/claude/gh-app/gh`・`scripts/claude/code-review.sh`・`scripts/claude/hooks/posttooluse_check.py`・`scripts/claude/tests/test_i223_gh_app.sh`・`scripts/claude/tests/test_posttooluse_check.sh`・`docs/runbooks/github-app-setup.md`・`docs/runbooks/plan-writing-rules.md`・`docs/reviews/backlog/I225.md`・`CLAUDE.md`
 
 ## テスト結果
-- 自動: （test-gate で記入）
-- 手動: （test-gate で記入）
+- 自動: OK — review-gate がゲート 9 本を実走し全 exit 0・CI 全緑。test-gate に回された重いゲートは無い（`docs/tests/open/I226_auto_test.md` の実行記録）
+- 手動: OK — M-01〜M-03 をすべて Claude が実施（Human の項目なし）
 
 ## 計画との差分
 - 振る舞いの差分なし。コードの形は計画変更記録 2 のとおり整理した（/simplify）
@@ -38,8 +38,10 @@
 - [implement] /simplify の 4 つの観点の指摘のうち、G10 の結合の写し・フックの出口が 2 本・`revoke_one` の余計な変数・偽の gh の余計なファイルは直した。`omission_lint` を別のライブラリに出す案（高さの観点・Low）は見送った — `--route` と同じ入口の形にそろえてあり、本体が壊れたときは TC-10g が捕まえる
 - [implement] shellcheck は手元に無いので、commit 時の pre-commit と CI に任せた
 - [review-gate] FINAL_VERDICT: OK・ADVERSARIAL_STAGE: NOT_REQUIRED（20261106_2139・CI 全緑・ゲート 9 本 exit 0）。台帳の F1（Medium・G10 の `\b` が和文の続く書き方を見落とす後退）〜F5（Low）は止める指摘でないので直さず、retro に回す — fix-loop が直すのは止める指摘だけ（I197）
+- [test-gate] gate-check OK。M-01（本物の GitHub に、ありえない形の鍵）・M-02（このセッションのフック）・M-03（ログインなしの入口）を自分で行い、すべて OK — どれも Claude が観測できる。M-01 は最初の読みが 401 なので DELETE を送らず、本物の鍵には触れていない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
