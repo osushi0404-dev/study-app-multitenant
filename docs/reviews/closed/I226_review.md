@@ -80,6 +80,7 @@
 - [retro] 台帳の残りの振り分け: F1（Medium・SECURITY=yes）→ I212（#358）のイシューファイルに同梱 6（次のハーネスの作業で最優先）／F2〜F5（Low）→ `docs/reviews/backlog/I226.md` — `code-review.sh --route` の結果に従った。F1 は 1 文字の直しとテスト 1 つなので新しいイシューを作らず、次に着手するハーネスのイシューに入れた（I223 → I225 → I226 と後続が続くのを止める）。#358 は bot の停止で GitHub から見えずコメントできないため、手元のイシューファイルに書き、コメントは停止が解けてから付ける
 - [retro] 予防処置は足さない — 見落としは review-gate がその場で捕まえ、直し方も決まっている（2.7 の問 2）
 - [retro] マージの後に手元の入口を入れ直す（`bash scripts/claude/gh-app/install.sh`）— `~/.local/bin/gh` は写しなので、入れ直すまで F2 の直しが手元の `gh` に効かない（計画 §8）。close のマージ依頼に書く
+- [close] PR #418 を Ready にし、最終チェック（BEHIND でない・CI 全緑）を通した。マージ依頼にあわせて、マージの後に手元の入口を入れ直す（`bash scripts/claude/gh-app/install.sh`）ことを伝える — 入口は写しなので、入れ直すまで F2 の直しが手元の `gh` に効かない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -87,3 +88,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
