@@ -37,7 +37,9 @@
 - [implement] フックがこのワークツリーの版を動かすことを、実装の直後に M-02 の手順で確かめた（宣言漏れの知らせが届き、見出しを直すと消えた。確かめ用のファイルは消した） — 計画レビューの Warning 1。新しいセッションでの確かめは要らなかった
 - [implement] /simplify の 4 つの観点の指摘のうち、G10 の結合の写し・フックの出口が 2 本・`revoke_one` の余計な変数・偽の gh の余計なファイルは直した。`omission_lint` を別のライブラリに出す案（高さの観点・Low）は見送った — `--route` と同じ入口の形にそろえてあり、本体が壊れたときは TC-10g が捕まえる
 - [implement] shellcheck は手元に無いので、commit 時の pre-commit と CI に任せた
+- [review-gate] FINAL_VERDICT: OK・ADVERSARIAL_STAGE: NOT_REQUIRED（20261106_2139・CI 全緑・ゲート 9 本 exit 0）。台帳の F1（Medium・G10 の `\b` が和文の続く書き方を見落とす後退）〜F5（Low）は止める指摘でないので直さず、retro に回す — fix-loop が直すのは止める指摘だけ（I197）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
