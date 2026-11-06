@@ -51,13 +51,15 @@ EOF
 cat > "$STUB/real-gh-revoke" <<'EOF'
 #!/usr/bin/env bash
 # 偽の本物の gh（G9）: 「鍵 引数」を $FAKE_GH_ARGS に書く。DELETE は $FAKE_REVOKED に鍵を足す（$FAKE_NO_REVOKE なら足さない）。
-# 読みに行くと、失効した鍵なら 401 の文言で 1、$FAKE_NET_DOWN なら通信の失敗で 1、それ以外は 0
+# 読みに行くと、失効した鍵なら 401 の文言で 1、$FAKE_NET_DOWN なら通信の失敗で 1、それ以外は 0。
+# $FAKE_NET_AFTER_DELETE なら、最初の DELETE の後の読みをすべて通信の失敗にする（I226: DELETE の後の分岐）
 echo "${GH_TOKEN:-<none>} $*" >> "$FAKE_GH_ARGS"
 if [ "${1:-} ${2:-} ${3:-}" = "api -X DELETE" ]; then
   [ -n "${FAKE_NO_REVOKE:-}" ] || echo "${GH_TOKEN:-}" >> "$FAKE_REVOKED"
+  [ -z "${FAKE_NET_AFTER_DELETE:-}" ] || : > "$FAKE_REVOKED.netdown"
   exit 0
 fi
-if [ -n "${FAKE_NET_DOWN:-}" ]; then echo "gh: dial tcp: lookup api.github.com: no such host" >&2; exit 1; fi
+if [ -n "${FAKE_NET_DOWN:-}" ] || [ -e "$FAKE_REVOKED.netdown" ]; then echo "gh: dial tcp: lookup api.github.com: no such host" >&2; exit 1; fi
 if grep -qxF "${GH_TOKEN:-}" "$FAKE_REVOKED" 2>/dev/null; then echo "gh: Bad credentials (HTTP 401)" >&2; exit 1; fi
 exit 0
 EOF
@@ -107,8 +109,8 @@ PY
 }
 
 # G10（I225）: 決まりの置き場（CLAUDE.md・docs/runbooks・.claude/skills・.claude/agents・scripts/claude〔tests を除く〕・
-#     docs/*/templates）に、鍵を画面に出す auth status の書き方（--json なし、または -t/--show-token 付き）が無い。
-#     出てくるたびに、そのあとから行末か次のバッククォートまでの語を見る。個々のイシューの記録は対象外（plan_I225.md §9）
+#     docs/*/templates）に、鍵を画面に出す書き方（--json なし、または -t/--show-token 付きの auth status・auth token）が無い。
+#     auth status は、出てくるたびに、そのあとから行末か次のバッククォートまでの語を見る（行末の \ で続く行はつなぐ・I226）。auth token は鍵を丸ごと出すので、語を問わず不合格（I226）。個々のイシューの記録は対象外（plan_I225.md §9）
 g10() {  # g10 <ルート>
   python3 -I - "$1" <<'PY'
 import os, re, sys
@@ -134,14 +136,15 @@ for f in files:
         text = open(f, encoding="utf-8").read()
     except (UnicodeDecodeError, OSError):
         continue
-    for m in re.finditer(r"gh auth status", text):
-        rest = re.split(r"[`\n]", text[m.end():], maxsplit=1)[0]
+    for m in re.finditer(r"gh auth (status|token)\b", text):
+        # 次のバッククォートか、行末の \ の付かない改行までを見る（\ で続く行はつなぐ）
+        rest = re.split(r"`|(?<!\\)\n", text[m.end():], maxsplit=1)[0].replace("\\\n", " ")
         toks = rest.split()
         has_json = any(t.startswith("--json") for t in toks)
         shows = any(t == "--show-token" or re.fullmatch(r"-[A-Za-z]*t[A-Za-z]*", t) for t in toks)
-        if not has_json or shows:
+        if m.group(1) == "token" or not has_json or shows:
             line = text.count("\n", 0, m.start()) + 1
-            bad.append(f"{os.path.relpath(f, root)}:{line}: gh auth status{rest[:60]}")
+            bad.append(f"{os.path.relpath(f, root)}:{line}: {m.group(0)}{rest[:60]}")
 for b in bad:
     print(b)
 sys.exit(1 if bad else 0)
@@ -250,6 +253,11 @@ github.com old /x/hosts.yml success" ] || r=NG
   [ "$rc" = 1 ] || r=NG                       # state が success でないものがあれば 1
   [[ "$out" != *SECRET* ]] || r=NG            # error の欄は出さない
   [ "$out" = "github.com bot GH_TOKEN error (active)" ] || r=NG
+  # ログインなし（hosts が空）は 1。案内の文は本物の gh が標準エラーに出すので、標準出力は空（I226・F2）
+  printf '%s' '{"hosts":{}}' > "$W/g8empty.json"
+  out=$(g8 "$W/g8empty.json" auth status); rc=$?
+  [ "$rc" = 1 ] || r=NG
+  [ -z "$out" ] || r=NG
   # わざと鍵を見る書き方・--json・ほかのコマンドは置き換えない
   for args in "auth status -t" "auth status --show-token" "auth status -at" "auth status --json hosts" "pr list"; do
     : > "$A"
@@ -265,7 +273,7 @@ github.com old /x/hosts.yml success" ] || r=NG
   r=OK
   local C="$W/g9c" A="$W/g9args" V="$W/g9rev" out2
   rv() { GH_APP_REAL_GH="$STUB/real-gh-revoke" GH_APP_CACHE_DIR="$C" FAKE_GH_ARGS="$A" FAKE_REVOKED="$V" bash "$S/gh-app/revoke.sh" "$@" 2>&1; }
-  mkcache() { rm -rf "$C"; mkdir -p "$C"; : > "$A"; : > "$V"
+  mkcache() { rm -rf "$C"; mkdir -p "$C"; : > "$A"; : > "$V"; rm -f "$V.netdown"
               printf '%s %s\n' 9999999999 rw-1 > "$C/token"; printf '%s %s\n' 9999999999 ro-1 > "$C/token-readonly"; }
   [ -f "$S/gh-app/revoke.sh" ] || r=NG
   # a) 2 つとも失効・確認・消す。鍵の値は出さない
@@ -295,6 +303,23 @@ github.com old /x/hosts.yml success" ] || r=NG
   # f) 使い方の誤り → 2
   printf '' | rv --stdin > /dev/null; [ $? = 2 ] || r=NG
   rv --bogus > /dev/null; [ $? = 2 ] || r=NG
+  # g) --stdin に最初から無効な鍵（貼り間違い・失効済み）→ 1。「失効を確認」と出さず、DELETE も送らない。値は出さない（I226・F1）
+  mkcache
+  echo bad-x > "$V"
+  if out2=$(printf 'bad-x\n' | rv --stdin); then r=NG; fi
+  [[ "$out2" == *最初から無効* && "$out2" != *失効を確認* && "$out2" != *bad-x* ]] || r=NG
+  ! grep -q '^bad-x api -X DELETE' "$A" || r=NG
+  # h) 控えの token だけ最初から無効（期限切れ）→ 0。2 つとも控えを消し、token は「もともと無効」と出す
+  mkcache
+  echo rw-1 > "$V"
+  out2=$(rv) || r=NG
+  [ ! -e "$C/token" ] && [ ! -e "$C/token-readonly" ] || r=NG
+  [[ "$out2" == *"token: もともと無効"* ]] || r=NG
+  # i) 失効の前の読みは成功し、DELETE の後の読みだけ通信の失敗 → 1・控えは残す
+  mkcache
+  if FAKE_NO_REVOKE=1 FAKE_NET_AFTER_DELETE=1 rv > /dev/null; then r=NG; fi
+  [ -f "$C/token" ] && [ -f "$C/token-readonly" ] || r=NG
+  grep -q '^rw-1 api -X DELETE' "$A" || r=NG
   echo "G9 $r"
   fi
 }
@@ -353,12 +378,15 @@ fg G7 "code-review.sh の --strict-mcp-config を消す" code-review.sh 's/ --st
 fg G7 "tmux で起こす tui-capture.sh の --strict-mcp-config を消す" tui-capture.sh 's/ --strict-mcp-config//'
 # shellcheck disable=SC2016  # sed の式なので $ をそのまま渡す
 fg G8 "入口の置き換えの分岐を消す" gh-app/gh 's/if \[ "\${1:-}" = auth \] && \[ "\${2:-}" = status \]; then/if false; then/'
-fg G8 "state の判定を消す（いつも 0）" gh-app/gh 's/sys.exit(0 if ok else 1)/sys.exit(0)/'
+fg G8 "state の判定を消す（いつも 0）" gh-app/gh 's/sys.exit(0 if ok and n else 1)/sys.exit(0)/'
+fg G8 "アカウントの数の確かめを消す（ログインなしで 0）" gh-app/gh 's/sys.exit(0 if ok and n else 1)/sys.exit(0 if ok else 1)/'
 fg G9 "控えの名前の一覧から token-readonly を消す" gh-app/revoke.sh 's/for name in token token-readonly; do/for name in token; do/'
 # shellcheck disable=SC2016  # sed の式なので $ をそのまま渡す
 fg G9 "401 の確かめを消す（失敗なら無効とみなす）" gh-app/revoke.sh 's/\[\[ "\$out" == \*"HTTP 401"\* \]\]/[ -n "$out" ]/'
 # shellcheck disable=SC2016  # sed の式なので $ をそのまま渡す
-fg G9 "--stdin で読んだ値を使わず控えの鍵を使う" gh-app/revoke.sh 's/if revoke_one "\$leaked"; then/if revoke_one "$(cut -d" " -f2 "$CACHE_DIR\/token")"; then/'
+fg G9 "--stdin で読んだ値を使わず控えの鍵を使う" gh-app/revoke.sh 's/revoke_one "\$leaked"; rc=\$?/revoke_one "$(cut -d" " -f2 "$CACHE_DIR\/token")"; rc=$?/'
+# shellcheck disable=SC2016  # sed の式なので $ をそのまま渡す
+fg G9 "失効の前の確かめを消す（もともと無効でも失効を確認と出す）" gh-app/revoke.sh 's/case \$? in 0) ;; 1) return 3 ;; \*) return 1 ;; esac/:/'
 
 # G10 の FG: 一時フォルダの手順書に鍵を出す書き方を書くと不合格、--json の形だけなら合格
 g10_fg() {  # g10_fg <説明> <期待の終了コード> <手順書の 1 行>
@@ -375,6 +403,10 @@ g10_fg "--json に -t を足すと不合格" 1 '確かめる: `gh auth status --
 g10_fg "本物の gh を直接呼ぶ形も不合格" 1 '確かめる: `/usr/bin/gh auth status -a`'
 # shellcheck disable=SC2016
 g10_fg "--json の形だけなら合格" 0 '確かめる: `gh auth status --json hosts --jq '"'"'.hosts[][] | .login'"'"'`'
+# I226（F6）: 鍵を丸ごと出す auth token は不合格。行末の \ で分けた --json 付きの書き方は合格
+# shellcheck disable=SC2016
+g10_fg "auth token は不合格" 1 '鍵を見る: `gh auth token`'
+g10_fg "行末の \\ で分けた --json は合格" 0 "$(printf 'gh auth status \\\n  --json hosts')"
 
 echo "---"
 echo "pass=$pass fail=$fail"

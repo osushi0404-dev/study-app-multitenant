@@ -21,15 +21,18 @@ if [ "${1:-}" = auth ] && [ "${2:-}" = status ]; then
   if [ "$plain" = 1 ]; then
     echo "gh: 鍵を画面に出さないよう、auth status を --json の形で表示しました（I225）" >&2
     json="$("$REAL_GH" auth status "${@:3}" --json hosts)" || exit $?
-    # 1 アカウント 1 行。error の欄は出さない（文言に鍵の一部が入りうる）。state がすべて success なら 0（--json なしの終了コードに合わせる）
+    # 1 アカウント 1 行。error の欄は出さない（文言に鍵の一部が入りうる）。state がすべて success なら 0（--json なしの終了コードに合わせる）。
+    # アカウントが 1 つも無い（ログインなし）ときも 1（案内の文は本物の gh が標準エラーに出す・I226）
     printf '%s' "$json" | python3 -I -c '
 import json, sys
 ok = True
+n = 0
 for accounts in json.load(sys.stdin).get("hosts", {}).values():
     for a in accounts:
+        n += 1
         ok = ok and a.get("state") == "success"
         print(" ".join(str(a.get(k, "")) for k in ("host", "login", "tokenSource", "state")) + (" (active)" if a.get("active") else ""))
-sys.exit(0 if ok else 1)
+sys.exit(0 if ok and n else 1)
 '
     exit $?
   fi
