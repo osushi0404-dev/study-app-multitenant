@@ -26,5 +26,7 @@
 ## 自律判断の記録
 - [plan] omission-lint を流す場所を PostToolUse のフックにした — pre-commit は CI の `--all-files` で古い open の I034 が落ち、避けると `ci.yml` も直すことになり高リスクのパスに当たる。スキルの手順は流し忘れる。フックは決定論で最も早く、高リスクのパスでない（plan_I226.md §9）
 - [plan] F2 は終了コードだけ直す — スパイクで本物の `gh` が「ログインしていない」の案内を標準エラーに出すことを確かめた（文を足すと 2 回出る）
+- [plan-review] PLAN_VERDICT: OK（20261106_2128）。Warning 3 件は計画書・テスト文書に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録 1）。Info の戻り値の定数化は見送り — コメントで足りる
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
