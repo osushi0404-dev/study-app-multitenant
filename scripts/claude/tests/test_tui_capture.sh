@@ -65,7 +65,8 @@ t1() {
   [ "$(grep -cxF "kill-session -t $S" "$LOG")" -eq 1 ] || return 1
   # 4 つの行がこの順にある（どれかが無ければ行番号が空で不合格）: new-session < send-keys < 最後の capture-pane < kill-session
   local n s c k
-  n=$(grep -nxF "new-session -d -s $S -e GH_APP_READONLY=1 -x 200 -y 50 -c $REPO_ROOT claude --permission-mode manual" "$LOG" | cut -d: -f1)
+  # I225: 入口のある PATH（~/.local/bin を先頭に、呼び出し元の PATH＝run_with の $FAKE:$PATH）と --strict-mcp-config を渡す
+  n=$(grep -nxF "new-session -d -s $S -e GH_APP_READONLY=1 -e PATH=$HOME/.local/bin:$FAKE:$PATH -x 200 -y 50 -c $REPO_ROOT claude --permission-mode manual --strict-mcp-config" "$LOG" | cut -d: -f1)
   s=$(grep -nxF "send-keys -t $S -l -- /plan-" "$LOG" | cut -d: -f1)
   c=$(grep -nxF "capture-pane -p -t $S" "$LOG" | tail -1 | cut -d: -f1)
   k=$(grep -nxF "kill-session -t $S" "$LOG" | cut -d: -f1)
@@ -133,6 +134,10 @@ M="$(mutant fg_t1 "trap 'tmux kill-session" "trap ': tmux-kill-session")"
 ck "FG の写し T1 が作れた" 0 "$(made "$M")"
 [ -n "$M" ] && { run_with "$M" --wait 0 '/plan-' >/dev/null; ck "FG-T1 後始末を消すと T1 不合格" 1 "$(rc t1)"; }
 
+M="$(mutant fg_t1b '-e "PATH=$HOME/.local/bin:$PATH" ' '')"
+ck "FG の写し T1b が作れた" 0 "$(made "$M")"
+[ -n "$M" ] && { run_with "$M" --wait 0 '/plan-' >/dev/null; ck "FG-T1b 入口のある PATH を渡さないと T1 不合格" 1 "$(rc t1)"; }
+
 M="$(mutant fg_t2 '=~ ^[[:space:]]*!' '=~ ^NEVER-MATCH')"
 ck "FG の写し T2 が作れた" 0 "$(made "$M")"
 [ -n "$M" ] && ck "FG-T2 ! の判定を消すと通ってしまう" 0 "$(run_with "$M" --wait 0 '!ls')"
@@ -145,7 +150,7 @@ M="$(mutant fg_t6 '[ "$waited" -lt "$START_TIMEOUT" ] ||' 'break;')"
 ck "FG の写し T6 が作れた" 0 "$(made "$M")"
 [ -n "$M" ] && ck "FG-T6 時間切れの判定を消すと 0 になる" 0 "$(TUI_FAKE_NOPROMPT=1 run_with "$M" --start-timeout 0 --wait 0 '/x')"
 
-M="$(mutant fg_t8 '"claude --permission-mode manual"' '"claude --permission-mode manual $*"')"
+M="$(mutant fg_t8 '"claude --permission-mode manual --strict-mcp-config"' '"claude --permission-mode manual --strict-mcp-config $*"')"
 ck "FG の写し T8 が作れた" 0 "$(made "$M")"
 [ -n "$M" ] && ck "FG-T8 起動の行に引数を足すと T8 不合格" 1 "$(rc t8 "$M")"
 

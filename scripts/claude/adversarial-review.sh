@@ -178,7 +178,7 @@ run_experiment_agent() {
     --model haiku --tools "Bash" \
     --permission-mode auto --permission-prompts none \
     --setting-sources user --settings .claude/settings.json \
-    --strict-mcp-config --no-session-persistence \
+    --no-session-persistence \
     --max-budget-usd "${ADV_EXEC_BUDGET}"
 }
 

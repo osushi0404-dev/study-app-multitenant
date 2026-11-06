@@ -66,10 +66,12 @@ else
   cd "$ROOT" || exit 2
   LOG="$(mktemp)"
   trap 'rm -f "$LOG"' EXIT
+  # MCP は --mcp-config で渡したものだけ（--strict-mcp-config・I225）。mcp の判定ではこのワークツリーの .mcp.json だけを読み、
   # bash の判定では MCP サーバーを起動しない（判定に要らず、起動の分だけ遅くなる）
-  if [ "$KIND" = "mcp" ]; then MCP_ARGS=(--mcp-config .mcp.json); else MCP_ARGS=(--strict-mcp-config); fi
+  MCP_ARGS=()
+  if [ "$KIND" = "mcp" ]; then MCP_ARGS=(--mcp-config .mcp.json); fi
   # I223: GitHub へは読み取りだけの App の鍵（承認なしで通る判定でも、GitHub への書き込みは GitHub が拒否する）
-  if ! GH_APP_READONLY=1 "${CLAUDE_BIN:-claude}" -p "$PROMPT" \
+  if ! GH_APP_READONLY=1 "${CLAUDE_BIN:-claude}" -p "$PROMPT" --strict-mcp-config \
       --model haiku \
       --permission-mode manual \
       --permission-prompts none \

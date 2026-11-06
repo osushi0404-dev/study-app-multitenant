@@ -42,7 +42,9 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || err "git のワークツ�
 S="tui-capture-$$"
 trap 'tmux kill-session -t "$S" >/dev/null 2>&1' EXIT
 # I223: テスト用のセッションなので GitHub へは読み取りだけの App の鍵（-e で渡す。tmux サーバーの環境に関係なく入る）
-tmux new-session -d -s "$S" -e GH_APP_READONLY=1 -x 200 -y 50 -c "$ROOT" "claude --permission-mode manual" || err "tmux のセッションを起動できません"
+# I225: PATH も -e で渡し、先頭に gh の入口（install.sh が入れる ~/.local/bin/gh）を置く。先に立っていた tmux サーバーの PATH に
+#       ~/.local/bin が無くても、中の claude の gh は入口を通る。MCP は読まない（--strict-mcp-config。手元の設定の MCP で鍵を迂回しない）
+tmux new-session -d -s "$S" -e GH_APP_READONLY=1 -e "PATH=$HOME/.local/bin:$PATH" -x 200 -y 50 -c "$ROOT" "claude --permission-mode manual --strict-mcp-config" || err "tmux のセッションを起動できません"
 
 PROMPT_RE=$'(^|\n)❯'
 waited=0
