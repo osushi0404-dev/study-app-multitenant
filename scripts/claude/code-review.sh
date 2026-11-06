@@ -911,6 +911,19 @@ if [ "${1:-}" = "--route" ]; then
   ledger_route "$2" "$rec"; exit $?
 fi
 
+# I226: 自動テスト文書の見出しの検査だけを流す（PostToolUse のフックが使う）: --lint-auto-test <ファイル>…。レビューは動かさない。
+# 決定論ゲートの見出しの外の bash ブロックにゲートのコマンドがあれば（見出しの書き違い・宣言漏れ）標準エラーに出して 1
+if [ "${1:-}" = "--lint-auto-test" ]; then
+  [ $# -ge 2 ] || { echo "Usage: $0 --lint-auto-test <auto_test.md>…" >&2; exit 2; }
+  rc=0
+  for f in "${@:2}"; do
+    [ "$(omission_lint "$f")" = OK ] && continue
+    echo "$f: 「## 決定論ゲート（自動実走）」の節の外の bash ブロックにゲートのコマンドがあります（見出しの書き違いか宣言漏れ）。ひな形 docs/tests/templates/auto_test_template.md の見出しに合わせてください。直さないと review-gate が HIGH にします" >&2
+    rc=1
+  done
+  exit "$rc"
+fi
+
 # I197: 別プロセスのレビュー役を「時間上限つき・承認なし・途中の出力を残す」で起動し、記録を読む関数
 # （関数だけを読み込む使い方〔gate-check・テストの写し〕には要らないので、本体でだけ読む）
 # shellcheck source=scripts/claude/review-process-lib.sh disable=SC1091  # -x なしの単体の検査（TC-C1）でもたどらない。ライブラリは別に検査される

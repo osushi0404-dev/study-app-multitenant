@@ -52,5 +52,18 @@ run_hook "$TMP/bad.txt"; expect "TC-10e 対象外の拡張子は exit 0" 0 ""
 
 run_hook ""; expect "TC-10f file_path なしは exit 0" 0 ""
 
+# I226: 自動テスト文書（docs/tests/open/I<数字>_auto_test.md）は、決定論ゲートの宣言漏れ（omission-lint）も見る
+D="$TMP/docs/tests/open"; mkdir -p "$D"
+auto_doc() {  # auto_doc <ファイル> <見出し>: 見出しの下の bash ブロックにゲートのコマンドを 1 行書く
+  # shellcheck disable=SC2016  # バッククォートは文書の文字そのもの
+  printf '# I999 自動テスト\n\n%s\n```bash\nbash scripts/claude/tests/test_i223_gh_app.sh\n```\n' "$2" > "$1"
+}
+auto_doc "$D/I999_auto_test.md" "## 決定論ゲート（自動実行）"
+run_hook "$D/I999_auto_test.md"; expect "TC-10g 見出しを 1 語違えた auto_test は exit 2" 2 "宣言漏れ"
+auto_doc "$D/I999_auto_test.md" "## 決定論ゲート（自動実走）"
+run_hook "$D/I999_auto_test.md"; expect "TC-10h ひな形どおりの見出しの auto_test は exit 0" 0 ""
+auto_doc "$D/I999_manual_test.md" "## 決定論ゲート（自動実行）"
+run_hook "$D/I999_manual_test.md"; expect "TC-10i 対象外の名前（manual_test）は exit 0" 0 ""
+
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

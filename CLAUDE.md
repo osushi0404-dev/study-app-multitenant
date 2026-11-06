@@ -53,4 +53,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 3. 権限と二重ガード
 - 権限（allow/ask/deny）は .claude/settings.json
 - hooks（PreToolUse）で危険操作をブロックする（scripts/claude/hooks/pretooluse_guard.py）
-- hooks（PostToolUse）で Edit/Write 直後の .py/.json/.yaml 構文を検証する（scripts/claude/hooks/posttooluse_check.py）
+- hooks（PostToolUse）で Edit/Write 直後の .py/.json/.yaml 構文と、自動テスト文書の決定論ゲートの宣言漏れを検証する（scripts/claude/hooks/posttooluse_check.py）

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: syntax check for .py / .json / .yaml files after Edit or Write."""
+"""PostToolUse hook: Edit/Write の直後に、.py / .json / .yaml の構文と、
+自動テスト文書（docs/tests/open/I<数字>_auto_test.md）の決定論ゲートの宣言漏れ（omission-lint・I226）を見る。"""
 import json
 import py_compile
+import re
+import subprocess  # nosec B404 — 決まったスクリプトを引数の配列で起こすだけ（shell を通さない）
 import sys
+from pathlib import Path
+
+AUTO_TEST_RE = re.compile(r"(^|/)docs/tests/open/I\d+_auto_test\.md$")
+CODE_REVIEW = Path(__file__).resolve().parent.parent / "code-review.sh"
 
 
 def _load() -> dict:
@@ -42,6 +49,19 @@ def _check_yaml(path: str) -> str | None:
         return str(e)
 
 
+def _check_auto_test(path: str) -> str | None:
+    # 判定の本体は code-review.sh の omission_lint（写しを作らない・I226）。流せないときは黙って通す（review-gate がもう一度見る）
+    try:
+        r = subprocess.run(  # nosec B603 — 引数の配列・shell=False。path はフックの JSON のファイルのパス
+            ["bash", str(CODE_REVIEW), "--lint-auto-test", path],
+            capture_output=True, text=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 1:
+        return None
+    return r.stderr.strip() or None
+
+
 def main() -> None:
     data = _load()
     tool_input = data.get("tool_input") or {}
@@ -49,6 +69,7 @@ def main() -> None:
     if not path:
         sys.exit(0)
 
+    label = "syntax error"
     try:
         if path.endswith(".py"):
             error = _check_python(path)
@@ -56,6 +77,9 @@ def main() -> None:
             error = _check_json(path)
         elif path.endswith((".yaml", ".yml")):
             error = _check_yaml(path)
+        elif AUTO_TEST_RE.search(path):
+            error = _check_auto_test(path)
+            label = "auto_test の宣言漏れ"
         else:
             sys.exit(0)
     except OSError:
@@ -63,7 +87,7 @@ def main() -> None:
         sys.exit(0)
 
     if error:
-        print(f"[posttooluse] syntax error in {path}:\n{error}", file=sys.stderr)
+        print(f"[posttooluse] {label} in {path}:\n{error}", file=sys.stderr)
         # PostToolUse で stderr を Claude に届けるのは exit 2 だけ（exit 1 は届かない・hooks.md）
         sys.exit(2)
 
