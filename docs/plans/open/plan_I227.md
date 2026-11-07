@@ -103,13 +103,13 @@ official_output_readable() {   # $1=種類（code / security） $2=出力
   esac
 }
 
-# I227: 出力に、JSON として読める指摘の配列があるか（exit 0＝ある）。```json（または ```）の囲みの中を順に試し、
+# I227: 出力に、JSON として読める指摘の配列があるか（exit 0＝ある）。```（言語名は何でもよい）の囲みの中を順に試し、
 # 囲みが 1 つも無ければ出力全体を試す。どれかが「要素がすべて "file" を持つオブジェクトの配列」なら読めた結果
 official_findings_json_present() {   # $1=出力
   python3 -I -c '
 import json, re, sys
 text = sys.stdin.read()
-blocks = re.findall(r"^```(?:json)?[ \t]*\n(.*?)^```[ \t]*$", text, re.M | re.S) or [text]
+blocks = re.findall(r"^```[A-Za-z0-9_+-]*[ \t]*\n(.*?)^```[ \t]*$", text, re.M | re.S) or [text]
 def ok(s):
     try:
         v = json.loads(s)
@@ -147,7 +147,7 @@ sys.exit(0 if any(ok(b) for b in blocks) else 1)
 - `scripts/claude/tests/test_i212_review_base.sh`:
   - `osv` を 3 引数（`<RISK_PATH> <NO_DELTA> <出力>`、4 つ目に写し）にし、U7 の各ケースは `NO_DELTA=0` で呼ぶ。U7 の「差分なしで動かしていない → OK」は `NO_DELTA=1` に替える
   - U9（新規・`official_security_verdict` の「差分なし」）: YES＋`NO_DELTA=0`＋出力 `(実行していない: 差分なし)` だけ → HIGH／YES＋`NO_DELTA=0`＋本文の中に `(実行していない: 差分なし)` を引用した文があり判定の行が無い → HIGH／YES＋`NO_DELTA=1`＋出力が空 → OK／YES＋`NO_DELTA=1`＋判定の行が無い文 → OK／YES＋`NO_DELTA=` 空＋判定の行が無い → HIGH
-  - U10（新規・`official_output_readable`）: `code`＋```` ```json ```` の囲みの指摘の配列（`"file"` つき）→ 読めた／`code`＋囲みの中が `[]` → 読めた／`code`＋囲みが無い裸の配列 `[ {"file": "a.sh"} ]` → 読めた／`code`＋和文の「指摘はありません。」だけ → 読めていない／`code`＋英文の `No issues found.` だけ → 読めていない／`code`＋本文に `"file": "a.sh"` の語があるだけ（JSON として読めない）→ 読めていない／`code`＋配列だが要素に `"file"` が無い（`[1, 2]`）→ 読めていない／`code`＋`SECURITY_FINDINGS: 0` の行だけ → 読めていない／`security`＋`SECURITY_FINDINGS: 0` の行 → 読めた／`security`＋指摘の配列だけ（判定の行なし）→ 読めていない／`security`＋和文の「報告する脆弱性はありません。」だけ → 読めていない／種類なし（空）＋指摘の配列 → 読めていない
+  - U10（新規・`official_output_readable`）: `code`＋```` ```json ```` の囲みの指摘の配列（`"file"` つき）→ 読めた／`code`＋囲みの中が `[]` → 読めた／`code`＋囲みが無い裸の配列 `[ {"file": "a.sh"} ]` → 読めた／`code`＋```` ```python ```` の囲みの後に ```` ```json ```` の囲みの指摘の配列 → 読めた（囲みの組が食い違わない）／`code`＋和文の「指摘はありません。」だけ → 読めていない／`code`＋英文の `No issues found.` だけ → 読めていない／`code`＋本文に `"file": "a.sh"` の語があるだけ（JSON として読めない）→ 読めていない／`code`＋配列だが要素に `"file"` が無い（`[1, 2]`）→ 読めていない／`code`＋`SECURITY_FINDINGS: 0` の行だけ → 読めていない／`security`＋`SECURITY_FINDINGS: 0` の行 → 読めた／`security`＋指摘の配列だけ（判定の行なし）→ 読めていない／`security`＋和文の「報告する脆弱性はありません。」だけ → 読めていない／種類なし（空）＋指摘の配列 → 読めていない
   - 今の U7 の最後（`official_output_readable` の 1 ケース）は U10 の `security` の行に移す
   - E2（既存）: パス判定 YES のブランチで、見終えた記録の後に記録の場所だけ変えた 3 周目は `NO_DELTA=1` → `REVIEW_COMPLETE: YES`（＝`SECURITY_VERDICT` が OK）。本体の呼び出しが `NO_DELTA` を渡すことを通しで固定する（変えない）
   - FG（`broken` の写し）:
@@ -159,7 +159,7 @@ sys.exit(0 if any(ok(b) for b in blocks) else 1)
 - `scripts/claude/tests/test_i193_official_flow.sh`:
   - C8 の 4 ケースを `official_output_readable code …` の形にする。「指摘の配列（`"file":`）は読めた結果」の入力を JSON として読める配列にする（今の入力 `[ {"file": "a.sh", "line": 1} ]` はそのまま読める）。「空の配列だけの行は読めた結果」の入力 `結果:\n[]\n` は囲みが無く全体が JSON でないので、```` ```json\n[]\n``` ```` の囲みに替える
   - C12（335 行目）「脆弱性は見つかりませんでした は読めた結果」→ 期待を 1（読めていない）に替え、名前を「文の言い回しだけでは読めた結果にしない（I227）」にする。種類は `security`
-  - C23 の 4 ケースを `official_security_verdict YES 0 …`（NO なら `NO 0 …`）の 3 引数にする
+  - C23 の 4 ケースを `official_security_verdict YES 0 …`（NO なら `NO 0 …`）の 3 引数にする。352 行目の入力の注意文を新しい文（`(注意: 出力に決まった形の結果…`）に揃える
 - `test_i197_review_ledger.sh:185`・`test_i193_official_flow.sh:425`（s8）: 部分一致のまま通るので変えない（TC-01 で確かめる）
 
 ### 4-6. `docs/issues/open/I227.md`（計画の時点で直した。受け入れ条件と本文を計画の確定値に合わせるため）
@@ -255,7 +255,8 @@ Danger Ops: 無
 | V4 | 2 | 実験必須 | `SECURITY_FINDINGS` の判定の行の読み方が 1 か所で、行全体の固定の形だけを読む（TC-05・TC-02 U7・FG-U7） |
 
 ## 計画変更記録
-（なし）
+1. 計画レビュー（20261108_0156・OK・高リスク判定 No）の Warning 3 件への対応: (W1) 囲みの開始の正規表現を言語名を問わない形（`^```[A-Za-z0-9_+-]*`）にし、```` ```python ```` の囲みの後に JSON の囲みがあるケースを U10 に足した（組の食い違いで読めていないに倒れるのを防ぐ）。警告行の除去は §1 のとおり retro で一覧に回す (W2) M-01 の備考に、JSON の配列が出なかったときは 1 回だけ実行し直し、2 回とも出なければ出力の末尾を記録して、注意が付いていること（注意と実際が一致）を確かめる、と書いた（`/code-review` は合否に使わない参考のため） (W3) C23 の 352 行目の入力の注意文を新しい文に揃える、と §4-5 に足した。計画レビューのやり直し: 不要（findings への対応で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
+- [20261108_0156 判定: ✅ 完了](../../reviews/I227_plan_review_20261108_0156.md)
 （plan-review 段階が追記する）
