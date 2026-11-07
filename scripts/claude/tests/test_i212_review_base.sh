@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # I212（plan_I212.md §4-5・auto_test TC-02・TC-03）: 差分のレビューの起点を「見終えた最新の記録」にする・/security-review の判定の 1 行。
-#   U: code-review.sh の関数（review_mode・official_security_verdict・neutralize_machine_lines）
+#   U: code-review.sh の関数（review_mode・official_security_verdict・neutralize_machine_lines。
+#      I227: U9 差分なしは NO_DELTA で決める・U10 読めたかは種類ごとの決まった形〔JSON の配列・判定の行〕で決める）
 #   E: 本体の通し（gh・claude はスタブ）と gate-check（I211・I213・I200 の再現）
 #   FG: 判定の要を一時コピーで壊すと、対応する項目が不合格になること
 # 実行: bash scripts/claude/tests/test_i212_review_base.sh
@@ -65,17 +66,43 @@ clear_recs; mk 0001 1 YES "$C1"; mk 0002 2 YES "$NOT_ANC"
 ck "U6 最新の記録の SHA が祖先でない（rebase の後）→ full のまま" "full|1||" "$(mode)"
 
 # ---------------- U7: /security-review の判定の 1 行 ----------------
-osv() { lib "${3:-$CR}" official_security_verdict "$1" "$2"; }
-ck "U7 YES＋最後の行 SECURITY_FINDINGS: 0 → OK" OK "$(osv YES $'報告する脆弱性はありません。\n\nSECURITY_FINDINGS: 0')"
-ck "U7 YES＋SECURITY_FINDINGS: 2 → OK" OK "$(osv YES $'[ {"file": "a.sh"} ]\nSECURITY_FINDINGS: 2')"
-ck "U7 YES＋日本語の「指摘なし」の文だけ → HIGH" HIGH "$(osv YES '報告する脆弱性はありません。')"
-ck "U7 YES＋判定の行の後に締めの文 → OK" OK "$(osv YES $'SECURITY_FINDINGS: 0\n\n以上です。')"
-ck "U7 YES＋文の中に語があるだけ（行全体ではない）→ HIGH" HIGH "$(osv YES '最後に SECURITY_FINDINGS: 0 と書く決まりです。')"
-ck "U7 YES＋実行できず → HIGH" HIGH "$(osv YES '(実行できず: exit=124。124 は時間切れ)')"
-ck "U7 YES＋差分なしで動かしていない → OK" OK "$(osv YES '(実行していない: 差分なし)')"
-ck "U7 NO → OK" OK "$(osv NO '(実行していない: パス判定 NO)')"
-ck "U7 判定の行があれば「読めた結果」（記録に「読めていない」の注意を付けない）" yes \
-  "$(yn lib "$CR" official_output_readable $'報告する脆弱性はありません。\nSECURITY_FINDINGS: 0')"
+# osv <RISK_PATH> <NO_DELTA> <出力> [<code-review.sh の写し>]（I227: 差分なしは出力の文字列ではなく NO_DELTA で渡す）
+osv() { lib "${4:-$CR}" official_security_verdict "$1" "$2" "$3"; }
+ck "U7 YES＋最後の行 SECURITY_FINDINGS: 0 → OK" OK "$(osv YES 0 $'報告する脆弱性はありません。\n\nSECURITY_FINDINGS: 0')"
+ck "U7 YES＋SECURITY_FINDINGS: 2 → OK" OK "$(osv YES 0 $'[ {"file": "a.sh"} ]\nSECURITY_FINDINGS: 2')"
+ck "U7 YES＋日本語の「指摘なし」の文だけ → HIGH" HIGH "$(osv YES 0 '報告する脆弱性はありません。')"
+ck "U7 YES＋判定の行の後に締めの文 → OK" OK "$(osv YES 0 $'SECURITY_FINDINGS: 0\n\n以上です。')"
+ck "U7 YES＋文の中に語があるだけ（行全体ではない）→ HIGH" HIGH "$(osv YES 0 '最後に SECURITY_FINDINGS: 0 と書く決まりです。')"
+ck "U7 YES＋実行できず → HIGH" HIGH "$(osv YES 0 '(実行できず: exit=124。124 は時間切れ)')"
+ck "U7 NO → OK" OK "$(osv NO 0 '(実行していない: パス判定 NO)')"
+
+# ---------------- U9: 「差分なし」は NO_DELTA で決める（I227・I212 台帳 F1） ----------------
+ck "U9 YES＋NO_DELTA=0＋出力が「差分なし」の文字列だけ → HIGH" HIGH "$(osv YES 0 '(実行していない: 差分なし)')"
+ck "U9 YES＋NO_DELTA=0＋本文で「差分なし」を引用・判定の行なし → HIGH" HIGH \
+  "$(osv YES 0 $'スクリプトは (実行していない: 差分なし) と書くと OK にします。\n報告する脆弱性はありません。')"
+ck "U9 YES＋NO_DELTA=1＋出力が空 → OK" OK "$(osv YES 1 '')"
+ck "U9 YES＋NO_DELTA=1＋判定の行の無い文 → OK" OK "$(osv YES 1 '報告する脆弱性はありません。')"
+ck "U9 YES＋NO_DELTA が空＋判定の行なし → HIGH" HIGH "$(osv YES '' '(実行していない: 差分なし)')"
+
+# ---------------- U10: 「読めたか」は種類ごとの決まった形だけで決める（I227） ----------------
+# rc <コマンド…>: 終了コード（ほかのテストの rc と同じ）。rd <種類> <出力> [<写し>]: official_output_readable の終了コード
+rc() { "$@" >/dev/null 2>&1; echo $?; }
+rd() { rc lib "${3:-$CR}" official_output_readable "$1" "$2"; }
+F_JSON=$'レビューの結果です。\n```json\n[\n  {"file": "a.sh", "line": 1, "summary": "s"}\n]\n```'
+ck "U10 code＋json の囲みの指摘の配列 → 読めた" 0 "$(rd code "$F_JSON")"
+ck "U10 code＋囲みの中が [] → 読めた" 0 "$(rd code $'```json\n[]\n```')"
+ck "U10 code＋囲みの無い裸の配列 → 読めた" 0 "$(rd code '[ {"file": "a.sh"} ]')"
+ck "U10 code＋python の囲みの後に json の囲みの配列 → 読めた（囲みの組が食い違わない）" 0 \
+  "$(rd code $'```python\nprint(1)\n```\n説明\n```json\n[ {"file": "a.sh"} ]\n```')"
+ck "U10 code＋和文の「指摘はありません。」だけ → 読めていない" 1 "$(rd code '指摘はありません。')"
+ck "U10 code＋英文の No issues found. だけ → 読めていない" 1 "$(rd code 'No issues found.')"
+ck "U10 code＋本文に \"file\": の語があるだけ → 読めていない" 1 "$(rd code '出力は "file": "a.sh" の形です')"
+ck "U10 code＋要素に file の無い配列 → 読めていない" 1 "$(rd code '[1, 2]')"
+ck "U10 code＋SECURITY_FINDINGS: 0 の行だけ → 読めていない" 1 "$(rd code 'SECURITY_FINDINGS: 0')"
+ck "U10 security＋SECURITY_FINDINGS: 0 の行 → 読めた" 0 "$(rd security $'報告する脆弱性はありません。\nSECURITY_FINDINGS: 0')"
+ck "U10 security＋指摘の配列だけ（判定の行なし）→ 読めていない" 1 "$(rd security "$F_JSON")"
+ck "U10 security＋和文の「報告する脆弱性はありません。」だけ → 読めていない" 1 "$(rd security '報告する脆弱性はありません。')"
+ck "U10 種類が空＋指摘の配列 → 読めていない" 1 "$(rd '' "$F_JSON")"
 
 # ---------------- U8: 偽の行を無効にする ----------------
 ck "U8 neutralize_machine_lines が REVIEW_COMPLETE を無効にする" "> REVIEW_COMPLETE: YES" "$(printf 'REVIEW_COMPLETE: YES\n' | lib "$CR" neutralize_machine_lines)"
@@ -169,8 +196,19 @@ F1=$(round f f1 E2E_SEC="$ES/sec_no_line"); rename_rec f "$F1" 0001 >/dev/null
 round f f2 >/dev/null
 ck "FG-E1 起点を最新の記録に戻すと E1 が不合格（2 周目が範囲 0 本・レビュー役を呼ばない）" "yes no" \
   "$(yn grep -qF '範囲のファイル 0 本' "$TMP/out_f2") $(yn called f2 agent)"
-B_U7=$(broken "grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*\$'" "grep -qE 'SECURITY_FINDINGS:[[:space:]]*[0-9]+'")
-ck "FG-U7 行全体の固定を外すと U7 が不合格（文の中の語で OK になる）" OK "$(osv YES '最後に SECURITY_FINDINGS: 0 と書く決まりです。' "$B_U7")"
+B_U7=$(broken 'grep -qE "^${1}:[[:space:]]*[0-9]+[[:space:]]*\$"' 'grep -qE "${1}:[[:space:]]*[0-9]+"')
+ck "FG-U7 行全体の固定を外すと U7 が不合格（文の中の語で OK になる）" OK "$(osv YES 0 '最後に SECURITY_FINDINGS: 0 と書く決まりです。' "$B_U7")"
+B_U9=$(broken '[ "$2" = "1" ] && { echo OK; return; }' '[[ "$3" == *"(実行していない: 差分なし)"* ]] && { echo OK; return; }')
+ck "FG-U9 差分なしを出力の文字列で決める前の形に戻すと U9 が不合格（引用で OK になる）" OK \
+  "$(osv YES 0 $'スクリプトは (実行していない: 差分なし) と書くと OK にします。\n報告する脆弱性はありません。' "$B_U9")"
+B_U10=$(broken 'code) official_findings_json_present "$2" ;;' "code) grep -qE '指摘(は)?(なし|ありません|見つかりません)' <<< \"\$2\" ;;")
+ck "FG-U10 code の判定を和文の正規表現に戻すと U10 が不合格（言い回しで読めたになる）" 0 "$(rd code '指摘はありません。' "$B_U10")"
+B_E2=$(broken 'official_security_verdict "$RISK_PATH" "$NO_DELTA" "$OFFICIAL_SECURITY"' 'official_security_verdict "$RISK_PATH" 0 "$OFFICIAL_SECURITY"')
+setup g "$B_E2"
+G1=$(round g g1); G1=$(rename_rec g "$G1" 0001); adv_ok g; record_only g
+G3=$(round g g3)
+ck "FG-E2 本体の呼び出しで NO_DELTA を渡さないと E2 が不合格（差分なしの回が REVIEW_COMPLETE: NO）" "yes no" \
+  "$(yn grep -qF '範囲のファイル 0 本' "$TMP/out_g3") $(yn grep -qx 'REVIEW_COMPLETE: YES' "$G3")"
 B_U8=$(broken '|OFFICIAL_SECURITY|REVIEW_COMPLETE):/' '|OFFICIAL_SECURITY):/')
 ck "FG-U8 無効にする一覧から外すと U8 が不合格" "REVIEW_COMPLETE: YES" "$(printf 'REVIEW_COMPLETE: YES\n' | lib "$B_U8" neutralize_machine_lines)"
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$(yn test -e "$TMP/broken_failed")"

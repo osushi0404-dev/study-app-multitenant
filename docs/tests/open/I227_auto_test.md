@@ -33,6 +33,8 @@
 | 2026-11-08 | TC-01（計画の時点のベースライン・直す前） | OK | `test_i212_review_base.sh` pass=31 fail=0・`test_i193_official_flow.sh` pass=174 fail=0・`test_i197_review_ledger.sh` pass=64 fail=0 |
 | 2026-11-08 | TC-02〜TC-04（計画の時点） | 実装前のため未実行 | テストを先に書くのはステップ 1 |
 | 2026-11-08 | TC-05（計画の時点・直す前） | 期待どおり NG | 下の 2 本のうち、`grep -q '^findings_line_present()'` は定義が無く exit 1、`! grep -qF 'FINDINGS:[[:space:]]'` は 95・188 行目に当たり不合格 |
+| 2026-11-08 | TC-02・TC-03（テストを先に書き、本体を直す前） | 期待どおり NG | `test_i212_review_base.sh` pass=35 fail=15（U7 の判定の行あり → OK が HIGH・U9 の NO_DELTA=1 → OK が HIGH・U10 の読めたが 1・FG は置き換え前の文字列が無く未成立）。直す前の関数そのもので、`official_security_verdict YES 'スクリプトは (実行していない: 差分なし) と書くと OK にします。'` が `OK`（F1 の穴の再現）、`official_output_readable '指摘はありません。'` が exit 0（言い回しで読めた）を確かめた |
+| 2026-11-08 | TC-01〜TC-06（実装・/simplify の整理の後） | OK | `test_i212_review_base.sh` pass=50 fail=0（FG-U7・FG-U9・FG-U10・FG-E2 がすべて成立）・`test_i193_official_flow.sh` pass=174・`test_i197_review_ledger.sh` pass=64・`test_i202_ledger_cleanup.sh` pass=157・`test_review_gates.sh` PASS=67、すべて fail=0。TC-05: `findings_line_present()` の定義あり・`FINDINGS:[[:space:]]` の残りは 0。`bash -n` 3 本 exit 0 |
 
 ## 決定論ゲート（自動実走）
 ```bash

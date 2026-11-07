@@ -6,7 +6,9 @@
 - 組み込みのレビューの「読めたか」を、種類ごとの決まった形（`/security-review` は `SECURITY_FINDINGS` の行・`/code-review` は JSON として読める指摘の配列）だけで決める
 
 ## 変更点
-- （実装後に記入）
+- `scripts/claude/code-review.sh`: `findings_line_present()`（新規・判定の行の正規表現の 1 か所）・`official_findings_json_present()`（新規・JSON の指摘の配列）・`official_output_readable()`（種類ごとの決まった形）・`run_official_review()`（第 2 引数を種類に）・`official_security_verdict()`（`NO_DELTA` を引数で受ける）・呼び出し 3 か所
+- テスト: `test_i212_review_base.sh` に U9・U10・FG-U9・FG-U10・FG-E2、U7・FG-U7 を新しい形に。`test_i193_official_flow.sh` の C8・C12・C23 を新しい引数の形に
+- `.claude/skills/review-gate/SKILL.md:36` の文（I212 F5 同梱）・`docs/reviews/backlog/I212.md` から F5・F7 を消した
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -17,7 +19,7 @@
 - 手動: （test-gate で記入）
 
 ## 計画との差分
-- （実装後に記入）
+- 計画変更記録 2（/simplify の整理）。振る舞いは計画どおり
 
 ## ロールバック
 - PR を revert する（設定・データの変更なし）
@@ -27,6 +29,7 @@
 - [plan] 「差分なし」は既存の変数 `NO_DELTA` を引数で渡す — 判定の前にいつも決まっていて、中身の照合を残さない
 - [plan] 一覧の I212 F5・F7 を同梱、ほかは残す — F7 は受け入れ条件 3 そのもの、F5 は直す行と同じ行の文言
 - [plan-review] Warning 3 件（囲みの言語名・M-01 のやり直し方針・C23 の注意文）を計画に反映し、再レビューはしない — 方式・範囲・受け入れ条件は変えない
+- [implement] /simplify の指摘のうち 5 件を直し、6 件を見送った（計画変更記録 2）— 見送りは計画どおりの形・範囲の外・軽微なもの。FG-E2 は grep に替えず、通しで退行を止める形を残した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
