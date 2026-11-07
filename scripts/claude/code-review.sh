@@ -91,6 +91,8 @@ official_output_readable() {
   # here-string で渡す（printf | grep -q だと、大きな出力で grep が先に終わり、pipefail の下で 141 になって誤判定する。I193 L1）
   grep -qE '"file"[[:space:]]*:' <<< "$out" && return 0
   grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' <<< "$out" && return 0
+  # I212: /security-review に出させた判定の行（official_security_verdict と同じ形）があれば読めた結果（判定と記録の注意を食い違わせない）
+  grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$' <<< "$out" && return 0
   grep -qE '指摘(は)?(なし|ありません|見つかりません)|(脆弱性|問題|指摘)[^。]*見つかりませんでした|[Nn]o (findings|issues|bugs|vulnerabilities)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' <<< "$out" && return 0
   return 1
 }
@@ -147,11 +149,12 @@ kill_tree() {
 # I193: 組み込みのレビュー（/code-review・/security-review）を読み取り専用（plan モード）・時間上限つきで実行する。
 # plan モードにするのは、claude -p にはプロジェクトの settings の許可（git push・rm など）がそのまま効くため
 # （差分の中の文章に誘導された書き込み・push を仕組みで止める）。失敗・時間切れは本文に書いて返す（呼び出し元は止めない）。
-run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD）
-  local prompt="$1" out rc=0
+run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD） $2=足す指示（省略可。--append-system-prompt で渡す）
+  local prompt="$1" out rc=0 extra=()
+  [ -n "${2:-}" ] && extra=(--append-system-prompt "$2")
   # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none。黙って止まる経路を作らない）
   # I223: GitHub へは読み取りだけの App の鍵（GH_APP_READONLY=1。書き込みは GitHub が拒否する）
-  out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none --strict-mcp-config "$prompt" 2>&1 < /dev/null) || rc=$?
+  out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none --strict-mcp-config ${extra[@]+"${extra[@]}"} "$prompt" 2>&1 < /dev/null) || rc=$?
   if [ "$rc" -ne 0 ]; then
     printf '(実行できず: exit=%s。124 は時間切れ)\n' "$rc"
     return 0
@@ -167,18 +170,22 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
 # その中の行（差分の中の文章を引用したものを含む）が判定の行として読まれないようにする。
 # I197: 敵対的レビューの記録が読む行（ITEM・EXPERIMENT_BEGIN/END・合計の行）も対象にする
 neutralize_machine_lines() {
-  sed -E -e 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|NEW_CRITICAL_TOTAL|NEW_HIGH_TOTAL|UNVERIFIED|ROUNDS|ITEM|FINDING|LEDGER|LEDGER_ROUND|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|ADVERSARIAL_VERDICT|CI_WAIT|OFFICIAL_SECURITY):/\1> \2:/' \
+  sed -E -e 's/^([[:space:]]*)(VERDICT|RISK|REVIEWED_COMMIT|STAGE_DONE|NEW_CRITICAL|NEW_HIGH|NEW_CRITICAL_TOTAL|NEW_HIGH_TOTAL|UNVERIFIED|ROUNDS|ITEM|FINDING|LEDGER|LEDGER_ROUND|FIX_GATE|FINAL_VERDICT|ADVERSARIAL_STAGE|ADVERSARIAL_VERDICT|CI_WAIT|OFFICIAL_SECURITY|REVIEW_COMPLETE):/\1> \2:/' \
     -e 's/^([[:space:]]*)(EXPERIMENT_BEGIN|EXPERIMENT_END)([[:space:]]|$)/\1> \2\3/'
 }
 
-# I193 7 回目 H2: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（実行できず・読めていない）ら HIGH。
-# 公式のセキュリティレビューは高リスクのときの多層防御の 1 枚なので、抜けたまま OK にしない（止まる側）
+# I212: /security-review に出させる判定の 1 行（official_security_verdict がこの行だけで「動いた」を決める）
+SECURITY_FINDINGS_PROMPT='このレビューの出力の最後の行には、報告する脆弱性の件数を SECURITY_FINDINGS: <件数> の形（半角数字・0 件なら SECURITY_FINDINGS: 0）で必ず 1 行だけ出す。'
+
+# I193 7 回目 H2: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかったら HIGH。
+# 公式のセキュリティレビューは高リスクのときの多層防御の 1 枚なので、抜けたまま OK にしない（止まる側）。
+# I212: 「動いた」は、出力に行全体が `SECURITY_FINDINGS: <数>` の行があるときだけ（文の形に頼らない。日本語の「指摘なし」を
+# 読めずに FAILED にしていた・I200 ほか）。差分が無くて動かしていない回は OK。それ以外（実行できず・判定の行が無い）は HIGH
 official_security_verdict() {   # $1=RISK_PATH（YES/NO） $2=組み込みの /security-review の出力
-  if [ "$1" = "YES" ] && [[ "$2" == *"(実行できず"* || "$2" == *"(注意: 出力に指摘の配列も"* ]]; then
-    echo HIGH
-  else
-    echo OK
-  fi
+  [ "$1" = "YES" ] || { echo OK; return; }
+  [[ "$2" == *"(実行していない: 差分なし)"* ]] && { echo OK; return; }
+  # here-string で渡す（pipefail の下で grep -q が先に終わって 141 になる誤判定を避ける。official_output_readable と同じ・I193 L1）
+  if grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$' <<< "$2"; then echo OK; else echo HIGH; fi
 }
 
 # I193: PR で動くワークフローのジョブ名（jobs.<id>.name。無ければ id）を 1 行ずつ出す。
@@ -481,6 +488,10 @@ record_reviewed_commit() {   # $1=ファイル
   grep -oE '^REVIEWED_COMMIT:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$1" 2>/dev/null | tail -1 | grep -oE '[0-9a-f]{7,40}' || true
 }
 
+# I212: 記録が「見終えた」か（REVIEW_COMPLETE: YES の行があれば exit 0）。行が無い古い記録は見終えていない扱い
+# （起点にしない側＝見直す範囲が広がる側に倒す）
+record_complete() { grep -qE '^REVIEW_COMPLETE:[[:space:]]*YES[[:space:]]*$' "$1" 2>/dev/null; }
+
 # LEDGER_ROUND: のある（＝レビュー役が正常に終わった）コードレビュー記録を、ファイル名の時刻順に出す
 ledger_records() {   # $1=I###
   local f
@@ -489,19 +500,31 @@ ledger_records() {   # $1=I###
   done < <(review_records "$1" code_review)
   return 0
 }
-# 台帳のある最新のコードレビューの記録（無ければ空）。review_mode と --route（I208）が使う
+# 台帳のある最新のコードレビューの記録（無ければ空）。review_mode（台帳と周の数の引き継ぎ）と --route（I208）が使う
 latest_ledger_record() { ledger_records "$1" | tail -1; }
 
 # 全体か差分か: "full<TAB>1<TAB><TAB>" か "delta<TAB><n><TAB><起点の SHA><TAB><前の記録>"。
-# 差分にするのは、台帳のある最新の記録の REVIEWED_COMMIT が今の HEAD の祖先のときだけ（rebase などで祖先でなければ全体）
-review_mode() {   # $1=I###
-  local last n sha
-  last=$(latest_ledger_record "$1")
+# 差分にするのは、台帳のある最新の記録の REVIEWED_COMMIT が今の HEAD の祖先のときだけ（rebase などで祖先でなければ全体）。
+# I212: 起点は、台帳のある記録のうち見終えた（record_complete）最新の記録の REVIEWED_COMMIT（HEAD の祖先のものだけ）。
+# 無ければブランチの分岐点（比べる相手との merge-base）＝ブランチ全体を差分のレビューとして見直す。
+# 台帳と周の数（<n>・<前の記録>）は、起点に関係なく台帳のある最新の記録から引き継ぐ（I206 の番号の合流を壊さない）
+review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
+  local last n sha rec rec_sha i base="" recs=()
+  mapfile -t recs < <(ledger_records "$1")
+  last=""; [ "${#recs[@]}" -gt 0 ] && last="${recs[-1]}"
   if [ -n "$last" ]; then
     n=$(grep -oE '^LEDGER_ROUND:[[:space:]]*[0-9]+[[:space:]]*$' "$last" | tail -1 | grep -oE '[0-9]+' || true)
     sha=$(record_reviewed_commit "$last")
     if [ -n "$n" ] && [ -n "$sha" ] && git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
-      printf 'delta\t%s\t%s\t%s\n' "$(( n + 1 ))" "$sha" "$last"; return 0
+      # 新しい順に見て、最初に当たった記録で止める
+      for (( i = ${#recs[@]} - 1; i >= 0; i-- )); do
+        rec="${recs[i]}"
+        record_complete "$rec" || continue
+        rec_sha=$(record_reviewed_commit "$rec")
+        if [ -n "$rec_sha" ] && git merge-base --is-ancestor "$rec_sha" HEAD 2>/dev/null; then base="$rec_sha"; break; fi
+      done
+      [ -n "$base" ] || base=$(git merge-base "${2:-origin/develop}" HEAD 2>/dev/null) || base=""
+      if [ -n "$base" ]; then printf 'delta\t%s\t%s\t%s\n' "$(( n + 1 ))" "$base" "$last"; return 0; fi
     fi
   fi
   printf 'full\t1\t\t\n'
@@ -964,7 +987,7 @@ PLAN_FILE=$(find_plan_file "$ISSUE")
 REVIEWED_HEAD=$(git rev-parse HEAD)
 
 # I197 §4.8: 全体のレビューか差分のレビューか（台帳のある最新の記録の REVIEWED_COMMIT が HEAD の祖先なら差分）
-IFS=$'\t' read -r REVIEW_KIND LEDGER_N SINCE PREV_LEDGER_REC <<< "$(review_mode "$ISSUE")"
+IFS=$'\t' read -r REVIEW_KIND LEDGER_N SINCE PREV_LEDGER_REC <<< "$(review_mode "$ISSUE" origin/develop)"
 SCOPE_FILE="$OFFICIAL_DIR/scope"
 # 前の周の台帳は、始めた時点で写しておく（以後に記録が変わっても、読んだ台帳を使う）
 PREV_LEDGER_FILE=""
@@ -973,6 +996,9 @@ if [ "$REVIEW_KIND" = "delta" ]; then
   delta_files origin/develop "$SINCE" > "$SCOPE_FILE" || { echo "⛔ 差分のレビューの範囲を取れません（起点 ${SINCE}）"; exit 1; }
   REVIEW_RANGE="${SINCE}...HEAD"
   echo "差分のレビュー（台帳の ${LEDGER_N} 周目・起点 ${SINCE}・範囲のファイル $(grep -c . "$SCOPE_FILE" || true) 本）"
+  if [ "$SINCE" != "$(record_reviewed_commit "$PREV_LEDGER_REC")" ]; then
+    echo "（前の記録 ${PREV_LEDGER_REC} は見終えていない〔REVIEW_COMPLETE: NO〕ため、見終えた最新の記録〔無ければブランチの分岐点〕から見直します）"
+  fi
 else
   REVIEW_RANGE="origin/develop...HEAD"
   echo "全体のレビュー（台帳の 1 周目）"
@@ -1042,7 +1068,7 @@ else
       echo "(注意: 手元の origin/HEAD が origin/develop を指していないため、/security-review が develop 以外と比べた可能性がある)" > "$OFFICIAL_DIR/security_note"
     fi
     echo "組み込みの /security-review を背景で実行しています..."
-    run_official_review "/security-review" > "$OFFICIAL_DIR/security" &
+    run_official_review "/security-review" "$SECURITY_FINDINGS_PROMPT" > "$OFFICIAL_DIR/security" &
     OFFICIAL_PIDS+=("$!")
   fi
 fi
@@ -1093,7 +1119,7 @@ $(cat "$OFFICIAL_DIR/security" 2>/dev/null || echo "(実行できず: 結果の�
 fi
 SECURITY_VERDICT=$(official_security_verdict "$RISK_PATH" "$OFFICIAL_SECURITY")
 if [ "$SECURITY_VERDICT" != "OK" ]; then
-  echo "⛔ 高リスクの変更で、組み込みの /security-review が動きませんでした（実行できず・読めていない）。HIGH として記録します。"
+  echo "⛔ 高リスクの変更で、組み込みの /security-review が動きませんでした（実行できず・判定の行 SECURITY_FINDINGS が無い）。HIGH として記録します。"
   echo "OFFICIAL_SECURITY: FAILED"
   GATE_EVIDENCE+="- ⛔ 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった（HIGH。直すものは無いので review-gate が 1 回だけ実行し直す）"$'\n'
 fi
@@ -1190,7 +1216,7 @@ else
 fi
 
 # 出力正規化
-REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed -E 's/[[:space:]]*$//; s/^([[:space:]]*)(LEDGER|LEDGER_ROUND):/\1> \2:/')
+REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed -E 's/[[:space:]]*$//; s/^([[:space:]]*)(LEDGER|LEDGER_ROUND|REVIEW_COMPLETE):/\1> \2:/')
 
 # ファイル保存。判定（RISK・VERDICT）は自作のレビュー役の本文だけで行い、組み込みのレビューの出力は判定の後に足す
 # （組み込みの出力の中の表の「| High |」などを、VERDICT 行が無いときの代わりの判定が拾わないように。I193 M6）
@@ -1230,6 +1256,12 @@ if [ "$REVIEWER_RAN" = "1" ] && [ "$LLM_VERDICT" != "OK" ] && ! grep -qE '^FINDI
   GATE_EVIDENCE+="- ⛔ code-reviewer の VERDICT は ${LLM_VERDICT} なのに、読める FINDING 行が無い（BLOCKER）"$'\n'
 fi
 GATE_EVIDENCE+="- 台帳（${REVIEW_KIND}・${LEDGER_N} 周目）: ${LEDGER_VERDICT}（code-reviewer の VERDICT=${LLM_VERDICT}・合否に使わない）"$'\n'
+# I212: レビュー役と（高リスクなら）組み込みの /security-review が範囲を見終えたか。YES の記録だけが次の差分のレビューの起点になる
+# （台帳に止める指摘が残った HIGH は見終えているので YES。/security-review が動かなかった・レビュー役の出力が壊れた・台帳を作れなかったは NO。
+# 組み込みの /code-review は合否に使わない参考なので条件に入れない）
+REVIEW_COMPLETE=NO
+if [ "$REVIEW_OK" = "1" ] && [ "$REVIEWER_VERDICT" = "OK" ] && [ "$SECURITY_VERDICT" = "OK" ]; then REVIEW_COMPLETE=YES; fi
+GATE_EVIDENCE+="- 見終えたか（次の差分のレビューの起点にできるか・I212）: ${REVIEW_COMPLETE}"$'\n'
 
 # I084: 決定論ゲート結果で VERDICT を決定論的に上書きする（LLM 出力非依存）。
 # FINAL = max(gate, omission, 台帳, code-reviewer の出力の壊れ, 組み込みのセキュリティ)。証跡を記録先頭へ注入し末尾 VERDICT 行を FINAL に書換え。
@@ -1239,6 +1271,8 @@ inject_gate_result "$REVIEW_FILE" "$GATE_EVIDENCE" "$OMISSION_VERDICT" "$FINAL_V
 set_risk_line "$REVIEW_FILE" "$RISK_FINAL"
 # I193（L13）: このレビューが見た HEAD を記録する（gate-check.sh が読む）
 add_reviewed_commit "$REVIEW_FILE" "$REVIEWED_HEAD"
+# I212: 見終えたか（review_mode が次の起点を選ぶのに読む）。組み込みのレビューの出力（無効にした行）より前に置く
+printf 'REVIEW_COMPLETE: %s\n' "$REVIEW_COMPLETE" >> "$REVIEW_FILE"
 # 判定の後に、組み込みのレビューの出力を参考として足す（機械が読む行は neutralize_machine_lines で無効にしてある）
 printf '\n## 組み込みのレビューの出力（公式・参考）\n\n### 組み込み /code-review の指摘\n\n%s\n\n### 組み込み /security-review の指摘\n\n%s\n' \
   "$OFFICIAL_CODE" "$OFFICIAL_SECURITY" >> "$REVIEW_FILE"

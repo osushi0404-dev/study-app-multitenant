@@ -110,7 +110,7 @@ PY
 
 # G10（I225）: 決まりの置き場（CLAUDE.md・docs/runbooks・.claude/skills・.claude/agents・scripts/claude〔tests を除く〕・
 #     docs/*/templates）に、鍵を画面に出す書き方（--json なし、または -t/--show-token 付きの auth status・auth token）が無い。
-#     auth status は、出てくるたびに、そのあとから行末か次のバッククォートまでの語を見る（行末の \ で続く行はつなぐ・I226）。auth token は鍵を丸ごと出すので、語を問わず不合格（I226）。個々のイシューの記録は対象外（plan_I225.md §9）
+#     auth status は、出てくるたびに、そのあとから行末か次のバッククォートまでの語を見る（行末の \ で続く行はつなぐ・I226）。auth token は鍵を丸ごと出すので、語を問わず不合格（I226）。語の境目は英数字だけで見る（和文がすぐ続いても当たる・I212）。個々のイシューの記録は対象外（plan_I225.md §9）
 g10() {  # g10 <ルート>
   python3 -I - "$1" <<'PY'
 import os, re, sys
@@ -136,7 +136,7 @@ for f in files:
         text = open(f, encoding="utf-8").read()
     except (UnicodeDecodeError, OSError):
         continue
-    for m in re.finditer(r"gh auth (status|token)\b", text):
+    for m in re.finditer(r"gh auth (status|token)(?![A-Za-z0-9_])", text):
         # 次のバッククォートか、行末の \ の付かない改行までを見る（\ で続く行はつなぐ）
         rest = re.split(r"`|(?<!\\)\n", text[m.end():], maxsplit=1)[0].replace("\\\n", " ")
         toks = rest.split()
@@ -407,6 +407,8 @@ g10_fg "--json の形だけなら合格" 0 '確かめる: `gh auth status --json
 # shellcheck disable=SC2016
 g10_fg "auth token は不合格" 1 '鍵を見る: `gh auth token`'
 g10_fg "行末の \\ で分けた --json は合格" 0 "$(printf 'gh auth status \\\n  --json hosts')"
+# I212（I226 の台帳 F1）: Python の \b は和文も語の文字に数えるので、和文がすぐ続く書き方を取りこぼさない
+g10_fg "和文がすぐ続く auth token は不合格" 1 'gh auth tokenを打つ'
 
 echo "---"
 echo "pass=$pass fail=$fail"

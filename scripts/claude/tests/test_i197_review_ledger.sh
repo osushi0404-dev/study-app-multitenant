@@ -52,10 +52,11 @@ rec 20260101_0000 "# 古い形式
 REVIEWED_COMMIT: ${SINCE}
 VERDICT: HIGH"
 ck "R1 LEDGER_ROUND の無い（古い形式・失敗した周）記録だけ → full" "full|1||" "$(inR lib "$CR" review_mode I900 | tr '\t' '|')"
-rec 20260101_0001 "# 台帳あり
+rec 20260101_0001 "# 台帳あり（I212: 起点になるのは見終えた記録だけ）
 LEDGER_ROUND: 2
 REVIEWED_COMMIT: ${SINCE}
-VERDICT: HIGH"
+VERDICT: HIGH
+REVIEW_COMPLETE: YES"
 ck "R1 LEDGER_ROUND: 2・祖先の REVIEWED_COMMIT → delta・3・起点" "delta|3|${SINCE}" "$(inR lib "$CR" review_mode I900 | cut -f1-3 | tr '\t' '|')"
 rec 20260101_0002 "# 祖先でない
 LEDGER_ROUND: 3
@@ -198,7 +199,7 @@ ck "R11 code-reviewer に FINDING 行の形・review-gate に差分のレビュ�
 
 # ---------------- FG ----------------
 ck "FG-R1 「台帳があれば delta」を消すと R1 が不合格（delta にならない）" full \
-  "$(inR lib "$(broken 'printf '"'"'delta\t%s\t%s\t%s\n'"'"' "$(( n + 1 ))" "$sha" "$last"; return 0' ':')" review_mode I900 | cut -f1)"
+  "$(inR lib "$(broken 'printf '"'"'delta\t%s\t%s\t%s\n'"'"' "$(( n + 1 ))" "$base" "$last"; return 0' ':')" review_mode I900 | cut -f1)"
 B3=$(broken 'sys.exit(2)
         out.append' 'pass
         out.append')
