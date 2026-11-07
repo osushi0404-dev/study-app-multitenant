@@ -61,7 +61,7 @@ user-invocable: false
    - 次回どう防ぐか
    - 確かめた結果（手順6 で流したテストと結果）
 
-8) 結線（必須・戻り先は 1 か所）: commit/push してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する。どの NG（レビュー・CI・テスト・人の手動テスト）から来たときも同じで、直した後は必ず review-gate が差分のレビューで見直す
+8) 結線（必須・戻り先は 1 か所）: commit してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）。どの NG（レビュー・CI・テスト・人の手動テスト）から来たときも同じで、直した後は必ず review-gate が差分のレビューで見直す
    ```
    STAGE_DONE: fix-loop NEXT: review-gate
    ```

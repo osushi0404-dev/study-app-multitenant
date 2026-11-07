@@ -60,7 +60,7 @@ bash scripts/claude/check-manual-test-executor.sh $ARGUMENTS
 
 ## 5. 結線（必須）
 
-commit/push してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に 1 行足して commit/push する:
+commit してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に 1 行足して commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）:
 - Human の項目がある: `STAGE_DONE: test-gate NEXT: human-test` を書き、次の形で提示して止まる
   ```
   ## 手動テスト確認項目（Human 実施分）

@@ -22,7 +22,7 @@
 2. /plan-issue I### → 計画書・テスト文書・レビュー文書 → 以下を Claude が順に進める（`proceed` が `scripts/claude/flow-stage.sh` で次の段階を決める）
    1. plan-review: 自作の計画レビュー（`plan-issue-review.sh`・`.claude/agents/plan-reviewer.md`）。Blocker は自分で直して再レビュー。高リスク判定 Yes → design-security-review、No → implement
    2. design-security-review（高リスクのときだけ）: 実装前の設計レビュー＋攻撃シナリオ。Blocker は計画を直して plan-review からやり直す
-   3. implement: 実装・TDD → 組み込みの `/simplify` で整理 → push
+   3. implement: 実装・TDD → 組み込みの `/simplify` で整理 → commit（push は review-gate の最初・下の「GitHub への書き込みの時点」）
    4. review-gate: CI 待ち（失敗・時間切れで止まる）＋組み込みの `/code-review`（パスの判定が YES のときは `/security-review` も。どちらも読み取り専用の plan モード）＋自作のレビュー役（受け入れ条件・計画・文書の照合）＋決定論ゲートの実走。高リスクなら敵対的レビュー（別プロセス・読むだけ・1 周 10 分・確かめる項目の一覧で判定。`scripts/claude/adversarial-review.sh`）。NG → fix-loop
    5. fix-loop: 診断レビューを通した案で直し、実装・テストのレビューを通して、**必ず review-gate に戻る**（戻り先は 1 か所）
    6. test-gate: `gate-check.sh`（最新のレビューが今の HEAD を見て OK か）→ 計画書が指定した重いテスト・Claude 担当の手動テスト（pytest・Jest・E2E は CI が正で、手元では流し直さない）→ 人の手動テストがあれば**ここで止まる**
@@ -47,10 +47,23 @@
 それ以外（技術的な設計の選択・直せる指摘の直し方・CI の失敗の直し方・develop との食い違いの解決など）は Claude が決め、`docs/reviews/open/I###_review.md` の「## 自律判断の記録」に `- [段階] 決めたこと — 理由` で書く。止まったとき（人の手動テストの手前・マージ依頼）に、その要点を平易にまとめて報告する。
 
 ## 記録とつなぎ（決定論）
-- 各段階は、終わりに `docs/reviews/open/I###_review.md`（close の後は closed）の末尾へ `STAGE_DONE: <段階> NEXT: <次の段階>` を 1 行足して commit/push する。止める条件で止まるときは書かない
+- 各段階は、終わりに `docs/reviews/open/I###_review.md`（close の後は closed）の末尾へ `STAGE_DONE: <段階> NEXT: <次の段階>` を 1 行足して commit する（push は下の「GitHub への書き込みの時点」だけ）。止める条件で止まるときは書かない
 - `scripts/claude/flow-stage.sh I###` が最後の `STAGE_DONE:` 行から次の段階を返す（`STAGE_DONE:` が無い・読めないときは exit 2 で止める）
 - `scripts/claude/gate-check.sh I###` が、test-gate・close の最初に「最新のコードレビュー記録（高リスク時は敵対的レビュー記録も）が VERDICT OK で、その `REVIEWED_COMMIT` から HEAD まで・作業ツリーに、記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）の外の変更が無い」ことを確かめる。直した後は必ずレビューを通り直す
 - 段階のスキルのうち test-gate・retro・close が書いてよいのは記録の場所だけ。それ以外を直す必要が出たら fix-loop・review-gate を通す
+
+## GitHub への書き込みの時点（I224）
+bot の停止（2026-10-30・短い間の書き込みの集中がきっかけと見ている）の再発防止。量の上限に頼らず、GitHub が中身を見る時点だけ送る。各スキルはこの節を参照する（写しを持たない）。
+- **push するのは 3 時点だけ**:
+  1. plan-issue の下書き PR の作成（イシューファイルのコミット。既コミット経路では計画の文書のコミット）
+  2. review-gate の CI 待ちの前（`code-review.sh` を流す直前。fix-loop の後のやり直しのたびを含む）
+  3. close の最後の確認の前（記録を closed へ移すコミット。`STAGE_DONE: close NEXT: merge` もこのコミットに入れる）
+  - ほかに `pr-base-sync.sh final` が base を取り込んだとき（BEHIND のときだけ・スクリプトが送る）
+- **それ以外の段階は手元でコミットだけ**（STAGE_DONE・自律判断の記録・テスト結果・レビュー記録）。次の時点でまとめて送る。送り忘れても、review-gate の CI 待ちが `CI_WAIT: NOT_PUSHED` で止まる（決定論）
+- **イシュー本文の書き換え（`gh issue edit --body-file`）は grill-me の終わりの 1 回だけ**。plan-issue で足す Draft PR の番号などは手元のファイルにだけ書く。起票（issue-bootstrap）・retro の既存イシューへのコメントはそのまま
+- **目安**: 1 本のイシューの push は 4 回以内（fix-loop の後のやり直し 1 回ごとに +1）。測り方: `git reflog show refs/remotes/origin/<ブランチ>` の `update by push` の行数
+- **同時に複数のセッションで GitHub に書き込まない**: 書き込む段階（plan-issue・review-gate・retro の起票・close）を、別の作業フォルダ（worktree）のセッションと重ねない。テスト用に起こすセッションは読み取りだけの鍵（I223）なので対象外。仕組みでは止めない（最後の守りは GitHub）
+- 決まりの押し戻し（スキルに「commit/push」を書き足すなど）は `scripts/claude/tests/test_i224_push_points.sh` が CI で止める
 
 ## ゲート
 - 計画レビュー（plan-review）を通す前にコード変更を開始しない

@@ -13,7 +13,13 @@ user-invocable: false
 
 **全体のレビューと差分のレビュー（台帳・I197）**: 1 回目はブランチ全体を見て、指摘を台帳（番号・重大度・状態）にする。やり直し（fix-loop の後）は、前の記録の `REVIEWED_COMMIT` からの直した差分と、台帳の止める指摘が直ったかだけを見る（全体を探し直さない）。合否はスクリプトが台帳の FINDING 行の欄（FILE・LINE・STOP・再現）から決定論で出す（I205。code-reviewer の VERDICT 行は合否に使わない）: アプリ本体はブランチで変えた行（と前後 3 行）または受け入れ条件の未達の、再現のある Blocker・High・Medium で止める。ハーネスは止める条件の一覧（流れが動かなくなる・秘密情報や個人情報が外に出る・develop/main や GitHub から戻せない設定を壊す・受け入れ条件の未達）に当たる、再現のある指摘だけで止める。GitHub から復旧できない例外（`path_risk_trigger()` の集合）は Blocker・High で止める。差分の外でも、セキュリティの Blocker は止める。止めない指摘は台帳に残り、retro が後続のイシューか軽い指摘の一覧へ回す（正は `docs/runbooks/review-rules.md`「検証の全体設計」）。どちらにするか・範囲・台帳はスクリプト（`scripts/claude/code-review.sh`）が決める（台帳のある最新の記録の `REVIEWED_COMMIT` が HEAD の祖先なら差分のレビュー）。高リスクかどうか（3. を走らせるか）は、計画レビューの判定・パスの判定・台帳の目印（code-reviewer が計画の見立てを超えた高リスクの変更に付ける `RISK=up`・I202）で決まる。一度 YES になったら戻らない。
 
-Bash ツールの `run_in_background: true` で実行し、完了の通知で結果を受け取る（CI 待ちと組み込みのレビューで、前面の実行の上限 10 分を超えうるため。背景の実行が 10 分を超えても止まらないことは 2026-10-25 に 700 秒で実測した。それより長い上限があっても、下の「判定行が無いとき」の扱いで止まる側に倒れる）:
+まず、ここまで手元でコミットだけしてきたもの（implement・fix-loop・記録）をまとめて送る（`docs/runbooks/workflow.md`「GitHub への書き込みの時点」の 2。CI は送ったコミットで動き、スクリプトは「PR の最新のコミット＝手元の HEAD」を確かめる）:
+
+```bash
+git push
+```
+
+続けて、スクリプトを Bash ツールの `run_in_background: true` で実行し、完了の通知で結果を受け取る（CI 待ちと組み込みのレビューで、前面の実行の上限 10 分を超えうるため。背景の実行が 10 分を超えても止まらないことは 2026-10-25 に 700 秒で実測した。それより長い上限があっても、下の「判定行が無いとき」の扱いで止まる側に倒れる）:
 
 ```bash
 bash scripts/claude/code-review.sh "$ARGUMENTS"
@@ -24,7 +30,7 @@ bash scripts/claude/code-review.sh "$ARGUMENTS"
 - exit 0: 2. へ
 - exit 3（CI 待ちの時間切れ）: 1 回だけ実行し直す。2 回続けば止める（止める条件 3: 安全側の選択肢が無い）
 - exit 1 で出力に `CI_WAIT: FAIL` がある: CI の失敗を直すため `STAGE_DONE: review-gate NEXT: fix-loop` を書いて終わる
-- exit 1 で出力に `CI_WAIT: NOT_PUSHED` がある（PR の最新のコミットが手元の HEAD と違う）: push してから 1 回だけ実行し直す。それでも同じなら止める（止める条件 3）
+- exit 1 で出力に `CI_WAIT: NOT_PUSHED` がある（PR の最新のコミットが手元の HEAD と違う。上の送り忘れ・送った後のコミット）: 上の送る手順をやり直してから 1 回だけ実行し直す。それでも同じなら止める（止める条件 3）
 - exit 1 で出力に `CI_WAIT: NO_JOBS` がある（ワークフローのジョブ名を読めない。python3 の PyYAML が無いなど）: 原因を直して 1 回だけ実行し直す。直せなければ止める（止める条件 3）
 - exit 1 で出力に `CI_WAIT: NO_PR` がある（PR を調べられない・開いている PR が無い）: 原因（gh の認証・ネットワーク・PR が閉じている）を直して 1 回だけ実行し直す。直せなければ止める（止める条件 3）。CI を確かめないまま先へ進まない
 - 出力に `OFFICIAL_SECURITY: FAILED` がある（高リスクの変更で組み込みの `/security-review` が動かず、HIGH になった）: 直すものが無い基盤の失敗なので fix-loop に回さず、1 回だけ実行し直す。2 回続けば止める（止める条件 3）
@@ -63,7 +69,7 @@ bash scripts/claude/adversarial-review.sh "$ARGUMENTS"
 
 - 出力に `ADVERSARIAL_VERDICT:` 行が無い（途中で止まった・背景の実行が打ち切られた）: 1 回だけ実行し直す。2 回続けば止める（止める条件 3）
 - exit 0（`ADVERSARIAL_VERDICT: OK`）: ステージ通過。最終判定 OK
-- exit 1（HIGH・BLOCKER。3 観点とも報告した）: 記録の「確かめる項目の結果」と findings を読み、3-3 で直す。直した後、`bash scripts/claude/code-review.sh "$ARGUMENTS"` を 1. と同じく背景で実行し直し（直した差分を基本レビューに通す）、OK なら 3-1 で次の周を起動する（スクリプトが前の周の `REVIEWED_COMMIT` からの差分だけを見る。修正の妥当性も反証対象）
+- exit 1（HIGH・BLOCKER。3 観点とも報告した）: 記録の「確かめる項目の結果」と findings を読み、3-3 で直す。直した後、`bash scripts/claude/code-review.sh "$ARGUMENTS"` を 1. と同じく（直したコミットを先に送ってから）背景で実行し直し（直した差分を基本レビューに通す）、OK なら 3-1 で次の周を起動する（スクリプトが前の周の `REVIEWED_COMMIT` からの差分だけを見る。修正の妥当性も反証対象）
 - exit 3（報告の無い観点がある。記録は `ROUNDS: 0` で周に数えない）: **報告の無い観点を合格に数えない**（その観点の項目はすべて未検証。VERDICT は HIGH）。記録の「観点ごとの実行」の終わり方・最後のツール呼び出しを自律判断の記録に書き、1 回だけ実行し直す。2 回続けば止める（止める条件 3。時間切れ・失敗が続くのは仕組みの見直しが要る兆し）
 - exit 4（`ADVERSARIAL_VERDICT: LIMIT`）: 下の「上限到達」へ
 - exit 2（`ADVERSARIAL_ERROR:`。一覧が無い・形が違う・作業ツリーに記録の場所の外の変更がある・引数の誤り）: 原因が記録の場所で直せる（計画書に一覧を足す・形を直す）なら直してコミットし、1 回だけ実行し直す。一覧を足すのは計画の範囲を変えないので計画変更記録に 1 行書き、計画レビューは通り直さない。直せない・2 回続くときは止める（止める条件 3）
@@ -95,7 +101,7 @@ bash scripts/claude/adversarial-review.sh "$ARGUMENTS"
 
 ## 4. 結線（必須）
 
-`docs/reviews/open/$ARGUMENTS_review.md` の末尾に 1 行足して commit/push する:
+`docs/reviews/open/$ARGUMENTS_review.md` の末尾に 1 行足して commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）:
 - 最終判定 OK: `STAGE_DONE: review-gate NEXT: test-gate`
 - 最終判定 HIGH / BLOCKER（上限到達で止める場合を除く）: `STAGE_DONE: review-gate NEXT: fix-loop`
 - 止める条件に当たって止まるときは `STAGE_DONE:` を書かない（`/proceed` で再開すると、この段階からやり直す）

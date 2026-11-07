@@ -90,11 +90,11 @@ DB変更なし・外部API/非同期処理なし・フロントエンド変更�
    - ビルド確認: react-scripts build（型エラーが出た場合は修正してから次のステップへ）
    - 修正対象の警告・エラーがある場合は修正してから次のステップへ
    - **例外 — 新規 pre-commit フックを `.pre-commit-config.yaml` に追加した場合**: `pre-commit run <hook-id> --all-files` を実行し、スコープ内の既存ファイル全体が hook を PASS することを確認してからコミットする（commit 時の自動実行はステージ済みファイルのみを対象とするため、既存ファイルの違反は自動では検出されない）
-3) commit/push して PR を更新
+3) commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）
 3.5) **完了前の反映検証（必須）**:
-   - 結線の**前に** `git diff origin/develop...HEAD --name-only` を確認し、計画書の実装対象に対応する**意図した変更ファイルがブランチに反映されている**ことを検証する。
-   - 意図した変更ファイルが現れない場合（作業ツリーにあるだけで未コミット、または未 push の可能性）は、commit/push し直してから確かめ直す。それでも現れないときは原因を記録して止める（止める条件 3）。空 diff のまま review-gate に渡すと「未実装/Blocker」誤判定になるため、この安全ゲートを必ず通す。
-4) 結線（必須）: `docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する（修正の後のレビューのやり直しは、fix-loop が必ず review-gate に戻すことで行う）
+   - 結線の**前に** `git diff origin/develop...HEAD --name-only` を確認し、計画書の実装対象に対応する**意図した変更ファイルがブランチ（手元のコミット）に反映されている**ことを検証する。
+   - 意図した変更ファイルが現れない場合（作業ツリーにあるだけで未コミットの可能性）は、commit し直してから確かめ直す。それでも現れないときは原因を記録して止める（止める条件 3）。空 diff のまま review-gate に渡すと「未実装/Blocker」誤判定になるため、この安全ゲートを必ず通す。
+4) 結線（必須）: `docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit する（修正の後のレビューのやり直しは、fix-loop が必ず review-gate に戻すことで行う）
    ```
    STAGE_DONE: implement NEXT: review-gate
    ```

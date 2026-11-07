@@ -40,7 +40,7 @@
 
 ## 3. 影響範囲
 - Backend/Frontend/DB: なし
-- Config/Infra: `.claude/skills/{plan-issue,plan-review,design-security-review,implement,review-gate,fix-loop,test-gate,retro,close,proceed}/SKILL.md`・`docs/runbooks/workflow.md`・`docs/runbooks/worktree.md`・`docs/runbooks/plan-writing-rules.md`・`scripts/claude/tests/test_i224_push_points.sh`（新規）・`docs/reviews/backlog/I226.md`
+- Config/Infra: `.claude/skills/{plan-issue,plan-review,design-security-review,implement,review-gate,fix-loop,test-gate,retro,close,proceed}/SKILL.md`・`docs/runbooks/workflow.md`・`docs/runbooks/worktree.md`・`docs/runbooks/plan-writing-rules.md`・`scripts/claude/tests/test_i224_push_points.sh`（新規）・`scripts/claude/tests/fixtures/i185/{plan_issue_continue_section,fix_loop_return}.txt`（固定ファイルの作り直し・計画変更記録 2）・`docs/reviews/backlog/I226.md`
 
 ## 4. 変更点一覧（具体）
 
@@ -143,6 +143,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 1. 計画レビュー（20261107_2215・OK）への対応: Warning 1（受け入れ条件 3 の次のイシュー分はこの PR の close の時点で未達と明記し、次の計画で測るよう報告とメモリに残す）・Warning 2（`proceed` の `merge` で依頼の前に `pr-base-sync.sh final` を流す）・Warning 3（テストの失敗の文に正の節と直し方を出す）・Info 2（M-01 で PR へのコメントの回数も並べる）を反映。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。Warning 2 の `proceed` の 1 行は、前倒しの安全網で範囲の中）
+2. 実装の途中と /simplify での調整（方式・範囲は変えない）: (a) `workflow.md` の新しい節の置き場所を「## 記録とつなぎ」の後ろ（「## ゲート」の前）にした — 「## 止めて聞く条件」〜「## 記録とつなぎ」は `test_i185_harness_docs.sh` が写しで固定している範囲で、その中に入れないため (b) `plan-issue` の「この先へ続ける」と `fix-loop` の手順 8 は同じテストが固定しているので、`--update` で固定ファイル（`scripts/claude/tests/fixtures/i185/plan_issue_continue_section.txt`・`fix_loop_return.txt`）を作り直した（このテストの決まりどおり。差分はレビューで見る） (c) 各スキルの「push しない。次に送るのは…」の言い直しを、正への参照「（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）」にそろえた（写しを持たない） (d) close の手順 3・6 と proceed の `merge` の行の経緯の説明を短くした (e) テストはルートの引数をやめ、FG は `.claude/skills` だけを写す・不合格と「その決まりとして出たか」を分けて確かめる形にした。見送り: `code-review.sh` に自分で push させる案（スクリプトの作りを変える範囲の変更。今の形でも送り忘れは `CI_WAIT: NOT_PUSHED` で決定論で止まる）・P4 を消す案（§9 で決めたとおり、P1〜P3 の決まりの正を指すため 1 行残す）。計画レビューのやり直し: 不要
 
 ## レビュー結果
 - [20261107_2215 判定: ✅ 完了](../../reviews/I224_plan_review_20261107_2215.md)

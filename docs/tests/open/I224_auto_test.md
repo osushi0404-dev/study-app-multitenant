@@ -30,11 +30,14 @@
 |---|---|---|---|
 | 2026-11-07 | TC-03（実装前） | 期待どおり NG | `workflow.md` に「GitHub への書き込みの時点」「同時に複数のセッションで」が無い（どちらも exit 1） |
 | 2026-11-07 | TC-02（実装前の数え） | — | 行の先頭の `git push`: `plan-issue` 2・`review-gate` 0・`close` 1。`gh issue edit` は `grill-me` だけ。テストは実装前のため未作成 |
-| 2026-11-07 | TC-01・TC-02・TC-04 | 実装前のため未実行 | |
+| 2026-11-07 | TC-02（テストを先に書き、本体を直す前） | 期待どおり NG | P1 が 13 か所・P2（`review-gate` 0 行）・P4（節なし）で不合格 |
+| 2026-11-07 | TC-02・TC-03・TC-04（実装と /simplify の後） | OK | `test_i224_push_points.sh` pass=9 fail=0（FG 4 つとも、その決まりで不合格になることを含む）・`grep -q` exit 0・`bash -n` exit 0 |
+| 2026-11-07 | TC-01（変えたスキル・手順書を読むテスト 17 本だけ手元で） | OK | `test_i185_harness_docs.sh`（固定ファイルを `--update` で作り直した後）・`test_i193_official_flow.sh` ほか 17 本がすべて exit 0。全体は CI |
 
 ## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_i224_push_points.sh
+bash scripts/claude/tests/test_i185_harness_docs.sh
 grep -q 同時に複数のセッションで docs/runbooks/workflow.md
 bash -n scripts/claude/tests/test_i224_push_points.sh
 ```
