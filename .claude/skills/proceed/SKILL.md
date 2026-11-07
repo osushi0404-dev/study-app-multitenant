@@ -12,7 +12,7 @@ argument-hint: "I###"
 
 1. 最後の `STAGE_DONE:` が `NEXT: human-test` であることを `flow-stage.sh` で確かめる（違えば、返信を結果として扱わず、1. へ進む）
 2. 返信の結果を `docs/tests/open/$ARGUMENTS_manual_test.md` の Human の行の「実結果」に書く
-3. 全部 OK なら `STAGE_DONE: human-test NEXT: retro`、NG が 1 つでもあれば NG の内容を記録して `STAGE_DONE: human-test NEXT: fix-loop` を `docs/reviews/open/$ARGUMENTS_review.md` の末尾に足して commit/push する
+3. 全部 OK なら `STAGE_DONE: human-test NEXT: retro`、NG が 1 つでもあれば NG の内容を記録して `STAGE_DONE: human-test NEXT: fix-loop` を `docs/reviews/open/$ARGUMENTS_review.md` の末尾に足して commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）
    （NG の後は fix-loop → review-gate → test-gate と進み、人の手動テストをもう一度依頼して止まる）
 
 ## 1. 次の段階を決める
@@ -32,6 +32,6 @@ bash scripts/claude/flow-stage.sh "$ARGUMENTS"
 |---|---|
 | `plan-review`・`design-security-review`・`implement`・`review-gate`・`fix-loop`・`test-gate`・`retro`・`close` | Skill ツールで同じ名前のスキルを呼ぶ（引数 `$ARGUMENTS`） |
 | `human-test` | `docs/tests/open/$ARGUMENTS_manual_test.md` の Human の項目と、ここまでの「## 自律判断の記録」の要点を平易に提示し、「結果（OK、または NG と内容）を返信してください」と伝えて止まる |
-| `merge` | close 段階がマージを依頼済み。「GitHub で Approve & Merge をお願いします」と伝えて止まる |
+| `merge` | `bash scripts/claude/pr-base-sync.sh final` を流し、exit 0 のときだけ「GitHub で Approve & Merge をお願いします」と伝えて止まる。0 以外は close の手順 5.5 と同じに扱う |
 
 段階のスキルが `STAGE_DONE:` を書かずに終わった（止める条件に当たって止まった）ときは、1. に戻らずにそのまま止まる（同じ段階を繰り返し呼ばない）。見分け方: 段階を呼ぶ前と後で `flow-stage.sh` の出力の `STAGE_COUNT:`（`STAGE_DONE:` 行の数）が増えていなければ、書かれていない（`LAST_LINE:` の行番号は、自律判断の記録に行を足すだけでずれるので見分けに使わない）。

@@ -87,7 +87,7 @@
 計画の正しさが、不確実な外部（ハーネス／フレームワーク／ツール）の挙動に依存し、計画自身がそれを「未知リスク／最大の未知リスク」と認識する場合は、その前提を**スパイク（最小実証）で検証**してから計画を確定する。これは実装手順の「未知リスク先行原則」を計画確定前の実証まで**前倒しで拡張**したものであり（重複定義はせず同原則を参照する）、スパイク可否で次の二分岐に従う。
 
 - **(1) 稼働中セッションで実証可能な挙動**（CLI フラグの効果・フレームワークの戻り値・設定ファイルのパース結果 等）: **計画確定前にスパイクで実証**し、結果（成立／不成立）を計画書「調査結果」に記録する。不成立の場合は設計をやり直してから計画レビューに進む。
-- **(2) 稼働中セッションでは実証不能な挙動**（権限モード・フックのロードに依存するハーネス挙動 等）: まず `claude -p` で新しいセッションを起動して確かめられないかを試す（手で起こすときは `bash scripts/claude/test-session.sh <引数>`。GitHub へは読み取りだけの鍵になり、書き込みは GitHub が拒否する・I223。`scripts/claude/` のスクリプトが Claude を起こす行〔`check-permission-prompt.sh`・`tui-capture.sh`・検証役の起動〕もすべて同じで、付け忘れは `test_i223_gh_app.sh` の G6 が止める。同じ行には `--strict-mcp-config` も付け（MCP は `--mcp-config` で渡したものだけ。手元の設定の MCP が読み取りだけの鍵を迂回しないように）、tmux の中の `claude` には入口のある `PATH`（`~/.local/bin` が先頭）も渡す（I225）。付け忘れは `test_i223_gh_app.sh` の G6・G7 が止める。承認画面が出るかは `scripts/claude/check-permission-prompt.sh`。設定・フックは `--settings`・`--permission-mode` を付けた `claude -p` の出力で観測できる。対話画面にだけ出る表示は `scripts/claude/tui-capture.sh`）。それでも確かめられない場合だけ、「未実証」であることを計画書「調査結果」に明記し、指定実施環境（プレーン default の新規セッション）での実証を**実装ステップ1に前倒し**する。ステップ1の結果は後続ステップを止めるゲートとして扱い、不成立なら計画をやり直す。
+- **(2) 稼働中セッションでは実証不能な挙動**（権限モード・フックのロードに依存するハーネス挙動 等）: まず `claude -p` で新しいセッションを起動して確かめられないかを試す（手で起こすときは `bash scripts/claude/test-session.sh <引数>`。GitHub へは読み取りだけの鍵になり、書き込みは GitHub が拒否する・I223。`scripts/claude/` のスクリプトが Claude を起こす行〔`check-permission-prompt.sh`・`tui-capture.sh`・検証役の起動〕もすべて同じ。同じ行には `--strict-mcp-config` も付け（MCP は `--mcp-config` で渡したものだけ。手元の設定の MCP が読み取りだけの鍵を迂回しないように）、tmux の中の `claude` には入口のある `PATH`（`~/.local/bin` が先頭）も渡す（I225）。付け忘れは `test_i223_gh_app.sh` の G6・G7 が止める。承認画面が出るかは `scripts/claude/check-permission-prompt.sh`。設定・フックは `--settings`・`--permission-mode` を付けた `claude -p` の出力で観測できる。対話画面にだけ出る表示は `scripts/claude/tui-capture.sh`）。それでも確かめられない場合だけ、「未実証」であることを計画書「調査結果」に明記し、指定実施環境（プレーン default の新規セッション）での実証を**実装ステップ1に前倒し**する。ステップ1の結果は後続ステップを止めるゲートとして扱い、不成立なら計画をやり直す。
 
 **スパイク完了基準**: 想定挙動を**実行可能な確認（コマンド出力・Read による観測・CI ログ 等）で再現**し、その結果（成立／不成立）を計画書「調査結果」に記録した時点で実証完了とする（計画者の解釈ゆれ防止）。
 
@@ -227,7 +227,7 @@ pip-audit・npm audit・mypy・semgrep 等の**既存コードを検査するツ
     PLAN_FILE="docs/plans/open/plan_${ARGUMENTS}_${COUNTER}.md"
   fi
   ```
-- **計画書作成後**: 計画書・テスト文書・レビュー文書を commit/push し、計画レビュー（plan-review 段階）へ進む。ユーザーの承認は待たない（I193。止めるのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるときだけ）
+- **計画書作成後**: 計画書・テスト文書・レビュー文書を commit し（push は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」の時点だけ）、計画レビュー（plan-review 段階）へ進む。ユーザーの承認は待たない（I193。止めるのは `docs/runbooks/workflow.md`「止めて聞く条件」に当たるときだけ）
 
 ### 計画書ヘッダー（文書間の関係性）
 ```markdown
