@@ -350,7 +350,7 @@ ck "C12 claude の設定の警告行は除く" "本文" "$(printf 'Permission al
 # C23: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかったら HIGH（I193 7 回目 H2）
 ck "C23 YES で「実行できず」→ HIGH" HIGH "$(official_security_verdict YES '(実行できず: exit=124。124 は時間切れ)')"
 ck "C23 YES で「読めていない」注意 → HIGH" HIGH "$(official_security_verdict YES $'(注意: 出力に指摘の配列も「指摘なし」も無く、対象を読めていない可能性がある。この出力は判定の根拠にしない)\n本文')"
-ck "C23 YES で読めた結果 → OK" OK "$(official_security_verdict YES '確信度の高い脆弱性は見つかりませんでした。')"
+ck "C23 YES で読めた結果（I212: 判定の行 SECURITY_FINDINGS つき）→ OK" OK "$(official_security_verdict YES $'確信度の高い脆弱性は見つかりませんでした。\nSECURITY_FINDINGS: 0')"
 ck "C23 NO なら（実行していない）→ OK" OK "$(official_security_verdict NO '(実行していない: パス判定 NO)')"
 ck "C23 FINAL の合成に組み込みのセキュリティの判定が入る（I197: 台帳の合否も）" 0 "$(rc grep -qF 'FINAL_VERDICT=$(combine_verdict "$GATE_VERDICT" "$OMISSION_VERDICT" "$LEDGER_VERDICT" "$REVIEWER_VERDICT" "$SECURITY_VERDICT")' scripts/claude/code-review.sh)"
 ck "C23 組み込みの出力の OFFICIAL_SECURITY: 行は行頭から外す" "> OFFICIAL_SECURITY: FAILED" "$(printf 'OFFICIAL_SECURITY: FAILED\n' | neutralize_machine_lines)"

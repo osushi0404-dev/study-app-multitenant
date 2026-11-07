@@ -163,9 +163,9 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
   - E1: `.github/` の下のファイルを変えたブランチ（パス判定 YES）で、1 周目は `/security-review` が判定の行を出さない（`E2E_SEC` に日本語の「報告する脆弱性はありません。」だけ）→ `FINAL_VERDICT: HIGH`・記録に `REVIEW_COMPLETE: NO`・gate-check は `REASON=verdict`。記録だけのコミットの後（記録の場所の外は変えない）に 2 周目（`E2E_SEC` は既定）→ 出力に `範囲のファイル 0 本` も `呼ばずに台帳を引き継ぎます` も無い・偽の `claude` の呼び出しに agent と security がある・`FINAL_VERDICT: OK`・記録に `REVIEW_COMPLETE: YES`・`LEDGER_ROUND: 2`・gate-check は `GATE_CHECK: OK`
   - E2: E1 の 2 周目の記録の後に、記録の場所だけを変えて 3 周目 → 今までどおり範囲 0 本でレビュー役を呼ばない・`REVIEW_COMPLETE: YES`（見終えた記録の後は I202 の動きのまま）
 - FG（`broken`: 写しの文字列を置き換えて壊す）:
-  - FG-U1: `if record_complete "$rec" &&` を `if :  &&` にする（見終えたかを見ない）→ U1 が `<c2>` になり不合格
+  - FG-U1: `record_complete "$rec" || continue` を `:` にする（見終えたかを見ない・計画変更記録 3 の形）→ U1 が `<c2>` になり不合格
   - FG-E1: 本体の写しの `review_mode` を前の形（最新の記録の SHA を起点）に戻す → E1 の 2 周目が `範囲のファイル 0 本` になり不合格
-  - FG-U7: `official_security_verdict` の行頭の固定（`'^SECURITY_FINDINGS:`）を外して `'SECURITY_FINDINGS:` にする → U7 の「文の中に語がある行だけ → HIGH」が OK になり不合格
+  - FG-U7: `official_security_verdict` の行全体の固定（`'^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$'`）を外して `'SECURITY_FINDINGS:[[:space:]]*[0-9]+'` にする → U7 の「文の中に語がある行だけ → HIGH」が OK になり不合格（計画変更記録 2）
   - 直す前の版（develop の `official_security_verdict`）で U7 を流し、期待と違う行（例: 「報告する脆弱性はありません。」だけ → 前の版は注意が付かない入力なので OK）が出ることをステップ 1 の記録に残す
   - FG-U8: `neutralize_machine_lines` の一覧から `REVIEW_COMPLETE` を外す → U8 が不合格
 
@@ -180,7 +180,7 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
 - `test_i202_ledger_cleanup.sh`: 偽の `claude` は `/security-review` を呼ばない作り（パス判定 NO）なので変えない。見終えた記録の後の通し（m・n）はそのまま合格するはず（TC-01 で確かめる）
 
 ### 4-7. `scripts/claude/tests/test_i223_gh_app.sh`（同梱 6）
-- 139 行目: `r"gh auth (status|token)\b"` → `r"gh auth (status|token)(?![A-Za-z0-9_-])"`
+- 139 行目: `r"gh auth (status|token)\b"` → `r"gh auth (status|token)(?![A-Za-z0-9_])"`（前の `\b` と同じく英数字と `_` だけを語の文字にする。`-` は入れない＝`gh auth token-foo` も今までどおり当たる・計画変更記録 3）
 - FG を 1 つ足す: `g10_fg "和文がすぐ続く auth token は不合格" 1 'gh auth tokenを打つ'`
 - 冒頭の G10 の説明（111 行目付近）に「語の境目は英数字だけで見る（和文が続いても当たる・I212）」を足す
 
@@ -273,6 +273,8 @@ Danger Ops: 無
 
 ## 計画変更記録
 1. 計画レビュー（20261108_0044・OK・高リスク判定 No）の Warning 3 件・Info 1 件への対応: (W1) §4-1 に「`/code-review` の失敗は見終えたかの条件に入れない」と理由を足した (W2) §4-6 に、既存の R1 の他のケースが第 2 引数なしでも変わらない理由と、ステップ 1 で確かめることを足した (W3) `official_security_verdict` を「最後の空でない行だけ」から「行全体が `SECURITY_FINDINGS: <数>` の行があるか」に緩めた（判定の行の後に締めの文が付いても FAILED にしない。行全体の固定の形なので文の中の語では当たらない）。U7・FG-U7・TC-03・V5 を合わせて直した (Info 1) 空の配列の展開を `${extra[@]+"${extra[@]}"}` にした。Info 2（欄の無い古い記録）は §8 のとおりで対応なし。計画レビューのやり直し: 不要（findings への対応で、方式・範囲・受け入れ条件は変えない）
+2. 実装での形の整理（振る舞いは計画どおり）: FG-U7 の壊し方を「行頭の固定を外す」から「行全体の固定（`^…$`）を外す」にした。行頭だけを外しても行末の `$` が残り、文の中の語では当たらないままで、FG が成立しなかった（実走で確かめた）。計画レビューのやり直し: 不要（テストの壊し方の直しで、方式・範囲・受け入れ条件は変えない）
+3. /simplify（4 観点）を受けた整理: (a) `review_mode` の起点探しを「記録の一覧を 1 回だけ配列に読み、新しい順に見て、最初に当たった記録で止める」形にし、外側の `sha` を上書きしない別の変数 `rec_sha` にした（振る舞いは同じ。FG-U1 の置き換え前の文字列を `record_complete "$rec" || continue` に合わせた） (b) `official_output_readable()` に「行全体が `SECURITY_FINDINGS: <数>` の行があれば読めた結果」を 1 行足した。判定が OK なのに記録に「読めていない可能性」の注意が残って食い違うのを防ぐ（U7 に 1 ケース足した） (c) G10 の先読みから `-` を外した（計画で `-` を入れた理由が無く、前の `\b` より緩くなっていた）。見送り: `review_mode` の呼び出しの既定値と明示の重なり・案内の再計算・`REVIEW_OK` の条件の重なり（どれも Low で、読みやすさの好みの範囲）、`/code-review` の側の自由文の読み取り・「差分なし」の文字列での判定・記録に「次の起点」を書く別設計（範囲の外・今の形で正しく動く。retro で扱う）、E の土台の写しが 4 本目になった件（ファイルごとの写しは決まりどおり。retro で扱う）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261108_0044 判定: ✅ 完了](../../reviews/I212_plan_review_20261108_0044.md)

@@ -25,6 +25,9 @@
 - [plan] 同梱 2・4（/security-review の判定の 1 行）・6（G10）を入れ、3・5（敵対的レビュー）は別イシューに切り出す（retro で起票） — 2・4 は直さないとやり直しも同じ FAILED で止まる。3・5 は別の仕組みで設計の検討が要る
 - [plan] gate-check.sh は直さない — 直した後の code-review.sh では見終えていない回は必ず HIGH／BLOCKER になり、やり直しは見終えた記録から差分を取るので、gate-check の結果は変わらない（plan §4-4）
 - [plan-review] 計画レビュー OK（高リスク判定 No）の Warning 3 件・Info 1 件を計画書で直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない findings への対応のため（計画変更記録 1）。W3 では /security-review の判定の 1 行を「最後の行だけ」から「行全体がその形の行があるか」に緩めた（締めの文で FAILED にして止まるのを防ぐ）
+- [implement] テストを先に書き、直す前の本体で U1〜U3・U5〜U8・E1 が落ちる（E1 では 2 周目が範囲 0 本でレビュー役を呼ばず、gate-check も通る＝I211 の穴を再現）ことを確かめてから直した — TC-02・TC-03 の FG の前提
+- [implement] FG-U7 の壊し方を「行全体の固定を外す」に直した — 行頭だけ外しても行末の固定が残り、FG が成立しなかった（計画変更記録 2）
+- [implement] /simplify の 4 観点のうち、起点探しの形（新しい順・最初に当たったら止める）・記録の「読めていない」注意との食い違い・G10 の `-` の 3 点を直し、他は見送った — 見送りはどれも Low か範囲の外で、今の形で正しく動く。`/code-review` 側の自由文の読み取り・E の土台の写しは retro で扱う（計画変更記録 3）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
