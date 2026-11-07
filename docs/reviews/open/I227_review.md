@@ -26,5 +26,7 @@
 - [plan] `/code-review` の「読めたか」を判定の行ではなく公式の決まった出力の形（JSON の指摘の配列）で決める — スパイク 2 回で `/code-review` が `--append-system-prompt` の指示に従わず、囲みの JSON 配列だけを出したため。受け入れ条件 2 の狙い（文の形に左右されない）は変えず、文言を合わせた
 - [plan] 「差分なし」は既存の変数 `NO_DELTA` を引数で渡す — 判定の前にいつも決まっていて、中身の照合を残さない
 - [plan] 一覧の I212 F5・F7 を同梱、ほかは残す — F7 は受け入れ条件 3 そのもの、F5 は直す行と同じ行の文言
+- [plan-review] Warning 3 件（囲みの言語名・M-01 のやり直し方針・C23 の注意文）を計画に反映し、再レビューはしない — 方式・範囲・受け入れ条件は変えない
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
