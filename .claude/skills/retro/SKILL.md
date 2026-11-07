@@ -155,7 +155,7 @@ user-invocable: false
        ```bash
        bash scripts/claude/code-review.sh --route issue $ARGUMENTS
        ```
-     - **一覧**: それ以外（Low、または再現なし）。イシューにせず、出力の行をそのまま `docs/reviews/backlog/$ARGUMENTS.md`（起点のイシューごとに 1 ファイル。無ければ作り、見出しは `docs/reviews/backlog/I206.md` と同じ形で「記録:」に標準エラーの記録のパスを書く）に貼り、手順 4 の「このイシューで直す」と同じく commit/push する:
+     - **一覧**: それ以外（Low、または再現なし）。イシューにせず、出力の行をそのまま `docs/reviews/backlog/$ARGUMENTS.md`（起点のイシューごとに 1 ファイル。無ければ作り、見出しは `docs/reviews/backlog/I206.md` と同じ形で「記録:」に標準エラーの記録のパスを書く）に貼り、手順 4 の「このイシューで直す」と同じく commit する:
        ```bash
        bash scripts/claude/code-review.sh --route backlog $ARGUMENTS
        ```
@@ -165,7 +165,7 @@ user-invocable: false
    - 手順 2.7 の 4 問による見送りは、この台帳の残りには使わない（判定は後続のイシューの計画、または一覧を見る計画で行う）。
 
 4) 振り分けに従って対応する（ユーザーの判断は待たない）:
-   - **このイシューで直す**: 記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）だけで済むものは、その場で直して commit/push する
+   - **このイシューで直す**: 記録の場所（`docs/reviews/`・`docs/tests/`・`docs/issues/`・`docs/plans/`）だけで済むものは、その場で直して commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）
    - **既存イシューに同梱**: 同梱先のイシュー（未着手のものを含む）に、改善案の要約・根本原因・予防策・対象ファイルをコメントする。本文は一時ファイルに書いて `gh issue comment <番号> --body-file <ファイル>` で付ける
    - **採用（新規起票）**: Skill ツールで `issue-bootstrap` を呼ぶ（引数はタイトル。呼ぶときに「retro からの起票」であること・根本原因・予防策・対象ファイル・起点のイシュー番号を伝える。issue-bootstrap はこのとき質問せず、未確定は「未定・grill-me で確認」と書く）
    - **見送り**: 何もしない（理由は記録に残す）
@@ -175,7 +175,7 @@ user-invocable: false
 
 5) 記録: `docs/reviews/open/$ARGUMENTS_review.md` の「## 自律判断の記録」に、改善案ごとの振り分け（直した／同梱先 #番号／起票 I###・#番号／見送り）と理由を書く。手順 3 の平易版・詳細版の振り返りも同じファイルの「## 振り返り」に残す（close 段階のマージ依頼で、平易版をまとめて報告する）
 
-6) 結線（必須）: commit/push してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する
+6) 結線（必須）: commit してから、`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）
    ```
    STAGE_DONE: retro NEXT: close
    ```

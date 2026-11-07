@@ -138,7 +138,7 @@ disallowed-tools: Write, NotebookEdit
 2. 直すには要件・基本設計・UI/UX を変える必要があるとき、または直し方が無いときだけ止める（止める条件 1・3）。`STAGE_DONE:` は書かない
 
 **Blocker がない場合**:
-`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する（Write は使えないので Edit で足す）:
+`docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit する（Write は使えないので Edit で足す。push はしない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）:
 ```
 STAGE_DONE: design-security-review NEXT: implement
 ```

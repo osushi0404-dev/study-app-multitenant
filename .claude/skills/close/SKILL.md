@@ -122,7 +122,8 @@ user-invocable: false
    )"
    ```
    テンプレートが存在しない場合は「目的/変更点/テスト/ロールバック/参照パス」を手動で記載する。
-3) commit/push して PR を更新する。
+3) commit して送り、PR を更新する（`docs/runbooks/workflow.md`「GitHub への書き込みの時点」の 3）。
+   commit の前に、`docs/reviews/closed/I###_review.md` の「## 自律判断の記録」に close の分を書き、末尾に `STAGE_DONE: close NEXT: merge` を足す。
    **staging は close 対象の I### 関連ファイルに限定する**（step 1 の `git mv` で移動した issue/plan/tests/reviews と、完了情報追記などで編集した追跡済みファイルのみ）。
    ```bash
    # 追跡済みファイルの変更（git mv 済みの move・完了情報追記）だけを staging する。
@@ -162,10 +163,10 @@ user-invocable: false
    `oshui0404` だけの設定のため（main には CODEOWNERS が無い・`docs/runbooks/branch-protection-setup.md`）、
    承認前の正常な最終状態は BLOCKED＝CI 全緑・承認待ちのみ）。
    - exit 0 → step 6 のマージ依頼へ進む
-   - exit 1 → 原因を見て直す。マージコンフリクトは step 0 と同じ扱い。DRAFT 残留は step 5 をやり直す。CI fail は、記録を 1 か所に保つため、step 1 で closed へ移したこのイシューの記録（`docs/issues/closed/I###.md`・`docs/plans/closed/plan_I###*.md`・`docs/tests/closed/I###_*.md`・`docs/reviews/closed/I###_review.md`）を `git mv` で open へ戻し（計画書のレビュー結果のリンクも step 1 の逆に戻す）、commit/push してから、`docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: fix-loop` を書いて終わる（後の段階は open の記録を読み書きする）
+   - exit 1 → 原因を見て直す。マージコンフリクトは step 0 と同じ扱い。DRAFT 残留は step 5 をやり直す。CI fail は、記録を 1 か所に保つため、step 1 で closed へ移したこのイシューの記録（`docs/issues/closed/I###.md`・`docs/plans/closed/plan_I###*.md`・`docs/tests/closed/I###_*.md`・`docs/reviews/closed/I###_review.md`）を `git mv` で open へ戻し（計画書のレビュー結果のリンクも step 1 の逆に戻す）、`docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: fix-loop` を足して commit して終わる（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）
    - exit 2 → mergeStateStatus=UNKNOWN が継続。1 回だけ実行し直し、続けば報告に書いて step 6 へ進む
-6) 結線とマージ依頼（必須）:
-   - `docs/reviews/closed/I###_review.md` の末尾に `STAGE_DONE: close NEXT: merge` を足して commit/push する
+6) マージ依頼（必須。ここではコミット・push しない）:
+   - 手順 3 の後に分かったこと（最後の確認の結果など）は、記録に足さず依頼の報告に書く
    - ユーザーへ GitHub 上で Approve & Merge を依頼する（承認とマージはユーザー `oshui0404` だけが行える。
      承認の後に develop への追従などでコミットが入ると承認は取り消されるため、その場合は再承認を依頼する）。
      手動テスト文書に、承認の後・マージの前に行う確認がある場合は、まず承認だけを依頼し、その確認を終えてからマージを依頼する。そのような確認がない場合は、承認とマージを一度に依頼する。

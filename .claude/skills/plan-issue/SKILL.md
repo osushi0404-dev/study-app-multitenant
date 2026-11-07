@@ -79,7 +79,7 @@ EOF
   --base develop
 ```
 
-Draft PR 番号をイシューファイルの「## 関連資料」セクションに追記する:
+Draft PR 番号をイシューファイルの「## 関連資料」セクションに追記する（手元のファイルだけ。GitHub のイシュー本文は同期しない。push は上の 2 の 1 回だけで、この後の段階は手元でコミットだけ・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）:
 ```
 - Draft PR: #XX
 ```
@@ -186,8 +186,8 @@ grep -rnF -e "FILE=<実装対象のパス1> |" -e "FILE=<実装対象のパス2>
 
 **この先へ続ける（必須・止まらない）**
 上の文書品質ゲートを満たしたら、ユーザーの入力を待たずに先へ進む（計画の承認は待たない。計画は plan-review 段階のレビューで確かめる）。
-1. 計画書・テスト文書・レビュー文書を commit/push する。
-2. `docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit/push する:
+1. 計画書・テスト文書・レビュー文書を commit する（push しない・`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）。
+2. `docs/reviews/open/$ARGUMENTS_review.md` の末尾に次の 1 行を足して commit する:
    ```
    STAGE_DONE: plan NEXT: plan-review
    ```

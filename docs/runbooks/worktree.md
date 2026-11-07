@@ -79,7 +79,7 @@ cp <primary>/e2e/.env.e2e e2e/.env.e2e                         # E2E を行う�
 
 1 つのワークツリーで、複数のイシューを順番に扱ってよい。
 
-1. いまのイシューの未コミット変更を片付ける（コミット・push する。不要なら捨てる）。新しいイシューのイシューファイル（untracked）は残してよい。
+1. いまのイシューの未コミット変更を片付ける（コミットする。不要なら捨てる。push は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」の時点だけ）。新しいイシューのイシューファイル（untracked）は残してよい。
 2. `/plan-issue I<番号>` を実行する。`origin/develop` から直接 feature ブランチを作るため、develop をチェックアウトしない（別のワークツリーが develop を使っていても失敗しない）。未コミットのイシューファイルはそのまま新ブランチへ持ち越される。
 
 ---
@@ -248,7 +248,7 @@ docker compose config | grep -A1 published
   - ツールの呼び出しではなくフックなので、見張りと Claude Code 本体の隔離の判定の外で動く（例外はこの早送りだけ）
 - **技術強制済み（I095）**: この「他のワークツリーを直接編集しない」ルールは、PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）で技術強制されている。別ワークツリーのルート配下への **Edit/Write/MultiEdit/NotebookEdit・Bash 書込（`>`/`>>`/`>|`・`tee`・`cp`/`mv` の宛先・`sed -i`）を `exit 2` でブロック**する（`.claude/settings.json` は commit 共有のため全ワークツリーに自動適用）。**読み取りは許可**（参照・調査は可）。判定は `git worktree list` のルートとの realpath 境界一致で行い、**入れ子では、パスを含む最も内側のワークツリーを所有者として判定**する（I179。入れ子ワークツリーは自分のファイルに書け、親→入れ子・入れ子→親・兄弟間はブロック）。**fail-safe**（ワークツリー境界を確定できない場合＝git 失敗時はブロック）・**エスケープ無し**（`DANGER_OK=1` でも解除されない）。未カバー経路（変数展開越しの `cd`・`eval`/変数展開越しの宛先）は検査できないという限界を stderr に明示する。
 - **削除・破棄は技術的には止めない（I179 計画変更記録 6）**: 公式配置では別のワークツリーが primary の中（`.claude/worktrees/`）にあるため、primary での相対パスや全体への操作で他のワークツリーの未コミット作業を消せる。ただしコマンドの文字列からシェルの動きを読み取って止める方式は、どこまで足しても抜け道と止めすぎが出続けた（I179 の敵対的レビュー第 1〜11 周・`docs/reviews/closed/I179_adversarial_review_*.md`）。develop/main は GitHub 側で保護され（bot は PR を出すだけ）、ローカルが壊れても GitHub から復旧できるため（例外は秘密情報の push とワークフローの変更など。`docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲」）、守りは次に任せる。
-  - **こまめに commit・push する**（失うのは push していない手元の変更だけにする）。
+  - **こまめに commit する**（push は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」の時点だけ。手元のコミットはワークツリーを消さない限り残り、`wt-remove.sh` は未 push のコミットがあると止まる）。
   - **別のワークツリーの中身を消さない**: primary のセッションで `.claude/worktrees/` 配下を `rm`・`mv`・`git -C <入れ子> reset/checkout/clean/stash` しない。撤去は `bash scripts/claude/wt-remove.sh <パス>`（未コミット・中の入れ子があると止まる）。`git worktree remove` は使わない（中の入れ子は gitignore 済みで、`--force` なしでも作業ごと消える）。
   - **別ワークツリー専用の判定は持たない**: 中の入れ子ワークツリーまで未コミットの作業ごと消す `git clean -ff`（`f` を 2 つ以上）を含め、`git clean -f`・`rm -r`・`git reset --hard` などは、見張り（I174）が危険操作として場所によらず止める（`docs/runbooks/danger-ops.md`）。
 - **既知の限界（入れ子）**: 「どれが現ワークツリーか」はフックを実行したときの作業フォルダ（`git rev-parse --show-toplevel`）で決まる。入れ子ワークツリーは primary のフォルダの中にあるため、primary のセッションで `cd .claude/worktrees/<name>` すると作業フォルダがそのまま残り、それ以降はそのセッションが入れ子のワークツリーとして扱われる（入れ子への書込が通る）。primary のセッションから入れ子へ `cd` しない。入れ子で作業するときは、そのワークツリーのセッションを使う（§2「セッションを開く」）。サブエージェントのフックは primary の設定で動くため、作業フォルダ以外（`CLAUDE_PROJECT_DIR` 等）で判定すると、サブエージェントが自分の入れ子に書けなくなる。このため作業フォルダでの判定を維持している。
