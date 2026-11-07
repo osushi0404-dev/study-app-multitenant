@@ -67,7 +67,7 @@
 - `test-gate`: 63 行を「commit」に
 - `retro`: 168・178 行を「commit」に（起票・既存イシューへのコメントはそのまま）
 - `close`: 手順 3 の commit の前に `STAGE_DONE: close NEXT: merge` を足して、このコミットで送る（③）。手順 6 は「結線は手順 3 で済み。マージ依頼だけ」に。165 行の CI 失敗の戻し（open へ戻す）は「commit/push」→「commit」（次の review-gate が送る）。このとき最後の行が `STAGE_DONE: close NEXT: fix-loop` になるので、手順 3 の `close NEXT: merge` より後の行が勝つ（`flow-stage.sh` は最後の行を読む）
-- `proceed`: 15 行の「commit/push」を「commit」に
+- `proceed`: 15 行の「commit/push」を「commit」に。表の `merge` の行（close がマージを依頼済み）に「依頼を伝える前に `bash scripts/claude/pr-base-sync.sh final` を流し、exit 0 のときだけ依頼する（0 以外は close の手順 5.5 と同じに扱う）」を足す（計画レビューの Warning 2: `close NEXT: merge` を手順 3 に前倒しするので、close が最後の確認の前に中断しても、再開で確認を飛ばさない）
 
 ### 4-3. `docs/runbooks/worktree.md`・`docs/runbooks/plan-writing-rules.md`
 - `worktree.md:82`「コミット・push する」→「コミットする」
@@ -83,6 +83,7 @@
 - P4: `docs/runbooks/workflow.md` に「## GitHub への書き込みの時点」の節がある（P1〜P3 の決まりの正）
 - FG: 一時フォルダの写しに `commit/push` を足す・`review-gate` の `git push` を 2 つにする・`retro` に `gh issue edit` を足す・節の見出しを消す → それぞれ落ちる（テストの中で確かめる）
 - 引数でルートを渡せる形にする（写しで FG を流すため）
+- 不合格のときは、どの決まりか（P1〜P4）・ファイル・行と、「決まりの正は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」。push の時点を意図して変えるなら、その節とこのテストの数を一緒に直す」を出す（計画レビューの Warning 3）
 
 ### 4-5. `docs/reviews/backlog/I226.md`
 - 同梱した F2 の行を消す
@@ -118,7 +119,7 @@ Claude が決めた（技術的な選択と理由）:
 - **決まりの正は `workflow.md` の 1 節、スキルは参照だけ**（仮定・技術的）: 写しを増やさない（I195 の方針）
 - **`STAGE_DONE: close NEXT: merge` を close の手順 3 のコミットに入れる**（仮定・技術的）: 手順 6 の結線のためだけの push（4 回目）を無くす。失敗時は後の行が勝つ
 - **決定論のテスト P1〜P3 を足す**（仮定・技術的）: `plan-writing-rules.md`「決定論テストの対象の選び方」の 2 問 — 普通の書き方（他のスキルの写し）で気づかずに壊しうる／壊れても CI・画面・すぐ後の作業で気づけない（push が増えるだけ）、被害は停止の再発で大きい → 作る。P4（節の有無）は意図的な変更でしか消えないが、P1〜P3 の決まりの正を指すため 1 行だけ置く
-- **受け入れ条件 3 の「次のイシュー 1 本の実測」は、マージの後に次のイシューの retro で行う**（イシューに明記・grill-me）: この PR の中では I224 自身の review-gate〜close の回数（3 回以内の見込み）で代わりに示す。次のイシューの retro で測ることをメモリと I224 の close の報告に書く
+- **受け入れ条件 3 の「次のイシュー 1 本の実測」は、マージの後に次のイシューの retro で行う**（イシューに明記・grill-me）: grill-me で「I224 の次に進めるイシュー 1 本で実測して達成を確かめる（I224 自身でも測って記録する）」と決めたので、この PR の close の時点では、受け入れ条件 3 のうち I224 自身の分（implement より後の review-gate〜close の回数・3 回以内の見込み）だけを満たし、次のイシューの分は未達のまま残る（計画レビューの Warning 1）。取りこぼさないよう、次のイシューの計画（`/plan-issue`）の「確定事項と自律判断」に測ることを書くよう、I224 の close の報告とメモリに残す。M-01 では push の回数に加え、PR へのコメントの回数（`gh pr view --json comments,reviews` の件数）も並べて記録する（Info 2・次の判断の材料）
 - **PR へのコメント（レビューの記録）は変えない**（仮定・技術的〜範囲）: grill-me で決めた範囲（push・イシュー本文）の外で、PR でレビューを読む導線を変えるのは別の判断。1 本で 2〜5 回・push の直後に続くことは記録に残す
 - **GitHub の上限の正確な数字は確かめない**（仮定・技術的）: 計画は数字に依存しない
 - 要件・基本設計・UI/UX の仮定: なし
@@ -139,3 +140,9 @@ Claude が決めた（技術的な選択と理由）:
 
 Danger Ops（有無/手順/ロールバック）:
 - 無
+
+## 計画変更記録
+1. 計画レビュー（20261107_2215・OK）への対応: Warning 1（受け入れ条件 3 の次のイシュー分はこの PR の close の時点で未達と明記し、次の計画で測るよう報告とメモリに残す）・Warning 2（`proceed` の `merge` で依頼の前に `pr-base-sync.sh final` を流す）・Warning 3（テストの失敗の文に正の節と直し方を出す）・Info 2（M-01 で PR へのコメントの回数も並べる）を反映。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。Warning 2 の `proceed` の 1 行は、前倒しの安全網で範囲の中）
+
+## レビュー結果
+- [20261107_2215 判定: ✅ 完了](../../reviews/I224_plan_review_20261107_2215.md)

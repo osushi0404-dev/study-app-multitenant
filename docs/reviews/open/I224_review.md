@@ -28,5 +28,7 @@
 - [plan] `STAGE_DONE: close NEXT: merge` を close の手順 3 のコミットに入れる — 結線のためだけの 4 回目の push を無くす
 - [plan] PR へのレビューの記録のコメントは変えない — grill-me で決めた範囲（push・イシュー本文）の外で、PR でレビューを読む導線を変えるのは別の判断
 - [plan] この I224 の plan-issue〜implement は古いスキルのまま進め、push は手順が許す範囲でまとめる（docs と STAGE_DONE を 1 回で送る）— 計画レビューを通す前に新しい決まりで動かない
+- [plan-review] PLAN_VERDICT: OK（20261107_2215）。Warning 3 件・Info 1 件を計画書・テスト文書に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録 1）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
