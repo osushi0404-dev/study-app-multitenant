@@ -34,6 +34,7 @@
 - [retro] 計画で切り出すと決めた同梱 3・5（敵対的レビューの確認済みの引き継ぎ・実験の時間）→ 新規起票 I228（#423・判定の仕組みなので最優先と記載） — 同梱先になる既存イシューが無かった
 - [retro] /simplify の見送りのうち「判定を文の形・表示の文字列に頼る」2 件は I227 に入れた。E の土台の写しが 4 本目（再利用の観点）は見送り — 外から動かす約束が変わると 4 本とも目に見えて落ちる（気づける）ので、共通の部品にする手間に見合わない
 - [retro] 新しい手順・観点は足さない — 今回の見逃し（受け入れ条件の文言と設計の食い違い・FG の壊し方の不足・G10 の `-`・記録の注意の食い違い）は、どれも計画の段階・実装の実走・/simplify でその場で捕まり、手戻りが無かった
+- [close] base 追従は不要（BLOCKED＝承認待ち）・gate-check OK の後に記録を closed へ移し、PR の説明を更新した。計画書の「実装後評価」とレビュー記録へのリンクも closed 向きに直した — 記録の 1 か所化
 
 ## 振り返り
 
@@ -75,3 +76,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
