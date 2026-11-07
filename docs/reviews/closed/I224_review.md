@@ -80,6 +80,7 @@
 - [test-gate] gate-check OK。M-01・M-02 を自分で行い OK。M-01 の最終の数（close の ③ の後）は close の報告に書く — close の後は記録に足さない決まり（新しい close の手順 6）
 - [retro] 台帳の残りの振り分け: 後続イシューに回す行は 0 件。F1〜F9 → `docs/reviews/backlog/I224.md` — `code-review.sh --route` の結果に従った（F1・F2 は Medium だが再現なし）
 - [retro] 予防処置は足さない — 固定範囲とのぶつかりは既存のテストがその場で捕まえた（2.7 の問 2）。受け入れ条件 3 の残り（次のイシュー 1 本での push の回数）は、マージ依頼の報告とメモリに残し、次のイシューの計画で測る
+- [close] 新しい手順で、close の分の記録と `STAGE_DONE: close NEXT: merge` を手順 3 のコミットに入れて 1 回だけ送った。最後の確認の結果と最終の push の回数はマージ依頼の報告に書く — 手順 3 の後は記録に足さない決まり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -87,3 +88,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
