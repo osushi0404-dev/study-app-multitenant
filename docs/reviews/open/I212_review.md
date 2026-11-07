@@ -11,8 +11,8 @@
 - Config（ハーネス）: `scripts/claude/code-review.sh`・テスト（`test_i212_review_base.sh` 新規・`test_i197_review_ledger.sh`・`test_i193_official_flow.sh`・`test_i223_gh_app.sh`）・`.claude/skills/review-gate/SKILL.md`・`docs/runbooks/review-rules.md`
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: review-gate の実走でゲート 8 本がすべて exit=0（新しい `test_i212_review_base.sh` pass=31・既存 5 本も fail=0）。CI 全緑（19195aa8）。gate-check OK
+- 手動: M-01（本物の /security-review が `SECURITY_FINDINGS: 0` を出し判定 OK）・M-02（記録に `REVIEW_COMPLETE: YES`）とも OK。Human の項目なし
 
 ## 計画との差分
 - （実装後に記入）
@@ -29,6 +29,7 @@
 - [implement] FG-U7 の壊し方を「行全体の固定を外す」に直した — 行頭だけ外しても行末の固定が残り、FG が成立しなかった（計画変更記録 2）
 - [implement] /simplify の 4 観点のうち、起点探しの形（新しい順・最初に当たったら止める）・記録の「読めていない」注意との食い違い・G10 の `-` の 3 点を直し、他は見送った — 見送りはどれも Low か範囲の外で、今の形で正しく動く。`/code-review` 側の自由文の読み取り・E の土台の写しは retro で扱う（計画変更記録 3）
 - [review-gate] 基本レビュー（全体・台帳 1 周目・19195aa8）は FINAL OK・高リスク NO・ADVERSARIAL_STAGE NOT_REQUIRED で test-gate へ進む — 台帳の F1（Medium・「差分なし」の文字列の部分一致で OK になる）〜F7（Low）はどれも止める条件の一覧に当たらず、スクリプトが止めない指摘と決めた。retro で振り分ける
+- [test-gate] gate-check OK・重いゲートなし・手動テスト M-01・M-02 を Claude が実施して OK・Human の項目なしで retro へ進む — M-01 の `bash -c` の形はワークツリーの安全装置が止めたので、同じ中身を一時のスクリプトにして流した（記録の場所の外は書いていない）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

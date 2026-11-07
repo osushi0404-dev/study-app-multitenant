@@ -34,6 +34,7 @@
 | 2026-11-08 | TC-04（直す前） | 期待どおり NG | 直す前の正規表現 `gh auth (status\|token)\b` は `gh auth tokenを打つ` に当たらない（Python で False）＝新しい `g10_fg` は直す前の版で rc=0 になり不合格 |
 | 2026-11-08 | TC-01〜TC-05（実装の後） | OK | `test_i212_review_base.sh` pass=30 fail=0（FG-U1・FG-E1・FG-U7・FG-U8 がすべて成立）・`test_i197_review_ledger.sh` pass=64・`test_i193_official_flow.sh` pass=174・`test_i202_ledger_cleanup.sh` pass=157・`test_review_gates.sh` PASS=67・`test_i223_gh_app.sh` pass=38（FG の 1 本が増えた）、すべて fail=0 |
 | 2026-11-08 | TC-01〜TC-05（/simplify の整理の後） | OK | `test_i212_review_base.sh` pass=31 fail=0（U7 に「判定の行があれば読めた結果」を足した）・`test_i197_review_ledger.sh` pass=64・`test_i193_official_flow.sh` pass=174・`test_i202_ledger_cleanup.sh` pass=157・`test_review_gates.sh` PASS=67・`test_i223_gh_app.sh` pass=38、すべて fail=0。`bash -n` 2 本も exit 0 |
+| 2026-11-08 | TC-01〜TC-05（review-gate の実走・19195aa8） | OK | `code-review.sh` がゲート 8 本を実走しすべて exit=0（`docs/reviews/I212_code_review_20261108_0100.md`）。test-gate に回された重いゲートは無い。gate-check OK |
 
 ## 決定論ゲート（自動実走）
 ```bash
