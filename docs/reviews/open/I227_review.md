@@ -30,7 +30,9 @@
 - [plan] 一覧の I212 F5・F7 を同梱、ほかは残す — F7 は受け入れ条件 3 そのもの、F5 は直す行と同じ行の文言
 - [plan-review] Warning 3 件（囲みの言語名・M-01 のやり直し方針・C23 の注意文）を計画に反映し、再レビューはしない — 方式・範囲・受け入れ条件は変えない
 - [implement] /simplify の指摘のうち 5 件を直し、6 件を見送った（計画変更記録 2）— 見送りは計画どおりの形・範囲の外・軽微なもの。FG-E2 は grep に替えず、通しで退行を止める形を残した
+- [review-gate] 基本レビュー 1 周目 OK（`I227_code_review_20261108_0208.md`・止める指摘なし・Low 5 件は台帳に残し retro へ）・敵対的レビューは NOT_REQUIRED — 計画レビューの判定 No・パス判定 NO
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
