@@ -38,7 +38,9 @@
 - [implement] `workflow.md` の新しい節を、`test_i185_harness_docs.sh` の固定範囲の外に置いた。固定している `plan-issue`・`fix-loop` の 2 か所はこのテストの決まりどおり `--update` で固定ファイルを作り直した — 意図した変更で、差分はレビューで見る
 - [implement] /simplify の指摘のうち、スキルの言い直しの統一・close と proceed の説明の短縮・テストの写す範囲（primary で全ワークツリーを写さない）・テストの引数と判定の整理は直した。`code-review.sh` に自分で push させる案（範囲の外・今も決定論で止まる）・P4 を消す案（計画で残すと決めた）・同梱の重複の整理を外す案（計画の同梱）は見送った
 - [implement] 手元では、変えたスキル・手順書を読むテスト 17 本だけを流した（全体は CI）
+- [review-gate] 新しい手順どおり最初に `git push` してから `code-review.sh` を流した（CI_WAIT: OK＝push を前提にする確認は壊れていない）。FINAL_VERDICT: OK・ADVERSARIAL_STAGE: NOT_REQUIRED（20261107_2228・ゲート 4 本 exit 0）。台帳の F1〜F9 は止める指摘でないので直さず retro へ — fix-loop が直すのは止める指摘だけ（I197）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
