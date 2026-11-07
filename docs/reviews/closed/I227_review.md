@@ -36,6 +36,7 @@
 - [retro] 改善案 R1（`drop_cli_warnings` が新しい形の警告を除かない）・R2（ほかのテストの代役が「指摘なし」を返す）は見送り、`docs/reviews/backlog/I227.md` に残した — どちらも判定に影響せず手戻りなし。次に `code-review.sh` を触る計画で一覧から拾える
 - [retro] 予防処置の新規起票・同梱なし — 想定外だった `/code-review` の振る舞いは計画前のスパイクで捕まり、手戻りが無かった（既存の「外部挙動依存のスパイク実証」の決まりが効いた）
 - [retro] I224 の push の回数: このイシューは plan-issue・review-gate の 2 回、close で 3 回目の予定（fix-loop なし・最少の形）
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK・記録を closed へ移した — 手順どおり
 
 ## 振り返り
 
@@ -86,3 +87,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
