@@ -28,7 +28,9 @@
 - [implement] テストを先に書き、直す前の本体で U1〜U3・U5〜U8・E1 が落ちる（E1 では 2 周目が範囲 0 本でレビュー役を呼ばず、gate-check も通る＝I211 の穴を再現）ことを確かめてから直した — TC-02・TC-03 の FG の前提
 - [implement] FG-U7 の壊し方を「行全体の固定を外す」に直した — 行頭だけ外しても行末の固定が残り、FG が成立しなかった（計画変更記録 2）
 - [implement] /simplify の 4 観点のうち、起点探しの形（新しい順・最初に当たったら止める）・記録の「読めていない」注意との食い違い・G10 の `-` の 3 点を直し、他は見送った — 見送りはどれも Low か範囲の外で、今の形で正しく動く。`/code-review` 側の自由文の読み取り・E の土台の写しは retro で扱う（計画変更記録 3）
+- [review-gate] 基本レビュー（全体・台帳 1 周目・19195aa8）は FINAL OK・高リスク NO・ADVERSARIAL_STAGE NOT_REQUIRED で test-gate へ進む — 台帳の F1（Medium・「差分なし」の文字列の部分一致で OK になる）〜F7（Low）はどれも止める条件の一覧に当たらず、スクリプトが止めない指摘と決めた。retro で振り分ける
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
