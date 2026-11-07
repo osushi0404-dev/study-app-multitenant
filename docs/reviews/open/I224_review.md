@@ -18,8 +18,8 @@
 - Config: `.claude/skills/` の 10 本・`docs/runbooks/workflow.md`・`docs/runbooks/worktree.md`・`docs/runbooks/plan-writing-rules.md`・`scripts/claude/tests/test_i224_push_points.sh`・`scripts/claude/tests/fixtures/i185/`・`docs/reviews/backlog/I226.md`
 
 ## テスト結果
-- 自動: （test-gate で記入）
-- 手動: （test-gate で記入）
+- 自動: OK — review-gate がゲート 4 本を実走し全 exit 0・CI 全緑。test-gate に回された重いゲートは無い
+- 手動: OK — M-01（push の回数: test-gate の時点で計 3 回・implement より後は 1 回）・M-02（新しいスキルの要所）を Claude が実施（Human の項目なし）
 
 ## 計画との差分
 - 振る舞いの差分なし。節の置き場所・固定ファイルの作り直し・言い回しの整理は計画変更記録 2 のとおり
@@ -39,8 +39,10 @@
 - [implement] /simplify の指摘のうち、スキルの言い直しの統一・close と proceed の説明の短縮・テストの写す範囲（primary で全ワークツリーを写さない）・テストの引数と判定の整理は直した。`code-review.sh` に自分で push させる案（範囲の外・今も決定論で止まる）・P4 を消す案（計画で残すと決めた）・同梱の重複の整理を外す案（計画の同梱）は見送った
 - [implement] 手元では、変えたスキル・手順書を読むテスト 17 本だけを流した（全体は CI）
 - [review-gate] 新しい手順どおり最初に `git push` してから `code-review.sh` を流した（CI_WAIT: OK＝push を前提にする確認は壊れていない）。FINAL_VERDICT: OK・ADVERSARIAL_STAGE: NOT_REQUIRED（20261107_2228・ゲート 4 本 exit 0）。台帳の F1〜F9 は止める指摘でないので直さず retro へ — fix-loop が直すのは止める指摘だけ（I197）
+- [test-gate] gate-check OK。M-01・M-02 を自分で行い OK。M-01 の最終の数（close の ③ の後）は close の報告に書く — close の後は記録に足さない決まり（新しい close の手順 6）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
