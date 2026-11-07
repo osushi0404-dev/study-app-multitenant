@@ -27,3 +27,4 @@
 - [plan-review] 計画レビュー OK（高リスク判定 No）の Warning 3 件・Info 1 件を計画書で直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない findings への対応のため（計画変更記録 1）。W3 では /security-review の判定の 1 行を「最後の行だけ」から「行全体がその形の行があるか」に緩めた（締めの文で FAILED にして止まるのを防ぐ）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
