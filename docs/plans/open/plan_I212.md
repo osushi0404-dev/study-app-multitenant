@@ -21,7 +21,7 @@
   - やり直しでは `changed_outside_records "$SINCE" HEAD`（`code-review.sh:988-993`）が「変わっていない」を返し、`NO_DELTA=1` → レビュー役も組み込みのレビューも呼ばず `VERDICT: OK`（`..._0204.md`）
 - **記録から「見終えたか」を読めるか**: 記録に残る機械の行は `VERDICT:`（合成した最終の判定）・`RISK:`・`REVIEWED_COMMIT:`・`LEDGER_ROUND:`。`OFFICIAL_SECURITY: FAILED` は標準出力だけで、記録には証跡の文（`- ⛔ 高リスク（パス判定 YES）で組み込みの /security-review が動かなかった…`）しか残らない。`VERDICT: HIGH` は「台帳に止める指摘が残った（見終えている）」でも付くので、`VERDICT` だけでは見終えたかを区別できない → 記録に `REVIEW_COMPLETE: YES|NO` の行を足す（§4-1）
 - **同梱 2・4 の原因**: `official_security_verdict()`（`code-review.sh:176-182`）は、`run_official_review()` が付ける「読めていない」の注意（`official_output_readable()` の正規表現に当たらない）で HIGH にする。`/security-review` は日本語の文（「報告する脆弱性はありません。」）で書くことがあり、正規表現に当たらない（I200 の `I200_code_review_20261029_2240.md:129-132` で実例）。主題を直しても、この読み違いが残るとやり直しでも同じ FAILED になり止まる
-- **スパイク（2026-11-08・成立）**: このブランチで `GH_APP_READONLY=1 timeout 900 claude -p --permission-mode plan --permission-prompts none --strict-mcp-config --append-system-prompt "このレビューの出力の最後の行には、報告する脆弱性の件数を SECURITY_FINDINGS: <件数> の形（半角数字・0 件なら SECURITY_FINDINGS: 0）で必ず 1 行だけ出す。" "/security-review"` を流すと、本文の最後が `報告する脆弱性はありません。` の後に `SECURITY_FINDINGS: 0` の 1 行で終わった（exit 0）。今の `official_output_readable()` は同じ本文を読めない（「報告する脆弱性はありません」は正規表現に当たらない）。→ 公式の CLI のフラグ（`--append-system-prompt`）で判定の 1 行を出させ、判定はその行だけで行う
+- **スパイク（2026-11-08・成立）**: このブランチで `GH_APP_READONLY=1 timeout 900 claude -p --permission-mode plan --permission-prompts none --strict-mcp-config --append-system-prompt "このレビューの出力の最後の行には、報告する脆弱性の件数を SECURITY_FINDINGS: <件数> の形（半角数字・0 件なら SECURITY_FINDINGS: 0）で必ず 1 行だけ出す。" "/security-review"` を流すと、本文の最後が `報告する脆弱性はありません。` の後に `SECURITY_FINDINGS: 0` の 1 行で終わった（exit 0）。今の `official_output_readable()` は同じ本文を読めない（「報告する脆弱性はありません」は正規表現に当たらない）。→ 公式の CLI のフラグ（`--append-system-prompt`）で判定の 1 行を出させ、判定はその行（行全体が `SECURITY_FINDINGS: <数>` の行）だけで行う
 - **同梱 6**: `scripts/claude/tests/test_i223_gh_app.sh:139` の `re.finditer(r"gh auth (status|token)\b", text)`。Python の `\b` は和文の文字も語の文字に数えるので、`gh auth tokenを打つ` で当たらず G10 が合格になる（I226 の台帳 F1）
 - **環境前提**: `bash`・`python3`・`git`・`claude`（スパイクで動作確認）があることを確かめた。ツールの追加なし
 - **既存テストのベースライン（2026-11-08・このブランチ）**: `test_i197_review_ledger.sh` pass=64 fail=0・`test_i193_official_flow.sh` pass=174 fail=0・`test_i202_ledger_cleanup.sh` pass=157 fail=0・`test_i223_gh_app.sh` pass=37 fail=0。全体は CI（Harness Tests）が正
@@ -55,7 +55,7 @@
 ### 修正アプローチ
 1. 記録ごとに「レビュー役と（高リスクなら）組み込みの `/security-review` が範囲を見終えたか」を `REVIEW_COMPLETE: YES|NO` の 1 行で残す
 2. 差分のレビューの起点は、台帳のある記録のうち `REVIEW_COMPLETE: YES` で `REVIEWED_COMMIT` が HEAD の祖先の最新のもの。無ければブランチの分岐点（比べる相手との merge-base）を起点にして、ブランチ全体を差分のレビューとして見直す。台帳と周の数は今までどおり台帳のある最新の記録から引き継ぐ
-3. `/security-review` には公式のフラグ `--append-system-prompt` で最後の行に `SECURITY_FINDINGS: <件数>` を出させ、動いたかの判定はその行だけで行う
+3. `/security-review` には公式のフラグ `--append-system-prompt` で最後の行に `SECURITY_FINDINGS: <件数>` を出させ、動いたかの判定は行全体がその形の行があるかだけで行う
 4. G10 の `\b` を英数字だけの先読みに替える
 
 ### 4-1. `scripts/claude/code-review.sh`: 見終えたかの行（`REVIEW_COMPLETE`）
@@ -68,6 +68,7 @@
   if [ "$REVIEW_OK" = "1" ] && [ "$REVIEWER_VERDICT" = "OK" ] && [ "$SECURITY_VERDICT" = "OK" ]; then REVIEW_COMPLETE=YES; fi
   GATE_EVIDENCE+="- 見終えたか（次の差分のレビューの起点にできるか・I212）: ${REVIEW_COMPLETE}"$'\n'
   ```
+  - 組み込みの `/code-review` の失敗（`OFFICIAL_CODE` が「実行できず」など）は条件に入れない（計画レビュー Warning 1）。`/code-review` の結果は合否に使わず、参考としてレビュー役に渡すだけなので、動かなくても範囲を見る役（レビュー役・高リスクなら `/security-review`）は見終えている
   - `NO_DELTA=1`（起点の後に記録の場所の外が変わっていない）の回は、レビュー役の代わりの本文で `REVIEW_OK=1`・`REVIEWER_VERDICT=OK`・`SECURITY_VERDICT=OK`（下の 4-3 の「差分なし」）になり YES。起点が見終えた記録なので、引き継いで見終えた扱いでよい
 - 書く場所: `add_reviewed_commit` の直後、組み込みのレビューの出力を足す前に `printf 'REVIEW_COMPLETE: %s\n' "$REVIEW_COMPLETE" >> "$REVIEW_FILE"`
 - 偽の行を無効にする: `neutralize_machine_lines()` の語の一覧に `REVIEW_COMPLETE` を足す（組み込みのレビューの出力）。`REVIEW_CLEAN` の sed（`code-review.sh:1193`）の `(LEDGER|LEDGER_ROUND)` を `(LEDGER|LEDGER_ROUND|REVIEW_COMPLETE)` にする（レビュー役の本文）
@@ -117,7 +118,7 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
   run_official_review() {   # $1=プロンプト $2=足す指示（省略可。--append-system-prompt で渡す）
     local prompt="$1" out rc=0 extra=()
     [ -n "${2:-}" ] && extra=(--append-system-prompt "$2")
-    out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none --strict-mcp-config "${extra[@]}" "$prompt" 2>&1 < /dev/null) || rc=$?
+    out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none --strict-mcp-config ${extra[@]+"${extra[@]}"} "$prompt" 2>&1 < /dev/null) || rc=$?
     ...（以下は今のまま）
   ```
 - 指示の文は定数にする（関数だけを読み込む側でも見えるよう、関数の定義の並びに置く）:
@@ -128,14 +129,16 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
 - 呼び出し（`code-review.sh:1045`）: `run_official_review "/security-review" "$SECURITY_FINDINGS_PROMPT"`
 - `official_security_verdict()`:
   ```bash
-  # I212: 高リスク（パス判定 YES）では、組み込みの /security-review の出力の最後の空でない行が
-  # `SECURITY_FINDINGS: <数>` のときだけ「動いた」（OK）。差分が無くて動かしていない回は OK。それ以外（実行できず・判定の行が無い）は HIGH
+  # I212: 高リスク（パス判定 YES）では、組み込みの /security-review の出力に、行全体が
+  # `SECURITY_FINDINGS: <数>` の行があるときだけ「動いた」（OK）。差分が無くて動かしていない回は OK。それ以外（実行できず・判定の行が無い）は HIGH
   official_security_verdict() {   # $1=RISK_PATH（YES/NO） $2=組み込みの /security-review の出力
     [ "$1" = "YES" ] || { echo OK; return; }
     [[ "$2" == *"(実行していない: 差分なし)"* ]] && { echo OK; return; }
-    if printf '%s\n' "$2" | sed '/^[[:space:]]*$/d' | tail -1 | grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$'; then echo OK; else echo HIGH; fi
+    # here-string で渡す（pipefail の下で grep -q が先に終わって 141 になる誤判定を避ける。official_output_readable と同じ・I193 L1）
+    if grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$' <<< "$2"; then echo OK; else echo HIGH; fi
   }
   ```
+  - 「最後の行だけ」に限らない（計画レビュー Warning 3）: モデルが判定の行の後に締めの文を付けても FAILED にしない。行全体が固定の形の行だけを読むので、文の中に出てくる語（「SECURITY_FINDINGS: 0 と書く」など）では当たらない
   - 指摘の件数は判定に使わない（指摘の中身はレビュー役と台帳が扱う。今までどおり）
   - `SECURITY_FINDINGS` は `neutralize_machine_lines` の対象にしない（判定はこの行を読むため。記録の中のこの行を読む処理は無い）
 - 本体の `⛔ … /security-review が動きませんでした（実行できず・読めていない）` の文を「（実行できず・判定の行 SECURITY_FINDINGS が無い）」に直す
@@ -154,7 +157,7 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
   - U4: 最新が `VERDICT: HIGH`・`REVIEW_COMPLETE: YES`（台帳に止める指摘が残った回）→ その記録の `REVIEWED_COMMIT` が起点（今までどおり）
   - U5: `REVIEW_COMPLETE` の行が無い記録は見終えていない扱い（起点にしない）
   - U6: 見終えた記録の `REVIEWED_COMMIT` が HEAD の祖先でない（rebase の前の枝）なら、その記録は起点にしない
-  - U7: `official_security_verdict`: YES＋最後の行 `SECURITY_FINDINGS: 0` → OK／YES＋`SECURITY_FINDINGS: 2` → OK／YES＋日本語の「報告する脆弱性はありません。」だけ → HIGH／YES＋`SECURITY_FINDINGS: 0` の後に別の文 → HIGH／YES＋`(実行できず: exit=124…)` → HIGH／YES＋`(実行していない: 差分なし)` → OK／NO → OK
+  - U7: `official_security_verdict`: YES＋最後の行 `SECURITY_FINDINGS: 0` → OK／YES＋`SECURITY_FINDINGS: 2` → OK／YES＋日本語の「報告する脆弱性はありません。」だけ → HIGH／YES＋`SECURITY_FINDINGS: 0` の後に締めの文 → OK／YES＋文の中に `SECURITY_FINDINGS: 0` の語がある行だけ（行全体ではない）→ HIGH／YES＋`(実行できず: exit=124…)` → HIGH／YES＋`(実行していない: 差分なし)` → OK／NO → OK
   - U8: `neutralize_machine_lines` が `REVIEW_COMPLETE: YES` を `> REVIEW_COMPLETE: YES` にする
 - E（本体の通し。`test_i202_ledger_cleanup.sh` の偽の `gh`・`claude` と同じ作り。偽の `claude` は、プロンプトが `/security-review` なら `$E2E_SEC` の中身〔既定は `SECURITY_FINDINGS: 0` で終わる文〕を返し、呼ばれた種類〔agent／code／security〕を書く）:
   - E1: `.github/` の下のファイルを変えたブランチ（パス判定 YES）で、1 周目は `/security-review` が判定の行を出さない（`E2E_SEC` に日本語の「報告する脆弱性はありません。」だけ）→ `FINAL_VERDICT: HIGH`・記録に `REVIEW_COMPLETE: NO`・gate-check は `REASON=verdict`。記録だけのコミットの後（記録の場所の外は変えない）に 2 周目（`E2E_SEC` は既定）→ 出力に `範囲のファイル 0 本` も `呼ばずに台帳を引き継ぎます` も無い・偽の `claude` の呼び出しに agent と security がある・`FINAL_VERDICT: OK`・記録に `REVIEW_COMPLETE: YES`・`LEDGER_ROUND: 2`・gate-check は `GATE_CHECK: OK`
@@ -162,8 +165,8 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
 - FG（`broken`: 写しの文字列を置き換えて壊す）:
   - FG-U1: `if record_complete "$rec" &&` を `if :  &&` にする（見終えたかを見ない）→ U1 が `<c2>` になり不合格
   - FG-E1: 本体の写しの `review_mode` を前の形（最新の記録の SHA を起点）に戻す → E1 の 2 周目が `範囲のファイル 0 本` になり不合格
-  - FG-U7: `official_security_verdict` の「最後の空でない行だけを見る」を「どこかの行にあればよい」に緩める（`sed '/^[[:space:]]*$/d' | tail -1 | grep -qE '^SECURITY_FINDINGS:` → `grep -qE 'SECURITY_FINDINGS:`）→ U7 の「`SECURITY_FINDINGS: 0` の後に別の文 → HIGH」が OK になり不合格
-  - 直す前の版（develop の `official_security_verdict`）で U7 を流し、期待と違う行（例: `SECURITY_FINDINGS: 0` の後に別の文 → 前の版は OK）が出ることをステップ 1 の記録に残す
+  - FG-U7: `official_security_verdict` の行頭の固定（`'^SECURITY_FINDINGS:`）を外して `'SECURITY_FINDINGS:` にする → U7 の「文の中に語がある行だけ → HIGH」が OK になり不合格
+  - 直す前の版（develop の `official_security_verdict`）で U7 を流し、期待と違う行（例: 「報告する脆弱性はありません。」だけ → 前の版は注意が付かない入力なので OK）が出ることをステップ 1 の記録に残す
   - FG-U8: `neutralize_machine_lines` の一覧から `REVIEW_COMPLETE` を外す → U8 が不合格
 
 ### 4-6. 既存テストの直し（意図した振る舞いの変更に合わせる）
@@ -173,6 +176,7 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
 - `test_i193_official_flow.sh`:
   - C23「YES で読めた結果 → OK」の出力を `確信度の高い脆弱性は見つかりませんでした。` から、その後に `SECURITY_FINDINGS: 0` の行を足した形にする（判定の行が要る、という新しい決まり）
   - s8 は `"/security-review"` の文字列を探すだけなので、呼び出しに第 2 引数を足しても変えない（実装で確かめる）
+  - R1 の他のケース（記録が無い・`LEDGER_ROUND` の無い記録だけ・祖先でない）は、第 2 引数を省いて既定の `origin/develop` が一時のリポジトリに無くても、起点を探す前に `full` で終わるので変わらない（計画レビュー Warning 2）。ステップ 1 で R1 が全部合格することを確かめ、変わるケースがあれば、そのケースに第 2 引数 `develop` を渡す。新しい `test_i212_review_base.sh` は常に `develop` を渡す
 - `test_i202_ledger_cleanup.sh`: 偽の `claude` は `/security-review` を呼ばない作り（パス判定 NO）なので変えない。見終えた記録の後の通し（m・n）はそのまま合格するはず（TC-01 で確かめる）
 
 ### 4-7. `scripts/claude/tests/test_i223_gh_app.sh`（同梱 6）
@@ -182,7 +186,7 @@ review_mode() {   # $1=I### [$2=比べる相手（既定 origin/develop）]
 
 ### 4-8. 説明の文
 - `.claude/skills/review-gate/SKILL.md:14`: 「前の記録の `REVIEWED_COMMIT` からの直した差分」→「見終えた最新の記録（`REVIEW_COMPLETE: YES`）の `REVIEWED_COMMIT` からの差分（見終えていない回の後は、その前の見終えた記録〔無ければブランチ全体〕から見直す・I212）」。括弧の中の「台帳のある最新の記録の `REVIEWED_COMMIT` が HEAD の祖先なら差分のレビュー」は残す（全体か差分かの決め方は変えない）
-- `.claude/skills/review-gate/SKILL.md:36`: `OFFICIAL_SECURITY: FAILED` の行に「やり直しは、見終えた記録から差分を取り直すので、動かなかった回が見るはずだった差分を `/security-review` が見る（I212）。判定は `/security-review` の最後の行の `SECURITY_FINDINGS:` だけで行う」を足す
+- `.claude/skills/review-gate/SKILL.md:36`: `OFFICIAL_SECURITY: FAILED` の行に「やり直しは、見終えた記録から差分を取り直すので、動かなかった回が見るはずだった差分を `/security-review` が見る（I212）。判定は `/security-review` の出力の、行全体が `SECURITY_FINDINGS: <数>` の行だけで行う」を足す
 - `docs/runbooks/review-rules.md:59`: 「前の記録の `REVIEWED_COMMIT` からの直した差分」→「見終えた最新の記録の `REVIEWED_COMMIT` からの差分（組み込みの `/security-review` が動かなかった回などは起点にしない・I212）」
 
 ### 4-9. `docs/issues/open/I212.md`
@@ -265,10 +269,11 @@ Danger Ops: 無
 | V2 | 1 | 実験必須 | 見終えていない回が 2 つ以上続いても、最後の見終えた記録（無ければ分岐点）が起点になる。台帳と周の数は最新の記録から引き継ぐ（TC-02 U1〜U3） |
 | V3 | 2 | 実験必須 | 台帳に止める指摘が残って HIGH になった回の後は、今までどおりその記録が起点（周が収束する動きを壊さない・TC-02 U4・TC-01） |
 | V4 | 2 | 実験必須 | 組み込みのレビュー・レビュー役の本文の中の `REVIEW_COMPLETE: YES` の行が記録の判定の行として読まれない（TC-02 U8） |
-| V5 | 3 | 実験必須 | `/security-review` が日本語の「指摘なし」で書いても、最後の行が `SECURITY_FINDINGS:` なら OK、無ければ HIGH（TC-03・M-01）。新しい FG がすべて直す前の版で不合格になる（false-green でない） |
+| V5 | 3 | 実験必須 | `/security-review` が日本語の「指摘なし」で書いても、行全体が `SECURITY_FINDINGS: <数>` の行があれば OK（その後に締めの文があっても OK）、無ければ HIGH（TC-03・M-01）。新しい FG がすべて直す前の版で不合格になる（false-green でない） |
 
 ## 計画変更記録
-（なし）
+1. 計画レビュー（20261108_0044・OK・高リスク判定 No）の Warning 3 件・Info 1 件への対応: (W1) §4-1 に「`/code-review` の失敗は見終えたかの条件に入れない」と理由を足した (W2) §4-6 に、既存の R1 の他のケースが第 2 引数なしでも変わらない理由と、ステップ 1 で確かめることを足した (W3) `official_security_verdict` を「最後の空でない行だけ」から「行全体が `SECURITY_FINDINGS: <数>` の行があるか」に緩めた（判定の行の後に締めの文が付いても FAILED にしない。行全体の固定の形なので文の中の語では当たらない）。U7・FG-U7・TC-03・V5 を合わせて直した (Info 1) 空の配列の展開を `${extra[@]+"${extra[@]}"}` にした。Info 2（欄の無い古い記録）は §8 のとおりで対応なし。計画レビューのやり直し: 不要（findings への対応で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
+- [20261108_0044 判定: ✅ 完了](../../reviews/I212_plan_review_20261108_0044.md)
 （plan-review 段階が追記する）
