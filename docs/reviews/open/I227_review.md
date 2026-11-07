@@ -15,8 +15,8 @@
 - Config（ハーネス）: `scripts/claude/code-review.sh`・`scripts/claude/tests/test_i212_review_base.sh`・`scripts/claude/tests/test_i193_official_flow.sh`・`.claude/skills/review-gate/SKILL.md`・`docs/reviews/backlog/I212.md`
 
 ## テスト結果
-- 自動: （test-gate で記入）
-- 手動: （test-gate で記入）
+- 自動: OK（決定論ゲート 10 本が review-gate の実走ですべて exit=0・CI 全緑・gate-check OK）
+- 手動: OK（M-01 本物の `/code-review` が読めた・M-02 本物の `/security-review` の判定 OK・M-03 記録の注意と実際が一致。すべて Claude）
 
 ## 計画との差分
 - 計画変更記録 2（/simplify の整理）。振る舞いは計画どおり
