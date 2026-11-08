@@ -6,30 +6,37 @@ set -euo pipefail
 # 反映されているか（memo ⊆ body）を機械判定する。
 # 呼び出し元: .claude/skills/grill-me/SKILL.md（本文整合の直後）。backstop: plan-reviewer.md。
 # 終了コード: 0=整合 / 1=不一致あり / 2=実行不可（引数不正・イシューファイル未検出）。
+# 使い方: check-memo-body-paths.sh I###（手元のイシューファイル）／check-memo-body-paths.sh --file <パス>
+#   --file は、手元のファイルを持たない新しいイシュー（I221）の本文を GitHub に書き戻す前の下書きを検査する。
 
-ISSUE="${1:-}"
-
-# 引数検証（パストラバーサル防止）: ^I[0-9]{3}$ のみ受け付け、不正ならパスを構築せず終了する。
-if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then
-  echo "⚠️ 不正なイシュー番号です（期待形式: I###）: '${ISSUE}'" >&2
-  exit 2
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # git リポジトリ外なら git のエラーコード（128 等）でなく exit 2 に正規化する（呼び出し元の 0/1/2 規約を守る）。
 if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   echo "⚠️ git リポジトリ外では実行できません（exit 2・skip 扱い）" >&2
   exit 2
 fi
-cd "$REPO_ROOT" || exit 2
 
-# イシューファイル探索（open → closed）。未検出は非ブロックの実行不可（exit 2）。
-ISSUE_FILE=""
-for f in "docs/issues/open/${ISSUE}.md" "docs/issues/closed/${ISSUE}.md"; do
-  if [ -f "$f" ]; then ISSUE_FILE="$f"; break; fi
-done
-if [ -z "$ISSUE_FILE" ]; then
-  echo "⚠️ イシューファイルが見つかりません: ${ISSUE}.md" >&2
-  exit 2
+if [ "${1:-}" = "--file" ]; then
+  if [ -z "${2:-}" ] || [ ! -f "$2" ]; then
+    echo "⚠️ 下書きのファイルが見つかりません: '${2:-}'" >&2
+    exit 2
+  fi
+  ISSUE_FILE="$(realpath -- "$2")"
+  cd "$REPO_ROOT" || exit 2
+else
+  ISSUE="${1:-}"
+  # 引数検証（パストラバーサル防止）: ^I[0-9]{3,}$ のみ受け付け、不正ならパスを構築せず終了する。
+  if ! [[ "$ISSUE" =~ ^I[0-9]{3,}$ ]]; then
+    echo "⚠️ 不正なイシュー番号です（期待形式: I###）: '${ISSUE}'" >&2
+    exit 2
+  fi
+  cd "$REPO_ROOT" || exit 2
+  # イシューファイルの探索は issue-source.sh の 1 か所（I221）。未検出は非ブロックの実行不可（exit 2）。
+  if ! ISSUE_FILE="$(bash "$SCRIPT_DIR/issue-source.sh" path "$ISSUE")"; then
+    echo "⚠️ イシューファイルが見つかりません: ${ISSUE}.md" >&2
+    exit 2
+  fi
 fi
 
 # セクション抽出: "## <見出し>" 行の次行から、次の "## " 見出し直前までを出力する。

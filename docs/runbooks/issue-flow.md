@@ -3,86 +3,34 @@
 詳細なイシューフロー運用ルールを定義します。
 `docs/runbooks/workflow.md` の「フロー」セクションも合わせて参照してください。
 
-## イシュー新規作成時の採番ルール
-新しいイシューを作成する際は、**全 worktree 横断のファイルシステム上の最大番号**（untracked 含む）と **git 履歴上の最大番号** の大きい方を採用して採番する。採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う（採番権威の単一実装。I098）。
-
-### 採番ルール
-**新イシュー番号 = max(全 worktree 横断 FS最大値〔untracked 含む〕, git履歴最大値) + 1**
-
-例:
-- FS最大 039、git履歴最大 039 → max(39, 39) + 1 = **040**
-- FS最大 005、git履歴最大 008（削除済み含む）→ max(5, 8) + 1 = **009**
-- 別 worktree に untracked I091 が存在 → 現 worktree の FS が低くても max に含まれ二重採番を防ぐ
-
-```bash
-# 採番（全 worktree 横断〔untracked 含む〕＋git履歴。next-issue-num.sh が単一権威）
-ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
-  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
-  exit 1
-}
-echo "次のイシュー番号: $ISSUE_NUM"
-```
-
-**重要**: 採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う。本スクリプトが全 worktree 横断 FS（untracked 含む）＋git 履歴（削除済み含む・closed から削除された番号も使用済み扱い）を一括集計するため、どの worktree から実行しても同一の大域一意番号が得られる。
+## イシューの番号と置き場所（I221）
+新しいイシューは GitHub のイシューだけで管理する。番号は GitHub が振り、「I＋GitHub の番号」（#427 → I427）で呼ぶ。手元の `docs/issues/open/` にファイルを作らない。見分け方・本文の写し・今までのイシュー（I426 以下で手元にファイルがあるもの）の扱いは `docs/runbooks/workflow.md`「イシューの置き場所」が正。読む・写す・番号を出すのは `scripts/claude/issue-source.sh`。
 
 ## イシュー作成時の自動実行フロー（必須）
 
-ユーザーから「イシューファイルを作成して」または「新しいイシューを作成して」という指示を受けた場合は、**必ず以下の手順を自動的に実行**すること：
+ユーザーから「イシューを作成して」という指示を受けた場合や、会話の中で別イシューにすると決まった場合は、`issue-bootstrap` スキル（`.claude/skills/issue-bootstrap/SKILL.md`）の手順を実行する。要点:
 
-### 1. イシュー番号の採番
-全 worktree 横断（untracked 含む）＋git 履歴を単一権威スクリプトで一括集計する：
-```bash
-# 採番（next-issue-num.sh が単一権威。3 桁ゼロ詰めの番号を stdout に返す）
-ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
-  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
-  exit 1
-}
-```
-
-### 2. イシューファイル作成
-```bash
-# テンプレートからイシューファイル作成
-cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
-# 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
-```
-
-### 3. GitHubイシューの登録（必須）
-```bash
-# ghコマンドでGitHubにイシューを登録
-gh issue create \
-  --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
-  --label "[種別ラベル]" --label "[トラックラベル]"
-```
+1. 本文の下書き: `docs/issues/templates/issue_template.md` をセッションのスクラッチパッド（リポジトリの外）に写して書く
+2. 自己完結度レビュー: `bash scripts/claude/issue-review.sh --file <下書き>`（ソフト・非ブロック）。判定の 1 行を下書きの「## 関連資料」に書く
+3. GitHub に登録: `gh issue create --title "[題名]" --body-file <下書き> --label "[種別ラベル]" --label "[トラックラベル]"`。題名に `I###:` を付けない。出力の URL の末尾の数字が番号 N（イシューは I<N>）。登録したら下書きを消す
 
 **ラベル設定（2軸・両方必須）**:
 - **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
 - **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
-  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・`.github/`・レビュー/ゲート/テンプレートの仕組み → `track:harness`
   - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`
   - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
 **注意事項**:
-- GitHubイシュー番号とローカルイシュー番号は異なる場合がある（GitHub側は自動採番）
-- ローカルイシュー番号（例: I035）をタイトルに含めることで紐づけを明確にする
 - `gh` が GitHub App の鍵で動くことが前提（`docs/runbooks/github-app-setup.md`）
 
-### 4. イシューファイルに GitHub Issue 番号を記録
-GitHub Issue 作成後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
+4. ユーザーへの報告:
 ```
-- GitHub Issue: #XX
-```
-
-### 5. ユーザーへの報告
-GitHubイシュー登録後、必ず以下を報告：
-
-```
-✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
-📂 ファイル: docs/issues/open/I${ISSUE_NUM}.md
-🔗 GitHubイシュー: [GitHubイシューURL]
+✅ イシュー I<N> を作成しました: [題名]
+🔗 GitHubイシュー: [GitHubイシューURL]（手元のファイルは作っていません。正は GitHub）
 
 ⚠️ ブランチはまだ作成されていません。
-次のステップ: /plan-issue I${ISSUE_NUM} でブランチ作成・計画書作成を行ってください。
+次のステップ: /plan-issue I<N> でブランチ作成・計画書作成を行ってください。
 ```
 
 ---
@@ -97,13 +45,13 @@ GitHubイシュー登録後、必ず以下を報告：
 【イシューフロー】
 
 === フェーズ1: イシュー準備（/issue-bootstrap） ===
-1. イシューファイル作成（テンプレート：docs/issues/templates/issue_template.md）
+1. 本文の下書き（テンプレート：docs/issues/templates/issue_template.md・リポジトリの外に置く）
     ↓
 1.5. issue-review サブエージェントによる自己完結度レビュー（ソフト・非ブロック）
      - 判定「十分」→ /grill-me スキップ可・/plan-issue 直行を案内
      - 判定「要補足」→ 未確定セクション提示・/grill-me 推奨
     ↓
-2. GitHubイシュー登録・イシューファイルに Issue 番号を記録
+2. GitHubイシュー登録（番号は GitHub が振る。I＋GitHub の番号で呼ぶ・手元にファイルを作らない）
     ↓
 3. 要件・基本設計・UI/UX で決めてもらうことがあれば、ユーザーに質問して止まる（無ければ止まらない。I193）
     ↓
@@ -151,7 +99,7 @@ GitHubイシュー登録後、必ず以下を報告：
 21. テストケース → closed/
 22. エラー管理ファイル → closed/（該当する場合）
 23. 計画書 → closed/（エラー対応計画書含む全て）
-24. イシューファイル → closed/
+24. イシューファイル（新しいイシューでは /plan-issue が作った本文の写し）→ closed/
 25. PR を develop にマージ（oshui0404 が GitHub で承認・マージ）
 26. レビューファイル → closed/
 27. GitHubイシューをクローズ
@@ -161,28 +109,15 @@ GitHubイシュー登録後、必ず以下を報告：
 
 #### フェーズ1: イシュー準備
 
-**ステップ1: イシューファイル作成**
+**ステップ1: 本文の下書き**
 - テンプレート: `docs/issues/templates/issue_template.md`
-- 保存先: `docs/issues/open/`
-- 命名規則: `XXX.md`（XXX: 3桁のイシュー番号）
+- 置き場所: セッションのスクラッチパッド（リポジトリの外。`docs/issues/` に置かない・I221）
 
+**ステップ2: 自己完結度レビュー・GitHubイシュー登録**
 ```bash
-# 採番（全 worktree 横断〔untracked 含む〕＋git履歴。next-issue-num.sh が単一権威）
-ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
-  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
-  exit 1
-}
-
-# テンプレートからコピー
-cp docs/issues/templates/issue_template.md docs/issues/open/${ISSUE_NUM}.md
-```
-
-**ステップ2: GitHubイシュー登録・Issue 番号の記録**
-```bash
-gh issue create \
-  --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
-  --label "[種別ラベル]" --label "[トラックラベル]"
+bash scripts/claude/issue-review.sh --file <下書き>
+URL=$(gh issue create --title "[イシュータイトル]" --body-file <下書き> --label "[種別ラベル]" --label "[トラックラベル]")
+N="${URL##*/}"   # イシューは I<N>
 ```
 **ラベル設定（2軸・両方必須）**:
 - **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
@@ -191,14 +126,9 @@ gh issue create \
   - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`
   - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
-登録後、返却された Issue 番号をイシューファイルの「## 関連資料」セクションに追記する:
-```
-- GitHub Issue: #XX
-```
-
 **ステップ3: 要件の質問（あれば）**
 - 要件・基本設計・UI/UX で決めてもらうことがあるときだけ、ユーザーに質問して止まる（`docs/runbooks/workflow.md`「止めて聞く条件」1）
-- イシューファイルの承認は待たない（内容は issue-review と計画レビューで確かめる）
+- イシューの承認は待たない（内容は issue-review と計画レビューで確かめる）
 
 #### フェーズ2: 計画・設計（/plan-issue）
 
@@ -210,7 +140,8 @@ gh issue create \
 ```bash
 git fetch origin
 git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの] origin/develop
-git add docs/issues/open/I${ISSUE_NUM}.md
+ISSUE_FILE=$(bash scripts/claude/issue-source.sh snapshot "I${ISSUE_NUM}")   # 新しいイシューは GitHub の本文の写しを作る
+git add "$ISSUE_FILE"
 git commit -m "docs: create issue I${ISSUE_NUM}"
 git push -u origin feature/I${ISSUE_NUM}-[概要]
 gh pr create \
@@ -411,7 +342,7 @@ git commit -m "docs: イシュー#XXX レビュー完了・クローズ"
 
 ### イシュー対応時の必須ルール
 イシュー番号（例: 001, #1など）を指定されたら、必ず以下を実行：
-1. `/docs/issues/open/XXX.md`または`/docs/issues/closed/XXX.md`を読み込む（XXXは指定された番号）
+1. `bash scripts/claude/issue-source.sh body IXXX` でイシューの本文を読む（手元のイシューファイル、無ければ GitHub の本文）
 2. `/rules/`配下の関連ルールファイルを確認
 3. 特にコード変更時はコーディング標準を厳守
 4. **UX設計セクションを計画書に必ず含める**（docs/runbooks/ux-rules.md参照）

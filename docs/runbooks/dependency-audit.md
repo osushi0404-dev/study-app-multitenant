@@ -13,13 +13,13 @@
 - 監査 fail 時は `scripts/claude/dependency-audit-issue.sh` が GitHub イシューを自動起票する:
   - タイトル: `[dependency-audit] <backend|frontend>: 依存脆弱性を検知（scheduled audit）`・ラベル: `dependency-audit`
   - **重複防止**: 監査種別ごとに open イシュー最大 1 本。既存 open があれば新規作成せず**コメント追記**（＝open のまま放置すると毎朝コメントが増えるが、イシューは乱立しない）
-- 検知するのは GitHub イシューのみ。ローカルの `docs/issues/open/I###.md` は自動作成しない（採番権威 `next-issue-num.sh` との衝突回避。下記の 2 段階運用）。
+- 検知するのは GitHub イシューのみ（I221 から、イシューは GitHub だけで管理する。番号は I＋GitHub の番号・`docs/runbooks/workflow.md`「イシューの置き場所」）。
 
-## 検知時の対応手順（2 段階運用）
+## 検知時の対応手順
 
 1. 起票されたイシューを確認する: `gh issue list --label dependency-audit --state open`
-2. `/issue-bootstrap` でローカルイシュー（I###）を正式起票し、通常のイシューフロー（計画 → 実装 → テスト）で CVE に対応する（イシュー本文に dependency-audit イシューの番号を関連資料として記載する）
-3. 対応完了（依存更新が develop にマージ）後、dependency-audit イシューをクローズする: `gh issue close <番号> --comment "I### で対応済み"`
+2. そのイシューを I<番号> として、通常のイシューフロー（計画 → 実装 → テスト）で CVE に対応する。自動起票の本文は短いので、計画の前に `/grill-me I<番号>` で本文をひな形（`docs/issues/templates/issue_template.md`）の形に書き足す。別のイシューを起票し直さない
+3. 対応の PR の `Closes #<番号>` で、マージのときに dependency-audit イシューが閉じる
 4. クローズ後に監査が再度 fail した場合（新規 CVE）は新しいイシューが起票される
 
 ## 手動実行（検証・任意時点の監査）

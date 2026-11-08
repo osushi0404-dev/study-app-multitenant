@@ -8,13 +8,13 @@ disable-model-invocation: true
 # /plan-issue
 
 必読:
-- docs/issues/open/$ARGUMENTS.md
+- イシューの本文: `bash scripts/claude/issue-source.sh body $ARGUMENTS` の出力（手元のイシューファイル、無ければ GitHub の本文・`docs/runbooks/workflow.md`「イシューの置き場所」。終了コード 2 なら出力の理由をユーザーに伝えて止まる）
 - docs/runbooks/plan-writing-rules.md
 - rules/ultimate_django_coding_standards.md
 - rules/react-coding-standards-integrated.md
 
 ### ブランチ作成・プッシュ・Draft PR（必須）
-イシューファイルを読んで GitHub Issue 番号を確認した後、以下を実行する。
+イシューの本文を読んで GitHub Issue 番号（`bash scripts/claude/issue-source.sh gh-number I${ISSUE_NUM}`）を確認した後、以下を実行する。
 
 #### 1. ブランチ作成
 `origin/develop` をベースに feature ブランチを作成（develop はチェックアウトしない。別ワークツリーが develop を使っていても失敗しないため）：
@@ -22,7 +22,7 @@ disable-model-invocation: true
 git fetch origin
 git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの] origin/develop
 ```
-- 未コミットのイシューファイルはそのまま新ブランチへ持ち越される。イシューファイル以外の未コミット変更は先に片付けてから実行する（`docs/runbooks/worktree.md` §3）。
+- 未コミットのイシューファイルはそのまま新ブランチへ持ち越される（新しいイシューは手元にファイルが無いので、持ち越すものは無い）。イシューファイル以外の未コミット変更は先に片付けてから実行する（`docs/runbooks/worktree.md` §3）。
 - `--no-track` は上流が `origin/develop` に設定されるのを防ぐ（上流は step 2 の `git push -u` で付く）。
 
 **ブランチ命名規則**:
@@ -34,9 +34,16 @@ git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの
 - スペースは`-`（ハイフン）に変換
 - 最大5単語程度に要約
 
-#### 2. イシューファイルのコミット・プッシュ
+#### 2. イシューファイル（または本文の写し）のコミット・プッシュ
 
-**前提（invariant）**: イシューファイルは **plan-issue が feature ブランチで初コミットする**のが原則。`/issue-bootstrap` はローカル作成（未コミット）に留め、develop 等のベースブランチへ事前コミットしない（retro/close のハンドオフでも同様）。同一ファイルシステム上の untracked ファイルは context clear をまたいでも残り、別コンテキストの plan-issue が拾える（develop 事前コミットもハンドオフ PR も不要）。
+まず、コミットするイシューファイルを決める。新しいイシュー（I427 以上で手元にファイルが無いもの）は、ここで GitHub の本文を `docs/issues/open/I${ISSUE_NUM}.md` に 1 回だけ写す（同期しない・正は GitHub・I221）。今までのイシュー（手元にファイルがあるもの）は、そのファイルのパスがそのまま出る:
+```bash
+ISSUE_FILE=$(bash scripts/claude/issue-source.sh snapshot "I${ISSUE_NUM}") || { echo "写し・イシューファイルを用意できません（上の理由を見る）"; exit 1; }
+echo "$ISSUE_FILE"
+```
+終了コードが 0 でなければ止まり、出力の理由をユーザーに伝える（番号に当たるファイルが無い・PR の番号・今までの流れのイシューなど）。
+
+**前提（invariant）**: イシューファイルは **plan-issue が feature ブランチで初コミットする**のが原則。新しいイシューは手元に未コミットのファイルを持たない（写しはこの手順で作ってすぐコミットする）。今までのイシューファイル（I427 未満）は、`/issue-bootstrap` で作ったローカル（未コミット）のまま develop 等のベースブランチへ事前コミットしない（retro/close のハンドオフでも同様）。同一ファイルシステム上の untracked ファイルは context clear をまたいでも残り、別コンテキストの plan-issue が拾える（develop 事前コミットもハンドオフ PR も不要）。
 
 イシューが既にベースへコミット済みかを自動判定する（既コミットだと `docs: create issue` が no-op 化し `gh pr create` が「No commits between develop and feature/…」で失敗するため）。パスはバージョン非依存になるよう open/closed を明示列挙する（`**` glob は git バージョン/設定依存のため使わない）:
 ```bash
@@ -49,8 +56,8 @@ fi
 
 - **未コミット（通常）**:
   ```bash
-  git add docs/issues/open/I${ISSUE_NUM}.md
-  git commit -m "docs: create issue I${ISSUE_NUM}"
+  git add "$ISSUE_FILE"
+  git commit -m "docs: create issue I${ISSUE_NUM}"   # 新しいイシューは "docs: create issue I${ISSUE_NUM}（GitHub #${ISSUE_NUM} の本文の写し）"
   git push -u origin feature/I${ISSUE_NUM}-[概要]
   ```
   → step 3 でそのまま draft PR を作成する。
@@ -72,7 +79,7 @@ gh pr create \
 I${ISSUE_NUM}: [概要]
 
 ## 関連イシュー
-Closes #[GitHubイシュー番号]
+Closes #[GitHubイシュー番号（bash scripts/claude/issue-source.sh gh-number I${ISSUE_NUM} の出力）]
 EOF
 )" \
   --draft \
