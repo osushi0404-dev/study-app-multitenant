@@ -42,6 +42,7 @@
 - [retro] 見送り: (a) 計画の環境前提で `jq` があると書いた — 実装の最初のテストで捕まり、手戻りは置き換えだけ（feedback: その場で捕まった見逃しに手順を足さない）。(b) 見張りが、python の本文の中の `git` の文字・スクラッチパッドの `rm -rf`・他のワークツリーへの読み取りの `git -C` を止めた — どれもその場で別の手段に替えて進め、損失は無い。見張りの作り込みは増やさない（feedback: ローカルの安全装置は最小限）。(c) F1〜F3 が計画レビューを通った — コードレビューがその場で捕まえた。観点を足さない
 - [retro] I189（#321・同時起票の番号の衝突）は I221 で吸収した（番号を GitHub が振る）。#321 は bot の停止で見えないので、bot が戻った後に閉じる（close で報告するやり残しに入れる）
 - [retro] I222.md（app-1 の未追跡のファイル）は、#427 で登録し直したので使わない。消すかはユーザーの片付けに任せる（close で伝える）
+- [close] base 追従は不要（BLOCKED・BEHIND でない）。gate-check は OK。記録（イシュー・計画・テスト・レビュー・日時つきのレビュー記録 3 件）を closed へ移し、計画書のレビュー結果のリンクを closed 向きに直した。I221 自身の close の移動（既存のイシューファイルの経路）はこの手順で通った（M-04 の close の分）。PR の説明をテンプレートで更新した
 
 ## 振り返り
 
@@ -82,3 +83,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
