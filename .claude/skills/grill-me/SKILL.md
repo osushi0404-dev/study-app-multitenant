@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: ユーザーが /grill-me I### を打ったときだけ使う。計画書の作成前に、要件・基本設計・UI/UX の曖昧な点だけをユーザーに確認し、イシューファイルに記録する。
+description: ユーザーが /grill-me I### を打ったときだけ使う。計画書の作成前に、要件・基本設計・UI/UX の曖昧な点だけをユーザーに確認し、イシュー（既存のイシューファイル、または GitHub の本文）に記録する。
 argument-hint: "I###"
 disable-model-invocation: true
 ---
@@ -13,10 +13,11 @@ disable-model-invocation: true
 
 ## 実施手順
 
-### 1. イシューファイルを読み込む
+### 1. イシューの本文を読み込む
 ```bash
-cat docs/issues/open/$ARGUMENTS.md
+bash scripts/claude/issue-source.sh body $ARGUMENTS
 ```
+手元のイシューファイル（I427 未満の今までのイシュー）があればその中身、無ければ GitHub の本文が出る（新しいイシュー・I221。`docs/runbooks/workflow.md`「イシューの置き場所」）。終了コード 2 のときは、出力の理由（番号に当たるファイルが無い・PR の番号など）をユーザーに伝えて止まる。
 
 ### 2. コードベースを探索して自己解決できる疑問を除去する
 - 関連スキルファイル・既存コード・runbooks を読み、コードを見れば分かる疑問は除く
@@ -42,9 +43,22 @@ cat docs/issues/open/$ARGUMENTS.md
 `/plan-issue $ARGUMENTS` を実行してください。
 ```
 
-### 4. ユーザーの回答をイシューファイルに追記する
+### 4. ユーザーの回答をイシューに追記する
 
-ユーザーが回答したら、イシューファイルの「## 関連資料」セクションの直後に以下を追記する:
+書き込む先は、既存のイシューファイルの有無で分ける（どちらも、下の「設計確認メモ」「本文整合」「機械検証」「GitHub の本文の書き換え」を同じ順に行う）:
+- **既存のイシューファイルがある**（`bash scripts/claude/issue-source.sh path $ARGUMENTS` が exit 0 で、そのパスを出す）: そのファイルを Edit で直す。機械検証は `bash scripts/claude/check-memo-body-paths.sh $ARGUMENTS`。最後に `gh issue edit <GitHub#> --body-file <そのファイル>`（`<GitHub#>` は `bash scripts/claude/issue-source.sh gh-number $ARGUMENTS` の出力）
+- **既存のイシューファイルが無い**（新しいイシュー。`issue-source.sh path` が exit 1）: GitHub の本文をスクラッチパッドの下書きに書き出して直し、GitHub に書き戻す。手元のリポジトリには何も残さない
+  ```bash
+  N=$(bash scripts/claude/issue-source.sh gh-number $ARGUMENTS)
+  DRAFT="<スクラッチパッド>/${ARGUMENTS}_body.md"
+  bash scripts/claude/issue-source.sh body $ARGUMENTS > "$DRAFT"
+  # Edit で「## 設計確認メモ（/grill-me）」の追記と本文整合を行う
+  bash scripts/claude/check-memo-body-paths.sh --file "$DRAFT"
+  gh issue edit "$N" --body-file "$DRAFT"
+  rm -f "$DRAFT"
+  ```
+
+ユーザーが回答したら、イシューの「## 関連資料」セクションの直後に以下を追記する:
 
 ```markdown
 ## 設計確認メモ（/grill-me）
@@ -56,10 +70,10 @@ cat docs/issues/open/$ARGUMENTS.md
 設計確認メモを追記したら、メモの確定値と矛盾する既存セクション（`解決方針` / `スコープ` / `実装対象` / `受け入れ条件`）を同じ確定値に整合更新する。「(a)/(b) どちらか」「併用（未確定）」等の grill 前の表現がメモの確定と矛盾したまま残らないようにする（`plan-writing-rules.md` の「ルール変更時に関連ファイルを同時更新する」不変条件を、イシュー本文内のセクション間にも適用する）。コンテキストを持たない担当者が本文を読んで方式未決と誤読しないことが目的。
 
 **メモ↔本文の機械検証（必須・スクリプト不在なら skip）**:
-本文整合の後、`bash scripts/claude/check-memo-body-paths.sh I###` を実行し、設計確認メモのファイルパスが本文（`## 実装対象` / `## 影響範囲`）に反映されているか（memo ⊆ body）を機械検証する。終了コード `1`（不一致）の場合は、列挙されたパスを本文に追記、または意図的除外であればその旨を本文に明記してから再実行し、`✅`（exit 0）を確認してから次へ進む。`2`（実行不可）やスクリプト不在の場合は非ブロックで skip してよい（警告のみ）。これは上記「本文整合（必須）」を散文の心がけで終わらせず決定論ゲートで締めるためのもの（`plan-writing-rules.md` の「消費箇所の全件更新」をイシュー本文に適用した決定論的インスタンス）。
+本文整合の後、`bash scripts/claude/check-memo-body-paths.sh I###`（新しいイシューは `--file <下書き>`）を実行し、設計確認メモのファイルパスが本文（`## 実装対象` / `## 影響範囲`）に反映されているか（memo ⊆ body）を機械検証する。終了コード `1`（不一致）の場合は、列挙されたパスを本文に追記、または意図的除外であればその旨を本文に明記してから再実行し、`✅`（exit 0）を確認してから次へ進む。`2`（実行不可）やスクリプト不在の場合は非ブロックで skip してよい（警告のみ）。これは上記「本文整合（必須）」を散文の心がけで終わらせず決定論ゲートで締めるためのもの（`plan-writing-rules.md` の「消費箇所の全件更新」をイシュー本文に適用した決定論的インスタンス）。
 
 **GitHub イシュー本文の同期（必須・`gh` 不可なら skip）**:
-本文整合の後、`gh issue edit <GitHub#> --body-file docs/issues/open/IXXX.md` で GitHub イシュー本文をローカルと同期する（`--body "$(cat ...)"` は本文中の `"`/バックティック/`$(...)` でシェル展開エラーになり得るため `--body-file` を使う）。`gh` が使えない環境（未認証・headless 等）では skip してよい（非ブロック・警告メッセージのみ表示し停止しない）。
+本文整合の後、`gh issue edit <GitHub#> --body-file <イシューファイル または 下書き>` で GitHub イシュー本文を書き換える（新しいイシューは GitHub が正なので、これが唯一の書き込み）（`--body "$(cat ...)"` は本文中の `"`/バックティック/`$(...)` でシェル展開エラーになり得るため `--body-file` を使う）。`gh` が使えない環境（未認証・headless 等）では skip してよい（非ブロック・警告メッセージのみ表示し停止しない）。
 
 **具体化追求ルール（必須）**:
 ユーザーの回答が以下の状態であれば、具体値が出るまで追加質問を行う:

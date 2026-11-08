@@ -1,14 +1,16 @@
 ---
 name: issue-bootstrap
-description: イシューを採番・作成し、自己完結度レビューを通して GitHub に登録する（ブランチは /plan-issue が作る）。使うのは、ユーザーが /issue-bootstrap を打ったとき・会話の中で別イシューにすると決まったとき（Claude が自分で呼ぶ。ユーザーにコマンドを渡さない）・retro 段階が改善案を起票するとき。
+description: イシューの本文を下書きし、自己完結度レビューを通して GitHub に登録する（番号は GitHub が振る・手元にファイルを作らない・ブランチは /plan-issue が作る）。使うのは、ユーザーが /issue-bootstrap を打ったとき・会話の中で別イシューにすると決まったとき（Claude が自分で呼ぶ。ユーザーにコマンドを渡さない）・retro 段階が改善案を起票するとき。
 argument-hint: "[title]"
 ---
 
 # /issue-bootstrap
 
+新しいイシューは GitHub のイシューだけで管理する（I221・`docs/runbooks/workflow.md`「イシューの置き場所」）。番号は「I＋GitHub の番号」（#427 → I427）。手元の `docs/issues/open/` にファイルを作らない（本文の写しは `/plan-issue` が計画を始めるときに作る）。
+
 ## 呼ばれ方
 - **ユーザーが打ったとき**: 下の手順をすべて行う。要件・基本設計・UI/UX で決めてもらうことがあるときだけ、手順 6 で質問して止まる（`docs/runbooks/workflow.md`「止めて聞く条件」1）
-- **Claude が会話の中で起票するとき**（`docs/runbooks/workflow.md`「Claude が会話の中で起票するとき」）: 下の手順をすべて行う。ただし、手順 3.5 の後、手順 4（GitHub への登録）の前に、要件・基本設計・UI/UX で決めてもらうことが残っていないかを見る。残っていればその質問をまとめて出して止まり、答えをイシューファイルの「## 設計確認メモ（/grill-me）」に書いてから手順 4 に進む（イシューファイルは未コミットのまま残る）。手順 6 では、案内の代わりに `I###（#GitHub の番号）・タイトル・なぜ起票したか` を 1 行で報告する
+- **Claude が会話の中で起票するとき**（`docs/runbooks/workflow.md`「Claude が会話の中で起票するとき」）: 下の手順をすべて行う。ただし、手順 3 の後、手順 5（GitHub への登録）の前に、要件・基本設計・UI/UX で決めてもらうことが残っていないかを見る（手順 4）。手順 6 では、案内の代わりに `I<N>（#<N>）・題名・なぜ起票したか` を 1 行で報告する
 - **retro 段階から呼ばれたとき**: 質問しない。未確定のことは「未定・grill-me で確認」と書いて最後まで進める。起点のイシュー番号を「関連資料」に書く
 
 どのときも、イシューの本文にコマンドの出力・ログ・環境変数・記録（JSONL）の中身・画面キャプチャ・コンソールの記録を貼らない。要約と `ファイル:行` の参照だけにする（公開リポジトリのため）。
@@ -21,106 +23,77 @@ git rev-parse --show-toplevel
 git branch --show-current
 ```
 
-### 2. イシュー番号の採番
-全 worktree 横断（untracked 含む）＋git 履歴を単一権威スクリプトで一括集計する：
+### 2. 本文の下書き
+ひな形 `docs/issues/templates/issue_template.md` を、セッションのスクラッチパッド（リポジトリの外。スクラッチパッドが無いときは `mktemp` で作ったファイル）に写して書く。リポジトリの中（`docs/issues/` など）に置かない（未追跡のファイルを残すと、ワークツリー間の持ち運びが戻るため）。
 ```bash
-# 採番（next-issue-num.sh が単一権威。3 桁ゼロ詰めの番号を stdout に返す）
-ISSUE_NUM=$(bash scripts/claude/next-issue-num.sh) || {
-  echo "採番に失敗しました。git worktree list と docs/issues を確認してください。" >&2
-  exit 1
-}
-echo "次のイシュー番号: $ISSUE_NUM"
+DRAFT="<スクラッチパッド>/issue_draft_<短い英語の名前>.md"
+cp docs/issues/templates/issue_template.md "$DRAFT"
+# 内容を Edit で書く（題名は本文に書かない。手順 5 の --title に渡す）
 ```
 
-**重要**: 採番は必ず `scripts/claude/next-issue-num.sh` 経由で行う。本スクリプトが**全 worktree 横断 FS（untracked 含む）**＋git 履歴（削除済み含む・closed から削除された番号も使用済み扱い）を一括集計するため、別 worktree の未コミットイシューも含めて二重採番を防ぐ（どの worktree から実行しても同一の大域一意番号）。
-
-### 3. イシューファイル作成
-
-**イシューファイル名形式**: `I${ISSUE_NUM}.md`（概要なし、例: `I039.md`）
-
-作成前に同名ファイルが存在しないことを確認する:
+### 3. 自己完結度レビュー（必須・ソフト警告）
+GitHub に登録する前に、issue-review サブエージェントで下書きをレビューする:
 ```bash
-if [ -f "docs/issues/open/I${ISSUE_NUM}.md" ]; then
-  echo "⚠️ docs/issues/open/I${ISSUE_NUM}.md が既に存在します。上書きしません。採番を再確認してください。"
-  exit 1
-fi
-cp docs/issues/templates/issue_template.md docs/issues/open/I${ISSUE_NUM}.md
-# 内容を編集（タイトル、概要等をユーザーの指示に基づいて記載）
+bash scripts/claude/issue-review.sh --file "$DRAFT"
 ```
 
-### 3.5 自己完結度レビュー（必須・ソフト警告）
-
-GitHub 登録（step 4）の前に、issue-review サブエージェントでイシュー内容をレビューする:
-```bash
-bash scripts/claude/issue-review.sh "I${ISSUE_NUM}"
-```
-
-- レビュー結果（自己完結判定＝`十分`/`要補足`、未記入セクション、内容指摘）をユーザーに提示する。
-- これは**ソフト警告**であり、登録（step 4 以降）を**ブロックしない**。情報が本当に未確定なら「未特定・grill-me で確認」と明記して進めてよい。
+- レビュー結果（自己完結判定＝`十分`/`要補足`、未記入セクション、内容指摘）を見て、直せるものは下書きを直す。
+- これは**ソフト警告**であり、登録（手順 5）を**ブロックしない**。情報が本当に未確定なら「未特定・grill-me で確認」と明記して進めてよい。
 - `claude -p` が利用できない等で結果が得られない場合もフローは継続する（`issue-review.sh` が非ブロックで `exit 0` する）。
 - 「未特定・grill-me で確認」「未定・grill-me で確認」「未特定」のプレースホルダが明記されている項目は未記入扱いにしない。
-- 実行後、出力中の `## 判定: 十分/要補足` を読み取り、step 6 の報告分岐（A=要補足／B=十分）の判断に使う。
+- 出力中の `## 判定: 十分/要補足` を読み取り、下書きの「## 関連資料」に `- 自己完結度レビュー（issue-review・YYYY-MM-DD）: 十分` または `要補足` の 1 行を書く（レビューの記録はこの 1 行と GitHub の本文の版に残る。`docs/reviews/` には保存しない）。手順 6 の報告分岐（A=要補足／B=十分）にも使う。
 
-### 4. GitHubイシューの登録（必須）
+### 4. 登録の前の質問（会話の中で Claude が起票するときだけ）
+要件・基本設計・UI/UX で決めてもらうことが残っていれば、その質問をまとめて出して止まる。下書き（`$DRAFT`）はそのまま残す。答えをもらったら、下書きの「## 関連資料」の直後に「## 設計確認メモ（/grill-me）」を書き（grill-me と同じ形）、本文の他の節も整合させてから手順 5 に進む。手順 1〜3 はやり直さない（番号は登録で決まるので、やり直しても変わらない）。
+
+### 5. GitHub への登録（必須）
 ```bash
-gh issue create \
-  --title "I${ISSUE_NUM}: [イシュータイトル]" \
-  --body "$(cat docs/issues/open/I${ISSUE_NUM}.md)" \
-  --label "[種別ラベル]" --label "[トラックラベル]"
+URL=$(gh issue create \
+  --title "[イシューの題名]" \
+  --body-file "$DRAFT" \
+  --label "[種別ラベル]" --label "[トラックラベル]")
+N="${URL##*/}"   # 出力の URL の末尾が番号（gh issue list --limit 1 では取らない。同時に起票されると別の番号を取るため）
+rm -f "$DRAFT"
+echo "I${N}（#${N}）: ${URL}"
 ```
+- 題名に `I###:` を付けない（番号は GitHub が振る。題名が `I###: ` で始まるイシューは、`scripts/claude/issue-source.sh` が今までの流れのイシューとして扱う）
+- `--body "$(cat …)"` は使わない（本文中の `"`・バッククォート・`$(...)` がシェルで展開されるため）
 
 **ラベル設定（2軸・両方必須）**:
 - **種別ラベル**: Bug → `bug` / Feature → `enhancement` / Documentation → `documentation` / Refactoring → `refactoring`
 - **トラックラベル**（`track:app` / `track:harness` のどちらか1つを必須付与）:
-  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み → `track:harness`
+  - 変更対象が `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・`.github/`・レビュー/ゲート/テンプレートの仕組み → `track:harness`
   - 変更対象が `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト → `track:app`
-  - 両方にまたがる場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
-
-### 5. イシューファイルに GitHub Issue 番号を記録
-GitHub Issue 作成後、返却された Issue URL から番号を取得してイシューファイルに追記する:
-```bash
-# gh issue create の出力から番号を取得（例: https://github.com/org/repo/issues/62 → #62）
-GITHUB_ISSUE_NUM=$(gh issue list --state open --limit 1 --json number --jq '.[0].number')
-# イシューファイルの「## 関連資料」セクションに追記
-# 例: sed -i を使って「## 関連資料」の次の行に挿入するか、
-#     Edit ツールで直接 「- GitHub Issue: #XX」 を追記する
-```
-
-記録フォーマット（`## 関連資料` セクションに追記）:
-```
-- GitHub Issue: #XX
-```
+  - 両方にまたがる場合、またはどちらの例にも当たらない場合は主目的側に**単一付与**（両付与はしない。判断に迷う場合はユーザーに確認）
 
 ### 6. ユーザーへの報告
 
-retro 段階から呼ばれたときは、下の報告の代わりに「起票した I### と GitHub の番号」を retro 段階に返して終わる（ユーザーへの報告は close 段階がまとめて行う）。会話の中で Claude が起票したときは、上の「呼ばれ方」の 1 行の報告にする。
+retro 段階から呼ばれたときは、下の報告の代わりに「起票した I<N> と GitHub の番号」を retro 段階に返して終わる（ユーザーへの報告は close 段階がまとめて行う）。会話の中で Claude が起票したときは、上の「呼ばれ方」の 1 行の報告にする。
 
-ユーザーが打ったときは、step 3.5 の issue-review 判定に応じて次ステップ案内を出し分ける。未確定のセクションのうち、要件・基本設計・UI/UX の価値判断が要るもの（受け入れ条件・仕様・画面の配置/文言/操作の流れ）があれば、案内の前にその質問を一括で出して止まる（技術的な未確定は計画で Claude が決めるので質問しない）。回答はイシューファイルの「## 設計確認メモ（/grill-me）」に書き、本文と GitHub の本文にも反映する（grill-me と同じ手順）。
+ユーザーが打ったときは、手順 3 の issue-review 判定に応じて次ステップ案内を出し分ける。未確定のセクションのうち、要件・基本設計・UI/UX の価値判断が要るもの（受け入れ条件・仕様・画面の配置/文言/操作の流れ）があれば、案内の前にその質問を一括で出して止まる（技術的な未確定は計画で Claude が決めるので質問しない）。回答は `/grill-me I<N>` と同じ手順で GitHub の本文に書く。
 
 **(A) 判定=`要補足` / 「未特定・未定」プレースホルダが残っている場合**:
 ```
-✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
-📂 ファイル: docs/issues/open/I${ISSUE_NUM}.md
-🔗 GitHubイシュー: [GitHubイシューURL]
+✅ イシュー I${N} を作成しました: [題名]
+🔗 GitHubイシュー: [URL]（手元のファイルは作っていません。正は GitHub）
 
 ⚠️ 未確定のセクションがあります: [未記入/プレースホルダのセクション名一覧]
 ⚠️ ブランチはまだ作成されていません。
 次のステップ:
-  👉 未確定の設計を詰めるため `/grill-me I${ISSUE_NUM}` を実行してください（推奨）。
-  👉 詰め終わったら `/plan-issue I${ISSUE_NUM}` でブランチ作成・計画書作成を行ってください。
+  👉 未確定の設計を詰めるため `/grill-me I${N}` を実行してください（推奨）。
+  👉 詰め終わったら `/plan-issue I${N}` でブランチ作成・計画書作成を行ってください。
 ```
 
 **(B) 判定=`十分`（重要セクションが具体的に記入済み・プレースホルダなし）の場合**:
 ```
-✅ イシュー I${ISSUE_NUM} を作成しました: [タイトル]
-📂 ファイル: docs/issues/open/I${ISSUE_NUM}.md
-🔗 GitHubイシュー: [GitHubイシューURL]
+✅ イシュー I${N} を作成しました: [題名]
+🔗 GitHubイシュー: [URL]（手元のファイルは作っていません。正は GitHub）
 
 ✅ イシューは自己完結しています（現状の問題・根本原因・解決方針・実装対象が記入済み）。
 ⚠️ ブランチはまだ作成されていません。
 次のステップ:
-  👉 設計上の疑問がなければ `/grill-me` はスキップして `/plan-issue I${ISSUE_NUM}` に直接進めます。
-  👉 念のため設計を確認したい場合は `/grill-me I${ISSUE_NUM}` を実行してください。
+  👉 設計上の疑問がなければ `/grill-me` はスキップして `/plan-issue I${N}` に直接進めます。
+  👉 念のため設計を確認したい場合は `/grill-me I${N}` を実行してください。
 ```
 
 ## 詳細ルール

@@ -29,11 +29,10 @@
 失敗の注入（FG・テストの中で、スクリプトの写しを `sed` で壊して流し、その S が NG になることを確かめる）:
 - FG-S2: `NEW_ISSUE_MIN=427` を `NEW_ISSUE_MIN=0` にした写しで S2 → NG（gh が呼ばれる）
 - FG-S4: url の `/issues/` の確認を消した写しで S4 → NG（写しが作られる）
-- FG-S3: `jq -j .body` の出力を `echo` 経由に変えた写しで S3 → NG（`cmp` が不一致）
-- FG-S8: 一時ファイル → `mv` を、直接書き込みに変えた写しで S8 → NG（半端なファイルが残る）
+- FG-S3: 本文の書き出し（`field body`）を `echo` 経由に変えた写しで S3 → NG（`cmp` が不一致）
 - FG-S11: 題名の `^I[0-9]{3,}: ` の確認を消した写しで S11 → NG（写しが作られる）
 
-実装前のため未実行。
+実装時（2026-11-08）に実行: 全 PASS（TC-02 は TC-02a・TC-02b とも exit 0。TC-01 は S1〜S11・FG-S2・FG-S3・FG-S4・FG-S11 が PASS）。
 
 ### TC-02 現役の文書・スキルに古い採番の手順が残っていない（実装の後に 1 回だけ流して記録する）
 決まりの文言の有無は、意図的な変更でしか変わらないので常設のテストにしない（plan-writing-rules「決定論テストの対象の選び方」）。実装の後に次を `bash -c` で流し、終了コードを記録する（合格=exit 0）:
@@ -42,12 +41,12 @@
 - TC-02b（入口のスキルが補助スクリプトを使う）: `grep -q "issue-source.sh" .claude/skills/plan-issue/SKILL.md` と `grep -q "issue-source.sh" .claude/skills/grill-me/SKILL.md` がどちらも exit 0
   - 失敗の注入: 実装前は `issue-source.sh` がどちらにも無く exit 1
 
-実装前のため未実行。
+実装時（2026-11-08）に実行: 全 PASS（TC-02 は TC-02a・TC-02b とも exit 0。TC-01 は S1〜S11・FG-S2・FG-S3・FG-S4・FG-S11 が PASS）。
 
 ### TC-03 関係するテスト（手元で選んで流す。全体は CI）
 - 下の決定論ゲートの各行。`test_i221_issue_source.sh` のほか、文言を固定しているテスト（i107・i179・i185）と、イシューファイルを仮に作るテスト（review_verdict・i224）
 
-実装前のため未実行。
+実装時（2026-11-08）に実行: 全 PASS（TC-02 は TC-02a・TC-02b とも exit 0。TC-01 は S1〜S11・FG-S2・FG-S3・FG-S4・FG-S11 が PASS）。
 
 ## 決定論ゲート（自動実走）
 ```bash
