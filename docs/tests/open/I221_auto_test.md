@@ -60,3 +60,6 @@ bash -n scripts/claude/issue-source.sh
 bash -n scripts/claude/check-memo-body-paths.sh
 bash -n scripts/claude/issue-review.sh
 ```
+
+## 実行記録
+- 2026-11-08（test-gate）: 手元で流す重いテストは無し（pytest・Jest・E2E は CI が正・review-gate の `code-review.sh` が `CI_WAIT: OK` を確認）。決定論ゲートの各行は review-gate の `code-review.sh` が実走（`docs/reviews/I221_code_review_20261108_2146.md`）。実装時の手元の実行は上の各 TC の記録のとおり全 PASS

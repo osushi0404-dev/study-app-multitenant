@@ -16,8 +16,8 @@
 - Config: ハーネス（スキル・レビュー役・スクリプト・runbook・イシューのひな形）
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: CI 全緑（Harness Tests は 1 回目が外部の 503 で落ち、流し直しで pass）。TC-01（S1〜S11・FG 4 件）・TC-02a/b・TC-03（関係するテスト 6 本）は手元で全 PASS
+- 手動: M-01〜M-04 すべて OK（Claude）。実走で I222 を #427（I427）として登録し直し、使い捨ての clone で `/plan-issue` の最初のコミット（写し 1 ファイル）まで通した。Human の項目なし
 
 ## 計画との差分
 - あり（計画書の計画変更記録 1〜3）: 境目を I427＋題名の拒否に（plan-review）／JSON を python3 で読む・FG-S8 をやめる／check-memo・issue-review の探索を issue-source.sh に寄せる（/simplify）
