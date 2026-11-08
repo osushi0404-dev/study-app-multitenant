@@ -83,18 +83,48 @@ add_reviewed_commit() {
   mv "$tmp" "$file"
 }
 
-# I193（S5 の反省）: 組み込みレビューの出力が「対象を読めた結果」に見えるか（exit 0＝読めたとみなす）。
-# 読めたとみなすのは、指摘の配列（"file": を持つ JSON）・空の配列だけの行・「指摘なし」に当たる文のどれかがあるときだけ。
-# ファイル名が出てくるだけ・行頭が [ なだけ（Markdown のリンクなど）では読めたとみなさない（I193 の組み込みレビューの指摘）。
-official_output_readable() {
-  local out="$1"
-  # here-string で渡す（printf | grep -q だと、大きな出力で grep が先に終わり、pipefail の下で 141 になって誤判定する。I193 L1）
-  grep -qE '"file"[[:space:]]*:' <<< "$out" && return 0
-  grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' <<< "$out" && return 0
-  # I212: /security-review に出させた判定の行（official_security_verdict と同じ形）があれば読めた結果（判定と記録の注意を食い違わせない）
-  grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$' <<< "$out" && return 0
-  grep -qE '指摘(は)?(なし|ありません|見つかりません)|(脆弱性|問題|指摘)[^。]*見つかりませんでした|[Nn]o (findings|issues|bugs|vulnerabilities)( were)? (found|reported)|[Nn]o (findings|issues|bugs)\.?$' <<< "$out" && return 0
-  return 1
+# I212・I227: 組み込みのレビューに出させた判定の 1 行（行全体が `<名前>: <数>`）があるか（exit 0＝ある）。
+# 組み込みのレビューの判定の行（SECURITY_FINDINGS など）の正規表現はここだけ（I212 F7: 2 か所にあると、片方だけ変えて
+# 判定と記録の注意が食い違う。台帳の LEDGER_ROUND などの記録の行は別の読み方のまま）。
+# 行全体の固定の形だけを読む（文の中の語では当たらない）。出力のどこにあってもよい（締めの文が後に付いても読む・I212 W3）。
+# here-string で渡す（pipefail の下で grep -q が先に終わって 141 になる誤判定を避ける・I193 L1）
+findings_line_present() {   # $1=行の名前（正規表現に入るので、コードの中の定数だけを渡す） $2=出力
+  grep -qE "^${1}:[[:space:]]*[0-9]+[[:space:]]*\$" <<< "$2"
+}
+
+# I212: /security-review に出させる判定の 1 行（findings_line_present SECURITY_FINDINGS で読む）
+SECURITY_FINDINGS_PROMPT='このレビューの出力の最後の行には、報告する脆弱性の件数を SECURITY_FINDINGS: <件数> の形（半角数字・0 件なら SECURITY_FINDINGS: 0）で必ず 1 行だけ出す。'
+
+# I193・I227: 組み込みのレビューの出力が「対象を読めた結果」か（exit 0＝読めた）。文の言い回し（「指摘なし」など）では決めない。
+#   security: 判定の行 SECURITY_FINDINGS があるとき（--append-system-prompt で出させる・I212）
+#   code: 公式の /code-review の決まった出力の形（JSON として読める指摘の配列）があるとき。/code-review は足した指示に従わず
+#         この形だけを出す（I227 のスパイク）
+#   それ以外の種類: 読めていない扱い
+official_output_readable() {   # $1=種類（code / security） $2=出力
+  case "$1" in
+    security) findings_line_present SECURITY_FINDINGS "$2" ;;
+    code) official_findings_json_present "$2" ;;
+    *) return 1 ;;
+  esac
+}
+
+# I227: 出力に、JSON として読める指摘の配列があるか（exit 0＝ある）。```（言語名は何でもよい）の囲みの中を順に試し、
+# 囲みが 1 つも無ければ出力全体を試す。どれかが「要素がすべて "file" を持つオブジェクトの配列」なら読めた結果（空の配列も）。
+# 出力は信用しないので、json.loads で読むだけ（評価しない）。出力は標準入力で渡す
+official_findings_json_present() {   # $1=出力
+  # shellcheck disable=SC2016  # 単一引用符の中は Python のコード（正規表現の $ を展開させない）
+  python3 -I -c '
+import json, re, sys
+text = sys.stdin.read()
+blocks = re.findall(r"^```[A-Za-z0-9_+-]*[ \t]*\n(.*?)^```[ \t]*$", text, re.M | re.S) or [text]
+def ok(s):
+    try:
+        v = json.loads(s)
+    except ValueError:
+        return False
+    return isinstance(v, list) and all(isinstance(e, dict) and "file" in e for e in v)
+sys.exit(0 if any(ok(b) for b in blocks) else 1)
+' <<< "$1"
 }
 
 # I193: claude が先頭に出す手元の設定の警告（「Permission allow rule (…) is not matched …」）を除く。
@@ -149,9 +179,10 @@ kill_tree() {
 # I193: 組み込みのレビュー（/code-review・/security-review）を読み取り専用（plan モード）・時間上限つきで実行する。
 # plan モードにするのは、claude -p にはプロジェクトの settings の許可（git push・rm など）がそのまま効くため
 # （差分の中の文章に誘導された書き込み・push を仕組みで止める）。失敗・時間切れは本文に書いて返す（呼び出し元は止めない）。
-run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD） $2=足す指示（省略可。--append-system-prompt で渡す）
-  local prompt="$1" out rc=0 extra=()
-  [ -n "${2:-}" ] && extra=(--append-system-prompt "$2")
+run_official_review() {   # $1=プロンプト（例: /code-review medium origin/develop...HEAD） $2=種類（code / security。読めたかの決め方と足す指示を選ぶ）
+  local prompt="$1" kind="$2" out rc=0 extra=()
+  # I212: /security-review には判定の 1 行を出させる。/code-review は足した指示に従わないので付けない（I227 のスパイク）
+  if [ "$kind" = "security" ]; then extra=(--append-system-prompt "$SECURITY_FINDINGS_PROMPT"); fi
   # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none。黙って止まる経路を作らない）
   # I223: GitHub へは読み取りだけの App の鍵（GH_APP_READONLY=1。書き込みは GitHub が拒否する）
   out=$(GH_APP_READONLY=1 timeout "${OFFICIAL_REVIEW_TIMEOUT:-900}" claude -p --permission-mode plan --permission-prompts none --strict-mcp-config ${extra[@]+"${extra[@]}"} "$prompt" 2>&1 < /dev/null) || rc=$?
@@ -160,8 +191,8 @@ run_official_review() {   # $1=プロンプト（例: /code-review medium origin
     return 0
   fi
   out=$(printf '%s\n' "$out" | drop_cli_warnings)
-  if ! official_output_readable "$out"; then
-    printf '(注意: 出力に指摘の配列も「指摘なし」も無く、対象を読めていない可能性がある。この出力は判定の根拠にしない)\n'
+  if ! official_output_readable "$kind" "$out"; then
+    printf '(注意: 出力に決まった形の結果〔/code-review は指摘の JSON 配列・/security-review は SECURITY_FINDINGS の行〕が無く、対象を読めていない可能性がある。この出力は判定の根拠にしない)\n'
   fi
   printf '%s\n' "$out" | neutralize_machine_lines
 }
@@ -174,18 +205,16 @@ neutralize_machine_lines() {
     -e 's/^([[:space:]]*)(EXPERIMENT_BEGIN|EXPERIMENT_END)([[:space:]]|$)/\1> \2\3/'
 }
 
-# I212: /security-review に出させる判定の 1 行（official_security_verdict がこの行だけで「動いた」を決める）
-SECURITY_FINDINGS_PROMPT='このレビューの出力の最後の行には、報告する脆弱性の件数を SECURITY_FINDINGS: <件数> の形（半角数字・0 件なら SECURITY_FINDINGS: 0）で必ず 1 行だけ出す。'
-
 # I193 7 回目 H2: 高リスク（パス判定 YES）で組み込みの /security-review が動かなかったら HIGH。
 # 公式のセキュリティレビューは高リスクのときの多層防御の 1 枚なので、抜けたまま OK にしない（止まる側）。
-# I212: 「動いた」は、出力に行全体が `SECURITY_FINDINGS: <数>` の行があるときだけ（文の形に頼らない。日本語の「指摘なし」を
-# 読めずに FAILED にしていた・I200 ほか）。差分が無くて動かしていない回は OK。それ以外（実行できず・判定の行が無い）は HIGH
-official_security_verdict() {   # $1=RISK_PATH（YES/NO） $2=組み込みの /security-review の出力
+# I212: 「動いた」は、出力に判定の行（findings_line_present SECURITY_FINDINGS）があるときだけ（文の形に頼らない）。
+# I227: 差分が無くて動かしていない回は、本体の NO_DELTA=1 で OK にする。表示の文字列「(実行していない: 差分なし)」では
+# 決めない（出力がそれを引用しても OK にしない・I212 台帳 F1）。NO_DELTA が 1 以外は動かした回として判定の行を求める
+official_security_verdict() {   # $1=RISK_PATH（YES/NO） $2=NO_DELTA（1=差分なしで動かしていない） $3=組み込みの /security-review の出力
   [ "$1" = "YES" ] || { echo OK; return; }
-  [[ "$2" == *"(実行していない: 差分なし)"* ]] && { echo OK; return; }
-  # here-string で渡す（pipefail の下で grep -q が先に終わって 141 になる誤判定を避ける。official_output_readable と同じ・I193 L1）
-  if grep -qE '^SECURITY_FINDINGS:[[:space:]]*[0-9]+[[:space:]]*$' <<< "$2"; then echo OK; else echo HIGH; fi
+  [ "$2" = "1" ] && { echo OK; return; }
+  # 読めたかの決まりは official_output_readable の 1 か所（記録の注意と判定を食い違わせない）
+  if official_output_readable security "$3"; then echo OK; else echo HIGH; fi
 }
 
 # I193: PR で動くワークフローのジョブ名（jobs.<id>.name。無ければ id）を 1 行ずつ出す。
@@ -1056,11 +1085,12 @@ RISK_PATH=$(path_risk_trigger "$GIT_FILES")
 RISK_PLAN=$(plan_risk "$ISSUE")
 RISK_FINAL=$(combine_risk "$RISK_PLAN" "$RISK_PATH")
 if [ "$NO_DELTA" = "1" ]; then
+  # 表示用の文字列（記録とレビュー役への入力）。判定には使わない（判定は NO_DELTA を渡す・I227）
   echo "(実行していない: 差分なし)" > "$OFFICIAL_DIR/code"
   [ "$RISK_PATH" = "YES" ] && echo "(実行していない: 差分なし)" > "$OFFICIAL_DIR/security"
 else
   echo "組み込みの /code-review を背景で実行しています..."
-  run_official_review "/code-review medium ${REVIEW_RANGE}" > "$OFFICIAL_DIR/code" &
+  run_official_review "/code-review medium ${REVIEW_RANGE}" code > "$OFFICIAL_DIR/code" &
   OFFICIAL_PIDS+=("$!")
   if [ "$RISK_PATH" = "YES" ]; then
     # /security-review は「origin の既定のブランチ」との差分を見る。手元の origin/HEAD が develop でなければ記録に残す
@@ -1068,7 +1098,7 @@ else
       echo "(注意: 手元の origin/HEAD が origin/develop を指していないため、/security-review が develop 以外と比べた可能性がある)" > "$OFFICIAL_DIR/security_note"
     fi
     echo "組み込みの /security-review を背景で実行しています..."
-    run_official_review "/security-review" "$SECURITY_FINDINGS_PROMPT" > "$OFFICIAL_DIR/security" &
+    run_official_review "/security-review" security > "$OFFICIAL_DIR/security" &
     OFFICIAL_PIDS+=("$!")
   fi
 fi
@@ -1117,7 +1147,7 @@ if [ "$RISK_PATH" = "YES" ]; then
   OFFICIAL_SECURITY="$(cat "$OFFICIAL_DIR/security_note" 2>/dev/null || true)
 $(cat "$OFFICIAL_DIR/security" 2>/dev/null || echo "(実行できず: 結果のファイルが無い)")"
 fi
-SECURITY_VERDICT=$(official_security_verdict "$RISK_PATH" "$OFFICIAL_SECURITY")
+SECURITY_VERDICT=$(official_security_verdict "$RISK_PATH" "$NO_DELTA" "$OFFICIAL_SECURITY")
 if [ "$SECURITY_VERDICT" != "OK" ]; then
   echo "⛔ 高リスクの変更で、組み込みの /security-review が動きませんでした（実行できず・判定の行 SECURITY_FINDINGS が無い）。HIGH として記録します。"
   echo "OFFICIAL_SECURITY: FAILED"
