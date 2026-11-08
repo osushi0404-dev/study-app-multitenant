@@ -29,3 +29,4 @@
 - [plan-review] Info 1 件（下書きがスクラッチパッドにしか無い間にセッションが切れる）は見送り — 未登録なだけで作り直せる（計画のリスク表）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
