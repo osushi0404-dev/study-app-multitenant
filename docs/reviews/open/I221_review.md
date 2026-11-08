@@ -35,7 +35,9 @@
 - [implement] JSON の読み取りを `jq` から `python3 -I` の json にした（`jq` がこの環境とハーネスの前提の道具に無い）。注入しても NG にならない FG-S8 をやめた — 計画変更記録 2
 - [implement] /simplify の指摘で、`check-memo-body-paths.sh`・`issue-review.sh` の I### の探索を `issue-source.sh path` に寄せ、`issue-source.sh` とテストの重複を整理した。edit-target の命令・ラベルの目印・境目の数字を文書から外す・gh の --jq は見送り — 計画変更記録 3
 - [review-gate] 1 回目の `code-review.sh` は `CI_WAIT: FAIL` で止まった。落ちたのは Harness Tests だけ（ほかの 5 ジョブは pass・E2E は実行中）。原因は I221 の変更ではなく、CI が shellcheck-py（v0.10.0.1）を入れるときの shellcheck 本体のダウンロードが HTTP 503 を返すこと（手元で同じ組み立てを試して同じ 503 を確認）。develop の CI（2026-11-08 09:25・I227 のマージ後）も同じ理由で落ちている。GitHub App の鍵では失敗したジョブを流し直せない（`Resource not accessible by integration`）。fix-loop で直すコードが無く、CI の設定（`.pre-commit-config.yaml`・`.github/`）を変えるのは止める条件 2 に当たるので、`STAGE_DONE:` を書かずに止める（止める条件 3）。手元では関係するテスト 6 本（TC-03）が全 PASS
+- [review-gate] ユーザーが PR の画面で失敗したジョブを流し直して全緑になった後、記録のコミットを送って `code-review.sh` をやり直した: `CI_WAIT: OK`・`FINAL_VERDICT: OK`・`ADVERSARIAL_STAGE: NOT_REQUIRED`（`docs/reviews/I221_code_review_20261108_2146.md`）。台帳は Medium 3（F1 grill-me で書き戻しの失敗でも下書きを消す・F2 issue-bootstrap で登録の失敗を確かめずに下書きを消す・F3 計画開始後の grill-me が写しを既存ファイルの経路で GitHub に書き戻す）・Low 7。どれもハーネスの止める条件に当たらないので fix-loop に回さず、retro が後続へ振り分ける
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
