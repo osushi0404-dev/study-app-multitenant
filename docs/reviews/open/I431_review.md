@@ -30,8 +30,8 @@
   - TC-23（RED）: 修正前の本番コードに対して 20 failed・3 passed（通ったのは TC-02・TC-10・TC-22。TC-22 は tenant_scope のファイルが残る状態で流したため。TC-15b は後から足し、修正前の core で単独で FAIL を確認）
   - TC-24: 修正後に `studylogs/tests/test_I431_studylogs_tenant_isolation.py`（24 件）＋ `problems/tests/`（119 件・I166 を含む）＝ 143 passed
   - TC-25: commit 時の pre-commit（ruff・bandit を含む）すべて Passed
-  - CI: review-gate で確認
-- 手動: （No.1・No.2 を記入）
+  - CI: PR #453 で通過（review-gate の `CI_WAIT: OK`・2 回）
+- 手動: No.1 OK（primary の dev DB の越境 0 件・10 種類すべて。学習記録の表は空・QuizSession 124 件・UserSubjectAccess 23 件）・No.2 OK（ダッシュボードと学習統計が表示・overview／analytics／user/subjects すべて 200）。Human の項目なし
 
 ## 計画との差分
 - 提案の二重の絞り込み（subject と mistake_pattern__subject）を `mistake_analysis.scope_learning_suggestions` にまとめて views と共用した（計画では各所で重ねる書き方。同じ条件を 2 か所に書かないための関数化で、振る舞いは同じ）
@@ -56,6 +56,7 @@
 - [implement] /simplify の見送り: モデルごとの絞り方の表（problems → studylogs の依存が生まれる）・`QuizService` の中継の削除（呼び出し元を変えない方針）・おすすめの問題数の 1 クエリ化と `id__in` の副問い合わせ（効果が小さい。後者は core へ移したことで消えた）・`create_card` の関数内の import（既存の書き方） — 振る舞いを変えず、計画の方針と依存の向きを保つため
 - [review-gate] 基本レビュー（20261111_1902）は OK・CI 通過・台帳は Low 6 件（F1〜F6・retro へ）。敵対的レビュー 1 周目（20261111_1914）は新規の Critical/High 0 件だが、V1・V2・V3・V6 が未検証（実験役のホストに python・pytest が無い）で HIGH。決まり（3-3）に沿い、失敗の注入で FAIL→PASS を実測済みの決定論の TC で覆っていることを一覧に書き、確かめ方を「読んで可」に下げて 2 周目へ — 実験役がホストで pytest を動かせない件はハーネスの改善候補として retro で扱う
 - [review-gate] 基本レビュー（20261111_1915）OK・敵対的レビュー 2 周目（20261111_1949）OK（新規の Critical/High 0 件・Low 2 件〔export_user_data_task の調査表の理由の書き方・キャッシュ〈F3 と同じ〉〕は retro へ）。最終判定 OK で test-gate へ
+- [test-gate] 手動 No.1 は、止まっていた primary の DB のコンテナだけを起こして SELECT で数え、終わった後に止めた。`psql -f` は見張りに止められたので `DANGER_OK=1` は使わず、同じ SELECT を `-c` で渡した — バックエンドを起こすと起動時の migrate で primary の DB に書き込むおそれがあり、読み取りだけに限るため
 - [implement] 学習記録の「科目が空のパターンで提案の生成が落ちる」既存の不具合は I452 の範囲として残す（I452 の本文に追記するかは retro で判断）
 
 STAGE_DONE: plan NEXT: plan-review

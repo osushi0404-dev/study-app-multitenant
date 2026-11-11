@@ -5,8 +5,17 @@
 - 実行コマンド（例）: `docker compose exec -T backend python -m pytest studylogs/tests/test_I431_studylogs_tenant_isolation.py -q`（app-1 ワークツリーのコンテナ）。全テストは CI（PR #453）が正。
 
 結果:
-- backend:
+- backend: 修正前 20 failed・3 passed（TC-23）→ 修正後 24 passed＋problems/tests 119 passed（TC-24・2026-11-11）。CI（PR #453）通過（review-gate の `CI_WAIT: OK`）
 - frontend: 対象外（変更なし）
+
+## 実行記録
+| 日時 | コマンド | 終了コード | 結果 |
+|---|---|---|---|
+| 2026-11-11 18:50 | `docker compose exec -T backend python -m pytest studylogs/tests/test_I431_studylogs_tenant_isolation.py -q`（修正前） | 1 | 21 failed・2 passed（URL の誤りを直す前） |
+| 2026-11-11 19:00 | 同上（修正前の本番コードを一時的に取り出して・テスト修正後） | 1 | 20 failed・3 passed（TC-23） |
+| 2026-11-11 19:01 | `... pytest studylogs/tests/test_I431_studylogs_tenant_isolation.py problems/tests/ -q`（修正後） | 0 | 143 passed（TC-24） |
+| 2026-11-11 19:02 | commit 時の pre-commit（ruff・bandit を含む） | 0 | すべて Passed（TC-25） |
+| 2026-11-11 test-gate | 決定論ゲートの heavy の委譲なし（このイシューは「## 決定論ゲート」を持たない）。pytest は CI が正のため流し直さない | — | — |
 
 ## fixture 方針
 I166 のテスト（`backend/problems/tests/test_I166_quiz_tenant_isolation.py`）に倣う。乱数に頼らないよう、自組織の候補は 1 件・他組織は 2 件にし、集合で比べる。
