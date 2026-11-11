@@ -3,8 +3,8 @@
 両方で判定し、確認・停止の増減を出す。修正した本人が、コミットの前に余計な確認・誤停止の増加に気づくためのゲート。
 
 使い方: python3 scripts/claude/tests/guard_corpus_diff.py [--base REV]（既定 HEAD）[--rebuild] [--limit PCT]（既定 1.0）
-- 作業記録（~/.claude/projects/<このリポジトリ>/**/*.jsonl）から Bash コマンドを抜き出し、
-  ~/.cache/claude-guard-corpus/<リポジトリ名>.json に保存する（リポジトリには入れない。公開リポジトリのため）。
+- 作業記録（~/.claude/projects/<primary>・<primary>--claude-worktrees-*/**/*.jsonl）から Bash コマンドを抜き出し、
+  ~/.cache/claude-guard-corpus/<primary の名前>.json に保存する（リポジトリには入れない。公開リポジトリのため）。
 - 基準と作業ツリーを同じ時点・同じ作業ディレクトリで判定するので、環境の差（変更のあるファイル等）は結果に混ざらない。
 - 確認＋停止の増加が記録の PCT% を超えたら exit 1。素通し→停止は一覧を出す（意図どおりかを人が見る）。
 - 作業記録が無い環境（CI 等）では SKIP（exit 0）。
@@ -13,13 +13,17 @@ import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
-REPO = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+# I444: ワークツリーからでも primary とすべてのワークツリーの作業記録を読む（共通の .git が読めなければ REPO に落とす）
+REPO, _COMMON = (subprocess.run(["git", "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"],
+                                capture_output=True, text=True).stdout.split("\n") + ["", ""])[:2]
+PRIMARY = os.path.dirname(_COMMON) if _COMMON else REPO
 GUARD_REL = "scripts/claude/hooks/pretooluse_guard.py"
 CACHE_DIR = os.path.expanduser("~/.cache/claude-guard-corpus")
 UPSTREAM = "origin/develop"
@@ -40,14 +44,17 @@ def base_rev(git) -> tuple:
     return f"{last}^1", f"{last[:7]}^1（guard を最後に変えたコミットの直前）"
 
 
-def _project_dir() -> str:
-    return os.path.expanduser("~/.claude/projects/" + REPO.replace("/", "-"))
+def _project_dirs(primary: str = PRIMARY) -> list:
+    """primary とそのワークツリーの作業記録のフォルダ（Claude Code は英数字以外を - にした名前で置く）。"""
+    base = os.path.expanduser("~/.claude/projects/" + re.sub(r"[^A-Za-z0-9]", "-", primary))
+    return [d for d in [base] + sorted(glob.glob(base + "--claude-worktrees-*")) if os.path.isdir(d)]
 
 
 def build_corpus(path: str) -> list:
     """作業記録から Bash コマンドを抜き出す（同じ呼び出し ID は 1 件）。"""
     seen, out = set(), []
-    for f in glob.glob(_project_dir() + "/**/*.jsonl", recursive=True):
+    files = [f for d in _project_dirs() for f in glob.glob(d + "/**/*.jsonl", recursive=True)]
+    for f in files:
         for line in open(f, encoding="utf-8", errors="replace"):
             try:
                 e = json.loads(line)
@@ -89,11 +96,11 @@ def main() -> int:
     ap.add_argument("--guard", default=None, help="作業ツリーの guard の代わりに比べるファイル（ゲート自体の検証用）")
     a = ap.parse_args()
 
-    path = os.path.join(CACHE_DIR, os.path.basename(REPO) + ".json")
+    path = os.path.join(CACHE_DIR, os.path.basename(PRIMARY) + ".json")
     if os.path.isdir(CACHE_DIR):
         os.chmod(CACHE_DIR, 0o700)                   # 以前の版で作ったキャッシュも本人だけに絞る
     if a.rebuild or not os.path.exists(path):
-        if not os.path.isdir(_project_dir()):
+        if not _project_dirs():
             print("SKIP: 作業記録が無い環境です（CI 等）")
             return 0
         cmds = build_corpus(path)

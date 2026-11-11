@@ -105,7 +105,7 @@ I200 で見張り（`scripts/claude/hooks/pretooluse_guard.py`）の確認を (A
     # 環境変数をまとめて表示する形（I444。ホストとコンテナで同じ）。env はコマンドを包むときは読み解きで外れるので、
     # 先頭に残った env は引数によらず表示（env -u X・env FOO=1・env -0）。ps は BSD 形式の e（最初の引数が英字だけ）
     if head in ("printenv", "env") or (head == "set" and len(toks) == 1) \
-            or (head == "ps" and len(toks) > 1 and re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", toks[1])) \
+            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) for a in toks[1:])) \
             or (head in ("export", "declare", "typeset")
                 and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")
@@ -133,7 +133,7 @@ I200 で見張り（`scripts/claude/hooks/pretooluse_guard.py`）の確認を (A
 ### 5-4. 許可リストを「危ない語が当たっても通す形」だけに縮める（4）
 **方針**: 許可リストを消して語と書き込み先の判定に一本化する案は、`pytest -k delete` などテスト名・ファイル名・中身の見えるコードに語が出る普通の操作が確認になる（調査結果）。そこで、許可リストの役目を「引数に危ない語が出やすいが、(A)〜(C) を起こさない形」に限り、それ以外の分岐を消す。残す形と理由:
 - テスト・lint・型検査（`pytest`・`flake8`・`bandit`・`pip-audit`・`mypy`・`eslint`・`tsc`・`jest`・`python -m pytest|flake8|mypy`・`npm test`・`npm run lint|test`・`npx tsc|eslint|jest`・e2e の `npx playwright test`・`ruff check`・`ruff format --check|--diff`）: 引数がテスト名・ファイル名。`--fix`・`--unsafe-fixes`・`--basetemp` があるときは外す（今と同じ）。`ruff format` は書き換えないとき（`--check`・`--diff`）だけ（今と同じ）
-- パイプの受け手の読むだけの絞り込み（`_PIPE_FILTERS`: `grep`・`head`・`tail`・`wc`・`sort`・`cut`・`tr`・`jq`・`uniq`・`cat`。`-o`・`--output` があるときは外す）: `sh -c "pytest -k delete | tail -20"` のように、パイプで受けると前のコマンドの語も見るため（今と同じ）
+- パイプの受け手の読むだけの絞り込み（`_PIPE_FILTERS`: `grep`・`head`・`tail`・`wc`・`sort`・`cut`・`tr`・`jq`・`uniq`・`cat`。書き出す `sort -o`・`uniq IN OUT` は外す）: `sh -c "pytest -k delete | tail -20"` のように、パイプで受けると前のコマンドの語も見るため（今と同じ）
 - 依存の情報（`pip freeze|list|show|check`・`pip index versions`・`npm ls|outdated|view`・`npm audit`〔`fix` なし〕）: 引数がパッケージ名（`openai` 等）
 - 読み取りの `manage.py`（`_SAFE_MANAGE`）・中身が見えて危険のない Python（`_code_safe`）・読み取りの SQL（`psql`・`dbshell` の `_sql_is_safe_read`）・ローカル宛ての curl（今の分岐のまま）
 - 前提の条件（読みきれない書き方・here-string・書き込み・ヒアドキュメント〔psql・python 以外〕のときは外す）は今のまま
@@ -150,7 +150,8 @@ def _container_safe(c: dict) -> bool:
         return False
     head, rest = os.path.basename(toks[0]), toks[1:]
     if c["piped"]:                             # パイプの受け手は読むだけの絞り込みだけ（pytest … | tail）
-        return head in _PIPE_FILTERS and not any(a.startswith(("-o", "--output")) for a in rest)
+        return head in _PIPE_FILTERS and not (head == "sort" and any(a.startswith(("-o", "--output")) for a in rest)) \
+            and not (head == "uniq" and len([a for a in rest if not a.startswith("-")]) > 1)
     dj = _django_sub(toks)
     if dj:
         if dj[0] == "dbshell":
@@ -287,6 +288,7 @@ PR を revert する（見張り・テスト・手順書・corpus diff だけ。
 ## 計画変更記録
 - 1（plan-review・2026-11-11・計画レビュー 1 は BLOCKER 1・Warning 4・Info 2）: 「必ず確かめる項目」の観点を 1〜3 の番号にした（Blocker）／許可リストのパイプの受け手（`_PIPE_FILTERS`）を残した（`sh -c "pytest -k delete | tail -20"` が確認になるため。`-o`・`--output` は外す）／`ruff` は `check` と `format --check|--diff` だけにした（今と同じ）／TC-01 に包む env の対照（`env -u X python -V` → 0）・TC-04 にパイプの対照・TC-05 に作業記録が無い環境の SKIP を足した／5-6 の git の呼び出しの場所と失敗時の落ち先を書いた／M-03 をパイプなしの 1 コマンド（`git diff --numstat`）にした。写しで流し直し、既存の 3 つのテストは全件そのまま・行数は 3811（−45）。計画レビューのやり直し: 要（Blocker のため）
 - 2（plan-review・2026-11-11・計画レビュー 2 は HIGHRISK・Warning 3・Info 2）: 5-2 で `rsync` は `-t` を書き先として読まない（`rsync -t` は時刻を保つオプションで値を取らないため、`rsync -avt /tmp/a /app/b` の書き先を見落とす）。TC-02 に `mv -t`・`install -t`・`rsync -avt` を足した／M-03 は出力の数値を実結果に書いて比べる形にした／5-4 の擬似コードの「今のまま」の部分は、実装時に今のコード（2551〜2575 行の python・npx・psql・curl の分岐）をそのまま移し、ヒアドキュメントの条件は `redis-cli` を外して `psql` と python だけにする（TC-04 と既存のテストの全件一致で確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 3（implement・/simplify の 4 観点の指摘）: (a) パイプの受け手の書き出しの除外を今と同じ `sort -o`・`uniq IN OUT` だけに戻した（全部の受け手に `-o` を当てると `grep -o` が確認になる・TC-04 04o）／(b) `ps` の e は「- の無い英字だけの引数のどれか」にした（`toks[1]` だけだと旧コンテナの判定より狭く `ps aux e` が通る・TC-01 01t。`ps -eo etimes,pcpu,args` はカンマを含むので今までどおり通る）／(c) `_ctr_write_targets` の式を 2 行に分けた・古いコメント 3 か所を「危ない語が当たっても通す形」にそろえた・corpus diff の git の呼び出しを 1 回にまとめた・FG-04 の置き換えを 1 行にした。見送り: 書き先の抽出 3 つ（`_bash_write_targets`・`_record_writes`・`_ctr_write_targets`）の共通化と、「通す形なら書き込みの判定ごと飛ばす」構造（例 `pytest --junitxml=/app/r.xml` が通る・今もそう）は、止める範囲を広げる・範囲を越えるので retro で扱う／テストの python の起動回数・`_env_dump` への切り出しは、既存のテストの形とそろえるため見送り。計画レビューのやり直し: 不要（(a)(b) は今の動きに合わせる側の直しで、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261111_1824 判定: ✅ 完了](../../reviews/I444_plan_review_20261111_1824.md)

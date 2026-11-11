@@ -6,6 +6,7 @@
 
 結果:
 - 計画時（2026-11-11）: すべて実装前のため未実行（テストのファイルがまだ無い）。同じケースを見張りの写し（計画書「調査結果」のスパイク `g_proto.py`）に流し、TC-01〜TC-04 の期待値どおりになることは確かめた。変更前の見張りでは TC-01・TC-02 の ASK のケースが 0（＝今の取りこぼし）、TC-03 は 2、TC-04 は 0
+- 2026-11-11（implement）: `bash scripts/claude/tests/test_i444_guard_gaps.sh` → pass=56 fail=0（exit 0。FG-01〜FG-05 を含む）。`run-all.sh` で container_guard・i200・matrix・oracle・i182_corpus_base の 5 本 → pass=5 fail=0。`test_guard_corpus_diff.sh --rebuild`（/simplify の手直しの前の版）→ 作業記録 15419 件（primary とすべてのワークツリー）・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の作業）・新しく停止 0 件・OK（上限 154 件）。手直しの後の版は review-gate の決定論ゲートで流し直す
 
 ## TC-01 環境変数をまとめて表示する形は確認（ホストとコンテナ）
 | ID | コマンド | 期待 |
@@ -29,6 +30,7 @@
 | 01q | `ps -eo etimes,pcpu,args --sort=-etimes`（ホスト） | 0 |
 | 01r | `env FOO=1 python3 -V`（ホスト） | 0 |
 | 01s | `$D env -u X python -V`（包む env は読み解きで外れる） | 0 |
+| 01t | `$D ps aux e`（後ろの引数の e・旧コンテナの判定と同じ） | ASK |
 | FG-01 | `_cmd_external` の新しい判定の下の `r.append("環境変数（秘密情報を含む）の表示")` を `pass` に置き換えた写しで 01a | 0 |
 
 ## TC-02 コンテナの /tmp/ 以外への書き込み（書き先の指定・移動元）は確認
@@ -72,7 +74,8 @@
 | 04l | `$D sh -c "pytest -k delete \| sort -o /app/x"`（受け手が書き出す） | ASK |
 | 04m | `$D ruff format --check apps/accounts/password_reset.py` | 0 |
 | 04n | `$D ruff format apps/accounts/password_reset.py`（書き換える） | ASK |
-| FG-04 | `_container_safe` の docstring の直後に `return False` を差し込んだ写しで 04a | ASK |
+| 04o | `$D sh -c "pytest -k delete \| grep -o FAILED"`（`-o` が書き出しでない受け手） | 0 |
+| FG-04 | `_container_safe` の `head, rest = …` の行を `return False` に置き換えた写しで 04a | ASK |
 
 I200 の普通の操作（I166 の形・`seed_e2e`・`psql select`・`manage.py check` など）は `test_i200_guard_narrowing.sh` の TC-01 が確かめる（TC-06）。
 
