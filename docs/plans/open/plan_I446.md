@@ -389,6 +389,13 @@ def get_queryset(self):
 - 2026-11-12 計画レビュー（20261112_0131・Blocker 1・Warning 3・Info 1）に対応: ① 高リスクの必須節「必ず確かめる項目」を足した（Blocker）② 4-2 に `ProblemSerializer` の書き込みの使用箇所と画面の依存の grep の結果を足した（Warning 1・2）③ 失敗注入の戻し方を Edit で元に戻すと明記した（Warning 3）④ CI の時間の目安を 8 章に足した（Info）。範囲・方式・受け入れ条件は変えない。Blocker への対応のため計画レビューはやり直す
 - 2026-11-12 計画レビュー（20261112_0133・HIGHRISK・Blocker なし）の Warning に対応: ① `IdCheck` に正の対照 `own_status`（GET の詳細で自分の番号は 200）を足し、TC-01 の期待値に足した ② `learning_insights` の xfail は、retro で #452 にコメントで同梱を依頼し、そのコメントの URL を review に残す（#452 が直しても KeyError が残れば、XFAIL のままで印は外れない。直れば XPASS で落ちて気づける）③ S1〜S4 が I103 の決まりを変えることを、close で PR の説明に書く。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - 2026-11-12 セキュリティ設計レビューの Medium（D1）に対応: 4-6（`ProblemViewSet.get_queryset` の土台を `available_problems` にする）と TC-06 を足した。同じファイルの 1 か所の絞り込みで、境界の判定の置き場所を変えない（I431 のセキュリティ設計レビューの Medium への対応と同じ扱い）。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+- 2026-11-12 実装中の気づきと /simplify の指摘に対応（方式・範囲・受け入れ条件は変えない）:
+  - 計画書の記載: 4-4「`.prefetch_related(Prefetch('answers', queryset=answers))` を `get_queryset` の全体に付ける」→ 採った方法: 回答を出す `retrieve`・`end` のときだけ付ける（ほかの操作は回答を読まないので、使わない問い合わせを省く）。理由: 効率。絞り込みを外すと TC-03 の `OwnCheck` 2 件が落ちることを確かめ直した
+  - 計画書の記載: 4-1 (3)「`user_a` のクイズの回を作る」→ 採った方法: 進行中の回は 1 人 1 つ（`uniq_active_quizsession_per_user`）のため、他組織の問題への回答を持つ回（`own.session_mixed`）を進行中にし、通常の回は終了済みにした。回答の問題番号の確かめ（`submit_answer` の `problem_id`）もこの回を使う。理由: 終了済みの回だと終了の経路が「既に終わっています」の 400 で先に返り、`OwnCheck` が漏れを捕まえられなかった（RED の取り直しで判明）
+  - 計画書の記載: 4-1 (1)「メソッドは `callback.actions` のキーのうち `http_method_names` に含まれるもの」→ 採った方法: さらに get・post・put・patch・delete だけに絞る。理由: DRF は初回の要求のときに `actions` へ head を足すため、ほかのテストの後に流すと HEAD が表に無い経路として出た。形式の接尾辞の除外も `<drf_format_suffix:format>` の書き方に合わせた
+  - /simplify の採用: テストの利用者のパスワードを暗号化しない（`password=None`・認証は `force_authenticate`）・一覧と自分の記録の確かめ方の使わない設定（`ListCheck.status`・`OwnCheck.param`／`actor`）を消した・同じ組織の別の利用者の番号から使わない科目・問題を外した。関係するテストの所要が約 2 分から約 45 秒になった
+  - /simplify の見送り: テストの小さな関数（`_masked` など）の共通化（このリポジトリはテストごとに持つ書き方）・`own_status` を真偽にする（計画の名前に合わせる）・作成・更新の多層防御の確かめを消す（9 章で残すと決めた）・画像の操作の後の組織の確かめ（差分の外）・キャッシュを消すのを前だけにする（ほかのファイルへの影響を防ぐため後も消す）
+  - 計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない実装の詳細）
 
 ## レビュー結果
 - [20261112_0133 判定: ✅ 完了](../../reviews/I446_plan_review_20261112_0133.md)

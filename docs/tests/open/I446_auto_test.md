@@ -5,13 +5,24 @@
 - 実行コマンド（例）: `docker compose exec -T backend python -m pytest core/tests/test_I446_cross_api_tenant_isolation.py problems/tests/ studylogs/tests/ -q`（app-1 ワークツリーのコンテナ）。全テストは CI（PR #456）が正。
 
 結果:
-- backend: 実装前のため未実行
+- backend: 修正前 9 failed・111 passed・9 xfailed（TC-20）→ 修正後 263 passed・9 xfailed（新しいテスト＋`problems/tests/`＋`studylogs/tests/`・TC-24・2026-11-12）。失敗注入 FG1〜FG3 はすべて RED（TC-21〜TC-23）。CI は review-gate で確かめる
 - frontend: 対象外（変更なし）
 
 ## 実行記録
 | 日時 | コマンド | 終了コード | 結果 |
 |---|---|---|---|
 | 2026-11-12 | 下調べ（scratchpad の使い捨てのテスト・リポジトリに入れない）をコンテナの `/tmp` で実行 | 0 | 計画書「調査結果」の S1〜S6 と、500 になる経路の一覧を得た |
+| 2026-11-12 01:58 | `docker compose exec -T backend python -m pytest core/tests/test_I446_cross_api_tenant_isolation.py -q`（修正前・TC-20） | 1 | 8 failed・112 passed・9 xfailed。終了の `OwnCheck` が通ってしまった（下準備の回が終了済みで、400 が先に返る）ため、下準備を直して取り直し |
+| 2026-11-12 02:00 | 同上（下準備を直した後・修正前・TC-20） | 1 | 9 failed（`POST api/problems/`・`generate_ai`・`generate_adaptive`・`PUT`／`PATCH api/problems/<pk>/` の subject・`GET api/quiz/` の List・`GET api/quiz/<pk>/`・`POST api/quiz/<pk>/end/` の Own・TC-06）・9 xfailed。計画の予想（8 件＋TC-06）と一致 |
+| 2026-11-12 02:03 | `... pytest core/tests/test_I446_cross_api_tenant_isolation.py problems/tests/ studylogs/tests/ -q`（4-2〜4-4・4-6 の後・4-5 の前） | 1 | 5 failed（I103 の 4 件・I166 TC-09。4-5 で直す予定のものだけ） |
+| 2026-11-12 02:06 | 同上（4-5 の後・TC-24） | 0 | 263 passed・9 xfailed |
+| 2026-11-12 02:07 | FG1a: `core/urls.py` に `path('api/i446-probe/', health)` を一時的に足して `-k route_table`（TC-21） | 1 | 「表に無い経路: ['ANY api/i446-probe/']」で FAIL。Edit で戻した |
+| 2026-11-12 02:08 | FG1b: 表から `GET api/study/goals/` の行を一時的に消して `-k route_table`（TC-21） | 1 | 「表に無い経路: ['GET api/study/goals/']」で FAIL。Edit で戻した |
+| 2026-11-12 02:09 | FG2a: `ProblemViewSet.get_queryset` を `Problem.objects.filter(is_deleted=False)` にして `-k problems`（TC-22） | 1 | 9 failed（`GET`／`PUT`／`PATCH`／`DELETE api/problems/<pk>/`・画像 2 経路・一覧の科目の絞り込み・一覧・TC-06）。Edit で戻した |
+| 2026-11-12 02:10 | FG2b: `SpacedRepetitionCardViewSet.get_queryset` の `scope_to_user_org` を外して `-k sr-cards`（TC-22） | 1 | 2 failed（`GET api/study/sr-cards/` の List・`subject_id` の IdCheck）。Edit で戻した |
+| 2026-11-12 02:11 | FG3: `StudyGoalViewSet.get_queryset` を `StudyGoal.objects.all()` にして `-k goals`（TC-23） | 1 | 5 failed（`api/study/goals/<pk>/` の 4 メソッド・`GET api/study/goals/` の List）。Edit で戻した |
+| 2026-11-12 02:12 | /simplify の整理の後に TC-24 を流し直す | 0 | 263 passed・9 xfailed（所要 45 秒） |
+| 2026-11-12 02:13 | 回答の先読み（4-4）を一時的に外して `-k own_check` | 1 | 2 failed（`GET api/quiz/<pk>/`・`POST api/quiz/<pk>/end/` の Own）。Edit で戻し、`-k quiz` で 9 passed |
 
 ## TC 一覧
 
