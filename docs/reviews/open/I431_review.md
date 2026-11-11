@@ -55,6 +55,7 @@
 - [plan-review] やり直しの計画レビュー（20261111_1857）は HIGHRISK・Blocker なし。Warning 4 件（本文の旧方式の記述・TC-23 の RED の一覧・手動 No.1 の式の記録・範囲の広がり）を文書に反映し、再レビューはしない。イシューの「影響範囲」への 1 行の追記は、GitHub の本文が正で手元の写しは同期しないため、計画書の影響範囲と計画変更記録に書くことで代える
 - [implement] /simplify の見送り: モデルごとの絞り方の表（problems → studylogs の依存が生まれる）・`QuizService` の中継の削除（呼び出し元を変えない方針）・おすすめの問題数の 1 クエリ化と `id__in` の副問い合わせ（効果が小さい。後者は core へ移したことで消えた）・`create_card` の関数内の import（既存の書き方） — 振る舞いを変えず、計画の方針と依存の向きを保つため
 - [review-gate] 基本レビュー（20261111_1902）は OK・CI 通過・台帳は Low 6 件（F1〜F6・retro へ）。敵対的レビュー 1 周目（20261111_1914）は新規の Critical/High 0 件だが、V1・V2・V3・V6 が未検証（実験役のホストに python・pytest が無い）で HIGH。決まり（3-3）に沿い、失敗の注入で FAIL→PASS を実測済みの決定論の TC で覆っていることを一覧に書き、確かめ方を「読んで可」に下げて 2 周目へ — 実験役がホストで pytest を動かせない件はハーネスの改善候補として retro で扱う
+- [review-gate] 基本レビュー（20261111_1915）OK・敵対的レビュー 2 周目（20261111_1949）OK（新規の Critical/High 0 件・Low 2 件〔export_user_data_task の調査表の理由の書き方・キャッシュ〈F3 と同じ〉〕は retro へ）。最終判定 OK で test-gate へ
 - [implement] 学習記録の「科目が空のパターンで提案の生成が落ちる」既存の不具合は I452 の範囲として残す（I452 の本文に追記するかは retro で判断）
 
 STAGE_DONE: plan NEXT: plan-review
@@ -68,3 +69,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
