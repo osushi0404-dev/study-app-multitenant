@@ -50,7 +50,9 @@
 - [implement] 失敗注入は Edit で入れて Edit で戻し、`git status` で backend の変更が計画どおりの 5 ファイルだけであることを確かめた — `git checkout`・`git restore` を使わない（計画レビューの Warning）
 
 - [review-gate] コードレビュー（20261112_0215）は OK（Low 6 件・台帳に残す）。敵対的レビュー 1 周目は新しい指摘 0 で、V6 だけ実験役の環境に python が無く未検証 → TC-07（失敗注入を CI で毎回行う決定論のテスト）を足して V6 を「読んで可」に下げ、2 周目で確かめる — review-gate 3-3 の決まり
+- [review-gate] コードレビューのやり直し（20261112_0228）OK・敵対的レビュー 2 周目（20261112_0240）OK（新しい指摘 0・V1〜V9 確認済み）。最終判定 OK で test-gate へ
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
