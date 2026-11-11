@@ -240,6 +240,17 @@ def get_queryset(self):
 ```
 - 影響の確認（コードの読解）: `submit_answer` の「回答済みか」（`session.answers.filter(...)`）と `QuizService` の `session.answers.values_list(...)`・`order_by(...)` は新しい問い合わせを作るので、先読み（prefetch）の絞り込みの影響を受けない。回の件数・正解数（`completed_problems`・`correct_answers`）は欄の値なので変わらない。`end` の応答（`QuizSessionDetailSerializer(session)`）は先読みした回答を使う
 
+### 4-6. 組織に属さない組織管理者の問題の管理（セキュリティ設計レビューで追加）`backend/problems/views.py` `ProblemViewSet.get_queryset`（166-171 行目）
+**修正方針**: 土台を境界の判定の部品 `available_problems(self.request.user)`（未削除・利用者の組織の科目の問題・組織に属さない利用者は空）にする。今の `Problem.objects.filter(is_deleted=False, subject__organization=self.request.user.organization)` は、利用者の組織が空のとき `subject__organization IS NULL` になり、全体共有の科目の問題を返す（2026-11-12 に実測: 組織が空で `role='admin'` の利用者が `GET /api/problems/` と `GET /api/problems/<共有の問題>/` で 200・問題文が返る）。
+```python
+def get_queryset(self):
+    # 利用者の組織の未削除の問題（組織に属さない利用者は空・全体共有の科目は含めない・I446）
+    queryset = available_problems(self.request.user)
+    ...（科目・難易度の絞り込みは今のまま）
+```
+- テスト: 新しいテストのファイルに `test_noorg_org_admin_sees_no_problems` を足す（組織が空で `role='admin'` の利用者で、`GET /api/problems/` が 200 の `[]`、`GET /api/problems/<全体共有の問題>/` が存在しない番号と同じ 404・同じ本文）→ TC-06
+- import に `available_problems` を足す
+
 ### 権限のクラス（変えない）
 - `ProblemViewSet`: `[permissions.IsAuthenticated, IsOrgAdmin]`（全アクション）
 - `QuizSessionViewSet`: `[permissions.IsAuthenticated]`
@@ -262,7 +273,7 @@ def get_queryset(self):
 ## 5. 実装手順
 1. ステップ1（未知リスク先行・テストの土台）: 4-1 の経路の収集と `test_route_table_matches_urlconf` と表を書く。表の分類が実在の経路とずれていないかを先に固める → TC-04・TC-05
 2. ステップ2: 4-1 の fixture と 4 種類の確かめ方を書き、修正前のコードで流して RED を記録する（落ちるのは S1〜S6 に当たるケースだけのはず。それ以外が落ちたら、表の期待値の誤りか新しい越境かを切り分け、新しい越境なら計画書を直す）→ TC-20
-3. ステップ3: 4-2〜4-4 の修正 → TC-01〜TC-03 が GREEN
+3. ステップ3: 4-2〜4-4・4-6 の修正 → TC-01〜TC-03・TC-06 が GREEN
 4. ステップ4: 4-5 の既存のテストの更新 → TC-11・TC-12
 5. ステップ5: 失敗注入（FG1〜FG3）で、テストが落ちることを確かめて戻す → TC-21〜TC-23
 6. 依存: ステップ2 はステップ1 の後。ステップ3・4 はステップ2 の RED の記録の後。ステップ5 はステップ3 の後
@@ -372,11 +383,56 @@ def get_queryset(self):
 | V6 | 3 | 実験必須 | 組織の絞り込み・本人の絞り込みを外すと、テストが落ちる（TC-22・TC-23 の FG の実測）。`IdCheck` が、空を返すだけ・すべて 404 を返すだけの実装で通らないよう、自組織の記録が読めること（`OwnCheck`・I166・I431 のテスト）と組み合わさっている |
 | V7 | 3 | 読んで可 | 表の「対象外」の各行の理由が、そのビューのコードと合っている（番号を受け取らない・運用者専用・登録画面用の仕様）。特に `api/auth/me/` の PUT・PATCH で組織・役割が書き換えられない（`UserSerializer.read_only_fields`） |
 | V8 | 1 | 読んで可 | 画面（`frontend/src`）が、問題の作成・AI 生成の 403 や「他組織の科目には問題を作成できません」の文言に依存していない（4-2 の調査結果の grep） |
+| V9 | 1 | 実験必須 | 組織が空の組織管理者（`role='admin'`）が、問題の一覧で全体共有の科目の問題を見られず、全体共有の問題の詳細・更新・削除が存在しない番号と同じ 404 になる（TC-06。修正前の 200 と修正後の 404 を実測） |
 
 ## 計画変更記録
 - 2026-11-12 計画レビュー（20261112_0131・Blocker 1・Warning 3・Info 1）に対応: ① 高リスクの必須節「必ず確かめる項目」を足した（Blocker）② 4-2 に `ProblemSerializer` の書き込みの使用箇所と画面の依存の grep の結果を足した（Warning 1・2）③ 失敗注入の戻し方を Edit で元に戻すと明記した（Warning 3）④ CI の時間の目安を 8 章に足した（Info）。範囲・方式・受け入れ条件は変えない。Blocker への対応のため計画レビューはやり直す
 - 2026-11-12 計画レビュー（20261112_0133・HIGHRISK・Blocker なし）の Warning に対応: ① `IdCheck` に正の対照 `own_status`（GET の詳細で自分の番号は 200）を足し、TC-01 の期待値に足した ② `learning_insights` の xfail は、retro で #452 にコメントで同梱を依頼し、そのコメントの URL を review に残す（#452 が直しても KeyError が残れば、XFAIL のままで印は外れない。直れば XPASS で落ちて気づける）③ S1〜S4 が I103 の決まりを変えることを、close で PR の説明に書く。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+- 2026-11-12 セキュリティ設計レビューの Medium（D1）に対応: 4-6（`ProblemViewSet.get_queryset` の土台を `available_problems` にする）と TC-06 を足した。同じファイルの 1 か所の絞り込みで、境界の判定の置き場所を変えない（I431 のセキュリティ設計レビューの Medium への対応と同じ扱い）。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果
 - [20261112_0133 判定: ✅ 完了](../../reviews/I446_plan_review_20261112_0133.md)
 - [20261112_0131 判定: 差し戻し（Blocker 1件）](../../reviews/I446_plan_review_20261112_0131.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-12
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | マルチテナント | D1: `ProblemViewSet.get_queryset` が `subject__organization=self.request.user.organization` で絞るため、組織が空の組織管理者（`role='admin'`）には `subject__organization IS NULL`（全体共有の科目の問題）が返る。一覧・詳細・更新・削除・画像の操作ができる（2026-11-12 に一覧・詳細の 200 を実測）。組織が空の組織管理者は運用者（`AdminUserViewSet`）しか作れない | 必須: 土台を `available_problems(user)` にする（4-6）。TC-06 で一覧が空・詳細が存在しない番号と同じ 404 を固定する |
+| Low | マルチテナント | D2: S1・S2 の修正後も `perform_create`・`perform_update` の 403・専用の文言の分岐はコードに残る（多層防御）。シリアライザの欄が将来戻されると、存在の確認の差が復活する | 横断のテスト（TC-01 の `POST api/problems/`・`PUT`／`PATCH` の subject）が差を検出して落ちる。追加の対処なし |
+| Low | OWASP Top 10（IDOR） | D3: 応答の比較はステータスと本文だけで、ヘッダー（`Allow` など）・応答時間の差は見ない。応答時間の差で存在を推測する攻撃は、このテストでは検出できない | 範囲外（記録のみ）。本文とステータスの一致で、通常の書き方の事故は捕まえられる |
+| Low | 入力検証 | D4: AI 生成の `subject_id` に数字でない値を送ると、`available_subjects(...).get(id='abc')` が ValueError で 500 になる（今も `Subject.objects.get` で同じ）。他組織の存在は漏れない | 範囲外（記録のみ・既存の振る舞いのまま） |
+| Low | 機密情報 | D5: テストの利用者のパスワードは固定のテスト用（`"pass"`）。本番の資格情報は使わない | なし（bandit の B106 は既存のテストと同じ扱い） |
+
+- 認証・認可: 権限のクラスは変えない（4 章「権限のクラス」）。最小権限は保たれる
+- ファイル操作: 画像の追加・削除の経路は変えない（テストで他組織の問題・画像の番号を確かめるだけ）
+- 外部通信: AI 生成は、他組織・存在しない科目では外部の AI を呼ぶ前に 404 で返る（4-3）。テストの `generate_ai` は `save_to_db=false`、他組織・存在しない科目だけを送るので外部を呼ばない
+- 依存ライブラリ: 追加・更新なし
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/problems/`・`PUT`／`PATCH /api/problems/<pk>/`（`subject`） | 組織管理者（組織 A） | 組織 B の科目の番号を総当たりで送り、403 と 400 の違いから B の科目の番号を集める | 他組織・全体共有の科目は存在しない科目と同じ 400・同じ本文。問題が作られない・付け替わらない | Yes: TC-01・TC-11・TC-20 | No | なし | Medium |
+| 2 | `POST /api/problems/generate_ai/`・`generate_adaptive/`（`subject_id`） | 組織管理者（組織 A） | 同上（403 と 404 の違い）。他組織の科目で AI 生成を走らせ、費用を使わせる | 他組織・全体共有の科目は存在しない科目と同じ 404。外部の AI を呼ばない・保存しない | Yes: TC-01・TC-11 | No | なし | Medium |
+| 3 | `GET /api/quiz/`・`GET /api/quiz/<pk>/`・`POST …/end/` | 一般の利用者 | I166 より前に作られた、自分の回の中の他組織の科目・問題への回答を読み出し、他組織の問題文・解説・選択肢を得る | 他組織・全体共有の科目の回は存在しない扱い。回の中の回答は組織の問題のものだけ | Yes: TC-03（`ListCheck`・`OwnCheck`）・TC-12 | Yes: 手動 No.2（自組織の回が今までどおり使える） | primary の dev DB は I431 の調査で越境 0 件。本番のデータは未調査（retro で扱う） | Medium |
+| 4 | `GET`／`PUT`／`PATCH`／`DELETE /api/problems/<pk>/`・`GET /api/problems/` | 組織が空の組織管理者 | 全体共有の科目の問題を読む・書き換える・消す | 組織が空の利用者は問題を扱えない（空・404） | Yes: TC-06 | No | なし | Medium |
+| 5 | `api/study/` の下の本人の記録の番号の経路（学習記録・目標・カード・復習の記録・提案・弱点） | 一般の利用者 | 同じ組織の別の利用者の記録の番号を送り、読む・書き換える・消す | 存在しない番号と同じ応答・相手の記録が変わらない | Yes: TC-02・TC-23 | No | なし（今の作りで守れていることを下調べで確認） | Low |
+| 6 | 新しく足される経路 | — | 開発者が絞り込みを書き忘れた経路を足す | 表に載るまでテストが落ちる。載せるときに確かめ方を選ぶ | Yes: TC-04・TC-21 | No | 「対象外」に理由を付けて載せれば通るので、理由の正しさはレビューに頼る | Low |
+| 7 | `api/admin/users/`・`monitoring/*`・`cache/*` | 組織管理者・一般の利用者 | 運用者専用の経路で他組織の利用者・全体の情報を見る | 403・302 で断られる | Yes: TC-05 | No | なし | Low |
+
+## レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 1件 | 4件 |
+| Low     | 4件 | 3件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）

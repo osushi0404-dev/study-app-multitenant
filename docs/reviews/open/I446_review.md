@@ -32,6 +32,9 @@
 - [plan-review] 1 回目の Blocker（高リスクの必須節が無い）を、「必ず確かめる項目」V1〜V8 を足して直し、やり直しで HIGHRISK（Blocker なし）になった — 計画レビューの指摘どおり
 - [plan-review] 画面からの AI 生成が今も 415 になる件（画面が JSON で送る）を見つけた。直さず retro で扱う — 境界と関係なく、画面とバックエンドにまたがる
 - [plan-review] 2 回目の Warning に対応し、番号の確かめに正の対照（自分の番号の詳細は 200）を足した。計画レビューはやり直さない — findings への対応の追記だけで、方式・範囲・受け入れ条件は変えない
+- [design-security-review] 組織が空の組織管理者が全体共有の科目の問題を見られる穴（D1・Medium）を実測し、4-6 として同梱した。計画レビューはやり直さない — 同じファイルの 1 か所の絞り込みで、境界の判定の置き場所を変えない（I431 の同種の対応と同じ扱い）
+- [design-security-review] Blocker・High なし。Low 4 件は記録だけ（応答時間の差・数字でない番号の 500 など、範囲外か既存のまま）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
