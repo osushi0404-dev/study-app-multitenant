@@ -16,6 +16,7 @@ from .models import (
     ProblemAttempt,
 )
 from problems.models import Problem, Subject
+from problems.services.tenant_scope import available_problems, available_subjects
 from core.cache_service import cache_service
 import random
 
@@ -167,7 +168,7 @@ class AdaptiveProblemSelector:
 
     def _calculate_subject_proficiency(self, attempts, reviews) -> Dict:
         """科目別の習熟度を計算"""
-        subjects = Subject.objects.all()
+        subjects = available_subjects(self.user)
         subject_stats = {}
 
         for subject in subjects:
@@ -291,11 +292,7 @@ class AdaptiveProblemSelector:
         return (data_confidence + activity_confidence) / 2
 
     def _get_problem_pool(self, subject: Optional[Subject]) -> List[Problem]:
-        """問題プールを取得"""
-        filters = {'is_active': True}
-        if subject:
-            filters['subject'] = subject
-
+        """問題プールを取得（ユーザーの組織の未削除の問題だけ）"""
         # ユーザーが最近解いていない問題を優先
         recent_attempts = ProblemAttempt.objects.filter(
             user=self.user,
@@ -309,7 +306,7 @@ class AdaptiveProblemSelector:
 
         recent_problem_ids = set(recent_attempts) | set(recent_reviews)
 
-        problems = Problem.objects.filter(**filters).exclude(
+        problems = available_problems(self.user, subject).exclude(
             id__in=recent_problem_ids
         ).select_related('subject')
 

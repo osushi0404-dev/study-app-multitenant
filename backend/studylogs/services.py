@@ -19,6 +19,7 @@ from .models import (
 )
 from .spaced_repetition import SpacedRepetitionCalculator
 from problems.models import Problem
+from problems.services.tenant_scope import available_problems, scope_to_user_org
 from core.cache_service import cache_service
 
 User = get_user_model()
@@ -39,10 +40,12 @@ class SpacedRepetitionService:
         if cached_cards is not None:
             return cached_cards
 
-        cards = list(SpacedRepetitionCard.objects.filter(
-            user=self.user,
-            is_active=True,
-            next_review_date__lte=timezone.now()
+        cards = list(scope_to_user_org(
+            SpacedRepetitionCard.objects.filter(
+                user=self.user,
+                is_active=True,
+                next_review_date__lte=timezone.now()
+            ), self.user, subject_path='problem__subject',
         ).select_related('problem', 'problem__subject').order_by(
             'next_review_date',
             '-ease_factor'  # 難しいカードを優先
@@ -59,9 +62,8 @@ class SpacedRepetitionService:
             user=self.user
         ).values_list('problem_id', flat=True)
 
-        return Problem.objects.filter(
-            is_active=True
-        ).exclude(
+        # 候補はユーザーの組織の未削除の問題だけ
+        return available_problems(self.user).exclude(
             id__in=existing_card_problems
         ).select_related('subject').order_by('?')[:limit]
 
