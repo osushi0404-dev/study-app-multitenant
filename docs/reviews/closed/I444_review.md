@@ -50,6 +50,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [fix-loop] 3 回目: F3・F4 を案 A（`ps` は直前の語が - で始まらない引数だけ・`-x` を数えない）で直した — 粗い判定のまま 1 行ずつの直しで済み、オプションの一覧を持つ案 B は写しが要る（診断 `docs/reviews/I444_fix_diagnosis_20261111_2130.md`・診断レビュー OK）
 - [review-gate] fix-loop 3 の後: コードレビュー OK・敵対的レビュー 2 周目 OK（通算 2 周で上限）。新しい台帳の F10（`ps -A e` のように値を取らないフラグの直後の e が通る）・F11（`ps o etime` の誤検出）・F12（`declare +x`）・F13（そのケース不足）はハーネスの Medium／Low で、次の周に進む理由にしない（review-gate 3-2）→ retro で #454 へ
 - [retro] 2 回目（fix-loop 3 の後）: 台帳の F3・F4 は resolved（#454 から外すとコメント）。F5・F10 → #454（F10 は SECURITY=yes・再現ありの退行なので「次のハーネスの作業で最優先」とコメント）、F11・F12・F13 → `docs/reviews/backlog/I444.md` に追記。I444 の中で直さないのは、敵対的レビューが通算 2 周の上限に達し、これ以上の変更はレビューを通せないため（review-gate 3-2）
+- [close] 2 回目: develop を取り込んだ（I431 のアプリの変更。このブランチのファイルとは重ならず、gate-check OK）。記録を closed へ移し、PR #451 の説明を更新した — 手順どおり
 
 ## 振り返り
 
@@ -116,3 +117,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
