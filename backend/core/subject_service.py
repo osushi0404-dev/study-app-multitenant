@@ -115,7 +115,8 @@ class SubjectService:
             annotate_count: 問題数をアノテートするか
 
         Returns:
-            ユーザーが選択した科目のQuerySet
+            ユーザーが選択した科目のうち、今の組織の科目のQuerySet
+            （組織を移った後の古い登録は含めない。組織に属さないユーザーは空）
         """
         from problems.models import Subject, UserSubjectAccess
         from .cache_service import cache_service
@@ -124,15 +125,20 @@ class SubjectService:
             logger.warning(f"User {user} is not authenticated")
             return Subject.objects.none()
 
+        if not user.organization_id:
+            return Subject.objects.none()
+
         cache_key = f"user_subjects_{user.id}_count_{annotate_count}"
 
-        # キャッシュ確認
+        # キャッシュ確認（組織の境界はキャッシュの中身を信じず、DB の条件で掛ける）
         if use_cache:
             cached_data = cache_service.get_subjects_cache(cache_key)
             if cached_data is not None:
                 logger.debug(f"Cache hit for key: {cache_key}")
                 subject_ids = [s['id'] for s in cached_data]
-                queryset = Subject.objects.filter(id__in=subject_ids)
+                queryset = Subject.objects.filter(
+                    id__in=subject_ids, organization_id=user.organization_id
+                )
                 if annotate_count:
                     queryset = queryset.annotate(problem_count=Count('problems'))
                 return queryset
@@ -143,7 +149,9 @@ class SubjectService:
             user=user
         ).values_list('subject_id', flat=True)
 
-        queryset = Subject.objects.filter(id__in=user_subject_ids).order_by('name')
+        queryset = Subject.objects.filter(
+            id__in=user_subject_ids, organization_id=user.organization_id
+        ).order_by('name')
 
         if annotate_count:
             queryset = queryset.annotate(problem_count=Count('problems'))

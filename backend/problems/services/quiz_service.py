@@ -8,6 +8,7 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from problems.models import Problem, QuizSession, Subject
+from problems.services import tenant_scope
 
 
 class IdempotencyKeyReusedError(Exception):
@@ -23,30 +24,13 @@ class QuizService:
 
     @staticmethod
     def available_subjects(user) -> QuerySet[Subject]:
-        """
-        クイズで指定してよい科目（ユーザーの組織の科目）
-
-        組織に属さないユーザーは空。境界の判定のためキャッシュは使わない。
-        """
-        if user.organization_id is None:
-            return Subject.objects.none()
-        return Subject.objects.filter(organization_id=user.organization_id)
+        """クイズで指定してよい科目（tenant_scope.available_subjects と同じ）"""
+        return tenant_scope.available_subjects(user)
 
     @staticmethod
     def available_problems(user, subject: Optional[Subject]) -> QuerySet[Problem]:
-        """
-        クイズで出題・回答してよい問題（ユーザーの組織の未削除の問題・科目の指定があればその科目）
-
-        問題の組織は subject 経由で判定する（Problem.organization は null 可のため使わない）。
-        """
-        if user.organization_id is None:
-            return Problem.objects.none()
-        problems = Problem.objects.filter(
-            is_deleted=False, subject__organization_id=user.organization_id
-        )
-        if subject is not None:
-            problems = problems.filter(subject=subject)
-        return problems
+        """クイズで出題・回答してよい問題（tenant_scope.available_problems と同じ）"""
+        return tenant_scope.available_problems(user, subject)
 
     @staticmethod
     def start_session(

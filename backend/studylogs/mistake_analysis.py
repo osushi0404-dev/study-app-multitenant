@@ -15,9 +15,22 @@ from .models import (
     MistakePattern, LearningSuggestion, LearningWeakness,
     ProblemAttempt, SpacedRepetitionReview, StudyLog
 )
-from problems.models import Subject
+from problems.services.tenant_scope import available_subjects, scope_to_user_org
 
 User = get_user_model()
+
+
+def scope_learning_suggestions(queryset, user):
+    """
+    学習提案をユーザーの組織の科目のものに絞る
+
+    応答の mistake_pattern_description がパターン側の文言を出すため、提案の科目に加えて
+    パターンの科目でも絞る（どちらも科目が空なら残す）。
+    """
+    queryset = scope_to_user_org(queryset, user, subject_path='subject', allow_null=True)
+    return scope_to_user_org(
+        queryset, user, subject_path='mistake_pattern__subject', allow_null=True,
+    )
 
 
 class MistakeAnalysisService:
@@ -45,20 +58,7 @@ class MistakeAnalysisService:
 
     def update_mistake_patterns(self, start_date: datetime, end_date: datetime):
         """間違いパターンを更新"""
-
-        # 間隔反復学習からの間違いデータ
-        sr_errors = SpacedRepetitionReview.objects.filter(
-            user=self.user,
-            reviewed_at__range=[start_date, end_date],
-            is_correct=False
-        ).select_related('problem', 'problem__subject')
-
-        # 通常の問題試行からの間違いデータ
-        attempt_errors = ProblemAttempt.objects.filter(
-            user=self.user,
-            attempted_at__range=[start_date, end_date],
-            is_correct=False
-        ).select_related('problem', 'problem__subject')
+        sr_errors, attempt_errors = self._error_records(start_date, end_date)
 
         # 科目別の苦手分野を分析
         self._analyze_subject_difficulties(sr_errors, attempt_errors)
@@ -71,6 +71,28 @@ class MistakeAnalysisService:
 
         # 概念の混同を分析
         self._analyze_concept_confusion(sr_errors, attempt_errors)
+
+    def _error_records(self, start_date: datetime, end_date: datetime):
+        """分析の土台にする間違いの記録（ユーザーの組織の問題のものだけ）"""
+        # 間隔反復学習からの間違いデータ
+        sr_errors = scope_to_user_org(
+            SpacedRepetitionReview.objects.filter(
+                user=self.user,
+                reviewed_at__range=[start_date, end_date],
+                is_correct=False
+            ), self.user, subject_path='problem__subject',
+        ).select_related('problem', 'problem__subject')
+
+        # 通常の問題試行からの間違いデータ
+        attempt_errors = scope_to_user_org(
+            ProblemAttempt.objects.filter(
+                user=self.user,
+                attempted_at__range=[start_date, end_date],
+                is_correct=False
+            ), self.user, subject_path='problem__subject',
+        ).select_related('problem', 'problem__subject')
+
+        return sr_errors, attempt_errors
 
     def _analyze_subject_difficulties(self, sr_errors, attempt_errors):
         """科目別の苦手分野を分析"""
@@ -238,7 +260,7 @@ class MistakeAnalysisService:
 
     def update_learning_weaknesses(self, start_date: datetime, end_date: datetime):
         """学習の弱点を更新"""
-        subjects = Subject.objects.all()
+        subjects = available_subjects(self.user)
 
         for subject in subjects:
             # 科目別の統計を取得
@@ -286,17 +308,21 @@ class MistakeAnalysisService:
     def generate_learning_suggestions(self):
         """学習提案を生成"""
         # アクティブな間違いパターンを取得
-        active_patterns = MistakePattern.objects.filter(
-            user=self.user,
-            is_active=True,
-            confidence_score__gte=0.3
+        active_patterns = scope_to_user_org(
+            MistakePattern.objects.filter(
+                user=self.user,
+                is_active=True,
+                confidence_score__gte=0.3
+            ), self.user, subject_path='subject', allow_null=True,
         ).order_by('-occurrence_count', '-confidence_score')
 
         # 深刻な弱点を取得
-        critical_weaknesses = LearningWeakness.objects.filter(
-            user=self.user,
-            severity__in=['critical', 'high'],
-            is_resolved=False
+        critical_weaknesses = scope_to_user_org(
+            LearningWeakness.objects.filter(
+                user=self.user,
+                severity__in=['critical', 'high'],
+                is_resolved=False
+            ), self.user, subject_path='subject',
         ).order_by('-severity', '-error_count')
 
         # パターンベースの提案を生成
@@ -464,20 +490,19 @@ class MistakeAnalysisService:
 
     def get_analysis_summary(self) -> Dict:
         """分析結果のサマリーを取得"""
-        patterns = MistakePattern.objects.filter(
-            user=self.user,
-            is_active=True
+        patterns = scope_to_user_org(
+            MistakePattern.objects.filter(user=self.user, is_active=True), self.user,
+            subject_path='subject', allow_null=True,
         ).order_by('-occurrence_count')
 
-        weaknesses = LearningWeakness.objects.filter(
-            user=self.user,
-            is_resolved=False
+        weaknesses = scope_to_user_org(
+            LearningWeakness.objects.filter(user=self.user, is_resolved=False), self.user,
+            subject_path='subject',
         ).order_by('-severity', '-error_count')
 
-        suggestions = LearningSuggestion.objects.filter(
-            user=self.user,
-            is_active=True,
-            is_read=False
+        suggestions = scope_learning_suggestions(
+            LearningSuggestion.objects.filter(user=self.user, is_active=True, is_read=False),
+            self.user,
         ).order_by('priority', '-created_at')
 
         # 改善トレンドの計算
