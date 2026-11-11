@@ -58,7 +58,7 @@ I200 で見張り（`scripts/claude/hooks/pretooluse_guard.py`）の確認を (A
 → 全部を消すと、受け入れ条件の「`pytest -k delete` などが今までどおり通る」を満たせない。許可リストは「危ない語が引数に出やすいが、(A)〜(C) を起こさない形」だけに縮める（5-4）。残りの分岐（`redis-cli`・`celery`・`sed -n`・`find`・`sort`・`uniq`・`echo`／`printf`・`node`・`ps`・読み取りのコマンドの一覧 `_SAFE_READ_CMDS`・パイプの受け手の一覧 `_PIPE_FILTERS`・`migrate`・`makemigrations`）は、引数に語が出にくく、出たとき（例 `grep -rn token /app`・`redis-cli GET token:x`）は (C) に当たりうるので確認でよい
 
 ### 案の写しでのスパイク（5-1・5-2・5-4 を当てた写し `g_proto.py`。リポジトリのファイルは変えていない）
-- 行数: 3856 → 3806（−50）
+- 行数: 3856 → 3811（−45。計画レビューの指摘でパイプの受け手と ruff format の条件を戻した後）
 - `test_pretooluse_container_guard.sh` pass=788 fail=0・`test_i200_guard_narrowing.sh` pass=75 fail=0・`test_pretooluse_guard_matrix.sh` pass=391 fail=0
 - 上の表の「望む」がすべて成り立つ。`pytest -k delete`・`manage.py test ...test_delete`・`npx playwright test --grep delete`・`pip show openai`・`ruff check .../password_reset.py` は 0、`grep -rn token /app/apps` は ASK。ホストの `export`・`env -u X`・`set`・`declare -p`・`ps auxe` は ASK、`ps aux`・`set -euo pipefail`・`env FOO=1 python -V` は 0
 - 過去の作業コマンド（3701 件）: 確認＋停止 135 → 140、新しく確認 5 件（0.14%・上限 1%＝37 件）、新しく停止 0 件。5 件の中身: `manage.py check --deploy` に `SECRET_KEY=$(python -c "import secrets…")` を渡す形（語 `secret`。確認でよい）・celery の `inspect` を含む長い 1 行が 3 件（許可リストから celery を外したため。同じ日の 1 回の作業）・ホストの `ps -eo etimes,pcpu,args`（`-o` の値の `etimes` の e を BSD 形式の e と誤った。今のコンテナの判定と同じ誤り）。最後の 1 件を受けて、`ps` の e は「最初の引数が英字だけで e を含む」（`ps e`・`ps auxe`・`ps axe -o pid`）に絞った（5-1）。絞った写しで既存の 3 つのテストと上のケースを流し直し、すべて同じ結果・`ps -eo etimes,…` は 0 になった。絞った後の過去の作業コマンドでの件数は TC-06 で測り直す（見込み 4 件）
@@ -132,12 +132,13 @@ I200 で見張り（`scripts/claude/hooks/pretooluse_guard.py`）の確認を (A
 
 ### 5-4. 許可リストを「危ない語が当たっても通す形」だけに縮める（4）
 **方針**: 許可リストを消して語と書き込み先の判定に一本化する案は、`pytest -k delete` などテスト名・ファイル名・中身の見えるコードに語が出る普通の操作が確認になる（調査結果）。そこで、許可リストの役目を「引数に危ない語が出やすいが、(A)〜(C) を起こさない形」に限り、それ以外の分岐を消す。残す形と理由:
-- テスト・lint・型検査（`pytest`・`ruff`・`flake8`・`bandit`・`pip-audit`・`mypy`・`eslint`・`tsc`・`jest`・`python -m pytest|flake8|mypy`・`npm test`・`npm run lint|test`・`npx tsc|eslint|jest`・e2e の `npx playwright test`）: 引数がテスト名・ファイル名。`--fix`・`--unsafe-fixes`・`--basetemp` があるときは外す（今と同じ）
+- テスト・lint・型検査（`pytest`・`flake8`・`bandit`・`pip-audit`・`mypy`・`eslint`・`tsc`・`jest`・`python -m pytest|flake8|mypy`・`npm test`・`npm run lint|test`・`npx tsc|eslint|jest`・e2e の `npx playwright test`・`ruff check`・`ruff format --check|--diff`）: 引数がテスト名・ファイル名。`--fix`・`--unsafe-fixes`・`--basetemp` があるときは外す（今と同じ）。`ruff format` は書き換えないとき（`--check`・`--diff`）だけ（今と同じ）
+- パイプの受け手の読むだけの絞り込み（`_PIPE_FILTERS`: `grep`・`head`・`tail`・`wc`・`sort`・`cut`・`tr`・`jq`・`uniq`・`cat`。`-o`・`--output` があるときは外す）: `sh -c "pytest -k delete | tail -20"` のように、パイプで受けると前のコマンドの語も見るため（今と同じ）
 - 依存の情報（`pip freeze|list|show|check`・`pip index versions`・`npm ls|outdated|view`・`npm audit`〔`fix` なし〕）: 引数がパッケージ名（`openai` 等）
 - 読み取りの `manage.py`（`_SAFE_MANAGE`）・中身が見えて危険のない Python（`_code_safe`）・読み取りの SQL（`psql`・`dbshell` の `_sql_is_safe_read`）・ローカル宛ての curl（今の分岐のまま）
-- 前提の条件（読みきれない書き方・here-string・書き込み・パイプで受ける・ヒアドキュメント〔psql・python 以外〕のときは外す）は今のまま。パイプで受ける形は、受け手の一覧（`_PIPE_FILTERS`）を消して一律に外す（受け手の grep 等は許可リストから外れるため）
+- 前提の条件（読みきれない書き方・here-string・書き込み・ヒアドキュメント〔psql・python 以外〕のときは外す）は今のまま
 
-消す分岐: `redis-cli`・`celery`・`sed`・`find`・`sort`・`uniq`・`echo`／`printf`・`node --version`・`ps`・`_SAFE_READ_CMDS`・`migrate`・`makemigrations`・`ruff format` の分け・`pip --version`・`npm run build|typecheck`・`npm --version`。これらは語が無ければ今までどおり通る（`_container_risky` が何も返さないため）。語があるときだけ確認になる。使わなくなった定数 `_SAFE_READ_CMDS`・`_PIPE_FILTERS`・`_SAFE_REDIS` を消す（他で使っていないことを grep で確かめた）。
+消す分岐: `redis-cli`・`celery`・パイプで受けない `sed -n`・`find`・`sort`・`uniq`・`echo`／`printf`・`node --version`・`ps`・`_SAFE_READ_CMDS`・`migrate`・`makemigrations`・`pip --version`・`npm run build|typecheck`・`npm --version`。これらは語が無ければ今までどおり通る（`_container_risky` が何も返さないため）。語があるときだけ確認になる。使わなくなった定数 `_SAFE_READ_CMDS`・`_SAFE_REDIS` を消す（他で使っていないことを grep で確かめた）。`_PIPE_FILTERS` は残す。
 
 ```python
 def _container_safe(c: dict) -> bool:
@@ -145,9 +146,11 @@ def _container_safe(c: dict) -> bool:
     テスト・lint・依存の情報・読み取りの manage.py・中身が見えて危険のない Python・読み取りの SQL・ローカル宛ての curl。
     これ以外は _container_risky（危ない語・/tmp/ 以外への書き込み）と _cmd_external（環境変数の表示など）だけで決まる。"""
     toks = c["toks"]
-    if c["note"] or c["herestr"] is not None or c["writes"] or c["piped"] or not toks:
+    if c["note"] or c["herestr"] is not None or c["writes"] or not toks:
         return False
     head, rest = os.path.basename(toks[0]), toks[1:]
+    if c["piped"]:                             # パイプの受け手は読むだけの絞り込みだけ（pytest … | tail）
+        return head in _PIPE_FILTERS and not any(a.startswith(("-o", "--output")) for a in rest)
     dj = _django_sub(toks)
     if dj:
         if dj[0] == "dbshell":
@@ -157,8 +160,10 @@ def _container_safe(c: dict) -> bool:
     if c["heredoc"] is not None and head != "psql" and not _PYTHON_RE.match(head):
         return False
     fix = any(a.startswith(("--fix", "--unsafe-fixes", "--basetemp")) for a in rest)
-    if head in ("pytest", "ruff", "flake8", "bandit", "pip-audit", "mypy", "eslint", "tsc", "jest"):
+    if head in ("pytest", "flake8", "bandit", "pip-audit", "mypy", "eslint", "tsc", "jest"):
         return not fix
+    if head == "ruff":                         # format は書き換えないとき（--check・--diff）だけ
+        return (rest[:1] == ["check"] and not fix) or (rest[:1] == ["format"] and ("--check" in rest or "--diff" in rest))
     if _PYTHON_RE.match(head):
         （今の -m の前のオプションを読み飛ばす部分と -m pytest|flake8|mypy・--version／-V はそのまま）
         return _code_safe(c)
@@ -189,7 +194,7 @@ def _container_safe(c: dict) -> bool:
 
 ```python
 _COMMON = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True, cwd=REPO or None).stdout.strip()
 PRIMARY = os.path.dirname(_COMMON) if _COMMON else REPO
 
 
@@ -198,7 +203,7 @@ def _project_dirs(primary: str = PRIMARY) -> list:
     base = os.path.expanduser("~/.claude/projects/" + re.sub(r"[^A-Za-z0-9]", "-", primary))
     return [d for d in [base] + sorted(glob.glob(base + "--claude-worktrees-*")) if os.path.isdir(d)]
 ```
-`build_corpus` は `_project_dirs()` の各フォルダを読む。`main` の「作業記録が無い環境」の判定は `not _project_dirs()`、キャッシュの名前は `os.path.basename(PRIMARY)`。`base_rev` と判定の部分は変えない。
+`REPO` は今と同じ（呼び出したフォルダの `git rev-parse --show-toplevel`。`test_guard_corpus_diff.sh` はリポジトリの中から呼ぶ）。`_COMMON` も `REPO` のフォルダで求め、git が失敗して空なら `PRIMARY = REPO` に落とす（今の動きと同じ名前で探し、見つからなければ今までどおり SKIP）。作業記録のフォルダが 1 つも無い環境（CI）は `_project_dirs()` が空になり、今までどおり「SKIP: 作業記録が無い環境です」で exit 0（TC-05b）。`build_corpus` は `_project_dirs()` の各フォルダを読む。`main` の「作業記録が無い環境」の判定は `not _project_dirs()`、キャッシュの名前は `os.path.basename(PRIMARY)`。`base_rev` と判定の部分は変えない。
 → TC-05
 
 ### ステップの順と依存
@@ -248,7 +253,7 @@ PR を revert する（見張り・テスト・手順書・corpus diff だけ。
 - 2: 書き先の直しはコンテナの判定（`_ctr_write_targets`）だけ。別ワークツリーの停止（`_bash_write_targets`）は広げない（範囲の外）
 - テストは新しいファイル `test_i444_guard_gaps.sh` に置く（イシューの実装対象は既存の 2 つのテストの直しを挙げていたが、スパイクで既存の期待値は 1 件も変わらないと分かったため、変えない）
 - 5-6: corpus diff の直しを同梱する（見張りを直したら流すテストがワークツリーで黙って SKIP になり、このイシューの確かめにも要る。決定論テストは「気づきにくく被害が大きい」に当たる: SKIP は exit 0 で気づけない）
-- 行数: スパイクで −50 行（受け入れ条件を満たす見込み）。テストのファイルは数えない（受け入れ条件は見張りの行数）
+- 行数: スパイクで −45 行（受け入れ条件を満たす見込み）。テストのファイルは数えない（受け入れ条件は見張りの行数）
 - 一覧 `docs/reviews/backlog/I200.md` F5: 残す — 語の後ろにも切れ目を求めると `secrets`・`deleted`・`tokens` のような語形を取りこぼし、(C) を弱める。粗い判定にとどめる方針（I200）に反する。過去の作業コマンドの「新しく確認」にも、この形（識別子の一部に当たる）は出ていない
 - 一覧 `docs/reviews/backlog/I200.md` F9: 同梱 — 5-2 で直す
 - 一覧 `docs/reviews/backlog/I200.md` F11: 同梱 — 5-2 で実物を手順書に合わせ、5-5 で手順書を代表と正の場所だけにする
@@ -273,12 +278,14 @@ PR を revert する（見張り・テスト・手順書・corpus diff だけ。
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
-| V1 | (C) | 読んで可 | コンテナ内・ホストの、環境変数をまとめて表示する形（引数なしの `export`・`declare`・`typeset`・`set`、コマンドを包まない `env`、`ps` の e）が確認になり、`set -euo pipefail`・`export FOO=1`・`env FOO=1 cmd`・`ps aux`・`ps -eo etimes,args` は通る（TC-01・FG-01） |
-| V2 | (B) | 読んで可 | コンテナ内の `/tmp/` 以外への書き込み（`-t`・`--target-directory=`・`mv` の移動元）が確認になり、`/tmp/` の中どうしは通る（TC-02・FG-02） |
-| V3 | (B) | 読んで可 | 許可リストを縮めた後も、停止（2）の判定は 1 件も通る側に変わらない（既存の 2 つのテストの期待値を変えない・matrix・corpus diff の「新しく停止」と「停止→通る」） |
-| V4 | 普通の操作 | 読んで可 | I200 の普通の操作（`test_i200_guard_narrowing.sh` の TC-01）と `pytest -k delete` などが通る（TC-04・M-01） |
-| V5 | 手順書 | 読んで可 | `danger-ops.md` 3.・4. と `worktree.md` §9 が、見張りの実物（`_cmd_external`・`_container_safe`・`_ctr_write_targets`・`_bash_write_targets`）と `sessionstart_context.py` の `_run` に食い違わない（M-04） |
+| V1 | 1 | 読んで可 | (C) コンテナ内・ホストの、環境変数をまとめて表示する形（引数なしの `export`・`declare`・`typeset`・`set`、コマンドを包まない `env`、`ps` の e）が確認になり、`set -euo pipefail`・`export FOO=1`・`env FOO=1 cmd`・`ps aux`・`ps -eo etimes,args` は通る（TC-01・FG-01） |
+| V2 | 1 | 読んで可 | (B) コンテナ内の `/tmp/` 以外への書き込み（`-t`・`--target-directory=`・`mv` の移動元）が確認になり、`/tmp/` の中どうしは通る（TC-02・FG-02） |
+| V3 | 2 | 読んで可 | (B) 許可リストを縮めた後も、停止（2）の判定は 1 件も通る側に変わらない（既存の 2 つのテストの期待値を変えない・matrix・corpus diff の「新しく停止」と「停止→通る」） |
+| V4 | 3 | 読んで可 | 普通の操作: I200 の普通の操作（`test_i200_guard_narrowing.sh` の TC-01）と `pytest -k delete` などが通る（TC-04・M-01） |
+| V5 | 3 | 読んで可 | 手順書: `danger-ops.md` 3.・4. と `worktree.md` §9 が、見張りの実物（`_cmd_external`・`_container_safe`・`_ctr_write_targets`・`_bash_write_targets`）と `sessionstart_context.py` の `_run` に食い違わない（M-04） |
 
 ## 計画変更記録
+- 1（plan-review・2026-11-11・計画レビュー 1 は BLOCKER 1・Warning 4・Info 2）: 「必ず確かめる項目」の観点を 1〜3 の番号にした（Blocker）／許可リストのパイプの受け手（`_PIPE_FILTERS`）を残した（`sh -c "pytest -k delete | tail -20"` が確認になるため。`-o`・`--output` は外す）／`ruff` は `check` と `format --check|--diff` だけにした（今と同じ）／TC-01 に包む env の対照（`env -u X python -V` → 0）・TC-04 にパイプの対照・TC-05 に作業記録が無い環境の SKIP を足した／5-6 の git の呼び出しの場所と失敗時の落ち先を書いた／M-03 をパイプなしの 2 つのコマンドにした。写しで流し直し、既存の 3 つのテストは全件そのまま・行数は 3811（−45）。計画レビューのやり直し: 要（Blocker のため）
 
 ## レビュー結果
+- [20261111_1819 判定: 差し戻し（Blocker 1件）](../../reviews/I444_plan_review_20261111_1819.md)

@@ -28,6 +28,7 @@
 | 01p | `ps aux`（ホスト） | 0 |
 | 01q | `ps -eo etimes,pcpu,args --sort=-etimes`（ホスト） | 0 |
 | 01r | `env FOO=1 python3 -V`（ホスト） | 0 |
+| 01s | `$D env -u X python -V`（包む env は読み解きで外れる） | 0 |
 | FG-01 | `_cmd_external` の新しい判定の下の `r.append("環境変数（秘密情報を含む）の表示")` を `pass` に置き換えた写しで 01a | 0 |
 
 ## TC-02 コンテナの /tmp/ 以外への書き込み（書き先の指定・移動元）は確認
@@ -64,6 +65,10 @@
 | 04h | `$D python manage.py shell -c "from rest_framework.test import APIClient; APIClient().post('/api/auth/password-reset-confirm/', {})"` | 0 |
 | 04i | `docker compose exec -T db psql -U postgres -c "select 'drop' as x"` | 0 |
 | 04j | `$D curl -fsS http://localhost:8000/health/` | 0 |
+| 04k | `$D sh -c "pytest -k delete \| tail -20"`（パイプの受け手） | 0 |
+| 04l | `$D sh -c "pytest -k delete \| sort -o /app/x"`（受け手が書き出す） | ASK |
+| 04m | `$D ruff format --check apps/accounts/password_reset.py` | 0 |
+| 04n | `$D ruff format apps/accounts/password_reset.py`（書き換える） | ASK |
 | FG-04 | `_container_safe` の docstring の直後に `return False` を差し込んだ写しで 04a | ASK |
 
 I200 の普通の操作（I166 の形・`seed_e2e`・`psql select`・`manage.py check` など）は `test_i200_guard_narrowing.sh` の TC-01 が確かめる（TC-06）。
@@ -73,6 +78,7 @@ I200 の普通の操作（I166 の形・`seed_e2e`・`psql select`・`manage.py 
 | ID | 確かめ | 期待 |
 |---|---|---|
 | 05a | 返るフォルダ | `-x-app-y` と `-x-app-y--claude-worktrees-w1` の 2 つだけ（この順） |
+| 05b | 一時の `HOME` に作業記録のフォルダを 1 つも作らずに、`guard_corpus_diff.py` を `HOME` を差し替えて実行する（CI と同じ・作業記録が無い環境） | 出力に「SKIP: 作業記録が無い環境です」・exit 0 |
 | FG-05 | `re.sub(r"[^A-Za-z0-9]", "-", primary)` を `primary.replace("/", "-")` に置き換えた写しで 05a | 空（`.` が残るので見つからない）→ 05a の比較が不一致 |
 
 ## TC-06 見張りを直したら流すテストと既存のテスト
