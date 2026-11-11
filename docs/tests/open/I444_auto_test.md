@@ -37,11 +37,14 @@
 | 02a | `$D cp -t /app/x /tmp/y` | ASK |
 | 02b | `$D cp --target-directory=/app/x /tmp/y` | ASK |
 | 02c | `$D cp -vt /app/x /tmp/y` | ASK |
+| 02h | `$D mv -t /app/x /tmp/y` | ASK |
+| 02i | `$D install -t /app/x /tmp/y` | ASK |
+| 02j | `$D rsync -avt /tmp/a /app/b`（rsync の -t は値を取らない） | ASK |
 | 02d | `$D mv /app/x /tmp/y` | ASK |
 | 02e | `$D mv /tmp/a /tmp/b` | 0 |
 | 02f | `$D cp /app/a /tmp/b` | 0 |
 | 02g | `$D cp -t /tmp/d /app/a` | 0 |
-| FG-02a | `_ctr_write_targets` の `tdir = _opt_values(toks[1:], ("-t", "--target-directory"))` を `tdir = []` に置き換えた写しで 02a | 0 |
+| FG-02a | `_ctr_write_targets` の `tdir = ` の行の右辺（`_opt_values(toks[1:], ("-t", "--target-directory")) if head != "rsync" else []`）を `[]` に置き換えた写しで 02a | 0 |
 | FG-02b | `_ctr_write_targets` の `return tdir + pos` を `return pos[-1:]` に置き換えた写しで 02d | 0 |
 
 ## TC-03 psql の WHERE なしの UPDATE は停止（コンテナ内・ホスト）

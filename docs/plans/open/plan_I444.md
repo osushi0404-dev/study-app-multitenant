@@ -118,7 +118,7 @@ I200 で見張り（`scripts/claude/hooks/pretooluse_guard.py`）の確認を (A
 
 ```python
     if head in ("cp", "mv", "install", "ln", "rsync"):
-        tdir = _opt_values(toks[1:], ("-t", "--target-directory"))
+        tdir = _opt_values(toks[1:], ("-t", "--target-directory")) if head != "rsync" else []   # rsync の -t は時刻を保つ
         if head == "mv":                       # 移動元も消える（I444）
             return tdir + pos
         return tdir or pos[-1:] if len(pos) >= 2 or tdir else []
@@ -285,7 +285,9 @@ PR を revert する（見張り・テスト・手順書・corpus diff だけ。
 | V5 | 3 | 読んで可 | 手順書: `danger-ops.md` 3.・4. と `worktree.md` §9 が、見張りの実物（`_cmd_external`・`_container_safe`・`_ctr_write_targets`・`_bash_write_targets`）と `sessionstart_context.py` の `_run` に食い違わない（M-04） |
 
 ## 計画変更記録
-- 1（plan-review・2026-11-11・計画レビュー 1 は BLOCKER 1・Warning 4・Info 2）: 「必ず確かめる項目」の観点を 1〜3 の番号にした（Blocker）／許可リストのパイプの受け手（`_PIPE_FILTERS`）を残した（`sh -c "pytest -k delete | tail -20"` が確認になるため。`-o`・`--output` は外す）／`ruff` は `check` と `format --check|--diff` だけにした（今と同じ）／TC-01 に包む env の対照（`env -u X python -V` → 0）・TC-04 にパイプの対照・TC-05 に作業記録が無い環境の SKIP を足した／5-6 の git の呼び出しの場所と失敗時の落ち先を書いた／M-03 をパイプなしの 2 つのコマンドにした。写しで流し直し、既存の 3 つのテストは全件そのまま・行数は 3811（−45）。計画レビューのやり直し: 要（Blocker のため）
+- 1（plan-review・2026-11-11・計画レビュー 1 は BLOCKER 1・Warning 4・Info 2）: 「必ず確かめる項目」の観点を 1〜3 の番号にした（Blocker）／許可リストのパイプの受け手（`_PIPE_FILTERS`）を残した（`sh -c "pytest -k delete | tail -20"` が確認になるため。`-o`・`--output` は外す）／`ruff` は `check` と `format --check|--diff` だけにした（今と同じ）／TC-01 に包む env の対照（`env -u X python -V` → 0）・TC-04 にパイプの対照・TC-05 に作業記録が無い環境の SKIP を足した／5-6 の git の呼び出しの場所と失敗時の落ち先を書いた／M-03 をパイプなしの 1 コマンド（`git diff --numstat`）にした。写しで流し直し、既存の 3 つのテストは全件そのまま・行数は 3811（−45）。計画レビューのやり直し: 要（Blocker のため）
+- 2（plan-review・2026-11-11・計画レビュー 2 は HIGHRISK・Warning 3・Info 2）: 5-2 で `rsync` は `-t` を書き先として読まない（`rsync -t` は時刻を保つオプションで値を取らないため、`rsync -avt /tmp/a /app/b` の書き先を見落とす）。TC-02 に `mv -t`・`install -t`・`rsync -avt` を足した／M-03 は出力の数値を実結果に書いて比べる形にした／5-4 の擬似コードの「今のまま」の部分は、実装時に今のコード（2551〜2575 行の python・npx・psql・curl の分岐）をそのまま移し、ヒアドキュメントの条件は `redis-cli` を外して `psql` と python だけにする（TC-04 と既存のテストの全件一致で確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
+- [20261111_1824 判定: ✅ 完了](../../reviews/I444_plan_review_20261111_1824.md)
 - [20261111_1819 判定: 差し戻し（Blocker 1件）](../../reviews/I444_plan_review_20261111_1819.md)
