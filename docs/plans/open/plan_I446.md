@@ -105,7 +105,7 @@ scratchpad に置いた使い捨てのテスト（リポジトリに入れない
 | `StaffOnlyCheck` | 運用者専用の経路を、組織管理者（`role='admin'`・`is_staff=False`）と一般の利用者で呼ぶ | 表に書いた値（DRF の `IsAdminUser` は 403、Django の `staff_member_required` は 302）。本文に目印が無い |
 | （`OUT_OF_SCOPE`） | 確かめない | 理由を必ず書く（空文字は表の検査で落とす） |
 
-`IdCheck` の項目: `actor`（`"user"`・`"org_admin"`・`"anon"`）、`where`（`"path"`・`"body"`・`"query"`）、`param`（入れる名前。path は URL の `<pk>` などの名前）、`target`（相手の記録の種類: `"subject"`・`"problem"`・`"session"`・`"log"`・`"goal"`・`"card"`・`"review"`・`"suggestion"`・`"weakness"`・`"asset"`）、`status`（期待するステータス）、`same_org`（同じ組織の別の利用者の記録も試すか・本人の記録だけ True）、`extra`（ほかの必須の入力。例: 画像の削除の自分の問題の番号）、`fmt`（`"json"`・`"multipart"`）、`writes`（`None`・`"unchanged"`・`"no_create:<モデル名>"`）、`list_param`（本文の番号を `[番号]` で送るか・登録の `subject_ids`）、`xfail`（理由の文字列・空なら無し）。
+`IdCheck` の項目: `actor`（`"user"`・`"org_admin"`・`"anon"`）、`where`（`"path"`・`"body"`・`"query"`）、`param`（入れる名前。path は URL の `<pk>` などの名前）、`target`（相手の記録の種類: `"subject"`・`"problem"`・`"session"`・`"log"`・`"goal"`・`"card"`・`"review"`・`"suggestion"`・`"weakness"`・`"asset"`）、`status`（期待するステータス）、`same_org`（同じ組織の別の利用者の記録も試すか・本人の記録だけ True）、`extra`（ほかの必須の入力。例: 画像の削除の自分の問題の番号）、`fmt`（`"json"`・`"multipart"`）、`writes`（`None`・`"unchanged"`・`"no_create:<モデル名>"`）、`list_param`（本文の番号を `[番号]` で送るか・登録の `subject_ids`）、`xfail`（理由の文字列・空なら無し）、`own_status`（正の対照。自分〔または自組織〕の記録の番号で呼んだときに期待するステータス。GET の path の確かめ〔科目・問題・クイズの回・学習記録・目標・カード・復習の記録の詳細〕では 200 を書き、自分の番号が存在しない番号と同じ応答にならないことも確かめる。書き込みの経路は呼ぶと記録が変わるので書かない〔None〕）。「全部 404 を返すだけ」の実装では、`own_status` の確かめで落ちる。
 
 **表の中身**（全行。メソッドはこの表の「メソッド」列。`<pk>` 等は URL の番号）:
 
@@ -375,6 +375,8 @@ def get_queryset(self):
 
 ## 計画変更記録
 - 2026-11-12 計画レビュー（20261112_0131・Blocker 1・Warning 3・Info 1）に対応: ① 高リスクの必須節「必ず確かめる項目」を足した（Blocker）② 4-2 に `ProblemSerializer` の書き込みの使用箇所と画面の依存の grep の結果を足した（Warning 1・2）③ 失敗注入の戻し方を Edit で元に戻すと明記した（Warning 3）④ CI の時間の目安を 8 章に足した（Info）。範囲・方式・受け入れ条件は変えない。Blocker への対応のため計画レビューはやり直す
+- 2026-11-12 計画レビュー（20261112_0133・HIGHRISK・Blocker なし）の Warning に対応: ① `IdCheck` に正の対照 `own_status`（GET の詳細で自分の番号は 200）を足し、TC-01 の期待値に足した ② `learning_insights` の xfail は、retro で #452 にコメントで同梱を依頼し、そのコメントの URL を review に残す（#452 が直しても KeyError が残れば、XFAIL のままで印は外れない。直れば XPASS で落ちて気づける）③ S1〜S4 が I103 の決まりを変えることを、close で PR の説明に書く。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果
+- [20261112_0133 判定: ✅ 完了](../../reviews/I446_plan_review_20261112_0133.md)
 - [20261112_0131 判定: 差し戻し（Blocker 1件）](../../reviews/I446_plan_review_20261112_0131.md)
