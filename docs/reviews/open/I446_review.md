@@ -34,3 +34,4 @@
 - [plan-review] 2 回目の Warning に対応し、番号の確かめに正の対照（自分の番号の詳細は 200）を足した。計画レビューはやり直さない — findings への対応の追記だけで、方式・範囲・受け入れ条件は変えない
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
