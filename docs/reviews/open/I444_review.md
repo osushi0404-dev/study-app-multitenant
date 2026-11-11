@@ -17,10 +17,11 @@
 - ハーネスの見張り・そのテスト・corpus diff・手順書だけ。アプリのコードの変更なし
 
 ## テスト結果
-（test-gate 段階で書く）
+- 自動: `test_i444_guard_gaps.sh` 56 件・見張りの既存テスト（container_guard・i200・matrix・oracle・i182_corpus_base）すべて pass・PR #451 の CI pass（review-gate）。TC-06 の過去コマンドでの比較（15738 件）は新しく確認 3 件・新しく停止 0 件で OK
+- 手動（すべて Claude）: M-01〜M-04 OK（コンテナ内の普通の操作は承認なし・危ない形は承認画面・見張りの行数 −40・手順書と実物が一致）
 
 ## 計画との差分
-（計画変更記録を参照して書く）
+- 計画変更記録 1〜5（計画レビューの指摘・/simplify の指摘・corpus diff を決定論ゲートから外す・そのスクリプトの説明）。方式・範囲・受け入れ条件の変更なし
 
 ## ロールバック
 PR を revert する（データの変更なし）。見張りが起動できなくなったときは、ユーザーが端末で `! git restore scripts/claude/hooks/pretooluse_guard.py`。
@@ -38,6 +39,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [fix-loop] 止める指摘 F1（corpus diff がゲートで時間切れ）は案 A（ゲートから外し、TC-06 で手で流して記録）で直した — 所要が作業記録の件数に比例し 120 秒のゲートに収まらない。速くする案・上限を延ばす案は新しいコードや共有の仕組みの変更が要る（診断 `docs/reviews/I444_fix_diagnosis_20261111_1915.md`・診断レビュー OK）
 - [fix-loop] 2 回目: 記録の場所だけの直しでは差分のレビューがレビュー役を呼ばず F1 が閉じないので、誤解の元だった `test_guard_corpus_diff.sh` の冒頭のコメントを直した（案 A・診断 `docs/reviews/I444_fix_diagnosis_20261111_2000.md`）。「記録の場所だけの直しでは止める指摘が閉じない」仕組みの穴は retro へ
 - [review-gate] コードレビュー 3 周目 OK・敵対的レビュー 1 周目 OK（V1〜V5 確認済み・新規の Critical/High なし）。台帳の Medium・Low（F2〜F7・`ps -C node` 等の誤検出・`install -d`・`-vt/app/x`）は止めない指摘として retro へ — 止める条件の一覧に当たらないため
+- [test-gate] M-02 のホストの `ps e` は `ps` が許可の一覧に無く見張りと関係なく承認画面が出るので、見張りのホストの判定は TC-01 で確かめたものとして OK にした — 承認画面の出どころを分けて記録するため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

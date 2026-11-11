@@ -8,6 +8,7 @@
 - 計画時（2026-11-11）: すべて実装前のため未実行（テストのファイルがまだ無い）。同じケースを見張りの写し（計画書「調査結果」のスパイク `g_proto.py`）に流し、TC-01〜TC-04 の期待値どおりになることは確かめた。変更前の見張りでは TC-01・TC-02 の ASK のケースが 0（＝今の取りこぼし）、TC-03 は 2、TC-04 は 0
 - 2026-11-11（implement）: `bash scripts/claude/tests/test_i444_guard_gaps.sh` → pass=56 fail=0（exit 0。FG-01〜FG-05 を含む）。`run-all.sh` で container_guard・i200・matrix・oracle・i182_corpus_base の 5 本 → pass=5 fail=0。`test_guard_corpus_diff.sh --rebuild`（/simplify の手直しの前の版）→ 作業記録 15419 件（primary とすべてのワークツリー）・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の作業）・新しく停止 0 件・OK（上限 154 件）。手直しの後の版は fix-loop 1 で流し直した（次の行）
 - 2026-11-11（fix-loop 1）: 決定論ゲートの .sh 6 本 → `run-all.sh` pass=6 fail=0。`test_guard_corpus_diff.sh --rebuild`（TC-06・手で流す）→ 作業記録 15621 件・基準 757828f（origin/develop との分かれた点）・確認＋停止 357→360・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の 1 回の作業。許可リストから celery を外したため）・新しく停止 0 件・異常終了 0 件・OK（上限 156 件）
+- 2026-11-11（test-gate・レビュー済みの HEAD 0a97a1d8 以降）: `bash scripts/claude/gate-check.sh I444` → GATE_CHECK: OK。決定論ゲートの 8 行は review-gate（`docs/reviews/I444_code_review_20261111_2004.md`）ですべて exit 0・委譲された heavy は無し。TC-06 `bash scripts/claude/tests/test_guard_corpus_diff.sh --rebuild` → exit 0・作業記録 15738 件・基準 757828f・確認＋停止 358→361・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の 1 回の作業）・新しく停止 0 件・異常終了 0 件・OK（上限 157 件）
 
 ## TC-01 環境変数をまとめて表示する形は確認（ホストとコンテナ）
 | ID | コマンド | 期待 |
