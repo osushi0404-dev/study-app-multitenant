@@ -872,8 +872,8 @@ def _ask(reason: str):
 #   - コマンドを「単純コマンド」の列に読み解いてから判定する（付着した ; && | ( )・$(...)・`...`・
 #     ヒアドキュメント・リダイレクト・包むコマンド〔sh -c・eval・env・timeout・sudo 等〕を展開する）。
 #   - 危険操作・外部送信・秘密情報は列挙で判定し、ホスト・コンテナの両方に当てる。
-#   - docker compose exec|run（docker-compose も同じ）の中の操作は、許可リストに入るものだけを素通しにし、
-#     それ以外は人の確認（ask）に回す（fail-safe）。素の docker exec|run は列挙だけで判定する。
+#   - docker compose exec|run（docker-compose も同じ）の中の操作は、危ない語が当たっても通す形（_container_safe）に入るものは通し、
+#     それ以外は危ない語・/tmp/ 以外への書き込みがあるときだけ確認（I200）。素の docker exec|run は列挙だけで判定する。
 #   - 脅威モデルは「事故」（Claude が普段書くコマンドでの事故を防ぐ。意図的な回避は対象外）。
 _MAX_WRAP_DEPTH = 4                 # sh -c・eval・$(...) の入れ子を展開する深さの上限
 _MAX_SCRIPT_BYTES = 1_000_000       # 中身を読む実行ファイルの大きさの上限
@@ -1267,18 +1267,13 @@ _ENV_NAME_HINT_RE = re.compile(r"(?i)key|secret|pass|token|api|email|smtp|db_|da
 # curl の引数に当てる外部送信の列挙（_CODE_EXTERNAL のうち API のパスで判定するもの）
 _URL_EXTERNAL_RE = re.compile(r"auth/register/|auth/password-reset/|problems/generate_(ai|adaptive)/")
 
-# docker compose exec|run の中の許可リスト（plan_I174.md 0-5・0-9）
+# docker compose exec|run の中の、危ない語が当たっても通す形（_container_safe・plan_I174.md 0-5・0-9・I444）
 _SAFE_MANAGE = ("test", "check", "showmigrations", "sqlmigrate", "help", "version")
 _SAFE_SQL_RE = re.compile(r"^\s*(select|show|explain(?!\s*\(|\s+analy[sz]e)|create\s+database|with)\b", re.I)
 _UNSAFE_SQL_RE = re.compile(r"\b(lo_export|lo_import|pg_read_file|pg_read_binary_file|pg_write\w*|"
                             r"pg_terminate_backend|pg_cancel_backend|pg_reload_conf|dblink\w*|set_config|"
                             r"copy|insert|update|delete|merge|truncate|drop|alter|grant|revoke|nextval|setval)\b", re.I)
 _SAFE_META_RE = re.compile(r"^\\(d[a-zA-Z+]*|l\+?|conninfo|x|timing|pset|echo|q)$")
-_SAFE_REDIS = ("PING", "INFO", "KEYS", "GET", "TTL", "PTTL", "EXISTS", "DBSIZE", "SCAN", "TYPE",
-               "HGETALL", "LRANGE", "SMEMBERS", "LLEN", "HLEN", "SCARD", "STRLEN")
-_SAFE_READ_CMDS = ("ls", "pwd", "cat", "head", "tail", "grep", "wc", "which", "whoami", "id", "true",
-                   "date", "uname", "hostname", "stat", "file", "du", "df", "ps", "test", "[", "cut", "tr",
-                   "jq", "diff", "cmp", "basename", "dirname", "realpath", "readlink", "cd", "env")
 _PIPE_FILTERS = ("grep", "head", "tail", "wc", "sort", "cut", "tr", "jq", "uniq", "cat")
 _SAFE_COMPOSE_DEFAULT = ("e2e",)    # コンテナ内のコマンドを書かず既定コマンドで動かしてよいサービス
 # I187: e2e サービスの `npx playwright test` で使ってよい選択肢（値を取るもの・取らないもの）
@@ -2252,7 +2247,14 @@ def _cmd_external(c: dict) -> list:
         r.append("秘密情報ファイルの読み出し（< で流し込み）")
     if head in ("grep",) and _grep_recursive_secret(c):
         r.append("秘密情報ファイルを含むディレクトリの再帰検索（grep -r。--include で絞るか rg を使う）")
-    if head == "printenv" or (head == "env" and not [a for a in toks[1:] if not a.startswith("-")]):
+    # 環境変数をまとめて表示する形（I444。ホストとコンテナで同じ）。env はコマンドを包むときは読み解きで外れるので、
+    # 先頭に残った env は引数によらず表示（env -u X・env FOO=1・env -0）。ps は BSD 形式の e（英字だけの引数で、
+    # -C node・-o etime のようなオプションの値は見ない）。declare -x FOO=1 のような代入は表示ではない
+    if head in ("printenv", "env") or (head == "set" and len(toks) == 1) \
+            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) and not p.startswith("-")
+                                     for p, a in zip(toks, toks[1:]))) \
+            or (head in ("export", "declare", "typeset")
+                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")
     if (c["ctr"] or head in ("echo", "printf")) and any(_SECRET_VAR_RE.search(a) for a in toks[1:]):
         r.append("秘密の環境変数の展開")
@@ -2366,7 +2368,8 @@ _CP_READ_LIMIT = 1024 * 1024
 
 
 def _container_risky(c: dict, text: str) -> list:
-    """I200: 許可リストに入らないコンテナ内の単純コマンドを確認にする理由（無ければ []）。
+    """I200: 危ない語が当たっても通す形（_container_safe）に入らないコンテナ内の単純コマンドを確認にする理由（無ければ []）。
+    環境変数の表示は _cmd_external が見る（I444）。
     コマンドの語・ヒアドキュメント・here-string・読める Python コードに危ない語があるか、/tmp/ 以外へ書き込むとき。
     パイプ・標準入力・読みきれない書き方では、流し込まれる中身が見えないので、コマンド全体の文字列も見る。"""
     parts = [" ".join(c["toks"]), c["heredoc"] or "", c["herestr"] or ""]
@@ -2382,16 +2385,8 @@ def _container_risky(c: dict, text: str) -> list:
     found = _risky_words("\n".join(parts))
     if found:
         reasons.append("危ない語: " + "・".join(found))
-    toks = c["toks"]
-    head = os.path.basename(toks[0]) if toks else ""
-    if any(not _in_scratch(t) for t in c["write_to"] + _ctr_write_targets(toks)):
+    if any(not _in_scratch(t) for t in c["write_to"] + _ctr_write_targets(c["toks"])):
         reasons.append("コンテナの /tmp/ 以外への書き込み")
-    # 環境変数（backend/.env の値）をまとめて表示する形（(C)）。ps の BSD 形式の e・引数なしの env・set、
-    # export -p・declare -p／-x（コードレビューの F6）
-    if (head == "ps" and any(not a.startswith("-") and "e" in a for a in toks[1:])) \
-            or (head in ("env", "set") and len(toks) == 1) \
-            or (head in ("export", "declare", "typeset") and any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:])):
-        reasons.append("環境変数（秘密情報）の表示")
     return reasons
 
 
@@ -2401,8 +2396,8 @@ def _in_scratch(path: str) -> bool:
 
 
 def _ctr_write_targets(toks: list) -> list:
-    """リダイレクト以外でファイルに書き込むコマンドの書き先（tee・sed -i・cp／mv／install／ln／rsync の最後の引数。
-    _record_writes と同じ見分け方）。コンテナの /app/ は手元に bind mount されているので、/tmp/ 以外は確認（F3）。"""
+    """リダイレクト以外でファイルに書き込むコマンドの書き先（tee・sed -i・cp／mv／install／ln／rsync の書き先〔最後の引数・
+    -t／--target-directory〕と mv の移動元・I444）。コンテナの /app/ は手元に bind mount されているので、/tmp/ 以外は確認（F3）。"""
     if not toks:
         return []
     head = os.path.basename(toks[0])
@@ -2411,8 +2406,13 @@ def _ctr_write_targets(toks: list) -> list:
         return pos
     if head == "sed" and _has_short(toks[1:], "i", "--in-place"):
         return pos[1:]
-    if head in ("cp", "mv", "install", "ln", "rsync") and len(pos) >= 2:
-        return [pos[-1]]
+    if head in ("cp", "mv", "install", "ln", "rsync"):
+        tdir = _opt_values(toks[1:], ("-t", "--target-directory")) if head != "rsync" else []   # rsync の -t は時刻を保つ
+        if head == "mv":                       # 移動元も消える（I444）
+            return tdir + pos
+        if tdir:
+            return tdir
+        return pos[-1:] if len(pos) >= 2 else []
     return []
 
 
@@ -2518,36 +2518,29 @@ def _edit_risky(tool: str, ti: dict, path: str):
 
 
 def _container_safe(c: dict) -> bool:
-    """docker compose exec|run の中の単純コマンドが許可リストに入るなら True（plan_I174.md 0-5・0-9）。"""
+    """I444: 危ない語が当たっても通す docker compose exec|run の中の形（引数に語が出やすい、(A)〜(C) を起こさない操作）。
+    テスト・lint・依存の情報・読み取りの manage.py・中身が見えて危険のない Python・読み取りの SQL・ローカル宛ての curl・
+    パイプの受け手の絞り込み。これ以外は _container_risky（危ない語・/tmp/ 以外への書き込み）と _cmd_external で決まる。"""
     toks = c["toks"]
     if c["note"] or c["herestr"] is not None or c["writes"] or not toks:
         return False
-    head = os.path.basename(toks[0])
-    rest = toks[1:]
-    if c["piped"] and head not in _PIPE_FILTERS:
-        return False
+    head, rest = os.path.basename(toks[0]), toks[1:]
+    if c["piped"]:                             # パイプの受け手は読むだけの絞り込みだけ（pytest … | tail）
+        return head in _PIPE_FILTERS and not (head == "sort" and any(a.startswith(("-o", "--output")) for a in rest)) \
+            and not (head == "uniq" and len([a for a in rest if not a.startswith("-")]) > 1)
     dj = _django_sub(toks)
     if dj:
-        sub, args = dj
-        if sub in _SAFE_MANAGE:
-            return True
-        if sub == "makemigrations":
-            return "--check" in args or "--dry-run" in args
-        if sub == "migrate":                             # 巻き戻しは _cmd_danger が先に止める
-            return not any(a.startswith(("--fake", "--prune", "--run-syncdb")) for a in args)
-        if sub == "shell":
-            return _code_safe(c)                         # 見えて、すべての呼び出しが一覧に入る
-        if sub == "dbshell":
+        if dj[0] == "dbshell":
             sql = _sql_of(c)
             return sql is not None and _sql_is_safe_read(sql)
+        return _code_safe(c) if dj[0] == "shell" else dj[0] in _SAFE_MANAGE
+    if c["heredoc"] is not None and head != "psql" and not _PYTHON_RE.match(head):
         return False
-    if c["heredoc"] is not None and head not in ("psql", "redis-cli") and not _PYTHON_RE.match(head):
-        return False
-    if head == "ruff":
-        return (rest[:1] == ["check"] and not any(a.startswith(("--fix", "--unsafe-fixes")) for a in rest)) or \
-            (rest[:1] == ["format"] and ("--check" in rest or "--diff" in rest))
+    fix = any(a.startswith(("--fix", "--unsafe-fixes", "--basetemp")) for a in rest)
     if head in ("pytest", "flake8", "bandit", "pip-audit", "mypy", "eslint", "tsc", "jest"):
-        return not any(a.startswith(("--fix", "--basetemp")) for a in rest)
+        return not fix
+    if head == "ruff":                         # format は書き換えないとき（--check・--diff）だけ
+        return (rest[:1] == ["check"] and not fix) or (rest[:1] == ["format"] and ("--check" in rest or "--diff" in rest))
     if _PYTHON_RE.match(head):
         k = 0
         while k < len(rest) and rest[k] in ("-W", "-X", "-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S", "-b", "-q"):
@@ -2558,46 +2551,19 @@ def _container_safe(c: dict) -> bool:
             return True
         return _code_safe(c)
     if head == "pip":
-        return rest[:1] in (["freeze"], ["list"], ["show"], ["check"], ["--version"]) or rest[:2] == ["index", "versions"]
+        return rest[:1] in (["freeze"], ["list"], ["show"], ["check"]) or rest[:2] == ["index", "versions"]
     if head == "npm":
-        if rest[:1] == ["audit"]:
-            return "fix" not in rest
-        return rest[:1] in (["test"], ["ls"], ["outdated"], ["view"], ["--version"]) or \
-            rest[:2] in (["run", "lint"], ["run", "typecheck"], ["run", "build"], ["run", "test"])
+        return rest[:1] in (["test"], ["ls"], ["outdated"], ["view"]) or rest[:2] in (["run", "lint"], ["run", "test"]) \
+            or (rest[:1] == ["audit"] and "fix" not in rest)
     if head == "npx":
         if rest[:2] == ["playwright", "test"]:          # I187: e2e サービスで範囲・表示だけを変えて流す E2E
             return c["compose"] and c.get("service") in _SAFE_COMPOSE_DEFAULT and _playwright_test_args_safe(rest[2:])
-        return rest[:1] in (["tsc"], ["eslint"], ["jest"]) and "--fix" not in rest
+        return rest[:1] in (["tsc"], ["eslint"], ["jest"]) and not fix
     if head == "psql":
         if _opt_values(rest, ("-o", "--output", "-L", "--log-file", "-f", "--file")) or c["stdin"]:
             return False
         sql = _sql_of(c)
         return sql is not None and _sql_is_safe_read(sql)
-    if head == "redis-cli":
-        if "--scan" in rest:
-            return True
-        sub = rest[_skip_opts(rest, ("-h", "-p", "-n", "-a", "-u")):]
-        return bool(sub) and sub[0].upper() in _SAFE_REDIS
-    if head == "celery":
-        sub = rest[_skip_opts(rest, ("-A", "--app", "-b", "--broker", "--workdir", "-l", "--loglevel")):]
-        return sub[:1] in (["inspect"], ["status"], ["report"])
-    if head == "sed":
-        if _has_short(rest, "i", "--in-place") or "-n" not in rest and "--quiet" not in rest:
-            return False
-        scripts = _opt_values(rest, ("-e", "--expression"))
-        if not scripts:
-            pos = [a for a in rest if not a.startswith("-")]
-            scripts = pos[:1]
-        return bool(scripts) and all(re.fullmatch(r"(\d+|\$)?(,(\d+|\$))?p|/[^/]*/p", s) for s in scripts)
-    if head == "find":
-        return not any(a in ("-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0",
-                             "-fprintf", "-fls") for a in rest)
-    if head == "sort":
-        return not any(a == "-o" or a.startswith(("--output", "-o")) for a in rest)
-    if head == "uniq":
-        return len([a for a in rest if not a.startswith("-")]) <= 1
-    if head in ("echo", "printf"):
-        return not any("$" in a for a in rest)
     if head == "curl":
         k, urls = 0, []
         while k < len(rest):
@@ -2623,11 +2589,7 @@ def _container_safe(c: dict) -> bool:
                 urls.append(a)
             k += 1
         return bool(urls) and all(re.match(r"https?://(localhost|127\.0\.0\.1|backend)(:\d+)?(/|$)", u) for u in urls)
-    if head in ("node",) and rest[:1] == ["--version"]:
-        return True
-    if head == "ps":                       # BSD 形式の e（ps auxe 等）は各プロセスの環境変数＝秘密情報を表示する
-        return not any(not a.startswith("-") and "e" in a for a in rest)
-    return head in _SAFE_READ_CMDS
+    return False
 
 def _describe(c: dict) -> str:
     s = " ".join(c["toks"])[:80]
@@ -2664,7 +2626,7 @@ def _analyze(text: str) -> dict:
             res["remote_ask"].append(c["remote_ask"])
         res["danger"] += d
         res["external"] += e
-        # I200: 許可リストに入らないコンテナ内の操作は、危ない語・/tmp/ 以外への書き込みがあるときだけ確認
+        # I200: 危ない語が当たっても通す形（_container_safe）に入らないコンテナ内の操作は、危ない語・/tmp/ 以外への書き込みがあるときだけ確認
         if c["compose"] and not d and not e and not _container_safe(c):
             why = _container_risky(c, text)
             if why:
@@ -3769,7 +3731,7 @@ def main():
     if external:
         _ask("外部への送信・秘密情報の表示を伴う操作です。確認してください: " + " / ".join(external))
 
-    # I174→I200: コンテナ内の操作は、許可リストに入らず、危ない語か /tmp/ 以外への書き込みがあるときだけ確認
+    # I174→I200: コンテナ内の操作は、危ない語が当たっても通す形（_container_safe）に入らず、危ない語か /tmp/ 以外への書き込みがあるときだけ確認
     # （docker compose cp のホスト→コンテナも同じ基準）
     if an["container"]:
         _ask("コンテナ内の操作・コンテナへのコピーに、危ない語か /tmp/ 以外への書き込みがあります。"
