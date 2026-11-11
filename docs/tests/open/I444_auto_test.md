@@ -6,7 +6,8 @@
 
 結果:
 - 計画時（2026-11-11）: すべて実装前のため未実行（テストのファイルがまだ無い）。同じケースを見張りの写し（計画書「調査結果」のスパイク `g_proto.py`）に流し、TC-01〜TC-04 の期待値どおりになることは確かめた。変更前の見張りでは TC-01・TC-02 の ASK のケースが 0（＝今の取りこぼし）、TC-03 は 2、TC-04 は 0
-- 2026-11-11（implement）: `bash scripts/claude/tests/test_i444_guard_gaps.sh` → pass=56 fail=0（exit 0。FG-01〜FG-05 を含む）。`run-all.sh` で container_guard・i200・matrix・oracle・i182_corpus_base の 5 本 → pass=5 fail=0。`test_guard_corpus_diff.sh --rebuild`（/simplify の手直しの前の版）→ 作業記録 15419 件（primary とすべてのワークツリー）・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の作業）・新しく停止 0 件・OK（上限 154 件）。手直しの後の版は review-gate の決定論ゲートで流し直す
+- 2026-11-11（implement）: `bash scripts/claude/tests/test_i444_guard_gaps.sh` → pass=56 fail=0（exit 0。FG-01〜FG-05 を含む）。`run-all.sh` で container_guard・i200・matrix・oracle・i182_corpus_base の 5 本 → pass=5 fail=0。`test_guard_corpus_diff.sh --rebuild`（/simplify の手直しの前の版）→ 作業記録 15419 件（primary とすべてのワークツリー）・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の作業）・新しく停止 0 件・OK（上限 154 件）。手直しの後の版は fix-loop 1 で流し直した（次の行）
+- 2026-11-11（fix-loop 1）: 決定論ゲートの .sh 6 本 → `run-all.sh` pass=6 fail=0。`test_guard_corpus_diff.sh --rebuild`（TC-06・手で流す）→ 作業記録 15621 件・基準 757828f（origin/develop との分かれた点）・確認＋停止 357→360・新しく確認 3 件（celery の inspect を含む長い 1 行・同じ日の 1 回の作業。許可リストから celery を外したため）・新しく停止 0 件・異常終了 0 件・OK（上限 156 件）
 
 ## TC-01 環境変数をまとめて表示する形は確認（ホストとコンテナ）
 | ID | コマンド | 期待 |
@@ -89,7 +90,14 @@ I200 の普通の操作（I166 の形・`seed_e2e`・`psql select`・`manage.py 
 
 ## TC-06 見張りを直したら流すテストと既存のテスト
 - 下の決定論ゲートのすべてが exit 0
-- `test_guard_corpus_diff.sh` は SKIP ではなく「OK: 新しく確認・停止 N 件」を出す（5-6 の後はワークツリーでも作業記録を読む）。N は 37 件（1%）以内。新しく停止は 0 件。出た件数と中身を計画変更記録に書く（計画時の見込み 4 件）
+- `bash scripts/claude/tests/test_guard_corpus_diff.sh --rebuild` を、implement の後と test-gate で上限なしで手で流す（数分かかり、決定論ゲートの 1 行 120 秒に収まらないため、ゲートには置かない・fix-loop 1）。SKIP ではなく「OK: 新しく確認・停止 N 件」を出す（5-6 の後はワークツリーでも作業記録を読む）。N は記録の 1% 以内・新しく停止は 0 件・異常終了 0 件。出た件数と中身をこの文書の結果の欄に書く
+
+### 再発防止の記録（fix-loop 1・2026-11-11）
+- なぜ失敗したか: 決定論ゲート（1 行 120 秒の上限）に、作業記録の件数に比例して数分かかる corpus diff を置いた。これまでワークツリーではフォルダ名の誤りで SKIP（exit 0）になり、ゲートでは「通って」いた（実際には何も確かめていなかった）。5-6 で誤りを直して本当に走るようになり、時間切れ（exit 124）が出た
+- 何を変えたか: corpus diff を決定論ゲートから外し、TC-06 の手で流す確かめ（implement の後・test-gate）にした。見張り・corpus diff のコードは変えていない
+- セキュリティ上の考慮点: なし（確かめの置き場所だけ）
+- 次回どう防ぐか: 重い確かめ（所要が記録や環境の大きさに比例するもの）は決定論ゲートに置かず、TC の手順として段階の中で流して記録する（`danger-ops.md` の「コミットの前に流す」と同じ位置づけ）
+- 確かめた結果: 下の決定論ゲートの .sh 6 本を `run-all.sh` で流し直し pass=6 fail=0（exit 0）。corpus diff の結果は TC-06 の結果の行に書く
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -98,7 +106,6 @@ bash scripts/claude/tests/test_pretooluse_container_guard.sh
 bash scripts/claude/tests/test_i200_guard_narrowing.sh
 bash scripts/claude/tests/test_pretooluse_guard_matrix.sh
 bash scripts/claude/tests/test_guard_bash_oracle.sh
-bash scripts/claude/tests/test_guard_corpus_diff.sh
 bash scripts/claude/tests/test_i182_corpus_base.sh
 python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
 python3 -m py_compile scripts/claude/tests/guard_corpus_diff.py
