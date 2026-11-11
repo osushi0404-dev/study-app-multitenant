@@ -46,6 +46,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [retro] 「重い確かめを決定論ゲートに置いた」は見送り — ゲートの時間切れ（exit 124）でその場で捕まり、直しは記録の場所とコメントだけだった。手順を足す必要は無い（2.7 の問 2）
 - [retro] 「計画時に測った過去の作業コマンドの件数が少なかった（ワークツリーの記録が入らない不具合）」は、このイシューの 5-6 で直した（是正済み）
 - [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR #451 の説明を更新した — 手順どおり
+- [close] マージ依頼の後、ユーザーの指示（2026-11-11「2」＝マージ前に直す）で、台帳 F3（ホストの `ps -C node` 等の誤検出）・F4（`declare -x FOO=1` の誤検出）をこのイシューで直すため、記録を open に戻して fix-loop へ回した — I444 の 5-1 が持ち込んだ退行で、直しは数行
 
 ## 振り返り
 
@@ -102,3 +103,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: fix-loop
