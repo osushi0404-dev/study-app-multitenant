@@ -201,6 +201,9 @@ scratchpad に置いた使い捨てのテスト（リポジトリに入れない
 - `OrgSubjectField`（今は 307-318 行目）を `ProblemSerializer` より前（`ProblemFieldConversionMixin` の前）に移す。説明の「クイズのセッションと学習記録の科目で使う」を「クイズのセッション・学習記録・問題の科目で使う」に直す
 - `ProblemSerializer` に `subject = OrgSubjectField()` を足す（`required` は既定の True のまま。部分更新〔PATCH〕では DRF が必須を外す）。出力（`to_representation`）は科目の番号のままで変わらない。`ProblemAdminSerializer` は継承で同じになる
 - 出力だけで使う箇所（`studylogs/serializers.py:115`・`problems/serializers.py` の `QuizAnswerDetailSerializer`・`views.py` の AI 生成の応答）は、書き込みをしないので影響しない
+- 調査（2026-11-12）: `grep -rn -E "Problem(Admin)?Serializer\(data|ProblemSerializer\(.*context" backend --include=*.py` は 0 件。`ProblemSerializer`・`ProblemAdminSerializer` を書き込みに使うのは `ProblemViewSet`（`get_serializer` が context に request を入れる）だけ。AI 生成の保存（`_save_ai_problem_to_db`）・`ProblemService` はシリアライザを通さずモデルを直接作る。`OrgSubjectField` の他の使用は `QuizSessionSerializer`・`studylogs/serializers.py` の 2 つ（既存）
+- 画面の依存の調査（2026-11-12）: `frontend/src` を「他組織の科目には」「generate_ai」「403」で検索した。問題の管理・AI 生成の画面（`components/AIQuestionGenerator.tsx:150`）はエラー時に `error.response?.data?.error` をそのまま出すだけで、403 や文言で分岐しない。共通の処理（`services/api.ts:180`・`utils/apiResponseUtils.ts:87`）はステータスごとの一般の文言を出すだけ。科目は自組織の科目の一覧から選ぶので、通常の操作では変化が見えない
+- 別件の発見（範囲外）: `AIQuestionGenerator.tsx:121・131` は JSON で送るが、`ProblemViewSet.parser_classes` は multipart・form だけで、画面からの AI 生成は今も 415 になる（下調べで JSON は 415 を確認）。境界と関係ないので直さず、retro で扱う（9 章）
 
 ```python
 class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer):
@@ -280,7 +283,7 @@ def get_queryset(self):
 |---|---|
 | 表のメンテが重く、新しい経路を足す人が表の書き方で迷う | テストのファイルの冒頭に「新しい経路を足したら、ここに 1 行足す。確かめ方の選び方」を書く。落ちたときのメッセージに、足りない経路と載せ方の例を出す |
 | 本文の番号を伏せるときに、関係ない数字まで伏せる | 他組織などの番号を `4460001` 以降の区別しやすい値で明示して作る |
-| ケースが多く（約 130）CI が遅くなる | 1 ケースの下準備は 50 件ほどの作成。下調べの 9 ケースが 5 秒強（初期化込み）で、全体で 1 分ほどの見込み。遅ければ fixture をまとめる |
+| ケースが多く（約 130）CI が遅くなる | 1 ケースの下準備は 50 件ほどの作成。下調べの 9 ケースが 5 秒強（初期化込み）で、全体で 1 分ほどの見込み。新しいテストだけで 2 分を超えたら（CI のログの所要時間で見る）、fixture を `django_db_setup` 相当のまとめた下準備に変える |
 | 修正で、クイズの回の古いデータが見えなくなる | 他組織・全体共有の科目を指す回だけ（I166 の後は作れない）。I431 の手動 No.1 で、primary の dev DB の QuizSession 124 件はどれも越境 0 件 |
 | AI 生成・作成の応答が 403 から 400・404 に変わり、画面の表示が変わる | 画面は自組織の科目しか送らない（科目の選択肢は `api/subjects/` から）。他組織の番号を手で送ったときだけ変わる |
 | 0 で割る不具合（`dashboard/analytics`）をテストの下準備で避けたことで、不具合が隠れる | 別に起票する（retro・9 章） |
@@ -305,6 +308,7 @@ def get_queryset(self):
 - S1〜S4 の応答を 403 から「存在しない科目と同じ」に変える（I103 の決まりを変える）— 受け入れ条件 AC1 の物差しで、grill-me で確定した方針。OWASP の推奨（存在するかどうかを他のテナントに知らせない）にも合う
 - 作成・更新の組織の確かめ（I103・SEC-1）を多層防御として残す — シリアライザの欄を誤って戻しても、他組織への作成は止まる
 - 0 で割る不具合（`dashboard/analytics`）はこのイシューで直さず、retro で新しいイシューに起票する — 境界と関係なく、イシューの範囲外。統計の画面で利用者に見える 500 なので、価値は低くない
+- 画面からの AI 生成が 415 になる件（`AIQuestionGenerator.tsx` が JSON で送る）は直さず、retro で起票か既存イシューへの同梱を決める — 境界と関係なく、画面とバックエンドの両方にまたがる
 - `learning_insights` の KeyError（`period_days`）は #452（学習記録の機能を直す）に同梱する（retro でコメント）— #452 が同じ機能を直すイシューのため
 - 1 つの経路に複数の確かめ方を持てる表にする（`dict[str, list[Check]]`）— 1 つの経路が「URL の番号」と「本文の科目」の 2 つの入口を持つ（問題の更新など）ため
 - 運用者専用の経路は、組織管理者と一般の利用者で断られることだけを確かめ、運用者（`is_staff`）が全組織を見られることは確かめない — 仕様（grill-me の自己解決）で、境界ではないため
@@ -357,5 +361,20 @@ def get_queryset(self):
 - 他組織の科目・問題の存在を応答で知らせない（S1〜S4）。他組織の問題文・解説・選択肢を、自分の古い記録を通しても返さない（S5・S6）
 - 保持期間・削除権・同意は変えない。既存のデータは消さない（読み出しから外すだけ）
 
+## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
+| 項目 | 観点 | 確かめ方 | 内容 |
+|---|---|---|---|
+| V1 | 1 | 実験必須 | 組織 A の組織管理者が、組織 B の科目・全体共有の科目で問題を作る（POST）・付け替える（PUT・PATCH）・AI 生成する（2 経路）と、存在しない科目と同じステータスと伏せた本文で断られ、問題が作られない・変わらない（TC-01・TC-11。修正前の FAIL〔TC-20〕と修正後の PASS を実測） |
+| V2 | 1 | 実験必須 | 自分のクイズの回のうち、他組織・全体共有の科目の回は一覧・詳細・終了・出題・回答から見えず、科目なしの回の中の他組織の問題への回答は、詳細・終了の応答に出ない（TC-03 の `GET api/quiz/`・`OwnCheck`・TC-12。修正前の FAIL と修正後の PASS を実測） |
+| V3 | 2 | 実験必須 | 4-4 の回答の先読みの絞り込みが、自組織の回の出題・回答・終了（`submit_answer` の「回答済みか」・`QuizService` の未回答の判定・終了の応答の回答の数）を変えない（I166 の TC-02〜TC-08・TC-12 が通る〔TC-12〕・手動 No.2） |
+| V4 | 2 | 読んで可 | `ProblemSerializer`・`ProblemAdminSerializer` を request の無い文脈で書き込みに使う箇所が無い（4-2 の調査結果の grep。あれば 4-2 で `OrgSubjectField` が何も受け付けず、その経路が壊れる） |
+| V5 | 3 | 読んで可 | 表と経路の突き合わせが、新しい経路・古い行の両方で落ち、`OUT_OF_SCOPE` の理由が空の行・両方に載る行も落ちる（TC-04・TC-21 の FG1 の実測） |
+| V6 | 3 | 実験必須 | 組織の絞り込み・本人の絞り込みを外すと、テストが落ちる（TC-22・TC-23 の FG の実測）。`IdCheck` が、空を返すだけ・すべて 404 を返すだけの実装で通らないよう、自組織の記録が読めること（`OwnCheck`・I166・I431 のテスト）と組み合わさっている |
+| V7 | 3 | 読んで可 | 表の「対象外」の各行の理由が、そのビューのコードと合っている（番号を受け取らない・運用者専用・登録画面用の仕様）。特に `api/auth/me/` の PUT・PATCH で組織・役割が書き換えられない（`UserSerializer.read_only_fields`） |
+| V8 | 1 | 読んで可 | 画面（`frontend/src`）が、問題の作成・AI 生成の 403 や「他組織の科目には問題を作成できません」の文言に依存していない（4-2 の調査結果の grep） |
+
 ## 計画変更記録
-（なし）
+- 2026-11-12 計画レビュー（20261112_0131・Blocker 1・Warning 3・Info 1）に対応: ① 高リスクの必須節「必ず確かめる項目」を足した（Blocker）② 4-2 に `ProblemSerializer` の書き込みの使用箇所と画面の依存の grep の結果を足した（Warning 1・2）③ 失敗注入の戻し方を Edit で元に戻すと明記した（Warning 3）④ CI の時間の目安を 8 章に足した（Info）。範囲・方式・受け入れ条件は変えない。Blocker への対応のため計画レビューはやり直す
+
+## レビュー結果
+- [20261112_0131 判定: 差し戻し（Blocker 1件）](../../reviews/I446_plan_review_20261112_0131.md)
