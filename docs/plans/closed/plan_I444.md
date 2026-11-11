@@ -293,8 +293,8 @@ PR を revert する（見張り・テスト・手順書・corpus diff だけ。
 - 5（fix-loop 2）: 誤解の元だった `scripts/claude/tests/test_guard_corpus_diff.sh` の冒頭のコメントを直した（ゲートに置かず手で流す・所要の説明）。コメントだけで動きは変えない。計画レビューのやり直し: 不要
 
 ## レビュー結果
-- [20261111_1824 判定: ✅ 完了](../../reviews/I444_plan_review_20261111_1824.md)
-- [20261111_1819 判定: 差し戻し（Blocker 1件）](../../reviews/I444_plan_review_20261111_1819.md)
+- [20261111_1824 判定: ✅ 完了](../../reviews/closed/I444_plan_review_20261111_1824.md)
+- [20261111_1819 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I444_plan_review_20261111_1819.md)
 
 ## セキュリティレビュー結果
 

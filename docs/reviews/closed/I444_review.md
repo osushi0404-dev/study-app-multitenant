@@ -45,6 +45,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [retro] 「記録の場所だけの直しでは止める指摘が閉じない」（`code-review.sh` の差分なしの近道）→ #435 に同梱（コメント・次のハーネスの作業で最優先） — 実害（往復 1 回分）があり、review-gate ⇄ fix-loop の往復を扱う #435 が同梱先として合う。判定の仕組みに関わるので最優先と書いた
 - [retro] 「重い確かめを決定論ゲートに置いた」は見送り — ゲートの時間切れ（exit 124）でその場で捕まり、直しは記録の場所とコメントだけだった。手順を足す必要は無い（2.7 の問 2）
 - [retro] 「計画時に測った過去の作業コマンドの件数が少なかった（ワークツリーの記録が入らない不具合）」は、このイシューの 5-6 で直した（是正済み）
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR #451 の説明を更新した — 手順どおり
 
 ## 振り返り
 
@@ -100,3 +101,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
