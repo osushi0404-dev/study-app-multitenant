@@ -149,7 +149,7 @@ def _write_targets(toks: list) -> list:
 ```
 - `_bash_write_targets`: コマンド別の宛先の部分（tee・cp／mv・sed の 17 行）を `targets += _write_targets(toks)` の 1 行にする。リダイレクトの読み取りと「絶対パスだけ」は変えない。これで停止（exit 2）は `install`・`ln`・`rsync` の書き先・`--target-directory=`・くっつけた `-t`・`mv` の移動元に広がる（設計確認メモ）。sed は「位置引数すべて」から「式を除いたファイル」に変わるが、絶対パスだけを見るので、止める形は減らない（式は `/` で始まる場合〔`sed -i '/^#/d' f`〕だけ絶対パスに見えていた。止める理由にはならない）
 - `_has_write_intent`: リダイレクトと `_write_targets(toks)` が空でないことで判定する（3 行にまとまる）
-- `_record_writes`: `targets = c["write_to"] + _write_targets(toks)`。コピー系（`_COPY_CMDS`）は、元の名前で書く形（`cp a /dir/`・`cp -t /dir a`）のために位置引数もすべて記録する（書く中身は見えない＝None。判定では「中身を確かめられない」で確認側に倒れる。今は最後の語だけを記録していて、`cp -t /tmp/d /tmp/x.sh && bash /tmp/d/x.sh` の x.sh を記録しない）
+- `_record_writes`: `targets = c["write_to"] + (コピー系なら位置引数すべて、それ以外は _write_targets(toks))`。コピー系（`_COPY_CMDS`）は、元の名前で書く形（`cp a /dir/`・`cp -t /dir a`）のために位置引数をすべて記録する（書く中身は見えない＝None。判定では「中身を確かめられない」で確認側に倒れる。今は最後の語だけを記録していて、`cp -t /tmp/d /tmp/x.sh && bash /tmp/d/x.sh` の x.sh を記録しない）
 → TC-02・TC-04・FG-04
 
 ### 5-4. 危ない語の理由と書き込みの理由を分け、通す形でも /tmp/ 以外への書き込みを見る（問題 3）
@@ -185,7 +185,7 @@ def _container_risky(c: dict, text: str) -> list:
 → TC-05
 
 ### 5-6. 手順書の正の関数の名前と代表の形を直す
-- `danger-ops.md`「見張りの扱い」の 4.: 書き込みの文の「形の正は `_ctr_write_targets`」を「形の正は `_write_targets`」にし、「書き先と移動元」の後ろに「・`--opt=/絶対パス` の値」を足す。「危ない語が当たっても通す形」の文の後ろに「（通す形でも、/tmp/ 以外への書き込みは確認・I454）」を足す
+- `danger-ops.md`「見張りの扱い」の 4.: 書き込みの文の「形の正は `_ctr_write_targets`」を「形の正は `_write_targets` と `_container_risky`」にし（`--opt=/絶対パス` の値は `_container_risky` が見るため）、「書き先と移動元」の後ろに「・`--opt=/絶対パス` の値」を足す。「危ない語が当たっても通す形」の文の後ろに「（通す形でも、/tmp/ 以外への書き込みは確認・I454）」を足す
 - `worktree.md` §9「技術強制済み（I095）」: 「Bash 書込（代表: リダイレクト・`tee`・`cp`/`mv` の宛先・`sed -i`。形の正は見張りの `_bash_write_targets`）」を「Bash 書込（代表: リダイレクト・`tee`・`sed -i`・`cp`/`mv`/`install`/`ln`/`rsync` の書き先と `mv` の移動元。形の正は見張りの `_write_targets`〔`_bash_write_targets` が絶対パスだけを見る〕）」にする
 → M-04
 
@@ -265,6 +265,7 @@ PR を revert する（見張り・テスト・手順書だけ。データの変
 
 ## 計画変更記録
 - 1（plan-review・2026-11-12・計画レビュー 1 は HIGHRISK・Warning 3・Info 2）: 9.「チェック」に守る対象と最後の守りを書いた／FG-03 の置き換え後の式を全文で書いた／auto_test の結果の欄に TC-06 の記録の行を用意した。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- 2（implement・/simplify の 4 観点の指摘）: `_record_writes` はコピー系なら位置引数だけ、それ以外は `_write_targets` にした（二重に記録していた）／`_write_targets` の sed は `-i` が無ければ先に返す形にした／`_opt_values` の値を 1 回だけ求める形にした／`--opt=/絶対パス` の正規表現を名前つきの定数 `_OPT_PATH_RE` にし、コンテナの判定だけが足すこと（停止の範囲は広げない）を `_write_targets` の docstring に書いた／`_PS_VALUE_OPT_RE` のコメントから文字の写しを外した。見送り: `--opt=/絶対パス` を `_write_targets` に入れる案（別ワークツリーの停止が設計確認メモの範囲を越えて広がる）・`ps` の値の判定を `_opt_values` で読む案（BSD 形式の 1 文字は正規表現が要り、短くならない）・テストの補助関数の共通化（既存のテストと同じ自己完結の形）。手順書の 4. の正の関数は `_write_targets` と `_container_risky` にした（`--opt=/絶対パス` の値は `_container_risky` が見るため・5-6 を合わせた）。見張りの行数は `65 84`（差し引き −19）。計画レビューのやり直し: 不要（整理だけで、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261112_0215 判定: ✅ 完了（高リスク）](../../reviews/I454_plan_review_20261112_0215.md)

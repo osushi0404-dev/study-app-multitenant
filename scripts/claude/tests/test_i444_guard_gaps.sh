@@ -66,11 +66,11 @@ ck 01x 0   "$(b 'declare -x FOO=1')"
 ck 01y ASK "$(b 'ps -u postgres e')"
 ck 01z ASK "$(b 'declare -x')"
 ck 01za ASK "$(b 'declare -p FOO')"
-fg FG-01 0 '                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
+fg FG-01 0 '                and (all(a.startswith(("-", "+")) for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")' \
-  '                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
+  '                and (all(a.startswith(("-", "+")) for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         pass' "$D export"
-fg FG-01b ASK ' and not p.startswith("-")' '' 'ps -C node'
+fg FG-01b ASK ' and not _PS_VALUE_OPT_RE.fullmatch(p)' '' 'ps -C node'
 
 # ---- TC-02 コンテナの /tmp/ 以外への書き込み（書き先の指定・移動元）は確認 ----
 ck 02a ASK "$(b "$D cp -t /app/x /tmp/y")"
@@ -83,8 +83,8 @@ ck 02j ASK "$(b "$D rsync -avt /tmp/a /app/b")"
 ck 02e 0   "$(b "$D mv /tmp/a /tmp/b")"
 ck 02f 0   "$(b "$D cp /app/a /tmp/b")"
 ck 02g 0   "$(b "$D cp -t /tmp/d /app/a")"
-fg FG-02a 0 '_opt_values(toks[1:], ("-t", "--target-directory")) if head != "rsync" else []' '[]' "$D cp -t /app/x /tmp/y"
-fg FG-02b 0 '            return tdir + pos' '            return pos[-1:]' "$D mv /app/x /tmp/y"
+fg FG-02a 0 '_opt_values(args, ("-t", "--target-directory")) if head != "rsync" else []' '[]' "$D cp -t /app/x /tmp/y"
+fg FG-02b 0 '        return tdir + pos' '        return pos[-1:]' "$D mv /app/x /tmp/y"
 
 # ---- TC-03 psql の WHERE なしの UPDATE は停止（コンテナ内・ホスト） ----
 ck 03a 2 "$(b "docker compose exec -T db psql -U postgres -c 'UPDATE users SET is_active=false'")"

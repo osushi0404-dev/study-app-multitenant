@@ -4,7 +4,15 @@
 見張り（`scripts/claude/hooks/pretooluse_guard.py`）の `ps -A e`・`ps -ef e` が確認にならない後退（F10）を、値を取るオプションの一覧で直す。書き先の見分け方を 1 つの関数（`_write_targets`）にまとめて別ワークツリーの停止を広げ、コンテナ内では通す形でも /tmp/ 以外への書き込みを見る。（実装の後に implement 段階が直す）
 
 ## 変更点
-（implement 段階が書く。計画書の「4. 変更点一覧」のとおりの予定）
+- 5-1 `pretooluse_guard.py` `_cmd_external`・`_PS_VALUE_OPT_RE`（新規）: `ps` の BSD 形式の e は、値を取るオプションの後ろだけを値として読み飛ばす（F10・F11）。`declare`／`typeset` は `+` で始まるオプションだけの形も表示（F12）
+- 5-2 `_opt_values`: まとめ書きを getopt と同じに読む（`-vt/x`）
+- 5-3 `_COPY_CMDS`・`_write_targets`（新規）: 書き先の見分け方を 1 つに。`_bash_write_targets`・`_has_write_intent`・`_record_writes` が使い、`_ctr_write_targets` は消した。sed の式の付着形・`install -d` を扱う
+- 5-4 `_container_risky`・`_container_safe`・`_analyze`・`_OPT_PATH_RE`（新規）: /tmp/ 以外への書き込み（リダイレクト・`_write_targets`・`--opt=/絶対パス`）は通す形でも常に見る。`writes` のフラグを消し、docker の包みを外すときはホスト側の `write_to` を消す
+- 5-5 `scripts/claude/tests/test_i444_guard_gaps.sh`: 失敗の注入の置き換え文字列を新しいコードに合わせた
+- テスト `scripts/claude/tests/test_i454_guard_env_writes.sh`（新規・44 件・FG-01〜FG-04）
+- 5-6 `docs/runbooks/danger-ops.md` 4.・`docs/runbooks/worktree.md` §9: 正の関数の名前と代表の形
+- 一覧: `docs/reviews/backlog/I444.md` の F11・F12・F13 を消した
+- 見張りの行数: +65／−84（差し引き −19）
 
 ## 影響範囲
 - ハーネスの見張り・そのテスト・手順書だけ。アプリのコードの変更なし
@@ -25,6 +33,8 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [plan] 通す形の分岐ごとの書き込みの除外は残す — 離した形の値（`--basetemp /app/x`）が書き込みの理由では見えず、消すと確認を外す範囲が広がる（計画書 5-4）
 - [plan] 一覧 I444 の F11・F12・F13 は同梱、F7 は残す（計画書 9）
 - [plan-review] 計画レビューの Warning 3 件（守る対象の明記・FG-03 の全文・TC-06 の記録欄）を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため（計画変更記録 1）
+- [implement] 新しいテストのファイルは、Write の道具が使えない間に既存のテストを写して Edit で書き換えて作った（ヒアドキュメントはワークツリーの外を指しうるとして拒否された） — 中身は auto_test の TC-01〜TC-04 と 1 対 1
+- [implement] /simplify の指摘 5 件を反映し、3 件は見送った — 見送りは停止の範囲を広げる・短くならない・既存のテストの形とそろえるため（計画変更記録 2）
 
 STAGE_DONE: plan NEXT: plan-review
 
