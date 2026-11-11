@@ -65,6 +65,7 @@
 | dashboard/views.py:212-218 `subject_distribution` | `subject__name` | 塞ぐ（D4） |
 | dashboard/views.py:273-280 `subject_performance` | `subject_id`・`subject_name` | 塞ぐ（D5） |
 | dashboard/views.py:291-294・313-316 おすすめの問題数 | 他組織の科目の問題数（`is_active` の欄が無く今は FieldError） | 塞ぐ（D6） |
+| `core/subject_service.py:106-157` `get_user_selected_subjects`（呼び出し元: views.py:249・dashboard/views.py:134・`api/views/user_subjects.py:19`） | 登録時の科目（`UserSubjectAccess`）が他組織の科目を指すとき（組織を移った利用者）、その科目名を返す | 塞ぐ（R16・関数の中で絞る・4-11） |
 | views.py:842・862・886・945・1046 の `subject_service.get_subject_by_id` | 既に組織で絞っている（`core/subject_service.py:95-98`） | 変えない（既に安全）。TC で回帰を固定（TC-10） |
 | dashboard/views.py:303 `get_user_subjects` | 既に組織で絞っている（`core/subject_service.py:63`） | 変えない（既に安全） |
 | 数だけを返す集計: `overview` の合計・連続日数（views.py:111-136）・`StudyGoalViewSet.update_progress`（:313-333）・`user_statistics`/`update_daily_analytics`/`learning_insights`/`analytics`（services.py:186-393・views.py:463-529）・`improvement_trends`（views.py:765-796）・ダッシュボードの `today`・`weekly_summary`・`daily_data`・`performance_trends`・`study_streak` | 科目・問題の名前・本文・ID を返さない（件数・時間・正答率だけ） | 変えない（扱いの基準 3） |
@@ -106,6 +107,8 @@
   - `backend/problems/services/quiz_service.py`（`available_subjects` / `available_problems` を新しいモジュールへ委ねる）
   - `backend/studylogs/views.py`・`serializers.py`・`services.py`・`adaptive_selection.py`・`mistake_analysis.py`・`tasks.py`
   - `backend/dashboard/views.py`
+  - `backend/core/subject_service.py`（`get_user_selected_subjects` を組織で絞る・4-11。呼び出し元 `backend/api/views/user_subjects.py` は変えない）
+  - `backend/problems/serializers.py`（`QuizSubjectField` を `OrgSubjectField` に改名・4-11）
   - `backend/studylogs/tests/__init__.py`・`backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`（新規）
 - Frontend: なし（画面から呼ぶのは `dashboard/overview/`・`analytics/` だけで、応答の形は変えない。他組織の記録が一覧から消えるだけ）
 - DB: なし（スキーマ変更なし・マイグレーションなし。dev DB は読み取りの調査だけ）
@@ -250,6 +253,10 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 - **D6 おすすめの問題数（291-294・313-316 行目）**: `Problem.objects.filter(subject_id=..., is_active=True).count()` → `available_problems(user).filter(subject_id=subject['subject__id']).count()`、`Problem.objects.filter(subject=subject, is_active=True).count()` → `available_problems(user, subject).count()`。
 - import: `from problems.models import QuizSession`（`Problem` は使わなくなる）・`from problems.services.tenant_scope import available_problems, available_subjects, scope_to_user_org`。
 
+### 4-11. 実装中の整理（/simplify の指摘・計画変更記録の 3 行目）
+- **`backend/core/subject_service.py` `get_user_selected_subjects`**: 登録時の科目（`UserSubjectAccess`）を、元の関数の中で利用者の組織の科目に絞る（組織に属さない利用者は空。キャッシュの有無のどちらの経路でも `organization_id=user.organization_id` を足す）。R3（views.py:249）と D3（dashboard/views.py:134）の呼び出し側の `.filter(id__in=available_subjects(user))` は消す。3 つ目の呼び出し元 `backend/api/views/user_subjects.py`（`GET /api/user/subjects/`・統計とダッシュボードの科目のプルダウン）の、組織を移った利用者の古い科目の漏れも同時に塞がる（R16）。
+- **`backend/problems/serializers.py` の `QuizSubjectField` を `OrgSubjectField` に改名**し、中身を `tenant_scope.available_subjects` の直接の呼び出しにする。`studylogs/serializers.py` は自前の同じ形の欄を持たず、これを import する（同じ境界の欄を 2 つ持たない）。`QuizSessionSerializer.subject` の振る舞いは変えない（I166 のテストで固定）。
+
 ### 4-10. テスト（新規）
 - `backend/studylogs/tests/__init__.py`（空）
 - `backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`（TC-01〜TC-22。中身は docs/tests/open/I431_auto_test.md）
@@ -356,6 +363,7 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 - 2026-11-11 計画レビュー（20261111_1843・HIGHRISK・Blocker なし）の Warning 3 件に対応: ① `submit_review` の `active_study_log` を R15 として追加し TC-04b を足した ② テストでまだ無い関数をテストの中で import する（TC-23 の RED を TC ごとに取る）③ R-c に本番で cache を消す手順を 1 行足した。範囲は「調査結果の表の塞ぐ」の 1 行追加で、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - 2026-11-11 セキュリティ設計レビュー（Blocker なし）の Medium に対応: 提案の読み出しを `mistake_pattern__subject` でも絞り、TC-16 に科目が空で他組織のパターンを指す提案の確認を足した。同じ経路の絞り込みを 1 段重ねるだけで、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要
+- 2026-11-11 実装中の /simplify の指摘に対応（4-11）: ① 登録時の科目の組織の絞り込みを、呼び出し側 2 か所から `core/subject_service.get_user_selected_subjects` の中へ移した（根の側で直す。3 つ目の呼び出し元 `GET /api/user/subjects/` も塞がる・R16・TC-15b を追加）② 学習記録の科目の欄をクイズの科目の欄と 1 つにした（`OrgSubjectField`）。①は対象の API を 1 つ増やす（範囲の変更）ため、計画レビューをやり直す。見送り: モデルごとの絞り方の表（`tenant_scope` が studylogs のモデルを知ることになり、problems → studylogs の依存が生まれる）・`QuizService` の中継の削除（呼び出し元を変えない方針）・おすすめの問題数の 1 クエリ化（最大 5 件の小さなクエリで、効果が小さい）・`scope_learning_suggestions` の 1 回の呼び出し化（小さい）。計画レビューのやり直し: 要（範囲を変える）
 
 ## レビュー結果
 - [20261111_1843 判定: ✅ 完了](../../reviews/I431_plan_review_20261111_1843.md)
