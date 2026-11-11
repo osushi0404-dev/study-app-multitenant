@@ -31,6 +31,7 @@
 - [plan] キャッシュの最大 5 分の古い結果は受け入れる — dev のみで本番が無い
 - [plan] 台帳の残り（I224 F9・I223 B1〜B4）は残す — `FILE=-` のハーネス・bot の項目で、変更点と関係しない
 - [plan-review] 計画レビューの Warning 3 件（`submit_review` の進行中の学習記録の絞り込み〔R15・TC-04b〕・テストでまだ無い関数をテストの中で import・本番の cache の消し方）を直し、再レビューはしない — 方式・受け入れ条件を変えない追記だけ
+- [design-security-review] Blocker 0 件。Medium（提案の `mistake_pattern_description` から他組織の文言が出うる）に対応し、提案をパターン側の科目でも絞る・TC-16 に確認を足した。再レビューはしない — 同じ経路の絞り込みを重ねるだけで方式・受け入れ条件は変えない
 
 STAGE_DONE: plan NEXT: plan-review
 

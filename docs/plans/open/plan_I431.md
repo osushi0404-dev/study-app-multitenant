@@ -220,7 +220,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 - **R15 `submit_review` の `active_study_log`（395-398 行目）**: `scope_to_user_org(StudyLog.objects.filter(user=request.user, is_active=True), request.user, subject_path='subject', allow_null=True).first()`（D1 と同じ。他組織の科目の記録を復習に紐づけない）。
 - **R7 `SpacedRepetitionCardViewSet.get_queryset`（538-540 行目）**: 土台を `scope_to_user_org(SpacedRepetitionCard.objects.filter(user=...), user, subject_path='problem__subject')` にする（`select_related` と絞り込みのオプションはそのまま）。
 - **R8 `SpacedRepetitionReviewViewSet.get_queryset`（570-572 行目）**: 土台を `scope_to_user_org(SpacedRepetitionReview.objects.filter(user=...), user, subject_path='problem__subject')` にする。
-- **R9〜R11 `patterns`・`suggestions`・`weaknesses`（614-617・639-642・717-720 行目）**: それぞれの土台を `scope_to_user_org(..., subject_path='subject', allow_null=True)`（patterns・suggestions は科目が空の記録がある）／`allow_null=False`（weaknesses は `subject` が必須）で絞る。
+- **R9〜R11 `patterns`・`suggestions`・`weaknesses`（614-617・639-642・717-720 行目）**: それぞれの土台を `scope_to_user_org(..., subject_path='subject', allow_null=True)`（patterns・suggestions は科目が空の記録がある）／`allow_null=False`（weaknesses は `subject` が必須）で絞る。suggestions は、応答の `mistake_pattern_description` がパターン側の文言を出すため、さらに `scope_to_user_org(..., subject_path='mistake_pattern__subject', allow_null=True)` を重ねる（パターンが無い・科目が空のパターンの提案は残る。セキュリティ設計レビューの Medium）。
 - import: `from django.db.models import Prefetch, Sum`・`from problems.services.tenant_scope import available_problems, available_subjects, scope_to_user_org`。
 
 ### 4-5. `backend/studylogs/services.py`
@@ -235,7 +235,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 - **C4 `update_mistake_patterns`（50-61 行目）**: `sr_errors`・`attempt_errors` を作る部分を新しいメソッド `_error_records(start_date, end_date)` に切り出し、どちらも `scope_to_user_org(..., subject_path='problem__subject')` で絞って返す。`update_mistake_patterns` はそれを使う（以降の 4 つの分析は変えない）。テストで土台を直接確かめるための切り出し（TC-11）。
 - **C5 `update_learning_weaknesses`（241 行目）**: `Subject.objects.all()` → `available_subjects(self.user)`。
 - **C6 `generate_learning_suggestions`（289-300 行目）**: `active_patterns` を `scope_to_user_org(..., subject_path='subject', allow_null=True)`、`critical_weaknesses` を `scope_to_user_org(..., subject_path='subject')` で絞る。
-- **R9〜R11 `get_analysis_summary`（467-481 行目）**: `patterns`（allow_null=True）・`weaknesses`（allow_null=False）・`suggestions`（allow_null=True）を同じく絞る。`_calculate_overall_improvement_rate`（529-532 行目）は数だけなので変えない。
+- **R9〜R11 `get_analysis_summary`（467-481 行目）**: `patterns`（allow_null=True）・`weaknesses`（allow_null=False）・`suggestions`（allow_null=True・さらに `mistake_pattern__subject` で allow_null=True を重ねる）を同じく絞る。`_calculate_overall_improvement_rate`（529-532 行目）は数だけなので変えない。
 - import: `from problems.services.tenant_scope import available_subjects, scope_to_user_org`。`from problems.models import Subject` は使わなくなるので消す（ruff の F401 を避ける）。
 
 ### 4-8. `backend/studylogs/tasks.py`
@@ -355,6 +355,56 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 2026-11-11 計画レビュー（20261111_1843・HIGHRISK・Blocker なし）の Warning 3 件に対応: ① `submit_review` の `active_study_log` を R15 として追加し TC-04b を足した ② テストでまだ無い関数をテストの中で import する（TC-23 の RED を TC ごとに取る）③ R-c に本番で cache を消す手順を 1 行足した。範囲は「調査結果の表の塞ぐ」の 1 行追加で、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+- 2026-11-11 セキュリティ設計レビュー（Blocker なし）の Medium に対応: 提案の読み出しを `mistake_pattern__subject` でも絞り、TC-16 に科目が空で他組織のパターンを指す提案の確認を足した。同じ経路の絞り込みを 1 段重ねるだけで、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要
 
 ## レビュー結果
 - [20261111_1843 判定: ✅ 完了](../../reviews/I431_plan_review_20261111_1843.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-11
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | マルチテナント | 境界を「各経路の土台の queryset に足す」作りのため、将来この 2 つのアプリに経路を足すと、`tenant_scope` を通し忘れる余地が残る | 必須: 調査結果の表に無い `Problem.objects`・`Subject.objects`・科目/問題を指すモデルの読み出しを、この PR で `studylogs`・`dashboard` に残さない（V4 で変更後のコードを grep して照合）。全経路の機械的な検査は #446 |
+| Medium | マルチテナント | 提案（LearningSuggestion）は `subject` で絞るが、`mistake_pattern_description`（serializers.py:225）はパターン側の文言を出す。今のコードは提案の `subject` をパターンの `subject` と同じにして作る（mistake_analysis.py:384-391）ため一致するが、両者が食い違う記録（管理画面などで作ったもの）では、科目が空の提案から他組織の科目名入りの文言が出うる | 必須: 提案の読み出し（R10・`get_analysis_summary`）は、提案の `subject` に加えて `mistake_pattern__subject` も境界で絞る（`scope_to_user_org(..., subject_path='mistake_pattern__subject', allow_null=True)` を重ねる）。TC-16 に、科目が空で他組織のパターンを指す提案が出ないことを足す |
+| Low | 入力検証 | `create_card` の `problem_id`・`sr-cards` の `subject_id` などに数字でない値を送ると、既存のコードと同じく ValueError で 500 になりうる（中身は漏れない） | 禁止: このイシューで応答の形を広げない（範囲外・既存の不具合）。漏れが無いことは TC-01 で固定 |
+| Low | 機密情報 | 適応的学習・間違い分析の `except Exception` が例外の文言を応答に含める（views.py:931-935・819-823）。今は difficulty の型の文言だけで、他組織の中身は含まない | 禁止: 文言を増やさない。I452 で例外の扱いを直すときに見る（TC-10 で他組織の文言が出ないことを固定） |
+| Low | マルチテナント | 復習対象・習熟度のキャッシュ（最大 5 分）が、デプロイ直後や組織を移った直後に古い結果を返しうる | 計画書 R-c のとおり受け入れる（dev のみ・本番で必要なら cache を消す手順あり） |
+| — | 認証・認可 | なし（`IsAuthenticated` は変えない。利用者単位の絞り込み〔`user=request.user`〕も変えず、その上に組織の境界を足す） | — |
+| — | OWASP Top 10 | なし（A01 の是正。ORM のパラメータ化のまま・SQL 文字列なし。JSON の API だけで XSS・CSRF の変更なし） | — |
+| — | ファイル操作 | なし（ファイルの読み書きなし） | — |
+| — | 外部通信 | なし（`send_study_reminders_task` のメール本文は件数だけで、問題・科目の中身を含まない。変更なし） | — |
+| — | 依存ライブラリ | なし（追加なし） | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/study/spaced-repetition/create_card/` | 一般（組織 A） | 組織 B の問題 ID を順に送り、201 と問題文・解説を集める／404 の違いで存在を確かめる | 他組織・削除済み・全体共有科目・存在しない ID がすべて同じ 404・同じ本文・カードを作らない | Yes: TC-01 | No | なし | High |
+| 2 | `GET /api/study/sr-cards/`・`sr-cards/<id>/`・`spaced-repetition/due_cards/`・`sr-reviews/` | 一般（組織 A） | 修正前に作った・組織を移る前に作ったカードと復習の記録から、他組織の問題を読む | 他組織の問題を指す記録は一覧に出ず、詳細は存在しない ID と同じ 404 | Yes: TC-03・TC-05 | Yes: No.1（dev DB に既にあるかの件数） | キャッシュの最大 5 分（R-c） | High |
+| 3 | `POST /api/study/spaced-repetition/submit_review/` | 一般（組織 A） | 他組織の問題のカード ID で復習を出し、応答の `updated_card` から問題を読む | 存在しないカードと同じ 404・復習の記録を作らない | Yes: TC-04・TC-04b | No | なし | High |
+| 4 | `POST /api/study/logs/`・`PATCH /api/study/logs/<id>/` | 一般（組織 A） | 組織 B の科目 ID を指定し、応答の `subject_name` で科目名を読む／存在を確かめる | 存在しない科目と同じ 400・作らない・変えない。全体共有科目も 400 | Yes: TC-12・TC-14 | No | なし | High |
+| 5 | `GET /api/study/statistics/*`・`/api/dashboard/*` | 一般（組織 A） | 他組織の科目の記録・登録時の科目（`UserSubjectAccess`）・古いクイズのセッションから科目名を読む | 他組織の科目名・科目 ID が応答に出ない（自組織は出る） | Yes: TC-15・TC-17〜TC-19 | Yes: No.2（画面の無退行） | なし | Medium |
+| 6 | `GET /api/study/mistake-analysis/patterns/`・`suggestions/`・`weaknesses/`・`analyze/` | 一般（組織 A） | 他組織の問題の記録から作られたパターン・弱点・提案の科目名・文言を読む | 他組織の科目を指す記録は出ない。新しく作らない。提案はパターン側の科目でも絞る | Yes: TC-11・TC-16 | No | なし | Medium |
+| 7 | `POST /api/study/adaptive-learning/select_problems/`・`GET proficiency_analysis/` ほか | 一般（組織 A） | 科目なしで出題候補を引き、他組織の問題を受け取る／`subject_proficiency` のキーで他組織の科目 ID を知る | 候補と科目別の習熟度は自組織だけ。他組織の科目の指定は存在しない科目と同じ 404 | Yes: TC-08〜TC-10 | No | difficulty の型の不具合で API は今は例外（I452 で直した後も、候補の取得のテストで固定） | High |
+| 8 | 全経路 | 組織に属さない利用者 | 組織が空の利用者で問題・科目を扱う | 問題・科目を扱えない。科目が空の記録だけ読める | Yes: TC-21・TC-22 | No | なし | Medium |
+| 9 | `update_user_proficiency_task`（非同期処理） | 内部（API からは呼ばれない） | 他組織の科目 ID で習熟度を計算させる | 存在しない科目と同じ扱い | Yes: TC-20 | No | 呼び出し元が無い（将来つなぐときに境界を通す） | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 4件（すべて自動テスト化済みの守るべき条件） |
+| Medium  | 2件 | 3件 |
+| Low     | 3件 | 1件 |
+
+### 設計レビューの Medium への対応（計画に反映）
+- 提案の絞り込みに `mistake_pattern__subject` を重ねる: 4-4 の R10 と 4-7 の `get_analysis_summary`・TC-16 に反映（下の計画変更記録）
+- 経路の通し忘れ: V4（変更後のコードの grep 照合）で確かめる。横断は #446
+
+### 残余リスク処遇
+（retro 段階で決定する）
