@@ -48,6 +48,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR #451 の説明を更新した — 手順どおり
 - [close] マージ依頼の後、ユーザーの指示（2026-11-11「2」＝マージ前に直す）で、台帳 F3（ホストの `ps -C node` 等の誤検出）・F4（`declare -x FOO=1` の誤検出）をこのイシューで直すため、記録を open に戻して fix-loop へ回した — I444 の 5-1 が持ち込んだ退行で、直しは数行
 - [fix-loop] 3 回目: F3・F4 を案 A（`ps` は直前の語が - で始まらない引数だけ・`-x` を数えない）で直した — 粗い判定のまま 1 行ずつの直しで済み、オプションの一覧を持つ案 B は写しが要る（診断 `docs/reviews/I444_fix_diagnosis_20261111_2130.md`・診断レビュー OK）
+- [review-gate] fix-loop 3 の後: コードレビュー OK・敵対的レビュー 2 周目 OK（通算 2 周で上限）。新しい台帳の F10（`ps -A e` のように値を取らないフラグの直後の e が通る）・F11（`ps o etime` の誤検出）・F12（`declare +x`）・F13（そのケース不足）はハーネスの Medium／Low で、次の周に進む理由にしない（review-gate 3-2）→ retro で #454 へ
 
 ## 振り返り
 
@@ -106,3 +107,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
