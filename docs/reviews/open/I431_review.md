@@ -36,6 +36,7 @@
 - [implement] TC-16 の科目が空のパターンの `confidence_score` を 0.1 にした — 提案の生成が科目が空のパターンで落ちる既存の不具合（`_generate_pattern_based_suggestions` が全種類の文言を `pattern.subject.name` で先に組み立てる）に当たらないようにするため。不具合そのものは I452 の範囲
 - [implement] 修正前のコードに一時的に戻したファイルを元に戻す `git checkout HEAD -- …` は安全装置に止められた。`DANGER_OK=1` は使わず、ステージを外してから、コミット前に退避していた同じ中身を書き戻し、`git status` でコミットとの差分が無いことを確かめた — 捨てたのは develop と同じ中身の一時的なファイルだけ
 - [implement] /simplify の指摘のうち、登録時の科目の絞り込みを根の関数に移す・科目の欄を 1 つにする、を採った。範囲が API 1 つ広がるため、計画書を直して計画レビューをやり直す（計画変更記録の 3 行目）
+- [plan-review] やり直しの計画レビュー（20261111_1857）は HIGHRISK・Blocker なし。Warning 4 件（本文の旧方式の記述・TC-23 の RED の一覧・手動 No.1 の式の記録・範囲の広がり）を文書に反映し、再レビューはしない。イシューの「影響範囲」への 1 行の追記は、GitHub の本文が正で手元の写しは同期しないため、計画書の影響範囲と計画変更記録に書くことで代える
 
 STAGE_DONE: plan NEXT: plan-review
 

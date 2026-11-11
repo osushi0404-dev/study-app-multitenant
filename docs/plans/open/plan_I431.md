@@ -217,7 +217,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 - **C1 `create_card`（446 行目）**: `Problem.objects.get(id=problem_id, is_deleted=False)` → `available_problems(request.user).get(id=problem_id)`。他組織・削除済み・全体共有科目・存在しない ID は同じ `Problem.DoesNotExist` → 同じ 404 `{'error': '問題が見つかりません'}`。関数の中の `from problems.models import Problem` はそのまま（`Problem.DoesNotExist` に使う）。
 - **R1 `StudyLogViewSet.get_queryset`（34-35 行目）**: `scope_to_user_org(StudyLog.objects.filter(user=self.request.user), self.request.user, subject_path='subject', allow_null=True)`。一覧・詳細・更新・削除・`end` で、他組織の科目の記録は存在しない ID と同じ 404。
 - **R2 `overview`（151 行目）**: `recent_logs` を同じ `scope_to_user_org(..., subject_path='subject', allow_null=True)` で絞ってから並べる（合計・連続日数の `study_logs` は変えない・扱いの基準 3）。
-- **R3 `_get_subject_statistics`（249 行目）**: `subjects = subject_service.get_user_selected_subjects(user, use_cache=True).filter(id__in=available_subjects(user))`。
+- **R3 `_get_subject_statistics`（249 行目）**: 4-11 により `get_user_selected_subjects` の中で組織に絞るため、呼び出し側は変えない（最初の実装で足した `.filter(id__in=available_subjects(user))` は消す）。
 - **R4 `daily_summary`（190-193 行目）**: `.prefetch_related(Prefetch('subjects_studied', queryset=available_subjects(user)))` を付ける（`DailyStudySummarySerializer.subjects_studied` の `StringRelatedField` は prefetch の結果を使う）。
 - **R6 `submit_review`（389-392 行目）**: `SpacedRepetitionCard.objects.get(id=..., user=...)` → `scope_to_user_org(SpacedRepetitionCard.objects.filter(user=request.user), request.user, subject_path='problem__subject').get(id=data['card_id'])`。他組織の問題のカードは存在しないカードと同じ 404 `{'error': 'カードが見つかりません'}`・復習の記録を作らない。
 - **R15 `submit_review` の `active_study_log`（395-398 行目）**: `scope_to_user_org(StudyLog.objects.filter(user=request.user, is_active=True), request.user, subject_path='subject', allow_null=True).first()`（D1 と同じ。他組織の科目の記録を復習に紐づけない）。
@@ -247,7 +247,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 ### 4-9. `backend/dashboard/views.py`
 - **D1 `active_session`（30-33 行目）**: `scope_to_user_org(StudyLog.objects.filter(user=user, is_active=True), user, subject_path='subject', allow_null=True).first()`。
 - **D2 `recent_quizzes`（36-38 行目）**: `scope_to_user_org(QuizSession.objects.filter(user=user), user, subject_path='subject', allow_null=True).order_by('-started_at')[:5]`。
-- **D3 `_get_subject_progress`（134 行目）**: `get_user_selected_subjects(...).filter(id__in=available_subjects(user))`。
+- **D3 `_get_subject_progress`（134 行目）**: 4-11 により呼び出し側は変えない（最初の実装で足した絞り込みは消す）。
 - **D4 `subject_distribution`（212-218 行目）**: 土台を `scope_to_user_org(StudyLog.objects.filter(user=user, started_at__date__gte=start_date), user, subject_path='subject', allow_null=True)` にする。
 - **D5 `subject_performance`（273-280 行目）**: 土台を同じく `allow_null=True` で絞る。`studied_subject_ids`（298-301 行目）は除外の ID に使うだけなので変えない。
 - **D6 おすすめの問題数（291-294・313-316 行目）**: `Problem.objects.filter(subject_id=..., is_active=True).count()` → `available_problems(user).filter(subject_id=subject['subject__id']).count()`、`Problem.objects.filter(subject=subject, is_active=True).count()` → `available_problems(user, subject).count()`。
@@ -364,8 +364,10 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-11 計画レビュー（20261111_1843・HIGHRISK・Blocker なし）の Warning 3 件に対応: ① `submit_review` の `active_study_log` を R15 として追加し TC-04b を足した ② テストでまだ無い関数をテストの中で import する（TC-23 の RED を TC ごとに取る）③ R-c に本番で cache を消す手順を 1 行足した。範囲は「調査結果の表の塞ぐ」の 1 行追加で、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - 2026-11-11 セキュリティ設計レビュー（Blocker なし）の Medium に対応: 提案の読み出しを `mistake_pattern__subject` でも絞り、TC-16 に科目が空で他組織のパターンを指す提案の確認を足した。同じ経路の絞り込みを 1 段重ねるだけで、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要
 - 2026-11-11 実装中の /simplify の指摘に対応（4-11）: ① 登録時の科目の組織の絞り込みを、呼び出し側 2 か所から `core/subject_service.get_user_selected_subjects` の中へ移した（根の側で直す。3 つ目の呼び出し元 `GET /api/user/subjects/` も塞がる・R16・TC-15b を追加）② 学習記録の科目の欄をクイズの科目の欄と 1 つにした（`OrgSubjectField`）。①は対象の API を 1 つ増やす（範囲の変更）ため、計画レビューをやり直す。見送り: モデルごとの絞り方の表（`tenant_scope` が studylogs のモデルを知ることになり、problems → studylogs の依存が生まれる）・`QuizService` の中継の削除（呼び出し元を変えない方針）・おすすめの問題数の 1 クエリ化（最大 5 件の小さなクエリで、効果が小さい）・`scope_learning_suggestions` の 1 回の呼び出し化（小さい）。計画レビューのやり直し: 要（範囲を変える）
+- 2026-11-11 計画レビュー（20261111_1857・HIGHRISK・Blocker なし）の Warning に対応: 4-4 R3・4-9 D3 の本文を 4-11 にそろえた・TC-23 の RED の一覧に TC-15b を足した・手動 No.1 で使った式を実結果に書くとした。範囲の広がり（`GET /api/user/subjects/`）は、同じ根の是正として計画レビューが許容した。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果
+- [20261111_1857 判定: ✅ 完了](../../reviews/I431_plan_review_20261111_1857.md)
 - [20261111_1843 判定: ✅ 完了](../../reviews/I431_plan_review_20261111_1843.md)
 
 ## セキュリティレビュー結果

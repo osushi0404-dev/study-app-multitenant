@@ -7,7 +7,7 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| 1 | primary の dev DB の越境データを数える（読み取りだけ）: `docker exec <primary の backend コンテナ> python manage.py shell -c "<数える式>"` で、利用者の組織と、記録が指す科目の組織（問題は `problem__subject__organization_id`）が違うものを種類ごとに数える: ① SpacedRepetitionCard ② SpacedRepetitionReview ③ ProblemAttempt ④ StudyLog（科目あり）⑤ DailyStudySummary の `subjects_studied` ⑥ MistakePattern（科目あり）⑦ LearningWeakness ⑧ LearningSuggestion（科目あり）⑨ QuizSession（科目あり）⑩ UserSubjectAccess。全体共有科目（組織が空）を指すものも越境に数える | 種類ごとの件数（と全体の件数）が出る。0 でないものがあれば、件数・種類を計画書の「調査結果」と review に書く（読み出しから外れるので、データは消さない。消すなら Danger Ops として承認を取る） | Claude |  | 受け入れ条件 AC8 |
+| 1 | primary の dev DB の越境データを数える（読み取りだけ）: `docker exec <primary の backend コンテナ> python manage.py shell -c "<数える式>"` で、利用者の組織と、記録が指す科目の組織（問題は `problem__subject__organization_id`）が違うものを種類ごとに数える: ① SpacedRepetitionCard ② SpacedRepetitionReview ③ ProblemAttempt ④ StudyLog（科目あり）⑤ DailyStudySummary の `subjects_studied` ⑥ MistakePattern（科目あり）⑦ LearningWeakness ⑧ LearningSuggestion（科目あり）⑨ QuizSession（科目あり）⑩ UserSubjectAccess。全体共有科目（組織が空）を指すものも越境に数える | 種類ごとの件数（と全体の件数）が出る。0 でないものがあれば、件数・種類を計画書の「調査結果」と review に書く（読み出しから外れるので、データは消さない。消すなら Danger Ops として承認を取る）。実際に使った数える式を「実結果」に書く | Claude |  | 受け入れ条件 AC8 |
 | 2 | ダッシュボードと統計の画面が従来どおり出る: `e2e_user_a` でログイン → ダッシュボード（`/dashboard`）を開く → 左のメニューから統計の画面を開く → `browser_console_messages` でコンソールを見る → 各画面の画面キャプチャを `.evidence/I431/` に保存 | ダッシュボードに今日の学習・最近のクイズ・科目の進み具合の欄が表示され、エラーの表示が出ない。統計の画面にグラフ・数値の欄が表示され、エラーの表示が出ない。コンソールに、`/api/dashboard/overview/`・`/api/dashboard/analytics/` の 4xx・5xx が出ない（ログイン前の `/api/settings/` の 401 は既知） | Claude |  | 受け入れ条件 AC6（画面から呼ぶ API は overview・analytics の 2 つ） |
 
 ## 画面確認
