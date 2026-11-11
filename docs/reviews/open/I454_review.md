@@ -29,3 +29,5 @@ PR を revert する（データの変更なし）。見張りが起動できな
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: design-security-review
+
+STAGE_DONE: design-security-review NEXT: implement
