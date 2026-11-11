@@ -58,10 +58,19 @@ ck 01q 0   "$(b 'ps -eo etimes,pcpu,args --sort=-etimes')"
 ck 01r 0   "$(b 'env FOO=1 python3 -V')"
 ck 01s 0   "$(b "$D env -u X python -V")"
 ck 01t ASK "$(b "$D ps aux e")"
-fg FG-01 0 '                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:]))):
+# fix-loop 3（台帳 F3・F4）: オプションの値・代入つきの -x は表示ではない。表示する形は確認のまま
+ck 01u 0   "$(b 'ps -C node')"
+ck 01v 0   "$(b 'ps -u postgres')"
+ck 01w 0   "$(b 'ps -p 1 -o etime')"
+ck 01x 0   "$(b 'declare -x FOO=1')"
+ck 01y ASK "$(b 'ps -u postgres e')"
+ck 01z ASK "$(b 'declare -x')"
+ck 01za ASK "$(b 'declare -p FOO')"
+fg FG-01 0 '                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")' \
-  '                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:]))):
+  '                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         pass' "$D export"
+fg FG-01b ASK ' and not p.startswith("-")' '' 'ps -C node'
 
 # ---- TC-02 コンテナの /tmp/ 以外への書き込み（書き先の指定・移動元）は確認 ----
 ck 02a ASK "$(b "$D cp -t /app/x /tmp/y")"

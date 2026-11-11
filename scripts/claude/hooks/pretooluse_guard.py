@@ -2248,11 +2248,13 @@ def _cmd_external(c: dict) -> list:
     if head in ("grep",) and _grep_recursive_secret(c):
         r.append("秘密情報ファイルを含むディレクトリの再帰検索（grep -r。--include で絞るか rg を使う）")
     # 環境変数をまとめて表示する形（I444。ホストとコンテナで同じ）。env はコマンドを包むときは読み解きで外れるので、
-    # 先頭に残った env は引数によらず表示（env -u X・env FOO=1・env -0）。ps は BSD 形式の e（- の無い英字だけの引数）
+    # 先頭に残った env は引数によらず表示（env -u X・env FOO=1・env -0）。ps は BSD 形式の e（英字だけの引数で、
+    # -C node・-o etime のようなオプションの値は見ない）。declare -x FOO=1 のような代入は表示ではない
     if head in ("printenv", "env") or (head == "set" and len(toks) == 1) \
-            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) for a in toks[1:])) \
+            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) and not p.startswith("-")
+                                     for p, a in zip(toks, toks[1:]))) \
             or (head in ("export", "declare", "typeset")
-                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:]))):
+                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")
     if (c["ctr"] or head in ("echo", "printf")) and any(_SECRET_VAR_RE.search(a) for a in toks[1:]):
         r.append("秘密の環境変数の展開")

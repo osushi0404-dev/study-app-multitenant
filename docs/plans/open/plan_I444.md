@@ -105,9 +105,10 @@ I200 で見張り（`scripts/claude/hooks/pretooluse_guard.py`）の確認を (A
     # 環境変数をまとめて表示する形（I444。ホストとコンテナで同じ）。env はコマンドを包むときは読み解きで外れるので、
     # 先頭に残った env は引数によらず表示（env -u X・env FOO=1・env -0）。ps は BSD 形式の e（最初の引数が英字だけ）
     if head in ("printenv", "env") or (head == "set" and len(toks) == 1) \
-            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) for a in toks[1:])) \
+            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) and not p.startswith("-")
+                                     for p, a in zip(toks, toks[1:]))) \
             or (head in ("export", "declare", "typeset")
-                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-x", "-px", "-xp") for a in toks[1:]))):
+                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")
 ```
 `_container_risky` の同じ判定（2389〜2394 行）と、そのためだけの `head` の変数を消す。docstring の「許可リストに入らない」を「危ない語が当たっても通す形（`_container_safe`）に入らない」に直す。
@@ -291,6 +292,7 @@ PR を revert する（見張り・テスト・手順書・corpus diff だけ。
 - 3（implement・/simplify の 4 観点の指摘）: (a) パイプの受け手の書き出しの除外を今と同じ `sort -o`・`uniq IN OUT` だけに戻した（全部の受け手に `-o` を当てると `grep -o` が確認になる・TC-04 04o）／(b) `ps` の e は「- の無い英字だけの引数のどれか」にした（`toks[1]` だけだと旧コンテナの判定より狭く `ps aux e` が通る・TC-01 01t。`ps -eo etimes,pcpu,args` はカンマを含むので今までどおり通る）／(c) `_ctr_write_targets` の式を 2 行に分けた・古いコメント 3 か所を「危ない語が当たっても通す形」にそろえた・corpus diff の git の呼び出しを 1 回にまとめた・FG-04 の置き換えを 1 行にした。見送り: 書き先の抽出 3 つ（`_bash_write_targets`・`_record_writes`・`_ctr_write_targets`）の共通化と、「通す形なら書き込みの判定ごと飛ばす」構造（例 `pytest --junitxml=/app/r.xml` が通る・今もそう）は、止める範囲を広げる・範囲を越えるので retro で扱う／テストの python の起動回数・`_env_dump` への切り出しは、既存のテストの形とそろえるため見送り。計画レビューのやり直し: 不要（(a)(b) は今の動きに合わせる側の直しで、方式・範囲・受け入れ条件は変えない）
 - 4（fix-loop 1・コードレビュー 1 の止める指摘 F1）: `test_guard_corpus_diff.sh` を auto_test の決定論ゲート（1 行 120 秒）から外し、TC-06 の手で流す確かめ（implement の後・test-gate・`--rebuild`・上限なし）にした。作業記録の件数に比例して数分かかり、ゲートの上限に収まらない（これまでワークツリーでは SKIP で偽の合格だった）。診断: `docs/reviews/I444_fix_diagnosis_20261111_1915.md`（案 A）。計画レビューのやり直し: 不要（確かめの置き場所だけで、方式・範囲・受け入れ条件は変えない）
 - 5（fix-loop 2）: 誤解の元だった `scripts/claude/tests/test_guard_corpus_diff.sh` の冒頭のコメントを直した（ゲートに置かず手で流す・所要の説明）。コメントだけで動きは変えない。計画レビューのやり直し: 不要
+- 6（fix-loop 3・マージ依頼の後のユーザーの指示「マージ前に直す」）: 5-1 がホストに持ち込んだ誤検出（台帳 F3・F4）を直した。`ps` の e は直前の語が - で始まらない引数だけを見る（`ps -C node`・`ps -u postgres`・`ps -p 1 -o etime` が通る）。`export`／`declare`／`typeset` は `-x` を数えず `-p`・`-px`・`-xp` だけ（`declare -x FOO=1` が通る・引数なしの `declare -x` は確認のまま）。TC-01 に 01u〜01za と FG-01b を足した。診断: `docs/reviews/I444_fix_diagnosis_20261111_2130.md`。F5 と作りの改善 2 件は #454 に残す。計画レビューのやり直し: 不要（5-1 の条件の直しで、方式〔判定を 1 か所・粗い判定〕・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261111_1824 判定: ✅ 完了](../../reviews/closed/I444_plan_review_20261111_1824.md)
