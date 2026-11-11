@@ -6,6 +6,7 @@
 
 結果:
 - 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じケースを見張りの写し（計画書「調査結果」のスパイク）に流し、TC-01〜TC-04 の期待値どおりになることは確かめた。変更前の見張りでは、TC-01 の 01a〜01c・01i・01j が 0、01f・01g が ASK（F11 の誤検出）、TC-02 の 02a・02e が 0、TC-03 の 03a が 0・03e と 03f が ASK（余計な確認）、TC-04 の 04a〜04f が 0（＝今の取りこぼし）
+- TC-06 の過去の作業コマンドでの比較（implement の後・test-gate で手で流し、ここに件数と中身を書く）: 計画時のスパイク（写しの見張り・15576 件）は新しく確認・停止 4 件・異常終了 0 件・OK（計画書「調査結果」）。implement の後: （未実施）。test-gate: （未実施）
 
 ## TC-01 環境変数をまとめて表示する形（F10・F11・F12）
 | ID | コマンド | 期待 |
@@ -47,7 +48,7 @@ I444 で固定した形（`ps e`・`ps auxe`・`ps aux e`・`ps -u postgres e`�
 | 03d | `$D sh -c "pytest -k delete > /app/out.txt"`（コンテナの中のリダイレクト） | ASK |
 | 03e | `$D sh -c "pytest -k delete > /tmp/out.txt"`（通す形の /tmp/ へのリダイレクト。変更前は語で ASK） | 0 |
 | 03f | `$D grep -rn foo /app/apps > out.txt`（ホスト側のリダイレクトはコンテナの書き込みではない） | 0 |
-| FG-03 | `_container_risky` の書き込みの判定 `if any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):` を `if not _container_safe(c) and any(…同じ…):` に置き換えた写し（＝通す形なら書き込みの判定も飛ばす・変更前の作り）で 03a | 0 |
+| FG-03 | `_container_risky` の書き込みの判定 `if any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):` を `if not _container_safe(c) and any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):` に置き換えた写し（＝通す形なら書き込みの判定も飛ばす・変更前の作り）で 03a | 0 |
 
 ## TC-04 別ワークツリーへの書き込みの停止（書き先の見分け方を 1 つに）
 | ID | コマンド | 期待 |
