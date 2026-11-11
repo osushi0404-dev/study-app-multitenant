@@ -17,8 +17,8 @@
 - ハーネスの見張り・そのテスト・corpus diff・手順書だけ。アプリのコードの変更なし
 
 ## テスト結果
-- 自動: `test_i444_guard_gaps.sh` 56 件・見張りの既存テスト（container_guard・i200・matrix・oracle・i182_corpus_base）すべて pass・PR #451 の CI pass（review-gate）。TC-06 の過去コマンドでの比較（15738 件）は新しく確認 3 件・新しく停止 0 件で OK
-- 手動（すべて Claude）: M-01〜M-04 OK（コンテナ内の普通の操作は承認なし・危ない形は承認画面・見張りの行数 −40・手順書と実物が一致）
+- 自動: `test_i444_guard_gaps.sh` 64 件（fix-loop 3 で 56→64）・見張りの既存テスト（container_guard・i200・matrix・oracle・i182_corpus_base）すべて pass・PR #451 の CI pass（review-gate）。TC-06 の過去コマンドでの比較（15852 件・fix-loop 3 の後）は新しく確認 3 件・新しく停止 0 件で OK
+- 手動（すべて Claude）: M-01〜M-04 OK（コンテナ内の普通の操作は承認なし・危ない形は承認画面・見張りの行数 −38・手順書と実物が一致）
 
 ## 計画との差分
 - 計画変更記録 1〜5（計画レビューの指摘・/simplify の指摘・corpus diff を決定論ゲートから外す・そのスクリプトの説明）。方式・範囲・受け入れ条件の変更なし
