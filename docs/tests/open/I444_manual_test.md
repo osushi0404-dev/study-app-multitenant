@@ -1,0 +1,10 @@
+# I444 手動テスト: 見張りに残る役目の取りこぼしを塞ぎ、許可リストと手順書の写しを整理する
+
+承認画面が出るかは、`bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`（通常モード・承認は誰も答えない・このブランチの `.claude/settings.json` を読む）で確かめる。exit 0＝承認なしで実行された・10＝承認画面が出る・2＝判定できない（もう 1 回流す）。承認なしで通る操作は実際に実行されるので、コンテナの中の操作は存在しないサービス名 `i444-no-such` で流す（見張りの判定はサービス名によらない。docker は「サービスが無い」で失敗し、何も実行されない）。
+
+| No | 手順 | 期待結果 | 実施者 | 実施環境 | 実結果 | 備考 |
+|---:|------|----------|--------|----------|--------|------|
+| M-01 | 普通の操作 3 つを `check-permission-prompt.sh` で流す: `docker compose exec -T i444-no-such pytest -k delete`／`docker compose exec -T i444-no-such python manage.py test apps.problems.tests.test_delete`／`docker compose exec -T i444-no-such pip show openai` | 3 つとも exit 0（承認画面が出ない） | Claude | claude -p の判定 |  | サービスが無いので何も実行されない |
+| M-02 | 確認になるはずの形 5 つを `check-permission-prompt.sh` で流す: `docker compose exec -T i444-no-such export`／`docker compose exec -T i444-no-such env -u X`／`docker compose exec -T i444-no-such cp -t /app/x /tmp/y`／`docker compose exec -T i444-no-such mv /app/x /tmp/y`／`ps e -p 999999`（ホスト・存在しないプロセス） | 5 つとも exit 10（承認画面が出る）。出力の先頭に見張りの理由（環境変数の表示・/tmp/ 以外への書き込み）が出る | Claude | claude -p の判定 |  | 承認画面が出る操作は自動で拒否され、実行されない。見張りが壊れて通っても、サービス・プロセスが無いので何も表示・変更されない |
+| M-03 | 見張りの行数を比べる: `git show origin/develop:scripts/claude/hooks/pretooluse_guard.py` の行数（計画時 3856）と、レビュー済みの HEAD の `scripts/claude/hooks/pretooluse_guard.py` の行数（`wc -l`） | HEAD の行数が develop 以下（計画時の見込み 3806 前後） | Claude | — |  | 増えた場合は、増えた行数と理由を計画書に書き、計画レビューで認められれば満たしたことにする（受け入れ条件） |
+| M-04 | `docs/runbooks/danger-ops.md`「見張りの扱い」の 3.・4.・「見張りが判定しないもの」と、`docs/runbooks/worktree.md` §9 を、見張りの `_cmd_external`・`_container_safe`・`_container_risky`・`_ctr_write_targets`・`_bash_write_targets` と `scripts/claude/hooks/sessionstart_context.py` の `_run` と突き合わせて読む | 手順書は分類・代表と正の関数の名前だけを書き、実物より広い約束・狭い約束が無い。環境変数の表示は 3. に 1 か所、許可リストは「危ない語が当たっても通す形」の分類、書き込みは代表と「書き先と移動元」。§9 の打ち切りは「読み取りはすぐ・fetch と merge だけ SIGTERM の後に待つ」。rebase の文に push の指示が無い | Claude | — |  | |
