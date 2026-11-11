@@ -36,6 +36,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [implement] /simplify の指摘のうち、パイプの受け手の書き出しの除外を `sort`・`uniq` だけに戻し、`ps` の e を後ろの引数でも見るようにした — どちらも今の動きより狭く・広くなっていた移し損ね（計画変更記録 3）
 - [implement] 書き先の抽出 3 つの共通化と、「通す形なら書き込みの判定ごと飛ばす」構造（`pytest --junitxml=/app/r.xml` が通る）は直さず retro へ — 別ワークツリーの停止を広げる・範囲を越えるため
 - [fix-loop] 止める指摘 F1（corpus diff がゲートで時間切れ）は案 A（ゲートから外し、TC-06 で手で流して記録）で直した — 所要が作業記録の件数に比例し 120 秒のゲートに収まらない。速くする案・上限を延ばす案は新しいコードや共有の仕組みの変更が要る（診断 `docs/reviews/I444_fix_diagnosis_20261111_1915.md`・診断レビュー OK）
+- [fix-loop] 2 回目: 記録の場所だけの直しでは差分のレビューがレビュー役を呼ばず F1 が閉じないので、誤解の元だった `test_guard_corpus_diff.sh` の冒頭のコメントを直した（案 A・診断 `docs/reviews/I444_fix_diagnosis_20261111_2000.md`）。「記録の場所だけの直しでは止める指摘が閉じない」仕組みの穴は retro へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
