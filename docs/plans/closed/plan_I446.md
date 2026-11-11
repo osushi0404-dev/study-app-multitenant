@@ -399,8 +399,8 @@ def get_queryset(self):
 - 2026-11-12 敵対的レビュー 1 周目（20261112_0226・新しい指摘 0・V6 が未検証〔実験役の環境に python が無い〕）に対応: V6 の失敗注入を CI で毎回行う決定論の TC-07（`test_checks_fail_when_scope_removed`・`mock.patch` で `get_queryset` を絞り込みの無いものに差し替え、確かめ方が AssertionError を出すことを確かめる）を足し、V6 の確かめ方を「読んで可」に下げた（review-gate 3-3 の決まり）。TC-07 自体も、確かめ方を空にすると 4 件とも「DID NOT RAISE」で落ちることを確かめた。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
-- [20261112_0133 判定: ✅ 完了](../../reviews/I446_plan_review_20261112_0133.md)
-- [20261112_0131 判定: 差し戻し（Blocker 1件）](../../reviews/I446_plan_review_20261112_0131.md)
+- [20261112_0133 判定: ✅ 完了](../../reviews/closed/I446_plan_review_20261112_0133.md)
+- [20261112_0131 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I446_plan_review_20261112_0131.md)
 
 ## セキュリティレビュー結果
 

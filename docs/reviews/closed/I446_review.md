@@ -105,6 +105,7 @@
 - [retro] 見送り: RED の予想（8 件）と実際が合わず下準備を直した件 — RED の確かめ（決定論）がその場で捕まえた。仕組みが働いた例
 - [retro] 残余リスク処遇: 攻撃シナリオ 3 の「本番のデータの未調査」は受け入れる — 読み出しのときに組織で絞る形に直したので、古いデータが残っていても中身は返らない。データを消すのは壊す操作で、要らない。シナリオ 6（対象外の理由の正しさはレビュー頼み）・D3・D5 は Low のまま受け入れる。D4 は #461 に載せた。High 以上は無い
 - [retro] 設計ルールへの昇格は見送る — 今回の型（存在の有無で応答が変わる・組織が空の利用者が全体共有に当たる）は、横断のテスト（TC-01・TC-06）が全経路で毎回決定論で捕まえるようになった。手続きの観点を足すと二重になる
+- [close] base 追従は不要（BLOCKED＝承認待ち）・gate-check OK。PR の説明に、I103 の決まり（他組織の科目は 403 → 存在しない科目と同じ 400・404）を変えたことを書いた — 計画レビューの Warning ③のとおり
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -112,3 +113,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
