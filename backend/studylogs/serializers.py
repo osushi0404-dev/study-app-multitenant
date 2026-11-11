@@ -4,10 +4,11 @@ from .models import (
     SpacedRepetitionCard, SpacedRepetitionReview, LearningAnalytics,
     MistakePattern, LearningSuggestion, LearningWeakness
 )
-from problems.serializers import ProblemSerializer
+from problems.serializers import OrgSubjectField, ProblemSerializer
 
 
 class StudyLogSerializer(serializers.ModelSerializer):
+    subject = OrgSubjectField(required=False, allow_null=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     accuracy = serializers.ReadOnlyField()
 
@@ -25,6 +26,8 @@ class StudyLogSerializer(serializers.ModelSerializer):
 
 
 class StudyLogCreateSerializer(serializers.ModelSerializer):
+    subject = OrgSubjectField(required=False, allow_null=True)
+
     class Meta:
         model = StudyLog
         fields = ['subject']

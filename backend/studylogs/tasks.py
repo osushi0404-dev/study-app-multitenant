@@ -198,8 +198,9 @@ def update_user_proficiency_task(self, user_id: int, subject_id: int = None):
 
         subject = None
         if subject_id:
-            from problems.models import Subject
-            subject = Subject.objects.get(id=subject_id)
+            # 他組織の科目は存在しない科目と同じ扱い
+            from problems.services.tenant_scope import available_subjects
+            subject = available_subjects(user).get(id=subject_id)
 
         proficiency_data = selector.analyze_user_proficiency(subject)
 

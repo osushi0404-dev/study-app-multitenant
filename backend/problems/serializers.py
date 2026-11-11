@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from rest_framework import serializers
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
-from .services.quiz_service import QuizService
+from .services.tenant_scope import available_subjects
 
 logger = logging.getLogger(__name__)
 
@@ -304,18 +304,22 @@ class QuizAnswerDetailSerializer(serializers.ModelSerializer):
         ]
 
 
-class QuizSubjectField(serializers.PrimaryKeyRelatedField):
-    """クイズで指定できる科目（リクエストユーザーの組織の科目）だけを受け付ける"""
+class OrgSubjectField(serializers.PrimaryKeyRelatedField):
+    """
+    リクエストユーザーの組織の科目だけを受け付ける（context に request が無ければ何も受け付けない）
+
+    クイズのセッションと学習記録の科目で使う。
+    """
 
     def get_queryset(self):
         request = self.context.get('request')
         if request is None:
             return Subject.objects.none()
-        return QuizService.available_subjects(request.user)
+        return available_subjects(request.user)
 
 
 class QuizSessionSerializer(serializers.ModelSerializer):
-    subject = QuizSubjectField(required=False, allow_null=True)
+    subject = OrgSubjectField(required=False, allow_null=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     # フロントエンド用のフィールド名（completed_problems のエイリアス）
     answered_problems = serializers.IntegerField(source='completed_problems', read_only=True)

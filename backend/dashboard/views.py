@@ -3,7 +3,10 @@ from rest_framework.response import Response
 from django.db.models import Sum, Avg, F
 from django.utils import timezone
 from datetime import timedelta
-from problems.models import Problem, QuizSession
+from problems.models import QuizSession
+from problems.services.tenant_scope import (
+    available_problems, scope_to_user_org,
+)
 from studylogs.models import StudyLog, DailyStudySummary
 from core.subject_service import subject_service
 
@@ -27,14 +30,16 @@ class DashboardOverviewView(views.APIView):
         )
 
         # Get current active session
-        active_session = StudyLog.objects.filter(
-            user=user,
-            is_active=True
+        # 他組織の科目を指す記録・セッションは出さない（科目が空のものは残す）
+        active_session = scope_to_user_org(
+            StudyLog.objects.filter(user=user, is_active=True), user,
+            subject_path='subject', allow_null=True,
         ).first()
 
         # Get recent quiz sessions
-        recent_quizzes = QuizSession.objects.filter(
-            user=user
+        recent_quizzes = scope_to_user_org(
+            QuizSession.objects.filter(user=user), user,
+            subject_path='subject', allow_null=True,
         ).order_by('-started_at')[:5]
 
         quiz_data = []
@@ -209,9 +214,9 @@ class DashboardAnalyticsView(views.APIView):
             current_date += timedelta(days=1)
 
         # Get subject distribution
-        subject_stats = StudyLog.objects.filter(
-            user=user,
-            started_at__date__gte=start_date
+        subject_stats = scope_to_user_org(
+            StudyLog.objects.filter(user=user, started_at__date__gte=start_date), user,
+            subject_path='subject', allow_null=True,
         ).values('subject__name').annotate(
             total_time=Sum('duration'),
             total_problems=Sum('problems_attempted')
@@ -270,9 +275,9 @@ class SubjectRecommendationView(views.APIView):
         # Get subjects with low accuracy that need improvement
         week_ago = timezone.now().date() - timedelta(days=7)
 
-        subject_performance = StudyLog.objects.filter(
-            user=user,
-            started_at__date__gte=week_ago
+        subject_performance = scope_to_user_org(
+            StudyLog.objects.filter(user=user, started_at__date__gte=week_ago), user,
+            subject_path='subject', allow_null=True,
         ).values('subject__id', 'subject__name').annotate(
             total_problems=Sum('problems_attempted'),
             total_correct=Sum('problems_correct'),
@@ -288,9 +293,8 @@ class SubjectRecommendationView(views.APIView):
                     'subject_name': subject['subject__name'],
                     'current_accuracy': round(subject['accuracy'], 2),
                     'reason': f"正答率が{round(subject['accuracy'], 1)}%と低めです。復習をお勧めします。",
-                    'recommended_problems': Problem.objects.filter(
-                        subject_id=subject['subject__id'],
-                        is_active=True
+                    'recommended_problems': available_problems(user).filter(
+                        subject_id=subject['subject__id']
                     ).count()
                 })
 
@@ -310,10 +314,7 @@ class SubjectRecommendationView(views.APIView):
                 'subject_name': subject.name,
                 'current_accuracy': None,
                 'reason': "最近学習していない科目です。定期的な復習をお勧めします。",
-                'recommended_problems': Problem.objects.filter(
-                    subject=subject,
-                    is_active=True
-                ).count()
+                'recommended_problems': available_problems(user, subject).count()
             })
 
         return Response({
