@@ -23,6 +23,9 @@
 | 2026-11-12 02:11 | FG3: `StudyGoalViewSet.get_queryset` を `StudyGoal.objects.all()` にして `-k goals`（TC-23） | 1 | 5 failed（`api/study/goals/<pk>/` の 4 メソッド・`GET api/study/goals/` の List）。Edit で戻した |
 | 2026-11-12 02:12 | /simplify の整理の後に TC-24 を流し直す | 0 | 263 passed・9 xfailed（所要 45 秒） |
 | 2026-11-12 02:13 | 回答の先読み（4-4）を一時的に外して `-k own_check` | 1 | 2 failed（`GET api/quiz/<pk>/`・`POST api/quiz/<pk>/end/` の Own）。Edit で戻し、`-k quiz` で 9 passed |
+| 2026-11-12 02:40 | TC-07 を足して `-k "scope_removed or goals or sr-cards or problems"` | 0 | 29 passed・1 xfailed |
+| 2026-11-12 02:41 | TC-07 の FG: `_run_id_check`・`_run_list_check` の先頭に一時的に `return` を入れて `-k scope_removed` | 1 | 4 failed（すべて「DID NOT RAISE AssertionError」）。Edit で戻した |
+| 2026-11-12 02:42 | 戻した後に新しいテストのファイル全体 | 0 | 124 passed・9 xfailed（9 秒） |
 
 ## TC 一覧
 
@@ -34,6 +37,7 @@
 | TC-04 | `test_route_table_matches_urlconf`: 収集した経路の集合と、表（`ROUTE_TABLE` ∪ `OUT_OF_SCOPE`）のキーの集合を比べる | 2 つの集合が一致する（差分が空）。両方に載る行・理由が空の対象外・確かめ方が空の行が無い | AC4 |
 | TC-05 | `test_staff_only_check`: `api/admin/users/` の下（403）と `monitoring/*`・`cache/*`（302）を、組織管理者（`role='admin'`・`is_staff=False`）と一般の利用者で呼ぶ | ステータスが表の値（403 または 302）と一致し、本文に目印が無い | AC4 |
 | TC-06 | `test_noorg_org_admin_sees_no_problems`: 組織が空で `role='admin'` の利用者で、問題の一覧と全体共有の問題の詳細を呼ぶ | 一覧が 200 の `[]`。詳細が 404 で、存在しない番号（`4469999`）のときと伏せた本文が同じ。修正前（4-6 の前）は一覧に全体共有の問題が出て、詳細が 200 で RED | AC1 |
+| TC-07 | `test_checks_fail_when_scope_removed`（4 件）: `mock.patch` で `get_queryset` を、組織の絞り込みを外したもの（`ProblemViewSet`・`SpacedRepetitionCardViewSet`）・本人の絞り込みを外したもの（`StudyGoalViewSet`）・何でも断るもの（`StudyGoalViewSet` の `none()`）に差し替え、表の確かめ方（`IdCheck`・`ListCheck`）を走らせる | 4 件とも確かめ方が `AssertionError` を出す（`pytest.raises` で受けて passed）。確かめ方を空にすると 4 件とも「DID NOT RAISE」で落ちる | AC6 |
 | TC-10 | CI の Backend Tests で新しいテストが流れる | PR #456 の CI の `Backend Tests` が success で、ログに `core/tests/test_I446_cross_api_tenant_isolation.py` の結果が出る | AC1 |
 | TC-11 | `problems/tests/test_I103_cross_org_create.py`（更新後） | 5 件 passed。他組織の科目での作成は 400 で、存在しない科目と伏せた本文が同じ・問題が作られない。AI 生成 2 経路は 404 `{"error": "指定された科目が見つかりません"}`・問題が作られない | AC1・AC7 |
 | TC-12 | `problems/tests/test_I166_quiz_tenant_isolation.py`（TC-09 の更新後） | 13 件 passed。TC-09 で、他組織の科目の既存の回の出題・回答が、存在しない回の番号と同じ 404 の本文になり、回答が保存されない | AC7 |

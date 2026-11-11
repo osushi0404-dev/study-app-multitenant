@@ -22,6 +22,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
+from unittest import mock
 
 import pytest
 from django.conf import settings
@@ -561,6 +562,10 @@ def _id_request(world, key, check, value):
 
 @pytest.mark.parametrize("key,check", _params(IdCheck))
 def test_id_check(world, key, check):
+    _run_id_check(world, key, check)
+
+
+def _run_id_check(world, key, check):
     refs = world["refs"]
     variants = {"他組織": refs[f"foreign.{check.target}"]}
     if check.target in SHARED_PK:
@@ -586,6 +591,10 @@ def test_id_check(world, key, check):
 # -------------------------------------------------- TC-03 一覧・集計と自分の記録 ----
 @pytest.mark.parametrize("key,check", _params(ListCheck))
 def test_list_check(world, key, check):
+    _run_list_check(world, key, check)
+
+
+def _run_list_check(world, key, check):
     method, route = key.split(" ", 1)
     response = _call(_client(world, check.actor), method, "/" + route, {}, "json")
 
@@ -630,3 +639,38 @@ def test_noorg_org_admin_sees_no_problems(world):
     assert listed.json() == []
     assert shared.status_code == 404
     assert _masked(shared) == _masked(missing)
+
+
+# ------------------------------------- TC-07 確かめ方そのものの失敗注入（毎回） ----
+# 絞り込みをわざと外した get_queryset に差し替え、確かめ方が落ちる（見逃さない）ことを CI で毎回確かめる。
+# 本番のコードの代わりではなく、このファイルの確かめ方が false-green でないことの検査
+def _first(key, check_type):
+    return next(c for c in ROUTE_TABLE[key] if isinstance(c, check_type))
+
+
+SCOPE_REMOVED = [
+    pytest.param(  # 組織の絞り込みを外す（他組織・全体共有の問題が読める）
+        "problems.views.ProblemViewSet",
+        lambda self: Problem.objects.filter(is_deleted=False),
+        "GET api/problems/<pk>/", IdCheck, id="org-scope-problem"),
+    pytest.param(  # 組織の絞り込みを外す（自分の古いカードの他組織の問題文が出る）
+        "studylogs.views.SpacedRepetitionCardViewSet",
+        lambda self: SpacedRepetitionCard.objects.filter(user=self.request.user),
+        "GET api/study/sr-cards/", ListCheck, id="org-scope-card-list"),
+    pytest.param(  # 本人の絞り込みを外す（同じ組織の別の利用者・他組織の目標が読める）
+        "studylogs.views.StudyGoalViewSet",
+        lambda self: StudyGoal.objects.all(),
+        "GET api/study/goals/<pk>/", IdCheck, id="user-scope-goal"),
+    pytest.param(  # 何でも断るだけ（正の対照が落とす）
+        "studylogs.views.StudyGoalViewSet",
+        lambda self: StudyGoal.objects.none(),
+        "GET api/study/goals/<pk>/", IdCheck, id="deny-all-goal"),
+]
+
+
+@pytest.mark.parametrize("view_path,broken_queryset,key,check_type", SCOPE_REMOVED)
+def test_checks_fail_when_scope_removed(world, view_path, broken_queryset, key, check_type):
+    run = _run_id_check if check_type is IdCheck else _run_list_check
+    with mock.patch(f"{view_path}.get_queryset", broken_queryset):
+        with pytest.raises(AssertionError):
+            run(world, key, _first(key, check_type))
