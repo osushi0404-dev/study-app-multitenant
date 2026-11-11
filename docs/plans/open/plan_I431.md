@@ -47,6 +47,7 @@
 | services.py:42-49 `get_due_cards` | 復習対象のカード（問題の中身） | 塞ぐ（R5） |
 | services.py:62-66 `get_new_cards` | 新しく学ぶ問題の候補（全組織） | 塞ぐ（C3） |
 | views.py:389-392 `submit_review` | 他組織の問題のカードの復習・応答の `updated_card` | 塞ぐ（R6） |
+| views.py:395-398 `submit_review` の `active_study_log` | 他組織の科目の進行中の学習記録を、復習の `study_session` に紐づける（応答には出ない） | 塞ぐ（R15・計画レビューの Warning で追加） |
 | views.py:537-561 `SpacedRepetitionCardViewSet` | カードの一覧・詳細 | 塞ぐ（R7） |
 | views.py:569-589 `SpacedRepetitionReviewViewSet` | `problem_question` | 塞ぐ（R8） |
 | views.py:614-633 `patterns`・mistake_analysis.py:467-470 | `subject_name`・`description`（科目名入り） | 塞ぐ（R9） |
@@ -216,6 +217,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 - **R3 `_get_subject_statistics`（249 行目）**: `subjects = subject_service.get_user_selected_subjects(user, use_cache=True).filter(id__in=available_subjects(user))`。
 - **R4 `daily_summary`（190-193 行目）**: `.prefetch_related(Prefetch('subjects_studied', queryset=available_subjects(user)))` を付ける（`DailyStudySummarySerializer.subjects_studied` の `StringRelatedField` は prefetch の結果を使う）。
 - **R6 `submit_review`（389-392 行目）**: `SpacedRepetitionCard.objects.get(id=..., user=...)` → `scope_to_user_org(SpacedRepetitionCard.objects.filter(user=request.user), request.user, subject_path='problem__subject').get(id=data['card_id'])`。他組織の問題のカードは存在しないカードと同じ 404 `{'error': 'カードが見つかりません'}`・復習の記録を作らない。
+- **R15 `submit_review` の `active_study_log`（395-398 行目）**: `scope_to_user_org(StudyLog.objects.filter(user=request.user, is_active=True), request.user, subject_path='subject', allow_null=True).first()`（D1 と同じ。他組織の科目の記録を復習に紐づけない）。
 - **R7 `SpacedRepetitionCardViewSet.get_queryset`（538-540 行目）**: 土台を `scope_to_user_org(SpacedRepetitionCard.objects.filter(user=...), user, subject_path='problem__subject')` にする（`select_related` と絞り込みのオプションはそのまま）。
 - **R8 `SpacedRepetitionReviewViewSet.get_queryset`（570-572 行目）**: 土台を `scope_to_user_org(SpacedRepetitionReview.objects.filter(user=...), user, subject_path='problem__subject')` にする。
 - **R9〜R11 `patterns`・`suggestions`・`weaknesses`（614-617・639-642・717-720 行目）**: それぞれの土台を `scope_to_user_org(..., subject_path='subject', allow_null=True)`（patterns・suggestions は科目が空の記録がある）／`allow_null=False`（weaknesses は `subject` が必須）で絞る。
@@ -255,7 +257,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 ## 5. 実装手順（TDD・垂直スライス）
 1. テストファイル（TC-01〜TC-22）を書き、今のコードで流して、境界の不備を突く TC が RED になることを確かめる（RED の一覧を review の「テスト結果」に書く）。→ TC-23 参照
 2. `tenant_scope.py` を作り、`quiz_service.py` を委ねる形にする（TC-21・TC-22 と I166 のテストが通る）。ステップ 1 の後。
-3. 間隔反復（C1・C3・R5〜R8）を直す（TC-01〜TC-07 が GREEN）。ステップ 2 の後。
+3. 間隔反復（C1・C3・R5〜R8・R15）を直す（TC-01〜TC-07・TC-04b が GREEN）。ステップ 2 の後。
 4. 学習記録・統計（C2・R1〜R4）を直す（TC-12〜TC-15 が GREEN）。ステップ 2 の後。3 と並行してよい。
 5. 適応的学習・間違い分析・非同期処理（R9〜R14・C4〜C6）を直す（TC-08〜TC-11・TC-16・TC-20 が GREEN）。ステップ 2 の後。
 6. ダッシュボード（D1〜D6）を直す（TC-17〜TC-19 が GREEN）。ステップ 2 の後。
@@ -280,7 +282,7 @@ class StudyLogCreateSerializer(serializers.ModelSerializer):
 ## 8. Risk & 回避策
 - R-a 自組織の機能の無退行: 絞り込みを足すだけで、自組織の記録の扱いは変えない。自組織の側を各 TC で確かめる（AC6）。
 - R-b 科目が空の記録の扱い: 学習記録・提案・パターンは科目が空のものがある。`allow_null=True` で残す（TC-13・TC-16・TC-21）。弱点（`LearningWeakness.subject` は必須）とカード・復習（`problem` は必須）は `allow_null=False`。
-- R-c キャッシュ: `get_due_cards` の結果（利用者ごと・5 分）と習熟度（同 5 分）は、デプロイ直後の最大 5 分、絞る前の結果が返りうる。dev のみで本番は無いため受け入れる（他の対応はしない）。テストは毎回 cache を消す。
+- R-c キャッシュ: `get_due_cards` の結果（利用者ごと・5 分）と習熟度（同 5 分）は、デプロイ直後の最大 5 分、絞る前の結果が返りうる。dev のみで本番は無いため受け入れる（他の対応はしない）。テストは毎回 cache を消す。本番に出すときにすぐ効かせたい場合は、デプロイの直後に `docker compose exec backend python manage.py shell -c "from django.conf import settings; from django.core.cache import caches; [caches[a].clear() for a in settings.CACHES]"` で cache を消す（ログインのセッションも cache にあるため、全員がログインし直しになる点に注意）。
 - R-d 副作用で動き始める経路（C3・R13・D6）: `daily_plan` が新しいカードを自組織の問題で作り始め、おすすめ API が 200 を返し始める。どちらも画面から呼ばれていない。境界の判定の中だけで動く（TC-06・TC-19）。
 - R-e 組織を移ったユーザー: 古い組織の記録は読み出しから外れる（I166 と同じく、今の組織で判定）。データは消さない。
 - R-f 見落とし: 調査結果の表で `studylogs`・`dashboard` の全 queryset を挙げた。横断の機械的な検査は #446。
@@ -350,3 +352,9 @@ Danger Ops（有無/手順/ロールバック）:
 | V6 | 1 | 実験必須 | 適応的な問題選択の候補（`_get_problem_pool`）と科目（`_calculate_subject_proficiency`）に他組織の問題・科目が入らない（TC-08・TC-09） |
 | V7 | 3 | 読んで可 | 組織に属さない利用者・全体共有科目・削除済みの問題で、境界が開かない（TC-01・TC-21・TC-22） |
 | V8 | 2 | 読んで可 | 新しいテストが今のコードで RED になる（TC-23 の RED の記録）。cache を消す fixture があり、テストの順番で結果が変わらない |
+
+## 計画変更記録
+- 2026-11-11 計画レビュー（20261111_1843・HIGHRISK・Blocker なし）の Warning 3 件に対応: ① `submit_review` の `active_study_log` を R15 として追加し TC-04b を足した ② テストでまだ無い関数をテストの中で import する（TC-23 の RED を TC ごとに取る）③ R-c に本番で cache を消す手順を 1 行足した。範囲は「調査結果の表の塞ぐ」の 1 行追加で、方式・受け入れ条件は変えない。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+
+## レビュー結果
+- [20261111_1843 判定: ✅ 完了](../../reviews/I431_plan_review_20261111_1843.md)
