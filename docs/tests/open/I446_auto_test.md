@@ -26,6 +26,9 @@
 | 2026-11-12 02:40 | TC-07 を足して `-k "scope_removed or goals or sr-cards or problems"` | 0 | 29 passed・1 xfailed |
 | 2026-11-12 02:41 | TC-07 の FG: `_run_id_check`・`_run_list_check` の先頭に一時的に `return` を入れて `-k scope_removed` | 1 | 4 failed（すべて「DID NOT RAISE AssertionError」）。Edit で戻した |
 | 2026-11-12 02:42 | 戻した後に新しいテストのファイル全体 | 0 | 124 passed・9 xfailed（9 秒） |
+| 2026-11-12 08:33 | test-gate: `bash scripts/claude/gate-check.sh I446` | 0 | GATE_CHECK: OK（コードレビュー 20261112_0228・敵対的レビュー 20261112_0240 とも VERDICT OK） |
+| 2026-11-12 08:33 | test-gate: `gh pr checks 456`（PR の先頭 ea14cc16＝レビュー済みのコミット。その後は記録だけ） | 0 | 7 ジョブすべて pass（TC-30）。`Backend Tests` のログに `core/tests/test_I446_cross_api_tenant_isolation.py` の結果が出て、全体で 285 passed・9 xfailed（TC-10） |
+| 2026-11-12 08:33 | test-gate で手元に流す重いテスト | — | 無し（計画書・コードレビューに test-gate へ任せたものが無い。pytest・Jest・E2E は CI が正） |
 
 ## TC 一覧
 

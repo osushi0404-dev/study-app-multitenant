@@ -24,7 +24,9 @@
   - TC-20（RED）: 修正前に 9 failed（計画の予想 8 件＋TC-06 と一致）・9 xfailed
   - TC-24: 修正後に新しいテスト＋`problems/tests/`＋`studylogs/tests/` が 263 passed・9 xfailed（45 秒）
   - TC-21〜TC-23（失敗注入）: 表の行の漏れ 2 種・組織の絞り込みを外す 2 種・本人の絞り込みを外す 1 種・回答の先読みを外す 1 種がすべて FAIL。すべて Edit で戻した
-  - CI・手動: review-gate・test-gate で記入
+  - CI（PR #456・ea14cc16）: 7 ジョブすべて pass。`Backend Tests` で新しいテストを含む 285 passed・9 xfailed（TC-10・TC-30）
+  - 手動（test-gate・Claude が Playwright MCP で実施）: No.1 問題の作成・編集 OK、No.2 クイズの開始・回答・続きからの読み出し OK。作った問題は削除して戻した。Human の項目なし
+  - 判定: gate-check OK・check-frontend-evidence 対象外（frontend/src の変更なし）・check-manual-test-executor 合格
 
 ## 計画との差分
 - 回答の先読みを、回答を出す詳細・終了のときだけにした（/simplify・計画変更記録）
@@ -51,6 +53,7 @@
 
 - [review-gate] コードレビュー（20261112_0215）は OK（Low 6 件・台帳に残す）。敵対的レビュー 1 周目は新しい指摘 0 で、V6 だけ実験役の環境に python が無く未検証 → TC-07（失敗注入を CI で毎回行う決定論のテスト）を足して V6 を「読んで可」に下げ、2 周目で確かめる — review-gate 3-3 の決まり
 - [review-gate] コードレビューのやり直し（20261112_0228）OK・敵対的レビュー 2 周目（20261112_0240）OK（新しい指摘 0・V1〜V9 確認済み）。最終判定 OK で test-gate へ
+- [test-gate] 手動テスト No.2 の手順と期待結果を直した。クイズの終了（`POST …/end/`）の代わりに、回の詳細（`GET /api/quiz/<id>/`）を続きからの読み込みで通した — 今の画面は終了の経路を呼ばない既存の作り（「終了」はダッシュボードへ戻るだけ）で、画面からは通せないため。4-4 で変えた回の詳細は画面から確かめ、終了の経路は CI の新しいテスト（OwnCheck）が確かめている。方式・範囲・受け入れ条件は変えないので、計画レビューはやり直さない
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
