@@ -416,6 +416,21 @@ def test_statistics_hide_other_org_subjects(setup):
     assert daily.json()[0]["subjects_studied"] == ["科目I431A"]
 
 
+# ---- TC-15b: 科目のプルダウンの API に登録時の他組織の科目が出ない ----
+def test_user_subjects_api_hides_other_org_subjects(setup):
+    UserSubjectAccess.objects.create(user=setup["user_a"], subject=setup["subject_a"])
+    UserSubjectAccess.objects.create(user=setup["user_a"], subject=setup["subject_b"])
+    UserSubjectAccess.objects.create(user=setup["user_noorg"], subject=setup["subject_a"])
+
+    own = _client(setup["user_a"]).get("/api/user/subjects/")
+    noorg = _client(setup["user_noorg"]).get("/api/user/subjects/")
+
+    assert own.status_code == status.HTTP_200_OK
+    assert own.json() == [{"id": setup["subject_a"].id, "name": "科目I431A"}]
+    assert noorg.status_code == status.HTTP_200_OK
+    assert noorg.json() == []
+
+
 # ---- TC-16: 間違い分析の一覧・まとめ・提案の生成・弱点の更新に他組織の科目が出ない ----
 def test_mistake_analysis_hides_and_does_not_create_other_org(setup):
     user = setup["user_a"]

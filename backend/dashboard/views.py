@@ -5,7 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from problems.models import QuizSession
 from problems.services.tenant_scope import (
-    available_problems, available_subjects, scope_to_user_org,
+    available_problems, scope_to_user_org,
 )
 from studylogs.models import StudyLog, DailyStudySummary
 from core.subject_service import subject_service
@@ -135,10 +135,8 @@ class DashboardOverviewView(views.APIView):
         return streak
 
     def _get_subject_progress(self, user):
-        # ダッシュボードでは会員が選択した科目のみ表示（組織を移った後の古い登録は除く）
-        subjects = subject_service.get_user_selected_subjects(user, use_cache=True).filter(
-            id__in=available_subjects(user)
-        )
+        # ダッシュボードでは会員が選択した科目のみ表示
+        subjects = subject_service.get_user_selected_subjects(user, use_cache=True)
         progress = []
 
         for subject in subjects:

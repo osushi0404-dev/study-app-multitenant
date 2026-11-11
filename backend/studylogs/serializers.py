@@ -4,19 +4,7 @@ from .models import (
     SpacedRepetitionCard, SpacedRepetitionReview, LearningAnalytics,
     MistakePattern, LearningSuggestion, LearningWeakness
 )
-from problems.models import Subject
-from problems.serializers import ProblemSerializer
-from problems.services.tenant_scope import available_subjects
-
-
-class OrgSubjectField(serializers.PrimaryKeyRelatedField):
-    """リクエストユーザーの組織の科目だけを受け付ける（context に request が無ければ何も受け付けない）"""
-
-    def get_queryset(self):
-        request = self.context.get('request')
-        if request is None:
-            return Subject.objects.none()
-        return available_subjects(request.user)
+from problems.serializers import OrgSubjectField, ProblemSerializer
 
 
 class StudyLogSerializer(serializers.ModelSerializer):

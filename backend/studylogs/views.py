@@ -256,10 +256,8 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
         return longest
 
     def _get_subject_statistics(self, user):
-        # 統計画面では会員が選択した科目のみ表示（組織を移った後の古い登録は除く）
-        subjects = subject_service.get_user_selected_subjects(user, use_cache=True).filter(
-            id__in=available_subjects(user)
-        )
+        # 統計画面では会員が選択した科目のみ表示
+        subjects = subject_service.get_user_selected_subjects(user, use_cache=True)
         stats = []
 
         for subject in subjects:
