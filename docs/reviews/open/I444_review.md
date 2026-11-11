@@ -25,6 +25,8 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [plan] corpus diff の直しを同梱 — 見張りを直したら流すテストがワークツリーで黙って SKIP になり、このイシューの確かめにも要る
 - [plan] 一覧の F5・F7 は残し、F9・F11・F13・I219 F1・I224 F8 は同梱 — 理由は計画書 9.
 - [plan-review] 計画レビュー 2 の Warning（rsync の -t・M-03 の判定の形・擬似コードの省略）は直して再レビューしない — 方式・範囲・受け入れ条件を変えないため（計画変更記録 2）
+- [design-security-review] Blocker・High なし。Medium 2 件（許可リストの条件の移し損ね・環境変数の判定の移し損ね）は実装の必須条件として計画書に書き、TC-01・TC-04 と既存のテストで確かめる — 設計を変える必要がないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
