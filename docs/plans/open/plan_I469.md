@@ -215,7 +215,7 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
-| V1 | 1 | 実験必須 | 取りこぼしが直っている: 受け入れ条件 1 の形と、同じ原因の `grep --exclude-from=.env x y`・`sed -f.env x`・`rg -f.env x`・`awk --file=.env x`・`curl x \| python3 -W ignore`・`grep -r --exclude-dir node_modules TOKEN <.env のあるディレクトリ>` が確認・停止になる（TC-01〜TC-04） |
+| V1 | 1 | 読んで可 | 取りこぼしが直っている（決定論の TC-01〜TC-04 が見張りに JSON を渡して判定を確かめ、失敗の注入 FG-01〜FG-04 で後退を捕まえる。CI の Harness Tests でも流れる）: 受け入れ条件 1 の形と、同じ原因の `grep --exclude-from=.env x y`・`sed -f.env x`・`rg -f.env x`・`awk --file=.env x`・`curl x \| python3 -W ignore`・`grep -r --exclude-dir node_modules TOKEN <.env のあるディレクトリ>` が確認・停止になる（TC-01〜TC-04） |
 | V2 | 1 | 実験必須 | 止める側の後退が無い: 止めるべき形の一覧（TC-05）と既存の見張りのテスト全件（TC-06）が、変更前と同じかより強い判定になる。`paths` の「`-` で始まらない語」を残している（`grep -f .env x` が確認のまま） |
 | V3 | 3 | 実験必須 | 止める対象を増やさない: `grep --exclude=.env foo x`・`python3 -c "$X" \| head`・`curl x \| python3 -m json.tool`・`curl x \| python3 tool.py` が通るまま（TC-02 の 02g・TC-03）。作業記録の比較（TC-07）で新しく確認・停止が 1% 以内 |
 
@@ -229,6 +229,7 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 - implement（2026-11-12・/simplify の 4 体の指摘）: `_grep_recursive_secret` の `--include` の有無を、語の頭（`a.startswith("--include")`）でなく表で読んだ名前で見る（grep の表に `--include` を足したので、読み方を 1 つにそろえた。判定は同じ）
   - 見送り: python のスクリプト名の読み方を `_python_code_raw` と共通の関数にする（標準入力とみなす場所が 2 つで違い〔`/dev/`・`/proc/` すべて／`/dev/stdin` など 3 つ〕、そろえると判定が変わる。I463 の前からの違い）・パターンのオプションと `_FILE_VALUE_OPTS` を 1 つの表にする（目的が違い、表を作り直す範囲になる）・`_getopt` の 2 回の呼び出しを 1 回にする（短い語の並びで差が無い）・テストの補助関数を共通の部品にする（既存の 10 本以上の写しと同じ形。このイシューの範囲外）
   - 計画レビューのやり直し: 不要（判定を変えない整理だけ）
+- review-gate（2026-11-12・敵対的レビュー 1646 が V1 を「未検証〔実験が拒否され読んで確認しただけ〕」で HIGH）: V1 は決定論の TC-01〜TC-04（失敗の注入 FG-01〜FG-04 つき・CI でも流れる）で覆っているので、確かめ方を「読んで可」に下げた（plan-writing-rules と review-gate 3-3 の「決定論の TC で覆ったときだけ下げてよい」）。方式・範囲・受け入れ条件は変えないので計画レビューは通り直さない
 
 ## レビュー結果
 - [20261112_1606 判定: ✅ 完了](../../reviews/I469_plan_review_20261112_1606.md)
