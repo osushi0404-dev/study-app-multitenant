@@ -2365,7 +2365,8 @@ def _read_limited(path: str, limit: int):
 
 _CTR_SCRATCH = "/tmp/"   # コンテナの中で書いてよい場所（/app/ は手元の backend/・frontend/ に bind mount されている）
 _CP_READ_LIMIT = 1024 * 1024
-_OPT_PATH_RE = re.compile(r"--[\w-]+=/")   # 書き出し先を値で受ける形（pytest --junitxml=/app/r.xml・粗く、読む場所にも当たる）
+# 書き出し先を値で受ける形（pytest --junitxml=/app/r.xml）。粗い判定で、よく使う読む場所の指定（--rootdir・--confcutdir）だけ除く
+_OPT_PATH_RE = re.compile(r"--(?!rootdir=|confcutdir=)[\w-]+=/")
 
 
 def _container_risky(c: dict, text: str) -> list:

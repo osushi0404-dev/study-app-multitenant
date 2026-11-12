@@ -77,6 +77,7 @@ ck 03c 0   "$(b "$D pytest -k delete")"
 ck 03d ASK "$(b "$D sh -c \"pytest -k delete > /app/out.txt\"")"
 ck 03e 0   "$(b "$D sh -c \"pytest -k delete > /tmp/out.txt\"")"
 ck 03f 0   "$(b "$D grep -rn foo /app/apps > out.txt")"
+ck 03g 0   "$(b "$D pytest /tmp/p.py --rootdir=/app -c /app/pytest.ini")"
 fg FG-03 0 'if any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):' \
   'if not _container_safe(c) and any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):' \
   "$D pytest --junitxml=/app/r.xml -k x"

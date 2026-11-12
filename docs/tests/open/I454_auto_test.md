@@ -7,7 +7,7 @@
 結果:
 - 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じケースを見張りの写し（計画書「調査結果」のスパイク）に流し、TC-01〜TC-04 の期待値どおりになることは確かめた。変更前の見張りでは、TC-01 の 01a〜01c・01i・01j が 0、01f・01g が ASK（F11 の誤検出）、TC-02 の 02a・02e が 0、TC-03 の 03a が 0・03e と 03f が ASK（余計な確認）、TC-04 の 04a〜04f が 0（＝今の取りこぼし）
 - 2026-11-12（implement・/simplify の後）: `bash scripts/claude/tests/test_i454_guard_env_writes.sh` → pass=44 fail=0（exit 0。FG-01〜FG-04 を含む）。`test_i444_guard_gaps.sh` pass=64・`test_pretooluse_container_guard.sh` pass=788・`test_i200_guard_narrowing.sh` pass=75・`test_pretooluse_guard_matrix.sh` pass=391・`test_guard_bash_oracle.sh` 見逃し 0・余計な停止 0・`test_pretooluse_worktree_guard.sh` pass=127・`test_i182_corpus_base.sh` pass=5、すべて fail=0（exit 0）。`py_compile` OK
-- TC-06 の過去の作業コマンドでの比較（implement の後・test-gate で手で流し、ここに件数と中身を書く）: 計画時のスパイク（写しの見張り・15576 件）は新しく確認・停止 4 件・異常終了 0 件・OK（計画書「調査結果」）。implement の後: （未実施）。test-gate: （未実施）
+- TC-06 の過去の作業コマンドでの比較（implement の後・test-gate で手で流し、ここに件数と中身を書く）: 計画時のスパイク（写しの見張り・15576 件）は新しく確認・停止 4 件・異常終了 0 件・OK（計画書「調査結果」）。implement の後（基準は develop との分かれた点 fba609bb・16015 件・計画変更記録 3 の直しの後）: 確認＋停止 373→367・確認→通過 8 件・新しく停止 2 件（どちらも同じ `mv <別ワークツリー harness-2 の e2e/tests/tmp-*.spec.ts> … /tmp/claude`＝別ワークツリーを移動元にする形で、計画どおりの停止）・新しく確認 0 件・異常終了 0 件・OK。直しの前の回（同じ基準）は新しく確認 14 件で、うち 12 件が `--rootdir=/app` の形だった（計画変更記録 3）。test-gate: （未実施）
 
 ## TC-01 環境変数をまとめて表示する形（F10・F11・F12）
 | ID | コマンド | 期待 |
@@ -49,6 +49,7 @@ I444 で固定した形（`ps e`・`ps auxe`・`ps aux e`・`ps -u postgres e`�
 | 03d | `$D sh -c "pytest -k delete > /app/out.txt"`（コンテナの中のリダイレクト） | ASK |
 | 03e | `$D sh -c "pytest -k delete > /tmp/out.txt"`（通す形の /tmp/ へのリダイレクト。変更前は語で ASK） | 0 |
 | 03f | `$D grep -rn foo /app/apps > out.txt`（ホスト側のリダイレクトはコンテナの書き込みではない） | 0 |
+| 03g | `$D pytest /tmp/p.py --rootdir=/app -c /app/pytest.ini`（読む場所の指定・計画変更記録 3） | 0 |
 | FG-03 | `_container_risky` の書き込みの判定 `if any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):` を `if not _container_safe(c) and any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):` に置き換えた写し（＝通す形なら書き込みの判定も飛ばす・変更前の作り）で 03a | 0 |
 
 ## TC-04 別ワークツリーへの書き込みの停止（書き先の見分け方を 1 つに）
