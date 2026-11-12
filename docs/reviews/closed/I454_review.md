@@ -44,6 +44,7 @@ PR を revert する（データの変更なし）。見張りが起動できな
 - [retro] 台帳の残りの振り分け: F2・F4・F6・F15・F16・F17 と敵対的レビューの Medium（くっつけた -t と複数の読み元）→ #463（I463・新規起票・「次のハーネスの作業で最優先」と本文に明記。F15・F17 が SECURITY=yes）。F5・F7・F8・F9・F14・F18 → `docs/reviews/backlog/I454.md` — 同梱先に合う既存イシューが無く（#430 は全面の組み直しで範囲が大きい）、1 件にまとめた
 - [retro] 予防策「見張りの読み方を変えたら、変更前と作業ツリーの見張りで手で並べたコマンドの判定を比べる決定論の仕組み（guard_corpus_diff.py に --cases）」→ #463 に同梱（新規起票に含めた） — fix-loop 1 で止めるべき形が後退し、review-gate が 1 周余分に回った実害があり、手順・観点の追加より決定論のチェックで塞ぐほうが確実なため。採否・形は #463 の grill-me で決める
 - [retro] 見送り: worktree の隔離で git を含む複合コマンドが拒否された件（単体のコマンドに分けて即座に解決し、手戻りなし）・Claude のログインの期限切れの警告（ユーザーに案内済み・流れの問題ではない）
+- [close] develop（#446 のアプリの変更・このブランチの変えたファイルには触れない）を取り込み、gate-check OK。手順 1 の glob に当たらない診断メモ 2 件（`I454_fix_diagnosis_*`）も、過去のイシューと同じく closed へ移した — 記録を 1 か所に保つため
 
 ## 振り返り
 
@@ -96,3 +97,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
