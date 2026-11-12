@@ -53,3 +53,4 @@ STAGE_DONE: design-security-review NEXT: implement
 - [implement] 画面の確かめ（Playwright MCP）は MCP が接続しなかったため test-gate の手動 No.1〜No.4 に回した — 人に頼まず Claude が後の段階で行う。画面の動きは Jest で固定済み
 
 STAGE_DONE: implement NEXT: review-gate
+- [implement] pre-commit の ESLint のフックが手元に eslint が無く exit 127 で止まった。同じ `npm run lint`（--max-warnings 0）をフロントのコンテナで流して 0 件を確かめ、そのコミットだけ `SKIP=eslint` にした — 同じ検査を別の場所で済ませた・CI でも流れる。手元の node_modules の準備は retro で扱う
