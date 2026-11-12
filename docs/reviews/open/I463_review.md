@@ -30,6 +30,8 @@
 - [plan] F16 は現象が再現しないので、偽の候補が出ないことの固定で閉じる
 - [plan] 一覧の I454 F14・F18 と I444 F7 を同梱、ほかは残す（計画書 9.）
 - [plan-review] 1226 の Warning 3 件（FG の置き換え元の確定・長いオプションの省略形・psql の表の根拠）は計画変更記録に対応を書き、再レビューしない — 方式・範囲・受け入れ条件を変えない
+- [design-security-review] Blocker・High なし。Medium 3 件（表の文字の誤り・`paths` を絞らない・python だけの読み終わり）は計画の必須防御条件として既に TC と必ず確かめる項目に入っているので、計画は変えない — 防御はどれも計画済み
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
