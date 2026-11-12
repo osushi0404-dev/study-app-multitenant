@@ -30,7 +30,7 @@
 | P9 | `backend/core/enhanced_logging.py:180`（`_log_exception`）→ `:83-92`（`DetailedFormatter._get_error_context`） | `include_locals: True` を常に付け、その場の変数を全部 `str(v)[:200]` で書く（`request.user` を持つ変数などからメールアドレス、登録の処理ならパスワードも入りうる）。コメントは「デバッグモード時のみ」だが本番でも動く | 想定外のエラーのたび |
 
 - P8 の注: Django のミドルウェアが受け取る `request`（`WSGIRequest`）には `.data` が無いので、今は `request.POST`（フォームで送った本文）だけが入り、JSON の本文は `{}` になる。今の画面は JSON で送るので実際に入るのはフォームの送信だけだが、伏せる欄は送り方に関係なく効かせる（設計確認メモの決定）
-- 直さない（理由）: `backend/core/subject_service.py:125`（未ログインの分岐で `str(AnonymousUser)` = `AnonymousUser`。個人情報でない）・`backend/accounts/views.py:143・163・224`（組織名）・`backend/accounts/views.py:95`（`serializer.errors`。DRF の文言で入力の値を含まない）・`backend/core/storage_service.py:58`（上げたファイルの名前。利用者を指す値の欄ではない）・`backend/problems/management/commands/import_problems.py:351`（運用者が打つコマンドの画面表示）・`backend/core/monitoring.py:242-243` と `middleware.py:55-56` の `user_agent`・`ip_address`（不正アクセスを調べるのに要る。イシューの範囲〔メールアドレス・氏名〕の外）・例外の文言（`str(e)`。DB の重複エラーなどに値が入る可能性はあるが、どこで起きるか決まらず、一律には直せない。R3）
+- 直さない（理由）: `backend/core/subject_service.py:125`（未ログインの分岐で `str(AnonymousUser)` = `AnonymousUser`。個人情報でない）・`backend/accounts/views.py:143・163・224`（組織名）・`backend/accounts/views.py:95`（`serializer.errors`。DRF の文言で入力の値を含まない）・`backend/core/storage_service.py:58`（上げたファイルの名前。利用者を指す値の欄ではない）・`backend/problems/management/commands/import_problems.py:351`（運用者が打つコマンドの画面表示）・`backend/core/monitoring.py:242-243` と `middleware.py:55-56` の `user_agent`・`ip_address`（不正アクセスを調べるのに要る。イシューの範囲〔メールアドレス・氏名〕の外）・例外の文言（`str(e)`。DB の重複エラーなどに値が入る可能性はあるが、どこで起きるか決まらず、一律には直せない。R3）・`ErrorContextMiddleware` の `query_params`（`dict(request.GET)`。今の backend に `email` などを GET で受ける API は無い〔2026-11-12 の grep〕）・同 `user_actions`（`X-User-Actions` ヘッダー。送る側の `frontend/src/utils/userActionLogger.ts` の `useActionLogger` は今どの画面からも使われておらず、ヘッダーは届かない。ただし送る側の伏せ字〔`sanitizeValue`・`sanitizeFormData`〕は `email` を伏せないので、使い始めると漏れうる。扱いは retro で決める）
 - 使われていないコード: `backend/core/logging_decorators.py`（`log_api_call` など）はどこからも使われていない（2026-11-12 `grep -rn "log_api_call\|log_db_operation\|log_celery_task\|mask_sensitive_data" backend`: 定義の中だけ）。中の `mask_sensitive_data` も `email` を伏せないが、動かないので本イシューでは直さない（9 章）
 - 記録を読む側: `frontend/src/pages/Monitoring.tsx` と `backend/core/views.py` の集計（`get_error_summary`・`get_activity_summary`）は `user_email` を使わない（集計は `user_id` と件数だけ。2026-11-12 `grep -rn user_email backend frontend/src`: 当たるのは `monitoring.py:173・382` だけ）
 
@@ -213,6 +213,10 @@ from django.conf import settings
 | V1 | 1 | 実験必須 | 監視の記録・API のログ・新規登録のログ・科目の取得のログにメールアドレス・パスワードが入らず、`user_id` が入る（TC-01〜TC-05。直す前のコードで Red を実測） |
 | V2 | 2 | 実験必須 | エラーの送信内容の記録で 5 つの欄が `[REDACTED]`・今までの欄も伏せたまま・ほかの欄は残る（TC-07） |
 | V3 | 3 | 実験必須 | `DEBUG=False` でその場の変数が記録されず、`DEBUG=True` では記録される（TC-06） |
-| V4 | 4 | 読んで可 | 1 章の全件確認の表に漏れが無い（`backend/` の logger・print の呼び出しのうち、利用者・送信内容を書くもの） |
+| V4 | 1 | 読んで可 | 1 章の全件確認の表に漏れが無い（`backend/` の logger・print の呼び出しのうち、利用者・送信内容を書くもの） |
 
 ## 計画変更記録
+- plan-review（20261112_2340・OK・Warning 2 件）: 1 章「直さない（理由）」に `query_params`・`user_actions` を理由付きで足した（`user_actions` の送る側が `email` を伏せない件は retro で扱いを決める）。「必ず確かめる項目」の V4 の観点を 4 → 1 にした（有効な観点は 1〜3）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+
+## レビュー結果
+- [20261112_2340 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2340.md)
