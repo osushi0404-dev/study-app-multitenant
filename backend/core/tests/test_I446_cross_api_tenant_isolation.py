@@ -437,11 +437,14 @@ def world(db):
         description=f"{FOREIGN_MARK}パターン", confidence_score=0.1)
     for subject in (subject_a, subject_b):
         UserSubjectAccess.objects.create(user=user_a, subject=subject)
-    # 解いた問題を 1 以上にする（dashboard/analytics の 0 で割る不具合は境界と関係ないので踏まない）
+    # 解いた問題が 0 件の日も入れる（I459 で dashboard/analytics の 0 で割る不具合を直した）
     summary = DailyStudySummary.objects.create(
         user=user_a, date=timezone.now().date(), total_problems_attempted=4,
         total_problems_correct=3)
     summary.subjects_studied.add(subject_a, subject_b)
+    DailyStudySummary.objects.create(
+        user=user_a, date=timezone.now().date() - timedelta(days=1),
+        total_study_time=600)
 
     refs = {f"foreign.{k}": v.pk for k, v in foreign.items()}
     refs.update({f"same.{k}": v.pk for k, v in same.items()})
