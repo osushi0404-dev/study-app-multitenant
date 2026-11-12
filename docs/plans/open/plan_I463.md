@@ -305,6 +305,8 @@ _OPT_PATH_RE = re.compile(r"--(?!(?:" + "|".join(map(re.escape, _OPT_READ_PATH))
 
 ## 計画変更記録
 - plan-review 1224 の Warning への対応（方式・範囲・受け入れ条件は変えない・再レビューは Blocker の直しで行う）: TC-12b を 3 つの `! grep -q` に分けた／FG の置き換え元は implement の最初に確定して auto_test.md に書く（ステップ 5 に明記）／長いオプションの省略形・表にない値付きの長いオプションは、脅威モデル（普通の書き方の事故）の範囲外として許容し、後退は TC-09 で見る
+- plan-review 1226 の Warning への対応（同上・再レビューしない）: psql の表の根拠は PostgreSQL 15 の psql の文書（docker-compose.yml の db は `postgres:15-alpine`）。手元に psql が無く `--help` と突き合わせられないので、V1 の psql は文書と、TC-09・TC-10 の後退検知で見る。コンテナを起こせたら implement で `docker compose exec -T db psql --help` と突き合わせ、結果を auto_test.md に書く
 
 ## レビュー結果
+- [20261112_1226 判定: ✅ 完了](../../reviews/I463_plan_review_20261112_1226.md)
 - [20261112_1224 判定: 差し戻し（Blocker 1件）](../../reviews/I463_plan_review_20261112_1224.md)
