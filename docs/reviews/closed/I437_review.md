@@ -77,6 +77,7 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [retro] 台帳の残り F2・F3・F4・F5・F6 → #484（後続イシュー「ログの個人情報・秘密の残りを片付ける（I437 のレビューの残り）」・SECURITY=yes を含むので本文に「次のハーネスの作業で最優先」を書いた）。一覧（backlog）行きは 0 件
 - [retro] 計画で retro に回した 3 件（`logging_decorators.py` の扱い・`user_actions` の送る側の伏せ字・`DetailedFormatter` の変数の記録の不具合）→ 同じ #484 に同梱 — 同じ原因（伏せる決まりが 1 か所に無い・動かないログのコード）で、まとめて決めるほうが安い
 - [retro] 予防処置は足さない（AC4 の前提違い・F1・手動テストの期待値） — どれも流れの中でその場で捕まり、手戻りが小さい（「## 振り返り」の見送り）
+- [close] develop への追従は不要（BEHIND でない）。`I437_fix_diagnosis_20261113_0002.md`（診断メモ）は close の回収の対象（`_review_` を含む記録）に当たらないので `docs/reviews/` に残した — I459 までの close と同じ扱い
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -85,3 +86,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge

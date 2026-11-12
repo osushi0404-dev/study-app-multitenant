@@ -5,7 +5,7 @@
 - **関連イシュー**: #437
 - **Draft PR**: #482
 - **作成根拠資料**: docs/issues/open/I437.md（GitHub #437 の本文の写し）
-- **実装後評価**: docs/reviews/open/I437_review.md
+- **実装後評価**: docs/reviews/closed/I437_review.md
 - **作成日**: 2026-11-12
 
 ## 1. 背景/目的
@@ -233,6 +233,12 @@ from django.conf import settings
   - 計画レビューのやり直し: 要（4-5 の方式を変えた）
 
 ## レビュー結果
-- [20261113_0005 判定: ✅ 完了](../../reviews/I437_plan_review_20261113_0005.md)
-- [20261112_2344 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2344.md)
-- [20261112_2340 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2340.md)
+- [20261113_0005 判定: ✅ 完了](../../reviews/closed/I437_plan_review_20261113_0005.md)
+- [20261112_2344 判定: ✅ 完了](../../reviews/closed/I437_plan_review_20261112_2344.md)
+- [20261112_2340 判定: ✅ 完了](../../reviews/closed/I437_plan_review_20261112_2340.md)
+- コードレビュー: [20261112_2349 判定: HIGH（F1）](../../reviews/closed/I437_code_review_20261112_2349.md) → fix-loop → [20261113_0008 判定: OK（F1 解決・Low 5 件は #484）](../../reviews/closed/I437_code_review_20261113_0008.md)
+
+## 完了情報
+- **完了日時**: 2026-11-13
+- **対応者**: Claude Code
+- **レビュー結果**: OK
