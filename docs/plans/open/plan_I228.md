@@ -75,7 +75,7 @@
 ### 4-3. 実験の案内（AC2）
 - `scripts/claude/adversarial-review.sh` の「## 実験の約束」に 1 文: 「アプリのテスト・管理コマンドは `docker compose exec -T backend <コマンド>` で流す（ホストに python は無い。コンテナの中の /app は作業ツリーそのものなので、書き換える実験はしない。守りを外して落ちるかは `mock.patch` などのテストの中で確かめる）」
 - `.claude/agents/adversarial-reviewer.md`「ツール境界と実験」に同じ内容の箇条書きと、「出力がコマンドの見つからない形だけの実験は実行できなかったに数えられる」を足す
-- `.claude/skills/review-gate/SKILL.md` §3-1: アプリ（`backend/`）を変えたイシューでは、起動の前に `docker compose ps --status running --services` に `backend` があるかを見て、無ければ `docker compose up -d backend` で起こす（コンテナが止まっていると、案内どおりの実験も空振りするため）
+- `.claude/skills/review-gate/SKILL.md` §3-1: アプリ（`backend/`）を変えたイシューでは、起動の前に `docker compose up -d backend` で起こす（動いていれば何もしない。コンテナが止まっていると、案内どおりの実験も空振りするため）
 
 ### 4-4. 計画の段階で決定論の TC に寄せる（AC3）
 - `docs/runbooks/plan-writing-rules.md`: 「決定論テストの対象の選び方」の後に節「高リスクの計画の「必ず確かめる項目」（I228）」を足す。中身: 実験必須にする前に決定論の TC（失敗の注入つき・本物のファイルを書き換えない。`mock.patch`・一時の写し）で覆えないかを書く。覆えるなら TC を書いて内容に `TC-xx` を書き、`読んで可` にする。特に「守りを外すと落ちる（失敗注入）」「表と外部の正（`--help` など）の突き合わせ」は実験必須にしない（I446 の V6・I463 の V1）
@@ -153,6 +153,7 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 - 計画レビュー（20261113_0054）の Warning への対応: 4-3 の `docker compose up -d` が承認なしで通る根拠（allow の `Bash(docker compose up *)`）を書き足し、TC-01 の A36 の出力は I455 の記録の実物（曲線引用符のまま）と明記した。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - implement の /simplify（4 観点）への対応: ①引き継ぎの条件 ① は `review_base()` と同じ決まりなので、`carry_items` は `REVIEW_BASE` を起点に使い、比べる相手（`ADV_BASE`）に戻っていれば引き継がない（祖先の判定を 2 か所に書かない）。②コンテナが止まっているときの `service "backend" is not running` も、コマンドが見つからない形と同じく「実行できなかった」に数える（4-2 の形に 1 つ足す・A36b）。③テストの重複を整理した（`item_is` を使う・A36 と FG-A36 の準備の共用）。見送り: 前の周の判定を記録末尾の機械の行で持つ案（表は同じスクリプトが書き、読めないときは引き継がない側に倒れるため・4-1 のまま）、`prev_tbl` と `prev_rec` の統合（形が違う）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
+- fix-loop（手動テスト No.3 の NG・docs/reviews/I228_fix_diagnosis_20261113_0128.md）: §3-1 の `docker compose ps --status running --services` は allow（`Bash(docker compose ps)` の完全一致）に当たらず承認画面が出たので、確かめを省き常に `docker compose up -d backend`（冪等・allow 済み）を流す形にした。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261113_0054 判定: ✅ 完了](../../reviews/I228_plan_review_20261113_0054.md)

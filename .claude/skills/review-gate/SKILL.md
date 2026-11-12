@@ -65,13 +65,11 @@ bash scripts/claude/adversarial-review.sh "$ARGUMENTS"
 
 ユーザーが延長（下の「上限到達」の 2）を承認したときだけ、`ADV_ROUND_LIMIT=3` を前に付けて実行する。
 
-アプリ（`backend/`）を変えたイシューでは、起動の前に backend のコンテナが動いているかを見て、動いていなければ起こす（実験役はアプリのテストを `docker compose exec -T backend …` で流すので、止まっていると実験が空振りする・I228）:
+アプリ（`backend/`）を変えたイシューでは、起動の前に backend のコンテナを起こす（実験役はアプリのテストを `docker compose exec -T backend …` で流すので、止まっていると実験が空振りする。動いていれば何もしない・allow の `Bash(docker compose up *)` に当たり承認画面は出ない・I228）:
 
 ```bash
-docker compose ps --status running --services
+docker compose up -d backend
 ```
-
-出力に `backend` が無ければ `docker compose up -d backend` を実行してから起動する。
 
 ### 3-2. 終わり方（終了コードと `ADVERSARIAL_VERDICT:` 行で決める）
 

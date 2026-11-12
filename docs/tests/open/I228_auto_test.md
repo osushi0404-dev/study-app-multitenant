@@ -43,3 +43,10 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 bash scripts/claude/tests/test_i202_ledger_cleanup.sh
 bash -n scripts/claude/adversarial-review.sh
 ```
+
+## 再発防止記録（fix-loop・2026-11-13）
+- なぜ失敗したか: review-gate §3-1 に足したコンテナの確かめ `docker compose ps --status running --services` が、allow の `Bash(docker compose ps)`（引数なしの完全一致）に当たらず、承認画面が出た（手動テスト No.3）
+- 何を変えたか: 確かめを省き、常に `docker compose up -d backend`（冪等・allow の `Bash(docker compose up *)`）を流す形にした
+- セキュリティ上の考慮点: 承認画面が出るのは止まる向きで、危ない操作が通る問題ではない。設定（`.claude/settings.json`）は変えていない
+- 次回どう防ぐか: 手順書に Claude が流すコマンドを足すときは、`check-permission-prompt.sh` でその形（または同じ allow の規則に当たる副作用の無い形）を先に確かめる。今回は手動テストに足した行で捕まえた
+- 確かめた結果: 手動 No.3（`docker compose up --help`）exit 0・TC-01 pass=134 fail=0
