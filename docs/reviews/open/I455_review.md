@@ -33,3 +33,5 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [plan-review] 3 回目で HIGHRISK（Blocker なし）。Warning は TC-10 の失敗の注入の手順の具体化だけ直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: design-security-review
