@@ -37,6 +37,7 @@
 - [design-security-review] Blocker・High なし。Medium 3 件（表の文字の誤り・`paths` を絞らない・python だけの読み終わり）は計画の必須防御条件として既に TC と必ず確かめる項目に入っているので、計画は変えない — 防御はどれも計画済み
 - [implement] 失敗の注入の置き換え元の追従で、FG-07b も直し、FG-07a・FG-07d は流す形・置き換えを替えた（守る形・期待値は同じ）— 偽の `-c` が出なくなり、元の形では差が出なくなったため（計画変更記録）
 - [implement] /simplify の 4 体の指摘のうち、同じコマンドを表と手書きで 2 通りに読む残り（python・psql・grep・flock）と、比べる道具の重複、テストの無駄な比較を直した。止める側が増える `_cmd_external` の python の `first`・差分の外の `git commit`・`_record_writes`・flock の読み終わりは見送った — 方式・範囲・受け入れ条件を変えず、読み方を 1 つにするだけのため計画レビューはやり直さない（計画変更記録）
+- [review-gate] 敵対的レビュー 1319 の HIGH（V1 が実験必須を読んで確認しただけ・新しい High は 0 件）に、表と `--help` を突き合わせる決定論の TC-13 を足して V1 を「読んで可」に下げた。あわせて止めないコードレビュー 1303 の F1（python の長いオプションの値をスクリプト名と読む後退・SECURITY=yes）も同じ表の直しなので直した — この変更が持ち込んだ後退で、受け入れ条件 4（止めるべき形が後退していない）に当たるため retro に回さない
 - [implement] psql のコンテナは起こさず、psql の表は PostgreSQL 15 の文書に拠った — 後退は TC-09・TC-10 で決定論で見る
 
 STAGE_DONE: plan NEXT: plan-review

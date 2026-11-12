@@ -57,6 +57,8 @@ ck 01c 2   "$(b "python3 $E")"
 ck 01d 2   "$(b "python3 -Xdev $E")"
 ck 01e 0   "$(b "python3 -c 'print(1)' $E")"
 ck 01f 2   "$(b "$D python manage.py shell -c 'from apps.users.models import User; User.objects.all().delete()'")"
+# コードレビュー 1303 の F1: 値を取る長いオプションの値をスクリプト名と読まない（変更前は確認だった形）
+ck 01g ASK "$(b "python3 --check-hash-based-pycs default -c 'print(open(\".env\").read())'")"
 fg FG-01 0 '_OPTSPEC_STOP = {"python": "cm"}' '_OPTSPEC_STOP = {}' "python3 $E -xcfoo"
 
 # ---- TC-02 psql の値の中の文字を -c と読まない（F14・F16） ----

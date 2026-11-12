@@ -61,3 +61,6 @@ docker compose exec -T backend cp -vt/app/x /tmp/y
 docker compose exec -T backend sed -i -es/a/b/ /app/x
 docker compose exec -T backend pytest --junitxml=/app/r.xml -k x
 docker compose exec -T backend pytest --basetemp=/app/tmp
+
+# python の値を取る長いオプションの値をスクリプト名と読まない（コードレビュー 1303 の F1）
+python3 --check-hash-based-pycs default -c 'print(open(".env").read())'

@@ -1861,7 +1861,7 @@ _OPTSPEC = {
     "psql": ("cdfFhLopPRTUv", ("--command", "--dbname", "--file", "--field-separator", "--host", "--log-file",
                                "--output", "--port", "--pset", "--record-separator", "--table-attr", "--username",
                                "--variable")),
-    "python": ("cmWX", ()),                      # -c・-m・最初の位置引数（スクリプト名）で読み終える
+    "python": ("cmWX", ("--check-hash-based-pycs",)),   # -c・-m・最初の位置引数（スクリプト名）で読み終える
     "django-shell": ("civ", ("--command", "--interface", "--settings", "--pythonpath", "--verbosity")),
     "sed": ("efl", ("--expression", "--file", "--line-length")),
     "grep": ("ABCDdefm", ("--regexp", "--file", "--max-count", "--directories", "--devices",
@@ -1873,7 +1873,7 @@ _OPTSPEC = {
     "script": ("BcEImOoT", ("--command", "--log-in", "--log-out", "--log-io", "--log-timing", "--logging-format",
                             "--echo", "--output-limit")),
 }
-_OPTSPEC_OPTIONAL = {"sed": "i"}   # 値をくっつけたときだけ取る（sed -i.bak・sed -ie は接尾辞 e）
+_OPTSPEC_OPTIONAL = {"sed": "i", "script": "t"}   # 値をくっつけたときだけ取る（sed -i.bak・sed -ie は接尾辞 e・script -t<file>）
 # 最初の位置引数と、ここに挙げた文字の値で読み終えるコマンド（後ろはスクリプトの引数。python -c・-m・スクリプト名）
 _OPTSPEC_STOP = {"python": "cm"}
 

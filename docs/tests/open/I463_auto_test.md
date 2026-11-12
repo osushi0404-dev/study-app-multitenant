@@ -8,6 +8,7 @@
 - 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じ形を develop の見張りに流した「今」の判定は計画書「調査結果」の表のとおり（01a・01b が 0、02a が 2、03a・03b・03c が 0、05a が 2、06a〜06d が ASK、07a・07f が 2）。直した後の期待とずれる形がこのイシューの対象で、それ以外の形は今も期待どおり
 - 2026-11-12（implement・/simplify の前）: `test_i463_guard_optspec.sh` pass=45 fail=0（FG-01〜FG-07 を含む）・`test_guard_must_stop_cases.sh` pass=3 fail=0（一覧 47 件・09b は破壊的 SQL の 5 件を「通す」と出して exit 1・09c は `echo hi` で exit 1）・`test_i454_guard_env_writes.sh` pass=59・`test_i444_guard_gaps.sh` pass=64・`test_pretooluse_container_guard.sh` pass=788・`test_i200_guard_narrowing.sh` pass=75・`test_pretooluse_guard_matrix.sh` pass=391・`test_guard_bash_oracle.sh` 見逃し 0・余計な停止 0・`test_pretooluse_worktree_guard.sh` pass=127・`test_i182_corpus_base.sh` pass=5、すべて fail=0（exit 0）。`py_compile` OK。TC-12a〜12d exit 0
 - 2026-11-12（implement・/simplify の後。表にそろえた呼び出し元 ①〜⑤ と 09b・09c の一覧の縮小・計画変更記録）: `test_i463_guard_optspec.sh` pass=45（FG-01 の置き換え元を `_OPTSPEC_STOP` に変更）・`test_guard_must_stop_cases.sh` pass=3・`test_i454_guard_env_writes.sh` pass=59・`test_i444_guard_gaps.sh` pass=64・`test_pretooluse_container_guard.sh` pass=788・`test_i200_guard_narrowing.sh` pass=75・`test_pretooluse_guard_matrix.sh` pass=391・`test_guard_bash_oracle.sh` 見逃し 0・余計な停止 0・`test_pretooluse_worktree_guard.sh` pass=127・`test_i182_corpus_base.sh` pass=5、すべて fail=0（exit 0）。`py_compile` OK
+- 2026-11-12（review-gate・敵対的レビュー 1319 の V1 未検証とコードレビュー 1303 の F1 への対応の後）: `test_i463_optspec_help.sh` pass=2（13a・FG-13。WARN なし）・`test_i463_guard_optspec.sh` pass=46（01g を足した）・`test_guard_must_stop_cases.sh` pass=3（一覧 48 件）・`run-all.sh` で見張りの既存 8 本と TC-13 の 9 本 pass=9 fail=0（exit 0）
 - TC-11（implement の後・基準 HEAD〔develop と同じ見張り〕・`bash scripts/claude/tests/test_guard_corpus_diff.sh --rebuild`・exit 0）: 16632 件・確認＋停止 368→368・新しく確認・停止 0 件・異常終了 0 件・OK（判定が変わった記録は 0 件。直した形〔`--cov=`・`-xcfoo` 等〕は過去の作業記録に無かった）。/simplify の後（同じ基準・キャッシュ 16632 件・exit 0）: 確認＋停止 368→368・新しく確認・停止 0 件・異常終了 0 件・OK
 
 ## TC-01 python はスクリプト名でオプションを読み終える（F15）
@@ -19,6 +20,7 @@
 | 01d | `python3 -Xdev $TMP/evil.py`（`-X` の値を飛ばしてスクリプトを読む） | 2 |
 | 01e | `python3 -c 'print(1)' $TMP/evil.py`（コードは `-c`。後ろはスクリプトの引数） | 0 |
 | 01f | `$D python manage.py shell -c 'from apps.users.models import User; User.objects.all().delete()'` | 2 |
+| 01g | `python3 --check-hash-based-pycs default -c 'print(open(".env").read())'`（値を取る長いオプションの値をスクリプト名と読まない・コードレビュー 1303 の F1） | ASK |
 | FG-01 | `_OPTSPEC_STOP = {"python": "cm"}`（python は位置引数・-c・-m で読み終える）を `_OPTSPEC_STOP = {}` に置き換えた写しで 01a | 0 |
 
 ## TC-02 psql の値の中の文字を `-c` と読まない（F14・F16）
@@ -121,8 +123,16 @@
 | 12d | `! grep -q "^- F7 " docs/reviews/backlog/I444.md` | exit 0 |
 12a〜12d は意図的な変更でしか崩れない文書の確かめなので、決定論ゲートには置かず implement の後に 1 回流して記録する（plan-writing-rules.md「決定論テストの対象の選び方」）。
 
+## TC-13 値を取る文字の表が --help と食い違わない（必ず確かめる項目 V1・敵対的レビュー 1319 の未検証への対応）
+`scripts/claude/tests/test_i463_optspec_help.sh` が、表の各コマンド（sed・grep・cp・mv・ln・install・su・flock・script）の `--help`（`LC_ALL=C`）の各行の先頭の短いオプションから「値を取る文字」「くっつけたときだけ値を取る文字」を抜き出し、表（`_OPTSPEC`・`_OPTSPEC_OPTIONAL`）と比べる。psql・python・Django の shell は --help の形がそろわない（psql は手元に無い）ので対象外で、TC-09・TC-10 の後退検知で見る。
+| ID | 確かめ | 期待 |
+|---|---|---|
+| 13a | 今の表で、表にあるが `--help` では値を取らない文字が 0 件（`--help` にあって表に無い文字は WARN を出すだけ） | exit 0 |
+| FG-13 | `"sed": ("efl",` を `"sed": ("efln",`（値を取らない n を足す）に置き換えた写し | exit 1（`NG sed: … n`） |
+
 ## 決定論ゲート（自動実走）
 ```bash
+bash scripts/claude/tests/test_i463_optspec_help.sh
 bash scripts/claude/tests/test_i463_guard_optspec.sh
 bash scripts/claude/tests/test_guard_must_stop_cases.sh
 bash scripts/claude/tests/test_i454_guard_env_writes.sh
