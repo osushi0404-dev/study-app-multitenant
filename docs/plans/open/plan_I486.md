@@ -22,6 +22,7 @@
 - **環境の確認（全イシュー必須）**:
   - `docker compose version` → `Docker Compose version v5.6.0`。`docker compose up --help` に `--build`・`--wait`（running|healthy まで待つ・detached を含む）・`--wait-timeout` がある（スパイクで確認）
   - Compose のプロジェクト名はワークツリーのフォルダ名（`docker ps` で `app-1-backend-1` の `com.docker.compose.project.working_dir` ラベルが `/mnt/c/app/study-app-multitenant/.claude/worktrees/app-1`＝そのワークツリーの `git rev-parse --show-toplevel` と同じ表記。スパイクで確認）。`docker compose` をリポジトリのルートで流せば、そのワークツリーのスタックに当たる。ただし環境変数・`.env` の `COMPOSE_PROJECT_NAME` で別のプロジェクトを指すと、別のワークツリーのコンテナ（＝別のコード）に当たりうる
+  - `docker compose ps -q --status running backend` は v5.6.0 で使え、このワークツリー（コンテナなし）では空の出力・exit 0。`docker inspect --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' app-1-backend-1` はパス 1 行を出す（計画レビュー W1 を受けてスパイクで確認）
   - `docker-compose.yml` の backend には healthcheck（`curl -f http://localhost:8000/health/`・start_period 60s・retries 18）があり、`--wait` は healthy まで待つ。起動のたびに collectstatic・migrate が走る
   - ワークツリーは直下 `.env`（`scripts/claude/wt-ports.sh` が作る）でポートをずらす。harness-1 には `.env` が無く、このまま `up` すると app-1 のスタック（8000 番など）とぶつかって失敗する（`docs/runbooks/worktree.md` §6「静かには壊れない」）
   - `.claude/settings.json` に `sandbox` の設定は無い。スクリプトの中の `docker` は Bash ツールの許可の判定を受けない（Bash ツールに渡るのは `bash scripts/claude/adversarial-review.sh I###` だけ）。settings.json は変えない
@@ -89,11 +90,12 @@
    - 修正方針: 「全行が決まった形」をやめ、「どこかの行に見つからない形を含む」で当てる。形の列挙を増やすのでなく、当て方を部分一致・どの行でもに広げる（取りすぎは未検証になるだけ）
      ```python
      pat = re.compile(r"command not found|: not found\s*$|failed to run command|is not running|Cannot connect to the Docker daemon|no such service"
-                      r"|^(?:\S*/)?(?:bash|sh|env|timeout|nice|xargs)(?:: line \d+)?: .*No such file or directory\s*$")
+                      r"|^(?:\S*/)?(?:bash|sh|env|timeout|nice|xargs)(?:: line \d+)?: .*No such file or directory\s*$"
+                      r"|^[^\s:]+: No such file or directory\s*$")
      lines = [l.strip() for l in open(sys.argv[1], encoding="utf-8", errors="replace").read().split("\n")]
      sys.exit(0 if any(pat.search(l) for l in lines) else 1)
      ```
-   - `ls: cannot access 'x': No such file or directory`（コマンドの中身の結果）は、行頭がシェル・`timeout` などでないので当たらない（A37 のまま「実行した」）
+   - `ls: cannot access 'x': No such file or directory`（コマンドの中身の結果）は、行頭がシェル・`timeout` などでないので当たらない（A37 のまま「実行した」）。今の形の `<1 語>: No such file or directory`（接頭辞なし・1 行まるごと）は残す（最後の選択肢。落とすと取り逃しの側に緩むため・計画レビュー W2）。`cat: x: No such file or directory` は 1 語の後に `x:` が続くので当たらない
    - 関数の上のコメントを「どこかの行が見つからない形を含むか」に直す
 5. **noexec の案内に新しい id**（`run_perspective()` 301-314 行）:
    - 結果を書く前に、その観点で使った `P<p>-E<n>` の最大の番号を `$d/exp/*.cmd` から数え、`next_eid="P${p}-E$(( max + 1 ))"` を決める
@@ -112,7 +114,7 @@
   - A41 `docker_wd` が別の場所 → exit 2・`ADVERSARIAL_ERROR: CONTAINER`・claude の呼び出し 0。`docker_ps` が空（動いていない）でも同じ
   - A42 backend の変更なし（A1 のまま）→ `docker_calls` が無い（docker を呼ばない）。`frontend/backend/x`・`docs/backend.md` だけの変更でも呼ばない
   - A43 `ADV_CLOCK_FILE` を使い、`docker_up_advance=100000` で docker が時計を締め切りより先へ進めても、exit 0・OK（締め切りは起こした後から数える）
-  - A44 出力が `is_error=false` / `collecting ...` / `sh: 1: python: not found` / `exit=127` の 4 行（別の行が混ざる）→ V1 未検証・記録に「実行できなかった」。`Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?` を含む出力も未検証
+  - A44 出力が `is_error=false` / `collecting ...` / `sh: 1: python: not found` / `exit=127` の 4 行（別の行が混ざる）→ V1 未検証・記録に「実行できなかった」。`Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?` を含む出力も未検証。`python: No such file or directory` の 1 行（今の形）も未検証のまま
   - A45 noexec の後の 2 回目の入力に「新しい id（P1-E2 から）」。続けて P1-E2 で出し直した案は実行され、V1 が「確認済み（実験）」になる（言い直しが通る筋）
 - FG（失敗の注入）: FG-A40（up の失敗で止める `|| exit 2` を外す → claude が呼ばれる）・FG-A41（作業フォルダの比較を外す → 止まらない）・FG-A42（backend の絞り込みを外す → docker が呼ばれる）・FG-A43（`ensure_backend_container` と `ADV_START` の順を入れ替える → 締め切りで未報告・exit 3）・FG-A44（当て方を `all(fullmatch)` に戻す → V1 確認済み）・FG-A45（案内の id を消す → 2 回目の入力に「P1-E2 から」が無い）
 - 既存の A36・A37・FG-A36 は変えずに通す
@@ -192,4 +194,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 3 | 読んで可 | backend の変更が無いイシューで docker を呼ばない／待ちが締め切りの外／noexec の取り逃しが「実行した」に数えられる道が残っていない（TC-01 の A42〜A44） |
 
 ## 計画変更記録
-（なし）
+- 計画レビュー（20261113_0845）の Warning 3 件への対応: W1 `ps --status`・`inspect` のラベルを実機で確認して §1 に追記／W2 今の形の `<1 語>: No such file or directory` を当て方に残す（4-1 の 4・A44 に 1 件足す）／W3 手動 No.1 の `.env` は `.gitignore` の `*.env` で無視される（`git check-ignore -v .env` で確認済み）と手動テストに書いた。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
+
+## レビュー結果
+- [20261113_0845 判定: ✅ 完了](../../reviews/I486_plan_review_20261113_0845.md)

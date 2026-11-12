@@ -25,5 +25,7 @@
 - [plan] コンテナは「止める」でなく「起こす」（常に `up -d --build --wait backend`）、起こせない・別のワークツリーのコンテナなら止める — 止めると手で起こす手続きが残り AC「手順書に Claude の判断が残らない」に反するため
 - [plan] `wt-ports.sh` はスクリプトから呼ばない — ワークツリーの設定を作る操作で責務の外。衝突は up の失敗で止まる
 - [plan] `ADVERSARIAL_ERROR: CONTAINER` は実行し直さずに止める — 原因が記録の場所で直せないため（既存の exit 2 の決まり）
+- [plan-review] 計画レビュー OK。Warning 3 件は計画変更記録のとおり直し、方式・範囲・AC は変えないので再レビューしない。Info（noexec の取りすぎ）はリスク欄に書いてあり許容 — 止める側に倒れるだけのため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
