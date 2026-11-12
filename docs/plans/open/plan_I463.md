@@ -366,4 +366,6 @@ _OPT_PATH_RE = re.compile(r"--(?!(?:" + "|".join(map(re.escape, _OPT_READ_PATH))
 | Low     | 2件 | 2件 |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+（retro・2026-11-12）
+- 設計レビューの Medium 3 件: すべて TC で防御済み（TC-03 の 03d・TC-02 の 02c・TC-09・TC-10・TC-13）
+- 受け入れる残り: 長いオプションの省略形（`--fi=/x`）・rsync を表に入れない・`--cov-report=xml:/app/…`（元から読まない）・表に無い値付きの長いオプション（grep `--exclude-dir` など）— 脅威モデル（普通の書き方の事故）の範囲外か変更前と同じ。秘密に関わる読み残し（su `-C`・`grep -f.env`／`--file=.env`・python のスクリプト名の探し方）は I469（#469）で扱う
