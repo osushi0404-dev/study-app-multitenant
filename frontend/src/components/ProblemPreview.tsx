@@ -17,13 +17,12 @@ import {
   Typography,
   Chip,
   Divider,
-  ImageList,
-  ImageListItem,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ImageModal from './ImageModal';
+import ProblemImageList from './ProblemImageList';
 import { Problem } from '../services/types';
-import { getMediaUrl } from '../utils/url';
+import { pickImageUrls } from '../utils/problemImages';
 
 interface ProblemPreviewProps {
   problem: Problem;
@@ -64,78 +63,9 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
     }
   };
 
-  // 画像URLを取得（新方式優先、旧方式フォールバック）
-  const getQuestionImageUrls = (): string[] => {
-    if (problem.question_images && problem.question_images.length > 0) {
-      return problem.question_images.map(asset => asset.url);
-    }
-    if (problem.question_image) {
-      return [problem.question_image];
-    }
-    return [];
-  };
-
-  const getExplanationImageUrls = (): string[] => {
-    if (problem.explanation_images && problem.explanation_images.length > 0) {
-      return problem.explanation_images.map(asset => asset.url);
-    }
-    if (problem.explanation_image) {
-      return [problem.explanation_image];
-    }
-    return [];
-  };
-
-  const questionImages = getQuestionImageUrls();
-  const explanationImages = getExplanationImageUrls();
-
-  // 画像表示コンポーネント（アクセシビリティ対応）
-  const renderImages = (images: string[], alt: string) => {
-    if (images.length === 0) return null;
-
-    return (
-      <Box sx={{ mt: 2 }}>
-        <ImageList cols={images.length === 1 ? 1 : Math.min(images.length, 3)} gap={8}>
-          {images.map((imageUrl, index) => (
-            <ImageListItem key={index}>
-              <Box
-                component="img"
-                src={getMediaUrl(imageUrl)}
-                alt={`${alt} ${index + 1}`}
-                role="button"
-                tabIndex={0}
-                aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}
-                loading="lazy"
-                sx={{
-                  width: '100%',
-                  maxHeight: 300,
-                  objectFit: 'contain',
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': {
-                    opacity: 0.9,
-                  },
-                  '&:focus': {
-                    outline: '2px solid',
-                    outlineColor: 'primary.main',
-                    outlineOffset: 2,
-                  },
-                }}
-                onClick={() => setImageModalOpen(getMediaUrl(imageUrl))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setImageModalOpen(getMediaUrl(imageUrl));
-                  }
-                }}
-              />
-            </ImageListItem>
-          ))}
-        </ImageList>
-      </Box>
-    );
-  };
+  // 画像URL（新方式優先、旧方式フォールバック）
+  const questionImages = pickImageUrls(problem.question_images, problem.question_image);
+  const explanationImages = pickImageUrls(problem.explanation_images, problem.explanation_image);
 
   return (
     <Box>
@@ -161,7 +91,7 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
       </Typography>
 
       {/* 問題画像 */}
-      {renderImages(questionImages, '問題画像')}
+      <ProblemImageList images={questionImages} alt="問題画像" onImageClick={setImageModalOpen} />
 
       {/* 選択肢 */}
       <Box sx={{ my: 2 }}>
@@ -202,7 +132,7 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
           </Typography>
 
           {/* 解説画像 */}
-          {renderImages(explanationImages, '解説画像')}
+          <ProblemImageList images={explanationImages} alt="解説画像" onImageClick={setImageModalOpen} />
         </Box>
       )}
 
