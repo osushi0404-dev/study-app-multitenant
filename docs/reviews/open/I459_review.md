@@ -3,19 +3,25 @@
 - 関連: docs/issues/open/I459.md / docs/plans/open/plan_I459.md / GitHub #459 / Draft PR #478
 
 ## 変更概要
-（実装後に記入）`GET /api/dashboard/analytics/` の週ごとの正答率を週の合計で割る形にして、0 問の日がある利用者で 500 になる不具合を直す。`days` を確かめ、不正な値を 400 にする。
+`GET /api/dashboard/analytics/` の週ごとの正答率を週の合計で割る形にして、0 問の日がある利用者で 500 になる不具合を直した。`days` を確かめ、不正な値を 400 にした。
 
 ## 変更点
-（実装後に記入）
+- `backend/dashboard/views.py`: `_accuracy_percent`（新規・モジュールの関数）・`DashboardAnalyticsView.get` の `days` の確かめと 400・`_get_performance_trends` の正答率を `Sum`/`Sum` で 1 回だけ割る形に
+- `backend/dashboard/serializers.py`（新規）: `AnalyticsQuerySerializer`（`days` 1〜365・省略時 30）
+- `backend/dashboard/tests/__init__.py`・`test_I459_analytics_zero_division.py`（新規）: TC-01〜TC-06（13 件）
+- `backend/core/tests/test_I446_cross_api_tenant_isolation.py`: 下準備に 0 件の日のまとめを 1 件足し、避ける注記を外した
 
 ## 影響範囲
-（実装後に記入）
+- API: `performance_trends[].avg_accuracy` の値の意味（週の合計で割る）と丸め（小数第 2 位）。`days` の不正な値は 500 → 400。キー・型は変わらない
+- 画面: 変わらない（`performance_trends` を読まず `days` も送らない）。統計の画面が 500 で読み込みに失敗しなくなる
+- DB・依存: 変更なし
 
 ## テスト結果
-（実装後に記入）
+- 手元: 新しいテスト 13 件と #446・I431 が 172 passed。Red（直す前に 8 件 FAIL）と FG（おすすめの絞り込みを外すと TC-05 FAIL）を確認（`docs/tests/open/I459_auto_test.md` の実行記録）
+- CI: review-gate で確かめる
 
 ## 計画との差分
-（実装後に記入）
+- /simplify で `_accuracy_percent` を 1 行にし、400 の `sub_message` の上限を定数から作るようにした（動き・文言は同じ。計画変更記録）
 
 ## ロールバック
 PR を revert する（コードとテストだけ・DB の形は変えない）。
@@ -26,5 +32,6 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [plan] 正答率を小数第 2 位で丸める — ほかの正答率の欄と同じ
 - [plan] 集計のサービス層への移動・overview の同じ計算の共通化はしない — #473 が作り直す
 - [plan] おすすめの割り算は直さず回帰テスト（TC-05）だけ足す — 再現で 0 で割らないことを確かめた（HAVING の後）
+- [implement] /simplify の 4 観点を 2 体にまとめて回した — 差分が 40 行ほどで、4 体は過剰。見送った指摘は計画変更記録に書いた
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

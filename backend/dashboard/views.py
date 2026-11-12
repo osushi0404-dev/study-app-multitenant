@@ -1,4 +1,4 @@
-from rest_framework import views, permissions
+from rest_framework import views, permissions, status
 from rest_framework.response import Response
 from django.db.models import Sum, Avg, F
 from django.utils import timezone
@@ -6,7 +6,14 @@ from datetime import timedelta
 from problems.models import QuizSession
 from problems.services.tenant_scope import available_problems
 from studylogs.models import StudyLog, DailyStudySummary
+from core.exceptions import create_error_response
 from core.subject_service import subject_service
+from .serializers import ANALYTICS_MAX_DAYS, AnalyticsQuerySerializer
+
+
+def _accuracy_percent(correct, attempted):
+    """正解数 ÷ 解いた問題数 × 100（小数第 2 位）。解いた問題数が 0・空なら 0"""
+    return round(correct * 100 / attempted, 2) if attempted else 0
 
 
 class DashboardOverviewView(views.APIView):
@@ -183,7 +190,14 @@ class DashboardAnalyticsView(views.APIView):
 
     def get(self, request):
         user = request.user
-        days = int(request.query_params.get('days', 30))
+        query = AnalyticsQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return create_error_response(
+                '期間の指定が正しくありません',
+                f'日数は 1〜{ANALYTICS_MAX_DAYS} の整数で指定してください',
+                status.HTTP_400_BAD_REQUEST,
+            )
+        days = query.validated_data['days']
 
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=days)
@@ -243,16 +257,16 @@ class DashboardAnalyticsView(views.APIView):
             ).aggregate(
                 avg_time=Avg('total_study_time'),
                 avg_problems=Avg('total_problems_attempted'),
-                avg_accuracy=Avg(
-                    F('total_problems_correct') * 100.0 / F('total_problems_attempted')
-                )
+                total_attempted=Sum('total_problems_attempted'),
+                total_correct=Sum('total_problems_correct'),
             )
 
             weeks.append({
                 'week_start': current_week_start.isoformat(),
                 'avg_study_time': week_summary['avg_time'] or 0,
                 'avg_problems': week_summary['avg_problems'] or 0,
-                'avg_accuracy': week_summary['avg_accuracy'] or 0
+                'avg_accuracy': _accuracy_percent(
+                    week_summary['total_correct'], week_summary['total_attempted']),
             })
 
             current_week_start += timedelta(days=7)

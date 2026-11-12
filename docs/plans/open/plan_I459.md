@@ -234,6 +234,7 @@ def _accuracy_percent(correct, attempted):
 | V4 | 3 | 読んで可 | 認可（`IsAuthenticated`）と集計の対象（`user=user`）が変わらない（差分と TC-06・TC-07） |
 
 ## 計画変更記録
+- implement（/simplify・2 体〔再利用／簡潔さ・効率・直す深さ〕。差分が 40 行ほどのため 4 観点を 2 体にまとめた）: 動きを変えずに次を直した — `_accuracy_percent` を `round(correct * 100 / attempted, 2) if attempted else 0` の 1 行に（`attempted` が 0 でなければ同じ行の集計なので `correct` は空にならない）・400 の `sub_message` の上限を `ANALYTICS_MAX_DAYS` から作る（定数と文言の二重持ちをやめる。文言は同じ）。見送り: `status.HTTP_400_BAD_REQUEST` の省略（`create_error_response` の既定値と同じだが、I452 の `review_summary` と同じく呼ぶ側で 400 を見せる）・`_clear_caches` の共通化（5 ファイルの写しで、`conftest.py` に移すのは本イシューの範囲外）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
 - [20261112_1832 判定: ✅ 完了](../../reviews/I459_plan_review_20261112_1832.md)

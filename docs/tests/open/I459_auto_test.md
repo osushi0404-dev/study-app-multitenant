@@ -8,7 +8,7 @@
 - 日付は `timezone.now().date()`（ビューと同じ）を `today` とする。下準備の利用者は `user_id="u_i459"`（組織 slug `org-i459`・`role="user"`）
 
 結果:
-- backend:
+- backend: 新しいテスト 13 件と守りのテスト（#446・I431）が 172 passed。Red（直す前に 8 件 FAIL）と FG（おすすめの絞り込みを外すと TC-05 が FAIL）を確かめた。CI は review-gate で確かめる
 - frontend: 対象なし（画面の変更なし）
 
 ## 決定論ゲート（自動実走）
@@ -18,6 +18,11 @@
 | 日時 | コマンド | 終了コード | 結果 |
 |---|---|---|---|
 | 2026-11-12 | TC-01〜TC-08（実装前） | — | 実装前のため未実行（テストのファイルがまだ無い）。直す前の 500 は、計画の調査で使い捨てのテストを流して再現済み（plan_I459.md「エラーの詳細」） |
+| 2026-11-12 18:34 | Red: `PYT`（テストだけ足し、views.py は直す前） | 1 | 8 failed・5 passed。TC-01・TC-02 は 500（`DataError: division by zero`）、TC-03 は `abc`・`1.5` が 500・`0`・`-1`・`366` が 200、TC-04 の `days=`（空）が 500（`int('')`）。通った 5 件は TC-04 の残り 3 件・TC-05・TC-06（直す前から正しい振る舞いの守り） |
+| 2026-11-12 18:34 | Green: `PYT` | 0 | 13 passed |
+| 2026-11-12 18:34 | FG: `backend/dashboard/views.py` のおすすめの `.filter(total_problems__gt=0)` を一時的に外して `PYT -k recommendations_with_zero_problem_log` | 1 | 1 failed（500・`DataError: division by zero`）。元に戻した |
+| 2026-11-12 18:35 | TC-07: #446・I431 と `PYT` をまとめて | 0 | 172 passed（#446 の下準備に 0 件の日を足した後） |
+| 2026-11-12 18:38 | TC-08（/simplify の後）: `PYT`・#446・I431 | 0 | 172 passed |
 
 ## TC 一覧
 
