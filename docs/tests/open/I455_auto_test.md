@@ -71,3 +71,16 @@ TC-13 のコマンド:
 ```bash
 git diff --exit-code 99b17757 -- backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py backend/problems/tests/test_I166_quiz_tenant_isolation.py backend/core/tests/test_I446_cross_api_tenant_isolation.py
 ```
+
+## 再発防止記録（fix-loop・2026-11-12）
+- なぜ失敗したか: コードレビュー（20261112_1006）の F6（Medium）。付け忘れ防止の検出器が「直前の 1 行か同じ行に印の文字がある」だけを見ていた。前の行の呼び出しの行末コメントが、次の行の別の呼び出しの理由として使い回せた（敵対的レビュー 1 周目で窓を 3 行から 1 行に狭めた後も残った形）
+- 何を変えたか: `tokenize` でコメントだけを拾い、理由を認める場所を「直前のコメントだけの行」と「同じ行のコメント」に限った。文字列の中の印も理由に数えない（`backend/studylogs/tests/test_I455_org_scoped_querysets.py` の `_missing_reasons`）。TC-07 の合成コードに、行末コメントの共有（13 行目）と文字列の中の印（14・15 行目）を足した
+- セキュリティ上の考慮点: 他組織のデータの読み出しの付け忘れが CI を通る穴を塞ぐ（OWASP A01 の再発防止の作り）。普通の書き方の事故が対象（R5）
+- 次回どう防ぐか: 検出器の判定を変えるときは、合成コードの TC-07 に「共有」「別の書き方」の形を足してから変える。窓や部分一致のような近似の判定は、コメントと文字列を区別する標準の仕組み（`tokenize`）で置き換える
+- 確かめた結果:
+
+| 日時 | コマンド | 終了コード | 結果 |
+|---|---|---|---|
+| 2026-11-12 | `docker compose exec -T backend python -m pytest studylogs/tests/test_I455_org_scoped_querysets.py -q -k reason` | 0 | 2 passed（本番のコードの理由コメントはすべてコメントだけの行で、落ちる箇所は無い） |
+| 2026-11-12 | FG: 直前の行の判定から「コメントだけの行」の条件を外す・`-k catches_unmarked` | 1 | `[3, 4, 5, 8, 9, 15] == [3, 4, 5, 8, 9, 13, ...]` で FAIL（行末コメントの共有の 13 行目を見落とす）。Edit で戻した |
+| 2026-11-12 | 戻した後に `studylogs/tests/test_I455_org_scoped_querysets.py` 全体 | 0 | 21 passed |

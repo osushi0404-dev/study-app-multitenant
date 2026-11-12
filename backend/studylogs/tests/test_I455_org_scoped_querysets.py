@@ -9,6 +9,8 @@ I455: 学習記録まわりの 8 モデルの、組織の境界つきの取り�
 TC-01〜TC-04・TC-06（docs/tests/open/I455_auto_test.md）に対応。
 """
 import ast
+import io
+import tokenize
 from pathlib import Path
 
 import pytest
@@ -220,9 +222,21 @@ def _missing_reasons(source):
     8 モデルを絞らずに読み、理由のコメントが無い行番号
 
     <モデル>.objects.<メソッド> の形を見る（基準の行はモデル名の書かれた行。複数行の呼び出しでも先頭）。
-    理由はその行の直前の 1 行（または同じ行）に書く。離れたコメントを別の呼び出しと共有させない。
+    理由は、直前のコメントだけの行か、同じ行のコメントに書く。前の行の行末コメント（その行の
+    呼び出しの理由）や文字列の中の印は、別の呼び出しの理由に数えない。
     """
     lines = source.splitlines()
+    marked = {  # 印を含むコメントのある行
+        tok.start[0] for tok in tokenize.generate_tokens(io.StringIO(source).readline)
+        if tok.type == tokenize.COMMENT and REASON_MARK in tok.string
+    }
+
+    def has_reason(lineno):
+        if lineno in marked:
+            return True
+        prev = lineno - 1
+        return prev in marked and lines[prev - 1].lstrip().startswith("#")
+
     missing = []
     for node in ast.walk(ast.parse(source)):
         if not (isinstance(node, ast.Attribute)
@@ -231,8 +245,7 @@ def _missing_reasons(source):
                 and _model_name(node.value.value) in SCOPED_MODELS
                 and node.attr not in NOT_READS):
             continue
-        window = lines[max(0, node.lineno - 2):node.lineno]
-        if not any(REASON_MARK in line for line in window):
+        if not has_reason(node.lineno):
             missing.append(node.lineno)
     return sorted(missing)
 
@@ -264,8 +277,11 @@ def test_reason_check_catches_unmarked_reads():
         "g = StudyLog.objects.for_user(u)",                     # 10 絞っている
         "h = StudyLog.objects.create(user=u)",                  # 11 書き込み
         f"i = MistakePattern.objects.get(id=1)  # {REASON_MARK}: 印付け",  # 12 同じ行の理由
+        "j = StudyLog.objects.values()",                        # 13 前の行の行末の理由を共有しない
+        f"k = '{REASON_MARK}'",                                 # 14 文字列の中の印
+        "m = StudyLog.objects.values()",                        # 15 文字列の印を理由に数えない
     ])
-    assert _missing_reasons(source) == [3, 4, 5, 8, 9]
+    assert _missing_reasons(source) == [3, 4, 5, 8, 9, 13, 15]
 
 
 def test_specs_cover_all_scoped_models():
