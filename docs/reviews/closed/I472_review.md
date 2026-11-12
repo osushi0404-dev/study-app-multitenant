@@ -106,6 +106,7 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [retro] /simplify で見送った 2 件（正解の選択肢を 2 回読む・古い形式の画像の getter が 3 か所）→ #470 に同梱 — 回答の処理と応答の作りの整理の範囲のため
 - [retro] ESLint のフックの再発 → #468 に同梱（再発の記録と優先度の根拠）— 直すイシューが既にあるため新規起票しない
 - [retro] 画像の一時置き場・結線の行の落とし・改行の形・I452 のテストの期待値は見送り — どれもその場で捕まり手戻りが小さい（2.7 の問 2）
+- [close] develop への追従は不要（`pr-base-sync.sh sync`: mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK を確かめてから記録を closed へ移した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -113,3 +114,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge

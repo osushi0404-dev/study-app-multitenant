@@ -268,5 +268,10 @@ interface ProblemImageListProps {
 - implement（/simplify・4 観点）: 動きを変えずに次を直した — `AnswerExplanationSerializer.explanation_image` を `CharField(source='get_explanation_image_url', read_only=True)` に（メソッドを呼ぶだけの組を 1 行に）・`ProblemImageList` の列数を `Math.min(images.length, 3)` に、`getMediaUrl` を 1 枚 1 回に・`QuizSession.tsx` の解説画像を `pickImageUrls(result?.…, result?.…)` に（三項演算を外す）・テストの冗長な確かめを 2 か所まとめた。見送り: 古い形式の画像の getter が 3 つの serializer に残る件（mixin 化は応答の作りを整理する #470 で扱う）・テストの `asset()` の共通化（共通のテスト部品の置き場が無く、3 ファイルの小さな写しで済む）・`submit_answer` で正解の選択肢を 2 回取る件（直す前からのコードで、正誤の判定を変えるのは本イシューの範囲外。#470 で扱う）・`return Response` を `with` の中に入れる案（計画のコードのまま・効果は同じ）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
-- [20261112_1559 判定: ✅ 完了](../../reviews/I472_plan_review_20261112_1559.md)
-（plan-review の後に追記）
+- [20261112_1559 判定: ✅ 完了](../../reviews/closed/I472_plan_review_20261112_1559.md)
+- コードレビュー: [20261112_1623 判定: OK（Low 4 件・止める指摘なし）](../../reviews/closed/I472_code_review_20261112_1623.md)
+
+## 完了情報
+- **完了日時**: 2026-11-12
+- **対応者**: Claude Code
+- **レビュー結果**: OK（計画レビュー 20261112_1559・コードレビュー 20261112_1623。高リスク判定 NO のため敵対的レビューは対象外）
