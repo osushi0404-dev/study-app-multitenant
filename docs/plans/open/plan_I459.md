@@ -236,3 +236,4 @@ def _accuracy_percent(correct, attempted):
 ## 計画変更記録
 
 ## レビュー結果
+- [20261112_1832 判定: ✅ 完了](../../reviews/I459_plan_review_20261112_1832.md)

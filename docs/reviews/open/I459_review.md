@@ -27,3 +27,4 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [plan] 集計のサービス層への移動・overview の同じ計算の共通化はしない — #473 が作り直す
 - [plan] おすすめの割り算は直さず回帰テスト（TC-05）だけ足す — 再現で 0 で割らないことを確かめた（HAVING の後）
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
