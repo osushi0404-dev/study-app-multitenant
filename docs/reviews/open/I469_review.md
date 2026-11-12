@@ -34,6 +34,8 @@
 - [plan] くっつけた値を秘密のファイルとして探すのは、中身を読むオプション（grep `-f`・`--file`・`--exclude-from`、sed `-f`・`--file`）だけ — 除く指定やパターンの値まで足すと確認が増える
 - [plan] 一覧 I463 F5（grep の値付きの長いオプション）を同梱、F4（flock の読みすぎ）は残す — F5 は表に足すだけで秘密の表示の取りこぼしが直る。F4 は止める側に倒れるだけ
 - [design-security-review] 同じ原因の rg・awk のくっつけた値（`rg -f.env`・`awk --file=.env`）も直す範囲に入れ、計画レビューをやり直す — 離した形は今も確認になり、止める対象を増やさない範囲の中。範囲を広げたので計画レビューを通し直す
+- [implement] /simplify の指摘のうち `--include` を表で読む 1 件だけ採り、python の読み方の共通化などは見送った — 共通化すると標準入力とみなす場所の違い（I463 の前から）で判定が変わる。見送りの理由は計画変更記録
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
