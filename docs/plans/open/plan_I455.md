@@ -70,7 +70,7 @@
 ## 2. 受け入れ条件（Acceptance Criteria）
 イシューの受け入れ条件と同じ。この計画での合格の基準:
 - [ ] AC1: 8 モデルの組織の境界が、それぞれの QuerySet のクラス属性（`subject_paths`・`allow_null`）の 1 か所で決まり、`for_user(user)` で取り出せる（TC-01〜TC-04）
-- [ ] AC2: `backend/studylogs/` と `backend/dashboard/` の、テスト以外のコードに `subject_path`・`allow_null`・`scope_to_user_org`・`scope_learning_suggestions` が残らない（TC-05）
+- [ ] AC2: `backend/studylogs/` と `backend/dashboard/` の、テスト以外のコードの呼び出し側に、`scope_to_user_org`・`scope_learning_suggestions` の呼び出しと `subject_path=`・`allow_null=` のキーワード引数が残らない（境界の決まりは 4-3 の QuerySet のクラス属性 `subject_paths = …`・`allow_null = …` だけに書く。TC-05）
 - [ ] AC3: 組織で絞らずに取り出す箇所に、`組織で絞らない` で始まる理由のコメントがある。8 モデルの取り出しが `for_user` でもコメントつきでもないとテストが落ちる（TC-06・TC-07）
 - [ ] AC4: I431（`backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`）・I166（`backend/problems/tests/test_I166_quiz_tenant_isolation.py`）・#446（`backend/core/tests/test_I446_cross_api_tenant_isolation.py`）のテストが、ファイルを変えずにすべて pass する（TC-08・TC-13）
 - [ ] AC5: 各 QuerySet の単体テストが、科目への経路・空を許すか・組織に属さない利用者・別の利用者を確かめる。LearningSuggestion は 2 つの経路の両方で絞ることを確かめる。失敗の注入で RED になる（TC-01〜TC-04・TC-09）
@@ -225,7 +225,7 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - `test_for_user_noorg_user`（8 モデル）: 組織に属さない利用者は、allow_null なら科目が空の自分の記録だけ、そうでなければ空（TC-02）
 - `test_learning_suggestion_both_paths`: 提案の科目が自組織でもパターンの科目が他組織なら外れ、パターンの科目が自組織でも提案の科目が他組織なら外れる。両方自組織・両方空は残る（TC-03）
 - `test_base_without_subject_paths_raises`: `OrgScopedQuerySet` をそのまま使う Manager で `for_user` を呼ぶと `ImproperlyConfigured`（TC-04）
-- `test_unscoped_reads_have_reason_comment`: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` を `ast` で読み、`<8 モデル名>.objects.<メソッド>` の呼び出しのうち、メソッドが `for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外のものについて、その行と直前 3 行のどこかに `組織で絞らない` があることを確かめる。無ければファイル名と行番号を並べて落ちる（TC-06）
+- `test_unscoped_reads_have_reason_comment`: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` を `ast` で読み、`<8 モデル名>.objects.<メソッド>` の呼び出しのうち、メソッドが `for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外のものについて、その行と直前 3 行のどこかに `組織で絞らない` があることを確かめる（基準の行は、モデル名が書かれた行＝`<モデル>.objects` の `ast.Attribute` の `lineno`。複数行の呼び出しでも先頭の行）。無ければファイル名と行番号を並べて落ちる（TC-06）
 
 ## 5. 実装手順
 - ステップ 1（未知リスク先行・土台）: 4-1・4-2・4-3（8 モデルの QuerySet と Manager）を入れる。migration が出ないこと（TC-10）、循環 import が無いこと（TC-08 の収集が通る）を先に確かめる。出たら計画を直す
@@ -287,7 +287,7 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 |---|---|---|---|
 | V1 | 1 | 実験必須 | 8 モデルの `for_user` が、I431 で各呼び出し側に書いていた条件（2 章の表の科目への経路・空を許すか）と同じ記録を返す。特に LearningSuggestion は `subject` と `mistake_pattern__subject` の両方で絞り、空を許すかの取り違えが無い（TC-01〜TC-03 の PASS と、TC-09 の FG で RED を実測） |
 | V2 | 1 | 実験必須 | 置き換えの後も、I431・I166・#446 の越境テストがファイルを変えずにすべて通る（TC-08・TC-13） |
-| V3 | 2 | 読んで可 | (B) に分けた箇所（studylogs/views.py:264・services.py:61・mistake_analysis.py:267・273・adaptive_selection.py:297・302・417・dashboard/views.py:143・302）が、渡す科目・問題が組織で絞られている／組織の候補から除く ID を集めるだけで、`for_user` にしても結果が変わらない（1 章の扱いの表の根拠と、各関数のコード） |
+| V3 | 2 | 読んで可 | (B) に分けた箇所（studylogs/views.py:264・services.py:61・mistake_analysis.py:267・273・adaptive_selection.py:297・302・417・dashboard/views.py:143・302）が、渡す科目・問題が組織で絞られている／組織の候補から除く ID を集めるだけで、`for_user` にしても結果が変わらない（1 章の扱いの表の根拠と、各関数のコード。実装の時に各箇所のコードで根拠を確かめ直し、言い切れなければ (C) に戻す。I431 のテストが (B) の箇所の経路〔`by_subject`・ダッシュボード・`daily_plan`〕を通ることは TC-08 で確かめる） |
 | V4 | 2 | 読んで可 | (C) に分けた箇所が、数だけ・印付け・利用者を持たない一括処理・応答に出ない重複の確かめで、他組織の科目・問題の名前・本文・ID を応答に出さない（I431 の扱いの基準 3 のまま） |
 | V5 | 3 | 実験必須 | 静的テスト TC-06 が、8 モデルの `<モデル>.objects.<読み出し>` を理由のコメントなしで足すと落ち、コメントを消しても落ちる（TC-07 の FG を実測）。複数行の呼び出し・`filter(**kwargs)` の形でも見落とさない |
 | V6 | 2 | 実験必須 | Manager の差し替えで migration が出ず（TC-10）、循環 import が無い（TC-08 の収集が通る） |
@@ -297,4 +297,6 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - イシューとのずれ: イシューの「含む」の「利用者を受け取る非同期処理は `for_user` を使う」のうち、`export_user_data_task` は件数だけを返すため `for_user` にせず理由のコメントにした（件数が変わると「振る舞いを変えない」に反する。9 章）。ほかの利用者を受け取るタスクはサービス経由で `for_user` になる
 
 ## レビュー結果
+- [20261112_0923 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0923.md)
 - [20261112_0921 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0921.md)
+- plan-review（20261112_0923）の指摘への対応: TC-05 の正規表現を呼び出し側の形（`scope_to_user_org`・`scope_learning_suggestions`・`subject_path=`・`allow_null=`）に絞り、AC2 の文言を合わせた（Blocker。4-3 のクラス属性に当たって正しい実装でも不合格になるため）・TC-06 の基準の行を 4-6 に明記・V3 に実装時の確かめ直しを追記・TC-13 の基点を `99b17757` に固定（Warning・Info）。計画レビューのやり直し: 要（AC2 の文言を変えた）
