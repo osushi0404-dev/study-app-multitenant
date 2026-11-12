@@ -39,3 +39,4 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [implement] /simplify の 4 観点を 2 体にまとめて回した — 差分が小さく 4 体は過剰。`subject_service.py:125` の直しの指摘は誤り（来るのは未ログイン・なしだけ）として見送った。ほかの見送りは計画変更記録
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
