@@ -26,3 +26,6 @@ PR を revert し、migration `0022_quizsession_mode` を戻す（`python manage
 - [plan-issue] 同梱の 14 件の扱いを計画書 9 章で決めた（同梱 7・I190 に渡す 4・残す 3）— 変更点に当たるものは同梱、I190 の担当のものは渡す
 
 STAGE_DONE: plan NEXT: plan-review
+- [plan-review] 判定 HIGHRISK。Warning 3 件（カードの初期値・習熟度のキャッシュのキーと消す処理・TC-14 の合否）を計画書・テスト文書で直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
+
+STAGE_DONE: plan-review NEXT: design-security-review

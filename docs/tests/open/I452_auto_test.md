@@ -60,5 +60,5 @@
 ```
 docker compose exec -T backend python -m pytest studylogs/tests/test_I452_quiz_review.py studylogs/tests/test_I431_studylogs_tenant_isolation.py studylogs/tests/test_I455_org_scoped_querysets.py problems/tests/test_I166_quiz_tenant_isolation.py problems/tests/test_I158_quiz_session_start.py core/tests/test_I446_cross_api_tenant_isolation.py -q -rxX
 ```
-- 出力に `xfailed`・`XPASS` が出ないこと（`-rxX` で一覧を出す）。xfail の印の外し忘れは `strict=True` の XPASS で CI が落ちるので、印を外した後に xfailed が 0 なら全部外せている
+- 合否は exit code だけで決める。xfail の印の残りは、決定論ゲートの `! grep -q XFAIL_452 backend/core/tests/test_I446_cross_api_tenant_isolation.py`（印に使う定数を消した＝9 ケースすべての印を外した）が exit code で確かめる。印を外し忘れて直っていたケースは `strict=True` の XPASS でこのコマンドが非ゼロになる。`-rxX` の一覧は記録のために出す（合否には使わない）
 - FG: `adaptive_selection.py` の難易度の直し（4-1）を 1 か所だけ一時的に元の文字の絞り込みに戻すと、#446 の `adaptive-learning` のケースと TC-09・TC-10 が FAIL（exit 1）。戻す

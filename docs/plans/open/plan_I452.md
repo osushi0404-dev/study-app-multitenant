@@ -129,7 +129,12 @@ def record_quiz_answer(self, problem, is_correct, time_taken_seconds, *, now=Non
     now = now or timezone.now()
     card, _ = SpacedRepetitionCard.objects.get_or_create(
         user=self.user, problem=problem,
-        defaults={...INITIAL..., 'next_review_date': now})
+        defaults={
+            'ease_factor': self.calculator.INITIAL_EASE_FACTOR,      # 2.5
+            'interval_days': self.calculator.INITIAL_INTERVAL,       # 1
+            'repetition_count': 0,
+            'next_review_date': now,
+        })  # 既存の create_card_for_problem と同じ初期値
     card = SpacedRepetitionCard.objects.select_for_update().get(pk=card.pk)
     if card.last_reviewed_at and timezone.localdate(card.last_reviewed_at) == timezone.localdate(now):
         return None
@@ -196,7 +201,7 @@ mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_NORMAL
 - 難易度（4-1）
 - `_generate_pattern_based_suggestions`（調査 5）: 種類ごとの文言を、当てはまる種類だけ組み立てる（種類ごとの小さな関数の表にする）。科目が要る種類（`subject_difficulty`・`concept_confusion`）で科目が空なら提案を作らない
 - `_analyze_problem_type_errors` の分母（I431 の同梱 F5）: `SpacedRepetitionReview`・`ProblemAttempt` を `for_user(self.user)` で数える（分子の間違いの記録はすでに `for_user` なので、分母も同じ範囲にそろえる。理由のコメントを消す）
-- 習熟度のキャッシュのキー（I431 の同梱 F3）: `cache_service.get_proficiency_cache`・`set_proficiency_cache` に `organization_id` の引数を足し、キーを `('proficiency', user_id, organization_id, subject_id or 'all')` にする。呼び出し（`adaptive_selection.py:72-75・122-126`）は `self.user.organization_id` を渡す。キーを消す処理（`invalidate_*`）がこのキーの形に依存していないかを実装の時に確かめる（依存していれば同じ形にそろえる）
+- 習熟度のキャッシュのキー（I431 の同梱 F3）: `cache_service.get_proficiency_cache`・`set_proficiency_cache` に `organization_id` の引数を足し、キーを `_generate_key('proficiency', user_id, f"org{organization_id}", subject_id or 'all')` にする（`_generate_key` は `int`・`str` 以外の引数を黙って捨てるため〔`cache_service.py:45-55`〕、組織が無い利用者の `None` も `"orgNone"` の文字で必ずキーに入れる）。呼び出し（`adaptive_selection.py:72-75・122-126`）は `self.user.organization_id` を渡す。キーを消す処理 `invalidate_proficiency_cache`（`cache_service.py:252-255`）は `learning_app:proficiency_{user_id}_*` の前方一致で消すので、組織の部分を足しても消し漏れない（計画レビューの時に確かめた）。`get_due_cards` のキー（4-2）も `invalidate_spaced_repetition_cache`（`spaced_repetition_{user_id}_*`・`cache_service.py:198-201`）の前方一致の中に入る
 - 印付けの 3 経路（I455 の BP の同梱）: `studylogs/views.py` の `mark_suggestion_read`・`resolve_weakness`、`mistake_analysis.py` の `provide_suggestion_feedback` の `objects.get(id=…, user=…)` を `objects.for_user(user).get(id=…)` にし、`組織で絞らない` のコメントを消す（他組織の科目を指す自分の古い記録は 404 になる）
 - `export_user_data_task` の理由のコメント（I455 の同梱 F1）: 「件数だけの集計」を「本人の記録の書き出し（応答は件数だけ・中身は外に出さない）」に直す（`tasks.py:276-278`）
 
@@ -388,7 +393,8 @@ export const getReviewSummary = async (subjectId?: string): Promise<ReviewSummar
 | V6 | 1 | 実験必須 | キャッシュのキーに組織が入り、組織を移った直後に前の組織の復習のカード・習熟度が返らない（TC-12） |
 
 ## 計画変更記録
-（なし）
+- plan-review（20261112_1232・HIGHRISK）の Warning への対応: 4-2 のカードの初期値を明記した（既存の `create_card_for_problem` と同じ値）／4-5 の習熟度のキャッシュのキーの組み立てを具体化し、消す処理（前方一致）で消し漏れないことを計画の時点で確かめた（`_generate_key` が `None` を捨てるので組織は `"org<番号>"` の文字で入れる）／TC-14 の xfail の残りは、決定論ゲートの `! grep -q XFAIL_452`（定数を消す＝印をすべて外した）で exit code として確かめると明記した。Info（回答とカードの更新の同じトランザクション・復習の開始で進行中のクイズが終わる）は計画のままとする。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
+- [20261112_1232 判定: ✅ 完了](../../reviews/I452_plan_review_20261112_1232.md)
 （plan-review 段階が追記する）
