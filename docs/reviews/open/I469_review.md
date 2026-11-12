@@ -31,3 +31,4 @@
 - [design-security-review] 同じ原因の rg・awk のくっつけた値（`rg -f.env`・`awk --file=.env`）も直す範囲に入れ、計画レビューをやり直す — 離した形は今も確認になり、止める対象を増やさない範囲の中。範囲を広げたので計画レビューを通し直す
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
