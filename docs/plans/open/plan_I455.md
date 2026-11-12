@@ -72,7 +72,7 @@
 - [ ] AC1: 8 モデルの組織の境界が、それぞれの QuerySet のクラス属性（`subject_paths`・`allow_null`）の 1 か所で決まり、`for_user(user)` で取り出せる（TC-01〜TC-04）
 - [ ] AC2: `backend/studylogs/` と `backend/dashboard/` の、テスト以外のコードに `subject_path`・`allow_null`・`scope_to_user_org`・`scope_learning_suggestions` が残らない（TC-05）
 - [ ] AC3: 組織で絞らずに取り出す箇所に、`組織で絞らない` で始まる理由のコメントがある。8 モデルの取り出しが `for_user` でもコメントつきでもないとテストが落ちる（TC-06・TC-07）
-- [ ] AC4: I431（`backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`）・I166（`backend/problems/tests/test_I166_quiz_tenant_isolation.py`）・#446（`backend/core/tests/test_I446_cross_api_tenant_isolation.py`）のテストが、ファイルを変えずにすべて pass する（TC-08）
+- [ ] AC4: I431（`backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`）・I166（`backend/problems/tests/test_I166_quiz_tenant_isolation.py`）・#446（`backend/core/tests/test_I446_cross_api_tenant_isolation.py`）のテストが、ファイルを変えずにすべて pass する（TC-08・TC-13）
 - [ ] AC5: 各 QuerySet の単体テストが、科目への経路・空を許すか・組織に属さない利用者・別の利用者を確かめる。LearningSuggestion は 2 つの経路の両方で絞ることを確かめる。失敗の注入で RED になる（TC-01〜TC-04・TC-09）
 - [ ] AC6: migration が増えない（TC-10）
 - [ ] AC7: 全テストが pass する（CI・TC-11）
@@ -232,7 +232,7 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - ステップ 2（ステップ 1 が前提）: 4-6 の単体テスト（TC-01〜TC-04）を足して通し、失敗の注入（TC-09）で RED を確かめる
 - ステップ 3（ステップ 1 が前提）: 4-4 の置き換えと、使わなくなった import の削除 → TC-05・TC-08
 - ステップ 4（ステップ 3 が前提）: 4-5 のコメントと 4-6 の静的テスト → TC-06・TC-07
-- ステップ 5: /simplify の後に TC-08・TC-10 を流し直す（→ TC-12）
+- ステップ 5: /simplify の後に TC-05・TC-08・TC-10・TC-13 を流し直す（→ TC-12）
 
 ## 6. テスト計画
 - 自動: docs/tests/open/I455_auto_test.md（単体テスト・静的テスト・守りにする既存の越境テスト・migration の確かめ・grep の不在の確かめ）。テストレベルは単体（QuerySet）と結合（既存の API の越境テスト）。新しい E2E は無し（画面の振る舞いを変えないため）
@@ -282,5 +282,19 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - 一覧 I223.md B1〜B4: 残す — bot の停止に関する項目で、このイシューの変更点と関係しない（`FILE=-`）
 - 実装対象のファイルに当たる行は無し
 
+## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
+| 項目 | 観点 | 確かめ方 | 内容 |
+|---|---|---|---|
+| V1 | 1 | 実験必須 | 8 モデルの `for_user` が、I431 で各呼び出し側に書いていた条件（2 章の表の科目への経路・空を許すか）と同じ記録を返す。特に LearningSuggestion は `subject` と `mistake_pattern__subject` の両方で絞り、空を許すかの取り違えが無い（TC-01〜TC-03 の PASS と、TC-09 の FG で RED を実測） |
+| V2 | 1 | 実験必須 | 置き換えの後も、I431・I166・#446 の越境テストがファイルを変えずにすべて通る（TC-08・TC-13） |
+| V3 | 2 | 読んで可 | (B) に分けた箇所（studylogs/views.py:264・services.py:61・mistake_analysis.py:267・273・adaptive_selection.py:297・302・417・dashboard/views.py:143・302）が、渡す科目・問題が組織で絞られている／組織の候補から除く ID を集めるだけで、`for_user` にしても結果が変わらない（1 章の扱いの表の根拠と、各関数のコード） |
+| V4 | 2 | 読んで可 | (C) に分けた箇所が、数だけ・印付け・利用者を持たない一括処理・応答に出ない重複の確かめで、他組織の科目・問題の名前・本文・ID を応答に出さない（I431 の扱いの基準 3 のまま） |
+| V5 | 3 | 実験必須 | 静的テスト TC-06 が、8 モデルの `<モデル>.objects.<読み出し>` を理由のコメントなしで足すと落ち、コメントを消しても落ちる（TC-07 の FG を実測）。複数行の呼び出し・`filter(**kwargs)` の形でも見落とさない |
+| V6 | 2 | 実験必須 | Manager の差し替えで migration が出ず（TC-10）、循環 import が無い（TC-08 の収集が通る） |
+
 ## 計画変更記録
-（なし）
+- plan-review（20261112_0921）の指摘への対応: 「必ず確かめる項目」の節を足した（Blocker）・TC-05 と TC-08 のコマンドを表の外のコードブロックに出し、TC-08 を TC-08（pytest）と TC-13（守りのテストのファイルが変わっていない）に分けた（Warning）・イシューとのずれ（`export_user_data_task` を `for_user` にしない）を下に記録（Warning）。計画レビューのやり直し: 要（Blocker の節の追加）
+- イシューとのずれ: イシューの「含む」の「利用者を受け取る非同期処理は `for_user` を使う」のうち、`export_user_data_task` は件数だけを返すため `for_user` にせず理由のコメントにした（件数が変わると「振る舞いを変えない」に反する。9 章）。ほかの利用者を受け取るタスクはサービス経由で `for_user` になる
+
+## レビュー結果
+- [20261112_0921 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0921.md)
