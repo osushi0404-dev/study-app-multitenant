@@ -5,7 +5,7 @@
 - **関連イシュー**: #452
 - **Draft PR**: #464
 - **作成根拠資料**: docs/issues/open/I452.md（GitHub #452 の本文の写し）と、#452 のコメント 5 件（I431・#446・I455 からの同梱）
-- **実装後評価**: docs/reviews/open/I452_review.md
+- **実装後評価**: docs/reviews/closed/I452_review.md
 - **作成日**: 2026-11-12
 
 ## 1. 背景/目的
@@ -408,7 +408,7 @@ export const getReviewSummary = async (subjectId?: string): Promise<ReviewSummar
 - implement（/simplify）で見送ったこと: `get_due_cards`（既存の `due_cards` API・学習プラン）を `due_cards_queryset` に寄せる案（削除した問題が外れる＝既存の API の振る舞いが変わる）／開始の件数・出題・終わりの合図を 1 つの候補の問い合わせにまとめる案（低・構造の変更が大きい）／`_reviewable_cards` の副問い合わせを JOIN にする案（`available_problems` を組織の判定の 1 か所にする設計を崩す）／テストの日付の補助関数の整理（期待値を本体と別に書くのは意図）／`review_card` の内側の `atomic` を外す案（ほかの呼び出し元の確認が要る）
 
 ## レビュー結果
-- [20261112_1232 判定: ✅ 完了](../../reviews/I452_plan_review_20261112_1232.md)
+- [20261112_1232 判定: ✅ 完了](../../reviews/closed/I452_plan_review_20261112_1232.md)
 
 ## セキュリティレビュー結果
 
@@ -458,3 +458,11 @@ export const getReviewSummary = async (subjectId?: string): Promise<ReviewSummar
 - Medium（設計 4 件・シナリオ 6 件）: すべて自動テストで塞いだ（TC-04・TC-08・TC-12・TC-14 と #446 の表の `review_summary`・`POST api/quiz/`・`next_problem`・`submit_answer`。失敗の注入で FAIL を実測）。残りなし
 - Low（入力の検証・認証漏れ・印付けの 404）: TC-04 (e)(f)・TC-08 (f)・TC-13 で確かめた。残りなし
 - レビューの Low（キャッシュの 5 分の古さ・同時回答のテストが無い・#446 の `ListCheck` のデータ）: どれも他組織のデータは出ない（絞る方向・期限つき）。I467（#467）に回した
+
+## 完了情報
+
+- **完了日時**: 2026-11-12
+
+- **対応者**: Claude Code
+
+- **レビュー結果**: OK（コードレビュー 20261112_1307・敵対的レビュー 20261112_1318）

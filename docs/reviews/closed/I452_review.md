@@ -120,3 +120,6 @@ STAGE_DONE: test-gate NEXT: retro
 - [retro] 残余リスク処遇を計画書に書いた（Medium はすべて自動テストで塞いだ・レビューの Low は I467）
 
 STAGE_DONE: retro NEXT: close
+- [close] develop への追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書に完了情報を足し、PR の説明をひな形どおりに更新した
+
+STAGE_DONE: close NEXT: merge
