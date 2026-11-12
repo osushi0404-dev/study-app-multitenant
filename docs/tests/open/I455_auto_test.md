@@ -32,6 +32,10 @@
 | 2026-11-12 | TC-10 FG（StudyLog の Manager を `use_in_migrations=True` のものに差し替え） | 1 | `0002_alter_studylog_managers.py`（Change managers on studylog）を検出（`--dry-run` なのでファイルは作られない）。Edit で戻して `No changes detected` |
 | 2026-11-12 | TC-13 FG（I166 のテストの末尾に空行を足す） | 1 | 差分を検出。Edit で戻して exit 0 |
 | 2026-11-12 | /simplify の後に TC-12（TC-05・TC-08・TC-10・TC-13） | 0 | すべて exit 0。TC-08 は 182 passed・9 xfailed（静的テストの対象モデルを登録から集める変更で 1 件増えた） |
+| 2026-11-12 | 敵対的レビュー 1 周目（20261112_0952）の Medium への対応の後に `-k reason` | 0 | 2 passed（本番のコードは理由が直前の行にあり、窓を狭めても合格） |
+| 2026-11-12 | TC-07 FG: 窓を「直前 3 行」に戻す | 1 | `[5, 8, 9] == [3, 4, 5, 8, 9]` で FAIL（共有された行 3・4 を見落とす）。Edit で戻した |
+| 2026-11-12 | TC-07 FG: `models.X` の形の検出を外す | 1 | `[3, 5, 8, 9] == [3, 4, 5, 8, 9]` で FAIL（行 4 を見落とす）。Edit で戻した |
+| 2026-11-12 | 直した後に TC-08 | 0 | 183 passed・9 xfailed（35 秒） |
 
 ## TC 一覧
 
@@ -42,8 +46,8 @@
 | TC-03 | `test_learning_suggestion_both_paths`: 提案（subject・パターンの subject）の組を (自・自)・(自・他)・(他・自)・(空・空)・(自・空) で作る | `... -k both_paths` | exit 0。`for_user(user_a)` が返すのは (自・自)・(空・空)・(自・空) の 3 件だけ | AC1・AC5 |
 | TC-04 | `test_base_without_subject_paths_raises`: 属性を書かない `OrgScopedQuerySet` で `for_user` を呼ぶ | `... -k without_subject_paths` | exit 0（`ImproperlyConfigured` が出ることを `pytest.raises` で確かめる） | AC1 |
 | TC-05 | 呼び出し側に境界の指定（`scope_to_user_org`・`scope_learning_suggestions` の呼び出しと、その引数 `subject_path=`）が残らない。QuerySet のクラス属性 `subject_paths = …`（4-3）は「=」の前に空白があるので当たらない。`allow_null=` は DRF の入力欄の設定（`serializers.py` の `OrgSubjectField(..., allow_null=True)` など）にも当たるので探さない（`scope_to_user_org` の呼び出しが無ければ、その引数としての `allow_null=` も無い） | 下の「TC-05 のコマンド」 | exit 0（1 行も当たらない）。FG: `backend/dashboard/views.py` に `# scope_to_user_org` の行を一時的に足すと exit 1。戻す | AC2 |
-| TC-06 | `test_unscoped_reads_have_reason_comment`（基準の行はモデル名が書かれた行＝`<モデル>.objects` の `ast.Attribute` の `lineno`。複数行の呼び出しでも先頭の行）: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` で、8 モデルの `objects.<メソッド>`（`for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外）の行と直前 3 行に `組織で絞らない` がある | `... -k reason_comment` | exit 0 | AC3 |
-| TC-07 | TC-06 の FG（3 種）: (a) `backend/studylogs/views.py` の `update_progress` の `組織で絞らない` のコメントを 1 つ消す (b) `backend/dashboard/views.py` に `StudyLog.objects.filter(user=user).count()` の行をコメントなしで一時的に足す (c) 同じ場所に、複数行に分けた `StudyLog.objects.filter(\n    user=user,\n).count()` をコメントなしで一時的に足す | `... -k reason_comment` を各 FG で | いずれも exit 1 で、失敗の文に注入したファイル名と行番号が出る。Edit で戻した後に exit 0 | AC3 |
+| TC-06 | `test_unscoped_reads_have_reason_comment`（基準の行はモデル名が書かれた行＝`<モデル>.objects` の `ast.Attribute` の `lineno`。複数行の呼び出しでも先頭の行）: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` で、8 モデルの `objects.<メソッド>`（`for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外）の行と直前の 1 行のどちらかに `組織で絞らない` がある（`StudyLog`・`models.StudyLog` のどちらの書き方も見る） | `... -k reason_comment` | exit 0 | AC3 |
+| TC-07 | `test_reason_check_catches_unmarked_reads`（CI で毎回）: 合成したコードで、検出器が付け忘れの行（離れたコメントを共有する呼び出し・`models.X` の形・複数行の呼び出し・`filter(**kw)`・`.all()`）だけを返し、`for_user`・`create`・直前の行や同じ行に理由のある呼び出しを返さない。あわせて TC-06 の FG（3 種）: (a) `backend/studylogs/views.py` の `update_progress` の `組織で絞らない` のコメントを 1 つ消す (b) `backend/dashboard/views.py` に `StudyLog.objects.filter(user=user).count()` の行をコメントなしで一時的に足す (c) 同じ場所に、複数行に分けた `StudyLog.objects.filter(\n    user=user,\n).count()` をコメントなしで一時的に足す | `... -k reason_comment` を各 FG で | いずれも exit 1 で、失敗の文に注入したファイル名と行番号が出る。Edit で戻した後に exit 0 | AC3 |
 | TC-08 | 守りの既存テスト（I431・I166・#446）と新しいテスト | 下の「TC-08 のコマンド」 | exit 0（failed 0。#446 の xfail はそのまま xfailed） | AC4 |
 | TC-13 | 守りのテストのファイルを変えていない（基点はこのブランチの起点の develop のコミット `99b17757` に固定） | 下の「TC-13 のコマンド」 | exit 0（差分なし）。FG: I166 のテストのファイルの末尾に空行を一時的に足すと exit 1。戻す | AC4 |
 | TC-09 | TC-01〜TC-03 の FG（3 種）: (a) `StudyLogQuerySet.allow_null` を `False` にする (b) 土台の `OrgScopedQuerySet.for_user` から `self.filter(user=user)` を外す（`self` のまま絞る） (c) `LearningSuggestionQuerySet.subject_paths` から `'mistake_pattern__subject'` を消す | `docker compose exec -T backend python -m pytest studylogs/tests/test_I455_org_scoped_querysets.py -q` を各 FG で | (a) TC-01・TC-02 の StudyLog が FAIL (b) TC-01 の 8 モデルすべてが FAIL（`user_a2` の記録が混ざる） (c) TC-03 が FAIL。いずれも exit 1。Edit で戻した後に exit 0 | AC5 |

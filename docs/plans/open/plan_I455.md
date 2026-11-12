@@ -213,7 +213,7 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 使わなくなった import（`scope_to_user_org`・`scope_learning_suggestions`）は消す。
 
 ### 4-5. 絞らない箇所の理由のコメント（(C)）
-**修正方針**: 1 章の「扱いの表」で (C) の各取り出しの直前（呼び出しの先頭の行から 3 行以内）に、次のどれかを書く。同じ関数の中で続く複数の取り出しは、最初の 1 つの前の 1 行で足りる場合も、静的テスト（4-6）がそれぞれの行を見るので、それぞれの直前に書く。
+**修正方針**: 1 章の「扱いの表」で (C) の各取り出しの直前の行（呼び出しの先頭の行のすぐ上、または同じ行）に、次のどれかを書く。続く複数の取り出しは、それぞれの直前に書く（静的テスト〔4-6〕は離れたコメントの共有を認めない）。
 - `# 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）`
 - `# 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）`
 - `# 組織で絞らない: 利用者を持たない一括処理（中身を外に出さない）`
@@ -225,7 +225,8 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - `test_for_user_noorg_user`（8 モデル）: 組織に属さない利用者は、allow_null なら科目が空の自分の記録だけ、そうでなければ空（TC-02）
 - `test_learning_suggestion_both_paths`: 提案の科目が自組織でもパターンの科目が他組織なら外れ、パターンの科目が自組織でも提案の科目が他組織なら外れる。両方自組織・両方空は残る（TC-03）
 - `test_base_without_subject_paths_raises`: `OrgScopedQuerySet` をそのまま使う Manager で `for_user` を呼ぶと `ImproperlyConfigured`（TC-04）
-- `test_unscoped_reads_have_reason_comment`: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` を `ast` で読み、`<8 モデル名>.objects.<メソッド>` の呼び出しのうち、メソッドが `for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外のものについて、その行と直前 3 行のどこかに `組織で絞らない` があることを確かめる（基準の行は、モデル名が書かれた行＝`<モデル>.objects` の `ast.Attribute` の `lineno`。複数行の呼び出しでも先頭の行）。無ければファイル名と行番号を並べて落ちる（TC-06）
+- `test_unscoped_reads_have_reason_comment`: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` を `ast` で読み、`<8 モデル名>.objects.<メソッド>` の呼び出しのうち、メソッドが `for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外のものについて、その行と直前の 1 行のどちらかに `組織で絞らない` があることを確かめる。モデルは `StudyLog`・`models.StudyLog` のどちらの書き方も見る（基準の行は、モデル名が書かれた行＝`<モデル>.objects` の `ast.Attribute` の `lineno`。複数行の呼び出しでも先頭の行）。無ければファイル名と行番号を並べて落ちる（TC-06）
+- `test_reason_check_catches_unmarked_reads`: 合成したコード（コメントの共有・`models.X` の形・複数行の呼び出し・`filter(**kw)`・`.all()`・`for_user`・`create`・同じ行の理由）で、検出器が付け忘れの行だけを返すことを確かめる（TC-07・CI で毎回）
 
 ## 5. 実装手順
 - ステップ 1（未知リスク先行・土台）: 4-1・4-2・4-3（8 モデルの QuerySet と Manager）を入れる。migration が出ないこと（TC-10）、循環 import が無いこと（TC-08 の収集が通る）を先に確かめる。出たら計画を直す
@@ -289,8 +290,8 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 | V2 | 1 | 実験必須 | 置き換えの後も、I431・I166・#446 の越境テストがファイルを変えずにすべて通る（TC-08・TC-13） |
 | V3 | 2 | 読んで可 | (B) に分けた箇所（studylogs/views.py:264・services.py:61・mistake_analysis.py:267・273・adaptive_selection.py:297・302・417・dashboard/views.py:143・302）が、渡す科目・問題が組織で絞られている／組織の候補から除く ID を集めるだけで、`for_user` にしても結果が変わらない（1 章の扱いの表の根拠と、各関数のコード。実装の時に各箇所のコードで根拠を確かめ直し、言い切れなければ (C) に戻す。I431 のテストが (B) の箇所の経路〔`by_subject`・ダッシュボード・`daily_plan`〕を通ることは TC-08 で確かめる） |
 | V4 | 2 | 読んで可 | (C) に分けた箇所が、数だけ・印付け・利用者を持たない一括処理・応答に出ない重複の確かめで、他組織の科目・問題の名前・本文・ID を応答に出さない（I431 の扱いの基準 3 のまま） |
-| V5 | 3 | 実験必須 | 静的テスト TC-06 が、8 モデルの `<モデル>.objects.<読み出し>` を理由のコメントなしで足すと落ち、コメントを消しても落ちる（TC-07 の FG を実測）。複数行の呼び出し・`filter(**kwargs)` の形でも見落とさない |
-| V6 | 2 | 実験必須 | Manager の差し替えで migration が出ず（TC-10）、循環 import が無い（TC-08 の収集が通る） |
+| V5 | 3 | 実験必須 | 静的テスト TC-06 が、8 モデルの `<モデル>.objects.<読み出し>` を理由のコメントなしで足すと落ち、コメントを消しても落ちる（TC-07 の FG を実測）。複数行の呼び出し・`filter(**kwargs)`・`models.X` の形でも見落とさず、離れたコメントを別の呼び出しと共有させない（TC-07 の `test_reason_check_catches_unmarked_reads` が CI で毎回確かめる） |
+| V6 | 2 | 読んで可 | Manager の差し替えで migration が出ず（TC-10。CI の `makemigrations --check`〔ci.yml:38〕が毎回確かめ、FG で非ゼロを実測済み）、循環 import が無い（TC-08・TC-11。テストの収集と CI の全テストが通る） |
 
 ## 計画変更記録
 - plan-review（20261112_0921）の指摘への対応: 「必ず確かめる項目」の節を足した（Blocker）・TC-05 と TC-08 のコマンドを表の外のコードブロックに出し、TC-08 を TC-08（pytest）と TC-13（守りのテストのファイルが変わっていない）に分けた（Warning）・イシューとのずれ（`export_user_data_task` を `for_user` にしない）を下に記録（Warning）。計画レビューのやり直し: 要（Blocker の節の追加）
@@ -299,6 +300,7 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - plan-review（20261112_0925・HIGHRISK）の Warning への対応: TC-10 の FG の手順を具体化（`Manager.from_queryset` に `use_in_migrations=True` を付けた Manager に一時的に差し替える）。`problems/views.py:812` は 9 章に理由を記録済みで、イシュー（GitHub が正）の表は変えない。(B) の箇所は implement で各箇所のコードを確かめ直し、言い切れなければ (C) に戻して計画変更記録に書く（V3）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 - implement: TC-05 の正規表現から `allow_null=` を外した — 計画の記載「`scope_to_user_org|scope_learning_suggestions|subject_path=|allow_null=`」が、DRF の入力欄の設定（`backend/studylogs/serializers.py:11・29・304` の `allow_null=True`。境界の指定ではない）に当たり、正しい実装でも不合格になるため。`allow_null=` は `scope_to_user_org` の引数としてしか境界の意味を持たず、その呼び出しが無いことは同じ TC で確かめるので、守る力は変わらない。AC2 の文言を「呼び出し（とその引数）」に合わせた。計画レビューのやり直し: 不要（受け入れ条件の意味・方式・範囲を変えない TC の誤検出の直し）
 - implement: (B) の各箇所を実装の時にコードで確かめ直した（V3）。`studylogs/views.py:264`・`dashboard/views.py:143` の科目は `get_user_selected_subjects`（`core/subject_service.py:106-160`・`organization_id=user.organization_id` で絞る）、`mistake_analysis.py:267・273` は `available_subjects`、`adaptive_selection.py:417` の問題は `available_problems` の候補、`services.py:61`・`adaptive_selection.py:297・302`・`dashboard/views.py:302` は組織で絞った一覧から除く ID を集めるだけ。どれも言い切れたので (C) に戻したものは無い
+- review-gate（敵対的レビュー 20261112_0952・HIGH）への対応: (1) 静的テストの理由のコメントの窓を「直前 3 行」から「直前の 1 行か同じ行」に狭めた（離れたコメントを別の呼び出しが共有できた・Medium）(2) `models.StudyLog.objects` の形も検出する（Medium）(3) 検出器そのものを合成したコードで確かめるテスト `test_reason_check_catches_unmarked_reads` を足した（TC-07 の FG を CI で毎回行う）(4) V6 は CI の `makemigrations --check` と全テストの収集という決定論の TC（TC-10・TC-08・TC-11。TC-10 は FG 済み）で覆っているので、確かめ方を「読んで可」に下げた（実験役の環境に python が無く実測できなかったため）。problems の QuizSession の読み出しを見張る範囲に入れる指摘（Medium）は、イシューの「含まない」（QuizService）に当たり AC3 の範囲外なので retro で扱う。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 - implement（/simplify）: 静的テストの対象モデルを、テストの表（SPECS）ではなくモデルの登録（既定の取り出し口が `OrgScopedQuerySet` のもの）から集め、表と一致することも確かめるテスト（`test_specs_cover_all_scoped_models`）を足した — 9 つ目のモデルに QuerySet を足したとき、表への足し忘れで静的テストの対象から漏れないため。理由のコメントの言い回しを 5 種類にそろえた。計画レビューのやり直し: 不要（4-6 のテストの対象の集め方の細部・方式は同じ）
 
 ## レビュー結果

@@ -206,28 +206,66 @@ SCOPED_MODELS = _scoped_model_names()
 NOT_READS = {"for_user", "create", "get_or_create", "update_or_create", "bulk_create"}
 
 
+def _model_name(node):
+    """`StudyLog`・`models.StudyLog` のどちらの書き方でもモデル名を返す"""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _missing_reasons(source):
+    """
+    8 モデルを絞らずに読み、理由のコメントが無い行番号
+
+    <モデル>.objects.<メソッド> の形を見る（基準の行はモデル名の書かれた行。複数行の呼び出しでも先頭）。
+    理由はその行の直前の 1 行（または同じ行）に書く。離れたコメントを別の呼び出しと共有させない。
+    """
+    lines = source.splitlines()
+    missing = []
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Attribute)
+                and node.value.attr == "objects"
+                and _model_name(node.value.value) in SCOPED_MODELS
+                and node.attr not in NOT_READS):
+            continue
+        window = lines[max(0, node.lineno - 2):node.lineno]
+        if not any(REASON_MARK in line for line in window):
+            missing.append(node.lineno)
+    return sorted(missing)
+
+
 def _unscoped_reads_without_reason():
     """studylogs・dashboard のテスト以外で、8 モデルを絞らずに読み、理由のコメントが無い行"""
     missing = []
     for app in ("studylogs", "dashboard"):
         for path in sorted((BACKEND_DIR / app).rglob("*.py")):
-            if {"tests", "migrations"} & set(path.relative_to(BACKEND_DIR).parts):
+            rel = path.relative_to(BACKEND_DIR)
+            if {"tests", "migrations"} & set(rel.parts):
                 continue
-            source = path.read_text(encoding="utf-8")
-            lines = source.splitlines()
-            for node in ast.walk(ast.parse(source)):
-                # <モデル>.objects.<メソッド> の形（基準の行はモデル名の書かれた行）
-                if not (isinstance(node, ast.Attribute)
-                        and isinstance(node.value, ast.Attribute)
-                        and node.value.attr == "objects"
-                        and isinstance(node.value.value, ast.Name)
-                        and node.value.value.id in SCOPED_MODELS
-                        and node.attr not in NOT_READS):
-                    continue
-                window = lines[max(0, node.lineno - 4):node.lineno]
-                if not any(REASON_MARK in line for line in window):
-                    missing.append(f"{path.relative_to(BACKEND_DIR)}:{node.lineno}")
+            missing += [f"{rel}:{n}" for n in _missing_reasons(path.read_text(encoding="utf-8"))]
     return missing
+
+
+def test_reason_check_catches_unmarked_reads():
+    """TC-07: 検出器そのものが、普通の書き方の付け忘れを見落とさない"""
+    source = "\n".join([
+        f"# {REASON_MARK}: 件数だけ",                          # 1
+        "a = StudyLog.objects.filter(user=u).count()",          # 2 理由あり
+        "b = StudyLog.objects.filter(user=u).count()",          # 3 直前の理由を共有しない
+        "c = models.ProblemAttempt.objects.filter(user=u)",     # 4 models.X の形
+        "d = QuizSession.objects.filter(",                      # 5 複数行の呼び出し
+        "    user=u,",
+        ")",
+        "e = LearningWeakness.objects.filter(**kw)",            # 8
+        "f = SpacedRepetitionCard.objects.all()",               # 9
+        "g = StudyLog.objects.for_user(u)",                     # 10 絞っている
+        "h = StudyLog.objects.create(user=u)",                  # 11 書き込み
+        f"i = MistakePattern.objects.get(id=1)  # {REASON_MARK}: 印付け",  # 12 同じ行の理由
+    ])
+    assert _missing_reasons(source) == [3, 4, 5, 8, 9]
 
 
 def test_specs_cover_all_scoped_models():
@@ -236,7 +274,7 @@ def test_specs_cover_all_scoped_models():
 
 
 def test_unscoped_reads_have_reason_comment():
-    """TC-06: 絞らずに読むなら、直前 3 行以内に「# 組織で絞らない: <理由>」を書く"""
+    """TC-06: 絞らずに読むなら、直前の行に「# 組織で絞らない: <理由>」を書く"""
     missing = _unscoped_reads_without_reason()
     assert missing == [], (
         "8 モデルを組織で絞らずに読んでいます。objects.for_user(user) を使うか、"
