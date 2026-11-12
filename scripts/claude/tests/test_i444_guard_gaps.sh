@@ -83,8 +83,8 @@ ck 02j ASK "$(b "$D rsync -avt /tmp/a /app/b")"
 ck 02e 0   "$(b "$D mv /tmp/a /tmp/b")"
 ck 02f 0   "$(b "$D cp /app/a /tmp/b")"
 ck 02g 0   "$(b "$D cp -t /tmp/d /app/a")"
-fg FG-02a 0 'T = ("-t", "--target-directory")' 'T = ("--target-directory",)' "$D cp -t /app/x /tmp/y"
-fg FG-02b 0 '        return tdir + guess + pos' '        return pos[-1:]' "$D mv /app/x /tmp/y"
+fg FG-02a 0 'n in ("-t", "--target-directory") and v]' 'n in ("--target-directory",) and v]' "$D cp -t /app/x /tmp/y"
+fg FG-02b 0 '        return tdir + pos' '        return pos[-1:]' "$D mv /app/x /tmp/y"
 
 # ---- TC-03 psql の WHERE なしの UPDATE は停止（コンテナ内・ホスト） ----
 ck 03a 2 "$(b "docker compose exec -T db psql -U postgres -c 'UPDATE users SET is_active=false'")"

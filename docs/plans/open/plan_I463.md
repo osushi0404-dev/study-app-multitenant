@@ -72,7 +72,8 @@ P3/P5/P8 影響なし（DB・外部 API・非同期処理・依存ファイル�
 ## 4. 変更点一覧
 | ファイル | 関数・定数 | 変更 |
 |---|---|---|
-| `scripts/claude/hooks/pretooluse_guard.py` | `_OPTSPEC`・`_OPTSPEC_OPTIONAL`（新規） | コマンドごとの値を取る短いオプションの文字と、値を取る長いオプション |
+| `scripts/claude/hooks/pretooluse_guard.py` | `_OPTSPEC`・`_OPTSPEC_OPTIONAL`・`_OPTSPEC_STOP`・`_value_opts`（新規） | コマンドごとの値を取る短いオプションの文字と、値を取る長いオプション（`_OPTSPEC_STOP`・`_value_opts` は計画変更記録の /simplify の追加） |
+| 同上 | `_django_sub`・`_container_safe`（python -m・psql）・`_wrap_skip`（flock） | 表で読む（計画変更記録の /simplify の追加） |
 | 同上 | `_getopt`（新規） | getopt と同じに読み、`([(オプション, 値)], 位置引数)` を返す |
 | 同上 | `_opt_values` | `loose` を消し、`cmd` を足す。`cmd` が表にあれば `_getopt` の結果から返す。無ければ今の strict の読み方 |
 | 同上 | `_expand`（su・script・flock の `-c`） | `cmd=head` で読む |
@@ -306,6 +307,19 @@ _OPT_PATH_RE = re.compile(r"--(?!(?:" + "|".join(map(re.escape, _OPT_READ_PATH))
 ## 計画変更記録
 - plan-review 1224 の Warning への対応（方式・範囲・受け入れ条件は変えない・再レビューは Blocker の直しで行う）: TC-12b を 3 つの `! grep -q` に分けた／FG の置き換え元は implement の最初に確定して auto_test.md に書く（ステップ 5 に明記）／長いオプションの省略形・表にない値付きの長いオプションは、脅威モデル（普通の書き方の事故）の範囲外として許容し、後退は TC-09 で見る
 - plan-review 1226 の Warning への対応（同上・再レビューしない）: psql の表の根拠は PostgreSQL 15 の psql の文書（docker-compose.yml の db は `postgres:15-alpine`）。手元に psql が無く `--help` と突き合わせられないので、V1 の psql は文書と、TC-09・TC-10 の後退検知で見る。コンテナを起こせたら implement で `docker compose exec -T db psql --help` と突き合わせ、結果を auto_test.md に書く
+- implement（2026-11-12）: ステップ 4 の失敗の注入の直し
+  - 計画書の記載: 「FG-02・FG-07c・FG-07d、FG-02a・FG-02b を直す。FG-07a は置き換え元が残るので変えない」
+  - 採った方法: FG-07b（install -d の判定）も置き換え元が消えたので直した。FG-07a は置き換え元は残るが、偽の `-c` が出なくなったので 07a（`psql -hlocalhost … <<EOF`）では写しでも 2 のまま差が出ず FAIL になった。流す形を、本物の `-c` とヒアドキュメントを併せた `psql -Umarc -c 'select 1' <<EOF` ＋ `DELETE …` に替えた（守る形〔-c があってもヒアドキュメントの SQL を見る〕は同じ）。FG-07d は sed の表から e を外すと `-nes…` の e が値なしの `-e` として残り差が出ないので、「-e／-f があれば位置引数はすべてファイル」の行を外す置き換えにした
+  - 理由: どれも守る形・期待値は変えず、置き換え元を新しいコードに合わせただけ
+  - 計画レビューのやり直し: 不要（テストの置き換え元の追従だけで、方式・範囲・受け入れ条件を変えない）
+- implement（2026-11-12）: `guard_corpus_diff.py` の比べる相手の決め方を `base_source` に切り出し、作業記録のモードと `--cases` で共用した（同じ決め方を 2 か所に書かない）。計画レビューのやり直し: 不要（ステップ 3 の範囲の中の整理）
+- implement（2026-11-12・/simplify の 4 体の指摘）: 同じコマンドを表と手書きの 2 通りで読む残りを表にそろえた（止める対象は増やさない・読み違いを減らすだけ）
+  - 計画書の記載: 変更点一覧の呼び出し元（`_expand`・`_python_code_raw`・`_sql_of`・psql の `-f`・`_grep_recursive_secret` のパターン・`_cmd_external` のパターン・`_write_targets`）
+  - 採った方法: ①`_getopt` の `cmd == "python"` の決め打ちを表 `_OPTSPEC_STOP = {"python": "cm"}` にした ②`_django_sub`（`python -m django`）と `_container_safe` の `python -m pytest` の判定の -W・-X 等を飛ばす手書きの一覧を `_getopt("python", …)` にした ③`_container_safe` の psql の読むだけの判定（`-o`・`-L`・`-f`）に `cmd="psql"` を付けた ④`_grep_recursive_secret` の `-r` の有無・ディレクトリも `_getopt("grep", …)` で読む（`-m 5` の 5 をディレクトリと見ない） ⑤`_wrap_skip` の flock の値を取るオプションを `_value_opts("flock")`（表から作る）にした ⑥`guard_corpus_diff.py` の 2 つのモードで同じだった「変更前の写しを書いて両方を判定」を `judge_both` にまとめ、`base_source` の戻り値で `a.base` を書き換えないようにした ⑦`test_guard_must_stop_cases.sh` の 09b は DELETE の行だけ、09c は `echo hi` だけを流す（見張りの起動を約 280 回→約 100 回）
+  - 見送り: `_cmd_external` の python の `first`（`python3 -c "$X" | …` で表に替えると新しく確認が出る＝止める側が増える）・`git commit` の読み方（`_commit_no_verify`）を表に寄せる（このイシューの差分の外）・`_record_writes`（一覧 I454 F9 に残す）・flock を位置引数で読み終える（`flock /tmp/l -c …` の -c を読まなくなる）
+  - 理由: どれも同じ根本原因（コマンドごとの読み方が 2 通りある）の残りで、表に寄せると読み方が 1 つになる。止める対象は増えない（①〜⑤は読み違いが減るだけ）
+  - 計画レビューのやり直し: 不要（方式〔値を取る文字の表で読む〕・範囲・受け入れ条件は同じ。呼び出し元を表にそろえる追加だけ）
+- implement（2026-11-12）: psql のコンテナは止まっていて起こしていない（`docker compose ps` が空）。psql の表は PostgreSQL 15 の文書のまま（V1 の psql は TC-09・TC-10 の後退検知で見る）
 
 ## レビュー結果
 - [20261112_1226 判定: ✅ 完了](../../reviews/I463_plan_review_20261112_1226.md)
