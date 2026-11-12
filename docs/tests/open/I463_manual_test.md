@@ -4,5 +4,5 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実施環境 | 実結果 | 備考 |
 |---:|------|----------|--------|----------|--------|------|
-| M-01 | 読む指定の形 2 つを `check-permission-prompt.sh` で流す: `docker compose exec -T i463-no-such pytest --cov=/app/apps`／`docker compose exec -T i463-no-such pytest --ignore=/app/apps/x` | 2 つとも exit 0（承認画面が出ない。直す前は 10） | Claude | claude -p の判定 | | サービスが無いので何も実行されない |
-| M-02 | 書き出し先の形を `check-permission-prompt.sh` で流す: `docker compose exec -T i463-no-such pytest --junitxml=/app/r.xml -k x` | exit 10（承認画面が出る・今までどおり） | Claude | claude -p の判定 | | 承認画面が出る操作は自動で拒否され、実行されない |
+| M-01 | 読む指定の形 2 つを `check-permission-prompt.sh` で流す: `docker compose exec -T i463-no-such pytest --cov=/app/apps`／`docker compose exec -T i463-no-such pytest --ignore=/app/apps/x` | 2 つとも exit 0（承認画面が出ない。直す前は 10） | Claude | claude -p の判定 | OK（2026-11-12・HEAD c2310be4）: 2 つとも exit 0「承認なしで実行された」・出力は `service "i463-no-such" is not running` | サービスが無いので何も実行されない |
+| M-02 | 書き出し先の形を `check-permission-prompt.sh` で流す: `docker compose exec -T i463-no-such pytest --junitxml=/app/r.xml -k x` | exit 10（承認画面が出る・今までどおり） | Claude | claude -p の判定 | OK（2026-11-12・HEAD c2310be4）: exit 10「承認画面が出る」 | 承認画面が出る操作は自動で拒否され、実行されない |

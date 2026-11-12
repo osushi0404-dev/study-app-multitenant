@@ -19,7 +19,10 @@
 - ハーネステスト（新規 2 本・既存 2 本の失敗の注入）・`docs/runbooks/danger-ops.md`・軽い指摘の一覧
 
 ## テスト結果
-（test-gate で書く）
+- 決定論のテスト: `test_i463_guard_optspec.sh` pass=46・`test_guard_must_stop_cases.sh` pass=3（一覧 48 件）・`test_i463_optspec_help.sh` pass=2・見張りの既存テスト 8 本 fail=0・CI すべて合格（review-gate 1340）
+- 作業記録での比較（TC-11・test-gate・HEAD c2310be4）: 16982 件・確認＋停止 370→370・新しく確認・停止 0 件・異常終了 0 件
+- 手動テスト（Claude・`check-permission-prompt.sh`）: M-01 の 2 つ（`pytest --cov=`・`--ignore=`）は承認画面なし（exit 0）、M-02（`--junitxml=/app/…`）は承認画面あり（exit 10）。すべて OK
+- レビュー: コードレビュー 1303→1340 OK・敵対的レビュー 1319（V1 未検証で HIGH）→1357 OK（通算 2 周）
 
 ## 計画との差分
 （なし）
@@ -50,3 +53,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
