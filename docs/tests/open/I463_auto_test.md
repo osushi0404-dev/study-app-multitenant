@@ -105,8 +105,10 @@
 | ID | 確かめ | 期待 |
 |---|---|---|
 | 12a | `grep -q "test_guard_must_stop_cases.sh" docs/runbooks/danger-ops.md` | exit 0 |
-| 12b | `! grep -q "^- F14 " docs/reviews/backlog/I454.md && ! grep -q "^- F18 " docs/reviews/backlog/I454.md && ! grep -q "^- F7 " docs/reviews/backlog/I444.md` | exit 0 |
-12a・12b は意図的な変更でしか崩れない文書の確かめなので、決定論ゲートには置かず implement の後に 1 回流して記録する（plan-writing-rules.md「決定論テストの対象の選び方」）。
+| 12b | `! grep -q "^- F14 " docs/reviews/backlog/I454.md` | exit 0 |
+| 12c | `! grep -q "^- F18 " docs/reviews/backlog/I454.md` | exit 0 |
+| 12d | `! grep -q "^- F7 " docs/reviews/backlog/I444.md` | exit 0 |
+12a〜12d は意図的な変更でしか崩れない文書の確かめなので、決定論ゲートには置かず implement の後に 1 回流して記録する（plan-writing-rules.md「決定論テストの対象の選び方」）。
 
 ## 決定論ゲート（自動実走）
 ```bash
