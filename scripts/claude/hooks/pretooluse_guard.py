@@ -782,41 +782,49 @@ def _bash_write_targets(cmd: str) -> list:
                 if rhs:
                     targets.append(rhs)
             i += 1
-        # コマンド別の宛先
-        head = os.path.basename(toks[0]) if toks[0] else ""
-        rest = toks[1:]
-        if head == "tee":
-            targets += [a for a in rest if not a.startswith("-")]
-        elif head in ("cp", "mv"):
-            if "-t" in rest:                    # cp/mv -t <dir> src...
-                ti = rest.index("-t")
-                if ti + 1 < len(rest):
-                    targets.append(rest[ti + 1])
-            else:
-                positional = [a for a in rest if not a.startswith("-")]
-                if len(positional) >= 2:
-                    targets.append(positional[-1])   # 末尾＝宛先（src は対象外）
-        elif head == "sed":
-            if any(a == "-i" or a.startswith("-i") or a.startswith("--in-place") for a in rest):
-                targets += [a for a in rest if not a.startswith("-")]   # in-place 対象（絶対パスのみ後段で選別）
+        targets += _write_targets(toks)         # コマンド別の宛先（I454: 書き先の見分け方は 1 か所）
     # 絶対パスのみ（相対 src・sed script 等を除外）
     return [t for t in targets if t.startswith("/")]
 
 def _has_write_intent(cmd: str) -> bool:
-    """Bash に書込語（リダイレクト・tee・cp・mv・sed -i）が含まれるか（未カバー警告の判定用）。"""
+    """Bash に書込語（リダイレクト・_write_targets の書き先）が含まれるか（未カバー警告の判定用）。"""
     for toks in _segments(cmd):
-        if not toks:
-            continue
-        for t in toks:
-            if t in _REDIR_OPS or any(op in t for op in _REDIR_OPS):
-                return True
-        head = os.path.basename(toks[0]) if toks[0] else ""
-        if head in ("tee", "cp", "mv"):
-            return True
-        if head == "sed" and any(a == "-i" or a.startswith("-i") or a.startswith("--in-place")
-                                 for a in toks[1:]):
+        if any(t in _REDIR_OPS or any(op in t for op in _REDIR_OPS) for t in toks) or _write_targets(toks):
             return True
     return False
+
+_COPY_CMDS = ("cp", "mv", "install", "ln", "rsync")
+
+
+def _write_targets(toks: list) -> list:
+    """リダイレクト以外でファイルに書き込むコマンドの書き先（I454: 別ワークツリーの停止・同じコマンドの中で書くファイルの記録・
+    コンテナの /tmp/ 以外の判定で共通）。tee・sed -i（-e／-f で式を渡すときは位置引数がすべてファイル）・cp／mv／install／ln／
+    rsync の書き先（最後の位置引数か -t／--target-directory。-vt/x のようなまとめ書きも）と mv の移動元。install -d は作るだけ。
+    `--opt=/絶対パス` の値は、コンテナの判定だけが _OPT_PATH_RE で足す（停止の範囲は広げない・_container_risky）。"""
+    if not toks:
+        return []
+    head, args = os.path.basename(toks[0]), toks[1:]
+    pos = [a for a in args if not a.startswith("-")]
+    if head == "tee":
+        return pos
+    if head == "sed":
+        if not _has_short(args, "i", "--in-place"):
+            return []
+        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"), loose=True)   # 見つかれば位置引数はすべてファイル
+        files = [a for a in pos if a not in expr]
+        return files if expr else files[1:]
+    # install -d は英字だけの語（-d・-vd）で見る。-t/…study… のような値の中の d は見ない（I454 fix-loop F3）
+    if head not in _COPY_CMDS or (head == "install" and _has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d", "--directory")):
+        return []
+    T = ("-t", "--target-directory")
+    tdir = _opt_values(args, T) if head != "rsync" else []   # rsync の -t は時刻を保つ
+    # まとめ書きの途中から読んだ値（-vt/x）は推測なので、外れても本当の書き先を落とさないよう最後の位置引数も残す（I454 fix-loop 2）
+    guess = [v for v in _opt_values(args, T, loose=True) if v not in tdir] if head != "rsync" else []
+    if head == "mv":                           # 移動元も消える（I444）
+        return tdir + guess + pos
+    if tdir and not guess:
+        return tdir
+    return tdir + guess + (pos[-1:] if len(pos) >= 2 else [])
 
 def _bash_uncovered_risk(cmd: str) -> bool:
     """絶対パス宛先の抽出では捕捉できない書込リスク（`cd` 後の相対書込・変数/コマンド置換・
@@ -1481,7 +1489,7 @@ def _cut_substitutions(text: str):
 
 def _new_cmd(toks: list, ctr: bool, compose: bool = False) -> dict:
     return {"toks": toks, "ctr": ctr, "compose": compose, "piped": False, "stdin": None, "stdin_ctr": ctr,
-            "heredoc": None, "herestr": None, "writes": False, "write_to": [], "note": None, "workdir": None,
+            "heredoc": None, "herestr": None, "write_to": [], "note": None, "workdir": None,
             "service": None}
 
 # 同じコマンドの中で書き込まれるファイル（ファイル名 → 書き込む中身の列。中身が見えない書き込みは None）。
@@ -1492,13 +1500,8 @@ def _record_writes(c: dict):
     """単純コマンド c が書き込むファイルを _WRITTEN に記録する（cat/tee のヒアドキュメントは中身も）。"""
     toks = c["toks"]
     head = os.path.basename(toks[0]) if toks else ""
-    targets = list(c["write_to"])
-    if head == "tee":
-        targets += [a for a in toks[1:] if not a.startswith("-")]
-    elif head == "sed" and _has_short(toks[1:], "i", "--in-place"):
-        targets += [a for a in toks[1:] if not a.startswith("-")][1:]
-    elif head in ("cp", "mv", "install", "ln", "rsync") and len(toks) > 2:
-        targets.append(toks[-1])
+    # コピー系は位置引数をすべて記録する（cp a /dir/・cp -t /dir a は元の名前〔a〕で書く・I454）
+    targets = c["write_to"] + ([a for a in toks[1:] if not a.startswith("-")] if head in _COPY_CMDS else _write_targets(toks))
     body = c["heredoc"] if c["heredoc"] is not None else c["herestr"]
     for t in targets:
         _WRITTEN.setdefault(os.path.basename(t), []).append(body if head in ("cat", "tee") else None)
@@ -1554,8 +1557,7 @@ def _raw_commands(text: str, ctr: bool, compose: bool, loc=(None, None)):
             continue
         if t in (">", ">>", ">&", "&>", "<&", ">|", "<>"):
             if t != "<&" and nxt is not None and not nxt.isdigit() and nxt not in ("/dev/null", "-"):
-                cur["writes"] = True                 # ファイルへの書き込み（fd の複製・/dev/null は除く）
-                cur["write_to"].append(nxt)
+                cur["write_to"].append(nxt)          # ファイルへの書き込み（fd の複製・/dev/null は除く）
             i += 2                                   # 出力先は引数に入れない
             continue
         cur["toks"].append(_resolve_marks(t))       # -c "$(cat <<EOF ...)" の中身をコードとして戻す
@@ -1758,7 +1760,7 @@ def _expand(c: dict, depth: int) -> list:
         # xargs は標準入力の語を後ろに足して実行する（push の宛先・rm の対象が見えない）
         return [dict(e, via_xargs=True) for e in again(inner)] if inner else []
     if inner is not None:
-        flock_cmd = _opt_values(rest, ("-c", "--command")) if head == "flock" else []
+        flock_cmd = _opt_values(rest, ("-c", "--command"), loose=True) if head == "flock" else []
         return (again(inner) if inner else []) + [e for s in flock_cmd for e in sub(s)]
     if head == "env":
         j = _skip_opts(rest, _ENV_VALUE)
@@ -1770,7 +1772,7 @@ def _expand(c: dict, depth: int) -> list:
     if head == "eval":
         return sub(" ".join(rest))
     if head in ("su", "script"):
-        return [e for s in _opt_values(rest, ("-c", "--command")) for e in sub(s)] or [dict(c, toks=toks)]
+        return [e for s in _opt_values(rest, ("-c", "--command"), loose=True) for e in sub(s)] or [dict(c, toks=toks)]
     if head == "find":
         out, base, k = [], [], 0
         while k < len(rest):
@@ -1825,7 +1827,7 @@ def _expand(c: dict, depth: int) -> list:
             except ValueError:
                 inner_toks = dp["entrypoint"].split() + inner_toks
         # ホスト側のリダイレクト（docker ... > /tmp/log）はコンテナ内の書き込みではないので引き継がない
-        d = dict(c, toks=inner_toks, ctr=True, compose=dp["compose"], workdir=dp["workdir"], writes=False,
+        d = dict(c, toks=inner_toks, ctr=True, compose=dp["compose"], workdir=dp["workdir"], write_to=[],
                  service=dp.get("service") or (toks[1] if head == "docker" and len(toks) > 1 else None))
         if dp["compose"] and (dp["unknown"] or dp["entrypoint"]):
             return [_unknown(d, "読めない docker compose のオプション（未知のオプション・--entrypoint）",
@@ -1852,8 +1854,11 @@ def _parse(text: str, ctr: bool = False, depth: int = 0, compose: bool = False, 
         out += list(_parse(s, ctr, depth + 1, compose, loc))
     return tuple(out)
 
-def _opt_values(toks: list, names: tuple) -> list:
-    """toks から `-c X` / `-cX` / `-tAc X`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。"""
+def _opt_values(toks: list, names: tuple, loose: bool = False) -> list:
+    """toks から `-c X` / `-cX` / `-tAc X`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。
+    loose=True のときは、英字だけの並びの後にある該当の文字の後ろ（-tAcSQL・-lcCMD・-nesEXPR・-vt/x）も候補としてすべて足す。
+    値を取る文字を知らないので、-hlocalhost の c（→ alhost）のような偽の候補も入る。多く読むほど止める側に倒れる呼び出し元
+    （-c の中の検査・sed の式・-t の書き先）だけが loose を使う（I454 fix-loop 2）。"""
     vals, i = [], 0
     shorts = [n[1] for n in names if not n.startswith("--") and len(n) == 2]
     while i < len(toks):
@@ -1874,14 +1879,14 @@ def _opt_values(toks: list, names: tuple) -> list:
             continue
         if t.startswith("-") and not t.startswith("--") and len(t) > 2:
             body = t[1:]
+            if loose:                                  # -tAcSQL・-vt/x（まとめ書きの途中から後ろ）
+                vals += [body[j + 1:] for j in range(1, len(body) - 1) if body[j] in shorts and body[:j].isalpha()]
             if body[-1] in shorts and body[:-1].isalpha() and i + 1 < len(toks):
                 vals.append(toks[i + 1])             # -tAc X
                 i += 2
                 continue
             if body[0] in shorts:
                 vals.append(body[1:])                # -cX（付着形）
-                i += 1
-                continue
         i += 1
     return vals
 
@@ -1978,7 +1983,7 @@ def _python_code_raw(c: dict):
     toks = c["toks"]
     dj = _django_sub(toks)
     if dj and dj[0] == "shell":
-        codes = _opt_values(dj[1], ("-c", "--command"))
+        codes = _opt_values(dj[1], ("-c", "--command"), loose=True)
         if codes:
             return "\n".join(codes)
         if c["heredoc"] is not None:
@@ -1989,7 +1994,7 @@ def _python_code_raw(c: dict):
     head = os.path.basename(toks[0]) if toks else ""
     if _PYTHON_RE.match(head) and not dj:
         rest = toks[1:]
-        codes = _opt_values(rest, ("-c",))
+        codes = _opt_values(rest, ("-c",), loose=True)
         if codes:
             return "\n".join(codes)
         if "-m" in rest:
@@ -2016,15 +2021,13 @@ def _sql_of(c: dict):
     args = toks[1:]
     if dj and dj[0] == "dbshell":
         args = dj[1][dj[1].index("--") + 1:] if "--" in dj[1] else []
-    sqls = _opt_values(args, ("-c", "--command"))
-    if sqls:
-        sql = ";\n".join(sqls)
-        return None if "__SUBST_" in sql else sql            # $(...) を解決できなかった SQL は見えない扱い
-    if c["heredoc"] is not None:
-        return c["heredoc"]
-    if c["herestr"] is not None:
-        return c["herestr"]
-    return None
+    # -c の値（まとめ書きの途中からの候補も）とヒアドキュメント・here-string を合わせて見る。偽の -c（-hlocalhost の c）が
+    # あってもヒアドキュメントの SQL を見落とさない（I454 fix-loop 2）
+    sqls = _opt_values(args, ("-c", "--command"), loose=True)
+    if "__SUBST_" in "".join(sqls):
+        return None                                          # $(...) を解決できなかった SQL は見えない扱い
+    parts = sqls + [s for s in (c["heredoc"], c["herestr"]) if s is not None]
+    return ";\n".join(parts) if parts else None
 
 def _is_rm_rf(toks: list) -> bool:
     if not toks or os.path.basename(toks[0]) != "rm":
@@ -2207,6 +2210,11 @@ def _walk_shallow(top: str, depth: int):
         dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", ".venv", "__pycache__")]
         yield dirpath, dirs, files
 
+# ps の値を取るオプション（procps の短い形とまとめ書きの最後〔-eo〕・BSD 形式の 1 文字・長い形。BSD 形式のまとめ書き〔axo〕は
+# 値の語〈root〉と見分けられないので見ない＝確認側・I454）
+_PS_VALUE_OPT_RE = re.compile(r"-[A-Za-z]*[CGOUgopqstu]|[OUopqt]|--(sort|format|pid|ppid|user|group|tty|sid|cols|rows)")
+
+
 def _cmd_external(c: dict) -> list:
     """単純コマンドの外部送信・秘密情報の理由（人の確認）。"""
     toks = c["toks"]
@@ -2249,12 +2257,12 @@ def _cmd_external(c: dict) -> list:
         r.append("秘密情報ファイルを含むディレクトリの再帰検索（grep -r。--include で絞るか rg を使う）")
     # 環境変数をまとめて表示する形（I444。ホストとコンテナで同じ）。env はコマンドを包むときは読み解きで外れるので、
     # 先頭に残った env は引数によらず表示（env -u X・env FOO=1・env -0）。ps は BSD 形式の e（英字だけの引数で、
-    # -C node・-o etime のようなオプションの値は見ない）。declare -x FOO=1 のような代入は表示ではない
+    # 値を取るオプション〔-C node・-o etime・o etime・--sort etime〕の値は見ない・I454）。declare -x FOO=1 のような代入は表示ではない
     if head in ("printenv", "env") or (head == "set" and len(toks) == 1) \
-            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) and not p.startswith("-")
+            or (head == "ps" and any(re.fullmatch(r"[A-Za-z]*e[A-Za-z]*", a) and not _PS_VALUE_OPT_RE.fullmatch(p)
                                      for p, a in zip(toks, toks[1:]))) \
             or (head in ("export", "declare", "typeset")
-                and (all(a.startswith("-") for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
+                and (all(a.startswith(("-", "+")) for a in toks[1:]) or any(a in ("-p", "-px", "-xp") for a in toks[1:]))):
         r.append("環境変数（秘密情報を含む）の表示")
     if (c["ctr"] or head in ("echo", "printf")) and any(_SECRET_VAR_RE.search(a) for a in toks[1:]):
         r.append("秘密の環境変数の展開")
@@ -2365,13 +2373,21 @@ def _read_limited(path: str, limit: int):
 
 _CTR_SCRATCH = "/tmp/"   # コンテナの中で書いてよい場所（/app/ は手元の backend/・frontend/ に bind mount されている）
 _CP_READ_LIMIT = 1024 * 1024
+# 書き出し先を値で受ける形（pytest --junitxml=/app/r.xml）。粗い判定で、よく使う読む場所の指定（--rootdir・--confcutdir）だけ除く
+_OPT_PATH_RE = re.compile(r"--(?!rootdir=|confcutdir=)[\w-]+=/")
 
 
 def _container_risky(c: dict, text: str) -> list:
-    """I200: 危ない語が当たっても通す形（_container_safe）に入らないコンテナ内の単純コマンドを確認にする理由（無ければ []）。
-    環境変数の表示は _cmd_external が見る（I444）。
-    コマンドの語・ヒアドキュメント・here-string・読める Python コードに危ない語があるか、/tmp/ 以外へ書き込むとき。
+    """I200: コンテナ内の単純コマンドを確認にする理由（無ければ []）。環境変数の表示は _cmd_external が見る（I444）。
+    /tmp/ 以外へ書き込むとき（リダイレクト・_write_targets・`--opt=/絶対パス` の値）は常に確認（I454）。危ない語が当たっても
+    通す形（_container_safe）でなければ、コマンドの語・ヒアドキュメント・here-string・読める Python コードの危ない語も見る。
     パイプ・標準入力・読みきれない書き方では、流し込まれる中身が見えないので、コマンド全体の文字列も見る。"""
+    reasons = []
+    vals = [a.split("=", 1)[1] for a in c["toks"][1:] if _OPT_PATH_RE.match(a)]
+    if any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):
+        reasons.append("コンテナの /tmp/ 以外への書き込み")
+    if _container_safe(c):
+        return reasons
     parts = [" ".join(c["toks"]), c["heredoc"] or "", c["herestr"] or ""]
     try:
         code = _python_code_raw(c)
@@ -2381,39 +2397,13 @@ def _container_risky(c: dict, text: str) -> list:
         parts.append(code)
     if c["piped"] or c["stdin"] or c["note"]:
         parts.append(text)
-    reasons = []
     found = _risky_words("\n".join(parts))
-    if found:
-        reasons.append("危ない語: " + "・".join(found))
-    if any(not _in_scratch(t) for t in c["write_to"] + _ctr_write_targets(c["toks"])):
-        reasons.append("コンテナの /tmp/ 以外への書き込み")
-    return reasons
+    return reasons + (["危ない語: " + "・".join(found)] if found else [])
 
 
 def _in_scratch(path: str) -> bool:
     """コンテナのパスが /tmp/ の下か（.. を正規化してから見る。/tmp/../app/x は /tmp/ の外・コードレビューの F4）。"""
     return posixpath.normpath(path).startswith(_CTR_SCRATCH)
-
-
-def _ctr_write_targets(toks: list) -> list:
-    """リダイレクト以外でファイルに書き込むコマンドの書き先（tee・sed -i・cp／mv／install／ln／rsync の書き先〔最後の引数・
-    -t／--target-directory〕と mv の移動元・I444）。コンテナの /app/ は手元に bind mount されているので、/tmp/ 以外は確認（F3）。"""
-    if not toks:
-        return []
-    head = os.path.basename(toks[0])
-    pos = [a for a in toks[1:] if not a.startswith("-")]
-    if head == "tee":
-        return pos
-    if head == "sed" and _has_short(toks[1:], "i", "--in-place"):
-        return pos[1:]
-    if head in ("cp", "mv", "install", "ln", "rsync"):
-        tdir = _opt_values(toks[1:], ("-t", "--target-directory")) if head != "rsync" else []   # rsync の -t は時刻を保つ
-        if head == "mv":                       # 移動元も消える（I444）
-            return tdir + pos
-        if tdir:
-            return tdir
-        return pos[-1:] if len(pos) >= 2 else []
-    return []
 
 
 def _docker_cp_positional(args: list) -> list:
@@ -2520,9 +2510,9 @@ def _edit_risky(tool: str, ti: dict, path: str):
 def _container_safe(c: dict) -> bool:
     """I444: 危ない語が当たっても通す docker compose exec|run の中の形（引数に語が出やすい、(A)〜(C) を起こさない操作）。
     テスト・lint・依存の情報・読み取りの manage.py・中身が見えて危険のない Python・読み取りの SQL・ローカル宛ての curl・
-    パイプの受け手の絞り込み。これ以外は _container_risky（危ない語・/tmp/ 以外への書き込み）と _cmd_external で決まる。"""
+    パイプの受け手の絞り込み。打ち消すのは危ない語の理由だけで、/tmp/ 以外への書き込みは _container_risky が常に見る（I454）。"""
     toks = c["toks"]
-    if c["note"] or c["herestr"] is not None or c["writes"] or not toks:
+    if c["note"] or c["herestr"] is not None or not toks:
         return False
     head, rest = os.path.basename(toks[0]), toks[1:]
     if c["piped"]:                             # パイプの受け手は読むだけの絞り込みだけ（pytest … | tail）
@@ -2626,8 +2616,8 @@ def _analyze(text: str) -> dict:
             res["remote_ask"].append(c["remote_ask"])
         res["danger"] += d
         res["external"] += e
-        # I200: 危ない語が当たっても通す形（_container_safe）に入らないコンテナ内の操作は、危ない語・/tmp/ 以外への書き込みがあるときだけ確認
-        if c["compose"] and not d and not e and not _container_safe(c):
+        # I200: コンテナ内の操作は、/tmp/ 以外への書き込みと、危ない語が当たっても通す形（_container_safe）以外の危ない語で確認
+        if c["compose"] and not d and not e:
             why = _container_risky(c, text)
             if why:
                 res["container"].append(_describe(c) + "（" + "／".join(why) + "）")
