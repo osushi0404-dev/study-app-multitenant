@@ -27,7 +27,11 @@
 - Config: なし
 
 ## テスト結果
-（test-gate 段階で記入）
+- 自動（手元・app-1 のコンテナ）: バックエンドの新しいテスト 28 件と守りのテスト（I431・I455・I166・I158・#446・problems の views）が 247 passed（#446 の xfailed 0）。フロントの新しい 2 ファイルと既存のクイズの 2 ファイルが 20 passed。型チェック・lint（警告 0）・migration のずれなし。失敗の注入（難易度・同じ日・組織の絞り込み・キャッシュのキー・復習の分岐）はすべて FAIL
+- CI（PR #464）: 全ジョブ pass（review-gate の `CI_WAIT: OK`・TC-20）
+- レビュー: 基本レビュー OK（Low 7 件）・敵対的レビュー 2 周目 OK（1 周目は実験役に python が無く未検証 → 決定論の TC と失敗の注入で覆った）
+- 手動（test-gate・Claude が Playwright MCP で実施）: No.1〜No.4 すべて OK。Human の項目なし
+- 判定: gate-check OK・check-frontend-evidence 合格（画面確認 8 行）・check-manual-test-executor 合格
 
 ## 計画との差分
 - 計画書の計画変更記録のとおり（/simplify の整理 8 件と見送り 5 件・静的テストに合わせた理由のコメント）
@@ -58,3 +62,8 @@ STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 差分の基本レビュー（20261112_1307）OK・敵対的レビュー 2 周目（20261112_1318）OK（新しい High 0・Low 1 件はキャッシュの 5 分の古さで台帳 F4 と同種）。最終判定 OK — 通算 2 周で収束
 
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 手動テストの No.4 の期待結果（全問の後も「次の問題」を押す）を直した — いつものクイズは変更前から全問の後に「次の問題」を隠す作りで、このイシューで変えていない。全問の後も API が出し続ける動きは TC-05 で確かめ済み
+- [test-gate] 手動テストの準備で、シェルでのまとめての作成・一括更新を見張りが止めたので、回避せず画面から問題を 2 問作り、カードの日付は 1 枚ずつ倒した — 見張りの決まりに従う。作った問題とカードは E2E 用の組織の記録で残した
+- [test-gate] 会話のリセット（/clear）の直後に Playwright MCP が「古い接続」として止められ、ユーザーに /mcp で再接続してもらった（接続の記録で原因を確かめた）— retro で扱う
+
+STAGE_DONE: test-gate NEXT: retro
