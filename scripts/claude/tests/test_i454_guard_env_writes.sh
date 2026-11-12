@@ -68,7 +68,7 @@ ck 02d 0   "$(b "$D cp -vt/tmp/x /app/y")"
 ck 02e ASK "$(b "$D sed -i -es/a/b/ /app/x")"
 ck 02f 0   "$(b "$D sed -i -e s/a/b/ /tmp/x")"
 ck 02g ASK "$(b "$D install -m 644 /tmp/a /app/b")"
-fg FG-02 0 'ch in shorts and (j == 0 or body[:j].isalpha()' 'ch in shorts and (j == 0 or False' "$D cp -vt/app/x /tmp/y"
+fg FG-02 0 'guess = [v for v in _opt_values(args, T, loose=True)' 'guess = [v for v in _opt_values(args, T)' "$D cp -vt/app/x /tmp/y"
 
 # ---- TC-03 通す形でも /tmp/ 以外への書き込みは確認（危ない語の理由と書き込みの理由を分ける） ----
 ck 03a ASK "$(b "$D pytest --junitxml=/app/r.xml -k x")"
@@ -107,7 +107,17 @@ ck 07b 2   "$(b $'psql -Ucelery -dcourse_db <<EOF\nDELETE FROM users;\nEOF')"
 ck 07c 2   "$(b "install -t$W/dd /tmp/y")"
 ck 07d ASK "$(b "$D install -t/app/dd /tmp/a")"
 ck 07e 0   "$(b "$D install -vd /app/newdir")"
-fg FG-07a 0 'and (j == len(body) - 1 or not body[j + 1].isalpha())' 'and True' "$HD"
+# fix-loop 2（F10〜F13）: まとめ書きの途中にくっつけた値（英字で始まる）も止める側に読む・psql -f は変更前のまま
+ck 07f 2   "$(b "psql -tAc'DELETE FROM users'")"
+ck 07g 2   "$(b "su -lc'git push --force origin develop'")"
+ck 07h 2   "$(b "sed -i -nes/a/b/ $W/x")"
+ck 07i ASK "$(b "$D cp -vtapp /tmp/y")"
+ck 07j 0   "$(b 'psql -dprofile_db -c "select 1"')"
+fg FG-07a 0 'parts = sqls + [s for s in (c["heredoc"], c["herestr"]) if s is not None]' \
+  'parts = sqls or [s for s in (c["heredoc"], c["herestr"]) if s is not None]' "$HD"
+fg FG-07c 0 '            if loose:' '            if False:' "psql -tAc'DELETE FROM users'"
+fg FG-07d 0 '        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"), loose=True)' \
+  '        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"))' "sed -i -nes/a/b/ $W/x"
 fg FG-07b 0 '_has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d"' '_has_short(args, "d"' "install -t$W/dd /tmp/y"
 
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

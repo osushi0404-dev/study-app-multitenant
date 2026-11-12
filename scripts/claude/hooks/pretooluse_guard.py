@@ -810,16 +810,21 @@ def _write_targets(toks: list) -> list:
     if head == "sed":
         if not _has_short(args, "i", "--in-place"):
             return []
-        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"))
+        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"), loose=True)   # 見つかれば位置引数はすべてファイル
         files = [a for a in pos if a not in expr]
         return files if expr else files[1:]
     # install -d は英字だけの語（-d・-vd）で見る。-t/…study… のような値の中の d は見ない（I454 fix-loop F3）
     if head not in _COPY_CMDS or (head == "install" and _has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d", "--directory")):
         return []
-    tdir = _opt_values(args, ("-t", "--target-directory")) if head != "rsync" else []   # rsync の -t は時刻を保つ
+    T = ("-t", "--target-directory")
+    tdir = _opt_values(args, T) if head != "rsync" else []   # rsync の -t は時刻を保つ
+    # まとめ書きの途中から読んだ値（-vt/x）は推測なので、外れても本当の書き先を落とさないよう最後の位置引数も残す（I454 fix-loop 2）
+    guess = [v for v in _opt_values(args, T, loose=True) if v not in tdir] if head != "rsync" else []
     if head == "mv":                           # 移動元も消える（I444）
-        return tdir + pos
-    return tdir or (pos[-1:] if len(pos) >= 2 else [])
+        return tdir + guess + pos
+    if tdir and not guess:
+        return tdir
+    return tdir + guess + (pos[-1:] if len(pos) >= 2 else [])
 
 def _bash_uncovered_risk(cmd: str) -> bool:
     """絶対パス宛先の抽出では捕捉できない書込リスク（`cd` 後の相対書込・変数/コマンド置換・
@@ -1755,7 +1760,7 @@ def _expand(c: dict, depth: int) -> list:
         # xargs は標準入力の語を後ろに足して実行する（push の宛先・rm の対象が見えない）
         return [dict(e, via_xargs=True) for e in again(inner)] if inner else []
     if inner is not None:
-        flock_cmd = _opt_values(rest, ("-c", "--command")) if head == "flock" else []
+        flock_cmd = _opt_values(rest, ("-c", "--command"), loose=True) if head == "flock" else []
         return (again(inner) if inner else []) + [e for s in flock_cmd for e in sub(s)]
     if head == "env":
         j = _skip_opts(rest, _ENV_VALUE)
@@ -1767,7 +1772,7 @@ def _expand(c: dict, depth: int) -> list:
     if head == "eval":
         return sub(" ".join(rest))
     if head in ("su", "script"):
-        return [e for s in _opt_values(rest, ("-c", "--command")) for e in sub(s)] or [dict(c, toks=toks)]
+        return [e for s in _opt_values(rest, ("-c", "--command"), loose=True) for e in sub(s)] or [dict(c, toks=toks)]
     if head == "find":
         out, base, k = [], [], 0
         while k < len(rest):
@@ -1849,10 +1854,11 @@ def _parse(text: str, ctr: bool = False, depth: int = 0, compose: bool = False, 
         out += list(_parse(s, ctr, depth + 1, compose, loc))
     return tuple(out)
 
-def _opt_values(toks: list, names: tuple) -> list:
-    """toks から `-c X` / `-cX` / `-tAc X`・`-vtX`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。
-    まとめ書きは、先頭の文字（-cX）・英字だけの並びの最後の文字（-tAc X）・英字だけの並びの後で直後が英字以外の文字（-vt/x）。
-    値を取る文字を知らないので、-hlocalhost の c のように値の中の英字は拾わない（I454 fix-loop F1）。"""
+def _opt_values(toks: list, names: tuple, loose: bool = False) -> list:
+    """toks から `-c X` / `-cX` / `-tAc X`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。
+    loose=True のときは、英字だけの並びの後にある該当の文字の後ろ（-tAcSQL・-lcCMD・-nesEXPR・-vt/x）も候補としてすべて足す。
+    値を取る文字を知らないので、-hlocalhost の c（→ alhost）のような偽の候補も入る。多く読むほど止める側に倒れる呼び出し元
+    （-c の中の検査・sed の式・-t の書き先）だけが loose を使う（I454 fix-loop 2）。"""
     vals, i = [], 0
     shorts = [n[1] for n in names if not n.startswith("--") and len(n) == 2]
     while i < len(toks):
@@ -1873,13 +1879,14 @@ def _opt_values(toks: list, names: tuple) -> list:
             continue
         if t.startswith("-") and not t.startswith("--") and len(t) > 2:
             body = t[1:]
-            k = next((j for j, ch in enumerate(body) if ch in shorts and (j == 0 or body[:j].isalpha()
-                      and (j == len(body) - 1 or not body[j + 1].isalpha()))), None)
-            v = body[k + 1:] if k is not None else ""
-            if k is not None and (v or i + 1 < len(toks)):
-                vals.append(v or toks[i + 1])          # -cX・-vtX（付着形）／-tAc X
-                i += 1 if v else 2
+            if loose:                                  # -tAcSQL・-vt/x（まとめ書きの途中から後ろ）
+                vals += [body[j + 1:] for j in range(1, len(body) - 1) if body[j] in shorts and body[:j].isalpha()]
+            if body[-1] in shorts and body[:-1].isalpha() and i + 1 < len(toks):
+                vals.append(toks[i + 1])             # -tAc X
+                i += 2
                 continue
+            if body[0] in shorts:
+                vals.append(body[1:])                # -cX（付着形）
         i += 1
     return vals
 
@@ -1976,7 +1983,7 @@ def _python_code_raw(c: dict):
     toks = c["toks"]
     dj = _django_sub(toks)
     if dj and dj[0] == "shell":
-        codes = _opt_values(dj[1], ("-c", "--command"))
+        codes = _opt_values(dj[1], ("-c", "--command"), loose=True)
         if codes:
             return "\n".join(codes)
         if c["heredoc"] is not None:
@@ -1987,7 +1994,7 @@ def _python_code_raw(c: dict):
     head = os.path.basename(toks[0]) if toks else ""
     if _PYTHON_RE.match(head) and not dj:
         rest = toks[1:]
-        codes = _opt_values(rest, ("-c",))
+        codes = _opt_values(rest, ("-c",), loose=True)
         if codes:
             return "\n".join(codes)
         if "-m" in rest:
@@ -2014,15 +2021,13 @@ def _sql_of(c: dict):
     args = toks[1:]
     if dj and dj[0] == "dbshell":
         args = dj[1][dj[1].index("--") + 1:] if "--" in dj[1] else []
-    sqls = _opt_values(args, ("-c", "--command"))
-    if sqls:
-        sql = ";\n".join(sqls)
-        return None if "__SUBST_" in sql else sql            # $(...) を解決できなかった SQL は見えない扱い
-    if c["heredoc"] is not None:
-        return c["heredoc"]
-    if c["herestr"] is not None:
-        return c["herestr"]
-    return None
+    # -c の値（まとめ書きの途中からの候補も）とヒアドキュメント・here-string を合わせて見る。偽の -c（-hlocalhost の c）が
+    # あってもヒアドキュメントの SQL を見落とさない（I454 fix-loop 2）
+    sqls = _opt_values(args, ("-c", "--command"), loose=True)
+    if "__SUBST_" in "".join(sqls):
+        return None                                          # $(...) を解決できなかった SQL は見えない扱い
+    parts = sqls + [s for s in (c["heredoc"], c["herestr"]) if s is not None]
+    return ";\n".join(parts) if parts else None
 
 def _is_rm_rf(toks: list) -> bool:
     if not toks or os.path.basename(toks[0]) != "rm":
