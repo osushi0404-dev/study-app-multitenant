@@ -232,6 +232,23 @@ def test_error_body_redacts_personal_fields(user):
 
 
 @pytest.mark.django_db
+def test_error_body_redacts_secret_name_variants(user):
+    # パスワード変更 API（confirm_password）・入力欄の確かめの API（field/value）の欄の名前（fix-loop F1）
+    data = {
+        "current_password": "cur-i437", "new_password": "new-i437",  # pragma: allowlist secret
+        "confirm_password": "new-i437", "refresh_token": "refresh-i437",  # pragma: allowlist secret
+        "field": "email", "value": EMAIL,
+    }
+    logs, body = _error_body(data, user)
+    for field in ("current_password", "new_password", "confirm_password", "refresh_token", "value"):
+        assert body[field] == "[REDACTED]", field
+    assert body["field"] == ["email"]
+    text = logs.text()
+    for value in ("cur-i437", "new-i437", "refresh-i437", EMAIL):
+        assert value not in text
+
+
+@pytest.mark.django_db
 def test_error_body_adds_no_missing_fields(user):
     _, body = _error_body({"password": "pw-i437"}, user)  # pragma: allowlist secret
     assert body == {"password": "[REDACTED]"}

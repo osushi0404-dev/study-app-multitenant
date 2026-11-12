@@ -45,7 +45,7 @@
 イシューの受け入れ条件を、調べた結果に合わせて番号を付けた。
 - AC1: 監視の記録（P1・P2）にメールアドレスが入らず、`user_id` は入る（テストで確かめる）
 - AC2: API の呼び出しのログ（P3）と新規登録のログ（P4・P5）にメールアドレスが入らず、利用者 ID で追える。新規登録のログにパスワードも入らない（テストで確かめる）
-- AC3: エラーの送信内容の記録（P8）で、`email`・`first_name`・`last_name`・`user_id`・`refresh` が `[REDACTED]` になる。今まで伏せていた欄も `[REDACTED]` のまま。ほかの欄は残る（テストで確かめる）
+- AC3: エラーの送信内容の記録（P8）で、`email`・`first_name`・`last_name`・`user_id`・`refresh` が `[REDACTED]` になる。今まで伏せていた欄も `[REDACTED]` のまま。名前の一部に `password`・`token`・`secret`・`refresh`・`api_key` を含む欄（`confirm_password`・`refresh_token` など）と `value` も `[REDACTED]`（fix-loop で追加）。ほかの欄は残る（テストで確かめる）
 - AC4: `settings.DEBUG` が偽のとき、想定外のエラーの記録にその場の変数を書く印（`include_locals`）が付かず、変数（`locals`）も入らない。真のときは印が付く（テストで確かめる。変数そのものが書かれないのは今の書く側の不具合で、直すのは本イシューの範囲外・計画変更記録）
 - AC5: `backend/` のほかの logger の呼び出しを調べた結果（1 章の表と「直さない」）が計画書に記録され、個人情報を書いている所（P6・P7）も直っている
 - AC6: 全テストが通る（CI）
@@ -114,21 +114,24 @@
 ```
 
 ### 4-5. エラーの送信内容の記録（`backend/core/enhanced_logging.py:_safe_body`）
-**修正方針**: 伏せる欄に個人情報の欄（`email`・`first_name`・`last_name`・`user_id`）と `refresh` を足す。今までと同じく欄の名前の完全一致で伏せる（`dict(request.POST)` の欄の名前は API の欄の名前そのまま）。一覧は既存の秘密と個人情報に分けてモジュールの定数にする。
+**修正方針**: 秘密の欄は、名前の一部に `password`・`token`・`secret`・`refresh`・`api_key` を含めば伏せる（`confirm_password`・`password_confirm`・`refresh_token` など名前の揺れも止める・fix-loop で変更）。個人情報の欄（`email`・`first_name`・`last_name`・`user_id`）と、入力欄の確かめの API（`FieldValidationView`）がパスワード・メールアドレスを入れる `value` は、欄の名前の完全一致で伏せる（R4）。一覧はモジュールの定数にする。見るのは一番上の階層の欄だけ（今の API の送信内容は平ら。入れ子は範囲外・R4）。
 ```python
-# エラーの送信内容の記録で伏せる欄（秘密）
-SENSITIVE_BODY_FIELDS = (
-    'password', 'password_confirm', 'token', 'secret',
-    'api_key', 'current_password', 'new_password', 'refresh',
-)
-# エラーの送信内容の記録で伏せる欄（個人情報・I437）
-PERSONAL_BODY_FIELDS = ('email', 'first_name', 'last_name', 'user_id')
+# エラーの送信内容の記録で伏せる欄: 名前の一部にこの語を含むもの（秘密）
+SENSITIVE_BODY_WORDS = ('password', 'token', 'secret', 'refresh', 'api_key')
+# エラーの送信内容の記録で伏せる欄: 名前の完全一致（個人情報と、FieldValidationView の値・I437）
+PERSONAL_BODY_FIELDS = ('email', 'first_name', 'last_name', 'user_id', 'value')
+
+
+def _is_redacted_field(name) -> bool:
+    lowered = str(name).lower()
+    return lowered in PERSONAL_BODY_FIELDS or any(word in lowered for word in SENSITIVE_BODY_WORDS)
 
     def _safe_body(self, request):
         ...
-            for field in SENSITIVE_BODY_FIELDS + PERSONAL_BODY_FIELDS:
-                if field in body:
-                    body[field] = '[REDACTED]'
+            return {
+                key: '[REDACTED]' if _is_redacted_field(key) else value
+                for key, value in body.items()
+            }
 ```
 
 ### 4-6. その場の変数の記録（`backend/core/enhanced_logging.py:_log_exception`）
@@ -165,7 +168,7 @@ from django.conf import settings
 - R1 ログからメールアドレスが無くなり、問い合わせの調べものがしにくくなる → `user_id`（UUID）が全部の記録に残るので、管理画面（`backend/accounts/admin.py`）で ID から利用者を引ける。新規登録のログには組織 ID が残る
 - R2 本番でその場の変数が記録されなくなり、想定外のエラーの原因調べの手がかりが減る → ファイル・行・関数・コードの行と traceback は残る。変数が要るときは開発環境で再現する（設計確認メモの決定）
 - R3 例外の文言（`str(e)`）に値が入るエラー（DB の重複エラーなど）は残る → 新規登録のメールアドレスの重複は serializer が先に確かめて 400 にするので、DB の重複エラーになるのは同時に登録したときだけ。どこで起きるか決まらず一律に直せないので、本イシューでは扱わない（9 章）
-- R4 伏せる欄の名前を完全一致にしたので、別の名前の欄（例: `mail`）は伏せない → 今の API の欄の名前（`backend/accounts/serializers.py:46・213`）は `email`・`user_id`・`first_name`・`last_name` で、全部入る。部分一致にすると `subject_ids` など関係ない欄まで伏せて原因調べに使えなくなる
+- R4 個人情報の欄は名前の完全一致にしたので、別の名前の欄（例: `mail`）は伏せない → 今の API の欄の名前（`backend/accounts/serializers.py:46・213`）は `email`・`user_id`・`first_name`・`last_name` で、全部入る。部分一致にすると `subject_ids`（`id` を含む）など関係ない欄まで伏せて原因調べに使えなくなる。秘密の欄は漏れたときの被害が大きいので名前の一部で伏せる（`refresh_interval` のような秘密でない欄まで伏せうるが、手がかりが減るだけで漏れは起きない）。`value` も完全一致なので、将来 `value` という欄を持つ別の API が増えると伏せすぎるが、漏れは起きない。入れ子の欄（`{"data": {"password": ...}}`）は見ない — 今の API の送信内容は平らで、DRF の `request.data` もミドルウェアには届かない（P8 の注）
 
 ## 9. 確定事項と自律判断
 **イシューに明記されていること**（設計確認メモ 2026-11-12）:
@@ -223,6 +226,11 @@ from django.conf import settings
   - 選んだ案と理由: 付ける側を `settings.DEBUG` にする方針（4-6）は変えない（探し方が直ったときに本番で書かれないため・設計確認メモの決定）。AC4・TC-06・V3 を「`DEBUG` が偽なら印（`include_locals`）が付かず変数も入らない／真なら印が付く」に直す。書く側の探し方は直さない（開発だけで使う機能の不具合で、直すと開発のログにメールアドレス・パスワードが書かれるようになる。直すかは retro で扱いを決める）
   - 計画レビューのやり直し: 要（受け入れ条件 AC4 の文言を変えた）→ 20261112_2344 で OK
 - implement（/simplify・2 体〔再利用・簡潔さ／効率・直す深さ〕。差分が小さいため 4 観点を 2 体にまとめた）: 動きを変えずに次を直した — 伏せる欄の 2 つの定数をつないだ `REDACTED_BODY_FIELDS` をモジュールで 1 回だけ作る・テストで捕まえる logger から `django` を外す（root に届くので同じ記録が 2 回入っていた）・TC-07 の 2 件目の名前を中身に合わせて `test_error_body_adds_no_missing_fields` に。見送り: `subject_service.py:125` の直し（来るのは未ログイン・なしだけで `AnonymousUser`／`None` が出る。1 章の「直さない」）・入れ子の送信内容や名前の一部一致で伏せる形（R4 の決定）・`logging_decorators.py` との一覧の統合と、ratelimit の無効化の conftest への移動（範囲外）。計画レビューのやり直し: 不要
+- fix-loop（コードレビュー 20261112_2349 の F1・診断 `docs/reviews/I437_fix_diagnosis_20261113_0002.md`・診断レビュー PASS）:
+  - 計画書の記載: 4-5「今までと同じく欄の名前の完全一致で伏せる」
+  - 採った方法: 秘密の欄は名前の一部（`password`・`token`・`secret`・`refresh`・`api_key`）で伏せ、個人情報の欄は完全一致のまま。`FieldValidationView` の `value` を完全一致の一覧に足す
+  - 理由: パスワード変更 API の `confirm_password` が完全一致の一覧に無く、新しいパスワードがログに平文で残った（F1）。同型の調査で `value`（パスワード・メールアドレスが入る。429・400 で記録される）も見つかった。秘密は名前の揺れで漏れたのが原因なので、名前の一部で止めて同型を根本から止める。個人情報は R4 の理由で完全一致のまま
+  - 計画レビューのやり直し: 要（4-5 の方式を変えた）
 
 ## レビュー結果
 - [20261112_2344 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2344.md)
