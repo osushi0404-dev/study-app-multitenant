@@ -35,3 +35,4 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [implement] /simplify の 4 観点を 2 体にまとめて回した — 差分が 40 行ほどで、4 体は過剰。見送った指摘は計画変更記録に書いた
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
