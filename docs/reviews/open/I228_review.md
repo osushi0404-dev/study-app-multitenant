@@ -32,9 +32,11 @@
 - [implement] テストを先に足し、今の本体で新しい 17 件だけが落ちることを確かめてから実装した（Red→Green）
 - [implement] /simplify の指摘のうち、引き継ぎの起点を `REVIEW_BASE` にそろえる・コンテナ停止の出力を noexec に足す・テストの重複整理を採った。記録末尾の機械の行で判定を持つ案と `prev_tbl` の統合は見送り（計画変更記録に理由）
 - [implement] shellcheck はホストに無いので、commit 時の pre-commit の shellcheck に任せた
+- [review-gate] 基本レビュー OK（CI OK・RISK: NO・敵対的レビューは不要）。Low 5 件（F1 noexec の言い直しに新しい id を案内していない・F4 `docker compose ps --status …` が allow の完全一致に当たらない疑い ほか）は止める指摘ではないので直さず、retro で振り分ける
 
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
