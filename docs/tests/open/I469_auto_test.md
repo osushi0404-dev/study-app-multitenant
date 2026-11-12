@@ -5,7 +5,7 @@
 新しいテスト `test_i469_guard_optspec_leftovers.sh` は `test_i463_guard_optspec.sh` と同じ形: 一時リポジトリの中から見張りに Bash の JSON を渡して判定だけを見る（コマンドは実行しない）。期待値 `2`＝停止・`ASK`＝確認（exit 0 ＋ `permissionDecision: ask`）・`0`＝通す。0＝全 PASS／1＝FAIL あり。TC-04 は一時ディレクトリ `$P`（`$TMP/proj`）に空の `.env` を置く。失敗の注入（FG）は、見張りの写しの 1 か所を置き換え（置き換える文字列が見張りにちょうど 1 回だけあることを確かめ、無ければ FAIL）、その写しで同じケースが期待どおりに変わることを確かめる。FG の置き換え元の文字列は implement で確定し、下の表に書き写す。
 
 結果:
-- 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じ形を develop の見張りに流した「今」の判定は計画書「調査結果」の表のとおり（01a・01b・02a〜02d・03a・03b・04a が「通す」で、直した後の期待とずれる。それ以外の形は今も期待どおり）
+- 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じ形を develop の見張りに流した「今」の判定は計画書「調査結果」の表のとおり（01a・01b・02a〜02d・02h〜02k・03a・03b・04a が「通す」で、直した後の期待とずれる。それ以外の形は今も期待どおり）
 
 ## TC-01 su の `--session-command` の中のコマンドを読む（F2）
 | ID | コマンド | 期待 |
@@ -26,6 +26,10 @@
 | 02e | `grep -f .env x`（今までどおり） | ASK |
 | 02f | `grep -fpatterns.txt x` | 0 |
 | 02g | `grep --exclude=.env foo x`（除く指定は確認にしない・止める対象を増やさない） | 0 |
+| 02h | `rg -f.env x`（表に無いコマンドは既定の読み方・design-security-review で追加） | ASK |
+| 02i | `rg --file=.env x` | ASK |
+| 02j | `awk -f.env x` | ASK |
+| 02k | `awk --file=.env x` | ASK |
 | FG-02 | `paths += _opt_values(…)` の行（`_FILE_VALUE_OPTS` の値を足す）を外した写しで 02a | 0 |
 
 ## TC-03 パイプの受け手の python のスクリプト名を表で読む（F7）
@@ -50,7 +54,7 @@
 | FG-04 | grep の表から `"--exclude-dir"` を外した写しで 04a | 0 |
 
 ## TC-05 止めるべき形の一覧（変更前の見張りと比べる）
-`scripts/claude/tests/guard_must_stop_cases.txt` に次を足す（`.env` の有無によらない形だけ。一覧は空の一時リポジトリで判定する・一覧 I463 F6）: 01a・01b・02a〜02d・03a・03b の形。
+`scripts/claude/tests/guard_must_stop_cases.txt` に次を足す（`.env` の有無によらない形だけ。一覧は空の一時リポジトリで判定する・一覧 I463 F6）: 01a・01b・02a〜02d・02h〜02k・03a・03b の形。
 | ID | 確かめ | 期待 |
 |---|---|---|
 | 05a | `bash scripts/claude/tests/test_guard_must_stop_cases.sh`（一覧のすべてが作業ツリーで確認か停止・変更前より弱い判定 0 件・異常終了 0 件。失敗の注入 09b・09c を含む） | exit 0 |

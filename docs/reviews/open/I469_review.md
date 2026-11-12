@@ -28,5 +28,6 @@
 - [plan] python の `-c`・`-m` は今と同じに通す — パイプの中身はコードとして実行されない。I463 で見送った「`python3 -c "$X" | …` が新しく確認になる」を起こさない
 - [plan] くっつけた値を秘密のファイルとして探すのは、中身を読むオプション（grep `-f`・`--file`・`--exclude-from`、sed `-f`・`--file`）だけ — 除く指定やパターンの値まで足すと確認が増える
 - [plan] 一覧 I463 F5（grep の値付きの長いオプション）を同梱、F4（flock の読みすぎ）は残す — F5 は表に足すだけで秘密の表示の取りこぼしが直る。F4 は止める側に倒れるだけ
+- [design-security-review] 同じ原因の rg・awk のくっつけた値（`rg -f.env`・`awk --file=.env`）も直す範囲に入れ、計画レビューをやり直す — 離した形は今も確認になり、止める対象を増やさない範囲の中。範囲を広げたので計画レビューを通し直す
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

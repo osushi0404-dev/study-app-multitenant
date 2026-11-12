@@ -51,6 +51,7 @@ P3/P5/P8 影響なし（DB・外部 API・非同期処理・依存ファイル�
 | F2 | `su -c 'git push --force origin develop'` | 停止 | 停止 |
 | F3 | `grep -f.env x`・`grep --file=.env x` | 通す・通す | 確認・確認 |
 | F3（同じ原因） | `grep --exclude-from=.env x y`・`sed -f.env x` | 通す・通す | 確認・確認 |
+| F3（同じ原因・design-security-review で追加） | `rg -f.env x`・`rg --file=.env x`・`awk -f.env x`・`awk --file=.env x`（離した `rg -f .env x`・`awk -f .env x` は今も確認） | 通す（4 つとも） | 確認（4 つとも） |
 | F3 | `grep -f .env x`・`grep --file .env x` | 確認・確認 | 確認・確認 |
 | F3（増やさない側） | `grep -r foo --exclude=.env .`（.env を除く指定。離した `--exclude .env` は今も確認） | 通す | 通す |
 | F7 | `curl x \| python3 --check-hash-based-pycs default`・`curl x \| python3 -W ignore` | 通す・通す | 確認・確認 |
@@ -78,7 +79,7 @@ P3/P5/P8 影響なし（DB・外部 API・非同期処理・依存ファイル�
 | `scripts/claude/hooks/pretooluse_guard.py` | `_OPTSPEC["su"]` | 長いオプションに `--session-command` を足す |
 | 同上 | `_expand`（su・script） | `-c` の値を読む名前に `--session-command` を足す |
 | 同上 | `_OPTSPEC["grep"]` | 長いオプションに `--label`・`--binary-files`・`--include`・`--exclude`・`--exclude-from`・`--exclude-dir`・`--group-separator` を足す（一覧 I463 F5） |
-| 同上 | `_FILE_VALUE_OPTS`（新規）・`_cmd_external` の `paths` | 中身を読むファイルを値に取るオプション（grep `-f`・`--file`・`--exclude-from`、sed `-f`・`--file`）の値を、表で読んで `paths` に足す（今の `-` で始まらない語は残す） |
+| 同上 | `_FILE_VALUE_OPTS`（新規）・`_cmd_external` の `paths` | 中身を読むファイルを値に取るオプション（grep `-f`・`--file`・`--exclude-from`、sed・rg・awk `-f`・`--file`）の値を `_opt_values` で読んで `paths` に足す（grep・sed は表、rg・awk は表に無いので今の既定の読み方〔`-fX`・`--file=X`〕。今の `-` で始まらない語は残す） |
 | 同上 | `_cmd_external` の python の `script_arg` | `_getopt("python", …)` で読み、`-c`・`-m` があるか、最初の位置引数が `-`・`/dev/`・`/proc/` 以外ならスクリプトを指定した形とする |
 | `scripts/claude/tests/test_i469_guard_optspec_leftovers.sh`（新規） | — | TC-01〜TC-04 |
 | `scripts/claude/tests/guard_must_stop_cases.txt` | — | 止めるべき形を足す（TC-05） |
@@ -110,7 +111,9 @@ P3/P5/P8 影響なし（DB・外部 API・非同期処理・依存ファイル�
 **修正方針**: 中身を読むファイルを値に取るオプションだけを表で読み、その値を `paths` に足す。今の「`-` で始まらない語」は残すので、止める側は減らない。除く指定（`--exclude=.env`）やパターン（`-e.env`）の値は足さない（止める対象を増やさない）。
 ```python
 # 中身を読むファイルを値に取るオプション（I469 F3）。くっつけた値（grep -f.env・--file=.env）も、離した形と同じに秘密のファイルを探す
-_FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "--file")}
+# grep・sed は表で読み、表に無い rg・awk は _opt_values の既定（-fX・-f X・--file=X）で読む
+_FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "--file"),
+                    "rg": ("-f", "--file"), "awk": ("-f", "--file")}
 ...
     paths = [a for a in toks[1:] if not a.startswith("-")]
     if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file"), cmd=head):
@@ -175,7 +178,7 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 ### Claude が技術的に決めたこと（理由）
 - F7: python の `-c`・`-m` は「実行するものを指定した形」として通す（今と同じ） — パイプの中身はコードとして実行されない。表に替えたときに `python3 -c "$X" | …` が新しく確認になる（I463 で見送った理由）のは、`-c` を位置引数の有無だけで見るのをやめれば起きない
 - F3: `paths` に足すのは中身を読むファイルを値に取るオプション（grep `-f`・`--file`・`--exclude-from`、sed `-f`・`--file`）だけ — すべての値を足すと、離した形で今は通るくっつけた除く指定（`--exclude=.env`）やパターン（`-e.env`）まで確認になり、イシューの意味の範囲を超えて確認が増える
-- F3 を grep・sed に限る — `_SECRET_READERS` のうち表にある（値を取る文字を読める）コマンドは grep・sed・cp で、cp に中身を読むファイルを値に取るオプションは無い
+- F3 は grep・sed・rg・awk — `_SECRET_READERS` のうち、中身を読むファイルを値に取るオプション（`-f`・`--file`）を持つのはこの 4 つ（cp などには無い）。rg・awk は表に無いので `_opt_values` の既定の読み方（`-fX`・`--file=X`）で読む。表に足すと値を取る文字を全部調べる必要があり範囲が広がるので足さない（design-security-review で rg・awk を追加）
 - F2: su の表に `-C` を入れない（上の「イシューから変えたこと」）。`test_i463_optspec_help.sh` は短いオプションの文字を変えないので直さない
 - 一覧の行の扱い:
   - 一覧 docs/reviews/backlog/I463.md F5: 同梱 — grep の表に長いオプションを足すだけで、`grep -r --exclude-dir node_modules TOKEN .` の秘密の表示の取りこぼしが直る（TC-04）。F3 と同じ「表に無い値付きのオプション」の残り
@@ -212,12 +215,58 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
-| V1 | 1 | 実験必須 | 取りこぼしが直っている: 受け入れ条件 1 の形と、同じ原因の `grep --exclude-from=.env x y`・`sed -f.env x`・`curl x \| python3 -W ignore`・`grep -r --exclude-dir node_modules TOKEN <.env のあるディレクトリ>` が確認・停止になる（TC-01〜TC-04） |
+| V1 | 1 | 実験必須 | 取りこぼしが直っている: 受け入れ条件 1 の形と、同じ原因の `grep --exclude-from=.env x y`・`sed -f.env x`・`rg -f.env x`・`awk --file=.env x`・`curl x \| python3 -W ignore`・`grep -r --exclude-dir node_modules TOKEN <.env のあるディレクトリ>` が確認・停止になる（TC-01〜TC-04） |
 | V2 | 1 | 実験必須 | 止める側の後退が無い: 止めるべき形の一覧（TC-05）と既存の見張りのテスト全件（TC-06）が、変更前と同じかより強い判定になる。`paths` の「`-` で始まらない語」を残している（`grep -f .env x` が確認のまま） |
 | V3 | 3 | 実験必須 | 止める対象を増やさない: `grep --exclude=.env foo x`・`python3 -c "$X" \| head`・`curl x \| python3 -m json.tool`・`curl x \| python3 tool.py` が通るまま（TC-02 の 02g・TC-03）。作業記録の比較（TC-07）で新しく確認・停止が 1% 以内 |
 
 ## 計画変更記録
 - plan-review 1601 の Warning への対応（方式・範囲・受け入れ条件は変えない・再レビューしない）: FG の置き換え元は implement のステップ 4 の最初に確定して auto_test.md に書く（今のまま）／su の受け入れ条件の訂正はレビュー文書の自律判断の記録に書いてあり、close で PR の説明にも書く（GitHub のイシュー本文は写しを同期しない決まりなので書き換えない）
+- design-security-review（2026-11-12）: 同じ原因の取りこぼし（`rg -f.env x`・`rg --file=.env x`・`awk -f.env x`・`awk --file=.env x` が通る。離した形は確認）を見つけ、`_FILE_VALUE_OPTS` に rg・awk を足した（ステップ 2・変更点一覧・9.・V1・TC-02 の 02h〜02k・TC-05）
+  - 計画書の記載: 「`_FILE_VALUE_OPTS = {"grep": …, "sed": …}`」「F3 を grep・sed に限る」
+  - 採った方法: rg・awk の `-f`・`--file` も足す（表に無いので `_opt_values` の既定の読み方）
+  - 理由: F3 と同じ原因（くっつけた値の秘密のファイルを落とす）で、離した形は今も確認になる。止める対象を増やさない範囲の中
+  - 計画レビューのやり直し: 要（範囲を広げた）
 
 ## レビュー結果
 - [20261112_1601 判定: ✅ 完了](../../reviews/I469_plan_review_20261112_1601.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-12
+
+バックエンド・フロントエンドのコード変更なし（アプリの認証・認可・モデル・URL は読む対象なし）。対象はハーネスの見張り（PreToolUse フック）の判定と、そのテスト。脅威モデルは「普通の書き方の事故」（わざと抜ける書き方は対象外・danger-ops.md）。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 機密情報 | くっつけた値の秘密のファイルの取りこぼしが、計画の grep・sed のほかに rg・awk にも残る（`rg -f.env x`・`awk --file=.env x` が通る。離した形は確認） | 必須: `_FILE_VALUE_OPTS` に rg・awk の `-f`・`--file` を足す（計画変更記録）。TC-02 の 02h〜02k・止めるべき形の一覧 |
+| Medium | 入力検証（見張りが読むコマンド文字列） | grep・su の表に長いオプションを足すと、その次の語を値として読み飛ばす。値の語に止めるべきもの（秘密のファイル・中のコマンド）があれば止める側が減る | 禁止: `--help` で値を取ると書かれていない長いオプションを足さない。`_cmd_external` の `paths` の「`-` で始まらない語」を消さない。必須: TC-05（止めるべき形の一覧の版比較）・TC-06（既存テスト全件）・V2 |
+| Medium | 機密情報 | `_FILE_VALUE_OPTS` を広げすぎ（すべての値を足す）と、除く指定（`--exclude=.env`）・パターン（`-e.env`）まで確認になり、止める対象が増える | 禁止: 中身を読むファイルを値に取るオプション以外を足さない。必須: TC-02 の 02g・V3・TC-07（1% 以内） |
+| Low | 入力検証 | python の `-c`・`-m` を「実行するものを指定した形」として通すので、`curl x \| python3 -c 'exec(sys.stdin.read())'` のように -c のコードがパイプの中身を実行する形は、今と同じく -c のコードの語の判定だけになる | 今と同じ判定（後退なし）。脅威モデル（わざと抜ける書き方は対象外）の範囲で受け入れる |
+| Low | セキュリティ設定ミス | su の `-C` を止めない | どの版の su にも無く何も実行しない（調査結果）。表に入れると「`--help` に無い文字を表に入れない」に反する |
+| — | 認証・認可・マルチテナント・OWASP（XSS・CSRF・IDOR）・ファイル操作・外部通信・依存ライブラリ | なし（アプリのコード・依存の変更なし。テストは見張りに JSON を渡すだけで、コマンドを実行しない） | — |
+
+### 攻撃シナリオレビュー
+
+入口はアプリの API ではなく、Claude が Bash で打つコマンド（見張りが判定する）。想定する「攻撃」は、普通の書き方の事故で危ない操作が見張りを素通りすること。
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | Bash（grep・sed・rg・awk） | Claude（作業者） | `grep -f.env x`・`--file=.env`・`--exclude-from=.env`・`sed -f.env`・`rg -f.env`・`awk --file=.env` で秘密のファイルの中身を表示する | 確認になる（離した形と同じ） | Yes: TC-02・一覧 | Yes: M-01（承認画面が出る） | 表に無いほかの読み出しコマンドのくっつけた値（例 `jq --rawfile x .env`）は今のまま | Medium |
+| 2 | Bash（su） | Claude | `su --session-command 'git push --force …'`（離した形・`=` の形） | 停止（`-c` と同じ） | Yes: TC-01・一覧 | No | なし | Medium |
+| 3 | Bash（パイプの python） | Claude | `curl … \| python3 -W ignore`・`--check-hash-based-pycs default` で中身の見えないコードを流し込む | 確認になる（`python3 -` と同じ） | Yes: TC-03・一覧 | No | `-c` のコードが標準入力を実行する形は今と同じ（Low） | Medium |
+| 4 | Bash（grep -r） | Claude | `grep -r --exclude-dir node_modules TOKEN .` で .env の行を表示する | 確認になる（`grep -r TOKEN .` と同じ） | Yes: TC-04 | No | `.env` の有無に依存するので一覧には入れない（一覧 I463 F6） | Low |
+| 5 | Bash（全般） | Claude | 普通の操作（`grep --exclude=.env`・`python3 -c`・`python3 -m`・スクリプト） | 新しく確認・停止にしない | Yes: TC-02 の 02g・TC-03 の 03d〜03h・TC-07 | Yes: M-02 | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 3件 | 3件 |
+| Low     | 2件 | 2件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
