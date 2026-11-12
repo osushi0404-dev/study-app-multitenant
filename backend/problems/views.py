@@ -809,9 +809,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         # 他組織・全体共有の科目の回は存在しないものとして扱う（科目なしの回は残す・I446）
-        sessions = scope_to_user_org(
-            QuizSession.objects.filter(user=user), user, subject_path='subject', allow_null=True,
-        )
+        sessions = QuizSession.objects.for_user(user)
         if self.action in ('retrieve', 'end'):
             # 回答を出す応答（QuizSessionDetailSerializer）は、組織の問題の回答だけを出す
             # （I166 より前のデータ・表示だけの絞り込み。回の件数・正解数の欄は変えない）

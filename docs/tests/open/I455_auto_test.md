@@ -6,7 +6,7 @@
 - 合否は終了コード（合格=0・不合格=非ゼロ）。否定・不在の TC は失敗の注入（FG）で非ゼロになることを確かめる
 
 結果:
-- backend: （実装後に記入）
+- backend: 新しいテスト（20 件）と守りのテスト（I431・I166・#446）が 182 passed・9 xfailed（#446 の既知の xfail）。失敗の注入（TC-05・TC-07・TC-09・TC-10・TC-13）はすべて非ゼロ終了。CI は review-gate で確かめる
 - frontend: 対象外（変更なし）
 
 ## 実行記録
@@ -16,6 +16,22 @@
 | 2026-11-12 | TC-10（実装前） | 0 | `No changes detected`（ベースライン） |
 | 2026-11-12 | TC-13（実装前） | 0 | 差分なし（ベースライン） |
 | 2026-11-12 | TC-05 の正規表現の自己検証（scratchpad の使い捨てのファイル） | 0 / 1 | 4-3 の形のクラス属性（`subject_paths = (...)`・`allow_null = True`）だけのファイルでは exit 0（当たらない）。`scope_to_user_org(q)` の行を足すと exit 1（FG） |
+| 2026-11-12 | ステップ 1 の後に TC-10 | 0 | `No changes detected`（8 モデルの Manager を足しても migration は出ない） |
+| 2026-11-12 | TC-01〜TC-04（`-k "not reason_comment"`） | 1 → 0 | 初回はテストのデータの作り方の誤り（問題の作成者が必須・進行中のクイズの回は利用者ごとに 1 つ）で 8 failed。データを直して 18 passed |
+| 2026-11-12 | TC-09 FG (a) `StudyLogQuerySet.allow_null = False` | 1 | TC-01・TC-02 の StudyLog の 2 件が FAIL。Edit で戻した |
+| 2026-11-12 | TC-09 FG (b) `for_user` の `self.filter(user=user)` を `self` に | 1 | TC-01 の 8 モデルすべてが FAIL。Edit で戻した |
+| 2026-11-12 | TC-09 FG (c) `LearningSuggestionQuerySet.subject_paths` から `'mistake_pattern__subject'` を消す | 1 | TC-03 が FAIL。Edit で戻した後 18 passed |
+| 2026-11-12 | TC-05（置き換えの後・旧い正規表現） | 1 | `backend/studylogs/serializers.py` の DRF の `OrgSubjectField(..., allow_null=True)` などに当たった（境界の指定ではない）。正規表現から `allow_null=` を外した（計画変更記録） |
+| 2026-11-12 | TC-05（直した正規表現） | 0 | 当たらない |
+| 2026-11-12 | TC-05 FG（`backend/dashboard/views.py` に `# scope_to_user_org` の行を足す） | 1 | その行に当たった。Edit で戻した |
+| 2026-11-12 | TC-06 | 0 | 1 passed |
+| 2026-11-12 | TC-07 FG (a) `update_progress` のコメントを 1 つ消す | 1 | `['studylogs/views.py:327']` で FAIL。Edit で戻した |
+| 2026-11-12 | TC-07 FG (b)(c) `dashboard/views.py` に 1 行の呼び出しと複数行の呼び出しをコメントなしで足す | 1 | `['dashboard/views.py:295', 'dashboard/views.py:296']` で FAIL（両方を検出）。Edit で戻した |
+| 2026-11-12 | TC-08 | 0 | 181 passed・9 xfailed（26 秒） |
+| 2026-11-12 | TC-10・TC-13 | 0 | `No changes detected`・差分なし |
+| 2026-11-12 | TC-10 FG（StudyLog の Manager を `use_in_migrations=True` のものに差し替え） | 1 | `0002_alter_studylog_managers.py`（Change managers on studylog）を検出（`--dry-run` なのでファイルは作られない）。Edit で戻して `No changes detected` |
+| 2026-11-12 | TC-13 FG（I166 のテストの末尾に空行を足す） | 1 | 差分を検出。Edit で戻して exit 0 |
+| 2026-11-12 | /simplify の後に TC-12（TC-05・TC-08・TC-10・TC-13） | 0 | すべて exit 0。TC-08 は 182 passed・9 xfailed（静的テストの対象モデルを登録から集める変更で 1 件増えた） |
 
 ## TC 一覧
 
@@ -25,7 +41,7 @@
 | TC-02 | `test_for_user_noorg_user`（8 モデル）: 組織に属さない利用者 `user_noorg` の、組織 A の科目を指す記録と科目が空の記録で `for_user(user_noorg)` を取る | `... -k noorg_user` | exit 0。空を許すモデルは科目が空の記録の ID だけ、ほかは空（`[]`） | AC1・AC5 |
 | TC-03 | `test_learning_suggestion_both_paths`: 提案（subject・パターンの subject）の組を (自・自)・(自・他)・(他・自)・(空・空)・(自・空) で作る | `... -k both_paths` | exit 0。`for_user(user_a)` が返すのは (自・自)・(空・空)・(自・空) の 3 件だけ | AC1・AC5 |
 | TC-04 | `test_base_without_subject_paths_raises`: 属性を書かない `OrgScopedQuerySet` で `for_user` を呼ぶ | `... -k without_subject_paths` | exit 0（`ImproperlyConfigured` が出ることを `pytest.raises` で確かめる） | AC1 |
-| TC-05 | 呼び出し側に境界の指定（`scope_to_user_org` の呼び出し・`subject_path=`・`allow_null=` のキーワード引数）が残らない。QuerySet のクラス属性 `subject_paths = …`・`allow_null = …`（4-3）は「=」の前に空白があるので当たらない | 下の「TC-05 のコマンド」 | exit 0（1 行も当たらない）。FG: `backend/dashboard/views.py` に `# scope_to_user_org` の行を一時的に足すと exit 1。戻す | AC2 |
+| TC-05 | 呼び出し側に境界の指定（`scope_to_user_org`・`scope_learning_suggestions` の呼び出しと、その引数 `subject_path=`）が残らない。QuerySet のクラス属性 `subject_paths = …`（4-3）は「=」の前に空白があるので当たらない。`allow_null=` は DRF の入力欄の設定（`serializers.py` の `OrgSubjectField(..., allow_null=True)` など）にも当たるので探さない（`scope_to_user_org` の呼び出しが無ければ、その引数としての `allow_null=` も無い） | 下の「TC-05 のコマンド」 | exit 0（1 行も当たらない）。FG: `backend/dashboard/views.py` に `# scope_to_user_org` の行を一時的に足すと exit 1。戻す | AC2 |
 | TC-06 | `test_unscoped_reads_have_reason_comment`（基準の行はモデル名が書かれた行＝`<モデル>.objects` の `ast.Attribute` の `lineno`。複数行の呼び出しでも先頭の行）: `backend/studylogs/`・`backend/dashboard/` のテスト以外の `.py` で、8 モデルの `objects.<メソッド>`（`for_user`・`create`・`get_or_create`・`update_or_create`・`bulk_create` 以外）の行と直前 3 行に `組織で絞らない` がある | `... -k reason_comment` | exit 0 | AC3 |
 | TC-07 | TC-06 の FG（3 種）: (a) `backend/studylogs/views.py` の `update_progress` の `組織で絞らない` のコメントを 1 つ消す (b) `backend/dashboard/views.py` に `StudyLog.objects.filter(user=user).count()` の行をコメントなしで一時的に足す (c) 同じ場所に、複数行に分けた `StudyLog.objects.filter(\n    user=user,\n).count()` をコメントなしで一時的に足す | `... -k reason_comment` を各 FG で | いずれも exit 1 で、失敗の文に注入したファイル名と行番号が出る。Edit で戻した後に exit 0 | AC3 |
 | TC-08 | 守りの既存テスト（I431・I166・#446）と新しいテスト | 下の「TC-08 のコマンド」 | exit 0（failed 0。#446 の xfail はそのまま xfailed） | AC4 |
@@ -39,7 +55,7 @@
 
 TC-05 のコマンド:
 ```bash
-bash -c '! grep -rnE "scope_to_user_org|scope_learning_suggestions|subject_path=|allow_null=" backend/studylogs backend/dashboard --include=*.py --exclude-dir=tests'
+bash -c '! grep -rnE "scope_to_user_org|scope_learning_suggestions|subject_path=" backend/studylogs backend/dashboard --include=*.py --exclude-dir=tests'
 ```
 
 TC-08 のコマンド:

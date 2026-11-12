@@ -70,7 +70,7 @@
 ## 2. 受け入れ条件（Acceptance Criteria）
 イシューの受け入れ条件と同じ。この計画での合格の基準:
 - [ ] AC1: 8 モデルの組織の境界が、それぞれの QuerySet のクラス属性（`subject_paths`・`allow_null`）の 1 か所で決まり、`for_user(user)` で取り出せる（TC-01〜TC-04）
-- [ ] AC2: `backend/studylogs/` と `backend/dashboard/` の、テスト以外のコードの呼び出し側に、`scope_to_user_org`・`scope_learning_suggestions` の呼び出しと `subject_path=`・`allow_null=` のキーワード引数が残らない（境界の決まりは 4-3 の QuerySet のクラス属性 `subject_paths = …`・`allow_null = …` だけに書く。TC-05）
+- [ ] AC2: `backend/studylogs/` と `backend/dashboard/` の、テスト以外のコードの呼び出し側に、`scope_to_user_org`・`scope_learning_suggestions` の呼び出し（とその引数 `subject_path=`・`allow_null=`）が残らない（境界の決まりは 4-3 の QuerySet のクラス属性 `subject_paths = …`・`allow_null = …` だけに書く。TC-05）
 - [ ] AC3: 組織で絞らずに取り出す箇所に、`組織で絞らない` で始まる理由のコメントがある。8 モデルの取り出しが `for_user` でもコメントつきでもないとテストが落ちる（TC-06・TC-07）
 - [ ] AC4: I431（`backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`）・I166（`backend/problems/tests/test_I166_quiz_tenant_isolation.py`）・#446（`backend/core/tests/test_I446_cross_api_tenant_isolation.py`）のテストが、ファイルを変えずにすべて pass する（TC-08・TC-13）
 - [ ] AC5: 各 QuerySet の単体テストが、科目への経路・空を許すか・組織に属さない利用者・別の利用者を確かめる。LearningSuggestion は 2 つの経路の両方で絞ることを確かめる。失敗の注入で RED になる（TC-01〜TC-04・TC-09）
@@ -297,6 +297,9 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - イシューとのずれ: イシューの「含む」の「利用者を受け取る非同期処理は `for_user` を使う」のうち、`export_user_data_task` は件数だけを返すため `for_user` にせず理由のコメントにした（件数が変わると「振る舞いを変えない」に反する。9 章）。ほかの利用者を受け取るタスクはサービス経由で `for_user` になる
 - plan-review（20261112_0923）の指摘への対応: TC-05 の正規表現を呼び出し側の形（`scope_to_user_org`・`scope_learning_suggestions`・`subject_path=`・`allow_null=`）に絞り、AC2 の文言を合わせた（Blocker。4-3 のクラス属性に当たって正しい実装でも不合格になるため）・TC-06 の基準の行を 4-6 に明記・V3 に実装時の確かめ直しを追記・TC-13 の基点を `99b17757` に固定（Warning・Info）。計画レビューのやり直し: 要（AC2 の文言を変えた）
 - plan-review（20261112_0925・HIGHRISK）の Warning への対応: TC-10 の FG の手順を具体化（`Manager.from_queryset` に `use_in_migrations=True` を付けた Manager に一時的に差し替える）。`problems/views.py:812` は 9 章に理由を記録済みで、イシュー（GitHub が正）の表は変えない。(B) の箇所は implement で各箇所のコードを確かめ直し、言い切れなければ (C) に戻して計画変更記録に書く（V3）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+- implement: TC-05 の正規表現から `allow_null=` を外した — 計画の記載「`scope_to_user_org|scope_learning_suggestions|subject_path=|allow_null=`」が、DRF の入力欄の設定（`backend/studylogs/serializers.py:11・29・304` の `allow_null=True`。境界の指定ではない）に当たり、正しい実装でも不合格になるため。`allow_null=` は `scope_to_user_org` の引数としてしか境界の意味を持たず、その呼び出しが無いことは同じ TC で確かめるので、守る力は変わらない。AC2 の文言を「呼び出し（とその引数）」に合わせた。計画レビューのやり直し: 不要（受け入れ条件の意味・方式・範囲を変えない TC の誤検出の直し）
+- implement: (B) の各箇所を実装の時にコードで確かめ直した（V3）。`studylogs/views.py:264`・`dashboard/views.py:143` の科目は `get_user_selected_subjects`（`core/subject_service.py:106-160`・`organization_id=user.organization_id` で絞る）、`mistake_analysis.py:267・273` は `available_subjects`、`adaptive_selection.py:417` の問題は `available_problems` の候補、`services.py:61`・`adaptive_selection.py:297・302`・`dashboard/views.py:302` は組織で絞った一覧から除く ID を集めるだけ。どれも言い切れたので (C) に戻したものは無い
+- implement（/simplify）: 静的テストの対象モデルを、テストの表（SPECS）ではなくモデルの登録（既定の取り出し口が `OrgScopedQuerySet` のもの）から集め、表と一致することも確かめるテスト（`test_specs_cover_all_scoped_models`）を足した — 9 つ目のモデルに QuerySet を足したとき、表への足し忘れで静的テストの対象から漏れないため。理由のコメントの言い回しを 5 種類にそろえた。計画レビューのやり直し: 不要（4-6 のテストの対象の集め方の細部・方式は同じ）
 
 ## レビュー結果
 - [20261112_0925 判定: ✅ 完了](../../reviews/I455_plan_review_20261112_0925.md)
