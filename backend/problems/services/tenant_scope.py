@@ -3,12 +3,16 @@
 
 境界の判定のためキャッシュは使わない。組織に属さないユーザーは何も扱えない。
 全体共有科目（Subject.organization が空）は含めない。
+記録の絞り込みの本体（scope_to_user_org・各モデルの for_user の土台）は problems.querysets にある。
 """
 from typing import Optional
 
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 
 from problems.models import Problem, Subject
+from problems.querysets import scope_to_user_org
+
+__all__ = ['available_subjects', 'available_problems', 'scope_to_user_org']
 
 
 def available_subjects(user) -> QuerySet[Subject]:
@@ -32,22 +36,3 @@ def available_problems(user, subject: Optional[Subject] = None) -> QuerySet[Prob
     if subject is not None:
         problems = problems.filter(subject=subject)
     return problems
-
-
-def scope_to_user_org(
-    queryset: QuerySet, user, *, subject_path: str, allow_null: bool = False
-) -> QuerySet:
-    """
-    記録の queryset を、ユーザーの組織の科目を指すものに絞る
-
-    subject_path は記録から科目への経路（例: 'subject'・'problem__subject'）。
-    allow_null=True のとき、科目が空の記録も残す（他組織の中身を含まないため）。
-    組織に属さないユーザーは、allow_null なら科目が空の記録だけ、そうでなければ空。
-    """
-    null_cond = Q(**{f'{subject_path}__isnull': True})
-    if user.organization_id is None:
-        return queryset.filter(null_cond) if allow_null else queryset.none()
-    cond = Q(**{f'{subject_path}__organization_id': user.organization_id})
-    if allow_null:
-        cond |= null_cond
-    return queryset.filter(cond)

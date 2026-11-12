@@ -19,7 +19,7 @@ from .models import (
 )
 from .spaced_repetition import SpacedRepetitionCalculator
 from problems.models import Problem
-from problems.services.tenant_scope import available_problems, scope_to_user_org
+from problems.services.tenant_scope import available_problems
 from core.cache_service import cache_service
 
 User = get_user_model()
@@ -40,12 +40,9 @@ class SpacedRepetitionService:
         if cached_cards is not None:
             return cached_cards
 
-        cards = list(scope_to_user_org(
-            SpacedRepetitionCard.objects.filter(
-                user=self.user,
-                is_active=True,
-                next_review_date__lte=timezone.now()
-            ), self.user, subject_path='problem__subject',
+        cards = list(SpacedRepetitionCard.objects.for_user(self.user).filter(
+            is_active=True,
+            next_review_date__lte=timezone.now()
         ).select_related('problem', 'problem__subject').order_by(
             'next_review_date',
             '-ease_factor'  # 難しいカードを優先
@@ -58,9 +55,8 @@ class SpacedRepetitionService:
     def get_new_cards(self, limit: int = 5) -> List[Problem]:
         """新しく学習する問題を取得"""
         # まだカードが作成されていない問題を取得
-        existing_card_problems = SpacedRepetitionCard.objects.filter(
-            user=self.user
-        ).values_list('problem_id', flat=True)
+        existing_card_problems = SpacedRepetitionCard.objects.for_user(self.user).values_list(
+            'problem_id', flat=True)
 
         # 候補はユーザーの組織の未削除の問題だけ
         return available_problems(self.user).exclude(
@@ -192,7 +188,9 @@ class SpacedRepetitionService:
         if cached_stats is not None:
             return cached_stats
 
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         cards = SpacedRepetitionCard.objects.filter(user=self.user)
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         reviews = SpacedRepetitionReview.objects.filter(user=self.user)
 
         total_cards = cards.count()
@@ -260,6 +258,7 @@ class SpacedRepetitionService:
             check_date = today - timedelta(days=i)
 
             # その日に復習があったかチェック
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             has_reviews = SpacedRepetitionReview.objects.filter(
                 user=self.user,
                 reviewed_at__date=check_date
@@ -282,7 +281,9 @@ class SpacedRepetitionService:
         if target_date is None:
             target_date = date.today()
 
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         cards = SpacedRepetitionCard.objects.filter(user=self.user)
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         reviews_today = SpacedRepetitionReview.objects.filter(
             user=self.user,
             reviewed_at__date=target_date

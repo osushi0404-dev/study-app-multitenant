@@ -2,6 +2,8 @@ import uuid
 from django.db import models
 from django.contrib.auth import get_user_model
 
+from problems.querysets import OrgScopedQuerySet
+
 User = get_user_model()
 
 
@@ -195,6 +197,11 @@ class Choice(models.Model):
         return f"{self.problem.question[:30]}... - {self.text[:30]}..."
 
 
+class QuizSessionQuerySet(OrgScopedQuerySet):
+    subject_paths = ('subject',)
+    allow_null = True
+
+
 class QuizSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_sessions')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True)
@@ -206,6 +213,8 @@ class QuizSession(models.Model):
     is_active = models.BooleanField(default=True)
     # 開始リクエストの重複判定用（Idempotency-Key ヘッダの値）
     client_request_id = models.UUIDField(null=True, blank=True)
+
+    objects = QuizSessionQuerySet.as_manager()
 
     class Meta:
         ordering = ['-started_at']

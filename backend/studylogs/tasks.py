@@ -161,6 +161,7 @@ def analyze_mistake_patterns_task(self):
 def cleanup_expired_suggestions_task(self):
     """期限切れの学習提案をクリーンアップ"""
     try:
+        # 組織で絞らない: 利用者を持たない一括処理（中身を外に出さない）
         expired_suggestions = LearningSuggestion.objects.filter(
             expires_at__lt=timezone.now(),
             is_active=True
@@ -242,6 +243,7 @@ def bulk_update_spaced_repetition_task(self):
     """期限が来たすべてのスペースドリピティションカードを更新"""
     try:
         # 期限が来ているカードを取得
+        # 組織で絞らない: 利用者を持たない一括処理（中身を外に出さない）
         due_cards = SpacedRepetitionCard.objects.filter(
             next_review_date__lte=timezone.now(),
             is_active=True
@@ -273,8 +275,11 @@ def export_user_data_task(self, user_id: int, export_format: str = 'json'):
         user = User.objects.get(id=user_id)
 
         # ユーザーの学習データを収集
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         study_logs = list(StudyLog.objects.filter(user=user).values())
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         sr_cards = list(SpacedRepetitionCard.objects.filter(user=user).values())
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         sr_reviews = list(SpacedRepetitionReview.objects.filter(user=user).values())
         analytics = list(LearningAnalytics.objects.filter(user=user).values())
 
