@@ -44,6 +44,8 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [review-gate] コードレビュー（20261112_0940）は OK（Low 5 件・止める指摘なし）。Low は台帳に残し retro へ — 止める条件に当たらないため
 - [review-gate] 敵対的レビュー 1 周目（20261112_0952）は HIGH（新しい Critical・High は 0。V6 が未検証・Medium 3 件）。上限が残っているので Medium 2 件（理由のコメントの共有・`models.X` の形）を直し、検出器を合成コードで確かめるテストを常設した。V6 は CI の決定論の TC（TC-10・TC-08・TC-11）で覆っているので「読んで可」に下げた。problems の QuizSession を見張る範囲に入れる Medium は、イシューの「含まない」（QuizService）で AC3 の範囲外のため直さず retro へ — 直すとイシューの範囲を超えるため
 - [fix-loop] F6 は診断の案 A（`tokenize` でコメントを拾い、同じ行のコメントか直前のコメントだけの行だけを理由に認める）で直した — 共有を塞ぎ文字列の中の印も拾わない、粗く確実な形で、診断レビューが PASS したため。F7〜F9（Low）は止める指摘でないので直さない
+- [review-gate] 1 回目の差分のレビュー（20261112_0955）はレビュー役の出力の形の崩れで BLOCKER（台帳の周に数えない）だったので、仕組みの失敗として 1 回だけやり直した（記録のコミットの送り忘れで NOT_PUSHED になったので、送ってからもう一度）— 直すものが無い基盤の失敗のため
+- [review-gate] fix-loop の後の差分のレビュー（20261112_1020）は OK、敵対的レビュー 2 周目（20261112_1031）は OK（未検証 0・新しい Critical・High 0）。残った Low（同じ行の 2 つの呼び出しが理由を共有する・空の理由・`get_object_or_404` など）は止める理由にせず retro へ — 普通の書き方の事故になりにくく、R5 の割り切りの範囲のため
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -56,3 +58,5 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
