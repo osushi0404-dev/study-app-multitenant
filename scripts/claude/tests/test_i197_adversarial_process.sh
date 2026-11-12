@@ -58,7 +58,10 @@ if val("--tools") == "Bash":
             denials.append({"tool_name": "Bash", "tool_use_id": tid, "tool_input": {"command": cmd}})
             out({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": "permission denied", "is_error": True}]}})
         else:
-            out({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": "ok:" + eid + "\nVERDICT: OK", "is_error": False}]}})
+            # I228: out_<id> があれば、その中身を結果の本文にする（コマンドが見つからない形の出力を作る）
+            of = os.path.join(sd, "out_" + eid)
+            res = open(of, encoding="utf-8").read() if os.path.exists(of) else "ok:" + eid + "\nVERDICT: OK"
+            out({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": res, "is_error": False}]}})
             if os.path.exists(os.path.join(sd, "exec_dirty_" + eid)):
                 os.makedirs("scripts", exist_ok=True)
                 open("scripts/y.txt", "w").write("dirty\n")
@@ -554,6 +557,95 @@ fga28() { mk fga28; printf 'EXPERIMENT_BEGIN P1-E1\necho hello\nEXPERIMENT_END P
   echo error_max_budget_usd > "$TMP/fga28/stub/p1_1.subtype"; run fga28; }
 with_src "$(fg_copy 'if [ "$rc" -ne 0 ] || [ "$sub" != "success" ]; then' 'if [ "$rc" -ne 0 ]; then')" fga28
 ck "FG-A28 subtype を見ないと A28 が不合格（前の報告が消え NEW_HIGH: 1 が残らない）" no "$(yn out_has fga28 'NEW_HIGH: 1')"
+
+# ---------------- I228: 前の周の確認の引き継ぎ・コマンドが見つからない実験 ----------------
+V1_READ=$'ITEM: V1 RESULT=read\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n'
+# next_round <名前> <観点 1 の本文>: 次の周のスタブの本文を置く（呼び出しの数え方はスタブの p<k>_count に合わせる）
+next_round() {
+  local d="$TMP/$1" k i
+  for k in 1 2 3; do
+    i=$(cat "$d/calls/p${k}_count" 2>/dev/null || echo 0)
+    case $k in
+      1) printf '%s' "$2" > "$d/stub/p1_$i.txt" ;;
+      2) printf 'ITEM: V2 RESULT=read\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$d/stub/p2_$i.txt" ;;
+      3) printf 'ITEM: V3 RESULT=read\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$d/stub/p3_$i.txt" ;;
+    esac
+  done
+}
+# docs_commit <名前>: 記録の場所（計画書の計画変更記録）だけを直してコミットする
+docs_commit() { printf -- '- 記録だけの直し %s\n' "$RANDOM" >> "$TMP/$1/repo/docs/plans/open/plan_I900.md"; git -C "$TMP/$1/repo" add -A; git -C "$TMP/$1/repo" commit -q -m docs; }
+# code_commit <名前>: 記録の場所の外（a.txt）を変えてコミットする
+code_commit() { printf 'c\n' >> "$TMP/$1/repo/a.txt"; git -C "$TMP/$1/repo" add -A; git -C "$TMP/$1/repo" commit -q -m code; }
+# 2 周の筋書き: <名前> <1 周目と 2 周目の間に行う関数> [<1 周目の観点 1 の本文の上書き>]
+two_rounds() {
+  mk "$1"; [ -n "${3:-}" ] && printf '%s' "$3" > "$TMP/$1/stub/p1_0.txt"
+  run "$1"; record "$1" > "$TMP/$1/rec1"
+  "$2" "$1"; next_round "$1" "$V1_READ"; run "$1"
+}
+
+two_rounds a29 docs_commit
+A29_R1=$(basename "$(cat "$TMP/a29/rec1")")
+ck "A29 記録だけの直し → 2 周目 exit 0・OK・UNVERIFIED: 0" "0 yes yes" "$(rcode a29) $(yn out_has a29 'ADVERSARIAL_VERDICT: OK') $(yn out_has a29 'UNVERIFIED: 0')"
+ck "A29 V1 は引き継ぎ（元は 1 周目の記録）" yes "$(yn item_is a29 V1 "確認済み（前の周から引き継ぎ: ${A29_R1}）")"
+ck "A29 記録に引き継ぎの行と 1 周目の記録の名前" yes "$(yn bash -c 'grep -E "^- 引き継ぎ:" "$1" | grep -qF "$2"' _ "$(record a29)" "$A29_R1")"
+ck "A29 観点 1 の入力に「前の周から引き継ぎ済み」" yes "$(yn bash -c 'ls -t "$1"/*.in | xargs grep -l "あなたの観点: 1" | xargs grep -lF "V1（実験必須）: 実験で確かめる（前の周から引き継ぎ済み" | grep -q .' _ "$TMP/a29/calls")"
+
+two_rounds a30 code_commit
+ck "A30 記録の場所の外が変わった → V1 未検証・HIGH・exit 1" "1 yes yes" "$(rcode a30) $(yn item_is a30 V1 未検証) $(yn out_has a30 'ADVERSARIAL_VERDICT: HIGH')"
+ck "A30 記録の引き継ぎの行に a.txt" yes "$(yn bash -c 'grep -E "^- 引き継ぎ:" "$1" | grep -qF "a.txt"' _ "$(record a30)")"
+
+a31_change() { sed -i 's/| V1 | 1 | 実験必須 | 実験で確かめる |/| V1 | 1 | 実験必須 | 実験で確かめる（直した） |/' "$TMP/$1/repo/docs/plans/open/plan_I900.md"; git -C "$TMP/$1/repo" commit -qam plan; }
+two_rounds a31 a31_change
+ck "A31 項目の行が変わった → V1 未検証・HIGH・記録に「行が変わったため引き継がない: V1」" "yes yes yes" "$(yn item_is a31 V1 未検証) $(yn out_has a31 'ADVERSARIAL_VERDICT: HIGH') $(yn rec_has a31 '行が変わったため引き継がない: V1')"
+
+# prev_tbl <名前> <時刻> <REVIEWED_COMMIT> <V1 の判定> [<本文に足す行>]: 確かめる項目の結果の表を持つ過去の記録
+prev_tbl() {
+  { printf '# 過去\n\n## 確かめる項目の結果\n| 項目 | 観点 | 確かめ方 | 報告 | 実験 | 判定 |\n|---|---|---|---|---|---|\n'
+    printf '| V1 | 1 | 実験必須 | 実験で確認 | P1-E1=ran | %s |\n' "$4"
+    printf '\n## 各観点の報告（本文。機械が読む行は無害化した）\n\n%s\n' "${5:-}"
+    printf '\nREVIEWED_COMMIT: %s\nROUNDS: 1\nVERDICT: HIGH\n' "$3"; } > "$TMP/$1/repo/docs/reviews/I900_adversarial_review_$2.md"
+  git -C "$TMP/$1/repo" add -A; git -C "$TMP/$1/repo" commit -q -m rec
+}
+a32() { mk "$1"; local o; o=$(git -C "$TMP/$1/repo" commit-tree "HEAD^{tree}" -m orphan)
+  prev_tbl "$1" 20260101_0000 "$o" '確認済み（実験）'; printf '%s' "$V1_READ" > "$TMP/$1/stub/p1_0.txt"; run "$1"; }
+a32 a32
+ck "A32 REVIEWED_COMMIT が祖先でない → V1 未検証・HIGH・記録に「祖先でない」" "yes yes yes" "$(yn item_is a32 V1 未検証) $(yn out_has a32 'ADVERSARIAL_VERDICT: HIGH') $(yn rec_has a32 '祖先でない')"
+
+two_rounds a33 docs_commit "$V1_READ"
+ck "A33 前の周で未検証 → 2 周目も V1 未検証・HIGH" "yes yes" "$(yn item_is a33 V1 未検証) $(yn out_has a33 'ADVERSARIAL_VERDICT: HIGH')"
+
+two_rounds a34 docs_commit
+A34_R2=$(basename "$(record a34)")
+docs_commit a34; next_round a34 "$V1_READ"; run a34 ADV_ROUND_LIMIT=3
+ck "A34 連鎖: 3 周目も V1 は引き継ぎ（元は 2 周目の記録）・OK" "yes yes" "$(yn item_is a34 V1 "確認済み（前の周から引き継ぎ: ${A34_R2}）") $(yn out_has a34 'ADVERSARIAL_VERDICT: OK')"
+
+a35() { mk "$1"; prev_tbl "$1" 20260101_0000 "$(git -C "$TMP/$1/repo" rev-parse HEAD)" '未検証（実験必須を読んで確認しただけ）' \
+  '| V1 | 1 | 実験必須 | x | x | 確認済み（実験） |'; printf '%s' "$V1_READ" > "$TMP/$1/stub/p1_0.txt"; run "$1"; }
+a35 a35
+ck "A35 本文の偽の表の行を読まない → V1 未検証・HIGH" "yes yes" "$(yn item_is a35 V1 未検証) $(yn out_has a35 'ADVERSARIAL_VERDICT: HIGH')"
+
+# shellcheck disable=SC1112  # 曲線引用符は I455 の記録の実物のまま（意図した文字）
+a36() { mk "$1"; printf 'timeout: failed to run command ‘python’: No such file or directory\n' > "$TMP/$1/stub/out_P1-E1"; run "$1"; }
+a36 a36
+mk a36b; printf 'service "backend" is not running\n' > "$TMP/a36b/stub/out_P1-E1"; run a36b
+ck "A36 コンテナが止まっている出力も実行できなかった → V1 未検証" yes "$(yn item_is a36b V1 未検証)"
+ck "A36 コマンドが見つからない出力 → V1 未検証・HIGH・記録に「実行できなかった（コマンドが見つからない）」" "yes yes yes" \
+  "$(yn item_is a36 V1 未検証) $(yn out_has a36 'ADVERSARIAL_VERDICT: HIGH') $(yn rec_has a36 '実行できなかった（コマンドが見つからない）')"
+ck "A36 2 回目のレビュー役の入力に noexec と docker compose exec -T backend" yes "$(yn bash -c 'grep -l "^### P1-E1: noexec" "$1"/*.in | xargs grep -lF "docker compose exec -T backend" | grep -q .' _ "$TMP/a36/calls")"
+mk a37; printf "ls: cannot access 'x': No such file or directory\n" > "$TMP/a37/stub/out_P1-E1"; run a37
+ck "A37 正しい「無い」の実験は数える → V1 確認済み（実験）・OK" "yes yes" "$(yn item_is a37 V1 '確認済み（実験）') $(yn out_has a37 'ADVERSARIAL_VERDICT: OK')"
+ck "A38 実験の約束に docker compose exec -T backend" yes "$(yn bash -c 'sed -n "/^## 実験の約束/,/^## /p" "$1" | grep -qF "docker compose exec -T backend"' _ "$A12_IN")"
+
+with_src "$(fg_copy 'changed=$(changed_outside_records "$sha" HEAD); rc=$?' 'changed=""; rc=0')" two_rounds fga30 code_commit
+ck "FG-A30 記録の場所の外の比較を外すと A30 が不合格（V1 が確認済み）" yes "$(yn item_is fga30 V1 確認済み)"
+with_src "$(fg_copy 'if [ "$row" = "$(awk -F'"'"'\t'"'"' -v id="$id" '"'"'$1 == id'"'"' "$old")" ]; then' 'if true; then')" two_rounds fga31 a31_change
+ck "FG-A31 項目の行の比較を外すと A31 が不合格（V1 が確認済み）" yes "$(yn item_is fga31 V1 確認済み)"
+with_src "$(fg_copy 'if [ "$sha" = "$ADV_BASE" ]; then' 'sha=$(record_reviewed_commit "$prev"); if false; then')" a32 fga32
+ck "FG-A32 祖先の確かめを外すと A32 が不合格（V1 が確認済み）" yes "$(yn item_is fga32 V1 確認済み)"
+with_src "$(fg_copy 'insec = ($0 == "## 確かめる項目の結果")' 'insec = 1')" a35 fga35
+ck "FG-A35 節の絞り込みを外すと A35 が不合格（V1 が確認済み）" yes "$(yn item_is fga35 V1 確認済み)"
+with_src "$(fg_copy 'if [ "$st" = ran ] && exp_not_executable "$d/exp/$id.out"; then st=noexec; fi' '')" a36 fga36
+ck "FG-A36 コマンドが見つからない形を見ないと A36 が不合格（V1 が確認済み）" yes "$(yn item_is fga36 V1 確認済み)"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/fg_copy_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"

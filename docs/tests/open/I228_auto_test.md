@@ -19,11 +19,12 @@
 | A34 連鎖 | A29 の後に記録だけを直してコミットし、3 周目（`ADV_ROUND_LIMIT=3`）も read | 3 周目: V1 が `確認済み（前の周から引き継ぎ: ` で始まり、元は 2 周目の記録・OK | AC1 |
 | A35 本文の偽の表の行を読まない | 過去の記録の「## 確かめる項目の結果」では V1 が `未検証`、「## 各観点の報告」の本文に `\| V1 \| 1 \| 実験必須 \| x \| x \| 確認済み（実験） \|` の行。REVIEWED_COMMIT は HEAD（祖先）、その後は記録だけの変更 | V1 が `未検証`・HIGH | AC1 |
 | A36 コマンドが見つからない実験は数えない | A1 と同じ。スタブの実験役の P1-E1 の出力を `timeout: failed to run command ‘python’: No such file or directory` にする（I455 の記録の実物をそのまま・曲線引用符のまま） | V1 が `未検証`・HIGH・記録に「実行できなかった（コマンドが見つからない）」・2 回目のレビュー役の入力に `docker compose exec -T backend` | AC2 |
+| A36b コンテナが止まっている | P1-E1 の出力を `service "backend" is not running` にする | V1 が `未検証` | AC2 |
 | A37 正しい「無い」の実験は数える | P1-E1 の出力を `ls: cannot access 'x': No such file or directory` にする | V1 が `確認済み（実験）`・OK | AC2 |
 | A38 案内の文 | A1 の観点 1 の入力 | 入力の「## 実験の約束」に `docker compose exec -T backend` | AC2 |
 | FG-A30 | 本体の写しで `changed_outside_records` の結果を無視（常に 0 扱い）にする | A30 の準備で V1 が `確認済み`（＝A30 が落ちる） | AC1 の FG |
 | FG-A31 | 写しで項目の行の比較を外す（今の一覧に id があれば引き継ぐ） | A31 の準備で V1 が `確認済み` | AC1 の FG |
-| FG-A32 | 写しで `merge-base --is-ancestor` の確かめを外す | A32 の準備で V1 が `確認済み` | AC1 の FG |
+| FG-A32 | 写しで、起点が比べる相手に戻ったら引き継がない確かめを外す（`REVIEWED_COMMIT` をそのまま使う） | A32 の準備で V1 が `確認済み` | AC1 の FG |
 | FG-A35 | 写しで節の絞り込みを外す（記録全体の表の行を読む） | A35 の準備で V1 が `確認済み` | AC1 の FG |
 | FG-A36 | 写しで `noexec` の振り分けを外す | A36 の準備で V1 が `確認済み` | AC2 の FG |
 | 既存 A1〜A28・L・S・FG | 変更なし | すべて PASS（回帰なし） | AC4 |

@@ -29,6 +29,9 @@ set +e
 : "${ADV_DEADLINE:=600}" "${ADV_STEP_TIMEOUT:=300}" "${ADV_MIN_STEP:=60}" "${ADV_EXPERIMENT_ROUNDS:=2}" \
   "${ADV_ROUND_LIMIT:=2}" "${ADV_REVIEW_BUDGET:=2}" "${ADV_EXEC_BUDGET:=0.5}" "${ADV_BASE:=origin/develop}"
 
+# 実験の案内（I228）: アプリのテスト・管理コマンドはコンテナで流す（ホストに python は無い）
+APP_TEST_HINT='アプリのテスト・管理コマンドは docker compose exec -T backend <コマンド> で流す（ホストに python は無い。コンテナの /app は作業ツリーそのものなので書き換える実験はしない。守りを外して落ちるかは mock.patch などテストの中で確かめる）。'
+
 PERSPECTIVE_NAMES=(
   ""
   "ロジック回避・実機 repro（ガード・判定・分岐の抜け道を実験で確かめる）"
@@ -231,11 +234,12 @@ run_perspective() {
     printf 'イシューファイル: %s\n計画書: %s（どちらも Read で読む）\n' "$ISSUE_FILE" "$PLAN_FILE"
     printf '既知 findings（再報告しない。Read で読む）: %s\n\n' "${PREV_RECORDS:-なし}"
     printf '## あなたが判定を持つ項目（すべてに ITEM 行を書く）\n'
-    awk -F'\t' -v p="$p" '$2 == p { printf "- %s（%s）: %s\n", $1, $3, $4 }' "$RUN/checklist.tsv"
+    awk -F'\t' -v p="$p" -v carried=" $(cut -f1 "$RUN/carry.tsv" | paste -sd' ' -) " \
+      '$2 == p { printf "- %s（%s）: %s%s\n", $1, $3, $4, (index(carried, " " $1 " ") ? "（前の周から引き継ぎ済み・実験不要・ITEM 行は判定に使わない）" : "") }' "$RUN/checklist.tsv"
     printf '\n## 全項目（参考。ほかの観点の項目の ITEM 行は判定に使われない）\n'
     awk -F'\t' '{ printf "- %s（観点 %s・%s）: %s\n", $1, $2, $3, $4 }' "$RUN/checklist.tsv"
-    printf '\n## 実験の約束\n実験は自分で実行せず EXPERIMENT_BEGIN P%s-E<n> 〜 EXPERIMENT_END P%s-E<n> で返す。実験役が変えずに実行し、結果が次の入力で返る（往復は %s 回まで・1 周 %s 秒で締め切り）。作業ツリーに書く実験は無効になる（/tmp に書く）。\n' \
-      "$p" "$p" "${ADV_EXPERIMENT_ROUNDS}" "${ADV_DEADLINE}"
+    printf '\n## 実験の約束\n実験は自分で実行せず EXPERIMENT_BEGIN P%s-E<n> 〜 EXPERIMENT_END P%s-E<n> で返す。実験役が変えずに実行し、結果が次の入力で返る（往復は %s 回まで・1 周 %s 秒で締め切り）。作業ツリーに書く実験は無効になる（/tmp に書く）。%s\n' \
+      "$p" "$p" "${ADV_EXPERIMENT_ROUNDS}" "${ADV_DEADLINE}" "$APP_TEST_HINT"
     printf '\n## 変更ファイルの一覧\n'; cat "$RUN/files.txt"
     printf '\n## 差分\n'; cat "$RUN/diff.txt"
   } > "$d/in0.txt"
@@ -301,9 +305,12 @@ run_perspective() {
       else
         out=$(claude_log_ran "$d/exec$r.jsonl" "$d/exp/$id.cmd"); case $? in 0) st=ran ;; 10) st=denied ;; 1) st=notcalled ;; *) st=unreadable ;; esac
       fi
-      printf '%s\t%s\n' "$id" "$st" >> "$d/exp_status"
       printf '%s\n' "$out" > "$d/exp/$id.out"
+      # コマンドが見つからないだけの実験は「実行した」に数えない（I228。残りの往復で言い直せる）
+      if [ "$st" = ran ] && exp_not_executable "$d/exp/$id.out"; then st=noexec; fi
+      printf '%s\t%s\n' "$id" "$st" >> "$d/exp_status"
       printf '\n### %s: %s\n~~~\n%s\n~~~\n' "$id" "$st" "$out" >> "$next_in"
+      [ "$st" = noexec ] && printf 'コマンドが見つからない（実行できなかった）。%s\n' "$APP_TEST_HINT" >> "$next_in"
     done
     last_ids="$ids"
     printf '\n上の結果を踏まえ、最終報告を出力の形どおりに全部書き直せ（担当の項目すべてに ITEM 行を書く）。まだ実験が要るなら EXPERIMENT 行で出せ（残りの往復: %s）。\n' \
@@ -334,9 +341,77 @@ run_perspective() {
   printf '%s\n' "$cost" > "$d/cost"
 }
 
-# 項目の判定: <id> <観点> <確かめ方> → "<報告>\t<実験>\t<判定>"（判定は「確認済み（実験）」「確認済み（読んで）」「未検証（理由）」）
+# 記録の「## 確かめる項目の結果」の節の表から "V<n>\t<判定>" を出す（I228）。
+# 各観点の報告の本文（別の節）に同じ形の行があっても読まない
+record_item_verdicts() {   # $1=記録
+  awk -F'|' '
+    /^## / { insec = ($0 == "## 確かめる項目の結果"); next }
+    insec && /^\| V[0-9]+ \|/ {
+      id = $2; v = $7; gsub(/^[[:space:]]+|[[:space:]]+$/, "", id); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      print id "\t" v
+    }
+  ' "$1"
+}
+
+# 前の周の確認の引き継ぎ（I228）: 引き継ぐ項目を "V<n>\t<元の記録のファイル名>" で出し、理由を $RUN/carry_note に書く。
+# 条件はすべて決定論（読めない・失敗は引き継がない側）: ①周に数えた最新の記録の REVIEWED_COMMIT が HEAD の祖先（＝見る範囲の起点 REVIEW_BASE）
+# ②そこから HEAD までに記録の場所の外の変更が無い ③項目の行（id・観点・確かめ方・内容）がその時点の計画書と同じ
+# ④その記録での判定が「確認済み（実験）」か「確認済み（前の周から引き継ぎ」（計画書は記録の場所なので ③ が要る）
+carry_items() {
+  local prev sha="$REVIEW_BASE" name changed rc old="$RUN/plan_at_prev.tsv" id v row ids="" moved=""
+  : > "$RUN/carry_note"
+  prev=$(counted_records | tail -1)
+  [ -n "$prev" ] || return 0
+  name=$(basename "$prev")
+  # ① は見る範囲の起点（review_base）と同じ決まり: 起点が比べる相手に戻った＝REVIEWED_COMMIT が無い・祖先でない
+  if [ "$sha" = "$ADV_BASE" ]; then
+    printf '引き継がない（%s の REVIEWED_COMMIT が無い・HEAD の祖先でない）' "$name" > "$RUN/carry_note"; return 0
+  fi
+  changed=$(changed_outside_records "$sha" HEAD); rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf '引き継がない（%s の REVIEWED_COMMIT %s から HEAD までに記録の場所の外が変わった: %s）' \
+      "$name" "$sha" "$(printf '%s\n' "${changed:-git の失敗}" | paste -sd' ' -)" > "$RUN/carry_note"; return 0
+  fi
+  if ! git show "${sha}:${PLAN_FILE}" > "$RUN/plan_at_prev.md" 2>/dev/null || ! read_checklist "$RUN/plan_at_prev.md" > "$old" 2>/dev/null; then
+    printf '引き継がない（%s の時点の %s の一覧を読めない）' "$sha" "$PLAN_FILE" > "$RUN/carry_note"; return 0
+  fi
+  while IFS=$'\t' read -r id v; do
+    case "$v" in "確認済み（実験）"|"確認済み（前の周から引き継ぎ"*) ;; *) continue ;; esac
+    row=$(awk -F'\t' -v id="$id" '$1 == id' "$RUN/checklist.tsv")
+    [ -n "$row" ] || continue
+    if [ "$row" = "$(awk -F'\t' -v id="$id" '$1 == id' "$old")" ]; then printf '%s\t%s\n' "$id" "$name"; ids+="$id "
+    else moved+="$id "; fi
+  done < <(record_item_verdicts "$prev")
+  if [ -n "$ids" ]; then
+    printf '%s の REVIEWED_COMMIT %s から HEAD までに記録の場所の外の変更なし → %sを引き継いだ' "$name" "$sha" "$ids" > "$RUN/carry_note"
+  else
+    printf '引き継ぐ項目なし（%s で実験により確認済みの項目が無い）' "$name" > "$RUN/carry_note"
+  fi
+  [ -n "$moved" ] && printf '。行が変わったため引き継がない: %s' "${moved% }" >> "$RUN/carry_note"
+  return 0
+}
+
+# 実験の出力が「コマンドが見つからない」形の行だけか（I228）: <出力のファイル> → exit 0。
+# 先頭の is_error= の行・空行・Exit code の行は除く。行の形を固定する（ls: cannot access 'x': No such file … のような
+# コマンドの中身の結果は当たらない）
+exp_not_executable() {
+  python3 -I - "$1" <<'PY'
+import re, sys
+pat = re.compile(r"(?:(?:/\S*/)?(?:bash|sh|timeout|env|nice|xargs)(?:: line \d+)?: )?"
+                 r"(?:[^\s:]+: (?:command not found|No such file or directory)|failed to run command \S+: No such file or directory"
+                 r"|service \"[^\"]+\" is not running)")
+lines = [l.strip() for l in open(sys.argv[1], encoding="utf-8", errors="replace").read().split("\n")]
+lines = [l for l in lines if l and not l.startswith("is_error=") and not re.fullmatch(r"Exit code \d+", l)]
+sys.exit(0 if lines and all(pat.fullmatch(l) for l in lines) else 1)
+PY
+}
+
+# 項目の判定: <id> <観点> <確かめ方> → "<報告>\t<実験>\t<判定>"
+# （判定は「確認済み（実験）」「確認済み（読んで）」「確認済み（前の周から引き継ぎ: <記録>）」「未検証（理由）」）
 item_verdict() {
-  local id="$1" p="$2" m="$3" d="$RUN/p$2" line res exps e ok=0 shown=""
+  local id="$1" p="$2" m="$3" d="$RUN/p$2" line res exps e ok=0 shown="" from
+  from=$(awk -F'\t' -v id="$id" '$1 == id { print $2 }' "$RUN/carry.tsv" 2>/dev/null)
+  if [ -n "$from" ]; then printf '引き継ぎ\t%s\t確認済み（前の周から引き継ぎ: %s）\n' "$from" "$from"; return; fi
   if [ "$(cat "$d/state")" != "報告あり" ]; then printf '―\t―\t未検証（観点 %s の報告なし）\n' "$p"; return; fi
   line=$(item_line "$d/body.txt" "$id")
   if [ -z "$line" ]; then printf '―\t―\t未検証（ITEM 行が無い）\n'; return; fi
@@ -415,6 +490,7 @@ REVIEWED_HEAD=$(git rev-parse HEAD)
 REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 worktree_state > "$RUN/state0"
 PREV_RECORDS=$(counted_records | paste -sd' ' -)
+carry_items > "$RUN/carry.tsv"   # 前の周の確認の引き継ぎ（I228。レビュー役を呼ぶ前に 1 回だけ決める）
 if ! git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" \
    || ! git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt"; then
   echo "⛔ 見る範囲 ${REVIEW_BASE}...HEAD の差分を取れません（比べる相手が無い・REVIEWED_COMMIT が無い）。"
@@ -476,6 +552,7 @@ n=1; while [ -e "$RECORD" ]; do n=$(( n + 1 )); RECORD="docs/reviews/${ISSUE}_ad
   [ "$DENIALS_UNREADABLE" -eq 1 ] && printf -- '- ⛔ 拒否の一覧を読めない記録がある（承認が要る操作で止まったかを確かめられないので、この周は合格にしない）\n'
   [ -n "$REVIEW_BASE_NOTE" ] && printf -- '- %s\n' "$REVIEW_BASE_NOTE"
   printf -- '- 一覧: %s の「## 必ず確かめる項目」（%s 項目）\n' "$PLAN_FILE" "$(grep -c . "$RUN/checklist.tsv")"
+  [ -s "$RUN/carry_note" ] && printf -- '- 引き継ぎ: %s\n' "$(cat "$RUN/carry_note")"
   [ "$UNREPORTED" -gt 0 ] && printf -- '- 報告の無い観点が %s 件ある（この周は ROUNDS: 0。review-gate が 1 回だけやり直す）\n' "$UNREPORTED"
   printf '\n## 確かめる項目の結果\n| 項目 | 観点 | 確かめ方 | 報告 | 実験 | 判定 |\n|---|---|---|---|---|---|\n%s' "$ITEM_ROWS"
   printf '\n## 観点ごとの実行\n| 観点 | 終わり方 | 所要 | 実験の往復 | 拒否 | 費用 | 最後のツール呼び出し | その結果（先頭） | 最後の出来事からの経過 |\n|---|---|---|---|---|---|---|---|---|\n%s' "$PERSP_ROWS"
@@ -486,7 +563,7 @@ n=1; while [ -e "$RECORD" ]; do n=$(( n + 1 )); RECORD="docs/reviews/${ISSUE}_ad
     [ -s "$d/exp_status" ] || continue
     printf '\n### 観点 %s\n' "$p"
     while IFS=$'\t' read -r id st; do
-      case "$st" in ran) label="実行した" ;; unread) label="実行した（続きの呼び出しが終わらず、結果は読まれていない）" ;; denied) label="拒否された" ;; notcalled) label="呼ばれなかった（同じコマンドの実行が無い）" ;; mode) label="実行していない（実験役のモードが auto でない）" ;; deadline) label="実行していない（締め切り）" ;; limit) label="実行していない（往復の上限）" ;; *) label="判定できない（実験役の記録を読めない）" ;; esac
+      case "$st" in ran) label="実行した" ;; unread) label="実行した（続きの呼び出しが終わらず、結果は読まれていない）" ;; noexec) label="実行できなかった（コマンドが見つからない）" ;; denied) label="拒否された" ;; notcalled) label="呼ばれなかった（同じコマンドの実行が無い）" ;; mode) label="実行していない（実験役のモードが auto でない）" ;; deadline) label="実行していない（締め切り）" ;; limit) label="実行していない（往復の上限）" ;; *) label="判定できない（実験役の記録を読めない）" ;; esac
       printf '\n#### %s: %s\n~~~\n%s\n~~~\n' "$id" "$label" "$(neutralize_machine_lines < "$d/exp/$id.cmd" 2>/dev/null)"
       [ -s "$d/exp/$id.out" ] && printf '出力の先頭:\n~~~\n%s\n~~~\n' "$(neutralize_machine_lines < "$d/exp/$id.out")"
     done < "$d/exp_status"
