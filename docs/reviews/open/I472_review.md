@@ -26,7 +26,10 @@
 - Config: なし
 
 ## テスト結果
-（test-gate の後に書く）
+- 自動（手元・app-1 のコンテナ）: サーバー側は新しいテスト 6 件と守りのテストで 236 passed。画面側は新しい 3 ファイルと追記を含む 6 ファイルで 34 passed、型チェック・lint・本番ビルドも合格。Red（直す前の 500・500 なのに回答が残る）と FG（応答の組み立てをトランザクションの外に戻す・解説画像の選び方を古い形式だけに戻す）で、テストが回帰を捕まえることを確かめた
+- CI（PR #474・`b63ddcdb`）: 7 ジョブすべて pass（TC-12）
+- 手動（test-gate・Claude が Playwright MCP で実施）: No.1〜No.5 すべて OK。古い形式の解説画像の問題（直す前は 500）に答えて結果と画像が出る・新しい形式の解説画像 2 枚が 2 列・解説文なしでも画像が出る・クリックと Enter で拡大・プレビューは変わらない。Human の項目なし
+- 判定: gate-check OK・check-frontend-evidence 合格（画面確認 8 行）・check-manual-test-executor 合格
 
 ## 計画との差分
 - I452 のテストの応答のキーの期待値を更新した（`explanation_images` の追加に伴う・計画変更記録）
@@ -45,6 +48,8 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [implement] pre-commit の ESLint のフックが手元に eslint が無く exit 127 で止まった。同じ `npm run lint`（--max-warnings 0）をフロントのコンテナで流して 0 件を確かめ、画面側のコミットだけ `SKIP=eslint` にした — I452 と同じ扱い。同じ検査を別の場所で済ませ、CI でも流れる（根本対応は #468）
 - [implement] 手動確認の画像は `backend/media/`（git 管理のフォルダ）に一時的に写し、コミットに入れない。後片付けで 1 枚ずつ消す — 画像の種類が 1 つしか無く、新旧の見分けは `src` の URL で行った
 - [implement] /simplify の指摘のうち、古い形式の getter の mixin 化・正解の選択肢の 2 回の取り出しは #470、テストの `asset()` の共通化は見送り — 応答の作りの整理は #470 の範囲で、正誤の判定を変えるのは本イシューの範囲外のため
+- [test-gate] gate-check が、画面確認のために `backend/media/`（git の対象のフォルダ）に写した確認用の画像 7 枚を「コミットしていない変更」として止めた。コードではない確認用のデータなので、作業ツリーの外（スクラッチパッド）へ退避して gate-check を通し、手動テストの間だけ戻して、終わったら再び外へ移した — コミットに入れず、作業ツリーを元に戻すため
+- [test-gate] 手動 No.3 の「Tab でフォーカス」は、要素の `focus()` で代えた — Tab の回数は画面の部品の数で変わり、確かめたいのは「フォーカスがある画像で Enter を押すと拡大する」ことのため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

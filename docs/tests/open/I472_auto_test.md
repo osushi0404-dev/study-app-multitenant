@@ -30,6 +30,8 @@
 | 2026-11-12 16:13 | Green: TC-09・TC-11（Jest 6 ファイル・型チェック・lint） | 0 | 34 passed・`tsc --noEmit` 合格・`eslint --max-warnings 0` 合格 |
 | 2026-11-12 16:13 | FG: `QuizSession.tsx` の解説画像を `pickImageUrls(undefined, result.explanation_image)` に一時的に変えて TC-09 | 1 | 3 failed（新しい形式の解説画像・解説文なし・拡大）。戻した |
 | 2026-11-12 16:25 | TC-13（/simplify の後）: TC-06・Jest 6 ファイル・型チェック・lint | 0 | 236 passed・34 passed・型チェックと lint 合格 |
+| 2026-11-12 16:23 | review-gate: `bash scripts/claude/code-review.sh I472`（CI 待ちを含む） | 0 | `CI_WAIT: OK`・`FINAL_VERDICT: OK`（Low 4 件）・`ADVERSARIAL_STAGE: NOT_REQUIRED` |
+| 2026-11-12 16:34 | TC-12: `gh pr checks 474`（`b63ddcdb`） | 0 | 7 ジョブすべて pass（Backend Tests・Frontend Tests・E2E Tests・型チェック・lint と検査 2 つ・Harness Tests） |
 
 ## TC 一覧
 
