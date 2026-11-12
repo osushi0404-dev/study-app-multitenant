@@ -27,7 +27,8 @@ from problems.models import Subject
 EMAIL = "u_i437@example.com"
 FIRST_NAME = "太郎I437"
 LAST_NAME = "山田I437"
-TARGET_LOGGERS = ("", "django", "django.request")
+# django は propagate=True で root に届くので付けない（同じ記録が 2 回入らないように）
+TARGET_LOGGERS = ("", "django.request")
 
 
 class _ListHandler(logging.Handler):
@@ -231,7 +232,7 @@ def test_error_body_redacts_personal_fields(user):
 
 
 @pytest.mark.django_db
-def test_error_body_keeps_other_fields(user):
+def test_error_body_adds_no_missing_fields(user):
     _, body = _error_body({"password": "pw-i437"}, user)  # pragma: allowlist secret
     assert body == {"password": "[REDACTED]"}
 

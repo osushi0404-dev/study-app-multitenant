@@ -87,7 +87,7 @@ class UserRegistrationView(generics.CreateAPIView):
             mutable_data = request.data.copy()
             mutable_data['organization_id'] = organization.id
 
-            logger.info(f"Registration attempt with data: {mutable_data}")
+            logger.info(f"Registration attempt for organization_id: {organization.id}")
 
             with transaction.atomic():
                 serializer = self.get_serializer(data=mutable_data)
@@ -103,7 +103,8 @@ class UserRegistrationView(generics.CreateAPIView):
 
                 logger.info("Validation passed, creating user...")
                 user = serializer.save()
-                logger.info(f"User created successfully: {user.email} with organization_id: {user.organization_id}")
+                logger.info(
+                    f"User created successfully: user_id={user.id} with organization_id: {user.organization_id}")
 
                 # Send email verification
                 try:
@@ -175,7 +176,7 @@ class UserRegistrationView(generics.CreateAPIView):
 
         # For development, skip email sending
         if settings.DEBUG:
-            print(f"Email verification token for {user.email}: {token}")
+            print(f"Email verification token for user_id={user.id}: {token}")
             return
 
         verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"

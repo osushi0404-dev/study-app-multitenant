@@ -11,6 +11,17 @@ from pathlib import Path
 from typing import Any, Dict
 import uuid
 
+from django.conf import settings
+
+# エラーの送信内容の記録で伏せる欄（秘密）
+SENSITIVE_BODY_FIELDS = (
+    'password', 'password_confirm', 'token', 'secret',
+    'api_key', 'current_password', 'new_password', 'refresh',
+)
+# エラーの送信内容の記録で伏せる欄（個人情報・I437）
+PERSONAL_BODY_FIELDS = ('email', 'first_name', 'last_name', 'user_id')
+REDACTED_BODY_FIELDS = SENSITIVE_BODY_FIELDS + PERSONAL_BODY_FIELDS
+
 # ログディレクトリの設定
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "logs"
@@ -177,7 +188,8 @@ class ErrorContextMiddleware:
                 "query_params": dict(request.GET),
                 "headers": self._safe_headers(request),
             },
-            "include_locals": True  # ローカル変数情報を含める
+            # ローカル変数は開発環境（DEBUG）だけ記録する（個人情報を本番のログに残さない・I437）
+            "include_locals": settings.DEBUG
         }
 
         # フロントエンドの操作履歴を追加
@@ -224,12 +236,7 @@ class ErrorContextMiddleware:
             else:
                 return None
 
-            # パスワードなどのセンシティブフィールドを除外
-            sensitive_fields = [
-                'password', 'password_confirm', 'token', 'secret',
-                'api_key', 'current_password', 'new_password',
-            ]
-            for field in sensitive_fields:
+            for field in REDACTED_BODY_FIELDS:
                 if field in body:
                     body[field] = '[REDACTED]'
 
