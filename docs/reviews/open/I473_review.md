@@ -25,6 +25,8 @@
 - [plan] データ無し・失敗・苦手 0 件の文言を最小限で決めた — 作り込みは #487。ユーザーの指示「BP・UI/UX の観点で問題ないやり方で」の範囲
 - [plan] おすすめの苦手の判定を間違いやすい分野と同じ決まり（5 問以上・70% 未満）にそろえた — 1 問の間違いで苦手と出さないため
 - [plan-review] 計画レビューの Warning・Info 6 件のうち 5 件を直し、TC-12 の上限は実装後に書く — どれも方式・範囲・受け入れ条件を変えないので再レビューしない。「科目別の進み具合」の読み方は close でユーザーに伝える
+- [design-security-review] Blocker・High なし。Medium の必須条件（QuizAnswer を読むのは範囲の土台 1 か所だけ）を計画書に書き、TC-13 に組織なしの利用者を足した — QuizAnswer は I455 の見張りの対象外のモデルなので、作りで防ぎ review-gate で確かめる
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
