@@ -40,6 +40,7 @@
 - [review-gate] 敵対的レビュー 1319 の HIGH（V1 が実験必須を読んで確認しただけ・新しい High は 0 件）に、表と `--help` を突き合わせる決定論の TC-13 を足して V1 を「読んで可」に下げた。あわせて止めないコードレビュー 1303 の F1（python の長いオプションの値をスクリプト名と読む後退・SECURITY=yes）も同じ表の直しなので直した — この変更が持ち込んだ後退で、受け入れ条件 4（止めるべき形が後退していない）に当たるため retro に回さない
 - [review-gate] 直した差分の基本レビューで CI の Harness Tests が失敗した（`test_i204_tool_sync.sh` の S1: 新しい `test_i463_optspec_help.sh` に「道具が無ければ SKIP」の分岐がある）ので fix-loop へ回す。原因を調べるときに作業ツリーで直しを試した（未コミット）— 手順どおりなら診断レビューの後に直すので、fix-loop で診断レビューを通してから確定する
 - [fix-loop] CI の失敗（I204 の S1）を案 A（SKIP の分岐を消し、コマンドが無い・`--help` を読めないときは不合格）で直した — 診断レビュー 1339 が OK。一覧に util-linux を足す案 B は、一覧の写しのテストも直す手間が増えるので採らない
+- [review-gate] コードレビュー 1340 は OK（止める指摘なし・F7〜F9 は Low で retro へ）、敵対的レビュー 2 周目 1357 は OK（V1〜V4 すべて確認済み）。最終判定 OK — 通算 2 周で収束
 - [implement] psql のコンテナは起こさず、psql の表は PostgreSQL 15 の文書に拠った — 後退は TC-09・TC-10 で決定論で見る
 
 STAGE_DONE: plan NEXT: plan-review
@@ -48,3 +49,4 @@ STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
