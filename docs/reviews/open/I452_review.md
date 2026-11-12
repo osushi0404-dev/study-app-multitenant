@@ -54,3 +54,4 @@ STAGE_DONE: design-security-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
 - [implement] pre-commit の ESLint のフックが手元に eslint が無く exit 127 で止まった。同じ `npm run lint`（--max-warnings 0）をフロントのコンテナで流して 0 件を確かめ、そのコミットだけ `SKIP=eslint` にした — 同じ検査を別の場所で済ませた・CI でも流れる。手元の node_modules の準備は retro で扱う
+- [review-gate] 基本レビュー OK（Low 7 件・止める指摘なし）。敵対的レビュー 1 周目（20261112_1305）は新しい Critical・High 0 だが、実験役の環境に python が無く V1〜V4・V6 が未検証で HIGH。5 項目を CI の決定論の TC と手元の失敗の注入で覆い、確かめ方を読んで可に下げて 2 周目へ — I455 と同じ扱い（review-gate 3-3）

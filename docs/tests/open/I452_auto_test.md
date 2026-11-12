@@ -7,8 +7,8 @@
 - 下の表の `PYT` は `docker compose exec -T backend python -m pytest studylogs/tests/test_I452_quiz_review.py -q`、`JEST` は `docker compose exec -T frontend npx react-scripts test --watchAll=false` の略
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
+- backend: 新しいテスト 28 件と守りのテスト（I431・I455・I166・I158・#446・problems の views）が 247 passed（xfailed 0）。失敗の注入はすべて FAIL。CI は review-gate で確かめた（`CI_WAIT: OK`）
+- frontend: 新しい 2 ファイルと既存のクイズの 2 ファイルが 20 passed。型チェック・lint（警告 0）も合格
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -28,7 +28,20 @@
 |---|---|---|---|
 | 2026-11-12 | TC-19（実装前・決定論ゲートの 9 行を 1 行ずつ） | 1 | 9 行とも exit 1（消す前の状態で当たる）。これが FG の「消す前」の状態に当たる。実装後に 0 になることを確かめる |
 | 2026-11-12 | TC-15（実装前・ベースライン） | 0 | `No changes detected`。migration を足す前の状態。TC-15 の本番（0022 を足した後）は実装の時に行う |
-| 2026-11-12 | TC-01〜TC-14・TC-16〜TC-18・TC-20・TC-21 | — | 実装前のため未実行 |
+| 2026-11-12 | TC-01〜TC-14・TC-16〜TC-18・TC-20・TC-21（実装前） | — | 実装前のため未実行 |
+| 2026-11-12 | ステップ 1: #446 の直した 9 ケース（`-k "learning_insights or update_analytics or analyze or refresh_analysis or adaptive"`） | 0 | 15 passed（xfail の印を外した後・難易度などの直しの後） |
+| 2026-11-12 | Red: `PYT`（本体の実装前） | 1 | 21 failed・7 passed（`record_quiz_answer` が無い・`review_summary` が 404 など。通った 7 件はステップ 1 で直した 500 の経路） |
+| 2026-11-12 | Green: `PYT` | 0 | 28 passed |
+| 2026-11-12 | TC-14（初回） | 1 | I455 の静的テストが `studylogs/services.py` の行のロックの読み出しに理由のコメントが無いことを検出（計画変更記録）。コメントを足して 247 passed |
+| 2026-11-12 | TC-15 | 0 | `No changes detected`（0022 を足した後）。0022 は `AddField`（`quizsession.mode`）だけ |
+| 2026-11-12 | FG: `adaptive_selection.py` の難易度の絞り込みを文字に戻す | 1 | TC-09・TC-10 と #446 の `adaptive-learning` 5 件が FAIL（7 failed）。戻した |
+| 2026-11-12 | FG: 同じ日の判定を外す・`_reviewable_cards` の `available_problems` を `Problem.objects.all()` にする | 1 | TC-02 の 2 件・TC-04・TC-05 の 2 件・TC-06・TC-08 が FAIL（7 failed）。戻した |
+| 2026-11-12 | Red: `JEST` の新しい 2 ファイル（部品の実装前） | 1 | 部品が空で FAIL |
+| 2026-11-12 | TC-16・TC-17・TC-18 | 0 | 4 suites・20 passed |
+| 2026-11-12 | TC-19（決定論ゲートの 9 行） | 0 | 9 行とも exit 0。`frontend/src` 全体でも 7 つの関数名に当たらない |
+| 2026-11-12 | /simplify の後に TC-14・TC-15・TC-16〜TC-18（TC-21） | 0 | 247 passed・`No changes detected`・20 passed・型チェック合格・`npm run lint` 警告 0 |
+| 2026-11-12 12:55 | review-gate: `bash scripts/claude/code-review.sh I452`（CI 待ちを含む） | 0 | `CI_WAIT: OK`（TC-20）・`FINAL_VERDICT: OK`（Low 7 件）・`ADVERSARIAL_STAGE: REQUIRED` |
+| 2026-11-12 13:10 | review-gate の FG: `get_due_cards` のキーから組織を外す・`get_next_problem` の復習の分岐を外す | 1 | TC-12・TC-05 の 2 件・TC-08 が FAIL（4 failed）。戻して差分なし（敵対的レビューの未検証の項目 V3・V6 の裏取り） |
 
 ## TC 一覧
 
