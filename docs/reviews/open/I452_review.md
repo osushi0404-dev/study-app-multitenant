@@ -29,3 +29,6 @@ STAGE_DONE: plan NEXT: plan-review
 - [plan-review] 判定 HIGHRISK。Warning 3 件（カードの初期値・習熟度のキャッシュのキーと消す処理・TC-14 の合否）を計画書・テスト文書で直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan-review NEXT: design-security-review
+- [design-security-review] Blocker・High なし（Medium 4・Low 3／シナリオ Medium 6・Low 3）。カードの読み出しを due_cards_queryset の 1 か所に集めることを必須防御条件にし、TC-08 に他組織の科目での復習の開始（400）と mode の不正値（400）を足した — 攻撃シナリオ 2・8 を自動テストで確かめるため
+
+STAGE_DONE: design-security-review NEXT: implement

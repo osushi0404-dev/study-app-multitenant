@@ -397,4 +397,50 @@ export const getReviewSummary = async (subjectId?: string): Promise<ReviewSummar
 
 ## レビュー結果
 - [20261112_1232 判定: ✅ 完了](../../reviews/I452_plan_review_20261112_1232.md)
-（plan-review 段階が追記する）
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-12
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | マルチテナント | 今日の復習の件数・次の日付・復習の出題で、カードを本人だけで絞り、問題の組織で絞らないと、組織を移った利用者に前の組織の問題（本文・選択肢）が出る（カードは I431 より前の古いデータとして残りうる） | カードの読み出しは必ず `SpacedRepetitionCard.objects.for_user(user)` と `problem__in=available_problems(user, subject)` の両方を通す（`due_cards_queryset` の 1 か所に集め、`review_summary`・`start_session`・`_next_review_problem` はここだけを使う）。`objects.filter(user=...)` で直接読まない（I455 の静的テストが止める）。TC-04・TC-08・TC-14 |
+| Medium | マルチテナント | `review_summary` の `subject_id`、復習の回の `subject` で他組織の科目を指定し、その科目の件数・次の日付・問題を得る | `review_summary` は `available_subjects(request.user)` に無い番号を 400（存在しない番号と同じ文言）。復習の回の `subject` は既存の `OrgSubjectField`（`available_subjects` で絞る・`serializers.py:62-73`）で検証する。TC-04 (e)・#446 の表の `IdCheck(..., "subject_id", "subject", 400)` |
+| Medium | マルチテナント | カードの作成・更新の対象の問題を、回答の要求の `problem_id` から直接取ると、他組織の問題のカードを作れる | `record_quiz_answer` に渡す問題は、既存の `submit_answer` が `QuizService.available_problems(session.user, session.subject).get(id=problem_id)` で取ったものだけ（取れなければ今と同じ 404 で、カードを作らない）。セッションは `get_object()`（`QuizSession.objects.for_user(request.user)`）で本人のものに限る。#446 の `submit_answer` の `IdCheck`（`problem_id`・404・`QuizAnswer` の件数が変わらない）と TC-08 |
+| Medium | マルチテナント | 間隔反復のカード・習熟度のキャッシュのキーに組織が無く、組織を移った直後に前の組織の結果が返る（I431 の F3・SECURITY=yes） | キーに組織の番号を文字で入れる（4-2・4-5）。今日の復習の件数・復習の出題はキャッシュを使わない。TC-12 |
+| Low | 入力検証 | `mode` に想定外の値、`subject_id` に数字以外を入れる | `mode` は DRF の `ChoiceField`（`normal`・`review` 以外は 400）。`subject_id` は整数として検証してから科目を引く（400）。Raw SQL を使わない |
+| Low | 認証・認可 | 新しい経路 `review_summary` の認証漏れ | `SpacedRepetitionViewSet` の `permission_classes = [permissions.IsAuthenticated]` をそのまま使う（未認証 401・TC-04 (f)）。新しい権限のクラスは足さない |
+| Low | 認証・認可 | 印付けの 3 経路を `for_user` にすると、他組織の科目を指す自分の記録が 404 になる（振る舞いの変更） | 絞る方向の変更（他人・他組織のデータには触れない）。#446 の期待（存在しない番号と同じ 404）にそろう。TC-13 |
+| なし | 機密情報 | 応答に出るのは件数・日付・回の集計だけ。ログに個人情報を足さない | — |
+| なし | OWASP Top 10 | A01（認可・IDOR）は上の Medium で扱う。SQL は ORM のまま。XSS: 画面は文字と数字を React の既定のエスケープで出す（`dangerouslySetInnerHTML` なし）。CSRF: 既存の API の認証方式のまま | — |
+| なし | ファイル操作 | 該当なし | — |
+| なし | 外部通信 | 該当なし | — |
+| なし | 依存ライブラリ | 追加なし | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `GET /api/study/spaced-repetition/review_summary/?subject_id=<組織 B の科目>` | 一般（組織 A） | 他組織の科目の復習の件数・次の日付を得る | 400（存在しない番号と同じ文言）で、件数・日付を返さない | Yes: TC-04 (e)・#446 の `IdCheck` | No | なし | Medium |
+| 2 | `POST /api/quiz/`（`mode: review`・`subject: <組織 B の科目>`） | 一般（組織 A） | 他組織の科目で復習の回を始め、その科目の問題を出させる | 400（`OrgSubjectField`）で回を作らない | Yes: #446 の `POST api/quiz/` の `_subj_body`・TC-08 | No | なし | Medium |
+| 3 | `GET /api/quiz/<自分の復習の回>/next_problem/` | 一般（組織を A から移った利用者） | 前の組織 B の問題のカード（古いデータ）を出題させ、本文・選択肢を得る | `available_problems` で外れ、出題されない（件数にも入らない） | Yes: TC-08 (a) | No | なし | Medium |
+| 4 | `GET /api/quiz/<同じ組織の別の利用者の回>/next_problem/`・`submit_answer/` | 一般（組織 A） | 他人の復習の回を進め、他人のカードを更新する | 404（`QuizSession.objects.for_user`） | Yes: #446 の `next_problem`・`submit_answer` の `same_org` の `IdCheck` | No | なし | Medium |
+| 5 | `POST /api/quiz/<自分の回>/submit_answer/`（`problem_id: <組織 B の問題>`） | 一般（組織 A） | 他組織の問題のカードを作り、以後の復習でその問題を出させる | 404 で、回答もカードも作らない | Yes: #446 の `IdCheck`（`QuizAnswer` の件数が変わらない）・TC-08 | No | なし | Medium |
+| 6 | 組織を移った直後の `review_summary`・`adaptive-learning` | 一般（組織を A から B へ移った利用者） | キャッシュに残った前の組織の結果を得る | 移った直後でも前の組織の結果が返らない | Yes: TC-12 | No | なし | Medium |
+| 7 | `GET /api/study/spaced-repetition/review_summary/` | 未認証 | 件数を得る | 401 | Yes: TC-04 (f) | No | なし | Low |
+| 8 | `POST /api/quiz/`（`mode: <想定外の値>`）・同じ `Idempotency-Key` で `mode` を変える | 一般 | 不正な値で回を作る・冪等のキーで別の種類の回を取り出す | 400・422 | Yes: TC-08 (d)（422）。`mode` の 400 は DRF の `ChoiceField` の既定 | No | なし | Low |
+| 9 | `POST /api/study/mistake-analysis/mark_suggestion_read/` など印付けの 3 経路 | 一般（組織 A） | 他組織の科目を指す自分の古い提案・弱点に印を付ける | 404 で記録を変えない | Yes: TC-13 | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 4件 | 6件 |
+| Low     | 3件 | 3件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
