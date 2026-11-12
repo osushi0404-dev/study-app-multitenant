@@ -16,7 +16,7 @@
 
 ## テスト結果
 - 自動（手元）: TC-01 pass=134 fail=0・TC-02 test_i193_official_flow.sh pass=174・test_i202_ledger_cleanup.sh pass=157（全体は CI）
-- 手動: （test-gate で記入）
+- 手動: No.1 OK・No.2 OK・No.3 NG（review-gate §3-1 の `docker compose ps --status running --services` に承認画面が出る）
 
 ## 計画との差分
 - なし
@@ -33,6 +33,7 @@
 - [implement] /simplify の指摘のうち、引き継ぎの起点を `REVIEW_BASE` にそろえる・コンテナ停止の出力を noexec に足す・テストの重複整理を採った。記録末尾の機械の行で判定を持つ案と `prev_tbl` の統合は見送り（計画変更記録に理由）
 - [implement] shellcheck はホストに無いので、commit 時の pre-commit の shellcheck に任せた
 - [review-gate] 基本レビュー OK（CI OK・RISK: NO・敵対的レビューは不要）。Low 5 件（F1 noexec の言い直しに新しい id を案内していない・F4 `docker compose ps --status …` が allow の完全一致に当たらない疑い ほか）は止める指摘ではないので直さず、retro で振り分ける
+- [test-gate] 台帳 F4（コンテナの確認のコマンドが allow に当たらない疑い）を check-permission-prompt.sh で確かめ、承認画面が出ることを確認したので手動テスト No.3 として NG を記録し fix-loop に回した — 足した手順そのものが流れを止めるため（止める条件の「流れが動かなくなる」）
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -40,3 +41,4 @@ STAGE_DONE: plan-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: fix-loop

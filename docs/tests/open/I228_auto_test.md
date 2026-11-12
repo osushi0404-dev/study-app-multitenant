@@ -3,7 +3,11 @@
 実行コマンド: 下の「## 決定論ゲート（自動実走）」の各行（ハーネスのテスト。pytest・Jest・E2E は無い）
 
 結果:
-- 実装前のため未実行（TC-01 の新しいケースは実装の後でないと通らない。ステップ 1 で「今の本体で落ちる」ことを記録する）
+- 実装前（ステップ 1）: 新しい 17 件だけが落ちる（pass=116 fail=17）ことを確かめた
+- 実装後: TC-01 pass=134 fail=0・TC-02 pass=174／157
+
+## 実行記録
+- 2026-11-13 review-gate の決定論ゲート（code-review.sh 自動実走・docs/reviews/I228_code_review_20261113_0112.md）: 4 行とも exit=0。test-gate に委譲（heavy）は無し
 
 ## TC-01: `scripts/claude/tests/test_i197_adversarial_process.sh`（既存＋I228 の追加）
 
