@@ -11,6 +11,18 @@ from pathlib import Path
 from typing import Any, Dict
 import uuid
 
+from django.conf import settings
+
+# エラーの送信内容の記録で伏せる欄: 名前の一部にこの語を含むもの（秘密。confirm_password などの名前の揺れも止める）
+SENSITIVE_BODY_WORDS = ('password', 'token', 'secret', 'refresh', 'api_key')
+# エラーの送信内容の記録で伏せる欄: 名前の完全一致（個人情報と、FieldValidationView の値・I437）
+PERSONAL_BODY_FIELDS = ('email', 'first_name', 'last_name', 'user_id', 'value')
+
+
+def _is_redacted_field(name) -> bool:
+    lowered = str(name).lower()
+    return lowered in PERSONAL_BODY_FIELDS or any(word in lowered for word in SENSITIVE_BODY_WORDS)
+
 # ログディレクトリの設定
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "logs"
@@ -177,7 +189,8 @@ class ErrorContextMiddleware:
                 "query_params": dict(request.GET),
                 "headers": self._safe_headers(request),
             },
-            "include_locals": True  # ローカル変数情報を含める
+            # ローカル変数は開発環境（DEBUG）だけ記録する（個人情報を本番のログに残さない・I437）
+            "include_locals": settings.DEBUG
         }
 
         # フロントエンドの操作履歴を追加
@@ -224,16 +237,10 @@ class ErrorContextMiddleware:
             else:
                 return None
 
-            # パスワードなどのセンシティブフィールドを除外
-            sensitive_fields = [
-                'password', 'password_confirm', 'token', 'secret',
-                'api_key', 'current_password', 'new_password',
-            ]
-            for field in sensitive_fields:
-                if field in body:
-                    body[field] = '[REDACTED]'
-
-            return body
+            return {
+                key: '[REDACTED]' if _is_redacted_field(key) else value
+                for key, value in body.items()
+            }
         except Exception:
             # エラーが発生した場合はNoneを返す（500エラーを防ぐ）
             return None

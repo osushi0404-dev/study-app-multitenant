@@ -218,7 +218,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             process_name = self._get_process_name(request.path, request.method)
             user_info = 'anonymous'
             if hasattr(request, 'user') and request.user.is_authenticated:
-                user_info = f'{request.user.email}'
+                user_info = str(request.user.id)
 
             self.logger.info(f'[START] {process_name} - Method: {request.method} - User: {user_info}')
 
