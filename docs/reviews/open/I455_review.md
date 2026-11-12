@@ -30,3 +30,5 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [plan] `problems/views.py` の QuizSession の一覧も `for_user` にした — 同じモデルの境界を 2 か所に残さないため（イシューの表に無い 1 か所の追加・結果は同じ）
 - [plan] `export_user_data_task` は件数だけを返すので絞らずに理由のコメント — `for_user` にすると件数が変わり、「振る舞いを変えない」に反するため
 - [plan] 付け忘れを止める静的テスト（TC-06）を CI に常設 — #446 は API の経路だけを見て、サービスの内部・非同期処理を見ないため
+
+STAGE_DONE: plan NEXT: plan-review
