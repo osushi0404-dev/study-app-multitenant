@@ -18,6 +18,10 @@ class SpacedRepetitionCalculator:
     INITIAL_EASE_FACTOR = 2.5  # 初期難易度係数
     MIN_EASE_FACTOR = 1.3  # 最小難易度係数
 
+    # クイズの正誤から決める品質の値（自己評価のボタンは置かない・I452）
+    QUIZ_CORRECT_QUALITY = 4    # 正解（難易度係数を変えない）
+    QUIZ_INCORRECT_QUALITY = 2  # 不正解（SM-2 の失敗の中で最も軽い。係数を 0.32 下げる）
+
     # 評価スコアの定義
     SCORE_MEANINGS = {
         0: "完全に忘れた",
