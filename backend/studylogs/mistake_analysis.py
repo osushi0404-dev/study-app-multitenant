@@ -15,22 +15,9 @@ from .models import (
     MistakePattern, LearningSuggestion, LearningWeakness,
     ProblemAttempt, SpacedRepetitionReview, StudyLog
 )
-from problems.services.tenant_scope import available_subjects, scope_to_user_org
+from problems.services.tenant_scope import available_subjects
 
 User = get_user_model()
-
-
-def scope_learning_suggestions(queryset, user):
-    """
-    学習提案をユーザーの組織の科目のものに絞る
-
-    応答の mistake_pattern_description がパターン側の文言を出すため、提案の科目に加えて
-    パターンの科目でも絞る（どちらも科目が空なら残す）。
-    """
-    queryset = scope_to_user_org(queryset, user, subject_path='subject', allow_null=True)
-    return scope_to_user_org(
-        queryset, user, subject_path='mistake_pattern__subject', allow_null=True,
-    )
 
 
 class MistakeAnalysisService:
@@ -75,21 +62,15 @@ class MistakeAnalysisService:
     def _error_records(self, start_date: datetime, end_date: datetime):
         """分析の土台にする間違いの記録（ユーザーの組織の問題のものだけ）"""
         # 間隔反復学習からの間違いデータ
-        sr_errors = scope_to_user_org(
-            SpacedRepetitionReview.objects.filter(
-                user=self.user,
-                reviewed_at__range=[start_date, end_date],
-                is_correct=False
-            ), self.user, subject_path='problem__subject',
+        sr_errors = SpacedRepetitionReview.objects.for_user(self.user).filter(
+            reviewed_at__range=[start_date, end_date],
+            is_correct=False
         ).select_related('problem', 'problem__subject')
 
         # 通常の問題試行からの間違いデータ
-        attempt_errors = scope_to_user_org(
-            ProblemAttempt.objects.filter(
-                user=self.user,
-                attempted_at__range=[start_date, end_date],
-                is_correct=False
-            ), self.user, subject_path='problem__subject',
+        attempt_errors = ProblemAttempt.objects.for_user(self.user).filter(
+            attempted_at__range=[start_date, end_date],
+            is_correct=False
         ).select_related('problem', 'problem__subject')
 
         return sr_errors, attempt_errors
@@ -107,12 +88,14 @@ class MistakeAnalysisService:
 
         # 全体の試行回数を取得
         for subject in subject_stats.keys():
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             total_sr = SpacedRepetitionReview.objects.filter(
                 user=self.user,
                 problem__subject=subject,
                 reviewed_at__range=[timezone.now() - timedelta(days=30), timezone.now()]
             ).count()
 
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             total_attempts = ProblemAttempt.objects.filter(
                 user=self.user,
                 problem__subject=subject,
@@ -164,11 +147,13 @@ class MistakeAnalysisService:
 
         # 全体の試行回数を取得
         for difficulty in difficulty_stats.keys():
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             total_sr = SpacedRepetitionReview.objects.filter(
                 user=self.user,
                 problem__difficulty=difficulty
             ).count()
 
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             total_attempts = ProblemAttempt.objects.filter(
                 user=self.user,
                 problem__difficulty=difficulty
@@ -203,6 +188,7 @@ class MistakeAnalysisService:
         total_timed_attempts = 0
 
         # 平均回答時間を計算
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         avg_time_by_user = SpacedRepetitionReview.objects.filter(
             user=self.user
         ).aggregate(avg_time=Avg('response_time_seconds'))['avg_time'] or 30
@@ -264,14 +250,12 @@ class MistakeAnalysisService:
 
         for subject in subjects:
             # 科目別の統計を取得
-            subject_attempts = ProblemAttempt.objects.filter(
-                user=self.user,
+            subject_attempts = ProblemAttempt.objects.for_user(self.user).filter(
                 problem__subject=subject,
                 attempted_at__range=[start_date, end_date]
             )
 
-            subject_reviews = SpacedRepetitionReview.objects.filter(
-                user=self.user,
+            subject_reviews = SpacedRepetitionReview.objects.for_user(self.user).filter(
                 problem__subject=subject,
                 reviewed_at__range=[start_date, end_date]
             )
@@ -308,21 +292,15 @@ class MistakeAnalysisService:
     def generate_learning_suggestions(self):
         """学習提案を生成"""
         # アクティブな間違いパターンを取得
-        active_patterns = scope_to_user_org(
-            MistakePattern.objects.filter(
-                user=self.user,
-                is_active=True,
-                confidence_score__gte=0.3
-            ), self.user, subject_path='subject', allow_null=True,
+        active_patterns = MistakePattern.objects.for_user(self.user).filter(
+            is_active=True,
+            confidence_score__gte=0.3
         ).order_by('-occurrence_count', '-confidence_score')
 
         # 深刻な弱点を取得
-        critical_weaknesses = scope_to_user_org(
-            LearningWeakness.objects.filter(
-                user=self.user,
-                severity__in=['critical', 'high'],
-                is_resolved=False
-            ), self.user, subject_path='subject',
+        critical_weaknesses = LearningWeakness.objects.for_user(self.user).filter(
+            severity__in=['critical', 'high'],
+            is_resolved=False
         ).order_by('-severity', '-error_count')
 
         # パターンベースの提案を生成
@@ -400,6 +378,7 @@ class MistakeAnalysisService:
             return
 
         # 既存の提案をチェック（重複防止）
+        # 組織で絞らない: 重複の確かめだけ（応答に出ない。絞ると古いデータで結果が変わりうる）
         existing = LearningSuggestion.objects.filter(
             user=self.user,
             mistake_pattern=pattern,
@@ -440,6 +419,7 @@ class MistakeAnalysisService:
             priority = 'medium'
 
         # 既存の提案をチェック
+        # 組織で絞らない: 重複の確かめだけ（応答に出ない。絞ると古いデータで結果が変わりうる）
         existing = LearningSuggestion.objects.filter(
             user=self.user,
             subject=weakness.subject,
@@ -463,6 +443,7 @@ class MistakeAnalysisService:
     def _generate_general_suggestions(self):
         """一般的な学習改善提案を生成"""
         # ユーザーの学習統計を取得
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         recent_study_logs = StudyLog.objects.filter(
             user=self.user,
             started_at__gte=timezone.now() - timedelta(days=7)
@@ -490,20 +471,14 @@ class MistakeAnalysisService:
 
     def get_analysis_summary(self) -> Dict:
         """分析結果のサマリーを取得"""
-        patterns = scope_to_user_org(
-            MistakePattern.objects.filter(user=self.user, is_active=True), self.user,
-            subject_path='subject', allow_null=True,
-        ).order_by('-occurrence_count')
+        patterns = MistakePattern.objects.for_user(self.user).filter(
+            is_active=True).order_by('-occurrence_count')
 
-        weaknesses = scope_to_user_org(
-            LearningWeakness.objects.filter(user=self.user, is_resolved=False), self.user,
-            subject_path='subject',
-        ).order_by('-severity', '-error_count')
+        weaknesses = LearningWeakness.objects.for_user(self.user).filter(
+            is_resolved=False).order_by('-severity', '-error_count')
 
-        suggestions = scope_learning_suggestions(
-            LearningSuggestion.objects.filter(user=self.user, is_active=True, is_read=False),
-            self.user,
-        ).order_by('priority', '-created_at')
+        suggestions = LearningSuggestion.objects.for_user(self.user).filter(
+            is_active=True, is_read=False).order_by('priority', '-created_at')
 
         # 改善トレンドの計算
         improvement_trends = self._calculate_improvement_trends()
@@ -532,6 +507,7 @@ class MistakeAnalysisService:
             start_date = timezone.now() - timedelta(weeks=week+1)
             end_date = timezone.now() - timedelta(weeks=week)
 
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             week_attempts = ProblemAttempt.objects.filter(
                 user=self.user,
                 attempted_at__range=[start_date, end_date]
@@ -551,6 +527,7 @@ class MistakeAnalysisService:
 
     def _calculate_overall_improvement_rate(self) -> float:
         """全体的な改善率を計算"""
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         patterns = MistakePattern.objects.filter(
             user=self.user,
             is_active=True
@@ -565,6 +542,7 @@ class MistakeAnalysisService:
     def provide_suggestion_feedback(self, suggestion_id: int, rating: int, comment: str = ""):
         """学習提案にフィードバックを提供"""
         try:
+            # 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）
             suggestion = LearningSuggestion.objects.get(
                 id=suggestion_id,
                 user=self.user

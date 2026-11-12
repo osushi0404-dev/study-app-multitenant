@@ -22,12 +22,10 @@ from .serializers import (
     AdaptiveProblemSelectionSerializer, SelectedProblemsSerializer
 )
 from .services import SpacedRepetitionService
-from .mistake_analysis import MistakeAnalysisService, scope_learning_suggestions
+from .mistake_analysis import MistakeAnalysisService
 from .adaptive_selection import AdaptiveProblemSelector
 from core.subject_service import subject_service
-from problems.services.tenant_scope import (
-    available_problems, available_subjects, scope_to_user_org,
-)
+from problems.services.tenant_scope import available_problems, available_subjects
 
 
 class StudyLogViewSet(viewsets.ModelViewSet):
@@ -36,10 +34,7 @@ class StudyLogViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # 他組織の科目の記録は存在しないものとして扱う（科目が空の記録は残す）
-        return scope_to_user_org(
-            StudyLog.objects.filter(user=self.request.user), self.request.user,
-            subject_path='subject', allow_null=True,
-        )
+        return StudyLog.objects.for_user(self.request.user)
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -48,6 +43,7 @@ class StudyLogViewSet(viewsets.ModelViewSet):
 
     def create(self, request):
         # End any active study logs first
+        # 組織で絞らない: 自分の記録への終了の印付け（応答に出ない・I431 扱いの基準 3）
         StudyLog.objects.filter(
             user=request.user,
             is_active=True
@@ -115,6 +111,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
         now = timezone.now()
 
         # Get all study logs
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         study_logs = StudyLog.objects.filter(user=user)
 
         # Calculate total statistics
@@ -155,9 +152,8 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
 
         # Get recent activity (last 7 days)
         seven_days_ago = now - timedelta(days=7)
-        recent_logs = scope_to_user_org(
-            study_logs, user, subject_path='subject', allow_null=True,
-        ).filter(started_at__gte=seven_days_ago).order_by('-started_at')[:10]
+        recent_logs = StudyLog.objects.for_user(user).filter(
+            started_at__gte=seven_days_ago).order_by('-started_at')[:10]
         recent_activity = StudyLogSerializer(recent_logs, many=True).data
 
         data = {
@@ -212,6 +208,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
         current_date = today
 
         while True:
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             if StudyLog.objects.filter(
                 user=user,
                 started_at__date=current_date
@@ -222,6 +219,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
                 # Check if yesterday was studied (allow 1 day gap for today)
                 if current_date == today:
                     current_date -= timedelta(days=1)
+                    # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
                     if StudyLog.objects.filter(
                         user=user,
                         started_at__date=current_date
@@ -236,6 +234,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
         return streak
 
     def _calculate_longest_streak(self, user):
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         study_dates = StudyLog.objects.filter(user=user).values_list(
             'started_at__date', flat=True
         ).distinct().order_by('started_at__date')
@@ -261,7 +260,7 @@ class StudyStatisticsViewSet(viewsets.ViewSet):
         stats = []
 
         for subject in subjects:
-            subject_logs = StudyLog.objects.filter(user=user, subject=subject)
+            subject_logs = StudyLog.objects.for_user(user).filter(subject=subject)
 
             if not subject_logs.exists():
                 continue
@@ -325,6 +324,7 @@ class StudyGoalViewSet(viewsets.ModelViewSet):
 
         for goal in goals:
             if goal.goal_type == 'daily_time':
+                # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
                 today_time = StudyLog.objects.filter(
                     user=user,
                     started_at__date=timezone.now().date()
@@ -332,6 +332,7 @@ class StudyGoalViewSet(viewsets.ModelViewSet):
                 goal.current_value = today_time // 60  # Convert to minutes
 
             elif goal.goal_type == 'daily_problems':
+                # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
                 today_problems = StudyLog.objects.filter(
                     user=user,
                     started_at__date=timezone.now().date()
@@ -397,16 +398,11 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
 
         try:
             # カードを取得（他組織の問題のカードは存在しないカードと同じ扱い）
-            card = scope_to_user_org(
-                SpacedRepetitionCard.objects.filter(user=request.user), request.user,
-                subject_path='problem__subject',
-            ).get(id=data['card_id'])
+            card = SpacedRepetitionCard.objects.for_user(request.user).get(id=data['card_id'])
 
             # 現在のアクティブなスタディログを取得（オプション・他組織の科目の記録は使わない）
-            active_study_log = scope_to_user_org(
-                StudyLog.objects.filter(user=request.user, is_active=True), request.user,
-                subject_path='subject', allow_null=True,
-            ).first()
+            active_study_log = StudyLog.objects.for_user(request.user).filter(
+                is_active=True).first()
 
             # 復習を記録
             review = service.review_card(
@@ -547,10 +543,8 @@ class SpacedRepetitionCardViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = scope_to_user_org(
-            SpacedRepetitionCard.objects.filter(user=self.request.user), self.request.user,
-            subject_path='problem__subject',
-        ).select_related('problem', 'problem__subject')
+        queryset = SpacedRepetitionCard.objects.for_user(self.request.user).select_related(
+            'problem', 'problem__subject')
 
         # フィルタリングオプション
         is_due = self.request.query_params.get('is_due')
@@ -580,10 +574,8 @@ class SpacedRepetitionReviewViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = scope_to_user_org(
-            SpacedRepetitionReview.objects.filter(user=self.request.user), self.request.user,
-            subject_path='problem__subject',
-        ).select_related('card', 'problem', 'problem__subject')
+        queryset = SpacedRepetitionReview.objects.for_user(self.request.user).select_related(
+            'card', 'problem', 'problem__subject')
 
         # フィルタリングオプション
         card_id = self.request.query_params.get('card_id')
@@ -625,10 +617,8 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def patterns(self, request):
         """間違いパターンの一覧を取得"""
-        patterns = scope_to_user_org(
-            MistakePattern.objects.filter(user=request.user, is_active=True), request.user,
-            subject_path='subject', allow_null=True,
-        ).order_by('-occurrence_count', '-confidence_score')
+        patterns = MistakePattern.objects.for_user(request.user).filter(
+            is_active=True).order_by('-occurrence_count', '-confidence_score')
 
         # フィルタリングオプション
         pattern_type = request.query_params.get('pattern_type')
@@ -650,9 +640,7 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def suggestions(self, request):
         """学習提案の一覧を取得"""
-        suggestions = scope_learning_suggestions(
-            LearningSuggestion.objects.filter(user=request.user, is_active=True), request.user,
-        )
+        suggestions = LearningSuggestion.objects.for_user(request.user).filter(is_active=True)
 
         # フィルタリングオプション
         unread_only = request.query_params.get('unread_only', 'false').lower() == 'true'
@@ -685,6 +673,7 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             )
 
         try:
+            # 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）
             suggestion = LearningSuggestion.objects.get(
                 id=suggestion_id,
                 user=request.user
@@ -727,10 +716,8 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def weaknesses(self, request):
         """学習の弱点一覧を取得"""
-        weaknesses = scope_to_user_org(
-            LearningWeakness.objects.filter(user=request.user, is_resolved=False), request.user,
-            subject_path='subject',
-        ).order_by('-severity', '-error_count')
+        weaknesses = LearningWeakness.objects.for_user(request.user).filter(
+            is_resolved=False).order_by('-severity', '-error_count')
 
         # フィルタリングオプション
         subject_id = request.query_params.get('subject_id')
@@ -757,6 +744,7 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             )
 
         try:
+            # 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）
             weakness = LearningWeakness.objects.get(
                 id=weakness_id,
                 user=request.user
@@ -785,6 +773,7 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             start_date = timezone.now() - timedelta(weeks=i+1)
             end_date = timezone.now() - timedelta(weeks=i)
 
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             attempts = ProblemAttempt.objects.filter(
                 user=request.user,
                 attempted_at__range=[start_date, end_date]

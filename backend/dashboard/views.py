@@ -4,9 +4,7 @@ from django.db.models import Sum, Avg, F
 from django.utils import timezone
 from datetime import timedelta
 from problems.models import QuizSession
-from problems.services.tenant_scope import (
-    available_problems, scope_to_user_org,
-)
+from problems.services.tenant_scope import available_problems
 from studylogs.models import StudyLog, DailyStudySummary
 from core.subject_service import subject_service
 
@@ -20,6 +18,7 @@ class DashboardOverviewView(views.APIView):
         today = now.date()
 
         # Get today's study data
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         today_study = StudyLog.objects.filter(
             user=user,
             started_at__date=today
@@ -31,16 +30,10 @@ class DashboardOverviewView(views.APIView):
 
         # Get current active session
         # 他組織の科目を指す記録・セッションは出さない（科目が空のものは残す）
-        active_session = scope_to_user_org(
-            StudyLog.objects.filter(user=user, is_active=True), user,
-            subject_path='subject', allow_null=True,
-        ).first()
+        active_session = StudyLog.objects.for_user(user).filter(is_active=True).first()
 
         # Get recent quiz sessions
-        recent_quizzes = scope_to_user_org(
-            QuizSession.objects.filter(user=user), user,
-            subject_path='subject', allow_null=True,
-        ).order_by('-started_at')[:5]
+        recent_quizzes = QuizSession.objects.for_user(user).order_by('-started_at')[:5]
 
         quiz_data = []
         for quiz in recent_quizzes:
@@ -112,6 +105,7 @@ class DashboardOverviewView(views.APIView):
         current_date = today
 
         while True:
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             if StudyLog.objects.filter(
                 user=user,
                 started_at__date=current_date
@@ -121,6 +115,7 @@ class DashboardOverviewView(views.APIView):
             else:
                 if current_date == today:
                     current_date -= timedelta(days=1)
+                    # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
                     if StudyLog.objects.filter(
                         user=user,
                         started_at__date=current_date
@@ -140,7 +135,7 @@ class DashboardOverviewView(views.APIView):
         progress = []
 
         for subject in subjects:
-            logs = StudyLog.objects.filter(user=user, subject=subject)
+            logs = StudyLog.objects.for_user(user).filter(subject=subject)
             if not logs.exists():
                 continue
 
@@ -214,9 +209,8 @@ class DashboardAnalyticsView(views.APIView):
             current_date += timedelta(days=1)
 
         # Get subject distribution
-        subject_stats = scope_to_user_org(
-            StudyLog.objects.filter(user=user, started_at__date__gte=start_date), user,
-            subject_path='subject', allow_null=True,
+        subject_stats = StudyLog.objects.for_user(user).filter(
+            started_at__date__gte=start_date,
         ).values('subject__name').annotate(
             total_time=Sum('duration'),
             total_problems=Sum('problems_attempted')
@@ -275,9 +269,8 @@ class SubjectRecommendationView(views.APIView):
         # Get subjects with low accuracy that need improvement
         week_ago = timezone.now().date() - timedelta(days=7)
 
-        subject_performance = scope_to_user_org(
-            StudyLog.objects.filter(user=user, started_at__date__gte=week_ago), user,
-            subject_path='subject', allow_null=True,
+        subject_performance = StudyLog.objects.for_user(user).filter(
+            started_at__date__gte=week_ago,
         ).values('subject__id', 'subject__name').annotate(
             total_problems=Sum('problems_attempted'),
             total_correct=Sum('problems_correct'),
@@ -299,8 +292,7 @@ class SubjectRecommendationView(views.APIView):
                 })
 
         # Get subjects that haven't been studied recently
-        studied_subject_ids = StudyLog.objects.filter(
-            user=user,
+        studied_subject_ids = StudyLog.objects.for_user(user).filter(
             started_at__date__gte=week_ago
         ).values_list('subject_id', flat=True)
 

@@ -1,8 +1,42 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from problems.models import Subject, Problem
+from problems.querysets import OrgScopedQuerySet
 
 User = get_user_model()
+
+
+# 組織の境界つきの取り出し方（objects.for_user(user)）。境界の決まりはここだけに書く
+class StudyLogQuerySet(OrgScopedQuerySet):
+    subject_paths = ('subject',)
+    allow_null = True
+
+
+class ProblemAttemptQuerySet(OrgScopedQuerySet):
+    subject_paths = ('problem__subject',)
+
+
+class SpacedRepetitionCardQuerySet(OrgScopedQuerySet):
+    subject_paths = ('problem__subject',)
+
+
+class SpacedRepetitionReviewQuerySet(OrgScopedQuerySet):
+    subject_paths = ('problem__subject',)
+
+
+class MistakePatternQuerySet(OrgScopedQuerySet):
+    subject_paths = ('subject',)
+    allow_null = True
+
+
+class LearningSuggestionQuerySet(OrgScopedQuerySet):
+    # 応答の mistake_pattern_description がパターン側の文言を出すため、パターンの科目でも絞る
+    subject_paths = ('subject', 'mistake_pattern__subject')
+    allow_null = True
+
+
+class LearningWeaknessQuerySet(OrgScopedQuerySet):
+    subject_paths = ('subject',)
 
 
 class StudyLog(models.Model):
@@ -16,6 +50,8 @@ class StudyLog(models.Model):
     points_earned = models.IntegerField(default=0)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+
+    objects = StudyLogQuerySet.as_manager()
 
     class Meta:
         ordering = ['-started_at']
@@ -69,6 +105,8 @@ class ProblemAttempt(models.Model):
     is_correct = models.BooleanField(default=False)
     time_taken = models.IntegerField(default=0, help_text="Time taken in seconds")
     attempt_number = models.IntegerField(default=1)
+
+    objects = ProblemAttemptQuerySet.as_manager()
 
     class Meta:
         ordering = ['-attempted_at']
@@ -131,6 +169,8 @@ class SpacedRepetitionCard(models.Model):
     # メタデータ
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SpacedRepetitionCardQuerySet.as_manager()
 
     class Meta:
         unique_together = ['user', 'problem']
@@ -205,6 +245,8 @@ class SpacedRepetitionReview(models.Model):
     # メタデータ
     reviewed_at = models.DateTimeField(auto_now_add=True)
     study_session = models.ForeignKey(StudyLog, on_delete=models.SET_NULL, null=True, blank=True)
+
+    objects = SpacedRepetitionReviewQuerySet.as_manager()
 
     class Meta:
         ordering = ['-reviewed_at']
@@ -290,6 +332,8 @@ class MistakePattern(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = MistakePatternQuerySet.as_manager()
+
     class Meta:
         unique_together = ['user', 'pattern_type', 'subject', 'problem_difficulty']
         ordering = ['-occurrence_count', '-last_occurrence']
@@ -372,6 +416,8 @@ class LearningSuggestion(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = LearningSuggestionQuerySet.as_manager()
+
     class Meta:
         ordering = ['-priority', '-created_at']
         indexes = [
@@ -423,6 +469,8 @@ class LearningWeakness(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = LearningWeaknessQuerySet.as_manager()
 
     class Meta:
         unique_together = ['user', 'subject', 'concept_name']

@@ -89,7 +89,9 @@ class AdaptiveProblemSelector:
             attempts_filter['problem__subject'] = subject
             reviews_filter['problem__subject'] = subject
 
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         attempts = ProblemAttempt.objects.filter(**attempts_filter)
+        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
         reviews = SpacedRepetitionReview.objects.filter(**reviews_filter)
 
         # 難易度別の成績
@@ -248,6 +250,7 @@ class AdaptiveProblemSelector:
             start_week = timezone.now() - timedelta(weeks=week+1)
             end_week = timezone.now() - timedelta(weeks=week)
 
+            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
             week_attempts = ProblemAttempt.objects.filter(
                 user=self.user,
                 attempted_at__range=[start_week, end_week]
@@ -294,13 +297,11 @@ class AdaptiveProblemSelector:
     def _get_problem_pool(self, subject: Optional[Subject]) -> List[Problem]:
         """問題プールを取得（ユーザーの組織の未削除の問題だけ）"""
         # ユーザーが最近解いていない問題を優先
-        recent_attempts = ProblemAttempt.objects.filter(
-            user=self.user,
+        recent_attempts = ProblemAttempt.objects.for_user(self.user).filter(
             attempted_at__gte=timezone.now() - timedelta(days=7)
         ).values_list('problem_id', flat=True)
 
-        recent_reviews = SpacedRepetitionReview.objects.filter(
-            user=self.user,
+        recent_reviews = SpacedRepetitionReview.objects.for_user(self.user).filter(
             reviewed_at__gte=timezone.now() - timedelta(days=7)
         ).values_list('problem_id', flat=True)
 
@@ -414,8 +415,7 @@ class AdaptiveProblemSelector:
             score += 0.1
 
         # 最近の学習履歴に基づく調整
-        recent_attempts = ProblemAttempt.objects.filter(
-            user=self.user,
+        recent_attempts = ProblemAttempt.objects.for_user(self.user).filter(
             problem=problem,
             attempted_at__gte=timezone.now() - timedelta(days=30)
         ).count()
