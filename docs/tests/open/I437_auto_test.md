@@ -8,7 +8,7 @@
 - 下準備の利用者: `user_id="u_i437"`・`email="u_i437@example.com"`・`first_name="太郎I437"`・`last_name="山田I437"`（組織 slug `org-i437`・`role="user"`）。「ログ」は対象の logger（root・`django.request`。`django` は root に届く）に付けたハンドラーが集めた記録を、`DetailedFormatter` で整形した文字（`django.request` 以外は `record.getMessage()` も）とする
 
 結果:
-- backend: 新しいテスト 10 件と守りのテスト（I140・#446）が 149 passed。Red（直す前に 8 件 FAIL）を確かめた。CI は review-gate で確かめる
+- backend: 新しいテスト 11 件と守りのテスト（I140・#446）が 150 passed（fix-loop の後）。Red（直す前に 8 件 FAIL・fix-loop の前に TC-07 の 2 件目が FAIL）を確かめた。CI（PR #482）は 7 ジョブすべて pass
 - frontend: 対象なし（画面の変更なし）
 
 ## 決定論ゲート（自動実走）
@@ -25,6 +25,8 @@
 | 2026-11-12 23:5x | TC-10（/simplify の後）: `PYT` と TC-09 のコマンドをまとめて | 0 | 149 passed |
 | 2026-11-13 00:04 | fix-loop Red: `PYT -k error_body`（TC-07 の 2 件目を足し、直す前のコード） | 1 | 1 failed（`confirm_password` が伏せられない）・2 passed |
 | 2026-11-13 00:1x | fix-loop Green: `PYT`・I140・#446 を 1 回の pytest で | 0 | 150 passed |
+| 2026-11-13 00:08 | review-gate（差分）: `bash scripts/claude/code-review.sh I437`（CI 待ちを含む） | 0 | `CI_WAIT: OK`・`FINAL_VERDICT: OK`（F1 解決・Low 5 件）・`ADVERSARIAL_STAGE: NOT_REQUIRED` |
+| 2026-11-13 00:40 | test-gate: `gh pr checks 482`（`7db26617`） | 0 | 7 ジョブすべて pass（Backend Tests・E2E Tests・Frontend Tests・型チェック・lint と検査 2 つ・Harness Tests）。決定論ゲートの heavy の委譲は無し |
 
 ## TC 一覧
 

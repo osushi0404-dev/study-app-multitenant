@@ -19,7 +19,8 @@
 
 ## テスト結果
 - 手元: 新しいテスト 11 件と I140・#446 が 150 passed（fix-loop の後）。Red（直す前に 8 件 FAIL）を確認（`docs/tests/open/I437_auto_test.md` の実行記録）
-- CI: review-gate で確かめる
+- CI: PR #482 の 7 ジョブすべて pass（`7db26617`）
+- 手動: No.1・No.2 とも OK（Claude が dev のコンテナでログのファイルを確かめた。`docs/tests/open/I437_manual_test.md`）
 
 ## 計画との差分
 - AC4・TC-06 を「その場の変数を記録する印（`include_locals`）が `DEBUG` のときだけ付く」に直した（Red で、書く側の不具合で変数がどの環境でも書かれないと分かったため。計画の再レビュー OK）
@@ -40,6 +41,7 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [implement] /simplify の 4 観点を 2 体にまとめて回した — 差分が小さく 4 体は過剰。`subject_service.py:125` の直しの指摘は誤り（来るのは未ログイン・なしだけ）として見送った。ほかの見送りは計画変更記録
 - [fix-loop] コードレビューの F1（`confirm_password` が伏せられない）を、案 B（秘密は名前の一部・個人情報は完全一致）で直した。同型の `FieldValidationView` の `value` も同じ直しに入れた — 秘密は名前の揺れで漏れたのが原因で、名前の一部で止めると同型を根本から止められる。診断レビュー PASS・方式を変えたので計画レビューをやり直した（OK）
 - [plan-review] fix-loop の再レビューの Warning 2 件は直さない — TC-10 は 1 回の pytest にファイルを並べるだけで束ねたコマンドではない。`user_actions` の追跡は retro で起票か同梱を決める（計画に記録済み）
+- [test-gate] 手動テスト No.1 のトークンは、ログインの API ではなく dev DB の利用者から作った — パスワードの値がコンテナに無い。確かめるログは同じ。No.1 の応答の 403 は問題の一覧が管理者だけの API（I102）だからで、期待結果の 200 は計画の書き誤りとして OK にした（ログの確かめる点はすべて満たす）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
