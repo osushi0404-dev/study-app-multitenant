@@ -36,6 +36,9 @@
 | 2026-11-12 | TC-07 FG: 窓を「直前 3 行」に戻す | 1 | `[5, 8, 9] == [3, 4, 5, 8, 9]` で FAIL（共有された行 3・4 を見落とす）。Edit で戻した |
 | 2026-11-12 | TC-07 FG: `models.X` の形の検出を外す | 1 | `[3, 5, 8, 9] == [3, 4, 5, 8, 9]` で FAIL（行 4 を見落とす）。Edit で戻した |
 | 2026-11-12 | 直した後に TC-08 | 0 | 183 passed・9 xfailed（35 秒） |
+| 2026-11-12 10:32 | test-gate: `bash scripts/claude/gate-check.sh I455` | 0 | GATE_CHECK: OK（コードレビュー 20261112_1020・敵対的レビュー 20261112_1031 とも VERDICT OK） |
+| 2026-11-12 10:32 | test-gate: `gh pr checks 462`（PR の先頭 04c892c3＝レビュー済みのコミット。その後は記録だけ） | 0 | 7 ジョブすべて pass（TC-11）。`Backend Tests` のログに `studylogs/tests/test_I455_org_scoped_querysets.py` の 21 件が出て、全体で 306 passed・9 xfailed |
+| 2026-11-12 10:32 | test-gate で手元に流す重いテスト | — | 無し（コードレビューに test-gate へ任せたものが無く、TC 表に「/test で実行」も無い。pytest・Jest・E2E は CI が正） |
 
 ## TC 一覧
 
