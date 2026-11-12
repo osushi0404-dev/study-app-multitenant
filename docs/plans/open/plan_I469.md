@@ -217,4 +217,7 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 | V3 | 3 | 実験必須 | 止める対象を増やさない: `grep --exclude=.env foo x`・`python3 -c "$X" \| head`・`curl x \| python3 -m json.tool`・`curl x \| python3 tool.py` が通るまま（TC-02 の 02g・TC-03）。作業記録の比較（TC-07）で新しく確認・停止が 1% 以内 |
 
 ## 計画変更記録
-（なし）
+- plan-review 1601 の Warning への対応（方式・範囲・受け入れ条件は変えない・再レビューしない）: FG の置き換え元は implement のステップ 4 の最初に確定して auto_test.md に書く（今のまま）／su の受け入れ条件の訂正はレビュー文書の自律判断の記録に書いてあり、close で PR の説明にも書く（GitHub のイシュー本文は写しを同期しない決まりなので書き換えない）
+
+## レビュー結果
+- [20261112_1601 判定: ✅ 完了](../../reviews/I469_plan_review_20261112_1601.md)
