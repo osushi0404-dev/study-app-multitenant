@@ -18,7 +18,10 @@
 - ハーネステスト（新規 1 本・止めるべき形の一覧）・軽い指摘の一覧（`docs/reviews/backlog/I463.md`）
 
 ## テスト結果
-（test-gate で書く）
+- 決定論のテスト: `test_i469_guard_optspec_leftovers.sh` pass=30（FG-01〜FG-04 を含む）・`test_guard_must_stop_cases.sh` pass=3（一覧に 12 件を足した）・見張りの既存テスト 9 本 fail=0・CI すべて合格（review-gate 1630・1647）
+- 作業記録での比較（TC-07・test-gate・HEAD 0e5601ee）: 17476 件・確認＋停止 370→370・新しく確認・停止 0 件・異常終了 0 件
+- 手動テスト（Claude・`check-permission-prompt.sh`）: M-00（基準）・M-02（`--exclude=.env`）は承認画面なし（exit 0）、M-01（`grep -f.env`・`--file=.env`）は承認画面あり（exit 10）。すべて OK。検索先を `/dev/null` から README.md に替えた（作業フォルダの外を読む操作には Claude Code 自体が承認を求め、見張りの判定と見分けられないため）
+- レビュー: コードレビュー 1630→1647 OK・敵対的レビュー 1646（V1 未検証）→1702（V2・V3 未検証・上限到達）→ユーザーの選択で延長した 1812 OK（通算 3 周）
 
 ## 計画との差分
 計画変更記録（計画書）のとおり。
@@ -37,6 +40,7 @@
 - [implement] /simplify の指摘のうち `--include` を表で読む 1 件だけ採り、python の読み方の共通化などは見送った — 共通化すると標準入力とみなす場所の違い（I463 の前から）で判定が変わる。見送りの理由は計画変更記録
 - [review-gate] 敵対的レビュー 1646 の HIGH（V1 が未検証）は、V1 を決定論の TC-01〜TC-04 で覆っているので確かめ方を「読んで可」に下げて次の周へ進む — 実験が拒否されただけで、指摘（反証）は 3 観点とも 0 件。コードレビュー 1630 の Low 3 件（F1〜F3・どれも変更前からの形）は止めない指摘として台帳に残し retro へ
 - [review-gate] 敵対的レビュー 1702（2 周目）が、差分が文書だけで実験をせず V2・V3 を未検証として HIGH・上限到達で止めた。ユーザーの選択「もう 1 周だけ回す」で `ADV_ROUND_LIMIT=3` の 3 周目（1812）を流し、3 項目とも実験で確認済み・OK — 同じ種類（コードが変わっていなくても前の周の確認を引き継がない）の未検証が 2 周続いたことは retro で扱う
+- [test-gate] 手動テストの検索先を `/dev/null` から README.md に替え、基準の M-00 を足した — `grep x /dev/null` でも承認画面が出て（作業フォルダの外を読む操作への Claude Code 自体の確認）、見張りの判定と見分けられなかった。確かめる中身・期待は同じ
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
