@@ -26,3 +26,4 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [plan] 手動確認の dev のデータは、確認の後に問題を 1 件ずつ論理削除する — 物理削除は危険操作に当たるため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
