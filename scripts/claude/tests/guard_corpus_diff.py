@@ -78,14 +78,87 @@ def build_corpus(path: str) -> list:
     return out
 
 
-def judge(guard: str, cmd: str) -> str:
+def judge(guard: str, cmd: str, cwd: str = REPO) -> str:
     p = subprocess.run([sys.executable, "-I", guard], input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
-                       capture_output=True, text=True, cwd=REPO, timeout=60)
+                       capture_output=True, text=True, cwd=cwd, timeout=60)
     if p.returncode == 2:
         return "block"
     if p.returncode == 0 and '"ask"' in p.stdout:
         return "ask"
     return "pass" if p.returncode == 0 else f"rc{p.returncode}"
+
+
+def base_source(a, git, cur: str):
+    """比べる前の版の guard の中身と説明を返す。取り出せなければ (None, 理由)。
+    --base が既定（HEAD）で作業ツリーの guard と同じなら、develop との分かれた点などと比べる（base_rev）。"""
+    src = git("show", f"{a.base}:{GUARD_REL}")
+    if src.returncode != 0:
+        return None, f"{a.base} に guard がありません"
+    with open(cur, encoding="utf-8") as fh:
+        same = fh.read() == src.stdout
+    if not (same and a.base == "HEAD"):
+        return src.stdout, a.base
+    rev, why = base_rev(git)
+    if not rev:
+        return None, why
+    src = git("show", f"{rev}:{GUARD_REL}")
+    return (src.stdout, why) if src.returncode == 0 else (None, "比べる前の版の guard がありません")
+
+
+def judge_both(td: str, src, cur: str, cmds: list, cwd: str = REPO) -> tuple:
+    """変更前（src の中身を td に書き出す。None なら判定しない）と作業ツリーの guard で cmds を判定し、(変更前, 作業ツリー) を返す。"""
+    base = None
+    if src is not None:
+        base = os.path.join(td, "guard_base.py")
+        with open(base, "w", encoding="utf-8") as fh:
+            fh.write(src)
+    jobs = [(g, c) for g in (base, cur) if g for c in cmds]
+    with ThreadPoolExecutor(12) as ex:
+        res = list(ex.map(lambda gc: judge(gc[0], gc[1], cwd), jobs))
+    return (res[:len(cmds)], res[len(cmds):]) if base else ([None] * len(cmds), res)
+
+
+RANK = {"pass": 0, "ask": 1, "block": 2}
+
+
+def run_cases(a, git, cur: str) -> int:
+    """I463: 止めるべき形の一覧（1 行 1 コマンド・# と空行は飛ばす・⏎ は改行・{W} は別ワークツリー）を、変更前と作業ツリーの
+    guard の両方で判定する。作業ツリーで通す・変更前より弱い判定（停止→確認を含む）・異常終了が 1 件でもあれば exit 1。
+    作業記録を使わないので CI でも流せる。コマンドは実行しない（guard に JSON を渡すだけ）。"""
+    lines = [ln.rstrip("\n") for ln in open(a.cases, encoding="utf-8")]
+    cases = [ln for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
+    if not cases:
+        print(f"FAIL: 一覧 {a.cases} にコマンドがありません")
+        return 1
+    with tempfile.TemporaryDirectory() as td:
+        main_dir, wt = os.path.join(td, "main"), os.path.join(td, "other-wt")
+        os.makedirs(main_dir)
+        g = lambda *args: subprocess.run(["git", "-C", main_dir, *args], capture_output=True, text=True, check=True)
+        g("init", "-q")
+        g("-c", "user.email=t@example.com", "-c", "user.name=tester", "commit", "-q", "--allow-empty", "-m", "init")
+        g("branch", "-q", "other")
+        g("worktree", "add", "-q", wt, "other")
+        src, why = base_source(a, git, cur)
+        cmds = [c.replace("⏎", "\n").replace("{W}", wt) for c in cases]
+        b, w = judge_both(td, src, cur, cmds, main_dir)
+    print(f"止めるべき形 {len(cases)} 件（基準 {why if src is not None else 'なし'} → 作業ツリー）")
+    if src is None:
+        print(f"  変更前より弱いかは見られない（{why}）。作業ツリーで通す形・異常終了だけを見る")
+    bad = []
+    for c, x, y in zip(cases, b, w):
+        if y not in RANK:
+            bad.append(f"[異常終了 {y}] {c}")
+        elif y == "pass":
+            bad.append(f"[通す] {c}（基準 {x}）")
+        elif x in RANK and RANK[y] < RANK[x]:
+            bad.append(f"[弱くなった {x}->{y}] {c}")
+    for m in bad:
+        print("  " + m[:240])
+    if bad:
+        print(f"FAIL: 止めるべき形のうち {len(bad)} 件が後退・素通し・異常終了")
+        return 1
+    print(f"OK: {len(cases)} 件すべて作業ツリーで確認か停止・変更前より弱い判定 0 件")
+    return 0
 
 
 def main() -> int:
@@ -94,7 +167,13 @@ def main() -> int:
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--limit", type=float, default=1.0)
     ap.add_argument("--guard", default=None, help="作業ツリーの guard の代わりに比べるファイル（ゲート自体の検証用）")
+    ap.add_argument("--cases", default=None, help="止めるべき形の一覧で比べる（I463。作業記録は使わない）")
     a = ap.parse_args()
+
+    git = lambda *args: subprocess.run(["git", *args], capture_output=True, text=True, cwd=REPO)
+    cur = os.path.abspath(a.guard) if a.guard else os.path.join(REPO, GUARD_REL)
+    if a.cases:
+        return run_cases(a, git, cur)
 
     path = os.path.join(CACHE_DIR, os.path.basename(PRIMARY) + ".json")
     if os.path.isdir(CACHE_DIR):
@@ -110,34 +189,18 @@ def main() -> int:
         print("SKIP: 作業記録に Bash コマンドがありません")
         return 0
 
-    git = lambda *args: subprocess.run(["git", *args], capture_output=True, text=True, cwd=REPO)
+    # 未コミットの変更が無い（コミットの後・コードレビュー時）は、develop との分かれた点などと比べる（base_source）
+    src, label = base_source(a, git, cur)
+    if src is None:
+        print(f"SKIP: {label}")
+        return 0
     with tempfile.TemporaryDirectory() as td:
-        base = os.path.join(td, "guard_base.py")
-        src = git("show", f"{a.base}:{GUARD_REL}")
-        if src.returncode != 0:
-            print(f"SKIP: {a.base} に guard がありません")
-            return 0
-        cur = os.path.abspath(a.guard) if a.guard else os.path.join(REPO, GUARD_REL)
-        with open(cur, encoding="utf-8") as fh:
-            same = fh.read() == src.stdout
-        if same and a.base == "HEAD":
-            # 未コミットの変更が無い（コミットの後・コードレビュー時）: develop との分かれた点などと比べる（base_rev）
-            rev, why = base_rev(git)
-            src = git("show", f"{rev}:{GUARD_REL}") if rev else src
-            if not rev or src.returncode != 0:
-                print(f"SKIP: {why if not rev else '比べる前の版の guard がありません'}")
-                return 0
-            a.base = why
-        with open(base, "w", encoding="utf-8") as fh:
-            fh.write(src.stdout)
-        with ThreadPoolExecutor(12) as ex:
-            b = list(ex.map(lambda c: judge(base, c), cmds))
-            w = list(ex.map(lambda c: judge(cur, c), cmds))
+        b, w = judge_both(td, src, cur, cmds)
 
     n = len(cmds)
     hit = lambda xs: sum(1 for x in xs if x in ("ask", "block"))
     trans = Counter(f"{x}->{y}" for x, y in zip(b, w) if x != y)
-    print(f"作業記録 {n} 件（基準 {a.base} → 作業ツリー）")
+    print(f"作業記録 {n} 件（基準 {label} → 作業ツリー）")
     print(f"確認＋停止: {hit(b)}（{hit(b) / n:.2%}）→ {hit(w)}（{hit(w) / n:.2%}）")
     for k, v in sorted(trans.items()):
         print(f"  {k}: {v}")

@@ -68,7 +68,7 @@ ck 02d 0   "$(b "$D cp -vt/tmp/x /app/y")"
 ck 02e ASK "$(b "$D sed -i -es/a/b/ /app/x")"
 ck 02f 0   "$(b "$D sed -i -e s/a/b/ /tmp/x")"
 ck 02g ASK "$(b "$D install -m 644 /tmp/a /app/b")"
-fg FG-02 0 'guess = [v for v in _opt_values(args, T, loose=True)' 'guess = [v for v in _opt_values(args, T)' "$D cp -vt/app/x /tmp/y"
+fg FG-02 0 'tdir = [v for n, v in opts if n in ("-t", "--target-directory") and v]' 'tdir = []' "$D cp -vt/app/x /tmp/y"
 
 # ---- TC-03 通す形でも /tmp/ 以外への書き込みは確認（危ない語の理由と書き込みの理由を分ける） ----
 ck 03a ASK "$(b "$D pytest --junitxml=/app/r.xml -k x")"
@@ -114,11 +114,12 @@ ck 07h 2   "$(b "sed -i -nes/a/b/ $W/x")"
 ck 07i ASK "$(b "$D cp -vtapp /tmp/y")"
 ck 07j 0   "$(b 'psql -dprofile_db -c "select 1"')"
 fg FG-07a 0 'parts = sqls + [s for s in (c["heredoc"], c["herestr"]) if s is not None]' \
-  'parts = sqls or [s for s in (c["heredoc"], c["herestr"]) if s is not None]' "$HD"
-fg FG-07c 0 '            if loose:' '            if False:' "psql -tAc'DELETE FROM users'"
-fg FG-07d 0 '        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"), loose=True)' \
-  '        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"))' "sed -i -nes/a/b/ $W/x"
-fg FG-07b 0 '_has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d"' '_has_short(args, "d"' "install -t$W/dd /tmp/y"
+  'parts = sqls or [s for s in (c["heredoc"], c["herestr"]) if s is not None]' $'psql -Umarc -c \'select 1\' <<EOF\nDELETE FROM users;\nEOF'
+# I463: まとめ書きの読み方は値を取る文字の表（_OPTSPEC）になった。表から該当の文字を外した写しで、同じ形を読まなくなる
+fg FG-07c 0 '"psql": ("cdfFhLopPRTUv",' '"psql": ("dfFhLopPRTUv",' "psql -tAc'DELETE FROM users'"
+fg FG-07d 0 'return pos if names & {"-e", "-f", "--expression", "--file"} else pos[1:]' 'return pos[1:]' "sed -i -nes/a/b/ $W/x"
+fg FG-07b 0 'if head == "install" and {n for n, _v in opts} & {"-d", "--directory"}:' \
+  'if head == "install" and _has_short(args, "d", "--directory"):' "install -t$W/dd /tmp/y"
 
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

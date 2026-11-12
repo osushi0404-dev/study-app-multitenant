@@ -804,27 +804,26 @@ def _write_targets(toks: list) -> list:
     if not toks:
         return []
     head, args = os.path.basename(toks[0]), toks[1:]
-    pos = [a for a in args if not a.startswith("-")]
     if head == "tee":
-        return pos
-    if head == "sed":
-        if not _has_short(args, "i", "--in-place"):
+        return [a for a in args if not a.startswith("-")]
+    if head == "sed":                          # 値を取る文字の表で読む（-e's/print/…' の i を -i と読まない・I463 F4）
+        opts, pos = _getopt("sed", args)
+        names = {n for n, _v in opts}
+        if not names & {"-i", "--in-place"}:
             return []
-        expr = _opt_values(args, ("-e", "-f", "--expression", "--file"), loose=True)   # 見つかれば位置引数はすべてファイル
-        files = [a for a in pos if a not in expr]
-        return files if expr else files[1:]
-    # install -d は英字だけの語（-d・-vd）で見る。-t/…study… のような値の中の d は見ない（I454 fix-loop F3）
-    if head not in _COPY_CMDS or (head == "install" and _has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d", "--directory")):
+        return pos if names & {"-e", "-f", "--expression", "--file"} else pos[1:]   # -e／-f があれば位置引数はすべてファイル
+    if head not in _COPY_CMDS:
         return []
-    T = ("-t", "--target-directory")
-    tdir = _opt_values(args, T) if head != "rsync" else []   # rsync の -t は時刻を保つ
-    # まとめ書きの途中から読んだ値（-vt/x）は推測なので、外れても本当の書き先を落とさないよう最後の位置引数も残す（I454 fix-loop 2）
-    guess = [v for v in _opt_values(args, T, loose=True) if v not in tdir] if head != "rsync" else []
+    if head == "rsync":                        # rsync の -t は時刻を保つ。値を取る文字は表に入れない（I463）
+        pos = [a for a in args if not a.startswith("-")]
+        return pos[-1:] if len(pos) >= 2 else []
+    opts, pos = _getopt(head, args)            # -vt/x・-S .bak を表で読む（I463 F18・I444 F7）
+    if head == "install" and {n for n, _v in opts} & {"-d", "--directory"}:
+        return []                              # install -d は作るだけ
+    tdir = [v for n, v in opts if n in ("-t", "--target-directory") and v]
     if head == "mv":                           # 移動元も消える（I444）
-        return tdir + guess + pos
-    if tdir and not guess:
-        return tdir
-    return tdir + guess + (pos[-1:] if len(pos) >= 2 else [])
+        return tdir + pos
+    return tdir or (pos[-1:] if len(pos) >= 2 else [])
 
 def _bash_uncovered_risk(cmd: str) -> bool:
     """絶対パス宛先の抽出では捕捉できない書込リスク（`cd` 後の相対書込・変数/コマンド置換・
@@ -1720,7 +1719,7 @@ def _wrap_skip(head: str, rest: list):
     if head == "xargs":
         return rest[_skip_opts(rest, _XARGS_VALUE):]
     if head == "flock":
-        j = _skip_opts(rest, ("-w", "--timeout", "-E", "--conflict-exit-code", "-c", "--command"))
+        j = _skip_opts(rest, _value_opts("flock"))
         return rest[j + 1:]
     return None
 
@@ -1760,7 +1759,7 @@ def _expand(c: dict, depth: int) -> list:
         # xargs は標準入力の語を後ろに足して実行する（push の宛先・rm の対象が見えない）
         return [dict(e, via_xargs=True) for e in again(inner)] if inner else []
     if inner is not None:
-        flock_cmd = _opt_values(rest, ("-c", "--command"), loose=True) if head == "flock" else []
+        flock_cmd = _opt_values(rest, ("-c", "--command"), cmd="flock") if head == "flock" else []
         return (again(inner) if inner else []) + [e for s in flock_cmd for e in sub(s)]
     if head == "env":
         j = _skip_opts(rest, _ENV_VALUE)
@@ -1772,7 +1771,7 @@ def _expand(c: dict, depth: int) -> list:
     if head == "eval":
         return sub(" ".join(rest))
     if head in ("su", "script"):
-        return [e for s in _opt_values(rest, ("-c", "--command"), loose=True) for e in sub(s)] or [dict(c, toks=toks)]
+        return [e for s in _opt_values(rest, ("-c", "--command"), cmd=head) for e in sub(s)] or [dict(c, toks=toks)]
     if head == "find":
         out, base, k = [], [], 0
         while k < len(rest):
@@ -1854,11 +1853,77 @@ def _parse(text: str, ctr: bool = False, depth: int = 0, compose: bool = False, 
         out += list(_parse(s, ctr, depth + 1, compose, loc))
     return tuple(out)
 
-def _opt_values(toks: list, names: tuple, loose: bool = False) -> list:
-    """toks から `-c X` / `-cX` / `-tAc X`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。
-    loose=True のときは、英字だけの並びの後にある該当の文字の後ろ（-tAcSQL・-lcCMD・-nesEXPR・-vt/x）も候補としてすべて足す。
-    値を取る文字を知らないので、-hlocalhost の c（→ alhost）のような偽の候補も入る。多く読むほど止める側に倒れる呼び出し元
-    （-c の中の検査・sed の式・-t の書き先）だけが loose を使う（I454 fix-loop 2）。"""
+# I463: 見張りが中を読むコマンドの「値を取る短いオプションの文字」と「値を取る長いオプション」（各コマンドの --help・
+# psql は PostgreSQL 15 の文書。2026-11-12 に確認）。まとめ書き（-tAc X・-vt/x・-Xf/x）を getopt と同じに読む。
+# 表に無いコマンドは _opt_values の既定（-c X・-cX・まとめ書きの最後）のまま。止める対象は変えない（読み違いを減らすだけ）
+_CP_LONG = ("--target-directory", "--suffix")
+_OPTSPEC = {
+    "psql": ("cdfFhLopPRTUv", ("--command", "--dbname", "--file", "--field-separator", "--host", "--log-file",
+                               "--output", "--port", "--pset", "--record-separator", "--table-attr", "--username",
+                               "--variable")),
+    "python": ("cmWX", ("--check-hash-based-pycs",)),   # -c・-m・最初の位置引数（スクリプト名）で読み終える
+    "django-shell": ("civ", ("--command", "--interface", "--settings", "--pythonpath", "--verbosity")),
+    "sed": ("efl", ("--expression", "--file", "--line-length")),
+    "grep": ("ABCDdefm", ("--regexp", "--file", "--max-count", "--directories", "--devices",
+                          "--before-context", "--after-context", "--context")),
+    "cp": ("St", _CP_LONG), "mv": ("St", _CP_LONG), "ln": ("St", _CP_LONG),
+    "install": ("gmoSt", _CP_LONG + ("--group", "--mode", "--owner")),
+    "su": ("cgGsw", ("--command", "--group", "--supp-group", "--shell", "--whitelist-environment")),
+    "flock": ("cEw", ("--command", "--timeout", "--conflict-exit-code")),
+    "script": ("BcEImOoT", ("--command", "--log-in", "--log-out", "--log-io", "--log-timing", "--logging-format",
+                            "--echo", "--output-limit")),
+}
+_OPTSPEC_OPTIONAL = {"sed": "i", "script": "t"}   # 値をくっつけたときだけ取る（sed -i.bak・sed -ie は接尾辞 e・script -t<file>）
+# 最初の位置引数と、ここに挙げた文字の値で読み終えるコマンド（後ろはスクリプトの引数。python -c・-m・スクリプト名）
+_OPTSPEC_STOP = {"python": "cm"}
+
+
+def _value_opts(cmd: str) -> tuple:
+    """_OPTSPEC の値を取るオプションを ("-w", "--timeout", …) の形で返す（_skip_opts に渡す用）。"""
+    short, longs = _OPTSPEC[cmd]
+    return tuple("-" + ch for ch in short) + longs
+
+
+def _getopt(cmd: str, args: list) -> tuple:
+    """args を getopt と同じに読み、([(オプション, 値 or None)], 位置引数) を返す（I463）。オプションは "-c"・"--command" の形。
+    GNU と同じく位置引数の後ろのオプションも読む。_OPTSPEC_STOP のコマンドは、最初の位置引数とその文字の値で読み終える。"""
+    short, longs = _OPTSPEC[cmd]
+    optional = _OPTSPEC_OPTIONAL.get(cmd, "")
+    stop = _OPTSPEC_STOP.get(cmd)
+    opts, pos, i = [], [], 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            return opts, pos + args[i + 1:]
+        if a.startswith("--"):
+            name, eq, val = a.partition("=")
+            if not eq and name in longs and i + 1 < len(args):
+                i, val = i + 1, args[i + 1]
+            opts.append((name, val if (eq or name in longs) else None))
+        elif a.startswith("-") and a != "-":
+            body = a[1:]
+            for j, ch in enumerate(body):
+                if ch in short or ch in optional:
+                    val = body[j + 1:] or None
+                    if val is None and ch in short and i + 1 < len(args):
+                        i, val = i + 1, args[i + 1]
+                    opts.append(("-" + ch, val))
+                    break
+                opts.append(("-" + ch, None))
+        else:
+            pos.append(a)
+        if stop is not None and (pos or (opts and opts[-1][0][1:] in stop)):
+            return opts, pos + args[i + 1:]
+        i += 1
+    return opts, pos
+
+
+def _opt_values(toks: list, names: tuple, cmd: str = "") -> list:
+    """toks の中の names の値をすべて返す。cmd が _OPTSPEC にあれば getopt と同じに読む（I463）。
+    無ければ `-c X`・`-cX`・`-tAc X`（まとめ書きの最後）・`--command X`・`--command=X` を読む（値を取る文字を知らないので
+    まとめ書きの途中の文字は読まない）。"""
+    if cmd in _OPTSPEC:
+        return [v for n, v in _getopt(cmd, toks)[0] if n in names and v is not None]
     vals, i = [], 0
     shorts = [n[1] for n in names if not n.startswith("--") and len(n) == 2]
     while i < len(toks):
@@ -1879,8 +1944,6 @@ def _opt_values(toks: list, names: tuple, loose: bool = False) -> list:
             continue
         if t.startswith("-") and not t.startswith("--") and len(t) > 2:
             body = t[1:]
-            if loose:                                  # -tAcSQL・-vt/x（まとめ書きの途中から後ろ）
-                vals += [body[j + 1:] for j in range(1, len(body) - 1) if body[j] in shorts and body[:j].isalpha()]
             if body[-1] in shorts and body[:-1].isalpha() and i + 1 < len(toks):
                 vals.append(toks[i + 1])             # -tAc X
                 i += 2
@@ -1971,11 +2034,9 @@ def _django_sub(toks: list):
         if b == "manage.py" or b == "django-admin":
             return (toks[i + 1], toks[i + 2:]) if i + 1 < len(toks) else ("", [])
         if _PYTHON_RE.match(b):
-            k = i + 1
-            while k < len(toks) and toks[k] in ("-W", "-X", "-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S"):
-                k += 2 if toks[k] in ("-W", "-X") else 1
-            if toks[k:k + 2] == ["-m", "django"]:
-                return (toks[k + 2], toks[k + 3:]) if k + 2 < len(toks) else ("", [])
+            opts, pos = _getopt("python", toks[i + 1:])   # python の読み方は表で 1 つに（I463）
+            if opts[-1:] == [("-m", "django")]:
+                return (pos[0], pos[1:]) if pos else ("", [])
     return None
 
 def _python_code_raw(c: dict):
@@ -1983,7 +2044,7 @@ def _python_code_raw(c: dict):
     toks = c["toks"]
     dj = _django_sub(toks)
     if dj and dj[0] == "shell":
-        codes = _opt_values(dj[1], ("-c", "--command"), loose=True)
+        codes = _opt_values(dj[1], ("-c", "--command"), cmd="django-shell")
         if codes:
             return "\n".join(codes)
         if c["heredoc"] is not None:
@@ -1993,17 +2054,14 @@ def _python_code_raw(c: dict):
         return None
     head = os.path.basename(toks[0]) if toks else ""
     if _PYTHON_RE.match(head) and not dj:
-        rest = toks[1:]
-        codes = _opt_values(rest, ("-c",), loose=True)
+        # python 自身と同じく -c・-m・スクリプト名で読み終える（後ろのスクリプトの引数の c を -c と読まない・I463 F15）
+        opts, pos = _getopt("python", toks[1:])
+        codes = [v for n, v in opts if n == "-c" and v is not None]
         if codes:
             return "\n".join(codes)
-        if "-m" in rest:
+        if any(n == "-m" for n, _v in opts):
             return False
-        pos = [a for a in rest if not a.startswith("-")]
-        k = 0                                        # 最初の位置引数（- を含む。-W / -X の値は飛ばす）
-        while k < len(rest) and rest[k].startswith("-") and rest[k] != "-":
-            k += 2 if rest[k] in ("-W", "-X") else 1
-        first = rest[k] if k < len(rest) else None
+        first = pos[0] if pos else None              # 最初の位置引数（- を含む）
         stdin_code = first is None or first == "-" or first.startswith(("/dev/stdin", "/dev/fd/0", "/proc/self/fd/0"))
         if c["stdin"] and stdin_code:              # python3 - < f.py / python3 /dev/stdin < f.py
             return _read_exec_file(c["stdin"], c.get("stdin_ctr", False), c["workdir"], c.get("service"))
@@ -2021,9 +2079,9 @@ def _sql_of(c: dict):
     args = toks[1:]
     if dj and dj[0] == "dbshell":
         args = dj[1][dj[1].index("--") + 1:] if "--" in dj[1] else []
-    # -c の値（まとめ書きの途中からの候補も）とヒアドキュメント・here-string を合わせて見る。偽の -c（-hlocalhost の c）が
-    # あってもヒアドキュメントの SQL を見落とさない（I454 fix-loop 2）
-    sqls = _opt_values(args, ("-c", "--command"), loose=True)
+    # -c の値（psql の表で読む・I463）とヒアドキュメント・here-string を合わせて見る（-c があってもヒアドキュメントの SQL を
+    # 見落とさない・I454 fix-loop 2）
+    sqls = _opt_values(args, ("-c", "--command"), cmd="psql")
     if "__SUBST_" in "".join(sqls):
         return None                                          # $(...) を解決できなかった SQL は見えない扱い
     parts = sqls + [s for s in (c["heredoc"], c["herestr"]) if s is not None]
@@ -2162,7 +2220,7 @@ def _cmd_danger(c: dict) -> list:
         sql = _sql_of(c)
         if sql is not None and _sql_is_destructive(sql):
             r.append("destructive SQL requires DANGER_OK=1")
-        if _opt_values(toks[1:], ("-f", "--file")) or c["stdin"] or c["piped"]:
+        if _opt_values(toks[1:], ("-f", "--file"), cmd="psql") or c["stdin"] or c["piped"]:
             r.append("ダンプ・SQL ファイルの流し込み（psql -f / < / パイプ）requires DANGER_OK=1")
     if head == "dropdb":
         r.append("データベースの削除（dropdb）requires DANGER_OK=1")
@@ -2181,14 +2239,13 @@ def _cmd_danger(c: dict) -> list:
 
 def _grep_recursive_secret(c: dict) -> bool:
     """grep -r が --include なしで .env を含むディレクトリを読むなら True（rg は .gitignore を守るので対象外）。"""
-    toks = c["toks"]
-    args = toks[1:]
-    if not (_has_short(args, "r", "--recursive") or _has_short(args, "R", "--dereference-recursive")):
+    args = c["toks"][1:]
+    opts, pos = _getopt("grep", args)                # オプション・パターン・ディレクトリを表で 1 回に読む（I463）
+    if not {n for n, _v in opts} & {"-r", "--recursive", "-R", "--dereference-recursive"}:
         return False
     if any(a.startswith("--include") for a in args):
         return False
-    pos = [a for a in args if not a.startswith("-")]
-    patterns = _opt_values(args, ("-e", "-f", "--regexp", "--file"))
+    patterns = [v for n, v in opts if n in ("-e", "-f", "--regexp", "--file") and v is not None]
     if not patterns:
         patterns, pos = pos[:1], pos[1:]
     if not any(_ENV_NAME_HINT_RE.search(p) for p in patterns):
@@ -2243,8 +2300,9 @@ def _cmd_external(c: dict) -> list:
             and not first.startswith(("/dev/", "/proc/"))
         if not f[0] and c["piped"] and not c["compose"] and not script_arg:
             r.append("パイプで流し込むコード（中身が見えない）")
+    # 秘密のファイルを探す paths は位置引数に絞らない（grep -f .env x の .env を落とさない・I463）。パターンの有無だけ表で読む
     paths = [a for a in toks[1:] if not a.startswith("-")]
-    if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file")):
+    if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file"), cmd=head):
         paths = paths[1:]
     secret_path = any(_secret_path(a) for a in paths)
     if head in _SECRET_READERS and secret_path:
@@ -2373,8 +2431,9 @@ def _read_limited(path: str, limit: int):
 
 _CTR_SCRATCH = "/tmp/"   # コンテナの中で書いてよい場所（/app/ は手元の backend/・frontend/ に bind mount されている）
 _CP_READ_LIMIT = 1024 * 1024
-# 書き出し先を値で受ける形（pytest --junitxml=/app/r.xml）。粗い判定で、よく使う読む場所の指定（--rootdir・--confcutdir）だけ除く
-_OPT_PATH_RE = re.compile(r"--(?!rootdir=|confcutdir=)[\w-]+=/")
+# 書き出し先を値で受ける形（pytest --junitxml=/app/r.xml）。粗い判定で、よく使う読む場所の指定だけ除く（I454・I463 F6）
+_OPT_READ_PATH = ("rootdir", "confcutdir", "cov", "cov-config", "ignore", "ignore-glob", "deselect")
+_OPT_PATH_RE = re.compile(r"--(?!(?:" + "|".join(map(re.escape, _OPT_READ_PATH)) + r")=)[\w-]+=/")
 
 
 def _container_risky(c: dict, text: str) -> list:
@@ -2532,10 +2591,8 @@ def _container_safe(c: dict) -> bool:
     if head == "ruff":                         # format は書き換えないとき（--check・--diff）だけ
         return (rest[:1] == ["check"] and not fix) or (rest[:1] == ["format"] and ("--check" in rest or "--diff" in rest))
     if _PYTHON_RE.match(head):
-        k = 0
-        while k < len(rest) and rest[k] in ("-W", "-X", "-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S", "-b", "-q"):
-            k += 2 if rest[k] in ("-W", "-X") else 1        # -m より前のインタプリタのオプションだけを読み飛ばす
-        if rest[k:k + 2] in (["-m", "pytest"], ["-m", "flake8"], ["-m", "mypy"]):
+        opts = _getopt("python", rest)[0]              # -m より前のインタプリタのオプションは表で読み飛ばす（I463）
+        if opts[-1:] in ([("-m", "pytest")], [("-m", "flake8")], [("-m", "mypy")]):
             return True
         if rest[:1] in (["--version"], ["-V"]):
             return True
@@ -2550,7 +2607,7 @@ def _container_safe(c: dict) -> bool:
             return c["compose"] and c.get("service") in _SAFE_COMPOSE_DEFAULT and _playwright_test_args_safe(rest[2:])
         return rest[:1] in (["tsc"], ["eslint"], ["jest"]) and not fix
     if head == "psql":
-        if _opt_values(rest, ("-o", "--output", "-L", "--log-file", "-f", "--file")) or c["stdin"]:
+        if _opt_values(rest, ("-o", "--output", "-L", "--log-file", "-f", "--file"), cmd="psql") or c["stdin"]:
             return False
         sql = _sql_of(c)
         return sql is not None and _sql_is_safe_read(sql)
