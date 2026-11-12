@@ -35,6 +35,7 @@
 - [review-gate] 基本レビュー OK（CI OK・RISK: NO・敵対的レビューは不要）。Low 5 件（F1 noexec の言い直しに新しい id を案内していない・F4 `docker compose ps --status …` が allow の完全一致に当たらない疑い ほか）は止める指摘ではないので直さず、retro で振り分ける
 - [test-gate] 台帳 F4（コンテナの確認のコマンドが allow に当たらない疑い）を check-permission-prompt.sh で確かめ、承認画面が出ることを確認したので手動テスト No.3 として NG を記録し fix-loop に回した — 足した手順そのものが流れを止めるため（止める条件の「流れが動かなくなる」）
 - [fix-loop] 診断レビュー PASS の案 C（確かめを省き常に `docker compose up -d backend`）で直した — 案 A（引数なしの `docker compose ps` の表を読む）より判断が要らず粗く確実、案 B（allow を足す）は `.claude/settings.json` が復旧できない例外で重すぎる
+- [review-gate] 差分のレビュー OK（F4 は解消・新しい Low 3 件 F6〜F8〔`up -d` の作り直し・`--build` なし・失敗時の分岐〕は止める指摘ではなく retro へ）
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -45,3 +46,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
