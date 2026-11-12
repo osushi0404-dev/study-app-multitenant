@@ -27,7 +27,7 @@
 | P6 | `backend/accounts/views.py:178`（`send_verification_email`） | `print(f"Email verification token for {user.email}: {token}")` | 開発環境（`DEBUG`）での新規登録のたび |
 | P7 | `backend/core/subject_service.py:43・91`（`SubjectService.get_user_subjects`・`get_subject_by_id`） | `User {user} has no organization_id`（`str(user)` = メールアドレス） | 組織の無い利用者が科目を取るたび（grill-me の後の全件確認で新しく見つかった） |
 | P8 | `backend/core/enhanced_logging.py:228-231`（`ErrorContextMiddleware._safe_body`） | 4xx・5xx になった POST の本文。伏せる欄が `password` などだけで、`email`・`first_name`・`last_name`・`user_id`・`refresh` はそのまま | 4xx・5xx の POST のたび（下の注） |
-| P9 | `backend/core/enhanced_logging.py:180`（`_log_exception`）→ `:83-92`（`DetailedFormatter._get_error_context`） | `include_locals: True` を常に付け、その場の変数を全部 `str(v)[:200]` で書く（`request.user` を持つ変数などからメールアドレス、登録の処理ならパスワードも入りうる）。コメントは「デバッグモード時のみ」だが本番でも動く | 想定外のエラーのたび |
+| P9 | `backend/core/enhanced_logging.py:180`（`_log_exception`）→ `:83-92`（`DetailedFormatter._get_error_context`） | `include_locals: True` を常に付け、その場の変数を全部 `str(v)[:200]` で書く（`request.user` を持つ変数などからメールアドレス、登録の処理ならパスワードも入りうる）。コメントは「デバッグモード時のみ」だが本番でも付く。**implement の Red で分かったこと**: 書く側の変数の探し方（`tb.tb_frame` から外側へたどり、行番号で突き合わせる）が合わず、今は本番でも開発でも変数は 1 つも書かれていない（実際の漏れは無い）。付ける側を `DEBUG` だけにして、探し方が直ったときに本番で書かれないようにしておく | 想定外のエラーのたび |
 
 - P8 の注: Django のミドルウェアが受け取る `request`（`WSGIRequest`）には `.data` が無いので、今は `request.POST`（フォームで送った本文）だけが入り、JSON の本文は `{}` になる。今の画面は JSON で送るので実際に入るのはフォームの送信だけだが、伏せる欄は送り方に関係なく効かせる（設計確認メモの決定）
 - 直さない（理由）: `backend/core/subject_service.py:125`（未ログインの分岐で `str(AnonymousUser)` = `AnonymousUser`。個人情報でない）・`backend/accounts/views.py:143・163・224`（組織名）・`backend/accounts/views.py:95`（`serializer.errors`。DRF の文言で入力の値を含まない）・`backend/core/storage_service.py:58`（上げたファイルの名前。利用者を指す値の欄ではない）・`backend/problems/management/commands/import_problems.py:351`（運用者が打つコマンドの画面表示）・`backend/core/monitoring.py:242-243` と `middleware.py:55-56` の `user_agent`・`ip_address`（不正アクセスを調べるのに要る。イシューの範囲〔メールアドレス・氏名〕の外）・例外の文言（`str(e)`。DB の重複エラーなどに値が入る可能性はあるが、どこで起きるか決まらず、一律には直せない。R3）・`ErrorContextMiddleware` の `query_params`（`dict(request.GET)`。今の backend に `email` などを GET で受ける API は無い〔2026-11-12 の grep〕）・同 `user_actions`（`X-User-Actions` ヘッダー。送る側の `frontend/src/utils/userActionLogger.ts` の `useActionLogger` は今どの画面からも使われておらず、ヘッダーは届かない。ただし送る側の伏せ字〔`sanitizeValue`・`sanitizeFormData`〕は `email` を伏せないので、使い始めると漏れうる。扱いは retro で決める）
@@ -46,7 +46,7 @@
 - AC1: 監視の記録（P1・P2）にメールアドレスが入らず、`user_id` は入る（テストで確かめる）
 - AC2: API の呼び出しのログ（P3）と新規登録のログ（P4・P5）にメールアドレスが入らず、利用者 ID で追える。新規登録のログにパスワードも入らない（テストで確かめる）
 - AC3: エラーの送信内容の記録（P8）で、`email`・`first_name`・`last_name`・`user_id`・`refresh` が `[REDACTED]` になる。今まで伏せていた欄も `[REDACTED]` のまま。ほかの欄は残る（テストで確かめる）
-- AC4: `settings.DEBUG` が偽のとき、想定外のエラーの記録にその場の変数（`locals`）が入らない。真のときは今までどおり入る（テストで確かめる）
+- AC4: `settings.DEBUG` が偽のとき、想定外のエラーの記録にその場の変数を書く印（`include_locals`）が付かず、変数（`locals`）も入らない。真のときは印が付く（テストで確かめる。変数そのものが書かれないのは今の書く側の不具合で、直すのは本イシューの範囲外・計画変更記録）
 - AC5: `backend/` のほかの logger の呼び出しを調べた結果（1 章の表と「直さない」）が計画書に記録され、個人情報を書いている所（P6・P7）も直っている
 - AC6: 全テストが通る（CI）
 
@@ -146,7 +146,7 @@ from django.conf import settings
 - TC の中身は `docs/tests/open/I437_auto_test.md`
 
 ## 5. 実装手順
-- ステップ 1（未知リスク先行・縦の 1 本）: 4-7 のテストを先に書き、直す前のコードで流して落ちる（Red）ことを確かめる（`DEBUG=True` の TC-06 の後半・伏せたままの欄の確かめは直す前から通る）。→ TC-01〜TC-08
+- ステップ 1（未知リスク先行・縦の 1 本）: 4-7 のテストを先に書き、直す前のコードで流して落ちる（Red）ことを確かめる（`DEBUG=True` で印が付く TC-06 の 2 件目・伏せたままの欄の確かめは直す前から通る）。→ TC-01〜TC-08
 - ステップ 2（ステップ 1 が前提）: 4-1〜4-6 を直し、TC-01〜TC-08 を通す（Green）。→ TC-01〜TC-08
 - ステップ 3（ステップ 2 と並行可）: 守りの既存テスト（I140 の登録・#446 の横断）を流す。→ TC-09
 - ステップ 4: /simplify の後に流し直す。→ TC-10
@@ -212,11 +212,16 @@ from django.conf import settings
 |---|---|---|---|
 | V1 | 1 | 実験必須 | 監視の記録・API のログ・新規登録のログ・科目の取得のログにメールアドレス・パスワードが入らず、`user_id` が入る（TC-01〜TC-05。直す前のコードで Red を実測） |
 | V2 | 2 | 実験必須 | エラーの送信内容の記録で 5 つの欄が `[REDACTED]`・今までの欄も伏せたまま・ほかの欄は残る（TC-07） |
-| V3 | 3 | 実験必須 | `DEBUG=False` でその場の変数が記録されず、`DEBUG=True` では記録される（TC-06） |
+| V3 | 3 | 実験必須 | `DEBUG=False` で `include_locals` が付かず変数も記録されず、`DEBUG=True` では印が付く（TC-06） |
 | V4 | 1 | 読んで可 | 1 章の全件確認の表に漏れが無い（`backend/` の logger・print の呼び出しのうち、利用者・送信内容を書くもの） |
 
 ## 計画変更記録
 - plan-review（20261112_2340・OK・Warning 2 件）: 1 章「直さない（理由）」に `query_params`・`user_actions` を理由付きで足した（`user_actions` の送る側が `email` を伏せない件は retro で扱いを決める）。「必ず確かめる項目」の V4 の観点を 4 → 1 にした（有効な観点は 1〜3）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+- implement（Red・2026-11-12）:
+  - 計画書の記載: AC4「`DEBUG` が真のときは今までどおり（その場の変数が）入る」・TC-06 の 2 件目「`DEBUG=True` で `locals` にメールアドレスがある」
+  - 分かったこと: 直す前のコードで TC-06 の 2 件目が落ち、1 件目が通った。`DetailedFormatter._get_error_context`（`enhanced_logging.py:83-92`）は `tb.tb_frame`（いちばん外の枠）から `f_back` で外側へたどり、記録の時点の行番号で突き合わせるので、例外が起きた枠に届かず、どの環境でも変数を書かない
+  - 選んだ案と理由: 付ける側を `settings.DEBUG` にする方針（4-6）は変えない（探し方が直ったときに本番で書かれないため・設計確認メモの決定）。AC4・TC-06・V3 を「`DEBUG` が偽なら印（`include_locals`）が付かず変数も入らない／真なら印が付く」に直す。書く側の探し方は直さない（開発だけで使う機能の不具合で、直すと開発のログにメールアドレス・パスワードが書かれるようになる。直すかは retro で扱いを決める）
+  - 計画レビューのやり直し: 要（受け入れ条件 AC4 の文言を変えた）
 
 ## レビュー結果
 - [20261112_2340 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2340.md)
