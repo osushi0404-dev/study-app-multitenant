@@ -813,7 +813,8 @@ def _write_targets(toks: list) -> list:
         expr = _opt_values(args, ("-e", "-f", "--expression", "--file"))
         files = [a for a in pos if a not in expr]
         return files if expr else files[1:]
-    if head not in _COPY_CMDS or (head == "install" and _has_short(args, "d", "--directory")):
+    # install -d は英字だけの語（-d・-vd）で見る。-t/…study… のような値の中の d は見ない（I454 fix-loop F3）
+    if head not in _COPY_CMDS or (head == "install" and _has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d", "--directory")):
         return []
     tdir = _opt_values(args, ("-t", "--target-directory")) if head != "rsync" else []   # rsync の -t は時刻を保つ
     if head == "mv":                           # 移動元も消える（I444）
@@ -1850,7 +1851,8 @@ def _parse(text: str, ctr: bool = False, depth: int = 0, compose: bool = False, 
 
 def _opt_values(toks: list, names: tuple) -> list:
     """toks から `-c X` / `-cX` / `-tAc X`・`-vtX`（まとめ書き）/ `--command X` / `--command=X` の値をすべて返す。
-    まとめ書きは、英字だけの並びの後の最初の該当の文字から後ろが値（無ければ次の語。getopt と同じ・I454）。"""
+    まとめ書きは、先頭の文字（-cX）・英字だけの並びの最後の文字（-tAc X）・英字だけの並びの後で直後が英字以外の文字（-vt/x）。
+    値を取る文字を知らないので、-hlocalhost の c のように値の中の英字は拾わない（I454 fix-loop F1）。"""
     vals, i = [], 0
     shorts = [n[1] for n in names if not n.startswith("--") and len(n) == 2]
     while i < len(toks):
@@ -1871,7 +1873,8 @@ def _opt_values(toks: list, names: tuple) -> list:
             continue
         if t.startswith("-") and not t.startswith("--") and len(t) > 2:
             body = t[1:]
-            k = next((j for j, ch in enumerate(body) if ch in shorts and (j == 0 or body[:j].isalpha())), None)
+            k = next((j for j, ch in enumerate(body) if ch in shorts and (j == 0 or body[:j].isalpha()
+                      and (j == len(body) - 1 or not body[j + 1].isalpha()))), None)
             v = body[k + 1:] if k is not None else ""
             if k is not None and (v or i + 1 < len(toks)):
                 vals.append(v or toks[i + 1])          # -cX・-vtX（付着形）／-tAc X

@@ -4,7 +4,7 @@
 # 実行: bash scripts/claude/tests/test_i454_guard_env_writes.sh
 #
 # 見張りに JSON を渡して判定だけを見る（コマンドは実行しない）。期待値: 2＝停止・ASK＝確認・0＝通す。
-# ケースは docs/tests/open/I454_auto_test.md の TC-01〜TC-04 と 1 対 1。0=全 PASS / 1=FAIL あり。
+# ケースは docs/tests/open/I454_auto_test.md の TC-01〜TC-04・TC-07 と 1 対 1。0=全 PASS / 1=FAIL あり。
 set -uo pipefail
 unset CLAUDE_PROJECT_DIR
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -68,7 +68,7 @@ ck 02d 0   "$(b "$D cp -vt/tmp/x /app/y")"
 ck 02e ASK "$(b "$D sed -i -es/a/b/ /app/x")"
 ck 02f 0   "$(b "$D sed -i -e s/a/b/ /tmp/x")"
 ck 02g ASK "$(b "$D install -m 644 /tmp/a /app/b")"
-fg FG-02 0 '(j == 0 or body[:j].isalpha())' 'j == 0' "$D cp -vt/app/x /tmp/y"
+fg FG-02 0 'ch in shorts and (j == 0 or body[:j].isalpha()' 'ch in shorts and (j == 0 or False' "$D cp -vt/app/x /tmp/y"
 
 # ---- TC-03 通す形でも /tmp/ 以外への書き込みは確認（危ない語の理由と書き込みの理由を分ける） ----
 ck 03a ASK "$(b "$D pytest --junitxml=/app/r.xml -k x")"
@@ -99,6 +99,16 @@ ck 04m 0 "$(b "ln -s $W/x /tmp/y")"
 ck 04n 0 "$(b "install -d $W/newdir")"
 ck 04o 0 "$(b "sed -n p $W/x")"
 fg FG-04 0 '        targets += _write_targets(toks)' '        targets += []' "cp -vt$W/x /tmp/y"
+
+# ---- TC-07 値の中の文字を別のオプションと取り違えない（fix-loop 1・F1・F3） ----
+HD=$'psql -hlocalhost -U postgres <<EOF\nDELETE FROM users;\nEOF'
+ck 07a 2   "$(b "$HD")"
+ck 07b 2   "$(b $'psql -Ucelery -dcourse_db <<EOF\nDELETE FROM users;\nEOF')"
+ck 07c 2   "$(b "install -t$W/dd /tmp/y")"
+ck 07d ASK "$(b "$D install -t/app/dd /tmp/a")"
+ck 07e 0   "$(b "$D install -vd /app/newdir")"
+fg FG-07a 0 'and (j == len(body) - 1 or not body[j + 1].isalpha())' 'and True' "$HD"
+fg FG-07b 0 '_has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d"' '_has_short(args, "d"' "install -t$W/dd /tmp/y"
 
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -7,7 +7,8 @@
 結果:
 - 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じケースを見張りの写し（計画書「調査結果」のスパイク）に流し、TC-01〜TC-04 の期待値どおりになることは確かめた。変更前の見張りでは、TC-01 の 01a〜01c・01i・01j が 0、01f・01g が ASK（F11 の誤検出）、TC-02 の 02a・02e が 0、TC-03 の 03a が 0・03e と 03f が ASK（余計な確認）、TC-04 の 04a〜04f が 0（＝今の取りこぼし）
 - 2026-11-12（implement・/simplify の後）: `bash scripts/claude/tests/test_i454_guard_env_writes.sh` → pass=44 fail=0（exit 0。FG-01〜FG-04 を含む）。`test_i444_guard_gaps.sh` pass=64・`test_pretooluse_container_guard.sh` pass=788・`test_i200_guard_narrowing.sh` pass=75・`test_pretooluse_guard_matrix.sh` pass=391・`test_guard_bash_oracle.sh` 見逃し 0・余計な停止 0・`test_pretooluse_worktree_guard.sh` pass=127・`test_i182_corpus_base.sh` pass=5、すべて fail=0（exit 0）。`py_compile` OK
-- TC-06 の過去の作業コマンドでの比較（implement の後・test-gate で手で流し、ここに件数と中身を書く）: 計画時のスパイク（写しの見張り・15576 件）は新しく確認・停止 4 件・異常終了 0 件・OK（計画書「調査結果」）。implement の後（基準は develop との分かれた点 fba609bb・16015 件・計画変更記録 3 の直しの後）: 確認＋停止 373→367・確認→通過 8 件・新しく停止 2 件（どちらも同じ `mv <別ワークツリー harness-2 の e2e/tests/tmp-*.spec.ts> … /tmp/claude`＝別ワークツリーを移動元にする形で、計画どおりの停止）・新しく確認 0 件・異常終了 0 件・OK。直しの前の回（同じ基準）は新しく確認 14 件で、うち 12 件が `--rootdir=/app` の形だった（計画変更記録 3）。test-gate: （未実施）
+- TC-06 の過去の作業コマンドでの比較（implement の後・test-gate で手で流し、ここに件数と中身を書く）: 計画時のスパイク（写しの見張り・15576 件）は新しく確認・停止 4 件・異常終了 0 件・OK（計画書「調査結果」）。implement の後（基準は develop との分かれた点 fba609bb・16015 件・計画変更記録 3 の直しの後）: 確認＋停止 373→367・確認→通過 8 件・新しく停止 2 件（どちらも同じ `mv <別ワークツリー harness-2 の e2e/tests/tmp-*.spec.ts> … /tmp/claude`＝別ワークツリーを移動元にする形で、計画どおりの停止）・新しく確認 0 件・異常終了 0 件・OK。直しの前の回（同じ基準）は新しく確認 14 件で、うち 12 件が `--rootdir=/app` の形だった（計画変更記録 3）。fix-loop 1 の後（同じ基準・16165 件）: 確認＋停止 373→367・新しく停止 2 件（上と同じ mv）・新しく確認 0 件・異常終了 0 件・OK。test-gate: （未実施）
+- 2026-11-12（fix-loop 1・F1・F3）: `test_i454_guard_env_writes.sh` → pass=52 fail=0（TC-07・FG-07a・FG-07b を足し、FG-02 の置き換え元を新しい式に合わせた）。既存の 7 本と `py_compile` もすべて exit 0
 
 ## TC-01 環境変数をまとめて表示する形（F10・F11・F12）
 | ID | コマンド | 期待 |
@@ -38,7 +39,7 @@ I444 で固定した形（`ps e`・`ps auxe`・`ps aux e`・`ps -u postgres e`�
 | 02e | `$D sed -i -es/a/b/ /app/x`（式を -e にくっつけた形） | ASK |
 | 02f | `$D sed -i -e s/a/b/ /tmp/x`（式の語は書き先ではない） | 0 |
 | 02g | `$D install -m 644 /tmp/a /app/b` | ASK |
-| FG-02 | `_opt_values` の `(j == 0 or body[:j].isalpha())` を `j == 0` に置き換えた写しで 02a | 0 |
+| FG-02（fix-loop 1 で置き換え元を変更） | `ch in shorts and (j == 0 or body[:j].isalpha()` を `ch in shorts and (j == 0 or False` に置き換えた写しで 02a | 0 |
 
 ## TC-03 通す形でも /tmp/ 以外への書き込みは確認（危ない語の理由と書き込みの理由を分ける）
 | ID | コマンド | 期待 |
@@ -81,6 +82,25 @@ I444 で固定した形（`ps e`・`ps auxe`・`ps aux e`・`ps -u postgres e`�
 ## TC-06 見張りを直したら流すテストと既存のテスト
 - 下の決定論ゲートのすべてが exit 0
 - `bash scripts/claude/tests/test_guard_corpus_diff.sh --rebuild` を、implement の後と test-gate で上限なしで手で流す（数分かかり、決定論ゲートの 1 行 120 秒に収まらないため、ゲートに置かない・I444 の fix-loop 1）。「OK: 新しく確認・停止 N 件」を出し、N は記録の 1% 以内・異常終了 0 件。出た件数と中身をこの文書の結果の欄に書く
+
+## TC-07 値の中の文字を別のオプションと取り違えない（fix-loop 1・F1・F3）
+`HD` は `psql -hlocalhost -U postgres <<EOF` ＋ `DELETE FROM users;` ＋ `EOF`。
+| ID | コマンド | 期待 |
+|---|---|---|
+| 07a | `$HD`（`-hlocalhost` の c を `-c` と取り違えない） | 2 |
+| 07b | `psql -Ucelery -dcourse_db <<EOF` ＋ `DELETE FROM users;`（`-U`・`-d` の値の c） | 2 |
+| 07c | `install -t$W/dd /tmp/y`（`-t` の値の d を `install -d` と取り違えない） | 2 |
+| 07d | `$D install -t/app/dd /tmp/a` | ASK |
+| 07e | `$D install -vd /app/newdir`（まとめ書きの -d は作るだけ） | 0 |
+| FG-07a | `and (j == len(body) - 1 or not body[j + 1].isalpha())` を `and True` に置き換えた写し（＝implement の一般化）で 07a | 0 |
+| FG-07b | `_has_short([a for a in args if a[1:].isalpha() or a.startswith("--")], "d"` を `_has_short(args, "d"` に置き換えた写しで 07c | 0 |
+
+再発防止の記録（fix-loop 1）:
+- なぜ失敗したか: `-vt/x` を読むため `_opt_values` を「英字だけの並びの後の最初の該当の文字から後ろが値」と一般化した。見張りはどの文字が値を取るかを知らないので、`-hlocalhost` の c のような値の中の英字を拾った（F1）。`-t<パス>` を読めるようにした結果、`_has_short` が値の中の d を `install -d` と見た（F3）
+- 何を変えたか: 新しく読む形を「直後が英字以外」に絞った（変更前の 2 形はそのまま）。`install -d` は英字だけの語と `--directory` で見る
+- セキュリティ上の考慮点: どちらも止める側の後退（破壊的 SQL の停止・別ワークツリーの停止〔解除不可〕）。直しは単純な規則（英字かどうか）だけで、精密な読み解きは足さない
+- 次回どう防ぐか: 読む形を広げるときは、値を取る別のオプションの値（`-hlocalhost`・`-Ucelery`・`-t/…d…`）を TC に入れ、失敗の注入で一般化前と比べる（TC-07 がその形）
+- 確かめた結果: 上の「結果」の fix-loop 1 の行
 
 ## 決定論ゲート（自動実走）
 ```bash
