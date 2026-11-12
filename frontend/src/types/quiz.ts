@@ -1,5 +1,8 @@
 // frontend/src/types/quiz.ts
 
+/** いつものクイズ（normal）か、今日の復習（review・I452）か */
+export type QuizMode = 'normal' | 'review';
+
 /**
  * クイズセッション
  */
@@ -7,6 +10,7 @@ export interface QuizSession {
   id: string;
   subject?: string;
   subject_name?: string;
+  mode?: QuizMode;
   total_problems: number;
   answered_problems: number;  // completed_problemsのエイリアス
   correct_answers: number;

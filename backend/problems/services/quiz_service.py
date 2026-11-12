@@ -11,7 +11,7 @@ from problems.models import Problem, QuizSession, Subject
 from problems.services import tenant_scope
 
 
-def _review_service(user):
+def spaced_repetition_service(user):
     """間隔反復のサービス（studylogs.models が problems.models を読むので、循環しないよう呼ぶときに読む）"""
     from studylogs.services import SpacedRepetitionService
     return SpacedRepetitionService(user)
@@ -75,7 +75,7 @@ class QuizService:
                 )
 
                 if mode == QuizSession.MODE_REVIEW:
-                    total_problems = _review_service(user).due_cards_queryset(subject).count()
+                    total_problems = spaced_repetition_service(user).due_cards_queryset(subject).count()
                 else:
                     total_problems = QuizService.available_problems(user, subject).count()
 
@@ -171,7 +171,7 @@ class QuizService:
         答えた問題は次の復習日が明日以降になるので、毎回問い合わせれば自然に外れる。
         """
         card = (
-            _review_service(session.user)
+            spaced_repetition_service(session.user)
             .due_cards_queryset(session.subject)
             .exclude(problem_id__in=session.answers.values_list('problem_id', flat=True))
             .select_related('problem', 'problem__subject')

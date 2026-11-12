@@ -8,7 +8,7 @@ from datetime import timedelta, date
 from typing import List, Dict, Optional
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Avg, Sum
+from django.db.models import Avg, Count, Min, Q, Sum
 from django.contrib.auth import get_user_model
 
 from .models import (
@@ -18,7 +18,7 @@ from .models import (
     StudyLog,
 )
 from .spaced_repetition import SpacedRepetitionCalculator
-from problems.difficulty import LABELS, LEVEL_BY_LABEL
+from problems.difficulty import LABEL_BY_LEVEL
 from problems.models import Problem
 from problems.services.tenant_scope import available_problems
 from core.cache_service import cache_service
@@ -70,18 +70,23 @@ class SpacedRepetitionService:
             id__in=existing_card_problems
         ).select_related('subject').order_by('?')[:limit]
 
-    def create_card_for_problem(self, problem: Problem) -> SpacedRepetitionCard:
-        """問題用の新しいカードを作成"""
-        card, created = SpacedRepetitionCard.objects.get_or_create(
+    def create_card_for_problem(
+        self, problem: Problem, *, now=None, lock: bool = False,
+    ) -> SpacedRepetitionCard:
+        """問題用のカードを取る・無ければ作る（lock なら行をロックする・トランザクションの中で使う）"""
+        # 組織で絞らない: 本人の、呼び出し側が組織で絞った問題のカードを取る・作る（行のロックつき）
+        cards = SpacedRepetitionCard.objects.select_for_update() if lock else SpacedRepetitionCard.objects
+        card, _ = cards.get_or_create(
             user=self.user,
             problem=problem,
             defaults={
                 'ease_factor': self.calculator.INITIAL_EASE_FACTOR,
                 'interval_days': self.calculator.INITIAL_INTERVAL,
                 'repetition_count': 0,
-                'next_review_date': timezone.now(),
+                'next_review_date': now or timezone.now(),
             }
         )
+        card.problem = problem  # 呼び出し側が持っている問題を使い回す（読み直さない）
         return card
 
     @transaction.atomic
@@ -101,19 +106,8 @@ class SpacedRepetitionService:
         problem は呼び出し側が組織で絞って取ったもの（available_problems）を渡す。
         """
         now = now or timezone.now()
-        card, _ = SpacedRepetitionCard.objects.get_or_create(
-            user=self.user,
-            problem=problem,
-            defaults={
-                'ease_factor': self.calculator.INITIAL_EASE_FACTOR,
-                'interval_days': self.calculator.INITIAL_INTERVAL,
-                'repetition_count': 0,
-                'next_review_date': now,
-            }
-        )
         # 同じ問題を同時に答えたときに 2 回更新しないよう、行をロックしてから判定する
-        # 組織で絞らない: 直前に取った本人のカードの行のロック（問題は呼び出し側が組織で絞った）
-        card = SpacedRepetitionCard.objects.select_for_update().get(pk=card.pk)
+        card = self.create_card_for_problem(problem, now=now, lock=True)
         if (card.last_reviewed_at is not None
                 and timezone.localdate(card.last_reviewed_at) == timezone.localdate(now)):
             return None
@@ -134,11 +128,13 @@ class SpacedRepetitionService:
     def review_summary(self, subject=None, *, now=None) -> Dict:
         """今日の復習の件数と、次の復習日（今より後で最も近いもの・地域の日付。無ければ None）"""
         now = now or timezone.now()
-        upcoming = self._reviewable_cards(subject).filter(
-            next_review_date__gt=now
-        ).order_by('next_review_date').values_list('next_review_date', flat=True).first()
+        result = self._reviewable_cards(subject).aggregate(
+            due_count=Count('id', filter=Q(next_review_date__lte=now)),
+            upcoming=Min('next_review_date', filter=Q(next_review_date__gt=now)),
+        )
+        upcoming = result['upcoming']
         return {
-            'due_count': self.due_cards_queryset(subject, now=now).count(),
+            'due_count': result['due_count'],
             'next_review_date': timezone.localdate(upcoming) if upcoming else None,
         }
 
@@ -194,7 +190,7 @@ class SpacedRepetitionService:
         review = SpacedRepetitionReview.objects.create(
             card=card,
             user=self.user,
-            problem=card.problem,
+            problem_id=card.problem_id,
             quality_score=quality_score,
             response_time_seconds=response_time_seconds,
             is_correct=quality_score >= 3,
@@ -209,10 +205,16 @@ class SpacedRepetitionService:
             study_session=study_session
         )
 
-        # 関連キャッシュを無効化
-        cache_service.invalidate_spaced_repetition_cache(self.user.id)
-        cache_service.invalidate_statistics_cache(self.user.id)
-        cache_service.invalidate_analytics_cache(self.user.id)
+        # 関連キャッシュを無効化（コミットの後・ロックを持ったまま Redis を待たない。
+        # 取り消し〔ロールバック〕のときは消さない）
+        user_id = self.user.id
+
+        def invalidate_caches():
+            cache_service.invalidate_spaced_repetition_cache(user_id)
+            cache_service.invalidate_statistics_cache(user_id)
+            cache_service.invalidate_analytics_cache(user_id)
+
+        transaction.on_commit(invalidate_caches)
 
         return review
 
@@ -395,8 +397,8 @@ class SpacedRepetitionService:
 
         # 難易度別統計
         difficulty_counts = {
-            label: cards.filter(problem__difficulty=LEVEL_BY_LABEL[label]).count()
-            for label in LABELS
+            label: cards.filter(problem__difficulty=level).count()
+            for level, label in LABEL_BY_LEVEL.items()
         }
 
         # データを更新または作成

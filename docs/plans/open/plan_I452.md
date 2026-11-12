@@ -394,6 +394,17 @@ export const getReviewSummary = async (subjectId?: string): Promise<ReviewSummar
 
 ## 計画変更記録
 - plan-review（20261112_1232・HIGHRISK）の Warning への対応: 4-2 のカードの初期値を明記した（既存の `create_card_for_problem` と同じ値）／4-5 の習熟度のキャッシュのキーの組み立てを具体化し、消す処理（前方一致）で消し漏れないことを計画の時点で確かめた（`_generate_key` が `None` を捨てるので組織は `"org<番号>"` の文字で入れる）／TC-14 の xfail の残りは、決定論ゲートの `! grep -q XFAIL_452`（定数を消す＝印をすべて外した）で exit code として確かめると明記した。Info（回答とカードの更新の同じトランザクション・復習の開始で進行中のクイズが終わる）は計画のままとする。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+- implement: `record_quiz_answer` の行のロックを読み出しにしたところ、I455 の静的テスト（絞らない読み出しに理由のコメント）が止めた。直前に取った本人のカードのロックなので、決まりどおり `組織で絞らない` の理由を書いた（/simplify の後は `create_card_for_problem(lock=True)` の 1 か所）。計画レビューのやり直し: 不要
+- implement（/simplify・4 観点のレビュー）で直したこと（どれも振る舞いを変えない・方式・範囲・受け入れ条件は同じ）:
+  - `review_summary` の科目の検証を既存の `OrgSubjectField`（自組織の科目だけを受け付ける部品）にした。ビューの手組みの判定をやめ、400 の文言は同じ
+  - `record_quiz_answer` のカードの取得・作成を既存の `create_card_for_problem` に寄せた（`now`・`lock` の引数を足し、`select_for_update().get_or_create` で 1 本に。初期値の定義を 1 か所に）。復習記録の作成は `problem_id` を使い、問題を読み直さない
+  - `review_card` のキャッシュの無効化を `transaction.on_commit` に移した（ロックを持ったまま Redis を待たない・取り消しのときは消さない）
+  - `review_summary` の件数と次の日付を 1 本の集計（`Count`・`Min` の `filter`）にした
+  - `problems/views.py` の問題一覧の難易度の絞り込みに残っていた写し（`difficulty_map`）も `LEVEL_BY_LABEL` にした（4-1 の「1 か所に置く」の取りこぼし）
+  - クイズの画面の「今日の復習」の印・「結果を見る」は、URL ではなく回の `mode` で決める（`/quiz/<id>` で開き直しても同じ表示。開始の要求で送る値だけ URL から取る）
+  - 間隔反復のサービスを取り出す関数を `quiz_service.spaced_repetition_service` の 1 つにまとめ、`submit_answer` もそれを使う（関数の中の import の理由を 1 か所に）
+  - 難易度のループを `LABEL_BY_LEVEL.items()` にした・`types/quiz.ts` の説明のコメントの位置を直した
+- implement（/simplify）で見送ったこと: `get_due_cards`（既存の `due_cards` API・学習プラン）を `due_cards_queryset` に寄せる案（削除した問題が外れる＝既存の API の振る舞いが変わる）／開始の件数・出題・終わりの合図を 1 つの候補の問い合わせにまとめる案（低・構造の変更が大きい）／`_reviewable_cards` の副問い合わせを JOIN にする案（`available_problems` を組織の判定の 1 か所にする設計を崩す）／テストの日付の補助関数の整理（期待値を本体と別に書くのは意図）／`review_card` の内側の `atomic` を外す案（ほかの呼び出し元の確認が要る）
 
 ## レビュー結果
 - [20261112_1232 判定: ✅ 完了](../../reviews/I452_plan_review_20261112_1232.md)

@@ -184,8 +184,8 @@ class DailyStudyPlanSerializer(serializers.Serializer):
 
 
 class ReviewSummaryQuerySerializer(serializers.Serializer):
-    """今日の復習の件数の入力（科目は省略可・整数）"""
-    subject_id = serializers.IntegerField(required=False)
+    """今日の復習の件数の入力（科目は省略可。自組織で選べる科目だけ・context に request が要る）"""
+    subject_id = OrgSubjectField(required=False)
 
 
 class ReviewSummarySerializer(serializers.Serializer):

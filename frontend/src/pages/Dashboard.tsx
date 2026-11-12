@@ -44,6 +44,7 @@ import SubjectService from '../services/subjectService';
 import { DashboardData, Subject } from '../services/types';
 import { toast } from 'react-hot-toast';
 import { SubjectSelector } from '../components/SubjectSelector';
+import TodayReviewCard from '../components/TodayReviewCard';
 
 // Register Chart.js components
 ChartJS.register(
@@ -283,6 +284,11 @@ const Dashboard: React.FC = () => {
             />
           </Grid>
         </Grid>
+      </Box>
+
+      {/* 今日の復習（I452）: 科目の選択の下・数字の並びの上 */}
+      <Box sx={{ mb: 3 }}>
+        <TodayReviewCard subjectId={selectedSubject} />
       </Box>
 
       {/* Stats Cards */}

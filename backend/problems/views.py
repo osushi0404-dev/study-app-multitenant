@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 import json
 import uuid
 import hashlib
+from .difficulty import LEVEL_BY_LABEL
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
 from .serializers import (
     SubjectSerializer, ProblemSerializer, ProblemAdminSerializer, ProblemDisplaySerializer,
@@ -17,7 +18,9 @@ from .serializers import (
     SubmitAnswerSerializer, MediaAssetSerializer
 )
 from .services import QuizService
-from .services.quiz_service import ActiveSessionConflictError, IdempotencyKeyReusedError
+from .services.quiz_service import (
+    ActiveSessionConflictError, IdempotencyKeyReusedError, spaced_repetition_service,
+)
 from .services.tenant_scope import available_problems, available_subjects, scope_to_user_org
 from core.cache_service import cache_service
 from core.exceptions import create_error_response
@@ -178,8 +181,7 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(subject_id=subject_id)
         if difficulty:
             # フロントエンドから送られる文字列('easy', 'medium', 'hard')を数値に変換
-            difficulty_map = {'easy': 1, 'medium': 2, 'hard': 3}
-            difficulty_value = difficulty_map.get(difficulty)
+            difficulty_value = LEVEL_BY_LABEL.get(difficulty)
             if difficulty_value:
                 queryset = queryset.filter(difficulty=difficulty_value)
 
@@ -976,8 +978,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
             session.save(update_fields=['completed_problems', 'correct_answers'])
 
             # 次の復習日を決める（その日の最初の回答だけ・problem は組織で絞って取ったもの）
-            from studylogs.services import SpacedRepetitionService
-            SpacedRepetitionService(session.user).record_quiz_answer(
+            spaced_repetition_service(session.user).record_quiz_answer(
                 problem, is_correct, time_taken)
 
         # Return result with explanation and updated session

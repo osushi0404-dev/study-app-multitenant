@@ -381,13 +381,9 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def review_summary(self, request):
         """今日の復習の件数と次の復習日（科目の指定は自組織で選べる科目だけ）"""
-        query = ReviewSummaryQuerySerializer(data=request.query_params)
-        valid = query.is_valid()
-        subject_id = query.validated_data.get('subject_id') if valid else None
-        subject = None
-        if subject_id is not None:
-            subject = available_subjects(request.user).filter(id=subject_id).first()
-        if not valid or (subject_id is not None and subject is None):
+        query = ReviewSummaryQuerySerializer(
+            data=request.query_params, context={'request': request})
+        if not query.is_valid():
             # 数字でない・他組織・全体共有・存在しない科目は同じ 400（違いを見せない）
             return create_error_response(
                 '科目の指定が正しくありません',
@@ -395,7 +391,7 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
                 status.HTTP_400_BAD_REQUEST,
             )
 
-        summary = self.get_service().review_summary(subject)
+        summary = self.get_service().review_summary(query.validated_data.get('subject_id'))
         return Response(ReviewSummarySerializer(summary).data)
 
     @action(detail=False, methods=['get'])

@@ -15,7 +15,7 @@ from .models import (
     SpacedRepetitionReview,
     ProblemAttempt,
 )
-from problems.difficulty import LABELS, LEVEL_BY_LABEL, label_of
+from problems.difficulty import LABEL_BY_LEVEL, LABELS, label_of
 from problems.models import Problem, Subject
 from problems.services.tenant_scope import available_problems, available_subjects
 from core.cache_service import cache_service
@@ -134,8 +134,7 @@ class AdaptiveProblemSelector:
         """難易度別の習熟度を計算"""
         difficulty_stats = {}
 
-        for difficulty in LABELS:
-            level = LEVEL_BY_LABEL[difficulty]
+        for level, difficulty in LABEL_BY_LEVEL.items():
             # 問題試行からの統計
             diff_attempts = attempts.filter(problem__difficulty=level)
             # 間隔反復学習からの統計
