@@ -353,4 +353,6 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 | Low     | 2件 | 2件 |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+- Medium 2 件: TC-01〜TC-03・TC-08・TC-09 で塞いだ（残りなし）
+- Low（静的テストのすり抜け）: R5 として受け入れ、#452 に同梱
+- Low（匿名の利用者で 500）: 呼び出し元がすべて認証の後で fail-closed のため受け入れ
