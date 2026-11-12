@@ -2,10 +2,11 @@
  * QuizSessionコンポーネントのテスト
  * イシュー#026: クイズ機能バグ修正のためのテスト
  */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import QuizSessionPage from '../QuizSession';
 import apiClient from '../../services/api';
+import { getMediaUrl } from '../../utils/url';
 
 // APIクライアントのモック
 jest.mock('../../services/api');
@@ -250,6 +251,110 @@ describe('QuizSession Component', () => {
     // 難易度が日本語で表示される
     await waitFor(() => {
       expect(screen.getByText('初級')).toBeInTheDocument();
+    });
+  });
+
+  describe('問題画像・解説画像（I472）', () => {
+    const asset = (url: string) => ({
+      id: url,
+      url,
+      usage_kind: 'explanation',
+      original_filename: 'x.png',
+      mime_type: 'image/png',
+      file_size_bytes: 100,
+      created_at: '2026-11-12T00:00:00Z',
+    });
+
+    const renderWithProblem = async (problem: object) => {
+      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: mockSession });
+      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: problem });
+      render(
+        <BrowserRouter>
+          <QuizSessionPage />
+        </BrowserRouter>
+      );
+      expect(await screen.findByText('テスト問題文')).toBeInTheDocument();
+    };
+
+    // 単一選択の選択肢を押して即時回答し、回答後の結果の枠を返す
+    const answerWith = async (result: object) => {
+      await renderWithProblem(mockProblem);
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({
+        data: { is_correct: true, session_complete: false, ...result },
+      });
+      fireEvent.click(screen.getByLabelText('選択肢1'));
+      return screen.findByTestId('answer-result');
+    };
+
+    it('新しい形式の解説画像があれば新しい形式だけを出す', async () => {
+      const resultBox = await answerWith({
+        explanation: 'テスト解説',
+        explanation_image: '/media/legacy.png',
+        explanation_images: [asset('/media/e1.png'), asset('/media/e2.png')],
+      });
+
+      expect(within(resultBox).getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/e1.png'));
+      expect(within(resultBox).getByAltText('解説画像 2')).toHaveAttribute('src', getMediaUrl('/media/e2.png'));
+      expect(within(resultBox).queryByAltText('解説画像 3')).not.toBeInTheDocument();
+      expect(
+        within(resultBox).getAllByRole('button').filter(
+          (el) => el.getAttribute('src') === getMediaUrl('/media/legacy.png'))
+      ).toHaveLength(0);
+    });
+
+    it('新しい形式が無ければ古い形式の解説画像を 1 枚出す', async () => {
+      const resultBox = await answerWith({
+        explanation: 'テスト解説',
+        explanation_image: '/media/legacy.png',
+      });
+
+      expect(within(resultBox).getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/legacy.png'));
+      expect(within(resultBox).queryByAltText('解説画像 2')).not.toBeInTheDocument();
+    });
+
+    it('解説文が無くても解説画像を出す', async () => {
+      const resultBox = await answerWith({
+        explanation: '',
+        explanation_images: [asset('/media/e1.png')],
+      });
+
+      expect(within(resultBox).getByAltText('解説画像 1')).toBeInTheDocument();
+      expect(within(resultBox).queryByText('解説:')).not.toBeInTheDocument();
+    });
+
+    it('解説画像を押すと拡大の画面が開く', async () => {
+      const resultBox = await answerWith({
+        explanation: 'テスト解説',
+        explanation_images: [asset('/media/e1.png'), asset('/media/e2.png')],
+      });
+
+      fireEvent.click(within(resultBox).getByAltText('解説画像 1'));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('img')).toHaveAttribute('src', getMediaUrl('/media/e1.png'));
+    });
+
+    it('新しい形式の問題画像があれば新しい形式だけを出す', async () => {
+      await renderWithProblem({
+        ...mockProblem,
+        question_image: '/media/qlegacy.png',
+        question_images: [asset('/media/q1.png')],
+      });
+
+      expect(screen.getByAltText('問題画像 1')).toHaveAttribute('src', getMediaUrl('/media/q1.png'));
+      expect(screen.queryByAltText('問題画像 2')).not.toBeInTheDocument();
+    });
+
+    it('新しい形式が無ければ古い形式の問題画像を出す', async () => {
+      await renderWithProblem({ ...mockProblem, question_image: '/media/qlegacy.png' });
+
+      expect(screen.getByAltText('問題画像 1')).toHaveAttribute('src', getMediaUrl('/media/qlegacy.png'));
+    });
+
+    it('問題画像が無ければ画像を出さない', async () => {
+      await renderWithProblem(mockProblem);
+
+      expect(screen.queryByAltText(/^問題画像/)).not.toBeInTheDocument();
     });
   });
 });

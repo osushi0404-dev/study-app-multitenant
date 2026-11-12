@@ -36,6 +36,8 @@ import {
 } from '../types/quiz';
 import { useQuizDisplayStats } from '../hooks/useQuizDisplayStats';
 import ImageModal from '../components/ImageModal';
+import ProblemImageList from '../components/ProblemImageList';
+import { pickImageUrls } from '../utils/problemImages';
 
 const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 
@@ -425,6 +427,10 @@ const QuizSessionPage: React.FC = () => {
     );
   }
 
+  const explanationImages = result
+    ? pickImageUrls(result.explanation_images, result.explanation_image)
+    : [];
+
   return (
     <Container maxWidth="md">
       <Box mb={3}>
@@ -490,22 +496,12 @@ const QuizSessionPage: React.FC = () => {
               {currentProblem.question_text}
             </Typography>
 
-            {/* 問題画像 - 条件付きレンダリング */}
-            {currentProblem.question_image && (
-              <Box mt={2}>
-                <img
-                  src={`${process.env.REACT_APP_API_BASE_URL}${currentProblem.question_image}`}
-                  alt="問題画像"
-                  style={{
-                    maxWidth: '100%',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => setImageModalOpen(`${process.env.REACT_APP_API_BASE_URL}${currentProblem.question_image}`)}
-                  loading="lazy"
-                />
-              </Box>
-            )}
+            {/* 問題画像（新しい形式を優先・問題管理のプレビューと同じ並べ方） */}
+            <ProblemImageList
+              images={pickImageUrls(currentProblem.question_images, currentProblem.question_image)}
+              alt="問題画像"
+              onImageClick={setImageModalOpen}
+            />
 
             {/* Answer Input */}
             <Box mt={3}>
@@ -618,7 +614,7 @@ const QuizSessionPage: React.FC = () => {
                 </Alert>
 
                 {/* 解説ボックス: 解説文または解説画像がある場合に表示 */}
-                {(result.explanation || result.explanation_image) && (
+                {(result.explanation || explanationImages.length > 0) && (
                   <Box mt={2} p={2} bgcolor="grey.100" borderRadius={1}>
                     {result.explanation && (
                       <>
@@ -631,22 +627,12 @@ const QuizSessionPage: React.FC = () => {
                       </>
                     )}
 
-                    {/* 解説画像 - 条件付きレンダリング */}
-                    {result.explanation_image && (
-                      <Box mt={result.explanation ? 2 : 0}>
-                        <img
-                          src={`${process.env.REACT_APP_API_BASE_URL}${result.explanation_image}`}
-                          alt="解説画像"
-                          style={{
-                            maxWidth: '100%',
-                            borderRadius: '8px',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => setImageModalOpen(`${process.env.REACT_APP_API_BASE_URL}${result.explanation_image}`)}
-                          loading="lazy"
-                        />
-                      </Box>
-                    )}
+                    {/* 解説画像（新しい形式を優先・問題管理のプレビューと同じ並べ方） */}
+                    <ProblemImageList
+                      images={explanationImages}
+                      alt="解説画像"
+                      onImageClick={setImageModalOpen}
+                    />
                   </Box>
                 )}
               </Box>
