@@ -323,8 +323,8 @@ _OPT_PATH_RE = re.compile(r"--(?!(?:" + "|".join(map(re.escape, _OPT_READ_PATH))
 - implement（2026-11-12）: psql のコンテナは止まっていて起こしていない（`docker compose ps` が空）。psql の表は PostgreSQL 15 の文書のまま（V1 の psql は TC-09・TC-10 の後退検知で見る）
 
 ## レビュー結果
-- [20261112_1226 判定: ✅ 完了](../../reviews/I463_plan_review_20261112_1226.md)
-- [20261112_1224 判定: 差し戻し（Blocker 1件）](../../reviews/I463_plan_review_20261112_1224.md)
+- [20261112_1226 判定: ✅ 完了](../../reviews/closed/I463_plan_review_20261112_1226.md)
+- [20261112_1224 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I463_plan_review_20261112_1224.md)
 
 ## セキュリティレビュー結果
 

@@ -86,6 +86,7 @@
 - [retro] 見送り: CI の失敗（新しいテストの SKIP の分岐・I204）— 決定論のテスト（`test_i204_tool_sync.sh`）が CI で捕まえ、fix-loop 1 回で直った。手元で関係するテストを選ぶ仕組みは無いが、足す工程に見合う頻度ではない
 - [retro] 見送り: fix-loop で診断レビューの前に作業ツリーで直しを試した — 未コミットのまま診断レビューを通してから確定し、実害なし。記録に残した
 - [retro] セキュリティの残り（計画書「セキュリティレビュー結果」の残余リスク）: 長いオプションの省略形・表に無い値付きの長いオプション・rsync を表に入れない・`--cov-report=xml:/app/…` を元から読まない、は受け入れる — 脅威モデル（普通の書き方の事故）の範囲外か変更前と同じで、Medium 以上の残りは無い。表に無い値付きの長いオプションのうち秘密に関わるもの（grep `--file=`）は I469 で扱う
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー結果のリンクを closed 向きに直した。診断メモ `I463_fix_diagnosis_20261112_1338.md` は close の回収の対象（`*_review_*`）に当たらないので `docs/reviews/` 直下に残す（I454 と同じ扱い）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -96,3 +97,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
