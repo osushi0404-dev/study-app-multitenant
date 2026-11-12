@@ -27,5 +27,7 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [plan] `user_agent`・`ip_address`・例外の文言・使われていない `logging_decorators.py` は直さない — 理由は plan_I437.md 1 章・9 章
 - [plan] 決定論ゲート（ソースの grep）は置かず、動きを確かめる pytest で守る — 書き方が多様で文字の確かめでは捕まえられない
 - [plan-review] 計画レビュー（OK・高リスク No）の Warning 2 件を直し、再レビューはしなかった — 記録の追記と観点の番号の直しだけで、方式・範囲・受け入れ条件を変えない
+- [implement] Red で、その場の変数の記録は書く側（`DetailedFormatter`）の探し方の不具合でどの環境でも書かれていないと分かった。AC4・TC-06 を「印（`include_locals`）が `DEBUG` のときだけ付く」に直し、計画レビューをやり直した（OK） — 方針（`DEBUG` のときだけ）は変えない。書く側の不具合は直さず retro で扱いを決める
+- [plan-review] 再レビューの Warning（イシューの AC と計画の AC4 の文言の違い）は、イシューの本文を直さない — イシューの AC「`DEBUG` が偽のとき変数が入らない」を計画の AC4 がそのまま含む（より細かく確かめるだけ）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

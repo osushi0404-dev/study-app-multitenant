@@ -224,4 +224,5 @@ from django.conf import settings
   - 計画レビューのやり直し: 要（受け入れ条件 AC4 の文言を変えた）
 
 ## レビュー結果
+- [20261112_2344 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2344.md)
 - [20261112_2340 判定: ✅ 完了](../../reviews/I437_plan_review_20261112_2340.md)
