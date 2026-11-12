@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List
 
 from rest_framework import serializers
+from .difficulty import LEVEL_BY_LABEL, label_of
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
 from .services.tenant_scope import available_subjects
 
@@ -80,8 +81,7 @@ class ProblemFieldConversionMixin:
         data = super().to_representation(instance)
 
         # difficulty を文字列に変換
-        difficulty_map = {1: 'easy', 2: 'medium', 3: 'hard'}
-        data['difficulty'] = difficulty_map.get(instance.difficulty, 'medium')
+        data['difficulty'] = label_of(instance.difficulty) or 'medium'
 
         # problem_type を変換
         type_map = {
@@ -136,9 +136,8 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
 
         # difficulty の変換
         if 'difficulty' in data:
-            difficulty_map = {'easy': 1, 'medium': 2, 'hard': 3}
             if isinstance(data['difficulty'], str):
-                data['difficulty'] = difficulty_map.get(data['difficulty'], 2)
+                data['difficulty'] = LEVEL_BY_LABEL.get(data['difficulty'], 2)
 
         # problem_type の変換
         if 'problem_type' in data:
@@ -331,7 +330,7 @@ class QuizSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizSession
         fields = [
-            'id', 'subject', 'subject_name', 'total_problems',
+            'id', 'subject', 'subject_name', 'mode', 'total_problems',
             'completed_problems', 'answered_problems', 'correct_answers',
             'started_at', 'ended_at', 'is_active', 'duration', 'accuracy'
         ]

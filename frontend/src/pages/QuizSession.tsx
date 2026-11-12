@@ -61,13 +61,19 @@ const QuizSessionPage: React.FC = () => {
   const [isReviewMode, setIsReviewMode] = useState<boolean>(false);  // 追加
   const isReviewModeRef = useRef(isReviewMode);
   useLayoutEffect(() => { isReviewModeRef.current = isReviewMode; }, [isReviewMode]);
-  // 開始リクエストを科目ごとに 1 回へ限定する（StrictMode の effect 再実行でも送らない）
-  const startedSubjectRef = useRef<string | null | undefined>(undefined);
+  // 今日の復習（I452）を答え終えたときの結果（答えた数・正解数）
+  const [reviewResult, setReviewResult] = useState<{ completed: number; correct: number } | null>(null);
+  // 開始リクエストを科目と種類ごとに 1 回へ限定する（StrictMode の effect 再実行でも送らない）
+  const startedKeyRef = useRef<string | undefined>(undefined);
 
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const subjectId = searchParams.get('subject');
+  // ?mode=review で開始すると今日の復習（復習する日が来た問題だけを出し、無くなったら終わる）
+  const reviewRequested = searchParams.get('mode') === 'review';
+  // 表示の分け方は回の種類で決める（/quiz/<id> で開き直しても同じ表示にする）
+  const isReviewSession = session?.mode === 'review';
 
   // カスタムフック使用：表示用統計値を計算（React Hooksルールに従いトップレベルで呼び出す）
   const stats = useQuizDisplayStats(session, showResult, result, totalProblemsInSubject);
@@ -81,6 +87,18 @@ const QuizSessionPage: React.FC = () => {
       setTextAnswer('');
 
       const response = await apiClient.get(`/api/quiz/${sessionId}/next_problem/`);
+
+      if (response.data?.review_complete) {
+        // 今日の復習を答え終えた: 回を終えて結果を出す（終える要求が失敗しても結果は出す）
+        setReviewResult({
+          completed: response.data.completed_problems,
+          correct: response.data.correct_answers,
+        });
+        apiClient.post(`/api/quiz/${sessionId}/end/`).catch((error: unknown) => {
+          console.error('Error ending review session:', error);
+        });
+        return;
+      }
 
       if (response.data && response.data.id) {
         setCurrentProblem(response.data);
@@ -123,10 +141,14 @@ const QuizSessionPage: React.FC = () => {
       setLoading(true);
       // 完了画面の「もう一度挑戦」から開始した場合に、完了表示を解除する
       setSessionComplete(false);
+      setReviewResult(null);
       const sessionData: any = {};
 
       if (subject) {
         sessionData.subject = subject;
+      }
+      if (reviewRequested) {
+        sessionData.mode = 'review';
       }
       // problem_count パラメータは送信しない（バックエンドが全問題数を設定）
 
@@ -146,7 +168,7 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [navigate, loadNextProblem]);
+  }, [navigate, loadNextProblem, reviewRequested]);
 
   const loadSession = useCallback(async (sessionId: string) => {
     try {
@@ -225,13 +247,14 @@ const QuizSessionPage: React.FC = () => {
       loadSession(id);
       return;
     }
-    if (startedSubjectRef.current === subjectId) {
+    const startKey = `${subjectId ?? ''}|${reviewRequested ? 'review' : 'normal'}`;
+    if (startedKeyRef.current === startKey) {
       return;
     }
-    startedSubjectRef.current = subjectId;
+    startedKeyRef.current = startKey;
     // 新しいセッションを作成
     createNewSession(subjectId, generateIdempotencyKey());
-  }, [id, subjectId, loadSession, createNewSession]);
+  }, [id, subjectId, reviewRequested, loadSession, createNewSession]);
 
   // 単一選択問題の即時回答機能（UX改善）
   useEffect(() => {
@@ -288,6 +311,33 @@ const QuizSessionPage: React.FC = () => {
       <Box display="flex" justifyContent="center" alignItems="center" height="400px">
         <CircularProgress />
       </Box>
+    );
+  }
+
+  if (reviewResult) {
+    return (
+      <Container maxWidth="md">
+        <Card>
+          <CardContent>
+            <Box textAlign="center" py={3}>
+              <Typography variant="h5" component="h1" gutterBottom>
+                {reviewResult.completed > 0
+                  ? `今日の復習が終わりました（${reviewResult.completed}問中${reviewResult.correct}問正解）`
+                  : '今日の復習はありません'}
+              </Typography>
+              <Box mt={4}>
+                <Button
+                  variant="contained"
+                  startIcon={<Home />}
+                  onClick={() => navigate('/dashboard')}
+                >
+                  ダッシュボードへ戻る
+                </Button>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Container>
     );
   }
 
@@ -389,6 +439,9 @@ const QuizSessionPage: React.FC = () => {
 
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
             <Box display="flex" alignItems="center" gap={1}>
+              {isReviewSession && (
+                <Chip label="今日の復習" size="small" color="secondary" />
+              )}
               <Typography variant="body2" color="textSecondary">
                 問題 {stats.problemInRound} / {totalProblemsInSubject || session.total_problems}
               </Typography>
@@ -630,13 +683,16 @@ const QuizSessionPage: React.FC = () => {
                   >
                     終了
                   </Button>
-                  {session.answered_problems < session.total_problems && (
+                  {/* 今日の復習は最後の問題の後も進めて、終わりの表示を出す */}
+                  {(isReviewSession || session.answered_problems < session.total_problems) && (
                     <Button
                       variant="contained"
                       endIcon={<NavigateNext />}
                       onClick={handleNextQuestion}
                     >
-                      次の問題
+                      {isReviewSession && session.answered_problems >= session.total_problems
+                        ? '結果を見る'
+                        : '次の問題'}
                     </Button>
                   )}
                 </>

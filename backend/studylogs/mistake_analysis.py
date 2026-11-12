@@ -15,9 +15,13 @@ from .models import (
     MistakePattern, LearningSuggestion, LearningWeakness,
     ProblemAttempt, SpacedRepetitionReview, StudyLog
 )
+from problems.difficulty import LABELS, LEVEL_BY_LABEL, label_of
 from problems.services.tenant_scope import available_subjects
 
 User = get_user_model()
+
+# 提案の文言に科目名を使うパターンの種類
+SUBJECT_PATTERN_TYPES = ('subject_difficulty', 'concept_confusion')
 
 
 class MistakeAnalysisService:
@@ -129,34 +133,27 @@ class MistakeAnalysisService:
     def _analyze_problem_type_errors(self, sr_errors, attempt_errors):
         """問題タイプ別の間違いを分析"""
         # 難易度別の分析
-        difficulty_stats = {
-            'easy': {'errors': 0, 'total': 0},
-            'medium': {'errors': 0, 'total': 0},
-            'hard': {'errors': 0, 'total': 0},
-        }
+        difficulty_stats = {label: {'errors': 0, 'total': 0} for label in LABELS}
 
         for review in sr_errors:
-            difficulty = review.problem.difficulty
+            difficulty = label_of(review.problem.difficulty)
             if difficulty in difficulty_stats:
                 difficulty_stats[difficulty]['errors'] += 1
 
         for attempt in attempt_errors:
-            difficulty = attempt.problem.difficulty
+            difficulty = label_of(attempt.problem.difficulty)
             if difficulty in difficulty_stats:
                 difficulty_stats[difficulty]['errors'] += 1
 
-        # 全体の試行回数を取得
+        # 全体の試行回数を取得（分子の間違いの記録と同じく、自組織の問題の記録だけを数える）
         for difficulty in difficulty_stats.keys():
-            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
-            total_sr = SpacedRepetitionReview.objects.filter(
-                user=self.user,
-                problem__difficulty=difficulty
+            level = LEVEL_BY_LABEL[difficulty]
+            total_sr = SpacedRepetitionReview.objects.for_user(self.user).filter(
+                problem__difficulty=level
             ).count()
 
-            # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
-            total_attempts = ProblemAttempt.objects.filter(
-                user=self.user,
-                problem__difficulty=difficulty
+            total_attempts = ProblemAttempt.objects.for_user(self.user).filter(
+                problem__difficulty=level
             ).count()
 
             difficulty_stats[difficulty]['total'] = total_sr + total_attempts
@@ -316,8 +313,13 @@ class MistakeAnalysisService:
 
     def _generate_pattern_based_suggestions(self, pattern: MistakePattern):
         """パターンベースの学習提案を生成"""
-        suggestions_map = {
-            'subject_difficulty': {
+        # 科目名を使う種類は、科目が空のパターン（古いデータ）から提案を作らない
+        if pattern.pattern_type in SUBJECT_PATTERN_TYPES and pattern.subject is None:
+            return
+
+        # 当てはまる種類の文言だけを組み立てる（科目が空のパターンで科目名を読まない）
+        builders = {
+            'subject_difficulty': lambda: {
                 'title': f"{pattern.subject.name}の重点的な復習",
                 'description': (
                     f"{pattern.subject.name}で間違いが多発しているため、"
@@ -332,7 +334,7 @@ class MistakeAnalysisService:
                 'suggestion_type': 'concept_review',
                 'priority': 'high' if pattern.error_rate > 60 else 'medium'
             },
-            'problem_type': {
+            'problem_type': lambda: {
                 'title': f"{pattern.get_problem_difficulty_display()}レベル問題の強化",
                 'description': (
                     f"{pattern.get_problem_difficulty_display()}レベルの問題で苦戦しています。"
@@ -347,7 +349,7 @@ class MistakeAnalysisService:
                 'suggestion_type': 'practice_focus',
                 'priority': 'medium'
             },
-            'time_pressure': {
+            'time_pressure': lambda: {
                 'title': "時間管理スキルの向上",
                 'description': "急いで回答することで間違いが増えています。正確性を重視した学習を心がけましょう。",
                 'action_steps': [
@@ -359,7 +361,7 @@ class MistakeAnalysisService:
                 'suggestion_type': 'time_management',
                 'priority': 'medium'
             },
-            'concept_confusion': {
+            'concept_confusion': lambda: {
                 'title': f"{pattern.subject.name}の概念整理",
                 'description': f"{pattern.subject.name}の概念間で混同が発生しています。概念マップで整理しましょう。",
                 'action_steps': [
@@ -373,9 +375,10 @@ class MistakeAnalysisService:
             }
         }
 
-        suggestion_config = suggestions_map.get(pattern.pattern_type, {})
-        if not suggestion_config:
+        build = builders.get(pattern.pattern_type)
+        if build is None:
             return
+        suggestion_config = build()
 
         # 既存の提案をチェック（重複防止）
         # 組織で絞らない: 重複の確かめだけ（応答に出ない。絞ると古いデータで結果が変わりうる）
@@ -542,11 +545,8 @@ class MistakeAnalysisService:
     def provide_suggestion_feedback(self, suggestion_id: int, rating: int, comment: str = ""):
         """学習提案にフィードバックを提供"""
         try:
-            # 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）
-            suggestion = LearningSuggestion.objects.get(
-                id=suggestion_id,
-                user=self.user
-            )
+            # 他組織の科目を指す自分の古い提案は、存在しない提案と同じ扱い
+            suggestion = LearningSuggestion.objects.for_user(self.user).get(id=suggestion_id)
 
             suggestion.effectiveness_rating = rating
             suggestion.mark_as_applied()

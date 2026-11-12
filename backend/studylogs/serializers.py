@@ -183,6 +183,17 @@ class DailyStudyPlanSerializer(serializers.Serializer):
     recommendations = serializers.DictField()
 
 
+class ReviewSummaryQuerySerializer(serializers.Serializer):
+    """今日の復習の件数の入力（科目は省略可。自組織で選べる科目だけ・context に request が要る）"""
+    subject_id = OrgSubjectField(required=False)
+
+
+class ReviewSummarySerializer(serializers.Serializer):
+    """今日の復習の件数と、次の復習日（無ければ null）"""
+    due_count = serializers.IntegerField()
+    next_review_date = serializers.DateField(allow_null=True)
+
+
 class LearningInsightsSerializer(serializers.Serializer):
     """学習洞察用シリアライザー"""
     insights = serializers.ListField(child=serializers.CharField())

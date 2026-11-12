@@ -108,10 +108,6 @@ class StaffOnlyCheck:
     status: int
 
 
-XFAIL_452 = "#452: difficulty の型（'easy' を数字の欄で絞る）で 500。#452 で直ったら印を外す"
-XFAIL_452_INSIGHTS = (
-    "#452: LearningInsightsSerializer の period_days の KeyError で 500（#452 に同梱を依頼）"
-)
 DRF_STAFF = [StaffOnlyCheck(403)]
 DJANGO_STAFF = [StaffOnlyCheck(302)]
 LIST = [ListCheck()]
@@ -232,8 +228,10 @@ ROUTE_TABLE = {
        for m in ("PUT", "PATCH", "DELETE")},
     # ---- 間隔反復 ----
     **{f"GET {SR}{a}/": LIST for a in ("analytics", "daily_plan", "due_cards", "user_statistics")},
-    f"GET {SR}learning_insights/": [ListCheck(xfail=XFAIL_452_INSIGHTS)],
-    f"POST {SR}update_analytics/": [ListCheck(xfail=XFAIL_452)],
+    f"GET {SR}learning_insights/": LIST,
+    f"POST {SR}update_analytics/": LIST,
+    f"GET {SR}review_summary/": [ListCheck(),
+                                 IdCheck("user", "query", "subject_id", "subject", 400)],
     f"POST {SR}create_card/": [IdCheck("user", "body", "problem_id", "problem", 404,
                                        writes=("count", "card"))],
     f"POST {SR}submit_review/": [IdCheck(
@@ -246,8 +244,8 @@ ROUTE_TABLE = {
                                   IdCheck("user", "query", "card_id", "card", 200, same_org=True)],
     "GET api/study/sr-reviews/<pk>/": [_detail("review", same_org=True)],
     # ---- 間違い分析 ----
-    f"GET {MA}analyze/": [ListCheck(xfail=XFAIL_452)],
-    f"POST {MA}refresh_analysis/": [ListCheck(xfail=XFAIL_452)],
+    f"GET {MA}analyze/": LIST,
+    f"POST {MA}refresh_analysis/": LIST,
     f"GET {MA}improvement_trends/": LIST,
     f"GET {MA}suggestions/": LIST,
     **{f"GET {MA}{a}/": [ListCheck(), IdCheck("user", "query", "subject_id", "subject", 200)]
@@ -261,10 +259,10 @@ ROUTE_TABLE = {
         "user", "body", "weakness_id", "weakness", 404, same_org=True, writes=("same", ""))],
     # ---- 適応的学習 ----
     **{f"GET {AL}{a}/": [IdCheck("user", "query", "subject_id", "subject", 404),
-                         ListCheck(xfail=XFAIL_452)]
+                         ListCheck()]
        for a in ("proficiency_analysis", "personalized_recommendation", "learning_path",
                  "difficulty_distribution")},
-    f"POST {AL}select_problems/": [_subj_body("subject_id", 404), ListCheck(xfail=XFAIL_452)],
+    f"POST {AL}select_problems/": [_subj_body("subject_id", 404), ListCheck()],
     # ---- ダッシュボード ----
     "GET api/dashboard/overview/": LIST,
     "GET api/dashboard/analytics/": LIST,

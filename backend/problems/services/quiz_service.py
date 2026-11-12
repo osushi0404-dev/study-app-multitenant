@@ -11,6 +11,12 @@ from problems.models import Problem, QuizSession, Subject
 from problems.services import tenant_scope
 
 
+def spaced_repetition_service(user):
+    """間隔反復のサービス（studylogs.models が problems.models を読むので、循環しないよう呼ぶときに読む）"""
+    from studylogs.services import SpacedRepetitionService
+    return SpacedRepetitionService(user)
+
+
 class IdempotencyKeyReusedError(Exception):
     """同じ Idempotency-Key が別の内容（科目）で再利用された"""
 
@@ -38,12 +44,14 @@ class QuizService:
         user,
         subject: Optional[Subject],
         client_request_id: Optional[uuid.UUID],
+        mode: str = QuizSession.MODE_NORMAL,
     ) -> Tuple[QuizSession, bool]:
         """
         クイズセッションを開始する
 
         同一ユーザーの開始処理はユーザー行のロックで直列化する。
         同じ client_request_id の再送には作成済みのセッションを返す（冪等）。
+        mode が review（今日の復習）なら、total_problems はその時点で復習する日が来た問題の数。
 
         Returns:
             (セッション, 新規作成したかどうか)
@@ -57,7 +65,8 @@ class QuizService:
                         user=user, client_request_id=client_request_id
                     ).first()
                     if existing is not None:
-                        if existing.subject_id != (subject.pk if subject else None):
+                        if (existing.subject_id != (subject.pk if subject else None)
+                                or existing.mode != mode):
                             raise IdempotencyKeyReusedError()
                         return existing, False
 
@@ -65,11 +74,17 @@ class QuizService:
                     is_active=False, ended_at=timezone.now()
                 )
 
+                if mode == QuizSession.MODE_REVIEW:
+                    total_problems = spaced_repetition_service(user).due_cards_queryset(subject).count()
+                else:
+                    total_problems = QuizService.available_problems(user, subject).count()
+
                 session = QuizSession.objects.create(
                     user=user,
                     subject=subject,
                     client_request_id=client_request_id,
-                    total_problems=QuizService.available_problems(user, subject).count(),
+                    mode=mode,
+                    total_problems=total_problems,
                 )
                 return session, True
         except IntegrityError as exc:
@@ -88,7 +103,11 @@ class QuizService:
         Returns:
             (問題, 復習モードフラグ, 科目の総問題数)
             問題がない場合は (None, False, 0)
+            今日の復習の回は、出す問題が無くなったら (None, False, 回の total_problems)
         """
+        if session.mode == QuizSession.MODE_REVIEW:
+            return QuizService._next_review_problem(session), False, session.total_problems
+
         # 回答済み問題のサブクエリ（リストに変換せずクエリのまま使用）
         answered_problem_ids_subquery = session.answers.values_list(
             'problem_id', flat=True
@@ -143,6 +162,23 @@ class QuizService:
             is_review_mode = False
 
         return next_problem, is_review_mode, total_problems_in_subject
+
+    @staticmethod
+    def _next_review_problem(session: QuizSession) -> Optional[Problem]:
+        """
+        今日の復習の回の次の問題（その時点で復習する日が来ていて、この回でまだ答えていないもの）
+
+        答えた問題は次の復習日が明日以降になるので、毎回問い合わせれば自然に外れる。
+        """
+        card = (
+            spaced_repetition_service(session.user)
+            .due_cards_queryset(session.subject)
+            .exclude(problem_id__in=session.answers.values_list('problem_id', flat=True))
+            .select_related('problem', 'problem__subject')
+            .order_by('next_review_date', 'id')
+            .first()
+        )
+        return card.problem if card else None
 
     @staticmethod
     def calculate_session_stats(session: QuizSession) -> dict:

@@ -19,8 +19,10 @@ from .serializers import (
     MistakePatternSerializer, LearningSuggestionSerializer, LearningWeaknessSerializer,
     MistakeAnalysisSerializer, SuggestionFeedbackSerializer,
     ProficiencyAnalysisSerializer, PersonalizedRecommendationSerializer,
-    AdaptiveProblemSelectionSerializer, SelectedProblemsSerializer
+    AdaptiveProblemSelectionSerializer, SelectedProblemsSerializer,
+    ReviewSummaryQuerySerializer, ReviewSummarySerializer,
 )
+from core.exceptions import create_error_response
 from .services import SpacedRepetitionService
 from .mistake_analysis import MistakeAnalysisService
 from .adaptive_selection import AdaptiveProblemSelector
@@ -377,6 +379,22 @@ class SpacedRepetitionViewSet(viewsets.ViewSet):
         })
 
     @action(detail=False, methods=['get'])
+    def review_summary(self, request):
+        """今日の復習の件数と次の復習日（科目の指定は自組織で選べる科目だけ）"""
+        query = ReviewSummaryQuerySerializer(
+            data=request.query_params, context={'request': request})
+        if not query.is_valid():
+            # 数字でない・他組織・全体共有・存在しない科目は同じ 400（違いを見せない）
+            return create_error_response(
+                '科目の指定が正しくありません',
+                'ダッシュボードの科目の選択からやり直してください',
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+        summary = self.get_service().review_summary(query.validated_data.get('subject_id'))
+        return Response(ReviewSummarySerializer(summary).data)
+
+    @action(detail=False, methods=['get'])
     def daily_plan(self, request):
         """1日の学習プランを取得"""
         service = self.get_service()
@@ -673,11 +691,8 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             )
 
         try:
-            # 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）
-            suggestion = LearningSuggestion.objects.get(
-                id=suggestion_id,
-                user=request.user
-            )
+            # 他組織の科目を指す自分の古い提案は、存在しない提案と同じ 404
+            suggestion = LearningSuggestion.objects.for_user(request.user).get(id=suggestion_id)
 
             suggestion.is_read = True
             suggestion.save()
@@ -744,11 +759,8 @@ class MistakeAnalysisViewSet(viewsets.ViewSet):
             )
 
         try:
-            # 組織で絞らない: 自分の記録への印付け（応答は固定の文言・I431 扱いの基準 3）
-            weakness = LearningWeakness.objects.get(
-                id=weakness_id,
-                user=request.user
-            )
+            # 他組織の科目を指す自分の古い弱点は、存在しない弱点と同じ 404
+            weakness = LearningWeakness.objects.for_user(request.user).get(id=weakness_id)
 
             weakness.is_resolved = True
             weakness.improvement_score = 1.0
