@@ -59,6 +59,20 @@ class ProblemMediaAssetSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class OrgSubjectField(serializers.PrimaryKeyRelatedField):
+    """
+    リクエストユーザーの組織の科目だけを受け付ける（context に request が無ければ何も受け付けない）
+
+    クイズのセッション・学習記録・問題の科目で使う。
+    """
+
+    def get_queryset(self):
+        request = self.context.get('request')
+        if request is None:
+            return Subject.objects.none()
+        return available_subjects(request.user)
+
+
 class ProblemFieldConversionMixin:
     """Problem型変換の共通ロジック（DRY原則）"""
 
@@ -81,6 +95,8 @@ class ProblemFieldConversionMixin:
 
 
 class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer):
+    # 他組織・全体共有の科目は、存在しない科目と同じ 400 で断る（I446）
+    subject = OrgSubjectField()
     choices = ChoiceSerializer(many=True, required=False)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     created_by_username = serializers.CharField(source='created_by.username', read_only=True)
@@ -302,20 +318,6 @@ class QuizAnswerDetailSerializer(serializers.ModelSerializer):
             'id', 'problem', 'selected_choices', 'text_answer',
             'is_correct', 'answered_at', 'time_taken'
         ]
-
-
-class OrgSubjectField(serializers.PrimaryKeyRelatedField):
-    """
-    リクエストユーザーの組織の科目だけを受け付ける（context に request が無ければ何も受け付けない）
-
-    クイズのセッションと学習記録の科目で使う。
-    """
-
-    def get_queryset(self):
-        request = self.context.get('request')
-        if request is None:
-            return Subject.objects.none()
-        return available_subjects(request.user)
 
 
 class QuizSessionSerializer(serializers.ModelSerializer):

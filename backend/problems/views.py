@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Prefetch
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 import json
@@ -16,6 +17,7 @@ from .serializers import (
 )
 from .services import QuizService
 from .services.quiz_service import ActiveSessionConflictError, IdempotencyKeyReusedError
+from .services.tenant_scope import available_problems, available_subjects, scope_to_user_org
 from core.cache_service import cache_service
 from core.exceptions import create_error_response
 from core.subject_service import subject_service
@@ -164,11 +166,8 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
     multipart_list_fields = ['choices']
 
     def get_queryset(self):
-        # ユーザーの組織に紐づく科目の問題のみ取得
-        queryset = Problem.objects.filter(
-            is_deleted=False,
-            subject__organization=self.request.user.organization
-        )
+        # 利用者の組織の未削除の問題（組織に属さない利用者は空・全体共有の科目は含めない・I446）
+        queryset = available_problems(self.request.user)
 
         # クエリパラメータによるフィルタリング
         subject_id = self.request.query_params.get('subject')
@@ -253,7 +252,8 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         # バリデーション済みデータ
         validated_data = serializer.validated_data
 
-        # I103: 越境 subject への作成を拒否（テナント境界）。
+        # I103: 越境 subject への作成を拒否（テナント境界）。シリアライザ（OrgSubjectField）が
+        # 先に存在しない科目と同じ 400 で断るので、ここは多層防御（I446）。
         # subject は Problem.subject=NOT NULL・serializer required のため create 時は必ず存在。
         subject = validated_data['subject']
         if subject.organization_id != self.request.user.organization_id:
@@ -306,7 +306,8 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
         validated_data = serializer.validated_data
         request = self.request
 
-        # 1. SEC-1: subject の他組織付け替えを拒否（越境データ注入・越境ファイル書き込み防止）
+        # 1. SEC-1: subject の他組織付け替えを拒否（越境データ注入・越境ファイル書き込み防止）。
+        #    シリアライザ（OrgSubjectField）が先に存在しない科目と同じ 400 で断るので、ここは多層防御（I446）
         new_subject = validated_data.get('subject')
         if new_subject and new_subject.organization_id != request.user.organization_id:
             raise DRFValidationError({'subject': ['他組織の科目には変更できません']})
@@ -382,18 +383,12 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # 科目の取得
-            subject = Subject.objects.get(id=subject_id)
+            # 他組織・全体共有の科目は、存在しない科目と同じ 404（save_to_db に関わらず生成前に停止・I446）
+            subject = available_subjects(request.user).get(id=subject_id)
         except Subject.DoesNotExist:
             return Response({
                 'error': '指定された科目が見つかりません'
             }, status=status.HTTP_404_NOT_FOUND)
-
-        # I103: 越境 subject への作成を拒否（save_to_db に関わらず生成前に停止）
-        if subject.organization_id != request.user.organization_id:
-            return Response({
-                'error': '他組織の科目には問題を作成できません'
-            }, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # AI生成器の初期化
@@ -512,17 +507,12 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            subject = Subject.objects.get(id=subject_id)
+            # 他組織・全体共有の科目は、存在しない科目と同じ 404（I446）
+            subject = available_subjects(request.user).get(id=subject_id)
         except Subject.DoesNotExist:
             return Response({
                 'error': '指定された科目が見つかりません'
             }, status=status.HTTP_404_NOT_FOUND)
-
-        # I103: 越境 subject への作成を拒否（テナント境界）
-        if subject.organization_id != request.user.organization_id:
-            return Response({
-                'error': '他組織の科目には問題を作成できません'
-            }, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # ユーザーの最近のパフォーマンス分析
@@ -817,7 +807,18 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
-        return QuizSession.objects.filter(user=self.request.user)
+        user = self.request.user
+        # 他組織・全体共有の科目の回は存在しないものとして扱う（科目なしの回は残す・I446）
+        sessions = scope_to_user_org(
+            QuizSession.objects.filter(user=user), user, subject_path='subject', allow_null=True,
+        )
+        if self.action in ('retrieve', 'end'):
+            # 回答を出す応答（QuizSessionDetailSerializer）は、組織の問題の回答だけを出す
+            # （I166 より前のデータ・表示だけの絞り込み。回の件数・正解数の欄は変えない）
+            answers = scope_to_user_org(
+                QuizAnswer.objects.all(), user, subject_path='problem__subject')
+            sessions = sessions.prefetch_related(Prefetch('answers', queryset=answers))
+        return sessions
 
     def get_serializer_class(self):
         if self.action == 'retrieve':

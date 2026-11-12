@@ -241,18 +241,22 @@ def test_restart_with_ended_session_subject_is_checked(setup):
 
 
 # ---- TC-09: 他組織の科目を持つセッションが既にあっても漏れない（多層防御） ----
+# I446 から、他組織の科目の回そのものを存在しない回と同じ 404 で扱う
 def test_existing_foreign_subject_session_does_not_leak(setup):
     user = setup["user_a"]
     client = _client(user)
     session = QuizSession.objects.create(user=user, subject=setup["subject_b"], is_active=True)
+    missing_id = QuizSession.objects.order_by("-id").first().id + 1000
 
     served = client.get(f"{QUIZ_URL}{session.id}/next_problem/")
+    missing_served = client.get(f"{QUIZ_URL}{missing_id}/next_problem/")
     assert served.status_code == status.HTTP_404_NOT_FOUND
-    assert served.json() == BODY_404_NO_PROBLEMS
+    assert served.json() == missing_served.json()
 
     answered = _answer(client, session.id, setup["problems_b"][0])
+    missing_answered = _answer(client, missing_id, setup["problems_b"][0])
     assert answered.status_code == status.HTTP_404_NOT_FOUND
-    assert answered.json() == BODY_404_PROBLEM
+    assert answered.json() == missing_answered.json()
     assert QuizAnswer.objects.filter(session=session).count() == 0
 
 
