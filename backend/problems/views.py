@@ -14,7 +14,7 @@ from .difficulty import LEVEL_BY_LABEL
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
 from .serializers import (
     SubjectSerializer, ProblemSerializer, ProblemAdminSerializer, ProblemDisplaySerializer,
-    QuizSessionSerializer, QuizSessionDetailSerializer,
+    AnswerExplanationSerializer, QuizSessionSerializer, QuizSessionDetailSerializer,
     SubmitAnswerSerializer, MediaAssetSerializer
 )
 from .services import QuizService
@@ -981,20 +981,21 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
             spaced_repetition_service(session.user).record_quiz_answer(
                 problem, is_correct, time_taken)
 
-        # Return result with explanation and updated session
-        return Response({
-            'is_correct': is_correct,
-            'explanation': problem.explanation,
-            'explanation_image': problem.explanation_image.url if problem.explanation_image else None,
-            'correct_choices': list(problem.choices.filter(is_correct=True).values('id', 'text')),
-            'session_complete': not session.is_active,
-            'session': QuizSessionSerializer(session).data,  # 追加: 更新されたセッション情報
-            'session_stats': {  # 後方互換性のため残す
-                'completed': session.completed_problems,
-                'total': session.total_problems,
-                'correct': session.correct_answers
+            # 応答も同じトランザクションの中で作る（作るのに失敗したら回答・集計・復習の予定を残さない）
+            result = {
+                'is_correct': is_correct,
+                **AnswerExplanationSerializer(problem).data,
+                'correct_choices': list(problem.choices.filter(is_correct=True).values('id', 'text')),
+                'session_complete': not session.is_active,
+                'session': QuizSessionSerializer(session).data,  # 追加: 更新されたセッション情報
+                'session_stats': {  # 後方互換性のため残す
+                    'completed': session.completed_problems,
+                    'total': session.total_problems,
+                    'correct': session.correct_answers
+                }
             }
-        })
+
+        return Response(result)
 
     @action(detail=True, methods=['post'])
     def end(self, request, pk=None):

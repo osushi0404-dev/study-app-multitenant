@@ -48,6 +48,7 @@
   - `backend/problems/views.py`（`QuizSessionViewSet.submit_answer` の応答）
   - `backend/problems/serializers.py`（新しい形式の画像の応答の共通関数・回答の解説の serializer）
   - `backend/problems/tests/test_I472_quiz_answer_explanation_image.py`（新規）
+  - `backend/studylogs/tests/test_I452_quiz_review.py`（`test_submit_answer_updates_card` の応答のキーの集合に `explanation_images` を足す）
 - Frontend:
   - `frontend/src/utils/problemImages.ts`（新規・画像の選び方）
   - `frontend/src/components/ProblemImageList.tsx`（新規・画像の並べ方。`ProblemPreview.tsx` の `renderImages` を切り出す）
@@ -266,6 +267,7 @@ interface ProblemImageListProps {
 
 ## 計画変更記録
 - plan-review（20261112_1559・OK）の Warning 2 件への対応: 手動テスト No.1・No.5 のデータ作成・後片付けのコードの渡し方を「スクラッチパッドのファイル → `docker compose cp` で `/tmp/` → `manage.py shell --command` で 1 コマンドずつ」に具体化し、No.1 のあいまいな「`GET /api/quiz/` 相当の確かめ」を削った（No.2 で確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+- implement: I452 のテスト `test_submit_answer_updates_card`（`backend/studylogs/tests/test_I452_quiz_review.py:263`）が回答の応答のキーの集合をそのまま確かめていて、`explanation_images` の追加（AC3）で落ちた。期待するキーに `explanation_images` を足し、影響範囲に書き足した。ほかの欄の確かめは変えない。計画レビューのやり直し: 不要（AC3 のとおりの欄の追加に伴うテストの期待値の更新で、方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
 - [20261112_1559 判定: ✅ 完了](../../reviews/I472_plan_review_20261112_1559.md)

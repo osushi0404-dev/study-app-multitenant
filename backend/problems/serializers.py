@@ -50,6 +50,12 @@ class MediaAssetSerializer(serializers.ModelSerializer):
         return obj.get_url()
 
 
+def serialize_media_assets(problem, usage_kind):
+    """問題に紐づく新しい形式の画像（usage_kind の分・表示順）の応答"""
+    media_links = problem.get_media_assets(usage_kind=usage_kind)
+    return MediaAssetSerializer([link.asset for link in media_links], many=True).data
+
+
 class ProblemMediaAssetSerializer(serializers.ModelSerializer):
     """問題画像紐づけのシリアライザー"""
     asset = MediaAssetSerializer(read_only=True)
@@ -232,13 +238,11 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
 
     def get_question_images(self, obj):
         """問題用画像の配列を取得（新方式）"""
-        media_links = obj.get_media_assets(usage_kind='problem')
-        return MediaAssetSerializer([link.asset for link in media_links], many=True).data
+        return serialize_media_assets(obj, 'problem')
 
     def get_explanation_images(self, obj):
         """解説用画像の配列を取得（新方式）"""
-        media_links = obj.get_media_assets(usage_kind='explanation')
-        return MediaAssetSerializer([link.asset for link in media_links], many=True).data
+        return serialize_media_assets(obj, 'explanation')
 
 
 class ChoiceAdminSerializer(serializers.ModelSerializer):
@@ -288,13 +292,29 @@ class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSer
 
     def get_question_images(self, obj):
         """問題用画像の配列を取得（新方式）"""
-        media_links = obj.get_media_assets(usage_kind='problem')
-        return MediaAssetSerializer([link.asset for link in media_links], many=True).data
+        return serialize_media_assets(obj, 'problem')
 
     def get_explanation_images(self, obj):
         """解説用画像の配列を取得（新方式）"""
-        media_links = obj.get_media_assets(usage_kind='explanation')
-        return MediaAssetSerializer([link.asset for link in media_links], many=True).data
+        return serialize_media_assets(obj, 'explanation')
+
+
+class AnswerExplanationSerializer(serializers.ModelSerializer):
+    """クイズの回答の応答に入れる解説（解説文・古い形式の画像の URL・新しい形式の画像）"""
+    explanation_image = serializers.SerializerMethodField()
+    explanation_images = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Problem
+        fields = ['explanation', 'explanation_image', 'explanation_images']
+
+    def get_explanation_image(self, obj):
+        """古い形式の解説画像の URL（他の経路と同じ作り方）"""
+        return obj.get_explanation_image_url()
+
+    def get_explanation_images(self, obj):
+        """新しい形式の解説画像（表示順）"""
+        return serialize_media_assets(obj, 'explanation')
 
 
 class QuizAnswerSerializer(serializers.ModelSerializer):
