@@ -46,4 +46,6 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [implement] 手動確認の画像は `backend/media/`（git 管理のフォルダ）に一時的に写し、コミットに入れない。後片付けで 1 枚ずつ消す — 画像の種類が 1 つしか無く、新旧の見分けは `src` の URL で行った
 - [implement] /simplify の指摘のうち、古い形式の getter の mixin 化・正解の選択肢の 2 回の取り出しは #470、テストの `asset()` の共通化は見送り — 応答の作りの整理は #470 の範囲で、正誤の判定を変えるのは本イシューの範囲外のため
 
+STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
