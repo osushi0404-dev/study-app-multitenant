@@ -5,7 +5,7 @@
 - **関連イシュー**: #469
 - **Draft PR**: #475
 - **作成根拠資料**: docs/issues/open/I469.md（起点イシュー・GitHub #469 の本文の写し）
-- **実装後評価**: docs/reviews/open/I469_review.md
+- **実装後評価**: docs/reviews/closed/I469_review.md
 - **作成日**: 2026-11-12
 
 ## 1. 背景/目的
@@ -232,8 +232,8 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 - review-gate（2026-11-12・敵対的レビュー 1646 が V1 を「未検証〔実験が拒否され読んで確認しただけ〕」で HIGH）: V1 は決定論の TC-01〜TC-04（失敗の注入 FG-01〜FG-04 つき・CI でも流れる）で覆っているので、確かめ方を「読んで可」に下げた（plan-writing-rules と review-gate 3-3 の「決定論の TC で覆ったときだけ下げてよい」）。方式・範囲・受け入れ条件は変えないので計画レビューは通り直さない
 
 ## レビュー結果
-- [20261112_1606 判定: ✅ 完了](../../reviews/I469_plan_review_20261112_1606.md)
-- [20261112_1601 判定: ✅ 完了](../../reviews/I469_plan_review_20261112_1601.md)
+- [20261112_1606 判定: ✅ 完了](../../reviews/closed/I469_plan_review_20261112_1606.md)
+- [20261112_1601 判定: ✅ 完了](../../reviews/closed/I469_plan_review_20261112_1601.md)
 
 ## セキュリティレビュー結果
 
@@ -275,3 +275,8 @@ _FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "-
 
 ### 残余リスク処遇
 （retro 段階で決定する）
+
+## 完了情報
+- **完了日時**: 2026-11-12
+- **対応者**: Claude Code
+- **レビュー結果**: OK

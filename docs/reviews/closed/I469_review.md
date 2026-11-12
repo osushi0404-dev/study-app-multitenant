@@ -88,6 +88,8 @@
 - [test-gate] 手動テストの検索先を `/dev/null` から README.md に替え、基準の M-00 を足した — `grep x /dev/null` でも承認画面が出て（作業フォルダの外を読む操作への Claude Code 自体の確認）、見張りの判定と見分けられなかった。確かめる中身・期待は同じ
 - [retro] 台帳の残り（コードレビュー 1647）: F1・F2・F3 → I477（#477・3 件とも SECURITY=yes のため後続イシュー。本文に「次のハーネスの作業で最優先」）。一覧に回す行は 0 件
 - [retro] 改善案の振り分け: 敵対的レビューで前の周の確認を引き継がない件 → 既存 #423 に同梱（コメント）／手動テストで作業フォルダの外を読む形を使った件・イシューの前提の誤り・計画レビューの 2 回目 → 見送り（その場で捕まり手戻りが小さい。理由は「## 振り返り」の見送り）
+- [close] origin/develop（I472 のマージ）を取り込んだ — 触れたのはアプリと I472 の記録だけで、I469 の変えたファイルと重ならない。取り込み後の gate-check も OK
+- [close] PR の説明に、受け入れ条件の su の形の訂正（`-C` → `--session-command`）を書いた — GitHub のイシュー本文は写しを同期しない決まりなので、PR で残す（計画レビュー 1601 の Warning）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -95,3 +97,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
