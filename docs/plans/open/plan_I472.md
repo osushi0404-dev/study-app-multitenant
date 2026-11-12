@@ -265,7 +265,8 @@ interface ProblemImageListProps {
 | V5 | 1 | 読んで可 | 応答に入る画像が、答えた問題に紐づくものだけ（`get_media_assets` は `problem.media_links`）で、他の問題・他の組織の画像の経路が無い |
 
 ## 計画変更記録
-（まだなし）
+- plan-review（20261112_1559・OK）の Warning 2 件への対応: 手動テスト No.1・No.5 のデータ作成・後片付けのコードの渡し方を「スクラッチパッドのファイル → `docker compose cp` で `/tmp/` → `manage.py shell --command` で 1 コマンドずつ」に具体化し、No.1 のあいまいな「`GET /api/quiz/` 相当の確かめ」を削った（No.2 で確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
+- [20261112_1559 判定: ✅ 完了](../../reviews/I472_plan_review_20261112_1559.md)
 （plan-review の後に追記）
