@@ -455,4 +455,6 @@ export const getReviewSummary = async (subjectId?: string): Promise<ReviewSummar
 | Low     | 3件 | 3件 |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+- Medium（設計 4 件・シナリオ 6 件）: すべて自動テストで塞いだ（TC-04・TC-08・TC-12・TC-14 と #446 の表の `review_summary`・`POST api/quiz/`・`next_problem`・`submit_answer`。失敗の注入で FAIL を実測）。残りなし
+- Low（入力の検証・認証漏れ・印付けの 404）: TC-04 (e)(f)・TC-08 (f)・TC-13 で確かめた。残りなし
+- レビューの Low（キャッシュの 5 分の古さ・同時回答のテストが無い・#446 の `ListCheck` のデータ）: どれも他組織のデータは出ない（絞る方向・期限つき）。I467（#467）に回した
