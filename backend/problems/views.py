@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -842,6 +843,7 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 subject=serializer.validated_data.get('subject'),
                 client_request_id=client_request_id,
+                mode=serializer.validated_data.get('mode', QuizSession.MODE_NORMAL),
             )
         except IdempotencyKeyReusedError:
             return create_error_response(
@@ -874,6 +876,15 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
 
         # サービス層を使用してビジネスロジックを実行
         next_problem, is_review_mode, total_problems_in_subject = QuizService.get_next_problem(session)
+
+        if not next_problem and session.mode == QuizSession.MODE_REVIEW:
+            # 今日の復習は対象が無くなったら終わり（回を終えるのは画面が end を呼ぶ）
+            return Response({
+                'review_complete': True,
+                'total_problems': session.total_problems,
+                'completed_problems': session.completed_problems,
+                'correct_answers': session.correct_answers,
+            })
 
         if not next_problem:
             return Response(
@@ -924,42 +935,50 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create answer
-        answer = QuizAnswer.objects.create(
-            session=session,
-            problem=problem,
-            text_answer=text_answer,
-            time_taken=time_taken
-        )
+        # 回答・正誤・回の集計・復習の予定（間隔反復のカード）を 1 つのトランザクションで記録する
+        # （カードの更新に失敗したら回答も残さず、回答とカードを食い違わせない）
+        with transaction.atomic():
+            # Create answer
+            answer = QuizAnswer.objects.create(
+                session=session,
+                problem=problem,
+                text_answer=text_answer,
+                time_taken=time_taken
+            )
 
-        # Add selected choices
-        if selected_choice_ids:
-            choices = Choice.objects.filter(id__in=selected_choice_ids, problem=problem)
-            answer.selected_choices.set(choices)
+            # Add selected choices
+            if selected_choice_ids:
+                choices = Choice.objects.filter(id__in=selected_choice_ids, problem=problem)
+                answer.selected_choices.set(choices)
 
-        # Check if answer is correct
-        is_correct = False
-        if problem.problem_type == 'text':
-            # For text answers, this would need more sophisticated checking
-            # For now, just mark as needs review
+            # Check if answer is correct
             is_correct = False
-        else:
-            correct_choices = set(problem.choices.filter(is_correct=True).values_list('id', flat=True))
-            selected_choices = set(selected_choice_ids)
-            is_correct = correct_choices == selected_choices
+            if problem.problem_type == 'text':
+                # For text answers, this would need more sophisticated checking
+                # For now, just mark as needs review
+                is_correct = False
+            else:
+                correct_choices = set(problem.choices.filter(is_correct=True).values_list('id', flat=True))
+                selected_choices = set(selected_choice_ids)
+                is_correct = correct_choices == selected_choices
 
-        answer.is_correct = is_correct
-        answer.save()
+            answer.is_correct = is_correct
+            answer.save()
 
-        # Update session statistics
-        session.completed_problems += 1
-        if is_correct:
-            session.correct_answers += 1
+            # Update session statistics
+            session.completed_problems += 1
+            if is_correct:
+                session.correct_answers += 1
 
-        # 無制限クイズのため、セッション完了チェックを削除
-        # ユーザーが中断するまで問題を出し続ける
-        # 集計列だけを保存する（別タブの開始が終了させた is_active を書き戻さない）
-        session.save(update_fields=['completed_problems', 'correct_answers'])
+            # 無制限クイズのため、セッション完了チェックを削除
+            # ユーザーが中断するまで問題を出し続ける
+            # 集計列だけを保存する（別タブの開始が終了させた is_active を書き戻さない）
+            session.save(update_fields=['completed_problems', 'correct_answers'])
+
+            # 次の復習日を決める（その日の最初の回答だけ・problem は組織で絞って取ったもの）
+            from studylogs.services import SpacedRepetitionService
+            SpacedRepetitionService(session.user).record_quiz_answer(
+                problem, is_correct, time_taken)
 
         # Return result with explanation and updated session
         return Response({

@@ -235,17 +235,27 @@ class CacheService:
         self.default_cache.delete(key)
 
     # 適応的学習関連
-    def get_proficiency_cache(self, user_id: int, subject_id: Optional[int] = None) -> Optional[Dict]:
+    def _proficiency_key(self, user_id: int, organization_id: Optional[int],
+                         subject_id: Optional[int]) -> str:
+        # 組織を移った直後に前の組織の結果を返さないよう、組織をキーに入れる
+        # （_generate_key は None を捨てるので文字にする）
+        return self._generate_key(
+            'proficiency', user_id, f"org{organization_id}", subject_id or 'all')
+
+    def get_proficiency_cache(
+        self, user_id: int, organization_id: Optional[int],
+        subject_id: Optional[int] = None,
+    ) -> Optional[Dict]:
         """習熟度キャッシュを取得"""
-        key = self._generate_key('proficiency', user_id, subject_id or 'all')
+        key = self._proficiency_key(user_id, organization_id, subject_id)
         return self.default_cache.get(key)
 
     def set_proficiency_cache(
-        self, user_id: int, proficiency_data: Dict,
+        self, user_id: int, organization_id: Optional[int], proficiency_data: Dict,
         subject_id: Optional[int] = None,
     ):
         """習熟度キャッシュを設定"""
-        key = self._generate_key('proficiency', user_id, subject_id or 'all')
+        key = self._proficiency_key(user_id, organization_id, subject_id)
         timeout = self.timeouts['spaced_repetition']  # 5分間
         self.default_cache.set(key, proficiency_data, timeout)
 

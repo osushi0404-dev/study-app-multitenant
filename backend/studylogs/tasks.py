@@ -275,11 +275,11 @@ def export_user_data_task(self, user_id: int, export_format: str = 'json'):
         user = User.objects.get(id=user_id)
 
         # ユーザーの学習データを収集
-        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
+        # 組織で絞らない: 本人の記録の書き出し（応答は件数だけ・中身は外に出さない）
         study_logs = list(StudyLog.objects.filter(user=user).values())
-        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
+        # 組織で絞らない: 本人の記録の書き出し（応答は件数だけ・中身は外に出さない）
         sr_cards = list(SpacedRepetitionCard.objects.filter(user=user).values())
-        # 組織で絞らない: 件数・時間・正答率だけの集計（中身を返さない・I431 扱いの基準 3）
+        # 組織で絞らない: 本人の記録の書き出し（応答は件数だけ・中身は外に出さない）
         sr_reviews = list(SpacedRepetitionReview.objects.filter(user=user).values())
         analytics = list(LearningAnalytics.objects.filter(user=user).values())
 

@@ -18,11 +18,17 @@ from .models import (
     StudyLog,
 )
 from .spaced_repetition import SpacedRepetitionCalculator
+from problems.difficulty import LABELS, LEVEL_BY_LABEL
 from problems.models import Problem
 from problems.services.tenant_scope import available_problems
 from core.cache_service import cache_service
 
 User = get_user_model()
+
+
+def _start_of_local_day(now):
+    """now のアプリの地域の日付の 0 時（aware）"""
+    return timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 class SpacedRepetitionService:
@@ -34,7 +40,8 @@ class SpacedRepetitionService:
 
     def get_due_cards(self, limit: int = 20) -> List[SpacedRepetitionCard]:
         """復習が必要なカードを取得"""
-        cache_key = f"due_cards_{limit}"
+        # 組織を移った直後に前の組織のカードを返さないよう、組織をキーに入れる
+        cache_key = f"due_cards_{limit}_org{self.user.organization_id}"
         cached_cards = cache_service.get_spaced_repetition_cache(self.user.id, cache_key)
 
         if cached_cards is not None:
@@ -78,15 +85,83 @@ class SpacedRepetitionService:
         return card
 
     @transaction.atomic
+    def record_quiz_answer(
+        self,
+        problem: Problem,
+        is_correct: bool,
+        time_taken_seconds: int,
+        *,
+        now=None,
+    ) -> Optional[SpacedRepetitionReview]:
+        """
+        クイズの回答から、その問題のカードを作る・更新する
+
+        次の復習日を決めるのは、その日（アプリの地域の日付）の最初の回答だけ。
+        同じ日の 2 回目以降は何もしない（None を返す）。
+        problem は呼び出し側が組織で絞って取ったもの（available_problems）を渡す。
+        """
+        now = now or timezone.now()
+        card, _ = SpacedRepetitionCard.objects.get_or_create(
+            user=self.user,
+            problem=problem,
+            defaults={
+                'ease_factor': self.calculator.INITIAL_EASE_FACTOR,
+                'interval_days': self.calculator.INITIAL_INTERVAL,
+                'repetition_count': 0,
+                'next_review_date': now,
+            }
+        )
+        # 同じ問題を同時に答えたときに 2 回更新しないよう、行をロックしてから判定する
+        # 組織で絞らない: 直前に取った本人のカードの行のロック（問題は呼び出し側が組織で絞った）
+        card = SpacedRepetitionCard.objects.select_for_update().get(pk=card.pk)
+        if (card.last_reviewed_at is not None
+                and timezone.localdate(card.last_reviewed_at) == timezone.localdate(now)):
+            return None
+
+        quality_score = (self.calculator.QUIZ_CORRECT_QUALITY if is_correct
+                         else self.calculator.QUIZ_INCORRECT_QUALITY)
+        return self.review_card(card, quality_score, time_taken_seconds, now=now)
+
+    def due_cards_queryset(self, subject=None, *, now=None):
+        """
+        復習する日が来たカード（有効・自組織で解ける問題・科目の指定があればその科目）
+
+        今日の復習の件数と、復習のクイズの出題はここだけを使う。
+        """
+        now = now or timezone.now()
+        return self._reviewable_cards(subject).filter(next_review_date__lte=now)
+
+    def review_summary(self, subject=None, *, now=None) -> Dict:
+        """今日の復習の件数と、次の復習日（今より後で最も近いもの・地域の日付。無ければ None）"""
+        now = now or timezone.now()
+        upcoming = self._reviewable_cards(subject).filter(
+            next_review_date__gt=now
+        ).order_by('next_review_date').values_list('next_review_date', flat=True).first()
+        return {
+            'due_count': self.due_cards_queryset(subject, now=now).count(),
+            'next_review_date': timezone.localdate(upcoming) if upcoming else None,
+        }
+
+    def _reviewable_cards(self, subject=None):
+        """有効なカードのうち、自組織で解ける問題（科目の指定があればその科目）のもの"""
+        return SpacedRepetitionCard.objects.for_user(self.user).filter(
+            is_active=True,
+            problem__in=available_problems(self.user, subject),
+        )
+
+    @transaction.atomic
     def review_card(
         self,
         card: SpacedRepetitionCard,
         quality_score: int,
         response_time_seconds: int,
         hint_used: bool = False,
-        study_session: Optional[StudyLog] = None
+        study_session: Optional[StudyLog] = None,
+        *,
+        now=None,
     ) -> SpacedRepetitionReview:
-        """カードを復習し、スケジューリングを更新"""
+        """カードを復習し、スケジューリングを更新（次の復習日は答えた日の 0 時＋間隔）"""
+        now = now or timezone.now()
 
         # 復習前の状態を記録
         previous_ease_factor = card.ease_factor
@@ -99,7 +174,7 @@ class SpacedRepetitionService:
             ease_factor=card.ease_factor,
             repetition_count=card.repetition_count,
             quality_score=quality_score,
-            last_review_date=timezone.now()
+            last_review_date=_start_of_local_day(now)
         )
 
         # カードを更新
@@ -107,7 +182,7 @@ class SpacedRepetitionService:
         card.interval_days = new_interval
         card.repetition_count = previous_repetition_count + 1 if quality_score >= 3 else 0
         card.next_review_date = next_review_date
-        card.last_reviewed_at = timezone.now()
+        card.last_reviewed_at = now
         card.total_reviews += 1
 
         if quality_score >= 3:  # 正解の場合
@@ -320,9 +395,8 @@ class SpacedRepetitionService:
 
         # 難易度別統計
         difficulty_counts = {
-            'easy': cards.filter(problem__difficulty='easy').count(),
-            'medium': cards.filter(problem__difficulty='medium').count(),
-            'hard': cards.filter(problem__difficulty='hard').count(),
+            label: cards.filter(problem__difficulty=LEVEL_BY_LABEL[label]).count()
+            for label in LABELS
         }
 
         # データを更新または作成
@@ -358,7 +432,7 @@ class SpacedRepetitionService:
         ).order_by('date')
 
         if not analytics.exists():
-            return {'insights': [], 'recommendations': []}
+            return {'insights': [], 'recommendations': [], 'period_days': days, 'analytics_data': []}
 
         insights = []
         recommendations = []

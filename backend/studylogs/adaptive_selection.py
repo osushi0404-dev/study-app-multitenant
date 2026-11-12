@@ -15,6 +15,7 @@ from .models import (
     SpacedRepetitionReview,
     ProblemAttempt,
 )
+from problems.difficulty import LABELS, LEVEL_BY_LABEL, label_of
 from problems.models import Problem, Subject
 from problems.services.tenant_scope import available_problems, available_subjects
 from core.cache_service import cache_service
@@ -71,6 +72,7 @@ class AdaptiveProblemSelector:
         # Redisキャッシュから取得を試みる
         cached_proficiency = cache_service.get_proficiency_cache(
             self.user.id,
+            self.user.organization_id,
             subject.id if subject else None
         )
 
@@ -121,6 +123,7 @@ class AdaptiveProblemSelector:
         # Redisキャッシュに保存
         cache_service.set_proficiency_cache(
             self.user.id,
+            self.user.organization_id,
             proficiency_data,
             subject.id if subject else None
         )
@@ -131,11 +134,12 @@ class AdaptiveProblemSelector:
         """難易度別の習熟度を計算"""
         difficulty_stats = {}
 
-        for difficulty in ['easy', 'medium', 'hard']:
+        for difficulty in LABELS:
+            level = LEVEL_BY_LABEL[difficulty]
             # 問題試行からの統計
-            diff_attempts = attempts.filter(problem__difficulty=difficulty)
+            diff_attempts = attempts.filter(problem__difficulty=level)
             # 間隔反復学習からの統計
-            diff_reviews = reviews.filter(problem__difficulty=difficulty)
+            diff_reviews = reviews.filter(problem__difficulty=level)
 
             # 総合精度
             total_correct = (
@@ -384,7 +388,7 @@ class AdaptiveProblemSelector:
         score = 0.0
 
         # 難易度に基づくスコア
-        difficulty = problem.difficulty
+        difficulty = label_of(problem.difficulty)
         difficulty_weights = {
             'easy': strategy['easy_weight'],
             'medium': strategy['medium_weight'],
@@ -442,7 +446,7 @@ class AdaptiveProblemSelector:
             # 特定の難易度を優先
             filtered_problems = [
                 (p, s) for p, s in scored_problems
-                if p.difficulty == difficulty_preference
+                if label_of(p.difficulty) == difficulty_preference
             ]
             if len(filtered_problems) >= count:
                 scored_problems = filtered_problems
@@ -505,10 +509,11 @@ class AdaptiveProblemSelector:
             return 0.5
 
         # 最近の問題の難易度分布
-        difficulty_counts = {'easy': 0, 'medium': 0, 'hard': 0}
+        difficulty_counts = {label: 0 for label in LABELS}
         for review in recent_reviews:
-            difficulty = review.problem.difficulty
-            difficulty_counts[difficulty] += 1
+            difficulty = label_of(review.problem.difficulty)
+            if difficulty in difficulty_counts:
+                difficulty_counts[difficulty] += 1
 
         total = len(recent_reviews)
         easy_ratio = difficulty_counts['easy'] / total
