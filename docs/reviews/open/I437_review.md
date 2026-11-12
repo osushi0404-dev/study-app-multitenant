@@ -26,3 +26,4 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [plan] `subject_service.py:43・91`（`str(user)` がメールアドレス）も直す — 全件確認で見つかった同じ型で、AC5 の範囲
 - [plan] `user_agent`・`ip_address`・例外の文言・使われていない `logging_decorators.py` は直さない — 理由は plan_I437.md 1 章・9 章
 - [plan] 決定論ゲート（ソースの grep）は置かず、動きを確かめる pytest で守る — 書き方が多様で文字の確かめでは捕まえられない
+STAGE_DONE: plan NEXT: plan-review
