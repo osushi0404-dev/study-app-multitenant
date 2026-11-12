@@ -49,3 +49,4 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
