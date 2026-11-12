@@ -78,16 +78,13 @@ def serialize_media_assets(problem, usage_kind):
 ```python
 class AnswerExplanationSerializer(serializers.ModelSerializer):
     """クイズの回答の応答に入れる解説（解説文・古い形式の画像の URL・新しい形式の画像）"""
-    explanation_image = serializers.SerializerMethodField()
+    # 古い形式の解説画像の URL（他の経路と同じ作り方）
+    explanation_image = serializers.CharField(source='get_explanation_image_url', read_only=True)
     explanation_images = serializers.SerializerMethodField()
 
     class Meta:
         model = Problem
         fields = ['explanation', 'explanation_image', 'explanation_images']
-
-    def get_explanation_image(self, obj):
-        """古い形式の解説画像の URL（他の経路と同じ作り方）"""
-        return obj.get_explanation_image_url()
 
     def get_explanation_images(self, obj):
         """新しい形式の解説画像（表示順）"""
@@ -154,7 +151,7 @@ interface ProblemImageListProps {
   onImageClick: (fullUrl: string) => void;
 }
 ```
-`images` が空なら `null` を返す。中身は `renderImages` と同じ（`Box mt=2` → `ImageList cols={images.length === 1 ? 1 : Math.min(images.length, 3)} gap={8}` → 各 `ImageListItem` に `Box component="img"`・同じ `sx`・`alt={`${alt} ${index + 1}`}`・`aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}`・`loading="lazy"`）。`React.memo` は使わない（親の再描画が軽く、props の配列は毎回作り直すので効かない）。
+`images` が空なら `null` を返す。中身は `renderImages` と同じ（`Box mt=2` → `ImageList cols={Math.min(images.length, 3)} gap={8}`（空は先に返すので、元の `images.length === 1 ? 1 : …` と同じ） → 各 `ImageListItem` に `Box component="img"`・同じ `sx`・`alt={`${alt} ${index + 1}`}`・`aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}`・`loading="lazy"`）。`React.memo` は使わない（親の再描画が軽く、props の配列は毎回作り直すので効かない）。
 
 ### 4-5. 問題管理のプレビュー（`frontend/src/components/ProblemPreview.tsx`）
 **修正方針**: 見え方を変えずに、`getQuestionImageUrls`・`getExplanationImageUrls`・`renderImages` を 4-3・4-4 に置き換える。`questionImages = pickImageUrls(problem.question_images, problem.question_image)`・`explanationImages = pickImageUrls(problem.explanation_images, problem.explanation_image)`・`<ProblemImageList images={questionImages} alt="問題画像" onImageClick={setImageModalOpen} />`（解説も同じ・`alt="解説画像"`）。解説文が無いと解説画像を出さない動き（`showExplanation && problem.explanation &&`）は変えない（イシューの「含まない」）。使わなくなった `ImageList`・`ImageListItem`・`getMediaUrl` の import を消す。
@@ -268,6 +265,7 @@ interface ProblemImageListProps {
 ## 計画変更記録
 - plan-review（20261112_1559・OK）の Warning 2 件への対応: 手動テスト No.1・No.5 のデータ作成・後片付けのコードの渡し方を「スクラッチパッドのファイル → `docker compose cp` で `/tmp/` → `manage.py shell --command` で 1 コマンドずつ」に具体化し、No.1 のあいまいな「`GET /api/quiz/` 相当の確かめ」を削った（No.2 で確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 - implement: I452 のテスト `test_submit_answer_updates_card`（`backend/studylogs/tests/test_I452_quiz_review.py:263`）が回答の応答のキーの集合をそのまま確かめていて、`explanation_images` の追加（AC3）で落ちた。期待するキーに `explanation_images` を足し、影響範囲に書き足した。ほかの欄の確かめは変えない。計画レビューのやり直し: 不要（AC3 のとおりの欄の追加に伴うテストの期待値の更新で、方式・範囲・受け入れ条件を変えない）
+- implement（/simplify・4 観点）: 動きを変えずに次を直した — `AnswerExplanationSerializer.explanation_image` を `CharField(source='get_explanation_image_url', read_only=True)` に（メソッドを呼ぶだけの組を 1 行に）・`ProblemImageList` の列数を `Math.min(images.length, 3)` に、`getMediaUrl` を 1 枚 1 回に・`QuizSession.tsx` の解説画像を `pickImageUrls(result?.…, result?.…)` に（三項演算を外す）・テストの冗長な確かめを 2 か所まとめた。見送り: 古い形式の画像の getter が 3 つの serializer に残る件（mixin 化は応答の作りを整理する #470 で扱う）・テストの `asset()` の共通化（共通のテスト部品の置き場が無く、3 ファイルの小さな写しで済む）・`submit_answer` で正解の選択肢を 2 回取る件（直す前からのコードで、正誤の判定を変えるのは本イシューの範囲外。#470 で扱う）・`return Response` を `with` の中に入れる案（計画のコードのまま・効果は同じ）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
 - [20261112_1559 判定: ✅ 完了](../../reviews/I472_plan_review_20261112_1559.md)

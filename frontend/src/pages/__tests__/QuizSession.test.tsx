@@ -295,11 +295,8 @@ describe('QuizSession Component', () => {
 
       expect(within(resultBox).getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/e1.png'));
       expect(within(resultBox).getByAltText('解説画像 2')).toHaveAttribute('src', getMediaUrl('/media/e2.png'));
-      expect(within(resultBox).queryByAltText('解説画像 3')).not.toBeInTheDocument();
-      expect(
-        within(resultBox).getAllByRole('button').filter(
-          (el) => el.getAttribute('src') === getMediaUrl('/media/legacy.png'))
-      ).toHaveLength(0);
+      // 古い形式も出ていれば 3 枚になる
+      expect(within(resultBox).getAllByAltText(/^解説画像/)).toHaveLength(2);
     });
 
     it('新しい形式が無ければ古い形式の解説画像を 1 枚出す', async () => {

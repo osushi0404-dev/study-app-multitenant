@@ -20,44 +20,47 @@ const ProblemImageList: React.FC<ProblemImageListProps> = ({ images, alt, onImag
 
   return (
     <Box sx={{ mt: 2 }}>
-      <ImageList cols={images.length === 1 ? 1 : Math.min(images.length, 3)} gap={8}>
-        {images.map((imageUrl, index) => (
-          <ImageListItem key={index}>
-            <Box
-              component="img"
-              src={getMediaUrl(imageUrl)}
-              alt={`${alt} ${index + 1}`}
-              role="button"
-              tabIndex={0}
-              aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}
-              loading="lazy"
-              sx={{
-                width: '100%',
-                maxHeight: 300,
-                objectFit: 'contain',
-                borderRadius: 1,
-                cursor: 'pointer',
-                border: '1px solid',
-                borderColor: 'divider',
-                '&:hover': {
-                  opacity: 0.9,
-                },
-                '&:focus': {
-                  outline: '2px solid',
-                  outlineColor: 'primary.main',
-                  outlineOffset: 2,
-                },
-              }}
-              onClick={() => onImageClick(getMediaUrl(imageUrl))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onImageClick(getMediaUrl(imageUrl));
-                }
-              }}
-            />
-          </ImageListItem>
-        ))}
+      <ImageList cols={Math.min(images.length, 3)} gap={8}>
+        {images.map((imageUrl, index) => {
+          const fullUrl = getMediaUrl(imageUrl);
+          return (
+            <ImageListItem key={index}>
+              <Box
+                component="img"
+                src={fullUrl}
+                alt={`${alt} ${index + 1}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}
+                loading="lazy"
+                sx={{
+                  width: '100%',
+                  maxHeight: 300,
+                  objectFit: 'contain',
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': {
+                    opacity: 0.9,
+                  },
+                  '&:focus': {
+                    outline: '2px solid',
+                    outlineColor: 'primary.main',
+                    outlineOffset: 2,
+                  },
+                }}
+                onClick={() => onImageClick(fullUrl)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onImageClick(fullUrl);
+                  }
+                }}
+              />
+            </ImageListItem>
+          );
+        })}
       </ImageList>
     </Box>
   );

@@ -427,9 +427,7 @@ const QuizSessionPage: React.FC = () => {
     );
   }
 
-  const explanationImages = result
-    ? pickImageUrls(result.explanation_images, result.explanation_image)
-    : [];
+  const explanationImages = pickImageUrls(result?.explanation_images, result?.explanation_image);
 
   return (
     <Container maxWidth="md">

@@ -43,10 +43,7 @@ describe('ProblemImageList', () => {
     fireEvent.keyDown(image, { key: ' ' });
     fireEvent.keyDown(image, { key: 'a' });
 
-    expect(onImageClick).toHaveBeenCalledTimes(3);
-    expect(onImageClick).toHaveBeenNthCalledWith(1, getMediaUrl('/media/a.png'));
-    expect(onImageClick).toHaveBeenNthCalledWith(2, getMediaUrl('/media/a.png'));
-    expect(onImageClick).toHaveBeenNthCalledWith(3, getMediaUrl('/media/a.png'));
+    expect(onImageClick.mock.calls).toEqual(Array(3).fill([getMediaUrl('/media/a.png')]));
   });
 
   it('画像が無ければ何も描かない', () => {

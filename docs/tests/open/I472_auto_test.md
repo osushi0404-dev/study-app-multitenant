@@ -7,8 +7,8 @@
 - 下の表の `PYT` は `docker compose exec -T backend python -m pytest problems/tests/test_I472_quiz_answer_explanation_image.py -q`、`JEST` は `docker compose exec -T frontend npx react-scripts test --watchAll=false` の略
 
 結果:
-- backend:
-- frontend:
+- backend: 新しいテスト 6 件と守りのテスト（I166・I158・problems の serializers・views・I073・I452・#446）が 236 passed。Red（直す前の 500・500 なのに回答が残る）と FG（応答の組み立てを外に戻すと TC-04 が 2 件とも FAIL）を確かめた。CI は review-gate で確かめる
+- frontend: 新しい 3 ファイルと追記を含むクイズの画面の 3 ファイルが 34 passed。Red と FG（解説画像の選び方を古い形式だけに戻すと 3 件 FAIL）を確かめた。型チェック・lint（警告 0）も合格
 
 ## 決定論ゲート（自動実走）
 決定論ゲート（grep などの文字の確かめ）は置かない。守る決まり（URL の作り方・トランザクションの範囲・画面の選び方）は、動きを確かめる pytest・Jest（TC-01〜TC-10）が CI で毎回止める。
@@ -18,6 +18,18 @@
 |---|---|---|---|
 | 2026-11-12 | TC-06（実装前・ベースライン） | 0 | 230 passed（develop `616f003b` 相当・I472 の変更なし） |
 | 2026-11-12 | TC-01〜TC-05・TC-07〜TC-13（実装前） | — | 実装前のため未実行 |
+| 2026-11-12 16:02 | Red: `PYT`（serializer も無い状態） | 2 | `AnswerExplanationSerializer` の読み込みで収集エラー |
+| 2026-11-12 16:03 | Red: `PYT`（serializer だけ足し、view は直す前） | 1 | 5 failed・1 passed。TC-01 は 500（`AttributeError: 'str' object has no attribute 'url'`・`views.py:988`）、TC-04 (b) は 500 なのに QuizAnswer が 1 件残る。通った 1 件は TC-05（serializer だけで決まる） |
+| 2026-11-12 16:03 | Green: `PYT` | 0 | 6 passed |
+| 2026-11-12 16:04 | FG: 応答の組み立て（`result = {...}`）を `with transaction.atomic():` の外に戻して `PYT -k build_failure` | 1 | 2 failed（どちらも QuizAnswer が 1 件残る）。直した版に戻した |
+| 2026-11-12 16:05 | TC-06（初回） | 1 | I452 の `test_submit_answer_updates_card` が応答のキーの集合に `explanation_images` が無いことで FAIL（計画変更記録）。期待するキーを足して 236 passed |
+| 2026-11-12 16:09 | TC-10（切り出す前のプレビュー） | 0 | 4 passed（今の見え方をテストで固定してから切り出した） |
+| 2026-11-12 16:10 | Red: TC-07・TC-08（関数・部品が無い状態） | 1 | 2 suites が読み込みで FAIL |
+| 2026-11-12 16:11 | Green: TC-07・TC-08・TC-10 | 0 | 3 suites・14 passed |
+| 2026-11-12 16:12 | Red: TC-09（クイズの画面を直す前） | 1 | 6 failed・8 passed（既存の 7 件と「問題画像が無ければ出さない」） |
+| 2026-11-12 16:13 | Green: TC-09・TC-11（Jest 6 ファイル・型チェック・lint） | 0 | 34 passed・`tsc --noEmit` 合格・`eslint --max-warnings 0` 合格 |
+| 2026-11-12 16:13 | FG: `QuizSession.tsx` の解説画像を `pickImageUrls(undefined, result.explanation_image)` に一時的に変えて TC-09 | 1 | 3 failed（新しい形式の解説画像・解説文なし・拡大）。戻した |
+| 2026-11-12 16:25 | TC-13（/simplify の後）: TC-06・Jest 6 ファイル・型チェック・lint | 0 | 236 passed・34 passed・型チェックと lint 合格 |
 
 ## TC 一覧
 

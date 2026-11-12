@@ -301,16 +301,13 @@ class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSer
 
 class AnswerExplanationSerializer(serializers.ModelSerializer):
     """クイズの回答の応答に入れる解説（解説文・古い形式の画像の URL・新しい形式の画像）"""
-    explanation_image = serializers.SerializerMethodField()
+    # 古い形式の解説画像の URL（他の経路と同じ作り方）
+    explanation_image = serializers.CharField(source='get_explanation_image_url', read_only=True)
     explanation_images = serializers.SerializerMethodField()
 
     class Meta:
         model = Problem
         fields = ['explanation', 'explanation_image', 'explanation_images']
-
-    def get_explanation_image(self, obj):
-        """古い形式の解説画像の URL（他の経路と同じ作り方）"""
-        return obj.get_explanation_image_url()
 
     def get_explanation_images(self, obj):
         """新しい形式の解説画像（表示順）"""
