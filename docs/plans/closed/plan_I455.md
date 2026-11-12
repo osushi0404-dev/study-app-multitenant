@@ -5,7 +5,7 @@
 - **関連イシュー**: #455
 - **Draft PR**: #462
 - **作成根拠資料**: docs/issues/open/I455.md（GitHub #455 の本文の写し）
-- **実装後評価**: docs/reviews/open/I455_review.md
+- **実装後評価**: docs/reviews/closed/I455_review.md
 - **作成日**: 2026-11-12
 
 ## 1. 背景/目的
@@ -305,9 +305,9 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - implement（/simplify）: 静的テストの対象モデルを、テストの表（SPECS）ではなくモデルの登録（既定の取り出し口が `OrgScopedQuerySet` のもの）から集め、表と一致することも確かめるテスト（`test_specs_cover_all_scoped_models`）を足した — 9 つ目のモデルに QuerySet を足したとき、表への足し忘れで静的テストの対象から漏れないため。理由のコメントの言い回しを 5 種類にそろえた。計画レビューのやり直し: 不要（4-6 のテストの対象の集め方の細部・方式は同じ）
 
 ## レビュー結果
-- [20261112_0925 判定: ✅ 完了](../../reviews/I455_plan_review_20261112_0925.md)
-- [20261112_0923 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0923.md)
-- [20261112_0921 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0921.md)
+- [20261112_0925 判定: ✅ 完了](../../reviews/closed/I455_plan_review_20261112_0925.md)
+- [20261112_0923 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I455_plan_review_20261112_0923.md)
+- [20261112_0921 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I455_plan_review_20261112_0921.md)
 
 ## セキュリティレビュー結果
 
@@ -356,3 +356,8 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 - Medium 2 件: TC-01〜TC-03・TC-08・TC-09 で塞いだ（残りなし）
 - Low（静的テストのすり抜け）: R5 として受け入れ、#452 に同梱
 - Low（匿名の利用者で 500）: 呼び出し元がすべて認証の後で fail-closed のため受け入れ
+
+## 完了情報
+- **完了日時**: 2026-11-12
+- **対応者**: Claude Code
+- **レビュー結果**: OK（コードレビュー 20261112_1020・敵対的レビュー 20261112_1031）

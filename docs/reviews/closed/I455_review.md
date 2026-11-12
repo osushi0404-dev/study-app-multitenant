@@ -113,6 +113,7 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [test-gate] 手動テストの期待結果「ダッシュボードの最近のクイズの欄」を、画面に欄が無いため API の応答の直接の読み取りで確かめる形に直した — 画面のコードはこのイシューで変えておらず、確かめたいのはバックエンドの `recent_quizzes` の中身のため
 - [retro] 台帳の残り F1〜F5・F8〜F11（9 件・すべて Low・KIND=app）は #452 にまとめて同梱（同じ周辺を次に直すイシューで、1 件ずつ起票するより手戻りが少ない）。一覧（`docs/reviews/backlog/`）に回るものは 0 件
 - [retro] 改善案の振り分け: 敵対的レビューの実験役の環境の前提 → #423 に同梱／code-review.sh のやり直しの NOT_PUSHED → #435 に同梱／TC-05 の誤検出・静的テストの締め直し・手動テストの期待結果の画面の欄 → 見送り（どれも流れの中で捕まり、手戻りは数分。決まりを足すほどの損失が無い）。新規起票なし
+- [close] develop への追従は不要（mergeStateStatus=BLOCKED＝承認待ち）。記録を closed へ移した。fix-loop の診断メモ（`docs/reviews/I455_fix_diagnosis_20261112_1010.md`）は close の回収の対象の形（`*_review_*`）でないので、手順どおり元の場所に残した — 計画書の計画変更記録がそのパスを参照しているため
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -131,3 +132,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
