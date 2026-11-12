@@ -295,8 +295,10 @@ QuizSession に `objects = QuizSessionQuerySet.as_manager()`。
 ## 計画変更記録
 - plan-review（20261112_0921）の指摘への対応: 「必ず確かめる項目」の節を足した（Blocker）・TC-05 と TC-08 のコマンドを表の外のコードブロックに出し、TC-08 を TC-08（pytest）と TC-13（守りのテストのファイルが変わっていない）に分けた（Warning）・イシューとのずれ（`export_user_data_task` を `for_user` にしない）を下に記録（Warning）。計画レビューのやり直し: 要（Blocker の節の追加）
 - イシューとのずれ: イシューの「含む」の「利用者を受け取る非同期処理は `for_user` を使う」のうち、`export_user_data_task` は件数だけを返すため `for_user` にせず理由のコメントにした（件数が変わると「振る舞いを変えない」に反する。9 章）。ほかの利用者を受け取るタスクはサービス経由で `for_user` になる
+- plan-review（20261112_0923）の指摘への対応: TC-05 の正規表現を呼び出し側の形（`scope_to_user_org`・`scope_learning_suggestions`・`subject_path=`・`allow_null=`）に絞り、AC2 の文言を合わせた（Blocker。4-3 のクラス属性に当たって正しい実装でも不合格になるため）・TC-06 の基準の行を 4-6 に明記・V3 に実装時の確かめ直しを追記・TC-13 の基点を `99b17757` に固定（Warning・Info）。計画レビューのやり直し: 要（AC2 の文言を変えた）
+- plan-review（20261112_0925・HIGHRISK）の Warning への対応: TC-10 の FG の手順を具体化（`Manager.from_queryset` に `use_in_migrations=True` を付けた Manager に一時的に差し替える）。`problems/views.py:812` は 9 章に理由を記録済みで、イシュー（GitHub が正）の表は変えない。(B) の箇所は implement で各箇所のコードを確かめ直し、言い切れなければ (C) に戻して計画変更記録に書く（V3）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
+- [20261112_0925 判定: ✅ 完了](../../reviews/I455_plan_review_20261112_0925.md)
 - [20261112_0923 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0923.md)
 - [20261112_0921 判定: 差し戻し（Blocker 1件）](../../reviews/I455_plan_review_20261112_0921.md)
-- plan-review（20261112_0923）の指摘への対応: TC-05 の正規表現を呼び出し側の形（`scope_to_user_org`・`scope_learning_suggestions`・`subject_path=`・`allow_null=`）に絞り、AC2 の文言を合わせた（Blocker。4-3 のクラス属性に当たって正しい実装でも不合格になるため）・TC-06 の基準の行を 4-6 に明記・V3 に実装時の確かめ直しを追記・TC-13 の基点を `99b17757` に固定（Warning・Info）。計画レビューのやり直し: 要（AC2 の文言を変えた）

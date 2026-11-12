@@ -31,7 +31,7 @@
 | TC-08 | 守りの既存テスト（I431・I166・#446）と新しいテスト | 下の「TC-08 のコマンド」 | exit 0（failed 0。#446 の xfail はそのまま xfailed） | AC4 |
 | TC-13 | 守りのテストのファイルを変えていない（基点はこのブランチの起点の develop のコミット `99b17757` に固定） | 下の「TC-13 のコマンド」 | exit 0（差分なし）。FG: I166 のテストのファイルの末尾に空行を一時的に足すと exit 1。戻す | AC4 |
 | TC-09 | TC-01〜TC-03 の FG（3 種）: (a) `StudyLogQuerySet.allow_null` を `False` にする (b) 土台の `OrgScopedQuerySet.for_user` から `self.filter(user=user)` を外す（`self` のまま絞る） (c) `LearningSuggestionQuerySet.subject_paths` から `'mistake_pattern__subject'` を消す | `docker compose exec -T backend python -m pytest studylogs/tests/test_I455_org_scoped_querysets.py -q` を各 FG で | (a) TC-01・TC-02 の StudyLog が FAIL (b) TC-01 の 8 モデルすべてが FAIL（`user_a2` の記録が混ざる） (c) TC-03 が FAIL。いずれも exit 1。Edit で戻した後に exit 0 | AC5 |
-| TC-10 | migration が増えない | `docker compose exec -T backend python manage.py makemigrations --check --dry-run` | exit 0（`No changes detected`）。FG: `StudyLogQuerySet.as_manager()` の Manager に一時的に `use_in_migrations = True` を付けると exit 1（変更を検出）。戻す | AC6 |
+| TC-10 | migration が増えない | `docker compose exec -T backend python manage.py makemigrations --check --dry-run` | exit 0（`No changes detected`）。FG: `backend/studylogs/models.py` の StudyLog の `objects = StudyLogQuerySet.as_manager()` を一時的に `objects = type('_M', (models.Manager.from_queryset(StudyLogQuerySet),), {'use_in_migrations': True})()` に置き換えると exit 1（Manager の変更を検出）。Edit で戻す | AC6 |
 | TC-11 | CI の全テスト | `gh pr checks 462` | 全ジョブ pass（`Backend Tests` に `test_I455_org_scoped_querysets.py` の結果が出る） | AC7 |
 | TC-12 | /simplify の後の流し直し | TC-05・TC-08・TC-10・TC-13 のコマンド | すべて exit 0 | AC2・AC4・AC6 |
 
