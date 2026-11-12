@@ -156,4 +156,9 @@ Danger Ops（有無/手順/ロールバック）:
 - fix-loop（手動テスト No.3 の NG・docs/reviews/I228_fix_diagnosis_20261113_0128.md）: §3-1 の `docker compose ps --status running --services` は allow（`Bash(docker compose ps)` の完全一致）に当たらず承認画面が出たので、確かめを省き常に `docker compose up -d backend`（冪等・allow 済み）を流す形にした。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
-- [20261113_0054 判定: ✅ 完了](../../reviews/I228_plan_review_20261113_0054.md)
+- [20261113_0054 判定: ✅ 完了](../../reviews/closed/I228_plan_review_20261113_0054.md)
+
+## 完了情報
+- **完了日時**: 2026-11-13
+- **対応者**: Claude Code
+- **レビュー結果**: OK

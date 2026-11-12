@@ -40,6 +40,7 @@
 - [retro] 台帳の残り 7 件（F1・F2・F3・F5・F6・F7・F8。すべて Low・再現なし）→ `docs/reviews/backlog/I228.md`。後続イシューに回る行は 0 件
 - [retro] 改善案「古いイシューを GitHub の番号で呼ぶと本文の読み取りが正しい名前を案内せずに止まる」→ #428 に同梱（同じ `issue-source.sh` と grill-me の入口を直すイシュー。会話の数手の手戻りが 2 回）
 - [retro] 改善案「手順書に足したコマンドが allow に当たるかを計画の段階で確かめていない」→ 見送り。既存の決まり（承認画面の有無は `check-permission-prompt.sh` で自分で確かめる）に沿っていなかっただけで、手動テストの行で捕まり fix-loop 1 回（約 10 分）で直った。新しい手順は足さない
+- [close] base 追従は不要（mergeStateStatus=BLOCKED）・gate-check OK。記録を closed へ移した（`I228_fix_diagnosis_20261113_0128.md` は close の回収の型 `*_review_*` に当たらないので docs/reviews/ 直下に残る）
 
 
 ## 振り返り
@@ -94,3 +95,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
