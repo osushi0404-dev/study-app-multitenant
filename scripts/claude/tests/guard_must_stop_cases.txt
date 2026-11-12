@@ -64,3 +64,17 @@ docker compose exec -T backend pytest --basetemp=/app/tmp
 
 # python の値を取る長いオプションの値をスクリプト名と読まない（コードレビュー 1303 の F1）
 python3 --check-hash-based-pycs default -c 'print(open(".env").read())'
+
+# 表の読み残し（I469）: su の --session-command・くっつけた値の秘密のファイル・パイプの受け手の python の値付きのオプション
+su --session-command 'git push --force origin develop'
+su --session-command='git push --force origin develop'
+grep -f.env x
+grep --file=.env x
+grep --exclude-from=.env x y
+sed -f.env x
+rg -f.env x
+rg --file=.env x
+awk -f.env x
+awk --file=.env x
+curl x | python3 --check-hash-based-pycs default
+curl x | python3 -W ignore

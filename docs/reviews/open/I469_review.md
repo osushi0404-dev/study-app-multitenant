@@ -5,10 +5,13 @@
 - Draft PR: #475
 
 ## 変更概要
-（implement で書く）
+見張り（`scripts/claude/hooks/pretooluse_guard.py`）の値を取る文字の表の読み残しを直す。su の `--session-command`（F2）・くっつけた値の秘密のファイル（`grep -f.env`・`--file=.env`・`--exclude-from=.env`・`sed`・`rg`・`awk` の `-f`。F3）・パイプの受け手の python の値付きのオプション（F7）・grep の再帰検索の値付きの長いオプション（一覧 I463 F5）を、離して書いた形と同じ判定にする。止める対象（規則）は増やさない。
 
 ## 変更点
-（implement で書く）
+- `scripts/claude/hooks/pretooluse_guard.py`: `_OPTSPEC` の su に `--session-command`、grep に値を取る長いオプション 7 つを足した。su・script の `-c` の値を読む名前に `--session-command` を足した。`_FILE_VALUE_OPTS`（新規）の値を秘密のファイルを探す `paths` に足す。パイプの受け手の python のスクリプト名を `_getopt("python", …)` で読む（`-c`・`-m` は今と同じに通す）。`_grep_recursive_secret` の `--include` を表で読む
+- 新規: `scripts/claude/tests/test_i469_guard_optspec_leftovers.sh`（TC-01〜TC-04・失敗の注入 4 つ）
+- `scripts/claude/tests/guard_must_stop_cases.txt`: 止めるべき形を 12 件足した
+- `docs/reviews/backlog/I463.md`: 同梱した F5 の行を消した
 
 ## 影響範囲
 - 見張り（PreToolUse フック）の判定。全ワークツリーの Bash の確認・停止
@@ -18,7 +21,9 @@
 （test-gate で書く）
 
 ## 計画との差分
-（なし）
+計画変更記録（計画書）のとおり。
+- design-security-review: 同じ原因の rg・awk のくっつけた値も範囲に入れた（計画レビュー 1606 を通し直した）
+- implement: /simplify で `_grep_recursive_secret` の `--include` を表で読むようにした（判定は同じ）
 
 ## ロールバック
 `git revert` で見張りとテストを戻す（データ・設定の変更なし）。

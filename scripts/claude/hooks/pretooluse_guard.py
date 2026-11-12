@@ -1268,6 +1268,10 @@ _SECRET_READERS = ("cat", "less", "more", "head", "tail", "grep", "rg", "sed", "
                    "base64", "xxd", "od", "tac", "nl", "bat", "vi", "vim", "nano", "sort", "uniq", "diff",
                    "cmp", "jq", "wc", "cut", "tr", "file")
 _PATTERN_FIRST = ("grep", "rg", "sed", "awk")   # 最初の位置引数がパターン（パスではない）コマンド
+# 中身を読むファイルを値に取るオプション（I469 F3）。grep・sed は値を取る文字の表で、表に無い rg・awk は _opt_values の
+# 既定（-fX・-f X・--file=X）で読む。除く指定（--exclude=.env）・パターン（-e.env）の値は入れない（止める対象を増やさない）
+_FILE_VALUE_OPTS = {"grep": ("-f", "--file", "--exclude-from"), "sed": ("-f", "--file"),
+                    "rg": ("-f", "--file"), "awk": ("-f", "--file")}
 # .env に並ぶ設定名に当たりうる検索語（grep -r で .env の行が表示されうるもの）
 _ENV_NAME_HINT_RE = re.compile(r"(?i)key|secret|pass|token|api|email|smtp|db_|database|dsn|sendgrid|openai|"
                                r"redis|_url|host|user|=|\.\*|^\.$|^\^")
@@ -1771,7 +1775,8 @@ def _expand(c: dict, depth: int) -> list:
     if head == "eval":
         return sub(" ".join(rest))
     if head in ("su", "script"):
-        return [e for s in _opt_values(rest, ("-c", "--command"), cmd=head) for e in sub(s)] or [dict(c, toks=toks)]
+        return [e for s in _opt_values(rest, ("-c", "--command", "--session-command"), cmd=head) for e in sub(s)] \
+            or [dict(c, toks=toks)]
     if head == "find":
         out, base, k = [], [], 0
         while k < len(rest):
@@ -1865,10 +1870,13 @@ _OPTSPEC = {
     "django-shell": ("civ", ("--command", "--interface", "--settings", "--pythonpath", "--verbosity")),
     "sed": ("efl", ("--expression", "--file", "--line-length")),
     "grep": ("ABCDdefm", ("--regexp", "--file", "--max-count", "--directories", "--devices",
-                          "--before-context", "--after-context", "--context")),
+                          "--before-context", "--after-context", "--context", "--label", "--binary-files",
+                          "--include", "--exclude", "--exclude-from", "--exclude-dir", "--group-separator")),
     "cp": ("St", _CP_LONG), "mv": ("St", _CP_LONG), "ln": ("St", _CP_LONG),
     "install": ("gmoSt", _CP_LONG + ("--group", "--mode", "--owner")),
-    "su": ("cgGsw", ("--command", "--group", "--supp-group", "--shell", "--whitelist-environment")),
+    # su の --session-command は短い形が無い（-C はどの版の su にも無い・I469 F2）
+    "su": ("cgGsw", ("--command", "--session-command", "--group", "--supp-group", "--shell",
+                     "--whitelist-environment")),
     "flock": ("cEw", ("--command", "--timeout", "--conflict-exit-code")),
     "script": ("BcEImOoT", ("--command", "--log-in", "--log-out", "--log-io", "--log-timing", "--logging-format",
                             "--echo", "--output-limit")),
@@ -2241,9 +2249,10 @@ def _grep_recursive_secret(c: dict) -> bool:
     """grep -r が --include なしで .env を含むディレクトリを読むなら True（rg は .gitignore を守るので対象外）。"""
     args = c["toks"][1:]
     opts, pos = _getopt("grep", args)                # オプション・パターン・ディレクトリを表で 1 回に読む（I463）
-    if not {n for n, _v in opts} & {"-r", "--recursive", "-R", "--dereference-recursive"}:
+    names = {n for n, _v in opts}
+    if not names & {"-r", "--recursive", "-R", "--dereference-recursive"}:
         return False
-    if any(a.startswith("--include") for a in args):
+    if "--include" in names:                         # --include も表で読む（I469）
         return False
     patterns = [v for n, v in opts if n in ("-e", "-f", "--regexp", "--file") and v is not None]
     if not patterns:
@@ -2293,17 +2302,23 @@ def _cmd_external(c: dict) -> list:
     f = _code_findings(c)
     if f:
         r += f[2]
-        # 実行するファイルを引数で指定した python（python3 $G など）では、パイプで流れるのはデータでコードではない
+        # 実行するものを指定した python（スクリプト名・-c・-m）では、パイプで流れるのはデータでコードではない。
+        # 値を取るオプション（-W ignore・--check-hash-based-pycs default）の値はスクリプト名ではない（表で読む・I469 F7）。
         # ただし `python - 引数` と `python /dev/stdin` は標準入力（パイプの中身）をコードとして実行する
-        first = next((a for a in toks[1:] if a == "-" or not a.startswith("-")), None)
-        script_arg = _PYTHON_RE.match(head) and not dj and first is not None and first != "-" \
-            and not first.startswith(("/dev/", "/proc/"))
+        script_arg = False
+        if _PYTHON_RE.match(head) and not dj:
+            opts, pos = _getopt("python", toks[1:])
+            first = pos[0] if pos else None
+            script_arg = any(n in ("-c", "-m") for n, _v in opts) \
+                or (first is not None and first != "-" and not first.startswith(("/dev/", "/proc/")))
         if not f[0] and c["piped"] and not c["compose"] and not script_arg:
             r.append("パイプで流し込むコード（中身が見えない）")
     # 秘密のファイルを探す paths は位置引数に絞らない（grep -f .env x の .env を落とさない・I463）。パターンの有無だけ表で読む
     paths = [a for a in toks[1:] if not a.startswith("-")]
     if head in _PATTERN_FIRST and not _opt_values(toks[1:], ("-e", "-f", "--regexp", "--file"), cmd=head):
         paths = paths[1:]
+    if head in _FILE_VALUE_OPTS:                     # くっつけた値（grep -f.env・--file=.env）も離した形と同じに探す（I469 F3）
+        paths += _opt_values(toks[1:], _FILE_VALUE_OPTS[head], cmd=head)
     secret_path = any(_secret_path(a) for a in paths)
     if head in _SECRET_READERS and secret_path:
         r.append("秘密情報ファイルの読み出し")

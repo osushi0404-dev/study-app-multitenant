@@ -6,6 +6,10 @@
 
 結果:
 - 計画時（2026-11-12）: テストのファイルがまだ無いので未実行（実装前のため未実行）。同じ形を develop の見張りに流した「今」の判定は計画書「調査結果」の表のとおり（01a・01b・02a〜02d・02h〜02k・03a・03b・04a が「通す」で、直した後の期待とずれる。それ以外の形は今も期待どおり）
+- 2026-11-12（implement・/simplify の前）: `test_i469_guard_optspec_leftovers.sh` pass=30 fail=0（FG-01〜FG-04 を含む）・`test_guard_must_stop_cases.sh` pass=3（一覧に 12 件を足した）・`test_i463_optspec_help.sh` pass=2・`test_i463_guard_optspec.sh` pass=46・`test_i454_guard_env_writes.sh` pass=59・`test_i444_guard_gaps.sh` pass=64・`test_pretooluse_container_guard.sh` pass=788・`test_i200_guard_narrowing.sh` pass=75・`test_pretooluse_guard_matrix.sh` pass=391・`test_guard_bash_oracle.sh` 見逃し 0・余計な停止 0・`test_pretooluse_worktree_guard.sh` pass=127、すべて exit 0。`py_compile` OK。TC-08 の 08a exit 0。`run-all.sh test_i204_tool_sync.sh test_i469_guard_optspec_leftovers.sh` pass=2（I204 のテストは単体で流すと手元の PyYAML・pre-commit の版の違いで L2 が落ちるが、正規の入口 run-all.sh では合格）
+- 2026-11-12（implement・/simplify の後。`--include` を表で読む）: 上と同じ 11 本がすべて同じ件数で exit 0・`py_compile` OK・08a exit 0（`test_guard_must_stop_cases.sh` と `test_i463_optspec_help.sh` の出力の FAIL・NG の行は失敗の注入 09b・09c・FG-13 の期待どおりの出力）
+- FG の置き換え元（implement で確定・見張りにちょうど 1 回あることをテストの patch が確かめる）: FG-01 `("-c", "--command", "--session-command"), cmd=head)` → `("-c", "--command"), cmd=head)`／FG-02 `        paths += _opt_values(toks[1:], _FILE_VALUE_OPTS[head], cmd=head)` → `        paths += []`／FG-03 `            first = pos[0] if pos else None⏎`（12 字下げ・`_cmd_external`）→ `            first = next((a for a in toks[1:] if a == "-" or not a.startswith("-")), None)⏎`／FG-04 `"--exclude-from", "--exclude-dir", "--group-separator"` → `"--exclude-from", "--group-separator"`
+- TC-07（implement の後・基準 58c68ec0〔develop との分かれた点〕・`bash scripts/claude/tests/test_guard_corpus_diff.sh --base 58c68ec0 --rebuild`・exit 0）: 17250 件・確認＋停止 370→370・新しく確認・停止 0 件・異常終了 0 件・OK（直した形は過去の作業記録に無かった）
 
 ## TC-01 su の `--session-command` の中のコマンドを読む（F2）
 | ID | コマンド | 期待 |
