@@ -31,7 +31,10 @@ PR を revert する（コードだけの変更。DB の形は変えない）。
 - [plan] `export_user_data_task` は件数だけを返すので絞らずに理由のコメント — `for_user` にすると件数が変わり、「振る舞いを変えない」に反するため
 - [plan] 付け忘れを止める静的テスト（TC-06）を CI に常設 — #446 は API の経路だけを見て、サービスの内部・非同期処理を見ないため
 - [plan-review] 3 回目で HIGHRISK（Blocker なし）。Warning は TC-10 の失敗の注入の手順の具体化だけ直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
+- [design-security-review] Blocker・High なし（Medium 2・Low 2）。Medium はどちらも計画の TC（TC-01〜TC-03・TC-08・TC-09）と V3 の確かめ直しで受けるので、計画を直さず implement へ — 新しいエンドポイントが無く、`for_user` は絞る方向にしか働かないため
 
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: design-security-review
+
+STAGE_DONE: design-security-review NEXT: implement
