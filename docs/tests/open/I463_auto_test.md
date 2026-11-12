@@ -130,6 +130,13 @@
 | 13a | 今の表で、表にあるが `--help` では値を取らない文字が 0 件（`--help` にあって表に無い文字は WARN を出すだけ） | exit 0 |
 | FG-13 | `"sed": ("efl",` を `"sed": ("efln",`（値を取らない n を足す）に置き換えた写し | exit 1（`NG sed: … n`） |
 
+再発防止の記録（fix-loop 1・CI の Harness Tests の失敗）:
+- なぜ失敗したか: review-gate で足した `test_i463_optspec_help.sh` に「コマンドが無ければ SKIP」の分岐を書き、I204 の決まり（テストは道具が無いときに黙って飛ばさない・`test_i204_tool_sync.sh` の S1）に当たった
+- 何を変えたか: SKIP の分岐を消した。コマンドが無ければ例外で不合格、`--help` から値を取る文字を 1 つも読めなければ不合格にした（診断メモ 1338 の案 A。required-tools.txt に util-linux を足す案 B は、一覧の写しのテスト L1 も直す手間が増えるので採らない）
+- セキュリティ上の考慮点: SKIP のままだと、道具の無い環境で V1（表の文字の正しさ）の確かめが黙って抜ける偽合格になる
+- 次回どう防ぐか: 新しいハーネスのテストを書いたら、push の前に `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i204_tool_sync.sh <新しいテスト>` で決まりのテストも一緒に流す（I204 の S1 は新しいテストのファイルの中身を読むので、そのテストを足したときに落ちる）
+- 確かめた結果（2026-11-12）: `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i204_tool_sync.sh scripts/claude/tests/test_i463_optspec_help.sh` → run-all: pass=2 fail=0（exit 0）。`test_i463_optspec_help.sh` 単体: 13a PASS・FG-13 PASS（`NG sed: … n`）
+
 ## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_i463_optspec_help.sh

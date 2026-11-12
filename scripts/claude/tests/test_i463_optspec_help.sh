@@ -18,7 +18,7 @@ ck() { if [ "$2" = "$3" ]; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
 # check <見張り>: 表の各コマンドの --help と比べ、表にあって --help で値を取らない文字があれば exit 1
 check() {
   python3 -I - "$1" <<'PY'
-import importlib.util, re, shutil, subprocess, sys
+import importlib.util, re, subprocess, sys
 spec = importlib.util.spec_from_file_location("guard", sys.argv[1])
 g = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(g)
@@ -41,10 +41,11 @@ def help_opts(cmd):
 
 bad = 0
 for cmd in ("sed", "grep", "cp", "mv", "ln", "install", "su", "flock", "script"):
-    if not shutil.which(cmd):
-        print(f"SKIP {cmd}: コマンドが無い")
+    takes, optional = help_opts(cmd)   # コマンドが無ければ例外で不合格（飛ばさない・I204。どれも OS の基本の道具）
+    if not takes:
+        print(f"NG {cmd}: --help から値を取る文字を 1 つも読めない（--help の形が変わった）")
+        bad += 1
         continue
-    takes, optional = help_opts(cmd)
     table = set(g._OPTSPEC[cmd][0])
     table_opt = set(g._OPTSPEC_OPTIONAL.get(cmd, ""))
     extra = (table - takes) | (table_opt - optional - takes)
