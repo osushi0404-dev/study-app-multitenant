@@ -83,9 +83,11 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [test-gate] 統計の画面のコンソールに出た 2 件の error（開発サーバーの WebSocket・`Statistics` の一覧の `key` の警告）は今回と関係ない既存のものとして扱った — どちらも analytics の応答と無関係で、変更前からある
 - [retro] 台帳の残り: F1 → #473（コメント）・F2 → #473（コメント）。どちらも `--route issue`（アプリ本体）。判定の仕組み・`SECURITY=yes` に関わる指摘は無いので「最優先」の注記は付けない。一覧（backlog）行き 0 件
 - [retro] 改善案: 学習記録 API のクエリの数字の確かめ漏れ → 起票 I479（#479）。grill-me での言い間違い・`Statistics` の `key` の警告 → 見送り（理由は振り返りの 2.7 の判定）
+- [close] develop への追従は不要（`pr-base-sync.sh sync`: BLOCKED＝承認待ち）・gate-check OK。計画書の「実装後評価」の参照先を closed に直し、コードレビューの記録へのリンクを足した
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge

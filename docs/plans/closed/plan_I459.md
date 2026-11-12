@@ -5,7 +5,7 @@
 - **関連イシュー**: #459
 - **Draft PR**: #478
 - **作成根拠資料**: docs/issues/open/I459.md（GitHub #459 の本文の写し）
-- **実装後評価**: docs/reviews/open/I459_review.md
+- **実装後評価**: docs/reviews/closed/I459_review.md
 - **作成日**: 2026-11-12
 
 ## 1. 背景/目的
@@ -237,4 +237,10 @@ def _accuracy_percent(correct, attempted):
 - implement（/simplify・2 体〔再利用／簡潔さ・効率・直す深さ〕。差分が 40 行ほどのため 4 観点を 2 体にまとめた）: 動きを変えずに次を直した — `_accuracy_percent` を `round(correct * 100 / attempted, 2) if attempted else 0` の 1 行に（`attempted` が 0 でなければ同じ行の集計なので `correct` は空にならない）・400 の `sub_message` の上限を `ANALYTICS_MAX_DAYS` から作る（定数と文言の二重持ちをやめる。文言は同じ）。見送り: `status.HTTP_400_BAD_REQUEST` の省略（`create_error_response` の既定値と同じだが、I452 の `review_summary` と同じく呼ぶ側で 400 を見せる）・`_clear_caches` の共通化（5 ファイルの写しで、`conftest.py` に移すのは本イシューの範囲外）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
-- [20261112_1832 判定: ✅ 完了](../../reviews/I459_plan_review_20261112_1832.md)
+- [20261112_1832 判定: ✅ 完了](../../reviews/closed/I459_plan_review_20261112_1832.md)
+- コードレビュー: [20261112_1837 判定: OK（Low 2 件・止める指摘なし）](../../reviews/closed/I459_code_review_20261112_1837.md)
+
+## 完了情報
+- **完了日時**: 2026-11-12
+- **対応者**: Claude Code
+- **レビュー結果**: OK
