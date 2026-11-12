@@ -23,6 +23,8 @@
 | 2026-11-12 23:5x | Green: `PYT` | 0 | 10 passed |
 | 2026-11-12 23:5x | TC-09: I140・#446 | 0 | 139 passed |
 | 2026-11-12 23:5x | TC-10（/simplify の後）: `PYT` と TC-09 のコマンドをまとめて | 0 | 149 passed |
+| 2026-11-13 00:04 | fix-loop Red: `PYT -k error_body`（TC-07 の 2 件目を足し、直す前のコード） | 1 | 1 failed（`confirm_password` が伏せられない）・2 passed |
+| 2026-11-13 00:1x | fix-loop Green: `PYT`・I140・#446 を 1 回の pytest で | 0 | 150 passed |
 
 ## TC 一覧
 
@@ -40,3 +42,10 @@
 | TC-10 | /simplify の後の流し直し | `PYT` と TC-09 のコマンド | どちらも exit 0 | AC1〜AC6 |
 
 - CI: 上のファイルは CI の Backend Tests（`pytest`・PostgreSQL）で毎回流れる（AC6）。review-gate が `gh pr checks 482` で確かめる
+
+## 再発防止記録（fix-loop・コードレビュー F1）
+- なぜ失敗したか: 伏せる欄を名前の完全一致の一覧で持っていて、パスワード変更 API の `confirm_password`（既存の一覧は `password_confirm`）が漏れ、新しいパスワードが 4xx の記録に平文で残った。同型で入力欄の確かめの API の `value` も漏れていた
+- 何を変えたか: 秘密の欄は名前の一部（`password`・`token`・`secret`・`refresh`・`api_key`）で伏せ、個人情報の欄と `value` は完全一致で伏せる（`backend/core/enhanced_logging.py` の `_is_redacted_field`）
+- セキュリティ上の考慮点: OWASP A09／A02。伏せすぎ（`refresh_interval` など）は手がかりが減るだけで漏れない側に倒した。入れ子の欄は見ない（今の API の送信内容は平ら・plan_I437.md R4）
+- 次回どう防ぐか: TC-07 の 2 件目（`test_error_body_redacts_secret_name_variants`）が名前の揺れを CI で毎回止める。新しい秘密の欄は名前に上の語を含めば自動で伏せられる
+- 確かめた結果: 直す前に 2 件目が落ち（Red）、直した後に `PYT`・I140・#446 が 150 passed
