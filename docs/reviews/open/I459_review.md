@@ -18,7 +18,9 @@
 
 ## テスト結果
 - 手元: 新しいテスト 13 件と #446・I431 が 172 passed。Red（直す前に 8 件 FAIL）と FG（おすすめの絞り込みを外すと TC-05 FAIL）を確認（`docs/tests/open/I459_auto_test.md` の実行記録）
-- CI: review-gate で確かめる
+- CI: PR #478（`41b84ec4`）の 7 ジョブすべて pass
+- コードレビュー: `docs/reviews/I459_code_review_20261112_1837.md`（OK・Low 2 件・敵対的レビュー不要）
+- 手動テスト: No.1〜No.3 すべて OK（Claude。dev で 0 件の日を持つ `e2e_user_c` の統計の画面が 200 で開く・不正な `days` が 400）
 
 ## 計画との差分
 - /simplify で `_accuracy_percent` を 1 行にし、400 の `sub_message` の上限を定数から作るようにした（動き・文言は同じ。計画変更記録）
@@ -33,6 +35,8 @@ PR を revert する（コードとテストだけ・DB の形は変えない）
 - [plan] 集計のサービス層への移動・overview の同じ計算の共通化はしない — #473 が作り直す
 - [plan] おすすめの割り算は直さず回帰テスト（TC-05）だけ足す — 再現で 0 で割らないことを確かめた（HAVING の後）
 - [implement] /simplify の 4 観点を 2 体にまとめて回した — 差分が 40 行ほどで、4 体は過剰。見送った指摘は計画変更記録に書いた
+- [test-gate] 手動テスト No.3 を、計画の `browser_evaluate`（承認画面が出る操作）から、dev の backend のコンテナで `APIClient.force_authenticate` して呼ぶ形に変えた — 確かめたいのは dev で動くコードの応答で、承認なしで同じことを確かめられる。期待結果は同じ
+- [test-gate] 統計の画面のコンソールに出た 2 件の error（開発サーバーの WebSocket・`Statistics` の一覧の `key` の警告）は今回と関係ない既存のものとして扱った — どちらも analytics の応答と無関係で、変更前からある
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate

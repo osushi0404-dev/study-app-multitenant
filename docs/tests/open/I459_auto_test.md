@@ -23,6 +23,8 @@
 | 2026-11-12 18:34 | FG: `backend/dashboard/views.py` のおすすめの `.filter(total_problems__gt=0)` を一時的に外して `PYT -k recommendations_with_zero_problem_log` | 1 | 1 failed（500・`DataError: division by zero`）。元に戻した |
 | 2026-11-12 18:35 | TC-07: #446・I431 と `PYT` をまとめて | 0 | 172 passed（#446 の下準備に 0 件の日を足した後） |
 | 2026-11-12 18:38 | TC-08（/simplify の後）: `PYT`・#446・I431 | 0 | 172 passed |
+| 2026-11-12 18:37 | review-gate: `bash scripts/claude/code-review.sh I459`（CI 待ちを含む） | 0 | `CI_WAIT: OK`・`FINAL_VERDICT: OK`（Low 2 件）・`ADVERSARIAL_STAGE: NOT_REQUIRED` |
+| 2026-11-12 18:49 | test-gate: `gh pr checks 478`（`41b84ec4`） | 0 | 7 ジョブすべて pass（Backend Tests・E2E Tests・Frontend Tests・型チェック・lint と検査 2 つ・Harness Tests）。決定論ゲートの heavy の委譲は無し |
 
 ## TC 一覧
 
