@@ -40,7 +40,7 @@ class SubjectService:
         from .cache_service import cache_service
 
         if not user or not hasattr(user, 'organization_id') or not user.organization_id:
-            logger.warning(f"User {user} has no organization_id")
+            logger.warning(f"User {getattr(user, 'id', None)} has no organization_id")
             return Subject.objects.none()
 
         org_id = user.organization_id
@@ -88,7 +88,7 @@ class SubjectService:
         from problems.models import Subject
 
         if not user or not hasattr(user, 'organization_id') or not user.organization_id:
-            logger.warning(f"User {user} has no organization_id")
+            logger.warning(f"User {getattr(user, 'id', None)} has no organization_id")
             return None
 
         try:

@@ -170,7 +170,6 @@ class ErrorTracker:
             'traceback': traceback.format_exc(),
             'context': context or {},
             'user_id': str(user.id) if user else None,
-            'user_email': user.email if user else None,
         }
 
         # 詳細ログ
@@ -379,7 +378,6 @@ class UserActivityMonitor:
         activity_data = {
             'timestamp': timezone.now().isoformat(),
             'user_id': str(user.id),  # UUIDを文字列に変換
-            'user_email': user.email,
             'activity_type': activity_type,
             'details': details or {}
         }
