@@ -31,3 +31,5 @@
 - [plan-review] 2 回目の Warning・Info は計画変更記録に書いて直し、計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: design-security-review
