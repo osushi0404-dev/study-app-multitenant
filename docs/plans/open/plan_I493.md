@@ -337,4 +337,9 @@ Danger Ops（有無/手順/ロールバック）:
 | Low     | 2件 | 4件 |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+（retro・2026-11-13 に決定。High 以上は 0 件）
+- 設計 Medium 2 件（install スクリプト・npx）: 計画に反映して実装済み（`npm ci --ignore-scripts`・`./node_modules/.bin/openapi-typescript`）。敵対的レビューの V6 で確認済み
+- 設計 Low（スキーマを見せる URL を足しやすくなる）: 受け入れ。今回は URL が無いこと（404）を手動 No.3 で確かめた。足すときは別イシューで認証と本番の扱いを決める
+- 設計 Low（`backend/openapi.yaml` の公開）: 受け入れ。中身は overview の形だけで秘密は無い
+- シナリオ #3（PR の作成者が道具を書き換えて CI でコードを動かす）: 受け入れ。secrets も書き込みの権限も無く、必須チェックとコードオーナーの承認で止まる
+- シナリオ #4（必須チェックへの登録まではマージを止められない）: close でユーザーに `API Types Up To Date` の必須チェックへの登録をお願いする（bot に権限が無い）
