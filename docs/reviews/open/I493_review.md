@@ -25,7 +25,10 @@
 - [plan] 実行時の形の確かめ（`isDashboardOverview`）を残した — 型は実行時に消え、TC-22 の 0 埋めの防止がこれに頼っているため
 - [plan-review] 計画レビューの判定は HIGHRISK（`.github` の変更）。Warning 3 件・Info 1 件は計画書と手動テストを直して対応し、再レビューはしない — 方式・範囲・受け入れ条件を変えていないため
 - [plan-review] 新しいジョブ `api-types` を必須チェックの一覧に足し、登録は close でユーザーにお願いする — bot に管理者の権限が無いため
+- [design-security-review] Medium 2 件（CI の `npm ci` で依存の install スクリプトが動く・失敗の注入の `npx` がネットから取り直しうる）を、`--ignore-scripts` と `./node_modules/.bin/openapi-typescript` で計画に反映し、V6 を足した。計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えていないため
 
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: design-security-review
+
+STAGE_DONE: design-security-review NEXT: implement

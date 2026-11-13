@@ -132,7 +132,7 @@
     }
   }
   ```
-- `tools/api-types/package-lock.json`: `npm install --prefix tools/api-types` で作る。
+- `tools/api-types/package-lock.json`: `npm install --prefix tools/api-types --ignore-scripts` で作る。
 - `node_modules` はルートの `.gitignore` の `node_modules/` で除外済み（変えない）。
 
 ### E. 作った型と画面の置き換え（frontend）
@@ -172,7 +172,8 @@
           cache: 'npm'
           cache-dependency-path: tools/api-types/package-lock.json
       - name: Install dependencies
-        run: npm ci
+        # 依存の install スクリプトを動かさない（道具は install スクリプト無しで動く・計画時のスパイク 3 で確認）
+        run: npm ci --ignore-scripts
         working-directory: tools/api-types
       - name: Generated types are up to date
         run: npm run check
@@ -182,7 +183,7 @@
         run: |
           cp ../../frontend/src/types/api/schema.d.ts "$RUNNER_TEMP/stale.d.ts"
           echo "export type Stale = 1;" >> "$RUNNER_TEMP/stale.d.ts"
-          if npx openapi-typescript ../../backend/openapi.yaml -o "$RUNNER_TEMP/stale.d.ts" --check; then
+          if ./node_modules/.bin/openapi-typescript ../../backend/openapi.yaml -o "$RUNNER_TEMP/stale.d.ts" --check; then
             echo "::error::古い型でも --check が通った（ずれを止められない）"
             exit 1
           fi
@@ -193,7 +194,7 @@
   ```
 - `.github/dependabot.yml`: `/frontend` の npm の塊の後に、`directory: "/tools/api-types"` の npm の塊を足す（`schedule`・`labels`・`cooldown`・`groups` は `/frontend` と同じ）。
 - `docs/runbooks/common-commands.md`: 「## モデル変更時の必須手順（migration drift 防止）」の後に「## API の形を変えたとき（型の作り直し・I493）」を足す。中身は次の 3 つ:
-  - 作り直す 2 つのコマンド（`docker compose exec -T backend python manage.py spectacular --file openapi.yaml --validate --fail-on-warn`・`npm --prefix tools/api-types ci`〔初回だけ〕・`npm --prefix tools/api-types run generate`）
+  - 作り直す 2 つのコマンド（`docker compose exec -T backend python manage.py spectacular --file openapi.yaml --validate --fail-on-warn`・`npm --prefix tools/api-types ci --ignore-scripts`〔初回だけ〕・`npm --prefix tools/api-types run generate`）
   - 契約に入れる API を足すときは `backend/core/openapi.py` の `CONTRACT_PATHS` に足すこと
   - 2 つの作ったファイルを手で直さないこと
 - `docs/runbooks/branch-protection-setup.md`: §2 の必須チェックの一覧に `API Types Up To Date` を足し（6→7 件）、§3 ステップ 3 の一覧（今は 5 件で `Harness Tests` が抜けている）を §2 と同じ 7 件にそろえる。§2 の説明に「`API Types Up To Date`（I493）は、画面の型が API のスキーマと同じかを見る」を 1 文足す。
@@ -285,9 +286,51 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 3 | 読んで可 | 契約に入った API の型が正確（警告で string に落ちた型が入らない）。TC-01 が `--fail-on-warn` で作り、TC-03 が overview の必須・型・null の可否を確かめている。TC-04 が契約のパスが一覧どおりかを確かめている |
 | V4 | 1 | 読んで可 | 新しいジョブが secrets を使わず、action が SHA で固定され、`GITHUB_TOKEN` が読み取りだけ。スキーマを見せる URL が増えていない（手動 No.3） |
 | V5 | 3 | 読んで可 | 実行時の形の確かめ（`isDashboardOverview`）が残り、形の違う応答で 0 埋めしない（TC-11 の中の Dashboard.test.tsx TC-22） |
+| V6 | 1 | 読んで可 | `api-types` ジョブが依存の install スクリプトを動かさず（`npm ci --ignore-scripts`）、失敗の注入で道具をネットから取り直さない（`./node_modules/.bin/openapi-typescript`・`npx` を使わない）。`run:` に PR から来る値（`${{ github.event.* }}` など）を埋め込まない |
 
 ## 計画変更記録
 - 計画レビュー（20261113_1218）の Warning 3 件・Info 1 件に対応した: ① スパイク 5 で名前の付け替えを先に確かめた ② 手動 No.2 を `git diff --exit-code`（コミット済みの状態）に変えた ③ ESLint が作った型で落ちたときの方針を決めた ④ 新しいジョブを必須チェックの一覧に足し、登録を close でユーザーにお願いする。方式・範囲・受け入れ条件は変えていない（④ は手順書の一覧を足すだけ）→ 計画レビューのやり直し: 不要
+- セキュリティ設計レビュー（2026-11-13）の Medium 2 件に対応した: `api-types` ジョブと手順書・lock の作成で `--ignore-scripts` を付け、失敗の注入の `npx` を `./node_modules/.bin/openapi-typescript` に変えた。必ず確かめる項目に V6 を足した。方式・範囲・受け入れ条件は変えていない → 計画レビューのやり直し: 不要
 
 ## レビュー結果
 - [20261113_1218 判定: ✅ 完了](../../reviews/I493_plan_review_20261113_1218.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-13
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 依存ライブラリ | `api-types` ジョブの `npm ci` が、道具の依存の install スクリプト（postinstall など）を PR の CI の中で動かす。依存が乗っ取られたとき、そこでコードが動く | `npm ci --ignore-scripts` にする（手順書・lock の作成も同じ）。道具は install スクリプト無しで動く（スパイク 3 は `--ignore-scripts` で入れて動いた）。secrets は渡さず、`GITHUB_TOKEN` は読み取りだけ（既存の `permissions: contents: read`） |
+| Medium | 依存ライブラリ | 失敗の注入のステップで `npx openapi-typescript` を使うと、手元に無いときにネットから lock の外の版を取って動かしうる | `./node_modules/.bin/openapi-typescript` を直接呼ぶ（lock で固定した版だけを使う） |
+| Low | セキュリティ設定ミス | `drf_spectacular` を `INSTALLED_APPS` に入れると、スキーマを見せる URL を誰かが足しやすくなる | 今回は URL を足さない（grill-me で確定・手動 No.3 で 404 を確認）。足すときは別イシューで認証と本番の扱いを決める |
+| Low | 機密情報 | `backend/openapi.yaml` を公開リポジトリに入れる | 中身は overview の形と、JWT の bearer を使うことだけで、秘密・個人情報は無い。契約に入れるパスは `CONTRACT_PATHS` の一覧に足したものだけ |
+| なし | 認証・認可 | — | `DashboardOverviewView` の `permissions.IsAuthenticated` と応答の中身は変えない |
+| なし | マルチテナント | — | `OrgSubjectField` は型の注釈（`extend_schema_field(OpenApiTypes.INT)`）を足すだけで、`get_queryset`（`available_subjects`）は変えない。他組織の科目は今までどおり 400 |
+| なし | 入力検証 | — | `OverviewQuerySerializer` の検証は変えない |
+| なし | OWASP Top 10（XSS・SQLi・CSRF・IDOR） | — | 画面の表示・API の処理・SQL は変えない |
+| なし | ファイル操作 | — | アップロード・ダウンロードは無い。スキーマ・型のファイルは開発者のコマンドと CI だけが作る |
+| なし | 外部通信 | — | 実行中のアプリから外への通信は増えない。CI の `npm ci` は lock で固定した版をレジストリから取るだけ |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `GET /api/schema/`・`/api/schema/swagger-ui/` | 未認証 | API の一覧と形を取りにいく | スキーマを見せる URL が無い（404） | No（URL を足すのは意図的な変更でしか起きないので、テストにしない・plan-writing-rules「写しのテストを作らない」） | Yes: 手動 No.3 で 404 | 無し | Low |
+| 2 | `GET /api/dashboard/overview/?subject_id=<他組織の科目>` | 一般 | 型の注釈を足した `OrgSubjectField` で他組織の科目を通そうとする | 他組織・全体共有・存在しない科目は 400 で、数字を返さない | Yes: 既存の `test_I473_overview.py`（変更なしで通る・CI） | No | 無し（検証の処理を変えない） | Low |
+| 3 | PR の CI（`api-types` ジョブ） | 外部の PR 作成者 | `tools/api-types/package*.json` の依存を書き換え、install スクリプトや道具で CI の中のコードを動かす | install スクリプトを動かさない・secrets が無い・トークンは読み取りだけ | No（V6 として敵対的レビューが読んで確かめる） | No | 道具そのもの（`openapi-typescript`）を書き換えれば `npm run check` で動く。secrets も書き込みの権限も無いので、被害は CI の結果の偽りだけ。必須チェックとコードオーナーの承認で止まる | Low |
+| 4 | 開発者が API の形を変える | 開発者 | スキーマ・型を作り直さずにマージしようとする | CI が落ちる | Yes: TC-01・TC-02（pytest）・TC-20・TC-21（`api-types`） | No | `API Types Up To Date` を必須チェックに入れるまでは、落ちてもマージできる（close でユーザーに登録をお願いする） | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 2件（計画に反映済み） | 0件 |
+| Low     | 2件 | 4件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
