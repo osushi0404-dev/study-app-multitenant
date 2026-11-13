@@ -761,23 +761,27 @@ def is_rest(e):
 
 PLAN_RISK_HEAD = re.compile(r"## 8\.")   # I512: 計画書の「## 8. Risk & 回避策」の節
 PLAN_RISK_ROW = re.compile(r"\|\s*(R[0-9]+)\s*[:：]")   # 表の行の最初のセルが R<番号>: で始まる
+PLAN_COMMENT = re.compile(r"<!--.*?-->", re.S)   # 閉じた HTML コメント（行をまたいでも・1 行に複数でも）
 
 def accepted_risks(plan):
     # I512: 計画書の 8 の節の表で、最後のセルが「受け入れ」と完全に一致する行の R 番号の集合。
     # 同じ R 番号に受け入れでない行が 1 つでもあれば外す（処遇が食い違う番号は受け入れと確かめられない）。
-    # HTML コメント（<!-- から --> まで）の中の行は読まない。
+    # 粗い fail-closed（行ごとの特例を積まない）: 閉じた HTML コメントは全文から取り除き、閉じていない <!-- から後ろは読まない。
+    # 8 の節にコードの囲み（```）が 1 つでもあれば、受け入れは全部効かせない。
     # パスが空・読めない・節が無いときは空の集合（目印が効かない＝今までどおりの振り分け・fail-closed）
     if not plan or not os.path.isfile(plan):
         return set()
-    acc, other, inside, comment = set(), set(), False, False
-    for line in read_lines(plan):
-        if comment or line.lstrip().startswith("<!--"):
-            comment = "-->" not in line
-            continue
+    text = PLAN_COMMENT.sub("", open(plan, encoding="utf-8", errors="replace").read()).split("<!--", 1)[0]
+    acc, other, inside = set(), set(), False
+    for line in text.split("\n"):
         if line.startswith("## "):
             inside = bool(PLAN_RISK_HEAD.match(line))
             continue
-        m = PLAN_RISK_ROW.match(line) if inside else None
+        if not inside:
+            continue
+        if line.lstrip().startswith("```"):
+            return set()
+        m = PLAN_RISK_ROW.match(line)
         if not m:
             continue
         cells = line.rstrip().split("|")
