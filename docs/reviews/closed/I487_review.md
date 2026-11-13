@@ -170,3 +170,6 @@ STAGE_DONE: test-gate NEXT: retro
 - [retro] 2 回目: 予防処置 P1 を I509（#509・track:harness）に起票した — 実害（マージの依頼の後の作り直し）があり、同梱先の開いているイシューが無い。do（plan-issue）と gate（plan-reviewer）の 1 項目ずつに絞った
 
 STAGE_DONE: retro NEXT: close
+- [close] 2 回目: develop への追従は不要（BLOCKED＝承認待ち）。gate-check OK（REVIEWED_COMMIT bf5811db 以降は記録の場所だけ）。記録を closed へ移し、PR の説明を React Query への置き換えに合わせて更新した
+
+STAGE_DONE: close NEXT: merge
