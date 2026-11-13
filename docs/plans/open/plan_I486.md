@@ -5,7 +5,7 @@
 - **関連イシュー**: #486
 - **Draft PR**: #490
 - **作成根拠資料**: docs/issues/open/I486.md
-- **実装後評価**: docs/reviews/closed/I486_review.md
+- **実装後評価**: docs/reviews/open/I486_review.md
 - **作成日**: 2026-11-13
 
 ## 1. 背景/目的
@@ -29,8 +29,9 @@
 - **消費箇所の全件（`up -d backend`・`exp_not_executable`・`noexec` の grep。closed と記録は除く）**: `scripts/claude/adversarial-review.sh`（310・313・397・566 行）・`scripts/claude/tests/test_i197_adversarial_process.sh`（A36・FG-A36）・`.claude/skills/review-gate/SKILL.md:71`・`.claude/agents/adversarial-reviewer.md:70`（noexec の説明「形の行だけ」）・`docs/reviews/backlog/I228.md`。`docs/runbooks/common-commands.md:137`・`docs/runbooks/frontend-verify.md:65` の `up -d backend` は E2E のレート制限の話で別物（変えない）
 
 ## 2. 受け入れ条件
-- [ ] 見る範囲に `backend/` の変更があるとき、`adversarial-review.sh` はレビュー役を呼ぶ前に `docker compose up -d --build --wait backend` を流し、そのうえで動いている backend のコンテナがこのワークツリーのもの（ラベル `com.docker.compose.project.working_dir` ＝ リポジトリのルート）かを確かめる。起こせない・時間切れ・別のワークツリーのコンテナのときは `ADVERSARIAL_ERROR: CONTAINER`・exit 2 で止まり、レビュー役を呼ばない（TC-01 の A39〜A41・FG）
-- [ ] 見る範囲に `backend/` の変更が無いときは、docker を一度も呼ばない（TC-01 の A42・FG）
+- [ ] ブランチ（`ADV_BASE...HEAD`。2 周目以降の見る範囲の縮みに左右されない）に `backend/` の変更があるとき、`adversarial-review.sh` はレビュー役を呼ぶ前に `docker compose up -d --build --wait backend` を流し、そのうえで動いている backend のコンテナがこのワークツリーのもの（ラベル `com.docker.compose.project.working_dir` ＝ リポジトリのルート）かを確かめる。起こせない・時間切れ・別のワークツリーのコンテナのときは `ADVERSARIAL_ERROR: CONTAINER`・exit 2 で止まり、レビュー役を呼ばない（TC-01 の A39〜A41・FG）
+- [ ] ブランチに `backend/` の変更が無いときは、docker を一度も呼ばない（TC-01 の A42・FG）
+- [ ] 2 周目に、直した差分（見る範囲）に `backend/` が無くても、ブランチに `backend/` の変更があればコンテナを起こす（TC-01 の A46・FG）
 - [ ] コンテナを起こす待ち時間は 1 周の締め切り（`ADV_DEADLINE`）の外（TC-01 の A43・FG）
 - [ ] 出力に「見つからない」形の行が混ざる実験も `noexec` になる（TC-01 の A44・FG）。正しい「無い」の実験（`ls: cannot access …`）は今までどおり「実行した」（A37 のまま）
 - [ ] `noexec` の結果に、新しい id（`P<観点>-E<まだ使っていない番号>`）での言い直しの案内が付く（TC-01 の A45・FG）
@@ -78,6 +79,7 @@
      }
      ```
    - `files.txt` は `git diff --name-status --no-renames` の `<状態>\t<パス>`。`backend/` で始まるパスだけに当たる（`docs/…/backend/x` や `frontend/` は当たらない）
+   - **計画変更（close の後・F1）**: 起こすかの判定は、その周の見る範囲（`files.txt`・2 周目以降は前の周の後の差分だけ）でなく、ブランチ全体（`git diff --name-only --no-renames "${ADV_BASE}...HEAD"` を `$RUN/branch_files.txt` に書く。取れなければ既存の `ADVERSARIAL_ERROR: DIFF` で止める）に `^backend/` があるかで決める。`CONTAINER_NOTE` の文言も「ブランチに backend/ の変更なし」にする
 3. **本体の並び替え**（447-503 行あたり）:
    - 449 行目の `ADV_START=$(adv_now) || { … CLOCK … }` を、差分を取った後（503 行の後）に移し、その直前に `ensure_backend_container || exit 2` を置く。コンテナの待ちを締め切りの外にする:
      ```bash
@@ -116,11 +118,12 @@
   - A43 `ADV_CLOCK_FILE` を使い、`docker_up_advance=100000` で docker が時計を締め切りより先へ進めても、exit 0・OK（締め切りは起こした後から数える）
   - A44 出力が `is_error=false` / `collecting ...` / `sh: 1: python: not found` / `exit=127` の 4 行（別の行が混ざる）→ V1 未検証・記録に「実行できなかった」。`Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?` を含む出力も未検証。`python: No such file or directory` の 1 行（今の形）も未検証のまま
   - A45 noexec の後の 2 回目の入力に「新しい id（P1-E2 から）」。続けて P1-E2 で出し直した案は実行され、V1 が「確認済み（実験）」になる（言い直しが通る筋）
+  - A46（計画変更）1 周目に backend の変更あり → 記録だけを直して 2 周目 → 2 周目も `compose up -d --build --wait backend` を呼ぶ（`docker_calls` の up が 2 行）。FG-A46: 判定を見る範囲（`files.txt`）に戻すと up が 1 行になる
 - FG（失敗の注入）: FG-A40（up の失敗で止める `|| exit 2` を外す → claude が呼ばれる）・FG-A41（作業フォルダの比較を外す → 止まらない）・FG-A42（backend の絞り込みを外す → docker が呼ばれる）・FG-A43（`ensure_backend_container` と `ADV_START` の順を入れ替える → 締め切りで未報告・exit 3）・FG-A44（当て方を `all(fullmatch)` に戻す → V1 確認済み）・FG-A45（案内の id を消す → 2 回目の入力に「P1-E2 から」が無い）
 - 既存の A36・A37・FG-A36 は変えずに通す
 
 ### 4-3. `.claude/skills/review-gate/SKILL.md`
-- §3-1 の 68-72 行（「アプリ（`backend/`）を変えたイシューでは…」の段落と `docker compose up -d backend` のコードブロック）を消し、「見る範囲に `backend/` の変更があれば、スクリプトが起動時に backend のコンテナを起こして確かめる（I486。手で起こさない）」の 1 文にする
+- §3-1 の 68-72 行（「アプリ（`backend/`）を変えたイシューでは…」の段落と `docker compose up -d backend` のコードブロック）を消し、「ブランチに `backend/` の変更があれば、スクリプトが起動時に backend のコンテナを起こして確かめる（I486。手で起こさない）」の 1 文にする（計画変更で「見る範囲に」から直した）
 - §3-2 の exit 2 の箇条に足す: 「`ADVERSARIAL_ERROR: CONTAINER`（backend のコンテナを起こせない・別のワークツリーのコンテナ）は記録の場所で直せないので、実行し直さずに止める（止める条件 3）。出力の理由（docker の出力の最後・案内）をそのままユーザーに伝える」
 
 ### 4-4. `.claude/agents/adversarial-reviewer.md`
@@ -195,12 +198,8 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 計画レビュー（20261113_0845）の Warning 3 件への対応: W1 `ps --status`・`inspect` のラベルを実機で確認して §1 に追記／W2 今の形の `<1 語>: No such file or directory` を当て方に残す（4-1 の 4・A44 に 1 件足す）／W3 手動 No.1 の `.env` は `.gitignore` の `*.env` で無視される（`git check-ignore -v .env` で確認済み）と手動テストに書いた。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
+- close の後（ユーザーとの評価で台帳 F1 を一覧から引き戻した）: 計画の記載「見る範囲（`files.txt`）に `backend/` の変更があれば起こす」→ 採った方法: ブランチ全体（`ADV_BASE...HEAD`）で判定する（4-1 の 2 の「計画変更」・AC 1〜3・A46 と FG-A46）。理由: 2 周目以降は見る範囲が直した差分だけに縮み、文書だけを直した周でコンテナを起こさず、このイシューの目的の空振りがそのまま起こるため。計画レビューのやり直し: 要（AC の文言を変える）
 - 実装中（test_i202 の N18・N19 に当たった）: 計画の記載「既定値の並びに足す」「`t0=$(date +%s)` で所要秒」→ 採った方法: 新しい既定値は既存の 2 行を変えずに別の `:` 行に置く／所要秒は bash の `SECONDS` で数える。理由: 既定値の行を 1 字も変えない決まり（N18）と、実際の時計を読むのは `adv_now` の 1 か所だけの決まり（N19・I210）を守るため。所要秒は表示だけ。計画レビューのやり直し: 不要（書き方の違いだけ）
 
 ## レビュー結果
-- [20261113_0845 判定: ✅ 完了](../../reviews/closed/I486_plan_review_20261113_0845.md)
-
-## 完了情報
-- **完了日時**: Fri Nov 13 09:26:48 JST 2026
-- **対応者**: Claude Code
-- **レビュー結果**: OK
+- [20261113_0845 判定: ✅ 完了](../../reviews/I486_plan_review_20261113_0845.md)

@@ -75,6 +75,7 @@
 ## 完了情報
 - close: develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK・記録を closed へ移し、PR #490 の説明を更新
 - [close] 手動 No.1 で起こした harness-1 のスタックは `docker compose stop` で止めたまま残す（データは消さない）。直下 `.env`（offset=30）は無視ファイルなので残す — 次にこのワークツリーで起こすときにそのまま使えるため
+- [close の後] マージ依頼の後のユーザーとの評価で、台帳 F1（2 周目に、直した差分に backend/ が無いとコンテナを起こさない）を一覧から引き戻し、この PR で直す。記録を open へ戻し、計画を直して計画レビューから通し直す — このイシューの目的（空振りを防ぐ）そのものの穴で、別イシューに分けると間に来た高リスクのイシューの 2 周目で同じ空振りが起こるため。直す量は数行・テスト 1 件
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -83,3 +84,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review
