@@ -76,77 +76,82 @@ const Dashboard: React.FC = () => {
     setMountKey(Date.now());
   }, []);
 
-  const fetchOverview = useCallback(async () => {
-    // checkForAchievements は fetchOverview からのみ使用するためローカル関数として定義
-    const checkForAchievements = (data: DashboardOverview) => {
-      const { streak, totals } = data;
+  // 達成のお知らせは利用者の全体の記録の節目なので、科目が「すべて」の応答だけで判定する（I473 F2）
+  const checkForAchievements = useCallback((data: DashboardOverview) => {
+    const { streak, totals } = data;
 
-      // Check for streak milestones
-      if (streak.current_days > 0 && streak.current_days % 7 === 0) {
-        showStreakNotification(streak.current_days);
-      }
-
-      // Check for problem count milestones
-      const milestones = [10, 50, 100, 250, 500, 1000];
-      milestones.forEach(milestone => {
-        if (totals.answered_count === milestone) {
-          showAchievement(`${milestone}問解答達成！おめでとうございます！🎉`);
-        }
-      });
-
-      // Check for accuracy achievements（答えが 0 件の null は判定しない）
-      if (
-        totals.accuracy_rate !== null &&
-        totals.accuracy_rate >= 0.95 &&
-        totals.answered_count >= 20
-      ) {
-        const lastCheck = localStorage.getItem('lastHighAccuracyNotification');
-        const today = new Date().toDateString();
-
-        if (lastCheck !== today) {
-          showAchievement('素晴らしい正答率です！95%以上をキープしています！🎯');
-          localStorage.setItem('lastHighAccuracyNotification', today);
-        }
-      }
-
-      // Check for daily goal achievements
-      const dailyGoalMinutes = 60; // This should come from user settings（#487）
-      const todayStudyMinutes = Math.floor(data.today.study_seconds / 60);
-
-      if (todayStudyMinutes >= dailyGoalMinutes) {
-        const lastCheck = localStorage.getItem('lastDailyGoalNotification');
-        const today = new Date().toDateString();
-
-        if (lastCheck !== today) {
-          showAchievement('今日の学習目標を達成しました！継続は力なり！💪');
-          localStorage.setItem('lastDailyGoalNotification', today);
-        }
-      }
-    };
-
-    try {
-      setLoading(true);
-      const params = selectedSubject && selectedSubject !== 'all'
-        ? { subject_id: selectedSubject }
-        : {};
-      // 応答の形が違えば getOverview が投げる（欠けたキーを 0 で埋めない・I473）
-      const data = await dashboardService.getOverview(params);
-
-      checkForAchievements(data);
-      setOverview(data);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      toast.error('ダッシュボードデータの取得に失敗しました');
-      // 読み込みの後で overview が null なのは失敗のときだけ（下の表示でエラーの文を出す）
-      setOverview(null);
-    } finally {
-      setLoading(false);
+    // Check for streak milestones
+    if (streak.current_days > 0 && streak.current_days % 7 === 0) {
+      showStreakNotification(streak.current_days);
     }
-  }, [selectedSubject, showAchievement, showStreakNotification]);
+
+    // Check for problem count milestones
+    const milestones = [10, 50, 100, 250, 500, 1000];
+    milestones.forEach(milestone => {
+      if (totals.answered_count === milestone) {
+        showAchievement(`${milestone}問解答達成！おめでとうございます！🎉`);
+      }
+    });
+
+    // Check for accuracy achievements（答えが 0 件の null は判定しない）
+    if (
+      totals.accuracy_rate !== null &&
+      totals.accuracy_rate >= 0.95 &&
+      totals.answered_count >= 20
+    ) {
+      const lastCheck = localStorage.getItem('lastHighAccuracyNotification');
+      const today = new Date().toDateString();
+
+      if (lastCheck !== today) {
+        showAchievement('素晴らしい正答率です！95%以上をキープしています！🎯');
+        localStorage.setItem('lastHighAccuracyNotification', today);
+      }
+    }
+
+    // Check for daily goal achievements
+    const dailyGoalMinutes = 60; // This should come from user settings（#487）
+    const todayStudyMinutes = Math.floor(data.today.study_seconds / 60);
+
+    if (todayStudyMinutes >= dailyGoalMinutes) {
+      const lastCheck = localStorage.getItem('lastDailyGoalNotification');
+      const today = new Date().toDateString();
+
+      if (lastCheck !== today) {
+        showAchievement('今日の学習目標を達成しました！継続は力なり！💪');
+        localStorage.setItem('lastDailyGoalNotification', today);
+      }
+    }
+  }, [showAchievement, showStreakNotification]);
 
   useEffect(() => {
-    fetchOverview();
-  }, [fetchOverview]);
+    // 科目を切り替えた後に届いた古い応答（成功・失敗とも）は捨てる（TodayReviewCard と同じ形・I473 F3）
+    let ignore = false;
+    const isAll = selectedSubject === 'all';
+    const params = isAll ? {} : { subject_id: selectedSubject };
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        // 応答の形が違えば getOverview が投げる（欠けたキーを 0 で埋めない・I473）
+        const data = await dashboardService.getOverview(params);
+        if (ignore) return;
+        if (isAll) checkForAchievements(data);
+        setOverview(data);
+      } catch (error) {
+        if (ignore) return;
+        console.error('Error fetching dashboard data:', error);
+        toast.error('ダッシュボードデータの取得に失敗しました');
+        // 読み込みの後で overview が null なのは失敗のときだけ（下の表示でエラーの文を出す）
+        setOverview(null);
+      }
+      if (!ignore) setLoading(false);
+    };
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedSubject, checkForAchievements]);
 
   // 科目取得処理（データ取得のみに専念）
   useEffect(() => {
@@ -456,13 +461,12 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 間違いやすい分野
               </Typography>
-              {!overview.has_data ? (
+              {/* 一覧は科目の選択に関係なく全科目から出す。出し分けも一覧の有無を先に見る（I473 F1・F4） */}
+              {overview.weak_subjects.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  データがありません。まずは問題を解いてみましょう！
-                </Typography>
-              ) : overview.weak_subjects.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  正答率が 70% 未満の科目はありません
+                  {selectedSubject === 'all' && !overview.has_data
+                    ? 'データがありません。まずは問題を解いてみましょう！'
+                    : '5 問以上解いた科目のうち、正答率が 70% 未満の科目はありません'}
                 </Typography>
               ) : (
                 overview.weak_subjects.map(subject => (

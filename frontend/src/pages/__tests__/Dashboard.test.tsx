@@ -3,7 +3,7 @@
  * 契約どおりのキーを読む・データ無し・形の違い/失敗はエラー（0 で埋めない）・科目の選択・苦手 0 件
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Dashboard from '../Dashboard';
 import apiClient from '../../services/api';
@@ -46,6 +46,16 @@ jest.mock('../../components/SubjectSelector', () => ({
     <>
       <button type="button" onClick={() => onChange('5')}>科目5を選ぶ</button>
       <button type="button" onClick={() => onChange('all')}>すべてを選ぶ</button>
+      {/* 読み込み中は画面全体が置き換わるので、科目 5 を選んだ直後に「すべて」へ切り替える動きをまとめて起こす */}
+      <button
+        type="button"
+        onClick={() => {
+          onChange('5');
+          setTimeout(() => onChange('all'), 0);
+        }}
+      >
+        科目5の直後にすべてへ
+      </button>
     </>
   ),
 }));
@@ -181,10 +191,75 @@ describe('Dashboard', () => {
     });
   });
 
-  it('TC-25: 正答率 70% 未満の科目が無ければ、その旨を出す', async () => {
+  it('TC-25: 一覧が空なら、一覧に入る条件（5 問以上）を含めて伝える（F4）', async () => {
     respond(overview({ weak_subjects: [] }));
     render(<Dashboard />);
 
-    expect(await screen.findByText('正答率が 70% 未満の科目はありません')).toBeInTheDocument();
+    expect(
+      await screen.findByText('5 問以上解いた科目のうち、正答率が 70% 未満の科目はありません')
+    ).toBeInTheDocument();
+  });
+
+  it('TC-26: 科目で絞って has_data が false でも、全科目の間違いやすい分野は出す（F1）', async () => {
+    const empty = {
+      has_data: false,
+      totals: { answered_count: 0, correct_count: 0, accuracy_rate: null },
+    };
+    mockGet.mockImplementation((url: string, config: { params: Record<string, string> }) =>
+      url === URL
+        ? Promise.resolve({ data: overview(config.params.subject_id ? empty : {}) })
+        : Promise.resolve({ data: {} })
+    );
+    render(<Dashboard />);
+    await screen.findByText('5分');
+
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+
+    expect(await screen.findByText('まだ解答の記録がありません')).toBeInTheDocument();
+    expect(screen.getByText('英語')).toBeInTheDocument();
+    expect(
+      screen.queryByText('データがありません。まずは問題を解いてみましょう！')
+    ).not.toBeInTheDocument();
+  });
+
+  it('TC-27: 達成のお知らせは「すべて」の応答だけで判定し、科目で絞った応答では出さない（F2）', async () => {
+    const milestone = { totals: { answered_count: 10, correct_count: 5, accuracy_rate: 0.5 } };
+    respond(overview(milestone));
+    render(<Dashboard />);
+    await screen.findByText('5分');
+    expect(mockShowAchievement).toHaveBeenCalledTimes(1);
+    expect(mockShowAchievement).toHaveBeenCalledWith('10問解答達成！おめでとうございます！🎉');
+
+    mockShowAchievement.mockClear();
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith(URL, { params: { subject_id: '5' } });
+    });
+    await screen.findByText('5分');
+    expect(mockShowAchievement).not.toHaveBeenCalled();
+  });
+
+  it('TC-28: 科目を切り替えた後に届いた古い応答で、今の数字を上書きしない（F3）', async () => {
+    let resolveOld: (value: unknown) => void = () => {};
+    mockGet.mockImplementation((url: string, config: { params: Record<string, string> }) => {
+      if (url !== URL) return Promise.resolve({ data: {} });
+      if (config.params.subject_id === '5') {
+        return new Promise((resolve) => { resolveOld = resolve; });
+      }
+      return Promise.resolve({ data: overview() });
+    });
+    render(<Dashboard />);
+    await screen.findByText('5分');
+
+    await userEvent.click(screen.getByRole('button', { name: '科目5の直後にすべてへ' }));
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith(URL, { params: { subject_id: '5' } });
+    });
+    expect(await screen.findByTestId('stat-answered-count')).toHaveTextContent('12');
+
+    await act(async () => {
+      resolveOld({ data: overview({ totals: { answered_count: 99, correct_count: 0, accuracy_rate: 0 } }) });
+    });
+    expect(screen.getByTestId('stat-answered-count')).toHaveTextContent('12');
   });
 });

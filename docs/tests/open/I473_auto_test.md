@@ -47,7 +47,10 @@
 | TC-21 | データ無し（`has_data=false`・比率 `null`・7 件すべて 0・一覧が空） | 「まだ解答の記録がありません」が出て、ドーナツのモックが描かれない。正答率のカードが「—」。間違いやすい分野に「データがありません。まずは問題を解いてみましょう！」 |
 | TC-22 | 形の違う応答（`last_7_days` を欠く・`totals` を欠く）と取得の失敗（reject） | どれも「ダッシュボードの数字を読み込めませんでした」の `role="alert"` が出て、数字のカード（「0分」「0日」「0%」）が 1 つも出ない |
 | TC-23 | 科目の選択: `SubjectSelector` のモックから `onChange('5')` を呼ぶ | `apiClient.get` が `('/api/dashboard/overview/', { params: { subject_id: '5' } })` で呼ばれる。`'all'` のときは `{ params: {} }` |
-| TC-25 | 正答率 70% 未満の科目が無い（`has_data=true`・`weak_subjects=[]`） | 「正答率が 70% 未満の科目はありません」が出る |
+| TC-25 | 正答率 70% 未満の科目が無い（`has_data=true`・`weak_subjects=[]`） | 「5 問以上解いた科目のうち、正答率が 70% 未満の科目はありません」が出る（F4） |
+| TC-26 | 「すべて」は答えあり・科目 5 で絞ると `has_data=false`（`weak_subjects` は英語のまま）→ 科目 5 を選ぶ | 「まだ解答の記録がありません」が出て、間違いやすい分野に「英語」が出る。「データがありません。まずは問題を解いてみましょう！」は出ない（F1） |
+| TC-27 | `totals.answered_count=10` の応答で、「すべて」で開く → 科目 5 を選ぶ | 「すべて」では `showAchievement('10問解答達成！おめでとうございます！🎉')` が 1 回。科目 5 の応答では呼ばれない（F2） |
+| TC-28 | 科目 5 の応答を止めたまま「すべて」に切り替え、「すべて」の応答（12 問）が出た後に、科目 5 の応答（99 問）を届ける | 解答問題数が 12 のまま（F3） |
 
 ## E2E（`e2e/tests/quiz-session.spec.ts` に追加）
 
@@ -67,3 +70,10 @@
   - TC-12・TC-13・TC-03: 3 つの壊し方を `backend/dashboard/selectors.py` に入れて流し、3 件とも落ちた（`test_query_count_is_constant`・`test_only_own_answers_in_own_org`・`test_dates_are_japan_time` が FAILED）→ 元に戻して 22 件 pass
   - TC-22: 最初の形（`totals` を欠く応答だけ）は、確かめを外しても通ってしまった（false-green）。`totals` が無いと達成のお知らせの判定で例外になり、たまたま catch に入ってエラーの文が出るため。`last_7_days` を欠く応答（画面は落ちずに描けてしまう）を足し、確かめを外すとその行が落ちることを確かめた → 元に戻して 7 件 pass
 - 実行結果: backend `dashboard/`・`test_I431`・`test_I455`・`test_I446` の 215 件 pass／frontend `Dashboard.test.tsx` 7 件 pass／E2E は CI で流す
+
+## 再発防止記録（fix-loop・2026-11-13・コードレビュー F1〜F4）
+- なぜ失敗したか: 画面の出し分け・判定に、科目で絞った値（has_data・totals）を、科目をまたぐ一覧やお知らせにまで使った（F1・F2）。一覧に入る条件（5 問以上）を言わない文言で言い切った（F4）。取得を useCallback で行い、古い応答を捨てる仕組みが無かった（F3）
+- 何を変えたか: frontend/src/pages/Dashboard.tsx — 間違いやすい分野は一覧の有無を先に見て、空のときの文言に条件を入れた／お知らせは「すべて」の応答だけで判定／取得を useEffect に移し ignore の印で古い応答を捨てる（TodayReviewCard と同じ形）
+- セキュリティ上の考慮点: なし（本人の数字の表示の食い違い。他人・他組織のデータは関係しない）
+- 次回どう防ぐか: 科目で絞る値と全科目の値を同じ画面に並べるときは、どの部品がどちらの範囲かを計画書 4.3 に書く。データを取得する effect は ignore（または AbortController）を必ず付ける
+- 確かめた結果: frontend Dashboard.test.tsx 10 件 pass（TC-26〜28 を追加・TC-25 の文言を変更）。失敗の注入（3 か所を直す前の条件に戻す）で TC-26・27・28 が落ちることを確かめ、戻して 10 件 pass。ESLint（frontend コンテナ）違反 0・型チェック OK。backend の変更なし
