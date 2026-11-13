@@ -27,3 +27,5 @@
 - [plan-review] 新しいジョブ `api-types` を必須チェックの一覧に足し、登録は close でユーザーにお願いする — bot に管理者の権限が無いため
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: design-security-review
