@@ -107,3 +107,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] F1 の直しの後、手動 No.1 を branch_files.txt で実機で流し直し OK（レビューの F9 に対応）。手動 No.2 は §3-1 の文言が「ブランチに」になっただけで判断の文は増えていない — OK のまま
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+- [close] 2 回目の close: 追従不要・gate-check OK・記録を closed へ移し、PR #490 の説明を F1 の直しと新しい記録に合わせて更新
+STAGE_DONE: close NEXT: merge
