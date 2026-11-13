@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -41,7 +42,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import dashboardService from '../services/dashboard.service';
 import SubjectService from '../services/subjectService';
-import { DashboardData, Subject } from '../services/types';
+import { DashboardOverview, Subject } from '../services/types';
 import { toast } from 'react-hot-toast';
 import { SubjectSelector } from '../components/SubjectSelector';
 import TodayReviewCard from '../components/TodayReviewCard';
@@ -59,7 +60,7 @@ ChartJS.register(
 );
 
 const Dashboard: React.FC = () => {
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [mountKey, setMountKey] = useState(Date.now());
@@ -75,92 +76,82 @@ const Dashboard: React.FC = () => {
     setMountKey(Date.now());
   }, []);
 
-  const fetchDashboardData = useCallback(async () => {
-    // checkForAchievements は fetchDashboardData からのみ使用するためローカル関数として定義
-    const checkForAchievements = (data: DashboardData) => {
-      const { stats } = data;
+  // 達成のお知らせは利用者の全体の記録の節目なので、科目が「すべて」の応答だけで判定する（I473 F2）
+  const checkForAchievements = useCallback((data: DashboardOverview) => {
+    const { streak, totals } = data;
 
-      // statsが存在しない場合は処理をスキップ
-      if (!stats) return;
-
-      // Check for streak milestones
-      if (stats.current_streak > 0 && stats.current_streak % 7 === 0) {
-        showStreakNotification(stats.current_streak);
-      }
-
-      // Check for problem count milestones
-      const milestones = [10, 50, 100, 250, 500, 1000];
-      milestones.forEach(milestone => {
-        if (stats.total_problems_solved === milestone) {
-          showAchievement(`${milestone}問解答達成！おめでとうございます！🎉`);
-        }
-      });
-
-      // Check for accuracy achievements
-      if (stats.accuracy_rate >= 0.95 && stats.total_problems_solved >= 20) {
-        const lastCheck = localStorage.getItem('lastHighAccuracyNotification');
-        const today = new Date().toDateString();
-
-        if (lastCheck !== today) {
-          showAchievement('素晴らしい正答率です！95%以上をキープしています！🎯');
-          localStorage.setItem('lastHighAccuracyNotification', today);
-        }
-      }
-
-      // Check for daily goal achievements
-      const dailyGoalMinutes = 60; // This should come from user settings
-      const todayStudyMinutes = Math.floor(stats.today_study_time / 60);
-
-      if (todayStudyMinutes >= dailyGoalMinutes) {
-        const lastCheck = localStorage.getItem('lastDailyGoalNotification');
-        const today = new Date().toDateString();
-
-        if (lastCheck !== today) {
-          showAchievement('今日の学習目標を達成しました！継続は力なり！💪');
-          localStorage.setItem('lastDailyGoalNotification', today);
-        }
-      }
-    };
-
-    try {
-      setLoading(true);
-      const params = selectedSubject && selectedSubject !== 'all'
-        ? { subject_id: selectedSubject }
-        : {};
-      const data = await dashboardService.getDashboardData(params);
-
-      // プロパティが存在しない場合はデフォルト値を設定
-      const dashboardDataWithDefaults = {
-        ...data,
-        stats: data?.stats || {
-          today_study_time: 0,
-          week_study_time: 0,
-          total_problems_solved: 0,
-          accuracy_rate: 0,
-          current_streak: 0,
-          longest_streak: 0
-        },
-        weekly_progress: Array.isArray(data?.weekly_progress) ? data.weekly_progress : [],
-        subject_progress: Array.isArray(data?.subject_progress) ? data.subject_progress : [],
-        recommendations: Array.isArray(data?.recommendations) ? data.recommendations : [],
-        recent_sessions: Array.isArray(data?.recent_sessions) ? data.recent_sessions : []
-      };
-
-      // Check for achievements and show notifications
-      checkForAchievements(dashboardDataWithDefaults);
-
-      setDashboardData(dashboardDataWithDefaults);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      toast.error('ダッシュボードデータの取得に失敗しました');
-    } finally {
-      setLoading(false);
+    // Check for streak milestones
+    if (streak.current_days > 0 && streak.current_days % 7 === 0) {
+      showStreakNotification(streak.current_days);
     }
-  }, [selectedSubject, showAchievement, showStreakNotification]);
+
+    // Check for problem count milestones
+    const milestones = [10, 50, 100, 250, 500, 1000];
+    milestones.forEach(milestone => {
+      if (totals.answered_count === milestone) {
+        showAchievement(`${milestone}問解答達成！おめでとうございます！🎉`);
+      }
+    });
+
+    // Check for accuracy achievements（答えが 0 件の null は判定しない）
+    if (
+      totals.accuracy_rate !== null &&
+      totals.accuracy_rate >= 0.95 &&
+      totals.answered_count >= 20
+    ) {
+      const lastCheck = localStorage.getItem('lastHighAccuracyNotification');
+      const today = new Date().toDateString();
+
+      if (lastCheck !== today) {
+        showAchievement('素晴らしい正答率です！95%以上をキープしています！🎯');
+        localStorage.setItem('lastHighAccuracyNotification', today);
+      }
+    }
+
+    // Check for daily goal achievements
+    const dailyGoalMinutes = 60; // This should come from user settings（#487）
+    const todayStudyMinutes = Math.floor(data.today.study_seconds / 60);
+
+    if (todayStudyMinutes >= dailyGoalMinutes) {
+      const lastCheck = localStorage.getItem('lastDailyGoalNotification');
+      const today = new Date().toDateString();
+
+      if (lastCheck !== today) {
+        showAchievement('今日の学習目標を達成しました！継続は力なり！💪');
+        localStorage.setItem('lastDailyGoalNotification', today);
+      }
+    }
+  }, [showAchievement, showStreakNotification]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [selectedSubject, fetchDashboardData]);
+    // 科目を切り替えた後に届いた古い応答（成功・失敗とも）は捨てる（TodayReviewCard と同じ形・I473 F3）
+    let ignore = false;
+    const isAll = selectedSubject === 'all';
+    const params = isAll ? {} : { subject_id: selectedSubject };
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        // 応答の形が違えば getOverview が投げる（欠けたキーを 0 で埋めない・I473）
+        const data = await dashboardService.getOverview(params);
+        if (ignore) return;
+        if (isAll) checkForAchievements(data);
+        setOverview(data);
+      } catch (error) {
+        if (ignore) return;
+        console.error('Error fetching dashboard data:', error);
+        toast.error('ダッシュボードデータの取得に失敗しました');
+        // 読み込みの後で overview が null なのは失敗のときだけ（下の表示でエラーの文を出す）
+        setOverview(null);
+      }
+      if (!ignore) setLoading(false);
+    };
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedSubject, checkForAchievements]);
 
   // 科目取得処理（データ取得のみに専念）
   useEffect(() => {
@@ -203,7 +194,7 @@ const Dashboard: React.FC = () => {
     navigate(`/quiz?subject=${subjectId}`);
   }, [navigate]);
 
-  if (loading || !dashboardData) {
+  if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
         <Typography variant="h6">ダッシュボードを読み込み中...</Typography>
@@ -211,27 +202,18 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // 安全なデフォルト値でデータを展開
-  const {
-    stats = {
-      today_study_time: 0,
-      week_study_time: 0,
-      total_problems_solved: 0,
-      accuracy_rate: 0,
-      current_streak: 0,
-      longest_streak: 0
-    },
-    weekly_progress = [],
-    subject_progress = [],
-    recommendations = []
-  } = dashboardData || {};
+  const todayMinutes = overview ? Math.floor(overview.today.study_seconds / 60) : 0;
+  const accuracyRate = overview?.totals.accuracy_rate ?? null;
+  const lastDays = overview?.last_7_days ?? [];
 
   const weeklyChartData = {
-    labels: (weekly_progress || []).map(item => new Date(item.date).toLocaleDateString('ja-JP', { weekday: 'short' })),
+    labels: lastDays.map(day =>
+      new Date(`${day.date}T00:00:00`).toLocaleDateString('ja-JP', { weekday: 'short' })
+    ),
     datasets: [
       {
         label: '学習時間（分）',
-        data: (weekly_progress || []).map(item => item.study_time),
+        data: lastDays.map(day => Math.round(day.study_seconds / 60)),
         borderColor: 'rgb(75, 192, 192)',
         backgroundColor: 'rgba(75, 192, 192, 0.2)',
         tension: 0.4,
@@ -243,7 +225,7 @@ const Dashboard: React.FC = () => {
     labels: ['正解', '不正解'],
     datasets: [
       {
-        data: [stats.accuracy_rate * 100, (1 - stats.accuracy_rate) * 100],
+        data: accuracyRate === null ? [] : [accuracyRate * 100, (1 - accuracyRate) * 100],
         backgroundColor: ['#4caf50', '#f44336'],
         borderWidth: 0,
       },
@@ -291,6 +273,13 @@ const Dashboard: React.FC = () => {
         <TodayReviewCard subjectId={selectedSubject} />
       </Box>
 
+      {!overview ? (
+        // 取得の失敗・形の違いは 0 で埋めずに伝える（再試行などの作り込みは #487）
+        <Alert severity="error" sx={{ mb: 4 }}>
+          ダッシュボードの数字を読み込めませんでした
+        </Alert>
+      ) : (
+      <>
       {/* Stats Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -301,7 +290,7 @@ const Dashboard: React.FC = () => {
                   <Timer />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6">{Math.floor(stats.today_study_time / 60)}分</Typography>
+                  <Typography variant="h6">{todayMinutes}分</Typography>
                   <Typography variant="body2" color="text.secondary">
                     今日の学習時間
                   </Typography>
@@ -309,11 +298,11 @@ const Dashboard: React.FC = () => {
               </Box>
               <LinearProgress
                 variant="determinate"
-                value={Math.min((stats.today_study_time / 3600) * 100, 100)}
+                value={Math.min((todayMinutes / 60) * 100, 100)}
                 sx={{ mt: 2 }}
               />
               <Typography variant="caption" color="text.secondary">
-                目標: 60分 ({Math.floor((stats.today_study_time / 3600) * 100)}%)
+                目標: 60分 ({Math.floor((todayMinutes / 60) * 100)}%)
               </Typography>
             </CardContent>
           </Card>
@@ -327,7 +316,7 @@ const Dashboard: React.FC = () => {
                   <EmojiEvents />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6">{stats.current_streak}日</Typography>
+                  <Typography variant="h6">{overview.streak.current_days}日</Typography>
                   <Typography variant="body2" color="text.secondary">
                     連続学習日数
                   </Typography>
@@ -345,7 +334,9 @@ const Dashboard: React.FC = () => {
                   <Quiz />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6">{stats.total_problems_solved}</Typography>
+                  <Typography variant="h6" data-testid="stat-answered-count">
+                    {overview.totals.answered_count}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary">
                     解答問題数
                   </Typography>
@@ -364,7 +355,7 @@ const Dashboard: React.FC = () => {
                 </Avatar>
                 <Box>
                   <Typography variant="h6">
-                    {Math.round(stats.accuracy_rate * 100)}%
+                    {accuracyRate === null ? '—' : `${Math.round(accuracyRate * 100)}%`}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     正答率
@@ -382,7 +373,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                今週の学習時間
+                直近 7 日の学習時間
               </Typography>
               <Box sx={{ height: 300 }}>
                 <Line data={weeklyChartData} options={chartOptions} />
@@ -397,13 +388,22 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 正答率
               </Typography>
-              <Box sx={{ height: 300, display: 'flex', justifyContent: 'center' }}>
-                <Doughnut data={accuracyChartData} options={chartOptions} />
+              <Box sx={{ height: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                {overview.has_data ? (
+                  <Doughnut data={accuracyChartData} options={chartOptions} />
+                ) : (
+                  // データ無しで「不正解 100%」の赤い円を出さない（I473）
+                  <Typography variant="body2" color="text.secondary">
+                    まだ解答の記録がありません
+                  </Typography>
+                )}
               </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+      </>
+      )}
 
       {/* Action Buttons */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -412,9 +412,11 @@ const Dashboard: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               学習を開始
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              今日の目標達成まであと{Math.max(0, 60 - Math.floor(stats.today_study_time / 60))}分です
-            </Typography>
+            {overview && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                今日の目標達成まであと{Math.max(0, 60 - todayMinutes)}分です
+              </Typography>
+            )}
             <Button
               variant="contained"
               size="large"
@@ -451,6 +453,7 @@ const Dashboard: React.FC = () => {
       </Grid>
 
       {/* Mistake Summary and Recommendations */}
+      {overview && (
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Card>
@@ -458,29 +461,29 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 間違いやすい分野
               </Typography>
-              {(subject_progress || []).length > 0 ? (
-                (subject_progress || [])
-                  .filter(subject => subject.accuracy < 0.7)
-                  .slice(0, 3)
-                  .map((subject, index) => (
-                    <Box key={index} sx={{ mb: 2 }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body1">{subject.subject_name}</Typography>
-                        <Chip
-                          label={`${Math.round(subject.accuracy * 100)}%`}
-                          size="small"
-                          color={subject.accuracy < 0.5 ? 'error' : 'warning'}
-                        />
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        解答数: {subject.problems_solved}問
-                      </Typography>
-                    </Box>
-                  ))
-              ) : (
+              {/* 一覧は科目の選択に関係なく全科目から出す。出し分けも一覧の有無を先に見る（I473 F1・F4） */}
+              {overview.weak_subjects.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  データがありません。まずは問題を解いてみましょう！
+                  {selectedSubject === 'all' && !overview.has_data
+                    ? 'データがありません。まずは問題を解いてみましょう！'
+                    : '5 問以上解いた科目のうち、正答率が 70% 未満の科目はありません'}
                 </Typography>
+              ) : (
+                overview.weak_subjects.map(subject => (
+                  <Box key={subject.subject_id} sx={{ mb: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body1">{subject.subject_name}</Typography>
+                      <Chip
+                        label={`${Math.round(subject.accuracy_rate * 100)}%`}
+                        size="small"
+                        color={subject.accuracy_rate < 0.5 ? 'error' : 'warning'}
+                      />
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      解答数: {subject.answered_count}問
+                    </Typography>
+                  </Box>
+                ))
               )}
             </CardContent>
           </Card>
@@ -492,17 +495,17 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 おすすめ練習問題
               </Typography>
-              {(recommendations || []).length > 0 ? (
-                (recommendations || []).slice(0, 3).map((rec, index) => (
-                  <Box key={index} sx={{ mb: 2 }}>
-                    <Typography variant="body1">{rec.title}</Typography>
+              {overview.recommendations.length > 0 ? (
+                overview.recommendations.map(rec => (
+                  <Box key={`${rec.kind}-${rec.subject_id}`} sx={{ mb: 2 }}>
+                    <Typography variant="body1">{rec.subject_name}</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      {rec.description}
+                      {rec.reason}
                     </Typography>
                     <Button
                       size="small"
                       variant="text"
-                      onClick={() => navigate('/quiz')}
+                      onClick={() => navigate(`/quiz?subject=${rec.subject_id}`)}
                     >
                       練習する
                     </Button>
@@ -517,6 +520,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+      )}
 
       {/* 科目選択Dialog */}
       <Dialog

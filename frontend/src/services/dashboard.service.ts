@@ -1,31 +1,67 @@
 import { AxiosResponse } from 'axios';
 import apiClient from './api';
-import { DashboardData, AnalyticsData, AnalyticsFilters, UserSettings } from './types';
+import { DashboardOverview, AnalyticsData, AnalyticsFilters, UserSettings } from './types';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isNumber = (value: unknown): value is number => typeof value === 'number';
+
+const isListOf = (value: unknown, isItem: (item: Record<string, unknown>) => boolean): boolean =>
+  Array.isArray(value) && value.every((item) => isRecord(item) && isItem(item));
+
+const hasCounts = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) &&
+  isNumber(value.answered_count) &&
+  isNumber(value.correct_count) &&
+  (value.accuracy_rate === null || isNumber(value.accuracy_rate));
+
+/**
+ * ダッシュボードの応答が契約（DashboardOverview）の形かを、一覧の中身まで確かめる（I473）
+ * 欠けたキーを 0 で埋めず、形が違えばエラーとして扱うため
+ * （形の正は backend/dashboard/serializers.py の OverviewSerializer）
+ */
+const isDashboardOverview = (data: unknown): data is DashboardOverview =>
+  isRecord(data) &&
+  typeof data.has_data === 'boolean' &&
+  hasCounts(data.today) &&
+  isNumber(data.today.study_seconds) &&
+  isRecord(data.streak) &&
+  isNumber(data.streak.current_days) &&
+  hasCounts(data.totals) &&
+  Array.isArray(data.last_7_days) &&
+  data.last_7_days.length > 0 &&
+  isListOf(data.last_7_days, (day) =>
+    typeof day.date === 'string' &&
+    isNumber(day.study_seconds) &&
+    isNumber(day.answered_count) &&
+    isNumber(day.correct_count)
+  ) &&
+  isListOf(data.weak_subjects, (subject) =>
+    isNumber(subject.subject_id) &&
+    typeof subject.subject_name === 'string' &&
+    isNumber(subject.answered_count) &&
+    isNumber(subject.accuracy_rate)
+  ) &&
+  isListOf(data.recommendations, (rec) =>
+    (rec.kind === 'weak_subject' || rec.kind === 'unstudied_subject') &&
+    isNumber(rec.subject_id) &&
+    typeof rec.subject_name === 'string' &&
+    typeof rec.reason === 'string'
+  );
 
 class DashboardService {
   private readonly DASHBOARD_BASE_URL = '/api/dashboard';
   private readonly ACCOUNTS_BASE_URL = '/api/accounts';
 
-  async getDashboardData(params?: { subject_id?: string }): Promise<DashboardData> {
-    const response: AxiosResponse<DashboardData> = await apiClient.get(
+  async getOverview(params: { subject_id?: string } = {}): Promise<DashboardOverview> {
+    const response: AxiosResponse<unknown> = await apiClient.get(
       `${this.DASHBOARD_BASE_URL}/overview/`,
       { params }
     );
-    return response.data;
-  }
-
-  async getRecommendations(): Promise<Array<{
-    type: 'weak_subject' | 'unstudied_subject' | 'streak_reminder';
-    title: string;
-    description: string;
-    action_url?: string;
-  }>> {
-    const response: AxiosResponse<Array<{
-      type: 'weak_subject' | 'unstudied_subject' | 'streak_reminder';
-      title: string;
-      description: string;
-      action_url?: string;
-    }>> = await apiClient.get(`${this.DASHBOARD_BASE_URL}/recommendations/`);
+    if (!isDashboardOverview(response.data)) {
+      throw new Error('ダッシュボードの応答の形が違います');
+    }
     return response.data;
   }
 

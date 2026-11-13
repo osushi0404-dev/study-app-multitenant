@@ -17,6 +17,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def user_subjects_cache_key(user_id: int, organization_id: Optional[int],
+                            annotate_count: bool) -> str:
+    """利用者が選んだ科目のキャッシュのキー（無効化する signals と同じ関数で作る・I473）"""
+    return f"user_subjects_{user_id}_org_{organization_id}_count_{annotate_count}"
+
+
 class SubjectService:
     """科目取得処理の統一サービスクラス"""
 
@@ -128,36 +134,29 @@ class SubjectService:
         if not user.organization_id:
             return Subject.objects.none()
 
-        cache_key = f"user_subjects_{user.id}_count_{annotate_count}"
+        cache_key = user_subjects_cache_key(user.id, user.organization_id, annotate_count)
 
-        # キャッシュ確認（組織の境界はキャッシュの中身を信じず、DB の条件で掛ける）
-        if use_cache:
-            cached_data = cache_service.get_subjects_cache(cache_key)
-            if cached_data is not None:
-                logger.debug(f"Cache hit for key: {cache_key}")
-                subject_ids = [s['id'] for s in cached_data]
-                queryset = Subject.objects.filter(
-                    id__in=subject_ids, organization_id=user.organization_id
-                )
-                if annotate_count:
-                    queryset = queryset.annotate(problem_count=Count('problems'))
-                return queryset
-
-        # UserSubjectAccessテーブルから取得
-        logger.debug(f"Cache miss for key: {cache_key}, fetching from DB")
-        user_subject_ids = UserSubjectAccess.objects.filter(
-            user=user
-        ).values_list('subject_id', flat=True)
+        # 科目 ID の取り出し方だけをキャッシュの有無で分け、絞り込み・並び・件数は 1 か所で組む
+        # （組織の境界はキャッシュの中身を信じず、DB の条件で掛ける）
+        cached_data = cache_service.get_subjects_cache(cache_key) if use_cache else None
+        if cached_data is not None:
+            logger.debug(f"Cache hit for key: {cache_key}")
+            subject_ids = [s['id'] for s in cached_data]
+        else:
+            logger.debug(f"Cache miss for key: {cache_key}, fetching from DB")
+            subject_ids = UserSubjectAccess.objects.filter(
+                user=user
+            ).values_list('subject_id', flat=True)
 
         queryset = Subject.objects.filter(
-            id__in=user_subject_ids, organization_id=user.organization_id
+            id__in=subject_ids, organization_id=user.organization_id
         ).order_by('name')
 
         if annotate_count:
             queryset = queryset.annotate(problem_count=Count('problems'))
 
-        # キャッシュに保存
-        if use_cache and queryset.exists():
+        # キャッシュに保存（キャッシュから組んだときは保存し直さない）
+        if use_cache and cached_data is None and queryset.exists():
             cache_data = list(queryset.values('id', 'name', 'description'))
             cache_service.set_subjects_cache(cache_data, cache_key)
             logger.debug(f"Cached {len(cache_data)} user subjects for key: {cache_key}")

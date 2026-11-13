@@ -264,9 +264,9 @@ ROUTE_TABLE = {
                  "difficulty_distribution")},
     f"POST {AL}select_problems/": [_subj_body("subject_id", 404), ListCheck()],
     # ---- ダッシュボード ----
-    "GET api/dashboard/overview/": LIST,
+    "GET api/dashboard/overview/": [ListCheck(),
+                                    IdCheck("user", "query", "subject_id", "subject", 400)],
     "GET api/dashboard/analytics/": LIST,
-    "GET api/dashboard/recommendations/": LIST,
 }
 
 OUT_OF_SCOPE = {
