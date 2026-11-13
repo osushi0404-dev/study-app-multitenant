@@ -109,3 +109,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] 2 回目: gate-check OK・手動テスト No.2・No.3 を流し直して OK・Human の項目なしで retro へ
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+- [close] 記録を closed へ移した（fix の診断メモも一緒に）・PR #514 の説明を更新・develop への追従は不要（BLOCKED）・gate-check OK
+STAGE_DONE: close NEXT: merge
