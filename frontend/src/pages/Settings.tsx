@@ -36,7 +36,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useQueryClient } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
-import { USER_SETTINGS_KEY_ROOT } from '../hooks/useDailyStudyGoal';
+import { USER_SETTINGS_KEY_ROOT, userSettingsKey } from '../hooks/useDailyStudyGoal';
 import { PatchedUserSettings, UserSettings } from '../types/api';
 
 interface UserSettingsData {
@@ -189,8 +189,13 @@ const Settings: React.FC = () => {
       }
 
       setSettings(data);
-      // ダッシュボードが持つ設定のキャッシュを古いことにする（戻ったときに新しい目標を出す・I487）
-      queryClient.invalidateQueries({ queryKey: [USER_SETTINGS_KEY_ROOT] });
+      // ダッシュボードが持つ設定のキャッシュを、保存の応答（裏側が保存した値）で書き換える。
+      // 古いことにするだけ（invalidate）だと、戻ったときに取り直しが終わるまで古い目標で判定・表示してしまう（I487 F7）
+      if (user) {
+        queryClient.setQueryData(userSettingsKey(user.id), updatedSettings);
+      } else {
+        queryClient.invalidateQueries({ queryKey: [USER_SETTINGS_KEY_ROOT] });
+      }
       toast.success('設定を保存しました');
     } catch (error) {
       console.error('Error saving settings:', error);

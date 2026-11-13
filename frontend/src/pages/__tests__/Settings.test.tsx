@@ -1,5 +1,5 @@
 /**
- * 設定画面の項目名（I487・TC-17）と、保存のときの設定のキャッシュ（TC-10d）
+ * 設定画面の項目名（I487・TC-17）と、保存のときの設定のキャッシュ（TC-10d・F7）
  * 裏側（UserSettingsSerializer）の名前で読み、同じ名前で保存する
  */
 import React from 'react';
@@ -90,16 +90,20 @@ describe('Settings', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('設定を保存しました'));
   });
 
-  it('TC-10d: 保存すると、ダッシュボードが持つ設定のキャッシュを古いことにする', async () => {
+  it('TC-10d: 保存すると、ダッシュボードが持つ設定のキャッシュを保存した値にする（古い目標で判定させない・F7）', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    queryClient.setQueryData(['user-settings', 'user-1'], { daily_study_goal_minutes: 45 });
+    // ダッシュボードで読んだ古い設定（目標 30 分）がキャッシュにある
+    queryClient.setQueryData(['user-settings', 'user-1'], { ...SAVED, daily_study_goal_minutes: 30 });
     renderSettings(queryClient);
 
-    await screen.findByLabelText('1日の学習目標時間（分）');
-    expect(queryClient.getQueryState(['user-settings', 'user-1'])?.isInvalidated).toBe(false);
-
+    const goal = await screen.findByLabelText('1日の学習目標時間（分）');
+    await userEvent.clear(goal);
+    await userEvent.type(goal, '60');
     await userEvent.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('設定を保存しました'));
-    expect(queryClient.getQueryState(['user-settings', 'user-1'])?.isInvalidated).toBe(true);
+
+    // 取り直しを待たずに、キャッシュは保存の応答（60 分）になっている
+    const cached = queryClient.getQueryData<{ daily_study_goal_minutes: number }>(['user-settings', 'user-1']);
+    expect(cached?.daily_study_goal_minutes).toBe(60);
   });
 });

@@ -122,3 +122,6 @@ STAGE_DONE: implement NEXT: review-gate
 - [review-gate] React Query への置き換えの差分のレビューは HIGH（止める指摘は F7: 設定の保存の後、古い目標のキャッシュで達成を判定しうる）。F8・F9 は Low で台帳に残す
 
 STAGE_DONE: review-gate NEXT: fix-loop
+- [fix-loop] F7 は案 A（保存の応答で設定のキャッシュを書き換える `setQueryData`）で直した — React Query の公式の推奨で、取り直しを待たずに新しい目標で判定・表示する。案 B（キャッシュを消す）は通信が増え目標の 1 行が一瞬消える・案 C（判定に取り直し中かを足す）は条件が増える。診断レビュー PASS
+
+STAGE_DONE: fix-loop NEXT: review-gate

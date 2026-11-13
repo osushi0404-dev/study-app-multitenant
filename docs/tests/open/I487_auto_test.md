@@ -48,7 +48,7 @@
 ### 設定・通知・アクセシビリティ（新規）
 | TC | 置き場所 | 内容 | 期待値 |
 |---|---|---|---|
-| TC-10d | `frontend/src/pages/__tests__/Settings.test.tsx` | 保存のときに設定のキャッシュを古いことにする | `QueryClient` に `['user-settings', 'user-1']` のデータ（`daily_study_goal_minutes: 45`）を入れておき、設定画面で保存すると、そのクエリの `isInvalidated` が `true` になる（保存の前は `false`） |
+| TC-10d | `frontend/src/pages/__tests__/Settings.test.tsx` | 保存のときに設定のキャッシュを保存した値にする（F7） | `QueryClient` に `['user-settings', 'user-1']` の古いデータ（`daily_study_goal_minutes: 30`）を入れておき、設定画面で 60 にして保存すると、取り直しを待たずにそのキャッシュの `daily_study_goal_minutes` が `60` になる |
 | TC-17 | `frontend/src/pages/__tests__/Settings.test.tsx` | 読み込みと保存の項目名 | GET `/api/settings/` の応答 `{ daily_study_goal_minutes: 45, study_reminders_enabled: false, reminder_time: '19:00:00', theme_preference: 'dark', notification_settings: { email: false, push: true, achievements: true, reminders: false } }`。「1日の学習目標時間（分）」の入力欄の値が「45」。値を「50」にして「設定を保存」相当のボタン（既存の保存ボタン）を押すと、PATCH `/api/settings/` の本文が `{ daily_study_goal_minutes: 50, study_reminders_enabled: false, reminder_time: '19:00', theme_preference: 'dark', notification_settings: { email: false, push: true, achievements: true, reminders: false } }`（`toEqual`）。本文に `daily_study_goal`・`study_reminder_enabled`・`theme` のキーが無い。`toast.success('設定を保存しました')` が呼ばれる |
 | TC-18 | `frontend/src/contexts/__tests__/NotificationContext.test.tsx` | リマインダーの項目名 | `notificationService` をモック（`isEnabled` true・`getPermissionStatus` `'granted'`）。`scheduleReminders({ daily_study_goal_minutes: 40, study_reminders_enabled: true, reminder_time: '19:00:00', theme_preference: 'light', notification_settings: {} })` を呼ぶと、`scheduleStudyReminder` が `('19:00:00', '今日の学習目標は40分です。一緒に頑張りましょう！')` で 1 回呼ばれる。`study_reminders_enabled: false` なら呼ばれない |
 | TC-19 | `frontend/src/components/__tests__/AccessibilityProvider.test.tsx` | 上のバーのボタンと浮いたボタン | (a) `<AccessibilityProvider><div /></AccessibilityProvider>`: 「アクセシビリティ設定」のボタンが 1 つあり、`MuiFab-root` のクラスを持つ。(b) `<AccessibilityProvider><AccessibilityToggleButton /></AccessibilityProvider>`: 「アクセシビリティ設定」のボタンがちょうど 1 つで、`MuiFab-root` を持たない。押すと `role=dialog`「アクセシビリティ設定パネル」が出る。(c) (b) の `AccessibilityToggleButton` を外して描き直すと、浮いたボタン（`MuiFab-root`）が戻る |
@@ -91,7 +91,8 @@
 |---|---|---|---|
 | TC-08 | `useDashboardOverview` の Promise の使い回しを外す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格（自作の取得のとき） |
 | TC-08（React Query への置き換えの後） | `useDashboardOverview` の取得を `useQuery` から `useEffect` での直接の取得に戻す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格 |
-| TC-10d | 保存のときの `invalidateQueries` を外す | `isInvalidated` が `false` のままで不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格 |
+| TC-10d | 保存のときの `invalidateQueries` を外す | `isInvalidated` が `false` のままで不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格（F7 の直しの前の形） |
+| TC-10d（F7 の直しの後） | 保存のときの `setQueryData` を `invalidateQueries` に戻す | キャッシュが 30 のままで不合格 | 2026-11-13 直す前の実装（`invalidateQueries`）で不合格（✕）を確かめてから直し、合格 |
 | TC-16 | お知らせの関数を取得の effect の依存に戻す | 呼び出しが 2 回以上で不合格 | 2026-11-13 不合格になった（✕・`useNotifications().showAchievement` を依存に入れた）→ 戻して合格 |
 | TC-21・TC-22 | `Layout.tsx` の `minWidth: 0` を外す | TC-22 が不合格（スパイクで 1440 → 390 の `scrollWidth` 808 を確認済み） | 2026-11-13 TC-22 が不合格（`scrollWidth <= clientWidth` が 5 秒で true にならない）・TC-21 は合格（直接 390 で開くとはみ出さないため。想定どおり）→ 戻して合格 |
 | TC-25 | 読み込み中に画面全体を置き換える形（`SubjectSelector` を外して付け直す）に戻す | 警告が出る、または「読み込み中...」が見えて不合格 | 2026-11-13 `SubjectSelector` に `key={selectedSubject}` を付けて切り替えのたびに付け直すと、MUI の `out-of-range value 2` の警告が 4 回出て不合格 → 戻して合格（画面全体を置き換える注入は開発サーバーの表示が壊れて確かめにならなかったので、原因そのもの〔付け直し〕を注入した） |
@@ -117,3 +118,10 @@
 - テストの変更: 画面のテストを `QueryClientProvider`（テストごとに新しい `QueryClient`・`retry: false`）で包んだ。TC-07 は、React Query が応答を少し遅れて画面に反映するので、数字が出るのを `findByTestId` で待つ形にした（確かめる中身は同じ）
 - E2E（手元の e2e コンテナ・`--retries=0`）: `dashboard-layout.spec.ts` 7 件・`settings.spec.ts` 1 件・`quiz-session.spec.ts` 3 件 合格（TC-24 の初回の取得 1 回を含む）
 - 失敗の注入: TC-08（`useEffect` での直接の取得に戻す → 2 回で不合格）・TC-10d（`invalidateQueries` を外す → 不合格）。どちらも戻して合格
+
+## 再発防止記録（fix-loop・コードレビュー F7・2026-11-13）
+- なぜ失敗したか: 設定の保存のときに、設定のキャッシュを「古い」と印を付けるだけ（`invalidateQueries`）にしていた。React Query は取り直しが終わるまで古い値を返すので、ダッシュボードに戻った直後に、古い目標で達成を判定して記録してしまいうる
+- 何を変えたか: 保存の応答（裏側が保存した値）で設定のキャッシュを書き換える（`setQueryData`・`frontend/src/pages/Settings.tsx`）。React Query の公式の推奨（Updates from Mutation Responses）
+- セキュリティ上の考慮点: なし（端末の表示用の記録だけ）
+- 次回どう防ぐか: 画面で値を保存して、同じ値をほかの画面がキャッシュで持つときは、保存の応答でキャッシュを書き換える。TC-10d で固定
+- 確かめた結果: TC-10d は直す前に不合格（✕）・直した後に合格。`Settings.test.tsx` 2 件・`Dashboard.test.tsx` 27 件 合格。`npm run lint`・`npm run typecheck` 合格

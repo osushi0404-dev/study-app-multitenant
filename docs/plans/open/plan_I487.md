@@ -114,7 +114,7 @@
   - 失敗の toast は出さず、画面の中の表示だけにする。`console.error` は `queryFn` の中で残す
 - `frontend/src/hooks/useUserSubjects.ts`（新規）: `useQuery`（キー `['user-subjects', userId]`）で `SubjectService.getUserSubjects()` を取り、`{ status: 'loading' } | { status: 'error' } | { status: 'success'; subjects: Subject[] }` と `retry`（`refetch`）を返す。失敗を「科目 0 件」と取り違えない（失敗の toast はやめ、クイズのカードの中に出す）。引数は `userId`
 - `frontend/src/hooks/useDailyStudyGoal.ts`（新規）: `useQuery`（キー `['user-settings', userId]`・`userSettingsKey` として書き出す）で `dashboardService.getUserSettings()` を取り、`daily_study_goal_minutes` が 1 以上の整数なら分の数、それ以外（失敗・欠け）は `null` を返す（`{ status: 'loading' } | { status: 'done'; minutes: number | null }`）。`null` のときは目標の表示を出さない（仮の値で埋めない・C7）。引数は `userId`
-- `frontend/src/pages/Settings.tsx`: 保存に成功したら `queryClient.invalidateQueries({ queryKey: ['user-settings'] })` で設定のキャッシュを古いことにする（ダッシュボードに戻ったときに新しい目標を出す。キャッシュがあると古い目標を一瞬出すことがあるのを防ぐ）。設定画面の読み込みは今のまま（`useQuery` への置き換えは #496 の範囲）
+- `frontend/src/pages/Settings.tsx`: 保存に成功したら、PATCH の応答で設定のキャッシュを書き換える（`queryClient.setQueryData(userSettingsKey(user.id), updatedSettings)`。利用者が無いときだけ `invalidateQueries`）。古いことにするだけだと、ダッシュボードに戻ったときに取り直しが終わるまで古い目標で判定・表示してしまう（コードレビュー F7）。設定画面の読み込みは今のまま（`useQuery` への置き換えは #496 の範囲）
 - テスト: 画面のテストは、テストごとに新しい `QueryClient`（`retry: false`）の `QueryClientProvider` で包む（テストの間でキャッシュを持ち越さない・失敗をすぐ出す）
 
 ### 4.3 部品に分ける（`Dashboard.tsx` は組み立てだけ・200 行以下）
@@ -357,6 +357,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-13 implement: `useDashboardOverview` は、結果にどの取得（ユーザーと科目）の結果かを持たせ、今の科目と違えば読み込み中として返す。4.2 の「科目を切り替えた直後は前の科目の数字を残さずスケルトン」を effect の実行の順に頼らず確実にするため。計画レビューのやり直し: 不要（4.2 の方式の中の書き方）
 - 2026-11-13 implement（/simplify の指摘）: `frontend/src/components/SubjectSelector.tsx` の見出し（`InputLabel`）を `useId` の id と `labelId` で選択欄に結び付ける（計画の変更点に無かったファイル）。選択欄の名前が無く、読み上げで「科目を選択」と伝わらず、E2E（TC-25）も名前なしで探す回避をしていたため。見た目・動きは変えない（学習統計の画面の科目の選択も同じく名前が付く）。計画レビューのやり直し: 不要（アクセシビリティの付け足しで、方式・範囲・受け入れ条件は変えない）
 - 2026-11-13 implement: 達成の記録の `streakRuns` の読み書きは `Map` を通す（ESLint の `security/detect-object-injection` の警告を出さないため）。設定画面の `notification_settings` の読み取りも同じ理由で `Object.entries` を使う。計画レビューのやり直し: 不要
+- 2026-11-13 fix-loop（コードレビュー F7）: 設定の保存のときのキャッシュの扱いを `invalidateQueries` から `setQueryData`（保存の応答で書き換え）に変えた（4.2）。診断: `docs/reviews/I487_fix_diagnosis_20261113_1824.md`（案 A・診断レビュー PASS）。計画レビューのやり直し: 不要（findings への対応で、方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261113_1805 判定: ✅ 完了](../../reviews/I487_plan_review_20261113_1805.md)
