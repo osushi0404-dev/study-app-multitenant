@@ -13,6 +13,7 @@
 ## 共通の前提（Jest）
 - `Dashboard.test.tsx` の既存のモック（`services/api`・`SubjectService`・`SubjectSelector`・`TodayReviewCard`・`react-chartjs-2`・`AuthContext`〔`user: { id: 'user-1', user_id: 'u_i473' }` に `id` を足す〕・`NotificationContext`）を使う
 - `beforeEach` で `localStorage.clear()`
+- 描くときは、テストごとに新しい `QueryClient`（`defaultOptions.queries.retry: false`）の `QueryClientProvider` で包む（2026-11-13 の React Query への置き換えから。テストの間でキャッシュを持ち越さない・失敗をすぐ出す）
 - 設定 API（`/api/settings/`）の応答は、TC ごとに `mockGet` の URL の分岐で返す（指定の無い TC は `{ data: {} }` ＝ 目標なし）
 - `overview()` は既存のひな形（has_data true・今日 330 秒・連続 2 日・解答 12・正答率 0.75・苦手 英語・おすすめ 数学）
 
@@ -29,7 +30,7 @@
 | TC-05 | 科目 0 件 | `getUserSubjects` が `[]`。`role=status` の中に「科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください」。`start-quiz-button` が `disabled`。`toast.error` が呼ばれない。「設定画面から科目を追加」の文字が無い。「今日の目標達成まで」の文字が無い |
 | TC-06 | 科目の一覧の取得に失敗 | `getUserSubjects` が reject。クイズのカードに「科目を読み込めませんでした」とボタン「再読み込み」、`start-quiz-button` が `disabled`、「科目がまだ登録されていません」が無い。2 回目は `[{ id: 7, name: '数学' }]` を返すようにして「再読み込み」（クイズのカードの中のもの）を押すと、`start-quiz-button` が押せるようになり、「科目を読み込めませんでした」が消える |
 | TC-07 | 読み込み中と科目の切り替え | overview の応答を手で解決する Promise にする。初回: `dashboard-skeleton` があり、見出し「おかえりなさい、u_i473さん！」・`start-quiz-button`・「科目5を選ぶ」がある。解決すると `stat-answered-count` が「12」になり、スケルトンが消える。「科目5を選ぶ」を押すと、`stat-answered-count` が消えて `dashboard-skeleton` が出る間も、見出し・`start-quiz-button`・「今日の復習のカード」が出たまま（同じ DOM の要素〔押す前に取った参照と `toBe` で同じ〕）。文字「ダッシュボードを読み込み中...」が出ない |
-| TC-08 | StrictMode で 1 回 | `<React.StrictMode><Dashboard /></React.StrictMode>` を描き、`stat-answered-count` が「12」になった後、`mockGet` の `'/api/dashboard/overview/'` への呼び出しがちょうど 1 回 |
+| TC-08 | StrictMode で 1 回（React Query が同じキーの取得を重ねる） | `<React.StrictMode><Dashboard /></React.StrictMode>` を描き、`stat-answered-count` が「12」になった後、`mockGet` の `'/api/dashboard/overview/'` への呼び出しがちょうど 1 回 |
 | TC-09 | 取得の失敗と再試行 | 1 回目の overview は reject、2 回目は `overview()`。`role=alert` に「ダッシュボードの数字を読み込めませんでした」とボタン「再読み込み」。`toast.error` が呼ばれない。押すと overview の呼び出しが 2 回になり、`stat-answered-count` が「12」、`role=alert` が無くなる |
 | TC-10 | 目標時間 | (a) 設定の応答 `{ daily_study_goal_minutes: 45 }`（今日 330 秒 = 5 分）: 「目標: 45分 (11%)」と「今日の目標達成まであと40分です」があり、「60」を含む「目標: 60分」が無い。`role=progressbar` の `aria-valuenow` が「11」（MUI の `LinearProgress` は渡した値 `5/45*100` を丸めて出す）。(b) 今日 2700 秒（45 分）: 「今日の目標（45分）を達成しました！」。(c) 設定の取得が reject: 「目標:」「今日の目標達成まで」の文字が無く、`role=progressbar` が無い。「5分」は出る |
 | TC-11 | グラフの縦軸 | `react-chartjs-2` の `Line` のモックが受け取った `options` を保存し、`options.scales.y.beginAtZero === true`・`options.scales.y.ticks.precision === 0` |
@@ -47,6 +48,7 @@
 ### 設定・通知・アクセシビリティ（新規）
 | TC | 置き場所 | 内容 | 期待値 |
 |---|---|---|---|
+| TC-10d | `frontend/src/pages/__tests__/Settings.test.tsx` | 保存のときに設定のキャッシュを古いことにする | `QueryClient` に `['user-settings', 'user-1']` のデータ（`daily_study_goal_minutes: 45`）を入れておき、設定画面で保存すると、そのクエリの `isInvalidated` が `true` になる（保存の前は `false`） |
 | TC-17 | `frontend/src/pages/__tests__/Settings.test.tsx` | 読み込みと保存の項目名 | GET `/api/settings/` の応答 `{ daily_study_goal_minutes: 45, study_reminders_enabled: false, reminder_time: '19:00:00', theme_preference: 'dark', notification_settings: { email: false, push: true, achievements: true, reminders: false } }`。「1日の学習目標時間（分）」の入力欄の値が「45」。値を「50」にして「設定を保存」相当のボタン（既存の保存ボタン）を押すと、PATCH `/api/settings/` の本文が `{ daily_study_goal_minutes: 50, study_reminders_enabled: false, reminder_time: '19:00', theme_preference: 'dark', notification_settings: { email: false, push: true, achievements: true, reminders: false } }`（`toEqual`）。本文に `daily_study_goal`・`study_reminder_enabled`・`theme` のキーが無い。`toast.success('設定を保存しました')` が呼ばれる |
 | TC-18 | `frontend/src/contexts/__tests__/NotificationContext.test.tsx` | リマインダーの項目名 | `notificationService` をモック（`isEnabled` true・`getPermissionStatus` `'granted'`）。`scheduleReminders({ daily_study_goal_minutes: 40, study_reminders_enabled: true, reminder_time: '19:00:00', theme_preference: 'light', notification_settings: {} })` を呼ぶと、`scheduleStudyReminder` が `('19:00:00', '今日の学習目標は40分です。一緒に頑張りましょう！')` で 1 回呼ばれる。`study_reminders_enabled: false` なら呼ばれない |
 | TC-19 | `frontend/src/components/__tests__/AccessibilityProvider.test.tsx` | 上のバーのボタンと浮いたボタン | (a) `<AccessibilityProvider><div /></AccessibilityProvider>`: 「アクセシビリティ設定」のボタンが 1 つあり、`MuiFab-root` のクラスを持つ。(b) `<AccessibilityProvider><AccessibilityToggleButton /></AccessibilityProvider>`: 「アクセシビリティ設定」のボタンがちょうど 1 つで、`MuiFab-root` を持たない。押すと `role=dialog`「アクセシビリティ設定パネル」が出る。(c) (b) の `AccessibilityToggleButton` を外して描き直すと、浮いたボタン（`MuiFab-root`）が戻る |
@@ -87,7 +89,9 @@
 ## 失敗の注入（否定・不在・回帰の TC・実装時に 1 回だけ）
 | TC | 注入する壊れ方 | 期待（不合格になる） | 結果 |
 |---|---|---|---|
-| TC-08 | `useDashboardOverview` の Promise の使い回しを外す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格 |
+| TC-08 | `useDashboardOverview` の Promise の使い回しを外す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格（自作の取得のとき） |
+| TC-08（React Query への置き換えの後） | `useDashboardOverview` の取得を `useQuery` から `useEffect` での直接の取得に戻す | 呼び出しが 2 回で不合格 | 置き換えの実装のときに行う |
+| TC-10d | 保存のときの `invalidateQueries` を外す | `isInvalidated` が `false` のままで不合格 | 置き換えの実装のときに行う |
 | TC-16 | お知らせの関数を取得の effect の依存に戻す | 呼び出しが 2 回以上で不合格 | 2026-11-13 不合格になった（✕・`useNotifications().showAchievement` を依存に入れた）→ 戻して合格 |
 | TC-21・TC-22 | `Layout.tsx` の `minWidth: 0` を外す | TC-22 が不合格（スパイクで 1440 → 390 の `scrollWidth` 808 を確認済み） | 2026-11-13 TC-22 が不合格（`scrollWidth <= clientWidth` が 5 秒で true にならない）・TC-21 は合格（直接 390 で開くとはみ出さないため。想定どおり）→ 戻して合格 |
 | TC-25 | 読み込み中に画面全体を置き換える形（`SubjectSelector` を外して付け直す）に戻す | 警告が出る、または「読み込み中...」が見えて不合格 | 2026-11-13 `SubjectSelector` に `key={selectedSubject}` を付けて切り替えのたびに付け直すと、MUI の `out-of-range value 2` の警告が 4 回出て不合格 → 戻して合格（画面全体を置き換える注入は開発サーバーの表示が壊れて確かめにならなかったので、原因そのもの〔付け直し〕を注入した） |

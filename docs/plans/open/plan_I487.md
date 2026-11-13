@@ -23,7 +23,7 @@
 - [ ] 並び順「挨拶 → 科目の選択 → クイズを始める・今日の復習 → 数字のカード → グラフ → 間違いやすい分野・おすすめ → 統計を見る（小さなリンク）」 → TC-01・手動 No.1・No.2
 - [ ] 読み込み中はスケルトン、科目を切り替えても画面全体が置き換わらない。MUI の範囲外の値の警告が出ない。初回表示で `GET /api/dashboard/overview/` が 1 回 → TC-07・TC-08・TC-24・TC-25
 - [ ] 取得に失敗したらエラーの表示と再試行のボタン、押すと取り直す → TC-09
-- [ ] 目標時間が設定の `daily_study_goal_minutes` に従い、設定画面で保存した値を読み戻せる → TC-10・TC-17・TC-28
+- [ ] 目標時間が設定の `daily_study_goal_minutes` に従い、設定画面で保存した値を読み戻せる → TC-10・TC-10d・TC-17・TC-28
 - [ ] お知らせの記録がユーザーごとに分かれ、連続日数は同じ連続で 1 回（途切れて再び届けばもう一度）、解答数は越えた中で一番大きい未表示の節目を 1 回、正答率 95%・目標達成は 1 日 1 回 → TC-12〜TC-16
 - [ ] 1440×900 の最初の画面に主な行動が入る → TC-23・手動 No.1
 - [ ] 1440px・390px でアクセシビリティ設定のボタンがダッシュボードのボタン・グラフ・数字に重ならない → TC-19・TC-26・手動 No.1・No.2
@@ -91,23 +91,31 @@
 - `frontend/src/components/Layout.tsx` の `component="main"` の `sx` に `minWidth: 0` を足す（ほかの画面は、中身が枠より広いときに縮めるようになるだけで、広い画面での見た目は変わらない。手動 No.6 でほかの画面も見る）
 - グラフの入れ物（下の `DashboardCharts.tsx`）に `position: 'relative'` を付ける
 
-### 4.2 取得と状態のフック
-- **修正方針**: 取得・状態・古い応答を捨てる処理を画面から外し、4 つの状態（読み込み中・失敗・データあり・データ無し）を型で表す。開発時の 2 回の effect でも呼び出しを 1 回にする
+### 4.2 取得と状態のフック（React Query・2026-11-13 に自作の取得から置き換え）
+- **修正方針**: API から取るデータ（数字・科目の一覧・設定）は、規約 6.3（非同期データは useQuery/SWR）に沿って、すでに入っていて `App.tsx` で設定済みの `@tanstack/react-query`（v5・`QueryClient` は `retry: 1`・`refetchOnWindowFocus: false`）の `useQuery` で取る。取得の重ね合わせ（開発時の StrictMode の 2 回の effect でも 1 回）・古い応答の破棄・再試行・キャッシュは React Query に任せ、自作しない。4 つの状態（読み込み中・失敗・データあり・データ無し）は、画面の部品が読みやすい形に写して返す
+- クエリのキーはユーザーの id を含める（同じタブで別のユーザーで入り直したときに、前のユーザーのキャッシュを出さない）。キーは各フックのファイルで定数・関数として書き出す
 - `frontend/src/hooks/useDashboardOverview.ts`（新規）
   ```ts
   type OverviewState =
     | { status: 'loading'; data: null }
     | { status: 'error'; data: null }
     | { status: 'success'; data: DashboardOverview };
-  export const useDashboardOverview = (subjectId: string) => { ...; return { ...state, retry }; };
+  export const dashboardOverviewKey = (userId: string, subjectId: string) =>
+    ['dashboard', 'overview', userId, subjectId] as const;
+  export const useDashboardOverview = (userId: string, subjectId: string) => {
+    const query = useQuery({ queryKey: dashboardOverviewKey(userId, subjectId), queryFn: ... });
+    // 読み込み中 = 初回の取得中（isPending）か、失敗の後の取り直し中（isError && isFetching）
+    return { ...state, retry: () => query.refetch() };
+  };
   ```
   - `subjectId` が `'all'` なら `{}`、それ以外は `{ subject_id: subjectId }` で `dashboardService.getOverview` を呼ぶ（今と同じ）
-  - 同じ引数の取得が進んでいる間は、同じ Promise を使い回す（モジュールの中の `Map<string, Promise<DashboardOverview>>`。キーは `${ユーザーの id}:${subjectId}`〔ログアウトして別のユーザーで入り直したときに、前のユーザーの進行中の取得を使い回さない〕。終わったら消す）。StrictMode の 2 回目の effect は同じ Promise を待つので、呼び出しは 1 回になる。失敗の後の再試行は新しく取る
-  - 科目を切り替えた後に届いた古い応答は捨てる（今の `ignore` と同じ・I473 F3）
-  - `retry()` は同じ科目で取り直す（状態を `loading` に戻す）
-  - 失敗の toast はやめ、画面の中の表示だけにする（同じことを 2 か所で伝えない）。`console.error` は残す
-- `frontend/src/hooks/useUserSubjects.ts`（新規）: `SubjectService.getUserSubjects()` を 1 回呼び、`{ status: 'loading' } | { status: 'error' } | { status: 'success'; subjects: Subject[] }` と `retry` を返す。失敗を「科目 0 件」と取り違えない（失敗の toast はやめ、クイズのカードの中に出す）
-- `frontend/src/hooks/useDailyStudyGoal.ts`（新規）: `dashboardService.getUserSettings()` を 1 回呼び、`daily_study_goal_minutes` が 1 以上の整数なら分の数、それ以外（失敗・欠け）は `null` を返す。`null` のときは目標の表示を出さない（仮の値で埋めない・C7）
+  - 科目を切り替えるとキーが変わり、新しいキーは読み込み中（`isPending`）になる。前の科目の数字は出さない（`placeholderData` は使わない・C7）。古い応答は React Query がキーごとに分けるので、今の科目の表示を上書きしない（I473 F3）
+  - `retry()` は `refetch()`。失敗の後の取り直しの間は読み込み中（スケルトン）として返す
+  - 失敗の toast は出さず、画面の中の表示だけにする。`console.error` は `queryFn` の中で残す
+- `frontend/src/hooks/useUserSubjects.ts`（新規）: `useQuery`（キー `['user-subjects', userId]`）で `SubjectService.getUserSubjects()` を取り、`{ status: 'loading' } | { status: 'error' } | { status: 'success'; subjects: Subject[] }` と `retry`（`refetch`）を返す。失敗を「科目 0 件」と取り違えない（失敗の toast はやめ、クイズのカードの中に出す）。引数は `userId`
+- `frontend/src/hooks/useDailyStudyGoal.ts`（新規）: `useQuery`（キー `['user-settings', userId]`・`userSettingsKey` として書き出す）で `dashboardService.getUserSettings()` を取り、`daily_study_goal_minutes` が 1 以上の整数なら分の数、それ以外（失敗・欠け）は `null` を返す（`{ status: 'loading' } | { status: 'done'; minutes: number | null }`）。`null` のときは目標の表示を出さない（仮の値で埋めない・C7）。引数は `userId`
+- `frontend/src/pages/Settings.tsx`: 保存に成功したら `queryClient.invalidateQueries({ queryKey: ['user-settings'] })` で設定のキャッシュを古いことにする（ダッシュボードに戻ったときに新しい目標を出す。キャッシュがあると古い目標を一瞬出すことがあるのを防ぐ）。設定画面の読み込みは今のまま（`useQuery` への置き換えは #496 の範囲）
+- テスト: 画面のテストは、テストごとに新しい `QueryClient`（`retry: false`）の `QueryClientProvider` で包む（テストの間でキャッシュを持ち越さない・失敗をすぐ出す）
 
 ### 4.3 部品に分ける（`Dashboard.tsx` は組み立てだけ・200 行以下）
 - **修正方針**: 規約 5.3（200 行目安・ロジックはフック・繰り返しは部品）と 8.3（4 状態）に合わせる。見た目の部品は受け取った値を出すだけにする
@@ -240,7 +248,7 @@
   - TC-26: 同じ理由で「まだ解答の記録がありません」→「この科目はまだ解答がありません。まずは問題を解いてみましょう！」に直す。全科目の一覧（英語）が出ることは保つ
   - TC-27: 達成の記録が `localStorage` に残るようになるので、`beforeEach` で `localStorage.clear()` を足す（TC-20 の 12 問で 10 問の節目が記録され、TC-27 で出なくなるのを防ぐ）
   - TC-20・TC-22・TC-23・TC-25・TC-28: 変えずに通す（TC-22 の「エラーの文」は同じ文言を保つ。科目 0 件の案内は `role="status"` にして `findByRole('alert')` と重ならないようにする）
-- **失敗の注入**（否定・不在・回帰の TC。実装時に一度だけ行い、結果を auto_test の結果欄に書く）: TC-08（取得の使い回しを外すと 2 回）・TC-21/TC-22（`minWidth: 0` を外すと 1440 → 390 で `scrollWidth` が広がる。スパイクで 808 を確認済み）・TC-25（`SubjectSelector` を付け直す形に戻すと警告が出る）・TC-16（お知らせの関数を effect の依存に戻すと取得が 2 回）
+- **失敗の注入**（否定・不在・回帰の TC。実装時に一度だけ行い、結果を auto_test の結果欄に書く）: TC-08（React Query を使わず effect で取る形にすると 2 回・2026-11-13 の置き換えの後にやり直す）・TC-21/TC-22（`minWidth: 0` を外すと 1440 → 390 で `scrollWidth` が広がる。スパイクで 808 を確認済み）・TC-25（`SubjectSelector` を付け直す形に戻すと警告が出る）・TC-16（お知らせの関数を effect の依存に戻すと取得が 2 回）
 - pytest・Jest・E2E は CI で流す（手元で全体を流し直さない）。実装中は関係するファイルだけを手元で流す
 
 ### 手動（`docs/tests/open/I487_manual_test.md`・実施者はすべて Claude・Playwright MCP）
@@ -260,7 +268,8 @@
 |---|---|
 | `main` の `minWidth: 0` がほかの画面の見た目を変える | 広い画面では中身が枠より狭いので変わらない。手動 No.6 で設定・学習統計・問題管理を 1440・390 で見る |
 | 設定の項目名を直すと、通知を許可している人にリマインダー（既定は有効・19:00）が実際に組まれるようになる | 設定画面の「学習リマインダーを有効にする」の表示どおりの動きになるだけ（今は名前のずれで動いていない）。設定画面で切れる。レビュー文書の「自律判断の記録」に書き、close の報告で伝える |
-| 取得の Promise の使い回しで、古い結果を返す | 使い回すのは「進んでいる間」だけで、終わったら消す。再試行・科目の切り替えは新しく取る（TC-09・TC-07 で確かめる） |
+| React Query のキャッシュで、古い数字・別のユーザーの値を出す | キーに科目とユーザーの id を入れ、`placeholderData` を使わない（科目を切り替えた直後はスケルトン）。設定は保存のときにキャッシュを古いことにする（TC-07・TC-09・TC-10d で確かめる） |
+| アプリ全体の `retry: 1` で、失敗の表示が出るまで 1 回の取り直し（約 1 秒）待つ | アプリ全体の設定に合わせる（ほかの画面と同じ）。テストは `retry: false` で失敗をすぐ確かめる |
 | 解答数の節目の初回: 今 300 問の人に、初めて開いたときに 250 問の節目が 1 回出る | 設計確認メモの決まりどおり（越えた中で一番大きい未表示の節目を 1 回）。それより小さい節目はまとめて出したことにするので、続けて出ない |
 | `localStorage` が使えない（プライベートモードの制限など） | 読み書きの失敗は握りつぶして空の記録として扱い、画面を落とさない（お知らせが出すぎる側に倒れるが、表示は壊れない） |
 | 上のバーのボタンが増えて、スマホの上のバーが窮屈になる | 390px の上のバー: メニュー・題名・アクセシビリティ・ダークモード・利用者のメニュー。題名は `noWrap` で省略される。手動 No.2 で崩れないことを見る |
@@ -278,7 +287,7 @@ Claude が決めた（技術・細部と理由）:
 - **設定の型を作った型に置き換え、全 5 項目の名前をそろえる**（イシューは目標時間の名前だけを挙げていた）: 理由: 5 項目とも名前がずれていて、目標時間だけ直しても検証で保存できず受け入れ条件を満たせない（イシューの目的の穴なのでこの PR で直す）。#493 の決定（触る画面で順に置き換える）に合わせ、手書きの型を直すのでなく契約に足す。#496 の設定の分を先に行うことになるので、retro で #496 に書く
 - **`backend/core/openapi.py` に 1 行足す**（イシューの影響範囲は「Backend なし」）: 理由: 上の置き換えの仕組みの一部。API の振る舞いは変わらない（スパイクで注釈なしに警告 0）
 - **リマインダーが実際に動くようになる**（`NotificationContext.tsx` の名前の直し）: 理由: 設定画面の表示どおりの動きに直すだけで、新しい機能ではない
-- **初回の呼び出しを 1 回にする方法**: 進んでいる取得の Promise を使い回す。理由: 受け入れ条件は開発サーバー（StrictMode）での観測。新しいライブラリ（React Query など）を入れるほどの規模ではない
+- **取得のしくみ**: React Query（`useQuery`）を使う（2026-11-13 に自作の取得から置き換え）。理由: 規約 6.3 が非同期データに useQuery/SWR を求め、`@tanstack/react-query` はすでに入っていて `App.tsx` で設定済み（どの画面もまだ使っていなかった）。StrictMode での 1 回の取得・古い応答の破棄・再試行・キャッシュを自作せずに済む。最初の計画で「新しいライブラリを入れるほどではない」と書いたのは、入っていることを確かめなかった誤り
 - **失敗の toast をやめ、画面の中だけで伝える**（ダッシュボードの数字・科目の一覧）: 理由: ux-rules「コンテキスト維持・明確な次のアクション」。同じことを 2 か所で伝えない
 - **科目の一覧の取得に失敗したときの表示**（「科目を読み込めませんでした」＋「再読み込み」）: 理由: 失敗を「科目 0 件」と取り違えて誤った案内を出さない（C7）。文言は今日の復習のカードの失敗の表示にそろえた
 - **科目 0 件のときは「クイズを始める」を押せなくし、カードの中に案内を出す**（grill-me の 3 回目の返答で伝えた）・案内は `role="status"`（急ぎの警告ではない）
@@ -344,14 +353,10 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-13 計画レビュー（20261113_1632）の Warning 2・Info 1 への対応: 4.2 の使い回しのキーにユーザーの id を入れる・手動 No.5 に元の値の記録を足す・auto_test の TC-27/TC-28 に共有ユーザーの前提を 1 行足す。計画レビューのやり直し: 不要（findings への対応の追記だけで、方式・範囲・受け入れ条件は変えない）
 - 2026-11-13 implement: E2E の幅の確かめ（TC-21〜23・26）は `page.route` で overview の応答を固定する。計画の記載は「`stat-answered-count` が出た後」だったが、E2E の利用者は種データを流すたびに作り直されて解答 0 件から始まり、グラフ（canvas）が描かれない（はみ出しの原因の再現に canvas が要る）。共有の利用者に解答を足すと `quiz-session.spec.ts` の「1 増える」と干渉するので、応答の固定を選んだ。通信の回数（TC-24）・科目の切り替え（TC-25）・科目 0 件（TC-27）は本物の API のまま。計画レビューのやり直し: 不要（確かめ方の手段の変更で、確かめる中身と受け入れ条件は変えない）
 - 2026-11-13 implement: 既存の E2E `e2e/tests/quiz-session.spec.ts` の「解答問題数が 1 増える」を、数字が無い（「まだ記録がありません」）ときは 0 として読むように直す。計画の 4.4 で解答 0 件のときに数字の代わりに文を出すので、この spec が先頭で流れると数字を待って落ちるため（変更点の消費箇所の取りこぼし）。計画レビューのやり直し: 不要（受け入れ条件「既存の E2E が通る」を保つための追従）
+- 2026-11-13（マージの前・ユーザーの指示「React Query に置き換えて進めて」）: 取得の 3 つのフックを、自作（進行中の Promise の使い回し・`useEffect` と `ignore`）から React Query の `useQuery` に置き換える（4.2 を書き直し）。きっかけは、マージの前の BP の確かめで、規約 6.3 と、`@tanstack/react-query` がすでに入って設定済みであることを見つけたこと（最初の計画で確かめていなかった）。画面の見た目・動き・受け入れ条件は変えない。あわせて、設定の保存のときに設定のキャッシュを古いことにする（`Settings.tsx`）・テストを `QueryClientProvider` で包む。計画レビューのやり直し: 要（方式を変える）
 - 2026-11-13 implement: `useDashboardOverview` は、結果にどの取得（ユーザーと科目）の結果かを持たせ、今の科目と違えば読み込み中として返す。4.2 の「科目を切り替えた直後は前の科目の数字を残さずスケルトン」を effect の実行の順に頼らず確実にするため。計画レビューのやり直し: 不要（4.2 の方式の中の書き方）
 - 2026-11-13 implement（/simplify の指摘）: `frontend/src/components/SubjectSelector.tsx` の見出し（`InputLabel`）を `useId` の id と `labelId` で選択欄に結び付ける（計画の変更点に無かったファイル）。選択欄の名前が無く、読み上げで「科目を選択」と伝わらず、E2E（TC-25）も名前なしで探す回避をしていたため。見た目・動きは変えない（学習統計の画面の科目の選択も同じく名前が付く）。計画レビューのやり直し: 不要（アクセシビリティの付け足しで、方式・範囲・受け入れ条件は変えない）
 - 2026-11-13 implement: 達成の記録の `streakRuns` の読み書きは `Map` を通す（ESLint の `security/detect-object-injection` の警告を出さないため）。設定画面の `notification_settings` の読み取りも同じ理由で `Object.entries` を使う。計画レビューのやり直し: 不要
 
 ## レビュー結果
-- [20261113_1632 判定: ✅ 完了](../../reviews/closed/I487_plan_review_20261113_1632.md)
-
-## 完了情報
-- **完了日時**: 2026-11-13
-- **対応者**: Claude Code
-- **レビュー結果**: OK（計画レビュー OK・コードレビュー 2 回目 OK〔1 回目の F1 は fix-loop で直した〕・手動テスト No.1〜6 OK）
+- [20261113_1632 判定: ✅ 完了](../../reviews/I487_plan_review_20261113_1632.md)

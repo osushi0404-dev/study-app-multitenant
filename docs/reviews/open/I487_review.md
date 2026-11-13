@@ -108,3 +108,6 @@ STAGE_DONE: retro NEXT: close
 - [close] develop への追従は不要（BLOCKED＝承認待ち）。gate-check OK。記録を closed へ移し、診断メモ（`_fix_diagnosis_`）も closed へ回収した（close の glob に当たらないため）。PR の説明をひな形で更新した
 
 STAGE_DONE: close NEXT: merge
+- [マージ前の見直し] マージ依頼の後、ユーザーの「BP の観点で問題ないか」の確認で、取得を React Query を使わずに自作していたことを見つけた（規約 6.3・`@tanstack/react-query` は入っていて `App.tsx` で設定済み）。ユーザーの指示「React Query に置き換えて進めて」で、記録を open に戻し、PR を下書きに戻して、計画を直して計画レビューからやり直す
+
+STAGE_DONE: close NEXT: plan-review
