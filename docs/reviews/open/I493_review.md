@@ -23,3 +23,5 @@
 - [plan] 契約に入れる API を一覧（`CONTRACT_PATHS`）で絞り、警告 0 を条件にした — 全 API を入れると警告 61・エラー 136 で、中身の正しくない型ができるため（スパイク 1）
 - [plan] 型を作る道具をリポジトリ直下の `tools/api-types/` に置いた — 画面のイメージ（`COPY . .`・`.dockerignore` なし）に入れず、画面の TypeScript 4.9.5 と分けるため
 - [plan] 実行時の形の確かめ（`isDashboardOverview`）を残した — 型は実行時に消え、TC-22 の 0 埋めの防止がこれに頼っているため
+
+STAGE_DONE: plan NEXT: plan-review
