@@ -5,3 +5,6 @@ type Schemas = components['schemas'];
 
 export type DashboardOverview = Schemas['DashboardOverview'];
 export type DashboardRecommendationKind = Schemas['DashboardRecommendationKindEnum'];
+// 設定（I487）。読むときの形と、PATCH で送る形（どの項目も省略できる）
+export type UserSettings = Schemas['UserSettings'];
+export type PatchedUserSettings = Schemas['PatchedUserSettings'];

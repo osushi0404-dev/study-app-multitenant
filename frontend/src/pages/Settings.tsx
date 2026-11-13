@@ -34,8 +34,10 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useQueryClient } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
-import { UserSettings } from '../services/types';
+import { USER_SETTINGS_KEY_ROOT, userSettingsKey } from '../hooks/useDailyStudyGoal';
+import { PatchedUserSettings, UserSettings } from '../types/api';
 
 interface UserSettingsData {
   dailyStudyGoalMinutes: number;
@@ -89,6 +91,36 @@ const passwordSchema = yup.object({
     .required('パスワード確認は必須です'),
 });
 
+// 設定の項目名は裏側（UserSettingsSerializer）の名前にそろえる（I487）。値が無いときは裏側の既定値を使う
+const DEFAULT_GOAL_MINUTES = 30;
+const DEFAULT_REMINDER_TIME = '19:00';
+const THEMES: ReadonlyArray<UserSettingsData['themePreference']> = ['light', 'dark', 'auto'];
+
+/** notification_settings（JSON）から真偽値だけを読む */
+const readFlag = (source: unknown, key: string, fallback: boolean): boolean => {
+  if (typeof source !== 'object' || source === null) return fallback;
+  const value = Object.entries(source).find(([name]) => name === key)?.[1];
+  return typeof value === 'boolean' ? value : fallback;
+};
+
+const toFormData = (saved: UserSettings): UserSettingsData => {
+  const remindersEnabled = saved.study_reminders_enabled ?? true;
+  const theme = THEMES.find((t) => t === saved.theme_preference) ?? 'light';
+  return {
+    dailyStudyGoalMinutes: saved.daily_study_goal_minutes ?? DEFAULT_GOAL_MINUTES,
+    studyRemindersEnabled: remindersEnabled,
+    // 裏側は HH:MM:SS で返す。入力欄は HH:MM
+    reminderTime: (saved.reminder_time ?? DEFAULT_REMINDER_TIME).slice(0, 5),
+    themePreference: theme,
+    notificationSettings: {
+      email: readFlag(saved.notification_settings, 'email', true),
+      push: readFlag(saved.notification_settings, 'push', true),
+      achievements: readFlag(saved.notification_settings, 'achievements', true),
+      reminders: readFlag(saved.notification_settings, 'reminders', remindersEnabled),
+    },
+  };
+};
+
 const Settings: React.FC = () => {
   const [settings, setSettings] = useState<UserSettingsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,6 +131,7 @@ const Settings: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { darkMode, toggleDarkMode } = useTheme();
   const {
     permission,
@@ -123,18 +156,7 @@ const Settings: React.FC = () => {
       try {
         const userSettings = await dashboardService.getUserSettings();
 
-        const settingsData: UserSettingsData = {
-          dailyStudyGoalMinutes: userSettings.daily_study_goal,
-          studyRemindersEnabled: userSettings.study_reminder_enabled,
-          reminderTime: userSettings.study_reminder_time || '09:00',
-          themePreference: userSettings.theme,
-          notificationSettings: {
-            email: userSettings.email_notifications,
-            push: userSettings.push_notifications,
-            achievements: true,
-            reminders: userSettings.study_reminder_enabled,
-          },
-        };
+        const settingsData = toFormData(userSettings);
 
         setSettings(settingsData);
         resetSettingsForm(settingsData);
@@ -151,13 +173,12 @@ const Settings: React.FC = () => {
   const onSettingsSubmit = async (data: UserSettingsData) => {
     setSaving(true);
     try {
-      const submitData: Partial<UserSettings> = {
-        daily_study_goal: data.dailyStudyGoalMinutes,
-        study_reminder_enabled: data.studyRemindersEnabled,
-        study_reminder_time: data.reminderTime, // HH:MM format
-        theme: data.themePreference as 'light' | 'dark',
-        email_notifications: data.notificationSettings.email,
-        push_notifications: data.notificationSettings.push,
+      const submitData: PatchedUserSettings = {
+        daily_study_goal_minutes: data.dailyStudyGoalMinutes,
+        study_reminders_enabled: data.studyRemindersEnabled,
+        reminder_time: data.reminderTime, // HH:MM
+        theme_preference: data.themePreference,
+        notification_settings: data.notificationSettings,
       };
 
       const updatedSettings = await dashboardService.updateUserSettings(submitData);
@@ -168,6 +189,15 @@ const Settings: React.FC = () => {
       }
 
       setSettings(data);
+      // ダッシュボードが持つ設定のキャッシュを、保存の応答（裏側が保存した値）で書き換える。
+      // 古いことにするだけ（invalidate）だと、戻ったときに取り直しが終わるまで古い目標で判定・表示してしまう（I487 F7）
+      if (user) {
+        // 保存の前に始まった取得の古い応答が、書き換えたキャッシュを上書きしないよう先に止める（React Query の推奨の手順・I487 F10）
+        await queryClient.cancelQueries({ queryKey: userSettingsKey(user.id) });
+        queryClient.setQueryData(userSettingsKey(user.id), updatedSettings);
+      } else {
+        queryClient.invalidateQueries({ queryKey: [USER_SETTINGS_KEY_ROOT] });
+      }
       toast.success('設定を保存しました');
     } catch (error) {
       console.error('Error saving settings:', error);

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import notificationService, { NotificationPermission } from '../services/notification.service';
 import dashboardService from '../services/dashboard.service';
-import { UserSettings } from '../services/types';
+import { UserSettings } from '../types/api';
 import { toast } from 'react-hot-toast';
 
 interface NotificationContextType {
@@ -57,7 +57,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const loadUserSettingsAndScheduleReminders = async () => {
     try {
       const settings = await dashboardService.getUserSettings();
-      if (settings.study_reminder_enabled && permission === 'granted') {
+      if (settings.study_reminders_enabled && permission === 'granted') {
         scheduleReminders(settings);
       }
     } catch (error) {
@@ -91,15 +91,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     // Cancel existing reminders
     cancelReminders();
 
-    if (settings.study_reminder_enabled && settings.study_reminder_time) {
+    // 項目名は裏側（UserSettingsSerializer）の名前（I487）
+    if (settings.study_reminders_enabled && settings.reminder_time) {
       const reminderId = notificationService.scheduleStudyReminder(
-        settings.study_reminder_time,
-        `今日の学習目標は${settings.daily_study_goal}分です。一緒に頑張りましょう！`
+        settings.reminder_time,
+        `今日の学習目標は${settings.daily_study_goal_minutes}分です。一緒に頑張りましょう！`
       );
       setCurrentReminderId(reminderId);
       updateActiveRemindersCount();
 
-      console.log(`Study reminder scheduled for ${settings.study_reminder_time}`);
+      console.log(`Study reminder scheduled for ${settings.reminder_time}`);
     }
   };
 

@@ -1,7 +1,12 @@
 import { AxiosResponse } from 'axios';
 import apiClient from './api';
-import { AnalyticsData, AnalyticsFilters, UserSettings } from './types';
-import { DashboardOverview, DashboardRecommendationKind } from '../types/api';
+import { AnalyticsData, AnalyticsFilters } from './types';
+import {
+  DashboardOverview,
+  DashboardRecommendationKind,
+  PatchedUserSettings,
+  UserSettings,
+} from '../types/api';
 
 // おすすめの種類。API の選択肢が増えても消えても、ここが合わなければ型の検査で落ちる
 const RECOMMENDATION_KINDS: Record<DashboardRecommendationKind, true> = {
@@ -88,7 +93,7 @@ class DashboardService {
     return response.data;
   }
 
-  async updateUserSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
+  async updateUserSettings(settings: PatchedUserSettings): Promise<UserSettings> {
     const response: AxiosResponse<UserSettings> = await apiClient.patch(
       `/api/settings/`,
       settings

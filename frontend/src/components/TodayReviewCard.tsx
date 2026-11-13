@@ -9,13 +9,12 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, Card, CardContent, CircularProgress, Typography } from '@mui/material';
 import { Replay } from '@mui/icons-material';
 import { getReviewSummary, ReviewSummary } from '../services/review.service';
+import { ALL_SUBJECTS } from '../hooks/useDashboardOverview';
 
 interface TodayReviewCardProps {
   /** ダッシュボードの科目の選択の値（'all' なら全科目） */
   subjectId: string;
 }
-
-const ALL_SUBJECTS = 'all';
 
 /** 'YYYY-MM-DD' を「M月D日」に（端末の時刻の設定でずれないよう Date に通さない） */
 const formatMonthDay = (isoDate: string): string => {
@@ -61,7 +60,7 @@ const TodayReviewCard: React.FC<TodayReviewCardProps> = ({ subjectId }) => {
   }, [navigate, subject]);
 
   return (
-    <Card>
+    <Card data-testid="today-review-card" sx={{ height: '100%' }}>
       <CardContent>
         {state.status === 'loading' && (
           <Box display="flex" alignItems="center" gap={1} role="status">
