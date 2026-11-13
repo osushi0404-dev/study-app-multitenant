@@ -102,7 +102,7 @@
   export const useDashboardOverview = (subjectId: string) => { ...; return { ...state, retry }; };
   ```
   - `subjectId` が `'all'` なら `{}`、それ以外は `{ subject_id: subjectId }` で `dashboardService.getOverview` を呼ぶ（今と同じ）
-  - 同じ引数の取得が進んでいる間は、同じ Promise を使い回す（モジュールの中の `Map<string, Promise<DashboardOverview>>`。終わったら消す）。StrictMode の 2 回目の effect は同じ Promise を待つので、呼び出しは 1 回になる。失敗の後の再試行は新しく取る
+  - 同じ引数の取得が進んでいる間は、同じ Promise を使い回す（モジュールの中の `Map<string, Promise<DashboardOverview>>`。キーは `${ユーザーの id}:${subjectId}`〔ログアウトして別のユーザーで入り直したときに、前のユーザーの進行中の取得を使い回さない〕。終わったら消す）。StrictMode の 2 回目の effect は同じ Promise を待つので、呼び出しは 1 回になる。失敗の後の再試行は新しく取る
   - 科目を切り替えた後に届いた古い応答は捨てる（今の `ignore` と同じ・I473 F3）
   - `retry()` は同じ科目で取り直す（状態を `loading` に戻す）
   - 失敗の toast はやめ、画面の中の表示だけにする（同じことを 2 か所で伝えない）。`console.error` は残す
@@ -339,3 +339,9 @@ Danger Ops（有無/手順/ロールバック）:
 
 ### 成功指標
 - 受け入れ条件の TC がすべて通ること（E2E の幅・並び・通信の回数・警告なし）
+
+## 計画変更記録
+- 2026-11-13 計画レビュー（20261113_1632）の Warning 2・Info 1 への対応: 4.2 の使い回しのキーにユーザーの id を入れる・手動 No.5 に元の値の記録を足す・auto_test の TC-27/TC-28 に共有ユーザーの前提を 1 行足す。計画レビューのやり直し: 不要（findings への対応の追記だけで、方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261113_1632 判定: ✅ 完了](../../reviews/I487_plan_review_20261113_1632.md)

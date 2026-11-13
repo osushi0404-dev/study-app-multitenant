@@ -67,6 +67,7 @@
 | TC-27 | 科目 0 件 | `/dashboard` で「科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください」が見え、`start-quiz-button` が `toBeDisabled()`。「設定画面から科目を追加」の文字が無い |
 
 `e2e/tests/settings.spec.ts`（新規・`test.use({ storageState: '.auth/user_c.json' })`）
+- 共有ユーザーの前提: TC-27 と TC-28 はどちらも `e2e_user_c` を使う。TC-28 が書き換えるのは目標時間だけで、TC-27 は目標時間を見ない（科目 0 件のときは目標の 1 行を出さない）ので、並列に流しても互いに影響しない。`problem-management-authz.spec.ts` の `e2e_user_c` も目標時間を見ない
 | TC | 内容 | 期待値 |
 |---|---|---|
 | TC-28 | 目標時間の保存と読み戻し | `/settings` で「1日の学習目標時間（分）」の今の値を読み、45 でなければ 45、45 なら 50 を入れて保存。「設定を保存しました」が見える。`page.reload()` の後、入力欄の値が保存した値。`GET /api/settings/` の応答の `daily_study_goal_minutes` も同じ値（`page.waitForResponse`） |

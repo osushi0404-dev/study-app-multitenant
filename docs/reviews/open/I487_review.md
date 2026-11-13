@@ -29,3 +29,6 @@
 - [plan] 失敗の toast をやめ、画面の中の表示と再読み込みのボタンにする（数字・科目の一覧）。科目の一覧の取得失敗を「科目 0 件」と取り違えない表示を足す — C7・ux-rules
 
 STAGE_DONE: plan NEXT: plan-review
+- [plan-review] 計画レビュー OK（高リスク No）。Warning 2・Info 1 を直した（使い回しのキーにユーザー・手動 No.5 に元の値・E2E の共有ユーザーの前提）— 方式・範囲・受け入れ条件は変えないので再レビューはしない
+
+STAGE_DONE: plan-review NEXT: implement
