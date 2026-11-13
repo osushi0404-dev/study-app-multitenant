@@ -45,3 +45,6 @@ STAGE_DONE: review-gate NEXT: fix-loop
 - [fix-loop] F1 は案 A（同じ応答の今日の答えの数で連続の終わりを今日か昨日に決める）で直した — 裏側の規則と同じで API を変えない。案 B（1 日の幅）は途切れ直後の同じ節目を取り違える・案 C（API に終わりの日を足す）は契約を広げる。診断レビュー PASS
 
 STAGE_DONE: fix-loop NEXT: review-gate
+- [review-gate] 2 回目（差分）のコードレビューは OK。F1 は解決。新しく F5（端末とサーバの日付のずれ・#481 の範囲）・F6（TC-14b の境目の追加）が Low で台帳に残る。敵対的レビューは不要（高リスク NO）
+
+STAGE_DONE: review-gate NEXT: test-gate
