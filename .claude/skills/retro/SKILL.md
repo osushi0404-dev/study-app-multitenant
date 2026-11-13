@@ -151,7 +151,7 @@ user-invocable: false
 
 4-0) 台帳の残り（必須・I205）: レビューで止めなかった指摘（止める条件に当たらない・再現が無い・差分の外）を埋もれさせない。
    - 台帳のある最新のコードレビューの記録の `STATUS=open` の指摘を、スクリプトが重さで 2 つに振り分けて出す（I208。判定は台帳の欄の値だけで、要約の文字は見ない。読んだ記録のパスは標準エラーに「記録: …」で出る。exit 2 は記録が無い・引数の誤りなので、止めて調べる）:
-     - **後続イシュー**: 止める指摘・再現のある Medium 以上・`SECURITY=yes`（重さに関係なく）・アプリ本体（`KIND=app`。`SCOPE=outside` も）・guard の Medium 以上（再現を問わない。止める判定と同じく GitHub から復旧できない例外）のどれかに当たる行。出力の各行の最後に理由が付く。1 件ずつ起票せず、1 件の後続イシュー（手順 4 の「採用（新規起票）」。タイトルに「$ARGUMENTS のレビューの残り」）にまとめるか、合う既存のイシューへのコメント（手順 4 の「既存イシューに同梱」）に入れる:
+     - **後続イシュー**: 止める指摘・再現のある Medium 以上・`SECURITY=yes` で再現ありか Medium 以上（Low かつ再現なしは一覧・I480）・アプリ本体（`KIND=app`。`SCOPE=outside` も）・guard の Medium 以上（再現を問わない。止める判定と同じく GitHub から復旧できない例外）のどれかに当たる行。出力の各行の最後に理由が付く。1 件ずつ起票せず、1 件の後続イシュー（手順 4 の「採用（新規起票）」。タイトルに「$ARGUMENTS のレビューの残り」）にまとめるか、合う既存のイシューへのコメント（手順 4 の「既存イシューに同梱」）に入れる:
        ```bash
        bash scripts/claude/code-review.sh --route issue $ARGUMENTS
        ```
@@ -160,7 +160,7 @@ user-invocable: false
        bash scripts/claude/code-review.sh --route backlog $ARGUMENTS
        ```
        出力の行の形: `- <番号> SEV=<…> REPRO=<…> KIND=<…> FILE=<パス|-> | <要約> | 一覧に回した理由: <Low／再現なし>`（`FILE=` は台帳の行の値。手で組み立てない）。一覧は計画（`/plan-issue` の「台帳の残りの一覧」）で、実装対象のファイルに当たる行を見る
-   - 後続イシューに回した行に、判定の仕組み（`scripts/claude/code-review.sh`・`scripts/claude/adversarial-review.sh`・`scripts/claude/gate-check.sh`・`.claude/agents/`）に関わる指摘、または `SECURITY=yes` の指摘が入っていれば、その後続のイシュー（同梱ならコメント）に「次のハーネスの作業で最優先」と書く。
+   - 後続イシューに回した行に、判定の仕組み（`scripts/claude/code-review.sh`・`scripts/claude/adversarial-review.sh`・`scripts/claude/gate-check.sh`・`.claude/agents/`）に関わる指摘、または出力の `後続イシューにする理由:` より後ろに `SECURITY=yes` がある行（行の前の方の `SECURITY=` の欄は見ない。アプリ本体の Low・再現なしは、欄が yes でも理由は「アプリ本体」だけで最優先にしない）が入っていれば、その後続のイシュー（同梱ならコメント）に「次のハーネスの作業で最優先」と書く。
    - 「## 自律判断の記録」に、指摘の番号ごとの振り分け先（`#番号` か `docs/reviews/backlog/$ARGUMENTS.md`）を書く。0 件なら「台帳の残り 0 件」と書く。
    - 手順 2.7 の 4 問による見送りは、この台帳の残りには使わない（判定は後続のイシューの計画、または一覧を見る計画で行う）。
 

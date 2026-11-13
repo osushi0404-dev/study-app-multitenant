@@ -764,12 +764,12 @@ def route_reasons(e):
         r.append("止める指摘")
     if RANK[sev] >= 1 and repro == "yes":
         r.append("再現のある Medium 以上")
-    if sec == "yes":
-        r.append("SECURITY=yes")
+    if sec == "yes" and (repro == "yes" or RANK[sev] >= 1):
+        r.append("SECURITY=yes")   # I480: Low かつ再現なしは一覧へ（最優先の後続が続かないように）
     if kind == "app":
         r.append("アプリ本体")
     if kind == "guard" and RANK[sev] >= 1:
-        r.append("guard の Medium 以上")   # GitHub から復旧できない例外: blocking() と同じく再現を問わない
+        r.append("guard の Medium 以上")   # GitHub から復旧できない例外: 再現を問わない（blocking() の guard は High 以上で、こちらは Medium 以上）
     return r
 
 mode = sys.argv[1]
