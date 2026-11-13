@@ -108,3 +108,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] 2 回目: gate-check OK・手動テスト No.2・No.3 を流し直して OK・Human の項目なしで retro へ
 STAGE_DONE: test-gate NEXT: retro
+STAGE_DONE: retro NEXT: close
