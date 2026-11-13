@@ -13,6 +13,7 @@
 # 環境変数: ADV_DEADLINE（既定 600）・ADV_STEP_TIMEOUT（300）・ADV_MIN_STEP（60）・ADV_EXPERIMENT_ROUNDS（2）・
 #           ADV_ROUND_LIMIT（2。ユーザーが延長を承認したときだけ 3）・ADV_REVIEW_BUDGET（2）・ADV_EXEC_BUDGET（0.5）・
 #           ADV_BASE（比べる相手。既定 origin/develop）・CLAUDE_BIN（テスト用）・
+#           ADV_CONTAINER_TIMEOUT（600。backend のコンテナを起こして healthy まで待つ上限・締め切りの外）・ADV_DOCKER_BIN（テスト用）・
 #           ADV_CLOCK_FILE（テスト用。今の時刻〔整数の秒〕を読むファイル。既定は date +%s）
 # 計画: docs/plans/open/plan_I197.md §4.3
 set -uo pipefail
@@ -28,6 +29,7 @@ set +e
 # 既定値はここで 1 回だけ決める（記録に書く値と実際に効く値をそろえる）
 : "${ADV_DEADLINE:=600}" "${ADV_STEP_TIMEOUT:=300}" "${ADV_MIN_STEP:=60}" "${ADV_EXPERIMENT_ROUNDS:=2}" \
   "${ADV_ROUND_LIMIT:=2}" "${ADV_REVIEW_BUDGET:=2}" "${ADV_EXEC_BUDGET:=0.5}" "${ADV_BASE:=origin/develop}"
+: "${ADV_CONTAINER_TIMEOUT:=600}" "${ADV_DOCKER_BIN:=docker}"
 
 # 実験の案内（I228）: アプリのテスト・管理コマンドはコンテナで流す（ホストに python は無い）
 APP_TEST_HINT='アプリのテスト・管理コマンドは docker compose exec -T backend <コマンド> で流す（ホストに python は無い。コンテナの /app は作業ツリーそのものなので書き換える実験はしない。守りを外して落ちるかは mock.patch などテストの中で確かめる）。'
@@ -299,6 +301,13 @@ run_perspective() {
     local mode; mode=$(claude_log_mode "$d/exec$r.jsonl")
     next_in="$d/in$r.txt"
     printf '## 実験の結果（往復 %s）\n' "$r" > "$next_in"
+    # 言い直しに使う次の id（I486）: この観点で使った P<p>-E<n> の最大＋1（扱い済みの id は必ず .cmd がある）
+    local max=0 cf en next_eid
+    for cf in "$d"/exp/P"$p"-E*.cmd; do
+      en="${cf##*-E}"; en="${en%.cmd}"
+      [[ "$en" =~ ^[0-9]+$ ]] && [ $(( 10#$en )) -gt "$max" ] && max=$(( 10#$en ))
+    done
+    next_eid="P${p}-E$(( max + 1 ))"
     for id in $ids; do
       if [ "$mode" != "auto" ]; then
         st="mode"; out="実験役のモードが auto ではない（${mode:-不明}）ため実行していない"
@@ -306,11 +315,11 @@ run_perspective() {
         out=$(claude_log_ran "$d/exec$r.jsonl" "$d/exp/$id.cmd"); case $? in 0) st=ran ;; 10) st=denied ;; 1) st=notcalled ;; *) st=unreadable ;; esac
       fi
       printf '%s\n' "$out" > "$d/exp/$id.out"
-      # コマンドが見つからないだけの実験は「実行した」に数えない（I228。残りの往復で言い直せる）
+      # コマンドが見つからない実験は「実行した」に数えない（I228・I486。残りの往復で、新しい id で言い直せる）
       if [ "$st" = ran ] && exp_not_executable "$d/exp/$id.out"; then st=noexec; fi
       printf '%s\t%s\n' "$id" "$st" >> "$d/exp_status"
       printf '\n### %s: %s\n~~~\n%s\n~~~\n' "$id" "$st" "$out" >> "$next_in"
-      [ "$st" = noexec ] && printf 'コマンドが見つからない（実行できなかった）。%s\n' "$APP_TEST_HINT" >> "$next_in"
+      [ "$st" = noexec ] && printf 'コマンドが見つからない（実行できなかった）。言い直すときは、まだ使っていない新しい id（%s から）で出す（同じ id で出した案は扱い済みとして実行されない）。%s\n' "$next_eid" "$APP_TEST_HINT" >> "$next_in"
     done
     last_ids="$ids"
     printf '\n上の結果を踏まえ、最終報告を出力の形どおりに全部書き直せ（担当の項目すべてに ITEM 行を書く）。まだ実験が要るなら EXPERIMENT 行で出せ（残りの往復: %s）。\n' \
@@ -391,19 +400,42 @@ carry_items() {
   return 0
 }
 
-# 実験の出力が「コマンドが見つからない」形の行だけか（I228）: <出力のファイル> → exit 0。
-# 先頭の is_error= の行・空行・Exit code の行は除く。行の形を固定する（ls: cannot access 'x': No such file … のような
-# コマンドの中身の結果は当たらない）
+# 実験の出力のどこかの行が「コマンドが見つからない」形を含むか（I228・I486）: <出力のファイル> → exit 0。
+# 前提（コンテナ）は起動時に確かめるので、ここは粗く当てる（別の行が混ざっても当たる。取りすぎは未検証＝止める側）。
+# 形を足し続けない。ls: cannot access 'x': No such file … のようなコマンドの中身の結果は、行頭がシェルなどでないので当たらない
 exp_not_executable() {
   python3 -I - "$1" <<'PY'
 import re, sys
-pat = re.compile(r"(?:(?:/\S*/)?(?:bash|sh|timeout|env|nice|xargs)(?:: line \d+)?: )?"
-                 r"(?:[^\s:]+: (?:command not found|No such file or directory)|failed to run command \S+: No such file or directory"
-                 r"|service \"[^\"]+\" is not running)")
+pat = re.compile(r"command not found|: not found$|failed to run command|is not running|Cannot connect to the Docker daemon|no such service"
+                 r"|^(?:\S*/)?(?:bash|sh|env|timeout|nice|xargs)(?:: line \d+)?: .*No such file or directory$"
+                 r"|^[^\s:]+: No such file or directory$")
 lines = [l.strip() for l in open(sys.argv[1], encoding="utf-8", errors="replace").read().split("\n")]
-lines = [l for l in lines if l and not l.startswith("is_error=") and not re.fullmatch(r"Exit code \d+", l)]
-sys.exit(0 if lines and all(pat.fullmatch(l) for l in lines) else 1)
+sys.exit(0 if any(pat.search(l) for l in lines) else 1)
 PY
+}
+
+# 実験の前提（I486）: 見る範囲に backend/ の変更があれば、このワークツリーの backend のコンテナを起こして確かめる。
+# 動いているかで分けずに常に up する（変わっていなければ作り直さない・依存を変えていれば --build で作り直す）。
+# 起動のたびに migrate が走る（docker-compose.yml の command）。起こせない・時間切れ・別のワークツリーのコンテナなら止める（1 を返す）
+ensure_backend_container() {
+  local id wd s0=$SECONDS   # 所要秒は表示だけなので bash の SECONDS で数える（時計を読むのは adv_now の 1 か所だけ・I210）
+  CONTAINER_NOTE="確かめていない（見る範囲に backend/ の変更なし）"
+  grep -qE $'^[A-Z][0-9]*\tbackend/' "$RUN/files.txt" || return 0
+  if ! timeout "${ADV_CONTAINER_TIMEOUT}" "${ADV_DOCKER_BIN}" compose up -d --build --wait backend > "$RUN/container.log" 2>&1; then
+    echo "⛔ backend のコンテナを起こせません（上限 ${ADV_CONTAINER_TIMEOUT} 秒）。出力の最後:"; tail -20 "$RUN/container.log"
+    echo "（ワークツリーで初めて起こすときは、先に bash scripts/claude/wt-ports.sh でポートを割り当てる・docs/runbooks/worktree.md §6）"
+    echo "ADVERSARIAL_ERROR: CONTAINER"; return 1
+  fi
+  # 動いていない（id が空）・2 つ以上（改行を含む 1 つの引数）なら inspect が失敗して wd が空になり、下の比較で止まる。
+  # 比べる前に実パスにそろえる（wt-remove.sh の detect_data と同じそろえ方）
+  id=$("${ADV_DOCKER_BIN}" compose ps -q --status running backend 2>/dev/null)
+  wd=$("${ADV_DOCKER_BIN}" inspect --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$id" 2>/dev/null)
+  [ -n "$wd" ] && wd=$(cd "$wd" 2>/dev/null && pwd -P)
+  if [ "$wd" != "$(pwd -P)" ]; then
+    echo "⛔ 動いている backend のコンテナが、このワークツリー（${REPO_ROOT}）のものではありません（元の場所: ${wd:-不明・動いていない}。COMPOSE_PROJECT_NAME などで別のプロジェクトを指していないか）。"
+    echo "ADVERSARIAL_ERROR: CONTAINER"; return 1
+  fi
+  CONTAINER_NOTE="backend を起こして確かめた（$(( SECONDS - s0 )) 秒・締め切りの外）"
 }
 
 # 項目の判定: <id> <観点> <確かめ方> → "<報告>\t<実験>\t<判定>"
@@ -446,7 +478,6 @@ if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then echo "⛔ 使い方: $0 I###（受け�
 if ! command -v flock >/dev/null 2>&1; then echo "⛔ flock がありません（実験役を 1 本ずつにできない）。util-linux を入れてください。"; echo "ADVERSARIAL_ERROR: FLOCK"; exit 2; fi
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリの中で実行してください"; exit 2; }
 cd "$REPO_ROOT" || exit 2
-ADV_START=$(adv_now) || { echo "⛔ 今の時刻を読めません（ADV_CLOCK_FILE=${ADV_CLOCK_FILE}）"; echo "ADVERSARIAL_ERROR: CLOCK"; exit 2; }
 
 # 周回の上限（今の周を始める前に数える）
 USED=$(count_rounds)
@@ -488,7 +519,6 @@ if [ "$REVIEW_BASE" = "$ADV_BASE" ] && [ -n "$(counted_records | tail -1)" ]; th
 fi
 REVIEWED_HEAD=$(git rev-parse HEAD)
 REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-worktree_state > "$RUN/state0"
 PREV_RECORDS=$(counted_records | paste -sd' ' -)
 carry_items > "$RUN/carry.tsv"   # 前の周の確認の引き継ぎ（I228。レビュー役を呼ぶ前に 1 回だけ決める）
 if ! git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" \
@@ -501,6 +531,12 @@ head -c 102400 "$RUN/diff_full.txt" > "$RUN/diff.txt"
 if [ "$(wc -c < "$RUN/diff_full.txt")" -gt 102400 ]; then
   printf '\n（差分は 100KB で切った。続きは一覧のファイルを Read で読む）\n' >> "$RUN/diff.txt"
 fi
+
+# 実験の前提（コンテナ）を確かめてから締め切りを数え始める（起こす待ちは 1 周の締め切りの外・I486）。
+# 作業ツリーの起点（state0）も起こした後に取る（起こしたときにできたファイルを実験のせいにしない）
+ensure_backend_container || exit 2
+ADV_START=$(adv_now) || { echo "⛔ 今の時刻を読めません（ADV_CLOCK_FILE=${ADV_CLOCK_FILE}）"; echo "ADVERSARIAL_ERROR: CLOCK"; exit 2; }
+worktree_state > "$RUN/state0"
 
 echo "敵対的レビューを 3 観点で起動しました（締め切り ${ADV_DEADLINE} 秒・見る範囲 ${REVIEW_BASE}...HEAD）..."
 for p in 1 2 3; do run_perspective "$p" & PIDS+=("$!"); done
@@ -551,6 +587,7 @@ n=1; while [ -e "$RECORD" ]; do n=$(( n + 1 )); RECORD="docs/reviews/${ISSUE}_ad
   printf -- '- 人の応答待ち: 0（レビュー役・実験役はすべて --permission-prompts none で起動。拒否 %s 件は下の表）\n' "$DENIALS"
   [ "$DENIALS_UNREADABLE" -eq 1 ] && printf -- '- ⛔ 拒否の一覧を読めない記録がある（承認が要る操作で止まったかを確かめられないので、この周は合格にしない）\n'
   [ -n "$REVIEW_BASE_NOTE" ] && printf -- '- %s\n' "$REVIEW_BASE_NOTE"
+  printf -- '- コンテナ: %s\n' "$CONTAINER_NOTE"
   printf -- '- 一覧: %s の「## 必ず確かめる項目」（%s 項目）\n' "$PLAN_FILE" "$(grep -c . "$RUN/checklist.tsv")"
   [ -s "$RUN/carry_note" ] && printf -- '- 引き継ぎ: %s\n' "$(cat "$RUN/carry_note")"
   [ "$UNREPORTED" -gt 0 ] && printf -- '- 報告の無い観点が %s 件ある（この周は ROUNDS: 0。review-gate が 1 回だけやり直す）\n' "$UNREPORTED"
