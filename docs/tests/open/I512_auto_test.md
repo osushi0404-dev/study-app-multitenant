@@ -32,3 +32,4 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 - セキュリティ: 影響なし（テストの書き方だけ）
 - 次回どう防ぐか: 手元で流すテストの選び方に、変えたファイル名を読むテストに加えて、scripts/claude の全スクリプトを走査するテスト（test_pipefail_negated_grep.sh など）を入れる
 - 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=35 fail=0）・`test_pipefail_negated_grep.sh` exit 0（pass=10 fail=0）
+- 実行記録（2026-11-14・test-gate）: `bash scripts/claude/gate-check.sh I512` exit 0（GATE_CHECK: OK）。heavy の委譲は無いので手元で流し直していない（CI が正）

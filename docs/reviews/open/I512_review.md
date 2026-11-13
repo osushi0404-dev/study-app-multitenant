@@ -16,8 +16,8 @@
 - Backend/Frontend/DB/Config: ハーネスだけ（`scripts/claude/code-review.sh`・`.claude/agents/code-reviewer.md`・`docs/plans/templates/plan_template.md`・`.claude/skills/retro/SKILL.md`・`docs/runbooks/review-rules.md`・テスト・一覧）
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: CI 全ジョブ合格（2 回目・d4bc5bba）。決定論ゲート `test_i512_accepted_risk.sh`（35/35）・`test_i202_ledger_cleanup.sh`（163/163）・`test_i205_stop_criteria.sh`（91/91）を `code-review.sh` が実走して OK。test-gate に委譲された重いテストは無い
+- 手動: No.1〜No.3 すべて Claude が実施して OK（Human の項目なし）
 
 ## 計画との差分
 - あり（計画変更記録の 2026-11-14 implement の行）: /simplify の結果で関数の形と計画書の探し方を変えた・I208 F3 の後半も直した・FG の元の文字列の追従。方式・範囲・受け入れ条件は変えない
@@ -34,6 +34,7 @@
 - [review-gate] 1 回目は CI_WAIT: FAIL（Harness Tests の test_pipefail_negated_grep.sh G1: test_i512_accepted_risk.sh:171 の `! grep … | grep -qvE` が pipefail の下の否定とパイプの形）で fix-loop へ — コードレビューは CI が通ってから
 - [fix-loop] 案 A（件数で判定・FG-07b を足す）で直した — 診断レビュー PASS。1 行の書き換えで shellcheck と I210 の決まりの両方を満たす
 - [review-gate] 2 回目は CI_WAIT: OK・FINAL_VERDICT: OK・ADVERSARIAL_STAGE: NOT_REQUIRED（`docs/reviews/I512_code_review_20261114_0153.md`）。台帳の F1（Medium・SECURITY=yes・R 番号の重複で受け入れ側が効く）〜F6（Low）は止めない指摘なので直さず retro へ — fix-loop が直すのは止める指摘だけ（I197）
+- [test-gate] gate-check OK・手動テスト 3 件を Claude が実施して OK・Human の項目なしで retro へ
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
