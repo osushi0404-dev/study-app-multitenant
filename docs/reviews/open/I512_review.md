@@ -16,7 +16,7 @@
 - Backend/Frontend/DB/Config: ハーネスだけ（`scripts/claude/code-review.sh`・`.claude/agents/code-reviewer.md`・`docs/plans/templates/plan_template.md`・`.claude/skills/retro/SKILL.md`・`docs/runbooks/review-rules.md`・テスト・一覧）
 
 ## テスト結果
-- 自動: CI 全ジョブ合格（2 回目・d4bc5bba）。決定論ゲート `test_i512_accepted_risk.sh`（35/35）・`test_i202_ledger_cleanup.sh`（163/163）・`test_i205_stop_criteria.sh`（91/91）を `code-review.sh` が実走して OK。test-gate に委譲された重いテストは無い
+- 自動: CI 全ジョブ合格（最後は 0a59b190）。決定論ゲート `test_i512_accepted_risk.sh`（43/43）・`test_i202_ledger_cleanup.sh`（163/163）・`test_i205_stop_criteria.sh`（91/91）を `code-review.sh` が実走して OK。test-gate に委譲された重いテストは無い
 - 手動: No.1〜No.3 すべて Claude が実施して OK（Human の項目なし）
 
 ## 計画との差分
@@ -94,3 +94,5 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 5 回目は CI_WAIT: OK・FINAL_VERDICT: OK（`docs/reviews/I512_code_review_20261114_0234.md`）。F11・F12 は resolved。新しい F13〜F16 はすべて Low・再現なしなので直さず retro で一覧へ（打ち切りの決めのとおり）
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 2 回目: gate-check OK・手動テスト No.2・No.3 を流し直して OK・Human の項目なしで retro へ
+STAGE_DONE: test-gate NEXT: retro

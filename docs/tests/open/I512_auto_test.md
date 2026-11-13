@@ -53,3 +53,4 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 - 何を変えたか: 囲み（``` と ~~~・行頭から空白 3 つまで・閉じていなければ後ろを全部）を全文から先に取り除き、その後で閉じたコメントを取り除く。8 の節の囲みの特例は消した。TC-05 を 17 通りに（前の節の囲みの中の 8 の例 2 形・閉じていない囲み）、囲みの中の <!-- で本物が切られない肯定（fok）、FG-05h（囲みを取り除かない写しで 3 通りが効き fok が切られる）
 - 次回どう防ぐか: 文書の構造を読む照合は「本文でないところ（囲み・コメント）を全文から先に取り除く → 節を読む」の順で最初から作る
 - 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=43 fail=0）・`test_i202_ledger_cleanup.sh` exit 0（163/163）・`test_pipefail_negated_grep.sh` exit 0（10/10）・本物の plan_I512 の R3 は効いたまま
+- 実行記録（2026-11-14・test-gate 2 回目・fix-loop 4 回目の後）: `bash scripts/claude/gate-check.sh I512` exit 0（GATE_CHECK: OK・REVIEWED_COMMIT 0a59b190）。manual_test No.2・No.3 を流し直して同じ結果（R3 だけが一覧・I430 は F1〜F3 が後続イシュー）。heavy の委譲は無い
