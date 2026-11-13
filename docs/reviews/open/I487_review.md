@@ -119,3 +119,6 @@ STAGE_DONE: plan-review NEXT: implement
 - [implement] 実装のコミットだけ `SKIP=eslint`（#468 と同じ。コンテナで `npm run lint` 0 件を確かめた）
 
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] React Query への置き換えの差分のレビューは HIGH（止める指摘は F7: 設定の保存の後、古い目標のキャッシュで達成を判定しうる）。F8・F9 は Low で台帳に残す
+
+STAGE_DONE: review-gate NEXT: fix-loop
