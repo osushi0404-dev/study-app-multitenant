@@ -17,11 +17,13 @@ const overview = (patch: {
   accuracy?: number | null;
   streak?: number;
   todaySeconds?: number;
+  /** 今日の答えの数（連続の終わりが今日か昨日かを決める・裏側の _current_streak と同じ規則） */
+  answeredToday?: number;
 } = {}): DashboardOverview => ({
   has_data: true,
   today: {
     study_seconds: patch.todaySeconds ?? 0,
-    answered_count: 0,
+    answered_count: patch.answeredToday ?? 0,
     correct_count: 0,
     accuracy_rate: null,
   },
@@ -89,22 +91,36 @@ describe('dashboardAchievements', () => {
   });
 
   it('TC-14: 連続日数の節目は同じ連続の間に 1 回、途切れて再び届けばもう一度', () => {
-    const first = decide(overview({ streak: 7 }), emptyRecord(), '2026-11-13');
+    const answered = (streak: number) => overview({ streak, answeredToday: 1 });
+    const first = decide(answered(7), emptyRecord(), '2026-11-13');
     expect(first.streakDays).toBe(7);
     expect(first.record.streakRuns['7']).toBe('2026-11-07');
 
-    expect(decide(overview({ streak: 7 }), first.record, '2026-11-13').streakDays).toBeNull();
-    expect(decide(overview({ streak: 8 }), first.record, '2026-11-14').streakDays).toBeNull();
+    expect(decide(answered(7), first.record, '2026-11-13').streakDays).toBeNull();
+    expect(decide(answered(8), first.record, '2026-11-14').streakDays).toBeNull();
 
-    const fourteen = decide(overview({ streak: 14 }), first.record, '2026-11-20');
+    const fourteen = decide(answered(14), first.record, '2026-11-20');
     expect(fourteen.streakDays).toBe(14);
     expect(fourteen.record.streakRuns['14']).toBe('2026-11-07');
 
-    const again = decide(overview({ streak: 7 }), first.record, '2026-11-30');
+    const again = decide(answered(7), first.record, '2026-11-30');
     expect(again.streakDays).toBe(7);
     expect(again.record.streakRuns['7']).toBe('2026-11-24');
 
     expect(decide(overview({ streak: 0 })).streakDays).toBeNull();
+  });
+
+  it('TC-14b: 今日まだ答えていない日は、連続の終わりを昨日として同じ連続と見なす（F1）', () => {
+    const first = decide(overview({ streak: 7, answeredToday: 1 }), emptyRecord(), '2026-11-13');
+    // 翌日、まだ答えずに開く: 裏側は昨日までの 7 日を返す。同じ連続なので出さない
+    const nextDay = decide(overview({ streak: 7, answeredToday: 0 }), first.record, '2026-11-14');
+    expect(nextDay.streakDays).toBeNull();
+    expect(nextDay.record.streakRuns['7']).toBe('2026-11-07');
+
+    // 初めて開いたのが「昨日まで 7 日・今日はまだ」の日: 始まりは昨日の 6 日前
+    const fresh = decide(overview({ streak: 7, answeredToday: 0 }), emptyRecord(), '2026-11-14');
+    expect(fresh.streakDays).toBe(7);
+    expect(fresh.record.streakRuns['7']).toBe('2026-11-07');
   });
 
   it('TC-15: 正答率 95% と目標達成は 1 日 1 回', () => {

@@ -42,3 +42,4 @@ STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 1 回目のコードレビューは HIGH（止める指摘は F1 だけ: 連続日数の節目の開始日が、今日まだ解答していない日に 1 日ずれて同じ連続でもう一度出る）。F2〜F4 は止めない指摘として台帳に残し retro へ
 
 STAGE_DONE: review-gate NEXT: fix-loop
+- [fix-loop] F1 は案 A（同じ応答の今日の答えの数で連続の終わりを今日か昨日に決める）で直した — 裏側の規則と同じで API を変えない。案 B（1 日の幅）は途切れ直後の同じ節目を取り違える・案 C（API に終わりの日を足す）は契約を広げる。診断レビュー PASS

@@ -128,7 +128,10 @@ export const decideAchievements = ({
 
   const days = overview.streak.current_days;
   if (days > 0 && days % STREAK_STEP_DAYS === 0) {
-    const runStart = daysBefore(today, days - 1);
+    // 裏側（dashboard/selectors.py の _current_streak）は、今日に答えがあれば今日まで、無ければ昨日までを数える。
+    // 同じ規則で連続の終わりの日を決め、そこから始まりの日を出す（I487 F1）
+    const endsToday = overview.today.answered_count > 0;
+    const runStart = daysBefore(today, days - 1 + (endsToday ? 0 : 1));
     const runs = new Map(Object.entries(next.streakRuns));
     if (runs.get(String(days)) !== runStart) {
       streakDays = days;
