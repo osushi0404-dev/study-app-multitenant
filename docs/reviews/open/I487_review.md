@@ -39,3 +39,6 @@ STAGE_DONE: plan-review NEXT: implement
 - [implement] 実装のコミットだけ `SKIP=eslint` にした — ワークツリーのホストに eslint が無くフックが exit 127 で止まる既知の問題（#468・I473・I493 と同じ）。同じ `npm run lint`（--max-warnings 0）を frontend のコンテナで流して違反 0 件を確かめた（初回に出たテストの 3 件は直した）。CI の ESLint は通常どおり流れる
 
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] 1 回目のコードレビューは HIGH（止める指摘は F1 だけ: 連続日数の節目の開始日が、今日まだ解答していない日に 1 日ずれて同じ連続でもう一度出る）。F2〜F4 は止めない指摘として台帳に残し retro へ
+
+STAGE_DONE: review-gate NEXT: fix-loop
