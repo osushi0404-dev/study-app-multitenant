@@ -24,3 +24,5 @@
 - このブランチのコミットを revert する
 
 ## 自律判断の記録
+
+STAGE_DONE: plan NEXT: plan-review
