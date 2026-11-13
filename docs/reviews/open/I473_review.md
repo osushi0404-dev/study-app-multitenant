@@ -42,7 +42,9 @@
 - [implement] クエリ数を 9 で固定した — 実装後に数えた本数。データを増やしても同じであることも同じテストで見る
 - [implement] `/simplify` の 4 観点の指摘 15 件のうち 7 件を直し、8 件を見送った（理由は計画変更記録）— 振る舞いを変えるもの・契約を変えるもの・範囲外の既存の借りは見送り
 - [implement] E2E は手元で流さず CI に任せた — 1 本の追加で、CI が PR ごとに全部流すため（手元で CI と同じものを流し直さない）
+- [implement] 実装のコミットだけ `SKIP=eslint` にした — ワークツリーのホストに eslint が無くフックが exit 127 で止まる既知の問題（#468・I452 と同じ）。同じ `npm run lint` を frontend コンテナで流して違反 0 件を確かめた上で使った。CI の ESLint は通常どおり流れる
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
