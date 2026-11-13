@@ -12,7 +12,7 @@
 - Backend/Frontend/DB/Config: ハーネス（`scripts/claude/adversarial-review.sh`・テスト・review-gate・adversarial-reviewer.md・台帳）だけ
 
 ## テスト結果
-- 自動: TC-01〜03 合格（test_i197 pass=154 fail=0・台帳と review-gate の否定の確かめ exit 0）。関係する test_i202・i181・i193 も手元で合格。CI 合格（CI_WAIT: OK）
+- 自動: TC-01〜03 合格（F1 の直しの後 test_i197 pass=156 fail=0。前は 154・台帳と review-gate の否定の確かめ exit 0）。関係する test_i202・i181・i193 も手元で合格。CI 合格（CI_WAIT: OK）
 - 手動: No.1（実際の docker でこのワークツリーの backend を起こし healthy・ラベル一致・exec 可）OK／No.2（review-gate に Claude の判断が残らない）OK
 
 ## 計画との差分
@@ -91,3 +91,5 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 差分のレビュー OK（docs/reviews/I486_code_review_20261113_1023.md・F1 resolved）。新しい指摘 F7〜F9 は Low・止めない。F9（手動テストの手順が files.txt のまま）は test-gate で手順を直して実機で流し直す
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] F1 の直しの後、手動 No.1 を branch_files.txt で実機で流し直し OK（レビューの F9 に対応）。手動 No.2 は §3-1 の文言が「ブランチに」になっただけで判断の文は増えていない — OK のまま
+STAGE_DONE: test-gate NEXT: retro

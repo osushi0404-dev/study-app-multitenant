@@ -21,3 +21,4 @@ bash scripts/claude/tests/test_i197_adversarial_process.sh
 
 ## 実行記録
 - 2026-11-13 09:07 `bash scripts/claude/code-review.sh I486` の決定論ゲート 7 行 → すべて exit 0（docs/reviews/I486_code_review_20261113_0907.md）。test-gate に任された重いテストは無し
+- 2026-11-13 10:23 F1 の直しの後 `bash scripts/claude/code-review.sh I486` の決定論ゲート → exit 0（docs/reviews/I486_code_review_20261113_1023.md）。test_i197 pass=156 fail=0（A46・FG-A46 を含む）
