@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: 計画書「3. 影響範囲」のとおり（DB の変更なし）
 
 ## テスト結果
-- 自動: （実装後に書く）
-- 手動: （test-gate で書く）
+- 自動: CI がすべて成功（Backend Lint & Security・Backend Tests・Frontend Type Check・Frontend Lint & Security・Frontend Tests・API Types Up To Date・Harness Tests・E2E）。コードレビュー OK・敵対的レビュー OK（1 周）。詳細は docs/tests/open/I493_auto_test.md
+- 手動: No.1〜3 すべて OK（Claude・Playwright MCP とコマンド）。詳細は docs/tests/open/I493_manual_test.md
 
 ## 計画との差分
 - （実装後に書く）
@@ -31,6 +31,9 @@
 - [implement] 画面の確かめ（Playwright）は test-gate の手動 No.1 に回した — 画面の動きは変えておらず（型の読み込み先と、選択肢の確かめの書き方だけ）、選択肢の確かめは Dashboard.test.tsx（10 件通過）で見ている
 - [implement] backend・celery のイメージを作り直したところ、celery・celery-beat が起動直後に落ちた。原因は今回と無関係（celery の部品 kombu の新しい版が redis-py 6.1 以上を求めるが、`requirements.txt` は `redis==5.0.1` に固定。作業の開始時から celery は動いていなかった）。別イシューとして起票する — 本イシューの範囲外で、本番のイメージでも同じことが起こりうるため → I499（#499）として起票した
 - [review-gate] コードレビューは OK（台帳に Low 4 件・止める指摘なし）、敵対的レビューは 1 周目で OK（V1〜V6 すべて確認済み・新しい指摘なし）。Low は retro で扱う — 止める条件に当たらないため
+- [test-gate] 手動 No.3 は `curl` が許可されていないので Playwright MCP で URL を開いて HTTP の状態（404）を見た — 同じことを確かめられ、承認画面を出さずに済むため
+- [test-gate] 手動 No.1 の期待結果「今日も 0 以外」は、今日の答えの記録が無いため 0 分の表示が正しい。データどおりなので OK とし、書き方が強すぎたことを記録した — 期待結果の文言の誤りで、画面の不具合ではないため
+- [test-gate] 画面確認で、ログアウトの API が 400 を返すのを見た（I151 のレビューで既知の `logout_view` の不備・今回と無関係）。retro で扱う
 
 STAGE_DONE: plan NEXT: plan-review
 

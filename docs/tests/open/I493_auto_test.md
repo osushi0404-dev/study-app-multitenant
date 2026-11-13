@@ -3,8 +3,17 @@
 実行コマンド（例）: `docker compose exec backend pytest core/tests/test_I493_openapi_contract.py` / `docker compose exec frontend npm run typecheck`（pytest・Jest・型検査・lint・`api-types` ジョブは CI が PR ごとに流す。手元では流し直さない）
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
+- backend: 手元（implement・2026-11-13）で `pytest core/tests/test_I493_openapi_contract.py dashboard/tests/test_I473_overview.py` が 33 passed（整理の後に I493 の 11 件を流し直して 11 passed）。CI の Backend Tests が成功（review-gate の `CI_WAIT: OK`・コミット 5c543f82）
+- frontend: 手元（implement）で `tsc --noEmit` 終了コード 0・`npm run lint` 違反 0・`Dashboard.test.tsx` 10 passed。CI の Frontend Type Check・Frontend Lint & Security・Frontend Tests・API Types Up To Date（TC-20〜TC-22）が成功（同上）
+- TC-21 の失敗の注入: 手元で CI と同じ手順を流し、`--check` が終了コード 1（「Generated types are not up-to-date!」）
+- 決定論ゲート（TC-13）: review-gate の `code-review.sh` が実走して exit=0
+
+## 実行記録
+| 日時 | 段階 | コマンド | 終了コード |
+|---|---|---|---|
+| 2026-11-13 12:33 | review-gate | `bash scripts/claude/code-review.sh I493`（CI 待ち・決定論ゲート TC-13 の実走を含む） | 0（`CI_WAIT: OK`・`FINAL_VERDICT: OK`） |
+| 2026-11-13 12:47 | test-gate | `bash scripts/claude/gate-check.sh I493` | 0（`GATE_CHECK: OK`） |
+| 2026-11-13 12:48 | test-gate | test-gate に回された重いテストは無い（pytest・Jest・api-types は CI が流した） | — |
 
 ## テストケース
 
