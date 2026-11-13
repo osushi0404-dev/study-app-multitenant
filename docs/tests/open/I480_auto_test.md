@@ -4,7 +4,10 @@
 
 結果:
 - 計画時のベースライン（2026-11-13・変更前）: `test_i202_ledger_cleanup.sh` pass=157 fail=0・`test_i205_stop_criteria.sh` pass=91 fail=0
-- TC-01〜TC-03: 実装前のため未実行（Q10 は実装の後でないと書けない）
+- 実行記録（2026-11-13・implement）: `bash scripts/claude/tests/test_i202_ledger_cleanup.sh` exit 0（pass=163 fail=0・Q10・FG-Q10a〜c・Q7・FG-Q7 を含む）／`bash scripts/claude/tests/test_i205_stop_criteria.sh` exit 0（pass=91 fail=0）
+- 実行記録（2026-11-13・review-gate）: 決定論ゲートの 2 本を `code-review.sh` が実走して OK（`docs/reviews/I480_code_review_20261113_1142.md`）。CI（`run-all.sh` を含む）も OK
+- TC-03: manual_test No.1 で OK
+- test-gate: heavy の委譲は無いので手元で流し直していない（CI が正）
 
 | TC | AC | 内容 | 期待（合格=exit 0） | 失敗の注入 |
 |---|---|---|---|---|

@@ -14,8 +14,8 @@
 - Backend/Frontend/DB/Config: ハーネスの retro の振り分けだけ（`blocking()`・レビューの合否は変えない）
 
 ## テスト結果
-- 自動: 未実施（計画の段階）
-- 手動: 未実施
+- 自動: `test_i202_ledger_cleanup.sh` pass=163 fail=0・`test_i205_stop_criteria.sh` pass=91 fail=0・CI OK・コードレビュー OK（`docs/reviews/I480_code_review_20261113_1142.md`）
+- 手動: No.1・No.2 とも OK（Claude）。Human の項目なし
 
 ## 計画との差分
 - なし
@@ -29,8 +29,10 @@
 - [implement] /simplify は整理役 4 体を起こさず自分で 4 観点を見た（指摘なし） — 差分が条件 1 行・コメント 1 行・テスト 1 ブロック・文言 3 か所と小さく、4 体は過剰（memory: 小さな直しに重い工程を回さない）
 - [implement] FG-Q5 の壊し方も新しい条件の行（`SEC_COND`）を置き換える形に直した — 前の `if sec == "yes":` の文字列が本体から消え、写しが作れなくなるため（計画 §4 の Q7・Q10 の直しに付随。判定は変えない）
 - [review-gate] コードレビュー OK・CI OK・高リスク NO（敵対的レビューは不要）。台帳の残り Low 3 件（F1〜F3）は止めない指摘なので直さず retro へ — 止める指摘だけを直す決まり（I197）
+- [test-gate] gate-check OK・手元で流し直すテストなし（heavy の委譲なし）・手動テスト 2 項目を Claude が実施して OK — Human の項目が無いので retro へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
