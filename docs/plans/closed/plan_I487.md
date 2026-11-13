@@ -349,4 +349,9 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-13 implement: 達成の記録の `streakRuns` の読み書きは `Map` を通す（ESLint の `security/detect-object-injection` の警告を出さないため）。設定画面の `notification_settings` の読み取りも同じ理由で `Object.entries` を使う。計画レビューのやり直し: 不要
 
 ## レビュー結果
-- [20261113_1632 判定: ✅ 完了](../../reviews/I487_plan_review_20261113_1632.md)
+- [20261113_1632 判定: ✅ 完了](../../reviews/closed/I487_plan_review_20261113_1632.md)
+
+## 完了情報
+- **完了日時**: 2026-11-13
+- **対応者**: Claude Code
+- **レビュー結果**: OK（計画レビュー OK・コードレビュー 2 回目 OK〔1 回目の F1 は fix-loop で直した〕・手動テスト No.1〜6 OK）

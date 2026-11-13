@@ -105,3 +105,6 @@ STAGE_DONE: test-gate NEXT: retro
 - [retro] 予防処置は足さない — 見つかった問題はどれもその場で捕まり手戻りが小さい（見送りの理由は「## 振り返り」）
 
 STAGE_DONE: retro NEXT: close
+- [close] develop への追従は不要（BLOCKED＝承認待ち）。gate-check OK。記録を closed へ移し、診断メモ（`_fix_diagnosis_`）も closed へ回収した（close の glob に当たらないため）。PR の説明をひな形で更新した
+
+STAGE_DONE: close NEXT: merge
