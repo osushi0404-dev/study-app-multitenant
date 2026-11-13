@@ -192,6 +192,8 @@ const Settings: React.FC = () => {
       // ダッシュボードが持つ設定のキャッシュを、保存の応答（裏側が保存した値）で書き換える。
       // 古いことにするだけ（invalidate）だと、戻ったときに取り直しが終わるまで古い目標で判定・表示してしまう（I487 F7）
       if (user) {
+        // 保存の前に始まった取得の古い応答が、書き換えたキャッシュを上書きしないよう先に止める（React Query の推奨の手順・I487 F10）
+        await queryClient.cancelQueries({ queryKey: userSettingsKey(user.id) });
         queryClient.setQueryData(userSettingsKey(user.id), updatedSettings);
       } else {
         queryClient.invalidateQueries({ queryKey: [USER_SETTINGS_KEY_ROOT] });

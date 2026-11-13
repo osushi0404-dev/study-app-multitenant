@@ -128,3 +128,6 @@ STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] F7 の直しの差分のレビューは HIGH（止める指摘は F10: 保存の前に始まった設定の取得の古い応答が、書き換えたキャッシュを上書きしうる）。F11・F12 は Low で台帳に残す
 
 STAGE_DONE: review-gate NEXT: fix-loop
+- [fix-loop] F10 は案 A（キャッシュを書き換える前に `cancelQueries` で同じキーの取得を止める）で直した — React Query の推奨の手順。案 B（保存の後にもう一度取り直す）は上書きの窓が残る。診断レビュー PASS
+
+STAGE_DONE: fix-loop NEXT: review-gate

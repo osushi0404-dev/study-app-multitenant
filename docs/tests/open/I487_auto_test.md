@@ -48,6 +48,7 @@
 ### 設定・通知・アクセシビリティ（新規）
 | TC | 置き場所 | 内容 | 期待値 |
 |---|---|---|---|
+| TC-10d（競合） | `frontend/src/pages/__tests__/Settings.test.tsx` | 保存の前に始まった設定の取得が後から古い値を返しても、キャッシュは保存した値のまま（F10） | 古いデータ（30）のキャッシュに、終わっていない取得（`fetchQuery`）を作ってから 60 で保存し、その後に取得が 30 を返しても、キャッシュの `daily_study_goal_minutes` が `60` |
 | TC-10d | `frontend/src/pages/__tests__/Settings.test.tsx` | 保存のときに設定のキャッシュを保存した値にする（F7） | `QueryClient` に `['user-settings', 'user-1']` の古いデータ（`daily_study_goal_minutes: 30`）を入れておき、設定画面で 60 にして保存すると、取り直しを待たずにそのキャッシュの `daily_study_goal_minutes` が `60` になる |
 | TC-17 | `frontend/src/pages/__tests__/Settings.test.tsx` | 読み込みと保存の項目名 | GET `/api/settings/` の応答 `{ daily_study_goal_minutes: 45, study_reminders_enabled: false, reminder_time: '19:00:00', theme_preference: 'dark', notification_settings: { email: false, push: true, achievements: true, reminders: false } }`。「1日の学習目標時間（分）」の入力欄の値が「45」。値を「50」にして「設定を保存」相当のボタン（既存の保存ボタン）を押すと、PATCH `/api/settings/` の本文が `{ daily_study_goal_minutes: 50, study_reminders_enabled: false, reminder_time: '19:00', theme_preference: 'dark', notification_settings: { email: false, push: true, achievements: true, reminders: false } }`（`toEqual`）。本文に `daily_study_goal`・`study_reminder_enabled`・`theme` のキーが無い。`toast.success('設定を保存しました')` が呼ばれる |
 | TC-18 | `frontend/src/contexts/__tests__/NotificationContext.test.tsx` | リマインダーの項目名 | `notificationService` をモック（`isEnabled` true・`getPermissionStatus` `'granted'`）。`scheduleReminders({ daily_study_goal_minutes: 40, study_reminders_enabled: true, reminder_time: '19:00:00', theme_preference: 'light', notification_settings: {} })` を呼ぶと、`scheduleStudyReminder` が `('19:00:00', '今日の学習目標は40分です。一緒に頑張りましょう！')` で 1 回呼ばれる。`study_reminders_enabled: false` なら呼ばれない |
@@ -125,3 +126,10 @@
 - セキュリティ上の考慮点: なし（端末の表示用の記録だけ）
 - 次回どう防ぐか: 画面で値を保存して、同じ値をほかの画面がキャッシュで持つときは、保存の応答でキャッシュを書き換える。TC-10d で固定
 - 確かめた結果: TC-10d は直す前に不合格（✕）・直した後に合格。`Settings.test.tsx` 2 件・`Dashboard.test.tsx` 27 件 合格。`npm run lint`・`npm run typecheck` 合格
+
+## 再発防止記録（fix-loop・コードレビュー F10・2026-11-13）
+- なぜ失敗したか: F7 の直しで保存の応答をキャッシュに書いたが、その前に同じキーの進行中の取得を止めていなかった。保存の前に始まった取得の古い応答が、後から届いてキャッシュを上書きしうる
+- 何を変えたか: `setQueryData` の前に `await queryClient.cancelQueries({ queryKey: userSettingsKey(user.id) })`（`frontend/src/pages/Settings.tsx`）。React Query の推奨の手順
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: キャッシュを手で書き換えるときは、先に同じキーの取得を止める。TC-10d（競合）で固定
+- 確かめた結果: TC-10d（競合）は直す前に不合格（✕）・直した後に合格。`Settings.test.tsx` 3 件・`Dashboard.test.tsx` 27 件 合格。`npm run lint`・`npm run typecheck` 合格

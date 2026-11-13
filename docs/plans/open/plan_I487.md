@@ -358,6 +358,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-13 implement（/simplify の指摘）: `frontend/src/components/SubjectSelector.tsx` の見出し（`InputLabel`）を `useId` の id と `labelId` で選択欄に結び付ける（計画の変更点に無かったファイル）。選択欄の名前が無く、読み上げで「科目を選択」と伝わらず、E2E（TC-25）も名前なしで探す回避をしていたため。見た目・動きは変えない（学習統計の画面の科目の選択も同じく名前が付く）。計画レビューのやり直し: 不要（アクセシビリティの付け足しで、方式・範囲・受け入れ条件は変えない）
 - 2026-11-13 implement: 達成の記録の `streakRuns` の読み書きは `Map` を通す（ESLint の `security/detect-object-injection` の警告を出さないため）。設定画面の `notification_settings` の読み取りも同じ理由で `Object.entries` を使う。計画レビューのやり直し: 不要
 - 2026-11-13 fix-loop（コードレビュー F7）: 設定の保存のときのキャッシュの扱いを `invalidateQueries` から `setQueryData`（保存の応答で書き換え）に変えた（4.2）。診断: `docs/reviews/I487_fix_diagnosis_20261113_1824.md`（案 A・診断レビュー PASS）。計画レビューのやり直し: 不要（findings への対応で、方式・範囲・受け入れ条件は変えない）
+- 2026-11-13 fix-loop（コードレビュー F10）: 設定のキャッシュを書き換える前に、同じキーの進行中の取得を `cancelQueries` で止める（4.2・`Settings.tsx`）。保存の前に始まった取得の古い応答が上書きしないため。診断: `docs/reviews/I487_fix_diagnosis_20261113_1839.md`（案 A・診断レビュー PASS）。計画レビューのやり直し: 不要（findings への対応）
 
 ## レビュー結果
 - [20261113_1805 判定: ✅ 完了](../../reviews/I487_plan_review_20261113_1805.md)

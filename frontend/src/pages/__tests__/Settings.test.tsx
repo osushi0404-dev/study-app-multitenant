@@ -106,4 +106,29 @@ describe('Settings', () => {
     const cached = queryClient.getQueryData<{ daily_study_goal_minutes: number }>(['user-settings', 'user-1']);
     expect(cached?.daily_study_goal_minutes).toBe(60);
   });
+
+  it('TC-10d（競合）: 保存の前に始まった設定の取得が後から古い値を返しても、キャッシュは保存した値のまま（F10）', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['user-settings', 'user-1'];
+    queryClient.setQueryData(key, { ...SAVED, daily_study_goal_minutes: 30 });
+    // ダッシュボードで始まった、まだ終わっていない設定の取得
+    let resolveOld: (value: unknown) => void = () => {};
+    const pendingFetch = queryClient
+      .fetchQuery({ queryKey: key, queryFn: () => new Promise((resolve) => { resolveOld = resolve; }) })
+      .catch(() => undefined);
+    renderSettings(queryClient);
+
+    const goal = await screen.findByLabelText('1日の学習目標時間（分）');
+    await userEvent.clear(goal);
+    await userEvent.type(goal, '60');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('設定を保存しました'));
+
+    // 古い取得の応答（30 分）が保存の後に届く
+    resolveOld({ ...SAVED, daily_study_goal_minutes: 30 });
+    await pendingFetch;
+
+    const cached = queryClient.getQueryData<{ daily_study_goal_minutes: number }>(key);
+    expect(cached?.daily_study_goal_minutes).toBe(60);
+  });
 });
