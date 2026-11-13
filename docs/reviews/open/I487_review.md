@@ -37,3 +37,5 @@ STAGE_DONE: plan-review NEXT: implement
 - [implement] /simplify（4 観点）の採用: 読み上げ専用の文字に既存の `.sr-only` を使う・「すべて」の値を 1 か所に・使われない export を外す・「今日の分」の計算を 1 つの関数に・`StartQuizCard` の不要なメモ化を外す・グラフのデータを応答が変わったときだけ作る・上のバーのボタンは描く前に登録（浮いたボタンが一瞬出ない）・`SubjectSelector` の名前の結び付け・取得の目印は関数にまとめて依存を元の値だけにする
 - [implement] /simplify の見送り: 取得の 3 つのフックを共通の 1 つにまとめる（科目の目印・使い回しの有無が違い、まとめると条件分岐が増える）／`streakRuns` を角括弧で読む（ESLint の警告が出る）／科目の一覧の 2 回の取得をまとめる（`SubjectSelector` は学習統計でも使い、画面に戻ったときの取り直しの動きを変えることになる。#494 で科目の選び直しの画面を作るときに見直す）／設定の 2 回の取得（通知の仕組みに手を入れる必要があり割に合わない）／保存のたびの `localStorage` の書き込み（「すべて」の応答 1 回につき 1 度で小さい）
 - [implement] 実装のコミットだけ `SKIP=eslint` にした — ワークツリーのホストに eslint が無くフックが exit 127 で止まる既知の問題（#468・I473・I493 と同じ）。同じ `npm run lint`（--max-warnings 0）を frontend のコンテナで流して違反 0 件を確かめた（初回に出たテストの 3 件は直した）。CI の ESLint は通常どおり流れる
+
+STAGE_DONE: implement NEXT: review-gate
