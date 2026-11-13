@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: （実装後に記入。計画では Backend は `core/openapi.py` の 1 行と `openapi.yaml` の作り直し・Frontend はダッシュボード・設定・通知・共通の枠・アクセシビリティ設定・DB/Config なし）
 
 ## テスト結果
-- 自動: （CI の結果を記入）
-- 手動: （`docs/tests/open/I487_manual_test.md`）
+- 自動: CI（pytest・Jest・E2E）成功（PR #507・5cd85647）。手元では関係するファイルだけ（Jest 45 件・E2E 11 件）を流して合格。失敗の注入 5 件はすべて不合格になることを確かめた（`docs/tests/open/I487_auto_test.md`）
+- 手動: No.1〜No.6 すべて Claude が Playwright MCP で実施して OK（`docs/tests/open/I487_manual_test.md`・701ccc72）。Human の項目なし
 
 ## 計画との差分
 - なし / あり（理由）
@@ -48,3 +48,6 @@ STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 2 回目（差分）のコードレビューは OK。F1 は解決。新しく F5（端末とサーバの日付のずれ・#481 の範囲）・F6（TC-14b の境目の追加）が Low で台帳に残る。敵対的レビューは不要（高リスク NO）
 
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 手動 No.1〜No.6 はすべて Claude が実施して OK。グラフの見た目を確かめるため、e2e_user_a で 1 問だけ答えてから見た（E2E の種データを流すたびに作り直される利用者）。No.5 で書き換えた目標時間は元の 30 に戻した
+
+STAGE_DONE: test-gate NEXT: retro

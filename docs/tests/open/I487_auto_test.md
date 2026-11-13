@@ -102,3 +102,8 @@
 - セキュリティ上の考慮点: なし（端末の表示用の記録だけ）
 - 次回どう防ぐか: 裏側の値を画面で読み直して計算するときは、裏側の数え方（境目の規則）をコメントで指し、境目の場合（今日まだ答えていない）を TC に入れる。TC-14b を追加
 - 確かめた結果: TC-14b（追加）は直す前に不合格（✕）・直した後に合格。`dashboardAchievements.test.ts` 5 件・`Dashboard.test.tsx` 27 件 合格・`npm run lint` 0 件。既存の TC-14 は、今日に答えがある前提を明示した（`answeredToday: 1`）
+
+## 実行記録（test-gate・2026-11-13）
+- `bash scripts/claude/gate-check.sh I487` → exit 0（コードレビュー `docs/reviews/I487_code_review_20261113_1720.md` VERDICT OK・REVIEWED_COMMIT 5cd85647 以降は記録の場所だけ）
+- 決定論ゲート（シェル）: 宣言なし（test-gate に回された heavy なものも無い）
+- pytest・Jest・E2E: CI（PR #507・HEAD 5cd85647）で成功（review-gate の `CI_WAIT: OK`）。手元では流し直していない
