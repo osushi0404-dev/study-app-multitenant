@@ -30,6 +30,9 @@
 - [implement] /simplify（4 観点）で採った: コンテナの id の数の分岐を消し inspect の失敗に任せる／作業フォルダを `pwd -P` でそろえて比べる（wt-remove.sh と同じそろえ方）／正規表現の行末の `\s*` を外す／テストの案内の確かめをヘルパー `hint_has` に・`yn` の書き方にそろえる／docker のスタブの inspect を実物どおり空の対象で失敗させる — どれも振る舞いを変えない整理
 - [implement] /simplify で見送った: 毎回 `--build`（依存を変えたときだけにする案）— 計画で確実さを優先して決めた。作り直されるのは COPY の層だけで締め切りの外／終了コード 127 での判定 — `| tail` で隠れる（I455 の実例は is_error=false）ので文字の手掛かりが要る／id の重複をスクリプトで振り直す — レビュー役の ITEM 行が新しい id を知る必要があり範囲の外（AC は案内）／コンテナの確かめの共通化・a36 と a44 の統合・次の id を noexec のときだけ数える — 小さく、既存のテストや別スクリプトに手が広がるため
 
+- [review-gate] 基本レビュー OK・敵対的レビューは NOT_REQUIRED（docs/reviews/I486_code_review_20261113_0907.md）。止めない指摘 F1〜F6（Medium 2・Low 4）は台帳に残し retro で扱う — 止める条件に当たらない（ハーネス・再現なし）
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
