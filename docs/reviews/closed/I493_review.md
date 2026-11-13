@@ -83,6 +83,8 @@
 - [retro] 手動 No.1 の期待結果の書き方が強すぎた（データ次第の値を「0 以外」と書いた）→ 見送り — その場で正しく判断でき、手戻りは無い
 - [retro] 計画レビューの Warning（名前の付け替えのスパイク不足）→ 見送り — 実装の前にスパイク 5 で確かめ、手戻りは無い
 - [retro] 設計ルール昇格（CI で依存を入れるときの install スクリプト・npx）→ 見送り — 既存のジョブは `react-scripts` の都合で install スクリプトが要る可能性があり、一律の決まりにするには全ジョブの調査が要る。今回は design-security-review で捕まった
+- [close] develop への追従は不要（`pr-base-sync.sh sync`・mergeStateStatus=BLOCKED＝承認待ち）、gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した
+- [close] 新しいジョブ `API Types Up To Date` の必須チェックへの登録を、マージ依頼と一緒にユーザーにお願いする — bot に管理者の権限が無く、登録までは落ちてもマージを止められないため
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -97,3 +99,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
