@@ -89,3 +89,5 @@ STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 - [implement] F1 の直し: 起こすかの判定をブランチ全体（ADV_BASE...HEAD の branch_files.txt）に変更・A46/FG-A46 を追加（Red: up 1 回 → Green: pass=156 fail=0・test_i202 も合格）。/simplify は省いた — 整理済みの後の数行の追加のため（決定論のテストは流した）
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] 差分のレビュー OK（docs/reviews/I486_code_review_20261113_1023.md・F1 resolved）。新しい指摘 F7〜F9 は Low・止めない。F9（手動テストの手順が files.txt のまま）は test-gate で手順を直して実機で流し直す
+STAGE_DONE: review-gate NEXT: test-gate
