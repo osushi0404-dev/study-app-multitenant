@@ -699,11 +699,13 @@ ck "Q4 I197 形の High は HIGH・I205/I202 形の Low は OK・一覧の行は
 ck "Q4 新しい形の止める指摘は HIGH" HIGH "$(lib "$CR" ledger_verdict "$TMP/q4_new")"
 ck "FG-Q4 LEDG が FILE の欄を読まないと Q4 が不合格（HIGH にならない）" no \
   "$(yn [ "$(lib "$(broken '(?: FILE=(\S+))?' '')" ledger_verdict "$TMP/q4_new" 2>/dev/null)" = HIGH ])"
+# route_reasons() の SECURITY=yes の条件の行（I480: 再現ありか Medium 以上）。FG はこの行を書き換えて壊す
+SEC_COND='    if sec == "yes" and (repro == "yes" or RANK[sev] >= 1):'
 # Q5（AC1）: 振り分けは欄の値だけ（要約の中の KIND=app・SECURITY=yes・REPRO=yes の文字は見ない）
 printf 'LEDGER: F1 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no FILE=scripts/claude/a.sh | 要約に KIND=app SECURITY=yes SEV=High REPRO=yes の文字\n' > "$TMP/q5"
 ck "Q5 要約に欄の名前の文字があっても一覧側" "B:F1 I:" "B:$(ids "$CR" backlog "$TMP/q5") I:$(ids "$CR" issue "$TMP/q5")"
 ck "FG-Q5 行の文字で SECURITY=yes を見ると Q5 が不合格（後続イシュー側）" "B: I:F1" \
-  "$(B=$(broken '    if sec == "yes":' '    if "SECURITY=yes" in ledger_line("F0", e):'); echo "B:$(ids "$B" backlog "$TMP/q5") I:$(ids "$B" issue "$TMP/q5")")"
+  "$(B=$(broken "$SEC_COND" '    if "SECURITY=yes" in ledger_line("F0", e):'); echo "B:$(ids "$B" backlog "$TMP/q5") I:$(ids "$B" issue "$TMP/q5")")"
 # Q6（AC2）: guard の Medium 以上は再現が無くても後続イシュー側
 printf '%s\n' 'LEDGER: F1 SEV=High STATUS=open SCOPE=outside KIND=guard STOP=- REPRO=no RISK=- SECURITY=no FILE=.github/workflows/ci.yml | g1' \
   'LEDGER: F2 SEV=Medium STATUS=open SCOPE=delta KIND=guard STOP=- REPRO=no RISK=- SECURITY=no FILE=.github/workflows/ci.yml | g2' \
@@ -726,11 +728,11 @@ printf '%s\n' 'LEDGER: F1 SEV=Medium STATUS=open SCOPE=delta KIND=harness STOP=-
   'LEDGER: F11 SEV=Low STATUS=open SCOPE=delta KIND=guard STOP=- REPRO=yes RISK=- SECURITY=no | guard の Low' \
   'LEDGER: F12 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=flow REPRO=yes RISK=- SECURITY=no | 止める Low' \
   'LEDGER: F13 SEV=High STATUS=resolved SCOPE=delta KIND=app STOP=- REPRO=yes RISK=- SECURITY=no | 直った' > "$TMP/q7"
-Q7_WANT='I:F1,F7,F8,F9,F12 B:F2,F3,F4,F5,F6,F10,F11'
-ck "Q7 I206 の F1 と app・SECURITY=yes・guard の High・止める指摘は後続イシュー、ほかは一覧・resolved は出ない" "$Q7_WANT" \
+Q7_WANT='I:F1,F7,F9,F12 B:F2,F3,F4,F5,F6,F8,F10,F11'   # I480: F8（Low・再現なしの SECURITY=yes）は一覧
+ck "Q7 I206 の F1 と app・guard の High・止める指摘は後続イシュー、ほかは一覧（Low・再現なしの SECURITY=yes も）・resolved は出ない" "$Q7_WANT" \
   "I:$(ids "$CR" issue "$TMP/q7") B:$(ids "$CR" backlog "$TMP/q7")"
-ck "FG-Q7 SECURITY=yes の条件を外すと Q7 が不合格（F8 が一覧に落ちる）" no \
-  "$(B=$(broken '    if sec == "yes":' '    if False:'); yn [ "I:$(ids "$B" issue "$TMP/q7") B:$(ids "$B" backlog "$TMP/q7")" = "$Q7_WANT" ])"
+ck "FG-Q7 SECURITY=yes の条件を前の形（重さ・再現を見ない）に戻すと Q7 が不合格（F8 が後続イシューに上がる）" no \
+  "$(B=$(broken "$SEC_COND" '    if sec == "yes":'); yn [ "I:$(ids "$B" issue "$TMP/q7") B:$(ids "$B" backlog "$TMP/q7")" = "$Q7_WANT" ])"
 # Q8（AC3）: 一覧の行・後続イシューの行の形と理由。種類の誤りは exit 2
 printf '%s\n' 'LEDGER: F1 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no FILE=a | s1' \
   'LEDGER: F2 SEV=Medium STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no FILE=a | s2' \
@@ -756,6 +758,27 @@ ck "Q9 種類の誤り・引数の不足・記録の無いイシューは exit 2
   "$( (cd "$R" && rc bash "$CR" --route other I900) ) $( (cd "$R" && rc bash "$CR" --route backlog) ) $( (cd "$R" && rc bash "$CR" --route backlog I901) )"
 ck "FG-Q9 最新でなく最初の記録を読むと Q9 が不合格" no \
   "$(yn grep -qF '| 新しい |' <(q9 "$(broken 'latest_ledger_record() { ledger_records "$1" | tail -1; }' 'latest_ledger_record() { ledger_records "$1" | head -1; }')"))"
+
+# ---------------- I480: SECURITY=yes でも Low かつ再現なしは一覧（plan_I480.md §6・auto_test TC-01） ----------------
+# Q10: F1・F2（Low・再現なし。F2 は #477 の形の guard）は一覧、F3（再現あり）・F4（Medium）・F6（Blocker・outside）は理由 SECURITY=yes で
+# 後続イシュー、F5（app の Low・再現なし）は理由「アプリ本体」だけで後続イシュー（最優先にしない）
+printf '%s\n' 'LEDGER: F1 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=yes FILE=a | s1' \
+  'LEDGER: F2 SEV=Low STATUS=open SCOPE=delta KIND=guard STOP=- REPRO=no RISK=- SECURITY=yes FILE=.github/workflows/ci.yml | s2' \
+  'LEDGER: F3 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=yes RISK=- SECURITY=yes FILE=a | s3' \
+  'LEDGER: F4 SEV=Medium STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=yes FILE=a | s4' \
+  'LEDGER: F5 SEV=Low STATUS=open SCOPE=delta KIND=app STOP=- REPRO=no RISK=- SECURITY=yes FILE=backend/x.py | s5' \
+  'LEDGER: F6 SEV=Blocker STATUS=open SCOPE=outside KIND=harness STOP=- REPRO=no RISK=- SECURITY=yes FILE=a | s6' > "$TMP/q10"
+Q10_WANT='I:F3,F4,F5,F6 B:F1,F2'
+# 理由の中の SECURITY=yes（行の前の方の SECURITY= の欄は数えない）を持つ行の番号と、F5 の理由
+q10_sec() { route "$1" issue "$TMP/q10" | awk -F'後続イシューにする理由: ' 'index($2, "SECURITY=yes") { split($1, a, " "); print a[2] }' | paste -sd, -; }
+q10() { echo "I:$(ids "$1" issue "$TMP/q10") B:$(ids "$1" backlog "$TMP/q10")"; }
+ck "Q10 後続イシューが F3・F4・F5・F6、一覧が F1・F2" "$Q10_WANT" "$(q10 "$CR")"
+ck "Q10 理由に SECURITY=yes が付くのは F3・F4・F6・F5 の理由はアプリ本体だけ" "F3,F4,F6 yes" \
+  "$(q10_sec "$CR") $(yn grep -qxF -- '- F5 SEV=Low REPRO=no KIND=app SECURITY=yes FILE=backend/x.py | s5 | 後続イシューにする理由: アプリ本体' <(route "$CR" issue "$TMP/q10"))"
+ck "Q10 一覧の F1・F2 の理由は Low／再現なし" 2 "$(route "$CR" backlog "$TMP/q10" | grep -c '| 一覧に回した理由: Low／再現なし$')"
+ck "FG-Q10a 条件を前の形に戻すと不合格（F1・F2 が後続イシュー）" 'I:F1,F2,F3,F4,F5,F6 B:' "$(q10 "$(broken "$SEC_COND" '    if sec == "yes":')")"
+ck "FG-Q10b 再現を外すと不合格（F3 が一覧）" 'I:F4,F5,F6 B:F1,F2,F3' "$(q10 "$(broken "$SEC_COND" '    if sec == "yes" and RANK[sev] >= 1:')")"
+ck "FG-Q10c Medium 以上を外すと不合格（F4・F6 が一覧）" 'I:F3,F5 B:F1,F2,F4,F6' "$(q10 "$(broken "$SEC_COND" '    if sec == "yes" and repro == "yes":')")"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
