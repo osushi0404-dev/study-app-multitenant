@@ -214,7 +214,7 @@
   - 見張りを呼ぶ PreToolUse フックの数の期待値を 4 → 3 に直す
   - サンドボックスの決まり（壊しても気づきにくく、壊れると別ワークツリーの守りが消える）を足す: `sandbox.enabled` が true・`allowUnsandboxedCommands` が false・`failIfUnavailable` が true・`filesystem.denyWrite` に `.claude/worktrees`・`filesystem.denyRead` に `~/.config/github-app`・`excludedCommands` に一般のインタプリタとシェル（`bash *`・`sh *`・`python3 *`・`python *`・`node *`・`env *`・`*` だけの行）が無い。それぞれ失敗の注入（FG）を付ける
   - deny の `Bash(gh pr checkout *)`・`Bash(gh co *)` を確かめる（消すと fork の PR の取り込みの守りが無くなり、気づきにくい）
-- 消した判定の期待値を消す（逆の期待値＝「通す」には書き換えない。通すかどうかは見張りの役目ではなくなった）:
+- 消した判定の期待値を消す（逆の期待値＝「通す」には書き換えない。通すかどうかは見張りの役目ではなくなった）。消したテストの例は、ファイルごとに「例の名前・消した判定（D1〜D3）」の一覧を計画変更記録に残す（レビューで「消した判定の分だけか」を追えるように・計画レビュー 3 回目の Warning）:
   - `scripts/claude/tests/test_pretooluse_gh_pr_guard.sh`（494 行・G33〜G35 だけを見る）を消す
   - `scripts/claude/tests/test_pretooluse_worktree_guard.sh`: Bash の書き込みの例を消し、Edit／Write の例（G01）を残す
   - `scripts/claude/tests/test_pretooluse_push_guard.sh`: 保護ブランチ・宛先の決まらない push の例を消し、force・`--no-verify`・削除・`--mirror` の例を残す
@@ -254,7 +254,7 @@
 | R2: `bash scripts/claude/*` を外に出すので、Claude が書いたスクリプトを外で動かせる | 脅威モデルは事故。`scripts/claude/` は PR でレビューされる。一般のインタプリタは外に出さない（TC-01）。見張りは外に出したコマンドにも今までどおり効く |
 | R3: 許可した宛先（github.com）経由の持ち出し（文書の警告） | 事故の範囲では起きにくい（秘密の場所は `denyRead`・Read の deny で読めない）。TLS の中を見るプロキシは費用に見合わないので入れない |
 | R4: `failIfUnavailable` で、道具の無い PC で Claude Code が起動しない | onboarding.md に入れ方を書く。起動しないほうが「守りが無いまま動く」より安全。GitHub Actions では Claude Code を起動していない（2026-11-13 に `.github/` を grep して 0 件） |
-| R10: git と git 以外を 1 回の呼び出しでつなぐ（`git checkout X && npm …`）と、全体が中で動き、設定ファイルが違うブランチへの切り替えで設定ファイルだけ古く残る（S22 と同じ事故） | git だけをつなぐ形（`git fetch … && git checkout …`）は全部が `git *` に当たるので外で動く。git と他をつながない決まりを danger-ops.md に書く（4-5）。起きたときは `error: unable to unlink old '.claude/settings.json'` が出て気づけ、git を単体で `git checkout -- .claude/settings.json` と流せば戻る |
+| R10: git と git 以外を 1 回の呼び出しでつなぐ（`git checkout X && npm …`）と、全体が中で動き、設定ファイルが違うブランチへの切り替えで設定ファイルだけ古く残る（S22 と同じ事故） | git だけをつなぐ形（`git fetch … && git checkout …`）は全部が `git *` に当たるので外で動く。git と他をつながない決まりを danger-ops.md に書く（4-5）。起きたときは `error: unable to unlink old '.claude/settings.json'` が出て気づける。戻すときは、`git diff .claude/settings.json` で、差分が「切り替える前のブランチの中身」だけ（自分の未コミットの変更が無い）ことを確かめてから、git を単体で `git checkout -- .claude/settings.json` と流す。自分の変更が混ざっていれば、Edit で切り替え先の中身に合わせる（未コミットの変更を捨てない） |
 | R9: deny `Bash(gh pr checkout *)` は前方一致なので、`gh -R x pr checkout` のようにオプションを挟んだ形に当たらない | 普通の書き方の事故ではない（意図的な回避）。danger-ops.md に「前方一致」と書く |
 | R5: 見張りの削除で、残す判定まで壊す | 残す判定のテスト（push・コンテナ・checkout・matrix・oracle・止めるべき形の一覧）を変えずに流す。期待値を消すのは消した判定の分だけ（4-6） |
 | R6: manual モードでは変数入りのコマンドが確認になる（S1b） | ユーザーのセッションは auto モードで、通ることを確かめた（S16）。`claude -p` のレビュー役は Read・Grep・Glob だけを使う |
@@ -319,6 +319,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V8 | 1 | 実験必須 | レビュー役（`bash scripts/claude/test-session.sh …`）・`gh`・`git fetch`・docker が、最終の設定で承認なしに動く（M-06〜M-08） |
 
 ## レビュー結果
+- [20261113_1734 判定: ✅ 完了](../../reviews/I430_plan_review_20261113_1734.md)
 - [20261113_1727 判定: ✅ 完了](../../reviews/I430_plan_review_20261113_1727.md)
 - [20261113_1725 判定: 差し戻し（Blocker 1件）](../../reviews/I430_plan_review_20261113_1725.md)
 
@@ -329,6 +330,7 @@ Danger Ops（有無/手順/ロールバック）:
   - 採った方法: `git *` をまるごと外に出す。`allowWrite` を消し、`allowedDomains` を空にする（`strictAllowlist: true` のまま）。M-14 を「設定ファイルの違うブランチへの切り替え」の確かめに替える。R10 と danger-ops の「git を他とつながない」を足す
   - 理由: サンドボックスの中では `.claude/settings.json` が読み取り専用で（S21）、中の `git checkout` が設定ファイルだけ古く残す事故になった（S22）。サブコマンドを列挙すると漏れが同じ事故になる。git を外に出すと pre-commit も外で動くので `allowWrite` と PyPI・npm の宛先が要らなくなり、中で通信が要るコマンドが無くなった（最小権限）
   - 計画レビューのやり直し: 要（外に出す範囲＝方式を変える）
+- 2026-11-13 計画レビュー 3 回目（HIGHRISK・Warning 3・Info 2）への対応: R10 の戻し方に未コミットの変更を捨てない前提を足す・消したテストの例の一覧を計画変更記録に残す（4-6）・M-05 の実結果に止まった理由の文言を残す。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
 
 ## セキュリティレビュー結果
 
