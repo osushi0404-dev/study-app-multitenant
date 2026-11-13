@@ -25,3 +25,10 @@ bash scripts/claude/tests/test_i512_accepted_risk.sh
 bash scripts/claude/tests/test_i202_ledger_cleanup.sh
 bash scripts/claude/tests/test_i205_stop_criteria.sh
 ```
+
+## 再発防止記録（fix-loop・2026-11-14）
+- なぜ失敗したか: commit 時の shellcheck SC2143 に合わせて TC-07 の形の照合を `! grep … | grep -qvE` に書き換えた。pipefail の下では `grep -q` が先に終わると前の grep が SIGPIPE で終わり `!` が反転しうる（I210 の決まり）。CI の `test_pipefail_negated_grep.sh` G1 が捕まえた
+- 何を変えたか: 件数の比較 `[ "$(… | grep -cvE "$BL_FORM")" -eq 0 ]` にした（SC2143 にも当たらない）。形の照合が効いていることを確かめる FG-07b（形の崩れた行を足した写しは不合格）を足した
+- セキュリティ: 影響なし（テストの書き方だけ）
+- 次回どう防ぐか: 手元で流すテストの選び方に、変えたファイル名を読むテストに加えて、scripts/claude の全スクリプトを走査するテスト（test_pipefail_negated_grep.sh など）を入れる
+- 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=35 fail=0）・`test_pipefail_negated_grep.sh` exit 0（pass=10 fail=0）

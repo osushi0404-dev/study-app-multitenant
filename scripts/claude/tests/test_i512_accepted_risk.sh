@@ -168,10 +168,12 @@ BL_FORM='^- F[0-9]+ SEV=(Blocker|High|Medium|Low) REPRO=(yes|no) KIND=(app|harne
 t7() { grep -qE '^- F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の R2）$' "$1" \
   && grep -qE '^- F2 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の 4-1）$' "$1" \
   && grep -qE '^- F3 SEV=Medium REPRO=no KIND=guard SECURITY=no FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の 4-1）$' "$1" \
-  && ! grep -E '^- F' "$1" | grep -qvE "$BL_FORM"; }
+  && [ "$(grep -E '^- F' "$1" | grep -cvE "$BL_FORM")" -eq 0 ]; }   # pipefail の下で「! … | grep -q」を使わない（I210）
 ck "TC-07 docs/reviews/backlog/I430.md に F1〜F3 があり、どの行も一覧の形" yes "$(yn t7 docs/reviews/backlog/I430.md)"
 grep -v '^- F2 ' docs/reviews/backlog/I430.md > "$TMP/i430_noF2"
 ck "FG-07 F2 の行を消した写しは不合格" no "$(yn t7 "$TMP/i430_noF2")"
+{ cat docs/reviews/backlog/I430.md; printf -- '- F9 SEV=Low FILE=x\n'; } > "$TMP/i430_bad"
+ck "FG-07b 形の崩れた行を足した写しは不合格" no "$(yn t7 "$TMP/i430_bad")"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
