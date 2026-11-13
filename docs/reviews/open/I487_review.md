@@ -43,3 +43,5 @@ STAGE_DONE: implement NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: fix-loop
 - [fix-loop] F1 は案 A（同じ応答の今日の答えの数で連続の終わりを今日か昨日に決める）で直した — 裏側の規則と同じで API を変えない。案 B（1 日の幅）は途切れ直後の同じ節目を取り違える・案 C（API に終わりの日を足す）は契約を広げる。診断レビュー PASS
+
+STAGE_DONE: fix-loop NEXT: review-gate
