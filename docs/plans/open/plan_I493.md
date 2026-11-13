@@ -22,6 +22,7 @@
 - **スパイク 1（全部の API でスキーマを作る）**: 警告 61・エラー 136 が出た。シリアライザの無い APIView（`DashboardAnalyticsView`・`ChangePasswordView` など 12 種）は省かれ、ViewSet の多くは `get_queryset` が匿名ユーザーで例外になり、型が string に落ちる。→ 全 API を契約に入れると、中身の正しくない型ができる。
 - **スパイク 2（契約に入れるパスを `PREPROCESSING_HOOKS` で一覧に絞る・`--validate --fail-on-warn`）**: `extend_schema(parameters=[OverviewQuerySerializer], responses=OverviewSerializer)` と、`OrgSubjectField` に `extend_schema_field(OpenApiTypes.INT)` を付けると、警告 0 で通った（終了コード 0）。出たスキーマでは、必須のキーが全部 `required` に入り、`accuracy_rate` は Today・Totals で `nullable: true`、WeakSubject で null 不可、`kind` は enum（`weak_subject`・`unstudied_subject`）、`subject_id` のクエリは integer・省略可。
   - 部品の名前は `Day`・`Today`・`Totals`・`KindEnum` のように一般的な名前になる。→ 後で別の API を契約に足したとき名前がぶつからないよう、`Dashboard` で始まる名前にする（変更点 B2）。
+- **スパイク 5（計画レビューの Warning 1 を受けて・名前の付け替え）**: スパイク 2 に、7 つのシリアライザへの `extend_schema_serializer(component_name=...)`（`TotalsSerializer` を先に、継承した `TodaySerializer` を後に付ける。実装でクラスの定義に付けるのと同じ順）と、`ENUM_NAME_OVERRIDES`（`'DashboardRecommendationKindEnum': 'dashboard.serializers.RECOMMENDATION_KIND_CHOICES'`・値は `(KIND_WEAK, KIND_UNSTUDIED)`）を足して作った。`--validate --fail-on-warn` で終了コード 0。部品は `DashboardDay`・`DashboardOverview`・`DashboardRecommendation`・`DashboardRecommendationKindEnum`・`DashboardStreak`・`DashboardToday`・`DashboardTotals`・`DashboardWeakSubject` の 8 つで、`DashboardToday` と `DashboardTotals` は別々に出た。→ 変更点 B2 はこのとおり効く
 - **スパイク 3（型の生成）**: スパイク 2 のスキーマから `openapi-typescript` 7.13.0 で `.d.ts` を作り、frontend のコンテナの TypeScript 4.9.5 で `tsc --noEmit --strict` が通った。作った型の中身は普通の `interface`/`type` だけ。
 - **スパイク 4（`--check` の確かめ）**: 同じ型なら `--check` は終了コード 0。1 か所変えた写し（`has_data: boolean`→`string`）に `--check` をかけると「Generated types are not up-to-date!」で終了コード 1。
 - **既存の型の使われ方**: `DashboardOverview` を使うのは `frontend/src/pages/Dashboard.tsx:45`・`frontend/src/pages/__tests__/Dashboard.test.tsx:11`・`frontend/src/services/dashboard.service.ts:3`。`AnswerCounts`・`DashboardDay`・`WeakSubject`・`DashboardRecommendation` は `frontend/src/services/types.ts` の中でしか使われていない（grep で確認）。
@@ -49,7 +50,8 @@
 | Config/Infra | `.github/workflows/ci.yml` | 型のずれを確かめるジョブ `api-types` を足す |
 | Config/Infra | `.github/dependabot.yml` | `tools/api-types` の npm を見張りに足す |
 | Config/Infra | Docker | `backend/Dockerfile` は変えない（`base` が `requirements.txt` を入れるので dev・production に自動で入る）。`frontend/Dockerfile` は変えない（道具はリポジトリ直下の `tools/` に置くので、`frontend/` のイメージに入らない）。`docker-compose.yml` は変えない。実装後に backend・celery のイメージを作り直す（`docker compose up -d --build backend celery celery-beat`） |
-| Docs | `docs/runbooks/common-commands.md` | 型を作り直すコマンド |
+| Docs | `docs/runbooks/common-commands.md`・`docs/runbooks/branch-protection-setup.md` | 型を作り直すコマンド・必須チェックの一覧に `API Types Up To Date` を足す |
+| Frontend（条件つき） | `frontend/package.json` | ESLint が作った型で落ちたときだけ `eslintConfig.ignorePatterns` を足す（依存は変えない） |
 | DB | なし | |
 
 ## 4. 変更点一覧（具体）
@@ -194,9 +196,11 @@
   - 作り直す 2 つのコマンド（`docker compose exec -T backend python manage.py spectacular --file openapi.yaml --validate --fail-on-warn`・`npm --prefix tools/api-types ci`〔初回だけ〕・`npm --prefix tools/api-types run generate`）
   - 契約に入れる API を足すときは `backend/core/openapi.py` の `CONTRACT_PATHS` に足すこと
   - 2 つの作ったファイルを手で直さないこと
+- `docs/runbooks/branch-protection-setup.md`: §2 の必須チェックの一覧に `API Types Up To Date` を足し（6→7 件）、§3 ステップ 3 の一覧（今は 5 件で `Harness Tests` が抜けている）を §2 と同じ 7 件にそろえる。§2 の説明に「`API Types Up To Date`（I493）は、画面の型が API のスキーマと同じかを見る」を 1 文足す。
+- （ESLint が作った型で落ちたときだけ）`frontend/package.json` の `eslintConfig` に `ignorePatterns` を足す（「8. Risk & 回避策」の ESLint の行）。
 
 ## 5. 実装手順（ステップ）
-1. **バックエンドのスキーマ（未知のリスクを先に）**: A・B・C を入れ、`backend/openapi.yaml` を作る。部品の名前の付け替え（B2 の継承と `ENUM_NAME_OVERRIDES`）が効くかは、ここで初めて分かる。効かなければ止まって計画を直す。→ TC-01〜TC-04 参照
+1. **バックエンドのスキーマ（未知のリスクを先に）**: A・B・C を入れ、`backend/openapi.yaml` を作る。部品の名前の付け替え（B2 の継承と `ENUM_NAME_OVERRIDES`）は、計画時のスパイク 5 で効くことを確かめた。→ TC-01〜TC-04 参照
 2. **型を作る道具と作った型**: D と E の `schema.d.ts`・`index.ts` を作る（ステップ 1 が前提）。→ TC-20 参照
 3. **画面の置き換え**: E の残り（`types.ts`・`dashboard.service.ts`・`Dashboard.tsx`・`Dashboard.test.tsx`）（ステップ 2 が前提）。→ TC-10〜TC-13 参照
 4. **CI・Dependabot・手順書**: F（ステップ 2 が前提。ステップ 3 と並べてよい）。→ TC-21〜TC-23 参照
@@ -222,8 +226,9 @@
 |---|---|
 | 手元と CI で作ったスキーマの中身が違う（版・並び順） | Python 3.11・`drf-spectacular` の版を固定する。手元でも CI と同じ backend のコンテナの中で作る。ずれたら TC-01 が CI で落ちるので気づける |
 | `component_name` が継承で引き継がれ、Today と Totals の名前がぶつかる | 両方に個別に付ける。ぶつかると drf-spectacular が警告を出し、`--fail-on-warn` で TC-01 が落ちる。TC-03 で名前が別々かも確かめる |
-| `ENUM_NAME_OVERRIDES` が効かず `KindEnum` のままになる | TC-03 で名前を確かめる。効かなければステップ 1 で止まって計画を直す（候補: 名前の付け替えをやめて `KindEnum` のままにする） |
-| 作った `.d.ts` を ESLint・pre-commit（行末の空白・最後の改行）が直してしまい、`--check` とずれる | スパイク 3 の出力は最後が改行で、行末の空白も無い。ずれれば TC-12・TC-20 で分かる |
+| `ENUM_NAME_OVERRIDES` が効かず `KindEnum` のままになる | 計画時のスパイク 5 で効くことを確かめた。TC-03 で名前を毎回確かめる |
+| 作った `.d.ts` を ESLint・pre-commit（行末の空白・最後の改行）が直してしまい、`--check` とずれる | スパイク 3 の出力は最後が改行で、行末の空白も無い。ずれれば TC-12・TC-20 で分かる。ESLint（TC-12・pre-commit の eslint）が作った `schema.d.ts` で落ちたときは、作ったファイルを手で直さず、`frontend/package.json` の `eslintConfig` に `"ignorePatterns": ["src/types/api/schema.d.ts"]` を足す（作ったファイルは lint の対象にしないのが一般的なやり方。手で書く `index.ts` は対象のまま）。このときは計画変更記録に 1 行書く（方式・範囲・受け入れ条件は変えないので、計画レビューはやり直さない） |
+| 新しいジョブ `api-types` が落ちても、必須チェックに入っていないとマージを止められない | `docs/runbooks/branch-protection-setup.md` の必須チェックの一覧（§2 と §3 のステップ 3）に `API Types Up To Date` を足す。登録は管理者の設定画面の操作で、bot には権限が無いので、close の段階でユーザーに登録をお願いする（`develop`・`main`） |
 | 道具の版上げで `--check` が効かなくなる | TC-21 の失敗の注入を CI で毎回流す |
 | 一覧に無い API を、作った型の対象だと思い込む | `CONTRACT_PATHS` の説明と手順書に書く。#496 で順に足す |
 
@@ -282,4 +287,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V5 | 3 | 読んで可 | 実行時の形の確かめ（`isDashboardOverview`）が残り、形の違う応答で 0 埋めしない（TC-11 の中の Dashboard.test.tsx TC-22） |
 
 ## 計画変更記録
-- なし
+- 計画レビュー（20261113_1218）の Warning 3 件・Info 1 件に対応した: ① スパイク 5 で名前の付け替えを先に確かめた ② 手動 No.2 を `git diff --exit-code`（コミット済みの状態）に変えた ③ ESLint が作った型で落ちたときの方針を決めた ④ 新しいジョブを必須チェックの一覧に足し、登録を close でユーザーにお願いする。方式・範囲・受け入れ条件は変えていない（④ は手順書の一覧を足すだけ）→ 計画レビューのやり直し: 不要
+
+## レビュー結果
+- [20261113_1218 判定: ✅ 完了](../../reviews/I493_plan_review_20261113_1218.md)
