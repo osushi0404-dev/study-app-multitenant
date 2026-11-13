@@ -85,3 +85,5 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
+- [plan-review] 計画変更の再レビュー OK（docs/reviews/I486_plan_review_20261113_1015.md）。Warning 4 件は文書の食い違いで、計画変更記録のとおり直した（GitHub のイシュー本文の AC も更新）
+STAGE_DONE: plan-review NEXT: implement
