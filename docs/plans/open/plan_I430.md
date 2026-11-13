@@ -100,6 +100,7 @@
   - `.claude/settings.json`（`sandbox` の追加・deny 2 行の追加・PreToolUse の GitHub MCP の登録の削除。安全装置）
   - `scripts/claude/hooks/pretooluse_guard.py`（判定の削除。安全装置・高リスク）
   - ハーネステスト（`scripts/claude/tests/` の見張りと設定のテスト）
+  - 敵対的レビューのレビュー役の指示（`.claude/agents/adversarial-reviewer.md`。実験で新しいセッションを起こす書き方。review-gate で追加・計画変更記録）
   - 手順書: `docs/runbooks/danger-ops.md`・`docs/runbooks/plan-writing-rules.md`・`docs/runbooks/workflow.md`（fork の PR の節）・`docs/runbooks/worktree.md`（§9）・`docs/runbooks/onboarding.md`（道具の準備）・`CLAUDE.md`（§3 に 1 行）
   - 手元の環境: Claude Code のセッションの Bash が、すべてサンドボックスの中で動くようになる。マージの後は primary（develop）のセッションも同じ。ワークツリーのセッションでは、そのワークツリーの `.claude/settings.json` が効く（S14）ので、このブランチのワークツリー（harness-1）では、設定を変えた時点からこの会話の Bash にも効く見込み
 
@@ -208,6 +209,9 @@
 - `docs/runbooks/worktree.md` §9 の 247–249 行: 「削除・破棄は技術的には止めない」を、「Bash の書き込みはサンドボックスが止める（外に出したコマンドは除く）。Edit／Write は見張りが止める」に直す
 - `docs/runbooks/onboarding.md`「手元の準備」: `sudo apt install -y bubblewrap socat` を足す（無いと `failIfUnavailable` で Claude Code が起動しない。別の端末で打つ。`!` からは sudo のパスワードを入れられない＝2026-11-13 に確認）
 - `CLAUDE.md` §3: 「Bash は公式のサンドボックスの中で動く（`.claude/settings.json` の `sandbox`・docs/runbooks/danger-ops.md）」の 1 行を足す（参照だけ。ルールは増やさない）
+
+### 4-5b. 敵対的レビューのレビュー役の指示（review-gate で追加）
+- `.claude/agents/adversarial-reviewer.md`「ツール境界と実験」: 新しい Claude のセッションが要る実験は `bash scripts/claude/test-session.sh …`（または `check-permission-prompt.sh`）を `bash -c`・`timeout`・`cd`・パイプで包まずに書く（計画変更記録「2026-11-13 review-gate」）
 
 ### 4-6. テスト
 - `scripts/claude/tests/test_settings_permissions.sh`:
