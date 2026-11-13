@@ -414,13 +414,14 @@ sys.exit(0 if any(pat.search(l) for l in lines) else 1)
 PY
 }
 
-# 実験の前提（I486）: 見る範囲に backend/ の変更があれば、このワークツリーの backend のコンテナを起こして確かめる。
+# 実験の前提（I486）: ブランチ（ADV_BASE...HEAD）に backend/ の変更があれば、このワークツリーの backend のコンテナを起こして確かめる。
+# その周の見る範囲では決めない（2 周目以降は直した差分だけに縮み、文書だけを直した周で起こさずに空振りするため）。
 # 動いているかで分けずに常に up する（変わっていなければ作り直さない・依存を変えていれば --build で作り直す）。
 # 起動のたびに migrate が走る（docker-compose.yml の command）。起こせない・時間切れ・別のワークツリーのコンテナなら止める（1 を返す）
 ensure_backend_container() {
   local id wd s0=$SECONDS   # 所要秒は表示だけなので bash の SECONDS で数える（時計を読むのは adv_now の 1 か所だけ・I210）
-  CONTAINER_NOTE="確かめていない（見る範囲に backend/ の変更なし）"
-  grep -qE $'^[A-Z][0-9]*\tbackend/' "$RUN/files.txt" || return 0
+  CONTAINER_NOTE="確かめていない（ブランチに backend/ の変更なし）"
+  grep -q '^backend/' "$RUN/branch_files.txt" || return 0
   if ! timeout "${ADV_CONTAINER_TIMEOUT}" "${ADV_DOCKER_BIN}" compose up -d --build --wait backend > "$RUN/container.log" 2>&1; then
     echo "⛔ backend のコンテナを起こせません（上限 ${ADV_CONTAINER_TIMEOUT} 秒）。出力の最後:"; tail -20 "$RUN/container.log"
     echo "（ワークツリーで初めて起こすときは、先に bash scripts/claude/wt-ports.sh でポートを割り当てる・docs/runbooks/worktree.md §6）"
@@ -522,8 +523,9 @@ REVIEWED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 PREV_RECORDS=$(counted_records | paste -sd' ' -)
 carry_items > "$RUN/carry.tsv"   # 前の周の確認の引き継ぎ（I228。レビュー役を呼ぶ前に 1 回だけ決める）
 if ! git -c core.quotePath=false diff --name-status --no-renames "${REVIEW_BASE}...HEAD" > "$RUN/files.txt" \
-   || ! git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt"; then
-  echo "⛔ 見る範囲 ${REVIEW_BASE}...HEAD の差分を取れません（比べる相手が無い・REVIEWED_COMMIT が無い）。"
+   || ! git diff "${REVIEW_BASE}...HEAD" > "$RUN/diff_full.txt" \
+   || ! git -c core.quotePath=false diff --name-only --no-renames "${ADV_BASE}...HEAD" > "$RUN/branch_files.txt"; then
+  echo "⛔ 見る範囲 ${REVIEW_BASE}...HEAD（またはブランチ ${ADV_BASE}...HEAD）の差分を取れません（比べる相手が無い・REVIEWED_COMMIT が無い）。"
   echo "ADVERSARIAL_ERROR: DIFF"
   exit 2
 fi

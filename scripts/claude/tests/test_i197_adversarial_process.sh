@@ -717,7 +717,7 @@ with_src "$(fg_copy 'ensure_backend_container || exit 2' 'ensure_backend_contain
 ck "FG-A40 起こせないときに止めないと A40 が不合格（claude が呼ばれる）" no "$(yn [ "$(n_calls fga40)" = 0 ])"
 with_src "$(fg_copy 'if [ "$wd" != "$(pwd -P)" ]; then' 'if false; then')" a41 fga41
 ck "FG-A41 作業フォルダの比較を外すと A41 が不合格（exit 0）" 0 "$(rcode fga41)"
-with_src "$(fg_copy "grep -qE \$'^[A-Z][0-9]*\\tbackend/' \"\$RUN/files.txt\" || return 0" ':')" mk fga42
+with_src "$(fg_copy "grep -q '^backend/' \"\$RUN/branch_files.txt\" || return 0" ':')" mk fga42
 run fga42
 ck "FG-A42 backend の絞り込みを外すと A42 が不合格（docker を呼ぶ）" yes "$(yn docker_called fga42)"
 with_src "$(fg_copy 'ensure_backend_container || exit 2' 'ADV_START0=$(adv_now); ensure_backend_container || exit 2' 'ADV_START=$(adv_now) || {' 'ADV_START=$ADV_START0 || {')" a43 fga43
@@ -726,6 +726,14 @@ with_src "$(fg_copy 'sys.exit(0 if any(pat.search(l) for l in lines) else 1)' 's
 ck "FG-A44 全行の形に戻すと A44 が不合格（V1 確認済み）" yes "$(yn item_is fga44 V1 確認済み)"
 with_src "$(fg_copy 'next_eid="P${p}-E$(( max + 1 ))"' 'next_eid="P${p}-E1"')" a45 fga45
 ck "FG-A45 次の id の数え方を壊すと A45 が不合格（案内に P1-E2 が無い）" no "$(yn hint_has fga45)"
+
+# A46 2 周目に、直した差分（見る範囲）に backend/ が無くても、ブランチに backend/ の変更があればコンテナを起こす
+n_up() { grep -c '^compose up ' "$TMP/$1/stub/docker_calls" 2>/dev/null || true; }
+a46() { mk "$1"; backend_commit "$1"; run "$1"; docs_commit "$1"; next_round "$1" "$V1_READ"; run "$1"; }
+a46 a46
+ck "A46 記録だけ直した 2 周目も compose up を呼ぶ（up 2 回）・exit 0" "2 0" "$(n_up a46) $(rcode a46)"
+with_src "$(fg_copy "grep -q '^backend/' \"\$RUN/branch_files.txt\" || return 0" "grep -qE \$'^[A-Z][0-9]*\\tbackend/' \"\$RUN/files.txt\" || return 0")" a46 fga46
+ck "FG-A46 判定を見る範囲に戻すと A46 が不合格（up 1 回）" 1 "$(n_up fga46)"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/fg_copy_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
