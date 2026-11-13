@@ -12,8 +12,8 @@
 - Backend/Frontend/DB/Config: ハーネス（`scripts/claude/adversarial-review.sh`・テスト・review-gate・adversarial-reviewer.md・台帳）だけ
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: TC-01〜03 合格（test_i197 pass=154 fail=0・台帳と review-gate の否定の確かめ exit 0）。関係する test_i202・i181・i193 も手元で合格。CI 合格（CI_WAIT: OK）
+- 手動: No.1（実際の docker でこのワークツリーの backend を起こし healthy・ラベル一致・exec 可）OK／No.2（review-gate に Claude の判断が残らない）OK
 
 ## 計画との差分
 - なし
