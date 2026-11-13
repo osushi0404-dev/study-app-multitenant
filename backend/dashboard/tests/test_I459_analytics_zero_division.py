@@ -3,7 +3,7 @@ I459: 学習統計（GET /api/dashboard/analytics/）が、解いた問題が 0 
 
 - 週ごとの正答率は「週の正解数の合計 ÷ 週の解いた問題数の合計 × 100」（週の合計が 0 問なら 0）
 - days は 1〜365 の整数（省略時 30）。不正な値は 400
-- おすすめ（recommendations）は 0 問の学習記録があっても 0 で割らない
+（おすすめの TC-05 は I473 で経路を消したので削除。0 件で割らないことは test_I473_overview.py が見る）
 
 TC-01〜TC-06（docs/tests/open/I459_auto_test.md）に対応。
 """
@@ -17,13 +17,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
-from problems.models import Subject
-from studylogs.models import DailyStudySummary, StudyLog
+from studylogs.models import DailyStudySummary
 
 User = get_user_model()
 
 ANALYTICS = "/api/dashboard/analytics/"
-RECOMMENDATIONS = "/api/dashboard/recommendations/"
 INVALID_DAYS_BODY = {
     "error": {
         "main_message": "期間の指定が正しくありません",
@@ -130,25 +128,6 @@ def test_valid_days_returns_200(client, query, expected_days):
 
     assert response.status_code == 200
     assert len(response.json()["daily_data"]) == expected_days
-
-
-def test_recommendations_with_zero_problem_log(client, user, org):
-    """TC-05: 0 問の学習記録があっても、おすすめは 0 で割らない"""
-    subject_zero = Subject.objects.create(name="科目I459ゼロ", slug="subj-i459-zero", organization=org)
-    subject_low = Subject.objects.create(name="科目I459低", slug="subj-i459-low", organization=org)
-    StudyLog.objects.create(
-        user=user, subject=subject_zero, problems_attempted=0, problems_correct=0, duration=60)
-    StudyLog.objects.create(
-        user=user, subject=subject_low, problems_attempted=4, problems_correct=1, duration=60)
-
-    response = client.get(RECOMMENDATIONS)
-
-    assert response.status_code == 200
-    # 正答率が低い科目の項目（未学習の科目の項目は current_accuracy が None）
-    with_accuracy = [
-        r for r in response.json()["recommendations"] if r["current_accuracy"] is not None]
-    assert [(r["subject_id"], r["current_accuracy"]) for r in with_accuracy] == [
-        (str(subject_low.id), 25.0)]
 
 
 def test_analytics_requires_login(db):

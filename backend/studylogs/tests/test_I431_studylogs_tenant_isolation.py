@@ -20,7 +20,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
-from problems.models import Choice, Problem, QuizSession, Subject, UserSubjectAccess
+from problems.models import Choice, Problem, QuizAnswer, QuizSession, Subject, UserSubjectAccess
 from studylogs.adaptive_selection import AdaptiveProblemSelector
 from studylogs.mistake_analysis import MistakeAnalysisService
 from studylogs.models import (
@@ -497,25 +497,29 @@ def test_mistake_analysis_hides_and_does_not_create_other_org(setup):
     assert weakness_subjects == {setup["subject_a"].id}
 
 
-# ---- TC-17: ダッシュボードの概要に他組織の科目が出ない ----
+def _quiz_answers(user, problem, total, correct):
+    """クイズの答えを total 件（うち正解 correct 件）。セッションは答えごとに作る（I473）"""
+    for i in range(total):
+        session = QuizSession.objects.create(user=user, subject=problem.subject, is_active=False)
+        QuizAnswer.objects.create(session=session, problem=problem, is_correct=i < correct)
+
+
+# ---- TC-17: ダッシュボードの概要に他組織の科目が出ない（I473 でクイズの答えから数える形に書き直し） ----
 def test_dashboard_overview_hides_other_org_subjects(setup):
     user = setup["user_a"]
-    QuizSession.objects.create(user=user, subject=setup["subject_a"], is_active=False)
-    QuizSession.objects.create(user=user, subject=setup["subject_b"], is_active=False)
-    StudyLog.objects.create(user=user, subject=setup["subject_b"], is_active=True)
     UserSubjectAccess.objects.create(user=user, subject=setup["subject_a"])
     UserSubjectAccess.objects.create(user=user, subject=setup["subject_b"])
-    StudyLog.objects.create(
-        user=user, subject=setup["subject_a"], is_active=False,
-        problems_attempted=2, problems_correct=1)
+    _quiz_answers(user, setup["problem_a"], 5, 1)
+    _quiz_answers(user, setup["problems_b"][0], 5, 0)  # 不具合で残った他組織の問題への答えの想定
 
     response = _client(user).get(DASH + "overview/")
 
     assert response.status_code == status.HTTP_200_OK
     assert _no_other(response)
-    assert {q["subject"] for q in response.json()["recent_quizzes"]} == {"科目I431A"}
-    assert response.json()["active_session"] is None
-    assert {p["subject_name"] for p in response.json()["subject_progress"]} == {"科目I431A"}
+    data = response.json()
+    assert data["totals"]["answered_count"] == 5
+    assert {w["subject_name"] for w in data["weak_subjects"]} == {"科目I431A"}
+    assert {r["subject_id"] for r in data["recommendations"]} == {setup["subject_a"].id}
 
 
 # ---- TC-18: ダッシュボードの分析の科目の内訳に他組織の科目が出ない ----
@@ -532,20 +536,39 @@ def test_dashboard_analytics_hides_other_org_subjects(setup):
     assert {d["subject__name"] for d in distribution} == {"科目I431A", None}
 
 
-# ---- TC-19: おすすめに他組織の科目が出ず、問題数は自組織の未削除の問題だけ ----
+# ---- TC-19: おすすめに他組織の科目が出ない（I473 で overview の recommendations に移した） ----
 def test_dashboard_recommendations_are_own_org_only(setup):
     user = setup["user_a"]
     for subject in (setup["subject_a"], setup["subject_b"]):
+        UserSubjectAccess.objects.create(user=user, subject=subject)
         StudyLog.objects.create(
             user=user, subject=subject, problems_attempted=10, problems_correct=1)
 
-    response = _client(user).get(DASH + "recommendations/")
+    response = _client(user).get(DASH + "overview/")
 
     assert response.status_code == status.HTTP_200_OK
     assert _no_other(response)
     recommendations = response.json()["recommendations"]
-    assert {r["subject_id"] for r in recommendations} == {str(setup["subject_a"].id)}
-    assert recommendations[0]["recommended_problems"] == 1
+    assert [(r["kind"], r["subject_id"]) for r in recommendations] == [
+        ("unstudied_subject", setup["subject_a"].id)]
+
+
+# ---- I473 TC-15: 学習記録を作るとき、閉じるのは自組織の科目・科目なしの進行中の記録だけ ----
+def test_create_study_log_closes_only_own_org_active_logs(setup):
+    user = setup["user_a"]
+    own = StudyLog.objects.create(user=user, subject=setup["subject_a"], is_active=True)
+    no_subject = StudyLog.objects.create(user=user, subject=None, is_active=True)
+    other = StudyLog.objects.create(user=user, subject=setup["subject_b"], is_active=True)
+
+    response = _client(user).post(STUDY + "logs/", {"subject": setup["subject_a"].id})
+
+    assert response.status_code == status.HTTP_201_CREATED
+    own.refresh_from_db()
+    no_subject.refresh_from_db()
+    other.refresh_from_db()
+    assert own.is_active is False
+    assert no_subject.is_active is False
+    assert other.is_active is True
 
 
 # ---- TC-20: 習熟度の非同期処理は他組織の科目を存在しない科目と同じに扱う ----

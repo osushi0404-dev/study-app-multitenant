@@ -26,7 +26,7 @@
 | TC-10 | 間違いやすい分野の境界: 科目 P（4 問・0 正解）・Q（5 問・3 正解＝60%）・R（10 問・7 正解＝70%）・S（5 問・0 正解）・T（6 問・3 正解＝50%）・U（5 問・1 正解＝20%） | `weak_subjects` の `subject_name` が `[S, U, T]`（0%・20%・50% の低い順・最大 3 件）。P（4 問）・R（ちょうど 70%）は入らず、Q は 4 件目で切られる。`accuracy_rate` は `0.0`・`0.2`・`0.5` |
 | TC-11 | おすすめ: `user_a` が 英語 を 5 問（正解 1）今日・数学は 10 日前に 5 問（正解 5）・理科（問題 0 問）は答え無し。加えて `StudyLog(user_a, subject=None)` を 1 件作る（引き継ぎ 1） | `recommendations == [{"kind": "weak_subject", "subject_id": 英語, "subject_name": "英語", "reason": "正答率が 20% です。復習しましょう"}, {"kind": "unstudied_subject", "subject_id": 数学, "subject_name": "数学", "reason": "この 7 日間、解いていません"}]`（理科は問題が無いので出ない。科目が空の StudyLog があっても数学が消えない） |
 | TC-11b | おすすめの上限: weak が 3 科目・unstudied が 2 科目ある | `len(recommendations) == 3` で、3 件とも `kind == "weak_subject"` |
-| TC-12 | クエリ数: 小さいデータ（1 科目・1 問）と大きいデータ（3 科目・30 日にわたり 60 問）で、`CaptureQueriesContext` で overview 1 回のクエリ数を数える（キャッシュは各回の前に消す） | 2 つの本数が等しい（`==`）。かつ本数が 15 以下（実装後に数えた本数をここに書き足す） |
+| TC-12 | クエリ数: 小さいデータ（1 科目・1 問）と大きいデータ（3 科目・30 日にわたり 60 問）で、`CaptureQueriesContext` で overview 1 回のクエリ数を数える（キャッシュは各回の前に消す） | 2 つの本数が等しい（`==`）。かつ本数が 9（実装後に数えた本数・2026-11-13。内訳: 直近 7 日・全期間・連続日数・間違いやすい分野・最近答えた科目・問題のある科目・選んだ科目〔有無の確認・キャッシュ用の読み出し・本体〕） |
 | TC-13 | 認可と境界: ① 未認証 ② `user_b`（B）の答え・`user_a2` の答えを作り、`user_a` の答えも 1 問 ③ `user_a` の B科目 の問題への答え（不具合で残った想定）を 3 問 ④ 組織に属さない利用者（自分の答えを A の問題に 1 問持つ想定） | ④ status 200・`has_data is False`・`totals.answered_count == 0`・`weak_subjects == []`・`recommendations == []`。① status 401 ② `user_a` の `totals.answered_count == 1`（①③の答えを含まない）③ 応答の JSON の文字列に `B科目` が含まれず、`weak_subjects`・`recommendations` の `subject_id` に B の ID が無い |
 | TC-14 | 経路の削除: 認証して `GET /api/dashboard/recommendations/` | status 404 |
 | TC-16 | 引き継ぎ 3: ① `get_user_selected_subjects(user_a)` を 2 回（1 回目でキャッシュに入れ、2 回目はキャッシュから）② `UserSubjectAccess` を 1 件足す ③ キーの関数 | ① 2 回目（キャッシュの経路）の科目 ID の並びが、1 回目（DB の経路・`order_by('name')`）の並びと一致し、`Subject.objects.filter(...).order_by('name')` の並びとも一致する（科目は名前の順と作った順がずれるように作る）② 足した後の呼び出しに新しい科目が入る（signals がキーを消した）③ `user_subjects_cache_key(1, 7, False) == "user_subjects_1_org_7_count_False"` |
@@ -45,7 +45,7 @@
 |---|---|---|
 | TC-20 | 契約どおりの応答（`today.study_seconds=330`・`streak.current_days=2`・`totals.answered_count=12`・`accuracy_rate=0.75`・`last_7_days` 7 件・`weak_subjects` 1 件〔英語・0.5・10 問〕・`recommendations` 1 件〔数学・id 4〕） | 「5分」「2日」「12」「75%」が出る。見出し「直近 7 日の学習時間」がある。推移のグラフのデータが 7 件。間違いやすい分野に「英語」と「50%」と「解答数: 10問」。おすすめの「練習する」を押すと `navigate('/quiz?subject=4')` が呼ばれる。`data-testid="stat-answered-count"` の文字が `12` |
 | TC-21 | データ無し（`has_data=false`・比率 `null`・7 件すべて 0・一覧が空） | 「まだ解答の記録がありません」が出て、ドーナツのモックが描かれない。正答率のカードが「—」。間違いやすい分野に「データがありません。まずは問題を解いてみましょう！」 |
-| TC-22 | 形の違う応答（`totals` を欠く）と取得の失敗（reject） | どちらも「ダッシュボードの数字を読み込めませんでした」の `role="alert"` が出て、数字のカード（「0分」「0日」「0%」）が 1 つも出ない |
+| TC-22 | 形の違う応答（`last_7_days` を欠く・`totals` を欠く）と取得の失敗（reject） | どれも「ダッシュボードの数字を読み込めませんでした」の `role="alert"` が出て、数字のカード（「0分」「0日」「0%」）が 1 つも出ない |
 | TC-23 | 科目の選択: `SubjectSelector` のモックから `onChange('5')` を呼ぶ | `apiClient.get` が `('/api/dashboard/overview/', { params: { subject_id: '5' } })` で呼ばれる。`'all'` のときは `{ params: {} }` |
 | TC-25 | 正答率 70% 未満の科目が無い（`has_data=true`・`weak_subjects=[]`） | 「正答率が 70% 未満の科目はありません」が出る |
 
@@ -63,4 +63,7 @@
 - TC-22: `isDashboardOverview` を常に true を返す形にすると、TC-22 の「形の違う応答」が落ちることを確かめる
 - TC-13: 土台の `scope_to_user_org` を外すと ③ が落ちることを確かめる
 - TC-03: `TruncDate` に `tzinfo=datetime.timezone.utc` を渡すと落ちることを確かめる
-- 実装前のため未実行（実装の後でないと動かない）
+- 結果（2026-11-13・implement）:
+  - TC-12・TC-13・TC-03: 3 つの壊し方を `backend/dashboard/selectors.py` に入れて流し、3 件とも落ちた（`test_query_count_is_constant`・`test_only_own_answers_in_own_org`・`test_dates_are_japan_time` が FAILED）→ 元に戻して 22 件 pass
+  - TC-22: 最初の形（`totals` を欠く応答だけ）は、確かめを外しても通ってしまった（false-green）。`totals` が無いと達成のお知らせの判定で例外になり、たまたま catch に入ってエラーの文が出るため。`last_7_days` を欠く応答（画面は落ちずに描けてしまう）を足し、確かめを外すとその行が落ちることを確かめた → 元に戻して 7 件 pass
+- 実行結果: backend `dashboard/`・`test_I431`・`test_I455`・`test_I446` の 215 件 pass／frontend `Dashboard.test.tsx` 7 件 pass／E2E は CI で流す

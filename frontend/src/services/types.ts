@@ -57,47 +57,43 @@ export interface TokenRefreshResponse {
   access: string;
 }
 
-// Study Types
-export interface StudySession {
-  id: string;
-  start_time: string;
-  end_time: string | null;
-  total_duration: number;
-  problems_attempted: number;
-  problems_correct: number;
-  subject: string;
+// Dashboard Types（GET /api/dashboard/overview/ の応答・backend/dashboard/serializers.py の OverviewSerializer と同じ形・I473）
+// 比率は 0〜1。答えが 0 件なら null（0% と区別する）
+export interface AnswerCounts {
+  answered_count: number;
+  correct_count: number;
+  accuracy_rate: number | null;
 }
 
-export interface StudyStats {
-  today_study_time: number;
-  week_study_time: number;
-  total_problems_solved: number;
+export interface DashboardDay {
+  date: string; // YYYY-MM-DD（日本時間）
+  study_seconds: number;
+  answered_count: number;
+  correct_count: number;
+}
+
+export interface WeakSubject {
+  subject_id: number;
+  subject_name: string;
+  answered_count: number;
   accuracy_rate: number;
-  current_streak: number;
-  longest_streak: number;
 }
 
-export interface DashboardData {
-  stats: StudyStats;
-  recent_sessions: StudySession[];
-  weekly_progress: Array<{
-    date: string;
-    study_time: number;
-    problems_solved: number;
-    accuracy: number;
-  }>;
-  subject_progress: Array<{
-    subject_name: string;
-    problems_solved: number;
-    accuracy: number;
-    time_spent: number;
-  }>;
-  recommendations: Array<{
-    type: 'weak_subject' | 'unstudied_subject' | 'streak_reminder';
-    title: string;
-    description: string;
-    action_url?: string;
-  }>;
+export interface DashboardRecommendation {
+  kind: 'weak_subject' | 'unstudied_subject';
+  subject_id: number;
+  subject_name: string;
+  reason: string;
+}
+
+export interface DashboardOverview {
+  has_data: boolean;
+  today: AnswerCounts & { study_seconds: number };
+  streak: { current_days: number };
+  totals: AnswerCounts;
+  last_7_days: DashboardDay[]; // 今日を含む直近 7 日・古い順
+  weak_subjects: WeakSubject[];
+  recommendations: DashboardRecommendation[];
 }
 
 // Problem Types
