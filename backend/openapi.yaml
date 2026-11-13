@@ -5,7 +5,7 @@ info:
 paths:
   /api/dashboard/overview/:
     get:
-      operationId: api_dashboard_overview_retrieve
+      operationId: dashboard_overview_retrieve
       description: ダッシュボードの数字（クイズの答えの記録から数える・I473）
       parameters:
       - in: query
@@ -13,7 +13,7 @@ paths:
         schema:
           type: integer
       tags:
-      - api
+      - dashboard
       security:
       - jwtAuth: []
       responses:
@@ -22,6 +22,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardOverview'
+          description: ''
+  /api/settings/:
+    get:
+      operationId: settings_retrieve
+      tags:
+      - settings
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+          description: ''
+    put:
+      operationId: settings_update
+      tags:
+      - settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettings'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserSettings'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+          description: ''
+    patch:
+      operationId: settings_partial_update
+      tags:
+      - settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserSettings'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserSettings'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
           description: ''
 components:
   schemas:
@@ -155,6 +211,46 @@ components:
       - answered_count
       - subject_id
       - subject_name
+    PatchedUserSettings:
+      type: object
+      properties:
+        daily_study_goal_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        study_reminders_enabled:
+          type: boolean
+        reminder_time:
+          type: string
+          format: time
+        theme_preference:
+          $ref: '#/components/schemas/ThemePreferenceEnum'
+        notification_settings: {}
+    ThemePreferenceEnum:
+      enum:
+      - light
+      - dark
+      - auto
+      type: string
+      description: |-
+        * `light` - Light
+        * `dark` - Dark
+        * `auto` - Auto
+    UserSettings:
+      type: object
+      properties:
+        daily_study_goal_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        study_reminders_enabled:
+          type: boolean
+        reminder_time:
+          type: string
+          format: time
+        theme_preference:
+          $ref: '#/components/schemas/ThemePreferenceEnum'
+        notification_settings: {}
   securitySchemes:
     jwtAuth:
       type: http

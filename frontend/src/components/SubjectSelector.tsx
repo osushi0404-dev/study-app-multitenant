@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from '@mui/material';
 import { toast } from 'react-hot-toast';
 import SubjectService from '../services/subjectService';
@@ -21,6 +21,7 @@ export const SubjectSelector: React.FC<SubjectSelectorProps> = ({
 }) => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
+  const labelId = useId();
 
   useEffect(() => {
     loadUserSubjects();
@@ -63,8 +64,9 @@ export const SubjectSelector: React.FC<SubjectSelectorProps> = ({
 
   return (
     <FormControl fullWidth={fullWidth} disabled={loading}>
-      <InputLabel>{label}</InputLabel>
+      <InputLabel id={labelId}>{label}</InputLabel>
       <Select
+        labelId={labelId}
         value={value}
         label={label}
         onChange={handleChange}

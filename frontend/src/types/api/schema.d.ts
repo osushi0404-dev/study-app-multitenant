@@ -12,13 +12,29 @@ export interface paths {
             cookie?: never;
         };
         /** @description ダッシュボードの数字（クイズの答えの記録から数える・I473） */
-        get: operations["api_dashboard_overview_retrieve"];
+        get: operations["dashboard_overview_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settings_retrieve"];
+        put: operations["settings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["settings_partial_update"];
         trace?: never;
     };
 }
@@ -77,6 +93,29 @@ export interface components {
             /** Format: double */
             accuracy_rate: number;
         };
+        PatchedUserSettings: {
+            daily_study_goal_minutes?: number;
+            study_reminders_enabled?: boolean;
+            /** Format: time */
+            reminder_time?: string;
+            theme_preference?: components["schemas"]["ThemePreferenceEnum"];
+            notification_settings?: unknown;
+        };
+        /**
+         * @description * `light` - Light
+         *     * `dark` - Dark
+         *     * `auto` - Auto
+         * @enum {string}
+         */
+        ThemePreferenceEnum: "light" | "dark" | "auto";
+        UserSettings: {
+            daily_study_goal_minutes?: number;
+            study_reminders_enabled?: boolean;
+            /** Format: time */
+            reminder_time?: string;
+            theme_preference?: components["schemas"]["ThemePreferenceEnum"];
+            notification_settings?: unknown;
+        };
     };
     responses: never;
     parameters: never;
@@ -86,7 +125,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    api_dashboard_overview_retrieve: {
+    dashboard_overview_retrieve: {
         parameters: {
             query?: {
                 subject_id?: number;
@@ -103,6 +142,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardOverview"];
+                };
+            };
+        };
+    };
+    settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSettings"];
+                };
+            };
+        };
+    };
+    settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UserSettings"];
+                "multipart/form-data": components["schemas"]["UserSettings"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSettings"];
+                };
+            };
+        };
+    };
+    settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUserSettings"];
+                "multipart/form-data": components["schemas"]["PatchedUserSettings"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSettings"];
                 };
             };
         };

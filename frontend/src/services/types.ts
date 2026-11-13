@@ -152,17 +152,7 @@ export interface QuizResult {
   }>;
 }
 
-// Settings Types
-export interface UserSettings {
-  id: string;
-  theme: 'light' | 'dark';
-  daily_study_goal: number;
-  study_reminder_enabled: boolean;
-  study_reminder_time: string;
-  email_notifications: boolean;
-  push_notifications: boolean;
-  difficulty_preference: 'easy' | 'medium' | 'hard' | 'mixed';
-}
+// 設定の型は API のスキーマから作ったもの（types/api の UserSettings）を使う（I487）
 
 // Analytics Types
 export interface AnalyticsFilters {
