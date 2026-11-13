@@ -762,16 +762,32 @@ def is_rest(e):
 PLAN_RISK_HEAD = re.compile(r"## 8\.")   # I512: 計画書の「## 8. Risk & 回避策」の節
 PLAN_RISK_ROW = re.compile(r"\|\s*(R[0-9]+)\s*[:：]")   # 表の行の最初のセルが R<番号>: で始まる
 PLAN_COMMENT = re.compile(r"<!--.*?-->", re.S)   # 閉じた HTML コメント（行をまたいでも・1 行に複数でも）
+PLAN_FENCE = re.compile(r" {0,3}(```|~~~)")   # コードの囲みの開き・閉じ（行頭から空白 3 つまで）
+
+def strip_fences(text):
+    # 囲みの中は本文ではない: 開きから同じ記号の閉じまでの行を取り除く（閉じていなければ後ろを全部取り除く＝fail-closed）
+    out, fence = [], None
+    for line in text.split("\n"):
+        m = PLAN_FENCE.match(line)
+        if fence:
+            if m and m.group(1) == fence:
+                fence = None
+            continue
+        if m:
+            fence = m.group(1)
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 def accepted_risks(plan):
     # I512: 計画書の 8 の節の表で、最後のセルが「受け入れ」と完全に一致する行の R 番号の集合。
     # 同じ R 番号に受け入れでない行が 1 つでもあれば外す（処遇が食い違う番号は受け入れと確かめられない）。
-    # 粗い fail-closed（行ごとの特例を積まない）: 閉じた HTML コメントは全文から取り除き、閉じていない <!-- から後ろは読まない。
-    # 8 の節にコードの囲み（```）が 1 つでもあれば、受け入れは全部効かせない。
+    # 本文でないところは先に全文から取り除く（行ごとの特例を積まない）: コードの囲み → 閉じた HTML コメントの順。
+    # 閉じていない <!-- から後ろは読まない。
     # パスが空・読めない・節が無いときは空の集合（目印が効かない＝今までどおりの振り分け・fail-closed）
     if not plan or not os.path.isfile(plan):
         return set()
-    text = PLAN_COMMENT.sub("", open(plan, encoding="utf-8", errors="replace").read()).split("<!--", 1)[0]
+    text = PLAN_COMMENT.sub("", strip_fences(open(plan, encoding="utf-8", errors="replace").read())).split("<!--", 1)[0]
     acc, other, inside = set(), set(), False
     for line in text.split("\n"):
         if line.startswith("## "):
@@ -779,8 +795,6 @@ def accepted_risks(plan):
             continue
         if not inside:
             continue
-        if line.lstrip().startswith("```"):
-            return set()
         m = PLAN_RISK_ROW.match(line)
         if not m:
             continue

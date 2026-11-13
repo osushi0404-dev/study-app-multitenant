@@ -148,28 +148,40 @@ sed 's/^## 8\. Risk & 回避策$/&\nx <!--\n| R2: c | d | 受け入れ |\n-->/' 
 sed 's/^## 8\. Risk & 回避策$/&\n<!-- a --> <!--\n| R2: c | d | 受け入れ |\n-->/' "$TMP/plan_norow" > "$TMP/plan_reopen"
 # 閉じていないコメントは、共有の計画書の閉じたコメントより後ろ（8 の表の最後の行の後）で開く
 sed 's/^| R6: g | h | 受け入れない |$/&\n<!--\n| R2: c | d | 受け入れ |/' "$TMP/plan_norow" > "$TMP/plan_open"
-sed 's/^## 8\. Risk & 回避策$/&\n```\nx\n```/' "$PLAN" > "$TMP/plan_fence"
+# review-gate 4 回目 F11・F12: 囲みは全文から先に取り除く。8 より前の節の囲みの中の 8 の例（``` と ~~~）・閉じていない囲み
+sed 's/^## 8\. Risk & 回避策$/```\n## 8. Risk \& 回避策\n| R2: c | d | 受け入れ |\n```\n&/' "$TMP/plan_norow" > "$TMP/plan_fpre"
+sed 's/^## 8\. Risk & 回避策$/~~~\n## 8. Risk \& 回避策\n| R2: c | d | 受け入れ |\n~~~\n&/' "$TMP/plan_norow" > "$TMP/plan_tpre"
+sed 's/^## 8\. Risk & 回避策$/&\n```/' "$PLAN" > "$TMP/plan_func"
 T5_WANT='- F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=x | s1 | 後続イシューにする理由: SECURITY=yes・guard の Medium 以上'
-# t5 <写し>: 15 通りの照合の失敗のうち、後続イシューに期待どおりの行が出た数
+# t5 <写し>: 17 通りの照合の失敗のうち、後続イシューに期待どおりの行が出た数
 t5() { local n=0 c
   for c in "$TMP/t5|" "$TMP/t5|$TMP/nonexistent.md" "$TMP/t5|$TMP/plan_nosec" "$TMP/t5|$TMP/plan_norow" "$TMP/t5|$TMP/plan_avoid" \
            "$TMP/t5_R5|$PLAN" "$TMP/t5_R1|$PLAN" "$TMP/t5_R6|$PLAN" "$TMP/t5|$TMP/plan_dup" "$TMP/t5|$TMP/plan_cmt" \
-           "$TMP/t5_R9|$PLAN" "$TMP/t5|$TMP/plan_mid" "$TMP/t5|$TMP/plan_reopen" "$TMP/t5|$TMP/plan_open" "$TMP/t5|$TMP/plan_fence"; do
+           "$TMP/t5_R9|$PLAN" "$TMP/t5|$TMP/plan_mid" "$TMP/t5|$TMP/plan_reopen" "$TMP/t5|$TMP/plan_open" \
+           "$TMP/t5|$TMP/plan_fpre" "$TMP/t5|$TMP/plan_tpre" "$TMP/t5|$TMP/plan_func"; do
     [ "$(route "$1" issue "${c%%|*}" "${c#*|}")" = "$T5_WANT" ] && n=$((n+1))
   done; echo "$n"; }
-ck "TC-05 計画書なし・無いパス・節なし・行なし・処遇違い・節の外（R5）・回避（R1）・受け入れない（R6）・同じ番号の回避と受け入れ・コメントの中（4 形）・閉じていないコメント・コードの囲みの 15 通りとも後続イシュー" 15 "$(t5 "$CR")"
-ck "TC-05 作った計画書が意図どおり（dup に回避と受け入れの両方・cmt・mid・reopen・open に R2 の受け入れの行・fence に囲み）" "yes yes yes yes yes yes yes" \
+ck "TC-05 計画書なし・無いパス・節なし・行なし・処遇違い・節の外（R5）・回避（R1）・受け入れない（R6）・同じ番号の回避と受け入れ・コメントの中（4 形）・閉じていないコメント・前の節の囲みの中の 8 の例（2 形）・閉じていない囲みの 17 通りとも後続イシュー" 17 "$(t5 "$CR")"
+ck "TC-05 作った計画書が意図どおり（dup に回避と受け入れの両方・cmt・mid・reopen・open・fpre・tpre・func に R2 の受け入れの行）" "yes yes yes yes yes yes yes yes yes" \
   "$(yn grep -qxF '| R2: z | z | 回避 |' "$TMP/plan_dup") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_dup") \
 $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_cmt") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_mid") \
-$(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_reopen") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_open") $(yn grep -qxF '```' "$TMP/plan_fence")"
+$(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_reopen") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_open") \
+$(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_fpre") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_tpre") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_func")"
+ck "TC-05 囲みの計画書に本物の 8 の見出しが残っている（fpre・tpre は例と本物の 2 つ・func は 1 つ）" "2 2 1" \
+  "$(grep -cxF '## 8. Risk & 回避策' "$TMP/plan_fpre") $(grep -cxF '## 8. Risk & 回避策' "$TMP/plan_tpre") $(grep -cxF '## 8. Risk & 回避策' "$TMP/plan_func")"
+# 肯定: 8 より前の節の囲みの中に <!-- があっても、本物の 8 の R2 は効く（F12）
+sed 's/^## 8\. Risk & 回避策$/```\nx <!-- y\n```\n&/' "$PLAN" > "$TMP/plan_fok"
+fok() { yn grep -qE '^- F1 .*計画で受け入れ（R2）$' <(route "$1" backlog "$TMP/t5" "$TMP/plan_fok"); }
+ck "TC-05 前の節の囲みの中の <!-- で本物の 8 が切られない（R2 が効く）" yes "$(fok "$CR")"
 ck "FG-05a 目印があれば効くようにすると不合格" 0 "$(t5 "$(broken 'why_not = accepted_why_not(e, acc_set) if e[10] != "-" else "目印なし"' 'why_not = "" if e[10] != "-" else "目印なし"')")"
-ck "FG-05b 節の終わりを見ないと不合格（R5 が効く）" 14 "$(t5 "$(broken 'inside = bool(PLAN_RISK_HEAD.match(line))' 'inside = inside or bool(PLAN_RISK_HEAD.match(line))')")"
-ck "FG-05c 処遇を完全一致で見ないと不合格（R6 が効く）" 14 "$(t5 "$(broken '.strip() == "受け入れ"' '.strip().startswith("受け入れ")')")"
-ck "FG-05e 受け入れでない同じ番号を引かないと不合格（dup が効く）" 14 "$(t5 "$(broken 'return acc - other' 'return acc')")"
-PC_READ='PLAN_COMMENT.sub("", open(plan, encoding="utf-8", errors="replace").read()).split("<!--", 1)[0]'
-ck "FG-05f コメントを取り除かないと不合格（cmt・R9・mid・reopen・open が効く）" 10 "$(t5 "$(broken "$PC_READ" 'open(plan, encoding="utf-8", errors="replace").read()')")"
-ck "FG-05g 閉じていないコメントから後ろを切らないと不合格（open が効く）" 14 "$(t5 "$(broken "$PC_READ" 'PLAN_COMMENT.sub("", open(plan, encoding="utf-8", errors="replace").read())')")"
-ck "FG-05h コードの囲みを見ないと不合格（fence が効く）" 14 "$(t5 "$(broken 'if line.lstrip().startswith("```"):' 'if False:')")"
+ck "FG-05b 節の終わりを見ないと不合格（R5 が効く）" 16 "$(t5 "$(broken 'inside = bool(PLAN_RISK_HEAD.match(line))' 'inside = inside or bool(PLAN_RISK_HEAD.match(line))')")"
+ck "FG-05c 処遇を完全一致で見ないと不合格（R6 が効く）" 16 "$(t5 "$(broken '.strip() == "受け入れ"' '.strip().startswith("受け入れ")')")"
+ck "FG-05e 受け入れでない同じ番号を引かないと不合格（dup が効く）" 16 "$(t5 "$(broken 'return acc - other' 'return acc')")"
+PC_READ='PLAN_COMMENT.sub("", strip_fences(open(plan, encoding="utf-8", errors="replace").read())).split("<!--", 1)[0]'
+ck "FG-05f コメントを取り除かないと不合格（cmt・R9・mid・reopen・open が効く）" 12 "$(t5 "$(broken "$PC_READ" 'strip_fences(open(plan, encoding="utf-8", errors="replace").read())')")"
+ck "FG-05g 閉じていないコメントから後ろを切らないと不合格（open が効く）" 16 "$(t5 "$(broken "$PC_READ" 'PLAN_COMMENT.sub("", strip_fences(open(plan, encoding="utf-8", errors="replace").read()))')")"
+B05H=$(broken "$PC_READ" 'PLAN_COMMENT.sub("", open(plan, encoding="utf-8", errors="replace").read()).split("<!--", 1)[0]')
+ck "FG-05h 囲みを取り除かないと不合格（fpre・tpre・func が効き、fok が切られる）" "14 no" "$(t5 "$B05H") $(fok "$B05H")"
 ck "FG-05i コメントが閉じない読み方だと不合格（TC-01 の R2・R4 が効かない）" no \
   "$(yn [ "$(t1 "$(broken 'PLAN_COMMENT = re.compile(r"<!--.*?-->", re.S)' 'PLAN_COMMENT = re.compile(r"<!--.*", re.S)')")" = "I: B:F1,F2,F3,F4" ])"
 # 本物の入口 --route（一時のリポジトリ・台帳のある記録）
