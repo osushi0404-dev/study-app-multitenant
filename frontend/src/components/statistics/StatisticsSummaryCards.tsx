@@ -11,7 +11,7 @@ interface StatisticsSummaryCardsProps {
   analytics: DashboardAnalytics;
 }
 
-const StatisticsSummaryCards: React.FC<StatisticsSummaryCardsProps> = ({ analytics }) => {
+const StatisticsSummaryCards = ({ analytics }: StatisticsSummaryCardsProps) => {
   const { period, totals } = analytics;
   const cards = [
     { label: '学習時間', value: formatStudyTime(totals.study_seconds) },

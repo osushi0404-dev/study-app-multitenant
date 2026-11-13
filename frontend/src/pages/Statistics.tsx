@@ -30,7 +30,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SubjectSelector } from '../components/SubjectSelector';
 import { NO_RECORD_TEXT } from '../components/dashboard/DashboardStatCards';
 import StatisticsSummaryCards from '../components/statistics/StatisticsSummaryCards';
-import StatisticsTrendChart from '../components/statistics/StatisticsTrendCharts';
+import StatisticsTrendChart from '../components/statistics/StatisticsTrendChart';
 import SubjectBreakdown from '../components/statistics/SubjectBreakdown';
 import { ALL_SUBJECTS } from '../hooks/useDashboardOverview';
 import { DEFAULT_STATISTICS_DAYS, STATISTICS_PERIODS, useStatistics } from '../hooks/useStatistics';
@@ -44,7 +44,7 @@ interface TabPanelProps {
 }
 
 /** 描画の中で定義すると描くたびに別の部品になり中身が作り直されるので、外で定義する（MUI の例と同じ形） */
-const TabPanel: React.FC<TabPanelProps> = ({ index, value, children }) => (
+const TabPanel = ({ index, value, children }: TabPanelProps) => (
   <div
     role="tabpanel"
     hidden={value !== index}
@@ -55,7 +55,7 @@ const TabPanel: React.FC<TabPanelProps> = ({ index, value, children }) => (
   </div>
 );
 
-const StatisticsSkeleton: React.FC = () => (
+const StatisticsSkeleton = () => (
   <Box aria-busy="true">
     {/* 画面には出さず読み上げにだけ伝える（ダッシュボードのスケルトンと同じ・styles/accessibility.css の .sr-only） */}
     <span className="sr-only">学習統計を読み込み中</span>
@@ -70,7 +70,7 @@ const StatisticsSkeleton: React.FC = () => (
   </Box>
 );
 
-const Statistics: React.FC = () => {
+const Statistics = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [days, setDays] = useState<number>(DEFAULT_STATISTICS_DAYS);

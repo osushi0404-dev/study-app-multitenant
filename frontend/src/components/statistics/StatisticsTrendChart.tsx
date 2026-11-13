@@ -40,11 +40,11 @@ interface ChartPoint {
   accuracyPercent: number | null;
 }
 
-const PointTooltip: React.FC<TooltipProps<number, string> & { metric: TrendMetric }> = ({
+const PointTooltip = ({
   active,
   payload,
   metric,
-}) => {
+}: TooltipProps<number, string> & { metric: TrendMetric }) => {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -65,7 +65,7 @@ interface StatisticsTrendChartProps {
   metric: TrendMetric;
 }
 
-const StatisticsTrendChart: React.FC<StatisticsTrendChartProps> = ({ analytics, metric }) => {
+const StatisticsTrendChart = ({ analytics, metric }: StatisticsTrendChartProps) => {
   const { trend, period, totals } = analytics;
 
   const points = useMemo<ChartPoint[]>(() => trend.map((bucket) => ({
@@ -99,7 +99,8 @@ const StatisticsTrendChart: React.FC<StatisticsTrendChartProps> = ({ analytics, 
           <BarChart data={points}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="label" />
-            <YAxis allowDecimals={false} domain={[0, 'auto']} />
+            {/* 棒は分の小数第 1 位まで持つので、1 分未満の期間でも目盛りを刻めるよう小数を許す */}
+            <YAxis domain={[0, 'auto']} />
             {tooltip}
             <Bar dataKey="minutes" fill="#8884d8" />
           </BarChart>

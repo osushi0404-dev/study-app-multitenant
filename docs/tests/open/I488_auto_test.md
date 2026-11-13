@@ -54,4 +54,4 @@
 - 結果（2026-11-14・implement）:
   - TC-12・TC-08・TC-03: 3 つの壊し方（区切りごとに 1 クエリ足す・`_answers` から `scope_to_user_org` を外す・週の始まりを日曜にする）を `backend/dashboard/selectors.py` に入れて流し、`test_query_count_is_constant`・`test_only_own_answers_in_own_org`・`test_user_without_org_sees_nothing`・`test_week_buckets` が FAILED → 元に戻して pass
   - TC-22: `getAnalytics` の形の確かめを外すと、TC-22 の形の違う応答 3 つ（`trend` を欠く・`totals` を欠く・知らない区切り）が FAILED → 元に戻して 12 件 pass
-  - 気づき: タブの切り替えを `userEvent.click`（v13）で書いたところ、MUI のタブが切り替わらず、TC-24 の「科目別」の確かめが前のタブの同じ文言で通ってしまう形だった。`fireEvent.click` にして、タブが切り替わったうえで TC-24・25・26 が中身を見ていることを確かめた
+  - 気づき: タブの切り替えを `userEvent.click`（v13）で書いたところ、すぐに中身を見ると前のタブのままで、TC-24 の「科目別」の確かめが前のタブの同じ文言で通ってしまう形だった。review-gate で、タブの `aria-selected` が true になるのを待ってから中身を見る形にし（`openTab`）、規約 12.2 どおり `userEvent` のまま TC-24・25・26 が切り替わった後の中身を見ていることを確かめた（39 件 pass）

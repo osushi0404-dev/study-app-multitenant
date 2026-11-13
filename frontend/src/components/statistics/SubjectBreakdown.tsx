@@ -14,7 +14,7 @@ interface SubjectBreakdownProps {
   subjects: DashboardAnalytics['subject_breakdown'];
 }
 
-const SubjectBreakdown: React.FC<SubjectBreakdownProps> = ({ subjects }) => {
+const SubjectBreakdown = ({ subjects }: SubjectBreakdownProps) => {
   if (subjects.length === 0) {
     return <Typography variant="body2" color="text.secondary">{NO_RECORD_IN_PERIOD_TEXT}</Typography>;
   }

@@ -3,7 +3,7 @@
  * 契約どおりのキーを読む・データ無し・期間に記録無し・形の違い/失敗はエラー（空で埋めない）・期間と科目の送り方・区切りのラベル・科目別
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -118,7 +118,10 @@ const renderStatistics = () => {
   );
 };
 
-const openTab = (name: string) => fireEvent.click(screen.getByRole('tab', { name }));
+const openTab = async (name: string) => {
+  userEvent.click(screen.getByRole('tab', { name }));
+  await waitFor(() => expect(screen.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true'));
+};
 
 describe('Statistics', () => {
   beforeEach(() => {
@@ -217,7 +220,7 @@ describe('Statistics', () => {
     expect(screen.getByText('この期間の記録はありません')).toBeInTheDocument();
     expect(screen.queryByTestId('bar-chart')).toBeNull();
 
-    openTab('科目別（全科目）');
+    await openTab('科目別（全科目）');
     expect(screen.getByText('この期間の記録はありません')).toBeInTheDocument();
   });
 
@@ -238,7 +241,7 @@ describe('Statistics', () => {
     const bars = await screen.findByTestId('bar-chart');
     expect(bars.getAttribute('data-labels')?.split(',')[0]).toBe(label);
 
-    openTab('正答率');
+    await openTab('正答率');
     // 答えの無い区切りは 0% にせず null のまま（線を切る）
     expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '50,null');
   });
@@ -247,7 +250,7 @@ describe('Statistics', () => {
     respond(analytics());
     const { unmount } = renderStatistics();
     await screen.findByText('15問');
-    openTab('科目別（全科目）');
+    await openTab('科目別（全科目）');
 
     const english = screen.getByRole('region', { name: '英語' });
     expect(within(english).getByText('10分')).toBeInTheDocument();
@@ -262,7 +265,7 @@ describe('Statistics', () => {
     }));
     renderStatistics();
     await screen.findByText('15問');
-    openTab('科目別（全科目）');
+    await openTab('科目別（全科目）');
 
     expect(screen.queryByTestId('pie')).toBeNull();
     expect(screen.getByText('学習時間の記録がありません')).toBeInTheDocument();
