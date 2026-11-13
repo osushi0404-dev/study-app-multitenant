@@ -42,6 +42,8 @@
 - [test-gate] M-01 で、git を echo とつないだ形が中で動き、サンドボックスが中でだけ置く空のファイルが `git status` に未追跡として見えた — 実際の作業ツリーには無いことを外の `git status` と `ls` で確かめた。danger-ops.md の「git を他とつながない」で扱える範囲なので、追加の直しはしない
 - [retro] 台帳の残り: F1・F2・F3 → #512（I512・後続イシュー・「次のハーネスの作業で最優先」をコメント）、F4・F5・F6・F7・F8 → `docs/reviews/backlog/I430.md`、F9 → このイシューで直した（計画書の影響範囲と 4-5b に `.claude/agents/adversarial-reviewer.md` を足した）
 - [retro] 改善案の振り分け: (1) 敵対的レビューの実験で入れ子の Claude を起こせない → このイシューで直した（review-gate で `.claude/agents/adversarial-reviewer.md`）(2) 受け入れ済みの残余リスクが最優先の後続を作り続ける → 起票 I512（#512）(3) 新しいセッションの起動のたびの許可の設定の警告 → #450 に同梱（コメント）(4) #436 の要否 → #436 に見直しの結果をコメント（閉じるかはユーザーの判断）(5) 設定ファイルの読み取り専用 × git checkout の事故（S22）が計画の試しで見つからなかった → 見送り（design-security-review でその場で見つけ、実装前に直したので手戻りが無い）(6) 同時に 2 つのテストを流して偽の失敗が出た → 見送り（手元の運用の誤りで、その場で気づき、コミット後に流し直して解消）(7) 設定の変更が、開いている会話の Bash に効かなかった → このイシューで記録（close の報告で「開いているセッションは開き直す」と案内する）
+- [close] origin/develop を取り込んだ（I487 のアプリの変更。このブランチの変更ファイルと重ならず、gate-check は OK のまま）
+- [close] #436 は閉じずにコメントだけ付けた — 閉じるかはユーザーの判断（マージ依頼の報告で聞く）
 
 ## 振り返り
 
@@ -116,3 +118,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge

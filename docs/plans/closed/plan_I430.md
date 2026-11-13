@@ -323,9 +323,9 @@ Danger Ops（有無/手順/ロールバック）:
 | V8 | 1 | 実験必須 | レビュー役（`bash scripts/claude/test-session.sh …`）・`gh`・`git fetch`・docker が、最終の設定で承認なしに動く（M-06〜M-08）。新しいセッションの起こし方は V1 と同じ（その中の Bash に `gh issue view 430 --json state` などを流させる） |
 
 ## レビュー結果
-- [20261113_1734 判定: ✅ 完了](../../reviews/I430_plan_review_20261113_1734.md)
-- [20261113_1727 判定: ✅ 完了](../../reviews/I430_plan_review_20261113_1727.md)
-- [20261113_1725 判定: 差し戻し（Blocker 1件）](../../reviews/I430_plan_review_20261113_1725.md)
+- [20261113_1734 判定: ✅ 完了](../../reviews/closed/I430_plan_review_20261113_1734.md)
+- [20261113_1727 判定: ✅ 完了](../../reviews/closed/I430_plan_review_20261113_1727.md)
+- [20261113_1725 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I430_plan_review_20261113_1725.md)
 
 ## 計画変更記録
 - 2026-11-13 計画レビュー 2 回目（HIGHRISK・Warning 3・Info 2）への対応: pre-commit の環境を新しく作る形の確かめ（M-14・ステップ 1）・TC-02 の合否を Edit／Write の例に絞る・4-1 の外に出すものの書き込み先の説明を正確に・R4 に GitHub Actions で Claude Code を起動していないこと（grep 0 件）・R9 と danger-ops の前方一致の注記。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
@@ -404,3 +404,8 @@ Danger Ops（有無/手順/ロールバック）:
 
 ### 残余リスク処遇
 （retro 段階で決定する）
+
+## 完了情報
+- **完了日時**: Fri Nov 13 19:34:26 JST 2026
+- **対応者**: Claude Code
+- **レビュー結果**: OK（コードレビュー OK・敵対的レビュー 2 周目 OK・手動テスト M-01〜M-14 OK）
