@@ -43,8 +43,11 @@
 - [implement] `/simplify` の 4 観点の指摘 15 件のうち 7 件を直し、8 件を見送った（理由は計画変更記録）— 振る舞いを変えるもの・契約を変えるもの・範囲外の既存の借りは見送り
 - [implement] E2E は手元で流さず CI に任せた — 1 本の追加で、CI が PR ごとに全部流すため（手元で CI と同じものを流し直さない）
 - [implement] 実装のコミットだけ `SKIP=eslint` にした — ワークツリーのホストに eslint が無くフックが exit 127 で止まる既知の問題（#468・I452 と同じ）。同じ `npm run lint` を frontend コンテナで流して違反 0 件を確かめた上で使った。CI の ESLint は通常どおり流れる
+- [review-gate] 1 回目のコードレビューは CI 待ちの 20 分切れ（exit 3）で、CI は遅れて始まり全部合格していた。決まりどおり 1 回だけやり直した — CI の実行の待ち行列の遅れで、直すものは無い
+- [review-gate] 止める指摘 F1〜F4（Medium・画面）で fix-loop へ。F5〜F8（Low）は台帳に残し retro へ — スクリプトの判定どおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
