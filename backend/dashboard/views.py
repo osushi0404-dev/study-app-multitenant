@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.db.models import Avg, Sum
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
 
@@ -24,6 +25,7 @@ class DashboardOverviewView(views.APIView):
     """ダッシュボードの数字（クイズの答えの記録から数える・I473）"""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(parameters=[OverviewQuerySerializer], responses={200: OverviewSerializer})
     def get(self, request):
         query = OverviewQuerySerializer(data=request.query_params, context={'request': request})
         if not query.is_valid():

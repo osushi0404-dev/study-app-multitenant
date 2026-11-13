@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from problems.serializers import OrgSubjectField
@@ -16,7 +17,11 @@ class AnalyticsQuerySerializer(serializers.Serializer):
 
 
 # ---- ダッシュボードの概要（overview・I473）----
-# 比率は 0〜1（答えが 0 件なら null）。画面の型（frontend/src/services/types.ts の DashboardOverview）と同じ形
+# 比率は 0〜1（答えが 0 件なら null）。この形から backend/openapi.yaml と画面の型
+# （frontend/src/types/api/schema.d.ts）を作る（I493）。部品の名前は他の API とぶつからないよう Dashboard で始める
+
+# おすすめの種類（選択肢の正。SPECTACULAR_SETTINGS の ENUM_NAME_OVERRIDES もこれを指す）
+RECOMMENDATION_KIND_CHOICES = (KIND_WEAK, KIND_UNSTUDIED)
 
 
 class OverviewQuerySerializer(serializers.Serializer):
@@ -24,20 +29,25 @@ class OverviewQuerySerializer(serializers.Serializer):
     subject_id = OrgSubjectField(required=False)
 
 
+@extend_schema_serializer(component_name='DashboardTotals')
 class TotalsSerializer(serializers.Serializer):
     answered_count = serializers.IntegerField()
     correct_count = serializers.IntegerField()
     accuracy_rate = serializers.FloatField(allow_null=True)
 
 
+# 継承すると親の部品の名前も引き継ぐので、個別に付ける
+@extend_schema_serializer(component_name='DashboardToday')
 class TodaySerializer(TotalsSerializer):
     study_seconds = serializers.IntegerField()
 
 
+@extend_schema_serializer(component_name='DashboardStreak')
 class StreakSerializer(serializers.Serializer):
     current_days = serializers.IntegerField()
 
 
+@extend_schema_serializer(component_name='DashboardDay')
 class DaySerializer(serializers.Serializer):
     date = serializers.DateField()
     study_seconds = serializers.IntegerField()
@@ -45,6 +55,7 @@ class DaySerializer(serializers.Serializer):
     correct_count = serializers.IntegerField()
 
 
+@extend_schema_serializer(component_name='DashboardWeakSubject')
 class WeakSubjectSerializer(serializers.Serializer):
     subject_id = serializers.IntegerField()
     subject_name = serializers.CharField()
@@ -52,13 +63,15 @@ class WeakSubjectSerializer(serializers.Serializer):
     accuracy_rate = serializers.FloatField()
 
 
+@extend_schema_serializer(component_name='DashboardRecommendation')
 class RecommendationSerializer(serializers.Serializer):
-    kind = serializers.ChoiceField(choices=[KIND_WEAK, KIND_UNSTUDIED])
+    kind = serializers.ChoiceField(choices=RECOMMENDATION_KIND_CHOICES)
     subject_id = serializers.IntegerField()
     subject_name = serializers.CharField()
     reason = serializers.CharField()
 
 
+@extend_schema_serializer(component_name='DashboardOverview')
 class OverviewSerializer(serializers.Serializer):
     """GET /api/dashboard/overview/ の応答（キーは全部必須）"""
     has_data = serializers.BooleanField()

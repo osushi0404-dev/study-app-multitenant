@@ -1,0 +1,13 @@
+{
+  "name": "api-types",
+  "private": true,
+  "description": "backend/openapi.yaml から画面の型（frontend/src/types/api/schema.d.ts）を作る（I493）",
+  "scripts": {
+    "generate": "openapi-typescript ../../backend/openapi.yaml -o ../../frontend/src/types/api/schema.d.ts",
+    "check": "npm run generate -- --check"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
