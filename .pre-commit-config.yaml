@@ -24,7 +24,7 @@ repos:
         exclude: ^backend/.*/migrations/
 
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.9
+    rev: 1.9.4
     hooks:
       - id: bandit
         files: ^backend/
@@ -32,7 +32,7 @@ repos:
 
   # .github/dependabot.yml の書き間違いを公式のスキーマで止める（I213。0.39.0 は出たばかりなので待つ日数に合わせて 1 つ前）
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.38.2
+    rev: 0.39.0
     hooks:
       - id: check-dependabot
 
