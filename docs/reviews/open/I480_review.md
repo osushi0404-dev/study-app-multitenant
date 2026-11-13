@@ -28,7 +28,9 @@
 - [plan-review] 高リスク判定は NO（PLAN_VERDICT: OK）なので design-security-review を飛ばして implement へ — スクリプトの判定どおり
 - [implement] /simplify は整理役 4 体を起こさず自分で 4 観点を見た（指摘なし） — 差分が条件 1 行・コメント 1 行・テスト 1 ブロック・文言 3 か所と小さく、4 体は過剰（memory: 小さな直しに重い工程を回さない）
 - [implement] FG-Q5 の壊し方も新しい条件の行（`SEC_COND`）を置き換える形に直した — 前の `if sec == "yes":` の文字列が本体から消え、写しが作れなくなるため（計画 §4 の Q7・Q10 の直しに付随。判定は変えない）
+- [review-gate] コードレビュー OK・CI OK・高リスク NO（敵対的レビューは不要）。台帳の残り Low 3 件（F1〜F3）は止めない指摘なので直さず retro へ — 止める指摘だけを直す決まり（I197）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
