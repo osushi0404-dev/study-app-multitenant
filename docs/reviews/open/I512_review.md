@@ -31,6 +31,8 @@
 - [plan-review] Warning 2 件は計画書・manual_test を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない
 - [implement] /simplify の 4 体の指摘のうち、計画書の探し方（find_plan_file）・判定の入口の一本化・route_reasons() に旗を足さない形・テストの起動回数の削減を採用。台帳の行を名前で引く形（namedtuple）・BL_FORM の重複・入口と Python の種類の確かめの重複は見送り — 範囲の外か、既存の書き方の慣例
 - [implement] 関係するテストだけを 1 本ずつ流し、全体は CI に任せた — run-all.sh はサンドボックスで uv の一時ファイルを書けない
+- [review-gate] 1 回目は CI_WAIT: FAIL（Harness Tests の test_pipefail_negated_grep.sh G1: test_i512_accepted_risk.sh:171 の `! grep … | grep -qvE` が pipefail の下の否定とパイプの形）で fix-loop へ — コードレビューは CI が通ってから
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
