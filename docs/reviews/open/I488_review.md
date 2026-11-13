@@ -25,5 +25,7 @@
 - [plan] 科目別の内訳は科目の選択に関係なく全科目（「科目別（全科目）」）— 1 科目だけの円グラフは意味が無く、ダッシュボードの「（全科目）」の見せ方にそろえる
 - [plan] グラフの道具は `recharts` のまま（`chart.js` への統一と依存の削除は retro で別イシューにするか決める）— 本イシューの目的と関係しない差分を増やさない
 - [plan] E2E を足さない — 画面と API の形のずれは、契約のテスト・OpenAPI から作る型・形の確かめで止め、実際の流れは手動テスト No.5 で確かめる
+- [plan-review] 計画レビューの Warning 2・Info 2 を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない記述の具体化だけ（計画変更記録に記録）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
