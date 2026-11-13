@@ -29,7 +29,8 @@
 - [implement] 実装のコミットだけ `SKIP=eslint` にした — ワークツリーのホストに eslint が無くフックが exit 127 で止まる既知の問題（#468・I473 と同じ）。同じ `npm run lint`（--max-warnings 0）を frontend のコンテナで流して違反 0 件を確かめた。CI の ESLint は通常どおり流れる
 - [implement] /simplify の 4 観点の指摘のうち 4 件を直し、4 件を見送った（理由は計画変更記録）— 直したのは選択肢の一覧の増減の検知・check のパスの 1 か所化・TC-02 の注入の書式依存の除去・スキーマ生成を 1 回に
 - [implement] 画面の確かめ（Playwright）は test-gate の手動 No.1 に回した — 画面の動きは変えておらず（型の読み込み先と、選択肢の確かめの書き方だけ）、選択肢の確かめは Dashboard.test.tsx（10 件通過）で見ている
-- [implement] backend・celery のイメージを作り直したところ、celery・celery-beat が起動直後に落ちた。原因は今回と無関係（celery の部品 kombu の新しい版が redis-py 6.1 以上を求めるが、`requirements.txt` は `redis==5.0.1` に固定。作業の開始時から celery は動いていなかった）。別イシューとして起票する — 本イシューの範囲外で、本番のイメージでも同じことが起こりうるため
+- [implement] backend・celery のイメージを作り直したところ、celery・celery-beat が起動直後に落ちた。原因は今回と無関係（celery の部品 kombu の新しい版が redis-py 6.1 以上を求めるが、`requirements.txt` は `redis==5.0.1` に固定。作業の開始時から celery は動いていなかった）。別イシューとして起票する — 本イシューの範囲外で、本番のイメージでも同じことが起こりうるため → I499（#499）として起票した
+- [review-gate] コードレビューは OK（台帳に Low 4 件・止める指摘なし）、敵対的レビューは 1 周目で OK（V1〜V6 すべて確認済み・新しい指摘なし）。Low は retro で扱う — 止める条件に当たらないため
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -38,3 +39,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
