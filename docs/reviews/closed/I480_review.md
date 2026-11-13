@@ -69,6 +69,7 @@
 - [test-gate] gate-check OK・手元で流し直すテストなし（heavy の委譲なし）・手動テスト 2 項目を Claude が実施して OK — Human の項目が無いので retro へ
 - [retro] 台帳の残り 3 件: F1・F2・F3 → docs/reviews/backlog/I480.md（後続イシュー 0 件）。F1 は目的の穴ではないことを確かめてから一覧へ
 - [retro] 改善案 2 件はどちらも見送り（その場で捕まり手戻りなし）・新規起票・同梱なし
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK・記録を closed へ移し PR の説明を更新 — 手順どおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -76,3 +77,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
