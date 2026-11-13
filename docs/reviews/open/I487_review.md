@@ -134,3 +134,6 @@ STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] F10 の直しの差分のレビューは OK。F13（保存の後のキャッシュの処理が try の中）は Low で台帳に残す
 
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] React Query への置き換えの後、取得のしくみに影響する手動 No.1・No.3・No.4・No.5 を Claude が Playwright でやり直して OK（設定の保存の後、戻った直後から新しい目標・同じタブでユーザーを変えても前のユーザーの値を出さない）。No.2・No.6 は置き換えで触っていない部分なので、置き換えの後の E2E の合格で代えた。CI は bf5811db で成功（review-gate の `CI_WAIT: OK`）。Human の項目なし
+
+STAGE_DONE: test-gate NEXT: retro
