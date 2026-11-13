@@ -27,5 +27,7 @@
 - [plan] サンドボックスの外に出すスクリプトを `bash scripts/claude/*` のディレクトリごとにした — 一覧に絞っても守りの強さは同じで、一覧の漏れが黙った失敗になるため（ユーザーの「BP の観点で」の指示を受けた点検）
 - [plan] allow・`autoMode.environment`・`Read(*)` などは変えない — 承認画面の主な出どころは見張りの確認で、判定役の拒否は 14 日で 1 回ほど。サンドボックスの中のコマンドは allow によらず通るため
 - [plan] 安全装置の変更（止めて聞く条件 2）をユーザーに確かめた — 答えは「BP の観点で問題ないやり方で進めて」
+- [plan-review] 1 回目の Blocker（`failIfUnavailable` の未実証）は、道具を消さずに `bwrap` を除いた `PATH` で試して実証した（S20）— 環境を壊さずに実機で確かめられたため
+- [plan-review] 2 回目の Warning・Info は計画変更記録に書いて直し、計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan NEXT: plan-review

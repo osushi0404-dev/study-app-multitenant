@@ -12,7 +12,7 @@
 | TC | 対象 | 確かめること | 合否の判定 | FG（失敗の注入） | 結果 |
 |---|---|---|---|---|---|
 | TC-01 | `scripts/claude/tests/test_settings_permissions.sh` | 見張りを呼ぶ PreToolUse フックが 3 つ。`sandbox.enabled`=true・`allowUnsandboxedCommands`=false・`failIfUnavailable`=true・`filesystem.denyWrite` に `.claude/worktrees`・`filesystem.denyRead` に `~/.config/github-app`・`excludedCommands` に一般のインタプリタ・シェル（`bash *`・`sh *`・`python3 *`・`python *`・`node *`・`env *`・`*`）が無い・deny に `Bash(gh pr checkout *)`・`Bash(gh co *)` がある | exit 0 | テストの中で設定の写しを壊す（`enabled` を false・`allowUnsandboxedCommands` を true・`failIfUnavailable` を消す・`denyWrite` から `.claude/worktrees` を消す・`denyRead` から App の鍵を消す・`excludedCommands` に `bash *`／`sh *`／`python3 *`／`*` を足す・deny から 2 行を消す）と、それぞれ不合格になる（テストの中の `ck`） | 実装前のため未実行 |
-| TC-02 | `scripts/claude/tests/test_pretooluse_worktree_guard.sh` | Edit／Write の別ワークツリー・primary への書き込みが今までどおり止まる（G01）。Bash の例は消えている | exit 0 | 既存の FG（見張りの判定を外した写しで不合格）をそのまま使う | 実装前のため未実行 |
+| TC-02 | `scripts/claude/tests/test_pretooluse_worktree_guard.sh` | Edit／Write の別ワークツリー・primary への書き込みが今までどおり止まる（G01）。合否はこの Edit／Write の例が全部通ること（Bash の例を消したことは、計画 4-6 のとおりレビューで差分を見る） | exit 0 | 既存の FG（見張りの判定を外した写しで不合格）をそのまま使う | 実装前のため未実行 |
 | TC-03 | `scripts/claude/tests/test_pretooluse_push_guard.sh` | force・`--no-verify`・リモートの削除・`--mirror`/`--all` が今までどおり止まる・確認になる | exit 0 | 既存の FG | 実装前のため未実行 |
 | TC-04 | `scripts/claude/tests/test_guard_must_stop_cases.sh` | 止めるべき形の一覧（消した判定の行を除いたもの）で、変更前より弱い判定が無い | exit 0 | 既存の FG | 実装前のため未実行 |
 | TC-05 | `scripts/claude/tests/test_pretooluse_guard_matrix.sh` | 危険な操作 × 書き方の総当たりで、残す判定の素通しが無い | exit 0 | 既存の FG | 実装前のため未実行 |

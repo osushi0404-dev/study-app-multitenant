@@ -108,7 +108,7 @@
 
 | 守るもの | 公式・GitHub の守り（出典） | 止まらない漏れ | 見張りの扱い |
 |---|---|---|---|
-| (B) 別のワークツリー・primary への Bash の書き込み | サンドボックスの書き込みの制限（sandboxing.md「Default write behavior」・S2）。primary のセッションからの `.claude/worktrees/` は `denyWrite`（S19） | 外に出したコマンド（docker・gh・git push/fetch/pull・`bash scripts/claude/*`）の中の書き込み | G02・G03 を消す。漏れは「外に出すものは書き込み先を持たない道具か、レビュー済みのリポジトリのスクリプトだけ」で受け入れる（4-2） |
+| (B) 別のワークツリー・primary への Bash の書き込み | サンドボックスの書き込みの制限（sandboxing.md「Default write behavior」・S2）。primary のセッションからの `.claude/worktrees/` は `denyWrite`（S19） | 外に出したコマンド（docker・gh・git push/fetch/pull・`bash scripts/claude/*`）の中の書き込み | G02・G03 を消す。漏れは受け入れる（4-2）。外に出すもののうち、git push/fetch/pull・gh が書くのは今の作業ディレクトリと共有の `.git`（と gh の鍵の控え）だけ、docker は bind mount の先（コンテナの判定が残る）、`bash scripts/claude/*` はレビュー済みのリポジトリのスクリプト |
 | (B) 別のワークツリーへの Edit／Write | 無い（Edit はサンドボックスの外。auto モードで通った・S18。deny は「primary の下、ただし自分は除く」を書けない） | 全部 | **G01 を残す** |
 | (B) 作業ディレクトリの中の戻せない操作（未コミットの変更の取り消し・`reset --hard`・`clean -f`・`rm -r`・`find -delete`） | 無い（中は書ける） | 全部 | G13〜G15・G32 を残す |
 | (B)(C) コンテナの中の操作（DB の破壊・秘密の表示・外部への送信・/tmp 以外への書き込み） | 無い（docker は外に出す・sandboxing.md「docker is incompatible」） | 全部 | G16〜G23・G26・G27・G29〜G31 を残す（コンテナの許可リストの整理は #444 の範囲で済んでいる） |
@@ -201,6 +201,7 @@
   - 新しい小節「見張りに判定を足すときの決まり（I430）」: ①足す前に、公式の仕組み（`.claude/settings.json` の deny／ask・サンドボックスの設定）で表せないかを計画に書き、表せるなら公式を使う ②足すなら、実際に起きた事故の例を計画に書く（レビューの「この書き方でもすり抜けられる」だけでは足さない）③レビューで見張りへの意図的な回避の指摘が出たら、Low として一覧（`docs/reviews/backlog/`）に回すだけにし、後続のイシューにしない
   - 「新しい秘密ファイルを置くときは」の項に、リポジトリの外の秘密は `sandbox.filesystem.denyRead` に足すと書く
   - サンドボックスの外に出すもの（`excludedCommands`）の項: `scripts/claude/` に置いたスクリプトは `bash scripts/claude/…` で呼ぶとサンドボックスの外で動く。スクリプトを足す・中で呼ぶ道具を変えるときは、外で動いてよいもの（中で書き込み・通信の制限を外したいもの）かをレビューで見る。一般のインタプリタ・シェルを `excludedCommands` に足さない（計画レビューの Warning への対応）
+  - fork の PR の取り込みの deny（`gh pr checkout`・`gh co`）は前方一致で、`gh -R x pr checkout` のようにオプションを挟んだ形には当たらない（意図的な回避は対象外）と書く（計画レビュー 2 回目の Info）
 - 実装で `.claude/skills/`・`.claude/agents/` を `gh pr checkout`・`gh co`・`fork`・`cross`・`保護ブランチ` で grep し、消す判定（G33〜G35・G05）を説明している箇所があれば、4-5 と同じ方針で直す（計画レビューの Info への対応。2026-11-13 の時点では `docs/runbooks` だけに見つかった）
 - `docs/runbooks/plan-writing-rules.md`: 新しい小節「見張り（`pretooluse_guard.py`）に判定を足す計画」。計画に書くこと 3 つ（公式で表せないかの検討・事故の実例・意図的な回避の指摘は一覧へ）を書き、正は danger-ops.md の小節と書く
 - `docs/runbooks/workflow.md`「外部（fork）からの PR の扱い」249・253–259 行: 見張りの説明を「`gh pr checkout`・`gh co` は settings.json の deny で拒否。マージ・承認は GitHub のブランチ保護で止まる」に直す
@@ -221,7 +222,7 @@
   - そのほか、実装で `run-all.sh` を流して落ちたテスト（候補: `test_pretooluse_guard_matrix.sh`・`test_i200_guard_narrowing.sh`・`test_i182_guard_failsafe.sh`・`test_i197_adversarial_process.sh`・`test_wt_lifecycle.sh`・`guard_bash_oracle.py`・`test_i444_guard_gaps.sh`・`test_i454_guard_env_writes.sh`・`test_i463_guard_optspec.sh`・`test_i469_guard_optspec_leftovers.sh`。後ろの 4 本は D1・D2 が触る共有の関数〔書き先・push の宛先・オプションの表〕の周りを見るので、決定論ゲートにも入れる＝TC-07）は、落ちた期待値が消した判定のものかを 1 件ずつ確かめてから消す。残す判定の期待値が落ちたら、見張りの削除の誤りとして直す（テストを直さない）
 
 ## 5. 実装手順（ステップ）
-1. **設定（未知のリスクの先）**: `.claude/settings.json` に 4-2 の `sandbox`・deny 2 行を足し、GitHub MCP のフックの登録を消す。このワークツリーのセッションの Bash にも効く見込み（S14）なので、足した直後に、この会話の Bash で作業場所の中の書き込み・`git status`・`bash scripts/claude/issue-source.sh gh-number I430` が動くことを確かめる → TC-10・M-01・M-07。動かなければ `sandbox.enabled` を false に戻して（Edit はサンドボックスの外）計画をやり直す
+1. **設定（未知のリスクの先）**: `.claude/settings.json` に 4-2 の `sandbox`・deny 2 行を足し、GitHub MCP のフックの登録を消す。このワークツリーのセッションの Bash にも効く見込み（S14）なので、足した直後に、この会話の Bash で作業場所の中の書き込み・`git status`・`bash scripts/claude/issue-source.sh gh-number I430` が動くことを確かめる → TC-10・M-01・M-07。動かなければ `sandbox.enabled` を false に戻して（Edit はサンドボックスの外）計画をやり直す。あわせて、pre-commit の環境を新しく作る形（`allowWrite` の下の新しい場所を `PRE_COMMIT_HOME` にした `pre-commit run`）が中で通るかを確かめる → M-14。通らなければ足りない宛先か書き込み先を一覧に足し、計画変更記録に書く（一般のインタプリタ・広い場所は足さない）
 2. **設定のテスト**: `test_settings_permissions.sh` を 4-6 のとおり直す（ステップ 1 の後） → TC-01
 3. **見張りの削除**: 4-3 の D1・D2・D3 の順に消す（ステップ 2 と並行してよい）。1 つ消すごとに関係するテストの期待値を 4-6 のとおり直す → TC-02〜TC-07・TC-08
 4. **手順書**: 4-5 を直す（ステップ 3 の後。消した判定に合わせる） → TC-11・TC-12
@@ -237,7 +238,7 @@
 - 失敗の注入: TC-01 の各決まりに FG を付ける（設定を壊した写しで不合格になる）
 
 ### 手動（`docs/tests/open/I430_manual_test.md`・実施者はすべて Claude・`claude -p の判定`）
-- 最終の `.claude/settings.json` を読ませた新しいセッションで、S1〜S20 のうち公式に任せた判定の分を流し直す（M-01〜M-13）
+- 最終の `.claude/settings.json` を読ませた新しいセッションで、S1〜S20 のうち公式に任せた判定の分を流し直す（M-01〜M-14）
 - Human の行は無い
 
 ## 7. ロールバック
@@ -252,7 +253,8 @@
 | R1: サンドボックスの中で今の手順のコマンドが動かなくなる（外に出す一覧の漏れ） | 外に出す理由を S6〜S13 で確かめた。implement 以降の段階はこのワークツリーでサンドボックスの中で動くので、漏れはこのイシューの中で出る。出たら計画変更記録に書いて一覧に足す（一般のインタプリタは足さない） |
 | R2: `bash scripts/claude/*` を外に出すので、Claude が書いたスクリプトを外で動かせる | 脅威モデルは事故。`scripts/claude/` は PR でレビューされる。一般のインタプリタは外に出さない（TC-01）。見張りは外に出したコマンドにも今までどおり効く |
 | R3: 許可した宛先（github.com）経由の持ち出し（文書の警告） | 事故の範囲では起きにくい（秘密の場所は `denyRead`・Read の deny で読めない）。TLS の中を見るプロキシは費用に見合わないので入れない |
-| R4: `failIfUnavailable` で、道具の無い PC で Claude Code が起動しない | onboarding.md に入れ方を書く。起動しないほうが「守りが無いまま動く」より安全 |
+| R4: `failIfUnavailable` で、道具の無い PC で Claude Code が起動しない | onboarding.md に入れ方を書く。起動しないほうが「守りが無いまま動く」より安全。GitHub Actions では Claude Code を起動していない（2026-11-13 に `.github/` を grep して 0 件） |
+| R9: deny `Bash(gh pr checkout *)` は前方一致なので、`gh -R x pr checkout` のようにオプションを挟んだ形に当たらない | 普通の書き方の事故ではない（意図的な回避）。danger-ops.md に「前方一致」と書く |
 | R5: 見張りの削除で、残す判定まで壊す | 残す判定のテスト（push・コンテナ・checkout・matrix・oracle・止めるべき形の一覧）を変えずに流す。期待値を消すのは消した判定の分だけ（4-6） |
 | R6: manual モードでは変数入りのコマンドが確認になる（S1b） | ユーザーのセッションは auto モードで、通ることを確かめた（S16）。`claude -p` のレビュー役は Read・Grep・Glob だけを使う |
 | R7: 自分のワークツリーで設定が効いたとたん、この会話の Bash が動かなくなる | ステップ 1 の直後に確かめ、動かなければ Edit で `enabled` を false に戻す（7.） |
@@ -316,4 +318,8 @@ Danger Ops（有無/手順/ロールバック）:
 | V8 | 1 | 実験必須 | レビュー役（`bash scripts/claude/test-session.sh …`）・`gh`・`git fetch`・docker が、最終の設定で承認なしに動く（M-06〜M-08） |
 
 ## レビュー結果
+- [20261113_1727 判定: ✅ 完了](../../reviews/I430_plan_review_20261113_1727.md)
 - [20261113_1725 判定: 差し戻し（Blocker 1件）](../../reviews/I430_plan_review_20261113_1725.md)
+
+## 計画変更記録
+- 2026-11-13 計画レビュー 2 回目（HIGHRISK・Warning 3・Info 2）への対応: pre-commit の環境を新しく作る形の確かめ（M-14・ステップ 1）・TC-02 の合否を Edit／Write の例に絞る・4-1 の外に出すものの書き込み先の説明を正確に・R4 に GitHub Actions で Claude Code を起動していないこと（grep 0 件）・R9 と danger-ops の前方一致の注記。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
