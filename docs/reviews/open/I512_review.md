@@ -86,3 +86,5 @@ STAGE_DONE: retro NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 3 回目は CI_WAIT: OK・FINAL_VERDICT: OK（`docs/reviews/I512_code_review_20261114_0210.md`）。F1 は resolved。新しい F7（Medium・コメントの変わった形）・F8（Low・コードの囲み）・F9（Medium・コメントの後の表の肯定テストが無い）・F10（Low）は F1 と同じ種類（計画書の読み方の穴）なので、精密化をやめて粗い fail-closed に 1 回で倒すため fix-loop へ（ユーザーの以前の指示「同種が続いたら粗い fail-closed に」「目的の穴はその PR で」）。これで収まらなければ一覧・後続へ回して打ち切る
 STAGE_DONE: review-gate NEXT: fix-loop
+- [fix-loop] 3 回目: 台帳 F7〜F10 を案 A（粗い fail-closed）で直した — 診断レビュー PASS。行ごとの特例の積み上げをやめた
+STAGE_DONE: fix-loop NEXT: review-gate
