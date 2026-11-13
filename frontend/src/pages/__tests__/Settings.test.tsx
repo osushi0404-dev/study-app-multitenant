@@ -1,9 +1,10 @@
 /**
- * 設定画面の項目名（I487・TC-17）
+ * 設定画面の項目名（I487・TC-17）と、保存のときの設定のキャッシュ（TC-10d）
  * 裏側（UserSettingsSerializer）の名前で読み、同じ名前で保存する
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
 import Settings from '../Settings';
@@ -46,6 +47,14 @@ const SAVED = {
   notification_settings: { email: false, push: true, achievements: true, reminders: false },
 };
 
+// 取得のキャッシュ（React Query）の中で描く。QueryClient はテストごとに新しくする
+const renderSettings = (queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
+  render(
+    <QueryClientProvider client={queryClient}>
+      <Settings />
+    </QueryClientProvider>
+  );
+
 describe('Settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -56,7 +65,7 @@ describe('Settings', () => {
   });
 
   it('TC-17: 裏側の項目名で読み、同じ名前で保存する', async () => {
-    render(<Settings />);
+    renderSettings();
 
     const goal = await screen.findByLabelText('1日の学習目標時間（分）');
     expect(goal).toHaveValue(45);
@@ -79,5 +88,18 @@ describe('Settings', () => {
     expect(body).not.toHaveProperty('study_reminder_enabled');
     expect(body).not.toHaveProperty('theme');
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('設定を保存しました'));
+  });
+
+  it('TC-10d: 保存すると、ダッシュボードが持つ設定のキャッシュを古いことにする', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['user-settings', 'user-1'], { daily_study_goal_minutes: 45 });
+    renderSettings(queryClient);
+
+    await screen.findByLabelText('1日の学習目標時間（分）');
+    expect(queryClient.getQueryState(['user-settings', 'user-1'])?.isInvalidated).toBe(false);
+
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('設定を保存しました'));
+    expect(queryClient.getQueryState(['user-settings', 'user-1'])?.isInvalidated).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ import SubjectService from '../../services/subjectService';
 import { DashboardOverview } from '../../types/api';
 import { toast } from 'react-hot-toast';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../services/api');
 
@@ -129,9 +130,17 @@ const overviewCalls = () => mockGet.mock.calls.filter(([url]) => url === URL).le
 const isBefore = (a: Element, b: Element) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-// 「統計を見る」のリンクのため Router の中で描く（rerender でも同じ包みを使う）
-const renderDashboard = (ui: React.ReactElement = <Dashboard />) =>
-  render(ui, { wrapper: MemoryRouter });
+// 「統計を見る」のリンクのため Router の中で、取得のため React Query の中で描く。
+// QueryClient は描くたびに新しくする（テストの間でキャッシュを持ち越さない・失敗をすぐ出す）。rerender でも同じ包みを使う
+const renderDashboard = (ui: React.ReactElement = <Dashboard />) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
+  return render(ui, { wrapper: Wrapper });
+};
 
 const SUBJECTS = [{ id: 5, name: '英語' }, { id: 6, name: '数学' }];
 
@@ -443,7 +452,8 @@ describe('Dashboard', () => {
     expect(screen.queryByText('ダッシュボードを読み込み中...')).not.toBeInTheDocument();
 
     await act(async () => { pending[0]({ data: overview() }); });
-    expect(screen.getByTestId('stat-answered-count')).toHaveTextContent('12');
+    // React Query は応答を少し遅れて画面に反映するので、出るのを待つ
+    expect(await screen.findByTestId('stat-answered-count')).toHaveTextContent('12');
     expect(screen.queryByTestId('dashboard-skeleton')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));

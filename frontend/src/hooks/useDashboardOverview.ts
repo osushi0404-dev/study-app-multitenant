@@ -1,12 +1,11 @@
 /**
  * ダッシュボードの数字の取得と状態（I487）
  *
- * - 状態は読み込み中・失敗・成功の 3 つ（データ無しは成功の中の has_data で表す）
- * - 科目を切り替えた後に届いた古い応答は捨てる（I473 F3）
- * - 同じユーザー・同じ科目の取得が進んでいる間は、同じ Promise を使い回す。
- *   開発時の StrictMode が effect を 2 回動かしても、呼び出しは 1 回になる
+ * 取得は React Query（規約 6.3）。同じキーの取得の重ね合わせ（開発時の StrictMode でも 1 回）・
+ * 古い応答の破棄・再試行・キャッシュは React Query に任せる。
+ * 画面には 3 つの状態（読み込み中・失敗・成功）で返す（データ無しは成功の中の has_data で表す）。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
 import { DashboardOverview } from '../types/api';
 
@@ -17,50 +16,36 @@ type OverviewState =
   | { status: 'error'; data: null }
   | { status: 'success'; data: DashboardOverview };
 
-const inFlight = new Map<string, Promise<DashboardOverview>>();
+/** キーにユーザーを入れる（同じタブで別のユーザーで入り直したときに、前のユーザーのキャッシュを出さない） */
+export const dashboardOverviewKey = (userId: string, subjectId: string) =>
+  ['dashboard', 'overview', userId, subjectId] as const;
 
-const requestKey = (userId: string, subjectId: string) => `${userId}:${subjectId}`;
-
-const fetchOverview = (userId: string, subjectId: string): Promise<DashboardOverview> => {
-  const key = requestKey(userId, subjectId);
-  const pending = inFlight.get(key);
-  if (pending) return pending;
-
-  const params = subjectId === ALL_SUBJECTS ? {} : { subject_id: subjectId };
-  const request = dashboardService.getOverview(params).finally(() => {
-    inFlight.delete(key);
-  });
-  inFlight.set(key, request);
-  return request;
+const fetchOverview = async (subjectId: string): Promise<DashboardOverview> => {
+  try {
+    // 応答の形が違えば getOverview が投げる（欠けたキーを 0 で埋めない・I473）
+    return await dashboardService.getOverview(subjectId === ALL_SUBJECTS ? {} : { subject_id: subjectId });
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    throw error;
+  }
 };
 
 export const useDashboardOverview = (userId: string, subjectId: string) => {
-  // 結果はどの取得のものかを一緒に持つ。科目を切り替えた直後は、前の科目の結果を出さずに読み込み中とする（C7）
-  const [result, setResult] = useState<{ key: string; state: OverviewState } | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  // 科目を切り替えるとキーが変わり、新しいキーは読み込み中になる。前の科目の数字は出さない（placeholderData を使わない・C7）
+  const query = useQuery({
+    queryKey: dashboardOverviewKey(userId, subjectId),
+    queryFn: () => fetchOverview(subjectId),
+  });
 
-  useEffect(() => {
-    let ignore = false;
-    const key = requestKey(userId, subjectId);
-    setResult(null);
-    fetchOverview(userId, subjectId)
-      .then((data) => {
-        if (!ignore) setResult({ key, state: { status: 'success', data } });
-      })
-      .catch((error) => {
-        if (ignore) return;
-        // 応答の形が違うときも getOverview が投げる（欠けたキーを 0 で埋めない・I473）
-        console.error('Error fetching dashboard data:', error);
-        setResult({ key, state: { status: 'error', data: null } });
-      });
-    return () => {
-      ignore = true;
-    };
-  }, [userId, subjectId, attempt]);
+  // 失敗の後の取り直しの間も読み込み中（スケルトン）にする
+  let state: OverviewState;
+  if (query.isSuccess) {
+    state = { status: 'success', data: query.data };
+  } else if (query.isError && !query.isFetching) {
+    state = { status: 'error', data: null };
+  } else {
+    state = { status: 'loading', data: null };
+  }
 
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
-
-  const state: OverviewState =
-    result && result.key === requestKey(userId, subjectId) ? result.state : { status: 'loading', data: null };
-  return { ...state, retry };
+  return { ...state, retry: () => { query.refetch(); } };
 };

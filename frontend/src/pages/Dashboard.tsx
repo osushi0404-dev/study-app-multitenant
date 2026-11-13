@@ -28,9 +28,11 @@ import { todayStudyMinutes } from '../utils/dashboardAchievements';
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [selectedSubject, setSelectedSubject] = useState(ALL_SUBJECTS);
-  const overview = useDashboardOverview(user?.id ?? '', selectedSubject);
-  const { state: subjects, retry: retrySubjects } = useUserSubjects();
-  const goal = useDailyStudyGoal();
+  // 取得のキャッシュのキーに使う（利用者の情報が無い間の扱いは #508）
+  const userId = user?.id ?? '';
+  const overview = useDashboardOverview(userId, selectedSubject);
+  const { state: subjects, retry: retrySubjects } = useUserSubjects(userId);
+  const goal = useDailyStudyGoal(userId);
   const goalMinutes = goal.status === 'done' ? goal.minutes : null;
 
   // 達成のお知らせは利用者の全体の記録の節目なので、「すべて」の応答だけで判定する（I473 F2）

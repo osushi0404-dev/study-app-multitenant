@@ -90,8 +90,8 @@
 | TC | 注入する壊れ方 | 期待（不合格になる） | 結果 |
 |---|---|---|---|
 | TC-08 | `useDashboardOverview` の Promise の使い回しを外す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格（自作の取得のとき） |
-| TC-08（React Query への置き換えの後） | `useDashboardOverview` の取得を `useQuery` から `useEffect` での直接の取得に戻す | 呼び出しが 2 回で不合格 | 置き換えの実装のときに行う |
-| TC-10d | 保存のときの `invalidateQueries` を外す | `isInvalidated` が `false` のままで不合格 | 置き換えの実装のときに行う |
+| TC-08（React Query への置き換えの後） | `useDashboardOverview` の取得を `useQuery` から `useEffect` での直接の取得に戻す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格 |
+| TC-10d | 保存のときの `invalidateQueries` を外す | `isInvalidated` が `false` のままで不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格 |
 | TC-16 | お知らせの関数を取得の effect の依存に戻す | 呼び出しが 2 回以上で不合格 | 2026-11-13 不合格になった（✕・`useNotifications().showAchievement` を依存に入れた）→ 戻して合格 |
 | TC-21・TC-22 | `Layout.tsx` の `minWidth: 0` を外す | TC-22 が不合格（スパイクで 1440 → 390 の `scrollWidth` 808 を確認済み） | 2026-11-13 TC-22 が不合格（`scrollWidth <= clientWidth` が 5 秒で true にならない）・TC-21 は合格（直接 390 で開くとはみ出さないため。想定どおり）→ 戻して合格 |
 | TC-25 | 読み込み中に画面全体を置き換える形（`SubjectSelector` を外して付け直す）に戻す | 警告が出る、または「読み込み中...」が見えて不合格 | 2026-11-13 `SubjectSelector` に `key={selectedSubject}` を付けて切り替えのたびに付け直すと、MUI の `out-of-range value 2` の警告が 4 回出て不合格 → 戻して合格（画面全体を置き換える注入は開発サーバーの表示が壊れて確かめにならなかったので、原因そのもの〔付け直し〕を注入した） |
@@ -111,3 +111,9 @@
 - `bash scripts/claude/gate-check.sh I487` → exit 0（コードレビュー `docs/reviews/I487_code_review_20261113_1720.md` VERDICT OK・REVIEWED_COMMIT 5cd85647 以降は記録の場所だけ）
 - 決定論ゲート（シェル）: 宣言なし（test-gate に回された heavy なものも無い）
 - pytest・Jest・E2E: CI（PR #507・HEAD 5cd85647）で成功（review-gate の `CI_WAIT: OK`）。手元では流し直していない
+
+## React Query への置き換えの記録（implement・2026-11-13）
+- 手元・関係するファイルだけ: `Dashboard.test.tsx` 27 件・`Settings.test.tsx` 2 件（TC-10d を追加）・`dashboardAchievements.test.ts` 5 件・`NotificationContext.test.tsx` 2 件・`AccessibilityProvider.test.tsx` 3 件・`TodayReviewCard.test.tsx` 7 件 合格（46 件）。`npm run lint`（--max-warnings 0）・`npm run typecheck` 合格
+- テストの変更: 画面のテストを `QueryClientProvider`（テストごとに新しい `QueryClient`・`retry: false`）で包んだ。TC-07 は、React Query が応答を少し遅れて画面に反映するので、数字が出るのを `findByTestId` で待つ形にした（確かめる中身は同じ）
+- E2E（手元の e2e コンテナ・`--retries=0`）: `dashboard-layout.spec.ts` 7 件・`settings.spec.ts` 1 件・`quiz-session.spec.ts` 3 件 合格（TC-24 の初回の取得 1 回を含む）
+- 失敗の注入: TC-08（`useEffect` での直接の取得に戻す → 2 回で不合格）・TC-10d（`invalidateQueries` を外す → 不合格）。どちらも戻して合格

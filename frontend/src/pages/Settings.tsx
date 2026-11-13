@@ -34,7 +34,9 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useQueryClient } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
+import { USER_SETTINGS_KEY_ROOT } from '../hooks/useDailyStudyGoal';
 import { PatchedUserSettings, UserSettings } from '../types/api';
 
 interface UserSettingsData {
@@ -129,6 +131,7 @@ const Settings: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { darkMode, toggleDarkMode } = useTheme();
   const {
     permission,
@@ -186,6 +189,8 @@ const Settings: React.FC = () => {
       }
 
       setSettings(data);
+      // ダッシュボードが持つ設定のキャッシュを古いことにする（戻ったときに新しい目標を出す・I487）
+      queryClient.invalidateQueries({ queryKey: [USER_SETTINGS_KEY_ROOT] });
       toast.success('設定を保存しました');
     } catch (error) {
       console.error('Error saving settings:', error);

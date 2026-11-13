@@ -114,3 +114,8 @@ STAGE_DONE: close NEXT: plan-review
 - [plan-review] React Query への置き換えの計画レビューは OK（高リスク No）。Warning（置き換えの後の TC-08・TC-10d の失敗の注入の結果が未記入）は implement で行って記入する。Info 2 件（notification_settings の未知のキー・ログアウト時の記録）は今の範囲では実害が無いので見送り
 
 STAGE_DONE: plan-review NEXT: implement
+- [implement] 取得の 3 つのフック（数字・科目の一覧・設定）を React Query の `useQuery` に置き換えた。自作の進行中の Promise の使い回し・`ignore`・`attempt` を消した。キーにユーザーの id を入れ、科目の切り替えでは前の数字を出さない（`placeholderData` を使わない）。失敗の後の取り直しの間はスケルトン。設定の保存のときに設定のキャッシュを古いことにする（TC-10d）
+- [implement] この置き換えには /simplify（4 観点）を回し直さない — 置き換え自体が自作の仕組みを消す整理で、差分が小さい（フック 3 つと設定の 1 行）。決定論のテスト（Jest・E2E・失敗の注入）は流した
+- [implement] 実装のコミットだけ `SKIP=eslint`（#468 と同じ。コンテナで `npm run lint` 0 件を確かめた）
+
+STAGE_DONE: implement NEXT: review-gate
