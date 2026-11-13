@@ -6,8 +6,8 @@
 共通の準備（BE）: 組織 A・B、A の科目 `数学`（問題 3 問）・`英語`（問題 3 問）、B の科目 `B科目`（問題 1 問）、A の利用者 `user_a`・`user_a2`（答え無し）、B の利用者 `user_b`。答えは `QuizSession(user, mode)` と `QuizAnswer(session, problem, is_correct, time_taken)` で作り、`answered_at` は作った後に `update()` で決まった時刻に書き換える（`QuizAnswer` は `(session, problem)` が一意なので、答えごとにセッションを作る）。「今」は `2026-11-14 08:00`（日本時間・土曜）を `build_analytics(..., now=...)` に渡す。API を呼ぶテストは本物の「今」で動くので、日付は `timezone.localdate()` からの相対で作る。
 
 結果:
-- backend: （実装前のため未実行。実装後に CI の結果を書く）
-- frontend: （実装前のため未実行。実装後に CI の結果を書く）
+- backend（手元・2026-11-14・implement）: `dashboard/`・`test_I431`・`test_I455`・`test_I446`・`test_I493` の 248 件 pass（/simplify の後に `dashboard/` 55 件 pass）。CI の結果は review-gate で書く
+- frontend（手元・2026-11-14・implement）: `Statistics.test.tsx`・`Dashboard.test.tsx` の 39 件 pass・`tsc --noEmit` OK・ESLint 違反 0。CI の結果は review-gate で書く
 
 ## バックエンド（`backend/dashboard/tests/test_I488_analytics.py`）
 
@@ -24,7 +24,7 @@
 | TC-09 | データ無し: 答えの無い `user_a2` で `GET …?days=7` | `has_data is False`、`totals == {"study_seconds": 0, "answered_count": 0, "correct_count": 0, "accuracy_rate": None, "studied_days": 0}`、`trend` が 7 件すべて 0 と `None`、`subject_breakdown == []` |
 | TC-10 | 期間に答えが無い（全期間ではある）: 40 日前に 1 問 → `days=30` | `has_data is True`・`totals.answered_count == 0`・`subject_breakdown == []` |
 | TC-11 | 科目別の並びと値: 期間内に 数学 3 問（`time_taken` 100・100・100・正解 2）・英語 2 問（`time_taken` 400・400〔300 秒で数える〕・正解 0）・理科 1 問（100 秒・正解 1）・化学 1 問（100 秒・正解 0）。理科・化学は組織 A にこのテストで作る（同じ学習時間・同じ解答数で、科目名の順を確かめるため） | `subject_breakdown` の科目名の並びが `["英語"(600秒), "数学"(300秒), "化学"(100秒・1 問), "理科"(100秒・1 問)]` — 学習時間の多い順、同じなら解答数の多い順、さらに同じなら科目名順（`化学` < `理科`）。英語 `accuracy_rate == 0.0`・数学 `0.6667` |
-| TC-12 | クエリ数: 小さいデータ（1 科目・1 問）と大きいデータ（3 科目・200 日にわたり 120 問）で、`days=7` と `days=365`、`subject_id` なしとあり、の組み合わせで `CaptureQueriesContext` で 1 回のクエリ数を数える（キャッシュは各回の前に消す） | `subject_id` なしの 4 つの本数が等しく、`subject_id` ありの 4 つの本数が等しい（`==`）。加えて、どちらも本数が `<= N`（N は実装後に実測して書く・目安 6。定数でも大きすぎる形を止める） |
+| TC-12 | クエリ数: 小さいデータ（1 科目・1 問）と大きいデータ（3 科目・200 日にわたり 120 問）で、`days=7` と `days=365`、`subject_id` なしとあり、の組み合わせで `CaptureQueriesContext` で 1 回のクエリ数を数える（キャッシュは各回の前に消す） | `subject_id` なしの 4 つの本数が等しく、`subject_id` ありの 4 つの本数が等しい（`==`）。加えて、本数が `subject_id` なしで `<= 3`・ありで `<= 4`（2026-11-14 に実測。日ごと・科目別・有無の 3 本と、科目の確かめ 1 本） |
 | TC-13 | 境界の横断テスト（既存の合わせ込み）: `test_I431_studylogs_tenant_isolation.py` の TC-18 を答えで書き直したもの（自組織の科目の答え・他組織の問題への答え）、`test_I446_cross_api_tenant_isolation.py` の表（analytics に `ListCheck()` と `IdCheck("user", "query", "subject_id", "subject", 400)`） | すべて pass。TC-18 は他組織の科目名が応答に出ない（`_no_other(response)`）・`subject_breakdown` の科目名が `{"科目I431A"}` |
 | TC-14 | I459 の合わせ込み（`test_I459_analytics_zero_division.py`）: TC-03（不正な `days` は同じ 400）・TC-04（省略・空 → `period.days == 30`・`len(trend) == 30`・`granularity == "day"`／`"1"` → `len(trend) == 1`／`"365"` → `period.days == 365`・`granularity == "month"`）・TC-06（401） | すべて pass。TC-01・02（`DailyStudySummary` の週の正答率）は消す |
 | TC-15 | overview の退行（`test_I473_overview.py`） | 変えずにすべて pass（`_last_days` を `_daily_rows` に移しても overview の応答は同じ） |
@@ -51,4 +51,7 @@
 - TC-22: `isDashboardAnalytics` を常に true を返す形にすると、TC-22 の「形の違う応答」の少なくとも 1 つ（`trend` を欠く）が落ちることを確かめる
 - TC-08: 土台の `scope_to_user_org` を外すと ③ が落ちることを確かめる
 - TC-03: 週の始まりを日曜にする（`weekday()` の代わりに `(weekday() + 1) % 7`）と落ちることを確かめる
-- 結果: （実装前のため未実行）
+- 結果（2026-11-14・implement）:
+  - TC-12・TC-08・TC-03: 3 つの壊し方（区切りごとに 1 クエリ足す・`_answers` から `scope_to_user_org` を外す・週の始まりを日曜にする）を `backend/dashboard/selectors.py` に入れて流し、`test_query_count_is_constant`・`test_only_own_answers_in_own_org`・`test_user_without_org_sees_nothing`・`test_week_buckets` が FAILED → 元に戻して pass
+  - TC-22: `getAnalytics` の形の確かめを外すと、TC-22 の形の違う応答 3 つ（`trend` を欠く・`totals` を欠く・知らない区切り）が FAILED → 元に戻して 12 件 pass
+  - 気づき: タブの切り替えを `userEvent.click`（v13）で書いたところ、MUI のタブが切り替わらず、TC-24 の「科目別」の確かめが前のタブの同じ文言で通ってしまう形だった。`fireEvent.click` にして、タブが切り替わったうえで TC-24・25・26 が中身を見ていることを確かめた

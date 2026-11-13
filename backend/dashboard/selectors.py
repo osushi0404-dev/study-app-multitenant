@@ -69,28 +69,36 @@ def _with_rate(counts: dict) -> dict:
     return {**counts, 'accuracy_rate': _rate(counts['correct_count'], counts['answered_count'])}
 
 
-def _last_days(answers: QuerySet, today: date) -> list:
-    """今日を含む直近 7 日（古い順・答えが無い日も 0 で必ず 7 件）"""
-    first = today - timedelta(days=RECENT_DAYS - 1)
+COUNT_KEYS = ('study_seconds', 'answered_count', 'correct_count')
+ZERO_COUNTS = dict.fromkeys(COUNT_KEYS, 0)
+
+
+def _between(answers: QuerySet, first: date, last: date) -> QuerySet:
+    """first〜last（両端を含む・日本時間）の答え"""
+    return answers.filter(answered_at__gte=_start_of(first),
+                          answered_at__lt=_start_of(last + timedelta(days=1)))
+
+
+def _daily_rows(answers: QuerySet, first: date, last: date) -> dict:
+    """first〜last の日ごとの学習時間・解答数・正解数（答えのある日だけ・1 クエリ）"""
     rows = (
-        answers.filter(answered_at__gte=_start_of(first),
-                       answered_at__lt=_start_of(today + timedelta(days=1)))
+        _between(answers, first, last)
         .annotate(day=TruncDate('answered_at'))
         .values('day')
         .annotate(**_counts())
         .order_by()  # 既定の並び（answered_at）で GROUP BY が崩れないように外す
     )
-    by_day = {row['day']: row for row in rows}
+    return {row['day']: {key: row[key] for key in COUNT_KEYS} for row in rows}
+
+
+def _last_days(answers: QuerySet, today: date) -> list:
+    """今日を含む直近 7 日（古い順・答えが無い日も 0 で必ず 7 件）"""
+    first = today - timedelta(days=RECENT_DAYS - 1)
+    by_day = _daily_rows(answers, first, today)
     days = []
     for offset in range(RECENT_DAYS):
         day = first + timedelta(days=offset)
-        row = by_day.get(day, {})
-        days.append({
-            'date': day.isoformat(),
-            'study_seconds': row.get('study_seconds', 0),
-            'answered_count': row.get('answered_count', 0),
-            'correct_count': row.get('correct_count', 0),
-        })
+        days.append({'date': day.isoformat(), **by_day.get(day, ZERO_COUNTS)})
     return days
 
 
@@ -201,4 +209,103 @@ def build_overview(user, subject=None, *, now: Optional[datetime] = None) -> dic
         'last_7_days': last_days,
         'weak_subjects': weak,
         'recommendations': _recommendations(user, answers, weak, today),
+    }
+
+
+# ---- 学習統計（analytics・I488）----
+TREND_DAY_MAX_DAYS = 31     # days がこれ以下なら日ごと
+TREND_WEEK_MAX_DAYS = 180   # days がこれ以下なら週ごと（月曜始まり）、超えたら月ごと
+
+GRANULARITY_DAY = 'day'
+GRANULARITY_WEEK = 'week'
+GRANULARITY_MONTH = 'month'
+
+
+def _granularity(days: int) -> str:
+    """期間の日数から、推移の区切りを決める"""
+    if days <= TREND_DAY_MAX_DAYS:
+        return GRANULARITY_DAY
+    if days <= TREND_WEEK_MAX_DAYS:
+        return GRANULARITY_WEEK
+    return GRANULARITY_MONTH
+
+
+def _bucket_start(day: date, granularity: str) -> date:
+    """その日を含む区切りの始まり（期間で切る前）"""
+    if granularity == GRANULARITY_WEEK:
+        return day - timedelta(days=day.weekday())  # 月曜
+    if granularity == GRANULARITY_MONTH:
+        return day.replace(day=1)
+    return day
+
+
+def _buckets(first: date, last: date, granularity: str) -> list:
+    """first〜last を区切った (始まり, 終わり) の並び（古い順・端は期間で切る）"""
+    starts = []
+    day = first
+    while day <= last:
+        start = max(_bucket_start(day, granularity), first)
+        if not starts or starts[-1] != start:
+            starts.append(start)
+        day += timedelta(days=1)
+    ends = [next_start - timedelta(days=1) for next_start in starts[1:]] + [last]
+    return list(zip(starts, ends))
+
+
+def _subject_breakdown(answers: QuerySet) -> list:
+    """科目ごとの学習時間・解答数・正解数（学習時間 → 解答数の多い順、同じなら科目名順）"""
+    rows = (
+        answers.values('problem__subject_id', 'problem__subject__name')
+        .annotate(**_counts())
+        .order_by()
+    )
+    subjects = [
+        {
+            'subject_id': row['problem__subject_id'],
+            'subject_name': row['problem__subject__name'],
+            **{key: row[key] for key in COUNT_KEYS},
+        }
+        for row in rows
+    ]
+    subjects.sort(key=lambda s: (-s['study_seconds'], -s['answered_count'], s['subject_name']))
+    return [_with_rate(s) for s in subjects]
+
+
+def build_analytics(user, days: int, subject=None, *, now: Optional[datetime] = None) -> dict:
+    """
+    GET /api/dashboard/analytics/ の中身（形は serializers.AnalyticsSerializer）
+
+    期間は今日（日本時間）を含む days 日。subject があれば、推移と合計をその科目だけで数える。
+    科目別の内訳は、科目をまたいで比べる一覧なので常に全科目から出す。
+    has_data は科目・期間に関係なく、答えが 1 件でもあるか（まだ一度も解いていないかの区別）。
+    now は日付の境界を確かめるテストのため（省略時は今）。
+    """
+    today = timezone.localdate(now or timezone.now())
+    first = today - timedelta(days=days - 1)
+    granularity = _granularity(days)
+    answers = _answers(user)
+    scoped = answers.filter(problem__subject=subject) if subject is not None else answers
+
+    by_day = _daily_rows(scoped, first, today)
+    buckets = _buckets(first, today, granularity)
+    by_bucket = {start: dict(ZERO_COUNTS) for start, _ in buckets}
+    totals = dict(ZERO_COUNTS)
+    for day, row in by_day.items():
+        bucket = by_bucket[max(_bucket_start(day, granularity), first)]
+        for key in COUNT_KEYS:
+            bucket[key] += row[key]
+            totals[key] += row[key]
+    trend = [
+        {'start_date': start, 'end_date': end, **_with_rate(by_bucket[start])}
+        for start, end in buckets
+    ]
+    # by_day は答えのある日だけ（GROUP BY の行）なので、その数が学習した日数
+    totals['studied_days'] = len(by_day)
+
+    return {
+        'has_data': answers.exists(),
+        'period': {'days': days, 'start_date': first, 'end_date': today, 'granularity': granularity},
+        'totals': _with_rate(totals),
+        'trend': trend,
+        'subject_breakdown': _subject_breakdown(_between(answers, first, today)),
     }

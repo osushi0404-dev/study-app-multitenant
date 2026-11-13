@@ -266,7 +266,8 @@ ROUTE_TABLE = {
     # ---- ダッシュボード ----
     "GET api/dashboard/overview/": [ListCheck(),
                                     IdCheck("user", "query", "subject_id", "subject", 400)],
-    "GET api/dashboard/analytics/": LIST,
+    "GET api/dashboard/analytics/": [ListCheck(),
+                                     IdCheck("user", "query", "subject_id", "subject", 400)],
 }
 
 OUT_OF_SCOPE = {

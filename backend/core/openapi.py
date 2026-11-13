@@ -5,6 +5,7 @@
 """
 CONTRACT_PATHS = frozenset({
     '/api/dashboard/overview/',
+    '/api/dashboard/analytics/',  # I488: 統計画面
     '/api/settings/',  # I487: 設定画面・通知の項目名を裏側にそろえるため
 })
 

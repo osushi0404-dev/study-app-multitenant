@@ -26,6 +26,10 @@
 - [plan] グラフの道具は `recharts` のまま（`chart.js` への統一と依存の削除は retro で別イシューにするか決める）— 本イシューの目的と関係しない差分を増やさない
 - [plan] E2E を足さない — 画面と API の形のずれは、契約のテスト・OpenAPI から作る型・形の確かめで止め、実際の流れは手動テスト No.5 で確かめる
 - [plan-review] 計画レビューの Warning 2・Info 2 を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない記述の具体化だけ（計画変更記録に記録）
+- [implement] 書式の共通ファイル（`components/statistics/format.ts`）・件数の共通のシリアライザ・科目のカードの `section`・円グラフを秒で描く・棒の高さを分の小数第 1 位に — どれも計画の範囲の中の作り方の細部で、方式・範囲・受け入れ条件を変えないので再レビューはしない（計画変更記録に記録）
+- [implement] `/simplify` の 4 観点の指摘のうち、区切りの 1 回のなめ方・3 つの状態の変換の共通化（`hooks/queryLoadState.ts`・ダッシュボードのフックも使う）・`hasCounts` の使い回しなどを直し、クエリ数がデータで変わる案・差分の外に広がる案は見送った — 見送りの理由は計画変更記録
+- [implement] タブの切り替えのテストは `fireEvent.click` にした — `userEvent.click`（v13）では MUI のタブが切り替わらず、TC-24 が前のタブの文言で偶然通る形だったため
+- [implement] 画面確認（e2e_user_a・1440）で、統計画面が新しい応答で出て API が 200・新しいエラーが無いことを確かめた（`.evidence/I488/impl-statistics-1440-a*.png`）。細かい確かめは test-gate の手動テストで行う
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

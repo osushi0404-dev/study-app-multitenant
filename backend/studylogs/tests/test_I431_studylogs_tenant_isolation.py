@@ -522,18 +522,19 @@ def test_dashboard_overview_hides_other_org_subjects(setup):
     assert {r["subject_id"] for r in data["recommendations"]} == {setup["subject_a"].id}
 
 
-# ---- TC-18: ダッシュボードの分析の科目の内訳に他組織の科目が出ない ----
+# ---- TC-18: 学習統計の科目の内訳に他組織の科目が出ない（I488 でクイズの答えから数える形に書き直し） ----
 def test_dashboard_analytics_hides_other_org_subjects(setup):
     user = setup["user_a"]
-    for subject in (setup["subject_a"], setup["subject_b"], None):
-        StudyLog.objects.create(user=user, subject=subject, duration=60)
+    _quiz_answers(user, setup["problem_a"], 3, 1)
+    _quiz_answers(user, setup["problems_b"][0], 3, 0)  # 不具合で残った他組織の問題への答えの想定
 
     response = _client(user).get(DASH + "analytics/")
 
     assert response.status_code == status.HTTP_200_OK
     assert _no_other(response)
-    distribution = response.json()["subject_distribution"]
-    assert {d["subject__name"] for d in distribution} == {"科目I431A", None}
+    data = response.json()
+    assert {s["subject_name"] for s in data["subject_breakdown"]} == {"科目I431A"}
+    assert data["totals"]["answered_count"] == 3
 
 
 # ---- TC-19: おすすめに他組織の科目が出ない（I473 で overview の recommendations に移した） ----

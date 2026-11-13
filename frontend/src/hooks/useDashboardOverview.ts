@@ -8,13 +8,9 @@
 import { useQuery } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
 import { DashboardOverview } from '../types/api';
+import { toLoadState } from './queryLoadState';
 
 export const ALL_SUBJECTS = 'all';
-
-type OverviewState =
-  | { status: 'loading'; data: null }
-  | { status: 'error'; data: null }
-  | { status: 'success'; data: DashboardOverview };
 
 /** キーにユーザーを入れる（同じタブで別のユーザーで入り直したときに、前のユーザーのキャッシュを出さない） */
 export const dashboardOverviewKey = (userId: string, subjectId: string) =>
@@ -32,20 +28,8 @@ const fetchOverview = async (subjectId: string): Promise<DashboardOverview> => {
 
 export const useDashboardOverview = (userId: string, subjectId: string) => {
   // 科目を切り替えるとキーが変わり、新しいキーは読み込み中になる。前の科目の数字は出さない（placeholderData を使わない・C7）
-  const query = useQuery({
+  return toLoadState(useQuery({
     queryKey: dashboardOverviewKey(userId, subjectId),
     queryFn: () => fetchOverview(subjectId),
-  });
-
-  // 失敗の後の取り直しの間も読み込み中（スケルトン）にする
-  let state: OverviewState;
-  if (query.isSuccess) {
-    state = { status: 'success', data: query.data };
-  } else if (query.isError && !query.isFetching) {
-    state = { status: 'error', data: null };
-  } else {
-    state = { status: 'loading', data: null };
-  }
-
-  return { ...state, retry: () => { query.refetch(); } };
+  }));
 };
