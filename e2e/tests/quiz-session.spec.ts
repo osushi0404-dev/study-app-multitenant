@@ -36,8 +36,9 @@ test.describe('クイズセッション', () => {
   test('クイズに答えると、ダッシュボードの解答問題数が 1 増える', async ({ page }) => {
     await page.goto('/dashboard');
     const answeredCount = page.locator('[data-testid="stat-answered-count"]');
-    await expect(answeredCount).toHaveText(/^\d+$/);
-    const before = Number(await answeredCount.textContent());
+    // 解答が 0 件のときは数字の代わりに「まだ記録がありません」が出る（I487）ので、数字が無ければ 0 とする
+    await expect(page.getByText('解答問題数')).toBeVisible();
+    const before = (await answeredCount.count()) > 0 ? Number(await answeredCount.textContent()) : 0;
 
     await page.click('[data-testid="start-quiz-button"]');
     const subjectDialog = page.locator('[role="dialog"]');

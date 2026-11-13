@@ -6,9 +6,9 @@
 - 計画書: `docs/plans/open/plan_I487.md`（TC と受け入れ条件の対応は計画書の「2. 受け入れ条件」）
 
 結果:
-- backend: 実装前のため未実行（既存の `core/tests/test_I493_openapi_contract.py` を CI で流す）
-- frontend: 実装前のため未実行
-- e2e: 実装前のため未実行
+- backend: 手元では流していない（既存の `core/tests/test_I493_openapi_contract.py` を CI で流す。スキーマは `manage.py spectacular --validate --fail-on-warn` で作り直し、警告 0）
+- frontend（2026-11-13・手元・関係するファイルだけ）: `Dashboard.test.tsx` 27 件・`dashboardAchievements.test.ts` 4 件・`Settings.test.tsx` 1 件・`NotificationContext.test.tsx` 2 件・`AccessibilityProvider.test.tsx` 3 件・`TodayReviewCard.test.tsx` 7 件 すべて合格。`npm run typecheck` 合格・変えたファイルの ESLint 0 件
+- e2e（2026-11-13・手元の e2e コンテナ・`--retries=0`）: `dashboard-layout.spec.ts` 7 件・`settings.spec.ts` 1 件・`quiz-session.spec.ts` 3 件 すべて合格
 
 ## 共通の前提（Jest）
 - `Dashboard.test.tsx` の既存のモック（`services/api`・`SubjectService`・`SubjectSelector`・`TodayReviewCard`・`react-chartjs-2`・`AuthContext`〔`user: { id: 'user-1', user_id: 'u_i473' }` に `id` を足す〕・`NotificationContext`）を使う
@@ -24,6 +24,7 @@
 | TC-01 | 並び順 | 次の要素が文書の中でこの順に並ぶ（`compareDocumentPosition` の `DOCUMENT_POSITION_FOLLOWING`）: 見出し（`role=heading` level 1）「おかえりなさい、u_i473さん！」→ 科目の選択（モックのボタン「科目5を選ぶ」）→ `start-quiz-button` → 「今日の復習のカード」→ `stat-answered-count` → 見出し「直近 7 日の学習時間」→ 見出し「間違いやすい分野（全科目）」→ 見出し「おすすめ練習問題（全科目）」→ リンク「統計を見る」（`href="/statistics"`）。文字「今日も学習を頑張りましょう」と見出し「詳細統計」が無い |
 | TC-02 | データ 0 件（すべて） | `has_data: false`・数字 0・`last_7_days` すべて 0 の応答で、「まだ記録がありません」がちょうど 6 個（`getAllByText` の長さ 6）。`line-chart`・`doughnut-chart` が無い。「目標:」の文字・`role=progressbar` が無い。「データがありません。まずは問題を解いてみましょう！」がある |
 | TC-03 | 選んだ科目だけ 0 件 | 「すべて」は `overview()`、`subject_id=5` は `has_data: false` の応答。「科目5を選ぶ」の後、「この科目はまだ解答がありません。まずは問題を解いてみましょう！」があり、その後ろ（`DOCUMENT_POSITION_FOLLOWING`）に「英語」がある。「5 問以上解いた科目のうち…」「データがありません。まず…」が無い。苦手の一覧が空（`weak_subjects: []`）の科目 0 件の応答では、案内の文だけがあり「5 問以上解いた科目のうち…」が無い |
+| TC-03b | 選んだ科目だけ 0 件で一覧も空 | 案内の文だけがあり、「5 問以上解いた科目のうち…」が無い（TC-03 の後半を別の TC に分けた） |
 | TC-04 | 「クイズを始める」の行き先 | (a) 科目 2 件（id 5・6）・選択「すべて」→ 押すと `role=dialog` が出て、`navigate` は呼ばれない。(b) 科目 2 件・「科目5を選ぶ」の後 → 押すとダイアログが出ず `navigate('/quiz?subject=5')`。(c) 科目 1 件（id 7）・「すべて」→ `navigate('/quiz?subject=7')` |
 | TC-05 | 科目 0 件 | `getUserSubjects` が `[]`。`role=status` の中に「科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください」。`start-quiz-button` が `disabled`。`toast.error` が呼ばれない。「設定画面から科目を追加」の文字が無い。「今日の目標達成まで」の文字が無い |
 | TC-06 | 科目の一覧の取得に失敗 | `getUserSubjects` が reject。クイズのカードに「科目を読み込めませんでした」とボタン「再読み込み」、`start-quiz-button` が `disabled`、「科目がまだ登録されていません」が無い。2 回目は `[{ id: 7, name: '数学' }]` を返すようにして「再読み込み」（クイズのカードの中のもの）を押すと、`start-quiz-button` が押せるようになり、「科目を読み込めませんでした」が消える |
@@ -52,13 +53,14 @@
 
 ### E2E（Playwright・開発サーバー・CI で流す）
 `e2e/tests/dashboard-layout.spec.ts`（新規・既定のユーザー `e2e_user_a`）
+- TC-21〜23・26 は `page.route` で overview の応答を固定する（`has_data: true`・解答 123456・長い科目名。E2E の利用者は解答 0 件から始まり、グラフが描かれないため・計画変更記録）。TC-24・25・27 は本物の API
 | TC | 内容 | 期待値 |
 |---|---|---|
-| TC-21 | 390px で開く | `page.setViewportSize({ width: 390, height: 844 })` の後に `/dashboard`。`stat-answered-count` が出た後、`document.documentElement.scrollWidth <= document.documentElement.clientWidth`。`start-quiz-button` と `today-review-card` の `boundingBox()` が `x >= 0` かつ `x + width <= 390` |
+| TC-21 | 390px で開く | `page.setViewportSize({ width: 390, height: 844 })` の後に `/dashboard`。`stat-answered-count` が「123456」になった後、`document.documentElement.scrollWidth <= document.documentElement.clientWidth`。`start-quiz-button` と `today-review-card` の `boundingBox()` が `x >= 0` かつ `x + width <= 390` |
 | TC-22 | 1440 → 390 に縮める（はみ出しの原因の再発防止） | 1440×900 で `/dashboard` を開き、`stat-answered-count` と `canvas` 2 つが出た後に 390×844 にする。`expect.poll` で `scrollWidth <= clientWidth` になる（5 秒以内）。TC-21 と同じ 2 つのボタンの範囲の条件 |
 | TC-23 | 1440×900 の最初の画面 | `start-quiz-button` と `today-review-card` の `boundingBox()` が `y >= 0` かつ `y + height <= 900`（スクロールしない状態） |
-| TC-24 | 初回の呼び出し 1 回 | `page.on('request')` で GET の `pathname === '/api/dashboard/overview/'` を数える。`/dashboard` を開き `stat-answered-count` が出た後、1 秒待っても数がちょうど 1 |
-| TC-25 | 科目の切り替え | `page.on('console')` を集める。科目の選択（`role=combobox` 名前「科目を選択」）を開き、2 番目の選択肢（「すべて」の次）を選ぶ。見出し level 1「おかえりなさい」が見えたまま、`stat-answered-count` が再び出る。集めたコンソールに `out-of-range` を含むものが無い。文字「ダッシュボードを読み込み中...」が一度も見えない（`page.getByText` の数が 0） |
+| TC-24 | 初回の呼び出し 1 回 | `page.on('request')` で GET の `pathname === '/api/dashboard/overview/'` を数える。`/dashboard` を開き「今日の学習時間」が見えた後、1 秒待っても数がちょうど 1 |
+| TC-25 | 科目の切り替え | `page.on('console')` を集める。科目の選択（ダッシュボードで唯一の `role=combobox`。`SubjectSelector` の見出しは選択欄の名前に結び付いていない）を開き、2 番目の選択肢（「すべて」の次）を選ぶ。見出し level 1 が見えたまま、「今日の学習時間」が再び出る。集めたコンソールに `out-of-range` を含むものが無い。文字「ダッシュボードを読み込み中...」が一度も見えない（`page.getByText` の数が 0） |
 | TC-26 | アクセシビリティ設定のボタンの位置 | 1440×900 と 390×844 の両方で、`getByRole('button', { name: 'アクセシビリティ設定' })` がちょうど 1 つで、その `boundingBox()` の `y + height <= 64`（上のバーの中）。`.MuiFab-root` が 0 個 |
 
 `e2e/tests/dashboard-layout.spec.ts` の `test.describe` を分けて `test.use({ storageState: '.auth/user_c.json' })`（科目 0 件の一般ユーザー）
@@ -78,16 +80,18 @@
 | TC-21 | 「まだ解答の記録がありません」→「まだ記録がありません」（`getAllByText`） | 赤い円（`doughnut-chart`）を出さない・正答率の「—」は「まだ記録がありません」に置き換わるので `'—'` の確かめを外す・「データがありません。まずは問題を解いてみましょう！」 |
 | TC-26 | 「まだ解答の記録がありません」→「この科目はまだ解答がありません。まずは問題を解いてみましょう！」 | 全科目の一覧（英語）が出る・「データがありません。まず…」が出ない |
 | TC-27 | `beforeEach` に `localStorage.clear()`（共通の前提） | 「すべて」の応答だけで判定する・科目の応答では出さない |
-| TC-20・TC-22・TC-23・TC-25・TC-28 | 変えない（`AuthContext` のモックに `id` を足すだけ） | そのまま |
+| TC-20・TC-22・TC-23・TC-25・TC-28 | 変えない（`AuthContext` のモックに `id` を足すだけ。描くときに `MemoryRouter` で包む〔「統計を見る」のリンクのため〕） | そのまま |
+
+既存の E2E の更新（計画変更記録）: `e2e/tests/quiz-session.spec.ts` の「クイズに答えると、ダッシュボードの解答問題数が 1 増える」は、「解答問題数」の見出しが出た後、数字（`stat-answered-count`）が無ければ前の値を 0 とする。前後の差（+1）を確かめることは変えない
 
 ## 失敗の注入（否定・不在・回帰の TC・実装時に 1 回だけ）
 | TC | 注入する壊れ方 | 期待（不合格になる） | 結果 |
 |---|---|---|---|
-| TC-08 | `useDashboardOverview` の Promise の使い回しを外す | 呼び出しが 2 回で不合格 | 実装前のため未実行 |
-| TC-16 | お知らせの関数を取得の effect の依存に戻す | 呼び出しが 2 回以上で不合格 | 実装前のため未実行 |
-| TC-21・TC-22 | `Layout.tsx` の `minWidth: 0` を外す | TC-22 が不合格（スパイクで 1440 → 390 の `scrollWidth` 808 を確認済み） | 実装前のため未実行 |
-| TC-25 | 読み込み中に画面全体を置き換える形（`SubjectSelector` を外して付け直す）に戻す | 警告が出る、または「読み込み中...」が見えて不合格 | 実装前のため未実行 |
-| TC-02・TC-05 | 「まだ記録がありません」の分岐を外す／科目 0 件の案内を消す | 不合格 | 実装前のため未実行 |
+| TC-08 | `useDashboardOverview` の Promise の使い回しを外す | 呼び出しが 2 回で不合格 | 2026-11-13 不合格になった（✕）→ 戻して合格 |
+| TC-16 | お知らせの関数を取得の effect の依存に戻す | 呼び出しが 2 回以上で不合格 | 2026-11-13 不合格になった（✕・`useNotifications().showAchievement` を依存に入れた）→ 戻して合格 |
+| TC-21・TC-22 | `Layout.tsx` の `minWidth: 0` を外す | TC-22 が不合格（スパイクで 1440 → 390 の `scrollWidth` 808 を確認済み） | 2026-11-13 TC-22 が不合格（`scrollWidth <= clientWidth` が 5 秒で true にならない）・TC-21 は合格（直接 390 で開くとはみ出さないため。想定どおり）→ 戻して合格 |
+| TC-25 | 読み込み中に画面全体を置き換える形（`SubjectSelector` を外して付け直す）に戻す | 警告が出る、または「読み込み中...」が見えて不合格 | 2026-11-13 `SubjectSelector` に `key={selectedSubject}` を付けて切り替えのたびに付け直すと、MUI の `out-of-range value 2` の警告が 4 回出て不合格 → 戻して合格（画面全体を置き換える注入は開発サーバーの表示が壊れて確かめにならなかったので、原因そのもの〔付け直し〕を注入した） |
+| TC-02・TC-05 | 「まだ記録がありません」の分岐を外す／科目 0 件の案内を消す | 不合格 | 2026-11-13 どちらも不合格になった（✕）→ 戻して合格 |
 
 ## 決定論ゲート（自動実走）
 <!-- 本イシューはシェルの決定論ゲートを持たない（確かめは Jest・E2E・pytest で CI が流す）。 -->

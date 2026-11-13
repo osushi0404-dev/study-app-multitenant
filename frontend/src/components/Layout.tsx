@@ -35,6 +35,7 @@ import {
 
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { AccessibilityToggleButton } from './AccessibilityProvider';
 
 const drawerWidth = 240;
 
@@ -137,6 +138,9 @@ const Layout: React.FC = () => {
             {menuItems.find(item => item.path === location.pathname)?.text || '学習アプリ'}
           </Typography>
 
+          {/* アクセシビリティ設定は上のバーに置く（浮いた丸いボタンは画面の中身に重なるため・I487） */}
+          <AccessibilityToggleButton />
+
           <IconButton color="inherit" onClick={toggleDarkMode}>
             {darkMode ? <LightMode /> : <DarkMode />}
           </IconButton>
@@ -220,6 +224,9 @@ const Layout: React.FC = () => {
         component="main"
         sx={{
           flexGrow: 1,
+          // 横並び（flex）の子は既定で中身より狭くなれない。グラフの canvas が広い幅のまま残ると、
+          // 画面を狭くしても main が縮まず横にはみ出す（I487）
+          minWidth: 0,
           p: 3,
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: 8,

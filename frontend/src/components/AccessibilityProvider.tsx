@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react';
 import { Box, IconButton, Tooltip, Fab, Typography, Slider, FormControlLabel, Switch } from '@mui/material';
 import {
   Accessibility as AccessibilityIcon,
@@ -26,6 +26,9 @@ interface AccessibilityContextType {
   speak: (text: string) => void;
   isAccessibilityPanelOpen: boolean;
   toggleAccessibilityPanel: () => void;
+  /** 上のバーにボタンがある間は true（浮いた丸いボタンを出さない・I487） */
+  headerButtonMounted: boolean;
+  setHeaderButtonMounted: (mounted: boolean) => void;
 }
 
 const defaultSettings: AccessibilitySettings = {
@@ -37,6 +40,8 @@ const defaultSettings: AccessibilitySettings = {
   voiceAnnouncements: false,
   focusVisible: true
 };
+
+const TOGGLE_TOOLTIP = 'アクセシビリティ設定 (Alt+A)';
 
 const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
 
@@ -52,6 +57,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
   });
 
   const [isAccessibilityPanelOpen, setIsAccessibilityPanelOpen] = useState(false);
+  const [headerButtonMounted, setHeaderButtonMounted] = useState(false);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
 
   useEffect(() => {
@@ -146,7 +152,9 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
     updateSetting,
     speak,
     isAccessibilityPanelOpen,
-    toggleAccessibilityPanel
+    toggleAccessibilityPanel,
+    headerButtonMounted,
+    setHeaderButtonMounted,
   };
 
   return (
@@ -158,23 +166,25 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
       {/* アクセシビリティコントロールパネル */}
       <AccessibilityPanel />
 
-      {/* アクセシビリティFAB */}
-      <Tooltip title="アクセシビリティ設定 (Alt+A)">
-        <Fab
-          size="medium"
-          color="secondary"
-          aria-label="アクセシビリティ設定"
-          sx={{
-            position: 'fixed',
-            bottom: 80,
-            right: 16,
-            zIndex: 1000
-          }}
-          onClick={toggleAccessibilityPanel}
-        >
-          <AccessibilityIcon />
-        </Fab>
-      </Tooltip>
+      {/* アクセシビリティFAB（上のバーにボタンがある画面では出さない。浮いたボタンは画面の中身に重なるため・I487） */}
+      {!headerButtonMounted && (
+        <Tooltip title={TOGGLE_TOOLTIP}>
+          <Fab
+            size="medium"
+            color="secondary"
+            aria-label="アクセシビリティ設定"
+            sx={{
+              position: 'fixed',
+              bottom: 80,
+              right: 16,
+              zIndex: 1000
+            }}
+            onClick={toggleAccessibilityPanel}
+          >
+            <AccessibilityIcon />
+          </Fab>
+        </Tooltip>
+      )}
     </AccessibilityContext.Provider>
   );
 };
@@ -183,7 +193,7 @@ const AccessibilityPanel: React.FC = () => {
   const context = useContext(AccessibilityContext);
   if (!context) return null;
 
-  const { settings, updateSetting, isAccessibilityPanelOpen, speak } = context;
+  const { settings, updateSetting, isAccessibilityPanelOpen, speak, headerButtonMounted } = context;
 
   if (!isAccessibilityPanelOpen) return null;
 
@@ -198,7 +208,8 @@ const AccessibilityPanel: React.FC = () => {
     <Box
       sx={{
         position: 'fixed',
-        bottom: 140,
+        // 上のバーのボタンから開いたときはバーの下、浮いたボタンから開いたときはボタンの上に出す
+        ...(headerButtonMounted ? { top: 72 } : { bottom: 140 }),
         right: 16,
         width: 320,
         maxHeight: 500,
@@ -341,6 +352,34 @@ const AccessibilityPanel: React.FC = () => {
         ショートカット: Alt+A でパネル開閉
       </Typography>
     </Box>
+  );
+};
+
+/** 上のバーに置くアクセシビリティ設定のボタン（I487）。付いている間は浮いた丸いボタンを出さない */
+export const AccessibilityToggleButton: React.FC = () => {
+  const context = useContext(AccessibilityContext);
+  const setHeaderButtonMounted = context?.setHeaderButtonMounted;
+
+  // 画面に描く前に登録する（浮いた丸いボタンが一瞬出てから消えるのを防ぐ）
+  useLayoutEffect(() => {
+    if (!setHeaderButtonMounted) return undefined;
+    setHeaderButtonMounted(true);
+    return () => setHeaderButtonMounted(false);
+  }, [setHeaderButtonMounted]);
+
+  if (!context) return null;
+
+  return (
+    <Tooltip title={TOGGLE_TOOLTIP}>
+      <IconButton
+        color="inherit"
+        size="large"
+        aria-label="アクセシビリティ設定"
+        onClick={context.toggleAccessibilityPanel}
+      >
+        <AccessibilityIcon />
+      </IconButton>
+    </Tooltip>
   );
 };
 
