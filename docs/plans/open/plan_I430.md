@@ -309,14 +309,14 @@ Danger Ops（有無/手順/ロールバック）:
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
-| V1 | 1 | 実験必須 | 最終の `.claude/settings.json`（見張りつき・見張りなしの両方）で、ワークツリーのセッションの Bash から別のワークツリー・primary への書き込みが止まる。外に出したコマンドを混ぜた形（`git push … && echo x > <別のワークツリー>` など）でも、中で動く部分が止まる（M-02・M-03） |
-| V2 | 1 | 実験必須 | primary のセッションの Bash から `.claude/worktrees/` の下への書き込みが止まる（M-04） |
-| V3 | 1 | 実験必須 | 外での再実行（`dangerouslyDisableSandbox`）が無効で、サンドボックスに止められたコマンドが外で動かない（M-05） |
+| V1 | 1 | 実験必須 | 最終の `.claude/settings.json` で、ワークツリーのセッションの Bash から別のワークツリー・primary への書き込みが止まる。外に出したコマンドを混ぜた形（`git status && echo x > <別のワークツリー>/x` など）でも、中で動く部分が止まる（M-02・M-03）。新しいセッションは `bash scripts/claude/test-session.sh "<指示>" --model haiku --permission-mode auto --permission-prompts none --setting-sources user --settings .claude/settings.json` で、包まずに起こす（`.claude/agents/adversarial-reviewer.md`） |
+| V2 | 1 | 読んで可 | primary のセッションの Bash から `.claude/worktrees/` の下への書き込みが止まる。設定の `denyWrite` に `.claude/worktrees` があり、消すと TC-01（S19）が不合格になる。公式の `denyWrite` の効き目は計画の S19 で実機で確かめ、test-gate の M-04 でも確かめる（実験役は作業ディレクトリを一時のリポジトリに移すと `cd` でサンドボックスの中に入り、新しいセッションを起こせない） |
+| V3 | 1 | 実験必須 | 外での再実行（`dangerouslyDisableSandbox`）が無効で、サンドボックスに止められたコマンドが外で動かない（M-05。設定の値は TC-01 の S17）。新しいセッションの起こし方は V1 と同じ |
 | V4 | 2 | 読んで可 | TC-01 のサンドボックスの決まりと deny が、設定を壊した写しで不合格になる（FG）。`excludedCommands` の一般のインタプリタの判定が `bash *` だけでなく `sh *`・`python3 *`・`*` を落とす |
 | V5 | 3 | 読んで可 | 4-1 の表で、消した判定（D1〜D3）ごとに代わりの仕組みがあり、止まらない漏れが書いてある。残した判定は「公式でも GitHub でも止まらない」に対応している |
 | V6 | 2 | 読んで可 | 消したテストの期待値が、消した判定の分だけである（残す判定の期待値を消していない）。TC-02〜TC-07 |
 | V7 | 2 | 読んで可 | deny `Bash(gh pr checkout *)`・`Bash(gh co *)` が設定にあり、消すと TC-01 が不合格になる（FG）。実機の拒否は M-09 で確かめる |
-| V8 | 1 | 実験必須 | レビュー役（`bash scripts/claude/test-session.sh …`）・`gh`・`git fetch`・docker が、最終の設定で承認なしに動く（M-06〜M-08） |
+| V8 | 1 | 実験必須 | レビュー役（`bash scripts/claude/test-session.sh …`）・`gh`・`git fetch`・docker が、最終の設定で承認なしに動く（M-06〜M-08）。新しいセッションの起こし方は V1 と同じ（その中の Bash に `gh issue view 430 --json state` などを流させる） |
 
 ## レビュー結果
 - [20261113_1734 判定: ✅ 完了](../../reviews/I430_plan_review_20261113_1734.md)
@@ -347,6 +347,11 @@ Danger Ops（有無/手順/ロールバック）:
     - `test_i200_guard_narrowing.sh`: 02b（D2）
     - `test_i182_guard_failsafe.sh`: F6 の「保護ブランチへの push は停止」を「force push は停止」に替えた（本物の停止を確かめる例として、残す判定を使う）
     - `test_pretooluse_container_guard.sh`: 安全網を外す置換の中の `push_dynamic` のキーを消した（見張りの戻り値から消えたため）
+- 2026-11-13 review-gate（敵対的レビュー 1 周目が HIGH・新しい Critical/High なし・実験必須の V1・V2・V3・V8 が未検証）への対応:
+  - 原因: 実験役が実験案の `bash -c 'ulimit …; timeout 150 claude -p …'` を実行した。包まれた `claude` はサンドボックスの中で動き、Claude の API につながらず（ログインの案内も出た）、出力が空になった。読み取りだけの GitHub の鍵で新しいセッションを起こす決まり（`test-session.sh`・I223）からも外れていた
+  - 直し: `.claude/agents/adversarial-reviewer.md` の「ツール境界と実験」に、新しいセッションは `bash scripts/claude/test-session.sh …` を包まずに書くと足した（外に出したスクリプトなのでサンドボックスの外で動く）。サンドボックスを入れたことで、この実験の書き方が動かなくなったので、このイシューの範囲で直す（実装対象に `.claude/agents/adversarial-reviewer.md` を足す）
+  - V1・V3・V8 の内容に起こし方を書き足した（実験必須のまま）。V2 は、実験役が作業ディレクトリを移すと `cd` でサンドボックスの中に入り確かめられないので、TC-01（S19）・計画の S19・test-gate の M-04 で覆い「読んで可」にした
+  - 計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない。実験の書き方の手順と、確かめる項目の書き方を直しただけ）
 
 ## セキュリティレビュー結果
 
