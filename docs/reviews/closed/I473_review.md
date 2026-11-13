@@ -117,6 +117,8 @@
 - [retro] 改善案: ESLint のフックの再発 → 既存 #468 に同梱。手動テストの前提の取り違え・レビューの F1〜F4・CI 待ちの 20 分切れ・シェルの書き方の誤りは見送り（その場で捕まり手戻りなし、または初出で決まりどおりに解決）
 - [retro] 敵対的レビューの効果測定（I228・I486 の約束）は、実験 0 件で材料が無く、次の高リスクのイシューへ持ち越した
 
+- [close] base 追従は不要（mergeStateStatus=BLOCKED＝CI 緑・承認待ち）。gate-check OK。fix-loop の診断メモ（I473_fix_diagnosis_20261113_0936.md）は close の回収の対象（*_review_*）に当たらないので docs/reviews/ 直下に残した — ほかのイシューの診断メモと同じ置き場所
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -126,3 +128,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
