@@ -72,9 +72,14 @@
 - worktree 隔離での一括書き換えの拒否: 問 1（実害なし）
 - 台帳 F1（2 周目の見る範囲）: 4-0 の一覧に残す（2.7 の見送りは使わない）
 
+## 完了情報
+- close: develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK・記録を closed へ移し、PR #490 の説明を更新
+- [close] 手動 No.1 で起こした harness-1 のスタックは `docker compose stop` で止めたまま残す（データは消さない）。直下 `.env`（offset=30）は無視ファイルなので残す — 次にこのワークツリーで起こすときにそのまま使えるため
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
