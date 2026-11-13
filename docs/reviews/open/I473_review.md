@@ -45,9 +45,12 @@
 - [implement] 実装のコミットだけ `SKIP=eslint` にした — ワークツリーのホストに eslint が無くフックが exit 127 で止まる既知の問題（#468・I452 と同じ）。同じ `npm run lint` を frontend コンテナで流して違反 0 件を確かめた上で使った。CI の ESLint は通常どおり流れる
 - [review-gate] 1 回目のコードレビューは CI 待ちの 20 分切れ（exit 3）で、CI は遅れて始まり全部合格していた。決まりどおり 1 回だけやり直した — CI の実行の待ち行列の遅れで、直すものは無い
 - [review-gate] 止める指摘 F1〜F4（Medium・画面）で fix-loop へ。F5〜F8（Low）は台帳に残し retro へ — スクリプトの判定どおり
+- [fix-loop] F1〜F4 を診断メモの推奨案（API の契約は変えず画面の出し分け・判定・取得の書き方だけを直す）で直した — 診断レビュー PASS。全科目の has_data を API に足す案は、この食い違いのためだけに契約を増やすので採らなかった
+- [fix-loop] TC-28 は、読み込み中に画面全体が置き換わってセレクタが消えるため、テストのモックで「科目 5 を選んだ直後にすべてへ」をまとめて起こす形にした — 実際の画面で起こりうる順番（選択の直後に別の切り替えが届く）を再現するため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
