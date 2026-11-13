@@ -124,7 +124,7 @@
     "description": "backend/openapi.yaml から画面の型（frontend/src/types/api/schema.d.ts）を作る（I493）",
     "scripts": {
       "generate": "openapi-typescript ../../backend/openapi.yaml -o ../../frontend/src/types/api/schema.d.ts",
-      "check": "openapi-typescript ../../backend/openapi.yaml -o ../../frontend/src/types/api/schema.d.ts --check"
+      "check": "npm run generate -- --check"
     },
     "devDependencies": {
       "openapi-typescript": "7.13.0",
@@ -151,7 +151,7 @@
 - `frontend/src/services/dashboard.service.ts`:
   - `DashboardOverview` を `../types/api` から読む。`AnalyticsData`・`AnalyticsFilters`・`UserSettings` は今のまま `./types` から読む。
   - `isDashboardOverview` は残す。型は実行時に消えるので、API の応答を受けるところで形を確かめるのは、型を作るようにした後も要る（TC-22 の 0 埋めの防止）。`last_7_days` が空でないことのような、型では書けない決まりもここで見る。
-  - `kind` の確かめを、作った型に結びつける: `const RECOMMENDATION_KINDS: readonly DashboardRecommendationKind[] = ['weak_subject', 'unstudied_subject'];` を置き、`(RECOMMENDATION_KINDS as readonly unknown[]).includes(rec.kind)` で見る。API から選択肢が消えたら `tsc` が落ちる。
+  - `kind` の確かめを、作った型に結びつける: `const RECOMMENDATION_KINDS: Record<DashboardRecommendationKind, true> = { weak_subject: true, unstudied_subject: true };` を置き、`isRecommendationKind(value)`（文字列で、`RECOMMENDATION_KINDS` の自分のキーか）で見る。API の選択肢が増えても消えても `tsc` が落ちる。
   - 22 行目のコメント（形の正）を「形の正は backend/openapi.yaml（OverviewSerializer から作る）」に直す。
 - `frontend/src/pages/Dashboard.tsx:45`: `DashboardOverview` を `../types/api` から読み、`Subject` は `../services/types` から読む。他は変えない。
 - `frontend/src/pages/__tests__/Dashboard.test.tsx:11`: `DashboardOverview` を `../../types/api` から読む。テストの中身は変えない。
@@ -291,6 +291,10 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 - 計画レビュー（20261113_1218）の Warning 3 件・Info 1 件に対応した: ① スパイク 5 で名前の付け替えを先に確かめた ② 手動 No.2 を `git diff --exit-code`（コミット済みの状態）に変えた ③ ESLint が作った型で落ちたときの方針を決めた ④ 新しいジョブを必須チェックの一覧に足し、登録を close でユーザーにお願いする。方式・範囲・受け入れ条件は変えていない（④ は手順書の一覧を足すだけ）→ 計画レビューのやり直し: 不要
 - セキュリティ設計レビュー（2026-11-13）の Medium 2 件に対応した: `api-types` ジョブと手順書・lock の作成で `--ignore-scripts` を付け、失敗の注入の `npx` を `./node_modules/.bin/openapi-typescript` に変えた。必ず確かめる項目に V6 を足した。方式・範囲・受け入れ条件は変えていない → 計画レビューのやり直し: 不要
+- 実装中（implement）: 計画書の記載「§2 の必須チェックの一覧に足し、§3 ステップ 3 の一覧を §2 と同じ 7 件にそろえる」→ 採った方法: 同じファイルの中で件数を書いた残り 3 か所（§1 の表 2 行の「Required status checks（5件）」・確認手順の「必須チェック 5 件」）も 7 件にそろえた。理由: 一覧だけ直すと同じ手順書の中で件数が食い違う（plan-writing-rules「消費箇所の全件列挙」）→ 計画レビューのやり直し: 不要（同じファイルの数字の整合だけ）
+- 実装中（implement）: ESLint は作った `schema.d.ts` を警告 0 で通った（TC-12）。条件つきの `frontend/package.json` の `ignorePatterns` は足していない
+- 実装中（/simplify の指摘）: ① `RECOMMENDATION_KINDS` を配列から `Record<DashboardRecommendationKind, true>` に変えた（配列だと API の選択肢が増えたときに型の検査で気づけないため。増えても消えても `tsc` が落ちる）② `tools/api-types` の `check` を `npm run generate -- --check` にした（入力と出力のパスを 1 か所にする）③ TC-02 の注入を、YAML の書式に頼る置き換えから「1 行足す」に変えた ④ スキーマを作る fixture をモジュール単位にした（作る・検証するのを 10 回から 1 回に）。方式・範囲・受け入れ条件は変えていない → 計画レビューのやり直し: 不要
+- /simplify で見送った指摘: TC-03・TC-04 がスキーマの写しで TC-01 と重なる（AC1 が「スキーマを読むテストで固定」を求めており、生成の道具の設定ミス〔null の可否・部品の名前の継承〕を CI で名指しで止めるため残す）／シリアライザのクラス名を `Dashboard…Serializer` に変えて `component_name` をやめる（参照の書き換えが計画の外に広がる・#496 で他の API を足すときにまとめて決める）／CI の失敗の注入を npm の追加引数で呼ぶ（`-o` を 2 回渡すと道具が異常終了し、確かめの不合格と区別できなくなるので、今の書き方を残す）／`--enum-values` で選択肢の配列を作る（出力が `.d.ts` から `.ts` に変わり計画の外。① で増減とも止められる）
 
 ## レビュー結果
 - [20261113_1218 判定: ✅ 完了](../../reviews/I493_plan_review_20261113_1218.md)

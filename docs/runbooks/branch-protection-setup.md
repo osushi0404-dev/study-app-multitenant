@@ -32,7 +32,7 @@
 | Require review from Code Owners | **ON** |
 | Require status checks to pass before merging | **ON** |
 | Require branches to be up to date before merging | **ON** |
-| Required status checks（5件） | 後述 |
+| Required status checks（7件） | 後述 |
 | Do not allow bypassing the above settings | **ON** |
 | Restrict who can push to matching branches | **ON**（`oshui0404` のみ） |
 | Restrict pushes that create matching branches | **ON**（既定のまま） |
@@ -49,7 +49,7 @@
 | Require review from Code Owners | **ON** |
 | Require status checks to pass before merging | **ON** |
 | Require branches to be up to date before merging | **ON** |
-| Required status checks（5件） | 後述 |
+| Required status checks（7件） | 後述 |
 | Do not allow bypassing the above settings | **ON** |
 | Restrict who can push to matching branches | **ON**（`oshui0404` のみ） |
 | Restrict pushes that create matching branches | **ON**（既定のまま） |
@@ -98,7 +98,7 @@ develop も同じ理由で、CODEOWNERS を追加した PR（I178・#298）が d
 
 ## 2. 必須 CI チェック名
 
-`.github/workflows/ci.yml` で定義されている以下の 6 ジョブをすべて Required status checks に登録します。
+`.github/workflows/ci.yml` で定義されている以下の 7 ジョブをすべて Required status checks に登録します。
 
 ```
 Backend Lint & Security
@@ -106,10 +106,13 @@ Backend Tests
 Frontend Type Check
 Frontend Lint & Security
 Frontend Tests
+API Types Up To Date
 Harness Tests
 ```
 
 `Harness Tests`（I193）は、ハーネス（スキル・スクリプト・見張り）の回帰テスト `scripts/claude/tests/run-all.sh` を流す。ユーザーの確認を手動テストとマージだけにした流れで、ハーネスの退行を GitHub で止めるために必須チェックにする（登録はリポジトリ管理者が設定画面で行う。bot には権限が無い）。
+
+`API Types Up To Date`（I493）は、画面の型（`frontend/src/types/api/schema.d.ts`）が API のスキーマ（`backend/openapi.yaml`）と同じかを見る。
 
 > **注意**: status checks の名前は `jobs.<job_id>.name` の値です。
 > GitHub の UI に候補が表示されない場合は、先に PR を 1 件作成・CI を実行してから登録してください。
@@ -149,12 +152,14 @@ Harness Tests
 **Require status checks to pass before merging**:
 - チェックボックスをオン
 - **Require branches to be up to date before merging** をオン
-- **Status checks that are required** の検索ボックスに各ジョブ名を入力して追加（5件）:
+- **Status checks that are required** の検索ボックスに各ジョブ名を入力して追加（7件・§2 と同じ）:
   - `Backend Lint & Security`
   - `Backend Tests`
   - `Frontend Type Check`
   - `Frontend Lint & Security`
   - `Frontend Tests`
+  - `API Types Up To Date`
+  - `Harness Tests`
 
 **Do not allow bypassing the above settings**:
 - チェックボックスをオン（管理者も対象）
@@ -221,7 +226,7 @@ bot の承認が数えられないことを確かめる手順だったが、期�
    - `reviewDecision=APPROVED`
    - `mergeStateStatus` が `BEHIND`・`DIRTY` でない
    - 最新の承認（`reviews` の最後の `APPROVED`）の `commit.oid` が `headRefOid` と同じ（承認後に新しいコミットが無い）
-   - `statusCheckRollup` の必須チェック 5 件がすべて `SUCCESS`
+   - `statusCheckRollup` の必須チェック 7 件（§2）がすべて `SUCCESS`
 2. **実行前に `oshui0404` の了承を得てから**、bot で GitHub のマージ API を直接呼ぶ（`gh pr merge` は API を呼ぶ前に手元で `BLOCKED` を判定し、push 制限と他の理由を区別できない汎用の文で止まるため使わない。`--auto` も付けない）。push 制限の設定を誤っていると、この操作で実際にマージされる点に注意する。`-i` で HTTP ステータスも表示させ、記録する:
    ```bash
    gh api -i -X PUT repos/osushi0404-dev/study-app-multitenant/pulls/<PR番号>/merge -f merge_method=merge

@@ -116,6 +116,24 @@ docker compose exec backend python manage.py makemigrations --check --dry-run
 > CI の backend-lint ジョブでも `makemigrations --check` を実行するが、
 > PR を出す前にローカルで確認することを推奨する。
 
+## API の形を変えたとき（型の作り直し・I493）
+
+契約に入れた API（`backend/core/openapi.py` の `CONTRACT_PATHS`）のシリアライザ・ビューを変えたら、スキーマと画面の型を作り直してコミットする。
+
+```bash
+# 1. シリアライザから OpenAPI のスキーマ（backend/openapi.yaml）を作る（警告が 1 つでもあれば失敗する）
+docker compose exec -T backend python manage.py spectacular --file openapi.yaml --validate --fail-on-warn
+
+# 2. スキーマから画面の型（frontend/src/types/api/schema.d.ts）を作る（道具を入れるのは初回だけ）
+npm --prefix tools/api-types ci --ignore-scripts
+npm --prefix tools/api-types run generate
+```
+
+- 作った 2 つのファイル（`backend/openapi.yaml`・`frontend/src/types/api/schema.d.ts`）は手で直さない
+- 作り直し忘れは CI が止める（スキーマは backend-test の `core/tests/test_I493_openapi_contract.py`、型は `API Types Up To Date` ジョブ）
+- 契約に API を足すときは `CONTRACT_PATHS` にパスを足し、警告 0 で作れるようにビュー（`extend_schema`）とシリアライザ（`extend_schema_serializer` など）に注釈を付ける。画面は `frontend/src/types/api/index.ts` に短い名前を足して使う
+- 道具（`tools/api-types`）は画面の本体とは別の置き場で TypeScript 5 で動く（画面は `react-scripts` 5 の制約で TypeScript 4.9 のまま）
+
 ## ローカル E2E テスト実行手順（初回セットアップ）
 
 ### 1. `.env.e2e` を作成する（初回のみ）

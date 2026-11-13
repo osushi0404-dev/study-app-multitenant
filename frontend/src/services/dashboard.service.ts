@@ -1,6 +1,16 @@
 import { AxiosResponse } from 'axios';
 import apiClient from './api';
-import { DashboardOverview, AnalyticsData, AnalyticsFilters, UserSettings } from './types';
+import { AnalyticsData, AnalyticsFilters, UserSettings } from './types';
+import { DashboardOverview, DashboardRecommendationKind } from '../types/api';
+
+// おすすめの種類。API の選択肢が増えても消えても、ここが合わなければ型の検査で落ちる
+const RECOMMENDATION_KINDS: Record<DashboardRecommendationKind, true> = {
+  weak_subject: true,
+  unstudied_subject: true,
+};
+
+const isRecommendationKind = (value: unknown): value is DashboardRecommendationKind =>
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(RECOMMENDATION_KINDS, value);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -19,7 +29,7 @@ const hasCounts = (value: unknown): value is Record<string, unknown> =>
 /**
  * ダッシュボードの応答が契約（DashboardOverview）の形かを、一覧の中身まで確かめる（I473）
  * 欠けたキーを 0 で埋めず、形が違えばエラーとして扱うため
- * （形の正は backend/dashboard/serializers.py の OverviewSerializer）
+ * （形の正は backend/openapi.yaml〔OverviewSerializer から作る〕。型は実行時に消えるので、受けるところで形を確かめる・I493）
  */
 const isDashboardOverview = (data: unknown): data is DashboardOverview =>
   isRecord(data) &&
@@ -44,7 +54,7 @@ const isDashboardOverview = (data: unknown): data is DashboardOverview =>
     isNumber(subject.accuracy_rate)
   ) &&
   isListOf(data.recommendations, (rec) =>
-    (rec.kind === 'weak_subject' || rec.kind === 'unstudied_subject') &&
+    isRecommendationKind(rec.kind) &&
     isNumber(rec.subject_id) &&
     typeof rec.subject_name === 'string' &&
     typeof rec.reason === 'string'

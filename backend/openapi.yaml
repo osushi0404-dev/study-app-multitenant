@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: study-app API
+  version: 1.0.0
+paths:
+  /api/dashboard/overview/:
+    get:
+      operationId: api_dashboard_overview_retrieve
+      description: ダッシュボードの数字（クイズの答えの記録から数える・I473）
+      parameters:
+      - in: query
+        name: subject_id
+        schema:
+          type: integer
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverview'
+          description: ''
+components:
+  schemas:
+    DashboardDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        study_seconds:
+          type: integer
+        answered_count:
+          type: integer
+        correct_count:
+          type: integer
+      required:
+      - answered_count
+      - correct_count
+      - date
+      - study_seconds
+    DashboardOverview:
+      type: object
+      description: GET /api/dashboard/overview/ の応答（キーは全部必須）
+      properties:
+        has_data:
+          type: boolean
+        today:
+          $ref: '#/components/schemas/DashboardToday'
+        streak:
+          $ref: '#/components/schemas/DashboardStreak'
+        totals:
+          $ref: '#/components/schemas/DashboardTotals'
+        last_7_days:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardDay'
+        weak_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardWeakSubject'
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardRecommendation'
+      required:
+      - has_data
+      - last_7_days
+      - recommendations
+      - streak
+      - today
+      - totals
+      - weak_subjects
+    DashboardRecommendation:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/DashboardRecommendationKindEnum'
+        subject_id:
+          type: integer
+        subject_name:
+          type: string
+        reason:
+          type: string
+      required:
+      - kind
+      - reason
+      - subject_id
+      - subject_name
+    DashboardRecommendationKindEnum:
+      enum:
+      - weak_subject
+      - unstudied_subject
+      type: string
+      description: |-
+        * `weak_subject` - weak_subject
+        * `unstudied_subject` - unstudied_subject
+    DashboardStreak:
+      type: object
+      properties:
+        current_days:
+          type: integer
+      required:
+      - current_days
+    DashboardToday:
+      type: object
+      properties:
+        answered_count:
+          type: integer
+        correct_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+          nullable: true
+        study_seconds:
+          type: integer
+      required:
+      - accuracy_rate
+      - answered_count
+      - correct_count
+      - study_seconds
+    DashboardTotals:
+      type: object
+      properties:
+        answered_count:
+          type: integer
+        correct_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - accuracy_rate
+      - answered_count
+      - correct_count
+    DashboardWeakSubject:
+      type: object
+      properties:
+        subject_id:
+          type: integer
+        subject_name:
+          type: string
+        answered_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+      required:
+      - accuracy_rate
+      - answered_count
+      - subject_id
+      - subject_name
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
