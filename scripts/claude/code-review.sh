@@ -654,10 +654,11 @@ for p in sorted(set(a) & set(b)):
 _LEDGER_PY='
 import os, re, sys
 # I202 F5: STOP= の後ろに任意の目印 RISK=up（計画の見立てを超えた高リスクの変更。止めるかどうかとは別で、敵対的レビューを必須にする）
-FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) LINE=(\S+) SECURITY=(yes|no) STOP=(\S+)(?: RISK=(up))?(?: \| (.*))?")
+# I512: RISK の後ろに任意の目印 ACCEPTED=R<番号>（計画書の「## 8. Risk & 回避策」で処遇が受け入れの行。振り分けにだけ効き、止める判定には効かない）
+FIND = re.compile(r"FINDING: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) FILE=(\S+) LINE=(\S+) SECURITY=(yes|no) STOP=(\S+)(?: RISK=(up))?(?: ACCEPTED=(R[0-9]+))?(?: \| (.*))?")
 # 前の形（I197・KIND などの欄なし／I205・RISK の欄なし／I202・FILE の欄なし）の行も読む。足りない欄は止める側の既定値（app・STOP=-・REPRO=yes）。
 # RISK・FILE は -（I208: FILE はその指摘のファイル。一覧の行に出す）
-LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside)(?: KIND=(app|harness|guard) STOP=(\S+) REPRO=(yes|no)(?: RISK=(up|-))?)? SECURITY=(yes|no)(?: FILE=(\S+))?(?: \| (.*))?")
+LEDG = re.compile(r"LEDGER: (F[0-9]+) SEV=(Blocker|High|Medium|Low) STATUS=(open|resolved) SCOPE=(delta|outside)(?: KIND=(app|harness|guard) STOP=(\S+) REPRO=(yes|no)(?: RISK=(up|-))?(?: ACCEPTED=(R[0-9]+))?)? SECURITY=(yes|no)(?: FILE=(\S+))?(?: \| (.*))?")
 REPRO_MARK = re.compile(r"(?:^|\s*\|)\s*再現:")   # 要約の後ろの「| 再現: …」の印（最後のものを使う）
 NO_REPRO = {"なし", "無し", "-", "none", "n/a"}   # 「再現: なし」などは再現なし（I205-F5）
 # 「なし（理由）」「なし。」のように、先頭が「なし」などで直後が句読点・括弧・コロンでも再現なし（I206 F7）。
@@ -718,7 +719,7 @@ def read_findings(path):
         if not m:
             print("形の崩れた FINDING 行: " + line[:120], file=sys.stderr)
             sys.exit(2)
-        out.append(m.groups())   # (id, SEV, STATUS, FILE, LINE, SECURITY, STOP, RISK, 残り)
+        out.append(m.groups())   # (id, SEV, STATUS, FILE, LINE, SECURITY, STOP, RISK, ACCEPTED, 残り)
     return out
 
 def read_ledger(path):
@@ -727,13 +728,15 @@ def read_ledger(path):
         for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
             m = LEDG.fullmatch(line.rstrip())
             if m:
-                fid, sev, st, scope, kind, stop, repro, risk, sec, file, title = m.groups()
-                led[fid] = [sev, st, scope, kind or "app", stop or "-", repro or "yes", sec, title or "", risk or "-", file or "-"]
+                fid, sev, st, scope, kind, stop, repro, risk, acc, sec, file, title = m.groups()
+                led[fid] = [sev, st, scope, kind or "app", stop or "-", repro or "yes", sec, title or "", risk or "-", file or "-", acc or "-"]
     return led
 
 def ledger_line(fid, e):
-    sev, st, scope, kind, stop, repro, sec, title, risk, file = e
-    return f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} KIND={kind} STOP={stop} REPRO={repro} RISK={risk} SECURITY={sec} FILE={file}" + (f" | {title}" if title else "")
+    sev, st, scope, kind, stop, repro, sec, title, risk, file, acc = e
+    # 目印はあるときだけ書く（無い行は I512 の前と 1 文字も変えない）
+    mark = f" ACCEPTED={acc}" if acc != "-" else ""
+    return f"LEDGER: {fid} SEV={sev} STATUS={st} SCOPE={scope} KIND={kind} STOP={stop} REPRO={repro} RISK={risk}{mark} SECURITY={sec} FILE={file}" + (f" | {title}" if title else "")
 
 def blocking(e):
     sev, st, scope, kind, stop, repro, sec = e[:7]
@@ -756,6 +759,40 @@ def is_rest(e):
     # 台帳の残り: open で止めない指摘（差分のレビューの入力に見せ、直ったら resolved と書いてよい・I202）
     return e[1] == "open" and not blocking(e)
 
+PLAN_RISK_HEAD = re.compile(r"## 8\.")   # I512: 計画書の「## 8. Risk & 回避策」の節
+PLAN_RISK_ROW = re.compile(r"\|\s*(R[0-9]+)\s*[:：]")   # 表の行の最初のセルが R<番号>: で始まる
+
+def accepted_risks(plan):
+    # I512: 計画書の 8 の節の表で、最後のセルが「受け入れ」と完全に一致する行の R 番号の集合。
+    # パスが空・読めない・節が無いときは空の集合（目印が効かない＝今までどおりの振り分け・fail-closed）
+    if not plan or not os.path.isfile(plan):
+        return set()
+    acc, inside = set(), False
+    for line in read_lines(plan):
+        if line.startswith("## "):
+            inside = bool(PLAN_RISK_HEAD.match(line))
+            continue
+        m = PLAN_RISK_ROW.match(line) if inside else None
+        cells = line.rstrip().split("|")
+        if m and len(cells) > 2 and cells[-1] == "" and cells[-2].strip() == "受け入れ":
+            acc.add(m.group(1))
+    return acc
+
+def accepted_why_not(e, acc_set):
+    # I512: 目印が効かない理由（効くなら空）。効くのは計画書で受け入れた R 番号の、Medium 以下・再現なし・アプリ本体でない行だけ
+    # （アプリ本体は目印に関係なく後続イシュー。効かせると Medium・SECURITY=yes の行が最優先から外れる）
+    if e[10] not in acc_set:
+        return "計画書の 8 の表に処遇が受け入れの行が無い"
+    if RANK[e[0]] > 1:
+        return "High 以上"
+    if e[5] != "no":
+        return "再現あり"
+    if e[3] == "app":
+        return "アプリ本体"
+    return ""
+
+ACCEPTED_DROPS = ("SECURITY=yes", "guard の Medium 以上")   # I512: 計画で受け入れた行で外す理由（止める判定は変えない）
+
 def route_reasons(e):
     # I208: open の指摘を後続イシューにする理由（欄の値だけで決める。要約は見ない）。空なら軽い指摘の一覧
     sev, kind, repro, sec = e[0], e[3], e[5], e[6]
@@ -775,7 +812,7 @@ def route_reasons(e):
 mode = sys.argv[1]
 if mode == "parse":
     for g in read_findings(sys.argv[2]):
-        print("\t".join(x or "" for x in g[:7] + g[8:]))   # RISK の欄は出さない（列はこれまでどおり）
+        print("\t".join(x or "" for x in g[:7] + g[9:]))   # RISK・ACCEPTED の欄は出さない（列はこれまでどおり）
 elif mode == "kinds":
     # kinds <パスの一覧>: 「種類\tパス」を出す（レビュー役の入力の「変更の種類」の節）
     for p in read_lines(sys.argv[2]):
@@ -818,33 +855,35 @@ elif mode == "update":
             if a <= e + HUNK_MARGIN and b >= s - HUNK_MARGIN:
                 return "delta"
         return "outside"
-    def merged(o, sev, st, stop, repro, sec, title, risk, file):
+    def merged(o, sev, st, stop, repro, sec, title, risk, file, acc):
         # 既にある行への書き直し: SCOPE・KIND は前のまま（今回の範囲で決め直すと、触っていない行の未解決の指摘が消える）。
         # 止める側の値は残す（重大度は下げない・SECURITY・REPRO は yes が残る・一覧に当たる STOP は残る・RISK は up が残る）。
-        # FILE は前のまま（I208。前の形の行の - だけ今回の値で埋める）
+        # FILE は前のまま（I208。前の形の行の - だけ今回の値で埋める）。ACCEPTED は今回の行の値（I512: 最新のレビュー役の判断。
+        # 外せば - になり、振り分けは後続イシュー側に倒れる）
         return [sev if RANK[sev] > RANK[o[0]] else o[0], st, o[2], o[3],
                 o[4] if STOP_RE.fullmatch(o[4]) else stop, "yes" if "yes" in (repro, o[5]) else "no",
                 "yes" if "yes" in (sec, o[6]) else "no", title or o[7], "up" if "up" in (risk, o[8]) else "-",
-                o[9] if o[9] != "-" else file]
-    for fid, sev, st, path, line, sec, stop, risk, rest in findings:
+                o[9] if o[9] != "-" else file, acc]
+    for fid, sev, st, path, line, sec, stop, risk, acc, rest in findings:
         stop = stop if STOP_RE.fullmatch(stop) else "-"
         risk = risk or "-"
+        acc = acc or "-"
         title, repro = split_repro(rest or "")
         # この行だけで決めた台帳の行（新しい指摘のときと、台帳の残りの行が止める中身かの判定に使う。既にある指摘の書き直しでは使わない）
         file = "-" if path == "-" else norm_path(path)   # I208: 一覧の行に出すファイル（kind_of と同じく :行番号 を除いて揃える）
         kind = branch_kind(branch_files) if path == "-" else kind_of(file)
-        fresh = [sev, st, scope_of(path, line, stop), kind, stop, repro, sec, title, risk, file]
+        fresh = [sev, st, scope_of(path, line, stop), kind, stop, repro, sec, title, risk, file, acc]
         if fid in rest_ids:
             # I207: 台帳の残りの番号の行は、同じ回の何行目でも、その行の中身だけで決める（同じ回の前の行に左右されない・F2）
             if st == "resolved":
                 # 直った: 前の行を resolved にする（振り直し先には付けない）
-                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file)
+                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file, acc)
                 continue
             if not blocking(fresh):
                 # 止めない中身（「直していない」の書き直しなど）: 新しい行を作らず（I206 F8）、STATUS・要約は前のまま、
                 # 止める側の値だけ前の行へ合流する（F1）
                 o = led[fid]
-                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk, file)
+                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk, file, acc)
                 continue
             # 止める中身の open は、下で新しい指摘として振り直す（前の SCOPE を引き継いで止まらなくなるのを防ぐ・I197-F1 の守り）
         keep = fid in seen or fid in shown
@@ -857,7 +896,7 @@ elif mode == "update":
             next_id += 1
         seen.add(fid)
         if fid in led:
-            led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file)   # 既にある指摘の書き直し
+            led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file, acc)   # 既にある指摘の書き直し
         else:
             led[fid] = fresh
     for fid in sorted(led, key=lambda x: int(x[1:])):
@@ -875,21 +914,27 @@ elif mode == "open":
         if is_rest(led[fid]):
             print(ledger_line(fid, led[fid]))
 elif mode == "route":
-    # I208: route <issue|backlog> <台帳のファイル>: open の指摘（止める指摘も含む）を欄の値だけで振り分け、retro がそのまま使う行を出す。
-    # issue は後続イシューにする行（理由つき）、backlog は軽い指摘の一覧（docs/reviews/backlog/）に貼る行
+    # I208: route <issue|backlog> <台帳のファイル> [<計画書>]: open の指摘（止める指摘も含む）を欄の値だけで振り分け、retro がそのまま使う行を出す。
+    # issue は後続イシューにする行（理由つき）、backlog は軽い指摘の一覧（docs/reviews/backlog/）に貼る行。
+    # I512: 計画書があれば、目印 ACCEPTED=R<番号> を 8 の表と照合する（無い・合わなければ目印は効かない）
     side = sys.argv[2]
     if side not in ("issue", "backlog"):
         print("route の種類は issue か backlog: " + side, file=sys.stderr)
         sys.exit(2)
     led = read_ledger(sys.argv[3])
+    acc_set = accepted_risks(sys.argv[4] if len(sys.argv) > 4 else "")
     for fid in sorted(led, key=lambda x: int(x[1:])):
         e = led[fid]
         if e[1] != "open":
             continue
-        r = route_reasons(e)
-        head = f"- {fid} SEV={e[0]} REPRO={e[5]} KIND={e[3]}"
+        why_not = accepted_why_not(e, acc_set) if e[10] != "-" else "目印なし"
+        ok = not why_not
+        if e[10] != "-" and not ok:
+            print(f"目印を使わない: {fid} ACCEPTED={e[10]}（{why_not}）", file=sys.stderr)
+        r = [x for x in route_reasons(e) if not (ok and x in ACCEPTED_DROPS)]
+        head = f"- {fid} SEV={e[0]} REPRO={e[5]} KIND={e[3]} SECURITY={e[6]} FILE={e[9]} | {e[7]}"
         if side == "issue" and r:
-            print(f"{head} SECURITY={e[6]} FILE={e[9]} | {e[7]} | 後続イシューにする理由: " + "・".join(r))
+            print(f"{head} | 後続イシューにする理由: " + "・".join(r))
         elif side == "backlog" and not r:
             why = []
             if e[0] == "Low":
@@ -899,7 +944,9 @@ elif mode == "route":
             if not why:   # route_reasons() の条件を変えて、一覧に回す理由の無い行ができたら止める（黙って一覧に落とさない）
                 print("一覧に回す理由の無い行: " + fid, file=sys.stderr)
                 sys.exit(2)
-            print(f"{head} FILE={e[9]} | {e[7]} | 一覧に回した理由: " + "／".join(why))
+            if ok:
+                why.append(f"計画で受け入れ（{e[10]}）")
+            print(f"{head} | 一覧に回した理由: " + "／".join(why))
 elif mode == "risk":
     # risk <台帳のファイル…>: どれかの台帳の行に RISK=up があれば YES（計画の見立てを超えた高リスク・I202 F5）。
     # 数えるのは KIND=app の行だけ（ハーネスだけの変更では付けない決まりをスクリプトで強制・guard はパスの判定で YES になる・I206 F6）
@@ -956,11 +1003,17 @@ if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 # 台帳のある最新のコードレビューの記録（latest_ledger_record）を読み、記録のパスは標準エラーに出す。記録が無ければ 2
 if [ "${1:-}" = "--route" ]; then
   [ $# -eq 3 ] || { echo "Usage: $0 --route <issue|backlog> I###" >&2; exit 2; }
+  # I512（一覧の I208 F3）: 種類は記録を探す前に確かめる。計画書のパスを組み立てるので、番号は I<数字> の形だけを通す（../・glob を通さない）
+  case "$2" in issue|backlog) ;; *) echo "route の種類は issue か backlog: $2" >&2; exit 2 ;; esac
+  [[ "$3" =~ ^I[0-9]+$ ]] || { echo "イシューの番号は I<数字> の形: $3" >&2; exit 2; }
   cd "$(git rev-parse --show-toplevel)" || exit 2
   rec=$(latest_ledger_record "$3")
   [ -n "$rec" ] || { echo "台帳のあるコードレビューの記録がありません: $3" >&2; exit 2; }
   echo "記録: $rec" >&2
-  ledger_route "$2" "$rec"; exit $?
+  # I512: 目印 ACCEPTED=R<番号> を照合する計画書（レビュー役が読むのと同じ最新の計画書。無ければ目印は効かない）
+  plan=$(find_plan_file "$3")
+  echo "計画書: ${plan:-なし}" >&2
+  ledger_route "$2" "$rec" "$plan"; exit $?
 fi
 
 # I226: 自動テスト文書の見出しの検査だけを流す（PostToolUse のフックが使う）: --lint-auto-test <ファイル>…。レビューは動かさない。
