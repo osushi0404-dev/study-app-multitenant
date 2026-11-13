@@ -58,18 +58,6 @@ ck "A8 notebookedit 別wt→block" 2 "$(nbedit "$OTHER/nb.ipynb")"
 ck "A9 write 現wt→allow"        0 "$(edit Write "$MAIN/x.py")"
 ck "A10 edit symlink→block"     2 "$(edit Edit "$MAIN/link_to_other/x.py")"
 
-# --- Bash 書込経路（TC-A11〜A15・A11b） ---
-ck "A11 redirect 別wt→block"       2 "$(bash_c "echo x > $OTHER/f")"
-ck "A11b 埋め込みredirect→block"   2 "$(bash_c "echo x>$OTHER/f")"
-# I174 敵対的レビュー再実施 第 2 周: >| を > とパイプに割らない
-ck "A11c >| redirect→block"        2 "$(bash_c "echo x >| $OTHER/f")"
-ck "A11d 埋め込み>|→block"         2 "$(bash_c "echo x >|$OTHER/f")"
-ck "A11e 2>&1 の後の >|→block"     2 "$(bash_c "echo x 2>&1 >| $OTHER/f")"
-ck "A12 tee 別wt→block"            2 "$(bash_c "tee $OTHER/f")"
-ck "A13 cp dest別wt→block"         2 "$(bash_c "cp a.txt $OTHER/")"
-ck "A14 mv dest別wt→block"         2 "$(bash_c "mv a.txt $OTHER/b.txt")"
-ck "A15 sed -i 別wt→block"         2 "$(bash_c "sed -i s/x/y/ $OTHER/f")"
-
 # --- 読み取り許可・非書込（TC-A16〜A17） ---
 ck "A16 cp src別wt→allow"  0 "$(bash_c "cp $OTHER/src.txt ./dest.txt")"
 ck "A17 cat 別wt→allow"    0 "$(bash_c "cat $OTHER/f")"
@@ -80,29 +68,9 @@ ck "A18 fail-safe(git不在)→block" 2 \
   "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$NOGIT/x.py" \
      | ( cd "$NOGIT" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?)"
 
-# --- エスケープ無し（TC-A19・DANGER_OK でも解除されない） ---
-ck "A19 DANGER_OK 別wt bash→block" 2 "$(bash_c "DANGER_OK=1 echo x > $OTHER/f")"
-
 # --- 回帰（TC-A20・現wt書込 allow / force push block 維持） ---
 ck "A20a 現wt redirect→allow" 0 "$(bash_c "echo x > $MAIN/ok.txt")"
 ck "A20b force push→block"    2 "$(bash_c "git push --force origin x")"
-
-# --- 未カバー経路の no-silent-caps 警告（TC-A22）。固定パスの cd は I179 で判定対象になった（X20）ため、変数越しの cd で見る ---
-# shellcheck disable=SC2016  # $WT はガードに渡すコマンド文字列の一部（展開させない）
-A22_CODE=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd $WT && echo x > f"}}' \
-             | ( cd "$MAIN" && python3 "$GUARD" >/dev/null 2>&1 ); echo $?)
-ck "A22 cd経由 未カバー exit0" 0 "$A22_CODE"
-# shellcheck disable=SC2016  # 同上
-A22_ERR=$(printf '{"tool_name":"Bash","tool_input":{"command":"cd $WT && echo x > f"}}' \
-             | ( cd "$MAIN" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
-if printf '%s' "$A22_ERR" | grep -q "絶対パス宛先のみ検査"; then
-  ck "A22 未カバー警告出力" 0 0; else ck "A22 未カバー警告出力" 0 1; fi
-
-# --- 未カバー警告の誤発火防止（TC-A23・cp read は cd/変数なし → 警告なし・Medium 対応） ---
-A23_ERR=$(printf '{"tool_name":"Bash","tool_input":{"command":"cp %s/src.txt ./dest.txt"}}' "$OTHER" \
-             | ( cd "$MAIN" && python3 "$GUARD" 2>&1 >/dev/null ) || true)
-if printf '%s' "$A23_ERR" | grep -q "絶対パス宛先のみ検査"; then
-  ck "A23 read-cp 警告誤発火なし" 0 1; else ck "A23 read-cp 警告誤発火なし" 0 0; fi
 
 # --- FALSEGREEN 注入（TC-A21・_cross_worktree を常に False 化） ---
 BROKEN="$TMP/guard_broken.py"

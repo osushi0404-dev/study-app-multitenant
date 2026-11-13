@@ -34,9 +34,30 @@ for h in pre:
                 errs.append(f"Bash のフックが guard を正しく呼んでいない: {x}")
 # I182（計画変更記録 1）: 見張りの時間切れ・起動失敗・異常終了は、公式の onFailure で止める（素通しにしない）
 guard_hooks = [x for h in pre for x in h.get("hooks", []) if "pretooluse_guard.py" in x.get("command", "")]
-# I187: Edit 系・Bash・GitHub MCP に加え、Playwright MCP（保存の書き先の制限）で 4 つ
-if len(guard_hooks) != 4:
-    errs.append(f"見張りを呼ぶ PreToolUse フックが 4 つでない: {len(guard_hooks)}")
+# I187: Edit 系・Bash・Playwright MCP（保存の書き先の制限）で 3 つ（I430: GitHub MCP の登録は消した。MCP は入れておらず、
+# fork の PR のマージは GitHub のブランチ保護が止める）
+if len(guard_hooks) != 3:
+    errs.append(f"見張りを呼ぶ PreToolUse フックが 3 つでない: {len(guard_hooks)}")
+# I430: サンドボックスが Bash の別ワークツリーへの書き込みを止める（見張りから判定を消した）。壊しても普段の作業では
+# 気づけないので、守りの要の値を確かめる（docs/plans/closed/plan_I430.md 4-2）
+sb = full.get("sandbox") or {}
+if sb.get("enabled") is not True:
+    errs.append("sandbox.enabled が true でない")
+if sb.get("allowUnsandboxedCommands") is not False:
+    errs.append("sandbox.allowUnsandboxedCommands が false でない（止められたコマンドを外で再実行できる）")
+if sb.get("failIfUnavailable") is not True:
+    errs.append("sandbox.failIfUnavailable が true でない（道具が無いとサンドボックスなしで動く）")
+fs = sb.get("filesystem") or {}
+if ".claude/worktrees" not in (fs.get("denyWrite") or []):
+    errs.append("sandbox.filesystem.denyWrite に .claude/worktrees が無い（primary のセッションから他のワークツリーに書ける）")
+if "~/.config/github-app" not in (fs.get("denyRead") or []):
+    errs.append("sandbox.filesystem.denyRead に ~/.config/github-app（App の秘密の鍵）が無い")
+# 外に出すコマンドに一般のインタプリタ・シェルを入れない（書いたファイルを外で動かせる。公式の警告）
+_wide_excl = {"*", "bash *", "bash", "sh *", "sh", "zsh *", "python *", "python", "python3 *", "python3",
+              "node *", "node", "env *", "env", "eval *", "exec *", "xargs *", "uv *", "npx *"}
+for e in sb.get("excludedCommands") or []:
+    if e.strip() in _wide_excl:
+        errs.append(f"sandbox.excludedCommands に一般のインタプリタ・シェル {e} がある")
 for x in guard_hooks:
     if x.get("timeout") != 20 or x.get("onFailure") != "block":
         errs.append(f"見張りのフックに timeout 20 / onFailure block が無い: {x}")
@@ -77,7 +98,9 @@ if any(e.startswith(("Write(", "NotebookEdit(", "MultiEdit(")) for e in allow + 
 for r in ["Read(**/.env)", "Read(**/.env.e2e)", "Edit(**/.env)", "Edit(**/.env.e2e)",
           "Read(**/.env.local)", "Edit(**/.env.local)", "Read(**/.env.*.local)", "Edit(**/.env.*.local)",
           "Read(**/secrets/**)", "Edit(**/secrets/**)", "Read(**/*.pem)", "Edit(**/*.pem)",
-          "Read(**/*.key)", "Edit(**/*.key)"]:
+          "Read(**/*.key)", "Edit(**/*.key)",
+          # I430: fork の PR の取り込みは deny（見張りの判定を消した）
+          "Bash(gh pr checkout *)", "Bash(gh co *)"]:
     if r not in deny:
         errs.append(f"deny に {r} が無い")
 if any(e.startswith(("Read(./.env", "Edit(./.env")) for e in deny):
@@ -101,10 +124,12 @@ python3 - "$SETTINGS" "$TMP" <<'PY'
 import json, sys, copy
 src, tmp = sys.argv[1], sys.argv[2]
 base = json.load(open(src, encoding="utf-8"))
-def write(name, mut):
+def write_full(name, mut):
     d = copy.deepcopy(base)
-    mut(d["permissions"])
+    mut(d)
     json.dump(d, open(f"{tmp}/{name}.json", "w", encoding="utf-8"))
+def write(name, mut):
+    write_full(name, lambda d: mut(d["permissions"]))
 write("rm_back_to_ask", lambda p: (p["allow"].remove("Bash(rm *)"), p["ask"].append("Bash(rm *)")))
 write("psql_back_to_ask", lambda p: (p["allow"].remove("Bash(psql *)"), p["ask"].append("Bash(psql *)")))
 write("chmod_nowhere", lambda p: p["allow"].remove("Bash(chmod *)"))
@@ -138,6 +163,17 @@ json.dump(d, open(f"{tmp}/no_onfailure.json", "w", encoding="utf-8"))
 d = copy.deepcopy(base)
 d["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] = 600
 json.dump(d, open(f"{tmp}/long_timeout.json", "w", encoding="utf-8"))
+# I430: サンドボックスの要の値を壊す
+write_full("sb_disabled", lambda d: d["sandbox"].__setitem__("enabled", False))
+write_full("sb_no_sandbox", lambda d: d.pop("sandbox"))
+write_full("sb_unsandboxed_retry", lambda d: d["sandbox"].__setitem__("allowUnsandboxedCommands", True))
+write_full("sb_no_fail", lambda d: d["sandbox"].pop("failIfUnavailable"))
+write_full("sb_no_denywrite", lambda d: d["sandbox"]["filesystem"]["denyWrite"].remove(".claude/worktrees"))
+write_full("sb_no_denyread", lambda d: d["sandbox"]["filesystem"]["denyRead"].remove("~/.config/github-app"))
+for n, e in (("bash", "bash *"), ("sh", "sh *"), ("python3", "python3 *"), ("star", "*")):
+    write_full(f"sb_excl_{n}", lambda d, e=e: d["sandbox"]["excludedCommands"].append(e))
+write("no_deny_gh_checkout", lambda p: p["deny"].remove("Bash(gh pr checkout *)"))
+write("no_deny_gh_co", lambda p: p["deny"].remove("Bash(gh co *)"))
 PY
 ck "S2 rm を allow から ask へ戻すと不合格"   1 "$(run_check "$TMP/rm_back_to_ask.json")"
 ck "S2a psql を allow から ask へ戻すと不合格"  1 "$(run_check "$TMP/psql_back_to_ask.json")"
@@ -158,6 +194,18 @@ ck "S11 disableAllHooks を足すと不合格"      1 "$(run_check "$TMP/disable
 ck "S12 guard を呼ばないフックを足すと不合格" 1 "$(run_check "$TMP/neutered_hook.json")"
 ck "S13a 見張りのフックの onFailure を消すと不合格" 1 "$(run_check "$TMP/no_onfailure.json")"
 ck "S13b 見張りのフックの timeout を 600 にすると不合格" 1 "$(run_check "$TMP/long_timeout.json")"
+ck "S16 sandbox.enabled を false にすると不合格" 1 "$(run_check "$TMP/sb_disabled.json")"
+ck "S16a sandbox を丸ごと消すと不合格" 1 "$(run_check "$TMP/sb_no_sandbox.json")"
+ck "S17 外での再実行を許すと不合格" 1 "$(run_check "$TMP/sb_unsandboxed_retry.json")"
+ck "S18 failIfUnavailable を消すと不合格" 1 "$(run_check "$TMP/sb_no_fail.json")"
+ck "S19 denyWrite から .claude/worktrees を消すと不合格" 1 "$(run_check "$TMP/sb_no_denywrite.json")"
+ck "S20 denyRead から App の鍵を消すと不合格" 1 "$(run_check "$TMP/sb_no_denyread.json")"
+ck "S21a excludedCommands に bash * を足すと不合格" 1 "$(run_check "$TMP/sb_excl_bash.json")"
+ck "S21b excludedCommands に sh * を足すと不合格" 1 "$(run_check "$TMP/sb_excl_sh.json")"
+ck "S21c excludedCommands に python3 * を足すと不合格" 1 "$(run_check "$TMP/sb_excl_python3.json")"
+ck "S21d excludedCommands に * を足すと不合格" 1 "$(run_check "$TMP/sb_excl_star.json")"
+ck "S22a deny から gh pr checkout を消すと不合格" 1 "$(run_check "$TMP/no_deny_gh_checkout.json")"
+ck "S22b deny から gh co を消すと不合格" 1 "$(run_check "$TMP/no_deny_gh_co.json")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

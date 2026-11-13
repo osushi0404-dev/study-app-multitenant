@@ -14,15 +14,11 @@ GUARD="$REPO_ROOT/scripts/claude/hooks/pretooluse_guard.py"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# 一時リポジトリ（＝今のワークツリーの代役）に別ワークツリー W を作る（test_i454_guard_env_writes.sh と同じ）。
-# 見張りはこの一時リポジトリの中から呼ぶ
+# 一時リポジトリ（＝今のワークツリーの代役）。見張りはこの一時リポジトリの中から呼ぶ
 MAIN="$TMP/main"
 mkdir -p "$MAIN"
 git -C "$MAIN" init -q
 git -C "$MAIN" -c user.email=t@example.com -c user.name=tester commit -q --allow-empty -m init
-git -C "$MAIN" branch -q other
-W="$TMP/other-wt"
-git -C "$MAIN" worktree add -q "$W" other
 # アプリを import して全件を消すスクリプト（ホストの python でも危険操作を判定する形）
 printf 'import django\nfrom apps.users.models import User\nUser.objects.all().delete()\n' > "$TMP/evil.py"
 E="$TMP/evil.py"
@@ -82,12 +78,14 @@ ck 04a 0   "$(b 'psql -dprofile_db -c "select 1"')"
 ck 04b 0   "$(b "$D psql -dprofile_db -c \"select 1\"")"
 
 # ---- TC-05 sed の in-place の判定（F4） ----
-ck 05a 0   "$(b "sed -e's/print/log/' $W/x")"
-ck 05b 2   "$(b "sed -ie s/a/b/ $W/x")"
-ck 05c 2   "$(b "sed -i.bak s/a/b/ $W/x")"
-ck 05d 2   "$(b "sed --in-place=.bak -e s/a/b/ $W/x")"
-ck 05e 0   "$(b "sed -n -f $W/x /tmp/y")"
-fg FG-05 2 '        if not names & {"-i", "--in-place"}:' '        if not _has_short(args, "i", "--in-place"):' "sed -e's/print/log/' $W/x"
+# I430: ホストの別ワークツリーへの書き込みの判定は消した（サンドボックスが止める）ので、書き先の読み方はコンテナの
+# /tmp/ 以外への書き込みの確認（同じ _write_targets を使う）で確かめる
+ck 05a 0   "$(b "$D sed -e's/print/log/' /app/x")"
+ck 05b ASK "$(b "$D sed -ie s/a/b/ /app/x")"
+ck 05c ASK "$(b "$D sed -i.bak s/a/b/ /app/x")"
+ck 05d ASK "$(b "$D sed --in-place=.bak -e s/a/b/ /app/x")"
+ck 05e 0   "$(b "$D sed -n -f /app/x /tmp/y")"
+fg FG-05 ASK '        if not names & {"-i", "--in-place"}:' '        if not _has_short(args, "i", "--in-place"):' "$D sed -e's/print/log/' /app/x"
 
 # ---- TC-06 読む指定を書き込みと見なさない（F6） ----
 ck 06a 0   "$(b "$D pytest --cov=/app/apps")"
@@ -99,13 +97,14 @@ ck 06f ASK "$(b "$D pytest --junitxml=/app/r.xml -k x")"
 fg FG-06 ASK '"confcutdir", "cov", ' '"confcutdir", ' "$D pytest --cov=/app/apps"
 
 # ---- TC-07 cp／mv の書き先と移動元（敵対的レビューの Medium・F18・I444 F7） ----
-ck 07a 0   "$(b "cp -vt/tmp/d $W/a $W/b")"
-ck 07b 0   "$(b "cp -t /tmp/d $W/a $W/b")"
-ck 07c 2   "$(b "cp -vt$W/d /tmp/a /tmp/b")"
-ck 07d 2   "$(b "mv -vt/tmp/d $W/a")"
-ck 07e 2   "$(b "install -m644 /tmp/a $W/b")"
-ck 07f 0   "$(b "mv -S $W/sfx /tmp/a /tmp/b")"
-fg FG-07 2 '    return tdir or (pos[-1:] if len(pos) >= 2 else [])' '    return tdir + pos[-1:]' "cp -vt/tmp/d $W/a $W/b"
+# I430: 同上（コンテナの /tmp/ 以外への書き込みの確認で確かめる）
+ck 07a 0   "$(b "$D cp -vt/tmp/d /app/a /app/b")"
+ck 07b 0   "$(b "$D cp -t /tmp/d /app/a /app/b")"
+ck 07c ASK "$(b "$D cp -vt/app/d /tmp/a /tmp/b")"
+ck 07d ASK "$(b "$D mv -vt/tmp/d /app/a")"
+ck 07e ASK "$(b "$D install -m644 /tmp/a /app/b")"
+ck 07f 0   "$(b "$D mv -S /app/sfx /tmp/a /tmp/b")"
+fg FG-07 ASK '    return tdir or (pos[-1:] if len(pos) >= 2 else [])' '    return tdir + pos[-1:]' "$D cp -vt/tmp/d /app/a /app/b"
 
 # ---- TC-08 シェルを包むコマンドの -c（su・flock・script） ----
 ck 08a 2   "$(b "su -lc'git push --force origin develop'")"

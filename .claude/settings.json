@@ -121,6 +121,8 @@
       "Bash(git push -u origin main)",
       "Bash(git push -u origin HEAD)",
       "Bash(git push * --force*)",
+      "Bash(gh pr checkout *)",
+      "Bash(gh co *)",
       "Read(**/.env)",
       "Read(**/.env.e2e)",
       "Read(**/.env.local)",
@@ -193,18 +195,28 @@
             "onFailure": "block"
           }
         ]
-      },
-      {
-        "matcher": "mcp__github__merge_pull_request|mcp__github__update_pull_request_branch|mcp__github__create_pull_request_review",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py",
-            "timeout": 20,
-            "onFailure": "block"
-          }
-        ]
       }
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true,
+    "excludedCommands": [
+      "docker *",
+      "docker-compose *",
+      "gh *",
+      "git *",
+      "bash scripts/claude/*"
+    ],
+    "filesystem": {
+      "denyWrite": [".claude/worktrees"],
+      "denyRead": ["~/.config/github-app", "~/.cache/github-app"]
+    },
+    "network": {
+      "allowedDomains": [],
+      "strictAllowlist": true
+    }
   }
 }

@@ -33,27 +33,6 @@ grep -ie. .env
 grep -f .env x
 grep -m1 x .env
 
-# 別ワークツリーへの書き込み・移動（I454 TC-04・TC-07・I463 TC-05・TC-07）
-cp -vt{W}/x /tmp/y
-cp --target-directory={W}/x /tmp/y
-install /tmp/y {W}/x
-ln -s /tmp/y {W}/x
-rsync -a /tmp/y {W}/x
-mv {W}/x /tmp/y
-cp /tmp/y {W}/x
-cp -t {W}/x /tmp/y
-sed -i s/a/b/ {W}/x
-tee {W}/x
-echo x > {W}/x
-install -t{W}/dd /tmp/y
-sed -i -nes/a/b/ {W}/x
-sed -ie s/a/b/ {W}/x
-sed -i.bak s/a/b/ {W}/x
-sed --in-place=.bak -e s/a/b/ {W}/x
-cp -vt{W}/d /tmp/a /tmp/b
-mv -vt/tmp/d {W}/a
-install -m644 /tmp/a {W}/b
-
 # コンテナの /tmp/ 以外への書き込み（I454 TC-02・TC-03・TC-07・I463 TC-06）
 docker compose exec -T backend install -t/app/dd /tmp/a
 docker compose exec -T backend cp -vtapp /tmp/y

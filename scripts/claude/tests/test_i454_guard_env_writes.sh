@@ -82,44 +82,29 @@ fg FG-03 0 'if any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c[
   'if not _container_safe(c) and any(not _in_scratch(t) for t in c["write_to"] + _write_targets(c["toks"]) + vals):' \
   "$D pytest --junitxml=/app/r.xml -k x"
 
-# ---- TC-04 別ワークツリーへの書き込みの停止（書き先の見分け方を 1 つに） ----
-ck 04a 2 "$(b "cp -vt$W/x /tmp/y")"
-ck 04b 2 "$(b "cp --target-directory=$W/x /tmp/y")"
-ck 04c 2 "$(b "install /tmp/y $W/x")"
-ck 04d 2 "$(b "ln -s /tmp/y $W/x")"
-ck 04e 2 "$(b "rsync -a /tmp/y $W/x")"
-ck 04f 2 "$(b "mv $W/x /tmp/y")"
-ck 04g 2 "$(b "cp /tmp/y $W/x")"
-ck 04h 2 "$(b "cp -t $W/x /tmp/y")"
-ck 04i 2 "$(b "sed -i s/a/b/ $W/x")"
-ck 04j 2 "$(b "tee $W/x")"
-ck 04k 2 "$(b "echo x > $W/x")"
+# ---- TC-04 読み取り・作るだけの形は止めない（別ワークツリーへの書き込みは I430 からサンドボックスが止める） ----
 ck 04l 0 "$(b "cp $W/x /tmp/y")"
 ck 04m 0 "$(b "ln -s $W/x /tmp/y")"
 ck 04n 0 "$(b "install -d $W/newdir")"
 ck 04o 0 "$(b "sed -n p $W/x")"
-fg FG-04 0 '        targets += _write_targets(toks)' '        targets += []' "cp -vt$W/x /tmp/y"
 
 # ---- TC-07 値の中の文字を別のオプションと取り違えない（fix-loop 1・F1・F3） ----
 HD=$'psql -hlocalhost -U postgres <<EOF\nDELETE FROM users;\nEOF'
 ck 07a 2   "$(b "$HD")"
 ck 07b 2   "$(b $'psql -Ucelery -dcourse_db <<EOF\nDELETE FROM users;\nEOF')"
-ck 07c 2   "$(b "install -t$W/dd /tmp/y")"
 ck 07d ASK "$(b "$D install -t/app/dd /tmp/a")"
 ck 07e 0   "$(b "$D install -vd /app/newdir")"
 # fix-loop 2（F10〜F13）: まとめ書きの途中にくっつけた値（英字で始まる）も止める側に読む・psql -f は変更前のまま
 ck 07f 2   "$(b "psql -tAc'DELETE FROM users'")"
 ck 07g 2   "$(b "su -lc'git push --force origin develop'")"
-ck 07h 2   "$(b "sed -i -nes/a/b/ $W/x")"
+ck 07h2 ASK "$(b "$D sed -i -nes/a/b/ /app/x")"
 ck 07i ASK "$(b "$D cp -vtapp /tmp/y")"
 ck 07j 0   "$(b 'psql -dprofile_db -c "select 1"')"
 fg FG-07a 0 'parts = sqls + [s for s in (c["heredoc"], c["herestr"]) if s is not None]' \
   'parts = sqls or [s for s in (c["heredoc"], c["herestr"]) if s is not None]' $'psql -Umarc -c \'select 1\' <<EOF\nDELETE FROM users;\nEOF'
 # I463: まとめ書きの読み方は値を取る文字の表（_OPTSPEC）になった。表から該当の文字を外した写しで、同じ形を読まなくなる
 fg FG-07c 0 '"psql": ("cdfFhLopPRTUv",' '"psql": ("dfFhLopPRTUv",' "psql -tAc'DELETE FROM users'"
-fg FG-07d 0 'return pos if names & {"-e", "-f", "--expression", "--file"} else pos[1:]' 'return pos[1:]' "sed -i -nes/a/b/ $W/x"
-fg FG-07b 0 'if head == "install" and {n for n, _v in opts} & {"-d", "--directory"}:' \
-  'if head == "install" and _has_short(args, "d", "--directory"):' "install -t$W/dd /tmp/y"
+fg FG-07d 0 'return pos if names & {"-e", "-f", "--expression", "--file"} else pos[1:]' 'return pos[1:]' "$D sed -i -nes/a/b/ /app/x"
 
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

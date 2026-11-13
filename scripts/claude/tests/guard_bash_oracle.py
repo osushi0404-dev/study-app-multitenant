@@ -24,11 +24,10 @@ REPO = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=Tr
 GUARD = os.environ.get("GUARD") or os.path.join(REPO, "scripts/claude/hooks/pretooluse_guard.py")
 MARK = "__RAN__"
 STUBS = (
-    # git: reset --hard・push --force・保護ブランチ（main / develop）への push で印を出す（bash が展開した後の引数で見る）
-    # （-f・--force-with-lease・+参照・HEAD:main の形も印を出す。将来 DANGERS に足したときに「実行しない形」と誤分類しないため）
+    # git: reset --hard・force push で印を出す（bash が展開した後の引数で見る）
+    # （-f・--force-with-lease・+参照の形も印を出す。将来 DANGERS に足したときに「実行しない形」と誤分類しないため）
     'git(){ case "$1" in reset) [ "$2" = "--hard" ] && echo ' + MARK + ';; '
-    'push) case " $* " in *" --force "*|*" --force-with-lease"*|*" -f "*|*" +"*|*" main "*|*" develop "*'
-    '|*":main "*|*":develop "*|*"/main "*|*"/develop "*) echo ' + MARK + ';; esac;; esac; }\n'
+    'push) case " $* " in *" --force "*|*" --force-with-lease"*|*" -f "*|*" +"*) echo ' + MARK + ';; esac;; esac; }\n'
     'rm(){ case " $* " in *" -r""f "*|*" -f""r "*|*" -R""f "*|*" -f""R "*|*" -r "*|*" -R "*) echo ' + MARK + ';; esac; }\n'
     # git.exe（WSL から Windows の git を呼ぶ形）も同じ印を出す
     'git.exe(){ git "$@"; }\n'
@@ -40,11 +39,9 @@ RM = "rm -r" + "f"   # ソース上の連続表記を避ける（このファイ
 DANGERS = [
     ("git", "reset --hard origin/develop"),
     ("git", "push --force origin develop"),
-    ("git", "push origin main"),
     (RM.split()[0], RM.split()[1] + " build_tmp"),
     # 引数そのものを $'…' のエスケープで書く形（bash は \x6d を m に展開する）
     ("git", "reset $'\\x2d\\x2dhard' origin/develop"),
-    ("git", "push origin $'\\x6dain'"),
     ("git", "push $'\\055\\055force' origin feature/x"),
     (RM.split()[0], "$'-\\x72f' build_tmp"),
     # STUBS で印を出す別の書き方（第 2 周: 印を広げても、それを通るケースが無ければ測れない）
@@ -52,10 +49,8 @@ DANGERS = [
     ("rm", "-f" + "R build_tmp"),
     ("git", "push -f origin feature/x"),
     ("git", "push origin +feature/x"),
-    ("git", "push origin HEAD:main"),
     # 第 3 周: git.exe・-f の無い rm -r
     ("git.exe", "reset --hard origin/develop"),
-    ("git.exe", "push origin main"),
     ("rm", "-r build_tmp"),
 ]
 # 前置きの文脈: (前置き, 使えるつなぎ方)。改行でしかつなげないもの（ヒアドキュメント・コメント）は "\n" だけ

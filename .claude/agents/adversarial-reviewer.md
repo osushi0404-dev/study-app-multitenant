@@ -66,6 +66,7 @@ model: sonnet
   ```
 - 実験のコマンドは、リポジトリのルートで実行される。作業ツリー（リポジトリの中のファイル）に書く実験は無効になる（判定が HIGH になる）。一時ファイルは `/tmp` の下に作り、使い捨てのリポジトリが要るときは `mktemp -d` の下に作る。
 - 判定対象（スクリプト・フック）を実行する実験は、`bash -c 'ulimit -v 2097152; timeout 60 <コマンド>'` のように、メモリ 2GB・60 秒の上限を付ける。時間切れ（exit 124）やメモリ不足（`MemoryError` 等）は、処理量の欠陥の証拠として findings に書く（I179 retro P2）
+- 新しい Claude のセッション（`claude -p`）が要る実験（設定・フック・サンドボックス・承認画面の効き方）は、`claude` を直接書かず、リポジトリのスクリプトで起こす: `bash scripts/claude/test-session.sh "<指示>" --model haiku --permission-mode <manual|auto> --permission-prompts none --setting-sources user --settings .claude/settings.json`（承認画面が出るかだけなら `bash scripts/claude/check-permission-prompt.sh bash '<コマンド>'`）。この行は `bash -c`・`timeout`・`cd`・パイプで包まず、単体で書く（包むと Bash のサンドボックスの中で動き、Claude の API につながらずログインの案内が出る。スクリプトは外で動き、GitHub へは読み取りだけの鍵で起こす・I223・I430）
 - アプリのテスト・管理コマンド（pytest・`manage.py` など）は `docker compose exec -T backend <コマンド>` で流す（ホストに python は無い・I228）。コンテナの `/app` は作業ツリーそのものなので、書き換える実験はしない。守りを外すと落ちるかは `mock.patch` などテストの中で確かめる
 - 出力のどこかに「コマンドが見つからない」形の行（`command not found`・`not found`・`failed to run command`・コンテナが動いていない など）がある実験は「実行できなかった」（`noexec`）として返り、実行したに数えない。言い直すときは、案内された新しい id で出す（同じ id は扱い済みとして実行されない）
 - 入力の担当の項目に「前の周から引き継ぎ済み」と付いた項目は、スクリプトが前の周の確認を引き継いでいる（記録の場所の外と項目の行が変わっていない・I228）。実験は要らない（ITEM 行は判定に使われない）
