@@ -30,9 +30,11 @@
 - [implement] `/simplify` の 4 観点の指摘のうち、区切りの 1 回のなめ方・3 つの状態の変換の共通化（`hooks/queryLoadState.ts`・ダッシュボードのフックも使う）・`hasCounts` の使い回しなどを直し、クエリ数がデータで変わる案・差分の外に広がる案は見送った — 見送りの理由は計画変更記録
 - [implement] タブの切り替えのテストは `fireEvent.click` にした — `userEvent.click`（v13）では MUI のタブが切り替わらず、TC-24 が前のタブの文言で偶然通る形だったため（→ review-gate で `userEvent` に戻した）
 - [review-gate] コードレビュー（20261114_0200）は OK だったが、敵対的レビューの前に、ユーザーの BP の確認で見つけた規約の 2 点（新しい部品の `React.FC`・テストの `fireEvent`）と台帳の Low の F1・F2 を直し、差分のレビューを通してから敵対的レビューへ進む — 敵対的レビューが OK になった後に差分を足すと通らなくなるため、先に直す。F3 は見送り（クエリ数をデータで変えない）
+- [review-gate] 差分のコードレビュー（20261114_0213）OK・敵対的レビュー 1 周目（20261114_0223）OK（V1〜V5 確認済み）。Low 2 件（TC-22 が `subject_breakdown` の欠落を試していない・期間の最初の日の 0〜9 時の答えを直接確かめていない）は、OK の周の後に差分を足さないため直さず retro に回す
 - [implement] 画面確認（e2e_user_a・1440）で、統計画面が新しい応答で出て API が 200・新しいエラーが無いことを確かめた（`.evidence/I488/impl-statistics-1440-a*.png`）。細かい確かめは test-gate の手動テストで行う
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
