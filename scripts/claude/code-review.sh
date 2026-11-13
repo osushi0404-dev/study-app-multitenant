@@ -764,19 +764,28 @@ PLAN_RISK_ROW = re.compile(r"\|\s*(R[0-9]+)\s*[:：]")   # 表の行の最初の
 
 def accepted_risks(plan):
     # I512: 計画書の 8 の節の表で、最後のセルが「受け入れ」と完全に一致する行の R 番号の集合。
+    # 同じ R 番号に受け入れでない行が 1 つでもあれば外す（処遇が食い違う番号は受け入れと確かめられない）。
+    # HTML コメント（<!-- から --> まで）の中の行は読まない。
     # パスが空・読めない・節が無いときは空の集合（目印が効かない＝今までどおりの振り分け・fail-closed）
     if not plan or not os.path.isfile(plan):
         return set()
-    acc, inside = set(), False
+    acc, other, inside, comment = set(), set(), False, False
     for line in read_lines(plan):
+        if comment or line.lstrip().startswith("<!--"):
+            comment = "-->" not in line
+            continue
         if line.startswith("## "):
             inside = bool(PLAN_RISK_HEAD.match(line))
             continue
         m = PLAN_RISK_ROW.match(line) if inside else None
+        if not m:
+            continue
         cells = line.rstrip().split("|")
-        if m and len(cells) > 2 and cells[-1] == "" and cells[-2].strip() == "受け入れ":
+        if len(cells) > 2 and cells[-1] == "" and cells[-2].strip() == "受け入れ":
             acc.add(m.group(1))
-    return acc
+        else:
+            other.add(m.group(1))
+    return acc - other
 
 def accepted_why_not(e, acc_set):
     # I512: 目印が効かない理由（効くなら空）。効くのは計画書で受け入れた R 番号の、Medium 以下・再現なし・アプリ本体でない行だけ

@@ -82,3 +82,5 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: fix-loop
+- [fix-loop] 2 回目（retro から）: 台帳 F1 を案 A（受け入れでない同じ番号を引く・コメントの中を読まない）で直した — 診断レビュー PASS。安全側にしか倒れない単純な規則
+STAGE_DONE: fix-loop NEXT: review-gate

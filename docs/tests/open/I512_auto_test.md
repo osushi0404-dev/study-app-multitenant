@@ -33,3 +33,10 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 - 次回どう防ぐか: 手元で流すテストの選び方に、変えたファイル名を読むテストに加えて、scripts/claude の全スクリプトを走査するテスト（test_pipefail_negated_grep.sh など）を入れる
 - 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=35 fail=0）・`test_pipefail_negated_grep.sh` exit 0（pass=10 fail=0）
 - 実行記録（2026-11-14・test-gate）: `bash scripts/claude/gate-check.sh I512` exit 0（GATE_CHECK: OK）。heavy の委譲は無いので手元で流し直していない（CI が正）
+
+## 再発防止記録（fix-loop 2 回目・retro から・2026-11-14）
+- なぜ失敗したか: `accepted_risks()` が同じ R 番号の受け入れでない行と、HTML コメントの中の行を考えていなかった（TC-05 の照合の失敗の列挙に「同じ番号の食い違い」「コメントの中」が無かった）。コードレビューの台帳 F1 で見つかった
+- 何を変えたか: 受け入れの番号の集合から受け入れでない行の番号を引く・`<!--` から `-->` までの行を読まない。TC-05 に (9) 同じ R2 の回避と受け入れ (10) コメントの中だけの受け入れ を足し、FG-05e（引き算を外す）・FG-05f（コメントを読む）で不合格になることを確かめた
+- セキュリティ: 回避と書いた残余リスクが一覧に落ちる穴を塞いだ（止める判定は元から変わらない）
+- 次回どう防ぐか: 照合を作るときは「合う」の条件だけでなく「同じ鍵が食い違う」「無効な場所（コメント）にある」を照合の失敗の列挙に入れる（このイシューの TC-05 の形）
+- 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=38 fail=0）・`test_i202_ledger_cleanup.sh` exit 0（163/163）・`test_pipefail_negated_grep.sh` exit 0（10/10）・本物の plan_I512 の R3 は効いたまま

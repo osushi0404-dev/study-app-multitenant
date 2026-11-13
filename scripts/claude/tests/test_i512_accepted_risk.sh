@@ -136,17 +136,24 @@ sed 's/^## 8\. Risk/## 7. Risk/' "$PLAN" > "$TMP/plan_nosec"
 grep -v '^| R2:' "$PLAN" > "$TMP/plan_norow"
 sed 's/^| R2: c | d | 受け入れ |/| R2: c | d | 回避 |/' "$PLAN" > "$TMP/plan_avoid"
 for r in R5 R1 R6; do sed "s/ACCEPTED=R2/ACCEPTED=$r/" "$TMP/t5" > "$TMP/t5_$r"; done
+# 同じ R2 に回避の行もある計画書・8 の節の HTML コメントの中にだけ R2 の受け入れの行がある計画書（I512 retro F1）
+sed 's/^| R2: c | d | 受け入れ |$/&\n| R2: z | z | 回避 |/' "$PLAN" > "$TMP/plan_dup"
+sed 's/^## 8\. Risk & 回避策$/&\n<!--\n| R2: c | d | 受け入れ |\n-->/' "$TMP/plan_norow" > "$TMP/plan_cmt"
 T5_WANT='- F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=x | s1 | 後続イシューにする理由: SECURITY=yes・guard の Medium 以上'
-# t5 <写し>: 8 通りの照合の失敗のうち、後続イシューに期待どおりの行が出た数
+# t5 <写し>: 10 通りの照合の失敗のうち、後続イシューに期待どおりの行が出た数
 t5() { local n=0 c
   for c in "$TMP/t5|" "$TMP/t5|$TMP/nonexistent.md" "$TMP/t5|$TMP/plan_nosec" "$TMP/t5|$TMP/plan_norow" "$TMP/t5|$TMP/plan_avoid" \
-           "$TMP/t5_R5|$PLAN" "$TMP/t5_R1|$PLAN" "$TMP/t5_R6|$PLAN"; do
+           "$TMP/t5_R5|$PLAN" "$TMP/t5_R1|$PLAN" "$TMP/t5_R6|$PLAN" "$TMP/t5|$TMP/plan_dup" "$TMP/t5|$TMP/plan_cmt"; do
     [ "$(route "$1" issue "${c%%|*}" "${c#*|}")" = "$T5_WANT" ] && n=$((n+1))
   done; echo "$n"; }
-ck "TC-05 計画書なし・無いパス・節なし・行なし・処遇違い・節の外（R5）・回避（R1）・受け入れない（R6）の 8 通りとも後続イシュー" 8 "$(t5 "$CR")"
+ck "TC-05 計画書なし・無いパス・節なし・行なし・処遇違い・節の外（R5）・回避（R1）・受け入れない（R6）・同じ番号の回避と受け入れ・コメントの中の 10 通りとも後続イシュー" 10 "$(t5 "$CR")"
+ck "TC-05 dup・cmt の計画書が意図どおり（R2 の受け入れの行が残っている）" "yes yes" \
+  "$(yn grep -qxF '| R2: z | z | 回避 |' "$TMP/plan_dup") $(yn grep -qxF '| R2: c | d | 受け入れ |' "$TMP/plan_cmt")"
 ck "FG-05a 目印があれば効くようにすると不合格" 0 "$(t5 "$(broken 'why_not = accepted_why_not(e, acc_set) if e[10] != "-" else "目印なし"' 'why_not = "" if e[10] != "-" else "目印なし"')")"
-ck "FG-05b 節の終わりを見ないと不合格（R5 が効く）" 7 "$(t5 "$(broken 'inside = bool(PLAN_RISK_HEAD.match(line))' 'inside = inside or bool(PLAN_RISK_HEAD.match(line))')")"
-ck "FG-05c 処遇を完全一致で見ないと不合格（R6 が効く）" 7 "$(t5 "$(broken '.strip() == "受け入れ"' '.strip().startswith("受け入れ")')")"
+ck "FG-05b 節の終わりを見ないと不合格（R5 が効く）" 9 "$(t5 "$(broken 'inside = bool(PLAN_RISK_HEAD.match(line))' 'inside = inside or bool(PLAN_RISK_HEAD.match(line))')")"
+ck "FG-05c 処遇を完全一致で見ないと不合格（R6 が効く）" 9 "$(t5 "$(broken '.strip() == "受け入れ"' '.strip().startswith("受け入れ")')")"
+ck "FG-05e 受け入れでない同じ番号を引かないと不合格（dup が効く）" 9 "$(t5 "$(broken 'return acc - other' 'return acc')")"
+ck "FG-05f コメントの中を読むと不合格（cmt が効く）" 9 "$(t5 "$(broken 'if comment or line.lstrip().startswith("<!--"):' 'if False:')")"
 # 本物の入口 --route（一時のリポジトリ・台帳のある記録）
 mkdir -p "$R/docs/reviews"
 { printf '# r\n\n## 台帳（累積・スクリプトが書く）\n'; cat "$TMP/t5"; printf 'LEDGER_ROUND: 1\n'; } > "$R/docs/reviews/I900_code_review_20260101_0000.md"
