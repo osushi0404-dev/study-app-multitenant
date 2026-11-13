@@ -111,3 +111,6 @@ STAGE_DONE: close NEXT: merge
 - [マージ前の見直し] マージ依頼の後、ユーザーの「BP の観点で問題ないか」の確認で、取得を React Query を使わずに自作していたことを見つけた（規約 6.3・`@tanstack/react-query` は入っていて `App.tsx` で設定済み）。ユーザーの指示「React Query に置き換えて進めて」で、記録を open に戻し、PR を下書きに戻して、計画を直して計画レビューからやり直す
 
 STAGE_DONE: close NEXT: plan-review
+- [plan-review] React Query への置き換えの計画レビューは OK（高リスク No）。Warning（置き換えの後の TC-08・TC-10d の失敗の注入の結果が未記入）は implement で行って記入する。Info 2 件（notification_settings の未知のキー・ログアウト時の記録）は今の範囲では実害が無いので見送り
+
+STAGE_DONE: plan-review NEXT: implement
