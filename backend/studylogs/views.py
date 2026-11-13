@@ -44,10 +44,8 @@ class StudyLogViewSet(viewsets.ModelViewSet):
         return StudyLogSerializer
 
     def create(self, request):
-        # End any active study logs first
-        # 組織で絞らない: 自分の記録への終了の印付け（応答に出ない・I431 扱いの基準 3）
-        StudyLog.objects.filter(
-            user=request.user,
+        # 進行中の記録を閉じる（自組織の科目・科目なしの記録だけ。他組織の科目の記録は触らない・I473）
+        StudyLog.objects.for_user(request.user).filter(
             is_active=True
         ).update(is_active=False, ended_at=timezone.now())
 
