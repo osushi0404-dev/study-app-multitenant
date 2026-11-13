@@ -55,3 +55,10 @@
   - TC-12・TC-08・TC-03: 3 つの壊し方（区切りごとに 1 クエリ足す・`_answers` から `scope_to_user_org` を外す・週の始まりを日曜にする）を `backend/dashboard/selectors.py` に入れて流し、`test_query_count_is_constant`・`test_only_own_answers_in_own_org`・`test_user_without_org_sees_nothing`・`test_week_buckets` が FAILED → 元に戻して pass
   - TC-22: `getAnalytics` の形の確かめを外すと、TC-22 の形の違う応答 3 つ（`trend` を欠く・`totals` を欠く・知らない区切り）が FAILED → 元に戻して 12 件 pass
   - 気づき: タブの切り替えを `userEvent.click`（v13）で書いたところ、すぐに中身を見ると前のタブのままで、TC-24 の「科目別」の確かめが前のタブの同じ文言で通ってしまう形だった。review-gate で、タブの `aria-selected` が true になるのを待ってから中身を見る形にし（`openTab`）、規約 12.2 どおり `userEvent` のまま TC-24・25・26 が切り替わった後の中身を見ていることを確かめた（39 件 pass）
+
+## 再発防止記録（fix-loop・2026-11-14・手動テスト No.2 の NG）
+- なぜ失敗したか: recharts 2.15.4 の `Line` は、線の描き始めの動き（アニメーション）が終わった合図を受けてから点を描く。正答率の折れ線は答えの無い区切りを `null` にして線を切るので、線が途切れ途切れ（または点が 1 つだけで線が無い）になり、終わりの合図が来ず、点が 1 つも描かれなかった。画面のテストは recharts をモックしているので本物の描き方を通らず、implement の画面確認は正答率のタブを開いていなかった
+- 何を変えたか: `frontend/src/components/statistics/StatisticsTrendChart.tsx` の正答率の `Line` に `isAnimationActive={false}` を付けた（線を切る決まり〔計画 4.4〕は保つ）。`Statistics.test.tsx` の recharts のモックで `Line` に渡す `isAnimationActive` を見えるようにし、TC-25 で false であることを確かめる行を足した
+- セキュリティ上の考慮点: なし（表示だけの不具合）
+- 次回どう防ぐか: グラフの道具をモックするテストでは、本物の描き方の条件（アニメーション・点の出る条件）を通らない。グラフを足す・変えるときは、画面確認ですべてのタブ・グラフを開き、答えのある区切りが 1 つだけの場面と、待ってから撮った静止画で確かめる
+- 確かめた結果: 診断（`docs/reviews/I488_fix_diagnosis_20261114_0254.md`・診断レビュー OK）。スパイク: `isAnimationActive={false}` で 11/13・11/14 の 100% の点が出た（`.evidence/I488/fix-spike-no-animation-1440-a.png`）。失敗の注入: 直しを外すと TC-25 の 3 件が落ち、戻すと `Statistics.test.tsx`・`Dashboard.test.tsx` の 39 件 pass。ESLint 違反 0・`tsc --noEmit` OK。依存の変更なし（npm audit の対象は変わらない）

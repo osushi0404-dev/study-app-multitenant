@@ -43,17 +43,22 @@ jest.mock('recharts', () => {
         data-points={data.map((point) => point.minutes).join(',')}
       />
     ),
-    LineChart: ({ data }: { data: MockPoint[] }) => (
+    LineChart: ({ data, children }: { data: MockPoint[]; children: React.ReactNode }) => (
       <div
         data-testid="line-chart"
         data-points={data.map((point) => String(point.accuracyPercent)).join(',')}
-      />
+      >
+        {children}
+      </div>
     ),
     PieChart: ({ children }: { children: React.ReactNode }) => <div data-testid="pie-chart">{children}</div>,
     Pie: ({ data }: { data: unknown[] }) => <div data-testid="pie" data-count={data.length} />,
     Cell: Nothing,
     Bar: Nothing,
-    Line: Nothing,
+    // 本物の Line は描き始めの動きが終わるまで点を描かないので、動きを止めているかを見えるようにする
+    Line: ({ isAnimationActive }: { isAnimationActive?: boolean }) => (
+      <div data-testid="accuracy-line" data-animation={String(isAnimationActive)} />
+    ),
     XAxis: Nothing,
     YAxis: Nothing,
     CartesianGrid: Nothing,
@@ -244,6 +249,8 @@ describe('Statistics', () => {
     await openTab('正答率');
     // 答えの無い区切りは 0% にせず null のまま（線を切る）
     expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '50,null');
+    // 途切れた線でも点が出るよう、描き始めの動きを止めている（I488 の手動テスト No.2 の NG の再発防止）
+    expect(screen.getByTestId('accuracy-line')).toHaveAttribute('data-animation', 'false');
   });
 
   it('TC-26: 科目別は科目ごとの学習時間・正答率・問題数と円グラフ。学習時間が 0 なら円グラフの代わりに文言', async () => {

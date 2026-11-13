@@ -110,7 +110,18 @@ const StatisticsTrendChart = ({ analytics, metric }: StatisticsTrendChartProps) 
             <XAxis dataKey="label" />
             <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
             {tooltip}
-            <Line type="linear" dataKey="accuracyPercent" stroke="#82ca9d" strokeWidth={3} dot={{ r: 4 }} />
+            {/*
+              描き始めの動きを止める: recharts の Line は線の動きが終わった合図を受けてから点を描くが、
+              答えの無い区切り（null）で線が途切れると合図が来ず、点が 1 つも出ない（I488 の手動テスト No.2）
+            */}
+            <Line
+              type="linear"
+              dataKey="accuracyPercent"
+              stroke="#82ca9d"
+              strokeWidth={3}
+              dot={{ r: 4 }}
+              isAnimationActive={false}
+            />
           </LineChart>
         )}
       </ResponsiveContainer>
