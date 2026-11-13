@@ -45,6 +45,7 @@
 - [retro] 見送り「確かめ用の利用者のパスワードの入れ直しが承認されず、計画どおりの確かめ用データで確かめられなかった」— e2e_user_a の実データと BE のテストで受け入れ条件は確かめられた。確かめ用データの作り方は #513（管理コマンド・パスワードは秘密の名前で渡す）が扱う
 - [retro] 敵対的レビューの効果の測定（I228・I486 の約束）: 2 周とも実験 0 件（項目はすべて「読んで可」）・空振り 0・CONTAINER で止まった回 0。2 周目は記録の場所の外が変わったので引き継がなかった（正しい判定）。引き継ぎの効果は「実験必須」の項目を持つ次の高リスクのイシューへ持ち越し
 - [retro] 残余リスク処遇: High 以上 0 件。Medium 4 件はテストで固定済みで受け入れ（計画書「残余リスク処遇」）
+- [close] develop への追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。fix-loop の診断メモ（`docs/reviews/I488_fix_diagnosis_20261114_0254.md`）は close の手順の回収の対象（`*_review_*`）に当たらないので元の場所に残した — 前のイシュー（I473）の診断メモと同じ扱い
 
 ## 振り返り
 
@@ -106,3 +107,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
