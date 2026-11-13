@@ -58,6 +58,7 @@
 | S17 | 見張りなし・manual モードで、Write ツールで別のワークツリーに書く | 確認になった（承認なしでは書けない） |
 | S18 | 見張りなし・**auto モード**で、Write ツールで別のワークツリーに書く | **書けてしまった**（判定役が通した。書いたファイルはすぐ消した）→ Edit／Write の別ワークツリーの判定（G01）は見張りに残す |
 | S19 | primary のセッションで、作業ディレクトリの中の `.claude/worktrees/` への書き込みを `filesystem.denyWrite` で止める（相対・`./` つき・絶対の 3 通り） | 成立。3 通りとも止まり、ほかの場所には書けた |
+| S20 | 一時のリポジトリのプロジェクトの `.claude/settings.json` に `failIfUnavailable` を書き、`bwrap` を除いた `PATH`（`/usr/bin` の `bwrap` 以外へのリンクだけを並べたフォルダ。道具は消さない）で `claude -p` を起こす（計画レビューの Blocker への対応・2026-11-13） | 成立。`true` は `Error: sandbox required but unavailable … Refusing to start without a working sandbox` で exit 1（起動しない）。`false` は `⚠ Sandbox disabled … Commands will run WITHOUT sandboxing` を出して動き、中で `SANDBOX_RUNTIME` が無かった |
 
 ### 見張りの判定の棚卸し（読み取り・2026-11-13）
 判定は 39 種（G01〜G39）。主なものと、公式・GitHub で代わりに止まるか（全体の表は 4-1）:
@@ -82,7 +83,7 @@
 
 ## 2. 受け入れ条件
 - [ ] AC1: 公式（サンドボックス・許可の設定・ワークツリーの隔離）だけで組んだ守りと、それで止まらない漏れの一覧が、出典の公式文書つきで計画書にある（4-1）。見張りに残す判定は、すべて「公式でも GitHub でも止まらない漏れ」に対応している
-- [ ] AC2: 公式に任せると決めた判定ごとに、実際に動かして止まることを確かめた結果がある（調査結果の S1〜S19 と、最終の設定での手動テスト M-01〜M-12）。docker・`gh`・`git push`・`claude -p` のレビュー役が今までどおり動くことも確かめてある
+- [ ] AC2: 公式に任せると決めた判定ごとに、実際に動かして止まることを確かめた結果がある（調査結果の S1〜S20 と、最終の設定での手動テスト M-01〜M-13）。docker・`gh`・`git push`・`claude -p` のレビュー役が今までどおり動くことも確かめてある
 - [ ] AC3: 公式で足りる判定は見張りから消えており、`pretooluse_guard.py` の行数が 3,880 行（2026-11-13）から **3,050 行以下**になっている（TC-08）。消した判定 → 代わりに止める仕組みの対応が 4-3 にある
 - [ ] AC4: 許可の設定の整理（auto mode を前提にした allow・`autoMode.environment`）について、変える・変えないの結果と根拠が 4-4 にある
 - [ ] AC5: サンドボックスが有効で、中の Bash が確認の画面なしで通る。外に出したコマンドの一覧と理由が 4-2 にあり、`claude -p` で承認画面の出方を確かめた結果がある（M-01・M-06〜M-08）
@@ -199,6 +200,8 @@
   - 33 行目の「見張りの Edit 系の判定は、このほかに別 worktree への書き込みの停止」はそのまま
   - 新しい小節「見張りに判定を足すときの決まり（I430）」: ①足す前に、公式の仕組み（`.claude/settings.json` の deny／ask・サンドボックスの設定）で表せないかを計画に書き、表せるなら公式を使う ②足すなら、実際に起きた事故の例を計画に書く（レビューの「この書き方でもすり抜けられる」だけでは足さない）③レビューで見張りへの意図的な回避の指摘が出たら、Low として一覧（`docs/reviews/backlog/`）に回すだけにし、後続のイシューにしない
   - 「新しい秘密ファイルを置くときは」の項に、リポジトリの外の秘密は `sandbox.filesystem.denyRead` に足すと書く
+  - サンドボックスの外に出すもの（`excludedCommands`）の項: `scripts/claude/` に置いたスクリプトは `bash scripts/claude/…` で呼ぶとサンドボックスの外で動く。スクリプトを足す・中で呼ぶ道具を変えるときは、外で動いてよいもの（中で書き込み・通信の制限を外したいもの）かをレビューで見る。一般のインタプリタ・シェルを `excludedCommands` に足さない（計画レビューの Warning への対応）
+- 実装で `.claude/skills/`・`.claude/agents/` を `gh pr checkout`・`gh co`・`fork`・`cross`・`保護ブランチ` で grep し、消す判定（G33〜G35・G05）を説明している箇所があれば、4-5 と同じ方針で直す（計画レビューの Info への対応。2026-11-13 の時点では `docs/runbooks` だけに見つかった）
 - `docs/runbooks/plan-writing-rules.md`: 新しい小節「見張り（`pretooluse_guard.py`）に判定を足す計画」。計画に書くこと 3 つ（公式で表せないかの検討・事故の実例・意図的な回避の指摘は一覧へ）を書き、正は danger-ops.md の小節と書く
 - `docs/runbooks/workflow.md`「外部（fork）からの PR の扱い」249・253–259 行: 見張りの説明を「`gh pr checkout`・`gh co` は settings.json の deny で拒否。マージ・承認は GitHub のブランチ保護で止まる」に直す
 - `docs/runbooks/worktree.md` §9 の 247–249 行: 「削除・破棄は技術的には止めない」を、「Bash の書き込みはサンドボックスが止める（外に出したコマンドは除く）。Edit／Write は見張りが止める」に直す
@@ -215,7 +218,7 @@
   - `scripts/claude/tests/test_pretooluse_worktree_guard.sh`: Bash の書き込みの例を消し、Edit／Write の例（G01）を残す
   - `scripts/claude/tests/test_pretooluse_push_guard.sh`: 保護ブランチ・宛先の決まらない push の例を消し、force・`--no-verify`・削除・`--mirror` の例を残す
   - `scripts/claude/tests/guard_must_stop_cases.txt`: 消した判定の形（gh の fork PR・保護ブランチへの push・別のワークツリーへの Bash の書き込み）の行を消す
-  - そのほか、実装で `run-all.sh` を流して落ちたテスト（候補: `test_pretooluse_guard_matrix.sh`・`test_i200_guard_narrowing.sh`・`test_i182_guard_failsafe.sh`・`test_i197_adversarial_process.sh`・`test_wt_lifecycle.sh`・`guard_bash_oracle.py`）は、落ちた期待値が消した判定のものかを 1 件ずつ確かめてから消す。残す判定の期待値が落ちたら、見張りの削除の誤りとして直す（テストを直さない）
+  - そのほか、実装で `run-all.sh` を流して落ちたテスト（候補: `test_pretooluse_guard_matrix.sh`・`test_i200_guard_narrowing.sh`・`test_i182_guard_failsafe.sh`・`test_i197_adversarial_process.sh`・`test_wt_lifecycle.sh`・`guard_bash_oracle.py`・`test_i444_guard_gaps.sh`・`test_i454_guard_env_writes.sh`・`test_i463_guard_optspec.sh`・`test_i469_guard_optspec_leftovers.sh`。後ろの 4 本は D1・D2 が触る共有の関数〔書き先・push の宛先・オプションの表〕の周りを見るので、決定論ゲートにも入れる＝TC-07）は、落ちた期待値が消した判定のものかを 1 件ずつ確かめてから消す。残す判定の期待値が落ちたら、見張りの削除の誤りとして直す（テストを直さない）
 
 ## 5. 実装手順（ステップ）
 1. **設定（未知のリスクの先）**: `.claude/settings.json` に 4-2 の `sandbox`・deny 2 行を足し、GitHub MCP のフックの登録を消す。このワークツリーのセッションの Bash にも効く見込み（S14）なので、足した直後に、この会話の Bash で作業場所の中の書き込み・`git status`・`bash scripts/claude/issue-source.sh gh-number I430` が動くことを確かめる → TC-10・M-01・M-07。動かなければ `sandbox.enabled` を false に戻して（Edit はサンドボックスの外）計画をやり直す
@@ -234,7 +237,7 @@
 - 失敗の注入: TC-01 の各決まりに FG を付ける（設定を壊した写しで不合格になる）
 
 ### 手動（`docs/tests/open/I430_manual_test.md`・実施者はすべて Claude・`claude -p の判定`）
-- 最終の `.claude/settings.json` を読ませた新しいセッションで、S1〜S19 のうち公式に任せた判定の分を流し直す（M-01〜M-12）
+- 最終の `.claude/settings.json` を読ませた新しいセッションで、S1〜S20 のうち公式に任せた判定の分を流し直す（M-01〜M-13）
 - Human の行は無い
 
 ## 7. ロールバック
@@ -253,7 +256,7 @@
 | R5: 見張りの削除で、残す判定まで壊す | 残す判定のテスト（push・コンテナ・checkout・matrix・oracle・止めるべき形の一覧）を変えずに流す。期待値を消すのは消した判定の分だけ（4-6） |
 | R6: manual モードでは変数入りのコマンドが確認になる（S1b） | ユーザーのセッションは auto モードで、通ることを確かめた（S16）。`claude -p` のレビュー役は Read・Grep・Glob だけを使う |
 | R7: 自分のワークツリーで設定が効いたとたん、この会話の Bash が動かなくなる | ステップ 1 の直後に確かめ、動かなければ Edit で `enabled` を false に戻す（7.） |
-| R8: 未実証: `failIfUnavailable` がプロジェクトの設定から効くか | 道具を外して試すと環境を壊すので試さない（文書どおり）。効かなくても、道具が無い PC ではサンドボックスなしで動くだけで、今と同じ（見張りは Edit を守る・GitHub が最後の守り） |
+| R8: `failIfUnavailable` がプロジェクトの設定から効かず、道具が無い PC でサンドボックスなしに動く | S20 で、プロジェクトの設定から効き、道具が見えないと起動しないことを確かめた。最終の設定でも M-13 で確かめる |
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
@@ -265,7 +268,7 @@
 - 1〜4・6 の取りこぼし・コンテナの許可リストは扱わない（#444 で完了）。run-all の決まりは #445
 
 Claude が決めた（技術的な選択と理由。設定の変更はユーザーに確かめる＝下の Danger Ops）:
-- `allowUnsandboxedCommands: false`・`failIfUnavailable: true`（安全側。外での再実行は、auto モードでは判定役が通しうるので、別ワークツリーへの書き込みの事故の経路になる）
+- `allowUnsandboxedCommands: false`・`failIfUnavailable: true`（安全側。外での再実行は、auto モードでは判定役が通しうるので、別ワークツリーへの書き込みの事故の経路になる。`failIfUnavailable` がプロジェクトの設定から効くことは S20 で確かめた）
 - 外に出すコマンドの一覧（4-2。S6〜S13 の結果）
 - `denyWrite: [".claude/worktrees"]`・`denyRead`（App の鍵）・`allowWrite`（pre-commit の環境）・`allowedDomains` 5 つ・`strictAllowlist: true`
 - fork の PR の判定を deny と GitHub に置き換える（4-1。記録上 0 件・手順で使わない・GitHub がマージを止める）。ready・edit・update-branch・承認の確認は無くす（GitHub が実害を止める）
@@ -309,5 +312,8 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 2 | 読んで可 | TC-01 のサンドボックスの決まりと deny が、設定を壊した写しで不合格になる（FG）。`excludedCommands` の一般のインタプリタの判定が `bash *` だけでなく `sh *`・`python3 *`・`*` を落とす |
 | V5 | 3 | 読んで可 | 4-1 の表で、消した判定（D1〜D3）ごとに代わりの仕組みがあり、止まらない漏れが書いてある。残した判定は「公式でも GitHub でも止まらない」に対応している |
 | V6 | 2 | 読んで可 | 消したテストの期待値が、消した判定の分だけである（残す判定の期待値を消していない）。TC-02〜TC-07 |
-| V7 | 1 | 実験必須 | `gh pr checkout <N>`・`gh co <N>` が、最終の設定の `claude -p` で拒否される（M-09） |
+| V7 | 2 | 読んで可 | deny `Bash(gh pr checkout *)`・`Bash(gh co *)` が設定にあり、消すと TC-01 が不合格になる（FG）。実機の拒否は M-09 で確かめる |
 | V8 | 1 | 実験必須 | レビュー役（`bash scripts/claude/test-session.sh …`）・`gh`・`git fetch`・docker が、最終の設定で承認なしに動く（M-06〜M-08） |
+
+## レビュー結果
+- [20261113_1725 判定: 差し戻し（Blocker 1件）](../../reviews/I430_plan_review_20261113_1725.md)

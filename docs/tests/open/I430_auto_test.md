@@ -17,7 +17,7 @@
 | TC-04 | `scripts/claude/tests/test_guard_must_stop_cases.sh` | 止めるべき形の一覧（消した判定の行を除いたもの）で、変更前より弱い判定が無い | exit 0 | 既存の FG | 実装前のため未実行 |
 | TC-05 | `scripts/claude/tests/test_pretooluse_guard_matrix.sh` | 危険な操作 × 書き方の総当たりで、残す判定の素通しが無い | exit 0 | 既存の FG | 実装前のため未実行 |
 | TC-06 | `scripts/claude/tests/test_guard_bash_oracle.sh` | 本物の bash との突き合わせで、残す判定の素通しが無い | exit 0 | 既存の FG | 実装前のため未実行 |
-| TC-07 | `scripts/claude/tests/test_pretooluse_container_guard.sh`・`test_pretooluse_checkout_guard.sh`・`test_i182_guard_failsafe.sh`・`test_i200_guard_narrowing.sh`・`test_i187_mcp_filename_guard.sh` | 残す判定（コンテナ・未コミットの変更の取り消し・見張りの失敗・Playwright の書き先）の振る舞いが変わらない | exit 0 | 既存の FG | 実装前のため未実行 |
+| TC-07 | `scripts/claude/tests/test_pretooluse_container_guard.sh`・`test_pretooluse_checkout_guard.sh`・`test_i182_guard_failsafe.sh`・`test_i200_guard_narrowing.sh`・`test_i187_mcp_filename_guard.sh`・`test_i444_guard_gaps.sh`・`test_i454_guard_env_writes.sh`・`test_i463_guard_optspec.sh`・`test_i469_guard_optspec_leftovers.sh` | 残す判定（コンテナ・未コミットの変更の取り消し・見張りの失敗・Playwright の書き先・書き先とオプションの表の共有の関数）の振る舞いが変わらない | exit 0 | 既存の FG | 2026-11-13 実装前: 前の 5 本は基準で合格（下の結果）。後ろの 4 本は計画レビューの Warning で足した（実装の中で流す） |
 | TC-08 | `scripts/claude/hooks/pretooluse_guard.py` の行数 | 3,050 行以下（AC3） | `bash -c 'test "$(wc -l < scripts/claude/hooks/pretooluse_guard.py)" -le 3050'` が exit 0 | 目標を 3,880（今の行数より 1 小さい 3,879）にすると今の見張りで不合格になる（`bash -c 'test "$(wc -l < scripts/claude/hooks/pretooluse_guard.py)" -le 3879'` が今は exit 1） | 2026-11-13 実装前: 本体 exit 1（3,880 行・期待どおり不合格）・FG（上限 3,879）exit 1。実装後に本体が exit 0 になることを確かめる |
 | TC-09 | `bash scripts/claude/tests/run-all.sh` | ハーネスのテストが全部合格（AC7） | CI の Harness Tests が success | — | CI で確かめる |
 | TC-10 | `.claude/settings.json`・見張りの構文 | JSON として読める・見張りがコンパイルできる | `python3 -m json.tool` と `python3 -m py_compile` が exit 0 | — | 2026-11-13 実装前: どちらも exit 0（変更前の基準）。実装後に流し直す |
@@ -41,6 +41,10 @@ bash scripts/claude/tests/test_pretooluse_checkout_guard.sh
 bash scripts/claude/tests/test_i182_guard_failsafe.sh
 bash scripts/claude/tests/test_i200_guard_narrowing.sh
 bash scripts/claude/tests/test_i187_mcp_filename_guard.sh
+bash scripts/claude/tests/test_i444_guard_gaps.sh
+bash scripts/claude/tests/test_i454_guard_env_writes.sh
+bash scripts/claude/tests/test_i463_guard_optspec.sh
+bash scripts/claude/tests/test_i469_guard_optspec_leftovers.sh
 python3 -m json.tool .claude/settings.json
 python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
 grep -q 見張りに判定を足すときの決まり docs/runbooks/danger-ops.md
