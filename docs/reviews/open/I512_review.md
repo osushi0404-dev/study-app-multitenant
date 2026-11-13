@@ -90,3 +90,5 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 4 回目は CI_WAIT: OK・FINAL_VERDICT: OK（`docs/reviews/I512_code_review_20261114_0222.md`）。F7〜F10 は resolved。F11（Medium・前の節の囲みの中の 8 の例を読む）は見送ると後続の最優先になり、このイシューの目的に反するため、囲みを全文から先に取り除く一般形で 1 回だけ直す（F12 も同じ直しで消える）。これを最後とし、以降の同種は止める指摘でない限り一覧・後続へ
 STAGE_DONE: review-gate NEXT: fix-loop
+- [fix-loop] 4 回目: 台帳 F11・F12 を案 A（囲みを全文から先に取り除く一般形）で直した — 診断レビュー PASS
+STAGE_DONE: fix-loop NEXT: review-gate
