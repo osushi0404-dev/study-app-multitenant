@@ -23,7 +23,8 @@
 
 ## テスト結果
 - 自動（手元・implement）: backend `dashboard/`・`test_I431`・`test_I455`・`test_I446` 215 件 pass／frontend `Dashboard.test.tsx` 7 件 pass／型チェック・本番ビルド OK／E2E は CI。false-green の確かめ 4 件（TC-12・13・03・22）を実施し、TC-22 の false-green を見つけて直した（自動テスト文書）
-- 手動: （test-gate で行う）
+- CI（PR #489）: 全ジョブ pass（E2E の TC-24 を含む）
+- 手動（test-gate・Claude が Playwright で実施）: No.1〜5 OK。No.3・No.4 は期待の前提（答えの無い科目）を取り違えていたので、DB で確かめた実データに照らして判定。No.4 の「練習する」の遷移は実画面で未確認（単体テスト TC-20 が受け持つ）
 
 ## 計画との差分
 - あり（どれも方式・範囲・受け入れ条件は変えない）: 計画書の「計画変更記録」の implement・`/simplify` の行のとおり（signals の消し方を読む側と同じ経路に・TC-22 の補強・TC-12 の本数 9・形の確かめを要素まで・`loadError` の削除・科目のキャッシュの組み立ての 1 本化・選んだ科目の問題だけを調べる）
@@ -47,6 +48,8 @@
 - [review-gate] 止める指摘 F1〜F4（Medium・画面）で fix-loop へ。F5〜F8（Low）は台帳に残し retro へ — スクリプトの判定どおり
 - [fix-loop] F1〜F4 を診断メモの推奨案（API の契約は変えず画面の出し分け・判定・取得の書き方だけを直す）で直した — 診断レビュー PASS。全科目の has_data を API に足す案は、この食い違いのためだけに契約を増やすので採らなかった
 - [review-gate] 2 回目（差分のレビュー・`I473_code_review_20261113_0942.md`）は OK。敵対的レビュー 1 周目（`I473_adversarial_review_20261113_0951.md`）も OK（Critical・High 0）。Low 1 件（300 秒ちょうど・301 秒の境界値のテストが無い）は台帳に残し retro へ — 止める指摘ではない
+- [test-gate] 手動テスト No.3・No.4 の前提（E2E Subject A に答えが無い）が誤りだった。E2E 用のデータを書き換えて前提に合わせることはせず、実データで動きが正しいことを確かめて判定した — dev の E2E 用データを変えると他のテスト・画面確認に影響するため。おすすめの遷移は単体テストで固定済み
+- [test-gate] データ 0 件のとき推移のグラフの目盛りが -1.0〜1.0 になる見た目の問題は #487 に回す — 見た目の改善は #487 の範囲
 - [fix-loop] TC-28 は、読み込み中に画面全体が置き換わってセレクタが消えるため、テストのモックで「科目 5 を選んだ直後にすべてへ」をまとめて起こす形にした — 実際の画面で起こりうる順番（選択の直後に別の切り替えが届く）を再現するため
 
 STAGE_DONE: plan NEXT: plan-review
@@ -56,3 +59,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

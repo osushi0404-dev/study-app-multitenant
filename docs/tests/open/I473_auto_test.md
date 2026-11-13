@@ -77,3 +77,7 @@
 - セキュリティ上の考慮点: なし（本人の数字の表示の食い違い。他人・他組織のデータは関係しない）
 - 次回どう防ぐか: 科目で絞る値と全科目の値を同じ画面に並べるときは、どの部品がどちらの範囲かを計画書 4.3 に書く。データを取得する effect は ignore（または AbortController）を必ず付ける
 - 確かめた結果: frontend Dashboard.test.tsx 10 件 pass（TC-26〜28 を追加・TC-25 の文言を変更）。失敗の注入（3 か所を直す前の条件に戻す）で TC-26・27・28 が落ちることを確かめ、戻して 10 件 pass。ESLint（frontend コンテナ）違反 0・型チェック OK。backend の変更なし
+
+## 実行記録（test-gate・2026-11-13）
+- 決定論ゲートの委譲（heavy）: なし（このイシューは決定論ゲートを持たない）
+- CI（PR #489・HEAD 30d62f8e の時点）: Backend Lint & Security・Backend Tests・Frontend Type Check・Frontend Lint & Security・Frontend Tests・Harness Tests・E2E Tests (Playwright) すべて pass（review-gate の code-review.sh が CI_WAIT: OK で確認）。E2E の TC-24 を含む
