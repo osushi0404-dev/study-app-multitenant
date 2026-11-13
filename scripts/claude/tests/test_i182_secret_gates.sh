@@ -40,7 +40,7 @@ CASES=(
   "ASK|D2|git push -d origin feature/x"
   "ASK|D3|git push origin :feature/x"
   "ASK|D4|git push --prune origin feature/x"
-  "2|D5|git push origin :develop"
+  "ASK|D5|git push origin :develop"   # I430: 保護ブランチの停止は消した（GitHub が保護ブランチの削除を拒否する）。リモート削除の確認は残る
   "0|D6|git push origin feature/x"
   "ASK|D7|bash -c \"git push origin --delete feature/x\""
 )

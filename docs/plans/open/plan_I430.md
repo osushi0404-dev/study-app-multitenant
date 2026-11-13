@@ -331,6 +331,22 @@ Danger Ops（有無/手順/ロールバック）:
   - 理由: サンドボックスの中では `.claude/settings.json` が読み取り専用で（S21）、中の `git checkout` が設定ファイルだけ古く残す事故になった（S22）。サブコマンドを列挙すると漏れが同じ事故になる。git を外に出すと pre-commit も外で動くので `allowWrite` と PyPI・npm の宛先が要らなくなり、中で通信が要るコマンドが無くなった（最小権限）
   - 計画レビューのやり直し: 要（外に出す範囲＝方式を変える）
 - 2026-11-13 計画レビュー 3 回目（HIGHRISK・Warning 3・Info 2）への対応: R10 の戻し方に未コミットの変更を捨てない前提を足す・消したテストの例の一覧を計画変更記録に残す（4-6）・M-05 の実結果に止まった理由の文言を残す。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
+- 2026-11-13 implement の記録:
+  - ステップ 1: 設定を変えても、この会話の Bash にはサンドボックスが効かなかった（`SANDBOX_RUNTIME` が無い。会話を始めた時点の設定のまま）。最終の `.claude/settings.json` を `--settings` で読ませた新しい `claude -p` で、作業場所の中の書き込みと `bash scripts/claude/issue-source.sh` が承認なしで動くことを確かめた（M-01・M-07 の先取り）。計画の「この会話の Bash にも効く見込み」は外れたが、方式は変えない
+  - `git push --repo` の判定（G06 の一部）も消した: 計画 4-1 は G06 を「残す」としたが、`--repo` の判定はコメントのとおり「保護ブランチの判定を避ける書き方」を止めるためだけのもの（`--repo` 自体は宛先を変えるだけ）。保護ブランチの判定を GitHub に任せたので一緒に消した。`--all`／`--mirror` は残した。範囲の変更は小さく、計画レビューはやり直さない
+  - 一覧 I454 F9: 計画は「同梱」としたが「残す」に変えた — `_bash_write_targets` は消え `_write_targets` の docstring は直したが、`_record_writes` と `_write_targets` の 2 通りの見分け方は残る（今回の範囲の外）。一覧の行の文言を直した。F5・F7 は行を消した
+  - 見張りの使われない import（`bisect`）も消した（消した判定だけが使っていた）
+  - 4-5 の消費箇所の grep（`docs/` 全体）で、`docs/claude-code-structure.md` の hooks の説明（保護ブランチへの push をフックが止める・動的宛先の確認・`--repo`）が見つかったので、同じ方針で直した（`docs/proposals/` の I185・I193 は当時の記録なので直さない）
+  - i454・i463 のテストの、別ワークツリーへの Bash の書き込みで書き先・値の読み方（`_write_targets`・`_getopt`）を確かめていた例は、同じ関数を使うコンテナの /tmp/ 以外への書き込みの確認の形（`docker compose exec -T backend …` と `/app/…`）に置き換えた（i463 の 05a〜05e・FG-05・07a〜07f・FG-07、i454 の 07h2・FG-07d）。読み方の確かめを失わないため。i454 の 04a〜04k・FG-04・07c・07h と FG-07b は消した（FG-07b はコンテナでは値のパスの判定に隠れて観測できない）。i200 の 03j、コンテナの A176・H26 も消した（D1・D2）。`test_i182_secret_gates.sh` の D5（`git push origin :develop`）は期待値を 2 → ASK にした（保護ブランチの停止を消し、残すリモート削除の確認になる。GitHub は保護ブランチの削除を拒否する）。checkout の G87 は期待値を ASK → 0 にし、見張りが外のリポジトリの設定で何も実行しないこと（PWNED が出ない）の確かめとして残した
+  - 消したテストの例（ファイルごと・消した判定）:
+    - `test_pretooluse_gh_pr_guard.sh`: ファイルごと（D3）
+    - `test_pretooluse_worktree_guard.sh`: A11・A11b・A11c・A11d・A11e・A12・A13・A14・A15・A19（D1・Bash の別ワークツリーへの書き込み）、A22・A23（D1・未カバーの警告）
+    - `test_pretooluse_push_guard.sh`: P1〜P4・P6・P7・P11〜P14・P16・P17・P23・P27・P33・XP3・XP10〜XP16・XP19・XP21・XP31〜XP35・XP43〜XP47・XP60・XP64・XP74・XP76・XP77・XP83・XP84・XP90・XP93・FG-A・FG-B（D2・保護ブランチへの push）、P28〜P32・FG-E・FG-F（D2・`--repo`）、D1〜D8・D10・DOK1・XP1・XP2・XP4・XP8・XP9・XP24・XP25・XP28〜XP30・XP48〜XP51・XP72・XP73・XP82・XP87〜XP89・XP91・XP92・FG-I・FG-I2・FG-J・FG-J2・FG-K・FG-K2・FG-M（D2・宛先の決まらない push の確認）。XP27 は期待値を 2 → ASK（残すリモート削除の確認になる）。D9 は題だけ直した（rm -rf の停止を見る）。FG-L の前に置換が入ったことの確かめ（FG-L0）を足した
+    - `guard_must_stop_cases.txt`: 別ワークツリーへの書き込み・移動の 19 行（D1）
+    - `guard_bash_oracle.py`: `push origin main`・`push origin HEAD:main`・`push origin $'\x6dain'`・`git.exe push origin main`（D2）
+    - `test_i200_guard_narrowing.sh`: 02b（D2）
+    - `test_i182_guard_failsafe.sh`: F6 の「保護ブランチへの push は停止」を「force push は停止」に替えた（本物の停止を確かめる例として、残す判定を使う）
+    - `test_pretooluse_container_guard.sh`: 安全網を外す置換の中の `push_dynamic` のキーを消した（見張りの戻り値から消えたため）
 
 ## セキュリティレビュー結果
 

@@ -65,7 +65,6 @@ ck 01i 0   "$(b 'docker compose exec -T backend cp /app/manage.py /tmp/x')"
 
 # ---- TC-02 (A)〜(C) の代表は今までどおり停止・確認 ----
 ck 02a 2   "$(b 'git push --force origin feature/x')"
-ck 02b 2   "$(b 'git push origin develop')"
 ck 02c ASK "$(b 'git push origin --delete feature/x')"
 ck 02d 2   "$(b 'git reset --hard')"
 ck 02e 2   "$(b 'docker compose down -v')"
@@ -88,12 +87,6 @@ if inject "$TMP/g_analyze.py" "def _analyze(text: str) -> dict:" 'raise ValueErr
   ck 03d 0   "$(b 'echo ok' "$TMP/g_analyze.py")"
   ck 03e ASK "$(b 'git push origin feature/x' "$TMP/g_analyze.py")"
   ck 03i ASK "$(b 'docker compose down -v' "$TMP/g_analyze.py")"
-  # コードレビューの F1: 読み解きが例外でも、別 worktree への書き込みの停止は外さない（語の判定より前で止める）
-  # 一時のリポジトリに主とワークツリーを作り、主の中から別のワークツリーへの書き込みを渡す（CI にも別の worktree が無いため）
-  WTR="$TMP/wtr"; mkdir -p "$WTR/main"; git -C "$WTR/main" init -q
-  git -C "$WTR/main" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m base
-  git -C "$WTR/main" worktree add -q "$WTR/other" -b other
-  ck 03j 2 "$(judge "$TMP/g_analyze.py" "$(bash_json "cp a.txt $WTR/other/i200_probe_never_written.txt")" "$WTR/main")"
 else ck "03d-e,i 差し込み" ok NOINJECT; fi
 if inject "$TMP/g_main.py" "    data = _load()" 'raise RuntimeError("i200")'; then
   ck 03f 0   "$(b 'echo ok' "$TMP/g_main.py")"

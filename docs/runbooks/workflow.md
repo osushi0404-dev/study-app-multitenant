@@ -246,14 +246,11 @@ public リポジトリのため、第三者（自律 AI エージェントを含
 2. **Actions の実行を承認しない**（fork PR には repository secrets が渡らず、E2E は原理的に失敗する）。
 3. **base 追従・CI 対応・レビューをしない**（マージしない PR に投じる意味がない）。
    **手元に checkout しない**（`.claude/` と hook 本体が相手の版に置き換わり、次の操作でそのコードが実行されるため）。中身は `gh pr diff <PR番号>` / `gh pr view <PR番号>` で確認する。
-   `gh pr checkout` と既定エイリアス `gh co` は PreToolUse ガードで block されるが、`git fetch origin pull/<N>/head` → `git checkout`・`gh pr diff <N> | git apply` などの別経路はガードの対象外なので、手順として行わないこと。
+   `gh pr checkout` と既定エイリアス `gh co` は `.claude/settings.json` の deny で拒否されるが、`git fetch origin pull/<N>/head` → `git checkout`・`gh pr diff <N> | git apply`・オプションを挟んだ `gh -R … pr checkout` などの別経路は拒否されないので、手順として行わないこと。
 4. 方針コメントを付けて close する: `gh pr comment <PR番号> --body-file <file>` → `gh pr close <PR番号>`。
 5. 対象のイシューは OPEN のまま残し、必要なら通常のハーネス手順（/plan-issue 以降）で自前実装する。
 
-判定は `scripts/claude/pr-base-sync.sh`（close 段階の最初）と PreToolUse ガード
-（`scripts/claude/hooks/pretooluse_guard.py`）でも自動検知されるが、上記は人が最初に見たときの手順である。
-ガードは外部 PR への `gh pr merge` / `gh pr checkout`（`gh co`）と MCP の `merge_pull_request` を block、
-`gh pr ready` / `edit` / `update-branch` / `review --approve` と MCP の `update_pull_request_branch` /
-`create_pull_request_review`（APPROVE）を ask にする。読み取りと `close` / `comment` は断るために必要なので素通しする。
-実行されるコマンドの中に `gh pr merge` 等があるのに判定しきれない場合は、block ではなく ask になる。
-引用符の中の文字列やヒアドキュメントの本文（コミットメッセージ・文書・テスト用の文字列）には反応しない。
+判定は `scripts/claude/pr-base-sync.sh`（close 段階の最初）でも自動検知されるが、上記は人が最初に見たときの手順である。
+I430 から、外部 PR の判定は見張り（PreToolUse ガード）に置かない。取り込み（`gh pr checkout`・`gh co`）は `.claude/settings.json` の deny、
+マージ・承認は GitHub のブランチ保護（Code Owners の承認だけが数えられ、bot はマージできない）が止める（`docs/runbooks/danger-ops.md`「サンドボックス（第 1 層）」）。
+`gh pr ready` / `edit` / `update-branch` / `review --approve` は止まらないので、外部 PR には使わない（上の 3）。

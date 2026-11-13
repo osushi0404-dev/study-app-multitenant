@@ -30,6 +30,9 @@
 - [plan-review] 1 回目の Blocker（`failIfUnavailable` の未実証）は、道具を消さずに `bwrap` を除いた `PATH` で試して実証した（S20）— 環境を壊さずに実機で確かめられたため
 - [plan-review] 2 回目の Warning・Info は計画変更記録に書いて直し、計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えないため
 - [design-security-review] `git *` をまるごとサンドボックスの外に出し、`allowWrite` を消して `allowedDomains` を空にした — 中では `.claude/settings.json` が読み取り専用で、中の `git checkout` が設定ファイルだけ古く残す事故になった（S22）。サブコマンドの列挙は漏れが同じ事故になるため。方式の変更なので計画レビューをやり直す
+- [implement] この会話の Bash にはサンドボックスが効かなかった（会話を始めた時点の設定のまま）ので、最終の設定は新しい `claude -p` で確かめる — 計画の「効く見込み」が外れたが、確かめ方を変えるだけで方式は変わらない
+- [implement] `git push --repo` の判定も消した — 保護ブランチの判定を避ける書き方を止めるためだけの判定だったため（計画変更記録）
+- [implement] /simplify（4 観点）の指摘のうち、重複の関数・deny の確かめの二重化・安全網の欄の名前の写し（`_NET_KEYS`・`_empty_net`）・使われない変数と引数（`_danger_reasons` の `cmd`・`_norm_push_dest` の `cur_branch`）・古い見出しとコメント・空振りした置換・使われないテストの準備・オラクルの古い条件・散らばった削除の説明コメントを直した。見送り: `_write_targets` を直接比べる表のテスト（新しいテストの作りで範囲の外）・`need_worktree`／`genv` の引数（残す git の場所の判定の中なので触らない）・`_block_cross_worktree` の `kind`・`guard_corpus_diff.py` の `{W}`（任意）・`_current_worktree_root` のキャッシュ（差分の外）
 
 STAGE_DONE: plan NEXT: plan-review
 

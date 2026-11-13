@@ -58,10 +58,6 @@ _wide_excl = {"*", "bash *", "bash", "sh *", "sh", "zsh *", "python *", "python"
 for e in sb.get("excludedCommands") or []:
     if e.strip() in _wide_excl:
         errs.append(f"sandbox.excludedCommands に一般のインタプリタ・シェル {e} がある")
-# I430: fork の PR の取り込みは deny（見張りの判定を消した）
-for r in ("Bash(gh pr checkout *)", "Bash(gh co *)"):
-    if r not in deny:
-        errs.append(f"deny に {r} が無い")
 for x in guard_hooks:
     if x.get("timeout") != 20 or x.get("onFailure") != "block":
         errs.append(f"見張りのフックに timeout 20 / onFailure block が無い: {x}")
@@ -102,7 +98,9 @@ if any(e.startswith(("Write(", "NotebookEdit(", "MultiEdit(")) for e in allow + 
 for r in ["Read(**/.env)", "Read(**/.env.e2e)", "Edit(**/.env)", "Edit(**/.env.e2e)",
           "Read(**/.env.local)", "Edit(**/.env.local)", "Read(**/.env.*.local)", "Edit(**/.env.*.local)",
           "Read(**/secrets/**)", "Edit(**/secrets/**)", "Read(**/*.pem)", "Edit(**/*.pem)",
-          "Read(**/*.key)", "Edit(**/*.key)"]:
+          "Read(**/*.key)", "Edit(**/*.key)",
+          # I430: fork の PR の取り込みは deny（見張りの判定を消した）
+          "Bash(gh pr checkout *)", "Bash(gh co *)"]:
     if r not in deny:
         errs.append(f"deny に {r} が無い")
 if any(e.startswith(("Read(./.env", "Edit(./.env")) for e in deny):
@@ -126,10 +124,12 @@ python3 - "$SETTINGS" "$TMP" <<'PY'
 import json, sys, copy
 src, tmp = sys.argv[1], sys.argv[2]
 base = json.load(open(src, encoding="utf-8"))
-def write(name, mut):
+def write_full(name, mut):
     d = copy.deepcopy(base)
-    mut(d["permissions"])
+    mut(d)
     json.dump(d, open(f"{tmp}/{name}.json", "w", encoding="utf-8"))
+def write(name, mut):
+    write_full(name, lambda d: mut(d["permissions"]))
 write("rm_back_to_ask", lambda p: (p["allow"].remove("Bash(rm *)"), p["ask"].append("Bash(rm *)")))
 write("psql_back_to_ask", lambda p: (p["allow"].remove("Bash(psql *)"), p["ask"].append("Bash(psql *)")))
 write("chmod_nowhere", lambda p: p["allow"].remove("Bash(chmod *)"))
@@ -164,10 +164,6 @@ d = copy.deepcopy(base)
 d["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] = 600
 json.dump(d, open(f"{tmp}/long_timeout.json", "w", encoding="utf-8"))
 # I430: サンドボックスの要の値を壊す
-def write_full(name, mut):
-    d = copy.deepcopy(base)
-    mut(d)
-    json.dump(d, open(f"{tmp}/{name}.json", "w", encoding="utf-8"))
 write_full("sb_disabled", lambda d: d["sandbox"].__setitem__("enabled", False))
 write_full("sb_no_sandbox", lambda d: d.pop("sandbox"))
 write_full("sb_unsandboxed_retry", lambda d: d["sandbox"].__setitem__("allowUnsandboxedCommands", True))

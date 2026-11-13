@@ -56,11 +56,12 @@ inject f4 "def _edit_path(data: dict) -> str:" 'raise ValueError("i182")' || ech
 ck "F4 Edit の分岐の例外は確認" ASK "$(run "$TMP/f4.py" "$(edit_json docs/x.md)")"
 ck "F4 理由に型名がある" yes "$(has ValueError)"
 
-inject f5 "def _danger_reasons(cmd: str, pcmd: str) -> list:" 'raise KeyError("i182")' || echo "NOINJECT f5"
+inject f5 "def _danger_reasons(pcmd: str) -> list:" 'raise KeyError("i182")' || echo "NOINJECT f5"
 ck "F5 今まで包まれていなかった判定の例外は確認" 0   "$(run "$TMP/f5.py" "$(bash_json ls)")"
 
 ck "F6 本物: ls は素通し" 0 "$(run "$GUARD" "$(bash_json ls)")"
-ck "F6 本物: 保護ブランチへの push は停止" 2 "$(run "$GUARD" "$(bash_json 'git push origin develop')")"
+# I430: 保護ブランチへの push の判定は消した（GitHub に任せた）ので、残す危険操作の force push で本物の停止を確かめる
+ck "F6 本物: force push は停止" 2 "$(run "$GUARD" "$(bash_json 'git push --force origin x')")"
 ck "F6 本物: docs の Edit は素通し" 0 "$(run "$GUARD" "$(edit_json docs/x.md)")"
 
 # 偽合格の防止: 包みを外した複製（修正前の作り）では、F1 と同じ注入で exit 1（ASK でも 2 でもない）になる

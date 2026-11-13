@@ -233,7 +233,9 @@ ck "G83 git -C <外のリポジトリ> checkout"            ASK "$(pw "git -C $E
 ck "G84 cd <入れ子のリポジトリ> && checkout"         ASK "$(pw 'cd nested && git checkout -- g')"
 ck "G85 --git-dir=<中に作った偽の git-dir>"          ASK "$(pw 'git --git-dir=fakegit --work-tree=. checkout -- sub/s.txt')"
 ck "G86 GIT_DIR=<中に作った偽の git-dir>"            ASK "$(pw 'GIT_DIR=fakegit git checkout -- sub/s.txt')"
-ck "G87 cd <外のリポジトリ> && git push"             ASK "$(pw "cd $EV/evil && git push")"
+# I430: 保護ブランチ・宛先の決まらない push の判定を消したので、外のリポジトリの push は確認にならない（0）。
+# このテストが守るのは「見張りが外のリポジトリの設定〔core.fsmonitor〕で何かを実行しない」こと（PWNED が出ない）
+ck "G87 cd <外のリポジトリ> && git push（実行しない）" 0   "$(pw "cd $EV/evil && git push")"
 # 条件付きの cd（実行されないまま後ろが動きうる）は場所が 1 つに決まらない → 確認（code-review 20261021_1509 第 1 周）
 ck "G88 false && cd other; checkout -- dirty"      ASK "$(runj 'false && cd other; git checkout -- sub/s.txt')"
 ck "G89 true || cd other; checkout -- dirty"       ASK "$(runj 'true || cd other; git checkout -- sub/s.txt')"

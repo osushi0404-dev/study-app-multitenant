@@ -230,7 +230,6 @@ ckd "A172 継続行の down -v"            "docker compose down ${BS}${NL}  -v"
 ckd "A173 継続行の migrate の巻き戻し" "docker compose exec backend python manage.py migrate ${BS}${NL}  problems 0001"
 ckd "A174 継続行の find -delete"       "find backend -name '*.pyc' ${BS}${NL}  -delete"
 ckd "A175 継続行の force push"         "git push origin ${BS}${NL}  --force"
-ckd "A176 継続行の保護ブランチ push"   "git push ${BS}${NL}  origin main"
 # 第 2 周（2026-10-18）: 引用符付きヒアドキュメントの本文・コメントの中の \ は継続ではない（後ろのコマンドを読み飛ばさない）
 ckd "A177 本文の最後の行が \\ のヒアドキュメントの後の reset" "cat > notes.md <<'EOF'${NL}1行目${BS}${NL}2行目${BS}${NL}EOF${NL}git reset --hard origin/develop"
 ckd "A178 Windows パスの本文の後の force push" "git commit -F - <<'EOF'${NL}fix: path C:${BS}tmp${BS}${NL}EOF${NL}git push --force origin develop"
@@ -283,7 +282,6 @@ ck "H23 parallel 'echo {}' は通す"                0 "$(runj "parallel 'echo {
 # git.exe（WSL）も git と同じ（第 3 周 H3: 単純コマンドごとの判定〔_cmd_danger〕を通る形）
 ck "H24 git.exe reset --hard"                     2 "$(runj 'git.exe reset --hard origin/develop')"
 ck "H25 git.exe clean -fdx"                       2 "$(runj 'git.exe clean -fdx')"
-ck "H26 bash -c 'git.exe push origin main'"       2 "$(runj "bash -c 'git.exe push origin main'")"
 ck "H27 /usr/bin/git reset --hard"                2 "$(runj '/usr/bin/git reset --hard origin/develop')"
 # 値を取るオプションの値を中のコマンドと読み違えない（第 3 周 M5）
 ck "H28 xargs --arg-file … rm -rf"                2 "$(runj "xargs --arg-file list.txt $RM")"
@@ -693,7 +691,7 @@ ck "P73 \$(cat /dev/zero) で固まらない" 0 "$(timeout 20 bash -c "$(declare
 
 # --- (G) 偽合格の防止: 判定の呼び出しを外した複製では素通し・実体では止まる ---
 # D / X / C は安全網（0-12）も外す（外さないと、外した判定を安全網が確認として拾い直すため。それは G11〜G13 で確かめる）
-NO_NET='s/net = _safety_net(pcmd)/net = {"hard": "", "danger": [], "external": [], "container": [], "git_unsure": [], "push_dynamic": [], "remote_ask": []}/'
+NO_NET='s/net = _safety_net(pcmd)/net = _empty_net()/'
 BROKEN_D="$TMP/guard_no_danger.py"
 sed -e 's/reasons += _analyze(pcmd)\["danger"\]/pass/' -e "$NO_NET" "$GUARD" > "$BROKEN_D"
 BROKEN_X="$TMP/guard_no_external.py"

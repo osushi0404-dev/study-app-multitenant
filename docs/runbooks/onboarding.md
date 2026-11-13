@@ -109,6 +109,16 @@ docs/
 
 ---
 
+## 手元の準備（サンドボックスの道具・I430）
+
+Claude Code の Bash は公式のサンドボックスの中で動く（`.claude/settings.json` の `sandbox`・`docs/runbooks/danger-ops.md`「サンドボックス（第 1 層）」）。WSL2・Linux では bubblewrap と socat が要り、無いと Claude Code が起動しない（`failIfUnavailable: true`。`Error: sandbox required but unavailable … Refusing to start without a working sandbox` と出る）。新しい端末では、Claude Code とは別の WSL のターミナルで入れる（Claude Code の `!` からは sudo のパスワードを入れられない）:
+
+```bash
+sudo apt install -y bubblewrap socat
+```
+
+---
+
 ## 手元の準備（GitHub の名義）
 
 Claude は GitHub App の名義で GitHub を操作する（I223）。新しい端末では `docs/runbooks/github-app-setup.md` の手順で設定する。
