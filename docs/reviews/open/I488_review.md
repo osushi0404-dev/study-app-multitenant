@@ -34,6 +34,7 @@
 - [test-gate] 確かめ用の利用者 verify_i487 のパスワードの入れ直しは承認されなかったので繰り返さず、e2e_user_a の実データで期待値と見比べた — 複数の日・週・月にまたがる集計の正しさは BE の TC-02〜04 が固定しているため、画面では区切りのラベル・数・期待値との一致を確かめれば足りる
 - [test-gate] 手動 No.2 が NG（正答率の折れ線で 100% の点が描かれない）→ fix-loop。ほかの No.1・3〜7 は OK
 - [fix-loop] 案 A（正答率の `Line` の描き始めの動きを止める）で直した — 線を切る決まり（計画 4.4）と見せ方を変えずに、点が確実に出る最小の直し。案 B（線をつなぐ）は計画に反し、案 C（棒グラフ）は UI の変更になるので採らない。診断レビュー OK。test-gate の「上の端で切れている」の見立ては、スパイクで違うと分かったので診断メモで正した
+- [review-gate] fix-loop の後の差分のコードレビュー（20261114_0257）OK・敵対的レビュー 2 周目（20261114_0306）OK。Low 2 件（TC-22 の欠けたキーの試し方の再報告・TC-25 は点が描かれることまでは見ていない〔モックの限界〕）は retro に回す。通算 2 周を使い切ったので、この後にコードを直すと止まる
 - [implement] 画面確認（e2e_user_a・1440）で、統計画面が新しい応答で出て API が 200・新しいエラーが無いことを確かめた（`.evidence/I488/impl-statistics-1440-a*.png`）。細かい確かめは test-gate の手動テストで行う
 
 STAGE_DONE: plan NEXT: plan-review
@@ -43,3 +44,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
