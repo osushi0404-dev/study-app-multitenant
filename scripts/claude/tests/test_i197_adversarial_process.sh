@@ -100,6 +100,32 @@ out({"type": "result", "subtype": sub, "result": body, "session_id": sid, "permi
 PY
 chmod +x "$STUB"
 
+# ---------------- スタブの docker（I486）----------------
+# 呼び出しの引数を $STUB_DIR/docker_calls に 1 行ずつ残す。compose up は $STUB_DIR/docker_up_rc（既定 0）で終わり、
+# $STUB_DIR/docker_up_advance があれば ADV_CLOCK_FILE の秒をその数だけ進める（起こす待ちを作る）。
+# compose ps は $STUB_DIR/docker_ps（既定 cid1）、inspect は $STUB_DIR/docker_wd（既定 リポジトリのルート）を出す
+DSTUB="$TMP/stub_docker"
+cat > "$DSTUB" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$STUB_DIR/docker_calls"
+case "$1 ${2:-}" in
+  "compose up")
+    if [ -f "$STUB_DIR/docker_up_advance" ] && [ -n "${ADV_CLOCK_FILE:-}" ]; then
+      echo $(( $(cat "$ADV_CLOCK_FILE") + $(cat "$STUB_DIR/docker_up_advance") )) > "$ADV_CLOCK_FILE"
+    fi
+    echo "stub up"
+    exit "$(cat "$STUB_DIR/docker_up_rc" 2>/dev/null || echo 0)" ;;
+  "compose ps")
+    if [ -f "$STUB_DIR/docker_ps" ]; then cat "$STUB_DIR/docker_ps"; else echo cid1; fi; exit 0 ;;
+  inspect*)
+    # 実物と同じく、対象（最後の引数）が空・改行を含むなら失敗する
+    case "${*: -1}" in ""|*$'\n'*) echo "Error: No such object" >&2; exit 1 ;; esac
+    if [ -f "$STUB_DIR/docker_wd" ]; then cat "$STUB_DIR/docker_wd"; else git rev-parse --show-toplevel; fi; exit 0 ;;
+esac
+exit 1
+SH
+chmod +x "$DSTUB"
+
 # ---------------- 一時のリポジトリ ----------------
 PLAN_OK='# I900 計画書
 
@@ -138,7 +164,7 @@ mk() {
 # run <名前> [環境変数…]: 実行して出力を $TMP/<名前>/out、終了コードを $TMP/<名前>/rc に残す
 run() {
   local d="$TMP/$1"; shift
-  ( cd "$d/repo" && env CLAUDE_BIN="$STUB" STUB_DIR="$d/stub" STUB_CALLS="$d/calls" \
+  ( cd "$d/repo" && env CLAUDE_BIN="$STUB" ADV_DOCKER_BIN="$DSTUB" STUB_DIR="$d/stub" STUB_CALLS="$d/calls" \
       ADV_BASE=develop ADV_DEADLINE=60 ADV_STEP_TIMEOUT=20 ADV_MIN_STEP=1 \
       "$@" bash scripts/claude/adversarial-review.sh I900 > "$d/out" 2>&1; echo $? > "$d/rc" )
 }
@@ -646,6 +672,68 @@ with_src "$(fg_copy 'insec = ($0 == "## 確かめる項目の結果")' 'insec = 
 ck "FG-A35 節の絞り込みを外すと A35 が不合格（V1 が確認済み）" yes "$(yn item_is fga35 V1 確認済み)"
 with_src "$(fg_copy 'if [ "$st" = ran ] && exp_not_executable "$d/exp/$id.out"; then st=noexec; fi' '')" a36 fga36
 ck "FG-A36 コマンドが見つからない形を見ないと A36 が不合格（V1 が確認済み）" yes "$(yn item_is fga36 V1 確認済み)"
+
+# ---------------- I486: 実験の前提（backend のコンテナ）・粗い空振りの見分け・言い直しの id ----------------
+# backend_commit <名前>: backend/ の下を変えてコミットする（見る範囲に backend/ の変更がある状態）
+backend_commit() { mkdir -p "$TMP/$1/repo/backend"; printf 'x = 1\n' >> "$TMP/$1/repo/backend/x.py"; git -C "$TMP/$1/repo" add -A; git -C "$TMP/$1/repo" commit -q -m backend; }
+docker_called() { [ -s "$TMP/$1/stub/docker_calls" ]; }
+a39() { mk "$1"; backend_commit "$1"; run "$1"; }
+a39 a39
+ck "A39 backend の変更あり・起こせた → exit 0・OK" "0 yes" "$(rcode a39) $(yn out_has a39 'ADVERSARIAL_VERDICT: OK')"
+ck "A39 compose up -d --build --wait backend を呼んだ" yes "$(yn grep -qxF 'compose up -d --build --wait backend' "$TMP/a39/stub/docker_calls")"
+ck "A39 記録に「コンテナ: backend を起こして確かめた」" yes "$(yn rec_has a39 '- コンテナ: backend を起こして確かめた')"
+a40() { mk "$1"; backend_commit "$1"; echo 1 > "$TMP/$1/stub/docker_up_rc"; run "$1"; }
+a40 a40
+ck "A40 起こせない → exit 2・CONTAINER・claude の呼び出し 0・記録 0" "2 yes 0 0" "$(rcode a40) $(yn out_has a40 'ADVERSARIAL_ERROR: CONTAINER') $(n_calls a40) $(n_records a40)"
+a41() { mk "$1"; backend_commit "$1"; printf '/somewhere/else\n' > "$TMP/$1/stub/docker_wd"; run "$1"; }
+a41 a41
+ck "A41 別のワークツリーのコンテナ → exit 2・CONTAINER・claude の呼び出し 0" "2 yes 0" "$(rcode a41) $(yn out_has a41 'ADVERSARIAL_ERROR: CONTAINER') $(n_calls a41)"
+mk a41b; backend_commit a41b; : > "$TMP/a41b/stub/docker_ps"; run a41b
+ck "A41 動いている backend が無い → exit 2・CONTAINER・claude の呼び出し 0" "2 yes 0" "$(rcode a41b) $(yn out_has a41b 'ADVERSARIAL_ERROR: CONTAINER') $(n_calls a41b)"
+ck "A42 backend の変更なし（A1）→ docker を呼ばない" no "$(yn docker_called a1)"
+mk a42; mkdir -p "$TMP/a42/repo/frontend/backend"; printf 'x\n' > "$TMP/a42/repo/frontend/backend/x"; printf 'x\n' > "$TMP/a42/repo/docs/backend.md"
+git -C "$TMP/a42/repo" add -A; git -C "$TMP/a42/repo" commit -q -m other; run a42
+ck "A42 frontend/backend/・docs/backend.md だけ → exit 0・docker を呼ばない" "0 no" "$(rcode a42) $(yn docker_called a42)"
+a43() { mk "$1"; backend_commit "$1"; echo 1000 > "$TMP/$1/clock"; echo 100000 > "$TMP/$1/stub/docker_up_advance"; run "$1" ADV_CLOCK_FILE="$TMP/$1/clock"; }
+a43 a43
+ck "A43 起こす待ちが締め切りより長くても exit 0・OK（締め切りは起こした後から）" "0 yes" "$(rcode a43) $(yn out_has a43 'ADVERSARIAL_VERDICT: OK')"
+a44() { mk "$1"; printf '%s' "$2" > "$TMP/$1/stub/out_P1-E1"; run "$1"; }
+a44 a44 $'collecting ...\nsh: 1: python: not found\nexit=127\n'
+ck "A44 別の行が混ざる「見つからない」出力 → V1 未検証・記録に「実行できなかった」" "yes yes" "$(yn item_is a44 V1 未検証) $(yn rec_has a44 '実行できなかった')"
+a44 a44b $'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n'
+ck "A44 docker のデーモンにつながらない出力 → V1 未検証" yes "$(yn item_is a44b V1 未検証)"
+a44 a44c $'python: No such file or directory\n'
+ck "A44 今の形（1 語: No such file or directory）→ V1 未検証" yes "$(yn item_is a44c V1 未検証)"
+a45() { mk "$1"; printf 'bash: python: command not found\n' > "$TMP/$1/stub/out_P1-E1"
+  printf 'EXPERIMENT_BEGIN P1-E2\necho again\nEXPERIMENT_END P1-E2\nITEM: V1 RESULT=not_done\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$TMP/$1/stub/p1_1.txt"
+  printf 'ITEM: V1 RESULT=experiment EXP=P1-E2\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$TMP/$1/stub/p1_2.txt"; run "$1"; }
+# hint_has <名前>: noexec の結果を返した入力に「新しい id（P1-E2 から）」の案内がある
+hint_has() { grep -l '^### P1-E1: noexec' "$TMP/$1/calls"/*.in | xargs grep -lF '新しい id（P1-E2 から）' | grep -q .; }
+a45 a45
+ck "A45 noexec の後の入力に「新しい id（P1-E2 から）」" yes "$(yn hint_has a45)"
+ck "A45 新しい id で出し直した実験は実行され V1 確認済み（実験）・OK" "yes yes" "$(yn item_is a45 V1 '確認済み（実験）') $(yn out_has a45 'ADVERSARIAL_VERDICT: OK')"
+
+with_src "$(fg_copy 'ensure_backend_container || exit 2' 'ensure_backend_container')" a40 fga40
+ck "FG-A40 起こせないときに止めないと A40 が不合格（claude が呼ばれる）" no "$(yn [ "$(n_calls fga40)" = 0 ])"
+with_src "$(fg_copy 'if [ "$wd" != "$(pwd -P)" ]; then' 'if false; then')" a41 fga41
+ck "FG-A41 作業フォルダの比較を外すと A41 が不合格（exit 0）" 0 "$(rcode fga41)"
+with_src "$(fg_copy "grep -q '^backend/' \"\$RUN/branch_files.txt\" || return 0" ':')" mk fga42
+run fga42
+ck "FG-A42 backend の絞り込みを外すと A42 が不合格（docker を呼ぶ）" yes "$(yn docker_called fga42)"
+with_src "$(fg_copy 'ensure_backend_container || exit 2' 'ADV_START0=$(adv_now); ensure_backend_container || exit 2' 'ADV_START=$(adv_now) || {' 'ADV_START=$ADV_START0 || {')" a43 fga43
+ck "FG-A43 締め切りを起こす前から数えると A43 が不合格（exit 0 にならない）" no "$(yn [ "$(rcode fga43)" = 0 ])"
+with_src "$(fg_copy 'sys.exit(0 if any(pat.search(l) for l in lines) else 1)' 'sys.exit(0 if lines and all(pat.fullmatch(l) for l in lines if not l.startswith("is_error=")) else 1)')" a44 fga44 $'collecting ...\nsh: 1: python: not found\nexit=127\n'
+ck "FG-A44 全行の形に戻すと A44 が不合格（V1 確認済み）" yes "$(yn item_is fga44 V1 確認済み)"
+with_src "$(fg_copy 'next_eid="P${p}-E$(( max + 1 ))"' 'next_eid="P${p}-E1"')" a45 fga45
+ck "FG-A45 次の id の数え方を壊すと A45 が不合格（案内に P1-E2 が無い）" no "$(yn hint_has fga45)"
+
+# A46 2 周目に、直した差分（見る範囲）に backend/ が無くても、ブランチに backend/ の変更があればコンテナを起こす
+n_up() { grep -c '^compose up ' "$TMP/$1/stub/docker_calls" 2>/dev/null || true; }
+a46() { mk "$1"; backend_commit "$1"; run "$1"; docs_commit "$1"; next_round "$1" "$V1_READ"; run "$1"; }
+a46 a46
+ck "A46 記録だけ直した 2 周目も compose up を呼ぶ（up 2 回）・exit 0" "2 0" "$(n_up a46) $(rcode a46)"
+with_src "$(fg_copy "grep -q '^backend/' \"\$RUN/branch_files.txt\" || return 0" "grep -qE \$'^[A-Z][0-9]*\\tbackend/' \"\$RUN/files.txt\" || return 0")" a46 fga46
+ck "FG-A46 判定を見る範囲に戻すと A46 が不合格（up 1 回）" 1 "$(n_up fga46)"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/fg_copy_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
