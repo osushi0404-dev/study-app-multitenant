@@ -21,3 +21,4 @@
 - PR を revert する（plan §7。目印のある記録が develop にあれば先に目印を消す）
 
 ## 自律判断の記録
+STAGE_DONE: plan NEXT: plan-review
