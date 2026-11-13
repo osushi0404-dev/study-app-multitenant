@@ -4,6 +4,8 @@
 
 結果:
 - 2026-11-13 実装前の基準: TC-01〜TC-07 の 11 本を `bash scripts/claude/tests/run-all.sh <11 本>` で流し、`run-all: pass=11 fail=0`（変更前の見張り・設定）
+- 2026-11-13 実装後（/simplify の後・コミット後）: TC-01〜TC-07 と、見張りに触れるそのほかのテスト（i197・wt_lifecycle・i182_secret_gates・guard_corpus_diff）の 19 本を `run-all.sh` で流し、`run-all: pass=19 fail=0`。TC-08 は exit 0（2,929 行）・TC-10〜TC-12 は exit 0。TC-09（全体）は CI で確かめる
+- TC-01 の FG: 足したサンドボックスの決まり・deny の 12 件（S16〜S22b）は、壊した写しでそれぞれ不合格になった（`pass=32 fail=0`）
 - backend: 対象外（コードの変更なし）
 - frontend: 対象外（コードの変更なし）
 

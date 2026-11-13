@@ -6,18 +6,21 @@
 - 「見張りに判定を足すときの決まり」を danger-ops.md・plan-writing-rules.md に入れる
 
 ## 変更点
-- （実装後に記入）
+- `.claude/settings.json`: `sandbox`（enabled・autoAllow・外での再実行なし・failIfUnavailable・外に出す docker／docker-compose／gh／git／`bash scripts/claude/*`・denyWrite `.claude/worktrees`・denyRead App の鍵・通信なし）、deny `Bash(gh pr checkout *)`・`Bash(gh co *)`、GitHub MCP のフックの登録を削除
+- `scripts/claude/hooks/pretooluse_guard.py`: 3,880 → 2,929 行。Bash の別ワークツリーへの書き込み・未カバーの警告・保護ブランチへの push・宛先の決まらない push の確認・`--repo`・fork の PR（gh・MCP）の判定と、それだけが使う関数を削除。安全網の欄を `_NET_KEYS` に一本化
+- テスト: `test_pretooluse_gh_pr_guard.sh` を削除。消した判定の例を削除し、書き先の読み方はコンテナの形で確かめ直した（一覧は計画変更記録）。`test_settings_permissions.sh` にサンドボックスの決まりと FG を追加
+- 手順書: danger-ops（サンドボックスの節・消した判定の対応表・判定を足すときの決まり）・plan-writing-rules・workflow・worktree・onboarding・claude-code-structure・CLAUDE.md
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
 - Config: `.claude/settings.json`（sandbox・deny 2 行・GitHub MCP のフックの登録の削除）・`scripts/claude/hooks/pretooluse_guard.py`・ハーネステスト・手順書（danger-ops・plan-writing-rules・workflow・worktree・onboarding）・CLAUDE.md
 
 ## テスト結果
-- 自動: （実装後に記入）
+- 自動: 見張りと設定のテスト 19 本が合格（`run-all: pass=19 fail=0`）・TC-08（2,929 行）・TC-10〜12 合格。全体は CI
 - 手動: （test-gate で記入）
 
 ## 計画との差分
-- なし（実装後に更新）
+- あり（計画書の計画変更記録「2026-11-13 implement の記録」）: `--repo` の判定も削除・一覧 I454 F9 は残す・`docs/claude-code-structure.md` も直した・i454／i463 のテストの例をコンテナの形に置き換えた・この会話の Bash にはサンドボックスが効かなかった
 
 ## ロールバック
 - PR を revert する。サンドボックスだけ止めるときは `.claude/settings.json` の `sandbox.enabled` を false（Edit はサンドボックスの外）。詳細は計画書 7.
@@ -41,3 +44,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: plan-review NEXT: design-security-review
 
 STAGE_DONE: design-security-review NEXT: implement
+
+STAGE_DONE: implement NEXT: review-gate
