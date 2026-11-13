@@ -45,7 +45,7 @@
 |---|---|---|
 | `scripts/claude/code-review.sh` | `route_reasons()` の `SECURITY=yes` の条件 | `if sec == "yes":` → `if sec == "yes" and (repro == "yes" or RANK[sev] >= 1):`。理由の文言 `SECURITY=yes` は変えない |
 | `scripts/claude/code-review.sh` | `route_reasons()` の guard の行のコメント | 一覧 I208 F1 を同梱: 「blocking() と同じく再現を問わない」→「再現を問わない（GitHub から復旧できない例外。blocking() の guard は High 以上で、こちらは Medium 以上）」 |
-| `.claude/skills/retro/SKILL.md` | 手順 4-0 の 154 行・163 行 | 154 行の「`SECURITY=yes`（重さに関係なく）」→「`SECURITY=yes` で再現ありか Medium 以上（Low かつ再現なしは一覧）」。163 行の最優先の条件の「`SECURITY=yes` の指摘」→「出力の理由に `SECURITY=yes` が付いた行」 |
+| `.claude/skills/retro/SKILL.md` | 手順 4-0 の 154 行・163 行 | 154 行の「`SECURITY=yes`（重さに関係なく）」→「`SECURITY=yes` で再現ありか Medium 以上（Low かつ再現なしは一覧）」。163 行の最優先の条件の「`SECURITY=yes` の指摘」→「出力の `後続イシューにする理由:` より後ろに `SECURITY=yes` がある行（行の前の方の `SECURITY=` の欄は見ない）」 |
 | `docs/runbooks/review-rules.md` | 70 行の振り分けの要約 | 「`SECURITY=yes`」→「`SECURITY=yes` で再現ありか Medium 以上」 |
 | `scripts/claude/tests/test_i202_ledger_cleanup.sh` | Q7 の期待値・FG-Q7 | Q7 の F8（Low・再現なし・harness・`SECURITY=yes`）を一覧側へ（`Q7_WANT='I:F1,F7,F9,F12 B:F2,F3,F4,F5,F6,F8,F10,F11'`）。FG-Q7 は「条件を外す」が F8 で検出できなくなるので、「新しい条件を前の `if sec == "yes":` に戻すと F8 が後続イシューに上がり不合格」に置き換える |
 | `scripts/claude/tests/test_i202_ledger_cleanup.sh` | 新しい Q10（I480） | 下の §6 の行で、振り分けと理由の付き方を固定し、3 つの失敗の注入（FG-Q10a〜c）を付ける |
@@ -70,7 +70,7 @@
 | F5 | Low | app | no | yes | 後続イシュー・理由は `アプリ本体` だけ（`SECURITY=yes` は付かない＝最優先にしない） |
 | F6 | Blocker | harness | no | yes | 後続イシュー・理由 `SECURITY=yes` |
 
-- Q10: `I:F3,F4,F5,F6 B:F1,F2`、かつ後続イシュー側の理由に `SECURITY=yes` を含む行が F3・F4・F6 の 3 行で、F5 の理由は `アプリ本体` だけ
+- Q10: `I:F3,F4,F5,F6 B:F1,F2`、かつ後続イシュー側の行のうち `後続イシューにする理由:` より後ろに `SECURITY=yes` を含む行が F3・F4・F6 の 3 行（行の前の方の `SECURITY=` の欄は数えない。F5 の行にも欄としては出る）で、F5 の理由は `アプリ本体` だけ
 - FG-Q10a（前の条件に戻す `if sec == "yes":`）: F1・F2 が後続イシュー側に上がり不合格
 - FG-Q10b（再現を外す `if sec == "yes" and RANK[sev] >= 1:`）: F3 が一覧側に落ち不合格
 - FG-Q10c（Medium 以上を外す `if sec == "yes" and repro == "yes":`）: F4・F6 が一覧側に落ち不合格
@@ -95,7 +95,7 @@
 - 判定は台帳の欄の値だけで行う（制約・I208）
 
 Claude が決めた（技術的な選択と理由）:
-- 「最優先」の条件を「出力の理由に `SECURITY=yes` が付いた行」と書く — 振り分けと同じ条件を、retro が出力から機械的に読める形にするため。アプリ本体の Low・再現なしの `SECURITY=yes` は「アプリ本体」の理由で後続イシューになるが、最優先は付かない（イシューの「条件を同じに直す」をそのまま当てはめた結果）
+- 「最優先」の条件を「出力の `後続イシューにする理由:` より後ろに `SECURITY=yes` がある行（行の前の方の `SECURITY=` の欄は見ない）」と書く — 振り分けと同じ条件を、retro が出力から機械的に読める形にするため。アプリ本体の Low・再現なしの `SECURITY=yes` は「アプリ本体」の理由で後続イシューになるが、最優先は付かない（イシューの「条件を同じに直す」をそのまま当てはめた結果）
 - 理由の文言は `SECURITY=yes` のまま変えない — 既存の出力の形・retro の読み方を変えないため
 - `docs/runbooks/review-rules.md` 70 行も直す — 同じ決まりの要約で、残すと説明が食い違う（plan-writing-rules「消費箇所の全件列挙」）
 - テストは既存の `test_i202_ledger_cleanup.sh`（I208 の振り分けのテストがある所）に Q10 として足す — 補助関数（`route`・`ids`・`broken`）をそのまま使える
@@ -119,4 +119,10 @@ Danger Ops（有無/手順/ロールバック）:
 |---|---|---|---|
 | V1 | 2 | 読んで可 | TC-01 の FG-Q10a〜c と置き換えた FG-Q7 が、新しい条件の 3 つの部分（Low かつ再現なしを一覧へ・再現ありは後続・Medium 以上は後続）をそれぞれ壊すと不合格になり、条件を確かめているか |
 | V2 | 3 | 読んで可 | 一覧に移るのは `SECURITY=yes`・`SEV=Low`・`REPRO=no` で、止める指摘・アプリ本体・guard の Medium 以上に当たらない行だけか（`route_reasons()` のほかの理由と `blocking()` が変わっていない。TC-01 の Q10 の F5・TC-02） |
-| V3 | 3 | 読んで可 | retro 4-0 の「最優先」の条件（理由に `SECURITY=yes` が付いた行）が、`route_reasons()` の出力と食い違わないか（TC-03） |
+| V3 | 3 | 読んで可 | retro 4-0 の「最優先」の条件（出力の `後続イシューにする理由:` より後ろに `SECURITY=yes` がある行（行の前の方の `SECURITY=` の欄は見ない））が、`route_reasons()` の出力と食い違わないか（TC-03） |
+
+## レビュー結果
+- [20261113_1135 判定: ✅ 完了](../../reviews/I480_plan_review_20261113_1135.md)
+
+## 計画変更記録
+- 1（plan-review の Warning・2026-11-13）: 計画書の記載「出力の理由に `SECURITY=yes` が付いた行」。採った方法: 「`後続イシューにする理由:` より後ろに `SECURITY=yes` がある行」に限り、Q10 の数え方も同じ範囲にする。理由: `--route issue` の行は前の方に `SECURITY=` の欄も出すので、行全体で見ると F5（アプリ本体の Low・再現なし）も拾う。計画レビューのやり直し: 不要（文言の明確化で、方式・範囲・受け入れ条件は変えない）

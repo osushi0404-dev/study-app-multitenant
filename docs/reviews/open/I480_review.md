@@ -24,5 +24,8 @@
 - このブランチのコミットを revert する
 
 ## 自律判断の記録
+- [plan-review] 計画レビュー OK（Warning 1 件: 最優先の条件を `後続イシューにする理由:` より後ろに限る形に直した。文言の明確化なので再レビューはしない） — 方式・範囲・受け入れ条件を変えないため
+- [plan-review] 高リスク判定は NO（PLAN_VERDICT: OK）なので design-security-review を飛ばして implement へ — スクリプトの判定どおり
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
