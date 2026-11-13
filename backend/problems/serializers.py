@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Any, Dict, List
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from .difficulty import LEVEL_BY_LABEL, label_of
 from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
@@ -66,6 +68,8 @@ class ProblemMediaAssetSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+# クラスに queryset が無いので、API の契約（I493）では科目の主キー（整数）として型を書く
+@extend_schema_field(OpenApiTypes.INT)
 class OrgSubjectField(serializers.PrimaryKeyRelatedField):
     """
     リクエストユーザーの組織の科目だけを受け付ける（context に request が無ければ何も受け付けない）

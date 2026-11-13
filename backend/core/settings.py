@@ -36,6 +36,7 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'django_filters',
+    'drf_spectacular',
 ]
 
 LOCAL_APPS = [
@@ -158,6 +159,19 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.MultiPartParser',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# API の契約（OpenAPI のスキーマ）の作り方（I493）。スキーマを見せる URL は作らない
+# 契約に入れるパスは core/openapi.py の CONTRACT_PATHS。作り直し方は docs/runbooks/common-commands.md
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'study-app API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'PREPROCESSING_HOOKS': ['core.openapi.only_contract_paths'],
+    'ENUM_NAME_OVERRIDES': {
+        'DashboardRecommendationKindEnum': 'dashboard.serializers.RECOMMENDATION_KIND_CHOICES',
+    },
 }
 
 # JWT Configuration

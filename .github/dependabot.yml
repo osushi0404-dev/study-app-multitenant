@@ -38,6 +38,23 @@ updates:
         applies-to: security-updates
         update-types: ["minor", "patch"]
 
+  # I493: API のスキーマから画面の型を作る道具（openapi-typescript・TypeScript 5）
+  - package-ecosystem: "npm"
+    directory: "/tools/api-types"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "track:app"]
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: "npm"
     directory: "/e2e"
     schedule:

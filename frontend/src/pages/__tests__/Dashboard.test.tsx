@@ -8,7 +8,7 @@ import userEvent from '@testing-library/user-event';
 import Dashboard from '../Dashboard';
 import apiClient from '../../services/api';
 import SubjectService from '../../services/subjectService';
-import { DashboardOverview } from '../../services/types';
+import { DashboardOverview } from '../../types/api';
 
 jest.mock('../../services/api');
 

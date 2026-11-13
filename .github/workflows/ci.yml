@@ -145,6 +145,40 @@ jobs:
         run: CI=true npm test
         working-directory: frontend
 
+  # I493: 画面の型（frontend/src/types/api/schema.d.ts）が backend/openapi.yaml から作り直したものと同じかを見る。
+  # backend/openapi.yaml がシリアライザと同じかは backend-test の pytest（core/tests/test_I493_openapi_contract.py）が見る
+  api-types:
+    name: API Types Up To Date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: tools/api-types/package-lock.json
+      - name: Install dependencies
+        # 依存の install スクリプトを動かさない（道具は install スクリプト無しで動く）
+        run: npm ci --ignore-scripts
+        working-directory: tools/api-types
+      - name: Generated types are up to date
+        run: npm run check
+        working-directory: tools/api-types
+      - name: Failure injection (stale types must fail the check)
+        # 古い型の写しに --check をかけて、落ちることを毎回確かめる（道具の版上げで --check が効かなくなったら気づくため）。
+        # npx は使わない（手元に無いとネットから lock の外の版を取りうる）
+        run: |
+          cp ../../frontend/src/types/api/schema.d.ts "$RUNNER_TEMP/stale.d.ts"
+          echo "export type Stale = 1;" >> "$RUNNER_TEMP/stale.d.ts"
+          if ./node_modules/.bin/openapi-typescript ../../backend/openapi.yaml -o "$RUNNER_TEMP/stale.d.ts" --check; then
+            echo "::error::古い型でも --check が通った（ずれを止められない）"
+            exit 1
+          fi
+        working-directory: tools/api-types
+      - name: npm audit
+        run: npm audit --audit-level=high
+        working-directory: tools/api-types
+
   # I193（I185 P8）: ハーネス（スキル・スクリプト・見張り）の回帰テストを PR ごとに流す。
   # ユーザーの確認を減らした流れで、ハーネスの退行を GitHub で止めるため。秘密情報は使わない。
   harness-tests:
