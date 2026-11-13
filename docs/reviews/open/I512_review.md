@@ -92,3 +92,5 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 - [fix-loop] 4 回目: 台帳 F11・F12 を案 A（囲みを全文から先に取り除く一般形）で直した — 診断レビュー PASS
 STAGE_DONE: fix-loop NEXT: review-gate
+- [review-gate] 5 回目は CI_WAIT: OK・FINAL_VERDICT: OK（`docs/reviews/I512_code_review_20261114_0234.md`）。F11・F12 は resolved。新しい F13〜F16 はすべて Low・再現なしなので直さず retro で一覧へ（打ち切りの決めのとおり）
+STAGE_DONE: review-gate NEXT: test-gate
