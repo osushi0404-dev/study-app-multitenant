@@ -33,3 +33,4 @@
 - [implement] 関係するテストだけを 1 本ずつ流し、全体は CI に任せた — run-all.sh はサンドボックスで uv の一時ファイルを書けない
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
