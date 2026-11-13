@@ -21,4 +21,8 @@
 - PR を revert する（plan §7。目印のある記録が develop にあれば先に目印を消す）
 
 ## 自律判断の記録
+- [plan] grill-me の 4 問はユーザーの委任（「ベストなやり方で」）を受けてすべて推奨案で確定 — 取り消しやすく手間が増えず安全側に倒れる案
+- [plan] アプリ本体の行には目印を効かせない — アプリ本体の Medium・SECURITY=yes が最優先から外れるのを防ぐ（効く範囲を狭める安全側）
+- [plan-review] Warning 2 件は計画書・manual_test を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement

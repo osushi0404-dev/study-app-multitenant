@@ -40,6 +40,7 @@
 - AC6: 前の形（`ACCEPTED=` の欄の無い）の FINDING・LEDGER 行も今までどおり読め、振り分けが変わらない（テストで確かめる）
 - AC7: `docs/plans/templates/plan_template.md` の「## 8. Risk & 回避策」の表に「処遇」の列がある
 - AC8: `docs/reviews/backlog/I430.md` に F1〜F3 の行がある
+- 同梱（一覧から・AC の外。理由は §9）: 一覧の I480 F1（`--route backlog` の行に `SECURITY=` の欄を足す・`FILE=… |` の並びは変えない＝R4・TC-07）と I208 F3（`--route` の第 3 引数を `^I[0-9]+$` で確かめる・TC-05）
 
 ## 3. 影響範囲
 - Backend: なし
@@ -208,5 +209,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 3 | 読んで可 | 前の形の行（I197・I205・I202・I208 の形）の読み方と、目印の無い行の LEDGER 行が変わらない: TC-04・TC-06 |
 
 ## レビュー結果
+- [20261114_0117 判定: ✅ 完了](../../reviews/I512_plan_review_20261114_0117.md)
 
 ## 計画変更記録
+- 2026-11-14 計画レビュー 1 回目（OK・Warning 2・Info 2）への対応: 一覧からの同梱 2 件（I480 F1・I208 F3）を §2 に AC の外として明記・manual_test No.2 の手順を ledger_route の 1 通りに決め、行を SECURITY=yes にした（目印が効かないと issue 側になる形）。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
