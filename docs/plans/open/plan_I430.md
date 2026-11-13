@@ -59,6 +59,8 @@
 | S18 | 見張りなし・**auto モード**で、Write ツールで別のワークツリーに書く | **書けてしまった**（判定役が通した。書いたファイルはすぐ消した）→ Edit／Write の別ワークツリーの判定（G01）は見張りに残す |
 | S19 | primary のセッションで、作業ディレクトリの中の `.claude/worktrees/` への書き込みを `filesystem.denyWrite` で止める（相対・`./` つき・絶対の 3 通り） | 成立。3 通りとも止まり、ほかの場所には書けた |
 | S20 | 一時のリポジトリのプロジェクトの `.claude/settings.json` に `failIfUnavailable` を書き、`bwrap` を除いた `PATH`（`/usr/bin` の `bwrap` 以外へのリンクだけを並べたフォルダ。道具は消さない）で `claude -p` を起こす（計画レビューの Blocker への対応・2026-11-13） | 成立。`true` は `Error: sandbox required but unavailable … Refusing to start without a working sandbox` で exit 1（起動しない）。`false` は `⚠ Sandbox disabled … Commands will run WITHOUT sandboxing` を出して動き、中で `SANDBOX_RUNTIME` が無かった |
+| S21 | サンドボックスの中から `.claude/settings.json`・見張り（`pretooluse_guard.py`）・`.claude/` の下の新しいファイルを `touch` する（design-security-review・2026-11-13） | `.claude/settings.json` は `Read-only file system`（Claude Code が自動で守る）。見張りと新しいファイルは書けた（見張りは Edit でも直せる・今と同じ） |
+| S22 | 一時のリポジトリで、`.claude/settings.json` の中身が違うブランチへ、サンドボックスの中から `git checkout other`（design-security-review） | **不成立（事故）**。`error: unable to unlink old '.claude/settings.json': Device or resource busy` を出しながらブランチだけが切り替わり、設定ファイルが古い中身のまま「変更あり（M）」で残った → git をまるごと外に出す（4-2・計画変更記録） |
 
 ### 見張りの判定の棚卸し（読み取り・2026-11-13）
 判定は 39 種（G01〜G39）。主なものと、公式・GitHub で代わりに止まるか（全体の表は 4-1）:
@@ -108,7 +110,7 @@
 
 | 守るもの | 公式・GitHub の守り（出典） | 止まらない漏れ | 見張りの扱い |
 |---|---|---|---|
-| (B) 別のワークツリー・primary への Bash の書き込み | サンドボックスの書き込みの制限（sandboxing.md「Default write behavior」・S2）。primary のセッションからの `.claude/worktrees/` は `denyWrite`（S19） | 外に出したコマンド（docker・gh・git push/fetch/pull・`bash scripts/claude/*`）の中の書き込み | G02・G03 を消す。漏れは受け入れる（4-2）。外に出すもののうち、git push/fetch/pull・gh が書くのは今の作業ディレクトリと共有の `.git`（と gh の鍵の控え）だけ、docker は bind mount の先（コンテナの判定が残る）、`bash scripts/claude/*` はレビュー済みのリポジトリのスクリプト |
+| (B) 別のワークツリー・primary への Bash の書き込み | サンドボックスの書き込みの制限（sandboxing.md「Default write behavior」・S2）。primary のセッションからの `.claude/worktrees/` は `denyWrite`（S19） | 外に出したコマンド（docker・gh・git・`bash scripts/claude/*`）の中の書き込み。primary のセッションからの `git -C .claude/worktrees/<別> …`（ワークツリーのセッションでは Claude Code が断る） | G02・G03 を消す。漏れは受け入れる（4-2）。外に出すもののうち、git・gh が書くのは今の作業ディレクトリと共有の `.git`（と gh の鍵の控え）だけ（primary からの `git -C` の危ない操作は G13〜G15 が今までどおり止める）、docker は bind mount の先（コンテナの判定が残る）、`bash scripts/claude/*` はレビュー済みのリポジトリのスクリプト |
 | (B) 別のワークツリーへの Edit／Write | 無い（Edit はサンドボックスの外。auto モードで通った・S18。deny は「primary の下、ただし自分は除く」を書けない） | 全部 | **G01 を残す** |
 | (B) 作業ディレクトリの中の戻せない操作（未コミットの変更の取り消し・`reset --hard`・`clean -f`・`rm -r`・`find -delete`） | 無い（中は書ける） | 全部 | G13〜G15・G32 を残す |
 | (B)(C) コンテナの中の操作（DB の破壊・秘密の表示・外部への送信・/tmp 以外への書き込み） | 無い（docker は外に出す・sandboxing.md「docker is incompatible」） | 全部 | G16〜G23・G26・G27・G29〜G31 を残す（コンテナの許可リストの整理は #444 の範囲で済んでいる） |
@@ -119,7 +121,7 @@
 | (A)(B) fork の PR の手元への取り込み（`gh pr checkout`・`gh co`。相手の `.claude/` とフックが手元で動く） | 許可の設定の deny（permissions.md の前方一致） | `git fetch origin pull/<N>/head` などの別の書き方（今も見張りの対象外・workflow.md の手順で扱わない） | G33 の取り込みの判定を消し、deny `Bash(gh pr checkout *)`・`Bash(gh co *)` に置き換える |
 | (A) fork の PR への ready・edit・update-branch・承認（今は確認） | GitHub（承認は Code Owners の分しか数えない・マージは bot にできない） | fork の PR の題・本文の書き換え、fork のブランチへのマージコミット（相手のブランチ・取り消せる） | G34・G35 を消す（GitHub の MCP は入れていない・`.mcp.json` は playwright だけ） |
 | (C) 手元の秘密ファイルの読み出し（Bash） | Read の deny の場所はサンドボックスでも読めない（S4）。App の鍵は `denyRead`（S11） | `git show`・`git diff` での履歴からの表示・コンテナの中 | G24・G25 は残す（ホストとコンテナで同じ関数を使い、ホストの分だけを分けると判定が増える） |
-| (C) 外部への送信（ホストの Bash） | `network.allowedDomains`＋`strictAllowlist`（S3）・既存の deny（`curl`・`wget` など） | 許可した宛先（GitHub）経由の持ち出し（TLS の中を見ない・文書の警告）・外に出したコマンド・コンテナの中 | G20〜G22 は残す（主にコンテナ） |
+| (C) 外部への送信（ホストの Bash） | `network.allowedDomains: []`＋`strictAllowlist`（中からはどこにもつながらない。S3）・既存の deny（`curl`・`wget` など） | 外に出したコマンド（git・gh の宛先は GitHub、App の鍵はこのリポジトリだけに効く）・コンテナの中 | G20〜G22 は残す（主にコンテナ） |
 | (B) Playwright の書き先 | 無い（MCP はサンドボックスの外） | 全部 | G36 を残す |
 | (C) ワークフロー・pre-commit の設定の書き換え | 無い（ask にすると毎回確認になる） | 全部 | G37 を残す |
 | 見張り自身の読み落とし・失敗 | フックの `timeout`・`onFailure: block`（hooks.md） | — | G38・G39 を残す |
@@ -138,18 +140,15 @@
     "docker *",
     "docker-compose *",
     "gh *",
-    "git push *",
-    "git fetch *",
-    "git pull *",
+    "git *",
     "bash scripts/claude/*"
   ],
   "filesystem": {
     "denyWrite": [".claude/worktrees"],
-    "denyRead": ["~/.config/github-app", "~/.cache/github-app"],
-    "allowWrite": ["~/.cache/pre-commit"]
+    "denyRead": ["~/.config/github-app", "~/.cache/github-app"]
   },
   "network": {
-    "allowedDomains": ["github.com", "api.github.com", "pypi.org", "files.pythonhosted.org", "registry.npmjs.org"],
+    "allowedDomains": [],
     "strictAllowlist": true
   }
 }
@@ -160,15 +159,15 @@
 |---|---|
 | `docker *`・`docker-compose *` | docker はサンドボックスと両立しない（文書）。S6 |
 | `gh *` | 鍵の取り直しで `~/.cache/github-app` に書く（`~/.local/bin/gh-app-token`）。その場所は `denyRead` で塞ぐので、中では動かない。S7 |
-| `git push *`・`git fetch *`・`git pull *` | 資格情報の仕組み（同じ `gh-app-token`）が鍵の控えを読み書きする。S8・S9 |
+| `git *` | (1) push・fetch・pull は資格情報の仕組み（同じ `gh-app-token`）が鍵の控えを読み書きする（S8・S9）(2) サンドボックスの中では `.claude/settings.json` が読み取り専用になり（S21）、設定ファイルが違うブランチへの checkout・switch・merge・rebase などが設定ファイルだけ古いまま残す事故になる（S22）。作業ツリーを書き換える git のサブコマンドを列挙すると漏れが同じ事故になるので、git をまるごと外に出す。git が書くのは作業ディレクトリと共有の `.git` で、ワークツリーのセッションでは別のワークツリーを指す git の操作を Claude Code が断る（2026-11-13 にこの会話で観測: 「a worktree-isolated session's git operations must target its own worktree」）。危ない git の操作（reset --hard・未コミットの変更の取り消し・force push など）は今までどおり見張りが止める。`git commit` の pre-commit も外で動く（今と同じ） |
 | `bash scripts/claude/*` | レビュー役の `claude -p`（`api.anthropic.com`・`~/.claude` への書き込み）と、中で gh を呼ぶスクリプト（`issue-source.sh`・`code-review.sh`・`pr-base-sync.sh` ほか 8 本）が中では動かない。S10・S12・S13。ハーネステスト（`run-all.sh` の `uv`）もここに当たる |
 
 - `bash scripts/claude/*` は「作業ディレクトリのファイルを外で動かせる」形（文書の警告）。`scripts/claude/**` は Claude が Edit できる。脅威モデルは事故なので、普通の書き方（手順書どおりのスクリプトの呼び出し）では問題ないと判断し、受け入れる（8. Risk）。`bash *`・`python3 *`・`sh *` のような一般のインタプリタは外に出さない（TC-01 で固定する）
 - 最小権限の点検（ユーザーの指示「BP の観点で問題ないやり方で」・2026-11-13）: 外に出すスクリプトを、要るもの（claude・gh・git push・docker を中で呼ぶ約 15 本と run-all.sh）の一覧に絞る案と比べた。どちらも Claude が Edit できるスクリプトが外で動く点は同じで、守りの強さは変わらない。一方、一覧に絞ると、新しいスクリプトが gh などを使い始めたときに、中で黙って失敗する（一覧の漏れに気づきにくい）。そのためディレクトリごとにする。`bash scripts/claude/../<外>` のような `..` を使う書き方は、普通の書き方の事故では起きないので対象外（意図的な回避）
 - `denyWrite: [".claude/worktrees"]`: primary のセッションでは他のワークツリーが作業ディレクトリの中にあるため（S19）。ワークツリーのセッションでは、その下にある入れ子（サブエージェントのワークツリー）を守る
 - `denyRead`: GitHub App の秘密の鍵と 1 時間の鍵の控え（S4・S11）。gh・git push は外で動くので影響しない
-- `allowWrite: ["~/.cache/pre-commit"]`: pre-commit の設定の版を上げた後の最初の `git commit`（中で動く）が、検査の環境を作れるようにする。中の実行ファイルを動かすのは pre-commit だけで、`git commit` もサンドボックスの中で動く
-- `allowedDomains`: GitHub（`git clone` で pre-commit の環境を作る・`api.github.com`）と、pre-commit の環境に要る PyPI・npm。`strictAllowlist: true` で一覧の外は確認を出さずに拒否（持ち出しの事故を確認の画面で通さない）
+- `allowedDomains: []`・`strictAllowlist: true`: 通信の要るもの（git・gh・docker・レビュー役のスクリプト）はすべて外に出したので、中で通信の要るコマンドは無い（最小権限）。一覧の外は確認を出さずに拒否する（持ち出しの事故を確認の画面で通さない）。中で通信が要るコマンドが見つかったら、宛先を足すか外に出すかを計画変更記録に書いて決める
+- `filesystem.allowWrite` は足さない（pre-commit は `git commit` と一緒に外で動く）
 
 足す deny（4-1 の G33 の置き換え）:
 - `"Bash(gh pr checkout *)"`・`"Bash(gh co *)"`（手順で使っていない・2026-11-13 に `.claude/skills`・`scripts/claude`・`docs/runbooks` を grep して 0 件）
@@ -201,6 +200,7 @@
   - 新しい小節「見張りに判定を足すときの決まり（I430）」: ①足す前に、公式の仕組み（`.claude/settings.json` の deny／ask・サンドボックスの設定）で表せないかを計画に書き、表せるなら公式を使う ②足すなら、実際に起きた事故の例を計画に書く（レビューの「この書き方でもすり抜けられる」だけでは足さない）③レビューで見張りへの意図的な回避の指摘が出たら、Low として一覧（`docs/reviews/backlog/`）に回すだけにし、後続のイシューにしない
   - 「新しい秘密ファイルを置くときは」の項に、リポジトリの外の秘密は `sandbox.filesystem.denyRead` に足すと書く
   - サンドボックスの外に出すもの（`excludedCommands`）の項: `scripts/claude/` に置いたスクリプトは `bash scripts/claude/…` で呼ぶとサンドボックスの外で動く。スクリプトを足す・中で呼ぶ道具を変えるときは、外で動いてよいもの（中で書き込み・通信の制限を外したいもの）かをレビューで見る。一般のインタプリタ・シェルを `excludedCommands` に足さない（計画レビューの Warning への対応）
+  - git のコマンドは git 以外のコマンドと 1 回の呼び出しでつながない（つなぐとサンドボックスの中で動き、`.claude/settings.json` が読み取り専用なので、設定ファイルの違うブランチへの切り替えで設定ファイルだけ古く残る。計画 S22・R10）
   - fork の PR の取り込みの deny（`gh pr checkout`・`gh co`）は前方一致で、`gh -R x pr checkout` のようにオプションを挟んだ形には当たらない（意図的な回避は対象外）と書く（計画レビュー 2 回目の Info）
 - 実装で `.claude/skills/`・`.claude/agents/` を `gh pr checkout`・`gh co`・`fork`・`cross`・`保護ブランチ` で grep し、消す判定（G33〜G35・G05）を説明している箇所があれば、4-5 と同じ方針で直す（計画レビューの Info への対応。2026-11-13 の時点では `docs/runbooks` だけに見つかった）
 - `docs/runbooks/plan-writing-rules.md`: 新しい小節「見張り（`pretooluse_guard.py`）に判定を足す計画」。計画に書くこと 3 つ（公式で表せないかの検討・事故の実例・意図的な回避の指摘は一覧へ）を書き、正は danger-ops.md の小節と書く
@@ -222,7 +222,7 @@
   - そのほか、実装で `run-all.sh` を流して落ちたテスト（候補: `test_pretooluse_guard_matrix.sh`・`test_i200_guard_narrowing.sh`・`test_i182_guard_failsafe.sh`・`test_i197_adversarial_process.sh`・`test_wt_lifecycle.sh`・`guard_bash_oracle.py`・`test_i444_guard_gaps.sh`・`test_i454_guard_env_writes.sh`・`test_i463_guard_optspec.sh`・`test_i469_guard_optspec_leftovers.sh`。後ろの 4 本は D1・D2 が触る共有の関数〔書き先・push の宛先・オプションの表〕の周りを見るので、決定論ゲートにも入れる＝TC-07）は、落ちた期待値が消した判定のものかを 1 件ずつ確かめてから消す。残す判定の期待値が落ちたら、見張りの削除の誤りとして直す（テストを直さない）
 
 ## 5. 実装手順（ステップ）
-1. **設定（未知のリスクの先）**: `.claude/settings.json` に 4-2 の `sandbox`・deny 2 行を足し、GitHub MCP のフックの登録を消す。このワークツリーのセッションの Bash にも効く見込み（S14）なので、足した直後に、この会話の Bash で作業場所の中の書き込み・`git status`・`bash scripts/claude/issue-source.sh gh-number I430` が動くことを確かめる → TC-10・M-01・M-07。動かなければ `sandbox.enabled` を false に戻して（Edit はサンドボックスの外）計画をやり直す。あわせて、pre-commit の環境を新しく作る形（`allowWrite` の下の新しい場所を `PRE_COMMIT_HOME` にした `pre-commit run`）が中で通るかを確かめる → M-14。通らなければ足りない宛先か書き込み先を一覧に足し、計画変更記録に書く（一般のインタプリタ・広い場所は足さない）
+1. **設定（未知のリスクの先）**: `.claude/settings.json` に 4-2 の `sandbox`・deny 2 行を足し、GitHub MCP のフックの登録を消す。このワークツリーのセッションの Bash にも効く見込み（S14）なので、足した直後に、この会話の Bash で作業場所の中の書き込み・`git status`・`bash scripts/claude/issue-source.sh gh-number I430` が動くことを確かめる → TC-10・M-01・M-07。動かなければ `sandbox.enabled` を false に戻して（Edit はサンドボックスの外）計画をやり直す。あわせて、`.claude/settings.json` の中身が違うブランチへの切り替えが、外に出した git で設定ファイルまで切り替わることを確かめる → M-14。中で通信が要るコマンドが見つかったら、宛先を足すか外に出すかを計画変更記録に書く（一般のインタプリタ・広い宛先は足さない）
 2. **設定のテスト**: `test_settings_permissions.sh` を 4-6 のとおり直す（ステップ 1 の後） → TC-01
 3. **見張りの削除**: 4-3 の D1・D2・D3 の順に消す（ステップ 2 と並行してよい）。1 つ消すごとに関係するテストの期待値を 4-6 のとおり直す → TC-02〜TC-07・TC-08
 4. **手順書**: 4-5 を直す（ステップ 3 の後。消した判定に合わせる） → TC-11・TC-12
@@ -238,7 +238,7 @@
 - 失敗の注入: TC-01 の各決まりに FG を付ける（設定を壊した写しで不合格になる）
 
 ### 手動（`docs/tests/open/I430_manual_test.md`・実施者はすべて Claude・`claude -p の判定`）
-- 最終の `.claude/settings.json` を読ませた新しいセッションで、S1〜S20 のうち公式に任せた判定の分を流し直す（M-01〜M-14）
+- 最終の `.claude/settings.json` を読ませた新しいセッションで、S1〜S22 のうち公式に任せた判定と外に出した git の分を流し直す（M-01〜M-14）
 - Human の行は無い
 
 ## 7. ロールバック
@@ -254,6 +254,7 @@
 | R2: `bash scripts/claude/*` を外に出すので、Claude が書いたスクリプトを外で動かせる | 脅威モデルは事故。`scripts/claude/` は PR でレビューされる。一般のインタプリタは外に出さない（TC-01）。見張りは外に出したコマンドにも今までどおり効く |
 | R3: 許可した宛先（github.com）経由の持ち出し（文書の警告） | 事故の範囲では起きにくい（秘密の場所は `denyRead`・Read の deny で読めない）。TLS の中を見るプロキシは費用に見合わないので入れない |
 | R4: `failIfUnavailable` で、道具の無い PC で Claude Code が起動しない | onboarding.md に入れ方を書く。起動しないほうが「守りが無いまま動く」より安全。GitHub Actions では Claude Code を起動していない（2026-11-13 に `.github/` を grep して 0 件） |
+| R10: git と git 以外を 1 回の呼び出しでつなぐ（`git checkout X && npm …`）と、全体が中で動き、設定ファイルが違うブランチへの切り替えで設定ファイルだけ古く残る（S22 と同じ事故） | git だけをつなぐ形（`git fetch … && git checkout …`）は全部が `git *` に当たるので外で動く。git と他をつながない決まりを danger-ops.md に書く（4-5）。起きたときは `error: unable to unlink old '.claude/settings.json'` が出て気づけ、git を単体で `git checkout -- .claude/settings.json` と流せば戻る |
 | R9: deny `Bash(gh pr checkout *)` は前方一致なので、`gh -R x pr checkout` のようにオプションを挟んだ形に当たらない | 普通の書き方の事故ではない（意図的な回避）。danger-ops.md に「前方一致」と書く |
 | R5: 見張りの削除で、残す判定まで壊す | 残す判定のテスト（push・コンテナ・checkout・matrix・oracle・止めるべき形の一覧）を変えずに流す。期待値を消すのは消した判定の分だけ（4-6） |
 | R6: manual モードでは変数入りのコマンドが確認になる（S1b） | ユーザーのセッションは auto モードで、通ることを確かめた（S16）。`claude -p` のレビュー役は Read・Grep・Glob だけを使う |
@@ -272,7 +273,7 @@
 Claude が決めた（技術的な選択と理由。設定の変更はユーザーに確かめる＝下の Danger Ops）:
 - `allowUnsandboxedCommands: false`・`failIfUnavailable: true`（安全側。外での再実行は、auto モードでは判定役が通しうるので、別ワークツリーへの書き込みの事故の経路になる。`failIfUnavailable` がプロジェクトの設定から効くことは S20 で確かめた）
 - 外に出すコマンドの一覧（4-2。S6〜S13 の結果）
-- `denyWrite: [".claude/worktrees"]`・`denyRead`（App の鍵）・`allowWrite`（pre-commit の環境）・`allowedDomains` 5 つ・`strictAllowlist: true`
+- `denyWrite: [".claude/worktrees"]`・`denyRead`（App の鍵）・`allowedDomains: []`・`strictAllowlist: true`・git をまるごと外に出す（S22）
 - fork の PR の判定を deny と GitHub に置き換える（4-1。記録上 0 件・手順で使わない・GitHub がマージを止める）。ready・edit・update-branch・承認の確認は無くす（GitHub が実害を止める）
 - G01（Edit の別ワークツリー）・G24/G25（秘密ファイル）・コンテナの判定は残す（S18・4-1）
 - allow・`autoMode.environment`・`Read(*)` などは変えない（4-4）
@@ -323,3 +324,53 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 2026-11-13 計画レビュー 2 回目（HIGHRISK・Warning 3・Info 2）への対応: pre-commit の環境を新しく作る形の確かめ（M-14・ステップ 1）・TC-02 の合否を Edit／Write の例に絞る・4-1 の外に出すものの書き込み先の説明を正確に・R4 に GitHub Actions で Claude Code を起動していないこと（grep 0 件）・R9 と danger-ops の前方一致の注記。方式・範囲・受け入れ条件は変えないので計画レビューはやり直さない
+- 2026-11-13 design-security-review の Blocker（S22）への対応:
+  - 計画書の記載: `excludedCommands` に `git push *`・`git fetch *`・`git pull *`。`filesystem.allowWrite: ["~/.cache/pre-commit"]`・`allowedDomains` に GitHub・PyPI・npm の 5 つ。M-14 は pre-commit の環境を新しく作る確かめ
+  - 採った方法: `git *` をまるごと外に出す。`allowWrite` を消し、`allowedDomains` を空にする（`strictAllowlist: true` のまま）。M-14 を「設定ファイルの違うブランチへの切り替え」の確かめに替える。R10 と danger-ops の「git を他とつながない」を足す
+  - 理由: サンドボックスの中では `.claude/settings.json` が読み取り専用で（S21）、中の `git checkout` が設定ファイルだけ古く残す事故になった（S22）。サブコマンドを列挙すると漏れが同じ事故になる。git を外に出すと pre-commit も外で動くので `allowWrite` と PyPI・npm の宛先が要らなくなり、中で通信が要るコマンドが無くなった（最小権限）
+  - 計画レビューのやり直し: 要（外に出す範囲＝方式を変える）
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-13
+
+アプリのコード（backend・frontend）の変更は無い。対象は、手元の開発の守り（サンドボックス・許可の設定・見張り）の変更で生まれうる穴。脅威モデルは「事故」（意図的な回避は対象外・`docs/runbooks/danger-ops.md`）。この段階で S21・S22 を足して試した。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Blocker（計画変更で解消済み） | ファイル操作 | サンドボックスの中では `.claude/settings.json` が読み取り専用（S21）。中の `git checkout` で、設定ファイルの違うブランチに切り替えると、設定ファイルだけ古いまま「変更あり」で残る（S22）。古い設定のまま作業が進み、見張りの登録・deny の違いに気づけない | `git *` をサンドボックスの外に出す（4-2）。M-14 で確かめる。git と他をつながない決まり（R10・danger-ops） |
+| High（計画で解消済み） | 機密情報 | GitHub App の秘密の鍵・1 時間の鍵の控えが、サンドボックスの中から読める（S4。Read の deny `**/*.pem` はリポジトリの中だけ） | `filesystem.denyRead` に 2 つの場所を入れる（S11・M-10）。TC-01 で消すと不合格にする |
+| Medium（受け入れ） | 認証・認可（最小権限） | `git *`・`gh *`・`docker *`・`bash scripts/claude/*` は外で全部の権限で動く。`scripts/claude/` は Claude が Edit できるので、書いたスクリプトを外で動かせる | 外に出すのは中で動かないものだけ。一般のインタプリタ・シェルは外に出さない（TC-01）。外に出したコマンドにも見張り・deny・auto モードの判定役が今までどおり効く。スクリプトの追加はレビューで見る（danger-ops） |
+| Low | 外部通信 | 外に出した git・gh は GitHub と通信できる。App の鍵はこのリポジトリだけに効き、リポジトリは公開 | 中は `allowedDomains: []`・`strictAllowlist: true` でどこにもつながらない（M-11）。見張りの外部送信の判定（G20〜G22）は残す |
+| Low | セキュリティ設定ミス | `failIfUnavailable` が効かないと、道具の無い PC でサンドボックスなしに動く | プロジェクトの設定から効くことを確かめた（S20・M-13）。onboarding.md に道具の入れ方 |
+| Low | 依存 | bubblewrap 0.9.0-1ubuntu0.3・socat 1.8.0.0-4ubuntu0.1 を足した | Ubuntu の公式の配布（noble-updates・noble-security）。更新は apt の通常の更新で入る |
+| なし | マルチテナント・入力検証・OWASP（XSS・SQLi・CSRF・IDOR） | アプリのコードを変えない | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | Bash（ワークツリーのセッション） | Claude（auto） | 別のワークツリー・primary へ `echo >`・`cp`・`rm` | 書けない（サンドボックス） | No（実機の bwrap が要る） | Yes: M-02・M-03 | 外に出したコマンドの中の書き込み（git・gh は自分の作業ディレクトリだけ） | Low |
+| 2 | Bash（primary のセッション） | Claude（auto） | `.claude/worktrees/<別>` の下へ書く | 書けない（`denyWrite`） | No | Yes: M-04 | primary からの `git -C .claude/worktrees/<別> …`（危ない操作は G13〜G15 が止める） | Low |
+| 3 | Bash（サンドボックスに止められた後） | Claude（auto） | `dangerouslyDisableSandbox` で外で再実行 | 外で動かない（`allowUnsandboxedCommands: false`） | Yes: TC-01（設定の決まり） | Yes: M-05 | なし | Low |
+| 4 | Edit／Write | Claude（auto） | 別のワークツリーに書く（S18 で判定役が通した） | 見張りが止める（G01 を残す） | Yes: TC-02 | Yes: M-12 | なし | Low |
+| 5 | Bash の git | Claude（auto） | 設定ファイルの違うブランチへ切り替える | 設定ファイルまで切り替わる（git は外） | No | Yes: M-14 | git と他をつないだ形（R10。エラーで気づける） | Low |
+| 6 | Bash | Claude（auto） | App の鍵・`.env` を読む | 読めない（`denyRead`・Read の deny） | Yes: TC-01（設定の決まり） | Yes: M-10 | 外に出したコマンドからは読める（今と同じ。見張りの G24 が `.env` の表示を確認にする） | Low |
+| 7 | Bash | Claude（auto） | fork の PR を `gh pr checkout`・`gh co` で取り込む | 拒否（deny） | Yes: TC-01 | Yes: M-09 | オプションを挟んだ書き方（R9・意図的な回避） | Low |
+| 8 | Bash | Claude（auto） | develop／main へ push・fork の PR をマージ | GitHub が拒否（bot は push・マージできない） | No（GitHub の設定） | No（I178 の確認 6 で確かめ済み・branch-protection-setup.md） | なし | Low |
+| 9 | Bash（`bash scripts/claude/*`） | Claude（auto） | Edit で書き換えたスクリプトを外で動かす | 事故の範囲では起きない（手順書どおりの呼び出し） | Yes: TC-01（一般のインタプリタを外に出さない） | No | 意図的な回避（対象外） | Medium |
+| 10 | 起動 | — | 道具（bwrap）の無い PC で起動 | 起動しない（`failIfUnavailable`） | No | Yes: M-13 | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 1件（計画変更で解消済み・計画レビューをやり直す） | 0件 |
+| High    | 1件（計画で解消済み） | 0件 |
+| Medium  | 1件（受け入れ） | 1件（受け入れ） |
+| Low     | 3件 | 9件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）

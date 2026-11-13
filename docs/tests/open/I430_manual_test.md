@@ -19,6 +19,6 @@
 | 11 | M-11: auto モード・見張りなしで `python3 -c` から `https://example.com` に接続 | 接続できない（確認の画面も出ない＝`permission_denials` が空） | Claude | claude -p の判定 |  |  |
 | 12 | M-12: auto モード・**見張りつき**で、Write ツールで別のワークツリー（`/mnt/c/app/study-app-multitenant/.claude/worktrees/app-1/.spike_I430w`）に書く | 見張りが止める（`別 worktree` の文言）。ファイルができない | Claude | claude -p の判定 |  | G01 を残した確かめ（見張りなしでは auto モードで書けた＝計画 S18） |
 | 13 | M-13: 一時のリポジトリ（スクラッチパッド。`.claude/settings.json` に最終の `sandbox` の写し）を作業ディレクトリにし、`bwrap` を除いた `PATH`（`/usr/bin` の `bwrap` 以外へのリンクだけを並べたフォルダと `~/.local/bin`。道具は消さない）で `claude -p` を起こす | `Error: sandbox required but unavailable` と `Refusing to start without a working sandbox` が出て、終了コードが 0 以外（起動しない） | Claude | claude -p の判定 |  | 計画 S20 の流し直し（最終の設定の写しで） |
-| 14 | M-14: manual モード・見張りつきで `PRE_COMMIT_HOME=/home/tacic/.cache/pre-commit/i430-fresh pre-commit run --files docs/issues/open/I430.md`（環境を新しく作る形） | 各フックの環境ができ、`Passed` か `Skipped` が並ぶ（`Read-only file system` や接続の失敗が無い）。終わったら試しのセッションの外で `/home/tacic/.cache/pre-commit/i430-fresh` を消す | Claude | claude -p の判定 |  | 計画レビュー 2 回目の Warning（allowWrite・allowedDomains の実証） |
+| 14 | M-14: 一時のリポジトリ（スクラッチパッド。`main` と `other` で `.claude/settings.json` の中身が違い、どちらにも最終の `sandbox` の写し）を作業ディレクトリにし、manual モードで `git checkout other` を 1 回流す | `error: unable to unlink` が出ず、`git status --short` が空で、`.claude/settings.json` が `other` の中身になっている（外に出した git で切り替わる） | Claude | claude -p の判定 |  | 計画 S22 の事故が起きないことの確かめ（design-security-review） |
 
 結論: OK / NG

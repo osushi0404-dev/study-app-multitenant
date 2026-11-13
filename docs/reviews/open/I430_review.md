@@ -29,6 +29,7 @@
 - [plan] 安全装置の変更（止めて聞く条件 2）をユーザーに確かめた — 答えは「BP の観点で問題ないやり方で進めて」
 - [plan-review] 1 回目の Blocker（`failIfUnavailable` の未実証）は、道具を消さずに `bwrap` を除いた `PATH` で試して実証した（S20）— 環境を壊さずに実機で確かめられたため
 - [plan-review] 2 回目の Warning・Info は計画変更記録に書いて直し、計画レビューはやり直さない — 方式・範囲・受け入れ条件を変えないため
+- [design-security-review] `git *` をまるごとサンドボックスの外に出し、`allowWrite` を消して `allowedDomains` を空にした — 中では `.claude/settings.json` が読み取り専用で、中の `git checkout` が設定ファイルだけ古く残す事故になった（S22）。サブコマンドの列挙は漏れが同じ事故になるため。方式の変更なので計画レビューをやり直す
 
 STAGE_DONE: plan NEXT: plan-review
 
