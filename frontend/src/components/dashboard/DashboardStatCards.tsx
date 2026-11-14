@@ -33,17 +33,36 @@ const StatCard: React.FC<StatCardProps> = ({ icon, color, label, value, footer }
   </Card>
 );
 
-const noRecord = <Typography variant="body1" color="text.secondary">{NO_RECORD_TEXT}</Typography>;
+const GoalFooter: React.FC<GoalProgress> = ({ todayMinutes, goalMinutes }) => (
+  <>
+    <LinearProgress
+      variant="determinate"
+      value={Math.min((todayMinutes / goalMinutes) * 100, 100)}
+      sx={{ mt: 2 }}
+    />
+    <Typography variant="caption" color="text.secondary">
+      目標（全科目）: {goalMinutes}分 ({Math.floor((todayMinutes / goalMinutes) * 100)}%)
+    </Typography>
+  </>
+);
+
+const noRecord =<Typography variant="body1" color="text.secondary">{NO_RECORD_TEXT}</Typography>;
+
+/** 1 日の目標の進み具合（全科目の今日の分と目標の分・I513） */
+export interface GoalProgress {
+  todayMinutes: number;
+  goalMinutes: number;
+}
 
 interface DashboardStatCardsProps {
   overview: DashboardOverview;
-  goalMinutes: number | null;
+  /** 目標は 1 日全体のものなので、選んだ科目に関係なく全科目の値で渡す（出さないときは null） */
+  goalProgress: GoalProgress | null;
 }
 
-const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalMinutes }) => {
+const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalProgress }) => {
   const { has_data: hasData, totals } = overview;
   const todayMinutes = todayStudyMinutes(overview);
-  const goalPercent = goalMinutes ? Math.min((todayMinutes / goalMinutes) * 100, 100) : 0;
 
   const cards: StatCardProps[] = [
     {
@@ -51,14 +70,7 @@ const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalM
       color: 'primary.main',
       label: '今日の学習時間',
       value: hasData ? <Typography variant="h6">{todayMinutes}分</Typography> : noRecord,
-      footer: hasData && goalMinutes !== null && (
-        <>
-          <LinearProgress variant="determinate" value={goalPercent} sx={{ mt: 2 }} />
-          <Typography variant="caption" color="text.secondary">
-            目標: {goalMinutes}分 ({Math.floor((todayMinutes / goalMinutes) * 100)}%)
-          </Typography>
-        </>
-      ),
+      footer: goalProgress && <GoalFooter {...goalProgress} />,
     },
     {
       icon: <EmojiEvents />,

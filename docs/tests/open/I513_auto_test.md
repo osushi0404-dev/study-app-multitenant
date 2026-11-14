@@ -3,9 +3,13 @@
 実行コマンド（例）: `docker compose exec backend python -m pytest dashboard/tests/test_I513_seed_dashboard_verify.py` / `docker compose exec frontend npm test -- --watchAll=false src/pages/__tests__/Dashboard.test.tsx`
 （CI が PR ごとに全体を流す。手元では流し直さない）
 
-結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
+結果（implement 段階の手元の実行・2026-11-15。正は CI）:
+- backend: `test_I513_seed_dashboard_verify.py` 65 passed（Red: 実装前は import で失敗を確かめた）
+- frontend: `Dashboard.test.tsx` 37 passed（Red: 実装前は `Bar` が無く失敗を確かめた）。`npm run typecheck`・変えたファイルの ESLint はエラー・警告 0
+
+FG の結果（2026-11-15・どれも元に戻して `cmp`・`grep` で戻ったことを確かめた）:
+- FG-1: TC-30 が落ちた（「あと25分」）／FG-2: TC-31 の 2 件が落ちた（「あと30分」が出る）。古い `/目標:/` の正規表現は新しい文言 `目標（全科目）:` に当たらないので、直さないと TC-02・TC-10c が素通りする（新しい正規表現に直した）／FG-3: TC-32（`…,2,6`）・TC-34（a）（`79分`）が落ちた
+- FG-4: TC-45 の 2 件が落ちた／FG-5: TC-44 が落ちた／FG-6: TC-43 の 3 件と TC-48 が落ちた／FG-7: TC-47 が落ちた
 
 ## Frontend（`frontend/src/pages/__tests__/Dashboard.test.tsx`）
 共通: `react-chartjs-2` のモックの `Bar` が `data-testid="bar-chart"`・`data-points`（棒の値をカンマでつなぐ）・`aria-label` を出し、`options` を変数に取る。`days()` の日付は 2026-11-07（土）〜11-13（金）。

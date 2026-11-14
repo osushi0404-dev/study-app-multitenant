@@ -14,7 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SubjectSelector } from '../components/SubjectSelector';
 import TodayReviewCard from '../components/TodayReviewCard';
 import StartQuizCard from '../components/dashboard/StartQuizCard';
-import DashboardStatCards from '../components/dashboard/DashboardStatCards';
+import DashboardStatCards, { GoalProgress } from '../components/dashboard/DashboardStatCards';
 import DashboardCharts from '../components/dashboard/DashboardCharts';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
 import WeakSubjectsCard from '../components/dashboard/WeakSubjectsCard';
@@ -31,15 +31,22 @@ const Dashboard: React.FC = () => {
   // 取得のキャッシュのキーに使う（利用者の情報が無い間の扱いは #508）
   const userId = user?.id ?? '';
   const overview = useDashboardOverview(userId, selectedSubject);
+  // 目標は 1 日全体のものなので、科目を選んでいても「すべて」を読んで全科目の今日の分で出す（I513）。
+  // 「すべて」を選んでいるときは同じキーなので、取得は 1 回にまとまる（React Query）
+  const allOverview = useDashboardOverview(userId, ALL_SUBJECTS);
   const { state: subjects, retry: retrySubjects } = useUserSubjects(userId);
   const goal = useDailyStudyGoal(userId);
   const goalMinutes = goal.status === 'done' ? goal.minutes : null;
 
   // 達成のお知らせは利用者の全体の記録の節目なので、「すべて」の応答だけで判定する（I473 F2）
-  const allSubjectsOverview = selectedSubject === ALL_SUBJECTS ? overview.data : null;
-  useDashboardAchievements(user?.id, allSubjectsOverview, goal);
+  useDashboardAchievements(user?.id, allOverview.data, goal);
 
-  const todayMinutes = overview.data ? todayStudyMinutes(overview.data) : null;
+  // 「すべて」が読み込み中・失敗のときは、目標の行と進み具合を出さない（仮の値で埋めない）
+  const allTodayMinutes = allOverview.data ? todayStudyMinutes(allOverview.data) : null;
+  const goalProgress: GoalProgress | null =
+    allOverview.data?.has_data && allTodayMinutes !== null && goalMinutes !== null
+      ? { todayMinutes: allTodayMinutes, goalMinutes }
+      : null;
 
   return (
     <Box>
@@ -59,7 +66,7 @@ const Dashboard: React.FC = () => {
             subjects={subjects}
             onRetrySubjects={retrySubjects}
             selectedSubject={selectedSubject}
-            todayMinutes={todayMinutes}
+            todayMinutes={allTodayMinutes}
             goalMinutes={goalMinutes}
           />
         </Grid>
@@ -87,7 +94,7 @@ const Dashboard: React.FC = () => {
 
       {overview.status === 'success' && (
         <>
-          <DashboardStatCards overview={overview.data} goalMinutes={goalMinutes} />
+          <DashboardStatCards overview={overview.data} goalProgress={goalProgress} />
           <DashboardCharts overview={overview.data} />
           <Grid container spacing={3} sx={{ mb: 2 }}>
             <Grid item xs={12} md={6}>
