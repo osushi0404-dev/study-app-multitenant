@@ -22,3 +22,5 @@
 - PR を revert する（マイグレーション・依存の変更なし）
 
 ## 自律判断の記録
+
+STAGE_DONE: plan NEXT: plan-review
