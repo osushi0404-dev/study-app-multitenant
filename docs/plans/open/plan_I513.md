@@ -69,7 +69,7 @@
 | ファイル | 変更 |
 |---|---|
 | `frontend/src/components/dashboard/weeklySummary.ts`（新規） | `type DashboardDay = DashboardOverview['last_7_days'][number]`。`studyMinutes(seconds) = Math.floor(seconds / 60)`。`dayRate(correct, answered) = answered > 0 ? correct / answered : null`。`dayTitle(date)` → `11/13（金）`（'YYYY-MM-DD' を分けて読み、曜日は `toLocaleDateString('ja-JP', { weekday: 'short' })`）。`dayLines(day)` → `['学習時間: ◯分', '解答数: ◯問', '正答率: ◯%' か '正答率: —']`。`weeklyTotal(days)` → `{ minutes, answered, rateText }`（秒・解答・正解をそれぞれ足してから切り捨て・割り算）。`weeklyTotalText(days)` → `直近 7 日の合計: ◯分・◯問・正答率◯%`。正答率の書式は統計画面の `formatRate`（`components/statistics/format.ts`・null は「—」・`Math.round`）を使う |
-| `frontend/src/components/dashboard/DashboardCharts.tsx` | `Line`・`LineElement`・`PointElement` を `Bar`・`BarElement` に替える（`Title`・`Legend` は使っていないので登録から外さず今のまま）。データは `studyMinutes(day.study_seconds)`。`barOptions` = `{ responsive, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => dayTitle(lastDays[items[0].dataIndex].date), label: (item) => dayLines(lastDays[item.dataIndex]) } } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }`（`interaction` を index にして、棒の高さが 0 の日〔答えはあるが 1 分未満・答えが無い日〕も、その日の列を押せば tooltip が出るようにする。tooltip は日ごとの値を閉じ込めるので `useMemo` で `lastDays` から作る）。`ChartCard` に任意の `subtitle` を足し、推移のカードの見出しの下に `weeklyTotalText(lastDays)`（`Typography variant="body2" color="text.secondary" data-testid="weekly-total"`）を出す。データ無しのときは今どおり「まだ記録がありません」だけで、合計の行も出さない。`Bar` に `aria-label`（各日の `dayTitle` と学習時間を並べた文）を付け、画面読み上げでも日ごとの値が分かるようにする |
+| `frontend/src/components/dashboard/DashboardCharts.tsx` | `Line`・`LineElement`・`PointElement` を `Bar`・`BarElement` に替える（`Title`・`Legend` は使っていないので登録から外さず今のまま）。データは `studyMinutes(day.study_seconds)`。`barOptions` = `{ responsive, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => dayTitle(lastDays[items[0].dataIndex].date), label: (item) => dayLines(lastDays[item.dataIndex]) } } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }`（`interaction` を index にして、棒の高さが 0 の日〔答えはあるが 1 分未満・答えが無い日〕も、その日の列を押せば tooltip が出るようにする。tooltip は日ごとの値を閉じ込めるので `useMemo` で `lastDays` から作る）。`ChartCard` に任意の `subtitle` を足し、推移のカードの見出しの下に `weeklyTotalText(lastDays)`（`Typography variant="body2" color="text.secondary" data-testid="weekly-total"`）を出す。データ無しのときは今どおり「まだ記録がありません」だけで、合計の行も出さない。`Bar` に `aria-label`（各日の `dayTitle`・学習時間・解答数を `11/13（金） 5分・3問` の形で読点でつないだ文）を付け、画面読み上げでも日ごとの値が分かるようにする |
 
 ### 4-3. 確かめ用のデータの管理コマンド
 修正方針: 書き込みの中身は `dashboard/verify_data.py` に置き、コマンドは引数の読み取りと出力だけにする（規約の「薄いコマンド・処理はモジュールに」）。計画（乱数）→ 期待値（計画から数える）→ DB への書き込み、の順で、期待値は `dashboard/selectors.py` を読まない。
@@ -79,6 +79,7 @@
 - `@dataclass(frozen=True) PlannedAnswer(subject_slug, answered_at: datetime, is_correct: bool, time_taken: int)`
 - `plan_answers(rng: random.Random, now: datetime) -> list[PlannedAnswer]`（純粋な関数・DB を読まない）:
   - `today = timezone.localdate(now)`。範囲の日 `today-13 … today`
+  - 順番: 境目（a〜d）を先に確定し、その後で乱数の日・科目を足す（乱数で選んだ後に境目を後から足す作りにしない。どの種でも境目が入ることを作りで保つ）
   - 必ず入れる境目: (a) 直近 7 日の中（`today-6 … today-1`）から 1〜2 日を「解答の無い日」に選ぶ (b) 今日に 1 問以上 (c) 範囲の外（`today-13 … today-7`）のどこか 1 日に 1 問以上 (d) 直近 7 日の中の解答のどれか 1 問を `time_taken` 301〜900 秒にする
   - 乱数: 解答の無い日以外の各日について、範囲の外の日は 50%・範囲の中の日は必ず、解く。解く日は科目ごとに 70% で解き（最低 1 科目）、1 科目あたり 1〜`PROBLEMS_PER_SUBJECT` 問（同じセッションで同じ問題は 1 回まで）・正解 60%・`time_taken` 20〜240 秒
   - 時刻: その日の日本時間 7:00〜22:59 の乱数。今日は 0:00〜`now` の 1 分前の間（`now` より後の解答を作らない。0:01 より前なら 0:00）
@@ -190,4 +191,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 3 | 読んで可 | 目標の行・進み具合が、選んだ科目の応答ではなく「すべて」の応答から計算される（TC-30）。「すべて」が読めないときは出さない（TC-31） |
 
 ## 計画変更記録
-- （なし）
+- 計画レビュー（`docs/reviews/I513_plan_review_20261115_0308.md`）の Warning 2 件への対応: `plan_answers` で境目を乱数より先に確定する順を明記した／TC-33 に 1 分未満で解答のある日の tooltip、aria-label に解答数を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261115_0308 判定: ✅ 完了](../../reviews/I513_plan_review_20261115_0308.md)
