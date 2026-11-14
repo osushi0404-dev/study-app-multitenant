@@ -1,24 +1,14 @@
-from datetime import timedelta
-
-from django.db.models import Avg, Sum
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
 
 from core.exceptions import create_error_response
-from core.subject_service import subject_service
-from studylogs.models import DailyStudySummary, StudyLog
 
-from .selectors import build_overview
+from .selectors import build_analytics, build_overview
 from .serializers import (
-    ANALYTICS_MAX_DAYS, AnalyticsQuerySerializer, OverviewQuerySerializer, OverviewSerializer,
+    ANALYTICS_MAX_DAYS, AnalyticsQuerySerializer, AnalyticsSerializer, OverviewQuerySerializer,
+    OverviewSerializer,
 )
-
-
-def _accuracy_percent(correct, attempted):
-    """正解数 ÷ 解いた問題数 × 100（小数第 2 位）。解いた問題数が 0・空なら 0"""
-    return round(correct * 100 / attempted, 2) if attempted else 0
 
 
 class DashboardOverviewView(views.APIView):
@@ -41,89 +31,26 @@ class DashboardOverviewView(views.APIView):
 
 
 class DashboardAnalyticsView(views.APIView):
+    """学習統計（期間の推移・科目別の内訳。クイズの答えの記録から数える・I488）"""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(parameters=[AnalyticsQuerySerializer], responses={200: AnalyticsSerializer})
     def get(self, request):
-        user = request.user
-        query = AnalyticsQuerySerializer(data=request.query_params)
+        query = AnalyticsQuerySerializer(data=request.query_params, context={'request': request})
         if not query.is_valid():
+            if 'days' in query.errors:
+                return create_error_response(
+                    '期間の指定が正しくありません',
+                    f'日数は 1〜{ANALYTICS_MAX_DAYS} の整数で指定してください',
+                    status.HTTP_400_BAD_REQUEST,
+                )
+            # 数字でない・他組織・全体共有・存在しない科目は同じ 400（違いを見せない）
             return create_error_response(
-                '期間の指定が正しくありません',
-                f'日数は 1〜{ANALYTICS_MAX_DAYS} の整数で指定してください',
+                '科目の指定が正しくありません',
+                '学習統計の科目の選択からやり直してください',
                 status.HTTP_400_BAD_REQUEST,
             )
-        days = query.validated_data['days']
 
-        end_date = timezone.now().date()
-        start_date = end_date - timedelta(days=days)
-
-        # Get daily study data
-        daily_data = []
-        current_date = start_date
-
-        while current_date <= end_date:
-            summary = DailyStudySummary.objects.filter(
-                user=user,
-                date=current_date
-            ).first()
-
-            daily_data.append({
-                'date': current_date.isoformat(),
-                'study_time': summary.total_study_time if summary else 0,
-                'problems_attempted': summary.total_problems_attempted if summary else 0,
-                'problems_correct': summary.total_problems_correct if summary else 0,
-                'accuracy': summary.accuracy if summary else 0
-            })
-
-            current_date += timedelta(days=1)
-
-        # Get subject distribution
-        subject_stats = StudyLog.objects.for_user(user).filter(
-            started_at__date__gte=start_date,
-        ).values('subject__name').annotate(
-            total_time=Sum('duration'),
-            total_problems=Sum('problems_attempted')
-        ).order_by('-total_time')
-
-        # Get performance trends
-        performance_data = self._get_performance_trends(user, start_date, end_date)
-
-        # Get subject breakdown for dropdown
-        subject_breakdown = subject_service.get_subjects_for_dropdown(user)
-
-        return Response({
-            'daily_data': daily_data,
-            'subject_distribution': list(subject_stats),
-            'performance_trends': performance_data,
-            'subject_breakdown': subject_breakdown
-        })
-
-    def _get_performance_trends(self, user, start_date, end_date):
-        # Get weekly averages for the period
-        weeks = []
-        current_week_start = start_date
-
-        while current_week_start <= end_date:
-            week_end = min(current_week_start + timedelta(days=6), end_date)
-
-            week_summary = DailyStudySummary.objects.filter(
-                user=user,
-                date__range=[current_week_start, week_end]
-            ).aggregate(
-                avg_time=Avg('total_study_time'),
-                avg_problems=Avg('total_problems_attempted'),
-                total_attempted=Sum('total_problems_attempted'),
-                total_correct=Sum('total_problems_correct'),
-            )
-
-            weeks.append({
-                'week_start': current_week_start.isoformat(),
-                'avg_study_time': week_summary['avg_time'] or 0,
-                'avg_problems': week_summary['avg_problems'] or 0,
-                'avg_accuracy': _accuracy_percent(
-                    week_summary['total_correct'], week_summary['total_attempted']),
-            })
-
-            current_week_start += timedelta(days=7)
-
-        return weeks
+        analytics = build_analytics(
+            request.user, query.validated_data['days'], query.validated_data.get('subject_id'))
+        return Response(AnalyticsSerializer(analytics).data)

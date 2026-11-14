@@ -1,7 +1,8 @@
 import { AxiosResponse } from 'axios';
 import apiClient from './api';
-import { AnalyticsData, AnalyticsFilters } from './types';
 import {
+  DashboardAnalytics,
+  DashboardAnalyticsGranularity,
   DashboardOverview,
   DashboardRecommendationKind,
   PatchedUserSettings,
@@ -65,6 +66,45 @@ const isDashboardOverview = (data: unknown): data is DashboardOverview =>
     typeof rec.reason === 'string'
   );
 
+// 推移の区切り。API の選択肢が増えても消えても、ここが合わなければ型の検査で落ちる（I488）
+const GRANULARITIES: Record<DashboardAnalyticsGranularity, true> = {
+  day: true,
+  week: true,
+  month: true,
+};
+
+const isGranularity = (value: unknown): value is DashboardAnalyticsGranularity =>
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(GRANULARITIES, value);
+
+const hasAnalyticsCounts = (value: unknown): value is Record<string, unknown> =>
+  hasCounts(value) && isNumber(value.study_seconds);
+
+/**
+ * 学習統計の応答が契約（DashboardAnalytics）の形かを、一覧の中身まで確かめる（I488）
+ * 欠けたキーを空の配列や 0 で埋めず、形が違えばエラーとして扱うため（I473 と同じ考え方）
+ */
+const isDashboardAnalytics = (data: unknown): data is DashboardAnalytics =>
+  isRecord(data) &&
+  typeof data.has_data === 'boolean' &&
+  isRecord(data.period) &&
+  isNumber(data.period.days) &&
+  typeof data.period.start_date === 'string' &&
+  typeof data.period.end_date === 'string' &&
+  isGranularity(data.period.granularity) &&
+  hasAnalyticsCounts(data.totals) &&
+  isNumber(data.totals.studied_days) &&
+  isListOf(data.trend, (bucket) =>
+    typeof bucket.start_date === 'string' &&
+    typeof bucket.end_date === 'string' &&
+    hasAnalyticsCounts(bucket)
+  ) &&
+  (data.trend as unknown[]).length > 0 &&
+  isListOf(data.subject_breakdown, (subject) =>
+    isNumber(subject.subject_id) &&
+    typeof subject.subject_name === 'string' &&
+    hasAnalyticsCounts(subject)
+  );
+
 class DashboardService {
   private readonly DASHBOARD_BASE_URL = '/api/dashboard';
   private readonly ACCOUNTS_BASE_URL = '/api/accounts';
@@ -80,11 +120,14 @@ class DashboardService {
     return response.data;
   }
 
-  async getAnalytics(filters: AnalyticsFilters): Promise<AnalyticsData> {
-    const response: AxiosResponse<AnalyticsData> = await apiClient.get(
+  async getAnalytics(params: { days: number; subject_id?: string }): Promise<DashboardAnalytics> {
+    const response: AxiosResponse<unknown> = await apiClient.get(
       `${this.DASHBOARD_BASE_URL}/analytics/`,
-      { params: filters }
+      { params }
     );
+    if (!isDashboardAnalytics(response.data)) {
+      throw new Error('学習統計の応答の形が違います');
+    }
     return response.data;
   }
 

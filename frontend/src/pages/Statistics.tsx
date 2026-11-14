@@ -1,375 +1,170 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * 学習統計（I488 で作り直し）
+ *
+ * 上から: 見出し → 絞り込み（期間・科目）→ 期間 → 数字のカード → タブ（学習時間・正答率・科目別（全科目））
+ * 取得と状態はフック、表示は components/statistics の部品が受け持つ。
+ * 読み込み中・失敗・データ無しは絞り込みの下だけを置き換え、絞り込みは出し続ける。
+ */
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Grid,
+  Alert,
+  Box,
+  Button,
   Card,
   CardContent,
-  Typography,
-  Box,
   FormControl,
+  Grid,
   InputLabel,
-  Select,
   MenuItem,
-  Tabs,
-  Tab,
-  Button,
   Paper,
+  Select,
+  Skeleton,
+  Tab,
+  Tabs,
+  Typography,
 } from '@mui/material';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-} from 'recharts';
-import { Download } from '@mui/icons-material';
-import dashboardService from '../services/dashboard.service';
-import { AnalyticsData, AnalyticsFilters } from '../services/types';
-import { toast } from 'react-hot-toast';
+import { Replay } from '@mui/icons-material';
+
+import { useAuth } from '../contexts/AuthContext';
 import { SubjectSelector } from '../components/SubjectSelector';
+import { NO_RECORD_TEXT } from '../components/dashboard/DashboardStatCards';
+import StatisticsSummaryCards from '../components/statistics/StatisticsSummaryCards';
+import StatisticsTrendChart from '../components/statistics/StatisticsTrendChart';
+import SubjectBreakdown from '../components/statistics/SubjectBreakdown';
+import { ALL_SUBJECTS } from '../hooks/useDashboardOverview';
+import { DEFAULT_STATISTICS_DAYS, STATISTICS_PERIODS, useStatistics } from '../hooks/useStatistics';
 
-// ネイティブJavaScriptのDateヘルパー関数
-const formatDate = (date: Date, formatStr: string) => {
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
+const TABS = ['学習時間', '正答率', '科目別（全科目）'] as const;
 
-  if (formatStr === 'M/d') {
-    return `${month}/${day}`;
-  } else if (formatStr === 'M月d日') {
-    return `${month}月${day}日`;
-  }
-  return date.toLocaleDateString();
-};
+interface TabPanelProps {
+  index: number;
+  value: number;
+  children: React.ReactNode;
+}
 
-const Statistics: React.FC = () => {
-  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
-  const [selectedSubject, setSelectedSubject] = useState('all');
-  const [tabValue, setTabValue] = useState(0);
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [mountKey, setMountKey] = useState(Date.now());
+/** 描画の中で定義すると描くたびに別の部品になり中身が作り直されるので、外で定義する（MUI の例と同じ形） */
+const TabPanel = ({ index, value, children }: TabPanelProps) => (
+  <div
+    role="tabpanel"
+    hidden={value !== index}
+    id={`statistics-tabpanel-${index}`}
+    aria-labelledby={`statistics-tab-${index}`}
+  >
+    {value === index && <Box sx={{ p: { xs: 2, sm: 3 } }}>{children}</Box>}
+  </div>
+);
 
-  useEffect(() => {
-    // 画面表示時にSubjectSelectorを再マウントさせるためkeyを更新
-    setMountKey(Date.now());
-  }, []);
+const StatisticsSkeleton = () => (
+  <Box aria-busy="true">
+    {/* 画面には出さず読み上げにだけ伝える（ダッシュボードのスケルトンと同じ・styles/accessibility.css の .sr-only） */}
+    <span className="sr-only">学習統計を読み込み中</span>
+    <Grid container spacing={2} sx={{ mb: 3 }}>
+      {[0, 1, 2, 3].map((key) => (
+        <Grid item xs={6} md={3} key={key}>
+          <Skeleton variant="rounded" height={96} />
+        </Grid>
+      ))}
+    </Grid>
+    <Skeleton variant="rounded" height={360} />
+  </Box>
+);
 
-  useEffect(() => {
-    const loadStatistics = async () => {
-      try {
-        setLoading(true);
-        const filters: AnalyticsFilters = {
-          period,
-          subject: selectedSubject === 'all' ? undefined : selectedSubject || undefined,
-        };
-
-        const analyticsData = await dashboardService.getAnalytics(filters);
-        setData(analyticsData);
-      } catch (error) {
-        console.error('Error fetching analytics data:', error);
-        toast.error('統計データの取得に失敗しました');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadStatistics();
-  }, [period, selectedSubject]);
-
-  const handleExportData = () => {
-    // Implement data export functionality
-    console.log('Exporting data...');
-  };
-
-  if (loading || !data) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <Typography variant="h6">統計データを読み込み中...</Typography>
-      </Box>
-    );
-  }
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-  // データの存在チェックとデフォルト値の設定
-  const studyTimeTrend = data?.study_time_trend || [];
-  const accuracyTrend = data?.accuracy_trend || [];
-  const subjectBreakdown = data?.subject_breakdown || [];
-  const mistakePatterns = data?.mistake_patterns || [];
-
-  const totalStudyTime = studyTimeTrend.length > 0
-    ? studyTimeTrend.reduce((sum: number, item: any) => sum + (item.study_time || 0), 0)
-    : 0;
-
-  const averageAccuracy = accuracyTrend.length > 0
-    ? accuracyTrend.reduce((sum: number, item: any) => sum + (item.accuracy || 0), 0) / accuracyTrend.length
-    : 0;
-
-  const totalProblems = subjectBreakdown.length > 0
-    ? subjectBreakdown.reduce((sum: number, item: any) => sum + (item.problems_solved || 0), 0)
-    : 0;
-
-  const TabPanel = ({ children, value, index }: any) => (
-    <div hidden={value !== index}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
+const Statistics = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [days, setDays] = useState<number>(DEFAULT_STATISTICS_DAYS);
+  const [selectedSubject, setSelectedSubject] = useState(ALL_SUBJECTS);
+  const [tab, setTab] = useState(0);
+  // 取得のキャッシュのキーに使う（利用者の情報が無い間の扱いは #508）
+  const statistics = useStatistics(user?.id ?? '', days, selectedSubject);
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h4">学習統計</Typography>
-        <Button
-          variant="outlined"
-          startIcon={<Download />}
-          onClick={handleExportData}
-        >
-          データをエクスポート
-        </Button>
-      </Box>
+      <Typography variant="h5" component="h1" sx={{ mb: 3 }}>学習統計</Typography>
 
-      {/* Filters */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth>
-              <InputLabel>期間</InputLabel>
+              <InputLabel id="statistics-period-label">期間</InputLabel>
               <Select
-                value={period}
+                labelId="statistics-period-label"
+                value={days}
                 label="期間"
-                onChange={(e) => setPeriod(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                onChange={(event) => setDays(Number(event.target.value))}
               >
-                <MenuItem value="daily">日別</MenuItem>
-                <MenuItem value="weekly">週別</MenuItem>
-                <MenuItem value="monthly">月別</MenuItem>
+                {STATISTICS_PERIODS.map((period) => (
+                  <MenuItem key={period.days} value={period.days}>{period.label}</MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <SubjectSelector
-              key={`statistics-subject-${mountKey}`}
-              value={selectedSubject}
-              onChange={(value) => setSelectedSubject(value)}
-              label="科目"
-            />
+            <SubjectSelector value={selectedSubject} onChange={setSelectedSubject} label="科目" />
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                総学習時間
-              </Typography>
-              <Typography variant="h4">
-                {Math.floor(totalStudyTime / 60)}h {totalStudyTime % 60}m
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                平均正答率
-              </Typography>
-              <Typography variant="h4">
-                {Math.round(averageAccuracy * 100)}%
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                解いた問題数
-              </Typography>
-              <Typography variant="h4">
-                {totalProblems}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                学習日数
-              </Typography>
-              <Typography variant="h4">
-                {studyTimeTrend.filter((item: any) => item.study_time > 0).length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {statistics.status === 'loading' && <StatisticsSkeleton />}
 
-      {/* Tabs */}
-      <Paper sx={{ width: '100%' }}>
-        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
-          <Tab label="学習時間" />
-          <Tab label="正答率推移" />
-          <Tab label="科目別分析" />
-          <Tab label="間違いパターン" />
-        </Tabs>
+      {statistics.status === 'error' && (
+        // 取得の失敗・形の違いは 0 や空のグラフで埋めずに伝え、その場で取り直せるようにする（C7）
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" startIcon={<Replay />} onClick={statistics.retry}>
+              再読み込み
+            </Button>
+          }
+        >
+          学習統計を読み込めませんでした
+        </Alert>
+      )}
 
-        <TabPanel value={tabValue} index={0}>
-          <Typography variant="h6" gutterBottom>
-            学習時間の推移
-          </Typography>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={studyTimeTrend}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(value) => formatDate(new Date(value), 'M/d')}
-              />
-              <YAxis />
-              <Tooltip
-                labelFormatter={(value) => formatDate(new Date(value), 'M月d日')}
-                formatter={(value) => [`${value}分`, '学習時間']}
-              />
-              <Bar dataKey="study_time" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
-        </TabPanel>
+      {statistics.status === 'success' && !statistics.data.has_data && (
+        <Card>
+          <CardContent sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" component="p" gutterBottom>{NO_RECORD_TEXT}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              クイズを解くと、学習時間と正答率の推移がここに出ます
+            </Typography>
+            <Button variant="contained" onClick={() => navigate('/quiz')}>クイズを始める</Button>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6" gutterBottom>
-            正答率の推移
-          </Typography>
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={accuracyTrend}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(value) => formatDate(new Date(value), 'M/d')}
-              />
-              <YAxis
-                domain={[0, 1]}
-                tickFormatter={(value) => `${Math.round(value * 100)}%`}
-              />
-              <Tooltip
-                labelFormatter={(value) => formatDate(new Date(value), 'M月d日')}
-                formatter={(value: number) => [`${Math.round(value * 100)}%`, '正答率']}
-              />
-              <Line
-                type="monotone"
-                dataKey="accuracy"
-                stroke="#82ca9d"
-                strokeWidth={3}
-                dot={{ fill: '#82ca9d', strokeWidth: 2, r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={2}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                科目別学習時間
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={subjectBreakdown}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ subject_name, percent }) => `${subject_name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="time_spent"
-                  >
-                    {subjectBreakdown.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value}分`, '学習時間']} />
-                </PieChart>
-              </ResponsiveContainer>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                科目別詳細
-              </Typography>
-              {subjectBreakdown.map((subject: any, index: number) => (
-                <Card key={subject.subject_name} sx={{ mb: 2 }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      {subject.subject_name}
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={4}>
-                        <Typography variant="body2" color="text.secondary">
-                          学習時間
-                        </Typography>
-                        <Typography variant="body1">
-                          {Math.floor(subject.time_spent / 60)}h {subject.time_spent % 60}m
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={4}>
-                        <Typography variant="body2" color="text.secondary">
-                          正答率
-                        </Typography>
-                        <Typography variant="body1">
-                          {Math.round(subject.accuracy * 100)}%
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={4}>
-                        <Typography variant="body2" color="text.secondary">
-                          問題数
-                        </Typography>
-                        <Typography variant="body1">
-                          {subject.problems_solved}問
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
+      {statistics.status === 'success' && statistics.data.has_data && (
+        <>
+          <StatisticsSummaryCards analytics={statistics.data} />
+          <Paper sx={{ width: '100%' }}>
+            <Tabs
+              value={tab}
+              onChange={(_, next: number) => setTab(next)}
+              variant="scrollable"
+              allowScrollButtonsMobile
+            >
+              {TABS.map((label, index) => (
+                <Tab
+                  key={label}
+                  label={label}
+                  id={`statistics-tab-${index}`}
+                  aria-controls={`statistics-tabpanel-${index}`}
+                />
               ))}
-            </Grid>
-          </Grid>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <Typography variant="h6" gutterBottom>
-            間違いパターン分析
-          </Typography>
-          <Grid container spacing={2}>
-            {mistakePatterns.map((pattern: any, index: number) => (
-              <Grid item xs={12} sm={6} md={3} key={`${pattern.subject_name}-${pattern.problem_type}`}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      {pattern.subject_name} - {pattern.problem_type}
-                    </Typography>
-                    <Typography variant="h4" color="error.main" gutterBottom>
-                      {pattern.mistake_count}回
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      難易度: {pattern.difficulty}
-                    </Typography>
-                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                      {pattern.improvement_suggestion}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </TabPanel>
-      </Paper>
+            </Tabs>
+            <TabPanel value={tab} index={0}>
+              <StatisticsTrendChart analytics={statistics.data} metric="study_time" />
+            </TabPanel>
+            <TabPanel value={tab} index={1}>
+              <StatisticsTrendChart analytics={statistics.data} metric="accuracy" />
+            </TabPanel>
+            <TabPanel value={tab} index={2}>
+              <SubjectBreakdown subjects={statistics.data.subject_breakdown} />
+            </TabPanel>
+          </Paper>
+        </>
+      )}
     </Box>
   );
 };
