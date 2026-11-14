@@ -16,8 +16,8 @@
 - Backend/Frontend/DB/Config: ハーネスだけ（`scripts/claude/code-review.sh`・`.claude/agents/code-reviewer.md`・`docs/plans/templates/plan_template.md`・`.claude/skills/retro/SKILL.md`・`docs/runbooks/review-rules.md`・テスト・一覧）
 
 ## テスト結果
-- 自動: CI 全ジョブ合格（最後は 0a59b190）。決定論ゲート `test_i512_accepted_risk.sh`（43/43）・`test_i202_ledger_cleanup.sh`（163/163）・`test_i205_stop_criteria.sh`（91/91）を `code-review.sh` が実走して OK。test-gate に委譲された重いテストは無い
-- 手動: No.1〜No.3 すべて Claude が実施して OK（Human の項目なし）
+- 自動: CI 全ジョブ合格（最後は a41286c2）。決定論ゲート `test_i512_accepted_risk.sh`（40/40・TC-07 を外した後）・`test_i202_ledger_cleanup.sh`（163/163）・`test_i205_stop_criteria.sh`（91/91）を `code-review.sh` が実走して OK。test-gate に委譲された重いテストは無い
+- 手動: No.1〜No.4 すべて Claude が実施して OK（Human の項目なし・No.4 は TC-07 を外した AC8 の確かめ）
 
 ## 計画との差分
 - あり（計画変更記録の 2026-11-14 implement の行）: /simplify の結果で関数の形と計画書の探し方を変えた・I208 F3 の後半も直した・FG の元の文字列の追従。方式・範囲・受け入れ条件は変えない
@@ -117,3 +117,5 @@ STAGE_DONE: close NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 6 回目は CI_WAIT: OK・FINAL_VERDICT: OK（`docs/reviews/I512_code_review_20261114_1209.md`）。F4 は resolved。F17〜F19（記録の件数・書き方の食い違い・Low）は test-gate で記録を直す
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 3 回目: gate-check OK・手動テスト No.4（AC8）を実施して OK・台帳 F17〜F19（記録の食い違い）を記録の場所で直した・Human の項目なしで retro へ
+STAGE_DONE: test-gate NEXT: retro

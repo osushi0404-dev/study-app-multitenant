@@ -3,6 +3,7 @@
 実行コマンド: 下の「決定論ゲート」。pytest・Jest・E2E は対象のコードが無いので対象外（CI の `scripts/claude/tests/run-all.sh` も同じテストを流す）
 
 結果:
+- 注: TC-07・FG-07・FG-07b は close の後の fix-loop で外した（下の「再発防止記録（fix-loop 5 回目）」）。下の実行記録のうち、それより前のものは当時の件数のまま
 - 計画時のベースライン（2026-11-14・変更前）: `test_i202_ledger_cleanup.sh` pass=163 fail=0
 - 実行記録（2026-11-14・implement・/simplify の後）: `bash scripts/claude/tests/test_i512_accepted_risk.sh` exit 0（pass=34 fail=0・TC-01〜TC-05・TC-07 と各 FG）／`bash scripts/claude/tests/test_i202_ledger_cleanup.sh` exit 0（pass=163 fail=0）／`bash scripts/claude/tests/test_i205_stop_criteria.sh` exit 0（pass=91 fail=0）
 - 変えた文書を読む関係のテスト（test_adversarial_trigger・test_i114・test_i180・test_i181・test_i182・test_i185・test_i197 の 2 本・test_i224・test_review_verdict）は合格。test_i193_official_flow の F9（run-all.sh の 3 項目）だけが、サンドボックスで uv の一時ファイル（`~/.cache/uv`）を書けずに失敗（今回の変更と関係なし・CI が正）
@@ -60,3 +61,4 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 - 何を変えたか: TC-07・FG-07・FG-07b を外した。AC8 は manual_test No.4（Claude）で確かめた
 - 次回どう防ぐか: 受け入れ条件ごとに「その後も守り続ける決まりか／このイシューで 1 回確かめれば足りる状態か」を分け、後者は手動テストにする（plan-writing-rules の節のとおり）
 - 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=40 fail=0）・`test_i202_ledger_cleanup.sh` exit 0（163/163・D3 が I430 の新しい行を含む全一覧で合格）・`test_pipefail_negated_grep.sh` exit 0（10/10）
+- 実行記録（2026-11-14・test-gate 3 回目・fix-loop 5 回目の後）: `bash scripts/claude/gate-check.sh I512` exit 0（REVIEWED_COMMIT a41286c2）。`test_i512_accepted_risk.sh` は pass=40 fail=0（TC-07 なし）。heavy の委譲は無い
