@@ -3,6 +3,33 @@ info:
   title: study-app API
   version: 1.0.0
 paths:
+  /api/dashboard/analytics/:
+    get:
+      operationId: dashboard_analytics_retrieve
+      description: 学習統計（期間の推移・科目別の内訳。クイズの答えの記録から数える・I488）
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 30
+      - in: query
+        name: subject_id
+        schema:
+          type: integer
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardAnalytics'
+          description: ''
   /api/dashboard/overview/:
     get:
       operationId: dashboard_overview_retrieve
@@ -81,6 +108,129 @@ paths:
           description: ''
 components:
   schemas:
+    DashboardAnalytics:
+      type: object
+      description: GET /api/dashboard/analytics/ の応答（キーは全部必須）
+      properties:
+        has_data:
+          type: boolean
+        period:
+          $ref: '#/components/schemas/DashboardAnalyticsPeriod'
+        totals:
+          $ref: '#/components/schemas/DashboardAnalyticsTotals'
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardAnalyticsBucket'
+        subject_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardAnalyticsSubject'
+      required:
+      - has_data
+      - period
+      - subject_breakdown
+      - totals
+      - trend
+    DashboardAnalyticsBucket:
+      type: object
+      properties:
+        study_seconds:
+          type: integer
+        answered_count:
+          type: integer
+        correct_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+          nullable: true
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+      required:
+      - accuracy_rate
+      - answered_count
+      - correct_count
+      - end_date
+      - start_date
+      - study_seconds
+    DashboardAnalyticsGranularityEnum:
+      enum:
+      - day
+      - week
+      - month
+      type: string
+      description: |-
+        * `day` - day
+        * `week` - week
+        * `month` - month
+    DashboardAnalyticsPeriod:
+      type: object
+      properties:
+        days:
+          type: integer
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        granularity:
+          $ref: '#/components/schemas/DashboardAnalyticsGranularityEnum'
+      required:
+      - days
+      - end_date
+      - granularity
+      - start_date
+    DashboardAnalyticsSubject:
+      type: object
+      properties:
+        study_seconds:
+          type: integer
+        answered_count:
+          type: integer
+        correct_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+          nullable: true
+        subject_id:
+          type: integer
+        subject_name:
+          type: string
+      required:
+      - accuracy_rate
+      - answered_count
+      - correct_count
+      - study_seconds
+      - subject_id
+      - subject_name
+    DashboardAnalyticsTotals:
+      type: object
+      properties:
+        study_seconds:
+          type: integer
+        answered_count:
+          type: integer
+        correct_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+          nullable: true
+        studied_days:
+          type: integer
+      required:
+      - accuracy_rate
+      - answered_count
+      - correct_count
+      - studied_days
+      - study_seconds
     DashboardDay:
       type: object
       properties:

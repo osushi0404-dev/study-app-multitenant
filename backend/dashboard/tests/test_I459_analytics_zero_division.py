@@ -1,23 +1,19 @@
 """
-I459: 学習統計（GET /api/dashboard/analytics/）が、解いた問題が 0 件の日があっても 500 にならない。
+I459: 学習統計（GET /api/dashboard/analytics/）の days の入力の確かめ。
 
-- 週ごとの正答率は「週の正解数の合計 ÷ 週の解いた問題数の合計 × 100」（週の合計が 0 問なら 0）
 - days は 1〜365 の整数（省略時 30）。不正な値は 400
-（おすすめの TC-05 は I473 で経路を消したので削除。0 件で割らないことは test_I473_overview.py が見る）
+（おすすめの TC-05 は I473 で経路を消したので削除。週の正答率の TC-01・02 は I488 で集計元を
+ クイズの答えに替えたので削除。0 件で割らないことは test_I488_analytics.py〔答えの無い区切りは null〕が見る）
 
-TC-01〜TC-06（docs/tests/open/I459_auto_test.md）に対応。
+TC-03・TC-04・TC-06（docs/tests/open/I459_auto_test.md）に対応。TC-04 は I488 の新しい形で確かめる。
 """
-from datetime import timedelta
-
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import caches
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
-from studylogs.models import DailyStudySummary
 
 User = get_user_model()
 
@@ -63,50 +59,6 @@ def client(user):
     return client
 
 
-def _today():
-    return timezone.now().date()
-
-
-def _summary(user, days_ago, attempted, correct, study_time=0):
-    return DailyStudySummary.objects.create(
-        user=user, date=_today() - timedelta(days=days_ago),
-        total_problems_attempted=attempted, total_problems_correct=correct,
-        total_study_time=study_time,
-    )
-
-
-def test_zero_problem_day_in_week(client, user):
-    """TC-01: 0 問の日を含む週で 200・正答率は週の合計で割る"""
-    _summary(user, 6, attempted=10, correct=8)
-    _summary(user, 5, attempted=1, correct=0)
-    _summary(user, 4, attempted=0, correct=0, study_time=600)
-
-    response = client.get(ANALYTICS, {"days": 6})
-
-    assert response.status_code == 200
-    trends = response.json()["performance_trends"]
-    assert len(trends) == 1
-    assert trends[0]["week_start"] == (_today() - timedelta(days=6)).isoformat()
-    assert trends[0]["avg_accuracy"] == 72.73
-    zero_day = next(
-        d for d in response.json()["daily_data"]
-        if d["date"] == (_today() - timedelta(days=4)).isoformat())
-    assert zero_day["problems_attempted"] == 0
-    assert zero_day["accuracy"] == 0
-
-
-def test_week_without_problems_is_zero(client, user):
-    """TC-02: 0 問の日だけの週・まとめが無い週は 0"""
-    _summary(user, 13, attempted=0, correct=0, study_time=600)
-
-    response = client.get(ANALYTICS, {"days": 13})
-
-    assert response.status_code == 200
-    trends = response.json()["performance_trends"]
-    assert len(trends) == 2
-    assert [week["avg_accuracy"] for week in trends] == [0, 0]
-
-
 @pytest.mark.parametrize("days", ["abc", "1.5", "0", "-1", "366"])
 def test_invalid_days_returns_400(client, days):
     """TC-03: days が整数でない・1 未満・365 を超えると同じ 400"""
@@ -116,18 +68,21 @@ def test_invalid_days_returns_400(client, days):
     assert response.json() == INVALID_DAYS_BODY
 
 
-@pytest.mark.parametrize("query, expected_days", [
-    ({}, 31),
-    ({"days": ""}, 31),
-    ({"days": "1"}, 2),
-    ({"days": "365"}, 366),
+@pytest.mark.parametrize("query, expected_days, granularity, trend_len", [
+    ({}, 30, "day", 30),
+    ({"days": ""}, 30, "day", 30),
+    ({"days": "1"}, 1, "day", 1),
+    ({"days": "365"}, 365, "month", None),  # 月の区切りの数は今日の日付で 13 か 12
 ])
-def test_valid_days_returns_200(client, query, expected_days):
-    """TC-04: 省略・空は 30 日、1 と 365 は通る（daily_data は両端を含む）"""
+def test_valid_days_returns_200(client, query, expected_days, granularity, trend_len):
+    """TC-04: 省略・空は 30 日、1 と 365 は通る（期間は今日を含む days 日・I488）"""
     response = client.get(ANALYTICS, query)
 
     assert response.status_code == 200
-    assert len(response.json()["daily_data"]) == expected_days
+    period = response.json()["period"]
+    assert (period["days"], period["granularity"]) == (expected_days, granularity)
+    if trend_len is not None:
+        assert len(response.json()["trend"]) == trend_len
 
 
 def test_analytics_requires_login(db):

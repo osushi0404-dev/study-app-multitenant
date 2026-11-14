@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/dashboard/analytics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 学習統計（期間の推移・科目別の内訳。クイズの答えの記録から数える・I488） */
+        get: operations["dashboard_analytics_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard/overview/": {
         parameters: {
             query?: never;
@@ -41,6 +58,57 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description GET /api/dashboard/analytics/ の応答（キーは全部必須） */
+        DashboardAnalytics: {
+            has_data: boolean;
+            period: components["schemas"]["DashboardAnalyticsPeriod"];
+            totals: components["schemas"]["DashboardAnalyticsTotals"];
+            trend: components["schemas"]["DashboardAnalyticsBucket"][];
+            subject_breakdown: components["schemas"]["DashboardAnalyticsSubject"][];
+        };
+        DashboardAnalyticsBucket: {
+            study_seconds: number;
+            answered_count: number;
+            correct_count: number;
+            /** Format: double */
+            accuracy_rate: number | null;
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+        };
+        /**
+         * @description * `day` - day
+         *     * `week` - week
+         *     * `month` - month
+         * @enum {string}
+         */
+        DashboardAnalyticsGranularityEnum: "day" | "week" | "month";
+        DashboardAnalyticsPeriod: {
+            days: number;
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            granularity: components["schemas"]["DashboardAnalyticsGranularityEnum"];
+        };
+        DashboardAnalyticsSubject: {
+            study_seconds: number;
+            answered_count: number;
+            correct_count: number;
+            /** Format: double */
+            accuracy_rate: number | null;
+            subject_id: number;
+            subject_name: string;
+        };
+        DashboardAnalyticsTotals: {
+            study_seconds: number;
+            answered_count: number;
+            correct_count: number;
+            /** Format: double */
+            accuracy_rate: number | null;
+            studied_days: number;
+        };
         DashboardDay: {
             /** Format: date */
             date: string;
@@ -125,6 +193,28 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    dashboard_analytics_retrieve: {
+        parameters: {
+            query?: {
+                days?: number;
+                subject_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardAnalytics"];
+                };
+            };
+        };
+    };
     dashboard_overview_retrieve: {
         parameters: {
             query?: {

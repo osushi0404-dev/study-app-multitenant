@@ -153,35 +153,4 @@ export interface QuizResult {
 }
 
 // 設定の型は API のスキーマから作ったもの（types/api の UserSettings）を使う（I487）
-
-// Analytics Types
-export interface AnalyticsFilters {
-  period: 'daily' | 'weekly' | 'monthly';
-  start_date?: string;
-  end_date?: string;
-  subject?: string;
-}
-
-export interface AnalyticsData {
-  study_time_trend: Array<{
-    date: string;
-    study_time: number;
-  }>;
-  accuracy_trend: Array<{
-    date: string;
-    accuracy: number;
-  }>;
-  subject_breakdown: Array<{
-    subject_name: string;
-    problems_solved: number;
-    time_spent: number;
-    accuracy: number;
-  }>;
-  mistake_patterns: Array<{
-    subject_name: string;
-    problem_type: string;
-    difficulty: string;
-    mistake_count: number;
-    improvement_suggestion: string;
-  }>;
-}
+// 学習統計の型も API のスキーマから作ったもの（types/api の DashboardAnalytics）を使う（I488）

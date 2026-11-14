@@ -171,6 +171,7 @@ SPECTACULAR_SETTINGS = {
     'PREPROCESSING_HOOKS': ['core.openapi.only_contract_paths'],
     'ENUM_NAME_OVERRIDES': {
         'DashboardRecommendationKindEnum': 'dashboard.serializers.RECOMMENDATION_KIND_CHOICES',
+        'DashboardAnalyticsGranularityEnum': 'dashboard.serializers.GRANULARITY_CHOICES',
     },
 }
 
