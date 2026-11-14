@@ -113,3 +113,5 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 - [close] マージ依頼の後、ユーザーへの自己評価で TC-07（一覧のファイルの中身を CI で毎回確かめる）が plan-writing-rules「決定論テストの対象の選び方」に反すると分かった。将来一覧の行を正しく消すと CI が落ちる罠になるため、ユーザーの「ベストなやり方で」の指示で、記録を open に戻して fix-loop へ（AC8 は手動テストで確かめる）
 STAGE_DONE: close NEXT: fix-loop
+- [fix-loop] 5 回目（close の後）: TC-07 を外す案 A で直した — 診断レビュー PASS。一覧の行の形は既存の D3 が守る
+STAGE_DONE: fix-loop NEXT: review-gate
