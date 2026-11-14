@@ -115,3 +115,5 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 - [fix-loop] 5 回目（close の後）: TC-07 を外す案 A で直した — 診断レビュー PASS。一覧の行の形は既存の D3 が守る
 STAGE_DONE: fix-loop NEXT: review-gate
+- [review-gate] 6 回目は CI_WAIT: OK・FINAL_VERDICT: OK（`docs/reviews/I512_code_review_20261114_1209.md`）。F4 は resolved。F17〜F19（記録の件数・書き方の食い違い・Low）は test-gate で記録を直す
+STAGE_DONE: review-gate NEXT: test-gate
