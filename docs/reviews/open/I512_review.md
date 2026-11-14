@@ -111,3 +111,5 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 - [close] 記録を closed へ移した（fix の診断メモも一緒に）・PR #514 の説明を更新・develop への追従は不要（BLOCKED）・gate-check OK
 STAGE_DONE: close NEXT: merge
+- [close] マージ依頼の後、ユーザーへの自己評価で TC-07（一覧のファイルの中身を CI で毎回確かめる）が plan-writing-rules「決定論テストの対象の選び方」に反すると分かった。将来一覧の行を正しく消すと CI が落ちる罠になるため、ユーザーの「ベストなやり方で」の指示で、記録を open に戻して fix-loop へ（AC8 は手動テストで確かめる）
+STAGE_DONE: close NEXT: fix-loop
