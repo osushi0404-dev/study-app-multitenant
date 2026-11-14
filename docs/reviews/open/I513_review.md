@@ -22,5 +22,7 @@
 - PR を revert する（マイグレーション・依存の変更なし）
 
 ## 自律判断の記録
+- [plan-review] 計画レビュー OK。Warning 2 件（境目を乱数より先に決める順・1 分未満で解答のある日の tooltip）は計画とテスト文書に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記のため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
