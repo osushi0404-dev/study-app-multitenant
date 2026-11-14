@@ -135,3 +135,4 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 - [close] 2 回目: 記録を closed へ移した・develop への追従は不要（BLOCKED）・gate-check OK
 STAGE_DONE: close NEXT: merge
+- [close] 承認の後に develop（I488・PR #515）が先に入り BEHIND になったので取り込んだ。衝突なし・このブランチの変えたファイルとの重なりなし・gate-check OK（レビューの通り直しは不要）。再承認を依頼する
