@@ -133,3 +133,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] 3 回目: gate-check OK・手動テスト No.4（AC8）を実施して OK・台帳 F17〜F19（記録の食い違い）を記録の場所で直した・Human の項目なしで retro へ
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+- [close] 2 回目: 記録を closed へ移した・develop への追従は不要（BLOCKED）・gate-check OK
+STAGE_DONE: close NEXT: merge
