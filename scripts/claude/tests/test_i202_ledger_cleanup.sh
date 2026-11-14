@@ -594,7 +594,7 @@ ck "FG-N19 remaining を前の形（date +%s を直に読む）に戻すと不�
 # P1（F1・AC1）: 台帳の残りを止めない中身で書き直しても、止める側の値（重大度・SECURITY・RISK）は前の行に残る
 printf 'LEDGER: F2 SEV=Low STATUS=open SCOPE=outside KIND=app STOP=- REPRO=yes RISK=- SECURITY=no | 残り\n' > "$TMP/p_app"
 P1_F2='FINDING: F2 SEV=Medium STATUS=open FILE=backend/x.py LINE=15 SECURITY=yes STOP=- RISK=up | 書き直し | 再現: r'
-MERGE_REST='                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk, file)'
+MERGE_REST='                led[fid] = merged(o, sev, o[1], stop, repro, sec, o[7], risk, file, acc)'
 B_NOMERGE=$(broken "$MERGE_REST" '                pass')   # 合流を外した写し（FG-P1・FG-P5）
 p1() { ledger "$1" delta "$TMP/p_app" "$P1_F2" >/dev/null
   echo "$(led_has '^LEDGER: F3 ') $(led_has '^LEDGER: F2 SEV=Medium STATUS=open SCOPE=outside KIND=app STOP=- REPRO=yes RISK=up SECURITY=yes FILE=backend/x.py \| 残り$') $(lib "$CR" ledger_risk "$TMP/led") $(verdict)"; }
@@ -608,14 +608,14 @@ p2() { ledger "$1" delta "$TMP/l6_prev" "$P_RES" "$P_OPEN" >/dev/null
   echo "$(led_has '^LEDGER: F2 SEV=Low STATUS=resolved .*\| 直した$') $(led_has '^LEDGER: F3 ')"; }
 ck "P2 F2 は resolved のまま・F3 なし" "yes no" "$(p2 "$CR")"
 ck "FG-P2 合流で STATUS を書き直すと P2 が不合格（open に戻る）" "no no" \
-  "$(p2 "$(broken "$MERGE_REST" '                led[fid] = merged(o, sev, st, stop, repro, sec, o[7], risk, file)')")"
+  "$(p2 "$(broken "$MERGE_REST" '                led[fid] = merged(o, sev, st, stop, repro, sec, o[7], risk, file, acc)')")"
 # P3（I197-F1 の守り）: resolved の後の止める中身の open は、新しい指摘として振り直して止める（P3・P4・P6 は前の F1 を直した形にして、合否を F3 だけで決める）
 p3() { ledger "$1" delta "$TMP/l6_prev" "$N2_F1" "$P_RES" "$P_BLOCK" >/dev/null
   echo "$(led_has '^LEDGER: F2 SEV=Low STATUS=resolved') $(led_has '^LEDGER: F3 SEV=High STATUS=open SCOPE=delta') $(verdict)"; }
 ck "P3 F2 は resolved・新しい F3（High・open・delta）・HIGH" "yes yes HIGH" "$(p3 "$CR")"
 ck "FG-P3 resolved で seen に入れる（前の近道）と P3 が不合格（F3 なし）" no \
-  "$(p3 "$(broken '                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file)
-                continue' '                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file)
+  "$(p3 "$(broken '                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file, acc)
+                continue' '                led[fid] = merged(led[fid], sev, st, stop, repro, sec, title, risk, file, acc)
                 seen.add(fid)
                 continue')" | cut -d' ' -f2)"
 # P4: 止める中身の open の後の resolved は、振り直した新しい指摘を resolved にしない
@@ -648,7 +648,7 @@ ck "FG-D1 --route backlog の行を消すと不合格" no "$(yn d1_208 "$(withou
 cp "$RT" "$TMP/rt_old"; printf "%s\n" "grep -h '^LEDGER: .*STATUS=open' x | grep -vE 'KIND=app'" >> "$TMP/rt_old"
 ck "FG-D1 前の grep -vE の行を足すと不合格" no "$(yn d1_208 "$TMP/rt_old")"
 # D3（I207 AC4 → I208 AC5）: 一覧は形だけを確かめ、実物の行数に依存しない。計画で見る決まり・review-rules
-BL_FORM='^- F[0-9]+ SEV=(Blocker|High|Medium|Low) REPRO=(yes|no) KIND=(app|harness|guard) FILE=\S+ \| .* \| (一覧に回した理由|受け入れ): '
+BL_FORM='^- F[0-9]+ SEV=(Blocker|High|Medium|Low) REPRO=(yes|no) KIND=(app|harness|guard) (SECURITY=(yes|no) )?FILE=\S+ \| .* \| (一覧に回した理由|受け入れ): '   # I512: SECURITY= は新しい行だけ
 # 崩れた行を全部読んで出し、空かで決める（! と grep -q を使わない。pipefail の下で grep -q が先に終わると、見つけた崩れが合格に反転する・I210）
 # shellcheck disable=SC2143  # 勧めの ! grep -q は、この反転を起こす形そのもの
 d3_bl() { [ -d "$1" ] || return 0; [ -z "$(cat "$1"/*.md 2>/dev/null | grep -E '^- F' | grep -vE "$BL_FORM")" ]; }
@@ -688,7 +688,7 @@ printf 'LEDGER: F2 SEV=Low STATUS=resolved SCOPE=delta KIND=harness STOP=- REPRO
 ledger "$CR" delta "$TMP/q3_prev" 'FINDING: F2 SEV=Low STATUS=open FILE=scripts/claude/b.sh LINE=3 SECURITY=no STOP=- | 別件' >/dev/null
 ck "Q3 F2 は前の FILE・振り直した F3 は FILE=scripts/claude/b.sh・一覧の行にその FILE" "yes yes yes" \
   "$(led_has '^LEDGER: F2 .* FILE=scripts/claude/a.sh \| 直した$') $(led_has '^LEDGER: F3 .* FILE=scripts/claude/b.sh \| 別件$') \
-$(yn grep -qxF -- '- F3 SEV=Low REPRO=no KIND=harness FILE=scripts/claude/b.sh | 別件 | 一覧に回した理由: Low／再現なし' <(route "$CR" backlog "$TMP/led"))"
+$(yn grep -qxF -- '- F3 SEV=Low REPRO=no KIND=harness SECURITY=no FILE=scripts/claude/b.sh | 別件 | 一覧に回した理由: Low／再現なし' <(route "$CR" backlog "$TMP/led"))"
 # Q4（AC3・Risk）: 前の形の行も読める。新しい形の止める指摘は読み戻しても止める
 printf 'LEDGER: F1 SEV=High STATUS=open SCOPE=delta SECURITY=no | a\n' > "$TMP/q4_i197"
 printf '%s\n' 'LEDGER: F2 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no SECURITY=no | b' \
@@ -738,9 +738,9 @@ printf '%s\n' 'LEDGER: F1 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- RE
   'LEDGER: F2 SEV=Medium STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=no RISK=- SECURITY=no FILE=a | s2' \
   'LEDGER: F3 SEV=Low STATUS=open SCOPE=delta KIND=harness STOP=- REPRO=yes RISK=- SECURITY=no FILE=a | s3' \
   'LEDGER: F4 SEV=Medium STATUS=open SCOPE=outside KIND=harness STOP=- REPRO=yes RISK=- SECURITY=no FILE=a | s4' > "$TMP/q8"
-printf '%s\n' '- F1 SEV=Low REPRO=no KIND=harness FILE=a | s1 | 一覧に回した理由: Low／再現なし' \
-  '- F2 SEV=Medium REPRO=no KIND=harness FILE=a | s2 | 一覧に回した理由: 再現なし' \
-  '- F3 SEV=Low REPRO=yes KIND=harness FILE=a | s3 | 一覧に回した理由: Low' > "$TMP/q8_bl"
+printf '%s\n' '- F1 SEV=Low REPRO=no KIND=harness SECURITY=no FILE=a | s1 | 一覧に回した理由: Low／再現なし' \
+  '- F2 SEV=Medium REPRO=no KIND=harness SECURITY=no FILE=a | s2 | 一覧に回した理由: 再現なし' \
+  '- F3 SEV=Low REPRO=yes KIND=harness SECURITY=no FILE=a | s3 | 一覧に回した理由: Low' > "$TMP/q8_bl"
 ck "Q8 一覧の行の形と理由" yes "$(yn cmp -s "$TMP/q8_bl" <(route "$CR" backlog "$TMP/q8"))"
 ck "Q8 後続イシューの行の形と理由" '- F4 SEV=Medium REPRO=yes KIND=harness SECURITY=no FILE=a | s4 | 後続イシューにする理由: 再現のある Medium 以上' \
   "$(route "$CR" issue "$TMP/q8")"
@@ -753,7 +753,7 @@ q9rec 20260101_0100 新しい 'LEDGER_ROUND: 2\n'
 q9rec 20260101_0200 台帳の無い記録 ''
 q9() { (cd "$R" && bash "$1" --route backlog I900 2>"$TMP/q9_err"); }
 ck "Q9 台帳のある最新の記録の一覧側の行・記録のパスは標準エラー" "yes yes" \
-  "$(yn grep -qxF -- '- F1 SEV=Low REPRO=no KIND=harness FILE=x | 新しい | 一覧に回した理由: Low／再現なし' <(q9 "$CR")) $(yn grep -qxF '記録: docs/reviews/I900_code_review_20260101_0100.md' "$TMP/q9_err")"
+  "$(yn grep -qxF -- '- F1 SEV=Low REPRO=no KIND=harness SECURITY=no FILE=x | 新しい | 一覧に回した理由: Low／再現なし' <(q9 "$CR")) $(yn grep -qxF '記録: docs/reviews/I900_code_review_20260101_0100.md' "$TMP/q9_err")"
 ck "Q9 種類の誤り・引数の不足・記録の無いイシューは exit 2" "2 2 2" \
   "$( (cd "$R" && rc bash "$CR" --route other I900) ) $( (cd "$R" && rc bash "$CR" --route backlog) ) $( (cd "$R" && rc bash "$CR" --route backlog I901) )"
 ck "FG-Q9 最新でなく最初の記録を読むと Q9 が不合格" no \
