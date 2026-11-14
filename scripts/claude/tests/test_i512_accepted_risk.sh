@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# I512（plan_I512.md §4・auto_test TC-01〜TC-05・TC-07）: 計画で受け入れた残余リスクの目印（ACCEPTED=R<番号>）。
+# I512（plan_I512.md §4・auto_test TC-01〜TC-05。AC8〔I430 の一覧の行〕は CI で毎回確かめない＝manual_test No.4）: 計画で受け入れた残余リスクの目印（ACCEPTED=R<番号>）。
 #   目印は計画書の「## 8. Risk & 回避策」の表で処遇が「受け入れ」の行と照合し、Medium 以下・再現なし・アプリ本体でない行だけを
 #   後続イシューにせず一覧へ回す。止める判定は変えない。照合に合わなければ今までどおり（fail-closed）
 #   FG: 判定の要を一時コピーで壊すと、対応する項目が不合格になること（本物は書き換えない）
@@ -199,18 +199,6 @@ ck "TC-05 入口: 連番の最新の計画書（plan_I900_2.md）で照合する
   "$(yn grep -qE '^- F1 .*計画で受け入れ（R2）$' <(entry "$CR" backlog I900)) $(yn grep -qxF '計画書: docs/plans/open/plan_I900_2.md' "$TMP/entry_err")"
 ck "TC-05 入口: ../x・I9* は exit 2" "2 2" "$( (cd "$R" && rc bash "$CR" --route issue ../x) ) $( (cd "$R" && rc bash "$CR" --route issue 'I9*') )"
 ck "FG-05d 第 3 引数の確かめを外すと不合格（I9* が通る）" 0 "$( (cd "$R" && rc bash "$(broken '[[ "$3" =~ ^I[0-9]+$ ]] ||' 'true ||')" --route issue 'I9*') )"
-
-# ---------------- TC-07（AC8）: I430 の一覧に F1〜F3 ----------------
-BL_FORM='^- F[0-9]+ SEV=(Blocker|High|Medium|Low) REPRO=(yes|no) KIND=(app|harness|guard) (SECURITY=(yes|no) )?FILE=\S+ \| .* \| (一覧に回した理由|受け入れ): '
-t7() { grep -qE '^- F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の R2）$' "$1" \
-  && grep -qE '^- F2 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の 4-1）$' "$1" \
-  && grep -qE '^- F3 SEV=Medium REPRO=no KIND=guard SECURITY=no FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の 4-1）$' "$1" \
-  && [ "$(grep -E '^- F' "$1" | grep -cvE "$BL_FORM")" -eq 0 ]; }   # pipefail の下で「! … | grep -q」を使わない（I210）
-ck "TC-07 docs/reviews/backlog/I430.md に F1〜F3 があり、どの行も一覧の形" yes "$(yn t7 docs/reviews/backlog/I430.md)"
-grep -v '^- F2 ' docs/reviews/backlog/I430.md > "$TMP/i430_noF2"
-ck "FG-07 F2 の行を消した写しは不合格" no "$(yn t7 "$TMP/i430_noF2")"
-{ cat docs/reviews/backlog/I430.md; printf -- '- F9 SEV=Low FILE=x\n'; } > "$TMP/i430_bad"
-ck "FG-07b 形の崩れた行を足した写しは不合格" no "$(yn t7 "$TMP/i430_bad")"
 
 ck "FG の写しがすべて作れた（置き換え前の文字列が本体にある）" no "$([ -e "$TMP/broken_failed" ] && echo yes || echo no)"
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"

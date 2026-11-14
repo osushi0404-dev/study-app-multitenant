@@ -17,7 +17,7 @@
 | TC-04 | AC6 | 前の形と形の崩れ: (a) `ledger_update full` に目印の無い FINDING 行を通した LEDGER 行が、変更前の形（`RISK=- SECURITY=`、`ACCEPTED` の文字が無い）と完全一致 (b) 目印つきの FINDING 行は `RISK=- ACCEPTED=R2 SECURITY=` の並び (c) `parse_findings` の列の数が目印の有無で同じ 8 列 (d) `ACCEPTED=x`・`ACCEPTED=` の FINDING 行は形の崩れ（exit 2）(e) I197・I205・I202 の形の LEDGER 行（`test_i202_ledger_cleanup.sh` の Q4 と同じ行）で `ledger_verdict` が `HIGH OK`・`ledger_route backlog` が今までの行 (f) 同じ番号の書き直しで目印を外すと台帳の目印も消える | (a)〜(f) すべて期待どおり | FG-04a: `ledger_line()` が目印の無い行にも ` ACCEPTED=-` を書く写しで (a) が不合格／FG-04b: `parse` を `g[:7] + g[8:]` に戻した写しで (c) が不合格（9 列）／FG-04c: `merged()` の目印を前の値優先にした写しで (f) が不合格 |
 | TC-05 | AC5 | 照合の失敗: A1 と同じ行（目印 `ACCEPTED=R2`）を、(1) 計画書の引数なし (2) 存在しないパス (3) 「## 8.」の節の無い計画書 (4) R2 の行の無い計画書 (5) R2 の処遇が `回避` (6) 目印 `ACCEPTED=R5`（節の外の行）(7) 目印 `ACCEPTED=R1`（処遇が回避）で振り分ける。さらに本物の入口 `--route issue I900`（一時のリポジトリ・計画書なし）と `--route issue ../x`・`--route issue 'I9*'` | (1)〜(7) すべて issue 側で、理由に `SECURITY=yes・guard の Medium 以上`。入口は計画書なしで issue 側・標準エラーに `計画書: なし`。`../x`・`I9*` は exit 2 | FG-05a: 目印があれば効く（why_not を空にする）写しで (1)〜(8) が backlog 側で不合格。入口: 連番の計画書 plan_I900_2.md があればそちらで照合する（find_plan_file）／FG-05b: `accepted_risks()` の節の終わりの判定を外した写しで (6) が backlog 側で不合格／FG-05c: 処遇の完全一致を「受け入れ を含む」にした写しで、`| R6: g | h | 受け入れない |` の行を足した計画書の (8) `ACCEPTED=R6` が backlog 側で不合格／FG-05d: 第 3 引数の確かめを外した写しで `../x` が exit 2 にならず不合格 |
 | TC-06 | AC6（回帰） | 既存の台帳・止める判定のテスト | `bash scripts/claude/tests/test_i202_ledger_cleanup.sh`・`bash scripts/claude/tests/test_i205_stop_criteria.sh` がどちらも exit 0（`test_i202` は一覧の行の `SECURITY=` に合わせて期待を直した Q3・Q8・Q9・`BL_FORM` を含む） | 既存の各 FG |
-| TC-07 | AC8 | `docs/reviews/backlog/I430.md` に F1〜F3 の行があり、`test_i202_ledger_cleanup.sh` の `BL_FORM` に合う | 新しいテストの中で `grep -qE "^- F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=\.claude/settings\.json \| .* \| 一覧に回した理由: 再現なし／計画で受け入れ（plan_I430 の R2）$"`（F2・F3 も同じ形）と `BL_FORM` の照合がどれも exit 0 | FG-07: 一時の写しから F2 の行を消すと不合格 |
+| TC-07 | AC8 | 外した（close の後の fix-loop）。一覧は直したら行を消す運用なので、CI で毎回確かめると将来の罠になる。AC8 は manual_test No.4 で 1 回確かめる。一覧の行の形は `test_i202_ledger_cleanup.sh` の D3 | — | — |
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -54,3 +54,9 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 - 次回どう防ぐか: 文書の構造を読む照合は「本文でないところ（囲み・コメント）を全文から先に取り除く → 節を読む」の順で最初から作る
 - 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=43 fail=0）・`test_i202_ledger_cleanup.sh` exit 0（163/163）・`test_pipefail_negated_grep.sh` exit 0（10/10）・本物の plan_I512 の R3 は効いたまま
 - 実行記録（2026-11-14・test-gate 2 回目・fix-loop 4 回目の後）: `bash scripts/claude/gate-check.sh I512` exit 0（GATE_CHECK: OK・REVIEWED_COMMIT 0a59b190）。manual_test No.2・No.3 を流し直して同じ結果（R3 だけが一覧・I430 は F1〜F3 が後続イシュー）。heavy の委譲は無い
+
+## 再発防止記録（fix-loop 5 回目・close の後・2026-11-14）
+- なぜ失敗したか: AC8（記録の状態）を CI で毎回流す決定論テストにした。一覧は直したら行を消すので、将来正しく消すと無関係の PR の CI が落ちる（plan-writing-rules「決定論テストの対象の選び方」の「作らない」に当たる）
+- 何を変えたか: TC-07・FG-07・FG-07b を外した。AC8 は manual_test No.4（Claude）で確かめた
+- 次回どう防ぐか: 受け入れ条件ごとに「その後も守り続ける決まりか／このイシューで 1 回確かめれば足りる状態か」を分け、後者は手動テストにする（plan-writing-rules の節のとおり）
+- 確かめた結果: `test_i512_accepted_risk.sh` exit 0（pass=40 fail=0）・`test_i202_ledger_cleanup.sh` exit 0（163/163・D3 が I430 の新しい行を含む全一覧で合格）・`test_pipefail_negated_grep.sh` exit 0（10/10）
