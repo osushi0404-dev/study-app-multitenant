@@ -36,7 +36,9 @@
 - [implement] テストの仮のパスワードに `# pragma: allowlist secret` を付けた — detect-secrets の誤検知（テスト用の仮の値）
 - [implement] `/simplify` で直したもの: 目標の条件の重複・進み具合の割合の 2 回計算・7 日の合計の 3 回の走査・正答率の文字を作る場所の統一（`_counts`）・`dataclasses.replace`・`timezone.localdate` の包み関数を外した。いずれも動作は変えない
 - [implement] `/simplify` で見送ったもの: (1) 秒→分の切り捨てを `dashboardAchievements.ts`・`statistics/format.ts` と 1 か所にまとめる案と、日付の分解を `format.ts` の `partsOf` に寄せる案 — 計画で変えないとしたファイル（`format.ts`）と計画外のファイル（`dashboardAchievements.ts`）を触るため。グラフまわりの共通化は #516 で扱う (2) 目標の値を 1 つのフック（`useDailyGoalProgress`）に束ねる案 — 2 枚のカードの出す条件（記録が無いときに「学習を開始」の目標の行は出す）は I487 からの動きで、束ねると動作が変わる (3) 組織を `get_or_create` にする案 — 組織の slug は一意でなく、重複があると例外になるため `filter().first()` のまま (4) `useMemo`・`Intl.DateTimeFormat` の使い回し — 7 件の計算で差が無い
+- [review-gate] CI の Backend Tests が失敗した（`CI_WAIT: FAIL`・Actions run 43664045176）ので fix-loop へ回す — review-gate の決まりどおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
