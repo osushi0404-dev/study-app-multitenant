@@ -90,6 +90,8 @@
 - [retro] 台帳の残り（`docs/reviews/I513_code_review_20261115_1057.md`）: F3 → #516（コメント）・F4・F5・F6・F7 → #508（コメント）。一覧（backlog）に回る行は 0 件 — `--route issue` が 5 件ともアプリ本体として後続へ回し、合う既存のイシューがあるので新規起票せず同梱した
 - [retro] `/simplify` で見送った書式の重複（秒→分・日付の分解）は #516 のコメントに同梱 — グラフの書き方をそろえるときに一緒にまとめるのが自然
 - [retro] 予防処置は無し（新しい手順・観点を足さない）— 3 つの問題はどれも CI・コードレビューがその場で捕まえ、PR の中の 1 周で直った（4 問の問 2）
+- [close] develop への追従は不要（`pr-base-sync.sh sync` が BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR の説明をテンプレートで埋めた
+- [close] 開発の DB の確かめ用データは、test-gate の 2 回目の種（1030046851）と画面から解いた 3 問の状態で残した — ユーザーの指示（消さずに使い続ける）。次に使うときは手順書 §11 のコマンドで作り直す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -101,3 +103,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
