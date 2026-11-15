@@ -22,5 +22,8 @@
 - PR を revert する（7 章）
 
 ## 自律判断の記録
+- [plan-review] Warning 2 件は手動 No.2 の備考の追記と実装時の確認で対応し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: implement
