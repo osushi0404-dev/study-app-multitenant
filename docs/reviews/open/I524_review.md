@@ -16,8 +16,8 @@
 - Backend/Frontend/DB/Config: Backend は確かめ用データの中身と管理コマンドだけ。Frontend なし。DB はスキーマの変更なし。Config は `docker-compose.yml` に一度きりのサービスを足す
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: 手元の関係するテスト 312 passed・FG-1〜FG-6 はどれも狙った TC が落ちた。CI（PR #526・718311f5）の 8 ジョブすべて合格。決定論ゲート 2 本 exit 0。コードレビュー OK（Low 4 件・止める指摘なし）
+- 手動: No.1〜No.5 すべて OK（Claude）。起動で作り直した種 1554394331・2 回目 1199888813 で、画面の棒の読み上げ・合計がログと一字一句同じ。CI の E2E は新しいサービスを動かしていない
 
 ## 計画との差分
 - なし
@@ -40,3 +40,5 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: test-gate
+
+STAGE_DONE: test-gate NEXT: retro

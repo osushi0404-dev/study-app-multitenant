@@ -49,3 +49,8 @@ bash scripts/claude/tests/test_i213_dependabot.sh
 記録（計画の時点・2026-11-16・変更前の `docker-compose.yml`）:
 - `test_compose_ports.sh` → pass=13 fail=0（exit 0）
 - `test_i213_dependabot.sh` → pass=17 fail=0（exit 0。FG-I1・FG-V1 で、指紋の無い `image:`・名前の無い保存領域を入れると不合格になることを中で確かめている）
+
+## 実行記録（test-gate・2026-11-16 01:50）
+- `bash scripts/claude/gate-check.sh I524` → exit 0（`GATE_CHECK: OK`・レビュー済み 718311f5 以降は記録の場所だけ）
+- 決定論ゲート 2 本は review-gate の `code-review.sh` が実走して exit 0（`docs/reviews/I524_code_review_20261116_0138.md`）。test-gate に委譲されたものは無い
+- pytest・Jest・E2E は CI（PR #526・HEAD 718311f5）の 8 ジョブすべて合格。手元で流し直したものは無い
