@@ -39,6 +39,7 @@
 - [retro] /simplify の文言変更で I187 のテストを壊した件: 見送り — CI がその場で捕まえ、fix-loop 1 回（文言の 1 行）で直った。決定論のゲートが働いた例で、新しい手順は足さない
 - [retro] V3 を「実験必須」にした件（本物の pre-commit と git の部分は決定論の TC で覆えた）: 見送り — 決まり（plan-writing-rules「高リスクの計画の必ず確かめる項目」）はすでにあり、review-gate 3-3 の流れで TC-05 に置き換わった（敵対的レビュー 1 周分の手戻り）。同じことが続けば plan-reviewer の観点にする
 - [retro] 残余リスクの処遇: 計画書「セキュリティレビュー結果」の「残余リスク処遇」に記録（High 以上なし）
+- [close] マージ依頼前の最終確認で CI の `test_i202_ledger_cleanup.sh` D3 が落ちた（一覧 `docs/reviews/backlog/I468.md` の説明の行が `- F6（…` と「- F」で始まり、指摘の行の形と見なされた）— close 5.5 のとおり記録を open に戻して fix-loop へ。日時つきのレビュー記録は closed に残したので、計画書のリンク（closed を指す）は戻さない
 - [close] develop への追従は不要（mergeStateStatus=BLOCKED・承認待ち）。gate-check OK。診断メモ `I468_fix_diagnosis_20261115_1058.md` は、これまでのイシューと同じく `docs/reviews/` 直下に残した（close の回収の対象は `_review_` を含む記録だけ）
 
 ## 振り返り
@@ -103,3 +104,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: fix-loop
