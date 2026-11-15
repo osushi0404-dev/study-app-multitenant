@@ -43,8 +43,13 @@ export const daysAriaLabel = (days: DashboardDay[]): string =>
 
 /** 直近 7 日の合計: 78分・9問・正答率78%（秒・解答・正解をそれぞれ足してから丸める） */
 export const weeklyTotalText = (days: DashboardDay[]): string => {
-  const seconds = days.reduce((sum, day) => sum + day.study_seconds, 0);
-  const answered = days.reduce((sum, day) => sum + day.answered_count, 0);
-  const correct = days.reduce((sum, day) => sum + day.correct_count, 0);
+  const { seconds, answered, correct } = days.reduce(
+    (sum, day) => ({
+      seconds: sum.seconds + day.study_seconds,
+      answered: sum.answered + day.answered_count,
+      correct: sum.correct + day.correct_count,
+    }),
+    { seconds: 0, answered: 0, correct: 0 }
+  );
   return `直近 7 日の合計: ${studyMinutes(seconds)}分・${answered}問・正答率${formatRate(rateOf(correct, answered))}`;
 };

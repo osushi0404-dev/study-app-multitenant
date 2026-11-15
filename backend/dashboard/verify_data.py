@@ -11,6 +11,7 @@
 """
 import math
 import random
+import dataclasses
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Optional
@@ -62,14 +63,10 @@ def _start_of(day: date) -> datetime:
     return timezone.make_aware(datetime.combine(day, time.min))
 
 
-def _local_date(moment: datetime) -> date:
-    return timezone.localdate(moment)
-
-
 def _random_time(rng: random.Random, day: date, now: datetime) -> datetime:
     """その日の解答の時刻。今日は 0:00〜今の 1 分前（今より後の解答を作らない）"""
     start = _start_of(day)
-    if day == _local_date(now):
+    if day == timezone.localdate(now):
         span = max(0, int((now - timedelta(minutes=1) - start).total_seconds()))
         return start + timedelta(seconds=rng.randint(0, span))
     return start + timedelta(hours=DAYTIME_FROM_HOUR, seconds=rng.randint(0, DAYTIME_HOURS * 3600 - 1))
@@ -82,7 +79,7 @@ def plan_answers(rng: random.Random, now: datetime) -> list:
     境目（範囲の外の日・解答の無い日・今日）を先に確定してから、乱数で日・科目・問題数を足す。
     最後に、直近 7 日の中の解答のどれか 1 つを 300 秒超えにする。どの種でもすべての境目が入る。
     """
-    today = _local_date(now)
+    today = timezone.localdate(now)
     outside_days = [today - timedelta(days=n) for n in range(HISTORY_DAYS - 1, RECENT_DAYS - 1, -1)]
     recent_past_days = [today - timedelta(days=n) for n in range(RECENT_DAYS - 1, 0, -1)]
 
@@ -108,30 +105,30 @@ def plan_answers(rng: random.Random, now: datetime) -> list:
                 ))
 
     recent_first = today - timedelta(days=RECENT_DAYS - 1)
-    recent_indexes = [i for i, a in enumerate(planned) if _local_date(a.answered_at) >= recent_first]
+    recent_indexes = [i for i, a in enumerate(planned) if timezone.localdate(a.answered_at) >= recent_first]
     over = rng.choice(recent_indexes)  # 今日は必ず解くので空にならない
-    original = planned[over]
-    planned[over] = PlannedAnswer(
-        original.subject_slug, original.answered_at, original.is_correct, rng.randint(*OVER_CAP_RANGE))
+    planned[over] = dataclasses.replace(planned[over], time_taken=rng.randint(*OVER_CAP_RANGE))
     return sorted(planned, key=lambda a: a.answered_at)
 
 
 # ---- 期待値（集計を使わずに数える）----
-def _counts(answers: list) -> dict:
-    seconds = sum(min(a.time_taken, CAP_SECONDS) for a in answers)
-    return {
-        'seconds': seconds,
-        'minutes': seconds // 60,
-        'answered': len(answers),
-        'correct': sum(1 for a in answers if a.is_correct),
-    }
-
-
 def _rate_text(correct: int, answered: int) -> str:
     """画面の Math.round(correct / answered * 100) と同じ。0 件は「—」"""
     if not answered:
         return '—'
     return f'{math.floor(correct / answered * 100 + 0.5)}%'
+
+
+def _counts(answers: list) -> dict:
+    seconds = sum(min(a.time_taken, CAP_SECONDS) for a in answers)
+    correct = sum(1 for a in answers if a.is_correct)
+    return {
+        'seconds': seconds,
+        'minutes': seconds // 60,
+        'answered': len(answers),
+        'correct': correct,
+        'rate_text': _rate_text(correct, len(answers)),
+    }
 
 
 def _streak(days_with_answers: set, today: date) -> int:
@@ -146,18 +143,16 @@ def _streak(days_with_answers: set, today: date) -> int:
 def _scope(label: str, subject_slug: Optional[str], answers: list, today: date) -> dict:
     by_day = {}
     for a in answers:
-        by_day.setdefault(_local_date(a.answered_at), []).append(a)
+        by_day.setdefault(timezone.localdate(a.answered_at), []).append(a)
     recent = [today - timedelta(days=n) for n in range(RECENT_DAYS - 1, -1, -1)]
     days = [{'date': day, **_counts(by_day.get(day, []))} for day in recent]
-    week = _counts([a for day in recent for a in by_day.get(day, [])])
-    totals = _counts(answers)
     return {
         'label': label,
         'subject_slug': subject_slug,
         'today': _counts(by_day.get(today, [])),
         'days': days,
-        'week': {**week, 'rate_text': _rate_text(week['correct'], week['answered'])},
-        'totals': {**totals, 'rate_text': _rate_text(totals['correct'], totals['answered'])},
+        'week': _counts([a for day in recent for a in by_day.get(day, [])]),
+        'totals': _counts(answers),
         'streak': _streak(set(by_day), today),
     }
 
@@ -197,7 +192,7 @@ def format_summary(summary: dict, seed: int) -> list:
         for day in scope['days']:
             lines.append(
                 f'    {_day_title(day["date"])} 学習時間: {day["minutes"]}分・'
-                f'解答数: {day["answered"]}問・正答率: {_rate_text(day["correct"], day["answered"])}')
+                f'解答数: {day["answered"]}問・正答率: {day["rate_text"]}')
         lines.append(f'  全期間: {totals["answered"]}問・正答率{totals["rate_text"]}')
         lines.append(f'  連続日数: {scope["streak"]}日')
         goal = summary['goal']
@@ -268,7 +263,7 @@ def _write_answers(user, subjects: dict, planned: list) -> None:
     """(日・科目) ごとに終わったセッションを 1 つ作り、計画の時刻で解答を入れる"""
     groups = {}
     for a in planned:
-        groups.setdefault((_local_date(a.answered_at), a.subject_slug), []).append(a)
+        groups.setdefault((timezone.localdate(a.answered_at), a.subject_slug), []).append(a)
 
     sessions, answers = [], []
     for (_, slug), items in groups.items():
@@ -306,4 +301,4 @@ def seed_verify_data(*, seed: int, password: str, now: datetime) -> dict:
         QuizSession.objects.filter(user=user).delete()
         _write_answers(user, subjects, planned)
         goal_minutes = UserSettings.objects.get_or_create(user=user)[0].daily_study_goal_minutes
-    return summarize(planned, _local_date(now), goal_minutes)
+    return summarize(planned, timezone.localdate(now), goal_minutes)

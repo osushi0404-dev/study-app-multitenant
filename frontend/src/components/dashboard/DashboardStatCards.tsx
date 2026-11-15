@@ -33,20 +33,19 @@ const StatCard: React.FC<StatCardProps> = ({ icon, color, label, value, footer }
   </Card>
 );
 
-const GoalFooter: React.FC<GoalProgress> = ({ todayMinutes, goalMinutes }) => (
-  <>
-    <LinearProgress
-      variant="determinate"
-      value={Math.min((todayMinutes / goalMinutes) * 100, 100)}
-      sx={{ mt: 2 }}
-    />
-    <Typography variant="caption" color="text.secondary">
-      目標（全科目）: {goalMinutes}分 ({Math.floor((todayMinutes / goalMinutes) * 100)}%)
-    </Typography>
-  </>
-);
+const GoalFooter: React.FC<GoalProgress> = ({ todayMinutes, goalMinutes }) => {
+  const percent = (todayMinutes / goalMinutes) * 100;
+  return (
+    <>
+      <LinearProgress variant="determinate" value={Math.min(percent, 100)} sx={{ mt: 2 }} />
+      <Typography variant="caption" color="text.secondary">
+        目標（全科目）: {goalMinutes}分 ({Math.floor(percent)}%)
+      </Typography>
+    </>
+  );
+};
 
-const noRecord =<Typography variant="body1" color="text.secondary">{NO_RECORD_TEXT}</Typography>;
+const noRecord = <Typography variant="body1" color="text.secondary">{NO_RECORD_TEXT}</Typography>;
 
 /** 1 日の目標の進み具合（全科目の今日の分と目標の分・I513） */
 export interface GoalProgress {

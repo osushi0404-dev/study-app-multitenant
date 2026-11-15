@@ -44,8 +44,8 @@ const Dashboard: React.FC = () => {
   // 「すべて」が読み込み中・失敗のときは、目標の行と進み具合を出さない（仮の値で埋めない）
   const allTodayMinutes = allOverview.data ? todayStudyMinutes(allOverview.data) : null;
   const goalProgress: GoalProgress | null =
-    allOverview.data?.has_data && allTodayMinutes !== null && goalMinutes !== null
-      ? { todayMinutes: allTodayMinutes, goalMinutes }
+    allOverview.data?.has_data && goalMinutes !== null
+      ? { todayMinutes: todayStudyMinutes(allOverview.data), goalMinutes }
       : null;
 
   return (
