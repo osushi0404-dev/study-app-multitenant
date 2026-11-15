@@ -21,8 +21,8 @@
 - Backend/Frontend/DB/Config: Backend は管理コマンドの追加だけ（API・集計は変えない）。Frontend はダッシュボードの部品とテスト。DB・Config の変更なし
 
 ## テスト結果
-- 自動: 手元で backend `test_I513_seed_dashboard_verify.py`・`test_I473_overview.py` 87 passed、frontend `Dashboard.test.tsx` 37 passed、`npm run typecheck`・`npm run lint` 0、`react-scripts build` 成功。FG-1〜FG-7 はすべて落ちることを確かめた（`docs/tests/open/I513_auto_test.md`）。正は CI
-- 手動: （test-gate）。implement の下見（種 764387624）で、1440 の「すべて」「確かめ数学」「確かめ英語」と 390 の「すべて」の値がコマンドの期待値と一致した
+- 自動: 手元で backend `test_I513_seed_dashboard_verify.py`・`test_I473_overview.py` 87 passed、frontend `Dashboard.test.tsx` 37 passed、`npm run typecheck`・`npm run lint` 0、`react-scripts build` 成功。FG-1〜FG-9 はすべて落ちることを確かめた（`docs/tests/open/I513_auto_test.md`）。CI（PR #521・HEAD ee4bbeb3）は全部合格
+- 手動: test-gate で No.1〜No.7 すべて OK（実施者はすべて Claude）。違う種（1082476175・1030046851）で 2 回作り直し、どちらも 1440・390 の「すべて」と科目ごとの値がコマンドの期待値と一致。画面から 3 問解くと今日と直近 7 日の合計の解答数がちょうど 3 増えた（`docs/tests/open/I513_manual_test.md`）
 
 ## 計画との差分
 - なし（`/simplify` の整理は動作を変えない書き換えだけ）
@@ -41,6 +41,7 @@
 - [review-gate] コードレビュー（`docs/reviews/I513_code_review_20261115_1045.md`）が止める指摘 F1・F2（Medium・再現あり）で HIGH。fix-loop へ回す — 決まりどおり
 - [fix-loop] F1 は案 A（時刻を `rng.random()` 1 回で決める・TC-49）、F2 は案 A（数字のカードの進み具合は選んだ科目に記録があるときだけ出す・TC-30b を直す）で直した — 診断レビュー PASS。F2 は計画 9 章の自律判断の細部を直したもので、受け入れ条件・方式・範囲は変えないので計画レビューは通り直さない（計画変更記録に記載）。UI の判断は設計確認メモの委任の範囲
 - [review-gate] 差分のレビュー（`docs/reviews/I513_code_review_20261115_1057.md`）OK・CI 全部合格・高リスクではない（敵対的レビューは不要）。test-gate へ
+- [test-gate] 棒の tooltip は、グラフの中央の列（MCP の hover・click が当てる位置）で出して撮り、ほかの日は同じ値から作る棒の読み上げの文で見比べた — 座標を指定してマウスを動かすには任意のコードを動かす操作（`browser_run_code_unsafe`）が要り、手順書 §9 で避ける決まりのため。tooltip の文の作り方は TC-33 が固定している
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

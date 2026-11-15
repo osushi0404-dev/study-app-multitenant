@@ -68,3 +68,7 @@ FG（失敗の注入。実装の中で一時的に壊して落ちることを確
 - セキュリティ上の考慮点: なし（認可・入力・露出に関わらない）
 - 次回どう防ぐか: 種で再現したい乱数の計画では、乱数の消費量が入力（時刻など）で変わる関数を使わない。テストで入力を固定するときは、入力を変えても同じになるべき性質を別に確かめる（TC-49）。付属の表示を置くカードは、カードの値と同じ範囲の値にする
 - 確かめた結果: backend `test_I513_seed_dashboard_verify.py`・`test_I455_org_scoped_querysets.py` 106 passed、frontend `Dashboard.test.tsx` 37 passed、`npm run lint`・`npm run typecheck` 0。FG-8（時刻を `randint` に戻す）で TC-49 が 20 件中 13 件落ちた・FG-9（`hasData &&` を外す）で TC-30b が落ちた。どちらも元に戻した
+
+## 実行記録（test-gate・2026-11-15 11:06）
+- `bash scripts/claude/gate-check.sh I513` → exit 0（`GATE_CHECK: OK`・レビュー済み ee4bbeb3 以降は記録の場所だけ）
+- pytest・Jest・E2E は CI（PR #521・HEAD ee4bbeb3）が全部合格。決定論ゲート（heavy の委譲）は無いので、手元で流し直したものは無い
