@@ -238,4 +238,8 @@ Danger Ops（有無/手順/ロールバック）:
 | 5 | 同上 | 同上 | `SKIP=eslint` を付けてコミット | 手元では止められない（pre-commit の公式の機能） | No | No | CI の ESLint の段が止める（変えない・V4） | Low |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+（retro・2026-11-15）
+- 設計レビューの Medium（fail-open）: 回避済み（TC-01〜TC-05・FG-01〜FG-05。本物の環境でも、Docker に届かないときに止まることを test-gate で確かめた）
+- Low（依存のインストール・作業ツリーの書き込み・機密・外部通信）: 受け入れ（8 の表の R3・R4・R5・R7 と同じ。新しい依存・取得先・引数なし）
+- 攻撃シナリオ 4（`COMPOSE_PROJECT_NAME`）・5（`SKIP=eslint`）: 受け入れ（worktree.md §5 (C) と CI の ESLint の段が最後の守り）
+- High 以上: なし（イシュー化するものなし）
