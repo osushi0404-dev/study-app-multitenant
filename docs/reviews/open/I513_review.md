@@ -6,23 +6,36 @@
 - 確かめ用のデータを毎回乱数で作り直し、集計を使わずに数えた期待値を出す管理コマンド `seed_dashboard_verify` を足す。手順書に確かめ方を書く
 
 ## 変更点
-- 計画書 `docs/plans/open/plan_I513.md` の 4 章のとおり（実装後に書く）
+- `backend/dashboard/verify_data.py`（新規）: 計画（`plan_answers`・境目を先に確定）・期待値（`summarize`・`format_summary`・selectors を使わない）・書き込み（`seed_verify_data`・`ensure_debug`・確かめ用の組織の外の同じメールで止まる・この利用者のセッションだけを消す）
+- `backend/dashboard/management/commands/seed_dashboard_verify.py`（新規）: `--seed`・`--password-env`（値は引数で受けない）
+- `backend/dashboard/tests/test_I513_seed_dashboard_verify.py`（新規）: TC-40〜TC-48
+- `frontend/src/pages/Dashboard.tsx`: 「すべて」の overview をもう 1 回読み（同じキー）、目標の行・進み具合・達成のお知らせをそれで出す
+- `frontend/src/components/dashboard/DashboardStatCards.tsx`: `goalProgress`（`GoalProgress | null`）を受け、`目標（全科目）: ◯分 (◯%)`
+- `frontend/src/components/dashboard/StartQuizCard.tsx`: 文言を `今日の目標（全科目）…` に
+- `frontend/src/components/dashboard/weeklySummary.ts`（新規）: 分の切り捨て・tooltip の題と行・読み上げ・7 日の合計
+- `frontend/src/components/dashboard/DashboardCharts.tsx`: `Bar`・`interaction: index`・tooltip・合計の行・`aria-label`
+- `frontend/src/pages/__tests__/Dashboard.test.tsx`: TC-30〜TC-35 を足し、TC-02・TC-05・TC-10a〜c・TC-11・TC-20 を直した
+- `docs/runbooks/frontend-verify.md`: ログインの表に確かめ用の利用者・「11. 確かめ用のデータ（ダッシュボード）」
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: Backend は管理コマンドの追加だけ（API・集計は変えない）。Frontend はダッシュボードの部品とテスト。DB・Config の変更なし
 
 ## テスト結果
-- 自動: （実装後）
-- 手動: （test-gate）
+- 自動: 手元で backend `test_I513_seed_dashboard_verify.py`・`test_I473_overview.py` 87 passed、frontend `Dashboard.test.tsx` 37 passed、`npm run typecheck`・`npm run lint` 0、`react-scripts build` 成功。FG-1〜FG-7 はすべて落ちることを確かめた（`docs/tests/open/I513_auto_test.md`）。正は CI
+- 手動: （test-gate）。implement の下見（種 764387624）で、1440 の「すべて」「確かめ数学」「確かめ英語」と 390 の「すべて」の値がコマンドの期待値と一致した
 
 ## 計画との差分
-- （実装後）
+- なし（`/simplify` の整理は動作を変えない書き換えだけ）
 
 ## ロールバック
 - PR を revert する（マイグレーション・依存の変更なし）
 
 ## 自律判断の記録
 - [plan-review] 計画レビュー OK。Warning 2 件（境目を乱数より先に決める順・1 分未満で解答のある日の tooltip）は計画とテスト文書に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記のため
+- [implement] ESLint の pre-commit フックを `SKIP=eslint` で飛ばした — ワークツリーのホストで動かない既知の問題（#468）。frontend コンテナで `npm run lint`（`--max-warnings 0`）を流して違反 0 を確かめた
+- [implement] テストの仮のパスワードに `# pragma: allowlist secret` を付けた — detect-secrets の誤検知（テスト用の仮の値）
+- [implement] `/simplify` で直したもの: 目標の条件の重複・進み具合の割合の 2 回計算・7 日の合計の 3 回の走査・正答率の文字を作る場所の統一（`_counts`）・`dataclasses.replace`・`timezone.localdate` の包み関数を外した。いずれも動作は変えない
+- [implement] `/simplify` で見送ったもの: (1) 秒→分の切り捨てを `dashboardAchievements.ts`・`statistics/format.ts` と 1 か所にまとめる案と、日付の分解を `format.ts` の `partsOf` に寄せる案 — 計画で変えないとしたファイル（`format.ts`）と計画外のファイル（`dashboardAchievements.ts`）を触るため。グラフまわりの共通化は #516 で扱う (2) 目標の値を 1 つのフック（`useDailyGoalProgress`）に束ねる案 — 2 枚のカードの出す条件（記録が無いときに「学習を開始」の目標の行は出す）は I487 からの動きで、束ねると動作が変わる (3) 組織を `get_or_create` にする案 — 組織の slug は一意でなく、重複があると例外になるため `filter().first()` のまま (4) `useMemo`・`Intl.DateTimeFormat` の使い回し — 7 件の計算で差が無い
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
