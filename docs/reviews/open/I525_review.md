@@ -30,3 +30,4 @@ STAGE_DONE: plan NEXT: plan-review
 - [plan-review] 計画レビュー OK（Info 3 件は対応任意。S1 の検出範囲・fail-open の是正・worktree.md は計画で扱い済みのため直さない）
 STAGE_DONE: plan-review NEXT: implement
 - [implement] /simplify の 4 観点: run と run_args の重複（共通化・簡素化の 2 観点）を直し、run を run_args の包みにした。見送り: USAGE のケースのリポジトリの共有（数秒の短縮より、ケースごとに分けて互いに影響しない方を採る）・S1 を env/timeout の前置きにも広げる案・DIRTY の原因の表示（サンドボックスの検知が確実でない）・worktree.md の前置き（計画で範囲外・retro の候補）
+STAGE_DONE: implement NEXT: review-gate
