@@ -47,6 +47,7 @@
 - [review-gate] 取り込みの後: 差分のレビュー（3 ファイル）OK・CI 全ジョブ合格。延長の 3 周目は、Claude の Bash では `ADV_ROUND_LIMIT=3` の前置きでサンドボックスの外に出られず `ADVERSARIAL_ERROR: DIRTY` が 2 回続いた（作業ツリーはきれい・サンドボックスが差し込む装置ファイルを数えた）。止めてユーザーに聞き「BP の観点でベストに」の答えで、ユーザーに `!` で同じコマンドを流してもらい、3 周目 OK（20261116_0009・未検証 0・新しい指摘 0）。不具合は I525（#525）に起票
 - [test-gate] 3 回目: gate-check OK。取り込みで変えたのは手順書の節の番号と、それを指すスキル 2 つの参照だけで、ラッパー・フック・テストは変わっていないので手動テストは流し直さない（スキル・手順書を読むテスト 23 本は取り込みの前に手元で合格・CI も合格）
 - [retro] 3 回目: develop との衝突は、並行のイシューが同じ手順書の最後に節を足したことによる。手順書の節を番号で指す書き方は衝突しやすいが、今回は手元のテストで参照の取りこぼしを確かめて直せたので新しい手順は足さない。延長のコマンドの不具合は I525 に起票
+- [close] 4 回目: develop への追従は不要（BLOCKED）・gate-check OK。記録を closed へ移した。承認は取り込みで外れたので再承認を依頼する
 - [close] 3 回目（ユーザーの承認の後）: develop が I513（PR #521）で進み、PR が out-of-date になった。`frontend-verify.md` の最後の「## 11.」が衝突したので、I513 の節を 11 のまま残し、このイシューの節を 12 にしてスキル 2 つの参照を直した。変更の前に、スキル・手順書のフォルダを読むテスト 23 本を手元で流して合格（I523 の起票の理由と同じ漏れを繰り返さないため）。記録を open に戻して review-gate へ。敵対的レビューは通算 2 周の上限を使い切っていたので、ユーザーに聞き「3 周目まで回す」の答え（2026-11-15）で 1 周延長する
 - [close] 2 回目: develop への追従は不要（BLOCKED・承認待ち）・gate-check OK。記録を closed へ移し直した（計画書のリンクは前回から closed を指したまま）
 - [close] develop への追従は不要（mergeStateStatus=BLOCKED・承認待ち）。gate-check OK。診断メモ `I468_fix_diagnosis_20261115_1058.md` は、これまでのイシューと同じく `docs/reviews/` 直下に残した（close の回収の対象は `_review_` を含む記録だけ）
@@ -123,3 +124,4 @@ STAGE_DONE: close NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
