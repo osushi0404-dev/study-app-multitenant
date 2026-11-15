@@ -43,3 +43,6 @@
 bash scripts/claude/tests/test_i197_adversarial_process.sh
 bash scripts/claude/tests/test_i525_skill_sandbox_form.sh
 ```
+
+## 実行記録
+- 2026-11-16 test-gate: 決定論ゲート（TC-01・TC-02）は review-gate の code-review.sh が実走済み（heavy の委譲なし）。test-gate で流し直すものは無い

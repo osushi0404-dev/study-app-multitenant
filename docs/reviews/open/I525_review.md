@@ -14,7 +14,7 @@
 
 ## テスト結果
 - 自動: TC-01 pass=172 fail=0（計画変更 1 の後）・TC-02 pass=7 fail=0（手元・実装時）。関係する既存テスト 6 本（i181・i193・i197 ledger・i202・i205・i224）pass=6 fail=0
-- 手動: （未実施）
+- 手動: No.1 OK（前置きの形は実機で DIRTY）・No.2 OK（引数の形は DIRTY なしで周が始まり、敵対的レビュー 20261116_0229 は OK・未検証 0）
 
 ## 計画との差分
 - なし
@@ -39,3 +39,5 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 差分のレビュー OK（F1・F2 resolved）・NOT_REQUIRED。新しい Low 2 件（F6 記録の手書き換えが前提の既存の穴・F7 4 と桁の大きな値の FG が無い〔A9g7・A9g8 そのものが古い正規表現で落ちるので回帰は捕まる〕）は retro へ
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] gate-check OK。手動 No.1・No.2 とも Claude が実機で OK。No.2 で起動した敵対的レビュー（通算 1 周・OK）は高リスクでないイシューの追加の周で、gate-check の条件には入らない
+STAGE_DONE: test-gate NEXT: retro
