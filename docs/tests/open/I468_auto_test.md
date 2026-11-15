@@ -24,6 +24,13 @@
 - 次回どう防ぐか: /simplify で文書の文言を変えたら、/simplify の前と同じ「変えたファイルを読むテスト」を流し直してからコミットする（implement の 1.5) の「書き換えが計画の範囲を外れていないかを差分で確かめ」の確かめに含める）
 - 確かめた結果: `test_i193_official_flow.sh`・`test_i205_stop_criteria.sh`・`test_review_commit_lifecycle.sh`・`test_i181_review_slim.sh`・`test_i197_adversarial_process.sh`・`test_i468_lint_frontend.sh` の 6 本が合格（run-all: pass=6 fail=0）
 
+## 再発防止記録（fix-loop 2 回目・close の最終確認から・2026-11-15）
+- なぜ失敗したか: retro で作った一覧 `docs/reviews/backlog/I468.md` に、手で説明の行「- F6（…）は…」を書いた。`test_i202_ledger_cleanup.sh` の D3 は「- F」で始まる行を指摘の行と見なして形を確かめるので落ちた。retro の後に、記録のファイルを読むテストを流していなかった
+- 何を変えたか: 説明の行の書き出しを「- 台帳の F6（…）」にした（診断メモ `docs/reviews/I468_fix_diagnosis_20261115_1145.md` の案 A）。テストは変えていない
+- セキュリティ: 影響なし
+- 次回どう防ぐか: 一覧のファイルにはスクリプトの出力の行だけを「- F」で始め、説明は「- F」で始めない（retro 4-0 の「出力の行をそのまま貼る」のとおり）。手で足す行は「- R」など別の頭文字にする
+- 確かめた結果: `test_i202_ledger_cleanup.sh` 合格（run-all: pass=1 fail=0）
+
 ## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_i468_lint_frontend.sh
