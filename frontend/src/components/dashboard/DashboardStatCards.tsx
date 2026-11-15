@@ -6,6 +6,7 @@ import React from 'react';
 import { Avatar, Box, Card, CardContent, Grid, LinearProgress, Typography } from '@mui/material';
 import { EmojiEvents, Quiz, Timer, TrendingUp } from '@mui/icons-material';
 import { DashboardOverview } from '../../types/api';
+import { GoalProgress } from '../../types/dashboard';
 import { todayStudyMinutes } from '../../utils/dashboardAchievements';
 
 export const NO_RECORD_TEXT = 'まだ記録がありません';
@@ -33,7 +34,7 @@ const StatCard: React.FC<StatCardProps> = ({ icon, color, label, value, footer }
   </Card>
 );
 
-const GoalFooter: React.FC<GoalProgress> = ({ todayMinutes, goalMinutes }) => {
+const GoalFooter = ({ todayMinutes, goalMinutes }: GoalProgress) => {
   const percent = (todayMinutes / goalMinutes) * 100;
   return (
     <>
@@ -46,12 +47,6 @@ const GoalFooter: React.FC<GoalProgress> = ({ todayMinutes, goalMinutes }) => {
 };
 
 const noRecord = <Typography variant="body1" color="text.secondary">{NO_RECORD_TEXT}</Typography>;
-
-/** 1 日の目標の進み具合（全科目の今日の分と目標の分・I513） */
-export interface GoalProgress {
-  todayMinutes: number;
-  goalMinutes: number;
-}
 
 interface DashboardStatCardsProps {
   overview: DashboardOverview;

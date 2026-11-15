@@ -14,7 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SubjectSelector } from '../components/SubjectSelector';
 import TodayReviewCard from '../components/TodayReviewCard';
 import StartQuizCard from '../components/dashboard/StartQuizCard';
-import DashboardStatCards, { GoalProgress } from '../components/dashboard/DashboardStatCards';
+import DashboardStatCards from '../components/dashboard/DashboardStatCards';
 import DashboardCharts from '../components/dashboard/DashboardCharts';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
 import WeakSubjectsCard from '../components/dashboard/WeakSubjectsCard';
@@ -24,6 +24,7 @@ import { useUserSubjects } from '../hooks/useUserSubjects';
 import { useDailyStudyGoal } from '../hooks/useDailyStudyGoal';
 import { useDashboardAchievements } from '../hooks/useDashboardAchievements';
 import { todayStudyMinutes } from '../utils/dashboardAchievements';
+import { GoalProgress } from '../types/dashboard';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();

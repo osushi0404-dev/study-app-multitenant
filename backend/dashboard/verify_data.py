@@ -18,7 +18,6 @@ from typing import Optional
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -49,6 +48,10 @@ DAYTIME_FROM_HOUR = 7     # 過去の日の解答は 7:00〜22:59（日付の境
 DAYTIME_HOURS = 16
 
 WEEKDAYS = '月火水木金土日'
+
+
+class VerifyDataError(Exception):
+    """確かめ用のデータを作らずに止まるとき（呼び出し元の管理コマンドが CommandError に変える）"""
 
 
 @dataclass(frozen=True)
@@ -212,7 +215,7 @@ def format_summary(summary: dict, seed: int) -> list:
 # ---- 書き込み（開発の DB だけ）----
 def ensure_debug() -> None:
     if not settings.DEBUG:
-        raise CommandError('DEBUG が偽のため、確かめ用のデータは作りません（開発の環境だけで使うコマンドです）')
+        raise VerifyDataError('DEBUG が偽のため、確かめ用のデータは作りません（開発の環境だけで使うコマンドです）')
 
 
 def _ensure_user(password: str):
@@ -234,7 +237,7 @@ def _ensure_user(password: str):
         return User.objects.create_user(
             email=USER_EMAIL, user_id=USER_ID, password=password, organization=org, role='user'), org
     if user.organization_id != org.pk:
-        raise CommandError(f'{USER_EMAIL} が確かめ用の組織（{ORG_SLUG}）にいないため、何もしません')
+        raise VerifyDataError(f'{USER_EMAIL} が確かめ用の組織（{ORG_SLUG}）にいないため、何もしません')
     user.set_password(password)
     user.save(update_fields=['password'])
     return user, org
@@ -299,7 +302,7 @@ def seed_verify_data(*, seed: int, password: str, now: datetime) -> dict:
     """確かめ用のデータを作り直し、期待値を返す。DEBUG が偽・パスワードが空なら何もせずに止まる"""
     ensure_debug()
     if not password:
-        raise CommandError('パスワードが空です。--password-env で渡す環境変数に値を入れてください')
+        raise VerifyDataError('パスワードが空です。--password-env で渡す環境変数に値を入れてください')
 
     planned = plan_answers(random.Random(seed), now)  # nosec B311 - 確かめ用データの乱数（暗号の用途ではない）
     with transaction.atomic():

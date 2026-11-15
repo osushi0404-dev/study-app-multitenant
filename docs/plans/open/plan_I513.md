@@ -60,7 +60,7 @@
 | ファイル | 変更 |
 |---|---|
 | `frontend/src/pages/Dashboard.tsx` | `const allOverview = useDashboardOverview(userId, ALL_SUBJECTS);` を足す（「すべて」を選んでいるときは同じキーなので取得は 1 回）。`useDashboardAchievements(user?.id, allOverview.data, goal)` にする（今は「すべて」を選んでいるときだけ渡していた。同じ応答なので判定は変わらず、分岐が要らなくなる）。`allTodayMinutes = allOverview.data ? todayStudyMinutes(allOverview.data) : null` を `StartQuizCard` の `todayMinutes` に渡す。`goalProgress`（`{ todayMinutes, goalMinutes }` か `null`。`allOverview.data?.has_data` が真で、目標が読めたときだけ）を `DashboardStatCards` に渡す |
-| `frontend/src/components/dashboard/DashboardStatCards.tsx` | 引数 `goalMinutes` を `goalProgress: GoalProgress \| null` に替える。進み具合（バーと「目標（全科目）: ◯分 (◯%)」）は、選んだ科目に記録があり（`hasData`・I487 と同じ条件）、`goalProgress` があるときだけ出す（値は全科目。選んだ科目に記録が無いときは、同じカードの「まだ記録がありません」と食い違って読めるので出さず、目標は「学習を開始」のカードの全科目の行で伝える・fix-loop F2）。% は今どおり `Math.floor`、バーは 100 まで。`GoalProgress` 型をここから export する |
+| `frontend/src/components/dashboard/DashboardStatCards.tsx` | 引数 `goalMinutes` を `goalProgress: GoalProgress \| null` に替える。進み具合（バーと「目標（全科目）: ◯分 (◯%)」）は、選んだ科目に記録があり（`hasData`・I487 と同じ条件）、`goalProgress` があるときだけ出す（値は全科目。選んだ科目に記録が無いときは、同じカードの「まだ記録がありません」と食い違って読めるので出さず、目標は「学習を開始」のカードの全科目の行で伝える・fix-loop F2）。% は今どおり `Math.floor`、バーは 100 まで。`GoalProgress` 型は `frontend/src/types/dashboard.ts`（新規）に置き、ここと `Dashboard.tsx` が import する。I513 で足す部品は `React.FC` を使わない（規約・fix-loop BP） |
 | `frontend/src/components/dashboard/StartQuizCard.tsx` | `todayMinutes` の意味を「全科目の今日の分」にし（コメントを直す）、文言を `今日の目標（全科目）達成まであと${goal - today}分です`／`今日の目標（全科目・${goal}分）を達成しました！` にする |
 
 ### 4-2. 推移を棒グラフにし、tooltip と直近 7 日の合計を出す
@@ -85,15 +85,16 @@
   - 時刻: その日の日本時間 7:00〜22:59 の乱数。今日は 0:00〜`now` の 1 分前の間（`now` より後の解答を作らない。0:01 より前なら 0:00）
 - `summarize(planned, today, goal_minutes) -> dict`（純粋な関数・selectors を使わずに数える）: 全科目と科目ごとに `today`（秒・分・問）・`days`（直近 7 日の日ごとの日付・秒・分・問・正）・`week`（秒・分・問・正・正答率の文字）・`totals`（問・正・正答率の文字）・`streak`（答えのある日が今日〔今日が無ければ昨日〕から続く日数）。分は 1 問 300 秒までにしてから足し、`//60`。正答率の文字は `math.floor(correct / answered * 100 + 0.5)` + `%`（画面の `Math.round` と同じ）・0 件は `—`。全科目には目標の行（`goal_minutes`・あと◯分か達成・`floor(今日の分/目標*100)`%）も入れる
 - `format_summary(summary, seed) -> list[str]`: 画面の表記どおりの行（例 `直近 7 日の合計: 78分・9問・正答率78%`・tooltip と同じ `11/13（金） 学習時間: 12分・解答数: 5問・正答率: 80%`・`目標（全科目）: 30分 → あと18分（40%）`）と、`種: <seed>（同じデータを作り直すには --seed <seed>）`
-- `ensure_debug()`: `settings.DEBUG` が偽なら `CommandError('DEBUG が偽のため、確かめ用のデータは作りません')`
+- `class VerifyDataError(Exception)`: 止まるときの例外（処理を管理コマンドの層に依らせない。コマンドが `CommandError` に変える・fix-loop BP）
+- `ensure_debug()`: `settings.DEBUG` が偽なら `VerifyDataError('DEBUG が偽のため、確かめ用のデータは作りません')`
 - `seed_verify_data(*, seed: int, password: str, now: datetime) -> dict`（`transaction.atomic()` の中）:
   1. `ensure_debug()`（何よりも先）
-  2. 分類・組織を `get_or_create`（slug で）。利用者を email で探し、いれば組織が `verify-i487-org` でなければ `CommandError`（ほかの組織の利用者に触らない）。いなければ `create_user(role='user')`。`set_password(password)` して保存
+  2. 分類・組織を `get_or_create`（slug で）。利用者を email で探し、いれば組織が `verify-i487-org` でなければ `VerifyDataError`（ほかの組織の利用者に触らない）。いなければ `create_user(role='user')`。`set_password(password)` して保存
   3. 科目を `get_or_create`（組織・slug）。問題を科目ごとに `確かめ問題 1`〜`5`（`get_or_create`・`problem_type='single'`・選択肢「正解」「不正解」）。`UserSubjectAccess` を `get_or_create`。既存の問題（I487 の 1 問）は消さない
   4. この利用者の `QuizSession` を消す（`QuizSession.objects.filter(user=user).delete()`。解答は CASCADE で消える。ほかの利用者は条件に入らない）
   5. `plan_answers(random.Random(seed), now)` → (日・科目) ごとに `QuizSession(is_active=False, mode='normal', total_problems=5, completed_problems=n, correct_answers=c, ended_at=最後の解答の時刻)` を作り、`QuizAnswer` を `bulk_create` → `answered_at` を計画の時刻にして `bulk_update(['answered_at'])`。セッションの `started_at` も最初の解答の時刻に `bulk_update`
   6. `summarize(planned, today, UserSettings の daily_study_goal_minutes〔無ければ作る・既定 30〕)` を返す
-- `password` が空なら `CommandError`（1 より先に確かめる。何も作らない）
+- `password` が空なら `VerifyDataError`（1 より先に確かめる。何も作らない）
 
 `backend/dashboard/management/__init__.py`・`backend/dashboard/management/commands/__init__.py`（新規・空）
 
@@ -191,6 +192,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 3 | 読んで可 | 目標の行・進み具合が、選んだ科目の応答ではなく「すべて」の応答から計算される（TC-30）。「すべて」が読めないときは出さない（TC-31） |
 
 ## 計画変更記録
+- マージ依頼の後のユーザーの BP の確認（「直す」）への対応（診断メモ `docs/reviews/I513_fix_diagnosis_20261115_1143.md`）: `GoalFooter` を `React.FC` を使わない書き方に・`GoalProgress` 型を `frontend/src/types/dashboard.ts` に移す・`verify_data.py` は `VerifyDataError` を投げ、管理コマンドが `CommandError` に変える（4-1・4-3 を直した）。動作・受け入れ条件・方式・範囲は変えないので、計画レビューのやり直しは不要
 - fix-loop（コードレビュー `docs/reviews/I513_code_review_20261115_1045.md` の F1・F2・診断メモ `docs/reviews/I513_fix_diagnosis_20261115_1053.md`）: (F1) 確かめ用データの時刻を `rng.random()` 1 回で決め、乱数の消費量を `now` に依らなくする（TC-49 を足す）(F2) 数字のカードの進み具合を、選んだ科目に記録があるときだけ出す（4-1・9 章を直し、TC-30b の期待を直す）。計画レビューのやり直し: 不要（受け入れ条件 AC1〜AC10・方式・範囲は変えない。F2 は計画の自律判断の細部）
 - 計画レビュー（`docs/reviews/I513_plan_review_20261115_0308.md`）の Warning 2 件への対応: `plan_answers` で境目を乱数より先に確定する順を明記した／TC-33 に 1 分未満で解答のある日の tooltip、aria-label に解答数を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
 

@@ -32,6 +32,7 @@ from dashboard.verify_data import (
     PROBLEMS_PER_SUBJECT,
     USER_EMAIL,
     PlannedAnswer,
+    VerifyDataError,
     format_summary,
     plan_answers,
     seed_verify_data,
@@ -222,7 +223,7 @@ def test_rebuild_keeps_other_users_data():
 # ---- TC-45: DEBUG が偽なら何も作らず・消さずに止まる ----
 @pytest.mark.django_db
 def test_stops_when_debug_is_false_on_empty_db():
-    with override_settings(DEBUG=False), pytest.raises(CommandError, match="DEBUG が偽"):
+    with override_settings(DEBUG=False), pytest.raises(VerifyDataError, match="DEBUG が偽"):
         seed_verify_data(seed=1, password=PASSWORD, now=NOW)
 
     assert not Organization.objects.filter(slug=ORG_SLUG).exists()
@@ -286,7 +287,7 @@ def test_stops_when_email_belongs_to_other_org():
     user = _other_user(USER_EMAIL, org, "verify_i487")
     before = (_session_ids(user), _answer_ids(user), user.password)
 
-    with pytest.raises(CommandError):
+    with pytest.raises(VerifyDataError):
         _seed(1)
 
     user.refresh_from_db()

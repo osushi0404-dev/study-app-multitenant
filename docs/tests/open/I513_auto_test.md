@@ -72,3 +72,10 @@ FG（失敗の注入。実装の中で一時的に壊して落ちることを確
 ## 実行記録（test-gate・2026-11-15 11:06）
 - `bash scripts/claude/gate-check.sh I513` → exit 0（`GATE_CHECK: OK`・レビュー済み ee4bbeb3 以降は記録の場所だけ）
 - pytest・Jest・E2E は CI（PR #521・HEAD ee4bbeb3）が全部合格。決定論ゲート（heavy の委譲）は無いので、手元で流し直したものは無い
+
+## 再発防止記録（fix-loop 3 回目・2026-11-15・ユーザーの BP の確認）
+- なぜ失敗したか: マージ依頼の後、ユーザーの「BP の観点で問題ないか」の確認に、規約の節と照らし合わせて小さなずれ 3 点を報告し、ユーザーが「直す」と決めた。(1) 新しい部品 `GoalFooter` に `React.FC`（規約 293 行）(2) 画面と部品が共有する型 `GoalProgress` を表示部品のファイルに置いた（規約 1578 行）(3) `verify_data.py` が管理コマンドの例外 `CommandError` を直接投げていた。どれも既存のファイルの書き方に合わせ、実装の前に規約の節を照らし合わせなかった
+- 何を変えたか: (1) `GoalFooter` を `({ … }: GoalProgress) => …` に (2) `frontend/src/types/dashboard.ts` を作って `GoalProgress` を移した (3) `VerifyDataError` を投げ、管理コマンドが `CommandError` に変える（TC-45 の 1 つ目・TC-47 は `VerifyDataError` を待つ。コマンドを呼ぶ TC-45 の 2 つ目・TC-46 は `CommandError` のまま）。動作・表示・止まり方は変えない。診断メモ `docs/reviews/I513_fix_diagnosis_20261115_1143.md`
+- セキュリティ上の考慮点: なし（止まる条件と順番は同じ）
+- 次回どう防ぐか: `React.FC` は #510 のリントで機械的に止まるようになる。型の置き場所・例外の層は、新しい部品・処理を足すときに規約の節と照らし合わせる（I487 の振り返りでできた「自作の前に規約と依存を実ファイルで照合」の範囲）
+- 確かめた結果: backend `test_I513_seed_dashboard_verify.py`・`test_I455_org_scoped_querysets.py` 106 passed、frontend `Dashboard.test.tsx` 37 passed、`npm run typecheck`・`npm run lint` 0

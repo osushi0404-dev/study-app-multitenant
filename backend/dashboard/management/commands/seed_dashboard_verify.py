@@ -8,10 +8,10 @@
 import os
 import secrets
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from dashboard.verify_data import format_summary, seed_verify_data
+from dashboard.verify_data import VerifyDataError, format_summary, seed_verify_data
 
 SEED_LIMIT = 2 ** 31
 
@@ -32,6 +32,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         seed = options['seed'] if options['seed'] is not None else secrets.randbelow(SEED_LIMIT)
         password = os.environ.get(options['password_env'], '')
-        summary = seed_verify_data(seed=seed, password=password, now=timezone.now())
+        try:
+            summary = seed_verify_data(seed=seed, password=password, now=timezone.now())
+        except VerifyDataError as error:
+            raise CommandError(str(error)) from error
         for line in format_summary(summary, seed):
             self.stdout.write(line)
