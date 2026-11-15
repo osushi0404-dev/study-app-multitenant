@@ -31,3 +31,5 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 - [implement] /simplify の 4 観点: run と run_args の重複（共通化・簡素化の 2 観点）を直し、run を run_args の包みにした。見送り: USAGE のケースのリポジトリの共有（数秒の短縮より、ケースごとに分けて互いに影響しない方を採る）・S1 を env/timeout の前置きにも広げる案・DIRTY の原因の表示（サンドボックスの検知が確実でない）・worktree.md の前置き（計画で範囲外・retro の候補）
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] コードレビュー OK・高リスクではない（NOT_REQUIRED）。ただし台帳 F1・F2（上限の値の確かめに上の限りが無く、桁の大きな値で上限が外れる・延長 1 周の決まりを守らない）はこのイシューの目的（上限の判定を緩めない）を崩すので、一覧に回さず直す。受け付ける値を 1〜3 にする計画変更（計画変更記録 1）→ 計画レビューをやり直す
+STAGE_DONE: review-gate NEXT: plan-review
