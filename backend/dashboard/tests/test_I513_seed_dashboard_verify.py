@@ -10,6 +10,7 @@ TC-40〜TC-48（docs/tests/open/I513_auto_test.md）に対応。
 import inspect
 import os
 import random
+from collections import Counter
 from datetime import datetime, timedelta
 from io import StringIO
 from unittest import mock
@@ -153,7 +154,8 @@ def test_every_plan_has_boundaries(seed):
 
 # ---- TC-49: 同じ種なら、同じ日のうちは流す時刻が違っても同じデータ（fix-loop F1） ----
 def _shape(planned):
-    return [(a.subject_slug, a.answered_at.astimezone(JST).date(), a.is_correct, a.time_taken) for a in planned]
+    """時刻を除いた解答の集まり（同じ秒に丸まった解答の並びの入れ替わりに依らない・I524 F5）"""
+    return Counter((a.subject_slug, a.answered_at.astimezone(JST).date(), a.is_correct, a.time_taken) for a in planned)
 
 
 @pytest.mark.parametrize("seed", range(20))

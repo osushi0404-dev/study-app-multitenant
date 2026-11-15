@@ -3,6 +3,8 @@
 
 流し方（パスワードは e2e/.env.e2e の E2E_TEST_PASSWORD を、e2e-init のコンテナの中で読む）:
     docker compose run --rm --no-deps e2e-init python manage.py seed_dashboard_verify --password-env E2E_TEST_PASSWORD
+開発の起動のたびに、compose の dashboard-verify-seed が --soft-stop 付きで流す
+（I524。出力は docker compose logs dashboard-verify-seed）
 手順: docs/runbooks/frontend-verify.md「11. 確かめ用のデータ（ダッシュボード）」
 """
 import os
@@ -28,6 +30,10 @@ class Command(BaseCommand):
             '--password-env', required=True,
             help='確かめ用の利用者のパスワードを読む環境変数の名前（値そのものは引数で渡さない）',
         )
+        parser.add_argument(
+            '--soft-stop', action='store_true',
+            help='止まる理由があれば、作らずに案内を出して正常に終わる（開発の起動の処理から呼ぶため）',
+        )
 
     def handle(self, *args, **options):
         seed = options['seed'] if options['seed'] is not None else secrets.randbelow(SEED_LIMIT)
@@ -35,6 +41,9 @@ class Command(BaseCommand):
         try:
             summary = seed_verify_data(seed=seed, password=password, now=timezone.now())
         except VerifyDataError as error:
+            if options['soft_stop']:
+                self.stdout.write(f'確かめ用のデータは作りませんでした: {error}')
+                return
             raise CommandError(str(error)) from error
         for line in format_summary(summary, seed):
             self.stdout.write(line)

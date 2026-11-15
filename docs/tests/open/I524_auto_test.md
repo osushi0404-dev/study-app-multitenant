@@ -3,9 +3,14 @@
 実行コマンド（例）: `docker compose exec backend python -m pytest dashboard/tests/test_I524_dashboard_verify_volume.py dashboard/tests/test_I513_seed_dashboard_verify.py studylogs/tests/test_I455_org_scoped_querysets.py`
 （CI が PR ごとに全体を流す。手元では関係するテストだけ）
 
-結果:
-- backend: 実装前のため未実行
+結果（implement 段階の手元の実行・2026-11-16。正は CI）:
+- backend: `test_I524_dashboard_verify_volume.py`・`test_I513_seed_dashboard_verify.py`・`studylogs/tests/test_I455_org_scoped_querysets.py` 312 passed（`/simplify` の整理の後にも流し直して 312 passed）。Red: 実装前は TC-01〜TC-06 が落ちた（`--soft-stop` が無い・解答の無い日が 2 日・10 問未満・問題が 5 問・22:59:58）。TC-07 は今のコマンドの正しい動きを固定するテストで、実装前から通る（FG-6 で落ちることを確かめた）
+- TC-05 の「環境変数が無い」経路（計画レビューの Warning）: `clear=True` の `{}` でも `パスワードが空` の分岐を通って合格した
 - frontend: 変更なし
+
+FG の結果（2026-11-16。壊す・戻すはスクラッチパッドの Python で行い、元の控えとバイト単位で一致することを確かめて戻した）:
+- FG-1: TC-01 が 100 件すべて落ちた／FG-2: TC-02 が 100 件中 99 件落ちた（1 件は乱数でたまたま重ならなかった）／FG-3: TC-03 が一意制約の `IntegrityError` で落ちた／FG-4: TC-04・TC-05 の 3 件が落ちた／FG-5: TC-06 が `22:59:58` で落ちた／FG-6: TC-07 が `DID NOT RAISE CommandError` で落ちた
+- 1 回目にシェルのスクリプトの中から docker を動かしたときは、サンドボックスの中で `.env` を読めず、テストが流れないまま非 0 になった（無効として数えず、docker のコマンドを直接打って流し直した）
 
 ## Backend（`backend/dashboard/tests/test_I524_dashboard_verify_volume.py`・新規）
 共通: `NOW = 2026-11-16 15:00 JST`（`TODAY` = 11-16）。直近 7 日 = `TODAY-6`〜`TODAY`、今日より前の 6 日 = `TODAY-6`〜`TODAY-1`、範囲の外 = `TODAY-13`〜`TODAY-7`。DB を使うテストは `override_settings(DEBUG=True)`、パスワードは `mock.patch.dict(os.environ, {'VERIFY_PW': 'pw-for-test'})`。(日, 科目) ごとの数は `answered_at` を日本時間の日付にして数える。
