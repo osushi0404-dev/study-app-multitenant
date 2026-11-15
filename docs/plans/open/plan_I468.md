@@ -204,6 +204,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 計画レビュー（20261115_1038）の Warning: 4-6 の場所を行番号でなく文言で指すように直した。R3 の補足（`files: ^frontend/src/` は `package*.json`・ESLint の設定だけの変更では流れない）は既存の動きで、CI の ESLint が止めるので変えない。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない
 - implement の /simplify: Docker に届くかの確かめを `docker info` から `docker version --format '{{.Server.Version}}'` に替えた（同じ判定で軽い。4-1 のコード例の 1 行）。テストの偽の docker も `version` に合わせた（環境変数は `STUB_DAEMON_RC`）。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない
 - review-gate の敵対的レビュー 1 周目（20261115_1112）で V3（実験必須）が実験の拒否で未検証になった。review-gate 3-3 のとおり、決定論の TC-05（本物の pre-commit・git・偽の docker・FG-05）を足し、V3 を「読んで可」に下げた。本物の Docker の分は manual_test No.1・No.2 のまま。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない
+- close（承認の後）: develop に I513（PR #521）が入り、`docs/runbooks/frontend-verify.md` の最後に「## 11. 確かめ用のデータ（ダッシュボード）」が足されて、このイシューの「## 11. MCP が使えないとき」と衝突した。先にマージされた I513 の番号を残し、このイシューの節を「## 12.」にして I513 の節の後ろに置き、`.claude/skills/implement/SKILL.md`（0) と 1)）・`.claude/skills/test-gate/SKILL.md` の参照を §12 に直した（この計画書の 4-4〜4-6 の「11」は、マージの後は「12」と読む）。中身は変えていない。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない。ユーザーの判断で敵対的レビューを 1 周延長する（`ADV_ROUND_LIMIT=3`）
 
 ## レビュー結果
 - [20261115_1038 判定: ✅ 完了](../../reviews/closed/I468_plan_review_20261115_1038.md)
