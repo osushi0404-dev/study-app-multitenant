@@ -3,7 +3,7 @@
  *
  * - 科目を選んでいればその科目で、「すべて」なら 1 件はすぐ・2 件以上はダイアログで科目を選ぶ
  * - 科目 0 件・科目の取得失敗は、押せないボタンとカードの中の案内で伝える（toast だけにしない）
- * - 目標の 1 行は、設定の目標が読めたときだけ出す
+ * - 目標の 1 行は、設定の目標と全科目の今日の分が読めたときだけ出す（科目を選んでいても全科目で計算・I513）
  */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +27,7 @@ interface StartQuizCardProps {
   onRetrySubjects: () => void;
   /** 科目の選択の値（'all' なら全科目） */
   selectedSubject: string;
-  /** 今日の学習の分（数字を読めていないときは null） */
+  /** 全科目の今日の学習の分。目標は 1 日全体のものなので、選んだ科目に関係なく全科目の値（読めていないときは null・I513） */
   todayMinutes: number | null;
   /** 1 日の目標の分（読めていないときは null） */
   goalMinutes: number | null;
@@ -35,8 +35,8 @@ interface StartQuizCardProps {
 
 const goalText = (todayMinutes: number, goalMinutes: number): string =>
   todayMinutes >= goalMinutes
-    ? `今日の目標（${goalMinutes}分）を達成しました！`
-    : `今日の目標達成まであと${goalMinutes - todayMinutes}分です`;
+    ? `今日の目標（全科目・${goalMinutes}分）を達成しました！`
+    : `今日の目標（全科目）達成まであと${goalMinutes - todayMinutes}分です`;
 
 const StartQuizCard: React.FC<StartQuizCardProps> = ({
   subjects,
