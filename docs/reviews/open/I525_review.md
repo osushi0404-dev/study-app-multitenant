@@ -37,3 +37,5 @@ STAGE_DONE: review-gate NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 - [implement] 計画変更 1 を実装（^[1-3]$・A9g に 4 と桁の大きな値）。/simplify は省いた — 正規表現 1 行とテスト 2 行の追加だけで、整理済みの差分に重い工程を回し直さない（決定論ゲートの TC-01 は流した）
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] 差分のレビュー OK（F1・F2 resolved）・NOT_REQUIRED。新しい Low 2 件（F6 記録の手書き換えが前提の既存の穴・F7 4 と桁の大きな値の FG が無い〔A9g7・A9g8 そのものが古い正規表現で落ちるので回帰は捕まる〕）は retro へ
+STAGE_DONE: review-gate NEXT: test-gate
