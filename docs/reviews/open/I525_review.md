@@ -33,3 +33,5 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 - [review-gate] コードレビュー OK・高リスクではない（NOT_REQUIRED）。ただし台帳 F1・F2（上限の値の確かめに上の限りが無く、桁の大きな値で上限が外れる・延長 1 周の決まりを守らない）はこのイシューの目的（上限の判定を緩めない）を崩すので、一覧に回さず直す。受け付ける値を 1〜3 にする計画変更（計画変更記録 1）→ 計画レビューをやり直す
 STAGE_DONE: review-gate NEXT: plan-review
+- [plan-review] 再レビュー OK（Warning 3: 実装を ^[1-3]$ に直すのは implement で行う・手動 No.2 は敵対的レビューが不要の判定だったので test-gate で必ず行う・worktree.md は retro）
+STAGE_DONE: plan-review NEXT: implement
