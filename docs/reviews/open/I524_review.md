@@ -22,3 +22,5 @@
 - PR を revert する（7 章）
 
 ## 自律判断の記録
+
+STAGE_DONE: plan NEXT: plan-review
