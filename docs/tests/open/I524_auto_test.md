@@ -1,0 +1,46 @@
+# I524 自動テスト: ダッシュボードの確かめ用データを各科目・各曜日 10 問以上にし、開発の起動のたびに作り直す
+
+実行コマンド（例）: `docker compose exec backend python -m pytest dashboard/tests/test_I524_dashboard_verify_volume.py dashboard/tests/test_I513_seed_dashboard_verify.py studylogs/tests/test_I455_org_scoped_querysets.py`
+（CI が PR ごとに全体を流す。手元では関係するテストだけ）
+
+結果:
+- backend: 実装前のため未実行
+- frontend: 変更なし
+
+## Backend（`backend/dashboard/tests/test_I524_dashboard_verify_volume.py`・新規）
+共通: `NOW = 2026-11-16 15:00 JST`（`TODAY` = 11-16）。直近 7 日 = `TODAY-6`〜`TODAY`、今日より前の 6 日 = `TODAY-6`〜`TODAY-1`、範囲の外 = `TODAY-13`〜`TODAY-7`。DB を使うテストは `override_settings(DEBUG=True)`、パスワードは `mock.patch.dict(os.environ, {'VERIFY_PW': 'pw-for-test'})`。(日, 科目) ごとの数は `answered_at` を日本時間の日付にして数える。
+
+| TC | 内容 | 期待値 |
+|---|---|---|
+| TC-01 | 種 0〜99 で `plan_answers(random.Random(seed), NOW)`（DB を使わない） | 今日より前の 6 日のうち、解答が 0 件の日がちょうど 1 日。それ以外の 6 日（今日を含む）は、2 科目（`verify-i487-math`・`verify-i487-english`）のどちらも 10 以上 20 以下。範囲の外の (日, 科目) は 1 以上 5 以下で、範囲の外の解答が 1 件以上ある。どの解答も `answered_at < NOW` |
+| TC-02 | 種 0〜99 で `plan_answers`（DB を使わない） | 科目ごとに、直近 7 日の解答のある 6 日の数を集めると、6 つすべて違う（`len(set(counts)) == 6`）。科目どうしの同じ数は見ない |
+| TC-03 | 種 3・11 で `seed_verify_data` を流す（DB）。種 3 の後に種 11 をもう一度流す | 確かめ用の利用者の解答を (日本時間の日付, 科目) でまとめると、どの組も問題の id がすべて違う（件数 == 集合の大きさ）。確かめ用の科目ごとの問題は 20 問ちょうど（`確かめ数学の確かめ問題 1`〜`20`）で、2 回目の作り直しの後も 20 問のまま（増えない） |
+| TC-04 | `override_settings(DEBUG=False)` で `call_command('seed_dashboard_verify', '--password-env', 'VERIFY_PW', '--soft-stop', stdout=out)`。確かめ用データが無い DB で | 例外が出ない。出力に `確かめ用のデータは作りませんでした: DEBUG が偽` を含む。組織 `verify-i487-org`・利用者 `verify_i487@example.com`・`verify-i487` で始まる科目・解答が 0 件 |
+| TC-05 | `DEBUG=True` で、環境変数が無い（`clear=True`）と空（`VERIFY_PW=''`）の 2 通りで `--soft-stop` 付きのコマンド。1 回作った後の DB で | 例外が出ない。出力に `確かめ用のデータは作りませんでした: パスワードが空` を含み、`pw-for-test` を含まない。確かめ用の利用者の解答の id の集合と組織の数が前と同じ |
+| TC-06 | `_random_time` に、`random()` が決まった値を返す小さな置き物（`random.Random` を継いで `random` だけを返す値に替えたクラス）を渡す（F6） | 過去の日（`TODAY-2`）: 0.0 → 7:00:00、`1 - 2**-53` → 22:59:59。今日（`NOW` 15:00）: 0.0 → 0:00:00、`1 - 2**-53` → 14:58:59。今日・0:00:30 の `now`: どちらの値でも 0:00:00 |
+| TC-07 | 同じメールの利用者がほかの組織（`other-org`）にいる DB で、`--soft-stop` を付けずにコマンドを流す（F10） | `CommandError` で、文に `が確かめ用の組織（verify-i487-org）にいないため` を含む（`VerifyDataError` の文がそのまま伝わる）。その利用者の組織・パスワード・セッション・解答が前と同じ |
+
+## Backend（`backend/dashboard/tests/test_I513_seed_dashboard_verify.py`・直す）
+| TC | 内容 | 期待値 |
+|---|---|---|
+| TC-49（F5） | 種 0〜19 で `plan_answers` を同じ日の 0:30 と 23:00 で作る | `(科目, 日, 正誤, 秒)` の `collections.Counter` が同じ（並び順に依らない） |
+| TC-40〜TC-48 | そのまま（TC-42 は新しい作りでも成り立つ） | 今どおり通る |
+
+FG（失敗の注入。実装の中で一時的に壊して落ちることを確かめ、結果をここに書く。コミットしない）:
+- FG-1（TC-01）: 解答の無い日を `rng.sample(recent_past_days, 2)` の 2 日にする → TC-01 が落ちる
+- FG-2（TC-02）: 量の割り当てを `rng.choices(range(10, 21), k=6)`（重なりあり）にする → TC-02 が落ちる種がある
+- FG-3（TC-03）: `_write_answers` の問題を `problems[i % 5]` にする → TC-03 が落ちる（一意制約の `IntegrityError` か、id の重なり）
+- FG-4（TC-04・TC-05）: `--soft-stop` の分岐を外す（いつも `CommandError`）→ TC-04・TC-05 が落ちる
+- FG-5（TC-06）: 過去の日の `span` を `DAYTIME_HOURS * 3600 - 1` に戻す → TC-06 が落ちる（22:59:58）
+- FG-6（TC-07）: `_ensure_user` の組織の確かめを外す → TC-07 が落ちる
+
+## 決定論ゲート（自動実走）
+compose を読む既存のテスト（新しいサービスがポート・`image:`・名前の無い保存領域の決まりに当たらないこと）。計画の時点（変更前）で実行し、どちらも exit 0（下の記録）。
+```bash
+bash scripts/claude/tests/test_compose_ports.sh
+bash scripts/claude/tests/test_i213_dependabot.sh
+```
+
+記録（計画の時点・2026-11-16・変更前の `docker-compose.yml`）:
+- `test_compose_ports.sh` → pass=13 fail=0（exit 0）
+- `test_i213_dependabot.sh` → pass=17 fail=0（exit 0。FG-I1・FG-V1 で、指紋の無い `image:`・名前の無い保存領域を入れると不合格になることを中で確かめている）

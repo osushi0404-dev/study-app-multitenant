@@ -1,0 +1,21 @@
+# I524 手動テスト: ダッシュボードの確かめ用データを各科目・各曜日 10 問以上にし、開発の起動のたびに作り直す
+
+前提: app-1 の compose（`docker compose ps`）。画面は `docker compose port frontend 3000` のポートで開く。ログインは `verify_i487@example.com`・パスワード欄には秘密の名前 `E2E_TEST_PASSWORD`（`docs/runbooks/frontend-verify.md`）。画像は `.evidence/I524/`。期待値は、その回の起動のログ（`docker compose logs dashboard-verify-seed`）に出た行（種ごとに違う）。
+
+| No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
+|---:|------|----------|--------|--------|------|
+| 1 | 標準の起動コマンド `docker compose up -d --build --renew-anon-volumes` で起動し直し、`docker compose logs dashboard-verify-seed` を読む | 承認画面なしで終わる。ログの 1 行目に `種: <数>（同じデータを作り直すには --seed <数>）`、続けて基準の日（今日）・「全科目」「確かめ数学」「確かめ英語」の期待値の行が出る。`確かめ用のデータは作りませんでした` は出ない。パスワードの値は出ない。backend・frontend は healthy のまま | Claude |  |  |
+| 2 | 確かめ用の利用者でログインし、1440 幅で `/dashboard` の「すべて」「確かめ数学」「確かめ英語」を順に開き、棒グラフの読み上げの文（`aria-label`）と「直近 7 日の合計」の行を読む | 科目ごとに、7 日のうち今日より前の 1 日だけが `0分・0問`、ほかの 6 日（今日を含む）はどれも 10〜20 問で、6 つの問題数がすべて違う。「すべて」は同じ日の 2 科目の和（20〜40 問）で、解答の無い日は同じ 1 日。各日の分・問と合計の行が No.1 のログの行と一字一句同じ | Claude |  |  |
+| 3 | もう一度 `docker compose up -d` で起動し直し、ログを読んでから `/dashboard`（「すべて」）を開き直す | 2 回目のログの種が 1 回目と違い、期待値の行のどれかが違う。画面の値は 2 回目の期待値と同じ（1 回目の値のままの所が無い）。直近 7 日のうち 6 日にデータがある | Claude |  |  |
+| 4 | PR の CI の E2E（`.github/workflows/e2e.yml`）の結果と、その起動の行を読む（`gh pr checks`・`gh run view --log`） | E2E が合格。起動の行は `docker compose up -d --wait db backend frontend` のままで、`dashboard-verify-seed` のコンテナが作られた行が無い | Claude |  |  |
+| 5 | No.2・No.3 の間のコンソール（`browser_console_messages`） | `error` が無い（ログイン前の `/api/settings/` の 401・開発サーバーの再読み込みの接続は既知） | Claude |  |  |
+
+## 画面確認
+<!-- frontend/src を変えたイシューでは 1 行以上必要（test-gate 段階の check-frontend-evidence.sh が確かめる）。
+     画像の列は .evidence/I###/ 直下のファイル名（カンマ区切り）。確かめられない理由があるときは「理由: …」。
+     書き方: docs/runbooks/frontend-verify.md -->
+| 日時 | コミット | 画面と操作 | アカウント | 期待した結果 | 実際の結果 | 画像 |
+|---|---|---|---|---|---|---|
+|  |  |  |  |  |  |  |
+
+結論: OK / NG
