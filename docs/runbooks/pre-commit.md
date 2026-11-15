@@ -44,7 +44,7 @@ pre-commit install
 | `ruff` | `backend/`（migrations 除く） | Python lint・import 整理（flake8 相当）。違反があれば自動修正（`--fix`） |
 | `bandit` | `backend/`（migrations・tests 除く） | Python セキュリティスキャン。設定は `backend/.bandit` で管理（`B101` skip、LOW 以上すべてを対象。Low 発見は `# nosec BXXX` で個別に抑制） |
 | `shellcheck` | `scripts/` 等の shell スクリプト | シェルスクリプトの構文・バグ・非推奨記法を静的解析（`shellcheck-py`） |
-| `eslint` | `frontend/src/` | TypeScript/TSX lint。`--max-warnings 0` で警告もブロック |
+| `eslint` | `frontend/src/` | TypeScript/TSX lint。`--max-warnings 0` で警告もブロック。`scripts/claude/lint-frontend.sh` 経由でコンテナで流す（下の「ESLint のフックの流し方」） |
 
 ### detect-secrets JWT 検出について
 
@@ -65,6 +65,25 @@ pre-commit install
 ```bash
 pre-commit run --all-files
 ```
+
+---
+
+## ESLint のフックの流し方（I468）
+
+ワークツリーのホストには `frontend/node_modules` が無い（依存は frontend コンテナの中だけ・`docs/runbooks/worktree.md` §5）。そのため ESLint のフックは `scripts/claude/lint-frontend.sh` が、次の順で流せるところで `npm run lint` を流す。
+
+| 順 | 条件 | 流す場所 | かかる時間 |
+|---:|------|----------|-----------|
+| 1 | Docker が使えて、このワークツリーの frontend コンテナが起動中 | 起動中のコンテナ（`docker compose exec -T frontend npm run lint`） | 数秒 |
+| 2 | Docker が使えて、コンテナが起動していない | 使い捨てのコンテナ（`docker compose run --rm --no-deps -T --build --entrypoint npm frontend run lint`。終わったら消える） | 15〜30 秒ほど（初回はイメージの準備で数分） |
+| 3 | Docker が使えない（`docker` が無い・Docker が起動していない）で、ホストに `frontend/node_modules/.bin/eslint` がある | ホスト | 数秒 |
+| 4 | どれでもない | 流さずにコミットを止める（理由と対処を表示） | — |
+
+- 止まったとき（4）は Docker（Docker Desktop）を起動してからコミットし直す。`SKIP=eslint` で飛ばさない
+- 使い捨てのコンテナに `--entrypoint npm` を付けるのは、`frontend/Dockerfile.dev` の入口が引数を無視して開発サーバーを起動するため。`--build` は `package*.json` が変わったときに依存を作り直すため（変わっていなければ層の再利用で数秒）
+- 起動中のコンテナ（1）の依存は、起動したときのまま。`package*.json` を変えたら `docker compose up -d --build --renew-anon-volumes` で作り直す（作り直さずに食い違っても、CI の ESLint が止める）
+- `--build` のたびに、使われなくなったイメージ（`docker image ls` で `<none>` と出るもの・数 MB）が残る。溜まったら `docker image prune` で消せる（任意。コンテナ・データは消えない）
+- CI は別の段（`.github/workflows/ci.yml` の「ESLint」）で流すので、CI の pre-commit の段は `SKIP: eslint` のまま
 
 ---
 
