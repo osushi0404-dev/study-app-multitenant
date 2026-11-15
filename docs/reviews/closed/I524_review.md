@@ -38,6 +38,7 @@
   - F1 → #508／F2 → #508／F3 → #508／F4 → #508
 - [retro] AC7 の「#508 に『I524 に移した』と書く」は、上と同じコメントの 1 節で行った（計画 9 は close 段階と書いたが、retro の同梱のコメントと 1 本にまとめた。GitHub への書き込みの回数を増やさないため）
 - [retro] 改善案は 3 件とも見送り（下の「## 振り返り」）。どれもその場で捕まり、手戻りが無い
+- [close] develop への追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR 説明をテンプレートで埋めて Ready にする
 
 ## 振り返り
 
@@ -90,3 +91,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
