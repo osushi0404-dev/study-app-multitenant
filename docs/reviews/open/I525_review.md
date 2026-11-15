@@ -4,7 +4,7 @@
 - `scripts/claude/adversarial-review.sh` が延長の値を引数 `--round-limit <N>` でも受け取り、review-gate の延長の起動を `bash scripts/claude/adversarial-review.sh --round-limit 3 I###`（サンドボックスの外に出る形）にする
 
 ## 変更点
-- `scripts/claude/adversarial-review.sh`: 引数 `[--round-limit <N>] I###`（順は問わない・引数が環境変数より優先）。上限の値が 1 以上の整数でなければ `ADVERSARIAL_ERROR: USAGE`・exit 2（環境変数の誤った値で上限を外す穴をふさいだ）。冒頭のコメント
+- `scripts/claude/adversarial-review.sh`: 引数 `[--round-limit <N>] I###`（順は問わない・引数が環境変数より優先）。上限の値が 1〜3 でなければ `ADVERSARIAL_ERROR: USAGE`・exit 2（環境変数の誤った値で上限を外す穴をふさいだ）。冒頭のコメント
 - `.claude/skills/review-gate/SKILL.md`: 延長の起動を `bash scripts/claude/adversarial-review.sh --round-limit 3 "$ARGUMENTS"` にし、前置きしない理由を 1 文
 - `scripts/claude/tests/test_i197_adversarial_process.sh`: `run` を引数を渡せる `run_args` の包みにし、A9e〜A9i・FG-A9e・FG-A9h を足した
 - `scripts/claude/tests/test_i525_skill_sandbox_form.sh`（新規）: S1〜S3・FG 4 件
@@ -13,7 +13,7 @@
 - Backend/Frontend/DB/Config: なし（ハーネスのスクリプト・手順書・テストだけ）
 
 ## テスト結果
-- 自動: TC-01 pass=170 fail=0・TC-02 pass=7 fail=0（手元・実装時）。関係する既存テスト 6 本（i181・i193・i197 ledger・i202・i205・i224）pass=6 fail=0
+- 自動: TC-01 pass=172 fail=0（計画変更 1 の後）・TC-02 pass=7 fail=0（手元・実装時）。関係する既存テスト 6 本（i181・i193・i197 ledger・i202・i205・i224）pass=6 fail=0
 - 手動: （未実施）
 
 ## 計画との差分
@@ -35,3 +35,5 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: plan-review
 - [plan-review] 再レビュー OK（Warning 3: 実装を ^[1-3]$ に直すのは implement で行う・手動 No.2 は敵対的レビューが不要の判定だったので test-gate で必ず行う・worktree.md は retro）
 STAGE_DONE: plan-review NEXT: implement
+- [implement] 計画変更 1 を実装（^[1-3]$・A9g に 4 と桁の大きな値）。/simplify は省いた — 正規表現 1 行とテスト 2 行の追加だけで、整理済みの差分に重い工程を回し直さない（決定論ゲートの TC-01 は流した）
+STAGE_DONE: implement NEXT: review-gate

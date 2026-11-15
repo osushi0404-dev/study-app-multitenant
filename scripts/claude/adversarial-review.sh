@@ -488,8 +488,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 [[ "$ISSUE" =~ ^I[0-9]{3}$ ]] || usage_error "受け取った値: '${ISSUE}'"
-# 誤った値（整数でない・0）で上限の比較が誤りになり、上限を外して動くことを防ぐ（fail-closed）
-[[ "$ADV_ROUND_LIMIT" =~ ^[1-9][0-9]*$ ]] || usage_error "周回の上限は 1 以上の整数: '${ADV_ROUND_LIMIT}'"
+# 誤った値（整数でない・0・桁の大きな値）で上限の比較が誤りになり、上限を外して動くことを防ぐ（fail-closed）。
+# 上の限りは 3（延長は 1 周だけ・review-gate の手順書の決まりをここでも守る）
+[[ "$ADV_ROUND_LIMIT" =~ ^[1-3]$ ]] || usage_error "周回の上限は 1〜3（延長は 1 周だけ）: '${ADV_ROUND_LIMIT}'"
 # 実験役を観点をまたいで 1 本ずつにする flock が無ければ実行できない（黙って鍵なしで走らせない・I206 F10）
 if ! command -v flock >/dev/null 2>&1; then echo "⛔ flock がありません（実験役を 1 本ずつにできない）。util-linux を入れてください。"; echo "ADVERSARIAL_ERROR: FLOCK"; exit 2; fi
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリの中で実行してください"; exit 2; }

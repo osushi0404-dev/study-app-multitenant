@@ -268,6 +268,8 @@ ck "A9g --round-limit の値なし → USAGE" "2 yes 0 2" "$(a9g a9g1 I900 --rou
 ck "A9g --round-limit abc → USAGE" "2 yes 0 2" "$(a9g a9g2 --round-limit abc I900)"
 ck "A9g --round-limit 0 → USAGE" "2 yes 0 2" "$(a9g a9g3 --round-limit 0 I900)"
 ck "A9g --round-limit -1 → USAGE" "2 yes 0 2" "$(a9g a9g4 --round-limit -1 I900)"
+ck "A9g --round-limit 4 → USAGE（延長は 1 周だけ）" "2 yes 0 2" "$(a9g a9g7 --round-limit 4 I900)"
+ck "A9g 桁の大きな値 → USAGE（比較が壊れて上限を外さない）" "2 yes 0 2" "$(a9g a9g8 --round-limit 99999999999999999999 I900)"
 ck "A9g 知らないオプション → USAGE" "2 yes 0 2" "$(a9g a9g5 --foo I900)"
 ck "A9g イシュー 2 つ → USAGE" "2 yes 0 2" "$(a9g a9g6 I900 I901)"
 used2 a9h; run_args a9h ADV_ROUND_LIMIT=abc -- I900
@@ -502,7 +504,7 @@ fga9e() { used2 fga9e; run_args fga9e -- --round-limit 3 I900; }
 with_src "$(fg_copy 'ADV_ROUND_LIMIT="$2"; shift 2 ;;' 'shift 2 ;;')" fga9e
 ck "FG-A9e 引数の値を捨てると A9e が不合格（exit 0 にならない）" no "$([ "$(rcode fga9e)" = 0 ] && echo yes || echo no)"
 fga9h() { used2 fga9h; run_args fga9h ADV_ROUND_LIMIT=abc -- I900; }
-with_src "$(fg_copy '[[ "$ADV_ROUND_LIMIT" =~ ^[1-9][0-9]*$ ]] || usage_error' ': ||')" fga9h
+with_src "$(fg_copy '[[ "$ADV_ROUND_LIMIT" =~ ^[1-3]$ ]] || usage_error' ': ||')" fga9h
 ck "FG-A9h 上限の値の確かめを消すと A9h が不合格（exit 2 にならない）" no "$([ "$(rcode fga9h)" = 2 ] && echo yes || echo no)"
 
 fga10() { mk fga10 "${PLAN_OK/| V2 | 2 | 読んで可 |/| V2 | 2 | たぶん |}"; run fga10; }

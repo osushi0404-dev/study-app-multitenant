@@ -5,7 +5,7 @@
 結果:
 - backend: 対象外
 - frontend: 対象外
-- ハーネス（2026-11-16・実装時・手元）: TC-01 pass=170 fail=0（A9e〜A9i・FG-A9e・FG-A9h を含む）・TC-02 pass=7 fail=0（FG 4 件を含む）
+- ハーネス（2026-11-16・実装時・手元）: TC-01 pass=172 fail=0（A9e〜A9i・FG-A9e・FG-A9h を含む・計画変更 1 の 4 と桁の大きな値を足した後）・TC-02 pass=7 fail=0（FG 4 件を含む）
 
 ## TC-01 `scripts/claude/tests/test_i197_adversarial_process.sh`（既存に追加）
 一時のリポジトリ（`mk`）に、過去の記録 `ROUNDS: 1` を 2 本（`prev_rec`・上限を使い切った状態）置いて起動する。`claude` はスタブ。新しく `run_args <名前> <引数…>` を足す（`run` と同じ環境変数で、`bash scripts/claude/adversarial-review.sh <引数…>` を流す）。
