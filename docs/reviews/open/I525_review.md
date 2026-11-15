@@ -24,3 +24,5 @@
 - [plan] 引数と環境変数の両方があるときは引数を採り、環境変数は残す。上限の値は 1 以上の整数だけ（環境変数の誤った値が上限を外す fail-open の穴も同時にふさぐ）
 - [plan] 実機の確かめ（手動 No.2）は、このイシューの敵対的レビューの 1 周目を `--round-limit 2`（既定値）で起動して行う
 STAGE_DONE: plan NEXT: plan-review
+- [plan-review] 計画レビュー OK（Info 3 件は対応任意。S1 の検出範囲・fail-open の是正・worktree.md は計画で扱い済みのため直さない）
+STAGE_DONE: plan-review NEXT: implement
