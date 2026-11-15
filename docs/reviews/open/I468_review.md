@@ -25,5 +25,7 @@
 ## 自律判断の記録
 - [plan] 使い捨てのコンテナに `--entrypoint npm` と `--build` を付ける — スパイクで、入口のスクリプトが引数を無視して開発サーバーを起動すると分かったため・package*.json の変更に追従するため（plan_I468 の「確かめたこと」）
 - [plan] test-gate のスキルにも MCP の確かめを足す — implement と手順の粒度をそろえる（イシューの実装対象の表の外・AC4 と同じ目的）
+- [plan-review] 計画レビューの Warning 2 件（test-gate の場所を文言で指す・後始末の確認）は計画書で対応し、再レビューは省いた — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review

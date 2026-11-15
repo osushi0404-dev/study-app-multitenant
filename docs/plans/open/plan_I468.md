@@ -117,7 +117,7 @@ exit 1
 - 1) の「画面の確かめ」の行に「使えなくなっていたら 11 の手順（その場で依頼して止まる）」を足す
 
 ### 4-6. `.claude/skills/test-gate/SKILL.md`
-- 44 行目の画面確認の行に「先に `docs/runbooks/frontend-verify.md`「11. MCP が使えないとき」の確かめ方で使えるかを確かめ、使えなければその節の文例で再接続を頼んで止まる」を足す（implement と同じ粒度にそろえる・plan-writing-rules「条件分岐を足すときのコマンド粒度のパリティ」）
+- 「画面の表示・遷移・入力の結果・コンソールは、`docs/runbooks/frontend-verify.md` の手順（§9 の安全上の注意を含む）で Playwright MCP を使って確かめ」で始まる行に「先に `docs/runbooks/frontend-verify.md`「11. MCP が使えないとき」の確かめ方で使えるかを確かめ、使えなければその節の文例で再接続を頼んで止まる」を足す（implement と同じ粒度にそろえる・plan-writing-rules「条件分岐を足すときのコマンド粒度のパリティ」）
 
 ### 4-7. `scripts/claude/tests/test_i468_lint_frontend.sh`（新規）
 - 一時の git リポジトリを作り、その中からラッパー（本物のパス）を呼ぶ。`docker`・`npm` は、受け取った引数と作業フォルダを記録して決めた終了コードで終わる偽物を `PATH` の先頭に置く（本物の Docker は使わない）。中身は auto_test の TC-01〜TC-04 と FG
@@ -201,4 +201,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 3 | 読んで可 | CI の ESLint の段と pre-commit の段の `SKIP: eslint` が変わっていない（差分に `.github/` が無い） |
 
 ## 計画変更記録
-- なし
+- 計画レビュー（20261115_1038）の Warning: 4-6 の場所を行番号でなく文言で指すように直した。R3 の補足（`files: ^frontend/src/` は `package*.json`・ESLint の設定だけの変更では流れない）は既存の動きで、CI の ESLint が止めるので変えない。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない
+
+## レビュー結果
+- [20261115_1038 判定: ✅ 完了](../../reviews/I468_plan_review_20261115_1038.md)
