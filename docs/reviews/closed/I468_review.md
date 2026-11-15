@@ -44,6 +44,7 @@
 - [test-gate] 2 回目: gate-check OK。手動テスト（No.1〜No.5）の後に変わったのは記録の場所（一覧の説明の 1 行）だけで、スクリプト・設定・スキルは変わっていないので流し直さない。CI は全ジョブ合格
 - [retro] 2 回目: 一覧の説明の行の書き方で CI の D3 が落ちた件は、CI がその場で捕まえ 1 行で直った（決定論のゲートが働いた）ので新しい手順は足さない。再発防止記録は auto_test の「fix-loop 2 回目」に書いた
 - [close] マージ依頼前の最終確認で CI の `test_i202_ledger_cleanup.sh` D3 が落ちた（一覧 `docs/reviews/backlog/I468.md` の説明の行が `- F6（…` と「- F」で始まり、指摘の行の形と見なされた）— close 5.5 のとおり記録を open に戻して fix-loop へ。日時つきのレビュー記録は closed に残したので、計画書のリンク（closed を指す）は戻さない
+- [close] 2 回目: develop への追従は不要（BLOCKED・承認待ち）・gate-check OK。記録を closed へ移し直した（計画書のリンクは前回から closed を指したまま）
 - [close] develop への追従は不要（mergeStateStatus=BLOCKED・承認待ち）。gate-check OK。診断メモ `I468_fix_diagnosis_20261115_1058.md` は、これまでのイシューと同じく `docs/reviews/` 直下に残した（close の回収の対象は `_review_` を含む記録だけ）
 
 ## 振り返り
@@ -113,3 +114,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
