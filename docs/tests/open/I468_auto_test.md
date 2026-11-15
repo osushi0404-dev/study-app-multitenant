@@ -5,6 +5,7 @@
 結果:
 - 計画時のベースライン（2026-11-15・変更前）: `docker compose run --rm --no-deps -T --build --entrypoint npm frontend run lint` exit 0（違反 0 件）
 - 実行記録（2026-11-15・implement・/simplify の後）: `bash scripts/claude/tests/test_i468_lint_frontend.sh` exit 0（pass=17 fail=0・TC-01〜TC-04 と FG-01〜FG-04）。Red（ラッパーが無い状態）で fail=17 を確かめてから実装した
+- 実行記録（2026-11-15・test-gate）: `bash scripts/claude/gate-check.sh I468` exit 0（GATE_CHECK: OK・コードレビュー 20261115_1115・敵対的レビュー 20261115_1122）。決定論ゲートは review-gate が実走済みで、heavy の委譲は無い（pytest・Jest・E2E は CI が合格）。手元で流し直していない
 
 共通の準備（新しいテスト `scripts/claude/tests/test_i468_lint_frontend.sh` の中）: 一時のディレクトリに git リポジトリ（`git init`）と `frontend/` を作り、そこを作業フォルダにして本物の `scripts/claude/lint-frontend.sh` を呼ぶ。偽の `docker`・`npm` を一時のフォルダに置いて `PATH` の先頭に足す。偽物は、受け取った引数（空白区切り 1 行）と作業フォルダを記録のファイルに書き、`version`（デーモンに届くかの確かめ）は `STUB_DAEMON_RC`、`compose ps` は `STUB_PS_OUT` を出して 0、それ以外（lint を流す呼び出し）は `STUB_RC` で終わる。本物の Docker は使わない。失敗の注入は、ラッパーの写しを壊して同じ準備で流す（本物は書き換えない）。最後に「壊した写しがすべて作れた（置き換え前の文字列が本体にある）」を確かめる
 
