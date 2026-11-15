@@ -76,3 +76,5 @@ STAGE_DONE: test-gate NEXT: retro
 |---|---------|---------|--------|------------|
 | P1 | スキル・規約 | 手順書の起動の形と、サンドボックスの外に出る形の一覧を突き合わせる仕組みが無かった | スキルの手順書に前置きの起動が無いことを決定論のテストで止める（実装済み・TC-02）。runbook への拡大と、手順書が「承認のときだけ」と書いた操作の機械的な守りの有無の洗い出しは #520 に同梱 | `scripts/claude/tests/test_i525_skill_sandbox_form.sh`・#520 |
 STAGE_DONE: retro NEXT: close
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR の説明を更新した
+STAGE_DONE: close NEXT: merge
