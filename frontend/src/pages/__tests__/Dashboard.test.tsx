@@ -70,14 +70,34 @@ jest.mock('../../components/TodayReviewCard', () => ({
   default: () => <div>今日の復習のカード</div>,
 }));
 
-let mockLineOptions: unknown = null;
+let mockBarOptions: unknown = null;
 jest.mock('react-chartjs-2', () => ({
-  Line: ({ data, options }: { data: { datasets: Array<{ data: number[] }> }; options: unknown }) => {
-    mockLineOptions = options;
-    return <div data-testid="line-chart" data-points={data.datasets[0].data.join(',')} />;
+  Bar: ({ data, options, ...rest }: {
+    data: { datasets: Array<{ data: number[] }> };
+    options: unknown;
+    'aria-label'?: string;
+  }) => {
+    mockBarOptions = options;
+    return (
+      <div data-testid="bar-chart" data-points={data.datasets[0].data.join(',')} aria-label={rest['aria-label']} />
+    );
   },
   Doughnut: () => <div data-testid="doughnut-chart" />,
 }));
+
+interface BarOptions {
+  interaction: { mode: string; intersect: boolean };
+  scales: { y: { beginAtZero: boolean; ticks: { precision: number } } };
+  plugins: {
+    tooltip: {
+      callbacks: {
+        title: (items: Array<{ dataIndex: number }>) => string;
+        label: (item: { dataIndex: number }) => string[];
+      };
+    };
+  };
+}
+const barOptions = () => mockBarOptions as BarOptions;
 
 const URL = '/api/dashboard/overview/';
 const SETTINGS_URL = '/api/settings/';
@@ -125,7 +145,23 @@ const respond = (data: unknown, settings: unknown = {}) => {
   });
 };
 
+/** 「すべて」と科目 5 で違う応答を返す（I513） */
+const respondBySubject = (all: unknown, subject: unknown, settings: unknown = {}) => {
+  mockGet.mockImplementation((url: string, config?: { params: Record<string, string> }) => {
+    if (url === URL) return Promise.resolve({ data: config?.params.subject_id ? subject : all });
+    if (url === SETTINGS_URL) return Promise.resolve({ data: settings });
+    return Promise.resolve({ data: {} });
+  });
+};
+
+const withToday = (seconds: number) =>
+  overview({ today: { study_seconds: seconds, answered_count: 3, correct_count: 2, accuracy_rate: 0.6667 } });
+
 const overviewCalls = () => mockGet.mock.calls.filter(([url]) => url === URL).length;
+const overviewCallsWith = (params: Record<string, string>) =>
+  mockGet.mock.calls.filter(
+    ([url, config]) => url === URL && JSON.stringify(config?.params) === JSON.stringify(params)
+  ).length;
 
 const isBefore = (a: Element, b: Element) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -149,7 +185,7 @@ describe('Dashboard', () => {
     jest.clearAllMocks();
     localStorage.clear();
     mockFreshNotificationFunctions = false;
-    mockLineOptions = null;
+    mockBarOptions = null;
     // CRA の Jest は各テストの前にモックの実装を消す（resetMocks）ので、ここで入れ直す
     mockGetUserSubjects.mockResolvedValue([]);
   });
@@ -163,7 +199,7 @@ describe('Dashboard', () => {
     expect(screen.getByTestId('stat-answered-count')).toHaveTextContent('12');
     expect(screen.getByText('75%')).toBeInTheDocument();
     expect(screen.getByText('直近 7 日の学習時間')).toBeInTheDocument();
-    expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '0,0,0,0,0,2,6');
+    expect(screen.getByTestId('bar-chart')).toHaveAttribute('data-points', '0,0,0,0,0,2,5');
     expect(screen.getByTestId('doughnut-chart')).toBeInTheDocument();
     expect(screen.getByText('英語')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
@@ -332,9 +368,10 @@ describe('Dashboard', () => {
     renderDashboard();
 
     expect(await screen.findAllByText('まだ記録がありません')).toHaveLength(6);
-    expect(screen.queryByTestId('line-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
     expect(screen.queryByTestId('doughnut-chart')).not.toBeInTheDocument();
-    expect(screen.queryByText(/目標:/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('weekly-total')).not.toBeInTheDocument();
+    expect(screen.queryByText(/目標（全科目）/)).not.toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     expect(screen.getByText('データがありません。まずは問題を解いてみましょう！')).toBeInTheDocument();
   });
@@ -416,7 +453,7 @@ describe('Dashboard', () => {
     expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
     expect(toast.error).not.toHaveBeenCalled();
     expect(screen.queryByText(/設定画面から科目を追加/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/今日の目標達成まで/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/今日の目標/)).not.toBeInTheDocument();
   });
 
   it('TC-06: 科目の一覧の取得に失敗したら、0 件と取り違えずに再読み込みを出す', async () => {
@@ -497,8 +534,8 @@ describe('Dashboard', () => {
     mockGetUserSubjects.mockResolvedValue(SUBJECTS);
     renderDashboard();
 
-    expect(await screen.findByText('目標: 45分 (11%)')).toBeInTheDocument();
-    expect(screen.getByText('今日の目標達成まであと40分です')).toBeInTheDocument();
+    expect(await screen.findByText('目標（全科目）: 45分 (11%)')).toBeInTheDocument();
+    expect(screen.getByText('今日の目標（全科目）達成まであと40分です')).toBeInTheDocument();
     expect(screen.queryByText(/目標: 60分/)).not.toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '11');
   });
@@ -511,7 +548,7 @@ describe('Dashboard', () => {
     mockGetUserSubjects.mockResolvedValue(SUBJECTS);
     renderDashboard();
 
-    expect(await screen.findByText('今日の目標（45分）を達成しました！')).toBeInTheDocument();
+    expect(await screen.findByText('今日の目標（全科目・45分）を達成しました！')).toBeInTheDocument();
   });
 
   it('TC-10c: 設定を読めなければ、目標の表示を出さない', async () => {
@@ -525,19 +562,9 @@ describe('Dashboard', () => {
 
     expect(await screen.findByText('5分')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('start-quiz-button')).toBeEnabled());
-    expect(screen.queryByText(/目標:/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/今日の目標達成まで/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/目標（全科目）/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/今日の目標/)).not.toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-  });
-
-  it('TC-11: 推移のグラフの縦軸は 0 から、目盛りは整数', async () => {
-    respond(overview());
-    renderDashboard();
-    await screen.findByTestId('line-chart');
-
-    const options = mockLineOptions as { scales: { y: { beginAtZero: boolean; ticks: { precision: number } } } };
-    expect(options.scales.y.beginAtZero).toBe(true);
-    expect(options.scales.y.ticks.precision).toBe(0);
   });
 
   it('TC-16: お知らせの関数が描くたびに変わっても、取り直さない（F11）', async () => {
@@ -550,5 +577,138 @@ describe('Dashboard', () => {
     rerender(<Dashboard />);
     await act(async () => { await Promise.resolve(); });
     expect(overviewCalls()).toBe(1);
+  });
+
+  // ---- I513 ----
+
+  it('TC-30: 科目を選んでも、目標の残りと進み具合は全科目の今日の合計で出す', async () => {
+    respondBySubject(withToday(600), withToday(300), { daily_study_goal_minutes: 30 });
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await screen.findByText('10分');
+
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+
+    expect(await screen.findByText('5分')).toBeInTheDocument();
+    expect(screen.getByText('今日の目標（全科目）達成まであと20分です')).toBeInTheDocument();
+    expect(screen.getByText('目標（全科目）: 30分 (33%)')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33');
+    expect(overviewCallsWith({})).toBe(1);
+    expect(overviewCallsWith({ subject_id: '5' })).toBe(1);
+  });
+
+  it('TC-30b: 選んだ科目に記録が無いと、数字のカードに進み具合を出さず、目標は「学習を開始」の全科目の行で出す', async () => {
+    respondBySubject(withToday(600), emptyOverview(), { daily_study_goal_minutes: 30 });
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await screen.findByText('10分');
+    expect(screen.getByText('目標（全科目）: 30分 (33%)')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+
+    expect(
+      await screen.findByText('この科目はまだ解答がありません。まずは問題を解いてみましょう！')
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('まだ記録がありません').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/目標（全科目）:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByText('今日の目標（全科目）達成まであと20分です')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['失敗', () => Promise.reject(new Error('network'))],
+    ['読み込み中のまま', () => new Promise(() => {})],
+  ])('TC-31: 「すべて」の取得が%sなら、科目を選んでも目標の行と進み具合を出さない', async (_label, allResponse) => {
+    mockGet.mockImplementation((url: string, config?: { params: Record<string, string> }) => {
+      if (url === URL) {
+        return config?.params.subject_id ? Promise.resolve({ data: withToday(300) }) : allResponse();
+      }
+      if (url === SETTINGS_URL) return Promise.resolve({ data: { daily_study_goal_minutes: 30 } });
+      return Promise.resolve({ data: {} });
+    });
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-quiz-button')).toBeEnabled());
+
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+
+    expect(await screen.findByText('5分')).toBeInTheDocument();
+    expect(screen.queryByText(/今日の目標/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/目標（全科目）/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('TC-32: 推移は棒グラフで、値は分の切り捨て・縦軸は 0 から整数・列のどこでも tooltip を出す', async () => {
+    respond(overview());
+    renderDashboard();
+
+    expect(await screen.findByTestId('bar-chart')).toHaveAttribute('data-points', '0,0,0,0,0,2,5');
+    expect(screen.queryByTestId('line-chart')).not.toBeInTheDocument();
+    const options = barOptions();
+    expect(options.interaction).toEqual({ mode: 'index', intersect: false });
+    expect(options.scales.y.beginAtZero).toBe(true);
+    expect(options.scales.y.ticks.precision).toBe(0);
+  });
+
+  const dayOf = (index: number, seconds: number, answered: number, correct: number) => ({
+    date: `2026-11-${String(7 + index).padStart(2, '0')}`,
+    study_seconds: seconds,
+    answered_count: answered,
+    correct_count: correct,
+  });
+
+  /** 渡した日の後ろは 0 で埋めて 7 日にする */
+  const weekOf = (...rows: Array<[number, number, number]>) =>
+    [...rows, ...Array.from({ length: 7 - rows.length }, (): [number, number, number] => [0, 0, 0])]
+      .map((row, i) => dayOf(i, ...row));
+
+  it('TC-33: 棒の tooltip に日付・学習時間・解答数・正答率（答えが無い日は「—」）を出す', async () => {
+    respond(overview({ last_7_days: weekOf([0, 0, 0], [30, 1, 1], [0, 0, 0], [0, 0, 0], [0, 0, 0], [120, 1, 0], [330, 3, 2]) }));
+    renderDashboard();
+    const chart = await screen.findByTestId('bar-chart');
+
+    const { title, label } = barOptions().plugins.tooltip.callbacks;
+    expect(title([{ dataIndex: 6 }])).toBe('11/13（金）');
+    expect(label({ dataIndex: 6 })).toEqual(['学習時間: 5分', '解答数: 3問', '正答率: 67%']);
+    expect(label({ dataIndex: 0 })).toEqual(['学習時間: 0分', '解答数: 0問', '正答率: —']);
+    expect(label({ dataIndex: 1 })).toEqual(['学習時間: 0分', '解答数: 1問', '正答率: 100%']);
+    expect(chart.getAttribute('aria-label')).toContain('11/8（日） 0分・1問');
+  });
+
+  it.each([
+    [
+      '60 分以上も分で出し、分は切り捨て',
+      weekOf([125, 3, 2], [0, 0, 0], [2785, 5, 4], [1800, 1, 1]),
+      '直近 7 日の合計: 78分・9問・正答率78%',
+    ],
+    ['正答率は四捨五入（12.5% → 13%）', weekOf([600, 8, 1]), '直近 7 日の合計: 10分・8問・正答率13%'],
+    ['7 日の答えが 0 件なら正答率は「—」', weekOf(), '直近 7 日の合計: 0分・0問・正答率—'],
+  ])('TC-34: 直近 7 日の合計（%s）', async (_label, lastDays, text) => {
+    respond(overview({ last_7_days: lastDays }));
+    renderDashboard();
+
+    expect(await screen.findByTestId('weekly-total')).toHaveTextContent(text);
+  });
+
+  it('TC-34d: データ無しなら直近 7 日の合計を出さない', async () => {
+    respond(emptyOverview());
+    renderDashboard();
+
+    expect((await screen.findAllByText('まだ記録がありません')).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('weekly-total')).not.toBeInTheDocument();
+  });
+
+  it('TC-35: 合計の行は見出しとグラフの間にあり、グラフには日ごとの値の読み上げがある', async () => {
+    respond(overview());
+    renderDashboard();
+    const chart = await screen.findByTestId('bar-chart');
+
+    const heading = screen.getByRole('heading', { name: '直近 7 日の学習時間' });
+    const total = screen.getByTestId('weekly-total');
+    expect(isBefore(heading, total)).toBe(true);
+    expect(isBefore(total, chart)).toBe(true);
+    const ariaLabel = chart.getAttribute('aria-label') ?? '';
+    expect(ariaLabel.startsWith('11/7（土） 0分')).toBe(true);
+    expect(ariaLabel).toContain('11/13（金） 5分');
   });
 });

@@ -6,6 +6,7 @@ import React from 'react';
 import { Avatar, Box, Card, CardContent, Grid, LinearProgress, Typography } from '@mui/material';
 import { EmojiEvents, Quiz, Timer, TrendingUp } from '@mui/icons-material';
 import { DashboardOverview } from '../../types/api';
+import { GoalProgress } from '../../types/dashboard';
 import { todayStudyMinutes } from '../../utils/dashboardAchievements';
 
 export const NO_RECORD_TEXT = 'まだ記録がありません';
@@ -33,17 +34,29 @@ const StatCard: React.FC<StatCardProps> = ({ icon, color, label, value, footer }
   </Card>
 );
 
+const GoalFooter = ({ todayMinutes, goalMinutes }: GoalProgress) => {
+  const percent = (todayMinutes / goalMinutes) * 100;
+  return (
+    <>
+      <LinearProgress variant="determinate" value={Math.min(percent, 100)} sx={{ mt: 2 }} />
+      <Typography variant="caption" color="text.secondary">
+        目標（全科目）: {goalMinutes}分 ({Math.floor(percent)}%)
+      </Typography>
+    </>
+  );
+};
+
 const noRecord = <Typography variant="body1" color="text.secondary">{NO_RECORD_TEXT}</Typography>;
 
 interface DashboardStatCardsProps {
   overview: DashboardOverview;
-  goalMinutes: number | null;
+  /** 目標は 1 日全体のものなので、全科目の値で渡す（出さないときは null） */
+  goalProgress: GoalProgress | null;
 }
 
-const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalMinutes }) => {
+const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalProgress }) => {
   const { has_data: hasData, totals } = overview;
   const todayMinutes = todayStudyMinutes(overview);
-  const goalPercent = goalMinutes ? Math.min((todayMinutes / goalMinutes) * 100, 100) : 0;
 
   const cards: StatCardProps[] = [
     {
@@ -51,14 +64,9 @@ const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalM
       color: 'primary.main',
       label: '今日の学習時間',
       value: hasData ? <Typography variant="h6">{todayMinutes}分</Typography> : noRecord,
-      footer: hasData && goalMinutes !== null && (
-        <>
-          <LinearProgress variant="determinate" value={goalPercent} sx={{ mt: 2 }} />
-          <Typography variant="caption" color="text.secondary">
-            目標: {goalMinutes}分 ({Math.floor((todayMinutes / goalMinutes) * 100)}%)
-          </Typography>
-        </>
-      ),
+      // 選んだ科目に記録が無いときは出さない（同じカードの「まだ記録がありません」と食い違って読めるため。
+      // 目標は「学習を開始」のカードの全科目の行で伝わる）
+      footer: hasData && goalProgress && <GoalFooter {...goalProgress} />,
     },
     {
       icon: <EmojiEvents />,
