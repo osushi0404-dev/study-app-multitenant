@@ -131,5 +131,60 @@ fg FG-02b "exec $RUN_LINE" "$RUN_LINE || true; exit 0"
 fg FG-03 "cd frontend && exec npm run lint" "cd frontend && npm run lint || true; exit 0"
 fg FG-04 "exit 1  # 流せない" "exit 0  # 流せない"
 
+# TC-05: 本物の pre-commit と git で、フックの設定（.pre-commit-config.yaml の eslint のフック）→ ラッパー → 終了コードがつながり、
+# lint の失敗でコミットが止まる・成功でコミットされる（docker だけ偽物。本物の Docker での確かめは manual_test No.1・No.2）
+echo "== TC-05 本物の pre-commit と git"
+# $1=フックの設定の取り出し方（real か broken）。一時のリポジトリを作り、pre-commit のフックを入れる
+make_hook_repo() {
+  n=$((n + 1))
+  REPO="$TMP/hook-$n"
+  mkdir -p "$REPO/frontend/src" "$REPO/scripts/claude"
+  git -C "$REPO" init -q
+  cp "$REAL" "$REPO/scripts/claude/lint-frontend.sh"
+  python3 - "$REPO_ROOT/.pre-commit-config.yaml" "$REPO/.pre-commit-config.yaml" "$1" <<'P'
+import sys, yaml
+src, dst, mode = sys.argv[1:]
+cfg = yaml.safe_load(open(src))
+hooks = [h for r in cfg["repos"] if r["repo"] == "local" for h in r["hooks"] if h["id"] == "eslint"]
+assert len(hooks) == 1, "eslint のフックが 1 つではない"
+if mode == "broken":
+    hooks[0]["entry"] = "true"
+yaml.safe_dump({"repos": [{"repo": "local", "hooks": hooks}]}, open(dst, "w"), allow_unicode=True)
+P
+  git -C "$REPO" add -A
+  git -C "$REPO" -c user.email=t@example.com -c user.name=t commit -qm base --no-verify
+  (cd "$REPO" && PRE_COMMIT_HOME="$TMP/pc" pre-commit install >/dev/null) || ng "TC-05: pre-commit install に失敗"
+}
+# lint の終了コード $1 で frontend/src のファイルをコミットする。RC=コミットの終了コード・MOVED=yes/no（HEAD が進んだか）
+commit_with_lint_rc() {
+  local before
+  before="$(git -C "$REPO" rev-parse HEAD)"
+  mkdir -p "$REPO/frontend/src"   # 前の reset --hard で空のフォルダが消えるため
+  echo "export const x$n = 1;" > "$REPO/frontend/src/probe$n.ts"
+  git -C "$REPO" add -A
+  n=$((n + 1)); LOG="$TMP/log-$n"; : > "$LOG"
+  (cd "$REPO" && STUB_LOG="$LOG" STUB_RC="$1" STUB_PS_OUT="" PRE_COMMIT_HOME="$TMP/pc" PATH="$STUB:$PATH" \
+     git -c user.email=t@example.com -c user.name=t commit -qm probe >/dev/null 2>&1)
+  RC=$?
+  if [ "$(git -C "$REPO" rev-parse HEAD)" = "$before" ]; then MOVED=no; else MOVED=yes; fi
+  git -C "$REPO" reset -q --hard "$before"
+}
+# $1=設定の取り出し方。lint の失敗でコミットが止まり、成功でコミットされ、どちらも使い捨てのコンテナの呼び出しが 1 回あるか
+check_hook() {
+  local bad=0 calls
+  make_hook_repo "$1"
+  commit_with_lint_rc 1; calls="$(lint_calls)"
+  [ "$RC" -ne 0 ] && [ "$MOVED" = no ] && [ "$calls" = "$RUN_LINE @ $(cd "$REPO" && pwd -P)" ] || bad=1
+  [ "$2" = yes ] && { if [ "$bad" -eq 0 ]; then ok "TC-05 lint 失敗 → コミットが止まる"; else ng "TC-05 lint 失敗: rc=$RC moved=$MOVED calls=[$calls]"; fi; }
+  local b2=0
+  commit_with_lint_rc 0; calls="$(lint_calls)"
+  [ "$RC" -eq 0 ] && [ "$MOVED" = yes ] && [ "$calls" = "$RUN_LINE @ $(cd "$REPO" && pwd -P)" ] || b2=1
+  [ "$2" = yes ] && { if [ "$b2" -eq 0 ]; then ok "TC-05 lint 成功 → コミットされる"; else ng "TC-05 lint 成功: rc=$RC moved=$MOVED calls=[$calls]"; fi; }
+  [ "$bad" -eq 0 ] && [ "$b2" -eq 0 ]
+}
+check_hook real yes
+# FG-05: フックの entry をラッパーでないもの（true）にした設定では、lint の失敗でもコミットされ不合格になる
+if check_hook broken no; then ng "FG-05: entry を true にした設定でも合格した（false-green）"; else ok "FG-05: entry を true にした設定は不合格"; fi
+
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
