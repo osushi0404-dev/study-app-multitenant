@@ -94,6 +94,8 @@
 - [close] 開発の DB の確かめ用データは、test-gate の 2 回目の種（1030046851）と画面から解いた 3 問の状態で残した — ユーザーの指示（消さずに使い続ける）。次に使うときは手順書 §11 のコマンドで作り直す
 - [close→fix-loop] マージ依頼の後、ユーザーの BP の確認（2026-11-15「念のための確認だが、今回対応した内容はBPの観点で評価して問題ないか？」→ Claude が規約との小さなずれ 3 点を報告 →「直す」）で、記録を open に戻して fix-loop から通し直す。直す 3 点: (1) 新しい部品 `GoalFooter` の `React.FC`（規約 293 行）(2) `GoalProgress` 型を表示部品から型のファイルへ（規約 1578 行）(3) `verify_data.py` が管理コマンドの例外（`CommandError`）を直接投げている
 - [fix-loop] 3 点とも案 A で直した（診断レビュー PASS）: `GoalFooter` を `React.FC` なしに（ファイルの既存の部品は #510 のリントの置き換えに任せる）・`frontend/src/types/dashboard.ts` を作って `GoalProgress` を移す（既存の `types/quiz.ts` と同じ置き方）・`VerifyDataError` を投げて管理コマンドが `CommandError` に変える（`services.py` に移す案は、開発だけの確かめ用データを業務の書き込みと同じ場所に置くことになるので採らない）。動作・受け入れ条件は変えないので計画レビューは通り直さない（計画変更記録に記載）
+- [review-gate] BP の直しの差分のレビュー（`docs/reviews/I513_code_review_20261115_1146.md`）OK・CI 合格。新しい軽い指摘 F8〜F10 は台帳に残り retro で振り分ける
+- [test-gate] 直しが触ったところ（コマンドの例外の変換・目標の進み具合の型）だけをやり直した: コマンドを流し直して承認画面なしで動き、「すべて」1440 の値と目標の行が出力と一致（画面確認の 5 行目）。No.2〜No.7 の全体のやり直しはしない — 画面の表示と計算は変えていない（型の置き場所と書き方だけ）・自動テストは CI が全部通した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
