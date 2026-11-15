@@ -6,6 +6,7 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 - Claude が Playwright MCP で、起動・ログイン・入力・画面遷移・画面キャプチャ・コンソールエラーの確認まで自分で行う。人に頼むのは、公式の機能まで探しても Claude で確かめる手段が無いもの（操作感・外部ツールの操作など）だけ。承認画面が出るかは `scripts/claude/check-permission-prompt.sh` で Claude が確かめる。
 - 画像は git に入れない。長く残す証拠は「CI で毎回動くテスト（E2E・単体テスト）」と「文章の記録（テスト記録の 1 行）」。画面の動きを変えたら、手で確かめるだけで終わらせず E2E か単体テストを追加・更新する（review-gate 段階のレビュー役〔`.claude/agents/code-reviewer.md`〕の観点）。
 - 対象: `frontend/src` を変えたイシュー（implement 段階で確かめ、test-gate 段階の判定スクリプトが確認のし忘れを止める）。
+- Playwright MCP が使えないとき（会話のリセットの後など）は「11. MCP が使えないとき」。
 
 ## 2. 初回だけの準備
 1. chromium の起動に要る OS の部品（ユーザーが WSL のターミナルで実行。`!` からは sudo のパスワードを入力できない。`sudo npx` は PATH が変わって `npx` が見つからないので、公式コマンドの中身を出してから実行する）:
@@ -86,3 +87,13 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 - `.mcp.json` の `@playwright/mcp@x.y.z` を変える PR で行う。公開から 2 週間以上たった版を選び（`npm view @playwright/mcp time`）、その版だけを依存に持つ一時的な package.json で `npm audit` を流して high/critical が 0 であることを確かめる
 - 中で使う playwright の版が変わると chromium の取得し直しが要る（「2. 初回だけの準備」の 2 を新しい版で実行）
 - `scripts/claude/tests/test_i187_frontend_verify_config.sh` の期待値（版）も一緒に変える
+
+## 11. MCP が使えないとき（I468）
+会話のリセット（`/clear`）の後などに、Claude Code 本体が Playwright MCP のサーバーを「前の作業場所で登録された古い接続」として止め、つなぎ直さないことがある。そのセッションの Claude からはつなぎ直せないので、ユーザーに再接続を頼む。
+
+- **いつ確かめるか**: implement の最初（計画が `frontend/src` の画面の動きを変えるとき・コードを書く前）と、test-gate の画面確認の前。使えなければ、その時点で下の文例で頼んで止まる（`docs/runbooks/workflow.md`「止めて聞く条件」3）。test-gate まで持ち越さない
+- **確かめ方**: `ToolSearch` で `select:mcp__playwright__browser_tabs` を読み込み、`browser_tabs`（`action: list`）を呼ぶ。タブの一覧（例 `0: (current) [](about:blank)`）が返れば使える。読み込めない・呼ぶとエラーになる・`ToolSearch` が「接続中」と返し続ける、のどれかなら使えない（`browser_tabs` は一覧を出すだけで、`.claude/settings.json` で許可済み。承認画面は出ない）
+- **原因の見分け方**: 接続の記録 `~/.cache/claude-cli-nodejs/<作業場所のパスの / を - にしたもの>/mcp-logs-playwright/` の最新の `*.jsonl` に `excludeStalePluginClients: marking stale` があれば、Claude Code 本体が古い接続として止めた（例: ワークツリー app-1 なら `~/.cache/claude-cli-nodejs/-mnt-c-app-study-app-multitenant--claude-worktrees-app-1/mcp-logs-playwright/`）。この目印が無く、起動の失敗などのエラーがあれば「2. 初回だけの準備」を見直す
+- **ユーザーへの依頼の文例**:
+  > 画面の確認に使う Playwright MCP の接続が切れています。`/mcp` を打って playwright を選び、Reconnect（再接続）を選んでください。終わったら「つないだ」と返信してください。
+- 返信があったら、上の確かめ方でもう一度確かめてから続ける

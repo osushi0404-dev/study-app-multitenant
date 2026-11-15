@@ -64,7 +64,7 @@ pre-commit の ESLint のフックを、新しいラッパーのスクリプト�
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+if command -v docker >/dev/null 2>&1 && docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
   running=$(docker compose ps --status running --services 2>/dev/null || true)
   if grep -qx frontend <<<"$running"; then
     echo "ESLint: 起動中の frontend コンテナで流します" >&2
@@ -169,7 +169,7 @@ Claude が決めた（技術的な選択と理由）:
 - 使い捨てのコンテナに `--entrypoint npm` を付ける — スパイクで、付けないと `frontend/docker-entrypoint.sh` が引数を無視して開発サーバーを起動し、lint が流れないと分かった（設計確認メモのコマンドの形の技術的な補い）。入口のスクリプトを `exec "$@"` に直す案は、アプリの起動（Dockerfile.dev・compose）を変えることになり、このイシューの範囲を超えるので取らない
 - 使い捨てのコンテナに `--build` を付ける — package*.json が変わったときに古い依存で lint しないため。変わっていなければ 13 秒ほど（スパイク）
 - ラッパーは `scripts/claude/` に置く — このリポジトリの自作スクリプトの置き場。pre-commit の `language: system` からそのまま呼べる。`language: docker_image` などの pre-commit の機能は、compose のプロジェクト（ワークツリーごとのコンテナ・匿名ボリューム）を知らないので使わない
-- 「Docker が使えるか」は `docker` があることと `docker info` が通ることで見る — デーモンが止まっていても `docker` コマンド自体はあるため
+- 「Docker が使えるか」は `docker` があることと `docker version --format '{{.Server.Version}}'` が通ること（デーモンに届くこと）で見る — デーモンが止まっていても `docker` コマンド自体はあるため
 - MCP が使えるかの確かめは、スクリプトにせず手順にする — 使えるかは Claude のそのセッションのツールの状態で、別のプロセス（スクリプト）からは見えない。`browser_tabs` の `list` は害がなく許可済み（スパイクで確かめた）
 - MCP の確かめは implement の最初（コードを書く前）に置く — 依頼して止まるのが早いほど、ユーザーの再接続と Claude の作業の待ちが重ならない。画面確認の直前にも、使えなくなっていたら同じ手順で止まる
 - test-gate のスキルにも同じ確かめを足す — implement の後の `/clear` で切れることもあり、手順の粒度をそろえる（イシューの実装対象の表に無いが、AC4 と同じ目的の対の分岐）
@@ -202,6 +202,8 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 計画レビュー（20261115_1038）の Warning: 4-6 の場所を行番号でなく文言で指すように直した。R3 の補足（`files: ^frontend/src/` は `package*.json`・ESLint の設定だけの変更では流れない）は既存の動きで、CI の ESLint が止めるので変えない。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない
+
+- implement の /simplify: Docker に届くかの確かめを `docker info` から `docker version --format '{{.Server.Version}}'` に替えた（同じ判定で軽い。4-1 のコード例の 1 行）。テストの偽の docker も `version` に合わせた（環境変数は `STUB_DAEMON_RC`）。方式・範囲・受け入れ条件は変えていないので計画レビューはやり直さない
 
 ## レビュー結果
 - [20261115_1038 判定: ✅ 完了](../../reviews/I468_plan_review_20261115_1038.md)

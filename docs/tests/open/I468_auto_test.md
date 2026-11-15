@@ -6,7 +6,7 @@
 - 計画時のベースライン（2026-11-15・変更前）: `docker compose run --rm --no-deps -T --build --entrypoint npm frontend run lint` exit 0（違反 0 件）
 - 実装前のため TC-01〜TC-04 は未実行（テストのスクリプトは implement で作る）
 
-共通の準備（新しいテスト `scripts/claude/tests/test_i468_lint_frontend.sh` の中）: 一時のディレクトリに git リポジトリ（`git init`）と `frontend/` を作り、そこを作業フォルダにして本物の `scripts/claude/lint-frontend.sh` を呼ぶ。偽の `docker`・`npm` を一時のフォルダに置いて `PATH` の先頭に足す。偽物は、受け取った引数（空白区切り 1 行）と作業フォルダを記録のファイルに書き、`info` は `STUB_DOCKER_INFO_RC`、`compose ps` は `STUB_PS_OUT` を出して 0、それ以外（lint を流す呼び出し）は `STUB_RC` で終わる。本物の Docker は使わない。失敗の注入は、ラッパーの写しを壊して同じ準備で流す（本物は書き換えない）。最後に「壊した写しがすべて作れた（置き換え前の文字列が本体にある）」を確かめる
+共通の準備（新しいテスト `scripts/claude/tests/test_i468_lint_frontend.sh` の中）: 一時のディレクトリに git リポジトリ（`git init`）と `frontend/` を作り、そこを作業フォルダにして本物の `scripts/claude/lint-frontend.sh` を呼ぶ。偽の `docker`・`npm` を一時のフォルダに置いて `PATH` の先頭に足す。偽物は、受け取った引数（空白区切り 1 行）と作業フォルダを記録のファイルに書き、`version`（デーモンに届くかの確かめ）は `STUB_DAEMON_RC`、`compose ps` は `STUB_PS_OUT` を出して 0、それ以外（lint を流す呼び出し）は `STUB_RC` で終わる。本物の Docker は使わない。失敗の注入は、ラッパーの写しを壊して同じ準備で流す（本物は書き換えない）。最後に「壊した写しがすべて作れた（置き換え前の文字列が本体にある）」を確かめる
 
 | TC | AC | 内容 | 期待（合格=exit 0） | 失敗の注入 |
 |---|---|---|---|---|

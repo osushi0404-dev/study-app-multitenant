@@ -44,9 +44,10 @@ repos:
 
   - repo: local
     hooks:
+      # ワークツリーのホストには node_modules が無いので、コンテナで流す（I468・scripts/claude/lint-frontend.sh）
       - id: eslint
         name: ESLint
         language: system
-        entry: bash -c 'cd frontend && npm run lint'
+        entry: bash scripts/claude/lint-frontend.sh
         pass_filenames: false
         files: ^frontend/src/
