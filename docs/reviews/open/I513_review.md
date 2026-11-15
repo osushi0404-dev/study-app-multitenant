@@ -40,6 +40,7 @@
 - [fix-loop] 案 A（`verify_data.py` の QuizSession の 2 行に `# 組織で絞らない: <理由>` を書く）で直した — 診断レビュー PASS。動作を変えず I455 の決まりどおり。`for_user` 案は `bulk_update` に挟めず結局コメントが要るため、決まりのテストから外す案は安全装置を弱めるため採らない
 - [review-gate] コードレビュー（`docs/reviews/I513_code_review_20261115_1045.md`）が止める指摘 F1・F2（Medium・再現あり）で HIGH。fix-loop へ回す — 決まりどおり
 - [fix-loop] F1 は案 A（時刻を `rng.random()` 1 回で決める・TC-49）、F2 は案 A（数字のカードの進み具合は選んだ科目に記録があるときだけ出す・TC-30b を直す）で直した — 診断レビュー PASS。F2 は計画 9 章の自律判断の細部を直したもので、受け入れ条件・方式・範囲は変えないので計画レビューは通り直さない（計画変更記録に記載）。UI の判断は設計確認メモの委任の範囲
+- [review-gate] 差分のレビュー（`docs/reviews/I513_code_review_20261115_1057.md`）OK・CI 全部合格・高リスクではない（敵対的レビューは不要）。test-gate へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -48,3 +49,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
