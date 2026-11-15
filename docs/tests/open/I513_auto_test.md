@@ -53,3 +53,10 @@ FG（失敗の注入。実装の中で一時的に壊して落ちることを確
 
 ## 決定論ゲート（自動実走）
 - なし（pytest・Jest は CI が流す）
+
+## 再発防止記録（fix-loop・2026-11-15）
+- なぜ失敗したか: CI の Backend Tests で `studylogs/tests/test_I455_org_scoped_querysets.py::test_unscoped_reads_have_reason_comment`（I455 の TC-06）が落ちた。`dashboard/verify_data.py` の `QuizSession.objects.bulk_update`・`QuizSession.objects.filter(user=user).delete()` に、絞らずに扱う理由のコメント（`# 組織で絞らない: <理由>`）が無かった。実装の段階で手元では `dashboard/tests/` だけを流し、`dashboard` のコードにも掛かる `studylogs` の決まりのテストを流していなかった
+- 何を変えたか: 2 行の直前に理由のコメントを書いた（動作は変えない。診断メモ `docs/reviews/I513_fix_diagnosis_20261115_1043.md`・案 A）
+- セキュリティ上の考慮点: 消す・直す範囲は確かめ用の組織にいることを確かめた利用者 1 人のセッションだけで、中身を返さない（TC-44・TC-47 が固定）。認可・露出は変わらない
+- 次回どう防ぐか: `backend/dashboard/`・`backend/studylogs/` のコードを足す・変えるときは、手元の「関係するテスト」に `studylogs/tests/test_I455_org_scoped_querysets.py` を含める
+- 確かめた結果: `studylogs/tests/test_I455_org_scoped_querysets.py`・`dashboard/tests/test_I513_seed_dashboard_verify.py` 86 passed。コメントが無いと落ちることは、この CI の失敗そのもの（run 43664045176）で確かめた

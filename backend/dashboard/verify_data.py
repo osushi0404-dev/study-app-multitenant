@@ -283,6 +283,7 @@ def _write_answers(user, subjects: dict, planned: list) -> None:
         for answer, a in zip(created, items):
             answer.answered_at = a.answered_at
         answers.extend(created)
+    # 組織で絞らない: 確かめ用の利用者（確かめ用の組織にいることを確かめ済み）に今作ったセッションの時刻を直すだけ
     QuizSession.objects.bulk_update(sessions, ['started_at'])
     QuizAnswer.objects.bulk_update(answers, ['answered_at'])
 
@@ -298,6 +299,7 @@ def seed_verify_data(*, seed: int, password: str, now: datetime) -> dict:
         user, org = _ensure_user(password)
         subjects = _ensure_subjects(user, org)
         # 消すのはこの利用者のセッションだけ（解答は CASCADE で消える。ほかの利用者は条件に入らない）
+        # 組織で絞らない: 確かめ用の組織にいることを確かめた利用者 1 人のセッションを消すだけ（中身を返さない）
         QuizSession.objects.filter(user=user).delete()
         _write_answers(user, subjects, planned)
         goal_minutes = UserSettings.objects.get_or_create(user=user)[0].daily_study_goal_minutes
