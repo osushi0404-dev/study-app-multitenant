@@ -4,13 +4,16 @@
 - `scripts/claude/adversarial-review.sh` が延長の値を引数 `--round-limit <N>` でも受け取り、review-gate の延長の起動を `bash scripts/claude/adversarial-review.sh --round-limit 3 I###`（サンドボックスの外に出る形）にする
 
 ## 変更点
-- （実装後に記入）
+- `scripts/claude/adversarial-review.sh`: 引数 `[--round-limit <N>] I###`（順は問わない・引数が環境変数より優先）。上限の値が 1 以上の整数でなければ `ADVERSARIAL_ERROR: USAGE`・exit 2（環境変数の誤った値で上限を外す穴をふさいだ）。冒頭のコメント
+- `.claude/skills/review-gate/SKILL.md`: 延長の起動を `bash scripts/claude/adversarial-review.sh --round-limit 3 "$ARGUMENTS"` にし、前置きしない理由を 1 文
+- `scripts/claude/tests/test_i197_adversarial_process.sh`: `run` を引数を渡せる `run_args` の包みにし、A9e〜A9i・FG-A9e・FG-A9h を足した
+- `scripts/claude/tests/test_i525_skill_sandbox_form.sh`（新規）: S1〜S3・FG 4 件
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: なし（ハーネスのスクリプト・手順書・テストだけ）
 
 ## テスト結果
-- 自動: （未実施）
+- 自動: TC-01 pass=170 fail=0・TC-02 pass=7 fail=0（手元・実装時）。関係する既存テスト 6 本（i181・i193・i197 ledger・i202・i205・i224）pass=6 fail=0
 - 手動: （未実施）
 
 ## 計画との差分
@@ -26,3 +29,4 @@
 STAGE_DONE: plan NEXT: plan-review
 - [plan-review] 計画レビュー OK（Info 3 件は対応任意。S1 の検出範囲・fail-open の是正・worktree.md は計画で扱い済みのため直さない）
 STAGE_DONE: plan-review NEXT: implement
+- [implement] /simplify の 4 観点: run と run_args の重複（共通化・簡素化の 2 観点）を直し、run を run_args の包みにした。見送り: USAGE のケースのリポジトリの共有（数秒の短縮より、ケースごとに分けて互いに影響しない方を採る）・S1 を env/timeout の前置きにも広げる案・DIRTY の原因の表示（サンドボックスの検知が確実でない）・worktree.md の前置き（計画で範囲外・retro の候補）

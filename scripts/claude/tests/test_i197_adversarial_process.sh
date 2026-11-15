@@ -161,13 +161,16 @@ mk() {
   printf 'ITEM: V2 RESULT=read\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$d/stub/p2_0.txt"
   printf 'ITEM: V3 RESULT=read\nNEW_CRITICAL: 0\nNEW_HIGH: 0\n' > "$d/stub/p3_0.txt"
 }
-# run <名前> [環境変数…]: 実行して出力を $TMP/<名前>/out、終了コードを $TMP/<名前>/rc に残す
-run() {
+# run_args <名前> [環境変数=値…] -- <スクリプトの引数…>: 実行して出力を $TMP/<名前>/out、終了コードを $TMP/<名前>/rc に残す
+run_args() {
   local d="$TMP/$1"; shift
+  local envs=(); while [ $# -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
   ( cd "$d/repo" && env CLAUDE_BIN="$STUB" ADV_DOCKER_BIN="$DSTUB" STUB_DIR="$d/stub" STUB_CALLS="$d/calls" \
       ADV_BASE=develop ADV_DEADLINE=60 ADV_STEP_TIMEOUT=20 ADV_MIN_STEP=1 \
-      "$@" bash scripts/claude/adversarial-review.sh I900 > "$d/out" 2>&1; echo $? > "$d/rc" )
+      "${envs[@]}" bash scripts/claude/adversarial-review.sh "$@" > "$d/out" 2>&1; echo $? > "$d/rc" )
 }
+# run <名前> [環境変数…]: 引数 I900 で流す
+run() { local n="$1"; shift; run_args "$n" "$@" -- I900; }
 out_has() { grep -qxF -- "$2" "$TMP/$1/out"; }
 record() { sed -n 's/^ADVERSARIAL_RECORD: //p' "$TMP/$1/out" | head -1 | sed "s#^#$TMP/$1/repo/#"; }
 rec_has() { local f; f=$(record "$1"); [ -f "$f" ] && grep -qF -- "$2" "$f"; }
@@ -246,6 +249,31 @@ mk a9d; A9D_SHA=$(git -C "$TMP/a9d/repo" rev-parse HEAD); prev_rec a9d 20260101_
 ck "A9 ROUNDS: 0 は数えない（合計 1 で動く）" 0 "$(rcode a9d)"
 ck "A9 REVIEW_BASE は最新の記録の REVIEWED_COMMIT" yes "$(yn grep -qF "見る範囲（REVIEW_BASE）: ${A9D_SHA}...HEAD" "$(grep -l "あなたの観点: 1" "$TMP"/a9d/calls/*.in | head -1)")"
 ck "A9 記録が無ければ REVIEW_BASE は比べる相手（ADV_BASE）" yes "$(yn grep -qF '見る範囲（REVIEW_BASE）: develop...HEAD' "$(grep -l 'あなたの観点: 1' "$TMP"/a1/calls/*.in | head -1)")"
+
+# A9e〜A9i（I525）: 延長を引数 --round-limit で受け取る（環境変数の前置きはサンドボックスの外に出る形に当たらない）
+used2() { mk "$1"; prev_rec "$1" 20260101_0000 'ROUNDS: 1' ''; prev_rec "$1" 20260101_0001 'ROUNDS: 1' ''; }   # 2 周使い切り
+used2 a9e; run_args a9e -- --round-limit 3 I900
+ck "A9e --round-limit 3 なら 2 周使い切りでも動く・記録が 3 本" "0 yes 3" "$(rcode a9e) $(yn out_has a9e 'ADVERSARIAL_VERDICT: OK') $(n_records a9e)"
+used2 a9e2; run_args a9e2 -- I900 --round-limit 3
+ck "A9e イシューが前でも --round-limit が効く" 0 "$(rcode a9e2)"
+used2 a9f; run_args a9f ADV_ROUND_LIMIT=2 -- --round-limit 3 I900
+ck "A9f 環境変数 2・引数 3 → 引数を採って動く" 0 "$(rcode a9f)"
+used2 a9f2; run_args a9f2 ADV_ROUND_LIMIT=3 -- --round-limit 2 I900
+ck "A9f 環境変数 3・引数 2 → 引数を採って LIMIT・claude を呼ばない" "4 yes 0" "$(rcode a9f2) $(yn out_has a9f2 'ADVERSARIAL_VERDICT: LIMIT') $(n_calls a9f2)"
+a9g() {   # <名前> <引数…> → "終了コード USAGE行の有無 claude の呼び出し数 記録の数"
+  local n="$1"; shift; used2 "$n"; run_args "$n" -- "$@"
+  echo "$(rcode "$n") $(yn out_has "$n" 'ADVERSARIAL_ERROR: USAGE') $(n_calls "$n") $(n_records "$n")"
+}
+ck "A9g --round-limit の値なし → USAGE" "2 yes 0 2" "$(a9g a9g1 I900 --round-limit)"
+ck "A9g --round-limit abc → USAGE" "2 yes 0 2" "$(a9g a9g2 --round-limit abc I900)"
+ck "A9g --round-limit 0 → USAGE" "2 yes 0 2" "$(a9g a9g3 --round-limit 0 I900)"
+ck "A9g --round-limit -1 → USAGE" "2 yes 0 2" "$(a9g a9g4 --round-limit -1 I900)"
+ck "A9g 知らないオプション → USAGE" "2 yes 0 2" "$(a9g a9g5 --foo I900)"
+ck "A9g イシュー 2 つ → USAGE" "2 yes 0 2" "$(a9g a9g6 I900 I901)"
+used2 a9h; run_args a9h ADV_ROUND_LIMIT=abc -- I900
+ck "A9h 環境変数 ADV_ROUND_LIMIT=abc → 上限を外さず USAGE・claude を呼ばない" "2 yes 0" "$(rcode a9h) $(yn out_has a9h 'ADVERSARIAL_ERROR: USAGE') $(n_calls a9h)"
+used2 a9i; printf 'x\n' > "$TMP/a9i/repo/scripts/new.txt"; run_args a9i -- --round-limit 3 I900
+ck "A9i 引数で延長しても本物の未追跡は DIRTY・claude を呼ばない" "2 yes yes 0" "$(rcode a9i) $(yn out_has a9i 'ADVERSARIAL_ERROR: DIRTY') $(yn out_has a9i 'scripts/new.txt') $(n_calls a9i)"
 
 # A10 一覧の形
 a10() { mk "$1" "$2"; run "$1"; echo "$(rcode "$1") $(yn out_has "$1" 'ADVERSARIAL_ERROR: CHECKLIST') $(n_records "$1") $(n_calls "$1")"; }
@@ -469,6 +497,13 @@ ck "FG-A8 作業ツリーの比較を消すと A8 が不合格（OK が出る）
 fga9() { mk fga9; prev_rec fga9 20260101_0000 'ROUNDS: 1' ''; prev_rec fga9 20260101_0001 'ROUNDS: 1' ''; run fga9; }
 with_src "$(fg_copy 'if [ "$USED" -ge "${ADV_ROUND_LIMIT}" ]; then' 'if false; then')" fga9
 ck "FG-A9 周回の上限の比較を消すと A9 が不合格（exit 4 にならない）" no "$([ "$(rcode fga9)" = 4 ] && echo yes || echo no)"
+
+fga9e() { used2 fga9e; run_args fga9e -- --round-limit 3 I900; }
+with_src "$(fg_copy 'ADV_ROUND_LIMIT="$2"; shift 2 ;;' 'shift 2 ;;')" fga9e
+ck "FG-A9e 引数の値を捨てると A9e が不合格（exit 0 にならない）" no "$([ "$(rcode fga9e)" = 0 ] && echo yes || echo no)"
+fga9h() { used2 fga9h; run_args fga9h ADV_ROUND_LIMIT=abc -- I900; }
+with_src "$(fg_copy '[[ "$ADV_ROUND_LIMIT" =~ ^[1-9][0-9]*$ ]] || usage_error' ': ||')" fga9h
+ck "FG-A9h 上限の値の確かめを消すと A9h が不合格（exit 2 にならない）" no "$([ "$(rcode fga9h)" = 2 ] && echo yes || echo no)"
 
 fga10() { mk fga10 "${PLAN_OK/| V2 | 2 | 読んで可 |/| V2 | 2 | たぶん |}"; run fga10; }
 with_src "$(fg_copy '(m != "実験必須" && m != "読んで可") || ' '')" fga10

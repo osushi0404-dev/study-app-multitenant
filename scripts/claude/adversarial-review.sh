@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# adversarial-review.sh I###: 高リスク変更の敵対的レビューを 1 周行う（I197）。
+# adversarial-review.sh [--round-limit <N>] I###: 高リスク変更の敵対的レビューを 1 周行う（I197）。
 # 呼び出し元: .claude/skills/review-gate/SKILL.md §3（Bash ツールの run_in_background で 1 回呼ぶ）
 #
 # 1 周の流れ（人の応答を一度も待たない・締め切り ADV_DEADLINE 秒）:
@@ -11,7 +11,7 @@
 #   5. 記録 docs/reviews/I###_adversarial_review_<ts>.md を書いてコミットする（gate-check が最後の VERDICT・REVIEWED_COMMIT を読む）
 # 終了コード: 0=OK / 1=HIGH・BLOCKER（3 観点とも報告あり）/ 3=報告の無い観点がある（ROUNDS: 0）/ 4=周回の上限 / 2=実行できない
 # 環境変数: ADV_DEADLINE（既定 600）・ADV_STEP_TIMEOUT（300）・ADV_MIN_STEP（60）・ADV_EXPERIMENT_ROUNDS（2）・
-#           ADV_ROUND_LIMIT（2。ユーザーが延長を承認したときだけ 3）・ADV_REVIEW_BUDGET（2）・ADV_EXEC_BUDGET（0.5）・
+#           ADV_ROUND_LIMIT（2。延長は引数 --round-limit 3 で渡す・引数が優先・I525）・ADV_REVIEW_BUDGET（2）・ADV_EXEC_BUDGET（0.5）・
 #           ADV_BASE（比べる相手。既定 origin/develop）・CLAUDE_BIN（テスト用）・
 #           ADV_CONTAINER_TIMEOUT（600。backend のコンテナを起こして healthy まで待つ上限・締め切りの外）・ADV_DOCKER_BIN（テスト用）・
 #           ADV_CLOCK_FILE（テスト用。今の時刻〔整数の秒〕を読むファイル。既定は date +%s）
@@ -473,8 +473,23 @@ cell() { sed -e 's/|/／/g' | tr '\n' ' '; }
 # ---- テストは REVIEW_LIB_SOURCE_ONLY=1 で関数だけを読み込む ----
 if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 
-ISSUE="${1:-}"
-if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then echo "⛔ 使い方: $0 I###（受け取った値: '${ISSUE}'）"; echo "ADVERSARIAL_ERROR: USAGE"; exit 2; fi
+# 引数: [--round-limit <N>] I###（順は問わない）。延長は引数で渡す（環境変数の前置きはサンドボックスの外に出る形
+# `bash scripts/claude/*` に当たらず、サンドボックスの中で DIRTY になる・I525）。引数は環境変数 ADV_ROUND_LIMIT より優先する
+usage_error() { echo "⛔ 使い方: $0 [--round-limit <N>] I###（$1）"; echo "ADVERSARIAL_ERROR: USAGE"; exit 2; }
+ISSUE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --round-limit)
+      [ $# -ge 2 ] || usage_error "--round-limit の値がありません"
+      ADV_ROUND_LIMIT="$2"; shift 2 ;;
+    -*) usage_error "知らないオプション: '$1'" ;;
+    *)  [ -z "$ISSUE" ] || usage_error "イシューは 1 つだけ: '$ISSUE' と '$1'"
+        ISSUE="$1"; shift ;;
+  esac
+done
+[[ "$ISSUE" =~ ^I[0-9]{3}$ ]] || usage_error "受け取った値: '${ISSUE}'"
+# 誤った値（整数でない・0）で上限の比較が誤りになり、上限を外して動くことを防ぐ（fail-closed）
+[[ "$ADV_ROUND_LIMIT" =~ ^[1-9][0-9]*$ ]] || usage_error "周回の上限は 1 以上の整数: '${ADV_ROUND_LIMIT}'"
 # 実験役を観点をまたいで 1 本ずつにする flock が無ければ実行できない（黙って鍵なしで走らせない・I206 F10）
 if ! command -v flock >/dev/null 2>&1; then echo "⛔ flock がありません（実験役を 1 本ずつにできない）。util-linux を入れてください。"; echo "ADVERSARIAL_ERROR: FLOCK"; exit 2; fi
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリの中で実行してください"; exit 2; }

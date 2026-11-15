@@ -63,7 +63,7 @@ Bash ツールの `run_in_background: true` で 1 回実行し、完了の通知
 bash scripts/claude/adversarial-review.sh "$ARGUMENTS"
 ```
 
-ユーザーが延長（下の「上限到達」の 2）を承認したときだけ、`ADV_ROUND_LIMIT=3` を前に付けて実行する。
+ユーザーが延長（下の「上限到達」の 2）を承認したときだけ、`bash scripts/claude/adversarial-review.sh --round-limit 3 "$ARGUMENTS"` で実行する（`ADV_ROUND_LIMIT=3` を前に付けない。前に環境変数を付けた形はサンドボックスの外に出る形〔`.claude/settings.json` の `sandbox.excludedCommands` の `bash scripts/claude/*`〕に当たらず、サンドボックスの中で動いて `ADVERSARIAL_ERROR: DIRTY` で止まる・I525）。
 
 ブランチに `backend/` の変更があれば（2 周目以降も）、スクリプトが起動時に、このワークツリーの backend のコンテナを起こして確かめる（手で起こさない。待ちは 1 周の締め切りの外・I486）。
 
@@ -82,7 +82,7 @@ bash scripts/claude/adversarial-review.sh "$ARGUMENTS"
 - **上限を使い切った後のコードの変更**: 通算 2 周を使い切った後に（最後の周が OK で終わっていても）、人の手動テストの NG などで fix-loop がコードを直して戻ってきたときは、直した差分を見る OK の周を作れないので、下の「上限到達」と同じに止める（止める条件 3。ユーザーの承認で 1 周だけ延長できる）。gate-check も、最後の敵対的レビューの後の変更を通さない
 - **上限到達**（通算 2 周で Critical/High・未検証が残る）: 自動 OK にせず、最終判定を HIGH 以上に固定して止める（止める条件 3。セキュリティにかかわる指摘を受け入れて進む判断は Claude だけではしない）。「上限到達・未収束」と明記し、残った指摘と過去の周の指摘を**種類ごとに集計**する（種類 = 「どの仕組みのどんな穴か」を 1 行で名付けたもの。例: 「文字列の解析が bash の構文の一部を取り違える」）。ユーザーへの選択肢は次の順に出す:
   1. 同じ種類が 2 周続いていれば、先頭に「**止める場所・方式の見直し**」（列挙で塞ぐ方式の限界の疑い）
-  2. 修正してもう 1 周（ユーザーの承認で 1 周だけ延長。`ADV_ROUND_LIMIT=3` で起動する）
+  2. 修正してもう 1 周（ユーザーの承認で 1 周だけ延長。3-1 の `--round-limit 3` で起動する）
   3. 残りを受け入れて進む（理由を記録）
   - ユーザーが 3 を選んだときだけ、受け入れの記録 `docs/reviews/I###_adversarial_review_<ts>.md` を新しく作る: ユーザーの言葉（そのまま）・日時・受け入れた指摘の一覧を書き、最終行の前に `REVIEWED_COMMIT: <受け入れた時点の HEAD>` と `ROUNDS: 0`（周回に数えない）、最終行に `VERDICT: OK`（gate-check はこの記録を読んで通す）。Claude が自分で受け入れを書くことはしない（止める条件 3）
 
