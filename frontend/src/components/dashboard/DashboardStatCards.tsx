@@ -55,7 +55,7 @@ export interface GoalProgress {
 
 interface DashboardStatCardsProps {
   overview: DashboardOverview;
-  /** 目標は 1 日全体のものなので、選んだ科目に関係なく全科目の値で渡す（出さないときは null） */
+  /** 目標は 1 日全体のものなので、全科目の値で渡す（出さないときは null） */
   goalProgress: GoalProgress | null;
 }
 
@@ -69,7 +69,9 @@ const DashboardStatCards: React.FC<DashboardStatCardsProps> = ({ overview, goalP
       color: 'primary.main',
       label: '今日の学習時間',
       value: hasData ? <Typography variant="h6">{todayMinutes}分</Typography> : noRecord,
-      footer: goalProgress && <GoalFooter {...goalProgress} />,
+      // 選んだ科目に記録が無いときは出さない（同じカードの「まだ記録がありません」と食い違って読めるため。
+      // 目標は「学習を開始」のカードの全科目の行で伝わる）
+      footer: hasData && goalProgress && <GoalFooter {...goalProgress} />,
     },
     {
       icon: <EmojiEvents />,

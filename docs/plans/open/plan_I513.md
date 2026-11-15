@@ -60,7 +60,7 @@
 | ファイル | 変更 |
 |---|---|
 | `frontend/src/pages/Dashboard.tsx` | `const allOverview = useDashboardOverview(userId, ALL_SUBJECTS);` を足す（「すべて」を選んでいるときは同じキーなので取得は 1 回）。`useDashboardAchievements(user?.id, allOverview.data, goal)` にする（今は「すべて」を選んでいるときだけ渡していた。同じ応答なので判定は変わらず、分岐が要らなくなる）。`allTodayMinutes = allOverview.data ? todayStudyMinutes(allOverview.data) : null` を `StartQuizCard` の `todayMinutes` に渡す。`goalProgress`（`{ todayMinutes, goalMinutes }` か `null`。`allOverview.data?.has_data` が真で、目標が読めたときだけ）を `DashboardStatCards` に渡す |
-| `frontend/src/components/dashboard/DashboardStatCards.tsx` | 引数 `goalMinutes` を `goalProgress: GoalProgress \| null` に替える。進み具合（バーと「目標（全科目）: ◯分 (◯%)」）は `goalProgress` があるときだけ出す（選んだ科目の `has_data` には依らない。目標は 1 日全体のものなので、選んだ科目にまだ記録が無くても全科目の進み具合は出す）。% は今どおり `Math.floor`、バーは 100 まで。`GoalProgress` 型をここから export する |
+| `frontend/src/components/dashboard/DashboardStatCards.tsx` | 引数 `goalMinutes` を `goalProgress: GoalProgress \| null` に替える。進み具合（バーと「目標（全科目）: ◯分 (◯%)」）は、選んだ科目に記録があり（`hasData`・I487 と同じ条件）、`goalProgress` があるときだけ出す（値は全科目。選んだ科目に記録が無いときは、同じカードの「まだ記録がありません」と食い違って読めるので出さず、目標は「学習を開始」のカードの全科目の行で伝える・fix-loop F2）。% は今どおり `Math.floor`、バーは 100 まで。`GoalProgress` 型をここから export する |
 | `frontend/src/components/dashboard/StartQuizCard.tsx` | `todayMinutes` の意味を「全科目の今日の分」にし（コメントを直す）、文言を `今日の目標（全科目）達成まであと${goal - today}分です`／`今日の目標（全科目・${goal}分）を達成しました！` にする |
 
 ### 4-2. 推移を棒グラフにし、tooltip と直近 7 日の合計を出す
@@ -150,7 +150,7 @@
 Claude が決めた（技術的な選択と理由）:
 - 「すべて」は `useDashboardOverview(userId, ALL_SUBJECTS)` をもう 1 回呼ぶ（新しいフックを作らない。同じキーで重複は React Query がまとめる）
 - 達成のお知らせの判定も、いつも「すべて」の応答で行う（今は「すべて」を選んでいるときだけ。同じ応答・同じ記録なので出る回数は変わらず、選択による分岐を消せる。TC-27 はそのまま通る）
-- 進み具合（バー）は、選んだ科目に記録が無くても、全科目に記録があれば出す（目標は 1 日全体のもの・イシューの決定から導いた。全科目に記録が無い〔`has_data` が偽〕ときは今どおり出さない＝TC-02）
+- 進み具合（バー）は、選んだ科目に記録があるときだけ出し、値は全科目の今日の分で計算する。選んだ科目に記録が無いときは出さない（「今日の学習時間」のカードの「まだ記録がありません」と同じカードの中で食い違うため。目標は「学習を開始」のカードの全科目の行で伝える。全科目に記録が無いときも今どおり出さない＝TC-02）（fix-loop F2 で直した）
 - 目標の文言の「全科目」の置き方: `今日の目標（全科目）達成まであと◯分です`・`今日の目標（全科目・◯分）を達成しました！`・`目標（全科目）: ◯分 (◯%)`（イシューの「目標の行に『全科目』と添える」を、3 か所で同じ括弧書きにした）
 - 棒の値を `Math.round` から `Math.floor` にする（数字のカード・tooltip・合計・コマンドと同じ丸め。今は今日の棒とカードが 1 分ずれうる）
 - tooltip は `interaction.mode: 'index'`・`intersect: false`（高さ 0 の棒の日も出す・スマホで押しやすい）。題は `11/13（金）`、行は `学習時間: ◯分`・`解答数: ◯問`・`正答率: ◯%`（統計画面の tooltip の「◯分・◯問」と同じ単位の書き方）
@@ -191,6 +191,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 3 | 読んで可 | 目標の行・進み具合が、選んだ科目の応答ではなく「すべて」の応答から計算される（TC-30）。「すべて」が読めないときは出さない（TC-31） |
 
 ## 計画変更記録
+- fix-loop（コードレビュー `docs/reviews/I513_code_review_20261115_1045.md` の F1・F2・診断メモ `docs/reviews/I513_fix_diagnosis_20261115_1053.md`）: (F1) 確かめ用データの時刻を `rng.random()` 1 回で決め、乱数の消費量を `now` に依らなくする（TC-49 を足す）(F2) 数字のカードの進み具合を、選んだ科目に記録があるときだけ出す（4-1・9 章を直し、TC-30b の期待を直す）。計画レビューのやり直し: 不要（受け入れ条件 AC1〜AC10・方式・範囲は変えない。F2 は計画の自律判断の細部）
 - 計画レビュー（`docs/reviews/I513_plan_review_20261115_0308.md`）の Warning 2 件への対応: `plan_answers` で境目を乱数より先に確定する順を明記した／TC-33 に 1 分未満で解答のある日の tooltip、aria-label に解答数を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果

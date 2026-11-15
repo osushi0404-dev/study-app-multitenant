@@ -64,12 +64,19 @@ def _start_of(day: date) -> datetime:
 
 
 def _random_time(rng: random.Random, day: date, now: datetime) -> datetime:
-    """その日の解答の時刻。今日は 0:00〜今の 1 分前（今より後の解答を作らない）"""
+    """
+    その日の解答の時刻。今日は 0:00〜今の 1 分前（今より後の解答を作らない）、過去の日は 7:00〜22:59
+
+    乱数は rng.random() を 1 回だけ使う（randint は範囲の大きさで乱数を捨て直す回数が変わり、
+    今日の範囲は今の時刻で変わるので、同じ種でも流す時刻で後の乱数がずれる）
+    """
     start = _start_of(day)
     if day == timezone.localdate(now):
         span = max(0, int((now - timedelta(minutes=1) - start).total_seconds()))
-        return start + timedelta(seconds=rng.randint(0, span))
-    return start + timedelta(hours=DAYTIME_FROM_HOUR, seconds=rng.randint(0, DAYTIME_HOURS * 3600 - 1))
+    else:
+        start += timedelta(hours=DAYTIME_FROM_HOUR)
+        span = DAYTIME_HOURS * 3600 - 1
+    return start + timedelta(seconds=int(rng.random() * span))
 
 
 def plan_answers(rng: random.Random, now: datetime) -> list:

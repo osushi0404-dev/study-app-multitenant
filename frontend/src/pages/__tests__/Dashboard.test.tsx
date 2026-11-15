@@ -597,11 +597,12 @@ describe('Dashboard', () => {
     expect(overviewCallsWith({ subject_id: '5' })).toBe(1);
   });
 
-  it('TC-30b: 選んだ科目に記録が無くても、全科目に記録があれば目標の進み具合を出す', async () => {
+  it('TC-30b: 選んだ科目に記録が無いと、数字のカードに進み具合を出さず、目標は「学習を開始」の全科目の行で出す', async () => {
     respondBySubject(withToday(600), emptyOverview(), { daily_study_goal_minutes: 30 });
     mockGetUserSubjects.mockResolvedValue(SUBJECTS);
     renderDashboard();
     await screen.findByText('10分');
+    expect(screen.getByText('目標（全科目）: 30分 (33%)')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
 
@@ -609,7 +610,9 @@ describe('Dashboard', () => {
       await screen.findByText('この科目はまだ解答がありません。まずは問題を解いてみましょう！')
     ).toBeInTheDocument();
     expect(screen.getAllByText('まだ記録がありません').length).toBeGreaterThan(0);
-    expect(screen.getByText('目標（全科目）: 30分 (33%)')).toBeInTheDocument();
+    expect(screen.queryByText(/目標（全科目）:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByText('今日の目標（全科目）達成まであと20分です')).toBeInTheDocument();
   });
 
   it.each([

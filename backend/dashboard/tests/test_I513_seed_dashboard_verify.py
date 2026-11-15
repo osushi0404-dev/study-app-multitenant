@@ -150,6 +150,19 @@ def test_every_plan_has_boundaries(seed):
     assert max(per_group.values()) <= PROBLEMS_PER_SUBJECT
 
 
+# ---- TC-49: 同じ種なら、同じ日のうちは流す時刻が違っても同じデータ（fix-loop F1） ----
+def _shape(planned):
+    return [(a.subject_slug, a.answered_at.astimezone(JST).date(), a.is_correct, a.time_taken) for a in planned]
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_same_seed_same_data_at_different_time_of_day(seed):
+    early = datetime(2026, 11, 15, 0, 30, tzinfo=JST)
+    late = datetime(2026, 11, 15, 23, 0, tzinfo=JST)
+
+    assert _shape(plan_answers(random.Random(seed), early)) == _shape(plan_answers(random.Random(seed), late))
+
+
 # ---- TC-43: 期待値が overview の応答と一致する ----
 def _assert_scope_matches(expected, overview):
     assert expected["today"]["seconds"] == overview["today"]["study_seconds"]
