@@ -41,6 +41,8 @@
 - [retro] 残余リスクの処遇: 計画書「セキュリティレビュー結果」の「残余リスク処遇」に記録（High 以上なし）
 - [fix-loop] 一覧の説明の行を「- 台帳の F6（…）」に変える案 A で直した — 一覧の形の決まりを守り、テストを緩めない。診断レビュー PASS
 - [review-gate] fix-loop 2 回目の後: 差分のレビュー（範囲のファイル 0 本・記録の場所だけ）OK。敵対的レビューは通算 2 周の上限で LIMIT（起動しない）だが、最後の OK の周（20261115_1122）の後は記録の場所しか変わっておらず、gate-check が OK と判定した — コードの変更が無いので「上限を使い切った後のコードの変更」に当たらず、止めずに test-gate へ
+- [test-gate] 2 回目: gate-check OK。手動テスト（No.1〜No.5）の後に変わったのは記録の場所（一覧の説明の 1 行）だけで、スクリプト・設定・スキルは変わっていないので流し直さない。CI は全ジョブ合格
+- [retro] 2 回目: 一覧の説明の行の書き方で CI の D3 が落ちた件は、CI がその場で捕まえ 1 行で直った（決定論のゲートが働いた）ので新しい手順は足さない。再発防止記録は auto_test の「fix-loop 2 回目」に書いた
 - [close] マージ依頼前の最終確認で CI の `test_i202_ledger_cleanup.sh` D3 が落ちた（一覧 `docs/reviews/backlog/I468.md` の説明の行が `- F6（…` と「- F」で始まり、指摘の行の形と見なされた）— close 5.5 のとおり記録を open に戻して fix-loop へ。日時つきのレビュー記録は closed に残したので、計画書のリンク（closed を指す）は戻さない
 - [close] develop への追従は不要（mergeStateStatus=BLOCKED・承認待ち）。gate-check OK。診断メモ `I468_fix_diagnosis_20261115_1058.md` は、これまでのイシューと同じく `docs/reviews/` 直下に残した（close の回収の対象は `_review_` を含む記録だけ）
 
@@ -109,3 +111,5 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
+STAGE_DONE: retro NEXT: close
