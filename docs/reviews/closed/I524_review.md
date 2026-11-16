@@ -49,6 +49,7 @@
 - [retro（追加）] 台帳の残り: F1・F3・F4（前回と同じ）・F5・F6（新しい・アプリ本体の Low）→ #508 に追記（issuecomment-6905084682。F2 は I524 で直したことも書いた。上の fix-loop の行の「close で書き足す」はこのコメントで済ませた）
   - F1 → #508／F3 → #508／F4 → #508／F5 → #508／F6 → #508
 - [retro（追加）] BP の確認で直しに戻ったこと（I513 に続き 2 回目・やり直しの手戻りあり）の予防策は、#509 に同梱した（issuecomment-6905092247）。新規起票しない — 「計画を書く工程と計画レビューで規約を確かめる」の #509 と根が同じ
+- [close（2 回目）] BP の直しの後、develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK（レビュー済み 28d5d86d 以降は記録の場所だけ）。記録を closed へ移し、PR 説明に BP の直しを足す
 
 ## 振り返り
 
@@ -124,3 +125,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
