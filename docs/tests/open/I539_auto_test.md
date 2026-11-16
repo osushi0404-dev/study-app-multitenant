@@ -64,7 +64,7 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 
 | TC | 内容 | 期待値 | AC |
 |---|---|---|---|
-| TC-24 | 組織 A の利用者が科目 X（問題 2 問）・Y（問題 0 問）を学ぶ科目にしている。組織 B に問題 3 問の科目 Z があり、A の利用者の `UserSubjectAccess` に Z も入れておく（組織を移った後の古い登録の形）。A の利用者で `GET /api/user/subjects/` と、`PUT /api/user/subjects/`（`{"subject_ids": [X, Y]}`）。その後 X に問題を 1 問足して、もう一度 `GET` | GET・PUT とも 200・本文が `[{"id": X, "name": "X…", "problem_count": 2}, {"id": Y, "name": "Y…", "problem_count": 0}]`（名前の順・Z は入らない）。問題を足した後の GET の X は `problem_count == 3`（キャッシュで古い数が出ない） | AC13・AC11 |
+| TC-24 | 組織 A の利用者が科目 X（問題 2 問・各問に選択肢 4 つ。選択肢の数で問題数が膨らまないことも見る）・Y（問題 0 問）を学ぶ科目にしている。組織 B に問題 3 問の科目 Z があり、A の利用者の `UserSubjectAccess` に Z も入れておく（組織を移った後の古い登録の形）。A の利用者で `GET /api/user/subjects/` と、`PUT /api/user/subjects/`（`{"subject_ids": [X, Y]}`）。その後 X に問題を 1 問足して、もう一度 `GET` | GET・PUT とも 200・本文が `[{"id": X, "name": "X…", "problem_count": 2}, {"id": Y, "name": "Y…", "problem_count": 0}]`（名前の順・Z は入らない）。問題を足した後の GET の X は `problem_count == 3`（キャッシュで古い数が出ない） | AC13・AC11 |
 
 ## frontend: `frontend/src/pages/__tests__/Register.test.tsx`（新規）
 `AuthContext` の `register` と `apiClient.get`（slug の確認・科目一覧）を差し替える。`QueryClientProvider`（再試行なし）と `MemoryRouter` で描く。
