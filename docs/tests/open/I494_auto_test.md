@@ -74,3 +74,10 @@
 
 ## 決定論ゲート（自動実走）
 - 無し（守る決まりは pytest・Jest・E2E が CI で確かめる。文言・ファイルの有無を grep で見るゲートは作らない＝plan-writing-rules.md「決定論テストの対象の選び方」）
+
+## 再発防止記録（fix-loop・2026-11-16）
+- なぜ失敗したか: CI の E2E `settings.spec.ts` の TC-28 が `getByRole('button', { name: '保存' })` で「学習設定」の保存ボタンを探していた。Playwright の `name` は文字列だと既定で部分一致なので、I494 で同じ画面に足した「学ぶ科目を保存」にも当たり、strict mode で 2 つに当たって落ちた（画面の不具合ではない）
+- 何を変えたか: `e2e/tests/settings.spec.ts:19` を `{ name: '保存', exact: true }` にした（診断メモ `docs/reviews/I494_fix_diagnosis_20261116_1202.md`・案 A）
+- セキュリティ上の考慮点: なし（テストの探し方だけ）
+- 次回どう防ぐか: 画面に、既存のボタン・見出しの名前を含む新しい要素を足すときは、E2E（Playwright・既定は部分一致）の `getByRole(..., { name })` を `grep -rn "name: '<名前>'" e2e/tests` で探し、部分一致で当たるものを `exact: true` にする。Jest（Testing Library・文字列は既定で完全一致）の結果だけで E2E も通ると見なさない
+- 確かめた結果: `grep -rn "name: '保存'" e2e/tests frontend/src` で、部分一致の探し方は `settings.spec.ts:19` だけ（Jest の 3 か所は完全一致）。E2E の実行は CI で確かめる（手元では流し直さない）

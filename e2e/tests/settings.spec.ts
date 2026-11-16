@@ -16,7 +16,8 @@ test('TC-28: 目標時間を保存して、再読み込みの後も同じ値が�
 
   const next = (await goal.inputValue()) === '45' ? '50' : '45';
   await goal.fill(next);
-  await page.getByRole('button', { name: '保存' }).click();
+  // 同じ画面に「学ぶ科目を保存」もある（I494）。Playwright の name は既定で部分一致なので完全一致で探す
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('設定を保存しました')).toBeVisible();
 
   const reloaded = page.waitForResponse(
