@@ -28,3 +28,4 @@
 - [plan] 文言とカードの中の細かい並びは設計確認メモの決定から導いた（新しい価値判断は無いので止めない）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
