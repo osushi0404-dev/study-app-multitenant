@@ -11,8 +11,8 @@
 - Backend/Frontend/DB/Config: 計画書 3 章のとおり（DB・Config の変更なし）
 
 ## テスト結果
-- 自動: （CI の結果を記入）
-- 手動: （test-gate で記入）
+- 自動: PR #529 の CI（Backend Tests・Frontend Tests・Frontend Type Check・Lint・API Types Up To Date・E2E）すべて成功。gate-check OK
+- 手動: `docs/tests/open/I494_manual_test.md` の No.1〜No.7 すべて OK（実施者はすべて Claude・Playwright MCP）
 
 ## 計画との差分
 - なし
@@ -37,6 +37,7 @@
 - [fix-loop] ユーザーとの相談（「その方針で進めて」）で決めた直しを入れた: E2E は「学習設定」の form（名前付き）の中の「保存」を押す・見出しの段をそろえる・触る前は赤い注意を出さない
 - [fix-loop] 見出しのフォーカスの枠を消す案は取りやめた — 枠はアプリの「フォーカス表示強化」（既定でオン・利用者が切り替えられる）が出していて、このカードだけ打ち消すのは利用者の設定に反する
 - [review-gate] 差分のレビュー OK・敵対的レビュー 1 周目 OK（V1〜V5 すべて確認済み）。Low 2 件（TC-05 が確定の後の消去だけを単独では確かめていない など）は retro へ回す — 止める基準に当たらない
+- [test-gate] 手動 No.4 の画像で保存ボタンが押せない色に見えた件は、保存中の一瞬の状態と判断した — 同じ手順で押し直して成功・Jest に一時的に確かめを足して失敗の後に押せることを確かめた（コードは変えていない）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

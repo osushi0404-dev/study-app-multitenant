@@ -91,3 +91,7 @@
 - セキュリティ上の考慮点: F1 は裏側が 400 で断っていた（組織の境界は保たれていた）。今回の直しは表示とテストだけ
 - 次回どう防ぐか: 取り直しで変わる一覧に対して手元の選択の状態を持つときは、表示・送信の前に一覧と突き合わせる（状態は一覧から導く）。同じ画面に同じ働きのボタンを足すときは、まとまり（form）に名前を付け、テストはまとまりの中で探す
 - 確かめた結果: Jest の `Settings.test.tsx`・`LearningSubjectsCard.test.tsx`・`Dashboard.test.tsx` 57 passed。TC-24b は突き合わせを外すと落ちることを確かめた。ESLint・`tsc --noEmit` 通過。Playwright MCP で、`/settings#learning-subjects` の画面で `getByRole('form', { name: '学習設定' })` の中の「保存」に当たること・触る前に赤い注意が出ないことを確かめた（`.evidence/I494/settings-c-5.png`）。E2E は CI で確かめる
+
+## 実行記録（test-gate・2026-11-16）
+- `bash scripts/claude/gate-check.sh I494` → exit 0（`GATE_CHECK: OK`。コードレビュー `I494_code_review_20261116_1216.md`・敵対的レビュー `I494_adversarial_review_20261116_1224.md` とも OK）
+- pytest・Jest・E2E: PR #529 の CI で成功（review-gate の `CI_WAIT: OK`。手元では流し直さない）。決定論ゲートは無し
