@@ -41,8 +41,10 @@
 - [implement] クエリ数のテストの期待値を 9 → 8 に直した — 減った理由が F5 の作りの結果で、計画レビューのやり直しは要らない（計画変更記録）
 - [implement] /simplify の 4 観点の指摘のうち直したもの: キャッシュを使わない読み出しはサブクエリのまま 1 本に戻す・連続日数のループの初回の分岐をループの前に出す・テストのキャッシュの片付けを 1 つの関数とフィクスチャにまとめる・I494 TC-05 を 1 つのキーの形に・不要なコメントと重複の確かめを消す・テストから private 関数を読まない — どれも動きを変えない整理
 - [implement] /simplify の指摘で見送ったもの: LOCMEM の設定を conftest で 2 ファイル共有（計画の外のファイルを触るため・写しは 4 行）／空の選択もキャッシュする（動きが変わる）／TC-05 を 366 の 1 通りに絞る（365 ちょうども計画の確かめ）／E2E を専用の利用者で厳密に（計画の R5 で受け入れ済み。答える spec を足すときに見直す）
+- [review-gate] 基本レビュー OK（CI 成功・Low 4 件は台帳に残す）・敵対的レビュー 1 周目 OK（V1〜V4 確認済み・新しい High 以上なし）で test-gate へ — 止める指摘が無いため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
