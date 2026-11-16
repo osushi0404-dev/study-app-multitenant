@@ -104,5 +104,12 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 - 次回どう防ぐか: 登録画面など入力の検証を通る E2E では、環境の秘密の値の形に頼らず、決まりを満たす値をテストの中で作る（`E2E_TEST_PASSWORD` は `seed_e2e` の利用者のログインにだけ使う）
 - 確かめた結果: `docker compose --profile e2e run --rm e2e npx playwright test tests/auth.spec.ts --retries=0 --grep I539` → 1 passed（7.3s）。直す前の小文字だけの値で落ちることは CI の失敗（3 回とも同じ）で確かめ済み
 
+## 再発防止記録（fix-loop・2026-11-17・AC13 の後）
+- なぜ失敗したか: CI（run 43922117608）の E2E で `quiz-session.spec.ts` の 3 本が、「クイズを始める」の後の科目のダイアログを待って落ちた。E2E のデータの利用者 A の学ぶ科目は「E2E Quiz Subject」（問題 1 問）と「E2E Subject A」（問題 0 問）で、AC13 から問題のある科目だけが対象になり、対象 1 件なのでダイアログを出さずに進む（仕様どおり）。テストは「学ぶ科目が 2 件なら必ずダイアログ」を前提にしていた（診断メモ `docs/reviews/I539_fix_diagnosis_20261117_0253.md`）
+- 何を変えたか: 3 本を、ダイアログを出さずに問題のある科目のクイズへ進む（`/quiz?subject=<番号>` に移り、選択肢が出て、ダイアログが無い）形に直した（共通の手順 `startQuizFromDashboard`）。E2E のデータは変えない
+- セキュリティ上の考慮点: なし（画面の遷移の前提だけ）
+- 次回どう防ぐか: 画面の対象の決め方（何を出す・何を選ばせる）を変えるときは、E2E のデータでその決め方の元（今回は科目ごとの問題数）がどうなっているかを `seed_e2e.py` で確かめ、前提にしている spec を `grep` で探してから実装する
+- 確かめた結果: `docker compose --profile e2e run --rm e2e npx playwright test tests/quiz-session.spec.ts --retries=0` → 3 passed（9.4s）。直す前は CI で 3 本とも落ちた（再試行も同じ）。続けて流した `auth.spec.ts --grep I539` は、全体の準備のログインがログインの回数制限で止まった（spec の前・変更と無関係）ので CI で確かめる
+
 ## 決定論ゲート（自動実走）
 このイシューは、pytest・Jest・E2E（CI が流す）で受け入れ条件を確かめる。grep 等の決定論ゲートは置かない（`docs/runbooks/plan-writing-rules.md`「決定論テストの対象の選び方」: 守る決まりは CI のテストで覆える）。
