@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { randomBytes } from 'crypto';
 import * as path from 'path';
 
 // 未認証状態を自己宣言。chromium-authed で誤実行されても auth state が混入しない（二重防御）。
@@ -37,7 +38,9 @@ test.describe('ログインフロー（未認証）', () => {
 // 登録のたびに本人ひとりの組織ができるので、ユーザー ID・科目名は時刻で毎回変える
 test.describe('招待なしの会員登録（I539）', () => {
   test('登録して、自分の科目と問題を作り、クイズを始められる', async ({ page }) => {
-    const password = process.env.E2E_TEST_PASSWORD || '';
+    // 登録画面のパスワードの決まり（大文字・小文字・数字）を満たす値をその場で作る。
+    // CI の E2E_TEST_PASSWORD は 16 進（小文字と数字だけ）で決まりを満たさないので使わない（I539 の fix-loop）
+    const password = `Aa1-${randomBytes(16).toString('hex')}`;
     const stamp = Date.now();
     const userId = `i539_${stamp}`;
     const subjectName = `E2E I539 ${stamp}`;

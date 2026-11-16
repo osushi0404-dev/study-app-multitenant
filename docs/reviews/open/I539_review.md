@@ -35,6 +35,7 @@
 - [implement] `/simplify`（4 観点）の指摘のうち、使われなくなった `getSubjectsWithLoading` の削除・登録画面の読み込み中／失敗の条件の名前付け・使われない型の削除・`'personal'` の定数化を反映。見送り: 道筋の定数を既存の画面でも使う（計画の外）・共有の組織への `is_individual` の付与（意味が合わない）・`public` の既定の slug を消す（計画が残すと決めた）・並列の取得（計画は確認の後に読む fail-closed）・`get_or_create` を `create` に（重複に強いほうを残す）
 - [implement] 画面の確かめ（Playwright MCP）: 招待なしの登録 → ログイン → 管理者の案内 → 科目・問題の作成 → クイズの開始まで動いた（`.evidence/I539/` に 4 枚）
 - [review-gate] 1 回目: CI の E2E Tests (Playwright) が失敗（`CI_WAIT: FAIL`・run 43868042699）。手順どおり fix-loop へ
+- [fix-loop] CI の E2E の失敗は、TC-50 が CI の小文字・数字だけのパスワードで登録しようとして、登録画面のパスワードの決まりに止められたもの（アプリの不具合ではない）。案 A（テストの中で決まりを満たすパスワードを作る）で直した。ワークフローを直す案 B は安全装置の変更（止める条件 2）なので採らない — 診断レビュー PASS（`docs/reviews/I539_fix_diagnosis_review_20261116_2141.md`）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
