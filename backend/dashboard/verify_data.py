@@ -322,6 +322,7 @@ def _write_answers(user, subjects: dict, planned: list) -> None:
         answers.extend(created)
     # 組織で絞らない: 確かめ用の利用者（確かめ用の組織にいることを確かめ済み）に今作ったセッションの時刻を直すだけ
     QuizSession.objects.bulk_update(sessions, ['started_at'])
+    # 組織で絞らない: 同じく、今作った答えの時刻を直すだけ（読み出しではない）
     QuizAnswer.objects.bulk_update(answers, ['answered_at'])
 
 

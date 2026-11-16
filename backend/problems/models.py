@@ -241,6 +241,12 @@ class QuizSession(models.Model):
         return f"{self.user.username} - {self.started_at}"
 
 
+class QuizAnswerQuerySet(OrgScopedQuerySet):
+    # 持ち主は回（session）の利用者。科目は答えた問題の科目（I491）
+    user_path = 'session__user'
+    subject_paths = ('problem__subject',)
+
+
 class QuizAnswer(models.Model):
     session = models.ForeignKey(QuizSession, on_delete=models.CASCADE, related_name='answers')
     problem = models.ForeignKey(Problem, on_delete=models.CASCADE)
@@ -249,6 +255,8 @@ class QuizAnswer(models.Model):
     is_correct = models.BooleanField(default=False)
     answered_at = models.DateTimeField(auto_now_add=True)
     time_taken = models.IntegerField(default=0, help_text="Time taken in seconds")
+
+    objects = QuizAnswerQuerySet.as_manager()
 
     class Meta:
         ordering = ['answered_at']

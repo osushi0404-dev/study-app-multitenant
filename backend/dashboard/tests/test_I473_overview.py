@@ -21,8 +21,9 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
+from core.cache_service import cache_service
 from core.subject_service import subject_service, user_subjects_cache_key
-from dashboard.selectors import build_overview
+from dashboard.selectors import STREAK_WINDOW_DAYS, _current_streak, build_overview
 from problems.models import Choice, Problem, QuizAnswer, QuizSession, Subject, UserSubjectAccess
 from studylogs.models import StudyLog
 
@@ -40,14 +41,17 @@ INVALID_SUBJECT_BODY = {
 }
 
 
+def _clear_all_caches():
+    for alias in settings.CACHES:
+        caches[alias].clear()
+
+
 @pytest.fixture(autouse=True)
 def _clear_caches():
     """Redis があるときに、利用者 ID が同じ別テストの cache を拾わない"""
-    for alias in settings.CACHES:
-        caches[alias].clear()
+    _clear_all_caches()
     yield
-    for alias in settings.CACHES:
-        caches[alias].clear()
+    _clear_all_caches()
 
 
 def _jst(month, day, hour=12, minute=0):
@@ -329,8 +333,7 @@ def test_recommendations_limit(setup):
 
 # ---- TC-12: クエリ数がデータの量に依らない ----
 def _count_queries(client):
-    for alias in settings.CACHES:
-        caches[alias].clear()
+    _clear_all_caches()
     with CaptureQueriesContext(connection) as context:
         response = client.get(OVERVIEW)
     assert response.status_code == 200
@@ -354,7 +357,9 @@ def test_query_count_is_constant(setup):
     large = _count_queries(client)
 
     assert small == large
-    assert large == 9  # 実装後に数えた本数（I473）。増やすなら理由を計画書に書く
+    # 実装後に数えた本数（I473 は 9）。I491 で科目のキャッシュを作るときの存在確認と値の読み出しが
+    # 番号の読み出し 1 本になり 8。増やすなら理由を計画書に書く
+    assert large == 8
 
 
 # ---- TC-13: 認可と組織の境界 ----
@@ -404,8 +409,7 @@ def test_selected_subjects_cache_order_and_key(setup):
     # 名前の順と作った順がずれる科目を足す（あ は 数学・英語・理科 より前）
     late = Subject.objects.create(name="あ科目", slug="i473-late", organization=org)
     UserSubjectAccess.objects.create(user=user, subject=late)
-    for alias in settings.CACHES:
-        caches[alias].clear()
+    _clear_all_caches()
 
     from_db = list(subject_service.get_user_selected_subjects(user).values_list("id", flat=True))
     from_cache = list(
@@ -420,4 +424,136 @@ def test_selected_subjects_cache_order_and_key(setup):
     assert extra.id in set(
         subject_service.get_user_selected_subjects(user).values_list("id", flat=True))
 
-    assert user_subjects_cache_key(1, 7, False) == "user_subjects_1_org_7_count_False"
+
+# ==== I491: レビューの残り（TC-01〜TC-06・docs/tests/open/I491_auto_test.md） ====
+# キャッシュを本当に通すため、どの置き場も LocMem にする（Redis が無い環境で素通りしない・I494 と同じ形）
+LOCMEM = {
+    alias: {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": f"i491-{alias}"}
+    for alias in settings.CACHES
+}
+
+
+@pytest.fixture
+def locmem_caches(settings):
+    """キャッシュを LocMem にして空にする（autouse の片付けは差し替えの前に動くので、ここで空にする）"""
+    settings.CACHES = LOCMEM
+    _clear_all_caches()
+
+
+def _selected_names(user):
+    return list(subject_service.get_user_selected_subjects(user).values_list("name", flat=True))
+
+
+def _expected_names(user, org):
+    """DB の並び（照合順序）で、利用者が選んだその組織の科目の名前"""
+    return list(Subject.objects.filter(organization=org, user_access__user=user)
+                .order_by("name").values_list("name", flat=True))
+
+
+def _move(user, org):
+    user.organization = org
+    user.save(update_fields=["organization"])
+
+
+# ---- I491 TC-01: F5 組織を往復しても、外した科目がキャッシュから戻らない ----
+def test_i491_cache_not_stale_after_org_round_trip(setup, locmem_caches):
+    user, org_a, org_b = setup["user_a"], setup["org_a"], setup["subject_b"].organization
+    assert _selected_names(user) == _expected_names(user, org_a)  # A でキャッシュを作る
+
+    _move(user, org_b)
+    UserSubjectAccess.objects.get(user=user, subject=setup["english"]).delete()
+    _move(user, org_a)
+
+    names = _selected_names(user)
+    assert "英語" not in names
+    assert names == _expected_names(user, org_a)
+
+
+# ---- I491 TC-02: F5 組織を移った直後に、移った先の科目が出て前の組織の科目が出ない ----
+def test_i491_cache_follows_org_move(setup, locmem_caches):
+    user, org_a, org_b = setup["user_a"], setup["org_a"], setup["subject_b"].organization
+    UserSubjectAccess.objects.create(user=user, subject=setup["subject_b"])
+    assert _selected_names(user) == _expected_names(user, org_a)  # A でキャッシュを作る
+    assert "B科目" not in _selected_names(user)  # キャッシュから読んでも B の科目は出ない
+
+    _move(user, org_b)
+    assert _selected_names(user) == ["B科目"]
+    assert _selected_names(user) == ["B科目"]  # キャッシュから読んでも同じ
+
+    _move(user, org_a)
+    names = _selected_names(user)
+    assert "B科目" not in names
+    assert names == _expected_names(user, org_a)
+
+
+# ---- I491 TC-03: キャッシュのキーと中身（選んだ科目の番号の全部・組織で絞る前） ----
+def test_i491_cache_key_and_content(setup, locmem_caches):
+    user = setup["user_a"]
+    UserSubjectAccess.objects.create(user=user, subject=setup["subject_b"])
+    _selected_names(user)
+
+    assert user_subjects_cache_key(1) == "user_selected_subject_ids_1"
+    assert cache_service.get_subjects_cache(user_subjects_cache_key(user.id)) == sorted(
+        [setup["math"].id, setup["english"].id, setup["science"].id, setup["subject_b"].id])
+
+
+# ---- I491 TC-04: F7 連続日数の窓の境目（小さな窓で、日数と読み出しの本数を確かめる） ----
+TODAY = NOW.date()
+
+
+@pytest.mark.parametrize("offsets, expected_days, expected_queries", [
+    (range(0, 4), 4, 1),                       # (a) 窓の中で途切れる
+    (range(0, 5), 5, 2),                       # (b) 窓ちょうど → 前の窓（空）を読んで終わる
+    (range(0, 6), 6, 2),                       # (c) 窓を 1 日超える
+    (range(0, 11), 11, 3),                     # (d) 窓 3 つ
+    (range(1, 6), 5, 2),                       # (e) 今日はまだ・昨日まで 5 日
+    ([*range(0, 5), *range(6, 9)], 5, 2),      # (f) 窓の外の最初の日が空
+])
+def test_i491_streak_window_boundaries(setup, offsets, expected_days, expected_queries):
+    user, problem = setup["user_a"], setup["p_math"]
+    for offset in offsets:
+        _answer(user, problem, correct=True, at=NOW - timedelta(days=offset, hours=1))
+
+    with CaptureQueriesContext(connection) as context:
+        days = _current_streak(QuizAnswer.objects.for_user(user), TODAY, window_days=5)
+
+    assert days == expected_days
+    assert len(context.captured_queries) == expected_queries
+
+
+def test_i491_streak_window_must_cover_yesterday(setup):
+    """(g) 窓が 1 日だと、今日がまだのときの昨日が入らないので断る"""
+    with pytest.raises(ValueError):
+        _current_streak(QuizAnswer.objects.for_user(setup["user_a"]), TODAY, window_days=1)
+
+
+# ---- I491 TC-05: 既定の窓（365 日）を超える連続も頭打ちにしない ----
+def _answer_every_day(user, problem, days):
+    """今日から days 日続けて、日ごとに 1 つの回と答え（まとめて作る）"""
+    sessions = QuizSession.objects.bulk_create([
+        QuizSession(user=user, subject=problem.subject, is_active=False) for _ in range(days)])
+    answers = QuizAnswer.objects.bulk_create([
+        QuizAnswer(session=session, problem=problem, is_correct=True) for session in sessions])
+    for offset, answer in enumerate(answers):
+        answer.answered_at = NOW - timedelta(days=offset, hours=1)
+    QuizAnswer.objects.bulk_update(answers, ["answered_at"])
+
+
+@pytest.mark.parametrize("days", [STREAK_WINDOW_DAYS, STREAK_WINDOW_DAYS + 1])
+def test_i491_streak_beyond_default_window(setup, days):
+    user = setup["user_a"]
+    _answer_every_day(user, setup["p_math"], days)
+
+    assert build_overview(user, now=NOW)["streak"] == {"current_days": days}
+
+
+# ---- I491 TC-06: B1 学習時間の上限（1 問 300 秒）の境目 ----
+def test_i491_seconds_cap_boundary(setup):
+    user, problem = setup["user_a"], setup["p_math"]
+    for seconds in (299, 300, 301):
+        _answer(user, problem, correct=True, seconds=seconds, at=_jst(11, 13, 7))
+
+    today = build_overview(user, now=NOW)["today"]
+
+    assert today["study_seconds"] == 299 + 300 + 300
+    assert today["answered_count"] == 3

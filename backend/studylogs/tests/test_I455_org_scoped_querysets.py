@@ -1,9 +1,9 @@
 """
-I455: 学習記録まわりの 8 モデルの、組織の境界つきの取り出し方（objects.for_user）
+I455: 学習記録まわりのモデル（I491 で QuizAnswer を足した）の、組織の境界つきの取り出し方（objects.for_user）
 
 - 各モデルの境界の決まり（科目への経路・科目が空の記録を残すか）を直接確かめる
 - 組織に属さない利用者・同じ組織の別の利用者・提案の 2 経路を確かめる
-- studylogs・dashboard で 8 モデルを絞らずに読む行に、理由のコメントがあることを確かめる
+- studylogs・dashboard で境界つきの取り出し方を持つモデルを絞らずに読む行に、理由のコメントがあることを確かめる
   （付け忘れを止める。関連の取り出し・変数に入れたモデルなど、普通でない書き方は見ない）
 
 TC-01〜TC-04・TC-06（docs/tests/open/I455_auto_test.md）に対応。
@@ -22,7 +22,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 
 from accounts.models import Organization, OrganizationCategory
-from problems.models import Problem, QuizSession, Subject
+from problems.models import Problem, QuizAnswer, QuizSession, Subject
 from problems.querysets import OrgScopedQuerySet
 from studylogs.models import (
     LearningSuggestion, LearningWeakness, MistakePattern, ProblemAttempt,
@@ -91,6 +91,12 @@ def _review(user, problem):
     )
 
 
+def _quiz_answer(user, problem):
+    """終了済みの回（利用者 user・問題の科目）と、その問題への答え"""
+    session = QuizSession.objects.create(user=user, subject=problem.subject, is_active=False)
+    return QuizAnswer.objects.create(session=session, problem=problem, is_correct=True)
+
+
 # モデルの鍵: (モデル, 記録を作る関数〔利用者・科目〕, 科目が空の記録を残すか)
 # 問題を指すモデルは、その科目の問題を作って指す（問題は必須なので科目が空の記録は無い）
 SPECS = {
@@ -127,6 +133,8 @@ SPECS = {
         SpacedRepetitionCard, lambda u, s: _card(u, _problem(u, s)), False),
     "SpacedRepetitionReview": (
         SpacedRepetitionReview, lambda u, s: _review(u, _problem(u, s)), False),
+    # 持ち主は回（session）の利用者・科目は答えた問題の科目（I491）
+    "QuizAnswer": (QuizAnswer, lambda u, s: _quiz_answer(u, _problem(u, s)), False),
 }
 
 
@@ -219,7 +227,7 @@ def _model_name(node):
 
 def _missing_reasons(source):
     """
-    8 モデルを絞らずに読み、理由のコメントが無い行番号
+    境界つきの取り出し方を持つモデルを絞らずに読み、理由のコメントが無い行番号
 
     <モデル>.objects.<メソッド> の形を見る（基準の行はモデル名の書かれた行。複数行の呼び出しでも先頭）。
     理由は、直前のコメントだけの行か、同じ行のコメントに書く。前の行の行末コメント（その行の
@@ -251,7 +259,7 @@ def _missing_reasons(source):
 
 
 def _unscoped_reads_without_reason():
-    """studylogs・dashboard のテスト以外で、8 モデルを絞らずに読み、理由のコメントが無い行"""
+    """studylogs・dashboard のテスト以外で、境界つきの取り出し方を持つモデルを絞らずに読み、理由のコメントが無い行"""
     missing = []
     for app in ("studylogs", "dashboard"):
         for path in sorted((BACKEND_DIR / app).rglob("*.py")):
@@ -289,10 +297,15 @@ def test_specs_cover_all_scoped_models():
     assert SCOPED_MODELS == set(SPECS)
 
 
+def test_quiz_answer_is_watched():
+    """I491 TC-09: QuizAnswer も見張りの対象で（表に載ることは上のテスト）、絞らない読み出しを理由なしでは通さない"""
+    assert _missing_reasons("a = QuizAnswer.objects.filter(session__user=u)") == [1]
+
+
 def test_unscoped_reads_have_reason_comment():
     """TC-06: 絞らずに読むなら、直前の行に「# 組織で絞らない: <理由>」を書く"""
     missing = _unscoped_reads_without_reason()
     assert missing == [], (
-        "8 モデルを組織で絞らずに読んでいます。objects.for_user(user) を使うか、"
+        "境界つきの取り出し方を持つモデルを組織で絞らずに読んでいます。objects.for_user(user) を使うか、"
         f"直前に「# {REASON_MARK}: <理由>」を書いてください: {missing}"
     )

@@ -31,9 +31,10 @@ test.describe('クイズセッション', () => {
     await expect(page.locator('[data-testid="answer-result"]')).toBeVisible();
   });
 
-  // I473: クイズに答えると、ダッシュボードの「解答問題数」が 1 増える（数字が 0 のままだった不具合の再発防止）。
-  // E2E の DB は流すたびに答えが増えるので、前後の差で見る
-  test('クイズに答えると、ダッシュボードの解答問題数が 1 増える', async ({ page }) => {
+  // I473: クイズに答えると、ダッシュボードの「解答問題数」が増える（数字が 0 のままだった不具合の再発防止）。
+  // E2E の DB は流すたびに答えが増えるので、前後で比べる。共有の利用者 A で別の spec が同時に答えても
+  // 落ちないよう「前の値より大きい」で比べる（I491。数え方の正確さは backend の pytest が確かめる）
+  test('クイズに答えると、ダッシュボードの解答問題数が増える', async ({ page }) => {
     await page.goto('/dashboard');
     const answeredCount = page.locator('[data-testid="stat-answered-count"]');
     // 解答が 0 件のときは数字の代わりに「まだ記録がありません」が出る（I487）ので、数字が無ければ 0 とする
@@ -49,7 +50,7 @@ test.describe('クイズセッション', () => {
     await expect(page.locator('[data-testid="answer-result"]')).toBeVisible();
 
     await page.goto('/dashboard');
-    await expect(answeredCount).toHaveText(String(before + 1));
+    await expect.poll(async () => Number(await answeredCount.textContent())).toBeGreaterThan(before);
   });
 
   // I158: 開発サーバー（StrictMode 有効）でも開始リクエストは 1 回だけ・Idempotency-Key 付き
