@@ -44,6 +44,9 @@
 - [implement] ux-rules の「入力中にリアルタイムで指摘」を「欄を離れたときに確かめる」に直した — 公式の出典は無く Claude の判断（点検の表に明記）
 - [implement] /simplify の 4 観点の指摘のうち、重複の整理・参照への置き換え・必ず書くテストの一般化・非推奨の API の原則を直し、§0 の表の列を減らす案・I050 の決まりを消す案・MSW の例を短くする案は見送った — 表の形は設計確認メモの決定と AC2、I050 は `--no-migrations` で CI が順番を確かめないため、MSW の例はこれ以上削れないため（計画変更記録）
 - [implement] 規約の決まりのうち機械で止められるもの（Ruff・pytest の非推奨の警告・`check --deploy`）を #563 に起票し、ESLint で止められるものの一覧を #517 にコメントした — /simplify の直す深さの観点の指摘で、規約を文のまま残すより仕組みで止めるほうが根本のため
+- [implement] commit の前の detect-secrets のフックが `.secrets.baseline` を書き換えたので、計画書に足し（必ず確かめる項目 V1・V2・TC-07）、計画レビューをやり直した — 高リスクのファイルが範囲に入ったため。判定は HIGHRISK なので design-security-review を通す（実装はコミット済みで、その段階の結果で直しが要れば implement に戻る）
+- [implement] `.secrets.baseline` の、消したファイル（`rules/backend-django-coding-standards.md`・`rules/bk/…`）の古い登録は残した — フックが外さなかった登録で、無いファイルの登録は害が無い。手で消すと高リスクのファイルの手作業の変更が増える
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: plan-review NEXT: design-security-review
