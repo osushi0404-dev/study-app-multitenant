@@ -30,9 +30,12 @@
 - [plan-review] PLAN_VERDICT: OK（Info 3 件のみ・計画は直さない）— Info 2（TC-02 の失敗注入の結果を記録する）は implement で行う
 - [implement] /simplify（4 観点）で、close の手順書の「最長 1980 秒」の数字を消し、置き場所（`CI_WAIT_TIMEOUT_DEFAULT`）だけを書く形にした — 数字の 2 つ目の写しを作らないため（計画書 4-3 の文の数字だけを外した。方式は同じ）
 - [implement] /simplify の残りは見送り: `|| CI_TIMEOUT=""` の削除・時間切れメッセージを wait_ci へ移す・T3 での出力の使い回し・スタブの共通化・ci.yml の timeout-minutes との関係のテスト — どれも挙動を変えない小さな整理か、計画書 §8 R5 で決めたこと（設定の写しのテストを作らない）で、計画のコード例から外す価値が無いため
+- [review-gate] FINAL_VERDICT: OK・ADVERSARIAL_STAGE: NOT_REQUIRED（docs/reviews/I498_code_review_20261116_1139.md）。Low の F1〜F4 は直さない — 止める指摘ではなく、OK の後に差分を足すとレビューのやり直しになるため。retro で振り分ける
 
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
