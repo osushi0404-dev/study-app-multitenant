@@ -107,6 +107,7 @@
 - [fix-loop] まとまりの名前は `fieldset`・`legend` ではなく `aria-labelledby` で見える見出しを使った — 見出しを二重に置かない・見た目を変えない。送り先は規約の `constants/` に新しく `routes.ts` を作って置いた
 - [review-gate] fix-loop 3 回目の差分: コードレビュー OK（`I494_code_review_20261116_1303.md`）・敵対的レビュー 2 周目 OK（`I494_adversarial_review_20261116_1312.md`・指摘なし）
 - [retro] 3 回目の直しの後の台帳の残り F9〜F11 は #532 にコメントで同梱した。クイズの画面・会員登録の画面の選択肢のまとまりの名前と UX ルールへの決まりの追加は #536 に起票した（同じ形の穴が範囲の外に 2 画面あり、同梱先が無い）
+- [close] 2 回目の close: develop への追従は不要（BLOCKED・承認待ちだけ）。PR の説明に 3 回目の直しと #536 を足した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -125,3 +126,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
