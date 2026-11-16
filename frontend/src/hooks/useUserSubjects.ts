@@ -5,18 +5,18 @@
 import axios, { AxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import SubjectService from '../services/subjectService';
-import { Subject } from '../services/types';
+import { UserSubject } from '../types/api';
 import { availableSubjectsKey } from './useAvailableSubjects';
 import { DASHBOARD_OVERVIEW_KEY_ROOT } from './useDashboardOverview';
 
 export type UserSubjectsState =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'success'; subjects: Subject[] };
+  | { status: 'success'; subjects: UserSubject[] };
 
 export const userSubjectsKey = (userId: string) => ['user-subjects', userId] as const;
 
-const fetchSubjects = async (): Promise<Subject[]> => {
+const fetchSubjects = async (): Promise<UserSubject[]> => {
   try {
     return await SubjectService.getUserSubjects();
   } catch (error) {

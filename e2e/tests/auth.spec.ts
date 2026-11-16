@@ -79,8 +79,14 @@ test.describe('招待なしの会員登録（I539）', () => {
     await subjectDialog.getByRole('button', { name: '保存' }).click();
     await expect(page.getByText(subjectName)).toBeVisible();
 
-    // 6) その科目の問題を作る
-    await page.goto('/quiz-management');
+    // 6) 問題がまだ無いうちは、ダッシュボードで問題を作る案内が出て、クイズは始められない（AC13）
+    await page.goto('/dashboard');
+    await expect(page.getByText(/問題を作りましょう。問題管理で学ぶ科目の問題を作ると/)).toBeVisible();
+    await expect(page.locator('[data-testid="start-quiz-button"]')).toBeDisabled();
+    await page.getByRole('link', { name: '問題を作る' }).click();
+    await expect(page).toHaveURL(/\/quiz-management/);
+
+    // 7) その科目の問題を作る
     await page.getByRole('button', { name: 'add' }).click();
     const problemDialog = page.getByRole('dialog');
     await problemDialog.getByLabel('問題文').fill('I539 の E2E の問題');
@@ -95,9 +101,10 @@ test.describe('招待なしの会員登録（I539）', () => {
     await problemDialog.getByRole('button', { name: '作成' }).click();
     await expect(problemDialog).toBeHidden();
 
-    // 7) ダッシュボードからクイズを始められる（科目は 1 件なので、選ぶダイアログを出さずに進む）
+    // 8) ダッシュボードからクイズを始められる（科目は 1 件なので、選ぶダイアログを出さずに進む）
     await page.goto('/dashboard');
     await expect(page.getByText(/まず科目と問題を作りましょう/)).toHaveCount(0);
+    await expect(page.getByText(/問題を作りましょう/)).toHaveCount(0);
     const startButton = page.locator('[data-testid="start-quiz-button"]');
     await expect(startButton).toBeEnabled();
     await startButton.click();

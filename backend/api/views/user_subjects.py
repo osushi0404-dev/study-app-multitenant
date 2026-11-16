@@ -1,7 +1,8 @@
 """
 利用者が学ぶ科目の API
 
-- GET・PUT /api/user/subjects/: 選んだ科目の一覧（ダッシュボード・統計のプルダウン用）と、その置き換え（I494）
+- GET・PUT /api/user/subjects/: 選んだ科目の一覧（ダッシュボード・統計のプルダウン用）と、その置き換え（I494）。
+  科目ごとの問題数つき（I539）
 - GET /api/user/subjects/available/: 選べる自組織の科目（設定画面の「学ぶ科目」のカード・I494）
 """
 from drf_spectacular.utils import extend_schema
@@ -24,7 +25,9 @@ class UserSubjectsView(APIView):
 
     @extend_schema(responses={200: UserSubjectSerializer(many=True)})
     def get(self, request):
-        subjects = subject_service.get_user_selected_subjects(request.user, use_cache=True)
+        # 問題数はキャッシュに入れず毎回数える（キャッシュは科目の番号だけ・I539）
+        subjects = subject_service.get_user_selected_subjects(
+            request.user, use_cache=True, annotate_count=True)
         return Response(UserSubjectSerializer(subjects, many=True).data)
 
     @extend_schema(request=UserSubjectSelectionSerializer,
@@ -33,7 +36,8 @@ class UserSubjectsView(APIView):
         serializer = UserSubjectSelectionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         replace_user_subjects(user=request.user, subject_ids=serializer.validated_data['subject_ids'])
-        subjects = subject_service.get_user_selected_subjects(request.user, use_cache=False)
+        subjects = subject_service.get_user_selected_subjects(
+            request.user, use_cache=False, annotate_count=True)
         return Response(UserSubjectSerializer(subjects, many=True).data)
 
 

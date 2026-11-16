@@ -182,7 +182,8 @@ const renderDashboard = (ui: React.ReactElement = <Dashboard />) => {
   return render(ui, { wrapper: Wrapper });
 };
 
-const SUBJECTS = [{ id: 5, name: '英語' }, { id: 6, name: '数学' }];
+// problem_count が 0 の科目ではクイズを始められない（I539）。問題のある科目として差し替える
+const SUBJECTS = [{ id: 5, name: '英語', problem_count: 3 }, { id: 6, name: '数学', problem_count: 2 }];
 
 describe('Dashboard', () => {
   beforeEach(() => {
@@ -440,7 +441,7 @@ describe('Dashboard', () => {
 
   it('TC-04c: 「すべて」で科目が 1 件なら、その科目のクイズへ進む', async () => {
     respond(overview());
-    mockGetUserSubjects.mockResolvedValue([{ id: 7, name: '数学' }]);
+    mockGetUserSubjects.mockResolvedValue([{ id: 7, name: '数学', problem_count: 1 }]);
     renderDashboard();
     await waitFor(() => expect(screen.getByTestId('start-quiz-button')).toBeEnabled());
 
@@ -466,7 +467,7 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('link', { name: '問題を作る' })).not.toBeInTheDocument();
   });
 
-  it('TC-43: 管理者で、選んだ科目も組織の科目も 0 件なら、科目と問題を作る案内と行き先を出す（I539）', async () => {
+  it('TC-43: 管理者で、選んだ科目も組織の科目も 0 件なら、科目を作る案内と目立つボタンを 1 つ出す（I539）', async () => {
     mockUser = { ...DEFAULT_USER, role: 'admin' };
     respond(overview());
     renderDashboard();
@@ -475,10 +476,83 @@ describe('Dashboard', () => {
     expect(status).toHaveTextContent(
       'まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます'
     );
-    expect(screen.getByRole('link', { name: '科目を作る' })).toHaveAttribute('href', '/subject-management');
-    expect(screen.getByRole('link', { name: '問題を作る' })).toHaveAttribute('href', '/quiz-management');
+    const createSubject = screen.getByRole('link', { name: '科目を作る' });
+    expect(createSubject).toHaveAttribute('href', '/subject-management');
+    expect(createSubject).toHaveClass('MuiButton-contained');
+    // 科目が無いうちは問題を作れないので、問題を作る行き先は出さない
+    expect(screen.queryByRole('link', { name: '問題を作る' })).not.toBeInTheDocument();
     expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
     expect(screen.queryByText(/管理者が科目を用意するまでお待ちください/)).not.toBeInTheDocument();
+  });
+
+  it('TC-45: 管理者で、学ぶ科目に問題が無ければ、問題を作る案内と目立つボタンを出し、クイズを始められない（I539）', async () => {
+    mockUser = { ...DEFAULT_USER, role: 'admin' };
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue([{ id: 5, name: '英語', problem_count: 0 }]);
+    renderDashboard();
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(
+      '問題を作りましょう。問題管理で学ぶ科目の問題を作ると、クイズを始められます'
+    );
+    const createProblem = screen.getByRole('link', { name: '問題を作る' });
+    expect(createProblem).toHaveAttribute('href', '/quiz-management');
+    expect(createProblem).toHaveClass('MuiButton-contained');
+    expect(screen.queryByRole('link', { name: '科目を作る' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
+
+    // 科目を選ぶと「この科目」の文言になる
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '問題を作りましょう。問題管理でこの科目の問題を作ると、クイズを始められます'
+    );
+    expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('TC-46: 管理者でなく、学ぶ科目に問題が無ければ、管理者が用意するのを待つ案内を出す（I539）', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue([{ id: 5, name: '英語', problem_count: 0 }]);
+    renderDashboard();
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(
+      '学ぶ科目にまだ問題がありません。管理者が問題を用意するまでお待ちください'
+    );
+    expect(screen.queryByRole('link', { name: '問題を作る' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
+  });
+
+  it('TC-47: 「すべて」では問題のある科目だけから始める（I539）', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue([
+      { id: 5, name: '英語', problem_count: 3 },
+      { id: 6, name: '数学', problem_count: 0 },
+    ]);
+    const { unmount } = renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-quiz-button')).toBeEnabled());
+    expect(screen.queryByText(/問題を作りましょう|まだ問題がありません/)).not.toBeInTheDocument();
+
+    // 問題のある科目が 1 件なら、ダイアログを出さずにその科目へ
+    await userEvent.click(screen.getByTestId('start-quiz-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('/quiz?subject=5');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    unmount();
+
+    // 問題のある科目が 2 件なら、ダイアログにはその 2 件だけを出す
+    mockNavigate.mockClear();
+    mockGetUserSubjects.mockResolvedValue([
+      { id: 5, name: '英語', problem_count: 3 },
+      { id: 6, name: '数学', problem_count: 0 },
+      { id: 8, name: '理科', problem_count: 1 },
+    ]);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-quiz-button')).toBeEnabled());
+    await userEvent.click(screen.getByTestId('start-quiz-button'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: '英語のクイズを開始' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '理科のクイズを開始' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: '数学のクイズを開始' })).not.toBeInTheDocument();
   });
 
   it('TC-44: 管理者でも、組織に科目があれば、作る案内ではなく学ぶ科目を選ぶ案内を出す（I539）', async () => {
@@ -537,7 +611,7 @@ describe('Dashboard', () => {
     respond(overview());
     mockGetUserSubjects
       .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValueOnce([{ id: 7, name: '数学' }]);
+      .mockResolvedValueOnce([{ id: 7, name: '数学', problem_count: 1 }]);
     renderDashboard();
 
     const card = screen.getByTestId('start-quiz-card');
