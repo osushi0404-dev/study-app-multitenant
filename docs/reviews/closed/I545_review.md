@@ -109,6 +109,8 @@
 - [retro] 台帳の残り: 後続イシューに回す行 0 件。F3〜F10（8 件）は `docs/reviews/backlog/I545.md`。F6 はあわせて #552 にコメント（同じ `useForm` を触るため）
 - [retro] 改善案の振り分け: P1（決定論ゲートを書いた時点で実走と同じ判定で確かめる）→ #535 に同梱／P2（レビュー役が §16 の扱いを知らない）→ #547 に同梱／C2（今のフォームの検証の時機）→ #552 に同梱／C1 はこのイシューの fix-loop で対処済み。新規起票なし — どれも合う既存イシューがあるため
 - [retro] 見送り 3 件（版の見込みの違い・`.secrets.baseline` の自動の書き換え・点検の表の書き方の漏れ）— どれもその場で捕まり手戻りが小さく、手順を足すほどではない
+- [close] develop への追従は不要（mergeStateStatus=BLOCKED＝承認待ち）、gate-check OK。記録を closed へ移し、PR #550 の説明をテンプレートに沿って更新した
+- [close] fix-loop の診断メモ（`docs/reviews/I545_fix_diagnosis_<ts>.md`・3 本）は close の移動の対象（`*_review_*`）に当たらないので `docs/reviews/` の直下に残した — 決まりの手順どおり（ほかのイシューの診断メモも直下にある）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -125,3 +127,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
