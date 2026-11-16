@@ -85,7 +85,7 @@ run_wait_ci() {
   case "${rc}:${result}" in
     "0:CI_WAIT: OK")         return 0 ;;
     3:*)                     echo "⚠️ CI タイムアウト（${limit}秒）"; exit 1 ;;
-    "1:CI_WAIT: FAIL")       echo "⛔ CI 失敗（上の gh pr checks の出力を見る）"; exit 1 ;;
+    "1:CI_WAIT: FAIL")       echo "⛔ CI 失敗（上のチェックの一覧を見る）"; exit 1 ;;
     "1:CI_WAIT: NOT_PUSHED") echo "⛔ 手元のコミットが PR に送られていません（CI_WAIT: NOT_PUSHED）。push してから final をやり直す"; exit 1 ;;
     "1:CI_WAIT: NO_JOBS")    echo "⛔ PR で動くワークフローのジョブ名を読めません（CI_WAIT: NO_JOBS）。STOP してユーザーに報告"; exit 1 ;;
     4:*)                     echo "⛔ CI 待ちの処理（${CR_SCRIPT}）を読み込めません。STOP してユーザーに報告"; exit 1 ;;
@@ -209,3 +209,9 @@ Danger Ops（有無/手順/ロールバック）:
 | V1 | 1 | 読んで可 | `run_wait_ci` が合格（return 0）にするのは「戻り値 0 かつ最後の `CI_WAIT:` 行が `OK`」のときだけで、読み込みの失敗・想定外の戻り値・行の欠けがすべて exit 1 になるか（TC-01 の T22〜T25・TC-02 の T6） |
 | V2 | 2 | 読んで可 | TC-01 の T22〜T24 が、古い判定（`pending` が無ければ合格）に戻した写し・CLEAN の待ちを消した写しで本当に NG になる（FG1・FG2）か。スタブのチェックの形が `wait_ci` の `--json name,bucket --jq` の出力（`<bucket>\t<name>`）と同じか |
 | V3 | 3 | 読んで可 | final の exit 0 の道（`BLOCKED|UNSTABLE`・`CLEAN|HAS_HOOKS`）がすべて `run_wait_ci` を通り、BEHIND の追従の後も通るか。上限超え・失敗のメッセージと exit 1 が変わっていないか（TC-01 の T9・T22、TC-02 の T2・T5） |
+
+## 計画変更記録
+- 計画書の記載: 4-1「`⛔ CI 失敗（上の gh pr checks の出力を見る）`」／採った方法: 「`⛔ CI 失敗（上のチェックの一覧を見る）`」／理由: 計画レビューの Info（P4）。メッセージに `gh pr checks` の文字があると TC-03 の判定が本物のファイルで落ちる／計画レビューのやり直し: 不要（文言だけで、方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261116_1218 判定: ✅ 完了](../../reviews/I530_plan_review_20261116_1218.md)
