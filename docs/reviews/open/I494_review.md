@@ -36,6 +36,7 @@
 - [fix-loop] F1 を、選択を毎回組織の科目の一覧と突き合わせる形で直した（案 A）— 状態を一覧から導く。ほかの選択を消さない
 - [fix-loop] ユーザーとの相談（「その方針で進めて」）で決めた直しを入れた: E2E は「学習設定」の form（名前付き）の中の「保存」を押す・見出しの段をそろえる・触る前は赤い注意を出さない
 - [fix-loop] 見出しのフォーカスの枠を消す案は取りやめた — 枠はアプリの「フォーカス表示強化」（既定でオン・利用者が切り替えられる）が出していて、このカードだけ打ち消すのは利用者の設定に反する
+- [review-gate] 差分のレビュー OK・敵対的レビュー 1 周目 OK（V1〜V5 すべて確認済み）。Low 2 件（TC-05 が確定の後の消去だけを単独では確かめていない など）は retro へ回す — 止める基準に当たらない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -45,3 +46,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
