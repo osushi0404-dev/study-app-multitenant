@@ -28,6 +28,7 @@
 - [plan] `SubjectManagement.tsx` は変えない — 学ぶ科目への追加は裏側で済み、ダッシュボードは開くたびに取り直す
 - [plan] API の仕様書（`backend/openapi.yaml`）は作り直さない — 今回変える経路が載っていない（CI の契約のテストで確かめる）
 - [plan-review] 計画レビューは高リスク Yes（ロールの付与・テナント境界・未認証の API・データマイグレーション）。Warning 2 件・Info 1 件は計画変更記録に書いて直した（slug の重なりの処理を分けて乱数を差し替えずに確かめる・slug の形を 1 つの正規表現で両方確かめる・R4 の後続は retro で決める）。方式・範囲・受け入れ条件は変えないので再レビューはしない — workflow.md「findings への対応の追記だけなら通り直さない」
+- [design-security-review] Blocker: 「本人ひとりの組織」を種類 `type='personal'` で見分ける設計は、種類の既定が `personal` の招待用の組織（開発の DB の `e2e-org-a`・`e2e-org-b`）の招待を壊す。列 `is_individual`（`db_default=False`）で見分ける設計に直し、AC6 を同じ意味に言い直した（写しも）。High: `context` の渡し忘れは `ImproperlyConfigured` で止める。方式・DB を変えたので計画レビューからやり直す — design-security-review の手順 6・ユーザーの決定（個人用の組織に他人が入れない）は変えないので止めて聞かない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
