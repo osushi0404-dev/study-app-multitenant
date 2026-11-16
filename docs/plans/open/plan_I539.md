@@ -70,7 +70,8 @@
 - **方針**: 個人用の組織の作り方（名前・slug・カテゴリ）を 1 か所に置く。ビューを太らせない。
 - `PERSONAL_ORG_SLUG_PREFIX = 'p-'`
 - `personal_org_name(user_id: str) -> str`: `f'{user_id}さんの学習'`（`user_id` は 3〜30 文字なので `name` の 100 文字に収まる）
-- `new_personal_org_slug() -> str`: `'p-' + secrets.token_hex(6)`（14 文字・推測されない）を作り、`Organization.objects.filter(slug=…).exists()` が真の間は作り直す
+- `pick_unused_slug(candidates: Iterable[str]) -> str`: 候補を順に見て、`Organization.objects.filter(slug=…).exists()` が偽の最初のものを返す（重なりを避ける処理だけを分け、テストが候補の一覧を渡して直接確かめられるようにする・乱数を差し替えない）
+- `new_personal_org_slug() -> str`: `pick_unused_slug('p-' + secrets.token_hex(6) for _ in itertools.count())`（14 文字・推測されない）
 - `create_personal_organization(*, user_id: str, category: OrganizationCategory) -> Organization`: `Organization.objects.create(name=personal_org_name(user_id), slug=new_personal_org_slug(), type=Organization.TYPE_PERSONAL, category=category, is_active=True)`
 - `get_personal_category() -> OrganizationCategory | None`: `OrganizationCategory.objects.filter(slug=OrganizationCategory.PERSONAL_SLUG).first()`
 
@@ -182,7 +183,7 @@
 | R1: 登録の本文に `organization_id` を入れて、招待なしで他の組織に入る | シリアライザから `organization_id` を消し、組織はビューが決めて `context` で渡す（TC-06） | 回避 |
 | R2: 個人用の組織の slug を知った人が招待リンクの形で入る・科目名を見る | 3 つの入口（登録・slug の確認・未ログインの科目一覧）を `Organization.objects.invitable()` 1 か所の条件にそろえる。slug は 12 桁の乱数（TC-07） | 回避 |
 | R3: 登録の途中の失敗（重複のメールなど）で、持ち主のいない組織が残る | 組織の作成をシリアライザの `create`（`@transaction.atomic`）の中に置き、検証が通った後にだけ作る（TC-04） | 回避 |
-| R4: 誰でも登録して組織の管理者になれるので、AI での問題作成（OpenAI・使った分の料金）を回数の上限なく使える（全体の 300 回/分の制限だけ） | grill-me の後の確認でユーザーが「使えるようにする（今のまま）」と決め、料金が増えうることを受け入れた（2026-11-16・`docs/issues/open/I539.md` の設計確認メモ）。料金の上限・回数の制限は別のイシューで扱える | 受け入れ |
+| R4: 誰でも登録して組織の管理者になれるので、AI での問題作成（OpenAI・使った分の料金）を回数の上限なく使える（全体の 300 回/分の制限だけ） | grill-me の後の確認でユーザーが「使えるようにする（今のまま）」と決め、料金が増えうることを受け入れた（2026-11-16・`docs/issues/open/I539.md` の設計確認メモ）。料金の上限・回数の制限を別のイシューにするかは retro で決め、マージ依頼の報告に載せる（計画レビューの Warning） | 受け入れ |
 | R5: 誰でも登録して問題・解説の画像を置ける（1 問 5 枚まで）ので、保存の容量が増える | 画像の大きさ・形式の確かめは既存のまま（I031 以降）。個人の利用は品質基準で対象にしている使い方で、容量の上限は今回の範囲の外 | 受け入れ |
 | R6: データマイグレーションが運営用のアカウントを動かす・2 回目に組織を増やす | `is_staff=False` かつ `is_superuser=False` だけを対象にし、対象を共有の組織に今いる人で決める（移した人は 2 回目の対象にならない）（TC-14・TC-15） | 回避 |
 | R7: 本番で移す人数が多く、マイグレーションが長く掛かる | 1 人ずつ短いトランザクションで移す。開発の DB は 0 人。本番の件数はマージ依頼のときに数え方（下の 9 の Danger Ops）を示して確かめてもらう | 回避 |
@@ -295,4 +296,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V7 | 2 | 読んで可 | 登録画面で、招待の科目を読めなかったときに「登録する」で科目なしの送信をしない（TC-33 が失敗の応答を作り、ボタンが無効で `register` が呼ばれないことを見ているか） |
 
 ## 計画変更記録
-- （なし）
+- 計画レビュー（20261116_2112）の Info（TC-02 の乱数の差し替え）: 4-2 に `pick_unused_slug(candidates)` を分け、TC-02 は候補の一覧を渡して直接確かめる（乱数を差し替えない）。Warning（0022 と 4-2 の規則のずれ）: TC-14 の slug の形を TC-01 と同じ正規表現 `^p-[0-9a-f]{12}$` にし、テストの中で 1 つの定数として両方から使う。Warning（R4 の後続）: R4 の回避策の欄に「retro で決めて報告に載せる」を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ・方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261116_2112 判定: ✅ 完了](../../reviews/I539_plan_review_20261116_2112.md)

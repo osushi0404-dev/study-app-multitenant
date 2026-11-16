@@ -15,6 +15,7 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 - パスワードはテスト用のダミー値（`# pragma: allowlist secret`）
 - 登録の本文の基本形: `{"user_id": <id>, "email": "<id>@example.com", "password": P, "password_confirm": P}`（`subject_ids` を入れるときは明記）
 - 「個人用の組織」= `type='personal'` の組織。「共有の組織」= `type='personal'`・slug `personal` の組織（テストの中で作る）
+- 個人用の組織の slug の形は、テストファイルの 1 つの定数 `PERSONAL_SLUG_RE = re.compile(r'^p-[0-9a-f]{12}$')` で TC-01 と TC-14 の両方が確かめる（4-2 と 0022 の規則のずれに気づけるように）
 
 ## backend: `backend/accounts/tests/test_I539_personal_org_signup.py`
 
@@ -22,7 +23,7 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 |---|---|---|---|
 | TC-01 | `POST /api/auth/register/`（slug なし・`subject_ids` を入れない） | 201。本文の `organization == "i539_aさんの学習"`（ユーザー ID と「さん」の間に空白なし）。`User(user_id='i539_a')` の `role == 'admin'`・`organization.type == 'personal'`・`organization.name == 'i539_aさんの学習'`・`organization.slug` が `^p-[0-9a-f]{12}$` に一致・`organization.category.slug == 'personal'`・`organization.is_active is True`。その利用者の `UserSubjectAccess` は 0 件 | AC1・AC2 |
 | TC-01b | 同じ登録を `subject_ids: []` で送る | TC-01 と同じく 201・学ぶ科目 0 件 | AC1 |
-| TC-02 | 2 人（`i539_b1`・`i539_b2`）が slug なしで登録 | 両方 201。2 人の `organization_id` が異なり、slug も異なる。登録の前に slug `p-…` の組織が既にある状態（`secrets.token_hex` を最初の 1 回だけ既存と同じ値を返すように差し替え）でも、作られる組織の slug は既存と重ならない | AC2 |
+| TC-02 | 2 人（`i539_b1`・`i539_b2`）が slug なしで登録 | 両方 201。2 人の `organization_id` が異なり、slug も異なる。あわせて `accounts.services.pick_unused_slug(['p-aaaaaaaaaaaa', 'p-bbbbbbbbbbbb'])` を、slug `p-aaaaaaaaaaaa` の組織が既にある状態で呼ぶと `'p-bbbbbbbbbbbb'` を返す（乱数は差し替えない） | AC2 |
 | TC-03 | slug なしで `subject_ids: [<学校の組織の科目の番号>]` と `subject_ids: [4539999]`（存在しない番号）をそれぞれ送る | どちらも 400・本文の `error.main_message == '入力内容にエラーがあります'`・`error.details.subject_ids == ['選択された科目の一部が無効です']`。2 つの応答の本文が同じ。利用者・組織の数が前後で変わらない | AC1・AC11 |
 | TC-04 | 既にある `user_id` で slug なしの登録 | 400・`error.details.user_id == ['このユーザーIDは既に使用されています']`。組織の数が前後で変わらない（作りかけの組織が残らない） | AC2 |
 | TC-05 | slug なしの登録の応答と、その利用者で `GET /api/auth/me/` | `me` の `organization_name == '<user_id>さんの学習'`・`role == 'admin'` | AC2 |
