@@ -153,7 +153,7 @@ user-invocable: false
    ```
 5) Draft PRをReadyに切り替え: `gh pr ready <PR番号>`
 
-5.5) base 追従の最終チェック（マージ依頼の直前・必須）:
+5.5) base 追従の最終チェック（マージ依頼の直前・必須）。Bash ツールの `run_in_background: true` で実行し、完了の通知で終了コードを受け取る（CI 待ちの上限の既定は `code-review.sh` の `CI_WAIT_TIMEOUT_DEFAULT` で、前面の実行の上限 10 分を超えうるため・I498）。通知に終了コードが無いときは exit 1 と同じに扱う:
    ```bash
    bash scripts/claude/pr-base-sync.sh final
    # PR番号は省略可（step 0 と同じ・カレントブランチの PR を自動特定。明示指定も可）
