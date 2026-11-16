@@ -59,7 +59,7 @@
 | `backend/dashboard/selectors.py` | `_answers` | `QuizAnswer.objects.for_user(user)` にする（使わなくなる `scope_to_user_org` の import を外す）。QuizAnswer を読むのはここ 1 か所のまま |
 | `backend/dashboard/selectors.py` | `_current_streak`・定数 `STREAK_WINDOW_DAYS = 365` | 今日から 365 日の窓で答えのある日を読み、連続が窓の始まりまで届いたときだけ、その前の 365 日を読み足す（下のコード例） |
 | `backend/dashboard/verify_data.py` | `_write_answers` | `QuizAnswer.objects.bulk_update` の直前に「# 組織で絞らない: …」のコメントを足す（見張りの対象に入るため。動きは変えない） |
-| `backend/studylogs/tests/test_I455_org_scoped_querysets.py` | `SPECS`・新しいテスト | `QuizAnswer` の行を足す（TC-01・TC-02 の表で確かめる）。見張りが `QuizAnswer` の絞らない読み出しを止めることのテスト |
+| `backend/studylogs/tests/test_I455_org_scoped_querysets.py` | `SPECS`・新しいテスト | `QuizAnswer` の行を足す（TC-01・TC-02 の表で確かめる）。見張りが `QuizAnswer` の絞らない読み出しを止めることのテスト。docstring・失敗メッセージの「8 モデル」を「境界つきの取り出し方を持つモデル」に直す（数が増えてずれないように） |
 | `backend/dashboard/tests/test_I473_overview.py` | 新しいテスト・TC-16 の最後の行 | TC-01〜TC-06 の I491 分。`user_subjects_cache_key(1, 7, False)` の行を新しい形にする |
 | `backend/problems/tests/test_I494_user_subjects.py` | `test_cache_cleared_after_save`（TC-05） | キーを 1 つにする（`keys = [user_subjects_cache_key(user.id)]`）。確かめる中身は同じ |
 | `e2e/tests/quiz-session.spec.ts` | 「クイズに答えると、ダッシュボードの解答問題数が 1 増える」 | 比べ方を `expect.poll(...).toBeGreaterThan(before)` にし、題を「増える」にする |
@@ -74,6 +74,7 @@ F5（`core/subject_service.py`）:
 ```python
 def user_subjects_cache_key(user_id: int) -> str:
     """利用者が選んだ科目の番号（組織で絞る前）のキャッシュのキー（無効化する signals と同じ関数で作る・I491）"""
+    # 中身は他組織の科目の番号を含みうる。読むのは get_user_selected_subjects だけにし、そこで必ず組織の条件を掛ける
     return f"user_selected_subject_ids_{user_id}"
 
 # get_user_selected_subjects の中
@@ -199,4 +200,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 2 | 読んで可 | TC-04 が、窓の読み足しを外した作りで落ちる形か（「失敗の注入」の記録を読む） |
 
 ## 計画変更記録
-- （なし）
+- 計画レビュー（20261116_1716）の Info 3 件を反映: I455 のテストの「8 モデル」の表現を直す・キャッシュのキーの関数に境界のコメント・TC-01/TC-02 の並びの期待値を DB の並びと比べる形に。方式・範囲・受け入れ条件は変えないので再レビューはしない
+
+## レビュー結果
+- [20261116_1716 判定: ✅ 完了](../../reviews/I491_plan_review_20261116_1716.md)

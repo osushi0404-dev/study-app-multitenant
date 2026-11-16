@@ -29,5 +29,7 @@
 - [plan] F6 は「前の値より大きい」— 専用の利用者を作るのはこの 1 本には重い。目的（0 のままの再発防止）は守れる
 - [plan] Q1 は `OrgScopedQuerySet` に持ち主への経路を足して `QuizAnswer` を載せる — 見張りが登録から自動で対象にする
 - [plan] 範囲外の `problems/views.py:571`（無い項目 `created_at` で絞る）は直さず、retro で #460 に同梱する
+- [plan-review] Info 3 件（表現・コメント・並びの期待値）を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
