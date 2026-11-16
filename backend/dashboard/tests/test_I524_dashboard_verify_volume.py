@@ -3,10 +3,10 @@ I524: ダッシュボードの確かめ用データの量と、開発の起動�
 
 - 直近 7 日は、今日より前の 1 日だけが解答なしで、ほかの 6 日（今日を含む）は全科目 10〜20 問
 - 科目ごとに、解答のある 6 日の数がすべて違う。同じ日・同じ科目の解答はすべて違う問題
-- --soft-stop は、止まる理由があれば作らずに案内を出して正常に終わる
-- 時刻の範囲（F6）・ほかの組織の同じメールでコマンドが CommandError になる（F10）
+- --soft-stop は、想定内の止まり方（DEBUG が偽・パスワードが空）なら作らずに標準エラーに案内を出して正常に終わる
+- 時刻の範囲（F6）・ほかの組織の同じメールでコマンドが CommandError になる（F10。--soft-stop でも同じ）
 
-TC-01〜TC-07（docs/tests/open/I524_auto_test.md）に対応。
+TC-01〜TC-08（docs/tests/open/I524_auto_test.md）に対応。
 """
 import os
 import random
@@ -50,10 +50,11 @@ def _counts(planned):
 
 
 def _command(*args, env):
-    out = StringIO()
+    """コマンドを流し、(標準出力, 標準エラー) を返す"""
+    out, err = StringIO(), StringIO()
     with mock.patch.dict(os.environ, env, clear=True):
-        call_command("seed_dashboard_verify", "--password-env", "VERIFY_PW", *args, stdout=out)
-    return out.getvalue()
+        call_command("seed_dashboard_verify", "--password-env", "VERIFY_PW", *args, stdout=out, stderr=err)
+    return out.getvalue(), err.getvalue()
 
 
 def _answer_ids():
@@ -114,13 +115,14 @@ def test_same_day_same_subject_uses_different_problems():
                 assert questions == {f"{name}の確かめ問題 {n}" for n in range(1, 21)}
 
 
-# ---- TC-04: --soft-stop・DEBUG が偽 → 作らずに正常に終わる ----
+# ---- TC-04: --soft-stop・DEBUG が偽 → 作らずに、標準エラーに案内を出して正常に終わる ----
 @pytest.mark.django_db
 def test_soft_stop_when_debug_is_false():
     with override_settings(DEBUG=False):
-        output = _command("--soft-stop", env={"VERIFY_PW": PASSWORD})
+        out, err = _command("--soft-stop", env={"VERIFY_PW": PASSWORD})
 
-    assert "確かめ用のデータは作りませんでした: DEBUG が偽" in output
+    assert "確かめ用のデータは作りませんでした: DEBUG が偽" in err
+    assert out == ""
     assert not Organization.objects.filter(slug=ORG_SLUG).exists()
     assert not User.objects.filter(email=USER_EMAIL).exists()
     assert not Subject.objects.filter(slug__startswith="verify-i487").exists()
@@ -136,10 +138,11 @@ def test_soft_stop_without_password(env):
         before = _answer_ids()
         orgs = Organization.objects.count()
 
-        output = _command("--soft-stop", env=env)
+        out, err = _command("--soft-stop", env=env)
 
-    assert "確かめ用のデータは作りませんでした: パスワードが空" in output
-    assert PASSWORD not in output
+    assert "確かめ用のデータは作りませんでした: パスワードが空" in err
+    assert out == ""
+    assert PASSWORD not in err
     assert _answer_ids() == before
     assert Organization.objects.count() == orgs
 
@@ -170,9 +173,11 @@ def test_random_time_range_matches_docstring():
         assert _local_time(value, TODAY, just_after_midnight) == datetime(2026, 11, 16, 0, 0, tzinfo=JST)
 
 
-# ---- TC-07: 同じメールの利用者がほかの組織にいれば、コマンドは CommandError（F10） ----
+# ---- TC-07（F10）・TC-08（--soft-stop でも異常は正常終了にしない）:
+#      同じメールの利用者がほかの組織にいれば、コマンドは CommandError ----
 @pytest.mark.django_db
-def test_command_stops_when_email_belongs_to_other_org():
+@pytest.mark.parametrize("args", [(), ("--soft-stop",)], ids=["TC-07", "TC-08-soft-stop"])
+def test_command_stops_when_email_belongs_to_other_org(args):
     cat = OrganizationCategory.objects.create(name="ほか", slug="other-cat")
     org = Organization.objects.create(name="ほかの組織", slug="other-org", type="school", category=cat)
     user = User.objects.create_user(
@@ -189,7 +194,7 @@ def test_command_stops_when_email_belongs_to_other_org():
 
     with override_settings(DEBUG=True), pytest.raises(
             CommandError, match="が確かめ用の組織（verify-i487-org）にいないため"):
-        _command(env={"VERIFY_PW": PASSWORD})
+        _command(*args, env={"VERIFY_PW": PASSWORD})
 
     user.refresh_from_db()
     assert user.organization_id == org.pk

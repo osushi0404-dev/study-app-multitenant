@@ -13,7 +13,7 @@ import secrets
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from dashboard.verify_data import VerifyDataError, format_summary, seed_verify_data
+from dashboard.verify_data import VerifyDataError, VerifyDataUnavailable, format_summary, seed_verify_data
 
 SEED_LIMIT = 2 ** 31
 
@@ -32,7 +32,8 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--soft-stop', action='store_true',
-            help='止まる理由があれば、作らずに案内を出して正常に終わる（開発の起動の処理から呼ぶため）',
+            help=('作れる環境にない（DEBUG が偽・パスワードが空）ときは、作らずに警告を出して正常に終わる'
+                  '（開発の起動の処理から呼ぶため。起きてはいけない状態はエラーで終わる）'),
         )
 
     def handle(self, *args, **options):
@@ -40,10 +41,12 @@ class Command(BaseCommand):
         password = os.environ.get(options['password_env'], '')
         try:
             summary = seed_verify_data(seed=seed, password=password, now=timezone.now())
+        except VerifyDataUnavailable as error:
+            if not options['soft_stop']:
+                raise CommandError(str(error)) from error
+            self.stderr.write(self.style.WARNING(f'確かめ用のデータは作りませんでした: {error}'))
+            return
         except VerifyDataError as error:
-            if options['soft_stop']:
-                self.stdout.write(f'確かめ用のデータは作りませんでした: {error}')
-                return
             raise CommandError(str(error)) from error
         for line in format_summary(summary, seed):
             self.stdout.write(line)

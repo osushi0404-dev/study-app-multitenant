@@ -56,7 +56,11 @@ WEEKDAYS = '月火水木金土日'
 
 
 class VerifyDataError(Exception):
-    """確かめ用のデータを作らずに止まるとき（DEBUG が偽・パスワードが空・同じメールの利用者がほかの組織にいる）"""
+    """確かめ用のデータを作らずに止まるとき（起きてはいけない状態: 同じメールの利用者がほかの組織にいる）"""
+
+
+class VerifyDataUnavailable(VerifyDataError):
+    """作れる環境にないとき（DEBUG が偽・パスワードが空）。開発の起動の処理からは、作らずに正常に終わってよい"""
 
 
 @dataclass(frozen=True)
@@ -237,7 +241,8 @@ def format_summary(summary: dict, seed: int) -> list:
 # ---- 書き込み（開発の DB だけ）----
 def ensure_debug() -> None:
     if not settings.DEBUG:
-        raise VerifyDataError('DEBUG が偽のため、確かめ用のデータは作りません（開発の環境だけで使うコマンドです）')
+        raise VerifyDataUnavailable(
+            'DEBUG が偽のため、確かめ用のデータは作りません（開発の環境だけで使うコマンドです）')
 
 
 def _ensure_user(password: str):
@@ -324,7 +329,7 @@ def seed_verify_data(*, seed: int, password: str, now: datetime) -> dict:
     """確かめ用のデータを作り直し、期待値を返す。DEBUG が偽・パスワードが空なら何もせずに止まる"""
     ensure_debug()
     if not password:
-        raise VerifyDataError('パスワードが空です。--password-env で渡す環境変数に値を入れてください')
+        raise VerifyDataUnavailable('パスワードが空です。--password-env で渡す環境変数に値を入れてください')
 
     planned = plan_answers(random.Random(seed), now)  # nosec B311 - 確かめ用データの乱数（暗号の用途ではない）
     with transaction.atomic():

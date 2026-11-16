@@ -95,7 +95,7 @@ I513 で作った。ダッシュボードまわりの数字を、毎回違う実
 開発の環境を起動するたびに、一度きりのサービス `dashboard-verify-seed` がその日を基準に作り直す（I524）。いつ開いても直近 7 日にデータがある。画面から解いて足した分や、手で流した種のデータも、次の起動で消える。
 
 1. **作り直す**（過去 14 日の解答を乱数で作り直し、画面に出るはずの値〔期待値〕を出す）:
-   - **起動のたび（自動）**: 標準の起動コマンド（`docker compose up -d --build --renew-anon-volumes`・`docker compose up -d`）で、backend が healthy になった後に 1 回動いて終わる。出力（種と期待値）は `docker compose logs dashboard-verify-seed` で読む（ログは起動のたびに後ろへ足されるので、最後の `種:` の行から下が今のデータ。起動のコマンドが終わってから数秒で出る）。パスワードが無い・`DEBUG` が偽のときは、作らずに `確かめ用のデータは作りませんでした: <理由>` を出して正常に終わる（起動は止めない）
+   - **起動のたび（自動）**: 標準の起動コマンド（`docker compose up -d --build --renew-anon-volumes`・`docker compose up -d`）で、backend が healthy になった後に 1 回動いて終わる。出力（種と期待値）は `docker compose logs dashboard-verify-seed` で読む（ログは起動のたびに後ろへ足されるので、最後の `種:` の行から下が今のデータ。起動のコマンドが終わってから数秒で出る）。パスワードが無い・`DEBUG` が偽のときは、作らずに警告 `確かめ用のデータは作りませんでした: <理由>` を出して正常に終わる（起動は止めない）。確かめ用のメールの利用者がほかの組織にいるなど、起きてはいけない状態ではエラーで終わる（ログに理由。ほかのサービスは止まらない）
      - `docker compose up -d backend` のように名前を指定した起動では動かない（CI もこの形なので動かない）
      - 名前を指定しない `docker compose up -d --wait` は、このサービスが終わることで失敗扱い（exit 1）になるので使わない（I524 で確かめた）
    - **手で流す**: `docker compose run --rm --no-deps e2e-init python manage.py seed_dashboard_verify --password-env E2E_TEST_PASSWORD`
