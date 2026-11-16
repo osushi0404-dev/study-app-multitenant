@@ -343,9 +343,9 @@ git commit -m "docs: イシュー#XXX レビュー完了・クローズ"
 ### イシュー対応時の必須ルール
 イシュー番号（例: 001, #1など）を指定されたら、必ず以下を実行：
 1. `bash scripts/claude/issue-source.sh body IXXX` でイシューの本文を読む（手元のイシューファイル、無ければ GitHub の本文）
-2. `/rules/`配下の関連ルールファイルを確認
-3. 特にコード変更時はコーディング標準を厳守
-4. **UX設計セクションを計画書に必ず含める**（docs/runbooks/ux-rules.md参照）
+2. コーディング規約を確認する（Backend: `rules/ultimate_django_coding_standards.md`・Frontend: `rules/react-coding-standards-integrated.md`）
+3. 特にコード変更時はコーディング規約を厳守
+4. **画面を変えるときは、計画書に性能・UX 設計の節を含める**（項目は docs/runbooks/plan-writing-rules.md の 13)・使い勝手の原則は docs/runbooks/ux-rules.md）
 5. テスト実行時は該当するテストルールを参照
 6. 完了後は対応内容（自律判断の記録の要点を含む）を報告する。ユーザーの承認を待つのは「止めて聞く条件」（docs/runbooks/workflow.md）に当たるときと、マージの依頼だけ
 
