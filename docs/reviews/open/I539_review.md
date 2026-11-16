@@ -12,6 +12,7 @@
 ## テスト結果
 - 自動: CI すべて合格（Backend Lint & Security・Backend Tests・Frontend Type Check・Lint・Tests・API Types・Harness Tests・E2E 18 本）。1 回目の E2E の失敗はテストのパスワードの作り方が原因で、fix-loop で直した
 - 手動: 12 項目すべて Claude（Playwright MCP）で OK。No.4 のトーストは表示の時間内に捉えられず未確認（既存の動き）・No.12 は既知のエラーのみ。人の手動テストは無し
+- AC13（2026-11-17・マージ前の BP・UI/UX の確認で追加）: CI すべて合格（HEAD 346994a1）。途中の CI で E2E（クイズの 3 本・テストの前提が AC13 と合わない）とコードレビュー F5（削除済みの問題を数える）を fix-loop で直した。敵対的レビュー OK。手動 No.3・4b・6 を新しい利用者 i539_ac13 で確かめ直して OK
 
 ## 計画との差分
 - なし（実装後に更新）
@@ -135,3 +136,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

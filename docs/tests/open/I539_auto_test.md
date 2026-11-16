@@ -10,6 +10,7 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 - E2E: 1 回目の CI で TC-50 が落ち（パスワードの決まり・再発防止記録）、直した後の CI で 18 本すべて合格
 - TC-21: `makemigrations --check --dry-run` → `No changes detected`（終了コード 0・2026-11-16）
 - test-gate（2026-11-16）: 「## 決定論ゲート」に test-gate へ回す重いコマンドは無い。pytest・Jest・E2E は CI が正なので手元で流し直していない
+- AC13（2026-11-17）: CI（HEAD 346994a1）で Backend Tests・Frontend Tests・Type Check・Lint・API Types Up To Date・E2E（18 本）がすべて合格（review-gate のコードレビュー 20261117_0342 の CI 待ち）。敵対的レビュー 20261117_0351 は OK。test-gate へ回す重いコマンドは無い
 
 ## 共通の前提（backend）
 - pytest は `--no-migrations`。テストの中で「個人利用」カテゴリ（`OrganizationCategory(slug='personal')`）を作る（TC-17 だけは作らない）
