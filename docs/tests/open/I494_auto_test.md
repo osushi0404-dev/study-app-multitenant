@@ -103,3 +103,4 @@
 - セキュリティ上の考慮点: なし（表示とモジュールの置き場だけ）
 - 次回どう防ぐか: 選択肢のまとまり（チェックボックス・ラジオ）を足すときは、見える見出しをグループの名前に結び付ける。画面をまたぐ道筋・目印は `constants/` に置く
 - 確かめた結果: Jest の `LearningSubjectsCard.test.tsx` 13 passed・`Settings.test.tsx`・`Dashboard.test.tsx` も通過（計 58）。TC-20b は `aria-labelledby` を外すと落ちることを確かめた。ESLint・`tsc --noEmit` 通過。Playwright MCP で `/settings#learning-subjects` の「学ぶ科目」のグループを確かめた（`.evidence/I494/no1-settings-c-group.png`）
+- 2026-11-16（fix-loop 3 回目の後）: `bash scripts/claude/gate-check.sh I494` → exit 0（コードレビュー `I494_code_review_20261116_1303.md`・敵対的レビュー `I494_adversarial_review_20261116_1312.md`）。CI 成功（`CI_WAIT: OK`）。手動 No.1 をレビュー済みのコミット 90e4b7a5 で確かめ直した（ほかの No. は 3 回目の直しの影響が無い〔見た目・動きの変更なし〕ので前の結果のまま）
