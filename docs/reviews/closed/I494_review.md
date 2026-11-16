@@ -5,7 +5,7 @@
 - ダッシュボードの科目 0 件の案内を、組織に科目があればこのカードへの導線にする
 
 ## 変更点
-- （実装後に記入）
+- PR #529 の説明の「変更点」のとおり（API 2 本・書き換えのサービス・キャッシュの消し方・設定画面のカード・ダッシュボードの案内・設定画面の見出しと form の名前・テスト）
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: 計画書 3 章のとおり（DB・Config の変更なし）
@@ -15,7 +15,7 @@
 - 手動: `docs/tests/open/I494_manual_test.md` の No.1〜No.7 すべて OK（実施者はすべて Claude・Playwright MCP）
 
 ## 計画との差分
-- なし
+- あり（計画書の「計画変更記録」のとおり。方式・範囲・受け入れ条件は変えていない）
 
 ## ロールバック
 - PR を revert する（マイグレーション・依存の変更なし）
@@ -88,6 +88,7 @@
 - [retro] 設定画面の「学習設定」の保存が表示設定・通知設定の項目もまとめて保存する件（前からの作り・UI/UX の判断が要る）は #533 に起票した
 - [retro] 診断レビューが症状の直し（完全一致）を推奨のまま通した件は #534 に起票した（同梱先が無く、ユーザーの指摘という実害があった）
 - [retro] 見送り: 「E2E の探し方は部分一致が既定」を手順に足す案 — CI がその場で止め、直しも小さかった（手順を増やさない）。テストの題の空白の書き損じ（F8 など）— 実害が無く #532 で直す
+- [close] develop への追従は不要（BLOCKED・承認待ちだけ）。記録を closed へ移すときに一度まとめて動かして置き場を誤ったので、1 件ずつ正しい置き場へ移し直した（中身は変えていない）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -100,3 +101,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
