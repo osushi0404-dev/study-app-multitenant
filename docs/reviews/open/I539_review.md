@@ -34,9 +34,11 @@
 - [implement] 登録画面で、ボタンが無効でも入力欄の Enter で科目なしの送信が起きることを TC-33 で見つけ、1 段目の送信の処理でも止めた（計画変更記録に記録・止め方を外すと落ちることを確認）— 計画の意図「読めないときは科目なしで送らない」を守るため
 - [implement] `/simplify`（4 観点）の指摘のうち、使われなくなった `getSubjectsWithLoading` の削除・登録画面の読み込み中／失敗の条件の名前付け・使われない型の削除・`'personal'` の定数化を反映。見送り: 道筋の定数を既存の画面でも使う（計画の外）・共有の組織への `is_individual` の付与（意味が合わない）・`public` の既定の slug を消す（計画が残すと決めた）・並列の取得（計画は確認の後に読む fail-closed）・`get_or_create` を `create` に（重複に強いほうを残す）
 - [implement] 画面の確かめ（Playwright MCP）: 招待なしの登録 → ログイン → 管理者の案内 → 科目・問題の作成 → クイズの開始まで動いた（`.evidence/I539/` に 4 枚）
+- [review-gate] 1 回目: CI の E2E Tests (Playwright) が失敗（`CI_WAIT: FAIL`・run 43868042699）。手順どおり fix-loop へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
