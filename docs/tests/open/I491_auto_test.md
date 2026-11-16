@@ -6,6 +6,11 @@
 - backend（implement・2026-11-16・手元の backend コンテナ・関係する 3 ファイルだけ）: 通過。全体は CI が正
 - e2e: CI
 
+実行記録（test-gate・2026-11-16）:
+- `bash scripts/claude/gate-check.sh I491` → exit 0（`GATE_CHECK: OK`。コードレビュー `I491_code_review_20261116_1729.md`・敵対的レビュー `I491_adversarial_review_20261116_1737.md` とも VERDICT OK）
+- pytest・E2E・`makemigrations --check`: CI（PR #537）が成功（review-gate の `code-review.sh` で `CI_WAIT: OK`）。手元では流し直さない
+- 決定論ゲートの宣言なし（test-gate に委譲された重いコマンドなし）
+
 失敗の注入の記録（implement・2026-11-16）:
 - TC-01: 直す前のコード（キーに組織）で `assert '英語' not in ['数学', '理科', '英語']` で落ちた（再現）
 - TC-02・TC-03: 「キーから組織を外すだけ・組織で絞った番号を保存」に一時的に変えると、TC-02 が `assert [] == ['B科目']`（移った先の科目が出ない）、TC-03 が番号の list の比較で落ちた。戻して通過

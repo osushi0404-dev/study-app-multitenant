@@ -21,8 +21,8 @@
 - Backend/Frontend/DB/Config: Backend（`core/subject_service.py`・`problems/signals.py`・`problems/querysets.py`・`problems/models.py`・`dashboard/selectors.py`・`dashboard/verify_data.py`・テスト）・E2E（`quiz-session.spec.ts`）。Frontend・DB・Config なし
 
 ## テスト結果
-- 自動: （test-gate で記入）
-- 手動: （test-gate で記入）
+- 自動: CI（PR #537）成功・gate-check OK。implement で関係する 3 ファイルを手元で通過（失敗の注入の記録は auto_test）
+- 手動: 2 件とも Claude が実施して OK（確かめ用の利用者で連続日数 3 日がデータの期待値と一致・科目の選択肢 2 つが 2 回目〔キャッシュから〕も同じ）。Human の項目なし
 
 ## 計画との差分
 - ダッシュボードの 1 回の表示のクエリ数が 9 → 8（計画は「変わらない」）。F5 でキャッシュを作るときの 2 本が 1 本になったため（計画変更記録）
@@ -48,3 +48,4 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
