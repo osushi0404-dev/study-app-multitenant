@@ -30,6 +30,8 @@
 - [plan] Q1 は `OrgScopedQuerySet` に持ち主への経路を足して `QuizAnswer` を載せる — 見張りが登録から自動で対象にする
 - [plan] 範囲外の `problems/views.py:571`（無い項目 `created_at` で絞る）は直さず、retro で #460 に同梱する
 - [plan-review] Info 3 件（表現・コメント・並びの期待値）を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えないため
+- [design-security-review] Blocker・High なし。Medium 2 件（キャッシュの中身を読むのは 1 か所・`user_path` はクラスの定数だけ）を実装の必須条件にした — どちらも計画の作りのまま守れ、TC-02・TC-08 で確かめる
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement

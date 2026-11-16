@@ -204,3 +204,43 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## レビュー結果
 - [20261116_1716 判定: ✅ 完了](../../reviews/I491_plan_review_20261116_1716.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-16
+
+対象（読んだもの）: `core/subject_service.py`・`problems/signals.py`・`problems/querysets.py`・`problems/models.py`（`QuizSession`・`QuizAnswer`）・`dashboard/selectors.py`・`dashboard/verify_data.py`・`api/views/user_subjects.py`・`studylogs/views.py:259`。新しいエンドポイント・シリアライザ・権限クラスの変更は無い。`get_user_selected_subjects` の呼び手は `api/views/user_subjects.py:27`（GET `/api/user/subjects/`・キャッシュあり）・`:36`（PUT の応答・キャッシュなし）・`dashboard/selectors.py:158`（GET `/api/dashboard/overview/`）・`studylogs/views.py:259`（学習統計）の 4 か所で、どれもこの関数の戻り値だけを使う（grep で全数確認・2026-11-16）。
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | マルチテナント | F5 でキャッシュの中身が「組織で絞る前の科目の番号」になり、他組織の科目の番号を含みうる。読む側で組織の条件を外す・キャッシュの値をそのまま応答に使うと、他組織の科目の名前が出る | 必須: キャッシュを読むのは `get_user_selected_subjects` の 1 か所だけ。そこで、キャッシュの有無に関係なく `Subject.objects.filter(id__in=..., organization_id=user.organization_id)` を必ず掛ける。組織に属さない利用者はキャッシュを見る前に空を返す（今の `:134-135` を保つ）。禁止: キャッシュの値（番号）をほかの関数・応答に直接渡すこと。TC-02 で、B へ移った後に A の科目が出ないことを確かめる |
+| Medium | マルチテナント | `OrgScopedQuerySet.for_user` の持ち主の条件を `user_path` で変えられるようにするので、経路を誤ると他人の記録を返す。既存の 8 モデルの絞り方が変わるおそれ | 必須: `user_path` はクラスの定数だけで決める（呼び出しの引数・入力から決めない）。既定は `'user'` で、既存の 8 モデルの式は今と同じ。`QuizAnswerQuerySet` は `user_path='session__user'`・`subject_paths=('problem__subject',)`・`allow_null=False`。I455 の 8 モデルの表のテストと TC-08（同じ組織の別の利用者・他組織の科目・全体共有の科目の答えを返さない）で確かめる |
+| Low | マルチテナント | `_answers` を `for_user` に置き換えるとき、`session__user` の絞り込みが落ちると同じ組織の他人の答えが数字に入る | 必須: `_answers` は `QuizAnswer.objects.for_user(user)` だけを返す（ほかの条件で置き換えない）。既存の `test_only_own_answers_in_own_org` と TC-08 で確かめる |
+| Low | OWASP（資源の消費） | 連続日数の窓の読み足しは連続の長さに比例して増える | 答えは本人のクイズの回答でしか増えず、1 日を連続に足すには実際にその日に答える必要がある。1 年に 1 本で、利用者が任意に増やせない。窓は 2 日以上（未満は `ValueError`）で無限ループにならない（TC-04 (g)） |
+| — | 認証・認可 | なし（権限クラス・認証の変更なし。overview の 401 は既存の `test_requires_login`） | — |
+| — | 入力検証 | なし（新しい入力なし。キャッシュのキーは利用者の番号〔整数〕だけから作る） | — |
+| — | 機密情報 | なし（ログに出すのは今と同じキーの名前だけ。個人情報を足さない） | — |
+| — | ファイル操作・外部通信・依存ライブラリ | なし | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | GET `/api/user/subjects/`・`/api/dashboard/overview/` | 一般（組織を移された利用者） | 組織 A で作ったキャッシュが残ったまま組織 B で開き、A の科目の名前・おすすめを見る | どの経路でも組織の条件が DB で掛かり、A の科目が出ない | Yes: TC-02（サービス）・TC-01 | No | 組織を変える画面は無く、DB を直接変えたときだけ起きる | Medium |
+| 2 | GET `/api/dashboard/overview/` | 一般 | 同じ組織の別の利用者・他組織の答えをダッシュボードの数字に混ぜる | `QuizAnswer.objects.for_user` が本人（`session__user`）・自組織の科目の問題だけを返す | Yes: TC-08・既存の `test_only_own_answers_in_own_org` | No | なし | Medium |
+| 3 | `for_user` を使う既存の API（学習記録・復習カード・間違い分析など） | 一般 | `OrgScopedQuerySet` の変更で他人・他組織の記録が見える | 既存の 8 モデルは `user_path='user'` のまま同じ式 | Yes: I455 の 8 モデルの表のテスト・#446 の横断テスト（CI） | No | なし | Low |
+| 4 | GET `/api/dashboard/overview/` | 未認証 | 数字を取る | 401 | Yes: 既存の `test_requires_login` | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 0件 |
+| Medium  | 2件 | 2件 |
+| Low     | 2件 | 2件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
