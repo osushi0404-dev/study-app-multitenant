@@ -25,3 +25,5 @@
 - [plan] `rules/bk/` も消す — 参照が無く git の履歴に残る。控えを 2 か所に置かない
 - [plan] 点検の結果の表は `docs/reviews/open/I545_rules_audit.md` に置く — close の移動の対象に入り、計画書を太らせない
 - [plan] 決定論ゲートだけ足し、テストのスクリプトは足さない — 守る対象が意図的な変更でしか壊れないため（plan-writing-rules「決定論テストの対象の選び方」）
+
+STAGE_DONE: plan NEXT: plan-review
