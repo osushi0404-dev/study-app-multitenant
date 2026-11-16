@@ -36,6 +36,8 @@
 - [implement] 画面の確かめ（Playwright MCP）: 招待なしの登録 → ログイン → 管理者の案内 → 科目・問題の作成 → クイズの開始まで動いた（`.evidence/I539/` に 4 枚）
 - [review-gate] 1 回目: CI の E2E Tests (Playwright) が失敗（`CI_WAIT: FAIL`・run 43868042699）。手順どおり fix-loop へ
 - [fix-loop] CI の E2E の失敗は、TC-50 が CI の小文字・数字だけのパスワードで登録しようとして、登録画面のパスワードの決まりに止められたもの（アプリの不具合ではない）。案 A（テストの中で決まりを満たすパスワードを作る）で直した。ワークフローを直す案 B は安全装置の変更（止める条件 2）なので採らない — 診断レビュー PASS（`docs/reviews/I539_fix_diagnosis_review_20261116_2141.md`）
+- [review-gate] 2 回目: CI すべて合格・基本レビュー OK（`docs/reviews/I539_code_review_20261116_2143.md`）・高リスクのため敵対的レビュー 1 周目 OK（`docs/reviews/I539_adversarial_review_20261116_2152.md`・未検証 0・新しい Critical/High 0・Low 2 件は retro へ）。Low の「TC-33 の Enter は守りを通らないおそれ」は、implement で守りを外して TC-33 が落ちることを確かめ済み（計画変更記録）
+- [review-gate] 敵対的レビューの 1 回目の起動は、開発の確かめで科目を作ったときにできた追跡しない空のファイル（`backend/media/org/…/.gitkeep`）で `DIRTY` になった。消さずに一時置き場へ移してから流し直し、終わった後に元へ戻した — 記録の場所の外の変更を残さないため（削除は危険操作なので避けた）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -44,3 +46,4 @@ STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
