@@ -37,6 +37,7 @@
 - [retro] `pr-base-sync.sh` の `ci_wait` がチェックの未登録で待たずに通りうる穴（計画書 §9 で見つけた）→ 一覧（`docs/reviews/backlog/I498.md` の R1）。起票しない — 実害が出ていない・マージは GitHub の承認とチェックの表示が最後に止める・直し方（`wait_ci` の期待するジョブの確かめに寄せる）が分かっているので、`pr-base-sync.sh` を次に触る計画が一覧から拾えば足りる
 - [retro] 予防処置: 見送り — 同じ意味の値が 2 か所で食い違うという原因は、このイシューで値を 1 か所にし、決定論のテスト（T3・T4・FG1〜FG3）で再発を止めた。手順・観点を足す必要は無い（2.7 の問 3）
 - [retro] 実装中の自分の Bash の誤り（`rm -rf` を含む複合コマンドで見張りに止められた・`sed` が一時的な bwrap のエラー）→ 見送り — その場で単体のスクリプトに書き直して手戻りなし（2.7 の問 2）
+- [close] base 追従は不要（sync: BLOCKED）・gate-check OK。記録を closed へ移し、PR #528 の説明をひな形で埋めた。最終確認（final）はこの PR で直した形どおり背景の実行で流す
 
 ## 振り返り
 
@@ -83,3 +84,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
