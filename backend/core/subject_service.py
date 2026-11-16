@@ -17,10 +17,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def user_subjects_cache_key(user_id: int, organization_id: Optional[int],
-                            annotate_count: bool) -> str:
-    """利用者が選んだ科目のキャッシュのキー（無効化する signals と同じ関数で作る・I473）"""
-    return f"user_subjects_{user_id}_org_{organization_id}_count_{annotate_count}"
+def user_subjects_cache_key(user_id: int) -> str:
+    """
+    利用者が選んだ科目の番号（組織で絞る前）のキャッシュのキー（無効化する signals と同じ関数で作る・I491）
+
+    中身は他組織の科目の番号を含みうる。読むのは SubjectService.get_user_selected_subjects だけにし、
+    そこで必ず組織の条件を掛ける
+    """
+    return f"user_selected_subject_ids_{user_id}"
 
 
 class SubjectService:
@@ -134,19 +138,19 @@ class SubjectService:
         if not user.organization_id:
             return Subject.objects.none()
 
-        cache_key = user_subjects_cache_key(user.id, user.organization_id, annotate_count)
+        cache_key = user_subjects_cache_key(user.id)
 
-        # 科目 ID の取り出し方だけをキャッシュの有無で分け、絞り込み・並び・件数は 1 か所で組む
-        # （組織の境界はキャッシュの中身を信じず、DB の条件で掛ける）
-        cached_data = cache_service.get_subjects_cache(cache_key) if use_cache else None
-        if cached_data is not None:
-            logger.debug(f"Cache hit for key: {cache_key}")
-            subject_ids = [s['id'] for s in cached_data]
-        else:
-            logger.debug(f"Cache miss for key: {cache_key}, fetching from DB")
-            subject_ids = UserSubjectAccess.objects.filter(
-                user=user
-            ).values_list('subject_id', flat=True)
+        # キャッシュには、選んだ科目の番号の全部（組織で絞る前）だけを入れる。組織が変わっても中身は
+        # 正しいので、キーに組織は要らない（I491）。組織の境界・並び・件数は、キャッシュの有無に
+        # 関係なく下の 1 か所で毎回 DB の条件で掛ける（キャッシュの中身は他組織の番号を含みうる）
+        subject_ids = cache_service.get_subjects_cache(cache_key) if use_cache else None
+        if subject_ids is None:
+            subject_ids = UserSubjectAccess.objects.filter(user=user).values_list('subject_id', flat=True)
+            if use_cache:  # 保存するときだけ読み出す（使わないときは下の条件のサブクエリのまま 1 本）
+                subject_ids = sorted(subject_ids)
+                if subject_ids:
+                    cache_service.set_subjects_cache(subject_ids, cache_key)
+                    logger.debug(f"Cached {len(subject_ids)} user subject ids for key: {cache_key}")
 
         queryset = Subject.objects.filter(
             id__in=subject_ids, organization_id=user.organization_id
@@ -154,12 +158,6 @@ class SubjectService:
 
         if annotate_count:
             queryset = queryset.annotate(problem_count=Count('problems'))
-
-        # キャッシュに保存（キャッシュから組んだときは保存し直さない）
-        if use_cache and cached_data is None and queryset.exists():
-            cache_data = list(queryset.values('id', 'name', 'description'))
-            cache_service.set_subjects_cache(cache_data, cache_key)
-            logger.debug(f"Cached {len(cache_data)} user subjects for key: {cache_key}")
 
         return queryset
 

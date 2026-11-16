@@ -14,7 +14,6 @@ from django.utils import timezone
 
 from core.subject_service import subject_service
 from problems.models import QuizAnswer
-from problems.querysets import scope_to_user_org
 from problems.services.tenant_scope import available_problems
 
 STUDY_SECONDS_CAP_PER_ANSWER = 300  # 1 問あたりの学習時間の上限（秒）。放置した時間を数えない
@@ -22,6 +21,7 @@ RECENT_DAYS = 7                     # 直近の日数（推移・「この 7 日
 WEAK_MIN_ANSWERED = 5               # 間違いやすい分野に入れる最低の解答数
 WEAK_ACCURACY_BELOW = 0.7           # 間違いやすい分野の正答率のしきい値（未満）
 LIST_LIMIT = 3                      # 間違いやすい分野・おすすめの最大件数
+STREAK_WINDOW_DAYS = 365            # 連続日数を数えるときに 1 回で読む日数（1 回の行数の上限・I491）
 
 KIND_WEAK = 'weak_subject'
 KIND_UNSTUDIED = 'unstudied_subject'
@@ -29,8 +29,7 @@ KIND_UNSTUDIED = 'unstudied_subject'
 
 def _answers(user) -> QuerySet:
     """本人の答えのうち、自組織の科目の問題へのもの（組織に属さない利用者は空）"""
-    return scope_to_user_org(
-        QuizAnswer.objects.filter(session__user=user), user, subject_path='problem__subject')
+    return QuizAnswer.objects.for_user(user)
 
 
 def _answer_counts() -> dict:
@@ -102,21 +101,41 @@ def _last_days(answers: QuerySet, today: date) -> list:
     return days
 
 
-def _current_streak(answers: QuerySet, today: date) -> int:
-    """答えのある日が今日（今日がまだなら昨日）から何日続いているか"""
-    days = set(
-        answers.filter(answered_at__lt=_start_of(today + timedelta(days=1)))
+def _answer_days(answers: QuerySet, first: date, last: date) -> set:
+    """first〜last（両端を含む・日本時間）の、答えのある日（1 クエリ・行数は日数まで）"""
+    return set(
+        _between(answers, first, last)
         .annotate(day=TruncDate('answered_at'))
         .values_list('day', flat=True)
         .order_by()
         .distinct()
     )
+
+
+def _current_streak(answers: QuerySet, today: date, *, window_days: int = STREAK_WINDOW_DAYS) -> int:
+    """
+    答えのある日が今日（今日がまだなら昨日）から何日続いているか（頭打ちにしない・I491）
+
+    window_days 日ずつ読み、連続がその窓の始まりの日まで続いたときだけ、その前の窓を読み足す。
+    ふつうは 1 クエリで、1 回に読む行数は window_days まで。最初の答えより前の窓は空なので必ず終わる。
+    """
+    if window_days < 2:
+        # 今日がまだのとき、昨日が最初の窓に入っている必要がある
+        raise ValueError('window_days は 2 以上にしてください')
+    first = today - timedelta(days=window_days - 1)
+    days = _answer_days(answers, first, today)
     cursor = today if today in days else today - timedelta(days=1)
     streak = 0
-    while cursor in days:
-        streak += 1
-        cursor -= timedelta(days=1)
-    return streak
+    while True:
+        while cursor >= first and cursor in days:
+            streak += 1
+            cursor -= timedelta(days=1)
+        if cursor >= first:  # 窓の中で途切れた
+            return streak
+        # 窓の始まりまで続いた → その前の窓を読む
+        last = first - timedelta(days=1)
+        first = last - timedelta(days=window_days - 1)
+        days = _answer_days(answers, first, last)
 
 
 def _weak_subjects(answers: QuerySet) -> list:

@@ -16,10 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def invalidate_user_subjects_cache(user):
-    """利用者が選んだ科目のキャッシュを消す（キーは読む側と同じ関数で作る・I473）"""
-    for annotate_count in (False, True):
-        cache_service.invalidate_subjects_cache(
-            user_subjects_cache_key(user.id, user.organization_id, annotate_count))
+    """利用者が選んだ科目のキャッシュを消す（キーは読む側と同じ関数で作る・組織に関係なく 1 つ・I491）"""
+    cache_service.invalidate_subjects_cache(user_subjects_cache_key(user.id))
 
 
 def invalidate_user_subjects_cache_now_and_on_commit(user):

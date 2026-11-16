@@ -138,20 +138,20 @@ def test_empty_missing_and_too_many_rejected(world):
 @override_settings(CACHES=LOCMEM)
 def test_cache_cleared_after_save(world, django_capture_on_commit_callbacks):
     w = world
-    user, org = w["user_a"], w["org_a"]
+    user = w["user_a"]
     caches["default"].clear()
-    keys = [user_subjects_cache_key(user.id, org.id, flag) for flag in (False, True)]
+    key = user_subjects_cache_key(user.id)  # 件数の有無・組織に関係なく 1 つ（I491）
 
     assert _client(user).get(URL).json() == [{"id": w["math"].id, "name": "数学"}]
     list(subject_service.get_user_selected_subjects(user, annotate_count=True))
-    # 正の対照: 保存の前に両方のキーに値が入っている（キャッシュを本当に通っている）
-    assert all(_cached(k) for k in keys)
+    # 正の対照: 保存の前にキーに値が入っている（キャッシュを本当に通っている）
+    assert _cached(key)
 
     # 足すだけ（bulk_create は post_save を送らないので、シグナルだけではキャッシュが残る）
     with django_capture_on_commit_callbacks(execute=True):
         assert _put(user, [w["math"].id, w["physics"].id]).status_code == 200
 
-    assert not any(_cached(k) for k in keys)
+    assert not _cached(key)
     assert _client(user).get(URL).json() == [
         {"id": w["math"].id, "name": "数学"}, {"id": w["physics"].id, "name": "物理"}]
 

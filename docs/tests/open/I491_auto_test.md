@@ -3,8 +3,14 @@
 実行コマンド（例）: `docker compose exec backend python -m pytest dashboard/tests/test_I473_overview.py problems/tests/test_I494_user_subjects.py studylogs/tests/test_I455_org_scoped_querysets.py` / E2E は CI の e2e ジョブ
 
 結果:
-- backend: 実装前のため未実行（すべて実装の後に動く TC。CI が正）
-- e2e: 実装前のため未実行（CI）
+- backend（implement・2026-11-16・手元の backend コンテナ・関係する 3 ファイルだけ）: 通過。全体は CI が正
+- e2e: CI
+
+失敗の注入の記録（implement・2026-11-16）:
+- TC-01: 直す前のコード（キーに組織）で `assert '英語' not in ['数学', '理科', '英語']` で落ちた（再現）
+- TC-02・TC-03: 「キーから組織を外すだけ・組織で絞った番号を保存」に一時的に変えると、TC-02 が `assert [] == ['B科目']`（移った先の科目が出ない）、TC-03 が番号の list の比較で落ちた。戻して通過
+- TC-04・TC-05: 窓の読み足し（`last = first - 1 日`）を `return streak` にすると、(b)〜(f) と 366 日の行の 6 件が落ちた。戻して通過
+- TC-09: `verify_data.py` に足した理由のコメントを消すと、`test_unscoped_reads_have_reason_comment` が `dashboard/verify_data.py:326` を出して落ちた。戻して通過
 
 テストの置き場所:
 - TC-01〜TC-06・TC-10: `backend/dashboard/tests/test_I473_overview.py`（I491 の節を足す）
@@ -25,7 +31,7 @@
 | TC-07 | F6 E2E: 「クイズに答えると、ダッシュボードの解答問題数が増える」。答える前の数 `before` を読み、1 問答えてダッシュボードを開き直し、`expect.poll(() => 数字).toBeGreaterThan(before)` | 数字が `before` より大きい（CI の e2e ジョブで通る） | 答える操作を外すと `before` のままで落ちる（I473 で 0 のままだった不具合の再発防止になっていること） |
 | TC-08 | Q1 `QuizAnswer.objects.for_user`: I455 の `SPECS` に `"QuizAnswer"`（作る関数: 終了済みのセッション〔利用者 u・科目 s〕と、その科目の問題への答え。`allow_null=False`）を足し、既存の `test_for_user_scopes_by_org`・`test_for_user_noorg_user` の表で確かめる。`test_specs_cover_all_scoped_models` も通る | 本人・自組織の科目の答えだけ（他組織・全体共有の科目・同じ組織の別の利用者の答えを返さない）。組織に属さない利用者は空 | `QuizAnswerQuerySet.user_path` を `'user'` のままにすると FieldError で落ちる。`subject_paths` を空にすると `ImproperlyConfigured` で落ちる |
 | TC-09 | 見張りが `QuizAnswer` の絞らない読み出しを止める: `"QuizAnswer" in SCOPED_MODELS` と、`_missing_reasons("a = QuizAnswer.objects.filter(session__user=u)")` が `[1]`。既存の `test_unscoped_reads_have_reason_comment` が通る（`verify_data.py` の `bulk_update` に理由のコメントがある） | どちらも成り立つ | `verify_data.py` の足した理由のコメントを消すと `test_unscoped_reads_have_reason_comment` が `dashboard/verify_data.py:<行>` を出して落ちることを実装のステップ 2 で記録する。`QuizAnswer.objects` を既定の `models.Manager` に戻すと `"QuizAnswer" in SCOPED_MODELS` で落ちる |
-| TC-10 | クエリ数: 既存の `test_query_count_is_constant`（I473 の TC-12）がそのまま通る | `large == 9` | （既存のテスト。F7 で 20 日のデータは窓の中なので本数が変わらないことを確かめる） |
+| TC-10 | クエリ数: 既存の `test_query_count_is_constant`（I473 の TC-12）。F7 で 20 日のデータは窓の中なので連続日数の本数は 1 本のまま | `small == large == 8`（実装で 9 → 8。F5 でキャッシュを作るときの 2 本が 1 本になった・計画変更記録） | （既存のテスト。データの量で本数が変わると `small == large` で落ちる） |
 | TC-11 | 退行: CI の backend のテスト全体・`makemigrations --check --dry-run`・E2E | すべて通る。マイグレーションが出ない | （CI） |
 
 ## 決定論ゲート（自動実走）
