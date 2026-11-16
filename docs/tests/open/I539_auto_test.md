@@ -58,7 +58,13 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 | TC-19 | `backend/problems/tests/test_I115_public_unauth.py` | 変更なしで全件通る（TC-AUTO-05 の `''`・`register` は `[]`） | 全件 pass | AC6 |
 | TC-20 | `backend/core/tests/test_I446_cross_api_tenant_isolation.py`・`backend/core/tests/test_I437_no_pii_in_logs.py` | 変更なしで全件通る（登録の 2 経路で、他組織の科目の番号と存在しない番号の応答が同じで利用者が増えない／登録のログにメール・パスワードが出ない・`Registration attempt for organization_id: <id>` が出る） | 全件 pass | AC11 |
 | TC-21 | `docker compose exec -T backend python manage.py makemigrations --check --dry-run`（0022 を作った後） | モデルとマイグレーションの差分なし（0022 が `is_individual` の `AddField` を持つ） | 終了コード 0・`No changes detected` | — |
-| TC-22 | `backend/core/tests/test_I493_openapi_contract.py` | 変更なしで通る（仕様書に載る経路を変えていない） | pass | — |
+| TC-22 | `backend/core/tests/test_I493_openapi_contract.py` | 変更なしで通る（AC13 で `/api/user/subjects/` の応答に `problem_count` を足したので、`backend/openapi.yaml` は手順どおり作り直したものと一致する。作り直し忘れで落ちることは I493 のテストが持つ） | pass | AC13 |
+
+## backend: `backend/problems/tests/test_I539_user_subjects_problem_count.py`（新規・AC13）
+
+| TC | 内容 | 期待値 | AC |
+|---|---|---|---|
+| TC-24 | 組織 A の利用者が科目 X（問題 2 問）・Y（問題 0 問）を学ぶ科目にしている。組織 B に問題 3 問の科目 Z があり、A の利用者の `UserSubjectAccess` に Z も入れておく（組織を移った後の古い登録の形）。A の利用者で `GET /api/user/subjects/` と、`PUT /api/user/subjects/`（`{"subject_ids": [X, Y]}`）。その後 X に問題を 1 問足して、もう一度 `GET` | GET・PUT とも 200・本文が `[{"id": X, "name": "X…", "problem_count": 2}, {"id": Y, "name": "Y…", "problem_count": 0}]`（名前の順・Z は入らない）。問題を足した後の GET の X は `problem_count == 3`（キャッシュで古い数が出ない） | AC13・AC11 |
 
 ## frontend: `frontend/src/pages/__tests__/Register.test.tsx`（新規）
 `AuthContext` の `register` と `apiClient.get`（slug の確認・科目一覧）を差し替える。`QueryClientProvider`（再試行なし）と `MemoryRouter` で描く。
@@ -76,16 +82,20 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 | TC | 内容 | 期待値 | AC |
 |---|---|---|---|
 | TC-05（直す） | 管理者でない利用者・選んだ科目も組織の科目も 0 件 | `role="status"` の文が「科目がまだ用意されていません。管理者が科目を用意するまでお待ちください」。「クイズを始める」は無効。「科目を作る」「問題を作る」のリンクが無い。「組織の管理者に科目の登録を依頼してください」は出ない | AC7 |
-| TC-43 | `role: 'admin'`・選んだ科目も組織の科目も 0 件 | `role="status"` の文が「まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます」。リンク「科目を作る」の `href` が `/subject-management`、「問題を作る」の `href` が `/quiz-management`。「クイズを始める」は無効。「管理者が科目を用意するまでお待ちください」は出ない | AC3 |
+| TC-43（直す） | `role: 'admin'`・選んだ科目も組織の科目も 0 件 | `role="status"` の文が「まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます」。リンク「科目を作る」の `href` が `/subject-management` で、目立つ形（MUI の `MuiButton-contained` の class）。「問題を作る」のリンクは無い（科目が無いうちは作れない）。「クイズを始める」は無効。「管理者が科目を用意するまでお待ちください」は出ない | AC3 |
 | TC-44 | `role: 'admin'`・選んだ科目 0 件・組織の科目 1 件 | 今の TC-40 と同じ「学ぶ科目を選ぶ」の案内（管理者でも、科目があるときは作る案内を出さない） | AC3（回帰） |
 
-既存の TC-40〜TC-42 ほかはそのまま通る。
+| TC-45 | `role: 'admin'`・学ぶ科目 1 件（`problem_count: 0`）・「すべて」と、その科目を選んだとき | 「クイズを始める」は無効。`role="status"` の文が、「すべて」では「問題を作りましょう。問題管理で学ぶ科目の問題を作ると、クイズを始められます」、科目を選ぶと「問題を作りましょう。問題管理でこの科目の問題を作ると、クイズを始められます」。リンク「問題を作る」の `href` が `/quiz-management` で目立つ形（`MuiButton-contained`）。「科目を作る」のリンクは無い | AC13 |
+| TC-46 | 管理者でない利用者・学ぶ科目 1 件（`problem_count: 0`）・「すべて」 | 「クイズを始める」は無効。`role="status"` の文が「学ぶ科目にまだ問題がありません。管理者が問題を用意するまでお待ちください」。「問題を作る」のリンクは無い | AC13 |
+| TC-47 | 学ぶ科目 2 件（A は `problem_count: 3`・B は `0`）・「すべて」で「クイズを始める」／学ぶ科目 3 件（A・C は問題あり・B は 0）・「すべて」で押す | 2 件のときはダイアログを出さずに `/quiz?subject=<A>` へ移る。3 件のときはダイアログに A・C のボタンだけが出て、B は出ない。問題の案内（`NoProblemsGuide`）は出ない | AC13 |
+
+既存の TC-40〜TC-42 ほかはそのまま通る（学ぶ科目の差し替えの値に `problem_count`〔1 以上〕を足す。無いと始められない側に倒れる）。
 
 ## E2E: `e2e/tests/auth.spec.ts`（追加・未認証のプロジェクト `chromium-unauthed` で動く）
 
 | TC | 内容 | 期待値 | AC |
 |---|---|---|---|
-| TC-50 | 1) `/login` で「アカウントをお持ちでない方はこちら」を押す 2) メール・ユーザーID（`i539_<Date.now()>`）・パスワード（テストの中で作る `Aa1-<乱数の 16 進>`。`E2E_TEST_PASSWORD` は小文字と数字だけなので使わない）・確認を入れて「登録する」 3) 成功の文の後、`/login` に移る 4) そのユーザー ID とパスワードでログイン 5) ダッシュボードに「まず科目と問題を作りましょう」 6) 「科目を作る」→ 科目管理で「最初の科目を追加」→ 科目名 `E2E I539 <時刻>` → 保存 7) 問題管理（`/quiz-management`）で追加のボタン（`aria-label="add"`）→ 問題文・科目・選択肢（全部）・正解（A）・解説を入れて「作成」 8) `/dashboard` で「クイズを始める」 | 2) で段の表示が無い。3) で `/login` に移る。5) の案内が見え、「クイズを始める」は無効。8) で「クイズを始める」が押せ、科目が 1 件なので科目のダイアログを出さずに `/quiz` に移り、`[data-testid="choice-option"]` が出る | AC1・AC3・AC4・AC12 |
+| TC-50 | 1) `/login` で「アカウントをお持ちでない方はこちら」を押す 2) メール・ユーザーID（`i539_<Date.now()>`）・パスワード（テストの中で作る `Aa1-<乱数の 16 進>`。`E2E_TEST_PASSWORD` は小文字と数字だけなので使わない）・確認を入れて「登録する」 3) 成功の文の後、`/login` に移る 4) そのユーザー ID とパスワードでログイン 5) ダッシュボードに「まず科目と問題を作りましょう」 6) 「科目を作る」→ 科目管理で「最初の科目を追加」→ 科目名 `E2E I539 <時刻>` → 保存 6b) `/dashboard` に戻り、「問題を作りましょう」の案内を見て「問題を作る」を押す 7) 問題管理（`/quiz-management`）で追加のボタン（`aria-label="add"`）→ 問題文・科目・選択肢（全部）・正解（A）・解説を入れて「作成」 8) `/dashboard` で「クイズを始める」 | 2) で段の表示が無い。3) で `/login` に移る。5) の案内が見え、「クイズを始める」は無効。6b) で「問題を作りましょう」の案内が見え、「クイズを始める」は無効、「問題を作る」で `/quiz-management` に移る。8) で「クイズを始める」が押せ、科目が 1 件なので科目のダイアログを出さずに `/quiz` に移り、`[data-testid="choice-option"]` が出る | AC1・AC3・AC4・AC12・AC13 |
 
 ## 再発防止記録（fix-loop・2026-11-16）
 - なぜ失敗したか: TC-50 が登録のパスワードに CI の `E2E_TEST_PASSWORD` を使った。CI はこの値を `openssl rand -hex 24`（小文字と数字だけ）で作るので、登録画面のパスワードの決まり（大文字を含む）で入力の検証に止められ、成功の文が出なかった（run 43868042699・診断メモ `docs/reviews/I539_fix_diagnosis_20261116_2141.md`）。手元の値は大文字を含むので手元では通っていた

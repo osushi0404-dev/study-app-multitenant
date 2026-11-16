@@ -102,6 +102,8 @@
 - [retro] 計画書の「## セキュリティレビュー結果」の残余リスク処遇は「## 振り返り」の残余リスク処遇に記録（High 以上の残りなし）
 - [close] base 追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー結果のリンクを closed 向きに直した。`I539_fix_diagnosis_20261116_2141.md`（診断メモ）は close の回収の形（`*_review_*`）に当たらないので `docs/reviews/` の直下に残る
 - [close] PR の説明に Danger Ops（0023 の対象の数え方と「個人利用」カテゴリの有無の確かめ方）を書いた。`danger-approved` のラベルはユーザーが付ける
+- [close→plan] マージ前のユーザーの BP・UI/UX の確認（2026-11-17・ユーザー「BP,UI/UXの観点でベストなやり方で進めて。」）で、科目を作った後・問題を作る前に「クイズを始める」がエラーの通知で戻される行き止まりと、案内のボタンの強さが同じ点が見つかった。イシューの目的の途中の穴なので、この PR で直す（AC13・計画変更記録）。記録を open へ戻し、範囲・受け入れ条件・API の形を変えるので plan-review からやり直す — 一覧や後続に回すと、目的の「自分で科目・問題を作ってクイズを始められる」が崩れたままマージされるため
+- [close→plan] 処理の置き場所（`SubjectViewSet.perform_create` の業務の決まりを services へ）は、この窓口が前から処理を抱えていてまとめて移すのが筋なので #548 に同梱する（コメント）。役割の文字 `'admin'` の直書きは今のコードの書き方に合わせたもので、全体で直すべきなので見送る
 
 ## 変更概要（close で記入）
 - 招待なしの登録で本人ひとりの組織を作り、本人を管理者にする。招待の引き当てを `invitable()` にそろえ、科目 0 件の組織では科目選びを飛ばす。ダッシュボードの科目 0 件の案内を管理者／管理者でないで分ける。共有の `personal` 組織の一般の利用者を移すデータマイグレーション
@@ -117,3 +119,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review

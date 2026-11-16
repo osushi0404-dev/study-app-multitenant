@@ -45,12 +45,13 @@
 - [ ] AC10: 移す操作は、何度流しても同じ結果になる（2 回目は何も変えない）
 - [ ] AC11: 専用の組織の人から、ほかの利用者の科目・問題・記録が見えない
 - [ ] AC12: 上の流れ（組織なしの登録→ログイン→科目・問題を作る→クイズを始める）が E2E で確かめられている
+- [ ] AC13: 学ぶ科目はあるが、クイズの対象の科目（選んだ科目、「すべて」なら学ぶ科目の全部）に問題が 1 問も無いとき、ダッシュボードの「クイズを始める」は押せず（押してエラーの通知で戻されることが無い）、管理者には「問題を作りましょう」の案内と「問題を作る」のボタン、管理者でない人には「管理者が問題を用意するまでお待ちください」の案内が出る。「すべて」で問題のある科目と無い科目が混ざるときは、問題のある科目だけから始める（マージ前のユーザーの BP・UI/UX の確認で追加）
 
 ## 3. 影響範囲
 | 区分 | 対象 |
 |---|---|
-| Backend | accounts（登録・組織の引き当て・個人用の組織の作成・データマイグレーション）／problems（未認証の科目一覧・科目の作成） |
-| Frontend | 会員登録の画面・ダッシュボードの「学習を開始」のカード・登録画面の科目の取得（React Query のフックを新設） |
+| Backend | accounts（登録・組織の引き当て・個人用の組織の作成・データマイグレーション）／problems（未認証の科目一覧・科目の作成・学ぶ科目の応答に問題数〔`UserSubjectSerializer`〕）／api（`/api/user/subjects/` の GET・PUT が問題数を数える）／`backend/openapi.yaml`（作り直し） |
+| Frontend | 会員登録の画面・ダッシュボードの「学習を開始」のカード・登録画面の科目の取得（React Query のフックを新設）・学ぶ科目の型（`UserSubject`・`frontend/src/types/api/schema.d.ts` の作り直し） |
 | DB | `organizations` に列 `is_individual`（真偽・既定 False・DB の既定も False）を 1 つ足すスキーマのマイグレーション（0022・足すだけ）と、データマイグレーション 1 本（0023・共有の `personal` 組織の一般の利用者を専用の組織へ移す・Danger Ops） |
 | E2E | `e2e/tests/auth.spec.ts` に登録の流れを 1 本追加（未認証のプロジェクトで動く） |
 | Config/Infra | なし（依存ファイル・Dockerfile・docker-compose.yml の変更なし） |
@@ -131,12 +132,23 @@
 - `frontend/src/components/dashboard/StartQuizCard.tsx`:
   - 新しい prop `isOrgAdmin: boolean`
   - `NoSubjectsGuide` の「組織の科目も 0 件」の分岐を分ける:
-    - 管理者: `Alert`（info・`role="status"`）「まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます」＋ボタン「科目を作る」（`/subject-management`）・「問題を作る」（`/quiz-management`）（どちらも `variant="outlined"`・`component={RouterLink}`）
+    - 管理者: `Alert`（info・`role="status"`）「まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます」＋ボタン「科目を作る」（`/subject-management`・`variant="contained"`・`component={RouterLink}`）。次にやることを 1 つの目立つボタンにする（科目が無いうちは問題を作れないので「問題を作る」は出さない・計画変更記録）
     - 管理者でない: `Alert`（info・`role="status"`）「科目がまだ用意されていません。管理者が科目を用意するまでお待ちください」
   - 組織に科目があり選んだ科目が 0 件のとき（「学ぶ科目を選ぶ」）・取得の失敗は今のまま
+  - 問題のある科目だけをクイズの対象にする（AC13）: `startable = 学ぶ科目のうち problem_count > 0`。対象は、科目を選んでいればその科目（問題が無ければ対象なし）、「すべて」なら `startable`。「すべて」で 1 件ならすぐ始め、2 件以上ならダイアログに `startable` だけを出す
+  - 学ぶ科目はあるが対象が無いときの案内 `NoProblemsGuide`（`role="status"`）。「クイズを始める」は無効:
+    - 管理者: 「問題を作りましょう。問題管理でこの科目の問題を作ると、クイズを始められます」（「すべて」のときは「問題を作りましょう。問題管理で学ぶ科目の問題を作ると、クイズを始められます」）＋ボタン「問題を作る」（`/quiz-management`・`variant="contained"`・`component={RouterLink}`）
+    - 管理者でない: 「この科目にはまだ問題がありません。管理者が問題を用意するまでお待ちください」（「すべて」のときは「学ぶ科目にまだ問題がありません。管理者が問題を用意するまでお待ちください」）
+- `frontend/src/services/subjectService.ts`・`frontend/src/hooks/useUserSubjects.ts`: 学ぶ科目の型を、OpenAPI から作った `UserSubject`（`problem_count` が必須）にする（`getUserSubjects` は `getAvailableSubjects` と同じく応答をそのまま返す。I493 の型の決まり）
 - `frontend/src/constants/routes.ts`: `SUBJECT_MANAGEMENT_PATH = '/subject-management'`・`QUIZ_MANAGEMENT_PATH = '/quiz-management'` を足す（カードから使う）
 - `frontend/src/pages/Dashboard.tsx`: `isOrgAdmin={user?.role === 'admin'}` を `StartQuizCard` に渡す
 - `frontend/src/pages/SubjectManagement.tsx`: 変更しない（イシューの「変更が要るかは計画で確認」→ 不要。科目を作ると裏側で学ぶ科目に入り、ダッシュボードは開くたびに取り直す〔React Query の既定 `staleTime: 0`・`App.tsx:37-44`〕）
+
+### 4-7b. 学ぶ科目の API に問題数を足す（AC13）
+- `backend/problems/serializers.py` の `UserSubjectSerializer`: `problem_count = serializers.IntegerField(read_only=True)` を足し、`fields = ['id', 'name', 'problem_count']`
+- `backend/api/views/user_subjects.py` の `UserSubjectsView`: GET・PUT の両方で `subject_service.get_user_selected_subjects(..., annotate_count=True)`（キャッシュは科目の番号だけなので、数は毎回 DB で数える・古い数は出ない。クエリは件数の `COUNT` の 1 本のまま）
+- `backend/openapi.yaml`・`frontend/src/types/api/schema.d.ts`: `docs/runbooks/common-commands.md`「API の形を変えたとき」の手順で作り直す（手で直さない）
+- 組織の境界は今のまま（`get_user_selected_subjects` が今の組織の科目に絞る・数は自組織の科目の問題だけ）
 
 ### 4-8. テスト
 - 新規 `backend/accounts/tests/test_I539_personal_org_signup.py`（TC-01〜TC-16）
@@ -146,7 +158,9 @@
 - `backend/core/tests/test_I446_cross_api_tenant_isolation.py`・`backend/core/tests/test_I437_no_pii_in_logs.py` は変えない（TC-20）
 - 新規 `frontend/src/pages/__tests__/Register.test.tsx`（TC-30〜TC-33）
 - 直す `frontend/src/pages/__tests__/Dashboard.test.tsx`（`useAuth` の利用者を差し替えられる形にし、TC-05 の文言を変え、TC-43・TC-44 を足す）
-- 追加 `e2e/tests/auth.spec.ts`（TC-50）
+- 追加 `e2e/tests/auth.spec.ts`（TC-50。科目を作った後・問題を作る前にダッシュボードの「問題を作る」の案内を確かめる段を足す・AC13）
+- 新規 `backend/problems/tests/test_I539_user_subjects_problem_count.py`（TC-24）。`backend/problems/tests/test_I494_user_subjects.py` は応答の欄が増えるだけなので、欄を完全一致で見ている箇所があれば読み替える
+- `Dashboard.test.tsx` に TC-45〜TC-47 を足し、学ぶ科目の差し替えの値に `problem_count` を入れる（無いと「始められない」側に倒れるため）
 
 ## 5. 実装手順（ステップ）
 1. **裏側の登録を縦に通す**（4-1〜4-4・TC-01〜TC-10・TC-17・TC-18・TC-20〜TC-22）: 定数と `invitable()`、サービス、シリアライザ、ビュー。テストを先に書いて落ちることを見てから直す（TDD）。→ TC-01〜TC-10・TC-17・TC-18・TC-20〜TC-22 参照
@@ -154,7 +168,8 @@
 3. **データマイグレーション**（4-6・TC-14〜TC-16）: ステップ 1 と並行してよい（モデルの定数に依らない）。→ TC-14〜TC-16 参照
 4. **登録画面**（4-7 の `usePublicSubjects`・`Register.tsx`・TC-30〜TC-33）: ステップ 1 の後（科目なしの登録を裏側が受け付ける必要がある）。→ TC-30〜TC-33 参照
 5. **ダッシュボードの案内**（4-7 の `StartQuizCard`・`routes.ts`・`Dashboard.tsx`・TC-05・TC-43・TC-44）: ステップ 4 と並行してよい。→ TC-05・TC-43・TC-44 参照
-6. **E2E**（TC-50）: ステップ 1〜5 の後。→ TC-50 参照
+5b. **問題の無い科目の案内**（4-7b・4-7 の `StartQuizCard` の `startable`・`NoProblemsGuide`・TC-24・TC-45〜TC-47・AC13）: 裏側（serializer・ビュー・openapi の作り直し）→ 型の作り直し → 画面の順。→ TC-24・TC-45〜TC-47 参照
+6. **E2E**（TC-50）: ステップ 1〜5b の後。→ TC-50 参照
 7. 組み込みの `/simplify` で整理し、計画との一致を確かめる（implement 段階）
 
 - 縦の切り方: 「組織なしの登録」はステップ 1（API）＋ステップ 4（画面）＋ステップ 6（通し）、「科目を作ってクイズ」はステップ 2（API）＋ステップ 5（画面）＋ステップ 6 で縦に通る。画面のテストは API の受け口が先にあると実物と同じ値で書けるので、API を先に置く。未知のリスク（外部サービス・新しいライブラリ）は無い
@@ -171,7 +186,7 @@
 - **認可・テナント境界**: TC-06（本文の `organization_id` を使わない）・TC-07（個人用の組織への招待を断る）・TC-12（他の組織では学ぶ科目を増やさない）・TC-13（別の個人用の組織の科目が見えない）・TC-20（既存の横断テストが通る）
 - pytest・Jest・E2E は CI が PR ごとに流す（手元で全体を流し直さない）。実装中は関係するテストだけを手元で流す
 - `makemigrations --check`（スキーマの差分が出ないこと）は CI の backend のジョブが見る（`.github/workflows/ci.yml:38`）。実装中にも 1 回流す（TC-21）
-- API の仕様書（`backend/openapi.yaml`）に載っている経路は `/api/dashboard/*`・`/api/settings/`・`/api/user/subjects/*` だけで、今回変える登録・科目の経路は載っていない（2026-11-16 に `grep -n "^  /" backend/openapi.yaml` で確認）。仕様書は作り直さない。CI の `core/tests/test_I493_openapi_contract.py` が通ることで確かめる（TC-22）
+- API の仕様書（`backend/openapi.yaml`）に載っている経路は `/api/dashboard/*`・`/api/settings/`・`/api/user/subjects/*` だけで、今回変える登録・科目の経路は載っていない（2026-11-16 に `grep -n "^  /" backend/openapi.yaml` で確認）。AC13 で `/api/user/subjects/` の応答に `problem_count` を足すので、仕様書と画面の型は手順どおり作り直す（4-7b）。CI の `core/tests/test_I493_openapi_contract.py`（TC-22）と `API Types Up To Date` ジョブが、作り直し忘れを止める
 ### 手動（`docs/tests/open/I539_manual_test.md`）
 - Claude が Playwright MCP で画面を見る（登録画面の段の出し分け・ダッシュボードの案内・個人用の slug の招待の画面）。人の手動テストは無し
 
@@ -277,7 +292,8 @@ Danger Ops（有無/手順/ロールバック）:
 ## 13. 性能・UX設計
 - 性能: 登録 1 回で組織の作成 1 回と slug の重なりの確かめ（`exists()` の索引付きの問い合わせ・`slug` に索引あり）が増えるだけ。ダッシュボードは追加の取得なし（管理者かどうかは手元の利用者の情報で決める）
 - 読み込み中: 招待の科目を読む間、1 段目のボタンを無効にして丸い読み込み表示（`CircularProgress`）
-- 空: 招待の組織に科目が 0 件なら段を出さず「登録する」。ダッシュボードの科目 0 件は管理者／管理者でないで案内を分ける
+- 空: 招待の組織に科目が 0 件なら段を出さず「登録する」。ダッシュボードの科目 0 件は管理者／管理者でないで案内を分ける。学ぶ科目に問題が 0 問のときも同じく分け、「クイズを始める」は押せないまま（押してエラーで戻される流れを作らない・AC13）。案内のボタンは、その時点で次にやること 1 つだけを目立つ形（`contained`）で出す
+- 性能（AC13）: 学ぶ科目の取得に問題数の `COUNT` を足す（科目と問題の結合 1 本・学ぶ科目は多くても数十件）。追加の取得は無い
 - エラー: 招待の科目を読めなければ「科目を読み込めませんでした」＋「再読み込み」（ボタンは無効）。登録の失敗は今のまま `AuthContext` のトースト
 - 破壊的な操作: 増やさない
 - アクセシビリティ: 案内は `role="status"`（読み上げ）。ボタンはリンクの役割（`component={RouterLink}`）でキーボードで押せる。文言で行き先が分かる（「科目を作る」「問題を作る」）
@@ -310,6 +326,7 @@ Danger Ops（有無/手順/ロールバック）:
 - 計画レビュー（20261116_2118）の Warning（本番にカテゴリが無いと 0023 がデプロイを止める）: 9 の Danger Ops のマージ依頼の確かめに、「個人利用」カテゴリの有無を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - implement（2026-11-16）: 計画書の記載「読めなかった: …ボタンは無効」。TC-33 で、ボタンが無効でも入力欄の Enter で送信が起き、科目なしで登録されることが分かった。採った方法: 1 段目の送信の処理の最初で、招待の科目を読めていなければ何もしない（4-7 に追記）。TC-33 に Enter での送信を足し、止め方を外すと落ちることを確かめた。計画レビューのやり直し: 不要（計画の意図〔科目なしで送らない〕を守る直しで、方式・範囲・受け入れ条件は変えない）
 - implement の `/simplify`（2026-11-16）: 計画書の変更点に無い `frontend/src/services/subjectService.ts` の `getSubjectsWithLoading` を消した（呼び出し元は `Register.tsx` の消した取得の effect だけで、呼ぶ所が無くなった・`grep` で確認）。あわせて `Organization.type` の既定値と `SubjectViewSet.public` の `'personal'` を、足した定数（`TYPE_PERSONAL`・`SHARED_PERSONAL_SLUG`）で書いた（値は同じ・マイグレーションの差分なし）。見送り: 画面の道筋の定数を `Layout.tsx`・`App.tsx`・`SubjectDetail.tsx` でも使う直し（計画の外のファイル）・共有の組織に `is_individual` を付けて `invitable()` を簡単にする案（運営用のアカウントが残る組織なので意味が合わない）。計画レビューのやり直し: 不要（使われなくなったコードの片付けと書き方の統一だけで、動きは変えない）
+- マージ前のユーザーの BP・UI/UX の確認（2026-11-17・ユーザー「BP,UI/UXの観点でベストなやり方で進めて。」）: close の後に見直すと、科目を作った後・問題を作る前は、ダッシュボードの案内が消えて「クイズを始める」が押せ、押すと「この科目には問題が登録されていません」のエラーの通知でダッシュボードに戻される（イシューの目的〔自分で科目・問題を作ってクイズを始められる〕の途中の行き止まり）。あわせて、科目 0 件の管理者の案内のボタン 2 つが同じ強さで、まだ使えない「問題を作る」も並んでいた。採った方法: AC13 を足し、学ぶ科目の API に問題数を足して（4-7b）、問題のある科目だけをクイズの対象にし、対象が無いときは管理者／管理者でないで案内を分ける。案内のボタンはその時点で次にやること 1 つだけ（科目 0 件は「科目を作る」、問題 0 問は「問題を作る」）を `contained` で出す。TC-24・TC-45〜TC-47 を足し、TC-43・TC-50 を直す。計画レビューのやり直し: 要（範囲・受け入れ条件・API の形を変える）
 
 ## レビュー結果
 - [20261116_2118 判定: ✅ 完了](../../reviews/closed/I539_plan_review_20261116_2118.md)
