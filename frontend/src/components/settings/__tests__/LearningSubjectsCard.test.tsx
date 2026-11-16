@@ -76,7 +76,21 @@ describe('LearningSubjectsCard', () => {
     expect(screen.getByRole('button', { name: SAVE })).toBeDisabled();
   });
 
-  it('TC-21: 足して保存すると、応答で選んだ科目のキャッシュを書き換え、ダッシュボードを古いことにする', async () => {
+  it('TC-20b: チェックボックスのまとまりが「学ぶ科目」という名前のグループで、説明と（0 件にしたときは）注意が結び付く', async () => {
+    mountCard();
+
+    await checkbox('数学');
+    const group = screen.getByRole('group', { name: '学ぶ科目' });
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(3);
+    expect(group).toHaveAccessibleDescription('ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください');
+
+    await userEvent.click(await checkbox('数学'));
+    expect(group).toHaveAccessibleDescription(
+      'ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください 科目を最低1つ選択してください'
+    );
+  });
+
+  it('TC-21:足して保存すると、応答で選んだ科目のキャッシュを書き換え、ダッシュボードを古いことにする', async () => {
     const saved = [{ id: 1, name: '数学' }, { id: 2, name: '英語' }];
     mockUpdate.mockResolvedValue(saved);
     const queryClient = mountCard();

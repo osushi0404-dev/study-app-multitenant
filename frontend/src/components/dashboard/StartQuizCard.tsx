@@ -24,7 +24,7 @@ import { ALL_SUBJECTS } from '../../hooks/useDashboardOverview';
 import SubjectsRetryRow from '../SubjectsRetryRow';
 import { UserSubjectsState } from '../../hooks/useUserSubjects';
 import { AvailableSubjectsState } from '../../hooks/useAvailableSubjects';
-import { LEARNING_SUBJECTS_ANCHOR } from '../settings/LearningSubjectsCard';
+import { LEARNING_SUBJECTS_PATH } from '../../constants/routes';
 
 interface StartQuizCardProps {
   subjects: UserSubjectsState;
@@ -71,7 +71,7 @@ const NoSubjectsGuide = ({ availableSubjects, onRetry }: NoSubjectsGuideProps) =
       <Alert severity="info" role="status" sx={{ mb: 1 }}>
         学ぶ科目がまだ選ばれていません。設定画面で学ぶ科目を選んでください
       </Alert>
-      <Button variant="outlined" component={RouterLink} to={`/settings#${LEARNING_SUBJECTS_ANCHOR}`}>
+      <Button variant="outlined" component={RouterLink} to={LEARNING_SUBJECTS_PATH}>
         学ぶ科目を選ぶ
       </Button>
     </Box>

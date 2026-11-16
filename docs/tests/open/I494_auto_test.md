@@ -44,6 +44,7 @@
 | TC | 内容 | 期待値 |
 |---|---|---|
 | TC-20 | 表示 | 見出し「学ぶ科目」・「ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください」。チェックボックス「数学」が checked、「英語」「物理」が not checked。「英文法」が出る。「学ぶ科目を保存」が disabled（変わっていない） |
+| TC-20b | 表示（触る前と、「数学」を外して 0 件にした後） | `getByRole('group', { name: '学ぶ科目' })` の中にチェックボックス 3 つ。説明は「ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください」、0 件にした後は注意「科目を最低1つ選択してください」も続く（`aria-labelledby` を外すと落ちることを確かめた） |
 | TC-21 | 「英語」をチェックして「学ぶ科目を保存」。`updateUserSubjects` は `[{id:2,name:'英語'},{id:1,name:'数学'}]` を返す | `updateUserSubjects` が `[1, 2]` で 1 回呼ばれる・toast.success が「学ぶ科目を保存しました」・`queryClient.getQueryData(['user-subjects', userId])` が応答と同じ・`['dashboard']` で始まるキーが invalidate される・保存の後「学ぶ科目を保存」が disabled |
 | TC-22 | 「数学」を外して 0 件 | 「科目を最低1つ選択してください」が出る・「学ぶ科目を保存」が disabled・`updateUserSubjects` は呼ばれない |
 | TC-23 | `updateUserSubjects` が 500 の axios のエラーで失敗 | `role="alert"` に「学ぶ科目を保存できませんでした。時間をおいてもう一度お試しください」・「英語」は checked のまま |
@@ -95,3 +96,10 @@
 ## 実行記録（test-gate・2026-11-16）
 - `bash scripts/claude/gate-check.sh I494` → exit 0（`GATE_CHECK: OK`。コードレビュー `I494_code_review_20261116_1216.md`・敵対的レビュー `I494_adversarial_review_20261116_1224.md` とも OK）
 - pytest・Jest・E2E: PR #529 の CI で成功（review-gate の `CI_WAIT: OK`。手元では流し直さない）。決定論ゲートは無し
+
+## 再発防止記録（fix-loop 3 回目・2026-11-16）
+- なぜ見落としたか: 計画の 13 章（アクセシビリティ）が、個々のチェックボックスのラベルと注意の出し方までしか書いておらず、まとまりの名前（グループ）を決めていなかった。送り先の目印は、置き場（`constants/`）が無かったので送り先の部品の中に置いた
+- 何を変えたか: チェックボックスのまとまりに見出しを名前として結び付け、説明と注意も結び付けた（TC-20b）。送り先を `frontend/src/constants/routes.ts` に移した
+- セキュリティ上の考慮点: なし（表示とモジュールの置き場だけ）
+- 次回どう防ぐか: 選択肢のまとまり（チェックボックス・ラジオ）を足すときは、見える見出しをグループの名前に結び付ける。画面をまたぐ道筋・目印は `constants/` に置く
+- 確かめた結果: Jest の `LearningSubjectsCard.test.tsx` 13 passed・`Settings.test.tsx`・`Dashboard.test.tsx` も通過（計 58）。TC-20b は `aria-labelledby` を外すと落ちることを確かめた。ESLint・`tsc --noEmit` 通過。Playwright MCP で `/settings#learning-subjects` の「学ぶ科目」のグループを確かめた（`.evidence/I494/no1-settings-c-group.png`）

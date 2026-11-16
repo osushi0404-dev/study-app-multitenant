@@ -24,4 +24,5 @@
 | 2026-11-16 12:27 | b158a1fe | 選んだ科目・組織の科目の取得を `[]` に差し替えてダッシュボード・設定画面 | e2e_user_c | 管理者への依頼の案内。カードは保存ボタンなし | そのとおり | no5-dashboard-no-org-subjects.png, no5-settings-no-org-subjects.png |
 | 2026-11-16 12:43 | b158a1fe | 390×844 でダッシュボードと設定画面のカード | e2e_user_c | はみ出さず 1 列で読める | そのとおり | no6-dashboard-c-390.png, no6-settings-c-390.png |
 
+| 2026-11-16 13:02 | fix-loop 3 回目の作業ツリー | `/dashboard` →「学ぶ科目を選ぶ」→ `/settings#learning-subjects` のアクセシビリティの木 | e2e_user_c | チェックボックスのまとまりが「学ぶ科目」という名前のグループで、見た目は前と同じ | そのとおり | no1-settings-c-group.png |
 結論: OK（コンソールのエラーは開発サーバーの WebSocket とログイン前の `/api/settings/` の 401 だけで、既知のもの）

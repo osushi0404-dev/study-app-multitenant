@@ -29,8 +29,12 @@ import { useAvailableSubjects } from '../../hooks/useAvailableSubjects';
 import { isBadRequest, useSaveUserSubjects, useUserSubjects } from '../../hooks/useUserSubjects';
 import { extractApiErrorMessage } from '../../utils/apiError';
 import SubjectsRetryRow from '../SubjectsRetryRow';
+import { LEARNING_SUBJECTS_ANCHOR } from '../../constants/routes';
 
-export const LEARNING_SUBJECTS_ANCHOR = 'learning-subjects';
+// チェックボックスのまとまりに、見える見出し・説明・注意を結び付ける id（画面読み上げで何の選択かが分かるように）
+const HEADING_ID = 'learning-subjects-heading';
+const DESCRIPTION_ID = 'learning-subjects-description';
+const ERROR_ID = 'learning-subjects-error';
 const SAVE_FAILED = '学ぶ科目を保存できませんでした。時間をおいてもう一度お試しください';
 
 /** 400 なら裏側の理由、それ以外は決まった文言 */
@@ -117,7 +121,11 @@ const LearningSubjectsCard = () => {
     }
     return (
       <>
-        <FormGroup>
+        <FormGroup
+          role="group"
+          aria-labelledby={HEADING_ID}
+          aria-describedby={showEmptyError ? `${DESCRIPTION_ID} ${ERROR_ID}` : DESCRIPTION_ID}
+        >
           {subjects.map((subject) => (
             <Box key={subject.id} sx={{ mb: 1 }}>
               <FormControlLabel
@@ -134,7 +142,11 @@ const LearningSubjectsCard = () => {
             </Box>
           ))}
         </FormGroup>
-        {showEmptyError && <FormHelperText error>科目を最低1つ選択してください</FormHelperText>}
+        {showEmptyError && (
+          <FormHelperText id={ERROR_ID} error>
+            科目を最低1つ選択してください
+          </FormHelperText>
+        )}
         {saveError && (
           <Alert severity="error" role="alert" sx={{ mt: 2 }}>
             {saveError}
@@ -162,13 +174,14 @@ const LearningSubjectsCard = () => {
           variant="h6"
           component="h2"
           gutterBottom
+          id={HEADING_ID}
           ref={headingRef}
           tabIndex={-1}
           sx={{ scrollMarginTop: (theme) => theme.spacing(11) }}
         >
           学ぶ科目
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography id={DESCRIPTION_ID} variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください
         </Typography>
         {renderBody()}
