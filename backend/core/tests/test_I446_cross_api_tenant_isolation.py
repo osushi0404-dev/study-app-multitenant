@@ -66,7 +66,7 @@ MODELS = {
     "subject": Subject, "problem": Problem, "session": QuizSession, "log": StudyLog,
     "goal": StudyGoal, "card": SpacedRepetitionCard, "review": SpacedRepetitionReview,
     "suggestion": LearningSuggestion, "weakness": LearningWeakness, "asset": MediaAsset,
-    "User": User, "QuizAnswer": QuizAnswer,
+    "User": User, "QuizAnswer": QuizAnswer, "UserSubjectAccess": UserSubjectAccess,
 }
 
 
@@ -206,6 +206,10 @@ ROUTE_TABLE = {
                 writes=("count", "QuizAnswer")),
     ],
     "GET api/user/subjects/": LIST,
+    # I494: 学ぶ科目の置き換え（番号の一覧を本文で受ける）・選べる自組織の科目
+    "PUT api/user/subjects/": [_subj_body(
+        "subject_ids", list_param=True, writes=("count", "UserSubjectAccess"), own_status=200)],
+    "GET api/user/subjects/available/": LIST,
     # ---- 学習記録 ----
     "GET api/study/logs/": LIST,
     "POST api/study/logs/": [_subj_body(writes=("count", "log"))],

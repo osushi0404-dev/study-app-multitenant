@@ -12,9 +12,12 @@ import { toLoadState } from './queryLoadState';
 
 export const ALL_SUBJECTS = 'all';
 
+/** overview のキーの頭（利用者・科目を問わずまとめて古いことにするとき・I494） */
+export const DASHBOARD_OVERVIEW_KEY_ROOT = ['dashboard', 'overview'] as const;
+
 /** キーにユーザーを入れる（同じタブで別のユーザーで入り直したときに、前のユーザーのキャッシュを出さない） */
 export const dashboardOverviewKey = (userId: string, subjectId: string) =>
-  ['dashboard', 'overview', userId, subjectId] as const;
+  [...DASHBOARD_OVERVIEW_KEY_ROOT, userId, subjectId] as const;
 
 const fetchOverview = async (subjectId: string): Promise<DashboardOverview> => {
   try {
