@@ -137,6 +137,7 @@
 - [fix-loop] コードレビュー F5（削除済みの問題を数える）は案 A（出題の条件と同じ条件の式 `_problem_count()` を 1 つ置き、3 か所で使う）で直した — 診断レビュー PASS。科目管理の一覧の「問題数」も同じ式の同じ穴なのでそろえた（片方だけ直すと数え方が 2 通りになる）
 - [retro] 台帳の残り（コードレビュー 20261117_0342）: F1〜F4 は #548 の本文のまま、新しい F7・F8・F9（Low・再現なし・アプリ本体）は #548 にコメントで同梱（`--route backlog` は 0 件）。判定の仕組み・SECURITY=yes の行は無いので「最優先」の印は付けない
 - [retro] 2 回目の振り返り: P3 を #545、P4 を #547 にコメントで同梱。見送り 2 件は「## 振り返り」の 2 回目に理由つきで記録
+- [close] 2 回目: base 追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、2 回目の監査記録（`*_review_*`）も回収した。診断メモ 2 件（`I539_fix_diagnosis_20261117_0253.md`・`_0339.md`）は回収の形に当たらないので `docs/reviews/` の直下に残る。PR の説明に AC13 の変更点・テスト・後続を足した
 
 ## 変更概要（close で記入）
 - 招待なしの登録で本人ひとりの組織を作り、本人を管理者にする。招待の引き当てを `invitable()` にそろえ、科目 0 件の組織では科目選びを飛ばす。ダッシュボードの科目 0 件の案内を管理者／管理者でないで分ける。共有の `personal` 組織の一般の利用者を移すデータマイグレーション
@@ -163,3 +164,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
