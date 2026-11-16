@@ -259,7 +259,7 @@ Danger Ops（有無/手順/ロールバック）:
 - **有**: データマイグレーション 0023（共有の `personal` 組織の一般の利用者の `organization` と `role` の一括の更新）
 - 影響範囲: 共有の `personal` 組織（`type='personal'`・slug `personal`）の利用者のうち `is_staff=False` かつ `is_superuser=False` の人。開発の DB は 0 人（2026-11-16）
 - 代替案: 管理コマンドにして手で流す → デプロイのたびの手作業が要り、流し忘れると共有の組織に人が残るので採らない
-- 承認: ユーザーが grill-me で「移す」と決めた（2026-11-16）。マイグレーションは PR のレビューとマージで入り、デプロイ（コンテナの起動時の `migrate`）で走る。Claude は手元の開発の DB でも本番でも、このマイグレーションのために `DANGER_OK=1` の操作をしない。マージ依頼のときに、本番の対象の数え方（`docker compose exec -T backend python manage.py shell -c "from accounts.models import User; print(User.objects.filter(organization__type='personal', organization__slug='personal', is_staff=False, is_superuser=False).count())"`）と、デプロイで走ることを書いて確かめてもらう。PR に `danger-approved` のラベルを付けるのはユーザー
+- 承認: ユーザーが grill-me で「移す」と決めた（2026-11-16）。マイグレーションは PR のレビューとマージで入り、デプロイ（コンテナの起動時の `migrate`）で走る。Claude は手元の開発の DB でも本番でも、このマイグレーションのために `DANGER_OK=1` の操作をしない。マージ依頼のときに、本番の対象の数え方（`docker compose exec -T backend python manage.py shell -c "from accounts.models import User; print(User.objects.filter(organization__type='personal', organization__slug='personal', is_staff=False, is_superuser=False).count())"`）と、「個人利用」カテゴリがあること（`… shell -c "from accounts.models import OrganizationCategory; print(OrganizationCategory.objects.filter(slug='personal').exists())"` が `True`。無いのに対象がいると 0023 が `RuntimeError` でデプロイの `migrate` を止める）と、デプロイで走ることを書いて確かめてもらう。PR に `danger-approved` のラベルを付けるのはユーザー
 - ロールバック: 7 のとおり（逆向きは `noop`・コードを戻すだけ）
 
 ## 10. データ整合性設計
@@ -307,8 +307,10 @@ Danger Ops（有無/手順/ロールバック）:
 ## 計画変更記録
 - 計画レビュー（20261116_2112）の Info（TC-02 の乱数の差し替え）: 4-2 に `pick_unused_slug(candidates)` を分け、TC-02 は候補の一覧を渡して直接確かめる（乱数を差し替えない）。Warning（0022 と 4-2 の規則のずれ）: TC-14 の slug の形を TC-01 と同じ正規表現 `^p-[0-9a-f]{12}$` にし、テストの中で 1 つの定数として両方から使う。Warning（R4 の後続）: R4 の回避策の欄に「retro で決めて報告に載せる」を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ・方式・範囲・受け入れ条件は変えない）
 - design-security-review（2026-11-16）の Blocker: 計画書の記載「`invitable()` = `filter(is_active=True).exclude(type='personal')`」「`subject.organization.type == 'personal'` なら学ぶ科目に入れる」。種類の既定が `personal` で、招待用の組織（開発の DB の `e2e-org-a`・`e2e-org-b`）にも付いているため、招待リンクが使えなくなる・関係ない組織で学ぶ科目が増える（R10）。採った方法: 列 `is_individual` を足し（0022・スキーマ）、データマイグレーションを 0023 にずらし、`invitable()`・科目の作成の判定を `is_individual` と共有の `personal` 組織（`type`＋slug）で決める。あわせて High（`context` の渡し忘れで黙って個人用の登録になる）に `ImproperlyConfigured` で備える（R11・TC-23）。AC6 の言い回しを同じ意味に直した（写しも）。計画レビューのやり直し: 要（方式・DB・受け入れ条件の言い回しを変える）
+- 計画レビュー（20261116_2118）の Warning（本番にカテゴリが無いと 0023 がデプロイを止める）: 9 の Danger Ops のマージ依頼の確かめに、「個人利用」カテゴリの有無を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果
+- [20261116_2118 判定: ✅ 完了](../../reviews/I539_plan_review_20261116_2118.md)
 - [20261116_2112 判定: ✅ 完了](../../reviews/I539_plan_review_20261116_2112.md)
 
 ## セキュリティレビュー結果
