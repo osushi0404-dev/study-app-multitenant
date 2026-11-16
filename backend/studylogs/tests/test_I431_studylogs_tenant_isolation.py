@@ -426,8 +426,8 @@ def test_user_subjects_api_hides_other_org_subjects(setup):
     noorg = _client(setup["user_noorg"]).get("/api/user/subjects/")
 
     assert own.status_code == status.HTTP_200_OK
-    # problem_count は組織 A の科目の問題数（fixture の 2 問・I539 で応答に足した）
-    assert own.json() == [{"id": setup["subject_a"].id, "name": "科目I431A", "problem_count": 2}]
+    # problem_count は組織 A の科目の出題できる問題数（fixture の 2 問のうち削除済みの 1 問は数えない・I539）
+    assert own.json() == [{"id": setup["subject_a"].id, "name": "科目I431A", "problem_count": 1}]
     assert noorg.status_code == status.HTTP_200_OK
     assert noorg.json() == []
 

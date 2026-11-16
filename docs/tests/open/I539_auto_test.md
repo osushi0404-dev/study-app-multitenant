@@ -111,5 +111,12 @@ pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の�
 - 次回どう防ぐか: 画面の対象の決め方（何を出す・何を選ばせる）を変えるときは、E2E のデータでその決め方の元（今回は科目ごとの問題数）がどうなっているかを `seed_e2e.py` で確かめ、前提にしている spec を `grep` で探してから実装する
 - 確かめた結果: `docker compose --profile e2e run --rm e2e npx playwright test tests/quiz-session.spec.ts --retries=0` → 3 passed（9.4s）。直す前は CI で 3 本とも落ちた（再試行も同じ）。続けて流した `auth.spec.ts --grep I539` は、全体の準備のログインがログインの回数制限で止まった（spec の前・変更と無関係）ので CI で確かめる
 
+## 再発防止記録（fix-loop・2026-11-17・コードレビュー F5）
+- なぜ失敗したか: 問題数を `Count('problems')` で数えていて、論理削除済み（`Problem.is_deleted=True`）も数えた。出題は `available_problems`（`is_deleted=False`）なので、削除した問題しか無い科目で「クイズを始める」が押せ、エラーの通知で戻される（AC13 の穴・診断メモ `docs/reviews/I539_fix_diagnosis_20261117_0339.md`）。科目管理の一覧の「問題数」も同じ式で、前から削除済みを数えていた
+- 何を変えたか: `core/subject_service.py` に `_problem_count()`（`Count('problems', filter=Q(problems__is_deleted=False))`）を 1 つ置き、3 か所の注釈で使う。TC-24 に削除済みの問題を足し、科目管理の一覧（キャッシュの有無の両方）の確かめ `test_org_subjects_problem_count_excludes_deleted` を足した。`test_I431` の TC-15b の期待値を、削除済みを除いた 1 に直した
+- セキュリティ上の考慮点: なし（自組織の科目の数だけ。削除済みの中身は出ない）
+- 次回どう防ぐか: 「出題できるか」に使う数は、出題の条件（`available_problems`）と同じ条件で数える（式のそばに対応を書いた）。モデルの印を探すときは `is_active` だけでなく `is_deleted` など論理削除の印も `grep` する
+- 確かめた結果: 直す前は TC-24 の削除済みの段で `problem_count == 1` で落ちた。直した後 `pytest problems/tests/ studylogs/tests/test_I431_studylogs_tenant_isolation.py` → 165 passed、`core/tests/test_I437`・`test_I446`・`test_I493` を含む関係するテスト 200 件も合格
+
 ## 決定論ゲート（自動実走）
 このイシューは、pytest・Jest・E2E（CI が流す）で受け入れ条件を確かめる。grep 等の決定論ゲートは置かない（`docs/runbooks/plan-writing-rules.md`「決定論テストの対象の選び方」: 守る決まりは CI のテストで覆える）。

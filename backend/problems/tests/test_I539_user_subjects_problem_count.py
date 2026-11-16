@@ -15,6 +15,7 @@ from django.test import override_settings
 from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
+from core.subject_service import subject_service
 from problems.models import Choice, Problem, Subject, UserSubjectAccess
 
 User = get_user_model()
@@ -79,3 +80,29 @@ def test_user_subjects_include_problem_count(world):
     _add_problem(w["x"], w["user"], 99)
     again = w["client"].get(URL).json()
     assert again[0] == {"id": w["x"].id, "name": "X科目", "problem_count": 3}
+
+    # 削除済み（論理削除）の問題は出題されないので数えない（出題の条件 available_problems と同じ・F5）
+    Problem.objects.filter(subject=w["y"]).delete()
+    deleted = _add_problem(w["y"], w["user"], 0)
+    deleted.is_deleted = True
+    deleted.save(update_fields=["is_deleted"])
+    after_delete = w["client"].get(URL).json()
+    assert after_delete[1] == {"id": w["y"].id, "name": "Y科目", "problem_count": 0}
+
+
+@override_settings(CACHES=LOCMEM)
+@pytest.mark.parametrize("use_cache", [False, True])
+def test_org_subjects_problem_count_excludes_deleted(world, use_cache):
+    """科目管理の一覧（get_user_subjects・キャッシュの有無の両方）も削除済みの問題を数えない（F5）"""
+    w = world
+    deleted = _add_problem(w["x"], w["user"], 50)
+    deleted.is_deleted = True
+    deleted.save(update_fields=["is_deleted"])
+
+    if use_cache:  # 1 回目でキャッシュに入れ、2 回目はキャッシュから組み立てる経路を通す
+        list(subject_service.get_user_subjects(w["user"], use_cache=True, annotate_count=True))
+    counts = {
+        s.id: s.problem_count
+        for s in subject_service.get_user_subjects(w["user"], use_cache=use_cache, annotate_count=True)
+    }
+    assert counts == {w["x"].id: 2, w["y"].id: 0}
