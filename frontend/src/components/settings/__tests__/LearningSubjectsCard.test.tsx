@@ -134,7 +134,38 @@ describe('LearningSubjectsCard', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('TC-25: 組織の科目が 0 件なら管理者への依頼を案内し、保存のボタンを出さない', async () => {
+  it('TC-24b: 400 の後に取り直した一覧から消えた科目は、見えないまま送らず、次の保存が成功する（F1）', async () => {
+    mockUpdate
+      .mockRejectedValueOnce(
+        axiosError(400, { error: { main_message: '入力内容にエラーがあります', sub_message: '選択された科目の一部が無効です' } })
+      )
+      .mockResolvedValueOnce([{ id: 1, name: '数学' }, { id: 2, name: '英語' }]);
+    // 1 回目は 3 科目、取り直した 2 回目からは「物理」が消えている
+    mockGetAvailable.mockResolvedValueOnce(AVAILABLE).mockResolvedValue(AVAILABLE.slice(0, 2));
+    mountCard();
+
+    await userEvent.click(await checkbox('物理'));
+    await userEvent.click(screen.getByRole('button', { name: SAVE }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('選択された科目の一部が無効です');
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: '物理' })).not.toBeInTheDocument());
+
+    await userEvent.click(await checkbox('英語'));
+    await userEvent.click(screen.getByRole('button', { name: SAVE }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('学ぶ科目を保存しました'));
+    expect(mockUpdate).toHaveBeenLastCalledWith([1, 2]);
+  });
+
+  it('TC-22b: 科目 0 件で開いた直後は赤い注意を出さず（触る前は責めない）、保存もできない', async () => {
+    mockGetUserSubjects.mockResolvedValue([]);
+    mountCard();
+
+    expect(await checkbox('数学')).not.toBeChecked();
+    expect(screen.queryByText('科目を最低1つ選択してください')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: SAVE })).toBeDisabled();
+  });
+
+  it('TC-25:組織の科目が 0 件なら管理者への依頼を案内し、保存のボタンを出さない', async () => {
     mockGetAvailable.mockResolvedValue([]);
     mountCard();
 

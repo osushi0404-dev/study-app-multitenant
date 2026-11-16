@@ -59,8 +59,13 @@ const LearningSubjectsCard = () => {
   // 保存済みの選択（組織の科目にあるものだけ・組織の科目の並び）
   const savedSet = new Set(selected.state.status === 'success' ? selected.state.subjects.map((s) => s.id) : []);
   const savedIds = subjects.filter((s) => savedSet.has(s.id)).map((s) => s.id);
-  const currentIds = checked ?? savedIds;
+  // 触った後の選択も、いまの組織の科目の一覧と毎回突き合わせる
+  // （保存の 400 の後に一覧を取り直して消えた科目を、見えないまま送り続けない・F1）
+  const availableSet = new Set(subjects.map((s) => s.id));
+  const currentIds = (checked ?? savedIds).filter((id) => availableSet.has(id));
   const isEmpty = currentIds.length === 0;
+  // 赤い注意は、一度触ってから 0 件にしたときだけ出す（触る前は説明文だけ。保存できない決まりは同じ）
+  const showEmptyError = checked !== null && isEmpty;
   const canSave = ready && !isEmpty && !sameIds(currentIds, savedIds) && !save.isPending;
 
   useEffect(() => {
@@ -78,7 +83,6 @@ const LearningSubjectsCard = () => {
 
   const handleSave = () => {
     setSaveError(null);
-    // currentIds は組織の科目の番号だけ（savedIds も toggle も組織の科目から作る）
     save.mutate(currentIds, {
       onSuccess: () => {
         setChecked(null);
@@ -130,7 +134,7 @@ const LearningSubjectsCard = () => {
             </Box>
           ))}
         </FormGroup>
-        {isEmpty && <FormHelperText error>科目を最低1つ選択してください</FormHelperText>}
+        {showEmptyError && <FormHelperText error>科目を最低1つ選択してください</FormHelperText>}
         {saveError && (
           <Alert severity="error" role="alert" sx={{ mt: 2 }}>
             {saveError}
@@ -152,7 +156,8 @@ const LearningSubjectsCard = () => {
   return (
     <Card id={LEARNING_SUBJECTS_ANCHOR} data-testid="learning-subjects-card">
       <CardContent>
-        {/* 送った先で、上に固定されたアプリのバーの下に見出しが隠れないよう余白を取る */}
+        {/* 送った先で、上に固定されたアプリのバーの下に見出しが隠れないよう余白を取る。
+            フォーカスの枠は、利用者が選べる「フォーカス表示強化」（AccessibilityProvider・既定でオン）に任せる */}
         <Typography
           variant="h6"
           component="h2"

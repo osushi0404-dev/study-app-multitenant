@@ -3,7 +3,7 @@
  * 裏側（UserSettingsSerializer）の名前で読み、同じ名前で保存する
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
@@ -155,5 +155,17 @@ describe('Settings', () => {
 
     expect(await screen.findByRole('heading', { name: '学ぶ科目' })).toBeInTheDocument();
     expect(screen.getByTestId('learning-subjects-card')).toBeInTheDocument();
+  });
+
+  it('TC-29b: 「学習設定」の form に名前があり、その中の「保存」だけを指せる。見出しは h1・各カード h2（I494）', async () => {
+    renderSettings();
+
+    const form = await screen.findByRole('form', { name: '学習設定' });
+    expect(within(form).getByRole('button', { name: '保存' })).toBeInTheDocument();
+    expect(within(form).queryByRole('button', { name: '学ぶ科目を保存' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '設定' })).toBeInTheDocument();
+    for (const name of ['アカウント情報', '学習設定', '学ぶ科目', '表示設定', '通知設定']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
+    }
   });
 });
