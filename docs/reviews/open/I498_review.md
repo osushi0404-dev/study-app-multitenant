@@ -24,5 +24,8 @@
 - [plan] 値の置き場所を新しい共有ファイルでなく code-review.sh の変数にした — code-review.sh を一時のフォルダに写して動かす既存のテストが 5 本以上あり、新しいファイルの読み込みを足すと写しの組み合わせを全部直す必要があるため（計画書 §9）
 - [plan] 既定を 1980 秒にした（イシューの「1200 秒以上」の範囲） — CI で時間の上限を持つ一番長いジョブ（Harness Tests・30 分）より長くし、テストのジョブが延びても待ちが CI より先に諦めないようにするため（計画書 §9）
 - [plan] 調べる途中で見つけた `pr-base-sync.sh` の `ci_wait` の「チェックが未登録だと待たずに通る」穴は、このイシューでは直さず retro で起票を決める — イシューの目的（待ち不足で落ちない）と逆向きの話で、マージは GitHub の承認が止めるため（計画書 §9）
+- [plan-review] PLAN_VERDICT: OK（Info 3 件のみ・計画は直さない）— Info 2（TC-02 の失敗注入の結果を記録する）は implement で行う
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: implement
