@@ -7,7 +7,8 @@
  * - 科目 0 件の案内は、組織に科目があれば設定画面の「学ぶ科目」のカードへの導線（I494）。無ければ、管理者には
  *   科目を作る案内と行き先、管理者でない人には管理者が用意するのを待つ案内（I539）
  * - 問題 0 問の案内は、管理者には問題を作る行き先、管理者でない人には待つ案内（I539）
- * - 目標の 1 行は、設定の目標と全科目の今日の分が読めたときだけ出す（科目を選んでいても全科目で計算・I513）
+ * - 目標の 1 行は、クイズを始められ、設定の目標と全科目の今日の分が読めたときだけ出す（科目を選んでいても
+ *   全科目で計算・I513。始められないときは出さない・I539）
  */
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -200,7 +201,8 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
         <NoProblemsGuide isOrgAdmin={isOrgAdmin} isAllSubjects={isAllSubjects} />
       )}
 
-      {hasSubjects && todayMinutes !== null && goalMinutes !== null && (
+      {/* 目標の行は、クイズを始められるときだけ（始められないのに「あと◯分」と促さない・I539） */}
+      {canStart && todayMinutes !== null && goalMinutes !== null && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {goalText(todayMinutes, goalMinutes)}
         </Typography>

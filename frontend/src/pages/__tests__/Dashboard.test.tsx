@@ -487,7 +487,7 @@ describe('Dashboard', () => {
 
   it('TC-45: 管理者で、学ぶ科目に問題が無ければ、問題を作る案内と目立つボタンを出し、クイズを始められない（I539）', async () => {
     mockUser = { ...DEFAULT_USER, role: 'admin' };
-    respond(overview());
+    respond(overview(), { daily_study_goal_minutes: 30 });
     mockGetUserSubjects.mockResolvedValue([{ id: 5, name: '英語', problem_count: 0 }]);
     renderDashboard();
 
@@ -500,6 +500,9 @@ describe('Dashboard', () => {
     expect(createProblem).toHaveClass('MuiButton-contained');
     expect(screen.queryByRole('link', { name: '科目を作る' })).not.toBeInTheDocument();
     expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
+    // 始められないのに目標の「あと◯分」で促さない
+    await screen.findByText('5分');
+    expect(screen.queryByText(/今日の目標/)).not.toBeInTheDocument();
 
     // 科目を選ぶと「この科目」の文言になる
     await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
