@@ -230,11 +230,11 @@ for path in sys.argv[1:]:
 PY
 }
 
-# I193・I498: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 CI_WAIT_TIMEOUT_DEFAULT）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
-# 既定の正はこの 1 か所（pr-base-sync.sh の final も、関数だけを読み込む形でこの値を読む・I498）。
+# I193・I498: CI 待ちの上限の既定（秒）。既定の正はこの 1 か所（pr-base-sync.sh の final も wait_ci そのものを呼ぶ・I530）。
 # 1980 秒＝CI で時間の上限を持つ一番長いジョブ（.github/workflows/ci.yml の Harness Tests・timeout-minutes: 30）が
 # 自分の上限で止まるより先に待ちをやめないよう、30 分＋3 分（登録・順番待ちの分）。実測は 6〜11 分（PR #495 で 10 分 56 秒）
 CI_WAIT_TIMEOUT_DEFAULT=1980
+# CI 待ち。CI_WAIT_TIMEOUT 秒（既定 CI_WAIT_TIMEOUT_DEFAULT）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
 # - PR の最新のコミット（headRefOid）が手元の HEAD と違う → 手元のコミットを CI が見ていない（CI_WAIT: NOT_PUSHED・失敗）
 # - fail か cancel が 1 つでもある → 失敗
 # - PR で動くワークフローのジョブ（expected_ci_jobs）が全部、pass か skipping で出そろったときだけ成功。

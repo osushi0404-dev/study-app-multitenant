@@ -1,10 +1,14 @@
 # I530 レビュー: マージ前の最終確認の CI 待ちをレビュー段階の wait_ci に一本化する
 
 ## 変更概要
-- （実装後に書く）
+- マージ前の最終確認（`pr-base-sync.sh final`）の CI 待ちを、自前の判定（`ci_wait`）からレビュー段階の `code-review.sh` の `wait_ci` を呼ぶ形（`run_wait_ci`）に置き換えた。CI のチェックが未登録・一部だけのときに待たずに合格する穴をふさいだ
 
 ## 変更点
-- （実装後に書く）
+- `scripts/claude/pr-base-sync.sh`: `ci_wait` を消し `run_wait_ci`（別の bash で `wait_ci` を呼び、戻り値と `CI_WAIT:` 行を今のメッセージ・exit 1 に対応させる）を置いた。`PBS_CI_TIMEOUT`・`PBS_CI_INTERVAL` と I498 の既定の読み込みを消した。`CLEAN|HAS_HOOKS` でも CI を待つ
+- `scripts/claude/code-review.sh`: `wait_ci` の前のコメントの並びと文言だけ（動きは変えない）
+- `scripts/claude/tests/test_pr_base_sync.sh`: スタブを `wait_ci` の呼び方に合わせ、T22〜T26 と失敗の注入 FG1・FG2 を足した
+- `scripts/claude/tests/test_i498_ci_wait_timeout.sh`: 新しい形に合わせた（環境変数・T5・T6・FG1〜FG3）
+- `docs/reviews/backlog/I498.md`（F1・F2・F3・R1）・`I224.md`（F1）: 同梱して直した行を消した
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
@@ -15,7 +19,7 @@
 - 手動: （close の手順 5.5 で書く）
 
 ## 計画との差分
-- なし
+- あり（テストの組み方と期待の細部だけ。計画書の計画変更記録の 2〜5 行目）: FG2 の T3 を見ない・失敗の注入を `CASE_SCRIPT` で 1 ケースずつ流す形・T4 の正規表現・shellcheck を pre-commit 経由で
 
 ## ロールバック
 - この PR のコミットを revert する
@@ -26,6 +30,8 @@
 - [plan] 上限・間隔の上書きを `CI_WAIT_TIMEOUT`・`CI_POLL_INTERVAL` 1 つにし、`PBS_CI_TIMEOUT`・`PBS_CI_INTERVAL` を消した — 使うのはテストだけで、2 つの名前は review-gate と値がずれる元
 - [plan] 一覧の I498 F1・F2・F3・R1 と I224 F1 を同梱、I498 F4 は残した — 理由は計画書 §9
 - [plan-review] 計画レビュー OK（Info 3 件）。Info の 1 件目（失敗のメッセージに gh pr checks の文字があると TC-03 が落ちる）は文言を直した。残り 2 件は対応不要 — 相対パスの前提は wait_ci が元から持つ・TC-05 の形のずれは TC-05 自身が先に落ちる
+- [implement] I498 のテストの FG2 で T3 を見ないことにした — final が `wait_ci` そのものを呼ぶようになり、既定を変えても 2 つの上限が食い違わなくなった（AC2 の結果）。T3 自体は、pr-base-sync.sh に別の既定を書き戻したとき（FG1）を捕まえるので残す
+- [implement] /simplify の 4 観点の指摘のうち、失敗の注入の組み方（全体の流し直し → 1 ケースずつ）・FG2 の T3 の確かめ・古いコメントと名前を直した。見送り: 共有ファイルへの切り出し（I498 で、code-review.sh を写して動かす既存のテスト 5 本以上が壊れるため採らないと決めた）・`wait_ci` に上限の行を出させる（`wait_ci` の変更はイシューの範囲外。式は code-review.sh 本体の時間切れのメッセージと同じ書き方）・合格の 2 つの分岐をまとめる（✅ の文言が変わり、手動テストの期待とずれる）・BEHIND の後に待ちを 2 回通る（安全側に倒した意図した形・一覧 I498 F4 と同じ話）・テストが `wait_ci` の内側の呼び方に合わせたスタブを持つ（本物の `wait_ci` を通して穴が塞がることを確かめるのが目的）
 
 STAGE_DONE: plan NEXT: plan-review
 
