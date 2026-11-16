@@ -46,5 +46,3 @@ grep -q "rules/react-coding-standards-integrated.md" docs/runbooks/issue-flow.md
 - セキュリティ上の考慮点: なし（文書と文書のテスト）
 - 次回どう防ぐか: 決定論ゲートの失敗の注入は、`run_one_gate()` と同じ判定（`! grep` は内側の exit が 1 のときだけ合格）で確かめる。手元の確かめの道具（スクラッチパッドの `run_gate.sh`）をその判定に直した
 - 確かめた結果: 直したゲート 10 行を `run_one_gate()` と同じ判定で流し、すべて合格。3 行目は、`rules/bk/react-coding-standards.md` を置いた写しで内側の grep が exit 0（不合格）になることを確認
-
-（旧）実装後の合否は review-gate の決定論ゲートの実走で記録する
