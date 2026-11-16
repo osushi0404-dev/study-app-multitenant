@@ -5,6 +5,7 @@
 期待値は、ダッシュボードの集計を使わずに、作った解答の一覧だけから数える（集計の誤りや、画面が決め打ちの値を
 出していることに気づけるように）。
 
+- 直近 7 日は、今日より前の 1 日だけが解答なしで、ほかの 6 日（今日を含む）は全科目 10〜20 問（I524）
 - 計画（plan_answers）と期待値（summarize）は DB を読まない純粋な関数
 - 書き込み（seed_verify_data）は DEBUG が偽なら何もしない。消すのは確かめ用の利用者のクイズのセッション（と解答）だけ
 - 日付は日本時間（settings.TIME_ZONE）で区切る
@@ -33,14 +34,18 @@ USER_EMAIL = 'verify_i487@example.com'
 USER_ID = 'verify_i487'
 SUBJECTS = (('verify-i487-math', '確かめ数学'), ('verify-i487-english', '確かめ英語'))
 
-PROBLEMS_PER_SUBJECT = 5  # 同じセッションで同じ問題は 1 回までなので、1 日 1 科目の解答数の上限にもなる
+PROBLEMS_PER_SUBJECT = 20  # 同じセッションで同じ問題は 1 回までなので、1 日 1 科目の解答数の上限にもなる
 HISTORY_DAYS = 14         # 今日を含む 14 日（前半の 7 日は直近 7 日の範囲の外）
 RECENT_DAYS = 7           # 画面の「直近 7 日」
 CAP_SECONDS = 300         # 1 問の学習時間の上限（画面の仕様。ここでは集計を使わずに同じ規則で数える）
 
+# 1 科目の問題数（両端を含む）
+RECENT_COUNT_RANGE = (10, PROBLEMS_PER_SUBJECT)  # 直近 7 日の解答のある日。科目ごとに日どうしで重ならない
+OUTSIDE_COUNT_RANGE = (1, 5)                     # 範囲の外の日
+
 # 乱数の割合（日ごと・科目ごとに値がばらつくように）
 OUTSIDE_DAY_RATE = 0.5    # 範囲の外の日に解く割合
-SUBJECT_RATE = 0.7        # 解く日に、その科目を解く割合
+SUBJECT_RATE = 0.7        # 範囲の外の解く日に、その科目を解く割合（直近 7 日は全科目で解く）
 CORRECT_RATE = 0.6
 SECONDS_RANGE = (20, 240)
 OVER_CAP_RANGE = (CAP_SECONDS + 1, 900)
@@ -51,7 +56,11 @@ WEEKDAYS = '月火水木金土日'
 
 
 class VerifyDataError(Exception):
-    """確かめ用のデータを作らずに止まるとき（呼び出し元の管理コマンドが CommandError に変える）"""
+    """確かめ用のデータを作らずに止まるとき（起きてはいけない状態: 同じメールの利用者がほかの組織にいる）"""
+
+
+class VerifyDataUnavailable(VerifyDataError):
+    """作れる環境にないとき（DEBUG が偽・パスワードが空）。開発の起動の処理からは、作らずに正常に終わってよい"""
 
 
 @dataclass(frozen=True)
@@ -68,7 +77,8 @@ def _start_of(day: date) -> datetime:
 
 def _random_time(rng: random.Random, day: date, now: datetime) -> datetime:
     """
-    その日の解答の時刻。今日は 0:00〜今の 1 分前（今より後の解答を作らない）、過去の日は 7:00〜22:59
+    その日の解答の時刻（開始以上・終わり未満）。今日は 0:00 から今の 1 分前まで（今より後の解答を作らない。
+    0:01 より前に流したときは 0:00）、過去の日は 7:00 から 23:00 まで
 
     乱数は rng.random() を 1 回だけ使う（randint は範囲の大きさで乱数を捨て直す回数が変わり、
     今日の範囲は今の時刻で変わるので、同じ種でも流す時刻で後の乱数がずれる）
@@ -78,41 +88,57 @@ def _random_time(rng: random.Random, day: date, now: datetime) -> datetime:
         span = max(0, int((now - timedelta(minutes=1) - start).total_seconds()))
     else:
         start += timedelta(hours=DAYTIME_FROM_HOUR)
-        span = DAYTIME_HOURS * 3600 - 1
+        span = DAYTIME_HOURS * 3600
     return start + timedelta(seconds=int(rng.random() * span))
+
+
+def _day_groups(rng: random.Random, today: date) -> list:
+    """
+    (日, 科目 slug, 問題数) の並び。境目と量を、正誤・時間・時刻の乱数より先に決める
+
+    - 直近 7 日: 今日より前の 6 日から 1 日だけを解答の無い日にし、ほかの 6 日（今日を含む）は全科目で解く。
+      問題数は科目ごとに RECENT_COUNT_RANGE から重ならない 6 つ
+    - 範囲の外: 1 日は必ず解き、ほかの日は OUTSIDE_DAY_RATE で解く。科目は SUBJECT_RATE（最低 1 科目）・
+      問題数は OUTSIDE_COUNT_RANGE
+    """
+    outside_days = [today - timedelta(days=n) for n in range(HISTORY_DAYS - 1, RECENT_DAYS - 1, -1)]
+    recent_past_days = [today - timedelta(days=n) for n in range(RECENT_DAYS - 1, 0, -1)]
+    slugs = [slug for slug, _ in SUBJECTS]
+
+    empty_day = rng.choice(recent_past_days)
+    forced_outside_day = rng.choice(outside_days)
+    recent_days = [d for d in recent_past_days if d != empty_day] + [today]
+    low, high = RECENT_COUNT_RANGE
+    recent_counts = {slug: rng.sample(range(low, high + 1), len(recent_days)) for slug in slugs}
+
+    groups = []
+    for day in outside_days:
+        if day != forced_outside_day and rng.random() >= OUTSIDE_DAY_RATE:
+            continue
+        day_subjects = [slug for slug in slugs if rng.random() < SUBJECT_RATE] or [rng.choice(slugs)]
+        groups += [(day, slug, rng.randint(*OUTSIDE_COUNT_RANGE)) for slug in day_subjects]
+    for slug in slugs:
+        groups += [(day, slug, count) for day, count in zip(recent_days, recent_counts[slug])]
+    return groups
 
 
 def plan_answers(rng: random.Random, now: datetime) -> list:
     """
     今日を基準に、HISTORY_DAYS 日ぶんの解答の計画を作る（DB を読まない）
 
-    境目（範囲の外の日・解答の無い日・今日）を先に確定してから、乱数で日・科目・問題数を足す。
+    境目（範囲の外の日・解答の無い日・今日）と量（_day_groups）を先に確定してから、正誤・時間・時刻を乱数で決める。
     最後に、直近 7 日の中の解答のどれか 1 つを 300 秒超えにする。どの種でもすべての境目が入る。
     """
     today = timezone.localdate(now)
-    outside_days = [today - timedelta(days=n) for n in range(HISTORY_DAYS - 1, RECENT_DAYS - 1, -1)]
-    recent_past_days = [today - timedelta(days=n) for n in range(RECENT_DAYS - 1, 0, -1)]
-
-    # 境目を先に確定する
-    empty_days = set(rng.sample(recent_past_days, rng.randint(1, 2)))
-    forced_outside_day = rng.choice(outside_days)
-
-    studied_days = [d for d in outside_days if d == forced_outside_day or rng.random() < OUTSIDE_DAY_RATE]
-    studied_days += [d for d in recent_past_days if d not in empty_days]
-    studied_days.append(today)
-
-    slugs = [slug for slug, _ in SUBJECTS]
     planned = []
-    for day in studied_days:
-        day_subjects = [slug for slug in slugs if rng.random() < SUBJECT_RATE] or [rng.choice(slugs)]
-        for slug in day_subjects:
-            for _ in range(rng.randint(1, PROBLEMS_PER_SUBJECT)):
-                planned.append(PlannedAnswer(
-                    subject_slug=slug,
-                    answered_at=_random_time(rng, day, now),
-                    is_correct=rng.random() < CORRECT_RATE,
-                    time_taken=rng.randint(*SECONDS_RANGE),
-                ))
+    for day, slug, count in _day_groups(rng, today):
+        for _ in range(count):
+            planned.append(PlannedAnswer(
+                subject_slug=slug,
+                answered_at=_random_time(rng, day, now),
+                is_correct=rng.random() < CORRECT_RATE,
+                time_taken=rng.randint(*SECONDS_RANGE),
+            ))
 
     recent_first = today - timedelta(days=RECENT_DAYS - 1)
     recent_indexes = [i for i, a in enumerate(planned) if timezone.localdate(a.answered_at) >= recent_first]
@@ -215,7 +241,8 @@ def format_summary(summary: dict, seed: int) -> list:
 # ---- 書き込み（開発の DB だけ）----
 def ensure_debug() -> None:
     if not settings.DEBUG:
-        raise VerifyDataError('DEBUG が偽のため、確かめ用のデータは作りません（開発の環境だけで使うコマンドです）')
+        raise VerifyDataUnavailable(
+            'DEBUG が偽のため、確かめ用のデータは作りません（開発の環境だけで使うコマンドです）')
 
 
 def _ensure_user(password: str):
@@ -302,7 +329,7 @@ def seed_verify_data(*, seed: int, password: str, now: datetime) -> dict:
     """確かめ用のデータを作り直し、期待値を返す。DEBUG が偽・パスワードが空なら何もせずに止まる"""
     ensure_debug()
     if not password:
-        raise VerifyDataError('パスワードが空です。--password-env で渡す環境変数に値を入れてください')
+        raise VerifyDataUnavailable('パスワードが空です。--password-env で渡す環境変数に値を入れてください')
 
     planned = plan_answers(random.Random(seed), now)  # nosec B311 - 確かめ用データの乱数（暗号の用途ではない）
     with transaction.atomic():
