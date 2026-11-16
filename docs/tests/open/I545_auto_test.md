@@ -12,9 +12,9 @@
 | TC-01 | 規約 2 本の冒頭に「前提の版」の節がある | 下のゲートの 1〜2 行目が exit 0 | 実装前の今の規約で実行し、exit 1（不合格）になることを確認 |
 | TC-02・TC-03 | `rules/` の下（`rules/bk/` などの下のフォルダを含む）に、正の 2 本のほかに中身のあるファイルが無い（正でない古い規約 4 本・控えの 4 本を含む） | ゲートの 3 行目が exit 0（内側の grep が「一致なし」の exit 1。ほかにファイルがあれば exit 0 で不合格、`rules/` が無ければ exit 2 で不合格） | 実装前の今（8 本がある）と、`rules/bk/react-coding-standards.md` を置いた写しで、内側の grep が exit 0（不合格）になることを確認。0 バイトのファイルは捕まえない（規約として読まれないので受け入れる・fix-loop の診断メモ） |
 | TC-04 | `docs/runbooks/issue-flow.md` が「`/rules/` 配下の関連ルールファイル」と書かず、正の 2 本を名指ししている | ゲートの 4〜6 行目が exit 0 | 実装前の今の `issue-flow.md` で実行し、4 行目が exit 1 になることを確認 |
-| TC-05 | `docs/runbooks/backend-check.md` に curl で API を叩く手順（`curl -X`・`curl -s`・`curl http…` の形のどれも）が残っていない | ゲートの 7 行目が exit 0 | 実装前の今（curl の手順がある）で実行し、exit 1 になることを確認 |
-| TC-06 | `docs/runbooks/ux-rules.md` に計画書の UX の節のひな形が残っていない | ゲートの 8 行目が exit 0 | 実装前の今（ひな形がある）で実行し、exit 1 になることを確認 |
-| TC-07 | `.secrets.baseline` に `docs/runbooks/backend-check.md` の登録が無く、その元の文字列（`testpass`）が `docs/runbooks/backend-check.md` に無い | ゲートの 9〜10 行目が exit 0 | 実装前の `origin/develop` の 2 ファイルの写しで実行し、exit 1 になることを確認 |
+| TC-05 | `docs/runbooks/backend-check.md` に curl で API を叩く手順（`curl -X`・`curl -s`・`curl http…` の形のどれも）が残っていない | ゲートの 7〜8 行目が exit 0（`|` を使わない 2 行。ゲートの行に `|` を書くと実走されない） | 変更前の backend-check.md で 7 行目の内側が exit 0（不合格）、`curl http://x` を入れた写しで 8 行目の内側が exit 0（不合格）を確認 |
+| TC-06 | `docs/runbooks/ux-rules.md` に計画書の UX の節のひな形が残っていない | ゲートの 9 行目が exit 0 | 実装前の今（ひな形がある）で実行し、exit 1 になることを確認 |
+| TC-07 | `.secrets.baseline` に `docs/runbooks/backend-check.md` の登録が無く、その元の文字列（`testpass`）が `docs/runbooks/backend-check.md` に無い | ゲートの 10〜11 行目が exit 0 | 実装前の `origin/develop` の 2 ファイルの写しで実行し、exit 1 になることを確認 |
 
 FG の記録（計画の時点・実装前）: 下の「FG の実行記録」に書く。
 
@@ -26,7 +26,8 @@ grep -q "前提の版" rules/react-coding-standards-integrated.md
 ! grep -q "配下の関連ルールファイル" docs/runbooks/issue-flow.md
 grep -q "rules/ultimate_django_coding_standards.md" docs/runbooks/issue-flow.md
 grep -q "rules/react-coding-standards-integrated.md" docs/runbooks/issue-flow.md
-! grep -qE "curl +(-|http)" docs/runbooks/backend-check.md
+! grep -q "curl -" docs/runbooks/backend-check.md
+! grep -q "curl http" docs/runbooks/backend-check.md
 ! grep -q "### 改善後のユーザー体験" docs/runbooks/ux-rules.md
 ! grep -q "docs/runbooks/backend-check.md" .secrets.baseline
 ! grep -q "testpass" docs/runbooks/backend-check.md
@@ -46,3 +47,10 @@ grep -q "rules/react-coding-standards-integrated.md" docs/runbooks/issue-flow.md
 - セキュリティ上の考慮点: なし（文書と文書のテスト）
 - 次回どう防ぐか: 決定論ゲートの失敗の注入は、`run_one_gate()` と同じ判定（`! grep` は内側の exit が 1 のときだけ合格）で確かめる。手元の確かめの道具（スクラッチパッドの `run_gate.sh`）をその判定に直した
 - 確かめた結果: 直したゲート 10 行を `run_one_gate()` と同じ判定で流し、すべて合格。3 行目は、`rules/bk/react-coding-standards.md` を置いた写しで内側の grep が exit 0（不合格）になることを確認
+
+## 再発防止記録（fix-loop 2 回目・2026-11-17）
+- なぜ失敗したか: TC-05 を正規表現の選択肢 `(-|http)` で 1 行にまとめた。`scripts/claude/code-review.sh` の `classify_gate()` は、`|` を含む行をチェーンの疑いとして実走せず（fail-closed）、ゲートの判定が BLOCKER になった。手元の確かめの道具がこの分類をまねていなかった
+- 何を変えたか: `|` を使わない `! grep -q "curl -"` と `! grep -q "curl http"` の 2 行に分けた
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: 手元の確かめの道具（スクラッチパッドの `run_gate.sh`）に `classify_gate()` と同じ「実走しない文字」（`;`・`|`・`&`・バッククォート・`$(`・`>`）の分類を足し、古い 1 行が UNSAFE になることを確かめた
+- 確かめた結果: 直したゲート 11 行を、`classify_gate()`・`run_one_gate()` と同じ判定で流してすべて合格。7 行目は変更前の backend-check.md で、8 行目は `curl http://x` を入れた写しで、内側の grep が exit 0（不合格）になることを確認

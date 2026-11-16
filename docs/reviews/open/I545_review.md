@@ -49,6 +49,7 @@
 - [fix-loop] F1 は 8 行のゲートを `rules/` 全体を正の 2 本を除いて探す 1 行にした（診断メモ 案 A） — 実走は `! grep` のエラー（ファイルが無い）を不合格にするので、名指しのファイルの不在はこの形で確かめられない。フォルダ全体を見る形なら名指しの漏れも無い。0 バイトのファイルを捕まえない弱みは、規約として読まれないので受け入れた
 - [fix-loop] F2 は React 規約 §8 に `mode: 'onTouched'` を足した（案 A） — ux-rules §3 の「欄を離れたときに確かめる」と同じ意味で、直している最中に誤りが消える（onBlur より使い勝手がよい）
 - [fix-loop] 止める指摘でない台帳の指摘（§16 の「差が直る前から規約に従う」が今の依存では守れない決まりを含む・§16 の差の表の漏れ・`.secrets.baseline` に消したファイルの登録が残る など）は直さない — fix-loop が直すのは止める指摘だけ。retro が振り分ける
+- [fix-loop] 2 回目: TC-05 の正規表現の `|` で 1 行が実走対象外になったので、`|` を使わない 2 行に分けた（診断メモ `docs/reviews/I545_fix_diagnosis_20261117_0404.md` 案 A） — 読んで分かり、捕まえる範囲もほぼ同じ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -58,3 +59,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
