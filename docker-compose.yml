@@ -138,6 +138,31 @@ services:
       retries: 18
       start_period: 60s
 
+  # 開発の起動のたびに、ダッシュボードの確かめ用データを今日を基準に作り直して終わる（I524）
+  # 出力（種と期待値）: docker compose logs dashboard-verify-seed。手順: docs/runbooks/frontend-verify.md §11
+  # パスワードが無い・DEBUG が偽なら、作らずに案内を出して正常に終わる（--soft-stop）。CI は名前で指定して起動するので動かない
+  dashboard-verify-seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    env_file:
+      - path: ./backend/.env
+        required: false
+      - path: ./e2e/.env.e2e   # E2E_TEST_PASSWORD（確かめ用の利用者のパスワード）
+        required: false
+    environment:
+      - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy   # migrate の後
+    networks:
+      - app-network
+    command: python manage.py seed_dashboard_verify --password-env E2E_TEST_PASSWORD --soft-stop
+
   # E2E Init Container: backend イメージで migrate・seed_e2e を実行してから e2e サービスに引き渡す
   e2e-init:
     build:
