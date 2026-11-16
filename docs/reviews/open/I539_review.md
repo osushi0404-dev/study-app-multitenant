@@ -30,3 +30,4 @@
 - [plan-review] 計画レビューは高リスク Yes（ロールの付与・テナント境界・未認証の API・データマイグレーション）。Warning 2 件・Info 1 件は計画変更記録に書いて直した（slug の重なりの処理を分けて乱数を差し替えずに確かめる・slug の形を 1 つの正規表現で両方確かめる・R4 の後続は retro で決める）。方式・範囲・受け入れ条件は変えないので再レビューはしない — workflow.md「findings への対応の追記だけなら通り直さない」
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
