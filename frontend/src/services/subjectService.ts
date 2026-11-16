@@ -93,31 +93,6 @@ export class SubjectService {
     const response = await apiClient.put<UserSubject[]>('/api/user/subjects/', body);
     return response.data;
   }
-
-  /**
-   * 科目取得時のローディング状態とエラーハンドリングを含む便利メソッド
-   * @param organizationSlug 組織スラッグ
-   * @param onLoading ローディング状態変更コールバック
-   * @param onError エラーハンドリングコールバック
-   * @returns 科目配列
-   */
-  static async getSubjectsWithLoading(
-    organizationSlug?: string,
-    onLoading?: (loading: boolean) => void,
-    onError?: (error: string) => void
-  ): Promise<Subject[]> {
-    try {
-      onLoading?.(true);
-      const subjects = await this.getSubjects(organizationSlug);
-      return subjects;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '科目の取得に失敗しました';
-      onError?.(errorMessage);
-      return [];
-    } finally {
-      onLoading?.(false);
-    }
-  }
 }
 
 // デフォルトエクスポート

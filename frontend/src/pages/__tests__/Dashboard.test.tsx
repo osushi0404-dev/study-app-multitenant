@@ -26,8 +26,11 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+// 既定は管理者でない利用者。I539 の TC-43・TC-44 だけ role を 'admin' に替える
+const DEFAULT_USER = { id: 'user-1', user_id: 'u_i473' };
+let mockUser: { id: string; user_id: string; role?: string } = DEFAULT_USER;
 jest.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1', user_id: 'u_i473' } }),
+  useAuth: () => ({ user: mockUser }),
 }));
 
 // 既定では毎回同じ関数を返す。TC-16 だけ、描くたびに新しい関数を返すように替える
@@ -187,6 +190,7 @@ describe('Dashboard', () => {
     localStorage.clear();
     mockFreshNotificationFunctions = false;
     mockBarOptions = null;
+    mockUser = DEFAULT_USER;
     // CRA の Jest は各テストの前にモックの実装を消す（resetMocks）ので、ここで入れ直す
     mockGetUserSubjects.mockResolvedValue([]);
     // 既定は組織の科目も 0 件（管理者への依頼の案内・I494）
@@ -444,20 +448,48 @@ describe('Dashboard', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/quiz?subject=7');
   });
 
-  it('TC-05: 選んだ科目も組織の科目も 0 件なら、画面の中で管理者への依頼を案内し、クイズを始められない', async () => {
+  it('TC-05: 管理者でなく、選んだ科目も組織の科目も 0 件なら、管理者が用意するのを待つ案内を出し、クイズを始められない（I539）', async () => {
     respond(overview(), { daily_study_goal_minutes: 30 });
     renderDashboard();
     await screen.findByText('5分');
 
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent(
-      '科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください'
+      '科目がまだ用意されていません。管理者が科目を用意するまでお待ちください'
     );
     expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
     expect(toast.error).not.toHaveBeenCalled();
-    expect(screen.queryByText(/設定画面から科目を追加/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/組織の管理者に科目の登録を依頼してください/)).not.toBeInTheDocument();
     expect(screen.queryByText(/今日の目標/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '学ぶ科目を選ぶ' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '科目を作る' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '問題を作る' })).not.toBeInTheDocument();
+  });
+
+  it('TC-43: 管理者で、選んだ科目も組織の科目も 0 件なら、科目と問題を作る案内と行き先を出す（I539）', async () => {
+    mockUser = { ...DEFAULT_USER, role: 'admin' };
+    respond(overview());
+    renderDashboard();
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(
+      'まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます'
+    );
+    expect(screen.getByRole('link', { name: '科目を作る' })).toHaveAttribute('href', '/subject-management');
+    expect(screen.getByRole('link', { name: '問題を作る' })).toHaveAttribute('href', '/quiz-management');
+    expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
+    expect(screen.queryByText(/管理者が科目を用意するまでお待ちください/)).not.toBeInTheDocument();
+  });
+
+  it('TC-44: 管理者でも、組織に科目があれば、作る案内ではなく学ぶ科目を選ぶ案内を出す（I539）', async () => {
+    mockUser = { ...DEFAULT_USER, role: 'admin' };
+    mockGetAvailableSubjects.mockResolvedValue([{ id: 9, name: '国語' }]);
+    respond(overview());
+    renderDashboard();
+
+    expect(await screen.findByRole('link', { name: '学ぶ科目を選ぶ' })).toBeInTheDocument();
+    expect(screen.queryByText(/まず科目と問題を作りましょう/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '科目を作る' })).not.toBeInTheDocument();
   });
 
   it('TC-40: 選んだ科目が 0 件で組織に科目があれば、設定画面の「学ぶ科目」へ案内する（I494）', async () => {

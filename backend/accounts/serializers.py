@@ -1,11 +1,12 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.db import transaction
-from .models import User, UserSettings, StudyStreak, Organization
+from .models import User, UserSettings, StudyStreak
+from .services import create_personal_organization
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -26,45 +27,65 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     )
     first_name = serializers.CharField(required=False, allow_blank=True)
     last_name = serializers.CharField(required=False, allow_blank=True)
-    organization_id = serializers.IntegerField(write_only=True, required=True)
 
-    # 新規追加フィールド
+    # 学ぶ科目。組織に科目があるときだけ 1 つ以上が必須（validate で見る・I539）
     subject_ids = serializers.ListField(
         child=serializers.IntegerField(),
         write_only=True,
-        required=True,
-        min_length=1,
-        error_messages={
-            'required': '科目を最低1つ選択してください',
-            'min_length': '科目を最低1つ選択してください',
-        }
+        required=False,
+        default=list,
     )
 
     class Meta:
         model = User
         fields = (
             'email', 'user_id', 'password', 'password_confirm',
-            'first_name', 'last_name', 'organization_id', 'subject_ids'
+            'first_name', 'last_name', 'subject_ids'
         )
 
+    def _registration_target(self):
+        """登録先（招待先の組織、または個人用の組織を作るときの「個人利用」カテゴリ）
+
+        組織は入力から受け取らず、ビューが context で渡す（I539）。ちょうど片方が無ければ
+        設定の誤りとして止める（渡し忘れで黙って個人用の組織を作らない）
+        """
+        organization = self.context.get('organization')
+        personal_category = self.context.get('personal_category')
+        if (organization is None) == (personal_category is None):
+            raise ImproperlyConfigured(
+                'UserRegistrationSerializer には context の organization か personal_category の'
+                'ちょうど片方が要ります')
+        return organization, personal_category
+
     def validate(self, attrs):
+        organization, _ = self._registration_target()
+
         # パスワード確認
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({
                 'password_confirm': 'パスワードが一致しません'
             })
 
-        # 科目が組織に属することを確認
-        organization_id = attrs.get('organization_id')
         subject_ids = attrs.get('subject_ids', [])
+        if organization is None:
+            # 個人用の組織はまだ無く科目も無い。番号は他組織・存在しないの区別なく同じ応答で断る（I446）
+            if subject_ids:
+                raise serializers.ValidationError({
+                    'subject_ids': '選択された科目の一部が無効です'
+                })
+            return attrs
 
         from problems.models import Subject
-        valid_subjects = Subject.objects.filter(
-            organization_id=organization_id,
-            id__in=subject_ids
-        )
+        org_subjects = Subject.objects.filter(organization=organization)
+        if not subject_ids:
+            if org_subjects.exists():
+                raise serializers.ValidationError({
+                    'subject_ids': '科目を最低1つ選択してください'
+                })
+            return attrs
 
-        if valid_subjects.count() != len(subject_ids):
+        # 科目が組織に属することを確認
+        if org_subjects.filter(id__in=subject_ids).count() != len(subject_ids):
             raise serializers.ValidationError({
                 'subject_ids': '選択された科目の一部が無効です'
             })
@@ -85,34 +106,29 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_organization_id(self, value):
-        """組織IDの検証"""
-        if not Organization.objects.filter(
-            id=value,
-            is_active=True
-        ).exists():
-            raise serializers.ValidationError('無効な組織IDです')
-        return value
-
     @transaction.atomic
     def create(self, validated_data):
-        subject_ids = validated_data.pop('subject_ids')
-        organization_id = validated_data.pop('organization_id')
+        subject_ids = validated_data.pop('subject_ids', [])
         validated_data.pop('password_confirm')
 
-        # ユーザー作成
-        user = User.objects.create_user(**validated_data)
+        organization, personal_category = self._registration_target()
+        if organization is None:
+            # 本人ひとりの組織を、利用者と同じトランザクションで作り、その人を管理者にする（I539）
+            organization = create_personal_organization(
+                user_id=validated_data['user_id'], category=personal_category)
+            role = 'admin'
+        else:
+            role = 'user'
 
-        # 組織を設定
-        user.organization_id = organization_id
-        user.save(update_fields=['organization_id'])
+        user = User.objects.create_user(**validated_data, organization=organization, role=role)
 
         # 科目アクセス権限を設定
-        from problems.models import UserSubjectAccess
-        UserSubjectAccess.objects.bulk_create([
-            UserSubjectAccess(user=user, subject_id=subject_id)
-            for subject_id in subject_ids
-        ])
+        if subject_ids:
+            from problems.models import UserSubjectAccess
+            UserSubjectAccess.objects.bulk_create([
+                UserSubjectAccess(user=user, subject_id=subject_id)
+                for subject_id in subject_ids
+            ])
 
         # 既存の関連オブジェクト作成
         UserSettings.objects.get_or_create(user=user)

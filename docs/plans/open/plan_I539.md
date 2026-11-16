@@ -126,7 +126,7 @@
   - `needsSubjectStep = !!organizationSlug && 科目が 1 件以上`
   - `needsSubjectStep` が偽: 段の表示（Stepper）を出さず、1 段目のボタンを「登録する」にし、押すと科目なしで登録する（`subjectIds: []`）
   - `needsSubjectStep` が真: 今のまま（「登録して次へ」→ 2 段目で選ぶ → 「登録を完了」）
-  - 招待の科目を読み込み中: 1 段目のボタンを無効にして丸い読み込み表示。読めなかった: ボタンの上に「科目を読み込めませんでした」と「再読み込み」（`SubjectsRetryRow`）を出し、ボタンは無効（0 件と取り違えて科目なしで送らない）
+  - 招待の科目を読み込み中: 1 段目のボタンを無効にして丸い読み込み表示。読めなかった: ボタンの上に「科目を読み込めませんでした」と「再読み込み」（`SubjectsRetryRow`）を出し、ボタンは無効（0 件と取り違えて科目なしで送らない）。ボタンが無効でも入力欄の Enter で送信が起きるので、1 段目の送信の処理の最初でも、科目を読めていなければ何もしない
   - 送信を 1 か所（`submitRegistration(info, subjectIds)`）にまとめ、1 段目・2 段目の両方から呼ぶ
 - `frontend/src/components/dashboard/StartQuizCard.tsx`:
   - 新しい prop `isOrgAdmin: boolean`
@@ -308,6 +308,8 @@ Danger Ops（有無/手順/ロールバック）:
 - 計画レビュー（20261116_2112）の Info（TC-02 の乱数の差し替え）: 4-2 に `pick_unused_slug(candidates)` を分け、TC-02 は候補の一覧を渡して直接確かめる（乱数を差し替えない）。Warning（0022 と 4-2 の規則のずれ）: TC-14 の slug の形を TC-01 と同じ正規表現 `^p-[0-9a-f]{12}$` にし、テストの中で 1 つの定数として両方から使う。Warning（R4 の後続）: R4 の回避策の欄に「retro で決めて報告に載せる」を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ・方式・範囲・受け入れ条件は変えない）
 - design-security-review（2026-11-16）の Blocker: 計画書の記載「`invitable()` = `filter(is_active=True).exclude(type='personal')`」「`subject.organization.type == 'personal'` なら学ぶ科目に入れる」。種類の既定が `personal` で、招待用の組織（開発の DB の `e2e-org-a`・`e2e-org-b`）にも付いているため、招待リンクが使えなくなる・関係ない組織で学ぶ科目が増える（R10）。採った方法: 列 `is_individual` を足し（0022・スキーマ）、データマイグレーションを 0023 にずらし、`invitable()`・科目の作成の判定を `is_individual` と共有の `personal` 組織（`type`＋slug）で決める。あわせて High（`context` の渡し忘れで黙って個人用の登録になる）に `ImproperlyConfigured` で備える（R11・TC-23）。AC6 の言い回しを同じ意味に直した（写しも）。計画レビューのやり直し: 要（方式・DB・受け入れ条件の言い回しを変える）
 - 計画レビュー（20261116_2118）の Warning（本番にカテゴリが無いと 0023 がデプロイを止める）: 9 の Danger Ops のマージ依頼の確かめに、「個人利用」カテゴリの有無を足した。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+- implement（2026-11-16）: 計画書の記載「読めなかった: …ボタンは無効」。TC-33 で、ボタンが無効でも入力欄の Enter で送信が起き、科目なしで登録されることが分かった。採った方法: 1 段目の送信の処理の最初で、招待の科目を読めていなければ何もしない（4-7 に追記）。TC-33 に Enter での送信を足し、止め方を外すと落ちることを確かめた。計画レビューのやり直し: 不要（計画の意図〔科目なしで送らない〕を守る直しで、方式・範囲・受け入れ条件は変えない）
+- implement の `/simplify`（2026-11-16）: 計画書の変更点に無い `frontend/src/services/subjectService.ts` の `getSubjectsWithLoading` を消した（呼び出し元は `Register.tsx` の消した取得の effect だけで、呼ぶ所が無くなった・`grep` で確認）。あわせて `Organization.type` の既定値と `SubjectViewSet.public` の `'personal'` を、足した定数（`TYPE_PERSONAL`・`SHARED_PERSONAL_SLUG`）で書いた（値は同じ・マイグレーションの差分なし）。見送り: 画面の道筋の定数を `Layout.tsx`・`App.tsx`・`SubjectDetail.tsx` でも使う直し（計画の外のファイル）・共有の組織に `is_individual` を付けて `invitable()` を簡単にする案（運営用のアカウントが残る組織なので意味が合わない）。計画レビューのやり直し: 不要（使われなくなったコードの片付けと書き方の統一だけで、動きは変えない）
 
 ## レビュー結果
 - [20261116_2118 判定: ✅ 完了](../../reviews/I539_plan_review_20261116_2118.md)

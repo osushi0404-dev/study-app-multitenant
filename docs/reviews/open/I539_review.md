@@ -31,6 +31,9 @@
 - [design-security-review] Blocker: 「本人ひとりの組織」を種類 `type='personal'` で見分ける設計は、種類の既定が `personal` の招待用の組織（開発の DB の `e2e-org-a`・`e2e-org-b`）の招待を壊す。列 `is_individual`（`db_default=False`）で見分ける設計に直し、AC6 を同じ意味に言い直した（写しも）。High: `context` の渡し忘れは `ImproperlyConfigured` で止める。方式・DB を変えたので計画レビューからやり直す — design-security-review の手順 6・ユーザーの決定（個人用の組織に他人が入れない）は変えないので止めて聞かない
 - [plan-review] 2 回目（20261116_2118）も高リスク Yes・Blocker なし。Warning（本番にカテゴリが無いと 0023 がデプロイを止める）はマージ依頼の確かめに足した。Warning（R4 の後続）は retro で決めて報告に載せる（計画どおり）— findings への対応の追記だけなので再レビューしない
 - [design-security-review] 2 回目は Blocker・High なし。Low（後から手で作る組織と slug が重なりうる）は既存の slug の設計の範囲として計画に記録 — slug の一意化は今回の受け入れ条件の外
+- [implement] 登録画面で、ボタンが無効でも入力欄の Enter で科目なしの送信が起きることを TC-33 で見つけ、1 段目の送信の処理でも止めた（計画変更記録に記録・止め方を外すと落ちることを確認）— 計画の意図「読めないときは科目なしで送らない」を守るため
+- [implement] `/simplify`（4 観点）の指摘のうち、使われなくなった `getSubjectsWithLoading` の削除・登録画面の読み込み中／失敗の条件の名前付け・使われない型の削除・`'personal'` の定数化を反映。見送り: 道筋の定数を既存の画面でも使う（計画の外）・共有の組織への `is_individual` の付与（意味が合わない）・`public` の既定の slug を消す（計画が残すと決めた）・並列の取得（計画は確認の後に読む fail-closed）・`get_or_create` を `create` に（重複に強いほうを残す）
+- [implement] 画面の確かめ（Playwright MCP）: 招待なしの登録 → ログイン → 管理者の案内 → 科目・問題の作成 → クイズの開始まで動いた（`.evidence/I539/` に 4 枚）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

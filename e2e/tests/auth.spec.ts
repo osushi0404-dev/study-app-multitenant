@@ -33,6 +33,76 @@ test.describe('ログインフロー（未認証）', () => {
   });
 });
 
+// I539: 招待リンクなしの会員登録 → ログイン → 科目と問題を作る → クイズを始める（未認証のプロジェクトで動く）。
+// 登録のたびに本人ひとりの組織ができるので、ユーザー ID・科目名は時刻で毎回変える
+test.describe('招待なしの会員登録（I539）', () => {
+  test('登録して、自分の科目と問題を作り、クイズを始められる', async ({ page }) => {
+    const password = process.env.E2E_TEST_PASSWORD || '';
+    const stamp = Date.now();
+    const userId = `i539_${stamp}`;
+    const subjectName = `E2E I539 ${stamp}`;
+
+    // 1) ログイン画面の新規登録の入口
+    await page.goto('/login');
+    await page.getByText('アカウントをお持ちでない方はこちら').click();
+    await expect(page).toHaveURL(/\/register$/);
+
+    // 2) 科目選びの段は無く、「登録する」で登録を終える
+    await expect(page.getByText('科目選択')).toHaveCount(0);
+    await page.getByLabel('メールアドレス').fill(`${userId}@example.com`);
+    await page.getByLabel('ユーザーID').fill(userId);
+    await page.getByLabel('パスワード', { exact: true }).fill(password);
+    await page.getByLabel('パスワード確認').fill(password);
+    await page.getByRole('button', { name: '登録する' }).click();
+    await expect(page.getByText('登録が完了しました。メール認証を行ってからログインしてください。')).toBeVisible();
+
+    // 3) ログイン画面へ移り、登録した人でログインする
+    await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
+    await page.fill('[data-testid="email-input"]', `${userId}@example.com`);
+    await page.fill('[data-testid="password-input"]', password);
+    await page.click('[data-testid="login-button"]');
+    await expect(page).toHaveURL(/dashboard/);
+
+    // 4) 科目 0 件の管理者には、科目と問題を作る案内が出て、クイズはまだ始められない
+    await expect(page.getByText(/まず科目と問題を作りましょう/)).toBeVisible();
+    await expect(page.locator('[data-testid="start-quiz-button"]')).toBeDisabled();
+
+    // 5) 科目を作る
+    await page.getByRole('link', { name: '科目を作る' }).click();
+    await expect(page).toHaveURL(/\/subject-management/);
+    await page.getByRole('button', { name: '最初の科目を追加' }).click();
+    const subjectDialog = page.getByRole('dialog');
+    await subjectDialog.getByLabel('科目名').fill(subjectName);
+    await subjectDialog.getByRole('button', { name: '保存' }).click();
+    await expect(page.getByText(subjectName)).toBeVisible();
+
+    // 6) その科目の問題を作る
+    await page.goto('/quiz-management');
+    await page.getByRole('button', { name: 'add' }).click();
+    const problemDialog = page.getByRole('dialog');
+    await problemDialog.getByLabel('問題文').fill('I539 の E2E の問題');
+    await problemDialog.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: subjectName }).click();
+    for (const letter of ['A', 'B', 'C', 'D']) {
+      await problemDialog.getByLabel(`選択肢 ${letter}`).fill(`選択肢${letter}`);
+    }
+    // 正解に A を選ぶ（ラジオは「単一選択」「複数選択」の 2 つの後に選択肢の順で並ぶ）
+    await problemDialog.getByRole('radio').nth(2).check();
+    await problemDialog.getByLabel('解説').fill('I539 の E2E の解説');
+    await problemDialog.getByRole('button', { name: '作成' }).click();
+    await expect(problemDialog).toBeHidden();
+
+    // 7) ダッシュボードからクイズを始められる（科目は 1 件なので、選ぶダイアログを出さずに進む）
+    await page.goto('/dashboard');
+    await expect(page.getByText(/まず科目と問題を作りましょう/)).toHaveCount(0);
+    const startButton = page.locator('[data-testid="start-quiz-button"]');
+    await expect(startButton).toBeEnabled();
+    await startButton.click();
+    await expect(page).toHaveURL(/\/quiz\?subject=/);
+    await expect(page.locator('[data-testid="choice-option"]').first()).toBeVisible();
+  });
+});
+
 // 認証済み状態でのテスト（test.use でプロジェクト設定を上書き）
 test.describe('ログアウトフロー（認証済み）', () => {
   test.use({ storageState: path.join(__dirname, '..', '.auth', 'user_a.json') });  // tests/ の親ディレクトリの .auth/

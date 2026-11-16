@@ -3,7 +3,8 @@
  *
  * - 科目を選んでいればその科目で、「すべて」なら 1 件はすぐ・2 件以上はダイアログで科目を選ぶ
  * - 科目 0 件・科目の取得失敗は、押せないボタンとカードの中の案内で伝える（toast だけにしない）
- * - 科目 0 件の案内は、組織に科目があれば設定画面の「学ぶ科目」のカードへの導線、無ければ管理者への依頼（I494）
+ * - 科目 0 件の案内は、組織に科目があれば設定画面の「学ぶ科目」のカードへの導線（I494）。無ければ、管理者には
+ *   科目と問題を作る案内と行き先、管理者でない人には管理者が用意するのを待つ案内（I539）
  * - 目標の 1 行は、設定の目標と全科目の今日の分が読めたときだけ出す（科目を選んでいても全科目で計算・I513）
  */
 import React, { useState } from 'react';
@@ -24,9 +25,15 @@ import { ALL_SUBJECTS } from '../../hooks/useDashboardOverview';
 import SubjectsRetryRow from '../SubjectsRetryRow';
 import { UserSubjectsState } from '../../hooks/useUserSubjects';
 import { AvailableSubjectsState } from '../../hooks/useAvailableSubjects';
-import { LEARNING_SUBJECTS_PATH } from '../../constants/routes';
+import {
+  LEARNING_SUBJECTS_PATH,
+  QUIZ_MANAGEMENT_PATH,
+  SUBJECT_MANAGEMENT_PATH,
+} from '../../constants/routes';
 
 interface StartQuizCardProps {
+  /** 組織の管理者か（組織の科目が 0 件のときの案内を分ける・I539） */
+  isOrgAdmin: boolean;
   subjects: UserSubjectsState;
   onRetrySubjects: () => void;
   /** 組織の科目（選んだ科目が 0 件のときだけ読む・I494） */
@@ -46,23 +53,42 @@ const goalText = (todayMinutes: number, goalMinutes: number): string =>
     : `今日の目標（全科目）達成まであと${goalMinutes - todayMinutes}分です`;
 
 interface NoSubjectsGuideProps {
+  isOrgAdmin: boolean;
   availableSubjects: AvailableSubjectsState;
   onRetry: () => void;
 }
 
 /**
- * 選んだ科目が 0 件のときの案内（I494）。組織に科目があれば設定画面の「学ぶ科目」のカードへ、
- * 1 つも無ければ管理者への依頼。組織の科目を読み込み中は何も出さない
+ * 選んだ科目が 0 件のときの案内（I494）。組織に科目があれば設定画面の「学ぶ科目」のカードへ。
+ * 1 つも無ければ、管理者には科目と問題を作る行き先、管理者でない人には待つ案内（I539）。
+ * 組織の科目を読み込み中は何も出さない
  */
-const NoSubjectsGuide = ({ availableSubjects, onRetry }: NoSubjectsGuideProps) => {
+const NoSubjectsGuide = ({ isOrgAdmin, availableSubjects, onRetry }: NoSubjectsGuideProps) => {
   if (availableSubjects.status === 'error') {
     return <SubjectsRetryRow onRetry={onRetry} sx={{ mb: 2 }} />;
   }
   if (availableSubjects.status === 'loading') return null;
+  if (availableSubjects.data.length === 0 && isOrgAdmin) {
+    return (
+      <Box sx={{ mb: 2 }}>
+        <Alert severity="info" role="status" sx={{ mb: 1 }}>
+          まず科目と問題を作りましょう。科目管理で科目を作り、問題管理でその科目の問題を作ると、クイズを始められます
+        </Alert>
+        <Box display="flex" gap={1} flexWrap="wrap">
+          <Button variant="outlined" component={RouterLink} to={SUBJECT_MANAGEMENT_PATH}>
+            科目を作る
+          </Button>
+          <Button variant="outlined" component={RouterLink} to={QUIZ_MANAGEMENT_PATH}>
+            問題を作る
+          </Button>
+        </Box>
+      </Box>
+    );
+  }
   if (availableSubjects.data.length === 0) {
     return (
       <Alert severity="info" role="status" sx={{ mb: 2 }}>
-        科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください
+        科目がまだ用意されていません。管理者が科目を用意するまでお待ちください
       </Alert>
     );
   }
@@ -79,6 +105,7 @@ const NoSubjectsGuide = ({ availableSubjects, onRetry }: NoSubjectsGuideProps) =
 };
 
 const StartQuizCard: React.FC<StartQuizCardProps> = ({
+  isOrgAdmin,
   subjects,
   onRetrySubjects,
   availableSubjects,
@@ -117,7 +144,11 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
       {subjects.status === 'error' && <SubjectsRetryRow onRetry={onRetrySubjects} sx={{ mb: 2 }} />}
 
       {subjects.status === 'success' && !hasSubjects && (
-        <NoSubjectsGuide availableSubjects={availableSubjects} onRetry={onRetryAvailable} />
+        <NoSubjectsGuide
+          isOrgAdmin={isOrgAdmin}
+          availableSubjects={availableSubjects}
+          onRetry={onRetryAvailable}
+        />
       )}
 
       {hasSubjects && todayMinutes !== null && goalMinutes !== null && (

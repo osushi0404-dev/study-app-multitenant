@@ -35,8 +35,9 @@ def setup(db):
     inactive = Organization.objects.create(
         name="非アクティブI131", slug="org-inactive-i131", type="school",
         category=cat, is_active=False)
-    # --no-migrations のため personal 組織は存在しない。slug なし登録の既定組織
-    # （_get_organization の type='personal' 検索）用に fixture で自作する。
+    # --no-migrations のため共有の personal 組織と「個人利用」カテゴリは存在しない。
+    # I539 から slug なし登録は本人ひとりの組織を作るので、共有の組織には入らないことを確かめる。
+    OrganizationCategory.objects.create(name="個人利用I131", slug="personal")
     personal = Organization.objects.create(
         name="個人利用I131", slug="personal", type="personal", category=cat, is_active=True)
     subject = Subject.objects.create(name="科目I131", slug="subj-i131", organization=org)
@@ -111,18 +112,18 @@ def test_register_with_org_slug_returns_201(setup):
     assert UserSubjectAccess.objects.filter(user=user, subject=setup["subject"]).count() == 1
 
 
-# ---- TC-AUTO-06: 登録 API・slug なしルート 201（personal 既定・本バグの再発防止） ----
+# ---- TC-AUTO-06: 登録 API・slug なしルート 201（本バグの再発防止） ----
+# I539 から: 共有の personal 組織ではなく、本人ひとりの組織に入る（科目は送らない・TC-18）
 @pytest.mark.django_db
 def test_register_without_slug_uses_personal(setup):
     client = APIClient()
-    resp = client.post(
-        "/api/auth/register/",
-        _payload("i131_user_b", setup["subject_p"].id),
-        format="json",
-    )
+    payload = _payload("i131_user_b", setup["subject_p"].id)
+    del payload["subject_ids"]
+    resp = client.post("/api/auth/register/", payload, format="json")
     assert resp.status_code == status.HTTP_201_CREATED
     user = User.objects.get(user_id="i131_user_b")
-    assert user.organization_id == setup["personal"].id
+    assert user.organization_id != setup["personal"].id
+    assert user.organization.is_individual is True
 
 
 # ---- TC-AUTO-07: 登録 API・無効 slug 400（既存挙動不変） ----
