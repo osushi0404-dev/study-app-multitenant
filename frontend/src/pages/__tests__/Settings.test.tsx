@@ -3,14 +3,26 @@
  * 裏側（UserSettingsSerializer）の名前で読み、同じ名前で保存する
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
 import Settings from '../Settings';
 import apiClient from '../../services/api';
+import SubjectService from '../../services/subjectService';
 
 jest.mock('../../services/api');
+
+// 「学ぶ科目」のカード（I494）の取得は、このファイルでは中身を見ない（TC-29 で置かれていることだけを見る）
+jest.mock('../../services/subjectService', () => ({
+  __esModule: true,
+  default: {
+    getUserSubjects: jest.fn(),
+    getAvailableSubjects: jest.fn(),
+    updateUserSubjects: jest.fn(),
+  },
+}));
 
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
@@ -47,17 +59,23 @@ const SAVED = {
   notification_settings: { email: false, push: true, achievements: true, reminders: false },
 };
 
-// 取得のキャッシュ（React Query）の中で描く。QueryClient はテストごとに新しくする
+// 取得のキャッシュ（React Query）の中で描く。QueryClient はテストごとに新しくする。
+// 「学ぶ科目」のカードが URL のハッシュを読むので Router の中で描く（I494）
 const renderSettings = (queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
   render(
     <QueryClientProvider client={queryClient}>
-      <Settings />
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 
 describe('Settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // CRA の Jest は各テストの前にモックの実装を消す（resetMocks）ので、ここで入れ直す
+    (SubjectService.getUserSubjects as jest.Mock).mockResolvedValue([]);
+    (SubjectService.getAvailableSubjects as jest.Mock).mockResolvedValue([]);
     mockGet.mockResolvedValue({ data: SAVED });
     mockPatch.mockImplementation((_url: string, body: object) =>
       Promise.resolve({ data: { ...SAVED, ...body } })
@@ -130,5 +148,24 @@ describe('Settings', () => {
 
     const cached = queryClient.getQueryData<{ daily_study_goal_minutes: number }>(key);
     expect(cached?.daily_study_goal_minutes).toBe(60);
+  });
+
+  it('TC-29: 「学ぶ科目」のカードが置かれている（I494）', async () => {
+    renderSettings();
+
+    expect(await screen.findByRole('heading', { name: '学ぶ科目' })).toBeInTheDocument();
+    expect(screen.getByTestId('learning-subjects-card')).toBeInTheDocument();
+  });
+
+  it('TC-29b: 「学習設定」の form に名前があり、その中の「保存」だけを指せる。見出しは h1・各カード h2（I494）', async () => {
+    renderSettings();
+
+    const form = await screen.findByRole('form', { name: '学習設定' });
+    expect(within(form).getByRole('button', { name: '保存' })).toBeInTheDocument();
+    expect(within(form).queryByRole('button', { name: '学ぶ科目を保存' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '設定' })).toBeInTheDocument();
+    for (const name of ['アカウント情報', '学習設定', '学ぶ科目', '表示設定', '通知設定']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
+    }
   });
 });

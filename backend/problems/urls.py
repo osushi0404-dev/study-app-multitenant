@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import SubjectViewSet, ProblemViewSet, QuizSessionViewSet
-from api.views.user_subjects import get_user_subjects
+from api.views.user_subjects import AvailableSubjectsView, UserSubjectsView
 
 router = DefaultRouter()
 router.register(r'subjects', SubjectViewSet, basename='subject')
@@ -10,5 +10,6 @@ router.register(r'quiz', QuizSessionViewSet, basename='quiz')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('user/subjects/', get_user_subjects, name='user-subjects'),
+    path('user/subjects/', UserSubjectsView.as_view(), name='user-subjects'),
+    path('user/subjects/available/', AvailableSubjectsView.as_view(), name='user-subjects-available'),
 ]

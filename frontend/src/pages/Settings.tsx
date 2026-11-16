@@ -38,6 +38,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
 import { USER_SETTINGS_KEY_ROOT, userSettingsKey } from '../hooks/useDailyStudyGoal';
 import { PatchedUserSettings, UserSettings } from '../types/api';
+import LearningSubjectsCard from '../components/settings/LearningSubjectsCard';
 
 interface UserSettingsData {
   dailyStudyGoalMinutes: number;
@@ -94,6 +95,9 @@ const passwordSchema = yup.object({
 // 設定の項目名は裏側（UserSettingsSerializer）の名前にそろえる（I487）。値が無いときは裏側の既定値を使う
 const DEFAULT_GOAL_MINUTES = 30;
 const DEFAULT_REMINDER_TIME = '19:00';
+// 「学習設定」の form の名前に使う見出しの id（名前のある form は画面読み上げの飛び先になり、
+// 同じ画面のほかの「保存」と区別できる・I494）
+const STUDY_SETTINGS_HEADING_ID = 'study-settings-heading';
 const THEMES: ReadonlyArray<UserSettingsData['themePreference']> = ['light', 'dark', 'auto'];
 
 /** notification_settings（JSON）から真偽値だけを読む */
@@ -234,7 +238,7 @@ const Settings: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" component="h1" gutterBottom>
         設定
       </Typography>
 
@@ -243,7 +247,7 @@ const Settings: React.FC = () => {
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" component="h2" gutterBottom>
                   アカウント情報
                 </Typography>
 
@@ -278,11 +282,15 @@ const Settings: React.FC = () => {
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" component="h2" gutterBottom id={STUDY_SETTINGS_HEADING_ID}>
                   学習設定
                 </Typography>
 
-                <Box component="form" onSubmit={settingsForm.handleSubmit(onSettingsSubmit as any)}>
+                <Box
+                  component="form"
+                  aria-labelledby={STUDY_SETTINGS_HEADING_ID}
+                  onSubmit={settingsForm.handleSubmit(onSettingsSubmit as any)}
+                >
                   <TextField
                     fullWidth
                     label="1日の学習目標時間（分）"
@@ -331,11 +339,16 @@ const Settings: React.FC = () => {
             </Card>
           </Grid>
 
+          {/* 学ぶ科目（I494）。ダッシュボードの科目 0 件の案内から #learning-subjects で来る */}
+          <Grid item xs={12}>
+            <LearningSubjectsCard />
+          </Grid>
+
           {/* Appearance Settings */}
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" component="h2" gutterBottom>
                   表示設定
                 </Typography>
 
@@ -370,13 +383,13 @@ const Settings: React.FC = () => {
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" component="h2" gutterBottom>
                   通知設定
                 </Typography>
 
                 {/* Browser Notification Permission */}
                 <Box sx={{ mb: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" gutterBottom>
+                  <Typography variant="subtitle2" component="h3" gutterBottom>
                     ブラウザ通知の許可状況
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>

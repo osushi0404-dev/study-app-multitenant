@@ -132,13 +132,20 @@ test.describe('ダッシュボードの幅と並び（I487）', () => {
 test.describe('科目 0 件の利用者（I487）', () => {
   test.use({ storageState: path.join(authDir, 'user_c.json') });
 
-  test('TC-27: 科目 0 件なら画面の中で管理者への依頼を案内し、クイズを始められない', async ({ page }) => {
+  // I494: 組織 A には科目があるので、管理者への依頼ではなく設定画面の「学ぶ科目」へ案内する（保存はしない＝0 件を保つ）
+  test('TC-27: 科目 0 件なら設定画面の「学ぶ科目」へ案内し、クイズを始められない', async ({ page }) => {
     await page.goto('/dashboard');
 
     await expect(
-      page.getByText('科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください')
+      page.getByText('学ぶ科目がまだ選ばれていません。設定画面で学ぶ科目を選んでください')
     ).toBeVisible();
     await expect(page.getByTestId('start-quiz-button')).toBeDisabled();
+    await expect(page.getByText(/組織の管理者に科目の登録を依頼してください/)).toHaveCount(0);
     await expect(page.getByText(/設定画面から科目を追加/)).toHaveCount(0);
+
+    await page.getByRole('link', { name: '学ぶ科目を選ぶ' }).click();
+
+    await expect(page).toHaveURL(/\/settings#learning-subjects$/);
+    await expect(page.getByRole('heading', { name: '学ぶ科目' })).toBeVisible();
   });
 });

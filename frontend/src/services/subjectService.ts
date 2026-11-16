@@ -1,6 +1,7 @@
 import { apiClient } from './api';
 import { Subject, PaginatedResponse } from './types';
 import ApiResponseUtils from '../utils/apiResponseUtils';
+import { AvailableSubject, UserSubject, UserSubjectSelection } from '../types/api';
 
 /**
  * 科目API関連のサービス層
@@ -65,6 +66,32 @@ export class SubjectService {
       const errorMessage = ApiResponseUtils.handleApiError(error, 'ユーザー科目取得');
       throw new Error(errorMessage);
     }
+  }
+
+  /**
+   * 利用者が選べる自組織の科目の一覧（設定画面の「学ぶ科目」のカード・I494）
+   * @returns 自組織の科目（名前の順。組織に属さない利用者は空）
+   */
+  static async getAvailableSubjects(): Promise<AvailableSubject[]> {
+    try {
+      const response = await apiClient.get<AvailableSubject[]>('/api/user/subjects/available/');
+      return response.data;
+    } catch (error) {
+      const errorMessage = ApiResponseUtils.handleApiError(error, '選べる科目の取得');
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * 利用者が学ぶ科目を置き換える（I494）
+   * 失敗は包まずに投げ直す（画面が 400 の理由〔error.sub_message〕を読むため）
+   * @param subjectIds 選んだ科目の番号（自組織の科目・1 件以上）
+   * @returns 保存の後の選んだ科目（名前の順）
+   */
+  static async updateUserSubjects(subjectIds: number[]): Promise<UserSubject[]> {
+    const body: UserSubjectSelection = { subject_ids: subjectIds };
+    const response = await apiClient.put<UserSubject[]>('/api/user/subjects/', body);
+    return response.data;
   }
 
   /**

@@ -106,8 +106,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserSettings'
           description: ''
+  /api/user/subjects/:
+    get:
+      operationId: user_subjects_list
+      description: 利用者が選んだ科目の取得と置き換え（書けるのは本人の分だけ）
+      tags:
+      - user
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSubject'
+          description: ''
+    put:
+      operationId: user_subjects_update
+      description: 利用者が選んだ科目の取得と置き換え（書けるのは本人の分だけ）
+      tags:
+      - user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSubjectSelection'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserSubjectSelection'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSubject'
+          description: ''
+  /api/user/subjects/available/:
+    get:
+      operationId: user_subjects_available_list
+      description: 利用者が選べる自組織の科目（名前の順・ページ分けなし。組織に属さない利用者は空）
+      tags:
+      - user
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AvailableSubject'
+          description: ''
 components:
   schemas:
+    AvailableSubject:
+      type: object
+      description: 利用者が選べる自組織の科目（I494。GET /api/user/subjects/available/ の応答）
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+      required:
+      - id
+      - name
     DashboardAnalytics:
       type: object
       description: GET /api/dashboard/analytics/ の応答（キーは全部必須）
@@ -401,6 +475,32 @@ components:
         theme_preference:
           $ref: '#/components/schemas/ThemePreferenceEnum'
         notification_settings: {}
+    UserSubject:
+      type: object
+      description: 利用者が選んだ科目（I494。GET・PUT /api/user/subjects/ の応答）
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+      required:
+      - id
+      - name
+    UserSubjectSelection:
+      type: object
+      description: 学ぶ科目の置き換えの本文（I494）。自組織の科目だけを受ける
+      properties:
+        subject_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          maxItems: 200
+          minItems: 1
+      required:
+      - subject_ids
   securitySchemes:
     jwtAuth:
       type: http

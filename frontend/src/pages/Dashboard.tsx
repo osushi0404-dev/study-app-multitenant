@@ -21,6 +21,7 @@ import WeakSubjectsCard from '../components/dashboard/WeakSubjectsCard';
 import RecommendationsCard from '../components/dashboard/RecommendationsCard';
 import { ALL_SUBJECTS, useDashboardOverview } from '../hooks/useDashboardOverview';
 import { useUserSubjects } from '../hooks/useUserSubjects';
+import { useAvailableSubjects } from '../hooks/useAvailableSubjects';
 import { useDailyStudyGoal } from '../hooks/useDailyStudyGoal';
 import { useDashboardAchievements } from '../hooks/useDashboardAchievements';
 import { todayStudyMinutes } from '../utils/dashboardAchievements';
@@ -36,6 +37,9 @@ const Dashboard: React.FC = () => {
   // 「すべて」を選んでいるときは同じキーなので、取得は 1 回にまとまる（React Query）
   const allOverview = useDashboardOverview(userId, ALL_SUBJECTS);
   const { state: subjects, retry: retrySubjects } = useUserSubjects(userId);
+  // 選んだ科目が 0 件のときだけ組織の科目を読み、案内を分ける（I494）
+  const noSelectedSubjects = subjects.status === 'success' && subjects.subjects.length === 0;
+  const availableSubjects = useAvailableSubjects(userId, { enabled: noSelectedSubjects });
   const goal = useDailyStudyGoal(userId);
   const goalMinutes = goal.status === 'done' ? goal.minutes : null;
 
@@ -66,6 +70,8 @@ const Dashboard: React.FC = () => {
           <StartQuizCard
             subjects={subjects}
             onRetrySubjects={retrySubjects}
+            availableSubjects={availableSubjects}
+            onRetryAvailable={availableSubjects.retry}
             selectedSubject={selectedSubject}
             todayMinutes={allTodayMinutes}
             goalMinutes={goalMinutes}
