@@ -63,3 +63,9 @@ bash scripts/claude/tests/test_i213_dependabot.sh
 - セキュリティ上の考慮点: 止まる条件・順番は同じ（DEBUG が偽・パスワードが空は書き込みより前）。異常が失敗として見えるようになる向きの直しで、案内にパスワードの値は入らない（TC-05）
 - 次回どう防ぐか: 「止まったら正常に終わる」を足すときは、止まる理由を「想定内（環境が整っていない）」と「起きてはいけない状態」に分け、前者だけを正常終了にする。I513 の BP の直し・今回とも、マージ依頼の後に規約の節と照らして見つかった（I487 の振り返りの「自作の前に規約と依存を実ファイルで照合」の範囲）
 - 確かめた結果: Red（直す前に TC-04・TC-05 の 3 件が標準エラーで空・TC-08 が `DID NOT RAISE CommandError` で落ちた）→ 直した後 `test_I524_dashboard_verify_volume.py`・`test_I513_seed_dashboard_verify.py`・`studylogs/tests/test_I455_org_scoped_querysets.py` 313 passed。FG-7（`except VerifyDataUnavailable` を `except VerifyDataError` に戻す）で TC-08 が落ち、元に戻した
+
+## 実行記録（test-gate・BP の直しの後のやり直し・2026-11-16 10:48）
+- `bash scripts/claude/gate-check.sh I524` → exit 0（`GATE_CHECK: OK`・レビュー済み 28d5d86d 以降は記録の場所だけ）
+- 差分のコードレビュー `docs/reviews/I524_code_review_20261116_1040.md` は OK（F2 は解決済み）。決定論ゲート 2 本は `code-review.sh` が実走した
+- pytest・Jest・E2E は CI（PR #526・28d5d86d）の 8 ジョブすべて合格。手元で流し直したものは無い
+- 起動し直して作り直しが今までどおり動くこと・画面がログと同じことを、手動テストの「画面確認」の 4 行目に記録した（止まる道の確かめは TC-04・TC-05・TC-08）
