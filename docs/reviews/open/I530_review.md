@@ -15,8 +15,8 @@
 - Config: ハーネスのスクリプト（`pr-base-sync.sh`・`code-review.sh` のコメント）とテスト 2 本・一覧 2 本
 
 ## テスト結果
-- 自動: （実装後に書く）
-- 手動: （close の手順 5.5 で書く）
+- 自動: review-gate 2 回目で決定論ゲート 15 行すべて exit=0（test_pr_base_sync 26 ケース・test_i498 13 項目・test_i193・構文・不在の確かめ）・CI 全ジョブ合格（CI_WAIT: OK）。test-gate の gate-check OK
+- 手動: No.1（Claude）は close の手順 5.5 の実際の `final` の出力で確かめる（test-gate の時点では PR が Draft で確かめにならない）
 
 ## 計画との差分
 - あり（テストの組み方と期待の細部だけ。計画書の計画変更記録の 2〜5 行目）: FG2 の T3 を見ない・失敗の注入を `CASE_SCRIPT` で 1 ケースずつ流す形・T4 の正規表現・shellcheck を pre-commit 経由で
@@ -35,6 +35,7 @@
 - [review-gate] 1 回目（4e9a85c7 の記録）は FINAL_VERDICT: BLOCKER — 台帳は OK（Low 4 件）だが、決定論ゲートの 3 行（`pre-commit run shellcheck …`・`bash -c "…"` 2 行）が実走できる形でなく fail-closed。fix-loop でゲートの書き方を直す
 - [fix-loop] 案 A（ゲートの行を `classify_gate` が実走する形に分け、shellcheck は `bash -n` に置き換える）で直した — 診断レビュー PASS（`docs/reviews/I530_fix_diagnosis_review_20261116_1239.md`）。安全境界（`classify_gate`）を広げず、新しいテストのファイルも作らない最小の形。shellcheck は pre-commit と CI が流す
 - [review-gate] 2 回目（差分のレビュー・`docs/reviews/I530_code_review_20261116_1242.md`）は FINAL_VERDICT: OK・ゲート 15 行すべて exit=0・CI_WAIT: OK・高リスク NO（敵対的レビュー不要）。台帳の残り Low 4 件（F1〜F4）は retro が振り分ける
+- [test-gate] 手動テスト No.1 は close の手順 5.5 で確かめる（計画書 §6）。Human の項目は無いので retro へ進む
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -47,3 +48,5 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: test-gate
+
+STAGE_DONE: test-gate NEXT: retro

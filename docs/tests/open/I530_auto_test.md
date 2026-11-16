@@ -85,6 +85,9 @@ grep -qE '^- F4 ' docs/reviews/backlog/I498.md
 ## 実行記録
 - 2026-11-16 review-gate 1 回目（記録 `docs/reviews/I530_code_review_20261116_1227.md`）: テスト 3 本は exit=0・CI_WAIT: OK・台帳 OK。ゲートの 3 行（`pre-commit run shellcheck …`・`bash -c "…"` 2 行）が実走対象外で FINAL_VERDICT: BLOCKER → fix-loop
 
+- 2026-11-16 review-gate 2 回目（記録 `docs/reviews/I530_code_review_20261116_1242.md`・HEAD ce03e80f）: 決定論ゲート 15 行すべて exit=0・CI_WAIT: OK・FINAL_VERDICT: OK
+- 2026-11-16 test-gate: `bash scripts/claude/gate-check.sh I530` → GATE_CHECK: OK（exit 0）。test-gate に回された重いテストは無し（pytest・Jest・E2E は CI）
+
 ## 再発防止記録（fix-loop・2026-11-16）
 - なぜ失敗したか: 決定論ゲートの行を、`code-review.sh` の `classify_gate` が実走する形（`bash scripts/claude/tests/*.sh`・`grep`・`! grep`・`bash -n`・`python3 -m json.tool`・`python3 -m py_compile`。`;` `|` `&` `` ` `` `$(` `>` を含まない）に照らさずに書いた。`&&` でつないで `bash -c` で包んだ行、`|` の入った正規表現、`pre-commit run` は実走されず fail-closed の BLOCKER になる
 - 何を変えたか: TC-03 を `! grep` 2 行、TC-05 を `! grep`・`grep` 6 行（`|` を使わない）に分け、shellcheck の行を `bash -n` 4 行に置き換えた（shellcheck は pre-commit と CI が流す）。ゲートの節の下にこの決まりを 1 行書いた。`classify_gate` は変えない（安全境界を広げない）
