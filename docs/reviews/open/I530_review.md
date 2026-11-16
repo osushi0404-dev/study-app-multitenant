@@ -33,6 +33,7 @@
 - [implement] I498 のテストの FG2 で T3 を見ないことにした — final が `wait_ci` そのものを呼ぶようになり、既定を変えても 2 つの上限が食い違わなくなった（AC2 の結果）。T3 自体は、pr-base-sync.sh に別の既定を書き戻したとき（FG1）を捕まえるので残す
 - [implement] /simplify の 4 観点の指摘のうち、失敗の注入の組み方（全体の流し直し → 1 ケースずつ）・FG2 の T3 の確かめ・古いコメントと名前を直した。見送り: 共有ファイルへの切り出し（I498 で、code-review.sh を写して動かす既存のテスト 5 本以上が壊れるため採らないと決めた）・`wait_ci` に上限の行を出させる（`wait_ci` の変更はイシューの範囲外。式は code-review.sh 本体の時間切れのメッセージと同じ書き方）・合格の 2 つの分岐をまとめる（✅ の文言が変わり、手動テストの期待とずれる）・BEHIND の後に待ちを 2 回通る（安全側に倒した意図した形・一覧 I498 F4 と同じ話）・テストが `wait_ci` の内側の呼び方に合わせたスタブを持つ（本物の `wait_ci` を通して穴が塞がることを確かめるのが目的）
 - [review-gate] 1 回目（4e9a85c7 の記録）は FINAL_VERDICT: BLOCKER — 台帳は OK（Low 4 件）だが、決定論ゲートの 3 行（`pre-commit run shellcheck …`・`bash -c "…"` 2 行）が実走できる形でなく fail-closed。fix-loop でゲートの書き方を直す
+- [fix-loop] 案 A（ゲートの行を `classify_gate` が実走する形に分け、shellcheck は `bash -n` に置き換える）で直した — 診断レビュー PASS（`docs/reviews/I530_fix_diagnosis_review_20261116_1239.md`）。安全境界（`classify_gate`）を広げず、新しいテストのファイルも作らない最小の形。shellcheck は pre-commit と CI が流す
 
 STAGE_DONE: plan NEXT: plan-review
 

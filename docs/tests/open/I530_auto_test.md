@@ -47,18 +47,18 @@
 - 結果（2026-11-16 implement）: 13 項目すべて合格
 
 ## TC-03: CI を待つ判定が pr-base-sync.sh に無い（AC2・決定論ゲート 1 回）
-- 判定: 下の決定論ゲートの 5 行目（`pr-base-sync.sh` に `gh pr checks` も `ci_wait()` の定義も無ければ exit 0）
+- 判定: 下の決定論ゲートの `! grep` の 2 行（`pr-base-sync.sh` に `gh pr checks` も `ci_wait()` の定義も無ければ exit 0）
 - 意図的に戻さない限り起きないのでテストのファイルにはしない（`docs/runbooks/plan-writing-rules.md`「決定論テストの対象の選び方」）。戻したときの害は TC-01 の T22〜T24 が止める
 - 失敗の注入: 直す前の `pr-base-sync.sh`（`git show HEAD:scripts/claude/pr-base-sync.sh` を `$TMPDIR` に書き出したもの）に同じ判定を掛けると exit 1
 - 結果（2026-11-16 plan-issue）: 失敗の注入（直す前のファイル）で exit 1 を確認済み。本物のファイル（実装の後）は exit 0（2026-11-16 implement）
 
 ## TC-04: 関係する既存のテストと静的な確かめ
 - `test_i193_official_flow.sh`（`wait_ci` の C 群・`wait_ci` を変えないので通る）
-- `pre-commit run shellcheck --files …`（変えたスクリプト 2 本とテスト 2 本。手元に shellcheck 単体が無いので pre-commit 経由）
+- shellcheck（変えたスクリプト 2 本とテスト 2 本）は pre-commit と CI が流す。ゲートでは `bash -n`（構文）だけを実走する
 - 結果（2026-11-16 implement）: `test_i193_official_flow.sh` 合格・shellcheck `Passed`（最初の実行で出た SC2097/SC2098〔環境変数の渡し方〕・SC2016 をテストで直した）
 
 ## TC-05: 一覧の行（決定論ゲート 1 回）
-- 判定: 下の決定論ゲートの 6 行目（I498 の F1・F2・F3・R1 と I224 の F1 の行が無く、I498 の F4 の行が残っていれば exit 0）
+- 判定: 下の決定論ゲートの一覧の 6 行（I498 の F1・F2・F3・R1 と I224 の F1 の行が無く、I498 の F4 の行が残っていればそれぞれ exit 0）
 - 失敗の注入: 直す前の一覧（今のファイル）では exit 1
 - 結果: 失敗の注入（直す前の一覧）で exit 1 を確認済み（2026-11-16 plan-issue）。行を消した後は exit 0（2026-11-16 implement）
 
@@ -67,9 +67,27 @@
 bash scripts/claude/tests/test_pr_base_sync.sh
 bash scripts/claude/tests/test_i498_ci_wait_timeout.sh
 bash scripts/claude/tests/test_i193_official_flow.sh
-pre-commit run shellcheck --files scripts/claude/pr-base-sync.sh scripts/claude/code-review.sh scripts/claude/tests/test_pr_base_sync.sh scripts/claude/tests/test_i498_ci_wait_timeout.sh
-bash -c "! grep -qF 'gh pr checks' scripts/claude/pr-base-sync.sh && ! grep -qE '^ci_wait\(\)' scripts/claude/pr-base-sync.sh"
-bash -c "! grep -qE '^- (F1|F2|F3|R1) ' docs/reviews/backlog/I498.md && grep -qE '^- F4 ' docs/reviews/backlog/I498.md && ! grep -qE '^- F1 ' docs/reviews/backlog/I224.md"
+bash -n scripts/claude/pr-base-sync.sh
+bash -n scripts/claude/code-review.sh
+bash -n scripts/claude/tests/test_pr_base_sync.sh
+bash -n scripts/claude/tests/test_i498_ci_wait_timeout.sh
+! grep -qF 'gh pr checks' scripts/claude/pr-base-sync.sh
+! grep -qE '^ci_wait\(\)' scripts/claude/pr-base-sync.sh
+! grep -qE '^- F1 ' docs/reviews/backlog/I498.md
+! grep -qE '^- F2 ' docs/reviews/backlog/I498.md
+! grep -qE '^- F3 ' docs/reviews/backlog/I498.md
+! grep -qE '^- R1 ' docs/reviews/backlog/I498.md
+grep -qE '^- F4 ' docs/reviews/backlog/I498.md
+! grep -qE '^- F1 ' docs/reviews/backlog/I224.md
 ```
+- ゲートの行は `code-review.sh` の `classify_gate` が実走する形（`bash scripts/claude/tests/*.sh`・`grep`・`! grep`・`bash -n`）だけで書く（`|`・`&&`・`bash -c`・`pre-commit run` は実走されず BLOCKER になる・fix-loop の再発防止）。shellcheck は pre-commit（commit のたび）と CI（Harness Tests の pre-commit）が流す
 
 ## 実行記録
+- 2026-11-16 review-gate 1 回目（記録 `docs/reviews/I530_code_review_20261116_1227.md`）: テスト 3 本は exit=0・CI_WAIT: OK・台帳 OK。ゲートの 3 行（`pre-commit run shellcheck …`・`bash -c "…"` 2 行）が実走対象外で FINAL_VERDICT: BLOCKER → fix-loop
+
+## 再発防止記録（fix-loop・2026-11-16）
+- なぜ失敗したか: 決定論ゲートの行を、`code-review.sh` の `classify_gate` が実走する形（`bash scripts/claude/tests/*.sh`・`grep`・`! grep`・`bash -n`・`python3 -m json.tool`・`python3 -m py_compile`。`;` `|` `&` `` ` `` `$(` `>` を含まない）に照らさずに書いた。`&&` でつないで `bash -c` で包んだ行、`|` の入った正規表現、`pre-commit run` は実走されず fail-closed の BLOCKER になる
+- 何を変えたか: TC-03 を `! grep` 2 行、TC-05 を `! grep`・`grep` 6 行（`|` を使わない）に分け、shellcheck の行を `bash -n` 4 行に置き換えた（shellcheck は pre-commit と CI が流す）。ゲートの節の下にこの決まりを 1 行書いた。`classify_gate` は変えない（安全境界を広げない）
+- セキュリティ上の考慮点: なし（ゲートの安全境界を変えず、止まる側に倒れていたものを走る形に直しただけ）
+- 次回どう防ぐか: テスト文書のゲートの節を書いたら、`REVIEW_LIB_SOURCE_ONLY=1` で `code-review.sh` を読み込み `run_declared_gates <auto_test>` を流して `GATE_VERDICT=OK` と全行の ✅ を確かめてから review-gate に進む（今回の確かめ方）。retro で、計画の段階でこれを決定論で確かめる形（例: plan-issue の文書品質ゲートに 1 行）を検討する
+- 確かめた結果: `run_declared_gates` で 15 行すべてが ALLOW として実走され、`test_i193_official_flow.sh` 以外は exit=0。`test_i193_official_flow.sh` は確かめ用のスクリプトがサンドボックスの中で走り、F9（`run-all.sh` の uv での流し直し）が uv のキャッシュに書けず exit 2 になったもの。`bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i193_official_flow.sh` では `pass=1 fail=0`（review-gate 1 回目でも exit=0）。失敗の注入: 直す前の一覧（I498 の F1・F2・F3・R1・I224 の F1）・直す前の `pr-base-sync.sh`（`gh pr checks`・`ci_wait()`）・F4 の行を消した一覧で、対応する行がすべて rc=1
