@@ -26,6 +26,9 @@
 - [plan] 新しい 2 つの経路を API の契約（I493）に入れた — 画面の型を手書きしない
 - [plan] キャッシュは確定の後（on_commit）に消す — シグナルはトランザクションの中で消すので、確定の前に古い値が入り直す隙がある
 - [plan] 文言とカードの中の細かい並びは設計確認メモの決定から導いた（新しい価値判断は無いので止めない）
+- [plan-review] 計画レビューの Info（追跡用のログ）を取り入れた・Warning 2 件は直す所なし — 方式・範囲・受け入れ条件を変えないので再レビューしない
+- [design-security-review] 組織に属さない利用者の条件が全体共有の科目に当たる穴を High として計画で塞いだ（3 か所で先に打ち切る・テストに共有科目）。Blocker にはせず計画レビューもやり直さない — 守りの条件とテストの追記だけで方式・範囲・受け入れ条件は変わらない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement

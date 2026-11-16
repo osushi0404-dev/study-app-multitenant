@@ -8,7 +8,7 @@
 - e2e: 実装前のため未実行
 
 ## 共通の準備（backend）
-- 組織 A（科目 数学・英語・物理）・組織 B（科目 B数学）を作る。利用者 `user_a`（組織 A・role user・数学を選んでいる）・`user_none`（組織なし）
+- 組織 A（科目 数学・英語・物理）・組織 B（科目 B数学）・組織の無い全体共有の科目「共有科目」（`organization=None`）を作る。利用者 `user_a`（組織 A・role user・数学を選んでいる）・`user_none`（組織なし）
 - `client = APIClient(); client.force_authenticate(user_a)`
 - 本文は `format='json'`
 
@@ -17,15 +17,15 @@
 |---|---|---|
 | TC-01 | `user_a` が `PUT /api/user/subjects/` 本文 `{"subject_ids": [数学, 英語]}` | 200・本文 `[{"id": 英語, "name": "英語"}, {"id": 数学, "name": "数学"}]`（名前の順）・`UserSubjectAccess` の `user_a` の `subject_id` の集合が `{数学, 英語}`・英語の行の `granted_by` が `user_a` |
 | TC-02 | `user_a`（数学・英語）が `{"subject_ids": [英語]}` | 200・本文 `[{"id": 英語, "name": "英語"}]`・集合が `{英語}` |
-| TC-03 | `user_a`（数学）が `{"subject_ids": [数学, B数学]}`、別に `{"subject_ids": [数学, 4949999]}`（存在しない） | どちらも 400・`body["error"]["sub_message"] == "選択された科目の一部が無効です"`・`body["error"]["details"] == {"subject_ids": ["選択された科目の一部が無効です"]}`・2 つの本文が同じ・集合が `{数学}` のまま |
+| TC-03 | `user_a`（数学）が `{"subject_ids": [数学, B数学]}`、`{"subject_ids": [数学, 共有科目]}`、`{"subject_ids": [数学, 4949999]}`（存在しない） | 3 つとも 400・`body["error"]["sub_message"] == "選択された科目の一部が無効です"`・`body["error"]["details"] == {"subject_ids": ["選択された科目の一部が無効です"]}`・3 つの本文が同じ・集合が `{数学}` のまま |
 | TC-04 | `{"subject_ids": []}`、`{}`（キーなし） | どちらも 400・`body["error"]["details"]["subject_ids"] == ["科目を最低1つ選択してください"]`・集合が `{数学}` のまま。201 件の番号 → 400・`["選べる科目の数を超えています"]` |
 | TC-05 | `override_settings(CACHES=LocMem)` で、`GET /api/user/subjects/` → キー `user_subjects_cache_key(user_a.id, A.id, False)` に値が入っていることを確かめる（正の対照）→ `subject_service.get_user_selected_subjects(user_a, annotate_count=True)` も一度読む → `PUT {"subject_ids": [物理]}`（`django_capture_on_commit_callbacks(execute=True)`）→ `GET` | 2 回目の `GET` が `[{"id": 物理, "name": "物理"}]`・2 つのキー（`False`・`True`）がどちらも空 |
 | TC-06 | `{"subject_ids": [英語, 英語]}` | 200・本文 `[{"id": 英語, "name": "英語"}]`・集合 `{英語}` |
 | TC-07 | 未認証で `PUT /api/user/subjects/`・`GET /api/user/subjects/available/` | どちらも 401 |
-| TC-08 | `user_a` が `GET /api/user/subjects/available/`。組織 A に科目を足して計 25 件にしてからも読む | 200・各要素のキーが `{"id", "name", "description"}`・組織 A の科目が名前の順で全件（25 件・ページ分けなし）・B数学を含まない |
-| TC-09 | `user_none` が `PUT {"subject_ids": [数学]}`・`GET .../available/` | `PUT` は 400・`sub_message == "選択された科目の一部が無効です"`・`user_none` の行 0 件。`available` は 200・`[]` |
+| TC-08 | `user_a` が `GET /api/user/subjects/available/`。組織 A に科目を足して計 25 件にしてからも読む | 200・各要素のキーが `{"id", "name", "description"}`・組織 A の科目が名前の順で全件（25 件・ページ分けなし）・B数学・共有科目を含まない |
+| TC-09 | `user_none` が `PUT {"subject_ids": [数学]}`・`PUT {"subject_ids": [共有科目]}`・`GET .../available/`。サービスを直接 `replace_user_subjects(user=user_none, subject_ids=[共有科目])` | `PUT` はどちらも 400・`sub_message == "選択された科目の一部が無効です"`・`user_none` の行 0 件（サービスを直接呼んでも 0 件）。`available` は 200・`[]`（共有科目が出ない） |
 | TC-10 | `user_a`（数学）が `{"subject_ids": [数学]}` を 2 回 | どちらも 200・`[{"id": 数学, "name": "数学"}]`・数学の行の `pk` と `granted_at` が前と同じ（触っていない） |
-| TC-10b | サービスを直接 `replace_user_subjects(user=user_a, subject_ids=[英語, B数学])` | 例外なし・集合が `{英語}`（B数学は書かれない・数学は外れる） |
+| TC-10b | サービスを直接 `replace_user_subjects(user=user_a, subject_ids=[英語, B数学, 共有科目])` | 例外なし・集合が `{英語}`（B数学・共有科目は書かれない・数学は外れる） |
 | TC-11 | `mock.patch.object(UserSubjectAccess.objects, 'bulk_create', side_effect=RuntimeError)` の中で `replace_user_subjects(user=user_a, subject_ids=[英語])` | `RuntimeError`・集合が `{数学}` のまま（外した行が戻る） |
 
 ## テナント境界の横断（`backend/core/tests/test_I446_cross_api_tenant_isolation.py`）
