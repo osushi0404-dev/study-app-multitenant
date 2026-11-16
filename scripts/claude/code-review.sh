@@ -230,14 +230,18 @@ for path in sys.argv[1:]:
 PY
 }
 
-# I193: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 1200。直近の実測は最長 5.5 分）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
+# I193・I498: CI 待ち。CI_WAIT_TIMEOUT 秒（既定 CI_WAIT_TIMEOUT_DEFAULT）まで CI_POLL_INTERVAL 秒（既定 15）ごとに見る。
+# 既定の正はこの 1 か所（pr-base-sync.sh の final も、関数だけを読み込む形でこの値を読む・I498）。
+# 1980 秒＝CI で時間の上限を持つ一番長いジョブ（.github/workflows/ci.yml の Harness Tests・timeout-minutes: 30）が
+# 自分の上限で止まるより先に待ちをやめないよう、30 分＋3 分（登録・順番待ちの分）。実測は 6〜11 分（PR #495 で 10 分 56 秒）
+CI_WAIT_TIMEOUT_DEFAULT=1980
 # - PR の最新のコミット（headRefOid）が手元の HEAD と違う → 手元のコミットを CI が見ていない（CI_WAIT: NOT_PUSHED・失敗）
 # - fail か cancel が 1 つでもある → 失敗
 # - PR で動くワークフローのジョブ（expected_ci_jobs）が全部、pass か skipping で出そろったときだけ成功。
 #   チェックがまだ無い・一部しか登録されていない（push 直後）・ジョブ名を読めない・gh が失敗した → 待つ（時間切れで止まる）
 # 戻り値: 0=成功（CI_WAIT: OK）/ 1=失敗（CI_WAIT: FAIL・NOT_PUSHED）/ 3=時間切れ（CI_WAIT: TIMEOUT）
 wait_ci() {
-  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-1200}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0
+  local pr="$1" timeout_s="${CI_WAIT_TIMEOUT:-$CI_WAIT_TIMEOUT_DEFAULT}" interval="${CI_POLL_INTERVAL:-15}" elapsed=0
   local head pr_head checks expected name state missing
   head=$(git rev-parse HEAD)
   pr_head=$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null || true)
@@ -1201,7 +1205,7 @@ echo "CI を確認しています (PR #${PR_NUM})..."
 CI_RC=0
 wait_ci "$PR_NUM" || CI_RC=$?
 if [ "$CI_RC" -eq 3 ]; then
-  echo "⛔ CI が ${CI_WAIT_TIMEOUT:-1200} 秒で終わりませんでした。"
+  echo "⛔ CI が ${CI_WAIT_TIMEOUT:-$CI_WAIT_TIMEOUT_DEFAULT} 秒で終わりませんでした。"
   exit 3
 fi
 if [ "$CI_RC" -ne 0 ]; then

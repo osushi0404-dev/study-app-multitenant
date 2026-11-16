@@ -17,8 +17,16 @@ fi
 RETRY_INTERVAL="${PBS_RETRY_INTERVAL:-5}"   # UNKNOWN/DRAFT 再取得間隔（秒）＝イシュー確定値
 RETRY_MAX="${PBS_RETRY_MAX:-6}"             # 再取得回数（計30秒）＝イシュー確定値
 CI_INTERVAL="${PBS_CI_INTERVAL:-15}"        # CI ポーリング間隔（秒）＝code-review.sh と同値
-CI_TIMEOUT="${PBS_CI_TIMEOUT:-600}"         # CI 待機上限（秒）＝code-review.sh と同値
 LOOP_MAX="${PBS_LOOP_MAX:-3}"               # final の BEHIND 追従再チェック上限
+# CI 待機上限（秒）。既定は code-review.sh の CI_WAIT_TIMEOUT_DEFAULT（正は 1 か所・I498）。
+# 関数だけを読み込む形（REVIEW_LIB_SOURCE_ONLY=1）で読む。別の bash で読むので、このスクリプトの set の設定は変わらない
+CI_TIMEOUT="${PBS_CI_TIMEOUT:-}"
+if [ -z "$CI_TIMEOUT" ]; then
+  CI_TIMEOUT=$(REVIEW_LIB_SOURCE_ONLY=1 bash -c '. "$1" && printf "%s\n" "$CI_WAIT_TIMEOUT_DEFAULT"' _ \
+    "$(dirname "${BASH_SOURCE[0]}")/code-review.sh" 2>/dev/null) || CI_TIMEOUT=""
+  [[ "$CI_TIMEOUT" =~ ^[1-9][0-9]*$ ]] \
+    || { echo "⛔ CI 待ちの上限の既定を code-review.sh から読めません（'${CI_TIMEOUT}'）。STOP してユーザーに報告"; exit 1; }
+fi
 
 # I146: cross-repo（fork）PR ガード。MODE 分岐より前＝sync/final 共通で必ず走る。
 # 自前でない PR に base 追従・push をしない（fail-closed: 取得失敗・空値・想定外値も STOP）。
@@ -73,7 +81,7 @@ merge_base() {
   fi
 }
 
-ci_wait() {  # code-review.sh L214-237 と同型: pending 待機・fail 時 STOP
+ci_wait() {  # code-review.sh の wait_ci と同じ上限の既定: pending 待機・fail 時 STOP
   local elapsed=0 out
   while :; do
     out=$(gh pr checks "$PR_NUM" 2>&1 || true)
