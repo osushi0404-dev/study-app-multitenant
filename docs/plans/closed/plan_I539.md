@@ -312,8 +312,8 @@ Danger Ops（有無/手順/ロールバック）:
 - implement の `/simplify`（2026-11-16）: 計画書の変更点に無い `frontend/src/services/subjectService.ts` の `getSubjectsWithLoading` を消した（呼び出し元は `Register.tsx` の消した取得の effect だけで、呼ぶ所が無くなった・`grep` で確認）。あわせて `Organization.type` の既定値と `SubjectViewSet.public` の `'personal'` を、足した定数（`TYPE_PERSONAL`・`SHARED_PERSONAL_SLUG`）で書いた（値は同じ・マイグレーションの差分なし）。見送り: 画面の道筋の定数を `Layout.tsx`・`App.tsx`・`SubjectDetail.tsx` でも使う直し（計画の外のファイル）・共有の組織に `is_individual` を付けて `invitable()` を簡単にする案（運営用のアカウントが残る組織なので意味が合わない）。計画レビューのやり直し: 不要（使われなくなったコードの片付けと書き方の統一だけで、動きは変えない）
 
 ## レビュー結果
-- [20261116_2118 判定: ✅ 完了](../../reviews/I539_plan_review_20261116_2118.md)
-- [20261116_2112 判定: ✅ 完了](../../reviews/I539_plan_review_20261116_2112.md)
+- [20261116_2118 判定: ✅ 完了](../../reviews/closed/I539_plan_review_20261116_2118.md)
+- [20261116_2112 判定: ✅ 完了](../../reviews/closed/I539_plan_review_20261116_2112.md)
 
 ## セキュリティレビュー結果
 

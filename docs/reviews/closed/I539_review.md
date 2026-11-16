@@ -100,6 +100,11 @@
 - [retro] 画像の置き場所の未追跡のフォルダで作業ツリーの確かめが 3 回止まった件 → 新規起票 I549（#549）。既存のイシューに同梱先が無かった（`gh issue list` で確認）
 - [retro] 見送り 3 件（計画の確認項目の追加・E2E の手順書の追加・AI の料金の上限）は「## 振り返り」の見送りに理由つきで記録
 - [retro] 計画書の「## セキュリティレビュー結果」の残余リスク処遇は「## 振り返り」の残余リスク処遇に記録（High 以上の残りなし）
+- [close] base 追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー結果のリンクを closed 向きに直した。`I539_fix_diagnosis_20261116_2141.md`（診断メモ）は close の回収の形（`*_review_*`）に当たらないので `docs/reviews/` の直下に残る
+- [close] PR の説明に Danger Ops（0023 の対象の数え方と「個人利用」カテゴリの有無の確かめ方）を書いた。`danger-approved` のラベルはユーザーが付ける
+
+## 変更概要（close で記入）
+- 招待なしの登録で本人ひとりの組織を作り、本人を管理者にする。招待の引き当てを `invitable()` にそろえ、科目 0 件の組織では科目選びを飛ばす。ダッシュボードの科目 0 件の案内を管理者／管理者でないで分ける。共有の `personal` 組織の一般の利用者を移すデータマイグレーション
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -111,3 +116,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
