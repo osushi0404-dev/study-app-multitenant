@@ -32,17 +32,20 @@ class OrgScopedQuerySet(QuerySet):
     利用者本人の記録を、組織の境界の中に絞る取り出し方を持つ QuerySet の土台
 
     サブクラスは subject_paths（記録から科目への経路。複数なら全部で絞る）と
-    allow_null（科目が空の記録を残すか）を書く。絞らずに読むときは、呼び出しの直前に
+    allow_null（科目が空の記録を残すか）を書く。持ち主の利用者を別の記録を経て決めるモデルは
+    user_path（記録から持ち主への経路。例: 'session__user'）も書く。どれもクラスの定数だけで決め、
+    呼び出しの引数・入力から決めない。絞らずに読むときは、呼び出しの直前に
     「# 組織で絞らない: <理由>」を書く（studylogs のテストが付け忘れを止める）。
     """
     subject_paths: tuple[str, ...] = ()
     allow_null: bool = False
+    user_path: str = 'user'  # 記録から持ち主の利用者への経路（I491）
 
     def for_user(self, user):
         """user 本人の記録で、user の組織の科目を指すもの（allow_null なら科目が空のものも）"""
         if not self.subject_paths:
             raise ImproperlyConfigured(f'{type(self).__name__} に subject_paths がありません')
-        queryset = self.filter(user=user)
+        queryset = self.filter(**{self.user_path: user})
         for path in self.subject_paths:
             queryset = scope_to_user_org(
                 queryset, user, subject_path=path, allow_null=self.allow_null)
