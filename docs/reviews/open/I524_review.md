@@ -39,6 +39,7 @@
 - [retro] AC7 の「#508 に『I524 に移した』と書く」は、上と同じコメントの 1 節で行った（計画 9 は close 段階と書いたが、retro の同梱のコメントと 1 本にまとめた。GitHub への書き込みの回数を増やさないため）
 - [retro] 改善案は 3 件とも見送り（下の「## 振り返り」）。どれもその場で捕まり、手戻りが無い
 - [close] develop への追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR 説明をテンプレートで埋めて Ready にする
+- [close→fix-loop] マージ依頼の後、ユーザーの BP の確認（2026-11-16「念のための確認だが、今回対応した内容はBPの観点で評価して問題ないか？」→ Claude が規約〔`rules/ultimate_django_coding_standards.md` §14 のエラー握りつぶしの禁止〕と照らして 4 点を報告し、1・2 を直すことを推奨 →「1と2をこのPRで直して」）で、記録を open に戻して fix-loop から通し直す。直す 2 点: (1) `--soft-stop` が、ほかの組織に同じメールの利用者がいる異常まで正常終了にしている。想定内の止まり方（`DEBUG` が偽・パスワードが空）だけを正常終了にし、異常は今どおり `CommandError` にする（台帳の F2・#508 に同梱したもの）(2) 「作りませんでした」の案内を、Django の慣例どおり標準エラーに警告として出す。3（テストの準備の重複）・4（compose の設定の写し）は今のまま
 
 ## 振り返り
 
@@ -93,3 +94,5 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 
 STAGE_DONE: close NEXT: merge
+
+STAGE_DONE: close NEXT: fix-loop
