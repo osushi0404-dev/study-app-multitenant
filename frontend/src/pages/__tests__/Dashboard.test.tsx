@@ -43,7 +43,7 @@ jest.mock('../../contexts/NotificationContext', () => ({
 
 jest.mock('../../services/subjectService', () => ({
   __esModule: true,
-  default: { getUserSubjects: jest.fn() },
+  default: { getUserSubjects: jest.fn(), getAvailableSubjects: jest.fn() },
 }));
 
 jest.mock('../../components/SubjectSelector', () => ({
@@ -103,6 +103,7 @@ const URL = '/api/dashboard/overview/';
 const SETTINGS_URL = '/api/settings/';
 const mockGet = apiClient.get as jest.Mock;
 const mockGetUserSubjects = SubjectService.getUserSubjects as jest.Mock;
+const mockGetAvailableSubjects = SubjectService.getAvailableSubjects as jest.Mock;
 
 const days = (seconds: number[]) =>
   seconds.map((s, i) => ({
@@ -188,6 +189,8 @@ describe('Dashboard', () => {
     mockBarOptions = null;
     // CRA の Jest は各テストの前にモックの実装を消す（resetMocks）ので、ここで入れ直す
     mockGetUserSubjects.mockResolvedValue([]);
+    // 既定は組織の科目も 0 件（管理者への依頼の案内・I494）
+    mockGetAvailableSubjects.mockResolvedValue([]);
   });
 
   it('TC-20: 契約どおりの応答の数字・推移・苦手・おすすめを出し、「練習する」でその科目へ進む', async () => {
@@ -441,7 +444,7 @@ describe('Dashboard', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/quiz?subject=7');
   });
 
-  it('TC-05: 科目 0 件なら、画面の中で管理者への依頼を案内し、クイズを始められない', async () => {
+  it('TC-05: 選んだ科目も組織の科目も 0 件なら、画面の中で管理者への依頼を案内し、クイズを始められない', async () => {
     respond(overview(), { daily_study_goal_minutes: 30 });
     renderDashboard();
     await screen.findByText('5分');
@@ -454,6 +457,48 @@ describe('Dashboard', () => {
     expect(toast.error).not.toHaveBeenCalled();
     expect(screen.queryByText(/設定画面から科目を追加/)).not.toBeInTheDocument();
     expect(screen.queryByText(/今日の目標/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '学ぶ科目を選ぶ' })).not.toBeInTheDocument();
+  });
+
+  it('TC-40: 選んだ科目が 0 件で組織に科目があれば、設定画面の「学ぶ科目」へ案内する（I494）', async () => {
+    respond(overview());
+    mockGetAvailableSubjects.mockResolvedValue([{ id: 7, name: '数学', description: '' }]);
+    renderDashboard();
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('学ぶ科目がまだ選ばれていません。設定画面で学ぶ科目を選んでください');
+    expect(screen.getByRole('link', { name: '学ぶ科目を選ぶ' })).toHaveAttribute(
+      'href', '/settings#learning-subjects'
+    );
+    expect(screen.queryByText(/組織の管理者に科目の登録を依頼してください/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('start-quiz-button')).toBeDisabled();
+  });
+
+  it('TC-41: 選んだ科目が 0 件で組織の科目の取得に失敗したら、再読み込みを出す（I494）', async () => {
+    respond(overview());
+    mockGetAvailableSubjects
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce([{ id: 7, name: '数学', description: '' }]);
+    renderDashboard();
+
+    const card = screen.getByTestId('start-quiz-card');
+    expect(await within(card).findByText('科目を読み込めませんでした')).toBeInTheDocument();
+    expect(screen.queryByText(/組織の管理者に科目の登録を依頼してください/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(card).getByRole('button', { name: '再読み込み' }));
+    expect(await screen.findByRole('link', { name: '学ぶ科目を選ぶ' })).toBeInTheDocument();
+    expect(mockGetAvailableSubjects).toHaveBeenCalledTimes(2);
+  });
+
+  it('TC-42: 選んだ科目が 1 件以上なら、組織の科目を読まない（I494）', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+
+    await screen.findByText('5分');
+    await waitFor(() => expect(mockGetUserSubjects).toHaveBeenCalled());
+    expect(screen.getByTestId('start-quiz-button')).toBeEnabled();
+    expect(mockGetAvailableSubjects).not.toHaveBeenCalled();
   });
 
   it('TC-06: 科目の一覧の取得に失敗したら、0 件と取り違えずに再読み込みを出す', async () => {

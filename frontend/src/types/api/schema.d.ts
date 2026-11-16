@@ -54,10 +54,51 @@ export interface paths {
         patch: operations["settings_partial_update"];
         trace?: never;
     };
+    "/api/user/subjects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 利用者が選んだ科目の取得と置き換え（書けるのは本人の分だけ） */
+        get: operations["user_subjects_list"];
+        /** @description 利用者が選んだ科目の取得と置き換え（書けるのは本人の分だけ） */
+        put: operations["user_subjects_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user/subjects/available/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 利用者が選べる自組織の科目（名前の順・ページ分けなし。組織に属さない利用者は空） */
+        get: operations["user_subjects_available_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 利用者が選べる自組織の科目（I494。GET /api/user/subjects/available/ の応答） */
+        AvailableSubject: {
+            readonly id: number;
+            name: string;
+            description?: string;
+        };
         /** @description GET /api/dashboard/analytics/ の応答（キーは全部必須） */
         DashboardAnalytics: {
             has_data: boolean;
@@ -184,6 +225,15 @@ export interface components {
             theme_preference?: components["schemas"]["ThemePreferenceEnum"];
             notification_settings?: unknown;
         };
+        /** @description 利用者が選んだ科目（I494。GET・PUT /api/user/subjects/ の応答） */
+        UserSubject: {
+            readonly id: number;
+            name: string;
+        };
+        /** @description 学ぶ科目の置き換えの本文（I494）。自組織の科目だけを受ける */
+        UserSubjectSelection: {
+            subject_ids: number[];
+        };
     };
     responses: never;
     parameters: never;
@@ -299,6 +349,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserSettings"];
+                };
+            };
+        };
+    };
+    user_subjects_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSubject"][];
+                };
+            };
+        };
+    };
+    user_subjects_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserSubjectSelection"];
+                "multipart/form-data": components["schemas"]["UserSubjectSelection"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSubject"][];
+                };
+            };
+        };
+    };
+    user_subjects_available_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableSubject"][];
                 };
             };
         };

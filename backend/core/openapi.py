@@ -7,6 +7,8 @@ CONTRACT_PATHS = frozenset({
     '/api/dashboard/overview/',
     '/api/dashboard/analytics/',  # I488: 統計画面
     '/api/settings/',  # I487: 設定画面・通知の項目名を裏側にそろえるため
+    '/api/user/subjects/',  # I494: 学ぶ科目の取得・置き換え
+    '/api/user/subjects/available/',  # I494: 設定画面の「学ぶ科目」のカード
 })
 
 

@@ -11,3 +11,7 @@ export type DashboardAnalyticsGranularity = Schemas['DashboardAnalyticsGranulari
 // 設定（I487）。読むときの形と、PATCH で送る形（どの項目も省略できる）
 export type UserSettings = Schemas['UserSettings'];
 export type PatchedUserSettings = Schemas['PatchedUserSettings'];
+// 学ぶ科目（I494）。選んだ科目・選べる自組織の科目・置き換えの本文
+export type UserSubject = Schemas['UserSubject'];
+export type AvailableSubject = Schemas['AvailableSubject'];
+export type UserSubjectSelection = Schemas['UserSubjectSelection'];
