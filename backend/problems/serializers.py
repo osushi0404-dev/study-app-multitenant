@@ -11,6 +11,49 @@ from .services.tenant_scope import available_subjects
 
 logger = logging.getLogger(__name__)
 
+# 学ぶ科目として一度に送れる番号の上限（大きすぎる本文を断るだけ。組織の科目の数より十分大きい・I494）
+MAX_SELECTABLE_SUBJECTS = 200
+AT_LEAST_ONE_SUBJECT = '科目を最低1つ選択してください'
+
+
+class UserSubjectSerializer(serializers.ModelSerializer):
+    """利用者が選んだ科目（I494。GET・PUT /api/user/subjects/ の応答）"""
+
+    class Meta:
+        model = Subject
+        fields = ['id', 'name']
+
+
+class AvailableSubjectSerializer(serializers.ModelSerializer):
+    """利用者が選べる自組織の科目（I494。GET /api/user/subjects/available/ の応答）"""
+
+    class Meta:
+        model = Subject
+        fields = ['id', 'name', 'description']
+
+
+class UserSubjectSelectionSerializer(serializers.Serializer):
+    """学ぶ科目の置き換えの本文（I494）。自組織の科目だけを受ける"""
+
+    subject_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+        max_length=MAX_SELECTABLE_SUBJECTS,
+        error_messages={
+            'required': AT_LEAST_ONE_SUBJECT,
+            'min_length': AT_LEAST_ONE_SUBJECT,
+            'max_length': '選べる科目の数を超えています',
+        },
+    )
+
+    def validate_subject_ids(self, value):
+        ids = list(dict.fromkeys(value))  # 重複を除き、並びを保つ
+        user = self.context['request'].user
+        # 他組織・全体共有・存在しない番号は同じ文言（番号の存在を漏らさない。会員登録と同じ）
+        if available_subjects(user).filter(id__in=ids).count() != len(ids):
+            raise serializers.ValidationError('選択された科目の一部が無効です')
+        return ids
+
 
 class SubjectSerializer(serializers.ModelSerializer):
     problem_count = serializers.IntegerField(read_only=True)

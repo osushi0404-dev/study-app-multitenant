@@ -14,8 +14,8 @@ from .models import UserSubjectAccess
 logger = logging.getLogger(__name__)
 
 
-def _invalidate_user_subjects_cache(user):
-    """利用者が選んだ科目のキャッシュを消す（キーは読む側と同じ関数で作る・I473）"""
+def invalidate_user_subjects_cache(user):
+    """利用者が選んだ科目のキャッシュを消す（キーは読む側と同じ関数で作る・I473。I494 の書き換えのサービスも使う）"""
     for annotate_count in (False, True):
         cache_service.invalidate_subjects_cache(
             user_subjects_cache_key(user.id, user.organization_id, annotate_count))
@@ -26,7 +26,7 @@ def invalidate_user_subjects_cache_on_save(sender, instance, created, **kwargs):
     """
     UserSubjectAccess が作成・更新された時にユーザーの科目キャッシュを無効化
     """
-    _invalidate_user_subjects_cache(instance.user)
+    invalidate_user_subjects_cache(instance.user)
     logger.debug(f"Invalidated cache for user {instance.user.id} after UserSubjectAccess save")
 
 
@@ -35,5 +35,5 @@ def invalidate_user_subjects_cache_on_delete(sender, instance, **kwargs):
     """
     UserSubjectAccess が削除された時にユーザーの科目キャッシュを無効化
     """
-    _invalidate_user_subjects_cache(instance.user)
+    invalidate_user_subjects_cache(instance.user)
     logger.debug(f"Invalidated cache for user {instance.user.id} after UserSubjectAccess delete")
