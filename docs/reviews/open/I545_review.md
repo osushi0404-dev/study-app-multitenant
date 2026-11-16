@@ -46,6 +46,9 @@
 - [implement] 規約の決まりのうち機械で止められるもの（Ruff・pytest の非推奨の警告・`check --deploy`）を #563 に起票し、ESLint で止められるものの一覧を #517 にコメントした — /simplify の直す深さの観点の指摘で、規約を文のまま残すより仕組みで止めるほうが根本のため
 - [implement] commit の前の detect-secrets のフックが `.secrets.baseline` を書き換えたので、計画書に足し（必ず確かめる項目 V1・V2・TC-07）、計画レビューをやり直した — 高リスクのファイルが範囲に入ったため。判定は HIGHRISK なので design-security-review を通す（実装はコミット済みで、その段階の結果で直しが要れば implement に戻る）
 - [implement] `.secrets.baseline` の、消したファイル（`rules/backend-django-coding-standards.md`・`rules/bk/…`）の古い登録は残した — フックが外さなかった登録で、無いファイルの登録は害が無い。手で消すと高リスクのファイルの手作業の変更が増える
+- [fix-loop] F1 は 8 行のゲートを `rules/` 全体を正の 2 本を除いて探す 1 行にした（診断メモ 案 A） — 実走は `! grep` のエラー（ファイルが無い）を不合格にするので、名指しのファイルの不在はこの形で確かめられない。フォルダ全体を見る形なら名指しの漏れも無い。0 バイトのファイルを捕まえない弱みは、規約として読まれないので受け入れた
+- [fix-loop] F2 は React 規約 §8 に `mode: 'onTouched'` を足した（案 A） — ux-rules §3 の「欄を離れたときに確かめる」と同じ意味で、直している最中に誤りが消える（onBlur より使い勝手がよい）
+- [fix-loop] 止める指摘でない台帳の指摘（§16 の「差が直る前から規約に従う」が今の依存では守れない決まりを含む・§16 の差の表の漏れ・`.secrets.baseline` に消したファイルの登録が残る など）は直さない — fix-loop が直すのは止める指摘だけ。retro が振り分ける
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

@@ -122,14 +122,18 @@
 ## 8. フォーム
 
 - React Hook Form＋Zod で書く。スキーマから型を作り（`z.infer`）、フォームの型を二重に書かない
+- 検証の時機は `mode: 'onTouched'`（最初に欄を離れたときに確かめ、その後は入力のたびに確かめ直す。`docs/runbooks/ux-rules.md` §3）。既定の送信のときだけの確かめにしない
 - サーバーの検証のエラーは `setError` でその項目に出す
 - 送信中はボタンを `formState.isSubmitting` で止める（二重送信を防ぐ）
   ```tsx
   const schema = z.object({ email: z.email('メールアドレスの形で入力してください') });
   type FormValues = z.infer<typeof schema>;
-  const { register, handleSubmit, formState } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, formState } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    mode: 'onTouched',
+  });
   ```
-- 参照: https://react-hook-form.com/docs/useform ・ https://zod.dev/
+- 参照: https://react-hook-form.com/docs/useform#mode ・ https://zod.dev/
 
 ## 9. スタイル
 
