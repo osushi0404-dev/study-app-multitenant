@@ -89,6 +89,7 @@
 - [retro] 診断レビューが症状の直し（完全一致）を推奨のまま通した件は #534 に起票した（同梱先が無く、ユーザーの指摘という実害があった）
 - [retro] 見送り: 「E2E の探し方は部分一致が既定」を手順に足す案 — CI がその場で止め、直しも小さかった（手順を増やさない）。テストの題の空白の書き損じ（F8 など）— 実害が無く #532 で直す
 - [close] develop への追従は不要（BLOCKED・承認待ちだけ）。記録を closed へ移すときに一度まとめて動かして置き場を誤ったので、1 件ずつ正しい置き場へ移し直した（中身は変えていない）
+- [close] マージ依頼の前のユーザーの「BP・UI/UX の観点で問題ないか」で見直し、チェックボックスの一覧にまとまりの名前が無い（画面読み上げで何の選択か分からない）こと・ダッシュボードの部品が設定画面のカードから送り先の名前を取り込んでいることを見つけた。記録を open に戻して fix-loop で直す（前の組織の割り当て・選んだ科目の一覧の書き方は #532）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -102,3 +103,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: fix-loop
