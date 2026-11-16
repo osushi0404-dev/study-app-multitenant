@@ -3,10 +3,11 @@
  *
  * - 科目を選んでいればその科目で、「すべて」なら 1 件はすぐ・2 件以上はダイアログで科目を選ぶ
  * - 科目 0 件・科目の取得失敗は、押せないボタンとカードの中の案内で伝える（toast だけにしない）
+ * - 科目 0 件の案内は、組織に科目があれば設定画面の「学ぶ科目」のカードへの導線、無ければ管理者への依頼（I494）
  * - 目標の 1 行は、設定の目標と全科目の今日の分が読めたときだけ出す（科目を選んでいても全科目で計算・I513）
  */
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -18,13 +19,19 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import { PlayArrow, Replay } from '@mui/icons-material';
+import { PlayArrow } from '@mui/icons-material';
 import { ALL_SUBJECTS } from '../../hooks/useDashboardOverview';
+import SubjectsRetryRow from '../SubjectsRetryRow';
 import { UserSubjectsState } from '../../hooks/useUserSubjects';
+import { AvailableSubjectsState } from '../../hooks/useAvailableSubjects';
+import { LEARNING_SUBJECTS_ANCHOR } from '../settings/LearningSubjectsCard';
 
 interface StartQuizCardProps {
   subjects: UserSubjectsState;
   onRetrySubjects: () => void;
+  /** 組織の科目（選んだ科目が 0 件のときだけ読む・I494） */
+  availableSubjects: AvailableSubjectsState;
+  onRetryAvailable: () => void;
   /** 科目の選択の値（'all' なら全科目） */
   selectedSubject: string;
   /** 全科目の今日の学習の分。目標は 1 日全体のものなので、選んだ科目に関係なく全科目の値（読めていないときは null・I513） */
@@ -38,9 +45,44 @@ const goalText = (todayMinutes: number, goalMinutes: number): string =>
     ? `今日の目標（全科目・${goalMinutes}分）を達成しました！`
     : `今日の目標（全科目）達成まであと${goalMinutes - todayMinutes}分です`;
 
+interface NoSubjectsGuideProps {
+  availableSubjects: AvailableSubjectsState;
+  onRetry: () => void;
+}
+
+/**
+ * 選んだ科目が 0 件のときの案内（I494）。組織に科目があれば設定画面の「学ぶ科目」のカードへ、
+ * 1 つも無ければ管理者への依頼。組織の科目を読み込み中は何も出さない
+ */
+const NoSubjectsGuide = ({ availableSubjects, onRetry }: NoSubjectsGuideProps) => {
+  if (availableSubjects.status === 'error') {
+    return <SubjectsRetryRow onRetry={onRetry} sx={{ mb: 2 }} />;
+  }
+  if (availableSubjects.status === 'loading') return null;
+  if (availableSubjects.data.length === 0) {
+    return (
+      <Alert severity="info" role="status" sx={{ mb: 2 }}>
+        科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください
+      </Alert>
+    );
+  }
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Alert severity="info" role="status" sx={{ mb: 1 }}>
+        学ぶ科目がまだ選ばれていません。設定画面で学ぶ科目を選んでください
+      </Alert>
+      <Button variant="outlined" component={RouterLink} to={`/settings#${LEARNING_SUBJECTS_ANCHOR}`}>
+        学ぶ科目を選ぶ
+      </Button>
+    </Box>
+  );
+};
+
 const StartQuizCard: React.FC<StartQuizCardProps> = ({
   subjects,
   onRetrySubjects,
+  availableSubjects,
+  onRetryAvailable,
   selectedSubject,
   todayMinutes,
   goalMinutes,
@@ -72,19 +114,10 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
         学習を開始
       </Typography>
 
-      {subjects.status === 'error' && (
-        <Box display="flex" alignItems="center" justifyContent="space-between" gap={2} flexWrap="wrap" sx={{ mb: 2 }}>
-          <Typography variant="body2">科目を読み込めませんでした</Typography>
-          <Button variant="outlined" size="small" startIcon={<Replay />} onClick={onRetrySubjects}>
-            再読み込み
-          </Button>
-        </Box>
-      )}
+      {subjects.status === 'error' && <SubjectsRetryRow onRetry={onRetrySubjects} sx={{ mb: 2 }} />}
 
       {subjects.status === 'success' && !hasSubjects && (
-        <Alert severity="info" role="status" sx={{ mb: 2 }}>
-          科目がまだ登録されていません。組織の管理者に科目の登録を依頼してください
-        </Alert>
+        <NoSubjectsGuide availableSubjects={availableSubjects} onRetry={onRetryAvailable} />
       )}
 
       {hasSubjects && todayMinutes !== null && goalMinutes !== null && (

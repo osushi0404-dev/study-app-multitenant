@@ -2,10 +2,10 @@
 
 実行コマンド（例）: `docker compose exec backend pytest problems/tests/test_I494_user_subjects.py core/tests/test_I446_cross_api_tenant_isolation.py core/tests/test_I493_openapi_contract.py` / `docker compose exec frontend npm test -- --watchAll=false LearningSubjectsCard Settings Dashboard`（pytest・Jest・E2E は CI が PR ごとに流す。手元では流し直さない）
 
-結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
-- e2e: 実装前のため未実行
+結果（implement 段階の手元の確認。正は CI）:
+- backend: `test_I494_user_subjects.py` 12 passed・`test_I446_cross_api_tenant_isolation.py` の新しい行と経路の表 4 passed・`test_I493_openapi_contract.py` 11 passed。TC-05 は確定の後の消去を抜くと落ちることを確かめた（失敗の注入）
+- frontend: `LearningSubjectsCard.test.tsx` 10 passed（TC-28b を足した）・`Settings.test.tsx` 4 passed・`Dashboard.test.tsx` 40 passed・`tsc --noEmit` 通過
+- e2e: CI で確かめる
 
 ## 共通の準備（backend）
 - 組織 A（科目 数学・英語・物理）・組織 B（科目 B数学）・組織の無い全体共有の科目「共有科目」（`organization=None`）を作る。利用者 `user_a`（組織 A・role user・数学を選んでいる）・`user_none`（組織なし）
@@ -15,11 +15,11 @@
 ## API（`backend/problems/tests/test_I494_user_subjects.py`）
 | TC | 内容 | 期待値 |
 |---|---|---|
-| TC-01 | `user_a` が `PUT /api/user/subjects/` 本文 `{"subject_ids": [数学, 英語]}` | 200・本文 `[{"id": 英語, "name": "英語"}, {"id": 数学, "name": "数学"}]`（名前の順）・`UserSubjectAccess` の `user_a` の `subject_id` の集合が `{数学, 英語}`・英語の行の `granted_by` が `user_a` |
+| TC-01 | `user_a` が `PUT /api/user/subjects/` 本文 `{"subject_ids": [数学, 英語]}` | 200・本文 `[{"id": 数学, "name": "数学"}, {"id": 英語, "name": "英語"}]`（名前の順。DB の並びで「数学」が先）・`UserSubjectAccess` の `user_a` の `subject_id` の集合が `{数学, 英語}`・英語の行の `granted_by` が `user_a` |
 | TC-02 | `user_a`（数学・英語）が `{"subject_ids": [英語]}` | 200・本文 `[{"id": 英語, "name": "英語"}]`・集合が `{英語}` |
 | TC-03 | `user_a`（数学）が `{"subject_ids": [数学, B数学]}`、`{"subject_ids": [数学, 共有科目]}`、`{"subject_ids": [数学, 4949999]}`（存在しない） | 3 つとも 400・`body["error"]["sub_message"] == "選択された科目の一部が無効です"`・`body["error"]["details"] == {"subject_ids": ["選択された科目の一部が無効です"]}`・3 つの本文が同じ・集合が `{数学}` のまま |
 | TC-04 | `{"subject_ids": []}`、`{}`（キーなし） | どちらも 400・`body["error"]["details"]["subject_ids"] == ["科目を最低1つ選択してください"]`・集合が `{数学}` のまま。201 件の番号 → 400・`["選べる科目の数を超えています"]` |
-| TC-05 | `override_settings(CACHES=LocMem)` で、`GET /api/user/subjects/` → キー `user_subjects_cache_key(user_a.id, A.id, False)` に値が入っていることを確かめる（正の対照）→ `subject_service.get_user_selected_subjects(user_a, annotate_count=True)` も一度読む → `PUT {"subject_ids": [物理]}`（`django_capture_on_commit_callbacks(execute=True)`）→ `GET` | 2 回目の `GET` が `[{"id": 物理, "name": "物理"}]`・2 つのキー（`False`・`True`）がどちらも空 |
+| TC-05 | `override_settings(CACHES=LocMem)` で、`GET /api/user/subjects/` → キー `user_subjects_cache_key(user_a.id, A.id, False)` に値が入っていることを確かめる（正の対照）→ `subject_service.get_user_selected_subjects(user_a, annotate_count=True)` も一度読む → `PUT {"subject_ids": [数学, 物理]}`（足すだけ＝シグナルでは消えない形・`django_capture_on_commit_callbacks(execute=True)`）→ `GET` | 2 回目の `GET` が `[{"id": 数学, "name": "数学"}, {"id": 物理, "name": "物理"}]`・2 つのキー（`False`・`True`）がどちらも空 |
 | TC-06 | `{"subject_ids": [英語, 英語]}` | 200・本文 `[{"id": 英語, "name": "英語"}]`・集合 `{英語}` |
 | TC-07 | 未認証で `PUT /api/user/subjects/`・`GET /api/user/subjects/available/` | どちらも 401 |
 | TC-08 | `user_a` が `GET /api/user/subjects/available/`。組織 A に科目を足して計 25 件にしてからも読む | 200・各要素のキーが `{"id", "name", "description"}`・組織 A の科目が名前の順で全件（25 件・ページ分けなし）・B数学・共有科目を含まない |
@@ -43,15 +43,16 @@
 
 | TC | 内容 | 期待値 |
 |---|---|---|
-| TC-20 | 表示 | 見出し「学ぶ科目」・「ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください」。チェックボックス「数学」が checked、「英語」「物理」が not checked。「英文法」が出る。「保存」が disabled（変わっていない） |
-| TC-21 | 「英語」をチェックして「保存」。`updateUserSubjects` は `[{id:2,name:'英語'},{id:1,name:'数学'}]` を返す | `updateUserSubjects` が `[1, 2]` で 1 回呼ばれる・toast.success が「学ぶ科目を保存しました」・`queryClient.getQueryData(['user-subjects', userId])` が応答と同じ・`['dashboard']` で始まるキーが invalidate される・保存の後「保存」が disabled |
-| TC-22 | 「数学」を外して 0 件 | 「科目を最低1つ選択してください」が出る・「保存」が disabled・`updateUserSubjects` は呼ばれない |
+| TC-20 | 表示 | 見出し「学ぶ科目」・「ダッシュボード・クイズ・学習統計に出す科目です。最低1つ選んでください」。チェックボックス「数学」が checked、「英語」「物理」が not checked。「英文法」が出る。「学ぶ科目を保存」が disabled（変わっていない） |
+| TC-21 | 「英語」をチェックして「学ぶ科目を保存」。`updateUserSubjects` は `[{id:2,name:'英語'},{id:1,name:'数学'}]` を返す | `updateUserSubjects` が `[1, 2]` で 1 回呼ばれる・toast.success が「学ぶ科目を保存しました」・`queryClient.getQueryData(['user-subjects', userId])` が応答と同じ・`['dashboard']` で始まるキーが invalidate される・保存の後「学ぶ科目を保存」が disabled |
+| TC-22 | 「数学」を外して 0 件 | 「科目を最低1つ選択してください」が出る・「学ぶ科目を保存」が disabled・`updateUserSubjects` は呼ばれない |
 | TC-23 | `updateUserSubjects` が 500 の axios のエラーで失敗 | `role="alert"` に「学ぶ科目を保存できませんでした。時間をおいてもう一度お試しください」・「英語」は checked のまま |
 | TC-24 | `updateUserSubjects` が 400・`response.data.error.sub_message = '選択された科目の一部が無効です'` で失敗 | `role="alert"` に「選択された科目の一部が無効です」・`getAvailableSubjects` が取り直される（2 回目の呼び出し）。その後チェックを変えると alert が消える |
-| TC-25 | 組織の科目 `[]` | 「この組織には選べる科目がありません。組織の管理者に科目の登録を依頼してください」・「保存」ボタンが無い |
+| TC-25 | 組織の科目 `[]` | 「この組織には選べる科目がありません。組織の管理者に科目の登録を依頼してください」・「学ぶ科目を保存」ボタンが無い |
 | TC-26 | `getAvailableSubjects` が失敗 | 「科目を読み込めませんでした」・「再読み込み」を押すと `getAvailableSubjects` がもう一度呼ばれる |
 | TC-27 | 選んだ科目に組織に無い番号（99）が混ざる | 3 つのチェックのうち「数学」だけ checked・「英語」を足して保存すると `[1, 2]`（99 を送らない） |
-| TC-28 | `MemoryRouter initialEntries={['/settings#learning-subjects']}`・`Element.prototype.scrollIntoView` をモック | 一覧が出た後に `scrollIntoView` が呼ばれ、見出し「学ぶ科目」に focus がある。ハッシュなしでは呼ばれない |
+| TC-28 | `MemoryRouter initialEntries={['/settings#learning-subjects']}`・`Element.prototype.scrollIntoView` をモック | 一覧が出た後に `scrollIntoView` が呼ばれ、見出し「学ぶ科目」に focus がある |
+| TC-28b | ハッシュなしで開く | `scrollIntoView` が呼ばれない |
 
 ## 設定画面（`frontend/src/pages/__tests__/Settings.test.tsx`）
 | TC | 内容 | 期待値 |

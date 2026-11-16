@@ -41,7 +41,7 @@
 - Frontend: 設定画面の「学ぶ科目」のカード（新しい部品）・ダッシュボードの「学習を開始」のカードの科目 0 件の案内・`subjectService.ts`・フック・画面の型（`schema.d.ts`・`types/api/index.ts`）
 - DB: なし（既存の `UserSubjectAccess` を使う。マイグレーションなし）
 - Config/Infra: なし（依存の追加なし）
-- 変えないもの: `backend/problems/signals.py`（今のまま残す。サービスが確定の後にも消す）・`backend/problems/permissions.py`（使われていない）・`backend/studylogs/views.py`・`backend/dashboard/selectors.py`（外した科目を出さない今の作り）・`backend/accounts/serializers.py`（会員登録は変えない）・`frontend/src/components/SubjectSelector.tsx`（開くたびに取り直すので古くならない）
+- 変えないもの: `backend/problems/signals.py` の受け手の仕組み（消し方に「確定の後にもう一度消す」を足すだけ・計画変更記録）・`backend/problems/permissions.py`（使われていない）・`backend/studylogs/views.py`・`backend/dashboard/selectors.py`（外した科目を出さない今の作り）・`backend/accounts/serializers.py`（会員登録は変えない）・`frontend/src/components/SubjectSelector.tsx`（開くたびに取り直すので古くならない）
 
 ## 4. 変更点一覧（具体）
 
@@ -93,7 +93,7 @@
 - 組織の科目が 0 件: `Alert severity="info"`「この組織には選べる科目がありません。組織の管理者に科目の登録を依頼してください」（保存ボタンは出さない）
 - 科目の一覧: 組織の科目ごとに `FormControlLabel` + `Checkbox`（ラベルは科目名、説明があれば下に `body2` で）。初めの状態は選んだ科目の番号（組織の科目にあるものだけ）
 - 0 件のとき: 「科目を最低1つ選択してください」（`FormHelperText error`）
-- 「保存」（`Save` のアイコン・`variant="contained"`）: 0 件・初めの状態から変わっていない・保存中は押せない。保存中は `CircularProgress size={20}`
+- 「学ぶ科目を保存」（`Save` のアイコン・`variant="contained"`）: 0 件・初めの状態から変わっていない・保存中は押せない。保存中は `CircularProgress size={20}`
 - 保存の成功: toast「学ぶ科目を保存しました」。初めの状態を保存の応答に合わせる
 - 保存の失敗: カードの中に `Alert severity="error" role="alert"`。400 で `error.sub_message` が文字列ならその文、それ以外は「学ぶ科目を保存できませんでした。時間をおいてもう一度お試しください」。チェックの状態は残す。次に保存を押すかチェックを変えたら消す
 
@@ -193,6 +193,12 @@ Danger Ops（有無/手順/ロールバック）:
 | V4 | 3 | 読んで可 | 書き換えが 1 つのトランザクションで、途中の失敗で外した行が戻る（TC-11） |
 
 ## 計画変更記録
+- implement での細部の変更（計画レビューのやり直し: 不要。方式・範囲・受け入れ条件は変えない）:
+  - 計画書の記載:「組織が無ければ 3 か所で先に打ち切る」→ 採った方法: 既存の `problems.services.tenant_scope.available_subjects(user)`（組織なしは空・全体共有の科目を含めない）を 3 か所で使う。理由: 同じ境界の判定を写さず 1 か所に保つ
+  - 計画書の記載: カードの「保存」→ 採った方法: ボタンの名前を「学ぶ科目を保存」にする。理由: 同じ設定画面の「学習設定」に「保存」があり、画面読み上げ・テストで区別できないため
+  - 計画書の記載: 見出しへ `scrollIntoView`・`focus()` → 採った方法: 見出しに `scrollMarginTop`（`theme.spacing(11)`）を付け、`focus({ preventScroll: true })` にする。理由: 画面確認で、固定のアプリのバーの下に見出しが隠れたため
+  - /simplify（4 体）の取り込み: シグナルの受け手も「今すぐ消し、確定の後にもう一度消す」（`invalidate_user_subjects_cache_now_and_on_commit`）にし、サービスは `bulk_create` のときだけそれを呼ぶ（確定の前に古い値が入り直す隙を、管理画面・seed などほかの書き手でも塞ぐ。今すぐ消すのは残す＝同じトランザクションの中で読み直す既存の I473 TC-16 の前提を変えない）。3 の「変えないもの」の `signals.py` はこの変更だけ例外。画面は、`useAvailableSubjects` を既存の `toLoadState` で作る・読み込み失敗の行を `components/SubjectsRetryRow.tsx` に共通化・保存の失敗の文言を既存の `extractApiErrorMessage` で取る・overview のキーの頭を `DASHBOARD_OVERVIEW_KEY_ROOT` として `useDashboardOverview.ts` から出す。見送り: 保存の応答のための読み直し（1 クエリ。応答の正を読み取りの関数 1 つに保つ）・削除のシグナルが行ごとに利用者を読む（外す数は組織の科目の数まで）・固定のバーの余白を画面全体の `scroll-padding-top` にする（送る先は今これ 1 か所）・送り先の定数の置き場・会員登録と文言の定数の共通化
+  - TC-05 の保存を「足すだけ」（`[数学, 物理]`）にした。理由: 外す操作は削除のシグナルでもキャッシュが消えるので、確定の後の消去を抜いても合格してしまう（失敗の注入で、足すだけなら落ちることを確かめた）
 - 計画レビュー（`docs/reviews/I494_plan_review_20261116_1134.md`）の Info（追跡用のログ）への対応: サービスで書き換えの後に `user_id`・`organization_id`・足した数・外した数を `logger.info` に出す（4-1）。Warning 2 件は直す所なし（置き換える関数の参照元は `backend/problems/urls.py` だけと確かめ済み／他組織と存在しない番号の応答は同じクエリ 1 回で区別なし）。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
 - design-security-review の High（組織に属さない利用者の条件が全体共有の科目に当たる）への対応: 3 か所で組織が無ければ先に打ち切る（4-1）・TC-03・TC-08・TC-09・TC-10b に共有科目を足す・V5 を足す。計画レビューのやり直し: 不要（守りの条件とテストの追記だけ。方式・範囲・受け入れ条件は変えない）
 

@@ -12,7 +12,7 @@ from django.db import transaction
 
 from problems.models import UserSubjectAccess
 from problems.services.tenant_scope import available_subjects
-from problems.signals import invalidate_user_subjects_cache
+from problems.signals import invalidate_user_subjects_cache_now_and_on_commit
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def replace_user_subjects(*, user, subject_ids: Iterable[int]) -> None:
     """利用者の学ぶ科目を subject_ids（自組織の科目だけを使う）に置き換える"""
     # 同じ利用者の同時の保存を順に並べる（足す・外すが混ざらないように）
-    get_user_model().objects.select_for_update().filter(pk=user.pk).first()
+    list(get_user_model().objects.select_for_update().filter(pk=user.pk).values_list('pk', flat=True))
 
     wanted = set(available_subjects(user).filter(id__in=list(subject_ids))
                  .values_list('id', flat=True))
@@ -37,9 +37,8 @@ def replace_user_subjects(*, user, subject_ids: Iterable[int]) -> None:
              for subject_id in sorted(added)],
             ignore_conflicts=True,
         )
-
-    # シグナルはトランザクションの中で消すので、確定の前に古い値が入り直しうる。確定の後にも消す
-    transaction.on_commit(lambda: invalidate_user_subjects_cache(user))
+        # bulk_create は post_save を送らないので、シグナルと同じ消し方（確定の後にも消す）を自分で呼ぶ
+        invalidate_user_subjects_cache_now_and_on_commit(user)
     logger.info('user subjects replaced', extra={
         'user_id': user.id, 'organization_id': user.organization_id,
         'added': len(added), 'removed': len(removed),

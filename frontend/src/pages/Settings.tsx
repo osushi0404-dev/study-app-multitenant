@@ -38,6 +38,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import dashboardService from '../services/dashboard.service';
 import { USER_SETTINGS_KEY_ROOT, userSettingsKey } from '../hooks/useDailyStudyGoal';
 import { PatchedUserSettings, UserSettings } from '../types/api';
+import LearningSubjectsCard from '../components/settings/LearningSubjectsCard';
 
 interface UserSettingsData {
   dailyStudyGoalMinutes: number;
@@ -329,6 +330,11 @@ const Settings: React.FC = () => {
                 </Box>
               </CardContent>
             </Card>
+          </Grid>
+
+          {/* 学ぶ科目（I494）。ダッシュボードの科目 0 件の案内から #learning-subjects で来る */}
+          <Grid item xs={12}>
+            <LearningSubjectsCard />
           </Grid>
 
           {/* Appearance Settings */}
