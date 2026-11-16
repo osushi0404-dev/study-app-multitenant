@@ -50,3 +50,7 @@ grep -q 'run_in_background: true' .claude/skills/proceed/SKILL.md
 bash -n scripts/claude/pr-base-sync.sh
 bash -n scripts/claude/code-review.sh
 ```
+
+## 実行記録
+- 2026-11-16 review-gate（code-review.sh・HEAD e778d4a3）: 決定論ゲート 8 行すべて exit=0（docs/reviews/I498_code_review_20261116_1139.md）。CI 全ジョブ合格（CI_WAIT: OK）
+- 2026-11-16 test-gate: gate-check.sh I498 → GATE_CHECK: OK。test-gate に回された重いテストは無し（pytest・Jest・E2E は CI）

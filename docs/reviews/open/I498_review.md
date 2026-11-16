@@ -15,7 +15,9 @@
 - review-gate の CI 待ちの既定も 1200 秒から 1980 秒に延びる
 
 ## テスト結果
-- （test-gate で記入）docs/tests/open/I498_auto_test.md・docs/tests/open/I498_manual_test.md
+- 自動: 決定論ゲート 8 行すべて exit=0（review-gate・e778d4a3）。CI 全ジョブ合格。手元では implement で関係する 4 本が合格（docs/tests/open/I498_auto_test.md）
+- 手動: No.1（Claude）OK — review-gate の実際の CI 待ちが `/ 1980s` の上限で 495 秒まで待ち、`CI_WAIT: OK`（docs/tests/open/I498_manual_test.md）。人の手動テストは無し
+- 実際の `pr-base-sync.sh final` の背景での実行は close の手順 5.5 で行い、結果はマージ依頼の報告に書く
 
 ## 計画との差分
 - なし（`pr-base-sync.sh` の既定を読む位置は、計画書 4-2 の「`:21` の後」のとおり `LOOP_MAX` の行の後に置いた）
