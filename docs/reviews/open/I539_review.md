@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: 計画書 `docs/plans/open/plan_I539.md` の 3 を参照（実装後に実際の差分で更新）
 
 ## テスト結果
-- 自動: （CI の結果を記入）
-- 手動: （test-gate 段階で記入）
+- 自動: CI すべて合格（Backend Lint & Security・Backend Tests・Frontend Type Check・Lint・Tests・API Types・Harness Tests・E2E 18 本）。1 回目の E2E の失敗はテストのパスワードの作り方が原因で、fix-loop で直した
+- 手動: 12 項目すべて Claude（Playwright MCP）で OK。No.4 のトーストは表示の時間内に捉えられず未確認（既存の動き）・No.12 は既知のエラーのみ。人の手動テストは無し
 
 ## 計画との差分
 - なし（実装後に更新）
@@ -38,6 +38,9 @@
 - [fix-loop] CI の E2E の失敗は、TC-50 が CI の小文字・数字だけのパスワードで登録しようとして、登録画面のパスワードの決まりに止められたもの（アプリの不具合ではない）。案 A（テストの中で決まりを満たすパスワードを作る）で直した。ワークフローを直す案 B は安全装置の変更（止める条件 2）なので採らない — 診断レビュー PASS（`docs/reviews/I539_fix_diagnosis_review_20261116_2141.md`）
 - [review-gate] 2 回目: CI すべて合格・基本レビュー OK（`docs/reviews/I539_code_review_20261116_2143.md`）・高リスクのため敵対的レビュー 1 周目 OK（`docs/reviews/I539_adversarial_review_20261116_2152.md`・未検証 0・新しい Critical/High 0・Low 2 件は retro へ）。Low の「TC-33 の Enter は守りを通らないおそれ」は、implement で守りを外して TC-33 が落ちることを確かめ済み（計画変更記録）
 - [review-gate] 敵対的レビューの 1 回目の起動は、開発の確かめで科目を作ったときにできた追跡しない空のファイル（`backend/media/org/…/.gitkeep`）で `DIRTY` になった。消さずに一時置き場へ移してから流し直し、終わった後に元へ戻した — 記録の場所の外の変更を残さないため（削除は危険操作なので避けた）
+- [test-gate] gate-check は、開発の確かめでできた追跡しない空のファイル（`backend/media/org/…/.gitkeep`）で `dirty` になった。この流れで作ったもの（と前からあった `e2e-org-a`）を消さずにワークツリーの外の一時置き場へ移してやり直した（手動テストで増えた分も同じ）。`backend/media/` が git の対象外になっていないことが原因なので retro で扱う
+- [test-gate] 手動テスト No.7 は、応答の本文を開く操作に承認が要るので、同じ値を DB で読んで確かめた（自動の TC-05 も同じ値を確かめている）
+- [test-gate] 手動テスト No.10・11 のため、開発の DB に科目 0 件の学校の組織 `i539-empty-school` を足した（行を足すだけ）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

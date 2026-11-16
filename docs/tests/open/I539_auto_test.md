@@ -5,9 +5,11 @@
 pytest・Jest・E2E は CI が PR ごとに流す（正）。実装中は上の関係するテストだけを手元で流す。
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
-- E2E: 実装前のため未実行
+- backend: 実装中に手元で関係するテストを流して 200 passed（`accounts/tests/`・`test_I115`・`test_I446`・`test_I437`・`test_I493`）。CI の Backend Tests も合格（review-gate 2 回目・2026-11-16）
+- frontend: 手元で `Register.test.tsx`・`Dashboard.test.tsx` の 46 passed。CI の Frontend Tests・Type Check・Lint も合格
+- E2E: 1 回目の CI で TC-50 が落ち（パスワードの決まり・再発防止記録）、直した後の CI で 18 本すべて合格
+- TC-21: `makemigrations --check --dry-run` → `No changes detected`（終了コード 0・2026-11-16）
+- test-gate（2026-11-16）: 「## 決定論ゲート」に test-gate へ回す重いコマンドは無い。pytest・Jest・E2E は CI が正なので手元で流し直していない
 
 ## 共通の前提（backend）
 - pytest は `--no-migrations`。テストの中で「個人利用」カテゴリ（`OrganizationCategory(slug='personal')`）を作る（TC-17 だけは作らない）
