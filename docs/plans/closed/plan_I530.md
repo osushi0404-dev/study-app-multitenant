@@ -5,7 +5,7 @@
 - **関連イシュー**: #530
 - **Draft PR**: #531
 - **作成根拠資料**: docs/issues/open/I530.md（起点イシュー）
-- **実装後評価**: docs/reviews/open/I530_review.md
+- **実装後評価**: docs/reviews/closed/I530_review.md
 - **作成日**: 2026-11-16
 
 ## 1. 背景/目的
@@ -218,4 +218,4 @@ Danger Ops（有無/手順/ロールバック）:
 - 計画書の記載: auto_test の決定論ゲート `shellcheck …`／採った方法: `pre-commit run shellcheck --files …`／理由: 手元に shellcheck 単体が無く、pre-commit 経由で動く（他のイシューと同じ書き方）／計画レビューのやり直し: 不要
 
 ## レビュー結果
-- [20261116_1218 判定: ✅ 完了](../../reviews/I530_plan_review_20261116_1218.md)
+- [20261116_1218 判定: ✅ 完了](../../reviews/closed/I530_plan_review_20261116_1218.md)

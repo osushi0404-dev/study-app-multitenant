@@ -40,6 +40,8 @@
 - [retro] 改善案「決定論ゲートの行が実走される形かを書いた直後の検査で止める」→ 採用（新規起票 I535・#535）— 実害あり（review-gate 1 周＋fix-loop の手戻り）・同じ形が過去 4 件（I095・I122・I174・I178）で今回 5 回目・決定論のチェック（`--lint-auto-test` に `classify_gate` の分類を足す）で塞げる・同梱できる既存のイシューが無い（#523 は関係するテストを選んで流す話・#445 は run-all の話）
 - [retro] 改善案「I498 の上に積んで作った進め方」→ 見送り — 問題は起きていない（#528 のマージを待ってから依頼するだけ。close で確かめる）
 - [retro] 改善案「確かめ用のスクリプトがサンドボックスの中で走り test_i193 の F9 が落ちた」→ 見送り — 私の一時の確かめ方の都合で、review-gate・run-all の流し方では起きない。手戻りなし
+- [close] base 追従は不要（sync: mergeStateStatus=BLOCKED・追従不要）・gate-check OK。I498 の PR #528 はまだマージ前なので、PR の説明とマージ依頼で「#528 を先にマージ」と書いた（計画書 R6）
+- [close] 診断メモ（`I530_fix_diagnosis_20261116_1300.md`）も closed へ移した — 前例（I074・I134）と同じ置き場所
 
 ## 振り返り
 
@@ -88,3 +90,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
