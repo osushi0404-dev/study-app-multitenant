@@ -48,6 +48,7 @@
 - [retro] grill-me の下書きの書き出し（`> "$DRAFT"`・`$(...)`）がサンドボックスの中で鍵を読めず失敗した件 → #428 に同梱（予防策: 書き出しの引数を足して手順を単体のコマンドに）— grill-me の下書きの扱いを直すイシューがすでにあるため
 - [retro] 見送り: grill-me のメモの前提（キャッシュの中身）の読み違い — 計画の調査でその場で見つかり、実装の手戻りは無かったため／クエリ数が計画（変わらない）と違った — 既存のテストがその場で捕まえ、減る向きで害が無いため
 - [retro] 残余リスクの処遇を計画書の「セキュリティレビュー結果」に記入（High 以上なし・組織の移動の画面が無い前提を受け入れ）
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録のリンクと実装後評価のパスを closed に直した — 手順どおり
 
 ## 振り返り
 
@@ -98,3 +99,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
