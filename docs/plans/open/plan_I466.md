@@ -43,8 +43,8 @@
 - [ ] AC8: `backend/core/celery.py` の定期処理がすべて時刻（`crontab`）で決まり、間違いパターンの分析・期限切れの提案の掃除の定期処理が無く、登録したタスクがすべて実在する（TC-32）
 - [ ] AC9: 苦手を優先の次の問題を選ぶ問い合わせの数が、候補の問題の数に比例しない（TC-15）
 - [ ] AC10: I431・I446・I452・I455・I473 の回帰テストがすべて pass する（消した経路の分は新しい経路に合わせて直す）（TC-33）
-- [ ] AC12: 「すべて」で「苦手を優先して始める」を押したときのダイアログの見出しが「📚 苦手を優先して始める科目を選択」（「クイズを始める」のときは今のまま）。科目なし（全科目）の苦手を優先で解答が少ないときの案内が「まだ解答が少ないため、いつもの順で出題しています」（科目のある回は今のまま）。完了画面の「もう一度挑戦」の種類は回の種類だけで決まり（苦手を優先は苦手を優先・それ以外はいつものクイズ）、URL の `?mode` に頼らない（TC-23・TC-25b・TC-28c）
 - [ ] AC11: 全テストが pass する（CI）
+- [ ] AC12: 「すべて」で「苦手を優先して始める」を押したときのダイアログの見出しが「📚 苦手を優先して始める科目を選択」（「クイズを始める」のときは今のまま）。科目なし（全科目）の苦手を優先で解答が少ないときの案内が「まだ解答が少ないため、いつもの順で出題しています」（科目のある回は今のまま）。完了画面の「もう一度挑戦」の種類は回の種類だけで決まり（苦手を優先は苦手を優先・それ以外はいつものクイズ）、URL の `?mode` に頼らない（TC-23・TC-25b・TC-28c）
 
 ## 3. 影響範囲
 - Backend:
@@ -120,7 +120,7 @@ def order_weak_first(problems, user, subject) -> tuple[QuerySet[Problem], bool]:
 - `backend/problems/migrations/0023_quizsession_mode_weak.py`: `makemigrations` で作る `AlterField`（選択肢だけ）
 - `backend/problems/services/quiz_service.py`:
   - `get_next_problem` の戻り値を `NextProblem`（`typing.NamedTuple`: `problem`・`is_review_mode`・`total_problems_in_subject`・`is_weak_fallback`）にする。通常・復習の回は `is_weak_fallback=False`
-  - `mode == MODE_WEAK` のとき、未回答の問題（`exclude(id__in=回答済み)`）と、全部答えた後の既出の問題（`filter(id__in=回答済み).exclude(id__in=最近の 5 問)`、それも無ければ `filter(id__in=回答済み)`）の両方で、`order_by('?')` の代わりに `order_weak_first(..., session.user, session.subject)` の並びの先頭を取る。`is_weak_fallback` は `order_weak_first` の 2 つ目の戻り値
+  - `mode == MODE_WEAK` のとき、未回答の問題（`exclude(id__in=回答済み)`）と、全部答えた後の既出の問題（`filter(id__in=回答済み).exclude(id__in=最近の 5 問)`、それも無ければ直前の 1 問だけを除いた `filter(id__in=回答済み).exclude(id=直前の 1 問)`、科目の問題が 1 問だけでそれも空なら `filter(id__in=回答済み)`。直前の 1 問を除くのは通常のモードも同じ・fix-loop F1）の両方で、`order_by('?')` の代わりに `order_weak_first(..., session.user, session.subject)` の並びの先頭を取る。`is_weak_fallback` は `order_weak_first` の 2 つ目の戻り値
   - `start_session` は変えない（`weak` の `total_problems` は通常と同じく科目の問題数・既存の `else` の枝）
 - `backend/problems/views.py` の `next_problem`: `NextProblem` を受け、応答に `is_weak_fallback`（bool）を足す（通常・復習でも `false` を返す）。`review_complete`・404 の応答は変えない
 - 開始の API（`POST /api/quiz/`）は、`QuizSessionSerializer` の `mode`（モデルの選択肢から作られる `ChoiceField`）が `weak` を受けるようになるだけ。知らない値は今と同じ 400（DRF の選択肢の検証）
@@ -291,6 +291,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 3 | 読んで可 | 消した経路の下（`analyze/`・`select_problems/` など）がすべて 404 になり、呼び出し元が画面・e2e・backend に残っていない（TC-30・調査結果 7） |
 
 ## 計画変更記録
+- 2026-11-17 計画レビュー（20261117_1650）の Warning への対応: 4.2 に fix-loop F1 の「直前の 1 問は除く」を書き足した・AC の並びを番号順にした。手動テスト No.5 の列のずれの指摘は、列がそろっていた（実施者 Claude・実結果 OK・備考）ので直していない
 - 2026-11-17 マージ前のユーザーの確認（「BP・UI/UX の観点でベストなやり方で進めて」）: レビューの台帳の残りのうち画面の文言・遷移の 3 件（F6 ダイアログの見出し・F4 全科目の案内の文言・F9 再挑戦のモードが URL に頼る）を、知っている食い違いを残して出さないため、この PR で直す（AC12・4.4）。文言は委任の範囲で Claude が決めた（既存の文と同じ形で、苦手を優先・全科目に合う最小の言い換え）。範囲を変えるので計画レビューを通し直す。#567 からはこの 3 件を外す（コメントで記録）
 - 2026-11-17 implement（細部・方式は変えない）:
   - 計画書の記載: 4.4「`StartQuizCard.tsx`: …「苦手を優先して始める」…」／採った方法: ボタンに `TrackChanges` のアイコンを付け、`minHeight: 44` を足した／理由: 主ボタンと見た目をそろえる・360px 幅で実測 42px で ux-rules.md 6 の 44px に届かなかった
@@ -304,4 +305,5 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-17 計画レビュー（20261117_1432）の Warning 3 件への対応: 難易度の対応は既存の `backend/problems/difficulty.py` を使うと明記（4.1）・4.7 に `test_I473_overview.py` のキーの集合の更新を足す・TC-31 を 3 本に分ける。方式・範囲・受け入れ条件は変えないので計画レビューのやり直しは不要
 
 ## レビュー結果
+- [20261117_1650 判定: ✅ 完了](../../reviews/I466_plan_review_20261117_1650.md)
 - [20261117_1432 判定: ✅ 完了](../../reviews/closed/I466_plan_review_20261117_1432.md)
