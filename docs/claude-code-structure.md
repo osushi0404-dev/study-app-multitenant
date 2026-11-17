@@ -33,41 +33,37 @@ study-app-multitenant/
 │
 ├── docs/
 │   ├── runbooks/                            ← 詳細ルール集（CLAUDE.md から参照）
-│   │   ├── workflow.md                      ← 運用フロー・ブランチ戦略・承認ワークフロー
-│   │   ├── plan-writing-rules.md            ← 計画書の書き方・一致性保証ルール
-│   │   ├── issue-flow.md                    ← イシュー作成〜クローズの詳細手順（27ステップ）
-│   │   ├── danger-ops.md                    ← 危険操作の承認ルール
+│   │   ├── workflow.md                      ← 流れ・段階・止めて聞く条件・ブランチ戦略
+│   │   ├── plan-writing-rules.md            ← 計画書・テスト文書の書き方
+│   │   ├── issue-flow.md                    ← イシューの扱い（番号・置き場所・起票・ラベル）
+│   │   ├── danger-ops.md                    ← 危険操作・サンドボックス・見張り
 │   │   ├── common-commands.md               ← よく使うコマンド集
 │   │   ├── backend-check.md                 ← バックエンドを変えたときの確かめ方
-│   │   ├── review-rules.md                  ← レビューファイルの作成・管理ルール
+│   │   ├── review-rules.md                  ← レビューの決まり・記録の名前
 │   │   ├── ux-rules.md                      ← 画面の使い勝手の原則・確かめること
-│   │   ├── template-sync.md                 ← ルール変更時のテンプレート同期手順
-│   │   └── legacy/                          ← 旧ルールファイルのアーカイブ
+│   │   └── （ほかの手順書の一覧は CLAUDE.md「0. 参照先」）
 │   │
-│   ├── issues/                              ← イシューファイル（作業チケット）
-│   │   ├── open/XXX.md                      ← 対応予定・確認待ち
-│   │   ├── in_progress/XXX.md               ← 実装中
-│   │   ├── closed/XXX.md                    ← 完了
+│   ├── issues/                              ← イシューの写し（I427 以降の正は GitHub・docs/runbooks/issue-flow.md）
+│   │   ├── open/I###.md                     ← /plan-issue が写して commit
+│   │   ├── closed/I###.md                   ← close で移す
 │   │   └── templates/issue_template.md      ← イシュー作成テンプレート
 │   │
-│   ├── plans/                               ← 計画書（実装前に作成・承認必須）
-│   │   ├── open/plan_IXXX_概要.md           ← 承認待ち・作業中
+│   ├── plans/                               ← 計画書
+│   │   ├── open/plan_I###.md                ← 作業中
 │   │   ├── closed/                          ← 完了済み
-│   │   └── templates/plan_template.md       ← 計画書テンプレート
+│   │   └── templates/plan_template.md       ← 計画書テンプレート（形の正）
 │   │
-│   ├── tests/                               ← テストケース・エラー管理
-│   │   ├── open/test_IXXX_manual.md         ← ユーザーが実施するテスト手順
-│   │   ├── open/test_IXXX_auto.md           ← 自動テスト（ユニット・統合）手順
-│   │   ├── open/error_IXXX.md               ← エラー管理（NG 時に作成・追記方式）
+│   ├── tests/                               ← テスト文書
+│   │   ├── open/I###_manual_test.md         ← 手動テスト（実施者は原則 Claude）
+│   │   ├── open/I###_auto_test.md           ← 自動テスト・決定論ゲート
 │   │   ├── closed/
-│   │   └── templates/
-│   │       ├── test_record_template.md
-│   │       └── error_log_template.md
+│   │   └── templates/                       ← manual_test_template.md・auto_test_template.md
 │   │
-│   └── reviews/                             ← レビューファイル（品質記録）
-│       ├── open/reviewXXX_IXXX.md           ← 実装前に枠作成・実装後に結果記入
-│       ├── in_progress/                     ← 改善対応中
-│       ├── closed/                          ← 全改善完了
+│   └── reviews/                             ← レビューの記録（名前の正は docs/runbooks/review-rules.md）
+│       ├── open/I###_review.md              ← 段階の結線（STAGE_DONE）・自律判断の記録
+│       ├── I###_code_review_<ts>.md など    ← 各段階のレビューの監査記録
+│       ├── backlog/I###.md                  ← 止めない軽い指摘の一覧
+│       ├── closed/                          ← 完了済み
 │       └── templates/review_template.md     ← レビューテンプレート
 │
 ├── rules/                                   ← コーディング規約（実装時に参照）
@@ -75,13 +71,12 @@ study-app-multitenant/
 │   └── react-coding-standards-integrated.md ← フロントエンド規約（React / TypeScript）
 │
 ├── scripts/
-│   └── claude/
+│   └── claude/                              ← 段階のスクリプト・レビュー役の起動・テスト
 │       └── hooks/
 │           └── pretooluse_guard.py          ← 危険操作をブロックする安全フック（PreToolUse）
 │
 └── .github/
-    └── workflows/
-        └── plan-gate.yml                    ← PR マージ前の自動チェック（CI ゲート）
+    └── workflows/                           ← ci.yml・e2e.yml・dependency-audit.yml（必須チェックは docs/runbooks/branch-protection-setup.md §2）
 ```
 
 ---
@@ -94,88 +89,22 @@ study-app-multitenant/
 
 #### 絶対ルール（5 箇条）
 
-| # | ルール | 違反した場合 |
-|---|-------|------------|
-| 1 | 計画書に書いていない実装は禁止。より良い案があれば「提案 → 承認 → 計画書更新」が先 | 作業を中断し計画書更新を求める |
-| 2 | ユーザー承認なしに Edit/Write/MultiEdit を開始しない（読み取り・調査は可） | 承認待ち宣言を出して停止 |
-| 3 | develop/main への直 push 禁止。イシューごとにブランチを作り PR 経由でマージ | 実行自体が deny でブロックされる |
-| 4 | 危険操作（データ削除・force push 等）は明示承認制 | `DANGER_OK=1` がない限り hook がブロック |
-| 5 | すべての作業は「記録（plan / tests / review）」が残る形で進める | レビューファイルなしでのクローズ禁止 |
+中身の正は `CLAUDE.md`「1. 絶対ルール」（この文書には写さない）。計画外の実装をしない・ユーザーの確認は止めて聞く条件のときだけ・develop/main への直 push 禁止（GitHub のブランチ保護が止める）・危険操作は承認制（`docs/runbooks/danger-ops.md`）・記録を残す、の 5 つ。
 
-#### 参照先マップ
+#### 参照先
 
-```
-CLAUDE.md
-├── 運用フロー        → docs/runbooks/workflow.md
-├── 計画書の書き方    → docs/runbooks/plan-writing-rules.md
-├── 危険操作          → docs/runbooks/danger-ops.md
-├── よく使うコマンド  → docs/runbooks/common-commands.md
-├── イシューフロー    → docs/runbooks/issue-flow.md
-├── UXルール          → docs/runbooks/ux-rules.md
-├── バックエンドチェック → docs/runbooks/backend-check.md
-├── レビュールール    → docs/runbooks/review-rules.md
-├── テンプレート同期  → docs/runbooks/template-sync.md
-├── Backend 規約      → rules/ultimate_django_coding_standards.md
-└── Frontend 規約     → rules/react-coding-standards-integrated.md
-```
+一覧と役割の正は `CLAUDE.md`「0. 参照先」（この文書には写さない）。
 
 ---
 
 ### .claude/settings.json（権限設定）
 
-Claude Code が実行できる Bash コマンドを 3 段階で制御し、さらに PreToolUse hook で二重ガードする。
-
-#### allow（自動実行・確認なし）
-
-| カテゴリ | 許可コマンド例 |
-|---------|-------------|
-| ファイル読み取り | `Read(*)`, `Grep(*)`, `Glob(*)`, `cat *`, `head *`, `tail *` |
-| Git 調査 | `git status`, `git diff`, `git log *`, `git show *`, `git branch *` |
-| Git 操作（安全系） | `git checkout *`, `git switch *`, `git add *`, `git commit *`, `git push`, `git push *` |
-| GitHub CLI（読み取り系） | `gh pr view *`, `gh pr status *`, `gh issue *` |
-| Docker（読み取り系） | `docker compose ps`, `docker compose logs *`, `docker compose up *`, `docker compose build *` |
-| テスト実行 | `docker compose exec backend pytest *`, `docker compose exec frontend npm test *`, `npm run lint *`, `npm run typecheck *` |
-
-#### ask（毎回ユーザー確認が必要）
-
-| カテゴリ | 確認が必要なコマンド例 |
-|---------|-------------------|
-| Git 破壊系 | `git merge *`, `git rebase *`, `git reset *`, `git cherry-pick *` |
-| Docker 操作 | `docker compose exec *`, `docker compose run *`, `docker compose down *` |
-| ファイル操作 | `rm *`, `mv *`, `cp *`, `chmod *`, `chown *` |
-| DB 操作 | `psql *` |
-
-#### deny（常時禁止・実行不可）
-
-| カテゴリ | 禁止コマンド例 | 理由 |
-|---------|-------------|------|
-| ネットワーク | `curl *`, `wget *`, `ssh *`, `scp *`, `rsync *` | 外部通信・情報漏洩リスク |
-| 権限昇格 | `sudo *` | 管理者操作の防止 |
-| データ破壊 | `dd *`, `mkfs *`, `shred *`, `rm -rf / *` | 復元不可能な操作 |
-| 保護ブランチへの push | `git push origin develop`, `git push origin main`, `git push * --force*` | 直接 push 禁止（deny はテキスト自明形のバックストップ） |
-| シークレット読み書き | `Read(.env)`, `Edit(.env)`, `Write(.env)`, `Read(**/*.pem)`, `Read(**/*.key)` | 機密情報保護 |
-
-#### hooks（PreToolUse）
-
-```json
-"PreToolUse": [{
-  "matcher": "Bash",
-  "hooks": [{
-    "type": "command",
-    "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py"
-  }]
-}]
-```
-
-Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、settings.json の deny だけでは捕捉できないパターンも二重でブロックする。
+権限（allow / ask / deny）・フック・サンドボックスの設定の正は `.claude/settings.json` そのもの。守りの考え方（3 層・見張りが何を止めるか）の正は `docs/runbooks/danger-ops.md`（この文書には写さない）。
 
 `git push` は安全な feature push を allow（確認なし）にする。**保護ブランチ（develop/main）を宛先とする push は、I430 から GitHub のブランチ保護（PR 必須・bypass 不可・Restrict who can push。bot は push できない）に任せ、フックの判定は消した**（`deny` はテキストで自明な形のバックストップとして残す）。フックは force push・`--all`/`--mirror`・push の宛先や強制を変える設定を止める（`docs/runbooks/danger-ops.md`）。Bash は公式のサンドボックスの中で動き、`git` はその外で動く（同上「サンドボックス（第 1 層）」）。
 
-> **動的宛先・force 取りこぼしへの対応（I083 で対応済み）**: 本ガードはコマンド**実行前の生コマンド文字列**を静的に解析する。かつて以下の2クラスがすり抜けたが、I083 で根治した。
-> - **動的宛先 → ask に degrade**（I430 で廃止。宛先が保護ブランチに解決しても GitHub が拒否するため）: コマンド置換 `$(...)`／変数展開 `$VAR`・`${...}` など、実行時にしか宛先が確定しない形は、以前は確認にしていた。
-> - **force push の取りこぼし → pure `_segments` で捕捉**: force 判定を `_push_has_force`（push セグメントのトークン走査）に置換し、`-f`/`-uf`/`--force-with-lease`/`--force-if-includes`・複合コマンド（`cd foo && git push --force ...`）を捕捉する。旧 `re.match` の潜在誤 block（`git push origin feature; echo "--force"` 等の安全 push を誤遮断）も解消した。
-> - **残余の既知限界（脅威モデル外）**: push トークンを**完全に隠蔽**する偽装形（`eval "$VAR"`／`sh -c "$CMD"` で push がコマンド文字列に一切現れない）は検知対象外。本ガードの脅威モデルは「事故による protected/force push の防止」であり、意図的な難読化は対象としない（`DANGER_OK=1` の解除導線と同様に運用者の責任に委ねる）。
-> - **既知の残課題（I088 で対応予定）**: `--all`/`--mirror` の判定（`--repo` は I430 で廃止）は現状まだ貪欲正規表現（`.*` がシェル区切りを跨ぐ）のため、複合コマンド（例 `git push origin feature && ls --all`）で無関係な後続トークンに一致し安全 push を誤 block し得る。force と同型の兄弟バグで、I088(#172) が同一修正（`_segments` 化）で根治予定。
+> **force push の取りこぼしへの対応（I083 で対応済み）**: force の判定は push の部分ごとの語の走査（`_push_has_force`）で、`-f`・`-uf`・`--force-with-lease`・複合コマンドも捕まえる。
+> - **残余の既知限界（脅威モデル外）**: push の語を完全に隠蔽する形（`eval "$VAR"`・`sh -c "$CMD"`）は対象外。脅威モデルは「事故による force push の防止」。
 
 ---
 
@@ -193,315 +122,30 @@ Bash ツールが呼ばれるたびに `pretooluse_guard.py` を実行し、sett
 
 `/コマンド名` で呼び出せるプロンプトテンプレート。各 `SKILL.md` に Claude が実行すべき手順が記述されており、呼び出すと Claude がその手順に従って自動的に処理を進める。
 
-ユーザーが打つスキル（`/issue-bootstrap`・`/grill-me`・`/plan-issue`・`/proceed`）と、段階のスキル（`user-invocable: false`。`/plan-issue`・`/proceed` の中で Claude が Skill ツールで呼ぶ）に分かれる（I193）。`/plan-issue`・`/grill-me` は `disable-model-invocation: true`（Claude からは呼べない）。`allowed-tools`（そのターンは確認なしで使ってよいという事前許可で、制限ではない）は付けない。使えるツールを絞りたいスキルは `disallowed-tools` で制限する（例: security-review は `Write, NotebookEdit` を使わない）（I185 P4）。
-
----
-
-#### /issue-bootstrap（イシュー起票）
-
-**呼び出し**: `/issue-bootstrap [タイトル]`
-**役割**: 新しい開発タスクを起票し、作業環境を一括セットアップする。
-
-| ステップ | 処理内容 |
-|---------|---------|
-| 1 | リポジトリ確認（`git rev-parse`, `git branch --show-current`） |
-| 2 | イシュー番号の採番（open/in_progress/closed 全ディレクトリから最大番号を取得して +1） |
-| 3 | `docs/issues/templates/issue_template.md` をコピーして `docs/issues/open/XXX.md` 作成・編集 |
-| 4 | `develop` をベースに `feature/IXXX-[英語概要]` ブランチを作成 |
-| 5 | イシューファイルを commit・push |
-| 6 | `gh issue create` で GitHub Issue を登録（ラベル付き） |
-| 7 | `gh pr create --draft` で Draft PR を作成 |
-| 8 | ユーザーへの完了報告（ファイルパス・ブランチ名・GitHub URL を提示） |
-
-**ブランチ命名規則**: `feature/I{3桁番号}-{英語概要をケバブケースで最大5単語}`
-
----
-
-#### /plan（計画書・テスト・レビュー枠の作成）
-
-**呼び出し**: `/plan I###`
-**役割**: 実装前に必要な全ドキュメントを作成し、ユーザー承認を待つ。コード変更は一切しない。
-
-**必読ファイル（スキル実行時に参照）**:
-- `docs/issues/open/XXX.md`（イシュー定義）
-- `docs/runbooks/plan-writing-rules.md`（計画書ルール）
-- `rules/ultimate_django_coding_standards.md`
-- `rules/react-coding-standards-integrated.md`
-
-**生成ドキュメント**:
-
-| ファイル | 内容 |
-|---------|------|
-| `docs/plans/open/plan_IXXX_概要.md` | 背景・受入条件・影響範囲・変更点・手順・テスト計画・ロールバック・リスク・承認ポイント |
-| `docs/tests/open/test_IXXX_manual.md` | ユーザーが手動で確認する操作手順と期待結果 |
-| `docs/tests/open/test_IXXX_auto.md` | ユニットテスト・統合テストの実行コマンドと期待結果 |
-| `docs/reviews/open/reviewXXX_IXXX.md` | 基本情報のみ記入・評価セクションは空欄で作成 |
-
-**完了時の出力**（必須）:
-```
-📋 計画書完了: docs/plans/open/plan_IXXX_概要.md
-⏸️ 承認待ち中 - 修正作業は開始しません
-✅「OK」で承認、❌ 修正指示をお願いします
-```
-
----
-
-#### /implement（実装・テスト・記録）
-
-**呼び出し**: implement 段階（`/plan-issue`・`/proceed` が呼ぶ）
-**役割**: 承認済み計画書に従って実装し、テスト・記録・PR 更新までを完結させる。
-
-**必読ファイル（実装前に参照）**:
-- `docs/plans/open/plan_IXXX_*.md`
-- `docs/tests/open/test_IXXX_auto.md`
-- `docs/tests/open/test_IXXX_manual.md`
-- `docs/reviews/open/reviewXXX_IXXX.md`
-
-**実行ステップ**:
-
-| ステップ | 処理内容 |
-|---------|---------|
-| 1 | 計画書を再読し「より良い実装方法がないか」を必ず検討（計画書外の実装は禁止） |
-| 2 | 計画書通りにコード実装（Backend/Frontend/DB） |
-| 3 | `test_IXXX_auto.md` の自動テストを実行（失敗時は `/fix-loop` へ） |
-| 4 | レビューファイルに実装結果・品質評価を記入 |
-| 5 | commit/push して PR を更新 |
-| 6 | `test_IXXX_manual.md` の要点を提示し、ユーザーの手動テスト結果を待機 |
-
-**重要制約**: 計画書に記載のないファイル・メソッド・変数の変更は即時中断して報告。
-
----
-
-#### /fix-loop（NG 時の修正ループ）
-
-**呼び出し**: fix-loop 段階（`/plan-issue`・`/proceed` が呼ぶ）
-**役割**: テスト NG や実装失敗時に原因を記録し、差分計画を立てて承認後に修正する。
-
-| ステップ | 処理内容 |
-|---------|---------|
-| 1 | NG 内容を「再現手順 / 期待値 / 実際の結果 / ログ」に分解して記録 |
-| 2 | `docs/tests/open/error_IXXX.md` に追記（初回は新規作成） |
-| 3 | 差分計画を `docs/plans/open/plan_IXXX_概要_N.md`（連番で新規作成）に記載 |
-| 4 | 承認待ちで停止 |
-| 5 | 承認後に修正 → 再テスト → 記録更新 → ユーザー検証へ |
-
-**重要**: 元の計画書は上書きせず、新しい連番ファイル（`_2`, `_3`...）で追記する。
-
----
-
-#### /close（クローズ処理）
-
-**呼び出し**: close 段階（`/plan-issue`・`/proceed` が呼ぶ）
-**前提**: ユーザー検証 OK が出ていること。
-
-| ステップ | 処理内容 |
-|---------|---------|
-| 1 | `docs/tests/open/test_IXXX_*.md` → `closed/` へ移動（完了情報を末尾に追記） |
-| 2 | `docs/tests/open/error_IXXX.md`（存在する場合）→ `closed/` へ移動 |
-| 3 | `docs/plans/open/plan_IXXX_*.md`（全関連計画書）→ `closed/` へ移動 |
-| 4 | `docs/issues/open/XXX.md` → `closed/` へ移動（完了情報・関連ファイルリストを追記） |
-| 5 | featureブランチを develop にマージ（`--no-ff`） |
-| 6 | `docs/reviews/open/reviewXXX_IXXX.md` → `closed/` へ移動 |
-| 7 | GitHub Issue をクローズ（`gh issue close`） |
-| 8 | ユーザーへ GitHub 上での Approve & Merge を依頼 |
+各スキルの手順の正は `.claude/skills/<名前>/SKILL.md`、段階の流れと呼び方の正は `docs/runbooks/workflow.md`「使うスキル」「フロー」、書き方の確認は `docs/runbooks/review-rules.md`「スキルファイル変更時の Claude Code ベストプラクティス準拠（必須）」。この文書には写さない。
 
 ---
 
 ### docs/runbooks/（詳細ルール集）
 
-CLAUDE.md から参照される詳細ルールをまとめたディレクトリ。Claude Code は実装前・実装中に該当ファイルを参照する。
+CLAUDE.md から参照される詳細ルールをまとめたディレクトリ。Claude Code は実装前・実装中に該当ファイルを参照する。各手順書の中身の正は手順書そのもので、この文書には写さない（一覧と役割は `CLAUDE.md`「0. 参照先」）。
 
----
-
-#### workflow.md
-
-**役割**: 開発プロセス全体の標準手順書。
-
-| セクション | 内容 |
-|-----------|------|
-| ディレクトリ規約 | issues/plans/tests/reviews 各ディレクトリの open/in_progress/closed 構成 |
-| フロー定義 | `/issue-bootstrap → /plan → /implement → /fix-loop → /close` の 5 ステップ |
-| ゲート | 計画承認前のコード変更禁止・Danger Ops の明示承認必須・直 push 禁止 |
-| コマンド実行ルール | 実行前に「何をするコマンドか・なぜ実行するか」を日本語で説明する義務 |
-| ロジック修正時の説明 | 修正の意図・修正前の問題点・修正後の改善内容の 3 点を必ず説明 |
-| 必須承認ワークフロー | 調査 → 方針検討 → 計画書作成 → 承認待ち宣言 → 承認確認 → 記録 → 作業開始の 8 ステップ |
-| ブランチ戦略 | main（本番）/ develop（統合）/ feature/IXXX-xxx（開発）/ hotfix/xxx（緊急修正）の 4 種類 |
-| 本番リリースフロー | develop → main のマージ手順・バージョンタグ付与ルール |
-| hotfix 運用 | main と develop の**両方**にマージする必須ルール |
-
----
-
-#### plan-writing-rules.md
-
-**役割**: 計画書に必ず含める項目と、計画書と実装の一致を保証するルールを定義する。
-
-**計画書の必須記載項目（9 項目）**:
-
-| # | 項目 | 内容 |
-|---|-----|------|
-| 1 | 背景/目的 | なぜこの実装が必要か |
-| 2 | 受け入れ条件 | 何ができたら OK か（検証可能な形で） |
-| 3 | 影響範囲 | Backend / Frontend / DB / Config への影響 |
-| 4 | 変更点一覧 | 変更するファイル・関数・SQL の具体名 |
-| 5 | 実装手順 | ステップバイステップの作業手順 |
-| 6 | テスト計画 | 自動テスト・手動テストの両方 |
-| 7 | ロールバック | 問題発生時の戻し方 |
-| 8 | Risk & 回避策 | 想定リスクと対処法 |
-| 9 | 承認ポイント | ユーザーが OK を返すためのチェックリスト |
-
-**計画書と実装の一致性保証ルール（3 ステップチェック）**:
-1. 実装開始前に計画書を再読
-2. 「計画書に記載があるか」「より良い方法はないか」を 5 観点で検討（パフォーマンス/保守性/セキュリティ/拡張性/シンプルさ）
-3. 実装中に逸脱を検知したら即座に中断・報告・承認を待つ
-
-**計画書の命名規則**:
-```
-docs/plans/open/plan_[タイプ]_[概要].md
-  タイプ: I[番号] / BUG / FEAT / FIX / MAINT / PERF
-  2回目以降: plan_I010_概要_2.md, _3.md...
-```
-
----
-
-#### issue-flow.md
-
-**役割**: イシューの作成からクローズまでの詳細な 27 ステップフローを定義する。
-
-**フェーズ構成**:
-
-| フェーズ | ステップ | 内容 |
-|---------|---------|------|
-| フェーズ1（イシュー準備） | 1〜5 | ファイル作成・ブランチ作成・GitHub 登録・ユーザー確認 |
-| フェーズ2（計画・設計） | 6〜10 | 計画書・テストケース（2種）・レビュー枠作成・ユーザー承認 |
-| フェーズ3（実装・テスト） | 11〜19 | 実装・自動テスト・レビュー記入・ユーザーテスト・NG 対応ループ |
-| フェーズ4（クローズ） | 20〜27 | レビュー記入・各ファイル closed 移動・マージ・GitHub クローズ |
-
-**イシュー番号の採番ルール**:
-```bash
-LAST_NUM=$(ls docs/issues/open/*.md docs/issues/in_progress/*.md docs/issues/closed/*.md \
-  2>/dev/null | grep -o '[0-9]\+\.md' | sed 's/\.md//' | sort -n | tail -1)
-# closed ディレクトリも必ず含めて最大番号を取得し +1 する
-```
-
----
-
-#### danger-ops.md
-
-**役割**: 実行前に計画書明記・ユーザー承認・`DANGER_OK=1` の 3 条件が揃わないと実行できない操作を定義する。
-
-| カテゴリ | 対象操作 |
-|---------|---------|
-| DB | `DROP` / `TRUNCATE` / WHERE なし `UPDATE`・`DELETE` / 破壊的マイグレーション |
-| Git | `force push` / `reset --hard` / 大規模 rebase |
-| Docker | `down -v` / `--volumes`（データボリューム削除） |
-| Files | `rm -rf` / secrets ファイル操作 |
-
-**実行テンプレートの必須項目**: 影響範囲 / 代替案 / ロールバック方法 / 実行コマンド（`DANGER_OK=1` 付き）
-
----
-
-#### common-commands.md
-
-**役割**: 開発・デバッグ・テストでよく使うコマンドのリファレンス。
-
-| カテゴリ | コマンド例 |
-|---------|----------|
-| 開発環境起動 | `docker-compose up -d` |
-| ログ確認 | `tail -f backend/logs/django.log` |
-| エラー調査 | `python manage.py analyze_logs --last-errors=1` |
-| バックエンドテスト | `docker-compose exec backend python manage.py test` |
-| フロントエンドテスト | `docker-compose exec frontend npm test` |
-| 再起動 | `docker-compose restart frontend backend` |
-
-API エンドポイント一覧・修正済みの既知問題の履歴も記載。
-
----
-
-#### backend-check.md
-
-**役割**: バックエンドを変えたときの確かめ方（自動テスト・マイグレーション・モデルと DB の食い違いの診断）。書き方の決まりは `rules/ultimate_django_coding_standards.md` が正（I545）。
-
----
-
-#### review-rules.md
-
-**役割**: レビューファイルの作成タイミング・命名規則・必須記載項目・ライフサイクルを定義する。
-
-**命名規則**:
-
-| 種別 | 形式 | 例 |
-|-----|------|-----|
-| イシュー関連 | `reviewXXX_IYYY.md` / `reviewXXX_IYYY_post.md` | `review003_I010_post.md` |
-| アドホック対応 | `reviewXXX_AD_YYYYMMDD.md` | `review004_AD_20260303.md` |
-| 定期レビュー | `reviewXXX_PR_YYYYMMDD.md` | `review005_PR_20260303.md` |
-
-XXX は全レビューファイル共通の通し番号（3 桁ゼロパディング）。
-
-**記載タイミング**:
-
-| タイミング | 記載する項目 |
-|-----------|------------|
-| 実装前（/plan 時） | 基本情報・対象計画書・レビュー目的（評価セクションは空欄） |
-| 実装後（/implement 時） | 実装結果評価・品質評価・技術的評価 |
-| テスト後（OK/NG 判定後） | テスト結果・発見した問題・最終判定 |
-
-**ライフサイクル**: open → in_progress（改善対応中）→ closed（全改善完了・最後に移動）
-
----
-
-#### ux-rules.md
-
-**役割**: 画面の使い勝手の原則（利用者から見てどうあるべきか）。コードの書き方は `rules/react-coding-standards-integrated.md`、計画書の UX の節の項目は `docs/runbooks/plan-writing-rules.md` の 13) が正（I545）。
-
----
-
-#### template-sync.md
-
-**役割**: CLAUDE.md や runbook を変更した際に、対応するテンプレートファイルを同時更新するための手順を定義する。
-
-**実行トリガー**: ファイルヘッダー構造変更 / 命名規則変更 / 文書間の相互参照ルール変更
-
-**手順**:
-1. ルール変更を実施
-2. 関連テンプレートの存在を確認（`ls docs/*/templates/*.md`）
-3. テンプレートが存在する場合は必ず同時更新
-4. チェックリストで整合性を確認してコミット
+| 手順書 | 役割 |
+|---|---|
+| `workflow.md` | 使うスキル・段階の流れ・止めて聞く条件・ゲート・ブランチ戦略 |
+| `plan-writing-rules.md` | 計画書・テスト文書の書き方（形の正はテンプレート）・計画変更記録・実施者の区別 |
+| `issue-flow.md` | イシューの番号・置き場所・起票・ラベル |
+| `review-rules.md` | 検証の全体設計・止める基準・敵対的レビュー・記録の名前 |
+| `danger-ops.md` | 危険操作の承認・サンドボックス・見張り・GitHub から復旧できる範囲・外部 PR |
+| `worktree.md` | 並行トラック（ワークツリー）の運用 |
+| `common-commands.md` | よく使うコマンド |
+| `backend-check.md`・`ux-rules.md` | バックエンドの確かめ方・画面の使い勝手の原則 |
 
 ---
 
 ### docs/（作業ドキュメント）
 
-実際の開発作業で Claude Code が生成・更新するファイル群。全ディレクトリが `open → (in_progress) → closed` のライフサイクルで管理される。
-
-#### ファイル命名規則まとめ
-
-| ディレクトリ | 命名パターン | 作成タイミング | 作成者 |
-|-------------|-----------|-------------|--------|
-| `docs/issues/open/` | `XXX.md`（3桁連番） | `/issue-bootstrap` 実行時 | Claude Code |
-| `docs/plans/open/` | `plan_[タイプ]_[概要].md` | `/plan` 実行時 | Claude Code |
-| `docs/tests/open/` | `test_IXXX_manual.md` / `test_IXXX_auto.md` | `/plan` 実行時 | Claude Code |
-| `docs/tests/open/` | `error_IXXX.md` | `/fix-loop` 実行時（NG 時のみ） | Claude Code |
-| `docs/reviews/open/` | `reviewXXX_IXXX.md` | `/plan` 実行時（枠のみ） | Claude Code |
-
-#### テンプレートと生成ファイルの関係
-
-```
-docs/issues/templates/issue_template.md
-  └→ docs/issues/open/XXX.md（コピー後に内容を編集）
-
-docs/plans/templates/plan_template.md
-  └→ docs/plans/open/plan_IXXX_概要.md
-
-docs/tests/templates/test_record_template.md
-  ├→ docs/tests/open/test_IXXX_manual.md
-  └→ docs/tests/open/test_IXXX_auto.md
-
-docs/tests/templates/error_log_template.md
-  └→ docs/tests/open/error_IXXX.md（NG 発生時に作成、2回目以降は追記）
-
-docs/reviews/templates/review_template.md
-  └→ docs/reviews/open/reviewXXX_IXXX.md
-```
+イシューごとに Claude Code が作る記録。名前・置き場所・作るタイミングの正は、`docs/runbooks/workflow.md`「ディレクトリ規約」・`docs/runbooks/review-rules.md`（レビューの記録の名前）・各テンプレート。
 
 ---
 
@@ -528,71 +172,15 @@ docs/reviews/templates/review_template.md
 
 ---
 
-### .github/workflows/plan-gate.yml（CI ゲート）
-
-**役割**: PR マージ前に自動でルール遵守チェックを実行する GitHub Actions ワークフロー。
-
-計画書・レビューファイルの存在確認や命名規則チェックを行い、ドキュメントなしでのマージを防ぐ。
-
----
-
 ## スキル実行フロー（全体像）
 
-```
-[ユーザー指示: タスクを実装してほしい]
-      │
-      ▼
-/issue-bootstrap [title]
-  ├─ docs/issues/open/XXX.md 作成（テンプレートから）
-  ├─ feature/IXXX-xxx ブランチ作成（develop ベース）
-  ├─ GitHub Issue 登録（gh issue create）
-  ├─ Draft PR 作成（gh pr create --draft）
-  └─ ★ ユーザーにイシュー内容を確認（OK/NG）
-      │
-      ▼ ユーザー「OK」
-      │
-/plan I###
-  ├─ docs/plans/open/plan_IXXX_概要.md（背景/手順/ロールバック等 9 項目）
-  ├─ docs/tests/open/test_IXXX_manual.md（手動テスト手順）
-  ├─ docs/tests/open/test_IXXX_auto.md（自動テスト手順）
-  ├─ docs/reviews/open/reviewXXX_IXXX.md（基本情報のみ、評価欄は空）
-  └─ ★ 承認待ちで停止（コード変更禁止）
-      │
-      ▼ ユーザー「OK」
-      │
-implement 段階
-  ├─ 計画書再読 + 改善案の検討（必須）
-  ├─ コード実装（計画書の範囲内のみ）
-  ├─ 自動テスト実行（test_IXXX_auto.md に基づく）
-  │     └─ 失敗 → /fix-loop へ
-  ├─ docs/reviews/ に実装結果・品質評価を記入
-  ├─ commit/push・PR 更新
-  └─ ★ ユーザーへ手動テスト要点を提示して結果待ち
-      │
-      ├─ NG ──────────────────────────────┐
-      │                                   │
-      │  fix-loop 段階                    │
-      │   ├─ NG 内容を再現手順/期待/実際/ログで記録 │
-      │   ├─ docs/tests/open/error_IXXX.md に追記 │
-      │   ├─ 差分計画書を新規作成（連番）         │
-      │   └─ ★ 承認待ち → 修正 → 再テスト ───┘
-      │
-      ▼ ユーザー「OK」
-      │
-close 段階
-  ├─ test_IXXX_*.md → closed/（完了情報追記）
-  ├─ error_IXXX.md → closed/（存在する場合）
-  ├─ plan_IXXX_*.md（全関連）→ closed/
-  ├─ issues/open/XXX.md → closed/
-  ├─ feature/IXXX-xxx を develop にマージ（--no-ff）
-  ├─ reviewXXX_IXXX.md → closed/（最後）
-  ├─ GitHub Issue をクローズ（gh issue close）
-  └─ ★ ユーザーへ GitHub 上での Approve & Merge を依頼
-```
+流れの正は `docs/runbooks/workflow.md`「フロー」（この文書には写さない）。
 
 ---
 
-## 権限の二重ガード構造
+## 権限の守りの構造
+
+守りは 3 層（Bash のサンドボックス・見張りのフック・GitHub のブランチ保護）。正は `docs/runbooks/danger-ops.md`。下の図は settings.json と見張りの 2 つの関係だけを示す。
 
 ```
 ユーザーの指示
@@ -622,12 +210,7 @@ Claude Code がツール（Bash）を呼び出し
 実行
 ```
 
-**deny 対象の代表例**:
-- `curl`, `wget`, `ssh`（外部通信）
-- `sudo`（権限昇格）
-- `git push origin main/develop`（保護ブランチへの直 push）
-- `git push --force`（強制 push）
-- `.env` / `*.pem` / `*.key` の読み書き（シークレット保護）
+deny の中身の正は `.claude/settings.json`（この文書には写さない）。
 
 ---
 
@@ -638,15 +221,15 @@ CLAUDE.md（起点）
   │
   ├─ 参照 ──→ docs/runbooks/*.md（詳細ルール）
   │             ├─ workflow.md
-  │             ├─ plan-writing-rules.md  ←── /plan が必読
+  │             ├─ plan-writing-rules.md  ←── plan-issue が必読
   │             ├─ issue-flow.md          ←── /issue-bootstrap が参照
   │             ├─ backend-check.md       ←── バックエンドを変えたときの確かめ方
-  │             ├─ review-rules.md        ←── /plan, /implement, /close が参照
+  │             ├─ review-rules.md        ←── plan-issue・implement・close の段階が参照
   │             └─ ...
   │
   ├─ 参照 ──→ rules/*.md（コーディング規約）
-  │             ├─ ultimate_django_coding_standards.md  ←── /plan, /implement が必読
-  │             └─ react-coding-standards-integrated.md ←── /plan, /implement が必読
+  │             ├─ ultimate_django_coding_standards.md  ←── plan-issue・implement の段階が必読
+  │             └─ react-coding-standards-integrated.md ←── plan-issue・implement の段階が必読
   │
   └─ 参照 ──→ .claude/settings.json（権限）
                 └─ hooks → scripts/claude/hooks/pretooluse_guard.py

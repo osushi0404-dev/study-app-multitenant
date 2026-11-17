@@ -105,7 +105,7 @@ D9_WORDS=('認証・認可・ロール変更' 'マルチテナント境界変更
           '外部公開API追加・変更' 'Webhook・外部API連携' '個人情報・機微情報の新規取り扱い'
           '未成年データ・個人情報のテナント越境・目的外利用' 'DBスキーマ重要変更' '既存事故の再発リスクが高い変更'
           '画面制御していてもAPI直叩きで事故りうる変更' '【harness 固有・Yes にしない】')
-D10_PHRASE='計画レビューのやり直しは、計画の方式・範囲・受け入れ条件を変えたときだけ'
+# I546: D10（計画レビューのやり直しの条件の文言の固定）は消した。正は workflow.md「ゲート」で、文言は意図的な変更でしか消えない
 
 ck "D1 SKILL §3 に上限・止め方・周回の数え方" 0 "$(sec "$SK" "$H_SK" "$E_H2" "${D1_WORDS[@]}")"
 ck "D2 SKILL・review-rules に旧上限の語が無い" 0 "$(absent "$SK" "$RR" -- "${OLD_WORDS[@]}")"
@@ -124,7 +124,6 @@ ck "D8 新しい節のパスが実在（adversarial 守る範囲）" 0 "$(paths 
 ck "D8 新しい節のパスが実在（adversarial ツール境界）" 0 "$(paths "$AR" "$H_AR_TOOL" "$E_H2")"
 ck "D9 code-reviewer のアプリ条件が残り・Yes にしない行がある" 0 "$(sec "$CR" "$H_CR" "$E_CR" "${D9_WORDS[@]}")"
 ck "D9 code-reviewer に旧 harness 条件が無い" 0 "$(absent "$CR" -- '【harness 固有】hooks・ガード・権限設定・レビュー基盤' '【harness 固有】指示階層')"
-ck "D10 review-rules に計画レビューのやり直しの条件" 0 "$(sec "$RR" "$H_RR" "$E_H2" "$D10_PHRASE")"
 
 # ---- 偽合格の防止（複製に注入して当てる） ----
 inject() { # inject <src> <dst> <python の置換式: s を書き換える>
@@ -171,8 +170,6 @@ fg "FG-D8 存在しないパスを足すと D8 不合格" "$SK" "$TMP/sk8.md" \
    's.replace("## 3.", "## 3.\n\n`docs/runbooks/no_such_file.md`\n", 1)' paths "$TMP/sk8.md" "$H_SK" "$E_H2"
 fg "FG-D9 マルチテナント境界変更を消すと D9 不合格" "$CR" "$TMP/cr9.md" 's.replace("マルチテナント境界変更", "")' \
    sec "$TMP/cr9.md" "$H_CR" "$E_CR" "${D9_WORDS[@]}"
-fg "FG-D10 やり直しの条件を消すと D10 不合格" "$RR" "$TMP/rr10.md" "s.replace('$D10_PHRASE', '')" \
-   sec "$TMP/rr10.md" "$H_RR" "$E_H2" "$D10_PHRASE"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

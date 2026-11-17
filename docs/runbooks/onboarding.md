@@ -4,108 +4,25 @@
 
 **学習アプリ（study-app-multitenant）**
 Django REST Framework + React TypeScript のマルチテナント対応学習アプリ。
-Claude Code に実装を委任しながら、人間がゲートキーパーになる **安全寄り Vibe Coding** で開発している。
+Claude Code が計画・実装・レビュー・テストを自律で進め、人は価値判断（要件・設計・画面）・人の手動テスト・マージだけを行う。最後の守りは GitHub（ブランチ保護と CI）。
 
 ---
 
-## 一言で言うなら
+## 進め方の要点（正は各手順書）
 
-> 「Claude Code に実装を委任するが、人間がゲートキーパーになる Vibe Coding。GitHub が品質の最終防衛線。」
-
----
-
-## 4つの特徴
-
-### 1. スキル駆動のフロー（打つコマンドは少ない）
-
-ユーザーが打つのは `/plan-issue`（と、自分で起票したいときの `/issue-bootstrap`）だけ。会話の中で別イシューにすると決まったら、起票は Claude が行って報告する（I220）。`/plan-issue` の後は、Claude が計画レビュー → 実装 → レビュー → テストまで段階を順に進め、人の手動テストの手前で止まる（I193）。
+ユーザーが打つのは主に次の流れ（打つスキルと段階の正: `docs/runbooks/workflow.md`「使うスキル」「フロー」）:
 
 ```
 /issue-bootstrap →（任意で /grill-me）→ /plan-issue
-   └→ plan-review →（高リスク時）design-security-review → implement → review-gate ⇄ fix-loop → test-gate
-       → 人の手動テスト（結果を返信）→ retro → close → GitHub で Approve & Merge
 ```
 
-| ユーザーが打つスキル | 内容 |
-|---|---|
-| `/issue-bootstrap [title]` | 本文の下書き・自己完結度レビュー・GitHub 登録（番号は GitHub が振る・手元にファイルを作らない。要件・基本設計・UI/UX の質問があるときだけ止まる） |
-| `/grill-me I###` | 計画書作成前に、要件・基本設計・UI/UX の曖昧な点だけを聞く（任意） |
-| `/plan-issue I###` | ブランチ・Draft PR・計画書・テスト文書・レビュー文書を作り、手動テストの手前まで進める |
-| `/proceed I###` | 途中で止まったとき・新しいセッションで、続きから再開する |
+`/plan-issue` の後は Claude が段階を順に進め、人の手動テストの手前・マージ依頼で止まる。途中から続けるときは `/proceed I###`。
 
-段階のスキル（`plan-review`・`design-security-review`・`implement`・`review-gate`・`test-gate`・`fix-loop`・`retro`・`close`）はユーザーが打たない。組み込み（公式）の `/code-review`・`/security-review`・`/simplify` は段階の中で Claude が使う。詳細は docs/runbooks/workflow.md。
-
-### 2. 止める条件を絞った安全設計
-
-- ユーザーの確認は「人がやる手動テスト」と「マージ」と、3 つの止める条件（要件・基本設計・UI/UX の価値判断／取り消せない操作・安全装置そのものの変更／安全側の選択肢も取れない上限到達）だけ。それ以外で Claude が決めたことは「自律判断の記録」に残り、止まったときにまとめて報告される
-- 計画レビューを通すまで Claude はコードを書かない。修正の後は必ずレビューを通り直す（`scripts/claude/gate-check.sh` が決定論で確かめる）
-- hooks（`scripts/claude/hooks/pretooluse_guard.py`）が危険操作を物理的にブロック（PreToolUse）
-- hooks（`scripts/claude/hooks/posttooluse_check.py`）が Edit/Write 直後の `.py`/`.json`/`.yaml` 構文を検証（PostToolUse）
-
-### 3. GitHub が品質ゲートになっている
-
-| 仕組み | 役割 |
-|---|---|
-| **Draft PR** | イシュー開始時に即作成。WIP の可視化と early feedback |
-| **CI（GitHub Actions）** | push/PR のたびに自動実行 |
-| **PR 本文** | 目的・変更点・テスト結果・ロールバック手順・参照ドキュメントを必ず記載 |
-| **develop/main 直 push 禁止** | 必ず PR 経由。レビューなしにマージ不可 |
-
-CI の内容（全部 pass しないとマージ不可）:
-
-- Backend: `flake8`（lint）+ `bandit`（セキュリティ）+ `pytest`
-- Frontend: `tsc --noEmit`（型チェック）+ `ESLint` + `Jest`
-- ハーネス: `scripts/claude/tests/run-all.sh`（道具は `scripts/claude/tests/required-tools.txt`）
-
-### 4. すべてドキュメントが残る
-
-`docs/` 以下に `open` → `closed` で状態遷移するファイルが常に存在し、「なぜ作ったか」まで追える。PR 本文にも必ずドキュメントへの参照リンクを貼る。
-
----
-
-## 全体の流れ
-
-```
-ローカル                          GitHub
-─────────────────────────────────────────────
-/issue-bootstrap ──────────────→ GitHub Issue 登録
-/plan-issue ───────────────────→ Draft PR 作成
-  plan-review       （計画レビュー）
-  implement ───────────────────→ push → CI 実行
-  review-gate       （CI 結果確認・組み込み /code-review・自作レビュー）
-  test-gate         （テスト確認）→ 人の手動テスト（結果を返信）
-  retro             （振り返り・必須）
-  close ───────────────────────→ PR 本文整備 → Approve & Merge の依頼 → develop へマージ
-                                  （main へは定期リリース時のみ）
-```
-
----
-
-## ブランチ戦略
-
-```
-main (本番環境) ← 定期リリース時のみ
-  ↑
-develop (開発統合) ← 日常的な開発はここに集約
-  ↑
-feature/I###-xxx ← イシューごとに作成
-```
-
-- ブランチ命名: `feature/I{イシュー番号3桁}-{概要をケバブケース}`
-- hotfix は `main` と `develop` の**両方**にマージする
-
----
-
-## ドキュメント構成
-
-```
-docs/
-├── issues/      open / closed / templates                 # イシューファイル
-├── plans/       open / closed                             # 計画書
-├── proposals/                                             # 改善提案資料
-├── tests/       open / closed / templates                 # テスト文書（自動・手動）
-└── reviews/     open / closed / templates                 # レビュー文書
-```
+- 止めてユーザーに聞く場面: `docs/runbooks/workflow.md`「止めて聞く条件」
+- 守りの層（サンドボックス・見張り・GitHub）: `docs/runbooks/danger-ops.md`
+- マージに必須のチェック: `docs/runbooks/branch-protection-setup.md` §2
+- ブランチ・記録の置き場所: `docs/runbooks/workflow.md`「ブランチ戦略」「ディレクトリ規約」
+- 手順書の一覧: `CLAUDE.md`「0. 参照先」
 
 ---
 
@@ -122,6 +39,22 @@ sudo apt install -y bubblewrap socat
 ## 手元の準備（GitHub の名義）
 
 Claude は GitHub App の名義で GitHub を操作する（I223）。新しい端末では `docs/runbooks/github-app-setup.md` の手順で設定する。
+
+---
+
+## 手元の準備（pre-commit）
+
+`git commit` のときに秘密の検出・基本の品質チェックを流す（フックの一覧と運用: `docs/runbooks/pre-commit.md`）。新しい端末で 1 回だけ行う:
+
+```bash
+sudo apt-get install pipx
+pipx install pre-commit
+pipx install detect-secrets==1.5.0
+pre-commit install
+```
+
+- detect-secrets の版は `.pre-commit-config.yaml` の `rev`（今は `v1.5.0`）と `.secrets.baseline` の `version` に合わせる（版が違うと baseline を作り直したときに差分が出る）
+- `pre-commit install` はリポジトリのルートで行う（`.git/hooks/pre-commit` ができる）
 
 ---
 
@@ -147,9 +80,9 @@ bash scripts/claude/tests/run-all.sh
 | 道具 | 1. 正を書き換える | 2. 手元で流す | 3. push |
 |---|---|---|---|
 | PyYAML・pre-commit | `uv lock --project scripts/claude/tests --upgrade-package <名前>`（`uv.lock` だけが変わる） | `bash scripts/claude/tests/run-all.sh`（uv が入れ直して流す） | commit・push（CI が同じ `uv.lock` で流す） |
-| python（パッチ版） | `scripts/claude/tests/.python-version` を書き換える → `uv lock --project scripts/claude/tests` | 同じ | 同じ |
+| python（パッチ版） | `scripts/claude/tests/.python-version` を、手元の OS の `python3 --version` と同じパッチ版に書き換える（見張りが動く OS の python と黙ってずれないように、OS の更新に合わせて上げる。`uv.lock` はパッチ版を持たないので `uv lock` は要らない） | 同じ | 同じ |
 | uv | `pyproject.toml` の `required-version` を書き換える → 手元の uv を同じ版にする（pipx で入れたなら `pipx install --force uv==<新しい版>`、公式のインストーラで入れたなら `uv self update <新しい版>`） | 同じ | 同じ（CI の setup-uv が同じ行を読む） |
-| python のマイナー版（例: 3.11 → 3.12） | `.python-version` と `pyproject.toml` の `requires-python` を両方書き換える（片方だけだと `test_i211_version_pin.sh` の K1 が止める）→ `uv lock --project scripts/claude/tests` | 同じ | 同じ |
+| python のマイナー版（例: 3.12 → 3.13） | `.python-version` と `pyproject.toml` の `requires-python` を両方書き換える（片方だけだと `test_i211_version_pin.sh` の K1 が止める）→ `uv lock --project scripts/claude/tests` | 同じ | 同じ |
 
 片方だけずれたら、次のどれかが止める:
 - uv の版が `required-version` と違う → uv 自身が `Required uv version … does not match` で止める
@@ -166,28 +99,5 @@ bash scripts/claude/tests/run-all.sh
 **Q: Draft PR を最初に作る理由は？**
 → 実装前から変更が GitHub 上に見えるようにするため。CI も早めに回せる。
 
-**Q: CI が落ちたらどうする？**
-→ review-gate 段階が CI の失敗を見て fix-loop 段階に回し、Claude が直して review-gate に戻す（ユーザーの操作は要らない）。
-
-**Q: main にはどうマージする？**
-→ develop に十分な機能が溜まったタイミングで、bot が develop → main の PR を作り、oshui0404 が承認・マージする（週1・月1等）。マージ後にバージョンタグを必ず付ける。手順は docs/runbooks/workflow.md「本番リリースフロー」。
-
 **Q: 計画書なしに実装できる？**
-→ できない。計画書と計画レビュー（plan-review 段階）が最初のゲート。より良い案があれば、計画書を先に直して計画レビューを通してから実装する。
-
----
-
-## 参照先
-
-- 運用フロー詳細: `docs/runbooks/workflow.md`
-- イシューフロー: `docs/runbooks/issue-flow.md`
-- 計画書の書き方: `docs/runbooks/plan-writing-rules.md`
-- レビュールール: `docs/runbooks/review-rules.md`
-- 危険操作: `docs/runbooks/danger-ops.md`
-- よく使うコマンド: `docs/runbooks/common-commands.md`
-- UX ルール: `docs/runbooks/ux-rules.md`
-- バックエンドチェック: `docs/runbooks/backend-check.md`
-- テンプレート同期: `docs/runbooks/template-sync.md`
-- pre-commit 運用: `docs/runbooks/pre-commit.md`
-- コーディング規約（Backend）: `rules/ultimate_django_coding_standards.md`
-- コーディング規約（Frontend）: `rules/react-coding-standards-integrated.md`
+→ できない。計画書と計画レビュー（plan-review 段階）が最初のゲート。より良い案があれば、計画書を先に直して計画レビューを通してから実装する（`docs/runbooks/plan-writing-rules.md`）。

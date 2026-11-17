@@ -8,8 +8,13 @@ Claude は GitHub App `osushi0404-claude`（GitHub 上の名前は `osushi0404-c
 
 - App の鍵は 1 時間で切れる。`gh` の入口（`scripts/claude/gh-app/gh` を `~/.local/bin/gh` として入れる）が、`gh` を呼ぶたびに `gh-app-token` から鍵を受け取り、`GH_TOKEN` で本物の `gh`（`/usr/bin/gh`）に渡す。受け取った鍵は `~/.cache/github-app/` に控え、残り 10 分を切ったら取り直す
 - `git push` なども同じ入口を通る（git の credential helper を `!~/.local/bin/gh auth git-credential` にする）
-- テスト用のセッション（`claude -p`）には読み取りだけの鍵を渡す（`GH_APP_READONLY=1`）。`gh issue`・`gh pr`・`gh api`・`git push` のどの書き方でも、書き込みは GitHub が拒否する（HTTP 403）。手で起こすときの入口は `scripts/claude/test-session.sh`。`scripts/claude/` のスクリプトが Claude を起こす行（`claude -p`・tmux の中の `claude`）にはすべて `GH_APP_READONLY=1` と `--strict-mcp-config`（MCP は `--mcp-config` で渡したものだけ。手元の設定の MCP が読み取りだけの鍵を迂回しないように・I225）を付ける（レビュー役も同じ）。tmux の中の `claude` には、入口のある `PATH`（`~/.local/bin` が先頭）も渡す（先に立っていた tmux サーバーの `PATH` で入口を通らないことがないように・I225）。付け忘れは `scripts/claude/tests/test_i223_gh_app.sh` の G6・G7 が CI で止める（見るのは `scripts/claude/` 直下の `.sh` の、`claude -p` の呼び出しと、tmux で `claude` を起こす行。それ以外の形の起動は見ない）。決まりの正は `docs/runbooks/plan-writing-rules.md`
+- テスト用のセッション（`claude -p`）には読み取りだけの鍵を渡す（`GH_APP_READONLY=1`。GitHub が書き込みを HTTP 403 で拒否する）。手で起こすときの入口は `scripts/claude/test-session.sh`
+- `scripts/claude/` のスクリプトが Claude を起こす行（`check-permission-prompt.sh`・`tui-capture.sh`・検証役の起動など）には、次の 3 つを付ける（決まりの正はこの節）。付け忘れは `scripts/claude/tests/test_i223_gh_app.sh` の G6・G7 が CI で止める
+  - `GH_APP_READONLY=1`（GitHub へは読み取りだけの鍵）
+  - `--strict-mcp-config`（MCP は `--mcp-config` で渡したものだけ。手元の設定の MCP が読み取りだけの鍵を迂回しないように）
+  - tmux の中の `claude` には、入口のある `PATH`（`~/.local/bin` が先頭）
 - GitHub の MCP は使わない（I223 で外した。`docs/runbooks/mcp-usage.md`）
+- App にはリポジトリの設定（Administration）の権限が無い。設定を変える API は権限不足を 404（Not Found）で返すので、見つからないのではなく権限が無いと読む。設定の変更が受け入れ条件にあるイシューでは、計画で実施者を Human（`oshui0404`）にして画面の手順を書く
 
 ## 2. App の設定（今の値）
 
@@ -44,7 +49,8 @@ bash scripts/claude/gh-app/install.sh --check
 ## 5. 確かめる
 
 - 名義: `gh auth status --json hosts --jq '.hosts["github.com"][] | select(.active) | .login + " " + .tokenSource + " " + .state'` が `osushi0404-claude[bot] GH_TOKEN success` を出す
-  - 名義の確かめの `auth status` は、上のように `--json` で要る欄だけを取り出す。`--json` を付けないと、App の長い鍵の大部分が画面に出る（`gh` は最後の部分しか伏せない・I223 の手動テストで発生）。入口（`~/.local/bin/gh`）は、`--json` も `-t`/`--show-token` も無い `auth status` を、鍵の欄の無い表示（`<host> <login> <鍵の出どころ> <状態>`）に置き換える（I225）。本物の `gh`（`/usr/bin/gh`）を直接呼ぶと置き換わらない。手順書・スキル・スクリプトに `--json` なし（または `-t`/`--show-token` 付き）の書き方があると、`test_i223_gh_app.sh` の G10 が CI で止める
+  - 名義の確かめの `auth status` は、上のように `--json` で要る欄だけを取り出す。`--json` を付けないと、App の長い鍵の大部分が画面に出る（`gh` は最後の部分しか伏せない・I223）。入口（`~/.local/bin/gh`）は鍵の欄の無い表示に置き換えるが、本物の `gh`（`/usr/bin/gh`）を直接呼ぶと置き換わらない（I225）
+  - 手順書・スキル・スクリプトに `--json` なし（または `-t`/`--show-token` 付き）の書き方があると、`test_i223_gh_app.sh` の G10 が CI で止める
 - `git push` が通る
 
 ### 鍵が画面・記録に出てしまったら
@@ -69,7 +75,7 @@ bash scripts/claude/gh-app/install.sh --check
 ## 7. 困ったとき
 
 - `gh-app-token: 鍵を受け取れませんでした`: 鍵ファイルの場所と権限、App がこのリポジトリに入っているか（組織の Settings → GitHub Apps → Installed）、GitHub に届くか（20 秒で打ち切る）を確かめる
-- `GH_APP_DISABLE=1` を付けると、鍵を渡さずに本物の `gh` を動かす（App が使えないときの退避）。今は本物の `gh` に保存されたログインが停止中の bot アカウントのもので無効なので、退避には使えない。読み取りだけの指定（`GH_APP_READONLY=1`）があるときは無視される
+- `GH_APP_DISABLE=1` を付けると、鍵を渡さずに本物の `gh` を動かす（App が使えないときの退避）。退避になるのは、本物の `gh` に有効なログインが保存されているときだけ。読み取りだけの指定（`GH_APP_READONLY=1`）があるときは無視される
 
 ## 8. 守ること
 
@@ -79,5 +85,5 @@ bash scripts/claude/gh-app/install.sh --check
 
 ## 9. 前の仕組み（I223 より前）
 
-- I223 より前は、人の bot アカウント（2026-10-30 に停止）で操作し、GitHub の MCP は別の個人の鍵（Fine-grained PAT・環境変数 `GITHUB_PERSONAL_ACCESS_TOKEN`）で動かしていた。どちらも使わない
-- 手元に残っている場合: `~/.bashrc` などの `export GITHUB_PERSONAL_ACCESS_TOKEN=` の行を消す。PAT は、作ったアカウントの GitHub の Settings → Developer settings → Personal access tokens で失効させる
+- I223 より前は bot アカウントと、GitHub の MCP 用の個人の鍵（Fine-grained PAT・`GITHUB_PERSONAL_ACCESS_TOKEN`）で動かしていた。どちらも使わない
+- 手元に残っていたら、`~/.bashrc` などの `export GITHUB_PERSONAL_ACCESS_TOKEN=` の行を消し、PAT を作ったアカウントの Settings → Developer settings → Personal access tokens で失効させる

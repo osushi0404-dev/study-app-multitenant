@@ -13,7 +13,7 @@
 - 監査 fail 時は `scripts/claude/dependency-audit-issue.sh` が GitHub イシューを自動起票する:
   - タイトル: `[dependency-audit] <backend|frontend>: 依存脆弱性を検知（scheduled audit）`・ラベル: `dependency-audit`
   - **重複防止**: 監査種別ごとに open イシュー最大 1 本。既存 open があれば新規作成せず**コメント追記**（＝open のまま放置すると毎朝コメントが増えるが、イシューは乱立しない）
-- 検知するのは GitHub イシューのみ（I221 から、イシューは GitHub だけで管理する。番号は I＋GitHub の番号・`docs/runbooks/workflow.md`「イシューの置き場所」）。
+- 起票先は GitHub のイシューだけ（番号は I＋GitHub の番号・`docs/runbooks/issue-flow.md`「イシューの番号と置き場所（I221）」）。
 
 ## 検知時の対応手順
 
@@ -39,16 +39,15 @@ gh run list --workflow=dependency-audit.yml
 ## 前提・変更時の注意
 
 - **workflow 定義が default branch（現在: develop）上に存在すること**が schedule / workflow_dispatch の発火条件（GitHub 仕様）。default branch を main に戻す場合は、develop → main のマージで本 workflow が main に載っていれば schedule は継続する。
-- **監査コマンドは ci.yml（PR ゲート）と同一条件を維持すること**。どちらかを変更する場合は両方を同時に更新する。乖離は決定論ゲート `scripts/claude/tests/test_i109_dependency_audit.sh`（ペア検証）が検知する。
-- 判定基準の変更（例: npm audit のレベル変更）は、PR ゲートとの判定一貫性（「定期監査グリーンなら PR もグリーン」）を壊さないかを必ず検討する。
+- **監査コマンドと判定の基準は ci.yml（PR ゲート）と同じに保つ**（「定期監査が緑なら PR も緑」）。どちらかを変えるときは両方を同時に直す。食い違いは `scripts/claude/tests/test_i109_dependency_audit.sh`（ペア検証）が止める。
 
 ## Dependabot（版上げの PR）
 
 設定は `.github/dependabot.yml`。書き間違いは pre-commit の `check-dependabot`（check-jsonschema の公式のスキーマ）が手元のコミット時と CI で止める。
 
 ### 見張るもの・見張らないもの
-- 見張る: backend の pip・frontend の npm・e2e の npm・Docker（`backend`・`frontend` の Dockerfile と `docker-compose.yml`）・GitHub Actions・pre-commit。毎週確認する
-- 見張らない:
+- 見張る: 対象と頻度の正は `.github/dependabot.yml`（ここに写さない）
+- 見張らない（理由）:
   - ハーネスの道具の uv（`scripts/claude/tests`）: Dependabot の中で動く uv の版と、`pyproject.toml` の `required-version`（ぴったりの版・I211）がぶつかり、ロックファイルを作り直せない。版は onboarding.md「手元の準備（ハーネスのテスト）」の手順で手で上げる
   - 動かす環境の版を変える版上げ（python の minor 以上・node・postgres・redis の major）: `ignore` で出させない。上げるときは別のイシューを立てる
 
@@ -62,19 +61,21 @@ gh run list --workflow=dependency-audit.yml
 | PR の種類 | CI | すること |
 |---|---|---|
 | minor・patch のまとめ／セキュリティの修正（major でも） | CI が緑 | イシュー → 計画の流れを通さず、ユーザーがマージする（自動マージは使わない） |
-| 同上 | CI が赤 | マージしない。`/issue-bootstrap` で直すイシューを立てる（タイトルに PR 番号。セキュリティの修正なら優先度を上げる） |
-| major（セキュリティの修正以外） | どちらでも | マージしない。`/issue-bootstrap` でイシューを立て、通常の流れで扱う（PR は通知として開いたまま置き、イシューの対応で置き換わったら閉じる） |
+| 同上 | CI が赤 | マージしない。Claude が issue-bootstrap で直すイシューを立てる（タイトルに PR 番号。セキュリティの修正なら優先度を上げる） |
+| major（セキュリティの修正以外） | どちらでも | マージしない。Claude が issue-bootstrap でイシューを立て、通常の流れで扱う（PR は通知として開いたまま置き、イシューの対応で置き換わったら閉じる） |
+
+- CI が緑の Dependabot の PR は、`CLAUDE.md` 絶対ルール 5（記録が残る形で進める）の例外とする。記録は PR そのもの（差分・CI の結果・Dependabot の説明）で足りる（I213 F7）
 
 - Dependabot の PR の CI は secrets を使わない（E2E のパスワードは e2e.yml がジョブごとに作る）。pull_request で動くワークフローに secrets を足すと、Dependabot の PR の CI が落ちる（`scripts/claude/tests/test_i213_dependabot.sh` の W2 が止める）
 
 ### 取り込んだあと手元でやること
-- 標準の起動コマンド `docker compose up -d --build --renew-anon-volumes` で起動し直すだけ（依存・土台イメージの指紋が変わっていれば作り直す。common-commands.md）
+- `docs/runbooks/common-commands.md`「開発環境起動」のコマンドで起動し直すだけ
 - ハーネスの uv・pre-commit・e2e の npm は、次の実行で自動で合わせる（`uv run --locked`・pre-commit の版ごとの環境・e2e の `npm install` と `npx playwright install chromium`）
 
 ### 固定の決まり（新しく足すときも）
 - action はコミットの SHA で書き、行末に版を書く（例: `actions/checkout@<40 桁の SHA> # v4.4.0`）。Dependabot は SHA と版のコメントを一緒に上げる（W1 が止める）
 - 土台イメージは「タグ＋指紋」で書く（例: `python:3.11-slim@sha256:<64 桁>`）。Dependabot は指紋の更新を PR にする（I1 が止める）。指紋は `docker buildx imagetools inspect <タグ>` の `Digest:` の値。OS の修正を急ぐときは、この値で手で上げてよい
-- 例外: CI のワークフローの `services:` のイメージ（`ci.yml` の postgres・redis）は指紋で固定しない。Dependabot はワークフローの services を更新しないので、固定すると更新が届かず古いまま止まる。CI の services は毎回使い捨てで secrets を持たないので、タグのまま毎回新しいものを取る
+- 例外: CI のワークフローの `services:` のイメージ（`ci.yml` の postgres・redis）は指紋で固定しない。Dependabot はワークフローの services を更新しないので、固定すると更新が届かず古いまま止まる。CI の services は毎回使い捨てで secrets を持たないので、タグのまま毎回新しいものを取る。残るリスク: タグが乗っ取られると、そのイメージが CI（develop・main への push でも動く）の中で動く。CI は最上位で `contents: read` だけなので、書き込みの権限は持たない（I213 F10・受け入れ）
 
 ### 止まったときに見る場所
 - PR が来ない: Settings → Advanced Security の「Dependabot alerts」「Dependabot security updates」が On か（I213 の原因はここが無効だったこと）。Actions の「Dependabot Updates」の実行記録（対象ごとの成否とエラーの文言）

@@ -7,7 +7,7 @@ PR1-PR3 で追加・更新したファイル一覧。
 ```
 docs/
   runbooks/
-    legacy/            # PR3 で原本CLAUDE.mdを格納
+    legacy/            # PR3 で原本CLAUDE.mdを格納（I546 で削除・同じ内容は `docs/migration/CLAUDE_original.md`）
   issues/
     templates/
       issue_template.md
@@ -49,7 +49,7 @@ scripts/
 - `docs/migration/reports/apply_summary.md`
 
 ### PR2: chore/claude-migration-scaffold
-- `docs/runbooks/legacy/.gitkeep`
+- `docs/runbooks/legacy/.gitkeep`（I546 で削除・同じ内容は `docs/migration/CLAUDE_original.md`）
 - `docs/issues/templates/issue_template.md`
 - `docs/plans/templates/plan_template.md`
 - `docs/tests/templates/manual_test_template.md`
@@ -62,7 +62,7 @@ scripts/
 #### 新規追加
 - `docs/migration/CLAUDE_original.md`（原本固定・上書き禁止）
 - `docs/migration/migration_map.yml`（原本→移植先の対応表）
-- `docs/runbooks/legacy/CLAUDE.md.20260302`（原本のlegacyコピー）
+- `docs/runbooks/legacy/CLAUDE.md.20260302`（原本のlegacyコピー）（I546 で削除・同じ内容は `docs/migration/CLAUDE_original.md`）
 - `docs/runbooks/issue-flow.md`（NEW: イシューフロー・採番ルール・統合フロー）
 - `docs/runbooks/ux-rules.md`（NEW: UX重視の設計・実装ルール）
 - `docs/runbooks/backend-check.md`（NEW: DB整合性・API統合テスト・要件適合性）

@@ -25,7 +25,6 @@ res() { # $1=TC $2=説明 $3=0(成立)/非0
 has()   { grep -qF -- "$2" "$1" 2>/dev/null; }          # ファイル $1 に固定文字列 $2 がある
 lacks() { [ -f "$1" ] && ! grep -qF -- "$2" "$1"; }     # ファイル $1 が在り、固定文字列 $2 が無い（ファイル不在は不合格）
 hasx()  { grep -qxF -- "$2" "$1" 2>/dev/null; }         # ファイル $1 に行全体一致 $2 がある
-step5() { awk '/^\*\*ステップ5/{f=1} /^\*\*ステップ6/{f=0} f' "$1"; }   # issue-flow.md のステップ5〜6 の範囲
 
 check_all() {
   local R="$1" W C S F rc t hits
@@ -50,7 +49,7 @@ check_all() {
   rc=0
   for t in 'claude --worktree' '.worktreeinclude' 'wt-ports.sh' 'wt-remove.sh' 'git stash push -u -m' \
            'git config' 'docker compose ls -a' 'git worktree list' 'track:harness' 'track:app' \
-           '/plan-issue' '旧方式からの移行' 'grep -r' 'git worktree unlock' 'git remote set-head origin --auto' 'refs/remotes/origin/HEAD'; do
+           '/plan-issue' 'grep -r' 'git worktree unlock' 'git remote set-head origin --auto' 'refs/remotes/origin/HEAD'; do
     has "$W" "$t" || { rc=1; [ "$VERBOSE" -eq 1 ] && printf '  missing: %s\n' "$t"; }
   done
   res D3 "worktree.md に必要な記述がある" "$rc"
@@ -69,12 +68,7 @@ check_all() {
   has "$S" 'origin/develop' || rc=1
   res D5 "plan-issue/SKILL.md が origin/develop 基点" "$rc"
 
-  # D6: issue-flow.md ステップ5 も同じ（範囲外のステップ25 は対象外）
-  rc=0
-  step5 "$F" | grep -qF 'git checkout develop' && rc=1
-  step5 "$F" | grep -qF 'git pull origin develop' && rc=1
-  step5 "$F" | grep -qF 'checkout --no-track -b' || rc=1
-  res D6 "issue-flow.md ステップ5 が origin/develop 基点" "$rc"
+  # D6: （I546 で削除。issue-flow.md のブランチ作成の手順は消し、正は D5 の plan-issue/SKILL.md）
 
   # D7: 公式の作成・片付けを置き換えるフックが無い
   rc=0
@@ -167,7 +161,6 @@ fg D1  'mkdir -p "$D/scripts/claude"; : > "$D/scripts/claude/$OLD.sh"'
 fg D2  'printf "%s\n" "$OLD" >> "$D/docs/runbooks/onboarding.md"'
 fg D4  'printf "%s\n" "2026-07 時点" >> "$D/docs/runbooks/worktree.md"'
 fg D5  'printf "%s\n" "git checkout develop" >> "$D/.claude/skills/plan-issue/SKILL.md"'
-fg D6  'sed -i "/^\*\*ステップ5/a git checkout develop" "$D/docs/runbooks/issue-flow.md"'
 fg D7  'printf "%s\n" "\"WorktreeCreate\"" >> "$D/.claude/settings.json"'
 fg D8  'sed -i "/^backend\/\.env$/d" "$D/.worktreeinclude"'
 fg D9  'sed -i "/^\.claude\/worktrees\/$/d" "$D/.gitignore"'
