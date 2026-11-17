@@ -26,6 +26,10 @@ const OVERVIEW_WITH_DATA = {
     { subject_id: 9001, subject_name: 'とても長い名前の科目でも横にはみ出さないことを確かめる科目', answered_count: 10, accuracy_rate: 0.5 },
   ],
   recommendations: [],
+  // I466: 難易度別の苦手・急いだ間違い（契約のキー。欠けると画面は形の違う応答としてエラーにする）。
+  // 新しい表示も 390px で横にはみ出さないことを、同じ TC で確かめる
+  weak_difficulties: [{ difficulty: 'hard', answered_count: 12, accuracy_rate: 0.3 }],
+  rushed_mistakes: { mistake_count: 8, rushed_count: 3, rushed_rate: 0.375 },
 };
 
 const fixOverview = (page: Page) =>
@@ -50,6 +54,8 @@ test.describe('ダッシュボードの幅と並び（I487）', () => {
     await page.setViewportSize(MOBILE);
     await page.goto('/dashboard');
     await expect(page.getByTestId('stat-answered-count')).toHaveText('123456');
+    await expect(page.getByRole('heading', { level: 3, name: '難易度別' })).toBeVisible();
+    await expect(page.getByText(/急いで答えた問題の間違いが多めです/)).toBeVisible();
 
     expect(await hasNoHorizontalOverflow(page)).toBe(true);
     await expectInsideWidth(page, 'start-quiz-button', MOBILE.width);

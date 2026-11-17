@@ -103,3 +103,10 @@
 - TC-32: `beat_schedule` に ① `'schedule': 30.0` の項目 ② `'task': 'studylogs.tasks.analyze_mistake_patterns_task'` の項目、をテストの中で一時的に足すと（`mock.patch.dict`）、それぞれ落ちることを確かめる
 - TC-31a〜c: ① `backend/studylogs/views.py` に `from .models import ProblemAttempt` を足すと TC-31a ② `backend/dashboard/selectors.py` に `WEAK_MIN_ANSWERED = 5` の行を足すと TC-31b ③ `from problems.services.weakness import` の行を消すと TC-31c が、それぞれ exit 1 になることを確かめ、元に戻す
 - TC-27: `isDashboardOverview` の `weak_difficulties` の確かめを外すと ① ② が落ちることを確かめる
+
+## 再発防止記録（fix-loop・2026-11-17・CI の E2E の失敗）
+- なぜ失敗したか: `e2e/tests/dashboard-layout.spec.ts` の TC-21〜23・26 は overview の応答を固定している。固定の応答に I466 で足した `weak_difficulties`・`rushed_mistakes` が無く、画面の形の確かめ（`isDashboardOverview`・欠けたキーを 0 で埋めない I473 の決まり）でエラーの表示になり、数字のカードとグラフが出なかった。implement では型の検査で見つかる単体テストの準備だけを直し、型を使わない E2E の固定の応答を探していなかった
+- 何を変えたか: `e2e/tests/dashboard-layout.spec.ts` の `OVERVIEW_WITH_DATA` に 2 つのキー（上級の苦手 1 件・急いだ間違い 37.5%）を足し、TC-21 で 390px でも「難易度別」と急いだ間違いの 1 行が出て横にはみ出さないことを確かめる行を足した
+- セキュリティ上の考慮点: なし（テストの固定データだけ）
+- 次回どう防ぐか: 契約（`CONTRACT_PATHS`）の応答にキーを足すときは、`frontend/src` だけでなく `e2e/` の固定の応答（`route.fulfill`）も grep して直す。固定の応答を TypeScript の型で縛る案は retro で判断する（診断メモ 案 C）
+- 確かめた結果: 手元の compose の e2e コンテナで `tests/dashboard-layout.spec.ts`・`tests/quiz-session.spec.ts` の 11 件 pass（`--retries=0`）。診断レビュー PASS（`docs/reviews/I466_fix_diagnosis_review_20261117_1517.md`）
