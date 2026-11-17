@@ -1,28 +1,23 @@
-import { test, expect, Request } from '@playwright/test';
+import { test, expect, Page, Request } from '@playwright/test';
+
+/**
+ * ダッシュボードの「クイズを始める」で、問題のある科目のクイズへ進む。
+ *
+ * e2e-init のシードで、利用者 A の学ぶ科目は E2E Quiz Subject（問題 1 問）と E2E Subject A（問題 0 問）の 2 つ。
+ * クイズの対象は問題のある科目だけ（I539 AC13）なので、「すべて」でも対象は E2E Quiz Subject の 1 件で、
+ * 科目を選ぶダイアログを出さずにそのクイズへ進む（問題 0 問の科目を選んでエラーの通知で戻されない）。
+ */
+const startQuizFromDashboard = async (page: Page) => {
+  await page.click('[data-testid="start-quiz-button"]');
+  await expect(page).toHaveURL(/\/quiz\?subject=\d+/);
+  await page.waitForSelector('[data-testid="choice-option"]');
+  await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+};
 
 test.describe('クイズセッション', () => {
   test('ダッシュボードからクイズを開始して回答できる', async ({ page }) => {
     await page.goto('/dashboard');
-
-    // 「クイズを始める」ボタンをクリック
-    await page.click('[data-testid="start-quiz-button"]');
-
-    // e2e-init が tenant_isolation → quiz_session の順でシードするため
-    // org_a には E2E Subject A + E2E Quiz Subject の 2件が存在し、
-    // Dashboard の handleStartQuiz は必ずダイアログを開く（subjects.length >= 2）。
-    // expect(...).toBeVisible() は自動リトライ付きアサートで
-    // React 状態更新 + MUI ダイアログアニメーション（~300ms）を安全に待機する。
-    const subjectDialog = page.locator('[role="dialog"]');
-    await expect(subjectDialog).toBeVisible();
-
-    // aria-label="E2E Quiz Subjectのクイズを開始" に基づくアクセシビリティファーストなセレクタ
-    await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
-
-    // クイズ画面に遷移することを確認
-    await expect(page).toHaveURL(/\/quiz/);
-
-    // 選択肢が表示されるまで待機
-    await page.waitForSelector('[data-testid="choice-option"]');
+    await startQuizFromDashboard(page);
 
     // 最初の選択肢をクリック
     await page.click('[data-testid="choice-option"]');
@@ -41,11 +36,7 @@ test.describe('クイズセッション', () => {
     await expect(page.getByText('解答問題数')).toBeVisible();
     const before = (await answeredCount.count()) > 0 ? Number(await answeredCount.textContent()) : 0;
 
-    await page.click('[data-testid="start-quiz-button"]');
-    const subjectDialog = page.locator('[role="dialog"]');
-    await expect(subjectDialog).toBeVisible();
-    await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
-    await page.waitForSelector('[data-testid="choice-option"]');
+    await startQuizFromDashboard(page);
     await page.click('[data-testid="choice-option"]');
     await expect(page.locator('[data-testid="answer-result"]')).toBeVisible();
 
@@ -63,11 +54,7 @@ test.describe('クイズセッション', () => {
     });
 
     await page.goto('/dashboard');
-    await page.click('[data-testid="start-quiz-button"]');
-    const subjectDialog = page.locator('[role="dialog"]');
-    await expect(subjectDialog).toBeVisible();
-    await subjectDialog.getByRole('button', { name: /E2E Quiz Subject/ }).click();
-    await page.waitForSelector('[data-testid="choice-option"]');
+    await startQuizFromDashboard(page);
 
     expect(startRequests).toHaveLength(1);
     // crypto.randomUUID は安全なコンテキストでのみ使える。CI（localhost）ではキー付き、

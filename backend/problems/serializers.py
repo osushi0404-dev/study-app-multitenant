@@ -19,9 +19,13 @@ AT_LEAST_ONE_SUBJECT = '科目を最低1つ選択してください'
 class UserSubjectSerializer(serializers.ModelSerializer):
     """利用者が選んだ科目（I494。GET・PUT /api/user/subjects/ の応答）"""
 
+    # ビューが annotate_count=True で数えた値を読む（I539）
+    problem_count = serializers.IntegerField(
+        read_only=True, help_text='科目の問題数（0 の科目ではクイズを始められない）')
+
     class Meta:
         model = Subject
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'problem_count']
 
 
 class AvailableSubjectSerializer(serializers.ModelSerializer):

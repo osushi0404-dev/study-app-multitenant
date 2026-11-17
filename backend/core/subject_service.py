@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from django.db.models import Count, QuerySet
+from django.db.models import Count, Q, QuerySet
 from typing import TYPE_CHECKING, Optional, List, Dict
 import logging
 
@@ -15,6 +15,16 @@ if TYPE_CHECKING:
     from problems.models import Subject
 
 logger = logging.getLogger(__name__)
+
+
+def _problem_count() -> Count:
+    """
+    科目の「出題できる問題」の数（annotate の problem_count に使う）
+
+    論理削除済みの問題は出題されないので数えない。条件は出題の対象を決める
+    problems.services.tenant_scope.available_problems（is_deleted=False）と合わせる（I539 F5）
+    """
+    return Count('problems', filter=Q(problems__is_deleted=False))
 
 
 def user_subjects_cache_key(user_id: int) -> str:
@@ -65,7 +75,7 @@ class SubjectService:
                 subject_ids = [s['id'] for s in cached_data]
                 queryset = Subject.objects.filter(id__in=subject_ids)
                 if annotate_count:
-                    queryset = queryset.annotate(problem_count=Count('problems'))
+                    queryset = queryset.annotate(problem_count=_problem_count())
                 return queryset
 
         # データベースから取得
@@ -73,7 +83,7 @@ class SubjectService:
         queryset = Subject.objects.filter(organization=org_id)
 
         if annotate_count:
-            queryset = queryset.annotate(problem_count=Count('problems'))
+            queryset = queryset.annotate(problem_count=_problem_count())
 
         # キャッシュに保存
         if use_cache:
@@ -157,7 +167,7 @@ class SubjectService:
         ).order_by('name')
 
         if annotate_count:
-            queryset = queryset.annotate(problem_count=Count('problems'))
+            queryset = queryset.annotate(problem_count=_problem_count())
 
         return queryset
 

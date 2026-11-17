@@ -88,7 +88,8 @@ def test_add_subject(world):
     assert response.status_code == 200
     # 名前の順（DB の並び。「数学」が「英語」より前）
     assert response.json() == [
-        {"id": w["math"].id, "name": "数学"}, {"id": w["english"].id, "name": "英語"}]
+        {"id": w["math"].id, "name": "数学", "problem_count": 0},
+        {"id": w["english"].id, "name": "英語", "problem_count": 0}]
     assert _selected(w["user_a"]) == {w["math"].id, w["english"].id}
     assert UserSubjectAccess.objects.get(
         user=w["user_a"], subject=w["english"]).granted_by == w["user_a"]
@@ -102,7 +103,7 @@ def test_remove_subject(world):
     response = _put(w["user_a"], [w["english"].id])
 
     assert response.status_code == 200
-    assert response.json() == [{"id": w["english"].id, "name": "英語"}]
+    assert response.json() == [{"id": w["english"].id, "name": "英語", "problem_count": 0}]
     assert _selected(w["user_a"]) == {w["english"].id}
 
 
@@ -142,7 +143,7 @@ def test_cache_cleared_after_save(world, django_capture_on_commit_callbacks):
     caches["default"].clear()
     key = user_subjects_cache_key(user.id)  # 件数の有無・組織に関係なく 1 つ（I491）
 
-    assert _client(user).get(URL).json() == [{"id": w["math"].id, "name": "数学"}]
+    assert _client(user).get(URL).json() == [{"id": w["math"].id, "name": "数学", "problem_count": 0}]
     list(subject_service.get_user_selected_subjects(user, annotate_count=True))
     # 正の対照: 保存の前にキーに値が入っている（キャッシュを本当に通っている）
     assert _cached(key)
@@ -153,7 +154,8 @@ def test_cache_cleared_after_save(world, django_capture_on_commit_callbacks):
 
     assert not _cached(key)
     assert _client(user).get(URL).json() == [
-        {"id": w["math"].id, "name": "数学"}, {"id": w["physics"].id, "name": "物理"}]
+        {"id": w["math"].id, "name": "数学", "problem_count": 0},
+        {"id": w["physics"].id, "name": "物理", "problem_count": 0}]
 
 
 # ---- TC-06: 重複は 1 つにまとめる ----
@@ -162,7 +164,7 @@ def test_duplicates_collapsed(world):
     response = _put(w["user_a"], [w["english"].id, w["english"].id])
 
     assert response.status_code == 200
-    assert response.json() == [{"id": w["english"].id, "name": "英語"}]
+    assert response.json() == [{"id": w["english"].id, "name": "英語", "problem_count": 0}]
     assert _selected(w["user_a"]) == {w["english"].id}
 
 
@@ -215,7 +217,7 @@ def test_same_selection_keeps_rows(world):
     for _ in range(2):
         response = _put(w["user_a"], [w["math"].id])
         assert response.status_code == 200
-        assert response.json() == [{"id": w["math"].id, "name": "数学"}]
+        assert response.json() == [{"id": w["math"].id, "name": "数学", "problem_count": 0}]
 
     after = UserSubjectAccess.objects.get(user=w["user_a"], subject=w["math"])
     assert (after.pk, after.granted_at) == (before.pk, before.granted_at)

@@ -20,6 +20,7 @@ from rest_framework import serializers
 from core.throttling import AppAnonRateThrottle
 
 from .models import User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization
+from .services import get_personal_category
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -73,24 +74,30 @@ class UserRegistrationView(generics.CreateAPIView):
         logger.info(f"Registration attempt with slug: {organization_slug}")
 
         try:
-            # 組織を決定
-            organization = self._get_organization(organization_slug)
-            if not organization:
-                return Response({
-                    'error': {
-                        'main_message': '組織の設定に失敗しました',
-                        'sub_message': '無効な組織URLまたはシステムエラー'
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # リクエストデータに組織IDを追加
-            mutable_data = request.data.copy()
-            mutable_data['organization_id'] = organization.id
-
-            logger.info(f"Registration attempt for organization_id: {organization.id}")
+            # 登録先を決める。招待（slug あり）は招待で引き当ててよい組織、slug なしは
+            # 本人ひとりの組織をシリアライザが作る（組織は入力から受け取らない・I539）
+            if organization_slug:
+                organization = self._get_organization(organization_slug)
+                if not organization:
+                    return self._org_setup_failed()
+                target = {'organization': organization}
+                logger.info(f"Registration attempt for organization_id: {organization.id}")
+            else:
+                personal_category = get_personal_category()
+                if not personal_category:
+                    # 「個人利用」カテゴリは migration 0017 で常にある前提。不在は環境の異常なので
+                    # 自動作成せず、組織も利用者も作らずに断る（I140 の考え方を引き継ぐ）
+                    logger.error(
+                        "Personal organization category (slug='personal') not found. "
+                        "Environment is misconfigured; slug-less registration rejected."
+                    )
+                    return self._org_setup_failed()
+                target = {'personal_category': personal_category}
+                logger.info("Registration attempt for a new personal organization")
 
             with transaction.atomic():
-                serializer = self.get_serializer(data=mutable_data)
+                serializer = self.get_serializer(
+                    data=request.data, context={**self.get_serializer_context(), **target})
                 if not serializer.is_valid():
                     logger.error(f"Validation failed: {serializer.errors}")
                     return Response({
@@ -117,7 +124,7 @@ class UserRegistrationView(generics.CreateAPIView):
                 return Response({
                     'message': '登録完了。メール認証を行ってください。',
                     'user_id': str(user.id),
-                    'organization': organization.name
+                    'organization': user.organization.name
                 }, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.error(f"Registration error: {str(e)}", exc_info=True)
@@ -129,40 +136,26 @@ class UserRegistrationView(generics.CreateAPIView):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    def _get_organization(self, slug=None):
-        """組織を取得または作成"""
+    @staticmethod
+    def _org_setup_failed():
+        return Response({
+            'error': {
+                'main_message': '組織の設定に失敗しました',
+                'sub_message': '無効な組織URLまたはシステムエラー'
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def _get_organization(self, slug):
+        """招待の slug から登録先の組織を引く（本人ひとりの組織・共有の personal 組織は引かない・I539）"""
         import logging
         logger = logging.getLogger('django')
 
-        if slug:
-            # slugから組織を検索
-            organization = Organization.objects.filter(
-                slug=slug,
-                is_active=True
-            ).first()
-            if organization:
-                logger.info(f"Found organization by slug: {organization.name}")
-            else:
-                logger.warning(f"No organization found for slug: {slug}")
-            return organization
+        organization = Organization.objects.invitable().filter(slug=slug).first()
+        if organization:
+            logger.info(f"Found organization by slug: {organization.name}")
         else:
-            # デフォルト：personal組織を取得
-            personal = Organization.objects.filter(
-                type='personal',
-                is_active=True
-            ).first()
-
-            if not personal:
-                # personal 組織は migration 0014/0017/0018 で常に存在する前提。
-                # 不在は環境異常のため自動作成せず、既存の 400 分岐（create() 側）に委ねる
-                logger.error(
-                    "Personal organization (type='personal', is_active=True) not found. "
-                    "Environment is misconfigured; slug-less registration rejected."
-                )
-                return None
-
-            logger.info(f"Using personal organization: {personal.name}")
-            return personal
+            logger.warning(f"No organization found for slug: {slug}")
+        return organization
 
     def send_verification_email(self, user):
         token = secrets.token_urlsafe(32)
@@ -216,10 +209,8 @@ class OrganizationSlugValidationView(APIView):
         logger.info(f"Organization slug validation request: {slug}")
 
         try:
-            organization = Organization.objects.filter(
-                slug=slug,
-                is_active=True
-            ).first()
+            # 招待で引き当ててよい組織だけ（本人ひとりの組織は「見つからない」と同じ・I539）
+            organization = Organization.objects.invitable().filter(slug=slug).first()
 
             if organization:
                 logger.info(f"Valid organization found: {organization.name}")

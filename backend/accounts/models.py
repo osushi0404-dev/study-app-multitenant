@@ -6,6 +6,9 @@ from django.core.validators import MinLengthValidator, RegexValidator
 
 
 class OrganizationCategory(models.Model):
+    # マイグレーション 0017 が作る「個人利用」カテゴリの slug（会員登録で作る個人用の組織が指す・I539）
+    PERSONAL_SLUG = 'personal'
+
     name = models.CharField(max_length=50, verbose_name='カテゴリー名')
     slug = models.SlugField(max_length=50, unique=True, verbose_name='URL識別子')
     description = models.TextField(blank=True, verbose_name='説明')
@@ -24,11 +27,26 @@ class OrganizationCategory(models.Model):
         return self.name
 
 
+class OrganizationQuerySet(models.QuerySet):
+    def invitable(self):
+        """招待リンク（/register/<slug>）で引き当ててよい組織（I539）
+
+        本人ひとりの組織（is_individual）と共有の personal 組織は外す。種類（type）の既定が
+        personal なので、種類だけでは外さない（種類を指定せずに作った招待用の組織がある）
+        """
+        return self.filter(is_active=True, is_individual=False).exclude(
+            type=Organization.TYPE_PERSONAL, slug=Organization.SHARED_PERSONAL_SLUG)
+
+
 class Organization(models.Model):
+    TYPE_PERSONAL = 'personal'
+    # 組織を指定しない登録が I539 の前に入っていた、全員で共有の組織の slug
+    SHARED_PERSONAL_SLUG = 'personal'
+
     TYPE_CHOICES = [
         ('school', 'School'),
         ('corporate', 'Corporate'),
-        ('personal', 'Personal'),
+        (TYPE_PERSONAL, 'Personal'),
     ]
 
     id = models.AutoField(primary_key=True)  # organization_idから変更
@@ -44,16 +62,25 @@ class Organization(models.Model):
     type = models.CharField(
         max_length=20,
         choices=TYPE_CHOICES,
-        default='personal',
+        default=TYPE_PERSONAL,
         verbose_name='組織タイプ'
     )
     is_active = models.BooleanField(default=True, verbose_name='有効')
+    # db_default: 列を知らない古いコード（戻した後）が組織を作っても DB が False を入れる（I539）
+    is_individual = models.BooleanField(
+        default=False,
+        db_default=False,
+        verbose_name='本人ひとりの組織',
+        help_text='会員登録で作った、その利用者だけの組織（招待で入れない）',
+    )
     category = models.ForeignKey(
         'OrganizationCategory',
         on_delete=models.PROTECT,
         related_name='organizations',
         verbose_name='カテゴリー'
     )
+
+    objects = OrganizationQuerySet.as_manager()
 
     class Meta:
         verbose_name = '組織'
