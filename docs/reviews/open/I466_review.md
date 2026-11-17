@@ -14,8 +14,8 @@
 - Backend/Frontend/DB/Config: 計画書 3 章のとおり（DB は `QuizSession.mode` の選択肢の追加だけ）
 
 ## テスト結果
-- 自動: （CI の結果を書く）
-- 手動: （test-gate で書く）
+- 自動: CI（PR #564・a39f7287）で Backend・Frontend・API Types・Harness・E2E すべて pass。手元では変えたファイルのテスト（backend 733 件・frontend 82 件・E2E 11 件）と失敗の注入（TC-15・16・17・05③・13b・27・28b・31a〜c・32）を確かめた（docs/tests/open/I466_auto_test.md）
+- 手動: Claude が Playwright MCP で 8 件すべて OK（確かめ用データで、期待値は shell の読み出しで別に数えた。docs/tests/open/I466_manual_test.md）。人の手動テストは無し
 
 ## 計画との差分
 - （実装後に書く）
@@ -36,6 +36,7 @@
 - [review-gate] 2 回目: CI OK・コードレビュー HIGH（止める指摘 F1・F2。記録 docs/reviews/I466_code_review_20261117_1519.md）。fix-loop に回す
 - [fix-loop] F1 は「最後の手段でも直前の 1 問は除く」を通常・苦手を優先の共通の進み方に入れて直した（モード別の分岐を足さない）。F2 は引き継ぐモードを苦手を優先だけにした（I466 以前の今日の復習の動きに戻す）。診断レビュー PASS — どちらも数行の粗く確実な直し
 - [review-gate] 3 回目（差分のレビュー）: CI OK・コードレビュー OK（F1・F2 は直った。記録 docs/reviews/I466_code_review_20261117_1532.md）。高リスクではなく敵対的レビューは不要
+- [test-gate] 手動テストはすべて Claude で確かめられたので人の確認は無し。確かめ用データ（作り直しのコマンドのもの）は全問初級なので、上級が苦手になる形・急いだ間違いが 25% 以上の形は単体テストが受け持つ（データを足すのは見張りの承認が要るため行わない）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -45,3 +46,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

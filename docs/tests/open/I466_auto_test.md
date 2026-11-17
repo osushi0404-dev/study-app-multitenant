@@ -119,3 +119,9 @@
 - セキュリティ上の考慮点: なし（出題の順・画面の遷移）
 - 次回どう防ぐか: 「続けて出ない」を確かめるテストは、候補が少なく除外で全部消える境目（科目の問題が除外の数以下）を必ず入れる。モードを引き継ぐ処理を足すときは、既存のモード（今日の復習）の遷移が変わらないことを同じテストで確かめる
 - 確かめた結果: backend `problems/tests/`・`test_I452`・`test_I446` 307 件 pass。frontend `QuizSession.weak.test.tsx`・`QuizSession.review.test.tsx` 8 件 pass・ESLint 違反 0・ruff OK。失敗の注入: 直前の 1 問の除外を外すと TC-13b が `assert 14 != 14` で落ち、`session.mode ?? requestedMode` に戻すと TC-28b が `mode: "review"` で落ちた → 戻して pass。診断レビュー PASS（`docs/reviews/I466_fix_diagnosis_review_20261117_1528.md`）
+
+## 実行記録（test-gate・2026-11-17）
+- `bash scripts/claude/gate-check.sh I466` → exit 0（`GATE_CHECK: OK`。コードレビュー docs/reviews/I466_code_review_20261117_1532.md の REVIEWED_COMMIT a39f7287 以降は記録の場所だけ）
+- 決定論ゲートの委譲（heavy）: なし
+- CI（PR #564・HEAD a39f7287 の時点）: Backend・Frontend・API Types・Harness・E2E（TC-40・dashboard-layout の TC-21〜27 を含む）すべて pass（review-gate の code-review.sh が `CI_WAIT: OK` で確認）
+- 手動テスト（Claude）8 件 OK。`bash scripts/claude/check-frontend-evidence.sh I466` → 合格（画面確認 8 行）・`bash scripts/claude/check-manual-test-executor.sh I466` → 合格
