@@ -104,6 +104,7 @@
 - [retro] E2E の固定の応答が契約の型とつながっておらず CI の E2E で初めて落ちた → #496 にコメントで同梱（画面の API の型の置き換えの範囲に e2e の固定の応答を入れる）
 - [retro] 見送り: ① 計画書 13 章の「条件を満たさなければ 1 本」が I473 のクエリ数の決まりと矛盾していた — 実装中の既存テストがその場で止め、手戻りは数分（新しい手順を足さない）② F1（少ない科目の直前の問題）を最初のテストで見逃した — コードレビューがその場で止め、fix-loop 1 回で直った（観点の追加は不要）③ 確かめ用データを手で足す手順が見張りの承認対象になった — 見張りは意図どおりに働いた。データの側を直す #568 で解く
 - [close] develop への追従は不要（BLOCKED・承認待ち）。記録を closed へ移し、PR の説明を書いた
+- [close→再開] マージ前のユーザーの確認（BP・UI/UX）に「ベストなやり方で」と任されたので、台帳の残りの画面の 3 件（F4・F6・F9）をこの PR で直すと決め、記録を open に戻した — 知っている文言・遷移の食い違いを残して出さない。範囲を変えるので plan-review から通し直す。使わなくなった 4 つの表の削除は #492 にコメントで同梱した（計画で「別イシュー」と決めたのに起票していなかった漏れ）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -116,3 +117,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review

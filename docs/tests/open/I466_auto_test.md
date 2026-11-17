@@ -68,6 +68,7 @@
 | TC-21 | `rushed_mistakes = {mistake_count: 4, rushed_count: 2, rushed_rate: 0.5}` / `null` | `role="status"` で「急いで答えた問題の間違いが多めです（間違いの 50%）。落ち着いて解きましょう」が出る / 出ない |
 | TC-22 | 「苦手を優先して始める」: 科目を選んだ状態（科目 4・問題あり） | ボタン（`data-testid="start-weak-quiz-button"`）と「間違えた問題や正答率の低い難易度から出します」が出る。押すと `navigate('/quiz?subject=4&mode=weak')` |
 | TC-23 | 「すべて」で対象が 2 件: 「苦手を優先して始める」→ ダイアログで 2 件目の科目 → 閉じて「クイズを始める」→ ダイアログで 1 件目の科目 | 1 回目は `navigate('/quiz?subject=<2件目>&mode=weak')`、2 回目は `navigate('/quiz?subject=<1件目>')`（ダイアログが押したボタンのモードを使う） |
+| TC-23b | ダイアログの見出し（AC12）: 「すべて」で対象 2 件のとき、①「苦手を優先して始める」② 「クイズを始める」でダイアログを開く | ① 見出しが「📚 苦手を優先して始める科目を選択」② 「📚 クイズを始める科目を選択」 |
 | TC-24 | 始められない（学ぶ科目に問題が無い） | 「苦手を優先して始める」が `disabled` |
 | TC-26 | おすすめ: `recommendations = [{kind: "weak_subject", subject_id: 4, ...}, {kind: "unstudied_subject", subject_id: 5, ...}]` の「練習する」をそれぞれ押す | `navigate('/quiz?subject=4&mode=weak')`・`navigate('/quiz?subject=5')` |
 | TC-27 | 形の違う応答: ① `weak_difficulties` を欠く ② `difficulty: "extreme"` ③ `rushed_mistakes: {mistake_count: 4}`（欠けた数） | どれも「ダッシュボードの数字を読み込めませんでした」の `role="alert"` が出る |
@@ -78,6 +79,8 @@
 | TC | 内容 | 期待値 |
 |---|---|---|
 | TC-25 | `/quiz?subject=1&mode=weak` で開く。`POST /api/quiz/` は `{id: 9, mode: "weak", ...}`、`next_problem` は ① `is_weak_fallback: true` ② `false` | `apiClient.post` が `('/api/quiz/', {subject: '1', mode: 'weak'}, ...)` で 1 回呼ばれる。「苦手を優先」の印が出る。① 「この科目はまだ解答が少ないため、いつもの順で出題しています」が出る ② 出ない。「今日の復習」の印は出ない |
+| TC-25b | 全科目の案内（AC12）: `/quiz?mode=weak`（科目なし）で開き、`next_problem` が `is_weak_fallback: true` | 「まだ解答が少ないため、いつもの順で出題しています」が出て、「この科目は」で始まる文は出ない |
+| TC-28c | 再挑戦が URL に頼らない（AC12）: `/quiz/9?mode=review` の形（`mockSearch='mode=review'`・`useParams` が `{id: '9'}`）で、終えた `normal` の回を開き「もう一度挑戦」 | 開始の本文に `mode` が無い |
 | TC-28 | 終えた `weak` の回を開く（`/quiz/9`・`GET /api/quiz/9/` が `{is_active: false, mode: "weak", subject: 1, ...}`）→「もう一度挑戦」 | `apiClient.post` の本文が `{subject: 1, mode: 'weak'}` |
 | TC-28b | 終えた今日の復習の回を開く（`GET /api/quiz/9/` が `{is_active: false, mode: "review", subject: 1}`）→「もう一度挑戦」（F2） | 開始の本文が `{subject: 1}`（今日の復習は引き継がない） |
 | TC-29 | いつものクイズ（`/quiz?subject=1`） | 開始の本文に `mode` が無い。「苦手を優先」の印が出ない（既存の `QuizSession.review.test.tsx` の「いつものクイズでは印を出さず…」も pass） |

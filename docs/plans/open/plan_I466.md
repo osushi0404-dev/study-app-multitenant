@@ -5,7 +5,7 @@
 - **関連イシュー**: #466
 - **Draft PR**: #564
 - **作成根拠資料**: docs/issues/open/I466.md（GitHub #466 の本文の写し。設計確認メモ 2026-11-17）
-- **実装後評価**: docs/reviews/closed/I466_review.md
+- **実装後評価**: docs/reviews/open/I466_review.md
 - **作成日**: 2026-11-17
 
 ## 1. 背景/目的
@@ -43,6 +43,7 @@
 - [ ] AC8: `backend/core/celery.py` の定期処理がすべて時刻（`crontab`）で決まり、間違いパターンの分析・期限切れの提案の掃除の定期処理が無く、登録したタスクがすべて実在する（TC-32）
 - [ ] AC9: 苦手を優先の次の問題を選ぶ問い合わせの数が、候補の問題の数に比例しない（TC-15）
 - [ ] AC10: I431・I446・I452・I455・I473 の回帰テストがすべて pass する（消した経路の分は新しい経路に合わせて直す）（TC-33）
+- [ ] AC12: 「すべて」で「苦手を優先して始める」を押したときのダイアログの見出しが「📚 苦手を優先して始める科目を選択」（「クイズを始める」のときは今のまま）。科目なし（全科目）の苦手を優先で解答が少ないときの案内が「まだ解答が少ないため、いつもの順で出題しています」（科目のある回は今のまま）。完了画面の「もう一度挑戦」の種類は回の種類だけで決まり（苦手を優先は苦手を優先・それ以外はいつものクイズ）、URL の `?mode` に頼らない（TC-23・TC-25b・TC-28c）
 - [ ] AC11: 全テストが pass する（CI）
 
 ## 3. 影響範囲
@@ -143,13 +144,14 @@ def order_weak_first(problems, user, subject) -> tuple[QuerySet[Problem], bool]:
   1. 今の科目別の一覧と空の文（変えない）
   2. `weak_difficulties` が 1 件以上なら、小見出し「難易度別」（`Typography variant="subtitle2" component="h3"`）と、行ごとに 表示名（初級など）・正答率の `Chip`（`Math.round(rate * 100)%`・50% 未満は `error`、それ以外は `warning`・科目の行と同じ）・「解答数: ◯問」
   3. `rushed_mistakes` が `null` でなければ、`Alert severity="info" role="status"` で「急いで答えた問題の間違いが多めです（間違いの ◯%）。落ち着いて解きましょう」（◯ は `Math.round(rushed_rate * 100)`）
-- `StartQuizCard.tsx`: 「クイズを始める」の下に、`Button variant="outlined" size="large" fullWidth` の「苦手を優先して始める」（`data-testid="start-weak-quiz-button"`・押せる条件は「クイズを始める」と同じ `canStart`）と、その下に `Typography variant="caption" color="text.secondary"` で「間違えた問題や正答率の低い難易度から出します」。押した後の流れは「クイズを始める」と同じ（対象が 1 件ならすぐ・2 件以上ならダイアログで科目を選ぶ）で、行き先が `/quiz?subject=<id>&mode=weak` になる。ダイアログは押したボタンのモードを覚える（`useState<'normal' | 'weak'>`）
+- `StartQuizCard.tsx`: 「クイズを始める」の下に、`Button variant="outlined" size="large" fullWidth` の「苦手を優先して始める」（`data-testid="start-weak-quiz-button"`・押せる条件は「クイズを始める」と同じ `canStart`）と、その下に `Typography variant="caption" color="text.secondary"` で「間違えた問題や正答率の低い難易度から出します」。押した後の流れは「クイズを始める」と同じ（対象が 1 件ならすぐ・2 件以上ならダイアログで科目を選ぶ）で、行き先が `/quiz?subject=<id>&mode=weak` になる。ダイアログは押したボタンのモードを覚える（`useState<'normal' | 'weak'>`）。ダイアログの見出しは、苦手を優先なら「📚 苦手を優先して始める科目を選択」、いつものクイズなら今の「📚 クイズを始める科目を選択」
 - `RecommendationsCard.tsx`: `kind === 'weak_subject'` の「練習する」は `/quiz?subject=<id>&mode=weak`、`unstudied_subject` は今のまま `/quiz?subject=<id>`
 - `QuizSession.tsx`:
   - `?mode=` の読み方を `review`・`weak`・それ以外（通常）の 3 つにする（`requestedMode`）。開始の要求の本文の `mode` に `review`・`weak` を入れる。開始を 1 回にする印（`startedKeyRef`）のキーにモードを入れる
   - 回が `weak` なら、復習の印の位置に `Chip label="苦手を優先" size="small" color="primary"` を出す
   - `next_problem` の応答の `is_weak_fallback` が `true` なら、問題の上に `Alert severity="info"` で「この科目はまだ解答が少ないため、いつもの順で出題しています」
-  - 完了画面の「もう一度挑戦」は、終えた回と同じモードで始める（`createNewSession` にモードを引数で渡す）
+  - 完了画面の「もう一度挑戦」は、回の種類だけで始め方を決める（苦手を優先の回は苦手を優先、それ以外はいつものクイズ。URL の `?mode` に頼らない。`createNewSession` にモードを引数で渡す）
+  - 解答が少ない案内の文は、科目のある回は「この科目はまだ解答が少ないため、いつもの順で出題しています」、科目なし（全科目）の回は「まだ解答が少ないため、いつもの順で出題しています」
 - `frontend/src/types/quiz.ts`: `QuizMode = 'normal' | 'review' | 'weak'`、`Problem` に `is_weak_fallback?: boolean`
 
 ### 4.5 使われない分析を片付ける
@@ -289,6 +291,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 3 | 読んで可 | 消した経路の下（`analyze/`・`select_problems/` など）がすべて 404 になり、呼び出し元が画面・e2e・backend に残っていない（TC-30・調査結果 7） |
 
 ## 計画変更記録
+- 2026-11-17 マージ前のユーザーの確認（「BP・UI/UX の観点でベストなやり方で進めて」）: レビューの台帳の残りのうち画面の文言・遷移の 3 件（F6 ダイアログの見出し・F4 全科目の案内の文言・F9 再挑戦のモードが URL に頼る）を、知っている食い違いを残して出さないため、この PR で直す（AC12・4.4）。文言は委任の範囲で Claude が決めた（既存の文と同じ形で、苦手を優先・全科目に合う最小の言い換え）。範囲を変えるので計画レビューを通し直す。#567 からはこの 3 件を外す（コメントで記録）
 - 2026-11-17 implement（細部・方式は変えない）:
   - 計画書の記載: 4.4「`StartQuizCard.tsx`: …「苦手を優先して始める」…」／採った方法: ボタンに `TrackChanges` のアイコンを付け、`minHeight: 44` を足した／理由: 主ボタンと見た目をそろえる・360px 幅で実測 42px で ux-rules.md 6 の 44px に届かなかった
   - 計画書の記載: 4.4「行き先が `/quiz?subject=<id>&mode=weak` になる」（`StartQuizCard`・`RecommendationsCard` に別々に書く想定）／採った方法: 道筋を作る関数 `quizPath` と型 `QuizStartMode` を `frontend/src/constants/routes.ts` に置き、2 枚のカードから使う／理由: 画面どうしが互いの部品を読み込まずに同じ値を指す、既存の routes.ts の役割どおり
