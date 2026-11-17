@@ -21,6 +21,8 @@
 
 ## 自律判断の記録
 - [plan-review] 計画レビューは HIGHRISK（DB スキーマの重要な変更・API 経路の削除）。Warning 2 件（TC-04 の記録・R1 の確かめの追加）は計画書とテスト文書に追記し、方式・範囲を変えないので再レビューしない — 計画変更記録のとおり
+- [design-security-review] Blocker・High・Medium は無し、Low 4 件（バックアップの置き場所・既存の `str(e)`・利用者の選び方・管理画面の削除）は計画のままで守れるので計画を変えない — 計画書「## セキュリティレビュー結果」
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
