@@ -133,3 +133,8 @@
 - Red: TC-23b・TC-25b・TC-28c を先に足し、3 件とも落ちることを確かめた（見出しが無い・「この科目は」の文・`mode: review` が付く）
 - Green: `Dashboard.test.tsx`・`QuizSession.*.test.tsx` の 81 件 pass。型チェック（`tsc --noEmit`）エラー 0・ESLint 違反 0
 - 画面: Playwright MCP で見出しと全科目の案内を確かめた（手動テスト文書の「画面確認」の 2 行）
+
+## 実行記録（test-gate・AC12 の後・2026-11-17）
+- `bash scripts/claude/gate-check.sh I466` → exit 0（コードレビュー 20261117_1656・敵対的レビュー 20261117_1705 とも OK）
+- 決定論ゲートの委譲（heavy）: なし。CI（HEAD 7bbf45c9）すべて pass
+- 手動テスト: No.1〜8 は前回の OK のまま（AC12 は文言・分岐だけで、No.1〜8 の確かめる内容に触れない）。AC12 の 2 点は画面確認の 2 行。`check-frontend-evidence.sh`（10 行）・`check-manual-test-executor.sh` とも合格

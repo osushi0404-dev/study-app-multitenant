@@ -110,6 +110,7 @@
 - [implement] AC12: ダイアログの見出しを始め方に合わせ、読み上げ用にダイアログへ見出しを名前として結び付けた（aria-labelledby。見出しで区別できるようにするため）。全科目の案内は「まだ解答が少ないため…」、再挑戦は回の種類だけで決める。数行の文言・分岐の直しなので /simplify（4 体）は省いた — 整理済みのコードへの小さな追加で、重複・効率の論点が生まれない
 - [implement] #567 から F4・F6・F9 を外すコメントを付ける（この PR で直したため）
 - [review-gate] 4 回目（AC12 の差分）: CI OK・コードレビュー OK（docs/reviews/I466_code_review_20261117_1656.md）。計画レビューの高リスク判定で敵対的レビューが必要になり、1 周で OK（docs/reviews/I466_adversarial_review_20261117_1705.md・V1〜V3 確認済み）。Low の残り（TC-15 は本数の絶対値と既出の問題を出す経路を数えない）は retro で #566 に回す
+- [test-gate] AC12 の後: 手動テスト No.1〜8 はやり直さない（AC12 は文言・分岐だけで確かめる内容に触れない）。AC12 は画面確認 2 行と単体テストで確かめた。人の確認は無し
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -127,3 +128,4 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
