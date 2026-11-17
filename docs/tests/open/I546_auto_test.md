@@ -18,6 +18,12 @@
 | TC-02 | `CLAUDE.md` に「Cursor 経由」が無い（AC6） | `! grep -q` が exit 0 | exit 1（実装前は有るので不合格。失敗の注入の確認） |
 | TC-03 | `docs/runbooks/ux-rules.md` に「流れの途中」の決まりがある（AC8） | `grep -q` が exit 0 | exit 1（実装前は無いので不合格。失敗の注入の確認） |
 
+## 実行記録
+- 2026-11-17 16:52 review-gate（`scripts/claude/code-review.sh`・HEAD ded4d2d8）: 決定論ゲート 22 項目すべて exit=0（記録 `docs/reviews/I546_code_review_20261117_1652.md` の「決定論ゲート実行結果」）。TC-01 の 20 本・TC-02・TC-03 が合格
+- 2026-11-17 implement の後・/simplify の後に手元で 21 本を流した: 20 本 exit 0、`test_i193_official_flow.sh` は F9 の 3 項目だけ不合格（基準と同じ・手元の道具の版の違い）で、F9 以外の 170 項目は PASS
+- CI（`run-all.sh` を含む）: review-gate の CI 待ちで成功（`CI_WAIT: OK`）
+- test-gate で手元で流すもの（heavy の委譲）は無い
+
 ## FG（失敗の注入）の実行記録
 - 2026-11-17 計画時: TC-02・TC-03 を実装前のファイルに対して `bash -c` で流し、どちらも exit 1（不合格）になることを確かめた（実装前の状態が失敗の注入にあたる）
 - TC-01: 既存のテストはそれぞれのテストの中に FG を持つ（例: i193 の FG-D4・i181 の D 系）。直した項目には、その項目の FG が残っていることを確かめる

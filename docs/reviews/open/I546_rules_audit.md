@@ -848,3 +848,32 @@ closed/・legacy/・`docs/migration/`（移行の記録）・`docs/reviews/I###_
 - 重複（要約と明記済み）: 見張りに判定を足すときの 3 つが `danger-ops.md:60-63` と `plan-writing-rules.md:188-195`
 - 古さの疑い（推測）: `common-commands.md:63-72`「Bash 実行作法」の理由（allow に一致せず ask に落ちる）は I430 のサンドボックスの前の説明。今の正しい理由は「外に出すコマンドがサンドボックスの中で動くと鍵が読めない・DIRTY」。`workflow.md:122-129`「Claude Code実行ルール」（コマンドの前に必ず説明）も、自律の流れ（I193）と合うか点検が要る
 - 古さ: `workflow.md:181-187`「イシュー完了時のマージフロー」の「ステップ25」「レビューファイルを closed に移動」は今の close 段階と合わない可能性
+
+---
+
+## 付表: 小見出しと、それを覆う行（手動テスト No.1・2026-11-17）
+
+書き換える前（`origin/develop`）の対象ファイルの見出し（コードブロックの外の `#`〜`####`）285 件のうち、表 1 が見出しの文字のままでは書いていない 64 件。どれも、上の表の「まとめた行」が判定を持つ（判定はその行に従う）。
+
+| ファイル | 小見出し | 覆う行（点検・表 1 の節） | 判定 |
+|---|---|---|---|
+| 各ファイル | 1 行目の題（`# GitHub Branch Protection Rules 設定手順書`・`# よく使うコマンド`・`# 依存監査と Dependabot の運用`・`# フロントの画面確認（…）`・`# MCP 利用ガイドライン`・`# プロジェクト概要 / Onboarding`・`# pre-commit 運用手順`・`# テンプレートファイル同期必須ルール`） | 各ファイルの最初の行（冒頭・概要） | そのまま（template-sync.md はファイルごと消す） |
+| branch-protection-setup.md | `### develop ブランチ`・`### main ブランチ` | D「§1 設定値一覧（develop・main の 2 表）」 | 直す（1 表に） |
+| branch-protection-setup.md | `## 1.5 承認者の限定（I178）` | D「§1.5 理由」〜「§1.5 運用」の 5 行 | 各行のとおり |
+| branch-protection-setup.md | `### ステップ 1`〜`### ステップ 5` | D「§3 GitHub Settings 操作手順」 | 直す（必須チェックは §2 の参照・ステップ 5 は 1 行） |
+| branch-protection-setup.md | `## 4. 動作確認手順`・`### 確認 1・2`〜`### 確認 6` | D「§4 確認 1・2」「§4 確認 3・4」「§4 確認 5（廃止）」「§4 確認 6」 | 各行のとおり |
+| branch-protection-setup.md | `## 5. ロールバック手順` | D「§5 ロールバック」 | そのまま |
+| branch-protection-setup.md | `### 承認したのに BLOCKED に戻った` | D「§6 トラブルシューティング」 | 直す |
+| common-commands.md | `## よく使用するコマンド` | C「エラー調査手順」〜「テスト実行」（この見出しの下の小節） | 各行のとおり |
+| common-commands.md | `### 確認コマンド（drift チェック）` | C「モデル変更時の必須手順」 | 直す（縮める） |
+| common-commands.md | `### 1. .env.e2e を作成する`〜`### 4. パスワードを変更したい場合` | C「ローカル E2E テスト実行手順」 | 消す（frontend-verify.md §8 の参照に） |
+| common-commands.md | `### 恒久対処（I024 実装済み）` | C「webpack キャッシュトラブル対処」 | 直す（縮める） |
+| issue-flow.md | `#### フェーズ1`〜`#### フェーズ4`・`#### ステップ15-18` | A「### 各ステップの詳細（#### フェーズ1〜4・ステップ15-18 を含む）」 | 消す |
+| mcp-usage.md | `## 1.`・`## 2. built-in WebSearch ツール`・`## 4.`・`## 5.` とその下の `###`（評価パッケージ・導入不要の根拠・必須確認項目・追加する場合の設定ルール） | D「冒頭・§1 一覧」「§2 built-in WebSearch」「§4 Sequential Thinking を入れない理由」「§5 評価観点・設定ルール」 | 各行のとおり |
+| onboarding.md | `### 3. GitHub が品質ゲートになっている` | D「4つの特徴 §3 GitHub が品質ゲート」 | 直す |
+| pre-commit.md | `### 1. pipx のインストール`〜`### 3. git hooks への登録` | C「セットアップ」 | 直す（onboarding.md へ） |
+| pre-commit.md | `### 全ファイルへの手動実行` | C「日常的な使い方」 | 直す（縮める） |
+| pre-commit.md | `### 方法1`・`### 方法2` | C「detect-secrets の誤検知への対処（方法 1・2）」 | 直す |
+| pre-commit.md | `## .secrets.baseline の更新（…）` | C「`.secrets.baseline` の更新」 | 直す |
+| review-rules.md | `#### A.`〜`#### D.` | B「### レビュー内容の必須要素（#### A.〜#### D.）」 | 消す |
+| template-sync.md | `## ルール変更時の必須手順`・`### ステップ1`〜`### ステップ5`・`## テンプレート更新が必要となる変更例` | C「template-sync.md ファイル全体」 | 消す（決まり 2 行を plan-writing-rules.md へ） |
