@@ -942,6 +942,21 @@ describe('Dashboard', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('/quiz?subject=5');
   });
 
+  it('TC-I466-23b: ダイアログの見出しは押したボタンの始め方に合わせる（AC12）', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-weak-quiz-button')).toBeEnabled());
+
+    await userEvent.click(screen.getByTestId('start-weak-quiz-button'));
+    expect(await screen.findByRole('dialog', { name: '📚 苦手を優先して始める科目を選択' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByTestId('start-quiz-button'));
+    expect(await screen.findByRole('dialog', { name: '📚 クイズを始める科目を選択' })).toBeInTheDocument();
+  });
+
   it('TC-I466-24: クイズを始められないときは「苦手を優先して始める」も押せない', async () => {
     respond(overview());
     mockGetUserSubjects.mockResolvedValue([{ id: 5, name: '英語', problem_count: 0 }]);

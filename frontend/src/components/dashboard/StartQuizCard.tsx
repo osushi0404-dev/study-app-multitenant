@@ -249,8 +249,17 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
         間違えた問題や正答率の低い難易度から出します
       </Typography>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>📚 クイズを始める科目を選択</DialogTitle>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        aria-labelledby="start-quiz-dialog-title"
+      >
+        {/* 見出しは押したボタンの始め方に合わせる（I466 AC12） */}
+        <DialogTitle id="start-quiz-dialog-title">
+          {startMode === 'weak' ? '📚 苦手を優先して始める科目を選択' : '📚 クイズを始める科目を選択'}
+        </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {quizTargets.map((subject) => (
             <Button

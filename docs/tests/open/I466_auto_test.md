@@ -128,3 +128,8 @@
 - 決定論ゲートの委譲（heavy）: なし
 - CI（PR #564・HEAD a39f7287 の時点）: Backend・Frontend・API Types・Harness・E2E（TC-40・dashboard-layout の TC-21〜27 を含む）すべて pass（review-gate の code-review.sh が `CI_WAIT: OK` で確認）
 - 手動テスト（Claude）8 件 OK。`bash scripts/claude/check-frontend-evidence.sh I466` → 合格（画面確認 8 行）・`bash scripts/claude/check-manual-test-executor.sh I466` → 合格
+
+## 実行記録（AC12 の追加・implement・2026-11-17）
+- Red: TC-23b・TC-25b・TC-28c を先に足し、3 件とも落ちることを確かめた（見出しが無い・「この科目は」の文・`mode: review` が付く）
+- Green: `Dashboard.test.tsx`・`QuizSession.*.test.tsx` の 81 件 pass。型チェック（`tsc --noEmit`）エラー 0・ESLint 違反 0
+- 画面: Playwright MCP で見出しと全科目の案内を確かめた（手動テスト文書の「画面確認」の 2 行）

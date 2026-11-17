@@ -398,11 +398,12 @@ const QuizSessionPage: React.FC = () => {
                   variant="contained"
                   startIcon={<Refresh />}
                   // 完了画面の URL（/quiz/<id>）には ?subject・?mode が無いため、終えたセッションの科目で再挑戦する。
-                  // 引き継ぐ種類は苦手を優先だけ（今日の復習の回はいつものクイズで始める・I466 F2）
+                  // 始め方は回の種類だけで決める（苦手を優先は苦手を優先、それ以外はいつものクイズ。
+                  // 今日の復習を完了画面から始め直さない・URL の ?mode に頼らない・I466 F2・AC12）
                   onClick={() => createNewSession(
                     subjectId ?? session?.subject,
                     generateIdempotencyKey(),
-                    session.mode === 'weak' ? 'weak' : requestedMode
+                    session.mode === 'weak' ? 'weak' : 'normal'
                   )}
                 >
                   もう一度挑戦
@@ -442,7 +443,9 @@ const QuizSessionPage: React.FC = () => {
           {/* 苦手を優先の回で、解答が少なく判定できないとき（I466） */}
           {isWeakSession && currentProblem.is_weak_fallback && (
             <Alert severity="info" sx={{ mb: 1 }}>
-              この科目はまだ解答が少ないため、いつもの順で出題しています
+              {session.subject
+                ? 'この科目はまだ解答が少ないため、いつもの順で出題しています'
+                : 'まだ解答が少ないため、いつもの順で出題しています'}
             </Alert>
           )}
 
