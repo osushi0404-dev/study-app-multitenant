@@ -20,5 +20,7 @@
 - 計画書 `docs/plans/open/plan_I492.md` の 7
 
 ## 自律判断の記録
+- [plan-review] 計画レビューは HIGHRISK（DB スキーマの重要な変更・API 経路の削除）。Warning 2 件（TC-04 の記録・R1 の確かめの追加）は計画書とテスト文書に追記し、方式・範囲を変えないので再レビューしない — 計画変更記録のとおり
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
