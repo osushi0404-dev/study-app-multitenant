@@ -31,7 +31,9 @@
 - [implement] 「苦手を優先して始める」のボタンにアイコンと minHeight: 44 を足した — 主ボタンと見た目をそろえる・360px 幅の実測 42px が ux-rules.md の 44px に届かなかった
 - [implement] /simplify（4 体）で直した: quiz.ts の改行コード（CRLF に戻した）・割合と集計式と答えの読み方を weakness.py の 1 か所に（selectors の _rate・_answer_counts・別名の定数を消した）・使われない CACHE_TIMEOUTS の 2 キー・難易度の表を utils/difficulty.ts の 1 つに（形の確かめもそれを使う）・% の表示は既存の formatRate・QuizStartMode を QuizMode から作る
 - [implement] /simplify で見送った: ① 苦手を優先の 2 周目に並べた問い合わせを最大 3 回評価する・最後の答えの Subquery が 2 本（Medium・効率）— 本数は候補の数で増えず（TC-15）、通常のモードと共有している回の進み方の作りを変える大きさになるため。苦手を優先の利用が増えて遅さが見えたら別イシュー ② 件数と難易度別の 2 本の準備のクエリをまとめる・(problem_id, answered_at) の索引（Low）— 今のデータ量で不要 ③ クイズ画面のモードの印を表で引く（Low）— モードは 2 つで表にする利点が小さい ④ ProblemPreview・QuizManagement・AIQuestionGenerator に残る難易度の表示名の写し・I473/I488 のテストの補助の写し（Low）— このイシューの差分の外
+- [review-gate] CI の E2E（`dashboard-layout.spec.ts` の TC-21〜23・26）が失敗（CI_WAIT: FAIL・run 44029395707）。モックした overview の応答に `weak_difficulties`・`rushed_mistakes` が無く、画面の形の確かめでエラー表示になったため。fix-loop に回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
