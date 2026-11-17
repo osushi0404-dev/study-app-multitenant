@@ -113,6 +113,22 @@ describe('苦手を優先のクイズ', () => {
     expect(mockPost.mock.calls[0][1]).toEqual({ subject: 1, mode: 'weak' });
   });
 
+  it('TC-28b: 終えた今日の復習の回の「もう一度挑戦」は、いつものクイズで始める（F2）', async () => {
+    mockSearch = '';
+    mockParams = { id: 's9' };
+    mockGet
+      .mockResolvedValueOnce({ data: session({ mode: 'review', is_active: false, answered_problems: 3 }) })
+      .mockResolvedValueOnce({ data: problem() });
+    mockPost.mockResolvedValue({ data: session({ id: 's10', mode: 'normal' }) });
+
+    renderPage();
+
+    userEvent.click(await screen.findByRole('button', { name: 'もう一度挑戦' }));
+    expect(await screen.findByText('苦手の問題 p1')).toBeInTheDocument();
+    expect(mockPost.mock.calls[0][0]).toBe('/api/quiz/');
+    expect(mockPost.mock.calls[0][1]).toEqual({ subject: 1 });
+  });
+
   it('TC-29: いつものクイズでは印を出さず、モードも送らない', async () => {
     mockSearch = 'subject=1';
     mockPost.mockResolvedValue({ data: session({ mode: 'normal' }) });

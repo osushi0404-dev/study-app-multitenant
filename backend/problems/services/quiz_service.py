@@ -155,9 +155,13 @@ class QuizService:
                 .first()
             )
 
-            # それでも問題がない場合（5問未満の科目）
+            # それでも問題がない場合（5問以下の科目）: 直前の 1 問だけは除く（同じ問題を続けて出さない・I466 F1）。
+            # 科目の問題が 1 問だけのときは除外なし
             if not next_problem:
-                next_problem = ordered.filter(id__in=answered_problem_ids_subquery).first()
+                answered = ordered.filter(id__in=answered_problem_ids_subquery)
+                next_problem = (
+                    answered.exclude(id__in=last_n_problems[:1]).first() or answered.first()
+                )
 
             is_review_mode = True
         else:

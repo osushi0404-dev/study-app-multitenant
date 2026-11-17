@@ -42,6 +42,7 @@
 | TC-11 | API で回を進める: `POST /api/quiz/`（`subject=数学`・`mode="weak"`）→ `GET next_problem` → その問題に正解で `submit_answer` → `GET next_problem` | 開始は 201・`mode == "weak"`・`total_problems == 7`。1 回目の `id == p3`・`is_weak_fallback is False`・`is_review_mode is False`。2 回目の `id == p1`（同じ回で答えた p3 は続けて出ない） |
 | TC-12 | 判定できないとき: ① 数学 の `user_a` の答えを 4 件にする ② 5 件にする | ① `next_problem` の `is_weak_fallback is True`（問題は数学のどれか）② `False` |
 | TC-13 | 2 周目: `weak` の回で 7 問を並びの順にすべて答え（p3 だけ不正解・ほかは正解）、`next_problem` | `is_review_mode is True`・`id == p3`（最近の 5 問 p7・p4・p5・p6・p2 を除いた残り p3・p1 のうち、最後が不正解の p3 が先。乱数ではなく苦手を優先の並べ方） |
+| TC-13b | 5 問以下の科目（F1）: 3 問の科目で本人の古い答え 5 件（すべて正解）→ `weak` の回で出た順に 3 問とも答え、最後の 1 問だけ不正解 → `next_problem` | `is_review_mode is True` で、`id` が直前に答えた問題と違う（最近の 5 問で全問が除かれても、直前の 1 問は除く） |
 | TC-14 | 開始の検証: ① `mode="bogus"` ② 同じ `Idempotency-Key` で `mode="normal"` の後に `mode="weak"` ③ 他組織の科目（B科目）で `mode="weak"` | ① 400 ② 2 回目は 422（body の `main_message` が「Idempotency-Key が別の内容で使用されています」）③ 通常のモードで他組織の科目を指定したときと同じ status と body |
 | TC-15 | クエリ数（F4）: 候補 3 問の科目と 40 問の科目（どちらも本人の答え 10 件以上・最後が不正解の問題を含む）で、`weak` の回の `QuizService.get_next_problem(session)` を `CaptureQueriesContext` で数える | 2 つの本数が等しい（`==`） |
 | TC-17 | 組織の境界: TC-10 の準備に、数学の中級の未回答の問題 p8 を足す。① `user_a` の B科目 の中級の問題 b1 への答え 5 件（すべて不正解・不具合で残った想定。数えてしまうと中級が苦手になり p8 が段 1 に上がる）② `user_a2` が p4 に不正解 ③ 科目なしの `weak` の回で、未回答の問題を全部出し切るまで `next_problem` を繰り返す | ①② 並びが `[p3, p1, p7, p4, p8, p5, p6, p2]`（b1 は出ない・p8 は段 2・p4 の段は `user_a2` の答えで変わらない）③ 出た問題の組織がすべて組織 A |
@@ -78,6 +79,7 @@
 |---|---|---|
 | TC-25 | `/quiz?subject=1&mode=weak` で開く。`POST /api/quiz/` は `{id: 9, mode: "weak", ...}`、`next_problem` は ① `is_weak_fallback: true` ② `false` | `apiClient.post` が `('/api/quiz/', {subject: '1', mode: 'weak'}, ...)` で 1 回呼ばれる。「苦手を優先」の印が出る。① 「この科目はまだ解答が少ないため、いつもの順で出題しています」が出る ② 出ない。「今日の復習」の印は出ない |
 | TC-28 | 終えた `weak` の回を開く（`/quiz/9`・`GET /api/quiz/9/` が `{is_active: false, mode: "weak", subject: 1, ...}`）→「もう一度挑戦」 | `apiClient.post` の本文が `{subject: 1, mode: 'weak'}` |
+| TC-28b | 終えた今日の復習の回を開く（`GET /api/quiz/9/` が `{is_active: false, mode: "review", subject: 1}`）→「もう一度挑戦」（F2） | 開始の本文が `{subject: 1}`（今日の復習は引き継がない） |
 | TC-29 | いつものクイズ（`/quiz?subject=1`） | 開始の本文に `mode` が無い。「苦手を優先」の印が出ない（既存の `QuizSession.review.test.tsx` の「いつものクイズでは印を出さず…」も pass） |
 
 ## E2E（`e2e/tests/quiz-session.spec.ts` に追加）
@@ -110,3 +112,10 @@
 - セキュリティ上の考慮点: なし（テストの固定データだけ）
 - 次回どう防ぐか: 契約（`CONTRACT_PATHS`）の応答にキーを足すときは、`frontend/src` だけでなく `e2e/` の固定の応答（`route.fulfill`）も grep して直す。固定の応答を TypeScript の型で縛る案は retro で判断する（診断メモ 案 C）
 - 確かめた結果: 手元の compose の e2e コンテナで `tests/dashboard-layout.spec.ts`・`tests/quiz-session.spec.ts` の 11 件 pass（`--retries=0`）。診断レビュー PASS（`docs/reviews/I466_fix_diagnosis_review_20261117_1517.md`）
+
+## 再発防止記録（fix-loop・2026-11-17・コードレビュー F1・F2）
+- なぜ失敗したか: F1 — 全問を答えた後の「最近の 5 問を除く」は、5 問以下の科目では全問を除き、最後の手段で除外なしの並びの先頭を取っていた。苦手を優先の並びは決まった順なので、直前に間違えた問題が必ず先頭に来て続けて出た。TC-13 は 7 問の科目で、最後に答えたのが段 0 でない順だったため見つけられなかった。F2 —「もう一度挑戦」で回のモードをそのまま引き継いだため、今日の復習まで引き継いだ（計画は苦手を優先だけを引き継ぐ想定）
+- 何を変えたか: `backend/problems/services/quiz_service.py` — 最後の手段でも直前の 1 問は除く（科目の問題が 1 問だけなら除外なし。通常・苦手を優先の両方に効く）。`frontend/src/pages/QuizSession.tsx` — 引き継ぐモードは苦手を優先だけ
+- セキュリティ上の考慮点: なし（出題の順・画面の遷移）
+- 次回どう防ぐか: 「続けて出ない」を確かめるテストは、候補が少なく除外で全部消える境目（科目の問題が除外の数以下）を必ず入れる。モードを引き継ぐ処理を足すときは、既存のモード（今日の復習）の遷移が変わらないことを同じテストで確かめる
+- 確かめた結果: backend `problems/tests/`・`test_I452`・`test_I446` 307 件 pass。frontend `QuizSession.weak.test.tsx`・`QuizSession.review.test.tsx` 8 件 pass・ESLint 違反 0・ruff OK。失敗の注入: 直前の 1 問の除外を外すと TC-13b が `assert 14 != 14` で落ち、`session.mode ?? requestedMode` に戻すと TC-28b が `mode: "review"` で落ちた → 戻して pass。診断レビュー PASS（`docs/reviews/I466_fix_diagnosis_review_20261117_1528.md`）

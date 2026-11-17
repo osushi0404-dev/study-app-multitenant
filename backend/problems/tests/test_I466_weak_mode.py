@@ -134,6 +134,27 @@ def test_second_round_keeps_weak_order(world):
     assert again.data["id"] == world["p"]["p3"].id
 
 
+def test_small_subject_does_not_repeat_last_problem(world):
+    """TC-13b（F1）: 5 問以下の科目で、最後に答えた段 0 の問題を続けて出さない"""
+    user = world["user_a"]
+    subject = Subject.objects.create(name="小科目", slug="i466-small-subject", organization=world["org_a"])
+    q = [make_problem(subject, user, f"q{i}") for i in range(3)]
+    for i in range(5):  # 判定できる量（5 件）の古い答え（すべて正解）
+        answer(user, q[i % 3], correct=True, at=_ago(10 - i))
+    client = client_for(user)
+    started = _start(client, subject)
+    # 出た順に 3 問とも答え、最後の 1 問だけ不正解にする（その問題だけが段 0 になる）
+    for i in range(3):
+        shown = client.get(f"{QUIZ}{started.data['id']}/next_problem/")
+        assert shown.data["is_review_mode"] is False
+        last = Problem.objects.get(id=shown.data["id"])
+        submit(client, started.data["id"], last, correct=i < 2)
+
+    again = client.get(f"{QUIZ}{started.data['id']}/next_problem/")
+    assert again.data["is_review_mode"] is True
+    assert again.data["id"] != last.id
+
+
 def test_start_validation(world):
     """TC-14"""
     client = client_for(world["user_a"])

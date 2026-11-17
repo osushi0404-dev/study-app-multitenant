@@ -397,9 +397,12 @@ const QuizSessionPage: React.FC = () => {
                 <Button
                   variant="contained"
                   startIcon={<Refresh />}
-                  // 完了画面の URL（/quiz/<id>）には ?subject・?mode が無いため、終えたセッションの科目と種類で再挑戦する
+                  // 完了画面の URL（/quiz/<id>）には ?subject・?mode が無いため、終えたセッションの科目で再挑戦する。
+                  // 引き継ぐ種類は苦手を優先だけ（今日の復習の回はいつものクイズで始める・I466 F2）
                   onClick={() => createNewSession(
-                    subjectId ?? session?.subject, generateIdempotencyKey(), session.mode ?? requestedMode
+                    subjectId ?? session?.subject,
+                    generateIdempotencyKey(),
+                    session.mode === 'weak' ? 'weak' : requestedMode
                   )}
                 >
                   もう一度挑戦

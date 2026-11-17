@@ -34,6 +34,7 @@
 - [review-gate] CI の E2E（`dashboard-layout.spec.ts` の TC-21〜23・26）が失敗（CI_WAIT: FAIL・run 44029395707）。モックした overview の応答に `weak_difficulties`・`rushed_mistakes` が無く、画面の形の確かめでエラー表示になったため。fix-loop に回す
 - [fix-loop] CI の E2E の失敗は、固定の応答に 2 つのキーを足す案 A で直した（診断レビュー PASS）。画面の形の確かめを緩める案は I473 の決まりに反するので採らず、固定の応答を型で縛る案は retro に回す — 粗く確実な最小の直し
 - [review-gate] 2 回目: CI OK・コードレビュー HIGH（止める指摘 F1・F2。記録 docs/reviews/I466_code_review_20261117_1519.md）。fix-loop に回す
+- [fix-loop] F1 は「最後の手段でも直前の 1 問は除く」を通常・苦手を優先の共通の進み方に入れて直した（モード別の分岐を足さない）。F2 は引き継ぐモードを苦手を優先だけにした（I466 以前の今日の復習の動きに戻す）。診断レビュー PASS — どちらも数行の粗く確実な直し
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
