@@ -106,6 +106,7 @@
 - [close] develop への追従は不要（BLOCKED・承認待ち）。記録を closed へ移し、PR の説明を書いた
 - [close→再開] マージ前のユーザーの確認（BP・UI/UX）に「ベストなやり方で」と任されたので、台帳の残りの画面の 3 件（F4・F6・F9）をこの PR で直すと決め、記録を open に戻した — 知っている文言・遷移の食い違いを残して出さない。範囲を変えるので plan-review から通し直す。使わなくなった 4 つの表の削除は #492 にコメントで同梱した（計画で「別イシュー」と決めたのに起票していなかった漏れ）
 - [plan-review] 2 回目（計画変更の後）: HIGHRISK（理由は計画全体の組織の境界にかかわる新しい読み出し。今回の文言の直しではない）。Warning の 4.2 の記述と AC の並びは直し、手動テスト No.5 の列のずれは列がそろっていたので直さない。手順どおり design-security-review に回す
+- [design-security-review] Blocker・High・Medium は 0 件（Low 4 件・攻撃の筋 7 件はすべて既存の TC で覆われている。1 本ごとの重さは #566）。計画書に結果を書き足した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -120,3 +121,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
