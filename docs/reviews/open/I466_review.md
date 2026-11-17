@@ -33,9 +33,11 @@
 - [implement] /simplify で見送った: ① 苦手を優先の 2 周目に並べた問い合わせを最大 3 回評価する・最後の答えの Subquery が 2 本（Medium・効率）— 本数は候補の数で増えず（TC-15）、通常のモードと共有している回の進み方の作りを変える大きさになるため。苦手を優先の利用が増えて遅さが見えたら別イシュー ② 件数と難易度別の 2 本の準備のクエリをまとめる・(problem_id, answered_at) の索引（Low）— 今のデータ量で不要 ③ クイズ画面のモードの印を表で引く（Low）— モードは 2 つで表にする利点が小さい ④ ProblemPreview・QuizManagement・AIQuestionGenerator に残る難易度の表示名の写し・I473/I488 のテストの補助の写し（Low）— このイシューの差分の外
 - [review-gate] CI の E2E（`dashboard-layout.spec.ts` の TC-21〜23・26）が失敗（CI_WAIT: FAIL・run 44029395707）。モックした overview の応答に `weak_difficulties`・`rushed_mistakes` が無く、画面の形の確かめでエラー表示になったため。fix-loop に回す
 - [fix-loop] CI の E2E の失敗は、固定の応答に 2 つのキーを足す案 A で直した（診断レビュー PASS）。画面の形の確かめを緩める案は I473 の決まりに反するので採らず、固定の応答を型で縛る案は retro に回す — 粗く確実な最小の直し
+- [review-gate] 2 回目: CI OK・コードレビュー HIGH（止める指摘 F1・F2。記録 docs/reviews/I466_code_review_20261117_1519.md）。fix-loop に回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
