@@ -8,7 +8,7 @@
 - 定期処理の間隔を本番の値（`crontab`）にする
 
 ## 変更点
-- （実装後に書く。計画書 `docs/plans/open/plan_I466.md` の 4 章のとおり）
+- 計画書 `docs/plans/closed/plan_I466.md` の 4 章のとおり（PR #564 の説明に要約）
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: 計画書 3 章のとおり（DB は `QuizSession.mode` の選択肢の追加だけ）
@@ -18,7 +18,7 @@
 - 手動: Claude が Playwright MCP で 8 件すべて OK（確かめ用データで、期待値は shell の読み出しで別に数えた。docs/tests/open/I466_manual_test.md）。人の手動テストは無し
 
 ## 計画との差分
-- （実装後に書く）
+- あり（細部・方式は変えない）: 計画書の「計画変更記録」のとおり（急いだ間違いの 2 本目のクエリを常に流す・ボタンのアイコンと高さ・道筋の関数を routes.ts に・/simplify の整理・手動テストの準備をデータを足さない形に・F1・F2 の直し）
 
 ## ロールバック
 - PR を revert し、`python manage.py migrate problems 0022` で選択肢を戻す（データの変更なし）
@@ -103,6 +103,7 @@
 - [retro] 全問を解いた後の出し直しで、同じ回の答え済みの問題を出すが回答の API は 400 で断る（実装中に気づいた既存の不具合）→ #540 にコメントで同梱（同じ流れ・同じファイル。#540 が出し直しの扱いを計画で決める）
 - [retro] E2E の固定の応答が契約の型とつながっておらず CI の E2E で初めて落ちた → #496 にコメントで同梱（画面の API の型の置き換えの範囲に e2e の固定の応答を入れる）
 - [retro] 見送り: ① 計画書 13 章の「条件を満たさなければ 1 本」が I473 のクエリ数の決まりと矛盾していた — 実装中の既存テストがその場で止め、手戻りは数分（新しい手順を足さない）② F1（少ない科目の直前の問題）を最初のテストで見逃した — コードレビューがその場で止め、fix-loop 1 回で直った（観点の追加は不要）③ 確かめ用データを手で足す手順が見張りの承認対象になった — 見張りは意図どおりに働いた。データの側を直す #568 で解く
+- [close] develop への追従は不要（BLOCKED・承認待ち）。記録を closed へ移し、PR の説明を書いた
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -114,3 +115,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
