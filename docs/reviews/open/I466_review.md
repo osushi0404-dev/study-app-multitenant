@@ -109,6 +109,7 @@
 - [design-security-review] Blocker・High・Medium は 0 件（Low 4 件・攻撃の筋 7 件はすべて既存の TC で覆われている。1 本ごとの重さは #566）。計画書に結果を書き足した
 - [implement] AC12: ダイアログの見出しを始め方に合わせ、読み上げ用にダイアログへ見出しを名前として結び付けた（aria-labelledby。見出しで区別できるようにするため）。全科目の案内は「まだ解答が少ないため…」、再挑戦は回の種類だけで決める。数行の文言・分岐の直しなので /simplify（4 体）は省いた — 整理済みのコードへの小さな追加で、重複・効率の論点が生まれない
 - [implement] #567 から F4・F6・F9 を外すコメントを付ける（この PR で直したため）
+- [review-gate] 4 回目（AC12 の差分）: CI OK・コードレビュー OK（docs/reviews/I466_code_review_20261117_1656.md）。計画レビューの高リスク判定で敵対的レビューが必要になり、1 周で OK（docs/reviews/I466_adversarial_review_20261117_1705.md・V1〜V3 確認済み）。Low の残り（TC-15 は本数の絶対値と既出の問題を出す経路を数えない）は retro で #566 に回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -125,3 +126,4 @@ STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
