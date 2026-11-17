@@ -229,6 +229,8 @@ export interface components {
         UserSubject: {
             readonly id: number;
             name: string;
+            /** @description 科目の問題数（0 の科目ではクイズを始められない） */
+            readonly problem_count: number;
         };
         /** @description 学ぶ科目の置き換えの本文（I494）。自組織の科目だけを受ける */
         UserSubjectSelection: {

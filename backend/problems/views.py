@@ -11,7 +11,9 @@ import json
 import uuid
 import hashlib
 from .difficulty import LEVEL_BY_LABEL
-from .models import Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset
+from .models import (
+    Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset, UserSubjectAccess,
+)
 from .serializers import (
     SubjectSerializer, ProblemSerializer, ProblemAdminSerializer, ProblemDisplaySerializer,
     AnswerExplanationSerializer, QuizSessionSerializer, QuizSessionDetailSerializer,
@@ -67,17 +69,13 @@ class SubjectViewSet(viewsets.ModelViewSet):
         """
         from accounts.models import Organization
 
-        organization_slug = request.query_params.get('slug', 'personal')
-
-        # 'register'を'personal'に変換（レガシー対応）
+        # 未指定・'register'（レガシー）は共有の personal 組織として扱う（I539 から結果は常に空）
+        organization_slug = request.query_params.get('slug', Organization.SHARED_PERSONAL_SLUG)
         if organization_slug == 'register':
-            organization_slug = 'personal'
+            organization_slug = Organization.SHARED_PERSONAL_SLUG
 
-        # 組織を取得
-        organization = Organization.objects.filter(
-            slug=organization_slug,
-            is_active=True
-        ).first()
+        # 招待で引き当ててよい組織だけ（本人ひとりの組織・共有の personal 組織は「無い」と同じ空・I539）
+        organization = Organization.objects.invitable().filter(slug=organization_slug).first()
 
         if not organization:
             return Response([], status=status.HTTP_200_OK)
@@ -123,6 +121,12 @@ class SubjectViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 subject = serializer.save(organization_id=org_id, slug=slug)
                 subject_service.invalidate_cache(org_id)
+                if subject.organization.is_individual:
+                    # 本人ひとりの組織では、作った科目をそのまま学ぶ科目にする（設定画面で選び直さない・I539）。
+                    # post_save のシグナルが学ぶ科目のキャッシュを消す
+                    UserSubjectAccess.objects.get_or_create(
+                        user=self.request.user, subject=subject,
+                        defaults={'granted_by': self.request.user})
 
                 org_slug = subject.organization.slug
                 base = os.path.join(

@@ -485,9 +485,14 @@ components:
         name:
           type: string
           maxLength: 100
+        problem_count:
+          type: integer
+          readOnly: true
+          description: 科目の問題数（0 の科目ではクイズを始められない）
       required:
       - id
       - name
+      - problem_count
     UserSubjectSelection:
       type: object
       description: 学ぶ科目の置き換えの本文（I494）。自組織の科目だけを受ける

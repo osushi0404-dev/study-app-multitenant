@@ -56,12 +56,12 @@ export class SubjectService {
 
   /**
    * ユーザーが登録した科目の一覧を取得（ダッシュボード・統計画面用）
-   * @returns ユーザー登録科目配列
+   * @returns ユーザー登録科目配列（名前の順・科目ごとの問題数つき・I539）
    */
-  static async getUserSubjects(): Promise<Subject[]> {
+  static async getUserSubjects(): Promise<UserSubject[]> {
     try {
-      const response = await apiClient.get<Subject[]>('/api/user/subjects/');
-      return ApiResponseUtils.normalizeToArray(response.data, this.isValidSubject);
+      const response = await apiClient.get<UserSubject[]>('/api/user/subjects/');
+      return response.data;
     } catch (error) {
       const errorMessage = ApiResponseUtils.handleApiError(error, 'ユーザー科目取得');
       throw new Error(errorMessage);
@@ -92,31 +92,6 @@ export class SubjectService {
     const body: UserSubjectSelection = { subject_ids: subjectIds };
     const response = await apiClient.put<UserSubject[]>('/api/user/subjects/', body);
     return response.data;
-  }
-
-  /**
-   * 科目取得時のローディング状態とエラーハンドリングを含む便利メソッド
-   * @param organizationSlug 組織スラッグ
-   * @param onLoading ローディング状態変更コールバック
-   * @param onError エラーハンドリングコールバック
-   * @returns 科目配列
-   */
-  static async getSubjectsWithLoading(
-    organizationSlug?: string,
-    onLoading?: (loading: boolean) => void,
-    onError?: (error: string) => void
-  ): Promise<Subject[]> {
-    try {
-      onLoading?.(true);
-      const subjects = await this.getSubjects(organizationSlug);
-      return subjects;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '科目の取得に失敗しました';
-      onError?.(errorMessage);
-      return [];
-    } finally {
-      onLoading?.(false);
-    }
   }
 }
 

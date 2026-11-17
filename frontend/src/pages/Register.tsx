@@ -24,8 +24,8 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import toast from 'react-hot-toast';
 import apiClient from '../services/api';
-import SubjectService from '../services/subjectService';
-import { Subject } from '../services/types';
+import { usePublicSubjects } from '../hooks/usePublicSubjects';
+import SubjectsRetryRow from '../components/SubjectsRetryRow';
 import {
   checkEmailAvailability,
   checkUserIdAvailability,
@@ -91,9 +91,7 @@ const Register: React.FC = () => {
   const { register: registerUser } = useAuth();
 
   // 科目選択関連のstate
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
-  const [subjectsLoading, setSubjectsLoading] = useState(false);
 
   // リアルタイムバリデーション関連のstate
   const [emailChecking, setEmailChecking] = useState(false);
@@ -131,57 +129,18 @@ const Register: React.FC = () => {
     validateOrganizationSlug();
   }, [organizationSlug]);
 
-  // 組織検証成功後かつステップ2の場合のみ科目一覧を取得
-  useEffect(() => {
-    // デバッグログ（一時的）
-    console.log('科目取得useEffect実行', {
-      organizationSlug,
-      isValidatingOrg,
-      orgValidationError,
-      currentStep,
-      shouldFetch: currentStep === 2 && !isValidatingOrg && !orgValidationError
-    });
-
-    const fetchSubjects = async () => {
-      // ステップ2でない場合は何もしない
-      if (currentStep !== 2) {
-        console.log('ステップ2でないため科目取得をスキップ');
-        return;
-      }
-
-      // 組織検証中は何もしない
-      if (isValidatingOrg) {
-        console.log('組織検証中のため科目取得をスキップ');
-        return;
-      }
-
-      // 組織検証エラーがある場合も何もしない
-      if (orgValidationError) {
-        console.log('組織検証エラーのため科目取得をスキップ');
-        return;
-      }
-
-      // すでに科目が読み込まれている場合はスキップ（重複読み込み防止）
-      if (subjects.length > 0) {
-        console.log('科目が既に読み込まれているためスキップ');
-        return;
-      }
-
-      // 組織検証完了（成功）または個人登録の場合に科目を取得
-      console.log('科目取得を開始');
-
-      const fetchedSubjects = await SubjectService.getSubjectsWithLoading(
-        organizationSlug,
-        setSubjectsLoading,
-        (error) => toast.error(error)
-      );
-
-      console.log('科目取得成功:', fetchedSubjects);
-      setSubjects(fetchedSubjects);
-    };
-
-    fetchSubjects();
-  }, [organizationSlug, isValidatingOrg, orgValidationError, currentStep, subjects.length]);
+  // 招待先の科目は、組織の確認が済んだらすぐ読む（1 段目の時点で科目選びの段の有無を決める・I539）。
+  // 招待なしの登録は本人ひとりの組織をこれから作るので、科目は読まない
+  const publicSubjects = usePublicSubjects(organizationSlug, {
+    enabled: !isValidatingOrg && !orgValidationError,
+  });
+  const subjects = publicSubjects.status === 'success' ? publicSubjects.data : [];
+  // 科目選びの段は、招待先に科目があるときだけ
+  const needsSubjectStep = !!organizationSlug && subjects.length > 0;
+  // 招待先の科目を読めるまで送らせない（失敗を 0 件と取り違えて科目なしで送らない）
+  const subjectsReady = !organizationSlug || publicSubjects.status === 'success';
+  const subjectsLoading = !!organizationSlug && publicSubjects.status === 'loading';
+  const subjectsError = !!organizationSlug && publicSubjects.status === 'error';
 
   const {
     register,
@@ -244,6 +203,9 @@ const Register: React.FC = () => {
 
   // ステップ1: 基本情報の送信
   const onSubmitStep1 = async (data: RegisterFormData) => {
+    // 招待先の科目を読めていなければ送らない（ボタンは無効だが、入力欄の Enter でも送られうる・I539）
+    if (!subjectsReady) return;
+
     // 送信前に重複チェックを実行
     let hasError = false;
 
@@ -275,11 +237,15 @@ const Register: React.FC = () => {
       setUserIdChecking(false);
     }
 
-    // エラーがなければ次のステップへ
-    if (!hasError) {
-      setBasicInfo(data);
-      setCurrentStep(2);
+    if (hasError) return;
+
+    // 科目選びの段が無ければ、ここで科目なしで登録する（I539）
+    if (!needsSubjectStep) {
+      await submitRegistration(data, []);
+      return;
     }
+    setBasicInfo(data);
+    setCurrentStep(2);
   };
 
   // ステップ2: 最終送信
@@ -295,16 +261,21 @@ const Register: React.FC = () => {
       return;
     }
 
+    await submitRegistration(basicInfo, selectedSubjects);
+  };
+
+  // 登録の送信（1 段目・2 段目の両方から呼ぶ）
+  const submitRegistration = async (info: RegisterFormData, subjectIds: number[]) => {
     setLoading(true);
     try {
       await registerUser(
-        basicInfo.email,
-        basicInfo.userId,
-        basicInfo.password,
-        basicInfo.firstName,
-        basicInfo.lastName,
+        info.email,
+        info.userId,
+        info.password,
+        info.firstName,
+        info.lastName,
         organizationSlug,
-        selectedSubjects
+        subjectIds
       );
       const message = organizationSlug
         ? `${organizationName}への登録が完了しました。メール認証を行ってからログインしてください。`
@@ -490,49 +461,40 @@ const Register: React.FC = () => {
         学習科目を選択してください（必須）
       </Typography>
 
-      {subjectsLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-          <CircularProgress />
-        </Box>
-      ) : subjects.length === 0 ? (
-        <Alert severity="warning" sx={{ mt: 2 }}>
-          この組織には利用可能な科目がありません。管理者にお問い合わせください。
-        </Alert>
-      ) : (
-        <FormGroup>
-          {subjects.map((subject) => (
-            <FormControlLabel
-              key={subject.id}
-              control={
-                <Checkbox
-                  checked={selectedSubjects.includes(subject.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedSubjects([...selectedSubjects, subject.id]);
-                    } else {
-                      setSelectedSubjects(
-                        selectedSubjects.filter(id => id !== subject.id)
-                      );
-                    }
-                  }}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body1">{subject.name}</Typography>
-                  {subject.description && (
-                    <Typography variant="body2" color="text.secondary">
-                      {subject.description}
-                    </Typography>
-                  )}
-                </Box>
-              }
-            />
-          ))}
-        </FormGroup>
-      )}
+      {/* この段は招待先に科目があるときだけ出る（needsSubjectStep・I539） */}
+      <FormGroup>
+        {subjects.map((subject) => (
+          <FormControlLabel
+            key={subject.id}
+            control={
+              <Checkbox
+                checked={selectedSubjects.includes(subject.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedSubjects([...selectedSubjects, subject.id]);
+                  } else {
+                    setSelectedSubjects(
+                      selectedSubjects.filter(id => id !== subject.id)
+                    );
+                  }
+                }}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body1">{subject.name}</Typography>
+                {subject.description && (
+                  <Typography variant="body2" color="text.secondary">
+                    {subject.description}
+                  </Typography>
+                )}
+              </Box>
+            }
+          />
+        ))}
+      </FormGroup>
 
-      {selectedSubjects.length === 0 && subjects.length > 0 && (
+      {selectedSubjects.length === 0 && (
         <Typography variant="body2" color="error" sx={{ mt: 1 }}>
           ※ 最低1つの科目を選択してください
         </Typography>
@@ -574,15 +536,17 @@ const Register: React.FC = () => {
             </Alert>
           )}
 
-          {/* ステップインジケーター */}
-          <Stepper activeStep={currentStep - 1} sx={{ width: '100%', mb: 3 }}>
-            <Step>
-              <StepLabel>基本情報入力</StepLabel>
-            </Step>
-            <Step>
-              <StepLabel>科目選択</StepLabel>
-            </Step>
-          </Stepper>
+          {/* ステップインジケーター（科目選びの段があるときだけ。1 段なのに 2 段に見せない・I539） */}
+          {needsSubjectStep && (
+            <Stepper activeStep={currentStep - 1} sx={{ width: '100%', mb: 3 }}>
+              <Step>
+                <StepLabel>基本情報入力</StepLabel>
+              </Step>
+              <Step>
+                <StepLabel>科目選択</StepLabel>
+              </Step>
+            </Stepper>
+          )}
 
           {/* ステップ1: 基本情報入力 */}
           {currentStep === 1 && (
@@ -708,13 +672,21 @@ const Register: React.FC = () => {
                 }}
               />
 
+              {subjectsError && (
+                <SubjectsRetryRow onRetry={publicSubjects.retry} sx={{ mt: 2 }} />
+              )}
+
               <Button
                 type="submit"
                 fullWidth
                 variant="contained"
+                disabled={!subjectsReady || loading}
+                endIcon={
+                  subjectsLoading || loading ? <CircularProgress size={20} color="inherit" /> : undefined
+                }
                 sx={{ mt: 3, mb: 2 }}
               >
-                登録して次へ
+                {needsSubjectStep ? '登録して次へ' : '登録する'}
               </Button>
 
               <Box sx={{ textAlign: 'center' }}>

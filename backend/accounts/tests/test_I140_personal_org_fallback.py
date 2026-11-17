@@ -1,13 +1,13 @@
 """
 I140: 登録 API の personal 組織自動作成フォールバック廃止の回帰テスト。
 
-- slug なし登録で personal 組織（type='personal'・is_active=True）が不在の場合、
-  従来は Organization.objects.create()（category 未指定）が IntegrityError となり
-  広域 except で 400「エラーが発生しました」に丸められていた（潜在バグ）。
-- 修正後は自動作成せず None を返し、既存 400 分岐「組織の設定に失敗しました」
-  （views.py:78-84）に載る。組織は新規作成されず、error ログで環境異常が残る。
+- I140 当時: slug なし登録で共有の personal 組織が不在なら、自動作成せず 400
+  「組織の設定に失敗しました」に載せ、error ログで環境異常を残す。
+- I539 から: slug なし登録は本人ひとりの組織を作る。作るのに要る「個人利用」カテゴリ
+  （slug='personal'・migration 0017）が不在なら、同じく自動作成せず 400 に載せ、
+  組織も利用者も作らず、error ログを残す（I140 の考え方を引き継ぐ）。
 
-TC-AUTO-01/02/03/04（docs/tests/open/I140_auto_test.md）に対応。
+TC-AUTO-01/02/03/04（docs/tests/open/I140_auto_test.md）・TC-17（docs/tests/open/I539_auto_test.md）に対応。
 """
 import logging
 
@@ -15,7 +15,7 @@ import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from accounts.models import Organization, OrganizationCategory
+from accounts.models import Organization, OrganizationCategory, User
 from problems.models import Subject
 
 
@@ -28,7 +28,7 @@ def _disable_django_ratelimit(settings):
 
 @pytest.fixture
 def setup(db):
-    """personal 組織を作らない（--no-migrations の素の DB = personal 不在状態）。
+    """「個人利用」カテゴリ（slug='personal'）も personal 組織も作らない（--no-migrations の素の DB）。
     ペイロードを有効値にするための school 組織・科目のみ用意する。"""
     cat = OrganizationCategory.objects.create(name="テストI140", slug="test-cat-i140")
     org = Organization.objects.create(
@@ -37,13 +37,13 @@ def setup(db):
     return {"cat": cat, "org": org, "subject": subject}
 
 
-def _payload(user_id, subject_id):
+def _payload(user_id, subject_id=None):
+    # I539 から slug なし登録は科目を送らない（本人ひとりの組織には科目がまだ無い）
     return {
         "user_id": user_id,
         "email": f"{user_id}@example.com",
         "password": "I140TestPass123!",  # pragma: allowlist secret（テスト用ダミー値）
         "password_confirm": "I140TestPass123!",  # pragma: allowlist secret
-        "subject_ids": [subject_id],
     }
 
 
@@ -67,7 +67,7 @@ def test_register_without_personal_org_returns_400(setup):
     assert resp.json() == EXPECTED_400_BODY
 
 
-# ---- TC-AUTO-02: 組織が新規作成されない（自動作成廃止の固定） ----
+# ---- TC-AUTO-02: 組織・利用者が新規作成されない（自動作成廃止の固定） ----
 @pytest.mark.django_db
 def test_register_without_personal_org_creates_no_organization(setup):
     client = APIClient()
@@ -77,6 +77,8 @@ def test_register_without_personal_org_creates_no_organization(setup):
         format="json")
     assert Organization.objects.count() == count_before
     assert not Organization.objects.filter(slug="personal").exists()
+    assert not OrganizationCategory.objects.filter(slug="personal").exists()
+    assert not User.objects.filter(user_id="i140_user_b").exists()
 
 
 # ---- TC-AUTO-03: error ログで環境異常が可観測 ----
@@ -88,11 +90,11 @@ def test_register_without_personal_org_logs_error(setup, caplog):
             "/api/auth/register/", _payload("i140_user_c", setup["subject"].id),
             format="json")
     assert any(
-        r.levelno == logging.ERROR and "Personal organization" in r.getMessage()
+        r.levelno == logging.ERROR and "Personal organization category" in r.getMessage()
         for r in caplog.records)
 
 
-# ---- TC-AUTO-04: personal が非アクティブのみ存在しても同挙動 ----
+# ---- TC-AUTO-04: 共有の personal 組織（非アクティブ）があってもカテゴリが無ければ同挙動 ----
 @pytest.mark.django_db
 def test_register_with_only_inactive_personal_org_returns_400(setup):
     Organization.objects.create(

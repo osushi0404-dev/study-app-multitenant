@@ -68,6 +68,7 @@ const Dashboard: React.FC = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={6}>
           <StartQuizCard
+            isOrgAdmin={user?.role === 'admin'}
             subjects={subjects}
             onRetrySubjects={retrySubjects}
             availableSubjects={availableSubjects}
