@@ -205,7 +205,8 @@ class QuizSessionQuerySet(OrgScopedQuerySet):
 class QuizSession(models.Model):
     MODE_NORMAL = 'normal'
     MODE_REVIEW = 'review'
-    MODE_CHOICES = [(MODE_NORMAL, '通常'), (MODE_REVIEW, '今日の復習')]
+    MODE_WEAK = 'weak'
+    MODE_CHOICES = [(MODE_NORMAL, '通常'), (MODE_REVIEW, '今日の復習'), (MODE_WEAK, '苦手を優先')]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_sessions')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True)
@@ -217,7 +218,7 @@ class QuizSession(models.Model):
     is_active = models.BooleanField(default=True)
     # 開始リクエストの重複判定用（Idempotency-Key ヘッダの値）
     client_request_id = models.UUIDField(null=True, blank=True)
-    # 今日の復習（復習する日が来た問題だけを出し、無くなったら終わる）か、いつものクイズか
+    # 今日の復習（復習する日が来た問題だけを出し、無くなったら終わる）か、苦手を優先（I466）か、いつものクイズか
     mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_NORMAL)
 
     objects = QuizSessionQuerySet.as_manager()

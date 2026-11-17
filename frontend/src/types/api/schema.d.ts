@@ -166,6 +166,8 @@ export interface components {
             last_7_days: components["schemas"]["DashboardDay"][];
             weak_subjects: components["schemas"]["DashboardWeakSubject"][];
             recommendations: components["schemas"]["DashboardRecommendation"][];
+            weak_difficulties: components["schemas"]["DashboardWeakDifficulty"][];
+            rushed_mistakes: components["schemas"]["DashboardRushedMistakes"] | null;
         };
         DashboardRecommendation: {
             kind: components["schemas"]["DashboardRecommendationKindEnum"];
@@ -179,6 +181,13 @@ export interface components {
          * @enum {string}
          */
         DashboardRecommendationKindEnum: "weak_subject" | "unstudied_subject";
+        /** @description 直近 30 日の間違いのうち、急いで答えたものの数と割合（I466） */
+        DashboardRushedMistakes: {
+            mistake_count: number;
+            rushed_count: number;
+            /** Format: double */
+            rushed_rate: number;
+        };
         DashboardStreak: {
             current_days: number;
         };
@@ -195,6 +204,13 @@ export interface components {
             /** Format: double */
             accuracy_rate: number | null;
         };
+        /** @description 苦手な難易度（I466。値は problems/difficulty.py の文字） */
+        DashboardWeakDifficulty: {
+            difficulty: components["schemas"]["DifficultyEnum"];
+            answered_count: number;
+            /** Format: double */
+            accuracy_rate: number;
+        };
         DashboardWeakSubject: {
             subject_id: number;
             subject_name: string;
@@ -202,6 +218,13 @@ export interface components {
             /** Format: double */
             accuracy_rate: number;
         };
+        /**
+         * @description * `easy` - easy
+         *     * `medium` - medium
+         *     * `hard` - hard
+         * @enum {string}
+         */
+        DifficultyEnum: "easy" | "medium" | "hard";
         PatchedUserSettings: {
             daily_study_goal_minutes?: number;
             study_reminders_enabled?: boolean;

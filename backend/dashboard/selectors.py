@@ -8,18 +8,18 @@
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
-from django.db.models import Count, Q, QuerySet, Sum, Value
+from django.db.models import QuerySet, Sum, Value
 from django.db.models.functions import Coalesce, Least, TruncDate
 from django.utils import timezone
 
 from core.subject_service import subject_service
-from problems.models import QuizAnswer
 from problems.services.tenant_scope import available_problems
+from problems.services.weakness import (
+    ANSWER_SECONDS_CAP, WEAK_MIN_ANSWERED, answer_counts, is_weak, rate, rushed_mistakes,
+    user_answers, weak_difficulties,
+)
 
-STUDY_SECONDS_CAP_PER_ANSWER = 300  # 1 問あたりの学習時間の上限（秒）。放置した時間を数えない
 RECENT_DAYS = 7                     # 直近の日数（推移・「この 7 日間解いていない」）
-WEAK_MIN_ANSWERED = 5               # 間違いやすい分野に入れる最低の解答数
-WEAK_ACCURACY_BELOW = 0.7           # 間違いやすい分野の正答率のしきい値（未満）
 LIST_LIMIT = 3                      # 間違いやすい分野・おすすめの最大件数
 STREAK_WINDOW_DAYS = 365            # 連続日数を数えるときに 1 回で読む日数（1 回の行数の上限・I491）
 
@@ -28,35 +28,22 @@ KIND_UNSTUDIED = 'unstudied_subject'
 
 
 def _answers(user) -> QuerySet:
-    """本人の答えのうち、自組織の科目の問題へのもの（組織に属さない利用者は空）"""
-    return QuizAnswer.objects.for_user(user)
-
-
-def _answer_counts() -> dict:
-    """解答数・正解数の集計式"""
-    return {
-        'answered_count': Count('id'),
-        'correct_count': Count('id', filter=Q(is_correct=True)),
-    }
+    """本人の答えのうち、自組織の科目の問題へのもの（組織に属さない利用者は空。苦手を優先の出題と同じ読み方・I466）"""
+    return user_answers(user)
 
 
 def _counts() -> dict:
     """学習時間（1 問 300 秒まで）・解答数・正解数の集計式"""
     return {
         'study_seconds': Coalesce(
-            Sum(Least('time_taken', Value(STUDY_SECONDS_CAP_PER_ANSWER))), 0),
-        **_answer_counts(),
+            Sum(Least('time_taken', Value(ANSWER_SECONDS_CAP))), 0),
+        **answer_counts(),
     }
 
 
-def _rate(correct: int, answered: int) -> Optional[float]:
-    """正答率（0〜1・小数第 4 位）。答えが 0 件なら None（0% と区別する）"""
-    return round(correct / answered, 4) if answered else None
-
-
-def _percent(rate: float) -> int:
+def _percent(value: float) -> int:
     """画面の Math.round と同じく、0.5 は切り上げる"""
-    return int(rate * 100 + 0.5)
+    return int(value * 100 + 0.5)
 
 
 def _start_of(day: date) -> datetime:
@@ -65,7 +52,7 @@ def _start_of(day: date) -> datetime:
 
 
 def _with_rate(counts: dict) -> dict:
-    return {**counts, 'accuracy_rate': _rate(counts['correct_count'], counts['answered_count'])}
+    return {**counts, 'accuracy_rate': rate(counts['correct_count'], counts['answered_count'])}
 
 
 COUNT_KEYS = ('study_seconds', 'answered_count', 'correct_count')
@@ -142,7 +129,7 @@ def _weak_subjects(answers: QuerySet) -> list:
     """5 問以上答えた科目のうち、正答率 70% 未満を低い順（同じなら科目名順）に 3 件"""
     rows = (
         answers.values('problem__subject_id', 'problem__subject__name')
-        .annotate(**_answer_counts())
+        .annotate(**answer_counts())
         .filter(answered_count__gte=WEAK_MIN_ANSWERED)
         .order_by()
     )
@@ -151,10 +138,10 @@ def _weak_subjects(answers: QuerySet) -> list:
             'subject_id': row['problem__subject_id'],
             'subject_name': row['problem__subject__name'],
             'answered_count': row['answered_count'],
-            'accuracy_rate': _rate(row['correct_count'], row['answered_count']),
+            'accuracy_rate': rate(row['correct_count'], row['answered_count']),
         }
         for row in rows
-        if row['correct_count'] / row['answered_count'] < WEAK_ACCURACY_BELOW
+        if is_weak(row['answered_count'], row['correct_count'])
     ]
     weak.sort(key=lambda w: (w['accuracy_rate'], w['subject_name']))
     return weak[:LIST_LIMIT]
@@ -211,13 +198,14 @@ def build_overview(user, subject=None, *, now: Optional[datetime] = None) -> dic
     間違いやすい分野とおすすめは、科目をまたいで比べる一覧なので常に全科目から出す。
     now は日付の境界を確かめるテストのため（省略時は今）。
     """
-    today = timezone.localdate(now or timezone.now())
+    now = now or timezone.now()
+    today = timezone.localdate(now)
     answers = _answers(user)
     scoped = answers.filter(problem__subject=subject) if subject is not None else answers
 
     last_days = _last_days(scoped, today)
     today_counts = {k: v for k, v in last_days[-1].items() if k != 'date'}
-    totals = scoped.aggregate(**_answer_counts())
+    totals = scoped.aggregate(**answer_counts())
     weak = _weak_subjects(answers)
 
     return {
@@ -228,6 +216,9 @@ def build_overview(user, subject=None, *, now: Optional[datetime] = None) -> dic
         'last_7_days': last_days,
         'weak_subjects': weak,
         'recommendations': _recommendations(user, answers, weak, today),
+        # 難易度別の苦手・急いだ間違いも、科目をまたいで見る傾向なので全科目から出す（I466）
+        'weak_difficulties': weak_difficulties(answers),
+        'rushed_mistakes': rushed_mistakes(answers, now),
     }
 
 
@@ -299,7 +290,8 @@ def build_analytics(user, days: int, subject=None, *, now: Optional[datetime] = 
     has_data は科目・期間に関係なく、答えが 1 件でもあるか（まだ一度も解いていないかの区別）。
     now は日付の境界を確かめるテストのため（省略時は今）。
     """
-    today = timezone.localdate(now or timezone.now())
+    now = now or timezone.now()
+    today = timezone.localdate(now)
     first = today - timedelta(days=days - 1)
     granularity = _granularity(days)
     answers = _answers(user)

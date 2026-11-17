@@ -54,7 +54,7 @@
   - `backend/core/cache_service.py`（使われなくなるキャッシュの関数を消す）・`backend/core/celery.py`（定期処理）
 - Frontend:
   - `frontend/src/components/dashboard/WeakSubjectsCard.tsx`・`frontend/src/components/dashboard/StartQuizCard.tsx`・`frontend/src/components/dashboard/RecommendationsCard.tsx`・`frontend/src/pages/QuizSession.tsx`
-  - `frontend/src/services/dashboard.service.ts`（形の確かめ）・`frontend/src/types/api/schema.d.ts`（作り直し）・`frontend/src/types/quiz.ts`（`QuizMode` に `weak`・`Problem.is_weak_fallback`）
+  - `frontend/src/services/dashboard.service.ts`（形の確かめ）・`frontend/src/constants/routes.ts`（`quizPath`）・`frontend/src/types/api/schema.d.ts`（作り直し）・`frontend/src/types/quiz.ts`（`QuizMode` に `weak`・`Problem.is_weak_fallback`）
   - 新規 `frontend/src/utils/difficulty.ts`（難易度の表示名。`QuizSession.tsx` の `getDifficultyLabel` と共通にする）
 - DB: `QuizSession.mode` の選択肢に `('weak', '苦手を優先')` を足す（`AlterField`。DB の制約・データは変わらない）。表は消さない
 - Config/Infra: celery beat の定期処理の間隔（本番の値へ）。依存ライブラリの変更なし（`celery.schedules.crontab` は導入済みの celery の機能）
@@ -93,7 +93,7 @@ def weak_difficulties(answers) -> list[dict]:
 def rushed_mistakes(answers, now) -> Optional[dict]:
     """直近 RUSHED_WINDOW_DAYS 日（now から遡る）の答えについて:
     1 クエリ目: 解答数・間違いの数・平均の解答時間（time_taken > 0 の答えだけ・Least(time_taken, 300) で頭打ち）
-    解答数 < 20 か 間違い 0 か 平均が None なら None を返す（2 クエリ目を流さない）
+    （当てはまらなくても 2 クエリ目は流す。クエリの数をデータで変えない・I473）
     2 クエリ目: 間違いのうち 0 < time_taken < 平均 × 0.5 の数
     割合 = 急いだ間違い / 間違い。0.25 以上なら {'mistake_count', 'rushed_count', 'rushed_rate'（小数第 4 位）}、未満なら None"""
 
@@ -266,7 +266,7 @@ Danger Ops（有無/手順/ロールバック）:
 - Feature Flag・段階リリースは不要（画面の追加は副ボタンと表示の追加で、既存の流れを変えない）
 
 ## 13. 性能・UX設計
-- 性能: overview に足すクエリは 3 本まで（難易度別 1・急いだ間違い 2〔条件を満たさなければ 1〕）。`next_problem` の `weak` は 3 本前後（件数・難易度別・本体）で、候補の数で増えない（TC-15）。キャッシュは使わない（読むたびに正しい値。件数は本人の答えだけ）
+- 性能: overview に足すクエリは常に 3 本（難易度別 1・急いだ間違い 2。当てはまらなくても 2 本目を流し、I473 の「クエリ数がデータの量で変わらない」を保つ。`test_I473_overview.py` の TC-12 の本数を 8 → 11 にする）。`next_problem` の `weak` は 3 本前後（件数・難易度別・本体）で、候補の数で増えない（TC-15）。キャッシュは使わない（読むたびに正しい値。件数は本人の答えだけ）
 - 読み込み中・エラー: ダッシュボードは今の overview の読み込み中（スケルトン）・失敗（再読み込み）の表示に乗る。クイズは今の読み込み中・失敗の扱いのまま
 - 空の状態: 難易度別の苦手・急いだ間違いは、当てはまらなければ何も出さない（科目別の一覧の空の文はそのまま残り、次にすることの導線〔問題を解く〕もそのまま）
 - 破壊的な操作: 無し
@@ -289,6 +289,15 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 3 | 読んで可 | 消した経路の下（`analyze/`・`select_problems/` など）がすべて 404 になり、呼び出し元が画面・e2e・backend に残っていない（TC-30・調査結果 7） |
 
 ## 計画変更記録
+- 2026-11-17 implement（細部・方式は変えない）:
+  - 計画書の記載: 4.4「`StartQuizCard.tsx`: …「苦手を優先して始める」…」／採った方法: ボタンに `TrackChanges` のアイコンを付け、`minHeight: 44` を足した／理由: 主ボタンと見た目をそろえる・360px 幅で実測 42px で ux-rules.md 6 の 44px に届かなかった
+  - 計画書の記載: 4.4「行き先が `/quiz?subject=<id>&mode=weak` になる」（`StartQuizCard`・`RecommendationsCard` に別々に書く想定）／採った方法: 道筋を作る関数 `quizPath` と型 `QuizStartMode` を `frontend/src/constants/routes.ts` に置き、2 枚のカードから使う／理由: 画面どうしが互いの部品を読み込まずに同じ値を指す、既存の routes.ts の役割どおり
+  - 計画書の記載: 4.3「`WeakDifficultySerializer` … `difficulty = ChoiceField(choices=[('easy','初級'),…])`」／採った方法: `choices=LABELS`（`backend/problems/difficulty.py`）／理由: 対応表を `difficulty.py` の 1 か所に保つ（計画レビュー Warning 1 の方針）
+  - テストの補助: `backend/problems/tests/i466_data.py`（組織・問題・答えの作り方）を足し、problems と dashboard の I466 のテストで共有した。既存の `frontend/src/utils/__tests__/dashboardAchievements.test.ts` の準備と `backend/core/tests/test_I493_openapi_contract.py` のキーの集合に 2 つのキーを足した（型・契約のテストが新しいキーを要るため）
+  - 手動テストの準備: 確かめ用の利用者に上級の問題と答えを shell のループで足す手順は、見張り（`pretooluse_guard.py`）が「ループでの一括作成」として承認を求めた。承認を求めず、毎回作り直される確かめ用データ（`seed_dashboard_verify`・初級だけ・正答率 60% 前後）のまま、期待値を DB から別の計算で出して見比べる形にした。上級・急いだ間違いが出る形は単体テスト（TC-02・TC-04・TC-20・TC-21）が受け持つ
+  - /simplify: 割合・解答数の集計式・答えの読み方を `weakness.py` の `rate`・`answer_counts`・`user_answers` にまとめ、`dashboard/selectors.py` はそれを使う（`_rate`・`_answer_counts`・`STUDY_SECONDS_CAP_PER_ANSWER` を消す）。`backend/core/settings.py` の使われない `CACHE_TIMEOUTS` の 2 キーを消す。画面は難易度の表を `utils/difficulty.ts` の 1 つにし（`isDifficulty` も）、% の表示は既存の `components/statistics/format.ts` の `formatRate` を使う
+  - 計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+- 2026-11-17 implement: 急いだ間違いの 2 本目のクエリを条件付きにすると、I473 の TC-12（overview のクエリ数がデータの量で変わらない）が落ちた。常に 2 本流す形にし、TC-12 の本数を 8 → 11 にした（4.1・13 章）。方式・範囲・受け入れ条件は変えないので計画レビューのやり直しは不要
 - 2026-11-17 計画レビュー（20261117_1432）の Warning 3 件への対応: 難易度の対応は既存の `backend/problems/difficulty.py` を使うと明記（4.1）・4.7 に `test_I473_overview.py` のキーの集合の更新を足す・TC-31 を 3 本に分ける。方式・範囲・受け入れ条件は変えないので計画レビューのやり直しは不要
 
 ## レビュー結果

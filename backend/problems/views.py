@@ -881,9 +881,9 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
             )
 
         # サービス層を使用してビジネスロジックを実行
-        next_problem, is_review_mode, total_problems_in_subject = QuizService.get_next_problem(session)
+        picked = QuizService.get_next_problem(session)
 
-        if not next_problem and session.mode == QuizSession.MODE_REVIEW:
+        if not picked.problem and session.mode == QuizSession.MODE_REVIEW:
             # 今日の復習は対象が無くなったら終わり（回を終えるのは画面が end を呼ぶ）
             return Response({
                 'review_complete': True,
@@ -892,17 +892,19 @@ class QuizSessionViewSet(viewsets.ModelViewSet):
                 'correct_answers': session.correct_answers,
             })
 
-        if not next_problem:
+        if not picked.problem:
             return Response(
                 {'error': 'No problems available in this subject'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         # レスポンス作成
-        serializer = ProblemDisplaySerializer(next_problem)
+        serializer = ProblemDisplaySerializer(picked.problem)
         response_data = serializer.data
-        response_data['total_problems_in_subject'] = total_problems_in_subject
-        response_data['is_review_mode'] = is_review_mode
+        response_data['total_problems_in_subject'] = picked.total_problems_in_subject
+        response_data['is_review_mode'] = picked.is_review_mode
+        # 苦手を優先の回で、解答が少なくいつもの順で出しているか（I466。ほかのモードは常に False）
+        response_data['is_weak_fallback'] = picked.is_weak_fallback
 
         return Response(response_data)
 

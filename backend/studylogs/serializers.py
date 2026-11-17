@@ -1,8 +1,7 @@
 from rest_framework import serializers
 from .models import (
-    StudyLog, DailyStudySummary, ProblemAttempt, StudyGoal,
+    StudyLog, DailyStudySummary, StudyGoal,
     SpacedRepetitionCard, SpacedRepetitionReview, LearningAnalytics,
-    MistakePattern, LearningSuggestion, LearningWeakness
 )
 from problems.serializers import OrgSubjectField, ProblemSerializer
 
@@ -54,18 +53,6 @@ class DailyStudySummarySerializer(serializers.ModelSerializer):
         hours = obj.total_study_time // 3600
         minutes = (obj.total_study_time % 3600) // 60
         return f"{hours}時間{minutes}分"
-
-
-class ProblemAttemptSerializer(serializers.ModelSerializer):
-    problem_question = serializers.CharField(source='problem.question', read_only=True)
-    subject_name = serializers.CharField(source='problem.subject.name', read_only=True)
-
-    class Meta:
-        model = ProblemAttempt
-        fields = [
-            'id', 'problem', 'problem_question', 'subject_name',
-            'attempted_at', 'is_correct', 'time_taken', 'attempt_number'
-        ]
 
 
 class StudyGoalSerializer(serializers.ModelSerializer):
@@ -210,123 +197,3 @@ class UserStatisticsSerializer(serializers.Serializer):
     mastery_distribution = serializers.DictField()
     total_reviews = serializers.IntegerField()
     recent_reviews_count = serializers.IntegerField()
-
-
-class MistakePatternSerializer(serializers.ModelSerializer):
-    """間違いパターン用シリアライザー"""
-    pattern_type_display = serializers.CharField(source='get_pattern_type_display', read_only=True)
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
-    error_rate = serializers.ReadOnlyField()
-    severity_level = serializers.ReadOnlyField()
-
-    class Meta:
-        model = MistakePattern
-        fields = [
-            'id', 'pattern_type', 'pattern_type_display', 'subject', 'subject_name',
-            'problem_difficulty', 'occurrence_count', 'total_attempts', 'error_rate',
-            'last_occurrence', 'description', 'confidence_score', 'improvement_rate',
-            'severity_level', 'is_active', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['occurrence_count', 'total_attempts', 'last_occurrence']
-
-
-class LearningSuggestionSerializer(serializers.ModelSerializer):
-    """学習提案用シリアライザー"""
-    suggestion_type_display = serializers.CharField(source='get_suggestion_type_display', read_only=True)
-    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
-    difficulty_level_display = serializers.CharField(source='get_difficulty_level_display', read_only=True)
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
-    mistake_pattern_description = serializers.CharField(source='mistake_pattern.description', read_only=True)
-    is_expired = serializers.ReadOnlyField()
-
-    class Meta:
-        model = LearningSuggestion
-        fields = [
-            'id', 'suggestion_type', 'suggestion_type_display', 'priority', 'priority_display',
-            'title', 'description', 'action_steps', 'subject', 'subject_name',
-            'estimated_time_minutes', 'difficulty_level', 'difficulty_level_display',
-            'mistake_pattern', 'mistake_pattern_description', 'is_read', 'is_applied',
-            'applied_at', 'effectiveness_rating', 'is_active', 'expires_at', 'is_expired',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['applied_at']
-
-
-class LearningWeaknessSerializer(serializers.ModelSerializer):
-    """学習弱点用シリアライザー"""
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
-    severity_display = serializers.CharField(source='get_severity_display', read_only=True)
-    error_rate = serializers.ReadOnlyField()
-
-    class Meta:
-        model = LearningWeakness
-        fields = [
-            'id', 'subject', 'subject_name', 'concept_name', 'problem_count',
-            'error_count', 'error_rate', 'last_error_date', 'improvement_score',
-            'practice_recommendations', 'severity', 'severity_display', 'is_resolved',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['problem_count', 'error_count', 'last_error_date']
-
-
-class MistakeAnalysisSerializer(serializers.Serializer):
-    """間違い分析結果用シリアライザー"""
-    patterns = MistakePatternSerializer(many=True, read_only=True)
-    weaknesses = LearningWeaknessSerializer(many=True, read_only=True)
-    suggestions = LearningSuggestionSerializer(many=True, read_only=True)
-    summary = serializers.DictField(read_only=True)
-    improvement_trends = serializers.ListField(read_only=True)
-
-
-class SuggestionFeedbackSerializer(serializers.Serializer):
-    """学習提案フィードバック用シリアライザー"""
-    suggestion_id = serializers.IntegerField()
-    effectiveness_rating = serializers.IntegerField(min_value=1, max_value=5)
-    feedback_comment = serializers.CharField(required=False, allow_blank=True)
-
-    def validate_effectiveness_rating(self, value):
-        if value not in range(1, 6):
-            raise serializers.ValidationError("効果評価は1-5の範囲で入力してください")
-        return value
-
-
-class ProficiencyAnalysisSerializer(serializers.Serializer):
-    """習熟度分析結果用シリアライザー"""
-    difficulty_proficiency = serializers.DictField(read_only=True)
-    subject_proficiency = serializers.DictField(read_only=True)
-    learning_patterns = serializers.DictField(read_only=True)
-    growth_rate = serializers.FloatField(read_only=True)
-    total_attempts = serializers.IntegerField(read_only=True)
-    overall_accuracy = serializers.FloatField(read_only=True)
-    confidence_level = serializers.FloatField(read_only=True)
-
-
-class PersonalizedRecommendationSerializer(serializers.Serializer):
-    """個人化推奨用シリアライザー"""
-    suggested_focus_areas = serializers.ListField(read_only=True)
-    difficulty_recommendation = serializers.CharField(read_only=True)
-    learning_goal_suggestion = serializers.CharField(read_only=True)
-    estimated_study_time = serializers.IntegerField(read_only=True)
-    confidence_level = serializers.FloatField(read_only=True)
-
-
-class AdaptiveProblemSelectionSerializer(serializers.Serializer):
-    """適応的問題選択パラメータ用シリアライザー"""
-    subject_id = serializers.IntegerField(required=False, allow_null=True)
-    count = serializers.IntegerField(default=10, min_value=1, max_value=50)
-    difficulty_preference = serializers.ChoiceField(
-        choices=['easy', 'medium', 'hard', 'adaptive'],
-        default='adaptive'
-    )
-    learning_goal = serializers.ChoiceField(
-        choices=['review', 'learning', 'challenge', 'balanced'],
-        default='balanced'
-    )
-
-
-class SelectedProblemsSerializer(serializers.Serializer):
-    """選択された問題用シリアライザー"""
-    problems = serializers.ListField(read_only=True)
-    selection_criteria = serializers.DictField(read_only=True)
-    proficiency_summary = serializers.DictField(read_only=True)
-    recommendation = serializers.DictField(read_only=True)

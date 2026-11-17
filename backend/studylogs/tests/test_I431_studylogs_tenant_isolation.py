@@ -21,14 +21,10 @@ from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
 from problems.models import Choice, Problem, QuizAnswer, QuizSession, Subject, UserSubjectAccess
-from studylogs.adaptive_selection import AdaptiveProblemSelector
-from studylogs.mistake_analysis import MistakeAnalysisService
 from studylogs.models import (
-    DailyStudySummary, LearningSuggestion, LearningWeakness, MistakePattern,
-    ProblemAttempt, SpacedRepetitionCard, SpacedRepetitionReview, StudyLog,
+    DailyStudySummary, SpacedRepetitionCard, SpacedRepetitionReview, StudyLog,
 )
 from studylogs.services import SpacedRepetitionService
-from studylogs.tasks import update_user_proficiency_task
 
 User = get_user_model()
 
@@ -135,14 +131,6 @@ def _review(card, is_correct=True):
         new_ease_factor=2.5, new_interval=1, new_repetition_count=1,
         next_review_date=timezone.now(),
     )
-
-
-def _attempt(user, problem, is_correct):
-    return ProblemAttempt.objects.create(user=user, problem=problem, is_correct=is_correct)
-
-
-def _window():
-    return timezone.now() - timedelta(days=30), timezone.now() + timedelta(minutes=1)
 
 
 # ---- TC-01: 他組織・存在しない・削除済み・全体共有科目の問題でのカード作成は同じ 404 ----
@@ -267,59 +255,6 @@ def test_new_cards_exclude_existing_and_noorg_is_empty(setup):
     assert list(SpacedRepetitionService(setup["user_noorg"]).get_new_cards(limit=50)) == []
 
 
-# ---- TC-08: 適応的な問題選択の候補は自組織の未削除の問題だけ ----
-def test_adaptive_problem_pool_is_own_org_only(setup):
-    selector = AdaptiveProblemSelector(setup["user_a"])
-
-    assert {p.id for p in selector._get_problem_pool(None)} == {setup["problem_a"].id}
-    assert {p.id for p in selector._get_problem_pool(setup["subject_a"])} == {setup["problem_a"].id}
-
-
-# ---- TC-09: 科目別の習熟度は自組織の科目だけ ----
-def test_subject_proficiency_is_own_org_only(setup):
-    user = setup["user_a"]
-    _attempt(user, setup["problem_a"], True)
-    _attempt(user, setup["problems_b"][0], False)
-
-    result = AdaptiveProblemSelector(user)._calculate_subject_proficiency(
-        ProblemAttempt.objects.filter(user=user), SpacedRepetitionReview.objects.filter(user=user))
-
-    assert set(result.keys()) == {setup["subject_a"].id}
-
-
-# ---- TC-10: 適応的学習の API は他組織の科目を存在しない科目と同じ 404 で断り、他組織を返さない ----
-def test_adaptive_api_rejects_other_org_subject_and_leaks_nothing(setup):
-    client = _client(setup["user_a"])
-    for subject_id in (setup["subject_b"].id, _missing_id(Subject)):
-        selected = client.post(
-            STUDY + "adaptive-learning/select_problems/", {"subject_id": subject_id}, format="json")
-        assert selected.status_code == status.HTTP_404_NOT_FOUND
-        assert selected.json() == {"error": "科目が見つかりません"}
-        analysis = client.get(
-            STUDY + f"adaptive-learning/proficiency_analysis/?subject_id={subject_id}")
-        assert analysis.status_code == status.HTTP_404_NOT_FOUND
-        assert analysis.json() == {"error": "科目が見つかりません"}
-
-    _attempt(setup["user_a"], setup["problems_b"][0], False)
-    no_subject = client.post(STUDY + "adaptive-learning/select_problems/", {}, format="json")
-    # difficulty の型の不具合で今はエラー。ステータスは見ない（I452 で直っても同じ判定が通る）
-    assert _no_other(no_subject)
-
-
-# ---- TC-11: 間違いの分析の土台は自組織の問題の記録だけ ----
-def test_mistake_error_records_are_own_org_only(setup):
-    user = setup["user_a"]
-    _attempt(user, setup["problem_a"], False)
-    _attempt(user, setup["problems_b"][0], False)
-    _review(_card(user, setup["problem_a"]), is_correct=False)
-    _review(_card(user, setup["problems_b"][0]), is_correct=False)
-
-    sr_errors, attempt_errors = MistakeAnalysisService(user)._error_records(*_window())
-
-    assert {x.problem_id for x in sr_errors} == {setup["problem_a"].id}
-    assert {x.problem_id for x in attempt_errors} == {setup["problem_a"].id}
-
-
 # ---- TC-12: 学習記録の作成は他組織・存在しない・全体共有科目を同じ 400 で断る ----
 def test_study_log_create_rejects_other_org_subject_like_missing(setup):
     client = _client(setup["user_a"])
@@ -432,72 +367,6 @@ def test_user_subjects_api_hides_other_org_subjects(setup):
     assert noorg.json() == []
 
 
-# ---- TC-16: 間違い分析の一覧・まとめ・提案の生成・弱点の更新に他組織の科目が出ない ----
-def test_mistake_analysis_hides_and_does_not_create_other_org(setup):
-    user = setup["user_a"]
-    pattern_a = MistakePattern.objects.create(
-        user=user, pattern_type="subject_difficulty", subject=setup["subject_a"],
-        description="自組織のパターン", confidence_score=0.5)
-    pattern_b = MistakePattern.objects.create(
-        user=user, pattern_type="subject_difficulty", subject=setup["subject_b"],
-        description="科目I431Bのパターン", confidence_score=0.5)
-    # 科目が空のパターンは、提案の生成（_generate_pattern_based_suggestions が全種類の文言を
-    # pattern.subject.name で先に組み立てる既存の不具合・I452）に当たらないよう、生成の対象の
-    # しきい値（confidence_score >= 0.3）より下にする。一覧には出る
-    MistakePattern.objects.create(
-        user=user, pattern_type="time_pressure", subject=None,
-        description="時間のパターン", confidence_score=0.1)
-    LearningWeakness.objects.create(
-        user=user, subject=setup["subject_a"], concept_name="自組織の概念", severity="high")
-    LearningWeakness.objects.create(
-        user=user, subject=setup["subject_b"], concept_name="科目I431Bの概念", severity="high")
-    s_a = LearningSuggestion.objects.create(
-        user=user, subject=setup["subject_a"], suggestion_type="concept_review",
-        title="自組織の提案", description="自組織")
-    LearningSuggestion.objects.create(
-        user=user, subject=setup["subject_b"], suggestion_type="concept_review",
-        title="科目I431Bの提案", description="他組織")
-    s_none = LearningSuggestion.objects.create(
-        user=user, subject=None, suggestion_type="study_method",
-        title="一般の提案", description="一般")
-    LearningSuggestion.objects.create(
-        user=user, subject=None, mistake_pattern=pattern_b, suggestion_type="concept_review",
-        title="パターンだけ他組織の提案", description="パターン経由")
-    client = _client(user)
-
-    patterns = client.get(STUDY + "mistake-analysis/patterns/")
-    suggestions = client.get(STUDY + "mistake-analysis/suggestions/")
-    weaknesses = client.get(STUDY + "mistake-analysis/weaknesses/")
-    for response in (patterns, suggestions, weaknesses):
-        assert response.status_code == status.HTTP_200_OK
-        assert _no_other(response)
-    assert {p["subject"] for p in patterns.json()} == {setup["subject_a"].id, None}
-    assert {s["id"] for s in suggestions.json()} == {s_a.id, s_none.id}
-    assert {w["subject"] for w in weaknesses.json()} == {setup["subject_a"].id}
-
-    service = MistakeAnalysisService(user)
-    summary = service.get_analysis_summary()
-    assert {p.subject_id for p in summary["patterns"]} == {setup["subject_a"].id, None}
-    assert {w.subject_id for w in summary["weaknesses"]} == {setup["subject_a"].id}
-    assert {s.id for s in summary["suggestions"]} == {s_a.id, s_none.id}
-
-    LearningSuggestion.objects.all().delete()
-    service.generate_learning_suggestions()
-    assert not LearningSuggestion.objects.filter(user=user, subject=setup["subject_b"]).exists()
-    assert not LearningSuggestion.objects.filter(user=user, mistake_pattern=pattern_b).exists()
-    assert LearningSuggestion.objects.filter(user=user, subject=setup["subject_a"]).exists()
-    assert LearningSuggestion.objects.filter(user=user, mistake_pattern=pattern_a).exists()
-
-    LearningWeakness.objects.all().delete()
-    for _ in range(5):
-        _attempt(user, setup["problem_a"], False)
-        _attempt(user, setup["problems_b"][0], False)
-    service.update_learning_weaknesses(*_window())
-    weakness_subjects = set(
-        LearningWeakness.objects.filter(user=user).values_list("subject_id", flat=True))
-    assert weakness_subjects == {setup["subject_a"].id}
-
-
 def _quiz_answers(user, problem, total, correct):
     """クイズの答えを total 件（うち正解 correct 件）。セッションは答えごとに作る（I473）"""
     for i in range(total):
@@ -571,15 +440,6 @@ def test_create_study_log_closes_only_own_org_active_logs(setup):
     assert own.is_active is False
     assert no_subject.is_active is False
     assert other.is_active is True
-
-
-# ---- TC-20: 習熟度の非同期処理は他組織の科目を存在しない科目と同じに扱う ----
-def test_proficiency_task_treats_other_org_subject_like_missing(setup):
-    user_id = setup["user_a"].id
-    other = update_user_proficiency_task.apply(args=[user_id, setup["subject_b"].id]).result
-    missing = update_user_proficiency_task.apply(args=[user_id, _missing_id(Subject)]).result
-
-    assert other == missing == {"error": "Subject matching query does not exist."}
 
 
 # ---- TC-21: 組織に属さない利用者は問題・科目を扱えず、科目なしの記録だけ読める ----

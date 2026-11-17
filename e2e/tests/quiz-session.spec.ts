@@ -44,6 +44,15 @@ test.describe('クイズセッション', () => {
     await expect.poll(async () => Number(await answeredCount.textContent())).toBeGreaterThan(before);
   });
 
+  // I466: 「苦手を優先して始める」で、苦手を優先のクイズへ進む（並びの正しさは backend の pytest が確かめる）
+  test('ダッシュボードから苦手を優先のクイズを始められる', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.click('[data-testid="start-weak-quiz-button"]');
+    await expect(page).toHaveURL(/\/quiz\?subject=\d+&mode=weak/);
+    await page.waitForSelector('[data-testid="choice-option"]');
+    await expect(page.getByText('苦手を優先', { exact: true })).toBeVisible();
+  });
+
   // I158: 開発サーバー（StrictMode 有効）でも開始リクエストは 1 回だけ・Idempotency-Key 付き
   test('クイズ開始時の POST /api/quiz/ は 1 回だけ送られる', async ({ page }) => {
     const startRequests: Request[] = [];

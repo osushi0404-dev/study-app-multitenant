@@ -346,13 +346,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DashboardRecommendation'
+        weak_difficulties:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardWeakDifficulty'
+        rushed_mistakes:
+          allOf:
+          - $ref: '#/components/schemas/DashboardRushedMistakes'
+          nullable: true
       required:
       - has_data
       - last_7_days
       - recommendations
+      - rushed_mistakes
       - streak
       - today
       - totals
+      - weak_difficulties
       - weak_subjects
     DashboardRecommendation:
       type: object
@@ -378,6 +388,21 @@ components:
       description: |-
         * `weak_subject` - weak_subject
         * `unstudied_subject` - unstudied_subject
+    DashboardRushedMistakes:
+      type: object
+      description: 直近 30 日の間違いのうち、急いで答えたものの数と割合（I466）
+      properties:
+        mistake_count:
+          type: integer
+        rushed_count:
+          type: integer
+        rushed_rate:
+          type: number
+          format: double
+      required:
+      - mistake_count
+      - rushed_count
+      - rushed_rate
     DashboardStreak:
       type: object
       properties:
@@ -418,6 +443,21 @@ components:
       - accuracy_rate
       - answered_count
       - correct_count
+    DashboardWeakDifficulty:
+      type: object
+      description: 苦手な難易度（I466。値は problems/difficulty.py の文字）
+      properties:
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEnum'
+        answered_count:
+          type: integer
+        accuracy_rate:
+          type: number
+          format: double
+      required:
+      - accuracy_rate
+      - answered_count
+      - difficulty
     DashboardWeakSubject:
       type: object
       properties:
@@ -435,6 +475,16 @@ components:
       - answered_count
       - subject_id
       - subject_name
+    DifficultyEnum:
+      enum:
+      - easy
+      - medium
+      - hard
+      type: string
+      description: |-
+        * `easy` - easy
+        * `medium` - medium
+        * `hard` - hard
     PatchedUserSettings:
       type: object
       properties:

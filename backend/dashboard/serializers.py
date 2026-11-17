@@ -1,6 +1,7 @@
 from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
+from problems.difficulty import LABELS
 from problems.serializers import OrgSubjectField
 
 from .selectors import (
@@ -119,6 +120,22 @@ class WeakSubjectSerializer(serializers.Serializer):
     accuracy_rate = serializers.FloatField()
 
 
+@extend_schema_serializer(component_name='DashboardWeakDifficulty')
+class WeakDifficultySerializer(serializers.Serializer):
+    """苦手な難易度（I466。値は problems/difficulty.py の文字）"""
+    difficulty = serializers.ChoiceField(choices=LABELS)
+    answered_count = serializers.IntegerField()
+    accuracy_rate = serializers.FloatField()
+
+
+@extend_schema_serializer(component_name='DashboardRushedMistakes')
+class RushedMistakesSerializer(serializers.Serializer):
+    """直近 30 日の間違いのうち、急いで答えたものの数と割合（I466）"""
+    mistake_count = serializers.IntegerField()
+    rushed_count = serializers.IntegerField()
+    rushed_rate = serializers.FloatField()
+
+
 @extend_schema_serializer(component_name='DashboardRecommendation')
 class RecommendationSerializer(serializers.Serializer):
     kind = serializers.ChoiceField(choices=RECOMMENDATION_KIND_CHOICES)
@@ -137,3 +154,6 @@ class OverviewSerializer(serializers.Serializer):
     last_7_days = DaySerializer(many=True)
     weak_subjects = WeakSubjectSerializer(many=True)
     recommendations = RecommendationSerializer(many=True)
+    weak_difficulties = WeakDifficultySerializer(many=True)
+    # 当てはまらなければ null（キーは必ずある）
+    rushed_mistakes = RushedMistakesSerializer(allow_null=True)

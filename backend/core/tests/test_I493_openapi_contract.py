@@ -75,7 +75,8 @@ class TestOverviewShape:
         overview = _component(schema, 'DashboardOverview')
         props = overview['properties']
         assert set(overview['required']) == {
-            'has_data', 'today', 'streak', 'totals', 'last_7_days', 'weak_subjects', 'recommendations'}
+            'has_data', 'today', 'streak', 'totals', 'last_7_days', 'weak_subjects', 'recommendations',
+            'weak_difficulties', 'rushed_mistakes'}  # 後ろ 2 つは I466
         assert props['has_data'] == {'type': 'boolean'}
         assert props['today'] == {'$ref': _ref('DashboardToday')}
         assert props['streak'] == {'$ref': _ref('DashboardStreak')}

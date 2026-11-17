@@ -22,10 +22,8 @@ from rest_framework.test import APIClient
 from accounts.models import Organization, OrganizationCategory
 from problems.difficulty import LABEL_BY_LEVEL
 from problems.models import Choice, Problem, QuizAnswer, QuizSession, Subject
-from studylogs.adaptive_selection import AdaptiveProblemSelector
-from studylogs.mistake_analysis import MistakeAnalysisService
 from studylogs.models import (
-    LearningSuggestion, LearningWeakness, MistakePattern, SpacedRepetitionCard,
+    SpacedRepetitionCard,
     SpacedRepetitionReview,
 )
 from studylogs.services import SpacedRepetitionService
@@ -35,8 +33,6 @@ User = get_user_model()
 JST = ZoneInfo("Asia/Tokyo")
 QUIZ = "/api/quiz/"
 SR = "/api/study/spaced-repetition/"
-MA = "/api/study/mistake-analysis/"
-AL = "/api/study/adaptive-learning/"
 
 
 def at(month, day, hour=10, minute=0, second=0):
@@ -453,33 +449,6 @@ def test_difficulty_mapping_matches_choices():
     assert set(LABEL_BY_LEVEL) == {level for level, _ in Problem.DIFFICULTY_CHOICES}
 
 
-def test_difficulty_proficiency_counts(setup):
-    user = setup["user_a"]
-    for level, count in ((1, 1), (2, 2), (3, 3)):
-        problem = make_problem(user, setup["s1"], difficulty=level)
-        for _ in range(count):
-            make_review(user, problem)
-    stats = AdaptiveProblemSelector(user).analyze_user_proficiency()["difficulty_proficiency"]
-    assert {label: stats[label]["total_attempts"] for label in stats} == {
-        "easy": 1, "medium": 2, "hard": 3}
-
-
-def test_difficulty_error_rate_counts_own_org_only(setup):
-    user = setup["user_a"]
-    own = make_problem(user, setup["s1"], difficulty=1)
-    foreign = make_problem(setup["user_b"], setup["sb"], difficulty=1)
-    for _ in range(11):
-        make_review(user, own, is_correct=False)
-    for _ in range(100):
-        make_review(user, foreign, is_correct=True)  # 組織を移る前の古いデータ
-
-    service = MistakeAnalysisService(user)
-    end = timezone.now() + timedelta(minutes=1)
-    service._analyze_problem_type_errors(*service._error_records(end - timedelta(days=30), end))
-    assert MistakePattern.objects.filter(
-        user=user, pattern_type="problem_type", problem_difficulty="easy").exists()
-
-
 # ---- TC-10: 学習記録の API が 500 にならない ----
 
 def test_learning_endpoints_ok(setup):
@@ -495,38 +464,7 @@ def test_learning_endpoints_ok(setup):
                              "analytics_data": []}
     assert client.post(SR + "update_analytics/", {}, format="json").status_code == 200
     assert client.get(SR + "learning_insights/").status_code == 200
-    assert client.get(MA + "analyze/").status_code == 200
-    assert client.post(MA + "refresh_analysis/", {}, format="json").status_code == 200
-    for action in ("proficiency_analysis", "personalized_recommendation", "learning_path"):
-        assert client.get(f"{AL}{action}/").status_code == 200, action
-    distribution = client.get(AL + "difficulty_distribution/")
-    assert distribution.status_code == 200
-    performance = distribution.data["current_performance"]
-    assert set(performance) == {"easy", "medium", "hard"}
-    # 難易度 1・2 は正解、3 は不正解の記録（数字の欄から文字への対応が効いている）
-    assert (performance["easy"], performance["hard"]) == (100, 0)
-    assert client.post(AL + "select_problems/", {}, format="json").status_code == 200
-
-
-# ---- TC-11: 科目が空のパターン ----
-
-def test_pattern_without_subject(setup):
-    user = setup["user_a"]
-    service = MistakeAnalysisService(user)
-    time_pressure = MistakePattern.objects.create(
-        user=user, pattern_type="time_pressure", description="d", confidence_score=0.5)
-    problem_type = MistakePattern.objects.create(
-        user=user, pattern_type="problem_type", problem_difficulty="easy", description="d",
-        confidence_score=0.5)
-    subject_less = MistakePattern.objects.create(
-        user=user, pattern_type="subject_difficulty", description="d", confidence_score=0.5)
-
-    for pattern in (time_pressure, problem_type, subject_less):
-        service._generate_pattern_based_suggestions(pattern)
-
-    assert LearningSuggestion.objects.filter(mistake_pattern=time_pressure).count() == 1
-    assert LearningSuggestion.objects.filter(mistake_pattern=problem_type).count() == 1
-    assert not LearningSuggestion.objects.filter(mistake_pattern=subject_less).exists()
+    # 間違い分析・適応的な問題選択の経路は I466 で消した（studylogs/tests/test_I466_removed_routes.py）
 
 
 # ---- TC-12: キャッシュのキーの組織 ----
@@ -538,46 +476,8 @@ def test_cache_key_has_org(setup):
     make_review(user, problem)
 
     assert len(SpacedRepetitionService(user).get_due_cards()) == 1
-    before = AdaptiveProblemSelector(user).analyze_user_proficiency()["subject_proficiency"]
-    assert setup["s1"].id in before
 
     user.organization = setup["org_b"]
     user.save()
     assert SpacedRepetitionService(user).get_due_cards() == []
-    after = AdaptiveProblemSelector(user).analyze_user_proficiency()["subject_proficiency"]
-    assert setup["s1"].id not in after
-
-
-# ---- TC-13: 印付けの 3 経路 ----
-
-def test_mark_routes_scoped(setup):
-    user = setup["user_a"]
-    client = client_for(user)
-
-    def suggestion(subject):
-        return LearningSuggestion.objects.create(
-            user=user, subject=subject, suggestion_type="study_method", title="t", description="d")
-
-    def weakness(subject):
-        return LearningWeakness.objects.create(user=user, subject=subject, concept_name="c")
-
-    foreign_s, own_s = suggestion(setup["sb"]), suggestion(setup["s1"])
-    foreign_w, own_w = weakness(setup["sb"]), weakness(setup["s1"])
-
-    for target, expected in ((foreign_s, 404), (own_s, 200)):
-        assert client.post(MA + "mark_suggestion_read/", {"suggestion_id": target.id},
-                           format="json").status_code == expected
-        assert client.post(MA + "provide_feedback/",
-                           {"suggestion_id": target.id, "effectiveness_rating": 3},
-                           format="json").status_code == expected
-    for target, expected in ((foreign_w, 404), (own_w, 200)):
-        assert client.post(MA + "resolve_weakness/", {"weakness_id": target.id},
-                           format="json").status_code == expected
-
-    foreign_s.refresh_from_db()
-    own_s.refresh_from_db()
-    foreign_w.refresh_from_db()
-    own_w.refresh_from_db()
-    assert (foreign_s.is_read, own_s.is_read) == (False, True)
-    assert (foreign_s.effectiveness_rating, own_s.effectiveness_rating) == (None, 3)
-    assert (foreign_w.is_resolved, own_w.is_resolved) == (False, True)
+    # 習熟度のキャッシュ（AdaptiveProblemSelector）は I466 で消した

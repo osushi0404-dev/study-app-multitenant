@@ -9,6 +9,7 @@
  * - 問題 0 問の案内は、管理者には問題を作る行き先、管理者でない人には待つ案内（I539）
  * - 目標の 1 行は、クイズを始められ、設定の目標と全科目の今日の分が読めたときだけ出す（科目を選んでいても
  *   全科目で計算・I513。始められないときは出さない・I539）
+ * - 「クイズを始める」の下に「苦手を優先して始める」（I466）。押せる条件・科目の選び方は同じで、行き先に mode=weak を付ける
  */
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -23,7 +24,7 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import { PlayArrow } from '@mui/icons-material';
+import { PlayArrow, TrackChanges } from '@mui/icons-material';
 import { ALL_SUBJECTS } from '../../hooks/useDashboardOverview';
 import SubjectsRetryRow from '../SubjectsRetryRow';
 import { UserSubjectsState } from '../../hooks/useUserSubjects';
@@ -31,7 +32,9 @@ import { AvailableSubjectsState } from '../../hooks/useAvailableSubjects';
 import {
   LEARNING_SUBJECTS_PATH,
   QUIZ_MANAGEMENT_PATH,
+  QuizStartMode,
   SUBJECT_MANAGEMENT_PATH,
+  quizPath,
 } from '../../constants/routes';
 
 interface StartQuizCardProps {
@@ -157,6 +160,8 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
+  // ダイアログで科目を選んだときに使うモード（押したボタンのモード・I466）
+  const [startMode, setStartMode] = useState<QuizStartMode>('normal');
 
   const subjectList = subjects.status === 'success' ? subjects.subjects : [];
   const hasSubjects = subjectList.length > 0;
@@ -167,16 +172,17 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
   );
   const canStart = quizTargets.length > 0;
 
-  const goToQuiz = (subjectId: number) => {
+  const goToQuiz = (subjectId: number, mode: QuizStartMode) => {
     setDialogOpen(false);
-    navigate(`/quiz?subject=${subjectId}`);
+    navigate(quizPath(subjectId, mode));
   };
 
   // 対象が 1 件ならすぐ始め、2 件以上（「すべて」）ならダイアログで選ぶ
-  const handleStart = () => {
+  const handleStart = (mode: QuizStartMode) => {
     if (quizTargets.length === 1) {
-      goToQuiz(quizTargets[0].id);
+      goToQuiz(quizTargets[0].id, mode);
     } else {
+      setStartMode(mode);
       setDialogOpen(true);
     }
   };
@@ -212,13 +218,36 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
         variant="contained"
         size="large"
         startIcon={<PlayArrow />}
-        onClick={handleStart}
+        onClick={() => handleStart('normal')}
         fullWidth
         disabled={!canStart}
         data-testid="start-quiz-button"
       >
         クイズを始める
       </Button>
+
+      <Button
+        variant="outlined"
+        size="large"
+        startIcon={<TrackChanges />}
+        onClick={() => handleStart('weak')}
+        fullWidth
+        disabled={!canStart}
+        data-testid="start-weak-quiz-button"
+        aria-describedby="start-weak-quiz-help"
+        sx={{ mt: 1.5, minHeight: 44 /* タッチの的は 44px 以上（ux-rules.md 6） */ }}
+      >
+        苦手を優先して始める
+      </Button>
+      <Typography
+        id="start-weak-quiz-help"
+        variant="caption"
+        color="text.secondary"
+        component="p"
+        sx={{ mt: 0.5 }}
+      >
+        間違えた問題や正答率の低い難易度から出します
+      </Typography>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>📚 クイズを始める科目を選択</DialogTitle>
@@ -229,7 +258,7 @@ const StartQuizCard: React.FC<StartQuizCardProps> = ({
               variant="outlined"
               fullWidth
               size="large"
-              onClick={() => goToQuiz(subject.id)}
+              onClick={() => goToQuiz(subject.id, startMode)}
               aria-label={`${subject.name}のクイズを開始`}
               sx={{ mb: 1.5, py: 2 }}
             >

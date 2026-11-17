@@ -36,6 +36,8 @@ const overview = (patch: {
   last_7_days: [{ date: '2026-11-13', study_seconds: 0, answered_count: 0, correct_count: 0 }],
   weak_subjects: [],
   recommendations: [],
+  weak_difficulties: [],
+  rushed_mistakes: null,
 });
 
 const decide = (

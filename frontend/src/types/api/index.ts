@@ -5,6 +5,8 @@ type Schemas = components['schemas'];
 
 export type DashboardOverview = Schemas['DashboardOverview'];
 export type DashboardRecommendationKind = Schemas['DashboardRecommendationKindEnum'];
+// 難易度別の苦手（I466）
+export type DashboardWeakDifficulty = Schemas['DashboardWeakDifficulty'];
 // 学習統計（I488）
 export type DashboardAnalytics = Schemas['DashboardAnalytics'];
 export type DashboardAnalyticsGranularity = Schemas['DashboardAnalyticsGranularityEnum'];

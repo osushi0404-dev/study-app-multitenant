@@ -6,9 +6,9 @@
 共通の準備（BE）: 組織 A・B。A の科目 `数学`（問題 p1〜p6）・`英語`（上級の問題 e1〜e5）、B の科目 `B科目`（問題 b1）。A の利用者 `user_a`・`user_a2`、B の利用者 `user_b`。答えは `QuizSession(user, mode)` と `QuizAnswer(session, problem, is_correct, time_taken)` で作り、`answered_at` は作った後に `update()` で決まった時刻に書き換える。「今」は `2026-11-17 08:00`（日本時間）を関数の `now` に渡す。難易度は 1=初級（easy）・2=中級（medium）・3=上級（hard）。
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
-- e2e: 実装前のため未実行
+- backend（implement・2026-11-17・手元で変えたファイルのテスト）: I466 の新しいテスト 37 件 pass。`problems/tests/`・`dashboard/tests/`・`studylogs/tests/`・`core/tests/test_I446…`・`test_I493…`・`test_I466…` の 733 件 pass（スキーマの作り直しの後）
+- frontend（同）: `Dashboard.test.tsx` 54 件・`QuizSession.*.test.tsx` 4 ファイル pass。型チェック（`tsc --noEmit`）エラー 0・ESLint 違反 0
+- e2e: CI で流す（TC-40 を `e2e/tests/quiz-session.spec.ts` に追加）
 
 ## バックエンド: 苦手の判定（`backend/problems/tests/test_I466_weakness.py`）
 
@@ -26,7 +26,7 @@
 
 | TC | 内容 | 期待値 |
 |---|---|---|
-| TC-07 | 契約: TC-02 と TC-04 のデータの `user_a` で `GET /api/dashboard/overview/`。未認証でも 1 回 | status 200。最上位のキーの集合が `{"has_data","today","streak","totals","last_7_days","weak_subjects","recommendations","weak_difficulties","rushed_mistakes"}`。`weak_difficulties[i]` のキーが `{"difficulty","answered_count","accuracy_rate"}`、`rushed_mistakes` のキーが `{"mistake_count","rushed_count","rushed_rate"}`。未認証は 401 |
+| TC-07 | 契約: `user_a` に初級 6 問（正解 5）・中級 5 問（正解 2）・上級 10 問（正解 3。うち不正解 4 問は 5 秒・ほかは 40 秒）で `GET /api/dashboard/overview/`。未認証でも 1 回 | status 200。最上位のキーの集合が `{"has_data","today","streak","totals","last_7_days","weak_subjects","recommendations","weak_difficulties","rushed_mistakes"}`。`weak_difficulties == [{"difficulty": "hard", "answered_count": 10, "accuracy_rate": 0.3}, {"difficulty": "medium", "answered_count": 5, "accuracy_rate": 0.4}]`、`rushed_mistakes == {"mistake_count": 11, "rushed_count": 4, "rushed_rate": 0.3636}`（21 問・平均 33.3 秒）。未認証は 401 |
 | TC-08 | 科目の選択に関係しない: TC-07 のデータで `?subject_id=<数学>` | `weak_difficulties` と `rushed_mistakes` が `subject_id` なしの応答と同じ |
 | TC-09 | 当てはまらない: 答えの無い `user_a2` | `weak_difficulties == []`・`rushed_mistakes is None` |
 | TC-34 | スキーマ: `core/tests/test_I493_openapi_contract.py`（作り直した `backend/openapi.yaml` と一致）と CI の `API Types Up To Date` | pass |
@@ -44,7 +44,7 @@
 | TC-13 | 2 周目: `weak` の回で 7 問を並びの順にすべて答え（p3 だけ不正解・ほかは正解）、`next_problem` | `is_review_mode is True`・`id == p3`（最近の 5 問 p7・p4・p5・p6・p2 を除いた残り p3・p1 のうち、最後が不正解の p3 が先。乱数ではなく苦手を優先の並べ方） |
 | TC-14 | 開始の検証: ① `mode="bogus"` ② 同じ `Idempotency-Key` で `mode="normal"` の後に `mode="weak"` ③ 他組織の科目（B科目）で `mode="weak"` | ① 400 ② 2 回目は 422（body の `main_message` が「Idempotency-Key が別の内容で使用されています」）③ 通常のモードで他組織の科目を指定したときと同じ status と body |
 | TC-15 | クエリ数（F4）: 候補 3 問の科目と 40 問の科目（どちらも本人の答え 10 件以上・最後が不正解の問題を含む）で、`weak` の回の `QuizService.get_next_problem(session)` を `CaptureQueriesContext` で数える | 2 つの本数が等しい（`==`） |
-| TC-17 | 組織の境界: ① `user_a` の B科目 の問題 b1 への答え（不正解・不具合で残った想定）② `user_a2` が p4 に不正解 ③ 科目なしの `weak` の回で、未回答の問題を全部出し切るまで `next_problem` を繰り返す | ①② TC-10 の並びが変わらない（b1 は出ない・p4 の段は `user_a2` の答えで変わらない）③ 出た問題の科目がすべて組織 A の科目 |
+| TC-17 | 組織の境界: TC-10 の準備に、数学の中級の未回答の問題 p8 を足す。① `user_a` の B科目 の中級の問題 b1 への答え 5 件（すべて不正解・不具合で残った想定。数えてしまうと中級が苦手になり p8 が段 1 に上がる）② `user_a2` が p4 に不正解 ③ 科目なしの `weak` の回で、未回答の問題を全部出し切るまで `next_problem` を繰り返す | ①② 並びが `[p3, p1, p7, p4, p8, p5, p6, p2]`（b1 は出ない・p8 は段 2・p4 の段は `user_a2` の答えで変わらない）③ 出た問題の組織がすべて組織 A |
 | TC-18 | 通常・復習の回: `mode="normal"` の回の `next_problem` | 応答に `is_weak_fallback` があり `False` |
 
 ## バックエンド: 片付け
@@ -63,7 +63,7 @@
 
 | TC | 内容 | 期待値 |
 |---|---|---|
-| TC-20 | `weak_difficulties = [{difficulty: "hard", answered_count: 10, accuracy_rate: 0.3}, {difficulty: "medium", answered_count: 6, accuracy_rate: 0.65}]` | 「間違いやすい分野（全科目）」のカードの中に、見出し（level 3）「難易度別」・「上級」「30%」「解答数: 10問」・「中級」「65%」「解答数: 6問」。`weak_difficulties = []` の応答では「難易度別」が無い |
+| TC-20 | `weak_difficulties = [{difficulty: "hard", answered_count: 12, accuracy_rate: 0.3}, {difficulty: "medium", answered_count: 6, accuracy_rate: 0.65}]` | 「間違いやすい分野（全科目）」のカードの中に、見出し（level 3）「難易度別」・「上級」「30%」「解答数: 12問」（科目の行の「解答数: 10問」と重ならない数）・「中級」「65%」「解答数: 6問」。`weak_difficulties = []` の応答では「難易度別」が無い |
 | TC-21 | `rushed_mistakes = {mistake_count: 4, rushed_count: 2, rushed_rate: 0.5}` / `null` | `role="status"` で「急いで答えた問題の間違いが多めです（間違いの 50%）。落ち着いて解きましょう」が出る / 出ない |
 | TC-22 | 「苦手を優先して始める」: 科目を選んだ状態（科目 4・問題あり） | ボタン（`data-testid="start-weak-quiz-button"`）と「間違えた問題や正答率の低い難易度から出します」が出る。押すと `navigate('/quiz?subject=4&mode=weak')` |
 | TC-23 | 「すべて」で対象が 2 件: 「苦手を優先して始める」→ ダイアログで 2 件目の科目 → 閉じて「クイズを始める」→ ダイアログで 1 件目の科目 | 1 回目は `navigate('/quiz?subject=<2件目>&mode=weak')`、2 回目は `navigate('/quiz?subject=<1件目>')`（ダイアログが押したボタンのモードを使う） |
@@ -90,6 +90,13 @@
 <!-- 本イシューの決定論のテストは pytest（TC-15・TC-32）と、実装のときに 1 回流す TC-31a〜c だけ。TC-31a〜c は消したモジュールの再導入が意図的な変更でしか起きないため CI に入れない（plan-writing-rules.md「決定論テストの対象の選び方」） -->
 
 ## false-green の確かめ（実装のときに行い、結果を書く）
+- 結果（2026-11-17・implement）:
+  - TC-15: 候補ごとに `answers.filter(problem=p).first()` を流す形を `weakness.py` に入れると `assert 8 == 45` で落ちた → 戻して pass
+  - TC-16・TC-05 ③: `user_answers` を `filter(session__user=user)` に、平均の頭打ちを外す形にすると、`test_other_org_and_other_people_are_not_counted`・`test_rushed_mistakes_caps_long_answers` が落ちた
+  - TC-17: 最初の形（他組織の上級の答え 1 件）は、組織の絞り込みを外しても落ちなかった（上級はもともと苦手で、並びが変わらない false-green）。他組織の中級の答え 5 件と未回答の中級 p8 を足し、外すと p8 が 4 番目に上がって落ちることを確かめた → 戻して pass
+  - TC-32: テストの中に失敗の注入（`test_checks_catch_interval_and_missing_task`。秒の間隔・消したタスクを指す予定）を入れ、どちらも見つかることを CI で毎回確かめる
+  - TC-31a〜c: `$TMPDIR` の写しに ① `from .models import ProblemAttempt` ② `WEAK_MIN_ANSWERED = 5` ③ import の行を消す、を入れると、3 本とも exit 1。本物のファイルでは 3 本とも exit 0
+  - TC-27: `isDashboardOverview` の `weak_difficulties` の確かめを外すと ①② が落ちた → 戻して pass
 - TC-15: `order_weak_first` を、候補の問題ごとに最後の答えを問い合わせる形（ループで `QuizAnswer...filter(problem=p).first()`）に一時的に変えると、2 つの本数が違って落ちることを確かめる
 - TC-16・TC-17: `user_answers` を `QuizAnswer.objects.filter(session__user=user)`（組織で絞らない）に一時的に変えると落ちることを確かめる
 - TC-05 ③: 頭打ち（`Least`）を外すと落ちることを確かめる
