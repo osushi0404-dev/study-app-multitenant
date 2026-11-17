@@ -8,6 +8,7 @@ import {
   PatchedUserSettings,
   UserSettings,
 } from '../types/api';
+import { isDifficulty } from '../utils/difficulty';
 
 // おすすめの種類。API の選択肢が増えても消えても、ここが合わなければ型の検査で落ちる
 const RECOMMENDATION_KINDS: Record<DashboardRecommendationKind, true> = {
@@ -64,7 +65,18 @@ const isDashboardOverview = (data: unknown): data is DashboardOverview =>
     isNumber(rec.subject_id) &&
     typeof rec.subject_name === 'string' &&
     typeof rec.reason === 'string'
-  );
+  ) &&
+  isListOf(data.weak_difficulties, (weak) =>
+    isDifficulty(weak.difficulty) &&
+    isNumber(weak.answered_count) &&
+    isNumber(weak.accuracy_rate)
+  ) &&
+  (data.rushed_mistakes === null || (
+    isRecord(data.rushed_mistakes) &&
+    isNumber(data.rushed_mistakes.mistake_count) &&
+    isNumber(data.rushed_mistakes.rushed_count) &&
+    isNumber(data.rushed_mistakes.rushed_rate)
+  ));
 
 // 推移の区切り。API の選択肢が増えても消えても、ここが合わなければ型の検査で落ちる（I488）
 const GRANULARITIES: Record<DashboardAnalyticsGranularity, true> = {

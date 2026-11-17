@@ -2,8 +2,8 @@
 
 import { MediaAsset } from '../services/types';
 
-/** いつものクイズ（normal）か、今日の復習（review・I452）か */
-export type QuizMode = 'normal' | 'review';
+/** いつものクイズ（normal）か、今日の復習（review・I452）か、苦手を優先（weak・I466）か */
+export type QuizMode = 'normal' | 'review' | 'weak';
 
 /**
  * クイズセッション
@@ -51,6 +51,8 @@ export interface Problem {
   // 修正で追加されるフィールド
   total_problems_in_subject?: number;
   is_review_mode?: boolean;
+  /** 苦手を優先の回だが、解答が少なくいつもの順で出している（I466） */
+  is_weak_fallback?: boolean;
 }
 
 /**

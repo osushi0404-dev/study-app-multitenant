@@ -2,6 +2,7 @@
  * ダッシュボード
  * - I473（TC-20〜TC-28）: 契約どおりのキーを読む・データ無し・形の違い/失敗はエラー（0 で埋めない）・科目の選択・苦手 0 件
  * - I487（TC-01〜TC-11・TC-16）: 並び順・状態ごとの表示・クイズの行き先・科目 0 件・目標時間・取得の回数
+ * - I466（TC-I466-20〜27）: 難易度別の苦手・急いだ間違い・「苦手を優先して始める」・おすすめから苦手を優先
  */
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -128,6 +129,8 @@ const overview = (patch: Partial<DashboardOverview> = {}): DashboardOverview => 
   recommendations: [
     { kind: 'unstudied_subject', subject_id: 4, subject_name: '数学', reason: 'この 7 日間、解いていません' },
   ],
+  weak_difficulties: [],
+  rushed_mistakes: null,
   ...patch,
 });
 
@@ -864,5 +867,137 @@ describe('Dashboard', () => {
     const ariaLabel = chart.getAttribute('aria-label') ?? '';
     expect(ariaLabel.startsWith('11/7（土） 0分')).toBe(true);
     expect(ariaLabel).toContain('11/13（金） 5分');
+  });
+
+  // ---- I466 ----
+  it('TC-I466-20: 難易度別の苦手を、科目別の一覧の下に正答率と解答数つきで出し、無ければ見出しごと出さない', async () => {
+    respond(overview({
+      weak_difficulties: [
+        { difficulty: 'hard', answered_count: 12, accuracy_rate: 0.3 },
+        { difficulty: 'medium', answered_count: 6, accuracy_rate: 0.65 },
+      ],
+    }));
+    const { unmount } = renderDashboard();
+
+    const heading = await screen.findByRole('heading', { level: 3, name: '難易度別' });
+    expect(isBefore(screen.getByText('英語'), heading)).toBe(true);
+    expect(screen.getByText('上級')).toBeInTheDocument();
+    expect(screen.getByText('30%')).toBeInTheDocument();
+    expect(screen.getByText('解答数: 12問')).toBeInTheDocument();
+    expect(screen.getByText('中級')).toBeInTheDocument();
+    expect(screen.getByText('65%')).toBeInTheDocument();
+    expect(screen.getByText('解答数: 6問')).toBeInTheDocument();
+    unmount();
+
+    respond(overview());
+    renderDashboard();
+    await screen.findByText('5分');
+    expect(screen.queryByRole('heading', { name: '難易度別' })).not.toBeInTheDocument();
+  });
+
+  it('TC-I466-21: 急いだ間違いがあれば 1 行で知らせ、無ければ出さない', async () => {
+    respond(overview({ rushed_mistakes: { mistake_count: 4, rushed_count: 2, rushed_rate: 0.5 } }));
+    const { unmount } = renderDashboard();
+
+    const statuses = await screen.findAllByRole('status');
+    expect(statuses.some((el) =>
+      el.textContent === '急いで答えた問題の間違いが多めです（間違いの 50%）。落ち着いて解きましょう'
+    )).toBe(true);
+    unmount();
+
+    respond(overview());
+    renderDashboard();
+    await screen.findByText('5分');
+    expect(screen.queryByText(/急いで答えた問題の間違い/)).not.toBeInTheDocument();
+  });
+
+  it('TC-I466-22: 「苦手を優先して始める」は説明つきで、選んだ科目の苦手を優先のクイズへ進む', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-weak-quiz-button')).toBeEnabled());
+    expect(screen.getByTestId('start-weak-quiz-button')).toHaveTextContent('苦手を優先して始める');
+    expect(screen.getByText('間違えた問題や正答率の低い難易度から出します')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '科目5を選ぶ' }));
+    await userEvent.click(screen.getByTestId('start-weak-quiz-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('/quiz?subject=5&mode=weak');
+  });
+
+  it('TC-I466-23: 「すべて」で 2 件なら、ダイアログは押したボタンのモードで始める', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-weak-quiz-button')).toBeEnabled());
+
+    await userEvent.click(screen.getByTestId('start-weak-quiz-button'));
+    let dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: '数学のクイズを開始' }));
+    expect(mockNavigate).toHaveBeenLastCalledWith('/quiz?subject=6&mode=weak');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await userEvent.click(screen.getByTestId('start-quiz-button'));
+    dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: '英語のクイズを開始' }));
+    expect(mockNavigate).toHaveBeenLastCalledWith('/quiz?subject=5');
+  });
+
+  it('TC-I466-23b: ダイアログの見出しは押したボタンの始め方に合わせる（AC12）', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue(SUBJECTS);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId('start-weak-quiz-button')).toBeEnabled());
+
+    await userEvent.click(screen.getByTestId('start-weak-quiz-button'));
+    expect(await screen.findByRole('dialog', { name: '📚 苦手を優先して始める科目を選択' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByTestId('start-quiz-button'));
+    expect(await screen.findByRole('dialog', { name: '📚 クイズを始める科目を選択' })).toBeInTheDocument();
+  });
+
+  it('TC-I466-24: クイズを始められないときは「苦手を優先して始める」も押せない', async () => {
+    respond(overview());
+    mockGetUserSubjects.mockResolvedValue([{ id: 5, name: '英語', problem_count: 0 }]);
+    renderDashboard();
+    await screen.findByRole('status');
+    expect(screen.getByTestId('start-weak-quiz-button')).toBeDisabled();
+  });
+
+  it('TC-I466-26: おすすめの苦手な科目は苦手を優先で、解いていない科目はいつものクイズで始める', async () => {
+    respond(overview({
+      recommendations: [
+        { kind: 'weak_subject', subject_id: 4, subject_name: '英語', reason: '正答率が 20% です。復習しましょう' },
+        { kind: 'unstudied_subject', subject_id: 5, subject_name: '数学', reason: 'この 7 日間、解いていません' },
+      ],
+    }));
+    renderDashboard();
+    const buttons = await screen.findAllByRole('button', { name: '練習する' });
+
+    await userEvent.click(buttons[0]);
+    expect(mockNavigate).toHaveBeenLastCalledWith('/quiz?subject=4&mode=weak');
+    await userEvent.click(buttons[1]);
+    expect(mockNavigate).toHaveBeenLastCalledWith('/quiz?subject=5');
+  });
+
+  it.each([
+    ['weak_difficulties が無い', () => {
+      const { weak_difficulties: _omitted, ...broken } = overview();
+      return broken;
+    }],
+    ['知らない難易度', () => overview({
+      weak_difficulties: [{ difficulty: 'extreme' as 'hard', answered_count: 5, accuracy_rate: 0.2 }],
+    })],
+    ['急いだ間違いの数が欠けている', () => overview({
+      rushed_mistakes: { mistake_count: 4 } as DashboardOverview['rushed_mistakes'],
+    })],
+  ])('TC-I466-27: 形の違う応答（%s）はエラーの文を出す', async (_label, make) => {
+    respond(make());
+    renderDashboard();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'ダッシュボードの数字を読み込めませんでした'
+    );
   });
 });

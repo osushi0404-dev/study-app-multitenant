@@ -13,11 +13,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 
 from .models import (
-    LearningAnalytics, SpacedRepetitionCard, SpacedRepetitionReview,
-    LearningSuggestion, StudyLog
+    LearningAnalytics, SpacedRepetitionCard, SpacedRepetitionReview, StudyLog
 )
 from .services import SpacedRepetitionService
-from .mistake_analysis import MistakeAnalysisService
 from core.cache_service import cache_service
 import logging
 
@@ -119,123 +117,6 @@ def send_study_reminders_task(self):
     except Exception as exc:
         logger.error(f"Study reminders task failed: {str(exc)}")
         raise self.retry(exc=exc, countdown=300)
-
-
-@shared_task(bind=True, max_retries=3)
-def analyze_mistake_patterns_task(self):
-    """すべてのアクティブユーザーの間違いパターンを分析"""
-    try:
-        analyzed_count = 0
-
-        # 過去30日間にアクティブだったユーザー
-        active_since = timezone.now() - timedelta(days=30)
-        active_users = User.objects.filter(
-            Q(problem_attempts__attempted_at__gte=active_since) |
-            Q(sr_reviews__reviewed_at__gte=active_since)
-        ).distinct()
-
-        for user in active_users:
-            try:
-                service = MistakeAnalysisService(user)
-                service.analyze_mistakes(days=30)
-
-                # 関連キャッシュを無効化
-                cache_service.invalidate_mistake_patterns_cache(user.id)
-                cache_service.invalidate_learning_suggestions_cache(user.id)
-
-                analyzed_count += 1
-                logger.info(f"Analyzed mistake patterns for user {user.id}")
-
-            except Exception as e:
-                logger.error(f"Error analyzing patterns for user {user.id}: {str(e)}")
-
-        logger.info(f"Mistake pattern analysis completed for {analyzed_count} users")
-        return {'analyzed_count': analyzed_count}
-
-    except Exception as exc:
-        logger.error(f"Mistake pattern analysis task failed: {str(exc)}")
-        raise self.retry(exc=exc, countdown=300)
-
-
-@shared_task(bind=True)
-def cleanup_expired_suggestions_task(self):
-    """期限切れの学習提案をクリーンアップ"""
-    try:
-        # 組織で絞らない: 利用者を持たない一括処理（中身を外に出さない）
-        expired_suggestions = LearningSuggestion.objects.filter(
-            expires_at__lt=timezone.now(),
-            is_active=True
-        )
-
-        expired_count = expired_suggestions.count()
-
-        # 期限切れの提案を無効化
-        expired_suggestions.update(is_active=False)
-
-        # 関連ユーザーのキャッシュを無効化
-        for suggestion in expired_suggestions:
-            cache_service.invalidate_learning_suggestions_cache(suggestion.user.id)
-
-        logger.info(f"Cleaned up {expired_count} expired suggestions")
-        return {'expired_count': expired_count}
-
-    except Exception as exc:
-        logger.error(f"Cleanup suggestions task failed: {str(exc)}")
-        return {'error': str(exc)}
-
-
-@shared_task(bind=True)
-def update_user_proficiency_task(self, user_id: int, subject_id: int = None):
-    """特定ユーザーの習熟度を更新（即座に実行）"""
-    try:
-        user = User.objects.get(id=user_id)
-
-        # 習熟度キャッシュを無効化
-        cache_service.invalidate_proficiency_cache(user_id)
-
-        # 適応的学習サービスで習熟度を再計算
-        from .adaptive_selection import AdaptiveProblemSelector
-        selector = AdaptiveProblemSelector(user)
-
-        subject = None
-        if subject_id:
-            # 他組織の科目は存在しない科目と同じ扱い
-            from problems.services.tenant_scope import available_subjects
-            subject = available_subjects(user).get(id=subject_id)
-
-        proficiency_data = selector.analyze_user_proficiency(subject)
-
-        logger.info(f"Updated proficiency for user {user_id}")
-        return {
-            'user_id': user_id,
-            'subject_id': subject_id,
-            'overall_accuracy': proficiency_data.get('overall_accuracy', 0)
-        }
-
-    except Exception as exc:
-        logger.error(f"Update proficiency task failed for user {user_id}: {str(exc)}")
-        return {'error': str(exc)}
-
-
-@shared_task(bind=True)
-def generate_learning_insights_task(self, user_id: int):
-    """学習洞察を生成"""
-    try:
-        user = User.objects.get(id=user_id)
-        service = MistakeAnalysisService(user)
-
-        insights = service.get_learning_insights(days=7)
-
-        logger.info(f"Generated learning insights for user {user_id}")
-        return {
-            'user_id': user_id,
-            'insights_count': len(insights.get('insights', [])),
-            'recommendations_count': len(insights.get('recommendations', []))
-        }
-
-    except Exception as exc:
-        logger.error(f"Generate insights task failed for user {user_id}: {str(exc)}")
-        return {'error': str(exc)}
 
 
 @shared_task(bind=True)

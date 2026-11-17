@@ -141,7 +141,7 @@ def test_contract_keys_and_types(setup):
     data = response.json()
     assert set(data) == {
         "has_data", "today", "streak", "totals", "last_7_days", "weak_subjects",
-        "recommendations"}
+        "recommendations", "weak_difficulties", "rushed_mistakes"}  # 後ろ 2 つは I466
     assert set(data["today"]) == {
         "study_seconds", "answered_count", "correct_count", "accuracy_rate"}
     assert set(data["streak"]) == {"current_days"}
@@ -358,8 +358,9 @@ def test_query_count_is_constant(setup):
 
     assert small == large
     # 実装後に数えた本数（I473 は 9）。I491 で科目のキャッシュを作るときの存在確認と値の読み出しが
-    # 番号の読み出し 1 本になり 8。増やすなら理由を計画書に書く
-    assert large == 8
+    # 番号の読み出し 1 本になり 8。I466 で難易度別の苦手 1 本・急いだ間違い 2 本を足して 11
+    # （plan_I466 13 章）。増やすなら理由を計画書に書く
+    assert large == 11
 
 
 # ---- TC-13: 認可と組織の境界 ----
