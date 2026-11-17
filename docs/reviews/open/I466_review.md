@@ -24,5 +24,8 @@
 - PR を revert し、`python manage.py migrate problems 0022` で選択肢を戻す（データの変更なし）
 
 ## 自律判断の記録
+- [plan] grill-me でユーザーが「BP・UI/UX の観点でベストなやり方で」と任せたので、画面の細部（「難易度別」の小見出しを科目別の一覧の下に置く・急いだ間違いは info の 1 行・「苦手を優先」の印・終えた回の「もう一度挑戦」は同じモード・2 周目も苦手を優先の並べ方）は止めずに決めた — 任された範囲で、既存のカード・印の作りにそろえるのが最も迷わない
+- [plan-review] 計画レビュー OK（Warning 3 件）。3 件とも直した（難易度の対応は既存の difficulty.py を使う・4.7 に test_I473 の更新・TC-31 を 3 本に分ける）。再レビューはしない — 方式・範囲・受け入れ条件を変えない
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement

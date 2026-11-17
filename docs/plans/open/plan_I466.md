@@ -37,8 +37,8 @@
 - [ ] AC2: 直近 30 日に 20 問以上答え、間違いのうち自分の平均の解答時間の半分未満で答えたものが 25% 以上のとき、カードに「急いで答えた問題の間違いが多めです（間違いの ◯%）。落ち着いて解きましょう」が出る（当てはまらなければ出ない）（TC-04〜TC-06・TC-21）
 - [ ] AC3: ダッシュボードの「苦手を優先して始める」と、おすすめの「間違いやすい分野」の「練習する」から、モード `weak` のクイズが始まる（TC-22〜TC-24・TC-26）
 - [ ] AC4: モード `weak` の次の問題は、最後に間違えた問題 → 苦手な難易度の問題 → 未回答・しばらく答えていない問題の順に優先され、同じ回で続けて同じ問題が出ない。その科目の解答が 5 問未満なら通常と同じ順で出て、クイズの画面に「この科目はまだ解答が少ないため、いつもの順で出題しています」が出る（TC-10〜TC-14・TC-25）
-- [ ] AC5: 苦手の基準（5 問以上・正答率 70% 未満）が、科目別・難易度別・苦手を優先の出題で `backend/problems/services/weakness.py` の 1 か所の定数から読まれている（TC-31・コードレビュー）
-- [ ] AC6: 2 機能の材料が `QuizAnswer` で、`ProblemAttempt` を読まない。`MistakePattern`・`LearningWeakness`・`LearningSuggestion` に書き込む経路が無い（TC-31）
+- [ ] AC5: 苦手の基準（5 問以上・正答率 70% 未満）が、科目別・難易度別・苦手を優先の出題で `backend/problems/services/weakness.py` の 1 か所の定数から読まれている（TC-31b・TC-31c・コードレビュー）
+- [ ] AC6: 2 機能の材料が `QuizAnswer` で、`ProblemAttempt` を読まない。`MistakePattern`・`LearningWeakness`・`LearningSuggestion` に書き込む経路が無い（TC-31a）
 - [ ] AC7: `/api/study/mistake-analysis/` と `/api/study/adaptive-learning/` の下の経路が 404 になる（TC-30）
 - [ ] AC8: `backend/core/celery.py` の定期処理がすべて時刻（`crontab`）で決まり、間違いパターンの分析・期限切れの提案の掃除の定期処理が無く、登録したタスクがすべて実在する（TC-32）
 - [ ] AC9: 苦手を優先の次の問題を選ぶ問い合わせの数が、候補の問題の数に比例しない（TC-15）
@@ -86,7 +86,9 @@ def is_weak(answered: int, correct: int) -> bool:
 def weak_difficulties(answers) -> list[dict]:
     """難易度ごとに集計（1 クエリ・values('problem__difficulty').annotate(Count)）し、is_weak のものを
     正答率の低い順（同じなら易しい順）で返す。要素は {'difficulty': 'easy'|'medium'|'hard',
-    'answered_count': int, 'accuracy_rate': float（小数第 4 位）}。label_of が None の難易度は捨てる"""
+    'answered_count': int, 'accuracy_rate': float（小数第 4 位）}。数字と文字の対応は既存の
+    backend/problems/difficulty.py（LABEL_BY_LEVEL・LEVEL_BY_LABEL・label_of）だけを使い、ここに対応表を作らない。
+    label_of が None の難易度（1〜3 以外）は捨てる"""
 
 def rushed_mistakes(answers, now) -> Optional[dict]:
     """直近 RUSHED_WINDOW_DAYS 日（now から遡る）の答えについて:
@@ -102,7 +104,9 @@ def order_weak_first(problems, user, subject) -> tuple[QuerySet[Problem], bool]:
     - そうでなければ、問題ごとに本人の最後の答え（Subquery・answered_at の新しい順・同じなら id）の
       answered_at と is_correct を注釈し、Case で段を付けて並べる:
         段 0: 最後の答えが不正解
-        段 1: 難易度が weak_difficulties(user_answers(user)) に入る（全科目で判定・ダッシュボードの表示と同じ）
+        段 1: 難易度が weak_difficulties(user_answers(user)) に入る（全科目で判定・ダッシュボードの表示と同じ。
+              文字を数字に戻すのは LEVEL_BY_LABEL）
+      最後の答えの Subquery も user_answers(user)（本人・自組織だけ）から作る
         段 2: それ以外
       order_by('段', F('最後の答えの時刻').asc(nulls_first=True), 'id') → (並べた問題, False)
     - クエリ: 件数 1 本・難易度別の集計 1 本・本体 1 本（Subquery を含む 1 本）。候補の数で変わらない（AC9）"""
@@ -171,6 +175,7 @@ def order_weak_first(problems, user, subject) -> tuple[QuerySet[Problem], bool]:
 - `backend/core/tests/test_I446_cross_api_tenant_isolation.py`: `MA`・`AL` の定数と表の行、それだけが使う準備（`ProblemAttempt`・`MistakePattern`・`suggestion`・`weakness` の作成）を消す。`"POST api/quiz/"` の行（194 行・`_subj_body(...)`）に、本文に `mode: "weak"` を足した同じ形の行を 1 つ足す（他組織の科目を指定したときの扱いが通常と同じであることを確かめる）
 - `backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py`: 消した機能を確かめる 6 つのテスト（271・279・291・310・436・577 行）を消す。代わりの境界のテストは TC-16・TC-17
 - `backend/studylogs/tests/test_I452_quiz_review.py`: 消したモジュール・経路を使うテストと import を消す（復習の記録のテストは残す）
+- `backend/dashboard/tests/test_I473_overview.py`: TC-01 の最上位のキーの集合に `weak_difficulties`・`rushed_mistakes` を足す（スキーマの一致は作り直した `backend/openapi.yaml` で `core/tests/test_I493_openapi_contract.py` が確かめる）
 - `get_next_problem` の呼び出し元は `backend/problems/views.py:884` だけ（grep・2026-11-17。テストは API 経由）なので、テストの合わせ込みは無い
 
 ## 5. 実装手順（ステップ）
@@ -184,7 +189,7 @@ def order_weak_first(problems, user, subject) -> tuple[QuerySet[Problem], bool]:
 ### 自動
 - テストのレベル: 判定の計算（境界値）と出題の順・クエリ数・組織の境界は pytest（結合: DB を使う）。API の形は pytest（APIClient）。画面の出し分けと遷移は Jest（React Testing Library）。ダッシュボードから苦手を優先のクイズを始める流れは E2E（Playwright）1 本
 - 認可・組織の境界: 他組織の答え・問題が、難易度別の苦手・急いだ間違い・苦手を優先の並びに入らないこと（TC-16・TC-17）。未認証は 401（TC-07）
-- 再発防止: 定期処理の間隔が開発用に戻る・消したタスクを参照する（TC-32）、候補の問題ごとの問い合わせ（TC-15）、回数の足し込み（保存をやめることで構造的に無くなる。TC-31）
+- 再発防止: 定期処理の間隔が開発用に戻る・消したタスクを参照する（TC-32）、候補の問題ごとの問い合わせ（TC-15）、回数の足し込み（保存をやめることで構造的に無くなる。TC-31a）
 - 詳細は `docs/tests/open/I466_auto_test.md`
 ### 手動
 - Playwright MCP で、ダッシュボードのカードの表示・苦手を優先の開始・案内の 1 行・スマホ幅・コンソールを確かめる（実施者はすべて Claude）。`docs/tests/open/I466_manual_test.md`
@@ -227,7 +232,7 @@ Claude が決めた（技術的な選択と理由）:
 - 開始の要求のモードの検証は、モデルの選択肢から作られる DRF の `ChoiceField` に任せる（知らない値は 400）
 - 消すキャッシュの関数・タスクは、呼び出し元が消す機能だけのもの（grep で確認）。`update_user_proficiency_task`・`generate_learning_insights_task` はどこからも呼ばれていない
 - 定期処理のテストは「全部が `crontab`」「登録したタスクが import できる」の 2 点だけにし、時刻の値そのものはテストに写さない（plan-writing-rules.md「決定論テストの対象の選び方」。開発の値に戻す・消したタスクを残す、の 2 つが気づきにくく被害が大きい）
-- 材料・書き込みの不在（AC6）は、消したモジュールの再導入が意図的な変更でしか起きないので CI のテストにせず、実装のときの 1 回の確かめ（TC-31・失敗の注入つき）とコードレビューで見る
+- 材料・書き込みの不在（AC6）は、消したモジュールの再導入が意図的な変更でしか起きないので CI のテストにせず、実装のときの 1 回の確かめ（TC-31a〜c・失敗の注入つき）とコードレビューで見る
 - E2E は「ダッシュボードの『苦手を優先して始める』→ クイズの画面に『苦手を優先』の印」の 1 本だけ（遷移とモードの受け渡しは結合でしか見えない。順の正しさは pytest が受け持つ）
 
 一覧（`docs/reviews/backlog/`）:
@@ -284,4 +289,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V3 | 3 | 読んで可 | 消した経路の下（`analyze/`・`select_problems/` など）がすべて 404 になり、呼び出し元が画面・e2e・backend に残っていない（TC-30・調査結果 7） |
 
 ## 計画変更記録
-- （なし）
+- 2026-11-17 計画レビュー（20261117_1432）の Warning 3 件への対応: 難易度の対応は既存の `backend/problems/difficulty.py` を使うと明記（4.1）・4.7 に `test_I473_overview.py` のキーの集合の更新を足す・TC-31 を 3 本に分ける。方式・範囲・受け入れ条件は変えないので計画レビューのやり直しは不要
+
+## レビュー結果
+- [20261117_1432 判定: ✅ 完了](../../reviews/I466_plan_review_20261117_1432.md)

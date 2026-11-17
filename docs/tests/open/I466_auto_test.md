@@ -52,7 +52,9 @@
 | TC | 内容 | 期待値 |
 |---|---|---|
 | TC-30 | 経路の削除（`backend/studylogs/tests/test_I466_removed_routes.py`）: 認証した `user_a` で `GET /api/study/mistake-analysis/analyze/`・`GET /api/study/mistake-analysis/patterns/`・`POST /api/study/mistake-analysis/refresh_analysis/`・`GET /api/study/adaptive-learning/proficiency_analysis/`・`POST /api/study/adaptive-learning/select_problems/`・`GET /api/study/adaptive-learning/learning_path/` | すべて status 404 |
-| TC-31 | 材料・書き込みの不在（実装のときに 1 回流す・CI には入れない。plan 9 章）: `bash -c '! grep -rnE "ProblemAttempt|MistakePattern|LearningSuggestion|LearningWeakness|mistake_analysis|adaptive_selection|proficiency_cache" backend --include=*.py --exclude-dir=migrations --exclude-dir=tests --exclude=models.py --exclude=admin.py && ! grep -nE "^(WEAK_MIN_ANSWERED|WEAK_ACCURACY_BELOW) *=" backend/dashboard/selectors.py && grep -q "from problems.services.weakness import" backend/dashboard/selectors.py'` | exit 0 |
+| TC-31a | 材料・書き込みの不在（実装のときに 1 回流す・CI には入れない。plan 9 章）: `bash -c '! grep -rnE "ProblemAttempt|MistakePattern|LearningSuggestion|LearningWeakness|mistake_analysis|adaptive_selection|proficiency_cache" backend --include=*.py --exclude-dir=migrations --exclude-dir=tests --exclude=models.py --exclude=admin.py'` | exit 0 |
+| TC-31b | ダッシュボードが苦手の基準を自分で定義していない（同上・1 回）: `bash -c '! grep -nE "^(WEAK_MIN_ANSWERED|WEAK_ACCURACY_BELOW) *=" backend/dashboard/selectors.py'` | exit 0 |
+| TC-31c | ダッシュボードが基準を `weakness.py` から読む（同上・1 回）: `bash -c 'grep -q "from problems.services.weakness import" backend/dashboard/selectors.py'` | exit 0 |
 | TC-32 | 定期処理（`backend/core/tests/test_I466_celery_schedule.py`）: `core.celery.app.conf.beat_schedule` の全項目 | ① どの項目の `schedule` も `celery.schedules.crontab` のインスタンス（秒の数は無い）② どの項目の `task`（`<module>.<name>`）も `importlib.import_module(<module>)` に `<name>` があり、`.delay` を持つ（消したタスクを指していない）③ 項目の名前に `analyze-mistake-patterns`・`cleanup-expired-suggestions` が無い |
 | TC-33 | 回帰: `studylogs/tests/test_I431_studylogs_tenant_isolation.py`・`core/tests/test_I446_cross_api_tenant_isolation.py`（`POST api/quiz/` に `mode: "weak"` の行を追加）・`studylogs/tests/test_I452_quiz_review.py`・`studylogs/tests/test_I455_org_scoped_querysets.py`・`dashboard/tests/test_I473_overview.py`（TC-01 のキーの集合に 2 つを足す） | すべて pass |
 
@@ -85,12 +87,12 @@
 | TC-40 | `e2e_user_a` で `/dashboard` を開き、「苦手を優先して始める」→（ダイアログが出たら）「E2E Quiz Subject」 | URL が `/quiz?subject=<ID>&mode=weak` で、「苦手を優先」の印と問題文が出る |
 
 ## 決定論ゲート（自動実走）
-<!-- 本イシューの決定論のテストは pytest（TC-15・TC-32）と、実装のときに 1 回流す TC-31 だけ。TC-31 は消したモジュールの再導入が意図的な変更でしか起きないため CI に入れない（plan-writing-rules.md「決定論テストの対象の選び方」） -->
+<!-- 本イシューの決定論のテストは pytest（TC-15・TC-32）と、実装のときに 1 回流す TC-31a〜c だけ。TC-31a〜c は消したモジュールの再導入が意図的な変更でしか起きないため CI に入れない（plan-writing-rules.md「決定論テストの対象の選び方」） -->
 
 ## false-green の確かめ（実装のときに行い、結果を書く）
 - TC-15: `order_weak_first` を、候補の問題ごとに最後の答えを問い合わせる形（ループで `QuizAnswer...filter(problem=p).first()`）に一時的に変えると、2 つの本数が違って落ちることを確かめる
 - TC-16・TC-17: `user_answers` を `QuizAnswer.objects.filter(session__user=user)`（組織で絞らない）に一時的に変えると落ちることを確かめる
 - TC-05 ③: 頭打ち（`Least`）を外すと落ちることを確かめる
 - TC-32: `beat_schedule` に ① `'schedule': 30.0` の項目 ② `'task': 'studylogs.tasks.analyze_mistake_patterns_task'` の項目、をテストの中で一時的に足すと（`mock.patch.dict`）、それぞれ落ちることを確かめる
-- TC-31: ① `backend/dashboard/selectors.py` に `WEAK_MIN_ANSWERED = 5` の行 ② `backend/studylogs/views.py` に `from .models import ProblemAttempt` を一時的に足すと exit 1 になることを確かめ、元に戻す
+- TC-31a〜c: ① `backend/studylogs/views.py` に `from .models import ProblemAttempt` を足すと TC-31a ② `backend/dashboard/selectors.py` に `WEAK_MIN_ANSWERED = 5` の行を足すと TC-31b ③ `from problems.services.weakness import` の行を消すと TC-31c が、それぞれ exit 1 になることを確かめ、元に戻す
 - TC-27: `isDashboardOverview` の `weak_difficulties` の確かめを外すと ① ② が落ちることを確かめる
