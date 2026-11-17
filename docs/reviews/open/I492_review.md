@@ -20,3 +20,5 @@
 - 計画書 `docs/plans/open/plan_I492.md` の 7
 
 ## 自律判断の記録
+
+STAGE_DONE: plan NEXT: plan-review
