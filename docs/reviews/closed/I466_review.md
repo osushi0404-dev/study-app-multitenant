@@ -117,6 +117,7 @@
 - [test-gate] AC12 の後: 手動テスト No.1〜8 はやり直さない（AC12 は文言・分岐だけで確かめる内容に触れない）。AC12 は画面確認 2 行と単体テストで確かめた。人の確認は無し
 - [retro] 2 回目（AC12 の後）: 新しい台帳の残り F11〜F13 → #567、敵対的レビューの Low（TC-15 の本数の上限・既出の経路）→ #566。F3・F5・F7・F8・F10 は 1 回目の振り分けのまま（#566・#567）。一覧（backlog）に回す行は 0 件
 - [retro] 2 回目: 計画で「別イシュー」と決めた表の削除を起票しないまま close まで進んだ（マージ前の見直しで気づき #492 に同梱）→ 予防策を #547 にコメントで同梱（retro で計画書の「別イシュー」の行に番号が付いているかを決定論で確かめる案）
+- [close] 2 回目: develop への追従は不要（BLOCKED・承認待ち）。記録を closed へ移し、PR の説明に AC12・敵対的レビュー・同梱先を足した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -136,3 +137,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
