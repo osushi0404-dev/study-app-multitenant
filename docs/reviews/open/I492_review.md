@@ -33,8 +33,10 @@
 - [implement] I431 の TC-22 の材料を `StudyLog` から `QuizSession` に、I446 の失敗の注入を目標の経路から復習の記録の経路に、I455 の例文のモデル名を残るモデルに替えた — 消したモデル以外の確かめ（境界の関数・絞り込みを外すと落ちること・コメントの検査）を失わないため（計画変更記録）
 - [implement] /simplify の結果: 共有のテスト用データ `problems.tests.i466_data.answer` を使う・利用者の選び方を副問い合わせにする・空の `admin.py` を消す・定期処理のコメントを決まりだけにする、を直した。直さなかったもの: TC-07 の操作の比べを `describe()` の文字列にする案と、`LEGACY_TABLES` をモデルから導く案 — 手で書いた一覧のほうが、マイグレーションと独立した確かめになるため
 - [implement] 開発の DB には `0002` を流していない（M3 で `[ ] 0002` を確認）。コンテナも起こし直していない — 計画書 8 の R1・9 の Danger Ops
+- [review-gate] 1 回目: CI の E2E Tests (Playwright) が失敗（run 44207144182）。ほかの CI のジョブは通過。`CI_WAIT: FAIL` なので fix-loop へ回す — 手順どおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
