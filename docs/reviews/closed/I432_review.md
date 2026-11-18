@@ -104,3 +104,5 @@ STAGE_DONE: test-gate NEXT: retro
 ### 振り返りの追記（2 回目）
 - 最後の確認で Harness Tests が落ちた。振り返りで作った「軽い指摘の一覧」に、私が決まった形でない説明の行を足したため。機械のチェックが正しく止め、記録の 1 行を直して全部の確かめを通り直した（新しい仕組みは足さない。手順どおりに書けば起きないため）
 STAGE_DONE: retro NEXT: close
+- [close] 2 回目: base 追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移した。PR の説明は 1 回目に書いたものを使う（fix-loop の差分は記録だけ）
+STAGE_DONE: close NEXT: merge
