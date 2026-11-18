@@ -46,3 +46,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 2 回目（develop の取り込みの後）: CI_WAIT: OK（E2E を含む全ジョブ成功・I492 の変更込みで E2E が初めて通った）・FINAL_VERDICT: OK（Low 6 件・止める指摘なし。retro で振り分ける）・敵対的レビュー OK（docs/reviews/I492_adversarial_review_20261118_1528.md・新しい Critical/High なし・未検証 0）
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] M3 の確かめ直しで、開発の DB に `0002_remove_legacy_study_logs` が流れていた（`showmigrations` が `[X]`）。backend のログで 2026-11-18 15:27:54 に「Applying studylogs.0002_remove_legacy_study_logs... OK」。review-gate の `adversarial-review.sh` が、ブランチに backend/ の変更があるので確かめ用に backend のコンテナを起こし、起動の `migrate`（docker-compose.yml:70）が流した＝計画書 8 の R1 がハーネスの手順で起きた。被害: 消えた 4 つの表は M1 で 0 件・バックアップ（`.evidence/I492/legacy_backup.json`・空）あり。`SpacedRepetitionReview` の `study_session` の列は 0 件が入っていた（6 行は残る）。本番は無い。承認の前に Danger Ops が実行されたので、止めてユーザーに確かめる（止める条件 2）。STAGE_DONE は書かない
