@@ -37,3 +37,4 @@ STAGE_DONE: design-security-review NEXT: implement
 - [implement] lock の変更で `fsevents`（macOS 用の任意の依存）が消えたのはそのまま受け入れた — 1.65 の `playwright` が任意の依存から外したもので、計画書 §4 の想定の範囲（Linux の CI・コンテナに影響なし）
 - [implement] `/simplify` は 4 人のレビュー役を起こさず自分で 4 観点を当てた（直す点なし）— 差分が版の数字 6 か所とロックファイルだけで、起こす費用に見合わないため
 - [implement] `docker-compose.yml` は `sed -i` が置き換えに失敗（サンドボックスで 1 ファイルだけ書ける場所のため）したので Edit で直した — 結果は同じ
+STAGE_DONE: implement NEXT: review-gate
