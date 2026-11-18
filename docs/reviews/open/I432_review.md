@@ -94,3 +94,5 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 - [fix-loop] Harness Tests の D3 の失敗は、診断レビューを通った案 A（一覧の説明の行を `- F` で始まらない形に書き換える）で直した — 記録の 1 行で済み、正しく止めたテストを緩めないため。手元で test_i202_ledger_cleanup.sh を流して pass=163
 STAGE_DONE: fix-loop NEXT: review-gate
+- [review-gate] 2 回目（fix-loop の後）: CI 全ジョブ成功・差分のレビュー OK・敵対的レビュー 2 周目 OK（記録の場所だけの差分）
+STAGE_DONE: review-gate NEXT: test-gate
