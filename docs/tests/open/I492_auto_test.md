@@ -35,3 +35,10 @@
 - TC-05: 直す前の判定（`study_logs__started_at`）で落ちることを、ステップ 2 で記録する
 - TC-07: ステップ 4 で `0002` に復習の記録を消す操作を一時的に足して落ちることを確かめ、Edit で戻す
 - TC-08: 実装の前のコードで 404 以外になる（経路が残っている）ことを、ステップ 3 で TC を先に足して確かめる
+
+## 再発防止記録（fix-loop・2026-11-18）
+- なぜ失敗したか: CI の E2E が「Install Playwright dependencies」で失敗（run 44207144182）。I492 の変更ではなく、2026-11-17 から `ubuntu-latest` が Ubuntu 26.04 になり、develop の Playwright 1.59.1（26.04 に非対応）と CI の Node.js 18 では入れられなかった
+- 何を変えたか: I432（PR #575・develop b8265798）で直した develop を、このブランチにマージで取り込んだ（E2E の CI の Node.js 26・`@playwright/test` 1.65.1・手元の E2E のイメージ v1.65.1-jammy）。I492 の変更そのものは変えていない
+- セキュリティ上の考慮点: なし（取り込んだ変更は I432 でセキュリティ設計レビュー・敵対的レビュー済み）
+- 次回どう防ぐか: E2E を必須チェックにする #576・CI の action の版上げ #577 で、実行環境の変化に気づく・追いつく仕組みを足す
+- 確かめた結果: `bash scripts/claude/tests/test_i213_dependabot.sh` pass=17 fail=0・`bash scripts/claude/tests/test_i182_secret_gates.sh` pass=54 fail=0。E2E は push の後の CI で確かめる

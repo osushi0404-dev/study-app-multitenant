@@ -42,3 +42,4 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
+- [fix-loop] 案 A（develop をマージで取り込む）で直した — 診断レビュー PASS（docs/reviews/I492_fix_diagnosis_20261118_1520.md）。rebase は送り済みのコミットを書き換え強制の push が要るので採らない。1 回目の取り込みは、私がパイプをつないでサンドボックスの中で動かし `docker-compose.yml` を置き換えられず中止になった。途中で書き出された I432 の記録の写し 13 個は develop と同じ中身と確かめて消し、つながない形で取り込み直した
