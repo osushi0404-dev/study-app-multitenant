@@ -30,6 +30,7 @@
 - [implement] FG-03 の注入を `..` の名前から入れ子・絶対パスに変えた — 見張りは `..` を正規表現とは別にも止めるので、`..` では正規表現を緩めた写しでも止まり、注入が働かない（自動テスト文書の FG-03 も同じに直した。方式は変えない）
 - [implement] `/simplify`（4 観点）: 簡素化の指摘（不正な値のループ 5 つの重複・YES/NO の書き方の重複・同じ並びの 2 重ループ・1 回だけの変数）を反映。TC-02〜TC-05 の不正な値に `I1000x` も入れて TC-01 とそろえた。再利用・効率は指摘なし。直す深さの指摘のうち `code-review.sh` の `^I[0-9]+$`（`I12` も通す）・走査を許可の側に替える案・bash の共通関数は見送り — どれも I1000 は通り、計画の範囲外（3 桁固定ではない）。走査の形は計画 R3 で受け入れ済み
 - [implement] テストのファイルは 100644（ほかのテストと同じ。`bash` で呼ぶ）
+- [review-gate] コードレビュー OK（止める指摘なし・決定論ゲート 6 本 exit 0）・敵対的レビュー 1 周で OK（V1〜V4 確認済み）。台帳の F1（Medium・テストが「実在しない番号」に `I1000` を使い、#1000 が実在すると TC-03 が本物の敵対的レビューを起動しうる）は止める指摘ではないので fix-loop に回さず、retro で #1000 より前に直す後続にする — OK の周の後に差分を足すと gate-check が通さず、周の上限も使う
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -38,3 +39,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 
 STAGE_DONE: implement NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
