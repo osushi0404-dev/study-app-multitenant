@@ -7,15 +7,6 @@ User = get_user_model()
 
 
 # 組織の境界つきの取り出し方（objects.for_user(user)）。境界の決まりはここだけに書く
-class StudyLogQuerySet(OrgScopedQuerySet):
-    subject_paths = ('subject',)
-    allow_null = True
-
-
-class ProblemAttemptQuerySet(OrgScopedQuerySet):
-    subject_paths = ('problem__subject',)
-
-
 class SpacedRepetitionCardQuerySet(OrgScopedQuerySet):
     subject_paths = ('problem__subject',)
 
@@ -37,114 +28,6 @@ class LearningSuggestionQuerySet(OrgScopedQuerySet):
 
 class LearningWeaknessQuerySet(OrgScopedQuerySet):
     subject_paths = ('subject',)
-
-
-class StudyLog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='study_logs')
-    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
-    started_at = models.DateTimeField(auto_now_add=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
-    duration = models.IntegerField(default=0, help_text="Duration in seconds")
-    problems_attempted = models.IntegerField(default=0)
-    problems_correct = models.IntegerField(default=0)
-    points_earned = models.IntegerField(default=0)
-    notes = models.TextField(blank=True)
-    is_active = models.BooleanField(default=True)
-
-    objects = StudyLogQuerySet.as_manager()
-
-    class Meta:
-        ordering = ['-started_at']
-
-    def __str__(self):
-        return f"{self.user.username} - {self.started_at.strftime('%Y-%m-%d %H:%M')}"
-
-    def calculate_duration(self):
-        if self.ended_at and self.started_at:
-            delta = self.ended_at - self.started_at
-            self.duration = int(delta.total_seconds())
-            self.save()
-
-    @property
-    def accuracy(self):
-        if self.problems_attempted > 0:
-            return round((self.problems_correct / self.problems_attempted) * 100, 2)
-        return 0
-
-
-class DailyStudySummary(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_summaries')
-    date = models.DateField()
-    total_study_time = models.IntegerField(default=0, help_text="Total study time in seconds")
-    total_problems_attempted = models.IntegerField(default=0)
-    total_problems_correct = models.IntegerField(default=0)
-    total_points_earned = models.IntegerField(default=0)
-    subjects_studied = models.ManyToManyField(Subject)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ['user', 'date']
-        ordering = ['-date']
-
-    def __str__(self):
-        return f"{self.user.username} - {self.date}"
-
-    @property
-    def accuracy(self):
-        if self.total_problems_attempted > 0:
-            return round((self.total_problems_correct / self.total_problems_attempted) * 100, 2)
-        return 0
-
-
-class ProblemAttempt(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='problem_attempts')
-    problem = models.ForeignKey(Problem, on_delete=models.CASCADE, related_name='attempts')
-    study_log = models.ForeignKey(StudyLog, on_delete=models.CASCADE, null=True, blank=True, related_name='attempts')
-    attempted_at = models.DateTimeField(auto_now_add=True)
-    is_correct = models.BooleanField(default=False)
-    time_taken = models.IntegerField(default=0, help_text="Time taken in seconds")
-    attempt_number = models.IntegerField(default=1)
-
-    objects = ProblemAttemptQuerySet.as_manager()
-
-    class Meta:
-        ordering = ['-attempted_at']
-
-    def __str__(self):
-        return f"{self.user.username} - {self.problem.question[:30]}... - Attempt {self.attempt_number}"
-
-
-class StudyGoal(models.Model):
-    GOAL_TYPE_CHOICES = [
-        ('daily_time', '毎日の学習時間'),
-        ('daily_problems', '毎日の問題数'),
-        ('weekly_time', '週間学習時間'),
-        ('weekly_problems', '週間問題数'),
-        ('accuracy', '正答率'),
-        ('streak', '連続学習日数'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='study_goals')
-    goal_type = models.CharField(max_length=20, choices=GOAL_TYPE_CHOICES)
-    target_value = models.IntegerField()
-    current_value = models.IntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ['user', 'goal_type']
-        ordering = ['goal_type']
-
-    def __str__(self):
-        return f"{self.user.username} - {self.get_goal_type_display()}: {self.target_value}"
-
-    @property
-    def progress_percentage(self):
-        if self.target_value > 0:
-            return min(round((self.current_value / self.target_value) * 100, 2), 100)
-        return 0
 
 
 class SpacedRepetitionCard(models.Model):
@@ -244,7 +127,6 @@ class SpacedRepetitionReview(models.Model):
 
     # メタデータ
     reviewed_at = models.DateTimeField(auto_now_add=True)
-    study_session = models.ForeignKey(StudyLog, on_delete=models.SET_NULL, null=True, blank=True)
 
     objects = SpacedRepetitionReviewQuerySet.as_manager()
 
