@@ -96,3 +96,5 @@ STAGE_DONE: close NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 2 回目（fix-loop の後）: CI 全ジョブ成功・差分のレビュー OK・敵対的レビュー 2 周目 OK（記録の場所だけの差分）
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 2 回目: gate-check OK。fix-loop の差分は記録の場所だけで、手動 No.1〜No.5 の対象（設定・依存・イメージ・手順書・#377/#376）は変わっていないので結果を引き継ぐ。最新のコミット（15e47e64）の CI は E2E・Harness Tests を含む 8 ジョブすべて合格
+STAGE_DONE: test-gate NEXT: retro
