@@ -46,3 +46,7 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 - 同日（implement・Green）: 8 か所を直した後、`test_i569_issue_number_digits.sh` が全項目合格（`/simplify` の後に不正な値の並びを TC-02〜TC-05 でも `I1000x` を含む 4 値にそろえ、80 項目）。FG-01〜FG-04 も合格（＝注入した壊れ方をそれぞれ捕まえる）
 - 同日: ゲートの 2〜5 行目は手元で exit 0。6 行目（`test_i193_official_flow.sh`）は F9 の 3 項目だけ手元のサンドボックスで不合格（uv のキャッシュ `~/.cache/uv` が読み取り専用で `run-all.sh` を起動できない・変更と無関係）。決定論ゲートの実走はサンドボックスの外で動くので、review-gate の実走で確かめる
 - 実装後の合否は review-gate の決定論ゲートの実走で記録する
+
+## 実行記録
+- 2026-11-18 19:19（review-gate・`scripts/claude/code-review.sh I569` の決定論ゲート実走・REVIEWED_COMMIT e29485a1）: 6 行すべて exit=0（`test_i569_issue_number_digits.sh`・`test_i187_mcp_filename_guard.sh`・`test_sessionstart_context.sh`・`test_check_frontend_evidence.sh`・`test_check_manual_test_executor.sh`・`test_i193_official_flow.sh`。最後の 1 本はサンドボックスの外で流れ、手元で落ちた F9 も合格）
+- 同日・CI（PR #582）: Harness Tests を含め成功（`CI_WAIT: OK`）。test-gate に回された重いゲートは無い
