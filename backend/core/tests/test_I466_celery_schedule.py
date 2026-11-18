@@ -12,7 +12,7 @@ from celery.schedules import crontab
 
 from core.celery import app
 
-REMOVED = {"analyze-mistake-patterns", "cleanup-expired-suggestions"}
+REMOVED = {"analyze-mistake-patterns", "cleanup-expired-suggestions", "send-study-reminders"}  # I492
 
 
 def _non_crontab(schedule):

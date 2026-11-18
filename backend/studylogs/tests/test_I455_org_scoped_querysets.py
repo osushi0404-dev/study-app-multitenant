@@ -25,8 +25,8 @@ from accounts.models import Organization, OrganizationCategory
 from problems.models import Problem, QuizAnswer, QuizSession, Subject
 from problems.querysets import OrgScopedQuerySet
 from studylogs.models import (
-    LearningSuggestion, LearningWeakness, MistakePattern, ProblemAttempt,
-    SpacedRepetitionCard, SpacedRepetitionReview, StudyLog,
+    LearningAnalytics, LearningSuggestion, LearningWeakness, MistakePattern,
+    SpacedRepetitionCard, SpacedRepetitionReview,
 )
 
 User = get_user_model()
@@ -100,7 +100,6 @@ def _quiz_answer(user, problem):
 # モデルの鍵: (モデル, 記録を作る関数〔利用者・科目〕, 科目が空の記録を残すか)
 # 問題を指すモデルは、その科目の問題を作って指す（問題は必須なので科目が空の記録は無い）
 SPECS = {
-    "StudyLog": (StudyLog, lambda u, s: StudyLog.objects.create(user=u, subject=s), True),
     # 進行中の回は利用者ごとに 1 つまでなので、終了済みの回で作る
     "QuizSession": (
         QuizSession,
@@ -122,11 +121,6 @@ SPECS = {
     "LearningWeakness": (
         LearningWeakness,
         lambda u, s: LearningWeakness.objects.create(user=u, subject=s, concept_name="c"),
-        False,
-    ),
-    "ProblemAttempt": (
-        ProblemAttempt,
-        lambda u, s: ProblemAttempt.objects.create(user=u, problem=_problem(u, s)),
         False,
     ),
     "SpacedRepetitionCard": (
@@ -201,7 +195,7 @@ def test_learning_suggestion_both_paths(setup):
 def test_base_without_subject_paths_raises(setup):
     """TC-04: 境界の決まりを書かない QuerySet は、絞らずに返さず例外にする"""
     with pytest.raises(ImproperlyConfigured):
-        OrgScopedQuerySet(model=StudyLog).for_user(setup["user_a"])
+        OrgScopedQuerySet(model=LearningAnalytics).for_user(setup["user_a"])
 
 
 def _scoped_model_names():
@@ -217,7 +211,7 @@ NOT_READS = {"for_user", "create", "get_or_create", "update_or_create", "bulk_cr
 
 
 def _model_name(node):
-    """`StudyLog`・`models.StudyLog` のどちらの書き方でもモデル名を返す"""
+    """`SpacedRepetitionReview`・`models.SpacedRepetitionReview` のどちらの書き方でもモデル名を返す"""
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):
@@ -274,20 +268,20 @@ def test_reason_check_catches_unmarked_reads():
     """TC-07: 検出器そのものが、普通の書き方の付け忘れを見落とさない"""
     source = "\n".join([
         f"# {REASON_MARK}: 件数だけ",                          # 1
-        "a = StudyLog.objects.filter(user=u).count()",          # 2 理由あり
-        "b = StudyLog.objects.filter(user=u).count()",          # 3 直前の理由を共有しない
-        "c = models.ProblemAttempt.objects.filter(user=u)",     # 4 models.X の形
+        "a = SpacedRepetitionReview.objects.filter(user=u).count()",  # 2 理由あり
+        "b = SpacedRepetitionReview.objects.filter(user=u).count()",  # 3 直前の理由を共有しない
+        "c = models.LearningSuggestion.objects.filter(user=u)",  # 4 models.X の形
         "d = QuizSession.objects.filter(",                      # 5 複数行の呼び出し
         "    user=u,",
         ")",
         "e = LearningWeakness.objects.filter(**kw)",            # 8
         "f = SpacedRepetitionCard.objects.all()",               # 9
-        "g = StudyLog.objects.for_user(u)",                     # 10 絞っている
-        "h = StudyLog.objects.create(user=u)",                  # 11 書き込み
+        "g = SpacedRepetitionReview.objects.for_user(u)",  # 10 絞っている
+        "h = SpacedRepetitionReview.objects.create(user=u)",  # 11 書き込み
         f"i = MistakePattern.objects.get(id=1)  # {REASON_MARK}: 印付け",  # 12 同じ行の理由
-        "j = StudyLog.objects.values()",                        # 13 前の行の行末の理由を共有しない
+        "j = SpacedRepetitionReview.objects.values()",  # 13 前の行の行末の理由を共有しない
         f"k = '{REASON_MARK}'",                                 # 14 文字列の中の印
-        "m = StudyLog.objects.values()",                        # 15 文字列の印を理由に数えない
+        "m = SpacedRepetitionReview.objects.values()",  # 15 文字列の印を理由に数えない
     ])
     assert _missing_reasons(source) == [3, 4, 5, 8, 9, 13, 15]
 

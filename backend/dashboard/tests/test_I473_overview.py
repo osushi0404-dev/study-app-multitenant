@@ -25,7 +25,6 @@ from core.cache_service import cache_service
 from core.subject_service import subject_service, user_subjects_cache_key
 from dashboard.selectors import STREAK_WINDOW_DAYS, _current_streak, build_overview
 from problems.models import Choice, Problem, QuizAnswer, QuizSession, Subject, UserSubjectAccess
-from studylogs.models import StudyLog
 
 User = get_user_model()
 
@@ -305,7 +304,6 @@ def test_recommendations(setup):
     user = setup["user_a"]
     _answers(user, setup["p_english"], 5, 1)
     _answers(user, setup["p_math"], 5, 5, at=timezone.now() - timedelta(days=10))
-    StudyLog.objects.create(user=user, subject=None)  # NOT IN に NULL が混ざっても消えない
 
     recommendations = build_overview(user)["recommendations"]
 

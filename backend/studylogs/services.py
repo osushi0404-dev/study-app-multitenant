@@ -15,7 +15,6 @@ from .models import (
     SpacedRepetitionCard,
     SpacedRepetitionReview,
     LearningAnalytics,
-    StudyLog,
 )
 from .spaced_repetition import SpacedRepetitionCalculator
 from problems.difficulty import LABEL_BY_LEVEL
@@ -152,7 +151,6 @@ class SpacedRepetitionService:
         quality_score: int,
         response_time_seconds: int,
         hint_used: bool = False,
-        study_session: Optional[StudyLog] = None,
         *,
         now=None,
     ) -> SpacedRepetitionReview:
@@ -202,7 +200,6 @@ class SpacedRepetitionService:
             new_interval=new_interval,
             new_repetition_count=card.repetition_count,
             next_review_date=next_review_date,
-            study_session=study_session
         )
 
         # 関連キャッシュを無効化（コミットの後・ロックを持ったまま Redis を待たない。
