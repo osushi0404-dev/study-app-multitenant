@@ -81,3 +81,5 @@ STAGE_DONE: test-gate NEXT: retro
 - Why 3: そのスクリプトは、ブランチにまだ流していない危険なマイグレーションがあるかを見ずに起こす。計画の R1 の回避策は「このイシューの中で起こし直さない」という手順の約束で、ハーネスの手順がそれを守る仕組みが無かった
 - 抽象化: 「危険操作の承認を、手順の約束でなく仕組みで守っていない場所が、ハーネスの自動の手順の中にある」は他のイシューでも成り立つ → 予防処置（#579）
 STAGE_DONE: retro NEXT: close
+- [close] base 追従は不要（BLOCKED）・gate-check OK。記録を closed へ移し、PR の説明に Danger Ops の承認のお願いと、承認の前に開発の DB へ 0002 が流れた経緯（#579）を書いた。変更点の「開発の DB にはまだ流していない」は、test-gate の時点で流れていたと分かった（test-gate の行のとおり）
+STAGE_DONE: close NEXT: merge
