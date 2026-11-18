@@ -354,6 +354,4 @@ CACHE_TIMEOUTS = {
     'analytics_daily': 1800,     # 30分
     'analytics_weekly': 3600,    # 1時間
     'spaced_repetition': 300,    # 5分
-    'mistake_patterns': 1800,    # 30分
-    'learning_suggestions': 900,  # 15分
 }

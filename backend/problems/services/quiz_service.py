@@ -1,6 +1,6 @@
 # backend/problems/services/quiz_service.py
 import uuid
-from typing import Optional, Tuple
+from typing import NamedTuple, Optional, Tuple
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -9,12 +9,21 @@ from django.utils import timezone
 
 from problems.models import Problem, QuizSession, Subject
 from problems.services import tenant_scope
+from problems.services.weakness import order_weak_first
 
 
 def spaced_repetition_service(user):
     """間隔反復のサービス（studylogs.models が problems.models を読むので、循環しないよう呼ぶときに読む）"""
     from studylogs.services import SpacedRepetitionService
     return SpacedRepetitionService(user)
+
+
+class NextProblem(NamedTuple):
+    """次の問題と、画面に伝える出し方"""
+    problem: Optional[Problem]
+    is_review_mode: bool             # 同じ回で全部答え、既出の問題から出している
+    total_problems_in_subject: int
+    is_weak_fallback: bool           # 苦手を優先の回だが、解答が少なくいつもの順で出している（I466）
 
 
 class IdempotencyKeyReusedError(Exception):
@@ -91,22 +100,20 @@ class QuizService:
             raise ActiveSessionConflictError() from exc
 
     @staticmethod
-    def get_next_problem(
-        session: QuizSession
-    ) -> Tuple[Optional[Problem], bool, int]:
+    def get_next_problem(session: QuizSession) -> 'NextProblem':
         """
         次の問題を取得（N+1問題を回避した最適化実装）
 
-        Args:
-            session: クイズセッション
+        同じ回では未回答の問題を先に出し、全部答えたら既出の問題から出す（is_review_mode）。
+        選ぶ順は、苦手を優先の回（I466）なら weakness.order_weak_first、それ以外は乱数。
 
         Returns:
-            (問題, 復習モードフラグ, 科目の総問題数)
-            問題がない場合は (None, False, 0)
-            今日の復習の回は、出す問題が無くなったら (None, False, 回の total_problems)
+            NextProblem。問題がない場合は problem が None で total_problems_in_subject が 0
+            今日の復習の回は、出す問題が無くなったら problem が None で total_problems_in_subject が回の total_problems
         """
         if session.mode == QuizSession.MODE_REVIEW:
-            return QuizService._next_review_problem(session), False, session.total_problems
+            return NextProblem(
+                QuizService._next_review_problem(session), False, session.total_problems, False)
 
         # 回答済み問題のサブクエリ（リストに変換せずクエリのまま使用）
         answered_problem_ids_subquery = session.answers.values_list(
@@ -121,17 +128,18 @@ class QuizService:
         total_problems_in_subject = total_problems_queryset.count()
 
         if total_problems_in_subject == 0:
-            return None, False, 0
+            return NextProblem(None, False, 0, False)
+
+        if session.mode == QuizSession.MODE_WEAK:
+            ordered, is_weak_fallback = order_weak_first(
+                total_problems_queryset, session.user, session.subject)
+        else:
+            ordered, is_weak_fallback = total_problems_queryset.order_by('?'), False
 
         # 未回答の問題を取得（サブクエリで効率化）
-        next_problem = (
-            total_problems_queryset
-            .exclude(id__in=answered_problem_ids_subquery)
-            .order_by('?')
-            .first()
-        )
+        next_problem = ordered.exclude(id__in=answered_problem_ids_subquery).first()
 
-        # 復習モード：既出問題からランダム選択
+        # 既出問題から出す
         if not next_problem:
             # 最近解いた5問を除外して重複を減らす
             last_n_problems = list(
@@ -141,27 +149,25 @@ class QuizService:
             )
 
             next_problem = (
-                total_problems_queryset
+                ordered
                 .filter(id__in=answered_problem_ids_subquery)
                 .exclude(id__in=last_n_problems)  # 最近解いた問題を除外
-                .order_by('?')
                 .first()
             )
 
-            # それでも問題がない場合（5問未満の科目）
+            # それでも問題がない場合（5問以下の科目）: 直前の 1 問だけは除く（同じ問題を続けて出さない・I466 F1）。
+            # 科目の問題が 1 問だけのときは除外なし
             if not next_problem:
+                answered = ordered.filter(id__in=answered_problem_ids_subquery)
                 next_problem = (
-                    total_problems_queryset
-                    .filter(id__in=answered_problem_ids_subquery)
-                    .order_by('?')
-                    .first()
+                    answered.exclude(id__in=last_n_problems[:1]).first() or answered.first()
                 )
 
             is_review_mode = True
         else:
             is_review_mode = False
 
-        return next_problem, is_review_mode, total_problems_in_subject
+        return NextProblem(next_problem, is_review_mode, total_problems_in_subject, is_weak_fallback)
 
     @staticmethod
     def _next_review_problem(session: QuizSession) -> Optional[Problem]:

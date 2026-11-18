@@ -38,8 +38,7 @@ from problems.models import (
     UserSubjectAccess,
 )
 from studylogs.models import (
-    DailyStudySummary, LearningSuggestion, LearningWeakness, MistakePattern, ProblemAttempt,
-    SpacedRepetitionCard, SpacedRepetitionReview, StudyGoal, StudyLog,
+    DailyStudySummary, SpacedRepetitionCard, SpacedRepetitionReview, StudyGoal, StudyLog,
 )
 
 User = get_user_model()
@@ -55,8 +54,7 @@ SAME_ORG_MARK = "別人I446"
 
 FOREIGN_PK = {
     "subject": 4460001, "problem": 4460002, "session": 4460003, "log": 4460004,
-    "goal": 4460005, "card": 4460006, "review": 4460007, "suggestion": 4460008,
-    "weakness": 4460009,
+    "goal": 4460005, "card": 4460006, "review": 4460007,
 }
 SAME_ORG_PK = {key: pk + 100 for key, pk in FOREIGN_PK.items()
                if key not in ("subject", "problem")}  # 同じ組織の科目・問題は作らない
@@ -65,7 +63,7 @@ SHARED_PK = {"subject": 4460201, "problem": 4460202}
 MODELS = {
     "subject": Subject, "problem": Problem, "session": QuizSession, "log": StudyLog,
     "goal": StudyGoal, "card": SpacedRepetitionCard, "review": SpacedRepetitionReview,
-    "suggestion": LearningSuggestion, "weakness": LearningWeakness, "asset": MediaAsset,
+    "asset": MediaAsset,
     "User": User, "QuizAnswer": QuizAnswer, "UserSubjectAccess": UserSubjectAccess,
 }
 
@@ -130,8 +128,6 @@ PROBLEM_FIELDS = (("question", "I446"), ("problem_type", "single"), ("difficulty
 REGISTER_FIELDS = (("email", "reg_i446@example.com"), ("user_id", "reg_i446"),
                    ("password", "Passw0rd!i446"), ("password_confirm", "Passw0rd!i446"))
 SR = "api/study/spaced-repetition/"
-MA = "api/study/mistake-analysis/"
-AL = "api/study/adaptive-learning/"
 
 ROUTE_TABLE = {
     # ---- 運用者専用 ----
@@ -191,7 +187,9 @@ ROUTE_TABLE = {
     ],
     # ---- クイズ ----
     "GET api/quiz/": LIST,
-    "POST api/quiz/": [_subj_body(writes=("count", "session"))],
+    "POST api/quiz/": [_subj_body(writes=("count", "session")),
+                       # I466: 苦手を優先のモードでも他組織の科目は同じに断る
+                       _subj_body(body_extra=(("mode", "weak"),), writes=("count", "session"))],
     "GET api/quiz/<pk>/": [_detail("session", same_org=True), OwnCheck("own.session_mixed")],
     "POST api/quiz/<pk>/end/": [_detail("session", same_org=True, method="POST"),
                                 OwnCheck("own.session_mixed")],
@@ -247,26 +245,7 @@ ROUTE_TABLE = {
     "GET api/study/sr-reviews/": [ListCheck(),
                                   IdCheck("user", "query", "card_id", "card", 200, same_org=True)],
     "GET api/study/sr-reviews/<pk>/": [_detail("review", same_org=True)],
-    # ---- 間違い分析 ----
-    f"GET {MA}analyze/": LIST,
-    f"POST {MA}refresh_analysis/": LIST,
-    f"GET {MA}improvement_trends/": LIST,
-    f"GET {MA}suggestions/": LIST,
-    **{f"GET {MA}{a}/": [ListCheck(), IdCheck("user", "query", "subject_id", "subject", 200)]
-       for a in ("patterns", "weaknesses")},
-    f"POST {MA}mark_suggestion_read/": [IdCheck(
-        "user", "body", "suggestion_id", "suggestion", 404, same_org=True, writes=("same", ""))],
-    f"POST {MA}provide_feedback/": [IdCheck(
-        "user", "body", "suggestion_id", "suggestion", 404, same_org=True,
-        body_extra=(("effectiveness_rating", 3),), writes=("same", ""))],
-    f"POST {MA}resolve_weakness/": [IdCheck(
-        "user", "body", "weakness_id", "weakness", 404, same_org=True, writes=("same", ""))],
-    # ---- 適応的学習 ----
-    **{f"GET {AL}{a}/": [IdCheck("user", "query", "subject_id", "subject", 404),
-                         ListCheck()]
-       for a in ("proficiency_analysis", "personalized_recommendation", "learning_path",
-                 "difficulty_distribution")},
-    f"POST {AL}select_problems/": [_subj_body("subject_id", 404), ListCheck()],
+    # 間違い分析・適応的学習（mistake-analysis・adaptive-learning）の経路は I466 で消した
     # ---- ダッシュボード ----
     "GET api/dashboard/overview/": [ListCheck(),
                                     IdCheck("user", "query", "subject_id", "subject", 400)],
@@ -361,7 +340,7 @@ def _problem(subject, user, text, pk=None):
 
 
 def _records(user, subject, problem, pks, mark):
-    """クイズの回・学習記録・目標・カード・復習の記録・提案・弱点を 1 組作る"""
+    """クイズの回・学習記録・目標・カード・復習の記録を 1 組作る"""
     pks = pks or {}
     card = SpacedRepetitionCard.objects.create(
         pk=pks.get("card"), user=user, problem=problem,
@@ -379,12 +358,6 @@ def _records(user, subject, problem, pks, mark):
             response_time_seconds=10, is_correct=True, previous_ease_factor=2.5,
             previous_interval=1, previous_repetition_count=0, new_ease_factor=2.5,
             new_interval=1, new_repetition_count=1, next_review_date=timezone.now()),
-        "suggestion": LearningSuggestion.objects.create(
-            pk=pks.get("suggestion"), user=user, subject=subject,
-            suggestion_type="concept_review", title=f"{mark}提案", description=mark),
-        "weakness": LearningWeakness.objects.create(
-            pk=pks.get("weakness"), user=user, subject=subject, concept_name=f"{mark}概念",
-            severity="high"),
     }
 
 
@@ -433,13 +406,9 @@ def world(db):
     mixed = QuizSession.objects.create(user=user_a, subject=None, is_active=True)
     for problem in (problem_a, problem_b):
         QuizAnswer.objects.create(session=mixed, problem=problem)
-        ProblemAttempt.objects.create(user=user_a, problem=problem, is_correct=False)
     StudyLog.objects.create(user=user_a, subject=subject_b, duration=60)
     SpacedRepetitionCard.objects.create(
         user=user_a, problem=problem_b, next_review_date=timezone.now() - timedelta(days=1))
-    MistakePattern.objects.create(
-        user=user_a, pattern_type="subject_difficulty", subject=subject_b,
-        description=f"{FOREIGN_MARK}パターン", confidence_score=0.1)
     for subject in (subject_a, subject_b):
         UserSubjectAccess.objects.create(user=user_a, subject=subject)
     # 解いた問題が 0 件の日も入れる（I459 で dashboard/analytics の 0 で割る不具合を直した）

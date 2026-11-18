@@ -30,6 +30,7 @@ import {
 import { toast } from 'react-hot-toast';
 import apiClient from '../services/api';
 import {
+  QuizMode,
   QuizSession,
   Problem,
   QuizResult,
@@ -38,6 +39,7 @@ import { useQuizDisplayStats } from '../hooks/useQuizDisplayStats';
 import ImageModal from '../components/ImageModal';
 import ProblemImageList from '../components/ProblemImageList';
 import { pickImageUrls } from '../utils/problemImages';
+import { difficultyLabel } from '../utils/difficulty';
 
 const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 
@@ -46,6 +48,10 @@ const generateIdempotencyKey = (): string | undefined =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : undefined;
+
+/** ?mode= の値を回の種類に読み替える（review・weak 以外はいつものクイズ） */
+const toQuizMode = (value: string | null): QuizMode =>
+  value === 'review' || value === 'weak' ? value : 'normal';
 
 const QuizSessionPage: React.FC = () => {
   const [session, setSession] = useState<QuizSession | null>(null);
@@ -73,9 +79,11 @@ const QuizSessionPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const subjectId = searchParams.get('subject');
   // ?mode=review で開始すると今日の復習（復習する日が来た問題だけを出し、無くなったら終わる）
-  const reviewRequested = searchParams.get('mode') === 'review';
+  // ?mode=weak で開始すると苦手を優先（I466。選ぶ順だけが違い、進み方はいつものクイズと同じ）
+  const requestedMode = toQuizMode(searchParams.get('mode'));
   // 表示の分け方は回の種類で決める（/quiz/<id> で開き直しても同じ表示にする）
   const isReviewSession = session?.mode === 'review';
+  const isWeakSession = session?.mode === 'weak';
 
   // カスタムフック使用：表示用統計値を計算（React Hooksルールに従いトップレベルで呼び出す）
   const stats = useQuizDisplayStats(session, showResult, result, totalProblemsInSubject);
@@ -137,7 +145,8 @@ const QuizSessionPage: React.FC = () => {
 
   const createNewSession = useCallback(async (
     subject: string | null | undefined,
-    idempotencyKey: string | undefined
+    idempotencyKey: string | undefined,
+    mode: QuizMode
   ) => {
     try {
       setLoading(true);
@@ -149,8 +158,8 @@ const QuizSessionPage: React.FC = () => {
       if (subject) {
         sessionData.subject = subject;
       }
-      if (reviewRequested) {
-        sessionData.mode = 'review';
+      if (mode !== 'normal') {
+        sessionData.mode = mode;
       }
       // problem_count パラメータは送信しない（バックエンドが全問題数を設定）
 
@@ -170,7 +179,7 @@ const QuizSessionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [navigate, loadNextProblem, reviewRequested]);
+  }, [navigate, loadNextProblem]);
 
   const loadSession = useCallback(async (sessionId: string) => {
     try {
@@ -249,14 +258,14 @@ const QuizSessionPage: React.FC = () => {
       loadSession(id);
       return;
     }
-    const startKey = `${subjectId ?? ''}|${reviewRequested ? 'review' : 'normal'}`;
+    const startKey = `${subjectId ?? ''}|${requestedMode}`;
     if (startedKeyRef.current === startKey) {
       return;
     }
     startedKeyRef.current = startKey;
     // 新しいセッションを作成
-    createNewSession(subjectId, generateIdempotencyKey());
-  }, [id, subjectId, reviewRequested, loadSession, createNewSession]);
+    createNewSession(subjectId, generateIdempotencyKey(), requestedMode);
+  }, [id, subjectId, requestedMode, loadSession, createNewSession]);
 
   // 単一選択問題の即時回答機能（UX改善）
   useEffect(() => {
@@ -296,15 +305,6 @@ const QuizSessionPage: React.FC = () => {
       case 'medium': return 'warning';
       case 'hard': return 'error';
       default: return 'default';
-    }
-  };
-
-  const getDifficultyLabel = (difficulty: string): string => {
-    switch (difficulty) {
-      case 'easy': return '初級';
-      case 'medium': return '中級';
-      case 'hard': return '上級';
-      default: return difficulty;
     }
   };
 
@@ -397,8 +397,14 @@ const QuizSessionPage: React.FC = () => {
                 <Button
                   variant="contained"
                   startIcon={<Refresh />}
-                  // 完了画面の URL（/quiz/<id>）には ?subject が無いため、終えたセッションの科目で再挑戦する
-                  onClick={() => createNewSession(subjectId ?? session?.subject, generateIdempotencyKey())}
+                  // 完了画面の URL（/quiz/<id>）には ?subject・?mode が無いため、終えたセッションの科目で再挑戦する。
+                  // 始め方は回の種類だけで決める（苦手を優先は苦手を優先、それ以外はいつものクイズ。
+                  // 今日の復習を完了画面から始め直さない・URL の ?mode に頼らない・I466 F2・AC12）
+                  onClick={() => createNewSession(
+                    subjectId ?? session?.subject,
+                    generateIdempotencyKey(),
+                    session.mode === 'weak' ? 'weak' : 'normal'
+                  )}
                 >
                   もう一度挑戦
                 </Button>
@@ -434,6 +440,15 @@ const QuizSessionPage: React.FC = () => {
       <Box mb={3}>
         {/* Progress Bar */}
         <Box mb={2}>
+          {/* 苦手を優先の回で、解答が少なく判定できないとき（I466） */}
+          {isWeakSession && currentProblem.is_weak_fallback && (
+            <Alert severity="info" sx={{ mb: 1 }}>
+              {session.subject
+                ? 'この科目はまだ解答が少ないため、いつもの順で出題しています'
+                : 'まだ解答が少ないため、いつもの順で出題しています'}
+            </Alert>
+          )}
+
           {/* 復習モード通知 */}
           {isReviewMode && (
             <Alert severity="info" sx={{ mb: 1 }} icon={<Refresh />}>
@@ -445,6 +460,9 @@ const QuizSessionPage: React.FC = () => {
             <Box display="flex" alignItems="center" gap={1}>
               {isReviewSession && (
                 <Chip label="今日の復習" size="small" color="secondary" />
+              )}
+              {isWeakSession && (
+                <Chip label="苦手を優先" size="small" color="primary" />
               )}
               <Typography variant="body2" color="textSecondary">
                 問題 {stats.problemInRound} / {totalProblemsInSubject || session.total_problems}
@@ -483,7 +501,7 @@ const QuizSessionPage: React.FC = () => {
                 />
               )}
               <Chip
-                label={getDifficultyLabel(currentProblem.difficulty)}
+                label={difficultyLabel(currentProblem.difficulty)}
                 color={getDifficultyColor(currentProblem.difficulty) as any}
                 size="small"
               />
