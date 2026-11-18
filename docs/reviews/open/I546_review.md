@@ -11,7 +11,7 @@
 
 ## テスト結果
 - 自動: 決定論ゲート 22 項目すべて合格（review-gate・2026-11-17）。CI 成功。i193 は手元で F9 の 3 項目だけ道具の版で落ち、CI で全項目合格
-- 手動: Claude の No.1〜5 は OK。No.6（記憶のファイル 42 件の移動）はユーザーのコマンド待ち
+- 手動: Claude の No.1〜5 は OK。No.6（記憶のファイル 42 件の移動）は 2026-11-18 にユーザーが実行し OK
 
 ## 計画との差分
 - （実装後に書く）
@@ -35,3 +35,4 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
+STAGE_DONE: human-test NEXT: retro
