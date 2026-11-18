@@ -46,6 +46,7 @@
 - [review-gate] 2 回目のコードレビュー OK（`docs/reviews/I546_code_review_20261118_1726.md`）・CI は E2E を含めて全部成功
 - [test-gate] 手動テスト（Claude の No.1〜5・人の No.6）はやり直さず、前回の結果を使う — 取り込みの後もこのブランチの手順書・記憶は前回の確かめの時点と同じ（取り込んだ変更は手順書に触れていない）。人の手動テストを依頼し直さないので human-test を飛ばして retro へ
 - [retro] 2 回目: 台帳の残りは 1 回目と同じ 10 件で振り分けも同じ（F1 → #547・F2 → #520・F3〜F10 → `docs/reviews/backlog/I546.md`。一覧は 1 回目に貼り済み）。新しい改善案: マージ依頼の後に E2E が develop 側で直り、取り込みと流れのやり直しが要った — 見送り（E2E は必須チェックでなく、マージは止まっていなかった。U7 で必須にすれば、赤のまま依頼に進むことは仕組みで起きなくなる）。#432 がマージされたので、U7 の GitHub の設定はもう行ってよい（F10 の食い違いもそこで消える）
+- [close] 2 回目: base 追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ戻し、PR の説明のレビューの参照に 2 回目の記録を足した
 
 ## 振り返り
 
@@ -114,3 +115,4 @@ STAGE_DONE: close NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
