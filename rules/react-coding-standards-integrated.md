@@ -204,7 +204,7 @@
 
 | 差 | イシュー |
 |---|---|
-| Node.js 18・Create React App・Jest・user-event 13（§0・§1・§14） | #551 |
+| Node.js 18（画面〔`frontend/`〕のビルド・テスト・監査。E2E のジョブ〔`e2e/`・画面と別に動く〕は Playwright の要求に合わせて先に 26 にした・#432）・Create React App・Jest・user-event 13（§0・§1・§14） | #551 |
 | React 18・TypeScript 4.9（§0・§4） | #560 |
 | MUI 5（§0・§9） | #561 |
 | React Router 6・`react-router-dom`（§0・§1） | #562 |
