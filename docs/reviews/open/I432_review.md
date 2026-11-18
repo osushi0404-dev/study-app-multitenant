@@ -44,3 +44,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] #377・#376 をコメント付きで閉じた（手動 No.5）。グループの版上げは閉じても無視されないと分かったので、計画書の計画変更記録に R5 の補足を書いた — マージ後は develop が同じ版になり、作り直されても自動で閉じられるため害はない
 - [test-gate] 敵対的レビューの PR コメントは `post-review-comment.sh` が「開いている PR を取れません」で投稿しなかった（止めない決まり）。記録はファイルにある — 原因は retro で扱う
+STAGE_DONE: test-gate NEXT: retro
