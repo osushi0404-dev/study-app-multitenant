@@ -41,6 +41,7 @@
 - [retro] 改善案の振り分け: 「ユーザーにコマンドを打ってもらうときはどこで打つかを書く」「報告は日本語のまま」→ 記憶 `feedback_plain_language_user_facing.md` に足した（ユーザーとのやり取りの好みなので手順書ではなく記憶）。ほかの 4 件は見送り（下の振り返りに理由）
 - [close] develop（I466 の取り込み・アプリのファイルだけ）を取り込んだ。このブランチの変えたファイルとは重ならず、gate-check は OK のまま
 - [close] 記録を closed へ移し、PR の説明をテンプレートで書き直した。U7 の GitHub の設定（E2E を必須チェックに）はマージ依頼でメンテナに頼む
+- [close] マージ依頼の後、E2E の赤（Ubuntu 26.04 × Playwright 1.59.1）を直す #432（PR #575）と I492（PR #571）が develop に入ったので取り込んだ。`docs/runbooks/frontend-verify.md` の初回準備の 1 行が食い違い、版の数字を直書きしない、このブランチの書き方（`e2e/package.json` の版を見る）を残した（版を上げるたびに直さずに済む）。記録の場所の外を直したので、記録を open へ戻して review-gate からやり直す
 
 ## 振り返り
 
@@ -105,3 +106,4 @@ STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: review-gate
