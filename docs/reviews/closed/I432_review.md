@@ -88,3 +88,5 @@ STAGE_DONE: test-gate NEXT: retro
 - Why 3: 手順書は、サンドボックスを入れる前に書かれ、書き方が外に出る形かを確かめる決定論のチェックが無い
 - 抽象化: 「手順書のコマンドの形と、外に出す仕組みの当たり方を突き合わせる仕組みが無い」は他の手順書でも成り立つ → 予防処置（#538）
 STAGE_DONE: retro NEXT: close
+- [close] base 追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR の説明を書いた — 手順どおり
+STAGE_DONE: close NEXT: merge
