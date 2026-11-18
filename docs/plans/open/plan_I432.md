@@ -50,6 +50,7 @@
   - `e2e/package.json`・`e2e/package-lock.json`（CI の `npm ci` と、手元の e2e コンテナの既定コマンド `npm install` が入れるもの）
   - `docker-compose.yml` の `e2e` サービスのイメージ（`--profile e2e` のときだけ使う。Dockerfile・ビルドの対象には波及しない）
   - `docs/runbooks/frontend-verify.md:13`（ホストに入れる OS の部品を調べるコマンドの版）
+  - `rules/react-coding-standards-integrated.md:207`（§16 の表の #551 の行の文言だけ）
 
 ## 4. 変更点一覧（具体）
 ### 修正アプローチ
@@ -62,11 +63,12 @@ E2E のジョブの Node.js を規約の前提の 26 に上げ、Playwright を 
 | `e2e/package-lock.json` | `package.json` と一致させる | ホストで `npm install --save-exact @playwright/test@1.65.1`（`e2e/` で・キャッシュは `$TMPDIR`）で作り直す。変わるのは `@playwright/test`・`playwright`・`playwright-core`（と、それらが引く `fsevents` の任意の依存）の版・integrity・engines だけ |
 | `docker-compose.yml:197` | 手元の E2E のイメージを npm の版とそろえる（#376 と同じ値） | `mcr.microsoft.com/playwright:v1.59.1-jammy@sha256:8a0360d3…c8ff` → `mcr.microsoft.com/playwright:v1.65.1-jammy@sha256:b0ee5ce5e14ac42c394c0564a0a30adbda052153c611561bb2d31263593d6dd8` |
 | `docs/runbooks/frontend-verify.md:13` | 手順書の版を今の版に合わせる | `npx -y playwright@1.59.1 install-deps --dry-run chromium` → `playwright@1.65.1` |
+| `rules/react-coding-standards-integrated.md:207`（§16 の表） | 計画 §9 の読み方（E2E のジョブは #551 の対象外）を規約の文言にそろえ、後のレビューで揺れないようにする（計画レビュー W1） | `\| Node.js 18・Create React App・Jest・user-event 13（§0・§1・§14） \| #551 \|` → `\| Node.js 18（画面〔`frontend/`〕のビルド・テスト・監査。E2E のジョブ〔`e2e/`・画面と別に動く〕は Playwright の要求に合わせて先に 26 にした・#432）・Create React App・Jest・user-event 13（§0・§1・§14） \| #551 \|` |
 
 ## 5. 実装手順（ステップ）
 1. （未知リスク先行）`e2e.yml` の Node.js・`e2e/package.json`・`e2e/package-lock.json` を変えて commit する。push は review-gate の最初（`docs/runbooks/workflow.md`「GitHub への書き込みの時点」）。CI の E2E（Ubuntu 26.04・全件）がこのステップの確かめ → TC-03・手動 No.1・No.2。テストそのものが 1.65 で落ちたら fix-loop で原因を切り分ける（テストの古い書き方なら直す範囲を計画変更記録に書いて plan-review を通り直す）
 2. `docker-compose.yml` の e2e のイメージを 1.65.1 にする（ステップ 1 と並行可・依存なし）→ TC-01・手動 No.3
-3. `docs/runbooks/frontend-verify.md:13` の版を直す（ステップ 1 と並行可）→ 手動 No.4
+3. `docs/runbooks/frontend-verify.md:13` の版と、規約 §16 の表の #551 の行を直す（ステップ 1 と並行可）→ 手動 No.4・V4
 4. test-gate 段階の手動テスト No.5 で、#377 と #376 に「PR #575 で同じ版上げを取り込む」とコメントして閉じる（No.1・No.2 で CI が緑と確かめた後。閉じるのは取り消せる操作〔reopen〕）→ 手動 No.5
 - サービスの再起動: 不要（手元の e2e コンテナは実行のたびに作り直す `run --rm`。次に流すとき新しいイメージを引く）
 
@@ -80,7 +82,7 @@ E2E のジョブの Node.js を規約の前提の 26 に上げ、Playwright を 
 - No.1 CI の E2E のログで、Node.js が 26、Playwright が 1.65.1、ランナーが Ubuntu 26.04、`Running N tests` の N が 19 以上、`N failed` が無い
 - No.2 E2E 以外の CI のジョブが全部成功
 - No.3 手元の e2e コンテナ（新しいイメージ）で Playwright が 1.65.1 で、イメージに入っている chromium をそのまま使える
-- No.4 手順書の版の記載が 1.65.1
+- No.4 手順書の版の記載が 1.65.1、記録の外に `1.59.1` が残っていない（`! git grep -q` で合格=exit 0。直す前の今は exit 1 になることを確認済み）
 - No.5 #377・#376 が閉じられ、PR #575 へのコメントが付いている
 
 ## 7. ロールバック
@@ -90,7 +92,7 @@ E2E のジョブの Node.js を規約の前提の 26 に上げ、Playwright を 
 | リスク | 回避策 | 処遇 |
 |---|---|---|
 | R1: 1.59.1 → 1.65.1 の間の振る舞いの変化で、既存の E2E が落ちる（手元で事前に確かめられなかった） | ステップ 1 を最初に置き、CI の E2E で確かめる。落ちたら fix-loop で原因を特定し、テスト・アプリの直しが要るなら範囲を計画変更記録に書いて plan-review を通り直す | 回避 |
-| R2: develop で既に不安定な `settings.spec.ts` の TC-28（1.59.1 でも再試行で合格）が、この PR でも flaky になる | 1.65 で新しく出た不安定さと区別するため、No.1 で flaky のテスト名を記録する。TC-28 だけが flaky なら版上げの回帰とはせず、retro で別に扱う（起票を判断） | 受け入れ |
+| R2: develop で既に不安定な `settings.spec.ts` の TC-28（1.59.1 でも再試行で合格）が、この PR でも flaky になる | 1.65 で新しく出た不安定さと区別するため、No.1 で flaky のテスト名を記録する。TC-28 だけが flaky なら版上げの回帰とはせず、retro で別に扱う（起票を判断）。TC-28 以外が flaky なら No.1 を NG とし、fix-loop で原因を調べる（版上げで出た不安定さとして扱う。CI の再実行で緑になっても合格にしない） | 受け入れ |
 | R3: `actions/setup-node` v4.4.0 が `node-version: '26'` を解決できない | CI のログ（No.1）で Node.js の版を確かめる。解決できなければ fix-loop で直す | 回避 |
 | R4: E2E のジョブ（Node.js 26）と画面のビルド・テスト（Node.js 18）で版が一時的に分かれる | E2E のジョブは `e2e/` の依存（Playwright・dotenv）だけを入れ、画面は docker の frontend コンテナ（Node.js 18）で動かすので、互いに影響しない。画面側は #551 で 26 に上げる | 受け入れ |
 | R5: #377・#376 を閉じた後、Dependabot が同じ版上げを作り直す | このブランチのマージ後は develop が同じ版（1.65.1）を持つので、Dependabot は作り直さない。マージ前に閉じても、閉じた版上げは Dependabot が無視する | 回避 |
@@ -105,7 +107,7 @@ Claude が決めた（技術的な選択と理由）:
 - 取り込み方: 自分のブランチで同じ版上げを行い、#377・#376 は閉じる（Dependabot の PR に直しを足して作り直させる案より、1 本の PR で Node.js とイメージと npm をそろえて確かめられ、版のずれ〔#377 は 1.65.0・#376 は 1.65.1〕も無くせるため）
 - Playwright の版: 1.65.1（`latest`・#376 のイメージと同じ。1.65.0 にしない）
 - Node.js の版: 26（規約 §0 の前提の版。Playwright の最低限の 20 や 22 にしない — 規約の方針〔最新の Active LTS〕に合わせ、#551 で画面側を上げたときにそろう）
-- 規約 §16 の「#551 の行の道具・版を他のイシューで先に入れない」との関係: §16 は画面（`frontend/`）のコードとの差の表で、E2E のジョブ（`e2e/` の別の package・画面と別に動く）は対象外と読む。Playwright 1.65 が Node.js 20 以上を要るので、#551（Vite・Vitest への移行・大きい）を待つと E2E が止まったままになる。画面側の Node.js 18 は触らない
+- 規約 §16 の「#551 の行の道具・版を他のイシューで先に入れない」との関係: §16 は画面（`frontend/`）のコードとの差の表で、E2E のジョブ（`e2e/` の別の package・画面と別に動く）は対象外と読む。この読み方を §16 の表の #551 の行に書き足す（計画レビュー W1）。Playwright 1.65 が Node.js 20 以上を要るので、#551（Vite・Vitest への移行・大きい）を待つと E2E が止まったままになる。画面側の Node.js 18 は触らない
 - 取り込む順: #376 と #377 を同じ PR で取り込む（手元と CI の版をそろえる）
 - 新しい決定論テストは作らない（§6 の理由）
 - 1.65 でのテストの事前の確かめは CI に任せる（§1 スパイク。サンドボックスの中から制限なしで手元の E2E を流せないため）
@@ -127,4 +129,10 @@ Danger Ops（有無/手順/ロールバック）:
 | V1 | 1 | 読んで可 | `.github/workflows/e2e.yml` の差分が `node-version` の 1 行だけで、`permissions: contents: read`・パスワードの `::add-mask::` が `GITHUB_ENV` の書き込みより先・action の SHA 固定・secrets を使わないことが保たれている（TC-01・TC-02 がそれぞれ失敗の注入つきで確かめる） |
 | V2 | 1 | 読んで可 | `docker-compose.yml` の e2e のイメージが `@sha256:` の指紋で固定され、その値が #376 の値と一字一句同じ（TC-01 の I1 が固定を、手動 No.3 が実際に引けることを確かめる） |
 | V3 | 2 | 読んで可 | AC2・AC5 の確かめが CI の実際の E2E の結果（テストに入った後の `Running N tests` と `passed`）に基づき、導入の段で止まった赤や「スキップで緑」を合格にしていない（手動 No.1 の期待結果の書き方） |
-| V4 | 3 | 読んで可 | Node.js 26 に上げても、E2E のジョブ以外（画面のビルド・テスト・依存の監査）が Node.js 18 のまま影響を受けない（変更点が e2e.yml だけ）。§16 の #551 との分担の読み方が規約の文言と食い違っていない |
+| V4 | 3 | 読んで可 | Node.js 26 に上げても、E2E のジョブ以外（画面のビルド・テスト・依存の監査）が Node.js 18 のまま影響を受けない（Node.js の変更点が e2e.yml だけ）。§16 の #551 の行に E2E のジョブを対象外とする文言が入り、計画 §9 の読み方と食い違っていない |
+
+## レビュー結果
+- [20261118_1337 判定: ✅ 完了](../../reviews/I432_plan_review_20261118_1337.md)
+
+## 計画変更記録
+- 計画レビュー（20261118_1337）の Warning 3 件に対応: W1 規約 §16 の #551 の行に E2E のジョブを対象外とする文言を足す（変更点に `rules/react-coding-standards-integrated.md` を追加。計画で決めた読み方を文言にするだけで方式・受け入れ条件は変えない）／W2 手動 No.4 を `! git grep -q` の判定にした／W3 R2・手動 No.1 に TC-28 以外の flaky の扱いを足した — 計画レビューのやり直し: 不要（findings への対応の追記だけ）
