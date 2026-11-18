@@ -27,3 +27,4 @@
 - [plan] `.github/` を変えるが止めて聞かずに進めた — 変えるのは Node.js の版の 1 行だけで守りを緩めない（TC-01・TC-02）。直し方は grill-me の報告でユーザーに示した後に `/plan-issue` が打たれ、マージはユーザーが承認する（計画書 §9）
 - [plan] #377・#376 を閉じるのは test-gate の手動 No.5 にした — CI が緑と確かめた後に行い、AC4 を close の前に満たすため- [plan-review] 判定 HIGHRISK（`.github/workflows/e2e.yml`）。Warning 3 件（規約 §16 の文言・No.4 の判定コマンド・TC-28 以外の flaky の扱い）は計画書・手動テストを直して対応し、再レビューはしない — 方式・受け入れ条件を変えない findings への対応のため（計画変更記録）
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
