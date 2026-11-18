@@ -8,6 +8,7 @@
 # P3（fix-loop の自動進行）は I185 から外し、I193 で「必ず review-gate に戻る」決定論（gate-check.sh）と一緒に入れた。
 # I193 で、P2 の「レビュー済みの計画で承認待ち」は「承認を待たずに続ける」に置き換えたので、固定するブロックも
 # I193 の守りの部分（plan-issue の続け方・止めて聞く条件・止まったときの案内・fix-loop の戻り先）に付け替えた。
+# I546 で issue-flow.md の段階の流れの写し（ステップ 8.5）を消したので、その 2 つの固定も外した（流れの正は workflow.md と各スキル）。
 #
 # 守りの部分は、文字列の一部ではなく「ブロックを丸ごと固定」して照合する（敵対的レビューで、部分一致の
 # 照合は削除・反転・挿入を見逃すと 2 周続けて分かったため。粗くても確実に止まる側に倒す）。
@@ -25,7 +26,6 @@ PLAN_ISSUE="$SKILLS/plan-issue/SKILL.md"
 FIX_LOOP="$SKILLS/fix-loop/SKILL.md"
 SEC_REVIEW="$SKILLS/design-security-review/SKILL.md"
 WORKFLOW="$ROOT/docs/runbooks/workflow.md"
-ISSUE_FLOW="$ROOT/docs/runbooks/issue-flow.md"
 ONBOARDING="$ROOT/docs/runbooks/onboarding.md"
 REVIEW_RULES="$ROOT/docs/runbooks/review-rules.md"
 PLAN_REVIEWER="$ROOT/.claude/agents/plan-reviewer.md"
@@ -59,9 +59,7 @@ PINS=(
   "plan_issue_continue_section@@$PLAN_ISSUE@@**この先へ続ける（必須・止まらない）**@@EOF"
   "design_security_review_frontmatter@@$SEC_REVIEW@@---@@# design-security-review"
   "workflow_stop_conditions@@$WORKFLOW@@## 止めて聞く条件@@## 記録とつなぎ"
-  "workflow_stop_guidance@@$WORKFLOW@@### 各段階で止まったときの案内@@## 移行"
-  "issue_flow_8_5@@$ISSUE_FLOW@@8.5. plan-review 段階@@=== フェーズ3"
-  "issue_flow_step_8_5@@$ISSUE_FLOW@@**ステップ8.5: 計画レビュー@@#### フェーズ3"
+  "workflow_stop_guidance@@$WORKFLOW@@### 各段階で止まったときの案内@@---"
   "fix_loop_return@@$FIX_LOOP@@8) 結線（必須・戻り先は 1 か所）@@EOF"
 )
 

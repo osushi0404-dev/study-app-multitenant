@@ -1,7 +1,7 @@
-# Vibe Coding 運用フロー（公式の道具を土台にした自律の流れ・I193）
+# 運用フロー（イシューの流れ・段階・止めて聞く条件）
 
 ## 使うスキル（ユーザーが / で打つもの）
-- /issue-bootstrap [title] : 本文の下書き（リポジトリの外）、issue-review による自己完結度レビュー（ソフト）、GitHub Issue 作成（番号は GitHub が振る。手元にファイルを作らない・下の「イシューの置き場所」）。要件・基本設計・UI/UX で決めてもらうことがあるときだけ質問して止まる（ブランチ作成は /plan-issue で行う）。会話の中で別イシューにすると決まったときは、Claude が自分で呼んで起票し、後で報告する（下の「Claude が会話の中で起票するとき」）
+- /issue-bootstrap [title] : GitHub にイシューを起票する（決まりは docs/runbooks/issue-flow.md・手順はスキル）。会話の中で別イシューにすると決まったときは Claude が自分で呼ぶ（下の「Claude が会話の中で起票するとき」）
 - /grill-me I### : 計画書作成前に、要件・基本設計・UI/UX の曖昧な点だけを聞く（任意。issue-review 判定「十分」ならスキップ可）
 - /plan-issue I### : ブランチ・Draft PR・計画書・テスト文書・レビュー文書を作り、そのまま下の段階を順に進めて、人の手動テストの手前（人の分が無ければマージ依頼）で止まる
 - /proceed I### : 途中で止まったとき・新しいセッションで、記録の最後の `STAGE_DONE:` から続きを再開する
@@ -22,7 +22,7 @@
 2. /plan-issue I### → 計画書・テスト文書・レビュー文書 → 以下を Claude が順に進める（`proceed` が `scripts/claude/flow-stage.sh` で次の段階を決める）
    1. plan-review: 自作の計画レビュー（`plan-issue-review.sh`・`.claude/agents/plan-reviewer.md`）。Blocker は自分で直して再レビュー。高リスク判定 Yes → design-security-review、No → implement
    2. design-security-review（高リスクのときだけ）: 実装前の設計レビュー＋攻撃シナリオ。Blocker は計画を直して plan-review からやり直す
-   3. implement: 実装・TDD → 組み込みの `/simplify` で整理 → commit（push は review-gate の最初・下の「GitHub への書き込みの時点」）
+   3. implement: 実装・TDD → 組み込みの `/simplify` で整理 → commit（push は review-gate の最初・下の「GitHub への書き込みの時点」）。`/simplify` で整理済みの変更に後から数行を足しただけなら `/simplify` を回し直さず、自律判断の記録に「前回整理済み・追加は N 行」と 1 行書く（決定論ゲートとレビューは省かない）
    4. review-gate: CI 待ち（失敗・時間切れで止まる）＋組み込みの `/code-review`（パスの判定が YES のときは `/security-review` も。どちらも読み取り専用の plan モード）＋自作のレビュー役（受け入れ条件・計画・文書の照合）＋決定論ゲートの実走。高リスクなら敵対的レビュー（別プロセス・読むだけ・1 周 10 分・確かめる項目の一覧で判定。`scripts/claude/adversarial-review.sh`）。NG → fix-loop
    5. fix-loop: 診断レビューを通した案で直し、実装・テストのレビューを通して、**必ず review-gate に戻る**（戻り先は 1 か所）
    6. test-gate: `gate-check.sh`（最新のレビューが今の HEAD を見て OK か）→ 計画書が指定した重いテスト・Claude 担当の手動テスト（pytest・Jest・E2E は CI が正で、手元では流し直さない）→ 人の手動テストがあれば**ここで止まる**
@@ -33,18 +33,20 @@
 5. close: base 追従 → `gate-check.sh`（取り込んだ後の HEAD を見る）→ 記録を closed へ → PR 説明 → Ready → 追従と CI の最終確認 → **Approve & Merge を依頼して止まる**（自律判断の記録と振り返りの結果をまとめて報告する）
 6. ユーザーが GitHub で Approve & Merge
 
-詳細なイシューフローは docs/runbooks/issue-flow.md を参照。設計の根拠は docs/proposals/I193_official_base_flow.md。
+イシューの番号・置き場所・起票・ラベルは docs/runbooks/issue-flow.md を参照。設計の根拠は docs/proposals/I193_official_base_flow.md。
 フロントの画面確認（Claude が Playwright MCP で起動・ログイン・操作・画面キャプチャ・コンソール確認をする手順と、test-gate 段階の判定）は docs/runbooks/frontend-verify.md を参照。
 
 ## 止めて聞く条件（この 3 つだけ・各スキルはここを参照する）
 
 ユーザーの確認は「人がやる手動テスト」と「マージ」に加えて、次のどれかに当たるときだけ。
 
-1. **要件・基本設計・UI/UX の価値判断が要るとき**: 受け入れ条件・仕様・画面の配置/文言/操作の流れを変えないと進めないとき。複数の案のどれを選ぶかで仕様や画面が変わるとき
-2. **取り消せない操作・安全装置そのものを変える操作**: CLAUDE.md の危険操作（Danger Ops・`DANGER_OK=1`）・秘密情報が push されうる操作・GitHub Actions の変更、および安全装置そのものを変える操作。安全装置の集合は `scripts/claude/code-review.sh` の `path_risk_trigger` と同じ: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（安全装置は人の承認を外した流れで最後に残る守りなので、Claude が自分で緩めない）
+1. **要件・基本設計・UI/UX の価値判断が要るとき**: 受け入れ条件・仕様・画面の配置/文言/操作の流れを変えないと進めないとき（対応中のイシューの範囲・進める順番が変わるときを含む）。複数の案のどれを選ぶかで仕様や画面が変わるとき
+2. **取り消せない操作・安全装置そのものを変える操作**: 危険操作（`docs/runbooks/danger-ops.md`・`DANGER_OK=1`）・秘密情報が push されうる操作・GitHub Actions の変更、および安全装置そのものを変える操作。安全装置の集合は `scripts/claude/code-review.sh` の `path_risk_trigger` と同じ: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`。安全装置は人の承認を外した流れで最後に残る守りなので、Claude が自分で緩めない
 3. **周回の上限に達し、安全側の選択肢も取れないとき**: レビュー・修正の周回が上限に達したら、まず安全側の選択肢（確認を厳しめに倒す・範囲を狭める・別イシューに切り出す）を選んで記録して進む。それも取れないときだけ止める。セキュリティの Blocker・敵対的レビューで残った Critical/High を「受け入れて進む」判断は Claude だけではしない
 
 それ以外（技術的な設計の選択・直せる指摘の直し方・CI の失敗の直し方・develop との食い違いの解決など）は Claude が決め、`docs/reviews/open/I###_review.md` の「## 自律判断の記録」に `- [段階] 決めたこと — 理由` で書く。止まったとき（人の手動テストの手前・マージ依頼）に、その要点を平易にまとめて報告する。
+
+Claude が決めるときの基準: 案は「今の症状を消すか」ではなく「同じ壊れ方の再発を断てるか（根治か）・失うものは何か」で比べ、決めた 1 案を理由とともに記録する（選択肢の一覧を出して選ばせない）。
 
 ## 記録とつなぎ（決定論）
 - 各段階は、終わりに `docs/reviews/open/I###_review.md`（close の後は closed）の末尾へ `STAGE_DONE: <段階> NEXT: <次の段階>` を 1 行足して commit する（push は下の「GitHub への書き込みの時点」だけ）。止める条件で止まるときは書かない
@@ -53,32 +55,25 @@
 - 段階のスキルのうち test-gate・retro・close が書いてよいのは記録の場所だけ。それ以外を直す必要が出たら fix-loop・review-gate を通す
 
 ## イシューの置き場所（I221）
-- **新しいイシューは GitHub のイシューが唯一の正**。手元の `docs/issues/open/` にファイルを作らない（起票・grill-me は GitHub の本文を読み書きする）。番号は「I＋GitHub の番号」（#427 → I427）。記録のファイル名・ブランチ名・ゲートのスクリプトの I### の形はそのまま使う。GitHub はプルリクエストと番号を共有するので I 番号は飛ぶ
-- **見分け方は `scripts/claude/issue-source.sh` の 1 か所**: 手元にイシューファイルがあればそれを使う。無く、I427 以上で、GitHub の題名が `I###: ` で始まらないものが新しいイシュー。I427 未満でファイルが無いときは GitHub を読まずに止まる（別のワークツリーにしか無い I196 で、GitHub の #196〔別のイシュー〕を黙って読まないため。#426 以下はすべて今までの番号）。PR の番号も止める
-- **今までのイシュー（I426 以下・手元にファイルがあるもの）は今の流れのまま**。ファイルはそのワークツリーで扱い、消さない
-- **本文の写し**: `/plan-issue` が計画を始めるときに GitHub の本文を `docs/issues/open/I###.md` に 1 回だけ写し、最初のコミットにする（`issue-source.sh snapshot`）。写しは同期しない。計画を始めた後の範囲・受け入れ条件の変更は、計画書の計画変更記録と写しに書き、GitHub の本文には戻さない（下の「GitHub への書き込みの時点」）。GitHub の本文は「起票と grill-me で決めた依頼」の正、写しと計画書は「この PR で何をしたか」の正。写しがあるので、計画の後の段階（計画レビュー・review-gate・敵対的レビュー・close の移動）は今までのイシューファイルと同じに動く
-- **本文の変更の履歴**: GitHub が本文の全版を残す（`gh api graphql` で `issue(number:N){userContentEdits{nodes{editedAt diff}}}`）。起票〜grill-me の変更はここで追える
-- **既存イシューに同梱するとき**: 本文は直さず `gh issue comment <番号> --body-file <ファイル>` でコメントする（新しいイシューでも今までのイシューでも同じ。計画を始めた後のイシューは写しも直さない）
+正は docs/runbooks/issue-flow.md「イシューの番号と置き場所（I221）」（番号・見分け方・本文の写し・既存イシューへの同梱）。
 
 ## GitHub への書き込みの時点（I224）
-bot の停止（2026-10-30・短い間の書き込みの集中がきっかけと見ている）の再発防止。量の上限に頼らず、GitHub が中身を見る時点だけ送る。各スキルはこの節を参照する（写しを持たない）。
+GitHub に送るのは、GitHub が中身を見る時点だけにする（量の上限には頼らない）。各スキルはこの節を参照する（写しを持たない）。
 - **push するのは 3 時点だけ**:
   1. plan-issue の下書き PR の作成（イシューファイルのコミット〔新しいイシューでは本文の写しのコミット〕。既コミット経路では計画の文書のコミット）
   2. review-gate の CI 待ちの前（`code-review.sh` を流す直前。fix-loop の後のやり直しのたびを含む）
   3. close の最後の確認の前（記録を closed へ移すコミット。`STAGE_DONE: close NEXT: merge` もこのコミットに入れる）
   - ほかに `pr-base-sync.sh final` が base を取り込んだとき（BEHIND のときだけ・スクリプトが送る）
-- **それ以外の段階は手元でコミットだけ**（STAGE_DONE・自律判断の記録・テスト結果・レビュー記録）。次の時点でまとめて送る。送り忘れても、review-gate の CI 待ちが `CI_WAIT: NOT_PUSHED` で止まる（決定論）
+- **それ以外の段階は手元でコミットだけ**（STAGE_DONE・自律判断の記録・テスト結果・レビュー記録）。次の時点でまとめて送る。送り忘れを仕組みで止めるのは review-gate の CI 待ち（`CI_WAIT: NOT_PUSHED`・決定論）だけで、close・マージの後の送り忘れは仕組みでは止まらない（close は手順の中で push する）
 - **イシュー本文の書き換え（`gh issue edit --body-file`）は grill-me の終わりの 1 回だけ**。plan-issue で足す Draft PR の番号などは手元のファイルにだけ書く。起票（issue-bootstrap）・retro の既存イシューへのコメントはそのまま
 - **目安**: 1 本のイシューの push は 4 回以内（fix-loop の後のやり直し 1 回ごとに +1）。測り方: `git reflog show refs/remotes/origin/<ブランチ>` の `update by push` の行数
 - **同時に複数のセッションで GitHub に書き込まない**: 書き込む段階（plan-issue・review-gate・retro の起票・close）を、別の作業フォルダ（worktree）のセッションと重ねない。テスト用に起こすセッションは読み取りだけの鍵（I223）なので対象外。仕組みでは止めない（最後の守りは GitHub）
 - 決まりの押し戻し（スキルに「commit/push」を書き足すなど）は `scripts/claude/tests/test_i224_push_points.sh` が CI で止める
 
 ## ゲート
-- 計画レビュー（plan-review）を通す前にコード変更を開始しない
-- Danger Ops は明示承認（danger-approved + DANGER_OK=1）なしに実行しない（止める条件 2）
-- develop/main への直 push を禁止（PR経由）
-- イシューのスコープ・受け入れ条件が変更された場合は、docs/issues/open/[番号].md（新しいイシューでは本文の写し）も必ず更新する。GitHub の本文には戻さない（上の「イシューの置き場所」）
+- 計画レビュー（plan-review）を通す前にコード変更を開始しない。実装の前に、計画書があり・plan-review を通り・変更が計画書に書いてあることを確かめる（無ければ計画書を先に直す。直し方は docs/runbooks/plan-writing-rules.md「計画書と実装の一致性保証ルール」）
 - 計画の方式・範囲・受け入れ条件を変えたら plan-review を通り直す（findings への対応を計画変更記録に足しただけなら通り直さない。どちらに当たるかは計画変更記録に 1 行で書く）
+- 直 push の禁止・危険操作の承認は CLAUDE.md の絶対ルール 3・4（危険操作の条件は docs/runbooks/danger-ops.md）
 
 ## スキル呼び出しルール
 
@@ -91,13 +86,12 @@ bot の停止（2026-10-30・短い間の書き込みの集中がきっかけと
 ### Claude が会話の中で起票するとき（I220）
 
 - ユーザーにコマンドを渡さず（クリップボードにも入れず）、Claude が Skill ツールで `issue-bootstrap` を呼んで起票する
-- 明らかに価値が低いもの（その場で直せる軽い指摘・既存イシューへの同梱で足りるもの）は起票しない。その場で直すか既存イシューに同梱し、そのことを報告する
-- それ以外は確認なしで起票する。起票する前にユーザーに聞くのは次の 3 つだけ（2 つ以上に当たるときは 1 回にまとめて聞く）:
-  - 上の「価値が低いもの」に当たるか迷うもの: 起票するか、同梱かを聞く
+- 明らかに価値が低いもの（その場で直せる軽い指摘・既存イシューへの同梱で足りるもの）は起票しない。その場で直すか既存イシューに同梱し、そのことを報告する。当たるか迷うものは Claude が決めて、報告に理由を 1 行書く
+- それ以外は確認なしで起票する。起票する前にユーザーに聞くのは、「止めて聞く条件」1 に当たる次の 2 つだけ（両方に当たるときは 1 回にまとめて聞く）:
   - 対応中のイシューを進めるのに、別イシューの起票・対応が先に要るもの（今のイシューの範囲や進める順番が変わる）: 起票するか、どの順で進めるかを聞く
-  - 要件・基本設計・UI/UX の判断が要る点が残っているもの（「止めて聞く条件」1）: GitHub に起票する前に質問をまとめて出して止まり、答えをイシューの本文に入れてから起票する
+  - 要件・基本設計・UI/UX の判断が要る点が残っているもの: GitHub に起票する前に質問をまとめて出して止まり、答えをイシューの本文に入れてから起票する。対応中のイシューの段階の途中（/plan-issue の流れの中）で見つけた後続でも同じ
 - 起票した後に、1 件 1 行で `I###（#GitHub の番号）・タイトル・なぜ起票したか` を報告する
-- retro 段階からの起票は、この節ではなく retro の手順に従う（質問しない）
+- retro 段階からの起票は、この節ではなく retro の手順に従う（質問しない。決まっていない点は「未定」と書いて起票する）
 
 ### 各段階で止まったときの案内
 
@@ -110,85 +104,21 @@ bot の停止（2026-10-30・短い間の書き込みの集中がきっかけと
 | 止める条件に当たったとき | どの条件に当たったか・選択肢と推奨を平易に示して聞く。回答の後は「`/proceed I###`」で続ける（同じ会話なら Claude がそのまま続けてよい） |
 | 会話が切れた・新しいセッション | 「`/proceed I###` を入力してください」と案内 |
 
-## 移行（I193 のマージ前に着手したイシュー）
-- I193 のマージ前に着手したイシューは、古い流れのまま最後まで進める。スキルは各ワークツリーで checkout しているブランチから読み込まれるため、そのブランチが develop を取り込むまでは古いスキル（`/implement`・`/code-review`・`/test`・`/retro`・`/close`）が動く
-- 古い流れのイシューで `/proceed` を打つと、`STAGE_DONE:` が無いので止まる（新しい流れで誤って進めない）
-- I193 のマージ後に /plan-issue するイシューから新しい流れにする。新しい流れの最初のイシューを実地の通しとし、その振り返り（retro）で「`/plan-issue` だけで人の手動テストの手前まで進んだか」を確かめる
-
----
-
-## Claude Code実行ルール
-
-- **コマンド実行前に必ず説明する**: 実行するコマンドが何をするものか、なぜ実行するのかを日本語で説明してから実行すること
-- 例: 「PostgreSQLのデータベース一覧を確認するため、docker compose exec db psql -U postgres -c "\l"を実行します」
-
-- **ロジック修正提案時に必ず説明する**: フロント・バックエンド問わず、ロジック修正を提案する際は以下を必ず説明すること
-  1. **修正の意図**: なぜこの修正が必要なのか
-  2. **修正前の問題点**: 現状どういう問題があるのか（具体的に）
-  3. **修正後の改善内容**: 修正するとどう改善されるのか（具体的に）
-  - 例: 「現在のコードでは科目が1件のみでも科目選択UIが表示されてしまい、ユーザーが余計な操作を強いられています。科目が1件の場合は自動遷移させることで、ユーザーは『クイズを始める』ボタンを1回押すだけで即座にクイズを開始できるようになります」
-
----
-
-## 作業実行前の確認ルール
-
-指示を受けた際は、次の順で進める（ユーザーの承認は待たない。止めるのは「止めて聞く条件」に当たるときだけ）:
-
-1. **調査・分析**: 問題特定とログ確認
-2. **対応方針検討**: 調査結果に基づいて具体的な対応方針を検討
-3. **計画書作成**: `docs/plans/open/plan_I###.md`（再作成時は `plan_I###_2.md`…）に詳細記録
-4. **計画レビュー**: plan-review 段階（Blocker は自分で直す）
-5. **修正実施**: 実際の修正・テスト・検証（段階のスキルに沿う）
-
-### 修正ツール使用前チェック（必須）
-Edit/Write/MultiEdit等の実行前に必ず確認：
-- 計画書作成済み？（計画書・テスト文書・レビュー文書そのものの作成は除く）
-- 計画レビュー（plan-review）を通した？
-- 変更が計画書に書いてある？（無ければ計画書を先に直す）
-
 ---
 
 ## ブランチ戦略
 
-### 基本方針: 3ブランチ戦略（本番環境対応版）
-
 **ブランチ構成**:
-- **main**: 本番環境（AWS）デプロイ用、常に安定版のみ、リリース済みコードのみ
-- **develop**: 開発統合・ステージング環境用、機能開発の統合ブランチ
-- **feature/Ixxx-xxx**: 各イシュー開発用の作業ブランチ
-- **hotfix/xxx**: 本番環境の緊急修正用ブランチ
+- **main**: リリース済みのコードだけを置く（本番環境はまだ無い。用意したらリリースに使う）
+- **develop**: 開発の統合ブランチ（GitHub の既定ブランチ）。日常の PR はすべてここ宛て
+- **feature/I###-xxx**: イシューごとの作業ブランチ（/plan-issue が `origin/develop` から作る）
+- **hotfix/xxx**: リリース済みのコードの緊急修正用（本番ができてから使う）
 
-**ブランチの役割**:
-```
-main (本番環境 - AWS) ← リリース時のみマージ
-  ↑
-develop (開発統合・ステージング) ← 日常的な開発はここに集約
-  ↑
-feature/Ixxx-xxx (各イシュー開発) ← イシューごとに作成
-```
+**ブランチ命名規則**: `feature/I{GitHub の番号}-{概要を英語化してケバブケース}`（番号の桁数は問わない。例: `feature/I546-process-rules-bp-review`）
 
-**ブランチ命名規則**:
-- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
-- 例: `feature/I030-media-asset-models`
+### 本番リリースフロー
 
-### 現在のブランチ確認
-作業開始前に必ず現在のブランチを確認：
-```bash
-git branch --show-current
-```
-適切なブランチで作業していない場合は警告を出す。
-
-### イシュー完了時のマージフロー
-
-**詳細は「イシューフロー（統合ルール）」セクションを参照**
-
-マージはイシューフローのステップ25で実行する。
-- 全てのドキュメント更新（テストケース、エラー管理、計画書、イシューファイル）完了後にマージ
-- マージ後にレビューファイルをclosedに移動してクローズ完了
-
-### 本番リリースフロー（重要）
-
-**developの複数機能を本番環境（main）にリリースする場合のみ実行**:
+develop の複数の機能を main にリリースするときの手順:
 
 ```bash
 # 1. bot が develop → main の PR を作る
@@ -200,15 +130,11 @@ git tag -a vX.X.X origin/main -m "バージョンX.X.Xリリース"
 git push origin vX.X.X
 ```
 
-**重要な注意事項**:
-- mainへのマージは慎重に行う（十分なテスト完了後のみ）
-- 必ずバージョンタグを付ける
-- リリースノートを残す
-- developからmainへは定期的（週1回、月1回等）にまとめてマージ
+- バージョンタグを付け、リリースノートを残す
 
 ### 緊急修正（hotfix）のブランチ運用
 
-本番環境で緊急のバグ修正が必要な場合：
+リリース済みのコードで緊急のバグ修正が必要な場合：
 
 ```bash
 git fetch origin
@@ -222,35 +148,9 @@ gh pr create --base develop --head hotfix/critical-bug-description --title "hotf
 # 3. 両方のマージ後、GitHub の PR 画面の Delete branch でブランチを消す
 ```
 
-**main がまだ初期コミットだけの間は、main への hotfix はマージできない**（main から作ったブランチには CI のワークフローが無く、必須チェックが報告されないため。docs/runbooks/branch-protection-setup.md §1.5「main の制約」）。最初のリリース（develop → main）より前は、緊急の修正も develop 宛ての PR で行い、リリースで main に入れる。
-
-**hotfixの重要ポイント**: mainとdevelop**両方**にマージすること。
-- mainとdevelop**両方**にマージすること（忘れると修正が失われる）
-- 本番環境への影響を最小限にするため、修正は最小限に
-- テストは迅速だが確実に実施
-
-### ブランチ作成例外ルール
-以下の場合はブランチ作成を省略可能：
-1. **ドキュメントのみの修正**: README更新、typo修正等
-2. **緊急の1行修正**: 明らかな設定ミス等
-3. **ユーザーが明示的に指示**: 「ブランチ作成不要」等の指示がある場合
-
-ただし、**イシューファイル作成依頼の場合は必ずブランチを作成**すること。
+- main と develop の**両方**にマージする（忘れると修正が失われる）。修正は最小限にする
+- **main がまだ初期コミットだけの間は、main への hotfix はマージできない**（main から作ったブランチには CI のワークフローが無く、必須チェックが報告されないため。docs/runbooks/branch-protection-setup.md §1.5「main の制約」）。最初のリリース（develop → main）より前は、緊急の修正も develop 宛ての PR で行い、リリースで main に入れる
 
 ## 外部（fork）からの PR の扱い
 
-public リポジトリのため、第三者（自律 AI エージェントを含む）から fork 経由の PR が届くことがある。
-外部からのコード寄稿は受け付けない（`CONTRIBUTING.md`）。届いた場合は次の手順で処理する。
-
-1. head リポジトリを確認する: `gh pr view <PR番号> --json isCrossRepository -q .isCrossRepository` → `true` なら外部 PR。
-2. **Actions の実行を承認しない**（fork PR には repository secrets が渡らず、E2E は原理的に失敗する）。
-3. **base 追従・CI 対応・レビューをしない**（マージしない PR に投じる意味がない）。
-   **手元に checkout しない**（`.claude/` と hook 本体が相手の版に置き換わり、次の操作でそのコードが実行されるため）。中身は `gh pr diff <PR番号>` / `gh pr view <PR番号>` で確認する。
-   `gh pr checkout` と既定エイリアス `gh co` は `.claude/settings.json` の deny で拒否されるが、`git fetch origin pull/<N>/head` → `git checkout`・`gh pr diff <N> | git apply`・オプションを挟んだ `gh -R … pr checkout` などの別経路は拒否されないので、手順として行わないこと。
-4. 方針コメントを付けて close する: `gh pr comment <PR番号> --body-file <file>` → `gh pr close <PR番号>`。
-5. 対象のイシューは OPEN のまま残し、必要なら通常のハーネス手順（/plan-issue 以降）で自前実装する。
-
-判定は `scripts/claude/pr-base-sync.sh`（close 段階の最初）でも自動検知されるが、上記は人が最初に見たときの手順である。
-I430 から、外部 PR の判定は見張り（PreToolUse ガード）に置かない。取り込み（`gh pr checkout`・`gh co`）は `.claude/settings.json` の deny、
-マージ・承認は GitHub のブランチ保護（Code Owners の承認だけが数えられ、bot はマージできない）が止める（`docs/runbooks/danger-ops.md`「サンドボックス（第 1 層）」）。
-`gh pr ready` / `edit` / `update-branch` / `review --approve` は止まらないので、外部 PR には使わない（上の 3）。
+正は docs/runbooks/danger-ops.md（外部からの PR の判定・取り込まない・閉じる手順）。

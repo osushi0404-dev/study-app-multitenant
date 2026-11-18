@@ -5,8 +5,8 @@
 #
 # 検証内容（行数カウントの下限チェック）:
 #   - .claude/skills/issue-bootstrap/SKILL.md : 各文言 1 行以上
-#   - docs/runbooks/issue-flow.md             : 各文言 2 行以上（「自動実行フロー」「統合ルール」2 箇所更新の代理指標）
-#   - docs/runbooks/worktree.md               : 各文言 1 行以上（§10 トラック構成表の対応ラベル）
+#   - docs/runbooks/issue-flow.md             : 各文言 1 行以上（ラベルの決まりの正・I546 で 1 か所にまとめた）
+#   - docs/runbooks/worktree.md               : 各文言 1 行以上（§10 トラックとラベルの対応）
 # 0=全 PASS / 1=FAIL あり（不足箇所を stderr に列挙）。
 set -uo pipefail
 
@@ -29,8 +29,8 @@ req() { # $1=file $2=文言 $3=最低行数
 
 req "$SKILL"       "track:app"     1
 req "$SKILL"       "track:harness" 1
-req "$ISSUE_FLOW"  "track:app"     2
-req "$ISSUE_FLOW"  "track:harness" 2
+req "$ISSUE_FLOW"  "track:app"     1
+req "$ISSUE_FLOW"  "track:harness" 1
 req "$WORKTREE_MD" "track:app"     1
 req "$WORKTREE_MD" "track:harness" 1
 

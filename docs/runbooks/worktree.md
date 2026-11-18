@@ -22,19 +22,16 @@
 
 ## 2. ワークツリーの作り方（公式 `claude --worktree`）
 
-**作る前の確認（primary で行う。1 と 2 は一度合わせれば以後は確認だけ）**:
+**作る前の確認（primary で行う。一度合わせれば以後は確認だけ）**:
 
 ```bash
 cd <primary>
-# 1. 基点の確認: refs/remotes/origin/develop と出ること
+# 基点の確認: refs/remotes/origin/develop と出ること
 git symbolic-ref refs/remotes/origin/HEAD
 #    別のもの（refs/remotes/origin/main など。clone した時点の既定のまま残っている）が出る、または
 #    「fatal: ref refs/remotes/origin/HEAD is not a symbolic ref」で失敗する（未設定）なら、リモートの今の既定ブランチに合わせる
 git remote set-head origin --auto
 #    （refs/remotes/origin/HEAD は全ワークツリー共有の参照。合わせ直しても origin/HEAD を使う手順・スクリプトは無い）
-# 2. primary のブランチが I179 以降の内容を含むこと（.worktreeinclude・.gitignore の .claude/worktrees/・入れ子対応のガード）
-test -f .worktreeinclude && grep -qx '.claude/worktrees/' .gitignore \
-  && grep -q '_owning_root' scripts/claude/hooks/pretooluse_guard.py && echo ok
 ```
 
 ```bash
@@ -43,20 +40,18 @@ claude --worktree <track>-<連番>
 ```
 
 - **必ず primary で作る**: `claude --worktree` は実行したフォルダの中（`.claude/worktrees/`）に作る。primary 以外で実行すると、そのワークツリーの中に入れ子が作られる（外側を撤去するときは `wt-remove.sh` が入れ子を検出して止める → §4）。primary は撤去しないので、ここを作成元に固定する。
-- **基点**: 公式の既定（`worktree.baseRef` の `"fresh"`）は `origin/<既定ブランチ>` から作る。既定ブランチは GitHub に問い合わせず、**手元の `refs/remotes/origin/HEAD`** で決まる（2.1.304 の実装で確認）。これが `origin/main`（初期コミットのみで中身が無い）を指していると、CLAUDE.md・`.claude/settings.json`（ガード）・スキルが何も無い空のワークツリーができるので、上の確認 1 で必ず `origin/develop` に合わせておく。
-- **primary のブランチ**: `.worktreeinclude`・`.gitignore`・ガード（サブエージェントのフックは primary の `pretooluse_guard.py` が動く）・許可の判定の一部は、primary が今チェックアウトしているブランチの内容で決まる。primary は develop に置いておく（I200・I219: develop にいて追跡済みファイルがきれいなら、セッションの開始時に裏で自動で `origin/develop` へ早送りされる〔§9 の例外〕。結果は次の開始時の文脈の「primary: 前回 …」の行に出る。その行が「そろえません」「そろえられませんでした」なら、その行の手順で手でそろえる）。I179 より前に作られたブランチを primary で使っている間は、設定ファイルがコピーされない・primary で `git add -A` すると入れ子が embedded repository として追加される・入れ子が自分のファイルに書けない、が起きる。確認 2 が `ok` にならないときは作らない（primary のブランチに develop を取り込むか、そのブランチの作業が終わってから作る）。
+- **基点**: 公式の既定（`worktree.baseRef` の `"fresh"`）は `origin/<既定ブランチ>` から作る。既定ブランチは**手元の `refs/remotes/origin/HEAD`** で決まる。これが `origin/main`（初期コミットのみで中身が無い）を指していると、CLAUDE.md・`.claude/settings.json`（ガード）・スキルが何も無い空のワークツリーができるので、上の確認で必ず `origin/develop` に合わせておく。
+- **primary のブランチ**: `.worktreeinclude`・`.gitignore`・ガード（サブエージェントのフックは primary の `pretooluse_guard.py` が動く）・許可の判定の一部は、primary が今チェックアウトしているブランチの内容で決まる。primary は develop に置いておく（I200・I219: develop にいて追跡済みファイルがきれいなら、セッションの開始時に裏で自動で `origin/develop` へ早送りされる〔§9 の例外〕。結果は次の開始時の文脈の「primary: 前回 …」の行に出る。その行が「そろえません」「そろえられませんでした」なら、その行の手順で手でそろえる）。
 - **初期ブランチ**: `worktree-<name>` で作られる。`/plan-issue` で feature ブランチを作った後、不要なら `git branch -d worktree-<name>` で消してよい。
 - **設定ファイル**: gitignore 済みの `backend/.env`・`e2e/.env.e2e` は、リポジトリ直下の `.worktreeinclude` に従って公式機能が自動でコピーする（`--worktree`・サブエージェントの `isolation: worktree`・`EnterWorktree` のどれでも同じ）。**primary に `backend/.env` が無いとコピーされない**（黙って飛ばされる）。Docker を使う前に `wt-ports.sh` がこれを検査して止める（§5）。
-- **初めて使うフォルダ**: `claude --worktree` は、そのフォルダを Claude Code が信頼済みでないと「Workspace trust not yet accepted」で失敗する。新しく clone した primary などでは、先に `claude` を一度起動して信頼の確認を承認し、終了してから実行する（2.1.306 で確認）。
-- **終了時の確認**: 未コミットの変更があるワークツリーの対話セッションを終えると「Exiting worktree session」の確認が出る。続けて使うワークツリーは「**Keep worktree**」を選ぶ（「Remove worktree」は変更とコミットごと消す）。変更が無いワークツリーは確認なしで自動的に片付けられる（「Worktree removed (no changes)」と出る）。対話セッションを「Keep worktree」で終えた場合、ロックは残らない（2.1.306 で確認）。
-- **ロック**: `claude --worktree` はセッションの間、ワークツリーを `claude session <name> (pid N ...)` という理由でロックする（`git worktree list` に `locked` と出る）。`claude -p --worktree` など、セッションが終わってもロックが残る場合がある（2.1.304 で確認）。ロックされたワークツリーは素の `git worktree remove` では消せないので、撤去は §4 の `wt-remove.sh` で行う。
+- **初めて使うフォルダ**: `claude --worktree` は、そのフォルダを Claude Code が信頼済みでないと「Workspace trust not yet accepted」で失敗する。新しく clone した primary などでは、先に `claude` を一度起動して信頼の確認を承認し、終了してから実行する（`claude -p` は信頼の確認を飛ばす）。
+- **終了時の確認**: 変更もコミットも無いワークツリーは、終了のときに自動で消える。名前を付けたセッション・未コミットの変更や自分のブランチのコミットがあるワークツリーでは「Exiting worktree session」の確認が出る。続けて使うワークツリーは「**Keep worktree**」を選ぶ（「Remove worktree」は変更とコミットごと消す）。`/plan-issue` の後は feature ブランチにコミットがあるので、確認が出る。
+- **ロック**: `claude --worktree` はセッションの間、ワークツリーを `claude session <name> (pid N ...)` という理由でロックする（`git worktree list` に `locked` と出る）。終了したプロセスのロックは、後のセッションの掃除が自動で外す。待てないときやロックが残ったときは、§4 の `wt-remove.sh` で撤去する（素の `git worktree remove` はロックされたワークツリーを消せない）。
 - ロックの判定は pid で行うため、同じ環境（同じ WSL ディストリ）で動く Claude のロックだけを正しく判定できる。Windows 側など別の環境で動く Claude からワークツリーを使っている場合、その pid はこの環境に見えないので「終了済み」と判定される。その場合は `wt-remove.sh` を使う前に、そのセッションを終了しておく。
-- サブエージェントに `isolation: worktree` で作業させる場合も同じ仕組み（作成・コピー・自動片付け）が使われる。サブエージェントは、呼び出したセッションのワークツリーの中にさらに入れ子を作る。変更があった入れ子は自動では片付かずに残る（ロックは付かない）。
+- サブエージェントに `isolation: worktree` で作業させる場合も同じ仕組み（作成・コピー・自動片付け）が使われる。サブエージェントは、呼び出したセッションのワークツリーの中にさらに入れ子を作る。動いている間はロックされ、終われば外れる。変更があった入れ子は自動では片付かずに残る。
 - **自動片付けと入れ子の注意**: 公式機能の「変更が無い」の判定は、そのワークツリー自身の `git status` で行う。中の入れ子（`.claude/worktrees/` は gitignore 済み）の変更は見えないため、外側のワークツリーに変更が無く、中のサブエージェントの入れ子にだけ未コミットの変更があると、外側が「変更なし」として片付けられ、入れ子ごと消える恐れがある（ガードでは止められない）。サブエージェントに `isolation: worktree` で作業させたワークツリーは、終了時の確認で「残す」を選び、中の入れ子を確かめて（`git worktree list`）から §4 の `wt-remove.sh` で撤去する（`wt-remove.sh` は中に入れ子があると止まる）。
 
-**セッションを開く**: 各ワークツリーでは別々に `claude` を起動する（`claude --worktree` で作った直後のセッションはそのまま使える。再開するときは、そのワークツリーのフォルダで `claude` を起動する）。Cursor / VSCode では別のウィンドウで開く:
-- メニュー: File > New Window → Open Folder で対象のワークツリーを開く。または CLI: `cursor -n <path>` / `code -n <path>`（`-n` = 新しいウィンドウ）
-- **落とし穴**: 既に開いているフォルダを「Open Folder」で開き直しても、新しいウィンドウにはならず既存のウィンドウにフォーカスが戻るだけ。別ウィンドウにしたいときは必ず New Window から開く。入れ子ワークツリーは primary のフォルダの中にあるので、primary のウィンドウのエクスプローラーからではなく、別ウィンドウで入れ子のフォルダ自体を開く。
+**セッションを開く**: 各ワークツリーでは別々に `claude` を起動する（`claude --worktree` で作った直後のセッションはそのまま使える。再開するときは、そのワークツリーのフォルダで `claude` を起動する）。IDE（VS Code・Cursor など）を使うときは、ワークツリーごとに新しいウィンドウで開く（例: `code -n <パス>`。`-n` = 新しいウィンドウ）。既に開いているフォルダを開き直しても新しいウィンドウにはならない。入れ子ワークツリーは primary のフォルダの中にあるので、primary のウィンドウからではなく、別のウィンドウで入れ子のフォルダ自体を開く。
 
 **fallback（公式機能が使えない場合の手動手順）**:
 
@@ -102,16 +97,16 @@ DANGER_OK=1 bash scripts/claude/wt-remove.sh <primary>/.claude/worktrees/<name>
 KEEP_DATA=1 bash scripts/claude/wt-remove.sh <primary>/.claude/worktrees/<name>
 ```
 
-- 撤去対象は `git worktree list` に登録されたワークツリーのパスで指定する（登録外のフォルダは扱わない）。公式配置も旧配置（`/mnt/c/app/wt-harness` など）も同じ形。
-- 未コミット変更・未 push コミットがあると中止する（作業消失防止）。primary と、撤去対象の内側からの実行は拒否する。`--force` は使わない。
-- **中に別のワークツリー（入れ子）があると中止する**。`.claude/worktrees/` は gitignore 済みなので、未コミット変更の検査にも `git worktree remove` にも引っかからず、そのままだと入れ子の中身（未コミットの作業を含む）ごと消えてしまう。サブエージェントが作った入れ子などは、中のものを先に（同じ `wt-remove.sh` で）撤去してから外側を撤去する。中の入れ子が未 push のコミットで止まる場合は、残したい作業ならその入れ子のセッションで push してから撤去し、不要な作業なら外側の撤去を見送る（`--force` は使わない。作業を捨てる判断は人が行う）。フォルダが既に無い登録（`git worktree list` に `prunable` と出るもの）は数えないので止まらない（登録は `git worktree prune` で消せる）。中に**登録の無い `.git`**（登録が消えた入れ子のフォルダ・入れ子に置いた clone など）があって止まった場合は、`wt-remove.sh` にもその内側を渡せない（登録されたワークツリーではない）。**外側のワークツリーのセッションで**中身（未コミットの作業が無いか）を確かめ、不要なら `rm -r .claude/worktrees/<内側>` で消してから、primary で `wt-remove.sh` を再実行する（primary のセッションからは消さない＝§9）。登録が消えた入れ子では `git status` が `fatal: not a git repository` で使えないので、先に `git worktree repair <内側のパス>` で登録の復旧を試す（復旧できれば `wt-remove.sh` で撤去できる）。復旧できなければ、ファイルの更新日時（`ls -lt`）で最近の作業が無いかを確かめ、残したいものは外側の外へコピーしてから消す（確かめられないまま消さない）。
-- ロック（§2）: 終了済みの Claude セッションが残したロック（pid のプロセスが無い）だけを外して撤去する。使用中のセッションのロックがあれば、何も消さずに止まる（そのセッションを終了してから再実行）。Claude 以外の理由のロックも止まるので、使っている人に確認のうえ `git worktree unlock <パス>` してから再実行する。
-- データの判定: Compose プロジェクト名（フォルダ名を小文字にし、英数字・`_`・`-` 以外を除いたもの＝Compose の既定名）のラベルで `docker ps -a`・`docker volume ls` を調べる。`down -v` は必ず `docker compose -p <既定名> down -v` で、消す相手を既定名に固定して実行する（環境変数・`.env`・親フォルダの compose ファイルで primary など別のプロジェクトが選ばれないようにするため）。
-- **消す相手を確定できないときは、`DANGER_OK=1` でも止まる**（何も消さない）:
-  - プロジェクト名を変える指定がある: 環境変数 `COMPOSE_PROJECT_NAME`／直下 `.env` の `COMPOSE_PROJECT_NAME`・`COMPOSE_FILE`（`export`・空白・`:` 区切りを含む）／compose ファイル（`compose.yaml`・`docker-compose.yml`・override 等の 8 種）の最上位 `name:`／既定名が空になるフォルダ名。→ 指定を外し、コミットして push してから再実行する（未 push だと撤去前チェック（2）で止まる）。指定していた名前のプロジェクトのデータは `wt-remove.sh` では消えずに残るので、下の「取り残しの発見と削除」で片付ける（この場合は「止まったときの片付け」の手順 4 は使えない。指定が残っている限り何度実行しても止まる）。
-  - コンテナの作業フォルダのラベル（`com.docker.compose.project.working_dir`）が撤去対象と違う（同じ名前の別のプロジェクト・親フォルダの compose で起動したもの）。
-  - 既定名が別のワークツリーと同じ（親の違う同名の入れ子・primary と同じフォルダ名など）でデータがある。ワークツリーは同じ名前で作らない。同じ PC の別のクローンに同じ名前のワークツリーがある場合は、コンテナが残っていれば作業フォルダのラベルで止まるが、volume だけが残っている場合は区別できない（別のクローンで同じ名前を使わない）。
-- docker が使えない（コマンドが無い・デーモン停止）ときは判定できないので止まる。docker を起動して再実行するか、データを消さずに撤去してよければ `KEEP_DATA=1` を付けて再実行する（`down -v` は実行せず、データは残るので、docker が使えるときに下の「取り残し」の手順で片付ける）。`KEEP_DATA=1` は docker が使えないときだけ効き、データがあると判定できた場合は止まる。
+- 撤去対象は `git worktree list` に登録されたワークツリーのパスで指定する（登録外のフォルダは扱わない）。`--force` は使わない。
+- 止まる理由（何も消さずに止まる。止まったときはスクリプトの出力の手順に従う）:
+  - 未コミット変更・未 push コミットがある
+  - primary か撤去対象の内側から実行した
+  - 中に別のワークツリー（入れ子）がある（gitignore 済みなので入れ子の作業ごと消える。中のものを先に `wt-remove.sh` で撤去する）
+  - 使用中のセッションのロック・Claude 以外の理由のロックがある（終了済みのロックは外して進む。Claude 以外のロックは、使っている人に確認してから `git worktree unlock <パス>`）
+  - 消す相手（Compose のプロジェクト）を確定できない（`COMPOSE_PROJECT_NAME` などの指定・作業フォルダのラベルの違い・同じ名前の別のワークツリー。`DANGER_OK=1` でも止まる）
+  - docker が使えない（データを消さずに撤去してよければ `KEEP_DATA=1`）
+- **登録の無い `.git`** が中にあって止まった場合（登録が消えた入れ子・入れ子に置いた clone）は、`wt-remove.sh` にその内側を渡せない。**外側のワークツリーのセッションで**、まず `git worktree repair <内側のパス>` で登録の復旧を試す（復旧できれば `wt-remove.sh` で撤去できる）。復旧できなければファイルの更新日時（`ls -lt`）で最近の作業が無いかを確かめ、残したいものは外側の外へコピーしてから `rm -r .claude/worktrees/<内側>` で消す（確かめられないまま消さない・primary のセッションからは消さない＝§9）。
+- データの判定と削除: Compose の既定のプロジェクト名（フォルダ名から作る）のラベルで調べ、`down -v` は必ず `docker compose -p <既定名> down -v` で消す相手を固定して実行する（別のプロジェクトを消さないため）。
 - **ブランチは消さない**。完了メッセージに残ったブランチ名が出るので、不要なら `git branch -d <ブランチ>` で消す。
 
 **止まったときの片付け（持ち主を確かめてから手で行う）**: コンテナの作業フォルダが撤去対象と違う・同じ名前の別のワークツリーがある、で止まった場合（データが本当に撤去対象のものでも、Windows 側から起動して作業フォルダが `C:\…` の表記になっている場合などに起きる）:
@@ -149,12 +144,12 @@ docker volume ls -f dangling=true    # どのコンテナにも使われてい�
 ```bash
 # 対象のワークツリーで実行する（backend/.env・e2e/.env.e2e は .worktreeinclude で自動コピー済み）
 bash scripts/claude/wt-ports.sh      # (1) 直下 .env にポートを割り当てる（Docker 起動前に 1 回・→ §6）
-docker compose up -d --build --renew-anon-volumes   # (2) 起動（正準手順・作り直しの理由とテスト実行方法は common-commands.md を参照）
+docker compose up -d --build --renew-anon-volumes   # (2) 起動（正準手順。作り直しの理由は common-commands.md「開発環境起動」、テストの流し方は同「テスト実行」）
 ```
 
 - **⚠️ (B) `.env` 欠落は静かに壊れる**: `backend/.env` は `env_file` の `required: false` で参照されるため、無くても `docker compose up` は**失敗しない**。その代わり `SECRET_KEY` / `DB_PASSWORD` などが **insecure な既定値のまま静かに起動**する。→ `wt-ports.sh` は `backend/.env` が無ければ明示エラーで止める（primary に元ファイルが無く `.worktreeinclude` がコピーしなかった場合もここで気づく）。
 - **(C) `COMPOSE_PROJECT_NAME` を global に export しない**: Compose のプロジェクト名は既定でディレクトリ名になり、ワークツリーごとにコンテナ・named volume（Postgres データ含む）が自動的に分離される。global に export すると全ワークツリーが同一プロジェクト名になり、この分離が壊れる。→ `wt-ports.sh` / `wt-remove.sh` は当該変数が設定されていれば警告し、`wt-remove.sh` は消す相手を確定できないとして `DANGER_OK=1` でも止まる（変数を外してから再実行する → §4）。
-- **(D) 掃除**: ワークツリーごとに named volume が増える。Docker を使ったワークツリーは `wt-remove.sh` で撤去し、`down -v` → `git worktree remove` の順で volume を回収する（§4）。
+- **(D) 掃除**: Docker を使ったワークツリーは `wt-remove.sh` で撤去する（volume も回収する → §4）。
 
 ---
 
@@ -183,13 +178,14 @@ docker compose up -d --build --renew-anon-volumes   # (2) 起動（正準手順�
 - 実行し忘れて既定ポートのまま起動した場合は、primary のスタックとポートが衝突して `docker compose up` がエラーで止まる（静かには壊れない）。
 
 ```bash
-# 例: 2 つのワークツリーを同時起動。それぞれのワークツリーのセッション（そのフォルダで起動した claude・ターミナル）で実行する
+# 例: 同時に起動するワークツリーごとに、そのワークツリーのセッション（そのフォルダで起動した claude・ターミナル）で実行する
 # （1 つのセッションから cd して別のワークツリーの .env を書くのは §9 の「他のワークツリーを直接編集しない」に反する）
-bash scripts/claude/wt-ports.sh && docker compose up -d --build --renew-anon-volumes    # app-2 のセッションで → offset=10 → backend 8010 等
-bash scripts/claude/wt-ports.sh && docker compose up -d --build --renew-anon-volumes    # app-3 のセッションで → offset=20 → backend 8020 等
+# （2 つのコマンドはつながずに 1 つずつ流す。つなぐとサンドボックスの外に出ない・docs/runbooks/danger-ops.md「外に出すコマンドの書き方」）
+bash scripts/claude/wt-ports.sh                               # 1 つ目の追加ワークツリー → offset=10 → backend 8010 等（2 つ目は 20）
+docker compose up -d --build --renew-anon-volumes
 
-# 割当ポートの確認（publish されるホストポートをレンダリングして確認）
-docker compose config | grep -A1 published
+# 割当ポートの確認（起動後）
+docker compose port backend 8000
 ```
 
 ---
@@ -201,7 +197,7 @@ docker compose config | grep -A1 published
 **ワークツリー間の反映のタイミング**: 「共有される」のはコミットの履歴であって、作業中のファイルではない。各ワークツリーのファイル（スキル・手順書・`.claude/settings.json` を含む）は、そのワークツリーが今チェックアウトしているブランチの内容で動く。
 - 別のワークツリーで直したスキル・手順書は、PR で develop にマージされ、さらに自分のワークツリーがそれを取り込むまで反映されない（どこかで直せば即全体に効く、ではない）。新しいイシューは `/plan-issue` が最新の `origin/develop` からブランチを作るので自然に入る。
 - 作業途中のワークツリーに取り込むときは、そのワークツリーのセッションで `git fetch origin` → `git merge origin/develop` を行う（未コミットの変更は先にコミットしておく）。
-- 例外（ブランチによらない）: `~/.claude` の個人設定・メモリ、git config、git stash は 1 つで全ワークツリーに即効く（下の「共有される」）。サブエージェントのフック（ガード）と `.worktreeinclude` は、作業しているワークツリーではなく primary が今チェックアウトしているブランチの内容で決まる（§2「primary のブランチ」）。
+- 例外（ブランチによらない）: `~/.claude` の個人設定・メモリ、git config、git stash は 1 つで全ワークツリーに即効く（下の「共有される」）。ワークツリーのセッションで承認画面の「今後は聞かない」を選ぶと、その許可は primary の `.claude/settings.local.json` に入り、全ワークツリーに効く（公式の仕様）。サブエージェントのフック（ガード）と `.worktreeinclude` は、作業しているワークツリーではなく primary が今チェックアウトしているブランチの内容で決まる（§2「primary のブランチ」）。
 
 **共有される（コミット済み / `.git`）**:
 - `.git` 履歴・コミット済みファイル全般
@@ -214,7 +210,7 @@ docker compose config | grep -A1 published
 **共有されない（手当てが要る）**:
 - backend `.env`・`e2e/.env.e2e`（gitignore。`.worktreeinclude` で作成時に自動コピー → §2）
 - 直下 `.env`（ポート割当。ワークツリーごとに `wt-ports.sh` で作る → §6）
-- 未コミット / untracked のファイル（他ワークツリーからは見えない → §8）
+- 未コミット / untracked のファイル（他ワークツリーからは見えない。今までのイシューのファイルの扱いは docs/runbooks/issue-flow.md「イシューの番号と置き場所（I221）」）
 
 **コンテナ管理（ホストでは共有されないが手当ても不要）**:
 - 依存パッケージ（イメージに焼き込み）
@@ -223,33 +219,27 @@ docker compose config | grep -A1 published
 
 **入れ子配置の検索の注意**: primary の中の `.claude/worktrees/` には別のワークツリー（ファイル一式）がある。`grep -r`・`find` など gitignore を見ないコマンドで primary を検索すると、入れ子ワークツリーの中身が混ざる。`git grep`・Claude の Grep/Glob ツールは `.gitignore` に従うため混ざらない。
 
-**WSL 表示確認**: WSL 環境では、Windows 側エクスプローラや Cursor のパス表示が `/mnt/c/...` と `\\wsl$\...` で食い違うことがある。開いているフォルダのパスが目的のワークツリーと一致しているか確認する。
+**WSL 表示確認**: WSL 環境では、Windows 側のエクスプローラーや IDE のパス表示が `/mnt/c/...` と `\\wsl$\...` で食い違うことがある。開いているフォルダのパスが目的のワークツリーと一致しているか確認する。
 
 ---
 
 ## 8. イシューの番号（I221）
 
-- **番号は GitHub が振る**: 新しいイシューは GitHub のイシューだけで管理し、「I＋GitHub の番号」で呼ぶ（`docs/runbooks/workflow.md`「イシューの置き場所」）。どのワークツリーから起票しても番号はぶつからず、手元にファイルが無いのでワークツリー間で持ち運ぶものも無い。以前の自前の採番（全ワークツリーの `docs/issues` と git 履歴を数える自前のスクリプト・I098）は I221 で廃止した
-- **今までのイシュー（I426 以下）**: 起票したワークツリーに untracked のイシューファイルがあるものは、今までどおりそのワークツリーで `/plan-issue` する。別のワークツリーで打つと、`scripts/claude/issue-source.sh` が「ファイルが見つからない」で止める（GitHub の同じ番号の別のイシューを読まない）
+正は docs/runbooks/issue-flow.md「イシューの番号と置き場所（I221）」（番号は GitHub が振るのでワークツリー間でぶつからない・今までのイシューは起票したワークツリーで扱う）。
 
 ---
 
 ## 9. セッション間の引き継ぎ原則（自己完結）
 
-- **口頭メモ（チャット上のメモ）での引き継ぎは禁止**。メモ漏れで受け手セッションがぶれ、記録が `docs/` に残らず憲法5「記録が残る形」に反する。
+- **口頭メモ（チャット上のメモ）での引き継ぎは禁止**。メモ漏れで受け手セッションがぶれ、記録が `docs/` に残らず CLAUDE.md 絶対ルール 5「記録が残る形」に反する。
 - 引き継ぎは**イシュー / 計画 / レビューのファイルに自己完結で記述**する。**文脈ゼロの新規セッションが、そのファイルだけを読んで同じ結論に到達し作業を続行できる状態**を必須とする。
-- ワークツリーをまたぐ依頼も同様。現セッションから他のワークツリーを直接編集せず、引き継ぎはファイル経由で行う。
-- **例外: primary の早送り（I200・I219）**: セッションの開始のフック（`scripts/claude/hooks/sessionstart_context.py`）が、どのワークツリーのセッションでも開始時に裏の処理（`--sync-primary`）を起動し、primary を `origin/develop` へ早送りする。許可の判定の一部は primary の `.claude/settings.json` で行われる（`scripts/claude/check-permission-prompt.sh` の冒頭）ため、primary が古いと develop で足した許可が効かない。動くのは「primary が develop にいる・追跡済みファイルに未コミットの変更が無い・`git merge --ff-only` で済む」ときだけで、何も消さない（未追跡のファイルを上書きしうるときは git 自身が止める）。
-  - **開始は待たない（I219）**: 開始時のフックは裏の処理を起動してすぐ戻る。早送りの結果は次のセッションの開始時の文脈に「primary: 前回（日時）: …」の 1 行で出る（初回は「まだ結果がありません（裏でそろえています）」）。合わないとき・失敗したときは、その行に理由と手で行うコマンドが出る。結果は `~/.cache/claude-primary-sync/`（リポジトリの外）に置く
-  - **ロックを残さない（I219）**: フックの読み取りの git は `GIT_OPTIONAL_LOCKS=0`（索引の書き直しをしない）で動き、ロックを取らないので打ち切りはすぐ（SIGKILL）。必須のロックを取る fetch・merge だけ、SIGTERM で打ち切って少し待ち（git が自分で `.lock` を片付ける）、それでも終わらなければ SIGKILL（`sessionstart_context.py` の `_run`）。裏の処理は同時に 1 本だけ動く（排他の `.lock` を同じ置き場所に置く）
-  - ツールの呼び出しではなくフックなので、見張りと Claude Code 本体の隔離の判定の外で動く（例外はこの早送りだけ）
-- **技術強制済み（I095・I430）**: この「他のワークツリーを直接編集しない」ルールは、次の 2 つで技術強制されている（`.claude/settings.json` は commit 共有のため全ワークツリーに自動適用）。**読み取りは許可**（参照・調査は可）。
-  - **Bash の書き込み**: 公式のサンドボックス（I430・`docs/runbooks/danger-ops.md`「サンドボックス（第 1 層）」）。書けるのは作業ディレクトリの下と一時ディレクトリだけで、`.claude/worktrees/` は `denyWrite` で書けない（primary のセッションから入れ子を守る）。書き方（リダイレクト・`cp`・`cd` や変数越しの宛先）によらず場所で止める。ただし外に出したコマンド（`docker`・`gh`・`git`・`bash scripts/claude/*`）の中の書き込みは止めない（ワークツリーのセッションでは、別のワークツリーを指す git の操作を Claude Code が断る）
-  - **Edit/Write/MultiEdit/NotebookEdit**: PreToolUse フック（`scripts/claude/hooks/pretooluse_guard.py`）が別ワークツリーのルート配下への書き込みを `exit 2` でブロックする（サンドボックスは Edit 系にかからず、auto モードの判定役は通しうる＝I430 の試し S18）。判定は `git worktree list` のルートとの realpath 境界一致で行い、**入れ子では、パスを含む最も内側のワークツリーを所有者として判定**する（I179。入れ子ワークツリーは自分のファイルに書け、親→入れ子・入れ子→親・兄弟間はブロック）。**fail-safe**（ワークツリー境界を確定できない場合＝git 失敗時はブロック）・**エスケープ無し**（`DANGER_OK=1` でも解除されない）
-- **削除・破棄は技術的には止めない（I179 計画変更記録 6）**（I430 から、Bash の書き込みはサンドボックスが場所で止める。下は外に出したコマンドと、primary のセッションでの git の操作の話）: 公式配置では別のワークツリーが primary の中（`.claude/worktrees/`）にあるため、primary での相対パスや全体への操作で他のワークツリーの未コミット作業を消せる。ただしコマンドの文字列からシェルの動きを読み取って止める方式は、どこまで足しても抜け道と止めすぎが出続けた（I179 の敵対的レビュー第 1〜11 周・`docs/reviews/closed/I179_adversarial_review_*.md`）。develop/main は GitHub 側で保護され（bot は PR を出すだけ）、ローカルが壊れても GitHub から復旧できるため（例外は秘密情報の push とワークフローの変更など。`docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲」）、守りは次に任せる。
-  - **こまめに commit する**（push は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」の時点だけ。手元のコミットはワークツリーを消さない限り残り、`wt-remove.sh` は未 push のコミットがあると止まる）。
-  - **別のワークツリーの中身を消さない**: primary のセッションで `.claude/worktrees/` 配下を `rm`・`mv`・`git -C <入れ子> reset/checkout/clean/stash` しない。撤去は `bash scripts/claude/wt-remove.sh <パス>`（未コミット・中の入れ子があると止まる）。`git worktree remove` は使わない（中の入れ子は gitignore 済みで、`--force` なしでも作業ごと消える）。
-  - **別ワークツリー専用の判定は持たない**: 中の入れ子ワークツリーまで未コミットの作業ごと消す `git clean -ff`（`f` を 2 つ以上）を含め、`git clean -f`・`rm -r`・`git reset --hard` などは、見張り（I174）が危険操作として場所によらず止める（`docs/runbooks/danger-ops.md`）。
+- ワークツリーをまたぐ依頼も同様。現セッションから他のワークツリーを直接編集せず、引き継ぎはファイル経由で行う。読み取り（参照・調査）はしてよい。
+- **例外: primary の早送り（I200・I219）**: 開始時のフック（`scripts/claude/hooks/sessionstart_context.py` の `--sync-primary`）が、どのワークツリーのセッションでも裏で primary を `origin/develop` へ早送りする（許可の判定の一部は primary の `.claude/settings.json` で行われるため）。動くのは primary が develop にいて追跡済みファイルがきれいで早送りで済むときだけで、何も消さない。結果は次の開始時の文脈の「primary: 前回（日時）: …」の 1 行に出る（合わないときはその行に理由と手で行うコマンドが出る）。
+- **技術強制**: 公式のワークツリーの分離は、ワークツリーのセッションから primary（main checkout）への Edit と git の向け直しを止める。primary から入れ子・兄弟の間は、Bash の書き込みをサンドボックス、Edit 系の書き込みを見張りが止める（仕組みの正は `docs/runbooks/danger-ops.md`「サンドボックス（第 1 層・I430）」「見張り（pretooluse_guard.py）の扱い（I174）」1.）。外に出したコマンド（`docker`・`gh`・`git`・`bash scripts/claude/*`）の中の書き込みは止めない
+- **削除・破棄は文字列の判定では止めない**（I179 で、コマンドの文字列から読み取る方式は抜け道と止めすぎが出続けた）。ローカルが壊れても GitHub から復旧できる（例外は `docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲」）ので、次を守る:
+  - **こまめに commit する**（push は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」の時点だけ）
+  - **別のワークツリーの中身を消さない**: primary のセッションで `.claude/worktrees/` 配下を `rm`・`mv`・`git -C <入れ子> reset/checkout/clean/stash` しない。撤去は `bash scripts/claude/wt-remove.sh <パス>`（`git worktree remove` は使わない）
+  - `git clean -f`・`rm -r`・`git reset --hard` などは、見張りが危険操作として場所によらず止める（`docs/runbooks/danger-ops.md`）
 - **既知の限界（入れ子）**: 「どれが現ワークツリーか」はフックを実行したときの作業フォルダ（`git rev-parse --show-toplevel`）で決まる。入れ子ワークツリーは primary のフォルダの中にあるため、primary のセッションで `cd .claude/worktrees/<name>` すると作業フォルダがそのまま残り、それ以降はそのセッションが入れ子のワークツリーとして扱われる（入れ子への書込が通る）。primary のセッションから入れ子へ `cd` しない。入れ子で作業するときは、そのワークツリーのセッションを使う（§2「セッションを開く」）。サブエージェントのフックは primary の設定で動くため、作業フォルダ以外（`CLAUDE_PROJECT_DIR` 等）で判定すると、サブエージェントが自分の入れ子に書けなくなる。このため作業フォルダでの判定を維持している。
 
 ---
@@ -258,25 +248,4 @@ docker compose config | grep -A1 published
 
 現在のワークツリーは `git worktree list` で確認する（手書きの一覧は古くなるため置かない）。
 
-| トラック | 対応 GitHub ラベル | 対象 |
-|---------|-------------------|------|
-| ハーネス改善 | `track:harness` | `docs/runbooks/`・`scripts/claude/`・`.claude/`（skills/hooks/settings）・レビュー/ゲート/テンプレートの仕組み |
-| アプリ開発 | `track:app` | `backend/`・`frontend/`・`e2e/` 等のアプリ機能・アプリのテスト |
-
-ワークツリーはトラックに固定しない。どのワークツリーでどのトラックのイシューを扱ってもよい（同時に扱うのは 1 ワークツリー 1 イシュー）。
-
----
-
-## 11. 旧方式からの移行
-
-**wt-harness の移行は I184（2026-10-24）で完了した。以下は手順の記録として残す。**
-
-- **既存の `wt-harness`（`/mnt/c/app/wt-harness`・I179 より前の自作スクリプト方式で primary の外に作ったワークツリー）**: そこで進めているイシュー（I178・I179）が完了・クローズした後に、次の順で移す。
-  1. `wt-harness` にしか無い未コミットのファイルを primary へ移す。`/issue-bootstrap` のイシューファイル（`docs/issues/open/I###.md`）とイシューレビュー（`docs/reviews/I###_issue_review_*.md`）は、運用上わざと未コミットにしているので、捨てると起票済みイシューの本文と採番の根拠が消える。**primary のセッションで**、`git -C /mnt/c/app/wt-harness status --porcelain --untracked-files=all` に出る `??` のファイル（`--untracked-files=all` でフォルダではなくファイル単位に出す）のうち primary に無いものを `cp /mnt/c/app/wt-harness/<パス> <パス>` で primary にコピーする（コピー元の読み取りはガードに抵触しない。`wt-harness` のセッションから primary へ書き込むのはガードで止まる）。コピー後、両方の中身が `cmp` で一致することを確かめる。**primary にも同じパスのファイルがあるもの**は、コピーせずに `cmp` で中身を比べる。違っていれば（以前に primary へ写した後、`wt-harness` 側で追記した等）どちらが新しいかを確かめ、`wt-harness` 側が新しければ primary のセッションで差分を反映してから手順 3 に進む（手順 3 で `wt-harness` 側を削除するため、確かめずに進めると新しい版が消える）。
-     - **コピーしないもの**: 同じ番号が既にクローズ済み（develop に `docs/issues/closed/I###.md` がある。`git ls-tree -r --name-only origin/develop docs/issues/closed/` で確認）のイシューファイルは古い版なのでコピーしない（open と closed が内容違いで並ぶのを防ぐ）。
-     - gitignore 済みのファイルは `??` に出ないが、撤去で黙って消える。`git -C /mnt/c/app/wt-harness status --porcelain --ignored` の `!!` のうち、`.claude/settings.local.json`（個人の権限設定）など残したいものは、primary の同名ファイルと見比べて必要な行を primary 側へ手で反映する（上書きしない）。
-  2. `wt-harness` の中に入れ子（サブエージェントが作った `.claude/worktrees/agent-*` など）が残っていれば、先に撤去する（§4。未 push の入れ子の扱いも §4）。
-  3. primary から `bash scripts/claude/wt-remove.sh /mnt/c/app/wt-harness` で撤去する（Docker のデータが無ければ許可は不要）。`wt-harness` に残っている untracked のファイル（手順 1 でコピーしたもの・「コピーしないもの」としたクローズ済みイシューの古い版の両方）は、未コミット変更として撤去を止める。primary へのコピーを確かめたうえで、**`wt-harness` のセッションで**それらをすべて削除してから実行する。
-  4. 必要なら primary で `claude --worktree harness-<連番>` で作り直す（§2 の「作る前の確認」を先に行う）。
-     作った直後のワークツリーは変更が無いので、そのセッションを終えると確認なしで自動的に消える（§2「終了時の確認」）。使うときに作ればよく、残しておきたいときはセッションを開いたままにする（消えても同じコマンドで作り直せる）。
-- **primary は移行しない**（そのまま作成元として使う）。
+トラックは GitHub のラベル `track:harness`（ハーネス改善）／`track:app`（アプリ開発）で区別する（付け方の決まりは docs/runbooks/issue-flow.md「起票」）。ワークツリーはトラックに固定しない。どのワークツリーでどのトラックのイシューを扱ってもよい（同時に扱うのは 1 ワークツリー 1 イシュー）。

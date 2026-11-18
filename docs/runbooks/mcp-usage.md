@@ -1,6 +1,6 @@
 # MCP 利用ガイドライン
 
-このプロジェクトで評価・導入した MCP（Model Context Protocol）サーバーの一覧と、利用場面・使い方を記載する。
+このプロジェクトで評価・導入した MCP（Model Context Protocol）サーバーの一覧と、追加するときの決まりを記載する。
 
 ---
 
@@ -8,80 +8,32 @@
 
 | MCP | 評価結果 | 根拠 |
 |-----|---------|------|
-| GitHub MCP | ❌ 廃止（I223・I030 で導入） | GitHub の操作は `gh`（GitHub App の鍵）だけにする。名義と鍵を 1 つにまとめ、長く効く個人の鍵を持たないため。`docs/runbooks/github-app-setup.md` |
+| GitHub MCP | ❌ 廃止（I223・I030 で導入） | GitHub の操作は `gh`（GitHub App の鍵）だけにする。MCP は別の個人の鍵（PAT）で動き、名義と鍵が 2 つになっていた。長く効く個人の鍵を持たない。`docs/runbooks/github-app-setup.md` |
 | Playwright MCP | ✅ 導入済み（I187） | Claude が画面を確かめる。`docs/runbooks/frontend-verify.md` |
-| Sequential Thinking MCP | ❌ 導入不要（I035） | Claude 4.x では冗長。供給チェーンリスクあり（詳細は後述） |
-| Web Search MCP | ❌ 導入不要（I035） | built-in `WebSearch` ツールで対応可能。外部 API キー管理不要 |
+| Sequential Thinking MCP | ❌ 導入不要（I035） | 今の Claude の推論で足りる。供給チェーンリスクあり（§3） |
+| Web Search MCP | ❌ 導入不要（I035） | built-in の `WebSearch` で足りる。外部 API キー管理不要 |
 
 ---
 
-## 2. built-in WebSearch ツール
+## 2. built-in の WebSearch・WebFetch
 
-### 概要
-
-Claude Code には `WebSearch` ツールが組み込み機能として存在し、追加 MCP なしでリアルタイムの Web 検索が可能。
-
-### 利用場面
-
-| フェーズ | 利用例 |
-|---------|-------|
-| `/plan-issue` | 使用ライブラリの最新バージョン確認 |
-| `/plan-issue` | CVE・既知脆弱性の確認（`pip-audit` 補完として） |
-| `/plan-issue` | Django・React の最新推奨パターン確認 |
-| fix-loop 段階 | エラーメッセージの最新情報・Stack Overflow 調査 |
-
-### 使い方
-
-Claude に自然言語で指示する:
-
-```
-WebSearch ツールを使って Django REST framework の最新バージョンを調べて
-```
-
-```
-WebSearch ツールを使って [ライブラリ名] の既知 CVE を確認して
-```
-
-### 注意事項
-
-- **環境依存**: `WebSearch` ツールは Claude Code の環境によって利用不可の場合がある
-  - `claude.ai/code`（Web アプリ）: 利用可能
-  - Claude Code CLI（ローカル）: 設定・プランによって利用不可の場合あり
-- **フォールバック**: CLI 環境で利用不可の場合は公式ドキュメント・npm/PyPI を手動で確認する
-- **情報の最終確認**: WebSearch の結果は公式ドキュメントで裏取りしてから計画書に記載する（Web 検索結果は古い・誤りの場合がある）
+- Claude Code の組み込みの道具。追加の MCP は要らない。使えるかは提供元による（公式: Amazon Bedrock では使えない）
+- 最新の版・CVE・推奨を調べるときは、`WebSearch` で探し、`WebFetch` で公式の文書を読んで裏を取る（検索の結果だけで決めない）
+- 計画書・点検の表には、出典の URL と読んだ日付を書く
 
 ---
 
-## 3. GitHub MCP（I223 で廃止）
+## 3. Sequential Thinking MCP を導入しない理由
 
-I223 で `.mcp.json` から外した。スキル・スクリプトは GitHub の MCP を使っておらず、すべて `gh` で動いていた。MCP は別の個人の鍵（PAT）で動いていて、名義と鍵が 2 つになっていた。GitHub の操作は `gh`（GitHub App の鍵）だけを使う。設定は `docs/runbooks/github-app-setup.md`。見張りの MCP 向けの部分（`.claude/settings.json`・`pretooluse_guard.py`）は、戻したときにも効くように残している。
+評価したパッケージ: `@modelcontextprotocol/server-sequential-thinking`（2025.12.18）
 
----
-
-## 4. Sequential Thinking MCP を導入しない理由
-
-将来の参照のために、導入不要と判断した根拠を記録する。
-
-### 評価パッケージ
-
-`@modelcontextprotocol/server-sequential-thinking`（バージョン 2025.12.18）
-
-### 起動確認
-
-```bash
-npx -y @modelcontextprotocol/server-sequential-thinking
-# → "Sequential Thinking MCP Server running on stdio"（起動は成功）
-```
-
-### 導入不要の根拠
-
-1. **Claude 4.x では冗長**: このMCPはClaude 2/3向けの補助ツールとして設計された。Claude claude-sonnet-4-6（本プロジェクト使用中）はモデル内部で高精度の段階的推論を行っており、外部ツールで補う必要がない
-2. **供給チェーンリスク**: バージョン未固定（`npx -y`）で実行すると、パッケージの悪意ある更新が自動適用されるリスクがある。既存の MCP（当時の GitHub MCP の `@2025.4.8`・今の Playwright MCP の `@0.0.83`）は版を固定しており、一貫性がなく安全でない
-3. **依存増加のコスト超過**: 実質的な品質向上なしに npm 依存・保守コスト・攻撃面が増加する
+1. **冗長**: 段階的に考える補助で、今の Claude はモデルの中で段階的な推論を行うので、外から補う必要がない
+2. **供給チェーンリスク**: 版を固定せずに（`npx -y`）実行すると、パッケージの悪意ある更新がそのまま入る
+3. **依存増加のコスト超過**: 品質の向上なしに npm 依存・保守コスト・攻撃面が増える
 
 ---
 
-## 5. 将来 MCP を追加する際の評価観点
+## 4. 将来 MCP を追加する際の評価観点
 
 新しい MCP を追加する前に、以下の観点で評価すること。
 
@@ -92,7 +44,7 @@ npx -y @modelcontextprotocol/server-sequential-thinking
 | **代替手段の有無** | Claude Code の built-in 機能や既存ツール（`gh` CLI 等）で代替できないか |
 | **供給チェーンリスク** | バージョン固定が可能か（`@x.y.z` 形式で指定できるか） |
 | **シークレット管理** | 外部 API キーが不要か。必要な場合、環境変数管理の運用コストは許容できるか |
-| **Claude モデルとの適合** | 現在使用している Claude モデルに対して実質的な追加価値があるか |
+| **Claude モデルとの適合** | 今の Claude に対して実質的な追加価値があるか |
 | **公式性・信頼性** | Anthropic 公式または実績あるサードパーティか |
 
 ### 追加する場合の設定ルール
@@ -110,4 +62,6 @@ npx -y @modelcontextprotocol/server-sequential-thinking
 }
 ```
 
-`-y` オプションはバージョン固定している場合のみ使用可（未固定の場合はインストール後にパスを指定）。
+- `-y` オプションはバージョン固定している場合のみ使用可（未固定の場合はインストール後にパスを指定）
+- `.mcp.json` の MCP は、`claude -p`（レビュー役など）では承認なしで読み込まれる（公式）。`scripts/claude/` が Claude を起こす行は `--strict-mcp-config` を保つ（決まりの正は `docs/runbooks/github-app-setup.md`「1. 仕組み」）
+- 新しい MCP の道具は、PreToolUse の見張りの対象（`.claude/settings.json` の `hooks` の matcher。今は `mcp__playwright__.*`）と allow に足すかを決める。足さないと見張りが掛からない。`.claude/settings.json` の変更は `docs/runbooks/workflow.md`「止めて聞く条件」2 に当たる

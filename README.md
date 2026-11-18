@@ -104,14 +104,5 @@ docker compose exec backend python manage.py createsuperuser
 
 ## バイブコーディング運用（Claude Code）
 
-このリポジトリでは Claude Code を使ってバイブコーディングで開発を進めています。
-
-```
-/issue-bootstrap [タイトル]  # イシュー作成・ブランチ作成
-/plan-issue I###             # 計画書作成（承認待ち）
-/implement I###              # 実装・テスト
-/fix-loop I###               # NG時の修正ループ
-/close I###                  # クローズ処理・PR整備
-```
-
-詳細ルール: `docs/runbooks/` を参照
+Claude Code の運用の決まりは `CLAUDE.md`（索引と絶対ルール）にある。
+打つスキルと段階の流れは `docs/runbooks/workflow.md`。

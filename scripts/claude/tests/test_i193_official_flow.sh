@@ -540,7 +540,6 @@ d3() { local t; for t in '/code-review' '/security-review' '/simplify' '/verify'
          grep -E "^\| \`${t}\`" "$1" | grep -qE '\*\*(入れる|入れない)\*\*' || return 1; done; }
 d4() { s_has "$1" "## 止めて聞く条件" && s_has "$1" "要件・基本設計・UI/UX" && s_has "$1" "取り消せない操作" && s_has "$1" "安全側の選択肢" && s_has "$1" "## 自律判断の記録"; }
 d5() { s_not "$1" "ユーザー承認なしにコード変更" && s_has "$1" "「止めて聞く条件」"; }
-d6() { s_has "$1" "古い流れのまま最後まで進める" && s_has "$1" "スキルは各ワークツリーで checkout しているブランチから読み込まれる"; }
 d7() { local c; for c in '/issue-bootstrap' '/grill-me' '/plan-issue' '/proceed'; do s_has "$1" "- ${c}" || return 1; done
        s_has "$1" "ユーザーは打たない"; }
 ck "D1 設計書に §2〜§7 と出典" 0 "$(rc d1 $DS)"
@@ -548,7 +547,7 @@ ck "D2 設計書 §3 に L1〜L16（L15 fix-loop のレビュー役・L16 I187 �
 ck "D3 設計書 §4 に 4 つの道具の採否" 0 "$(rc d3 $DS)"
 ck "D4 workflow.md に止める 3 条件と自律判断の記録" 0 "$(rc d4 $WF)"
 ck "D5 CLAUDE.md に旧承認ルールが無く止める条件を参照" 0 "$(rc d5 CLAUDE.md)"
-ck "D6 workflow.md に着手済みイシューの扱い" 0 "$(rc d6 $WF)"
+# D6（workflow.md の「移行」の節）は I546 で節ごと消したので外した（I193 の前に着手したイシューはもう無い）
 ck "D7 workflow.md の使うスキルは 4 つで段階は打たない" 0 "$(rc d7 $WF)"
 sed 's#^| L13 |#| X13 |#' $DS > "$TMP/d2.md"
 ck "FG-D2 L13 を消すと D2 不合格" 1 "$(rc d2 "$TMP/d2.md")"

@@ -548,7 +548,7 @@ amk fn12 "$(broken_of "$ADV" 'if ! command -v flock >/dev/null 2>&1; then' 'if f
 ck "FG-N12 存在確認を外すと N12 が不合格（exit 2 にならない）" no "$([ "$(cat "$TMP/a_fn12/rc")" = 2 ] && echo yes || echo no)"
 # N13（F9）・N14b（4.10）: 指示ファイル
 n13() { grep -qF 'パスの判定が YES のときは' "$1" && ! grep -qF '高リスク時は /security-review' "$1" && ! grep -qF '高リスク時は `/security-review`' "$1"; }
-for f in "$RG" "$RR" docs/runbooks/workflow.md docs/runbooks/issue-flow.md; do
+for f in "$RG" "$RR" docs/runbooks/workflow.md; do  # issue-flow.md の段階の流れの写しは I546 で消した
   ck "N13 ${f}: /security-review はパスの判定が YES のとき" yes "$(yn n13 "$f")"
   ck "FG-N13 ${f}: 「パスの判定が YES のときは」の行を除くと不合格" no "$(yn n13 "$(without "$f" 'パスの判定が YES のときは')")"
 done

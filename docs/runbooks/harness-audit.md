@@ -7,8 +7,9 @@
 | スキル | `.claude/skills/` |
 | レビュー役 | `.claude/agents/` |
 | スクリプト | `scripts/claude/` |
-| 見張りと設定 | `scripts/claude/hooks/`・`.claude/settings.json`（手元の `.claude/settings.local.json` も） |
-| 手順書 | `docs/runbooks/`・`CLAUDE.md` |
+| 見張りと設定 | `scripts/claude/hooks/`・`.claude/settings.json`（手元の `.claude/settings.local.json` も）・`.worktreeinclude`・利用者の設定（`~/.claude/settings.json`・`~/.claude/CLAUDE.md`。リポジトリの許可より先に効く） |
+| 手順書 | `docs/runbooks/`・`CLAUDE.md`・`docs/claude-code-structure.md`・`docs/plans/templates/`・`docs/reviews/templates/`・`docs/tests/templates/` |
+| Claude の手元の記憶 | `~/.claude/projects/<プロジェクト>/memory/`。プロジェクトの決まり（どのセッション・レビュー役でも守るべきもの）が溜まっていないかを見る。溜まっていれば手順書の正の置き場所に移して記憶から消す（I546。記憶はリポジトリの外で、レビュー役・ほかのワークツリーから見えない） |
 | 記録の置き方 | `docs/issues/`・`docs/plans/`・`docs/tests/`・`docs/reviews/` |
 | MCP | `.mcp.json` |
 | CI | `.github/`（ワークフロー・CODEOWNERS・Dependabot）・`.pre-commit-config.yaml` |
@@ -37,4 +38,4 @@ GH_APP_READONLY= GH_APP_DISABLE=1 gh auth status --json hosts --jq '.hosts["gith
 ```
 
 - 1 行目: 古い鍵を `export` する行を、値を出さずにファイルごとに数える（0 でないファイルの行を消す。`docs/runbooks/github-app-setup.md`「9.」）。ファイルが無いときのエラーは無視してよい
-- 2 行目: 入口から App の鍵を渡さずに（`GH_APP_DISABLE=1`。読み取りだけの指定があると無視されるので空にする）、本物の `gh` が使う鍵を、名義・鍵の出どころ（環境変数か、保存されたログインのファイルか）・状態で出す。`--json` で要る欄だけを取り出すので鍵は出ない。`env -u` の形はワークツリーのセッションの見張りが止めるので使わない
+- 2 行目: 入口から App の鍵を渡さずに（`GH_APP_DISABLE=1`。読み取りだけの指定があると無視されるので空にする）、本物の `gh` が使う鍵を、名義・鍵の出どころ（環境変数か、保存されたログインのファイルか）・状態で出す。`--json` で要る欄だけを取り出すので鍵は出ない（**`--json` を付けずに状態を表示すると App の鍵が画面に出る**。出したときは `docs/runbooks/github-app-setup.md`「5.」の「鍵が画面・記録に出てしまったら」で失効させる）。`env -u` の形はワークツリーのセッションの見張りが止めるので使わない
