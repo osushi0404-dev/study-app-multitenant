@@ -34,6 +34,7 @@
 - [implement] /simplify の結果: 共有のテスト用データ `problems.tests.i466_data.answer` を使う・利用者の選び方を副問い合わせにする・空の `admin.py` を消す・定期処理のコメントを決まりだけにする、を直した。直さなかったもの: TC-07 の操作の比べを `describe()` の文字列にする案と、`LEGACY_TABLES` をモデルから導く案 — 手で書いた一覧のほうが、マイグレーションと独立した確かめになるため
 - [implement] 開発の DB には `0002` を流していない（M3 で `[ ] 0002` を確認）。コンテナも起こし直していない — 計画書 8 の R1・9 の Danger Ops
 - [review-gate] 1 回目: CI の E2E Tests (Playwright) が失敗（run 44207144182）。ほかの CI のジョブは通過。`CI_WAIT: FAIL` なので fix-loop へ回す — 手順どおり
+- [fix-loop] E2E の失敗の原因は I492 の変更ではない: 2026-11-17 午後から `ubuntu-latest` が Ubuntu 26.04 になり、`@playwright/test` 1.59.1（26.04 に非対応。1.65.1 は対応）がブラウザを入れる段で止まる。I492 の中では直さず、既存の #432（Dependabot #377 の Playwright の版上げを取り込む）を最優先に前倒しして直す。I492 はここで止め（STAGE_DONE を書かない）、#432 のマージの後に develop を取り込んで `/proceed I492` で再開する — ユーザーの方針「ハーネス・ループの BP の観点でベストなやり方で」（2026-11-18）。実行環境を古い版に固定する案はユーザーの指摘（古い版でテストし続けるのは BP ではない）で採らない。#432 に経緯をコメント済み
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
