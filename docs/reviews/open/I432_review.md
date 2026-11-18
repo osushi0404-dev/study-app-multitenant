@@ -40,3 +40,5 @@ STAGE_DONE: design-security-review NEXT: implement
 - [implement] `docker-compose.yml` は `sed -i` が置き換えに失敗（サンドボックスで 1 ファイルだけ書ける場所のため）したので Edit で直した — 結果は同じ
 STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 基本レビューは CI_WAIT: OK（E2E を含む全ジョブ成功）・FINAL_VERDICT: OK・Low 5 件（F1〜F5・止める指摘なし）。F4（この記録の 2 行のつながり）は記録の場所なのでその場で直した。ほかの Low は retro で振り分ける — 止める指摘ではなく、記録の外の差分を足すと OK の周が無くなるため
+- [review-gate] 敵対的レビュー 1 周目 OK（V1〜V4 確認済み・新しい Critical/High なし・未検証 0）
+STAGE_DONE: review-gate NEXT: test-gate
