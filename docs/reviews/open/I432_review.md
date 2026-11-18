@@ -28,3 +28,5 @@
 - [plan] #377・#376 を閉じるのは test-gate の手動 No.5 にした — CI が緑と確かめた後に行い、AC4 を close の前に満たすため- [plan-review] 判定 HIGHRISK（`.github/workflows/e2e.yml`）。Warning 3 件（規約 §16 の文言・No.4 の判定コマンド・TC-28 以外の flaky の扱い）は計画書・手動テストを直して対応し、再レビューはしない — 方式・受け入れ条件を変えない findings への対応のため（計画変更記録）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+- [design-security-review] Blocker・High・Medium なし（Low 4 件・シナリオ Low 3 件。どれも既存の決定論ゲート・npm audit・指紋の固定で手を打ってある）。前からあるパスワードの環境変数の件（I213 F3）は変えない — 本イシューの目的と別で、一覧に残っているため（計画書「セキュリティレビュー結果」）
+STAGE_DONE: design-security-review NEXT: implement
