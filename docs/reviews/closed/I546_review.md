@@ -39,6 +39,8 @@
 - [test-gate] 手動テスト No.1 の照合で、表 1 が見出しの文字のまま書いていない小見出し 64 件を見つけ、覆う行と判定の付表を点検の表に足した（漏れ 0 を記録で示すため）。No.6（記憶の移動）はサンドボックスで Claude が書けないので Human の行にした
 - [retro] 台帳の残り: F1 → #547（コメント・スキルの写し）・F2 → #520（コメント・文書と実際の記録名の食い違い）・F3〜F10 → `docs/reviews/backlog/I546.md`。判定の仕組みに関わる行は無いので「最優先」は付けない
 - [retro] 改善案の振り分け: 「ユーザーにコマンドを打ってもらうときはどこで打つかを書く」「報告は日本語のまま」→ 記憶 `feedback_plain_language_user_facing.md` に足した（ユーザーとのやり取りの好みなので手順書ではなく記憶）。ほかの 4 件は見送り（下の振り返りに理由）
+- [close] develop（I466 の取り込み・アプリのファイルだけ）を取り込んだ。このブランチの変えたファイルとは重ならず、gate-check は OK のまま
+- [close] 記録を closed へ移し、PR の説明をテンプレートで書き直した。U7 の GitHub の設定（E2E を必須チェックに）はマージ依頼でメンテナに頼む
 
 ## 振り返り
 
@@ -102,3 +104,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
