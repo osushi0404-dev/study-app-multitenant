@@ -50,3 +50,10 @@ bash scripts/claude/tests/test_i193_official_flow.sh
 ## 実行記録
 - 2026-11-18 19:19（review-gate・`scripts/claude/code-review.sh I569` の決定論ゲート実走・REVIEWED_COMMIT e29485a1）: 6 行すべて exit=0（`test_i569_issue_number_digits.sh`・`test_i187_mcp_filename_guard.sh`・`test_sessionstart_context.sh`・`test_check_frontend_evidence.sh`・`test_check_manual_test_executor.sh`・`test_i193_official_flow.sh`。最後の 1 本はサンドボックスの外で流れ、手元で落ちた F9 も合格）
 - 同日・CI（PR #582）: Harness Tests を含め成功（`CI_WAIT: OK`）。test-gate に回された重いゲートは無い
+
+## 再発防止記録（fix-loop・close の最終確認の CI 失敗・2026-11-18）
+- なぜ失敗したか: retro で作った一覧 `docs/reviews/backlog/I569.md` に、F1 の行き先の説明を `- F1（…）` で始まる行として手で書いた。`scripts/claude/tests/test_i202_ledger_cleanup.sh` の D3 は、一覧の `- F` で始まる行がすべて指摘の行の決まった形であることを確かめるので、CI の Harness Tests で落ちた
+- 何を変えたか: 説明の行を `- 台帳の F1（…）` で始まる書き方に直した（記録の 1 行だけ。コードは変えない）
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: 一覧に説明を足すときは、指摘の行（`- F<番号> SEV=…`）の形と取り違えない書き出しにする。CI の D3 がこの崩れを毎回止めるので、新しい手順は足さない
+- 確かめた結果: `bash scripts/claude/tests/test_i202_ledger_cleanup.sh` → `pass=161 fail=0`（D3 合格）。直す前の行は CI で D3 が不合格（実際の失敗が失敗の注入にあたる）
