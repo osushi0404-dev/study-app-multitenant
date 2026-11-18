@@ -25,5 +25,8 @@
 - [plan] 走査の範囲から記録の場所（`docs/`）を外した — 記録は古い形を説明として書くもので、判定は無い（イシューの AC 3 の「closed の記録を除く」の読み替え）
 - [plan] `.claude/skills/plan-issue/SKILL.md` のブランチ名の「イシュー番号3桁」を同梱した — イシューは I546 で直すとしていたが残っていた。同じ食い違いの 1 行
 - [plan] 一覧（台帳の残り）は `I221.md` の F7 だけ同梱し、ほかは別の話なので残す（計画書 9）
+- [plan-review] 計画レビューは Info 3 件だけで HIGHRISK（見張りの変更）。Info は計画書に理由が書いてあり直しは不要 — 方式・範囲を変えない
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: design-security-review
