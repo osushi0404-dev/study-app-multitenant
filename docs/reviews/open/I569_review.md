@@ -46,6 +46,7 @@
 - [retro] 残余リスク（設計レビューの Low 3 件・シナリオの Low 4 件）は受け入れ（計画書のセキュリティレビュー結果に記入）。設計ルールへの昇格: 見張りの判定を広げるときに「広げる部分以外を変えない」を TC と失敗の注入で縛る形がうまく働いた。plan-writing-rules の「必ず確かめる項目」の決まり（TC で覆えるなら読んで可）どおりで、新しい決まりは要らない
 - [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビューへのリンクと一覧（backlog/I569.md）の記録のパスを closed 向きに直した
 - [fix-loop] close の最終確認で CI の Harness Tests（`test_i202_ledger_cleanup.sh` の D3）が落ちた。原因は一覧 `backlog/I569.md` の説明の行が `- F` で始まっていたこと。診断レビュー PASS の案 A（書き出しを `- 台帳の F1` に直す）で直した — 記録の 1 行で済み、F1 の行き先が一覧にも残る。検査を変える案は採らない
+- [review-gate] fix-loop の後: 差分のコードレビュー OK（CI の Harness Tests も合格）・敵対的レビュー 2 周目 OK（差分は記録だけ。通算 2 周で上限に達したので、この後にコードを変えると止める）
 
 ## 振り返り
 
@@ -101,3 +102,5 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
+
+STAGE_DONE: review-gate NEXT: test-gate
