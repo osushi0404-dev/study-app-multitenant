@@ -26,3 +26,4 @@
 - [plan] 1.65 での E2E の事前の確かめは手元でせず CI に任せた — 手順書の `RATELIMIT_ENABLE=false docker compose …` は前置きがあるためサンドボックスの外で動く対象に当たらず `.env` を読めずに止まった。前置きなしではログインの制限で落ちる（計画書 §1 スパイク）。手順書の形がサンドボックスの中で動かないことは retro で扱う
 - [plan] `.github/` を変えるが止めて聞かずに進めた — 変えるのは Node.js の版の 1 行だけで守りを緩めない（TC-01・TC-02）。直し方は grill-me の報告でユーザーに示した後に `/plan-issue` が打たれ、マージはユーザーが承認する（計画書 §9）
 - [plan] #377・#376 を閉じるのは test-gate の手動 No.5 にした — CI が緑と確かめた後に行い、AC4 を close の前に満たすため
+STAGE_DONE: plan NEXT: plan-review
