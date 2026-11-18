@@ -50,6 +50,7 @@
 - [test-gate] fix-loop の後: gate-check OK・判定 2 本 OK。直したのは記録の 1 行だけでコードは変えていないので、Claude の手動テストはやり直さない（No.1 の結果をそのまま使う）
 - [retro（取り込みの後）] 台帳の残りは前回と同じ 3 件（F1 → #583・F2・F3 → 一覧）。新しい指摘なし。一覧の「記録:」を最新のコードレビューの記録に直した
 - [retro（取り込みの後）] 改善案「一覧に説明を手で書いて CI の D3 で落ちた」→ 見送り — 決定論の検査（`test_i202_ledger_cleanup.sh` の D3）がその場で捕まえた。損失は CI の待ち 1 回と敵対的レビューの 2 周目（記録だけの差分で OK）。retro の手順に「一覧を書いたら検査を流す」を足すと毎回の手間が増え、CI と同じ穴を二重に塞ぐことになる
+- [close（取り込みの後）] 追従不要・gate-check OK。記録を closed へ移した（診断メモと最新のレビュー記録を含む）。計画書のリンクと一覧の「記録:」を closed 向きに直した
 
 ## 振り返り
 
@@ -112,3 +113,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
