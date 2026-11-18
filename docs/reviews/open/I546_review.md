@@ -18,6 +18,7 @@
 ## テスト結果
 - 自動: 決定論ゲート 22 項目すべて合格（review-gate・2026-11-17）。CI 成功。i193 は手元で F9 の 3 項目だけ道具の版で落ち、CI で全項目合格
 - 手動: Claude の No.1〜5 は OK。No.6（記憶のファイル 42 件の移動）は 2026-11-18 にユーザーが実行し OK
+- 2 回目（develop〔#432・I492〕の取り込みの後・2026-11-18）: CI は E2E を含めて全部成功。取り込みで変わったのはアプリ・e2e・ほかのイシューの記録と `rules/react-coding-standards-integrated.md` で、このブランチの手順書は取り込みの前と同じ（`frontend-verify.md` も差分なし）。判定 2 本（画面確認・実施者の振り分け）は exit 0
 
 ## 計画との差分
 - あり（計画変更記録に書き、計画レビューをやり直して OK）: `docs/claude-code-structure.md` を食い違う行だけでなく写し全体を参照にした・記憶の退避先を記憶のフォルダの外にし、移動をユーザーのコマンドにした・`workflow.md` の移した節は見出しを残して参照 1 行にした
@@ -42,6 +43,8 @@
 - [close] develop（I466 の取り込み・アプリのファイルだけ）を取り込んだ。このブランチの変えたファイルとは重ならず、gate-check は OK のまま
 - [close] 記録を closed へ移し、PR の説明をテンプレートで書き直した。U7 の GitHub の設定（E2E を必須チェックに）はマージ依頼でメンテナに頼む
 - [close] マージ依頼の後、E2E の赤（Ubuntu 26.04 × Playwright 1.59.1）を直す #432（PR #575）と I492（PR #571）が develop に入ったので取り込んだ。`docs/runbooks/frontend-verify.md` の初回準備の 1 行が食い違い、版の数字を直書きしない、このブランチの書き方（`e2e/package.json` の版を見る）を残した（版を上げるたびに直さずに済む）。記録の場所の外を直したので、記録を open へ戻して review-gate からやり直す
+- [review-gate] 2 回目のコードレビュー OK（`docs/reviews/I546_code_review_20261118_1726.md`）・CI は E2E を含めて全部成功
+- [test-gate] 手動テスト（Claude の No.1〜5・人の No.6）はやり直さず、前回の結果を使う — 取り込みの後もこのブランチの手順書・記憶は前回の確かめの時点と同じ（取り込んだ変更は手順書に触れていない）。人の手動テストを依頼し直さないので human-test を飛ばして retro へ
 
 ## 振り返り
 
@@ -108,3 +111,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
