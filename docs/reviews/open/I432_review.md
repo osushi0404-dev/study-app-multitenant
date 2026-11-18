@@ -16,7 +16,7 @@
 
 ## テスト結果
 - 自動: TC-01 pass=17 fail=0・TC-02 pass=54 fail=0・TC-04 npm audit 0 件（implement）。TC-03 は CI（review-gate）
-- 手動: （test-gate で記入）
+- 手動: Claude 5 件すべて OK（CI の E2E は Ubuntu 26.04・Node.js v26.13.1・19 件すべて合格・flaky なし／ほかの CI 全部合格／手元の新しいイメージで 1.65.1・ブラウザ同梱／1.59.1 の残りなし／#377・#376 を閉じた）。Human の項目なし
 
 ## 計画との差分
 - なし
@@ -42,3 +42,5 @@ STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 基本レビューは CI_WAIT: OK（E2E を含む全ジョブ成功）・FINAL_VERDICT: OK・Low 5 件（F1〜F5・止める指摘なし）。F4（この記録の 2 行のつながり）は記録の場所なのでその場で直した。ほかの Low は retro で振り分ける — 止める指摘ではなく、記録の外の差分を足すと OK の周が無くなるため
 - [review-gate] 敵対的レビュー 1 周目 OK（V1〜V4 確認済み・新しい Critical/High なし・未検証 0）
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] #377・#376 をコメント付きで閉じた（手動 No.5）。グループの版上げは閉じても無視されないと分かったので、計画書の計画変更記録に R5 の補足を書いた — マージ後は develop が同じ版になり、作り直されても自動で閉じられるため害はない
+- [test-gate] 敵対的レビューの PR コメントは `post-review-comment.sh` が「開いている PR を取れません」で投稿しなかった（止めない決まり）。記録はファイルにある — 原因は retro で扱う
