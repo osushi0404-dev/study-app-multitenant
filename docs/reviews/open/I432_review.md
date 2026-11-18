@@ -92,3 +92,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 - [close] 最後の確認（pr-base-sync.sh final）で Harness Tests が失敗: test_i202_ledger_cleanup.sh の D3（一覧のファイルの `- F` で始まる行は決まった形）。retro で書いた docs/reviews/backlog/I432.md の見出しの説明の行が `- F4（…）` で始まっていたため。手順どおり記録を open に戻して fix-loop へ回す
 STAGE_DONE: close NEXT: fix-loop
+- [fix-loop] Harness Tests の D3 の失敗は、診断レビューを通った案 A（一覧の説明の行を `- F` で始まらない形に書き換える）で直した — 記録の 1 行で済み、正しく止めたテストを緩めないため。手元で test_i202_ledger_cleanup.sh を流して pass=163

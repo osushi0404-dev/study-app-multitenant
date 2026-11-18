@@ -23,3 +23,10 @@ bash scripts/claude/tests/test_i182_secret_gates.sh
 - 2026-11-18 implement: `bash scripts/claude/tests/test_i213_dependabot.sh` exit 0（pass=17）・`bash scripts/claude/tests/test_i182_secret_gates.sh` exit 0（pass=54）・`npm --prefix e2e audit --audit-level=high` exit 0（0 件）
 - 2026-11-18 review-gate: 決定論ゲート 2 本を code-review.sh が実走（OK）・CI 全ジョブ成功（TC-03）
 - 2026-11-18 test-gate: test-gate に回された heavy の TC なし（手元で E2E は流し直さない）
+
+## 再発防止記録（fix-loop・2026-11-18）
+- なぜ失敗したか: retro で作った `docs/reviews/backlog/I432.md` の見出しに、`- F4（…）` で始まる説明の行を足した。一覧の `- F` で始まる行は決まった形しか許されず、`test_i202_ledger_cleanup.sh` の D3 が close の後の CI で止めた（review-gate の時点では一覧のファイルがまだ無く、retro・close は手元でハーネスのテストを流さない）
+- 何を変えたか: 説明の行を `- 載せないもの: F4（…）` に書き換えた（記録の 1 行だけ）
+- セキュリティ上の考慮点: なし
+- 次回どう防ぐか: 一覧は retro の手順 4-0 どおり、見出しを I206 と同じ形にし、スクリプトの出力の行だけを `- F…` で書く。テストは正しく止めたので変えない
+- 確かめた結果: `bash scripts/claude/tests/test_i202_ledger_cleanup.sh` pass=163 fail=0（D3・FG-D3 合格）
