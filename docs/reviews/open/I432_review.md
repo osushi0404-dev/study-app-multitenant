@@ -90,3 +90,5 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 - [close] base 追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR の説明を書いた — 手順どおり
 STAGE_DONE: close NEXT: merge
+- [close] 最後の確認（pr-base-sync.sh final）で Harness Tests が失敗: test_i202_ledger_cleanup.sh の D3（一覧のファイルの `- F` で始まる行は決まった形）。retro で書いた docs/reviews/backlog/I432.md の見出しの説明の行が `- F4（…）` で始まっていたため。手順どおり記録を open に戻して fix-loop へ回す
+STAGE_DONE: close NEXT: fix-loop
