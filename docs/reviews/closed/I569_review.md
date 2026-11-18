@@ -44,6 +44,7 @@
 - [retro] 改善案「イシューの前提（plan-issue の SKILL の 3 桁は I546 で直す）が外れていた」→ 見送り — 計画の調査の grep で捕まり、同梱して直した
 - [retro] 改善案「ヒアドキュメントの中の書き方で見張りが止める・Write が一時使えない・手元で uv のキャッシュが書けず F9 が落ちる」→ 見送り — どれも書き方を変えてその場で進め、決定論ゲートはサンドボックスの外で通った。サンドボックスの書き方の決まりは #538 が扱う
 - [retro] 残余リスク（設計レビューの Low 3 件・シナリオの Low 4 件）は受け入れ（計画書のセキュリティレビュー結果に記入）。設計ルールへの昇格: 見張りの判定を広げるときに「広げる部分以外を変えない」を TC と失敗の注入で縛る形がうまく働いた。plan-writing-rules の「必ず確かめる項目」の決まり（TC で覆えるなら読んで可）どおりで、新しい決まりは要らない
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビューへのリンクと一覧（backlog/I569.md）の記録のパスを closed 向きに直した
 
 ## 振り返り
 
@@ -93,3 +94,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
