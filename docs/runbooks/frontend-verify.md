@@ -10,7 +10,7 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 
 ## 2. 初回だけの準備
 1. chromium の起動に要る OS の部品（ユーザーが WSL のターミナルで実行。`!` からは sudo のパスワードを入力できない。`sudo npx` は PATH が変わって `npx` が見つからないので、公式コマンドの中身を出してから実行する）:
-   - Claude が `npx -y playwright@1.59.1 install-deps --dry-run chromium` を実行し、出てきた `sudo -- sh -c "apt-get update&& apt-get install -y ..."` をユーザーに渡す（公式の `install-deps` が中で実行する内容と同じ。日本語フォントも入る）
+   - Claude が `npx -y playwright@1.65.1 install-deps --dry-run chromium` を実行し、出てきた `sudo -- sh -c "apt-get update&& apt-get install -y ..."` をユーザーに渡す（公式の `install-deps` が中で実行する内容と同じ。日本語フォントも入る）
 2. Playwright MCP 用の chromium（MCP の版に合ったもの。`~/.cache/ms-playwright/` に入る）: `npx -y -p @playwright/mcp@0.0.83 playwright install chromium`
 3. `e2e/.env.e2e`（無ければ `e2e/.env.e2e.example` からユーザーがコピーしてパスワードを設定。Claude は読まない）
 4. ワークツリーで作業するときは `bash scripts/claude/wt-ports.sh`（`docs/runbooks/worktree.md`）
