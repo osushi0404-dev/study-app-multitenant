@@ -21,9 +21,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
 from problems.models import Choice, Problem, QuizAnswer, QuizSession, Subject, UserSubjectAccess
-from studylogs.models import (
-    DailyStudySummary, SpacedRepetitionCard, SpacedRepetitionReview, StudyLog,
-)
+from studylogs.models import SpacedRepetitionCard, SpacedRepetitionReview
 from studylogs.services import SpacedRepetitionService
 
 User = get_user_model()
@@ -206,21 +204,6 @@ def test_submit_review_rejects_other_org_card_like_missing(setup):
     assert card_b.total_reviews == 0
 
 
-# ---- TC-04b: 復習に紐づける進行中の学習記録は他組織の科目のものを使わない ----
-def test_submit_review_does_not_link_other_org_study_log(setup):
-    card_a = _card(setup["user_a"], setup["problem_a"])
-    StudyLog.objects.create(user=setup["user_a"], subject=setup["subject_b"], is_active=True)
-
-    # 復習の後の update_daily_analytics が difficulty の型で例外になり 400 になりうる（I452）ため、
-    # ステータスは見ない
-    _client(setup["user_a"]).post(
-        STUDY + "spaced-repetition/submit_review/",
-        {"card_id": card_a.id, "quality_score": 4, "response_time_seconds": 10},
-        format="json")
-
-    assert SpacedRepetitionReview.objects.get(card=card_a).study_session_id is None
-
-
 # ---- TC-05: 既にある他組織の問題の復習の記録は一覧・詳細に出ない ----
 def test_existing_other_org_reviews_are_hidden(setup):
     review_a = _review(_card(setup["user_a"], setup["problem_a"]))
@@ -253,102 +236,6 @@ def test_new_cards_exclude_existing_and_noorg_is_empty(setup):
 
     assert list(SpacedRepetitionService(setup["user_a"]).get_new_cards(limit=50)) == []
     assert list(SpacedRepetitionService(setup["user_noorg"]).get_new_cards(limit=50)) == []
-
-
-# ---- TC-12: 学習記録の作成は他組織・存在しない・全体共有科目を同じ 400 で断る ----
-def test_study_log_create_rejects_other_org_subject_like_missing(setup):
-    client = _client(setup["user_a"])
-    url = STUDY + "logs/"
-    missing_id = _missing_id(Subject)
-
-    other = client.post(url, {"subject": setup["subject_b"].id}, format="json")
-    missing = client.post(url, {"subject": missing_id}, format="json")
-    shared = client.post(url, {"subject": setup["subject_shared"].id}, format="json")
-
-    assert other.status_code == status.HTTP_400_BAD_REQUEST
-    assert missing.status_code == status.HTTP_400_BAD_REQUEST
-    assert shared.status_code == status.HTTP_400_BAD_REQUEST
-    assert _masked(other, setup["subject_b"].id) == _masked(missing, missing_id)
-    assert _no_other(other)
-    assert StudyLog.objects.filter(user=setup["user_a"]).count() == 0
-
-    own = client.post(url, {"subject": setup["subject_a"].id}, format="json")
-    assert own.status_code == status.HTTP_201_CREATED
-    assert own.json()["subject"] == setup["subject_a"].id
-    assert own.json()["subject_name"] == "科目I431A"
-
-    none = client.post(url, {}, format="json")
-    assert none.status_code == status.HTTP_201_CREATED
-    assert none.json()["subject"] is None
-
-
-# ---- TC-13: 既にある他組織の科目の学習記録は一覧・詳細に出ない／科目なしは出る ----
-def test_existing_other_org_study_logs_are_hidden(setup):
-    user = setup["user_a"]
-    log_a = StudyLog.objects.create(user=user, subject=setup["subject_a"], is_active=False)
-    log_b = StudyLog.objects.create(user=user, subject=setup["subject_b"], is_active=True)
-    log_none = StudyLog.objects.create(user=user, subject=None, is_active=False)
-    client = _client(user)
-
-    listed = client.get(STUDY + "logs/")
-    assert listed.status_code == status.HTTP_200_OK
-    assert {log["id"] for log in _items(listed)} == {log_a.id, log_none.id}
-    assert _no_other(listed)
-
-    missing_id = _missing_id(StudyLog)
-    other = client.get(STUDY + f"logs/{log_b.id}/")
-    missing = client.get(STUDY + f"logs/{missing_id}/")
-    assert other.status_code == status.HTTP_404_NOT_FOUND
-    assert missing.status_code == status.HTTP_404_NOT_FOUND
-    assert _masked(other, log_b.id) == _masked(missing, missing_id)
-
-    ended = client.post(STUDY + f"logs/{log_b.id}/end/", {}, format="json")
-    assert ended.status_code == status.HTTP_404_NOT_FOUND
-    log_b.refresh_from_db()
-    assert log_b.is_active is True
-
-
-# ---- TC-14: 自分の学習記録の科目を他組織の科目に変えられない ----
-def test_study_log_update_rejects_other_org_subject(setup):
-    log_a = StudyLog.objects.create(user=setup["user_a"], subject=setup["subject_a"])
-    client = _client(setup["user_a"])
-    url = STUDY + f"logs/{log_a.id}/"
-    missing_id = _missing_id(Subject)
-
-    other = client.patch(url, {"subject": setup["subject_b"].id}, format="json")
-    missing = client.patch(url, {"subject": missing_id}, format="json")
-
-    assert other.status_code == status.HTTP_400_BAD_REQUEST
-    assert missing.status_code == status.HTTP_400_BAD_REQUEST
-    assert _masked(other, setup["subject_b"].id) == _masked(missing, missing_id)
-    log_a.refresh_from_db()
-    assert log_a.subject_id == setup["subject_a"].id
-
-
-# ---- TC-15: 統計の科目別・最近の記録・日次の科目に他組織の科目が出ない ----
-def test_statistics_hide_other_org_subjects(setup):
-    user = setup["user_a"]
-    UserSubjectAccess.objects.create(user=user, subject=setup["subject_a"])
-    UserSubjectAccess.objects.create(user=user, subject=setup["subject_b"])
-    StudyLog.objects.create(
-        user=user, subject=setup["subject_a"], problems_attempted=4, problems_correct=3)
-    StudyLog.objects.create(
-        user=user, subject=setup["subject_b"], problems_attempted=4, problems_correct=3)
-    summary = DailyStudySummary.objects.create(user=user, date=timezone.now().date())
-    summary.subjects_studied.add(setup["subject_a"], setup["subject_b"])
-    client = _client(user)
-
-    overview = client.get(STUDY + "statistics/overview/")
-    by_subject = client.get(STUDY + "statistics/by_subject/")
-    daily = client.get(STUDY + "statistics/daily_summary/")
-
-    for response in (overview, by_subject, daily):
-        assert response.status_code == status.HTTP_200_OK
-        assert _no_other(response)
-    assert [s["subject_id"] for s in by_subject.json()] == [setup["subject_a"].id]
-    assert {log["subject"] for log in overview.json()["recent_activity"]} == {setup["subject_a"].id}
-    assert overview.json()["best_subject"]["subject_id"] == setup["subject_a"].id
-    assert daily.json()[0]["subjects_studied"] == ["科目I431A"]
 
 
 # ---- TC-15b: 科目のプルダウンの API に登録時の他組織の科目が出ない ----
@@ -412,8 +299,6 @@ def test_dashboard_recommendations_are_own_org_only(setup):
     user = setup["user_a"]
     for subject in (setup["subject_a"], setup["subject_b"]):
         UserSubjectAccess.objects.create(user=user, subject=subject)
-        StudyLog.objects.create(
-            user=user, subject=subject, problems_attempted=10, problems_correct=1)
 
     response = _client(user).get(DASH + "overview/")
 
@@ -424,25 +309,7 @@ def test_dashboard_recommendations_are_own_org_only(setup):
         ("unstudied_subject", setup["subject_a"].id)]
 
 
-# ---- I473 TC-15: 学習記録を作るとき、閉じるのは自組織の科目・科目なしの進行中の記録だけ ----
-def test_create_study_log_closes_only_own_org_active_logs(setup):
-    user = setup["user_a"]
-    own = StudyLog.objects.create(user=user, subject=setup["subject_a"], is_active=True)
-    no_subject = StudyLog.objects.create(user=user, subject=None, is_active=True)
-    other = StudyLog.objects.create(user=user, subject=setup["subject_b"], is_active=True)
-
-    response = _client(user).post(STUDY + "logs/", {"subject": setup["subject_a"].id})
-
-    assert response.status_code == status.HTTP_201_CREATED
-    own.refresh_from_db()
-    no_subject.refresh_from_db()
-    other.refresh_from_db()
-    assert own.is_active is False
-    assert no_subject.is_active is False
-    assert other.is_active is True
-
-
-# ---- TC-21: 組織に属さない利用者は問題・科目を扱えず、科目なしの記録だけ読める ----
+# ---- TC-21: 組織に属さない利用者は問題を扱えない（学習記録の API は I492 で消した） ----
 def test_user_without_organization_is_fail_closed(setup):
     user = setup["user_noorg"]
     client = _client(user)
@@ -452,14 +319,6 @@ def test_user_without_organization_is_fail_closed(setup):
         format="json")
     assert card.status_code == status.HTTP_404_NOT_FOUND
     assert card.json() == {"error": "問題が見つかりません"}
-
-    log = client.post(STUDY + "logs/", {"subject": setup["subject_a"].id}, format="json")
-    assert log.status_code == status.HTTP_400_BAD_REQUEST
-
-    log_none = StudyLog.objects.create(user=user, subject=None)
-    StudyLog.objects.create(user=user, subject=setup["subject_a"])
-    listed = client.get(STUDY + "logs/")
-    assert [item["id"] for item in _items(listed)] == [log_none.id]
 
 
 # ---- TC-22: 境界の判定の関数（tenant_scope）の単体 ----
@@ -475,10 +334,11 @@ def test_tenant_scope_functions(setup):
     assert list(available_subjects(user_noorg)) == []
     assert list(available_problems(user_noorg)) == []
 
-    log_a = StudyLog.objects.create(user=user_a, subject=setup["subject_a"])
-    StudyLog.objects.create(user=user_a, subject=setup["subject_b"])
-    log_none = StudyLog.objects.create(user=user_a, subject=None)
-    logs = StudyLog.objects.all()
+    # 科目が NULL になりうる記録（I492 で StudyLog から QuizSession に替えた。進行中は 1 人 1 つなので終了済み）
+    log_a = QuizSession.objects.create(user=user_a, subject=setup["subject_a"], is_active=False)
+    QuizSession.objects.create(user=user_a, subject=setup["subject_b"], is_active=False)
+    log_none = QuizSession.objects.create(user=user_a, subject=None, is_active=False)
+    logs = QuizSession.objects.filter(user=user_a)
     with_null = scope_to_user_org(logs, user_a, subject_path="subject", allow_null=True)
     without_null = scope_to_user_org(logs, user_a, subject_path="subject")
     noorg = scope_to_user_org(logs, user_noorg, subject_path="subject", allow_null=True)

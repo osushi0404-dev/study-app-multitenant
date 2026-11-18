@@ -9,12 +9,9 @@ from datetime import timedelta
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from django.core.mail import send_mail
-from django.conf import settings
 
-from .models import (
-    LearningAnalytics, SpacedRepetitionCard, SpacedRepetitionReview, StudyLog
-)
+from .models import SpacedRepetitionCard, SpacedRepetitionReview
+from problems.models import QuizAnswer
 from .services import SpacedRepetitionService
 from core.cache_service import cache_service
 import logging
@@ -30,12 +27,14 @@ def update_daily_analytics_task(self):
         updated_count = 0
         error_count = 0
 
-        # 過去7日間にアクティブだったユーザーを対象
+        # 過去7日間にクイズに答えた・復習をしたユーザーを対象（I492: 学習の記録は QuizAnswer が正）
         active_since = timezone.now() - timedelta(days=7)
-        active_users = User.objects.filter(
-            Q(study_logs__started_at__gte=active_since) |
-            Q(sr_reviews__reviewed_at__gte=active_since)
-        ).distinct()
+        # 結合の OR（答え × 復習の行）を作らないよう、日時で絞った ID の副問い合わせにする
+        # 組織で絞らない: 利用者を選ぶだけ（値は出さず、集計は利用者ごとの SpacedRepetitionService が本人の記録で行う）
+        answered = QuizAnswer.objects.filter(answered_at__gte=active_since).values('session__user_id')
+        # 組織で絞らない: 同上
+        reviewed = SpacedRepetitionReview.objects.filter(reviewed_at__gte=active_since).values('user_id')
+        active_users = User.objects.filter(Q(id__in=answered) | Q(id__in=reviewed))
 
         for user in active_users:
             try:
@@ -62,61 +61,6 @@ def update_daily_analytics_task(self):
     except Exception as exc:
         logger.error(f"Daily analytics task failed: {str(exc)}")
         raise self.retry(exc=exc, countdown=60)
-
-
-@shared_task(bind=True, max_retries=3)
-def send_study_reminders_task(self):
-    """学習リマインダーを送信"""
-    try:
-        sent_count = 0
-
-        # 過去24時間学習していないアクティブユーザー
-        yesterday = timezone.now() - timedelta(days=1)
-        inactive_users = User.objects.filter(
-            is_active=True,
-            email__isnull=False
-        ).exclude(
-            Q(study_logs__started_at__gte=yesterday) |
-            Q(sr_reviews__reviewed_at__gte=yesterday)
-        ).distinct()
-
-        for user in inactive_users:
-            try:
-                # 復習が必要なカードがあるかチェック
-                service = SpacedRepetitionService(user)
-                due_cards = service.get_due_cards(limit=1)
-
-                if due_cards:
-                    # メール送信
-                    send_mail(
-                        subject='学習リマインダー - 復習が必要な問題があります',
-                        message=f'''
-こんにちは、{user.get_full_name() or user.username}さん
-
-復習が必要な問題が{len(due_cards)}件あります。
-効率的な学習のため、定期的な復習をお勧めします。
-
-今すぐ学習を始める: {settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else 'http://localhost:3000'}
-
-学習アプリチーム
-                        ''',
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[user.email],
-                        fail_silently=True,
-                    )
-
-                    sent_count += 1
-                    logger.info(f"Sent reminder to user {user.id}")
-
-            except Exception as e:
-                logger.error(f"Error sending reminder to user {user.id}: {str(e)}")
-
-        logger.info(f"Study reminders sent to {sent_count} users")
-        return {'sent_count': sent_count}
-
-    except Exception as exc:
-        logger.error(f"Study reminders task failed: {str(exc)}")
-        raise self.retry(exc=exc, countdown=300)
 
 
 @shared_task(bind=True)
@@ -146,36 +90,4 @@ def bulk_update_spaced_repetition_task(self):
 
     except Exception as exc:
         logger.error(f"Bulk update spaced repetition task failed: {str(exc)}")
-        return {'error': str(exc)}
-
-
-@shared_task(bind=True)
-def export_user_data_task(self, user_id: int, export_format: str = 'json'):
-    """ユーザーデータをエクスポート"""
-    try:
-        user = User.objects.get(id=user_id)
-
-        # ユーザーの学習データを収集
-        # 組織で絞らない: 本人の記録の書き出し（応答は件数だけ・中身は外に出さない）
-        study_logs = list(StudyLog.objects.filter(user=user).values())
-        # 組織で絞らない: 本人の記録の書き出し（応答は件数だけ・中身は外に出さない）
-        sr_cards = list(SpacedRepetitionCard.objects.filter(user=user).values())
-        # 組織で絞らない: 本人の記録の書き出し（応答は件数だけ・中身は外に出さない）
-        sr_reviews = list(SpacedRepetitionReview.objects.filter(user=user).values())
-        analytics = list(LearningAnalytics.objects.filter(user=user).values())
-
-        logger.info(f"Exported data for user {user_id}")
-        return {
-            'user_id': user_id,
-            'export_format': export_format,
-            'record_counts': {
-                'study_logs': len(study_logs),
-                'sr_cards': len(sr_cards),
-                'sr_reviews': len(sr_reviews),
-                'analytics': len(analytics),
-            }
-        }
-
-    except Exception as exc:
-        logger.error(f"Export data task failed for user {user_id}: {str(exc)}")
         return {'error': str(exc)}

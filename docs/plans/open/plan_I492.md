@@ -55,7 +55,7 @@
 
 | ファイル | 関数・クラス | 変更内容 |
 |---|---|---|
-| `backend/studylogs/tasks.py` | `update_daily_analytics_task` | 対象の利用者を `Q(quiz_sessions__answers__answered_at__gte=active_since) \| Q(sr_reviews__reviewed_at__gte=active_since)` の `.distinct()` にする（`active_since` は今のまま `timezone.now() - timedelta(days=7)`）。ほかは変えない |
+| `backend/studylogs/tasks.py` | `update_daily_analytics_task` | 対象の利用者を `Q(id__in=QuizAnswer の answered_at >= active_since の session__user_id) \| Q(id__in=SpacedRepetitionReview の reviewed_at >= active_since の user_id)` の 2 つの副問い合わせにする（`active_since` は今のまま `timezone.now() - timedelta(days=7)`。`id__in` なので重複が出ず `.distinct()` は要らない）。ほかは変えない |
 | `backend/studylogs/tasks.py` | `send_study_reminders_task`・`export_user_data_task` | 関数ごと消す。使わなくなる import（`send_mail`・`settings`・`LearningAnalytics`・`StudyLog`）を消す |
 | `backend/core/tasks.py` | `generate_system_report_task` | 関数ごと消す |
 | `backend/core/celery.py` | `app.conf.beat_schedule` | `'send-study-reminders'` の項目と、その上のコメントを消す |
@@ -64,14 +64,14 @@
 | `backend/studylogs/views.py` | `StudyLogViewSet`・`StudyStatisticsViewSet`・`StudyGoalViewSet` | クラスごと消す。使わなくなる import（シリアライザ・`Prefetch`・`Sum`・`datetime` など、ruff の F401 で決まるもの）を消す |
 | `backend/studylogs/urls.py` | `router.register` | `logs`・`statistics`・`goals` の 3 行と import を消す |
 | `backend/studylogs/serializers.py` | `StudyLogSerializer`・`StudyLogCreateSerializer`・`StudyLogEndSerializer`・`DailyStudySummarySerializer`・`StudyGoalSerializer`・`StudyStatisticsSerializer`・`SubjectStatisticsSerializer` | クラスごと消す（ほかから使われていないことは `grep` で確認済み）。モデルの import を消す |
-| `backend/studylogs/admin.py` | `StudyLog`・`DailyStudySummary`・`ProblemAttempt`・`StudyGoal` の管理画面 | 4 つの登録を消す（ほかの登録は無い） |
+| `backend/studylogs/admin.py` | `StudyLog`・`DailyStudySummary`・`ProblemAttempt`・`StudyGoal` の管理画面 | 4 つの登録しか無いので、ファイルごと消す（Django は `admin.py` を必須にしない） |
 | `backend/studylogs/models.py` | `StudyLogQuerySet`・`ProblemAttemptQuerySet`・`StudyLog`・`DailyStudySummary`・`ProblemAttempt`・`StudyGoal`・`SpacedRepetitionReview.study_session` | 4 モデルと 2 つの QuerySet と、`study_session` の列を消す |
 | `backend/studylogs/migrations/0002_remove_legacy_study_logs.py`（新規） | `Migration` | 依存: `('studylogs', '0001_initial')`。操作は順に `RemoveField('spacedrepetitionreview', 'study_session')`→`DeleteModel('ProblemAttempt')`→`DeleteModel('DailyStudySummary')`→`DeleteModel('StudyGoal')`→`DeleteModel('StudyLog')` の 5 つだけ。`makemigrations studylogs` で作り、中身を上の 5 つと照らす（Danger Ops） |
 | `backend/studylogs/tests/test_I492_remove_legacy_study_logs.py`（新規） | TC-05〜TC-08 | 下の 6 のとおり |
 | `backend/core/tests/test_I466_celery_schedule.py` | `REMOVED` | `"send-study-reminders"` を足す |
 | `backend/core/tests/test_I446_cross_api_tenant_isolation.py` | 経路の表・`world` の作成・失敗の注入の表 | `api/study/logs/`・`statistics`・`goals` の行（`:212-227`・`:273`）と、`log`・`goal` の物の作成（`:64-65`・`:351-353`）、`DailyStudySummary`・`StudyLog` を作るテスト（`:409-419` のテスト）、`StudyGoalViewSet` の失敗の注入（`:636-642`）を消す。消した後も `test_route_table_matches_urlconf` が URL の設定と表の一致を確かめる |
-| `backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py` | 学習記録の API のテスト・`test_submit_review_does_not_link_other_org_study_log` | 消した API のテスト（`StudyLog`・`DailyStudySummary` を作るもの）と、`study_session` を確かめる TC-04b を消す（`study_session` の列そのものが無くなる） |
-| `backend/studylogs/tests/test_I455_org_scoped_querysets.py` | `SPECS`・`test_base_without_subject_paths_raises` | `SPECS` の `"StudyLog"`・`"ProblemAttempt"` を消す。`OrgScopedQuerySet(model=StudyLog)` を `OrgScopedQuerySet(model=LearningAnalytics)`（境界の決まりを持たないモデル）に替える。`:277-290` の文字列（コメントの検査の入力の例文で、コードではない）はそのまま |
+| `backend/studylogs/tests/test_I431_studylogs_tenant_isolation.py` | 学習記録の API のテスト・`test_submit_review_does_not_link_other_org_study_log` | 消した API のテスト（TC-12・TC-13・TC-14・TC-15・I473 TC-15）と、`study_session` を確かめる TC-04b を消す（`study_session` の列そのものが無くなる）。TC-19 は `StudyLog` を作る 2 行だけを消す（おすすめは `StudyLog` を読まない）。TC-21 は消した `study/logs` の確かめを消し、カードの確かめを残す。TC-22 の `scope_to_user_org` の材料を `StudyLog` から `QuizSession`（科目が NULL になりうる・終了済みで作る）に替える |
+| `backend/studylogs/tests/test_I455_org_scoped_querysets.py` | `SPECS`・`test_base_without_subject_paths_raises` | `SPECS` の `"StudyLog"`・`"ProblemAttempt"` を消す。`OrgScopedQuerySet(model=StudyLog)` を `OrgScopedQuerySet(model=LearningAnalytics)`（境界の決まりを持たないモデル）に替える。`test_reason_check_catches_unmarked_reads` の例文のモデル名（`StudyLog`・`models.ProblemAttempt`）と `_model_name` の説明の例を、残る境界つきのモデル（`SpacedRepetitionReview`・`models.LearningSuggestion`）に替える（検査役は境界つきのモデルの一覧〔`SCOPED_MODELS`〕から名前を拾うので、消したモデルの名前のままだと例文が検査の対象から外れて落ちる） |
 | `backend/dashboard/tests/test_I473_overview.py` | `test_recommendations` | `StudyLog` を 1 行作る名残の行（`:308`）と import を消す（おすすめの集計は `StudyLog` を読まない） |
 
 ## 5. 実装手順（ステップ）
@@ -132,7 +132,7 @@
 | R5: 学習リマインダーのメールが届かなくなる | ユーザーの決定（grill-me・「メールはいったん不要」）。本番は無い。要るときは送る相手・文面を決め直して別イシュー | 受け入れ |
 | R6: Celery の作業者に、消す前に積まれた `send_study_reminders_task` の依頼が残っていると、「登録されていないタスク」のエラーが 1 回ログに出る | 開発環境だけの一時的なもの。害は無い | 受け入れ |
 | R7: 見張り（`scripts/claude/hooks/pretooluse_guard.py:770`）と、そのテストに `send_study_reminders_task` の名前が残る | 安全装置は変えない（止める条件 2）。残っても、無いタスクの名前に確認を出すだけで害は無い。retro で一覧（`docs/reviews/backlog/`）に Low として回す | 受け入れ |
-| R8: `update_daily_analytics_task` の新しい判定（クイズの回・答えをたどる結合と `distinct`）が重くなる | 夜 2 時に 1 回だけ。7 日の範囲で絞る。今の利用者数（開発の DB の答え 217 件）では問題にならない | 受け入れ |
+| R8: `update_daily_analytics_task` の新しい判定が重くなる | 結合の OR でなく、日時で絞った 2 つの副問い合わせ（`id__in`）にする（計画変更記録）。夜 2 時に 1 回だけ | 回避 |
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
@@ -194,7 +194,7 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 
 ## 13. 性能・UX設計
 - 画面の変更は無い（ローディング・空状態・エラー状態・破壊的操作の確認の導線は該当なし）
-- 性能: `update_daily_analytics_task` の利用者の選び方が、`StudyLog` の結合からクイズの回→答えの結合に替わる。`distinct()` で重複を除く。夜間に 1 回で、範囲は 7 日（8 の R8）
+- 性能: `update_daily_analytics_task` の利用者の選び方を、日時で絞った 2 つの副問い合わせ（`QuizAnswer`・`SpacedRepetitionReview`）の `id__in` にする（多対の結合の OR と `distinct()` を使わない）。夜間に 1 回で、範囲は 7 日（8 の R8）
 
 ## 14. 学習効果設計
 - 夜 2 時の学習分析の更新の対象に、クイズだけを解いている人が入るようになる（今は `StudyLog` に書く経路が無く、復習をした人だけが対象だった）。学習の数字の出どころを `QuizAnswer` にそろえる I473 の方針どおり（C1）
@@ -217,6 +217,11 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 ## 計画変更記録
 - 計画レビュー（20261118_0232）の Warning（TC-04 の記録）: TC-04 の結果の欄に「`REMOVED` に足す前・登録を消す前は `test_removed_schedules_are_gone` が落ち、消した後は通る」ことを実装で記録すると書いた。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - 計画レビュー（20261118_0232）の Warning（R1 が約束だけに頼る）: R1 の回避策に、マージ依頼の直前にも `showmigrations` で未適用を確かめること・開発の DB がこのワークツリー専用であることを足した。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+- 実装（2026-11-18）: I431 のテストの直し方を具体化した（4 の表の I431 の行）。計画の記載は「消した API のテストを消す」だったが、TC-19・TC-21・TC-22 は消す API 以外も確かめているため、消さずに `StudyLog` の部分だけを外す・材料を `QuizSession` に替える。理由: 境界の関数（`scope_to_user_org`）・組織に属さない利用者・おすすめの確かめを失わないため。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。テストの直し方の具体化だけ）
+- 実装（2026-11-18）: 計画の記載「I455 の `:277-290` の文字列はそのまま」は誤り。検査役（`_missing_reasons`）は登録されたモデルのうち境界つきのもの（`SCOPED_MODELS`）だけを見るので、`StudyLog`・`ProblemAttempt` を消すと例文が検査されず `test_reason_check_catches_unmarked_reads` が落ちる。例文のモデル名を残るモデルに替える（4 の表の I455 の行）。計画レビューのやり直し: 不要（テストの直し方の訂正だけ）
+- 実装（/simplify・2026-11-18）: 計画の記載「`Q(quiz_sessions__answers__answered_at__gte=…) | Q(sr_reviews__reviewed_at__gte=…)` の `.distinct()`」を、`id__in` の 2 つの副問い合わせに替えた。理由: 2 つの多対の結合の OR は、利用者ごとに（全期間の答え × 全期間の復習）の行を作ってから絞り・重複を除くので、記録が増えるほど重くなる（8 の R8）。副問い合わせなら日時の索引で 7 日分だけを見て、`.distinct()` も要らない。対象の利用者は同じ（TC-05 が確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。同じ結果のクエリの書き方だけ）
+- 実装（/simplify・2026-11-18）: 中身が無くなる `backend/studylogs/admin.py` をファイルごと消した（空のモジュールを残さない）。計画レビューのやり直し: 不要
+- 実装（/simplify・2026-11-18）: 新しいテストの答えの作成を、自前の `_answer` から共有のテスト用データ `problems.tests.i466_data.answer` に替えた（同じ作り方の写しを増やさない）
 
 ## レビュー結果
 - [20261118_0232 判定: ✅ 完了](../../reviews/I492_plan_review_20261118_0232.md)

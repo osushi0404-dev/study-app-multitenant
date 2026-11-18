@@ -37,9 +37,7 @@ from problems.models import (
     Choice, MediaAsset, Problem, ProblemMediaAsset, QuizAnswer, QuizSession, Subject,
     UserSubjectAccess,
 )
-from studylogs.models import (
-    DailyStudySummary, SpacedRepetitionCard, SpacedRepetitionReview, StudyGoal, StudyLog,
-)
+from studylogs.models import SpacedRepetitionCard, SpacedRepetitionReview
 
 User = get_user_model()
 
@@ -53,16 +51,16 @@ FOREIGN_MARK = "越境I446"
 SAME_ORG_MARK = "別人I446"
 
 FOREIGN_PK = {
-    "subject": 4460001, "problem": 4460002, "session": 4460003, "log": 4460004,
-    "goal": 4460005, "card": 4460006, "review": 4460007,
+    "subject": 4460001, "problem": 4460002, "session": 4460003,
+    "card": 4460006, "review": 4460007,
 }
 SAME_ORG_PK = {key: pk + 100 for key, pk in FOREIGN_PK.items()
                if key not in ("subject", "problem")}  # 同じ組織の科目・問題は作らない
 SHARED_PK = {"subject": 4460201, "problem": 4460202}
 
 MODELS = {
-    "subject": Subject, "problem": Problem, "session": QuizSession, "log": StudyLog,
-    "goal": StudyGoal, "card": SpacedRepetitionCard, "review": SpacedRepetitionReview,
+    "subject": Subject, "problem": Problem, "session": QuizSession,
+    "card": SpacedRepetitionCard, "review": SpacedRepetitionReview,
     "asset": MediaAsset,
     "User": User, "QuizAnswer": QuizAnswer, "UserSubjectAccess": UserSubjectAccess,
 }
@@ -208,26 +206,6 @@ ROUTE_TABLE = {
     "PUT api/user/subjects/": [_subj_body(
         "subject_ids", list_param=True, writes=("count", "UserSubjectAccess"), own_status=200)],
     "GET api/user/subjects/available/": LIST,
-    # ---- 学習記録 ----
-    "GET api/study/logs/": LIST,
-    "POST api/study/logs/": [_subj_body(writes=("count", "log"))],
-    "GET api/study/logs/<pk>/": [_detail("log", same_org=True)],
-    "DELETE api/study/logs/<pk>/": [_detail("log", same_org=True, method="DELETE")],
-    **{f"{m} api/study/logs/<pk>/": [
-        _detail("log", same_org=True, method=m, body=(("notes", "I446"),)),
-        _subj_body(path_extra=(("pk", "@own.log"),), writes=("own", "log")),
-    ] for m in ("PUT", "PATCH")},
-    "POST api/study/logs/<pk>/end/": [_detail("log", same_org=True, method="POST")],
-    "GET api/study/statistics/overview/": LIST,
-    "GET api/study/statistics/by_subject/": LIST,
-    "GET api/study/statistics/daily_summary/": LIST,
-    "GET api/study/goals/": LIST,
-    "POST api/study/goals/update_progress/": LIST,
-    "GET api/study/goals/<pk>/": [_detail("goal", same_org=True)],
-    **{f"{m} api/study/goals/<pk>/": [_detail(
-        "goal", same_org=True, method=m,
-        body=(("goal_type", "daily_time"), ("target_value", 5)))]
-       for m in ("PUT", "PATCH", "DELETE")},
     # ---- 間隔反復 ----
     **{f"GET {SR}{a}/": LIST for a in ("analytics", "daily_plan", "due_cards", "user_statistics")},
     f"GET {SR}learning_insights/": LIST,
@@ -270,7 +248,6 @@ OUT_OF_SCOPE = {
        for p in ("api/subjects/", "api/organizations/subjects/")},
     **{f"GET {p}": "登録画面用。slug を知る人に科目名だけを出す仕様（#446 の設計確認メモ）"
        for p in ("api/subjects/public/", "api/organizations/subjects/public/")},
-    "POST api/study/goals/": "番号を受け取らない（目標の種類と値だけ）。持ち主は本人に固定",
 }
 
 
@@ -340,7 +317,7 @@ def _problem(subject, user, text, pk=None):
 
 
 def _records(user, subject, problem, pks, mark):
-    """クイズの回・学習記録・目標・カード・復習の記録を 1 組作る"""
+    """クイズの回・カード・復習の記録を 1 組作る"""
     pks = pks or {}
     card = SpacedRepetitionCard.objects.create(
         pk=pks.get("card"), user=user, problem=problem,
@@ -348,10 +325,6 @@ def _records(user, subject, problem, pks, mark):
     return {
         "session": QuizSession.objects.create(
             pk=pks.get("session"), user=user, subject=subject, is_active=True),
-        "log": StudyLog.objects.create(
-            pk=pks.get("log"), user=user, subject=subject, is_active=True, notes=mark),
-        "goal": StudyGoal.objects.create(
-            pk=pks.get("goal"), user=user, goal_type="daily_time", target_value=10),
         "card": card,
         "review": SpacedRepetitionReview.objects.create(
             pk=pks.get("review"), card=card, user=user, problem=problem, quality_score=4,
@@ -406,19 +379,10 @@ def world(db):
     mixed = QuizSession.objects.create(user=user_a, subject=None, is_active=True)
     for problem in (problem_a, problem_b):
         QuizAnswer.objects.create(session=mixed, problem=problem)
-    StudyLog.objects.create(user=user_a, subject=subject_b, duration=60)
     SpacedRepetitionCard.objects.create(
         user=user_a, problem=problem_b, next_review_date=timezone.now() - timedelta(days=1))
     for subject in (subject_a, subject_b):
         UserSubjectAccess.objects.create(user=user_a, subject=subject)
-    # 解いた問題が 0 件の日も入れる（I459 で dashboard/analytics の 0 で割る不具合を直した）
-    summary = DailyStudySummary.objects.create(
-        user=user_a, date=timezone.now().date(), total_problems_attempted=4,
-        total_problems_correct=3)
-    summary.subjects_studied.add(subject_a, subject_b)
-    DailyStudySummary.objects.create(
-        user=user_a, date=timezone.now().date() - timedelta(days=1),
-        total_study_time=600)
 
     refs = {f"foreign.{k}": v.pk for k, v in foreign.items()}
     refs.update({f"same.{k}": v.pk for k, v in same.items()})
@@ -632,14 +596,14 @@ SCOPE_REMOVED = [
         "studylogs.views.SpacedRepetitionCardViewSet",
         lambda self: SpacedRepetitionCard.objects.filter(user=self.request.user),
         "GET api/study/sr-cards/", ListCheck, id="org-scope-card-list"),
-    pytest.param(  # 本人の絞り込みを外す（同じ組織の別の利用者・他組織の目標が読める）
-        "studylogs.views.StudyGoalViewSet",
-        lambda self: StudyGoal.objects.all(),
-        "GET api/study/goals/<pk>/", IdCheck, id="user-scope-goal"),
+    pytest.param(  # 本人の絞り込みを外す（同じ組織の別の利用者・他組織の復習の記録が読める。I492 で目標から移した）
+        "studylogs.views.SpacedRepetitionReviewViewSet",
+        lambda self: SpacedRepetitionReview.objects.all(),
+        "GET api/study/sr-reviews/<pk>/", IdCheck, id="user-scope-review"),
     pytest.param(  # 何でも断るだけ（正の対照が落とす）
-        "studylogs.views.StudyGoalViewSet",
-        lambda self: StudyGoal.objects.none(),
-        "GET api/study/goals/<pk>/", IdCheck, id="deny-all-goal"),
+        "studylogs.views.SpacedRepetitionReviewViewSet",
+        lambda self: SpacedRepetitionReview.objects.none(),
+        "GET api/study/sr-reviews/<pk>/", IdCheck, id="deny-all-review"),
 ]
 
 

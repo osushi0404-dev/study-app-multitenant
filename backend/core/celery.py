@@ -19,19 +19,13 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
 # 定期タスクの設定（時刻は app.conf.timezone の日本時間）
-# 間隔は crontab の時刻で決める。開発の都合で秒の間隔に変えない（学習リマインダーのメールが 1 分ごとに
-# 送られうる。I466）。タスクを消したら、ここからも外す（core/tests/test_I466_celery_schedule.py が見る）
+# 間隔は crontab の時刻で決める。開発の都合で秒の間隔に変えない（I466）。
+# タスクを消したら、ここからも外す（core/tests/test_I466_celery_schedule.py が見る）
 app.conf.beat_schedule = {
     # 毎日午前2時に学習分析データを更新
     'update-daily-analytics': {
         'task': 'studylogs.tasks.update_daily_analytics_task',
         'schedule': crontab(hour=2, minute=0),
-    },
-
-    # 毎日午前7時に学習リマインダーを送信
-    'send-study-reminders': {
-        'task': 'studylogs.tasks.send_study_reminders_task',
-        'schedule': crontab(hour=7, minute=0),
     },
 
     # 30分ごとにキャッシュのメンテナンス
