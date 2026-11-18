@@ -12,7 +12,7 @@ set -uo pipefail
 # 手順: docs/runbooks/frontend-verify.md ・ 計画: docs/plans/open/plan_I187.md 5-2-5
 
 ISSUE="${1:-}"
-if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then
+if ! [[ "$ISSUE" =~ ^I[0-9]{3,}$ ]]; then
   echo "[check-frontend-evidence] 使い方: $0 I###" >&2
   exit 2
 fi

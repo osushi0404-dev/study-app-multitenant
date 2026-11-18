@@ -8,7 +8,7 @@
 set -uo pipefail
 
 ISSUE="${1:-}"
-if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then
+if ! [[ "$ISSUE" =~ ^I[0-9]{3,}$ ]]; then
   echo "⛔ 使い方: $0 I###（受け取った値: '${ISSUE}'）"
   exit 2
 fi

@@ -2777,7 +2777,7 @@ def _join_continuations(text: str) -> str:
         i += 1
     return "".join(out)
 
-_EVIDENCE_FILE_RE = re.compile(r"\.evidence/I[0-9]{3}/[A-Za-z0-9._-]+")   # I187: Playwright MCP の書き先
+_EVIDENCE_FILE_RE = re.compile(r"\.evidence/I[0-9]{3,}/[A-Za-z0-9._-]+")   # I187: Playwright MCP の書き先（I569: 番号は 3 桁以上）
 
 
 def main():

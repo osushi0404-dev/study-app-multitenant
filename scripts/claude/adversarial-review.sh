@@ -487,7 +487,7 @@ while [ $# -gt 0 ]; do
         ISSUE="$1"; shift ;;
   esac
 done
-[[ "$ISSUE" =~ ^I[0-9]{3}$ ]] || usage_error "受け取った値: '${ISSUE}'"
+[[ "$ISSUE" =~ ^I[0-9]{3,}$ ]] || usage_error "受け取った値: '${ISSUE}'"
 # 誤った値（整数でない・0・桁の大きな値）で上限の比較が誤りになり、上限を外して動くことを防ぐ（fail-closed）。
 # 上の限りは 3（延長は 1 周だけ・review-gate の手順書の決まりをここでも守る）
 [[ "$ADV_ROUND_LIMIT" =~ ^[1-3]$ ]] || usage_error "周回の上限は 1〜3（延長は 1 周だけ）: '${ADV_ROUND_LIMIT}'"
