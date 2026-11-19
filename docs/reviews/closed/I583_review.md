@@ -70,6 +70,7 @@
 - [implement] `/simplify` の指摘のうち 2 件は採らなかった: `stops` の照合の仕方（line/text）の一本化 — `GATE_CHECK: FAIL REASON=missing` などは行全体で照合する設計のため／FG-06 で一時リポジトリを使い回す — ケースの順番に頼る形になり、損が数十 ms と小さいため
 - [retro] 台帳の残り 5 件（F1〜F5）はすべて `docs/reviews/backlog/I583.md` へ（後続イシュー行きは 0 件。F1 は Medium だが再現なし・ハーネスのテスト）
 - [retro] 改善案: 予防処置は #547 に同梱済みのため新規なし。S1〜S3 は見送り（実害なし・その場で捕まった・手順書に既にある）
+- [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -77,3 +78,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
