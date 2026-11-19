@@ -73,6 +73,8 @@
 - [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した
 - [close の後] ユーザーの指示「このイシューで対応」で、台帳の残り F1 を同梱する。記録を open に戻し（計画書のレビュー記録へのリンクも戻した）、範囲が増えるので計画レビューから通し直す
 - [plan-review] F1 同梱の計画レビューは OK。Warning 2 件・Info 2 件を計画書に反映し再レビューはしない（受け入れ条件 3 は F1 の指示そのものを書き表しただけで、範囲は計画レビュー済み）。手動テスト No.1 は test-gate で取り直す
+- [implement] F1 同梱の `/simplify` の指摘を採った: 外す変数の一覧を git から取り冒頭でも外す・`scan` にも前置き・作者の指定を 1 か所に・重複したコメントを縮める — 前置きを付け忘れた呼び出しまで覆い、FG-08 が前置きだけの差を確かめる形がコードから読めるため。使い回し・無駄の観点は指摘なし。テスト部品の共有ファイル化（他のテスト 10 本ほど）は範囲外のため採らない
+- [implement] F1 の場面（おとりに向けた GIT_DIR などを設定したシェルからテストを流す）を手元で確かめた: pass=86 fail=0・おとりのコミット 1 のまま・本物の HEAD 変わらず
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -83,3 +85,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
