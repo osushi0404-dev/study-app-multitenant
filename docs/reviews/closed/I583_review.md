@@ -84,6 +84,7 @@
 - [test-gate] 手動テスト No.1 と TC-A1 を F1 同梱の後のコードで取り直した（計画レビューの Warning どおり）。どちらも OK・pass=86
 - [retro] 台帳の残り（最新の記録 1755）: F1 は resolved。F2〜F7 は `docs/reviews/backlog/I583.md`（後続イシュー行きは 0 件）。F8 は review-gate で記録を直したので一覧に入れない。改善案は見送り 1 件（上の振り返り）
 - [close] F1 同梱の後の close: develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した。PR 説明に F1 の同梱を足した
+- [close] 最終確認で CI の Harness Tests が落ちた（`test_i202_ledger_cleanup.sh` D3: 台帳の残りの一覧に retro で足した説明の行が `- F` で始まり、指摘の行の形と読まれた）。原因が記録の場所（`docs/reviews/backlog/I583.md`）の書き方だけで、コードは変えないので、手順 5.5 の「記録を open に戻して fix-loop」には回さず、その行の書き出しを直してテストを手元で流し（pass=161 fail=0）、close のまま送り直した — fix-loop・review-gate を通しても見る差分は記録の 1 行だけで、gate-check も記録の場所の後からのコミットを通すため（手順からの外れとしてマージ依頼で報告する）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
