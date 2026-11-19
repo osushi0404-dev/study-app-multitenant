@@ -26,6 +26,7 @@
 - [plan-review] 計画レビュー（20261119_1527）は高リスク判定 Yes（Blocker なし）。Warning 5 件はすべて直し、方式・範囲・受け入れ条件を変えないので再レビューはしない（計画変更記録）— AC14 は読み替えをやめ、捨てる DB のコンテナに向けた backend を `docker compose run --use-aliases` で起こして画面で確かめる形にした（ユーザーに聞かずに元の受け入れ条件のまま確かめられるため）
 - [design-security-review] Blocker 0・Medium 2・Low 4（設計）。Medium の「checksum が null の行の ETag」は必須防御条件として 4-5・4-8・TC-04・TC-13 に足した。方式・範囲・受け入れ条件を変えないので計画レビューはやり直さない — 追加は守りの条件とテストの場合だけ
 - [implement] ステップ 1 の数え直し（M1）と控え（M2）を済ませ、Danger Ops の承認を求めて止まる（止める条件 2）— マイグレーションのファイルを書く前に承認を得る（計画書 5 のステップ 1・R1）
+- [implement] Danger Ops の承認: ユーザーの回答「3 つとも承認する (Recommended)」（2026-11-19・対象: 画像の行 4 件の削除・古い画像の列 2 つの削除・`backend/media` の PNG 6 枚と `.gitkeep` 12 個の削除。控え `backup_I587_before_20261119.sql`）。マージ依頼のときに PR の `danger-approved` もお願いする
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
