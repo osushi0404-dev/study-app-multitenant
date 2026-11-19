@@ -71,6 +71,7 @@
 - [retro] 台帳の残り 5 件（F1〜F5）はすべて `docs/reviews/backlog/I583.md` へ（後続イシュー行きは 0 件。F1 は Medium だが再現なし・ハーネスのテスト）
 - [retro] 改善案: 予防処置は #547 に同梱済みのため新規なし。S1〜S3 は見送り（実害なし・その場で捕まった・手順書に既にある）
 - [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した
+- [close の後] ユーザーの指示「このイシューで対応」で、台帳の残り F1 を同梱する。記録を open に戻し（計画書のレビュー記録へのリンクも戻した）、範囲が増えるので計画レビューから通し直す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -79,3 +80,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: plan-review

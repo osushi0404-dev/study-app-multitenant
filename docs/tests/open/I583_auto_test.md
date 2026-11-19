@@ -8,7 +8,7 @@
 ## テストケース
 | TC | 対象 | 期待値（合格=exit 0） |
 |---|---|---|
-| TC-A1 | `bash scripts/claude/tests/test_i569_issue_number_digits.sh` | exit 0・最後の行が `pass=<N> fail=0`。中の TC-02・TC-03・TC-05・TC-10・FG-05〜FG-07 がすべて PASS（下の表） |
+| TC-A1 | `bash scripts/claude/tests/test_i569_issue_number_digits.sh` | exit 0・最後の行が `pass=<N> fail=0`。中の TC-02・TC-03・TC-05・TC-10・TC-11・FG-05〜FG-08 がすべて PASS（下の表） |
 
 テストファイルの中のケース（計画書 4 節）:
 | ケース | 確かめること | 期待 |
@@ -20,6 +20,8 @@
 | FG-05 | `GATE_CHECK_LIB` を無いパスにした TC-02 の判定 | NO（読み込みの失敗で終わる） |
 | FG-06 | I1000 のイシューファイルと計画書をコミットした一時のリポジトリでの TC-03 の判定 | NO、かつ `$TMP/claude_called` ができる |
 | FG-07 | git の外のフォルダから起動した TC-05 の判定 | NO（git の外で終わる） |
+| TC-11 | `GIT_DIR`・`GIT_WORK_TREE` をおとりの一時のリポジトリに向けたまま `iso_repo` と `tgit add/commit` を流す（F1） | おとりのコミット数が 1 のまま、作ったリポジトリのコミット数が 1 → YES |
+| FG-08 | 前置き `NOGIT` を付けない git で TC-11 と同じことをする | NO（おとりにコミットが入る） |
 
 結果（実装後に記入）:
 - TC-A1: 2026-11-19 implement で実行・exit 0（pass=84 fail=0。TC-02・TC-03・TC-05・TC-10・FG-05〜FG-07 すべて PASS）
