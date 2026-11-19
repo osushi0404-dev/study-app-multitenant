@@ -4,17 +4,17 @@
 - `test_i569_issue_number_digits.sh` の TC-02・TC-03・TC-05 を、一時の git リポジトリの中から本物のスクリプトを起動する形にし、期待する止まり方と終了コードまで確かめる。差し替えの `claude` で別プロセスの起動を防ぎ・検出する
 
 ## 変更点
--
+- `scripts/claude/tests/test_i569_issue_number_digits.sh`: 部品 `tgit`・`iso_repo`・`stops`・差し替えの `claude` を足し、TC-02・TC-03・TC-05 を一時のリポジトリで流して止まり方まで確かめる。TC-10・FG-05〜FG-07 を足す
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: ハーネスのテスト 1 本だけ
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: `test_i569_issue_number_digits.sh` pass=84 fail=0（implement で実行・review-gate の決定論ゲートで実走・CI OK）
+- 手動: No.1 OK（本物のワークツリーに I1000 の記録を置いても pass=84・claude の起動なし）
 
 ## 計画との差分
-- なし / あり（理由）
+- あり（小）: `/simplify` の指摘で `stops` に git の環境変数を外す処理と git の探索の上限を足し、作者付きの git を `tgit` にまとめた（計画変更記録に記載・方式と範囲は同じ）
 
 ## ロールバック
 - このイシューのコミットを revert する

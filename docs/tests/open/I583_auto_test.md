@@ -28,3 +28,6 @@
 ```bash
 bash scripts/claude/tests/test_i569_issue_number_digits.sh
 ```
+
+## 実行記録
+- 2026-11-19 test-gate: 決定論ゲート `bash scripts/claude/tests/test_i569_issue_number_digits.sh` は review-gate（code-review.sh）が実走済み。heavy の委譲なし。test-gate で手元の流し直しはしない（CI が正・CI_WAIT: OK）
