@@ -33,3 +33,4 @@ bash scripts/claude/tests/test_i569_issue_number_digits.sh
 
 ## 実行記録
 - 2026-11-19 test-gate: 決定論ゲート `bash scripts/claude/tests/test_i569_issue_number_digits.sh` は review-gate（code-review.sh）が実走済み。heavy の委譲なし。test-gate で手元の流し直しはしない（CI が正・CI_WAIT: OK）
+- 2026-11-19 test-gate（F1 同梱の後・HEAD 40eb59d3 のレビュー済みコード）: 決定論ゲートは review-gate が実走済み（CI_WAIT: OK）。implement で手元でも実行し exit 0・`pass=86 fail=0`（TC-11・FG-08 の 2 件が増えた）。おとりに向けた `GIT_DIR` などを設定したシェルから流しても exit 0・`pass=86 fail=0`・おとりと本物にコミットなし

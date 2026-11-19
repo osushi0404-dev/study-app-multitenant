@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: ハーネスのテスト 1 本だけ
 
 ## テスト結果
-- 自動: `test_i569_issue_number_digits.sh` pass=84 fail=0（implement で実行・review-gate の決定論ゲートで実走・CI OK）
-- 手動: No.1 OK（本物のワークツリーに I1000 の記録を置いても pass=84・claude の起動なし）
+- 自動: `test_i569_issue_number_digits.sh` pass=86 fail=0（F1 同梱の後。implement で実行・review-gate の決定論ゲートで実走・CI OK）
+- 手動: No.1 OK（F1 同梱の後に取り直し。本物のワークツリーに I1000 の記録を置いても pass=86・claude の起動なし）
 
 ## 計画との差分
 - あり（小）: `/simplify` の指摘で `stops` に git の環境変数を外す処理と git の探索の上限を足し、作者付きの git を `tgit` にまとめた（計画変更記録に記載・方式と範囲は同じ）
@@ -76,6 +76,7 @@
 - [implement] F1 同梱の `/simplify` の指摘を採った: 外す変数の一覧を git から取り冒頭でも外す・`scan` にも前置き・作者の指定を 1 か所に・重複したコメントを縮める — 前置きを付け忘れた呼び出しまで覆い、FG-08 が前置きだけの差を確かめる形がコードから読めるため。使い回し・無駄の観点は指摘なし。テスト部品の共有ファイル化（他のテスト 10 本ほど）は範囲外のため採らない
 - [implement] F1 の場面（おとりに向けた GIT_DIR などを設定したシェルからテストを流す）を手元で確かめた: pass=86 fail=0・おとりのコミット 1 のまま・本物の HEAD 変わらず
 - [review-gate] F1 同梱のコードレビューは OK（F1 は resolved・敵対的レビューは不要）。新しい Low の F8（TC-11 の期待するコミット数の書き違い）は記録の場所だけで直るので、計画書とテスト文書を「2」に直した。F6・F7 は retro で台帳の残りへ回す
+- [test-gate] 手動テスト No.1 と TC-A1 を F1 同梱の後のコードで取り直した（計画レビューの Warning どおり）。どちらも OK・pass=86
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -88,3 +89,4 @@ STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
