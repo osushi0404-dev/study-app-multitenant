@@ -72,6 +72,7 @@
 - [retro] 改善案: 予防処置は #547 に同梱済みのため新規なし。S1〜S3 は見送り（実害なし・その場で捕まった・手順書に既にある）
 - [close] develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した
 - [close の後] ユーザーの指示「このイシューで対応」で、台帳の残り F1 を同梱する。記録を open に戻し（計画書のレビュー記録へのリンクも戻した）、範囲が増えるので計画レビューから通し直す
+- [plan-review] F1 同梱の計画レビューは OK。Warning 2 件・Info 2 件を計画書に反映し再レビューはしない（受け入れ条件 3 は F1 の指示そのものを書き表しただけで、範囲は計画レビュー済み）。手動テスト No.1 は test-gate で取り直す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -81,3 +82,4 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
