@@ -30,7 +30,6 @@ const ProblemImageList: React.FC<ProblemImageListProps> = ({ images, alt, onImag
                 role="button"
                 tabIndex={0}
                 aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}
-                loading="lazy"
                 sx={{
                   width: '100%',
                   maxHeight: 300,

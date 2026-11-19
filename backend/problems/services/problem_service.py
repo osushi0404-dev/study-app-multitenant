@@ -5,7 +5,6 @@
 I587: 画像の中身は DB（MediaAssetContent）に保存する。ファイルの置き場は使わない
 """
 import hashlib
-import logging
 import os
 import uuid
 from typing import List, Dict, Any, Optional
@@ -17,13 +16,12 @@ from problems.models import (
 )
 from problems.utils import (
     validate_image_file,
-    detect_image_mime,
+    detect_mime,
     sanitize_filename,
     check_duplicate_filename,
     get_storage_path,
 )
 
-logger = logging.getLogger(__name__)
 
 # usage_kind ごとの画像枚数上限（作成・更新で共用・マジックナンバー排除）
 MAX_IMAGES_PER_KIND = 5
@@ -172,7 +170,7 @@ class ProblemService:
             usage_kind=usage_kind,
             storage_key=storage_key,
             original_filename=sanitized_filename,
-            mime_type=detect_image_mime(image_file),
+            mime_type=detect_mime(data),  # 検査（validate_image_file）を通った中身から判定した値
             file_size_bytes=len(data),
             checksum_sha256=hashlib.sha256(data).hexdigest(),
             version=1,

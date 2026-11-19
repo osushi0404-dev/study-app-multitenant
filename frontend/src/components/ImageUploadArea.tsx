@@ -308,7 +308,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
               return (
                 <ImageListItem key={preview.key}>
                   {preview.isExisting ? (
-                    <MediaImage src={preview.src} alt={preview.title} loading="lazy" sx={PREVIEW_SX} />
+                    <MediaImage src={preview.src} alt={preview.title} sx={PREVIEW_SX} />
                   ) : (
                     <Box component="img" src={preview.src} alt={preview.title} loading="lazy" sx={PREVIEW_SX} />
                   )}

@@ -3,17 +3,15 @@ I587: 画像のファイルを DB に移す前の試し（読むだけ・何も�
 
     python manage.py check_media_migration
 
-行ごとの判定（移す・済み・消す〔ファイル無し〕）と件数、古い画像の列に値のある問題の件数を出す。
+行ごとの判定（移す・済み・消す〔ファイル無し〕）と件数を出す。
+古い画像の列に値のある問題は、マイグレーション 0026 が数えて止める。
 """
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Q
 
 from problems.media_migration import (
     LEGACY_MEDIA_ROOT, MediaMigrationError, move_media_files_to_db,
 )
-from problems.models import MediaAsset, MediaAssetContent, Problem, ProblemMediaAsset
-
-LEGACY_FIELDS = ('question_image', 'explanation_image')
+from problems.models import MediaAsset, MediaAssetContent, ProblemMediaAsset
 
 
 class Command(BaseCommand):
@@ -29,14 +27,3 @@ class Command(BaseCommand):
         for asset_id, key, action in result.planned:
             self.stdout.write(f'{action}\t{asset_id}\t{key}')
         self.stdout.write(f'I587 media（試し）: {result.summary()}')
-        self.stdout.write(f'古い画像の列: {self._legacy_summary()}')
-
-    @staticmethod
-    def _legacy_summary() -> str:
-        names = {f.name for f in Problem._meta.get_fields()}
-        if not set(LEGACY_FIELDS) <= names:
-            return '列なし（外し済み）'
-        condition = Q()
-        for name in LEGACY_FIELDS:
-            condition |= ~Q(**{f'{name}__isnull': True}) & ~Q(**{name: ''})
-        return f'値のある問題 {Problem.objects.filter(condition).count()} 件'

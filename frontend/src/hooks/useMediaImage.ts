@@ -1,7 +1,8 @@
 /**
  * 画像の中身を取り、表示用の URL（blob:）を返す（I587）
  *
- * 同じ画像の中身は変わらない（画像を替えると新しい ID になる）ので、取れた中身は捨てずに使い回す。
+ * 同じ画像の中身は変わらない（画像を替えると新しい ID になる）ので、表示している間は取り直さない。
+ * 画像は部品が置かれた時点で取る（img の loading="lazy" は blob の URL には効かないので付けない）。
  * 表示用の URL は部品が外れるか中身が変わったときに捨てる（メモリを残さない）。
  */
 import { useEffect, useState } from 'react';
@@ -18,6 +19,8 @@ export const useMediaImage = (url: string): { state: LoadState<Blob>['status']; 
       queryFn: () => getMediaBlob(url),
       enabled: !!url,
       staleTime: Infinity,
+      // 使わなくなった中身は早めに捨てる（もう一度要るときはブラウザの HTTP キャッシュか 304 で返る）
+      gcTime: 60_000,
     })
   );
   const blob = load.status === 'success' ? load.data : null;

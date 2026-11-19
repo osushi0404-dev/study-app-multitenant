@@ -3,7 +3,6 @@
 イシュー#031対応: 強化されたファイルバリデーションとサニタイゼーション
 """
 import re
-import hashlib
 import unicodedata
 from pathlib import Path
 from typing import Tuple, Optional
@@ -97,22 +96,20 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+MIME_SNIFF_BYTES = 2048
+
+
+def detect_mime(data: bytes) -> str:
+    """中身の先頭のバイト列から MIME を判定する（送り手の content_type は使わない・I587）"""
+    return magic.from_buffer(data[:MIME_SNIFF_BYTES], mime=True)
+
+
 def _detect_mime(file) -> str:
-    """ファイルの先頭 2048 バイトから MIME を判定する（読んだ後は先頭に戻す）"""
+    """ファイルの先頭から MIME を判定する（読んだ後は先頭に戻す）"""
     file.seek(0)
-    mime = magic.from_buffer(file.read(2048), mime=True)
+    mime = detect_mime(file.read(MIME_SNIFF_BYTES))
     file.seek(0)
     return mime
-
-
-def detect_image_mime(file) -> Optional[str]:
-    """
-    中身から判定した画像の MIME（PNG・JPEG・WebP のどれか）。それ以外は None
-
-    保存・配信には送り手の content_type でなくこの値を使う（I587）
-    """
-    mime = _detect_mime(file)
-    return mime if mime in ALLOWED_IMAGE_FORMATS else None
 
 
 def _validate_filename_safety(filename: str) -> Tuple[bool, Optional[str]]:
@@ -253,27 +250,6 @@ def check_duplicate_filename(
         return False, f'ファイル名 "{original_filename}" は既に{usage_label}として登録されています'
 
     return True, None
-
-
-def calculate_file_checksum(file) -> str:
-    """
-    ファイルのSHA256チェックサムを計算
-
-    Args:
-        file: ファイルオブジェクト
-
-    Returns:
-        str: SHA256ハッシュ値（16進数文字列）
-    """
-    file.seek(0)
-    sha256_hash = hashlib.sha256()
-
-    # チャンク単位で読み込んでハッシュ計算（メモリ効率化）
-    for chunk in iter(lambda: file.read(4096), b''):
-        sha256_hash.update(chunk)
-
-    file.seek(0)  # ファイルポインタを先頭に戻す
-    return sha256_hash.hexdigest()
 
 
 def get_storage_path(

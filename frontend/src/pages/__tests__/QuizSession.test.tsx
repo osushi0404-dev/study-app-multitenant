@@ -10,8 +10,8 @@ import apiClient from '../../services/api';
 // APIクライアントのモック
 jest.mock('../../services/api');
 
-// 画像の取得はしない（渡された API の URL を src に出す・I587）
-jest.mock('../../components/MediaImage');
+// 画像の取得はしない（フックを差し替え、渡された API の URL を src に出す・I587）
+jest.mock('../../hooks/useMediaImage');
 
 // react-hot-toastのモック
 jest.mock('react-hot-toast', () => ({

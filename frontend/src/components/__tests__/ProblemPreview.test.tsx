@@ -6,8 +6,8 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import ProblemPreview from '../ProblemPreview';
 import { MediaAsset, Problem } from '../../services/types';
 
-// 画像の取得はしない（渡された API の URL を src に出す・I587）
-jest.mock('../MediaImage');
+// 画像の取得はしない（フックを差し替え、渡された API の URL を src に出す・I587）
+jest.mock('../../hooks/useMediaImage');
 
 const asset = (id: string, url: string, usageKind: string): MediaAsset => ({
   id,

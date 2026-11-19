@@ -1,20 +1,22 @@
 # I587 レビュー: 問題・解説の画像を DB に保存し、組織の境界を確かめる API から返す
 
 ## 変更概要
-- （実装前）画像の中身を `media_asset_contents`（`MediaAsset` と 1 対 1・`bytea`）に保存し、`GET /api/media/<id>/` からログインと組織の境界を確かめて返す。画面は axios で中身を取って表示する。今あるファイルは 0025 で DB に移し、ファイルの無い行を消す。古い画像の列（0026）・`/media/` の配信・見本のファイルを外す
+- 画像の中身を `media_asset_contents`（`MediaAsset` と 1 対 1・`bytea`）に保存し、`GET /api/media/<id>/` からログインと組織の境界を確かめて返す。画面は axios で中身を取って表示する。今あるファイルは 0025 で DB に移し、ファイルの無い行を消す。古い画像の列（0026）・`/media/` の配信・見本のファイルを外す
 
 ## 変更点
-- （実装前）計画書 4 のとおり
+- Backend: `MediaAssetContent`（0024・`SET STORAGE EXTERNAL`）・保存は中身から判定した MIME・論理削除で中身を消す（`ProblemService._discard_asset`）・`GET /api/media/<id>/`（`MediaAssetContentView`・`selectors.py`）・0025（`media_migration.py`・`check_media_migration`）・0026（古い列）・`StorageService`・`MEDIA_*`・`/media/` の配信・科目のフォルダ作りを外した
+- Frontend: `MediaImage`・`useMediaImage`・`mediaService.getMediaBlob`・`api.ts` の `skipErrorToast`・画像の 3 つの部品・`pickImageUrls`・型・`utils/url.ts` を消した・`setupProxy.js`
+- Config/リポジトリ: `nginx/default.conf` の `/media/`・`docker-compose.yml` の `backend_media`・`.gitignore` の `!backend/media/`・`backend/media/` の見本（承認済み）
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: 計画書 3 のとおり
 
 ## テスト結果
-- 自動: 実装前のため未実行
-- 手動: 実装前のため未実行
+- 自動: 手元で backend 797 passed・frontend 150 passed・型・ESLint・ruff・`makemigrations --check`・ビルド・決定論ゲート 3 行が合格（2026-11-19）。CI は review-gate
+- 手動: M1〜M6 OK（Claude・Playwright MCP）。M7 は test-gate
 
 ## 計画との差分
-- なし（実装前）
+- あり（小さな直しだけ・計画変更記録「実装（2026-11-19）での小さな直し」「/simplify での整理」）
 
 ## ロールバック
 - 計画書 7 のとおり
@@ -27,6 +29,11 @@
 - [design-security-review] Blocker 0・Medium 2・Low 4（設計）。Medium の「checksum が null の行の ETag」は必須防御条件として 4-5・4-8・TC-04・TC-13 に足した。方式・範囲・受け入れ条件を変えないので計画レビューはやり直さない — 追加は守りの条件とテストの場合だけ
 - [implement] ステップ 1 の数え直し（M1）と控え（M2）を済ませ、Danger Ops の承認を求めて止まる（止める条件 2）— マイグレーションのファイルを書く前に承認を得る（計画書 5 のステップ 1・R1）
 - [implement] Danger Ops の承認: ユーザーの回答「3 つとも承認する (Recommended)」（2026-11-19・対象: 画像の行 4 件の削除・古い画像の列 2 つの削除・`backend/media` の PNG 6 枚と `.gitkeep` 12 個の削除。控え `backup_I587_before_20261119.sql`）。マージ依頼のときに PR の `danger-approved` もお願いする
+- [implement] TC-03 の確かめのため開発の DB で `migrate problems 0024` を流そうとしたら、見張りが巻き戻しの形として止めた。承認の画面を増やさず、試しのコマンドを中身の表が無くても動く形にした — 試しは流す前の環境で使うもので、こちらが筋が通る
+- [implement] ステップ 7 の `migrate` は `DANGER_OK=1` を前に付けずに流した — 付けるとサンドボックスの中で動いて `.env` を読めず止まる。前進の `migrate` は見張りの判定の対象外（danger-ops.md）で、承認はステップ 1 で得ていた。結果は `moved=0 already=0 deleted_assets=4 deleted_links=0`（M4）
+- [implement] 画面の確かめ用の問題「I587確認: 画像のある問題」を開発の DB の科目「I472確認用」（E2E Org A）に作った（画像 3 枚）。M7（控えの戻し）で画像のある問題として使うので、test-gate まで残す
+- [implement] 決定論ゲートの形を語の区切りつきに直した — 前の形は `../services/mediaService` に当たる誤検知を出した。直した形で失敗の注入を確かめ直した
+- [implement] /simplify の 4 つの観点のレビューで出た指摘のうち 8 件を直し、7 件を理由を付けて見送った（計画変更記録）。見送りのうち `Subject.image_directory` の列（読む所が無くなった）は retro で一覧に回す
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement

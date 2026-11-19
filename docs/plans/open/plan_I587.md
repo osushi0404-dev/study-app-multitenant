@@ -147,7 +147,7 @@
 - `backend/problems/migrations/0025_move_media_files_to_db.py`: `RunPython(forward, reverse_code=backward)`
   - `forward`: 上の関数を `dry_run=False` で呼び、`sys.stdout.write` で `I587 media: moved=… already=… deleted_assets=… deleted_links=…` を 1 行出す（`migrate` の出力に残す。規約の `print` を使わない）。最後に `cache_service.invalidate_problems_cache()` を呼び、古い URL を含む一覧のキャッシュを捨てる。`cache_service` の import は関数の中に置き、どの例外でも `logger.warning` に残して続ける（`migrate` を止めない。捨てられなくてもキャッシュは最長 1 時間で切れる）
   - `backward`: 中身のある画像を `LEGACY_MEDIA_ROOT / storage_key` に書き戻す（戻し方。消した行は戻らない: 戻すのは控え〔7〕）
-- 新しい管理コマンド `backend/problems/management/commands/check_media_migration.py`: 読むだけ。上の関数を `dry_run=True` で呼び、行ごとの判定と件数、古い画像の列に値のある問題の件数を出す（承認を求めるときに見せる試し）
+- 新しい管理コマンド `backend/problems/management/commands/check_media_migration.py`: 読むだけ。上の関数を `dry_run=True` で呼び、行ごとの判定と件数を出す（承認を求めるときに見せる試し）。古い画像の列に値のある問題は 0026 が数えて止める（/simplify で外した・計画変更記録）
 
 ### 4-9. 置き場の設定と見本のファイルの片付け
 - `backend/core/urls.py`: `static(settings.MEDIA_URL, ...)` と `static`・`settings` の import を消す
@@ -306,6 +306,18 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 <!-- 形は docs/runbooks/plan-writing-rules.md「計画変更記録の形」 -->
 - 計画レビュー（20261119_1527）の Warning への対応（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: 2 の「そのまま」の言い方と AC14 の文をイシューのとおりに戻し、M7 を画面で確かめる形にした／`upload_image` の呼び出しが無い根拠を 9 に書いた／決定論ゲートを `/api/media/` に当たらない形（`-e "^/media" -e "[^i]/media"`）にした（失敗の注入を確かめ直した）／0025 のキャッシュの捨て方を関数の中の import と警告だけにした／本人のブラウザに残る画像を R11 で受け入れた／M7 に承認画面の予告を足した
 - セキュリティ設計レビュー（2026-11-19）の必須防御条件への対応（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: 0025 で null の `checksum_sha256`・`file_size_bytes` を埋める（4-8）／配信は `checksum_sha256` が空なら ETag を付けない（4-5）／TC-04 に null の行の場合を足した
+- 実装（2026-11-19）での小さな直し（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）:
+  - 中身の取り出しも `selectors.py` に置いた（`media_asset_data`）— 4-5 の「取り出しは selectors」にそろえる
+  - TC-08 は `test_I006` でなく `test_I587_media_in_db.py` に置いた（`no_file_writes` の準備を共有するため）。`test_I006` の TC-AUTO-009・010 は計画どおり消した
+  - `studylogs/tests/test_I452_quiz_review.py` の応答のキーの一覧から `explanation_image` を外した（4-7 で外した項目を前提にしていた既存のテスト）
+  - `check_media_migration` は、中身の表がまだ無い（0024 の前）ときも動くようにした — 試しは流す前の環境で使うもの。開発の DB で `migrate problems 0024` を流そうとしたら見張りが巻き戻しの形として止めたので、先に 0024 だけを流す代わりにこちらにした
+  - 決定論ゲートの形を語の区切りつき（`-e "^/media\b" -e "[^i]/media\b"`）にした — 前の形は `../services/mediaService` に当たる誤検知を出した
+  - 画面のテスト（TC-16〜TC-18）は、axios-mock-adapter でなく `getMediaBlob` の差し替え（TC-16）と `MediaImage` の手動のモック（TC-18）で書いた。TC-17 は既存の `api.test.ts` に足した — ページのテストは今 `jest.mock('../../services/api')` で API を差し替えていて、画像の取得が順番の決まった差し替えを食い違わせるため
+  - `utils.py` の `calculate_file_checksum` を消した（4-2 の後に呼ぶ所が無くなった）
+  - ステップ 1 の控えは `scripts/db_backup.sh` と同じ `pg_dump` を DB のコンテナの中で流して取り出した（サンドボックスの中のスクリプトは `.env` を読めない）。ステップ 7 の `migrate` は前置きの `DANGER_OK=1` を付けずに流した（付けるとサンドボックスの中で動いて止まる。前進の `migrate` は見張りの判定の対象外〔danger-ops.md〕・承認はステップ 1 で得た）
+- /simplify（2026-11-19・4 つの観点のレビュー役）での整理（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）:
+  - 直した: 3 つの画面のファイルの改行の形を元の CRLF に戻した（差分が全体の書き換えに見えていた）／中身から MIME を判定する所を `utils.detect_mime(data)` の 1 か所にし、保存と移行の両方から使う（保存は読んだ中身から判定・ファイルを読み直さない）／`check_media_migration` の古い列の数えを外した（今のモデルから列が外れていて、いつも「列なし」と出る死んだコードだった。数えて止めるのは 0026）／`problem_service.py` の使われない `logger` を外した／0025 の書き戻しで、偽のモデルの実体を作らず値で場所を作り、中身を `.iterator()` で読む／画面のテストの差し替えを `MediaImage` から `useMediaImage`（`hooks/__mocks__/`）に下げ、本物の部品の属性の受け渡しもテストが通るようにした／blob の URL には効かない `loading="lazy"` を外した／画像の中身のキャッシュの持ち時間（`gcTime`）を 60 秒にした
+  - 見送った: `If-None-Match` を Django の `get_conditional_response` で読む（Django は弱い比較で `W/` も一致にする。計画 9・セキュリティレビューで「強い一致だけ」と決めて TC-04 で固定しているので変えない）／`upload_image`・`delete_image` の処理をサービスの公開の関数にまとめる（4-4 で今の作りのまま共通の保存・削除に寄せると決めた。紐づけの共有の判定の条件の違いは今からあるもの）／`MediaMigrationResult` の件数を判定の一覧から数える形にする（読みやすさの差が小さい）／`Subject.image_directory` の列を外す（読む所が無くなったが、外すと別のマイグレーションが要る。retro で一覧に回す）／テストの PNG・画像の行を作る補助を共通にする（範囲の外の既存のテストにまたがる）／失敗の枠を `SubjectsRetryRow` と共通にする（置き方が違う）／`isExisting` を `kind` から出す・`mediaImageKey` の export（軽い）
 
 ## レビュー結果
 - [20261119_1527 判定: ✅ 完了](../../reviews/I587_plan_review_20261119_1527.md)

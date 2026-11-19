@@ -206,7 +206,6 @@ def test_check_media_migration_command(world, monkeypatch, tmp_path, capsys):
     assert f"移す\t{present.id}" in out
     assert f"消す（ファイル無し）\t{missing.id}" in out
     assert "moved=1 already=0 deleted_assets=1 deleted_links=1" in out
-    assert "古い画像の列: 列なし（外し済み）" in out
     assert MediaAssetContent.objects.count() == 0
     assert MediaAsset.objects.filter(id=missing.id).exists()
 

@@ -19,7 +19,6 @@ interface MediaImageProps {
   role?: string;
   tabIndex?: number;
   'aria-label'?: string;
-  loading?: 'lazy' | 'eager';
   onClick?: () => void;
   onKeyDown?: (event: React.KeyboardEvent<HTMLImageElement>) => void;
 }

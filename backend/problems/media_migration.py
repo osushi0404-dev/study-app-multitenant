@@ -9,11 +9,10 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import magic
 from django.conf import settings
 from django.db import connection, transaction
 
-from problems.utils import ALLOWED_IMAGE_FORMATS
+from problems.utils import ALLOWED_IMAGE_FORMATS, detect_mime
 
 # 移す前のファイルの置き場（I587 で設定の MEDIA_ROOT を外したので、移行が読む場所はここに置く）
 LEGACY_MEDIA_ROOT = Path(settings.BASE_DIR) / 'media'
@@ -40,12 +39,12 @@ class MediaMigrationResult:
                 f'deleted_assets={self.deleted_assets} deleted_links={self.deleted_links}')
 
 
-def _resolve_inside(root: Path, asset) -> Path:
+def _resolve_inside(root: Path, asset_id, storage_key: str) -> Path:
     """キーから読む場所を作る。置き場の外（../・シンボリックリンク）を指せば止める"""
-    path = (root / asset.storage_key).resolve()
+    path = (root / storage_key).resolve()
     if not path.is_relative_to(root):
         raise MediaMigrationError(
-            f'I587 media: 置き場の外を指すキーです id={asset.id} key={asset.storage_key}')
+            f'I587 media: 置き場の外を指すキーです id={asset_id} key={storage_key}')
     return path
 
 
@@ -58,7 +57,7 @@ def _checked_content(asset, data: bytes) -> tuple:
     if asset.file_size_bytes is not None and asset.file_size_bytes != len(data):
         raise MediaMigrationError(
             f'I587 media: 中身の大きさが file_size_bytes と違います id={asset.id} key={asset.storage_key}')
-    mime = magic.from_buffer(data[:2048], mime=True)
+    mime = detect_mime(data)
     if mime not in ALLOWED_IMAGE_FORMATS:
         raise MediaMigrationError(
             f'I587 media: 中身が画像ではありません（{mime}）id={asset.id} key={asset.storage_key}')
@@ -91,7 +90,7 @@ def move_media_files_to_db(*, asset_model, link_model, content_model, media_root
                 result.already += 1
                 result.planned.append((asset.id, asset.storage_key, ACTION_ALREADY))
                 continue
-            path = _resolve_inside(root, asset)
+            path = _resolve_inside(root, asset.id, asset.storage_key)
             if not path.is_file():
                 missing_ids.append(asset.id)
                 result.planned.append((asset.id, asset.storage_key, ACTION_DELETE))
@@ -119,11 +118,10 @@ def write_back_media_files(*, asset_model, content_model, media_root: Path) -> i
     """0025 の戻し: 中身のある画像をファイルの置き場に書き戻す（消した行は戻らない）。書いた数を返す"""
     root = Path(media_root).resolve()
     written = 0
-    contents = content_model.objects.values_list('asset_id', 'data')
     keys = dict(asset_model.objects.values_list('id', 'storage_key'))
-    for asset_id, data in contents:
-        asset = asset_model(id=asset_id, storage_key=keys[asset_id])
-        path = _resolve_inside(root, asset)
+    # 中身を全部同時にメモリに載せない
+    for asset_id, data in content_model.objects.values_list('asset_id', 'data').iterator(chunk_size=50):
+        path = _resolve_inside(root, asset_id, keys[asset_id])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(bytes(data))
         written += 1

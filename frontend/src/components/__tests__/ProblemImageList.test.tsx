@@ -4,8 +4,8 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProblemImageList from '../ProblemImageList';
 
-// 画像の取得はしない（渡された API の URL を src に出す・I587）
-jest.mock('../MediaImage');
+// 画像の取得はしない（フックを差し替え、渡された API の URL を src に出す・I587）
+jest.mock('../../hooks/useMediaImage');
 
 const renderList = (images: string[], onImageClick = jest.fn()) =>
   render(<ProblemImageList images={images} alt="解説画像" onImageClick={onImageClick} />);

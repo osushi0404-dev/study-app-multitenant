@@ -5,8 +5,8 @@ import { render, screen } from '@testing-library/react';
 import ImageUploadArea from '../ImageUploadArea';
 import { EditableImage } from '../../services/types';
 
-// 画像の取得はしない（渡された API の URL を src に出す）
-jest.mock('../MediaImage');
+// 画像の取得はしない（フックを差し替え、渡された API の URL を src に出す・I587）
+jest.mock('../../hooks/useMediaImage');
 
 describe('ImageUploadArea の画像のプレビュー', () => {
   const createObjectURL = jest.fn();
