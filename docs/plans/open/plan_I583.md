@@ -66,7 +66,7 @@
   - 台帳の残り `docs/reviews/backlog/I583.md` F1 の同梱（マージ前にユーザーの指示で追加・2026-11-19）:
     - git の場所を指す環境変数を外し git の探索を `$TMP` で止める前置きを配列 `NOGIT=(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "GIT_CEILING_DIRECTORIES=$TMP")` 1 か所にまとめ、`tgit`・`iso_repo`（`git init`）・`stops` がこれを付けて git・スクリプトを起動する
     - 一時のリポジトリに書き込む FG-01 の `git -C "$F1"/"$F2" init`・`add` も `tgit` で流す（同じ穴。`scan` は読むだけなので今のまま）
-    - TC-11（新規）: `GIT_DIR`・`GIT_WORK_TREE` を別の一時のリポジトリ（おとり・`$TMP/decoy`）に向けたまま `iso_repo` と `tgit … add/commit` を流しても、おとりのコミット数が増えず、作った一時のリポジトリにコミットが 1 つある → YES
+    - TC-11（新規）: `GIT_DIR`・`GIT_WORK_TREE` を別の一時のリポジトリ（おとり・`$TMP/decoy`）に向けたまま `iso_repo` と `tgit … add/commit` を流しても、おとりのコミット数が増えず、作った一時のリポジトリにコミットが 2 つ（init と add・commit の分）ある → YES
     - FG-08（新規）: 前置きを付けない `git` で同じことをすると（直す前の形）、おとりにコミットが入り、TC-11 の判定が NO（TC-11 と同じ判定の関数を、git を起動する関数を差し替えて呼ぶ）
     - 冒頭のコメントの I583 のケースの範囲を「TC-10・TC-11・FG-05〜FG-08」に直し、一覧から F1 の行を消す
 
