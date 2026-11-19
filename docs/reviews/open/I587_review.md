@@ -24,5 +24,7 @@
 - [plan] 開発の DB での保存方式の試し（一時表の `ALTER TABLE ... SET STORAGE`）は、見張りが危険な SQL として止めたのでやめ、テストの DB で確かめる TC-03 に回した — 開発の DB を変えずに同じ性質を CI で毎回確かめられる
 - [plan] Danger Ops の承認は、実装の最初（ステップ 1・マイグレーションのファイルを書く前）にもらう — I492 で review-gate のコンテナの起こし直しが承認の前のマイグレーションを流した（#579 は未完了）。承認の後なら流れても承認済みの操作になる
 - [plan-review] 計画レビュー（20261119_1527）は高リスク判定 Yes（Blocker なし）。Warning 5 件はすべて直し、方式・範囲・受け入れ条件を変えないので再レビューはしない（計画変更記録）— AC14 は読み替えをやめ、捨てる DB のコンテナに向けた backend を `docker compose run --use-aliases` で起こして画面で確かめる形にした（ユーザーに聞かずに元の受け入れ条件のまま確かめられるため）
+- [design-security-review] Blocker 0・Medium 2・Low 4（設計）。Medium の「checksum が null の行の ETag」は必須防御条件として 4-5・4-8・TC-04・TC-13 に足した。方式・範囲・受け入れ条件を変えないので計画レビューはやり直さない — 追加は守りの条件とテストの場合だけ
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement

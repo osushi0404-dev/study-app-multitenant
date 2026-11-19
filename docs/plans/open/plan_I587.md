@@ -106,7 +106,7 @@
   - `permission_classes = [permissions.IsAuthenticated]`（認証は既定の `JWTAuthentication`。組織の管理者に限らない: クイズを解く一般の利用者も画像を見る）
   - 取り出し（`backend/problems/selectors.py` を新しく作り `visible_media_asset(*, user, asset_id) -> MediaAsset | None`）: `user.organization_id` が無ければ `None`。`MediaAsset.objects.filter(id=asset_id, is_deleted=False, organization_id=user.organization_id, subject__organization_id=user.organization_id).only('id', 'mime_type', 'checksum_sha256').first()`（組織は `request.user` から決める・規約 §5。`organization` か `subject` が null の行は条件に当たらず返らない）
   - 無ければ `NotFound()`（404。他の組織の画像があることを知らせない。本文は `custom_exception_handler` の形）
-  - `etag = f'"{asset.checksum_sha256}"'`。`request.headers.get('If-None-Match')` を `,` で分けて空白を除いた値のどれかが `etag` か `*` なら、中身を読まずに `HttpResponseNotModified()`（304・本文なし）に ETag・Cache-Control を付けて返す
+  - `checksum_sha256` が空なら ETag を付けず、304 の判定もしない（違う画像が同じ ETag にならないように・セキュリティレビューの必須防御条件）。値があれば `etag = f'"{asset.checksum_sha256}"'`。`request.headers.get('If-None-Match')` を `,` で分けて空白を除いた値のどれかが `etag` か `*` なら、中身を読まずに `HttpResponseNotModified()`（304・本文なし）に ETag・Cache-Control を付けて返す
   - 中身: `MediaAssetContent.objects.filter(asset_id=asset.id).values_list('data', flat=True).first()`。無ければ `NotFound()`
   - 応答: `HttpResponse(bytes(data), content_type=mime)`。`mime` は `asset.mime_type` が `ALLOWED_IMAGE_FORMATS` に入るときだけそれを使い、それ以外は `application/octet-stream`。見出し: `ETag`・`Cache-Control: private, max-age=3600`・`X-Content-Type-Options: nosniff`・`Content-Security-Policy: default-src 'none'; sandbox`・`Content-Disposition: inline`
   - 回数の制限は既定のまま（`AppUserRateThrottle`・300/分）
@@ -140,7 +140,7 @@
   - `LEGACY_MEDIA_ROOT = Path(settings.BASE_DIR) / 'media'`（設定から `MEDIA_ROOT` を外すので、移行が読む場所はここに置く）
   - `move_media_files_to_db(*, asset_model, link_model, content_model, media_root: Path, dry_run: bool) -> MediaMigrationResult`（モデルは引数で受ける: マイグレーションの中では過去のモデル、コマンドでは今のモデル）
   - 対象: `is_deleted=False` の `MediaAsset`（論理削除の行は今もファイルが消されていて配信もしないので触らない）
-  - 1 行ごと: すでに中身があれば `already`（やり直しで二重に入らない）。`(media_root / storage_key).resolve()` が `media_root.resolve()` の下でなければ止める。ファイルが無ければ「消す」に入れる。あれば読み、`sha256` と大きさが `checksum_sha256`・`file_size_bytes`（値があるときだけ）と違えば止める。`detect_image_mime` 相当の判定（`magic.from_buffer`）が `ALLOWED_IMAGE_FORMATS` に入らなければ止める。合えば中身を作り、`mime_type` を判定した値に直す
+  - 1 行ごと: すでに中身があれば `already`（やり直しで二重に入らない）。`(media_root / storage_key).resolve()` が `media_root.resolve()` の下でなければ止める。ファイルが無ければ「消す」に入れる。あれば読み、`sha256` と大きさが `checksum_sha256`・`file_size_bytes`（値があるときだけ）と違えば止める。値が null なら読んだ中身から埋める（ETag に使うため・セキュリティレビューの必須防御条件）。`detect_image_mime` 相当の判定（`magic.from_buffer`）が `ALLOWED_IMAGE_FORMATS` に入らなければ止める。合えば中身を作り、`mime_type` を判定した値に直す
   - 「消す」の行: `link_model.objects.filter(asset_id__in=ids).delete()`（紐づけは `RESTRICT` なので先に消す）→ `asset_model.objects.filter(id__in=ids).delete()`
   - `dry_run=True` は何も書かず、行ごとの判定（移す・済み・消す）と件数だけを返す
   - 結果: `MediaMigrationResult(moved, already, deleted_assets, deleted_links, deleted_keys)`。止めるときは `MediaMigrationError`（キーと理由を入れる。中身は入れない）
@@ -305,6 +305,55 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 ## 計画変更記録
 <!-- 形は docs/runbooks/plan-writing-rules.md「計画変更記録の形」 -->
 - 計画レビュー（20261119_1527）の Warning への対応（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: 2 の「そのまま」の言い方と AC14 の文をイシューのとおりに戻し、M7 を画面で確かめる形にした／`upload_image` の呼び出しが無い根拠を 9 に書いた／決定論ゲートを `/api/media/` に当たらない形（`-e "^/media" -e "[^i]/media"`）にした（失敗の注入を確かめ直した）／0025 のキャッシュの捨て方を関数の中の import と警告だけにした／本人のブラウザに残る画像を R11 で受け入れた／M7 に承認画面の予告を足した
+- セキュリティ設計レビュー（2026-11-19）の必須防御条件への対応（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: 0025 で null の `checksum_sha256`・`file_size_bytes` を埋める（4-8）／配信は `checksum_sha256` が空なら ETag を付けない（4-5）／TC-04 に null の行の場合を足した
 
 ## レビュー結果
 - [20261119_1527 判定: ✅ 完了](../../reviews/I587_plan_review_20261119_1527.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-19
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | OWASP（セキュリティ設定ミス） | `checksum_sha256` が null の古い行があると、ETag が `"None"` になり、違う画像どうしが同じ ETag で 304 になりうる | 必須: 0025 で中身を移すとき、`checksum_sha256`・`file_size_bytes` が null なら読んだ中身から埋める（値があれば比べて、違えば止める）。配信は `checksum_sha256` が空なら ETag を付けず、304 の判定もしない（TC-04 に「checksum が null の行は ETag なし・`If-None-Match: "None"` で 200」を足す） |
+| Medium | 入力検証（ファイル） | 保存する MIME を送り手の `content_type` から取ると、配信で HTML として解釈される（調査結果 6） | 必須: 保存は中身から判定した MIME（4-2）。配信は許可した 3 つ以外を `application/octet-stream`・`nosniff`・CSP の `sandbox`（4-5・TC-02・TC-05）。禁止: `image/svg+xml` を許可に足すこと |
+| Low | マルチテナント | 一般の利用者は、同じ組織のどの画像も ID で取れる（学ぶ科目に入れていない科目の画像・答える前の解説の画像を含む） | 問題の取得（`available_problems`）と同じ組織の単位の境界にそろえる。ID は UUID で、応答に出るのは見てよい場面だけ（R5 で受け入れ） |
+| Low | OWASP（資源の消費） | ログインした利用者が大きな画像（最大 5MB）を繰り返し取り、DB の読み込みを増やす | 既定の回数の制限（300/分）・`max-age` と 304 で 2 回目の読み込みを減らす。上限は今の 5MB のまま |
+| Low | ファイル操作 | 移行が `storage_key` から読む場所を作るので、`../` やシンボリックリンクで置き場の外を読める | 必須: `resolve()` した場所が `LEGACY_MEDIA_ROOT.resolve()` の下でなければ止める（4-8・TC-14 の (c)。シンボリックリンクも `resolve()` で外に出るので止まる） |
+| Low | 機密情報 | 検査のエラーの文に例外の文字列（`str(e)`）が入る（`utils.py` の `validate_image_file` の 3・4。今からある） | 範囲の外で変えない。新しく足すコードでは例外の文字列を応答に入れない（`upload_image`・`delete_image` の 500 の `str(e)` は消す・4-4） |
+| なし | 認証・認可 | — | 新しい API は `IsAuthenticated`・組織は `request.user` から（4-5）。書き込みの action は今の `IsOrgAdmin` のまま |
+| なし | 外部通信 | — | 外部の API・Webhook は無い |
+| なし | 依存ライブラリ | — | 足さない・上げない |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `GET /api/media/<id>/` | 未認証 | 知っている画像の ID で中身を取る | 401 で中身を返さない | Yes: TC-06 | Yes: M6（未ログインの `fetch`） | なし | High |
+| 2 | `GET /api/media/<id>/` | 他の組織の利用者 | 他の組織の画像の ID で取る | 404（あることも知らせない） | Yes: TC-07 (a) | Yes: M6（組織 B） | なし | High |
+| 3 | `GET /api/media/<id>/` | 同じ組織の利用者 | 論理削除した画像・持ち主が null の画像を取る | 404 | Yes: TC-07 (b)〜(e) | No | なし | Medium |
+| 4 | `POST /api/problems/`・`PATCH`・`images/upload/` | 組織の管理者 | 中身が PNG で `content_type: text/html` の画像、または HTML を埋めた画像を登録し、配信の URL を他の利用者に開かせる | 保存は判定した MIME・配信は `image/png`＋`nosniff`＋CSP の `sandbox` で、スクリプトが動かない | Yes: TC-02・TC-05 | No | 画像として正しいファイルに埋めた文字列は画像として表示されるだけ | High |
+| 5 | `GET /api/media/<id>/`（`If-None-Match`） | 同じ組織の利用者 | ETag を合わせて 304 を引き出し、中身があるかを確かめる・別の画像の中身を取り違えさせる | 304 は利用者に見える画像だけ（取り出しの絞り込みの後に判定）。ETag は中身の SHA-256 で、null の行は ETag を付けない | Yes: TC-04（null の行を含む） | No | なし | Medium |
+| 6 | `PATCH /api/problems/<id>/`（`question_order` の `existing`） | 組織の管理者 | 他の組織の画像の ID を `existing` に入れて自分の問題に紐づけ、配信で取る | その問題に紐づいた画像だけを受け付ける（`_reconcile_images` の今の確かめ。変えない） | Yes: 既存の `test_I073_image_update.py`（他の問題の画像の指定で 400） | No | なし | High |
+| 7 | `migrate`（0025） | 開発の環境の DB に行を書ける人 | `storage_key` に `../../` やシンボリックリンクを入れ、置き場の外のファイルを DB に入れさせる | 置き場の外なら止める | Yes: TC-14 (c) | No | DB に直接書ける人はもともと何でも読める（脅威は事故） | Low |
+| 8 | 画面（`MediaImage`） | 同じ組織の利用者 | 画像の取得の失敗を何度も起こし、通知を重ねる | 画像の取得は通知を出さず枠に出す | Yes: TC-16・TC-17 | Yes: M5 のコンソール | なし | Low |
+
+### 必須防御条件（実装で守ること）
+- 0025: `checksum_sha256`・`file_size_bytes` が null なら読んだ中身から埋める。値があって違えば止める
+- 配信: `checksum_sha256` が空の行は ETag を付けず、304 の判定をしない。304 の判定は、利用者に見える画像の取り出し（組織・論理削除・null の絞り込み）の後に行う
+- 許可する MIME に `image/svg+xml` を足さない
+
+## レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 4件（どれも設計で守られている・自動テストあり） |
+| Medium  | 2件 | 2件 |
+| Low     | 4件 | 2件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
