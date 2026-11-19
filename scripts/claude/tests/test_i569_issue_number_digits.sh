@@ -3,11 +3,15 @@
 # あわせて、番号を受け付ける判定に 3 桁固定の書き方が残っていない・書き戻されていないことを走査する（TC-09・再発防止）。
 # 実行: bash scripts/claude/tests/test_i569_issue_number_digits.sh
 # ケースは docs/tests/{open,closed}/I569_auto_test.md の TC-01〜TC-09・FG-01〜FG-04 と、
-# docs/tests/{open,closed}/I583_auto_test.md の TC-10・FG-05〜FG-07（TC-02・TC-03・TC-05 の組み直し）と対応する。
+# docs/tests/{open,closed}/I583_auto_test.md の TC-10・TC-11・FG-05〜FG-08（TC-02・TC-03・TC-05 の組み直しと、一時のリポジトリの部品の守り）と対応する。
 # 走査（TC-09）の例外の決まり: 番号でない 3 桁（例: HTTP の状態コード）の判定が要るときは、そのファイルを SCAN_EXCLUDE に足す（理由をコメントに書く）。
 # shellcheck disable=SC2016  # 単一引用符の $ISSUE などは、走査・注入の材料として文字どおりに書く
 set -uo pipefail
 unset CLAUDE_PROJECT_DIR
+# git の場所を指す環境変数（一覧は git が出す）を外す。外の環境から流しても、根・走査・一時のリポジトリの場所がずれない（I583）
+# shellcheck disable=SC2207  # 変数名だけの一覧なので空白で分けてよい
+GIT_LOCAL_VARS=($(git rev-parse --local-env-vars))
+unset "${GIT_LOCAL_VARS[@]}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
 SCAN_EXCLUDE=("scripts/claude/tests/test_i569_issue_number_digits.sh")   # このファイル自身は走査の形と失敗の注入の材料を書くので除く
@@ -54,17 +58,22 @@ LIB="$REPO_ROOT/scripts/claude/code-review.sh"   # gate-check.sh の既定の部
 STUB_DIR="$TMP/stub"; MARK="$TMP/claude_called"; mkdir -p "$STUB_DIR"
 printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$MARK" > "$STUB_DIR/claude"; chmod +x "$STUB_DIR/claude"
 command -v flock >/dev/null 2>&1 || echo "    flock がありません（TC-03・FG-06 は確かめられない）"
-# $1=一時のリポジトリ $2..=git の引数 → 作者を付けて git を流す（CI の git に作者が無くても動く）
-tgit() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
-# $1=フォルダ → git init と空のコミットだけの一時のリポジトリを作る
-iso_repo() { git init -q "$1" && tgit "$1" commit -q --allow-empty -m init; }
+# 一時の場所で git・スクリプトを流すときの前置き: git の場所を指す環境変数を外し、git の探索を $TMP で止める
+# （冒頭で外した後に関数の中などで設定し直されても、本物のリポジトリに届かない・書き込まない。TC-11）
+NOGIT=(env); for v in "${GIT_LOCAL_VARS[@]}"; do NOGIT+=(-u "$v"); done; NOGIT+=("GIT_CEILING_DIRECTORIES=$TMP")
+AUTHOR=(-c user.name=t -c user.email=t@t)   # CI の git に作者が無くても動く
+# $1=一時のリポジトリ $2..=git の引数 → 前置き NOGIT と作者を付けて git を流す
+tgit() { "${NOGIT[@]}" git -C "$1" "${AUTHOR[@]}" "${@:2}"; }
+# tgit から前置き NOGIT だけを外した形（直す前の形）。FG-08 の失敗の注入だけが使う
+rawgit() { git -C "$1" "${AUTHOR[@]}" "${@:2}"; }
+# $1=フォルダ [$2=git を流す関数・既定 tgit] → git init と空のコミットだけの一時のリポジトリを作る
+iso_repo() { local g=${2:-tgit}; mkdir -p "$1" && "$g" "$1" init -q && "$g" "$1" commit -q --allow-empty -m init; }
 # $1=起動する場所 $2=期待する exit code $3=照合の仕方（line=行全体・text=含む） $4=期待する文字 $5..=コマンド
 # → 終了コードが一致し、かつ出力が期待を含めば YES。TC と FG（失敗の注入）が同じこの判定を呼ぶ。
-# git の場所を指す環境変数を外し、git の探索を $TMP で止める（外から流しても本物のリポジトリに届かない）
+# 起動には前置き NOGIT を付ける
 stops() {
   local dir=$1 code=$2 how=$3 want=$4 out rc; shift 4
-  out="$(cd "$dir" && env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "GIT_CEILING_DIRECTORIES=$TMP" \
-    "PATH=$STUB_DIR:$PATH" "CLAUDE_BIN=$STUB_DIR/claude" "$@" 2>&1)"; rc=$?
+  out="$(cd "$dir" && "${NOGIT[@]}" "PATH=$STUB_DIR:$PATH" "CLAUDE_BIN=$STUB_DIR/claude" "$@" 2>&1)"; rc=$?
   if [ "$rc" != "$code" ]; then echo NO; return; fi
   if [ "$how" = line ]; then yn grep -qxF -- "$want" <<<"$out"; else has "$out" "$want"; fi
 }
@@ -92,6 +101,19 @@ rejects "TC-05 manual-test-executor" 2 "使い方" bash "$MTE"
 
 # ---- TC-10 TC-02〜TC-05 は別プロセスの claude を起動しない（I583）----
 ck "TC-10 差し替えの claude が呼ばれていない" NO "$(yn [ -e "$MARK" ])"
+
+# ---- TC-11 git の場所を指す環境変数が残っていても、一時のリポジトリの部品は別のリポジトリに書き込まない（I583・台帳の残り F1）----
+DECOY="$TMP/decoy"; iso_repo "$DECOY"
+# $1=git を流す関数 → GIT_DIR・GIT_WORK_TREE・GIT_INDEX_FILE をおとりに向けたまま、iso_repo で作って add・commit する。
+# おとりのコミットが 1 のまま・作ったリポジトリのコミットが 2 なら YES。TC-11 と FG-08 が同じこの判定を呼ぶ
+no_leak() {
+  local g=$1 r="$TMP/leak-$1"
+  ( export GIT_DIR="$DECOY/.git" GIT_WORK_TREE="$DECOY" GIT_INDEX_FILE="$DECOY/.git/index"
+    iso_repo "$r" "$g" && echo x > "$r/f" && "$g" "$r" add -A && "$g" "$r" commit -q -m rec ) >/dev/null 2>&1
+  [ "$(tgit "$DECOY" rev-list --count HEAD)" = 1 ] || { echo NO; return; }
+  yn [ "$(tgit "$r" rev-list --count HEAD 2>/dev/null)" = 2 ]
+}
+ck "TC-11 環境変数が残っていても、部品はおとりに書き込まない" YES "$(no_leak tgit)"
 
 # ---- TC-06 close のスキルの番号の確かめ ----
 # $1=SKILL.md → 番号の確かめの正規表現（`=~ ` と ` ]]` の間）
@@ -141,7 +163,7 @@ SCAN_PAT='I\[0-9\]\{3\}([^,]|$)|\^\[0-9\]\{3\}\$|I\[0-9\]\[0-9\]\[0-9\]|I\\d\{3\
 scan() {
   local ex args=()
   for ex in "${SCAN_EXCLUDE[@]}"; do args+=(":(exclude)$ex"); done
-  git -C "$1" grep -nE "$SCAN_PAT" -- scripts .claude .github .pre-commit-config.yaml "${args[@]}"
+  "${NOGIT[@]}" git -C "$1" grep -nE "$SCAN_PAT" -- scripts .claude .github .pre-commit-config.yaml "${args[@]}"
 }
 hits="$(scan "$REPO_ROOT")"
 [ -n "$hits" ] && printf '%s\n' "$hits" | sed 's/^/    3 桁固定: /'
@@ -149,17 +171,17 @@ ck "TC-09 3 桁固定の書き方が残っていない" 0 "$(printf '%s' "$hits"
 
 # ---- FG-01 走査が書き戻りを捕まえる（本物の scan を一時の git フォルダに流す）----
 F1="$TMP/fg1"; mkdir -p "$F1/scripts" "$F1/.claude/skills/b"
-git -C "$F1" init -q
+tgit "$F1" init -q
 printf '%s\n' '[[ "$X" =~ ^I[0-9]{3}$ ]]' > "$F1/scripts/a.sh"
 printf '%s\n' 'if ! [[ "$N" =~ ^[0-9]{3}$ ]]; then' > "$F1/.claude/skills/b/SKILL.md"
 printf '%s\n' 'R = re.compile(r"I[0-9]{3}/")' > "$F1/scripts/c.py"
 printf '%s\n' 'grep "I[0-9][0-9][0-9]"' > "$F1/scripts/d.sh"
-git -C "$F1" add -A
+tgit "$F1" add -A
 ck "FG-01 4 形を置くと 4 件とも当たる" 4 "$(scan "$F1" | grep -c .)"
 F2="$TMP/fg2"; mkdir -p "$F2/scripts"
-git -C "$F2" init -q
+tgit "$F2" init -q
 printf '%s\n' '[[ "$X" =~ ^I[0-9]{3,}$ ]]' > "$F2/scripts/a.sh"
-git -C "$F2" add -A
+tgit "$F2" add -A
 ck "FG-01 {3,} だけなら当たらない" 0 "$(scan "$F2" | grep -c .)"
 
 # ---- FG-02 flow-stage の確かめを外すと、TC-01 の不正な値の側が捕まえる ----
@@ -201,6 +223,9 @@ ck "FG-06 記録があると差し替えの claude が呼ばれ、印に出る" 
 mkdir -p "$TMP/nogit"
 ck "FG-07 git の外では TC-05 の判定は NO" NO \
   "$(stops "$TMP/nogit" 2 text '判定できない: I1000_manual_test.md がありません' bash "$MTE" I1000)"
+
+# ---- FG-08 前置き NOGIT を付けない git（直す前の形）では、おとりに書き込み、TC-11 の判定が捕まえる（I583）----
+ck "FG-08 前置きの無い git では TC-11 の判定は NO" NO "$(no_leak rawgit)"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
