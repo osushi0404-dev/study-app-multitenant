@@ -86,6 +86,8 @@
 - [test-gate] `DANGER_OK=1` を前に付けるとサンドボックスの中で動き、Docker に届かない（DB の更新・`psql -f` の 2 回）。危険な操作を承認つきで流す正規の道が Docker の操作で使えない仕組みの穴として、retro で起票を検討する
 - [retro] 台帳の残り: F3・F4・F5・F6・F7（どれもアプリ本体の Low・再現なし）→ #590（I590・I587 のレビューの残り）。F1・F2 は resolved。判定の仕組み・SECURITY=yes の行は無い。一覧（`docs/reviews/backlog/`）に回す行は 0 件
 - [retro] 改善案の振り分け: C1 → 起票 I590（#590）／C2 → #549 にコメント（I587 で解消）／P1 → #538 に同梱（`DANGER_OK=1` の前置きと Docker・`db_backup.sh`）／P2 → #547 に同梱（受け入れのリスクの根拠の確かめを計画レビュー役の観点に）／見張りの `migrate <アプリ> <番号>` の誤検知・サンドボックスの一時的な失敗・ヒアドキュメントの拒否・敵対的レビューの Low・/simplify の見送り 7 件 → 見送り（理由は「## 振り返り」）
+- [close] develop（I583 の記録とハーネスのテスト 1 本）を取り込んだ。I587 のファイルには触れておらず、gate-check は OK のまま
+- [close] PR の説明に `Closes #549` を足した（科目のフォルダ作りを外したので解消）。Danger Ops のラベル `danger-approved` はマージ依頼でお願いする
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -95,3 +97,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
