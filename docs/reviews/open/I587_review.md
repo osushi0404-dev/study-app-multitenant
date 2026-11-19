@@ -13,7 +13,8 @@
 
 ## テスト結果
 - 自動: 手元で backend 797 passed・frontend 150 passed・型・ESLint・ruff・`makemigrations --check`・ビルド・決定論ゲート 3 行が合格（2026-11-19）。CI は review-gate
-- 手動: M1〜M6 OK（Claude・Playwright MCP）。M7 は test-gate
+- 手動: M1〜M7 OK（Claude・Playwright MCP。M7 の流し込みの 1 行だけユーザーが `!` で流した）。人の手動テストは無い
+- CI: eedec7dc ですべて success。コードレビュー 20261119_2319・敵対的レビュー 20261119_2330 とも OK
 
 ## 計画との差分
 - あり（小さな直しだけ・計画変更記録「実装（2026-11-19）での小さな直し」「/simplify での整理」）
@@ -37,6 +38,9 @@
 - [fix-loop] F1 は案 F1-a（`delete_image` の判定に `is_deleted=False`）で直した — 1 行で 3 か所の判定がそろう。共有の判定の 1 か所へのまとめ（F1-b）は止める指摘でない F4 を巻き込むので retro へ
 - [fix-loop] F2 はユーザーの判断「このまま消す (Recommended)」（2026-11-19。最初の問いに「見本の画像使うことあるか？」と聞き返されたので、見本の出どころ〔I007 のコミット・70 バイトのテストの残り・取り込みで使われない q02〕を調べて伝え、選び直してもらった）。計画 R6 に書き、0025 が消した行のキーを出力に並べるようにした — 受け入れの目印は止める判定に効かないので、次の review-gate の差分のレビューで、この記録を見て判断してもらう
 - [review-gate] 2 回目の基本レビュー（20261119_2319・差分）は OK、敵対的レビュー（20261119_2330・1 周目）も OK（V1〜V6 確認済み）。F2 は計画 R6 のユーザーの受け入れの記録で通った
+- [test-gate] M7 の戻し先は捨てる DB のコンテナ（`--rm`・app-1 のネットワーク・外にポートを出さない）にし、終わったらすぐ止めた。`POSTGRES_HOST_AUTH_METHOD=trust` だったのは改善の余地（使い捨てのパスワードを付けるべきだった・ユーザーへの説明で伝えた）
+- [test-gate] 確かめに使った控え（after）と、最初に止まった `db_backup.sh` が残した空のファイルを消した。戻し方のための控え `backup_I587_before_20261119.sql` はマージまで残す（gitignore 済み）
+- [test-gate] `DANGER_OK=1` を前に付けるとサンドボックスの中で動き、Docker に届かない（DB の更新・`psql -f` の 2 回）。危険な操作を承認つきで流す正規の道が Docker の操作で使えない仕組みの穴として、retro で起票を検討する
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -44,3 +48,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

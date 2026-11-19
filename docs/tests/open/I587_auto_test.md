@@ -47,7 +47,7 @@
 | TC-21 | AC12 | 決定論ゲート | `backend` の `.py`（`tests`・`migrations` を除く）に古い置き場の `/media`（`/api/media` を除く）が無い | exit 0 | 実装前: exit 1（2026-11-19・`models.py:172`・`:179`・`:418`）。実装後: exit 0（2026-11-19） |
 | TC-22 | AC12 | 決定論ゲート | `nginx/default.conf` に古い置き場の `/media` が無い | exit 0 | 実装前: exit 1（2026-11-19・`:16`）。実装後: exit 0（2026-11-19） |
 | TC-23 | AC12 | pytest | `test_media_static_route_is_gone`。`settings.DEBUG=True` で URL の設定を読み直し（`importlib.reload(core.urls)`・`clear_url_caches()`）、`resolve('/media/org/x/a.png')` | `Resolver404` | OK（2026-11-19） |
-| TC-24 | 全体 | CI | backend（pytest 全件・ruff・bandit・`makemigrations --check`）・frontend（Jest・型・ESLint）・E2E | すべて success | 実装前のため未実行 |
+| TC-24 | 全体 | CI | backend（pytest 全件・ruff・bandit・`makemigrations --check`）・frontend（Jest・型・ESLint）・E2E | すべて success | OK（2026-11-19・eedec7dc） |
 
 ## 決定論ゲート（自動実走）
 ```bash
@@ -69,3 +69,9 @@
 - セキュリティ上の考慮点: F1 は、消したつもりの画像が同じ組織の利用者に配信され続けるのを止める（組織の境界は越えていなかった）
 - 次回どう防ぐか: 共有の判定を 1 か所にまとめるのは台帳の F4（ビューからサービスの非公開の関数を呼ぶ）と一緒に retro で扱う。追跡ファイルの削除と移行を同じ変更に入れるときは、ほかの環境での順番（git の取り込み → 起動の `migrate`）を計画の段階で確かめる（retro の振り返りに入れる）
 - 確かめた結果: 新しいテスト `test_delete_image_ignores_deleted_links_of_other_problems`（TC-10 に追加）は直す前に `assert False is True`（`is_deleted`）で落ち、直した後に通った。TC-12 に「消した行の id・key が出力に出る・移した行は出ない」を足した。関係するテスト 153 passed（`test_I587_media_in_db.py`・`test_I587_media_migration.py`・`test_I073_image_update.py`・`test_I446_cross_api_tenant_isolation.py`）・ruff・bandit 合格（2026-11-19）
+
+## 実行記録（test-gate・2026-11-20）
+- `bash scripts/claude/gate-check.sh I587` → exit 0（コードレビュー 20261119_2319 と敵対的レビュー 20261119_2330 が OK・その後は記録の場所だけ）
+- 決定論ゲート 3 行は review-gate（`code-review.sh`）が実走して 3 行とも exit 0。test-gate に回された重いもの（docker・npm・pytest）は無い
+- pytest・Jest・E2E は CI が PR ごとに流し、review-gate が完了と成功を確かめた（`CI_WAIT: OK`・コミット eedec7dc）。手元では流し直していない
+- TC-24（CI）: OK（2026-11-19・eedec7dc の CI がすべて success）
