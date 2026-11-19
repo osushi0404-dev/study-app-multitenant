@@ -23,5 +23,7 @@
 <!-- 各段階が、止めずに自分で決めたことを `- [段階] 決めたこと — 理由` で足す。段階の結線の行（STAGE_DONE:）はこのファイルの末尾に足す -->
 - [plan] スクリプトを写さず、本物のスクリプトを一時のリポジトリの中から起動する — 記録の場所は起動した場所の git の根で決まり、部品はスクリプト自身の場所から読むため（スパイクで成立）
 - [plan] TC-03 は `ADVERSARIAL_ERROR: FILES` だけを合格にする（FLOCK を外す）— CI・手元に flock があり、FLOCK で止まると番号の後の止まり方を確かめられないため
+- [plan-review] Warning 2 件（flock が無いときの原因の表示・手動テスト No.1 の中断時の後始末）を計画書とテスト文書に足し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記のため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
