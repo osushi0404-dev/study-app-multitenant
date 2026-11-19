@@ -43,20 +43,20 @@
 | TC-17 | R8 | Jest | `frontend/src/services/__tests__/api.skipErrorToast.test.ts`。`ApiClient` を差し替えた axios で作り、404 を返す設定で (a) `skipErrorToast: true` (b) 指定なし | (a) `toast.error` が呼ばれない (b) `toast.error('要求されたリソースが見つかりません')` が 1 回 | 実装前のため未実行 |
 | TC-18 | AC3 | Jest | 既存の `ProblemImageList.test.tsx`・`ProblemPreview.test.tsx`・`QuizSession.test.tsx`（画像の節）を、`getMediaUrl` の代わりに `/api/media/<id>/` の差し替えと `blob:` の `src` で確かめる形に直す。`ImageUploadArea` の保存済みの画像に `ImageUploadArea.test.tsx` を足す | 問題画像・解説画像の `img` が順に `blob:` の `src` で出る。押すと拡大のダイアログに同じ画像が出る。編集のダイアログの保存済みの画像も `blob:` で出て、新しく選んだ画像は `URL.createObjectURL(file)` の値で出る | 実装前のため未実行 |
 | TC-19 | AC10 | pytest・Jest | pytest `test_problem_payloads_have_no_legacy_image_fields`: 管理の一覧・クイズの問題・回答の応答のキーに `question_image`・`explanation_image` が無く、`question_images`・`explanation_images` はある。Jest `problemImages.test.ts`: `pickImageUrls([a, b])` が `[a.url, b.url]`、`undefined` で `[]` | 期待値のとおり | 実装前のため未実行 |
-| TC-20 | AC12 | 決定論ゲート | `frontend/src`（`__tests__` を除く）に `/media/` の文字が無い | exit 0 | 実装前: exit 1（2026-11-19・`utils/url.ts` などに残っている） |
-| TC-21 | AC12 | 決定論ゲート | `backend` の `.py`（`tests`・`migrations` を除く）に `/media/` の文字が無い | exit 0 | 実装前: exit 1（2026-11-19・`models.py:172`・`:179`・`:418`） |
-| TC-22 | AC12 | 決定論ゲート | `nginx/default.conf` に `/media/` の文字が無い | exit 0 | 実装前: exit 1（2026-11-19・`:16`） |
+| TC-20 | AC12 | 決定論ゲート | `frontend/src`（`__tests__` を除く）に古い置き場の `/media`（`/api/media` を除く。`setupProxy.js` の `'/media'` にも当たる）が無い | exit 0 | 実装前: exit 1（2026-11-19・`utils/url.ts` などに残っている） |
+| TC-21 | AC12 | 決定論ゲート | `backend` の `.py`（`tests`・`migrations` を除く）に古い置き場の `/media`（`/api/media` を除く）が無い | exit 0 | 実装前: exit 1（2026-11-19・`models.py:172`・`:179`・`:418`） |
+| TC-22 | AC12 | 決定論ゲート | `nginx/default.conf` に古い置き場の `/media` が無い | exit 0 | 実装前: exit 1（2026-11-19・`:16`） |
 | TC-23 | AC12 | pytest | `test_media_static_route_is_gone`。`settings.DEBUG=True` で URL の設定を読み直し（`importlib.reload(core.urls)`・`clear_url_caches()`）、`resolve('/media/org/x/a.png')` | `Resolver404` | 実装前のため未実行 |
 | TC-24 | 全体 | CI | backend（pytest 全件・ruff・bandit・`makemigrations --check`）・frontend（Jest・型・ESLint）・E2E | すべて success | 実装前のため未実行 |
 
 ## 決定論ゲート（自動実走）
 ```bash
-! grep -rq /media/ --exclude-dir=__tests__ frontend/src
-! grep -rq /media/ --include=*.py --exclude-dir=tests --exclude-dir=migrations backend
-! grep -q /media/ nginx/default.conf
+! grep -rq -e "^/media" -e "[^i]/media" --exclude-dir=__tests__ frontend/src
+! grep -rq -e "^/media" -e "[^i]/media" --include=*.py --exclude-dir=tests --exclude-dir=migrations backend
+! grep -q -e "^/media" -e "[^i]/media" nginx/default.conf
 ```
 
 ## 失敗の注入（false-green の確かめ）
-- TC-20〜TC-22（ゲート）: 実装の前の今のコードで 3 行とも exit 1 になることを確かめた（2026-11-19）。一致の無い場所（`backend/accounts`）に向けると exit 0 になることも確かめた
+- TC-20〜TC-22（ゲート）: 実装の前の今のコードで 3 行とも exit 1 になることを確かめた（2026-11-19）。`/api/media/1/` だけを書いた一時ファイルでは exit 0（新しい URL に当たらない）、`['/api', '/media']` を書いた一時ファイルでは exit 1（`setupProxy.js` の形に当たる）ことも確かめた（2026-11-19・計画レビューの Warning への対応）
 - TC-02・TC-03・TC-04・TC-07・TC-08・TC-11: 各行の「失敗の注入」を、実装のステップでテストを先に書くとき（または一時的に守りを外した写し）に確かめ、結果をこの表の結果の欄に書く
 - TC-13〜TC-15: 止める・飛ばす場合ごとに、守りの行（`already` の判定・`resolve()` の確かめ・`sha256` の比べ・古い列の数え）を一時的に外すと落ちることを確かめる

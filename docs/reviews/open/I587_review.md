@@ -23,4 +23,6 @@
 <!-- 各段階が、止めずに自分で決めたことを `- [段階] 決めたこと — 理由` で足す。段階の結線の行（STAGE_DONE:）はこのファイルの末尾に足す -->
 - [plan] 開発の DB での保存方式の試し（一時表の `ALTER TABLE ... SET STORAGE`）は、見張りが危険な SQL として止めたのでやめ、テストの DB で確かめる TC-03 に回した — 開発の DB を変えずに同じ性質を CI で毎回確かめられる
 - [plan] Danger Ops の承認は、実装の最初（ステップ 1・マイグレーションのファイルを書く前）にもらう — I492 で review-gate のコンテナの起こし直しが承認の前のマイグレーションを流した（#579 は未完了）。承認の後なら流れても承認済みの操作になる
+- [plan-review] 計画レビュー（20261119_1527）は高リスク判定 Yes（Blocker なし）。Warning 5 件はすべて直し、方式・範囲・受け入れ条件を変えないので再レビューはしない（計画変更記録）— AC14 は読み替えをやめ、捨てる DB のコンテナに向けた backend を `docker compose run --use-aliases` で起こして画面で確かめる形にした（ユーザーに聞かずに元の受け入れ条件のまま確かめられるため）
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review

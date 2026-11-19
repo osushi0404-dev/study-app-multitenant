@@ -28,7 +28,7 @@
 10. 問題一覧の応答は Redis に 1 時間キャッシュされる（`backend/core/cache_service.py:108-120`・`settings.py:352`）。URL の形を変えると、古い `/media/...` を含む応答が最長 1 時間残る
 
 ## 2. 受け入れ条件
-イシューの受け入れ条件をそのまま番号付けした（範囲を足さない）。
+イシューの受け入れ条件に番号を付けた（範囲を足さない）。AC2 の「404 か 403」は、他の組織を 404 にする（規約 §5）と決めて書いた。未ログインの 401 は認証の既定の応答で、イシューの「返らない」を具体にしたもの。
 - [ ] AC1: 問題・解説の画像を登録・更新すると、中身が DB に入り、ディスクにファイルが作られない
 - [ ] AC2: 画像は API から返り、ログインしていない利用者には 401、他の組織の利用者には 404 で返らない（テストで固定）
 - [ ] AC3: 画面（問題のプレビュー・クイズの問題と解説・拡大表示）で画像が表示される
@@ -42,7 +42,7 @@
 - [ ] AC11: `organization` か `subject` が null の `MediaAsset` の行の扱いが決まり、テストで固定されている（扱い: 中身は移すが配信しない〔404〕。9 を参照）
 - [ ] AC12: `/media/` から画像が配信されなくなり（`backend/core/urls.py`・`nginx/default.conf`）、`docker-compose.yml` から `backend_media` の定義が無くなる
 - [ ] AC13: 画像の応答の Cache-Control が `private` で、Content-Type が保存した MIME・`X-Content-Type-Options: nosniff` が付く
-- [ ] AC14: `scripts/db_backup.sh` で取った控えを別の DB に戻し、画像のある問題の画像がその DB から取れる。控えの大きさの増え方を記録する（確かめ方は 6 の M7・9 を参照）
+- [ ] AC14: `scripts/db_backup.sh` で取った控えを別の DB に戻し、画像のある問題を画面で開いて画像が表示される。控えの大きさの増え方を記録する（確かめ方は M7・9）
 
 ## 3. 影響範囲
 - Backend: `problems`（モデル・マイグレーション 3 本・サービス・ビュー・URL・シリアライザ・検査の関数・管理コマンド・テスト）・`core`（`storage_service.py` を消す・`urls.py`・`settings.py`）
@@ -145,7 +145,7 @@
   - `dry_run=True` は何も書かず、行ごとの判定（移す・済み・消す）と件数だけを返す
   - 結果: `MediaMigrationResult(moved, already, deleted_assets, deleted_links, deleted_keys)`。止めるときは `MediaMigrationError`（キーと理由を入れる。中身は入れない）
 - `backend/problems/migrations/0025_move_media_files_to_db.py`: `RunPython(forward, reverse_code=backward)`
-  - `forward`: 上の関数を `dry_run=False` で呼び、`sys.stdout.write` で `I587 media: moved=… already=… deleted_assets=… deleted_links=…` を 1 行出す（`migrate` の出力に残す。規約の `print` を使わない）。最後に `cache_service.invalidate_problems_cache()` を呼び、古い URL を含む一覧のキャッシュを捨てる（Redis に届かないときはログに残して続ける）
+  - `forward`: 上の関数を `dry_run=False` で呼び、`sys.stdout.write` で `I587 media: moved=… already=… deleted_assets=… deleted_links=…` を 1 行出す（`migrate` の出力に残す。規約の `print` を使わない）。最後に `cache_service.invalidate_problems_cache()` を呼び、古い URL を含む一覧のキャッシュを捨てる。`cache_service` の import は関数の中に置き、どの例外でも `logger.warning` に残して続ける（`migrate` を止めない。捨てられなくてもキャッシュは最長 1 時間で切れる）
   - `backward`: 中身のある画像を `LEGACY_MEDIA_ROOT / storage_key` に書き戻す（戻し方。消した行は戻らない: 戻すのは控え〔7〕）
 - 新しい管理コマンド `backend/problems/management/commands/check_media_migration.py`: 読むだけ。上の関数を `dry_run=True` で呼び、行ごとの判定と件数、古い画像の列に値のある問題の件数を出す（承認を求めるときに見せる試し）
 
@@ -198,6 +198,7 @@
 | R2: 送り手が決めた `content_type`（`text/html` など）で画像を返し、API の出どころで HTML・スクリプトとして解釈される | 判定した MIME を保存し（4-2）、配信は許可した 3 つの MIME 以外を `application/octet-stream` にする。`nosniff`・`Content-Security-Policy: default-src 'none'; sandbox` を付ける（TC-02・TC-05） | 回避 |
 | R3: 一覧・クイズの取得が画像の中身まで読み、遅くなる・メモリを使う | 中身を別の表にし（10）、取得のクエリに中身の表が出ないことをテストで固定する（TC-11） | 回避 |
 | R4: 共有のキャッシュ（中継の機器）が画像を持ち、他の利用者に返す | `Cache-Control: private`（TC-05）。ETag は中身の SHA-256 で、組織を表す値を含まない | 回避 |
+| R11: 本人のブラウザのキャッシュ（`max-age=3600`）に、ログアウト・権限の変更・画像の論理削除の後も最長 1 時間、画像が残る（共有の端末では次の人が同じブラウザで見られる） | 画像は問題・解説の図で、本番は無い。期限を 1 時間に抑える | 受け入れ |
 | R5: 解説の画像の ID を、答える前に知っていれば取れる | 画像の ID（UUID）は答えた後の応答にだけ入る（I476 の決まり・`AnswerExplanationSerializer`）。推測できない。組織の境界は掛ける | 受け入れ |
 | R6: ほかのワークツリーで develop を取り込むと、git が `backend/media/` の見本のファイルを先に消し、それを指す行があれば「ファイルの無い行」として消える | 開発のデータで、grill-me で受け入れた（イシューの制約）。各ワークツリーで登録した画像のファイルは git に入っていないので消えない | 受け入れ |
 | R7: ほかの環境で中身の不一致・画像でないファイル・置き場の外を指すキー、古い列に値のある問題があると、`migrate` が止まり backend が起動しない | 黙って消さないための止め方（C7）。止まったときの理由とキー・件数をエラーの文に出す。本番は無い | 受け入れ |
@@ -229,10 +230,10 @@ Claude が決めた（技術的な選択と理由）:
 - 移行の食い違い（中身の不一致・画像でない・置き場の外のキー）と古い列の値は、黙って直さずに止める — C7。止まっても開発の DB だけで、理由がエラーの文に出る
 - 論理削除の行（`is_deleted=True`）は移行で触らない — 今もファイルが消されていて、配信もしない
 - 古い列のマイグレーション（0026）は、移行（0025）と分ける — 規約 §4（データの書き換えとスキーマの変更を分ける）
-- `upload_image`・`delete_image` は消さずに共通の保存・削除にそろえる — 画面から使われていないが、消すと API の範囲が変わる。ファイルに書く経路を残さないことが目的
+- `upload_image`・`delete_image` は消さずに共通の保存・削除にそろえる — 画面から使われていないが、消すと API の範囲が変わる。ファイルに書く経路を残さないことが目的。受け付ける形式が GIF・10MB から PNG・JPEG・WebP・5MB に変わるが、呼ぶ所が無い: `frontend/src`・`e2e` に `images/upload` が無い（2026-11-19 の `grep`）・本番が無く外の利用者がいない（2026-11-17 時点）
 - `storage_key` の列は残す — 外すと別の破壊的な変更になり、一意の制約の作り直しが要る。識別用のキーとして今の形で作り続ける
 - 応答の `Content-Disposition: inline`・`Content-Security-Policy: default-src 'none'; sandbox` — 画像を別のタブで開いたときもスクリプトを動かさない（多層の守り）
-- AC14 の「別の DB に戻して画像が表示される」は、捨てる DB のコンテナ（`docker run --rm`）に控えを戻し、backend のコンテナから `DB_HOST` をその DB に向けた Django のテストクライアントで `GET /api/media/<id>/` を呼んで、中身の SHA-256 が元と同じことで確かめる（M7）— 画面の取得は同じ API を呼ぶだけで、画面の表示は M5 で確かめる。開発の DB を戻し先にすると、戻した後の片付け（`DROP DATABASE`）が危険操作になる。この確かめ方が AC14 の文と違わないかは計画レビューで見てもらう
+- AC14 の「別の DB」は、捨てる DB のコンテナ（`docker run --rm`・app-1 のネットワーク）にする。backend を止め、`docker compose run -d --rm --use-aliases --service-ports -e DB_HOST=i587-restore backend` で戻した DB に向けた backend を `backend` の名前で起こし、画面（`BACKEND_URL=http://backend:8000` の中継）で画像のある問題を開く。確かめた後にその backend とコンテナを止め、`docker compose start backend` で元に戻す（M7）— 開発の DB を戻し先にすると、片付け（`DROP DATABASE`）が危険操作になり、開発の DB の中身も変わる。捨てるコンテナなら消すのは止めるだけ
 - テストで `settings.MEDIA_ROOT` を差し替えるだけの行を消す — 設定が無くなり、残すと「科目の作成が画像の置き場所を作る」という誤った説明が残る
 - 一覧 `docs/reviews/backlog/I223.md` B1〜B4・`docs/reviews/backlog/I224.md` F9（`FILE=-`）: 残す — どれもハーネスの事柄で、本イシューの変更点と関係が無い。実装対象のファイルに当たる行は無い
 
@@ -303,4 +304,7 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 
 ## 計画変更記録
 <!-- 形は docs/runbooks/plan-writing-rules.md「計画変更記録の形」 -->
--
+- 計画レビュー（20261119_1527）の Warning への対応（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: 2 の「そのまま」の言い方と AC14 の文をイシューのとおりに戻し、M7 を画面で確かめる形にした／`upload_image` の呼び出しが無い根拠を 9 に書いた／決定論ゲートを `/api/media/` に当たらない形（`-e "^/media" -e "[^i]/media"`）にした（失敗の注入を確かめ直した）／0025 のキャッシュの捨て方を関数の中の import と警告だけにした／本人のブラウザに残る画像を R11 で受け入れた／M7 に承認画面の予告を足した
+
+## レビュー結果
+- [20261119_1527 判定: ✅ 完了](../../reviews/I587_plan_review_20261119_1527.md)
