@@ -15,7 +15,7 @@ set -uo pipefail
 # 計画: docs/plans/closed/plan_I187.md 5-2-8・docs/plans/open/plan_I195.md 4.2
 
 ISSUE="${1:-}"
-if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then
+if ! [[ "$ISSUE" =~ ^I[0-9]{3,}$ ]]; then
   echo "[check-manual-test-executor] 使い方: $0 I###" >&2
   exit 2
 fi

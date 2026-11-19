@@ -41,11 +41,11 @@ user-invocable: false
    exit 1 のときは、出力の `GATE_CHECK: FAIL REASON=<理由>` で test-gate の手順 1 と同じに分ける（`dirty` は片付けてから、`base` は fetch してからやり直す。それ以外は `docs/reviews/open/I###_review.md` の末尾に `STAGE_DONE: close NEXT: review-gate` を書いて終わる。取り込んだ develop がブランチの変えたファイルにも触れていたときもここで落ち、レビューを通り直す。gate-check で review-gate に戻すのが 2 回続くときは止める〔止める条件 3〕）。
 1) docs/*/open の対象 I### ファイルを closed へ移動（以下を順番に実行）:
    ```bash
-   ISSUE_NUM="###"  # 実際のイシュー番号（3桁）に置き換える
+   ISSUE_NUM="###"  # 実際のイシュー番号（3 桁以上）に置き換える
 
-   # ISSUE_NUM が3桁の数字であることを確認（パストラバーサル防止）
-   if ! [[ "$ISSUE_NUM" =~ ^[0-9]{3}$ ]]; then
-     echo "⚠️ ISSUE_NUM が3桁の数字ではありません: $ISSUE_NUM"
+   # ISSUE_NUM が 3 桁以上の数字であることを確認（パストラバーサル防止）
+   if ! [[ "$ISSUE_NUM" =~ ^[0-9]{3,}$ ]]; then
+     echo "⚠️ ISSUE_NUM が 3 桁以上の数字ではありません: $ISSUE_NUM"
      exit 1
    fi
 

@@ -14,7 +14,7 @@
 set -uo pipefail
 
 ISSUE="${1:-}"
-if ! [[ "$ISSUE" =~ ^I[0-9]{3}$ ]]; then
+if ! [[ "$ISSUE" =~ ^I[0-9]{3,}$ ]]; then
   echo "⛔ 使い方: $0 I###（受け取った値: '${ISSUE}'）"
   exit 1
 fi
@@ -23,7 +23,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリ�
 cd "$REPO_ROOT" || exit 1
 
 # RISK 行の読み方は code-review.sh と同じ関数を使う（直後が VERDICT の RISK 行だけを採用・無ければ YES）
-# shellcheck source=scripts/claude/code-review.sh
+# shellcheck source=scripts/claude/code-review.sh disable=SC1091  # -x なしの単体の検査でもたどらない（読み込み先は別に検査される）
 REVIEW_LIB_SOURCE_ONLY=1 . "${GATE_CHECK_LIB:-scripts/claude/code-review.sh}" || { echo "⛔ code-review.sh を読み込めません"; exit 1; }
 set +e   # code-review.sh の set -e を引き継がない（失敗の理由を出してから終わるため）
 

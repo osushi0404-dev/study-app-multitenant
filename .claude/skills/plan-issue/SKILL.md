@@ -26,7 +26,7 @@ git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの
 - `--no-track` は上流が `origin/develop` に設定されるのを防ぐ（上流は step 2 の `git push -u` で付く）。
 
 **ブランチ命名規則**:
-- フォーマット: `feature/I{イシュー番号3桁}-{概要を英語化してケバブケース}`
+- フォーマット: `feature/I{イシュー番号（I＋GitHub の番号・3 桁以上）}-{概要を英語化してケバブケース}`
 - 例: `feature/I030-media-asset-models`
 
 **概要の英語化ルール**:

@@ -25,7 +25,7 @@ import sys
 TIMEOUT_SEC = 5
 PR_LIMIT = 5
 UNAVAILABLE = "取得できませんでした"
-ISSUE_ID = re.compile(r"\b(I[0-9]{3})\b", re.ASCII)  # PR は「fix: I178 …」の形なので先頭に限らず最初の 1 つ
+ISSUE_ID = re.compile(r"\b(I[0-9]{3,})\b", re.ASCII)  # PR は「fix: I178 …」の形なので先頭に限らず最初の 1 つ
 DATE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})", re.ASCII)
 # I219: 読み取りの git は索引の書き直し（optional lock）をしない。打ち切られても .git/index.lock を残さない
 GIT_ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
