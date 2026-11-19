@@ -22,6 +22,14 @@ import {
   ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
 import { EditableImage } from '../services/types';
+import MediaImage from './MediaImage';
+
+const PREVIEW_SX = {
+  width: '100%',
+  height: 150,
+  objectFit: 'cover',
+  borderRadius: 1,
+} as const;
 
 interface ImageUploadAreaProps {
   /** 表示ラベル（例: "問題用画像", "解説用画像"） */
@@ -194,7 +202,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
   }, [onRemove]);
 
   /**
-   * プレビュー（既存=URL / 新規=Object URL）を導出。
+   * プレビュー（既存=画像の API の URL・MediaImage で取る〔I587〕 / 新規=Object URL）を導出。
    * 新規 File の Object URL はここで生成し、items 変更・アンマウント時に revoke して
    * メモリリークを防ぐ（イシュー#073 コードレビュー対応）。
    */
@@ -203,6 +211,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
       item.kind === 'existing'
         ? {
             key: `existing-${item.assetId}`,
+            isExisting: true,
             src: item.url,
             title: item.filename,
             subtitle: '保存済み',
@@ -210,6 +219,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
           }
         : {
             key: `new-${index}-${item.file.name}`,
+            isExisting: false,
             src: URL.createObjectURL(item.file),
             title: item.file.name,
             subtitle: `${(item.file.size / 1024).toFixed(1)} KB`,
@@ -297,18 +307,11 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
             {previews.map((preview, index) => {
               return (
                 <ImageListItem key={preview.key}>
-                  <Box
-                    component="img"
-                    src={preview.src}
-                    alt={preview.title}
-                    loading="lazy"
-                    sx={{
-                      width: '100%',
-                      height: 150,
-                      objectFit: 'cover',
-                      borderRadius: 1,
-                    }}
-                  />
+                  {preview.isExisting ? (
+                    <MediaImage src={preview.src} alt={preview.title} loading="lazy" sx={PREVIEW_SX} />
+                  ) : (
+                    <Box component="img" src={preview.src} alt={preview.title} loading="lazy" sx={PREVIEW_SX} />
+                  )}
                   <ImageListItemBar
                     title={preview.title}
                     subtitle={preview.subtitle}

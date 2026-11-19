@@ -433,7 +433,7 @@ const QuizSessionPage: React.FC = () => {
     );
   }
 
-  const explanationImages = pickImageUrls(result?.explanation_images, result?.explanation_image);
+  const explanationImages = pickImageUrls(result?.explanation_images);
 
   return (
     <Container maxWidth="md">
@@ -514,7 +514,7 @@ const QuizSessionPage: React.FC = () => {
 
             {/* 問題画像（新しい形式を優先・問題管理のプレビューと同じ並べ方） */}
             <ProblemImageList
-              images={pickImageUrls(currentProblem.question_images, currentProblem.question_image)}
+              images={pickImageUrls(currentProblem.question_images)}
               alt="問題画像"
               onImageClick={setImageModalOpen}
             />

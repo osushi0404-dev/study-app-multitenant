@@ -64,8 +64,8 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
   };
 
   // 画像URL（新方式優先、旧方式フォールバック）
-  const questionImages = pickImageUrls(problem.question_images, problem.question_image);
-  const explanationImages = pickImageUrls(problem.explanation_images, problem.explanation_image);
+  const questionImages = pickImageUrls(problem.question_images);
+  const explanationImages = pickImageUrls(problem.explanation_images);
 
   return (
     <Box>

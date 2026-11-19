@@ -58,4 +58,18 @@ describe('api client handleApiError (I132)', () => {
     });
     expect(toast.error).not.toHaveBeenCalled();
   });
+
+  it('I587 TC-17: skipErrorToast を付けた取得の失敗はトーストを出さない（付けなければ出す）', async () => {
+    mock.onGet('/api/media/a/').reply(404);
+    await expect(client.get('/api/media/a/', { skipErrorToast: true })).rejects.toMatchObject({
+      response: { status: 404 },
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+
+    await expect(client.get('/api/media/a/')).rejects.toMatchObject({
+      response: { status: 404 },
+    });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('要求されたリソースが見つかりません');
+  });
 });

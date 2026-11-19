@@ -4,14 +4,14 @@
  */
 import React from 'react';
 import { Box, ImageList, ImageListItem } from '@mui/material';
-import { getMediaUrl } from '../utils/url';
+import MediaImage from './MediaImage';
 
 interface ProblemImageListProps {
-  /** 表示する画像の URL（API の相対パス・pickImageUrls の戻り値） */
+  /** 表示する画像の API の URL（pickImageUrls の戻り値・/api/media/<id>/） */
   images: string[];
   /** 代替テキストの頭（例: '問題画像' → 「問題画像 1」） */
   alt: string;
-  /** 画像を押したとき（クリック・Enter・スペース）に、完全な URL を受け取る */
+  /** 画像を押したとき（クリック・Enter・スペース）に、その画像の API の URL を受け取る */
   onImageClick: (fullUrl: string) => void;
 }
 
@@ -22,12 +22,10 @@ const ProblemImageList: React.FC<ProblemImageListProps> = ({ images, alt, onImag
     <Box sx={{ mt: 2 }}>
       <ImageList cols={Math.min(images.length, 3)} gap={8}>
         {images.map((imageUrl, index) => {
-          const fullUrl = getMediaUrl(imageUrl);
           return (
-            <ImageListItem key={index}>
-              <Box
-                component="img"
-                src={fullUrl}
+            <ImageListItem key={imageUrl}>
+              <MediaImage
+                src={imageUrl}
                 alt={`${alt} ${index + 1}`}
                 role="button"
                 tabIndex={0}
@@ -50,11 +48,11 @@ const ProblemImageList: React.FC<ProblemImageListProps> = ({ images, alt, onImag
                     outlineOffset: 2,
                   },
                 }}
-                onClick={() => onImageClick(fullUrl)}
+                onClick={() => onImageClick(imageUrl)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onImageClick(fullUrl);
+                    onImageClick(imageUrl);
                   }
                 }}
               />

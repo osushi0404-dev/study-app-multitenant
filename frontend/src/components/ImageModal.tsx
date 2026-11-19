@@ -3,8 +3,10 @@
 import React from 'react';
 import { Dialog, IconButton, Box } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import MediaImage from './MediaImage';
 
 interface ImageModalProps {
+  /** 画像の API の URL（/api/media/<id>/・I587） */
   imageUrl: string;
   open: boolean;
   onClose: () => void;
@@ -45,10 +47,10 @@ const ImageModal: React.FC<ImageModalProps> = ({ imageUrl, open, onClose }) => {
         >
           <CloseIcon />
         </IconButton>
-        <img
+        <MediaImage
           src={imageUrl}
           alt="拡大画像"
-          style={{
+          sx={{
             width: '100%',
             height: 'auto',
             display: 'block',

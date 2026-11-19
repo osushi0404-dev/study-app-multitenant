@@ -2,6 +2,13 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } f
 import { toast } from 'react-hot-toast';
 import { userActionLogger } from '../utils/userActionLogger';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** true なら失敗しても共通の通知（トースト）を出さない。呼ぶ側が画面の中に出す（I587: 画像の取得） */
+    skipErrorToast?: boolean;
+  }
+}
+
 export class ApiClient {
   private instance: AxiosInstance;
   private refreshingToken = false;
@@ -166,6 +173,11 @@ export class ApiClient {
 
   private handleApiError(error: AxiosError) {
     const status = error.response?.status;
+
+    // 呼ぶ側が画面の中に出す失敗（I587: 画像の取得）は通知を出さない
+    if (error.config?.skipErrorToast) {
+      return;
+    }
 
     // Don't show error for auth endpoints (handled by auth context)
     if (error.config?.url?.includes('/auth/')) {

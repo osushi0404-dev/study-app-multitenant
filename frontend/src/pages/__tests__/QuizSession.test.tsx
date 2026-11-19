@@ -6,10 +6,12 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 import { BrowserRouter } from 'react-router-dom';
 import QuizSessionPage from '../QuizSession';
 import apiClient from '../../services/api';
-import { getMediaUrl } from '../../utils/url';
 
 // APIクライアントのモック
 jest.mock('../../services/api');
+
+// 画像の取得はしない（渡された API の URL を src に出す・I587）
+jest.mock('../../components/MediaImage');
 
 // react-hot-toastのモック
 jest.mock('react-hot-toast', () => ({
@@ -286,33 +288,21 @@ describe('QuizSession Component', () => {
       return screen.findByTestId('answer-result');
     };
 
-    it('新しい形式の解説画像があれば新しい形式だけを出す', async () => {
+    it('解説画像を表示順に出す', async () => {
       const resultBox = await answerWith({
         explanation: 'テスト解説',
-        explanation_image: '/media/legacy.png',
-        explanation_images: [asset('/media/e1.png'), asset('/media/e2.png')],
+        explanation_images: [asset('/api/media/e1/'), asset('/api/media/e2/')],
       });
 
-      expect(within(resultBox).getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/e1.png'));
-      expect(within(resultBox).getByAltText('解説画像 2')).toHaveAttribute('src', getMediaUrl('/media/e2.png'));
-      // 古い形式も出ていれば 3 枚になる
+      expect(within(resultBox).getByAltText('解説画像 1')).toHaveAttribute('src', '/api/media/e1/');
+      expect(within(resultBox).getByAltText('解説画像 2')).toHaveAttribute('src', '/api/media/e2/');
       expect(within(resultBox).getAllByAltText(/^解説画像/)).toHaveLength(2);
-    });
-
-    it('新しい形式が無ければ古い形式の解説画像を 1 枚出す', async () => {
-      const resultBox = await answerWith({
-        explanation: 'テスト解説',
-        explanation_image: '/media/legacy.png',
-      });
-
-      expect(within(resultBox).getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/legacy.png'));
-      expect(within(resultBox).queryByAltText('解説画像 2')).not.toBeInTheDocument();
     });
 
     it('解説文が無くても解説画像を出す', async () => {
       const resultBox = await answerWith({
         explanation: '',
-        explanation_images: [asset('/media/e1.png')],
+        explanation_images: [asset('/api/media/e1/')],
       });
 
       expect(within(resultBox).getByAltText('解説画像 1')).toBeInTheDocument();
@@ -322,30 +312,23 @@ describe('QuizSession Component', () => {
     it('解説画像を押すと拡大の画面が開く', async () => {
       const resultBox = await answerWith({
         explanation: 'テスト解説',
-        explanation_images: [asset('/media/e1.png'), asset('/media/e2.png')],
+        explanation_images: [asset('/api/media/e1/'), asset('/api/media/e2/')],
       });
 
       fireEvent.click(within(resultBox).getByAltText('解説画像 1'));
 
       const dialog = await screen.findByRole('dialog');
-      expect(within(dialog).getByRole('img')).toHaveAttribute('src', getMediaUrl('/media/e1.png'));
+      expect(within(dialog).getByRole('img')).toHaveAttribute('src', '/api/media/e1/');
     });
 
-    it('新しい形式の問題画像があれば新しい形式だけを出す', async () => {
+    it('問題画像を出す', async () => {
       await renderWithProblem({
         ...mockProblem,
-        question_image: '/media/qlegacy.png',
-        question_images: [asset('/media/q1.png')],
+        question_images: [asset('/api/media/q1/')],
       });
 
-      expect(screen.getByAltText('問題画像 1')).toHaveAttribute('src', getMediaUrl('/media/q1.png'));
+      expect(screen.getByAltText('問題画像 1')).toHaveAttribute('src', '/api/media/q1/');
       expect(screen.queryByAltText('問題画像 2')).not.toBeInTheDocument();
-    });
-
-    it('新しい形式が無ければ古い形式の問題画像を出す', async () => {
-      await renderWithProblem({ ...mockProblem, question_image: '/media/qlegacy.png' });
-
-      expect(screen.getByAltText('問題画像 1')).toHaveAttribute('src', getMediaUrl('/media/qlegacy.png'));
     });
 
     it('問題画像が無ければ画像を出さない', async () => {
