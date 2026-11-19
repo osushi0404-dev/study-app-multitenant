@@ -104,8 +104,7 @@ def test_admin_retrieve_exposes_is_correct(setup):
 
 # ---- TC-AUTO-03: create の読み書き両可 ----
 @pytest.mark.django_db
-def test_admin_create_returns_and_saves_is_correct(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_admin_create_returns_and_saves_is_correct(setup):
     client = _client(setup["admin"])
     res = client.post("/api/problems/", _valid_payload(setup["subject"].id))
     assert res.status_code == 201
@@ -121,8 +120,7 @@ def test_admin_create_returns_and_saves_is_correct(setup, tmp_path, settings):
 
 # ---- TC-AUTO-04: 正解保持（テキストのみ編集・FE の編集保存と同型） ----
 @pytest.mark.django_db
-def test_admin_update_preserves_is_correct(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_admin_update_preserves_is_correct(setup):
     client = _client(setup["admin"])
     pid = setup["problem"].id
     payload = _valid_payload(setup["subject"].id, question="編集後の問題I078")

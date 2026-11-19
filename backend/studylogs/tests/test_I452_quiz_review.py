@@ -257,7 +257,7 @@ def test_submit_answer_updates_card(setup):
     assert (ok.status_code, ok.data["is_correct"]) == (200, True)
     assert (ng.status_code, ng.data["is_correct"]) == (200, False)
     assert set(ok.data.keys()) == {
-        "is_correct", "explanation", "explanation_image", "explanation_images",
+        "is_correct", "explanation", "explanation_images",  # I587: explanation_image を外した
         "correct_choices", "session_complete", "session", "session_stats"}
     tomorrow = start_of_today() + timedelta(days=1)
     right_card, wrong_card = card_of(user, right), card_of(user, wrong)

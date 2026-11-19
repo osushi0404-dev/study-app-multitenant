@@ -1,15 +1,15 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction
 from django.db.models import Prefetch
+from django.http import HttpResponse, HttpResponseNotModified
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 import json
 import uuid
-import hashlib
 from .difficulty import LEVEL_BY_LABEL
 from .models import (
     Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset, UserSubjectAccess,
@@ -19,15 +19,16 @@ from .serializers import (
     AnswerExplanationSerializer, QuizSessionSerializer, QuizSessionDetailSerializer,
     SubmitAnswerSerializer, MediaAssetSerializer
 )
-from .services import QuizService
+from .services import ProblemService, QuizService
 from .services.quiz_service import (
     ActiveSessionConflictError, IdempotencyKeyReusedError, spaced_repetition_service,
 )
+from .selectors import media_asset_data, visible_media_asset
 from .services.tenant_scope import available_problems, available_subjects, scope_to_user_org
+from .utils import ALLOWED_IMAGE_FORMATS
 from core.cache_service import cache_service
 from core.exceptions import create_error_response
 from core.subject_service import subject_service
-from core.storage_service import StorageService
 from common.mixins import MultipartFormDataMixin
 
 
@@ -97,9 +98,7 @@ class SubjectViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
-        import os
         import uuid as _uuid
-        from django.conf import settings
         from django.db import transaction
         from django.utils.text import slugify
 
@@ -127,17 +126,7 @@ class SubjectViewSet(viewsets.ModelViewSet):
                     UserSubjectAccess.objects.get_or_create(
                         user=self.request.user, subject=subject,
                         defaults={'granted_by': self.request.user})
-
-                org_slug = subject.organization.slug
-                base = os.path.join(
-                    settings.MEDIA_ROOT, 'org', org_slug, 'subjects', slug
-                )
-                for folder in ('problem', 'explanation'):
-                    path = os.path.join(base, folder)
-                    os.makedirs(path, exist_ok=True)
-                    gitkeep = os.path.join(path, '.gitkeep')
-                    if not os.path.exists(gitkeep):
-                        open(gitkeep, 'w').close()
+                # 画像は DB に保存するので、科目ごとのフォルダは作らない（I587）
         except IntegrityError:
             raise DRFValidationError({'name': ['同名の科目が既に存在します']})
 
@@ -653,44 +642,13 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            # ファイルバリデーション
-            StorageService.validate_file(file_data)
-
-            # アセットID生成
-            asset_id = uuid.uuid4()
-
-            # ファイル拡張子取得
-            original_filename = file_data.name
-            extension = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'png'
-
-            # ストレージキー生成
-            storage_key = StorageService.generate_storage_key(
-                org_slug=problem.organization.slug,
-                subject_slug=problem.subject.slug,
+        # 作成・更新と同じ検査と保存（中身は DB・I587）。検査の誤りは ValidationError で 400
+        with transaction.atomic():
+            media_asset = ProblemService._save_image_as_asset(
+                image_file=file_data,
                 usage_kind=usage_kind,
-                asset_id=asset_id,
-                extension=extension
-            )
-
-            # ファイル保存
-            StorageService.save_file(storage_key, file_data)
-
-            # SHA256チェックサム計算
-            file_data.seek(0)
-            checksum = hashlib.sha256(file_data.read()).hexdigest()
-
-            # MediaAsset作成
-            media_asset = MediaAsset.objects.create(
-                id=asset_id,
-                organization_id=problem.organization_id,
+                organization=problem.subject.organization,
                 subject=problem.subject,
-                usage_kind=usage_kind,
-                storage_key=storage_key,
-                original_filename=original_filename,
-                mime_type=file_data.content_type,
-                file_size_bytes=file_data.size,
-                checksum_sha256=checksum
             )
 
             # 既存の紐づけを取得して次のpositionを決定
@@ -712,24 +670,13 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                 organization_id=problem.organization_id
             )
 
-            # キャッシュ無効化
-            cache_service.invalidate_problems_cache(problem.subject_id)
+        # キャッシュ無効化
+        cache_service.invalidate_problems_cache(problem.subject_id)
 
-            return Response(
-                MediaAssetSerializer(media_asset).data,
-                status=status.HTTP_201_CREATED
-            )
-
-        except ValidationError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            return Response(
-                {'error': f'画像アップロードに失敗しました: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(
+            MediaAssetSerializer(media_asset).data,
+            status=status.HTTP_201_CREATED
+        )
 
     @action(
         detail=True,
@@ -754,13 +701,18 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        try:
-            # MediaAsset取得
-            media_asset = MediaAsset.objects.get(
-                id=asset_id,
-                organization_id=request.user.organization_id
+        # MediaAsset取得（利用者の組織の画像だけ）
+        media_asset = MediaAsset.objects.filter(
+            id=asset_id,
+            organization_id=request.user.organization_id
+        ).first()
+        if media_asset is None:
+            return Response(
+                {'error': '画像が見つかりません'},
+                status=status.HTTP_404_NOT_FOUND
             )
 
+        with transaction.atomic():
             # ProblemMediaAsset削除（紐づけ解除）
             problem_link = ProblemMediaAsset.objects.filter(
                 problem=problem,
@@ -775,33 +727,64 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
 
             problem_link.delete()
 
-            # 他の問題でも使用されていない場合は、MediaAssetも論理削除
-            other_links = ProblemMediaAsset.objects.filter(asset=media_asset).exists()
-            if not other_links:
-                media_asset.is_deleted = True
-                media_asset.save()
+            # 他の問題でも使用されていない場合は、MediaAsset を論理削除し中身を消す（I587）
+            if not ProblemMediaAsset.objects.filter(asset=media_asset).exists():
+                ProblemService._discard_asset(media_asset)
 
-                # 物理ファイルも削除
-                StorageService.delete_file(media_asset.storage_key)
+        # キャッシュ無効化
+        cache_service.invalidate_problems_cache(problem.subject_id)
 
-            # キャッシュ無効化
-            cache_service.invalidate_problems_cache(problem.subject_id)
+        return Response(
+            {'message': '画像を削除しました'},
+            status=status.HTTP_200_OK
+        )
 
-            return Response(
-                {'message': '画像を削除しました'},
-                status=status.HTTP_200_OK
-            )
 
-        except MediaAsset.DoesNotExist:
-            return Response(
-                {'error': '画像が見つかりません'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            return Response(
-                {'error': f'画像削除に失敗しました: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+# 画像の応答の見出し（I587）。本人のブラウザにだけ持たせ、別のタブで開いてもスクリプトを動かさない
+MEDIA_CACHE_CONTROL = 'private, max-age=3600'
+MEDIA_SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Content-Disposition': 'inline',
+}
+
+
+def _if_none_match_hits(header: str, etag: str) -> bool:
+    """If-None-Match のどれかが強い一致（同じ ETag か *）なら True。弱い ETag（W/）は一致にしない"""
+    candidates = [value.strip() for value in header.split(',')]
+    return '*' in candidates or etag in candidates
+
+
+class MediaAssetContentView(APIView):
+    """
+    画像の中身を返す（GET /api/media/<asset_id>/・I587）
+
+    ログインした利用者の組織の、消されていない画像だけを返す。それ以外は 404（他の組織の画像があることを知らせない）。
+    同じ画像の 2 回目（If-None-Match）は中身を読まずに 304 を返す。
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, asset_id):
+        asset = visible_media_asset(user=request.user, asset_id=asset_id)
+        if asset is None:
+            raise NotFound()
+
+        # checksum が空の行は ETag を付けない（違う画像が同じ ETag にならないように）
+        etag = f'"{asset.checksum_sha256}"' if asset.checksum_sha256 else None
+        if etag and _if_none_match_hits(request.headers.get('If-None-Match', ''), etag):
+            response = HttpResponseNotModified()
+        else:
+            data = media_asset_data(asset)
+            if data is None:
+                raise NotFound()
+            mime = asset.mime_type if asset.mime_type in ALLOWED_IMAGE_FORMATS else 'application/octet-stream'
+            response = HttpResponse(data, content_type=mime)
+            for header, value in MEDIA_SECURITY_HEADERS.items():
+                response[header] = value
+        if etag:
+            response['ETag'] = etag
+        response['Cache-Control'] = MEDIA_CACHE_CONTROL
+        return response
 
 
 IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key'

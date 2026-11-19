@@ -158,9 +158,7 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     created_by_username = serializers.CharField(source='created_by.username', read_only=True)
     question_text = serializers.CharField(source='question', required=False)  # フロントエンド用のフィールド名
-    question_image = serializers.SerializerMethodField()
-    explanation_image = serializers.SerializerMethodField()
-    # 新方式: MediaAsset配列
+    # 画像（MediaAsset の配列。古い形の question_image・explanation_image は I587 で外した）
     question_images = serializers.SerializerMethodField()
     explanation_images = serializers.SerializerMethodField()
 
@@ -171,8 +169,7 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
             'difficulty', 'explanation', 'is_deleted',
             'is_ai_generated', 'choices', 'created_by', 'created_by_username',
             'created_at', 'updated_at',
-            'question_image', 'explanation_image',  # 旧形式（後方互換性）
-            'question_images', 'explanation_images'  # 新形式
+            'question_images', 'explanation_images'
         ]
         read_only_fields = ['created_by', 'is_ai_generated']
 
@@ -279,14 +276,6 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
 
         return instance
 
-    def get_question_image(self, obj):
-        """問題画像のURLを取得（旧形式、後方互換性のため保持）"""
-        return obj.get_question_image_url()
-
-    def get_explanation_image(self, obj):
-        """解説画像のURLを取得（旧形式、後方互換性のため保持）"""
-        return obj.get_explanation_image_url()
-
     def get_question_images(self, obj):
         """問題用画像の配列を取得（新方式）"""
         return serialize_media_assets(obj, 'problem')
@@ -318,9 +307,7 @@ class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSer
     choices = ChoiceDisplaySerializer(many=True, read_only=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     question_text = serializers.CharField(source='question', read_only=True)  # フロントエンド用のフィールド名
-    question_image = serializers.SerializerMethodField()
-    explanation_image = serializers.SerializerMethodField()
-    # 新方式: MediaAsset配列
+    # 画像（MediaAsset の配列。古い形の question_image・explanation_image は I587 で外した）
     question_images = serializers.SerializerMethodField()
     explanation_images = serializers.SerializerMethodField()
 
@@ -329,17 +316,8 @@ class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSer
         fields = [
             'id', 'subject_name', 'question', 'question_text', 'problem_type',
             'difficulty', 'choices',
-            'question_image', 'explanation_image',  # 旧形式（後方互換性）
-            'question_images', 'explanation_images'  # 新形式
+            'question_images', 'explanation_images'
         ]
-
-    def get_question_image(self, obj):
-        """問題画像のURLを取得（旧形式、後方互換性のため保持）"""
-        return obj.get_question_image_url()
-
-    def get_explanation_image(self, obj):
-        """解説画像のURLを取得（旧形式、後方互換性のため保持）"""
-        return obj.get_explanation_image_url()
 
     def get_question_images(self, obj):
         """問題用画像の配列を取得（新方式）"""
@@ -351,14 +329,12 @@ class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSer
 
 
 class AnswerExplanationSerializer(serializers.ModelSerializer):
-    """クイズの回答の応答に入れる解説（解説文・古い形式の画像の URL・新しい形式の画像）"""
-    # 古い形式の解説画像の URL（他の経路と同じ作り方）
-    explanation_image = serializers.CharField(source='get_explanation_image_url', read_only=True)
+    """クイズの回答の応答に入れる解説（解説文・画像）"""
     explanation_images = serializers.SerializerMethodField()
 
     class Meta:
         model = Problem
-        fields = ['explanation', 'explanation_image', 'explanation_images']
+        fields = ['explanation', 'explanation_images']
 
     def get_explanation_images(self, obj):
         """新しい形式の解説画像（表示順）"""

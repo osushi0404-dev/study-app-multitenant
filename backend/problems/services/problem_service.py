@@ -1,25 +1,25 @@
 """
 問題登録・更新のビジネスロジック（サービス層）
 イシュー#031対応: 画像アップロード機能の統合
-イシュー#035対応: 問題削除時の関連画像・ファイル削除
+イシュー#035対応: 問題削除時の関連画像の削除
+I587: 画像の中身は DB（MediaAssetContent）に保存する。ファイルの置き場は使わない
 """
+import hashlib
 import logging
-import uuid
 import os
+import uuid
 from typing import List, Dict, Any, Optional
 from django.db import transaction
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from problems.models import (
-    Problem, Choice, MediaAsset, ProblemMediaAsset, Subject
+    Problem, Choice, MediaAsset, MediaAssetContent, ProblemMediaAsset, Subject
 )
 from problems.utils import (
     validate_image_file,
+    detect_image_mime,
     sanitize_filename,
     check_duplicate_filename,
-    check_directory_exists,
-    calculate_file_checksum,
     get_storage_path,
 )
 
@@ -122,18 +122,18 @@ class ProblemService:
         subject: Subject
     ) -> MediaAsset:
         """
-        1枚の画像ファイルを検証・保存し MediaAsset を作成して返す（内部メソッド）。
+        1枚の画像ファイルを検証し、MediaAsset と中身（MediaAssetContent）を作って返す（内部メソッド）。
 
-        作成フロー・編集フローの双方から再利用する共有パイプライン（C7）。
+        作成・編集・images/upload の全部から使う共通の流れ（C7）。呼び出し側のトランザクションの中で、
+        行と中身を一緒に作る（片方だけ残らない・I587）。
         ProblemMediaAsset の作成・position 採番は呼び出し側の責務。
 
         処理内容:
             1. 画像バリデーション（サイズ/MIME/拡張子整合/ピクセル/ファイル名安全）
             2. ファイル名のサニタイズ
             3. 重複チェック
-            4. ディレクトリ存在確認
-            5. ファイル保存（UUID方式）
-            6. MediaAsset作成
+            4. 識別用のキーの作成（UUID方式）
+            5. MediaAsset と中身の作成（MIME は中身から判定した値・送り手の content_type は使わない）
         """
         # 1. 画像バリデーション
         is_valid, error_msg = validate_image_file(image_file)
@@ -154,46 +154,39 @@ class ProblemService:
         if not is_unique:
             raise ValidationError(f"{usage_kind}画像: {error_msg}")
 
-        # 4. ディレクトリ存在確認
-        directory_path = f"org/{organization.slug}/subjects/{subject.slug}/{usage_kind}"
-        dir_exists, error_msg = check_directory_exists(directory_path)
-        if not dir_exists:
-            raise ValidationError(f"{usage_kind}画像: {error_msg}")
-
-        # 5. UUID方式でファイル保存
-        file_uuid = uuid.uuid4()
+        # 4. 識別用のキー（UUID方式・ファイルの置き場ではない）
         file_extension = os.path.splitext(sanitized_filename)[1]
-        uuid_filename = f"{file_uuid}{file_extension}"
-
         storage_key = get_storage_path(
             organization_slug=organization.slug,
             subject_slug=subject.slug,
             usage_kind=usage_kind,
-            filename=uuid_filename
+            filename=f"{uuid.uuid4()}{file_extension}"
         )
 
-        # 物理ファイル保存
-        full_path = os.path.join(settings.MEDIA_ROOT, storage_key)
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
-        with open(full_path, 'wb') as f:
-            for chunk in image_file.chunks():
-                f.write(chunk)
-
-        # 6. MediaAsset作成
-        checksum = calculate_file_checksum(image_file)
-        return MediaAsset.objects.create(
+        # 5. MediaAsset と中身の作成
+        image_file.seek(0)
+        data = image_file.read()
+        asset = MediaAsset.objects.create(
             organization=organization,
             subject=subject,
             usage_kind=usage_kind,
             storage_key=storage_key,
             original_filename=sanitized_filename,
-            mime_type=image_file.content_type,
-            file_size_bytes=image_file.size,
-            checksum_sha256=checksum,
+            mime_type=detect_image_mime(image_file),
+            file_size_bytes=len(data),
+            checksum_sha256=hashlib.sha256(data).hexdigest(),
             version=1,
             is_deleted=False
         )
+        MediaAssetContent.objects.create(asset=asset, data=data)
+        return asset
+
+    @staticmethod
+    def _discard_asset(asset: MediaAsset) -> None:
+        """画像を論理削除し、中身を DB から消す（呼び出し側のトランザクションの中で・I587）"""
+        asset.is_deleted = True
+        asset.save(update_fields=['is_deleted'])
+        MediaAssetContent.objects.filter(asset=asset).delete()
 
     @staticmethod
     def _process_images(
@@ -295,15 +288,12 @@ class ProblemService:
         """
         usage_kind ごとの画像差分（追加・削除・並び替え）を反映する（内部メソッド）。
 
-        順序原則（物理削除は最後）: 物理ファイル削除は非可逆でロールバック対象外のため、
-        「新規ファイル保存 → link 再構築 → ★最後に物理削除」の順で実行し、途中失敗時に
-        残すべきファイルが消えないようにする。
+        画像の保存・紐づけ・削除（中身の削除を含む）はどれも DB の操作で、
+        update_problem_with_images のトランザクションの中で一緒に取り消せる（I587）。
 
         Args:
             order: None=当該種別は無変更 / []=全削除 / 要素は existing|new。
         """
-        from core.storage_service import StorageService
-
         # order 非送信（None）の種別は一切変更しない
         if order is None:
             return
@@ -356,7 +346,7 @@ class ProblemService:
                 raise ValidationError(
                     "order 要素は existing / new のいずれかを指定してください")
 
-        # 4. 新規ファイルを先に保存（物理削除の前 = 失敗時に削除へ到達させない）
+        # 4. 新しい画像を保存
         new_assets: Dict[str, MediaAsset] = {}
         for entry in order:
             if 'new' in entry:
@@ -383,7 +373,7 @@ class ProblemService:
                 position=position,
             )
 
-        # 6. 最後に削除対象アセットの論理削除＋物理削除（ここまで全成功時のみ）
+        # 6. 外した画像の論理削除と中身の削除
         for aid, link in current_assets.items():
             if aid in keep_asset_ids:
                 continue
@@ -392,34 +382,19 @@ class ProblemService:
             # 手順5で本問題の (problem, usage_kind) リンクは全削除済みのため、ここで
             # 残るのは「他問題」または「本問題の別 usage_kind」のリンク＝いずれも共有。
             # exclude(problem) を付けると本問題の別 usage_kind 共有を見落とし、共有画像を
-            # 誤って物理削除してしまうため付けない（code-review Medium 対応）。
+            # 誤って消してしまうため付けない（code-review Medium 対応）。
             shared = ProblemMediaAsset.objects.filter(
                 asset=asset, is_deleted=False
             ).exists()
             if shared:
-                continue  # 共有されている場合は紐づけ解除のみ（物理削除しない）
-            asset.is_deleted = True
-            asset.save(update_fields=['is_deleted'])
-            try:
-                StorageService.delete_file(asset.storage_key)
-            except Exception as e:
-                # 物理削除失敗はログのみで続行（DB整合優先・delete_problem 踏襲）
-                logger.warning(
-                    "media physical delete failed",
-                    extra={
-                        "problem_id": problem.id,
-                        "organization_id": getattr(organization, 'id', None),
-                        "asset_id": str(asset.id),
-                        "storage_key": asset.storage_key,
-                        "error": str(e),
-                    },
-                )
+                continue  # 共有されている場合は紐づけ解除のみ（中身は消さない）
+            ProblemService._discard_asset(asset)
 
     @staticmethod
     @transaction.atomic
     def delete_problem(problem: Problem) -> None:
         """
-        問題の削除（論理削除 + 実ファイル即時物理削除）
+        問題の削除（論理削除 + ほかの問題が使っていない画像の中身の削除）
 
         Args:
             problem: 削除対象の問題インスタンス
@@ -427,13 +402,10 @@ class ProblemService:
         処理内容:
             1. 関連するProblemMediaAssetを取得
             2. 各画像について他の問題で使用されていないか確認
-            3. 他で使用されていない場合のみ実ファイルを物理削除
-            4. MediaAssetを論理削除
-            5. ProblemMediaAssetを論理削除
-            6. Problemを論理削除
+            3. 他で使用されていない場合のみ MediaAsset を論理削除し、中身を消す
+            4. ProblemMediaAssetを論理削除
+            5. Problemを論理削除
         """
-        from core.storage_service import StorageService
-
         # 1. 関連するProblemMediaAssetを取得（削除されていないもの）
         related_links = ProblemMediaAsset.objects.filter(
             problem=problem,
@@ -451,22 +423,12 @@ class ProblemService:
             ).exclude(problem=problem).exists()
 
             if not other_links_exist:
-                # 3. 実ファイル即時物理削除
-                try:
-                    StorageService.delete_file(asset.storage_key)
-                except Exception as e:
-                    # ファイル削除失敗はログに記録するが処理は続行
-                    logger.warning(
-                        f"Failed to delete file: {asset.storage_key}, error: {e}"
-                    )
+                # 3. MediaAsset の論理削除と中身の削除
+                ProblemService._discard_asset(asset)
 
-                # 4. MediaAsset論理削除
-                asset.is_deleted = True
-                asset.save(update_fields=['is_deleted'])
-
-        # 5. ProblemMediaAsset論理削除
+        # 4. ProblemMediaAsset論理削除
         related_links.update(is_deleted=True)
 
-        # 6. Problem論理削除
+        # 5. Problem論理削除
         problem.is_deleted = True
         problem.save(update_fields=['is_deleted'])

@@ -39,10 +39,9 @@ MIGRATION = importlib.import_module('accounts.migrations.0023_move_shared_person
 
 
 @pytest.fixture(autouse=True)
-def _settings(settings, tmp_path):
+def _settings(settings):
     settings.RATELIMIT_ENABLE = False
     settings.API_THROTTLE_ENABLED = False
-    settings.MEDIA_ROOT = str(tmp_path)  # 科目の作成が作る画像の置き場所をテストの外に出さない
 
 
 @pytest.fixture

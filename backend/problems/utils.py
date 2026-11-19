@@ -2,13 +2,11 @@
 問題画像アップロード用のユーティリティ関数
 イシュー#031対応: 強化されたファイルバリデーションとサニタイゼーション
 """
-import os
 import re
 import hashlib
 import unicodedata
 from pathlib import Path
 from typing import Tuple, Optional
-from django.conf import settings
 from PIL import Image
 import magic
 
@@ -62,9 +60,7 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
     # 3. MIMEタイプ検証（拡張子偽装対策）
     try:
         # ファイルの先頭バイトからMIMEタイプを検出
-        file.seek(0)
-        mime = magic.from_buffer(file.read(2048), mime=True)
-        file.seek(0)  # ファイルポインタを先頭に戻す
+        mime = _detect_mime(file)
 
         if mime not in ALLOWED_IMAGE_FORMATS:
             return False, f"ファイルの内容が画像形式ではありません（検出: {mime}）"
@@ -99,6 +95,24 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
         return False, error_msg
 
     return True, None
+
+
+def _detect_mime(file) -> str:
+    """ファイルの先頭 2048 バイトから MIME を判定する（読んだ後は先頭に戻す）"""
+    file.seek(0)
+    mime = magic.from_buffer(file.read(2048), mime=True)
+    file.seek(0)
+    return mime
+
+
+def detect_image_mime(file) -> Optional[str]:
+    """
+    中身から判定した画像の MIME（PNG・JPEG・WebP のどれか）。それ以外は None
+
+    保存・配信には送り手の content_type でなくこの値を使う（I587）
+    """
+    mime = _detect_mime(file)
+    return mime if mime in ALLOWED_IMAGE_FORMATS else None
 
 
 def _validate_filename_safety(filename: str) -> Tuple[bool, Optional[str]]:
@@ -237,38 +251,6 @@ def check_duplicate_filename(
     if existing_assets.exists():
         usage_label = '問題画像' if usage_kind == 'problem' else '解説画像'
         return False, f'ファイル名 "{original_filename}" は既に{usage_label}として登録されています'
-
-    return True, None
-
-
-def check_directory_exists(directory_path: str) -> Tuple[bool, Optional[str]]:
-    """
-    ディレクトリの存在確認
-
-    Args:
-        directory_path: 確認対象のディレクトリパス（MEDIA_ROOT からの相対パス）
-
-    Returns:
-        Tuple[bool, Optional[str]]: (存在する, エラーメッセージ)
-
-    注意:
-        ディレクトリが存在しない場合はエラーとし、自動作成は行わない
-        （ディレクトリは科目登録時に作成済みの想定）
-    """
-    full_path = os.path.join(settings.MEDIA_ROOT, directory_path)
-
-    if not os.path.exists(full_path):
-        return False, (
-            f"ディレクトリが存在しません: {directory_path}"
-            f"（科目登録時にディレクトリが作成されているか確認してください）"
-        )
-
-    if not os.path.isdir(full_path):
-        return False, f"指定されたパスがディレクトリではありません: {directory_path}"
-
-    # 書き込み権限の確認
-    if not os.access(full_path, os.W_OK):
-        return False, f"ディレクトリへの書き込み権限がありません: {directory_path}"
 
     return True, None
 

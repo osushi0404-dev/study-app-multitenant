@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from problems.querysets import OrgScopedQuerySet
 
@@ -75,32 +76,6 @@ class Subject(models.Model):
     def __str__(self):
         return self.name
 
-    def get_image_base_directory(self):
-        """科目の画像ベースディレクトリを取得（設定値またはデフォルト）"""
-        if self.image_directory:
-            return self.image_directory.rstrip('/')
-        # デフォルト: 科目名をスラッグ化（科目別ディレクトリ構造）
-        subject_slug = self.name.lower().replace(' ', '-')
-        return f'problems/{subject_slug}'
-
-    def get_question_image_directory(self):
-        """問題画像のディレクトリを取得（新形式対応）"""
-        # イシュー#029: 新形式のディレクトリ構造に対応
-        # org/{org.slug}/subjects/{subject.slug}/problem
-        if hasattr(self, 'organization') and self.organization:
-            return f'org/{self.organization.slug}/subjects/{self.slug}/problem'
-        # フォールバック（旧形式）
-        return f'{self.get_image_base_directory()}/questions'
-
-    def get_explanation_image_directory(self):
-        """解説画像のディレクトリを取得（新形式対応）"""
-        # イシュー#029: 新形式のディレクトリ構造に対応
-        # org/{org.slug}/subjects/{subject.slug}/explanation
-        if hasattr(self, 'organization') and self.organization:
-            return f'org/{self.organization.slug}/subjects/{self.slug}/explanation'
-        # フォールバック（旧形式）
-        return f'{self.get_image_base_directory()}/explanations'
-
 
 class Problem(models.Model):
     DIFFICULTY_CHOICES = [
@@ -128,20 +103,6 @@ class Problem(models.Model):
     problem_type = models.CharField(max_length=10, choices=PROBLEM_TYPE_CHOICES, default='single')
     difficulty = models.IntegerField(choices=DIFFICULTY_CHOICES, default=1)
     explanation = models.TextField(blank=False)
-    question_image = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        verbose_name='問題画像ファイル名',
-        help_text='[非推奨] 旧形式。MediaAsset使用を推奨'
-    )
-    explanation_image = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        verbose_name='解説画像ファイル名',
-        help_text='[非推奨] 旧形式。MediaAsset使用を推奨'
-    )
     is_deleted = models.BooleanField(
         default=False,
         db_index=True,
@@ -163,20 +124,6 @@ class Problem(models.Model):
         if usage_kind:
             qs = qs.filter(usage_kind=usage_kind)
         return qs.order_by('usage_kind', 'position')
-
-    def get_question_image_url(self):
-        """問題画像の完全なURLを生成"""
-        if not self.question_image:
-            return None
-        directory = self.subject.get_question_image_directory()
-        return f'/media/{directory}/{self.question_image}'
-
-    def get_explanation_image_url(self):
-        """解説画像の完全なURLを生成"""
-        if not self.explanation_image:
-            return None
-        directory = self.subject.get_explanation_image_directory()
-        return f'/media/{directory}/{self.explanation_image}'
 
     def __str__(self):
         return f"{self.subject.name}: {self.question[:50]}..."
@@ -365,7 +312,7 @@ class MediaAsset(models.Model):
         help_text='画像の用途（問題用/解説用）'
     )
     storage_key = models.TextField(
-        help_text='物理ストレージのキー（例: org/1/subjects/uuid/problem/uuid.png）'
+        help_text='識別用のキー（例: org/1/subjects/uuid/problem/uuid.png）。I587 からファイルの置き場ではない'
     )
     original_filename = models.TextField(
         null=True,
@@ -414,8 +361,30 @@ class MediaAsset(models.Model):
         return f'{self.original_filename or self.storage_key} ({self.get_usage_kind_display()})'
 
     def get_url(self):
-        """画像URLを取得（将来的には署名付きURLに変更可能）"""
-        return f'/media/{self.storage_key}'
+        """画像の配信の API の URL（ログインと組織の境界を確かめて中身を返す・I587）"""
+        return reverse('media-asset-content', kwargs={'asset_id': self.id})
+
+
+class MediaAssetContent(models.Model):
+    """画像の中身（MediaAsset と 1 対 1・I587）。一覧で中身を読まないよう別の表に分ける"""
+
+    # 画像の行が消えたら中身も要らない（CASCADE）。主キーを共有して 1 対 1 を DB で保証する
+    asset = models.OneToOneField(
+        MediaAsset,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='content',
+        help_text='中身の持ち主の画像',
+    )
+    data = models.BinaryField(help_text='画像のバイト列（PNG・JPEG・WebP）')
+
+    class Meta:
+        db_table = 'media_asset_contents'
+        verbose_name = '画像の中身'
+        verbose_name_plural = '画像の中身'
+
+    def __str__(self):
+        return f'content of {self.asset_id}'
 
 
 class ProblemMediaAsset(models.Model):
