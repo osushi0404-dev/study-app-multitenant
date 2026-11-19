@@ -2,7 +2,8 @@
 # I569: イシューの番号（I＋GitHub の番号）が 3 桁以上でも流れが動き、不正な値は今までどおり断ることを決定論検証する。
 # あわせて、番号を受け付ける判定に 3 桁固定の書き方が残っていない・書き戻されていないことを走査する（TC-09・再発防止）。
 # 実行: bash scripts/claude/tests/test_i569_issue_number_digits.sh
-# ケースは docs/tests/{open,closed}/I569_auto_test.md の TC-01〜TC-09・FG-01〜FG-04 と対応する。
+# ケースは docs/tests/{open,closed}/I569_auto_test.md の TC-01〜TC-09・FG-01〜FG-04 と、
+# docs/tests/{open,closed}/I583_auto_test.md の TC-10・FG-05〜FG-07（TC-02・TC-03・TC-05 の組み直し）と対応する。
 # 走査（TC-09）の例外の決まり: 番号でない 3 桁（例: HTTP の状態コード）の判定が要るときは、そのファイルを SCAN_EXCLUDE に足す（理由をコメントに書く）。
 # shellcheck disable=SC2016  # 単一引用符の $ISSUE などは、走査・注入の材料として文字どおりに書く
 set -uo pipefail
@@ -42,16 +43,42 @@ for n in I1000 I12345 I999; do
 done
 rejects "TC-01 flow-stage" 2 "使い方" env REVIEW_DIR="$RD" bash scripts/claude/flow-stage.sh
 
+# ---- TC-02・TC-03・TC-05 の土台（I583）----
+# 番号の確かめを通った後の止まり方は、本物のリポジトリではなく一時の git リポジトリの中から本物のスクリプトを起動して見る
+# （3 本とも起動した場所の git の根から記録を読むので、本物の I1000 の記録ができても結果が変わらない）。
+# 起動のたびに、呼ばれたら印を作る差し替えの claude を PATH の先頭と CLAUDE_BIN に置く（本物のレビュー役を起こさない・起動を検出する）
+GATE="$REPO_ROOT/scripts/claude/gate-check.sh"
+ADV="$REPO_ROOT/scripts/claude/adversarial-review.sh"
+MTE="$REPO_ROOT/scripts/claude/check-manual-test-executor.sh"
+LIB="$REPO_ROOT/scripts/claude/code-review.sh"   # gate-check.sh の既定の部品は git の根からの相対パスなので、本物を明示する
+STUB_DIR="$TMP/stub"; MARK="$TMP/claude_called"; mkdir -p "$STUB_DIR"
+printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$MARK" > "$STUB_DIR/claude"; chmod +x "$STUB_DIR/claude"
+command -v flock >/dev/null 2>&1 || echo "    flock がありません（TC-03・FG-06 は確かめられない）"
+# $1=一時のリポジトリ $2..=git の引数 → 作者を付けて git を流す（CI の git に作者が無くても動く）
+tgit() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
+# $1=フォルダ → git init と空のコミットだけの一時のリポジトリを作る
+iso_repo() { git init -q "$1" && tgit "$1" commit -q --allow-empty -m init; }
+# $1=起動する場所 $2=期待する exit code $3=照合の仕方（line=行全体・text=含む） $4=期待する文字 $5..=コマンド
+# → 終了コードが一致し、かつ出力が期待を含めば YES。TC と FG（失敗の注入）が同じこの判定を呼ぶ。
+# git の場所を指す環境変数を外し、git の探索を $TMP で止める（外から流しても本物のリポジトリに届かない）
+stops() {
+  local dir=$1 code=$2 how=$3 want=$4 out rc; shift 4
+  out="$(cd "$dir" && env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "GIT_CEILING_DIRECTORIES=$TMP" \
+    "PATH=$STUB_DIR:$PATH" "CLAUDE_BIN=$STUB_DIR/claude" "$@" 2>&1)"; rc=$?
+  if [ "$rc" != "$code" ]; then echo NO; return; fi
+  if [ "$how" = line ]; then yn grep -qxF -- "$want" <<<"$out"; else has "$out" "$want"; fi
+}
+ISO="$TMP/iso"; iso_repo "$ISO"
+
 # ---- TC-02 gate-check.sh ----
-out="$(bash scripts/claude/gate-check.sh I1000 2>&1)"
-ck "TC-02 gate-check I1000 は番号の確かめを通る" NO "$(has "$out" "使い方")"
-rejects "TC-02 gate-check" 1 "使い方" bash scripts/claude/gate-check.sh
+ck "TC-02 gate-check I1000 は番号の確かめを通り、記録が無くて止まる" YES \
+  "$(stops "$ISO" 1 line 'GATE_CHECK: FAIL REASON=missing' env GATE_BASE=HEAD "GATE_CHECK_LIB=$LIB" bash "$GATE" I1000)"
+rejects "TC-02 gate-check" 1 "使い方" bash "$GATE"
 
 # ---- TC-03 adversarial-review.sh（I1000 はファイルが無いので、レビュー役を起こす前に止まる）----
-out="$(bash scripts/claude/adversarial-review.sh I1000 2>&1)"
-ck "TC-03 adversarial I1000 は番号の確かめを通る" NO "$(has "$out" "ADVERSARIAL_ERROR: USAGE")"
-ck "TC-03 adversarial I1000 はファイルが無くて止まる" YES "$(yn grep -qE 'ADVERSARIAL_ERROR: (FILES|FLOCK)' <<<"$out")"
-rejects "TC-03 adversarial" 2 "ADVERSARIAL_ERROR: USAGE" bash scripts/claude/adversarial-review.sh
+ck "TC-03 adversarial I1000 は番号の確かめを通り、ファイルが無くて止まる" YES \
+  "$(stops "$ISO" 2 line 'ADVERSARIAL_ERROR: FILES' bash "$ADV" I1000)"
+rejects "TC-03 adversarial" 2 "ADVERSARIAL_ERROR: USAGE" bash "$ADV"
 
 # ---- TC-04 check-frontend-evidence.sh ----
 BASE_REF=HEAD bash scripts/claude/check-frontend-evidence.sh I1000 >/dev/null 2>&1
@@ -59,9 +86,12 @@ ck "TC-04 frontend-evidence I1000 は対象外で合格" 0 "$?"
 rejects "TC-04 frontend-evidence" 2 "使い方" env BASE_REF=HEAD bash scripts/claude/check-frontend-evidence.sh
 
 # ---- TC-05 check-manual-test-executor.sh ----
-out="$(bash scripts/claude/check-manual-test-executor.sh I1000 2>&1)"
-ck "TC-05 manual-test-executor I1000 は番号の確かめを通る" NO "$(has "$out" "使い方")"
-rejects "TC-05 manual-test-executor" 2 "使い方" bash scripts/claude/check-manual-test-executor.sh
+ck "TC-05 manual-test-executor I1000 は番号の確かめを通り、文書が無くて止まる" YES \
+  "$(stops "$ISO" 2 text '判定できない: I1000_manual_test.md がありません' bash "$MTE" I1000)"
+rejects "TC-05 manual-test-executor" 2 "使い方" bash "$MTE"
+
+# ---- TC-10 TC-02〜TC-05 は別プロセスの claude を起動しない（I583）----
+ck "TC-10 差し替えの claude が呼ばれていない" NO "$(yn [ -e "$MARK" ])"
 
 # ---- TC-06 close のスキルの番号の確かめ ----
 # $1=SKILL.md → 番号の確かめの正規表現（`=~ ` と ` ]]` の間）
@@ -152,6 +182,25 @@ B4="$TMP/SKILL.md"
 sed 's/\("\$ISSUE_NUM" =~ \)[^ ]*\( \]\]\)/\1.*\2/' "$CLOSE" > "$B4"
 ck "FG-04 写しに置換が入った" YES "$(yn differs "$CLOSE" "$B4")"
 ck "FG-04 緩めると 1a が一致" YES "$(re_match "$(close_re "$B4")" 1a)"
+
+# ---- FG-05 確かめの後・記録を読む前に別の理由（部品の読み込みの失敗）で終わると、TC-02 の判定が捕まえる（I583）----
+ck "FG-05 部品を読めないと TC-02 の判定は NO" NO \
+  "$(stops "$ISO" 1 line 'GATE_CHECK: FAIL REASON=missing' env GATE_BASE=HEAD "GATE_CHECK_LIB=$TMP/no-such-lib.sh" bash "$GATE" I1000)"
+
+# ---- FG-06 I1000 の記録ができた状態では、TC-03 の判定が捕まえ、差し替えの claude の起動が印に出る（I583）----
+F6="$TMP/fg6"; iso_repo "$F6"; mkdir -p "$F6/docs/issues/open" "$F6/docs/plans/open"
+echo x > "$F6/docs/issues/open/I1000.md"
+printf '# p\n\n## 必ず確かめる項目\n| 項目 | 観点 | 確かめ方 | 内容 |\n|---|---|---|---|\n| V1 | 1 | 読んで可 | x |\n' > "$F6/docs/plans/open/plan_I1000.md"
+tgit "$F6" add -A && tgit "$F6" commit -q -m rec
+rm -f "$MARK"   # FG-06 自身の起動だけを印で見る（前のケースの印を持ち越さない）
+ck "FG-06 記録があると TC-03 の判定は NO" NO \
+  "$(stops "$F6" 2 line 'ADVERSARIAL_ERROR: FILES' env ADV_BASE=HEAD ADV_DEADLINE=30 ADV_STEP_TIMEOUT=10 ADV_MIN_STEP=1 bash "$ADV" I1000)"
+ck "FG-06 記録があると差し替えの claude が呼ばれ、印に出る" YES "$(yn [ -e "$MARK" ])"
+
+# ---- FG-07 確かめの後に別の理由（git の外）で終わると、TC-05 の判定が捕まえる（I583）----
+mkdir -p "$TMP/nogit"
+ck "FG-07 git の外では TC-05 の判定は NO" NO \
+  "$(stops "$TMP/nogit" 2 text '判定できない: I1000_manual_test.md がありません' bash "$MTE" I1000)"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

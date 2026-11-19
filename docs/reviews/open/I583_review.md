@@ -24,6 +24,8 @@
 - [plan] スクリプトを写さず、本物のスクリプトを一時のリポジトリの中から起動する — 記録の場所は起動した場所の git の根で決まり、部品はスクリプト自身の場所から読むため（スパイクで成立）
 - [plan] TC-03 は `ADVERSARIAL_ERROR: FILES` だけを合格にする（FLOCK を外す）— CI・手元に flock があり、FLOCK で止まると番号の後の止まり方を確かめられないため
 - [plan-review] Warning 2 件（flock が無いときの原因の表示・手動テスト No.1 の中断時の後始末）を計画書とテスト文書に足し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記のため
+- [implement] `/simplify` の指摘のうち 5 件を採った（git の環境変数を外す・git の探索を一時の場所で止める・作者付きの git を 1 か所に・FG-06 の前に印を消す・パスの変数をそろえる・LIB の置き場所）— 判定と範囲を変えずに守りと読みやすさが上がるため
+- [implement] `/simplify` の指摘のうち 2 件は採らなかった: `stops` の照合の仕方（line/text）の一本化 — `GATE_CHECK: FAIL REASON=missing` などは行全体で照合する設計のため／FG-06 で一時リポジトリを使い回す — ケースの順番に頼る形になり、損が数十 ms と小さいため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

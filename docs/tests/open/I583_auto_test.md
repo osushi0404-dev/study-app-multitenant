@@ -3,7 +3,7 @@
 実行コマンド（例）: `bash scripts/claude/tests/test_i569_issue_number_digits.sh`
 
 結果:
-- harness: 実装前のため未実行
+- harness: 2026-11-19 implement で実行・pass=84 fail=0
 
 ## テストケース
 | TC | 対象 | 期待値（合格=exit 0） |
@@ -22,7 +22,7 @@
 | FG-07 | git の外のフォルダから起動した TC-05 の判定 | NO（git の外で終わる） |
 
 結果（実装後に記入）:
-- TC-A1: 実装前のため未実行
+- TC-A1: 2026-11-19 implement で実行・exit 0（pass=84 fail=0。TC-02・TC-03・TC-05・TC-10・FG-05〜FG-07 すべて PASS）
 
 ## 決定論ゲート（自動実走）
 ```bash
