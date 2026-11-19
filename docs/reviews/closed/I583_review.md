@@ -83,6 +83,7 @@
 - [review-gate] F1 同梱のコードレビューは OK（F1 は resolved・敵対的レビューは不要）。新しい Low の F8（TC-11 の期待するコミット数の書き違い）は記録の場所だけで直るので、計画書とテスト文書を「2」に直した。F6・F7 は retro で台帳の残りへ回す
 - [test-gate] 手動テスト No.1 と TC-A1 を F1 同梱の後のコードで取り直した（計画レビューの Warning どおり）。どちらも OK・pass=86
 - [retro] 台帳の残り（最新の記録 1755）: F1 は resolved。F2〜F7 は `docs/reviews/backlog/I583.md`（後続イシュー行きは 0 件）。F8 は review-gate で記録を直したので一覧に入れない。改善案は見送り 1 件（上の振り返り）
+- [close] F1 同梱の後の close: develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した。PR 説明に F1 の同梱を足した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -97,3 +98,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
