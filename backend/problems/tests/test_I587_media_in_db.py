@@ -324,6 +324,22 @@ def test_discard_removes_content(world, no_file_writes, how):
     assert no_file_writes == []
 
 
+def test_delete_image_ignores_deleted_links_of_other_problems(world):
+    """共有の相手の問題が論理削除済みなら、外した画像は中身ごと消える（fix-loop F1）"""
+    problem, _ = make_problem(world)
+    other, _ = make_problem(world)
+    asset = make_asset(world, problem=problem)
+    ProblemMediaAsset.objects.create(organization=world["org_a"], problem=other, asset=asset,
+                                     usage_kind="problem", position=1, is_deleted=True)
+    response = client_for(world["admin_a"]).delete(
+        f"/api/problems/{problem.id}/images/delete/{asset.id}/")
+    assert response.status_code == 200
+    asset.refresh_from_db()
+    assert asset.is_deleted is True
+    assert not MediaAssetContent.objects.filter(asset=asset).exists()
+    assert client_for(world["learner_a"]).get(media_url(asset)).status_code == 404
+
+
 def test_delete_problem_keeps_shared_content(world):
     problem, _ = make_problem(world)
     other, _ = make_problem(world)

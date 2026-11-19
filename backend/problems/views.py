@@ -728,7 +728,8 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
             problem_link.delete()
 
             # 他の問題でも使用されていない場合は、MediaAsset を論理削除し中身を消す（I587）
-            if not ProblemMediaAsset.objects.filter(asset=media_asset).exists():
+            # 共有の判定は有効な紐づけだけで行う（_reconcile_images・delete_problem とそろえる・I587 F1）
+            if not ProblemMediaAsset.objects.filter(asset=media_asset, is_deleted=False).exists():
                 ProblemService._discard_asset(media_asset)
 
         # キャッシュ無効化

@@ -34,6 +34,8 @@
 - [implement] 画面の確かめ用の問題「I587確認: 画像のある問題」を開発の DB の科目「I472確認用」（E2E Org A）に作った（画像 3 枚）。M7（控えの戻し）で画像のある問題として使うので、test-gate まで残す
 - [implement] 決定論ゲートの形を語の区切りつきに直した — 前の形は `../services/mediaService` に当たる誤検知を出した。直した形で失敗の注入を確かめ直した
 - [implement] /simplify の 4 つの観点のレビューで出た指摘のうち 8 件を直し、7 件を理由を付けて見送った（計画変更記録）。見送りのうち `Subject.image_directory` の列（読む所が無くなった）は retro で一覧に回す
+- [fix-loop] F1 は案 F1-a（`delete_image` の判定に `is_deleted=False`）で直した — 1 行で 3 か所の判定がそろう。共有の判定の 1 か所へのまとめ（F1-b）は止める指摘でない F4 を巻き込むので retro へ
+- [fix-loop] F2 はユーザーの判断「このまま消す (Recommended)」（2026-11-19。最初の問いに「見本の画像使うことあるか？」と聞き返されたので、見本の出どころ〔I007 のコミット・70 バイトのテストの残り・取り込みで使われない q02〕を調べて伝え、選び直してもらった）。計画 R6 に書き、0025 が消した行のキーを出力に並べるようにした — 受け入れの目印は止める判定に効かないので、次の review-gate の差分のレビューで、この記録を見て判断してもらう
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement

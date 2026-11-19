@@ -25,6 +25,10 @@ def forward(apps, schema_editor):
     result = media_migration.move_media_files_to_db(
         **_models(apps), media_root=media_migration.LEGACY_MEDIA_ROOT, dry_run=False)
     sys.stdout.write(f'\n  I587 media: {result.summary()}\n')
+    # ファイルが無くて消した行を並べる（ほかの環境で何が消えたかを migrate の出力に残す・I587 F2）
+    for asset_id, key, action in result.planned:
+        if action == media_migration.ACTION_DELETE:
+            sys.stdout.write(f'  I587 media: deleted id={asset_id} key={key}\n')
     # 古い /media/ の URL を含む一覧のキャッシュを捨てる。捨てられなくても最長 1 時間で切れる
     try:
         from core.cache_service import cache_service

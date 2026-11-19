@@ -136,7 +136,11 @@ def test_0025_moves_files_and_reverts(world, settings, tmp_path, monkeypatch, ca
     assert bytes(MediaAssetContent.objects.get(asset=present).data) == PNG
     assert not MediaAsset.objects.filter(id=missing.id).exists()
     assert not ProblemMediaAsset.objects.filter(asset_id=missing.id).exists()
-    assert "I587 media: moved=1 already=0 deleted_assets=1 deleted_links=1" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "I587 media: moved=1 already=0 deleted_assets=1 deleted_links=1" in out
+    # 消した行のキーを出力に残す（fix-loop F2）。移した行は並べない
+    assert f"I587 media: deleted id={missing.id} key={missing.storage_key}" in out
+    assert f"id={present.id}" not in out
 
     (tmp_path / present.storage_key).unlink()
     _run(migration.unapply, before)
