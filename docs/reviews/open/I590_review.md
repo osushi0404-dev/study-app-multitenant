@@ -32,3 +32,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 - [implement] #597 のマージ（PR #598・2026-11-20）を受けて develop をブランチに取り込み（merge。最初のコミットを push 済みなので rebase しない）、M1（科目 11・`image_directory` に値のある科目 0）と M2（`bash scripts/claude/db-backup.sh I590_before` → `backup_I590_before_20261120_161736.sql`・160768 バイト）を取った — 計画 5 のステップ 1
 - [implement] F3・F9（ステップ 2）を承認を待たずに先に進めた。TC-01〜03 を先に書き、直す前に 4 件が落ちること（TC-02 (b) と TC-03 (a) は想定どおり通る）を確かめてから直した — 計画 5 のステップ 2 は DB を変えないので承認と並行してよい
+- [implement] ユーザーの承認「ok」（2026-11-20）を受けて、列の削除（ステップ 3）と移行の実行（ステップ 4・M3）を行った。開発の DB で 0027 は OK・列は無くなった。控え `backup_I590_before_20261120_161736.sql` はマージの後に close で消す — 計画 5 のステップ 1 の承認の条件
+- [implement] /simplify（4 観点）: TC-03 の場合分けを引数の組に直し、media_migration の docstring に「0025 の一部として扱う・problems.* を読まない」を書いた。見送り: マイグレーションのテストの補助（`_loader`・`_run`・列の一覧）が I492・I587・I590 で 3 つ写しになっている — 共有の補助に切り出すと I492・I587 のテストまで変え計画の範囲を外れる（retro で後続の候補にする）。`_detect_mime` の 1 行の包みと TC-01／TC-02 の二重の守りは計画どおりに残す — 計画 4-1・6

@@ -48,15 +48,6 @@ class Subject(models.Model):
         verbose_name='科目グループ'
     )
 
-    # 画像ディレクトリ管理フィールド（イシュー#028対応）
-    image_directory = models.CharField(
-        max_length=200,
-        blank=True,
-        default='',
-        verbose_name='画像ディレクトリ',
-        help_text='科目の画像ベースディレクトリ（例: problems/aws-clf）。空の場合は科目名から自動生成。'
-    )
-
     # ストレージパス用スラッグ（イシュー#029対応）
     slug = models.CharField(
         max_length=100,

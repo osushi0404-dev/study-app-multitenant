@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection, migrations
+from django.db.migrations.loader import MigrationLoader
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -93,22 +95,78 @@ def test_media_migration_check_ignores_utils_changes(world, tmp_path, monkeypatc
 
 
 # ---- TC-03: 配信の 200・304・412 のどれにも守りの見出しが付く ----
-@pytest.mark.parametrize("case, expected", [("plain", 200), ("not_modified", 304),
-                                            ("precondition", 412)])
-def test_media_security_headers_on_all_statuses(world, case, expected):
+@pytest.mark.parametrize("headers, expected", [
+    ({}, 200),
+    ({"HTTP_IF_NONE_MATCH": f'"{hashlib.sha256(PNG).hexdigest()}"'}, 304),
+    ({"HTTP_IF_MATCH": '"x"'}, 412),
+], ids=["plain", "not_modified", "precondition"])
+def test_media_security_headers_on_all_statuses(world, headers, expected):
     asset = make_asset(world, PNG)
     MediaAssetContent.objects.create(asset=asset, data=PNG)
     client = APIClient()
     client.force_authenticate(user=world["learner"])
-    url = f"/api/media/{asset.id}/"
-    headers = {
-        "plain": {},
-        "not_modified": {"HTTP_IF_NONE_MATCH": f'"{asset.checksum_sha256}"'},
-        "precondition": {"HTTP_IF_MATCH": '"x"'},
-    }[case]
 
-    response = client.get(url, **headers)
+    response = client.get(f"/api/media/{asset.id}/", **headers)
     assert response.status_code == expected
     assert response["X-Content-Type-Options"] == "nosniff"
     assert response["Content-Security-Policy"] == "default-src 'none'; sandbox"
     assert response["Cache-Control"] == "private, max-age=3600"
+
+
+# ---- TC-04: 0027 は値のある科目があれば止まり、空なら列を外す。戻すと列が '' で戻る ----
+def _loader(settings):
+    settings.MIGRATION_MODULES = {}  # pytest の --no-migrations を外し、本物のマイグレーションを読む
+    return MigrationLoader(connection)
+
+
+def _run(step, state):
+    """遅延の外部キーの検査を済ませてから DDL を流す（I587 の 0026 のテストと同じ）"""
+    with connection.cursor() as cursor:
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    with connection.schema_editor() as editor:
+        step(state.clone(), editor)
+
+
+def _subject_columns():
+    with connection.cursor() as cursor:
+        return {c.name for c in connection.introspection.get_table_description(
+            cursor, "problems_subject")}
+
+
+def _without_check(migration):
+    """判定の RunPython を外した写し（失敗の注入: 判定が無ければ値があっても列が消える）"""
+    copy = type(migration)(migration.name, migration.app_label)
+    copy.dependencies = migration.dependencies
+    copy.operations = [op for op in migration.operations
+                       if not isinstance(op, migrations.RunPython)]
+    return copy
+
+
+@pytest.mark.parametrize("value", ["problems/x", " "])
+def test_0027_refuses_values_then_removes_column(world, settings, value):
+    loader = _loader(settings)
+    migration = loader.get_migration("problems", "0027_remove_subject_image_directory")
+    before = loader.project_state(("problems", "0026_remove_problem_legacy_images"))
+    _run(migration.unapply, before)
+    OldSubject = before.apps.get_model("problems", "Subject")
+    try:
+        assert "image_directory" in _subject_columns()
+        assert set(OldSubject.objects.values_list("image_directory", flat=True)) == {""}
+
+        OldSubject.objects.filter(pk=world["subject"].pk).update(image_directory=value)
+        with pytest.raises(RuntimeError, match="1 件"):
+            _run(migration.apply, before)
+        assert "image_directory" in _subject_columns()
+
+        # 判定が効いていることの確かめ: 判定を外した写しなら値があっても列が消える
+        _run(_without_check(migration).apply, before)
+        assert "image_directory" not in _subject_columns()
+        _run(migration.unapply, before)
+
+        OldSubject.objects.update(image_directory="")
+        _run(migration.apply, before)
+        assert "image_directory" not in _subject_columns()
+    finally:
+        if "image_directory" in _subject_columns():
+            OldSubject.objects.update(image_directory="")
+            _run(migration.apply, before)
