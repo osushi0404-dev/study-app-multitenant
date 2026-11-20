@@ -23,3 +23,5 @@
 <!-- 各段階が、止めずに自分で決めたことを `- [段階] 決めたこと — 理由` で足す。段階の結線の行（STAGE_DONE:）はこのファイルの末尾に足す -->
 - [plan] 受け入れ条件の「最後の行が `-- PostgreSQL database dump complete`」を「完了の行がある＋`\restrict` と対の `\unrestrict` が最後にある」に読み替えた — 今の pg_dump（15.19）は最後の行が `\unrestrict <鍵>` で、文言のままでは正しい控えも不合格になる（スパイクで確かめた）。目的（途中で切れていない）は変えない
 - [plan] `.gitignore` のつながった行（`.github_token` が外れていない）をこのイシューで直す — 控えの置き場の確かめの途中で見つけた・1 行の直し
+
+STAGE_DONE: plan NEXT: plan-review
