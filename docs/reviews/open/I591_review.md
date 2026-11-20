@@ -11,7 +11,7 @@
 
 ## テスト結果
 - 自動:
-- 手動:
+- 手動: M2・M4〜M7 OK、M1・M3 NG（fix-loop へ）
 
 ## 計画との差分
 - なし / あり（理由）
@@ -35,6 +35,8 @@
 - [implement] `/simplify` は 4 体の点検役を起こさず、自分で確かめた — 対象が Markdown の記録 1 本でコードが無く、再利用・効率・直す深さの観点が当てはまらないため。直すところは無かった
 
 - [fix-loop] コードレビュー F1・F2（High）を案 A（記録と計画書の事実を直し、#593 に訂正のコメント）で直した — 採否 4 を変えるとユーザーの決定（I593 を最優先で起票）に反し、I593 を閉じて起票し直すと参照が増える。I181 の決定を見直すかは I593 でユーザーに確かめる
+
+- [test-gate] 手動テスト M1・M3 を NG にした — M1 は資料の要点ごとの公式の対応と「未確認」の表示が無く、M3 は図に adversarial-reviewer の名前が無い。記録の文書（docs/proposals）は test-gate では直せないので fix-loop に回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
