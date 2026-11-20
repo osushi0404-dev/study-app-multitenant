@@ -35,11 +35,12 @@
 | TC-23 | 引用符の中の文には当たらない | `git commit -m "bash scripts/claude/new.sh を足す"`（`new.sh` は新規）と `git status && bash scripts/claude/new.sh` | 前は出力なし・後ろは `updatedInput` がある | 最初の区切りだけを見る写し（FG TC-20 と同じ）で後ろが不合格 |
 | TC-24 | 振り向けがスクリプト名にくっついても取り違えない（F1） | 新しい `new.sh` を `>/dev/null`・`2>&1`・`< /dev/null`・`2>/dev/null` つきで流す。変更の無い `b.sh` を `>/dev/null`・`2>&1` つきで流す | 前の 4 つは `updatedInput` がある・後ろの 2 つは出力なし | 区切りから `<>` を外した写しで不合格 |
 | TC-25 | git が無視するファイル（F2） | `.gitignore` の `*.tmp`・`igndir/` で、① `bash scripts/claude/evil.tmp` ② 追跡済みの `c.sh`（`helper.tmp` を名前で呼ぶ）③ `bash scripts/claude/igndir/x.sh`。どれも他に変更なし | 3 つとも `updatedInput` がある | 無視されるファイルを数えない写しで ② が不合格・一覧の外の出発点を見ない写しで ③ が不合格 |
+| TC-24b | 振り向けの後ろの引数も同じ命令の引数として見る（F7） | `bash scripts/claude/test-session.sh x >log --permission-mode bypassPermissions`・`bash scripts/claude/tests/stress-repeat.sh 3 2>/dev/null scripts/claude/tests/test_new.sh`（新規） | 前は `ask`・後ろは `updatedInput` がある | 振り向けで命令を区切る写しで不合格 |
 
 セキュリティ設計レビュー（計画書「セキュリティレビュー結果」）で足す確かめ:
 - TC-02 に、名前に `'` と改行を含む新しいファイルを足す: 印の中の名前は `_` に置き換わり、`bash -n` が 0
 - TC-12 に `--settings=/tmp/s.json`（`=` の形）を足す: `ask`
-- TC-12 に F4 の形を足す: `--permission-mode bypassPermissions`・`--permission-mode=dontAsk`・`--setting-sources user`・`--setting-sources=` は `ask`。`--permission-mode auto`・`--setting-sources user,project`・`--setting-sources user --settings .claude/settings.json`（レビュー済み）は出力なし。FG: 許可のモードの表に `bypassPermissions` を足す・`--setting-sources` の確かめを外すと不合格
+- TC-12 に F4 の形を足す: `--permission-mode bypassPermissions`・`--permission-mode=dontAsk`・`--setting-sources user`・`--setting-sources=` は `ask`。`--permission-mode auto`・`--setting-sources user,project`・`--setting-sources user --settings .claude/settings.json`（レビュー済み）は出力なし。`--setting-sources user --settings .gitignore`（レビュー済みでも設定の代わりにならない・F8）は `ask`。FG: 許可のモードの表に `bypassPermissions` を足す・`--setting-sources` の確かめを外すと不合格
 - TC-13 に、土台の `.git/config` に `core.fsmonitor=<印を書くコマンド>` を書いた形を足す: 印ができない
 
 ## 決定論ゲート（自動実走）
@@ -66,3 +67,9 @@ grep -q 'I599' docs/runbooks/harness-audit.md
   - セキュリティ: レビュー前の中身・守りの無い子のセッションを外で動かせる穴を塞いだ（C8）。無視されるフォルダ（`.venv`・`__pycache__`）の中を名前で呼ぶ形は残る（計画 R3・わざと避ける形）
   - 次回どう防ぐか: 「一覧に無い」「値を見ない」を済みに倒さない（判定できないものは中で動かす・承認に倒す）。許可の表は名前だけでなく値も決める
   - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=47 fail=0（TC-24・TC-25・TC-12 の追加と各 FG を含む）
+- 2026-11-20 fix-loop（review-gate 2 周目の止める指摘 F7・F8）:
+  - なぜ失敗したか: F7 は F1 の直しの後退（振り向けの記号で命令を区切ったので、その後ろの引数が見られなくなった）。F8 は、プロジェクトの設定の代わりになる設定ファイルを「レビュー済みのファイル」と取り違えた
+  - 何を変えたか: 振り向けの記号は語から切り離すが命令の区切りにせず、記号と振り向けの先の 1 語だけを除く。`--setting-sources` が `project` を含まないときの代わりは `.claude/settings.json`（BASE と同じ）だけ（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1910.md`）
+  - セキュリティ: 守りの無い子・レビュー前のテストを外で動かせる穴を塞いだ（C8）
+  - 次回どう防ぐか: 区切りを変える直しは、区切りの後ろにある語（引数）の扱いも TC で確かめる（直しの後退を同じ周で拾う）
+  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=50 fail=0（TC-24b・TC-12 の追加と各 FG を含む）

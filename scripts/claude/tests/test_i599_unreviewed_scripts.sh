@@ -175,6 +175,18 @@ ok24 = ok24 and untouched(r, "bash scripts/claude/b.sh>/dev/null") and untouched
 ck("TC-24 振り向けつきでもレビュー前のスクリプトは中・変更の無いものは外のまま（F1）", ok24)
 
 
+def tc24b(root):
+    """振り向けの後ろの引数も同じ命令の引数として見る（F7）: ① test-session の許可のモード ② 引数のテストのファイル。"""
+    w(os.path.join(root, "scripts/claude/tests/test_new.sh"), "echo new\n")
+    got = (asked(root, "bash scripts/claude/test-session.sh x >log --permission-mode bypassPermissions"),
+           rewritten(root, "bash scripts/claude/tests/stress-repeat.sh 3 2>/dev/null scripts/claude/tests/test_new.sh"))
+    os.remove(os.path.join(root, "scripts/claude/tests/test_new.sh"))
+    return got
+
+
+ck("TC-24b 振り向けの後ろの引数も見る（F7）", all(tc24b(r)))
+
+
 def tc25(root):
     """git が無視するファイル: ① 直接流す（他に変更なし） ② 追跡済みのスクリプトが名前で呼ぶ（他に変更なし）
     ③ 無視されるフォルダの中のファイルを直接流す。3 つとも中で動く。"""
@@ -236,7 +248,8 @@ ok12 = untouched(r, f"{ts} --model haiku --permission-mode default --max-turns 3
 ok12 = ok12 and asked(r, f"{ts} --permission-mode bypassPermissions") and asked(r, f"{ts} --permission-mode=dontAsk") \
     and untouched(r, f"{ts} --permission-mode auto") and asked(r, f"{ts} --setting-sources user") \
     and asked(r, f"{ts} --setting-sources=") and untouched(r, f"{ts} --setting-sources user,project") \
-    and untouched(r, f"{ts} --setting-sources user --settings .claude/settings.json")
+    and untouched(r, f"{ts} --setting-sources user --settings .claude/settings.json") \
+    and asked(r, f"{ts} --setting-sources user --settings .gitignore")
 w(f"{r}/.claude/settings.json", '{"hooks": {}}\n')
 ok12 = ok12 and asked(r, f"{ts} --settings .claude/settings.json")
 subprocess.run([*GIT, "-C", r, "checkout", "-q", "--", ".claude/settings.json"], check=True)
@@ -427,6 +440,11 @@ fg.append(("FG TC-12（F4）: 許可のモードの表に bypassPermissions を�
 r17 = make_repo("fg_any_sources", broken_unreviewed("any_sources", '    if sources is not None and "project" not in sources.split(",") and not settings_ok:',
                                                     "    if False:"))
 fg.append(("FG TC-12（F4）: --setting-sources の確かめを外すと不合格", not asked(r17, f"{ts} --setting-sources user")))
+r18b = make_repo("fg_redirect_split2", broken_unreviewed("redirect_split2", "            skip_next = True\n", "            skip_next = False\n            segs.append(cur); cur = []\n"))
+fg.append(("FG TC-24b: 振り向けで命令を区切ると不合格", not all(tc24b(r18b))))
+r19 = make_repo("fg_any_settings", broken_unreviewed("any_settings", '            settings_ok = settings_ok or rel == ".claude/settings.json"',
+                                                    "            settings_ok = True"))
+fg.append(("FG TC-12（F8）: どの設定ファイルでも代わりにすると不合格", not asked(r19, f"{ts} --setting-sources user --settings .gitignore")))
 for name, ok in fg:
     ck(name, ok)
 print(f"---\npass={sum(results)} fail={len(results) - sum(results)}")

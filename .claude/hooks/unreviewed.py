@@ -100,9 +100,17 @@ def _segments(command: str) -> list[list[str]] | None:
         toks = list(lex)
     except ValueError:
         return None
+    # 振り向け（> >> < >& &> など）は記号として語から切り離す（I599 F1）が、命令の区切りにはしない。
+    # 記号と直後の 1 語（振り向けの先）を除き、同じ命令の引数を続けて読む（I599 F7）
     segs, cur = [], []
+    skip_next = False
     for t in toks:
-        if set(t) <= set(";&|()<>"):   # 振り向け（> < >& など）も区切る（語にくっつけない・I599 F1）
+        if skip_next:
+            skip_next = False
+            continue
+        if set(t) <= set(";&|()<>") and ("<" in t or ">" in t):
+            skip_next = True
+        elif set(t) <= set(";&|()"):
             if cur:
                 segs.append(cur)
             cur = []
@@ -220,7 +228,8 @@ def _test_session_ask(args: list[str], root: str, base) -> str | None:
                     or not _same_as_base(root, b, rel):
                 return (f"test-session.sh にレビュー前の設定ファイル（{v}）を渡しています。子のセッションのフックは"
                         "サンドボックスの外で動きます。中身を確かめて承認してください（I599）")
-            settings_ok = True
+            # プロジェクトの設定の代わりになるのは、見張りとサンドボックスを持つ .claude/settings.json だけ（I599 F8）
+            settings_ok = settings_ok or rel == ".claude/settings.json"
     # プロジェクトの設定（見張り・サンドボックス）を読まない子は、レビュー済みの設定を渡すときだけ承認なしで起こす
     if sources is not None and "project" not in sources.split(",") and not settings_ok:
         return (f"test-session.sh の --setting-sources {sources or '（空）'} は、プロジェクトの設定（見張り・サンドボックス）を"
