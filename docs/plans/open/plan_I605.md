@@ -71,7 +71,7 @@
 - P1 DB だけを起こす: `docker compose up -d --wait db`（backend は起こさない。起こすと控えの前に移行が流れる）
 - P2 控え: `bash scripts/claude/db-backup.sh I605_before_primary`（出力: primary の直下の `backup_I605_before_primary_<日時>.sql`）
 - P3 今の状態を数える（読むだけ。SQL は 4-1 と同じ）:
-  - a. 適用済みの移行: `docker compose run --rm --no-deps -T backend python manage.py showmigrations problems`
+  - a. 適用済みの移行と、P6 で流れる移行の全部: `docker compose run --rm --no-deps -T backend python manage.py showmigrations problems` と `docker compose run --rm --no-deps -T backend python manage.py migrate --plan`（`problems` 以外のアプリの未適用の移行も P6 で流れるので、`--plan` の一覧を P4 で一緒に見せる。`problems` の 0024〜0027 以外に、行や列を消す移行があれば、その中身も見せて承認を得る）
   - b. 画像の行: `media_assets` の `id`・`storage_key` の一覧と、`find backend/media -type f` の一覧を突き合わせ、「ファイルがある（0025 で移す）」「ファイルが無い（0025 で行と紐づけを消す）」に分ける。紐づけの数は `SELECT asset_id, count(*) FROM problem_media_assets GROUP BY asset_id`
   - c. 0026 の対象（4-1 の SELECT）
   - d. 0027 の対象（4-1 の SELECT）
@@ -79,7 +79,7 @@
 - P5 値を空にする（P4 で承認を得たものだけ）: 4-1 の UPDATE を `docker compose exec -T db psql -U postgres -d learning_app -c "…"` で流す（前置きは付けない。見張りが止めたら、同じコマンドを人に `!` を付けて流してもらう）
 - P6 移す: `docker compose run --rm --no-deps -T backend python manage.py migrate`。出力の `I587 media:` の行（件数と消した行）をそのまま P10 のコメントに写す。途中で止まったら、そこで止めて出力を人に見せる（承認していない値を空にしない）
 - P7 適用の確かめ: P3-a のコマンドで `problems` の 0024〜0027 が `[X]` であることを見る
-- P8 画面で確かめる: `docker compose up -d --wait` でアプリを起こし、`docs/runbooks/frontend-verify.md` の手順で Playwright MCP を使い、P3-b で「ファイルがある」画像を使う問題を 1 つ開いて画像が出ることを確かめ、画面の画像を primary の `.evidence/I605/primary_image.png` に保存する。移した件数（`I587 media:` の `moved`）が P3-b の「ファイルがある」件数と同じことも見る。画像を使う問題が無ければ、その旨を書く
+- P8 画面で確かめる: `docker compose up -d --wait` でアプリを起こし、`docs/runbooks/frontend-verify.md` の手順で Playwright MCP を使い、P3-b で「ファイルがある」画像を使う問題を 1 つ開いて画像が出ることを確かめ、画面の画像を primary の `.evidence/I605/primary_image.png` に保存する。移した件数（`I587 media:` の `moved`）が P3-b の「ファイルがある」件数と同じことも見る。画像を使う問題が無ければ、その旨を書く（引数なしの `up` は `dashboard-verify-seed` も動かし、primary の DB に確かめ用の組織と科目を作り直す。いつもの起動と同じ動きで、移行の確かめには影響しない）
 - P9 消す（止めて聞く）: P8 が済んだら、`backend/media` のファイルの一覧（P3-b）と控えのファイル名を見せ、「消すと、画像の中身は DB にしか無くなり、移行の前の DB にも戻せなくなる」ことを伝えて承認を得る。承認の後に `DANGER_OK=1 rm -rf backend/media`（見張りが承認画面を出す）と `rm backup_I605_before_primary_<日時>.sql` を流す
 - P10 記録: 下の形のコメントを `gh issue comment 605 --body-file <一時ファイル>` で残す（一時ファイルはスクラッチパッドに置き、送った後に消す）
   ```
@@ -101,7 +101,7 @@
 達成すること: 捨てると決めた harness-1・harness-2 の DB と、harness-2・study の画像ファイルを、一覧を残してから消す。
 - A1 一覧を記録する（読むだけ）: `find <harness-2>/backend/media -type f`・`find <study>/backend/media -type f`・`test ! -e <harness-1>/backend/media`・`docker ps -a --filter volume=harness-1_postgres_data --filter volume=harness-2_postgres_data`・`docker volume ls` の結果を `docs/tests/open/I605_manual_test.md` の記録に書く
 - A2 承認を得て人が消す（止めて聞く）: A1 の一覧を見せ、次の 3 つのコマンドを、人が app-1 の画面で `!` を付けて 1 つずつ流す（流すことと返信を承認として、言葉と日付を記録する）
-  - `docker rm harness-1-db-1 harness-2-db-1`（DB のコンテナ。次の起動で作り直される）
+  - `docker rm harness-1-db-1 harness-2-db-1`（DB のコンテナ。次の起動で作り直される。保存領域を使うのは DB のコンテナだけなので、backend などほかの止まったコンテナは消さずに残す。それらは次の起動でそのまま使われ、空の DB につながる）
   - `docker volume rm harness-1_postgres_data harness-2_postgres_data`
   - `rm -rf /mnt/c/app/study-app-multitenant/.claude/worktrees/harness-2/backend/media /mnt/c/app/study-app-multitenant/.claude/worktrees/study/backend/media`
 - A3 primary の結果を写す: GitHub #605 の primary のコメントを `gh issue view 605 --comments` で読み、`docs/tests/open/I605_manual_test.md` と `docs/reviews/open/I605_review.md` に写す。primary の画面の画像を `.evidence/I605/` に写す（primary の `.evidence/I605/primary_image.png` を読んで app-1 に置く）
@@ -176,4 +176,7 @@ P9 影響なし（個人情報の新しい扱いは無い。控えは用が済�
 | V3 | 1 | 読んで可 | 4-1 の空にする SQL の文が `backend/problems/tests/test_I590_review_leftovers.py` の `CLEAR_IMAGE_DIRECTORY_SQL` と同じ（手動 M8） |
 
 ## 計画変更記録
--
+- 2026-11-20 plan-review: 計画書の記載: [P3-a は `showmigrations problems` だけ・M1/M3 は出力を目で見る・A2 にほかのコンテナの扱いが無い・P8 に `dashboard-verify-seed` の副作用の記述が無い] → 採った方法: P3-a に `migrate --plan` を足して P4 で見せる・M1/M3 を合格で exit 0 の形にする・A2 と P8 に注記 — 理由: 計画レビュー 20261120_2000 の Warning 3 件・Info 1 件への対応。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261120_2000 判定: ✅ 完了](../../reviews/I605_plan_review_20261120_2000.md)

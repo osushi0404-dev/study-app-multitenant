@@ -5,9 +5,9 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| M1 | `docker volume ls --format '{{.Name}}'` を流す（AC3） | 出力に `harness-1_postgres_data` と `harness-2_postgres_data` の行が無い | Claude |  |  |
+| M1 | `docker volume inspect --format '{{.Name}}' harness-1_postgres_data`・同じく `harness-2_postgres_data`・同じく `app-1_postgres_data` を 1 つずつ単体で流す（つなぐ・振り向けるとサンドボックスの中で動き docker に届かない）（AC3） | harness-1・harness-2 の 2 つは exit 1（`no such volume`）。app-1 は exit 0（docker に届いていることの確かめ） | Claude |  | 判定の確かめ（2026-11-20）: 消す前の `harness-1_postgres_data` は exit 0・無い名前 `i605_no_such_volume` は exit 1 |
 | M2 | `test ! -e <P>/backend/media`・`test ! -e <W>/harness-1/backend/media`・`test ! -e <W>/harness-2/backend/media`・`test ! -e <W>/study/backend/media` を 1 つずつ流す（AC4） | 4 つとも exit 0 | Claude |  |  |
-| M3 | `find <P> <W>/app-1 <W>/harness-1 <W>/harness-2 <W>/study -maxdepth 1 -name 'backup_I605_*'` を流す（AC5） | 出力が空 | Claude |  |  |
+| M3 | 5 つのフォルダ（`<P>`・`<W>/app-1`・`<W>/harness-1`・`<W>/harness-2`・`<W>/study`）それぞれで、`test -d <フォルダ>` を流してから `! compgen -G '<フォルダ>/backup_I605_*'` を流す（AC5） | 10 個とも exit 0 | Claude |  | `test -d` でパスの誤りを先に落とす。失敗の注入: スクラッチパッドに `backup_I605_x.sql` を置いたフォルダでは `! compgen -G` が exit 1 になることを test-gate で確かめる |
 | M4 | `docker exec study-app-multitenant-db-1 psql -U postgres -d learning_app -tAc "SELECT name FROM django_migrations WHERE app = 'problems' AND name >= '0024' ORDER BY name"` を流す（primary の DB が止まっていれば、#605 の primary のコメントの P7 を読む）（AC1） | `0024_mediaassetcontent`・`0025_move_media_files_to_db`・`0026_remove_problem_legacy_images`・`0027_remove_subject_image_directory` の 4 行が出る（コメントで見たときは P7 の出力の 4 行が `[X]`） | Claude |  |  |
 | M5 | 下の「片付けの記録」の primary の行と `.evidence/I605/primary_image.png`（Read で見る）を読む（AC2） | `I587 media:` の行（`moved=`・`deleted_assets=`・`deleted_links=` の数）があり、消した行の id が P3-b の「ファイルが無い」行と同じ。`moved` が P3-b の「ファイルがある」件数と同じ。画像に問題の画面と、その問題の画像が写っている（画像を使う問題が無いときは、その旨の記録がある） | Claude |  |  |
 | M6 | `docs/reviews/open/I605_review.md` の「承認の記録」を読む（AC6） | P4（消える行・空にする値）・P9（primary のファイルと控え）・A2（harness の DB のコンテナと保存領域・harness-2 と study のファイル）のそれぞれに、人の言葉と日付がある（P5 で空にした値が無ければ、その旨） | Claude |  |  |
