@@ -188,16 +188,34 @@ ck("TC-24b 振り向けの後ろの引数も見る（F7）", all(tc24b(r)))
 
 
 def tc26(root):
-    """置き換え・かっこを含むコマンド（F11）: test-session は承認、それ以外は変更が無くても中。"""
+    """置き換え・かっこを含むコマンド（F11・F12）: test-session は常に承認。それ以外は、変更が無ければ外のまま、
+    レビュー前の中身があれば読み切らずに中。"""
     ts_ = "bash scripts/claude/test-session.sh x"
-    return (asked(root, f"{ts_} $(true) --permission-mode bypassPermissions"),
-            asked(root, f"{ts_} <(true) --permission-mode bypassPermissions"),
-            rewritten(root, "bash scripts/claude/b.sh $(true)"),
-            rewritten(root, "{ bash scripts/claude/b.sh; }"),
-            rewritten(root, 'bash scripts/claude/b.sh "$HOME"'))
+    forms = ["bash scripts/claude/b.sh $(true)", "{ bash scripts/claude/b.sh; }", 'bash scripts/claude/b.sh "$HOME"']
+    got = [asked(root, f"{ts_} $(true) --permission-mode bypassPermissions"),
+           asked(root, f"{ts_} <(true) --permission-mode bypassPermissions")]
+    got += [untouched(root, c) for c in forms]
+    w(os.path.join(root, "scripts/claude/lib.sh"), "echo changed\n")
+    got += [rewritten(root, c) for c in forms]
+    subprocess.run([*GIT, "-C", root, "checkout", "-q", "--", "scripts/claude/lib.sh"], check=True)
+    return got
 
 
-ck("TC-26 置き換え・かっこを含むコマンドは読み切らずに中で動かす・test-session は承認（F11）", all(tc26(r)))
+ck("TC-26 置き換え・かっこ: test-session は承認・変更が無ければ外のまま・あれば中（F11・F12）", all(tc26(r)))
+
+
+def tc27(root):
+    """F12 のスキルの形（変更なしで外のまま）と F13 の本文の形（変更があっても当たらない）。"""
+    got = [untouched(root, 'bash scripts/claude/issue-review.sh --file "$DRAFT"'),
+           untouched(root, 'N=$(bash scripts/claude/issue-source.sh gh-number I599)')]
+    w(os.path.join(root, "scripts/claude/lib.sh"), "echo changed\n")
+    got.append(untouched(root, 'gh pr edit 1 --body "$(cat <<\'EOF\'\n説明 bash scripts/claude/x.sh を使う\nEOF\n)"'))
+    got.append(rewritten(root, 'timeout 60 bash scripts/claude/a.sh'))
+    subprocess.run([*GIT, "-C", root, "checkout", "-q", "--", "scripts/claude/lib.sh"], check=True)
+    return got
+
+
+ck("TC-27 スキルの呼び出しは変更が無ければ外のまま・本文の文字には当たらない（F12・F13）", all(tc27(r)))
 
 
 def tc25(root):
@@ -460,7 +478,11 @@ r19 = make_repo("fg_any_settings", broken_unreviewed("any_settings", '          
 fg.append(("FG TC-12（F8）: どの設定ファイルでも代わりにすると不合格", not asked(r19, f"{ts} --setting-sources user --settings .gitignore")))
 r20 = make_repo("fg_parse_all", broken_unreviewed("parse_all", '    if UNPARSED_RE.search(command):\n', "    if False:\n"))
 got = tc26(r20)
-fg.append(("FG TC-26: 置き換え・かっこの規則を外すと不合格", not got[0] and not got[2] and not got[3]))
+fg.append(("FG TC-26: 置き換え・かっこの規則を外すと不合格", not got[0] and not all(got[5:])))
+r21 = make_repo("fg_unparsed_always", broken_unreviewed("unparsed_always", "    if changed and not res.ask_reason:", "    if True:"))
+fg.append(("FG TC-26・27: 変更が無くても中に回すと不合格（F12）", not all(tc26(r21)[2:5]) and not tc27(r21)[0]))
+r22 = make_repo("fg_anywhere", broken_unreviewed("anywhere", 'TRIGGER_RE = re.compile(r"(?:^|[;&|({!\\n]|\\$\\()\\s*', 'TRIGGER_RE = re.compile(r"(?:)\\s*'))
+fg.append(("FG TC-27: 本文の途中の文字にも当たると不合格（F13）", not tc27(r22)[2]))
 for name, ok in fg:
     ck(name, ok)
 print(f"---\npass={sum(results)} fail={len(results) - sum(results)}")

@@ -37,11 +37,15 @@
 - [fix-loop] F1・F2・F4 を直した。F2 は診断の案 A の 3（同じフォルダのファイル名を見る）を実装中に「git が無視するファイルを `ls-files --ignored --directory` で数える」に替えた — 変更が無いときの早く返す道でも効き、規則が単純（無視されるフォルダはまとめて数えないので遅くならない）。方式・範囲は変えない
 - [fix-loop] F7・F8 を直した（診断の案 A）。台帳の F9・F10（Low）は止める指摘でないので直さず retro に回す
 - [fix-loop] F11 は列挙を足さず、置き換え・かっこを含むコマンドを読み切らずに中で動かす単純な規則にした — F1・F7・F11 と同じ種類が 3 周続いた（列挙で塞ぐ方式の限界）。普段の呼び出しは変わらない
+- [review-gate] review-gate ⇄ fix-loop が 5 回目（上限）に当たり止めて聞いた。指摘の種類: 「コマンドの書き方の読み取りの取りこぼし」（F1・F7・F11）と「安全側に倒しすぎて普段の呼び出しを壊す」（F12・F13）。ユーザーの判断（2026-11-20・原文）: 「ループエンジニアリング、ハーネスエンジニアリング、グラフエンジニアリングのベストプラクティスと開発をサクサク進める(開発効率)という観点でベストなやり方で進めて。」→ 推奨の「もう 1 周だけ直す（置き換え・かっこの規則を scripts/claude/ に変更があるときだけ効かせる・当たりはコマンドの先頭の形だけ）」で進める
+- [fix-loop] F12 を直した（変更があるときだけ置き換え・かっこを中に・当たりはコマンドの先頭の形）。F13 も同じ原因なので同じ直しで消えた。F14・F15（Low）は止める指摘でないので retro へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop

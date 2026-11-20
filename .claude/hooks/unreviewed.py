@@ -47,7 +47,12 @@ TS_PERMISSION_MODES = {"default", "manual", "plan", "acceptEdits", "auto"}
 # 参照の語にこれがあれば、どのファイルに当たるか決まらない（「..」で外へ・変数・置き換え・glob・~・引用符の残り）
 UNTRACEABLE_RE = re.compile(r"\.\.|[$`*?\[~'\"\\]")
 UNPARSED_RE = re.compile(r"[$`(){}]")
-TRIGGER_RE = re.compile(r"(?<![\w./-])['\"]?bash['\"]?\s+['\"]?(?:\./|/\S*/)?" + re.escape(SCRIPTS))
+# 当たりは「コマンドの先頭の形」だけ: 行頭・; & | ( $( の後に、空白・X=… の前置き・包むコマンドを挟んで
+# `bash scripts/claude/`（本文の途中の文字には当たらない・I599 F13）
+_BASH_SCRIPT = r"['\"]?bash['\"]?\s+(['\"]?(?:\./|/\S*/)?" + re.escape(SCRIPTS) + r"[^\s;&|<>]*)"
+TRIGGER_RE = re.compile(r"(?:^|[;&|({!\n]|\$\()\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
+                        r"(?:(?:then|do|else|elif|if|while|until|!)\s+)*"
+                        r"(?:(?:timeout|nice|nohup|env|time)(?:\s+-?[\w.=-]+)?\s+)*" + _BASH_SCRIPT)
 TOKEN_RE = re.compile(r"[\w./-]+")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._/-]")
 
@@ -261,14 +266,8 @@ def _check(command: str, cwd: str | None) -> Result:
         return cache["b"]
 
     res = Result()
-    # 置き換え・かっこ（$ ` ( ) { }）があるコマンドは読み切らずに中で動かす（I599 F11。シェルの構文を
-    # 1 つずつ読んで塞ぐ方式は取りこぼしと後退が続いた）。test-session.sh は中では動かないので承認
     if UNPARSED_RE.search(command):
-        res.rewrite, res.why = True, "置き換え・かっこを含むコマンド"
-        if TEST_SESSION in command:
-            res.ask_reason = ("test-session.sh を、置き換え・かっこ（$ ` ( ) { }）を含むコマンドで流しています。"
-                              "引数を読み切れないので、確かめて承認してください（I599）")
-        return res
+        return _check_unparsed(command, root, base)
     start: set[str] = set()
     untraceable = []
     segs = _segments(command)
@@ -324,6 +323,32 @@ def _check(command: str, cwd: str | None) -> Result:
         return res
     if hits:
         res.rewrite, res.reached, res.why = True, sorted(hits), "レビュー前の中身に届く"
+    return res
+
+
+def _check_unparsed(command: str, root: str, base) -> Result:
+    """置き換え・かっこ（$ ` ( ) { }）を含むコマンドは読み切らない（I599 F11。シェルの構文を 1 つずつ読んで塞ぐ
+    方式は取りこぼしと後退が続いた）。
+    - スクリプトの位置の語そのものが変数・置き換え・「..」なら、どこのファイルでも指せるので中で動かす
+    - test-session.sh は承認（中では claude が動かない）
+    - それ以外は、scripts/claude/ にレビュー前の中身があるときだけ中で動かす（無ければすべてレビュー済み。
+      変更が無いときに引数を置き換えで組み立てる形は残る・plan_I599.md 8 の R10・I599 F12）"""
+    res = Result()
+    for m in TRIGGER_RE.finditer(command):
+        tok = m.group(1)
+        if UNTRACEABLE_RE.search(tok.strip("'\"")) or UNPARSED_RE.search(tok):
+            res.rewrite, res.why, res.reached = True, "たどれないスクリプトの位置", [tok]
+            return res
+    if TEST_SESSION in command:
+        res.ask_reason = ("test-session.sh を、置き換え・かっこ（$ ` ( ) { }）を含むコマンドで流しています。"
+                          "引数を読み切れないので、確かめて承認してください（I599）")
+    b = base()
+    if b is None:
+        res.rewrite, res.why = True, f"レビュー済みの基準（merge-base HEAD {BASE_REF}）を求められない"
+        return res
+    _, changed = _files(root, b)
+    if changed and not res.ask_reason:
+        res.rewrite, res.why, res.reached = True, "置き換え・かっこを含むコマンド（レビュー前の中身がある）", sorted(changed)[:5]
     return res
 
 
