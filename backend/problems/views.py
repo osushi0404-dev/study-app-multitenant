@@ -680,8 +680,9 @@ class MediaAssetContentView(generics.GenericAPIView):
                 raise NotFound()
             mime = asset.mime_type if asset.mime_type in ALLOWED_IMAGE_FORMATS else 'application/octet-stream'
             response = HttpResponse(data, content_type=mime)
-            for header, value in MEDIA_SECURITY_HEADERS.items():
-                response[header] = value
+        # 304・412 にも付ける（I590 F9。中身の無い応答でも守りの見出しをそろえる）
+        for header, value in MEDIA_SECURITY_HEADERS.items():
+            response[header] = value
         if etag:
             response['ETag'] = etag
         response['Cache-Control'] = MEDIA_CACHE_CONTROL

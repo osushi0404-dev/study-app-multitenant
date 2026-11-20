@@ -9,10 +9,14 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import magic
 from django.conf import settings
 from django.db import connection, transaction
 
-from problems.utils import ALLOWED_IMAGE_FORMATS, detect_mime
+# 移行の判定はアプリのモジュール（problems.utils）を読まず、ここに写しを持つ（I590 F3）。
+# 0025 は一度流したら書き換えない（規約 §4）ので、アプリの許可する形式や判定の変更に引きずられないようにする
+MIGRATION_ALLOWED_MIMES = frozenset({'image/png', 'image/jpeg', 'image/webp'})
+MIGRATION_SNIFF_BYTES = 2048
 
 # 移す前のファイルの置き場（I587 で設定の MEDIA_ROOT を外したので、移行が読む場所はここに置く）
 LEGACY_MEDIA_ROOT = Path(settings.BASE_DIR) / 'media'
@@ -39,6 +43,11 @@ class MediaMigrationResult:
                 f'deleted_assets={self.deleted_assets} deleted_links={self.deleted_links}')
 
 
+def _detect_mime(data: bytes) -> str:
+    """中身の先頭のバイト列から MIME を判定する（送り手の content_type は使わない）"""
+    return magic.from_buffer(data[:MIGRATION_SNIFF_BYTES], mime=True)
+
+
 def _resolve_inside(root: Path, asset_id, storage_key: str) -> Path:
     """キーから読む場所を作る。置き場の外（../・シンボリックリンク）を指せば止める"""
     path = (root / storage_key).resolve()
@@ -57,8 +66,8 @@ def _checked_content(asset, data: bytes) -> tuple:
     if asset.file_size_bytes is not None and asset.file_size_bytes != len(data):
         raise MediaMigrationError(
             f'I587 media: 中身の大きさが file_size_bytes と違います id={asset.id} key={asset.storage_key}')
-    mime = detect_mime(data)
-    if mime not in ALLOWED_IMAGE_FORMATS:
+    mime = _detect_mime(data)
+    if mime not in MIGRATION_ALLOWED_MIMES:
         raise MediaMigrationError(
             f'I587 media: 中身が画像ではありません（{mime}）id={asset.id} key={asset.storage_key}')
     return checksum, mime

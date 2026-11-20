@@ -30,3 +30,5 @@ STAGE_DONE: plan-review NEXT: design-security-review
 - [design-security-review] Blocker・High・Medium は 0 件、Low は設計 2 件・シナリオ 4 件で、どれも計画の TC（TC-01〜TC-04）と I587 の既存テストで覆う。追加の禁止事項は「条件付きの判定を get_object() より前に動かさない」「0027 の止める文に値・科目名を入れない」— 計画の方式は変えないので計画レビューのやり直しは不要
 - [implement] 控え（M2）で `bash scripts/db_backup.sh` がサンドボックスの中で `.env` を読めず止まり、空の `backup_20261120_133719.sql` を残した（I587 と同じ）。回り道の `pg_dump` は途中でユーザーが止め、原因を調べた。ユーザーの指示「切り出して先に直す方向で進めて」（2026-11-20）で #597 を起票し、#538 に切り出しを書いた。コンテナの中の写しと空のファイルは消した。I590 は #597 のマージまで M2（ステップ 1）で待つ
 STAGE_DONE: design-security-review NEXT: implement
+- [implement] #597 のマージ（PR #598・2026-11-20）を受けて develop をブランチに取り込み（merge。最初のコミットを push 済みなので rebase しない）、M1（科目 11・`image_directory` に値のある科目 0）と M2（`bash scripts/claude/db-backup.sh I590_before` → `backup_I590_before_20261120_161736.sql`・160768 バイト）を取った — 計画 5 のステップ 1
+- [implement] F3・F9（ステップ 2）を承認を待たずに先に進めた。TC-01〜03 を先に書き、直す前に 4 件が落ちること（TC-02 (b) と TC-03 (a) は想定どおり通る）を確かめてから直した — 計画 5 のステップ 2 は DB を変えないので承認と並行してよい
