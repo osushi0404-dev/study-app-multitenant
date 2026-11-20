@@ -97,7 +97,7 @@
 **修正方針**: ファイルに書く経路を残さない。画像の追加・削除の業務の処理（トランザクション・表示順の採番・共有の判定）をサービスの公開の関数にまとめ、ビューは入力の検証とサービスの呼び出しだけにする（規約 §6・§7）。エラーは DRF の例外で投げ、`custom_exception_handler` の形にそろえる（2026-11-20 の追加の直し・計画変更記録）。
 - `backend/problems/services/problem_service.py` に公開の関数を足す:
   - `add_image(*, problem, image_file, usage_kind) -> MediaAsset`（`@transaction.atomic`）: `_save_image_as_asset`（組織・科目は `problem.subject` から）→ 有効な紐づけ（`is_deleted=False`）の最大の `position` + 1 で `ProblemMediaAsset` を作る
-  - `remove_image(*, problem, asset_id) -> None`（`@transaction.atomic`）: 自分の有効な紐づけ（`problem`・`asset_id`・`is_deleted=False`・画像の組織が問題の組織）が無ければ `NotFound`。あれば紐づけを消し、ほかに有効な紐づけが無ければ `_discard_asset`
+  - `remove_image(*, problem, asset_id) -> None`（`@transaction.atomic`）: 自分の有効な紐づけ（`problem`・`asset_id`・`is_deleted=False`・`asset__organization_id=problem.subject.organization_id`〔`Problem.organization` は null 可のため科目の組織・セキュリティレビュー〔追加の直し〕の必須防御条件〕）が無ければ `NotFound`。あれば紐づけを消し、ほかに有効な紐づけが無ければ `_discard_asset`
 - `ProblemViewSet.upload_image`: 入力を新しいシリアライザー `ImageUploadSerializer`（`file = serializers.FileField()`・`usage_kind = serializers.ChoiceField(choices=MediaAsset.UsageKind.choices)`）で検証し、`ProblemService.add_image` を呼ぶ。応答は今のまま 201・`MediaAssetSerializer`。画像の検査の誤りは `ValidationError`（400）。受け付ける形式は共通の検査（PNG・JPEG・WebP・5MB）で、今までの GIF・10MB は受け付けない（画面から使われていない経路で、作成・更新と同じ決まりにそろえる）
 - `ProblemViewSet.delete_image`: `ProblemService.remove_image` を呼び、200 と `{'message': '画像を削除しました'}` を返す（今のまま）
 - 2 つの action の `problem.organization_id != request.user.organization_id` の 403 と、独自の形の `Response({'error': ...})` を消す（`get_object()` の組織の絞り込みが先に 404 を返すので届かない死んだコード。エラーは DRF の例外に寄せる）
@@ -375,6 +375,41 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 | High    | 0件 | 4件（どれも設計で守られている・自動テストあり） |
 | Medium  | 2件 | 2件 |
 | Low     | 4件 | 2件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
+
+## セキュリティレビュー結果（追加の直し）
+
+**実施日**: 2026-11-20（対象: 計画変更記録「追加の直し」の 4-4・4-5・4-6 の変更だけ。ほかは上の結果のまま）
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | マルチテナント | `remove_image` で、自分の紐づけを `problem` と `asset_id` だけで探すと、画像の組織が問題の組織と違う古いデータの行（組織が null の行など）を外せてしまう | 必須: 紐づけの絞り込みに `asset__organization_id=problem.subject.organization_id`（`Problem.organization` は null 可のため科目の組織を使う）と `is_deleted=False` を入れる。TC-10 の「自分の紐づけが無い」に、他の組織の画像の ID を指す場合を含める |
+| Low | OWASP（セキュリティ設定ミス） | `If-None-Match` の弱い比較で、`W/` 付きの値も 304 になる | ETag は中身の SHA-256 で、違う画像が同じ値になることは実際には無い。304 の判定は組織の絞り込み（`get_object()`）の後に行う（必須防御条件・上の結果のまま）。受け入れ |
+| Low | OWASP（情報の露出） | `get_conditional_response` は `If-Match`・`If-Unmodified-Since` も見て、GET に 412 を返しうる | 判定は組織の絞り込みの後なので、他の組織の画像の有無は分からない。受け入れ |
+| なし | 認証・認可 | — | 配信は `IsAuthenticated`・`get_queryset()` の組織の絞り込み・`get_object()` の 404。画像の登録・削除は今の `IsOrgAdmin` のまま |
+| なし | 入力検証 | — | `ImageUploadSerializer`（`FileField`・`ChoiceField`）で形を確かめ、中身は今の `validate_image_file`（大きさ・形式・中身の MIME・寸法・ファイル名）。誤りは 400 で `custom_exception_handler` の形 |
+| なし | 機密情報・外部通信・依存ライブラリ | — | 増えない |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `DELETE /api/problems/<自組織の問題>/images/delete/<他組織の画像>/` | 組織の管理者 | 他の組織の画像の ID を指して消す | 自分の問題の、自分の組織の画像の有効な紐づけでなければ 404。他の組織の画像は変わらない | Yes: TC-10（追加） | No | なし | High |
+| 2 | `GET /api/media/<id>/`（`If-None-Match: W/"…"`） | 同じ組織の利用者 | 弱い ETag で 304 を引き出す | 組織の絞り込みの後に判定。他の組織の画像は 404 のまま | Yes: TC-04・TC-07 | No | なし | Low |
+| 3 | `POST /api/problems/<id>/images/upload/`（`usage_kind` の誤り・`file` なし） | 組織の管理者 | 想定外の値で作らせる | 400・何も作らない | Yes: TC-09（追加） | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 1件（設計で守る・自動テストあり） |
+| Medium  | 1件 | 0件 |
+| Low     | 2件 | 2件 |
 
 ### 残余リスク処遇
 （retro 段階で決定する）
