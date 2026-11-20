@@ -34,6 +34,8 @@
 - [implement] 記録の参照の確かめで `scripts/claude/code-review.sh` の行の範囲が 2 行ずれていたので直した（1214〜1220 → 1216〜1222）
 - [implement] `/simplify` は 4 体の点検役を起こさず、自分で確かめた — 対象が Markdown の記録 1 本でコードが無く、再利用・効率・直す深さの観点が当てはまらないため。直すところは無かった
 
+- [fix-loop] コードレビュー F1・F2（High）を案 A（記録と計画書の事実を直し、#593 に訂正のコメント）で直した — 採否 4 を変えるとユーザーの決定（I593 を最優先で起票）に反し、I593 を閉じて起票し直すと参照が増える。I181 の決定を見直すかは I593 でユーザーに確かめる
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
