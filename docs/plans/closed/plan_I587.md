@@ -330,8 +330,8 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 - fix-loop（2026-11-20・コードレビュー 20261120_0915 の止める指摘 F8）（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: `MediaAssetContentView` に `filter_backends = []`・`pagination_class = None` を書いた（`GenericAPIView` にしたことで全体の `OrderingFilter` が効き、`?ordering=` で 500 になっていた）
 
 ## レビュー結果
-- [20261120_0903 判定: ✅ 完了](../../reviews/I587_plan_review_20261120_0903.md)
-- [20261119_1527 判定: ✅ 完了](../../reviews/I587_plan_review_20261119_1527.md)
+- [20261120_0903 判定: ✅ 完了](../../reviews/closed/I587_plan_review_20261120_0903.md)
+- [20261119_1527 判定: ✅ 完了](../../reviews/closed/I587_plan_review_20261119_1527.md)
 
 ## セキュリティレビュー結果
 

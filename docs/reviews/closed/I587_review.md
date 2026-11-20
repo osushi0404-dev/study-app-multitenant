@@ -113,6 +113,7 @@
 - [fix-loop] F8 は案 A（`filter_backends = []`・`pagination_class = None`）で直した — 1 件を返すビューに一覧の仕組みは要らない。`ordering_fields` だけを空にする案は、ほかの絞り込みを通し続けるので採らない。`APIView` に戻す案は規約 §6 から外れる
 - [review-gate] 追加の直しの後の基本レビュー（20261120_0925・差分）は OK、敵対的レビューの 2 周目（20261120_0936）も OK（NEW_HIGH 0）。通算 2 周を使い切ったので、この後にコードを変えるときは延長の承認が要る
 - [retro] 台帳の残り（追加の直しの後）: F3・F9 → #590（コメントで追記）。F4〜F7 は resolved。一覧に回す行は 0 件。改善案 P3 → #547 に同梱
+- [close] 追加の直しの後、develop に遅れは無かった（取り込み不要）。gate-check は OK。PR の説明に追加の直しを足し、下書きから戻す
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -132,3 +133,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
