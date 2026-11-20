@@ -10,8 +10,8 @@
 
 | No | 手順 | 期待結果 | 実施者 | 実結果 | 備考 |
 |---:|------|----------|--------|--------|------|
-| M1 | 記録の「公式の言葉との対応」の節を Read で読む | 要点ごとに、対応する Claude Code の公式の機能・言葉と、出典の URL・確認日（2026-11-20 以降の日付）が書いてある。公式で確かめられなかった要点には「未確認」と書いてある（AC1） | Claude |  |  |
-| M2 | 記録の「資料ごとの要点」の節を Read で読み、イシューの関連資料の一覧と突き合わせる | 10 件（ユーザーが本文を貼った X の 5 件〔m4lkxx・0xTrackmind・sermakarevich・hanakoxbt・addyosmani〕・X のリンク先 3 件〔Zenn・Code Mode の公式ドキュメント・OpenClaw の記事〕・公式の記事 2 件〔検証のブログ・サブエージェントの記事〕）のそれぞれに節があり、要点と採否の検討が書いてある。x.com/beamnxw は「対象外」とだけ書いてある。X の投稿の本文をそのまま写した段落（原文の英文が 5 文以上続く所）が無い（AC2・R4） | Claude |  |  |
+| M1 | 記録の「公式の言葉との対応」の節を Read で読む | 外部の解説 5 件（Turing Post・AI総研・AI Heartland・aibuilderclub・frankx）と渡された資料 10 件の要点ごとに、対応する Claude Code の公式の機能・言葉と、出典の URL・確認日（2026-11-20 以降の日付）が書いてある。公式で確かめられなかった要点には「未確認」と書いてある（AC1） | Claude |  |  |
+| M2 | 記録の「資料ごとの要点」の節を Read で読み、イシューの関連資料の一覧と突き合わせる | 10 件（ユーザーが本文を貼った X の 5 件〔m4lkxx・0xTrackmind・sermakarevich・hanakoxbt・addyosmani〕・X のリンク先 3 件〔Zenn・Code Mode の公式ドキュメント・OpenClaw の記事〕・公式の記事 2 件〔検証のブログ・サブエージェントの記事〕）のそれぞれに節があり、要点と採否の検討が書いてある。x.com/beamnxw は「対象外」とだけ書いてある。X の投稿の原文をそのまま写した連続段落が無い（要約と短い引用だけ）（AC2・R4） | Claude |  |  |
 | M3 | 記録の図を Read で読む | Mermaid のコードブロックが 1 つ以上あり、段階（plan・plan-review・design-security-review・implement・review-gate・fix-loop・test-gate・retro・close）・レビュー役（plan-reviewer・code-reviewer・adversarial-reviewer・fix-diagnosis-reviewer・issue-reviewer）・人の承認（手動テスト・マージ）・fix-loop から review-gate への戻り道・同時に流している所（組み込みのレビューと CI 待ち・敵対的レビューの 3 観点）が入っている（AC3） | Claude |  |  |
 | M4 | 記録の比較表と採否の節を Read で読む | 表の各行に「満たしている／差がある／取り入れない」のどれか 1 つと根拠（`ファイル:行` か I###）がある。差がある行には経緯（その仕組みを入れたイシュー）と採否・理由がある。設計確認メモで決まった 4 点（A・終了報告・回数の上限・B）は、その答えのとおりに書いてある（AC4・AC5） | Claude |  |  |
 | M5 | 記録の中の `ファイル:行`・ファイルの参照を全部抜き出し、`test -f` と `sed -n '<行>p'` で 1 件ずつ確かめる | 全件のファイルが実在し、行の参照は書いてある内容がその行（または前後 3 行）にある。切れた参照は 0 件（AC4・`docs/runbooks/plan-writing-rules.md`「参照先実在性の全件機械検証」） | Claude |  |  |
