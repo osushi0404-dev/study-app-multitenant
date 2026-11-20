@@ -33,3 +33,5 @@ grep -q "bash scripts/claude/db-backup.sh" docs/runbooks/danger-ops.md
 - 2026-11-20 implement（Red）: 入口が無い状態で TC-01 を流し、S1〜S9 が全部 FAIL（9 failed）を確かめた
 - 2026-11-20 implement（Green）: TC-01・TC-03 `bash scripts/claude/tests/test_i597_db_backup.sh` → 12 passed, 0 failed（S1〜S9・FG1〜FG3）。最初は FG2 が検出できなかった（途中で切れた `\restrict` のある出力は `\unrestrict` の確かめでも止まるため）。完了の行の確かめだけが止める古い形の途中切れを S4 に足して検出できるようにした
 - 2026-11-20 implement: TC-02 `bash -n` 2 本 rc=0／TC-04 2 行 rc=0／TC-05 2 行 rc=0（直す前は 4 行とも rc=1・plan の記録）。shellcheck は commit の pre-commit で Passed
+- 2026-11-20 review-gate: code-review.sh が決定論ゲートの 7 行を実走し、すべて exit=0（docs/reviews/I597_code_review_20261120_1454.md）。heavy（test-gate に回すもの）は無い。CI は CI_WAIT: OK
+- 2026-11-20 test-gate: gate-check.sh → GATE_CHECK: OK。手元で流し直す自動テストは無い（CI が正）

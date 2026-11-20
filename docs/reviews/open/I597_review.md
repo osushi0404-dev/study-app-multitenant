@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config:
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: `test_i597_db_backup.sh` 12 passed（S1〜S9・FG1〜FG3）・決定論ゲート 7 行すべて exit 0・CI OK（docs/reviews/I597_code_review_20261120_1454.md）
+- 手動: M1〜M3 すべて OK（Claude が実施・docs/tests/open/I597_manual_test.md）。本物の DB で入口が 119977 バイトの完全な控えを取り、人の道具をサンドボックスの中から流すと控えを残さず止まって入口を案内した
 
 ## 計画との差分
 - なし / あり（理由）
@@ -27,8 +27,10 @@
 - [implement] FG2（完了の行の確かめを外すと落ちるか）が最初は検出できなかったので、`\restrict` の無い古い形の途中切れを S4 に足した — `\restrict` のある出力の途中切れは `\unrestrict` の確かめでも止まり、完了の行の確かめだけを守る項目が無かった
 - [implement] /simplify の整理を当てた（引数の確かめを case に・終了コードの変数を消す・`\restrict` は最初の一致で読むのをやめ最後の行は末尾 20 行だけ読む・移した後の確かめを一時のファイルの有無だけに・テストの終了コードをファイルでなく変数に・s6 の判定を s1 の形にそろえる）— 挙動は変えない。テストは 12 passed
 - [implement] /simplify の案のうち当てなかったもの: `-s` の確かめを消す（止まった理由を分かりやすく残す）・`ck`/`yn` を 1 つの関数にまとめる（既存のテスト 48 本と同じ書き方にそろえる）・`\restrict` の対の確かめを消す（受け入れ条件と計画レビューで決めた中身で、完了の行より後ろで切れた控えを止める）・DB 名とユーザーをコンテナの環境変数から `sh -c` で読む（外で動くスクリプトの中身を読みやすく保つ・今までと同じ値の持ち方）
+- [test-gate] 手動テストは 3 件とも Claude が実施して OK。Human の項目は無い — 計画のとおり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
