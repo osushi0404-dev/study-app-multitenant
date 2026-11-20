@@ -94,6 +94,7 @@
 - [implement] 追加の直しを実装した（サービスの `add_image`・`remove_image`・`ImageUploadSerializer`・`GenericAPIView`・`get_conditional_response`・枠の高さ・44px のボタン）。画面は Playwright MCP で、成功・失敗・再読み込みを確かめた（失敗はブラウザのページの中で `/api/media/` の通信だけを 404 にして作った・`browser_run_code_unsafe`）。失敗の枠は表示のときと同じ高さで、下の選択肢の位置が変わらない
 - [implement] /simplify（4 観点）の指摘のうち 3 件を直し、3 件を見送った（計画変更記録）
 - [fix-loop] F8 は案 A（`filter_backends = []`・`pagination_class = None`）で直した — 1 件を返すビューに一覧の仕組みは要らない。`ordering_fields` だけを空にする案は、ほかの絞り込みを通し続けるので採らない。`APIView` に戻す案は規約 §6 から外れる
+- [review-gate] 追加の直しの後の基本レビュー（20261120_0925・差分）は OK、敵対的レビューの 2 周目（20261120_0936）も OK（NEW_HIGH 0）。通算 2 周を使い切ったので、この後にコードを変えるときは延長の承認が要る
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -110,3 +111,4 @@ STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
