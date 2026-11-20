@@ -33,3 +33,5 @@
 ### 承認の記録
 <!-- 危険操作の承認の言葉と日付（P4・P9 は #605 の primary のコメントから写す・A2 は app-1 の会話から） -->
 -
+
+STAGE_DONE: plan NEXT: plan-review
