@@ -89,6 +89,7 @@
 - [close] develop（I583 の記録とハーネスのテスト 1 本）を取り込んだ。I587 のファイルには触れておらず、gate-check は OK のまま
 - [close] PR の説明に `Closes #549` を足した（科目のフォルダ作りを外したので解消）。Danger Ops のラベル `danger-approved` はマージ依頼でお願いする
 - [close] マージ依頼の後、ユーザーに BP・UI/UX の評価を聞かれ、新しいコードの規約・UX の決まりからの外れ 4 点を挙げた。ユーザーの指示「BP,UI/UX の観点でベストなやり方で進めて」（2026-11-20）を受け、後回しにせずこの PR で直す。PR を下書きに戻し、記録を open に戻して、計画を直して計画レビューからやり直す（方式が変わるため）— #590 のうち今回書き換えたコードの分（F4〜F7）も一緒に直し、F3 と `image_directory` は #590 に残す
+- [plan-review] 計画レビュー（20261120_0903）は高リスク判定 Yes・Blocker なし。Warning 3 件（9 のエッジケースの古い記述・/simplify の見送りを覆した旨・`DANGER_OK=1` の実行コマンド）を直した。TC の再実施の Warning はステップ 9 の手順で行う — 方式は計画どおりで再レビューは不要
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -100,3 +101,4 @@ STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
