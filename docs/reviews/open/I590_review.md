@@ -35,3 +35,5 @@ STAGE_DONE: design-security-review NEXT: implement
 - [implement] ユーザーの承認「ok」（2026-11-20）を受けて、列の削除（ステップ 3）と移行の実行（ステップ 4・M3）を行った。開発の DB で 0027 は OK・列は無くなった。控え `backup_I590_before_20261120_161736.sql` はマージの後に close で消す — 計画 5 のステップ 1 の承認の条件
 - [implement] /simplify（4 観点）: TC-03 の場合分けを引数の組に直し、media_migration の docstring に「0025 の一部として扱う・problems.* を読まない」を書いた。見送り: マイグレーションのテストの補助（`_loader`・`_run`・列の一覧）が I492・I587・I590 で 3 つ写しになっている — 共有の補助に切り出すと I492・I587 のテストまで変え計画の範囲を外れる（retro で後続の候補にする）。`_detect_mime` の 1 行の包みと TC-01／TC-02 の二重の守りは計画どおりに残す — 計画 4-1・6
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] 基本レビュー OK（Low 2 件: TC-03 が Content-Disposition を比べない・0010 の経緯で古い DB では 0027 が止まりうる）・敵対的レビュー 1 周目 OK（Low 3 件）。どれも止める指摘ではないので台帳に残し retro に回す — review-rules の止める条件に当たらない
+STAGE_DONE: review-gate NEXT: test-gate
