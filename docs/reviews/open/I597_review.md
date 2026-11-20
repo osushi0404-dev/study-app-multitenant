@@ -23,5 +23,7 @@
 <!-- 各段階が、止めずに自分で決めたことを `- [段階] 決めたこと — 理由` で足す。段階の結線の行（STAGE_DONE:）はこのファイルの末尾に足す -->
 - [plan] 受け入れ条件の「最後の行が `-- PostgreSQL database dump complete`」を「完了の行がある＋`\restrict` と対の `\unrestrict` が最後にある」に読み替えた — 今の pg_dump（15.19）は最後の行が `\unrestrict <鍵>` で、文言のままでは正しい控えも不合格になる（スパイクで確かめた）。目的（途中で切れていない）は変えない
 - [plan] `.gitignore` のつながった行（`.github_token` が外れていない）をこのイシューで直す — 控えの置き場の確かめの途中で見つけた・1 行の直し
+- [plan-review] 計画レビューの Warning 3・Info 1 を直した（受け入れ条件の読み替えを計画変更記録に・権限 600 は `/mnt/c` の drvfs では付かないので R6 で受け入れ・名前の省略と空文字を `$#` で分ける・片付けに `backup_partial_*.sql`）— 方式・範囲は変えないので再レビューしない
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
