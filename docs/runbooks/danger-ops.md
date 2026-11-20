@@ -18,6 +18,18 @@
 - Files: rm -rf（`-f` の無い `rm -r` も同じ。端末につながっていない実行では確認が出ずに全部消える）/ `find -delete`・`find -exec rm`・`xargs rm` / 秘密ファイルの表示・外への送信（下の見張りの 3.）
 - ワークツリー（I179）: 別のワークツリーを消す・変更を捨てる操作はしない（決まりの正は `docs/runbooks/worktree.md` §9。撤去は `wt-remove.sh`）
 
+## 破壊的な DB の操作の前の控え（I597）
+
+破壊的なマイグレーション（列の削除など）・DB の流し込みの前に、開発の DB の控えを取る。Claude は次の入口だけを使う。
+- コマンド: `bash scripts/claude/db-backup.sh <イシュー番号>_before`（例: `bash scripts/claude/db-backup.sh I590_before`）。**単体で流す**（前置きの代入・振り向け・`&&` を付けない。理由は下の「外に出すコマンドの書き方」）。名前は英数字・`_`・`-` の 1〜64 文字
+- DB のコンテナが動いていないときは、先に `docker compose up -d --wait db`
+- `bash scripts/db_backup.sh` は人の道具（中で同じ入口を呼ぶ）。Claude から流すとサンドボックスの中で `.env` が読めず止まる
+- 出力: 今いるワークツリーの直下の `backup_<名前>_<日時>.sql`。`.gitignore` の `backup_*.sql` で git から外れる。`umask 077` で作る（`/mnt/c` の drvfs では権限が付かない）
+- 入口の確かめ: `pg_dump` の終了コードが 0・空でない・完了の行 `-- PostgreSQL database dump complete` がある・先頭近くに `\restrict <鍵>` があれば最後の空でない行が同じ鍵の `\unrestrict <鍵>`。どれかが駄目なら、控えのファイル（一時の `backup_partial_*.sql` を含む）を残さず非 0 で止まる
+- 計画書の Danger Ops 欄の「ロールバック」に、この控えのファイル名を書く（戻すのは `psql` の流し込みで、それ自体が危険操作）
+- 控えは DB の中身の写しなので、そのイシューのマージの後に消す（close の片付け。消すのは自分が作った `backup_<名前>_*.sql` と、強制終了などで残りうる `backup_partial_*.sql` だけ）
+- コンテナの中に写しを作る回り道（`pg_dump -f /tmp/…` → `docker compose cp`）はしない
+
 ## サンドボックス（第 1 層・I430）
 
 Bash のコマンドは、Claude Code の公式のサンドボックス（`.claude/settings.json` の `sandbox`・https://code.claude.com/docs/en/sandboxing.md ）の中で動く。サンドボックスの中のコマンドは承認なしで通るが、次の範囲に閉じ込められる。見張りは、公式と GitHub で止まらない漏れだけを見る（下の「見張りの扱い」）。
