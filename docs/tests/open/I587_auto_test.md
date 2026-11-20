@@ -87,3 +87,8 @@
 - セキュリティ上の考慮点: 500 の本文に内部の情報は出ていなかった。組織の境界（`get_queryset()`）は変わらない
 - 次回どう防ぐか: 一覧を返さない `GenericAPIView` を足すときは、全体の設定の絞り込み・ページ分けが効くことを前提に、使わないなら空にする（retro で規約 §6 への追記を検討）
 - 確かめた結果: `test_media_ignores_list_query_params[?ordering=id]` が直す前に `ImproperlyConfigured` で落ち、直した後に 3 つとも通った。`test_I587_media_in_db.py`・`test_I446_cross_api_tenant_isolation.py` 134 passed・ruff 合格（2026-11-20）
+
+## 実行記録（test-gate・追加の直しの後・2026-11-20）
+- `bash scripts/claude/gate-check.sh I587` → exit 0（コードレビュー 20261120_0925・敵対的レビュー 20261120_0936 が OK・その後は記録の場所だけ）
+- 決定論ゲート 3 行は review-gate が実走して exit 0。test-gate に回された重いものは無い
+- pytest・Jest・E2E は CI（a7e24950）がすべて success（`CI_WAIT: OK`）。手元では流し直していない

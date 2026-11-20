@@ -14,7 +14,8 @@
 ## テスト結果
 - 自動: 手元で backend 797 passed・frontend 150 passed・型・ESLint・ruff・`makemigrations --check`・ビルド・決定論ゲート 3 行が合格（2026-11-19）。CI は review-gate
 - 手動: M1〜M7 OK（Claude・Playwright MCP。M7 の流し込みの 1 行だけユーザーが `!` で流した）。人の手動テストは無い
-- CI: eedec7dc ですべて success。コードレビュー 20261119_2319・敵対的レビュー 20261119_2330 とも OK
+- CI: a7e24950（追加の直しの後）ですべて success。コードレビュー 20261120_0925・敵対的レビュー 20261120_0936（2 周目）とも OK
+- 追加の直しの後の画面（ce250a2e）: プレビュー・拡大・編集・一般の利用者のクイズ・ほかの組織 404・未ログイン 401・`W/` で 304・`?ordering=` で 200 を確かめた
 
 ## 計画との差分
 - あり（小さな直しだけ・計画変更記録「実装（2026-11-19）での小さな直し」「/simplify での整理」）
@@ -112,3 +113,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
