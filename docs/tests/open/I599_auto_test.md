@@ -30,6 +30,12 @@
 | TC-18 | `code-review.sh` のゲートは、レビュー前の中身に届く行を流さない | 一時のリポジトリで、ゲートに ① 新しい `tests/test_new.sh`（流されたら印を書く） ② 変更の無い `tests/test_x.sh`（同じく印）を書いた自動テスト文書を置き、`run_declared_gates` を流す | ①の印が無く、証跡に `⏭ レビュー前の中身` がある。②の印がある。`GATE_VERDICT=OK` | 確かめの呼び出しを外した写しで①の印ができて不合格 |
 | TC-19 | 判定の CLI | `python3 .claude/hooks/unreviewed.py check -- '<コマンド>'` を TC-04・TC-02・TC-12②・引数なしで | 終了コードが 0・1・3・2 | 終了コードを常に 0 にした写しで不合格 |
 | TC-20 | 1 つのコマンドの複数の参照をすべて見る | `lib.sh` を書き換え、`bash scripts/claude/b.sh && bash scripts/claude/a.sh`（後ろだけが届く） | `updatedInput` がある | 最初の参照だけを見る写しで不合格 |
+| TC-21 | 判定の読み取りの上限 | `scripts/claude/` に 1MB を超える新しいファイル、または 2,000 を超えるファイルを置き、`bash scripts/claude/b.sh` | 20 秒以内に終わり `updatedInput` がある | 上限を外した写しで時間が上限を超える・書き換えが無くて不合格 |
+
+セキュリティ設計レビュー（計画書「セキュリティレビュー結果」）で足す確かめ:
+- TC-02 に、名前に `'` と改行を含む新しいファイルを足す: 印の中の名前は `_` に置き換わり、`bash -n` が 0
+- TC-12 に `--settings=/tmp/s.json`（`=` の形）を足す: `ask`
+- TC-13 に、土台の `.git/config` に `core.fsmonitor=<印を書くコマンド>` を書いた形を足す: 印ができない
 
 ## 決定論ゲート（自動実走）
 ```bash
