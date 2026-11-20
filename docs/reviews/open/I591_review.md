@@ -27,3 +27,4 @@
 - [plan-review] 計画レビュー OK（Warning 2・Info 2）を再レビューなしで直した — 外部の解説 5 件を記録と M1 に加え、I547 へ A 先行のコメントを必ず書くと明記し、表記と M2 の判定を直しただけで、方式・範囲・受け入れ条件は変えないため
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
