@@ -25,3 +25,5 @@
 - [plan] F3 は 0025 を書き換えず、`media_migration` をアプリの部品から切り離す — 規約 §4（マージしたマイグレーションは書き換えない）。比べた案は計画 9
 - [plan] F9 は 412 を残し、守りの見出しをどの応答にも付ける — Django の標準の判定を上書きしない
 STAGE_DONE: plan NEXT: plan-review
+- [plan-review] 1 回目の Blocker（`views.py` の `transaction` の読み込みを消す誤り）を直して再レビュー（2 回目で完了・高リスク Yes）。2 回目の Warning のうち 0027 の判定の不要な `isnull` を消した（計画変更記録）。TC-02(b) は今のコードでも合格するが将来の守りとして残す — 失敗の注入は (a) で成立している
+STAGE_DONE: plan-review NEXT: design-security-review

@@ -79,7 +79,7 @@
   ```python
   def refuse_if_image_directory_set(apps, schema_editor):
       Subject = apps.get_model('problems', 'Subject')
-      count = Subject.objects.exclude(image_directory='').exclude(image_directory__isnull=True).count()
+      count = Subject.objects.exclude(image_directory='').count()  # 列は NOT NULL
       if count:
           raise RuntimeError(
               f'I590: image_directory に値のある科目が {count} 件あります。'
@@ -172,4 +172,6 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 - 2026-11-20 plan-review: 計画書の記載: [`views.py:6` の使われない `transaction` の読み込みを消す] → 採った方法: 消さない — 理由: 計画レビューの Blocker。`views.py:832` のクイズの回答の記録が使っており、消すと回答の API が `NameError` になる。あわせて Warning の TC-02 に判定の関数の差し替えの観点を足し、4-3 に 0027 の中身の確かめを足した。計画レビューのやり直し: 要（Blocker の対応）
 
 ## レビュー結果
+- [20261120_1335 判定: ✅ 完了](../../reviews/I590_plan_review_20261120_1335.md)
 - [20261120_1334 判定: 差し戻し（Blocker 1件）](../../reviews/I590_plan_review_20261120_1334.md)
+- 2026-11-20 plan-review（2 回目）: 計画書の記載: [0027 の判定の `.exclude(image_directory__isnull=True)`] → 採った方法: 消す — 理由: 計画レビューの Warning。列は NOT NULL で不要、残すと NULL がありうると誤解させる。計画レビューのやり直し: 不要（findings への対応の追記だけ）
