@@ -15,7 +15,7 @@
 | TC-03 | 変えていないスクリプトから名前で呼ぶライブラリを変えると中で動く | コミット済みの `lib.sh` を書き換え（未コミット）、`bash scripts/claude/a.sh` | `updatedInput` があり、印に `scripts/claude/lib.sh` が出る | たどり（辺を張る処理）を外した写しで不合格 |
 | TC-04 | 変えたファイルに届かないスクリプトは外のまま | `lib.sh` を書き換えたまま `bash scripts/claude/b.sh` | `updatedInput` が無い | 「届くか」を見ずに変更があれば書き換える写しで不合格 |
 | TC-05 | `run-all.sh` がまとめて拾うテストを足すと中で動く | 追跡していない `tests/test_y.sh` を置き `bash scripts/claude/tests/run-all.sh` | `updatedInput` がある | `_RUNNER_GLOBS` を空にした写しで不合格 |
-| TC-06 | 引数で渡したファイルを動かす入口 | 変更なしで `bash scripts/claude/tests/run-all.sh /tmp/x.sh`・`bash scripts/claude/tests/stress-repeat.sh 1 /tmp/x.sh` | どちらも `updatedInput` がある | `_ARG_EXEC` を空にした写しで不合格 |
+| TC-06 | 引数で渡したファイルを動かす入口 | 変更なしで、一時フォルダの既にある `x.sh` を `bash scripts/claude/tests/run-all.sh <x.sh>`・`bash scripts/claude/tests/stress-repeat.sh 1 <x.sh>` に渡す。無いファイルを渡す | 既にあるファイルはどちらも `updatedInput` がある。無いファイルは書き換えない | `EXEC_SUFFIXES` を空にした写しで不合格 |
 | TC-07 | たどれない形は変更が無くても中で動く | 変更なしで `bash scripts/claude/../../x.sh`・`bash scripts/claude/$X`・`` bash scripts/claude/`echo a`.sh ``・`bash scripts/claude/*.sh`・`bash scripts/claude/~x` | 5 つとも `updatedInput` がある | 文字の確かめを外した写しで不合格 |
 | TC-08 | BASE が求められないときは中で動く | `refs/remotes/origin/develop` を消して `bash scripts/claude/b.sh` | `updatedInput` がある | BASE の失敗を「済み」に倒す写しで不合格 |
 | TC-09 | `scripts/claude/` を含まないコマンドは今までどおり・git を呼ばない | `PATH` の先頭に呼ばれたら印を書く `git` を置き、`ls` を流す | 出力が空・印が無い | 起動条件を外した写しで印ができて不合格 |
@@ -30,7 +30,9 @@
 | TC-18 | `code-review.sh` のゲートは、レビュー前の中身に届く行を流さない | 一時のリポジトリで、ゲートに ① 新しい `tests/test_new.sh`（流されたら印を書く） ② 変更の無い `tests/test_x.sh`（同じく印）を書いた自動テスト文書を置き、`run_declared_gates` を流す | ①の印が無く、証跡に `⏭ レビュー前の中身` がある。②の印がある。`GATE_VERDICT=OK` | 確かめの呼び出しを外した写しで①の印ができて不合格 |
 | TC-19 | 判定の CLI | `python3 .claude/hooks/unreviewed.py check -- '<コマンド>'` を TC-04・TC-02・TC-12②・引数なしで | 終了コードが 0・1・3・2 | 終了コードを常に 0 にした写しで不合格 |
 | TC-20 | 1 つのコマンドの複数の参照をすべて見る | `lib.sh` を書き換え、`bash scripts/claude/b.sh && bash scripts/claude/a.sh`（後ろだけが届く） | `updatedInput` がある | 最初の参照だけを見る写しで不合格 |
-| TC-21 | 判定の読み取りの上限 | `scripts/claude/` に 1MB を超える新しいファイル、または 2,000 を超えるファイルを置き、`bash scripts/claude/b.sh` | 20 秒以内に終わり `updatedInput` がある | 上限を外した写しで時間が上限を超える・書き換えが無くて不合格 |
+| TC-21 | 判定の読み取りの上限 | 1MB を超える変更の無いファイル（コミット済み）を他の変更があるときに流す、または 2,000 を超えるファイルを置き `bash scripts/claude/b.sh` | 20 秒以内に終わり `updatedInput` がある | 上限を外した写しで時間が上限を超える・書き換えが無くて不合格 |
+| TC-22 | 基準と安全な `-c` が判定・起動役・見張りで同じ | 3 つのファイルの文字 | `merge-base HEAD origin/develop` と 3 つの `-c` が一致 | 起動役の `-c` を 1 つ消した文字列で不合格 |
+| TC-23 | 引用符の中の文には当たらない | `git commit -m "bash scripts/claude/new.sh を足す"`（`new.sh` は新規）と `git status && bash scripts/claude/new.sh` | 前は出力なし・後ろは `updatedInput` がある | 最初の区切りだけを見る写し（FG TC-20 と同じ）で後ろが不合格 |
 
 セキュリティ設計レビュー（計画書「セキュリティレビュー結果」）で足す確かめ:
 - TC-02 に、名前に `'` と改行を含む新しいファイルを足す: 印の中の名前は `_` に置き換わり、`bash -n` が 0

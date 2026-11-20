@@ -40,7 +40,15 @@ Bash のコマンドは、Claude Code の公式のサンドボックス（`.clau
 - **外での再実行はしない**（`allowUnsandboxedCommands: false`）。道具（bubblewrap・socat）が無いと Claude Code が起動しない（`failIfUnavailable: true`。入れ方は `docs/runbooks/onboarding.md`）
 - **外に出すコマンド**（`excludedCommands`）: `docker`・`docker-compose`・`gh`・`git`・`bash scripts/claude/*`。中では動かないものだけ（docker は両立しない・gh と git は鍵の控えを読み書きする・git は設定ファイルの違うブランチへの切り替えで `.claude/settings.json` を書き換える・スクリプトはレビュー役の `claude -p` と gh を使う）。外に出したコマンドも、許可の設定・見張り・auto モードの判定役が今までどおり見る
   - **外に出す一覧に一般のインタプリタ・シェル（`bash *`・`sh *`・`python3 *` など）を足さない**（書いたファイルを外で動かせる。`scripts/claude/tests/test_settings_permissions.sh` が止める）
-  - `scripts/claude/` に置いたスクリプトは `bash scripts/claude/…` で呼ぶと外で動く。スクリプトを足す・中で呼ぶ道具を変えるときは、外で動いてよいものかをレビューで見る
+  - `scripts/claude/` に置いたスクリプトは `bash scripts/claude/…` で呼ぶと外で動く。ただし**外で動くのはレビュー済みの中身だけ**（I599）。「レビュー済み」は、このブランチが develop から分かれた時点（`git merge-base HEAD origin/develop`）の中身と同じこと（レビュー段階を通っても、マージまでは済みにしない）
+    - 見張りは、流すスクリプトから名前で呼ぶファイルをたどり、分かれた時点と違うファイル（変更・追跡していない新しいファイル）に届くときは、コマンドの前に `echo '[I599] レビュー前の中身があるので、サンドボックスの中で動かします（届いた変更: …）' >&2 &&` を付けて、コマンド全体をサンドボックスの中で動かす（承認の画面は出ない）。判定の本体は `.claude/hooks/unreviewed.py`（サンドボックスから書けず、Edit は承認が要る）
+    - 変更の有無によらず中で動く形: `bash scripts/claude/` の後ろに「..」・`$`・バッククォート・glob・`~`・引用符があるとき、基準（`origin/develop`）を求められないとき、読み取りの上限（1 ファイル 1MB・合計 20MB・2,000 ファイル）を超えたとき
+    - `scripts/claude/` のスクリプトに渡した引数のうち、既にある `.sh`・`.py` のファイルは動かされうるものとして扱う（`scripts/claude/` の外なら中で動く）。名前でたどれない「まとめて拾う入口」だけを表で持つ（`.claude/hooks/unreviewed.py` の `RUNNER_GLOBS`。今は `run-all.sh`）。**ファイルを glob などでまとめて拾って動かす入口を足すときは表に足す**
+    - `scripts/claude/test-session.sh` に許可の表に無い引数（自分で書いた設定ファイルの `--settings`・`--mcp-config` など）を渡すときは承認を求める（子のセッションのフックは外で動く。中では claude が動かない）
+    - 中では gh・`claude -p` が動かないので、それらを使うスクリプト（レビュー役など）を変えたブランチでは失敗する。外で流す必要があるときは、ユーザーに `! bash scripts/claude/…` で流してもらう（レビュー役のスクリプトを変えたときの扱いの根本は I593）
+    - `scripts/claude/code-review.sh` は、自動テスト文書の決定論ゲートのうちレビュー前の中身に届く `bash scripts/claude/tests/test_*.sh` を手元で流さない（CI の Harness Tests が流す）
+  - **フックは起動役を通す**: `.claude/settings.json` の `hooks` の `command` はすべて `bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/<名前>.py`。`scripts/claude/` に分かれた時点との違いがあるあいだは、分かれた時点の写し（`~/.cache/claude-reviewed-hooks/<コミット>/`）でフックを動かす。**見張りを直すイシューでは、直した見張りが効くのはマージの後**（確かめは CI の決定論のテスト。`scripts/claude/tests/test_settings_permissions.sh` が起動役を通らないフックを止める）
+  - 受け入れた残り（plan_I599.md 8）: Claude Code の版が変わり、フックの書き換え（`updatedInput`）の後のコマンドで外に出すかが決まらなくなる（`docs/runbooks/harness-audit.md` で点検）／ファイル名を文字列で組み立てて呼ぶ形はたどれない／git が無視するファイル（`.venv`・`__pycache__`）の書き換えと `origin/develop` の参照の書き換え（わざと避ける形）／基準を求められないときは起動役が作業ツリーのフックを動かす（フック全体を止めると見張りを直せなくなるため）
 
 ### 外に出すコマンドの書き方（Bash を 1 つずつ流す理由）
 

@@ -74,7 +74,7 @@
   - 変更の一覧 CHANGED: `git diff --name-only BASE -- scripts/claude`（コミット済み・ステージ・未ステージ）＋ `git ls-files --others --exclude-standard -- scripts/claude`（追跡していない新しいファイル）。空なら None（AC4 の速い道）
   - たどり（閉包）: 出発点＝取り出した参照（＋入口の引数）。`scripts/claude/` の下の全ファイル（`git ls-files` ＋ 追跡していない新しいファイル）の中身から、他のファイルの「リポジトリからの相対パス」か「ファイル名（語の境目つき）」が出てくれば辺を張る。出発点から届くファイルに CHANGED が入れば書き換え
   - まとめて拾う入口の表 `_RUNNER_GLOBS`: `scripts/claude/tests/run-all.sh` → `scripts/claude/tests/` の下すべて（`test_*.sh` を拾い、テストは fixtures を読む）
-  - 引数で渡すものを動かす入口の表 `_ARG_EXEC`: `run-all.sh`（位置引数すべて）・`stress-repeat.sh`（2 番目）。引数のファイルを出発点に足す。`scripts/claude/` の外のパスは書き換え
+  - 引数のファイル（計画変更記録のとおり `_ARG_EXEC` の表から `EXEC_SUFFIXES` の規則に変えた）: `scripts/claude/` のスクリプトに渡した引数のうち、既にある `.sh`・`.py` のファイルを出発点に足す。`scripts/claude/` の外のパスは書き換え
   - `test-session.sh`: 引数が許可の表（位置引数 1 つ〔指示〕・`--model`・`--permission-mode`・`--permission-prompts`・`--max-turns`・`--output-format`・`--verbose`・`--setting-sources`・`--settings <BASE と同じ中身の作業ツリーのファイル>`）に無ければ ask_reason（AC5）。書き換えでは足りない（中では claude が動かない）ため
   - 書き換えの形: `updatedInput.command = "echo '[I599] レビュー前の中身があるので、サンドボックスの中で動かします（届いた変更: <最大 5 件>）。外で動かす必要があれば、ユーザーに ! で流してもらう: docs/runbooks/danger-ops.md' >&2 && " + 元のコマンド`。ファイル名は `[A-Za-z0-9._/-]` 以外を `_` に置き換えてから埋める。`echo` は外に出す一覧に無いので、コマンド全体が中で動く（調査結果 6）
 - 出力: 書き換えがあり、他の判定が素通しのときは、`permissionDecision` を返さず `updatedInput` だけを返す（スパイク C。許可の判定は今までどおり）。`_ask()` は `_REWRITE` があれば `updatedInput` を同じ出力に足す（AC7。公式: ask と updatedInput の組み合わせはユーザーに書き換えた入力を見せて確かめる）。`_block()` はそのまま（動かない）
@@ -192,6 +192,8 @@ Danger Ops（有無）:
 ## 計画変更記録
 <!-- 形は docs/runbooks/plan-writing-rules.md「計画変更記録の形」 -->
 - 2026-11-20 plan-review: 計画書の記載: [R3 は無視するファイルだけ・`.claude/hooks/` の書き込みの禁止は文面だけ] → 採った方法: R9（`origin/develop` の参照を動かす形・受け入れ・Low で一覧へ）を足し、`.claude/hooks/` に Bash から書けないことを手動 No.5 に足した。TC-20（1 つのコマンドに複数の参照）を足した — 理由: 計画レビューの Warning 2 件・Info 1 件。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+
+- 2026-11-20 implement（/simplify の指摘）: 計画書の記載: [引数で渡したものを動かす入口の表 `_ARG_EXEC`（`run-all.sh`・`stress-repeat.sh`）] → 採った方法: 表をやめ、`scripts/claude/` のスクリプトに渡した引数のうち既にある `.sh`・`.py` のファイルを出発点に足す規則（`EXEC_SUFFIXES`）。`scripts/claude/` の外なら中で動かす。無いファイルは動かせないので見ない — 理由: 入口を足すたびに表を直す手当てを要らなくする（足し忘れると外で動く）。広めに当たっても中で動くだけ。あわせて、起動役は写しがあれば差の確かめを省いて写しで動かす（毎回の git を 3 回から 1 回に）・判定の git を 6 回から 2〜3 回に・たどりは各ファイルを 1 回だけ読み変更に当たったら止める・見張りの読み込み失敗時は `scripts/claude/` を含めば中で動かす（当たりの規則を写さない）・判定・起動役・見張りの基準と安全な `-c` が同じことを TC-22 で確かめる。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件は変えない。表を一般の規則にしただけで、中で動く範囲は広がる側）
 
 ## レビュー結果
 - [20261120_1718 判定: ✅ 完了](../../reviews/I599_plan_review_20261120_1718.md)
