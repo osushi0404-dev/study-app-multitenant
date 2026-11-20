@@ -76,11 +76,11 @@
   - 共通の進め方: マイグレーションは書き換えない（規約 §4）／値を空にするのは DB の書き換えなので、先に控えを取る（`danger-ops.md`「破壊的な DB の操作の前の控え」・人の承認）／値の使い道を確かめてから空にする／空にしたら `migrate` し直す
   - 0027 の具体の手順（止まった時点でモデルに `image_directory` が無いので、ORM ではなく生の SQL で見る）:
     1. 控え: `bash scripts/claude/db-backup.sh <イシュー番号>_before`
-    2. 値の確かめ: `docker compose exec -T backend python manage.py shell -c "from django.db import connection; c = connection.cursor(); c.execute(\"SELECT id, name, image_directory FROM problems_subject WHERE image_directory <> ''\"); print(c.fetchall())"`
+    2. 値の確かめ: `docker compose exec -T backend python manage.py dbshell -- -c "SELECT id, name, image_directory FROM problems_subject WHERE image_directory <> ''"`（backend のイメージに `postgresql-client` が入っている・`backend/Dockerfile:11`）
     3. 使い道: 画像は I587 から DB に保存しており、`image_directory` はどこからも読まれない（0010 が古い列から写した値の残り）。値を残したい事情があれば、空にする前に控えとは別に書き留める
-    4. 空にする（人の承認の後）: 同じ形で `UPDATE problems_subject SET image_directory = '' WHERE image_directory <> ''`
+    4. 空にする（人の承認の後）: 同じ `dbshell -- -c` の形で `UPDATE problems_subject SET image_directory = '' WHERE image_directory <> ''`
     5. `docker compose exec -T backend python manage.py migrate problems`
-  - 0026（問題の古い画像の列）も同じ形で止まる。空にする対象は `problems_problem` の `question_image`・`explanation_image`（NULL にする）と 1 行だけ書く
+  - 0026（問題の古い画像の列）も同じ形で止まる。0026 の判定（`0026_remove_problem_legacy_images.py:14-18`）は NULL でも空文字でもない値を数えるので、空にする対象は `problems_problem` の `question_image`・`explanation_image`（NULL にする）と 1 行だけ書く
 - `backend/problems/tests/test_I590_review_leftovers.py` の TC-04（`test_0027_refuses_values_then_removes_column`）: 値を空にする手順を、ORM の `OldSubject.objects.update(image_directory="")` から手順書と同じ SQL 文（定数 `CLEAR_IMAGE_DIRECTORY_SQL`）を `connection.cursor()` で流す形に変える。説明に手順書の節を書く（手順書の SQL を変えたらこの定数もそろえる、と書く）。`finally` の後始末は今の ORM のまま
 
 ## 5. 実装手順（ステップ）
@@ -134,4 +134,7 @@ Danger Ops（有無）:
 - 無（この PR では DB を操作しない。手順書には、人が 0027 で止まったときの控えと承認の手順を書く）
 
 ## 計画変更記録
--
+- 2026-11-20 plan-review: 計画書の記載: [値の確かめ: `manage.py shell -c "...connection.cursor()..."`] → 採った方法: `manage.py dbshell -- -c "<SQL>"`。0026 の補足に判定の行を添えた — 理由: 計画レビューの Info 2 件（引用符の入れ子で貼り付けを誤りやすい・0026 の判定と合わせる）。方式・範囲・受け入れ条件は変えない。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+
+## レビュー結果
+- [20261120_1817 判定: ✅ 完了](../../reviews/I602_plan_review_20261120_1817.md)
