@@ -10,11 +10,11 @@ jest.mock('../../services/mediaService');
 
 const mockedGetMediaBlob = jest.mocked(getMediaBlob);
 
-const renderImage = () => {
+const renderImage = (height?: number) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MediaImage src="/api/media/a/" alt="問題画像 1" />
+      <MediaImage src="/api/media/a/" alt="問題画像 1" height={height} />
     </QueryClientProvider>
   );
 };
@@ -32,11 +32,13 @@ describe('MediaImage', () => {
     createObjectURL.mockReturnValue('blob:a');
   });
 
-  it('取得中は形だけ（読み込み中）を出す', () => {
+  it('取得中は形だけ（読み込み中）を、渡した高さの枠で出す', () => {
     mockedGetMediaBlob.mockReturnValue(new Promise(() => {}));
-    renderImage();
+    renderImage(300);
 
-    expect(screen.getByLabelText('問題画像 1を読み込み中')).toHaveAttribute('aria-busy', 'true');
+    const skeleton = screen.getByLabelText('問題画像 1を読み込み中');
+    expect(skeleton).toHaveAttribute('aria-busy', 'true');
+    expect(skeleton).toHaveStyle({ height: '300px' });
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(mockedGetMediaBlob).toHaveBeenCalledWith('/api/media/a/');
   });
@@ -46,8 +48,12 @@ describe('MediaImage', () => {
     renderImage();
 
     expect(await screen.findByText('画像を読み込めませんでした')).toBeInTheDocument();
+    // 失敗の枠も読み込み中と同じ高さ（既定 150px）・押す的は 44×44px 以上（UX §6）
+    expect(screen.getByRole('group', { name: '問題画像 1' })).toHaveStyle({ minHeight: '150px' });
+    const retryButton = screen.getByRole('button', { name: '再読み込み' });
+    expect(retryButton).toHaveStyle({ minHeight: '44px', minWidth: '44px' });
     mockedGetMediaBlob.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
-    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    fireEvent.click(retryButton);
 
     expect(await screen.findByRole('img', { name: '問題画像 1' })).toHaveAttribute('src', 'blob:a');
     expect(mockedGetMediaBlob).toHaveBeenCalledTimes(2);

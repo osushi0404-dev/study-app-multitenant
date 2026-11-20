@@ -105,6 +105,12 @@ def serialize_media_assets(problem, usage_kind):
     return MediaAssetSerializer([link.asset for link in media_links], many=True).data
 
 
+class ImageUploadSerializer(serializers.Serializer):
+    """images/upload の入力（I587）。画像の中身の検査はサービス（validate_image_file）が行う"""
+    file = serializers.FileField()
+    usage_kind = serializers.ChoiceField(choices=MediaAsset.UsageKind.choices)
+
+
 class ProblemMediaAssetSerializer(serializers.ModelSerializer):
     """問題画像紐づけのシリアライザー"""
     asset = MediaAssetSerializer(read_only=True)

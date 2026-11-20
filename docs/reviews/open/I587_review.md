@@ -91,6 +91,8 @@
 - [close] マージ依頼の後、ユーザーに BP・UI/UX の評価を聞かれ、新しいコードの規約・UX の決まりからの外れ 4 点を挙げた。ユーザーの指示「BP,UI/UX の観点でベストなやり方で進めて」（2026-11-20）を受け、後回しにせずこの PR で直す。PR を下書きに戻し、記録を open に戻して、計画を直して計画レビューからやり直す（方式が変わるため）— #590 のうち今回書き換えたコードの分（F4〜F7）も一緒に直し、F3 と `image_directory` は #590 に残す
 - [plan-review] 計画レビュー（20261120_0903）は高リスク判定 Yes・Blocker なし。Warning 3 件（9 のエッジケースの古い記述・/simplify の見送りを覆した旨・`DANGER_OK=1` の実行コマンド）を直した。TC の再実施の Warning はステップ 9 の手順で行う — 方式は計画どおりで再レビューは不要
 - [design-security-review] 追加の直しの分を確かめた。Blocker 0・Medium 1（`remove_image` の紐づけの絞り込みに画像の組織〔科目の組織〕を入れる）を必須防御条件として 4-4 と TC-10 に足した。Low 2 件（弱い比較・412）は受け入れ — 組織の絞り込みの後の判定なので境界は越えない
+- [implement] 追加の直しを実装した（サービスの `add_image`・`remove_image`・`ImageUploadSerializer`・`GenericAPIView`・`get_conditional_response`・枠の高さ・44px のボタン）。画面は Playwright MCP で、成功・失敗・再読み込みを確かめた（失敗はブラウザのページの中で `/api/media/` の通信だけを 404 にして作った・`browser_run_code_unsafe`）。失敗の枠は表示のときと同じ高さで、下の選択肢の位置が変わらない
+- [implement] /simplify（4 観点）の指摘のうち 3 件を直し、3 件を見送った（計画変更記録）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -104,3 +106,4 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate

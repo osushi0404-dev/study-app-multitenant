@@ -1,29 +1,29 @@
-from rest_framework import viewsets, status, permissions
+from rest_framework import generics, viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction
 from django.db.models import Prefetch
-from django.http import HttpResponse, HttpResponseNotModified
+from django.http import HttpResponse
+from django.utils.cache import get_conditional_response
 from django.utils import timezone
 import json
 import uuid
 from .difficulty import LEVEL_BY_LABEL
 from .models import (
-    Subject, Problem, Choice, QuizSession, QuizAnswer, MediaAsset, ProblemMediaAsset, UserSubjectAccess,
+    Subject, Problem, Choice, QuizSession, QuizAnswer, UserSubjectAccess,
 )
 from .serializers import (
     SubjectSerializer, ProblemSerializer, ProblemAdminSerializer, ProblemDisplaySerializer,
     AnswerExplanationSerializer, QuizSessionSerializer, QuizSessionDetailSerializer,
-    SubmitAnswerSerializer, MediaAssetSerializer
+    SubmitAnswerSerializer, MediaAssetSerializer, ImageUploadSerializer
 )
 from .services import ProblemService, QuizService
 from .services.quiz_service import (
     ActiveSessionConflictError, IdempotencyKeyReusedError, spaced_repetition_service,
 )
-from .selectors import media_asset_data, visible_media_asset
+from .selectors import media_asset_data, visible_media_assets
 from .services.tenant_scope import available_problems, available_subjects, scope_to_user_org
 from .utils import ALLOWED_IMAGE_FORMATS
 from core.cache_service import cache_service
@@ -606,139 +606,39 @@ class ProblemViewSet(MultipartFormDataMixin, viewsets.ModelViewSet):
     )
     def upload_image(self, request, pk=None):
         """
-        画像アップロードエンドポイント (Phase 1)
+        問題に画像を 1 枚足す（POST /api/problems/{problem_id}/images/upload/）
 
-        POST /api/problems/{problem_id}/images/upload/
-
-        Request (multipart/form-data):
-            - file: 画像ファイル (必須)
-            - usage_kind: 'problem' | 'explanation' (必須)
-
-        Response:
-            - MediaAsset情報
+        Request (multipart/form-data): file（画像）・usage_kind（'problem' | 'explanation'）
+        Response: 201 と MediaAsset。入力・画像の誤りは 400（custom_exception_handler の形）
+        画面からは使われていない（作成・更新は ProblemViewSet の create・update が画像を受ける）
         """
-        problem = self.get_object()
-
-        # 権限チェック: 自分の組織の問題のみ
-        if problem.organization_id != request.user.organization_id:
-            return Response(
-                {'error': '権限がありません'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # リクエストデータの検証
-        file_data = request.FILES.get('file')
-        usage_kind = request.data.get('usage_kind')
-
-        if not file_data:
-            return Response(
-                {'error': 'ファイルが必要です'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if usage_kind not in ['problem', 'explanation']:
-            return Response(
-                {'error': 'usage_kindは "problem" または "explanation" を指定してください'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 作成・更新と同じ検査と保存（中身は DB・I587）。検査の誤りは ValidationError で 400
-        with transaction.atomic():
-            media_asset = ProblemService._save_image_as_asset(
-                image_file=file_data,
-                usage_kind=usage_kind,
-                organization=problem.subject.organization,
-                subject=problem.subject,
-            )
-
-            # 既存の紐づけを取得して次のpositionを決定
-            existing_links = ProblemMediaAsset.objects.filter(
-                problem=problem,
-                usage_kind=usage_kind
-            ).order_by('-position')
-
-            next_position = 1
-            if existing_links.exists():
-                next_position = existing_links.first().position + 1
-
-            # ProblemMediaAsset作成（問題と画像の紐づけ）
-            ProblemMediaAsset.objects.create(
-                problem=problem,
-                asset=media_asset,
-                usage_kind=usage_kind,
-                position=next_position,
-                organization_id=problem.organization_id
-            )
-
-        # キャッシュ無効化
-        cache_service.invalidate_problems_cache(problem.subject_id)
-
-        return Response(
-            MediaAssetSerializer(media_asset).data,
-            status=status.HTTP_201_CREATED
+        problem = self.get_object()  # 組織の管理者の、自分の組織の問題だけ（それ以外は 404）
+        serializer = ImageUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        media_asset = ProblemService.add_image(
+            problem=problem,
+            image_file=serializer.validated_data['file'],
+            usage_kind=serializer.validated_data['usage_kind'],
         )
+        cache_service.invalidate_problems_cache(problem.subject_id)
+        return Response(MediaAssetSerializer(media_asset).data, status=status.HTTP_201_CREATED)
 
     @action(
         detail=True,
         methods=['delete'],
-        url_path='images/delete/(?P<asset_id>[^/.]+)'
+        # UUID の形だけを受ける（配信の <uuid:asset_id> と同じ。形の違う値は経路で 404）
+        url_path=r'images/delete/(?P<asset_id>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
     )
     def delete_image(self, request, pk=None, asset_id=None):
         """
-        画像削除エンドポイント (Phase 1)
+        問題から画像を 1 枚外す（DELETE /api/problems/{problem_id}/images/delete/{asset_id}/）
 
-        DELETE /api/problems/{problem_id}/images/delete/{asset_id}/
-
-        Response:
-            - 成功メッセージ
+        Response: 200 と message。自分の問題の、自分の組織の画像の有効な紐づけが無ければ 404
         """
         problem = self.get_object()
-
-        # 権限チェック
-        if problem.organization_id != request.user.organization_id:
-            return Response(
-                {'error': '権限がありません'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # MediaAsset取得（利用者の組織の画像だけ）
-        media_asset = MediaAsset.objects.filter(
-            id=asset_id,
-            organization_id=request.user.organization_id
-        ).first()
-        if media_asset is None:
-            return Response(
-                {'error': '画像が見つかりません'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        with transaction.atomic():
-            # ProblemMediaAsset削除（紐づけ解除）
-            problem_link = ProblemMediaAsset.objects.filter(
-                problem=problem,
-                asset=media_asset
-            ).first()
-
-            if not problem_link:
-                return Response(
-                    {'error': 'この問題に紐づけられていない画像です'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            problem_link.delete()
-
-            # 他の問題でも使用されていない場合は、MediaAsset を論理削除し中身を消す（I587）
-            # 共有の判定は有効な紐づけだけで行う（_reconcile_images・delete_problem とそろえる・I587 F1）
-            if not ProblemMediaAsset.objects.filter(asset=media_asset, is_deleted=False).exists():
-                ProblemService._discard_asset(media_asset)
-
-        # キャッシュ無効化
+        ProblemService.remove_image(problem=problem, asset_id=uuid.UUID(asset_id))
         cache_service.invalidate_problems_cache(problem.subject_id)
-
-        return Response(
-            {'message': '画像を削除しました'},
-            status=status.HTTP_200_OK
-        )
+        return Response({'message': '画像を削除しました'}, status=status.HTTP_200_OK)
 
 
 # 画像の応答の見出し（I587）。本人のブラウザにだけ持たせ、別のタブで開いてもスクリプトを動かさない
@@ -750,31 +650,27 @@ MEDIA_SECURITY_HEADERS = {
 }
 
 
-def _if_none_match_hits(header: str, etag: str) -> bool:
-    """If-None-Match のどれかが強い一致（同じ ETag か *）なら True。弱い ETag（W/）は一致にしない"""
-    candidates = [value.strip() for value in header.split(',')]
-    return '*' in candidates or etag in candidates
-
-
-class MediaAssetContentView(APIView):
+class MediaAssetContentView(generics.GenericAPIView):
     """
     画像の中身を返す（GET /api/media/<asset_id>/・I587）
 
     ログインした利用者の組織の、消されていない画像だけを返す。それ以外は 404（他の組織の画像があることを知らせない）。
-    同じ画像の 2 回目（If-None-Match）は中身を読まずに 304 を返す。
+    同じ画像の 2 回目（If-None-Match）は、中身を読まずに 304 を返す（判定は Django・RFC 9110 の弱い比較）。
     """
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'id'
+    lookup_url_kwarg = 'asset_id'
+
+    def get_queryset(self):
+        return visible_media_assets(self.request.user)
 
     def get(self, request, asset_id):
-        asset = visible_media_asset(user=request.user, asset_id=asset_id)
-        if asset is None:
-            raise NotFound()
+        asset = self.get_object()
 
         # checksum が空の行は ETag を付けない（違う画像が同じ ETag にならないように）
         etag = f'"{asset.checksum_sha256}"' if asset.checksum_sha256 else None
-        if etag and _if_none_match_hits(request.headers.get('If-None-Match', ''), etag):
-            response = HttpResponseNotModified()
-        else:
+        response = get_conditional_response(request, etag=etag) if etag else None
+        if response is None:
             data = media_asset_data(asset)
             if data is None:
                 raise NotFound()

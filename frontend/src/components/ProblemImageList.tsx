@@ -6,6 +6,9 @@ import React from 'react';
 import { Box, ImageList, ImageListItem } from '@mui/material';
 import MediaImage from './MediaImage';
 
+/** 問題・解説の画像の枠の高さ（今までの表示の上限 maxHeight: 300 と同じ）。MediaImage が 3 つの状態に同じ高さを使う */
+const IMAGE_HEIGHT = 300;
+
 interface ProblemImageListProps {
   /** 表示する画像の API の URL（pickImageUrls の戻り値・/api/media/<id>/） */
   images: string[];
@@ -26,13 +29,13 @@ const ProblemImageList: React.FC<ProblemImageListProps> = ({ images, alt, onImag
             <ImageListItem key={imageUrl}>
               <MediaImage
                 src={imageUrl}
+                height={IMAGE_HEIGHT}
                 alt={`${alt} ${index + 1}`}
                 role="button"
                 tabIndex={0}
                 aria-label={`${alt} ${index + 1}枚目。クリックで拡大表示`}
                 sx={{
                   width: '100%',
-                  maxHeight: 300,
                   objectFit: 'contain',
                   borderRadius: 1,
                   cursor: 'pointer',

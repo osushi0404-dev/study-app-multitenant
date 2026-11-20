@@ -139,8 +139,8 @@ def test_0025_moves_files_and_reverts(world, settings, tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert "I587 media: moved=1 already=0 deleted_assets=1 deleted_links=1" in out
     # 消した行のキーを出力に残す（fix-loop F2）。移した行は並べない
-    assert f"I587 media: deleted id={missing.id} key={missing.storage_key}" in out
-    assert f"id={present.id}" not in out
+    deleted_lines = [line.strip() for line in out.splitlines() if "I587 media: deleted" in line]
+    assert deleted_lines == [f"I587 media: deleted id={missing.id} key={missing.storage_key}"]
 
     (tmp_path / present.storage_key).unlink()
     _run(migration.unapply, before)

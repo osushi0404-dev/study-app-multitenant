@@ -20,6 +20,8 @@ describe('ProblemImageList', () => {
     expect(image).toHaveAttribute('role', 'button');
     expect(image).toHaveAttribute('tabindex', '0');
     expect(image).toHaveAttribute('src', '/api/media/a/');
+    // 画像の枠は高さ固定（読み込み中・失敗と同じ高さで、読み込み後にまわりが動かない）
+    expect(image).toHaveStyle({ height: '300px', objectFit: 'contain' });
   });
 
   it('2 枚は 2 列', () => {

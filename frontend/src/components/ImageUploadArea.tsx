@@ -24,9 +24,12 @@ import {
 import { EditableImage } from '../services/types';
 import MediaImage from './MediaImage';
 
+/** サムネイルの高さ（保存済み〔MediaImage の読み込み中・失敗も〕と新しく選んだ画像で同じ） */
+const PREVIEW_HEIGHT = 150;
+
 const PREVIEW_SX = {
   width: '100%',
-  height: 150,
+  height: PREVIEW_HEIGHT,
   objectFit: 'cover',
   borderRadius: 1,
 } as const;
@@ -308,7 +311,7 @@ const ImageUploadArea: React.FC<ImageUploadAreaProps> = ({
               return (
                 <ImageListItem key={preview.key}>
                   {preview.isExisting ? (
-                    <MediaImage src={preview.src} alt={preview.title} sx={PREVIEW_SX} />
+                    <MediaImage src={preview.src} alt={preview.title} height={PREVIEW_HEIGHT} sx={PREVIEW_SX} />
                   ) : (
                     <Box component="img" src={preview.src} alt={preview.title} loading="lazy" sx={PREVIEW_SX} />
                   )}

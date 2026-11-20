@@ -10,7 +10,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 from django.db import transaction
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from problems.models import (
     Problem, Choice, MediaAsset, MediaAssetContent, ProblemMediaAsset, Subject
 )
@@ -178,6 +178,76 @@ class ProblemService:
         )
         MediaAssetContent.objects.create(asset=asset, data=data)
         return asset
+
+    @staticmethod
+    @transaction.atomic
+    def add_image(*, problem: Problem, image_file: InMemoryUploadedFile, usage_kind: str) -> MediaAsset:
+        """
+        問題に画像を 1 枚足す（images/upload・I587）。
+
+        検査と保存は作成・更新と同じ流れ（_save_image_as_asset）。表示順は紐づけの最後の次
+        （一意の制約〔problem・usage_kind・position〕は論理削除の紐づけも含むので、全部の紐づけから数える）。
+        """
+        subject = problem.subject
+        asset = ProblemService._save_image_as_asset(
+            image_file=image_file,
+            usage_kind=usage_kind,
+            organization=subject.organization,
+            subject=subject,
+        )
+        last = (
+            ProblemMediaAsset.objects
+            .filter(problem=problem, usage_kind=usage_kind)
+            .order_by('-position')
+            .values_list('position', flat=True)
+            .first()
+        )
+        ProblemMediaAsset.objects.create(
+            organization_id=subject.organization_id,
+            problem=problem,
+            asset=asset,
+            usage_kind=usage_kind,
+            position=(last or 0) + 1,
+        )
+        return asset
+
+    @staticmethod
+    @transaction.atomic
+    def remove_image(*, problem: Problem, asset_id: uuid.UUID) -> None:
+        """
+        問題から画像を 1 枚外す（images/delete・I587）。
+
+        自分の問題の、自分の組織の画像の有効な紐づけが無ければ NotFound
+        （問題の組織は null 可なので科目の組織で比べる）。
+        ほかに有効な紐づけが無くなった画像は論理削除し、中身を消す。
+        """
+        link = (
+            ProblemMediaAsset.objects
+            .filter(
+                problem=problem,
+                asset_id=asset_id,
+                is_deleted=False,
+                asset__organization_id=problem.subject.organization_id,
+            )
+            .select_related('asset')
+            .first()
+        )
+        if link is None:
+            raise NotFound('この問題に紐づいた画像が見つかりません')
+        asset = link.asset
+        link.delete()
+        ProblemService._discard_asset_if_unused(asset)
+
+    @staticmethod
+    def _discard_asset_if_unused(asset: MediaAsset) -> None:
+        """
+        有効な紐づけ（is_deleted=False）が 1 つも残っていない画像だけを論理削除し、中身を消す。
+
+        呼ぶ側は、外す紐づけを先に消してから呼ぶ（残るのは「他の問題」または「同じ問題の別の用途」の紐づけ
+        ＝どれも共有。exclude(problem) を付けると同じ問題の別の用途の共有を見落とす）。
+        """
+        if not ProblemMediaAsset.objects.filter(asset=asset, is_deleted=False).exists():
+            ProblemService._discard_asset(asset)
 
     @staticmethod
     def _discard_asset(asset: MediaAsset) -> None:
@@ -371,22 +441,10 @@ class ProblemService:
                 position=position,
             )
 
-        # 6. 外した画像の論理削除と中身の削除
+        # 6. 外した画像のうち、ほかに有効な紐づけが無いものを論理削除し、中身を消す
         for aid, link in current_assets.items():
-            if aid in keep_asset_ids:
-                continue
-            asset = link.asset
-            # 共有判定: 当該アセットを参照する有効リンクが他に残っているか。
-            # 手順5で本問題の (problem, usage_kind) リンクは全削除済みのため、ここで
-            # 残るのは「他問題」または「本問題の別 usage_kind」のリンク＝いずれも共有。
-            # exclude(problem) を付けると本問題の別 usage_kind 共有を見落とし、共有画像を
-            # 誤って消してしまうため付けない（code-review Medium 対応）。
-            shared = ProblemMediaAsset.objects.filter(
-                asset=asset, is_deleted=False
-            ).exists()
-            if shared:
-                continue  # 共有されている場合は紐づけ解除のみ（中身は消さない）
-            ProblemService._discard_asset(asset)
+            if aid not in keep_asset_ids:
+                ProblemService._discard_asset_if_unused(link.asset)
 
     @staticmethod
     @transaction.atomic

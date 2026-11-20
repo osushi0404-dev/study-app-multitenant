@@ -186,7 +186,7 @@ def test_create_stores_detected_mime_not_client_content_type(world):
     assert response["Content-Type"] == "image/png"
 
 
-# ---- TC-04: 2 回目は 304（中身を読まない）・弱い ETag は一致にしない・null の checksum は ETag なし ----
+# ---- TC-04: 2 回目は 304（中身を読まない）・RFC 9110 の弱い比較・null の checksum は ETag なし ----
 def test_media_etag_304_without_reading_content(world):
     asset = make_asset(world)
     client = client_for(world["learner_a"])
@@ -203,7 +203,9 @@ def test_media_etag_304_without_reading_content(world):
     assert second["Cache-Control"] == "private, max-age=3600"
     assert content_sqls(context) == []
 
-    assert client.get(media_url(asset), HTTP_IF_NONE_MATCH=f"W/{etag}").status_code == 200
+    # If-None-Match は弱い比較（RFC 9110）: W/ 付きも一致。一致しない値は 200
+    assert client.get(media_url(asset), HTTP_IF_NONE_MATCH=f"W/{etag}").status_code == 304
+    assert client.get(media_url(asset), HTTP_IF_NONE_MATCH='"x"').status_code == 200
     assert client.get(media_url(asset), HTTP_IF_NONE_MATCH=f'"x", {etag}').status_code == 304
     assert client.get(media_url(asset), HTTP_IF_NONE_MATCH="*").status_code == 304
 
@@ -294,6 +296,7 @@ def test_upload_image_action_stores_content(world, no_file_writes):
     asset = MediaAsset.objects.get(id=response.json()["id"])
     assert bytes(asset.content.data) == PNG
     assert response.json()["url"] == media_url(asset)
+    assert ProblemMediaAsset.objects.get(asset=asset).position == 1
     assert no_file_writes == []
 
     before = MediaAsset.objects.count()
@@ -338,6 +341,52 @@ def test_delete_image_ignores_deleted_links_of_other_problems(world):
     assert asset.is_deleted is True
     assert not MediaAssetContent.objects.filter(asset=asset).exists()
     assert client_for(world["learner_a"]).get(media_url(asset)).status_code == 404
+
+
+@pytest.mark.parametrize("case", ["no_file", "bad_usage_kind"])
+def test_upload_image_action_rejects_bad_input(world, case):
+    """入力の誤りは 400 で、本文は custom_exception_handler の形（追加の直し・F5）"""
+    problem, _ = make_problem(world)
+    data = {"usage_kind": "problem"} if case == "no_file" else {"file": upload("u.png"),
+                                                                "usage_kind": "x"}
+    before = MediaAsset.objects.count()
+    response = client_for(world["admin_a"]).post(
+        f"/api/problems/{problem.id}/images/upload/", data, format="multipart")
+    assert response.status_code == 400
+    assert "main_message" in response.json()["error"]
+    assert MediaAsset.objects.count() == before
+
+
+@pytest.mark.parametrize("case", ["not_linked", "deleted_own_link", "other_org_asset"])
+def test_delete_image_rejects_missing_or_deleted_own_link(world, case):
+    """自分の問題の、自分の組織の画像の有効な紐づけでなければ 404 で何も変えない（追加の直し・F5・F7）"""
+    problem, _ = make_problem(world)
+    if case == "not_linked":
+        asset = make_asset(world)
+    elif case == "deleted_own_link":
+        asset = make_asset(world, problem=problem)
+        ProblemMediaAsset.objects.filter(asset=asset).update(is_deleted=True)
+    else:
+        asset = make_asset(world, org=world["org_b"], subject=world["subj_b"])
+        ProblemMediaAsset.objects.create(organization=world["org_a"], problem=problem,
+                                         asset=asset, usage_kind="problem", position=1)
+    links_before = ProblemMediaAsset.objects.filter(asset=asset).count()
+    response = client_for(world["admin_a"]).delete(
+        f"/api/problems/{problem.id}/images/delete/{asset.id}/")
+    assert response.status_code == 404
+    assert "main_message" in response.json()["error"]
+    asset.refresh_from_db()
+    assert asset.is_deleted is False
+    assert MediaAssetContent.objects.filter(asset=asset).exists()
+    assert ProblemMediaAsset.objects.filter(asset=asset).count() == links_before
+
+
+def test_delete_image_route_accepts_only_uuid(world):
+    """画像の ID は UUID の形だけを経路で受ける（形の違う値は 500 でなく 404）"""
+    problem, _ = make_problem(world)
+    response = client_for(world["admin_a"]).delete(
+        f"/api/problems/{problem.id}/images/delete/not-a-uuid/")
+    assert response.status_code == 404
 
 
 def test_delete_problem_keeps_shared_content(world):
