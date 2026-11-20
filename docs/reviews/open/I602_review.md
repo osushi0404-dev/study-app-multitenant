@@ -26,7 +26,9 @@
 - [implement] 計画どおり実装。手元で 3 ファイル 30 件 passed・TC-03 の 9 行は exit 0 — 正は CI
 - [implement] `/simplify`（4 観点）の反映: `app_imports` を「集めてから 1 回だけ絞る」形に戻した・`_subject_columns` の包みを消して `column_names("problems_subject")` を直に呼ぶ（計画書 4-(3) の記載どおり）・`run_migration` の説明の誤解しやすい書き方を直した — 振る舞いは変えない
 - [implement] `/simplify` の見送り: `test_I587_media_in_db.py` の見出しの固定の値の確かめを補助に寄せる案（計画の範囲外。固定の値の確かめは辞書と応答が一緒に変わる弱点〔計画 R2〕を補っているので残す）・`Cache-Control` の文字を `MEDIA_CACHE_CONTROL` に置き換える案（計画で残すと決めた行・値そのものを固定する意図）・`load_migrations` をセッションで 1 回にする案（DB の状態に左右され古い状態を読むおそれ）
+- [review-gate] コードレビュー OK（CI OK・RISK NO・敵対的レビュー不要）。Low 3 件（F1 は計画 R2 で受け入れ済み・F2 0026 の手順の粒度・F3 補助が制約を即時にしたまま戻さない）は止めない指摘なので直さず retro へ — 台帳の決まり（I197）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
