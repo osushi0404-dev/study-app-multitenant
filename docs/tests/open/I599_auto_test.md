@@ -36,6 +36,7 @@
 | TC-24 | 振り向けがスクリプト名にくっついても取り違えない（F1） | 新しい `new.sh` を `>/dev/null`・`2>&1`・`< /dev/null`・`2>/dev/null` つきで流す。変更の無い `b.sh` を `>/dev/null`・`2>&1` つきで流す | 前の 4 つは `updatedInput` がある・後ろの 2 つは出力なし | 区切りから `<>` を外した写しで不合格 |
 | TC-25 | git が無視するファイル（F2） | `.gitignore` の `*.tmp`・`igndir/` で、① `bash scripts/claude/evil.tmp` ② 追跡済みの `c.sh`（`helper.tmp` を名前で呼ぶ）③ `bash scripts/claude/igndir/x.sh`。どれも他に変更なし | 3 つとも `updatedInput` がある | 無視されるファイルを数えない写しで ② が不合格・一覧の外の出発点を見ない写しで ③ が不合格 |
 | TC-24b | 振り向けの後ろの引数も同じ命令の引数として見る（F7） | `bash scripts/claude/test-session.sh x >log --permission-mode bypassPermissions`・`bash scripts/claude/tests/stress-repeat.sh 3 2>/dev/null scripts/claude/tests/test_new.sh`（新規） | 前は `ask`・後ろは `updatedInput` がある | 振り向けで命令を区切る写しで不合格 |
+| TC-26 | 置き換え・かっこを含むコマンドは読み切らない（F11） | `test-session.sh x $(true) --permission-mode bypassPermissions`・同じく `<(true)`・`bash scripts/claude/b.sh $(true)`・`{ bash scripts/claude/b.sh; }`・`bash scripts/claude/b.sh "$HOME"`（変更なし） | 前の 2 つは `ask`・後ろの 3 つは `updatedInput` がある | 規則を外した写しで不合格 |
 
 セキュリティ設計レビュー（計画書「セキュリティレビュー結果」）で足す確かめ:
 - TC-02 に、名前に `'` と改行を含む新しいファイルを足す: 印の中の名前は `_` に置き換わり、`bash -n` が 0
@@ -73,3 +74,9 @@ grep -q 'I599' docs/runbooks/harness-audit.md
   - セキュリティ: 守りの無い子・レビュー前のテストを外で動かせる穴を塞いだ（C8）
   - 次回どう防ぐか: 区切りを変える直しは、区切りの後ろにある語（引数）の扱いも TC で確かめる（直しの後退を同じ周で拾う）
   - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=50 fail=0（TC-24b・TC-12 の追加と各 FG を含む）
+- 2026-11-20 fix-loop（review-gate 3 周目の止める指摘 F11）:
+  - なぜ失敗したか: F1・F7 と同じ種類（シェルの構文を自前の語の切り方で読み、書き方を 1 つずつ足して塞ぐ方式の限界）。`$(…)`・`<(…)` のかっこで命令を区切り、その後ろの引数を見落とした
+  - 何を変えたか: 方式の見直し。`bash scripts/claude/…` に当たるコマンドに `$`・バッククォート・`(`・`)`・`{`・`}` のどれかがあれば、読み切らずに中で動かす（`test-session.sh` なら承認）（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1925.md`）
+  - セキュリティ: 守りの無い子・レビュー前の中身を外で動かせる穴を塞いだ（C8）。普段の呼び出しはこれらの文字を含まないので変わらない
+  - 次回どう防ぐか: 同じ種類の指摘が 2 周続いたら、列挙を足さずに単純な規則（読み切れない形は安全側）に切り替える（retro で手順に書くかを決める）
+  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=52 fail=0（TC-26 と FG を含む）

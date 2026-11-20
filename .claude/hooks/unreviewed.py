@@ -46,6 +46,7 @@ TS_NO_VALUE = {"--verbose"}
 TS_PERMISSION_MODES = {"default", "manual", "plan", "acceptEdits", "auto"}
 # 参照の語にこれがあれば、どのファイルに当たるか決まらない（「..」で外へ・変数・置き換え・glob・~・引用符の残り）
 UNTRACEABLE_RE = re.compile(r"\.\.|[$`*?\[~'\"\\]")
+UNPARSED_RE = re.compile(r"[$`(){}]")
 TRIGGER_RE = re.compile(r"(?<![\w./-])['\"]?bash['\"]?\s+['\"]?(?:\./|/\S*/)?" + re.escape(SCRIPTS))
 TOKEN_RE = re.compile(r"[\w./-]+")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._/-]")
@@ -260,6 +261,14 @@ def _check(command: str, cwd: str | None) -> Result:
         return cache["b"]
 
     res = Result()
+    # 置き換え・かっこ（$ ` ( ) { }）があるコマンドは読み切らずに中で動かす（I599 F11。シェルの構文を
+    # 1 つずつ読んで塞ぐ方式は取りこぼしと後退が続いた）。test-session.sh は中では動かないので承認
+    if UNPARSED_RE.search(command):
+        res.rewrite, res.why = True, "置き換え・かっこを含むコマンド"
+        if TEST_SESSION in command:
+            res.ask_reason = ("test-session.sh を、置き換え・かっこ（$ ` ( ) { }）を含むコマンドで流しています。"
+                              "引数を読み切れないので、確かめて承認してください（I599）")
+        return res
     start: set[str] = set()
     untraceable = []
     segs = _segments(command)

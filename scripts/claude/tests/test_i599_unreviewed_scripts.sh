@@ -187,6 +187,19 @@ def tc24b(root):
 ck("TC-24b 振り向けの後ろの引数も見る（F7）", all(tc24b(r)))
 
 
+def tc26(root):
+    """置き換え・かっこを含むコマンド（F11）: test-session は承認、それ以外は変更が無くても中。"""
+    ts_ = "bash scripts/claude/test-session.sh x"
+    return (asked(root, f"{ts_} $(true) --permission-mode bypassPermissions"),
+            asked(root, f"{ts_} <(true) --permission-mode bypassPermissions"),
+            rewritten(root, "bash scripts/claude/b.sh $(true)"),
+            rewritten(root, "{ bash scripts/claude/b.sh; }"),
+            rewritten(root, 'bash scripts/claude/b.sh "$HOME"'))
+
+
+ck("TC-26 置き換え・かっこを含むコマンドは読み切らずに中で動かす・test-session は承認（F11）", all(tc26(r)))
+
+
 def tc25(root):
     """git が無視するファイル: ① 直接流す（他に変更なし） ② 追跡済みのスクリプトが名前で呼ぶ（他に変更なし）
     ③ 無視されるフォルダの中のファイルを直接流す。3 つとも中で動く。"""
@@ -445,6 +458,9 @@ fg.append(("FG TC-24b: 振り向けで命令を区切ると不合格", not all(t
 r19 = make_repo("fg_any_settings", broken_unreviewed("any_settings", '            settings_ok = settings_ok or rel == ".claude/settings.json"',
                                                     "            settings_ok = True"))
 fg.append(("FG TC-12（F8）: どの設定ファイルでも代わりにすると不合格", not asked(r19, f"{ts} --setting-sources user --settings .gitignore")))
+r20 = make_repo("fg_parse_all", broken_unreviewed("parse_all", '    if UNPARSED_RE.search(command):\n', "    if False:\n"))
+got = tc26(r20)
+fg.append(("FG TC-26: 置き換え・かっこの規則を外すと不合格", not got[0] and not got[2] and not got[3]))
 for name, ok in fg:
     ck(name, ok)
 print(f"---\npass={sum(results)} fail={len(results) - sum(results)}")
