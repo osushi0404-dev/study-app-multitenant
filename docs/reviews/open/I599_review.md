@@ -32,8 +32,10 @@
 - [implement] `/simplify` の指摘を取り込んだ（引数の表を一般の規則に・git の回数を減らす・写しがあれば起動役は差を見ない・見張りの読み込み失敗時の規則を写さない・TC-22）。`code-review.sh` のゲートの前置きの照合を判定に寄せる指摘は見送った — `classify_gate` が `&&` などのつなぎを UNSAFE にするので、ゲートの行は 1 つのコマンドだけ
 - [implement] 手動 No.5（`.claude/hooks/` に Bash から書けない）は実装中に確かめた — `.claude/hooks/unreviewed.py` を Bash の Python で直そうとして `Read-only file system` で拒否された
 - [implement] 当たりの判定を、コマンドを語に分けて「`bash` のすぐ後ろが scripts/claude/ のパス」の区切りだけにした（TC-23）— コミットのメッセージに `bash scripts/claude/…` と書いただけで `git commit` が中に回り、pre-commit が `.claude/hooks/` に書けず失敗した。読み切れないコマンドは今までどおり中で動かす
+- [review-gate] `code-review.sh` はこのブランチで直したので、見張りが中で動かす。計画の R7 のとおりユーザーに `!` で流してもらった。CI の Harness Tests が落ちた（フックの登録の古い書き方を確かめる既存のテスト 2 本: test_i187_frontend_verify_config.sh ⑦・test_sessionstart_context.sh TC-11g）ので fix-loop へ
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
