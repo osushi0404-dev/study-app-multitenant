@@ -106,7 +106,7 @@
 **修正方針**: 利用者の組織の、消されていない画像だけを返す。中身を読む前にメタデータで 304 を判定し、ブラウザのキャッシュは本人の分だけにする。
 - URL: `GET /api/media/<uuid:asset_id>/`（`backend/problems/urls.py` に `path('media/<uuid:asset_id>/', MediaAssetContentView.as_view(), name='media-asset-content')`）
 - `backend/problems/views.py` に `MediaAssetContentView(GenericAPIView)`（規約 §6。2026-11-20 の追加の直しで `APIView` から変えた）:
-  - `permission_classes = [permissions.IsAuthenticated]`（認証は既定の `JWTAuthentication`。組織の管理者に限らない: クイズを解く一般の利用者も画像を見る）
+  - `permission_classes = [permissions.IsAuthenticated]`・`filter_backends = []`・`pagination_class = None`（1 件を返すので一覧の仕組みを効かせない・fix-loop F8）（認証は既定の `JWTAuthentication`。組織の管理者に限らない: クイズを解く一般の利用者も画像を見る）
   - 取り出し（`backend/problems/selectors.py` を新しく作り `visible_media_assets(user) -> QuerySet[MediaAsset]`）: `user.organization_id` が無ければ空。`MediaAsset.objects.filter(is_deleted=False, organization_id=user.organization_id, subject__organization_id=user.organization_id).only('id', 'mime_type', 'checksum_sha256')`（組織は `request.user` から決める・規約 §5。`organization` か `subject` が null の行は条件に当たらず返らない）。ビューは `get_queryset()` でこれを返し、`lookup_field = 'id'`・`lookup_url_kwarg = 'asset_id'` の `get_object()` で 1 件を取る
   - 無ければ 404（`get_object()` の `Http404` を DRF が `NotFound` にする。他の組織の画像があることを知らせない。本文は `custom_exception_handler` の形）
   - `checksum_sha256` が空なら ETag を付けず、304 の判定もしない（違う画像が同じ ETag にならないように・セキュリティレビューの必須防御条件）。値があれば `etag = f'"{asset.checksum_sha256}"'`。Django の `django.utils.cache.get_conditional_response(request, etag=etag)` で条件つきの要求を判定し、304 なら中身を読まずにその応答（本文なし）に ETag・Cache-Control を付けて返す（`If-None-Match` は RFC 9110 のとおり弱い比較で、`W/` 付きも一致にする。2026-11-20 の追加の直しで、自前の判定〔強い一致だけ〕から変えた。ETag は中身の SHA-256 なので、弱い比較でも違う画像を 304 にしない）
@@ -327,6 +327,7 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 - fix-loop（2026-11-19・コードレビュー 20261119_1825 の止める指摘 F1・F2）（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: F1 `delete_image` の共有の判定を有効な紐づけだけにした（`_reconcile_images`・`delete_problem` とそろえる）／F2 見本のファイルを同じ PR で消すと、ほかの環境では消えた後に 0025 が流れる件は、ユーザーが「このまま消す」を選んだ（R6）。0025 が消した行の ID とキーを出力に並べるようにした
 - 追加の直し（2026-11-20・マージ依頼の後のユーザーの指示「BP・UI/UX の観点でベストなやり方で進めて」）（方式を変える・計画レビューのやり直し: 要）: マージ依頼の報告で、新しいコードの規約・UX の決まりからの外れ 4 点（配信のビューが `APIView`・再読み込みのボタンが 44px 未満・読み込み後のレイアウトのずれ・`If-None-Match` が標準より厳しい）を挙げた。後回しにせず、この PR で直す。あわせて、台帳の残り（#590）のうち今回書き換えたコードの分（F4 ビューの業務の処理・F5 エラーの形・F6 テストの比べ方・F7 自分の紐づけの絞り込み）も直す。F3（0025 が今のコードに頼る）と `Subject.image_directory` の削除は、設計の判断・Danger Ops が要るので #590 に残す。受け入れ条件は変えない。/simplify で「`get_conditional_response` を使わない（強い一致だけ）」と見送った判断は、この追加の直しで覆した
 - 追加の直しの /simplify（2026-11-20・4 観点）（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: 直した — 画像の削除の経路を UUID の形だけにした（ビューの中の形の確かめを消す・`remove_image` の `asset_id` は UUID 型）／`MediaImage` の `height` を表示の img にも既定で効かせ、呼ぶ側は高さを 1 か所に書くだけにした（拡大の画面は `sx` の `height: 'auto'` で上書き・編集のサムネイルは `PREVIEW_HEIGHT` を渡す）／「ほかに有効な紐づけが無ければ捨てる」を `_discard_asset_if_unused` にまとめ、`_reconcile_images` と `remove_image` から使う（`delete_problem` は条件が違うので変えない）。見送った — 画像の操作の `get_object()` が選択肢も読む（前からの形・差分の外）／44px の定数の共有（まだ 2 か所）／`perform_create` の中の import の重なり（差分の外）
+- fix-loop（2026-11-20・コードレビュー 20261120_0915 の止める指摘 F8）（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: `MediaAssetContentView` に `filter_backends = []`・`pagination_class = None` を書いた（`GenericAPIView` にしたことで全体の `OrderingFilter` が効き、`?ordering=` で 500 になっていた）
 
 ## レビュー結果
 - [20261120_0903 判定: ✅ 完了](../../reviews/I587_plan_review_20261120_0903.md)

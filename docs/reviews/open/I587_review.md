@@ -93,6 +93,7 @@
 - [design-security-review] 追加の直しの分を確かめた。Blocker 0・Medium 1（`remove_image` の紐づけの絞り込みに画像の組織〔科目の組織〕を入れる）を必須防御条件として 4-4 と TC-10 に足した。Low 2 件（弱い比較・412）は受け入れ — 組織の絞り込みの後の判定なので境界は越えない
 - [implement] 追加の直しを実装した（サービスの `add_image`・`remove_image`・`ImageUploadSerializer`・`GenericAPIView`・`get_conditional_response`・枠の高さ・44px のボタン）。画面は Playwright MCP で、成功・失敗・再読み込みを確かめた（失敗はブラウザのページの中で `/api/media/` の通信だけを 404 にして作った・`browser_run_code_unsafe`）。失敗の枠は表示のときと同じ高さで、下の選択肢の位置が変わらない
 - [implement] /simplify（4 観点）の指摘のうち 3 件を直し、3 件を見送った（計画変更記録）
+- [fix-loop] F8 は案 A（`filter_backends = []`・`pagination_class = None`）で直した — 1 件を返すビューに一覧の仕組みは要らない。`ordering_fields` だけを空にする案は、ほかの絞り込みを通し続けるので採らない。`APIView` に戻す案は規約 §6 から外れる
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -108,3 +109,4 @@ STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate

@@ -272,6 +272,15 @@ def test_media_tenant_boundary(world, case):
     assert "main_message" in response.json()["error"]
 
 
+@pytest.mark.parametrize("query", ["?ordering=id", "?search=x", "?page=2"])
+def test_media_ignores_list_query_params(world, query):
+    """1 件の配信なので、一覧の絞り込み・並べ替え・ページ分けの値は効かせない（fix-loop F8）"""
+    asset = make_asset(world)
+    response = client_for(world["learner_a"]).get(media_url(asset) + query)
+    assert response.status_code == 200
+    assert response.content == PNG
+
+
 def test_media_same_org_learner_gets_image(world):
     asset = make_asset(world)
     assert client_for(world["learner_a"]).get(media_url(asset)).status_code == 200

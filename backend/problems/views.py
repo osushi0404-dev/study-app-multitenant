@@ -658,6 +658,10 @@ class MediaAssetContentView(generics.GenericAPIView):
     同じ画像の 2 回目（If-None-Match）は、中身を読まずに 304 を返す（判定は Django・RFC 9110 の弱い比較）。
     """
     permission_classes = [permissions.IsAuthenticated]
+    # 1 件を返すビューなので、一覧の絞り込み・並べ替え・ページ分けを効かせない（I587 F8。
+    # 全体の OrderingFilter は serializer_class の無いビューで ?ordering= があると例外になる）
+    filter_backends = []
+    pagination_class = None
     lookup_field = 'id'
     lookup_url_kwarg = 'asset_id'
 
