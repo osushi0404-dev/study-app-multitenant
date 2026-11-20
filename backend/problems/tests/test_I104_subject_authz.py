@@ -64,8 +64,7 @@ def test_non_admin_can_read(setup):
 
 # ---- TC-AUTO-03: admin は create/update/destroy を従来どおり実行できる ----
 @pytest.mark.django_db
-def test_admin_can_crud(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_admin_can_crud(setup):
     client = APIClient()
     client.force_authenticate(user=setup["admin"])
 

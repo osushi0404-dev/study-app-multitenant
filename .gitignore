@@ -16,7 +16,6 @@ ENV/
 *.log
 db.sqlite3
 media/
-!backend/media/
 staticfiles/
 backend/logs/
 backend/staticfiles/

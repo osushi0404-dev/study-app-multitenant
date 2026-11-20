@@ -72,8 +72,7 @@ def test_non_admin_cannot_read(setup):
 
 # ---- TC-AUTO-02: 非admin は更新系・AI生成・画像で 403 ----
 @pytest.mark.django_db
-def test_non_admin_cannot_mutate(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_non_admin_cannot_mutate(setup):
     client = APIClient()
     client.force_authenticate(user=setup["normal"])
     pid = setup["problem"].id
@@ -101,8 +100,7 @@ def test_anonymous_gets_401(setup):
 
 # ---- TC-AUTO-03: admin は参照・CRUD を従来どおり実行できる ----
 @pytest.mark.django_db
-def test_admin_can_read_and_crud(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_admin_can_read_and_crud(setup):
     client = APIClient()
     client.force_authenticate(user=setup["admin"])
     pid = setup["problem"].id
@@ -121,10 +119,9 @@ def test_admin_can_read_and_crud(setup, tmp_path, settings):
 
 # ---- TC-AUTO-03b: admin はカスタムアクション（AI生成・画像）で 403 にならない ----
 @pytest.mark.django_db
-def test_admin_custom_actions_not_forbidden(setup, tmp_path, settings):
+def test_admin_custom_actions_not_forbidden(setup):
     """admin が全アクションで IsOrgAdmin を通過することを固定（AC2 の全アクションを明示）。
     AI生成/画像は入力不足で 400 になるが、重要なのは 403 でないこと（認可通過）。"""
-    settings.MEDIA_ROOT = str(tmp_path)
     client = APIClient()
     client.force_authenticate(user=setup["admin"])
     pid = setup["problem"].id

@@ -5,7 +5,9 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import ProblemPreview from '../ProblemPreview';
 import { MediaAsset, Problem } from '../../services/types';
-import { getMediaUrl } from '../../utils/url';
+
+// 画像の取得はしない（フックを差し替え、渡された API の URL を src に出す・I587）
+jest.mock('../../hooks/useMediaImage');
 
 const asset = (id: string, url: string, usageKind: string): MediaAsset => ({
   id,
@@ -34,30 +36,28 @@ const baseProblem: Problem = {
 };
 
 describe('ProblemPreview の画像（I472）', () => {
-  it('新しい形式の解説画像があれば新しい形式だけを出す', () => {
+  it('解説画像を表示順に出す', () => {
     render(
       <ProblemPreview
         problem={{
           ...baseProblem,
-          explanation_image: '/media/legacy.png',
           explanation_images: [
-            asset('e1', '/media/e1.png', 'explanation'),
-            asset('e2', '/media/e2.png', 'explanation'),
+            asset('e1', '/api/media/e1/', 'explanation'),
+            asset('e2', '/api/media/e2/', 'explanation'),
           ],
         }}
       />
     );
 
-    expect(screen.getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/e1.png'));
-    expect(screen.getByAltText('解説画像 2')).toHaveAttribute('src', getMediaUrl('/media/e2.png'));
+    expect(screen.getByAltText('解説画像 1')).toHaveAttribute('src', '/api/media/e1/');
+    expect(screen.getByAltText('解説画像 2')).toHaveAttribute('src', '/api/media/e2/');
     expect(screen.queryByAltText('解説画像 3')).not.toBeInTheDocument();
   });
 
-  it('新しい形式が無ければ古い形式の解説画像を 1 枚出す', () => {
-    render(<ProblemPreview problem={{ ...baseProblem, explanation_image: '/media/legacy.png' }} />);
+  it('画像が無ければ画像を出さない', () => {
+    render(<ProblemPreview problem={baseProblem} />);
 
-    expect(screen.getByAltText('解説画像 1')).toHaveAttribute('src', getMediaUrl('/media/legacy.png'));
-    expect(screen.queryByAltText('解説画像 2')).not.toBeInTheDocument();
+    expect(screen.queryByAltText(/^(解説|問題)画像/)).not.toBeInTheDocument();
   });
 
   it('解説文が空なら解説画像を出さない', () => {
@@ -66,7 +66,7 @@ describe('ProblemPreview の画像（I472）', () => {
         problem={{
           ...baseProblem,
           explanation: '',
-          explanation_images: [asset('e1', '/media/e1.png', 'explanation')],
+          explanation_images: [asset('e1', '/api/media/e1/', 'explanation')],
         }}
       />
     );
@@ -77,13 +77,13 @@ describe('ProblemPreview の画像（I472）', () => {
   it('問題画像を押すと拡大の画面が開く', () => {
     render(
       <ProblemPreview
-        problem={{ ...baseProblem, question_images: [asset('q1', '/media/q1.png', 'problem')] }}
+        problem={{ ...baseProblem, question_images: [asset('q1', '/api/media/q1/', 'problem')] }}
       />
     );
 
     fireEvent.click(screen.getByAltText('問題画像 1'));
 
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByRole('img')).toHaveAttribute('src', getMediaUrl('/media/q1.png'));
+    expect(within(dialog).getByRole('img')).toHaveAttribute('src', '/api/media/q1/');
   });
 });

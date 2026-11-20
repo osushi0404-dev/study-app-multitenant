@@ -63,8 +63,7 @@ def _valid_payload(subject_id, question="越境問題I103"):
 
 # ---- TC-AUTO-01: 越境 create=存在しない科目と同じ 400・Problem 未作成 ----
 @pytest.mark.django_db
-def test_cross_org_create_rejected(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_cross_org_create_rejected(setup):
     client = APIClient()
     client.force_authenticate(user=setup["admin_a"])
     other_id = setup["subject_b"].id
@@ -123,8 +122,7 @@ def test_cross_org_generate_adaptive_rejected(setup):
 
 # ---- TC-AUTO-04: 自組織 create=201（正常系不変） ----
 @pytest.mark.django_db
-def test_same_org_create_succeeds(setup, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_same_org_create_succeeds(setup):
     client = APIClient()
     client.force_authenticate(user=setup["admin_a"])
     resp = client.post(
