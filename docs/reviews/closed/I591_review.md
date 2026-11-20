@@ -87,6 +87,9 @@
 - [retro] 改善案「実装の最後に手動テストの期待結果と成果物を照らす」→ 見送り — test-gate がその場で捕まえ（M1・M3）、手戻りは記録の追記だけだった。test-gate の役目そのものなので二重に塞がない
 - [retro] 改善案「X の投稿の数え違い（6 件と書いた・正しくは 5 件）」→ このイシューで直した — 記録の冒頭と計画書に正しい数を書いた（イシューの本文とコメントは書き換えない）
 
+- [close] develop が先に進んでいた（I587 のマージ）ので取り込んだ。取り込んだ変更はこのブランチの変えたファイルに触れず、gate-check は OK のままだった — 記録の場所の外の変更はレビュー済みの範囲と重ならないため、レビューを通り直さない
+- [close] 診断のメモ（`docs/reviews/I591_fix_diagnosis_*.md`）は closed へ移さず `docs/reviews/` に残した — close の回収の対象（`*_review_*`）に当たらず、I587 など過去のイシューも同じ置き方のため
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -98,3 +101,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
