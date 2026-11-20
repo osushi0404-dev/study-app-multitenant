@@ -51,3 +51,9 @@ grep -q 'I599' docs/runbooks/harness-audit.md
 
 ## 実行記録
 - 2026-11-20 計画: TC-01〜TC-19 は実装前のため未実行。TC-17 の `! grep -q …I430.md` は、今は F1 の行があるので不合格（exit 1）になることを確かめた（失敗の注入に当たる）
+- 2026-11-20 fix-loop（CI の Harness Tests の失敗）:
+  - なぜ失敗したか: フックの `command` を起動役を通す形に変えたが、古い形と完全一致を見る既存のテストが 2 本あった（`test_i187_frontend_verify_config.sh` ⑦・`test_sessionstart_context.sh` TC-11g）。計画の調査で古い形の文字列をリポジトリ全体で grep しなかった
+  - 何を変えたか: 2 本の期待値を `bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/<名前>.py` に替えた（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1810.md` の案 A）
+  - セキュリティ: 守りの弱まりなし（期待値を起動役を通す形に厳しくしただけ）
+  - 次回どう防ぐか: 設定の書き方を変えるときは、古い形の文字列をリポジトリ全体で grep して消費箇所を全部直す（plan-writing-rules「規約是正時の消費箇所の全件列挙」。retro で振り返る）
+  - 確かめた結果: 2 本を手元で流し合格（⑦ pass=14 fail=0・TC-11g を含む pass=24 fail=0）。古い形のままで不合格になることは CI の run 44706186290 で確かめ済み（失敗の注入に当たる）

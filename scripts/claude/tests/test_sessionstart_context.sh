@@ -89,7 +89,7 @@ SETTINGS="${SETTINGS:-$REPO_ROOT/.claude/settings.json}"
 if python3 - "$SETTINGS" <<'PY'
 import json, sys
 import re
-WANT = 'python3 "$CLAUDE_PROJECT_DIR"/scripts/claude/hooks/sessionstart_context.py'
+WANT = 'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/sessionstart_context.py'  # I599: 起動役を通す
 groups = json.load(open(sys.argv[1], encoding="utf-8")).get("hooks", {}).get("SessionStart", [])
 ok = False
 for g in groups:
