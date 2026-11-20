@@ -41,6 +41,28 @@
 | 判定の決まりをベースのブランチから読む | 公式ブログ（資料 7）の運用。Claude Code の機能としては、プロジェクトのサブエージェントは作業ディレクトリからリポジトリのルートまでの `.claude/agents/` から読まれ、`--agents`（JSON）で別の定義を渡せる | 資料 7・https://code.claude.com/docs/en/sub-agents.md |
 | Code Mode | 公式・実験的機能 | 資料 5 |
 
+### 資料ごとの公式との対応（確認日 2026-11-20）
+
+「公式の機能なし」＝運用の考え方で、対応する Claude Code の機能が無いもの。「未確認」＝公式の出典で確かめていない数字・主張。
+
+| 資料 | 要点 | 対応する公式の機能・言葉 | 出典 |
+|---|---|---|---|
+| 外部・Turing Post | グラフ＝タスク・役・検証・状態・人の判断の明示的な設計。誇張の指摘 | サブエージェント・dynamic workflows・フック（「graph engineering」は公式の名前ではない）。誇張の否定は記事の主張で、公式の出典では未確認 | https://code.claude.com/docs/en/agents.md |
+| 外部・AI総研 | ノード・エッジ・状態・分岐と合流・差し戻し | dynamic workflows（`agent()`・`parallel()`・`pipeline()`・`phase()`）。「状態のスキーマ」は `agent()` の `schema` に当たる | https://code.claude.com/docs/en/workflows.md |
+| 外部・AI Heartland | 公式機能名ではない・実体はサブエージェントと dynamic workflows・"and then" は本当にエッジか | サブエージェント・dynamic workflows（`parallel()`＝全部を待つ・`pipeline()`＝待たない） | https://code.claude.com/docs/en/workflows.md |
+| 外部・AI Builder Club | ノード＝サブエージェント・確実な遷移はフック・90.2% 上回り約 15 倍のトークン | サブエージェント（`.claude/agents/`）・フック。数字は未確認（記事の引用） | https://code.claude.com/docs/en/sub-agents.md ・ https://code.claude.com/docs/en/hooks.md |
+| 外部・FrankX | ループ・ワークフロー・グラフの違い・同時 16・1,000 体 | dynamic workflows の上限（同時 16・1 回 1,000 体）は公式で確かめた | https://code.claude.com/docs/en/workflows.md |
+| 1 m4lkxx | Harness・Loop・Graph のはしご・証拠の強さ・取り消しの値段で関所 | ハーネスの各部は公式の機能（サブエージェント・フック・権限・サンドボックス）に当たる。はしごの段・証拠の順・関所の考え方は公式の機能なし（運用の考え方） | https://code.claude.com/docs/en/agents.md |
+| 2 0xTrackmind | 契約・地図・証拠の関所・権限はモデルの外・回数の上限・状態はファイルに | 権限はモデルの外＝公式の permissions・サンドボックス・フック。CLAUDE.md を短く＝公式の推奨（資料 10 の「システムプロンプトを 80% 以上削った」）。ほかは公式の機能なし。数字（8→16 件など）は未確認 | https://code.claude.com/docs/en/hooks.md ・資料 10 |
+| 3 sermakarevich | 評価を先に書く・評価役を悪い例で試す | 公式の機能なし（運用の考え方）。公式ブログ（資料 7）の「確かめ自体を試す」と同じ方向 | 資料 7 |
+| 4 Zenn（nrs） | コードを読まずにマージに要る合意 | 公式の機能なし（組織の運用の話） | — |
+| 5 Code Mode | JavaScript で複数の道具の呼び出し・サンドボックスの外・`-p` 不可 | Code Mode（公式・実験的機能） | https://code.claude.com/docs/en/code-mode |
+| 6 OpenClaw の CI | 不要なテストを消す・時機を分ける・関係するテストだけ | 公式の機能なし（CI の運用）。数字（95% など）は未確認（記事自身も施策ごとの寄与を分けていないと注意） | — |
+| 7 公式ブログ（検証） | 3 回で人を呼ぶ・判定の決まりはベースのブランチから・observe から・確かめ自体を試す | 公式の運用（Claude Code チーム）。関係する機能はフック・`/goal`・Code Review | 資料 7 |
+| 8 hanakoxbt | ループはノードの中・グラフはノードの間・戻すのは単位・取り消しの値段で関所 | サブエージェント（ノード）・dynamic workflows（ノードの間）。戻し方・関所の開け方は公式の機能なし（運用の考え方） | https://code.claude.com/docs/en/workflows.md |
+| 9 addyosmani | 認知の明け渡し・緑が何を見ていないか・要約より先に証拠 | 公式の機能なし（人の習慣の話）。新しい文脈のサブエージェントで自分の仕事を批評させる点はサブエージェントに当たる | https://code.claude.com/docs/en/sub-agents.md |
+| 10 公式記事（サブエージェントをまとめる） | 単一のループ＋スキル・道具が勝ることが多い・検証は残す | サブエージェント・スキル・MCP の道具（公式の記事） | 資料 10・https://code.claude.com/docs/en/sub-agents.md |
+
 ## 4. 今のハーネスの流れ（図）
 
 ```mermaid
@@ -62,10 +84,10 @@ flowchart TD
   RG_PAR --> GATES[[決定論のゲート<br/>auto_test の宣言]]
   GATES --> CR{{code-reviewer<br/>組み込みの結果を入力に}}
   CR -->|高リスク YES| ADV
-  subgraph ADV [敵対的レビュー adversarial-review.sh]
-    A1{{観点 1}}
-    A2{{観点 2}}
-    A3{{観点 3}}
+  subgraph ADV [敵対的レビュー adversarial-review.sh・3 観点を同時に]
+    A1{{adversarial-reviewer<br/>観点 1}}
+    A2{{adversarial-reviewer<br/>観点 2}}
+    A3{{adversarial-reviewer<br/>観点 3}}
   end
   CR -->|止める指摘| FL[fix-loop]
   ADV -->|Critical/High| FL

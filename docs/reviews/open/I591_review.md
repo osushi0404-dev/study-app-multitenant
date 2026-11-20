@@ -38,6 +38,8 @@
 
 - [test-gate] 手動テスト M1・M3 を NG にした — M1 は資料の要点ごとの公式の対応と「未確認」の表示が無く、M3 は図に adversarial-reviewer の名前が無い。記録の文書（docs/proposals）は test-gate では直せないので fix-loop に回す
 
+- [fix-loop] 手動テスト M1・M3 の NG を案 A（記録の 3 節に資料ごとの公式との対応表を足し、図に adversarial-reviewer の名前を書く）で直した — 期待値を緩める案は受け入れ条件を満たさないまま合格にする（テストを弱める）ので採らない
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
