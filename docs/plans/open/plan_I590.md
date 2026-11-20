@@ -17,7 +17,7 @@
 
 **詳細**:
 1. **F4〜F7 は済み**（受け入れ条件 1〜3・5 は満たされている）:
-   - F4: `backend/problems/views.py:607` の `upload_image` と `:632` の `delete_image` は `ProblemService.add_image`・`remove_image`（`backend/problems/services/problem_service.py:184`・`:216`。どちらも `@transaction.atomic`）を呼ぶだけ。ビューに `transaction.atomic` の呼び出しも `_save_image_as_asset`・`_discard_asset` の呼び出しも無い（`views.py:6` の `from django.db import transaction` は読み込みだけが残っている → 4-4 で消す）
+   - F4: `backend/problems/views.py:607` の `upload_image` と `:632` の `delete_image` は `ProblemService.add_image`・`remove_image`（`backend/problems/services/problem_service.py:184`・`:216`。どちらも `@transaction.atomic`）を呼ぶだけ。ビューに `transaction.atomic` の呼び出しも `_save_image_as_asset`・`_discard_asset` の呼び出しも無い（`views.py:6` の `from django.db import transaction` は、クイズの回答の記録〔`views.py:832`〕が使うので残す）
    - F5: 入力は `ImageUploadSerializer`（`serializers.py:108`）、紐づけが無いときは `NotFound`（`problem_service.py:236`）。どちらも `custom_exception_handler` の形になる
    - F6: `test_I587_media_migration.py:142` は行単位の完全一致（`deleted_lines == [...]`）
    - F7: `remove_image` は `is_deleted=False` と組織で絞る（`problem_service.py:224-234`）
@@ -30,7 +30,7 @@
 5. **台帳の残りの一覧**: 当たるのは `FILE=-` のハーネスの 5 行（I223・I224）だけ（9 に書く）
 
 ## 2. 受け入れ条件
-- [ ] AC1: `upload_image`・`delete_image` がサービスの公開の関数を呼ぶだけで、ビューに `transaction.atomic`・サービスの非公開の関数の呼び出しが無い（I587 で達成済み。このイシューでは `views.py` の使われない `transaction` の読み込みを消すだけ）
+- [ ] AC1: `upload_image`・`delete_image` がサービスの公開の関数を呼ぶだけで、ビューに `transaction.atomic`・サービスの非公開の関数の呼び出しが無い（I587 で達成済み。このイシューではコードを変えない）
 - [ ] AC2: 2 つの action のエラーが `{"error": {"main_message", ...}}` の形で返る（I587 で達成済み・I587 のテストで固定）
 - [ ] AC3: `delete_image` が論理削除済みの紐づけを対象にしない（I587 で達成済み・I587 のテストで固定）
 - [ ] AC4: 作成・更新で許す画像の形式や判定の関数を後で変えても、0025 の判定（どの中身を「画像でない」として止めるか）が変わらない。その方法と理由が計画書にある（TC-01・TC-02）
@@ -67,15 +67,15 @@
 - `_checked_content` はこれを使う（判定の中身は今と同じ: 先頭 2048 バイトを `python-magic` で判定し、3 形式以外なら止める）
 - 冒頭の説明に「0025 が読む。アプリのモジュール（`problems.*`）を読まない・中身の判定を変えない」を足す
 
-### 4-2. `backend/problems/views.py`（F9・AC1 の後片付け）
+### 4-2. `backend/problems/views.py`（F9）
 - 達成すること: 304・412 にも守りの見出しを付ける
 - `get` の `for header, value in MEDIA_SECURITY_HEADERS.items(): response[header] = value` を、`if response is None:` の中から外に出し、どの応答にも付ける。`Content-Disposition: inline` も一緒に付く（本文の無い応答では意味を持たないが害も無い）
-- 6 行目の使われない `from django.db import transaction` を消す（`views.py` の中に `transaction.` の呼び出しが無いことを `grep` で確かめてから）
+- 6 行目の `from django.db import transaction` は消さない（`views.py:832` のクイズの回答の記録が使う）
 
 ### 4-3. `backend/problems/models.py`・`backend/problems/migrations/0027_remove_subject_image_directory.py`
 - 達成すること: 読む所の無い列を外す。値がある DB では黙って消さない
 - モデルから `image_directory` の定義（`models.py:51-58` のコメント 1 行と定義）を消す
-- `makemigrations problems --name remove_subject_image_directory` で 0027 を作り、`RemoveField` の前に `RunPython` を足す
+- `makemigrations problems --name remove_subject_image_directory` で 0027 を作り、`RemoveField` の前に `RunPython` を足す。作った 0027 の `operations` が `RemoveField(subject.image_directory)` 1 つだけであること（ほかのモデルの差分が混ざっていないこと）を確かめる（`makemigrations --check` が CI で通る＝差分の取り残しも無い）
   ```python
   def refuse_if_image_directory_set(apps, schema_editor):
       Subject = apps.get_model('problems', 'Subject')
@@ -110,7 +110,7 @@
 ### 自動
 - テストのレベル: どれも pytest（結合。DB と HTTP のクライアントを使う）。画面の変更が無いので E2E は足さない。CI（pytest）が PR ごとに流す
 - TC-01: `media_migration` がアプリのモジュール（`problems.` で始まるもの）を読まない（AST で読み込みを数える）。失敗の注入: 同じ関数に `from problems.utils import detect_mime` を含む文字列を渡すと 1 件になることもテストで確かめる
-- TC-02: 0025 の判定が `problems.utils` の変更に引きずられない。`monkeypatch.setitem` で `problems.utils.ALLOWED_IMAGE_FORMATS`（辞書。今の `media_migration` は同じ物を読んでいる）に `text/plain` を足しても、文字の中身は「画像ではありません」で止まる（今のコードでは止まらず通る＝落ちる）
+- TC-02: 0025 の判定が `problems.utils` の変更に引きずられない。`monkeypatch.setitem` で `problems.utils.ALLOWED_IMAGE_FORMATS`（辞書。今の `media_migration` は同じ物を読んでいる）に `text/plain` を足しても、文字の中身は「画像ではありません」で止まる（今のコードでは止まらず通る＝落ちる）。あわせて `monkeypatch.setattr(problems.utils, 'detect_mime', lambda data: 'image/png')` の下でも文字の中身が止まる（判定の関数の差し替えにも引きずられない）
 - TC-03: 配信の API の 200・304・412 の応答に `nosniff` と CSP が付く。412 は `If-Match: "x"`、304 は `If-None-Match: <ETag>`
 - TC-04: 0027 は、値のある科目があれば `RuntimeError`（件数を含む）で止まり列が残る。空なら列を外す。戻すと列が `''` で戻る
 - 既存: `test_I587_media_migration.py`（0025 の移行と食い違いで止まる）・`test_I587_media_in_db.py`（配信・2 つの action）がそのまま通ること（CI）
@@ -169,4 +169,7 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 | V3 | 3 | 読んで可 | 0027 が値のある科目を黙って消さない（列は NOT NULL なので空文字以外の値すべて。空白だけの値も止める。TC-04）。戻しで列が戻る |
 
 ## 計画変更記録
--
+- 2026-11-20 plan-review: 計画書の記載: [`views.py:6` の使われない `transaction` の読み込みを消す] → 採った方法: 消さない — 理由: 計画レビューの Blocker。`views.py:832` のクイズの回答の記録が使っており、消すと回答の API が `NameError` になる。あわせて Warning の TC-02 に判定の関数の差し替えの観点を足し、4-3 に 0027 の中身の確かめを足した。計画レビューのやり直し: 要（Blocker の対応）
+
+## レビュー結果
+- [20261120_1334 判定: 差し戻し（Blocker 1件）](../../reviews/I590_plan_review_20261120_1334.md)
