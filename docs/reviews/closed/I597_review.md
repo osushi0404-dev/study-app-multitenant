@@ -1,23 +1,23 @@
 # I597 レビュー: DB の控えの入口を Claude から流せる形で直す
 
 ## 変更概要
--
+- Claude が破壊的な DB の操作の前に、1 つのコマンド（`bash scripts/claude/db-backup.sh <名前>`）で確かな控えを取れる入口を足した。失敗したら控えを残さず非 0 で止まる
 
 ## 変更点
--
+- `scripts/claude/db-backup.sh`（新規）・`scripts/db_backup.sh`（入口を呼ぶ包みに）・`docs/runbooks/danger-ops.md`（控えの節）・`.gitignore`（つながった行の直し）・`scripts/claude/tests/test_i597_db_backup.sh`（新規）
 
 ## 影響範囲
-- Backend/Frontend/DB/Config:
+- Backend/Frontend/DB/Config: Backend・Frontend・DB はなし。Config/Infra はハーネスのスクリプトと手順書・`.gitignore`。`.claude/settings.json` は変えない
 
 ## テスト結果
 - 自動: `test_i597_db_backup.sh` 12 passed（S1〜S9・FG1〜FG3）・決定論ゲート 7 行すべて exit 0・CI OK（docs/reviews/I597_code_review_20261120_1454.md）
 - 手動: M1〜M3 すべて OK（Claude が実施・docs/tests/open/I597_manual_test.md）。本物の DB で入口が 119977 バイトの完全な控えを取り、人の道具をサンドボックスの中から流すと控えを残さず止まって入口を案内した
 
 ## 計画との差分
-- なし / あり（理由）
+- あり（受け入れ条件の確かめの読み替え・drvfs の権限・テストの項目の追加。いずれも計画変更記録と自律判断の記録に書いた）
 
 ## ロールバック
--
+- PR を revert する。DB・設定の変更は無い
 
 ## 振り返り
 
@@ -71,6 +71,7 @@
 - [retro] 台帳の残り: F4 → #538 にコメントで同梱（アプリ側に分類の Low・同じ系統の残り）／F1・F2・F3・F5 → docs/reviews/backlog/I597.md。判定の仕組み・SECURITY=yes の行は無いので「最優先」は書かない
 - [retro] 引き継ぎ: #590 に入口の使い方・確かめの中身・片付けをコメントした（I590 の再開のため・受け入れ条件 6）
 - [retro] 改善案は「同梱 1 件（C1）・新規起票 0・見送り 6」。見送りの理由は「## 振り返り」の見送りの節
+- [close] 記録を closed へ移す途中で、いったん全部をレビューの場所に移してしまい、イシュー・計画書・テスト文書を正しい置き場へ移し直した — 最終の配置は手順のとおり（`git status` で確かめた）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -78,3 +79,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
