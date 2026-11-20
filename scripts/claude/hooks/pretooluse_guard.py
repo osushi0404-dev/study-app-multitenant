@@ -13,8 +13,8 @@ import sys
 import textwrap
 
 _INPUT = {}   # I200: 見張りが失敗したとき（_fail_safe）に、Bash のコマンドを語の判定にかけるため取っておく
-# I599: レビュー前の中身に届く `bash scripts/claude/…` を中で動かすための書き換え後のコマンド（None なら書き換えない）。
-# _ask() はこれがあれば updatedInput を付けて返す（承認しても外では動かない）
+# I599: `bash scripts/claude/<一覧の名前> …` を付け替えた起動役の形（python3 .claude/hooks/unreviewed.py run …）。
+# None なら付け替えない。_ask()・_pass() はこれがあれば updatedInput を付けて返す
 _REWRITE = None
 
 
@@ -722,7 +722,7 @@ def _updated_input() -> dict:
     return ti
 
 def _ask(reason: str):
-    """PreToolUse の permissionDecision=ask を返す（プロンプト化）。I599: 書き換えがあれば updatedInput も付ける。"""
+    """PreToolUse の permissionDecision=ask を返す（プロンプト化）。I599: 起動役への付け替えがあれば updatedInput も付ける。"""
     out = {
         "hookEventName": "PreToolUse",
         "permissionDecision": "ask",
@@ -734,23 +734,22 @@ def _ask(reason: str):
     sys.exit(0)
 
 def _pass():
-    """Bash を通す。I599: 書き換えがあれば、許可の判定を変えずに updatedInput だけを返す
-    （permissionDecision を返さない。plan_I599.md 調査結果 6 のスパイク C）。"""
+    """Bash を通す。I599: 起動役への付け替えがあれば、許可の判定を変えずに updatedInput だけを返す
+    （permissionDecision を返さない。plan_I599.md 調査結果 7 のスパイク C）。"""
     if _REWRITE:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                  "updatedInput": _updated_input()}}))
     sys.exit(0)
 
-# --- I599: レビュー前の中身をサンドボックスの中で動かす（判定の本体は .claude/hooks/unreviewed.py） ---
-_UNREVIEWED_FALLBACK = ("echo '[I599] レビュー済みかの判定を読み込めないため、サンドボックスの中で動かします"
-                        "（.claude/hooks/unreviewed.py）' >&2 && ")
-
-def _unreviewed_rewrite(command: str):
-    """(書き換え後のコマンド | None, 承認の理由 | None)。判定を読み込めないときは、scripts/claude/ を含むコマンドを
-    中で動かす（判定の当たりの規則を写さない。広めに当たっても中で動くだけで害が無い）。"""
-    if "scripts/claude/" not in command:      # 当たらないコマンドは判定を読み込まない
-        return None, None
-    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+# --- I599（第 2 版）: scripts/claude/ のスクリプトは既定でサンドボックスの中。外に出すのは起動役
+# （python3 .claude/hooks/unreviewed.py run）だけで、起動役がレビュー前の中身が無いときに一覧のスクリプトを動かす。
+# 見張りは、単体の形の `bash scripts/claude/<一覧の名前> …` を起動役の形に付け替え、起動役の形（単体・最上位の cwd）と
+# test-session.sh の引数を確かめるだけ（判定の本体は .claude/hooks/unreviewed.py の route） ---
+def _route(command: str):
+    """(付け替え後のコマンド | None, 承認の理由 | None, 止める理由 | None, 判定にかける同じ意味の形 | None)。"""
+    if "scripts/claude/" not in command and "unreviewed.py" not in command:   # 当たらないコマンドは読み込まない
+        return None, None, None, None
+    root = os.path.realpath(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
@@ -758,10 +757,12 @@ def _unreviewed_rewrite(command: str):
         mod = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = mod   # dataclass が型の名前を引くのに要る
         spec.loader.exec_module(mod)
-    except Exception:  # noqa: BLE001 — 読み込めないときは安全側
-        return _UNREVIEWED_FALLBACK + command, None
-    res = mod.check(command, root)
-    return (mod.rewrite_command(command, res) if res.rewrite else None), res.ask_reason
+        r = mod.route(command, root, _INPUT.get("cwd"))
+    except Exception:  # noqa: BLE001 — 読み込めないときは、起動役の形だけ止める（ほかは既定で中なので安全）
+        if re.search(r"unreviewed\.py['\"]?\s+['\"]?run\b", command):
+            return None, None, "起動役の判定（.claude/hooks/unreviewed.py）を読み込めないので、起動役は流せません（I599）", None
+        return None, None, None, None
+    return r.new_command, r.ask_reason, r.block_reason, r.analyze_as
 
 # --- I174: 危険操作・外部送信・秘密情報・コンテナ内操作の判定 ---
 # 方針（plan_I174.md 0 章・0-9）:
@@ -2850,9 +2851,14 @@ def main():
     raw = tool_input.get("command") or ""
     if not isinstance(raw, str) or not raw.strip():
         sys.exit(0)
-    # I599: 先に書き換えを決めておき、下の確認（_ask）にも付ける。承認の理由（test-session.sh）は最後に返す
+    # I599: 先に起動役への付け替えを決めておき、下の確認（_ask）にも付ける。起動役の形の誤りは止め、
+    # 承認の理由（test-session.sh）は最後に返す
     global _REWRITE
-    _REWRITE, unreviewed_ask = _unreviewed_rewrite(raw)
+    _REWRITE, unreviewed_ask, unreviewed_block, analyze_as = _route(raw)
+    if unreviewed_block:
+        _block(unreviewed_block, raw)
+    if analyze_as:      # 起動役の形は、同じ意味の `bash scripts/claude/<名前> …` として下の判定にかける
+        raw = analyze_as
 
     # I174: 行の継続（\ の直後の改行）は、bash と同じく 1 つのコマンドとして読む（区切りの改行と取り違えると、
     # `git reset \⏎ --hard` が 2 つのコマンドに分かれて素通りする）
@@ -2958,9 +2964,9 @@ def _fail_safe(e: BaseException):
     try:
         cmd = (_INPUT.get("tool_input") or {}).get("command") if _INPUT.get("tool_name") == "Bash" else None
         if isinstance(cmd, str) and cmd.strip():
-            global _REWRITE
-            if _REWRITE is None:      # I599: 書き換えを決める前に失敗したときも、レビュー前の中身を外で動かさない
-                _REWRITE = _unreviewed_rewrite(cmd)[0]
+            # I599: 付け替えを決める前に失敗したときは付け替えない（既定で中）。起動役の形の誤りは止める
+            if _route(cmd)[2]:
+                _block("起動役の形が正しくありません（I599）", cmd)
             _ask_if_risky(cmd, f"見張りが{why}ため、判定できませんでした")
             _pass()
     except SystemExit:

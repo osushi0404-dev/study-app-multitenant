@@ -24,10 +24,18 @@ EXT='bash scripts/claude/adversarial-review.sh --round-limit 3'
 s1() { ! grep -nE '(^|[`[:space:]$(])[A-Za-z_][A-Za-z0-9_]*=[^[:space:]`]*[[:space:]]+bash[[:space:]]+scripts/claude/' "$1"/.claude/skills/*/SKILL.md; }
 # S2 <根>: review-gate の延長の起動が引数の形で書かれている
 s2() { grep -qF -- "$EXT" "$1/.claude/skills/review-gate/SKILL.md"; }
-# S3 <根>: S2 の起動（バッククォートの中）が、settings.json の excludedCommands の形のどれかに glob で当たる
+# S3 <根>: S2 の起動（バッククォートの中）を、見張りが付け替えた形（I599 第 2 版: 外に出すのは起動役
+# `python3 .claude/hooks/unreviewed.py run …` だけ。判定の本体の route で付け替えを求める）が、settings.json の
+# excludedCommands の形のどれかに glob で当たる
 s3() {
-  local cmd pats p
-  cmd=$(grep -oE -- "\`${EXT//./\\.}[^\`]*\`" "$1/.claude/skills/review-gate/SKILL.md" | head -1 | tr -d '`')
+  local raw cmd pats p
+  raw=$(grep -oE -- "\`${EXT//./\\.}[^\`]*\`" "$1/.claude/skills/review-gate/SKILL.md" | head -1 | tr -d '`')
+  [ -n "$raw" ] || return 1
+  raw="${raw//\$ARGUMENTS/I999}"   # スキルを読み込むときに $ARGUMENTS はイシュー番号に置き換わる
+  cmd=$(python3 -I -B -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("u", sys.argv[1] + "/.claude/hooks/unreviewed.py")
+m = importlib.util.module_from_spec(s); sys.modules["u"] = m; s.loader.exec_module(m)
+print(m.route(sys.argv[2], sys.argv[1], sys.argv[1]).new_command or "")' "$1" "$raw") || return 1
   [ -n "$cmd" ] || return 1
   pats=$(python3 -I -c 'import json, sys
 for p in json.load(open(sys.argv[1], encoding="utf-8")).get("sandbox", {}).get("excludedCommands", []):
@@ -48,8 +56,9 @@ ck "S3 延長の起動が sandbox.excludedCommands の形に当たる" yes "$(yn
 # copy_root <名前>: スキルと settings.json の写しを作り、その根を出す
 copy_root() {
   local r="$TMP/$1"
-  mkdir -p "$r/.claude"
+  mkdir -p "$r/.claude/hooks"
   cp -r "$REPO_ROOT/.claude/skills" "$r/.claude/skills"
+  cp "$REPO_ROOT/.claude/hooks/unreviewed.py" "$r/.claude/hooks/unreviewed.py"
   cp "$REPO_ROOT/.claude/settings.json" "$r/.claude/settings.json"
   echo "$r"
 }
@@ -61,9 +70,9 @@ R=$(copy_root fg2); grep -vF -- "$EXT" "$REPO_ROOT/.claude/skills/review-gate/SK
 ck "FG-S2 延長の起動の行を消すと S2 が不合格" no "$(yn s2 "$R")"
 R=$(copy_root fg3); python3 -I -c 'import json, sys
 f = sys.argv[1]; d = json.load(open(f, encoding="utf-8"))
-d["sandbox"]["excludedCommands"] = [p for p in d["sandbox"]["excludedCommands"] if p != "bash scripts/claude/*"]
+d["sandbox"]["excludedCommands"] = [p for p in d["sandbox"]["excludedCommands"] if p != "python3 .claude/hooks/unreviewed.py run *"]
 json.dump(d, open(f, "w", encoding="utf-8"))' "$R/.claude/settings.json"
-ck "FG-S3 excludedCommands から bash scripts/claude/* を消すと S3 が不合格" no "$(yn s3 "$R")"
+ck "FG-S3 excludedCommands から起動役の形を消すと S3 が不合格" no "$(yn s3 "$R")"
 
 echo "pass=${pass} fail=${fail}"
 [ "$fail" -eq 0 ]

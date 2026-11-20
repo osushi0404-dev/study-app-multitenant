@@ -26,13 +26,13 @@
 5. **第 1 版の方式の限界（2026-11-20・review-gate 5 周）**: 外で動くのを既定にし、見張りがコマンドの文字（`shlex` での区切り・振り向け・置き換え・かっこ）からレビュー前の中身に届く形を見つけて中に回す方式は、直すたびに「外に漏れる」（F1・F2・F7・F11・F17・F18）か「普段の呼び出しを壊す」（F12・F13・F16）のどちらかが出て収まらなかった。シェルの書き方は数え切れず、既定が外である限り、読み落としが穴になる
 6. **外で動く必要のあるスクリプト**（`grep -lE '(^|[^a-z_-])(gh|claude|docker|curl)( |$)' scripts/claude/*.sh` と、それを呼ぶ入口を読んだ。2026-11-20）: `adversarial-review.sh`・`check-permission-prompt.sh`・`code-review.sh`・`db-backup.sh`・`dependency-audit-issue.sh`・`fix-diagnosis-review.sh`（`fix-review-lib.sh` で `claude -p`）・`issue-review.sh`・`issue-source.sh`・`lint-frontend.sh`・`plan-issue-review.sh`・`post-review-comment.sh`・`pr-base-sync.sh`・`test-session.sh`・`tui-capture.sh`・`wt-ports.sh`・`wt-remove.sh`。ほか（`flow-stage.sh`・`gate-check.sh`・`check-*.sh`・`tests/*`）は git とファイルの読み書きだけで、中で動く（この会話で中から流して確かめた: `flow-stage.sh`・`check-manual-test-executor.sh`・`tests/test_*.sh`）。ライブラリ（`fix-review-lib.sh`・`review-process-lib.sh`）は入口から読み込まれるだけ
 7. **スパイク（2026-11-20）**: `test-session.sh --settings <試しの設定>` の子のセッションで、PreToolUse のフックの `updatedInput` で書き換えたコマンドは、書き換えた後のコマンドで外に出すかが決まった（A 書き換えなし: 外・B/C `true && ` を前に付ける: 中・`permissionDecision` なしでも効く）。サンドボックスの中では環境変数 `SANDBOX_RUNTIME` がある（このセッションの中の Bash で `env` の名前を見た・探りの Python が中で `SANDBOX_RUNTIME` を見て「中」と出した）。外で無いことは手動 No.1（ステップ 3.5 の関所）で確かめる
-7b. 外に出す型は文字の一致で、`bash .claude/hooks/reviewed-run.sh *` は相対パス。Bash ツールの作業フォルダ（cwd）は呼び出しをまたいで保たれるので、`cd x` の後に Claude が書いた `x/.claude/hooks/reviewed-run.sh` も型に当たる（計画レビュー 2026-11-20 の Blocker。第 1 版の `bash scripts/claude/*` にも同じ穴）。PreToolUse のフックの入力には `cwd` がある（公式のフックの入力の共通の欄）
+7b. 外に出す型は文字の一致で、`python3 .claude/hooks/unreviewed.py run *` は相対パス。Bash ツールの作業フォルダ（cwd）は呼び出しをまたいで保たれるので、`cd x` の後に Claude が書いた `x/.claude/hooks/unreviewed.py run` も型に当たる（計画レビュー 2026-11-20 の Blocker。第 1 版の `bash scripts/claude/*` にも同じ穴）。PreToolUse のフックの入力には `cwd` がある（公式のフックの入力の共通の欄）
 8. 公式の機能だけで表せるか（`danger-ops.md`「見張りに判定を足すときの決まり」1）: 外に出すかは `excludedCommands` の文字の型だけ。中身が「レビュー済みか」は表せない。そこで、外に出す型を「起動役 1 つ」に絞り（公式の設定）、起動役が中身を確かめる。見張りは、決まった単純な形を起動役の形に付け替えるだけ（公式の `updatedInput`）
 9. 事故の実例（同 2）: I597（2026-11-20）の implement で、新しく書いた `scripts/claude/db-backup.sh` を、レビューの前にテストの中から外で動かした（中身は無害）
 10. 一覧の残り: `docs/reviews/backlog/I430.md` F1（このイシューそのもの・第 1 版で行を消した）・F2（git の穴。I600 で扱う）
 
 ## 2. 受け入れ条件
-- [ ] AC1: 外に出す一覧に `bash scripts/claude/*` が無く、`bash .claude/hooks/reviewed-run.sh *` だけがある。`bash scripts/claude/…` は、どの形でも、そのままではサンドボックスの中で動く（新しく書いた・書き換えた・「..」・変数・置き換え・振り向け・前置きのどれでも）
+- [ ] AC1: 外に出す一覧に `bash scripts/claude/*` が無く、`python3 .claude/hooks/unreviewed.py run *` だけがある。`bash scripts/claude/…` は、どの形でも、そのままではサンドボックスの中で動く（新しく書いた・書き換えた・「..」・変数・置き換え・振り向け・前置きのどれでも）
 - [ ] AC2: 外で動く必要のあるスクリプト（調査結果 6 の一覧）を単体の形（`bash scripts/claude/<名前> <引数…>`。`$`・バッククォート・`(`・`)`・`{`・`}`・`;`・`&`・`|`・`<`・`>`・改行・前置きの代入を含まない）で流すと、見張りが起動役の形に付け替え、`scripts/claude/` にレビュー前の中身（`git merge-base HEAD origin/develop` との差・追跡していない新規・git が無視するファイル）が無ければ、承認なしに外で動く
 - [ ] AC3: レビュー前の中身があるときは、起動役は外で動かさず、理由と「ユーザーに `! bash scripts/claude/<名前> …` で流してもらう」案内を出して終了コード 3 で終わる（スクリプトは動かない）。基準を求められないときも同じ
 - [ ] AC4: 起動役は、一覧に無い名前・`/`・「..」を含む名前を終了コード 2 で拒む。起動役を単体でない形（つなぎ・置き換え・振り向け・前置き）で流すと、見張りが止める
@@ -46,12 +46,12 @@
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra: `.claude/settings.json`（安全装置: 外に出す一覧・allow・フックの呼び方）・新規 `.claude/hooks/reviewed-run.sh`（スクリプトの起動役）・`.claude/hooks/reviewed-hook.sh`（フックの起動役・第 1 版のまま）・`.claude/hooks/unreviewed.py`（判定。第 1 版のたどりを消して小さくする）・`scripts/claude/hooks/pretooluse_guard.py`（安全装置: 付け替え・起動役の形の確かめ）・`scripts/claude/code-review.sh`（ゲート）・`docs/runbooks/danger-ops.md`・`docs/runbooks/harness-audit.md`・`scripts/claude/tests/`（`test_i599_unreviewed_scripts.sh` を作り直す・`test_settings_permissions.sh`）
+- Config/Infra: `.claude/settings.json`（安全装置: 外に出す一覧・allow・フックの呼び方）・`.claude/hooks/reviewed-hook.sh`（フックの起動役・第 1 版のまま）・`.claude/hooks/unreviewed.py`（判定。第 1 版のたどりを消して小さくする）・`scripts/claude/hooks/pretooluse_guard.py`（安全装置: 付け替え・起動役の形の確かめ）・`scripts/claude/code-review.sh`（ゲート）・`docs/runbooks/danger-ops.md`・`docs/runbooks/harness-audit.md`・`docs/runbooks/worktree.md`（外に出すコマンドの名前）・`.claude/skills/review-gate/SKILL.md`（延長の起動の説明）・`scripts/claude/tests/`（`test_i599_unreviewed_scripts.sh` を作り直し本体を `i599_cases.py` に分ける・`test_settings_permissions.sh`・`test_i525_skill_sandbox_form.sh`〔外に出す型に当たるかを、見張りの付け替えの後の形で見る〕）
 
 ## 4. 変更点一覧（具体）
 
 ### 修正アプローチ
-- **既定は中**。外に出すのは起動役（`.claude/hooks/reviewed-run.sh`）だけ。起動役は、`scripts/claude/` にレビュー前の中身が 1 つも無いとき、一覧にあるスクリプトだけを動かす。レビュー前の中身があれば外では動かさず、ユーザーに `!` で頼む案内を出す
+- **既定は中**。外に出すのは起動役（`.claude/hooks/unreviewed.py run`）だけ。起動役は、`scripts/claude/` にレビュー前の中身が 1 つも無いとき、一覧にあるスクリプトだけを動かす。レビュー前の中身があれば外では動かさず、ユーザーに `!` で頼む案内を出す
 - 見張りは安全の判定をしない。単体の形の `bash scripts/claude/<一覧の名前> …` を起動役の形に付け替える（便利のため）・起動役が単体の形で呼ばれているかを確かめる・`test-session.sh` の引数を確かめる（承認）だけ。読み切れない形は何もしない（中で動く）
 - 「レビュー済み」＝このブランチが develop から分かれた時点（`git merge-base HEAD origin/develop`）の中身と同じ（第 1 版と同じ）
 - フックは第 1 版の起動役（分かれた時点の写し）のまま
@@ -60,29 +60,29 @@
 達成すること: AC2〜AC5・AC7 の判定の本体。
 - 残すもの: `_git`（安全な `-c`・`GIT_` を外す）・`_files`（レビュー前の中身＝BASE との差・追跡していない新規・git が無視するファイル〔無視されるフォルダはまとめて数えない〕）・`_test_session_ask`（第 1 版の F4・F8 の確かめを含む）
 - 足すもの: `OUTSIDE_SCRIPTS`（調査結果 6 の 16 本の名前の集合）・`SIMPLE_RE`（単体の形でない文字 `[$`(){};&|<>\n]` が無いこと）・`route(command, root) -> Route(new_command, ask_reason, block_reason)`:
-  - コマンドに `.claude/hooks/reviewed-run.sh` を含む: 単体の形で、`bash .claude/hooks/reviewed-run.sh <名前> …` の 1 つの命令（前置きの代入なし）で、かつフックの入力の `cwd` の実体がプロジェクトの最上位（`CLAUDE_PROJECT_DIR` の実体）と同じでなければ `block_reason`（調査結果 7b。別のフォルダの偽の起動役が型に当たるのを止める）。`<名前>` が `test-session.sh` なら引数を `_test_session_ask` にかけて `ask_reason`
-  - そうでなく、単体の形で `bash scripts/claude/<名前> …`（`<名前>` は `OUTSIDE_SCRIPTS` にあり `/` を含まない）で、`cwd` が最上位のとき（違えば何もしない＝中）: `new_command = "bash .claude/hooks/reviewed-run.sh <名前> <元の引数の文字>"`。`test-session.sh` なら `ask_reason` も
+  - コマンドに `.claude/hooks/unreviewed.py run` を含む: 単体の形で、`python3 .claude/hooks/unreviewed.py run <名前> …` の 1 つの命令（前置きの代入なし）で、かつフックの入力の `cwd` の実体がプロジェクトの最上位（`CLAUDE_PROJECT_DIR` の実体）と同じでなければ `block_reason`（調査結果 7b。別のフォルダの偽の起動役が型に当たるのを止める）。`<名前>` が `test-session.sh` なら引数を `_test_session_ask` にかけて `ask_reason`
+  - そうでなく、単体の形で `bash scripts/claude/<名前> …`（`<名前>` は `OUTSIDE_SCRIPTS` にあり `/` を含まない）で、`cwd` が最上位のとき（違えば何もしない＝中）: `new_command = "python3 .claude/hooks/unreviewed.py run <名前> <元の引数の文字>"`。`test-session.sh` なら `ask_reason` も
   - それ以外: 何も返さない（中で動く）
 - CLI: `unreviewed.py outside-ok <名前>`（0=一覧にあり・レビュー前の中身なし／1=一覧に無い・名前の誤り／3=レビュー前の中身がある・基準を求められない）・`unreviewed.py dirty`（0=なし／1=あり・求められない）
 - 消すもの: 第 1 版のたどり（`_reach`・`RUNNER_GLOBS`・`EXEC_SUFFIXES`・`TRIGGER_RE`・`_check_unparsed`・`rewrite_command` など）
 
-### 4-2. スクリプトの起動役（新規 `.claude/hooks/reviewed-run.sh`）
+### 4-2. スクリプトの起動役（`.claude/hooks/unreviewed.py` の `run`）
 達成すること: AC2〜AC4。
-- `bash .claude/hooks/reviewed-run.sh <名前> [引数…]`。`root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"`
+- `python3 .claude/hooks/unreviewed.py run <名前> [引数…]`（判定と同じファイルに置く。計画変更記録のとおり、新しいファイルを作る道具が使えないため。動きは同じ）。最上位は `CLAUDE_PROJECT_DIR`、無ければ `git rev-parse --show-toplevel`
 - 最初に、サンドボックスの中で動いていないかを見る（中では環境変数 `SANDBOX_RUNTIME` がある。調査結果 7 のスパイクの探りで確かめた）。中なら「起動役がサンドボックスの中で動いています（外に出す型に当たっていない）」と出して終了コード 4（中では gh・`claude -p` が動かないので、早く失敗させる。手動 No.1 の外か中かの観測にもなる）
-- `python3 "$root/.claude/hooks/unreviewed.py" outside-ok "<名前>"` が 0 のときだけ `cd "$root" && exec bash "scripts/claude/<名前>" "$@"`。1 なら「一覧に無い名前」と終了コード 2。3 なら「レビュー前の中身があるので外では流せません。外で流す必要があれば、ユーザーに `! bash scripts/claude/<名前> …` で流してもらってください（docs/runbooks/danger-ops.md）」と終了コード 3
+- 名前が一覧にあり、レビュー前の中身が無いときだけ、最上位に移って `os.execvp("bash", ["bash", "scripts/claude/<名前>", *引数])`。一覧に無いなら「一覧に無い名前」と終了コード 2。3 なら「レビュー前の中身があるので外では流せません。外で流す必要があれば、ユーザーに `! bash scripts/claude/<名前> …` で流してもらってください（docs/runbooks/danger-ops.md）」と終了コード 3
 - 置き場所 `.claude/hooks/` はサンドボックスから書けず、Edit は承認が要る（第 1 版の手動 No.5 で確かめた）
 
 ### 4-3. 見張り（`scripts/claude/hooks/pretooluse_guard.py`）
 達成すること: AC2・AC4・AC5。
 - 第 1 版の `_unreviewed_rewrite` を `route(command, root, cwd)` を呼ぶ形に替える（`cwd` はフックの入力の `cwd`。無ければ最上位と違うものとして扱う）。`block_reason` は `_block`、`ask_reason` は `_ask`（`new_command` があれば `updatedInput` を付ける）、`new_command` だけなら `updatedInput` だけを返す（`permissionDecision` を返さない）
-- 判定を読み込めないとき: コマンドに `.claude/hooks/reviewed-run.sh` があれば止める（`_block`）。それ以外は何もしない（既定は中なので安全）
+- 判定を読み込めないとき: コマンドに `.claude/hooks/unreviewed.py run` があれば止める（`_block`）。それ以外は何もしない（既定は中なので安全）
 - 第 1 版の「`scripts/claude/` を含めば `echo … &&` を前に付ける」は消す（既定が中になったので要らない）
 
 ### 4-4. 設定（`.claude/settings.json`）
 達成すること: AC1。
-- `sandbox.excludedCommands` の `bash scripts/claude/*` を `bash .claude/hooks/reviewed-run.sh *` に替える
-- `permissions.allow` に `Bash(bash .claude/hooks/reviewed-run.sh *)` を足す（`Bash(bash scripts/claude/*)` は残す。中で動くので承認なし）
+- `sandbox.excludedCommands` の `bash scripts/claude/*` を `python3 .claude/hooks/unreviewed.py run *` に替える
+- `permissions.allow` に `Bash(python3 .claude/hooks/unreviewed.py run *)` を足す（`Bash(bash scripts/claude/*)` は残す。中で動くので承認なし）
 - フックの `command`（5 か所）は第 1 版のまま `reviewed-hook.sh` を通す
 
 ### 4-5. レビューのゲート（`scripts/claude/code-review.sh`）
@@ -174,6 +174,8 @@ Danger Ops（有無）:
 - 2026-11-20 implement（/simplify）: 引数の入口の表 `_ARG_EXEC` を `EXEC_SUFFIXES` の規則に・git の回数を減らす・写しがあれば起動役は差を見ない・TC-22（第 1 版）。計画レビューのやり直し: 不要
 - 2026-11-20 implement: 参照の取り出しを `shlex` の区切りに（TC-23・第 1 版）。計画レビューのやり直し: 不要
 - 2026-11-20 fix-loop（延長の 1 周）: 置き換え・かっこの規則を変更があるときだけに（第 1 版）。計画レビューのやり直し: 不要
+- 2026-11-20 implement（第 2 版）: 計画書の記載: [見張りは起動役の形を止める・付け替える] → 採った方法: 加えて ① 起動役の形を止めるのは、起動役で始まるコマンドか、git・gh・docker で始まり命令の区切りの後に起動役があるコマンドだけ（それ以外で始まるコマンドは公式に全体が中で動くので、本文・ヒアドキュメント・コミットのメッセージに起動役の文字があるだけの形を止めない。前置きの代入は外して見る） ② 起動役の形のときは、見張りのほかの判定を同じ意味の `bash scripts/claude/<名前> …` にかける（起動役〔Python〕の中身の `os.environ` を秘密の参照として確認に回していた） ③ 影響範囲に既存のテスト（`test_i525_skill_sandbox_form.sh` の外に出す型の確かめ）・手順書 2 つ（`worktree.md`・review-gate の SKILL）を足した ④ テストの本体を `i599_cases.py` に分けた（長いヒアドキュメントがワークツリーの分離の確かめに止められた） ⑤ /simplify で判定の git を減らした — 理由: 実装中に、自分の書き込み・コミットのコマンドが止められた・起動役の呼び出しが確認になった・CI のテストが古い型を見ていた。計画レビューのやり直し: 不要（方式・受け入れ条件は変えない）
+- 2026-11-20 implement: 計画書の記載: [スクリプトの起動役を新しいファイル `.claude/hooks/reviewed-run.sh` に置く] → 採った方法: 判定と同じ `.claude/hooks/unreviewed.py` の `run` に置き、外に出す型を `python3 .claude/hooks/unreviewed.py run *` にする — 理由: 新しいファイルを作る道具（Write）が許可の設定で拒否され、`.claude/hooks/` は Bash からも書けない（守りどおり）。既にあるファイルは Edit で直せる。置き場所の守り・動き・一覧の 1 か所は同じ。計画レビューのやり直し: 不要（置く場所の名前だけ）
 - 2026-11-20 plan-review（第 2 版・2 回目）: HIGHRISK。Warning に対応: イシュー #599 に第 2 版の方式の変更をコメントで書く・R8 に I600 で参照を守ることを足す・マージの後の確かめは I593 に決める・R11（確かめから exec までの間）を足す。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 - 2026-11-20 plan-review（第 2 版）: 外に出す型が cwd に依存する穴（Blocker）に、見張りが `cwd` を確かめる規則・TC-17 を足した。`SANDBOX_RUNTIME` の根拠・マージの後の確かめ・一覧を見直す `grep` を足した。計画レビューのやり直し: 要（Blocker の直し）
 - 2026-11-20 review-gate の上限（ユーザーの判断）: 計画書の記載: [外で動くのを既定にし、見張りがコマンドの文字からレビュー前の中身に届く形を見つけて中に回す（第 1 版の 4-1・4-6・AC1〜AC3・AC7）] → 採った方法: 既定を中にし、外に出すのは起動役だけ・起動役はレビュー前の中身が無いときに一覧のスクリプトだけを動かす（第 2 版） — 理由: 第 1 版は review-gate 5 周で「漏れる」と「壊す」が交互に出て収まらなかった（調査結果 5）。既定を中にすれば、読み落としは中で動くだけになり、安全の判定はコマンドの文字を読まない。計画レビューのやり直し: 要（方式・受け入れ条件を変える）
@@ -194,7 +196,7 @@ Danger Ops（有無）:
 
 | 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
 |--------|------|--------------|-------------------------------|
-| High | セキュリティ設定ミス | 外に出す型 `bash .claude/hooks/reviewed-run.sh *` は相対パスなので、cwd を変えると偽の起動役が当たる（調査結果 7b） | 必須: 見張りが起動役の形を見たら、フックの入力の `cwd` の実体が最上位と同じでなければ止める（TC-17）。`cwd` が無いときも止める |
+| High | セキュリティ設定ミス | 外に出す型 `python3 .claude/hooks/unreviewed.py run *` は相対パスなので、cwd を変えると偽の起動役が当たる（調査結果 7b） | 必須: 見張りが起動役の形を見たら、フックの入力の `cwd` の実体が最上位と同じでなければ止める（TC-17）。`cwd` が無いときも止める |
 | Medium | 入力検証 | 起動役の `<名前>` に `/`・「..」・別の拡張子を入れて任意のファイルを動かす | 必須: 起動役は `<名前>` を `^[A-Za-z0-9._-]+\.sh$` かつ `OUTSIDE_SCRIPTS` にあるときだけ受け付け、ほかは終了コード 2（TC-10） |
 | Medium | 入力検証 | 一覧のスクリプトに渡す引数で、外の任意のものを動かす | 一覧の 16 本で引数を命令として使うのは `test-session.sh`（`claude -p` の設定）だけ。`test-session.sh` の引数は見張りが表で確かめ、表に無いものは承認（TC-05）。`tui-capture.sh` は `!` で始まる入力を送らない・`db-backup.sh` は名前の文字を確かめる（既存） |
 | Medium | セキュリティ設定ミス | 判定（`unreviewed.py`）を読み込めない・壊れたときに、起動役の形を素通しする | 必須: 見張りは読み込めないとき起動役の形を止める（TC-06）。起動役は判定の CLI が 0 以外ならスクリプトを動かさない |
@@ -210,7 +212,7 @@ Danger Ops（有無）:
 | # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
 |---|------|---------|---------|------------|----------------|------------|---------|--------|
 | 1 | `bash scripts/claude/<新規・書き換え>` | Claude（Edit・Bash） | 書いてすぐ流す（I597 の形） | 外に出る型に当たらず中で動く | Yes: TC-02・TC-03 | Yes: 手動 No.2 | なし | High |
-| 2 | 起動役 `bash .claude/hooks/reviewed-run.sh <一覧の名前>` | Claude | 一覧のスクリプトかそれが呼ぶものを書き換えてから流す | レビュー前の中身があれば止める | Yes: TC-08 | Yes: 手動 No.1 | 確かめから exec の間（R11） | High |
+| 2 | 起動役 `python3 .claude/hooks/unreviewed.py run <一覧の名前>` | Claude | 一覧のスクリプトかそれが呼ぶものを書き換えてから流す | レビュー前の中身があれば止める | Yes: TC-08 | Yes: 手動 No.1 | 確かめから exec の間（R11） | High |
 | 3 | 起動役の名前 | Claude | `../x.sh`・一覧に無い名前 | 終了 2 | Yes: TC-10 | No | なし | High |
 | 4 | 起動役の形のつなぎ・置き換え・前置き・cwd | Claude | `; evil`・`$(evil)`・`X=1`・`cd x` の後の偽の起動役 | 見張りが止める | Yes: TC-04・TC-17 | No | なし | High |
 | 5 | `test-session.sh` | Claude | 表に無い引数・確認を外すモード・プロジェクトの設定を読まない子 | 承認 | Yes: TC-05 | No | ユーザーが中身を見ずに承認する | Medium |

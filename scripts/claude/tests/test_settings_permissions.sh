@@ -62,6 +62,13 @@ if "~/.config/github-app" not in (fs.get("denyRead") or []):
 # 外に出すコマンドに一般のインタプリタ・シェルを入れない（書いたファイルを外で動かせる。公式の警告）
 _wide_excl = {"*", "bash *", "bash", "sh *", "sh", "zsh *", "python *", "python", "python3 *", "python3",
               "node *", "node", "env *", "env", "eval *", "exec *", "xargs *", "uv *", "npx *"}
+# I599（第 2 版）: scripts/claude/ のスクリプトを外に出すのは起動役だけ（`bash scripts/claude/*` を戻すと、
+# 書いたスクリプトがそのまま外で動く）
+_excl = sb.get("excludedCommands") or []
+if any(e.strip().startswith("bash scripts/claude") for e in _excl):
+    errs.append("sandbox.excludedCommands に bash scripts/claude/* がある（起動役だけにする・I599）")
+if "python3 .claude/hooks/unreviewed.py run *" not in _excl:
+    errs.append("sandbox.excludedCommands に起動役 python3 .claude/hooks/unreviewed.py run * が無い（I599）")
 for e in sb.get("excludedCommands") or []:
     if e.strip() in _wide_excl:
         errs.append(f"sandbox.excludedCommands に一般のインタプリタ・シェル {e} がある")
@@ -183,6 +190,8 @@ for n, e in (("bash", "bash *"), ("sh", "sh *"), ("python3", "python3 *"), ("sta
 d = copy.deepcopy(base)
 d["hooks"]["PostToolUse"][0]["hooks"][0]["command"] = 'python3 "$CLAUDE_PROJECT_DIR"/scripts/claude/hooks/posttooluse_check.py'
 json.dump(d, open(f"{tmp}/hook_no_launcher.json", "w", encoding="utf-8"))
+write_full("excl_scripts_back", lambda d: d["sandbox"]["excludedCommands"].append("bash scripts/claude/*"))
+write_full("excl_no_launcher", lambda d: d["sandbox"]["excludedCommands"].remove("python3 .claude/hooks/unreviewed.py run *"))
 write("no_deny_gh_checkout", lambda p: p["deny"].remove("Bash(gh pr checkout *)"))
 write("no_deny_gh_co", lambda p: p["deny"].remove("Bash(gh co *)"))
 PY
@@ -218,6 +227,8 @@ ck "S21d excludedCommands に * を足すと不合格" 1 "$(run_check "$TMP/sb_e
 ck "S22a deny から gh pr checkout を消すと不合格" 1 "$(run_check "$TMP/no_deny_gh_checkout.json")"
 ck "S22b deny から gh co を消すと不合格" 1 "$(run_check "$TMP/no_deny_gh_co.json")"
 ck "S23 フックを起動役を通さない形に戻すと不合格（I599 TC-16）" 1 "$(run_check "$TMP/hook_no_launcher.json")"
+ck "S24 外に出す一覧に bash scripts/claude/* を戻すと不合格（I599 TC-13）" 1 "$(run_check "$TMP/excl_scripts_back.json")"
+ck "S25 外に出す一覧から起動役を消すと不合格（I599 TC-13）" 1 "$(run_check "$TMP/excl_no_launcher.json")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

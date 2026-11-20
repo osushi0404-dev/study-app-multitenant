@@ -40,6 +40,8 @@
 - [review-gate] review-gate ⇄ fix-loop が 5 回目（上限）に当たり止めて聞いた。指摘の種類: 「コマンドの書き方の読み取りの取りこぼし」（F1・F7・F11）と「安全側に倒しすぎて普段の呼び出しを壊す」（F12・F13）。ユーザーの判断（2026-11-20・原文）: 「ループエンジニアリング、ハーネスエンジニアリング、グラフエンジニアリングのベストプラクティスと開発をサクサク進める(開発効率)という観点でベストなやり方で進めて。」→ 推奨の「もう 1 周だけ直す（置き換え・かっこの規則を scripts/claude/ に変更があるときだけ効かせる・当たりはコマンドの先頭の形だけ）」で進める
 - [fix-loop] F12 を直した（変更があるときだけ置き換え・かっこを中に・当たりはコマンドの先頭の形）。F13 も同じ原因なので同じ直しで消えた。F14・F15（Low）は止める指摘でないので retro へ
 - [review-gate] 延長の 1 周の後も HIGH（F16・F17・F18）。種類は「漏れる」と「壊す」が交互（計画書の調査結果 5）。止めて聞き、方式の見直しを推奨した。ユーザーの判断（2026-11-20・原文）: 「ループエンジニアリング、ハーネスエンジニアリング、グラフエンジニアリングのベストプラクティスと開発をサクサク進める(開発効率)という観点でベストなやり方で進めて。」→ 推奨の「方式を裏返す（既定を中に・決まったスクリプトだけを起動役が外で動かす）」で計画を第 2 版に書き直し、計画レビューからやり直す
+- [implement] 第 2 版を実装した。新しいファイルを作る道具が使えない時間があったので、起動役は判定と同じ `.claude/hooks/unreviewed.py` の `run` に置いた（計画変更記録）。見張りが自分の書き込み・コミットのコマンドを止めた・起動役の呼び出しを確認に回した問題を、実装中に直した（計画変更記録）
+- [implement] /simplify（第 2 版・1 回にまとめた）: 判定の git を減らす・名前の確かめの重複を消す・見張りの説明を第 2 版に・ゲートの判定を 1 回に。見送り 2 件（失敗の道での判定の読み直し・test-session の基準の再計算。どちらも軽い）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -58,3 +60,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate

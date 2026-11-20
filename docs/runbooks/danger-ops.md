@@ -38,18 +38,18 @@ Bash のコマンドは、Claude Code の公式のサンドボックス（`.clau
 - **読み取り**: ほぼ全体。ただし `.claude/settings.json` の Read の deny の場所（`.env` など）と、`sandbox.filesystem.denyRead` の場所（GitHub App の鍵 `~/.config/github-app`・鍵の控え `~/.cache/github-app`）は読めない
 - **通信**: どこにもつながらない（`allowedDomains: []`・`strictAllowlist: true`）
 - **外での再実行はしない**（`allowUnsandboxedCommands: false`）。道具（bubblewrap・socat）が無いと Claude Code が起動しない（`failIfUnavailable: true`。入れ方は `docs/runbooks/onboarding.md`）
-- **外に出すコマンド**（`excludedCommands`）: `docker`・`docker-compose`・`gh`・`git`・`bash scripts/claude/*`。中では動かないものだけ（docker は両立しない・gh と git は鍵の控えを読み書きする・git は設定ファイルの違うブランチへの切り替えで `.claude/settings.json` を書き換える・スクリプトはレビュー役の `claude -p` と gh を使う）。外に出したコマンドも、許可の設定・見張り・auto モードの判定役が今までどおり見る
+- **外に出すコマンド**（`excludedCommands`）: `docker`・`docker-compose`・`gh`・`git`・`python3 .claude/hooks/unreviewed.py run *`（スクリプトの起動役・I599）。中では動かないものだけ（docker は両立しない・gh と git は鍵の控えを読み書きする・git は設定ファイルの違うブランチへの切り替えで `.claude/settings.json` を書き換える・起動役が動かすスクリプトはレビュー役の `claude -p` と gh を使う）。外に出したコマンドも、許可の設定・見張り・auto モードの判定役が今までどおり見る
   - **外に出す一覧に一般のインタプリタ・シェル（`bash *`・`sh *`・`python3 *` など）を足さない**（書いたファイルを外で動かせる。`scripts/claude/tests/test_settings_permissions.sh` が止める）
-  - `scripts/claude/` に置いたスクリプトは `bash scripts/claude/…` で呼ぶと外で動く。ただし**外で動くのはレビュー済みの中身だけ**（I599）。「レビュー済み」は、このブランチが develop から分かれた時点（`git merge-base HEAD origin/develop`）の中身と同じこと（レビュー段階を通っても、マージまでは済みにしない）
-    - 見張りは、流すスクリプトから名前で呼ぶファイルをたどり、分かれた時点と違うファイル（変更・追跡していない新しいファイル）に届くときは、コマンドの前に `echo '[I599] レビュー前の中身があるので、サンドボックスの中で動かします（届いた変更: …）' >&2 &&` を付けて、コマンド全体をサンドボックスの中で動かす（承認の画面は出ない）。判定の本体は `.claude/hooks/unreviewed.py`（サンドボックスから書けず、Edit は承認が要る）
-    - 置き換え・かっこ（`$`・バッククォート・`(`・`)`・`{`・`}`）を含むコマンドは読み切らない: `scripts/claude/` にレビュー前の中身があるときだけ中で動かす（無ければ外のまま。スキルの `--file "$DRAFT"` などの普段の呼び出しを壊さない）。`test-session.sh` なら常に承認。当たりはコマンドの先頭の形（行頭・`;`・`&`・`|`・`(`・`{`・`$(` の後の `bash scripts/claude/`）だけで、本文の途中の文字には当たらない
-    - 変更の有無によらず中で動く形: `bash` の直後のスクリプトの位置の語に「..」・`$`・バッククォート・glob・`~`・引用符があるとき、基準（`origin/develop`）を求められないとき、読み取りの上限（1 ファイル 1MB・合計 20MB・2,000 ファイル）を超えたとき
-    - `scripts/claude/` のスクリプトに渡した引数のうち、既にある `.sh`・`.py` のファイルは動かされうるものとして扱う（`scripts/claude/` の外なら中で動く）。名前でたどれない「まとめて拾う入口」だけを表で持つ（`.claude/hooks/unreviewed.py` の `RUNNER_GLOBS`。今は `run-all.sh`）。**ファイルを glob などでまとめて拾って動かす入口を足すときは表に足す**
-    - `scripts/claude/test-session.sh` に許可の表に無い引数（自分で書いた設定ファイルの `--settings`・`--mcp-config` など）を渡すときは承認を求める（子のセッションのフックは外で動く。中では claude が動かない）
-    - 中では gh・`claude -p` が動かないので、それらを使うスクリプト（レビュー役など）を変えたブランチでは失敗する。外で流す必要があるときは、ユーザーに `! bash scripts/claude/…` で流してもらう（レビュー役のスクリプトを変えたときの扱いの根本は I593）
-    - `scripts/claude/code-review.sh` は、自動テスト文書の決定論ゲートのうちレビュー前の中身に届く `bash scripts/claude/tests/test_*.sh` を手元で流さない（CI の Harness Tests が流す）
+  - **`scripts/claude/` のスクリプトは既定でサンドボックスの中で動く**（I599）。`bash scripts/claude/…` はそのままでは外に出す型に当たらない（新しく書いた・書き換えたスクリプトも、どんな書き方でも中）
+    - 外で動く必要のあるスクリプト（gh・`claude -p`・docker を使う入口）だけを、**起動役** `python3 .claude/hooks/unreviewed.py run <名前> <引数…>` が外で動かす。一覧は `.claude/hooks/unreviewed.py` の `OUTSIDE_SCRIPTS`（`code-review.sh`・`issue-source.sh`・`adversarial-review.sh` など 16 本）。起動役は、`scripts/claude/` に**レビュー前の中身**（このブランチが develop から分かれた時点〔`git merge-base HEAD origin/develop`〕との差・追跡していない新規・git が無視するファイル）が 1 つでもあれば、外で動かさずに理由と案内を出して終了コード 3 で終わる。基準を求められないときも同じ。サンドボックスの中で動いたら終了コード 4
+    - 見張りは、単体の形の `bash scripts/claude/<一覧の名前> <引数…>`（`$`・バッククォート・かっこ・`;`・`&`・`|`・`<`・`>`・改行・前置きの代入なし、プロジェクトの最上位で）を起動役の形に付け替える（承認の画面は出ない）。だから**スクリプトは今までどおり `bash scripts/claude/<名前> …` を単体で流す**。読み切れない形は何もしない（中で動く＝gh などは失敗する）
+    - 起動役を、つなぎ・置き換え・振り向け・前置きつき、またはプロジェクトの最上位でない場所（`cd` の後）で流すと、見張りが止める
+    - 起動役・判定は `.claude/hooks/` に置く（サンドボックスから書けず、Edit は承認が要る）。**外で動く必要のある入口を足すときは `OUTSIDE_SCRIPTS` に足す**（足し忘れは中で動いて失敗するので気づける）。一覧を見直すときは `grep -lE '(^|[^a-z_-])(gh|claude|docker|curl)( |$)' scripts/claude/*.sh`
+    - **ハーネスのイシューで `scripts/claude/` を変えたブランチでは、マージまで起動役も外で動かない**。レビュー役・gh を使うスクリプトを流す必要があるときは、ユーザーに `! bash scripts/claude/<名前> …` で流してもらう（レビュー役の写しで動かす改善は I593）
+    - `scripts/claude/test-session.sh` に許可の表に無い引数（自分で書いた設定ファイルの `--settings`・`--mcp-config`・確認を外す `--permission-mode`・プロジェクトの設定を読まない `--setting-sources` など）を渡すときは承認を求める（子のセッションのフックは外で動く）
+    - `scripts/claude/code-review.sh` は、レビュー前の中身があるとき、自動テスト文書の決定論ゲートの `bash scripts/claude/tests/test_*.sh` を手元で流さない（CI の Harness Tests が流す）
   - **フックは起動役を通す**: `.claude/settings.json` の `hooks` の `command` はすべて `bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/<名前>.py`。`scripts/claude/` に分かれた時点との違いがあるあいだは、分かれた時点の写し（`~/.cache/claude-reviewed-hooks/<コミット>/`）でフックを動かす。**見張りを直すイシューでは、直した見張りが効くのはマージの後**（確かめは CI の決定論のテスト。`scripts/claude/tests/test_settings_permissions.sh` が起動役を通らないフックを止める）
-  - 受け入れた残り（plan_I599.md 8）: Claude Code の版が変わり、フックの書き換え（`updatedInput`）の後のコマンドで外に出すかが決まらなくなる（`docs/runbooks/harness-audit.md` で点検）／ファイル名を文字列で組み立てて呼ぶ形はたどれない／git が無視するファイル（`.venv`・`__pycache__`）の書き換えと `origin/develop` の参照の書き換え（わざと避ける形）／基準を求められないときは起動役が作業ツリーのフックを動かす（フック全体を止めると見張りを直せなくなるため）
+  - 受け入れた残り（plan_I599.md 8）: Claude Code の版が変わり、見張りの付け替え（`updatedInput`）の後のコマンドで外に出すかが決まらなくなる（中で動く側に崩れるので安全。`docs/runbooks/harness-audit.md` で点検）／git が無視するフォルダ（`.venv`・`__pycache__`）の中の書き換えと `origin/develop` の参照の書き換え（わざと避ける形・参照は I600）／基準を求められないときはフックの起動役が作業ツリーのフックを動かす（フック全体を止めると見張りを直せなくなるため）／一覧のスクリプトが `scripts/claude/` の外の git の設定・docker・frontend の設定を動かす（I600）
 
 ### 外に出すコマンドの書き方（Bash を 1 つずつ流す理由）
 
@@ -61,7 +61,7 @@ Bash のコマンドは、Claude Code の公式のサンドボックス（`.clau
 中で動くと、`gh` は App の鍵が読めず失敗する（「鍵を受け取れません」）。`git` の切り替えは `.claude/settings.json` だけが古く残り（`error: unable to unlink old '.claude/settings.json'`）、作業ツリーの確かめが DIRTY になる。
 
 決まり:
-- `gh`・`git`・`docker`・`bash scripts/claude/*` は 1 回の呼び出しで単体で流す。`; echo "exit=$?"` も付けない
+- `gh`・`git`・`docker`・`bash scripts/claude/<名前>`（見張りが起動役に付け替える形）は 1 回の呼び出しで単体で流す。`; echo "exit=$?"` も付けない
 - 値は前置きの代入ではなく引数で渡す
 - 出力を絞りたいときは、ファイルに書く道具の引数（`--body-file` など）か、後から Read ツールで読む
 - git どうしのつなぎ（`git fetch … && git checkout …`）は外で動くのでよい

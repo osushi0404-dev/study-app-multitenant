@@ -43,6 +43,7 @@
       "Bash(git push *)",
       "Bash(python3 scripts/*)",
       "Bash(bash scripts/claude/*)",
+      "Bash(python3 .claude/hooks/unreviewed.py run *)",
       "Bash(python3 -m py_compile *)",
       "Bash(python3 -m json.tool *)",
       "Bash(gh pr create *)",
@@ -208,7 +209,7 @@
       "docker-compose *",
       "gh *",
       "git *",
-      "bash scripts/claude/*"
+      "python3 .claude/hooks/unreviewed.py run *"
     ],
     "filesystem": {
       "denyWrite": [".claude/worktrees"],
