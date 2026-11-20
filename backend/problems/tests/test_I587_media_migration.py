@@ -2,7 +2,8 @@
 I587: 画像のファイルを DB に移すマイグレーションと、古い画像の列を外すマイグレーション
 
 TC-03・TC-12〜TC-15（docs/tests/open/I587_auto_test.md）に対応。
-pytest は --no-migrations なので、本物のマイグレーションは MigrationLoader で読んで apply／unapply する（I492 と同じ）。
+pytest は --no-migrations なので、本物のマイグレーションは problems/tests/migration_helpers.py の補助で読んで
+apply／unapply する（I602 で補助をまとめた）。
 """
 import hashlib
 import io
@@ -12,7 +13,6 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import connection
-from django.db.migrations.loader import MigrationLoader
 from PIL import Image
 
 from accounts.models import Organization, OrganizationCategory
@@ -20,6 +20,9 @@ from problems import media_migration
 from problems.media_migration import MediaMigrationError, move_media_files_to_db
 from problems.models import (
     Choice, MediaAsset, MediaAssetContent, Problem, ProblemMediaAsset, Subject,
+)
+from problems.tests.migration_helpers import (
+    column_names, load_migrations, run_migration, table_names,
 )
 
 User = get_user_model()
@@ -76,29 +79,6 @@ def run_move(root, dry_run=False):
                                   dry_run=dry_run)
 
 
-def _loader(settings):
-    settings.MIGRATION_MODULES = {}  # pytest の --no-migrations を外し、本物のマイグレーションを読む
-    return MigrationLoader(connection)
-
-
-def _run(step, state):
-    """遅延の外部キーの検査を済ませてから DDL を流す（I492 と同じ）"""
-    with connection.cursor() as cursor:
-        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
-    with connection.schema_editor() as editor:
-        step(state.clone(), editor)
-
-
-def _tables():
-    with connection.cursor() as cursor:
-        return set(connection.introspection.table_names(cursor))
-
-
-def _columns(table):
-    with connection.cursor() as cursor:
-        return {c.name for c in connection.introspection.get_table_description(cursor, table)}
-
-
 def _attstorage():
     with connection.cursor() as cursor:
         cursor.execute(
@@ -109,17 +89,17 @@ def _attstorage():
 
 # ---- TC-03: 0024 は中身の列を EXTERNAL（圧縮しない）にする ----
 def test_0024_sets_external_storage(db, settings):
-    loader = _loader(settings)
+    loader = load_migrations(settings)
     migration = loader.get_migration("problems", "0024_mediaassetcontent")
     before = loader.project_state(("problems", "0023_quizsession_mode_weak"))
-    _run(migration.unapply, before)
+    run_migration(migration.unapply, before)
     try:
-        assert "media_asset_contents" not in _tables()
-        _run(migration.apply, before)
+        assert "media_asset_contents" not in table_names()
+        run_migration(migration.apply, before)
         assert _attstorage() == "e"
     finally:
-        if "media_asset_contents" not in _tables():
-            _run(migration.apply, before)
+        if "media_asset_contents" not in table_names():
+            run_migration(migration.apply, before)
 
 
 # ---- TC-12: 0025 はファイルを DB に移し、ファイルの無い行を消す。戻すとファイルに書き戻す ----
@@ -128,11 +108,11 @@ def test_0025_moves_files_and_reverts(world, settings, tmp_path, monkeypatch, ca
     present = make_asset(world)
     put_file(tmp_path, present)
     missing = make_asset(world, link=True)
-    loader = _loader(settings)
+    loader = load_migrations(settings)
     migration = loader.get_migration("problems", "0025_move_media_files_to_db")
     before = loader.project_state(("problems", "0024_mediaassetcontent"))
 
-    _run(migration.apply, before)
+    run_migration(migration.apply, before)
     assert bytes(MediaAssetContent.objects.get(asset=present).data) == PNG
     assert not MediaAsset.objects.filter(id=missing.id).exists()
     assert not ProblemMediaAsset.objects.filter(asset_id=missing.id).exists()
@@ -143,7 +123,7 @@ def test_0025_moves_files_and_reverts(world, settings, tmp_path, monkeypatch, ca
     assert deleted_lines == [f"I587 media: deleted id={missing.id} key={missing.storage_key}"]
 
     (tmp_path / present.storage_key).unlink()
-    _run(migration.unapply, before)
+    run_migration(migration.unapply, before)
     assert (tmp_path / present.storage_key).read_bytes() == PNG
 
 
@@ -216,22 +196,22 @@ def test_check_media_migration_command(world, monkeypatch, tmp_path, capsys):
 
 # ---- TC-15: 0026 は古い列に値があれば止まり、無ければ列を外す ----
 def test_0026_refuses_legacy_values_then_removes_columns(world, settings):
-    loader = _loader(settings)
+    loader = load_migrations(settings)
     migration = loader.get_migration("problems", "0026_remove_problem_legacy_images")
     before = loader.project_state(("problems", "0025_move_media_files_to_db"))
-    _run(migration.unapply, before)
+    run_migration(migration.unapply, before)
     try:
-        assert {"question_image", "explanation_image"} <= _columns("problems_problem")
+        assert {"question_image", "explanation_image"} <= column_names("problems_problem")
         OldProblem = before.apps.get_model("problems", "Problem")
         OldProblem.objects.filter(pk=world["problem"].pk).update(question_image="x.png")
         with pytest.raises(RuntimeError, match="1"):
-            _run(migration.apply, before)
-        assert "question_image" in _columns("problems_problem")
+            run_migration(migration.apply, before)
+        assert "question_image" in column_names("problems_problem")
 
         OldProblem.objects.filter(pk=world["problem"].pk).update(question_image="")
-        _run(migration.apply, before)
-        assert not {"question_image", "explanation_image"} & _columns("problems_problem")
+        run_migration(migration.apply, before)
+        assert not {"question_image", "explanation_image"} & column_names("problems_problem")
     finally:
-        if "question_image" in _columns("problems_problem"):
+        if "question_image" in column_names("problems_problem"):
             OldProblem.objects.update(question_image=None, explanation_image=None)
-            _run(migration.apply, before)
+            run_migration(migration.apply, before)
