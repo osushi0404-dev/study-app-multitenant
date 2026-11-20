@@ -19,9 +19,10 @@
 | TC-07 | 起動役: レビュー前の中身が無ければ一覧のスクリプトを動かす | `bash .claude/hooks/reviewed-run.sh issue-source.sh a "b c"` | 終了 0・印のファイルができる・引数がそのまま届く | 起動役が常に止める写しで不合格 |
 | TC-08 | 起動役: レビュー前の中身があれば止める | ① 追跡済みの `other.sh` を書き換え ② 追跡していない `scripts/claude/n.sh` ③ 無視される `scripts/claude/evil.tmp` のそれぞれで TC-07 と同じ | どれも終了 3・印のファイルができない・標準エラーに `! bash scripts/claude/issue-source.sh` の案内 | 差を見ない写し（①）・無視されるファイルを数えない写し（③）で不合格 |
 | TC-09 | 起動役: 基準を求められないときは止める | `origin/develop` を消して TC-07 と同じ | 終了 3・印ができない | 基準の失敗を「なし」に倒す写しで不合格 |
+| TC-16 | 起動役: サンドボックスの中で動いたら早く失敗する | `SANDBOX_RUNTIME=1` を付けて TC-07 と同じ | 終了 4・印ができない・標準エラーに「サンドボックスの中で動いています」 | 中の確かめを外した写しで印ができて不合格 |
 | TC-10 | 起動役: 名前の確かめ | `other.sh`（一覧に無い）・`../x.sh`・`tests/test_x.sh`・名前なし | どれも終了 2 で動かない | 名前の確かめを外した写しで `other.sh` が動いて不合格 |
 | TC-11 | `code-review.sh` のゲート | ゲートに `bash scripts/claude/tests/test_x.sh`（流されたら印）を書いた自動テスト文書で `run_declared_gates` を、変更なし・`other.sh` を変えた状態で流す | 変更なしは印ができる・変更ありは印ができず証跡に `⏭`・`GATE_VERDICT=OK` | `gate_reviewed` を常に真にした写しで、変更ありでも印ができて不合格 |
-| TC-12 | フックの起動役（第 1 版の TC-13〜TC-15 を残す） | 変更なし・`hooks/h.py` を変えた・基準なし・`.git/config` に `core.fsmonitor` | 作業ツリー／写し（`.complete`・標準入力が届く）／作業ツリーと理由。`core.fsmonitor` は動かない | 第 1 版と同じ |
+| TC-12 | フックの起動役（`.claude/hooks/reviewed-hook.sh scripts/claude/hooks/h.py`。`h.py` は自分の `__file__` と標準入力を出す。標準入力に `JSONIN` を渡す） | ① 変更なし ② `h.py` を書き換えた（未コミット） ③ ② のまま `origin/develop` を消した ④ ① で `.git/config` に `core.fsmonitor=touch <印>; false` | ① 終了 0・出力が作業ツリーの `h.py` のパスで始まる ② 終了 0・出力が `$HOME/.cache/claude-reviewed-hooks/<BASE>/scripts/claude/hooks/h.py` で始まり `JSONIN` で終わる・`.complete` がある ③ 終了 0・出力が書き換えた版・標準エラーに `[reviewed-hook]` ④ 印ができない | 常に写し（①で不合格）・差を見ない（②で不合格）・理由を出さない（③で不合格）写し |
 | TC-13 | 設定 | `test_settings_permissions.sh` | 外に出す一覧に `bash scripts/claude/*` が無く `bash .claude/hooks/reviewed-run.sh *` がある・allow に起動役・フックはすべて `reviewed-hook.sh` を通す | `bash scripts/claude/*` を戻した写し・フックを素の形に戻した写しで不合格 |
 | TC-14 | 基準と安全な `-c` が判定・2 つの起動役・見張りで同じ | 4 つのファイルの文字 | 一致 | 起動役の `-c` を 1 つ消した文字列で不合格 |
 | TC-15 | 手順書・一覧 | 下の決定論ゲートの `grep` | すべて 0 | 文言を消した写しで不合格（ゲートの `grep` そのもの） |
@@ -32,7 +33,7 @@ bash scripts/claude/tests/test_i599_unreviewed_scripts.sh
 bash scripts/claude/tests/test_settings_permissions.sh
 grep -q 'reviewed-run.sh' docs/runbooks/danger-ops.md
 grep -q 'reviewed-hook.sh' docs/runbooks/danger-ops.md
-grep -q 'I599' docs/runbooks/harness-audit.md
+grep -q 'reviewed-run.sh' docs/runbooks/harness-audit.md
 ! grep -q 'F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=.claude/settings.json' docs/reviews/backlog/I430.md
 ```
 
