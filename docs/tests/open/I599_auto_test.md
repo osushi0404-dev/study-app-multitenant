@@ -1,89 +1,41 @@
-# I599 自動テスト: サンドボックスの中から scripts/claude/ に書いたスクリプトをレビュー前に外で流せる穴を塞ぐ
+# I599 自動テスト: サンドボックスの中から scripts/claude/ に書いたスクリプトをレビュー前に外で流せる穴を塞ぐ（第 2 版）
 
 実行コマンド: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh`（CI の Harness Tests が `run-all.sh` で流す）
 
 結果:
-- 実装前のため未実行（テストのファイルは実装のステップ 1 で作る）
+- 第 2 版は実装前のため未実行
 
 ## テストケース
-共通の土台（TC-01）: 一時フォルダに git リポジトリを作り、`scripts/claude/` の小さな写し（`a.sh`〔`lib.sh` を名前で `source`〕・`lib.sh`・`b.sh`〔何も呼ばない〕・`tests/run-all.sh`・`tests/test_x.sh`・`tests/stress-repeat.sh`・`test-session.sh`）と `.claude/hooks/unreviewed.py`・`.claude/settings.json` を置いてコミットし、`refs/remotes/origin/develop` をそのコミットに向ける。見張りは `CLAUDE_PROJECT_DIR=<一時のリポジトリ>` で、本物の `scripts/claude/hooks/pretooluse_guard.py` を `{"tool_name":"Bash","tool_input":{"command":…}}` の JSON で流す。`HOME` は一時フォルダに替える。
+共通の土台: 一時フォルダに git リポジトリを作り、`scripts/claude/` の小さな写し（一覧の名前の `issue-source.sh`〔流されたら印のファイルを書き、引数を出す〕・`test-session.sh`・一覧に無い `other.sh`・`tests/test_x.sh`・`hooks/h.py`）・`.claude/hooks/` の本物の写し・`.gitignore`（`*.tmp`・`igndir/`）を置いてコミットし、`refs/remotes/origin/develop` をそのコミットに向ける。見張りは本物の `scripts/claude/hooks/pretooluse_guard.py` を `CLAUDE_PROJECT_DIR=<一時のリポジトリ>` で JSON を渡して流す。`HOME` は一時フォルダ。
 
 | TC | 何を確かめるか | 入力・操作 | 期待（終了コードで判定） | 失敗の注入（FG） |
 |---|---|---|---|---|
-| TC-01 | 土台が動く | 変更なしで `bash scripts/claude/a.sh` | 見張りの出力に `updatedInput` が無い・終了 0 | 土台の `origin/develop` を消すと TC-08 の形（書き換え）になる |
-| TC-02 | 新しく書いたスクリプト（I597 の形）は中で動く | 追跡していない `scripts/claude/new.sh` を置き `bash scripts/claude/tests/test_new.sh`（中で `new.sh` を名前で呼ぶ・これも新規） | `updatedInput.command` が `echo '[I599] ` で始まり、元のコマンドで終わる。`permissionDecision` が無い | `unreviewed.py` の `check()` が常に「済み」を返す写しで流すと不合格 |
-| TC-03 | 変えていないスクリプトから名前で呼ぶライブラリを変えると中で動く | コミット済みの `lib.sh` を書き換え（未コミット）、`bash scripts/claude/a.sh` | `updatedInput` があり、印に `scripts/claude/lib.sh` が出る | たどり（辺を張る処理）を外した写しで不合格 |
-| TC-04 | 変えたファイルに届かないスクリプトは外のまま | `lib.sh` を書き換えたまま `bash scripts/claude/b.sh` | `updatedInput` が無い | 「届くか」を見ずに変更があれば書き換える写しで不合格 |
-| TC-05 | `run-all.sh` がまとめて拾うテストを足すと中で動く | 追跡していない `tests/test_y.sh` を置き `bash scripts/claude/tests/run-all.sh` | `updatedInput` がある | `_RUNNER_GLOBS` を空にした写しで不合格 |
-| TC-06 | 引数で渡したファイルを動かす入口 | 変更なしで、一時フォルダの既にある `x.sh` を `bash scripts/claude/tests/run-all.sh <x.sh>`・`bash scripts/claude/tests/stress-repeat.sh 1 <x.sh>` に渡す。無いファイルを渡す | 既にあるファイルはどちらも `updatedInput` がある。無いファイルは書き換えない | `EXEC_SUFFIXES` を空にした写しで不合格 |
-| TC-07 | たどれない形は変更が無くても中で動く | 変更なしで `bash scripts/claude/../../x.sh`・`bash scripts/claude/$X`・`` bash scripts/claude/`echo a`.sh ``・`bash scripts/claude/*.sh`・`bash scripts/claude/~x` | 5 つとも `updatedInput` がある | 文字の確かめを外した写しで不合格 |
-| TC-08 | BASE が求められないときは中で動く | `refs/remotes/origin/develop` を消して `bash scripts/claude/b.sh` | `updatedInput` がある | BASE の失敗を「済み」に倒す写しで不合格 |
-| TC-09 | `scripts/claude/` を含まないコマンドは今までどおり・git を呼ばない | `PATH` の先頭に呼ばれたら印を書く `git` を置き、`ls` を流す | 出力が空・印が無い | 起動条件を外した写しで印ができて不合格 |
-| TC-10 | 前に付ける書き換えが意味を変えない | 元のコマンド 6 形（`false \|\| true`・`printf a \| cat`・`true; false`・ヒアドキュメント・頭の注釈 `# c⏎true`・`DANGER_OK=1 true`）を書き換えた形にし、`bash -n` と実行の終了コードを元と比べる | 6 形とも `bash -n` が 0・終了コードが元と同じ | 前置きを `echo … >&2;` 以外の壊れた形（`echo … >&2 \|`）にした写しで不合格 |
-| TC-11 | 確認（ask）にも書き換えが付く | 新しい `scripts/claude/new.sh` を置き、既存の確認に当たる語を足したコマンド（`bash scripts/claude/new.sh; printenv`） | `permissionDecision` が `ask` で、`updatedInput` もある | `_ask()` に `updatedInput` を足す処理を外した写しで不合格 |
-| TC-12 | `test-session.sh` の引数 | 変更なしで ① `bash scripts/claude/test-session.sh "x" --model haiku --permission-mode default` ② `… --settings /tmp/s.json` ③ `… --settings .claude/settings.json`（BASE と同じ） ④ ③で `.claude/settings.json` を書き換えた後 ⑤ `… --mcp-config m.json` | ①③は出力が空。②④⑤は `permissionDecision` が `ask` | 許可の表を「何でも可」にした写しで不合格 |
-| TC-13 | 起動役: 変更が無ければ作業ツリーのフック | 印を出すだけのフック `scripts/claude/hooks/h.py` をコミットし、`bash .claude/hooks/reviewed-hook.sh scripts/claude/hooks/h.py` | 標準出力が作業ツリーの印・終了 0 | 起動役が常に写しを使う写しで不合格（印が違う） |
-| TC-14 | 起動役: 変更があれば BASE の写し | `h.py` の印を書き換え（未コミット）て同じく流す | 標準出力が BASE の印。`$HOME/.cache/claude-reviewed-hooks/<BASE>/.complete` がある。標準入力がフックに届く（フックが読んだ JSON を出す） | 変更の判定を外した写しで不合格 |
-| TC-15 | 起動役: BASE が求められないとき | `origin/develop` を消して流す | 作業ツリーの印・標準エラーに理由・終了 0 | 理由を出さない写しで不合格 |
-| TC-16 | 設定のフックはすべて起動役を通る | `.claude/settings.json` の `hooks` の全 `command`（`test_settings_permissions.sh` に 1 項目） | すべて `.claude/hooks/reviewed-hook.sh scripts/claude/hooks/` を含む | 1 つを `python3 …/pretooluse_guard.py` に戻した写しで不合格 |
-| TC-17 | 手順書・一覧 | 下の決定論ゲートの `grep` | すべて 0 | 文言を消した写しで不合格（ゲートの `grep` そのもの） |
-| TC-18 | `code-review.sh` のゲートは、レビュー前の中身に届く行を流さない | 一時のリポジトリで、ゲートに ① 新しい `tests/test_new.sh`（流されたら印を書く） ② 変更の無い `tests/test_x.sh`（同じく印）を書いた自動テスト文書を置き、`run_declared_gates` を流す | ①の印が無く、証跡に `⏭ レビュー前の中身` がある。②の印がある。`GATE_VERDICT=OK` | 確かめの呼び出しを外した写しで①の印ができて不合格 |
-| TC-19 | 判定の CLI | `python3 .claude/hooks/unreviewed.py check -- '<コマンド>'` を TC-04・TC-02・TC-12②・引数なしで | 終了コードが 0・1・3・2 | 終了コードを常に 0 にした写しで不合格 |
-| TC-20 | 1 つのコマンドの複数の参照をすべて見る | `lib.sh` を書き換え、`bash scripts/claude/b.sh && bash scripts/claude/a.sh`（後ろだけが届く） | `updatedInput` がある | 最初の参照だけを見る写しで不合格 |
-| TC-21 | 判定の読み取りの上限 | 1MB を超える変更の無いファイル（コミット済み）を他の変更があるときに流す、または 2,000 を超えるファイルを置き `bash scripts/claude/b.sh` | 20 秒以内に終わり `updatedInput` がある | 上限を外した写しで時間が上限を超える・書き換えが無くて不合格 |
-| TC-22 | 基準と安全な `-c` が判定・起動役・見張りで同じ | 3 つのファイルの文字 | `merge-base HEAD origin/develop` と 3 つの `-c` が一致 | 起動役の `-c` を 1 つ消した文字列で不合格 |
-| TC-23 | 引用符の中の文には当たらない | `git commit -m "bash scripts/claude/new.sh を足す"`（`new.sh` は新規）と `git status && bash scripts/claude/new.sh` | 前は出力なし・後ろは `updatedInput` がある | 最初の区切りだけを見る写し（FG TC-20 と同じ）で後ろが不合格 |
-| TC-24 | 振り向けがスクリプト名にくっついても取り違えない（F1） | 新しい `new.sh` を `>/dev/null`・`2>&1`・`< /dev/null`・`2>/dev/null` つきで流す。変更の無い `b.sh` を `>/dev/null`・`2>&1` つきで流す | 前の 4 つは `updatedInput` がある・後ろの 2 つは出力なし | 区切りから `<>` を外した写しで不合格 |
-| TC-25 | git が無視するファイル（F2） | `.gitignore` の `*.tmp`・`igndir/` で、① `bash scripts/claude/evil.tmp` ② 追跡済みの `c.sh`（`helper.tmp` を名前で呼ぶ）③ `bash scripts/claude/igndir/x.sh`。どれも他に変更なし | 3 つとも `updatedInput` がある | 無視されるファイルを数えない写しで ② が不合格・一覧の外の出発点を見ない写しで ③ が不合格 |
-| TC-24b | 振り向けの後ろの引数も同じ命令の引数として見る（F7） | `bash scripts/claude/test-session.sh x >log --permission-mode bypassPermissions`・`bash scripts/claude/tests/stress-repeat.sh 3 2>/dev/null scripts/claude/tests/test_new.sh`（新規） | 前は `ask`・後ろは `updatedInput` がある | 振り向けで命令を区切る写しで不合格 |
-| TC-26 | 置き換え・かっこを含むコマンドは読み切らない（F11） | `test-session.sh x $(true) --permission-mode bypassPermissions`・同じく `<(true)`・`bash scripts/claude/b.sh $(true)`・`{ bash scripts/claude/b.sh; }`・`bash scripts/claude/b.sh "$HOME"`（変更なし） | 前の 2 つは `ask`。後ろの 3 つは、変更が無ければ出力なし・`lib.sh` を変えると `updatedInput` がある（F12 で直した期待） | 規則を外した写し・変更が無くても中に回す写しで不合格 |
-| TC-27 | スキルの呼び出しは変更が無ければ外のまま・本文の文字には当たらない（F12・F13） | 変更なしで `bash scripts/claude/issue-review.sh --file "$DRAFT"`・`N=$(bash scripts/claude/issue-source.sh gh-number I599)`。`lib.sh` を変えて `gh pr edit 1 --body "$(cat <<'EOF' … 説明 bash scripts/claude/x.sh を使う … EOF)"`・`timeout 60 bash scripts/claude/a.sh` | 前の 3 つは出力なし・最後は `updatedInput` がある | 変更が無くても中に回す写し・本文の途中にも当たる写しで不合格 |
-
-セキュリティ設計レビュー（計画書「セキュリティレビュー結果」）で足す確かめ:
-- TC-02 に、名前に `'` と改行を含む新しいファイルを足す: 印の中の名前は `_` に置き換わり、`bash -n` が 0
-- TC-12 に `--settings=/tmp/s.json`（`=` の形）を足す: `ask`
-- TC-12 に F4 の形を足す: `--permission-mode bypassPermissions`・`--permission-mode=dontAsk`・`--setting-sources user`・`--setting-sources=` は `ask`。`--permission-mode auto`・`--setting-sources user,project`・`--setting-sources user --settings .claude/settings.json`（レビュー済み）は出力なし。`--setting-sources user --settings .gitignore`（レビュー済みでも設定の代わりにならない・F8）は `ask`。FG: 許可のモードの表に `bypassPermissions` を足す・`--setting-sources` の確かめを外すと不合格
-- TC-13 に、土台の `.git/config` に `core.fsmonitor=<印を書くコマンド>` を書いた形を足す: 印ができない
+| TC-01 | 見張り: 一覧の名前の単体の形は起動役の形に付け替える | `bash scripts/claude/issue-source.sh body I1`（`timeout` 7 つき） | `updatedInput.command` が `bash .claude/hooks/reviewed-run.sh issue-source.sh body I1`・`timeout` が残る・`permissionDecision` なし | 付け替えを外した判定の写しで不合格 |
+| TC-02 | 見張り: 単体でない形・一覧に無い名前は何もしない（中で動く） | `timeout 5 bash scripts/claude/issue-source.sh x`・`X=1 bash …`・`bash … $(true)`・`` bash … `x` ``・`bash … \| cat`・`bash … >o`・`bash …; ls`・`{ bash …; }`・`bash scripts/claude/other.sh`・`bash scripts/claude/../../x.sh`・`bash scripts/claude/tests/run-all.sh x.sh`・`git commit -m "bash scripts/claude/issue-source.sh"` | どれも出力なし・終了 0 | 単体の確かめを外した写しで `$(true)` の形が付け替えられて不合格 |
+| TC-03 | 再発防止（I597 の形）: 新しく書いたスクリプトは外に出ない | 追跡していない `scripts/claude/new.sh` を置き `bash scripts/claude/new.sh`・`bash .claude/hooks/reviewed-run.sh new.sh` | 前は見張りの出力なし（中）・後ろは起動役が終了 2 で `new.sh` は動かない | 一覧に `new.sh` を足した写しで不合格 |
+| TC-04 | 見張り: 起動役を単体でない形で流すと止める | `bash .claude/hooks/reviewed-run.sh issue-source.sh x; ls`・`… $(true)`・`X=1 bash .claude/hooks/reviewed-run.sh …`・`… >o` | どれも見張りが終了 2 | 止める確かめを外した写しで不合格 |
+| TC-05 | 見張り: `test-session.sh` の引数 | スクリプトの形と起動役の形で、許可の表の引数（`--model haiku --permission-mode default`）・`--settings /tmp/s.json`・`--settings=/tmp/s.json`・`--mcp-config m.json`・`--permission-mode bypassPermissions`・`--setting-sources user`・`--setting-sources user --settings .gitignore`・`--setting-sources user --settings .claude/settings.json` | 表の引数と最後の形は承認なし（スクリプトの形は付け替えあり）。ほかは `ask`（スクリプトの形は `updatedInput` も付く） | 表を「何でも可」にした写しで不合格 |
+| TC-06 | 見張り: 判定を読み込めないとき | 判定のファイルを壊した写しで `bash .claude/hooks/reviewed-run.sh issue-source.sh x`・`bash scripts/claude/issue-source.sh x` | 前は終了 2（止める）・後ろは出力なし（中） | 読み込めないときも通す写しで不合格 |
+| TC-07 | 起動役: レビュー前の中身が無ければ一覧のスクリプトを動かす | `bash .claude/hooks/reviewed-run.sh issue-source.sh a "b c"` | 終了 0・印のファイルができる・引数がそのまま届く | 起動役が常に止める写しで不合格 |
+| TC-08 | 起動役: レビュー前の中身があれば止める | ① 追跡済みの `other.sh` を書き換え ② 追跡していない `scripts/claude/n.sh` ③ 無視される `scripts/claude/evil.tmp` のそれぞれで TC-07 と同じ | どれも終了 3・印のファイルができない・標準エラーに `! bash scripts/claude/issue-source.sh` の案内 | 差を見ない写し（①）・無視されるファイルを数えない写し（③）で不合格 |
+| TC-09 | 起動役: 基準を求められないときは止める | `origin/develop` を消して TC-07 と同じ | 終了 3・印ができない | 基準の失敗を「なし」に倒す写しで不合格 |
+| TC-10 | 起動役: 名前の確かめ | `other.sh`（一覧に無い）・`../x.sh`・`tests/test_x.sh`・名前なし | どれも終了 2 で動かない | 名前の確かめを外した写しで `other.sh` が動いて不合格 |
+| TC-11 | `code-review.sh` のゲート | ゲートに `bash scripts/claude/tests/test_x.sh`（流されたら印）を書いた自動テスト文書で `run_declared_gates` を、変更なし・`other.sh` を変えた状態で流す | 変更なしは印ができる・変更ありは印ができず証跡に `⏭`・`GATE_VERDICT=OK` | `gate_reviewed` を常に真にした写しで、変更ありでも印ができて不合格 |
+| TC-12 | フックの起動役（第 1 版の TC-13〜TC-15 を残す） | 変更なし・`hooks/h.py` を変えた・基準なし・`.git/config` に `core.fsmonitor` | 作業ツリー／写し（`.complete`・標準入力が届く）／作業ツリーと理由。`core.fsmonitor` は動かない | 第 1 版と同じ |
+| TC-13 | 設定 | `test_settings_permissions.sh` | 外に出す一覧に `bash scripts/claude/*` が無く `bash .claude/hooks/reviewed-run.sh *` がある・allow に起動役・フックはすべて `reviewed-hook.sh` を通す | `bash scripts/claude/*` を戻した写し・フックを素の形に戻した写しで不合格 |
+| TC-14 | 基準と安全な `-c` が判定・2 つの起動役・見張りで同じ | 4 つのファイルの文字 | 一致 | 起動役の `-c` を 1 つ消した文字列で不合格 |
+| TC-15 | 手順書・一覧 | 下の決定論ゲートの `grep` | すべて 0 | 文言を消した写しで不合格（ゲートの `grep` そのもの） |
 
 ## 決定論ゲート（自動実走）
 ```bash
 bash scripts/claude/tests/test_i599_unreviewed_scripts.sh
 bash scripts/claude/tests/test_settings_permissions.sh
+grep -q 'reviewed-run.sh' docs/runbooks/danger-ops.md
 grep -q 'reviewed-hook.sh' docs/runbooks/danger-ops.md
-grep -q 'unreviewed.py' docs/runbooks/danger-ops.md
 grep -q 'I599' docs/runbooks/harness-audit.md
 ! grep -q 'F1 SEV=Medium REPRO=no KIND=guard SECURITY=yes FILE=.claude/settings.json' docs/reviews/backlog/I430.md
 ```
 
 ## 実行記録
-- 2026-11-20 計画: TC-01〜TC-19 は実装前のため未実行。TC-17 の `! grep -q …I430.md` は、今は F1 の行があるので不合格（exit 1）になることを確かめた（失敗の注入に当たる）
-- 2026-11-20 fix-loop（CI の Harness Tests の失敗）:
-  - なぜ失敗したか: フックの `command` を起動役を通す形に変えたが、古い形と完全一致を見る既存のテストが 2 本あった（`test_i187_frontend_verify_config.sh` ⑦・`test_sessionstart_context.sh` TC-11g）。計画の調査で古い形の文字列をリポジトリ全体で grep しなかった
-  - 何を変えたか: 2 本の期待値を `bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/<名前>.py` に替えた（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1810.md` の案 A）
-  - セキュリティ: 守りの弱まりなし（期待値を起動役を通す形に厳しくしただけ）
-  - 次回どう防ぐか: 設定の書き方を変えるときは、古い形の文字列をリポジトリ全体で grep して消費箇所を全部直す（plan-writing-rules「規約是正時の消費箇所の全件列挙」。retro で振り返る）
-  - 確かめた結果: 2 本を手元で流し合格（⑦ pass=14 fail=0・TC-11g を含む pass=24 fail=0）。古い形のままで不合格になることは CI の run 44706186290 で確かめ済み（失敗の注入に当たる）
-- 2026-11-20 fix-loop（review-gate の止める指摘 F1・F2・F4）:
-  - なぜ失敗したか: 「実在するのに git の一覧（追跡＋追跡していない新規）に無いファイル」をレビュー済みと同じに扱っていた（振り向けがくっついた名前・git が無視する名前・変更が無いときの早く返す道・名前で呼ぶ先）。test-session の表は引数の名前だけを見て、値（許可のモード・プロジェクトの設定を読むか）を見ていなかった
-  - 何を変えたか: 区切りに `<>` を足す。git が無視するファイル（無視されるフォルダはまとめて 1 つにして数えない）をレビュー前に数える。出発点が実在するのに一覧に無ければ、変更が無くても中で動かす。`--permission-mode` は `default`・`manual`・`plan`・`acceptEdits`・`auto` だけ、`--setting-sources` は `project` を含むかレビュー済みの `--settings` と一緒のときだけ（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1840.md`。差し戻しの後の 2 回目で PASS）
-  - セキュリティ: レビュー前の中身・守りの無い子のセッションを外で動かせる穴を塞いだ（C8）。無視されるフォルダ（`.venv`・`__pycache__`）の中を名前で呼ぶ形は残る（計画 R3・わざと避ける形）
-  - 次回どう防ぐか: 「一覧に無い」「値を見ない」を済みに倒さない（判定できないものは中で動かす・承認に倒す）。許可の表は名前だけでなく値も決める
-  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=47 fail=0（TC-24・TC-25・TC-12 の追加と各 FG を含む）
-- 2026-11-20 fix-loop（review-gate 2 周目の止める指摘 F7・F8）:
-  - なぜ失敗したか: F7 は F1 の直しの後退（振り向けの記号で命令を区切ったので、その後ろの引数が見られなくなった）。F8 は、プロジェクトの設定の代わりになる設定ファイルを「レビュー済みのファイル」と取り違えた
-  - 何を変えたか: 振り向けの記号は語から切り離すが命令の区切りにせず、記号と振り向けの先の 1 語だけを除く。`--setting-sources` が `project` を含まないときの代わりは `.claude/settings.json`（BASE と同じ）だけ（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1910.md`）
-  - セキュリティ: 守りの無い子・レビュー前のテストを外で動かせる穴を塞いだ（C8）
-  - 次回どう防ぐか: 区切りを変える直しは、区切りの後ろにある語（引数）の扱いも TC で確かめる（直しの後退を同じ周で拾う）
-  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=50 fail=0（TC-24b・TC-12 の追加と各 FG を含む）
-- 2026-11-20 fix-loop（review-gate 3 周目の止める指摘 F11）:
-  - なぜ失敗したか: F1・F7 と同じ種類（シェルの構文を自前の語の切り方で読み、書き方を 1 つずつ足して塞ぐ方式の限界）。`$(…)`・`<(…)` のかっこで命令を区切り、その後ろの引数を見落とした
-  - 何を変えたか: 方式の見直し。`bash scripts/claude/…` に当たるコマンドに `$`・バッククォート・`(`・`)`・`{`・`}` のどれかがあれば、読み切らずに中で動かす（`test-session.sh` なら承認）（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1925.md`）
-  - セキュリティ: 守りの無い子・レビュー前の中身を外で動かせる穴を塞いだ（C8）。普段の呼び出しはこれらの文字を含まないので変わらない
-  - 次回どう防ぐか: 同じ種類の指摘が 2 周続いたら、列挙を足さずに単純な規則（読み切れない形は安全側）に切り替える（retro で手順に書くかを決める）
-  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=52 fail=0（TC-26 と FG を含む）
-- 2026-11-20 fix-loop（review-gate 4 周目の止める指摘 F12・上限に当たりユーザーの判断で 1 周延長）:
-  - なぜ失敗したか: F11 の直し（置き換え・かっこを含むコマンドは読み切らずに中）を変更の有無より前に置いたので、変更が無いときのスキルの普段の呼び出し（`--file "$DRAFT"` など）まで中に回して壊した。当たりの判定が本文の途中の文字にも当たった（F13）
-  - 何を変えたか: 置き換え・かっこを含むコマンドは、変更があるときだけ中。スクリプトの位置の語が変数・置き換え・「..」なら常に中。test-session は常に承認（変更が無ければ承認の後は外で動く）。当たりはコマンドの先頭の形（行頭・`;`・`&`・`|`・`(`・`{`・`!`・`$(` の後、前置きの代入・`then` などの語・`timeout` などの包むコマンドを挟んでよい）だけ（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1945.md`）
-  - セキュリティ: 変更が無いときの置き換え・変数で組み立てた引数は読み切らない（計画 R10 で受け入れ・`$(…)` は公式に中で動く・`"$VAR"` は外から入れられない）
-  - 次回どう防ぐか: 安全側に倒す規則を足すときは、受け入れ条件の「今までどおり外で動く」側の TC（スキルの普段の呼び出しの形）も同じ周で足す
-  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=55 fail=0（TC-26 の直し・TC-27・FG を含む）
+- 第 1 版（2026-11-20）: TC-01〜TC-27 を作り、review-gate 5 周の指摘（F1・F2・F4・F7・F8・F11・F12）ごとに足した。fix-loop の再発防止の記録は git の履歴（このファイルの第 1 版）とレビューの記録（`docs/reviews/I599_code_review_*.md`・`docs/reviews/I599_fix_diagnosis_*.md`）にある。要点: シェルの構文を読んで塞ぐ方式は「漏れる」「壊す」が交互に出て収まらなかった（計画書の調査結果 5）
+- 第 2 版: 実装前のため未実行
