@@ -26,3 +26,6 @@ python3 -m py_compile backend/problems/media_migration.py
 python3 -m py_compile backend/problems/views.py
 python3 -m py_compile backend/problems/tests/test_I590_review_leftovers.py
 ```
+
+## 実行記録
+- 2026-11-20 test-gate: gate-check.sh I590 → GATE_CHECK: OK（exit 0）。test-gate に委譲された重いテストは無し（pytest は CI が成功）。check-frontend-evidence 対象外・check-manual-test-executor 合格

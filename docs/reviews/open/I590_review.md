@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config:
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: CI 成功（3689936e・review-gate の CI 待ちで確認）。手元のコンテナで I590・I587 のテスト 49 passed。決定論ゲート（py_compile 3 件）exit 0
+- 手動: M1〜M3 すべて OK（Claude・2026-11-20）。人の手動テストは無し
 
 ## 計画との差分
 - なし / あり（理由）
@@ -37,3 +37,5 @@ STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 基本レビュー OK（Low 2 件: TC-03 が Content-Disposition を比べない・0010 の経緯で古い DB では 0027 が止まりうる）・敵対的レビュー 1 周目 OK（Low 3 件）。どれも止める指摘ではないので台帳に残し retro に回す — review-rules の止める条件に当たらない
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] 人の手動テストは無いので retro へ進む — 手動 M1〜M3 は Claude が実施済み・画面の変更なし
+STAGE_DONE: test-gate NEXT: retro
