@@ -5,7 +5,7 @@
 - **関連イシュー**: #590
 - **Draft PR**: #596
 - **作成根拠資料**: docs/issues/open/I590.md（起点イシュー）・#590 のコメント（2026-11-20・I587 の追加の直しからの更新）
-- **実装後評価**: docs/reviews/open/I590_review.md
+- **実装後評価**: docs/reviews/closed/I590_review.md
 - **作成日**: 2026-11-20
 
 ## 1. 背景/目的
@@ -173,8 +173,8 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 - 2026-11-20 plan-review: 計画書の記載: [`views.py:6` の使われない `transaction` の読み込みを消す] → 採った方法: 消さない — 理由: 計画レビューの Blocker。`views.py:832` のクイズの回答の記録が使っており、消すと回答の API が `NameError` になる。あわせて Warning の TC-02 に判定の関数の差し替えの観点を足し、4-3 に 0027 の中身の確かめを足した。計画レビューのやり直し: 要（Blocker の対応）
 
 ## レビュー結果
-- [20261120_1335 判定: ✅ 完了](../../reviews/I590_plan_review_20261120_1335.md)
-- [20261120_1334 判定: 差し戻し（Blocker 1件）](../../reviews/I590_plan_review_20261120_1334.md)
+- [20261120_1335 判定: ✅ 完了](../../reviews/closed/I590_plan_review_20261120_1335.md)
+- [20261120_1334 判定: 差し戻し（Blocker 1件）](../../reviews/closed/I590_plan_review_20261120_1334.md)
 - 2026-11-20 plan-review（2 回目）: 計画書の記載: [0027 の判定の `.exclude(image_directory__isnull=True)`] → 採った方法: 消す — 理由: 計画レビューの Warning。列は NOT NULL で不要、残すと NULL がありうると誤解させる。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## セキュリティレビュー結果

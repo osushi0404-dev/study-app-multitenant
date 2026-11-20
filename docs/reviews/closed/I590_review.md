@@ -72,3 +72,5 @@ STAGE_DONE: test-gate NEXT: retro
 
 見送り: grill-me がイシューのコメントを読まない（流れの中の計画で捕まり、手戻りは小さい）
 STAGE_DONE: retro NEXT: close
+- [close] PR #596 の説明を整え、記録を closed へ移した（計画書のレビューへのリンクも closed 向き）。控え backup_I590_before_*.sql はマージの後に消す — danger-ops.md「破壊的な DB の操作の前の控え」
+STAGE_DONE: close NEXT: merge
