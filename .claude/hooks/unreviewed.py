@@ -42,6 +42,8 @@ TEST_SESSION = "scripts/claude/test-session.sh"
 TS_WITH_VALUE = {"--model", "--permission-mode", "--permission-prompts", "--max-turns", "--output-format",
                  "--setting-sources"}
 TS_NO_VALUE = {"--verbose"}
+# 子のセッションの確認を外さない許可のモード（bypassPermissions・dontAsk などは承認・I599 F4）
+TS_PERMISSION_MODES = {"default", "manual", "plan", "acceptEdits", "auto"}
 # 参照の語にこれがあれば、どのファイルに当たるか決まらない（「..」で外へ・変数・置き換え・glob・~・引用符の残り）
 UNTRACEABLE_RE = re.compile(r"\.\.|[$`*?\[~'\"\\]")
 TRIGGER_RE = re.compile(r"(?<![\w./-])['\"]?bash['\"]?\s+['\"]?(?:\./|/\S*/)?" + re.escape(SCRIPTS))
@@ -92,7 +94,7 @@ def _normalize(tok: str, root: str) -> str | None:
 def _segments(command: str) -> list[list[str]] | None:
     """コマンドを制御の記号で区切った語の列にする。読めなければ None。"""
     try:
-        lex = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
+        lex = shlex.shlex(command, posix=True, punctuation_chars=";&|()<>")
         lex.whitespace_split = True
         lex.commenters = ""
         toks = list(lex)
@@ -100,7 +102,7 @@ def _segments(command: str) -> list[list[str]] | None:
         return None
     segs, cur = [], []
     for t in toks:
-        if set(t) <= set(";&|()"):
+        if set(t) <= set(";&|()<>"):   # 振り向け（> < >& など）も区切る（語にくっつけない・I599 F1）
             if cur:
                 segs.append(cur)
             cur = []
@@ -112,7 +114,9 @@ def _segments(command: str) -> list[list[str]] | None:
 
 
 def _files(root: str, base: str) -> tuple[list[str], set[str]]:
-    """(scripts/claude/ の全ファイル, BASE と違うファイル)。git を 2 回だけ呼ぶ。"""
+    """(scripts/claude/ の全ファイル, レビュー前のファイル)。git は 3 回。
+    レビュー前 = BASE と違う・追跡していない新規・git が無視するファイル（I599 F2。無視されるフォルダ〔.venv・
+    __pycache__〕は --directory で 1 つにまとめて数えない＝わざと避ける形として受け入れ・plan R3）。"""
     listed = _lines(_git(root, "ls-files", "-z", "-t", "--cached", "--others", "--exclude-standard", "--", SCRIPTS))
     files, untracked = set(), set()
     for x in listed:
@@ -120,8 +124,10 @@ def _files(root: str, base: str) -> tuple[list[str], set[str]]:
         files.add(name)
         if tag == "?":
             untracked.add(name)
+    ignored = {x for x in _lines(_git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard",
+                                      "--directory", "--", SCRIPTS)) if not x.endswith("/")}
     diff = _lines(_git(root, "diff", "-z", "--name-only", "--no-ext-diff", "--no-textconv", base, "--", SCRIPTS))
-    return sorted(files), set(diff) | untracked
+    return sorted(files | ignored), set(diff) | untracked | ignored
 
 
 class _Limit(Exception):
@@ -169,6 +175,12 @@ def _reach(root: str, start: set[str], files: list[str], changed: set[str]) -> l
     return hits
 
 
+def _outside_list(root: str, start: set[str], files: list[str]) -> list[str]:
+    """出発点のうち、実在するのに git の一覧に無いもの（無視されるフォルダの中など・I599 F2）。"""
+    fileset = set(files)
+    return sorted(s for s in start if s not in fileset and os.path.isfile(os.path.join(root, s)))
+
+
 def _same_as_base(root: str, base: str, rel: str) -> bool:
     """rel が追跡されていて、BASE と中身が同じか。"""
     try:
@@ -180,6 +192,8 @@ def _same_as_base(root: str, base: str, rel: str) -> bool:
 
 def _test_session_ask(args: list[str], root: str, base) -> str | None:
     i = 0
+    settings_ok = False
+    sources = None
     while i < len(args):
         a = args[i]
         if not a.startswith("-"):
@@ -188,20 +202,29 @@ def _test_session_ask(args: list[str], root: str, base) -> str | None:
         name, eq, val = a.partition("=")
         if name in TS_NO_VALUE and not eq:
             i += 1
-        elif name in TS_WITH_VALUE:
-            i += 1 if eq else 2
-        elif name == "--settings":
-            v = val if eq else (args[i + 1] if i + 1 < len(args) else "")
-            i += 1 if eq else 2
+            continue
+        if name not in TS_WITH_VALUE and name != "--settings":
+            return (f"test-session.sh に許可の表に無い引数（{name}）を渡しています。子のセッションの設定・道具を変え、"
+                    "サンドボックスの外で動かせます。確かめて承認してください（I599）")
+        v = val if eq else (args[i + 1] if i + 1 < len(args) else "")
+        i += 1 if eq else 2
+        if name == "--permission-mode" and v not in TS_PERMISSION_MODES:
+            return (f"test-session.sh の --permission-mode {v or '（空）'} は、子のセッションの確認を外せます。"
+                    "確かめて承認してください（I599）")
+        if name == "--setting-sources":
+            sources = v
+        if name == "--settings":
             rel = os.path.relpath(os.path.realpath(os.path.join(root, v)), root)
             b = base()
             if b is None or rel.startswith("..") or not os.path.isfile(os.path.join(root, rel)) \
                     or not _same_as_base(root, b, rel):
                 return (f"test-session.sh にレビュー前の設定ファイル（{v}）を渡しています。子のセッションのフックは"
                         "サンドボックスの外で動きます。中身を確かめて承認してください（I599）")
-        else:
-            return (f"test-session.sh に許可の表に無い引数（{name}）を渡しています。子のセッションの設定・道具を変え、"
-                    "サンドボックスの外で動かせます。確かめて承認してください（I599）")
+            settings_ok = True
+    # プロジェクトの設定（見張り・サンドボックス）を読まない子は、レビュー済みの設定を渡すときだけ承認なしで起こす
+    if sources is not None and "project" not in sources.split(",") and not settings_ok:
+        return (f"test-session.sh の --setting-sources {sources or '（空）'} は、プロジェクトの設定（見張り・サンドボックス）を"
+                "読まない子のセッションを作ります。確かめて承認してください（I599）")
     return None
 
 
@@ -270,6 +293,10 @@ def _check(command: str, cwd: str | None) -> Result:
         res.rewrite, res.why = True, f"レビュー済みの基準（merge-base HEAD {BASE_REF}）を求められない"
         return res
     files, changed = _files(root, b)
+    outside = _outside_list(root, start, files)   # 変更が無いときの早く返す道より先に見る
+    if outside:
+        res.rewrite, res.reached, res.why = True, outside[:5], "git の一覧に無いファイル"
+        return res
     if not changed:
         return res
     try:

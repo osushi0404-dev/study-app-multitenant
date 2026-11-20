@@ -33,10 +33,13 @@
 | TC-21 | 判定の読み取りの上限 | 1MB を超える変更の無いファイル（コミット済み）を他の変更があるときに流す、または 2,000 を超えるファイルを置き `bash scripts/claude/b.sh` | 20 秒以内に終わり `updatedInput` がある | 上限を外した写しで時間が上限を超える・書き換えが無くて不合格 |
 | TC-22 | 基準と安全な `-c` が判定・起動役・見張りで同じ | 3 つのファイルの文字 | `merge-base HEAD origin/develop` と 3 つの `-c` が一致 | 起動役の `-c` を 1 つ消した文字列で不合格 |
 | TC-23 | 引用符の中の文には当たらない | `git commit -m "bash scripts/claude/new.sh を足す"`（`new.sh` は新規）と `git status && bash scripts/claude/new.sh` | 前は出力なし・後ろは `updatedInput` がある | 最初の区切りだけを見る写し（FG TC-20 と同じ）で後ろが不合格 |
+| TC-24 | 振り向けがスクリプト名にくっついても取り違えない（F1） | 新しい `new.sh` を `>/dev/null`・`2>&1`・`< /dev/null`・`2>/dev/null` つきで流す。変更の無い `b.sh` を `>/dev/null`・`2>&1` つきで流す | 前の 4 つは `updatedInput` がある・後ろの 2 つは出力なし | 区切りから `<>` を外した写しで不合格 |
+| TC-25 | git が無視するファイル（F2） | `.gitignore` の `*.tmp`・`igndir/` で、① `bash scripts/claude/evil.tmp` ② 追跡済みの `c.sh`（`helper.tmp` を名前で呼ぶ）③ `bash scripts/claude/igndir/x.sh`。どれも他に変更なし | 3 つとも `updatedInput` がある | 無視されるファイルを数えない写しで ② が不合格・一覧の外の出発点を見ない写しで ③ が不合格 |
 
 セキュリティ設計レビュー（計画書「セキュリティレビュー結果」）で足す確かめ:
 - TC-02 に、名前に `'` と改行を含む新しいファイルを足す: 印の中の名前は `_` に置き換わり、`bash -n` が 0
 - TC-12 に `--settings=/tmp/s.json`（`=` の形）を足す: `ask`
+- TC-12 に F4 の形を足す: `--permission-mode bypassPermissions`・`--permission-mode=dontAsk`・`--setting-sources user`・`--setting-sources=` は `ask`。`--permission-mode auto`・`--setting-sources user,project`・`--setting-sources user --settings .claude/settings.json`（レビュー済み）は出力なし。FG: 許可のモードの表に `bypassPermissions` を足す・`--setting-sources` の確かめを外すと不合格
 - TC-13 に、土台の `.git/config` に `core.fsmonitor=<印を書くコマンド>` を書いた形を足す: 印ができない
 
 ## 決定論ゲート（自動実走）
@@ -57,3 +60,9 @@ grep -q 'I599' docs/runbooks/harness-audit.md
   - セキュリティ: 守りの弱まりなし（期待値を起動役を通す形に厳しくしただけ）
   - 次回どう防ぐか: 設定の書き方を変えるときは、古い形の文字列をリポジトリ全体で grep して消費箇所を全部直す（plan-writing-rules「規約是正時の消費箇所の全件列挙」。retro で振り返る）
   - 確かめた結果: 2 本を手元で流し合格（⑦ pass=14 fail=0・TC-11g を含む pass=24 fail=0）。古い形のままで不合格になることは CI の run 44706186290 で確かめ済み（失敗の注入に当たる）
+- 2026-11-20 fix-loop（review-gate の止める指摘 F1・F2・F4）:
+  - なぜ失敗したか: 「実在するのに git の一覧（追跡＋追跡していない新規）に無いファイル」をレビュー済みと同じに扱っていた（振り向けがくっついた名前・git が無視する名前・変更が無いときの早く返す道・名前で呼ぶ先）。test-session の表は引数の名前だけを見て、値（許可のモード・プロジェクトの設定を読むか）を見ていなかった
+  - 何を変えたか: 区切りに `<>` を足す。git が無視するファイル（無視されるフォルダはまとめて 1 つにして数えない）をレビュー前に数える。出発点が実在するのに一覧に無ければ、変更が無くても中で動かす。`--permission-mode` は `default`・`manual`・`plan`・`acceptEdits`・`auto` だけ、`--setting-sources` は `project` を含むかレビュー済みの `--settings` と一緒のときだけ（診断メモ `docs/reviews/I599_fix_diagnosis_20261120_1840.md`。差し戻しの後の 2 回目で PASS）
+  - セキュリティ: レビュー前の中身・守りの無い子のセッションを外で動かせる穴を塞いだ（C8）。無視されるフォルダ（`.venv`・`__pycache__`）の中を名前で呼ぶ形は残る（計画 R3・わざと避ける形）
+  - 次回どう防ぐか: 「一覧に無い」「値を見ない」を済みに倒さない（判定できないものは中で動かす・承認に倒す）。許可の表は名前だけでなく値も決める
+  - 確かめた結果: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` pass=47 fail=0（TC-24・TC-25・TC-12 の追加と各 FG を含む）

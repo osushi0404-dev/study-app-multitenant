@@ -55,6 +55,8 @@ def make_repo(name, unreviewed_src=None):
     w(f"{sc}/tests/stress-repeat.sh", 'bash "$2"\n')
     w(f"{sc}/hooks/h.py", 'import sys\nprint("V1", __file__, sys.stdin.read().strip())\n')
     w(f"{r}/.claude/settings.json", "{}\n")
+    w(f"{r}/.gitignore", "*.tmp\nigndir/\n")
+    w(f"{sc}/c.sh", 'bash "$(dirname "$0")/helper.tmp"\n')
     hooks = os.path.join(r, ".claude/hooks")
     os.makedirs(hooks, exist_ok=True)
     shutil.copy(unreviewed_src or os.path.join(REAL, ".claude/hooks/unreviewed.py"), f"{hooks}/unreviewed.py")
@@ -164,6 +166,32 @@ ck("TC-23 引用符の中の `bash scripts/claude/…` の文では書き換え�
    and rewritten(r, 'git status && bash scripts/claude/new.sh'))
 os.remove(f"{sc}/new.sh")
 
+# TC-24（F1）: 振り向けがスクリプト名にくっついても取り違えない・振り向けの形で区切りが壊れない
+w(f"{sc}/new.sh", "echo new\n")
+ok24 = all(rewritten(r, c) for c in ["bash scripts/claude/new.sh>/dev/null", "bash scripts/claude/new.sh 2>&1",
+                                     "bash scripts/claude/new.sh < /dev/null", "bash scripts/claude/new.sh 2>/dev/null"])
+os.remove(f"{sc}/new.sh")
+ok24 = ok24 and untouched(r, "bash scripts/claude/b.sh>/dev/null") and untouched(r, "bash scripts/claude/b.sh 2>&1")
+ck("TC-24 振り向けつきでもレビュー前のスクリプトは中・変更の無いものは外のまま（F1）", ok24)
+
+
+def tc25(root):
+    """git が無視するファイル: ① 直接流す（他に変更なし） ② 追跡済みのスクリプトが名前で呼ぶ（他に変更なし）
+    ③ 無視されるフォルダの中のファイルを直接流す。3 つとも中で動く。"""
+    rsc = os.path.join(root, "scripts/claude")
+    w(f"{rsc}/evil.tmp", "echo evil\n")
+    w(f"{rsc}/helper.tmp", "echo helper\n")
+    w(f"{rsc}/igndir/x.sh", "echo x\n")
+    got = (rewritten(root, "bash scripts/claude/evil.tmp"), rewritten(root, "bash scripts/claude/c.sh"),
+           rewritten(root, "bash scripts/claude/igndir/x.sh"))
+    for f in ("evil.tmp", "helper.tmp"):
+        os.remove(f"{rsc}/{f}")
+    shutil.rmtree(f"{rsc}/igndir")
+    return got
+
+
+ck("TC-25 git が無視するファイルは、直接・名前で呼ぶ先・無視されるフォルダの中のどれでも中で動く（F2）", all(tc25(r)))
+
 # TC-09: scripts/claude/ を含まないコマンドは git を呼ばない
 shim = os.path.join(TMP, "shim")
 w(f"{shim}/git", f'#!/usr/bin/env bash\ntouch "{TMP}/git_called"\nexec /usr/bin/git "$@"\n', 0o755)
@@ -204,6 +232,11 @@ ts = "bash scripts/claude/test-session.sh x"
 ok12 = untouched(r, f"{ts} --model haiku --permission-mode default --max-turns 3") \
     and asked(r, f"{ts} --settings /tmp/s.json") and asked(r, f"{ts} --settings=/tmp/s.json") \
     and untouched(r, f"{ts} --settings .claude/settings.json") and asked(r, f"{ts} --mcp-config m.json")
+# F4: 許可のモードの値・プロジェクトの設定を読まない子
+ok12 = ok12 and asked(r, f"{ts} --permission-mode bypassPermissions") and asked(r, f"{ts} --permission-mode=dontAsk") \
+    and untouched(r, f"{ts} --permission-mode auto") and asked(r, f"{ts} --setting-sources user") \
+    and asked(r, f"{ts} --setting-sources=") and untouched(r, f"{ts} --setting-sources user,project") \
+    and untouched(r, f"{ts} --setting-sources user --settings .claude/settings.json")
 w(f"{r}/.claude/settings.json", '{"hooks": {}}\n')
 ok12 = ok12 and asked(r, f"{ts} --settings .claude/settings.json")
 subprocess.run([*GIT, "-C", r, "checkout", "-q", "--", ".claude/settings.json"], check=True)
@@ -379,6 +412,21 @@ fg.append(("FG TC-15: 理由を出さないと不合格", "[reviewed-hook]" not 
 _, new_ran, _ = gates(r, override="gate_reviewed() { return 0; };")
 fg.append(("FG TC-18: ゲートの確かめを外すとレビュー前のテストが手元で流れる（不合格）", new_ran))
 
+r13 = make_repo("fg_no_redirect", broken_unreviewed("no_redirect", 'punctuation_chars=";&|()<>")', 'punctuation_chars=";&|()")'))
+w(os.path.join(r13, "scripts/claude/new.sh"), "echo new\n")
+fg.append(("FG TC-24: 区切りから振り向けを外すと不合格", not rewritten(r13, "bash scripts/claude/new.sh>/dev/null")))
+r14 = make_repo("fg_no_ignored", broken_unreviewed("no_ignored", "    return sorted(files | ignored), set(diff) | untracked | ignored",
+                                                   "    return sorted(files), set(diff) | untracked"))
+got = tc25(r14)
+fg.append(("FG TC-25: 無視されるファイルを数えないと ②（名前で呼ぶ先）が不合格", not got[1]))
+r15 = make_repo("fg_no_outside", broken_unreviewed("no_outside", "    if outside:\n", "    if False:\n"))
+fg.append(("FG TC-25: 一覧の外の出発点を見ないと ③ が不合格", not tc25(r15)[2]))
+r16 = make_repo("fg_any_mode", broken_unreviewed("any_mode", 'TS_PERMISSION_MODES = {"default", "manual", "plan", "acceptEdits", "auto"}',
+                                                 'TS_PERMISSION_MODES = {"default", "manual", "plan", "acceptEdits", "auto", "bypassPermissions"}'))
+fg.append(("FG TC-12（F4）: 許可のモードの表に bypassPermissions を足すと不合格", not asked(r16, f"{ts} --permission-mode bypassPermissions")))
+r17 = make_repo("fg_any_sources", broken_unreviewed("any_sources", '    if sources is not None and "project" not in sources.split(",") and not settings_ok:',
+                                                    "    if False:"))
+fg.append(("FG TC-12（F4）: --setting-sources の確かめを外すと不合格", not asked(r17, f"{ts} --setting-sources user")))
 for name, ok in fg:
     ck(name, ok)
 print(f"---\npass={sum(results)} fail={len(results) - sum(results)}")

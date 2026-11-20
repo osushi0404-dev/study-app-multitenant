@@ -34,6 +34,7 @@
 - [implement] 当たりの判定を、コマンドを語に分けて「`bash` のすぐ後ろが scripts/claude/ のパス」の区切りだけにした（TC-23）— コミットのメッセージに `bash scripts/claude/…` と書いただけで `git commit` が中に回り、pre-commit が `.claude/hooks/` に書けず失敗した。読み切れないコマンドは今までどおり中で動かす
 - [review-gate] `code-review.sh` はこのブランチで直したので、見張りが中で動かす。計画の R7 のとおりユーザーに `!` で流してもらった。CI の Harness Tests が落ちた（フックの登録の古い書き方を確かめる既存のテスト 2 本: test_i187_frontend_verify_config.sh ⑦・test_sessionstart_context.sh TC-11g）ので fix-loop へ
 - [fix-loop] CI の 2 本の失敗は、テストの期待値を起動役の形に替えて直した（案 A・差分が最小で意図を保つ）。診断レビュー PASS
+- [fix-loop] F1・F2・F4 を直した。F2 は診断の案 A の 3（同じフォルダのファイル名を見る）を実装中に「git が無視するファイルを `ls-files --ignored --directory` で数える」に替えた — 変更が無いときの早く返す道でも効き、規則が単純（無視されるフォルダはまとめて数えないので遅くならない）。方式・範囲は変えない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -42,3 +43,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
