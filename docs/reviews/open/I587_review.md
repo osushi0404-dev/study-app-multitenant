@@ -66,6 +66,22 @@
 - 敵対的レビューの `Low`（304 の経路で中身の有無を見ない）— 組織の境界は先に確かめている。直す価値が低い
 - /simplify で見送った 7 件（計画変更記録）— 理由はそこに書いた。`image_directory` だけ C1 に入れた
 
+### 追加の直しの振り返り（2026-11-20）
+
+**かんたんなまとめ**
+- 良かった点: マージ依頼の後に聞かれた BP・UX の外れを、後回しにせずこの PR で直し、計画レビューからやり直した。失敗の枠の見た目と「位置が動かない」ことを、画面の通信を一時的に失敗させて確かめられた（理由: 普段は出ない失敗の画面を、データを壊さずに再現できた）
+- 今回の問題への直接の対処: 台帳の残りのうち、今回書き換えたコードの分（F4〜F7）はこの PR で直し、#590 にそのことと、新しく出た軽い指摘（`If-Match` の 412 に守りの見出しが付かない・F9）を書いた
+- 同じ問題を次回から防ぐ改善: 新しいコードの規約・UX の外れが、レビューでは止まらずマージ依頼の後に見つかった。コードレビュー役に、画面の部品を UX の決まり（押す的・待つときの見え方）と照らす観点を足す。組み込みのレビューの「軽い指摘（規約の違反）」を台帳に残す。一覧を返さない `GenericAPIView` の書き方を規約に足す → #547 に同梱した
+
+**詳細**
+
+| # | 種類 | 根本原因 | 対処 | 対象 |
+|---|---|---|---|---|
+| C3 | 是正 | 台帳の F4〜F7 は今回書き換えたコードだった。F9 は追加の直しで生じた | F4〜F7 は I587 で直した。F9 と残りの F3・`image_directory` は #590（コメント済み） | `backend/problems/views.py` ほか |
+| P3 | 予防 | コードレビュー役に UX の決まり（§1・§2・§6）と照らす観点が無い。組み込みのレビューの nit が台帳に乗らない。規約 §6 に一覧を返さない `GenericAPIView` の決まりが無い | #547 に同梱（コメント済み） | `.claude/agents/code-reviewer.md`・`scripts/claude/code-review.sh`・`rules/ultimate_django_coding_standards.md` |
+
+見送り: 画像の操作の `get_object()` が選択肢も読む件（前からの形）・44px の定数の共有（2 か所）— どちらも実害が無く、直す価値が小さい
+
 ## 自律判断の記録
 <!-- 各段階が、止めずに自分で決めたことを `- [段階] 決めたこと — 理由` で足す。段階の結線の行（STAGE_DONE:）はこのファイルの末尾に足す -->
 - [plan] 開発の DB での保存方式の試し（一時表の `ALTER TABLE ... SET STORAGE`）は、見張りが危険な SQL として止めたのでやめ、テストの DB で確かめる TC-03 に回した — 開発の DB を変えずに同じ性質を CI で毎回確かめられる
@@ -96,6 +112,7 @@
 - [implement] /simplify（4 観点）の指摘のうち 3 件を直し、3 件を見送った（計画変更記録）
 - [fix-loop] F8 は案 A（`filter_backends = []`・`pagination_class = None`）で直した — 1 件を返すビューに一覧の仕組みは要らない。`ordering_fields` だけを空にする案は、ほかの絞り込みを通し続けるので採らない。`APIView` に戻す案は規約 §6 から外れる
 - [review-gate] 追加の直しの後の基本レビュー（20261120_0925・差分）は OK、敵対的レビューの 2 周目（20261120_0936）も OK（NEW_HIGH 0）。通算 2 周を使い切ったので、この後にコードを変えるときは延長の承認が要る
+- [retro] 台帳の残り（追加の直しの後）: F3・F9 → #590（コメントで追記）。F4〜F7 は resolved。一覧に回す行は 0 件。改善案 P3 → #547 に同梱
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
@@ -114,3 +131,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
+STAGE_DONE: retro NEXT: close
