@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: なし（文書の追加と起票だけ）
 
 ## テスト結果
-- 自動:
-- 手動: M2・M4〜M7 OK、M1・M3 NG（fix-loop へ）
+- 自動: 決定論のゲートは無し（文書だけ）。CI はレビューの 3 回とも成功（code-review.sh の CI_WAIT: OK）
+- 手動: M1〜M7 すべて OK（実施者 Claude。M1・M3 は 1 回目 NG → fix-loop で記録を直して 2 回目 OK）
 
 ## 計画との差分
 - なし / あり（理由）
@@ -39,6 +39,8 @@
 - [test-gate] 手動テスト M1・M3 を NG にした — M1 は資料の要点ごとの公式の対応と「未確認」の表示が無く、M3 は図に adversarial-reviewer の名前が無い。記録の文書（docs/proposals）は test-gate では直せないので fix-loop に回す
 
 - [fix-loop] 手動テスト M1・M3 の NG を案 A（記録の 3 節に資料ごとの公式との対応表を足し、図に adversarial-reviewer の名前を書く）で直した — 期待値を緩める案は受け入れ条件を満たさないまま合格にする（テストを弱める）ので採らない
+
+- [test-gate] 2 回目の手動テストで M1・M3 だけをやり直し、ほかの行は 1 回目の結果のままにした — 直したのは記録の 3 節と 4 節だけで、M2・M4〜M7 が見る所（2 節・5〜7 節・GitHub のイシュー）は変わっていない。M5 にかかわる `ファイル:行` の参照も増えていない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
