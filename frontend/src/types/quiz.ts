@@ -39,15 +39,13 @@ export interface Choice {
 export interface Problem {
   id: string;
   question_text: string;
-  question_image?: string | null;
-  question_images?: MediaAsset[];  // 新しい形式（I472）
+  question_images?: MediaAsset[];  // 画像（I472）
   subject_name?: string;
   difficulty: 'easy' | 'medium' | 'hard';
   problem_type: 'single_choice' | 'multiple_choice' | 'text';
   choices: Choice[];
   explanation?: string;
-  explanation_image?: string | null;
-  explanation_images?: MediaAsset[];  // 新しい形式（I472）
+  explanation_images?: MediaAsset[];  // 画像（I472）
   // 修正で追加されるフィールド
   total_problems_in_subject?: number;
   is_review_mode?: boolean;
@@ -61,8 +59,7 @@ export interface Problem {
 export interface QuizResult {
   is_correct: boolean;
   explanation?: string;
-  explanation_image?: string | null;
-  explanation_images?: MediaAsset[];  // 新しい形式（I472）
+  explanation_images?: MediaAsset[];  // 画像（I472）
   correct_choices?: Choice[];
   session_complete: boolean;
   session?: QuizSession;  // 修正で追加

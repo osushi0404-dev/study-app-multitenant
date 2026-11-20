@@ -3,8 +3,6 @@ URL configuration for core project.
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
 from django.db import connection
 from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
@@ -36,12 +34,6 @@ urlpatterns = [
     path('api/organizations/', include(organizations_router.urls)),
     path('', include('core.monitoring_urls')),
 ]
-
-# Serve media files in development
-if settings.DEBUG:
-    urlpatterns += static(
-        settings.MEDIA_URL, document_root=settings.MEDIA_ROOT
-    )
 
 # Admin site customization
 admin.site.site_header = "学習アプリ 管理画面"

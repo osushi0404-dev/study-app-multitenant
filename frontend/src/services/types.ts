@@ -94,9 +94,7 @@ export interface Problem {
   explanation?: string;
   created_at: string;
   updated_at: string;
-  // 画像フィールド - イシュー#033対応
-  question_image?: string;
-  explanation_image?: string;
+  // 画像（MediaAsset の配列。古い形の question_image・explanation_image は I587 で外した）
   question_images?: MediaAsset[];
   explanation_images?: MediaAsset[];
 }

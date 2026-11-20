@@ -9,7 +9,6 @@ PUT /api/problems/{id}/ への multipart 一括差分更新を起点に、
 """
 import io
 import json
-import os
 import uuid
 
 import pytest
@@ -20,7 +19,7 @@ from django.contrib.auth import get_user_model
 
 from accounts.models import Organization, OrganizationCategory
 from problems.models import (
-    Subject, Problem, Choice, MediaAsset, ProblemMediaAsset,
+    Subject, Problem, Choice, MediaAsset, MediaAssetContent, ProblemMediaAsset,
 )
 
 User = get_user_model()
@@ -38,25 +37,12 @@ def png_upload(name, size=(10, 10)):
     return SimpleUploadedFile(name, png_bytes(size), content_type="image/png")
 
 
-def ensure_dirs(media_root, org, subject):
-    for kind in ("problem", "explanation"):
-        os.makedirs(
-            os.path.join(media_root, "org", org.slug, "subjects", subject.slug, kind),
-            exist_ok=True,
-        )
-
-
-def make_asset_with_link(media_root, org, subject, problem, usage_kind, position,
-                         filename):
-    """既存画像（MediaAsset + 物理ファイル + ProblemMediaAsset link）を直接生成。"""
+def make_asset_with_link(org, subject, problem, usage_kind, position, filename):
+    """既存画像（MediaAsset + 中身〔I587: DB〕 + ProblemMediaAsset link）を直接生成。"""
     asset_id = uuid.uuid4()
     storage_key = (
         f"org/{org.slug}/subjects/{subject.slug}/{usage_kind}/{asset_id}.png"
     )
-    full = os.path.join(media_root, storage_key)
-    os.makedirs(os.path.dirname(full), exist_ok=True)
-    with open(full, "wb") as f:
-        f.write(png_bytes())
     asset = MediaAsset.objects.create(
         id=asset_id,
         organization=org,
@@ -68,6 +54,7 @@ def make_asset_with_link(media_root, org, subject, problem, usage_kind, position
         file_size_bytes=100,
         checksum_sha256="x" * 64,
     )
+    MediaAssetContent.objects.create(asset=asset, data=png_bytes())
     ProblemMediaAsset.objects.create(
         organization=org,
         problem=problem,
@@ -113,8 +100,9 @@ def put_payload(subject, question="Q?", explanation="exp", **extra):
     return data
 
 
-def file_exists(media_root, asset):
-    return os.path.exists(os.path.join(media_root, asset.storage_key))
+def has_content(asset):
+    """画像の中身が DB にあるか（I587: ファイルの有無の代わり）"""
+    return MediaAssetContent.objects.filter(asset=asset).exists()
 
 
 # ---- フィクスチャ ----------------------------------------------------------
@@ -125,8 +113,7 @@ def category(db):
 
 
 @pytest.fixture
-def env(db, category, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def env(db, category):
     org = Organization.objects.create(name="org1", slug="org1", category=category)
     org2 = Organization.objects.create(name="org2", slug="org2", category=category)
     # I102: ProblemViewSet が組織管理者(role=='admin')限定になったため、
@@ -144,12 +131,10 @@ def env(db, category, tmp_path, settings):
     )
     subject = Subject.objects.create(name="s1", slug="s1", organization=org)
     subject2 = Subject.objects.create(name="s2", slug="s2", organization=org2)
-    ensure_dirs(str(tmp_path), org, subject)
-    ensure_dirs(str(tmp_path), org2, subject2)
     client = APIClient()
     client.force_authenticate(user=user)
     return {
-        "media_root": str(tmp_path), "org": org, "org2": org2,
+        "org": org, "org2": org2,
         "user": user, "user2": user2, "subject": subject, "subject2": subject2,
         "client": client,
     }
@@ -179,7 +164,7 @@ def test_create_with_images_regression(env):
     assert MediaAsset.objects.filter(subject=env["subject"],
                                      usage_kind="problem").count() == 2
     for link in links:
-        assert file_exists(env["media_root"], link.asset)
+        assert has_content(link.asset)
 
 
 # ---- TC-AUTO-01: 追加 ------------------------------------------------------
@@ -187,7 +172,7 @@ def test_create_with_images_regression(env):
 @pytest.mark.django_db
 def test_add_image_to_existing(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
     data = put_payload(
         env["subject"],
@@ -209,9 +194,9 @@ def test_add_image_to_existing(env):
 @pytest.mark.django_db
 def test_text_only_edit_keeps_images(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
-    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    b = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 2, "b.png")
     data = put_payload(env["subject"], question="変更後の問題文")
     resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
@@ -227,9 +212,9 @@ def test_text_only_edit_keeps_images(env):
 @pytest.mark.django_db
 def test_empty_order_removes_all(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
-    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    b = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 2, "b.png")
     data = put_payload(env["subject"], question_images_order=json.dumps([]))
     resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
@@ -238,7 +223,7 @@ def test_empty_order_removes_all(env):
     for asset in (a, b):
         asset.refresh_from_db()
         assert asset.is_deleted is True
-        assert not file_exists(env["media_root"], asset)
+        assert not has_content(asset)
 
 
 # ---- TC-AUTO-04: 並び替え -------------------------------------------------
@@ -246,11 +231,11 @@ def test_empty_order_removes_all(env):
 @pytest.mark.django_db
 def test_reorder(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
-    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    b = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 2, "b.png")
-    c = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    c = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 3, "c.png")
     data = put_payload(env["subject"], question_images_order=json.dumps(
         [{"existing": str(c.id)}, {"existing": str(a.id)}, {"existing": str(b.id)}]))
@@ -259,11 +244,11 @@ def test_reorder(env):
     links = active_links(problem, "problem")
     assert [(str(link.asset_id), link.position) for link in links] == [
         (str(c.id), 1), (str(a.id), 2), (str(b.id), 3)]
-    # 物理・MediaAsset は削除されない
+    # 中身・MediaAsset は削除されない
     for asset in (a, b, c):
         asset.refresh_from_db()
         assert asset.is_deleted is False
-        assert file_exists(env["media_root"], asset)
+        assert has_content(asset)
 
 
 # ---- TC-AUTO-05: 共有画像の削除は紐づけ解除のみ ----------------------------
@@ -272,7 +257,7 @@ def test_reorder(env):
 def test_shared_asset_only_unlinked(env):
     problem1 = make_problem(env["org"], env["subject"], env["user"], question="p1")
     problem2 = make_problem(env["org"], env["subject"], env["user"], question="p2")
-    shared = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    shared = make_asset_with_link(env["org"], env["subject"],
                                   problem1, "problem", 1, "shared.png")
     # 同一アセットを problem2 にも紐づけ（共有）
     ProblemMediaAsset.objects.create(
@@ -284,7 +269,7 @@ def test_shared_asset_only_unlinked(env):
     assert active_links(problem1, "problem") == []
     shared.refresh_from_db()
     assert shared.is_deleted is False          # 共有のため論理削除しない
-    assert file_exists(env["media_root"], shared)  # 物理ファイル残存
+    assert has_content(shared)  # 中身が残る
     # problem2 からは引き続き取得可能
     assert [str(link.asset_id) for link in active_links(problem2, "problem")] == [
         str(shared.id)]
@@ -295,7 +280,7 @@ def test_shared_asset_only_unlinked(env):
 @pytest.mark.django_db
 def test_other_org_cannot_edit(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    make_asset_with_link(env["org"], env["subject"],
                          problem, "problem", 1, "a.png")
     other = APIClient()
     other.force_authenticate(user=env["user2"])
@@ -305,14 +290,14 @@ def test_other_org_cannot_edit(env):
     assert len(active_links(problem, "problem")) == 1  # 不変
 
 
-# ---- TC-AUTO-07: atomic（新規保存失敗・物理削除遅延） ---------------------
+# ---- TC-AUTO-07: atomic（新規保存失敗で全体が巻き戻る） ---------------------
 
 @pytest.mark.django_db
 def test_atomic_invalid_new_file_keeps_everything(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
-    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    b = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 2, "b.png")
     bad = SimpleUploadedFile("bad.png", b"not an image", content_type="image/png")
     # B を除外しつつ不正な新規ファイルを追加 → 失敗で全ロールバック
@@ -321,13 +306,13 @@ def test_atomic_invalid_new_file_keeps_everything(env):
         question_image_1=bad)
     resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
     assert resp.status_code == 400, resp.content
-    # DB・物理ともに元のまま（B も消えていない＝物理削除に到達していない）
+    # DB・中身ともに元のまま（B の中身も消えていない）
     links = active_links(problem, "problem")
     assert {str(link.asset_id) for link in links} == {str(a.id), str(b.id)}
     for asset in (a, b):
         asset.refresh_from_db()
         assert asset.is_deleted is False
-        assert file_exists(env["media_root"], asset)
+        assert has_content(asset)
 
 
 # ---- TC-AUTO-08: 不正 order → 全ロールバック ------------------------------
@@ -335,7 +320,7 @@ def test_atomic_invalid_new_file_keeps_everything(env):
 @pytest.mark.django_db
 def test_over_limit_order_rejected(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
     order = [{"existing": str(a.id)}] + [{"new": f"question_image_{i}"} for i in range(1, 6)]
     data = put_payload(env["subject"], question_images_order=json.dumps(order))
@@ -350,7 +335,7 @@ def test_over_limit_order_rejected(env):
 @pytest.mark.django_db
 def test_invalid_json_order_rejected(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
     data = put_payload(env["subject"], question_images_order="{not json")
     resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
@@ -364,7 +349,7 @@ def test_invalid_json_order_rejected(env):
 def test_cross_problem_asset_rejected(env):
     problem1 = make_problem(env["org"], env["subject"], env["user"], question="p1")
     problem2 = make_problem(env["org"], env["subject"], env["user"], question="p2")
-    other_asset = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    other_asset = make_asset_with_link(env["org"], env["subject"],
                                        problem2, "problem", 1, "p2.png")
     data = put_payload(env["subject"], question_images_order=json.dumps(
         [{"existing": str(other_asset.id)}]))
@@ -378,10 +363,10 @@ def test_cross_problem_asset_rejected(env):
 @pytest.mark.django_db
 def test_explanation_images(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "explanation", 1, "ea.png")
     # 追加: 既存 A + 新規 B（problem 種別は未送信＝不変であることも確認）
-    qa = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    qa = make_asset_with_link(env["org"], env["subject"],
                               problem, "problem", 1, "qa.png")
     data = put_payload(env["subject"], explanation_images_order=json.dumps(
         [{"existing": str(a.id)}, {"new": "explanation_image_1"}]),
@@ -400,11 +385,11 @@ def test_explanation_images(env):
 @pytest.mark.django_db
 def test_explanation_delete_and_reorder(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "explanation", 1, "ea.png")
-    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    b = make_asset_with_link(env["org"], env["subject"],
                              problem, "explanation", 2, "eb.png")
-    c = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    c = make_asset_with_link(env["org"], env["subject"],
                              problem, "explanation", 3, "ec.png")
     # 並び替え [A,B,C] -> [C,A,B]
     data = put_payload(env["subject"], explanation_images_order=json.dumps(
@@ -422,16 +407,16 @@ def test_explanation_delete_and_reorder(env):
     for asset in (a, b, c):
         asset.refresh_from_db()
         assert asset.is_deleted is True
-        assert not file_exists(env["media_root"], asset)
+        assert not has_content(asset)
 
 
-# ---- TC-AUTO-15: 同一アセットが別usage_kindで共有される場合は物理削除しない ----
+# ---- TC-AUTO-15: 同一アセットが別usage_kindで共有される場合は中身を消さない ----
 
 @pytest.mark.django_db
 def test_asset_shared_across_usage_kinds_preserved(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
     # 同一アセットを problem 種別と explanation 種別の両方に紐づけ（共有）
-    asset = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    asset = make_asset_with_link(env["org"], env["subject"],
                                  problem, "problem", 1, "shared.png")
     ProblemMediaAsset.objects.create(
         organization=env["org"], problem=problem, asset=asset,
@@ -441,11 +426,11 @@ def test_asset_shared_across_usage_kinds_preserved(env):
     resp = env["client"].put(f"/api/problems/{problem.id}/", data, format="multipart")
     assert resp.status_code == 200, resp.content
     assert active_links(problem, "problem") == []
-    # explanation 側の共有リンクが残るため、アセット実体・物理ファイルは保持される
+    # explanation 側の共有リンクが残るため、アセット実体・中身は保持される
     assert [str(link.asset_id) for link in active_links(problem, "explanation")] == [str(asset.id)]
     asset.refresh_from_db()
     assert asset.is_deleted is False
-    assert file_exists(env["media_root"], asset)
+    assert has_content(asset)
 
 
 # ---- TC-AUTO-13: 同一既存UUID重複指定を拒否（unique違反の500を防止） --------
@@ -453,7 +438,7 @@ def test_asset_shared_across_usage_kinds_preserved(env):
 @pytest.mark.django_db
 def test_duplicate_existing_rejected(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
     data = put_payload(env["subject"], question_images_order=json.dumps(
         [{"existing": str(a.id)}, {"existing": str(a.id)}]))
@@ -467,7 +452,7 @@ def test_duplicate_existing_rejected(env):
 @pytest.mark.django_db
 def test_both_keys_entry_rejected(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
     data = put_payload(env["subject"], question_images_order=json.dumps(
         [{"existing": str(a.id), "new": "question_image_1"}]),
@@ -482,9 +467,9 @@ def test_both_keys_entry_rejected(env):
 @pytest.mark.django_db
 def test_replace_image(env):
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
-    b = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    b = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 2, "b.png")
     data = put_payload(env["subject"], question_images_order=json.dumps(
         [{"existing": str(a.id)}, {"new": "question_image_1"}]),
@@ -495,10 +480,10 @@ def test_replace_image(env):
     assert [link.position for link in links] == [1, 2]
     assert str(links[0].asset_id) == str(a.id)
     assert links[1].asset.original_filename == "c.png"
-    # B は紐づけ解除＋（非共有のため）論理削除＋物理削除
+    # B は紐づけ解除＋（非共有のため）論理削除＋中身の削除
     b.refresh_from_db()
     assert b.is_deleted is True
-    assert not file_exists(env["media_root"], b)
+    assert not has_content(b)
 
 
 # ---- TC-AUTO-16: invalidate_problems_cache が実際にキャッシュをクリアする -----
@@ -528,7 +513,7 @@ def test_added_image_reflected_through_list_endpoint(env):
     返して追加画像が見えない（実機で観測された不具合の回帰テスト）。
     """
     problem = make_problem(env["org"], env["subject"], env["user"])
-    a = make_asset_with_link(env["media_root"], env["org"], env["subject"],
+    a = make_asset_with_link(env["org"], env["subject"],
                              problem, "problem", 1, "a.png")
     client = env["client"]
 
@@ -567,7 +552,5 @@ def test_cross_org_subject_rejected(env):
     assert resp.status_code == 400, resp.content
     problem.refresh_from_db()
     assert problem.subject_id == env["subject"].id  # 不変
-    # org2 ディレクトリに新規ファイルが書かれていない
-    org2_dir = os.path.join(env["media_root"], "org", env["org2"].slug,
-                            "subjects", env["subject2"].slug, "problem")
-    assert not os.path.exists(org2_dir) or os.listdir(org2_dir) == []
+    # org2 の科目に画像が作られていない（I587: 中身は DB）
+    assert not MediaAsset.objects.filter(subject=env["subject2"]).exists()

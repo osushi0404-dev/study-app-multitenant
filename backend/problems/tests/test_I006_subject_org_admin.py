@@ -44,8 +44,7 @@ def setup_data(db, category):
 
 # TC-AUTO-001
 @pytest.mark.django_db
-def test_create_subject_as_org_admin(setup_data, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_create_subject_as_org_admin(setup_data):
     client = APIClient()
     client.force_authenticate(user=setup_data["admin"])
 
@@ -81,8 +80,7 @@ def test_create_subject_unauthorized():
 
 # TC-AUTO-004
 @pytest.mark.django_db
-def test_create_subject_slug_auto_generated_english(setup_data, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_create_subject_slug_auto_generated_english(setup_data):
     client = APIClient()
     client.force_authenticate(user=setup_data["admin"])
 
@@ -95,8 +93,7 @@ def test_create_subject_slug_auto_generated_english(setup_data, tmp_path, settin
 
 # TC-AUTO-005
 @pytest.mark.django_db
-def test_create_subject_slug_auto_generated_japanese(setup_data, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_create_subject_slug_auto_generated_japanese(setup_data):
     client = APIClient()
     client.force_authenticate(user=setup_data["admin"])
 
@@ -110,8 +107,7 @@ def test_create_subject_slug_auto_generated_japanese(setup_data, tmp_path, setti
 
 # TC-AUTO-006
 @pytest.mark.django_db
-def test_create_subject_slug_collision_auto_numbered(setup_data, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_create_subject_slug_collision_auto_numbered(setup_data):
     org = setup_data["org"]
     Subject.objects.create(name="テスト1", slug="test", organization=org)
     Subject.objects.create(name="テスト2", slug="test-2", organization=org)
@@ -127,8 +123,7 @@ def test_create_subject_slug_collision_auto_numbered(setup_data, tmp_path, setti
 
 # TC-AUTO-007
 @pytest.mark.django_db
-def test_create_subject_duplicate_name_returns_400(setup_data, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
+def test_create_subject_duplicate_name_returns_400(setup_data):
     client = APIClient()
     client.force_authenticate(user=setup_data["admin"])
 
@@ -146,45 +141,6 @@ def test_list_subjects_accessible_for_normal_user(setup_data):
     response = client.get("/api/subjects/")
 
     assert response.status_code == 200
-
-
-# TC-AUTO-009
-@pytest.mark.django_db
-def test_media_folders_created_on_subject_create(setup_data, tmp_path, settings):
-    settings.MEDIA_ROOT = str(tmp_path)
-    client = APIClient()
-    client.force_authenticate(user=setup_data["admin"])
-
-    response = client.post("/api/subjects/", {"name": "Folder Test"}, format="json")
-
-    assert response.status_code == 201
-    org_slug = setup_data["org"].slug
-    subject = Subject.objects.get(name="Folder Test", organization=setup_data["org"])
-
-    problem_dir = tmp_path / "org" / org_slug / "subjects" / subject.slug / "problem"
-    explanation_dir = tmp_path / "org" / org_slug / "subjects" / subject.slug / "explanation"
-
-    assert problem_dir.exists(), "problem/ ディレクトリが作成されていない"
-    assert explanation_dir.exists(), "explanation/ ディレクトリが作成されていない"
-
-
-# TC-AUTO-010
-@pytest.mark.django_db
-def test_subject_rolled_back_when_folder_creation_fails(setup_data, tmp_path, settings, monkeypatch):
-    settings.MEDIA_ROOT = str(tmp_path)
-
-    def broken_makedirs(path, **kwargs):
-        raise OSError("disk full")
-
-    monkeypatch.setattr("os.makedirs", broken_makedirs)
-
-    client = APIClient(raise_request_exception=False)
-    client.force_authenticate(user=setup_data["admin"])
-
-    response = client.post("/api/subjects/", {"name": "ロールバックテスト"}, format="json")
-
-    assert response.status_code == 500
-    assert not Subject.objects.filter(name="ロールバックテスト").exists()
 
 
 # TC-AUTO-011

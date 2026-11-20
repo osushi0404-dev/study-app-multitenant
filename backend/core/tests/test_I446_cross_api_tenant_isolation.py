@@ -34,8 +34,8 @@ from rest_framework.test import APIClient
 
 from accounts.models import Organization, OrganizationCategory
 from problems.models import (
-    Choice, MediaAsset, Problem, ProblemMediaAsset, QuizAnswer, QuizSession, Subject,
-    UserSubjectAccess,
+    Choice, MediaAsset, MediaAssetContent, Problem, ProblemMediaAsset, QuizAnswer, QuizSession,
+    Subject, UserSubjectAccess,
 )
 from studylogs.models import SpacedRepetitionCard, SpacedRepetitionReview
 
@@ -183,6 +183,8 @@ ROUTE_TABLE = {
         IdCheck("org_admin", "path", "asset_id", "asset", 404,
                 path_extra=(("pk", "@own.problem"),), writes=("same", "")),
     ],
+    # I587: 画像の中身の配信（組織の境界で絞る・他組織は存在しない番号と同じ 404）
+    "GET api/media/<asset_id>/": [IdCheck("user", "path", "asset_id", "asset", 404)],
     # ---- クイズ ----
     "GET api/quiz/": LIST,
     "POST api/quiz/": [_subj_body(writes=("count", "session")),
@@ -368,6 +370,8 @@ def world(db):
     asset = MediaAsset.objects.create(
         id=uuid.UUID(FOREIGN_UUID), organization=org_b, subject=subject_b,
         storage_key="org/i446b/problem/a.png")
+    # 中身も入れる（I587: 中身が無いことで 404 になり、境界の確かめが見かけだけ通らないように）
+    MediaAssetContent.objects.create(asset=asset, data=b"\x89PNG-I446")
     ProblemMediaAsset.objects.create(
         problem=problem_b, asset=asset, usage_kind="problem", position=1, organization=org_b)
 

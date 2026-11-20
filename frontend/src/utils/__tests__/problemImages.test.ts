@@ -1,5 +1,5 @@
 /**
- * pickImageUrls（I472 TC-07）: 新しい形式が 1 枚以上あれば新しい形式だけ、無ければ古い形式の 1 枚
+ * pickImageUrls（I472 TC-07・I587 TC-19）: 画像の API の URL を表示順に並べる（古い形式の 1 枚は I587 で外した）
  */
 import { pickImageUrls } from '../problemImages';
 import { MediaAsset } from '../../services/types';
@@ -15,20 +15,14 @@ const asset = (url: string): MediaAsset => ({
 });
 
 describe('pickImageUrls', () => {
-  it('新しい形式があれば古い形式を使わない', () => {
-    expect(pickImageUrls([asset('/media/a.png'), asset('/media/b.png')], '/media/legacy.png'))
-      .toEqual(['/media/a.png', '/media/b.png']);
+  it('画像の URL を表示順に並べる', () => {
+    expect(pickImageUrls([asset('/api/media/a/'), asset('/api/media/b/')]))
+      .toEqual(['/api/media/a/', '/api/media/b/']);
   });
 
-  it('新しい形式が空配列なら古い形式の 1 枚', () => {
-    expect(pickImageUrls([], '/media/legacy.png')).toEqual(['/media/legacy.png']);
-  });
-
-  it('どちらも無ければ空', () => {
-    expect(pickImageUrls(undefined, null)).toEqual([]);
-  });
-
-  it('新しい形式だけ', () => {
-    expect(pickImageUrls([asset('/media/a.png')], undefined)).toEqual(['/media/a.png']);
+  it('空配列・無いときは空', () => {
+    expect(pickImageUrls([])).toEqual([]);
+    expect(pickImageUrls(undefined)).toEqual([]);
+    expect(pickImageUrls(null)).toEqual([]);
   });
 });

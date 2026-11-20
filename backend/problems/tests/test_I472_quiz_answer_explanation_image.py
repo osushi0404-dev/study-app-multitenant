@@ -1,8 +1,7 @@
 """
 I472: 解説画像がある問題へのクイズの回答で 500 にならず、保存されたのに 500 になる状態も無い。
 
-- 古い形式の解説画像（explanation_image はファイル名）の URL は get_explanation_image_url() で作る
-- 新しい形式の解説画像（MediaAsset）を応答の explanation_images に表示順で入れる
+- 解説画像（MediaAsset）を応答の explanation_images に表示順で入れる（古い形式の explanation_image は I587 で外した）
 - 応答の組み立てに失敗したら、回答・回の集計・復習の予定を残さない
 
 TC-01〜TC-05（docs/tests/open/I472_auto_test.md）に対応。
@@ -24,9 +23,8 @@ from studylogs.models import SpacedRepetitionCard, SpacedRepetitionReview
 User = get_user_model()
 
 QUIZ_URL = "/api/quiz/"
-EXPLANATION_DIR = "/media/org/org-i472-a/subjects/subj-i472/explanation"
 RESPONSE_KEYS = {
-    "is_correct", "explanation", "explanation_image", "explanation_images",
+    "is_correct", "explanation", "explanation_images",
     "correct_choices", "session_complete", "session", "session_stats",
 }
 MEDIA_ASSET_KEYS = {
@@ -87,31 +85,8 @@ def _answer(client, session_id, setup):
     )
 
 
-# ---- TC-01: 古い形式の解説画像がある問題への回答は 200・URL は get_explanation_image_url() ----
-def test_legacy_explanation_image_returns_200(setup):
-    problem = setup["problem"]
-    problem.explanation_image = "sample.png"
-    problem.save()
-    client = _client(setup["user"])
-    session_id = _start_session(client, setup["subject"])
-
-    response = _answer(client, session_id, setup)
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["is_correct"] is True
-    assert body["explanation_image"] == f"{EXPLANATION_DIR}/sample.png"
-    assert body["explanation_image"] == problem.get_explanation_image_url()
-    assert body["explanation_images"] == []
-    assert QuizAnswer.objects.filter(session_id=session_id).count() == 1
-    assert QuizSession.objects.get(id=session_id).completed_problems == 1
-
-
 # ---- TC-02: 新しい形式の解説画像が表示順で応答に入る（問題用は入らない） ----
 def test_new_format_explanation_images(setup):
-    problem = setup["problem"]
-    problem.explanation_image = "legacy.png"
-    problem.save()
     second = _link_asset(setup, "explanation", 2, "e2.png")
     first = _link_asset(setup, "explanation", 1, "e1.png")
     _link_asset(setup, "problem", 1, "q1.png")
@@ -125,10 +100,10 @@ def test_new_format_explanation_images(setup):
     images = body["explanation_images"]
     assert [image["id"] for image in images] == [str(first.id), str(second.id)]
     assert all(set(image) == MEDIA_ASSET_KEYS for image in images)
+    # I587: 画像は組織の境界を確かめる配信の API から返す
     assert [image["url"] for image in images] == [
-        f"/media/{first.storage_key}", f"/media/{second.storage_key}"]
+        f"/api/media/{first.id}/", f"/api/media/{second.id}/"]
     assert {image["usage_kind"] for image in images} == {"explanation"}
-    assert body["explanation_image"] == f"{EXPLANATION_DIR}/legacy.png"
 
 
 # ---- TC-03: 画像の無い問題・応答のキー ----
@@ -141,7 +116,6 @@ def test_response_keys_without_images(setup):
     assert response.status_code == 200
     body = response.json()
     assert set(body) == RESPONSE_KEYS
-    assert body["explanation_image"] is None
     assert body["explanation_images"] == []
     assert body["explanation"] == "I472の解説"
     assert body["correct_choices"] == [{"id": setup["correct"].id, "text": "正解"}]
@@ -155,7 +129,7 @@ def _raise(*args, **kwargs):
 
 # ---- TC-04: 応答の組み立てに失敗したら、回答・集計・復習の予定を残さない ----
 @pytest.mark.parametrize("target", [
-    (Problem, "get_explanation_image_url"),          # 組み立ての最初の欄（解説）
+    (AnswerExplanationSerializer, "get_explanation_images"),  # 組み立ての最初の欄（解説）
     (QuizSessionSerializer, "to_representation"),    # 組み立ての最後の欄（回）
 ])
 def test_build_failure_leaves_nothing(setup, monkeypatch, target):

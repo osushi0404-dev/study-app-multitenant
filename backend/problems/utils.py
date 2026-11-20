@@ -2,13 +2,10 @@
 問題画像アップロード用のユーティリティ関数
 イシュー#031対応: 強化されたファイルバリデーションとサニタイゼーション
 """
-import os
 import re
-import hashlib
 import unicodedata
 from pathlib import Path
 from typing import Tuple, Optional
-from django.conf import settings
 from PIL import Image
 import magic
 
@@ -62,9 +59,7 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
     # 3. MIMEタイプ検証（拡張子偽装対策）
     try:
         # ファイルの先頭バイトからMIMEタイプを検出
-        file.seek(0)
-        mime = magic.from_buffer(file.read(2048), mime=True)
-        file.seek(0)  # ファイルポインタを先頭に戻す
+        mime = _detect_mime(file)
 
         if mime not in ALLOWED_IMAGE_FORMATS:
             return False, f"ファイルの内容が画像形式ではありません（検出: {mime}）"
@@ -99,6 +94,22 @@ def validate_image_file(file) -> Tuple[bool, Optional[str]]:
         return False, error_msg
 
     return True, None
+
+
+MIME_SNIFF_BYTES = 2048
+
+
+def detect_mime(data: bytes) -> str:
+    """中身の先頭のバイト列から MIME を判定する（送り手の content_type は使わない・I587）"""
+    return magic.from_buffer(data[:MIME_SNIFF_BYTES], mime=True)
+
+
+def _detect_mime(file) -> str:
+    """ファイルの先頭から MIME を判定する（読んだ後は先頭に戻す）"""
+    file.seek(0)
+    mime = detect_mime(file.read(MIME_SNIFF_BYTES))
+    file.seek(0)
+    return mime
 
 
 def _validate_filename_safety(filename: str) -> Tuple[bool, Optional[str]]:
@@ -239,59 +250,6 @@ def check_duplicate_filename(
         return False, f'ファイル名 "{original_filename}" は既に{usage_label}として登録されています'
 
     return True, None
-
-
-def check_directory_exists(directory_path: str) -> Tuple[bool, Optional[str]]:
-    """
-    ディレクトリの存在確認
-
-    Args:
-        directory_path: 確認対象のディレクトリパス（MEDIA_ROOT からの相対パス）
-
-    Returns:
-        Tuple[bool, Optional[str]]: (存在する, エラーメッセージ)
-
-    注意:
-        ディレクトリが存在しない場合はエラーとし、自動作成は行わない
-        （ディレクトリは科目登録時に作成済みの想定）
-    """
-    full_path = os.path.join(settings.MEDIA_ROOT, directory_path)
-
-    if not os.path.exists(full_path):
-        return False, (
-            f"ディレクトリが存在しません: {directory_path}"
-            f"（科目登録時にディレクトリが作成されているか確認してください）"
-        )
-
-    if not os.path.isdir(full_path):
-        return False, f"指定されたパスがディレクトリではありません: {directory_path}"
-
-    # 書き込み権限の確認
-    if not os.access(full_path, os.W_OK):
-        return False, f"ディレクトリへの書き込み権限がありません: {directory_path}"
-
-    return True, None
-
-
-def calculate_file_checksum(file) -> str:
-    """
-    ファイルのSHA256チェックサムを計算
-
-    Args:
-        file: ファイルオブジェクト
-
-    Returns:
-        str: SHA256ハッシュ値（16進数文字列）
-    """
-    file.seek(0)
-    sha256_hash = hashlib.sha256()
-
-    # チャンク単位で読み込んでハッシュ計算（メモリ効率化）
-    for chunk in iter(lambda: file.read(4096), b''):
-        sha256_hash.update(chunk)
-
-    file.seek(0)  # ファイルポインタを先頭に戻す
-    return sha256_hash.hexdigest()
 
 
 def get_storage_path(
