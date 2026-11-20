@@ -29,9 +29,11 @@
 - [plan] primary の結果は GitHub #605 のコメントで受け渡す — primary のセッションは app-1 のファイルに書けず、チャットでの受け渡しは禁止のため（計画書 9）
 - [plan] 片付けは implement の段階で済ませ、人の承認のところで止まって `/proceed` で戻る — 危険操作は人の承認が要り、test-gate で終わった状態を確かめるため（計画書 9）
 - [plan] 手順書 §4 を直し、一覧の I602 F2 を同梱する — 起動の途中で止まった後に今のコマンドが動かないため（計画書の調査結果 2）
+- [plan-review] 計画レビューの Warning 3 件・Info 1 件を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記だけのため（計画変更記録）。M1 は docker をつなぐとサンドボックスの中で動き一覧が空になる（失敗を見逃す）と分かったので、`docker volume inspect` を単体で流す形にした
 
 ### 承認の記録
 <!-- 危険操作の承認の言葉と日付（P4・P9 は #605 の primary のコメントから写す・A2 は app-1 の会話から） -->
 -
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
