@@ -94,19 +94,22 @@
 - `backend/core/storage_service.py` を消す（使う所が無くなる。`imghdr` は Python 3.13 で外されたので、#554 の前に無くなるのは都合がよい）
 
 ### 4-4. 画面から使われていない 2 つの action
-**修正方針**: ファイルに書く経路を残さない。共通の保存の流れ（4-2）を使い、規約 §6・§7 のエラーの形にそろえる。
-- `ProblemViewSet.upload_image`（`views.py:612-737`）: `StorageService` を使わず `ProblemService._save_image_as_asset(image_file=file_data, usage_kind=usage_kind, organization=problem.subject.organization, subject=problem.subject)` を呼び、紐づけを作る（`transaction.atomic`）。`except Exception` で `str(e)` を返す 500 を消し、検査の誤りは DRF の `ValidationError`（400・`custom_exception_handler` の形）にする。受け付ける形式は共通の検査（PNG・JPEG・WebP・5MB）になり、今の GIF・10MB は受け付けなくなる（画面から使われていない経路で、作成・更新と同じ決まりにそろえる）
-- `ProblemViewSet.delete_image`（`views.py:739-805`）: `StorageService.delete_file` と `media_asset.is_deleted = True` を `ProblemService._discard_asset(media_asset)` に置き換え、`except Exception` の 500 を消す
-- 2 つの `problem.organization_id != request.user.organization_id` の 403 は変えない（`get_object()` の絞り込みが先に 404 を返すので届かないが、範囲の外）
+**修正方針**: ファイルに書く経路を残さない。画像の追加・削除の業務の処理（トランザクション・表示順の採番・共有の判定）をサービスの公開の関数にまとめ、ビューは入力の検証とサービスの呼び出しだけにする（規約 §6・§7）。エラーは DRF の例外で投げ、`custom_exception_handler` の形にそろえる（2026-11-20 の追加の直し・計画変更記録）。
+- `backend/problems/services/problem_service.py` に公開の関数を足す:
+  - `add_image(*, problem, image_file, usage_kind) -> MediaAsset`（`@transaction.atomic`）: `_save_image_as_asset`（組織・科目は `problem.subject` から）→ 有効な紐づけ（`is_deleted=False`）の最大の `position` + 1 で `ProblemMediaAsset` を作る
+  - `remove_image(*, problem, asset_id) -> None`（`@transaction.atomic`）: 自分の有効な紐づけ（`problem`・`asset_id`・`is_deleted=False`・画像の組織が問題の組織）が無ければ `NotFound`。あれば紐づけを消し、ほかに有効な紐づけが無ければ `_discard_asset`
+- `ProblemViewSet.upload_image`: 入力を新しいシリアライザー `ImageUploadSerializer`（`file = serializers.FileField()`・`usage_kind = serializers.ChoiceField(choices=MediaAsset.UsageKind.choices)`）で検証し、`ProblemService.add_image` を呼ぶ。応答は今のまま 201・`MediaAssetSerializer`。画像の検査の誤りは `ValidationError`（400）。受け付ける形式は共通の検査（PNG・JPEG・WebP・5MB）で、今までの GIF・10MB は受け付けない（画面から使われていない経路で、作成・更新と同じ決まりにそろえる）
+- `ProblemViewSet.delete_image`: `ProblemService.remove_image` を呼び、200 と `{'message': '画像を削除しました'}` を返す（今のまま）
+- 2 つの action の `problem.organization_id != request.user.organization_id` の 403 と、独自の形の `Response({'error': ...})` を消す（`get_object()` の組織の絞り込みが先に 404 を返すので届かない死んだコード。エラーは DRF の例外に寄せる）
 
 ### 4-5. 配信の API
 **修正方針**: 利用者の組織の、消されていない画像だけを返す。中身を読む前にメタデータで 304 を判定し、ブラウザのキャッシュは本人の分だけにする。
 - URL: `GET /api/media/<uuid:asset_id>/`（`backend/problems/urls.py` に `path('media/<uuid:asset_id>/', MediaAssetContentView.as_view(), name='media-asset-content')`）
-- `backend/problems/views.py` に `MediaAssetContentView(APIView)`:
+- `backend/problems/views.py` に `MediaAssetContentView(GenericAPIView)`（規約 §6。2026-11-20 の追加の直しで `APIView` から変えた）:
   - `permission_classes = [permissions.IsAuthenticated]`（認証は既定の `JWTAuthentication`。組織の管理者に限らない: クイズを解く一般の利用者も画像を見る）
-  - 取り出し（`backend/problems/selectors.py` を新しく作り `visible_media_asset(*, user, asset_id) -> MediaAsset | None`）: `user.organization_id` が無ければ `None`。`MediaAsset.objects.filter(id=asset_id, is_deleted=False, organization_id=user.organization_id, subject__organization_id=user.organization_id).only('id', 'mime_type', 'checksum_sha256').first()`（組織は `request.user` から決める・規約 §5。`organization` か `subject` が null の行は条件に当たらず返らない）
-  - 無ければ `NotFound()`（404。他の組織の画像があることを知らせない。本文は `custom_exception_handler` の形）
-  - `checksum_sha256` が空なら ETag を付けず、304 の判定もしない（違う画像が同じ ETag にならないように・セキュリティレビューの必須防御条件）。値があれば `etag = f'"{asset.checksum_sha256}"'`。`request.headers.get('If-None-Match')` を `,` で分けて空白を除いた値のどれかが `etag` か `*` なら、中身を読まずに `HttpResponseNotModified()`（304・本文なし）に ETag・Cache-Control を付けて返す
+  - 取り出し（`backend/problems/selectors.py` を新しく作り `visible_media_assets(user) -> QuerySet[MediaAsset]`）: `user.organization_id` が無ければ空。`MediaAsset.objects.filter(is_deleted=False, organization_id=user.organization_id, subject__organization_id=user.organization_id).only('id', 'mime_type', 'checksum_sha256')`（組織は `request.user` から決める・規約 §5。`organization` か `subject` が null の行は条件に当たらず返らない）。ビューは `get_queryset()` でこれを返し、`lookup_field = 'id'`・`lookup_url_kwarg = 'asset_id'` の `get_object()` で 1 件を取る
+  - 無ければ 404（`get_object()` の `Http404` を DRF が `NotFound` にする。他の組織の画像があることを知らせない。本文は `custom_exception_handler` の形）
+  - `checksum_sha256` が空なら ETag を付けず、304 の判定もしない（違う画像が同じ ETag にならないように・セキュリティレビューの必須防御条件）。値があれば `etag = f'"{asset.checksum_sha256}"'`。Django の `django.utils.cache.get_conditional_response(request, etag=etag)` で条件つきの要求を判定し、304 なら中身を読まずにその応答（本文なし）に ETag・Cache-Control を付けて返す（`If-None-Match` は RFC 9110 のとおり弱い比較で、`W/` 付きも一致にする。2026-11-20 の追加の直しで、自前の判定〔強い一致だけ〕から変えた。ETag は中身の SHA-256 なので、弱い比較でも違う画像を 304 にしない）
   - 中身: `MediaAssetContent.objects.filter(asset_id=asset.id).values_list('data', flat=True).first()`。無ければ `NotFound()`
   - 応答: `HttpResponse(bytes(data), content_type=mime)`。`mime` は `asset.mime_type` が `ALLOWED_IMAGE_FORMATS` に入るときだけそれを使い、それ以外は `application/octet-stream`。見出し: `ETag`・`Cache-Control: private, max-age=3600`・`X-Content-Type-Options: nosniff`・`Content-Security-Policy: default-src 'none'; sandbox`・`Content-Disposition: inline`
   - 回数の制限は既定のまま（`AppUserRateThrottle`・300/分）
@@ -117,11 +120,12 @@
 - `frontend/src/services/api.ts`: axios の型を広げて `skipErrorToast?: boolean` を設定に足し（`declare module 'axios' { interface AxiosRequestConfig { skipErrorToast?: boolean } }`）、`handleApiError` の最初で `error.config?.skipErrorToast` なら通知を出さずに戻る（401 のトークンの更新は今のまま効く）
 - 新しい `frontend/src/services/mediaService.ts`: `getMediaBlob(url: string): Promise<Blob>`（`apiClient.get<Blob>(url, { responseType: 'blob', skipErrorToast: true })` の `data`）
 - 新しい `frontend/src/hooks/useMediaImage.ts`: `useQuery({ queryKey: ['media', url], queryFn: () => getMediaBlob(url), enabled: !!url, staleTime: Infinity })`（同じ画像の中身は変わらない: 画像を替えると新しい ID になる）。取れた `Blob` から `URL.createObjectURL` で表示用の URL を作り、`useEffect` の後片付けで `URL.revokeObjectURL` する。戻り値は `{ state: LoadState（toLoadState）, objectUrl: string | null, retry: () => void }`
-- 新しい `frontend/src/components/MediaImage.tsx`（関数の部品・`React.FC` を使わない）: props は `src`（API の URL）・`alt`・`sx`・`onClick`・`onKeyDown`・`role`・`tabIndex`・`aria-label`・`loading`
-  - 読み込み中: MUI の `Skeleton`（`variant="rectangular"`・高さは `sx` の高さか 150px）
-  - 失敗: 枠の中に「画像を読み込めませんでした」と「再読み込み」のボタン（`retry` を呼ぶ。UX §1「同じ画面に『読み込めませんでした』と再読み込みのボタンを出す」をそのまま当てはめる）
-  - 取れた: `Box component="img"` に `objectUrl` を渡し、受け取った props を付ける
-- `frontend/src/components/ProblemImageList.tsx`: `getMediaUrl` をやめ、`MediaImage` に API の URL を渡す。`onImageClick` には API の URL を渡す。`key` は URL にする（同じ問題の中で同じ画像は 2 度出ない）
+- 新しい `frontend/src/components/MediaImage.tsx`（関数の部品・`React.FC` を使わない）: props は `src`（API の URL）・`alt`・`height`（枠の高さ・既定 150px）・`sx`・`onClick`・`onKeyDown`・`role`・`tabIndex`・`aria-label`
+  - 読み込み中・失敗・表示の 3 つを、どれも同じ高さ（`height`）の枠で出す。読み込みが終わっても、まわりの選択肢などが動かない（2026-11-20 の追加の直し）
+  - 読み込み中: MUI の `Skeleton`（`variant="rectangular"`・高さ `height`）
+  - 失敗: 同じ高さの枠（背景 `background.paper`。暗いダイアログの中でも文字が読める）に「画像を読み込めませんでした」と「再読み込み」のボタン（`retry` を呼ぶ。UX §1）。ボタンは `Replay` のアイコン付き・押す的は 44×44px 以上（UX §6。`sx={{ minHeight: 44, minWidth: 44 }}`）。見た目は既存の `SubjectsRetryRow` にそろえる（outlined・`Replay`）
+  - 取れた: `Box component="img"` に `objectUrl` を渡し、受け取った props を付ける（`loading="lazy"` は blob の URL に効かないので付けない）
+- `frontend/src/components/ProblemImageList.tsx`: `getMediaUrl` をやめ、`MediaImage` に API の URL を渡す。`onImageClick` には API の URL を渡す。`key` は URL にする（同じ問題の中で同じ画像は 2 度出ない）。画像の枠は高さ 300px に固定し（今までの `maxHeight: 300` と同じ上限）、`objectFit: 'contain'` で縦横の比を保って枠に収める。`MediaImage` に `height={300}` を渡し、読み込み中・失敗・表示で枠の高さを変えない（2026-11-20 の追加の直し）
 - `frontend/src/components/ImageModal.tsx`: `imageUrl`（API の URL）を `MediaImage` で表示する（同じクエリのキーなのでキャッシュから出る）
 - `frontend/src/components/ImageUploadArea.tsx`: 保存済み（`kind: 'existing'`）の画像は `MediaImage` で表示し、新しく選んだ画像は今のまま `URL.createObjectURL(file)` の `img`
 - `frontend/src/utils/url.ts` を消す（`getMediaUrl` は `ProblemImageList` だけが使っていた。axios が `baseURL` を付ける）
@@ -173,6 +177,7 @@
 6. **置き場の設定と見本のファイルの片付け**（ステップ 5 の後）: 4-9 の残り（`git rm -r backend/media` を含む）→ TC-20〜TC-22（決定論ゲート）・TC-23
 7. **app-1 で移行を流す**（ステップ 6 の後）: `DANGER_OK=1 docker compose exec -T backend python manage.py migrate problems`（ユーザーが承認画面で許可する）。出力の `I587 media:` の行を記録する → 手動 M4
 8. **画面で確かめる**（ステップ 7 の後）: Playwright MCP で、画像付きの問題を作ってプレビュー・クイズ・拡大・編集で表示し、通信と見出しを確かめる → 手動 M5・M6。控えを別の DB に戻して確かめる → 手動 M7
+9. **追加の直し（2026-11-20・ユーザーの指示「BP・UI/UX の観点でベストなやり方で」）**: 4-4（サービスの公開の関数・エラーの形・自分の紐づけの絞り込み）・4-5（`GenericAPIView`・`get_conditional_response`）・4-6（枠の高さ・再読み込みのボタン）。TC を先に直して落ちることを確かめてから実装する → TC-04・TC-09・TC-10・TC-12・TC-16・TC-18。画面を Playwright MCP で確かめ直す → 手動 M5・M6
 - サービスの再起動: ステップ 7 の後、`docker compose restart backend`（設定の `MEDIA_*` を外したので読み直す。起動の `migrate` は流し済みで何もしない）。画面は開発サーバーが読み直す（`setupProxy.js` を変えたので `docker compose restart frontend` も要る）
 - 垂直スライス: ステップ 2 で DB → API → 画面を 1 本通す。未知のリスク（画面の blob の受け取りと Jest での `URL.createObjectURL`）もステップ 2 に置く
 
@@ -223,14 +228,15 @@ Claude が決めた（技術的な選択と理由）:
 - 配信の URL は `GET /api/media/<asset_id>/`（問題の下に置かない）— 同じ画像を複数の問題が共有できる作り（`ProblemMediaAsset`）なので、画像の ID で引く
 - 境界は `organization_id` と `subject__organization_id` の両方が利用者の組織であること。null の行は返さない（AC11）。中身は移す（移さないと、後で持ち主を埋めたときに画像が無い）— 持ち主の分からない画像を誰にも見せない（fail-closed）。app-1 では 0 件
 - 権限は `IsAuthenticated` だけ（管理者に限らない）— クイズを解く一般の利用者も画像を見る。問題の取得（`available_problems`）と同じく組織の単位で見せる
-- 304 の判定は中身を読む前にメタデータだけで行う — 2 回目の表示で中身を DB から読まない（AC5 の目的）。`max-age=3600` — 中身は ID ごとに変わらないが、権限が変わったときに長く残さない
+- 304 の判定は中身を読む前にメタデータだけで行い、判定は Django の `get_conditional_response` に任せる（RFC 9110 の弱い比較）— 2 回目の表示で中身を DB から読まない（AC5 の目的）。自前で書くと標準との食い違い（弱い ETag の扱いなど）を抱える。ETag は中身の SHA-256 なので弱い比較でも安全（2026-11-20 に「強い一致だけ」から変えた）。`max-age=3600` — 中身は ID ごとに変わらないが、権限が変わったときに長く残さない
 - 画面は axios で `blob` を取り、`URL.createObjectURL` で表示する。短い期限の署名付きの URL にしない — 署名付きの URL は取得のときにログインを確かめない（AC2 の「ログインしていない利用者には返らない」に合わない）・URL がログや Referer に残る
+- 画像の枠は、読み込み中・失敗・表示で同じ高さにする（問題・解説の画像は 300px・編集のサムネイルは今の 150px）— 読み込み後にまわりが動く（レイアウトのずれ）と、選択肢を押し間違えやすい。画像の縦横の大きさを DB に持って比を出す案は、マイグレーションが要り今の量に見合わないので採らない
 - 画像の取得の失敗は、共通の通知を出さず画像の枠に出す（`skipErrorToast`）— 1 ページに画像が複数あると通知が重なる。枠の文言と再読み込みのボタンは UX §1 の決まり（「読み込めませんでした」と再読み込みのボタン）をそのまま当てはめたもので、新しい価値判断ではない
 - 移行は `RunPython` のデータのマイグレーション（0025）にし、試しは別の管理コマンド（読むだけ）にする — ほかの環境は `migrate` で自動で移る（設計確認メモ）。承認の前に見せる試しは書き込みの無いコマンドで出す
 - 移行の食い違い（中身の不一致・画像でない・置き場の外のキー）と古い列の値は、黙って直さずに止める — C7。止まっても開発の DB だけで、理由がエラーの文に出る
 - 論理削除の行（`is_deleted=True`）は移行で触らない — 今もファイルが消されていて、配信もしない
 - 古い列のマイグレーション（0026）は、移行（0025）と分ける — 規約 §4（データの書き換えとスキーマの変更を分ける）
-- `upload_image`・`delete_image` は消さずに共通の保存・削除にそろえる — 画面から使われていないが、消すと API の範囲が変わる。ファイルに書く経路を残さないことが目的。受け付ける形式が GIF・10MB から PNG・JPEG・WebP・5MB に変わるが、呼ぶ所が無い: `frontend/src`・`e2e` に `images/upload` が無い（2026-11-19 の `grep`）・本番が無く外の利用者がいない（2026-11-17 時点）
+- `upload_image`・`delete_image` は消さずに、業務の処理をサービスの公開の関数（`add_image`・`remove_image`）にまとめる — 画面から使われていないが、消すと API の範囲が変わる。ファイルに書く経路を残さず、ビューを薄くする（規約 §6・§7。2026-11-20 の追加の直し）。受け付ける形式が GIF・10MB から PNG・JPEG・WebP・5MB に変わるが、呼ぶ所が無い: `frontend/src`・`e2e` に `images/upload` が無い（2026-11-19 の `grep`）・本番が無く外の利用者がいない（2026-11-17 時点）
 - `storage_key` の列は残す — 外すと別の破壊的な変更になり、一意の制約の作り直しが要る。識別用のキーとして今の形で作り続ける
 - 応答の `Content-Disposition: inline`・`Content-Security-Policy: default-src 'none'; sandbox` — 画像を別のタブで開いたときもスクリプトを動かさない（多層の守り）
 - AC14 の「別の DB」は、捨てる DB のコンテナ（`docker run --rm`・app-1 のネットワーク）にする。backend を止め、`docker compose run -d --rm --use-aliases --service-ports -e DB_HOST=i587-restore backend` で戻した DB に向けた backend を `backend` の名前で起こし、画面（`BACKEND_URL=http://backend:8000` の中継）で画像のある問題を開く。確かめた後にその backend とコンテナを止め、`docker compose start backend` で元に戻す（M7）— 開発の DB を戻し先にすると、片付け（`DROP DATABASE`）が危険操作になり、開発の DB の中身も変わる。捨てるコンテナなら消すのは止めるだけ
@@ -281,11 +287,11 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 
 ## 13. 性能・UX設計
 - N+1・余計な読み込み: 一覧・クイズの取得は中身の表を読まない（TC-11）。画像の配信は 1 枚 1 回の取得で、2 回目は TanStack Query のキャッシュ（`staleTime: Infinity`）とブラウザの HTTP のキャッシュ（`private, max-age=3600`・ETag）から出る
-- 読み込み中: 画像の枠に MUI の `Skeleton`（形だけ先に出す・UX §2）
+- 読み込み中: 画像の枠に MUI の `Skeleton`（形だけ先に出す・UX §2）。読み込み中・失敗・表示で枠の高さを変えない（レイアウトのずれを出さない）
 - 失敗: 画像の枠に「画像を読み込めませんでした」と「再読み込み」のボタン（UX §1）。画面の他の部分はそのまま使える
 - 空: 画像が 0 枚の問題は画像の場所を出さない（今のまま）
 - 破壊的な操作: 画像の削除は今の編集のダイアログの操作のまま（変えない）
-- アクセシビリティ: `img` の `alt`・クリックできる画像の `role="button"`・`tabIndex`・`aria-label`・Enter とスペースでの拡大は今のまま `MediaImage` に渡す。再読み込みのボタンは `button`
+- アクセシビリティ: `img` の `alt`・クリックできる画像の `role="button"`・`tabIndex`・`aria-label`・Enter とスペースでの拡大は今のまま `MediaImage` に渡す。再読み込みのボタンは `button`・44×44px 以上（UX §6）。失敗の枠の文字は背景 `background.paper` の上に出し、明るさの比を保つ
 
 ## 15. プライバシー・コンプライアンス設計
 - 画像は組織が登録した問題・解説の図で、個人情報の新しい扱いは無い
@@ -300,7 +306,7 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
 | V3 | 2 | 読んで可 | TC-11 が、一覧・クイズの取得の SQL に `media_asset_contents` が出ないことを確かめていて、`select_related('asset__content')` を足すと落ちる（失敗の注入）か |
 | V4 | 3 | 読んで可 | TC-12〜TC-14 が、本物の 0025（`MigrationLoader`）と同じ関数を通り、ファイルのある行・無い行・済みの行・不一致・置き場の外のキーの 5 つの場合を見ているか。消す行の紐づけ（`RESTRICT`）を先に消しているか |
 | V5 | 3 | 読んで可 | 画像をファイルに書く・`/media/` を返す・`MEDIA_ROOT` を読むコードが、テストとマイグレーションの外に残っていないか（TC-01・TC-08・TC-20〜TC-23）。`upload_image`・`delete_image` が共通の保存・削除を通るか（TC-09・TC-10） |
-| V6 | 2 | 読んで可 | TC-04 の 304 が、中身を読む前に返っている（`django_assert_num_queries` で中身の表を読まない）ことを確かめているか。弱い ETag（`W/`）を一致にしないか |
+| V6 | 2 | 読んで可 | TC-04 の 304 が、中身を読む前に返っている（`django_assert_num_queries` で中身の表を読まない）ことを確かめているか。`W/` 付き・複数の値・`*` を RFC 9110 のとおり一致にするか（Django の `get_conditional_response`） |
 
 ## 計画変更記録
 <!-- 形は docs/runbooks/plan-writing-rules.md「計画変更記録の形」 -->
@@ -319,9 +325,10 @@ P9: 15 に書いた（個人情報の新しい扱いは無い・テナントの�
   - 直した: 3 つの画面のファイルの改行の形を元の CRLF に戻した（差分が全体の書き換えに見えていた）／中身から MIME を判定する所を `utils.detect_mime(data)` の 1 か所にし、保存と移行の両方から使う（保存は読んだ中身から判定・ファイルを読み直さない）／`check_media_migration` の古い列の数えを外した（今のモデルから列が外れていて、いつも「列なし」と出る死んだコードだった。数えて止めるのは 0026）／`problem_service.py` の使われない `logger` を外した／0025 の書き戻しで、偽のモデルの実体を作らず値で場所を作り、中身を `.iterator()` で読む／画面のテストの差し替えを `MediaImage` から `useMediaImage`（`hooks/__mocks__/`）に下げ、本物の部品の属性の受け渡しもテストが通るようにした／blob の URL には効かない `loading="lazy"` を外した／画像の中身のキャッシュの持ち時間（`gcTime`）を 60 秒にした
   - 見送った: `If-None-Match` を Django の `get_conditional_response` で読む（Django は弱い比較で `W/` も一致にする。計画 9・セキュリティレビューで「強い一致だけ」と決めて TC-04 で固定しているので変えない）／`upload_image`・`delete_image` の処理をサービスの公開の関数にまとめる（4-4 で今の作りのまま共通の保存・削除に寄せると決めた。紐づけの共有の判定の条件の違いは今からあるもの）／`MediaMigrationResult` の件数を判定の一覧から数える形にする（読みやすさの差が小さい）／`Subject.image_directory` の列を外す（読む所が無くなったが、外すと別のマイグレーションが要る。retro で一覧に回す）／テストの PNG・画像の行を作る補助を共通にする（範囲の外の既存のテストにまたがる）／失敗の枠を `SubjectsRetryRow` と共通にする（置き方が違う）／`isExisting` を `kind` から出す・`mediaImageKey` の export（軽い）
 - fix-loop（2026-11-19・コードレビュー 20261119_1825 の止める指摘 F1・F2）（方式・範囲・受け入れ条件は変えない・計画レビューのやり直し: 不要）: F1 `delete_image` の共有の判定を有効な紐づけだけにした（`_reconcile_images`・`delete_problem` とそろえる）／F2 見本のファイルを同じ PR で消すと、ほかの環境では消えた後に 0025 が流れる件は、ユーザーが「このまま消す」を選んだ（R6）。0025 が消した行の ID とキーを出力に並べるようにした
+- 追加の直し（2026-11-20・マージ依頼の後のユーザーの指示「BP・UI/UX の観点でベストなやり方で進めて」）（方式を変える・計画レビューのやり直し: 要）: マージ依頼の報告で、新しいコードの規約・UX の決まりからの外れ 4 点（配信のビューが `APIView`・再読み込みのボタンが 44px 未満・読み込み後のレイアウトのずれ・`If-None-Match` が標準より厳しい）を挙げた。後回しにせず、この PR で直す。あわせて、台帳の残り（#590）のうち今回書き換えたコードの分（F4 ビューの業務の処理・F5 エラーの形・F6 テストの比べ方・F7 自分の紐づけの絞り込み）も直す。F3（0025 が今のコードに頼る）と `Subject.image_directory` の削除は、設計の判断・Danger Ops が要るので #590 に残す。受け入れ条件は変えない
 
 ## レビュー結果
-- [20261119_1527 判定: ✅ 完了](../../reviews/closed/I587_plan_review_20261119_1527.md)
+- [20261119_1527 判定: ✅ 完了](../../reviews/I587_plan_review_20261119_1527.md)
 
 ## セキュリティレビュー結果
 
