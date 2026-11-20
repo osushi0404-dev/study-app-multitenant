@@ -1,23 +1,23 @@
 # I602 レビュー: I590 のレビューの残り（テストの守りの抜け・0027 の戻し方・補助の集約）
 
 ## 変更概要
--
+- I590 のレビューの残りを片付けた（テストと手順書だけ）: 配信の見出しを全項目で比べる・移行の判定の相対の読み込みを数える・マイグレーションのテストの補助を 1 か所にまとめる・0027 が止まったときの戻し方を手順書に書く
 
 ## 変更点
--
+- `backend/problems/tests/migration_helpers.py`（新規）・`test_I590_review_leftovers.py`・`test_I587_media_migration.py`・`studylogs/tests/test_I492_remove_legacy_study_logs.py`・`docs/runbooks/backend-check.md`
 
 ## 影響範囲
-- Backend/Frontend/DB/Config:
+- Backend/Frontend/DB/Config: Backend のテストだけ。Frontend・DB・Config なし。手順書 1 本
 
 ## テスト結果
 - 自動: CI run 44710229604（HEAD 90312b25） で backend 818 passed・frontend 150 passed（3 ファイル 30 件すべて通過）。決定論ゲート 9 行 exit 0
 - 手動: Claude の 2 項目とも OK（Human の項目なし）
 
 ## 計画との差分
-- なし / あり（理由）
+- あり（軽微）: 計画レビューの Info で、手順書の確かめのコマンドを `dbshell -- -c` にした（計画変更記録に記載・方式と範囲は同じ）
 
 ## ロールバック
--
+- PR を revert する（テストと手順書だけ）
 
 ## 自律判断の記録
 <!-- 各段階が、止めずに自分で決めたことを `- [段階] 決めたこと — 理由` で足す。段階の結線の行（STAGE_DONE:）はこのファイルの末尾に足す -->
@@ -61,6 +61,7 @@
 - `str.replace` の一括置換で `_columns(` が関数名の一部（`removes_columns(`）にも当たった — 差分の確認でその場で捕まり、テストの前に直した。手順を足すほどの損失が無い
 - `_subject_columns` の包みを残した — /simplify が捕まえた（既存の工程で足りる）
 - 残余リスク処遇・設計ルール昇格: security-review（設計・組み込み）は動いていない（RISK NO）のでスキップ
+- [close] 記録を closed へ移すときに 1 回すべてを `docs/reviews/closed/` に入れてしまい、すぐにそれぞれの closed へ移し直した（コミット前で影響なし）。一覧（backlog/I602.md）の記録のパスも closed に直した — 1 つの呼び出しで git を組み合わせる形が拒否されたため、単体の git mv に分けた
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
@@ -68,3 +69,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
