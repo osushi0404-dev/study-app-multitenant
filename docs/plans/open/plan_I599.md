@@ -83,7 +83,7 @@
 
 ### 4-2. フックの起動役（新規 `.claude/hooks/reviewed-hook.sh`・`.claude/settings.json`）
 達成すること: AC6。
-- `.claude/hooks/` はサンドボックスが書き込みを禁じ（このセッションのサンドボックスの `denyWithinAllow` にある）、Edit ツールの allow にも無い（書くたびに承認）。起動役をここに置く
+- `.claude/hooks/` はサンドボックスが書き込みを禁じ（このセッションのサンドボックスの `denyWithinAllow` にある。2026-11-20 の今は、まだ無い `.claude/hooks` をサンドボックスが文字デバイスで塞いでいることを `ls -la .claude` で見た）、Edit ツールの allow にも無い（書くたびに承認）。起動役をここに置く。フォルダを作った後も Bash から書けないことは手動 No.5 で確かめ、書けたら置き場所を見直す（計画をやり直す）
 - 動き（`bash .claude/hooks/reviewed-hook.sh <scripts/claude/hooks/X.py>`。標準入力はそのままフックに渡す）:
   1. `git <安全な -c 3 つ（見張りの _GIT_SAFE_OPTS と同じ）> -C "$CLAUDE_PROJECT_DIR" merge-base HEAD origin/develop` で BASE。失敗したら作業ツリーの版を動かし、標準エラーに理由を 1 行（R4 で受け入れ）
   2. `git diff --quiet BASE -- scripts/claude` が真かつ追跡していない新しいファイルが無ければ、作業ツリーの版を `exec python3`
@@ -135,6 +135,7 @@
 | R1: 「フックの書き換えの後のコマンドで外に出すかが決まる」は公式の明文が無い。Claude Code の版が変わると外で動きうる | スパイクで確かめた（調査結果 6）。手動 No.1 で本物のセッションで確かめ直す。ハーネスの総点検（`docs/runbooks/harness-audit.md`）の項目に足す | 受け入れ |
 | R2: レビュー済みのスクリプトが、ファイル名を文字列で組み立てて呼ぶ形を新しく持つと、たどりが届かない | 今は該当なし（調査結果 5）。入口を足すときは `_ARG_EXEC`・`_RUNNER_GLOBS` に足すと手順書に書く。足すのは新しいスクリプトなのでレビューで見る | 受け入れ |
 | R3: git が無視するファイル（`scripts/claude/tests/.venv`・`__pycache__` の `.pyc`）を書き換えると、変更の一覧に出ない | わざと避ける形（普通の書き方の事故では起きない）。`danger-ops.md`「見張りに判定を足すときの決まり」3 のとおり残す | 受け入れ |
+| R9: `origin/develop` の参照を動かす（`git update-ref`・`git branch -f` など）と、コミット済みのレビュー前の変更が「済み」に見える。参照を消すと起動役は作業ツリーのフックを動かす（R4） | わざと避ける形（普通の作業で `origin/develop` を手で動かすことは無い。`git fetch` は GitHub の develop＝レビュー済みに合わせるだけ）。`danger-ops.md`「見張りに判定を足すときの決まり」3 のとおり Low で一覧（`docs/reviews/backlog/I599.md`）に送る。git の参照・設定の書き換えは I600 の範囲 | 受け入れ |
 | R4: BASE が求められない（`origin/develop` が無い等）と、起動役は作業ツリーのフックを動かす | 見張りは同じときに書き換え（安全側）。起動役はフック全体を止めると Claude が何もできなくなる（見張りを直せない）ので、作業ツリーの版で動かし理由を出す | 受け入れ |
 | R5: 見張り・起動役が遅くなる（`/mnt/c` の git は遅い） | 起動条件に当たらないときは git を呼ばない。起動役は `git diff --quiet` だけ。手動 No.4 で測り、1 回 2 秒を超えたら直す | 回避 |
 | R6: 見張りを直すイシューでは、直した見張りが手元で効くのはマージの後 | ユーザーの判断（2026-11-20）。直した見張りは CI の決定論のテストと、このセッション（起動時の設定のまま）で確かめる | 受け入れ |
@@ -190,4 +191,7 @@ Danger Ops（有無）:
 
 ## 計画変更記録
 <!-- 形は docs/runbooks/plan-writing-rules.md「計画変更記録の形」 -->
--
+- 2026-11-20 plan-review: 計画書の記載: [R3 は無視するファイルだけ・`.claude/hooks/` の書き込みの禁止は文面だけ] → 採った方法: R9（`origin/develop` の参照を動かす形・受け入れ・Low で一覧へ）を足し、`.claude/hooks/` に Bash から書けないことを手動 No.5 に足した。TC-20（1 つのコマンドに複数の参照）を足した — 理由: 計画レビューの Warning 2 件・Info 1 件。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+
+## レビュー結果
+- [20261120_1718 判定: ✅ 完了](../../reviews/I599_plan_review_20261120_1718.md)

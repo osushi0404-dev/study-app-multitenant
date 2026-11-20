@@ -29,6 +29,7 @@
 | TC-17 | 手順書・一覧 | 下の決定論ゲートの `grep` | すべて 0 | 文言を消した写しで不合格（ゲートの `grep` そのもの） |
 | TC-18 | `code-review.sh` のゲートは、レビュー前の中身に届く行を流さない | 一時のリポジトリで、ゲートに ① 新しい `tests/test_new.sh`（流されたら印を書く） ② 変更の無い `tests/test_x.sh`（同じく印）を書いた自動テスト文書を置き、`run_declared_gates` を流す | ①の印が無く、証跡に `⏭ レビュー前の中身` がある。②の印がある。`GATE_VERDICT=OK` | 確かめの呼び出しを外した写しで①の印ができて不合格 |
 | TC-19 | 判定の CLI | `python3 .claude/hooks/unreviewed.py check -- '<コマンド>'` を TC-04・TC-02・TC-12②・引数なしで | 終了コードが 0・1・3・2 | 終了コードを常に 0 にした写しで不合格 |
+| TC-20 | 1 つのコマンドの複数の参照をすべて見る | `lib.sh` を書き換え、`bash scripts/claude/b.sh && bash scripts/claude/a.sh`（後ろだけが届く） | `updatedInput` がある | 最初の参照だけを見る写しで不合格 |
 
 ## 決定論ゲート（自動実走）
 ```bash
