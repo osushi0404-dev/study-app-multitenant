@@ -2,6 +2,8 @@
 I590: I587 のレビューの残り（移行 0025 の判定の依存・配信の 304/412 の見出し・Subject.image_directory の削除）
 
 TC-01〜TC-04（docs/tests/open/I590_auto_test.md）に対応。
+I602 で、TC-01 に相対の読み込みを、TC-03 に見出しの全項目を足し、マイグレーションの補助を
+problems/tests/migration_helpers.py にまとめた（docs/tests/open/I602_auto_test.md の TC-01・TC-02・TC-05）。
 """
 import ast
 import hashlib
@@ -12,7 +14,7 @@ from pathlib import Path
 import pytest
 from django.contrib.auth import get_user_model
 from django.db import connection, migrations
-from django.db.migrations.loader import MigrationLoader
+from django.http import HttpResponse
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -23,6 +25,8 @@ from problems.media_migration import MediaMigrationError, move_media_files_to_db
 from problems.models import (
     MediaAsset, MediaAssetContent, ProblemMediaAsset, Subject,
 )
+from problems.tests.migration_helpers import column_names, load_migrations, run_migration
+from problems.views import MEDIA_SECURITY_HEADERS
 
 User = get_user_model()
 
@@ -58,20 +62,29 @@ def make_asset(world, data):
 
 # ---- TC-01: 移行の判定はアプリのモジュールを読まない ----
 def app_imports(source: str) -> list:
-    """problems か problems. で始まる読み込みの一覧"""
+    """アプリのモジュールの読み込みの一覧（problems か problems. で始まるもの・相対の読み込み）
+
+    media_migration.py は problems の中にあるので、相対の読み込みはどれもアプリのモジュール（I602）。
+    """
     names = []
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            names.append(node.module)
+        if isinstance(node, ast.ImportFrom):
+            dots = "." * node.level  # 絶対の読み込みは level 0 で ""
+            if node.module:
+                names.append(dots + node.module)
+            else:
+                names.extend(dots + alias.name for alias in node.names)
         elif isinstance(node, ast.Import):
             names.extend(alias.name for alias in node.names)
-    return [n for n in names if n == "problems" or n.startswith("problems.")]
+    return [n for n in names if n.startswith(".") or n == "problems" or n.startswith("problems.")]
 
 
 def test_media_migration_imports_no_app_module():
     assert app_imports(MEDIA_MIGRATION_SOURCE.read_text(encoding="utf-8")) == []
     # 数え方が効くことの確かめ（失敗の注入）
     assert app_imports("from problems.utils import detect_mime\nimport os\n") == ["problems.utils"]
+    assert app_imports("from .utils import x\n") == [".utils"]
+    assert app_imports("from . import utils\n") == [".utils"]
 
 
 # ---- TC-02: 0025 の判定が problems.utils の変更に引きずられない ----
@@ -95,6 +108,30 @@ def test_media_migration_check_ignores_utils_changes(world, tmp_path, monkeypatc
 
 
 # ---- TC-03: 配信の 200・304・412 のどれにも守りの見出しが付く ----
+def missing_security_headers(response) -> list:
+    """MEDIA_SECURITY_HEADERS のうち、応答に無いか値が違う見出しの名前（I602。辞書の全項目を回す）"""
+    return [name for name, value in MEDIA_SECURITY_HEADERS.items()
+            if response.get(name) != value]
+
+
+@pytest.mark.parametrize("name", list(MEDIA_SECURITY_HEADERS))
+def test_missing_security_headers_detects_each_header(name):
+    """比べ方が効くことの確かめ（失敗の注入）: 1 つを消す・値を変えると、その見出しが返る"""
+    def full():
+        response = HttpResponse(b"")
+        for header, value in MEDIA_SECURITY_HEADERS.items():
+            response[header] = value
+        return response
+
+    assert missing_security_headers(full()) == []
+    dropped = full()
+    del dropped[name]
+    assert missing_security_headers(dropped) == [name]
+    changed = full()
+    changed[name] = "x"
+    assert missing_security_headers(changed) == [name]
+
+
 @pytest.mark.parametrize("headers, expected", [
     ({}, 200),
     ({"HTTP_IF_NONE_MATCH": f'"{hashlib.sha256(PNG).hexdigest()}"'}, 304),
@@ -108,29 +145,14 @@ def test_media_security_headers_on_all_statuses(world, headers, expected):
 
     response = client.get(f"/api/media/{asset.id}/", **headers)
     assert response.status_code == expected
-    assert response["X-Content-Type-Options"] == "nosniff"
-    assert response["Content-Security-Policy"] == "default-src 'none'; sandbox"
+    assert missing_security_headers(response) == []
     assert response["Cache-Control"] == "private, max-age=3600"
 
 
 # ---- TC-04: 0027 は値のある科目があれば止まり、空なら列を外す。戻すと列が '' で戻る ----
-def _loader(settings):
-    settings.MIGRATION_MODULES = {}  # pytest の --no-migrations を外し、本物のマイグレーションを読む
-    return MigrationLoader(connection)
-
-
-def _run(step, state):
-    """遅延の外部キーの検査を済ませてから DDL を流す（I587 の 0026 のテストと同じ）"""
-    with connection.cursor() as cursor:
-        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
-    with connection.schema_editor() as editor:
-        step(state.clone(), editor)
-
-
-def _subject_columns():
-    with connection.cursor() as cursor:
-        return {c.name for c in connection.introspection.get_table_description(
-            cursor, "problems_subject")}
+# 0027 で止まったときに人が流す SQL（docs/runbooks/backend-check.md「4. 止める判定のあるマイグレーションが
+# 止まったとき」）。手順書の SQL を変えたら、ここも同じ文にそろえる（I602）
+CLEAR_IMAGE_DIRECTORY_SQL = "UPDATE problems_subject SET image_directory = '' WHERE image_directory <> ''"
 
 
 def _without_check(migration):
@@ -144,29 +166,31 @@ def _without_check(migration):
 
 @pytest.mark.parametrize("value", ["problems/x", " "])
 def test_0027_refuses_values_then_removes_column(world, settings, value):
-    loader = _loader(settings)
+    loader = load_migrations(settings)
     migration = loader.get_migration("problems", "0027_remove_subject_image_directory")
     before = loader.project_state(("problems", "0026_remove_problem_legacy_images"))
-    _run(migration.unapply, before)
+    run_migration(migration.unapply, before)
     OldSubject = before.apps.get_model("problems", "Subject")
     try:
-        assert "image_directory" in _subject_columns()
+        assert "image_directory" in column_names("problems_subject")
         assert set(OldSubject.objects.values_list("image_directory", flat=True)) == {""}
 
         OldSubject.objects.filter(pk=world["subject"].pk).update(image_directory=value)
         with pytest.raises(RuntimeError, match="1 件"):
-            _run(migration.apply, before)
-        assert "image_directory" in _subject_columns()
+            run_migration(migration.apply, before)
+        assert "image_directory" in column_names("problems_subject")
 
         # 判定が効いていることの確かめ: 判定を外した写しなら値があっても列が消える
-        _run(_without_check(migration).apply, before)
-        assert "image_directory" not in _subject_columns()
-        _run(migration.unapply, before)
+        run_migration(_without_check(migration).apply, before)
+        assert "image_directory" not in column_names("problems_subject")
+        run_migration(migration.unapply, before)
 
-        OldSubject.objects.update(image_directory="")
-        _run(migration.apply, before)
-        assert "image_directory" not in _subject_columns()
+        # 手順書の SQL で空にすれば流れる
+        with connection.cursor() as cursor:
+            cursor.execute(CLEAR_IMAGE_DIRECTORY_SQL)
+        run_migration(migration.apply, before)
+        assert "image_directory" not in column_names("problems_subject")
     finally:
-        if "image_directory" in _subject_columns():
+        if "image_directory" in column_names("problems_subject"):
             OldSubject.objects.update(image_directory="")
-            _run(migration.apply, before)
+            run_migration(migration.apply, before)

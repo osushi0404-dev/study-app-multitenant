@@ -15,8 +15,6 @@ import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import caches
-from django.db import connection
-from django.db.migrations.loader import MigrationLoader
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -24,6 +22,9 @@ from rest_framework.test import APIClient
 from accounts.models import Organization, OrganizationCategory
 from problems.models import Problem, Subject
 from problems.tests.i466_data import answer
+from problems.tests.migration_helpers import (
+    column_names, load_migrations, run_migration, table_names,
+)
 from studylogs import tasks
 from studylogs.models import SpacedRepetitionCard, SpacedRepetitionReview
 
@@ -154,16 +155,6 @@ def test_submit_review_records_review(world):
 
 
 # ---- TC-07: マイグレーション 0002 の流し・戻し ----
-def _tables():
-    with connection.cursor() as cursor:
-        return set(connection.introspection.table_names(cursor))
-
-
-def _columns(table):
-    with connection.cursor() as cursor:
-        return {c.name for c in connection.introspection.get_table_description(cursor, table)}
-
-
 def _operations(migration):
     result = []
     for op in migration.operations:
@@ -175,24 +166,15 @@ def _operations(migration):
     return result
 
 
-def _run(step, state):
-    """遅延の外部キーの検査を済ませてから DDL を流す（残っていると ALTER TABLE が失敗する）"""
-    with connection.cursor() as cursor:
-        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
-    with connection.schema_editor() as editor:
-        step(state.clone(), editor)
-
-
 def test_migration_0002_drops_legacy_tables_and_keeps_reviews(world, settings):
-    settings.MIGRATION_MODULES = {}  # pytest の --no-migrations を外し、本物のマイグレーションを読む
-    loader = MigrationLoader(connection)
+    loader = load_migrations(settings)
     migration = loader.get_migration(*MIGRATION)
     assert _operations(migration) == EXPECTED_OPERATIONS
 
     before = loader.project_state(BEFORE)
     old = before.apps
     # テストの DB は今のモデルから作られるので、まず 0001 の形（古い表と列がある）に戻す
-    _run(migration.unapply, before)
+    run_migration(migration.unapply, before)
     try:
         learner = world["user"]("m")
         problem = world["problem"]
@@ -211,22 +193,22 @@ def test_migration_0002_drops_legacy_tables_and_keeps_reviews(world, settings):
         reviews = SpacedRepetitionReview.objects.count()
         assert reviews == 2
 
-        _run(migration.apply, before)
-        assert not LEGACY_TABLES & _tables()
-        assert "study_session_id" not in _columns(REVIEW_TABLE)
+        run_migration(migration.apply, before)
+        assert not LEGACY_TABLES & table_names()
+        assert "study_session_id" not in column_names(REVIEW_TABLE)
         assert SpacedRepetitionReview.objects.count() == reviews
 
         # 戻し方の試し（計画書 7 の 1）: テーブルと列が空で戻り、行を入れ直せる
-        _run(migration.unapply, before)
-        assert LEGACY_TABLES <= _tables()
-        assert "study_session_id" in _columns(REVIEW_TABLE)
+        run_migration(migration.unapply, before)
+        assert LEGACY_TABLES <= table_names()
+        assert "study_session_id" in column_names(REVIEW_TABLE)
         assert OldLog.objects.count() == 0
         OldLog.objects.create(user_id=learner.id, subject_id=world["subject"].id)
         assert OldLog.objects.count() == 1
         assert SpacedRepetitionReview.objects.count() == reviews
     finally:
-        if "studylogs_studylog" in _tables():
-            _run(migration.apply, before)  # テストの DB を今のモデルの形に戻す
+        if "studylogs_studylog" in table_names():
+            run_migration(migration.apply, before)  # テストの DB を今のモデルの形に戻す
 
 
 # ---- TC-08: 消した学習記録の API ----
