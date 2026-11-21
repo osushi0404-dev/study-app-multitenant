@@ -44,6 +44,7 @@
 - [implement] /simplify（第 2 版・1 回にまとめた）: 判定の git を減らす・名前の確かめの重複を消す・見張りの説明を第 2 版に・ゲートの判定を 1 回に。見送り 2 件（失敗の道での判定の読み直し・test-session の基準の再計算。どちらも軽い）
 - [fix-loop] F22 は案 A（スキルの呼び出しを単体の形に直し、TC-18 で機械で確かめる）・F23 は案 A（ワイルドカードを単体でない文字に）。診断レビュー PASS（`docs/reviews/I599_fix_diagnosis_review_20261121_1500.md`）— `route()` に包んだ形を読ませる案は第 1 版の精密な判定に戻るため採らない。`> "$DRAFT"` はスクリプトに書き出しを足さず Write ツールで下書きを作る（外で動くスクリプトに任意の場所へ書ける口を作らない）。`worktree.md` の `DANGER_OK=1`・`KEEP_DATA=1` の前置きは人が primary で流す危険操作で、第 1 版の前から外に出ない形なので直さない
 - [review-gate] 敵対的レビュー 1 周目は新しい指摘 0・V6 だけ未検証（HIGH）。V6 は TC-18 で静的な部分を覆って「読んで可」に下げ、本物の環境の実測はマージの後に I593 で行う（計画変更記録）— マージ前は子のセッションが develop の見張りの写しで動き、起動役の `os.environ` を確認に回すので測れない。外に出ないときは終了 4 で止まる安全側の失敗で、人の手を使わずに進める（ユーザーの任せる指示・開発効率）
+- [review-gate] 敵対的レビュー 2 周目 OK（`docs/reviews/I599_adversarial_review_20261121_1539.md`・未検証 0・新規 0）。PR へのコメント（`post-review-comment.sh`）は外で動く一覧のスクリプトで、ブランチにレビュー前の中身があると起動役が止めるので流していない（失敗しても止めない手順・記録はリポジトリにある・R5）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -67,3 +68,4 @@ STAGE_DONE: implement NEXT: review-gate
 - [review-gate] 第 2 版の 1 回目の基本レビューは HIGH（止める指摘 F22・F23）。fix-loop へ回す（実装をやり直した後の 1 回目）
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
