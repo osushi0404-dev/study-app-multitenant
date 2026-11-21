@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from core.cache_service import cache_service
 from problems.models import Subject, Problem, Choice
 
 User = get_user_model()
@@ -44,6 +45,7 @@ class ParsedProblem:
     question: str
     choices: List[ParsedChoice]
     explanation: str = ""
+    source: str = ""  # 出典（I609。無ければ空の文字）
     metadata: Dict[str, str] = None
 
     def __post_init__(self):
@@ -62,6 +64,9 @@ class ParsedProblem:
             raise ValueError("選択肢は2個以上必要")
         if not any(c.is_correct for c in self.choices):
             raise ValueError("正解が設定されていません")
+        if len(self.source) > Problem.SOURCE_MAX_LENGTH:
+            raise ValueError(
+                f"出典が長すぎます（{Problem.SOURCE_MAX_LENGTH}文字以下）: {len(self.source)}文字")
 
     @property
     def correct_choices(self) -> List[ParsedChoice]:
@@ -178,13 +183,14 @@ class MarkdownParserService:
             print("警告: 正解フラグが見つかりません")
             return None
 
-        # 解説抽出
-        explanation = fields.get('解説', '').strip() or ""
+        # 解説・出典の抽出（見出しが無い・値が空なら空の文字・I609）
+        explanation = fields.get('解説', '').strip()
+        source = fields.get('出典', '').strip()
 
         # メタ情報抽出
         metadata = {}
         for key, value in fields.items():
-            if key not in ['問題文', '選択肢', '正解', '解説']:
+            if key not in ['問題文', '選択肢', '正解', '解説', '出典']:
                 metadata[key] = value
 
         try:
@@ -192,6 +198,7 @@ class MarkdownParserService:
                 question=question,
                 choices=choices,
                 explanation=explanation,
+                source=source,
                 metadata=metadata,
             )
         except ValueError as e:
@@ -379,6 +386,8 @@ class Command(BaseCommand):
             for i, p in enumerate(parsed_problems[:3], start=1):
                 self.stdout.write(f'{i}. {p.question[:60]}...')
                 self.stdout.write(f'   選択肢数: {len(p.choices)}, 正解数: {len(p.correct_choices)}')
+                if p.source:
+                    self.stdout.write(f'   出典: {p.source}')
             return
 
         # DB登録処理
@@ -403,15 +412,16 @@ class Command(BaseCommand):
                     # 問題タイプ判定
                     problem_type = 'multiple' if parsed_problem.is_multiple_choice else 'single'
 
-                    # 問題作成
+                    # 問題作成（組織は画面から作る問題と同じく科目の組織・I609）
                     problem = Problem.objects.create(
                         subject=subject,
+                        organization_id=subject.organization_id,
                         created_by=user,
                         question=parsed_problem.question,
                         problem_type=problem_type,
                         difficulty=default_difficulty,
                         explanation=parsed_problem.explanation,
-                        points=10,
+                        source=parsed_problem.source,
                         is_ai_generated=False
                     )
 
@@ -432,6 +442,10 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f'エラー: 問題 {idx} - {str(e)}'))
                 error_count += 1
                 continue
+
+        # 問題管理の一覧のキャッシュを消す（API の作成と同じ。消さないと最大 1 時間一覧に出ない・I609）
+        if success_count > 0:
+            cache_service.invalidate_problems_cache(subject.id)
 
         # 結果表示
         self.stdout.write('\n' + '=' * 50)

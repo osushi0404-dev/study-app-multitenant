@@ -172,7 +172,7 @@ class ProblemSerializer(ProblemFieldConversionMixin, serializers.ModelSerializer
         model = Problem
         fields = [
             'id', 'subject', 'subject_name', 'question', 'question_text', 'problem_type',
-            'difficulty', 'explanation', 'is_deleted',
+            'difficulty', 'explanation', 'source', 'is_deleted',
             'is_ai_generated', 'choices', 'created_by', 'created_by_username',
             'created_at', 'updated_at',
             'question_images', 'explanation_images'
@@ -321,7 +321,7 @@ class ProblemDisplaySerializer(ProblemFieldConversionMixin, serializers.ModelSer
         model = Problem
         fields = [
             'id', 'subject_name', 'question', 'question_text', 'problem_type',
-            'difficulty', 'choices',
+            'difficulty', 'choices', 'source',  # 出典は答える前から見せてよい（I609）
             'question_images', 'explanation_images'
         ]
 

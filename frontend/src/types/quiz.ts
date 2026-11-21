@@ -46,6 +46,8 @@ export interface Problem {
   choices: Choice[];
   explanation?: string;
   explanation_images?: MediaAsset[];  // 画像（I472）
+  /** 出典（答える前から出す・無ければ空の文字・I609） */
+  source?: string;
   // 修正で追加されるフィールド
   total_problems_in_subject?: number;
   is_review_mode?: boolean;
@@ -107,6 +109,7 @@ export interface CreateProblemRequest {
   subject: string;
   difficulty: 'easy' | 'medium' | 'hard';
   problem_type: 'single_choice' | 'multiple_choice' | 'text';
-  explanation: string;
+  explanation?: string;
+  source?: string;
   choices: CreateChoiceData[];
 }

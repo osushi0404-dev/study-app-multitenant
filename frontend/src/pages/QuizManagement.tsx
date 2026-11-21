@@ -54,6 +54,7 @@ import axios from 'axios';
 import { Subject, Problem, EditableImage } from '../services/types';
 import apiClient from '../services/api';
 import quizService from '../services/quiz.service';
+import { PROBLEM_SOURCE_MAX_LENGTH } from '../constants/problem';
 
 /** API（DRF）のバリデーションエラーから表示用メッセージを抽出（イシュー#073） */
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
@@ -75,7 +76,12 @@ const problemSchema = yup.object({
   subject: yup.string().required('科目は必須です'),
   difficulty: yup.string().oneOf(['easy', 'medium', 'hard']).required('難易度は必須です'),
   problem_type: yup.string().oneOf(['single_choice', 'multiple_choice']).required('問題タイプは必須です'),
-  explanation: yup.string().required('解説は必須です'),
+  // 解説・出典は任意（I609）
+  explanation: yup.string(),
+  source: yup.string().max(
+    PROBLEM_SOURCE_MAX_LENGTH,
+    `出典は${PROBLEM_SOURCE_MAX_LENGTH}文字以内で入力してください`,
+  ),
   choices: yup.array().when('problem_type', ([problemType], schema) => {
     if (problemType === 'single_choice' || problemType === 'multiple_choice') {
       return schema.of(
@@ -130,6 +136,7 @@ const QuizManagement: React.FC = () => {
       difficulty: 'medium',
       problem_type: 'single_choice',
       explanation: '',
+      source: '',
       choices: [
         { text: '', is_correct: false },
         { text: '', is_correct: false },
@@ -249,6 +256,7 @@ const QuizManagement: React.FC = () => {
       formData.append('difficulty', data.difficulty);
       formData.append('problem_type', data.problem_type);
       formData.append('explanation', data.explanation || '');
+      formData.append('source', data.source || '');
 
       // 選択肢データを個別に追加（エラーハンドリング付き）
       if (data.choices && data.choices.length > 0) {
@@ -350,6 +358,7 @@ const QuizManagement: React.FC = () => {
       formData.append('difficulty', data.difficulty);
       formData.append('problem_type', data.problem_type);
       formData.append('explanation', data.explanation || '');
+      formData.append('source', data.source || '');
 
       if (data.choices && data.choices.length > 0) {
         data.choices.forEach((choice) => {
@@ -394,6 +403,7 @@ const QuizManagement: React.FC = () => {
       // 'text'タイプは問題管理画面では未対応のため型アサーション
       problem_type: problem.problem_type as 'single_choice' | 'multiple_choice',
       explanation: problem.explanation || '',
+      source: problem.source || '',
       choices: problem.choices.map(c => ({
         text: c.text,
         is_correct: c.is_correct,
@@ -713,6 +723,26 @@ const QuizManagement: React.FC = () => {
                 />
               </Grid>
 
+              {/* 出典（問題用画像のすぐ下・クイズの画面の表示順とそろえる・I609） */}
+              <Grid item xs={12}>
+                <Controller
+                  name="source"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="出典（任意）"
+                      placeholder="令和6年度 春期 データベーススペシャリスト試験 午前Ⅱ 問1"
+                      // 入力例を欄を押す前から見せる（ラベルを常に上に置く）
+                      InputLabelProps={{ shrink: true }}
+                      error={!!errors.source}
+                      helperText={errors.source?.message}
+                    />
+                  )}
+                />
+              </Grid>
+
               <Grid item xs={12} sm={4}>
                 <Controller
                   name="subject"
@@ -860,7 +890,7 @@ const QuizManagement: React.FC = () => {
                       fullWidth
                       multiline
                       rows={2}
-                      label="解説"
+                      label="解説（任意）"
                       error={!!errors.explanation}
                       helperText={errors.explanation?.message}
                     />
