@@ -39,8 +39,9 @@ OUTSIDE_SCRIPTS = frozenset({
     "test-session.sh", "tui-capture.sh", "wt-ports.sh", "wt-remove.sh",
 })
 LAUNCH = "python3 .claude/hooks/unreviewed.py run"
-# 単体の形でない文字（つなぎ・置き換え・かっこ・振り向け・改行・逃がし）。あれば付け替えない（中で動く）
-NOT_SIMPLE_RE = re.compile(r"[$`(){};&|<>\n\r\\]")
+# 単体の形でない文字（つなぎ・置き換え・かっこ・振り向け・ワイルドカード・改行・逃がし）。あれば付け替えない（中で動く）。
+# ワイルドカード（* ? [）は外の bash が作業ツリーのファイル名に展開し、書いた引数と違うものが渡るため（I599 F23）
+NOT_SIMPLE_RE = re.compile(r"[$`(){};&|<>*?\[\n\r\\]")
 SCRIPT_FORM_RE = re.compile(r"\s*bash\s+" + re.escape(SCRIPTS) + r"(?P<name>[^\s/]+)(?P<rest>(?:\s.*)?)", re.S)
 LAUNCH_FORM_RE = re.compile(r"\s*python3\s+\.claude/hooks/unreviewed\.py\s+run(?P<rest>(?:\s.*)?)", re.S)
 # 起動役を呼ぶ形（python3 … unreviewed.py run）。単体の形・最上位の cwd でなければ見張りが止める

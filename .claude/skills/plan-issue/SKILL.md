@@ -38,10 +38,9 @@ git checkout --no-track -b feature/I${ISSUE_NUM}-[概要を英語化したもの
 
 まず、コミットするイシューファイルを決める。新しいイシュー（I427 以上で手元にファイルが無いもの）は、ここで GitHub の本文を `docs/issues/open/I${ISSUE_NUM}.md` に 1 回だけ写す（同期しない・正は GitHub・I221）。今までのイシュー（手元にファイルがあるもの）は、そのファイルのパスがそのまま出る:
 ```bash
-ISSUE_FILE=$(bash scripts/claude/issue-source.sh snapshot "I${ISSUE_NUM}") || { echo "写し・イシューファイルを用意できません（上の理由を見る）"; exit 1; }
-echo "$ISSUE_FILE"
+bash scripts/claude/issue-source.sh snapshot I${ISSUE_NUM}
 ```
-終了コードが 0 でなければ止まり、出力の理由をユーザーに伝える（番号に当たるファイルが無い・PR の番号・今までの流れのイシューなど）。
+この 1 行を単体で流す（`$(…)` で包むとサンドボックスの中で動いて gh が失敗する・I599）。出たパスを、下の `git add` の `<イシューファイル>` にそのまま書く。終了コードが 0 でなければ止まり、出力の理由をユーザーに伝える（番号に当たるファイルが無い・PR の番号・今までの流れのイシューなど）。
 
 **前提（invariant）**: イシューファイルは **plan-issue が feature ブランチで初コミットする**のが原則。新しいイシューは手元に未コミットのファイルを持たない（写しはこの手順で作ってすぐコミットする）。今までのイシューファイル（I427 未満）は、`/issue-bootstrap` で作ったローカル（未コミット）のまま develop 等のベースブランチへ事前コミットしない（retro/close のハンドオフでも同様）。同一ファイルシステム上の untracked ファイルは context clear をまたいでも残り、別コンテキストの plan-issue が拾える（develop 事前コミットもハンドオフ PR も不要）。
 
@@ -56,7 +55,7 @@ fi
 
 - **未コミット（通常）**:
   ```bash
-  git add "$ISSUE_FILE"
+  git add <イシューファイル>
   git commit -m "docs: create issue I${ISSUE_NUM}"   # 新しいイシューは "docs: create issue I${ISSUE_NUM}（GitHub #${ISSUE_NUM} の本文の写し）"
   git push -u origin feature/I${ISSUE_NUM}-[概要]
   ```

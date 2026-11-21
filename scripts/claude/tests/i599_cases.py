@@ -1,7 +1,9 @@
 """I599（第 2 版）の確かめの本体。入口は test_i599_unreviewed_scripts.sh（引数: 本物のリポジトリの最上位・一時フォルダ）。"""
+import glob
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -115,7 +117,8 @@ def not_simple_forms(name="issue-source.sh"):
     s = f"bash scripts/claude/{name}"
     return [f"timeout 5 {s} x", f"X=1 {s} x", f"{s} $(true)", f"{s} `x`", f"{s} x | cat", f"{s} x >o",
             f"{s} x; ls", "{ " + s + " x; }", "bash scripts/claude/other.sh", "bash scripts/claude/../../x.sh",
-            "bash scripts/claude/tests/run-all.sh x.sh", f'{VCS[0]} commit -m "{s}"']
+            "bash scripts/claude/tests/run-all.sh x.sh", f'{VCS[0]} commit -m "{s}"',
+            f"{s} x [-]-y", f"{s} x *", f"{s} x ?"]
 
 
 # ---- 見張り（TC-01〜TC-06・TC-17） ----
@@ -155,6 +158,53 @@ ck("TC-17 cwd が最上位でない・無いとき: 起動役の形は止め、�
    and untouched(r, "bash scripts/claude/issue-source.sh a", cwd=os.path.join(r, "x"))
    and untouched(r, "bash scripts/claude/issue-source.sh a", cwd=None))
 shutil.rmtree(f"{r}/x")
+w(f"{r}/--dangerously-skip-permissions", "")
+ck("TC-05b test-session.sh の危ない引数をワイルドカードで書いても付け替えない（中で動く・F23）",
+   untouched(r, f"{ts_s} [-]-dangerously-skip-permissions") and untouched(r, f"{ts_s} --dangerously-skip-permission?"))
+os.remove(f"{r}/--dangerously-skip-permissions")
+
+
+def load_judge(path):
+    spec = importlib.util.spec_from_file_location("i599_judge", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["i599_judge"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def doc_calls(root, judge):
+    """スキルとサブエージェントの定義に書いた、外で動かす一覧のスクリプトの呼び出し（置き換えの後の形）。"""
+    names = "|".join(re.escape(n) for n in sorted(judge.OUTSIDE_SCRIPTS))
+    head = re.compile(r"\s*\S*bash scripts/claude/(?:" + names + r")(?:\s|$)")
+    files = glob.glob(os.path.join(root, ".claude/skills/*/SKILL.md")) + glob.glob(os.path.join(root, ".claude/agents/*.md"))
+    out = []
+    for f in sorted(files):
+        fenced = False
+        for no, line in enumerate(open(f, encoding="utf-8").read().splitlines(), 1):
+            if line.strip().startswith("```"):
+                fenced = not fenced
+                continue
+            cands = [re.sub(r"\s+#\s.*$", "", line)] if fenced else re.findall(r"`([^`]*)`", line)
+            for c in cands:
+                if not head.match(c):
+                    continue
+                # スキルの読み込みで置き換わる引数・文書の置き場の印（<…>・I###）を、実際に入る形にする
+                c = re.sub(r"\$\{?ARGUMENTS\}?|I\$\{ISSUE_NUM\}|I###", "I999", c)
+                out.append((os.path.relpath(f, root), no, re.sub(r"<[^<>]*>", "x", c).strip()))
+    return out
+
+
+def doc_calls_routed(root, judge):
+    calls = doc_calls(root, judge)
+    bad = [c for c in calls if not judge.route(c[2], REAL, REAL).new_command]
+    for f, no, c in bad:
+        print(f"  付け替わらない呼び出し: {f}:{no}: {c}")
+    return len(calls) >= 10 and not bad
+
+
+J = load_judge(JUDGE)
+ck("TC-18 スキル・サブエージェントの定義に書いた一覧のスクリプトの呼び出しは、すべて単体の形（付け替わる・F22）",
+   doc_calls_routed(REAL, J))
 
 # ---- 起動役（TC-07〜TC-10・TC-16） ----
 rc, got, _ = launch(r, "issue-source.sh", "a", "b c")
@@ -309,6 +359,17 @@ for name, old, new in [
     else:
         fg.append(("FG TC-12: 常に写しにすると、作業ツリーの印にならない",
                    not hook(rr).stdout.startswith("V1 " + os.path.join(rr, "scripts/claude/hooks/h.py"))))
+
+r18 = os.path.join(TMP, "fg_doc")
+shutil.copytree(os.path.join(REAL, ".claude/skills"), os.path.join(r18, ".claude/skills"))
+shutil.copytree(os.path.join(REAL, ".claude/agents"), os.path.join(r18, ".claude/agents"))
+with open(os.path.join(r18, ".claude/skills/grill-me/SKILL.md"), "a", encoding="utf-8") as fh:
+    fh.write("\n```bash\nN=$(bash scripts/claude/issue-source.sh gh-number $ARGUMENTS)\n```\n")
+fg.append(("FG TC-18: スキルに包んだ形の呼び出しを足すと不合格", not doc_calls_routed(r18, J)))
+r19 = make_repo("fg_no_glob", broken_judge("no_glob", r"*?\[\n", r"\n"))
+w(f"{r19}/--dangerously-skip-permissions", "")
+fg.append(("FG TC-05b・TC-02: ワイルドカードを単体でない文字から外すと付け替わる",
+           not untouched(r19, f"{ts_s} [-]-dangerously-skip-permissions")))
 
 for name, ok in fg:
     ck(name, ok)

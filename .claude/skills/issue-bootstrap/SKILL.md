@@ -32,9 +32,9 @@ cp docs/issues/templates/issue_template.md "$DRAFT"
 ```
 
 ### 3. 自己完結度レビュー（必須・ソフト警告）
-GitHub に登録する前に、issue-review サブエージェントで下書きをレビューする:
+GitHub に登録する前に、issue-review サブエージェントで下書きをレビューする（`<下書きのパス>` は手順 2 の実際のパスをそのまま書く。`"$DRAFT"` のような変数・`$(…)` で包んだ形はサンドボックスの中で動いて `claude -p` が失敗する・I599）:
 ```bash
-bash scripts/claude/issue-review.sh --file "$DRAFT"
+bash scripts/claude/issue-review.sh --file <下書きのパス>
 ```
 
 - レビュー結果（自己完結判定＝`十分`/`要補足`、未記入セクション、内容指摘）を見て、直せるものは下書きを直す。

@@ -48,15 +48,15 @@ bash scripts/claude/issue-source.sh body $ARGUMENTS
 書き込む先は、既存のイシューファイルの有無で分ける（どちらも、下の「設計確認メモ」「本文整合」「機械検証」「GitHub の本文の書き換え」を同じ順に行う）:
 - **既存のイシューファイルがある**（`bash scripts/claude/issue-source.sh path $ARGUMENTS` が exit 0 で、そのパスを出す）: そのファイルを Edit で直す。機械検証は `bash scripts/claude/check-memo-body-paths.sh $ARGUMENTS`。最後に `gh issue edit <GitHub#> --body-file <そのファイル>`（`<GitHub#>` は `bash scripts/claude/issue-source.sh gh-number $ARGUMENTS` の出力）
 - **既存のイシューファイルが無い**（新しいイシュー。`issue-source.sh path` が exit 1）: GitHub の本文をスクラッチパッドの下書きに書き出して直し、GitHub に書き戻す。手元のリポジトリには何も残さない
+  1. `bash scripts/claude/issue-source.sh gh-number $ARGUMENTS` を単体で流し、出た番号を `<N>` とする
+  2. 手順 1 で出た本文を、Write ツールでスクラッチパッドの下書き `<スクラッチパッド>/${ARGUMENTS}_body.md`（以下 `<下書き>`。実際のパスをそのまま書く）に書き、Edit で「## 設計確認メモ（/grill-me）」の追記と本文整合を行う
+  3. 次を流す（`<N>`・`<下書き>` は値をそのまま書く）:
   ```bash
-  N=$(bash scripts/claude/issue-source.sh gh-number $ARGUMENTS)
-  DRAFT="<スクラッチパッド>/${ARGUMENTS}_body.md"
-  bash scripts/claude/issue-source.sh body $ARGUMENTS > "$DRAFT"
-  # Edit で「## 設計確認メモ（/grill-me）」の追記と本文整合を行う
-  bash scripts/claude/check-memo-body-paths.sh --file "$DRAFT"
-  gh issue edit "$N" --body-file "$DRAFT"
-  rm -f "$DRAFT"
+  bash scripts/claude/check-memo-body-paths.sh --file <下書き>
+  gh issue edit <N> --body-file <下書き>
+  rm -f <下書き>
   ```
+  （`scripts/claude/` の外で動かすスクリプトは、`$(…)` で包む・`>` で書き出す・変数を渡す形にしない。包んだ形はサンドボックスの中で動いて gh が失敗する・I599）
 
 ユーザーが回答したら、イシューの「## 関連資料」セクションの直後に以下を追記する:
 

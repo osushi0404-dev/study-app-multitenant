@@ -42,6 +42,7 @@
 - [review-gate] 延長の 1 周の後も HIGH（F16・F17・F18）。種類は「漏れる」と「壊す」が交互（計画書の調査結果 5）。止めて聞き、方式の見直しを推奨した。ユーザーの判断（2026-11-20・原文）: 「ループエンジニアリング、ハーネスエンジニアリング、グラフエンジニアリングのベストプラクティスと開発をサクサク進める(開発効率)という観点でベストなやり方で進めて。」→ 推奨の「方式を裏返す（既定を中に・決まったスクリプトだけを起動役が外で動かす）」で計画を第 2 版に書き直し、計画レビューからやり直す
 - [implement] 第 2 版を実装した。新しいファイルを作る道具が使えない時間があったので、起動役は判定と同じ `.claude/hooks/unreviewed.py` の `run` に置いた（計画変更記録）。見張りが自分の書き込み・コミットのコマンドを止めた・起動役の呼び出しを確認に回した問題を、実装中に直した（計画変更記録）
 - [implement] /simplify（第 2 版・1 回にまとめた）: 判定の git を減らす・名前の確かめの重複を消す・見張りの説明を第 2 版に・ゲートの判定を 1 回に。見送り 2 件（失敗の道での判定の読み直し・test-session の基準の再計算。どちらも軽い）
+- [fix-loop] F22 は案 A（スキルの呼び出しを単体の形に直し、TC-18 で機械で確かめる）・F23 は案 A（ワイルドカードを単体でない文字に）。診断レビュー PASS（`docs/reviews/I599_fix_diagnosis_review_20261121_1500.md`）— `route()` に包んだ形を読ませる案は第 1 版の精密な判定に戻るため採らない。`> "$DRAFT"` はスクリプトに書き出しを足さず Write ツールで下書きを作る（外で動くスクリプトに任意の場所へ書ける口を作らない）。`worktree.md` の `DANGER_OK=1`・`KEEP_DATA=1` の前置きは人が primary で流す危険操作で、第 1 版の前から外に出ない形なので直さない
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -64,3 +65,4 @@ STAGE_DONE: implement NEXT: review-gate
 
 - [review-gate] 第 2 版の 1 回目の基本レビューは HIGH（止める指摘 F22・F23）。fix-loop へ回す（実装をやり直した後の 1 回目）
 STAGE_DONE: review-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
