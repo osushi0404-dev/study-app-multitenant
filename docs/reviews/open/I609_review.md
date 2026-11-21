@@ -29,3 +29,4 @@
 - [plan-review] Warning 3・Info 2 のうち、上限の定数化・計画変更記録・空白だけの出典の TC-30 を入れた。イシュー本文（GitHub）は直さない — 写しは同期しない決まりで、変更の正は計画書の計画変更記録と 9 にある
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
