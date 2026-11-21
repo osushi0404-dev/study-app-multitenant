@@ -25,7 +25,7 @@
 6. **入口を写しから動かしても動くか（スパイク・2026-11-22・成立）**: BASE の `git archive` を一時フォルダに広げ、作業フォルダをリポジトリの最上位にして `bash <写し>/scripts/claude/issue-source.sh path I610` → `docs/issues/closed/I610.md`（exit 0）。`bash <写し>/scripts/claude/code-review.sh --lint-auto-test docs/tests/closed/I610_auto_test.md` → exit 0。`REVIEW_LIB_SOURCE_ONLY=1` で読み込むと `review-process-lib.sh` を写しの側から読む（`gate_reviewed` が定義される）。入口は、同じフォルダの部品を `$(dirname "${BASH_SOURCE[0]}")` から、リポジトリを作業フォルダの `git rev-parse --show-toplevel` から求めるので、写しから動かしても作業ツリーの記録・計画書を読む
 7. **入口が作業ツリーのスクリプトを動かす箇所（全件 grep）**: 16 本と、それが読む `review-process-lib.sh`・`fix-review-lib.sh` で、`(bash|python3|source|.) "$REPO_ROOT/scripts/claude/…"` か素の `scripts/claude/…` を動かすのは 2 か所だけ
    - `scripts/claude/fix-diagnosis-review.sh:10`: `source "$REPO_ROOT/scripts/claude/fix-review-lib.sh"`（作業ツリーの部品を読む）→ 同じフォルダから読む形に直す（4-4）
-   - `scripts/claude/code-review.sh:441-458`（`run_declared_gates`）: 自動テスト文書のゲートの `bash scripts/claude/tests/test_*.sh` を作業ツリーで流す。`gate_reviewed`（`unreviewed.py dirty`）がレビュー前の中身があるときは流さない（I599）。この判定は残す（`dirty` の CLI は変えない）
+   - `scripts/claude/code-review.sh:441-458`（`run_declared_gates`）: 自動テスト文書のゲートの `bash scripts/claude/tests/test_*.sh` を作業ツリーで流す。`gate_reviewed`（`unreviewed.py dirty`）がレビュー前の中身があるときは流さない（I599）。この判定は残す（`dirty` の CLI は変えない）。写しの `code-review.sh` が動くようになっても、流さなかったゲートは黙って飛ばない: `test_*.sh` は記録の証跡に `⏭ レビュー前の中身のため手元では流さない（CI の Harness Tests が流す・I599）` と出て、review-gate は CI の合格を待つ。CI が流さないもの（`test_` で始まらない）は `⚠️ … 実走しない（fail-closed）` で BLOCKER（`code-review.sh:447-455`・TC-11）
    - `gh` は `~/.local/bin/gh`（リポジトリの外に入れた写し）で、作業ツリーを読まない
 8. **入口の部品を機械で見分けられるか（スパイク・2026-11-22・成立）**: 写しの入口の本文から、注釈の行（`#`）と表示の行（`echo`・`printf` で始まる）を除き、`scripts/claude/` の直下のファイル名とレビュー役の名前（`.claude/agents/<名前>.md`）が語として出てくるものをたどると、16 本の部品は次のとおりで、実際の読み込み・呼び出しと一致した（注釈まで数えると、`code-review.sh` が注釈で触れる `gate-check.sh`・`adversarial-review.sh` なども部品になり、見張りや関所を直すたびに `!` が要る）
    - `adversarial-review.sh` → `code-review.sh`・`review-process-lib.sh`・adversarial-reviewer・code-reviewer ／ `code-review.sh` → `review-process-lib.sh`・code-reviewer ／ `pr-base-sync.sh` → `code-review.sh`・`review-process-lib.sh`・code-reviewer ／ `fix-diagnosis-review.sh` → `fix-review-lib.sh`・fix-diagnosis-reviewer ／ `issue-review.sh` → `issue-source.sh`・issue-reviewer ／ `plan-issue-review.sh` → plan-reviewer ／ ほかの 10 本は部品なし
@@ -153,7 +153,7 @@
 | リスク | 回避策 | 処遇 |
 |---|---|---|
 | R1: `reviewed-hook.sh`・`reviewed-snapshot.sh` を壊すと、このセッションを含むすべてのフックが動かなくなる（見張りが止まり、Claude が何もできなくなる） | 保存の前に `bash -n` で文法を確かめる（TC-08）。読み込めない・写しを作れないときは今までどおり理由を出して作業ツリーのフックで動く（フックは止まらない）。保存の後に本物の起動役で見張りが動くことを確かめる（manual No.3）。止まったらユーザーが `! git restore .claude/hooks/reviewed-hook.sh .claude/hooks/reviewed-snapshot.sh` で戻す | 回避 |
-| R2: 部品の判定が、変数で組み立てた名前・注釈や表示の行だけに書いた名前で呼ぶ部品を見落とすと、書き換えた部品が作業ツリーから読まれて外で動く | 入口は部品を写しの側（`$(dirname "${BASH_SOURCE[0]}")`）から読む（4-4 で最後の 1 か所を直した）ので、見落としても読むのは写しの部品。作業ツリーのスクリプトを動かすのは `code-review.sh` のゲートだけで、`gate_reviewed`（`dirty`）が止める。部品の判定は「新しい版も要るか」の判断で、守りの本体ではない | 回避 |
+| R2: 部品の判定が、変数で組み立てた名前・注釈や表示の行だけに書いた名前で呼ぶ部品を見落とすと、書き換えた部品が作業ツリーから読まれて外で動く | 入口は部品を写しの側（`$(dirname "${BASH_SOURCE[0]}")`）から読む（4-4 で最後の 1 か所を直した）ので、見落としても読むのは写しの部品。作業ツリーのスクリプトを動かすのは `code-review.sh` のゲートだけで、`gate_reviewed`（`dirty`）が止める。部品の判定は「新しい版も要るか」の判断で、守りの本体ではない。見落とすと、直したレビューの道具が新しい版で流れないまま周が進む（その版はマージ前の CI のテストで確かめる）。変数で部品の名前を組み立てる書き方を止める lint は、retro で一覧に回す（計画レビュー 20261122_0254 の Warning） | 回避 |
 | R3: 部品の判定が広すぎると、関係しない変更で `!` が増える | 注釈・表示の行を除き、直下のファイル名だけをたどる（調査結果 8。見張り・関所を直しても、レビューの入口は自動で動く）。広すぎる側に崩れても今の動きより悪くならない（安全側） | 受け入れ |
 | R4: 写しの入口は BASE の中身で動くので、ブランチで足した記録・計画書の新しい書き方を読めないことがある | その書き方を読む入口・部品を変えていれば 75 で新しい版を頼む（AC2）。変えていなければ、BASE の入口が今までと同じ書き方で読む | 回避 |
 | R5: `DANGER_OK=1 git …` と前置きした危険操作は、中で動いて途中で止まりうるが、見張りの新しい判定にかけない | 危険操作の承認の流れ（`DANGER_OK=1` を付けると人の承認）を変えない。承認の画面で人が見る。I586 の事故はつなぎ・振り向けの形 | 受け入れ |
@@ -222,3 +222,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 2026-11-22 plan: 計画書の記載: [イシューの設計確認メモ「両方流す（古い版を自動・新しい版を `!`）」] → 採った方法: 入口か部品を変えたときは、その入口だけ新しい版を `!` で流し、それを正式な結果にする — 理由: 周の上限を 1 回で使い切る・2 回目は差分だけを見て何もレビューしない、が分かり、ユーザーに確かめて変えた（2026-11-22）。計画レビューのやり直し: 不要（計画レビューの前）
+- 計画レビュー（20261122_0254・HIGHRISK・Blocker なし）の Warning 3 件を反映: 写しの `code-review.sh` で流さなかったゲートが記録の証跡に出ることを調査結果 7 に書いた／TC-02 をコミット済みと未コミットの両方で確かめるようにした／R2 に、部品の見落としの影響と lint を一覧に回すことを書いた。方式・範囲・受け入れ条件は変えていないので再レビューはしない
+
+## レビュー結果
+- [20261122_0254 判定: ✅ 完了](../../reviews/I615_plan_review_20261122_0254.md)
