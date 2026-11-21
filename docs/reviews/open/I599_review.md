@@ -45,6 +45,7 @@
 - [fix-loop] F22 は案 A（スキルの呼び出しを単体の形に直し、TC-18 で機械で確かめる）・F23 は案 A（ワイルドカードを単体でない文字に）。診断レビュー PASS（`docs/reviews/I599_fix_diagnosis_review_20261121_1500.md`）— `route()` に包んだ形を読ませる案は第 1 版の精密な判定に戻るため採らない。`> "$DRAFT"` はスクリプトに書き出しを足さず Write ツールで下書きを作る（外で動くスクリプトに任意の場所へ書ける口を作らない）。`worktree.md` の `DANGER_OK=1`・`KEEP_DATA=1` の前置きは人が primary で流す危険操作で、第 1 版の前から外に出ない形なので直さない
 - [review-gate] 敵対的レビュー 1 周目は新しい指摘 0・V6 だけ未検証（HIGH）。V6 は TC-18 で静的な部分を覆って「読んで可」に下げ、本物の環境の実測はマージの後に I593 で行う（計画変更記録）— マージ前は子のセッションが develop の見張りの写しで動き、起動役の `os.environ` を確認に回すので測れない。外に出ないときは終了 4 で止まる安全側の失敗で、人の手を使わずに進める（ユーザーの任せる指示・開発効率）
 - [review-gate] 敵対的レビュー 2 周目 OK（`docs/reviews/I599_adversarial_review_20261121_1539.md`・未検証 0・新規 0）。PR へのコメント（`post-review-comment.sh`）は外で動く一覧のスクリプトで、ブランチにレビュー前の中身があると起動役が止めるので流していない（失敗しても止めない手順・記録はリポジトリにある・R5）
+- [test-gate] gate-check.sh が REASON=dirty で落ちた。未追跡に出たのは `.bashrc`・`.claude/worktrees` など 17 件で、どれもサンドボックスがふさぐための文字デバイス（1,3＝/dev/null）。第 2 版で gate-check.sh が中で動くようになったための回帰（前は `bash scripts/claude/*` で外で動き見えなかった）。マージ後はすべてのイシューの test-gate が止まるので、コードの直しとして fix-loop に回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -69,3 +70,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: fix-loop
