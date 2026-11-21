@@ -41,7 +41,9 @@
 <!-- 危険操作の承認の言葉と日付（P4・P9 は #605 の primary のコメントから写す・A2 は app-1 の会話から） -->
 - P4（2026-11-20・primary のセッション）: 0025 の削除に「消してよい」・0026 を空にすることに「空にしてよい」・0027 を空にすることに「空にしてよい」・accounts.0023 と studylogs.0002 を流すことに「流してよい」
 - P9（2026-11-20・primary のセッション）: `backend/media`（7 個）と控え `backup_I605_before_primary_20261120_224053.sql` を消すことに「消してよい」
+- A2（2026-11-21・app-1 の会話）: Claude が A1 の一覧と 3 行のコマンドを示し、「打つことを承認として扱う」と伝えたうえで、ユーザーが自分で `! docker rm harness-1-db-1 harness-2-db-1`・`! docker volume rm harness-1_postgres_data harness-2_postgres_data`・`! rm -rf /mnt/c/app/study-app-multitenant/.claude/worktrees/harness-2/backend/media` を順に流した（3 つとも成功）。study はワークツリーごと撤去済みのため対象外
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
