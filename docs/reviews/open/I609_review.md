@@ -27,6 +27,12 @@
 - [plan] 範囲外の `_save_ai_problem_to_db` の不具合は直さない — 受け入れ条件と関係しない。retro で扱いを決める
 
 - [plan-review] Warning 3・Info 2 のうち、上限の定数化・計画変更記録・空白だけの出典の TC-30 を入れた。イシュー本文（GitHub）は直さない — 写しは同期しない決まりで、変更の正は計画書の計画変更記録と 9 にある
+- [implement] 出典の欄の入力例が押す前から見えるよう `InputLabelProps.shrink` を足した — 画面確認で、MUI の既定では AC3 の「入力例が出る」を満たさないと分かったため（計画変更記録）
+- [implement] 既存の Jest「解説文が空なら解説画像を出さない」を消し、逆の TC-29 に置き換えた — ユーザーが計画のときに「クイズにそろえる（画像は出す）」を選んだため
+- [implement] 問題管理の Jest に `jest.setTimeout(20000)` を足した — 全部を並べて流したときに 1 回 5 秒を超えた（単独では 8 秒以内で通る）
+- [implement] 科目の選択欄にはラベルの結び付けが無いので、テストではダイアログの最初の選択欄として探す。結び付けの直しは範囲外 — 既存の作りで、今回の受け入れ条件と関係しない
+- [implement] `/simplify` の指摘のうち、改行コード（2 ファイルが CRLF→LF になっていた）を元に戻し、`organization_id` で渡し、古いコメントを直した。見送り: テストの補助 `precedes` の共通化（共通の置き場が無く既存の Dashboard のテストまで触る）・`ProblemSource` 単体のテストへの寄せ（AC は画面ごと）・import を `ProblemService` 経由にする／解説の表示を共通の部品に切り出す（計画の範囲を超える作り直し・retro の候補）・`full_clean`（試し実行の段階で弾く意図）
+- [implement] 画面確認で、最後の問題に答えた後に上部の「正解 / 総回答」が増えないのを見た — 数え方の表示は今回変えておらず #333 の範囲。test-gate の手動テスト No.5 の期待はこれに合わせて扱う
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
