@@ -227,12 +227,22 @@ git -C "$TMP/g9" checkout -q -- scripts/a.sh; printf 'x\n' > "$TMP/g9/scripts/ne
 ck "G9 scripts に未追跡のファイルがある → 1" 1 "$(g_rc g9)"
 rm "$TMP/g9/scripts/new.sh"; printf 'x\n' > "$TMP/g9/docs/reviews/I998_issue_review_x.md"
 ck "G9 docs/reviews の未追跡ファイルだけなら → 0" 0 "$(g_rc g9)"
-# G9b: サンドボックスのふさぎの印（/dev/null の文字デバイス）は未追跡でも数えない（I599。CI でも作れるよう
-# /dev/null へのシンボリックリンクで作る。-c はリンク先を見る）
+# G9b: /dev/null を指す未追跡のシンボリックリンクは、ふさぎの印（bind mount の文字デバイス）ではないので汚れとして数える
+# （I610 F30・F31。-c はリンク先を見るので、リンクでないことも確かめる）。最上位と深い場所の両方
 ln -s /dev/null "$TMP/g9/.bashrc"
-ck "G9b 未追跡が文字デバイス（ふさぎの印）だけなら → 0" 0 "$(g_rc g9)"
-sed '/&& -c "\$p" \]\] && continue/d' "$GC" > "$TMP/gc_no_dev.sh"
-ck "FG-G9b 文字デバイスを数えない処理を外すと → 1" 1 "$(GC=$TMP/gc_no_dev.sh g_rc g9)"
+ck "G9b 未追跡の /dev/null へのリンク（最上位）は汚れ → 1" 1 "$(g_rc g9)"
+rm "$TMP/g9/.bashrc"; mkdir -p "$TMP/g9/scripts/x"; ln -s /dev/null "$TMP/g9/scripts/x/.bashrc"
+ck "G9b 未追跡の /dev/null へのリンク（深い場所）は汚れ → 1" 1 "$(g_rc g9)"
+rm -r "$TMP/g9/scripts/x"
+# G9c: 本物のふさぎの印（リンクでない文字デバイス）を数えない道が残っている。CI では bind mount を作れないので、
+# 「リンクでない」の確かめを外した写し（リンクを印と見なす）で、印の道を通す（判定の差し替え）
+grep -qF '&& -c "$p" && ! -L "$p" ]] && continue' "$GC" || ck "G9c 置き換え元が gate-check.sh にある" 0 1
+sed 's/ && ! -L "\$p" \]\] && continue/ ]] \&\& continue/' "$GC" > "$TMP/gc_dev_as_mark.sh"
+ln -s /dev/null "$TMP/g9/.bashrc"
+# この写しは「リンクでない」の確かめを外したもの（FG-G9b を兼ねる: この写しでは G9b の最上位のリンクが 0 になる）
+ck "G9c・FG-G9b 印（文字デバイス）だけなら数えない → 0" 0 "$(GC=$TMP/gc_dev_as_mark.sh g_rc g9)"
+sed '/&& -c "\$p".*\]\] && continue/d' "$TMP/gc_dev_as_mark.sh" > "$TMP/gc_no_dev.sh"
+ck "FG-G9c 印を数えない行を消すと → 1（G9c が不合格になる）" 1 "$(GC=$TMP/gc_no_dev.sh g_rc g9)"
 rm "$TMP/g9/.bashrc"
 g_init g10; g_record g10 code_review 20260101_0000 OK NO
 printf 'x\n' > "$TMP/g10/scripts/日本語.sh"; g_commit g10 "jp"

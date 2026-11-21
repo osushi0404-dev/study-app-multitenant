@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # I599（plan_I599.md 4-2）: フックを、レビュー済みの中身で動かす起動役。
-#   フック（.claude/settings.json の hooks）はサンドボックスの外で動く。scripts/claude/ に、このブランチが develop から
-#   分かれた時点（git merge-base HEAD origin/develop＝BASE）と違う中身があるあいだは、BASE の scripts/claude の写しで
-#   フックを動かす（書き換えた見張りは、マージされるまで外で動かない）。違いが無ければ作業ツリーのフックを動かす。
+#   フック（.claude/settings.json の hooks）はサンドボックスの外で動く。このブランチが develop から分かれた時点
+#   （git merge-base HEAD origin/develop＝BASE）の scripts/claude の写しでフックを動かす（書き換えた見張りは、
+#   マージされるまで外で動かない）。
+#   I610: 変更が無くても写しで動かす（「変更があるか」の判定は持たない。差分・未追跡・git が無視するファイルの
+#   数え方の食い違いを、判定ごと無くす）。作業ツリーのフックを動かすのは、BASE を求められない・写しを作れない
+#   ときだけ（理由を標準エラーに出す）。写しは BASE ごとに 1 回だけ作る。フックは python3 -I で起こす
+#   （スクリプトの置き場所・PYTHONPATH・利用者の site を読み込み先にしない）。
 #   置き場所が .claude/hooks/ なのは、サンドボックスから書けず、Edit は承認が要るため（scripts/claude/ に置くと、
 #   起動役そのものを書き換えられる）。
 # 使い方: bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/<名前>.py [引数…]
@@ -26,18 +30,14 @@ g=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c submodule.recurse=
 
 if ! base="$("${g[@]}" merge-base HEAD origin/develop 2>/dev/null)" || [ -z "$base" ]; then
   echo "[reviewed-hook] レビュー済みの基準（merge-base HEAD origin/develop）を求められないため、作業ツリーのフックを動かします: $rel" >&2
-  exec python3 "$root/$rel" "$@"
+  exec python3 -I "$root/$rel" "$@"
 fi
 
 cache="${HOME}/.cache/claude-reviewed-hooks"
 snap="$cache/$base"
-# 写しがあればそれで動かす（変更が無いときも中身は作業ツリーと同じ。毎回の git の差の確かめを省く）
+# 写しがあればそれで動かす（BASE ごとに 1 回作った後は、git を呼ばない）
 if [ -f "$snap/.complete" ] && [ -f "$snap/$rel" ]; then
-  exec python3 "$snap/$rel" "$@"
-fi
-if "${g[@]}" diff --quiet --no-ext-diff --no-textconv "$base" -- scripts/claude 2>/dev/null \
-    && [ -z "$("${g[@]}" ls-files --others --exclude-standard -- scripts/claude 2>/dev/null)" ]; then
-  exec python3 "$root/$rel" "$@"
+  exec python3 -I "$snap/$rel" "$@"
 fi
 
 if [ ! -f "$snap/.complete" ]; then
@@ -52,6 +52,6 @@ if [ ! -f "$snap/.complete" ]; then
 fi
 if [ ! -f "$snap/.complete" ] || [ ! -f "$snap/$rel" ]; then
   echo "[reviewed-hook] レビュー済みの写しを作れないため、作業ツリーのフックを動かします: $rel" >&2
-  exec python3 "$root/$rel" "$@"
+  exec python3 -I "$root/$rel" "$@"
 fi
-exec python3 "$snap/$rel" "$@"
+exec python3 -I "$snap/$rel" "$@"
