@@ -85,6 +85,7 @@
 - [test-gate] 手動 No.1・No.2（子のセッションでの実測）は保留にし、マージの後に I593 で測る。No.3・No.5 は OK — 子のセッションはこのブランチでは写しの見張り（develop）で動くので、No.1 は測れない（R5）。No.2 も子のセッションを起こすのに人の `!` が要る。静的な部分は TC-18・S23・S24 で確かめた。外に出ないときは終了 4 で止まる安全側の失敗で、手動テストの NG ではない
 - [retro] 台帳の残り: F24・F30 → I610（#610・「次のハーネスの作業で最優先」）。F5・F6・F9・F10・F25・F26・F27・F28・F29・F31 → `docs/reviews/backlog/I599.md`。F32 は計画変更記録に 1 行足して直した
 - [retro] 改善案の振り分け: 外から中へ移ったスクリプトの確かめ（gate-check・run-all）→ 起票 I610（#610）／規則を変えたら書き手を機械で確かめる・安全装置を文字列の解析に頼る計画を計画レビューで止める・pre-commit の end-of-file-fixer が読み取り専用で落ちる → I610 に同梱（コメント）／手動 No.1・No.2 のマージ後の実測 → I593 に同梱（コメント）／PR へのレビューのコメントを流せなかった（R5）→ 見送り（マージ後は起きない・記録はリポジトリにある）
+- [close] develop が先に進んでいた（BEHIND）ので取り込んだ（I590・I602・I605 のバックエンドと記録だけで、このブランチのファイルと重ならない）。取り込んだ後の gate-check は OK — `pr-base-sync.sh` は外で動く一覧のスクリプトで、ブランチにレビュー前の中身があると起動役が止めるので、同じ確かめを gh・git で直接行った（R5）。最後の確かめ（BEHIND・DIRTY でない＋CI 全緑）も gh で行う
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -114,3 +115,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
