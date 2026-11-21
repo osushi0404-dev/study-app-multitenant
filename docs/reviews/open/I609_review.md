@@ -37,8 +37,10 @@
 - [test-gate] 手動テスト No.5 の期待の最後（「正解 / 総回答」が 1 増える）は書き方の誤りとして OK にした — 数は次の問題へ進むときに増える既存の表示で、今回変えていない（#333）
 - [test-gate] 範囲外の既存の不具合を見つけた: 問題を編集・更新した後に「問題を作成」を開くと、編集した問題の中身が入ったまま（`reset(values)` が既定値を置き換えるため）。確かめの途中でこれにより問題が 1 件余分にでき、画面から削除した（ID 109）。retro で起票する
 
+- [fix-loop] 手動テスト No.7 の NG を案 A（取り込みの最後に一覧のキャッシュを 1 回消す）で直した — API の作成と同じ消し方で 1 行。シグナルで消す案は問題ごとに Redis を走査し範囲も超えるので採らない。診断レビュー PASS（`docs/reviews/I609_fix_diagnosis_review_20261121_1824.md`）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
+STAGE_DONE: fix-loop NEXT: review-gate
