@@ -11,7 +11,7 @@
 
 ## テスト結果
 - 自動: backend 16 件（I609）・problems 230 件、Jest 161 件が手元で合格。CI 全部成功（review-gate）
-- 手動: Claude が No.1〜9 を実施。No.7 だけ NG（`import_problems` の後、一覧のキャッシュが消えず問題管理の一覧に出ない）→ fix-loop
+- 手動: Claude が No.1〜9 を実施。No.7 だけ NG（`import_problems` の後、一覧のキャッシュが消えず問題管理の一覧に出ない）→ fix-loop。fix-loop の後に No.7 を確かめ直して OK（全 9 項目 OK・人の手動テストなし）。確かめで作った問題 8 件は画面から削除
 
 ## 計画との差分
 - なし / あり（理由）
@@ -38,6 +38,7 @@
 - [test-gate] 範囲外の既存の不具合を見つけた: 問題を編集・更新した後に「問題を作成」を開くと、編集した問題の中身が入ったまま（`reset(values)` が既定値を置き換えるため）。確かめの途中でこれにより問題が 1 件余分にでき、画面から削除した（ID 109）。retro で起票する
 
 - [fix-loop] 手動テスト No.7 の NG を案 A（取り込みの最後に一覧のキャッシュを 1 回消す）で直した — API の作成と同じ消し方で 1 行。シグナルで消す案は問題ごとに Redis を走査し範囲も超えるので採らない。診断レビュー PASS（`docs/reviews/I609_fix_diagnosis_review_20261121_1824.md`）
+- [test-gate] 2 回目: No.7 を確かめ直して OK。確かめの途中で、プレビューのつもりで削除のボタンを押し、確認の画面で取り消した（削除はしていない）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
