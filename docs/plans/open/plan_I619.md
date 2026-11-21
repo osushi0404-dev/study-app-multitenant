@@ -46,7 +46,7 @@
 - [ ] AC12: パスキーに対応していないブラウザでは、ボタンが押せず「このブラウザはパスキーに未対応です」と出る（行き止まりのエラーにしない）
 
 ## 3. 影響範囲
-- Backend: accounts アプリ（モデル 2 つ・サービス・権限・シリアライザ・ビュー・URL・シグナル）、`core/throttling.py`（スロットルのクラスを 1 つ足す）、`core/settings.py`（WebAuthn の設定・スロットルのレート・CORS のヘッダー 1 つ）、`core/openapi.py`（契約にパスを足す）、`backend/openapi.yaml`（作り直し）、`backend/requirements.txt`（`webauthn==3.0.1`）
+- Backend: accounts アプリ（モデル 2 つ・サービス・権限・シリアライザ・ビュー・URL・シグナル・システムチェック〔新しい `accounts/checks.py`・`accounts/apps.py` の `ready()` で読む〕）、`core/throttling.py`（スロットルのクラスを 1 つ足す）、`core/settings.py`（WebAuthn の設定・スロットルのレート・CORS のヘッダー 1 つ）、`core/openapi.py`（契約にパスを足す）、`backend/openapi.yaml`（作り直し）、`backend/requirements.txt`（`webauthn==3.0.1`）
 - Frontend: `pages/Login.tsx`・`pages/Settings.tsx`・`contexts/AuthContext.tsx`、新しい `services/passkey.service.ts`・`hooks/usePasskeys.ts`・`hooks/usePasskeyReauth.ts`・`components/settings/PasskeysCard.tsx`・`components/settings/PasskeyReauthDialog.tsx`・`components/settings/PasskeyRenameDialog.tsx`・`utils/passkeyErrors.ts`、`types/api/schema.d.ts`（作り直し）・`types/api/index.ts`、`package.json`・`package-lock.json`（`@simplewebauthn/browser`）。テスト: 新しい `pages/__tests__/Login.test.tsx`・`components/settings/__tests__/PasskeysCard.test.tsx`・`components/settings/__tests__/PasskeyReauthDialog.test.tsx`、今の `pages/__tests__/Settings.test.tsx`（`PasskeysCard` を差し替える）。裏側のテスト: 新しい `backend/accounts/tests/test_I619_passkeys.py`・`backend/accounts/tests/webauthn_soft_authenticator.py`。E2E: 新しい `e2e/tests/passkey.spec.ts`
 - DB: 表を 2 つ足す（`passkeys`・`webauthn_challenges`）。足すだけのマイグレーション `accounts/0024_passkey_webauthnchallenge.py`
 - Config/Infra: 環境変数 `WEBAUTHN_RP_ID`（既定 `localhost`）・`WEBAUTHN_RP_NAME`（既定 `学習アプリ`）・`WEBAUTHN_ALLOWED_ORIGINS`（既定は `FRONTEND_URL`＝`http://localhost:3000`）。`docker-compose.yml` の backend にパススルー（`RATELIMIT_ENABLE` と同じ書き方）。`backend/.env.example` に 3 つを足す。依存の追加で backend・frontend のイメージの作り直しが要る（backend の Dockerfile は `requirements.txt` を `pip install`・frontend のコンテナは匿名の `/app/node_modules` を使うので、コンテナの中で `npm install` する）。本番の値は本番環境ができたときに決める（今は本番環境が無い）
@@ -114,6 +114,9 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] に 'passkey_login_options': '20/min', 
 CORS_ALLOW_HEADERS に 'x-reauth-token' を足す
 ```
 
+### 4-2b. 設定の誤りを止めるシステムチェック（新しい `backend/accounts/checks.py`）
+- `@register(Tags.security)` の `check_webauthn_settings`: `DEBUG=False` のとき、`WEBAUTHN_ALLOWED_ORIGINS` が空（`accounts.E001`）・`https://` で始まらない origin がある（`accounts.E002`）・`WEBAUTHN_RP_ID` が各 origin の host と同じでも、その親のドメイン（`host.endswith('.' + rp_id)`）でもない（`accounts.E003`）を Error で返す。`DEBUG=True`（開発・CI）では何も返さない。`AccountsConfig.ready()` で `import accounts.checks`（セキュリティレビューの Medium・本番の設定の誤りで平文の origin を許さない）
+
 ### 4-3. スロットル（`backend/core/throttling.py`）
 - `AppScopedRateThrottle(LiveSettingsRateMixin, ScopedRateThrottle)` を足す（有効スイッチ・レートを毎回 settings から読む。I127 と同じ）。`RATELIMIT_ENABLE=false`（E2E）で止まる
 
@@ -128,14 +131,14 @@ CORS_ALLOW_HEADERS に 'x-reauth-token' を足す
 - `authenticate_passkey(*, challenge_id, credential: dict, purpose, user=None) -> Passkey`: `consume_challenge`（コミット済み）→ `transaction.atomic` の中で `rawId` で `Passkey` を `select_for_update().select_related('user__organization')` で引く（無ければ失敗）→ 本人確認（purpose=REAUTH）なら `passkey.user_id == user.id` でなければ失敗 → `userHandle` があれば `passkey.user.id.bytes` と一致しなければ失敗 → 利用者が無効・組織が無効なら失敗 → `verify_authentication_response(credential_current_sign_count=passkey.sign_count, require_user_verification=True)`（署名回数の巻き戻りはここで拒まれる）→ `sign_count` を更新。ログイン（purpose=LOGIN）のときは `last_used_at` と `user.last_login` も今の時刻にする。失敗の文はすべて `'パスキーでログインできませんでした'`（ログイン）／`'パスキーを確かめられませんでした。もう一度お試しください'`（本人確認）で、理由を見分けさせない
 - `issue_reauth_token(*, user) -> str`: `signing.dumps({'uid': str(user.id), 'iat': int(timezone.now().timestamp())}, salt='accounts.passkeys.reauth')`
 - `has_valid_reauth(*, user, token: str | None) -> bool`: `signing.loads(salt=…)` が通り、`uid` が本人で、`0 <= 今 - iat <= PASSKEY_REAUTH_MAX_AGE_SECONDS` のときだけ True（`BadSignature` は False）
-- `verify_password_for_reauth(*, user, password) -> None`: `user.check_password` が偽なら `PasskeyError('パスワードが正しくありません')`
+- `verify_password_for_reauth(*, user, password) -> None`: ロック中（`user.is_account_locked()`）なら、正しいパスワードでも `PasskeyError('アカウントがロックされています。<時刻>まで待ってから再試行してください。')`（今のログインの文と同じ）。`user.check_password` が偽なら、ログインと同じく `failed_login_attempts` を 1 増やし、5 回以上で `account_locked_until = 今 + 30 分` にしてから `PasskeyError('パスワードが正しくありません')`。正しければ `failed_login_attempts` を 0 に戻す（セキュリティレビューの Medium・盗んだアクセストークンでの総当たりを止める）。パスキーでの本人確認はロックを見ない
 - `build_login_response(*, user) -> dict`: `RefreshToken.for_user(user)` から `{'access', 'refresh', 'user': UserSerializer(user).data}` を作る。`CustomTokenObtainPairView.post` もこれを使うように直す（同じ形を 1 か所で作る。AC4・AC11）
 
 ### 4-5. 権限（新しい `backend/accounts/permissions.py`）
 - `HasRecentReauth(BasePermission)`: `has_valid_reauth(user=request.user, token=request.headers.get('X-Reauth-Token'))`。偽なら 403（`message = '続けるには、本人であることを確かめてください'`）
 
 ### 4-6. シリアライザ（`backend/accounts/serializers.py`）
-- `PasskeySerializer`（出力・`name` だけ書ける）: `id`・`name`（1〜64 文字・前後の空白を除く・空は 400）・`created_at`・`last_used_at`。`credential_id`・`public_key`・`sign_count`・`transports` は出さない
+- `PasskeySerializer`（出力・`name` だけ書ける）: `id`・`name`（1〜64 文字・前後の空白を除く・空は 400・Unicode の Cc〔制御文字〕・Cf〔U+202E など書字方向を変える文字〕を含めば 400）・`created_at`・`last_used_at`。`credential_id`・`public_key`・`sign_count`・`transports` は出さない
 - `WebAuthnOptionsSerializer`（出力）: `challenge_id`（UUID）・`options`（object）
 - `WebAuthnCredentialSerializer`（入力）: `challenge_id`（UUID・必須）・`credential`（dict・必須）
 - `PasskeyReauthSerializer`（入力）: `password`（任意）か `challenge_id`＋`credential` のちょうど片方（両方・どちらも無しは 400）
@@ -199,7 +202,7 @@ def delete_passkeys_of_inactive_organization(sender, instance, **kwargs):
 ## 5. 実装手順（ステップ）
 1. **未知リスク: e2e コンテナでの RP ID**（他のステップを止めない・結果で R3 の回避策を選ぶ）: 4-1〜4-4 の最小（ログインの options と検証）を入れた後、e2e コンテナで `passkey.spec.ts` の登録までを流し、RP ID `frontend` が通るかを確かめる → TC-30（手元）。通らなければ、spec の頭で `baseURL` の host が `localhost` でないときは `test.skip`（理由のコメントつき）にし、frontend-verify.md §8 にそう書く
 2. **縦の 1 本目（ログイン）**: モデル・マイグレーション・設定・スロットル・サービス（challenge・ログイン・`build_login_response`）・ログインの 2 つの API・`CustomTokenObtainPairView` の切り替え → TC-01・TC-07・TC-08・TC-10・TC-11・TC-13。ステップ 3 の前
-3. **縦の 2 本目（本人確認・登録・一覧・名前・削除）**: 権限 `HasRecentReauth`・本人確認の 2 つの API・`PasskeyViewSet`・既定の名前 → TC-02〜TC-06・TC-12。認証・認可（本人確認・本人の分だけ）は守る対象の API と同じステップで入れる。ステップ 2 の後
+3. **縦の 2 本目（本人確認・登録・一覧・名前・削除）**: 権限 `HasRecentReauth`・本人確認の 2 つの API（パスワードの誤りのロックを含む）・`PasskeyViewSet`・既定の名前・システムチェック → TC-02〜TC-06・TC-12・TC-15。認証・認可（本人確認・本人の分だけ）は守る対象の API と同じステップで入れる。ステップ 2 の後
 4. **無効化での削除**: シグナル 2 つ → TC-09。ステップ 2 の後（ステップ 3 と並行してよい）
 5. **OpenAPI と画面の型**: `CONTRACT_PATHS`・`extend_schema`・`openapi.yaml`・`schema.d.ts`・`types/api/index.ts` → TC-14。ステップ 3 の後
 6. **画面（ログイン）**: `@simplewebauthn/browser` を入れる・`passkey.service.ts`・`passkeyErrors.ts`・`AuthContext.loginWithPasskey`・`Login.tsx` → TC-20。ステップ 5 の後
@@ -231,7 +234,10 @@ def delete_passkeys_of_inactive_organization(sender, instance, **kwargs):
 | R6: 失敗の理由（パスキーが無い・無効の利用者など）を応答で見分けられる | ログインの失敗の文をすべて同じにし、理由はログ（`reason=`）だけに残す。TC-08 | 回避 |
 | R7: `@simplewebauthn/browser` の型が TypeScript 4.9 で読めない | ステップ 6 で型チェック（`npm run typecheck`）を通す。読めなければ、使う関数の型だけを `src/types/` に書いて `skipLibCheck` に頼らない形を計画変更で決める | 回避 |
 | R8: 署名回数を持たない認証器（いつも 0・iCloud キーチェーンなど）が拒まれる | py_webauthn は両方 0 なら通す（スパイクで確かめた比べ方）。TC-08 に 0/0 で通る場合を入れる | 回避 |
-| R9: 本人確認の印は 5 分の間は何度でも使える（登録・削除を続けてできる） | 設計確認メモの決定（5 分は確かめ直さずに続けて操作できる）どおり。印は本人だけ・画面のメモリだけ | R9: 受け入れ |
+| R9: 本人確認の印は 5 分の間は何度でも使える（登録・削除を続けてできる）。ログアウト・パスワード変更でも取り消されない | 設計確認メモの決定（5 分は確かめ直さずに続けて操作できる）どおり。印は本人だけ・画面のメモリだけ・ヘッダーで送る（CSRF で使われない） | R9: 受け入れ |
+| R10: `attestation: none` のため、認証器の種類（メーカーの証明）を確かめず、ソフトの認証器も登録できる | 本人確認を通った本人だけが登録できる。機種の制限は要件に無い | R10: 受け入れ |
+| R11: 盗んだアクセストークンで、本人確認のパスワードを総当たりする | スロットル 5/min ＋ ログインと同じロック（5 回で 30 分）。TC-06 (j)(k) | 回避 |
+| R12: 本番の設定の誤り（`http://` の origin・合わない RP ID） | システムチェック `accounts.E001`〜`E003`。TC-15 | 回避 |
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
@@ -312,9 +318,59 @@ Danger Ops（有無）:
 | V5 | 3 | 読んで可 | 無効化の 3 つの入口（`toggle_active`・`AdminUserViewSet.update`・`save()`）と組織の `save()` で消え、`update()` で無効にした利用者・組織はログインで拒まれる。TC-09・TC-08 |
 | V6 | 3 | 読んで可 | ログインの応答の形がパスワードのログインと同じ（キーと `user` の中身）で、アクセストークンで `/api/auth/me/` が読める。TC-07・TC-10 |
 | V7 | 1 | 読んで可 | 実際のブラウザ（仮想の認証器）で、登録 → ログアウト → パスキーでログイン → 削除が通る。TC-30 が CI で通ること（実際の端末での確認は AC9 の人の手動テストが担う） |
+| V8 | 3 | 読んで可 | 盗んだアクセストークンで本人確認のパスワードを総当たりできない（5 回の誤りでロック・ロック中は正しいパスワードでも印が出ない）。本番の設定で `http://` の origin・合わない RP ID を止める。TC-06 (j)(k)・TC-15 |
 
 ## 計画変更記録
 - 2026-11-22 plan-review: 計画書の記載: 「`transaction.atomic` の中で `consume_challenge`」「`passkey_login` を options と検証で共有」「V7 実験必須」・監査のログの記載なし → 採った方法: challenge の消費を検証の `atomic` の前に別にコミット（失敗した試行の challenge も再利用できない・TC-02 (k)・TC-08 (m) を足す）、scope を `passkey_login_options`（20/min）と `passkey_login`（10/min）に分ける（TC-11 を両方に）、V7 を読んで可（TC-30）、登録・削除・名前・本人確認・無効化の監査のログを 11 に足す（TC-13 に入れる）。Info の `CheckConstraint(condition=)` は `backend/requirements.txt` の Django 5.2.17 で使える — 理由: 計画レビューの Warning 4 件への対応。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
+- 2026-11-22 design-security-review: 計画書の記載: 本人確認のパスワードはスロットル 5/min だけ・設定の検証なし・名前は長さだけ → 採った方法: 本人確認のパスワードの誤りをログインと同じロック（5 回で 30 分）に数える（4-4・TC-06 (j)(k)）、`DEBUG=False` で origin・RP ID の誤りを止めるシステムチェック（4-2b・TC-15）、名前の Cc・Cf の文字を拒む（4-6・TC-04 (j)）、R10〜R12 を足す — 理由: セキュリティ設計レビューの Medium 2 件・Low 1 件への必須防御条件。計画レビューのやり直し: 不要（守りの追加だけ。方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
 - [20261122_0310 判定: ✅ 完了](../../reviews/I619_plan_review_20261122_0310.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-22
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 認証・認可 | 本人確認のパスワードは `passkey_reauth` 5/min（利用者ごと）で、今のパスワード変更（django-ratelimit 5/5m）より 5 倍緩い。盗んだアクセストークンを持つ攻撃者が、本人確認でパスワードを総当たりし、通ればパスキーを足して居座れる（R2 の守りが弱まる） | 必須: 本人確認のパスワードの誤りを、ログインと同じ `failed_login_attempts` に数え、5 回で `account_locked_until`（30 分）を付ける。ロック中は本人確認のパスワードを（正しくても）拒む（文は「パスワードが正しくありません」と同じにせず、今のログインと同じ「アカウントがロックされています…」）。パスキーでの本人確認はロックを見ない（ログインと同じ考え方）。TC-06 (j)(k) |
+| Medium | 機密情報・設定 | 本番で `WEBAUTHN_ALLOWED_ORIGINS` に `http://` の origin や空、`WEBAUTHN_RP_ID` が origin の host と合わない値を入れると、平文の通信でのパスキーの利用や、全ログインの失敗になる（設定の誤り・OWASP A05） | 必須: Django のシステムチェック（`accounts/checks.py`・`@register(Tags.security, deploy=True)` と起動時の通常のチェック）で、`DEBUG=False` のときに origin が空・`https://` 以外・RP ID が各 origin の host と同じかその親のドメインでない、を Error（`accounts.E001`〜`E003`）にする。TC-15 |
+| Low | 入力検証・OWASP（表示のなりすまし） | パスキーの名前に制御文字・書字方向を変える文字（U+202E など）を入れると、一覧の表示を偽れる（XSS ではないが、削除する行を取り違えさせる） | 必須: 名前は前後の空白を除いた後、Unicode の Cc・Cf の文字を含めば 400（`details.name`）。TC-04 (j) |
+| Low | 認証・認可 | 本人確認の印は 5 分の間は何度でも使え、ログアウト・パスワード変更でも取り消されない | 受け入れ（R9）。印は本人に結び付き、画面のメモリだけに置き、ヘッダーで送る（Cookie にしないので CSRF で使われない）。盗める位置にいる攻撃者はすでにアクセストークンも持つ |
+| Low | 外部通信・依存 | `attestation: none` のため、認証器の種類（メーカーの証明）を確かめない。ソフトの認証器も登録できる | 受け入れ（R10）。本人確認を通った本人だけが登録でき、パスワードより弱くはならない。企業向けの機種の制限は要件に無い |
+| Low | 認証・認可 | スロットルの IP は DRF の `NUM_PROXIES=1` で X-Forwarded-For から取る。nginx を通らない直のアクセス（開発）では偽れる | 既存（I127）の全 API 共通の扱い。パスキーは推測できないので、総当たりの守りはスロットルに頼らない。新しく足すリスクなし |
+| なし | マルチテナント | — | 一覧・名前・削除は `get_queryset` で本人の分だけ（404）。本人確認は本人のパスキーだけ。設計どおり（TC-03〜TC-06） |
+| なし | ファイル操作 | — | 該当なし |
+| なし | 依存ライブラリ | — | `webauthn==3.0.1`（と依存）は pip-audit 0 件・`@simplewebauthn/browser@14.0.0` は npm audit 0 件（2026-11-22）。版を固定 |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/auth/passkeys/login/` | 未認証 | 一度通った assertion（または検証に失敗した試行の challenge）を送り直す | challenge は消費の時点でコミットされ 2 度使えない・署名回数の巻き戻りを拒む | Yes: TC-08 (a)(d)(m) | No | なし | High |
+| 2 | 同上 | 未認証 | 偽のサイトで取った assertion を本物に送る | origin と RP ID の検証（py_webauthn） | Yes: TC-08 (j) | No | なし | High |
+| 3 | 同上 | 未認証 | 自分の認証器の assertion に、他人の `userHandle` を付ける・他人の credential id を付ける | credential id で引いた鍵で署名を検証・`userHandle` の一致 | Yes: TC-08 (f)(i) | No | なし | High |
+| 4 | 同上 | 未認証 | 無効にした利用者・組織の人のパスキーでログイン（`update()` でシグナルを通らずに無効化した場合も） | ログインで利用者・組織の有効を確かめる | Yes: TC-08 (g)(h)・TC-09 | No | なし | High |
+| 5 | `POST /api/auth/passkeys/login/options/` | 未認証 | 大量に呼んで challenge の行を増やす | スロットル 20/min・期限切れの行を作る前に消す | Yes: TC-11 (a) | No | IP を変える分散の攻撃は止めきれない（行は 5 分で消える） | Low |
+| 6 | `POST /api/auth/passkeys/register/`・`register/options/` | 一般（盗んだアクセストークン） | 攻撃者の認証器を被害者のアカウントに足して居座る | 5 分以内の本人確認の印が無いと 403・印は本人だけ・パスワードの総当たりはロック | Yes: TC-01・TC-02 (j)・TC-06 (j)(k) | No | 本人確認から 5 分の間に盗まれると足せる（R9） | High |
+| 7 | `DELETE /api/auth/passkeys/{id}/`・`PATCH` | 一般（同じ組織・別の組織） | 他人のパスキーの id で消す・名前を変える | `get_queryset` で本人だけ → 404 | Yes: TC-04 (e)(f)・TC-05 (c)(d) | No | なし | High |
+| 8 | `POST /api/auth/passkeys/reauth/` | 一般 | 自分の challenge で他人のパスキーの assertion を送り、本人確認を通す | 本人確認では `passkey.user_id == request.user.id` | Yes: TC-06 (h) | No | なし | High |
+| 9 | 同上 | 一般（盗んだアクセストークン） | パスワードを総当たりして印を得る | スロットル 5/min ＋ 5 回でロック 30 分 | Yes: TC-06 (j)(k)・TC-11 | No | なし | Medium |
+| 10 | `POST /api/auth/passkeys/register/` | 一般 | 登録用の challenge をログインに使う・ログイン用を登録に使う・他人の challenge を使う | challenge の用途と利用者を条件にして消費 | Yes: TC-02 (e)(f)・TC-08 (c) | No | なし | Medium |
+| 11 | 設定画面の一覧 | 一般 | 名前に表示を偽る文字を入れる・HTML を入れる | 制御文字を拒む・React のテキストで出す | Yes: TC-04 (j)・TC-21 | No | なし | Low |
+| 12 | 本番の設定 | 運用者 | `http://` の origin・合わない RP ID で動かす | システムチェックが Error で止める | Yes: TC-15 | No | なし | Medium |
+| 13 | パスキーのログイン | 実際の端末 | 実際の OS のパスキーの画面での登録・ログイン（仮想の認証器と違う振る舞い） | 本物の認証器でも同じ検証が通る | No | Yes: 手動テスト No.12（人） | 端末・ブラウザの違いは人の確認だけ | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 8件（どれも設計で守られ、自動テストあり） |
+| Medium  | 2件 | 3件 |
+| Low     | 4件 | 2件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
