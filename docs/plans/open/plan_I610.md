@@ -20,7 +20,7 @@
 
 ### 詳細な原因分析
 - `.claude/hooks/reviewed-hook.sh:38-41`: `git diff --quiet "$base" -- scripts/claude` と `git ls-files --others --exclude-standard -- scripts/claude` が空なら作業ツリーのフックを動かす。無視されるファイル（`--ignored`）を数えない。起動役 `.claude/hooks/unreviewed.py:95-102`（`_unreviewed_files`）は差分・未追跡・無視されるファイルを数えており、2 つの「レビュー前の中身」の定義が食い違っている
-- `.claude/hooks/reviewed-hook.sh:29,36,40,55,57`: 5 か所とも `python3 <パス>`（`-I` なし）。Python は既定でスクリプトの置き場所を読み込み先の先頭に入れる
+- `.claude/hooks/reviewed-hook.sh:29,36,40,55,57`: 5 か所とも `python3 <パス>`（`-I` なし。近道を消した後は 4 か所）。Python は既定でスクリプトの置き場所を読み込み先の先頭に入れる
 - `scripts/claude/gate-check.sh:118`: `[[ "${entry:0:2}" == "??" && -c "$p" ]] && continue`。bash の `-c` はリンク先を見る
 - `scripts/claude/tests/test_i193_official_flow.sh:230-236`（G9b・FG-G9b）: `ln -s /dev/null .bashrc` で印を作り、0（数えない）を期待している
 - `scripts/claude/tests/run-all.sh:22`: `uv run --locked --project …` に `UV_CACHE_DIR` を渡していない。CI は `UV_CACHE_DIR` を指定している（`.github/workflows/ci.yml` の Harness Tests の env）
@@ -47,22 +47,18 @@
 | 関所 | `scripts/claude/gate-check.sh`（汚れの判定） |
 | テスト | `scripts/claude/tests/i599_cases.py`（TC-12 の続き）・`scripts/claude/tests/test_i193_official_flow.sh`（G9b）・`scripts/claude/tests/run-all.sh`（入口） |
 | 文書 | `docs/runbooks/plan-writing-rules.md` |
-| 意図的に変えない | `.claude/hooks/unreviewed.py`（数え方の正として呼ぶ側）・`scripts/claude/hooks/*.py`（中身は変えない）・`docs/runbooks/harness-audit.md`・`.claude/settings.json`・`.github/workflows/ci.yml` |
+| 意図的に変えない | `.claude/hooks/unreviewed.py`（起動役は呼ばなくなる。外に出す起動役としてはそのまま）・`scripts/claude/hooks/*.py`（中身は変えない）・`docs/runbooks/harness-audit.md`・`.claude/settings.json`・`.github/workflows/ci.yml` |
 | 依存 | 追加なし |
 
 ## 4. 変更点一覧（具体）
 ### 修正アプローチ
-フックの起動役は「変更があるか」の判定を起動役（`unreviewed.py dirty`）に任せて定義を 1 か所にし、フックを起こす `python3` すべてに `-I` を付ける。`gate-check.sh` は数えない印を「リンクでない文字デバイス」に絞る。`run-all.sh` は、キャッシュの置き場が指定されておらず書けないときだけ一時フォルダに向ける。手順書に、外と中の境目を動かすときの確かめを足す。
+フックの起動役は「変更が無ければ作業ツリーのフックを動かす」近道をやめ、いつも BASE の写し（レビュー済みの中身）でフックを動かす（写しを作れないとき・基準が無いときだけ、今までどおり理由を出して作業ツリー）。「変更があるか」の判定そのものが要らなくなり、定義の食い違い（F24 の根本原因）が消える。フックを起こす `python3` すべてに `-I` を付ける。`gate-check.sh` は数えない印を「リンクでない文字デバイス」に絞る。`run-all.sh` は、キャッシュの置き場が指定されておらず書けないときだけ一時フォルダに向ける。手順書に、外と中の境目を動かすときの確かめを足す。
 
 ### 4-1. `.claude/hooks/reviewed-hook.sh`
-修正方針: (1) 38-41 行の「変更が無ければ作業ツリーのフック」の条件を、`CLAUDE_PROJECT_DIR="$root" python3 -I "$root/.claude/hooks/unreviewed.py" dirty >/dev/null 2>&1` の終了コード 0 に置き換える（差分・未追跡・無視されるファイルを数える。起動役と同じ定義）。`unreviewed.py` は `.claude/hooks/` にあり、サンドボックスから書けない（読むだけ）。終了コードが 0 以外（中身あり・基準を求められない・起動の失敗）は、今の「変更あり」と同じく写しの道に進む（安全側）
-(2) フックを起こす `python3` 5 か所（29・36・40・55・57 行）をすべて `python3 -I` にする。
-```bash
-if CLAUDE_PROJECT_DIR="$root" python3 -I "$root/.claude/hooks/unreviewed.py" dirty >/dev/null 2>&1; then
-  exec python3 -I "$root/$rel" "$@"
-fi
-```
-- 冒頭のコメントに「変更の判定は unreviewed.py dirty（I610）・フックは -I で起こす（置き場所のモジュールを読まない）」を足す
+修正方針: (1) 38-41 行の「変更が無ければ作業ツリーのフック」の近道（`git diff --quiet` と `ls-files --others --exclude-standard`）を消す。写しが無ければ作る（45 行以降の今の処理）→ 写しで動かす。変更が無いとき、写し（`git archive $base`）の中身は作業ツリーの追跡しているファイルと同じなので、フックの動きは変わらない。写しは基準（BASE）ごとに 1 回作り、以降は 35-37 行の近道（git を呼ばない）で動く
+(2) フックを起こす `python3` 4 か所（基準なし・写しあり・写しを作れない・写しで動かす）をすべて `python3 -I` にする。
+- 冒頭のコメントに「変更が無くても写しで動かす（作業ツリーは、基準が無い・写しを作れないときだけ・I610）・フックは -I で起こす（置き場所のモジュールを読まない）」を足す
+- 消した近道の代わりの判定は足さない（`unreviewed.py` は呼ばない）
 
 ### 4-2. `scripts/claude/gate-check.sh`
 修正方針: 118 行を `[[ "${entry:0:2}" == "??" && -c "$p" && ! -L "$p" ]] && continue` にし、コメントに「リンクは数える（印は bind mount で、リンクではない・I610）」を足す。
@@ -77,12 +73,13 @@ fi
 
 ### 4-4. `scripts/claude/tests/i599_cases.py`（TC-12 の続き）
 修正方針: フックの起動役の新しい 2 つの決まりを、一時のリポジトリで確かめる（`make_repo` を使う・本物は書き換えない）。
+- TC-12（既存）の「変更なしは作業ツリー」の確かめを「変更なしでも写しの道」に直す（近道を消したので）
 - TC-12b（AC1）: `scripts/claude/hooks/x.tmp`（`.gitignore` の `*.tmp` で無視される）を置くと、フックは分かれた時点の写しで動く（出力が `V1 <写しのパス>`）
-- TC-12c（AC2）: 分かれた時点（BASE）に `scripts/claude/hooks/json.py`（`print("EVIL")`）をコミットし、`h.py` を `import json` にした一時のリポジトリで、フックの出力に `EVIL` が無い
-- TC-12d（AC2）: 起動役の中の、フックを起こす `python3`（`exec python3`・`python3 -I "$root/.claude/hooks/unreviewed.py"` を含む全部）がすべて `python3 -I` で始まる（行を読んで確かめる・5 か所の道を全部覆う）
-- TC-12e（V5）: 一時のリポジトリの `.claude/hooks/unreviewed.py` を壊す（`raise SystemExit(5)` だけにする）と、変更が無くてもフックは写しの道で動く（判定の失敗で作業ツリーに倒れない）
-- FG: 4-1 (1) の行を元の git の 2 つの確かめに戻した写しで TC-12b が作業ツリーで動き不合格／`-I` を 1 つ外した写し（作業ツリーの道の `exec python3 -I "$root/$rel"`）で TC-12c に `EVIL` が出て不合格／写しの道の `exec python3 -I "$snap/$rel"` の `-I` を外した写しで TC-12d が不合格／判定の行の後ろに `|| true` を足した写し（失敗でも作業ツリー）で TC-12e が不合格
-- 既存の FG（`never_snap`）の置き換え元の文字列が変わるので、新しい条件の行に合わせて直す
+- TC-12c（AC2）: 分かれた時点（BASE）に `scripts/claude/hooks/json.py`（`print("EVIL")`）をコミットし、`h.py` を `import json` にした一時のリポジトリ（写しにも `json.py` が入る）で、フックの出力に `EVIL` が無い
+- TC-12d（AC2）: 起動役の中の、フックを起こす `python3`（コメントの行を除く全部）がすべて `python3 -I` で始まる（行を読んで確かめる・4 か所の道を全部覆う）
+- FG: 消した近道（元の git の 2 つの確かめで作業ツリーへ）を写しを作る処理の前に戻した写しで TC-12b が作業ツリーで動き不合格／写しの道の `exec python3 -I "$snap/$rel"` の `-I` を外した写しで TC-12c に `EVIL` が出て不合格・TC-12d も不合格
+- 既存の FG（`always_snap`・`never_snap`）は、近道を消したので置き換え元が無くなる。`never_snap`（変更があっても作業ツリー）は「写しを作る処理を飛ばす」写しに直し、`always_snap` は消す（いつも写しが正しい動き）
+- 写しの場所を求める式・起動役の写しを壊す処理は、関数（`snap_of`・`launcher_variant`）にまとめ、既存の TC-12・FG のループもそれを使う（/simplify の指摘）
 
 ### 4-5. `scripts/claude/tests/run-all.sh`
 修正方針: uv で流し直す前（22 行の前）に、`UV_CACHE_DIR` が空で、既定の置き場（`${XDG_CACHE_HOME:-$HOME/.cache}/uv`）に一時ファイルを作れないときだけ、`UV_CACHE_DIR` を `$TMPDIR/uv-cache`（`TMPDIR` が無ければ `mktemp -d` の新しいフォルダ。共有の `/tmp` の決まった名前は、ほかの利用者が先に作れるので使わない）にして `export` する。理由を 1 行、標準エラーに出す。
@@ -127,8 +124,9 @@ fi
 <!-- 処遇: 回避 か 受け入れ。受け入れの行は --route の照合で使う（I512） -->
 | リスク | 回避策 | 処遇 |
 |---|---|---|
-| R1: `reviewed-hook.sh` を壊すと、このセッションを含むすべてのフックが動かなくなる（見張りが止まり、Claude が何もできなくなる） | 保存の前に `bash -n` で文法を確かめる（TC-04）。`unreviewed.py dirty` の失敗は「変更あり」と同じ写しの道に倒す（フックは動き続ける）。保存の後に、本物の起動役で見張りが動くことを確かめる（manual No.3） | 回避 |
-| R2: `unreviewed.py dirty` は git を 3 回呼ぶので、写しが無いときのフックが少し遅くなる | 写しがあるときは今までどおり git を呼ばない（35-37 行の近道は変えない）。写しの無い最初の 1 回だけ | 受け入れ |
+| R1: `reviewed-hook.sh` を壊すと、このセッションを含むすべてのフックが動かなくなる（見張りが止まり、Claude が何もできなくなる） | 保存の前に `bash -n` で文法を確かめる（TC-04）。写しを作れないときは今までどおり理由を出して作業ツリーで動く（フックは動き続ける）。保存の後に、本物の起動役で見張りが動くことを確かめる（manual No.3） | 回避 |
+| R2: 変更が無くても写しを作るので、基準（BASE）が変わった最初の 1 回だけ `git archive` の待ちが増える（develop を取り込んだ後など） | 写しは基準ごとに 1 回だけ作り、以降は git を呼ばない近道で動く。変更の判定（git 2〜4 回・python の起動）を毎回のツール呼び出しで行うより速い | 受け入れ |
+| R7: 写しの置き場（`~/.cache/claude-reviewed-hooks/`）に基準ごとの写しが増える | 今までも変更のあるブランチでは作っていた。1 つは scripts/claude の写し（数 MB 以下）。片付けは今の範囲外（増えても動きは変わらない） | 受け入れ |
 | R3: `-I` で、利用者の site（`~/.local`）にだけ入れた yaml が見えなくなり、`posttooluse_check.py` の YAML の構文チェックが黙って外れる | この環境の yaml は共有の場所（`/usr/lib/python3/dist-packages`）にあり外れない（実測）。外れても、YAML の誤りは pre-commit の check-yaml と CI が止める。`-P`（置き場所だけ外す）より `-I` を選ぶのは、環境変数（`PYTHONPATH` など）も読まない二重の守りのため。manual No.3 で本物のフックが動くことを確かめる | 受け入れ |
 | R4: 無視されるフォルダ（`__pycache__`・`.venv`）は `unreviewed.py` が数えない（I599 の R3 で受け入れ）ので、そこに置いたモジュールは数えられない | `-I` でスクリプトの置き場所を読み込み先にしないので、`__pycache__` のモジュールも `import` で読まれない（二重の守り・TC-02） | 回避 |
 | R5: `run-all.sh` が一時フォルダのキャッシュを使うと、毎回の取得で遅くなる | 同じ `$TMPDIR` のあいだは使い回される。CI は `UV_CACHE_DIR` を指定しているので変わらない | 受け入れ |
@@ -142,7 +140,7 @@ fi
 - F30 は `[ -c "$p" ] && [ ! -L "$p" ]`。G9b はリンクを汚れとして数える向き・本物の文字デバイスは判定の差し替えで確かめる
 
 Claude が決めた（技術的な選択と理由）:
-- 起動役の「変更があるか」は `unreviewed.py dirty` を呼ぶ（git の確かめをシェルに写さない）— 定義を 1 か所にし、食い違いという根本原因を直す。`unreviewed.py` は `.claude/hooks/` にあり、サンドボックスから書けないので、呼んでも外で動く守りが増えるわけではない。`-I` で起こす
+- 起動役は「変更があるか」の判定をやめ、変更が無くてもいつも写しで動かす（計画変更記録の implement の行）— 判定の定義の食い違いを、判定を無くすことで根本から消す。毎回のツール呼び出しで判定の手間がかからない
 - 写しがあるときの近道（35-37 行）は変えない — 写しは BASE の中身なので、無視されるファイルがあっても写しの道は安全。毎回 git を呼ばない速さを保つ
 - フックのテストは `i599_cases.py` の TC-12 の続きに足す — 一時のリポジトリ・起動役の写しの土台（`make_repo`）がそのまま使える。新しいファイルを作るより重複が少ない
 - `run-all.sh` のキャッシュは決定論テストにしない — 壊れると手元の全テストがすぐ落ちて気づける（plan-writing-rules「決定論テストの対象の選び方」）
@@ -175,11 +173,13 @@ Danger Ops（有無/手順/ロールバック）:
 | V2 | 1 | 読んで可 | フックが置き場所のモジュールを読み込まない: TC-02（TC-12c）が BASE に置いた `json.py` を読み込まないことを確かめ、`-I` を外した写しで不合格になる |
 | V3 | 1 | 読んで可 | `gate-check.sh` が `/dev/null` を指すリンクを汚れとして数え、本物の文字デバイスの道は残る: TC-03（G9b・G9c と FG）。本物の bind mount の印は manual No.5 |
 | V4 | 2 | 読んで可 | 既存の FG（`never_snap` など）が、置き換え元の文字列の変更で「置き換えに失敗して合格」にならない（`assert old in lsrc` が効いている） |
-| V5 | 3 | 読んで可 | 判定の失敗（`unreviewed.py` が起動できない・基準が無い）で、作業ツリーのフックに倒れない（写しの道か、基準なしの既存の道だけ）: TC-05（TC-12e）が壊した `unreviewed.py` で写しの道に進むことを確かめ、`|| true` を足した写しで不合格になる |
-| V6 | 2 | 読んで可 | フックを起こす `python3` の 5 か所がすべて `-I` 付き: TC-06（TC-12d）が全行を読み、写しの道の `-I` を外した写しで不合格になる |
+| V5 | 3 | 読んで可 | 作業ツリーのフックで動くのは、基準を求められない・写しを作れないときだけで、どちらも理由（`[reviewed-hook]`）を出す: TC-12（既存）の基準なしの確かめと、変更なしでも写しの道（TC-05） |
+| V6 | 2 | 読んで可 | フックを起こす `python3` の 4 か所がすべて `-I` 付き: TC-06（TC-12d）が全行を読み、写しの道の `-I` を外した写しで不合格になる |
 
 ## 計画変更記録
 - 計画レビュー（20261121_1727）の Warning 4 件・Info 1 件を反映: `-I` と任意の yaml の前提を訂正し R3 を受け入れに（実測でこの環境は外れない）／5 か所の `-I` を全部覆う TC-12d（TC-06）と、判定の失敗で写しの道に倒れる TC-12e（TC-05）と FG を足した／manual No.3 の入力と期待を 1 つに決めた／`run-all.sh` の置き場を `$TMPDIR/uv-cache` か `mktemp -d` にした。方式・範囲・受け入れ条件は変えていない（TC の追加と前提の訂正だけ）ので計画レビューはやり直さない
+- implement の /simplify（無駄・直す深さの観点の 2 体が同じ案）: 4-1 の方式を変えた。「`unreviewed.py dirty` で変更を判定し、無ければ作業ツリー」をやめ、「変更が無くてもいつも写しで動かす（作業ツリーは基準が無い・写しを作れないときだけ）」にした。理由: 近道は写しの無い最初の 1 回にしか通らず性能の意味が小さい一方、毎回のツール呼び出しで python の起動と git 4 回（WSL で 1 回 0.2〜0.5 秒）が増え、判定の定義の食い違いという F24 の根本原因も、判定そのものを無くすほうが確実に消える。テストは TC-12（既存）を「変更なしでも写し」に直し、TC-12e（判定の失敗）は判定が無くなったので消し、V5 は TC-12 の確かめに置き換えた。AC1・AC2 は変えていない（より強く満たす）。方式を変えたので計画レビューをやり直す
+- 設計確認メモ（イシュー）の「数え方を起動役と同じにする」は、判定そのものを無くすことで置き換えた（目的の「定義の食い違いを無くす」は同じ）
 
 ## レビュー結果
 - [20261121_1727 判定: ✅ 完了](../../reviews/I610_plan_review_20261121_1727.md)
