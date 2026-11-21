@@ -1,0 +1,50 @@
+# I619 自動テスト: パスキーでログイン
+
+実行コマンド（例）: `docker compose exec backend pytest accounts/tests/test_I619_passkeys.py` / `docker compose exec frontend npm test -- --watchAll=false src/components/settings src/pages/__tests__/Login.test.tsx` / `RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e npx playwright test tests/passkey.spec.ts --retries=0`（pytest・Jest・E2E の正は CI）
+
+結果:
+- backend: 実装前のため未実行
+- frontend: 実装前のため未実行
+- e2e: 実装前のため未実行
+
+## 前提（テストの道具）
+- 裏側: `backend/accounts/tests/test_I619_passkeys.py`（API を通す結合テスト）と `backend/accounts/tests/webauthn_soft_authenticator.py`（テスト用のソフトの認証器。cryptography の EC P-256 の鍵・cbor2 で、attestation `none` の登録の応答と、assertion〔`authenticatorData`・`clientDataJSON`・署名・`userHandle`〕を作る。origin・RP ID・UV・署名回数・challenge を引数で変えられる）。**py_webauthn の `verify_*` は差し替えない**（本物の検証を通す）
+- 設定: テストでは `WEBAUTHN_RP_ID='localhost'`・`WEBAUTHN_ALLOWED_ORIGINS=['http://localhost:3000']`（既定値）
+- 利用者: 組織 A の `alice`・`carol`（同じ組織）、組織 B の `bob`。パスワードはテストの中の定数 `TEST_PASSWORD`（値は文書に書かない）
+- 期限切れの作り方: challenge は行の `expires_at` を `timezone.now() - 1 秒` に書き換える。本人確認の印は `signing.dumps({'uid': …, 'iat': 今 − 301}, salt='accounts.passkeys.reauth')` で作る（時刻を差し替えない）
+- エラーの形: 400 は `{"error": {"main_message": "入力内容にエラーがあります", "sub_message": <文>, "details": {…}}}`、403 は `{"error": {"main_message": "アクセスが拒否されました", …}}`、404 は `{"error": {"main_message": "リソースが見つかりません", …}}`、401 は `{"error": {"main_message": "認証が必要です", …}}`
+
+## 裏側（pytest）
+
+| TC | 対象 | 手順 | 期待値 |
+|---|---|---|---|
+| TC-01 | 登録の options（`POST /api/auth/passkeys/register/options/`） | (a) 未認証 (b) alice・印なし (c) alice・期限切れの印（`iat` 301 秒前） (d) alice・carol の印 (e) alice・印の末尾を 1 文字変えたもの (f) alice・有効な印（`/reauth/` で得たもの）・パスキー 1 つ登録済み (g) alice・`iat` 299 秒前の印 | (a) 401 (b)(c)(d)(e) 403・`error.main_message == "アクセスが拒否されました"` (f) 200・`options.rp.id == "localhost"`・`options.authenticatorSelection.residentKey == "required"`・`options.authenticatorSelection.userVerification == "required"`・`options.attestation == "none"`・`options.timeout == 300000`・`options.user.id == base64url(alice.id.bytes)`・`options.user.name == "alice"`・`options.excludeCredentials` に登録済みの 1 つの id・`challenge_id` が UUID で、`webauthn_challenges` に purpose=`register`・user=alice の行が 1 つ (g) 200 |
+| TC-02 | 登録（`POST /api/auth/passkeys/register/`） | 有効な印で: (a) 正しい応答・`User-Agent: …Windows NT 10.0…Chrome/140…` (b) (a) と同じ認証器でもう一度（新しい challenge） (c) 同じ challenge_id で 2 回目 (d) `expires_at` を過去にした challenge (e) carol が作った challenge_id (f) ログイン用（purpose=login）の challenge_id (g) origin が `http://evil.example:3000` の応答 (h) UV のフラグが無い応答 (i) 20 個登録済みで 21 個目 (j) 印なし | (a) 201・本文 `{"id": UUID, "name": "Windows の Chrome", "created_at": <日時>, "last_used_at": null}`・`passkeys` の alice の行が 1 つ・`credential_id`・`public_key`・`sign_count == 応答の値`・`transports == ["internal"]`・使った challenge の行が消えている (b) 400・`sub_message == "この端末のパスキーはすでに登録されています"`・行は 1 つのまま (c)(d)(e)(f)(g)(h) 400・`sub_message == "パスキーを確かめられませんでした。もう一度お試しください"`・行は増えない (i) 400・`sub_message == "登録できるパスキーは 20 個までです"` (j) 403 |
+| TC-03 | 一覧（`GET /api/auth/passkeys/`） | (a) 未認証 (b) alice・0 個 (c) alice 2 個・carol 1 個・bob 1 個のとき alice で | (a) 401 (b) 200・`{"count": 0, "next": null, "previous": null, "results": []}` (c) 200・`count == 2`・`results` は alice の 2 つだけ（登録順）・各要素のキーがちょうど `{"id", "name", "created_at", "last_used_at"}`（`credential_id`・`public_key`・`sign_count`・`transports` が無い） |
+| TC-04 | 名前の変更（`PATCH /api/auth/passkeys/{id}/`） | (a) alice が自分の 1 つを `{"name": "  会社の PC  "}` (b) `{"name": "   "}` (c) 65 文字 (d) 64 文字 (e) carol のパスキーの id (f) bob のパスキーの id (g) 無い UUID (h) 未認証 (i) `PUT` | (a) 200・`name == "会社の PC"`（前後の空白を除く）・DB も同じ (b)(c) 400・`error.details.name` がある (d) 200 (e)(f)(g) 404・`error.main_message == "リソースが見つかりません"`・相手の名前は変わらない (h) 401 (i) 405 |
+| TC-05 | 削除（`DELETE /api/auth/passkeys/{id}/`） | (a) alice・印なし (b) alice・有効な印・自分の 1 つ（最後の 1 つ） (c) alice・有効な印・carol のパスキー (d) alice・有効な印・bob のパスキー (e) 未認証 (f) alice・期限切れの印 | (a)(f) 403・行は残る (b) 204・alice の行が 0 (c)(d) 404・相手の行は残る (e) 401 |
+| TC-06 | 本人確認（`POST /api/auth/passkeys/reauth/options/`・`/reauth/`） | (a) alice・正しいパスワード（`TEST_PASSWORD`） (b) 誤ったパスワード (c) `{}` (d) パスワードとパスキーの両方 (e) 未認証 (f) alice・パスキー 0 個で options (g) alice・パスキーで正しい応答 (h) alice の options の challenge で carol のパスキーの応答 (i) 得た印で `register/options` | (a) 200・`{"reauth_token": <文字列>, "expires_in": 300}` (b) 400・`sub_message == "パスワードが正しくありません"` (c)(d) 400 (e) 401 (f) 400・`sub_message == "登録済みのパスキーがありません"` (g) 200・`expires_in == 300`・そのパスキーの `sign_count` が応答の値になる・`last_used_at` は null のまま (h) 400・`sub_message == "パスキーを確かめられませんでした。もう一度お試しください"` (i) 200 |
+| TC-07 | パスキーでログイン（`POST /api/auth/passkeys/login/options/`・`/login/`） | alice のパスキーを登録（署名回数 1）→ options（未認証）→ 署名回数 2 の正しい応答で `/login/` → 返った `access` で `GET /api/auth/me/` | options: 200・`options.allowCredentials == []`・`options.userVerification == "required"`・`options.rpId == "localhost"`・purpose=`login`・user=null の challenge の行が 1 つ。login: 200・本文のキーがちょうど `{"access", "refresh", "user"}`・`user.id == str(alice.id)`・`user.user_id == "alice"`・パスキーの `sign_count == 2`・`last_used_at` と `alice.last_login` が今（1 分以内）・challenge の行が消えている。me: 200・`user_id == "alice"` |
+| TC-08 | ログインの拒否 | (a) 同じ challenge_id で 2 回目 (b) 期限切れの challenge (c) 登録用（purpose=register）の challenge (d) DB の `sign_count` を 5 にして、署名回数 5 の応答 (e) 署名回数 0 で登録したパスキー（`sign_count == 0`）に、署名回数 0 の応答 (f) 登録していない認証器の応答 (g) `User.objects.filter(pk=alice.pk).update(is_active=False)` の後 (h) `Organization.objects.filter(pk=org_a.pk).update(is_active=False)` の後 (i) `userHandle` を carol の UUID にした応答 (j) origin が違う応答 (k) UV のフラグが無い応答 (l) `account_locked_until` を 30 分後にした alice の正しい応答 | (a)(b)(c)(d)(f)(g)(h)(i)(j)(k) 400・`sub_message == "パスキーでログインできませんでした"`（どれも同じ文）・`access` が無い・`sign_count` は変わらない (e) 200 (l) 200（パスワードのロックはパスキーのログインに効かない） |
+| TC-09 | 無効化での削除 | alice 2 個・carol 1 個・bob 1 個を登録。(a) 管理者（`is_staff`）で `POST /api/admin/users/{alice}/toggle_active/` (b) 管理者で `PATCH /api/admin/users/{carol}/` `{"is_active": false}` (c) `bob.is_active = False; bob.save()` (d) (a) の後に alice を `toggle_active` で有効に戻す (e) 組織 A の dave（1 個）と組織 B の erin（1 個）を作り、`org_a.is_active = False; org_a.save()` | (a) alice の行 0・carol・bob は残る (b) carol の行 0 (c) bob の行 0 (d) alice の行は 0 のまま (e) 組織 A の利用者の行 0・erin の 1 個は残る |
+| TC-10 | パスワードのログインは今と同じ | `POST /api/auth/login/` 本文 `email` に `alice`・`password` に `TEST_PASSWORD` | 200・本文のキーがちょうど `{"access", "refresh", "user"}`・`user` のキーが TC-07 の `user` のキーと同じ・`alice.last_login` が今 |
+| TC-11 | 回数の制限 | `override_settings`（`API_THROTTLE_ENABLED=True`・`CACHES` を locmem・`test_I127_throttling.py` と同じ形）で、同じ IP から `login/options/` を 11 回 | 1〜10 回目 200・11 回目 429 |
+| TC-12 | 既定の名前（`default_passkey_name`） | UA: Windows の Chrome・Windows の Edge・Mac の Safari・iPhone の Safari・iPhone の Chrome（`CriOS`）・Android の Chrome・Linux の Firefox・空文字・`curl/8.0` | 順に「Windows の Chrome」「Windows の Edge」「Mac の Safari」「iPhone の Safari」「iPhone の Chrome」「Android の Chrome」「Linux の Firefox」「パスキー」「パスキー」 |
+| TC-13 | ログに鍵・個人情報を出さない | TC-07・TC-08 の流れで `caplog` を取る | ログに `alice` のメールアドレス・`reauth_token`・`challenge` の base64url・`public_key` の値が無い。失敗のログに `reason=` がある |
+| TC-14 | API の契約 | 既存の `core/tests/test_I493_openapi_contract.py`（CI）と `API Types Up To Date` ジョブ | 作り直した `backend/openapi.yaml`・`frontend/src/types/api/schema.d.ts` とコードが一致する（警告 0） |
+
+## 画面（Jest＋React Testing Library）
+`@simplewebauthn/browser`（`startAuthentication`・`startRegistration`・`browserSupportsWebAuthn`）と `services/passkey.service` を `jest.mock` で差し替える。
+
+| TC | 対象 | 手順 | 期待値 |
+|---|---|---|---|
+| TC-20 | `pages/__tests__/Login.test.tsx` | (a) 表示 (b) 「パスキーでログイン」を押す（service と `startAuthentication` が成功） (c) `startAuthentication` が `NotAllowedError` (d) `/login/` が 400 (e) `browserSupportsWebAuthn` が false (f) 押した直後 | (a) `getByRole('button', { name: 'パスキーでログイン' })` が ID・パスワードの欄より前にあり、間に「または」 (b) `startAuthentication` が `{ optionsJSON: <options> }` で呼ばれ、`/dashboard` へ移る (c)(d) トースト「パスキーでログインできませんでした。もう一度試すか、パスワードでログインしてください」・画面は移らない・入力欄の値は消えない (e) ボタンが `disabled`・「このブラウザはパスキーに未対応です」が出る (f) ボタンが `disabled`（二重に押せない） |
+| TC-21 | `components/settings/__tests__/PasskeysCard.test.tsx` | (a) 読み込み中 (b) 失敗 →「再読み込み」 (c) 0 個 (d) 2 個（1 つは `last_used_at: null`） (e) 「パスキーを登録」→ 本人確認（パスワード）→ 登録 (f) 続けて 2 回目の登録（5 分以内） (g) `startRegistration` が `InvalidStateError` (h) ごみ箱 → 確認のダイアログ →「削除」→ 本人確認 → 削除 (i) 確認のダイアログで「キャンセル」 (j) 鉛筆 → 名前を空・65 文字・「会社の PC」で保存 (k) 削除の API が 403 (l) `browserSupportsWebAuthn` が false | (a) 読み込み中の表示 (b)「パスキーを読み込めませんでした」と「再読み込み」で取り直す (c)「パスキーはまだありません」と「パスキーを登録」 (d) 名前・「登録 2026/11/22」・「最後に使った日 2026/11/23」／「まだ使っていません」・各行の `aria-label` が「『名前』の名前を変える」「『名前』を削除」 (e) 本人確認のダイアログが出て、確かめた後に `startRegistration` が呼ばれ、トースト「パスキーを登録しました」・一覧を取り直す (f) 本人確認のダイアログが出ない (g)「この端末のパスキーはすでに登録されています」 (h) 確認の文「『Windows の Chrome』を削除しますか？このパスキーではログインできなくなります」→ 削除の API が印つきで呼ばれ、トースト「パスキーを削除しました」 (i) 削除の API を呼ばない (j) 空・65 文字は欄に誤りが出て保存の API を呼ばない・「会社の PC」は保存してトースト「名前を変えました」 (k) 印を捨てて本人確認のダイアログをもう一度出す (l) 「パスキーを登録」が `disabled` で「このブラウザはパスキーに未対応です」 |
+| TC-22 | `components/settings/__tests__/PasskeyReauthDialog.test.tsx` | (a) パスキー 0 個 (b) パスキー 1 個以上 (c) 誤ったパスワード（400） (d) Esc | (a)「パスキーで確かめる」が無く、パスワードの欄と「確かめる」だけ (b)「パスキーで確かめる」がある・押すと reauth の options と `startAuthentication` を呼ぶ (c) 欄の下に「パスワードが正しくありません」・入力は消えない (d) 閉じて、待っている操作は取り消し（API を呼ばない） |
+| TC-23 | `pages/__tests__/Settings.test.tsx`（今のテスト） | `PasskeysCard` を差し替えて今のテストを流す | 今のテストがすべて通る・「パスキー」の欄が「学習設定」の後・「学ぶ科目」の前にある |
+
+## E2E（Playwright・仮想の認証器）
+
+| TC | 対象 | 手順 | 期待値 |
+|---|---|---|---|
+| TC-30 | `e2e/tests/passkey.spec.ts` | 空の storageState → CDP `WebAuthn.enable`・`WebAuthn.addVirtualAuthenticator`（ctap2・internal・resident key・UV あり・自動で触れる）→ `e2e_user_b` でパスワードのログイン → `/settings` →「パスキーを登録」→ 本人確認（パスワード）→ 一覧 → ログアウト →「パスキーでログイン」→ `/settings` → 増やした行の「削除」→「削除」→ 本人確認（「パスキーで確かめる」） | 登録後: トースト「パスキーを登録しました」・一覧の行が 1 つ増え、増えた行に「まだ使っていません」。パスキーでログイン後: URL が `/dashboard`・`POST /api/auth/passkeys/login/` が 200。設定画面で増やした行の「最後に使った日」が今日。削除後: トースト「パスキーを削除しました」・行の数が元に戻る |
