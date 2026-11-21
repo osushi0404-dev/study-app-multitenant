@@ -110,7 +110,7 @@ WEBAUTHN_ALLOWED_ORIGINS = [o for o in os.getenv('WEBAUTHN_ALLOWED_ORIGINS', FRO
 WEBAUTHN_CHALLENGE_TTL_SECONDS = 300   # challenge の期限。options の timeout も同じ値（ミリ秒）にする
 PASSKEY_REAUTH_MAX_AGE_SECONDS = 300   # 本人確認の有効時間（設計確認メモ: 5 分）
 PASSKEY_MAX_PER_USER = 20              # 1 人のパスキーの上限（一覧の 1 ページ＝20 件に収める）
-REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] に 'passkey_login': '10/min', 'passkey_reauth': '5/min' を足す
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] に 'passkey_login_options': '20/min', 'passkey_login': '10/min', 'passkey_reauth': '5/min' を足す
 CORS_ALLOW_HEADERS に 'x-reauth-token' を足す
 ```
 
@@ -120,12 +120,12 @@ CORS_ALLOW_HEADERS に 'x-reauth-token' を足す
 ### 4-4. サービス（新しい `backend/accounts/passkeys.py`）
 **達成すること**: 登録・ログイン・本人確認の業務の処理を 1 か所に置き、ビューを薄くする。全関数キーワード専用・型ヒントつき。失敗は `PasskeyError`（`rest_framework.exceptions.ValidationError` の子・利用者向けの決まった文）を投げ、理由はログに `reason=<短い記号>` で残す（個人情報・鍵・challenge の値は出さない）。
 - `issue_challenge(*, purpose, user=None) -> WebAuthnChallenge`: 期限切れの行を消してから 64 バイトの乱数で 1 行作る（期限 `WEBAUTHN_CHALLENGE_TTL_SECONDS`）
-- `consume_challenge(*, challenge_id, purpose, user) -> bytes`: `transaction.atomic` の中で、id・用途・利用者（ログインは null）が一致する行を `delete()` し、消せた件数が 1 で、かつ期限内のときだけ challenge を返す。それ以外（無い・使用済み・期限切れ・他人・別の用途）はすべて同じ `PasskeyError('パスキーを確かめられませんでした。もう一度お試しください')`
+- `consume_challenge(*, challenge_id, purpose, user) -> bytes`: **自分だけの `transaction.atomic` でコミットしてから返す**（呼び出し側の検証の `atomic` の外で先に呼ぶ。検証が失敗して例外でロールバックしても、消した challenge は戻らない＝失敗した試行の challenge も 2 度と使えない）。id・用途・利用者（ログインは null）が一致する行を `delete()` し、消せた件数が 1 で、かつ期限内のときだけ challenge を返す。それ以外（無い・使用済み・期限切れ・他人・別の用途）はすべて同じ `PasskeyError('パスキーを確かめられませんでした。もう一度お試しください')`
 - `registration_options(*, user) -> tuple[WebAuthnChallenge, dict]`: `generate_registration_options(rp_id, rp_name, user_id=user.id.bytes, user_name=user.user_id or str(user.id), user_display_name=同じ, timeout=TTL*1000, authenticator_selection=AuthenticatorSelectionCriteria(resident_key=REQUIRED, user_verification=REQUIRED), attestation=NONE, exclude_credentials=本人のパスキー全部)`。上限（20 個）なら `PasskeyError('登録できるパスキーは 20 個までです')`
-- `register_passkey(*, user, challenge_id, credential: dict, user_agent: str) -> Passkey`: 上限の確認 → `consume_challenge(REGISTER)` → `verify_registration_response(expected_rp_id, expected_origin=WEBAUTHN_ALLOWED_ORIGINS, require_user_verification=True)` → `Passkey` を作る（名前は `default_passkey_name(user_agent)`）。`credential_id` の一意の制約に当たったら `PasskeyError('この端末のパスキーはすでに登録されています')`。py_webauthn の `InvalidRegistrationResponse` は決まった文の `PasskeyError` に変える
+- `register_passkey(*, user, challenge_id, credential: dict, user_agent: str) -> Passkey`: 上限の確認 → `consume_challenge(REGISTER)`（コミット済み）→ `transaction.atomic` の中で `verify_registration_response(expected_rp_id, expected_origin=WEBAUTHN_ALLOWED_ORIGINS, require_user_verification=True)` → `Passkey` を作る（名前は `default_passkey_name(user_agent)`）。`credential_id` の一意の制約に当たったら `PasskeyError('この端末のパスキーはすでに登録されています')`。py_webauthn の `InvalidRegistrationResponse` は決まった文の `PasskeyError` に変える
 - `default_passkey_name(user_agent: str) -> str`: OS（iPhone・iPad・Android・Windows・Mac・ChromeOS・Linux）と ブラウザ（Edge・Opera・Firefox・Chrome・Safari）を順に見て「{OS} の {ブラウザ}」。分からなければ「パスキー」。64 文字に収める
 - `authentication_options(*, user=None) -> tuple[WebAuthnChallenge, dict]`: ログイン（user なし・`allow_credentials` 空）と本人確認（user あり・`allow_credentials`＝本人のパスキー。0 個なら `PasskeyError('登録済みのパスキーがありません')`）。`user_verification=REQUIRED`・`timeout=TTL*1000`
-- `authenticate_passkey(*, challenge_id, credential: dict, purpose, user=None) -> Passkey`: `transaction.atomic` の中で `consume_challenge` → `rawId` で `Passkey` を `select_for_update().select_related('user__organization')` で引く（無ければ失敗）→ 本人確認（purpose=REAUTH）なら `passkey.user_id == user.id` でなければ失敗 → `userHandle` があれば `passkey.user.id.bytes` と一致しなければ失敗 → 利用者が無効・組織が無効なら失敗 → `verify_authentication_response(credential_current_sign_count=passkey.sign_count, require_user_verification=True)`（署名回数の巻き戻りはここで拒まれる）→ `sign_count` を更新。ログイン（purpose=LOGIN）のときは `last_used_at` と `user.last_login` も今の時刻にする。失敗の文はすべて `'パスキーでログインできませんでした'`（ログイン）／`'パスキーを確かめられませんでした。もう一度お試しください'`（本人確認）で、理由を見分けさせない
+- `authenticate_passkey(*, challenge_id, credential: dict, purpose, user=None) -> Passkey`: `consume_challenge`（コミット済み）→ `transaction.atomic` の中で `rawId` で `Passkey` を `select_for_update().select_related('user__organization')` で引く（無ければ失敗）→ 本人確認（purpose=REAUTH）なら `passkey.user_id == user.id` でなければ失敗 → `userHandle` があれば `passkey.user.id.bytes` と一致しなければ失敗 → 利用者が無効・組織が無効なら失敗 → `verify_authentication_response(credential_current_sign_count=passkey.sign_count, require_user_verification=True)`（署名回数の巻き戻りはここで拒まれる）→ `sign_count` を更新。ログイン（purpose=LOGIN）のときは `last_used_at` と `user.last_login` も今の時刻にする。失敗の文はすべて `'パスキーでログインできませんでした'`（ログイン）／`'パスキーを確かめられませんでした。もう一度お試しください'`（本人確認）で、理由を見分けさせない
 - `issue_reauth_token(*, user) -> str`: `signing.dumps({'uid': str(user.id), 'iat': int(timezone.now().timestamp())}, salt='accounts.passkeys.reauth')`
 - `has_valid_reauth(*, user, token: str | None) -> bool`: `signing.loads(salt=…)` が通り、`uid` が本人で、`0 <= 今 - iat <= PASSKEY_REAUTH_MAX_AGE_SECONDS` のときだけ True（`BadSignature` は False）
 - `verify_password_for_reauth(*, user, password) -> None`: `user.check_password` が偽なら `PasskeyError('パスワードが正しくありません')`
@@ -147,7 +147,7 @@ CORS_ALLOW_HEADERS に 'x-reauth-token' を足す
 
 | URL | メソッド | 権限 | スロットル | 本文 | 成功 | 失敗 |
 |---|---|---|---|---|---|---|
-| `/api/auth/passkeys/login/options/` | POST | `AllowAny`（ログインの前に呼ぶため） | `passkey_login` | なし | 200 `{"challenge_id": UUID, "options": {…}}`（`rpId`・`challenge`・`allowCredentials: []`・`userVerification: "required"`・`timeout: 300000`） | 429 |
+| `/api/auth/passkeys/login/options/` | POST | `AllowAny`（ログインの前に呼ぶため） | `passkey_login_options` | なし | 200 `{"challenge_id": UUID, "options": {…}}`（`rpId`・`challenge`・`allowCredentials: []`・`userVerification: "required"`・`timeout: 300000`） | 429 |
 | `/api/auth/passkeys/login/` | POST | `AllowAny`（同上） | `passkey_login` | `{"challenge_id", "credential"}` | 200 `{"access", "refresh", "user"}` | 400 `sub_message: "パスキーでログインできませんでした"`・429 |
 | `/api/auth/passkeys/reauth/options/` | POST | `IsAuthenticated` | なし（既定の user） | なし | 200 `{"challenge_id", "options"}`（`allowCredentials`＝本人のパスキー） | 400 `"登録済みのパスキーがありません"`・401 |
 | `/api/auth/passkeys/reauth/` | POST | `IsAuthenticated` | `passkey_reauth` | `{"password"}` か `{"challenge_id", "credential"}` | 200 `{"reauth_token": "…", "expires_in": 300}` | 400（パスワード誤り・パスキー失敗・本文の形）・401・429 |
@@ -227,7 +227,7 @@ def delete_passkeys_of_inactive_organization(sender, instance, **kwargs):
 | R2: 盗まれたアクセストークンで攻撃者が自分のパスキーを足し、居座る | 登録・削除に 5 分の本人確認（パスワードかパスキー）を求める。印は署名つき・本人に結び付け・画面のメモリだけ。TC-01・TC-05・TC-06 | 回避 |
 | R3: e2e コンテナ（`http://frontend:3000`）で RP ID `frontend` を chromium が拒む | ステップ 1 で確かめ、拒まれたら手元のコンテナでは passkey.spec を `test.skip`（CI は localhost で流れる） | 回避 |
 | R4: 利用者を `QuerySet.update()` で無効にしてシグナルを通らず、パスキーが残る | ログインのときに利用者・組織の有効を確かめて拒む。TC-08 | 回避 |
-| R5: ログインの API（認証なし）を叩いて challenge の行を増やす | スロットル `passkey_login`（10/min・IP ごと）・行を作る前に期限切れの行を消す・期限 5 分 | 回避 |
+| R5: ログインの API（認証なし）を叩いて challenge の行を増やす | スロットル `passkey_login_options`（20/min・IP ごと）・行を作る前に期限切れの行を消す・期限 5 分 | 回避 |
 | R6: 失敗の理由（パスキーが無い・無効の利用者など）を応答で見分けられる | ログインの失敗の文をすべて同じにし、理由はログ（`reason=`）だけに残す。TC-08 | 回避 |
 | R7: `@simplewebauthn/browser` の型が TypeScript 4.9 で読めない | ステップ 6 で型チェック（`npm run typecheck`）を通す。読めなければ、使う関数の型だけを `src/types/` に書いて `skipLibCheck` に頼らない形を計画変更で決める | 回避 |
 | R8: 署名回数を持たない認証器（いつも 0・iCloud キーチェーンなど）が拒まれる | py_webauthn は両方 0 なら通す（スパイクで確かめた比べ方）。TC-08 に 0/0 で通る場合を入れる | 回避 |
@@ -248,7 +248,7 @@ Claude が決めた（技術的な選択と理由）:
 - challenge は Redis でなく DB の表に置く。理由: 今の Redis は `allkeys-lru` で消されることがあり、`IGNORE_EXCEPTIONS=True` で失敗が見えない。DB なら `delete()` の件数で使い捨てを決められ、テストで期限切れを直接作れる（`EmailVerification` と同じ考え方）
 - 本人確認は、署名つきの印（`django.core.signing`・salt 付き・`uid` と `iat`）をヘッダー `X-Reauth-Token` で受ける。理由: アクセストークン（盗まれうる）だけでは足りず、印はパスワードかパスキーを知っている人しか得られない。DB に状態を持たず、期限は `iat` で決めるのでテストで時刻を差し替えなくてよい
 - 失敗の応答は 400（`ValidationError` の子の `PasskeyError`）で、文を理由ごとに分けない（R6）。本人確認が無い・切れたは 403（`HasRecentReauth`）。他人・別の組織のパスキーは 404（`get_queryset` で本人に絞る）
-- 回数の制限は DRF のスロットル（Django 規約 §10）。`passkey_login` 10/min（options と検証の両方・IP ごと）・`passkey_reauth` 5/min（利用者ごと）。DRF のレートは単位が 1 つ（1 分）しか書けないので、今のパスワードのログイン（django-ratelimit の 5/5m）より緩いが、パスキーは推測できない（署名を作れない）ので総当たりの心配はなく、行を増やす攻撃を止めれば足りる
+- 回数の制限は DRF のスロットル（Django 規約 §10）。`passkey_login_options` 20/min（options・IP ごと）・`passkey_login` 10/min（検証・IP ごと）・`passkey_reauth` 5/min（利用者ごと）。options と検証を別の scope にし、学校・会社の NAT（同じ IP）でも 1 分に 10 回のログインを通す（同じ scope だとログイン 1 回で 2 回数えられ、約 5 回になる）。DRF のレートは単位が 1 つ（1 分）しか書けないので、今のパスワードのログイン（django-ratelimit の 5/5m）より緩いが、パスキーは推測できない（署名を作れない）ので総当たりの心配はなく、行を増やす攻撃を止めれば足りる
 - パスキーのログインは、パスワードの失敗でかかるアカウントのロック（`account_locked_until`）を見ない。理由: ロックはパスワードの総当たりを止めるためのもので、パスキーは推測できない。見ると、攻撃者がパスワードを 5 回間違えるだけで本人がパスキーでも入れなくなる
 - パスキーのログインは組織の有効も見る（パスワードのログインは見ていない。パスワードのログインを直すのはこのイシューの範囲外）。理由: 組織を無効にしたらパスキーで入れないという決定（AC8）を、シグナルを通らない無効化でも守るため（R4）
 - 無効化での削除はシグナル（`post_save`）に置く。Django 規約 §7 は「シグナルに業務の処理を書かない」だが、ここは例外にする。理由: 利用者の無効化の入口が 3 つ（`toggle_active`・`AdminUserViewSet.update`・Django の管理画面）あり、組織の無効化は shell・DB にしか入口が無い。どの入口でも必ず消える（後片付けで、呼び忘れの事故が起きない）ことを、入口ごとにサービスを呼ぶ形より優先する。処理は「無効なら消す」1 行だけで、呼び出しの流れを追う必要がない
@@ -280,6 +280,7 @@ Danger Ops（有無）:
 
 ## 11. 運用設計
 - 外部 API・非同期処理・バッチは無い。ログ: 成功は `logger.info("passkey login ok user_id=%s passkey_id=%s", …)`、失敗は `logger.warning("passkey login failed reason=%s", reason)`（`reason` は `challenge`・`unknown_credential`・`inactive`・`user_handle`・`verify` など）。個人情報・鍵・challenge・印は出さない
+- 監査のログ（居座りの攻撃〔R2〕の跡を追えるように）: 登録（`passkey registered user_id=%s passkey_id=%s`／`passkey register failed user_id=%s reason=%s`）・削除（`passkey deleted user_id=%s passkey_id=%s`）・名前の変更（`passkey renamed user_id=%s passkey_id=%s`）・本人確認（`passkey reauth ok user_id=%s method=password|passkey`／`passkey reauth failed user_id=%s method=%s reason=%s`）・無効化での削除（`passkeys deleted on deactivation user_id=%s count=%s`／`organization_id=%s count=%s`）を `logger.info`・`logger.warning` で残す。名前（利用者が付けた文字）・鍵・印は出さない
 - Feature Flag は使わない（パスワードのログインが残るので、パスキーが動かなくてもログインはできる）
 
 ## 12. コスト・保守見積もり
@@ -310,7 +311,10 @@ Danger Ops（有無）:
 | V4 | 2 | 読んで可 | ソフトの認証器で作った応答が本物の検証を通っていて、検証を差し替えていない（`verify_*` を `mock` していない）。署名回数の巻き戻り（5→5）が 400・0/0 が 200 になることを TC-08 が実際の値で確かめているか |
 | V5 | 3 | 読んで可 | 無効化の 3 つの入口（`toggle_active`・`AdminUserViewSet.update`・`save()`）と組織の `save()` で消え、`update()` で無効にした利用者・組織はログインで拒まれる。TC-09・TC-08 |
 | V6 | 3 | 読んで可 | ログインの応答の形がパスワードのログインと同じ（キーと `user` の中身）で、アクセストークンで `/api/auth/me/` が読める。TC-07・TC-10 |
-| V7 | 1 | 実験必須 | 実際のブラウザ（仮想の認証器）で、登録 → ログアウト → パスキーでログイン → 削除が通る（E2E の TC-30 が CI で通ったことで確かめる） |
+| V7 | 1 | 読んで可 | 実際のブラウザ（仮想の認証器）で、登録 → ログアウト → パスキーでログイン → 削除が通る。TC-30 が CI で通ること（実際の端末での確認は AC9 の人の手動テストが担う） |
 
 ## 計画変更記録
--
+- 2026-11-22 plan-review: 計画書の記載: 「`transaction.atomic` の中で `consume_challenge`」「`passkey_login` を options と検証で共有」「V7 実験必須」・監査のログの記載なし → 採った方法: challenge の消費を検証の `atomic` の前に別にコミット（失敗した試行の challenge も再利用できない・TC-02 (k)・TC-08 (m) を足す）、scope を `passkey_login_options`（20/min）と `passkey_login`（10/min）に分ける（TC-11 を両方に）、V7 を読んで可（TC-30）、登録・削除・名前・本人確認・無効化の監査のログを 11 に足す（TC-13 に入れる）。Info の `CheckConstraint(condition=)` は `backend/requirements.txt` の Django 5.2.17 で使える — 理由: 計画レビューの Warning 4 件への対応。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
+
+## レビュー結果
+- [20261122_0310 判定: ✅ 完了](../../reviews/I619_plan_review_20261122_0310.md)
