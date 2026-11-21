@@ -46,6 +46,8 @@
 - [review-gate] 敵対的レビュー 1 周目は新しい指摘 0・V6 だけ未検証（HIGH）。V6 は TC-18 で静的な部分を覆って「読んで可」に下げ、本物の環境の実測はマージの後に I593 で行う（計画変更記録）— マージ前は子のセッションが develop の見張りの写しで動き、起動役の `os.environ` を確認に回すので測れない。外に出ないときは終了 4 で止まる安全側の失敗で、人の手を使わずに進める（ユーザーの任せる指示・開発効率）
 - [review-gate] 敵対的レビュー 2 周目 OK（`docs/reviews/I599_adversarial_review_20261121_1539.md`・未検証 0・新規 0）。PR へのコメント（`post-review-comment.sh`）は外で動く一覧のスクリプトで、ブランチにレビュー前の中身があると起動役が止めるので流していない（失敗しても止めない手順・記録はリポジトリにある・R5）
 - [test-gate] gate-check.sh が REASON=dirty で落ちた。未追跡に出たのは `.bashrc`・`.claude/worktrees` など 17 件で、どれもサンドボックスがふさぐための文字デバイス（1,3＝/dev/null）。第 2 版で gate-check.sh が中で動くようになったための回帰（前は `bash scripts/claude/*` で外で動き見えなかった）。マージ後はすべてのイシューの test-gate が止まるので、コードの直しとして fix-loop に回す
+- [fix-loop] gate-check.sh の NG は案 A（未追跡の文字デバイスを数えない・G9b と失敗注入）。診断レビュー PASS（`docs/reviews/I599_fix_diagnosis_review_20261121_1545.md`）。直した後、このセッションの gate-check はふさぎの印を出さなくなった
+- [fix-loop] `test_i193_official_flow.sh` の F9 の 3 件（`run-all.sh`）は、中で uv がキャッシュ（`~/.cache/uv`）に書けず exit 2 になるためで、今回の直しと無関係（CI では起きない）。ただ「第 2 版で外から中に移ったスクリプトが、中で書けない場所に書く」という同じ種類の影響なので、retro で後続に回す（直すとこの fix-loop の範囲を超える）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

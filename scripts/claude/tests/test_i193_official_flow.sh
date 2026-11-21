@@ -227,6 +227,13 @@ git -C "$TMP/g9" checkout -q -- scripts/a.sh; printf 'x\n' > "$TMP/g9/scripts/ne
 ck "G9 scripts に未追跡のファイルがある → 1" 1 "$(g_rc g9)"
 rm "$TMP/g9/scripts/new.sh"; printf 'x\n' > "$TMP/g9/docs/reviews/I998_issue_review_x.md"
 ck "G9 docs/reviews の未追跡ファイルだけなら → 0" 0 "$(g_rc g9)"
+# G9b: サンドボックスのふさぎの印（/dev/null の文字デバイス）は未追跡でも数えない（I599。CI でも作れるよう
+# /dev/null へのシンボリックリンクで作る。-c はリンク先を見る）
+ln -s /dev/null "$TMP/g9/.bashrc"
+ck "G9b 未追跡が文字デバイス（ふさぎの印）だけなら → 0" 0 "$(g_rc g9)"
+sed '/&& -c "\$p" \]\] && continue/d' "$GC" > "$TMP/gc_no_dev.sh"
+ck "FG-G9b 文字デバイスを数えない処理を外すと → 1" 1 "$(GC=$TMP/gc_no_dev.sh g_rc g9)"
+rm "$TMP/g9/.bashrc"
 g_init g10; g_record g10 code_review 20260101_0000 OK NO
 printf 'x\n' > "$TMP/g10/scripts/日本語.sh"; g_commit g10 "jp"
 ck "G10 日本語のファイル名のスクリプトを足した → 1" 1 "$(g_rc g10)"
