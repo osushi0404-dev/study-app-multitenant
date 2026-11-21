@@ -60,19 +60,6 @@ describe('ProblemPreview の画像（I472）', () => {
     expect(screen.queryByAltText(/^(解説|問題)画像/)).not.toBeInTheDocument();
   });
 
-  it('解説文が空なら解説画像を出さない', () => {
-    render(
-      <ProblemPreview
-        problem={{
-          ...baseProblem,
-          explanation: '',
-          explanation_images: [asset('e1', '/api/media/e1/', 'explanation')],
-        }}
-      />
-    );
-
-    expect(screen.queryByAltText(/^解説画像/)).not.toBeInTheDocument();
-  });
 
   it('問題画像を押すと拡大の画面が開く', () => {
     render(
@@ -85,5 +72,63 @@ describe('ProblemPreview の画像（I472）', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('img')).toHaveAttribute('src', '/api/media/q1/');
+  });
+});
+
+/**
+ * I609: 出典の表示と、解説が無いときの表示（TC-27〜TC-30）
+ * 出典は問題画像の後・選択肢の前に「出典：」を付けて出す。解説の欄はクイズの画面と同じ条件で出す
+ */
+const precedes = (a: Element, b: Element) =>
+  Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+describe('ProblemPreview の出典と解説（I609）', () => {
+  it('TC-27: 出典を問題画像の後・選択肢の前に「出典：」を付けて出す', () => {
+    render(
+      <ProblemPreview
+        problem={{
+          ...baseProblem,
+          source: '出典X',
+          question_images: [asset('q1', '/api/media/q1/', 'problem')],
+        }}
+      />
+    );
+
+    const source = screen.getByText('出典：出典X');
+    expect(precedes(screen.getByAltText('問題画像 1'), source)).toBe(true);
+    expect(precedes(source, screen.getByText('A. 正解'))).toBe(true);
+  });
+
+  it('TC-27: 出典が空なら何も出さない', () => {
+    render(<ProblemPreview problem={{ ...baseProblem, source: '' }} />);
+
+    expect(screen.queryByText(/出典：/)).not.toBeInTheDocument();
+  });
+
+  it('TC-28: 解説が空で解説画像も無ければ「解説:」を出さない', () => {
+    render(<ProblemPreview problem={{ ...baseProblem, explanation: '' }} />);
+
+    expect(screen.queryByText('解説:')).not.toBeInTheDocument();
+  });
+
+  it('TC-29: 解説が空でも解説画像は出し、「解説:」は出さない（クイズの画面にそろえる）', () => {
+    render(
+      <ProblemPreview
+        problem={{
+          ...baseProblem,
+          explanation: '',
+          explanation_images: [asset('e1', '/api/media/e1/', 'explanation')],
+        }}
+      />
+    );
+
+    expect(screen.getByAltText('解説画像 1')).toHaveAttribute('src', '/api/media/e1/');
+    expect(screen.queryByText('解説:')).not.toBeInTheDocument();
+  });
+
+  it('TC-30: 空白だけの出典は出さない', () => {
+    render(<ProblemPreview problem={{ ...baseProblem, source: '   ' }} />);
+
+    expect(screen.queryByText(/出典：/)).not.toBeInTheDocument();
   });
 });

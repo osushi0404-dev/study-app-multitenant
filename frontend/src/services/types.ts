@@ -92,6 +92,8 @@ export interface Problem {
   problem_type: 'single_choice' | 'multiple_choice' | 'text';
   choices: Choice[];
   explanation?: string;
+  /** 出典（無ければ空の文字・I609） */
+  source?: string;
   created_at: string;
   updated_at: string;
   // 画像（MediaAsset の配列。古い形の question_image・explanation_image は I587 で外した）
@@ -115,6 +117,7 @@ export interface CreateProblemRequest {
   problem_type: 'single_choice' | 'multiple_choice' | 'text';
   choices: Omit<Choice, 'id'>[];
   explanation?: string;
+  source?: string;
 }
 
 // Quiz Types
