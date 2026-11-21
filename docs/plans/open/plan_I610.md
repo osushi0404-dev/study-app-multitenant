@@ -26,7 +26,7 @@
 - `scripts/claude/tests/run-all.sh:22`: `uv run --locked --project …` に `UV_CACHE_DIR` を渡していない。CI は `UV_CACHE_DIR` を指定している（`.github/workflows/ci.yml` の Harness Tests の env）
 
 ### 確かめたこと（2026-11-21・スパイク）
-- **成立**: `scripts/claude/hooks/*.py` が読み込むのは標準ライブラリだけ（import の行で確かめた）。`-I` で動きは変わらない
+- **訂正（計画レビュー 20261121_1727 の指摘）**: `scripts/claude/hooks/*.py` の先頭の import は標準ライブラリだけだが、`posttooluse_check.py:39-43` の `_check_yaml` が関数の中で任意に `import yaml` する（無ければ YAML の構文チェックを黙って飛ばす）。`-I` は利用者の site（`~/.local`）を読まないので、yaml が利用者の site にだけある環境ではチェックが外れる。この環境では `python3 -I -c 'import yaml'` が `/usr/lib/python3/dist-packages/yaml/` を読む（2026-11-21 に実測）ので外れない（R3）
 - **成立**: 一時フォルダに `json.py`（`print("EVIL")`）と `h.py`（`import json`）を置くと、`python3 h.py` は `EVIL` を出し、`python3 -I h.py` は出さない（`-I` で置き場所のモジュールを読み込まない）
 - **成立**: サンドボックスの中の `bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i468_lint_frontend.sh` は `Read-only file system … /home/tacic/.cache/uv` で exit 2。`UV_CACHE_DIR="$TMPDIR/uv-cache"` を付けると合格（pass=1 fail=0）
 - ベースライン: `UV_CACHE_DIR="$TMPDIR/uv-cache" bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i599_unreviewed_scripts.sh scripts/claude/tests/test_i193_official_flow.sh` → pass=2 fail=0
@@ -79,16 +79,18 @@ fi
 修正方針: フックの起動役の新しい 2 つの決まりを、一時のリポジトリで確かめる（`make_repo` を使う・本物は書き換えない）。
 - TC-12b（AC1）: `scripts/claude/hooks/x.tmp`（`.gitignore` の `*.tmp` で無視される）を置くと、フックは分かれた時点の写しで動く（出力が `V1 <写しのパス>`）
 - TC-12c（AC2）: 分かれた時点（BASE）に `scripts/claude/hooks/json.py`（`print("EVIL")`）をコミットし、`h.py` を `import json` にした一時のリポジトリで、フックの出力に `EVIL` が無い
-- FG: 4-1 (1) の行を元の git の 2 つの確かめに戻した写しで TC-12b が作業ツリーで動き不合格／`-I` を 1 つ外した写し（作業ツリーの道の `exec python3 -I "$root/$rel"`）で TC-12c に `EVIL` が出て不合格
+- TC-12d（AC2）: 起動役の中の、フックを起こす `python3`（`exec python3`・`python3 -I "$root/.claude/hooks/unreviewed.py"` を含む全部）がすべて `python3 -I` で始まる（行を読んで確かめる・5 か所の道を全部覆う）
+- TC-12e（V5）: 一時のリポジトリの `.claude/hooks/unreviewed.py` を壊す（`raise SystemExit(5)` だけにする）と、変更が無くてもフックは写しの道で動く（判定の失敗で作業ツリーに倒れない）
+- FG: 4-1 (1) の行を元の git の 2 つの確かめに戻した写しで TC-12b が作業ツリーで動き不合格／`-I` を 1 つ外した写し（作業ツリーの道の `exec python3 -I "$root/$rel"`）で TC-12c に `EVIL` が出て不合格／写しの道の `exec python3 -I "$snap/$rel"` の `-I` を外した写しで TC-12d が不合格／判定の行の後ろに `|| true` を足した写し（失敗でも作業ツリー）で TC-12e が不合格
 - 既存の FG（`never_snap`）の置き換え元の文字列が変わるので、新しい条件の行に合わせて直す
 
 ### 4-5. `scripts/claude/tests/run-all.sh`
-修正方針: uv で流し直す前（22 行の前）に、`UV_CACHE_DIR` が空で、既定の置き場（`${XDG_CACHE_HOME:-$HOME/.cache}/uv`）に一時ファイルを作れないときだけ、`UV_CACHE_DIR="${TMPDIR:-/tmp}/uv-cache-$(id -u)"` を `export` する。理由を 1 行、標準エラーに出す。
+修正方針: uv で流し直す前（22 行の前）に、`UV_CACHE_DIR` が空で、既定の置き場（`${XDG_CACHE_HOME:-$HOME/.cache}/uv`）に一時ファイルを作れないときだけ、`UV_CACHE_DIR` を `$TMPDIR/uv-cache`（`TMPDIR` が無ければ `mktemp -d` の新しいフォルダ。共有の `/tmp` の決まった名前は、ほかの利用者が先に作れるので使わない）にして `export` する。理由を 1 行、標準エラーに出す。
 ```bash
 if [ -z "${UV_CACHE_DIR:-}" ]; then
   uv_default="${XDG_CACHE_HOME:-$HOME/.cache}/uv"
   if ! { mkdir -p "$uv_default" 2>/dev/null && probe=$(mktemp -p "$uv_default" .w.XXXXXX 2>/dev/null) && rm -f "$probe"; }; then
-    export UV_CACHE_DIR="${TMPDIR:-/tmp}/uv-cache-$(id -u)"
+    if [ -n "${TMPDIR:-}" ]; then export UV_CACHE_DIR="$TMPDIR/uv-cache"; else UV_CACHE_DIR=$(mktemp -d) && export UV_CACHE_DIR; fi
     echo "（uv のキャッシュ ${uv_default} に書けないので ${UV_CACHE_DIR} を使います・サンドボックスの中など）" >&2
   fi
 fi
@@ -127,7 +129,7 @@ fi
 |---|---|---|
 | R1: `reviewed-hook.sh` を壊すと、このセッションを含むすべてのフックが動かなくなる（見張りが止まり、Claude が何もできなくなる） | 保存の前に `bash -n` で文法を確かめる（TC-04）。`unreviewed.py dirty` の失敗は「変更あり」と同じ写しの道に倒す（フックは動き続ける）。保存の後に、本物の起動役で見張りが動くことを確かめる（manual No.3） | 回避 |
 | R2: `unreviewed.py dirty` は git を 3 回呼ぶので、写しが無いときのフックが少し遅くなる | 写しがあるときは今までどおり git を呼ばない（35-37 行の近道は変えない）。写しの無い最初の 1 回だけ | 受け入れ |
-| R3: `-I` で、フックが環境変数（`PYTHONPATH` など）に頼っていたら動かなくなる | フックは標準ライブラリだけを使う（確かめた）。manual No.3 で本物のフックが動くことを確かめる | 回避 |
+| R3: `-I` で、利用者の site（`~/.local`）にだけ入れた yaml が見えなくなり、`posttooluse_check.py` の YAML の構文チェックが黙って外れる | この環境の yaml は共有の場所（`/usr/lib/python3/dist-packages`）にあり外れない（実測）。外れても、YAML の誤りは pre-commit の check-yaml と CI が止める。`-P`（置き場所だけ外す）より `-I` を選ぶのは、環境変数（`PYTHONPATH` など）も読まない二重の守りのため。manual No.3 で本物のフックが動くことを確かめる | 受け入れ |
 | R4: 無視されるフォルダ（`__pycache__`・`.venv`）は `unreviewed.py` が数えない（I599 の R3 で受け入れ）ので、そこに置いたモジュールは数えられない | `-I` でスクリプトの置き場所を読み込み先にしないので、`__pycache__` のモジュールも `import` で読まれない（二重の守り・TC-02） | 回避 |
 | R5: `run-all.sh` が一時フォルダのキャッシュを使うと、毎回の取得で遅くなる | 同じ `$TMPDIR` のあいだは使い回される。CI は `UV_CACHE_DIR` を指定しているので変わらない | 受け入れ |
 | R6: `gate-check.sh` でリンクを数えるようにすると、ほかの正しい未追跡のリンクで止まる | 未追跡のリンクは本来汚れ（記録の場所の外の未コミットの変更）。記録の場所の中のものは今までどおり数えない | 回避 |
@@ -173,7 +175,11 @@ Danger Ops（有無/手順/ロールバック）:
 | V2 | 1 | 読んで可 | フックが置き場所のモジュールを読み込まない: TC-02（TC-12c）が BASE に置いた `json.py` を読み込まないことを確かめ、`-I` を外した写しで不合格になる |
 | V3 | 1 | 読んで可 | `gate-check.sh` が `/dev/null` を指すリンクを汚れとして数え、本物の文字デバイスの道は残る: TC-03（G9b・G9c と FG）。本物の bind mount の印は manual No.5 |
 | V4 | 2 | 読んで可 | 既存の FG（`never_snap` など）が、置き換え元の文字列の変更で「置き換えに失敗して合格」にならない（`assert old in lsrc` が効いている） |
-| V5 | 3 | 読んで可 | 判定の失敗（`unreviewed.py` が起動できない・基準が無い）で、作業ツリーのフックに倒れない（写しの道か、基準なしの既存の道だけ） |
+| V5 | 3 | 読んで可 | 判定の失敗（`unreviewed.py` が起動できない・基準が無い）で、作業ツリーのフックに倒れない（写しの道か、基準なしの既存の道だけ）: TC-05（TC-12e）が壊した `unreviewed.py` で写しの道に進むことを確かめ、`|| true` を足した写しで不合格になる |
+| V6 | 2 | 読んで可 | フックを起こす `python3` の 5 か所がすべて `-I` 付き: TC-06（TC-12d）が全行を読み、写しの道の `-I` を外した写しで不合格になる |
 
 ## 計画変更記録
-- なし
+- 計画レビュー（20261121_1727）の Warning 4 件・Info 1 件を反映: `-I` と任意の yaml の前提を訂正し R3 を受け入れに（実測でこの環境は外れない）／5 か所の `-I` を全部覆う TC-12d（TC-06）と、判定の失敗で写しの道に倒れる TC-12e（TC-05）と FG を足した／manual No.3 の入力と期待を 1 つに決めた／`run-all.sh` の置き場を `$TMPDIR/uv-cache` か `mktemp -d` にした。方式・範囲・受け入れ条件は変えていない（TC の追加と前提の訂正だけ）ので計画レビューはやり直さない
+
+## レビュー結果
+- [20261121_1727 判定: ✅ 完了](../../reviews/I610_plan_review_20261121_1727.md)

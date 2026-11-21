@@ -28,5 +28,7 @@
 ## 自律判断の記録
 - [plan] 起動役の「変更があるか」は `unreviewed.py dirty` を呼ぶ（シェルに git の確かめを写さない）— 定義を 1 か所にそろえるため
 - [plan] `run-all.sh` のキャッシュは決定論テストにせず手動テストで確かめる — 壊れると手元のテストがすぐ落ちて気づけるため
+- [plan-review] 計画レビュー（20261121_1727）は OK・高リスク判定 No。Warning 4 件・Info 1 件は計画とテスト文書で対応し、再レビューは省いた — TC の追加と前提の訂正だけで、方式・範囲・受け入れ条件は変えていないため。`-I` は保ち（`-P` にしない）、yaml が利用者の site にだけある環境で YAML のチェックが外れる点は R3 で受け入れた（この環境は共有の場所にあり外れないことを実測）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
