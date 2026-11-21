@@ -38,6 +38,7 @@
 - [implement] 計画レビューのやり直しは、実装の途中の変更が「レビュー前の中身」として起動役に止められたので、`git stash push -u -m` で退避（SHA 9c58f2ee を控えた）→ レビュー → `git stash apply <SHA>` → タグで探し直して drop、で流した — 計画レビューは計画書しか読まないため。この先の review-gate はスクリプトをコミットした状態なので、ユーザーに `!` で流してもらう（I599 の決まり）
 - [implement] /simplify で直したもの: 起動役の方式（上の行）・テストの写しの場所と結果の確かめの式を関数にまとめた・G9c と FG-G9b の同じ確かめを 1 本にした。見送ったもの: `gate-check.sh` で `/dev/null` と同じデバイス番号（1:3）かまで見る案（今の `! -L` で事故は止まる・任意）・`unreviewed.py` の git の呼び出しをまとめる案（起動役から呼ばなくなったので、毎回の手間ではなくなった）・中へ移るスクリプトをテストで中で流す仕組み（手順書の追記で今回は足りる・retro で要否を決める）・`run-all.sh` の書けるかの確かめを `[ -w ]` に簡単にする案（読み取り専用の bind での確かさを優先）
 - [review-gate] コードレビュー（20261121_1752）は、`scripts/claude/` にレビュー前の中身があるため起動役が外で動かさず、ユーザーに `! bash scripts/claude/code-review.sh I610` で流してもらった（I599 の決まり）。CI 合格・FINAL_VERDICT OK・RISK NO・敵対的レビュー不要。台帳 F1〜F4 は止める指摘ではない — F1（写しの作成の競合）は I599 からある競合で、新しい基準の最初の 1 回の一瞬だけ。F2（SessionStart の子に -I が届かない）は子も写しの場所から動き、読めるのはレビュー済みの中身とサンドボックスから書けない環境変数だけ。どちらも retro で振り分ける
+- [close] 始めの追従の確認（`pr-base-sync.sh sync`）は外で動く入口でレビュー前の中身があると動かないので、同じ値（`mergeStateStatus`）を `gh pr view` で読んで確かめた（BLOCKED・追従不要）— ユーザーへの `!` のお願いを、CI を待つ最後の確認（`pr-base-sync.sh final`）の 1 回にまとめるため（#615 で直すまで）。gate-check OK
 - [retro] 台帳の残り: F1・F2 → #615 に同梱（コメント済み・「次のハーネスの作業で最優先」。F2 は SECURITY=yes）。F3・F4 → `docs/reviews/backlog/I610.md`。`docs/reviews/backlog/I599.md` の F31 は I610 で直したので消した。台帳の振り分け（`code-review.sh --route`）は外で動く入口なので、ユーザーに `!` で流してもらった
 - [retro] 外で動く入口をレビュー前のブランチで人に `!` を頼む件: 採用・新規起票 I615（#615）— ユーザーの評価（毎回のコマンド入力は開発効率に悪い・CLAUDE.md の「人に頼むのは価値判断だけ」に反する）。I610 だけで 3 回（計画レビューの退避・コードレビュー・台帳の振り分け）。#600 にも一緒に設計するコメントを付けた
 - [retro] /simplify で方式を変えて計画レビューをやり直した件: 見送り — /simplify の観点 2 体が同じ根本の案を出し、計画を直して通し直すという流れが働いた（手戻りは計画レビュー 1 回分）。新しい手順は足さない
@@ -94,3 +95,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
