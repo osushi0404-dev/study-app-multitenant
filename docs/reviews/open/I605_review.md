@@ -37,6 +37,7 @@
 - [implement] primary の画面の確かめ（P8）は、画像を使う問題が 0 件になったため無し — 計画書 4-2 P8「画像を使う問題が無ければ、その旨を書く」のとおり。AC2 はその旨の記録で満たす
 - [implement] study はワークツリーごと撤去されていた（2026-11-20 22:35 ごろ・I605 の外）ので、A2 の study の `rm -rf` は流さない。AC4 の study の分は「ワークツリーが無い」で満たす
 - [review-gate] コードレビュー 20261121_1454 は OK（止める指摘なし）。F1（M3 が撤去済みの study を確かめる形）は記録の場所なので直した。F2〜F4（手順書の Low）は止めない指摘なので直さず、retro が振り分ける（直すと手順書の差分のレビューをやり直すことになる）
+- [review-gate] 敵対的レビュー 20261121_1505 は OK（V1〜V3 確認済み・新規の Critical/High なし）。Low 2 件（M2 の study の行が撤去で常に通る・M1 の app-1 の保存領域の名前）は止めない指摘なので retro に回す
 
 ### 承認の記録
 <!-- 危険操作の承認の言葉と日付（P4・P9 は #605 の primary のコメントから写す・A2 は app-1 の会話から） -->
@@ -48,3 +49,4 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
