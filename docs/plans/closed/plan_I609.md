@@ -225,4 +225,4 @@ Danger Ops:
 - 2026-11-21 plan-review: 計画レビューの Warning・Info への対応 — 上限を定数（`Problem.SOURCE_MAX_LENGTH`・`PROBLEM_SOURCE_MAX_LENGTH`）で持つ・`sqlmigrate` の結果を実装で記録する（10 のとおり）・空白だけの出典の TC-30 を足す。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
-- [20261121_1754 判定: ✅ 完了](../../reviews/I609_plan_review_20261121_1754.md)
+- [20261121_1754 判定: ✅ 完了](../../reviews/closed/I609_plan_review_20261121_1754.md)

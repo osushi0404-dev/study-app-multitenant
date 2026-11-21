@@ -109,6 +109,7 @@
 #### 台帳の残り
 - 記録 `docs/reviews/I609_code_review_20261121_1826.md` の F1〜F5（どれも Low・アプリ本体・`後続イシューにする理由: アプリ本体`）→ I616（#616）にまとめた。一覧（`docs/reviews/backlog/I609.md`）に回す行は 0 件。判定の仕組み・`SECURITY=yes` に当たる行は無い（最優先の書き込みなし）
 
+- [close] fix-loop の診断メモ（`I609_fix_diagnosis_20261121_1824.md`）も closed へ移した — 手順の対象の形（`*_review_*`）に当たらないが、過去の診断メモの多くが closed にあり、記録を 1 か所に保つため
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -118,3 +119,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
