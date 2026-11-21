@@ -54,3 +54,4 @@ grep -q 'unreviewed.py run' docs/runbooks/harness-audit.md
 - 2026-11-21 review-gate（敵対的レビュー 1 周目の V6 未検証）: TC-18 に外に出る型への当たりを足した。`test_i599_unreviewed_scripts.sh` pass=35 fail=0
 - 2026-11-21 fix-loop（test-gate の gate-check の NG）: `test_i193_official_flow.sh` pass=172（G9b・FG-G9b を含む）・fail=3 は F9（`run-all.sh` が中で uv のキャッシュに書けない・今回の直しと無関係・CI では起きない）。`gate-check.sh I599` はふさぎの印を出さなくなった
 - 2026-11-21 再発防止（gate-check）: なぜ — 第 2 版で中で動くようになったスクリプトが、中でだけ見えるサンドボックスのふさぎの印を読んだ。何を — 未追跡の文字デバイスを数えない。次回 — 外から中へ移るスクリプトは、中でだけ見える物（ふさぎの印）と中で書けない場所（キャッシュ）を確かめる（retro で手順に書く）
+- 2026-11-21 test-gate: `bash scripts/claude/gate-check.sh I599` exit 0（GATE_CHECK: OK）。決定論ゲートのテスト 2 本はレビュー前の中身があるため `code-review.sh` が手元で流さず CI（Harness Tests・成功）が流した。grep 4 本は `code-review.sh` で exit 0
