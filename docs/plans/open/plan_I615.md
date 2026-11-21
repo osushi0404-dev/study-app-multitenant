@@ -38,7 +38,7 @@
 - [ ] AC1: `scripts/claude/` にレビュー前の中身（書き換え・追跡していない新規・無視されるファイル）があっても、流す入口とその部品・レビュー役の定義を変えていなければ、起動役は入口を外で動かし、終了コードは入口のもの（人に `!` を頼まない）（TC-01・manual No.1）
 - [ ] AC2: そのとき外で動く入口・部品は BASE の写しのもので、作業ツリーで書き換えた中身は外で動かない。流す入口・その部品・使うレビュー役の定義のどれかを BASE から変えていれば、起動役は何も動かさずに終了コード 75 で止まり、`! bash scripts/claude/<名前> <引数>` を案内する（新しい版をユーザーに流してもらい、その結果をその周の正式な結果にする）（TC-02・manual No.2）
 - [ ] AC3: 基準（`git merge-base HEAD origin/develop`）を求められない・写しを作れないときは、作業ツリーの版を外で動かさずに終了コード 75 で止まり、`!` を案内する（TC-03）
-- [ ] AC4: 写しの作り方・置き場所は 1 か所（`.claude/hooks/reviewed-snapshot.sh`）にあり、フックの起動役と入口の起動役は同じ BASE で同じ写しを使う（TC-04・manual No.4）
+- [ ] AC4: 写しの作り方・置き場所は 1 か所（`.claude/hooks/reviewed-hook.sh` の `reviewed_snapshot`。計画変更記録 implement）にあり、フックの起動役と入口の起動役は同じ BASE で同じ写しを使う（TC-04・manual No.4）
 - [ ] AC5: 写しを作る処理は、ほかの起動役が置いた写しを消さない（F1・TC-05）。フックが起こす python は子のプロセスも含めてすべて `-I`（F2・TC-06）
 - [ ] AC6: 作業ツリーを書き換える git の操作を、サンドボックスの中で動く形（git・gh・docker 以外とのつなぎ・`|`・`>`・`<`・`&`・かっこ・`$(…)`・バッククォート・前置きの代入）で流そうとすると、見張りが止めて単独で流すよう案内する。単独の形と git どうしのつなぎ、読み取りだけの git は今までどおり通る（TC-07・manual No.5）
 - [ ] AC7: 手順書の「ユーザーに `!` で流してもらう」は、写しを作れないとき・入口か部品を変えたとき・git の更新が途中で止まったときの戻しの 3 つの場面だけになっている（manual No.6）
@@ -47,7 +47,7 @@
 | 区分 | 内容 |
 |---|---|
 | Backend・Frontend・DB | なし |
-| 起動役（安全装置・`.claude/hooks/`） | 新規 `.claude/hooks/reviewed-snapshot.sh`（写しの作り方の正）・`.claude/hooks/reviewed-hook.sh`（すべてのフックの起動役。このセッションのフックも即座にこれで動く）・`.claude/hooks/unreviewed.py`（入口の起動役） |
+| 起動役（安全装置・`.claude/hooks/`） | `.claude/hooks/reviewed-hook.sh`（すべてのフックの起動役・写しの作り方の正〔計画変更記録 implement〕。このセッションのフックも即座にこれで動く）・`.claude/hooks/unreviewed.py`（入口の起動役） |
 | 見張り（安全装置） | `scripts/claude/hooks/pretooluse_guard.py`（git の更新をつないだ形を止める）・`scripts/claude/tests/guard_must_stop_cases.txt`（止める形を足す） |
 | フック | `scripts/claude/hooks/sessionstart_context.py`（子に `-I`） |
 | 入口 | `scripts/claude/fix-diagnosis-review.sh`（部品を同じフォルダから読む） |
@@ -59,9 +59,10 @@
 ## 4. 変更点一覧（具体）
 
 ### 修正アプローチ
-写しの作り方を新しい `.claude/hooks/reviewed-snapshot.sh` の 1 か所にまとめ（置き場所を新しい名前にし、F1 の `rm -rf` をやめる）、フックの起動役と入口の起動役の両方がそれを使う。入口の起動役は、作業ツリーがレビュー済みかを問わず、BASE の写しの入口を、作業フォルダをリポジトリの最上位にして動かす。ただし、流す入口・その部品・使うレビュー役の定義のどれかがブランチで変わっていれば、動かさずに `!` を案内する（その入口だけ今までどおり）。部品は写しの入口の本文から機械でたどる。見張りには、作業ツリーを書き換える git の操作を中で動く形で流すのを止める判定を足す。
+写しの作り方を `.claude/hooks/reviewed-hook.sh` の関数の 1 か所にまとめ（計画変更記録 implement。初めの案は新しいファイル `reviewed-snapshot.sh`）（置き場所を新しい名前にし、F1 の `rm -rf` をやめる）、フックの起動役と入口の起動役の両方がそれを使う。入口の起動役は、作業ツリーがレビュー済みかを問わず、BASE の写しの入口を、作業フォルダをリポジトリの最上位にして動かす。ただし、流す入口・その部品・使うレビュー役の定義のどれかがブランチで変わっていれば、動かさずに `!` を案内する（その入口だけ今までどおり）。部品は写しの入口の本文から機械でたどる。見張りには、作業ツリーを書き換える git の操作を中で動く形で流すのを止める判定を足す。
 
-### 4-1. 新規 `.claude/hooks/reviewed-snapshot.sh`（写しの作り方の正）
+### 4-1. 写しの作り方の正（`.claude/hooks/reviewed-hook.sh` の関数・計画変更記録 implement）
+**implement で置き場所を変えた**: 下の「`reviewed-snapshot.sh`」は `reviewed-hook.sh` と読み替える。直接実行の CLI は `bash reviewed-hook.sh --snapshot`（写しの最上位を出す・戻り値は下と同じ）。読み込み（`.`）は関数を定義するだけ。4-2 の読み込みは同じファイルの中なので要らない
 達成すること: BASE を求め、写しが無ければ作り、写しの最上位の場所を返す。ほかの起動役が置いた写しを消さない。
 - 関数 `reviewed_snapshot <root>`: 標準出力に写しの最上位（`<cache>/<BASE>`。その下に `scripts/claude/…`）を出す。戻り値 0＝写しあり／3＝基準を求められない／4＝写しを作れない（理由は標準エラーに `[reviewed-snapshot] …`）
   - `GIT_` の環境変数を外し、`git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c submodule.recurse=false -C <root>`（今の `reviewed-hook.sh:26-27` を移す）で `merge-base HEAD origin/develop`
@@ -80,7 +81,7 @@
 - 終了コードを足す: `NEED_HUMAN = 75`（人に `!` で流してもらう。今の 3 は、`code-review.sh` の CI 待ちの時間切れなど入口の終了コードと重なるので使わない）。2（名前の誤り）・4（中で動いた）は変えない。冒頭の CLI の説明も直す
 - `run` の流れ:
   1. 中で動いた・一覧に無い名前は今までどおり（4・2）
-  2. `bash <root>/.claude/hooks/reviewed-snapshot.sh <root>` を引数の配列で起こし、写しの場所を受け取る（`GIT_` の環境変数を外す・時間の上限 60 秒）。0 以外なら 75 と理由（基準を求められない／写しを作れない）
+  2. `bash <root>/.claude/hooks/reviewed-hook.sh --snapshot` を引数の配列で起こし（作業フォルダ <root>・`CLAUDE_PROJECT_DIR=<root>`）、写しの場所を受け取る（`GIT_` の環境変数を外す・時間の上限 60 秒）。0 以外なら 75 と理由（基準を求められない／写しを作れない）
   3. 写しに入口が無い（ブランチで足した入口）→ 75
   4. 部品（`parts(snap, name)`）と、ブランチで変わったファイル（`changed(root, base)`）が重なれば 75。案内: `この入口か部品（<名前…>）をブランチで変えているので、レビュー済みの版では流しません。新しい版をユーザーに ! bash scripts/claude/<名前> <引数> で流してもらい、その結果をこの周の結果にしてください`（引数は `shlex.join`）
   5. `os.chdir(root)` → `os.execvp("bash", ["bash", f"{snap}/scripts/claude/{name}", *args])`
@@ -108,14 +109,14 @@
 
 ### 4-7. `scripts/claude/tests/i599_cases.py`
 達成すること: 新しい起動役の動き・写しの作り方・F2・見張りの判定を、一時のリポジトリ（本物は書き換えない）で確かめる。
-- `make_repo` に `.claude/hooks/reviewed-snapshot.sh` の写しと、部品の関係のある小さな入口を足す: `code-review.sh`（`. "$(dirname "${BASH_SOURCE[0]}")/review-process-lib.sh"` と `REVIEWER_AGENT="code-reviewer"`）・`review-process-lib.sh`（`printf 'V1 %s|' "${BASH_SOURCE[0]}" "$@" > "$MARK"`）・`.claude/agents/code-reviewer.md`
+- `make_repo` に、部品の関係のある小さな入口を足す: `code-review.sh`（`. "$(dirname "${BASH_SOURCE[0]}")/review-process-lib.sh"` と `REVIEWER_AGENT="code-reviewer"`）・`review-process-lib.sh`（`printf 'V1 %s|' "${BASH_SOURCE[0]}" "$@" > "$MARK"`）・`.claude/agents/code-reviewer.md`
 - `snap_of` を新しい置き場所（`.cache/claude-reviewed-snapshots`）に直す
 - TC-07〜TC-09（I599）を新しい動きに直し、I615 の TC を足す（中身は auto_test の TC-01〜TC-07）
 - FG を新しいコードの置き換え元に直す（`fg_always_stop`・`fg_no_diff`・`fg_no_ignored`・`fg_base_ok` は `run` が `dirty` を使わなくなるので、`dirty` の CLI の確かめ〔TC-11 の `gate_reviewed`〕に向け直すか、I615 の FG に置き換える）
 
 ### 4-8. 文書
 - `docs/runbooks/danger-ops.md`:
-  - `:44`: 起動役は BASE の写し（`~/.cache/claude-reviewed-snapshots/<コミット>/`・作り方の正は `.claude/hooks/reviewed-snapshot.sh`）の入口を、作業フォルダを最上位にして動かす。流す入口・その部品（入口が読み込む・呼ぶ `scripts/claude/` の直下のファイル）・使うレビュー役の定義のどれかをブランチで変えていれば動かさずに終了コード 75。基準を求められない・写しを作れないときも 75。サンドボックスの中で動いたら 4
+  - `:44`: 起動役は BASE の写し（`~/.cache/claude-reviewed-snapshots/<コミット>/`・作り方の正は `.claude/hooks/reviewed-hook.sh` の `reviewed_snapshot`）の入口を、作業フォルダを最上位にして動かす。流す入口・その部品（入口が読み込む・呼ぶ `scripts/claude/` の直下のファイル）・使うレビュー役の定義のどれかをブランチで変えていれば動かさずに終了コード 75。基準を求められない・写しを作れないときも 75。サンドボックスの中で動いたら 4
   - `:48`: 「`scripts/claude/` を変えたブランチでは、マージまで起動役も外で動かない」を、「起動役が 75 で止まり `! bash scripts/claude/<名前> …` を案内したときだけ、ユーザーにそのコマンドで流してもらい、その結果をその周の正式な結果にする（入口か部品を変えたブランチでは、その入口だけ周ごとに毎回）」に書き換える
   - `:51`: 写しの置き場所を新しい名前に。古い `~/.cache/claude-reviewed-hooks/` は使わなくなったので消してよい
   - 「外に出すコマンドの書き方」の後に: 作業ツリーを書き換える git の操作を中で動く形で流すと見張りが止める（I615）。途中で止まったときの戻しは、未コミットの変更を捨てる操作になるので、今までどおりユーザーに `!` で流してもらう
@@ -152,7 +153,7 @@
 <!-- 処遇: 回避 か 受け入れ。受け入れの行は --route の照合で使う（I512） -->
 | リスク | 回避策 | 処遇 |
 |---|---|---|
-| R1: `reviewed-hook.sh`・`reviewed-snapshot.sh` を壊すと、このセッションを含むすべてのフックが動かなくなる（見張りが止まり、Claude が何もできなくなる） | 保存の前に `bash -n` で文法を確かめる（TC-08）。読み込めない・写しを作れないときは今までどおり理由を出して作業ツリーのフックで動く（フックは止まらない）。保存の後に本物の起動役で見張りが動くことを確かめる（manual No.3）。止まったらユーザーが `! git restore .claude/hooks/reviewed-hook.sh .claude/hooks/reviewed-snapshot.sh` で戻す | 回避 |
+| R1: `reviewed-hook.sh` を壊すと、このセッションを含むすべてのフックが動かなくなる（見張りが止まり、Claude が何もできなくなる） | 保存の前に `bash -n` で文法を確かめる（TC-08）。読み込めない・写しを作れないときは今までどおり理由を出して作業ツリーのフックで動く（フックは止まらない）。保存の後に本物の起動役で見張りが動くことを確かめる（manual No.3）。止まったらユーザーが `! git restore .claude/hooks/reviewed-hook.sh` で戻す | 回避 |
 | R2: 部品の判定が、変数で組み立てた名前・注釈や表示の行だけに書いた名前で呼ぶ部品を見落とすと、書き換えた部品が作業ツリーから読まれて外で動く | 入口は部品を写しの側（`$(dirname "${BASH_SOURCE[0]}")`）から読む（4-4 で最後の 1 か所を直した）ので、見落としても読むのは写しの部品。作業ツリーのスクリプトを動かすのは `code-review.sh` のゲートだけで、`gate_reviewed`（`dirty`）が止める。部品の判定は「新しい版も要るか」の判断で、守りの本体ではない。見落とすと、直したレビューの道具が新しい版で流れないまま周が進む（その版はマージ前の CI のテストで確かめる）。変数で部品の名前を組み立てる書き方を止める lint は、retro で一覧に回す（計画レビュー 20261122_0254 の Warning） | 回避 |
 | R3: 部品の判定が広すぎると、関係しない変更で `!` が増える | 注釈・表示の行を除き、直下のファイル名だけをたどる（調査結果 8。見張り・関所を直しても、レビューの入口は自動で動く）。広すぎる側に崩れても今の動きより悪くならない（安全側） | 受け入れ |
 | R4: 写しの入口は BASE の中身で動くので、ブランチで足した記録・計画書の新しい書き方を読めないことがある | その書き方を読む入口・部品を変えていれば 75 で新しい版を頼む（AC2）。変えていなければ、BASE の入口が今までと同じ書き方で読む | 回避 |
@@ -166,13 +167,13 @@
 イシューに明記されている（設計確認メモ）:
 - 外で動く入口は BASE の写しから動かし、フックの起動役と写しの作り方・置き場所を共有する
 - 写しを作れないとき（基準なし・作成の失敗）は止めて `!` を案内する
-- #600（git・docker の穴）は含めない。写しの仕組みは #600 でも使い回せる形にする（`reviewed-snapshot.sh` は `scripts/claude` の写しを返す関数で、呼び出し側を問わない）
+- #600（git・docker の穴）は含めない。写しの仕組みは #600 でも使い回せる形にする（`reviewed_snapshot` は `scripts/claude` の写しを返す関数で、呼び出し側を問わない）
 - I610 の F1・F2 を同梱
 - I586 の事例: 作業ツリーを書き換える git の操作をつないで流すのを見張りが止める。戻し方は変えない（Claude が「BP の観点で」任された判断）
 - **2026-11-22 の /plan-issue でユーザーに確認して変えた**: 設計確認メモの「レビューの道具を直したブランチでは、古い版を自動で流し、新しい版もユーザーに `!` で流してもらう（両方）」は、敵対的レビューの周の上限（1 イシュー 2 周）を 1 回で使い切ることと、2 回目の実行が「前回からの差分」だけを見て何もレビューしないことが分かったため、「流す入口かその部品・レビュー役の定義を変えたときは、その入口だけ今までどおり古い版を流さず、新しい版をユーザーに `!` で流してもらい、それを正式な結果にする（周ごとに毎回）」に変えた（イシューの設計確認メモも同じに直す）
 
 Claude が決めた（技術的な選択と理由）:
-- 写しの作り方の正を新しい `.claude/hooks/reviewed-snapshot.sh`（bash の関数・直接実行で CLI）にする — フックの起動役は毎回のツール呼び出しで動くので、読み込み（`.`）で新しいプロセスを増やさない。入口の起動役（python）は CLI で呼ぶ。`.claude/hooks/` はサンドボックスから書けない
+- 写しの作り方の正を bash の関数（初めは新しい `reviewed-snapshot.sh`・implement で `reviewed-hook.sh` の中に変えた）にし、直接実行で CLI にする — フックの起動役は毎回のツール呼び出しで動くので、読み込み（`.`）で新しいプロセスを増やさない。入口の起動役（python）は CLI で呼ぶ。`.claude/hooks/` はサンドボックスから書けない
 - 写しの置き場所を `claude-reviewed-snapshots` に変える — F1 の競合で `.complete` の無い写しが古い置き場所に残りうる。新しい作り方は置き場所を消さないので、古いものを引き継ぐと直らない
 - 「新しい版が要る」の判定は、作業ツリー全体でなく入口ごとの部品で決める（ユーザーの回答「流す入口とその部品」）。部品の一覧は手で持たず、写しの入口の本文からたどる（一覧を書き忘れると黙って古い版で動くため。調査結果 8 で実際の呼び出しと一致した）
 - 部品のたどりは注釈・表示の行を除く — 含めると `gate-check.sh`・見張りなどを直すたびに `code-review.sh` に `!` が要り、目的（人の手を減らす）に反する（調査結果 8）
@@ -193,7 +194,7 @@ Claude が決めた（技術的な選択と理由）:
 - 一覧 `docs/reviews/backlog/I221.md` F10・`I219.md` F3〜F6・`I569.md` F3（`sessionstart_context.py` の表示）: 残す — F2（`-I`）と別の箇所
 - 一覧 `docs/reviews/backlog/I221.md` F9・`I546.md` F5（`workflow.md`）・`I597.md` F2（`danger-ops.md` の控え）: 残す — 4-8 で触る節と別
 - 一覧 `FILE=-` の行（I224 F9・I223 B1〜B4）: 残す — 関係しない
-- 一覧のほかの実装対象（`.claude/hooks/reviewed-snapshot.sh`・`scripts/claude/fix-diagnosis-review.sh`・`scripts/claude/tests/guard_must_stop_cases.txt`・`docs/runbooks/harness-audit.md`）: 一覧の該当なし
+- 一覧のほかの実装対象（`scripts/claude/fix-diagnosis-review.sh`・`scripts/claude/tests/guard_must_stop_cases.txt`・`docs/runbooks/harness-audit.md`）: 一覧の該当なし
 
 要件適合性・業務ロジック: 受け入れ条件の範囲を超える仕様の追加は無い。マルチテナント・ステータス遷移は該当なし
 
@@ -221,6 +222,7 @@ Danger Ops（有無/手順/ロールバック）:
 | V6 | 3 | 読んで可 | フックが起こす python がすべて `-I`: TC-06（`scripts/claude/hooks/*.py` の `sys.executable` で起こす箇所）と FG |
 
 ## 計画変更記録
+- 2026-11-22 implement: 計画書の記載: [新規 `.claude/hooks/reviewed-snapshot.sh` に写しの作り方を置く（4-1）] → 採った方法: 写しの作り方は既存の `.claude/hooks/reviewed-hook.sh` の関数 `reviewed_snapshot`・`_reviewed_snapshot_make` に置き、`bash .claude/hooks/reviewed-hook.sh --snapshot` で写しの最上位だけを出す使い方を足す。入口の起動役はこれを呼ぶ。読み込んだとき（`.`）は関数を定義するだけ — 理由: このセッションでは新しいファイルを作る道具（Write）が許可の設定で拒まれ、`.claude/hooks/` はサンドボックスの中からも書けない。受け入れ条件の結果（作り方・置き場所が 1 か所・フックと入口が同じ写しを使う）は同じで、置くファイルが変わるだけ。計画レビューのやり直し: 不要（方式・範囲は同じ・AC4 のファイル名だけを直す）
 - 2026-11-22 plan: 計画書の記載: [イシューの設計確認メモ「両方流す（古い版を自動・新しい版を `!`）」] → 採った方法: 入口か部品を変えたときは、その入口だけ新しい版を `!` で流し、それを正式な結果にする — 理由: 周の上限を 1 回で使い切る・2 回目は差分だけを見て何もレビューしない、が分かり、ユーザーに確かめて変えた（2026-11-22）。計画レビューのやり直し: 不要（計画レビューの前）
 - 計画レビュー（20261122_0254・HIGHRISK・Blocker なし）の Warning 3 件を反映: 写しの `code-review.sh` で流さなかったゲートが記録の証跡に出ることを調査結果 7 に書いた／TC-02 をコミット済みと未コミットの両方で確かめるようにした／R2 に、部品の見落としの影響と lint を一覧に回すことを書いた。方式・範囲・受け入れ条件は変えていないので再レビューはしない
 
