@@ -73,7 +73,8 @@
 ### 4-1. 解説を任意にし、出典の列を足す（DB）
 - `backend/problems/models.py` `Problem`:
   - `explanation = models.TextField(blank=True, default='')`
-  - `source = models.CharField(max_length=2000, blank=True, default='', verbose_name='出典', help_text='公開の過去問などの出どころ（例: 令和6年度 春期 データベーススペシャリスト試験 午前Ⅱ 問1）。画面が頭に「出典：」を付けて出す')`
+  - 上限は 1 か所で持つ: `Problem.SOURCE_MAX_LENGTH = 2000`（クラスの定数）。シリアライザはモデルの `max_length` から欄を作るので直書きしない。`import_problems` は `Problem.SOURCE_MAX_LENGTH` を読む
+  - `source = models.CharField(max_length=SOURCE_MAX_LENGTH, blank=True, default='', verbose_name='出典', help_text='公開の過去問などの出どころ（例: 令和6年度 春期 データベーススペシャリスト試験 午前Ⅱ 問1）。画面が頭に「出典：」を付けて出す')`
 - `backend/problems/migrations/0028_problem_source_optional_explanation.py`（`makemigrations problems` で作る）: `AddField(problem.source)`・`AlterField(problem.explanation)` の 2 つだけ。依存は `0027_remove_subject_image_directory`
 
 ### 4-2. API で解説を任意にし、出典を読み書きする
@@ -94,7 +95,8 @@
 
 ### 4-3. 問題管理の入力画面
 - `frontend/src/pages/QuizManagement.tsx`
-  - スキーマ: `explanation: yup.string()`（必須を外す）・`source: yup.string().max(2000, '出典は2000文字以内で入力してください')`
+  - 上限は `frontend/src/constants/problem.ts`（新規）の `PROBLEM_SOURCE_MAX_LENGTH = 2000` で持つ（API の上限と同じ値。食い違いは TC-22 と TC-04 で気づける）
+  - スキーマ: `explanation: yup.string()`（必須を外す）・`source: yup.string().max(PROBLEM_SOURCE_MAX_LENGTH, `出典は${PROBLEM_SOURCE_MAX_LENGTH}文字以内で入力してください`)`
   - 既定値 `source: ''`、編集を開くとき `source: problem.source || ''`
   - 作成・更新の送信で `formData.append('source', data.source || '')`
   - 入力欄: 問題用画像（`ImageUploadArea label="問題用画像"`）の `Grid` のすぐ後、科目の前に、1 行の `TextField`（`label="出典（任意）"`・`placeholder="令和6年度 春期 データベーススペシャリスト試験 午前Ⅱ 問1"`・`error`/`helperText` は検証の結果）
@@ -111,7 +113,7 @@
 
 ### 4-5. `import_problems`
 - `backend/problems/management/commands/import_problems.py`
-  - `ParsedProblem` に `source: str = ""` を足し、`__post_init__` で `len(self.source) > 2000` なら `ValueError("出典が長すぎます（2000文字以下）: N文字")`（その問題は取り込まず警告を出す。試し実行の件数にも入らない）
+  - `ParsedProblem` に `source: str = ""` を足し、`__post_init__` で `len(self.source) > Problem.SOURCE_MAX_LENGTH` なら `ValueError("出典が長すぎます（2000文字以下）: N文字")`（その問題は取り込まず警告を出す。試し実行の件数にも入らない）
   - `_parse_problem_section`: `source = fields.get('出典', '').strip()`。`metadata` から外すキーに `'出典'` を足す
   - `Problem.objects.create`: `points=10` を消す・`source=parsed_problem.source` と `organization=subject.organization` を渡す
   - 試し実行の「最初の3問」の表示に、出典があれば `   出典: …` の行を足す（取り込む前に出典の読み取りを確かめるため）
@@ -131,11 +133,11 @@
 - `backend/problems/tests/test_I609_optional_explanation_source.py`（新規）: API・シリアライザ・`import_problems`・マイグレーション（→ 自動テスト文書 TC-01〜TC-14）
 - `frontend/src/pages/__tests__/QuizManagement.source.test.tsx`（新規）: 入力欄の並び・ラベル・入力例・検証・送信（→ TC-20〜TC-23）
 - `frontend/src/pages/__tests__/QuizSession.source.test.tsx`（新規）: 出典の表示・解説が無いとき（→ TC-24〜TC-26）
-- `frontend/src/components/__tests__/ProblemPreview.test.tsx`（足す）: 出典の表示・解説が無いとき・解説の画像だけのとき（→ TC-27〜TC-29）
+- `frontend/src/components/__tests__/ProblemPreview.test.tsx`（足す）: 出典の表示・解説が無いとき・解説の画像だけのとき・空白だけの出典（→ TC-27〜TC-30）
 
 ## 5. 実装手順（ステップ）
 1. DB → API → 画面の縦の 1 本目（出典の列・API・型・問題管理の入力欄）: 4-1・4-2・4-3・4-4 の型 → TC-01〜TC-10・TC-14・TC-20〜TC-23
-2. 表示（クイズの画面・プレビュー・`ProblemSource`）: 4-4 → TC-24〜TC-29。ステップ 1 の後（API の `source` と型を使う）
+2. 表示（クイズの画面・プレビュー・`ProblemSource`）: 4-4 → TC-24〜TC-30。ステップ 1 の後（API の `source` と型を使う）
 3. `import_problems`: 4-5 → TC-11〜TC-12。ステップ 1 の後（`source` の列を使う）。ステップ 2 と並行してよい
 4. マイグレーションのテスト: → TC-13。ステップ 1 の後
 - マイグレーションを足すので、実装後に backend の再起動（`docker compose restart backend` で起動時の migrate が流れる）が要る
@@ -215,4 +217,8 @@ Danger Ops:
 - C1: 解説が無い問題でも、正誤・正しい選択肢の印・出典が出るので、学ぶ人は答え合わせと出どころの確認ができる。採点・復習の時期・苦手の判定は変えない（解説の有無を使っていない）
 
 ## 計画変更記録
--
+- 2026-11-21 plan: イシューの記載: [出典は `CharField(max_length=200)`・201 文字以上は登録できない] → 採った方法: 上限 2000 文字 — 理由: 計画のときのユーザーの指摘（出典に URL を入れると 200 文字を超えることがある）とユーザーの選択（2000・500・上限なしから 2000）。GitHub のイシュー本文は同期しない（正は GitHub だが、この変更の正はこの計画書と 9 の「ユーザーに確かめた」）。計画レビューのやり直し: 不要（計画レビューの前に計画書へ入れ済み）
+- 2026-11-21 plan-review: 計画レビューの Warning・Info への対応 — 上限を定数（`Problem.SOURCE_MAX_LENGTH`・`PROBLEM_SOURCE_MAX_LENGTH`）で持つ・`sqlmigrate` の結果を実装で記録する（10 のとおり）・空白だけの出典の TC-30 を足す。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
+
+## レビュー結果
+- [20261121_1754 判定: ✅ 完了](../../reviews/I609_plan_review_20261121_1754.md)

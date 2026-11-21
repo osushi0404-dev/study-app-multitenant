@@ -26,4 +26,6 @@
 - [plan] E2E は足さず、Jest と Claude の画面確認で確かめる — 種のデータを変えるとほかの E2E に響き、表示は部品のテストで値まで確かめられるため
 - [plan] 範囲外の `_save_ai_problem_to_db` の不具合は直さない — 受け入れ条件と関係しない。retro で扱いを決める
 
+- [plan-review] Warning 3・Info 2 のうち、上限の定数化・計画変更記録・空白だけの出典の TC-30 を入れた。イシュー本文（GitHub）は直さない — 写しは同期しない決まりで、変更の正は計画書の計画変更記録と 9 にある
+
 STAGE_DONE: plan NEXT: plan-review
