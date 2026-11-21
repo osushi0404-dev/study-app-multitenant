@@ -37,7 +37,9 @@
 - [implement] /simplify の無駄・直す深さの観点の指摘で、フックの起動役の方式を「変更を判定して無ければ作業ツリー」から「いつも写し（作業ツリーは基準なし・写しを作れないときだけ）」に変えた — 毎回のツール呼び出しでの判定の手間（WSL で 1 回 0.2〜0.5 秒）が無くなり、定義の食い違いも判定ごと消えるため。方式の変更なので計画書を先に直し、計画レビューをやり直す
 - [implement] 計画レビューのやり直しは、実装の途中の変更が「レビュー前の中身」として起動役に止められたので、`git stash push -u -m` で退避（SHA 9c58f2ee を控えた）→ レビュー → `git stash apply <SHA>` → タグで探し直して drop、で流した — 計画レビューは計画書しか読まないため。この先の review-gate はスクリプトをコミットした状態なので、ユーザーに `!` で流してもらう（I599 の決まり）
 - [implement] /simplify で直したもの: 起動役の方式（上の行）・テストの写しの場所と結果の確かめの式を関数にまとめた・G9c と FG-G9b の同じ確かめを 1 本にした。見送ったもの: `gate-check.sh` で `/dev/null` と同じデバイス番号（1:3）かまで見る案（今の `! -L` で事故は止まる・任意）・`unreviewed.py` の git の呼び出しをまとめる案（起動役から呼ばなくなったので、毎回の手間ではなくなった）・中へ移るスクリプトをテストで中で流す仕組み（手順書の追記で今回は足りる・retro で要否を決める）・`run-all.sh` の書けるかの確かめを `[ -w ]` に簡単にする案（読み取り専用の bind での確かさを優先）
+- [review-gate] コードレビュー（20261121_1752）は、`scripts/claude/` にレビュー前の中身があるため起動役が外で動かさず、ユーザーに `! bash scripts/claude/code-review.sh I610` で流してもらった（I599 の決まり）。CI 合格・FINAL_VERDICT OK・RISK NO・敵対的レビュー不要。台帳 F1〜F4 は止める指摘ではない — F1（写しの作成の競合）は I599 からある競合で、新しい基準の最初の 1 回の一瞬だけ。F2（SessionStart の子に -I が届かない）は子も写しの場所から動き、読めるのはレビュー済みの中身とサンドボックスから書けない環境変数だけ。どちらも retro で振り分ける
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
