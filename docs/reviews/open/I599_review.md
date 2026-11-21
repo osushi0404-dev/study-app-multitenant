@@ -61,3 +61,6 @@ STAGE_DONE: review-gate NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+
+- [review-gate] 第 2 版の 1 回目の基本レビューは HIGH（止める指摘 F22・F23）。fix-loop へ回す（実装をやり直した後の 1 回目）
+STAGE_DONE: review-gate NEXT: fix-loop
