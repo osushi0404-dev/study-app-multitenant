@@ -80,6 +80,9 @@ class Problem(models.Model):
         ('multiple', '複数選択'),
     ]
 
+    # 出典の上限（URL を入れても足りる長さ・I609）。import_problems もこの値で長さを確かめる
+    SOURCE_MAX_LENGTH = 2000
+
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='problems')
     organization = models.ForeignKey(
         'accounts.Organization',
@@ -93,7 +96,16 @@ class Problem(models.Model):
     question = models.TextField()
     problem_type = models.CharField(max_length=10, choices=PROBLEM_TYPE_CHOICES, default='single')
     difficulty = models.IntegerField(choices=DIFFICULTY_CHOICES, default=1)
-    explanation = models.TextField(blank=False)
+    # 解説・出典の「無い」は空の文字だけで表す（null は使わない・I609）
+    explanation = models.TextField(blank=True, default='')
+    source = models.CharField(
+        max_length=SOURCE_MAX_LENGTH,
+        blank=True,
+        default='',
+        verbose_name='出典',
+        help_text='公開の過去問などの出どころ（例: 令和6年度 春期 データベーススペシャリスト試験 午前Ⅱ 問1）。'
+                  '画面が頭に「出典：」を付けて出す',
+    )
     is_deleted = models.BooleanField(
         default=False,
         db_index=True,

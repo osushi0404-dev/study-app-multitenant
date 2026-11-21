@@ -21,6 +21,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ImageModal from './ImageModal';
 import ProblemImageList from './ProblemImageList';
+import ProblemSource from './ProblemSource';
 import { Problem } from '../services/types';
 import { pickImageUrls } from '../utils/problemImages';
 
@@ -93,6 +94,9 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
       {/* 問題画像 */}
       <ProblemImageList images={questionImages} alt="問題画像" onImageClick={setImageModalOpen} />
 
+      {/* 出典（I609） */}
+      <ProblemSource source={problem.source} />
+
       {/* 選択肢 */}
       <Box sx={{ my: 2 }}>
         {problem.choices.map((choice, index) => (
@@ -120,16 +124,20 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
         ))}
       </Box>
 
-      {/* 解説 */}
-      {showExplanation && problem.explanation && (
+      {/* 解説: 解説文か解説画像があるときに出し、見出しは解説文があるときだけ（クイズの画面と同じ・I609） */}
+      {showExplanation && (problem.explanation || explanationImages.length > 0) && (
         <Box>
           <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle2" gutterBottom>
-            解説:
-          </Typography>
-          <Typography variant="body2">
-            {problem.explanation}
-          </Typography>
+          {problem.explanation && (
+            <>
+              <Typography variant="subtitle2" gutterBottom>
+                解説:
+              </Typography>
+              <Typography variant="body2">
+                {problem.explanation}
+              </Typography>
+            </>
+          )}
 
           {/* 解説画像 */}
           <ProblemImageList images={explanationImages} alt="解説画像" onImageClick={setImageModalOpen} />

@@ -38,6 +38,7 @@ import {
 import { useQuizDisplayStats } from '../hooks/useQuizDisplayStats';
 import ImageModal from '../components/ImageModal';
 import ProblemImageList from '../components/ProblemImageList';
+import ProblemSource from '../components/ProblemSource';
 import { pickImageUrls } from '../utils/problemImages';
 import { difficultyLabel } from '../utils/difficulty';
 
@@ -518,6 +519,9 @@ const QuizSessionPage: React.FC = () => {
               alt="問題画像"
               onImageClick={setImageModalOpen}
             />
+
+            {/* 出典（答える前から出す・I609） */}
+            <ProblemSource source={currentProblem.source} />
 
             {/* Answer Input */}
             <Box mt={3}>
