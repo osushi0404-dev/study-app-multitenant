@@ -28,3 +28,5 @@
 - [plan] 新しい版を頼む手順はスキルに書かず、起動役の案内の文と danger-ops.md に置いた — どの入口でも同じ動きで、写しを増やさないため
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: design-security-review
