@@ -43,6 +43,7 @@
       "Bash(git push *)",
       "Bash(python3 scripts/*)",
       "Bash(bash scripts/claude/*)",
+      "Bash(python3 .claude/hooks/unreviewed.py run *)",
       "Bash(python3 -m py_compile *)",
       "Bash(python3 -m json.tool *)",
       "Bash(gh pr create *)",
@@ -145,7 +146,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/sessionstart_context.py",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/sessionstart_context.py",
             "timeout": 30
           }
         ]
@@ -157,7 +158,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/posttooluse_check.py"
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/posttooluse_check.py"
           }
         ]
       }
@@ -168,7 +169,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/pretooluse_guard.py",
             "timeout": 20,
             "onFailure": "block"
           }
@@ -179,7 +180,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/pretooluse_guard.py",
             "timeout": 20,
             "onFailure": "block"
           }
@@ -190,7 +191,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hooks/pretooluse_guard.py",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/pretooluse_guard.py",
             "timeout": 20,
             "onFailure": "block"
           }
@@ -208,7 +209,7 @@
       "docker-compose *",
       "gh *",
       "git *",
-      "bash scripts/claude/*"
+      "python3 .claude/hooks/unreviewed.py run *"
     ],
     "filesystem": {
       "denyWrite": [".claude/worktrees"],

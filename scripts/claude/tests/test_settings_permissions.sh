@@ -17,6 +17,14 @@ full = json.load(open(sys.argv[1], encoding="utf-8"))
 p = full["permissions"]
 allow, ask, deny = p.get("allow", []), p.get("ask", []), p.get("deny", [])
 errs = []
+# I599: フックはすべて起動役を通す（scripts/claude/ にレビュー前の中身があるあいだは、分かれた時点の版で動く）。
+# 新しいフックを足すときに python3 …/X.py と素で書くと、書き換えたフックが外で動く
+LAUNCHER = 'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/'
+for ev, groups in (full.get("hooks") or {}).items():
+    for h in groups:
+        for x in h.get("hooks", []):
+            if not x.get("command", "").startswith(LAUNCHER):
+                errs.append(f"{ev} のフックが起動役（.claude/hooks/reviewed-hook.sh）を通っていない: {x.get('command')}")
 # guard が唯一の決定論ゲートなので、Bash の PreToolUse フック登録と権限モードも確かめる（第 2 周 #18）
 pre = (full.get("hooks") or {}).get("PreToolUse") or []
 if not any(h.get("matcher") == "Bash" and any("pretooluse_guard.py" in x.get("command", "") for x in h.get("hooks", []))
@@ -29,8 +37,7 @@ if full.get("disableAllHooks"):
 for h in pre:
     if h.get("matcher") == "Bash":
         for x in h.get("hooks", []):
-            if x.get("type") != "command" or not x.get("command", "").startswith("python3 ") \
-                    or "pretooluse_guard.py" not in x.get("command", ""):
+            if x.get("type") != "command" or "pretooluse_guard.py" not in x.get("command", ""):
                 errs.append(f"Bash のフックが guard を正しく呼んでいない: {x}")
 # I182（計画変更記録 1）: 見張りの時間切れ・起動失敗・異常終了は、公式の onFailure で止める（素通しにしない）
 guard_hooks = [x for h in pre for x in h.get("hooks", []) if "pretooluse_guard.py" in x.get("command", "")]
@@ -55,6 +62,13 @@ if "~/.config/github-app" not in (fs.get("denyRead") or []):
 # 外に出すコマンドに一般のインタプリタ・シェルを入れない（書いたファイルを外で動かせる。公式の警告）
 _wide_excl = {"*", "bash *", "bash", "sh *", "sh", "zsh *", "python *", "python", "python3 *", "python3",
               "node *", "node", "env *", "env", "eval *", "exec *", "xargs *", "uv *", "npx *"}
+# I599（第 2 版）: scripts/claude/ のスクリプトを外に出すのは起動役だけ（`bash scripts/claude/*` を戻すと、
+# 書いたスクリプトがそのまま外で動く）
+_excl = sb.get("excludedCommands") or []
+if any(e.strip().startswith("bash scripts/claude") for e in _excl):
+    errs.append("sandbox.excludedCommands に bash scripts/claude/* がある（起動役だけにする・I599）")
+if "python3 .claude/hooks/unreviewed.py run *" not in _excl:
+    errs.append("sandbox.excludedCommands に起動役 python3 .claude/hooks/unreviewed.py run * が無い（I599）")
 for e in sb.get("excludedCommands") or []:
     if e.strip() in _wide_excl:
         errs.append(f"sandbox.excludedCommands に一般のインタプリタ・シェル {e} がある")
@@ -172,6 +186,12 @@ write_full("sb_no_denywrite", lambda d: d["sandbox"]["filesystem"]["denyWrite"].
 write_full("sb_no_denyread", lambda d: d["sandbox"]["filesystem"]["denyRead"].remove("~/.config/github-app"))
 for n, e in (("bash", "bash *"), ("sh", "sh *"), ("python3", "python3 *"), ("star", "*")):
     write_full(f"sb_excl_{n}", lambda d, e=e: d["sandbox"]["excludedCommands"].append(e))
+# I599: フックを 1 つ、起動役を通さない形に戻す
+d = copy.deepcopy(base)
+d["hooks"]["PostToolUse"][0]["hooks"][0]["command"] = 'python3 "$CLAUDE_PROJECT_DIR"/scripts/claude/hooks/posttooluse_check.py'
+json.dump(d, open(f"{tmp}/hook_no_launcher.json", "w", encoding="utf-8"))
+write_full("excl_scripts_back", lambda d: d["sandbox"]["excludedCommands"].append("bash scripts/claude/*"))
+write_full("excl_no_launcher", lambda d: d["sandbox"]["excludedCommands"].remove("python3 .claude/hooks/unreviewed.py run *"))
 write("no_deny_gh_checkout", lambda p: p["deny"].remove("Bash(gh pr checkout *)"))
 write("no_deny_gh_co", lambda p: p["deny"].remove("Bash(gh co *)"))
 PY
@@ -206,6 +226,9 @@ ck "S21c excludedCommands に python3 * を足すと不合格" 1 "$(run_check "$
 ck "S21d excludedCommands に * を足すと不合格" 1 "$(run_check "$TMP/sb_excl_star.json")"
 ck "S22a deny から gh pr checkout を消すと不合格" 1 "$(run_check "$TMP/no_deny_gh_checkout.json")"
 ck "S22b deny から gh co を消すと不合格" 1 "$(run_check "$TMP/no_deny_gh_co.json")"
+ck "S23 フックを起動役を通さない形に戻すと不合格（I599 TC-16）" 1 "$(run_check "$TMP/hook_no_launcher.json")"
+ck "S24 外に出す一覧に bash scripts/claude/* を戻すと不合格（I599 TC-13）" 1 "$(run_check "$TMP/excl_scripts_back.json")"
+ck "S25 外に出す一覧から起動役を消すと不合格（I599 TC-13）" 1 "$(run_check "$TMP/excl_no_launcher.json")"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

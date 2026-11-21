@@ -424,15 +424,37 @@ run_one_gate() {
   timeout "${GATE_TIMEOUT:-120}" bash -c "$cmd" >/dev/null 2>&1
 }
 
+# I599: scripts/claude/ にレビュー前の中身が無いか（判定の本体 .claude/hooks/unreviewed.py の dirty。0 のときだけ真）。
+# 引数（ゲートの行）は見ない: レビュー前の中身が 1 つでもあれば、テストのスクリプトは手元で流さない（第 2 版）
+gate_reviewed() {
+  local root
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  python3 -B "$root/.claude/hooks/unreviewed.py" dirty >/dev/null 2>&1
+}
+
 # 宣言ゲートを分類・実走し、グローバル GATE_EVIDENCE（証跡 md）/ GATE_VERDICT（OK|BLOCKER）を設定する。
 # サブシェル汚染を避けるため呼び出し元は $() を使わず直呼びすること（W1）。
 run_declared_gates() {
-  local f="$1" cmd cls code had=0
+  local f="$1" cmd cls code had=0 reviewed=0
   GATE_VERDICT=OK; GATE_EVIDENCE=""
+  gate_reviewed && reviewed=1   # I599: リポジトリ全体の問いなので 1 回だけ求める
   while IFS= read -r cmd; do
     [ -n "$cmd" ] || continue
     had=1
     cls=$(classify_gate "$cmd")
+    # I599: レビュー前の中身があるときは、スクリプトを動かす行を手元で流さない（このスクリプトはサンドボックスの外で
+    # 動くので、新しく書いたテストが外で動く）。test_*.sh は CI の Harness Tests（run-all.sh）が必ず流し、review-gate は
+    # CI の合格を待つ。test_ で始まらないもの（CI が流さない）は止める。判定できないとき（判定のファイルが無い等）も流さない
+    if [ "$cls" = ALLOW ] && [[ "$cmd" == bash\ scripts/claude/* ]] && [ "$reviewed" -eq 0 ]; then
+      case "${cmd#bash scripts/claude/tests/}" in
+        test_*)
+          GATE_EVIDENCE+="- \`${cmd}\` → ⏭ レビュー前の中身のため手元では流さない（CI の Harness Tests が流す・I599）"$'\n' ;;
+        *)
+          GATE_EVIDENCE+="- \`${cmd}\` → ⚠️ レビュー前の中身で CI も流さないため実走しない（I599・fail-closed）"$'\n'
+          GATE_VERDICT=BLOCKER ;;
+      esac
+      continue
+    fi
     case "$cls" in
       ALLOW)
         code=0; run_one_gate "$cmd" || code=$?

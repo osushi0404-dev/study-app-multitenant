@@ -13,6 +13,9 @@ import sys
 import textwrap
 
 _INPUT = {}   # I200: 見張りが失敗したとき（_fail_safe）に、Bash のコマンドを語の判定にかけるため取っておく
+# I599: `bash scripts/claude/<一覧の名前> …` を付け替えた起動役の形（python3 .claude/hooks/unreviewed.py run …）。
+# None なら付け替えない。_ask()・_pass() はこれがあれば updatedInput を付けて返す
+_REWRITE = None
 
 
 def _load():
@@ -712,16 +715,54 @@ def _block_cross_worktree(kind: str, path: str):
           file=sys.stderr)
     sys.exit(2)
 
+def _updated_input() -> dict:
+    """I599: 書き換えたコマンドで、元の道具の入力（timeout・description など）を保ったもの。"""
+    ti = dict(_INPUT.get("tool_input") or {})
+    ti["command"] = _REWRITE
+    return ti
+
 def _ask(reason: str):
-    """PreToolUse の permissionDecision=ask を返す（プロンプト化）。"""
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "ask",
-            "permissionDecisionReason": reason,
-        }
-    }))
+    """PreToolUse の permissionDecision=ask を返す（プロンプト化）。I599: 起動役への付け替えがあれば updatedInput も付ける。"""
+    out = {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "ask",
+        "permissionDecisionReason": reason,
+    }
+    if _REWRITE:
+        out["updatedInput"] = _updated_input()
+    print(json.dumps({"hookSpecificOutput": out}))
     sys.exit(0)
+
+def _pass():
+    """Bash を通す。I599: 起動役への付け替えがあれば、許可の判定を変えずに updatedInput だけを返す
+    （permissionDecision を返さない。plan_I599.md 調査結果 7 のスパイク C）。"""
+    if _REWRITE:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                                 "updatedInput": _updated_input()}}))
+    sys.exit(0)
+
+# --- I599（第 2 版）: scripts/claude/ のスクリプトは既定でサンドボックスの中。外に出すのは起動役
+# （python3 .claude/hooks/unreviewed.py run）だけで、起動役がレビュー前の中身が無いときに一覧のスクリプトを動かす。
+# 見張りは、単体の形の `bash scripts/claude/<一覧の名前> …` を起動役の形に付け替え、起動役の形（単体・最上位の cwd）と
+# test-session.sh の引数を確かめるだけ（判定の本体は .claude/hooks/unreviewed.py の route） ---
+def _route(command: str):
+    """(付け替え後のコマンド | None, 承認の理由 | None, 止める理由 | None, 判定にかける同じ意味の形 | None)。"""
+    if "scripts/claude/" not in command and "unreviewed.py" not in command:   # 当たらないコマンドは読み込まない
+        return None, None, None, None
+    root = os.path.realpath(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_i599_unreviewed", os.path.join(root, ".claude", "hooks", "unreviewed.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod   # dataclass が型の名前を引くのに要る
+        spec.loader.exec_module(mod)
+        r = mod.route(command, root, _INPUT.get("cwd"))
+    except Exception:  # noqa: BLE001 — 読み込めないときは、起動役の形だけ止める（ほかは既定で中なので安全）
+        if re.search(r"unreviewed\.py['\"]?\s+['\"]?run\b", command):
+            return None, None, "起動役の判定（.claude/hooks/unreviewed.py）を読み込めないので、起動役は流せません（I599）", None
+        return None, None, None, None
+    return r.new_command, r.ask_reason, r.block_reason, r.analyze_as
 
 # --- I174: 危険操作・外部送信・秘密情報・コンテナ内操作の判定 ---
 # 方針（plan_I174.md 0 章・0-9）:
@@ -2810,6 +2851,14 @@ def main():
     raw = tool_input.get("command") or ""
     if not isinstance(raw, str) or not raw.strip():
         sys.exit(0)
+    # I599: 先に起動役への付け替えを決めておき、下の確認（_ask）にも付ける。起動役の形の誤りは止め、
+    # 承認の理由（test-session.sh）は最後に返す
+    global _REWRITE
+    _REWRITE, unreviewed_ask, unreviewed_block, analyze_as = _route(raw)
+    if unreviewed_block:
+        _block(unreviewed_block, raw)
+    if analyze_as:      # 起動役の形は、同じ意味の `bash scripts/claude/<名前> …` として下の判定にかける
+        raw = analyze_as
 
     # I174: 行の継続（\ の直後の改行）は、bash と同じく 1 つのコマンドとして読む（区切りの改行と取り違えると、
     # `git reset \⏎ --hard` が 2 つのコマンドに分かれて素通りする）
@@ -2826,7 +2875,7 @@ def main():
         an = _analyze(pcmd)
     except Exception as e:                       # I200: 読み解けないときは、危ない語があるときだけ確認
         _ask_if_risky(raw, f"見張りがコマンドを読み解けませんでした（{type(e).__name__}）")
-        sys.exit(0)
+        _pass()
 
     # hard-block（DANGER_OK=1 でも解除しない）。I174: rm -rf はルート（/・/*）だけをここで止め、
     # それ以外の rm -rf は下の危険操作（DANGER_OK=1 で人の承認）で扱う。mkfs・dd・shred はコマンド名で判定する。
@@ -2869,7 +2918,7 @@ def main():
     except Exception as e:                       # I200: 安全網が読めないときは、危ない語があるときだけ確認
         # 語が無ければここで通す（下の an["unsure"] も危ない語があるときだけ入るので、見落としは無い）
         _ask_if_risky(raw, f"見張りが内容を読み切れませんでした（安全網の読み取りに失敗: {type(e).__name__}）")
-        sys.exit(0)
+        _pass()
     if net["hard"]:
         _block(net["hard"], raw)
     if net["danger"]:
@@ -2883,7 +2932,11 @@ def main():
     if an["unsure"]:
         _ask("見張りがコマンドを読みきれませんでした（" + " / ".join(an["unsure"]) + "）。確認してください。")
 
-    sys.exit(0)
+    # I599: test-session.sh に許可の表に無い引数を渡すときは承認。書き換えだけのときは許可の判定を変えずに
+    # updatedInput だけを返す（permissionDecision を返さない。plan_I599.md 調査結果 6 のスパイク C）
+    if unreviewed_ask:
+        _ask(unreviewed_ask)
+    _pass()
 
 # --- 見張りの失敗を素通しにしない（I182 plan_I182.md 4-2） ---
 # 時間切れ・起動失敗・異常終了（exit 0/2 以外）は、settings.json のフック設定（"timeout": 20・"onFailure": "block"）で
@@ -2911,8 +2964,11 @@ def _fail_safe(e: BaseException):
     try:
         cmd = (_INPUT.get("tool_input") or {}).get("command") if _INPUT.get("tool_name") == "Bash" else None
         if isinstance(cmd, str) and cmd.strip():
+            # I599: 付け替えを決める前に失敗したときは付け替えない（既定で中）。起動役の形の誤りは止める
+            if _route(cmd)[2]:
+                _block("起動役の形が正しくありません（I599）", cmd)
             _ask_if_risky(cmd, f"見張りが{why}ため、判定できませんでした")
-            sys.exit(0)
+            _pass()
     except SystemExit:
         raise
     except BaseException:  # noqa: BLE001 — 語の判定が失敗したら確認

@@ -147,7 +147,7 @@ ck("⑤c 効かない RATELIMIT_ENABLE=false docker compose up の許可が無�
 ck("⑥ deny の Read(**/.env.e2e) が残っている", "Read(**/.env.e2e)" in deny)
 
 # ⑦ MCP の書き先の見張り（/security-review）
-GUARD_CMD = 'python3 "$CLAUDE_PROJECT_DIR"/scripts/claude/hooks/pretooluse_guard.py'
+GUARD_CMD = 'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/reviewed-hook.sh scripts/claude/hooks/pretooluse_guard.py'  # I599: 起動役を通す
 entries = settings.get("hooks", {}).get("PreToolUse", [])
 ok7 = any(
     e.get("matcher") == "mcp__playwright__.*"

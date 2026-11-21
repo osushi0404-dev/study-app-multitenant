@@ -63,7 +63,7 @@ Bash ツールの `run_in_background: true` で 1 回実行し、完了の通知
 bash scripts/claude/adversarial-review.sh "$ARGUMENTS"
 ```
 
-ユーザーが延長（下の「上限到達」の 2）を承認したときだけ、`bash scripts/claude/adversarial-review.sh --round-limit 3 "$ARGUMENTS"` で実行する（`ADV_ROUND_LIMIT=3` を前に付けない。前に環境変数を付けた形はサンドボックスの外に出る形〔`.claude/settings.json` の `sandbox.excludedCommands` の `bash scripts/claude/*`〕に当たらず、サンドボックスの中で動いて `ADVERSARIAL_ERROR: DIRTY` で止まる・I525）。
+ユーザーが延長（下の「上限到達」の 2）を承認したときだけ、`bash scripts/claude/adversarial-review.sh --round-limit 3 "$ARGUMENTS"` で実行する（`ADV_ROUND_LIMIT=3` を前に付けない。前に環境変数を付けた形は、見張りがスクリプトの起動役〔`python3 .claude/hooks/unreviewed.py run`・`.claude/settings.json` の `sandbox.excludedCommands`〕に付け替えず、サンドボックスの中で動いて失敗する・I525・I599）。
 
 ブランチに `backend/` の変更があれば（2 周目以降も）、スクリプトが起動時に、このワークツリーの backend のコンテナを起こして確かめる（手で起こさない。待ちは 1 周の締め切りの外・I486）。
 

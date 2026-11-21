@@ -235,7 +235,7 @@ docker compose port backend 8000
 - 引き継ぎは**イシュー / 計画 / レビューのファイルに自己完結で記述**する。**文脈ゼロの新規セッションが、そのファイルだけを読んで同じ結論に到達し作業を続行できる状態**を必須とする。
 - ワークツリーをまたぐ依頼も同様。現セッションから他のワークツリーを直接編集せず、引き継ぎはファイル経由で行う。読み取り（参照・調査）はしてよい。
 - **例外: primary の早送り（I200・I219）**: 開始時のフック（`scripts/claude/hooks/sessionstart_context.py` の `--sync-primary`）が、どのワークツリーのセッションでも裏で primary を `origin/develop` へ早送りする（許可の判定の一部は primary の `.claude/settings.json` で行われるため）。動くのは primary が develop にいて追跡済みファイルがきれいで早送りで済むときだけで、何も消さない。結果は次の開始時の文脈の「primary: 前回（日時）: …」の 1 行に出る（合わないときはその行に理由と手で行うコマンドが出る）。
-- **技術強制**: 公式のワークツリーの分離は、ワークツリーのセッションから primary（main checkout）への Edit と git の向け直しを止める。primary から入れ子・兄弟の間は、Bash の書き込みをサンドボックス、Edit 系の書き込みを見張りが止める（仕組みの正は `docs/runbooks/danger-ops.md`「サンドボックス（第 1 層・I430）」「見張り（pretooluse_guard.py）の扱い（I174）」1.）。外に出したコマンド（`docker`・`gh`・`git`・`bash scripts/claude/*`）の中の書き込みは止めない
+- **技術強制**: 公式のワークツリーの分離は、ワークツリーのセッションから primary（main checkout）への Edit と git の向け直しを止める。primary から入れ子・兄弟の間は、Bash の書き込みをサンドボックス、Edit 系の書き込みを見張りが止める（仕組みの正は `docs/runbooks/danger-ops.md`「サンドボックス（第 1 層・I430）」「見張り（pretooluse_guard.py）の扱い（I174）」1.）。外に出したコマンド（`docker`・`gh`・`git`・スクリプトの起動役 `python3 .claude/hooks/unreviewed.py run`）の中の書き込みは止めない
 - **削除・破棄は文字列の判定では止めない**（I179 で、コマンドの文字列から読み取る方式は抜け道と止めすぎが出続けた）。ローカルが壊れても GitHub から復旧できる（例外は `docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲」）ので、次を守る:
   - **こまめに commit する**（push は `docs/runbooks/workflow.md`「GitHub への書き込みの時点」の時点だけ）
   - **別のワークツリーの中身を消さない**: primary のセッションで `.claude/worktrees/` 配下を `rm`・`mv`・`git -C <入れ子> reset/checkout/clean/stash` しない。撤去は `bash scripts/claude/wt-remove.sh <パス>`（`git worktree remove` は使わない）
