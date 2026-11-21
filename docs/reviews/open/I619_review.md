@@ -26,3 +26,4 @@
 - [plan-review] 計画レビュー（HIGHRISK・Blocker なし）の Warning 4 件を直した（challenge の消費を検証の前に別にコミット・スロットルの scope を分ける・V7 を読んで可・監査のログ）。再レビューはしない — 方式・範囲・受け入れ条件を変えない findings への対応の追記だけ（計画変更記録）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
