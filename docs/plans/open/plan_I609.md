@@ -116,6 +116,7 @@
   - `ParsedProblem` に `source: str = ""` を足し、`__post_init__` で `len(self.source) > Problem.SOURCE_MAX_LENGTH` なら `ValueError("出典が長すぎます（2000文字以下）: N文字")`（その問題は取り込まず警告を出す。試し実行の件数にも入らない）
   - `_parse_problem_section`: `source = fields.get('出典', '').strip()`。`metadata` から外すキーに `'出典'` を足す
   - `Problem.objects.create`: `points=10` を消す・`source=parsed_problem.source` と `organization=subject.organization` を渡す
+  - 1 問でも登録したら、ループの後で `cache_service.invalidate_problems_cache(subject.id)` を 1 回呼ぶ（問題管理の一覧のキャッシュを消す。API の作成の経路と同じ・試し実行と 0 問のときは呼ばない）
   - 試し実行の「最初の3問」の表示に、出典があれば `   出典: …` の行を足す（取り込む前に出典の読み取りを確かめるため）
   - `解説` の見出しが無い・値が空（`**解説**：` だけの行は `FIELD_PATTERN` の `.+` に当たらず見出し無しと同じ）のときは `explanation=''` で登録する（今の読み取りのまま。テストで固定する）
 - Markdown の形（1 問の例）:
@@ -218,6 +219,7 @@ Danger Ops:
 
 ## 計画変更記録
 - 2026-11-21 plan: イシューの記載: [出典は `CharField(max_length=200)`・201 文字以上は登録できない] → 採った方法: 上限 2000 文字 — 理由: 計画のときのユーザーの指摘（出典に URL を入れると 200 文字を超えることがある）とユーザーの選択（2000・500・上限なしから 2000）。GitHub のイシュー本文は同期しない（正は GitHub だが、この変更の正はこの計画書と 9 の「ユーザーに確かめた」）。計画レビューのやり直し: 不要（計画レビューの前に計画書へ入れ済み）
+- 2026-11-21 fix-loop: 計画書の記載: [`import_problems` は出典を読み、`points` を消し、組織を付ける] → 採った方法: あわせて登録の後に問題の一覧のキャッシュを消す — 理由: 手動テスト No.7 で、取り込んだ問題が問題管理の一覧に最大 1 時間出ないと分かった（一覧は利用者ごとに 1 時間キャッシュされ、取り込みは消していなかった）。比べた案: シグナルで消す（問題ごとに Redis を走査・範囲を超える）・手順に書く（忘れる）。診断メモ `docs/reviews/I609_fix_diagnosis_20261121_1824.md`。計画レビューのやり直し: 不要（受け入れ条件 AC6 を満たすための直し・方式と範囲は変えない）
 - 2026-11-21 implement: 計画書の記載: [出典の欄は `label="出典（任意）"`・`placeholder`] → 採った方法: あわせて `InputLabelProps={{ shrink: true }}` でラベルを常に上に置く — 理由: MUI の既定では欄を押すまで入力例が見えず、受け入れ条件 AC3「入力例が出る」を満たさないため（画面確認で見つけた）。見せ方の判断ではなく AC を満たす直し。計画レビューのやり直し: 不要
 - 2026-11-21 implement: `/simplify` の指摘で `import_problems` の組織を `organization_id=subject.organization_id` で渡す（組織を読むクエリを 1 回減らす・結果は同じ）。計画レビューのやり直し: 不要
 - 2026-11-21 plan-review: 計画レビューの Warning・Info への対応 — 上限を定数（`Problem.SOURCE_MAX_LENGTH`・`PROBLEM_SOURCE_MAX_LENGTH`）で持つ・`sqlmigrate` の結果を実装で記録する（10 のとおり）・空白だけの出典の TC-30 を足す。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）

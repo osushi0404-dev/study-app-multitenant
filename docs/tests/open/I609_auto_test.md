@@ -25,6 +25,7 @@
 | TC-10 | 組織 A の問題の出典の書き換えを、`admin_b`（PATCH）・`user_a`（PATCH）・未ログイン（PATCH）で試す | それぞれ 404・403・401。DB の `source` は変わらない |
 | TC-11 | `import_problems --file <一時ファイル> --subject-id <subject_a>`（Markdown 3 問: ① `解説` の見出しなし・`出典` あり ② `**解説**：` の値が空 ③ 解説あり・出典なし） | 3 問ができる（`stdout` に `成功: 3問`・エラー 0）。① `source == '令和6年度 春期 データベーススペシャリスト試験 午前Ⅱ 問1'`・`explanation == ''` ② `explanation == ''` ③ `explanation == '<書いた解説>'`・`source == ''`。全問 `organization == subject_a.organization`。**修正前（`points=10` のまま）は 0 問で落ちることを先に確かめる** |
 | TC-12 | TC-11 と同じファイルに ④ 出典 2001 文字の問題を足し、`--dry-run` と本番を続けて流す | 試し実行の `stdout` に `パースされた問題: 3問` と `出典: 令和6年度 …` の行。本番の後の問題の数が 3（④ は入らない） |
+| TC-15 | `admin_a` が `GET /api/problems/` で一覧を開く（キャッシュができる）→ `import_problems` で 3 問を取り込む → もう一度 `GET /api/problems/` | 2 回目の応答に取り込んだ 3 問の問題文がある。**直す前（キャッシュを消さない）は 2 回目に 3 問が無く落ちることを先に確かめる**（fix-loop・手動テスト No.7 の NG の再発防止） |
 | TC-13 | マイグレーション: `0027` まで流した表に解説 `'既存の解説'` の行を入れ、`0028` を流し、その後戻す（`problems/tests/migration_helpers.py`） | 流した後: 行の `explanation == '既存の解説'`・`source == ''`。戻した後: `problems_problem` に `source` の列が無く、`explanation == '既存の解説'` |
 | TC-14 | 既存の形の問題（解説つき・出典なし）を `admin_a` が GET（一覧・詳細） | 200。`explanation == "<元の解説>"`・`source == ""`。ほかの項目（`question_text`・`choices`・`difficulty`）は作ったときの値 |
 
@@ -52,3 +53,10 @@
 | TC-28 | `explanation: ''`・解説画像なし | 「解説:」が無い |
 | TC-29 | `explanation: ''`・解説画像 1 枚 | 解説画像（`alt` が解説画像）が出て、「解説:」は無い |
 | TC-30 | `source: '   '`（空白だけ） | `出典：` を含む文が無い |
+
+## 再発防止記録（fix-loop・2026-11-21）
+- なぜ失敗したか: 手動テスト No.7 で、`import_problems` で取り込んだ問題が問題管理の一覧に出なかった。一覧は利用者ごとに 1 時間キャッシュされ、画面・API の作成はキャッシュを消すが、`import_problems` は消していなかった（I609 より前は `points` で 1 問も登録できず、抜けが表に出なかった）
+- 何を変えたか: `import_problems` で 1 問でも登録したら、ループの後で `cache_service.invalidate_problems_cache(subject.id)` を 1 回呼ぶ（診断メモ `docs/reviews/I609_fix_diagnosis_20261121_1824.md`・案 A）
+- セキュリティ上の考慮点: なし（キャッシュを消すだけ。キャッシュのキーは利用者ごとで、他組織のデータは混ざらない）
+- 次回どう防ぐか: TC-15（一覧をキャッシュさせてから取り込み、一覧に出ることを確かめる）を足した。直す前に落ちることを確かめた（2 回目の一覧が空）。作成の経路を `ProblemService` にまとめる根本の直しは retro の候補
+- 確かめた結果: `docker compose exec -T backend python -m pytest problems/tests/test_I609_optional_explanation_source.py` → 17 件合格（直す前は TC-15 だけ失敗）

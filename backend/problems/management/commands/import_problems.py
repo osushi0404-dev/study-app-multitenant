@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from core.cache_service import cache_service
 from problems.models import Subject, Problem, Choice
 
 User = get_user_model()
@@ -441,6 +442,10 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f'エラー: 問題 {idx} - {str(e)}'))
                 error_count += 1
                 continue
+
+        # 問題管理の一覧のキャッシュを消す（API の作成と同じ。消さないと最大 1 時間一覧に出ない・I609）
+        if success_count > 0:
+            cache_service.invalidate_problems_cache(subject.id)
 
         # 結果表示
         self.stdout.write('\n' + '=' * 50)

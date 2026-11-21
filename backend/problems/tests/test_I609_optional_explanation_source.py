@@ -290,6 +290,23 @@ def test_import_dry_run_count_matches_and_skips_over_limit(world, tmp_path):
     assert Problem.objects.filter(subject=world["subject_a"]).count() == 3
 
 
+# ---- TC-15: 取り込んだ問題が、キャッシュ済みの問題管理の一覧にすぐ出る（手動テスト No.7 の再発防止） ----
+def test_import_invalidates_problem_list_cache(world, tmp_path):
+    client = _client(world["admin_a"])
+    assert client.get(PROBLEMS_URL).json() == []  # 一覧の応答をキャッシュさせる
+    path = tmp_path / "problems.md"
+    path.write_text(IMPORT_MARKDOWN, encoding="utf-8")
+
+    _import(world, path)
+
+    listed = {p["question_text"] for p in client.get(PROBLEMS_URL).json()}
+    assert listed == {
+        "解説の見出しが無く、出典がある問題です。",
+        "解説の値が空になっている問題です。",
+        "解説があり、出典が無い問題です。",
+    }
+
+
 # ---- TC-13: マイグレーションは既存の解説を変えず、戻すと出典の列が消える ----
 def test_migration_keeps_explanation_and_reverts(world, settings):
     loader = load_migrations(settings)
