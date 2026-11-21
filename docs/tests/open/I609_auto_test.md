@@ -3,8 +3,9 @@
 実行コマンド（例）: `docker compose exec backend python -m pytest problems/tests/test_I609_optional_explanation_source.py` / `docker compose exec frontend npm test -- --watchAll=false QuizManagement.source QuizSession.source ProblemPreview`
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
+- backend: implement で `test_I609_optional_explanation_source.py` 16 件が先に失敗（Red・`import_problems` は「成功: 0問・エラー: 3問」）→ 実装後 16 件合格。problems 全体 230 件合格（2026-11-21）
+- frontend: implement で I609 の 15 件が先に失敗（Red）→ 実装後に合格。Jest 全体 22 ファイル・161 件合格（2026-11-21）
+- CI: review-gate で PR #614 の CI が全部成功（`CI_WAIT: OK`・2026-11-21 18:11）。test-gate では手元で流し直さない（決定論ゲートなし）
 
 ## バックエンド（`backend/problems/tests/test_I609_optional_explanation_source.py`）
 
