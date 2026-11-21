@@ -1,4 +1,5 @@
 """I599（第 2 版）の確かめの本体。入口は test_i599_unreviewed_scripts.sh（引数: 本物のリポジトリの最上位・一時フォルダ）。"""
+import fnmatch
 import glob
 import importlib.util
 import json
@@ -194,16 +195,26 @@ def doc_calls(root, judge):
     return out
 
 
-def doc_calls_routed(root, judge):
+def excluded_patterns(settings_path):
+    return json.load(open(settings_path, encoding="utf-8")).get("sandbox", {}).get("excludedCommands", [])
+
+
+def doc_calls_routed(root, judge, patterns=None):
+    """付け替えた形が、外に出る型（excludedCommands。公式は * を任意の文字列として照らす）のどれかに当たることまで見る。"""
+    pats = excluded_patterns(os.path.join(REAL, ".claude/settings.json")) if patterns is None else patterns
     calls = doc_calls(root, judge)
-    bad = [c for c in calls if not judge.route(c[2], REAL, REAL).new_command]
+    bad = []
+    for c in calls:
+        new = judge.route(c[2], REAL, REAL).new_command
+        if not new or not any(fnmatch.fnmatchcase(new, p) for p in pats):
+            bad.append(c)
     for f, no, c in bad:
-        print(f"  付け替わらない呼び出し: {f}:{no}: {c}")
+        print(f"  付け替わらない・外に出る型に当たらない呼び出し: {f}:{no}: {c}")
     return len(calls) >= 10 and not bad
 
 
 J = load_judge(JUDGE)
-ck("TC-18 スキル・サブエージェントの定義に書いた一覧のスクリプトの呼び出しは、すべて単体の形（付け替わる・F22）",
+ck("TC-18 スキル・サブエージェントの定義に書いた一覧のスクリプトの呼び出しは、すべて単体の形で、付け替えた形が外に出る型に当たる（F22・V6）",
    doc_calls_routed(REAL, J))
 
 # ---- 起動役（TC-07〜TC-10・TC-16） ----
@@ -366,6 +377,9 @@ shutil.copytree(os.path.join(REAL, ".claude/agents"), os.path.join(r18, ".claude
 with open(os.path.join(r18, ".claude/skills/grill-me/SKILL.md"), "a", encoding="utf-8") as fh:
     fh.write("\n```bash\nN=$(bash scripts/claude/issue-source.sh gh-number $ARGUMENTS)\n```\n")
 fg.append(("FG TC-18: スキルに包んだ形の呼び出しを足すと不合格", not doc_calls_routed(r18, J)))
+fg.append(("FG TC-18: 外に出る型から起動役の形を外すと不合格",
+           not doc_calls_routed(REAL, J, [p for p in excluded_patterns(os.path.join(REAL, ".claude/settings.json"))
+                                          if "unreviewed.py" not in p])))
 r19 = make_repo("fg_no_glob", broken_judge("no_glob", r"*?\[\n", r"\n"))
 w(f"{r19}/--dangerously-skip-permissions", "")
 fg.append(("FG TC-05b・TC-02: ワイルドカードを単体でない文字から外すと付け替わる",
