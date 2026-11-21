@@ -21,8 +21,8 @@
 - 文書: `docs/runbooks/plan-writing-rules.md`
 
 ## テスト結果
-- 自動: （未実施）
-- 手動: （未実施）
+- 自動: TC-01〜TC-06（test_i599・test_i193 と FG）合格・CI 全ジョブ合格・コードレビュー OK（RISK NO）
+- 手動（すべて Claude）: No.1〜No.5・No.3b すべて OK（中でテストがキャッシュに書けて通る・見張りが今も止める・ほかのフックも写しから動く・本物のふさぎの印を汚れと数えない）
 
 ## 計画との差分
 - なし
@@ -43,3 +43,4 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro

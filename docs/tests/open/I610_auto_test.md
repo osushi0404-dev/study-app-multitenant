@@ -5,6 +5,9 @@
 結果:
 - 計画時のベースライン（2026-11-21・変更前）: `UV_CACHE_DIR="$TMPDIR/uv-cache" bash scripts/claude/tests/run-all.sh scripts/claude/tests/test_i599_unreviewed_scripts.sh scripts/claude/tests/test_i193_official_flow.sh` → pass=2 fail=0
 - 実装（第 1 版・`unreviewed.py dirty` で判定）で TC-01〜TC-06 を Red→Green で確かめた後、/simplify の指摘で方式を「いつも写し」に変えた（計画変更記録）。第 2 版の実行記録は implement で書く
+- 実行記録（2026-11-21・implement 第 2 版・/simplify の後・キャッシュの指定なし）: `bash scripts/claude/tests/run-all.sh` で test_i193・test_i599・test_pipefail_negated_grep・test_sessionstart_context・test_settings_permissions・test_i187_frontend_verify_config → pass=6 fail=0。手順書を読むテスト 12 本 → pass=12 fail=0。`bash -n .claude/hooks/reviewed-hook.sh` exit 0
+- 実行記録（2026-11-21・review-gate）: コードレビュー（ユーザーが `!` で流した）の決定論ゲートと CI の Harness Tests が合格
+- 実行記録（2026-11-21・test-gate）: `bash scripts/claude/gate-check.sh I610` exit 0（GATE_CHECK: OK・サンドボックスの中・本物のふさぎの印あり）。heavy の委譲は無い（pytest・Jest・E2E は CI が合格）
 
 共通の準備: TC-01・TC-02 は `scripts/claude/tests/i599_cases.py` の `make_repo`（一時のリポジトリに本物の `.claude/hooks/reviewed-hook.sh`・`.claude/hooks/unreviewed.py` を写す・`.gitignore` に `*.tmp`）を使う。TC-03 は `test_i193_official_flow.sh` の `g_init` の一時のリポジトリ。失敗の注入は写しを壊して流す（本物は書き換えない）。置き換え元の文字列が本体に無いときは、テストが失敗する（`assert old in …`）
 
