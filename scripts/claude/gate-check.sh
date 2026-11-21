@@ -114,8 +114,9 @@ DIRTY=""
 while IFS= read -r -d '' entry; do
   p="${entry:3}"
   # サンドボックスは書き込みを禁じる場所を /dev/null の bind mount でふさぐ。中で動くと最上位に文字デバイスとして
-  # 現れ、未追跡に出る（.bashrc・.claude/worktrees など）。文字デバイスは中身として記録されないので数えない（I599）
-  [[ "${entry:0:2}" == "??" && -c "$p" ]] && continue
+  # 現れ、未追跡に出る（.bashrc・.claude/worktrees など）。文字デバイスは中身として記録されないので数えない（I599）。
+  # -c はリンク先を見るので、リンクでないことも確かめる（/dev/null を指すリンクは印ではなく汚れ・I610）
+  [[ "${entry:0:2}" == "??" && -c "$p" && ! -L "$p" ]] && continue
   is_record_path "$p" || DIRTY+="${p}"$'\n'
 done < <(git status --porcelain=v1 -z --untracked-files=all --no-renames)
 [ -z "$DIRTY" ] || fail dirty "記録の場所の外に、コミットしていない変更があります:

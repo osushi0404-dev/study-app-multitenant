@@ -279,21 +279,30 @@ def hook(root):
                           input="JSONIN", capture_output=True, text=True, timeout=60, env=env_for(root))
 
 
+def snap_of(root):
+    """origin/develop（make_repo の直後の HEAD＝BASE）の写しの場所。HOME は env_for が決める。"""
+    b = vcs(root, "rev-parse", "refs/remotes/origin/develop", out=True).strip()
+    return os.path.join(env_for(root)["HOME"], ".cache/claude-reviewed-hooks", b)
+
+
+def ran_in(p, where):
+    """フックが where（写し・作業ツリーの最上位）の h.py で動き、0 で終わったか。"""
+    return p.returncode == 0 and p.stdout.startswith("V1 " + os.path.join(where, "scripts/claude/hooks/h.py"))
+
+
 rh = make_repo("hook")
 fsm = os.path.join(TMP, "fsmonitor_called")
 vcs(rh, "config", "core.fsmonitor", f"touch {fsm}; false")
+snap = snap_of(rh)
 p1 = hook(rh)
-base = vcs(rh, "rev-parse", "HEAD", out=True).strip()
 w(f"{rh}/scripts/claude/hooks/h.py", 'print("V2")\n')
 p2 = hook(rh)
-snap = os.path.join(TMP, "home_hook", ".cache/claude-reviewed-hooks", base)
 vcs(rh, "update-ref", "-d", "refs/remotes/origin/develop")
 p3 = hook(rh)
-ck("TC-12 フックの起動役: 変更なしは作業ツリー・変更ありは分かれた時点の写し（標準入力が届く）・基準なしは作業ツリーと理由・"
+ck("TC-12 フックの起動役: 変更なしも変更ありも分かれた時点の写し（標準入力が届く・I610）・基準なしは作業ツリーと理由・"
    "fsmonitor は動かない",
-   p1.returncode == 0 and p1.stdout.startswith("V1 " + os.path.join(rh, "scripts/claude/hooks/h.py"))
-   and p2.returncode == 0 and p2.stdout.startswith("V1 " + os.path.join(snap, "scripts/claude/hooks/h.py"))
-   and p2.stdout.strip().endswith("JSONIN") and os.path.isfile(os.path.join(snap, ".complete"))
+   ran_in(p1, snap) and ran_in(p2, snap) and p2.stdout.strip().endswith("JSONIN")
+   and os.path.isfile(os.path.join(snap, ".complete"))
    and p3.returncode == 0 and p3.stdout.startswith("V2") and "[reviewed-hook]" in p3.stderr
    and not os.path.exists(fsm))
 
@@ -313,6 +322,50 @@ def same_defs(lsrc_, gsrc_):
 
 
 ck("TC-14 基準と git の安全な -c が判定・フックの起動役・見張りで同じ", same_defs(lsrc, gsrc))
+
+# ---- I610: フックの起動役はいつも写し・-I（TC-12b〜d・plan_I610.md 4-4） ----
+# FG の置き換え元（本体に無ければ assert で落ちる）
+MAKE_SNAP = 'if [ ! -f "$snap/.complete" ]; then\n  mkdir'
+RUN_SNAP = 'exec python3 -I "$snap/$rel" "$@"'
+
+
+def launcher_variant(name, old, new, count=1):
+    """起動役の写しを壊した一時のリポジトリ（本物は書き換えない）。count=-1 は最後の 1 か所だけを置き換える。"""
+    assert old in lsrc, f"FG の置き換え元が見つからない: {old}"
+    src = lsrc.replace(old, new, 1) if count == 1 else new.join(lsrc.rsplit(old, 1))
+    rr = make_repo(name)
+    w(os.path.join(rr, ".claude/hooks/reviewed-hook.sh"), src)
+    return rr
+
+
+def ignored_case(root):
+    """TC-12b: 無視されるファイル（*.tmp）が scripts/claude/hooks/ にあっても、写しの道で動く。"""
+    w(f"{root}/scripts/claude/hooks/x.tmp", "x\n")
+    return ran_in(hook(root), snap_of(root))
+
+
+def evil_case(root):
+    """TC-12c: BASE に置いた json.py（写しにも入る）を、フックが読み込まない（-I）。"""
+    w(f"{root}/scripts/claude/hooks/json.py", 'print("EVIL")\n')
+    w(f"{root}/scripts/claude/hooks/h.py", 'import json\nimport sys\nprint("V1", __file__, sys.stdin.read().strip())\n')
+    vcs(root, "add", "-A")
+    vcs(root, "commit", "-q", "-m", "evil base")
+    vcs(root, "update-ref", "refs/remotes/origin/develop", "HEAD")
+    p = hook(root)
+    return ran_in(p, snap_of(root)) and "EVIL" not in p.stdout
+
+
+def all_dash_i(src):
+    """TC-12d: フックの起動役の python3（コメントの行を除く）がすべて -I 付き。道は 4 つ（基準なし・写しあり・
+    写しを作れない・写しで動かす）なので 4 か所以上。"""
+    code = [x for x in src.splitlines() if not x.lstrip().startswith("#")]
+    uses = [m for x in code for m in re.finditer(r"\bpython3\b(?P<after>.{0,4})", x)]
+    return len(uses) >= 4 and all(m.group("after").startswith(" -I ") for m in uses)
+
+
+ck("TC-12b 無視されるファイルが scripts/claude/hooks/ にあっても、フックは写しの道で動く", ignored_case(make_repo("hook_ignored")))
+ck("TC-12c フックは、置き場所の json.py を読み込まない（-I）", evil_case(make_repo("hook_evil")))
+ck("TC-12d フックの起動役の python3 がすべて -I 付き", all_dash_i(lsrc))
 
 # ---- FG（失敗の注入） ----
 fg = []
@@ -358,18 +411,18 @@ fg.append(("FG TC-16: 中の確かめを外すと不合格", launch(r11, "issue-
 fg.append(("FG TC-11: gate_reviewed を常に真にすると、レビュー前の中身があってもテストが流れる", ran_fg))
 fg.append(("FG TC-14: フックの起動役の -c を 1 つ消すと不合格",
            not same_defs(lsrc.replace(" -c submodule.recurse=false", "", 1), gsrc)))
-for name, old, new in [
-        ("always_snap", 'if [ -f "$snap/.complete" ] && [ -f "$snap/$rel" ]; then', 'if true; then'),
-        ("never_snap", 'if "${g[@]}" diff --quiet', 'if true || "${g[@]}" diff --quiet')]:
-    rr = make_repo(f"fg_{name}")
-    assert old in lsrc
-    w(os.path.join(rr, ".claude/hooks/reviewed-hook.sh"), lsrc.replace(old, new, 1))
-    if name == "never_snap":
-        w(os.path.join(rr, "scripts/claude/hooks/h.py"), 'print("V2")\n')
-        fg.append(("FG TC-12: 差を見ないと、変更があっても作業ツリーで動いて不合格", hook(rr).stdout.startswith("V2")))
-    else:
-        fg.append(("FG TC-12: 常に写しにすると、作業ツリーの印にならない",
-                   not hook(rr).stdout.startswith("V1 " + os.path.join(rr, "scripts/claude/hooks/h.py"))))
+rr = launcher_variant("fg_never_snap", MAKE_SNAP, 'if false; then\n  mkdir')
+w(os.path.join(rr, "scripts/claude/hooks/h.py"), 'print("V2")\n')
+fg.append(("FG TC-12: 写しを作らないと、変更があっても作業ツリーで動いて不合格", hook(rr).stdout.startswith("V2")))
+# 消した近道（I610 の前の「git の差と未追跡が無ければ作業ツリー」）を写しを作る前に戻す
+OLD_SHORTCUT = ('if "${g[@]}" diff --quiet --no-ext-diff --no-textconv "$base" -- scripts/claude 2>/dev/null \\\n'
+                '    && [ -z "$("${g[@]}" ls-files --others --exclude-standard -- scripts/claude 2>/dev/null)" ]; then\n'
+                '  exec python3 -I "$root/$rel" "$@"\nfi\n')
+fg.append(("FG TC-12b: 消した近道を戻すと、無視されるファイルがあっても作業ツリーで動いて不合格",
+           not ignored_case(launcher_variant("fg_old_shortcut", MAKE_SNAP, OLD_SHORTCUT + MAKE_SNAP))))
+fg.append(("FG TC-12c: 写しで動かす最後の行の -I を外すと json.py を読み込んで不合格",
+           not evil_case(launcher_variant("fg_no_isolate", RUN_SNAP, RUN_SNAP.replace(" -I", ""), count=-1))))
+fg.append(("FG TC-12d: 写しの道の -I を外すと不合格", not all_dash_i(lsrc.replace(RUN_SNAP, RUN_SNAP.replace(" -I", ""), 1))))
 
 r18 = os.path.join(TMP, "fg_doc")
 shutil.copytree(os.path.join(REAL, ".claude/skills"), os.path.join(r18, ".claude/skills"))

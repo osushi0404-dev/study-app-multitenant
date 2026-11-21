@@ -19,6 +19,16 @@ if [ "${VIRTUAL_ENV:-}" != "$REPO_ROOT/$PROJ/.venv" ]; then
     echo "⛔ uv がありません。入れ方: docs/runbooks/onboarding.md「手元の準備（ハーネスのテスト）」。テストは流していません"
     exit 1
   fi
+  # uv のキャッシュの置き場が指定されておらず、既定の置き場に書けないとき（サンドボックスの中など）だけ、書ける一時の
+  # 置き場に向ける（I610）。CI は UV_CACHE_DIR を指定するので変わらない。共有の /tmp の決まった名前は使わない
+  if [ -z "${UV_CACHE_DIR:-}" ]; then
+    uv_default="${XDG_CACHE_HOME:-$HOME/.cache}/uv"
+    if ! { mkdir -p "$uv_default" 2>/dev/null && probe=$(mktemp -p "$uv_default" .w.XXXXXX 2>/dev/null) && rm -f "$probe"; }; then
+      if [ -n "${TMPDIR:-}" ]; then UV_CACHE_DIR="$TMPDIR/uv-cache"; else UV_CACHE_DIR=$(mktemp -d) || exit 1; fi
+      export UV_CACHE_DIR
+      echo "（uv のキャッシュ ${uv_default} に書けないので ${UV_CACHE_DIR} を使います・サンドボックスの中など）" >&2
+    fi
+  fi
   HARNESS_UV_REEXEC=1 exec uv run --locked --project "$PROJ" bash "$PROJ/run-all.sh" "$@"
 fi
 if ! bash "$PROJ/check-tools.sh"; then
