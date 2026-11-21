@@ -48,6 +48,7 @@
 - [test-gate] gate-check.sh が REASON=dirty で落ちた。未追跡に出たのは `.bashrc`・`.claude/worktrees` など 17 件で、どれもサンドボックスがふさぐための文字デバイス（1,3＝/dev/null）。第 2 版で gate-check.sh が中で動くようになったための回帰（前は `bash scripts/claude/*` で外で動き見えなかった）。マージ後はすべてのイシューの test-gate が止まるので、コードの直しとして fix-loop に回す
 - [fix-loop] gate-check.sh の NG は案 A（未追跡の文字デバイスを数えない・G9b と失敗注入）。診断レビュー PASS（`docs/reviews/I599_fix_diagnosis_review_20261121_1545.md`）。直した後、このセッションの gate-check はふさぎの印を出さなくなった
 - [fix-loop] `test_i193_official_flow.sh` の F9 の 3 件（`run-all.sh`）は、中で uv がキャッシュ（`~/.cache/uv`）に書けず exit 2 になるためで、今回の直しと無関係（CI では起きない）。ただ「第 2 版で外から中に移ったスクリプトが、中で書けない場所に書く」という同じ種類の影響なので、retro で後続に回す（直すとこの fix-loop の範囲を超える）
+- [review-gate] gate-check の直しの後、基本レビュー OK（F30〜F32 は止めない指摘・retro へ）。敵対的レビューは通算 2 周を使い切っていたので延長を提案し、ユーザーが `! bash scripts/claude/adversarial-review.sh --round-limit 3 "I599"` を打った（2026-11-21・打ったことを延長の承認として扱う）。3 周目 OK（`docs/reviews/I599_adversarial_review_20261121_1602.md`）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -74,3 +75,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
