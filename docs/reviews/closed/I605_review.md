@@ -44,6 +44,7 @@
 - [retro] 見送り: `git add -A docs/reviews` が関係の無い未追跡のレビュー記録 11 本を巻き込んだ件 — 送る前にコミットの中身を見て気づき、戻して作り直した（手戻り数分・GitHub には出ていない）。add はパスを 1 つずつ書く
 - [retro] 見送り: primary の問題 186 の画像が、primary に無く harness-2・study に写しがあったのに消えた件 — primary のセッションが P4 で写しのあることも見せたうえで、ユーザーが「消してよい」と決めた（開発の試しのデータ）
 - [retro] 残余リスク処遇（design-security-review）: Medium（公開のリポジトリに書く中身）→ P10 の決まりで回避済み・#605 のコメントは件数・id・ファイル名だけだった。Low 2 件（控えの権限・`!` の打ち間違い）→ 控えは消した・コマンドは計画書の絶対パスのまま流れたので、どちらも残りなし
+- [close] develop の取り込みは不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移し、PR の説明を書き換えた。計画書の承認の記録の参照先を closed に直した
 
 ### 承認の記録
 <!-- 危険操作の承認の言葉と日付（P4・P9 は #605 の primary のコメントから写す・A2 は app-1 の会話から） -->
@@ -99,3 +100,4 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge

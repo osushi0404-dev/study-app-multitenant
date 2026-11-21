@@ -160,7 +160,7 @@ Danger Ops（有）:
 - 代替案: harness の DB も primary と同じく移す（ユーザーが捨てると決めた）／`#579` を先に直す（範囲外・イシューの含まないもの）
 - ロールバック: 7 のとおり（primary の控えのファイル名は `backup_I605_before_primary_<日時>.sql`）
 - 実行コマンド: 4-2 の P5（`docker compose exec -T db psql … -c "UPDATE …"`）・P6（`docker compose run --rm --no-deps -T backend python manage.py migrate`。前進の移行は見張りの判定の対象外・承認は P4）・P9（`DANGER_OK=1 rm -rf backend/media`・控えの `rm`）。4-3 の A2 の 3 つ（人が `!` で流す）
-- 承認の記録: primary は #605 のコメント（P10）、app-1 の分は `docs/reviews/open/I605_review.md` の「## 自律判断の記録」の下の「承認の記録」
+- 承認の記録: primary は #605 のコメント（P10）、app-1 の分は `docs/reviews/closed/I605_review.md` の「## 自律判断の記録」の下の「承認の記録」
 - PR のラベル `danger-approved`: 付けない — この PR の差分は手順書だけで、破壊的なマイグレーションのコードを含まない（危険操作は手元の開発の DB への運用で、PR には入らない）
 要件適合性・業務ロジック: 受け入れ条件の外の仕様の追加は無い。マルチテナント・状態の遷移の変更は無い（コードを変えない）
 セキュリティ影響なし（コードを変えない。控えは DB の中身の写しなので P9 で消す・C2）
@@ -179,7 +179,7 @@ P9 影響なし（個人情報の新しい扱いは無い。控えは用が済�
 - 2026-11-20 plan-review: 計画書の記載: [P3-a は `showmigrations problems` だけ・M1/M3 は出力を目で見る・A2 にほかのコンテナの扱いが無い・P8 に `dashboard-verify-seed` の副作用の記述が無い] → 採った方法: P3-a に `migrate --plan` を足して P4 で見せる・M1/M3 を合格で exit 0 の形にする・A2 と P8 に注記 — 理由: 計画レビュー 20261120_2000 の Warning 3 件・Info 1 件への対応。計画レビューのやり直し: 不要（findings への対応の追記だけ。方式・範囲・受け入れ条件は変えない）
 
 ## レビュー結果
-- [20261120_2000 判定: ✅ 完了](../../reviews/I605_plan_review_20261120_2000.md)
+- [20261120_2000 判定: ✅ 完了](../../reviews/closed/I605_plan_review_20261120_2000.md)
 
 ## セキュリティレビュー結果
 
