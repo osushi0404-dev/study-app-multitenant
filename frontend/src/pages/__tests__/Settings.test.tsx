@@ -29,6 +29,12 @@ jest.mock('react-hot-toast', () => ({
   default: { error: jest.fn(), success: jest.fn() },
 }));
 
+// 「パスキー」の欄（I619）の中身は PasskeysCard のテストで見る。ここでは置き場所だけを見る（TC-23）
+jest.mock('../../components/settings/PasskeysCard', () => ({
+  __esModule: true,
+  default: () => <section data-testid="passkeys-card">パスキー</section>,
+}));
+
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'u@example.com', role: 'user' } }),
 }));
@@ -155,6 +161,18 @@ describe('Settings', () => {
 
     expect(await screen.findByRole('heading', { name: '学ぶ科目' })).toBeInTheDocument();
     expect(screen.getByTestId('learning-subjects-card')).toBeInTheDocument();
+  });
+
+  it('I619 TC-23: 「パスキー」の欄が「学習設定」の後・「学ぶ科目」の前にある', async () => {
+    renderSettings();
+
+    const studyForm = await screen.findByRole('form', { name: '学習設定' });
+    const passkeys = screen.getByTestId('passkeys-card');
+    const subjects = screen.getByTestId('learning-subjects-card');
+    // eslint-disable-next-line no-bitwise
+    expect(studyForm.compareDocumentPosition(passkeys) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // eslint-disable-next-line no-bitwise
+    expect(passkeys.compareDocumentPosition(subjects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('TC-29b: 「学習設定」の form に名前があり、その中の「保存」だけを指せる。見出しは h1・各カード h2（I494）', async () => {

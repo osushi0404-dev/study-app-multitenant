@@ -3,9 +3,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import RegexValidator
-from django.utils import timezone
 from django.db import transaction
-from .models import User, UserSettings, StudyStreak
+from .models import Passkey, User, UserSettings, StudyStreak
 from .services import create_personal_organization
 
 
@@ -173,13 +172,8 @@ class UserLoginSerializer(serializers.Serializer):
                     else:
                         failed_user = User.objects.get(user_id=email_or_user_id)
 
-                    failed_user.failed_login_attempts += 1
-
-                    # Lock account after 5 failed attempts for 30 minutes
-                    if failed_user.failed_login_attempts >= 5:
-                        failed_user.account_locked_until = timezone.now() + timezone.timedelta(minutes=30)
-
-                    failed_user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+                    # Lock account after LOCK_THRESHOLD failed attempts（パスキーの本人確認と同じ規則・I619）
+                    failed_user.record_failed_login()
                     raise serializers.ValidationError("ユーザーIDまたはパスワードが正しくありません。")
 
                 if not user.is_active:
@@ -187,9 +181,7 @@ class UserLoginSerializer(serializers.Serializer):
 
                 # Reset failed login attempts on successful login
                 if user.failed_login_attempts > 0:
-                    user.failed_login_attempts = 0
-                    user.account_locked_until = None
-                    user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+                    user.unlock_account()
 
                 attrs['user'] = user
                 return attrs
@@ -279,6 +271,57 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         except ValidationError as e:
             raise serializers.ValidationError(list(e.messages))
         return value
+
+
+class PasskeySerializer(serializers.ModelSerializer):
+    """パスキーの一覧・名前の変更（I619）。鍵・認証器の ID・署名回数は出さない"""
+    name = serializers.CharField(max_length=64, trim_whitespace=True)
+
+    class Meta:
+        model = Passkey
+        fields = ('id', 'name', 'created_at', 'last_used_at')
+        read_only_fields = ('id', 'created_at', 'last_used_at')
+
+    def validate_name(self, value):
+        from .passkeys import clean_passkey_name  # passkeys が serializers を読むので、ここで読む
+        return clean_passkey_name(value)
+
+
+class WebAuthnOptionsSerializer(serializers.Serializer):
+    """WebAuthn の options と、検証のときに送り返す challenge の番号（I619）"""
+    challenge_id = serializers.UUIDField()
+    options = serializers.DictField()
+
+
+class WebAuthnCredentialSerializer(serializers.Serializer):
+    """ブラウザの PublicKeyCredential.toJSON() の結果（中身の検証は py_webauthn に任せる・I619）"""
+    challenge_id = serializers.UUIDField()
+    credential = serializers.DictField()
+
+
+class PasskeyReauthSerializer(serializers.Serializer):
+    """本人確認: パスワードか、パスキー（challenge_id と credential）のちょうど片方（I619）"""
+    password = serializers.CharField(required=False, write_only=True, trim_whitespace=False)
+    challenge_id = serializers.UUIDField(required=False)
+    credential = serializers.DictField(required=False)
+
+    def validate(self, attrs):
+        present = attrs.keys() & {'password', 'challenge_id', 'credential'}
+        if present not in ({'password'}, {'challenge_id', 'credential'}):
+            raise serializers.ValidationError('パスワードか、パスキーのどちらか一方で確かめてください')
+        return attrs
+
+
+class ReauthTokenSerializer(serializers.Serializer):
+    reauth_token = serializers.CharField()
+    expires_in = serializers.IntegerField()
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    """ログインの応答（パスワード・パスキーで同じ形・I619）"""
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    user = UserSerializer()
 
 
 class EmailVerificationSerializer(serializers.Serializer):

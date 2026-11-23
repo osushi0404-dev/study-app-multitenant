@@ -130,6 +130,16 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Frontend URL
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
+# パスキー（WebAuthn・I619）。RP ID を後で変えると登録済みのパスキーが全部使えなくなる
+WEBAUTHN_RP_ID = os.getenv('WEBAUTHN_RP_ID', 'localhost')
+WEBAUTHN_RP_NAME = os.getenv('WEBAUTHN_RP_NAME', '学習アプリ')
+WEBAUTHN_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv('WEBAUTHN_ALLOWED_ORIGINS', FRONTEND_URL).split(',') if origin.strip()
+]
+WEBAUTHN_CHALLENGE_TTL_SECONDS = 300  # challenge の期限。options の timeout も同じ値（ミリ秒）にする
+PASSKEY_REAUTH_MAX_AGE_SECONDS = 300  # 本人確認の有効時間（設計確認メモ: 5 分）
+PASSKEY_MAX_PER_USER = 20  # 1 人のパスキーの上限（一覧の 1 ページ＝20 件に収める）
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -217,6 +227,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-user-actions',  # カスタムヘッダーを追加
     'idempotency-key',  # クイズ開始の重複送信防止（I158）
+    'x-reauth-token',  # パスキーの登録・削除の前の本人確認の印（I619）
 ]
 
 # Redis Configuration
@@ -315,6 +326,11 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = [
 REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'anon': '60/min',   # 未認証: IP ごと（登録画面の科目取得等は数 req/min で余裕）
     'user': '300/min',  # 認証済み: ユーザーごと（1 問/秒のクイズ回答=60 req/min でも 300/min に余裕で抵触しない）
+    # パスキー（I619）。DRF のレートは単位が 1 つ（1 分）しか書けない。options と検証は別の scope
+    # にし、学校・会社の NAT（同じ IP）でも 1 分に 10 回のログインを通す
+    'passkey_login_options': '20/min',
+    'passkey_login': '10/min',
+    'passkey_reauth': '5/min',
 }
 # 本番は nginx 1 段（X-Forwarded-For 付与・nginx/default.conf）。XFF が無い直アクセスは
 # REMOTE_ADDR に自動フォールバックするため開発環境でもこの値のままでよい。

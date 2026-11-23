@@ -1,6 +1,6 @@
 """アプリ専用の DRF スロットルクラス（I127）。"""
 from django.conf import settings
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, UserRateThrottle
 
 
 class LiveSettingsRateMixin:
@@ -25,4 +25,9 @@ class AppAnonRateThrottle(LiveSettingsRateMixin, AnonRateThrottle):
 
 
 class AppUserRateThrottle(LiveSettingsRateMixin, UserRateThrottle):
+    pass
+
+
+class AppScopedRateThrottle(LiveSettingsRateMixin, ScopedRateThrottle):
+    """ビューの throttle_scope ごとのレート（パスキーのログイン・本人確認・I619）"""
     pass

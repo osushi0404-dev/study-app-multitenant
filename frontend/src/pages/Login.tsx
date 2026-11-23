@@ -8,15 +8,18 @@ import {
   Typography,
   Box,
   CircularProgress,
+  Divider,
   IconButton,
   InputAdornment,
 } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Key, Visibility, VisibilityOff } from '@mui/icons-material';
+import { browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 
 import { useAuth } from '../contexts/AuthContext';
+import { PASSKEY_UNSUPPORTED } from '../utils/passkeyErrors';
 
 interface LoginFormData {
   emailOrUserId: string;
@@ -36,10 +39,12 @@ const schema = yup.object({
 const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const passkeySupported = browserSupportsWebAuthn();
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, loginWithPasskey } = useAuth();
 
   const from = location.state?.from?.pathname || '/dashboard';
 
@@ -50,6 +55,19 @@ const Login: React.FC = () => {
   } = useForm<LoginFormData>({
     resolver: yupResolver(schema),
   });
+
+  // パスキーでログイン（I619）。失敗の知らせは AuthContext が出す。入力欄の値はそのまま残る
+  const onPasskeyLogin = async () => {
+    setPasskeyLoading(true);
+    try {
+      await loginWithPasskey();
+      navigate(from, { replace: true });
+    } catch {
+      // 失敗の知らせは AuthContext が出した
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
@@ -92,7 +110,27 @@ const Login: React.FC = () => {
             ログイン
           </Typography>
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 1, width: '100%' }}>
+          <Box sx={{ mt: 1, width: '100%' }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={passkeyLoading ? undefined : <Key />}
+              onClick={onPasskeyLogin}
+              disabled={!passkeySupported || passkeyLoading || loading}
+              data-testid="passkey-login-button"
+              sx={{ minHeight: 44 }}
+            >
+              {passkeyLoading ? <CircularProgress size={24} /> : 'パスキーでログイン'}
+            </Button>
+            {!passkeySupported && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {PASSKEY_UNSUPPORTED}
+              </Typography>
+            )}
+            <Divider sx={{ my: 2 }}>または</Divider>
+          </Box>
+
+          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>
             <TextField
               margin="normal"
               fullWidth
