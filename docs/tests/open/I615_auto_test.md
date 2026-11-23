@@ -5,7 +5,7 @@
 結果:
 - backend: 対象外（コードの変更なし）
 - frontend: 対象外（コードの変更なし）
-- harness: 実装前のため未実行
+- harness: 実装前のため未実行 → 下の「実行記録」
 
 ## テストケース
 すべて `i599_cases.py` の中の確かめ（`ck`）。合否は入口のスクリプトの終了コード（合格=exit 0）。FG は、本体の写し（起動役・見張り・フック）を一時フォルダで壊し、その TC が不合格になることを確かめる（`assert old in src` で置き換え元が無ければ落ちる）。
@@ -34,3 +34,8 @@ bash -n .claude/hooks/reviewed-hook.sh
 python3 -m py_compile .claude/hooks/unreviewed.py
 python3 -m py_compile scripts/claude/hooks/pretooluse_guard.py
 ```
+
+## 実行記録
+- 2026-11-22〜24 implement（手元・サンドボックスの中）: `bash scripts/claude/tests/test_i599_unreviewed_scripts.sh` → exit 0（pass=56 fail=0。TC-I615-01〜07 と各 FG を含む）／`bash scripts/claude/tests/test_guard_must_stop_cases.sh` → exit 0（pass=3）／`bash scripts/claude/tests/test_pretooluse_checkout_guard.sh` → exit 0（pass=140）／`test_pretooluse_container_guard.sh`・`test_pretooluse_push_guard.sh`・`test_pretooluse_worktree_guard.sh`・`test_i182_guard_failsafe.sh`・`test_i200_guard_narrowing.sh`・`test_i444_guard_gaps.sh`・`test_i454_guard_env_writes.sh`・`test_i463_guard_optspec.sh`・`test_i469_guard_optspec_leftovers.sh`・`test_i187_mcp_filename_guard.sh` → すべて exit 0
+- 2026-11-24 review-gate: CI（Harness Tests を含む）OK（`docs/reviews/I615_code_review_20261124_0231.md`・`CI_WAIT: OK`）。決定論ゲートの `bash -n`・`py_compile` は code-review.sh が実走、`test_*.sh` は CI が流した
+- 2026-11-24 test-gate: 委譲（heavy）の行は無い。見張りの重いテストは manual No.5

@@ -6,18 +6,23 @@
 - 見張りが、作業ツリーを書き換える git の操作を中で動く形で流すのを止める（I586 の事故の予防）
 
 ## 変更点
-- （実装後に書く）
+- `.claude/hooks/reviewed-hook.sh`: 写しの作り方の正（`reviewed_snapshot`・`--snapshot`）・置き場所 `claude-reviewed-snapshots`・置いてある写しを消さない（F1）
+- `.claude/hooks/unreviewed.py`: `run` が写しの入口を動かす・部品（`parts`）とブランチの変更が重なれば 75
+- `scripts/claude/hooks/pretooluse_guard.py`: ほかの判定が通す形のうち、git の更新を中で動く形で流すものを止める
+- `scripts/claude/hooks/sessionstart_context.py`: 子に `-I`（F2）
+- `scripts/claude/fix-diagnosis-review.sh`: 部品を同じフォルダから読む
+- テスト・手順書（danger-ops.md・harness-audit.md）
 
 ## 影響範囲
 - Backend/Frontend/DB: なし
 - Config: `.claude/hooks/`（起動役）・`scripts/claude/hooks/`（見張り・セッション開始のフック）・`scripts/claude/fix-diagnosis-review.sh`・`scripts/claude/tests/`・`docs/runbooks/danger-ops.md`・`docs/runbooks/harness-audit.md`
 
 ## テスト結果
-- 自動: （実装後に書く）
-- 手動: （test-gate で書く）
+- 自動: `test_i599_unreviewed_scripts.sh` pass=56・見張りのテスト一式・CI すべて OK（`docs/tests/open/I615_auto_test.md`「実行記録」）。コードレビュー OK（止める指摘なし・Low/Medium 6 件は台帳）・敵対的レビュー OK（V1〜V6 確認済み）
+- 手動: No.1〜No.6 すべて OK（実施者はすべて Claude）
 
 ## 計画との差分
-- なし
+- あり: 写しの作り方を新しいファイルでなく `reviewed-hook.sh` の中に置いた（Write が拒まれたため）・見張りの判定をほかの判定の後に置いた（既存の確認を上書きしないため）・`test_pretooluse_checkout_guard.sh` の期待を 3 件直した（計画変更記録）
 
 ## ロールバック
 - PR を revert する。`~/.cache/claude-reviewed-snapshots/` は消してよい
@@ -29,6 +34,7 @@
 - [implement] 写しの作り方を新しいファイルでなく reviewed-hook.sh の中に置いた — Write が拒まれ、.claude/hooks/ はサンドボックスから書けないため（結果は同じ・計画変更記録）
 - [implement] 見張りの新しい判定は、ほかの判定がすべて通すとしたコマンドにだけかける — 既存の確認（承認画面）の判定を止めに変えないため（計画変更記録）
 - [implement] /simplify の指摘のうち、部品の対応表化・設定から外に出る語を作る案・一覧の一本化は見送った — 計画で決めた方式・決まり（計画変更記録）
+- [test-gate] 作業記録との比べ（manual No.5）は HOME を一時フォルダに向けて流した — キャッシュの置き場所 ~/.cache がサンドボックスの中から書けないため（作業記録は同じものを読む）
 
 STAGE_DONE: plan NEXT: plan-review
 
