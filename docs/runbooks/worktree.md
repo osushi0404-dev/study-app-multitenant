@@ -262,11 +262,11 @@ docker compose port backend 8000
   - 起動のたびに確かめ用のデータ（`verify_i487`）が作り直されるが、本人の利用者・組織には触れない（`frontend-verify.md` §11）
   - アプリの更新は、PR がマージされた後に `git fetch origin` → `git switch --detach origin/develop` → 起動し直す（develop は primary が使っているので切り替えられない）
   - 控えは `bash scripts/claude/db-backup.sh`（勉強の記録を消す前・アプリを更新する前に取る）
-- **Claude が本人の利用者で画面を操作するとき**: ユーザーがこのワークツリーの `e2e/.env.e2e` に `STUDY_USER_PASSWORD=<パスワード>` の行を足し、`/mcp` で playwright をつなぎ直す。Claude はパスワード欄に名前 `STUDY_USER_PASSWORD` を入れる（値は会話・出力に出ない・`frontend-verify.md` の `--secrets`）
+- **Claude が本人の利用者で画面を操作するとき**: ユーザーがこのワークツリーの `e2e/.env.e2e` に `STUDY_USER_PASSWORD=<パスワード>` の行を足し、`/mcp` で playwright をつなぎ直す。Claude はパスワード欄に名前 `STUDY_USER_PASSWORD` を入れる（値は会話・出力に出ない・`frontend-verify.md` の `--secrets`）。値は `'` で囲む（`STUDY_USER_PASSWORD='<パスワード>'`。囲まないと `#` から後ろが消える。値が空と読まれた名前は置き換わらず、名前のまま入力される）。行を足す・直すたびに `/mcp` でつなぎ直す（起動したときしか読まない）。置き換わったかは、パスワード欄の値が名前と同じでないこと・8 文字以上であることだけを `browser_evaluate` で真偽で確かめる（値そのものは出さない）
 - **過去問の扱いの決まり**（IPA の使用条件: https://www.ipa.go.jp/shiken/faq.html ）:
   - 問題・選択肢・正解は IPA の公開 PDF（問題冊子・解答例）からだけ取る。PDF はユーザーが保存する（Claude の `curl` は止められる）
   - 出典の欄に「<年度> <期> <試験区分> <時間区分> 問N」（例: 令和6年度 秋期 データベーススペシャリスト試験 午前Ⅱ 問3）。改行・字下げ以外で表記を変えたら（下線が消える・枠の空欄を文字にする など）「（一部改変）」を付ける。上付き・下付きは Unicode の文字（B⁺・T₁）で書けば改変にならない。図・表を画像のまま付けるのは改変にならない
-  - 解説は Claude が書き、先頭に「（Claude 作成の解説。IPA の公式の解説ではありません）」を付ける。過去問サイト・参考書の解説は見ない・写さない。書いたら、別の点検役（Agent）に問題冊子・解答例だけを材料に全問を見てもらう。誤りに気づいたら問題管理の画面で直す
+  - 解説は Claude が書き、先頭に「（Claude 作成の解説。IPA の公式の解説ではありません）」を付ける。過去問サイト・参考書の解説は見ない・写さない。書いたら、別の点検役（Agent）に問題冊子・解答例だけを材料に全問を見てもらう。誤りに気づいたら問題管理の画面で直す（DB を `manage.py shell` で直すと問題一覧の一時保存が古いまま残る。そのときは `from core.cache_service import cache_service; cache_service.invalidate_problems_cache(<科目 ID>)` で消す）。Linux の確かめ用のブラウザでは `⇄` が別の記号で出るので使わない（`→`・`⁺`・`₁`・`¹⁶`・`ⁿ` は出る）
   - 問題の Markdown・画像・PDF はリポジトリに入れない（`.evidence/I###/` に置く。git の対象外）
 - **道具の注意**:
   - `import_problems` は欄を 1 行だけ読み（改行は捨てられる）、難易度はファイルごと（`--difficulty`）。難易度ごとにファイルを分けて流す。ファイルは `docker compose cp <ファイル> backend:/tmp/` で渡す。画面は選択肢の記号を出さないので、選択肢の本文の先頭に記号（ア〜エ）を書く
