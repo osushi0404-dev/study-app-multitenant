@@ -39,6 +39,9 @@
 
 - [implement] /simplify は点検役を起こさず 4 観点を自分で見た — 差分が文書 3 ファイル・45 行だけのため。高さの指摘 1 件（`.env.e2e` の値を `'` で囲む・つなぎ直す話は `--secrets` 全般の話なので `frontend-verify.md` §9 が本来の置き場所）は計画の範囲外なので直さず、retro で同梱か起票かを決める
 
+- [review-gate] 基本レビューは OK（`docs/reviews/I586_code_review_20261124_0257.md`・CI OK・敵対的レビューは不要）。Low 4 件（F1 計画書のフォルダのパス・F2 `.env.e2e` が backend にも読まれる・F3 `'` を含むパスワードの書き方・F4 計画変更記録の事後の行）は止めない指摘なので直さず retro へ — 台帳の決まり（I197）
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
