@@ -37,5 +37,8 @@
 - [implement] 問3 の解説の `⇄` を言い換え、DB は `manage.py shell` で 1 行だけ直して一覧の一時保存を消した — 画面で直すより確実に同じ文にできる。意味は変えていないので点検（MT-06）はやり直さない
 - [implement] MT-11 の 5 問目まででクイズを「終了」した — 計画の「5 問以上・図 2 問以上」を満たしたため
 
+- [implement] /simplify は点検役を起こさず 4 観点を自分で見た — 差分が文書 3 ファイル・45 行だけのため。高さの指摘 1 件（`.env.e2e` の値を `'` で囲む・つなぎ直す話は `--secrets` 全般の話なので `frontend-verify.md` §9 が本来の置き場所）は計画の範囲外なので直さず、retro で同梱か起票かを決める
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
