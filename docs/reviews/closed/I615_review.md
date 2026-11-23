@@ -75,6 +75,7 @@
 - [retro] 新しい版を正式な結果にする決まり → #593 に共有（向きが逆の要件のため、設計で決め直す）
 - [retro] セキュリティ設計レビューの残り Medium 2 件 → #600 に同梱（git・docker の設定経由の穴の範囲）
 - [retro] 見送り: 「grill-me で、選択肢が既存の道具の制約（周の上限・記録の数え方）で実現できるかを先に確かめる」— 計画の段階で捕まり手戻りは質問 1 回だけ（4 問の 2）。Write が使えなくなった件 — 環境の事象で、方式を変えずに置き場所で吸収できた。見張りのテストとの衝突 — implement で既存のテストを流して捕まった
+- [close] base 追従は不要（mergeStateStatus=BLOCKED＝承認待ち）・gate-check OK・記録を closed へ移した
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -89,3 +90,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
