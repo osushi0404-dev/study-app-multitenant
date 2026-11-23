@@ -12,7 +12,14 @@
 - 何を変えたか: F1 は `PasskeySerializer.validate()` で `name` の無い本文を 400（`details.name`）にした。F2 は `record_failed_login()` の頭で、期限の切れたロックがあれば回数と期限を戻してから数える（パスワードのログインと本人確認の両方が同じに直る）
 - セキュリティ上の考慮点: F2 は締め出し（可用性）の攻撃を止める。総当たりの守り（30 分ごとに 5 回まで）は変わらない。F1 は内部の情報の露出なし（入力の誤りを 5xx にしない）
 - 次回どう防ぐか: 書ける項目が 1 つの PATCH には「本文が空」の TC を必ず入れる（TC-04 に足した）。ロックのような時間の状態は「期限の後の 1 回目」の TC を入れる（TC-06 に足した）
-- 確かめた結果: TC-04（`PATCH {}` が 400・`details.name`）と TC-06（`test_tc06_lock_expiry_restarts_count`: 期限切れの後の 1 回の誤りで回数 1・ロックなし。本人確認とパスワードのログインの両方）を足した。直しを外すと 2 件とも落ちる（`KeyError: 'name'`・再ロック）ことを確かめてから戻した
+- 確かめた結果（F1・F2）: TC-04（`PATCH {}` が 400・`details.name`）と TC-06（`test_tc06_lock_expiry_restarts_count`: 期限切れの後の 1 回の誤りで回数 1・ロックなし。本人確認とパスワードのログインの両方）を足した。直しを外すと 2 件とも落ちる（`KeyError: 'name'`・再ロック）ことを確かめてから戻した
+
+## 再発防止記録（fix-loop・2026-11-24・test-gate の手動テスト No.10）
+- なぜ失敗したか: MUI 5 の `IconButton` の既定は 40px（アイコン 24px＋余白 8px）。文字のボタンには `minHeight: 44` を付けたが、一覧の行の鉛筆・ごみ箱のアイコンだけのボタンに付け忘れた。jsdom の単体テストは大きさを測れず、E2E も大きさを見ていなかった
+- 何を変えたか: `PasskeysCard.tsx` の 2 つの `IconButton` に `sx={{ width: 44, height: 44 }}`。TC-30（`e2e/tests/passkey.spec.ts`）に、登録した行の 2 つのボタンの `boundingBox` が幅・高さとも 44 以上かの確かめを足した
+- セキュリティ上の考慮点: 該当なし（押しやすさ。削除は確認のダイアログと本人確認があり、押し間違いで消えない）
+- 次回どう防ぐか: アイコンだけのボタンを足すときは、実際のブラウザで大きさを測る E2E を置く（jsdom では測れない）。既存の画面のアイコンのボタンの点検は retro で後続にするかを決める
+- 確かめた結果: e2e コンテナで TC-30 が通過。直しを外すと `Expected: >= 44 / Received: 40` で落ちることを確かめてから戻した。設定の部品の Jest 27 件・ESLint・型チェックが通過
 
 ## 前提（テストの道具）
 - 裏側: `backend/accounts/tests/test_I619_passkeys.py`（API を通す結合テスト）と `backend/accounts/tests/webauthn_soft_authenticator.py`（テスト用のソフトの認証器。cryptography の EC P-256 の鍵・cbor2 で、attestation `none` の登録の応答と、assertion〔`authenticatorData`・`clientDataJSON`・署名・`userHandle`〕を作る。origin・RP ID・UV・署名回数・challenge を引数で変えられる）。**py_webauthn の `verify_*` は差し替えない**（本物の検証を通す）

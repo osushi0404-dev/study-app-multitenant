@@ -53,6 +53,12 @@ test('TC-30: パスキーを登録し、ログアウトしてパスキーでロ�
   await expect(card.getByRole('listitem')).toHaveCount(before + 1);
   const added = card.getByRole('listitem').last();
   await expect(added).toContainText('まだ使っていません');
+  // 行のアイコンのボタンの押す的は 44px 以上（ux-rules.md §6・I619 の test-gate の NG の再発防止）
+  for (const name of [/の名前を変える$/, /を削除$/]) {
+    const box = await added.getByRole('button', { name }).boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
 
   // ログアウト → パスキーでログイン
   await page.click('[data-testid="user-menu-button"]');

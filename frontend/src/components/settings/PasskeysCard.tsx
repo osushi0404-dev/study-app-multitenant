@@ -111,10 +111,19 @@ function PasskeysCard() {
             divider
             secondaryAction={
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <IconButton aria-label={`『${passkey.name}』の名前を変える`} onClick={() => setRenaming(passkey)}>
+                {/* 押す的は 44px 以上（ux-rules.md §6。IconButton の既定は 40px） */}
+                <IconButton
+                  aria-label={`『${passkey.name}』の名前を変える`}
+                  onClick={() => setRenaming(passkey)}
+                  sx={{ width: 44, height: 44 }}
+                >
                   <Edit />
                 </IconButton>
-                <IconButton aria-label={`『${passkey.name}』を削除`} onClick={() => setDeleting(passkey)}>
+                <IconButton
+                  aria-label={`『${passkey.name}』を削除`}
+                  onClick={() => setDeleting(passkey)}
+                  sx={{ width: 44, height: 44 }}
+                >
                   <Delete />
                 </IconButton>
               </Box>
