@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config: （実装後に書く。計画の 3 を参照）
 
 ## テスト結果
-- 自動: （実装後に書く）
-- 手動: （test-gate で書く）
+- 自動: CI（backend・frontend・E2E・Harness）がすべて通過（review-gate の code-review.sh が確かめた・2026-11-24）。手元の追加の実走は無し（auto_test の決定論ゲートは無い）
+- 手動（Claude・2026-11-24・0cfabd25）: No.1〜9・11 は OK、No.10 は NG（一覧の行の鉛筆・ごみ箱のボタンが 40×40px で、押す的の 44px に足りない）。No.12（人）は直した後に依頼する
 
 ## 計画との差分
 - （実装後に書く）
@@ -32,6 +32,7 @@
 - [implement] /simplify（4 観点）で直した: ロックの規則を User のメソッドに 1 つにまとめ、パスワードのログインと本人確認で共有・`complete_login` で last_login も更新・用途を user から決める・シグナルの update_fields の除外・OpenAPI の詳細の経路の抜け・本人確認の 400 以外の文・使わない export・テストの重複した 1 行 — 理由は計画変更記録
 - [implement] /simplify で直さなかった: reauth の印を `signing` の `max_age` に任せる（期限切れのテストに時刻の差し替えが要るため、計画の決定どおり iat を持つ）／一覧のページ分けを外す（Django 規約 §6 の必須）／登録・名前の変更の後の取り直しをキャッシュの書き換えにする（React 規約 §5 は invalidate）／期限切れの challenge の片付けを定期の処理にする（計画の R5 の決定・行は 5 分で消える）／403 に専用の印を付ける（この経路で 403 を返すのは `HasRecentReauth` だけで、共通の例外の形を変えるのは範囲外）／`establishSession` の型を生成の型にそろえる（手書きの User と生成の型の差は既存の差）／`browserSupportsWebAuthn()` を 1 回だけにする（軽く、テストで毎回差し替えるため）／400 の文の取り出しと再読み込みの行の共通化（LearningSubjectsCard など範囲外の部品を直すことになる）
 - [fix-loop] 止める指摘 F1（PATCH の空の本文で 500）は案 A（シリアライザの validate で 400）、F2（ロックの期限切れで回数が戻らない）は案 A（`record_failed_login` で期限切れなら数え直す）で直した。診断レビュー PASS（docs/reviews/I619_fix_diagnosis_review_20261124_0232.md）。F2 の直しはパスワードのログインのロックにも効く（元からの欠陥・ログインの成否と応答の形は変わらない）。台帳の Low（F3〜F7）は直さない — fix-loop が直すのは止める指摘だけ
+- [test-gate] Claude の手動テストで No.10 が NG（MUI の IconButton の既定が 40px で、ux-rules §6 の 44px に足りない）。コードを直す必要があるので fix-loop に回す。人の手動テスト（No.12）は、直してレビューを通った後にまとめて依頼する
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
