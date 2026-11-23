@@ -12,7 +12,8 @@
 
 ## テスト結果
 - 自動: 決定論ゲートなし（`I586_auto_test.md` に理由）
-- 手動: MT-01〜MT-13 は OK（`I586_manual_test.md`）。MT-14（Human・本人の使い心地）は test-gate で頼む
+- 手動: MT-01〜MT-13 は OK（`I586_manual_test.md`）。MT-14（Human・本人の使い心地）はユーザーに依頼中
+- test-gate: `gate-check.sh` OK・記録の判定 2 つ OK（2026-11-24）
 
 ## 使いにくさの候補
 - 一覧は `docs/tests/open/I586_manual_test.md`「## 使いにくさの候補」（画像の選択肢の見比べ・画像が小さく拡大が画面に収まらない・正解数の表示が遅れる・プレビューの記号の重複・管理一覧の並び・DB を直接直したときの一時保存）。MT-14 の感想を足し、retro で起票か同梱かを決める
@@ -41,7 +42,10 @@
 
 - [review-gate] 基本レビューは OK（`docs/reviews/I586_code_review_20261124_0257.md`・CI OK・敵対的レビューは不要）。Low 4 件（F1 計画書のフォルダのパス・F2 `.env.e2e` が backend にも読まれる・F3 `'` を含むパスワードの書き方・F4 計画変更記録の事後の行）は止めない指摘なので直さず retro へ — 台帳の決まり（I197）
 
+- [test-gate] Claude 担当の MT-01〜MT-13 は implement の中で済ませた結果をそのまま使う — レビュー済みの HEAD 以降はコードもデータの手順も変えていないため
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: human-test

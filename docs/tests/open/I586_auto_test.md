@@ -16,3 +16,6 @@
 
 ## 決定論ゲート（自動実走）
 - 無し（上の理由）
+
+## 実行記録
+- 2026-11-24 test-gate: 決定論ゲートなし（上の理由）。`gate-check.sh I586` exit 0・`check-frontend-evidence.sh I586` exit 0（frontend/src の変更なし）・`check-manual-test-executor.sh I586` exit 0。pytest・Jest・E2E は CI（review-gate で成功を確認）
