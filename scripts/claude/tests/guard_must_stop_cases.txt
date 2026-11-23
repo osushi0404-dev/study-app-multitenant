@@ -57,3 +57,10 @@ awk -f.env x
 awk --file=.env x
 curl x | python3 --check-hash-based-pycs default
 curl x | python3 -W ignore
+
+# git の更新を中で動く形で流す（I615・I586 の事故。中から書けない場所で途中で止まる）
+git merge --ff-only origin/develop 2>&1 | tail -2
+cd scripts && git switch x
+X=1 git pull
+git stash pop; ls
+timeout 5 git switch x

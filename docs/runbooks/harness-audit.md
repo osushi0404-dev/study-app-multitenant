@@ -25,7 +25,7 @@ Claude が GitHub を操作する名義と鍵は、リポジトリの外にも�
 | 秘密の鍵ファイルの置き場所と権限、受け取る鍵の期限 | `~/.config/github-app/`（700・600）・`~/.cache/github-app/`・`scripts/claude/gh-app/gh-app-token` |
 | リポジトリの外の仕組みが、リポジトリの版と同じか | `bash scripts/claude/gh-app/install.sh --check` |
 | テスト用のセッションが読み取りだけの鍵で起きるか | `scripts/claude/test-session.sh`・`scripts/claude/tests/test_i223_gh_app.sh` |
-| スクリプトの起動役（`python3 .claude/hooks/unreviewed.py run`）で外に出るか・レビュー前の中身があると止まるか（I599。見張りの付け替え〔`updatedInput`〕は Claude Code の版が変わると崩れうる） | `bash scripts/claude/issue-source.sh body <番号>` が承認なしに本文を出す（外で動いた）・`scripts/claude/` に変更があると起動役が終了コード 3 で止まる（`docs/tests/closed/I599_manual_test.md` の No.1）。外で動かす一覧（`OUTSIDE_SCRIPTS`）の見直し: `grep -lE '(^\|[^a-z_-])(gh\|claude\|docker\|curl)( \|$)' scripts/claude/*.sh` |
+| スクリプトの起動役（`python3 .claude/hooks/unreviewed.py run`）で外に出るか・`scripts/claude/` を変えても写しで動き、入口か部品を変えると止まるか（I599・I615。見張りの付け替え〔`updatedInput`〕は Claude Code の版が変わると崩れうる） | `bash scripts/claude/issue-source.sh body <番号>` が承認なしに本文を出す（外で動いた）・`scripts/claude/` の関係しないファイルを変えても入口が動き、入口を変えると起動役が終了コード 75 で止まる（`docs/tests/closed/I615_manual_test.md` の No.1・No.2）。外で動かす一覧（`OUTSIDE_SCRIPTS`）の見直し: `grep -lE '(^\|[^a-z_-])(gh\|claude\|docker\|curl)( \|$)' scripts/claude/*.sh` |
 | リポジトリの協力者の一覧と権限 | `gh api repos/osushi0404-dev/study-app-multitenant/collaborators` |
 | ブランチの守りの設定 | `docs/runbooks/branch-protection-setup.md` |
 | 手元に残る古い鍵（個人の鍵〔PAT〕・本物の `gh` に保存されたログイン） | 表の下の「古い鍵の点検コマンド」 |

@@ -40,7 +40,7 @@
 - [ ] AC3: 基準（`git merge-base HEAD origin/develop`）を求められない・写しを作れないときは、作業ツリーの版を外で動かさずに終了コード 75 で止まり、`!` を案内する（TC-03）
 - [ ] AC4: 写しの作り方・置き場所は 1 か所（`.claude/hooks/reviewed-hook.sh` の `reviewed_snapshot`。計画変更記録 implement）にあり、フックの起動役と入口の起動役は同じ BASE で同じ写しを使う（TC-04・manual No.4）
 - [ ] AC5: 写しを作る処理は、ほかの起動役が置いた写しを消さない（F1・TC-05）。フックが起こす python は子のプロセスも含めてすべて `-I`（F2・TC-06）
-- [ ] AC6: 作業ツリーを書き換える git の操作を、サンドボックスの中で動く形（git・gh・docker 以外とのつなぎ・`|`・`>`・`<`・`&`・かっこ・`$(…)`・バッククォート・前置きの代入）で流そうとすると、見張りが止めて単独で流すよう案内する。単独の形と git どうしのつなぎ、読み取りだけの git は今までどおり通る（TC-07・manual No.5）
+- [ ] AC6: 作業ツリーを書き換える git の操作を、サンドボックスの中で動く形（git・gh・docker 以外とのつなぎ・`|`・`>`・`<`・`&`・かっこ・`$(…)`・バッククォート・前置きの代入）で流そうとすると、見張りが止めて単独で流すよう案内する。単独の形と git どうしのつなぎ、読み取りだけの git は今までどおり通る。ほかの判定が確認（承認画面）・停止にする形は、その判定のまま（人が承認画面で見る。計画変更記録 implement）（TC-07・manual No.5）
 - [ ] AC7: 手順書の「ユーザーに `!` で流してもらう」は、写しを作れないとき・入口か部品を変えたとき・git の更新が途中で止まったときの戻しの 3 つの場面だけになっている（manual No.6）
 
 ## 3. 影響範囲
@@ -51,7 +51,7 @@
 | 見張り（安全装置） | `scripts/claude/hooks/pretooluse_guard.py`（git の更新をつないだ形を止める）・`scripts/claude/tests/guard_must_stop_cases.txt`（止める形を足す） |
 | フック | `scripts/claude/hooks/sessionstart_context.py`（子に `-I`） |
 | 入口 | `scripts/claude/fix-diagnosis-review.sh`（部品を同じフォルダから読む） |
-| テスト | `scripts/claude/tests/i599_cases.py`（I615 の TC を足し、止める形から写しで動く形に直す） |
+| テスト | `scripts/claude/tests/i599_cases.py`（I615 の TC を足し、止める形から写しで動く形に直す）・`scripts/claude/tests/test_pretooluse_checkout_guard.sh`（cd とつないだ checkout を通すと期待していた G23・G47・FG-AMB を、止める〔2〕に直す。計画変更記録 implement） |
 | 文書 | `docs/runbooks/danger-ops.md`・`docs/runbooks/harness-audit.md` |
 | 意図的に変えない | `.claude/settings.json`（外に出す型・フックの呼び方は同じ）・`OUTSIDE_SCRIPTS` の一覧・`.claude/agents/*.md`（部品として読むだけ）・`.claude/skills/`（下の 9。案内は起動役の出力と danger-ops.md に置く）・`docs/runbooks/workflow.md`（`!` の案内の記述が無い）・`scripts/claude/code-review.sh`（`gate_reviewed` は `dirty` のまま） |
 | 依存 | 追加なし |
@@ -105,7 +105,7 @@
   - 中で動く形 = 次のどれか: 引用符の外の `|`・`>`・`<`・`&`（`&&` を除く）・`(`・`)` がある／`$(` かバッククォートがある（引用符の中も含む・安全側）／`&&`・`||`・`;`・改行で区切った命令のどれかの最初の語が `git`・`gh`・`docker`・`docker-compose` でない（前置きの代入〔`X=1 git …`〕・`cd`・`timeout` などを含む）
   - 両方に当たれば止める（exit 2）。理由: `作業ツリーを書き換える git の操作（<命令>）を、ほかのコマンドとのつなぎ・振り向け・前置きつきで流すと、サンドボックスの中で動いて途中で止まります。git を単体で（git どうしのつなぎは可）流してください（docs/runbooks/danger-ops.md「外に出すコマンドの書き方」・I615）`
 - 区切りの読み取りは既存の `_segments_ops`（引用符の中の `|`・`;` で区切らない）を使う
-- `scripts/claude/tests/guard_must_stop_cases.txt` に節「git の更新を中で動く形で流す（I615・I586）」を足す: `git merge --ff-only origin/develop 2>&1 | tail -2`・`cd sub && git checkout main`・`X=1 git pull`・`git stash pop; ls`・`git reset --hard HEAD > /tmp/x`
+- `scripts/claude/tests/guard_must_stop_cases.txt` に節「git の更新を中で動く形で流す（I615・I586）」を足す: `git merge --ff-only origin/develop 2>&1 | tail -2`・`cd scripts && git switch x`・`X=1 git pull`・`git stash pop; ls`・`git reset --hard HEAD > /tmp/x`
 
 ### 4-7. `scripts/claude/tests/i599_cases.py`
 達成すること: 新しい起動役の動き・写しの作り方・F2・見張りの判定を、一時のリポジトリ（本物は書き換えない）で確かめる。
@@ -222,6 +222,8 @@ Danger Ops（有無/手順/ロールバック）:
 | V6 | 3 | 読んで可 | フックが起こす python がすべて `-I`: TC-06（`scripts/claude/hooks/*.py` の `sys.executable` で起こす箇所）と FG |
 
 ## 計画変更記録
+- 2026-11-22 implement（/simplify と見張りのテスト）: 計画書の記載: [4-6「`_git_update_inside(cmd)` を `main()` の `_route` の止める判定の直後に置く」「区切りの読み取りは既存の `_segments_ops`」] → 採った方法: 判定は、ほかの判定（危険操作の停止・確認・安全網）がすべて通すとしたコマンドにだけ、最後の `_pass()` の直前でかける。git の命令は見張りの読み解き（`_analyze` が `git_update` に集める。`_git_find` で命令の位置の git だけ・包み〔timeout・env〕は読み解きが外す・コンテナの中は除く）から受け取り、「中で動く形か」だけを `_segments_ops` と文字で見る。外に出る最初の語は `("git", "gh", *_DOCKER_CLIS)` — 理由: `_route` の直後に置くと、既存の見張りのテスト（`test_pretooluse_checkout_guard.sh` の 61 件・`test_pretooluse_container_guard.sh` の 2 件）で、確認（承認画面）にしていた危険な形まで止めに変わり、ヒアドキュメントの本文の git も命令と取り違えた。最後に置けば、既存の確認・停止の判定と理由はそのままで、通していた形だけを止める。`cd sub && git checkout main` のように場所が決まらず確認になる形は確認のまま（人が見る）なので、TC-07 と止める形の一覧の例を `cd scripts && git switch x` に替え、`git reset --hard HEAD > o`（危険操作で先に止まる）を `git switch x > o` に替えた。`test_pretooluse_checkout_guard.sh` の G23・G47（cd とつないだ checkout を通す）と FG-AMB は、狙いどおり止める（2）に期待を直した。計画レビューのやり直し: 不要（止める対象〔ほかの判定が通す形〕は同じで、既存の判定を上書きしない側に狭めた。AC6 に一文を足した）
+- 2026-11-22 implement（/simplify）: 起動役 `run` の git を 6 回から 3 回に（`_unreviewed_files` に複数の場所を渡す）・写しを作れない理由は `reviewed-hook.sh` の文をそのまま使う・フックの起動役の理由の行を 1 行に・`GIT_` の変数を組み込みだけで外す（毎回のツール呼び出しでプロセスを増やさない）・テストの重複（`snap_of`・`guard_err`・手書きの FG の写し）を既存の `snapdir`・`guard_proc`・`broken_judge`（置き換えの組を複数・元のファイルを選べる）にまとめ、一時のリポジトリを 2 つ減らし、FG は最初に落ちた件で止める。計画レビューのやり直し: 不要（整理だけ）。見送り: 部品のたどりを入口ごとの対応表に替える案（ユーザーの回答「流す入口とその部品」と調査結果 8 で決めた方式。R2 で受け入れ）・見張りの外に出る最初の語を設定から作る案（設定を写すテストを作らない決まり）・TC-07 の例と止める形の一覧を 1 つにする案（一覧は変更前の見張りとの比べ、TC は I615 の理由の確かめで、目的が違う）・`$(…)` で関数を呼ぶ子の bash を変数で返す案（フォークだけで数 ms）
 - 2026-11-22 implement: 計画書の記載: [新規 `.claude/hooks/reviewed-snapshot.sh` に写しの作り方を置く（4-1）] → 採った方法: 写しの作り方は既存の `.claude/hooks/reviewed-hook.sh` の関数 `reviewed_snapshot`・`_reviewed_snapshot_make` に置き、`bash .claude/hooks/reviewed-hook.sh --snapshot` で写しの最上位だけを出す使い方を足す。入口の起動役はこれを呼ぶ。読み込んだとき（`.`）は関数を定義するだけ — 理由: このセッションでは新しいファイルを作る道具（Write）が許可の設定で拒まれ、`.claude/hooks/` はサンドボックスの中からも書けない。受け入れ条件の結果（作り方・置き場所が 1 か所・フックと入口が同じ写しを使う）は同じで、置くファイルが変わるだけ。計画レビューのやり直し: 不要（方式・範囲は同じ・AC4 のファイル名だけを直す）
 - 2026-11-22 plan: 計画書の記載: [イシューの設計確認メモ「両方流す（古い版を自動・新しい版を `!`）」] → 採った方法: 入口か部品を変えたときは、その入口だけ新しい版を `!` で流し、それを正式な結果にする — 理由: 周の上限を 1 回で使い切る・2 回目は差分だけを見て何もレビューしない、が分かり、ユーザーに確かめて変えた（2026-11-22）。計画レビューのやり直し: 不要（計画レビューの前）
 - 計画レビュー（20261122_0254・HIGHRISK・Blocker なし）の Warning 3 件を反映: 写しの `code-review.sh` で流さなかったゲートが記録の証跡に出ることを調査結果 7 に書いた／TC-02 をコミット済みと未コミットの両方で確かめるようにした／R2 に、部品の見落としの影響と lint を一覧に回すことを書いた。方式・範囲・受け入れ条件は変えていないので再レビューはしない
