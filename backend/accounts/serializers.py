@@ -286,6 +286,12 @@ class PasskeySerializer(serializers.ModelSerializer):
         from .passkeys import clean_passkey_name  # passkeys が serializers を読むので、ここで読む
         return clean_passkey_name(value)
 
+    def validate(self, attrs):
+        # 書ける項目は名前だけ。PATCH（partial）で名前が無い本文は入力の誤り（I619 F1）
+        if 'name' not in attrs:
+            raise serializers.ValidationError({'name': '名前を入力してください'})
+        return attrs
+
 
 class WebAuthnOptionsSerializer(serializers.Serializer):
     """WebAuthn の options と、検証のときに送り返す challenge の番号（I619）"""

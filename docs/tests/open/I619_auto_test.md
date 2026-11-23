@@ -1,11 +1,18 @@
 # I619 自動テスト: パスキーでログイン
 
-実行コマンド（例）: `docker compose exec backend pytest accounts/tests/test_I619_passkeys.py` / `docker compose exec frontend npm test -- --watchAll=false src/components/settings src/pages/__tests__/Login.test.tsx` / `RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e npx playwright test tests/passkey.spec.ts --retries=0`（pytest・Jest・E2E の正は CI）
+実行コマンド（例）: `docker compose exec backend pytest accounts/tests/test_I619_passkeys.py` / `docker compose exec frontend npm test -- --watchAll=false src/components/settings src/pages/__tests__/Login.test.tsx` / e2e コンテナは `docs/runbooks/frontend-verify.md` §8 の `--env-file` を重ねる形（pytest・Jest・E2E の正は CI）
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
-- e2e: 実装前のため未実行
+- backend（2026-11-24・手元）: `test_I619_passkeys.py` 42 件・accounts と関係する core のテスト 96 件が通過。implement の時点で全体 876 件が通過
+- frontend（2026-11-22・手元）: パスキーの部品・ログイン画面・設定画面・AuthContext の 7 ファイル 41 件が通過・型チェックとリントも通過
+- e2e（2026-11-22・手元の e2e コンテナ）: `tests/passkey.spec.ts` 1 件が通過（RP ID `frontend`）
+
+## 再発防止記録（fix-loop・2026-11-24・コードレビュー F1・F2）
+- なぜ失敗したか: F1 は PATCH（partial）で `name` の必須の検証が外れ、`perform_update` が `validated_data['name']` を前提にしていた。F2 はロックの期限切れを回数のリセットに結び付けておらず（I619 の前からパスワードのログインにあった規則を、/simplify で `User.record_failed_login()` に移したときにそのまま写した）、期限のたびに 1 回の誤りで再ロックされた
+- 何を変えたか: F1 は `PasskeySerializer.validate()` で `name` の無い本文を 400（`details.name`）にした。F2 は `record_failed_login()` の頭で、期限の切れたロックがあれば回数と期限を戻してから数える（パスワードのログインと本人確認の両方が同じに直る）
+- セキュリティ上の考慮点: F2 は締め出し（可用性）の攻撃を止める。総当たりの守り（30 分ごとに 5 回まで）は変わらない。F1 は内部の情報の露出なし（入力の誤りを 5xx にしない）
+- 次回どう防ぐか: 書ける項目が 1 つの PATCH には「本文が空」の TC を必ず入れる（TC-04 に足した）。ロックのような時間の状態は「期限の後の 1 回目」の TC を入れる（TC-06 に足した）
+- 確かめた結果: TC-04（`PATCH {}` が 400・`details.name`）と TC-06（`test_tc06_lock_expiry_restarts_count`: 期限切れの後の 1 回の誤りで回数 1・ロックなし。本人確認とパスワードのログインの両方）を足した。直しを外すと 2 件とも落ちる（`KeyError: 'name'`・再ロック）ことを確かめてから戻した
 
 ## 前提（テストの道具）
 - 裏側: `backend/accounts/tests/test_I619_passkeys.py`（API を通す結合テスト）と `backend/accounts/tests/webauthn_soft_authenticator.py`（テスト用のソフトの認証器。cryptography の EC P-256 の鍵・cbor2 で、attestation `none` の登録の応答と、assertion〔`authenticatorData`・`clientDataJSON`・署名・`userHandle`〕を作る。origin・RP ID・UV・署名回数・challenge を引数で変えられる）。**py_webauthn の `verify_*` は差し替えない**（本物の検証を通す）

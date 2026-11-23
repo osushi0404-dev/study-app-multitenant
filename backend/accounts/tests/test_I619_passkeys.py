@@ -368,6 +368,11 @@ def test_tc04_rename(alice, carol, bob):
     assert client_for().patch(url, {"name": "x"}, format="json").status_code == 401
     assert client.put(url, {"name": "x"}, format="json").status_code == 405
 
+    # F1: 名前の無い PATCH は入力の誤り（500 にしない）
+    empty = client.patch(url, {}, format="json")
+    assert empty.status_code == 400
+    assert "name" in empty.json()["error"]["details"]
+
 
 # ---------------------------------------------------------------- TC-05 削除 ----
 @pytest.mark.django_db
@@ -457,6 +462,29 @@ def test_tc06_reauth_password_lockout(alice):
         "credential": authenticator.assertion_response(
             options["options"]["challenge"], user_handle=alice.id.bytes)}, format="json")
     assert by_passkey.status_code == 200
+
+
+@pytest.mark.django_db
+def test_tc06_lock_expiry_restarts_count(alice):
+    """F2: ロックの期限が切れたら数え直す（期限後の 1 回の誤りで再ロックしない）。
+
+    本人確認とパスワードのログインで同じ
+    """
+    client = client_for(alice)
+    expired = timezone.now() - timezone.timedelta(seconds=1)
+
+    User.objects.filter(pk=alice.pk).update(failed_login_attempts=5, account_locked_until=expired)
+    assert client.post(REAUTH, {"password": WRONG_INPUT}, format="json").status_code == 400
+    alice.refresh_from_db()
+    assert alice.failed_login_attempts == 1
+    assert alice.account_locked_until is None
+
+    User.objects.filter(pk=alice.pk).update(failed_login_attempts=5, account_locked_until=expired)
+    client_for().post("/api/auth/login/", {"email": "alice", "password": WRONG_INPUT}, format="json")
+    alice.refresh_from_db()
+    assert alice.failed_login_attempts == 1
+    assert alice.account_locked_until is None
+    assert client.post(REAUTH, {"password": TEST_PASSWORD}, format="json").status_code == 200
 
 
 @pytest.mark.django_db

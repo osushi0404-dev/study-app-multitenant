@@ -185,7 +185,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         return False
 
     def record_failed_login(self):
-        """パスワードの誤りを 1 つ数え、しきい値に達したらロックする"""
+        """パスワードの誤りを 1 つ数え、しきい値に達したらロックする
+
+        ロックの期限が切れていれば数え直す（期限のたびに 1 回の誤りで再ロックされない・I619 F2）
+        """
+        if self.account_locked_until and not self.is_account_locked():
+            self.failed_login_attempts = 0
+            self.account_locked_until = None
         self.failed_login_attempts += 1
         if self.failed_login_attempts >= self.LOCK_THRESHOLD:
             self.account_locked_until = timezone.now() + timezone.timedelta(minutes=self.LOCK_MINUTES)
