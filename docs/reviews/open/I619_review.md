@@ -47,3 +47,4 @@ STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
+STAGE_DONE: human-test NEXT: retro
