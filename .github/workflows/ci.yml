@@ -189,7 +189,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0   # 履歴を見るテスト（採番・レビュー記録など）があるため
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           # uv の版は pyproject.toml の required-version、python は .python-version、道具は uv.lock が正（I211）。
           # run-all.sh が uv run --locked で入れて流す。ここに python-version・version を書かない・install を足さない
