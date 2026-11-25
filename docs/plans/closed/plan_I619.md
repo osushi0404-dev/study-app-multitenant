@@ -332,7 +332,7 @@ Danger Ops（有無）:
 - 2026-11-24 implement（/simplify）: 計画書の記載: `build_login_response`・本人確認のロックは passkeys.py の定数・`authenticate_passkey(purpose=…)` → 採った方法: (1) ロックの規則（5 回・30 分）を `User.record_failed_login()`・`User.LOCK_THRESHOLD`・`LOCK_MINUTES` に置き、パスワードのログイン（`UserLoginSerializer`）と本人確認の両方から使う（成功の戻しは既存の `User.unlock_account()`） (2) `build_login_response` を `complete_login` にし、`last_login` の更新もここで行う（パスワードとパスキーで同じ処理） (3) `authenticate_passkey` の用途は `user` の有無から決める (4) 無効化のシグナルは `update_fields` に `is_active` が無い保存では何もしない (5) `core/openapi.py` の絞り込みは、渡る経路の `{pk}` をスキーマの形の `{id}` に直してから比べる（詳細の経路 `/api/auth/passkeys/{id}/` が契約から抜けていた） (6) 本人確認のダイアログで 400 以外（回数の制限・通信の失敗）の文を「本人の確認ができませんでした。時間をおいてもう一度お試しください」にした（「パスワードが正しくありません」と出て誤解させないため） — 理由: 4 つの観点の整理（同じ規則の写し・余分な引数・無駄な DELETE・契約の抜け）。パスワードのログインの振る舞いは同じ（全テストで確かめる）。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない）
 
 ## レビュー結果
-- [20261122_0310 判定: ✅ 完了](../../reviews/I619_plan_review_20261122_0310.md)
+- [20261122_0310 判定: ✅ 完了](../../reviews/closed/I619_plan_review_20261122_0310.md)
 
 ## セキュリティレビュー結果
 
