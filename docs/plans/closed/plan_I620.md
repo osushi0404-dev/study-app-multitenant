@@ -293,7 +293,7 @@ Danger Ops: 無（表の追加と選択肢の追加だけ。データの削除�
 - 2026-11-26 plan-review: 計画書の記載: TC-02 の 405・TC-21 の QR の確かめ・手動 No.5/No.8・R2・R7 → 採った方法: TC-02 を 404 に、TC-21 は `qrcode.react` を値を出す部品に差し替えて `value` を確かめる、No.5 は新しいコンテキスト、No.8 は読み直し後の本人確認を明記、R2 に #622 までの扱い、R7 の確かめをステップ 1 に — 理由: 計画レビューの Warning 4・Info 2。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果
-- [20261126_1311 判定: ✅ 完了](../../reviews/I620_plan_review_20261126_1311.md)
+- [20261126_1311 判定: ✅ 完了](../../reviews/closed/I620_plan_review_20261126_1311.md)
 - 2026-11-26 implement: 計画書の記載: 4-4「`_registration_options(*, user, purpose)` に切り出す」→ 採った方法: 名前を `build_registration_options` にした — 理由: 別のモジュール（`registration_links.py`）から呼ぶので、先頭の `_` を付けない。計画レビューのやり直し: 不要（名前だけ）
 - 2026-11-26 implement: 計画書の記載: 4-3「`link_url` は `FRONTEND_URL` を土台にする」→ 採った方法: 設定 `REGISTRATION_LINK_BASE_URL`（既定は `WEBAUTHN_ALLOWED_ORIGINS` の最初）を土台にし、`backend/.env.example` に説明を足した — 理由: 画面で確かめたところ、ワークツリーでは `FRONTEND_URL` が 3000 のまま、パスキーが通る画面は 3020 で、リンクを開いても登録できなかった。パスキーは origin が一致しないと登録できないので、リンクはパスキーを許す画面で開くのが正しい。計画レビューのやり直し: 不要（土台の値の取り方だけ・受け入れ条件は変わらない）
 - 2026-11-26 implement: 計画書に無い変更: `frontend/src/services/api.ts` の `handleAuthFailure` の「ログイン画面へ移さない」画面に `PASSKEY_SETUP_PATH` を足した — 理由: ログイン前の画面でも通知の設定を読みにいき、その 401 でログイン画面へ移され、リンクを開いても登録画面が出なかった（画面で確かめて見つけた）。`/login`・`/register` と同じ扱いにする。TC-30（E2E）が確かめる。計画レビューのやり直し: 不要（受け入れ条件 14 を満たすための直し）
@@ -302,8 +302,8 @@ Danger Ops: 無（表の追加と選択肢の追加だけ。データの削除�
 - 2026-11-26 implement: テスト文書 TC-01 の「`solo` の 403 の `sub_message`」は、共通のエラー処理（`core.exceptions`）が 403 の文を「この操作を実行する権限がありません」にそろえるので、状態コードだけを確かめる形に直した。`core/tests/test_I127_throttling.py` の設定の一覧に新しいスロットルの 2 つを足した（足さないと落ちる既存のテスト）。計画レビューのやり直し: 不要
 - 2026-11-26 implement: 本人ひとりの組織の管理者で一覧の API を呼ばないよう、`MemberManagement` を中身の部品と分けた（Jest の TC-20 で見つけた）。計画レビューのやり直し: 不要
 - 2026-11-26 implement（/simplify）: 計画書に無い直し: (1) 公開の 2 つの API に `authentication_classes = []`（発行で失効した古いトークンが付いていても 401 にしない・TC-05 に足した） (2) システムチェック `accounts.E004`（`REGISTRATION_LINK_BASE_URL` が `WEBAUTHN_ALLOWED_ORIGINS` に無ければ本番で止める・TC-13 を足し、I619 の TC-15 に土台の値をそろえた） (3) 本人確認を足す `get_permissions` を `MemberCredentialActionsMixin` の 1 か所にした (4) `AdminUserViewSet.queryset` に `select_related('organization')`（新しい項目で N+1 にしない） (5) 作った直後のメンバーは集計の問い合わせを流し直さない (6) 登録画面は最初は開いたときの challenge を使い、やり直しだけ取り直す — 理由: 4 つの観点の点検（再利用・簡素化・効率・直す深さ）の指摘。どれも方式・範囲・受け入れ条件を変えない。計画レビューのやり直し: 不要
-- 2026-11-26 fix-loop: コードレビュー F1〜F3 の直し（追加の後の発行を画面で行う・登録画面は押すたびに challenge を取り直す〔/simplify で入れた使い回しを戻した〕・リンクの土台の既定値を空の一覧で落ちない形に）— 理由: 診断メモ `docs/reviews/I620_fix_diagnosis_20261126_1430.md`。計画レビューのやり直し: 不要（findings への対応）
-- 2026-11-26 fix-loop（test-gate No.12）: メンバーの表に最小の幅と折り返さない指定を足し、TC-30 に幅 360px の確かめを足した — 理由: 診断メモ `docs/reviews/I620_fix_diagnosis_20261126_1520.md`。計画 13 の「表は `TableContainer` で横に流す」を実現する直し。計画レビューのやり直し: 不要
+- 2026-11-26 fix-loop: コードレビュー F1〜F3 の直し（追加の後の発行を画面で行う・登録画面は押すたびに challenge を取り直す〔/simplify で入れた使い回しを戻した〕・リンクの土台の既定値を空の一覧で落ちない形に）— 理由: 診断メモ `docs/reviews/closed/I620_fix_diagnosis_20261126_1430.md`。計画レビューのやり直し: 不要（findings への対応）
+- 2026-11-26 fix-loop（test-gate No.12）: メンバーの表に最小の幅と折り返さない指定を足し、TC-30 に幅 360px の確かめを足した — 理由: 診断メモ `docs/reviews/closed/I620_fix_diagnosis_20261126_1520.md`。計画 13 の「表は `TableContainer` で横に流す」を実現する直し。計画レビューのやり直し: 不要
 
 ## セキュリティレビュー結果
 

@@ -78,8 +78,8 @@
 #### 是正処置（Corrective）
 | # | カテゴリ | 根本原因 | 対処内容 |
 |---|---------|---------|---------|
-| C1 | 予期しない問題 | /simplify の効率の指摘で、期限のある challenge を使い回した（F2）。発行を描画に結び付けた（F1）。空でありうる一覧の先頭を設定の読み込みで取った（F3） | fix-loop で直した（診断メモ `docs/reviews/I620_fix_diagnosis_20261126_1430.md`）。再発防止は auto_test の記録 |
-| C2 | モダン開発 | MUI の表が狭い幅で列を縮める既定の動きを考えていなかった（No.12） | fix-loop で `minWidth` と折り返さない指定・E2E の 360px の確かめ（`docs/reviews/I620_fix_diagnosis_20261126_1520.md`） |
+| C1 | 予期しない問題 | /simplify の効率の指摘で、期限のある challenge を使い回した（F2）。発行を描画に結び付けた（F1）。空でありうる一覧の先頭を設定の読み込みで取った（F3） | fix-loop で直した（診断メモ `docs/reviews/closed/I620_fix_diagnosis_20261126_1430.md`）。再発防止は auto_test の記録 |
+| C2 | モダン開発 | MUI の表が狭い幅で列を縮める既定の動きを考えていなかった（No.12） | fix-loop で `minWidth` と折り返さない指定・E2E の 360px の確かめ（`docs/reviews/closed/I620_fix_diagnosis_20261126_1520.md`） |
 | C3 | ベストプラクティス | レビューの止める基準に当たらない指摘・敵対的レビューの上限の後の Medium・確かめ用の初期データの不足 | 後続 I636（#636）に集約 |
 
 #### 予防処置（Preventive）
@@ -118,3 +118,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] gate-check OK・No.12 を再確認して OK。check-frontend-evidence・check-manual-test-executor とも合格。人の手動テストの項目は無い（計画 6 の理由）
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+- [close] base 追従は不要（BLOCKED）・gate-check OK。日時つきの記録と診断メモを closed へ移し、計画書とレビュー文書の参照を closed 向きに直した
+STAGE_DONE: close NEXT: merge
