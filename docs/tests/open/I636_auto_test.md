@@ -36,6 +36,7 @@
 - `test_i636_complete_without_locked_recheck_would_pass`（失敗の注入）: 上の包みに加え、`accounts.registration_links._usable_link` を「`lock=True` なら確かめずに `RegistrationLink.objects.get(token_hash=hash_token(token))` を返す」包みにして、kind=`revoked` で complete → `status_code == 200`（引き直しを外すと上のテストが落ちることの証拠）
 
 ### TC-03（L）: 同時使用は 1 回だけ（行の鍵を外すと必ず落ちる）
+- 前提: I620 の今のテストと同じく `@pytest.mark.django_db(transaction=True)`（スレッドから互いの COMMIT が見える）で、スレッドの終わりに `connections.close_all()`
 - `test_tc07_concurrent_complete_only_once`（作り直す）: `accounts.registration_links.passkeys.verify_and_create_passkey` を「`threading.Barrier(2, timeout=2)` で待ち（`BrokenBarrierError` は受けて先へ）、本物を呼ぶ」包みにする。2 本のスレッドで complete → `sorted(results) == [200, 400]`・`Passkey.objects.filter(user=alice).count() == 1`・`RegistrationLink.objects.filter(user=alice, used_at__isnull=False).count() == 1`・待ち合わせが時間切れになった（包みが記録した `broken` が 1 回以上）
 - `test_i636_concurrent_without_row_lock_both_succeed`（失敗の注入）: 同じ包みに加え、`_usable_link` を `lock` を常に `False` にして呼ぶ包みにする → `sorted(results) == [200, 200]`・パスキー 2・待ち合わせは時間切れにならない（2 本とも鍵の中に入れた）。手動テスト No.1 でこれを 10 回流す
 
@@ -73,7 +74,7 @@
 ### TC-09（F8）: リンクのダイアログの値を閉じ終わりまで持つ・追加の流れの二度押し
 - `MemberManagement.test.tsx` に足す: 行の発行 → ［閉じる］を押した直後（閉じ終わる前）にも、ダイアログの見出し「『taro』の登録用リンク」がある。閉じ終わった後（`waitForElementToBeRemoved`）は見出しもリンクの欄も無い
 - 追加の流れ（`members.create` は成功・本人確認の後の `mockApi.issueLink` は解決を待たせる）で、待っている間に 一覧の新しい行の［登録用リンク］が `disabled`・［メンバーを追加］が `disabled`。解決した後、`mockApi.issueLink` の呼び出しは 1 回
-- 追加の流れのダイアログ（`MemberManagement` 側）も、閉じた直後に見出しが『』にならない
+- 追加の流れ（`members.create` が `NEW`〔`user_id: 'hanako2'`〕を返す）のリンクのダイアログで［閉じる］を押した直後（閉じ終わる前）に、見出し「『hanako2』の登録用リンク」がある（「『』の登録用リンク」は無い）。閉じ終わった後は見出しもリンクの欄も無い
 
 ### TC-10（F5）: メニューと画面の入口は `can_manage_members` に従う
 - `Layout.members.test.tsx` を直す: `{ role: 'admin', can_manage_members: true }` → 「科目管理」の後に「メンバー管理」。`{ role: 'admin', can_manage_members: false }`（本人ひとり・無効の組織・共有の personal の管理者の代表）→ 出ない（「科目管理」は出る）。`{ role: 'user', can_manage_members: false }` → 出ない
@@ -93,7 +94,7 @@
 - 直す前（右上のまま）は、通知の枠とメニューのボタンの枠が重なって落ちることを確かめてから直す
 
 ### TC-14（settings.spec）: TC-28 が並行で落ちない
-- `e2e/tests/settings.spec.ts` の TC-28 を、実装のステップ 6 で決めた形に直す（計画書 §4-13）。E2E 全体を `--retries=0` で 3 回流して 3 回とも通る（手動テスト No.2）
+- `e2e/tests/settings.spec.ts` の TC-28 を、実装のステップ 6 で決めた形に直す（計画書 §4-13）。直した形と期待値（例: 保存の `PATCH /api/settings/` が 200 を返してから再読み込みし、`GET` の `daily_study_goal_minutes` と入力欄の値が保存した値）は実装の時にこの TC に書き戻す。E2E 全体を `--retries=0` で 3 回流して 3 回とも通る（手動テスト No.2）
 
 ## 決定論ゲート（自動実走）
 <!-- このイシューは pytest・Jest・E2E（CI が流す）で確かめる。決定論のゲートのスクリプトは無い -->
