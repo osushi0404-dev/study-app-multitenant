@@ -39,6 +39,7 @@ import dashboardService from '../services/dashboard.service';
 import { USER_SETTINGS_KEY_ROOT, userSettingsKey } from '../hooks/useDailyStudyGoal';
 import { PatchedUserSettings, UserSettings } from '../types/api';
 import LearningSubjectsCard from '../components/settings/LearningSubjectsCard';
+import PasskeysCard from '../components/settings/PasskeysCard';
 
 interface UserSettingsData {
   dailyStudyGoalMinutes: number;
@@ -337,6 +338,11 @@ const Settings: React.FC = () => {
                 </Box>
               </CardContent>
             </Card>
+          </Grid>
+
+          {/* パスキー（I619）。「アカウント情報」「学習設定」の行のすぐ下・「学ぶ科目」の上 */}
+          <Grid item xs={12}>
+            <PasskeysCard />
           </Grid>
 
           {/* 学ぶ科目（I494）。ダッシュボードの科目 0 件の案内から #learning-subjects で来る */}

@@ -5,7 +5,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from rest_framework import status, generics, permissions, viewsets
+from rest_framework import mixins, status, generics, permissions, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,16 +16,27 @@ from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
-from core.throttling import AppAnonRateThrottle
+from core.throttling import AppAnonRateThrottle, AppScopedRateThrottle
 
-from .models import User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization
+from . import passkeys
+from .models import (
+    User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization, Passkey,
+)
+from .permissions import HasRecentReauth
 from .services import get_personal_category
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
     UserSerializer,
     AdminUserSerializer,
+    PasskeySerializer,
+    PasskeyReauthSerializer,
+    ReauthTokenSerializer,
+    LoginResponseSerializer,
+    WebAuthnCredentialSerializer,
+    WebAuthnOptionsSerializer,
     UserSettingsSerializer,
     StudyStreakSerializer,
     PasswordResetRequestSerializer,
@@ -45,18 +56,120 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         user = serializer.validated_data['user']
 
-        # Update last login
-        user.last_login = timezone.now()
-        user.save(update_fields=['last_login'])
+        # 最後のログインの日時の更新と応答は、パスキーのログインと同じ処理（I619）
+        return Response(passkeys.complete_login(user=user))
 
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
 
-        return Response({
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'user': UserSerializer(user).data
-        })
+# ------------------------------------------------------------ パスキー（I619） ----
+def _options_response(challenge, options):
+    return Response(WebAuthnOptionsSerializer({'challenge_id': challenge.id, 'options': options}).data)
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyLoginOptionsView(generics.GenericAPIView):
+    """パスキーでのログインの options。ログインの前に呼ぶので AllowAny"""
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'passkey_login_options'
+    serializer_class = WebAuthnOptionsSerializer
+
+    @extend_schema(request=None, responses={200: WebAuthnOptionsSerializer})
+    def post(self, request):
+        return _options_response(*passkeys.authentication_options())
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyLoginView(generics.GenericAPIView):
+    """パスキーでのログイン。ログインの前に呼ぶので AllowAny"""
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'passkey_login'
+    serializer_class = WebAuthnCredentialSerializer
+
+    @extend_schema(request=WebAuthnCredentialSerializer, responses={200: LoginResponseSerializer})
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        passkey = passkeys.authenticate_passkey(
+            challenge_id=serializer.validated_data['challenge_id'],
+            credential=serializer.validated_data['credential'])
+        return Response(passkeys.complete_login(user=passkey.user))
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyReauthOptionsView(generics.GenericAPIView):
+    """本人確認をパスキーで行うときの options（本人のパスキーだけを許す）"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = WebAuthnOptionsSerializer
+
+    @extend_schema(request=None, responses={200: WebAuthnOptionsSerializer})
+    def post(self, request):
+        return _options_response(*passkeys.authentication_options(user=request.user))
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyReauthView(generics.GenericAPIView):
+    """本人確認（パスワードかパスキー）。通れば 5 分有効の印を返す"""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'passkey_reauth'
+    serializer_class = PasskeyReauthSerializer
+
+    @extend_schema(request=PasskeyReauthSerializer, responses={200: ReauthTokenSerializer})
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if 'password' in data:
+            passkeys.verify_password_for_reauth(user=request.user, password=data['password'])
+        else:
+            passkeys.authenticate_passkey(
+                challenge_id=data['challenge_id'], credential=data['credential'], user=request.user)
+        return Response(ReauthTokenSerializer({
+            'reauth_token': passkeys.issue_reauth_token(user=request.user),
+            'expires_in': settings.PASSKEY_REAUTH_MAX_AGE_SECONDS,
+        }).data)
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, mixins.DestroyModelMixin,
+                     viewsets.GenericViewSet):
+    """本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404）"""
+    serializer_class = PasskeySerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
+    lookup_value_regex = '[0-9a-f-]{36}'  # UUID の形だけ（login などが詳細の <pk> に当たらない）
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):  # OpenAPI を作るとき（利用者がいない）
+            return Passkey.objects.none()
+        return Passkey.objects.filter(user=self.request.user)
+
+    def get_permissions(self):
+        if self.action in ('destroy', 'register_options', 'register'):
+            return [permissions.IsAuthenticated(), HasRecentReauth()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        passkeys.rename_passkey(passkey=serializer.instance, name=serializer.validated_data['name'])
+
+    def perform_destroy(self, instance):
+        passkeys.delete_passkey(passkey=instance)
+
+    @extend_schema(request=None, responses={200: WebAuthnOptionsSerializer})
+    @action(detail=False, methods=['post'], url_path='register/options')
+    def register_options(self, request):
+        return _options_response(*passkeys.registration_options(user=request.user))
+
+    @extend_schema(request=WebAuthnCredentialSerializer, responses={201: PasskeySerializer})
+    @action(detail=False, methods=['post'])
+    def register(self, request):
+        serializer = WebAuthnCredentialSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        passkey = passkeys.register_passkey(
+            user=request.user, challenge_id=serializer.validated_data['challenge_id'],
+            credential=serializer.validated_data['credential'],
+            user_agent=request.headers.get('User-Agent', ''))
+        return Response(PasskeySerializer(passkey).data, status=status.HTTP_201_CREATED)
 
 
 @method_decorator(ratelimit(key='ip', rate='10/5m', method='POST'), name='post')

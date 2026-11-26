@@ -175,10 +175,27 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
+    # パスワードの誤りでかけるロック（ログインとパスキーの本人確認で同じ・I619）
+    LOCK_THRESHOLD = 5
+    LOCK_MINUTES = 30
+
     def is_account_locked(self):
         if self.account_locked_until:
             return timezone.now() < self.account_locked_until
         return False
+
+    def record_failed_login(self):
+        """パスワードの誤りを 1 つ数え、しきい値に達したらロックする
+
+        ロックの期限が切れていれば数え直す（期限のたびに 1 回の誤りで再ロックされない・I619 F2）
+        """
+        if self.account_locked_until and not self.is_account_locked():
+            self.failed_login_attempts = 0
+            self.account_locked_until = None
+        self.failed_login_attempts += 1
+        if self.failed_login_attempts >= self.LOCK_THRESHOLD:
+            self.account_locked_until = timezone.now() + timezone.timedelta(minutes=self.LOCK_MINUTES)
+        self.save(update_fields=['failed_login_attempts', 'account_locked_until'])
 
     def unlock_account(self):
         self.failed_login_attempts = 0
@@ -228,6 +245,49 @@ class PasswordResetToken(models.Model):
 
     def is_valid(self):
         return not self.is_used and not self.is_expired()
+
+
+class Passkey(models.Model):
+    """利用者のパスキー（WebAuthn の資格情報・I619）。秘密鍵・生体の情報は端末から出ない"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # CASCADE: 利用者を消したら、その人の鍵は意味が無い
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='passkeys')
+    credential_id = models.BinaryField(max_length=1023)
+    public_key = models.BinaryField()  # COSE の公開鍵
+    sign_count = models.PositiveBigIntegerField(default=0)
+    transports = models.JSONField(default=list, blank=True)  # 例: ["internal", "hybrid"]
+    name = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)  # パスキーでのログインの成功で更新
+
+    class Meta:
+        db_table = 'passkeys'
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['credential_id'], name='passkey_credential_id_unique'),
+            models.CheckConstraint(condition=~models.Q(name=''), name='passkey_name_not_empty'),
+        ]
+        indexes = [models.Index(fields=['user', 'created_at'])]
+
+
+class WebAuthnChallenge(models.Model):
+    """使い捨ての WebAuthn の challenge（I619）。使うときに行を消す"""
+    class Purpose(models.TextChoices):
+        REGISTER = 'register'
+        LOGIN = 'login'
+        REAUTH = 'reauth'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purpose = models.CharField(max_length=16, choices=Purpose.choices)
+    # CASCADE: 利用者を消したら、その人の未使用の challenge も要らない。ログイン用は null（まだ誰か分からない）
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+    challenge = models.BinaryField()
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'webauthn_challenges'
+        indexes = [models.Index(fields=['expires_at'])]
 
 
 class UserSettings(models.Model):

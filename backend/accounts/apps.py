@@ -8,3 +8,4 @@ class AccountsConfig(AppConfig):
 
     def ready(self):
         import accounts.signals  # noqa: F401
+        import accounts.checks  # noqa: F401  パスキーの設定のシステムチェック（I619）
