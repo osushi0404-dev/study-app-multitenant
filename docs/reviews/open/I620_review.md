@@ -44,3 +44,5 @@ STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+- [review-gate] コードレビュー（台帳の 1 周目）が HIGH（止める指摘 F1〜F3・いずれも Medium・delta）。fix-loop へ。敵対的レビューは基本レビューが OK になってから
+STAGE_DONE: review-gate NEXT: fix-loop
