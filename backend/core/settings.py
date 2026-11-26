@@ -34,6 +34,8 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
+    # refresh トークンの失効の表（I620 で #501 から同梱。登録用リンクの発行でログイン中の状態を切る）
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_filters',
     'drf_spectacular',
@@ -139,6 +141,11 @@ WEBAUTHN_ALLOWED_ORIGINS = [
 WEBAUTHN_CHALLENGE_TTL_SECONDS = 300  # challenge の期限。options の timeout も同じ値（ミリ秒）にする
 PASSKEY_REAUTH_MAX_AGE_SECONDS = 300  # 本人確認の有効時間（設計確認メモ: 5 分）
 PASSKEY_MAX_PER_USER = 20  # 1 人のパスキーの上限（一覧の 1 ページ＝20 件に収める）
+REGISTRATION_LINK_TTL_SECONDS = 3600  # 登録用リンクの期限（I620 の設計確認メモ: 1 時間）
+REGISTRATION_LINK_PATH = '/passkey-setup'  # 登録用リンクで開く画面の道筋（値は # の後ろに付ける）
+# 登録用リンクの土台。パスキーは origin が一致しないと登録できないので、既定はパスキーを許す最初の画面の origin
+# 一覧が空でも読み込みで落とさない（空の一覧は accounts.checks の E001 が報告する・I620 F3）
+REGISTRATION_LINK_BASE_URL = os.getenv('REGISTRATION_LINK_BASE_URL', (WEBAUTHN_ALLOWED_ORIGINS or [FRONTEND_URL])[0])
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -331,6 +338,9 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'passkey_login_options': '20/min',
     'passkey_login': '10/min',
     'passkey_reauth': '5/min',
+    # 登録用リンク（I620）。ログインと同じ考え方で、認証なしで challenge の行を増やされないようにする
+    'registration_link_options': '20/min',
+    'registration_link': '10/min',
 }
 # 本番は nginx 1 段（X-Forwarded-For 付与・nginx/default.conf）。XFF が無い直アクセスは
 # REMOTE_ADDR に自動フォールバックするため開発環境でもこの値のままでよい。

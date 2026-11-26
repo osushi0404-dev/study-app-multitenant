@@ -35,6 +35,7 @@ import { ReauthCancelledError, usePasskeyReauth } from '../../hooks/usePasskeyRe
 import { Passkey } from '../../types/api';
 import {
   apiErrorText,
+  MULTI_DEVICE_GUIDE,
   PASSKEY_DELETE_FAILED,
   PASSKEY_UNSUPPORTED,
   registrationErrorText,
@@ -158,6 +159,8 @@ function PasskeysCard() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           指紋・顔・PIN でパスワードなしにログインできます
         </Typography>
+        {/* I620: 端末をなくしても入れるように、複数の端末で使うことを勧める */}
+        <Alert severity="info" sx={{ mb: 2 }}>{MULTI_DEVICE_GUIDE}</Alert>
         {renderList()}
         {actionError && (
           <Alert severity="error" role="alert" sx={{ mt: 2 }}>

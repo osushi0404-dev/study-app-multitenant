@@ -5,6 +5,9 @@ import axios from 'axios';
 import { extractApiErrorMessage } from './apiError';
 
 export const PASSKEY_UNSUPPORTED = 'このブラウザはパスキーに未対応です';
+/** 端末をなくしても入れるように、複数の端末で使うことを勧める（設定画面と登録用リンクの画面・I620） */
+export const MULTI_DEVICE_GUIDE =
+  '2 台以上の端末で使えるようにしてください。iCloud キーチェーンや Google パスワード マネージャーなど、端末どうしで同期されるパスキーがおすすめです';
 export const PASSKEY_LOGIN_FAILED = 'パスキーでログインできませんでした。もう一度試すか、パスワードでログインしてください';
 const PASSKEY_ALREADY_REGISTERED = 'この端末のパスキーはすでに登録されています';
 export const PASSKEY_VERIFY_FAILED = 'パスキーを確かめられませんでした。もう一度お試しください';

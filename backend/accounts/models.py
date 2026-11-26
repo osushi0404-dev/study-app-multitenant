@@ -276,6 +276,7 @@ class WebAuthnChallenge(models.Model):
         REGISTER = 'register'
         LOGIN = 'login'
         REAUTH = 'reauth'
+        LINK_REGISTER = 'link_register'  # 登録用リンクからの登録（I620）。ログイン済みの登録と混ぜない
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purpose = models.CharField(max_length=16, choices=Purpose.choices)
@@ -287,6 +288,34 @@ class WebAuthnChallenge(models.Model):
 
     class Meta:
         db_table = 'webauthn_challenges'
+        indexes = [models.Index(fields=['expires_at'])]
+
+
+class RegistrationLink(models.Model):
+    """管理者が発行する、パスキーを登録するための 1 回だけのリンク（I620）。値は SHA-256 だけを持つ"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # CASCADE: 利用者を消したら、その人あてのリンクは意味が無い
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registration_links')
+    # SET_NULL: 発行した管理者を消しても、記録（いつ・誰あてに）は残す。管理コマンドからの発行は null
+    issued_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    token_hash = models.CharField(max_length=64)  # リンクの値の SHA-256（16 進）
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'registration_links'
+        constraints = [
+            models.UniqueConstraint(fields=['token_hash'], name='registration_link_token_hash_unique'),
+            # 1 人に「使っていない・失効していない」リンクは 1 つだけ（発行のときに前のものを失効にする）
+            models.UniqueConstraint(
+                fields=['user'], condition=models.Q(used_at__isnull=True, revoked_at__isnull=True),
+                name='registration_link_one_open_per_user'),
+            models.CheckConstraint(
+                condition=models.Q(used_at__isnull=True) | models.Q(revoked_at__isnull=True),
+                name='registration_link_not_used_and_revoked'),
+        ]
         indexes = [models.Index(fields=['expires_at'])]
 
 

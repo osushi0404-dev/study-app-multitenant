@@ -202,6 +202,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/WebAuthnOptions'
           description: ''
+  /api/auth/registration-links/complete/:
+    post:
+      operationId: auth_registration_links_complete_create
+      description: 登録用リンクでパスキーを登録し、ログインした状態にする。AllowAny（同上）
+      tags:
+      - registration-links
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationLinkComplete'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegistrationLinkComplete'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+  /api/auth/registration-links/options/:
+    post:
+      operationId: auth_registration_links_options_create
+      description: 登録用リンクを開いたときの options。ログインの前に開くので AllowAny（本人はリンクの値で決める）
+      tags:
+      - registration-links
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationLinkToken'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegistrationLinkToken'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationLinkOptions'
+          description: ''
   /api/dashboard/analytics/:
     get:
       operationId: dashboard_analytics_retrieve
@@ -249,6 +297,142 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardOverview'
           description: ''
+  /api/members/:
+    get:
+      operationId: members_list
+      description: 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - members
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMemberList'
+          description: ''
+    post:
+      operationId: members_create
+      description: 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）
+      tags:
+      - members
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MemberCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+          description: ''
+  /api/members/{id}/passkeys/:
+    get:
+      operationId: members_passkeys_list
+      description: 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-f-]{36}$
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - members
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPasskeyList'
+          description: ''
+  /api/members/{id}/passkeys/{passkey_id}/:
+    delete:
+      operationId: members_passkeys_destroy
+      description: 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-f-]{36}$
+        required: true
+      - in: path
+        name: passkey_id
+        schema:
+          type: string
+          pattern: ^[0-9a-f-]{36}$
+        required: true
+      tags:
+      - members
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/members/{id}/registration-link/:
+    post:
+      operationId: members_registration_link_create
+      description: 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-f-]{36}$
+        required: true
+      tags:
+      - members
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationLinkIssued'
+          description: ''
+    delete:
+      operationId: members_registration_link_destroy
+      description: 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-f-]{36}$
+        required: true
+      tags:
+      - members
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/settings/:
     get:
       operationId: settings_retrieve
@@ -698,6 +882,90 @@ components:
       - access
       - refresh
       - user
+    Member:
+      type: object
+      description: 組織の管理者が見るメンバーの行。数と期限は get_queryset の注釈から読む
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+          nullable: true
+          description: 半角英数字とアンダースコアのみ使用可能
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        passkey_count:
+          type: integer
+          readOnly: true
+        registration_link_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_self:
+          type: boolean
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_active
+      - is_self
+      - last_login
+      - passkey_count
+      - registration_link_expires_at
+      - role
+      - user_id
+    MemberCreate:
+      type: object
+      description: メンバーの作成はユーザー ID だけ（役割・組織・有効は受け取らない）
+      properties:
+        user_id:
+          type: string
+          pattern: ^[a-zA-Z0-9_]+$
+          maxLength: 30
+          minLength: 3
+      required:
+      - user_id
+    PaginatedMemberList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
     PaginatedPasskeyList:
       type: object
       required:
@@ -804,6 +1072,56 @@ components:
       required:
       - expires_in
       - reauth_token
+    RegistrationLinkComplete:
+      type: object
+      description: リンクの値。形の確かめはサービスが行い、使えないリンクと同じ文にそろえる（理由を見分けさせない）
+      properties:
+        token:
+          type: string
+        challenge_id:
+          type: string
+          format: uuid
+        credential:
+          type: object
+          additionalProperties: {}
+      required:
+      - challenge_id
+      - credential
+      - token
+    RegistrationLinkIssued:
+      type: object
+      properties:
+        url:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+      - url
+    RegistrationLinkOptions:
+      type: object
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        options:
+          type: object
+          additionalProperties: {}
+        user_id:
+          type: string
+      required:
+      - challenge_id
+      - options
+      - user_id
+    RegistrationLinkToken:
+      type: object
+      description: リンクの値。形の確かめはサービスが行い、使えないリンクと同じ文にそろえる（理由を見分けさせない）
+      properties:
+        token:
+          type: string
+      required:
+      - token
     RoleEnum:
       enum:
       - user
@@ -868,12 +1186,17 @@ components:
         organization_name:
           type: string
           readOnly: true
+        organization_is_individual:
+          type: boolean
+          readOnly: true
+          default: false
       required:
       - created_at
       - id
       - is_staff
       - is_superuser
       - last_login
+      - organization_is_individual
       - organization_name
       - role
       - user_id

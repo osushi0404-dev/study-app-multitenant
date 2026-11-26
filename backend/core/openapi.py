@@ -18,6 +18,13 @@ CONTRACT_PATHS = frozenset({
     '/api/auth/passkeys/login/',
     '/api/auth/passkeys/reauth/options/',
     '/api/auth/passkeys/reauth/',
+    # I620: メンバー管理と登録用リンク
+    '/api/members/',
+    '/api/members/{id}/passkeys/',
+    '/api/members/{id}/passkeys/{passkey_id}/',
+    '/api/members/{id}/registration-link/',
+    '/api/auth/registration-links/options/',
+    '/api/auth/registration-links/complete/',
 })
 
 
