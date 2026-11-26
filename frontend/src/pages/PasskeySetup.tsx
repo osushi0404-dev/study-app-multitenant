@@ -6,6 +6,7 @@
  * - 開いたときに options でリンクが使えるかを確かめ、［パスキーを登録］のたびに challenge を取り直す
  */
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -31,6 +32,7 @@ function PasskeySetup() {
   const [token] = useState(() => tokenFromHash(window.location.hash));
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkGone, setLinkGone] = useState(false);
   const supported = browserSupportsWebAuthn();
 
   useEffect(() => {
@@ -55,7 +57,11 @@ function PasskeySetup() {
     setError(null);
     try {
       // 押すたびに取り直す（challenge の期限は 5 分。開いてから押すまでの時間は利用者次第・I620 F2）
-      const fresh = await registrationLinkService.options(token);
+      const fresh = await registrationLinkService.options(token).catch((caught: unknown) => {
+        // 開いた後に使えなくなった（期限切れ・失効など・400）なら、開いたときに使えなかった場合と同じ表示にする（I636 F7）
+        if (axios.isAxiosError(caught) && caught.response?.status === 400) setLinkGone(true);
+        throw caught;
+      });
       const credential = await createPasskeyCredential(fresh);
       await completeRegistrationLink({ token, challengeId: fresh.challenge_id, credential });
       toast.success('パスキーを登録しました');
@@ -68,7 +74,7 @@ function PasskeySetup() {
   };
 
   const renderBody = () => {
-    if (token === null || options.isError) {
+    if (token === null || options.isError || linkGone) {
       return <Alert severity="error">{LINK_UNUSABLE}</Alert>;
     }
     if (options.isPending) {

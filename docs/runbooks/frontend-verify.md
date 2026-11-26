@@ -33,11 +33,13 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 |---|---|---|---|
 | `e2e_user_a@example.com` | A | 管理者 | 管理者だけの画面（例: 問題管理 `/quiz-management`） |
 | `e2e_user_c@example.com` | A | 一般ユーザー | 管理者だけの画面が遮断されること |
-| `e2e_user_b@example.com` | B | — | 組織をまたいで見えないこと |
+| `e2e_user_b@example.com` | B | 管理者 | 組織をまたいで見えないこと・メンバー管理（`/members`） |
+| `e2e_staff@example.com` | 確かめ用（`e2e-org-staff`） | 運営（`is_staff`）・一般ユーザー | 運営の画面（`/admin/users`・利用者の編集画面の「パスキーと登録用リンク」）。メンバー管理は使えない |
+| `e2e_solo@example.com` | 本人ひとりの組織（`e2e-org-solo`） | 管理者 | 本人ひとりの組織ではメンバー管理が出ない・開けないこと |
 | `verify_i487@example.com` | 確かめ用（`verify-i487-org`） | 一般ユーザー | ダッシュボード・統計の数字の確かめ（「11. 確かめ用のデータ」で作り直す） |
 
 - パスワード欄には値ではなく**名前** `E2E_TEST_PASSWORD` を入力する（`--secrets` が本当の値に置き換えて入力し、出力では `<secret>E2E_TEST_PASSWORD</secret>` に伏せる）
-- ログインできないときだけ、ユーザーが `seed_e2e` を流す（E2E 用ユーザーだけを作り直す。`--flush` は使わない）
+- ログインできないときだけ、ユーザーが `seed_e2e` を流す（E2E 用ユーザーだけを作り直す。`--flush` は使わない。上の表の `e2e_` で始まる利用者は `--scenario tenant_isolation` で作られる。DEBUG が偽の環境では止まる・I636）
 - ログインは IP ごとに 5 回／5 分まで。E2E を流した直後に画面確認でログインすると制限に当たることがある（下の「8. E2E の落とし穴」）
 - パスキー（I619）を確かめるときは、`browser_run_code_unsafe` で CDP の `WebAuthn.enable`・`WebAuthn.addVirtualAuthenticator`（`protocol: 'ctap2'`・`transport: 'internal'`・`hasResidentKey`・`hasUserVerification`・`isUserVerified`・`automaticPresenceSimulation` を true）を付けてから操作する。内蔵の認証器は 1 つしか付けられないので、付け直すときは先に `WebAuthn.disable` → `WebAuthn.enable` で外す。backend の origin の既定はワークツリーの画面のポート（`http://localhost:<ポート>`）なので、MCP で開く URL と一致する。確かめ終わったら作ったパスキーを画面から消す
 - ログイン前の画面でもコンソールに `/api/settings/` の 401 が出る（ログイン前に通知設定を読みにいく既存の動き）。画面確認では既知のものとして扱い、新しいエラーと区別する

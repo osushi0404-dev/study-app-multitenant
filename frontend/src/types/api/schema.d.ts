@@ -622,8 +622,7 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
             readonly organization_name: string;
-            /** @default false */
-            readonly organization_is_individual: boolean;
+            readonly can_manage_members: boolean;
         };
         UserSettings: {
             daily_study_goal_minutes?: number;

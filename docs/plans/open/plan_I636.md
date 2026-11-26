@@ -173,7 +173,7 @@
 | リスク | 回避策 | 処遇 |
 |---|---|---|
 | R1: `organization_is_individual` を `UserSerializer` から外すと、保存済みの `localStorage` の `user` に `can_manage_members` が無い間、管理者のメニューが出ない | 起動時に `AuthContext` が `getCurrentUser` で取り直して保存し直す（`AuthContext.tsx:61-63`）。出ない側に倒れる（安全側） | 受け入れ |
-| R2: `is_invitable` と `invitable()` の条件が将来ずれる | TC-05 で組織の種類ごとに一致を確かめる（条件を 1 つ変えると落ちる） | 回避 |
+| R2: 画面の判定と API の判定が将来ずれる | 両方が `User.can_manage_members`（条件は `invitable()` の 1 か所）を読む。TC-05 で組織の種類ごとに `/api/auth/me/` と `/api/members/` の一致を確かめる | 回避 |
 | R3: 同時使用のテストの待ち合わせの時間切れ（2 秒）で CI が遅くなる | 1 本 2 秒だけ。時間切れの側が本来の動き（鍵で待つ）なので外さない | 受け入れ |
 | R4: 通知を上の中央にすると、上の中央に出る画面の要素（見出しなど）に一時的に重なる | 通知は 4 秒で消え、押す要素（ボタン）は上のバーの左右にしかない。手動テスト No.3 で主な画面を見る | 受け入れ |
 | R5: settings.spec の原因が 3 回で再現しない | 副作用の無い「保存の応答を待つ」だけを入れ、原因は未特定として記録。再発したら retro で起票 | 受け入れ |
@@ -240,6 +240,12 @@ Danger Ops:
 | V4 | 3 | 読んで可 | 作成の重複（TC-04）で、例外の中身・ユーザー ID がログと応答に出ないか。`transaction.atomic` の中で受けて、外側のトランザクションを壊さないか |
 
 ## 計画変更記録
+- 2026-11-27 implement: 計画書の記載: §4-10「`MemberCredentialActions` に `wrap?: boolean` を足し、ボタンの並びを…」→ 採った方法: 同じ並びの `Box` に `role="group"`・`aria-label="『<ユーザーID>』の操作"` も付け、TC-11 はこの名前で並びを探す — 理由: テストが `parentElement`（部品の中の入れ子）に頼るとリント（`testing-library/no-node-access`）に止められ、F12 と同じ「内部の構造に頼る」形にもなる。読み上げで行の操作のまとまりが分かる（見た目は変わらない）。計画レビューのやり直し: 不要（読み上げの名前の付随の追加だけ）
+- 2026-11-27 implement（/simplify）: 計画書の記載: §4-4「`Organization.is_invitable`（property）… 両者が同じことはテストで守る」→ 採った方法: property を作らず、`User.can_manage_members` が `Organization.objects.invitable().filter(pk=self.organization_id).exists()` を呼ぶ（条件は QuerySet の 1 か所だけ）。TC-05 の一致のテスト 2 本（`is_invitable` と QuerySet・その失敗の注入）は要らなくなったので消し、組織の種類ごとの `/api/auth/me/` と `/api/members/` の一致のテストは残す — 理由: /simplify の指摘（同じ条件を 2 か所に書き、一致をテストで守るより、1 か所に置くほうが簡単で直し忘れが起きない）。問い合わせの数は I620 の権限の判定と同じ 1 回。計画レビューのやり直し: 不要（判定の置き場所の実装の選び直しで、条件・範囲・受け入れ条件は変えない）
+- 2026-11-27 implement（/simplify）: 計画書の記載: §4-7「`RegistrationLinkDialog` に `open`・`onExited` を足し、親が値と開いているかを分けて持つ」→ 採った方法: ダイアログが最後に見せた値（見出しのユーザー ID とリンク）を自分の state に覚え、閉じ終わり（`TransitionProps.onExited`）で捨てる。親（`MemberManagement`・`MemberCredentialActions`）は I620 と同じ `link`・`onClose` の形のまま — 理由: /simplify の指摘（同じ組の state を 2 つの親に書き写していた）。値を捨てる時点（閉じ終わり）は計画と同じ。計画レビューのやり直し: 不要（部品の中の作りの選び直しだけ）
+- 2026-11-27 implement: 計画書の記載: 「`DUPLICATE_USER_ID` … シリアライザの `validate_user_id` も同じ定数を使う」（定数の置き場所は `registration_links.py`）→ 採った方法: 定数は `serializers.py` に置き、`registration_links.py` が import する — 理由: `serializers.py` が `registration_links.py` を import すると、`registration_links` → `passkeys` → `serializers` の循環になる。計画レビューのやり直し: 不要（定数の置き場所だけ）
+- 2026-11-27 implement: 計画書の記載: TC-02 の失敗の注入を kind=`revoked` で → 採った方法: kind=`expired` — 理由: `revoked` は DB の制約（`registration_link_not_used_and_revoked`）が使用の確定を止めるので、引き直しを外しても 500 になり 200 にならない（引き直しの有無を見分けられない）。計画レビューのやり直し: 不要（注入の条件の選び直しだけ）
+- 2026-11-27 implement: 計画書の記載: §4-13 の settings.spec → 採った方法: 並行の全体を 3 回分（21 件＋42 件）流して再現しなかったので、「保存の応答（PATCH の 200 と保存した値）を待ってから再読み込み」だけを入れた（R5 のとおり）。原因は未特定 — 理由: 計画どおり。計画レビューのやり直し: 不要
 - 2026-11-27 design-security-review: 計画書の記載: §4-11 の初期データ・TC-01・TC-12 → 採った方法: `seed_e2e` を DEBUG が偽なら止める・TC-01 に運営の API の 404・TC-12 に DEBUG 偽の確かめを足した — 理由: セキュリティ設計レビューの Medium 1 件・Low 1 件の必須防御条件。計画レビューのやり直し: 不要（防御条件とテストの追記だけで、方式・範囲・受け入れ条件は変えない）
 - 2026-11-27 plan-review: 計画書の記載: 自動テスト TC-03・TC-09・TC-14 → 採った方法: TC-03 に `transaction=True` の前提、TC-09 に追加の流れのダイアログの具体的な期待値、TC-14 に実装の時に期待値を書き戻すことを足した — 理由: 計画レビューの Warning 3 件（期待値の具体化だけ）。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 

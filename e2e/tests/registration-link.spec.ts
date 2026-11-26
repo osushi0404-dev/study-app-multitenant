@@ -4,7 +4,17 @@ import { test, expect, Page, BrowserContext } from '@playwright/test';
 // ログインしていない別のブラウザの文脈でリンクを開いて仮想の認証器でパスキーを登録 → ログイン → ログアウト →
 // パスキーでログインする。共有の storageState を使わない（ログアウトで共有の refresh を失効させないため）。
 // 追加するメンバーは毎回ちがうユーザー ID にする（何度流しても同じに確かめられる）。
+// I636: 表の枠は役割と名前で探す（MUI の内部のクラス名に頼らない）。360px では 3 つのボタンの行を確かめる。
+// 通知は上の中央に出るので、通知が消えるのを待たずにログアウトできる（幅 360px でもユーザーメニューに重ならない）。
 test.use({ storageState: { cookies: [], origins: [] } });
+
+const TABLE_REGION = 'メンバーの一覧の表（横に動かせます）';
+
+/** 2 つの枠が重なるか（左右・上下のどちらかが離れていれば重ならない） */
+function overlaps(a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number }): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
 
 async function addVirtualAuthenticator(context: BrowserContext, page: Page) {
   const cdp = await context.newCDPSession(page);
@@ -49,12 +59,26 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
   const url = await linkDialog.getByRole('textbox', { name: 'リンク' }).inputValue();
   expect(url).toMatch(/\/passkey-setup#token=[A-Za-z0-9_-]{43}$/);
   await linkDialog.getByRole('button', { name: '閉じる' }).click();
-  await expect(page.getByRole('row', { name: new RegExp(userId) })).toContainText('有効');
+  const openRow = page.getByRole('row', { name: new RegExp(userId) });
+  await expect(openRow).toContainText('有効');
+
+  // 幅 360px では、表は表の中で横に流れ、列が縮んで文字が 1 文字ずつ折り返さない（I620 test-gate No.12 の再発防止。
+  // jsdom では測れない）。リンクが有効な行は［リンクを取り消す］を含む 3 つのボタン（I636 F11）
+  await page.setViewportSize({ width: 360, height: 740 });
+  const container = page.getByRole('region', { name: TABLE_REGION });
+  await expect.poll(() => container.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  for (const name of ['登録用リンク', 'パスキー', 'リンクを取り消す']) {
+    const box = await openRow.getByRole('button', { name }).boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeLessThanOrEqual(56);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   // ログインしていない別の文脈でリンクを開き、パスキーを登録する
   const visitor = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   try {
     const member = await visitor.newPage();
+    await member.setViewportSize({ width: 360, height: 740 });
     await addVirtualAuthenticator(visitor, member);
     await member.goto(url);
     await expect(member.getByText(`ユーザーID『${userId}』のパスキーを登録します`)).toBeVisible();
@@ -62,10 +86,15 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
     await member.getByRole('button', { name: 'パスキーを登録' }).click();
     await member.waitForURL('**/dashboard');
 
-    // ログアウト → パスキーでログイン。通知（ログインしました・パスキーを登録しました）がメニューに重なるので、
-    // 消えてからメニューを開く（重なったまま押すと通知の上で止まり、時間切れになる）
-    await expect(member.getByText('ログインしました')).toBeHidden({ timeout: 15000 });
-    await expect(member.getByText('パスキーを登録しました')).toBeHidden({ timeout: 15000 });
+    // 通知（パスキーを登録しました）が出ている間でも、ユーザーメニューのボタンに重ならず、そのままログアウトできる（I636）
+    const toast = member.getByRole('status').filter({ hasText: 'パスキーを登録しました' });
+    // 出てくるときは上から滑り込むので、止まって（画面の中に入って）から位置を測る
+    await expect.poll(async () => (await toast.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+    const toastBox = await toast.boundingBox();
+    const menuBox = await member.locator('[data-testid="user-menu-button"]').boundingBox();
+    expect(toastBox).not.toBeNull();
+    expect(menuBox).not.toBeNull();
+    expect(overlaps(toastBox!, menuBox!)).toBe(false);
     await member.click('[data-testid="user-menu-button"]');
     await member.click('[data-testid="logout-button"]');
     await expect(member).toHaveURL(/login/);
@@ -84,14 +113,4 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
   const row = page.getByRole('row', { name: new RegExp(userId) });
   await expect(row).toContainText('1 個');
   await expect(row).toContainText('なし');
-
-  // 幅 360px では、表は表の中で横に流れ、列が縮んで文字が 1 文字ずつ折り返さない（test-gate No.12 の再発防止。jsdom では測れない）
-  await page.setViewportSize({ width: 360, height: 740 });
-  const container = page.locator('.MuiTableContainer-root');
-  await expect.poll(() => container.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
-  for (const name of ['登録用リンク', 'パスキー']) {
-    const box = await row.getByRole('button', { name }).boundingBox();
-    expect(box?.height).toBeGreaterThanOrEqual(44);
-    expect(box?.height).toBeLessThanOrEqual(56);
-  }
 });

@@ -1,10 +1,12 @@
 import secrets
+import uuid
 from datetime import timedelta
 
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
+from django.http import Http404
 from rest_framework import mixins, status, generics, permissions, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
@@ -253,7 +255,11 @@ class MemberCredentialActionsMixin:
     @action(detail=True, methods=['delete'], url_path=r'passkeys/(?P<passkey_id>[0-9a-f-]{36})')
     def delete_member_passkey(self, request, pk=None, passkey_id=None):
         target = self._credential_target()
-        registration_links.delete_passkey_of(target=target, passkey_id=passkey_id, deleted_by=request.user)
+        try:  # URL の正規表現は UUID の形までは保証しない（`-` が 36 個など）。形の誤りは 404（I636 M1）
+            passkey_uuid = uuid.UUID(passkey_id)
+        except ValueError:
+            raise Http404
+        registration_links.delete_passkey_of(target=target, passkey_id=passkey_uuid, deleted_by=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(methods=['POST'], request=None, responses={201: RegistrationLinkIssuedSerializer})
@@ -296,9 +302,8 @@ class MemberViewSet(MemberCredentialActionsMixin, mixins.ListModelMixin, mixins.
     def create(self, request, *args, **kwargs):
         serializer = MemberCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = User.objects.create_user(
-            user_id=serializer.validated_data['user_id'], password=None,
-            organization=request.user.organization, role='user')
+        user = registration_links.create_member(
+            organization=request.user.organization, user_id=serializer.validated_data['user_id'])
         # 作ったばかりの人はパスキー 0 個・開いたリンク無し（集計の問い合わせを流し直さない）
         user.passkey_count = 0
         user.registration_link_expires_at = None

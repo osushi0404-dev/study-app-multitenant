@@ -34,7 +34,7 @@
 ### TC-02（M2）: complete の側でも使えないリンクは 400（鍵つきの引き直しを外すと落ちる）
 - `test_i636_complete_unusable`（parametrize: `expired`・`revoked`・`inactive_user`・`inactive_org`）: `token = issued_token(admin_a, alice)` → `options = link_options(token).json()` → `_make_unusable(kind, people, token)` → `complete(token, options=options)` → `status_code == 400`・`sub_message == LINK_UNUSABLE`・`Passkey.objects.filter(user=alice).count() == 0`・`RegistrationLink.objects.get(user=alice).used_at is None`
 - `test_i636_complete_unusable_after_first_check`（同じ parametrize）: `accounts.registration_links.passkeys.consume_challenge` を「本物を呼んで、戻る前に `_make_unusable(kind, …)`」の包みにして complete → 400・`LINK_UNUSABLE`・パスキー 0・`used_at is None`
-- `test_i636_complete_without_locked_recheck_would_pass`（失敗の注入）: 上の包みに加え、`accounts.registration_links._usable_link` を「`lock=True` なら確かめずに `RegistrationLink.objects.get(token_hash=hash_token(token))` を返す」包みにして、kind=`revoked` で complete → `status_code == 200`（引き直しを外すと上のテストが落ちることの証拠）
+- `test_i636_complete_without_locked_recheck_would_pass`（失敗の注入）: 上の包みに加え、`accounts.registration_links._usable_link` を「`lock=True` なら確かめずに `RegistrationLink.objects.get(token_hash=hash_token(token))` を返す」包みにして、kind=`expired` で complete → `status_code == 200`（引き直しを外すと上のテストが落ちることの証拠。`revoked` は「使用済みかつ失効」を禁じる DB の制約が別に止めるので、引き直しの有無を見分けられない）
 
 ### TC-03（L）: 同時使用は 1 回だけ（行の鍵を外すと必ず落ちる）
 - 前提: I620 の今のテストと同じく `@pytest.mark.django_db(transaction=True)`（スレッドから互いの COMMIT が見える）で、スレッドの終わりに `connections.close_all()`
@@ -47,10 +47,9 @@
 - `test_tc02_create_member`（I620）が通ったまま（201・役割 `user`・組織 A）
 
 ### TC-05（F5）: メンバー管理を使える条件が、判定・API で同じ（新しいファイル `test_I636_member_access.py`）
-- `test_i636_is_invitable_matches_queryset`（parametrize: 有効な招待用・`is_active=False`・`is_individual=True`・`type=personal` かつ `slug=personal`・`type=personal` かつ別の slug）: `org.is_invitable == Organization.objects.invitable().filter(pk=org.pk).exists()`。期待値はそれぞれ `True`・`False`・`False`・`False`・`True`
 - `test_i636_can_manage_members_matches_api`（parametrize: 上の 5 つの組織の管理者・有効な招待用の一般の利用者・有効な招待用の組織の運営〔`is_staff=True`・`role='admin'`〕・組織なしの管理者）: `GET /api/auth/me/` の `can_manage_members` と、`GET /api/members/` が 200 か（`True` ⇔ 200、`False` ⇔ 403・`main_message == "アクセスが拒否されました"`）が一致する。期待値は 管理者の 5 つ: `True`・`False`・`False`・`False`・`True`、一般: `False`、運営の管理者: `True`（I620 と同じ）、組織なし: `False`
 - `test_i636_user_serializer_has_no_individual_flag`: `GET /api/auth/me/` の応答に `organization_is_individual` が無い（I620 の TC-12 を置き換える）
-- 失敗の注入: `is_invitable` から `is_active` の条件を外した写しの関数で、`is_active=False` の組で一致が崩れることを、テストの中で `mock.patch.object(Organization, "is_invitable", property(...))` を使って確かめる（`test_i636_parity_breaks_when_condition_differs`）
+- 判定は `User.can_manage_members`（組織の条件は `OrganizationQuerySet.invitable()` の 1 か所・implement の /simplify で property をやめた）。画面（`/api/auth/me/`）と API（`IsOrgMemberManager`）が同じこれを読むので、上の 8 通りの期待値で条件のずれを止める
 
 ### TC-06（F6）: 作成のエラー文がすべて日本語
 - `test_i636_create_member_error_messages`（parametrize）: `{}` → 「ユーザーIDを入力してください」・`{"user_id": None}` → 「ユーザーIDを入力してください」・`{"user_id": ""}` → 「ユーザーIDを入力してください」・`{"user_id": "ab"}` → 「ユーザーIDは3文字以上で入力してください」・`{"user_id": "a" * 31}` → 「ユーザーIDは30文字以内で入力してください」・`{"user_id": "bad-id"}` → 「ユーザーIDは半角英数字とアンダースコアのみ使用できます」・`{"user_id": ["x"]}` → 「ユーザーIDは文字で入力してください」・`{"user_id": "alice"}`（既存）→ 「このユーザーIDは既に使用されています」。どれも `status_code == 400`・`sub_message` が期待の文と一致
@@ -74,6 +73,8 @@
 - 直す前は 1 つ目のテストが（ボタンが残るので）落ちることを確かめてから直す
 
 ### TC-09（F8）: リンクのダイアログの値を閉じ終わりまで持つ・追加の流れの二度押し
+- 閉じる操作は `fireEvent.click`（`@testing-library/react`・act の中で動く）で行う。user-event 13 の `click` は描き直しを待たないので、「押した直後」の確かめが直す前でも通ってしまう（実装の時に、直しを外して落ちることを確かめた）
+- ダイアログは最後に見せた値を自分で覚え、閉じ終わり（`onExited`）で捨てる（implement の /simplify で、親が値と開いているかを分けて持つ形からこの形にした。直しを外す〔中身を `link` があるときだけ描く〕と落ちることを確かめた）
 - `MemberManagement.test.tsx` に足す: 行の発行 → ［閉じる］を押した直後（閉じ終わる前）にも、ダイアログの見出し「『taro』の登録用リンク」がある。閉じ終わった後（`waitForElementToBeRemoved`）は見出しもリンクの欄も無い
 - 追加の流れ（`members.create` は成功・本人確認の後の `mockApi.issueLink` は解決を待たせる）で、待っている間に 一覧の新しい行の［登録用リンク］が `disabled`・［メンバーを追加］が `disabled`。解決した後、`mockApi.issueLink` の呼び出しは 1 回
 - 追加の流れ（`members.create` が `NEW`〔`user_id: 'hanako2'`〕を返す）のリンクのダイアログで［閉じる］を押した直後（閉じ終わる前）に、見出し「『hanako2』の登録用リンク」がある（「『』の登録用リンク」は無い）。閉じ終わった後は見出しもリンクの欄も無い
@@ -93,10 +94,11 @@
 - リンクを発行して行が「有効」になった直後に幅 360px にし、枠が横に流れる（`scrollWidth > clientWidth`）・［登録用リンク］［パスキー］［リンクを取り消す］の高さが 44〜56px。確かめたら 1280×720 に戻す
 - 登録の画面（別の文脈）は幅 360px で開く。登録の後のダッシュボードで「パスキーを登録しました」が見えている間に、その通知の枠とユーザーメニューのボタン（`[data-testid="user-menu-button"]`）の枠が重ならない（`boundingBox` で左右・上下の重なりが無い）
 - 通知が消えるのを待たずに、ユーザーメニュー → ログアウトで `/login` に移る（通知が消えるのを待つ 2 行を消す）
-- 直す前（右上のまま）は、通知の枠とメニューのボタンの枠が重なって落ちることを確かめてから直す
+- 通知は上から滑り込んで出るので、`boundingBox().y >= 0`（画面の中に止まった）になるまで待ってから測る
+- 直す前（右上のまま）は、通知の枠とメニューのボタンの枠が重なって落ちることを確かめてから直す（実装の時に確かめた: 右上に戻すと `overlaps == true` で落ち、上の中央で通る）
 
 ### TC-14（settings.spec）: TC-28 が並行で落ちない
-- `e2e/tests/settings.spec.ts` の TC-28 を、実装のステップ 6 で決めた形に直す（計画書 §4-13）。直した形と期待値（例: 保存の `PATCH /api/settings/` が 200 を返してから再読み込みし、`GET` の `daily_study_goal_minutes` と入力欄の値が保存した値）は実装の時にこの TC に書き戻す。E2E 全体を `--retries=0` で 3 回流して 3 回とも通る（手動テスト No.2）
+- `e2e/tests/settings.spec.ts` の TC-28: 保存の `PATCH /api/settings/` の応答を待ち、`status() == 200`・応答の `daily_study_goal_minutes == Number(next)` を確かめてから再読み込みし、`GET` の `daily_study_goal_minutes` と入力欄の値が保存した値（実装の時に決めた形。並行の全体を 3 回分〔21 件＋`--repeat-each=2` の 42 件〕流して再現しなかったので、計画書 §4-13 の「保存の応答を待つ」だけを入れた）。E2E 全体を `--retries=0` で 3 回流して 3 回とも通る（手動テスト No.2）
 
 ## 決定論ゲート（自動実走）
 <!-- このイシューは pytest・Jest・E2E（CI が流す）で確かめる。決定論のゲートのスクリプトは無い -->

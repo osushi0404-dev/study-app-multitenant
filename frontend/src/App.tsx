@@ -56,13 +56,16 @@ function App() {
               <Router>
               <NavigationLogger />
               <CssBaseline />
+              {/* 上の中央に出し、上のバーの左右のボタン（メニュー・ユーザーメニュー）に重ねない。幅 360px でも
+                  左右 64px を空ける（右上に出していたときは、通知がログアウトのメニューを押せなくしていた・I636） */}
               <Toaster
-                position="top-right"
+                position="top-center"
                 toastOptions={{
                   duration: 4000,
                   style: {
                     background: '#363636',
                     color: '#fff',
+                    maxWidth: 'min(350px, calc(100vw - 128px))',
                   },
                 }}
               />
