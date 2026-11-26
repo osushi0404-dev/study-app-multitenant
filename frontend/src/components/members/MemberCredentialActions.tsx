@@ -2,7 +2,7 @@
  * 1 人分の［登録用リンク］［パスキー］［リンクを取り消す］と、その確認・表示のダイアログ（I620）
  * メンバー管理と運営の編集画面で使う。本人確認（withReauth）は画面に 1 つだけ置き、行どうしで印を共有する
  */
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Box, Button } from '@mui/material';
 import { Key, Link as LinkIcon, LinkOff } from '@mui/icons-material';
@@ -17,7 +17,7 @@ import RegistrationLinkDialog from './RegistrationLinkDialog';
 
 export type WithReauth = <T>(action: (token: string) => Promise<T>) => Promise<T>;
 
-const ISSUE_FAILED = '登録用リンクを発行できませんでした。もう一度お試しください';
+export const ISSUE_FAILED = '登録用リンクを発行できませんでした。もう一度お試しください';
 const REVOKE_FAILED = '登録用リンクを取り消せませんでした。もう一度お試しください';
 const DELETE_FAILED = 'パスキーを削除できませんでした。もう一度お試しください';
 
@@ -28,20 +28,14 @@ type Props = {
   userId: string;
   hasOpenLink: boolean;
   withReauth: WithReauth;
-  /** 作ったばかりの人に、確認なしで続けて発行する（メンバーを追加の流れ） */
-  autoIssue?: boolean;
-  onAutoIssueDone?: () => void;
 };
 
-function MemberCredentialActions({
-  base, viewerId, memberId, userId, hasOpenLink, withReauth, autoIssue = false, onAutoIssueDone,
-}: Props) {
+function MemberCredentialActions({ base, viewerId, memberId, userId, hasOpenLink, withReauth }: Props) {
   const [confirm, setConfirm] = useState<LinkConfirmKind | null>(null);
   const [issued, setIssued] = useState<RegistrationLinkIssued | null>(null);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const credentials = useMemberCredentials(viewerId, base, memberId, { passkeysEnabled: passkeysOpen });
-  const autoIssued = useRef(false);
 
   const run = async <T,>(action: (token: string) => Promise<T>, failed: string): Promise<T | null> => {
     try {
@@ -60,13 +54,6 @@ function MemberCredentialActions({
     }
   };
 
-  useEffect(() => {
-    if (!autoIssue || autoIssued.current) return;
-    autoIssued.current = true;
-    issue().finally(() => onAutoIssueDone?.());
-    // 作った直後に 1 回だけ流す
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoIssue]);
 
   const handleConfirm = async () => {
     const kind = confirm;

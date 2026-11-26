@@ -144,7 +144,8 @@ PASSKEY_MAX_PER_USER = 20  # 1 人のパスキーの上限（一覧の 1 ペー�
 REGISTRATION_LINK_TTL_SECONDS = 3600  # 登録用リンクの期限（I620 の設計確認メモ: 1 時間）
 REGISTRATION_LINK_PATH = '/passkey-setup'  # 登録用リンクで開く画面の道筋（値は # の後ろに付ける）
 # 登録用リンクの土台。パスキーは origin が一致しないと登録できないので、既定はパスキーを許す最初の画面の origin
-REGISTRATION_LINK_BASE_URL = os.getenv('REGISTRATION_LINK_BASE_URL', WEBAUTHN_ALLOWED_ORIGINS[0])
+# 一覧が空でも読み込みで落とさない（空の一覧は accounts.checks の E001 が報告する・I620 F3）
+REGISTRATION_LINK_BASE_URL = os.getenv('REGISTRATION_LINK_BASE_URL', (WEBAUTHN_ALLOWED_ORIGINS or [FRONTEND_URL])[0])
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

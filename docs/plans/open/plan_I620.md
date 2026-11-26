@@ -302,6 +302,7 @@ Danger Ops: 無（表の追加と選択肢の追加だけ。データの削除�
 - 2026-11-26 implement: テスト文書 TC-01 の「`solo` の 403 の `sub_message`」は、共通のエラー処理（`core.exceptions`）が 403 の文を「この操作を実行する権限がありません」にそろえるので、状態コードだけを確かめる形に直した。`core/tests/test_I127_throttling.py` の設定の一覧に新しいスロットルの 2 つを足した（足さないと落ちる既存のテスト）。計画レビューのやり直し: 不要
 - 2026-11-26 implement: 本人ひとりの組織の管理者で一覧の API を呼ばないよう、`MemberManagement` を中身の部品と分けた（Jest の TC-20 で見つけた）。計画レビューのやり直し: 不要
 - 2026-11-26 implement（/simplify）: 計画書に無い直し: (1) 公開の 2 つの API に `authentication_classes = []`（発行で失効した古いトークンが付いていても 401 にしない・TC-05 に足した） (2) システムチェック `accounts.E004`（`REGISTRATION_LINK_BASE_URL` が `WEBAUTHN_ALLOWED_ORIGINS` に無ければ本番で止める・TC-13 を足し、I619 の TC-15 に土台の値をそろえた） (3) 本人確認を足す `get_permissions` を `MemberCredentialActionsMixin` の 1 か所にした (4) `AdminUserViewSet.queryset` に `select_related('organization')`（新しい項目で N+1 にしない） (5) 作った直後のメンバーは集計の問い合わせを流し直さない (6) 登録画面は最初は開いたときの challenge を使い、やり直しだけ取り直す — 理由: 4 つの観点の点検（再利用・簡素化・効率・直す深さ）の指摘。どれも方式・範囲・受け入れ条件を変えない。計画レビューのやり直し: 不要
+- 2026-11-26 fix-loop: コードレビュー F1〜F3 の直し（追加の後の発行を画面で行う・登録画面は押すたびに challenge を取り直す〔/simplify で入れた使い回しを戻した〕・リンクの土台の既定値を空の一覧で落ちない形に）— 理由: 診断メモ `docs/reviews/I620_fix_diagnosis_20261126_1430.md`。計画レビューのやり直し: 不要（findings への対応）
 
 ## セキュリティレビュー結果
 

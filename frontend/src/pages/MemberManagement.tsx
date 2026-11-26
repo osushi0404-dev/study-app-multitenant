@@ -23,14 +23,17 @@ import {
 } from '@mui/material';
 import { PersonAdd } from '@mui/icons-material';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { useMembers } from '../hooks/useMembers';
+import { membersKeyRoot, useMembers } from '../hooks/useMembers';
 import { usePasskeys } from '../hooks/usePasskeys';
-import { usePasskeyReauth } from '../hooks/usePasskeyReauth';
-import { MEMBERS_BASE } from '../services/member.service';
-import { Member } from '../types/api';
+import { ReauthCancelledError, usePasskeyReauth } from '../hooks/usePasskeyReauth';
+import { credentialApi, MEMBERS_BASE } from '../services/member.service';
+import { Member, RegistrationLinkIssued } from '../types/api';
+import { apiErrorText } from '../utils/passkeyErrors';
 import AddMemberDialog from '../components/members/AddMemberDialog';
-import MemberCredentialActions from '../components/members/MemberCredentialActions';
+import MemberCredentialActions, { ISSUE_FAILED } from '../components/members/MemberCredentialActions';
+import RegistrationLinkDialog from '../components/members/RegistrationLinkDialog';
 import PasskeyReauthDialog from '../components/settings/PasskeyReauthDialog';
 
 const PAGE_SIZE = 20;  // 裏側の REST_FRAMEWORK['PAGE_SIZE'] と同じ（ページ数を count から出すため）
@@ -63,16 +66,25 @@ function MemberManagement() {
 function MemberManagementContent({ viewerId }: { viewerId: string }) {
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
-  const [justAdded, setJustAdded] = useState<string | null>(null);
+  const [added, setAdded] = useState<{ userId: string; link: RegistrationLinkIssued } | null>(null);
+  const queryClient = useQueryClient();
   const { list, create } = useMembers(viewerId, page);
   const ownPasskeys = usePasskeys(viewerId);
   const reauth = usePasskeyReauth();
 
+  // 追加 → 本人確認 → 発行を、この画面で続けて行う（追加した人が今のページに無くても発行する・I620 F1）
   const handleAdd = async (userId: string) => {
     const member = await create.mutateAsync(userId);
     setAdding(false);
     toast.success('メンバーを追加しました');
-    setJustAdded(member.id);
+    try {
+      const link = await reauth.withReauth((token) => credentialApi(MEMBERS_BASE).issueLink(token, member.id));
+      setAdded({ userId: member.user_id ?? userId, link });
+      toast.success('登録用リンクを発行しました');
+      queryClient.invalidateQueries({ queryKey: membersKeyRoot(viewerId) });
+    } catch (error) {
+      if (!(error instanceof ReauthCancelledError)) toast.error(apiErrorText(error, ISSUE_FAILED));
+    }
   };
 
   const renderRow = (member: Member) => (
@@ -92,8 +104,6 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
             userId={member.user_id ?? ""}
             hasOpenLink={member.registration_link_expires_at !== null}
             withReauth={reauth.withReauth}
-            autoIssue={justAdded === member.id}
-            onAutoIssueDone={() => setJustAdded(null)}
           />
         )}
       </TableCell>
@@ -148,6 +158,7 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
       </Box>
       {renderBody()}
       <AddMemberDialog open={adding} onAdd={handleAdd} onCancel={() => setAdding(false)} />
+      <RegistrationLinkDialog userId={added?.userId ?? ''} link={added?.link ?? null} onClose={() => setAdded(null)} />
       <PasskeyReauthDialog
         open={reauth.dialogOpen}
         hasPasskeys={ownPasskeys.list.status === 'success' && ownPasskeys.list.data.length > 0}

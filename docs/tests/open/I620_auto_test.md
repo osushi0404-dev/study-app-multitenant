@@ -17,6 +17,13 @@
 - e2e（2026-11-26・手元の e2e コンテナ・RP ID `frontend`）: `tests/registration-link.spec.ts`・`tests/passkey.spec.ts` が通過。全体では 21 件中 20 件が通過し、`tests/settings.spec.ts`（TC-28・目標時間）が並行で流したときだけ 1 回落ちた（単独では通過・I620 は設定画面に触れていない）
 - 否定のテストの確かめ（失敗の注入）: `_usable_link` の失効の確かめと complete の行の鍵を外すと TC-03（出し直し）・TC-04・TC-05（revoked）・TC-07 の 4 件が落ちた。`MemberViewSet` の `HasRecentReauth` と組織の絞り込みを外すと TC-01（範囲）・TC-03（本人確認・相手）・TC-04・TC-08 の 5 件が落ちた。どちらも戻して全件通過
 
+## 再発防止記録（fix-loop・2026-11-26・コードレビュー F1〜F3）
+- なぜ失敗したか: F1 は「追加の後の発行」を一覧の行の部品が描かれたときに動かしていたので、追加した人が今のページに無いと発行されなかった。F2 は /simplify の効率の指摘に合わせて、1 回目の登録で開いたときの challenge（期限 5 分）を使う形にしたので、開いて 5 分を過ぎると失敗した。F3 はリンクの土台の既定値を、空でありうる一覧の先頭から設定の読み込み時に取っていた
+- 何を変えたか: F1 は追加 → 本人確認 → 発行を `MemberManagement` の `handleAdd` で続けて行い、リンクのダイアログを画面に 1 つ置いた（行の部品の `autoIssue` を消した）。F2 は押すたびに options を取り直す形に戻した。F3 は既定値を `(WEBAUTHN_ALLOWED_ORIGINS or [FRONTEND_URL])[0]` にした（空の一覧は E001 がこれまでどおり報告する）
+- セキュリティ上の考慮点: 該当なし（F1・F2 は動かないだけ・F3 は起動しないだけ。challenge の期限・本人確認は変えていない）
+- 次回どう防ぐか: 発行など副作用のある処理を、描画（どの行が見えているか）に結び付けない。期限のある値（challenge）は、取った時点から使う時点までの時間を利用者が決める画面で使い回さない。/simplify の効率の指摘でも、期限のある値の使い回しは採らない。設定の読み込み時に、空でありうる一覧の先頭を取らない
+- 確かめた結果: TC-22（追加した人が一覧に無い場合でもリンクのダイアログが出る）・TC-24（押したときに options を取り直す・やり直しでも取り直す）・`test_tc13_empty_origins_do_not_break_settings_loading`（空の一覧で設定が読める。直しを外すと `IndexError` で落ちることを確かめてから戻した）が通過。画面の関係 25 件・型チェック・リントも通過
+
 ## 前提（テストの道具）
 - 裏側: `backend/accounts/tests/test_I620_registration_links.py`（API を通す結合テスト）。WebAuthn の応答は I619 の `backend/accounts/tests/webauthn_soft_authenticator.py` で作り、**py_webauthn の `verify_*` は差し替えない**
 - 利用者: 組織 A（招待用・`is_individual=False`）の管理者 `admin_a`・管理者 `admin_a2`・一般 `alice`・無効の `ghost`、組織 B の管理者 `admin_b`・一般 `bob`、本人ひとりの組織の `solo`（`role='admin'`）、運営 `staff`（`is_staff=True`・組織 A に所属させても一覧に出ないことを見る）・`root`（`is_superuser=True`）。パスワードはテストの中の定数（値は文書に書かない）

@@ -598,6 +598,24 @@ def test_tc13_system_check_link_base(settings, base, expected):
     assert [error.id for error in check_webauthn_settings(None)] == expected
 
 
+def test_tc13_empty_origins_do_not_break_settings_loading():
+    """パスキーの origin の一覧が空でも、設定の読み込みで落ちない（F3。空は E001 が報告する）"""
+    import os
+    import subprocess  # nosec B404（テストで manage.py を別のプロセスで動かす）
+    import sys
+    from pathlib import Path
+
+    env = {**os.environ, "WEBAUTHN_ALLOWED_ORIGINS": "", "DJANGO_SETTINGS_MODULE": "core.settings"}
+    env.pop("REGISTRATION_LINK_BASE_URL", None)
+    code = ("import django; django.setup(); from django.conf import settings; "
+            "print(repr(settings.WEBAUTHN_ALLOWED_ORIGINS), settings.REGISTRATION_LINK_BASE_URL)")
+    result = subprocess.run(  # nosec B603（固定の引数だけ）
+        [sys.executable, "-c", code], env=env, cwd=Path(__file__).resolve().parents[2],
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("[] ")
+
+
 # ---------------------------------------- TC-05 失効した古いトークンが付いていても ----
 @pytest.mark.django_db
 def test_tc05_stale_token_is_ignored(people):

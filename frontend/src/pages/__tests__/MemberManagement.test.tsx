@@ -255,18 +255,20 @@ describe('MemberManagement', () => {
     expect(await within(dialog).findByText('このユーザーIDは既に使用されています')).toBeInTheDocument();
   });
 
-  it('TC-22: 追加 → 本人確認 → 発行 → リンクの表示', async () => {
-    const NEW: Member = { ...TARO, id: 'm-9', user_id: 'new_member', passkey_count: 0 };
+  it('TC-22: 追加 → 本人確認 → 発行 → リンクの表示（追加した人が今のページに無くても・F1）', async () => {
+    const NEW: Member = { ...TARO, id: 'm-9', user_id: 'zzz_member', passkey_count: 0 };
     members.create.mockResolvedValue(NEW);
-    members.list.mockResolvedValueOnce(page([SELF, TARO])).mockResolvedValue(page([SELF, TARO, NEW]));
+    // 追加した人は別のページに載る（今のページの一覧には出てこない）
+    members.list.mockResolvedValue(page([SELF, TARO]));
     mountPage();
     userEvent.click(await screen.findByRole('button', { name: 'メンバーを追加' }));
     const dialog = await screen.findByRole('dialog', { name: 'メンバーを追加' });
-    userEvent.type(within(dialog).getByLabelText('ユーザーID'), 'new_member');
+    userEvent.type(within(dialog).getByLabelText('ユーザーID'), 'zzz_member');
     userEvent.click(within(dialog).getByRole('button', { name: '追加してリンクを発行' }));
-    await waitFor(() => expect(members.create).toHaveBeenCalledWith('new_member'));
+    await waitFor(() => expect(members.create).toHaveBeenCalledWith('zzz_member'));
     await confirmWithPassword();
-    expect(await screen.findByRole('dialog', { name: '『new_member』の登録用リンク' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '『zzz_member』の登録用リンク' })).toBeInTheDocument();
+    expect(screen.queryByText('zzz_member', { selector: 'td' })).not.toBeInTheDocument();
     expect(mockApi.issueLink).toHaveBeenCalledWith('reauth-1', 'm-9');
   });
 

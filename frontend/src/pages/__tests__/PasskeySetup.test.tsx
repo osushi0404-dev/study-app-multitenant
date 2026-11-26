@@ -84,12 +84,13 @@ describe('PasskeySetup', () => {
     expect(service.options).toHaveBeenCalledWith(TOKEN);
   });
 
-  it('TC-24: 登録が通ればログインした状態でダッシュボードへ（最初は開いたときの challenge を使う）', async () => {
+  it('TC-24: 登録が通ればログインした状態でダッシュボードへ（押したときに challenge を取り直す・F2）', async () => {
     mountAt(`#token=${TOKEN}`);
     userEvent.click(await screen.findByRole('button', { name: 'パスキーを登録' }));
     await waitFor(() => expect(mockComplete).toHaveBeenCalledWith(
       { token: TOKEN, challengeId: 'c-1', credential: CREDENTIAL }));
-    expect(service.options).toHaveBeenCalledTimes(1);
+    // 開いたときに 1 回・押したときにもう 1 回（開いたときの challenge は期限切れになりうるので使わない）
+    expect(service.options).toHaveBeenCalledTimes(2);
     expect(toast.success).toHaveBeenCalledWith('パスキーを登録しました');
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
   });
@@ -125,6 +126,6 @@ describe('PasskeySetup', () => {
     // やり直しでは challenge を取り直す
     userEvent.click(screen.getByRole('button', { name: 'パスキーを登録' }));
     await waitFor(() => expect(mockComplete).toHaveBeenCalled());
-    expect(service.options).toHaveBeenCalledTimes(2);
+    expect(service.options).toHaveBeenCalledTimes(3);
   });
 });
