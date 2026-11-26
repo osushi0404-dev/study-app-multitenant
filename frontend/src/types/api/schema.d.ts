@@ -141,6 +141,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/registration-links/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 登録用リンクでパスキーを登録し、ログインした状態にする。AllowAny（同上） */
+        post: operations["auth_registration_links_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/registration-links/options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 登録用リンクを開いたときの options。ログインの前に開くので AllowAny（本人はリンクの値で決める） */
+        post: operations["auth_registration_links_options_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard/analytics/": {
         parameters: {
             query?: never;
@@ -170,6 +204,76 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/members/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない） */
+        get: operations["members_list"];
+        put?: never;
+        /** @description 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない） */
+        post: operations["members_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/members/{id}/passkeys/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない） */
+        get: operations["members_passkeys_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/members/{id}/passkeys/{passkey_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない） */
+        delete: operations["members_passkeys_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/members/{id}/registration-link/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない） */
+        post: operations["members_registration_link_create"];
+        /** @description 組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない） */
+        delete: operations["members_registration_link_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -368,6 +472,42 @@ export interface components {
             refresh: string;
             user: components["schemas"]["User"];
         };
+        /** @description 組織の管理者が見るメンバーの行。数と期限は get_queryset の注釈から読む */
+        Member: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description 半角英数字とアンダースコアのみ使用可能 */
+            readonly user_id: string | null;
+            readonly role: components["schemas"]["RoleEnum"];
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly last_login: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly passkey_count: number;
+            /** Format: date-time */
+            readonly registration_link_expires_at: string | null;
+            readonly is_self: boolean;
+        };
+        /** @description メンバーの作成はユーザー ID だけ（役割・組織・有効は受け取らない） */
+        MemberCreate: {
+            user_id: string;
+        };
+        PaginatedMemberList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Member"][];
+        };
         PaginatedPasskeyList: {
             /** @example 123 */
             count: number;
@@ -424,6 +564,32 @@ export interface components {
             reauth_token: string;
             expires_in: number;
         };
+        /** @description リンクの値。形の確かめはサービスが行い、使えないリンクと同じ文にそろえる（理由を見分けさせない） */
+        RegistrationLinkComplete: {
+            token: string;
+            /** Format: uuid */
+            challenge_id: string;
+            credential: {
+                [key: string]: unknown;
+            };
+        };
+        RegistrationLinkIssued: {
+            url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RegistrationLinkOptions: {
+            /** Format: uuid */
+            challenge_id: string;
+            options: {
+                [key: string]: unknown;
+            };
+            user_id: string;
+        };
+        /** @description リンクの値。形の確かめはサービスが行い、使えないリンクと同じ文にそろえる（理由を見分けさせない） */
+        RegistrationLinkToken: {
+            token: string;
+        };
         /**
          * @description * `user` - User
          *     * `admin` - Admin
@@ -456,6 +622,8 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
             readonly organization_name: string;
+            /** @default false */
+            readonly organization_is_individual: boolean;
         };
         UserSettings: {
             daily_study_goal_minutes?: number;
@@ -702,6 +870,54 @@ export interface operations {
             };
         };
     };
+    auth_registration_links_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationLinkComplete"];
+                "multipart/form-data": components["schemas"]["RegistrationLinkComplete"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    auth_registration_links_options_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationLinkToken"];
+                "multipart/form-data": components["schemas"]["RegistrationLinkToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationLinkOptions"];
+                };
+            };
+        };
+    };
     dashboard_analytics_retrieve: {
         parameters: {
             query?: {
@@ -742,6 +958,138 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DashboardOverview"];
                 };
+            };
+        };
+    };
+    members_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMemberList"];
+                };
+            };
+        };
+    };
+    members_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberCreate"];
+                "multipart/form-data": components["schemas"]["MemberCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    members_passkeys_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPasskeyList"];
+                };
+            };
+        };
+    };
+    members_passkeys_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    members_registration_link_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationLinkIssued"];
+                };
+            };
+        };
+    };
+    members_registration_link_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

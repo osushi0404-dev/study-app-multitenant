@@ -1,0 +1,70 @@
+<!--
+## 自動テスト品質基準
+各テストケースが以下を満たすことを確認してください:
+- アサーションに具体的な期待値（status_code の数値・body の具体フィールド等）があるか
+- 「正常レスポンスを確認」のような曖昧な記述になっていないか
+- 他テナントデータへのアクセス拒否テストが含まれているか（認可変更がある場合）
+- テストが実装詳細をトレースするだけでなく、仕様を検証する形になっているか
+-->
+
+# I620 自動テスト: 組織の管理者が 1 回だけ使える登録用リンクを発行し、パスキーの初回登録と再登録に使う
+
+実行コマンド（例）: `docker compose exec backend pytest accounts/tests/test_I620_registration_links.py accounts/tests/test_I619_passkeys.py core/tests/test_I446_cross_api_tenant_isolation.py core/tests/test_I493_openapi_contract.py` / `docker compose exec frontend npm test -- --watchAll=false src/components/members src/pages/__tests__/MemberManagement.test.tsx src/pages/__tests__/PasskeySetup.test.tsx` / e2e は `docs/runbooks/frontend-verify.md` §8（pytest・Jest・E2E の正は CI）
+
+結果:
+- backend（2026-11-26・手元）: `test_I620_registration_links.py` 40 件が通過。accounts・core・studylogs・problems・dashboard の 923 件のうち 922 件が通過し、1 件（I619 の `test_tc01_register_options_requires_auth_and_recent_reauth`）は流し直しで通過（「299 秒前の印」の境目を `int(time.time())` の切り捨てで 1 秒越えることがある前からの不安定さ・I620 は触っていない）。`makemigrations --check` は変更なし
+- frontend（2026-11-26・手元）: メンバー管理 14 件・登録画面 6 件・運営の欄 5 件・メニュー 3 件・設定のパスキーの欄（TC-25 を足した）を含む関係する 11 ファイル 70 件が通過。型チェック・リントも通過
+- e2e（2026-11-26・手元の e2e コンテナ・RP ID `frontend`）: `tests/registration-link.spec.ts`・`tests/passkey.spec.ts` が通過。全体では 21 件中 20 件が通過し、`tests/settings.spec.ts`（TC-28・目標時間）が並行で流したときだけ 1 回落ちた（単独では通過・I620 は設定画面に触れていない）
+- 否定のテストの確かめ（失敗の注入）: `_usable_link` の失効の確かめと complete の行の鍵を外すと TC-03（出し直し）・TC-04・TC-05（revoked）・TC-07 の 4 件が落ちた。`MemberViewSet` の `HasRecentReauth` と組織の絞り込みを外すと TC-01（範囲）・TC-03（本人確認・相手）・TC-04・TC-08 の 5 件が落ちた。どちらも戻して全件通過
+
+## 再発防止記録（fix-loop・2026-11-26・コードレビュー F1〜F3）
+- なぜ失敗したか: F1 は「追加の後の発行」を一覧の行の部品が描かれたときに動かしていたので、追加した人が今のページに無いと発行されなかった。F2 は /simplify の効率の指摘に合わせて、1 回目の登録で開いたときの challenge（期限 5 分）を使う形にしたので、開いて 5 分を過ぎると失敗した。F3 はリンクの土台の既定値を、空でありうる一覧の先頭から設定の読み込み時に取っていた
+- 何を変えたか: F1 は追加 → 本人確認 → 発行を `MemberManagement` の `handleAdd` で続けて行い、リンクのダイアログを画面に 1 つ置いた（行の部品の `autoIssue` を消した）。F2 は押すたびに options を取り直す形に戻した。F3 は既定値を `(WEBAUTHN_ALLOWED_ORIGINS or [FRONTEND_URL])[0]` にした（空の一覧は E001 がこれまでどおり報告する）
+- セキュリティ上の考慮点: 該当なし（F1・F2 は動かないだけ・F3 は起動しないだけ。challenge の期限・本人確認は変えていない）
+- 次回どう防ぐか: 発行など副作用のある処理を、描画（どの行が見えているか）に結び付けない。期限のある値（challenge）は、取った時点から使う時点までの時間を利用者が決める画面で使い回さない。/simplify の効率の指摘でも、期限のある値の使い回しは採らない。設定の読み込み時に、空でありうる一覧の先頭を取らない
+- 確かめた結果: TC-22（追加した人が一覧に無い場合でもリンクのダイアログが出る）・TC-24（押したときに options を取り直す・やり直しでも取り直す）・`test_tc13_empty_origins_do_not_break_settings_loading`（空の一覧で設定が読める。直しを外すと `IndexError` で落ちることを確かめてから戻した）が通過。画面の関係 25 件・型チェック・リントも通過
+
+## 再発防止記録（fix-loop・2026-11-26・test-gate の手動テスト No.12）
+- なぜ失敗したか: MUI の `Table` は既定で幅 100%・列は枠に合わせて縮むので、幅 360px では表が横に流れず、ユーザー ID・見出し・ボタンの文字が 1 文字ずつ折り返した（`TableContainer` の `overflowX` だけでは、表の幅が枠を超えないので効かない）。jsdom の単体テストは大きさを測れず、E2E も 1280px でしか見ていなかった
+- 何を変えたか: 表に `minWidth: 720`・見出しと列は折り返さない（ユーザー ID の列だけ折り返す・最小 120px）・操作のボタンは表の中では横に並べる。TC-30（E2E）に「幅 360px で表の枠が横に流れ、表の中のボタンの高さが 44〜56px」を足した。あわせて TC-30 は、通知（ログインしました・パスキーを登録しました）が消えてからログアウトのメニューを開くようにし、時間の上限を 60 秒にした（通知がメニューに重なって時間切れになることがあった）
+- セキュリティ上の考慮点: 該当なし（見た目）
+- 次回どう防ぐか: 表を足す画面では、幅 360px の E2E で「表が横に流れ、ボタンが縦に伸びない」を確かめる（I619 の No.10 と同じく、大きさは jsdom では測れない）
+- 確かめた結果: e2e コンテナで TC-30 が通過（11 秒）。直し（`minWidth` と折り返さない指定）を外すと、ボタンの高さ 144.5px で落ちることを確かめてから戻した。メンバー管理の Jest 14 件・型チェック・リントも通過。Playwright MCP で 360px（表の枠 818/296 で横に流れる・行の高さ 57px・ボタン 44px）と 1280px を確かめた
+
+## 前提（テストの道具）
+- 裏側: `backend/accounts/tests/test_I620_registration_links.py`（API を通す結合テスト）。WebAuthn の応答は I619 の `backend/accounts/tests/webauthn_soft_authenticator.py` で作り、**py_webauthn の `verify_*` は差し替えない**
+- 利用者: 組織 A（招待用・`is_individual=False`）の管理者 `admin_a`・管理者 `admin_a2`・一般 `alice`・無効の `ghost`、組織 B の管理者 `admin_b`・一般 `bob`、本人ひとりの組織の `solo`（`role='admin'`）、運営 `staff`（`is_staff=True`・組織 A に所属させても一覧に出ないことを見る）・`root`（`is_superuser=True`）。パスワードはテストの中の定数（値は文書に書かない）
+- 本人確認の印は I619 と同じく `passkeys.issue_reauth_token(user=…)` で作り、`X-Reauth-Token` に付ける
+- 期限切れの作り方: リンクの行の `expires_at` を `timezone.now() - 1 秒` に書き換える
+- エラーの形: 400 は `{"error": {"main_message": "入力内容にエラーがあります", "sub_message": <文>, …}}`、403 は `main_message: "アクセスが拒否されました"`、404 は `main_message: "リソースが見つかりません"`、401 は `main_message: "認証が必要です"`
+- 文: `LINK_UNUSABLE` = 「このリンクは使えません。管理者に新しいリンクを発行してもらってください」・`CANNOT_TARGET_SELF` = 「自分あてには操作できません。ほかの管理者か運営に依頼してください」・`INACTIVE_TARGET` = 「無効の利用者には発行できません」・`STAFF_TARGET` = 「運営のアカウントには画面から発行できません」・`INDIVIDUAL_TARGET` = 「個人利用の利用者には発行できません」
+- 画面: Jest＋React Testing Library。`services/member.service.ts`・`services/passkey.service.ts` を `jest.mock` で差し替える（今の書き方）。`qrcode.react` は `jest.mock` で `value` と `aria-label` をそのまま属性に出す軽い部品に差し替え、QR に入る値を確かめる（QR の描き方そのものはライブラリの責任）
+
+## テストケース
+| TC | 対象 | 手順 | 期待値 |
+|---|---|---|---|
+| TC-01 | `GET /api/members/`（AC1・AC3） | 未認証・`alice`・`solo`・`admin_a` で呼ぶ。`alice` に 2 個のパスキー・`admin_a2` に開いたリンクを作っておく。`django_assert_num_queries` で数を測る | 未認証 401・`alice` 403・`solo` 403（403 の文は共通のエラー処理がそろえるので状態コードで見る）。`admin_a` は 200・`results` の `user_id` が `admin_a`・`admin_a2`・`alice`・`ghost` の 4 件（`user_id` 順・`staff`・`root`・`bob` が無い）。`alice` の行は `passkey_count: 2`・`registration_link_expires_at: null`、`admin_a2` の行は期限の日時、`admin_a` の行は `is_self: true`。クエリの数が利用者の数で増えない（4 件と 1 件で同じ数） |
+| TC-02 | `POST /api/members/`（AC1・AC4） | `admin_a` が `{"user_id": "new_member"}`・`{"user_id": "ab"}`・`{"user_id": "bad-id"}`・`{"user_id": "alice"}`・`{"user_id": "x", "role": "admin", "is_active": false}` を送る。`solo` が `{"user_id": "y_y"}` | `new_member` は 201・`role: "user"`・`is_active: true`・DB の `organization` が組織 A・`has_usable_password()` が偽・`email` が null。`ab`・`bad-id` は 400（`details.user_id`）・`alice` は 400（「このユーザーIDは既に使用されています」）。`role`・`is_active` の指定は無視され `role: "user"`・`is_active: true`。`solo` は 403。`GET`・`PATCH`・`PUT`・`DELETE /api/members/{id}/` は 404（詳細のルートを作らない。実装で実測して合わせる） |
+| TC-03 | `POST /api/members/{id}/registration-link/`（AC2・AC7・AC8・AC10・AC13） | `alice` に 2 個のパスキーと、ログインで得た refresh と、それを `/api/auth/refresh/` で rotation して得た新しい refresh を用意。`admin_a` が印なし／印ありで `alice` あてに発行。続けてもう一度発行。`bob`・`staff`・`admin_a` 自身・`ghost` あてにも発行。`admin_a2`（ほかの管理者）あてにも発行 | 印なし 403。印あり 201・`url` が `http://localhost:3000/passkey-setup#token=` と 43 文字の `[A-Za-z0-9_-]`・`expires_at` が今から 3600 秒後（±5 秒）。`alice` のパスキーが 0 個・用意した 2 つの refresh（rotation 後のものを含む）で `POST /api/auth/refresh/` がどちらも 401・古いパスキーでのログインが 400。DB の `registration_links` のどの列にも値（43 文字）が無く、`token_hash` が値の SHA-256。2 回目の発行で 1 回目の行に `revoked_at` が入り、開いた行は 1 つ。`bob`・`staff` は 404・自分は 400（`CANNOT_TARGET_SELF`）・`ghost` は 400（`INACTIVE_TARGET`）・`admin_a2` は 201 |
+| TC-04 | `DELETE /api/members/{id}/registration-link/`・失効の表（AC2・AC7・AC10・AC13） | 発行した後、印なし／印ありで失効。開いたリンクが無い状態でもう一度。失効したリンクで options を呼ぶ。別に、ログインの refresh を `BlacklistedToken` にしてから `/api/auth/refresh/`、ログアウト（`/api/auth/logout/`）を呼ぶ | 印なし 403・印あり 204・2 回目も 204。失効したリンクの options は 400（`LINK_UNUSABLE`）。失効させた refresh は 401。ログアウトは 200（失効の表が入ったため） |
+| TC-05 | `POST /api/auth/registration-links/options/`（AC11） | 正しい値・43 文字でない値・存在しない値・期限切れ・使用済み・失効・利用者が無効・組織が無効のリンクで呼ぶ | 正しい値は 200・`user_id: "alice"`・`options.authenticatorSelection.residentKey: "required"`・`userVerification: "required"`・`excludeCredentials: []`・`challenge_id` の行の用途が `link_register`。それ以外はすべて 400 で `sub_message` が `LINK_UNUSABLE`（同じ文）。ログに `reason=`（`not_found`・`expired`・`used`・`revoked`・`inactive`）が出る |
+| TC-06 | `POST /api/auth/registration-links/complete/`（AC11・AC14） | options の後にソフトの認証器の登録の応答で complete。同じリンクでもう一度 complete。用途 `register` の challenge（I619 の登録）を使う。別の利用者のリンクの challenge を使う。同じ認証器（重複）で別のリンクを使う。無効から有効に戻した `ghost` に発行したリンクで登録 | 1 回目は 200・`{"access","refresh","user"}` で `user.user_id: "alice"`・パスキーが 1 個・リンクの `used_at` が入る・そのパスキーで `/api/auth/passkeys/login/` が 200。2 回目は 400（`LINK_UNUSABLE`）。別の用途・別の利用者の challenge は 400（「パスキーを確かめられませんでした。もう一度お試しください」）。重複は 400（「この端末のパスキーはすでに登録されています」）でリンクの `used_at` は空のまま。`ghost`（有効に戻した後）は 200 |
+| TC-07 | 同時使用（AC12） | `django_db(transaction=True)`。同じリンクの options を 2 回取り、別々の認証器の応答で complete をスレッド 2 本から同時に呼ぶ | 200 がちょうど 1 つ・もう 1 つは 400（`LINK_UNUSABLE`）。パスキーは 1 個・`used_at` が入った行が 1 つ |
+| TC-08 | `GET /api/members/{id}/passkeys/`・`DELETE …/passkeys/{passkey_id}/`（AC6・AC7） | `admin_a` が `alice` のパスキーの一覧・印なし／印ありで削除。`bob` の一覧・`bob` のパスキーの番号を `alice` の URL で削除・自分のパスキーの削除。`solo` が呼ぶ | 一覧 200・`results` に `id`・`name`・`created_at`・`last_used_at` だけ（`credential_id`・`public_key` が無い）。印なし 403・印あり 204 で 1 個減る。`bob` 404・`bob` のパスキーを `alice` の URL で指すと 404（消えない）・自分 400（`CANNOT_TARGET_SELF`）。`solo` 403 |
+| TC-09 | 運営の API（AC5・AC6・AC7） | `staff` が `alice`（組織 A）・`bob`（組織 B）あてに発行・失効、パスキーの一覧と削除。`root`・`staff` 自身・`solo`・`ghost` あてに発行。`admin_a`（組織の管理者・運営でない）と `alice` が同じ URL を呼ぶ | `alice`・`bob` は 201／204／200／204（印あり）・印なしの書き込みは 403。`root` は 400（`STAFF_TARGET`）・自分 400（`CANNOT_TARGET_SELF`）・`solo` 400（`INDIVIDUAL_TARGET`・パスキーの一覧も 400）・`ghost` 400（`INACTIVE_TARGET`）。`admin_a`・`alice` は 403 |
+| TC-10 | 管理コマンド `issue_registration_link`（AC5） | `call_command('issue_registration_link', 'staff_user_id', stdout=…)`・存在しないユーザー ID・`ghost` | 標準出力に `http://localhost:3000/passkey-setup#token=` で始まる URL と期限・`staff` のパスキーが 0 個・開いたリンクが 1 つ（`issued_by` は null）。存在しない ID は `CommandError`（「利用者が見つかりません」）・`ghost` は `CommandError`（`INACTIVE_TARGET`） |
+| TC-11 | ログ（AC16） | `caplog` で、発行・失効・options・complete（成功と失敗）・管理者のパスキー削除を流す | `registration link issued user_id=… link_id=… issued_by=…`・`registration link revoked …`・`registration link used …`・`passkey deleted by admin …` が出る。どのログの文にもリンクの値（43 文字）・その SHA-256・ユーザー ID（`alice` の文字）が出ない |
+| TC-12 | `UserSerializer.organization_is_individual`（AC3） | `solo`・`alice`・組織なしの利用者で `/api/auth/me/` を呼ぶ | `solo` は `organization_is_individual: true`・`alice` は false・組織なしは false |
+| TC-13 | OpenAPI（既存 `core/tests/test_I493_openapi_contract.py`） | 作り直した `backend/openapi.yaml` と画面の型で流す | 通る（新しい 6 つのパスと `Member`・`RegistrationLinkIssued`・`RegistrationLinkOptions`・`User.organization_is_individual` が入る） |
+| TC-14 | 経路の表（既存 `core/tests/test_I446_cross_api_tenant_isolation.py`） | 新しい経路を `ROUTE_TABLE`（運営の 4 つは `DRF_STAFF`）と `OUT_OF_SCOPE` に足して流す | 通る（運営の 4 つは組織の管理者・一般の利用者で 403） |
+| TC-13b | システムチェック E004（`accounts/tests/test_I620_registration_links.py::test_tc13_system_check_link_base`） | 本番（DEBUG=False）で、リンクの土台がパスキーの origin に入っている／入っていない | 入っていれば誤り無し・入っていなければ `accounts.E004` |
+| TC-05b | 古いトークン（`test_tc05_stale_token_is_ignored`） | 無効な `Authorization: Bearer …` を付けてリンクの options を呼ぶ | 200（公開の API は認証を見ない） |
+| TC-15 | I619 の回帰（既存 `accounts/tests/test_I619_passkeys.py`）と設定の一覧（既存 `core/tests/test_I127_throttling.py`） | 4-4 の切り出しの後に流す。スロットルの設定の一覧に新しい 2 つを足す | 全件通る |
+| TC-20 | `MemberManagement.tsx` | 一覧の読み込み中・失敗・空・あり（自分の行・リンクのある行）を描く。`useMembers`・`useMemberCredentials` のクエリのキーに見ている人の userId が入っているか（`queryClient.getQueryCache()` で見る）。`Layout` を `role: 'admin'`・`organization_is_individual: true/false`・`role: 'user'` で描く | 読み込み中の印・「メンバーを読み込めませんでした」と［再読み込み］・「メンバーはまだいません」・行（「メンバー」「管理者」「2 個」「有効（15:30 まで）」「なし」）。自分の行は「（自分は操作できません）」でボタンが無い。メニューの「メンバー管理」は `admin` かつ個人でないときだけ。クエリのキーの 2 番目が見ている人の userId |
+| TC-21 | 発行の流れ（`MemberCredentialActions`・`RegistrationLinkDialog`） | ［登録用リンク］→ 確認で［キャンセル］→ もう一度［発行する］→ 本人確認（差し替え）→ ダイアログ。［コピー］（`navigator.clipboard.writeText` を差し替え・成功と失敗）・［閉じる］。リンクのある行で［リンクを取り消す］ | 確認の文「『taro』の登録用リンクを発行しますか？」「今のパスキーはすべて使えなくなり、ログイン中の端末もログアウトされます。」。キャンセルでは発行しない。発行後、`QRCodeSVG` に渡された `value` が発行の応答の `url` と同じ（差し替えた部品の属性で見る）・`aria-label="登録用リンクの QR コード"`、欄の値が URL・「有効期限: 2026/11/26 15:30（1 時間・1 回だけ）」・「この画面を閉じると、リンクは二度と表示できません」。コピー成功で「リンクをコピーしました」・失敗で「コピーできませんでした。リンクを選んでコピーしてください」。閉じたら URL が画面から消える。取り消しは確認の後に `revokeLink` を呼び「登録用リンクを取り消しました」 |
+| TC-22 | `AddMemberDialog` | 空・「ab」・「bad-id」で欄を離れる。サーバーが 400（`details.user_id`）を返す。正しい値で送る | 「ユーザーIDを入力してください」「3文字以上で入力してください」「半角英数字とアンダースコアのみ使用できます」が欄の下に出る。サーバーの誤りが欄の下に出る。正しい値で `create` → 本人確認 → `issueLink` の順に呼ばれ、リンクのダイアログが開く。送信中はボタンが押せない |
+| TC-23 | `MemberPasskeysDialog` | 一覧の 4 つの状態。ごみ箱 → 確認で［削除］ | 「パスキーはまだありません」など 4 つ。確認の文「『会社の PC』を削除しますか？このパスキーではログインできなくなります」→ `deletePasskey(印, memberId, passkeyId)`・「パスキーを削除しました」。ボタンの `aria-label` が「『会社の PC』を削除」 |
+| TC-24 | `PasskeySetup.tsx` | `#token=<43 文字>` で開く（options 成功）・`#` なしで開く・options が 400・`browserSupportsWebAuthn` が偽・［パスキーを登録］で成功・`createPasskeyCredential` が取り消し | 開いた直後に `history.replaceState` が `#` の無い URL で呼ばれる。「ユーザーID『alice』のパスキーを登録します」・案内の文・［パスキーを登録］。`#` なしと 400 は「このリンクは使えません。管理者に新しいリンクを発行してもらってください」でボタンが無い。非対応は「このブラウザはパスキーに未対応です」でボタンが押せない。成功で `completeRegistrationLink` が呼ばれ `/dashboard` へ・「パスキーを登録しました」。取り消しは I619 の文が出てボタンがまた押せる |
+| TC-25 | `PasskeysCard.tsx` の案内 | 描く | 「2 台以上の端末で使えるようにしてください。iCloud キーチェーンや Google パスワード マネージャーなど、端末どうしで同期されるパスキーがおすすめです」が出る。I619 のテスト（`PasskeysCard.test.tsx`）が通る |
+| TC-26 | `UserEdit.tsx`（運営） | 一般の利用者・運営のアカウント・本人ひとりの組織の利用者で描く | 一般の利用者には「パスキーと登録用リンク」の欄に［登録用リンク］［パスキー］。運営・本人ひとりの組織の利用者には「この利用者には画面から発行できません」でボタンが無い |
+| TC-30 | E2E `e2e/tests/registration-link.spec.ts`（AC9・AC14・AC17） | 4-11 の流れ | `/members` に新しい行・リンクのダイアログの欄の値が `/passkey-setup#token=` を含む・新しいコンテキストで登録 → URL が `/dashboard`・パスキーでのログインで `/dashboard`・管理者の画面でその行が「1 個」「なし」。登録画面の URL に `#token=` が残っていない |

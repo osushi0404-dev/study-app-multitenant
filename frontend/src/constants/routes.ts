@@ -14,6 +14,10 @@ export const LEARNING_SUBJECTS_PATH = `/settings#${LEARNING_SUBJECTS_ANCHOR}`;
 export const SUBJECT_MANAGEMENT_PATH = '/subject-management';
 export const QUIZ_MANAGEMENT_PATH = '/quiz-management';
 
+/** メンバー管理（組織の管理者）と、登録用リンクで開くパスキーの登録画面（I620。後者は裏側の REGISTRATION_LINK_PATH と同じ） */
+export const MEMBER_MANAGEMENT_PATH = '/members';
+export const PASSKEY_SETUP_PATH = '/passkey-setup';
+
 /** ダッシュボードから選べるクイズの始め方（いつものクイズ・苦手を優先〔I466〕。今日の復習は専用のカード） */
 export type QuizStartMode = Exclude<QuizMode, 'review'>;
 

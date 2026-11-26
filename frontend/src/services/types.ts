@@ -26,6 +26,7 @@ export interface User {
   created_at: string;
   last_login: string;
   organization_name?: string;
+  organization_is_individual?: boolean;  // 本人ひとりの組織（メンバー管理を出さない・I620）
 }
 
 export interface LoginRequest {

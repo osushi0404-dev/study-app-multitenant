@@ -1,5 +1,6 @@
 from rest_framework.permissions import BasePermission
 
+from .models import Organization
 from .passkeys import has_valid_reauth
 
 REAUTH_HEADER = 'X-Reauth-Token'
@@ -11,3 +12,14 @@ class HasRecentReauth(BasePermission):
 
     def has_permission(self, request, view):
         return has_valid_reauth(user=request.user, token=request.headers.get(REAUTH_HEADER))
+
+
+class IsOrgMemberManager(BasePermission):
+    """メンバー管理（I620）: 招待で人を迎えられる組織（本人ひとりの組織・共有の personal 組織を除く）の管理者"""
+    message = 'メンバーを管理する権限がありません'
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not getattr(user, 'is_authenticated', False) or user.role != 'admin' or user.organization_id is None:
+            return False
+        return Organization.objects.invitable().filter(pk=user.organization_id).exists()
