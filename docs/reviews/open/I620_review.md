@@ -48,3 +48,5 @@ STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 - [fix-loop] F1〜F3 を診断メモの推奨案（各 案 A）で直した — 診断レビュー OK。F2 は /simplify で入れた使い回しを戻した
 STAGE_DONE: fix-loop NEXT: review-gate
+- [review-gate] 差分のレビュー OK（docs/reviews/I620_code_review_20261126_1434.md）・敵対的レビュー 1 周目 OK（未検証 0・Critical/High 0・docs/reviews/I620_adversarial_review_20261126_1445.md）
+STAGE_DONE: review-gate NEXT: test-gate
