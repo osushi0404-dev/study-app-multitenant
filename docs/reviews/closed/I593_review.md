@@ -1,23 +1,23 @@
 # I593 レビュー: 判定の仕組みを変える PR を変更前の版で審査する
 
 ## 変更概要
--
+- 審査の入口とレビュー役の定義・レビューの決まりを、ブランチが分かれた時点の写しの版で動かす。写しで動かせない判定の部品を変えた PR は必ず高リスク。テストを弱める差分を決定論で拾ってレビュー役に必ず見せる
 
 ## 変更点
--
+- `scripts/claude/reviewer-agents-lib.sh`（新規）・審査の入口 5 本・`.claude/hooks/unreviewed.py`・`.claude/hooks/reviewed-hook.sh`・`scripts/claude/gate-check.sh`・`scripts/claude/plan-issue-review.sh`・レビュー役の定義 2 本・手順書 3 本・テスト（PR #635 の説明に詳細）
 
 ## 影響範囲
-- Backend/Frontend/DB/Config:
+- Backend/Frontend/DB: なし。Config: ハーネスのレビューの流れ（高リスクの周が直近 60 件で 7 件ぶん増える・審査の入口を変えたブランチの毎周の `!` はマージ後なくなる）
 
 ## テスト結果
 - 自動: CI（Harness Tests ほか）成功・gate-check OK・新しいテスト test_i593_review_from_base.sh pass=53（失敗の注入つき）・起動役の TC-I593-05 は test_i599_unreviewed_scripts.sh で合格
 - 手動: Claude の 2 項目とも OK（審査の入口は 75 で止まり、`!` で流した作業ツリーの版の記録は高リスク YES・テストを弱めうる差分が載る）
 
 ## 計画との差分
-- なし / あり（理由）
+- あり（計画変更記録の 2 行: 計画レビューの指摘の反映・既存テストを写しから流す形への直しなど実装の詳細。方式・範囲・受け入れ条件は変えていない）
 
 ## ロールバック
--
+- PR を revert する（写しは分かれた時点ごとに作り直される）
 
 ## 振り返り
 
@@ -81,6 +81,8 @@
 - [retro] `--route` は起動役で 75 になったが、読むだけの処理なのでユーザーに `!` を頼まず、サンドボックスの中（`bash ./scripts/…`）で流した — 中で動くのは安全側で、ユーザーから `!` の多さを指摘されたため
 - [retro] 予防処置 P1（写しで動かす範囲の残り 3 点）→ #547 に同梱（コメント済み）。マージ後の実測も #547 の最初の PR で行うよう依頼
 - [retro] C1 の再発防止の手順の追加・`!` の多さ・つないだコミット・`--route` の 75 は見送り（理由は「## 振り返り」の見送り）
+- [close] `pr-base-sync.sh sync` も部品を変えているため 75 で止まった。ユーザーに `!` を頼まず、同じ確かめを git と gh で直接行った（develop が 26 コミット先・重なるファイル無し → 取り込み・gate-check OK）— 取り込んだのはアプリ本体と I620 の記録だけで、このブランチのファイルに触れないため
+- [close] マージ前の最終チェック（`pr-base-sync.sh final`）も同じ理由で 75 になるため、CI の結果と mergeStateStatus を gh で直接確かめる
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -97,3 +99,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+
+STAGE_DONE: close NEXT: merge
