@@ -52,7 +52,7 @@
 
 ## 3. 影響範囲
 - Backend: accounts（`models.py` の判定の置き場所・`permissions.py`・`serializers.py`・`views.py`・`registration_links.py`・`management/commands/seed_e2e.py`・テスト）。`backend/openapi.yaml`（作り直し）
-- Frontend: `App.tsx`（通知の場所）・`components/Layout.tsx`（メニュー）・`pages/MemberManagement.tsx`・`pages/PasskeySetup.tsx`・`components/members/RegistrationLinkDialog.tsx`・`components/members/MemberCredentialActions.tsx`・`services/types.ts`・`types/api/schema.d.ts`（作り直し）と、それぞれの Jest のテスト
+- Frontend: `App.tsx`（通知の場所）・`components/Layout.tsx`（メニュー）・`pages/MemberManagement.tsx`・`pages/PasskeySetup.tsx`・`components/members/RegistrationLinkDialog.tsx`・`components/members/MemberCredentialActions.tsx`・`services/types.ts`・`types/api/schema.d.ts`（作り直し）・`pages/Settings.tsx`（読み込みの効果の後片付け・fix-loop で足した）と、それぞれの Jest のテスト（`pages/__tests__/Settings.test.tsx` を含む）
 - E2E: `e2e/tests/registration-link.spec.ts`・`e2e/tests/settings.spec.ts`（原因しだいで `e2e/global-setup.ts`・`e2e/tests/dashboard-layout.spec.ts`）
 - DB: なし（マイグレーションなし。初期データのコマンドに利用者を足すだけ）
 - Config/Infra: なし
@@ -147,6 +147,7 @@
   - 保存と再読み込みの順序が原因なら、保存の応答（`PATCH /api/settings/`）を待ってから再読み込みする
   - それ以外・ここに無いファイルが要るときは、計画変更記録に書いて計画レビューを通し直す
 - 3 回流しても再現しないときは、上の 2 つのうち副作用の無い「保存の応答を待つ」だけを入れ、原因は未特定と記録する（§8 R5）
+- （fix-loop で特定・計画変更記録）原因は設定画面の読み込みの効果に後片付けが無いこと。開発の StrictMode で取得が 2 回走り、遅れた 2 回目の応答が `reset` で入力を保存済みの値に戻す。`frontend/src/pages/Settings.tsx` の効果に `ignore` の後片付けを付け、古い応答では state もフォームも変えない（React の公式の形）。Jest（`Settings.test.tsx`）で StrictMode の下で 1 回目の取得を遅らせて再現し、直しを外すと落ちることを確かめる → TC-15
 
 ## 5. 実装手順（ステップ）
 1. 裏側の M1・M2・L（テストを先に書き、落ちることを確かめてから直す）→ TC-01〜TC-03
@@ -240,6 +241,7 @@ Danger Ops:
 | V4 | 3 | 読んで可 | 作成の重複（TC-04）で、例外の中身・ユーザー ID がログと応答に出ないか。`transaction.atomic` の中で受けて、外側のトランザクションを壊さないか |
 
 ## 計画変更記録
+- 2026-11-27 fix-loop: 計画書の記載: §4-13「原因で直し方を決める（…それ以外・ここに無いファイルが要るときは、計画変更記録に書いて計画レビューを通し直す）」→ 採った方法: 原因が分かった（test-gate の手動テスト No.2・診断メモ `docs/reviews/I636_fix_diagnosis_20261127_0420.md`）。設定画面 `frontend/src/pages/Settings.tsx` の読み込みの `useEffect` に後片付け（`let ignore = false`・後片付けで `ignore = true`。`ignore` なら `setSettings`・`resetSettingsForm`・`toast.error`・`setLoading` をしない）を付け、StrictMode で 2 回走る取得の古い応答が入力を戻さないようにする。実装対象に `Settings.tsx` と `frontend/src/pages/__tests__/Settings.test.tsx` を足す。E2E の「保存の応答を待つ」は残す — 理由: 診断レビューを通った案 A（React の公式の形・最小の変更）。TanStack Query への移行（案 B）は範囲を超えるので採らない。計画レビューのやり直し: 要（実装対象のファイルを足す）
 - 2026-11-27 implement: 計画書の記載: §4-10「`MemberCredentialActions` に `wrap?: boolean` を足し、ボタンの並びを…」→ 採った方法: 同じ並びの `Box` に `role="group"`・`aria-label="『<ユーザーID>』の操作"` も付け、TC-11 はこの名前で並びを探す — 理由: テストが `parentElement`（部品の中の入れ子）に頼るとリント（`testing-library/no-node-access`）に止められ、F12 と同じ「内部の構造に頼る」形にもなる。読み上げで行の操作のまとまりが分かる（見た目は変わらない）。計画レビューのやり直し: 不要（読み上げの名前の付随の追加だけ）
 - 2026-11-27 implement（/simplify）: 計画書の記載: §4-4「`Organization.is_invitable`（property）… 両者が同じことはテストで守る」→ 採った方法: property を作らず、`User.can_manage_members` が `Organization.objects.invitable().filter(pk=self.organization_id).exists()` を呼ぶ（条件は QuerySet の 1 か所だけ）。TC-05 の一致のテスト 2 本（`is_invitable` と QuerySet・その失敗の注入）は要らなくなったので消し、組織の種類ごとの `/api/auth/me/` と `/api/members/` の一致のテストは残す — 理由: /simplify の指摘（同じ条件を 2 か所に書き、一致をテストで守るより、1 か所に置くほうが簡単で直し忘れが起きない）。問い合わせの数は I620 の権限の判定と同じ 1 回。計画レビューのやり直し: 不要（判定の置き場所の実装の選び直しで、条件・範囲・受け入れ条件は変えない）
 - 2026-11-27 implement（/simplify）: 計画書の記載: §4-7「`RegistrationLinkDialog` に `open`・`onExited` を足し、親が値と開いているかを分けて持つ」→ 採った方法: ダイアログが最後に見せた値（見出しのユーザー ID とリンク）を自分の state に覚え、閉じ終わり（`TransitionProps.onExited`）で捨てる。親（`MemberManagement`・`MemberCredentialActions`）は I620 と同じ `link`・`onClose` の形のまま — 理由: /simplify の指摘（同じ組の state を 2 つの親に書き写していた）。値を捨てる時点（閉じ終わり）は計画と同じ。計画レビューのやり直し: 不要（部品の中の作りの選び直しだけ）

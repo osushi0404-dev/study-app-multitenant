@@ -101,5 +101,9 @@
 ### TC-14（settings.spec）: TC-28 が並行で落ちない
 - `e2e/tests/settings.spec.ts` の TC-28: 保存の `PATCH /api/settings/` の応答を待ち、`status() == 200`・応答の `daily_study_goal_minutes == Number(next)` を確かめてから再読み込みし、`GET` の `daily_study_goal_minutes` と入力欄の値が保存した値（実装の時に決めた形。並行の全体を 3 回分〔21 件＋`--repeat-each=2` の 42 件〕流して再現しなかったので、計画書 §4-13 の「保存の応答を待つ」だけを入れた）。E2E 全体を `--retries=0` で 3 回流して 3 回とも通る（手動テスト No.2）
 
+### TC-15（fix-loop・settings.spec の原因）: 設定画面の古い読み込みの応答が入力を戻さない
+- `frontend/src/pages/__tests__/Settings.test.tsx` に足す: `<React.StrictMode>` の中で設定画面を描く。`dashboardService.getUserSettings` の 1 回目は解決を待たせ（後片付けされる方）、2 回目は `daily_study_goal_minutes: 30` で解決する。フォームが出たら目標時間を 45 にする → 1 回目を `daily_study_goal_minutes: 50` で解決させる → 入力欄の値は 45 のまま（50 に戻らない）
+- 直しを外す（後片付けを消す）と、入力欄が 50 に戻って落ちることを確かめる
+
 ## 決定論ゲート（自動実走）
 <!-- このイシューは pytest・Jest・E2E（CI が流す）で確かめる。決定論のゲートのスクリプトは無い -->
