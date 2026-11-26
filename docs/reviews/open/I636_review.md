@@ -34,8 +34,10 @@
 - [implement] 画面の確かめは Playwright MCP（`localhost:3020`）で、ログイン直後の通知（上の中央・幅 360px でメニューに重ならない）と `/members`（表の枠 720/296・Tab で枠に入る・ボタン 44px・コンソールのエラー 0）を見た。開いた画面に、作り直す前の「Module not found」の開発用の表示（webpack の overlay）が残ったので、取り除いてから確かめた — 配っている bundle に依存が入っていること（`qrcode.react` を含む）と、frontend のログの「Compiled successfully」を確かめた。E2E（`frontend:3000`）では出ていない
 - [implement] /simplify の 4 観点の指摘のうち、組織の条件を 1 か所にする・ダイアログが最後の値を自分で持つ・消したテストの墓標のコメントを消す、の 3 つを採った。URL の正規表現を締める（イシューで view で直すと決めている）・発行の 2 系統を 1 つにする（計画の範囲を超える作り直し）・事前の重複の確認を消す（普通の重複を競合の扱いに寄せることになる）・待ち合わせの時間を縮める（CI で 2 本目が遅れると鍵を外した注入のテストが不安定になる）・テスト全体のパスワードのハッシュを軽くする（差分の外）は採らなかった — 振る舞い・範囲を変えないため
 - [implement] `react-scripts build` は手元で流さず、型チェック（`tsc --noEmit`）・リントで代えた。ビルドは CI が流す — 手元のビルドは `frontend/build` を作るだけで、型と依存の誤りは型チェックと開発サーバーの「Compiled successfully」で見ている
+- [review-gate] 基本レビューは OK（Low 3 件・止める指摘なし。台帳に残し retro へ）。高リスクなので敵対的レビューを 1 周流し、V1〜V4 とも確認済みで OK。敵対的レビューの Low（`UserSerializer` の `can_manage_members` が `exists()` の問い合わせを 1 回足す）は直さず retro に回す — 止める基準に当たらず、OK の周の後に差分を足さないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
