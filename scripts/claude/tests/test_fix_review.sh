@@ -103,7 +103,8 @@ done
 ck_grep TC-16-claude "$LIB" 'claude -p'
 ck_grep TC-16-tools  "$LIB" '\-\-tools[[:space:]]+"Read,Grep,Glob"'
 # shellcheck disable=SC2016  # 単一引用符の $agent_name は文字どおりの照合用
-ck_grep TC-16-agent  "$LIB" '\-\-agent[[:space:]]+"\$agent_name"'   # I193: モデルはサブエージェント定義（model: sonnet）で決める
+ck_grep TC-16-agent  "$LIB" 'reviewer_agent_args[[:space:]]+"\$agent_name"'   # I193: モデルはサブエージェント定義（model: sonnet）で決める。I593: 定義は写しの版を --agents で渡す
+ck_grep TC-16-args   "$LIB" '"\$\{REVIEWER_ARGS\[@\]\}"[[:space:]]+--tools'
 # TC-17: --tools 引用符内に書込ツールが無い（コメントで false-positive しない）
 for s in "$LIB" "$DIAG_SH"; do
   ck_ngrep "TC-17-nowrite $(basename "$s")" "$s" '\-\-tools[[:space:]]+"[^"]*(Write|Edit|Bash|MultiEdit)[^"]*"'

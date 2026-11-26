@@ -50,6 +50,7 @@ Blocker 判定を下すことを恐れるな。
 5. git diff（`git diff origin/develop...HEAD`、最大 100KB）
 
 6. **決定論ゲート実行結果**（`### 決定論ゲート実行結果`・スクリプトが実走済みの実 exit code）
+7. **テストを弱めうる差分**（`### テストを弱めうる差分`・I593。ブランチ全体についてスクリプトが数えた `TEST_WEAKENING:` の行。`deleted`＝消したテストのファイル／`fewer-tests`＝テストの定義の数の減少／`fewer-checks`＝確かめの数の減少／`skip`＝足したスキップの目印。`なし` なら該当なし）
 
 上記はプロンプト内に含まれている。追加で必要なファイルは Read・Grep・Glob を使用して参照する。
 
@@ -112,6 +113,7 @@ Blocker 判定を下すことを恐れるな。
 - モック過多で実態を検証できていない状態になっていないか
 - 認可テスト（テナント境界・ロール別アクセス制御の検証）が実装されているか（認可変更がある場合）
 - **画面の動きの回帰テスト（I187）**: `frontend/src` の画面の動き（表示・遷移・入力の結果）を変えた場合、E2E か単体テストを追加・更新しているか。テストにしにくい見た目（配置・色など）だけを画面キャプチャで確かめているか（手順は `docs/runbooks/frontend-verify.md`）。手で確かめただけで終わっていれば High
+- **テストを弱める差分（I593・必須）**: 入力の `### テストを弱めうる差分` の `TEST_WEAKENING:` の行を 1 行ずつ、計画書（変更点・確定事項・計画変更記録）に理由が書かれているかを確かめる。理由が無いものは、その行ごとに FINDING 行を `STOP=test`・`FILE=` にそのテストのファイル・再現に「`TEST_WEAKENING:` の行の中身と、計画書に理由が無いこと」を書く（アプリ本体でもハーネスでも止まる）。理由があるものは書かない。数が減っていなくても、確かめを弱める書き換え（期待値をゆるめる・`assert True` など）に気づいたら同じく `STOP=test`
 - 否定・不在・回帰・無改変を検証する合否判定 TC（grep 等の決定論テスト・lint 異常系を含む）が、失敗条件で実際に不合格になることが確認されているか（正常系で合格するだけの false-green な常時 OK でないか）
 - 決定論テストが、設定の中身の写しや、意図的な変更でしか壊れないもの（文言・フックの有無・並び）を確かめていないか（過剰。`docs/runbooks/plan-writing-rules.md`「決定論テストの対象の選び方」）
 - **テスト結果文書（I###_auto_test.md）の結果欄が空白の場合**: CI が全ジョブ pass していれば test-gate 段階の実施前の正常状態として Low 以下で扱う。CI 未 pass またはテスト結果空白かつ CI 状況不明の場合は従来通り Medium 以上で指摘する（流れの順序: implement → review-gate → test-gate のため review-gate 時点では空白が正常）
@@ -168,8 +170,9 @@ Blocker 判定を下すことを恐れるな。
 - DBスキーマ重要変更
 - 既存事故の再発リスクが高い変更
 - 画面制御していてもAPI直叩きで事故りうる変更
-- 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
-- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
+- 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `guard_path_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
+- 【harness 固有】変更前の版で動かせない判定の部品の変更: `.claude/hooks/*`・`.claude/skills/review-gate/*`・`.claude/skills/test-gate/*`・`.claude/skills/fix-loop/*`・`.claude/skills/plan-review/*`・`scripts/claude/gate-check.sh`（正は `scripts/claude/code-review.sh` の `review_mechanism_trigger()`・I593。審査の入口とレビュー役の定義・決まりは変更前の写しの版で動くので入らない）
+- 【harness 固有・Yes にしない】上の 2 つの一覧以外の手元のハーネス（`.claude/skills/` のほかのスキル・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
 
 ---
 
@@ -196,6 +199,7 @@ Blocker 判定を下すことを恐れるな。
   - `leak` ② 秘密情報・個人情報が外に出る（PR・イシュー・コメント・ログへの書き出し、外部への送信）
   - `github` ③ develop・main を直接壊す（直接の push・強制の push・ブランチ保護を外す）、または GitHub から戻せない設定を壊す
   - `ac:<番号>` ④ イシューの受け入れ条件を満たしていない（番号が無いものは当たらない扱い）
+  - `test` ⑤ テストを弱める差分（入力の `TEST_WEAKENING:`）に計画書の理由が無い（I593。アプリ本体の指摘でも、この値で書けば重大度によらず止まる）
   - どれにも当たらないものは `STOP=-` で書いてよい（止めない。台帳に残り retro が後続のイシューか一覧へ回す）。「判定をすり抜けられる穴（関所の穴）」は一覧に入れない（`STOP=-`。後続のイシューに回ったときは最優先になる）
 - **guard（GitHub から復旧できない例外のファイル）**: I197 のまま、Blocker・High を書く（再現が無くても止まる）。
 - **再現（共通・必須）**: 止めたい指摘には、行の最後に `| 再現: <この入力・この手順で・こう壊れる>` を書く。再現が書けない指摘は止まらない（台帳に残る）。`| 再現: なし`・`| 再現: -` と書いたものは再現なしとして扱う。
@@ -223,7 +227,7 @@ Blocker 判定を下すことを恐れるな。
 | 1 | ...        | ✅ 実装済み / ⚠️ 一部不足 / ❌ 未実装 | ...（⚠️・❌ は「## 台帳」に `STOP=ac:<#>` の FINDING 行も書く） |
 
 ## 台帳
-FINDING: F<n> SEV=<Blocker|High|Medium|Low> STATUS=<open|resolved> FILE=<パス|-> LINE=<n|n-m|-> SECURITY=<yes|no> STOP=<flow|leak|github|ac:<番号>|->[ RISK=up][ ACCEPTED=R<番号>] | <指摘の要約 1 行> | 再現: <入力・手順・壊れ方>
+FINDING: F<n> SEV=<Blocker|High|Medium|Low> STATUS=<open|resolved> FILE=<パス|-> LINE=<n|n-m|-> SECURITY=<yes|no> STOP=<flow|leak|github|test|ac:<番号>|->[ RISK=up][ ACCEPTED=R<番号>] | <指摘の要約 1 行> | 再現: <入力・手順・壊れ方>
 （指摘 1 件ごとに 1 行。指摘はここにだけ書く。表や箇条書きにだけ書いたものは指摘として数えられない）
 
 ---

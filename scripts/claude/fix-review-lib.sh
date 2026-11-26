@@ -65,9 +65,12 @@ run_fix_review() {
 
   # 1) reviewer 不在 → 非ブロック SKIP。claude -p --agent に渡す名前（ファイル名）で、公式の置き場所の定義を確かめる
   #    （パスと名前がずれて、確かめたファイルと呼ぶ定義が違うことにならないように。I193 3 回目 L1）
-  local agent_name; agent_name=$(basename "$reviewer" .md)
-  if [ ! -f ".claude/agents/${agent_name}.md" ]; then
-    echo "⚠️ reviewer 定義が見つかりません: .claude/agents/${agent_name}.md。${kind} レビューを skip します。"
+  # I593: 定義はこのファイルと同じ版（写しから動けば写しの版）から --agents で渡す（作業ツリーの定義を読まない）
+  local agent_name agents_dir; agent_name=$(basename "$reviewer" .md)
+  agents_dir=$(mktemp -d)
+  if ! reviewer_agent_args "$agent_name" "$agents_dir"; then
+    rm -rf "$agents_dir"
+    echo "⚠️ reviewer 定義を用意できません: ${agent_name}（上の理由）。${kind} レビューを skip します。"
     echo "FIX_GATE: SKIP"; return 0
   fi
 
@@ -78,8 +81,11 @@ run_fix_review() {
   # 3) タイムアウト付き起動。失敗・空・タイムアウト(exit124) は全て非ブロック SKIP＋未実施記録
   # I193: 公式のサブエージェント定義（.claude/agents/<name>.md）を --agent で呼ぶ。名前はファイル名から取る
   # I197: 承認が要る操作は待たずに拒否する（--permission-prompts none）。I223: GitHub へは読み取りだけの鍵。I225: MCP は読まない
-  if ! review=$(printf '%s' "$context" | GH_APP_READONLY=1 timeout "${FIX_REVIEW_TIMEOUT:-300}" claude -p --strict-mcp-config \
-        --agent "$agent_name" --tools "Read,Grep,Glob" --permission-prompts none) || [ -z "$review" ]; then
+  local review_rc=0
+  review=$(printf '%s' "$context" | GH_APP_READONLY=1 timeout "${FIX_REVIEW_TIMEOUT:-300}" "${CLAUDE_BIN:-claude}" -p --strict-mcp-config \
+        "${REVIEWER_ARGS[@]}" --tools "Read,Grep,Glob" --permission-prompts none) || review_rc=$?
+  rm -rf "$agents_dir"
+  if [ "$review_rc" -ne 0 ] || [ -z "$review" ]; then
     printf '# %s fix-%s レビュー（未実施）\n\nclaude -p の失敗/空/タイムアウトのためレビュー未実施（非ブロック skip）。\n\nFIX_GATE: SKIP\n' \
       "$issue" "$kind" > "$review_file"
     commit_review_artifact "$review_file" "$issue" "fix-${kind}-review"
@@ -111,6 +117,10 @@ run_fix_review() {
   echo "FIX_GATE: REMAND"
   return "$(gate_exit_code REMAND)"
 }
+
+# I593: レビュー役の定義の渡し方（このファイルと同じ版の .claude/agents/ から）
+# shellcheck source=scripts/claude/reviewer-agents-lib.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/reviewer-agents-lib.sh"
 
 # ---- source ガード（全関数定義の後・本体の前に配置）----
 # 本 lib は関数定義のみで実行本体を持たない。テスト/エントリポイントは source して関数を利用する。

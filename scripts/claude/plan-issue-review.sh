@@ -65,6 +65,21 @@ append_review_link() {
   fi
 }
 
+# I593: 審査が写しの版で動かなかった（人が `!` で作業ツリーの版を流した）ときは、記録の高リスク判定を Yes にする。
+# 「## 高リスク判定」の節の最初の「判定:」行を Yes にし（無ければ節を足す）、最後の VERDICT: OK の後に HIGHRISK を足す
+force_plan_highrisk() {   # $1=記録
+  local f="$1" tmp="$1.tmp"
+  if awk '
+    /^## 高リスク判定/ { s=1; seen=1; print; next }
+    s && /^## / { s=0 }
+    s && !done && /^判定:/ { print "判定: Yes"; done=1; next }
+    { print }
+    END { if (!seen) { print ""; print "## 高リスク判定"; print "判定: Yes" } }
+  ' "$f" > "$tmp"; then mv "$tmp" "$f"; else rm -f "$tmp"; return 1; fi
+  printf '\n## 審査の版（I593）\n作業ツリー（写しで動かせなかった → 高リスク）\n' >> "$f"
+  if grep -qE '^VERDICT:[[:space:]]*OK[[:space:]]*$' "$f"; then printf 'VERDICT: HIGHRISK\n' >> "$f"; fi
+}
+
 # 案A(I069): レビュー記録（生産物）は生産者がコミットする。引数の1ファイルのみを path-scoped で
 # add→commit（他の index/作業ツリーに触れない・auto-push しない・後続 close が push）。
 # ブランチガード: 保護ブランチ（develop/main/detached HEAD/取得失敗）では commit せず未追跡のまま残す
@@ -96,7 +111,11 @@ cd "$REPO_ROOT"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_plan_review_${TIMESTAMP}.md"
-REVIEWER_AGENT="plan-reviewer"   # 定義: .claude/agents/plan-reviewer.md（tools: Read, Grep, Glob）
+REVIEWER_AGENT="plan-reviewer"   # 定義: .claude/agents/plan-reviewer.md（tools: Read, Grep, Glob）。I593: このファイルと同じ版の定義を --agents で渡す
+# shellcheck source=scripts/claude/reviewer-agents-lib.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/reviewer-agents-lib.sh"
+AGENTS_DIR=$(mktemp -d); trap 'rm -rf "$AGENTS_DIR"' EXIT
+reviewer_agent_args "$REVIEWER_AGENT" "$AGENTS_DIR" || { echo "⛔ レビュー役の定義を用意できません（上の理由）。止めます。"; exit 1; }
 
 ISSUE_FILE=$(find_file "issues" "${ISSUE}.md")
 PLAN_FILE=$(find_plan_file "$ISSUE")
@@ -128,7 +147,7 @@ $(cat "$MANUAL_TEST")"
 # claude -p でレビュー実行（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）
 # 時間上限 REVIEW_TIMEOUT（既定 900 秒）。時間切れ・失敗は判定できないので exit 1（fail-closed）
 REVIEW_RC=0
-REVIEW=$(printf '%s' "$CONTEXT" | GH_APP_READONLY=1 timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --strict-mcp-config --permission-prompts none) || REVIEW_RC=$?
+REVIEW=$(printf '%s' "$CONTEXT" | GH_APP_READONLY=1 timeout "${REVIEW_TIMEOUT:-900}" claude -p "${REVIEWER_ARGS[@]}" --tools "Read,Grep,Glob" --strict-mcp-config --permission-prompts none) || REVIEW_RC=$?
 if [ "$REVIEW_RC" -ne 0 ]; then
   echo "⛔ 計画レビューが終わりませんでした（claude -p exit=${REVIEW_RC}。124 は時間切れ）。判定できないため止めます。"
   exit 1
@@ -142,6 +161,7 @@ REVIEW_CLEAN=$(printf '%s\n' "$REVIEW" | sed 's/[[:space:]]*$//')
 # ファイル保存
 mkdir -p "$(dirname "$REVIEW_FILE")"
 printf '%s\n' "$REVIEW_CLEAN" > "$REVIEW_FILE"
+reviewer_from_snapshot || force_plan_highrisk "$REVIEW_FILE"
 
 # 案A(I069): 生産物（レビュー記録）を生産者がコミットする（feature ブランチ時のみ・path-scoped）。
 commit_review_artifact "$REVIEW_FILE" "$ISSUE" "plan-review"

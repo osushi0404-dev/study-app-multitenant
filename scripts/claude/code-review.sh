@@ -221,7 +221,7 @@ official_security_verdict() {   # $1=RISK_PATH（YES/NO） $2=NO_DELTA（1=差�
 # 対象は CI_WORKFLOWS（空白区切り・既定 .github/workflows/ci.yml .github/workflows/e2e.yml）。読めなければ何も出さない。
 expected_ci_jobs() {
   # shellcheck disable=SC2086  # CI_WORKFLOWS は空白区切りの一覧として分ける
-  python3 - ${CI_WORKFLOWS:-.github/workflows/ci.yml .github/workflows/e2e.yml} <<'PY' 2>/dev/null || true
+  python3 -I - ${CI_WORKFLOWS:-.github/workflows/ci.yml .github/workflows/e2e.yml} <<'PY' 2>/dev/null || true
 import sys, yaml
 for path in sys.argv[1:]:
     d = yaml.safe_load(open(path, encoding="utf-8")) or {}
@@ -306,7 +306,9 @@ detect_risk_flag() {
 # それ以外の手元のハーネス（スキル・スクリプト・レビュー指示・中核文書・テスト）は GitHub が最後の守り
 # （docs/runbooks/review-rules.md）なので対象外。LLM 側（code-reviewer.md・plan-reviewer.md）も同じ集合。
 # case glob の * は / にも一致するため .github/* はワークフロー・CODEOWNERS を含む配下すべてに一致する。
-path_risk_trigger() {
+# I593: この集合（guard_path_trigger）は変更の種類 guard・止めて聞く条件 2 の安全装置の集合と同じ。高リスクの判定
+# path_risk_trigger は、これに「変更前の版で動かせない判定の部品」（review_mechanism_trigger）を足したもの。
+guard_path_trigger() {
   local files="$1" f
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -315,6 +317,29 @@ path_risk_trigger() {
     esac
   done <<< "$files"
   echo NO
+}
+
+# I593: 変更前の版（BASE の写し）で動かせない判定の部品。起動役そのもの（.claude/hooks/・作業ツリーから動く）・
+# 本体の会話が作業ツリーから読む審査の段階のスキル・手元で作業ツリーの版が流れる gate-check.sh。
+# レビュー役の定義・決まり・審査の入口は写しの版で動くので入れない（docs/runbooks/review-rules.md）。
+review_mechanism_trigger() {
+  local files="$1" f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "$f" in
+      .claude/hooks/*|.claude/skills/review-gate/*|.claude/skills/test-gate/*|.claude/skills/fix-loop/*|.claude/skills/plan-review/*|scripts/claude/gate-check.sh) echo YES; return;;
+    esac
+  done <<< "$files"
+  echo NO
+}
+
+path_risk_trigger() {
+  if [ "$(guard_path_trigger "$1")" = YES ] || [ "$(review_mechanism_trigger "$1")" = YES ]; then echo YES; else echo NO; fi
+}
+
+# I593: 審査が写しの版で動いていなければ（人が `!` で作業ツリーの版を流した）高リスク。判定は reviewer-agents-lib.sh
+reviewer_source_risk() {
+  if declare -F reviewer_from_snapshot >/dev/null && reviewer_from_snapshot; then echo NO; else echo YES; fi
 }
 
 # I086: 高リスク判定の合成（LLM RISK OR パス決定論）と敵対ステージ要否の決定を関数化する。
@@ -429,7 +454,7 @@ run_one_gate() {
 gate_reviewed() {
   local root
   root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-  python3 -B "$root/.claude/hooks/unreviewed.py" dirty >/dev/null 2>&1
+  python3 -I -B "$root/.claude/hooks/unreviewed.py" dirty >/dev/null 2>&1
 }
 
 # 宣言ゲートを分類・実走し、グローバル GATE_EVIDENCE（証跡 md）/ GATE_VERDICT（OK|BLOCKER）を設定する。
@@ -526,7 +551,7 @@ inject_gate_result() {
 # ---- I197 §4.8: 基本レビューの台帳（やり直しは差分と台帳だけを見て、合否は台帳から決定論で出す） ----
 # 台帳の行（スクリプトが書く）: `LEDGER: F<n> SEV=… STATUS=<open|resolved> SCOPE=<delta|outside> KIND=<app|harness|guard> STOP=<…> REPRO=<yes|no> RISK=<up|-> SECURITY=<yes|no> FILE=<パス|-> | 要約`
 # レビュー役の行（code-reviewer が書く・I205）:
-#   `FINDING: F<n> SEV=… STATUS=… FILE=<パス|-> LINE=<n|n-m|-> SECURITY=… STOP=<flow|leak|github|ac:<番号>|-> | 要約 | 再現: …`
+#   `FINDING: F<n> SEV=… STATUS=… FILE=<パス|-> LINE=<n|n-m|-> SECURITY=… STOP=<flow|leak|github|test|ac:<番号>|-> | 要約 | 再現: …`
 # SCOPE（行で決める）と KIND（FILE のパスで決める）はレビュー役に書かせず、スクリプトが決める。止めるかは blocking()（I205: 変更の種類ごと）。
 # 台帳は最新の記録に累積で全部書く
 
@@ -693,10 +718,11 @@ NO_REPRO_HEAD = re.compile(r"(?:なし|無し|none|n/a)(?:$|[（(。、.,:：])"
 RANK = {"Low": 0, "Medium": 1, "High": 2, "Blocker": 3}
 # ハーネスの止める条件の一覧（I205）: ① flow 流れが動かなくなる ② leak 秘密情報・個人情報が外に出る
 # ③ github develop・main を直接壊す／GitHub から戻せない設定を壊す ④ ac:<番号> 受け入れ条件の未達
-STOP_RE = re.compile(r"flow|leak|github|ac:[0-9]+")
+# ⑤ test テストを弱める差分（入力の TEST_WEAKENING）に計画書の理由が無い（I593。種類によらず止める）
+STOP_RE = re.compile(r"flow|leak|github|test|ac:[0-9]+")
 LINE_RE = re.compile(r"([0-9]+)(?:-([0-9]+))?")
 HUNK_MARGIN = 3   # 塊の前後の行数（git の既定の前後の行数と同じ）
-# 変更の種類（I205）。guard は path_risk_trigger() と同じ集合（テスト R-K2 で一致を固定）。どれでもないものは app（厳しい側）
+# 変更の種類（I205）。guard は guard_path_trigger() と同じ集合（テスト R-K2 で一致を固定・I593 で path_risk_trigger から分けた）。どれでもないものは app（厳しい側）
 GUARD_PREFIX = (".github/",)
 GUARD_FILES = {".pre-commit-config.yaml", ".secrets.baseline", "scripts/claude/hooks/pretooluse_guard.py",
                ".claude/settings.json", ".claude/settings.local.json"}
@@ -777,8 +803,8 @@ def blocking(e):
         return True
     if scope != "delta":
         return False
-    if kind == "app":             # アプリ本体: Blocker・High・Medium。受け入れ条件の未達（ac:<番号>）は重大度に関係なく止める
-        return RANK[sev] >= 1 or stop.startswith("ac:")
+    if kind == "app":             # アプリ本体: Blocker・High・Medium。受け入れ条件の未達（ac:<番号>）・理由の無いテストの弱め（test・I593）は重大度に関係なく止める
+        return RANK[sev] >= 1 or stop.startswith("ac:") or stop == "test"
     return bool(STOP_RE.fullmatch(stop))   # それ以外のハーネス: 止める条件の一覧に当たるものだけ（重大度は見ない）
 
 def is_rest(e):
@@ -1049,6 +1075,91 @@ set_risk_line() {   # $1=ファイル $2=YES|NO
   mv "$tmp" "$1"
 }
 
+# I593: テストを弱めうる差分を決定論で数える（plan_I593.md 4-5）。引数 <base> <head>。1 行 1 件で
+#   TEST_WEAKENING: deleted <パス> ／ fewer-tests <パス> <前>-><後> ／ fewer-checks <パス> <前>-><後> ／ skip <パス>:<行> <中身>
+# を出す。無ければ `TEST_WEAKENING: なし`。git が失敗したら非 0（呼ぶ側が止める）。止めるかはレビュー役が計画書と照らして決める
+_TEST_WEAKENING_PY='
+import re, subprocess, sys
+base, head = sys.argv[1], sys.argv[2]
+def git(*a):
+    return subprocess.run(["git", "-c", "core.quotePath=false", *a], capture_output=True, text=True, check=True).stdout
+def is_test(p):
+    name = p.rsplit("/", 1)[-1]
+    if p.startswith("scripts/claude/tests/") or p.startswith("e2e/"):
+        return True
+    if p.startswith("backend/"):
+        return "/tests/" in p or (name.startswith("test_") and name.endswith(".py"))
+    if p.startswith("frontend/"):
+        return "/__tests__/" in p or re.search(r"\.(test|spec)\.[cm]?[jt]sx?$", name) is not None
+    return False
+def lang(p):
+    if p.endswith(".py"): return "py"
+    if re.search(r"\.[cm]?[jt]sx?$", p): return "js"
+    if p.endswith(".sh"): return "sh"
+    return ""
+TESTS = {"py": re.compile(r"^\s*(?:async\s+)?def\s+test_", re.M),
+         "js": re.compile(r"^\s*(?:it|test)(?:\.each\(.*?\))?\s*\(", re.M)}
+CHECKS = {"py": re.compile(r"^\s*assert\b|\bself\.assert\w+\(", re.M),
+          "js": re.compile(r"\bexpect\s*\("),
+          "sh": re.compile(r"^\s*ck\w*\s", re.M)}
+SKIP = {"py": re.compile(r"@pytest\.mark\.(?:skip|skipif|xfail)\b|\bpytest\.(?:skip|xfail)\(|@unittest\.(?:skip|skipIf|skipUnless|expectedFailure)\b|\bxfail\b|\bskipIf\b|\bskipUnless\b"),
+        "js": re.compile(r"\b(?:it|test|describe)\.(?:skip|only|todo|fixme)\b|\bx(?:it|describe|test)\s*\(|\.(?:skip|only|todo|fixme)\("),
+        "sh": re.compile(r"\b(?:skip|SKIP)\b")}
+def blob(rev, p):
+    try:
+        return git("show", f"{rev}:{p}")
+    except subprocess.CalledProcessError:
+        return None
+out = []
+fields = git("diff", "--no-renames", "--name-status", "-z", base, head).split("\0")
+for st, p in zip(fields[0::2], fields[1::2]):
+    if not is_test(p):
+        continue
+    if st.startswith("D"):
+        out.append(f"deleted {p}")
+        continue
+    lg = lang(p)
+    # 足したファイル（A）と、数え方の無い拡張子は中身を取らない（git の起動を減らす）
+    old = new = None
+    if not st.startswith("A") and (lg in TESTS or lg in CHECKS):
+        old, new = blob(base, p), blob(head, p)
+    if old is not None and new is not None:
+        for kind, table in (("fewer-tests", TESTS), ("fewer-checks", CHECKS)):
+            rx = table.get(lg)
+            if rx is None:
+                continue
+            a, b = len(rx.findall(old)), len(rx.findall(new))
+            if b < a:
+                out.append(f"{kind} {p} {a}->{b}")
+    rx = SKIP.get(lg)
+    if rx is None:
+        continue
+    line = 0
+    for d in git("diff", "--no-renames", "-U0", base, head, "--", p).splitlines():
+        m = re.match(r"@@ -\S+ \+(\d+)", d)
+        if m:
+            line = int(m.group(1)); continue
+        if d.startswith("+") and not d.startswith("+++"):
+            if rx.search(d[1:]):
+                out.append(f"skip {p}:{line} {d[1:].strip()[:160]}")
+            line += 1
+for o in out or ["なし"]:
+    print("TEST_WEAKENING: " + o)
+'
+test_weakening_report() {   # $1=base $2=head
+  python3 -I -c "$_TEST_WEAKENING_PY" "$1" "$2"
+}
+
+# I593: レビュー役の入力と記録（証跡）に入れる節。範囲はいつもブランチ全体（merge-base から HEAD）。取れなければ止める側の 1 行
+weakening_section() {   # $1=比べる相手（origin/develop）
+  local mb out
+  if mb=$(git merge-base "$1" HEAD 2>/dev/null) && out=$(test_weakening_report "$mb" HEAD); then
+    printf '%s\n' "$out"
+  else
+    printf 'TEST_WEAKENING: 数えられなかった（git の失敗。差分を自分で見て、テストの削除・スキップを確かめる）\n'
+  fi
+}
+
 # テストから関数のみを source するためのガード（本体は実行しない）
 if [ "${REVIEW_LIB_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 
@@ -1086,6 +1197,9 @@ fi
 # （関数だけを読み込む使い方〔gate-check・テストの写し〕には要らないので、本体でだけ読む）
 # shellcheck source=scripts/claude/review-process-lib.sh disable=SC1091  # -x なしの単体の検査（TC-C1）でもたどらない。ライブラリは別に検査される
 . "$(dirname "${BASH_SOURCE[0]}")/review-process-lib.sh"
+# I593: レビュー役の定義をこのファイルと同じ版（写しから動けば写しの版）から渡す
+# shellcheck source=scripts/claude/reviewer-agents-lib.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/reviewer-agents-lib.sh"
 
 ISSUE="${1:?Usage: $0 I###}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -1105,7 +1219,8 @@ TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}.md"
 # I197: 同じ分のうちにもう一度流しても前の記録を上書きしない（台帳の前の周が消えるため）
 n=1; while [ -e "$REVIEW_FILE" ]; do n=$(( n + 1 )); REVIEW_FILE="docs/reviews/${ISSUE}_code_review_${TIMESTAMP}_${n}.md"; done
-REVIEWER_AGENT="code-reviewer"   # 定義: .claude/agents/code-reviewer.md（tools: Read, Grep, Glob）
+REVIEWER_AGENT="code-reviewer"   # 定義: .claude/agents/code-reviewer.md（tools: Read, Grep, Glob）。I593: このファイルと同じ版の定義を --agents で渡す
+reviewer_agent_args "$REVIEWER_AGENT" "$OFFICIAL_DIR/agents" || { echo "⛔ レビュー役の定義を用意できません（上の理由）。止めます。"; exit 1; }
 
 # I193: 比べる相手（origin/develop）を最新にする（古い develop と比べて無関係の差分を見ないため）
 if ! git fetch -q origin develop; then
@@ -1190,6 +1305,10 @@ RISK_PATH=$(path_risk_trigger "$GIT_FILES")
 # I202 F5: レビュー役の後に、台帳の目印（RISK=up）でも YES にする（下の台帳の後）
 RISK_PLAN=$(plan_risk "$ISSUE")
 RISK_FINAL=$(combine_risk "$RISK_PLAN" "$RISK_PATH")
+# I593: 写しの版で動いていなければ（人が `!` で作業ツリーの版を流した）高リスク
+RISK_SOURCE=$(reviewer_source_risk)
+RISK_FINAL=$(combine_risk "$RISK_FINAL" "$RISK_SOURCE")
+if [ "$RISK_SOURCE" = "YES" ]; then REVIEWER_SOURCE_NOTE="作業ツリー（写しで動かせなかった → 高リスク）"; else REVIEWER_SOURCE_NOTE="写し $(basename "$(reviewer_src_root)")"; fi
 if [ "$NO_DELTA" = "1" ]; then
   # 表示用の文字列（記録とレビュー役への入力）。判定には使わない（判定は NO_DELTA を渡す・I227）
   echo "(実行していない: 差分なし)" > "$OFFICIAL_DIR/code"
@@ -1208,6 +1327,9 @@ else
     OFFICIAL_PIDS+=("$!")
   fi
 fi
+
+# I593: テストを弱めうる差分（ブランチ全体・毎周）。組み込みのレビューを裏で起こした後に数える（待ち時間に重ねる）
+WEAKENING=$(weakening_section origin/develop)
 
 # CI 待機（I193: 時間切れは exit 3・失敗は exit 1。打ち切った後に先へ進まない）。
 # PR を取れない（gh の失敗）・PR が無いときも、CI を確かめられないので止める（I193 4 回目 H1。新しい流れでは
@@ -1243,6 +1365,9 @@ if [ -n "$AUTO_TEST_FILE" ]; then
   run_declared_gates "$AUTO_TEST_FILE"
   OMISSION_VERDICT=$(omission_lint "$AUTO_TEST_FILE")
 fi
+# I593: 審査の版とテストを弱めうる差分を証跡（記録）に残す
+GATE_EVIDENCE+="- 審査の版: ${REVIEWER_SOURCE_NOTE}"$'\n'
+GATE_EVIDENCE+="- テストを弱めうる差分（ブランチ全体・I593）:"$'\n'"$(printf '%s\n' "$WEAKENING" | sed 's/^/  - /')"$'\n'
 
 # 組み込みのレビューの終わりを待って結果を受け取る（それぞれ OFFICIAL_REVIEW_TIMEOUT で止まる）
 wait "${OFFICIAL_PIDS[@]}" 2>/dev/null || true
@@ -1291,6 +1416,9 @@ $(if [ "$REVIEW_KIND" = "delta" ]; then ledger_kinds "$SHOWN_FILES_FILE"; else l
 
 ### 決定論ゲート実行結果（スクリプト実走済み・実 exit code／読解で上書きしないこと）
 ${GATE_EVIDENCE}
+
+### テストを弱めうる差分（決定論・I593。ブランチ全体。全件について、計画書に理由があるかを確かめる）
+${WEAKENING}
 omission-lint: ${OMISSION_VERDICT}
 
 ### git log (${REVIEW_RANGE})
@@ -1328,7 +1456,7 @@ if [ "$NO_DELTA" = "1" ]; then
 VERDICT: OK"
 else
   run_claude_logged "${REVIEW_TIMEOUT:-900}" "$REVIEW_LOG" "$REVIEW_IN" \
-    --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --permission-prompts none || REVIEW_RC=$?
+    "${REVIEWER_ARGS[@]}" --tools "Read,Grep,Glob" --permission-prompts none || REVIEW_RC=$?
   REVIEW=$(claude_log_result "$REVIEW_LOG" 2>/dev/null) || REVIEW=""
 fi
 REVIEW_OK=1
@@ -1380,7 +1508,7 @@ mapfile -t CODE_REVIEWS < <(review_records "$ISSUE" code_review)
 RISK_LEDGER=$(ledger_risk "${CODE_REVIEWS[@]}") || RISK_LEDGER=YES
 RISK_FINAL=$(combine_risk "$RISK_FINAL" "$RISK_LEDGER")
 # I197 §4.8・I202: 高リスク判定は計画レビュー・パス・台帳の目印（code-reviewer は判定しない）。証跡は注入セクションに残す
-GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（計画レビュー=${RISK_PLAN} / path=${RISK_PATH} / 台帳の目印=${RISK_LEDGER}）"$'\n'
+GATE_EVIDENCE+="- 高リスク判定: ${RISK_FINAL}（計画レビュー=${RISK_PLAN} / path=${RISK_PATH} / 審査の版=${RISK_SOURCE} / 台帳の目印=${RISK_LEDGER}）"$'\n'
 LLM_VERDICT=$(detect_code_verdict "$REVIEW_FILE")
 # I205: code-reviewer の VERDICT 行は、全体のレビューでも差分のレビューでも合否に使わない（止めるかはスクリプトが FINDING 行の欄から決める）。
 # VERDICT 行が無い＝出力が壊れているときだけ止める

@@ -175,6 +175,7 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 
 ## 計画変更記録
 - 2026-11-26 plan-review: 計画レビュー（20261126_1328・OK）の Warning・Info を反映: 調査結果 3 に公式の説明での確かめと実起動の確かめ方を追記／4-2 に呼ぶ側の `--tools` を残すことを追記／4-4 の写し（fixture）と plan-reviewer.md の行を確定／4-5 に review-rules.md の書き方の例を追記／auto_test の TC-12 の判定の形と対応を直した。`.claude/hooks/`・`gate-check.sh` を集合に入れたこと（イシューの方針 (3) の 4 つのスキルを超える）は 9. の理由のとおり方針 (2) の具体化で、ユーザーの委任の範囲として close の PR 説明に明記する — 理由: 指摘への対応の追記だけで方式・範囲・受け入れ条件は変えない。計画レビューのやり直し: 不要
+- 2026-11-26 implement: 計画書の記載: 「既存の `test_i181_review_slim.sh`・… を直す」 → 採った方法: (1) 審査の入口を丸ごと流す既存のテスト（`test_i197_review_ledger.sh`・`test_i202_ledger_cleanup.sh`・`test_i205_stop_criteria.sh`・`test_i212_review_base.sh`・`test_i197_adversarial_process.sh`）は、一時リポジトリに `reviewer-agents-lib.sh` と定義を写し、本番と同じく写しから入口を流す（新しいテストの道具 `scripts/claude/tests/lib_test_snapshot.sh`）。作業ツリーから流すと 4-3 で高リスクに倒れ、期待が変わるため (2) 呼び方を照らす既存のテスト（`test_i193_official_flow.sh` の R7・S12、`test_i197_adversarial_process.sh` の S1・S5、`test_fix_review.sh` の TC-16、`test_i205_stop_criteria.sh` の K2・FG-B11）を新しい呼び方・`guard_path_trigger` に合わせた (3) TC-05 は起動役の道具がある `i599_cases.py` に書いた (4) `fix-review-lib.sh` の claude を `${CLAUDE_BIN:-claude}` にした（TC-04 の差し替えのため。ほかの入口と同じ形）(5) `gate-check.sh` の一時ファイルの後片付けを既存の後片付けにまとめた (6) 写しの作り方は、BASE に定義・決まりが無いときもそれを除いて写しを作る（archive 全体を失敗させない）(7) `force_plan_highrisk` は VERDICT: OK の後に HIGHRISK の行を足す形にした — 理由: どれも計画の方式・範囲・受け入れ条件の中の実装の詳細とテストの直し。計画レビューのやり直し: 不要
 
 ## レビュー結果
 - [20261126_1328 判定: ✅ 完了](../../reviews/I593_plan_review_20261126_1328.md)

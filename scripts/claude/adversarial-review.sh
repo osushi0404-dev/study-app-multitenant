@@ -25,6 +25,9 @@ REVIEW_LIB_SOURCE_ONLY=1 . "$ADV_SCRIPT_DIR/code-review.sh" || { echo "⛔ code-
 set +e
 # shellcheck source=scripts/claude/review-process-lib.sh disable=SC1091
 . "$ADV_SCRIPT_DIR/review-process-lib.sh" || { echo "⛔ review-process-lib.sh を読み込めません"; exit 2; }
+# I593: レビュー役の定義をこのファイルと同じ版（写しから動けば写しの版）から渡す
+# shellcheck source=scripts/claude/reviewer-agents-lib.sh disable=SC1091
+. "$ADV_SCRIPT_DIR/reviewer-agents-lib.sh" || { echo "⛔ reviewer-agents-lib.sh を読み込めません"; exit 2; }
 
 # 既定値はここで 1 回だけ決める（記録に書く値と実際に効く値をそろえる）
 : "${ADV_DEADLINE:=600}" "${ADV_STEP_TIMEOUT:=300}" "${ADV_MIN_STEP:=60}" "${ADV_EXPERIMENT_ROUNDS:=2}" \
@@ -172,7 +175,7 @@ run_step() {
 run_reviewer() {
   local sid="${3:-}"
   run_step "$1" "$2" \
-    --agent adversarial-reviewer --tools "Read,Grep,Glob" \
+    "${REVIEWER_ARGS[@]}" --tools "Read,Grep,Glob" \
     --permission-mode manual --permission-prompts none \
     --max-budget-usd "${ADV_REVIEW_BUDGET}" ${sid:+--resume "$sid"}
 }
@@ -516,6 +519,11 @@ PIDS=()
 cleanup_adv() { local q; for q in "${PIDS[@]}"; do kill_tree "$q"; done; rm -rf "$RUN"; }
 trap cleanup_adv EXIT
 trap 'exit 130' INT TERM
+if ! reviewer_agent_args adversarial-reviewer "$RUN/agents"; then
+  echo "⛔ レビュー役の定義を用意できません（上の理由）"
+  echo "ADVERSARIAL_ERROR: AGENT"
+  exit 2
+fi
 if ! read_checklist "$PLAN_FILE" > "$RUN/checklist.tsv"; then
   echo "⛔ ${PLAN_FILE} の「## 必ず確かめる項目」を読めません（上の理由）。一覧を直してからやり直してください。"
   echo "ADVERSARIAL_ERROR: CHECKLIST"

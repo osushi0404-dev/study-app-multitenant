@@ -42,9 +42,10 @@
   | 変更の種類 | 止めるもの |
   |---|---|
   | アプリ本体（`app`。下の 2 つ以外すべて＝知らない場所は厳しい側） | イシューに関係する（ブランチで変えた行と前後 3 行、または受け入れ条件の未達 `STOP=ac:<番号>`）、再現のある Blocker・High・Medium（指摘 0 を目指す。Low の改善提案は止めない） |
-  | GitHub から復旧できない例外（`guard`。`path_risk_trigger()` の集合） | Blocker・High（再現を問わない・I197 のまま） |
-  | それ以外のハーネス（`harness`。`.claude/`・`scripts/claude/`・`docs/`・`rules/`・`CLAUDE.md` など） | 止める条件の一覧に当たり、再現のある指摘だけ（重大度は見ない）: ① 流れが動かなくなる（`flow`）② 秘密情報・個人情報が外に出る（`leak`）③ develop・main を直接壊す／GitHub から戻せない設定を壊す（`github`）④ 受け入れ条件の未達（`ac:<番号>`・番号必須） |
+  | GitHub から復旧できない例外（`guard`。`guard_path_trigger()` の集合） | Blocker・High（再現を問わない・I197 のまま） |
+  | それ以外のハーネス（`harness`。`.claude/`・`scripts/claude/`・`docs/`・`rules/`・`CLAUDE.md` など） | 止める条件の一覧に当たり、再現のある指摘だけ（重大度は見ない）: ① 流れが動かなくなる（`flow`）② 秘密情報・個人情報が外に出る（`leak`）③ develop・main を直接壊す／GitHub から戻せない設定を壊す（`github`）④ 受け入れ条件の未達（`ac:<番号>`・番号必須）⑤ テストを弱める差分に計画書の理由が無い（`test`・I593） |
 
+  - **テストを弱める差分（I593）**: `code-review.sh` が毎周、ブランチ全体（merge-base から HEAD）のテストのファイル（`scripts/claude/tests/`・`backend/` の `tests/` と `test_*.py`・`frontend/` の `__tests__/` と `*.test.*`・`*.spec.*`・`e2e/`）について、消したファイル・テストの定義の数の減少・確かめ（`assert`・`expect(`・`ck` で始まる行）の数の減少・足したスキップの目印（`skip`・`xfail`・`.only`・`.skip`・`todo`・`fixme` など）を決定論で数え、`TEST_WEAKENING:` の行でレビュー役の入力と記録の証跡に載せる。code-reviewer は各行について計画書に理由があるかを確かめ、無ければ `STOP=test`（アプリ本体でもハーネスでも、再現があれば重大度によらず止まる）。正当な整理で数が減るときは、計画書の「4. 変更点」に「`<テストのファイル>` のテストを `<移した先>` へ移す・重複を消す」のように書いておく。高リスク（敵対的レビュー）にはしない
   - 共通: 再現（`| 再現: 入力・手順・壊れ方`）の無い指摘は止めない（guard を除く）。差分の外でも、セキュリティの Blocker（再現あり）は止める。差分の中か外かは行で決める（行が読めない・ファイルが無いときは止める側）。
   - 関所の穴（判定をすり抜けられる穴）は一覧に入れない。止めずに台帳に残す（後続のイシューに回ったときは最優先にする）。ハーネスは完璧を目指さない（GitHub が最後の守り）。
   - 止めない指摘は台帳に残り、retro が `bash scripts/claude/code-review.sh --route <issue|backlog> I###`（I208）で、台帳の欄の値だけで振り分ける（`.claude/skills/retro/SKILL.md` 4-0・I207）:
@@ -62,10 +63,12 @@
 - **前提（GitHub が最後の守り）**: develop/main は GitHub 側で保護され（ブランチ保護・CODEOWNERS・承認必須）、bot はマージできない。手元のハーネスが壊れても GitHub から復旧できるので、手元のハーネスの変更は決定論ゲートと基本レビューで先へ進む。例外（GitHub から復旧できない操作）は `docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲（I182）」。
 - **対象**: 高リスク判定 YES の変更は、敵対的レビューステージ（反証マンデート×多観点・対応後の再レビュー）の通過を合格条件とする（review-gate 段階が自動で起動する）。高リスク判定 YES になるのは次のどれか:
   - (a) アプリの高リスク条件（`.claude/agents/code-reviewer.md`「高リスク判定の条件」）に当たる変更（計画レビューが判定する）
-  - (b) ハーネスでは、例外に関わるファイルの変更だけ: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`）
+  - (b) ハーネスでは、例外に関わるファイルの変更（`.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`。正は `scripts/claude/code-review.sh` の `guard_path_trigger()`）と、変更前の版で動かせない判定の部品の変更（`.claude/hooks/*`・`.claude/skills/review-gate/*`・`.claude/skills/test-gate/*`・`.claude/skills/fix-loop/*`・`.claude/skills/plan-review/*`・`scripts/claude/gate-check.sh`。正は `review_mechanism_trigger()`。I593）。両方の OR が `path_risk_trigger()`
+  - (d) 審査が写しの版で動かなかったとき（人が `!` で作業ツリーの版の `code-review.sh`・`plan-issue-review.sh` を流した。I593）
   - (c) 台帳の目印: 計画レビューが No でも、基本レビューの code-reviewer が (a) に当たる変更を差分に見つけて FINDING 行に `RISK=up` を付けたとき（I202。一度 YES になったら戻らない）
 - **上限**: 1 周 10 分（`scripts/claude/adversarial-review.sh` が締め切る）・攻め筋 3 本・実験の往復は 1 観点 2 回まで・1 周 3 観点・イシュー全体で 2 周（review-gate のやり直しで数え直さない。報告の無い観点がある周は `ROUNDS: 0` で数えない）。2 周目は記録の `REVIEWED_COMMIT` からの差分だけ。判定は計画の「## 必ず確かめる項目」から決定論で出し、未検証が 1 件でも残れば合格にしない（I197）。前の周に実験で確かめた項目は、その周の `REVIEWED_COMMIT` から記録の場所の外と項目の行が変わっていなければ引き継ぐ（I228。正は `scripts/claude/adversarial-review.sh` の `carry_items`）。ガード・見張りは「普通の書き方による事故」までを Critical/High にする。手順の正は `.claude/skills/review-gate/SKILL.md` §3。
 - **上限到達**: 自動 OK にせず、FINAL VERDICT HIGH 以上で停止してユーザーにエスカレーションする（`docs/runbooks/workflow.md`「止めて聞く条件」3。セキュリティにかかわる指摘を受け入れて進む判断は Claude だけではしない）。残った指摘と過去の周の指摘を種類ごとに集計し、同じ種類が 2 周続いていれば「止める場所・方式の見直し」を選択肢の先頭に置く。
+- **審査は変更前の版で動く（I593）**: 審査の入口（`code-review.sh`・`adversarial-review.sh`・`plan-issue-review.sh`・`fix-diagnosis-review.sh`・`issue-review.sh`）は、ブランチで変えていても、ブランチが develop から分かれた時点（BASE）の写しで動く（`.claude/hooks/unreviewed.py`）。レビュー役の定義（`.claude/agents/`）とこの決まり（`docs/runbooks/review-rules.md`）も写しの版を使う（`scripts/claude/reviewer-agents-lib.sh` が `--agents` で渡す）。だから審査役・決まりを直す PR は直す前の審査役が審査し、新しい審査役が効くのはマージの後（新しい版は CI の決定論のテストで確かめる）。写しで動かせない部品（起動役・審査の段階のスキル・`gate-check.sh`）は上の (b) で必ず高リスクになる。`gate-check.sh` は判定の関数を BASE の `code-review.sh` から読む
 - 敵対的レビューの周ごとに計画レビューを挟まない。計画レビューのやり直しの条件は `docs/runbooks/workflow.md`「ゲート」が正。
 
 ## GitHub から復旧できない変更のレビュー観点（I182）
