@@ -4,6 +4,143 @@
  */
 
 export interface paths {
+    "/api/auth/passkeys/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404） */
+        get: operations["auth_passkeys_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/passkeys/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description 本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404） */
+        delete: operations["auth_passkeys_destroy"];
+        options?: never;
+        head?: never;
+        /** @description 本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404） */
+        patch: operations["auth_passkeys_partial_update"];
+        trace?: never;
+    };
+    "/api/auth/passkeys/login/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description パスキーでのログイン。ログインの前に呼ぶので AllowAny */
+        post: operations["auth_passkeys_login_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/passkeys/login/options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description パスキーでのログインの options。ログインの前に呼ぶので AllowAny */
+        post: operations["auth_passkeys_login_options_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/passkeys/reauth/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 本人確認（パスワードかパスキー）。通れば 5 分有効の印を返す */
+        post: operations["auth_passkeys_reauth_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/passkeys/reauth/options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 本人確認をパスキーで行うときの options（本人のパスキーだけを許す） */
+        post: operations["auth_passkeys_reauth_options_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/passkeys/register/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404） */
+        post: operations["auth_passkeys_register_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/passkeys/register/options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404） */
+        post: operations["auth_passkeys_register_options_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard/analytics/": {
         parameters: {
             query?: never;
@@ -225,6 +362,56 @@ export interface components {
          * @enum {string}
          */
         DifficultyEnum: "easy" | "medium" | "hard";
+        /** @description ログインの応答（パスワード・パスキーで同じ形・I619） */
+        LoginResponse: {
+            access: string;
+            refresh: string;
+            user: components["schemas"]["User"];
+        };
+        PaginatedPasskeyList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Passkey"][];
+        };
+        /** @description パスキーの一覧・名前の変更（I619）。鍵・認証器の ID・署名回数は出さない */
+        Passkey: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly last_used_at: string | null;
+        };
+        /** @description 本人確認: パスワードか、パスキー（challenge_id と credential）のちょうど片方（I619） */
+        PasskeyReauth: {
+            password?: string;
+            /** Format: uuid */
+            challenge_id?: string;
+            credential?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description パスキーの一覧・名前の変更（I619）。鍵・認証器の ID・署名回数は出さない */
+        PatchedPasskey: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly last_used_at?: string | null;
+        };
         PatchedUserSettings: {
             daily_study_goal_minutes?: number;
             study_reminders_enabled?: boolean;
@@ -233,6 +420,16 @@ export interface components {
             theme_preference?: components["schemas"]["ThemePreferenceEnum"];
             notification_settings?: unknown;
         };
+        ReauthToken: {
+            reauth_token: string;
+            expires_in: number;
+        };
+        /**
+         * @description * `user` - User
+         *     * `admin` - Admin
+         * @enum {string}
+         */
+        RoleEnum: "user" | "admin";
         /**
          * @description * `light` - Light
          *     * `dark` - Dark
@@ -240,6 +437,26 @@ export interface components {
          * @enum {string}
          */
         ThemePreferenceEnum: "light" | "dark" | "auto";
+        User: {
+            /** Format: uuid */
+            readonly id: string;
+            email?: (string) | null;
+            /** @description 半角英数字とアンダースコアのみ使用可能 */
+            readonly user_id: string | null;
+            readonly role: components["schemas"]["RoleEnum"];
+            is_email_verified?: boolean;
+            readonly is_staff: boolean;
+            /**
+             * スーパーユーザー権限
+             * @description 全ての権限を持っているとみなされます。
+             */
+            readonly is_superuser: boolean;
+            /** Format: date-time */
+            readonly last_login: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly organization_name: string;
+        };
         UserSettings: {
             daily_study_goal_minutes?: number;
             study_reminders_enabled?: boolean;
@@ -259,6 +476,22 @@ export interface components {
         UserSubjectSelection: {
             subject_ids: number[];
         };
+        /** @description ブラウザの PublicKeyCredential.toJSON() の結果（中身の検証は py_webauthn に任せる・I619） */
+        WebAuthnCredential: {
+            /** Format: uuid */
+            challenge_id: string;
+            credential: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description WebAuthn の options と、検証のときに送り返す challenge の番号（I619） */
+        WebAuthnOptions: {
+            /** Format: uuid */
+            challenge_id: string;
+            options: {
+                [key: string]: unknown;
+            };
+        };
     };
     responses: never;
     parameters: never;
@@ -268,6 +501,207 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    auth_passkeys_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPasskeyList"];
+                };
+            };
+        };
+    };
+    auth_passkeys_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_passkeys_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPasskey"];
+                "multipart/form-data": components["schemas"]["PatchedPasskey"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Passkey"];
+                };
+            };
+        };
+    };
+    auth_passkeys_login_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebAuthnCredential"];
+                "multipart/form-data": components["schemas"]["WebAuthnCredential"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    auth_passkeys_login_options_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebAuthnOptions"];
+                };
+            };
+        };
+    };
+    auth_passkeys_reauth_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PasskeyReauth"];
+                "multipart/form-data": components["schemas"]["PasskeyReauth"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReauthToken"];
+                };
+            };
+        };
+    };
+    auth_passkeys_reauth_options_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebAuthnOptions"];
+                };
+            };
+        };
+    };
+    auth_passkeys_register_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebAuthnCredential"];
+                "multipart/form-data": components["schemas"]["WebAuthnCredential"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Passkey"];
+                };
+            };
+        };
+    };
+    auth_passkeys_register_options_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebAuthnOptions"];
+                };
+            };
+        };
+    };
     dashboard_analytics_retrieve: {
         parameters: {
             query?: {

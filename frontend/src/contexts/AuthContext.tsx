@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import authService from '../services/auth.service';
+import passkeyService, { getPasskeyAssertion } from '../services/passkey.service';
+import { PASSKEY_LOGIN_FAILED } from '../utils/passkeyErrors';
 import apiClient from '../services/api';
 import { User } from '../services/types';
 import { toast } from 'react-hot-toast';
@@ -9,6 +11,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithPasskey: () => Promise<void>;
   register: (email: string, userId: string, password: string, firstName?: string, lastName?: string, organizationSlug?: string, subjectIds?: number[]) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
@@ -153,23 +156,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     showSuccessToast('セッションを延長しました');
   };
 
+  // ログインの応答を保存して、ログインした状態にする（パスワード・パスキーで同じ・I619）
+  const establishSession = (loginResponse: { access: string; refresh: string; user: User }) => {
+    localStorage.setItem('accessToken', loginResponse.access);
+    localStorage.setItem('refreshToken', loginResponse.refresh);
+    localStorage.setItem('user', JSON.stringify(loginResponse.user));
+
+    apiClient.setAuthToken(loginResponse.access);
+    setUser(loginResponse.user);
+
+    // Start auto-logout timer
+    setTimeout(() => resetAutoLogoutTimer(), 100);
+
+    showSuccessToast('ログインしました');
+  };
+
   const login = async (email: string, password: string) => {
     try {
-      const loginResponse = await authService.login({ email, password });
-
-      localStorage.setItem('accessToken', loginResponse.access);
-      localStorage.setItem('refreshToken', loginResponse.refresh);
-      localStorage.setItem('user', JSON.stringify(loginResponse.user));
-
-      apiClient.setAuthToken(loginResponse.access);
-      setUser(loginResponse.user);
-
-      // Start auto-logout timer
-      setTimeout(() => resetAutoLogoutTimer(), 100);
-
-      showSuccessToast('ログインしました');
+      establishSession(await authService.login({ email, password }));
     } catch (error: any) {
       showErrorToast(error);
+      throw error;
+    }
+  };
+
+  // パスキーでログイン（I619）。失敗の理由は見分けず、次にすることを書いた決まった文を出す
+  const loginWithPasskey = async () => {
+    try {
+      const options = await passkeyService.loginOptions();
+      const credential = await getPasskeyAssertion(options);
+      const loginResponse = await passkeyService.login(options.challenge_id, credential);
+      establishSession({ ...loginResponse, user: loginResponse.user as unknown as User });
+    } catch (error) {
+      toast.error(PASSKEY_LOGIN_FAILED);
       throw error;
     }
   };
@@ -347,6 +366,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       user,
       loading,
       login,
+      loginWithPasskey,
       register,
       logout,
       refreshToken,

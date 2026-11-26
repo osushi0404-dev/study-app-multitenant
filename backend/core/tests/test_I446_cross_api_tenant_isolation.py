@@ -246,6 +246,13 @@ OUT_OF_SCOPE = {
     **{f"{m} api/auth/me/": "本人の情報の書き換え。組織・役割は読み取り専用で、番号を受け取らない"
        for m in ("PUT", "PATCH")},
     **{f"{m} api/settings/": "本人の設定の書き換え。番号を受け取らない" for m in ("PUT", "PATCH")},
+    # I619: パスキー。本人のパスキーだけを扱い、問題・科目・記録の番号を受け取らない。他人・別の組織の
+    # パスキーの境界は accounts/tests/test_I619_passkeys.py（TC-03〜TC-06）が確かめる
+    **{key: "本人のパスキーだけを扱う（境界は accounts/tests/test_I619_passkeys.py）" for key in (
+        "GET api/auth/passkeys/", "PATCH api/auth/passkeys/<pk>/", "DELETE api/auth/passkeys/<pk>/",
+        "POST api/auth/passkeys/register/options/", "POST api/auth/passkeys/register/",
+        "POST api/auth/passkeys/login/options/", "POST api/auth/passkeys/login/",
+        "POST api/auth/passkeys/reauth/options/", "POST api/auth/passkeys/reauth/")},
     **{f"POST {p}": "番号を受け取らない。組織は利用者の組織に固定（SubjectViewSet.perform_create）"
        for p in ("api/subjects/", "api/organizations/subjects/")},
     **{f"GET {p}": "登録画面用。slug を知る人に科目名だけを出す仕様（#446 の設計確認メモ）"
