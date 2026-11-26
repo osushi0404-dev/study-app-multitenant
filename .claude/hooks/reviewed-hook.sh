@@ -27,10 +27,21 @@ _reviewed_git() {
 # 置いてある写しは消さない（先に別の起動役が置いていれば、自分の一時の写しだけを消してそれを使う）。
 # 戻り値 0＝写しあり（標準出力に場所）／4＝作れない。テストは有無の確かめを飛ばしてこれを直接呼ぶ（TC-05）
 _reviewed_snapshot_make() {
-  local root="$1" base="$2" cache="$3" snap tmp
+  local root="$1" base="$2" cache="$3" snap tmp stale p paths=(scripts/claude)
   snap="$cache/$base"
   if mkdir -p "$cache" 2>/dev/null && chmod 700 "$cache" && tmp="$(mktemp -d "$cache/.tmp.XXXXXX" 2>/dev/null)"; then
-    if _reviewed_git "$root" archive "$base" scripts/claude | tar -x -C "$tmp" && touch "$tmp/.complete"; then
+    # I593: 審査の入口がレビュー役の定義とレビューの決まりも写しの版から渡すので、BASE にあれば両方を写しに入れる
+    # （無い BASE で archive 全体を失敗させない。無ければ審査の入口が定義を用意できずに止まる側に倒れる）
+    while IFS= read -r p; do
+      [ -n "$p" ] && paths+=("$p")
+    done < <(_reviewed_git "$root" ls-tree --name-only "$base" -- .claude/agents docs/runbooks/review-rules.md 2>/dev/null)
+    if _reviewed_git "$root" archive "$base" "${paths[@]}" | tar -x -C "$tmp" \
+        && touch "$tmp/.complete"; then
+      # I615 F3（一覧から同梱・I593）: .complete の無いフォルダ（作りかけで残ったもの）があると mv -T が毎回失敗するので、
+      # 脇へ移してから置く（.complete のある置いてある写しは今までどおり消さない・動かさない）
+      if [ -d "$snap" ] && [ ! -f "$snap/.complete" ] && stale="$(mktemp -d "$cache/.stale.${base}.XXXXXX" 2>/dev/null)"; then
+        mv -T "$snap" "$stale/old" 2>/dev/null || true
+      fi
       mv -T "$tmp" "$snap" 2>/dev/null || rm -rf "$tmp"
     else
       rm -rf "$tmp"

@@ -9,6 +9,7 @@
 # shellcheck disable=SC1090,SC1091  # code-review.sh（と壊した写し）は関数だけを読み込む
 set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+. "$REPO_ROOT/scripts/claude/tests/lib_test_snapshot.sh"   # I593: 審査の入口は写しから流す
 cd "$REPO_ROOT" || exit 1
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -145,7 +146,7 @@ B_NONE='# r\n\n## 台帳\n指摘なし\n\nVERDICT: OK\n'
 # setup <名前> [<code-review.sh の写し>]: 一時のリポジトリ（feature で a.py と .github/w.yml を変える＝パス判定 YES）。計画レビューの判定は No
 setup() { local E="$TMP/e_$1" O="$TMP/e_$1.git"
   mkdir -p "$E/scripts/claude" "$E/docs/issues/open" "$E/docs/reviews" "$E/.github"
-  cp "${2:-$CR}" "$E/scripts/claude/code-review.sh"; cp "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$GC" "$E/scripts/claude/"
+  cp "${2:-$CR}" "$E/scripts/claude/code-review.sh"; cp "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$GC" "$E/scripts/claude/"
   printf '# I900\n' > "$E/docs/issues/open/I900.md"; printf 'l1\n' > "$E/a.py"; printf 'x: 1\n' > "$E/.github/w.yml"
   printf '# 計画レビュー\n\n## 高リスク判定\n判定: No\n' > "$E/docs/reviews/I900_plan_review_20260101_0000.md"
   git init -q --bare "$O"; git -C "$E" init -q -b develop; git -C "$E" add -A; git -C "$E" commit -qm base
@@ -155,7 +156,7 @@ setup() { local E="$TMP/e_$1" O="$TMP/e_$1.git"
 # round <名前> <周の名前> [環境変数…]: 本体を丸ごと動かす。出力は $TMP/out_<周>、呼び出しは $TMP/calls_<周>、記録の名前を出す
 round() { local E="$TMP/e_$1" r="$2"; shift 2; printf '%b' "$B_NONE" > "$TMP/review_$r.txt"; : > "$TMP/calls_$r"
   (cd "$E" && env PATH="$ES:$PATH" CLAUDE_BIN="$ES/claude" E2E_REVIEW="$TMP/review_$r.txt" E2E_CALLS="$TMP/calls_$r" \
-     CI_WORKFLOWS="$ES/wf.yml" CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 "$@" bash scripts/claude/code-review.sh I900 > "$TMP/out_$r" 2>&1)
+     CI_WORKFLOWS="$ES/wf.yml" CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 "$@" bash "$(make_test_snapshot "$E")/scripts/claude/code-review.sh" I900 > "$TMP/out_$r" 2>&1)
   (cd "$E" && lib "$CR" review_records I900 code_review | tail -1 | sed "s#^#$E/#"); }
 fv() { sed -n 's/^FINAL_VERDICT: //p' "$TMP/out_$1"; }
 called() { grep -qx "$2" "$TMP/calls_$1"; }

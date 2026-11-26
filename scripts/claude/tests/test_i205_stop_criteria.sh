@@ -7,6 +7,7 @@
 # shellcheck disable=SC1090,SC1091  # code-review.sh（と壊した写し）は関数だけを読み込む
 set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+. "$REPO_ROOT/scripts/claude/tests/lib_test_snapshot.sh"   # I593: 審査の入口は写しから流す
 cd "$REPO_ROOT" || exit 1
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -145,11 +146,11 @@ scripts/claude/hooks/pretooluse_guard.py
 EOF
 EXPECT_K="app app app app app app app harness harness harness harness harness harness harness harness guard guard guard guard guard guard guard"
 ck "K1 パスごとの種類" "$EXPECT_K" "$(lib "$CR" ledger_kinds "$TMP/kpaths" | cut -f1 | paste -sd' ' -)"
-# 1 回だけ読み込み、パスごとに path_risk_trigger と種類を突き合わせる
+# 1 回だけ読み込み、パスごとに guard_path_trigger と種類を突き合わせる
 k2() { REVIEW_LIB_SOURCE_ONLY=1 bash -c '. "$1"; while IFS=$'"'"'\t'"'"' read -r k p; do
-         t=$(path_risk_trigger "$p"); { [ "$k" = guard ] && [ "$t" = YES ]; } || { [ "$k" != guard ] && [ "$t" = NO ]; } || exit 1
+         t=$(guard_path_trigger "$p"); { [ "$k" = guard ] && [ "$t" = YES ]; } || { [ "$k" != guard ] && [ "$t" = NO ]; } || exit 1
        done < <(ledger_kinds "$2")' _ "$1" "$TMP/kpaths"; }
-ck "K2 guard の集合と path_risk_trigger() が一致" 0 "$(rc k2 "$CR")"
+ck "K2 guard の集合と guard_path_trigger() が一致（I593 で path_risk_trigger から分けた）" 0 "$(rc k2 "$CR")"
 kind_dash() { printf '%s\n' "$@" > "$TMP/bf_k3"; BFILES="$TMP/bf_k3" ledger "$CR" full "" "$(fx - 1)" >/dev/null; grep -oE 'KIND=[a-z]+' "$TMP/led" | cut -d= -f2; }
 ck "K3 FILE=- の種類: guard を含む → guard" guard "$(kind_dash backend/a.py .github/workflows/ci.yml)"
 ck "K3 FILE=- の種類: app を含む → app" app "$(kind_dash docs/x.md backend/a.py)"
@@ -231,7 +232,7 @@ chmod +x "$ES/gh" "$ES/claude"
 # e2e <名前> <写し> <変えるファイル> <レビュー役の本文>: 一時のリポジトリで本体を丸ごと動かす（変えるファイルの 2 行目を足す）
 e2e() { local n="$1" src="$2" f="$3" E="$TMP/e2e_$1" O="$TMP/e2e_$1.git"
   mkdir -p "$E/scripts/claude" "$E/docs/issues/open" "$E/docs/reviews" "$(dirname "$E/$f")"
-  cp "$src" "$E/scripts/claude/code-review.sh"; cp "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$E/scripts/claude/"
+  cp "$src" "$E/scripts/claude/code-review.sh"; cp "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$E/scripts/claude/"
   printf '# I900\n' > "$E/docs/issues/open/I900.md"; printf 'l1\n' > "$E/$f"
   printf '# 計画レビュー\n\n## 高リスク判定\n判定: No\n' > "$E/docs/reviews/I900_plan_review_20260101_0000.md"
   git init -q --bare "$O"; git -C "$E" init -q -b develop; git -C "$E" add -A; git -C "$E" commit -qm base
@@ -239,7 +240,7 @@ e2e() { local n="$1" src="$2" f="$3" E="$TMP/e2e_$1" O="$TMP/e2e_$1.git"
   git -C "$E" checkout -q -b feature/I900-x; printf 'l2\n' >> "$E/$f"; git -C "$E" add -A; git -C "$E" commit -qm change
   printf '%b' "$4" > "$TMP/review_$n.txt"
   (cd "$E" && PATH="$ES:$PATH" CLAUDE_BIN="$ES/claude" E2E_IN="$TMP/in_$n.txt" E2E_REVIEW="$TMP/review_$n.txt" CI_WORKFLOWS="$ES/wf.yml" \
-     CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 bash scripts/claude/code-review.sh I900 > "$TMP/out_$n.txt" 2>&1)
+     CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 bash "$(make_test_snapshot "$E")/scripts/claude/code-review.sh" I900 > "$TMP/out_$n.txt" 2>&1)
   find "$E/docs/reviews" -name 'I900_code_review_*.md' | LC_ALL=C sort | tail -1; }
 fv() { sed -n 's/^FINAL_VERDICT: //p' "$TMP/out_$1.txt"; }
 W1_REC=$(e2e w1 "$CR" a.py '# r\n\n## 台帳\nFINDING: F1 SEV=Medium STATUS=open FILE=a.py LINE=2 SECURITY=no STOP=- | m | 再現: x\n\nVERDICT: OK\n')
@@ -283,10 +284,10 @@ ck "FG-D5 review-rules から関所の穴を消すと不合格" 1 "$(rc d5 "$(wi
 ck "FG-B5 再現の検査を消すと B5 が不合格（HIGH）" HIGH "$(v "$(broken '    if repro != "yes":' '    if False:')" "$(fl High backend/x.py 10 no - no)")"
 ck "FG-B6 差分の外のセキュリティの Blocker の扱いを消すと B6 が不合格（OK）" OK "$(v "$(broken '    if sec_blocker:' '    if False:')" "$(fl Blocker backend/x.py 1 yes - yes)")"
 ck "FG-B8 ハーネスを重大度で決めると B8 が不合格（OK）" OK "$(v "$(broken '    return bool(STOP_RE.fullmatch(stop))' '    return RANK[sev] >= 2')" "$(fl Low scripts/claude/a.sh 10 no flow yes)")"
-ck "FG-B11 STOP を何でも当たるにすると B11 が不合格（HIGH）" HIGH "$(v "$(broken 'STOP_RE = re.compile(r"flow|leak|github|ac:[0-9]+")' 'STOP_RE = re.compile(r".*")')" "$(fl High scripts/claude/a.sh 10 no other yes)")"
+ck "FG-B11 STOP を何でも当たるにすると B11 が不合格（HIGH）" HIGH "$(v "$(broken 'STOP_RE = re.compile(r"flow|leak|github|test|ac:[0-9]+")' 'STOP_RE = re.compile(r".*")')" "$(fl High scripts/claude/a.sh 10 no other yes)")"
 ck "FG-L2 前後の行数を 0 にすると L2 が不合格（outside）" outside "$(scope "$(fx backend/x.py 13)" "$(broken 'HUNK_MARGIN = 3' 'HUNK_MARGIN = 0')")"
 ck "FG-L8 casefold を外すと L8 が不合格（outside）" outside "$(scope "$(fx Docs/up.md 5)" "$(broken 'hunks.get(norm.casefold(), [])' 'hunks.get(norm, [])')")"
-ck "FG-L9 全部を delta にすると L9 が不合格（delta）" delta "$(HUNKS="$TMP/h_full2" scope "$(fx old.txt 9)" "$(broken '        if stop.startswith("ac:") or path == "-":' '        if True:')")"
+ck "FG-L9 全部を delta にすると L9 が不合格（delta）" delta "$(HUNKS="$TMP/h_full2" scope "$(fx old.txt 9)" "$(broken '        if stop.startswith("ac:") or stop == "test" or path == "-":' '        if True:')")"
 ck "FG-K1 harness の場所から .claude/ を外すと K1 が不合格（app）" app \
   "$(lib "$(broken 'HARNESS_PREFIX = (".claude/", ' 'HARNESS_PREFIX = (')" ledger_kinds "$TMP/kpaths" | sed -n 8p | cut -f1)"
 BW2=$(broken "grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*\$' \"\$REVIEW_FILE\" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER" 'REVIEWER_VERDICT="$LLM_VERDICT"')

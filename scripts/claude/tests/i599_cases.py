@@ -615,6 +615,56 @@ g_off = broken_judge("guard_no_inside", "def _git_update_inside(cmd: str, subs: 
                      "def _git_update_inside(cmd: str, subs: list):\n    return None\n", src_path=GUARD)
 fg.append(("FG TC-I615-07: 見張りの判定を外すと、止める形が通り不合格", not git_inside_case(rg, g_off)))
 
+# ---- I593（TC-05）: 審査の入口は、写しに新しい仕組み（reviewer-agents-lib.sh）があれば写しの版で流す ----
+def make_repo_i593(name, judge_src=None):
+    """BASE に reviewer-agents-lib.sh がある一時リポジトリ（I593 のマージ後の BASE と同じ形）。"""
+    root = make_repo(name, judge_src)
+    w(f"{root}/scripts/claude/reviewer-agents-lib.sh", "reviewer_agent_args() { :; }\n")
+    vcs(root, "add", "-A")
+    vcs(root, "commit", "-q", "-m", "lib")
+    vcs(root, "update-ref", "refs/remotes/origin/develop", "HEAD")
+    return root
+
+
+def i593_review_entry_case(root):
+    """(a) 入口・部品・レビュー役の定義をブランチで変えても（未コミット・コミット済み）、写しの入口を動かし、案内を出す。"""
+    for commit in (False, True):
+        for setup in PART_SETUPS:
+            setup(root)
+            if commit:
+                vcs(root, "add", "-A")
+                vcs(root, "commit", "-q", "-m", "part")
+            rc_, got_, err = launch(root, "code-review.sh", "a")
+            vcs(root, "reset", "-q", "--hard", "refs/remotes/origin/develop")
+            if not (rc_ == 0 and got_ == lib_mark(root, "a") and "変更前の版で審査します" in err):
+                return False
+    return True
+
+
+def i593_other_entry_case(root):
+    """(c) 審査の入口でない入口（issue-source.sh）は、変えれば今までどおり 75。(d) 写しに無い審査の入口は 75。"""
+    w(f"{root}/scripts/claude/issue-source.sh", 'printf EVIL > "$MARK"\n')
+    rc_c, got_c, _ = launch(root, "issue-source.sh", "a")
+    vcs(root, "reset", "-q", "--hard", "refs/remotes/origin/develop")
+    w(f"{root}/scripts/claude/plan-issue-review.sh", 'printf EVIL > "$MARK"\n')
+    rc_d, got_d, err_d = launch(root, "plan-issue-review.sh", "a")
+    os.remove(f"{root}/scripts/claude/plan-issue-review.sh")
+    return rc_c == 75 and got_c is None and rc_d == 75 and got_d is None and "入口が無い" in err_d
+
+
+r593 = make_repo_i593("i593")
+ck("TC-I593-05a 写しに新しい仕組みがあれば、審査の入口は入口・部品・定義を変えていても写しの版で動く（75 にしない・AC1）",
+   i593_review_entry_case(r593))
+ck("TC-I593-05b 写しに新しい仕組みが無い BASE では、審査の入口も今までどおり 75（AC2・TC-I615-02 と同じ形）", all(part_cases(r)))
+ck("TC-I593-05cd 審査の入口でない入口の変更・写しに無い審査の入口は 75（AC2）", i593_other_entry_case(r593))
+j593a = broken_judge("i593_no_entries", "    if hit and name in REVIEW_ENTRIES and ", "    if False and ")
+fg.append(("FG TC-I593-05a: 審査の入口の例外を外すと 75 になり不合格", not i593_review_entry_case(make_repo_i593("fg593a", j593a))))
+j593b = broken_judge("i593_no_lib_check", " and os.path.isfile(os.path.join(snap, SCRIPTS, REVIEWER_LIB)):", ":")
+fg.append(("FG TC-I593-05b: 写しの新しい仕組みの確かめを外すと、古い写しで動いて不合格", not all(part_cases(make_repo("fg593b", j593b)))))
+j593c = broken_judge("i593_all_entries", "    if hit and name in REVIEW_ENTRIES and ", "    if hit and ")
+fg.append(("FG TC-I593-05c: 例外をすべての入口に広げると、審査の入口でない入口が動いて不合格",
+           not i593_other_entry_case(make_repo_i593("fg593c", j593c))))
+
 for name, ok in fg:
     ck(name, ok)
 print(f"---\npass={sum(results)} fail={len(results) - sum(results)}")

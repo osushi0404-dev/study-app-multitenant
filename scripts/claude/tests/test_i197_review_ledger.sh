@@ -7,6 +7,7 @@
 # shellcheck disable=SC1090,SC1091  # code-review.sh（と壊した写し）は関数だけを読み込む
 set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+. "$REPO_ROOT/scripts/claude/tests/lib_test_snapshot.sh"   # I593: 審査の入口は写しから流す
 cd "$REPO_ROOT" || exit 1
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -219,7 +220,7 @@ ck "FG-R10 fix-loop に fix-test-review を足すと R10 が不合格" 1 "$(rc r
 # ---------------- R14 本体を丸ごと動かす（全体のレビュー → 直す → 差分のレビュー）。gh・claude はスタブ ----------------
 # 関数だけのテストでは、本体の配線の誤り（I197: set -e の下で条件が偽の $( [ … ] && … ) が代入ごと止めた）を捕まえられないため
 E="$TMP/e2e"; EO="$TMP/e2e_origin.git"; ES="$TMP/e2e_stub"; mkdir -p "$E/scripts/claude" "$E/docs/issues/open" "$E/docs/reviews" "$ES/calls"
-cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$E/scripts/claude/"
+cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$E/scripts/claude/"
 printf '# I900\n' > "$E/docs/issues/open/I900.md"; printf 'a\n' > "$E/a.sh"
 printf '# 計画レビュー\n\n## 高リスク判定\n判定: No\n' > "$E/docs/reviews/I900_plan_review_20260101_0000.md"
 printf 'jobs:\n  j:\n    name: J\n' > "$ES/wf.yml"
@@ -255,7 +256,7 @@ chmod +x "$ES/gh" "$ES/claude"
 printf '# コードレビュー [I900]\n\n## 台帳\nFINDING: F1 SEV=High STATUS=open FILE=a.sh LINE=2 SECURITY=no STOP=- | a.sh の穴 | 再現: r\nFINDING: F2 SEV=Low STATUS=open FILE=a.sh LINE=2 SECURITY=no STOP=- | 軽い\n\nRISK: YES\nVERDICT: HIGH\n' > "$ES/review_1.txt"
 printf '# コードレビュー [I900]\n\n## 台帳\nFINDING: F1 SEV=High STATUS=resolved FILE=a.sh LINE=2 SECURITY=no STOP=- | a.sh の穴\n\nVERDICT: HIGH\n' > "$ES/review_2.txt"
 e2e() { (cd "$E" && PATH="$ES:$PATH" CLAUDE_BIN="$ES/claude" E2E_STUB="$ES" CI_WORKFLOWS="$ES/wf.yml" CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 \
-          bash scripts/claude/code-review.sh I900 > "$1" 2>&1; echo $? >> "$1.rc"); }
+          bash "$(make_test_snapshot "$E")/scripts/claude/code-review.sh" I900 > "$1" 2>&1; echo $? >> "$1.rc"); }
 e2e "$TMP/e2e1.out"
 E1_REC=$(find "$E/docs/reviews" -name 'I900_code_review_*.md' | LC_ALL=C sort | tail -1)
 ck "R14 全体のレビュー: 最後まで動き FINAL_VERDICT: HIGH（台帳の F1 High）" "HIGH" "$(sed -n 's/^FINAL_VERDICT: //p' "$TMP/e2e1.out")"

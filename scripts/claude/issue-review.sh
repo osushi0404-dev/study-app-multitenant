@@ -32,9 +32,12 @@ TIMESTAMP=$(date +%Y%m%d_%H%M)
 REVIEW_FILE="docs/reviews/${ISSUE}_issue_review_${TIMESTAMP}.md"
 REVIEWER_AGENT="issue-reviewer"   # 定義: .claude/agents/issue-reviewer.md（tools: Read, Grep, Glob）
 
-# reviewer 定義の存在確認（非ブロック・防御的）
-if [ ! -f ".claude/agents/${REVIEWER_AGENT}.md" ]; then
-  echo "⚠️ issue-reviewer.md が見つかりません。issue-review をスキップします。"
+# I593: このファイルと同じ版（写しから動けば写しの版）の定義を --agents で渡す。定義を用意できなければ非ブロックで skip
+# shellcheck source=scripts/claude/reviewer-agents-lib.sh disable=SC1091
+. "$SCRIPT_DIR/reviewer-agents-lib.sh"
+AGENTS_DIR=$(mktemp -d); trap 'rm -rf "$AGENTS_DIR"' EXIT
+if ! reviewer_agent_args "$REVIEWER_AGENT" "$AGENTS_DIR"; then
+  echo "⚠️ issue-reviewer の定義を用意できません（上の理由）。issue-review をスキップします。"
   exit 0
 fi
 
@@ -45,7 +48,7 @@ $(cat "$ISSUE_FILE")"
 
 # claude -p で第三者レビュー（I193: 公式のサブエージェント定義を --agent で呼ぶ。読み取り専用は定義の tools で効かせる）。
 # 失敗・時間切れ（REVIEW_TIMEOUT・既定 900 秒）でも起票フローを止めない
-if ! REVIEW=$(printf '%s' "$CONTEXT" | GH_APP_READONLY=1 timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent "$REVIEWER_AGENT" --tools "Read,Grep,Glob" --strict-mcp-config --permission-prompts none); then
+if ! REVIEW=$(printf '%s' "$CONTEXT" | GH_APP_READONLY=1 timeout "${REVIEW_TIMEOUT:-900}" claude -p "${REVIEWER_ARGS[@]}" --tools "Read,Grep,Glob" --strict-mcp-config --permission-prompts none); then
   echo "⚠️ issue-review をスキップしました（claude -p 失敗または時間切れ）。"
   exit 0
 fi
