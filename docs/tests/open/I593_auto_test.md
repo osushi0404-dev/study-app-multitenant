@@ -5,7 +5,10 @@
 結果:
 - backend: 変更なし（CI）
 - frontend: 変更なし（CI）
-- harness: 実装前のため未実行
+- harness: CI の Harness Tests が成功（review-gate の CI_WAIT: OK・2026-11-26。最後に見た REVIEWED_COMMIT 9667053）。手元では関係するテストだけを流した（test_i593 pass=53・ほかは rc=0）
+
+## 実行記録
+- 2026-11-27 test-gate: `bash scripts/claude/gate-check.sh I593` → exit 0（GATE_CHECK: OK）。決定論ゲートはすべて `bash scripts/claude/tests/test_*.sh` で heavy なし（CI が流し、review-gate が成功を確かめた）
 
 ## テストケース
 TC-05 は `scripts/claude/tests/i599_cases.py`（`test_i599_unreviewed_scripts.sh` が流す。起動役の一時リポジトリの道具がそこにあるため）の `TC-I593-05a`・`05b`・`05cd`、ほかは `scripts/claude/tests/test_i593_review_from_base.sh` の中（一時の git リポジトリ・写しのダミー・`CLAUDE_BIN` の差し替えを使い、本物のファイルを書き換えない）。合否は終了コード（合格=0）。各 TC の FG は、判定を外した写し・壊した入力で流し、その TC が不合格になることを確かめる。

@@ -10,8 +10,8 @@
 - Backend/Frontend/DB/Config:
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: CI（Harness Tests ほか）成功・gate-check OK・新しいテスト test_i593_review_from_base.sh pass=53（失敗の注入つき）・起動役の TC-I593-05 は test_i599_unreviewed_scripts.sh で合格
+- 手動: Claude の 2 項目とも OK（審査の入口は 75 で止まり、`!` で流した作業ツリーの版の記録は高リスク YES・テストを弱めうる差分が載る）
 
 ## 計画との差分
 - なし / あり（理由）
@@ -35,6 +35,8 @@
 - [fix-loop] review-gate 1 周目 F1（STOP=test が行の位置で差分の外になり止まらない）は、診断レビュー PASS の案 A（scope_of() で ac: と同じく差分の中）で直した — 既にある形への 1 語の追加で、記録の SCOPE 欄とも食い違わないため。TC-09 の偽の合格（実在しないファイル）も直した
 - [fix-loop] 診断レビューは入口を変えているため起動役が 75 で止め、ユーザーに `!` で流してもらった（I615 の決まりどおり・この PR のマージ前の写しには新しい仕組みが無い）
 - [review-gate] 2 周目（差分のレビュー）は OK・F1 は直った。高リスク（作業ツリーの版で流した → YES、新しい仕組みのとおり）なので敵対的レビューを 1 周流し、OK（未検証 0・新しい Critical/High 0）。コードレビュー・敵対的レビューとも入口を変えているので、起動役が 75 で止め、ユーザーに `!` で流してもらった
+- [test-gate] gate-check の「パス=NO」は、判定の関数を BASE（マージ前）の code-review.sh から読む新しい仕組みのとおり（BASE の集合に .claude/hooks は無い）。高リスクは記録の RISK: YES で拾われ、敵対的レビューの OK を確かめて通った
+- [test-gate] 手動テストは 2 項目とも Claude で確かめて OK。Human の項目は無いので retro へ進む
 
 STAGE_DONE: plan NEXT: plan-review
 
@@ -47,3 +49,5 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 
 STAGE_DONE: review-gate NEXT: test-gate
+
+STAGE_DONE: test-gate NEXT: retro
