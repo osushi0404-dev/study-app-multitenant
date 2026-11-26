@@ -26,5 +26,7 @@
 - [plan] 運営の画面は `UserEdit.tsx` に部品を 1 つ足すだけ — 範囲を広げない
 - [plan] 人の手動テストは置かない — 登録の処理は I619 で実機を確かめた同じもの。スマホでの QR の読み取りは手元のアプリ（localhost）に届かず確かめられないので、QR に入る値を TC-21 で確かめる
 - [plan] 画面の配置と文言の案をユーザーに確かめた（2026-11-26・案のとおり）
+- [plan-review] 計画レビューの Warning 4・Info 2 をすべて直した（TC-02 は 404・TC-21 は QR に入る値を確かめる・手動 No.5/No.8・R2・R7）。方式・範囲は変わらないので再レビューはしない — 計画変更記録のとおり
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: design-security-review
