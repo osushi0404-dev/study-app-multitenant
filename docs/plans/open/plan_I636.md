@@ -85,8 +85,7 @@
 
 ### 4-4. F5: メンバー管理を使えるかを 1 か所で判定し、画面に渡す（`models.py`・`permissions.py`・`serializers.py`・画面）
 - 達成: メニュー・画面の入口・API が同じ条件になる
-- `Organization.is_invitable`（property）: `self.is_active and not self.is_individual and not (self.type == TYPE_PERSONAL and self.slug == SHARED_PERSONAL_SLUG)`。`OrganizationQuerySet.invitable()` と同じ条件（招待の slug の引き当てはこれまでどおり `invitable()` を使う）。両者が同じことはテストで確かめる（TC-05）
-- `User.can_manage_members`（property）: `self.role == 'admin' and self.organization is not None and self.organization.is_invitable`
+- `User.can_manage_members`（property）: `self.role == 'admin'` かつ組織があり、`Organization.objects.invitable().filter(pk=self.organization_id).exists()`（組織の条件は `OrganizationQuerySet.invitable()` の 1 か所だけ。implement の /simplify で `Organization.is_invitable` の property をやめた・計画変更記録）
 - `IsOrgMemberManager.has_permission`: `getattr(user, 'is_authenticated', False) and user.can_manage_members`（`organization` は `request.user` の外部キーを 1 回引く。これまでの `exists()` の問い合わせと同じ 1 回）
 - `UserSerializer`: `can_manage_members = serializers.BooleanField(read_only=True)`（モデルの property を読む）を足し、`organization_is_individual` を外す（画面でこの用途にしか使っていないので、2 つの判定を残さない。`AdminUserSerializer` の `organization_is_individual` は運営の欄で使うので残す）
 - 画面: `services/types.ts` の `User` に `can_manage_members?: boolean` を足し `organization_is_individual` を外す。`Layout.tsx` のメニューは `user?.can_manage_members` で出す。`MemberManagement.tsx` の入口は `!user?.can_manage_members` なら「このページにアクセスする権限がありません」（一覧の API を呼ばない）
@@ -104,8 +103,7 @@
 
 ### 4-7. F8: リンクのダイアログの値を閉じ終わりまで持つ・追加の流れの二度押しを止める
 - 達成: 閉じるアニメーションの間も見出しと中身が残る。追加の流れの発行は 1 回だけ
-- `RegistrationLinkDialog.tsx`: props に `open: boolean`・`onExited: () => void` を足し、`<Dialog open={open} ... TransitionProps={{ onExited }}>`。中身は `link` があれば描く（閉じている間も親が値を持つ）
-- `MemberManagement.tsx`・`MemberCredentialActions.tsx`: 表示する値（`{ userId, link } | null`）と開いているか（`boolean`）を分けて持つ。［閉じる］で `open=false`、`onExited` で値を `null`（値を捨てるのは閉じ終わった時点。保存領域には置かないまま）
+- `RegistrationLinkDialog.tsx`: 最後に見せた値（見出しのユーザー ID とリンク）を部品の state に覚え、親が `link` を `null` にして閉じても閉じるアニメーションの間はそれで描く。閉じ終わり（`TransitionProps.onExited`）で捨てる（保存領域には置かない）。親（`MemberManagement.tsx`・`MemberCredentialActions.tsx`）の props の形は I620 のまま（implement の /simplify で、親が値と開いているかを分けて持つ形からこの形にした・計画変更記録）
 - 追加の流れ: `MemberManagement` に `issuingFor: string | null`（発行中のメンバーの ID）を持ち、`handleAdd` の発行の前後で立てて下ろす（`finally`）。行の `MemberCredentialActions` に `issueBusy={issuingFor === member.id}` を渡し、［登録用リンク］を `credentials.issueLink.isPending || issueBusy` で押せなくする。［メンバーを追加］も `issuingFor !== null` の間は押せなくする
 
 ### 4-8. F9: 設定の読み込みのテストを `.env` に左右されなくする（`test_I620_registration_links.py`）
@@ -235,7 +233,7 @@ Danger Ops:
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 | 項目 | 観点 | 確かめ方 | 内容 |
 |---|---|---|---|
-| V1 | 1 | 読んで可 | メンバー管理の API・メニュー・画面の入口が同じ条件か。TC-05 が組織の種類（有効な招待用・無効・本人ひとり・共有の personal・slug が共有でない personal）と役割（管理者・一般・組織なし）の組み合わせで、`can_manage_members` と `/api/members/` の 200/403 の一致を確かめているか。運営（`is_staff`）の管理者の扱いが前と変わらないか |
+| V1 | 1 | 読んで可 | メンバー管理の API・メニュー・画面の入口が同じ条件か。TC-05 が組織の種類（有効な招待用・無効・本人ひとり・共有の personal・slug が共有でない personal）と役割（管理者・一般・組織なし）の組み合わせで、`can_manage_members`（`/api/auth/me/`）と `/api/members/` の 200/403 の一致を確かめているか。運営（`is_staff`）の管理者の扱いが前と変わらないか |
 | V2 | 2 | 読んで可 | TC-02・TC-03 が本当に鍵つきの引き直しと行の鍵を確かめているか（失敗の注入の版が `[200, 200]`・200 になり、本来の版が落ちる形か。待ち合わせの包みが本物の検証を呼んでいるか） |
 | V3 | 1 | 読んで可 | 形の違う `passkey_id`・メンバーの ID で 500 にならないか（TC-01）。別の組織のメンバーの ID と形の違う ID の両方で 404 か |
 | V4 | 3 | 読んで可 | 作成の重複（TC-04）で、例外の中身・ユーザー ID がログと応答に出ないか。`transaction.atomic` の中で受けて、外側のトランザクションを壊さないか |
@@ -252,6 +250,7 @@ Danger Ops:
 - 2026-11-27 plan-review: 計画書の記載: 自動テスト TC-03・TC-09・TC-14 → 採った方法: TC-03 に `transaction=True` の前提、TC-09 に追加の流れのダイアログの具体的な期待値、TC-14 に実装の時に期待値を書き戻すことを足した — 理由: 計画レビューの Warning 3 件（期待値の具体化だけ）。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果
+- [20261127_0354 判定: ✅ 完了](../../reviews/I636_plan_review_20261127_0354.md)
 - [20261127_0229 判定: ✅ 完了](../../reviews/I636_plan_review_20261127_0229.md)
 
 ## セキュリティレビュー結果

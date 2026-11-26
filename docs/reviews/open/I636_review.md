@@ -38,6 +38,7 @@
 - [test-gate] 手動テスト No.2（E2E 全体の 3 回）を NG として fix-loop に回す。TC-28 の落ち方の原因（StrictMode で 2 回走る設定の読み込みの、遅れた応答が入力を戻す）が `Settings.tsx` にあり、計画の対象の外なので、fix-loop で計画変更記録と計画レビューを通してから直す — AC13 の未達で、原因が特定できたため（計画 §4-13 の「原因が分かれば直す」）
 - [test-gate] TC-30 の 1 件の落ち方（ログイン直後の 401 で、画面の更新の宛先 `/api/auth/token/refresh/` が裏側の `/api/auth/refresh/` と食い違って 404 → ログアウト）は I636 の変更ではないので、このイシューでは直さず retro で別のイシューにする — 前からある食い違いで、直すと認証の作りに触れ、I636 の範囲を超えるため
 - [test-gate] No.3〜No.6（画面）は fix-loop の後の test-gate でまとめて行う — Claude の分に NG があれば fix-loop に回す決まりで、直した後の HEAD で確かめ直すことになるため
+- [fix-loop] 設定画面の読み込みの効果に後片付けを付ける案（診断メモの案 A）で直した。計画変更記録に書いて計画レビュー（`docs/reviews/I636_plan_review_20261127_0354.md`・Blocker なし）を通してから直した — React の公式の形で変更が小さく、TanStack Query への移行（案 B）は範囲を超えるため。計画レビューの Warning（計画本文の §4-4・§4-7・V1 と TC-11 の書き方が変更記録に追いついていない）も直した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review

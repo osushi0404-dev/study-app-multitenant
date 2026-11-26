@@ -85,8 +85,8 @@
 - `MemberManagement.test.tsx` を直す: `can_manage_members: false` の管理者 → 「このページにアクセスする権限がありません」・`members.list` は呼ばれない。`true` → 一覧が出る
 
 ### TC-11（F12）: 表の中ではボタンを横に並べ、運営の欄では折り返す
-- `MemberManagement.test.tsx`: 行の操作のボタンの親の要素（`getByRole('button', { name: '登録用リンク' }).parentElement`）が `toHaveStyle({ flexWrap: 'nowrap' })`。ユーザー ID のセルの中の要素が `toHaveStyle({ minWidth: '120px' })`
-- `StaffCredentialsCard.test.tsx`（既存の運営の欄）: 同じ親の要素が `toHaveStyle({ flexWrap: 'wrap' })`
+- `MemberManagement.test.tsx`: 行の操作の並び（`getByRole('group', { name: '『taro』の操作' })`）が `toHaveStyle({ flexWrap: 'nowrap' })`。ユーザー ID のセルの中の要素が `toHaveStyle({ minWidth: '120px' })`
+- `StaffCredentialsCard.test.tsx`（既存の運営の欄）: `getByRole('group', { name: '『alice』の操作' })` が `toHaveStyle({ flexWrap: 'wrap' })`
 
 ## E2E（Playwright）
 
@@ -104,6 +104,13 @@
 ### TC-15（fix-loop・settings.spec の原因）: 設定画面の古い読み込みの応答が入力を戻さない
 - `frontend/src/pages/__tests__/Settings.test.tsx` に足す: `<React.StrictMode>` の中で設定画面を描く。`dashboardService.getUserSettings` の 1 回目は解決を待たせ（後片付けされる方）、2 回目は `daily_study_goal_minutes: 30` で解決する。フォームが出たら目標時間を 45 にする → 1 回目を `daily_study_goal_minutes: 50` で解決させる → 入力欄の値は 45 のまま（50 に戻らない）
 - 直しを外す（後片付けを消す）と、入力欄が 50 に戻って落ちることを確かめる
+
+## 再発防止記録（fix-loop・2026-11-27・test-gate の手動テスト No.2）
+- なぜ失敗したか: 設定画面（`Settings.tsx`）の読み込みの `useEffect` に後片付けが無かった。開発の StrictMode で取得が 2 回走り、遅れて届いた 1 回目の応答が `reset` で入力を保存済みの値に戻した。E2E を並行で流して裏側が混むと、その応答が入力の後に届き、TC-28 が保存した値と違う値を送って落ちた（I620 の「並行で 1 回だけ落ちた」の原因）
+- 何を変えたか: 効果に `ignore` の後片付けを付け、後片付けの後の応答では state・フォーム・通知・読み込み中の表示を変えない。TC-15（Jest・StrictMode で 1 回目の取得を遅らせる）を足した
+- セキュリティ上の考慮点: 該当なし（本人の設定の値の表示と保存の順序だけ）
+- 次回どう防ぐか: 効果の中で非同期に取得して state やフォームを書き換えるときは、後片付けで古い応答を捨てる（React の公式の形）。新しい画面は取得を TanStack Query に寄せる（規約 §5）。E2E の同じ利用者の値を書くテストが並行で落ちたら、StrictMode の 2 回の取得を疑う
+- 確かめた結果: TC-15 は直す前に落ちた（入力欄が 45 → 50 に戻った）。直した後は `Settings.test.tsx` の 7 件・リント・型チェックが通過。E2E 全体の 3 回は test-gate で流す
 
 ## 決定論ゲート（自動実走）
 <!-- このイシューは pytest・Jest・E2E（CI が流す）で確かめる。決定論のゲートのスクリプトは無い -->
