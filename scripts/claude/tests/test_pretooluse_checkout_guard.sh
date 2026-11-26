@@ -88,7 +88,8 @@ ck "G19 cd -- sub && checkout -- dirty"    2 "$(run 'cd -- sub && git checkout -
 ck "G20 pushd other && restore（元の場所だけ変更あり）" ASK "$(runj 'pushd other && git restore sub/s.txt')"
 ck "G21 bash -c cd sub && restore dirty（ありそうな場所で当たる）" 2 "$(runj "bash -c 'cd sub && git restore s.txt'")"
 ck "G22 --work-tree=. checkout -- dirty"   2 "$(run 'git --work-tree=. checkout -- sub/s.txt')"
-ck "G23 cd sub && cd .. 後の clean ファイル" 0 "$(run 'cd sub && cd .. && git checkout -- tracked.txt')"
+# I615: cd とつないだ git の更新はサンドボックスの中で動くので、checkout の判定が通しても見張りが止める（2）
+ck "G23 cd sub && cd .. 後の clean ファイル（I615 で止める）" 2 "$(run 'cd sub && cd .. && git checkout -- tracked.txt')"
 # --- ステージ済みの変更（第 3 周 M7）: コミットから戻す形は消えるので止める・index から戻す形は残るので通す ---
 printf 'orig\n' > st.txt
 git add st.txt
@@ -140,7 +141,7 @@ ck "G45 bash -c 'env GIT_DIR=<別> … checkout'"   ASK "$(runj "bash -c 'env GI
 # 作業記録の再判定で見つかった余計な停止: まとめ書きの -qb（ブランチ作成）・場所が変数の cd の後
 ck "G46 checkout -qb <新ブランチ> は通す"         0 "$(run 'git checkout -qb feat2')"
 # shellcheck disable=SC2016  # $(…)・$f・$S を展開せず、そのまま guard に渡すのが目的
-ck "G47 cd \$S; git checkout -qb は通す"          0 "$(run 'cd $S; git checkout -qb feat3')"
+ck "G47 cd \$S; git checkout -qb（checkout の判定は通す・I615 で止める）" 2 "$(run 'cd $S; git checkout -qb feat3')"
 # 止めすぎの解消（code-review 20261021_0905 第 2 周）: 変数で渡す切り替え先・( ) の無い cd の後の別リポジトリ
 # shellcheck disable=SC2016  # $BR 等を展開せず、そのまま guard に渡すのが目的
 ck "G48 git checkout \$BR（切り替え）は通す"      0 "$(run 'git checkout $BR')"
@@ -324,7 +325,8 @@ ck "FG-TRUST notrust は判定中に実行してしまう" YES "$([ -e "$PW" ] &
 BROKEN_AMB="$TMP/guard_noamb.py"
 sed 's/^def _loc_ambiguous(text: str, cmds=None) -> bool:$/&\n    return False/' "$GUARD" > "$BROKEN_AMB"
 ck "FG-AMB 複製に置換が入った" YES "$( (! cmp -s "$GUARD" "$BROKEN_AMB") && echo YES || echo NO)"
-ck "FG-AMB noamb passes cd - checkout" 0 "$(json 'cd sub; ls; cd -; git checkout -- sub/s.txt' | python3 "$BROKEN_AMB" >/dev/null 2>&1; echo $?)"
+# I615: 場所の判定を外した写しは確認を出さず、つないだ形の判定（I615）まで落ちて止まる（確認ではない＝FG が効いている）
+ck "FG-AMB noamb は確認を出さず I615 で止まる" 2 "$(json 'cd sub; ls; cd -; git checkout -- sub/s.txt' | python3 "$BROKEN_AMB" >/dev/null 2>&1; echo $?)"
 
 # --- FALSEGREEN（自動注入）: 判定呼び出し行を無効化した複製で dirty が素通し /
 #     実体で block。両者の差で「block は判定行に依存」を機械裏取り（false-green 排除） ---

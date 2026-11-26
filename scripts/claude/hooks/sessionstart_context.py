@@ -197,7 +197,7 @@ def primary_line_and_spawn() -> str:
         except (OSError, ValueError):
             line = "primary: まだ結果がありません（裏でそろえています）"
     try:
-        subprocess.Popen([sys.executable, os.path.abspath(__file__), "--sync-primary"], start_new_session=True,
+        subprocess.Popen([sys.executable, "-I", os.path.abspath(__file__), "--sync-primary"], start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         line += "（裏の処理を起動できませんでした）"
