@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
 import { userActionLogger } from '../utils/userActionLogger';
+import { PASSKEY_SETUP_PATH } from '../constants/routes';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -162,7 +163,9 @@ export class ApiClient {
     localStorage.removeItem('user');
 
     // Only show error and redirect if not already on login page
-    if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+    // 登録用リンクで開く画面（I620）もログインの前に開くので、ここから移さない
+    const publicPaths = ['/login', '/register', PASSKEY_SETUP_PATH];
+    if (!publicPaths.some((path) => window.location.pathname.includes(path))) {
       // Show error message
       toast.error('セッションが期限切れです。再度ログインしてください。');
 

@@ -108,7 +108,12 @@ def _ensure_below_limit(user: User) -> None:
 
 def registration_options(*, user: User) -> tuple[WebAuthnChallenge, dict]:
     _ensure_below_limit(user)
-    challenge = issue_challenge(purpose=Purpose.REGISTER, user=user)
+    return build_registration_options(user=user, purpose=Purpose.REGISTER)
+
+
+def build_registration_options(*, user: User, purpose: str) -> tuple[WebAuthnChallenge, dict]:
+    """登録の options（ログイン済みの登録と、登録用リンクからの登録〔I620〕で同じ形）"""
+    challenge = issue_challenge(purpose=purpose, user=user)
     name = user.user_id or str(user.id)
     options = generate_registration_options(
         rp_id=settings.WEBAUTHN_RP_ID,
@@ -142,6 +147,11 @@ def register_passkey(*, user: User, challenge_id: uuid.UUID, credential: dict, u
     except PasskeyError:
         logger.warning('passkey register failed user_id=%s reason=%s', user.id, 'challenge')
         raise
+    return verify_and_create_passkey(user=user, challenge=challenge, credential=credential, user_agent=user_agent)
+
+
+def verify_and_create_passkey(*, user: User, challenge: bytes, credential: dict, user_agent: str) -> Passkey:
+    """登録の応答を確かめてパスキーを作る（challenge は呼ぶ側が消費済み・登録用リンク〔I620〕と共通）"""
     try:
         verified = verify_registration_response(
             credential=credential, expected_challenge=challenge,

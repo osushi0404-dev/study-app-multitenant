@@ -728,5 +728,8 @@ def test_tc13_audit_logs_without_secrets(alice, carol, staff, org_a, caplog):
 def test_tc15_system_check(debug, origins, rp_id, expected):
     from accounts.checks import check_webauthn_settings
 
-    with override_settings(DEBUG=debug, WEBAUTHN_ALLOWED_ORIGINS=origins, WEBAUTHN_RP_ID=rp_id):
+    # 登録用リンクの土台（I620・E004）はパスキーの最初の origin にそろえておく
+    base = origins[0] if origins else ""
+    with override_settings(DEBUG=debug, WEBAUTHN_ALLOWED_ORIGINS=origins, WEBAUTHN_RP_ID=rp_id,
+                           REGISTRATION_LINK_BASE_URL=base):
         assert [error.id for error in check_webauthn_settings(None)] == expected

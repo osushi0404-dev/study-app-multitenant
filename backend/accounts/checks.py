@@ -26,6 +26,12 @@ def check_webauthn_settings(app_configs, **kwargs):
     if mismatched:
         errors.append(Error(f'WEBAUTHN_RP_ID（{rp_id}）が origin の host と合いません: {mismatched}',
                             id='accounts.E003', hint='RP ID は host と同じか、その親のドメインにします'))
+    # 登録用リンク（I620）はパスキーを許す画面で開かないと登録できない
+    base = settings.REGISTRATION_LINK_BASE_URL
+    if base not in origins:
+        errors.append(Error(
+            f'REGISTRATION_LINK_BASE_URL（{base}）が WEBAUTHN_ALLOWED_ORIGINS にありません',
+            id='accounts.E004', hint='登録用リンクの土台は、パスキーを許す画面の origin にします'))
     return errors
 
 

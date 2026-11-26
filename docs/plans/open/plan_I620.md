@@ -27,6 +27,7 @@
 9. QR のライブラリ: `qrcode.react` 4.2.0（npm の最新・依存なし・peer は React 16.8〜19）。SVG で描く（`QRCodeSVG`）
 10. E2E: `e2e/tests/passkey.spec.ts` が CDP の仮想の認証器の付け方の手本。seed（`seed_e2e.py`）の `e2e_user_b` は org_b の管理者（`is_individual=False`）
 11. 経路の表 `backend/core/tests/test_I446_cross_api_tenant_isolation.py` に新しい経路を足さないと `test_route_table_matches_urlconf` が落ちる。OpenAPI の対象は `backend/core/openapi.py` の `CONTRACT_PATHS`
+12. （implement のステップ 1・M1）simplejwt 5.5.1 の `TokenRefreshSerializer.validate` は rotation の後に `refresh.outstand()` を呼ぶので、rotation で作られた新しい refresh も `OutstandingToken` に記録され、発行の失効の対象になる（成立。TC-03 が rotation 後の refresh の 401 を確かめる）
 
 ## 2. 受け入れ条件
 1. 組織の管理者は、自分の組織の利用者の一覧を見て、ユーザー ID だけで利用者を作れる。ほかの組織の利用者・運営のアカウントは一覧に出ず、番号を指しても 404
@@ -293,6 +294,14 @@ Danger Ops: 無（表の追加と選択肢の追加だけ。データの削除�
 
 ## レビュー結果
 - [20261126_1311 判定: ✅ 完了](../../reviews/I620_plan_review_20261126_1311.md)
+- 2026-11-26 implement: 計画書の記載: 4-4「`_registration_options(*, user, purpose)` に切り出す」→ 採った方法: 名前を `build_registration_options` にした — 理由: 別のモジュール（`registration_links.py`）から呼ぶので、先頭の `_` を付けない。計画レビューのやり直し: 不要（名前だけ）
+- 2026-11-26 implement: 計画書の記載: 4-3「`link_url` は `FRONTEND_URL` を土台にする」→ 採った方法: 設定 `REGISTRATION_LINK_BASE_URL`（既定は `WEBAUTHN_ALLOWED_ORIGINS` の最初）を土台にし、`backend/.env.example` に説明を足した — 理由: 画面で確かめたところ、ワークツリーでは `FRONTEND_URL` が 3000 のまま、パスキーが通る画面は 3020 で、リンクを開いても登録できなかった。パスキーは origin が一致しないと登録できないので、リンクはパスキーを許す画面で開くのが正しい。計画レビューのやり直し: 不要（土台の値の取り方だけ・受け入れ条件は変わらない）
+- 2026-11-26 implement: 計画書に無い変更: `frontend/src/services/api.ts` の `handleAuthFailure` の「ログイン画面へ移さない」画面に `PASSKEY_SETUP_PATH` を足した — 理由: ログイン前の画面でも通知の設定を読みにいき、その 401 でログイン画面へ移され、リンクを開いても登録画面が出なかった（画面で確かめて見つけた）。`/login`・`/register` と同じ扱いにする。TC-30（E2E）が確かめる。計画レビューのやり直し: 不要（受け入れ条件 14 を満たすための直し）
+- 2026-11-26 implement: 計画書の記載: 4-10「`UserEdit.tsx` に `MemberCredentialActions` を置き、運営・本人ひとりの組織の利用者には『この利用者には画面から発行できません』」→ 採った方法: 部品 `components/members/StaffCredentialsCard.tsx`（本人確認の部品を 1 つ持つ）を作って `UserEdit.tsx` に置き、`AdminUserSerializer` に読み取りだけの `organization_is_individual` を足した — 理由: 運営の画面が相手の組織が本人ひとりかを知る手段が無かった。`UserEdit.tsx`（415 行）を太らせない。運営の画面は開いたリンクの有無を持たないので［リンクを取り消す］は常に出す（取り消しは冪等で 204）。計画レビューのやり直し: 不要
+- 2026-11-26 implement: 確認のダイアログ `IssueLinkConfirmDialog` で、発行と取り消しの両方の確認を出す（計画 13 の「取り消しは確認のダイアログ」を 1 つの部品で）。計画レビューのやり直し: 不要
+- 2026-11-26 implement: テスト文書 TC-01 の「`solo` の 403 の `sub_message`」は、共通のエラー処理（`core.exceptions`）が 403 の文を「この操作を実行する権限がありません」にそろえるので、状態コードだけを確かめる形に直した。`core/tests/test_I127_throttling.py` の設定の一覧に新しいスロットルの 2 つを足した（足さないと落ちる既存のテスト）。計画レビューのやり直し: 不要
+- 2026-11-26 implement: 本人ひとりの組織の管理者で一覧の API を呼ばないよう、`MemberManagement` を中身の部品と分けた（Jest の TC-20 で見つけた）。計画レビューのやり直し: 不要
+- 2026-11-26 implement（/simplify）: 計画書に無い直し: (1) 公開の 2 つの API に `authentication_classes = []`（発行で失効した古いトークンが付いていても 401 にしない・TC-05 に足した） (2) システムチェック `accounts.E004`（`REGISTRATION_LINK_BASE_URL` が `WEBAUTHN_ALLOWED_ORIGINS` に無ければ本番で止める・TC-13 を足し、I619 の TC-15 に土台の値をそろえた） (3) 本人確認を足す `get_permissions` を `MemberCredentialActionsMixin` の 1 か所にした (4) `AdminUserViewSet.queryset` に `select_related('organization')`（新しい項目で N+1 にしない） (5) 作った直後のメンバーは集計の問い合わせを流し直さない (6) 登録画面は最初は開いたときの challenge を使い、やり直しだけ取り直す — 理由: 4 つの観点の点検（再利用・簡素化・効率・直す深さ）の指摘。どれも方式・範囲・受け入れ条件を変えない。計画レビューのやり直し: 不要
 
 ## セキュリティレビュー結果
 

@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../services/api';
+import StaffCredentialsCard from '../components/members/StaffCredentialsCard';
 
 interface UserData {
   id: string;
@@ -32,6 +33,7 @@ interface UserData {
   updated_at: string;
   failed_login_attempts: number;
   account_locked_until?: string;
+  organization_is_individual?: boolean;
 }
 
 interface UserEditFormData {
@@ -395,6 +397,9 @@ const UserEdit: React.FC = () => {
           </Box>
         </Box>
       </Paper>
+
+      {/* I620: 登録用リンクの発行・取り消しとパスキーの一覧・削除（運営） */}
+      {userData && <StaffCredentialsCard target={userData} />}
 
       <Snackbar
         open={snackbar.open}

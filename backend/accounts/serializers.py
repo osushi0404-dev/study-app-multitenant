@@ -196,6 +196,10 @@ class UserSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(
         source='organization.name', read_only=True, default=None
     )
+    # 本人ひとりの組織か（画面がメンバー管理のメニューを出し分ける・I620）
+    organization_is_individual = serializers.BooleanField(
+        source='organization.is_individual', read_only=True, default=False
+    )
 
     class Meta:
         model = User
@@ -203,17 +207,75 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'user_id', 'role',
             'is_email_verified', 'is_staff', 'is_superuser',
             'last_login', 'created_at',
-            'organization_name',
+            'organization_name', 'organization_is_individual',
         )
         read_only_fields = (
             'id', 'user_id', 'role', 'is_staff', 'is_superuser',
-            'last_login', 'created_at', 'organization_name',
+            'last_login', 'created_at', 'organization_name', 'organization_is_individual',
         )
+
+
+# ---------------------------------------------------------------- メンバー管理（I620） ----
+class MemberSerializer(serializers.ModelSerializer):
+    """組織の管理者が見るメンバーの行。数と期限は get_queryset の注釈から読む"""
+    passkey_count = serializers.IntegerField(read_only=True)
+    registration_link_expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    is_self = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'user_id', 'role', 'is_active', 'last_login', 'created_at',
+                  'passkey_count', 'registration_link_expires_at', 'is_self')
+        read_only_fields = fields
+
+    def get_is_self(self, obj) -> bool:
+        request = self.context.get('request')
+        return request is not None and obj.pk == request.user.pk
+
+
+class MemberCreateSerializer(serializers.Serializer):
+    """メンバーの作成はユーザー ID だけ（役割・組織・有効は受け取らない）"""
+    user_id = serializers.CharField(
+        min_length=3, max_length=30,
+        error_messages={'blank': 'ユーザーIDを入力してください',
+                        'min_length': 'ユーザーIDは3文字以上で入力してください'},
+        validators=[RegexValidator(regex=r'^[a-zA-Z0-9_]+$',
+                                   message='ユーザーIDは半角英数字とアンダースコアのみ使用できます',
+                                   code='invalid_user_id')])
+
+    def validate_user_id(self, value):
+        if User.objects.filter(user_id=value).exists():
+            raise serializers.ValidationError('このユーザーIDは既に使用されています')
+        return value
+
+
+class RegistrationLinkIssuedSerializer(serializers.Serializer):
+    url = serializers.CharField()
+    expires_at = serializers.DateTimeField()
+
+
+class RegistrationLinkTokenSerializer(serializers.Serializer):
+    """リンクの値。形の確かめはサービスが行い、使えないリンクと同じ文にそろえる（理由を見分けさせない）"""
+    token = serializers.CharField(allow_blank=True, trim_whitespace=False)
+
+
+class RegistrationLinkOptionsSerializer(serializers.Serializer):
+    challenge_id = serializers.UUIDField()
+    options = serializers.DictField()
+    user_id = serializers.CharField()
+
+
+class RegistrationLinkCompleteSerializer(RegistrationLinkTokenSerializer):
+    challenge_id = serializers.UUIDField()
+    credential = serializers.DictField()
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
     """管理者用の詳細なユーザーシリアライザー"""
     is_admin = serializers.BooleanField(source='is_staff', required=False)
+    # 本人ひとりの組織か（運営の画面が登録用リンクの欄を出し分ける・I620）
+    organization_is_individual = serializers.BooleanField(
+        source='organization.is_individual', read_only=True, default=False)
 
     class Meta:
         model = User
@@ -221,7 +283,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
             'id', 'email', 'user_id', 'first_name', 'last_name',
             'role', 'is_active', 'is_admin', 'is_superuser',
             'is_email_verified', 'last_login', 'created_at', 'updated_at',
-            'failed_login_attempts', 'account_locked_until'
+            'failed_login_attempts', 'account_locked_until', 'organization_is_individual',
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'last_login')
 

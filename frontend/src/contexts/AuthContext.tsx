@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import authService from '../services/auth.service';
-import passkeyService, { getPasskeyAssertion } from '../services/passkey.service';
+import passkeyService, { CredentialJSON, getPasskeyAssertion } from '../services/passkey.service';
+import { registrationLinkService } from '../services/member.service';
 import { PASSKEY_LOGIN_FAILED } from '../utils/passkeyErrors';
 import apiClient from '../services/api';
 import { User } from '../services/types';
@@ -12,6 +13,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithPasskey: () => Promise<void>;
+  completeRegistrationLink: (args: { token: string; challengeId: string; credential: CredentialJSON }) => Promise<void>;
   register: (email: string, userId: string, password: string, firstName?: string, lastName?: string, organizationSlug?: string, subjectIds?: number[]) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
@@ -193,6 +195,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // 登録用リンクでパスキーを登録し、その利用者としてログインする（I620）。
+  // リンクの値は引数でだけ受け、保存領域・console に置かない。失敗の文は呼ぶ画面が出す
+  const completeRegistrationLink = async (
+    { token, challengeId, credential }: { token: string; challengeId: string; credential: CredentialJSON }
+  ) => {
+    const loginResponse = await registrationLinkService.complete(token, challengeId, credential);
+    establishSession({ ...loginResponse, user: loginResponse.user as unknown as User });
+  };
+
   const register = async (email: string, userId: string, password: string, firstName?: string, lastName?: string, organizationSlug?: string, subjectIds?: number[]) => {
     try {
       await authService.register({
@@ -367,6 +378,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       loading,
       login,
       loginWithPasskey,
+      completeRegistrationLink,
       register,
       logout,
       refreshToken,

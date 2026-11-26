@@ -91,6 +91,13 @@ describe('PasskeysCard', () => {
     expect(service.list).toHaveBeenCalledTimes(2);
   });
 
+  it('I620 TC-25: 複数の端末で使うことを勧める案内', async () => {
+    mountCard();
+    expect(await screen.findByText(
+      '2 台以上の端末で使えるようにしてください。iCloud キーチェーンや Google パスワード マネージャーなど、端末どうしで同期されるパスキーがおすすめです'
+    )).toBeInTheDocument();
+  });
+
   it('TC-21c: 0 個なら「パスキーはまだありません」と「パスキーを登録」', async () => {
     service.list.mockResolvedValue([]);
     mountCard();

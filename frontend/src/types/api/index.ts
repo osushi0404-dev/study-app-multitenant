@@ -23,3 +23,8 @@ export type PaginatedPasskeyList = Schemas['PaginatedPasskeyList'];
 export type WebAuthnOptions = Schemas['WebAuthnOptions'];
 export type ReauthToken = Schemas['ReauthToken'];
 export type LoginResponse = Schemas['LoginResponse'];
+// メンバー管理と登録用リンク（I620）
+export type Member = Schemas['Member'];
+export type PaginatedMemberList = Schemas['PaginatedMemberList'];
+export type RegistrationLinkIssued = Schemas['RegistrationLinkIssued'];
+export type RegistrationLinkOptions = Schemas['RegistrationLinkOptions'];

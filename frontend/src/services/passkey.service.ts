@@ -23,7 +23,7 @@ const REAUTH_HEADER = 'X-Reauth-Token';
 /** ブラウザの PublicKeyCredential.toJSON() の結果（中身はサーバーの py_webauthn が確かめる） */
 export type CredentialJSON = Record<string, unknown>;
 
-const reauthHeaders = (reauthToken: string) => ({ headers: { [REAUTH_HEADER]: reauthToken } });
+export const reauthHeaders = (reauthToken: string) => ({ headers: { [REAUTH_HEADER]: reauthToken } });
 
 /** サーバーの options（中身は py_webauthn が作る WebAuthn の JSON）を、challenge があることを確かめてから渡す */
 const hasChallenge = (options: Record<string, unknown>) => typeof options.challenge === 'string';
