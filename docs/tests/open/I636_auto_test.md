@@ -27,6 +27,7 @@
 ### TC-01（M1）: 形の違うパスキーの ID・メンバーの ID は 404
 - `test_i636_delete_passkey_malformed_id_is_404`（parametrize: `"-" * 36`・`"g" * 36`・`"0" * 36`）: `admin_a` が `alice`（パスキー 1 個）に `DELETE /api/members/<alice.id>/passkeys/<値>/`（本人確認の印つき）→ `status_code == 404`・`main_message == "リソースが見つかりません"`・`Passkey.objects.filter(user=alice).count() == 1`
 - `test_i636_delete_passkey_other_org_member_is_404`: `admin_a` が `bob`（組織 B）のパスキーの正しい ID で削除 → 404・bob のパスキーは 1 個のまま
+- `test_i636_staff_delete_passkey_malformed_id_is_404`: `staff` が `DELETE /api/admin/users/<alice.id>/passkeys/<"-" * 36>/`（本人確認の印つき）→ 404・alice のパスキーは 1 個のまま
 - `test_i636_malformed_member_id_is_404`: `admin_a` が `GET /api/members/<"-" * 36>/passkeys/` → 404
 - 直す前は 1 本目が 500（`ValidationError`）で落ちることを確かめてから直す
 
@@ -60,6 +61,7 @@
 
 ### TC-12（初期データ）: `seed_e2e` が運営と本人ひとりの組織の管理者を作る
 - `test_i636_seed_e2e_creates_staff_and_solo`: `call_command("seed_e2e", "--scenario", "tenant_isolation", "--password", TEST_PASSWORD)` を 2 回 → `e2e_staff@example.com` は 1 人・`is_staff is True`・`role == "user"`・組織の slug `e2e-org-staff`、`e2e_solo@example.com` は 1 人・`role == "admin"`・組織の `is_individual is True`・`can_manage_members is False`。組織 `e2e-org-solo` は 1 つだけ。`e2e_user_a`・`e2e_user_b`・`e2e_user_c` もいる
+- `test_i636_seed_e2e_refuses_without_debug`: `settings.DEBUG = False` で同じコマンド → `CommandError`（文「seed_e2e は DEBUG が真の環境（開発・E2E）でだけ流せます」）・`User.objects.filter(email__startswith="e2e_").count() == 0`
 
 ### OpenAPI
 - `core/tests/test_I493_openapi_contract.py` が通る（`backend/openapi.yaml` と `frontend/src/types/api/schema.d.ts` を作り直してコミットする）

@@ -26,6 +26,8 @@
 - [plan] 通知の最大幅を `min(350px, calc(100vw - 128px))` にする — 幅 360px で上のバーの左右のボタンに重ねないため（イシューの「重なるなら最大幅を抑える」の具体化）
 - [plan] 表の枠に `role="region"` と読み上げの名前・`tabIndex={0}` を付ける — E2E を MUI の内部のクラス名に頼らせず、横に流れる枠をキーボードで動かせるようにするため
 - [plan-review] 計画レビューの Warning 3 件（TC-03 の前提・TC-09 の期待値・TC-14 の書き戻し）はテスト文書の具体化だけなので直して再レビューしない — 方式・範囲・受け入れ条件を変えないため
+- [design-security-review] Medium 1 件（`seed_e2e` に既知のパスワードの運営を足す）は、DEBUG が偽ならコマンド全体を止める防御を計画に足して解消扱いにした。Low の運営の API の 404 もテストに足した — Blocker は無く、要件・UI を変えない防御とテストの追記だけのため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
+STAGE_DONE: design-security-review NEXT: implement
