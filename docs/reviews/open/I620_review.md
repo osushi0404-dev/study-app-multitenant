@@ -13,7 +13,8 @@
 
 ## テスト結果
 - 自動: `docs/tests/open/I620_auto_test.md` の結果のとおり（裏側 40 件・画面の関係 70 件・E2E 2 件が手元で通過。正は CI）
-- 手動: test-gate で行う（implement では画面確認の 5 行を記録）
+- 手動: Claude の 13 項目すべて OK（No.12 は 1 回 NG → fix-loop で直して再確認）・人の分は無し。画面確認 13 行（`docs/tests/open/I620_manual_test.md`）
+- CI: 2 回目の差分のレビューの時点（f90f78c5）で全ジョブ成功（backend・frontend・API の型・ハーネス・E2E）
 
 ## 計画との差分
 - あり（計画書の「計画変更記録」の implement の 7 行。どれも方式・範囲・受け入れ条件は変えない）
@@ -56,3 +57,5 @@ STAGE_DONE: test-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 差分のレビュー OK（docs/reviews/I620_code_review_20261126_1521.md）・敵対的レビュー 2 周目 OK（未検証 0・Critical/High 0・docs/reviews/I620_adversarial_review_20261126_1529.md）。通算 2 周を使い切った
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] gate-check OK・No.12 を再確認して OK。check-frontend-evidence・check-manual-test-executor とも合格。人の手動テストの項目は無い（計画 6 の理由）
+STAGE_DONE: test-gate NEXT: retro
