@@ -54,3 +54,5 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: fix-loop
 - [fix-loop] No.12 を診断メモの案 A（表に最小の幅・折り返さない・E2E に 360px の確かめ）で直した — 診断レビュー OK。カードの並びへの切り替え（案 B）は了承した画面の配置を変えるので採らない。E2E の通知の重なりは待ってからメニューを開く形にした
 STAGE_DONE: fix-loop NEXT: review-gate
+- [review-gate] 差分のレビュー OK（docs/reviews/I620_code_review_20261126_1521.md）・敵対的レビュー 2 周目 OK（未検証 0・Critical/High 0・docs/reviews/I620_adversarial_review_20261126_1529.md）。通算 2 周を使い切った
+STAGE_DONE: review-gate NEXT: test-gate
