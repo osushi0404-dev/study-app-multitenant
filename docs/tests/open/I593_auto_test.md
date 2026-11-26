@@ -36,3 +36,10 @@ bash scripts/claude/tests/test_i205_stop_criteria.sh
 bash scripts/claude/tests/test_i599_unreviewed_scripts.sh
 bash scripts/claude/tests/test_fix_review.sh
 ```
+
+## 再発防止記録（fix-loop・review-gate 1 周目 F1）
+- なぜ失敗したか: `STOP=test` を足したとき `blocking()` の種類ごとの分岐だけを直し、その前の「差分の中か外か」（`scope_of()`）を見ていなかった。テストを弱める指摘は消えた行に向くので、行が変更の塊から離れると差分の外になり止まらなかった。TC-09 は実在しないファイルを指していたため、位置の判定を素通りして合格していた（偽の合格）
+- 何を変えたか: `scope_of()` で `STOP=test` を `ac:` と同じく行によらず差分の中と扱う（`scripts/claude/code-review.sh`）。TC-09 に実在するファイル（`scripts/claude/tests/run-all.sh`）で塊から離れた行の `STOP=test` を足し、`scope_of()` から `test` を外すと落ちる FG を付けた。`test_i205_stop_criteria.sh` の FG-L9 の置き換え元を新しい行に合わせた
+- セキュリティ上の考慮点: 止まるべき指摘が止まらない（fail-open）を閉じた。偽の止まりは計画書に理由を書けば外れる
+- 次回どう防ぐか: 止める種類を足すときは、`scope_of()`・`blocking()`・`STOP_RE` の 3 か所を見る。位置で決まる判定のテストは、実在するファイルで塊の外の行を使う
+- 確かめた結果: `bash scripts/claude/tests/test_i593_review_from_base.sh`（pass=53 fail=0）・`test_i205_stop_criteria.sh`・`test_i197_review_ledger.sh`・`test_i202_ledger_cleanup.sh`（すべて rc=0）

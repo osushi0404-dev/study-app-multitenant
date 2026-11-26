@@ -287,7 +287,7 @@ ck "FG-B8 ハーネスを重大度で決めると B8 が不合格（OK）" OK "$
 ck "FG-B11 STOP を何でも当たるにすると B11 が不合格（HIGH）" HIGH "$(v "$(broken 'STOP_RE = re.compile(r"flow|leak|github|test|ac:[0-9]+")' 'STOP_RE = re.compile(r".*")')" "$(fl High scripts/claude/a.sh 10 no other yes)")"
 ck "FG-L2 前後の行数を 0 にすると L2 が不合格（outside）" outside "$(scope "$(fx backend/x.py 13)" "$(broken 'HUNK_MARGIN = 3' 'HUNK_MARGIN = 0')")"
 ck "FG-L8 casefold を外すと L8 が不合格（outside）" outside "$(scope "$(fx Docs/up.md 5)" "$(broken 'hunks.get(norm.casefold(), [])' 'hunks.get(norm, [])')")"
-ck "FG-L9 全部を delta にすると L9 が不合格（delta）" delta "$(HUNKS="$TMP/h_full2" scope "$(fx old.txt 9)" "$(broken '        if stop.startswith("ac:") or path == "-":' '        if True:')")"
+ck "FG-L9 全部を delta にすると L9 が不合格（delta）" delta "$(HUNKS="$TMP/h_full2" scope "$(fx old.txt 9)" "$(broken '        if stop.startswith("ac:") or stop == "test" or path == "-":' '        if True:')")"
 ck "FG-K1 harness の場所から .claude/ を外すと K1 が不合格（app）" app \
   "$(lib "$(broken 'HARNESS_PREFIX = (".claude/", ' 'HARNESS_PREFIX = (')" ledger_kinds "$TMP/kpaths" | sed -n 8p | cut -f1)"
 BW2=$(broken "grep -qE '^VERDICT:[[:space:]]*(BLOCKER|HIGH|OK)[[:space:]]*\$' \"\$REVIEW_FILE\" && REVIEWER_VERDICT=OK || REVIEWER_VERDICT=BLOCKER" 'REVIEWER_VERDICT="$LLM_VERDICT"')

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2016  # 単一引用符の \$ は、置き換え元・照合の文字どおりの文字列（展開させない）
+# shellcheck disable=SC2016,SC1091  # 単一引用符の \$ は、置き換え元・照合の文字どおりの文字列（展開させない）
 # I593: 判定の仕組みを変える PR を変更前の版で審査する（plan_I593.md・docs/tests/open/I593_auto_test.md の TC）。
 #   TC-01 高リスクの集合（review_mechanism_trigger）／TC-02 集合の説明の一致／TC-03 定義の変換（reviewer-agents-lib.sh）／
 #   TC-04 審査の入口の呼び方／TC-06 写しで動かなかったときの高リスク／TC-07・TC-08 テストを弱める差分／TC-09 STOP=test／
@@ -223,10 +223,14 @@ ck "FG-TC-08 入力の節を消すと不合格" 1 "$(rc tc08 "$(broken "$CR" '##
 tc09() { local f="$1" d="$TMP/l9_$RANDOM"; mkdir -p "$d"
   printf 'b.py\t1\t5\nscripts/claude/tests/t.sh\t1\t5\n' > "$d/hunks"; printf 'backend/x/tests/test_a.py\nscripts/claude/tests/t.sh\n' > "$d/own"
   printf 'backend/x/tests/test_a.py\t1\t5\n' >> "$d/hunks"
-  printf '# r\n\n## 台帳\nFINDING: F1 SEV=Low STATUS=open FILE=backend/x/tests/test_a.py LINE=3 SECURITY=no STOP=test | 理由の無いスキップ | 再現: TEST_WEAKENING: skip …・計画書に理由なし\nFINDING: F2 SEV=Low STATUS=open FILE=scripts/claude/tests/t.sh LINE=2 SECURITY=no STOP=test | 理由の無い削除 | 再現: TEST_WEAKENING: fewer-checks …\n\nVERDICT: OK\n' > "$d/rev.md"
+  # F3: 実在するファイルで、行が変更の塊（1〜2 行目＋前後 3 行）から離れている（review-gate 1 周目 F1）
+  printf 'scripts/claude/tests/run-all.sh\t1\t2\n' >> "$d/hunks"; printf 'scripts/claude/tests/run-all.sh\n' >> "$d/own"
+  printf '# r\n\n## 台帳\nFINDING: F1 SEV=Low STATUS=open FILE=backend/x/tests/test_a.py LINE=3 SECURITY=no STOP=test | 理由の無いスキップ | 再現: TEST_WEAKENING: skip …・計画書に理由なし\nFINDING: F2 SEV=Low STATUS=open FILE=scripts/claude/tests/t.sh LINE=2 SECURITY=no STOP=test | 理由の無い削除 | 再現: TEST_WEAKENING: fewer-checks …\nFINDING: F3 SEV=Low STATUS=open FILE=scripts/claude/tests/run-all.sh LINE=40 SECURITY=no STOP=test | 理由の無いテストの削除（消えた行の位置） | 再現: TEST_WEAKENING: fewer-tests …\n\nVERDICT: OK\n' > "$d/rev.md"
   lib "$f" ledger_update full "" "$d/rev.md" "$d/hunks" "$d/own" > "$d/led" || return 1
-  [ "$(lib "$f" ledger_blocking "$d/led" | grep -c '^LEDGER: ')" -eq 2 ]; }
-ck "TC-09 STOP=test はアプリ本体（Low）でもハーネスでも止める指摘になる" 0 "$(rc tc09 "$CR")"
+  [ "$(lib "$f" ledger_blocking "$d/led" | grep -c '^LEDGER: ')" -eq 3 ]; }
+ck "TC-09 STOP=test はアプリ本体（Low）でもハーネスでも、行が変更の塊から離れていても止める指摘になる" 0 "$(rc tc09 "$CR")"
+ck "FG-TC-09 塊から離れた行の STOP=test を差分の外にすると不合格（review-gate 1 周目 F1）" 1 \
+  "$(rc tc09 "$(broken "$CR" 'if stop.startswith("ac:") or stop == "test" or path == "-":' 'if stop.startswith("ac:") or path == "-":')")"
 ck "FG-TC-09 STOP_RE から test を外すと不合格" 1 "$(rc tc09 "$(broken "$CR" 'STOP_RE = re.compile(r"flow|leak|github|test|ac:[0-9]+")' 'STOP_RE = re.compile(r"flow|leak|github|ac:[0-9]+")')")"
 ck "FG-TC-09 アプリ本体で test を止めないと不合格" 1 "$(rc tc09 "$(broken "$CR" ' or stop.startswith("ac:") or stop == "test"' ' or stop.startswith("ac:")')")"
 

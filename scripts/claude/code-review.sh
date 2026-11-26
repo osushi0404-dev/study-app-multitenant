@@ -916,7 +916,9 @@ elif mode == "update":
     def scope_of(path, line, stop):
         # delta（止める側）: 受け入れ条件の未達・FILE=-・行が読めない・リポジトリの外・実在しないファイル・塊と重なる行。
         # outside にするのは「リポジトリの中の実在のファイルで、どの塊（前後 HUNK_MARGIN 行）とも重ならない行」だけ
-        if stop.startswith("ac:") or path == "-":
+        # 理由の無いテストの弱め（test・I593）も受け入れ条件の未達と同じく行によらず差分の中（消えた行に向く指摘で、
+        # HEAD の行が変更の塊と重ならないことが普通にあるため）
+        if stop.startswith("ac:") or stop == "test" or path == "-":
             return "delta"
         m = LINE_RE.fullmatch(line)
         if not m:
