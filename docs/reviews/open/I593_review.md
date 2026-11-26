@@ -31,7 +31,10 @@
 - [implement] fix-review-lib.sh の claude を ${CLAUDE_BIN:-claude} にした — TC-04 の差し替えのため。ほかの入口と同じ形
 - [implement] /simplify の指摘のうち、小さく挙動を変えないもの（git の起動を減らす・弱める差分の計算を組み込みのレビューの起動の後へ移す・写しの道具のループ化・一時フォルダの後片付けを 1 つに・関数の位置）を直した。見送ったもの: 写しに docs/runbooks/ 全体を入れる（設計確認メモで review-rules.md だけと決めた）・計画レビューの高リスクを記録の 1 行と plan_risk の OR に変える・gate-check を写しから読む・テストの道具（ck・broken・lib）の共通化 — どれも仕組みを変えるか差分が広がるので retro で後続にするか判断する
 - [implement] run-all のうち test_compose_ports・test_guard_corpus_diff・test_i211_version_pin はサンドボックスの中で落ちる（~/.cache に書けない・docker が無い）。このブランチで触っていないファイルなので CI で確かめる
+- [implement] コミットを `| grep` とつないで流し、サンドボックスの中で .claude/ に書けず pre-commit が落ちた（I615 の落とし穴と同じ種類・#613 に同梱済み）。単独で流し直して済んだ
 
 STAGE_DONE: plan NEXT: plan-review
 
 STAGE_DONE: plan-review NEXT: implement
+
+STAGE_DONE: implement NEXT: review-gate
