@@ -50,3 +50,5 @@ STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 - [review-gate] 差分のレビュー OK（docs/reviews/I620_code_review_20261126_1434.md）・敵対的レビュー 1 周目 OK（未検証 0・Critical/High 0・docs/reviews/I620_adversarial_review_20261126_1445.md）
 STAGE_DONE: review-gate NEXT: test-gate
+- [test-gate] gate-check OK。Claude の手動テスト 13 項目のうち No.12（幅 360px でメンバーの表が横に流れず、文字が 1 文字ずつ折り返す）が NG → fix-loop。確かめ用に開発の DB に運営 i620_staff・個人利用 i620_solo を作った（パスワードは e2e_user_a のものを写した）
+STAGE_DONE: test-gate NEXT: fix-loop
