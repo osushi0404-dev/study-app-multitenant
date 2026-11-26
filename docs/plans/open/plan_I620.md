@@ -165,8 +165,8 @@ class RegistrationLink(models.Model):
 - `constants/routes.ts`: `MEMBER_MANAGEMENT_PATH = '/members'`・`PASSKEY_SETUP_PATH = '/passkey-setup'`
 - `types/api/index.ts`: `Member`・`PaginatedMemberList`・`MemberCreate`・`RegistrationLinkIssued`・`RegistrationLinkOptions` の短い名前
 - `services/member.service.ts`: `memberService`（`list(page)`・`create(userId)`）と、`credentialApi(base: '/api/members/' | '/api/admin/users/')` が返す `passkeys(id)`・`deletePasskey(reauthToken, id, passkeyId)`・`issueLink(reauthToken, id)`・`revokeLink(reauthToken, id)`（`X-Reauth-Token` を付ける）。`registrationLinkService`（`options(token)`・`complete(token, challengeId, credential)`）
-- `hooks/useMembers.ts`: 一覧（`useQuery`・キー `['members', userId, page]`）・作成（`useMutation`・成功で一覧を読み直す）
-- `hooks/useMemberCredentials.ts`: `base` と相手の id を受け、パスキーの一覧（キー `['member-passkeys', base, id]`）・削除・発行・失効（成功で一覧と `['members']` を読み直す）
+- `hooks/useMembers.ts`: 一覧（`useQuery`・キー `['members', 見ている人の userId, page]`）・作成（`useMutation`・成功で一覧を読み直す）
+- `hooks/useMemberCredentials.ts`: `base` と相手の id を受け、パスキーの一覧（キー `['member-passkeys', 見ている人の userId, base, id]`。利用者が変わったら前の人の値を見せない・React 規約 §5・セキュリティ設計レビュー M2）・削除・発行・失効（成功で一覧と `['members']` を読み直す）
 - `components/members/RegistrationLinkDialog.tsx`: MUI の `Dialog`。見出し「『{user_id}』の登録用リンク」・`QRCodeSVG`（`value=url`・`size=192`・`aria-label="登録用リンクの QR コード"`）・読み取りだけの `TextField`（`label="リンク"`）と「コピー」ボタン（`navigator.clipboard.writeText` → トースト「リンクをコピーしました」。失敗は「コピーできませんでした。リンクを選んでコピーしてください」）・「有効期限: YYYY/MM/DD HH:MM（1 時間・1 回だけ）」（`Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo' })`）・警告の `Alert`「この画面を閉じると、リンクは二度と表示できません」・［閉じる］。値は親の state にだけ置き、閉じたら捨てる
 - `components/members/IssueLinkConfirmDialog.tsx`: 「『{user_id}』の登録用リンクを発行しますか？」「今のパスキーはすべて使えなくなり、ログイン中の端末もログアウトされます。」［キャンセル］［発行する］
 - `components/members/MemberPasskeysDialog.tsx`: 「『{user_id}』のパスキー」・一覧（名前／登録日／最後に使った日・I619 の `PasskeysCard` と同じ書き方）・各行のごみ箱（`aria-label="『名前』を削除"`・44px）→ 確認「『名前』を削除しますか？このパスキーではログインできなくなります」→ 本人確認 → トースト「パスキーを削除しました」。4 つの状態（読み込み中・失敗・空「パスキーはまだありません」・あり）
@@ -174,7 +174,7 @@ class RegistrationLink(models.Model):
 - `components/members/AddMemberDialog.tsx`: 「メンバーを追加」・`ユーザーID` の欄（React Hook Form＋yup・`mode: 'onTouched'`・必須・3〜30 文字・半角英数字と `_`・サーバーの誤りは `setError`）［キャンセル］［追加してリンクを発行］→ 作成 → 本人確認 → 発行 → `RegistrationLinkDialog`。送信中はボタンを止める
 - `pages/MemberManagement.tsx`: 見出し「メンバー管理」・［＋ メンバーを追加］・表（ユーザーID／役割〔管理者・メンバー〕／パスキー〔n 個〕／登録用リンク〔「有効（HH:MM まで）」か「なし」〕／操作）。自分の行は操作の代わりに「（自分は操作できません）」。4 つの状態（`toLoadState`）。20 件を超えたら MUI の `Pagination`。幅 360px では表を横に流せる `TableContainer`
 - `pages/PasskeySetup.tsx`（ログイン不要）: 開いたら `location.hash` から `token` を読み、`window.history.replaceState` で `#` 以降を消す → `registrationLinkService.options` → 見出し「パスキーの登録」・「ユーザーID『{user_id}』のパスキーを登録します」・案内の `Alert`（info）「2 台以上の端末で使えるようにしてください。iCloud キーチェーンや Google パスワード マネージャーなど、端末どうしで同期されるパスキーがおすすめです」・［パスキーを登録］→ `createPasskeyCredential` → `AuthContext.completeRegistrationLink` → `/dashboard`・トースト「パスキーを登録しました」。使えないリンク（値が無い・400）は `Alert`（error）「このリンクは使えません。管理者に新しいリンクを発行してもらってください」。非対応のブラウザは I619 と同じ「このブラウザはパスキーに未対応です」でボタンを止める。登録の取り消し・失敗は I619 の `passkeyErrors` の文（もう一度押せる。challenge は押すたびに取り直す）
-- `contexts/AuthContext.tsx`: `completeRegistrationLink({ token, challengeId, credential })` を足す（`registrationLinkService.complete` → `establishSession`）
+- `contexts/AuthContext.tsx`: `completeRegistrationLink({ token, challengeId, credential })` を足す（`registrationLinkService.complete` → `establishSession`）。リンクの値は引数でだけ受け、localStorage・sessionStorage・ログ・`console` に置かない（セキュリティ設計レビュー L3）
 - `components/Layout.tsx`: `isOrgAdmin && !user.organization_is_individual` のとき「科目管理」の後に「メンバー管理」（アイコン `Group`・`/members`）
 - `App.tsx`: 公開のルート `/passkey-setup`、保護のルート `members`（`OrgAdminRoute`＋本人ひとりの組織なら「このページにアクセスする権限がありません」）
 - `pages/UserEdit.tsx`（運営）: 「パスキーと登録用リンク」の `Card` を 1 つ足し、`MemberCredentialActions`（`base='/api/admin/users/'`）を置く。運営・本人ひとりの組織の利用者には「この利用者には画面から発行できません」を出して部品を置かない（裏側も 400）
@@ -184,7 +184,7 @@ class RegistrationLink(models.Model):
 - 空の storageState で `e2e_user_b`（org_b の管理者）がパスワードでログイン → `/members` → ［メンバーを追加］で `e2e_link_<時刻>` → 本人確認（パスワード）→ リンクのダイアログの「リンク」の欄の値を読む → ［閉じる］→ 新しいブラウザのコンテキスト（ログインなし）に仮想の認証器を付けてそのリンクを開く → 「ユーザーID『e2e_link_…』のパスキーを登録します」→［パスキーを登録］→ `/dashboard` → ログアウト →「パスキーでログイン」で `/dashboard`。最後に管理者の画面を読み直して、その行が「1 個」「なし」になっている
 
 ## 5. 実装手順（ステップ）
-1. **未知リスク: 失効の表**: 設定に `token_blacklist` を入れて `migrate`、`RefreshToken.for_user` が `OutstandingToken` を作り、`BlacklistedToken` にしたトークンで `/api/auth/refresh/` が 401 になることを確かめる → TC-04（失効の部分）。ログアウト（`logout_view`）が 200 になることも見る（#501 へのコメントに書く）。あわせて、ログアウトを含む今の E2E（共有の storageState を使う spec）が手元の e2e コンテナで通ることを確かめる（R7）。ステップ 3 の前
+1. **未知リスク: 失効の表**: 設定に `token_blacklist` を入れて `migrate`、`RefreshToken.for_user` が `OutstandingToken` を作り、`BlacklistedToken` にしたトークンで `/api/auth/refresh/` が 401 になることを確かめる → TC-04（失効の部分）。ログアウト（`logout_view`）が 200 になることも見る（#501 へのコメントに書く）。あわせて、`/api/auth/refresh/` で rotation した後の新しい refresh が `OutstandingToken` に記録され、発行の失効の対象になることを確かめる（simplejwt 5.5.1・セキュリティ設計レビュー M1）。ログアウトを含む今の E2E（共有の storageState を使う spec）が手元の e2e コンテナで通ることを確かめる（R7）。ステップ 3 の前
 2. **パスキーの処理の切り出し**: 4-4（振る舞いは変えない）→ I619 のテスト（TC-15）。ステップ 3 の前
 3. **縦の 1 本目（発行と使用）**: モデル・マイグレーション・設定・サービス（発行・使用・失効）・公開の 2 つの API・組織の管理者の発行と失効・権限 `IsOrgMemberManager` → TC-03〜TC-07・TC-11。認可（組織の境界・本人確認）は同じステップで入れる
 4. **縦の 2 本目（一覧・作成・パスキー）**: `MemberViewSet` の一覧・作成・パスキーの一覧と削除 → TC-01・TC-02・TC-08。ステップ 3 の後
@@ -293,3 +293,52 @@ Danger Ops: 無（表の追加と選択肢の追加だけ。データの削除�
 
 ## レビュー結果
 - [20261126_1311 判定: ✅ 完了](../../reviews/I620_plan_review_20261126_1311.md)
+
+## セキュリティレビュー結果
+
+**実施日**: 2026-11-26
+
+### セキュリティ設計レビュー
+
+| 重大度 | 分類 | 設計上のリスク | 対処（禁止事項 / 必須防御条件） |
+|--------|------|--------------|-------------------------------|
+| Medium | 認証・認可 | M1: refresh の rotation（`BLACKLIST_AFTER_ROTATION`）で作られた新しい refresh が `OutstandingToken` に記録されないと、発行の時点の失効から漏れ、なくした端末のセッションが残る | 必須: ステップ 1 で rotation 後の新しい refresh が記録されることを確かめ、TC-03 に「rotation で得た refresh も発行の後は 401」を入れる。記録されないなら、発行の失効を「記録の無い refresh も通らない」形に計画変更で直す（直すまで実装を進めない） |
+| Medium | マルチテナント | M2: 画面のキャッシュのキーに見ている人を入れないと、同じブラウザで別の管理者に替わったとき（登録用リンクを開いて別人としてログインしたときを含む）に前の人のメンバー・パスキーの一覧が一瞬見える | 必須: `members`・`member-passkeys` のキーに見ている人の userId を入れる（React 規約 §5・#491 と同じ） |
+| Low | 認証・認可 | L1: 組織の管理者は、自分の組織のほかの管理者を含む全員になりすませ、締め出せる | 受け入れ（R1・設計確認メモでユーザー了承）。発行は本人確認つき・`issued_by` をログに残す・本人は締め出されて気づける |
+| Low | 認証・認可 | L2: このイシューを入れる前に作られた refresh は `OutstandingToken` に無く、発行で失効できない（最長 7 日） | 受け入れ。本番環境はまだ無い（開発の DB だけ）。入れた後に作られた refresh はすべて記録される |
+| Low | 機密情報 | L3: リンクの値が画面の保存領域・ブラウザの履歴・`console` に残る | 必須: `#` の後ろに置き、読んだらすぐ `replaceState` で消す・保存領域と `console` に置かない（4-10） |
+| Low | 機密情報 | L4: 管理コマンドが標準出力に URL を出すので、端末の記録に残りうる | 受け入れ。サーバーを触れる運営だけが使う・1 時間で切れる・1 回だけ |
+| Low | 入力検証 | L5: メンバーの作成の重複の誤りで、ほかの組織にそのユーザー ID があることが分かる | 受け入れ。今の公開の `validate-field`（認証なし）でも分かる。ユーザー ID は全体で一意の識別子 |
+| Low | 依存ライブラリ | L6: `qrcode.react` 4.2.0 の既知の脆弱性 | 必須: implement で `npm audit` を流し、high/critical があれば直す（R10） |
+| — | OWASP Top 10 | IDOR（他人のパスキーの番号・他組織の利用者の番号）・CSRF（JWT のヘッダー認証だけ・`SessionAuthentication` 無し）・XSS（`dangerouslySetInnerHTML` を使わない・QR は SVG の部品）・総当たり（256 ビット＋スロットル）は計画の設計で防がれている | TC-03・TC-08・TC-05 で確かめる |
+| — | ファイル操作 | なし | — |
+| — | 外部通信 | なし（外部の API を呼ばない） | — |
+
+### 攻撃シナリオレビュー
+
+| # | 入口 | 想定権限 | 想定操作 | 守るべき条件 | 自動テスト化対象 | 手動確認対象 | 残余リスク | 重大度 |
+|---|------|---------|---------|------------|----------------|------------|---------|--------|
+| 1 | `POST /api/members/{id}/registration-link/` | 組織の管理者 | ほかの組織の利用者・運営の id を指して発行し乗っ取る | `get_queryset` が自分の組織の一般の利用者・管理者だけ・範囲の外は 404 | Yes: TC-03 | No | なし | High |
+| 2 | `/api/members/*` | 本人ひとりの組織の管理者・一般の利用者 | メンバー管理の API を直接叩いて人を足す・発行する | `IsOrgMemberManager` で 403 | Yes: TC-01・TC-02・TC-08 | Yes: No.2（メニューと直接の URL） | なし | High |
+| 3 | `DELETE /api/members/{id}/passkeys/{passkey_id}/` | 組織の管理者 | 自分の組織の人の URL に別の組織の人のパスキーの番号を入れて消す | 対象の利用者のパスキーの中からだけ引く・無ければ 404 | Yes: TC-08 | No | なし | High |
+| 4 | 発行・失効・削除の API | 盗んだアクセストークンを持つ攻撃者 | 管理者になりすまして発行し、組織の人を乗っ取る | 5 分以内の本人確認（パスキーかパスワード）が無ければ 403 | Yes: TC-03・TC-04・TC-08・TC-09 | No | アクセストークンを盗まれ、かつパスワードも知られたときは防げない（I619 と同じ） | High |
+| 5 | `POST /api/auth/registration-links/complete/` | 未認証（リンクを手に入れた人） | 同じリンクを 2 か所から同時に使い、2 つのパスキーを登録する | 使用の確定を行の鍵の中で行う | Yes: TC-07 | No | なし | High |
+| 6 | `POST /api/auth/registration-links/options/`・`complete/` | 未認証 | 値を総当たりする・期限切れ・失効・使用済みのリンクを使う・理由を応答で見分ける | 256 ビット・スロットル・すべて同じ文 | Yes: TC-05・TC-06 | Yes: No.7 | なし | Medium |
+| 7 | 発行の時点の失効 | なくした端末を拾った人 | 発行の後も古いパスキー・refresh（rotation 後のものを含む）で入り続ける | 発行で全パスキーを消し、記録された refresh をすべて失効する | Yes: TC-03（M1 の rotation を含む） | No | アクセストークンは最長 60 分（R2）・入れる前の refresh（L2） | Medium |
+| 8 | `POST /api/admin/users/{id}/registration-link/` | 運営 | 運営・個人利用の人・自分に発行する | 400 で拒む・運営あては管理コマンドだけ | Yes: TC-09・TC-10 | Yes: No.10 | なし | Medium |
+| 9 | 同じ人への同時の発行／使用と発行の競合 | 組織の管理者 2 人 | 開いたリンクを 2 つ作る・失効したリンクで登録を完了させる | 利用者の行の鍵・部分一意制約・complete で鍵を取って引き直す | Yes: TC-03（制約）・TC-07 | No | なし | Medium |
+| 10 | リンクの値の漏れ | 管理者の周りの人・ログを読める人 | URL・ログ・DB からリンクの値を拾って使う | `#` の後ろ・画面で消す・ログと DB はハッシュだけ・1 時間・1 回だけ | Yes: TC-11・TC-03（DB）・TC-24（replaceState） | Yes: No.5（アドレスバー） | 渡す途中（チャット・コピー）で漏れたら、1 時間の間は使われうる（管理者が取り消せる） | Medium |
+| 11 | `POST /api/members/` | 組織の管理者 | `role`・`is_staff`・`organization` を本文に入れて権限を上げる | 入力は `user_id` だけを受け、役割は `user`・組織は管理者の組織に固定 | Yes: TC-02 | No | なし | Medium |
+| 12 | 画面のキャッシュ | 同じブラウザの次の利用者 | 前の管理者のメンバーの一覧を見る | キーに見ている人を入れる（M2） | Yes: TC-20（キー） | No | なし | Low |
+
+### レビュー結果サマリー
+
+| 重大度 | 設計レビュー | シナリオ |
+|--------|------------|---------|
+| Blocker | 0件 | 0件 |
+| High    | 0件 | 5件（すべて設計で防がれ、TC で確かめる） |
+| Medium  | 2件（M1・M2・計画に必須の条件として反映済み） | 6件 |
+| Low     | 6件 | 1件 |
+
+### 残余リスク処遇
+（retro 段階で決定する）
