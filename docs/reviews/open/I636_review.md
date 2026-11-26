@@ -35,9 +35,13 @@
 - [implement] /simplify の 4 観点の指摘のうち、組織の条件を 1 か所にする・ダイアログが最後の値を自分で持つ・消したテストの墓標のコメントを消す、の 3 つを採った。URL の正規表現を締める（イシューで view で直すと決めている）・発行の 2 系統を 1 つにする（計画の範囲を超える作り直し）・事前の重複の確認を消す（普通の重複を競合の扱いに寄せることになる）・待ち合わせの時間を縮める（CI で 2 本目が遅れると鍵を外した注入のテストが不安定になる）・テスト全体のパスワードのハッシュを軽くする（差分の外）は採らなかった — 振る舞い・範囲を変えないため
 - [implement] `react-scripts build` は手元で流さず、型チェック（`tsc --noEmit`）・リントで代えた。ビルドは CI が流す — 手元のビルドは `frontend/build` を作るだけで、型と依存の誤りは型チェックと開発サーバーの「Compiled successfully」で見ている
 - [review-gate] 基本レビューは OK（Low 3 件・止める指摘なし。台帳に残し retro へ）。高リスクなので敵対的レビューを 1 周流し、V1〜V4 とも確認済みで OK。敵対的レビューの Low（`UserSerializer` の `can_manage_members` が `exists()` の問い合わせを 1 回足す）は直さず retro に回す — 止める基準に当たらず、OK の周の後に差分を足さないため
+- [test-gate] 手動テスト No.2（E2E 全体の 3 回）を NG として fix-loop に回す。TC-28 の落ち方の原因（StrictMode で 2 回走る設定の読み込みの、遅れた応答が入力を戻す）が `Settings.tsx` にあり、計画の対象の外なので、fix-loop で計画変更記録と計画レビューを通してから直す — AC13 の未達で、原因が特定できたため（計画 §4-13 の「原因が分かれば直す」）
+- [test-gate] TC-30 の 1 件の落ち方（ログイン直後の 401 で、画面の更新の宛先 `/api/auth/token/refresh/` が裏側の `/api/auth/refresh/` と食い違って 404 → ログアウト）は I636 の変更ではないので、このイシューでは直さず retro で別のイシューにする — 前からある食い違いで、直すと認証の作りに触れ、I636 の範囲を超えるため
+- [test-gate] No.3〜No.6（画面）は fix-loop の後の test-gate でまとめて行う — Claude の分に NG があれば fix-loop に回す決まりで、直した後の HEAD で確かめ直すことになるため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: fix-loop
