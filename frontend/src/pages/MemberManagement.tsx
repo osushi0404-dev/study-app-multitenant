@@ -89,7 +89,7 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
 
   const renderRow = (member: Member) => (
     <TableRow key={member.id}>
-      <TableCell sx={{ overflowWrap: 'anywhere' }}>{member.user_id}</TableCell>
+      <TableCell>{member.user_id}</TableCell>
       <TableCell>{member.role === 'admin' ? '管理者' : 'メンバー'}{member.is_active ? '' : '（無効）'}</TableCell>
       <TableCell>{member.passkey_count} 個</TableCell>
       <TableCell>{linkLabel(member)}</TableCell>
@@ -128,7 +128,18 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
     return (
       <>
         <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-          <Table size="small" aria-label="メンバーの一覧">
+          {/* 狭い画面では列を縮めず、表の中で横に流す（I620 test-gate No.12）。ユーザー ID の列だけ折り返す */}
+          <Table
+            size="small"
+            aria-label="メンバーの一覧"
+            sx={{
+              minWidth: 720,
+              '& th, & td': { whiteSpace: 'nowrap' },
+              '& td:first-of-type': { whiteSpace: 'normal', overflowWrap: 'anywhere', minWidth: 120 },
+              // 操作のボタンは表の中では横に並べる（運営の欄では折り返す）
+              '& td:last-of-type > div': { flexWrap: 'nowrap' },
+            }}
+          >
             <TableHead>
               <TableRow>
                 <TableCell component="th">ユーザーID</TableCell>

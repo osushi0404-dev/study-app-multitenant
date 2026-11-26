@@ -22,6 +22,7 @@ async function addVirtualAuthenticator(context: BrowserContext, page: Page) {
 }
 
 test('TC-30: メンバーを追加してリンクを発行し、リンクからパスキーを登録してログインする', async ({ page, browser }) => {
+  test.setTimeout(60_000);  // 2 つのブラウザの文脈で登録・ログアウト・ログインまで通すので、既定の 30 秒では足りない
   const password = process.env.E2E_TEST_PASSWORD;
   if (!password) throw new Error('E2E_TEST_PASSWORD is not set');
   const userId = `e2e_link_${Date.now()}`;
@@ -61,7 +62,10 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
     await member.getByRole('button', { name: 'パスキーを登録' }).click();
     await member.waitForURL('**/dashboard');
 
-    // ログアウト → パスキーでログイン
+    // ログアウト → パスキーでログイン。通知（ログインしました・パスキーを登録しました）がメニューに重なるので、
+    // 消えてからメニューを開く（重なったまま押すと通知の上で止まり、時間切れになる）
+    await expect(member.getByText('ログインしました')).toBeHidden({ timeout: 15000 });
+    await expect(member.getByText('パスキーを登録しました')).toBeHidden({ timeout: 15000 });
     await member.click('[data-testid="user-menu-button"]');
     await member.click('[data-testid="logout-button"]');
     await expect(member).toHaveURL(/login/);
@@ -80,4 +84,14 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
   const row = page.getByRole('row', { name: new RegExp(userId) });
   await expect(row).toContainText('1 個');
   await expect(row).toContainText('なし');
+
+  // 幅 360px では、表は表の中で横に流れ、列が縮んで文字が 1 文字ずつ折り返さない（test-gate No.12 の再発防止。jsdom では測れない）
+  await page.setViewportSize({ width: 360, height: 740 });
+  const container = page.locator('.MuiTableContainer-root');
+  await expect.poll(() => container.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  for (const name of ['登録用リンク', 'パスキー']) {
+    const box = await row.getByRole('button', { name }).boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeLessThanOrEqual(56);
+  }
 });

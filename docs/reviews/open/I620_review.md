@@ -52,3 +52,5 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 - [test-gate] gate-check OK。Claude の手動テスト 13 項目のうち No.12（幅 360px でメンバーの表が横に流れず、文字が 1 文字ずつ折り返す）が NG → fix-loop。確かめ用に開発の DB に運営 i620_staff・個人利用 i620_solo を作った（パスワードは e2e_user_a のものを写した）
 STAGE_DONE: test-gate NEXT: fix-loop
+- [fix-loop] No.12 を診断メモの案 A（表に最小の幅・折り返さない・E2E に 360px の確かめ）で直した — 診断レビュー OK。カードの並びへの切り替え（案 B）は了承した画面の配置を変えるので採らない。E2E の通知の重なりは待ってからメニューを開く形にした
+STAGE_DONE: fix-loop NEXT: review-gate

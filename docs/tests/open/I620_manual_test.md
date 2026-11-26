@@ -39,5 +39,6 @@
 | 2026-11-26 15:11 | d9ea8e38 | 幅 360px（表・リンクのダイアログ・登録画面） | e2e_user_a | はみ出さない・表は横に流れる・44px | 表の列が縮んで文字が 1 文字ずつ折り返す（NG） | tg-members-360-a-1.png, tg-link-dialog-360-a-1.png, tg-setup-360-1.png |
 | 2026-11-26 15:12 | d9ea8e38 | 一般・本人ひとりの組織のメニューと `/members`・設定の案内 | e2e_user_c, i620_solo | メニューに無い・権限なし・案内の文 | そのとおり | tg-members-c-1.png, tg-members-solo-1.png, tg-settings-card-c-1.png |
 | 2026-11-26 15:13 | d9ea8e38 | 運営の編集画面（一般・本人ひとり・自分） | i620_staff | 欄の出し分け・発行できる | そのとおり | tg-staff-edit-e2e_user_c-1.png, tg-staff-edit-i620_solo-1.png, tg-staff-edit-i620_staff-1.png, tg-staff-link-1.png |
+| 2026-11-26 15:25 | fix-loop 中（コミット前） | 幅 360px のメンバーの表（直した後） | e2e_user_a | 表は横に流れる・ボタンは横に並ぶ・44px | 表の枠 818/296 で横に流れる・行の高さ 57px・ボタン 44px。1280px も崩れない | tg-members-360-a-3.png, tg-members-1280-a-3.png |
 
 結論: NG（No.12・幅 360px のメンバーの表）→ fix-loop
