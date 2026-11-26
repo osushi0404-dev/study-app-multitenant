@@ -23,7 +23,7 @@
 | TC-09 | AC4 | 台帳: `FINDING: F1 SEV=Medium STATUS=open FILE=backend/x/tests/test_a.py LINE=3 SECURITY=no STOP=test | … | 再現: …` を harness と app の両方の種類で `ledger_update` → `ledger_blocking` | 止める指摘に出る。`STOP=testx` は形の崩れ | `STOP_RE` から `test` を消した写しで落ちる |
 | TC-10 | AC3 | 一時リポジトリで、BASE の `code-review.sh` の `path_risk_trigger` は YES、作業ツリーの `code-review.sh` は常に NO を返す形にして gate-check.sh（`GATE_CHECK_LIB` なし）を流す。敵対的レビューの記録は無い | `GATE_CHECK: FAIL REASON=missing`（敵対的レビューを求める）で exit 1 | gate-check の読み込み先を作業ツリーに戻した写しで exit 0 になり落ちる |
 | TC-11 | AC1 | `reviewed-hook.sh` の `_reviewed_snapshot_make` で作った写しに `.claude/agents/code-reviewer.md` と `docs/runbooks/review-rules.md` がある。`.complete` の無いフォルダが先にあっても写しが置かれる（I615 F3） | 両方のファイルがあり、`.complete` がある。先にあった壊れたフォルダは `.stale.` の名前で残る | archive のパスから `.claude/agents` を消した写しで落ちる。壊れたフォルダを移す処理を消した写しで rc=4 になり落ちる |
-| TC-12 | AC5 | `code-review.sh` に `-I` の無い `python3 -`・`python3 -c` が無い（I615 F5） | `! grep -nE 'python3 +-(c\|$\| )' scripts/claude/code-review.sh` の形で exit 0 | `-I` を 1 か所外した写しで落ちる |
+| TC-12 | 同梱（一覧 I615 F5） | `code-review.sh` で `python3` を `-I` 無しで起こす行が無い（`python3 -`・`python3 -c`・`python3 -B` など、`python3` の直後の引数が `-I` で始まらない行） | テストの中で `grep -nP 'python3(?! +-I)\s+-' scripts/claude/code-review.sh` が 0 件（`! grep -qP …` の形で exit 0） | `-I` を 1 か所外した写しで 1 件になり落ちる |
 | TC-13 | AC5 | 既存のハーネスのテスト全部（`scripts/claude/tests/run-all.sh`）と shellcheck・bandit | CI の Harness Tests・pre-commit が成功 | （既存のテストの FG） |
 
 ## 決定論ゲート（自動実走）

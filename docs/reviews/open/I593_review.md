@@ -25,5 +25,9 @@
 - [plan] `.claude/hooks/` と `scripts/claude/gate-check.sh` を高リスクの集合に足した — 設計確認メモ「変更前の版で動かせない部分は必ず高リスク」の具体化（増えるのは 60 件で 7 件）
 - [plan] 変更の種類 guard と止めて聞く条件 2 の集合は広げない — 審査の段階のスキルを直すたびに止めて聞くことになり開発の速さを落とすため
 - [plan] 一覧から I615 F3・F5 を同梱、ほかは残す — 写しの作り方と写しの入口の安全に直接かかわるものだけ
+- [plan-review] 計画レビュー（OK）の Warning 1 の実起動のスパイクは、承認の画面を出す test-session.sh --agents を繰り返さず、公式の説明での確かめと、この PR の review-gate で人が流す新しい版の実際のレビュー（手動テスト No.2）で代える — ユーザーから「必須でない承認は出さない」と指示があったため
+- [plan-review] Warning・Info をすべて計画書・テスト文書に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記だけ（計画変更記録）
 
 STAGE_DONE: plan NEXT: plan-review
+
+STAGE_DONE: plan-review NEXT: implement

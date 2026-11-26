@@ -17,7 +17,7 @@
 **詳細**:
 1. 起動役 `.claude/hooks/unreviewed.py` の `run()`（:289〜320）は、BASE の写し（`.claude/hooks/reviewed-hook.sh` の `reviewed_snapshot`。写しの中身は `git archive "$base" scripts/claude` だけ・:33）の入口を、作業フォルダをリポジトリの最上位にして動かす。入口・部品・使うレビュー役の定義（`.claude/agents/*.md`）のどれかがブランチで変わっていれば 75 で止め、人に `!` で新しい版を流してもらう（:313〜317）
 2. 写しの入口は `claude -p --agent <名前>` で起こす（`scripts/claude/code-review.sh:1330`・`scripts/claude/adversarial-review.sh:175`・`scripts/claude/plan-issue-review.sh:131`・`scripts/claude/issue-review.sh:48`・`scripts/claude/fix-review-lib.sh:81`）。`--agent` は作業フォルダからたどる `.claude/agents/` の定義を読むので、写しで動いても定義はブランチの版になる。レビューの決まり `docs/runbooks/review-rules.md` は、レビュー役が Read で作業ツリーから読む（`.claude/agents/code-reviewer.md:171`・`.claude/agents/plan-reviewer.md:220` が参照）
-3. **スパイク（成立・2026-11-26）**: `--agents <ファイル>`（JSON）で `code-reviewer` を定義して `--agent code-reviewer` で起こすと、同じ名前のプロジェクトの定義（`.claude/agents/code-reviewer.md`）より `--agents` の定義が使われた（`claude -p` 2.1.332・出力 `CANARY_FROM_AGENTS_FLAG`）。`claude --help` は「with --print the path to a file that holds one」と説明する。このため、写しの定義を `--agents` のファイルで渡せば、作業ツリーの定義を読ませずに済む
+3. **スパイク（成立・2026-11-26）**: `--agents <ファイル>`（JSON）で `code-reviewer` を定義して `--agent code-reviewer` で起こすと、同じ名前のプロジェクトの定義（`.claude/agents/code-reviewer.md`）より `--agents` の定義が使われた（`claude -p` 2.1.332・出力 `CANARY_FROM_AGENTS_FLAG`）。`claude --help` は「with --print the path to a file that holds one」と説明する。このため、写しの定義を `--agents` のファイルで渡せば、作業ツリーの定義を読ませずに済む。公式の説明（https://code.claude.com/docs/en/sub-agents.md・2026-11-26 に確認）: `--agents` の JSON は `prompt`（本文と同じ）と前書きの欄 `description`・`tools`・`model` などを受け付け、`tools` の例は配列（`["Read", "Grep", "Glob"]`）、`model` は `sonnet` などの別名か完全なモデル ID。同じ名前の定義は「Managed settings > `--agents` > `.claude/agents/`」の順で上が勝つ。読み取り専用の制限は、今までどおり呼ぶ側が渡す `--tools "Read,Grep,Glob"` でも効かせる（定義の `tools` だけに頼らない）。実起動の確かめは、承認の画面を出す `test-session.sh --agents` を繰り返さず、この PR の review-gate で人が `!` で流す新しい版の実際のレビュー（手動テスト No.2）で行う
 4. 高リスクの決定論の判定 `path_risk_trigger()`（`scripts/claude/code-review.sh:309`〜`318`）の集合は「GitHub から復旧できない例外」だけ。同じ集合が変更の種類 `guard`（:699・I205。止め方が厳しい）と、止めて聞く条件 2 の安全装置の集合（`docs/runbooks/workflow.md`・テスト `test_i193_official_flow.sh` の S12）に使われている
 5. 変更前の版で動かせない判定の部品: (a) 起動役そのもの（`.claude/hooks/`。作業ツリーから動く）(b) 本体の会話が作業ツリーから読むスキル（審査の段階: review-gate・test-gate・fix-loop・plan-review）(c) `scripts/claude/gate-check.sh`（test-gate・close が手元のサンドボックスの中で作業ツリーの版を流す。外に出す一覧に無い）。さらに gate-check.sh は判定の関数を作業ツリーの `scripts/claude/code-review.sh` から読む（:26）
 6. 費用（直近 60 件のマージ）: (a)(b)(c) のどれかを変え、今の集合に当たらないものは 7 件（約 12%）。集合を判定の仕組み全部（定義・スキル・決まり・スクリプト）に広げると 24 件
@@ -59,7 +59,7 @@
 - 新しい部品 `scripts/claude/reviewer-agents-lib.sh`（審査の入口が `$(dirname "${BASH_SOURCE[0]}")` から読む）:
   - `reviewer_src_root`: このファイルの 2 つ上（写しから動けば写しの最上位、作業ツリーから動けばリポジトリの最上位）を出す
   - `reviewer_from_snapshot`: 最上位に `.complete` があり、最上位がリポジトリの最上位（`git rev-parse --show-toplevel`）と違うとき真
-  - `reviewer_agent_args <名前> <一時フォルダ>`: `<最上位>/.claude/agents/<名前>.md` を `python3 -I` の小さな変換で `--agents` 用の JSON（`{"<名前>": {"description": …, "prompt": <本文>, "tools": [...], "model": …}}`）にして `<一時フォルダ>/agents.json` に書き、グローバルの配列 `REVIEWER_ARGS=(--agents <ファイル> --agent <名前> --add-dir <最上位>)` を作る（作業ツリーから動くときは `--add-dir` を付けない）。前書きは `name`・`description`・`tools`・`model` の 4 つだけを受け付け、ほかの鍵・形の崩れ・定義が無いときは非 0 で終わる（fail-closed。写しの定義が無い＝古い形の写しのときは「`~/.cache/claude-reviewed-snapshots/<BASE>` を消してやり直す」案内を出す）。写しから動くときは、本文の `docs/runbooks/review-rules.md` を `<最上位>/docs/runbooks/review-rules.md`（写しの版）に置き換える
+  - `reviewer_agent_args <名前> <一時フォルダ>`: `<最上位>/.claude/agents/<名前>.md` を `python3 -I` の小さな変換で `--agents` 用の JSON（`{"<名前>": {"description": …, "prompt": <本文>, "tools": [...], "model": …}}`）にして `<一時フォルダ>/agents.json` に書き、グローバルの配列 `REVIEWER_ARGS=(--agents <ファイル> --agent <名前> --add-dir <最上位>)` を作る（作業ツリーから動くときは `--add-dir` を付けない）。呼ぶ側の `--tools "Read,Grep,Glob"`・`--permission-prompts none` などはそのまま残す（読み取り専用の制限を定義だけに頼らない）。前書きは `name`・`description`・`tools`・`model` の 4 つだけを受け付け、ほかの鍵・形の崩れ・定義が無いときは非 0 で終わる（fail-closed。写しの定義が無い＝古い形の写しのときは「`~/.cache/claude-reviewed-snapshots/<BASE>` を消してやり直す」案内を出す）。写しから動くときは、本文の `docs/runbooks/review-rules.md` を `<最上位>/docs/runbooks/review-rules.md`（写しの版）に置き換える
 - 呼ぶ側（`--agent <名前>` を `"${REVIEWER_ARGS[@]}"` に置き換える）:
   - `scripts/claude/code-review.sh`（:1330 の `run_claude_logged` の引数・:1108 の `REVIEWER_AGENT`）
   - `scripts/claude/adversarial-review.sh`（:175 の `run_reviewer`）
@@ -81,7 +81,7 @@
   - `path_risk_trigger()` は両方の OR（入出力は今のまま。呼ぶ側 :1188・gate-check.sh:134 は変えない）
   - 変更の種類（:699 付近）の `guard` は `guard_path_trigger()` の集合のまま
 - `scripts/claude/gate-check.sh`: `GATE_CHECK_LIB` が無いときは、判定の関数を作業ツリーの `scripts/claude/code-review.sh` でなく、`git show <merge-base>:scripts/claude/code-review.sh` を一時ファイルに書いて読む（取れなければ `fail base`）。テストの差し替え `GATE_CHECK_LIB` は残す
-- 集合の説明をそろえる: `.claude/agents/code-reviewer.md`（:171 の行に新しい集合の行を足す・:172 の「Yes にしない」から新しい集合を除く）・`.claude/agents/plan-reviewer.md`（:220 付近・同じ）・`docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」・`docs/runbooks/workflow.md`（止めて聞く条件 2 は `guard_path_trigger` と同じと書き直す）・`scripts/claude/tests/fixtures/i185/workflow_stop_conditions.txt`（workflow.md の写しなら合わせる）
+- 集合の説明をそろえる: `.claude/agents/code-reviewer.md`（:171 の行に新しい集合の行を足す・:172 の「Yes にしない」から新しい集合を除く）・`.claude/agents/plan-reviewer.md`（:220 の行に新しい集合の行を足す・:221 の「Yes にしない」から新しい集合を除く）・`docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」・`docs/runbooks/workflow.md`（止めて聞く条件 2 は `guard_path_trigger` と同じと書き直す）・`scripts/claude/tests/fixtures/i185/workflow_stop_conditions.txt`（workflow.md「止めて聞く条件」の節の写しで、`scripts/claude/tests/test_i185_harness_docs.sh:61` が一致を確かめるので、同じ文に直す）
 
 ### 4-5. テストを弱める差分（AC4）
 何を達成するか: ブランチ全体のテストを弱めうる差分を、毎周の入力と記録に必ず載せ、計画書に理由の無いものを止める。
@@ -93,7 +93,7 @@
 - 本体: コンテキストに節「### テストを弱めうる差分（決定論・I593。全件について、計画書に理由があるかを確かめる）」を足し、証跡（`GATE_EVIDENCE`）にも同じ行を書く（記録に残る）
 - 止める種類 `test` を足す: `STOP_RE`（:696）を `flow|leak|github|test|ac:[0-9]+` にし、台帳の止め方（種類によらず、再現ありの `STOP=test` は止める）を `flow` などと同じ扱いにする
 - `.claude/agents/code-reviewer.md`: 「提供されるコンテキスト」に新しい節を書き、P4 に「入力の `TEST_WEAKENING` の各行について、計画書（変更点・確定事項）に理由があるか確かめる。理由が無いものは `STOP=test`・再現に該当の行を書く」を足す。「止める指摘の書き方」の一覧に `test` を足す
-- `docs/runbooks/review-rules.md`: 止める条件の一覧と、テストを弱める差分の扱いを書く
+- `docs/runbooks/review-rules.md`: 止める条件の一覧と、テストを弱める差分の扱いを書く。正当な整理で数が減るときの計画書への書き方の例（「4. 変更点に `<テストのファイル>` のテストを `<移した先>` へ移す・重複を消す、と書く」）を添える（計画レビューの Info）
 
 ### 4-6. 手順書
 - `docs/runbooks/danger-ops.md`（:44・:48）: 審査の入口は、ブランチで変えていても写しの版で流す（75 にしない）。75 は写しに入口が無い・写しを作れない・写しに新しい仕組みが無いときだけ。審査の入口の引数・出力の形を変えるときは、古い形も受ける版を先にマージする（2 段で変える）
@@ -174,4 +174,7 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 | V6 | 3 | 読んで可 | 定義の変換が前書きの未知の鍵・崩れ・定義なしで止まり、決まりの参照が写しの版に置き換わる。TC-03 |
 
 ## 計画変更記録
--
+- 2026-11-26 plan-review: 計画レビュー（20261126_1328・OK）の Warning・Info を反映: 調査結果 3 に公式の説明での確かめと実起動の確かめ方を追記／4-2 に呼ぶ側の `--tools` を残すことを追記／4-4 の写し（fixture）と plan-reviewer.md の行を確定／4-5 に review-rules.md の書き方の例を追記／auto_test の TC-12 の判定の形と対応を直した。`.claude/hooks/`・`gate-check.sh` を集合に入れたこと（イシューの方針 (3) の 4 つのスキルを超える）は 9. の理由のとおり方針 (2) の具体化で、ユーザーの委任の範囲として close の PR 説明に明記する — 理由: 指摘への対応の追記だけで方式・範囲・受け入れ条件は変えない。計画レビューのやり直し: 不要
+
+## レビュー結果
+- [20261126_1328 判定: ✅ 完了](../../reviews/I593_plan_review_20261126_1328.md)
