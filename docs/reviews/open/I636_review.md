@@ -4,13 +4,17 @@
 - I620 のレビューの残り（敵対的レビューの M1・M2・L、コードレビューの F4〜F12）を直し、確かめ用の初期データ・通知の場所（上の中央）・settings.spec の不安定さを整える（計画書 `docs/plans/open/plan_I636.md`）
 
 ## 変更点
-- （実装後に書く）
+- 裏側: パスキー削除の形の違う ID を 404 に（`views.py`）／メンバーの作成を `registration_links.create_member` に移し、重複の競合を 400 に／`User.can_manage_members`（組織の条件は `invitable()` の 1 か所）を権限と `UserSerializer` で使い、`organization_is_individual` を `UserSerializer` から外した／`MemberCreateSerializer` のエラー文を日本語に／`seed_e2e` に `e2e_staff`・`e2e_solo` を足し、DEBUG が偽なら止める
+- テスト: complete の側の使えないリンク（4 種・1 回目の確かめの後に使えなくなる場合・引き直しを外した注入）／同時使用（待ち合わせで順序を作る・鍵を外した注入）／作成の競合とエラー文／設定の読み込み（`load_dotenv` を止めた子のプロセス）／メンバー管理を使える条件（8 通り）と初期データ
+- 画面: 通知を上の中央に（最大幅 `min(350px, calc(100vw - 128px))`）／メニューと画面の入口を `can_manage_members` で／登録画面は押したときの取り直しが 400 なら使えないリンクの表示に／リンクのダイアログは最後の値を閉じ終わりまで持つ／追加の流れの発行中は［メンバーを追加］とその人の［登録用リンク］を押せない／表の枠に `role="region"`・名前・`tabIndex`、ユーザー ID のセルは中の `Box` で最小の幅、操作の並びは `wrap` と `role="group"`
+- E2E: TC-30 は表の枠を名前で探し、3 つのボタンの行を 360px で確かめ、通知が出ている間に重ならずにログアウトする／TC-28 は保存の応答を待ってから読み直す
+- 手順書: `frontend-verify.md` §5 に `e2e_staff`・`e2e_solo` を足し、`e2e_user_b` の役割を直した
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: accounts（モデルの判定・権限・シリアライザ・ビュー・サービス・初期データ）・OpenAPI・画面（通知・メニュー・メンバー管理・登録画面）・E2E。DB と設定の変更は無い
 
 ## テスト結果
-- 自動: （実装後に書く）
+- 自動（implement・手元）: backend `accounts`・OpenAPI の契約・組織の境界の 271 件が通過。frontend の関係する 8 ファイル 69 件・型チェック・リントが通過。E2E 全体（`--retries=0`）が 21 件通過・`--repeat-each=2` で 42 件通過（TC-28 は再現せず）。失敗の注入: 削除の ID・作成の競合・エラー文・メニュー・登録画面・二度押し・表の並びのテストは直す前に落ちることを確かめた。行の鍵・鍵つきの引き直しを外した版のテストは 200 になる。ダイアログの直しを外すと TC-09 が落ち、通知を右上に戻すと TC-30 が落ちることを確かめてから戻した
 - 手動: （test-gate で書く）
 
 ## 計画との差分
@@ -27,7 +31,11 @@
 - [plan] 表の枠に `role="region"` と読み上げの名前・`tabIndex={0}` を付ける — E2E を MUI の内部のクラス名に頼らせず、横に流れる枠をキーボードで動かせるようにするため
 - [plan-review] 計画レビューの Warning 3 件（TC-03 の前提・TC-09 の期待値・TC-14 の書き戻し）はテスト文書の具体化だけなので直して再レビューしない — 方式・範囲・受け入れ条件を変えないため
 - [design-security-review] Medium 1 件（`seed_e2e` に既知のパスワードの運営を足す）は、DEBUG が偽ならコマンド全体を止める防御を計画に足して解消扱いにした。Low の運営の API の 404 もテストに足した — Blocker は無く、要件・UI を変えない防御とテストの追記だけのため
+- [implement] 画面の確かめは Playwright MCP（`localhost:3020`）で、ログイン直後の通知（上の中央・幅 360px でメニューに重ならない）と `/members`（表の枠 720/296・Tab で枠に入る・ボタン 44px・コンソールのエラー 0）を見た。開いた画面に、作り直す前の「Module not found」の開発用の表示（webpack の overlay）が残ったので、取り除いてから確かめた — 配っている bundle に依存が入っていること（`qrcode.react` を含む）と、frontend のログの「Compiled successfully」を確かめた。E2E（`frontend:3000`）では出ていない
+- [implement] /simplify の 4 観点の指摘のうち、組織の条件を 1 か所にする・ダイアログが最後の値を自分で持つ・消したテストの墓標のコメントを消す、の 3 つを採った。URL の正規表現を締める（イシューで view で直すと決めている）・発行の 2 系統を 1 つにする（計画の範囲を超える作り直し）・事前の重複の確認を消す（普通の重複を競合の扱いに寄せることになる）・待ち合わせの時間を縮める（CI で 2 本目が遅れると鍵を外した注入のテストが不安定になる）・テスト全体のパスワードのハッシュを軽くする（差分の外）は採らなかった — 振る舞い・範囲を変えないため
+- [implement] `react-scripts build` は手元で流さず、型チェック（`tsc --noEmit`）・リントで代えた。ビルドは CI が流す — 手元のビルドは `frontend/build` を作るだけで、型と依存の誤りは型チェックと開発サーバーの「Compiled successfully」で見ている
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
 STAGE_DONE: design-security-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate

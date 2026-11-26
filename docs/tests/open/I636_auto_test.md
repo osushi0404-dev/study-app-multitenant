@@ -12,9 +12,10 @@
 実行コマンド（例）: `docker compose exec backend pytest accounts/tests/test_I620_registration_links.py accounts/tests/test_I636_member_access.py core/tests/test_I493_openapi_contract.py` / `docker compose exec frontend npm test -- --watchAll=false src/components/__tests__/Layout.members.test.tsx src/pages/__tests__/MemberManagement.test.tsx src/pages/__tests__/PasskeySetup.test.tsx` / e2e は `docs/runbooks/frontend-verify.md` §8（pytest・Jest・E2E の正は CI）
 
 結果:
-- backend: 実装前のため未実行
-- frontend: 実装前のため未実行
-- e2e: 実装前のため未実行
+- backend（2026-11-27・手元）: `accounts`・`core/tests/test_I493_openapi_contract.py`・`core/tests/test_I446_cross_api_tenant_isolation.py` の 271 件が通過（`test_I620_registration_links.py`・`test_I636_member_access.py` を含む）
+- frontend（2026-11-27・手元）: 関係する 8 ファイル 69 件・`tsc --noEmit`・`npm run lint` が通過
+- e2e（2026-11-27・手元の e2e コンテナ・RP ID `frontend`・`--retries=0`）: 全体 21 件が通過。`--repeat-each=2` の 42 件も通過（TC-28 は再現せず）
+- 失敗の注入: TC-01・TC-04・TC-06・TC-08・TC-10・TC-11 は直す前に落ちた。TC-02・TC-03 の注入の版は 200・`[200, 200]` になる。TC-09 はダイアログの直しを外すと落ち、TC-13 は通知を右上に戻すと落ちた（どちらも戻して通過）
 
 ## 前提（テストの道具）
 - 裏側は I620 の下準備（`test_I620_registration_links.py` の `people`・`issued_token`・`link_options`・`complete`・`_make_unusable`・`reauth`）を使う。WebAuthn の応答は I619 の `SoftAuthenticator` で作り、py_webauthn の検証は差し替えない
