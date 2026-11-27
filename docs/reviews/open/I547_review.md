@@ -33,7 +33,9 @@
 - [implement] 写しの一致を見るテストの項目（i181 D6・D9・i593 TC-02・i185 TC-14⑧b）を、1 か所・参照を見る形に変えた — 写しを 1 つにすると落ちる項目で、写しを残すと AC4 に反するため（計画変更記録・計画レビューのやり直し OK）
 - [implement] bug のイシューから「画面と API の受け渡し」（#473・#488）の観点をコードレビュー役に足した — 2 回起き、どちらもマージ後に画面で見つかったため（計画変更記録）
 - [implement] /simplify の 4 観点の指摘を直した（review-rules の中の写しも (b) の 1 か所に・テストは集合で写しの無さを見る・レビュー役は節だけを Grep で読む）。節をスクリプトが入力に入れる案は #640 の範囲なので見送った — 写しと無駄を減らし、範囲は変えないため
+- [review-gate] 基本レビュー（`docs/reviews/I547_code_review_20261127_0946.md`）は HIGH（止める指摘 F1・flow）。fix-loop へ回す。AC7 の実測: 起動役が 75 を出さず「変更前の版で審査します」と出て、記録に「審査の版: 写し b4af25e8…」が出た — I593 の仕組みがマージ後に動くことを確かめた
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
