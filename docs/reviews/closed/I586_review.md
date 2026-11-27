@@ -111,6 +111,8 @@
 - [retro] 取り込みが改行入りの解説を読めない件は #645 に同梱（コメント）— 解説の改行の表示と一緒に直すのが自然なため
 - [retro] 見送り 3 件（承認なしの一括の書き換え・画面が変わらないのに再テストを頼んだ件・MT-14 の 2 回の NG）— どれもその場で捕まり、手順書か #645 で手当て済み。新しい決まりを足すほどの損失が無い
 
+- [close] origin/develop を取り込んだ（パスキーの一連など。I586 の変えたファイルには触れず、gate-check OK）。記録を closed へ移し、PR #623 の説明を埋めた。修正の診断メモ（`I586_fix_diagnosis_<ts>.md`）は close の回収の対象外の名前なので `docs/reviews/` 直下に残した — 他のイシュー（I619 など）と同じ扱い
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -128,3 +130,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
