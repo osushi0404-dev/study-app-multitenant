@@ -29,3 +29,4 @@
 - [plan] 色の勝ち負けは E2E（TC-08）で確かめる — jsdom はセレクタの強さによる上書きを正しく計算しないため
 - [plan-review] Warning 4 件・Info 2 件を直し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記だけのため
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
