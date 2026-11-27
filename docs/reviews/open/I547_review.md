@@ -25,3 +25,4 @@
 - [plan] 判定の基準は定義の中に 1 行で残し、高リスク判定の条件の一覧は `review-rules.md` に 1 つにした — 審査の写しに入るのは定義と review-rules だけ（I593）で、ほかの手順書への参照だけにするとブランチが自分の審査の基準を変えられるため
 - [plan] 前置きに `effort` などを足さない — 審査の入口が 4 項目しか受け付けず、足すとマージの後の審査が止まる（`scripts/claude/reviewer-agents-lib.sh:47`）。#640 に渡す
 - [plan] 同梱 E（受け入れのリスクの根拠）は Blocker にした — 計画レビューを通ると実装まで止まる場所が無いため
+STAGE_DONE: plan NEXT: plan-review
