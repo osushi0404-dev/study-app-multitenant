@@ -39,3 +39,4 @@
 - [implement] 複数選択の行にも `data-testid="choice-option"` を付け、部品のテストは行を分割代入で受け取る — pre-commit の ESLint（`no-node-access`・`detect-object-injection`）に当たったため。無効化のコメントは足さない。書き換えた後も、×の印を外した版で TC-04・TC-06 が落ちることを確かめ直した
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
+STAGE_DONE: implement NEXT: review-gate
