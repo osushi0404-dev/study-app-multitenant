@@ -22,6 +22,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ImageModal from './ImageModal';
 import ProblemImageList from './ProblemImageList';
 import ProblemSource from './ProblemSource';
+import ChoiceLabelText from './ChoiceLabelText';
 import { Problem } from '../services/types';
 import { pickImageUrls } from '../utils/problemImages';
 
@@ -115,7 +116,7 @@ const ProblemPreview: React.FC<ProblemPreviewProps> = ({
             }}
           >
             <Typography>
-              {String.fromCharCode(65 + index)}. {choice.text}
+              <ChoiceLabelText index={index} text={choice.text} />
             </Typography>
             {showCorrectAnswer && choice.is_correct && (
               <Chip icon={<CheckCircleIcon />} label="正解" size="small" color="success" />

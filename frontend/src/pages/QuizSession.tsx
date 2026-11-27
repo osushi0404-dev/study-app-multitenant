@@ -6,14 +6,9 @@ import {
   Card,
   CardContent,
   Button,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
   LinearProgress,
   Chip,
   Alert,
-  Checkbox,
-  FormGroup,
   TextField,
   CircularProgress,
   Container,
@@ -25,7 +20,6 @@ import {
   Home,
   Refresh,
   School,
-  CheckCircleOutline,  // 追加: 正解マーカー用
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import apiClient from '../services/api';
@@ -39,6 +33,7 @@ import { useQuizDisplayStats } from '../hooks/useQuizDisplayStats';
 import ImageModal from '../components/ImageModal';
 import ProblemImageList from '../components/ProblemImageList';
 import ProblemSource from '../components/ProblemSource';
+import QuizChoices from '../components/QuizChoices';
 import { pickImageUrls } from '../utils/problemImages';
 import { difficultyLabel } from '../utils/difficulty';
 
@@ -536,90 +531,15 @@ const QuizSessionPage: React.FC = () => {
                   onChange={(e) => setTextAnswer(e.target.value)}
                   disabled={showResult}
                 />
-              ) : currentProblem.problem_type === 'single_choice' ? (
-                <RadioGroup
-                  value={selectedChoices[0] || ''}
-                  onChange={(e) => handleChoiceSelect(e.target.value)}
-                >
-                  {currentProblem.choices.map((choice) => {
-                    const isCorrectChoice = showResult && result?.correct_choices?.some((c: any) => c.id === choice.id);
-                    const isSelectedWrong = showResult && selectedChoices.includes(choice.id) && !result?.is_correct;
-
-                    return (
-                      <Box key={choice.id} sx={{ position: 'relative', mb: 1 }} data-testid="choice-option">
-                        <FormControlLabel
-                          value={choice.id}
-                          control={<Radio />}
-                          label={
-                            <Box display="flex" alignItems="center" gap={1}>
-                              {choice.text}
-                              {isCorrectChoice && (
-                                <CheckCircleOutline
-                                  sx={{ color: 'success.main', fontSize: 20 }}
-                                />
-                              )}
-                            </Box>
-                          }
-                          disabled={showResult}
-                          sx={{
-                            width: '100%',
-                            '& .MuiFormControlLabel-label': {
-                              color: isCorrectChoice
-                                ? 'success.main'
-                                : isSelectedWrong
-                                ? 'error.main'
-                                : 'inherit',
-                              fontWeight: isCorrectChoice ? 600 : 400,
-                            }
-                          }}
-                        />
-                      </Box>
-                    );
-                  })}
-                </RadioGroup>
               ) : (
-                <FormGroup>
-                  {currentProblem.choices.map((choice) => {
-                    const isCorrectChoice = showResult && result?.correct_choices?.some((c: any) => c.id === choice.id);
-                    const isSelectedWrong = showResult && selectedChoices.includes(choice.id) &&
-                                            !result?.correct_choices?.some((c: any) => c.id === choice.id);
-
-                    return (
-                      <Box key={choice.id} sx={{ position: 'relative', mb: 1 }}>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={selectedChoices.includes(choice.id)}
-                              onChange={() => handleChoiceSelect(choice.id)}
-                              disabled={showResult}
-                            />
-                          }
-                          label={
-                            <Box display="flex" alignItems="center" gap={1}>
-                              {choice.text}
-                              {isCorrectChoice && (
-                                <CheckCircleOutline
-                                  sx={{ color: 'success.main', fontSize: 20 }}
-                                />
-                              )}
-                            </Box>
-                          }
-                          sx={{
-                            width: '100%',
-                            '& .MuiFormControlLabel-label': {
-                              color: isCorrectChoice
-                                ? 'success.main'
-                                : isSelectedWrong
-                                ? 'error.main'
-                                : 'inherit',
-                              fontWeight: isCorrectChoice ? 600 : 400,
-                            }
-                          }}
-                        />
-                      </Box>
-                    );
-                  })}
-                </FormGroup>
+                <QuizChoices
+                  problemType={currentProblem.problem_type}
+                  choices={currentProblem.choices}
+                  selectedChoices={selectedChoices}
+                  onSelect={handleChoiceSelect}
+                  showResult={showResult}
+                  correctChoiceIds={result?.correct_choices?.map((c) => c.id) ?? []}
+                />
               )}
             </Box>
 

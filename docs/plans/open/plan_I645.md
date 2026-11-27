@@ -25,6 +25,8 @@
 7. テーマ: `frontend/src/contexts/ThemeContext.tsx` は MUI の既定の色（light の `error.main` は `#d32f2f`、`success.main` は `#2e7d32`）。白の背景との明るさの比はどちらも 4.5:1 以上（`docs/runbooks/ux-rules.md` §6）
 8. 選択肢の数に上限は無い（`backend/problems/serializers.py:232` の `validate_choices` は数を限らない）
 9. develop の最新の CI（E2E Tests・CI）は成功（`gh run list --branch develop`・2026-11-27）
+11. （implement で判明）ダークモードでは、カードの背景（`rgb(30, 30, 30)` に白 5% の重ねで、実際は約 `rgb(41, 41, 41)`）に対して `error.main`（`rgb(244, 67, 54)`）の明るさの比が 3.94:1 で、`docs/runbooks/ux-rules.md` §6 の 4.5:1 に届かない。`error.light`（`rgb(229, 115, 115)`）なら 4.85:1。`success.main`（`rgb(102, 187, 106)`）は 6.13:1 で足りる（Playwright MCP で色を測り、重ねを入れて計算・2026-11-27）
+10. （implement で判明）単一選択では「選んだ選択肢か」の判定そのものが外れていた。API は選択肢の id を数字で返す（`backend/problems/serializers.py:79-82` の `ChoiceDisplaySerializer`・モデルの自動の id）が、`RadioGroup` の `onChange` の `e.target.value` は文字になる。`selectedChoices` に文字の `'12'` が入り、`selectedChoices.includes(choice.id)`（数字の 12）が偽になるので、選んだ誤答の色も印も付かなかった。E2E（TC-08）を初めて流したときに×の印が出ず、灰色のままになって判明した。部品のテストは id を文字で作っていたので気づかなかった
 
 ## 2. 受け入れ条件
 - [ ] クイズの画面の選択肢（単一選択・複数選択）に、上から順に「ア・イ・ウ・エ」（5 個目からはオ・カ・キ…）の記号が、本文と別の要素として出る（区切りの文字に頼らない）
@@ -47,19 +49,15 @@
 ### 修正アプローチ
 - 記号を作る処理を 1 か所（`utils/choiceLabel.ts`）にまとめ、記号と本文を並べて出す小さな部品（`ChoiceLabelText`）を 3 つの画面で使う。記号の作り方と見た目を 1 か所で決めるので、画面ごとにずれない
 - クイズの画面の選択肢の部分（単一選択・複数選択の 2 つの塊）を `QuizChoices` の部品に切り出し、そこで記号・正解の印・誤答の印・色を出す。`QuizSession.tsx` は 721 行あり、規約の「200 行を超えたら分ける」（React 規約 §4）に照らして、今回書き直す部分だけを切り出す（ほかの部分は動かさない）
-- 色は、MUI の disabled の指定と同じ強さ以上のセレクタ（`& .MuiFormControlLabel-label.Mui-disabled`）にも同じ色を書いて、灰色に負けないようにする。`!important` は使わない
+- 色は、ラベルの中の自前の `Box`（記号・本文・印を包む要素）に直接書いて、ラベルの要素に付く disabled の灰色（子へは受け継ぎで伝わるだけ）に負けないようにする。`!important` も MUI のクラス名も使わない（計画変更記録の /simplify の行）
 
 ### 4-1. `frontend/src/utils/choiceLabel.ts`（新規）
 何を達成するか: 選択肢の順番（0 から）から記号を出す、ただ 1 つの場所。
 ```ts
 /** 選択肢の記号（I645）。IPA の過去問にそろえ、五十音の順に ア・イ・ウ・エ… と付ける */
-export const CHOICE_LABELS: readonly string[] = [
-  'ア','イ','ウ','エ','オ','カ','キ','ク','ケ','コ','サ','シ','ス','セ','ソ','タ','チ','ツ','テ','ト',
-  'ナ','ニ','ヌ','ネ','ノ','ハ','ヒ','フ','ヘ','ホ','マ','ミ','ム','メ','モ','ヤ','ユ','ヨ',
-  'ラ','リ','ル','レ','ロ','ワ','ヲ','ン',
-];
+export const CHOICE_LABELS = 'アイウエオ…ワヲン'; // 46 字
 /** 順番（0 から）の記号。表を超えたら 1 から数えた数字を返す */
-export const choiceLabel = (index: number): string => CHOICE_LABELS[index] ?? String(index + 1);
+export const choiceLabel = (index: number): string => CHOICE_LABELS.charAt(index) || String(index + 1);
 ```
 
 ### 4-2. `frontend/src/components/ChoiceLabelText.tsx`（新規）
@@ -74,11 +72,12 @@ export const choiceLabel = (index: number): string => CHOICE_LABELS[index] ?? St
   - `correctChoiceIds`: `result?.correct_choices` の id の配列（今の `result?.correct_choices?.some((c: any) => c.id === choice.id)` と同じ判定を、部品の外で一度だけ作る。`any` はやめ、`frontend/src/types/quiz.ts:65` の `QuizResult.correct_choices?: Choice[]` から取る。`QuizChoices` の props の選択肢の型も `types/quiz.ts` の `Choice` にそろえる〔`services/types.ts` の同名の型は使わない〕）
   - 単一選択の「選んだ誤答」: 選んだ選択肢で、正解の id に入っていないもの（今の `!result?.is_correct` と同じ結果。複数選択と同じ判定にそろえる）
   - 複数選択の「選んだ誤答」: 今と同じ（選んで、正解の id に入っていないもの）
+- 単一選択の `onChange` では、`e.target.value`（文字）から `choices` の中の同じ id（`String(choice.id) === value`）の選択肢を探し、その元の id を `onSelect` に渡す（調査結果 10。`selectedChoices` と送る `selected_choice_ids` が API と同じ型になる）
 - 各選択肢の表示:
   - ラベル: `<ChoiceLabelText index={i} text={choice.text} />` の後ろに、正解なら `CheckCircleOutline`（`color: 'success.main'`・`fontSize: 20`・今と同じ）、選んだ誤答なら `Cancel`（`color: 'error.main'`・`fontSize: 20`）
-  - 色: 正解は `success.main`、選んだ誤答は `error.main` を、`'& .MuiFormControlLabel-label, & .MuiFormControlLabel-label.Mui-disabled'` の両方に書く。どちらでもない選択肢は色を書かない（disabled の灰色のまま・今と同じ）。太さは正解だけ 600（今と同じ）
+  - 色: 正解は `success.main`、選んだ誤答はライトモードで `error.main`・ダークモードで `error.light`（調査結果 11。×の印も同じ色）を、ラベルの中の自前の `Box` に直接書く。どちらでもない選択肢は色を書かない（disabled の灰色のまま・今と同じ）。太さは正解だけ 600（今と同じ）
   - 名前: 入力（`Radio`・`Checkbox`）に `inputProps={{ 'aria-label': `${choiceLabel(i)} ${choice.text}` }}` を付ける。読み上げで記号と本文が分かれて聞こえ、テストで名前が決まった形になる（ラベルの中の要素の並びから名前を作らせると、要素の間に空白が入るかが表示の形に左右される）
-  - 今の `data-testid="choice-option"`（単一選択の `Box`）は残す（E2E が使う）。複数選択の `Box` には今も付いていないので、付け方は変えない
+  - `data-testid="choice-option"` は単一選択の行に残し（E2E が使う）、複数選択の行にも付ける（計画変更記録の lint の行）
   - `key` は今と同じ `choice.id`
 - 印のアイコンは今の正解の印と同じく飾り（読み上げない・MUI の既定）。正誤の結果は今の結果の `Alert`（`QuizSession.tsx:629-634`・「正解です！」「不正解です」の文字とアイコンあり）が伝える
 
@@ -135,7 +134,7 @@ Claude が決めた（技術的な選択と理由）:
 - 記号の表は五十音の 46 字（ア〜ン・ヰヱは除く）で、超えたら数字 — 理由: 選択肢の数に上限が無い（調査結果 8）。46 を超える選択肢は現実には無いが、表の外で `undefined` を出さないため。仮定で決めた・技術的
 - 記号を `utils/choiceLabel.ts`、見た目を `components/ChoiceLabelText.tsx` に置く — 理由: React 規約 §2 の置き場所（小さな関数は `utils/`・部品は `components/`）。2 か所に書かれていた `String.fromCharCode` を 1 か所にする。仮定で決めた・技術的
 - 選択肢の塊を `components/QuizChoices.tsx` に切り出す — 理由: React 規約 §4（200 行を超えた部品は分ける）。書き直す部分だけを切り出し、押す処理は残す（R4）。仮定で決めた・技術的
-- 色は `& .MuiFormControlLabel-label.Mui-disabled` にも書く（`!important` は使わない） — 理由: 調査結果 3 の MUI の指定と同じ強さで、後に書いた `sx` が勝つ。`!important` はテーマの上書きを難しくする。仮定で決めた・技術的
+- 色はラベルの中の自前の `Box` に直接書く（`!important` も MUI のクラス名も使わない） — 理由: 調査結果 3 の MUI の灰色はラベルの要素に付き子へは受け継ぎで伝わるだけなので、子に直接書いた色が勝つ（計画変更記録・/simplify）。仮定で決めた・技術的
 - 正解の文字も緑になる（今は灰色に負けて灰色） — 理由: 今のコードが意図していた色（`success.main`）で、同じ原因の直しで戻る。AC の「今までどおり」は緑の印のことで、文字の色は意図に戻すだけ。UI の見た目の変化はあるが、もともとの意図と grill-me の「正解は今どおり緑」に沿うので、価値判断の新しい仮定ではない
 - 単一選択の「選んだ誤答」の判定を、`!result.is_correct` から「正解の id に入っていない」にそろえる — 理由: 単一選択では結果は同じで、2 つの判定を 1 つにできる。仮定で決めた・技術的
 - 入力に `aria-label`（`ア 選択肢の本文`）を付ける — 理由: 読み上げで記号を本文と分けて伝える（React 規約 §13）。名前の作られ方を表示の形に頼らない（4-3）。仮定で決めた・技術的
@@ -170,6 +169,11 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 - 直した後の確かめ: クイズの画面で記号が 1 つだけ（「ア　本文」）に見えること
 
 ## 計画変更記録
+- 2026-11-27 implement: 計画書の記載: 複数選択の行の `data-testid` は付け方を変えない・TC-04/TC-06 の行は入力から `closest('label')` で取る → 採った方法: 複数選択の行にも `data-testid="choice-option"` を付け、部品のテストは行を上から順に分割代入で受け取り、各行の入力の名前が ア・イ・ウ の順であることを確かめる — 理由: pre-commit の ESLint が `closest`（`testing-library/no-node-access`）と、番号で配列を引く書き方（`security/detect-object-injection`）を止めた。行の組み立てを 1 つにまとめたので、行の印も 1 つにそろえるほうが簡単。E2E の問題は単一選択だけなので影響しない。計画レビューのやり直し: 不要
+- 2026-11-27 implement: 計画書の記載: 記号の表は文字の配列で `CHOICE_LABELS[index] ?? …` → 採った方法: 46 字の 1 つの文字列にして `CHOICE_LABELS.charAt(index) || …` — 理由: ビルドの ESLint（`security/detect-object-injection`）が変数で配列を引く書き方を止めた。無効化のコメントを足す案より、規則に当たらない書き方のほうが素直で、動きは同じ（TC-01 で確かめた）。計画レビューのやり直し: 不要
+- 2026-11-27 implement（/simplify）: 計画書の記載: 色は `& .MuiFormControlLabel-label.Mui-disabled` にも書いて灰色に勝つ → 採った方法: 色をラベルの中の自前の `Box`（記号・本文・印を包む要素）に直接書く。TC-08 は本文の文字（`getByText('不正解の選択肢')`）の色で確かめる。あわせて単一選択と複数選択の行の組み立てを 1 つの関数（部品だけを受け取る）にまとめ、使っていない `position: 'relative'` を消した — 理由: MUI の灰色はラベルの要素に付き、子へは受け継ぎで伝わるだけなので、子に直接書いた色が必ず勝つ。MUI の内部のクラス名とセレクタの強さに頼らないので、MUI の版の更新（#561）で壊れにくい（R2 が小さくなる）。/simplify の点検（直す深さ・簡潔さ）の指摘。受け入れ条件・範囲は変えない。計画レビューのやり直し: 不要（同じ受け入れ条件を、より壊れにくい書き方で満たすだけ）
+- 2026-11-27 implement: 計画書の記載: 選んだ誤答は `error.main` → 採った方法: ダークモードのときだけ `error.light`（同じ赤の明るい版） — 理由: 手動 No.4 の測定で、ダークモードのカードの背景に対する `error.main` の明るさの比が 3.94:1 で、`ux-rules.md` §6 の 4.5:1 に届かなかった（調査結果 11）。テーマの色を変える案は、ほかの画面の赤も変わるので範囲を超える。ライトモードは今のまま（4.98:1）。grill-me の「赤い文字」の範囲の中で、決まり（明るさの比）を満たす色を選んだだけで、受け入れ条件・範囲・方式は変えない。計画レビューのやり直し: 不要
+- 2026-11-27 implement: 計画書の記載: 誤答の色が出ない原因は disabled の灰色の強さ（調査結果 3）だけ → 採った方法: 単一選択の `onChange` で、文字の値から元の id の選択肢を探して渡す（調査結果 10）。再発防止に TC-04b（id が数字の選択肢で押すと数字の id で呼ばれる）を足した — 理由: E2E（TC-08）で、選んだ誤答に×の印も赤も付かず、`RadioGroup` が値を文字にするため `selectedChoices` と API の数字の id が比べられていなかったと分かった。比べる側を `String()` でそろえる案もあるが、送る `selected_choice_ids` の型も API とそろう、元の id を渡す案を採った。受け入れ条件・範囲・方式（部品の分け方・色の付け方）は変えない。計画レビューのやり直し: 不要（受け入れ条件を満たすための原因の追加と、その直しの追記だけ）
 - 2026-11-27 plan-review: 計画書の記載: 結果の表示を「Chip」・複数選択の行の取り方が無い・手動 No.4 の基準が主観 → 採った方法: 結果の表示を `Alert` に直し、`QuizChoices` の型を `types/quiz.ts` にそろえると明記。TC-04・TC-06 の行は名前の入力から `closest('label')` で取る・TC-07 の置き換えの式・TC-08 の失敗の注入を手元で流せないときの代わり（Playwright MCP で色を測る）・手動 No.4 の切り替え手順と色の値と明るさの比を書いた — 理由: 計画レビューの Warning 4 件・Info 2 件への対応。計画レビューのやり直し: 不要（findings への対応の追記だけ）
 
 ## レビュー結果

@@ -96,7 +96,7 @@ describe('ProblemPreview の出典と解説（I609）', () => {
 
     const source = screen.getByText('出典：出典X');
     expect(precedes(screen.getByAltText('問題画像 1'), source)).toBe(true);
-    expect(precedes(source, screen.getByText('A. 正解'))).toBe(true);
+    expect(precedes(source, screen.getByText('ア'))).toBe(true);
   });
 
   it('TC-27: 出典が空なら何も出さない', () => {
@@ -130,5 +130,19 @@ describe('ProblemPreview の出典と解説（I609）', () => {
     render(<ProblemPreview problem={{ ...baseProblem, source: '   ' }} />);
 
     expect(screen.queryByText(/出典：/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * I645: 選択肢の記号（TC-07）
+ * クイズの画面と同じ ア・イ・ウ・エ… を出し、「A. 」は出さない
+ */
+describe('ProblemPreview の選択肢の記号（I645）', () => {
+  it('TC-07: 記号「ア」「イ」を出し、「A. 」「B. 」を出さない', () => {
+    render(<ProblemPreview problem={baseProblem} />);
+
+    expect(screen.getByText('ア')).toBeInTheDocument();
+    expect(screen.getByText('イ')).toBeInTheDocument();
+    expect(screen.queryByText(/^[AB]\. /)).not.toBeInTheDocument();
   });
 });

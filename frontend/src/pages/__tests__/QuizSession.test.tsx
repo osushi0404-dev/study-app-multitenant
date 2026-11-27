@@ -129,7 +129,7 @@ describe('QuizSession Component', () => {
     });
 
     // 選択肢をクリック
-    const choice1 = screen.getByLabelText('選択肢1');
+    const choice1 = screen.getByLabelText('ア 選択肢1');
     fireEvent.click(choice1);
 
     // 即座に回答が送信されることを確認
@@ -284,7 +284,7 @@ describe('QuizSession Component', () => {
       (apiClient.post as jest.Mock).mockResolvedValueOnce({
         data: { is_correct: true, session_complete: false, ...result },
       });
-      fireEvent.click(screen.getByLabelText('選択肢1'));
+      fireEvent.click(screen.getByLabelText('ア 選択肢1'));
       return screen.findByTestId('answer-result');
     };
 
