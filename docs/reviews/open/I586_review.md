@@ -52,6 +52,8 @@
 
 - [review-gate] 差分のレビュー OK（`I586_code_review_20261127_1501.md`）。止めない指摘 F1〜F3・F5〜F8（計画 4-2 の例が古い・事後の Danger Ops の実行コマンド・§11 に一括更新の注意・MT-11 の結果が古い形のもの など）は retro で扱う — 台帳の決まり（I197）
 
+- [fix-loop] MT-14 の再テストの NG（選択肢の 2 行目の位置・解説に改行が無い）は、ユーザーの選択で、画面の 2 点を #645 に追記し、I586 では解説のデータだけを選択肢ごとの行に書き直した（診断メモ `docs/reviews/I586_fix_diagnosis_20261127_1638.md`・診断レビュー PASS）。DB の 25 行の置き換えは、先に控えを取り、ユーザーの事前承認を得てから行った。受け入れ条件・方式・範囲は変えないので計画レビューは通り直さない
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
