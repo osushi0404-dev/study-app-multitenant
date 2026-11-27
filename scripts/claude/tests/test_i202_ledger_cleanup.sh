@@ -8,6 +8,7 @@
 # shellcheck disable=SC1090,SC1091  # code-review.sh（と壊した写し）は関数だけを読み込む
 set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+. "$REPO_ROOT/scripts/claude/tests/lib_test_snapshot.sh"   # I593: 審査の入口は写しから流す
 cd "$REPO_ROOT" || exit 1
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -169,7 +170,7 @@ chmod +x "$ES/gh" "$ES/claude"
 # setup <名前> [<code-review.sh の写し>]: 一時のリポジトリ（develop に a.py・feature で 2 行目を足す）。計画レビューの判定は No
 setup() { local E="$TMP/e_$1" O="$TMP/e_$1.git"
   mkdir -p "$E/scripts/claude" "$E/docs/issues/open" "$E/docs/reviews"
-  cp "${2:-$CR}" "$E/scripts/claude/code-review.sh"; cp "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$GC" "$E/scripts/claude/"
+  cp "${2:-$CR}" "$E/scripts/claude/code-review.sh"; cp "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$GC" "$E/scripts/claude/"
   printf '# I900\n' > "$E/docs/issues/open/I900.md"; printf 'l1\n' > "$E/a.py"
   printf '# 計画レビュー\n\n## 高リスク判定\n判定: No\n' > "$E/docs/reviews/I900_plan_review_20260101_0000.md"
   git init -q --bare "$O"; git -C "$E" init -q -b develop; git -C "$E" add -A; git -C "$E" commit -qm base
@@ -179,7 +180,7 @@ setup() { local E="$TMP/e_$1" O="$TMP/e_$1.git"
 round() { local name="$1" E="$TMP/e_$1" r="$2"; printf '%b' "$3" > "$TMP/review_$r.txt"; shift 3
   : > "$TMP/calls_$r"
   (cd "$E" && env PATH="$ES:$PATH" CLAUDE_BIN="$ES/claude" E2E_IN="$TMP/in_$r.txt" E2E_REVIEW="$TMP/review_$r.txt" E2E_CALLS="$TMP/calls_$r" \
-     CI_WORKFLOWS="$ES/wf.yml" CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 "$@" bash scripts/claude/code-review.sh I900 > "$TMP/out_$r" 2>&1)
+     CI_WORKFLOWS="$ES/wf.yml" CI_WAIT_TIMEOUT=5 CI_POLL_INTERVAL=1 "$@" bash "$(make_test_snapshot "$E")/scripts/claude/code-review.sh" I900 > "$TMP/out_$r" 2>&1)
   latest_rec "$name"; }
 # 最新のコードレビューの記録（本体と同じ review_records の順）
 latest_rec() { (cd "$TMP/e_$1" && lib "$CR" review_records I900 code_review | tail -1 | sed "s#^#$TMP/e_$1/#"); }
@@ -362,7 +363,8 @@ APLAN='# I900 計画書
 # amk <名前> [<adversarial-review.sh の写し>]: 一時のリポジトリ
 amk() { local d="$TMP/a_$1"
   mkdir -p "$d/repo/scripts/claude" "$d/repo/docs/issues/open" "$d/repo/docs/plans/open" "$d/repo/docs/reviews" "$d/sd"
-  cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$d/repo/scripts/claude/"
+  cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$d/repo/scripts/claude/"
+  mkdir -p "$d/repo/.claude/agents"; cp "$REPO_ROOT"/.claude/agents/*.md "$d/repo/.claude/agents/"   # I593
   cp "${2:-$ADV}" "$d/repo/scripts/claude/adversarial-review.sh"
   printf '# I900\n' > "$d/repo/docs/issues/open/I900.md"; printf '%s' "$APLAN" > "$d/repo/docs/plans/open/plan_I900.md"
   printf 'a\n' > "$d/repo/a.txt"
@@ -569,7 +571,7 @@ rem() { ADV_START=100 ADV_DEADLINE=50 ADV_CLOCK_FILE="$2" lib "$1" remaining 2>/
 ck "N16 remaining: 読めない中身 → 0・120 → 30・ファイルなし → 0" "0 30 0" \
   "$(rem "$ADV" "$TMP/clk_bad") $(rem "$ADV" "$TMP/clk_120") $(rem "$ADV" "$TMP/no-such-clock")"
 # 壊した写しは、読み込む code-review.sh・review-process-lib.sh と同じ場所に置く
-mkdir -p "$TMP/n16"; cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$TMP/n16/"
+mkdir -p "$TMP/n16"; cp "$CR" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$TMP/n16/"
 cp "$(broken_of "$ADV" 'remaining() { local n; n=$(adv_now) || { echo 0; return; }; echo' 'remaining() { local n; n=$(adv_now); echo')" "$TMP/n16/adv.sh"
 ck "FG-N16 読めないときの 0 を外すと N16 が不合格（0 にならない）" no \
   "$([ "$(rem "$TMP/n16/adv.sh" "$TMP/clk_bad")" = 0 ] && echo yes || echo no)"

@@ -22,14 +22,26 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "⛔ git リポジトリの中で実行してください"; exit 1; }
 cd "$REPO_ROOT" || exit 1
 
+# 比べる相手（既定は origin/develop。テストでは一時リポジトリの枝を渡す）。パス判定と「ブランチ自身の変更」の両方に使う
+GATE_BASE="${GATE_BASE:-origin/develop}"
+
 # RISK 行の読み方は code-review.sh と同じ関数を使う（直後が VERDICT の RISK 行だけを採用・無ければ YES）
+# I593: 判定の関数は、ブランチの版でなく、このブランチが分かれた時点（merge-base）の code-review.sh から読む
+# （ブランチの code-review.sh が gate-check の判定を変えないように）。テストは GATE_CHECK_LIB で差し替える
+GC_TMP=$(mktemp -d)
+trap 'rm -rf "$GC_TMP"' EXIT
+if [ -n "${GATE_CHECK_LIB:-}" ]; then
+  LIB_FILE="$GATE_CHECK_LIB"
+else
+  LIB_BASE=$(git merge-base "$GATE_BASE" HEAD 2>/dev/null) || { echo "⛔ gate-check NG: 比べる相手 ${GATE_BASE} がありません（git fetch origin develop をしてから）"; echo "GATE_CHECK: FAIL REASON=base"; exit 1; }
+  LIB_FILE="$GC_TMP/code-review.sh"
+  git show "${LIB_BASE}:scripts/claude/code-review.sh" > "$LIB_FILE" 2>/dev/null || { echo "⛔ gate-check NG: 分かれた時点（${LIB_BASE}）の code-review.sh を読めません"; echo "GATE_CHECK: FAIL REASON=base"; exit 1; }
+fi
 # shellcheck source=scripts/claude/code-review.sh disable=SC1091  # -x なしの単体の検査でもたどらない（読み込み先は別に検査される）
-REVIEW_LIB_SOURCE_ONLY=1 . "${GATE_CHECK_LIB:-scripts/claude/code-review.sh}" || { echo "⛔ code-review.sh を読み込めません"; exit 1; }
+REVIEW_LIB_SOURCE_ONLY=1 . "$LIB_FILE" || { echo "⛔ code-review.sh を読み込めません"; exit 1; }
 set +e   # code-review.sh の set -e を引き継がない（失敗の理由を出してから終わるため）
 
 # 記録の場所は code-review.sh の is_record_path（docs/{issues,reviews,tests,plans}/ のうち templates/ 以外）を使う
-# 比べる相手（既定は origin/develop。テストでは一時リポジトリの枝を渡す）。パス判定と「ブランチ自身の変更」の両方に使う
-GATE_BASE="${GATE_BASE:-origin/develop}"
 
 # fail <理由の種類> <説明>: 種類は dirty（作業ツリーの汚れ）/ unreviewed（レビューの後の変更）/
 # verdict（VERDICT が OK でない）/ missing（記録・行が無い）/ base（比べる相手が無い）
@@ -105,8 +117,6 @@ ${out}"
   echo "✅ ${label}: ${file}（VERDICT OK・REVIEWED_COMMIT ${sha} 以降は記録の場所だけ）"
 }
 
-GC_TMP=$(mktemp -d)
-trap 'rm -rf "$GC_TMP"' EXIT
 
 # コミットしていない変更（未追跡を含む）。-z で読む（空白や引用符を含むパスも、そのままの名前で比べる。I193 M3）。
 # 先に確かめる（汚れはレビューをやり直しても直らないので、理由を dirty として区別する）

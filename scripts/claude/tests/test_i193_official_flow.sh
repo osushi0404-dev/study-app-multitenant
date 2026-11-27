@@ -71,7 +71,7 @@ r7() { local f bad=0
        for f in "$@"; do
          while IFS= read -r l; do
            case "$l" in *timeout*) ;; *) bad=1 ;; esac
-         done < <(grep -E 'claude -p( --|[[:space:]]*\\$)' "$f" | grep -vE '^[[:space:]]*#')
+         done < <(grep -E 'claude(\}")? -p( --| "\$\{REVIEWER_ARGS|[[:space:]]*\\$)' "$f" | grep -vE '^[[:space:]]*#')   # I593: 定義は "${REVIEWER_ARGS[@]}" で渡す
          grep -qE -- '--system-prompt|claude-sonnet-4-6' "$f" && bad=1
        done
        [ "$bad" -eq 0 ]; }
@@ -105,7 +105,7 @@ ck "FG-R6 workflow.md に /test I123 を足すと R6 不合格" 1 "$(rc r6 "$TMP
 cp -r "$R6TMP" "$TMP/r6b"; printf '\n.claude/review-agents/code-reviewer.md\n' >> "$TMP/r6b/.claude/skills/close/SKILL.md"
 ck "FG-R6 close に review-agents を足すと R6 不合格" 1 "$(rc r6 "$TMP/r6b")"
 ck "FG-R6 写しの元のままなら合格（写し方の確認）" 0 "$(rc r6 "$R6TMP")"
-sed 's/timeout "${REVIEW_TIMEOUT:-900}" claude -p --agent/claude -p --agent/' scripts/claude/plan-issue-review.sh > "$TMP/r7.sh"
+sed 's/timeout "${REVIEW_TIMEOUT:-900}" claude -p "\${REVIEWER_ARGS/claude -p "${REVIEWER_ARGS/' scripts/claude/plan-issue-review.sh > "$TMP/r7.sh"
 ck "FG-R7 plan-issue-review.sh の timeout を外すと R7 不合格" 1 "$(rc r7 "$TMP/r7.sh")"
 
 # ---------------- F: flow-stage.sh ----------------
@@ -471,7 +471,7 @@ s21_rules_prompt() {
   awk '/Human.*承認画面|承認画面.*Human/ && !/check-permission-prompt\.sh/ { f = 1 } END { exit f }' "$@"
 }
 s21_rules_review() { s_has "$1" '試した手段:' && s_has "$1" '実施者の区別'; }
-# 止める条件 2 の安全装置の集合が path_risk_trigger の case 行と一致する
+# 止める条件 2 の安全装置の集合が guard_path_trigger の case 行と一致する（I593 で path_risk_trigger から分けた）
 s12() {
   python3 - "$1" "$2" <<'PY'
 import re, sys
@@ -481,7 +481,7 @@ if len(case) != 1: sys.exit(1)
 want = set(case[0].strip().split(")")[0].split("|"))
 rows = [l for l in open(wf, encoding="utf-8").read().split("\n") if l.startswith("2. **取り消せない操作・安全装置そのものを変える操作**")]
 if len(rows) != 1: sys.exit(1)
-got = set(re.findall(r"`([^`]+)`", rows[0].split("と同じ:")[1].split("（安全装置は")[0])) if "と同じ:" in rows[0] else set()
+got = set(re.findall(r"`([^`]+)`", rows[0].split("と同じ", 1)[1].split("（安全装置は")[0])) if "と同じ" in rows[0] else set()   # I593: 「と同じ（…）:」の形
 sys.exit(0 if got == want else 1)
 PY
 }
@@ -508,7 +508,7 @@ ck "S21 rules-test test-gate に tui-capture.sh・試した手段" 0 "$(rc s21_r
 ck "S21 rules-tpl テンプレートは参照と試した手段" 0 "$(rc s21_rules_tpl $TPL)"
 ck "S21 rules-prompt 承認画面を Human にする書き方が無い" 0 "$(rc s21_rules_prompt $SK/plan-issue/SKILL.md $PWR $TPL)"
 ck "S21 rules-review plan-reviewer に Human の行の観点" 0 "$(rc s21_rules_review .claude/agents/plan-reviewer.md)"
-ck "S12 止める条件 2 の集合が path_risk_trigger と一致" 0 "$(rc s12 scripts/claude/code-review.sh docs/runbooks/workflow.md)"
+ck "S12 止める条件 2 の集合が guard_path_trigger の case 行と一致（I593）" 0 "$(rc s12 scripts/claude/code-review.sh docs/runbooks/workflow.md)"
 
 sed 's#bash scripts/claude/gate-check.sh#bash scripts/claude/no-check.sh#' $SK/test-gate/SKILL.md > "$TMP/s3.md"
 ck "FG-S3 test-gate から gate-check を消すと S3 不合格" 1 "$(rc s3 "$TMP/s3.md")"

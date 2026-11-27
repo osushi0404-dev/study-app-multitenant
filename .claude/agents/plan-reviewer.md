@@ -217,8 +217,9 @@ Blocker 判定を下すことを恐れるな。
 - DBスキーマ重要変更
 - 既存事故の再発リスクが高い変更
 - 画面制御していてもAPI直叩きで事故りうる変更
-- 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `path_risk_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
-- 【harness 固有・Yes にしない】上の一覧以外の手元のハーネス（`.claude/skills/`・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
+- 【harness 固有】GitHub から復旧できない例外に関わるファイルの変更: `.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`（正は `scripts/claude/code-review.sh` の `guard_path_trigger()`。理由は `docs/runbooks/review-rules.md`「高リスク変更の敵対的レビューステージ」）
+- 【harness 固有】変更前の版で動かせない判定の部品の変更: `.claude/hooks/*`・`.claude/skills/review-gate/*`・`.claude/skills/test-gate/*`・`.claude/skills/fix-loop/*`・`.claude/skills/plan-review/*`・`scripts/claude/gate-check.sh`（正は `scripts/claude/code-review.sh` の `review_mechanism_trigger()`・I593。審査の入口とレビュー役の定義・決まりは変更前の写しの版で動くので入らない）
+- 【harness 固有・Yes にしない】上の 2 つの一覧以外の手元のハーネス（`.claude/skills/` のほかのスキル・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
 
 ---
 

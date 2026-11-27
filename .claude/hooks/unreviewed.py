@@ -7,6 +7,7 @@
 origin/develop＝BASE）の写し（作り方の正は .claude/hooks/reviewed-hook.sh の reviewed_snapshot）の入口で、作業フォルダは
 リポジトリの最上位。流す入口・その部品（入口が読み込む・呼ぶ scripts/claude/ の直下のファイル）・使うレビュー役の定義
 （.claude/agents/*.md）のどれかがブランチで変わっていれば動かさず、ユーザーに `!` で新しい版を流してもらう（75）。
+I593: 審査の入口（REVIEW_ENTRIES）は、写しに reviewer-agents-lib.sh があれば、変わっていても写しの版で流す（定義も写しの版）。
 「ブランチで変わった」= BASE との差・追跡していない新規・git が無視するファイル。見張り（scripts/claude/hooks/pretooluse_guard.py）は
 route() で、単体の形の `bash scripts/claude/<一覧の名前> …` を run の形に付け替え、run の形を確かめ、test-session.sh の引数を確かめる。
 
@@ -50,6 +51,12 @@ OUTSIDE_SCRIPTS = frozenset({
     "lint-frontend.sh", "plan-issue-review.sh", "post-review-comment.sh", "pr-base-sync.sh",
     "test-session.sh", "tui-capture.sh", "wt-ports.sh", "wt-remove.sh",
 })
+# I593: 審査の入口。写しに新しい仕組み（REVIEWER_LIB）があれば、ブランチで入口・部品・レビュー役の定義を変えていても
+# 75 にせず写しの版で流す（審査は変更前の版で動く。ブランチの変更はマージの後に効く・docs/runbooks/review-rules.md）
+REVIEW_ENTRIES = frozenset({
+    "adversarial-review.sh", "code-review.sh", "fix-diagnosis-review.sh", "issue-review.sh", "plan-issue-review.sh",
+})
+REVIEWER_LIB = "reviewer-agents-lib.sh"
 LAUNCH = "python3 .claude/hooks/unreviewed.py run"
 # 単体の形でない文字（つなぎ・置き換え・かっこ・振り向け・ワイルドカード・改行・逃がし）。あれば付け替えない（中で動く）。
 # ワイルドカード（* ? [）は外の bash が作業ツリーのファイル名に展開し、書いた引数と違うものが渡るため（I599 F23）
@@ -313,6 +320,10 @@ def run(argv: list[str]) -> int:
         hit = sorted(parts(snap, name, root) & _unreviewed_files(root, base, SCRIPTS, AGENTS))
     except (RuntimeError, OSError, subprocess.SubprocessError, ValueError):
         return _need_human(name, args, "入口の部品がブランチで変わったかを確かめられない")
+    if hit and name in REVIEW_ENTRIES and os.path.isfile(os.path.join(snap, SCRIPTS, REVIEWER_LIB)):
+        print("[unreviewed run] ブランチで変えた審査の仕組み（" + ", ".join(hit[:5]) + "）は使わず、変更前の版で審査します"
+              "（マージの後に効く・I593）", file=sys.stderr)
+        hit = []
     if hit:
         return _need_human(name, args, "この入口か部品（" + ", ".join(hit[:5]) + "）をブランチで変えている")
     os.chdir(root)
