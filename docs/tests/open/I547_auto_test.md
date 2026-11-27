@@ -23,7 +23,8 @@
 
 ## 実行記録
 - 2026-11-27 fix-loop の後に手元で決定論ゲート 29 行を流し、29 行とも exit 0（既存のテスト 11 本・TC-02〜TC-06）
-- 2026-11-27 review-gate（`docs/reviews/I547_code_review_20261127_0946.md`）: 決定論ゲートはスクリプトが実走（記録の「決定論ゲート実行結果」）・CI は `CI_WAIT: OK`
+- 2026-11-27 test-gate: `bash scripts/claude/gate-check.sh I547` exit 0（`GATE_CHECK: OK`・REVIEWED_COMMIT 9cfab29a）。委ねられた重いテストは無い
+- 2026-11-27 review-gate（`docs/reviews/I547_code_review_20261127_0946.md`・差分のレビュー `docs/reviews/I547_code_review_20261127_1001.md`）: 決定論ゲートはスクリプトが実走（記録の「決定論ゲート実行結果」）・CI は `CI_WAIT: OK`
 
 ## 再発防止記録（fix-loop・2026-11-27）
 - なぜ失敗したか: /simplify で「review-rules の中の一覧を (b) の 1 か所に」と「レビュー役は節だけを読む」を同時に入れ、節が自己完結でなくなったのに読む範囲を節に絞ったので、ハーネスの一覧が計画レビュー役の読む範囲の外に出た（基本レビュー F1・`docs/reviews/I547_fix_diagnosis_20261127_1010.md`）

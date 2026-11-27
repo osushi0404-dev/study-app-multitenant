@@ -74,7 +74,7 @@
 |---|---|---|---|---|
 | AR1 | 冒頭の HTML の注釈（呼び出し元） | そのまま | | |
 | AR2 | `<instructions>`・データとして扱う | 直す | C2 | C2 |
-| AR3 | 反証マンデート・時間と攻め筋の上限・守る範囲 | そのまま（言い回しだけ C4） | 上限は `docs/runbooks/review-rules.md:69`・スクリプトと同じ | |
+| AR3 | 反証マンデート・時間と攻め筋の上限・守る範囲・実機 repro（Critical/High の裏取り） | そのまま（言い回しだけ C4） | 上限は `docs/runbooks/review-rules.md:69`・スクリプトと同じ | |
 | AR4 | 実験の上限（`:68`）と `test-session.sh` の行（`:69`）の食い違い | 直す（一覧 I430 F7） | `:69` の行が `:68` の「`bash -c 'ulimit …; timeout …'` で包む」の例外であることと、その実験の時間の上限は 1 周 10 分の締め切り（スクリプト）であることを書く | 内部（`docs/reviews/backlog/I430.md:12`） |
 | AR5 | 「実行できなかった」とみなす行の説明（`:71`） | 直す（一覧 I486 F6） | 実装（`scripts/claude/adversarial-review.sh:412`）に合わせ、「`command not found`・`: not found` で終わる行・`failed to run command`・`is not running`・`Cannot connect to the Docker daemon`・`no such service`」と書く | 内部（`docs/reviews/backlog/I486.md:11`） |
 | AR6 | 出力の形・ITEM・NEW_* 行 | そのまま | §0.3 | |

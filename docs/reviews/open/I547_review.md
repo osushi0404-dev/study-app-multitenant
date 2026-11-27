@@ -14,8 +14,8 @@
 - Backend/Frontend/DB/Config: なし（ハーネスのレビュー役の指示・手順書と規約の 1 文ずつ）
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: 決定論ゲート 29 行（定義の文字を読む既存のテスト 11 本・TC-02〜TC-06）が review-gate のスクリプトの実走と手元で exit 0。CI は 2 回とも `CI_WAIT: OK`。test-gate に委ねられた重いテストは無い。`gate-check.sh` OK
+- 手動: 7 行すべて Claude で OK（`docs/tests/open/I547_manual_test.md`）。人の手動テストは無い
 
 ## 計画との差分
 - なし
@@ -36,6 +36,7 @@
 - [review-gate] 基本レビュー（`docs/reviews/I547_code_review_20261127_0946.md`）は HIGH（止める指摘 F1・flow）。fix-loop へ回す。AC7 の実測: 起動役が 75 を出さず「変更前の版で審査します」と出て、記録に「審査の版: 写し b4af25e8…」が出た — I593 の仕組みがマージ後に動くことを確かめた
 - [fix-loop] F1 は案 B（2 つのレビュー役は review-rules を Read し、計画レビュー役は節と (b) の 2 つの一覧で判定）で直した — 判定に要る情報を確実に読ませる形のうち一番短く、F3 も同時に消えるため。診断レビュー OK（`docs/reviews/I547_fix_diagnosis_review_20261127_0956.md`）
 - [review-gate] 差分のレビュー（`docs/reviews/I547_code_review_20261127_1001.md`）は OK（F1・F3 は resolved、新しい Low の F7・F8 は台帳に残す）。敵対的レビューは不要（高リスク NO）
+- [test-gate] 手動 No.1 で点検の表の行の名前に無い見出し（敵対的レビュー役の「実機 repro」）を見つけ、表の AR3 に足した — 記録の場所の直しで、判定は「そのまま」のため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
