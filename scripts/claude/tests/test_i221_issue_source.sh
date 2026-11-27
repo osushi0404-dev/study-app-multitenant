@@ -163,7 +163,7 @@ fg() { # $1=名前 $2=場面 $3=sed 式
 }
 fg S2  s2  's/^NEW_ISSUE_MIN=427$/NEW_ISSUE_MIN=0/'
 fg S4  s4  's|^  \[\[ "\$url" =~ .*$|  true|'
-fg S3  s3  's/^      field body$/      echo "$(field body)"/'
+fg S3  s3  's/^      render body$/      echo "$(render body)"/'
 fg S11 s11 's/^  \[\[ "\$TITLE" =~ .*$/  false \\/'
 
 exit "$fail"
