@@ -15,7 +15,7 @@
 
 ## テスト結果
 - 自動（implement・手元）: backend `accounts`・OpenAPI の契約・組織の境界の 271 件が通過。frontend の関係する 8 ファイル 69 件・型チェック・リントが通過。E2E 全体（`--retries=0`）が 21 件通過・`--repeat-each=2` で 42 件通過（TC-28 は再現せず）。失敗の注入: 削除の ID・作成の競合・エラー文・メニュー・登録画面・二度押し・表の並びのテストは直す前に落ちることを確かめた。行の鍵・鍵つきの引き直しを外した版のテストは 200 になる。ダイアログの直しを外すと TC-09 が落ち、通知を右上に戻すと TC-30 が落ちることを確かめてから戻した
-- 手動: （test-gate で書く）
+- 手動（test-gate・2026-11-27）: No.1〜No.6 とも Claude が確かめて OK。No.2 は fix-loop（設定画面の古い読み込みの応答）の後に E2E 全体を 3 回、順に流し、TC-28 は 3 回とも通過。3 回目の TC-30 の 1 件（手元の DB に溜まったメンバーで新しいメンバーが 2 ページ目に載った）は、ユーザーの判断で手元の環境によるものとして受け入れた
 
 ## 計画との差分
 - なし
@@ -40,6 +40,8 @@
 - [test-gate] No.3〜No.6（画面）は fix-loop の後の test-gate でまとめて行う — Claude の分に NG があれば fix-loop に回す決まりで、直した後の HEAD で確かめ直すことになるため
 - [fix-loop] 設定画面の読み込みの効果に後片付けを付ける案（診断メモの案 A）で直した。計画変更記録に書いて計画レビュー（`docs/reviews/I636_plan_review_20261127_0354.md`・Blocker なし）を通してから直した — React の公式の形で変更が小さく、TanStack Query への移行（案 B）は範囲を超えるため。計画レビューの Warning（計画本文の §4-4・§4-7・V1 と TC-11 の書き方が変更記録に追いついていない）も直した
 - [review-gate] fix-loop の後の差分のレビューは OK（Low 1 件: TC-15 が 50ms の実時間の待ちに頼る）。敵対的レビュー 2 周目（通算 2 周・上限）も V1〜V4 とも確認済みで OK。Low は直さず retro へ — 止める基準に当たらず、OK の周の後に差分を足すと敵対的レビューの周を作り直せない（上限を使い切った）ため
+- [test-gate] fix-loop の後の手動テストは No.1〜No.6 とも OK。No.2 の 3 回目の TC-30 の 1 件は、手元の DB に E2E のメンバーが 22 人溜まって 2 ページ目に載ったため（読み取りだけの数え上げで確かめた）。敵対的レビューの上限を使い切っていて、直すには延長が要るので、ユーザーに聞いた。答え「手元のせいとして進める」（2026-11-27）に従い受け入れ、TC-30 を溜まっても落ちない形にする直しは retro で別のイシューにする
+- [test-gate] 画面の確かめで、開いた画面に作り直す前の開発用の表示（webpack の overlay・「Module not found」）が残り続けた。配っている bundle に依存が入っていて frontend のログも「Compiled successfully」なので、表示を取り除いてから確かめた（E2E の `frontend:3000` では出ない）。原因は未特定 — 画面の動きの確かめには影響しないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -50,3 +52,4 @@ STAGE_DONE: test-gate NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
