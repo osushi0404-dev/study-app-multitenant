@@ -122,6 +122,8 @@
 - [test-gate] 人の手動テスト（MT-14）は頼み直さず retro へ — 前回の OK（ユーザー・2026-11-27）の後の変更は一覧の注記の 1 行だけで、画面にもデータにも表れない（画面が変わらないのに再テストを頼まない・ユーザーの指摘）
 - [retro] 2 回目は追記だけ: CI の D3 の失敗（一覧の注記の行が `- F` で始まった）は CI がその場で捕まえ手戻りは 1 周なので、手順は足さない（見送り）。台帳の残りの振り分けは前の retro のまま
 
+- [close] 2 回目: develop への追従は不要（BLOCKED＝承認待ち）・gate-check OK。記録を closed へ移した。PR の説明は前のまま
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -145,3 +147,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
