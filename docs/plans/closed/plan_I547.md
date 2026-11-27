@@ -4,9 +4,9 @@
 - **計画書ID**: plan_I547
 - **関連イシュー**: #547
 - **Draft PR**: #642
-- **作成根拠資料**: docs/issues/open/I547.md（起点イシュー）
-- **点検の結果の表**: docs/reviews/open/I547_agents_audit.md（節ごとの判定・根拠・正の置き場所。この計画の変更点の正）
-- **実装後評価**: docs/reviews/open/I547_review.md
+- **作成根拠資料**: docs/issues/closed/I547.md（起点イシュー）
+- **点検の結果の表**: docs/reviews/closed/I547_agents_audit.md（節ごとの判定・根拠・正の置き場所。この計画の変更点の正）
+- **実装後評価**: docs/reviews/closed/I547_review.md
 - **作成日**: 2026-11-27
 
 ## 1. 背景/目的
@@ -162,5 +162,5 @@ Danger Ops（有無/手順/ロールバック）:
 - 2026-11-27 fix-loop（基本レビュー F1・`docs/reviews/I547_fix_diagnosis_20261127_1010.md`）: /simplify の記録の「2 つのレビュー役は review-rules をファイル全体でなく Grep で節だけ読む」→ 採った方法: 2 つのレビュー役は `docs/runbooks/review-rules.md` を Read し、計画レビュー役は「高リスク判定の条件」の節と同じファイルの (b) の 2 つの一覧で判定する — 理由: 節だけを読むと、節が参照する (b) の一覧が読む範囲の外になり、ハーネスの高リスクを判定できない。診断レビュー OK。計画レビューのやり直し: 不要（findings への対応）。（retro で台帳 F8 を受けて追記）
 
 ## レビュー結果
-- [20261127_0916 判定: ✅ 完了](../../reviews/I547_plan_review_20261127_0916.md)
-- [20261127_0911 判定: ✅ 完了](../../reviews/I547_plan_review_20261127_0911.md)
+- [20261127_0916 判定: ✅ 完了](../../reviews/closed/I547_plan_review_20261127_0916.md)
+- [20261127_0911 判定: ✅ 完了](../../reviews/closed/I547_plan_review_20261127_0911.md)

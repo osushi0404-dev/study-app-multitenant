@@ -39,6 +39,8 @@
 - [test-gate] 手動 No.1 で点検の表の行の名前に無い見出し（敵対的レビュー役の「実機 repro」）を見つけ、表の AR3 に足した — 記録の場所の直しで、判定は「そのまま」のため
 - [retro] 台帳の残り: F2・F4・F5・F6・F7 → `docs/reviews/backlog/I547.md`（Low・再現なし）。F8 → このイシューで直した（計画変更記録に 1 行）。後続イシューに回す行は 0 件
 - [retro] 改善案の振り分け: C1（整理の食い違い）→ 直した（fix-loop）・新しい手順は見送り（レビューがその場で捕まえた）。C2 → このイシューで直した。P1（新しいレビュー役の事後の確かめ）→ #641 に同梱（issuecomment-7207123202）。テストの中身を計画で読む決まり → 見送り（消費箇所の全件列挙にすでに含まれる）
+- [close] base 追従の確かめは `pr-base-sync.sh sync` の代わりに `git merge-base --is-ancestor origin/develop HEAD`（exit 0・追従の要らない状態）で行った — `pr-base-sync.sh` はこのブランチで変えたレビュー役の定義を部品に含み、起動役が 75 で止めたため。取り込むものが無いので結果は同じ
+- [close] 計画書の基本情報のパスを closed に直した — close で記録を移したため
 
 ## 振り返り
 
@@ -112,3 +114,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
