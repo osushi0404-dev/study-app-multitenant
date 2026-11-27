@@ -27,3 +27,4 @@
 - [plan] 色は `.Mui-disabled` のセレクタにも書く（`!important` なし） — MUI 5 の disabled の指定（クラス 3 つ）と同じ強さで勝つため
 - [plan] 入力に `aria-label`（記号＋本文）を付ける — 読み上げで記号を分けて伝え、テストの名前を表示の形に頼らせないため
 - [plan] 色の勝ち負けは E2E（TC-08）で確かめる — jsdom はセレクタの強さによる上書きを正しく計算しないため
+STAGE_DONE: plan NEXT: plan-review
