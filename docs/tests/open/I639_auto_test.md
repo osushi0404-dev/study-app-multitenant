@@ -5,7 +5,7 @@
 結果:
 - backend: 対象外
 - frontend: 対象外
-- harness: 実装前のため未実行
+- harness: 2026-11-27 implement で手元で実行。test_i639_issue_comments.sh（13 場面・FG 6）・test_i639_plan_followups.sh（11 場面・FG 4）・test_i221_issue_source.sh はすべて PASS（exit 0）。bash -n も OK。正式な結果は CI の Harness Tests
 
 ## テストケース
 
