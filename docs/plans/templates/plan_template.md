@@ -69,7 +69,7 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 
 ## 必ず確かめる項目（高リスク時の敵対的レビューが判定に使う）
 <!--
-  高リスク判定に当たりうる計画（.claude/agents/code-reviewer.md「高リスク判定の条件」・scripts/claude/code-review.sh の path_risk_trigger()）では必須。
+  高リスク判定に当たりうる計画（docs/runbooks/review-rules.md「高リスク判定の条件」・scripts/claude/code-review.sh の path_risk_trigger()）では必須。
   無い・形が違うと scripts/claude/adversarial-review.sh が動かない（exit 2）。それ以外の計画では省略してよい。
   - 見出しはこの形のまま（「## 必ず確かめる項目」の後ろに全角の括弧書きを付けてよい。### にしない）
   - 項目: V1, V2, …（重複しない）

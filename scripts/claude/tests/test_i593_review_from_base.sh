@@ -54,26 +54,42 @@ ck "FG-TC-01 path_risk_trigger を guard だけにすると不合格" 1 \
 # ---------------- TC-02: 集合の説明の一致（guard は TC-K2・S12・i181 が見る。ここは審査の部品の集合） ----------------
 tc02() { python3 -I - "$@" <<'PY'
 import re, sys
-crs, *mds = sys.argv[1:]
+crs, md = sys.argv[1:3]
 case = [l for l in open(crs, encoding="utf-8").read().split("\n") if re.match(r"^\s+\.claude/hooks/\*\|", l)]
 if len(case) != 1:
     sys.exit(1)
 want = set(case[0].strip().split(")")[0].split("|"))
-for f in mds:
-    rows = [l for l in open(f, encoding="utf-8").read().split("\n") if "変更前の版で動かせない判定の部品" in l and "`.claude/hooks/*`" in l]
-    if len(rows) != 1:
-        sys.exit(1)
-    head = rows[0].split("変更前の版で動かせない判定の部品の変更", 1)[1].split("正は")[0]
-    if set(re.findall(r"`([^`]+)`", head)) != want:
-        sys.exit(1)
+rows = [l for l in open(md, encoding="utf-8").read().split("\n") if "変更前の版で動かせない判定の部品" in l and "`.claude/hooks/*`" in l]
+if len(rows) != 1:
+    sys.exit(1)
+head = rows[0].split("変更前の版で動かせない判定の部品の変更", 1)[1].split("正は")[0]
+if set(re.findall(r"`([^`]+)`", head)) != want:
+    sys.exit(1)
 PY
 }
-MDS=(.claude/agents/code-reviewer.md .claude/agents/plan-reviewer.md docs/runbooks/review-rules.md)
-ck "TC-02 審査の部品の集合が code-reviewer.md・plan-reviewer.md・review-rules.md の行と一致" 0 "$(rc tc02 "$CR" "${MDS[@]}")"
-for m in "${MDS[@]}"; do
-  args=(); for x in "${MDS[@]}"; do if [ "$x" = "$m" ]; then args+=("$(broken "$x" '・`scripts/claude/gate-check.sh`' '')"); else args+=("$x"); fi; done
-  ck "FG-TC-02 ${m} から scripts/claude/gate-check.sh を消すと不合格" 1 "$(rc tc02 "$CR" "${args[@]}")"
+# 定義に path_risk_trigger の集合（例外のファイル・判定の部品）のパスが 1 つも無い（写しが戻っていない）: <code-review.sh> <定義> → 無ければ 0
+tc02b() { python3 -I - "$@" <<'PY'
+import re, sys
+crs, md = sys.argv[1:3]
+src = open(crs, encoding="utf-8").read().split("\n")
+paths = set()
+for pat in (r"^\s+\.github/\*\|", r"^\s+\.claude/hooks/\*\|"):
+    case = [l for l in src if re.match(pat, l)]
+    if len(case) != 1:
+        sys.exit(2)
+    paths |= set(case[0].strip().split(")")[0].split("|"))
+body = open(md, encoding="utf-8").read()
+sys.exit(1 if any("`" + x + "`" in body for x in paths) else 0)
+PY
+}
+# I547: 一覧の正は review-rules.md の 1 か所（2 つのレビュー役は「高リスク判定の条件」の節を参照する）。定義に写しが戻らないことも見る
+RRM=docs/runbooks/review-rules.md
+ck "TC-02 審査の部品の集合が review-rules.md の行と一致" 0 "$(rc tc02 "$CR" "$RRM")"
+ck "FG-TC-02 review-rules.md から scripts/claude/gate-check.sh を消すと不合格" 1 "$(rc tc02 "$CR" "$(broken "$RRM" '・`scripts/claude/gate-check.sh`' '')")"
+for m in .claude/agents/code-reviewer.md .claude/agents/plan-reviewer.md; do
+  ck "TC-02b ${m} に高リスクのパスの一覧の写しが無い" 0 "$(rc tc02b "$CR" "$m")"
 done
+ck "FG-TC-02b 定義に .github/* を書くと不合格" 1 "$(rc tc02b "$CR" "$(broken .claude/agents/code-reviewer.md '## 高リスク判定の参照' '## 高リスク判定の参照 `.github/*`')")"
 
 # ---------------- TC-03: 定義の変換 ----------------
 SNAP="$TMP/snap"; mkdir -p "$SNAP/scripts/claude" "$SNAP/.claude/agents" "$SNAP/docs/runbooks"

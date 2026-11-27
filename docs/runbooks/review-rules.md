@@ -19,7 +19,7 @@
 | 診断レビューの記録 | `I###_fix_diagnosis_<timestamp>.md` | `scripts/claude/fix-diagnosis-review.sh` | 同上 |
 | 軽い指摘の一覧 | `I###.md` | retro（`code-review.sh --route backlog`） | `docs/reviews/backlog/`（イシューを閉じても残る。計画で実装対象に当たる行を拾う） |
 
-- `<timestamp>` は `YYYYMMDD_HHMM`（同じ分に 2 つ目ができると `_<n>` が付く）
+- `<timestamp>` は `YYYYMMDD_HHMM`。コードレビューと敵対的レビューの記録は、同じ分に 2 つ目ができると `_<n>` が付く（`code-review.sh`・`adversarial-review.sh`）。ほかの記録は同じ名前で上書きされる
 - 古い通し番号の記録（`review001` など）は `docs/reviews/closed/` にそのまま残す
 
 ---
@@ -58,11 +58,28 @@
 - **工程を減らす・まとめるとき**: レビュー・チェック・ゲートを減らす・まとめる案は、その工程が止めている漏れの種類と、回数を押し上げている上流の原因を分けて示してから出す。別々の漏れを止める工程はまとめず、中身を減らす（I181）。
 - 方式の比較（裏のサブエージェント・メイン側・別プロセス・組み込み・GitHub 側）と採否の理由は `docs/plans/closed/plan_I197.md` §4.2。
 
+## 高リスク判定の条件
+
+計画レビュー役（`.claude/agents/plan-reviewer.md`）が計画で判定し、コードレビュー役（`.claude/agents/code-reviewer.md`）が差分で `RISK=up` を付けるときに使う一覧（I547 で 2 つのレビュー役の写しを 1 つにした。この節は審査の写しに入る・I593）。次の条件に 1 つでも当たれば高リスク: Yes。
+- 認証・認可・ロール変更
+- マルチテナント境界変更
+- 管理画面追加・変更
+- ファイルアップロード/ダウンロード
+- 外部公開API追加・変更
+- Webhook・外部API連携
+- 個人情報・機微情報の新規取り扱い
+- 未成年データ・個人情報のテナント越境・目的外利用（P9）
+- DBスキーマ重要変更
+- 既存事故の再発リスクが高い変更
+- 画面制御していてもAPI直叩きで事故りうる変更
+- 【harness 固有】下の「高リスク変更の敵対的レビューステージ」の (b) の 2 つの一覧（GitHub から復旧できない例外に関わるファイル・変更前の版で動かせない判定の部品）に当たるファイルの変更（一覧は (b) の行が正。審査の入口とレビュー役の定義・この決まりは変更前の写しの版で動くので入らない・I593）
+- 【harness 固有・Yes にしない】(b) の 2 つの一覧以外の手元のハーネス（`.claude/skills/` のほかのスキル・`.claude/agents/`・`scripts/claude/` のほかのスクリプトとテスト・`scripts/git-hooks/`・CLAUDE.md・runbook）だけの変更は、上のアプリの条件（「既存事故の再発リスクが高い変更」など）を理由に Yes にしない（GitHub が最後の守り）
+
 ## 高リスク変更の敵対的レビューステージ（自己認証の非権威化・I086／対象と上限・I181）
 
 - **前提（GitHub が最後の守り）**: develop/main は GitHub 側で保護され（ブランチ保護・CODEOWNERS・承認必須）、bot はマージできない。手元のハーネスが壊れても GitHub から復旧できるので、手元のハーネスの変更は決定論ゲートと基本レビューで先へ進む。例外（GitHub から復旧できない操作）は `docs/runbooks/danger-ops.md`「GitHub から復旧できる範囲（I182）」。
 - **対象**: 高リスク判定 YES の変更は、敵対的レビューステージ（反証マンデート×多観点・対応後の再レビュー）の通過を合格条件とする（review-gate 段階が自動で起動する）。高リスク判定 YES になるのは次のどれか:
-  - (a) アプリの高リスク条件（`.claude/agents/code-reviewer.md`「高リスク判定の条件」）に当たる変更（計画レビューが判定する）
+  - (a) アプリの高リスク条件（上の「高リスク判定の条件」）に当たる変更（計画レビューが判定する）
   - (b) ハーネスでは、例外に関わるファイルの変更（`.github/*`・`.pre-commit-config.yaml`・`.secrets.baseline`・`scripts/claude/hooks/pretooluse_guard.py`・`.claude/settings.json`・`.claude/settings.local.json`。正は `scripts/claude/code-review.sh` の `guard_path_trigger()`）と、変更前の版で動かせない判定の部品の変更（`.claude/hooks/*`・`.claude/skills/review-gate/*`・`.claude/skills/test-gate/*`・`.claude/skills/fix-loop/*`・`.claude/skills/plan-review/*`・`scripts/claude/gate-check.sh`。正は `review_mechanism_trigger()`。I593）。両方の OR が `path_risk_trigger()`
   - (d) 審査が写しの版で動かなかったとき（人が `!` で作業ツリーの版の `code-review.sh`・`plan-issue-review.sh` を流した。I593）
   - (c) 台帳の目印: 計画レビューが No でも、基本レビューの code-reviewer が (a) に当たる変更を差分に見つけて FINDING 行に `RISK=up` を付けたとき（I202。一度 YES になったら戻らない）
