@@ -36,6 +36,7 @@ import SubjectDetail from './pages/SubjectDetail';
 import MemberManagement from './pages/MemberManagement';
 import PasskeySetup from './pages/PasskeySetup';
 import { MEMBER_MANAGEMENT_PATH, PASSKEY_SETUP_PATH } from './constants/routes';
+import { BELOW_APP_BAR_TOP } from './constants/layout';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,16 +57,16 @@ function App() {
               <Router>
               <NavigationLogger />
               <CssBaseline />
-              {/* 上の中央に出し、上のバーの左右のボタン（メニュー・ユーザーメニュー）に重ねない。幅 360px でも
-                  左右 64px を空ける（右上に出していたときは、通知がログアウトのメニューを押せなくしていた・I636） */}
+              {/* 上の中央の、上のバーのすぐ下に出す。上のバーと縦に分けるので、幅やボタンの数によらず、上のバーの
+                  どのボタンも塞がない（右上に出していたときは、通知がログアウトのメニューを押せなくしていた・I636） */}
               <Toaster
                 position="top-center"
+                containerStyle={{ top: BELOW_APP_BAR_TOP }}
                 toastOptions={{
                   duration: 4000,
                   style: {
                     background: '#363636',
                     color: '#fff',
-                    maxWidth: 'min(350px, calc(100vw - 128px))',
                   },
                 }}
               />

@@ -5,7 +5,8 @@ import { test, expect, Page, BrowserContext } from '@playwright/test';
 // パスキーでログインする。共有の storageState を使わない（ログアウトで共有の refresh を失効させないため）。
 // 追加するメンバーは毎回ちがうユーザー ID にする（何度流しても同じに確かめられる）。
 // I636: 表の枠は役割と名前で探す（MUI の内部のクラス名に頼らない）。360px では 3 つのボタンの行を確かめる。
-// 通知は上の中央に出るので、通知が消えるのを待たずにログアウトできる（幅 360px でもユーザーメニューに重ならない）。
+// 通知は上の中央（上のバーのすぐ下）に出るので、通知が消えるのを待たずにログアウトできる（幅 360px でも上のバーの
+// どのボタンも塞がない。上のバーから開くアクセシビリティ設定のパネルは通知より手前に出る）。
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const TABLE_REGION = 'メンバーの一覧の表（横に動かせます）';
@@ -86,15 +87,30 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
     await member.getByRole('button', { name: 'パスキーを登録' }).click();
     await member.waitForURL('**/dashboard');
 
-    // 通知（パスキーを登録しました）が出ている間でも、ユーザーメニューのボタンに重ならず、そのままログアウトできる（I636）
+    // 通知（パスキーを登録しました）は上のバーのすぐ下に出て、上のバーのどのボタンも塞がない（I636。個々のボタンでなく
+    // 上のバー全体と比べる）。出てくるときは上から滑り込むので、上のバーの下端より下に止まるまで待つ
     const toast = member.getByRole('status').filter({ hasText: 'パスキーを登録しました' });
-    // 出てくるときは上から滑り込むので、止まって（画面の中に入って）から位置を測る
-    await expect.poll(async () => (await toast.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+    const bannerBox = await member.getByRole('banner').boundingBox();
+    expect(bannerBox).not.toBeNull();
+    const bannerBottom = bannerBox!.y + bannerBox!.height;
+    await expect.poll(async () => (await toast.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(bannerBottom);
+
+    // 通知が出ている間に上のバーからアクセシビリティ設定のパネルを開くと、パネルが通知より手前に出て操作を塞がれない
+    await member.getByRole('button', { name: 'アクセシビリティ設定' }).click();
+    const panel = member.getByRole('dialog', { name: 'アクセシビリティ設定パネル' });
+    await expect(panel).toBeVisible();
+    await expect(toast).toBeVisible();  // 通知とパネルが同時に出ている状態で確かめる（通知が消えた後では確かめにならない）
+    const panelBox = await panel.boundingBox();
     const toastBox = await toast.boundingBox();
-    const menuBox = await member.locator('[data-testid="user-menu-button"]').boundingBox();
-    expect(toastBox).not.toBeNull();
-    expect(menuBox).not.toBeNull();
-    expect(overlaps(toastBox!, menuBox!)).toBe(false);
+    expect(overlaps(panelBox!, toastBox!)).toBe(true);  // 幅 360px では同じ高さで重なる（重なっていなければ確かめにならない）
+    const topmostInPanel = await panel.evaluate((el, point) => {
+      const hit = document.elementFromPoint(point.x, point.y);
+      return hit !== null && el.contains(hit);
+    }, { x: panelBox!.x + panelBox!.width / 2, y: panelBox!.y + 10 });
+    expect(topmostInPanel).toBe(true);
+    await member.getByRole('button', { name: 'アクセシビリティ設定' }).click();
+    await expect(panel).toBeHidden();
+
     await member.click('[data-testid="user-menu-button"]');
     await member.click('[data-testid="logout-button"]');
     await expect(member).toHaveURL(/login/);
