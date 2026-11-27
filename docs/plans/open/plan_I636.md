@@ -47,12 +47,12 @@
 - [ ] AC9: リンクのダイアログを閉じる間も見出し『<ユーザーID>』の登録用リンク と中身が残り、閉じ終わったら値を捨てる。追加の流れの発行の間は、その人の行の［登録用リンク］と［メンバーを追加］が押せず、発行は 1 回だけ
 - [ ] AC10: E2E が MUI の内部のクラス名に頼らずに表の枠を探し、幅 360px で 3 つのボタン（登録用リンク・パスキー・リンクを取り消す）の行の高さが 44〜56px
 - [ ] AC11: `seed_e2e`（`tenant_isolation` の場面）が運営 `e2e_staff@example.com` と本人ひとりの組織の管理者 `e2e_solo@example.com` を作り、`docs/runbooks/frontend-verify.md` §5 の表に載っている
-- [ ] AC12: 通知が上の中央に出て、幅 1280px と 360px のどちらでもユーザーメニューのボタンに重ならず、ログイン直後に通知が出ている間でもログアウトを押せる（E2E）
+- [ ] AC12: 通知が上の中央（上のバーのすぐ下）に出て、幅 1280px と 360px のどちらでも上のバーのどのボタンも塞がず、ログイン直後に通知が出ている間でもログアウトを押せる。通知が出ている間に上のバーから開いたアクセシビリティ設定のパネルの操作も塞がない（E2E。close の後の見直しで強めた・計画変更記録）
 - [ ] AC13: settings.spec の TC-28 が、E2E 全体を並行・`--retries=0` で 3 回流して 3 回とも通る
 
 ## 3. 影響範囲
 - Backend: accounts（`models.py` の判定の置き場所・`permissions.py`・`serializers.py`・`views.py`・`registration_links.py`・`management/commands/seed_e2e.py`・テスト）。`backend/openapi.yaml`（作り直し）
-- Frontend: `App.tsx`（通知の場所）・`components/Layout.tsx`（メニュー）・`pages/MemberManagement.tsx`・`pages/PasskeySetup.tsx`・`components/members/RegistrationLinkDialog.tsx`・`components/members/MemberCredentialActions.tsx`・`services/types.ts`・`types/api/schema.d.ts`（作り直し）・`pages/Settings.tsx`（読み込みの効果の後片付け・fix-loop で足した）と、それぞれの Jest のテスト（`pages/__tests__/Settings.test.tsx` を含む）
+- Frontend: `App.tsx`（通知の場所）・`components/AccessibilityProvider.tsx`（パネルの重なり順・fix-loop で足した）・`constants/layout.ts`（新規・上のバーの下の位置と重なり順の定数）・`components/Layout.tsx`（メニュー）・`pages/MemberManagement.tsx`・`pages/PasskeySetup.tsx`・`components/members/RegistrationLinkDialog.tsx`・`components/members/MemberCredentialActions.tsx`・`services/types.ts`・`types/api/schema.d.ts`（作り直し）・`pages/Settings.tsx`（読み込みの効果の後片付け・fix-loop で足した）と、それぞれの Jest のテスト（`pages/__tests__/Settings.test.tsx` を含む）
 - E2E: `e2e/tests/registration-link.spec.ts`・`e2e/tests/settings.spec.ts`（原因しだいで `e2e/global-setup.ts`・`e2e/tests/dashboard-layout.spec.ts`）
 - DB: なし（マイグレーションなし。初期データのコマンドに利用者を足すだけ）
 - Config/Infra: なし
@@ -178,6 +178,7 @@
 | R5: settings.spec の原因が 3 回で再現しない | 副作用の無い「保存の応答を待つ」だけを入れ、原因は未特定として記録。再発したら retro で起票 | 受け入れ |
 | R6: 初期データに運営を足すと、運営の一覧（`/admin/users`）の件数を見ている E2E が変わる | 今の E2E は運営の画面を見ていない（`grep admin/users e2e/tests` で 0 件）。CI の E2E 全体で確かめる | 回避 |
 | R7: `TableContainer` に `tabIndex={0}` を付けると、Tab の順に表の枠が 1 つ増える | 横に流れる枠をキーボードで動かすための推奨の形。手動テスト No.3 で Tab の順を見る | 受け入れ |
+| R8: 通知（上のバーのすぐ下・重なり順 9999）が、携帯の幅で開く左のメニュー（`Drawer`・1200）の先頭の項目と、通知が複数たまったときの各画面の一番上の中身に、短い間重なる | 通知は操作の直後に 4 秒だけ出る。メニューの開閉と重なるのはまれで、閉じれば読める | 受け入れ |
 
 ## 9. 確定事項と自律判断
 イシューに明記されている（設計確認メモ）:
@@ -239,6 +240,7 @@ Danger Ops:
 | V4 | 3 | 読んで可 | 作成の重複（TC-04）で、例外の中身・ユーザー ID がログと応答に出ないか。`transaction.atomic` の中で受けて、外側のトランザクションを壊さないか |
 
 ## 計画変更記録
+- 2026-11-27 fix-loop（close の後）: 計画書の記載: §4-12「`Toaster` の `position` を `top-center` に、`toastOptions.style` に `maxWidth: 'min(350px, calc(100vw - 128px))'` を足す（左右 64px ずつ空ける）」→ 採った方法: `Toaster` の `containerStyle` の `top` を `BELOW_APP_BAR_TOP`（72px）にして上のバーのすぐ下に出し、`maxWidth` の指定は外す（既定の 350px）。上のバーから開くアクセシビリティ設定のパネル（`AccessibilityProvider.tsx`・同じ `top: 72`）の `zIndex` を `ABOVE_TOASTS_Z_INDEX`（10000・react-hot-toast の 9999 より手前）にする。2 つの値は新しい `frontend/src/constants/layout.ts` に置く。AC12 を「上のバーのどのボタンも・パネルの操作も塞がない」に強める。TC-13 に上のバー（`banner`）との重なり・パネルの手前の確かめを足す — 理由: 幅 360px で通知が「アクセシビリティ設定」のボタンに重なっていた（手動テスト No.7・診断メモ `docs/reviews/I636_fix_diagnosis_20261127_1400.md`）。上のバーと縦に分けるので、幅やボタンの数に左右されない。通知の重なり順はダイアログ（1300）より手前のまま（ダイアログの中の通知を隠さない）。携帯の幅で開く左のメニュー（`Drawer`・1200）の先頭の項目に、通知が出ている短い間だけ重なりうる点は受け入れる（通知が出るのは操作の直後の 4 秒で、メニューを開くのと重なるのはまれ・§8 R8）。計画レビューのやり直し: 要（受け入れ条件を強め、実装対象のファイルを足す）
 - 2026-11-27 fix-loop: 計画書の記載: §4-13「原因で直し方を決める（…それ以外・ここに無いファイルが要るときは、計画変更記録に書いて計画レビューを通し直す）」→ 採った方法: 原因が分かった（test-gate の手動テスト No.2・診断メモ `docs/reviews/I636_fix_diagnosis_20261127_0420.md`）。設定画面 `frontend/src/pages/Settings.tsx` の読み込みの `useEffect` に後片付け（`let ignore = false`・後片付けで `ignore = true`。`ignore` なら `setSettings`・`resetSettingsForm`・`toast.error`・`setLoading` をしない）を付け、StrictMode で 2 回走る取得の古い応答が入力を戻さないようにする。実装対象に `Settings.tsx` と `frontend/src/pages/__tests__/Settings.test.tsx` を足す。E2E の「保存の応答を待つ」は残す — 理由: 診断レビューを通った案 A（React の公式の形・最小の変更）。TanStack Query への移行（案 B）は範囲を超えるので採らない。計画レビューのやり直し: 要（実装対象のファイルを足す）
 - 2026-11-27 implement: 計画書の記載: §4-10「`MemberCredentialActions` に `wrap?: boolean` を足し、ボタンの並びを…」→ 採った方法: 同じ並びの `Box` に `role="group"`・`aria-label="『<ユーザーID>』の操作"` も付け、TC-11 はこの名前で並びを探す — 理由: テストが `parentElement`（部品の中の入れ子）に頼るとリント（`testing-library/no-node-access`）に止められ、F12 と同じ「内部の構造に頼る」形にもなる。読み上げで行の操作のまとまりが分かる（見た目は変わらない）。計画レビューのやり直し: 不要（読み上げの名前の付随の追加だけ）
 - 2026-11-27 implement（/simplify）: 計画書の記載: §4-4「`Organization.is_invitable`（property）… 両者が同じことはテストで守る」→ 採った方法: property を作らず、`User.can_manage_members` が `Organization.objects.invitable().filter(pk=self.organization_id).exists()` を呼ぶ（条件は QuerySet の 1 か所だけ）。TC-05 の一致のテスト 2 本（`is_invitable` と QuerySet・その失敗の注入）は要らなくなったので消し、組織の種類ごとの `/api/auth/me/` と `/api/members/` の一致のテストは残す — 理由: /simplify の指摘（同じ条件を 2 か所に書き、一致をテストで守るより、1 か所に置くほうが簡単で直し忘れが起きない）。問い合わせの数は I620 の権限の判定と同じ 1 回。計画レビューのやり直し: 不要（判定の置き場所の実装の選び直しで、条件・範囲・受け入れ条件は変えない）
