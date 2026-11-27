@@ -90,6 +90,7 @@
 - [close] マージ依頼の後、ユーザーの「BP（UI/UX を含む）の観点で問題ないか」の確認の依頼で見直し、幅 360px で通知が上のバーの「アクセシビリティ設定」のボタンに重なることが分かった（手動テスト No.7）。ユーザーの答え「マージの前にこの PR で直す (Recommended)」（敵対的レビューの 1 周の延長を含む選択肢）に従い、記録を open に戻して fix-loop へ回す
 - [fix-loop] 通知を上のバーのすぐ下に出し、アクセシビリティ設定のパネルを通知より手前にする案で直した（診断メモ `docs/reviews/I636_fix_diagnosis_20261127_1400.md`。1 回目の診断は `Snackbar` の調べの誤りとパネルの見落としで差し戻され、補って通った）。計画変更記録に書いて計画レビュー（`docs/reviews/I636_plan_review_20261127_0945.md`・Blocker なし）を通してから直した — 上のバーと縦に分けるので幅やボタンの数に左右されず、「上の中央」というユーザーの決定も保てるため
 - [fix-loop] TC-30 そのものは手元で通しきれない（E2E のメンバーの溜まり・#643）ので、同じ判定の一時の spec で直す前後を確かめ、TC-30 は CI で確かめる。手元の DB のメンバーは消していない — ユーザーの前の判断（「手元のせいとして進める」・何も消さない）に従うため
+- [review-gate] fix-loop の後の差分のレビュー（`docs/reviews/I636_code_review_20261127_0952.md`）で止める指摘 2 件: F5（上のバーのすぐ下の通知が、ユーザーメニューの「ログアウト」を覆う）・F6（パネルを通知より手前にしたため、パネルを開いたままだとユーザーメニュー・ダイアログがパネルの下に隠れる）。fix-loop へ回す
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -107,3 +108,4 @@ STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: fix-loop
