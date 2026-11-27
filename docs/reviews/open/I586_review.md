@@ -54,6 +54,8 @@
 
 - [fix-loop] MT-14 の再テストの NG（選択肢の 2 行目の位置・解説に改行が無い）は、ユーザーの選択で、画面の 2 点を #645 に追記し、I586 では解説のデータだけを選択肢ごとの行に書き直した（診断メモ `docs/reviews/I586_fix_diagnosis_20261127_1638.md`・診断レビュー PASS）。DB の 25 行の置き換えは、先に控えを取り、ユーザーの事前承認を得てから行った。受け入れ条件・方式・範囲は変えないので計画レビューは通り直さない
 
+- [review-gate] 差分のレビュー OK（`I586_code_review_20261127_1641.md`・CI OK・敵対的レビューは不要）。F7 は解消。新しい F9（Low・§11 の改行入りの解説の行に一時保存を消す手順が無い）は止めない指摘なので retro へ
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -67,3 +69,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
