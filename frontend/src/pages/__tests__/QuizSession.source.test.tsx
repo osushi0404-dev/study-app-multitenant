@@ -82,7 +82,7 @@ describe('QuizSession の出典と解説（I609）', () => {
 
     const source = await screen.findByText('出典：出典X');
     expect(precedes(screen.getByAltText('問題画像 1'), source)).toBe(true);
-    expect(precedes(source, screen.getByLabelText('選択肢1'))).toBe(true);
+    expect(precedes(source, screen.getByLabelText('ア 選択肢1'))).toBe(true);
   });
 
   it('TC-25: 出典が空なら何も出さない', async () => {
@@ -105,7 +105,7 @@ describe('QuizSession の出典と解説（I609）', () => {
     });
 
     await screen.findByText('I609の問題文');
-    fireEvent.click(screen.getByLabelText('選択肢1'));
+    fireEvent.click(screen.getByLabelText('ア 選択肢1'));
 
     await waitFor(() => {
       expect(screen.getByText('正解です！')).toBeInTheDocument();

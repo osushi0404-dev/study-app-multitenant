@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import apiService from '../services/api';
+import ChoiceLabelText from './ChoiceLabelText';
 import { Subject } from '../services/types';
 
 interface AIQuestionGeneratorProps {
@@ -380,7 +381,7 @@ const AIQuestionGenerator: React.FC<AIQuestionGeneratorProps> = ({
                             fontWeight: choice.is_correct ? 'bold' : 'normal'
                           }}
                         >
-                          {String.fromCharCode(65 + choiceIndex)}. {choice.text}
+                          <ChoiceLabelText index={choiceIndex} text={choice.text} />
                           {choice.is_correct && ' ✓'}
                         </Typography>
                       ))}

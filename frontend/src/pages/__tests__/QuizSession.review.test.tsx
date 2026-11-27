@@ -78,7 +78,7 @@ const renderPage = () =>
   );
 
 const answerCurrent = async () => {
-  userEvent.click(screen.getByLabelText('選択肢A'));
+  userEvent.click(screen.getByLabelText('ア 選択肢A'));
   userEvent.click(screen.getByRole('button', { name: '回答する' }));
 };
 

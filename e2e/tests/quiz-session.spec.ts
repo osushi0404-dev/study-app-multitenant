@@ -44,6 +44,25 @@ test.describe('クイズセッション', () => {
     await expect.poll(async () => Number(await answeredCount.textContent())).toBeGreaterThan(before);
   });
 
+  // I645: 選択肢に記号（ア・イ）が付き、誤答を選ぶと、その文字が赤く（disabled の灰色に負けず）×の印が付く。
+  // 正解の文字は緑。色の勝ち負けは jsdom では測れないので本物のブラウザで確かめる（TC-08）。
+  // e2e-init のシードの問題は 1 つ目が「正解の選択肢」、2 つ目が「不正解の選択肢」。色はライトモードの既定（error.main・success.main）
+  test('誤答を選ぶと、その選択肢に×の印と赤い文字が付き、正解の文字は緑', async ({ page }) => {
+    await page.goto('/dashboard');
+    await startQuizFromDashboard(page);
+
+    const options = page.locator('[data-testid="choice-option"]');
+    await expect(options.nth(0)).toContainText('ア');
+    await expect(options.nth(1)).toContainText('イ');
+
+    await options.nth(1).click();
+    await expect(page.locator('[data-testid="answer-result"]')).toBeVisible();
+
+    await expect(options.nth(1).getByText('不正解の選択肢')).toHaveCSS('color', 'rgb(211, 47, 47)');
+    await expect(options.nth(1).locator('[data-testid="CancelIcon"]')).toHaveCount(1);
+    await expect(options.nth(0).getByText('正解の選択肢', { exact: true })).toHaveCSS('color', 'rgb(46, 125, 50)');
+  });
+
   // I466: 「苦手を優先して始める」で、苦手を優先のクイズへ進む（並びの正しさは backend の pytest が確かめる）
   test('ダッシュボードから苦手を優先のクイズを始められる', async ({ page }) => {
     await page.goto('/dashboard');
