@@ -293,4 +293,10 @@ Danger Ops:
 | Low     | 4件 | 5件 |
 
 ### 残余リスク処遇
-（retro 段階で決定する）
+（retro・2026-11-27）
+- Medium（`seed_e2e` に既知のパスワードの運営）: 回避済み（DEBUG が偽ならコマンド全体を止める・TC-12 の `test_i636_seed_e2e_refuses_without_debug`）。DEBUG を真にした本番では止まらない点は、本番は DEBUG 偽が前提（`check --deploy`）なので受け入れ
+- Low（運営の API の形の違う ID）: 回避済み（TC-01 の `test_i636_staff_delete_passkey_malformed_id_is_404`）
+- Low（条件の取りこぼし）: 回避済み（条件は `invitable()` の 1 か所・TC-05 の 8 通り）
+- Low（`can_manage_members` を応答に出す）: 受け入れ（本人の権限の真偽だけ）
+- Low（作成の重複の `IntegrityError`）: 回避済み（セーブポイントの中で受ける・TC-04）
+- 残り（標準外の形の 36 文字の `passkey_id`・問い合わせが 1 回増える）: #643 で扱う
