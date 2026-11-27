@@ -56,6 +56,8 @@
 
 - [review-gate] 差分のレビュー OK（`I586_code_review_20261127_1641.md`・CI OK・敵対的レビューは不要）。F7 は解消。新しい F9（Low・§11 の改行入りの解説の行に一時保存を消す手順が無い）は止めない指摘なので retro へ
 
+- [test-gate] 3 回目は gate-check と 2 つの判定だけを流した — 変更は解説のデータと記録だけで、MT-10 の照らし合わせは fix-loop で流し直し済みのため
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -70,3 +72,4 @@ STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: human-test
