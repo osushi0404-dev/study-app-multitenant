@@ -99,9 +99,11 @@
 - [retro] 見送り: 私の書き換えでファイルの改行コードが CRLF から LF に変わった — /simplify の点検がその場で捕まえ、コミットの前に戻した（2.7 の問 2）
 - [retro] 見送り: コミットの時の ESLint（`detect-object-injection`・`no-node-access`）で 2 回止まった — pre-commit がその場で捕まえ、規則に当たらない書き方に直した（2.7 の問 2）
 - [retro] 見送り: 手元の E2E が続けて流すとログインの回数の制限で落ちた — 避け方は `docs/runbooks/frontend-verify.md` の 8 に既にあり、それで流せた（2.7 の問 2）
+- [close] develop の取り込みは不要（mergeStateStatus=BLOCKED・承認待ち）。記録を closed へ移し、計画書のレビュー記録へのリンクを closed 向きに直した。PR の説明をひな形で埋めた
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
