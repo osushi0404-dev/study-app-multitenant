@@ -28,3 +28,4 @@
 - [plan-review] 計画レビュー OK（Warning 5・Info 1）。全部を計画書・テスト文書の追記で直し、やり直しはしない — 方式・範囲・受け入れ条件を変えないため（計画変更記録）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
