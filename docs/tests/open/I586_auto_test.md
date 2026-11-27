@@ -21,6 +21,7 @@
 - 2026-11-27 test-gate（2 回目）: `gate-check.sh I586` exit 0・`check-frontend-evidence.sh` exit 0・`check-manual-test-executor.sh` exit 0
 - 2026-11-24 test-gate: 決定論ゲートなし（上の理由）。`gate-check.sh I586` exit 0・`check-frontend-evidence.sh I586` exit 0（frontend/src の変更なし）・`check-manual-test-executor.sh I586` exit 0。pytest・Jest・E2E は CI（review-gate で成功を確認）
 - 2026-11-27 16:50 test-gate（3 回目）: `bash scripts/claude/gate-check.sh I586` exit 0・`check-frontend-evidence.sh` exit 0（対象外）・`check-manual-test-executor.sh` exit 0。MT-10 は fix-loop で流し直し済み（食い違いなし）
+- 2026-11-27 18:05 test-gate（4 回目・CI D3 の直しの後）: `gate-check.sh` exit 0・`check-frontend-evidence.sh` exit 0（対象外）・`check-manual-test-executor.sh` exit 0。CI の Harness Tests は review-gate の CI 待ちで pass
 
 ## 再発防止記録（fix-loop・2026-11-27・MT-14 の NG）
 - なぜ失敗したか: 選択肢の記号と本文・問番号と問題文を半角スペース 1 つで区切ったため、記号が本文とくっついて見えた（ユーザーの指摘）。画面に記号を出す仕組みが無く、データに文字で書くしかないことは計画のときに分かっていたが、区切りの見え方を画面で確かめる観点が無かった
