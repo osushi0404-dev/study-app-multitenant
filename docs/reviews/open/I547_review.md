@@ -1,10 +1,14 @@
 # I547 レビュー: レビュー役 5 つの指示を BP のあるべき姿に見直す（最新化・漏れ・最適化）
 
 ## 変更概要
-- （実装の後に書く）
+- 5 つのレビュー役の指示を、公式の書き方（サブエージェント・プロンプト・2026-11-27 に照合）に照らして直し、すり抜けた実例のある観点を 6 つ足し、写しと強い言い回しを刈った。節ごとの判定は `docs/reviews/open/I547_agents_audit.md`
 
 ## 変更点
-- （実装の後に書く）
+- `.claude/agents/` の 5 つ: 入力の扱いを 1 節に・道具は 1 行・観点の見出しを P1〜P9 に・規約の節と §16 の扱い・足した観点（流れの途中の状態・時間がたつと現れるデータ・受け入れのリスクの根拠・UX の決まりの照合・画面と API の受け渡し）・高リスク判定の条件とスキル点検は review-rules の参照に・古い言い方と食い違いの直し
+- `docs/runbooks/review-rules.md`: 新しい節「高リスク判定の条件」・記録の連番の説明
+- `docs/runbooks/plan-writing-rules.md`・`docs/runbooks/harness-audit.md`・`rules/ultimate_django_coding_standards.md`・`docs/plans/templates/plan_template.md`: 1 文ずつ
+- `scripts/claude/tests/` の 3 本: 写しの一致を見る項目を、1 か所・写しが無いことを見る形に（D6・D9・TC-02・TC-02b・TC-14⑧b）
+- 一覧から直した 3 行を消した（I430 F7・I486 F6・I546 F3）。#594・#640 にコメント
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: なし（ハーネスのレビュー役の指示・手順書と規約の 1 文ずつ）
@@ -26,6 +30,9 @@
 - [plan] 前置きに `effort` などを足さない — 審査の入口が 4 項目しか受け付けず、足すとマージの後の審査が止まる（`scripts/claude/reviewer-agents-lib.sh:47`）。#640 に渡す
 - [plan] 同梱 E（受け入れのリスクの根拠）は Blocker にした — 計画レビューを通ると実装まで止まる場所が無いため
 - [plan-review] 計画レビュー OK（Warning 5・Info 1）。全部を計画書・テスト文書の追記で直し、やり直しはしない — 方式・範囲・受け入れ条件を変えないため（計画変更記録）
+- [implement] 写しの一致を見るテストの項目（i181 D6・D9・i593 TC-02・i185 TC-14⑧b）を、1 か所・参照を見る形に変えた — 写しを 1 つにすると落ちる項目で、写しを残すと AC4 に反するため（計画変更記録・計画レビューのやり直し OK）
+- [implement] bug のイシューから「画面と API の受け渡し」（#473・#488）の観点をコードレビュー役に足した — 2 回起き、どちらもマージ後に画面で見つかったため（計画変更記録）
+- [implement] /simplify の 4 観点の指摘を直した（review-rules の中の写しも (b) の 1 か所に・テストは集合で写しの無さを見る・レビュー役は節だけを Grep で読む）。節をスクリプトが入力に入れる案は #640 の範囲なので見送った — 写しと無駄を減らし、範囲は変えないため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

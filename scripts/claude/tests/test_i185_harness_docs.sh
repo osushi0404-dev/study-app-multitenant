@@ -144,7 +144,7 @@ ckt "TC-14⑦ onboarding.md の流れが新しい順番" has_line "$ONBOARDING" 
 # P4
 ckt "TC-14① どの SKILL.md の frontmatter にも allowed-tools がない" no_allowed_tools_in_frontmatter
 ckt "TC-14⑧a review-rules.md のスキル変更チェック 1 が新しい基準" has_line "$REVIEW_RULES" '| 1 | 使えるツールを絞る必要があるスキルは `disallowed-tools` で制限しているか。`allowed-tools` は「確認なしで使ってよい」事前許可で制限にはならないので、付けるなら本当に事前許可が要るものだけに絞っているか（素の `Bash` を事前許可していないか）（I185 P4） | セキュリティ |'
-ckt "TC-14⑧b plan-reviewer.md の観点が新しい基準" has_line "$PLAN_REVIEWER" '- 使えるツールを絞る必要があるスキルは `disallowed-tools` で制限しているか（`allowed-tools` は事前許可で制限にはならない。付けるなら本当に事前許可が要るものだけで、素の `Bash` を事前許可していないか）'
+ckt "TC-14⑧b plan-reviewer.md はスキル点検を review-rules.md のチェックリストの参照で見る（I547 で写しをやめた）" grep -qF '`docs/runbooks/review-rules.md`「スキルファイル変更時の Claude Code ベストプラクティス準拠」' "$PLAN_REVIEWER"
 ckt "TC-14⑧c lint_skills.py の必須項目に allowed-tools がない" lint_does_not_require_allowed_tools
 # P3 を I193 で入れたこと（fix-loop は止まらずに推奨案で進むが、案は診断レビューを通し、直した後は必ず review-gate に戻る）
 ckt "TC-14⑤a fix-loop 手順 4 は診断レビューを通った推奨案で止まらずに進む" grep -qF '4) 案を決める（止まらない）: 診断レビューを通った推奨案で進め' "$FIX_LOOP"

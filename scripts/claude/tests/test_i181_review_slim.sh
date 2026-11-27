@@ -51,10 +51,10 @@ for p in re.findall(r"`([^`]+)`", "\n".join(lines[start:end])):
 if bad:
     print(f"実在しないパス: {bad}"); sys.exit(1)
 PY
-# 集合の一致: path_risk_trigger の case 行 ＝ code-reviewer.md ＝ plan-reviewer.md の例外の行
+# 集合の一致: guard_path_trigger の case 行 ＝ review-rules.md「高リスク変更の敵対的レビューステージ」(b) の例外の一覧（I547 で 2 つのレビュー役の写しをこの 1 つにした）
 cat > "$TMP/sets.py" <<'PY'
 import re, sys
-crs, cr, pr = sys.argv[1:4]
+crs, md = sys.argv[1:3]
 src = open(crs, encoding="utf-8").read().split("\n")
 case = [l for l in src if re.match(r"^\s+\.github/\*\|", l)]
 if len(case) != 1:
@@ -62,13 +62,14 @@ if len(case) != 1:
 path_set = set(case[0].strip().split(")")[0].split("|"))
 def md_set(f):
     rows = [l for l in open(f, encoding="utf-8").read().split("\n")
-            if l.startswith("- 【harness 固有】GitHub から復旧できない例外")]
+            if "(b) ハーネスでは、例外に関わるファイルの変更（" in l]
     if len(rows) != 1:
         print(f"{f}: 例外の行が 1 行でない: {len(rows)}"); sys.exit(1)
-    return set(re.findall(r"`([^`]+)`", rows[0].split("（正は")[0]))
-a, b = md_set(cr), md_set(pr)
-if not (path_set == a == b):
-    print(f"不一致: path={sorted(path_set)} code-reviewer={sorted(a)} plan-reviewer={sorted(b)}"); sys.exit(1)
+    head = rows[0].split("例外に関わるファイルの変更（", 1)[1].split("。正は")[0]
+    return set(re.findall(r"`([^`]+)`", head))
+a = md_set(md)
+if path_set != a:
+    print(f"不一致: path={sorted(path_set)} md={sorted(a)}"); sys.exit(1)
 PY
 sec() { python3 "$TMP/sec.py" "$@" >/dev/null 2>&1; echo $?; }
 paths() { python3 "$TMP/paths.py" "$@" >/dev/null 2>&1; echo $?; }
@@ -87,7 +88,7 @@ ck() { if [ "$2" = "$3" ]; then printf 'PASS %s\n' "$1"; pass=$((pass+1));
 H_SK="## 3."; E_H2='^## '
 H_RR="## 高リスク変更の敵対的レビューステージ"
 H_AR_SCOPE="## 守る範囲"; H_AR_TOOL="## ツール境界"
-H_CR="## 高リスク判定の条件"; E_CR='^(## |---)'
+H_RISK="## 高リスク判定の条件"; E_RISK='^(## |---)'
 H_P8="### P8."; E_H3='^(### |## |---)'
 H_FL="3) 対応方法"; E_FL='^3\.5\)'
 
@@ -115,15 +116,15 @@ if r=0; for w in "${D4_WORDS[@]}"; do grep -qF -- "$w" "$AR" || r=1; done; [ "$r
 ck "D4 adversarial-reviewer に上限・資源の上限" 0 "$d4"
 ck "D4 adversarial-reviewer に守る範囲（A10）" 0 "$(sec "$AR" "$H_AR_SCOPE" "$E_H2" "${D4_SCOPE_WORDS[@]}")"
 ck "D5 review-rules に前提・例外の一覧" 0 "$(sec "$RR" "$H_RR" "$E_H2" "${D5_WORDS[@]}")"
-ck "D6 例外の集合が 3 か所で一致" 0 "$(sets "$CRS" "$CR" "$PR")"
+ck "D6 例外の集合が code-review.sh と review-rules の (b) で一致" 0 "$(sets "$CRS" "$RR")"
 ck "D7 fix-loop 手順 3 に安全装置を足す前の確認" 0 "$(sec "$FL" "$H_FL" "$E_FL" "${D7_WORDS[@]}")"
 ck "D7 plan-reviewer P8 に安全装置を足す前の確認" 0 "$(sec "$PR" "$H_P8" "$E_H3" "${D7_WORDS[@]}")"
 ck "D8 新しい節のパスが実在（SKILL §3）" 0 "$(paths "$SK" "$H_SK" "$E_H2")"
 ck "D8 新しい節のパスが実在（review-rules）" 0 "$(paths "$RR" "$H_RR" "$E_H2")"
 ck "D8 新しい節のパスが実在（adversarial 守る範囲）" 0 "$(paths "$AR" "$H_AR_SCOPE" "$E_H2")"
 ck "D8 新しい節のパスが実在（adversarial ツール境界）" 0 "$(paths "$AR" "$H_AR_TOOL" "$E_H2")"
-ck "D9 code-reviewer のアプリ条件が残り・Yes にしない行がある" 0 "$(sec "$CR" "$H_CR" "$E_CR" "${D9_WORDS[@]}")"
-ck "D9 code-reviewer に旧 harness 条件が無い" 0 "$(absent "$CR" -- '【harness 固有】hooks・ガード・権限設定・レビュー基盤' '【harness 固有】指示階層')"
+ck "D9 review-rules の高リスク判定の条件にアプリ条件・Yes にしない行がある" 0 "$(sec "$RR" "$H_RISK" "$E_RISK" "${D9_WORDS[@]}")"
+ck "D9 code-reviewer・review-rules に旧 harness 条件が無い" 0 "$(absent "$CR" "$RR" -- '【harness 固有】hooks・ガード・権限設定・レビュー基盤' '【harness 固有】指示階層')"
 
 # ---- 偽合格の防止（複製に注入して当てる） ----
 inject() { # inject <src> <dst> <python の置換式: s を書き換える>
@@ -157,19 +158,19 @@ else ck "FG-D4 ulimit -v を消すと D4 不合格（注入が起きた）" ok n
 fg "FG-D5 .secrets.baseline を消すと D5 不合格" "$RR" "$TMP/rr5.md" 's.replace(".secrets.baseline", "")' \
    sec "$TMP/rr5.md" "$H_RR" "$E_H2" "${D5_WORDS[@]}"
 # shellcheck disable=SC2016  # 置換式のバッククォートはリテラル（展開させない）
-fg "FG-D6 code-reviewer の例外から .github/* を消すと D6 不合格" "$CR" "$TMP/cr6.md" \
-   's.replace("`.github/*`・", "", 1)' sets "$CRS" "$TMP/cr6.md" "$PR"
+fg "FG-D6 review-rules の例外から .github/* を消すと D6 不合格" "$RR" "$TMP/rr6a.md" \
+   's.replace("`.github/*`・", "", 1)' sets "$CRS" "$TMP/rr6a.md"
 # shellcheck disable=SC2016
-fg "FG-D6 plan-reviewer の例外に CLAUDE.md を足すと D6 不合格" "$PR" "$TMP/pr6.md" \
-   's.replace("`.claude/settings.local.json`（正は", "`.claude/settings.local.json`・`CLAUDE.md`（正は", 1)' \
-   sets "$CRS" "$CR" "$TMP/pr6.md"
+fg "FG-D6 review-rules の例外に CLAUDE.md を足すと D6 不合格" "$RR" "$TMP/rr6b.md" \
+   's.replace("`.claude/settings.local.json`。正は", "`.claude/settings.local.json`・`CLAUDE.md`。正は", 1)' \
+   sets "$CRS" "$TMP/rr6b.md"
 fg "FG-D7 fix-loop の追加項目を消すと D7 不合格" "$FL" "$TMP/fl7.md" 's.replace("I179 retro P1", "")' \
    sec "$TMP/fl7.md" "$H_FL" "$E_FL" "${D7_WORDS[@]}"
 # shellcheck disable=SC2016
 fg "FG-D8 存在しないパスを足すと D8 不合格" "$SK" "$TMP/sk8.md" \
    's.replace("## 3.", "## 3.\n\n`docs/runbooks/no_such_file.md`\n", 1)' paths "$TMP/sk8.md" "$H_SK" "$E_H2"
-fg "FG-D9 マルチテナント境界変更を消すと D9 不合格" "$CR" "$TMP/cr9.md" 's.replace("マルチテナント境界変更", "")' \
-   sec "$TMP/cr9.md" "$H_CR" "$E_CR" "${D9_WORDS[@]}"
+fg "FG-D9 マルチテナント境界変更を消すと D9 不合格" "$RR" "$TMP/rr9.md" 's.replace("マルチテナント境界変更", "")' \
+   sec "$TMP/rr9.md" "$H_RISK" "$E_RISK" "${D9_WORDS[@]}"
 
 printf -- '---\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -105,7 +105,7 @@
 | H | 候補を挙げた | §9 と `docs/runbooks/harness-audit.md` に 1 行 |
 
 ## §8 漏れの点検（レビューをすり抜けた実例から）
-`docs/reviews/closed/*_review.md` の振り返りで、レビュー役の観点を足す案になった行（2026-11-27 に `grep -n "plan-reviewer.md\|code-reviewer.md\|adversarial-reviewer.md\|issue-reviewer.md\|fix-diagnosis-reviewer.md"` から「足す・追加・観点」を含む行を拾った 23 行）を、今の定義に入っているかで分けた。実装の段階で `bug` ラベルの閉じたイシューの題を見て、ここに無い種類があれば足す。
+`docs/reviews/closed/*_review.md` の振り返りで、レビュー役の観点を足す案になった行（2026-11-27 に `grep -n "plan-reviewer.md\|code-reviewer.md\|adversarial-reviewer.md\|issue-reviewer.md\|fix-diagnosis-reviewer.md"` から「足す・追加・観点」を含む行を拾った 23 行）を、今の定義に入っているかで分けた。実装の段階で `bug` ラベルの閉じたイシュー 30 件（2026-11-27 に `gh issue list --state closed --label bug --limit 100`）の題を見て、下の表の最後の 3 行を足した。
 | 元 | 案 | 今の定義 | 処遇 |
 |---|---|---|---|
 | I539 | 流れの途中の状態 | 無い | 足す（A） |
@@ -122,6 +122,9 @@
 | I187 | 画面の動きの回帰テスト | ある（code-reviewer P4） | そのまま |
 | I205・I197・I202・I512・I593 | 台帳・止める条件・RISK=up・受け入れ・テストを弱める差分 | ある | そのまま |
 | I062・I067・I071・I081・I086・I122・I185 | VERDICT・分岐パリティ・P9・コマンド衛生・敵対的レビュー・exit code の向き | ある | そのまま |
+| #473・#488（bug・実装の段階で足した） | 画面と API の受け渡しの形の食い違い（画面の数字が 0・空） | 計画レビュー役の P1 にだけある（「画面/API/DB で業務ルールの解釈が一致」） | 足す（コードレビュー役の P1・Medium） |
+| #431・#459・#472・#437（bug） | テナント境界の漏れ・0 件の日の 0 で割る・画像の無い問題の 500・ログの個人情報 | ある（P2 テナント境界・P1 エッジケース・P9 ログへの露出） | そのまま |
+| 残りの bug（見張り・CI 待ち・番号の桁・サンドボックスなどハーネスの穴） | ハーネスの仕組みの穴 | レビュー役の観点ではなく、各イシューで決定論のテストを足した | そのまま |
 
 ## §9 外す候補（#594 の問題集で 1 つずつ測ってから決める・S5）
 | # | 部品 | 外せそうな理由 | 測り方の案 |
@@ -134,4 +137,9 @@
 | X6 | 前置きの `effort`・`maxTurns` | 入口が 4 項目しか受け付けない（§0.3） | #640 で入口が受け付けるようにした後、問題集で比べる |
 
 ## 結果（実装で確定したものを足す）
--
+- §1〜§6 の「直す・消す・足す」の行は全部そのとおりに直した（2026-11-27 implement）。PR15・CR9 は、review-rules の新しい節にアプリの条件と「Yes にしない」行を置き、ハーネスの 2 つの一覧はどちらも既存の (b) の行を正にして参照する形にした（計画変更記録）
+- 写しの一致・有無を見るテストの項目 4 つを、1 か所・参照を見る形に変えた: `test_i181_review_slim.sh` の D6・D9・`test_i593_review_from_base.sh` の TC-02・`test_i185_harness_docs.sh` の TC-14⑧b（`test_i593` は FG-TC-02b を足して 4 → 5、ほかは項目の数は同じ）
+- §8 に bug のイシューから 1 種類（画面と API の受け渡し・#473・#488）を足し、コードレビュー役の P1 に 1 行足した
+- 前置きは 5 つとも 4 項目のまま。5 つとも審査の入口と同じ変換を通り、`claude -p` で固有の出力の形を答えた（手動 No.4）
+- コメント: #594（§9 の X1〜X6）https://github.com/osushi0404-dev/study-app-multitenant/issues/594#issuecomment-7206621750 ・#640（§0.2 の結果と前置きの項目）https://github.com/osushi0404-dev/study-app-multitenant/issues/640#issuecomment-7206622097
+- 一覧から消した行: `docs/reviews/backlog/I430.md` F7・`I486.md` F6・`I546.md` F3
