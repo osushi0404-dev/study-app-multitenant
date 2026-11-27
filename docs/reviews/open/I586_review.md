@@ -50,6 +50,8 @@
 
 - [fix-loop] review-gate（14:46）の BLOCKER はレビュー役の FINDING 行の形の崩れ（止める指摘は無し）。F5（承認を得ずに 125 行を一括更新した手順違反）はユーザーに報告して事後承認を得て（2026-11-27「今回の書き換えを承認する」）、計画書の Danger Ops に事後の記録を書いた。F6（古い書き方の例）も直した（診断メモ `I586_fix_diagnosis_20261127_1459.md`・診断レビュー PASS）
 
+- [review-gate] 差分のレビュー OK（`I586_code_review_20261127_1501.md`）。止めない指摘 F1〜F3・F5〜F8（計画 4-2 の例が古い・事後の Danger Ops の実行コマンド・§11 に一括更新の注意・MT-11 の結果が古い形のもの など）は retro で扱う — 台帳の決まり（I197）
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -59,3 +61,4 @@ STAGE_DONE: human-test NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
