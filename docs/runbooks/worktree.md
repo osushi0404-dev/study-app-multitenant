@@ -249,3 +249,27 @@ docker compose port backend 8000
 現在のワークツリーは `git worktree list` で確認する（手書きの一覧は古くなるため置かない）。
 
 トラックは GitHub のラベル `track:harness`（ハーネス改善）／`track:app`（アプリ開発）で区別する（付け方の決まりは docs/runbooks/issue-flow.md「起票」）。ワークツリーはトラックに固定しない。どのワークツリーでどのトラックのイシューを扱ってもよい（同時に扱うのは 1 ワークツリー 1 イシュー）。
+
+---
+
+## 11. 勉強用のワークツリー（I586）
+
+開発とは別に、本物の利用者としてアプリで勉強するためのワークツリー（`study`）。勉強の記録を長く残すため、開発の作業には使わない。
+
+- **作り方**: primary で `claude --worktree study`（§2）→ そのワークツリーで `wt-ports.sh`・起動（§5）→ ユーザーが画面（`http://localhost:<FRONTEND_PORT>/register`）で会員登録する（本人ひとりの組織ができ、本人がその管理者になる）
+- **使い方の決まり**:
+  - このワークツリーでほかのイシューの作業をしない（ブランチの切り替え・作業中のマイグレーション・E2E で DB が変わる）。`seed_e2e --flush` など DB を消す操作をしない
+  - 起動のたびに確かめ用のデータ（`verify_i487`）が作り直されるが、本人の利用者・組織には触れない（`frontend-verify.md` §11）
+  - アプリの更新は、PR がマージされた後に `git fetch origin` → `git switch --detach origin/develop` → 起動し直す（develop は primary が使っているので切り替えられない）
+  - 控えは `bash scripts/claude/db-backup.sh`（勉強の記録を消す前・アプリを更新する前に取る）
+- **Claude が本人の利用者で画面を操作するとき**: ユーザーがこのワークツリーの `e2e/.env.e2e` に `STUDY_USER_PASSWORD=<パスワード>` の行を足し、`/mcp` で playwright をつなぎ直す。Claude はパスワード欄に名前 `STUDY_USER_PASSWORD` を入れる（値は会話・出力に出ない・`frontend-verify.md` の `--secrets`）。値は `'` で囲む（`STUDY_USER_PASSWORD='<パスワード>'`。囲まないと `#` から後ろが消える。値が空と読まれた名前は置き換わらず、名前のまま入力される）。行を足す・直すたびに `/mcp` でつなぎ直す（起動したときしか読まない）。置き換わったかは、パスワード欄の値が名前と同じでないこと・8 文字以上であることだけを `browser_evaluate` で真偽で確かめる（値そのものは出さない）
+- **過去問の扱いの決まり**（IPA の使用条件: https://www.ipa.go.jp/shiken/faq.html ）:
+  - 問題・選択肢・正解は IPA の公開 PDF（問題冊子・解答例）からだけ取る。PDF はユーザーが保存する（Claude の `curl` は止められる）
+  - 出典の欄に「<年度> <期> <試験区分> <時間区分> 問N」（例: 令和6年度 秋期 データベーススペシャリスト試験 午前Ⅱ 問3）。改行・字下げ以外で表記を変えたら（下線が消える・枠の空欄を文字にする など）「（一部改変）」を付ける。上付き・下付きは Unicode の文字（B⁺・T₁）で書けば改変にならない。図・表を画像のまま付けるのは改変にならない
+  - 解説は Claude が書き、先頭に「（Claude 作成の解説。IPA の公式の解説ではありません）」を付ける。過去問サイト・参考書の解説は見ない・写さない。書いたら、別の点検役（Agent）に問題冊子・解答例だけを材料に全問を見てもらう。誤りに気づいたら問題管理の画面で直す（DB を `manage.py shell` で直すと問題一覧の一時保存が古いまま残る。そのときは `from core.cache_service import cache_service; cache_service.invalidate_problems_cache(<科目 ID>)` で消す）。Linux の確かめ用のブラウザでは `⇄` が別の記号で出るので使わない（`→`・`⁺`・`₁`・`¹⁶`・`ⁿ` は出る）
+  - 解説は選択肢ごとの行に分ける（1 行目: 注記／2 行目: 要点と「正解は〇です。」／3 行目から: `ア：…`・正解の行は `エ（正解）：…`）。`import_problems` は「**解説**：」の 1 行しか読まないので、改行入りの解説は取り込みの後に `manage.py shell` で入れる。複数の問題を画面を通さずに書き換えるのは `docs/runbooks/danger-ops.md` の「大量更新」に当たるので、先に `bash scripts/claude/db-backup.sh` で控えを取り、承認を得てから行う。画面が解説の改行を出すのは #645 の後（それまでは空白 1 つで出る）
+  - 問題の Markdown・画像・PDF はリポジトリに入れない（`.evidence/I###/` に置く。git の対象外）
+- **道具の注意**:
+  - `import_problems` は欄を 1 行だけ読み（改行は捨てられる）、難易度はファイルごと（`--difficulty`）。難易度ごとにファイルを分けて流す。ファイルは `docker compose cp <ファイル> backend:/tmp/` で渡す。画面は選択肢の記号を出さないので、選択肢の本文の先頭に記号と全角のピリオド（`ア．ディメンションテーブル`・画像の選択肢は `ア．画像のア`）を書く。半角スペースで区切ると記号が本文とくっついて見える。問題文の先頭に問番号は書かない（出典の欄に出る）
+  - 画像は `import_problems` では付かない。問題管理の画面の「問題用画像」で付ける
+  - PDF を画像にするのは使い捨てのコンテナの `pdftoppm`（`docker run --rm -v <PDF のフォルダ>:/in:ro -v <置き場所>:/out python:3.11-slim sh -c "apt-get update -qq && apt-get install -y -qq poppler-utils && pdftoppm …"`。範囲は `-x -y -W -H`、150dpi で A4 は 1240×1754px）
