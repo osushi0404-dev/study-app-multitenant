@@ -43,7 +43,7 @@
 - Backend: なし
 - Frontend: なし
 - DB: なし
-- Config/Infra: なし（`.claude/settings.json`・`.github/`・`.secrets.baseline` は触らない。`scripts/claude/` はテスト `scripts/claude/tests/test_i181_review_slim.sh` の D9 の読む場所の 1 か所だけを変え、スクリプトの動きは変えない）
+- Config/Infra: なし（`.claude/settings.json`・`.github/`・`.secrets.baseline` は触らない。`scripts/claude/` はテスト 3 本（`test_i181_review_slim.sh`・`test_i593_review_from_base.sh`・`test_i185_harness_docs.sh`）の、写しの一致・有無を見る項目だけを変え、スクリプトの動きは変えない）
 - ハーネス: 5 つのレビュー役の指示が変わる（効くのはマージの後・I593）。`review-rules.md` に高リスク判定の条件の節が入り、2 つのレビュー役はそこを読む。手順書・規約に 1 文ずつ
 
 ## 4. 変更点一覧（具体）
@@ -59,12 +59,14 @@
 | `.claude/agents/adversarial-reviewer.md` | C2・C4・AR4（実験の上限の例外・一覧 I430 F7）・AR5（実行できなかった行の説明・一覧 I486 F6） |
 | `.claude/agents/fix-diagnosis-reviewer.md` | C2・C3 |
 | `.claude/agents/issue-reviewer.md` | C2・C3・IR1（description の「手順 3」） |
-| `docs/runbooks/review-rules.md` | 新しい節「## 高リスク判定の条件」（今の 2 つの一覧の中身をそのまま 1 つに。アプリの条件・ハーネスの 2 つの一覧・Yes にしないもの）・「高リスク変更の敵対的レビューステージ」の (a) の参照先をこの節に・「命名と置き場所」の連番の説明を事実に（一覧 I546 F3） |
+| `docs/runbooks/review-rules.md` | 新しい節「## 高リスク判定の条件」（今の 2 つの一覧のアプリの条件と「Yes にしない」行をそのまま 1 つに。ハーネスの 2 つの一覧は既存の (b) の行を正にして参照する）・「高リスク変更の敵対的レビューステージ」の (a) の参照先をこの節に・「命名と置き場所」の連番の説明を事実に（一覧 I546 F3） |
 | `docs/runbooks/plan-writing-rules.md` | 8) に 1 文: 「受け入れにする行のうち、ユーザーのデータを失うもの・ほかの環境に及ぶものは、設計確認メモ（grill-me の回答）に根拠を書く。無ければ計画レビューの前にユーザーに確かめる」（同梱 E） |
 | `rules/ultimate_django_coding_standards.md` | §6 に 1 文: 「一覧を返さない `GenericAPIView` は、全体の設定の絞り込み・ページ分けが効くので、使わないなら `filter_backends = []`・`pagination_class = None` にする」（同梱 F） |
 | `docs/runbooks/harness-audit.md` | 冒頭に 1 行: 「モデルを変えたとき（既定のモデル・レビュー役の `model`）は、部品の見直しのイシューを起票する（部品を 1 つずつ外し、#594 の問題集で結果が落ちないかで決める・I547）」（同梱 H） |
 | `docs/plans/templates/plan_template.md` | 「必ず確かめる項目」の注釈の参照先「`.claude/agents/code-reviewer.md`「高リスク判定の条件」」を `docs/runbooks/review-rules.md`「高リスク判定の条件」に（PR15 の消費箇所） |
 | `scripts/claude/tests/test_i181_review_slim.sh` | D9（`:125` の語がある検査と `:126` の旧条件が無い検査の 2 つ）と FG-D9 が読む場所を `.claude/agents/code-reviewer.md` の「## 高リスク判定の条件」から `docs/runbooks/review-rules.md` の同じ名前の節に移す（見る語・失敗の注入・項目の数は変えない。一覧の置き場所を移すため。テストを弱める差分ではない） |
+| `scripts/claude/tests/test_i593_review_from_base.sh` | TC-02（審査の部品の一覧が `code-reviewer.md`・`plan-reviewer.md`・`review-rules.md` の 3 か所で `review_mechanism_trigger()` と一致するか）を、`review-rules.md` の 1 か所で一致するかに変え、2 つの定義に一覧の写しが無いことを見る 2 項目を足す（写しを 1 つにするため。項目の数は同じ。FG は review-rules の 1 つに残る） |
+| `scripts/claude/tests/test_i185_harness_docs.sh` | TC-14⑧b（plan-reviewer にスキル点検の項目 1 の写しの行があるか）を、plan-reviewer が `review-rules.md`「スキルファイル変更時の Claude Code ベストプラクティス準拠」を参照しているかに変える（写しを参照にするため・PR4。項目の数は同じ） |
 | `docs/reviews/backlog/I430.md`・`I486.md`・`I546.md` | 同梱した行（I430 F7・I486 F6・I546 F3）を直した後に消す |
 | `docs/reviews/open/I547_agents_audit.md` | 点検の表（作成済み）。実装で確定した結果・コメントの番号を足す |
 
@@ -89,7 +91,7 @@
 ### 自動
 - 決定論ゲート（`docs/tests/open/I547_auto_test.md`）: 定義の文字を見る既存のテスト 11 本が書き換えた後も合格する（TC-01。`test_i593_review_from_base.sh` の TC-03 が、前置きが入口の変換を通ることを確かめる）＋高リスク判定の条件の一覧が 1 か所だけにある（TC-02・TC-03）＋同梱の観点がある（TC-04）
 - 新しいテストのスクリプトは足さない。前置きの制約は既存の TC-03 が守り、ほかの変更は意図的な変更でしか戻らない（`plan-writing-rules.md`「決定論テストの対象の選び方」）
-- 既存のテストのスクリプトは、`test_i181_review_slim.sh` の D9 の読む場所だけを変える（一覧を移すため。見る語・失敗の注入・項目の数は同じ）。ほかは変えない（変えるときは計画変更記録に書き、テストを弱める差分の理由を残す）
+- 既存のテストのスクリプトは、写しを 1 つにするのに合わせて 3 本だけ変える: `test_i181_review_slim.sh` の D9 の読む場所・`test_i593_review_from_base.sh` の TC-02 の照らす場所・`test_i185_harness_docs.sh` の TC-14⑧b（どれも写しの一致・写しの有無を見る項目で、項目の数は同じ）。ほかは変えない（変えるときは計画変更記録に書き、テストを弱める差分の理由を残す）
 - pytest・Jest・E2E: 変更なし（文書だけ）。CI に任せる
 ### 手動（すべて Claude）
 - No.1 点検の表が、書き換える前の 5 つの定義の全部の見出しを覆っている（AC1）
@@ -152,6 +154,7 @@ Danger Ops（有無/手順/ロールバック）:
 
 ## 計画変更記録
 - 2026-11-27 計画レビュー（`docs/reviews/I547_plan_review_20261127_0911.md`・OK）の Warning 5 件・Info 1 件への対応: 3 節に test_i181 の 1 か所を書いた・D9 の `:126`（旧条件が無い検査）も読む場所を移すと書いた・手順 6 で観点を足すときは先に計画変更記録に書くとした・TC-04・TC-05 はこの PR の実装の確かめだけに使うと書いた・ゲートの複合の grep を 1 語ずつに分けた・R3 に #641 の retro での事後の確かめを書いた。計画レビューのやり直し: 不要（方式・範囲・受け入れ条件を変えない findings への対応の追記だけ）
+- 2026-11-27 implement（手順 1）: 計画書の記載「`review-rules.md` の新しい節に今の 2 つの一覧の中身をそのまま 1 つに」と「既存のテストは test_i181 の D9 だけ変える」→ 採った方法: 新しい節はアプリの条件と「Yes にしない」行だけを持ち、ハーネスの 2 つの一覧は既存の (b) の行を正にして参照する。テストは test_i181 の D9 に加え、`test_i593_review_from_base.sh` の TC-02（部品の一覧が 3 か所で一致）と `test_i185_harness_docs.sh` の TC-14⑧b（plan-reviewer にスキル点検の写しの行）を、1 か所・参照を見る形に変える — 理由: 実装の前にテストの見る語を洗ったら、TC-02 が review-rules の中に部品の一覧の行がちょうど 1 つであることと、2 つの定義にも同じ行があることを求め、TC-14⑧b がスキル点検の写しの行を求めていた。どちらも写しの一致を守る項目で、写しを 1 つにするとそのままでは落ちる。写しを残してテストを変えない案は AC4（同じことを 2 か所に書かない）と同梱 C に反する。項目の数は変えず、写しが戻らないことを見る項目に置き換えるので、テストを弱める差分ではない。計画レビューのやり直し: 要（変えるファイルの範囲を変える）
 
 ## レビュー結果
 - [20261127_0911 判定: ✅ 完了](../../reviews/I547_plan_review_20261127_0911.md)

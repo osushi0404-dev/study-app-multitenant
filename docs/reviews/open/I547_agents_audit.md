@@ -23,7 +23,7 @@
 ### §0.3 変えない約束（流れを止めないため）
 - **前置きは `name`・`description`・`tools`・`model` の 4 つだけ**。審査の入口は前置きをこの 4 つしか受け付けず、ほかの項目があると変換に失敗して審査が止まる（`reviewer-agents-lib.sh:47`〜`:48`。`effort`・`maxTurns`・`disallowedTools` などは S1 にあるが足さない。足すかは #640 にコメントで渡す）
 - **出力の形はスクリプトが読む**ので変えない: 計画レビューの `VERDICT:` 行と「判定: Yes / No」（`scripts/claude/plan-issue-review.sh`）・コードレビューの `FINDING:` 行と `VERDICT:` 行（`scripts/claude/code-review.sh`）・敵対的レビューの `ITEM:`・`NEW_CRITICAL:`・`NEW_HIGH:`・`EXPERIMENT_BEGIN/END`（`scripts/claude/adversarial-review.sh`）・診断レビューの `VERDICT:`（`scripts/claude/fix-review-lib.sh`）・イシューレビューの「## 判定: 十分/要補足」（`scripts/claude/issue-review.sh`・issue-bootstrap）
-- 定義の文字を見る既存のテスト 11 本（`test_i181_review_slim.sh` の D9 だけは、一覧を移す PR15・CR9 に合わせて読む場所を review-rules に移す）（`test_fix_review`・`test_i181_review_slim`・`test_i185_harness_docs`・`test_i193_official_flow`・`test_i197_adversarial_process`・`test_i197_review_ledger`・`test_i202_ledger_cleanup`・`test_i205_stop_criteria`・`test_i593_review_from_base`・`test_review_verdict`・`test_adversarial_trigger`）が見る語は残す。2026-11-27 にこのブランチの起点で 11 本とも exit 0
+- 定義の文字を見る既存のテスト 11 本（写しの一致・有無を見る 3 項目〔`test_i181_review_slim.sh` の D9・`test_i593_review_from_base.sh` の TC-02・`test_i185_harness_docs.sh` の TC-14⑧b〕は、写しを 1 つにする PR4・PR15・CR9 に合わせて、1 か所・参照を見る形に変える。項目の数は同じ）（`test_fix_review`・`test_i181_review_slim`・`test_i185_harness_docs`・`test_i193_official_flow`・`test_i197_adversarial_process`・`test_i197_review_ledger`・`test_i202_ledger_cleanup`・`test_i205_stop_criteria`・`test_i593_review_from_base`・`test_review_verdict`・`test_adversarial_trigger`）が見る語は残す。2026-11-27 にこのブランチの起点で 11 本とも exit 0
 
 ## §1 5 つに共通
 | # | 節・事柄 | 判定 | 変更内容 | 根拠 |
@@ -52,7 +52,7 @@
 | PR12 | P3・P5・P8・P9 | そのまま | P8 の安全装置の精密な判定（I599 の retro の案）はすでに入っている（`:147`） | 内部 |
 | PR13 | 差し戻しファースト原則の表 | そのまま | 例が具体的で S2 に合う | S2 |
 | PR14 | 重大度定義 | そのまま | | |
-| PR15 | 高リスク判定の条件（`:206`〜`:222`） | 直す（移す） | 一覧を `docs/runbooks/review-rules.md` の新しい節「高リスク判定の条件」に移し、ここは「その節の条件で判定する」の参照にする（コードレビュー役と同じ一覧の 2 つの写しを 1 つに） | §0.2・S3（重なり） |
+| PR15 | 高リスク判定の条件（`:206`〜`:222`） | 直す（移す） | 一覧のアプリの条件と「Yes にしない」行を `docs/runbooks/review-rules.md` の新しい節「高リスク判定の条件」に移し（ハーネスの 2 つの一覧は同じファイルの (b) の行が正）、ここは「その節の条件で判定する」の参照にする（コードレビュー役と同じ一覧の 2 つの写しを 1 つに） | §0.2・S3（重なり） |
 | PR16 | 出力の形・VERDICT 行 | そのまま（言い回しだけ C4） | §0.3 | |
 
 ## §3 `code-reviewer.md`
