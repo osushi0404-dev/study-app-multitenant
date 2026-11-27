@@ -110,6 +110,7 @@
 - [review-gate] 2 回目の fix-loop の後の差分のレビューは OK（F5・F6 は resolved。F8〔`error` の通知もマウスで止められない〕は計画で受け入れた R9）。敵対的レビューは、ユーザーが選んだ 1 周の延長（`--round-limit 3`）で 3 周目を流し、V1〜V4 とも確認済みで OK
 - [test-gate] 手動テスト No.7 を 2 回の fix-loop の後に Playwright MCP でやり直して OK（通知は上のバーの下・クリックを受け取らない・パネル／ユーザーメニュー／左のメニューの重なる所が押せる・1280px も OK）。TC-30 は CI（毎回新しい DB）で通っている（review-gate の CI 待ちの OK）
 - [retro] close の後の見直しの分: 予防処置 P1（浮いた表示の重なりの確かめ方）を #607 に同梱（コメント）。台帳の残りは F8（R9 で受け入れ・Low）だけで、#643 に追記する
+- [close] 2 回目の close。develop への追従は不要（BLOCKED＝承認待ち）・gate-check は OK。PR の説明に通知の直し（上のバーの下・クリックを受け取らない）と #607 を足した
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -133,3 +134,4 @@ STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
