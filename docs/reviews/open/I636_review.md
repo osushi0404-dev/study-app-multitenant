@@ -94,6 +94,7 @@
 - [fix-loop] 差分のレビューの F5・F6 は、ユーザーの選択「通知を押せない表示にする」（2026-11-27）に従い、押す操作を持たない通知（`success`・`error`・`loading`）をクリックを受け取らない表示にし、パネルの重なり順を戻して直した（診断メモ `docs/reviews/I636_fix_diagnosis_20261127_1430.md`・計画レビュー `docs/reviews/I636_plan_review_20261127_1011.md` は Blocker なし）。種類を絞ったのは、セッションの期限の警告の［セッション延長］を押せるままにするため
 - [fix-loop] 計画レビューの Warning「押す操作を持つ通知が押せることをコードの読みだけで確かめる」は、jsdom が `pointer-events` を効かせないので自動のテストにせず、ライブラリの作りを読んで記録し、手動テスト No.7 で画面でも確かめる — 自動のテストにするには E2E でセッションの期限の時間を進める仕組みが要り、範囲を超えるため
 - [review-gate] 2 回目の fix-loop の後の差分のレビューは OK（F5・F6 は resolved。F8〔`error` の通知もマウスで止められない〕は計画で受け入れた R9）。敵対的レビューは、ユーザーが選んだ 1 周の延長（`--round-limit 3`）で 3 周目を流し、V1〜V4 とも確認済みで OK
+- [test-gate] 手動テスト No.7 を 2 回の fix-loop の後に Playwright MCP でやり直して OK（通知は上のバーの下・クリックを受け取らない・パネル／ユーザーメニュー／左のメニューの重なる所が押せる・1280px も OK）。TC-30 は CI（毎回新しい DB）で通っている（review-gate の CI 待ちの OK）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -115,3 +116,4 @@ STAGE_DONE: review-gate NEXT: fix-loop
 
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
+STAGE_DONE: test-gate NEXT: retro
