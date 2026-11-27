@@ -58,6 +58,8 @@
 
 - [test-gate] 3 回目は gate-check と 2 つの判定だけを流した — 変更は解説のデータと記録だけで、MT-10 の照らし合わせは fix-loop で流し直し済みのため
 
+- [human-test] MT-14 は再テストをせず OK とした（ユーザーの「OK」）— 画面が改行を出さず、データの書き直しが見た目に表れないため。残りの 2 点は #645 で確かめる。再テストを頼んだのは Claude の判断ミス（変更が見た目に表れるかを確かめずに依頼した）
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -73,3 +75,4 @@ STAGE_DONE: human-test NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
+STAGE_DONE: human-test NEXT: retro
