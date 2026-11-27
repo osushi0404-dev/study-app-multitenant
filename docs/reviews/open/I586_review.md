@@ -115,6 +115,8 @@
 
 - [close] 最後の確認で CI の Harness Tests が落ちた（`test_i202_ledger_cleanup.sh` の D3: 一覧の `- F` で始まる行はすべて決まった形）。retro で `docs/reviews/backlog/I586.md` に書いた注記の行「- F1・F5・F6・F8 は…」が指摘の行と見なされた。close の決まりどおり記録を open に戻して fix-loop へ
 
+- [fix-loop] CI の D3 の失敗は、一覧の注記の行を `- F` で始まらない書き方にして直した（診断メモ `I586_fix_diagnosis_20261127_1720.md`・診断レビュー PASS）。手元は D3 の判定だけを失敗注入つきで流した（`run-all.sh` はサンドボックスで依存を落とせない）
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
