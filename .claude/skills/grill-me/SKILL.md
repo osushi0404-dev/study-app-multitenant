@@ -17,7 +17,7 @@ disable-model-invocation: true
 ```bash
 bash scripts/claude/issue-source.sh body $ARGUMENTS
 ```
-手元のイシューファイル（I427 未満の今までのイシュー）があればその中身、無ければ GitHub の本文が出る（新しいイシュー・I221。`docs/runbooks/workflow.md`「イシューの置き場所」）。終了コード 2 のときは、出力の理由（番号に当たるファイルが無い・PR の番号など）をユーザーに伝えて止まる。
+手元のイシューファイル（I427 未満の今までのイシュー）があればその中身、無ければ GitHub の本文が出る（新しいイシュー・I221。`docs/runbooks/workflow.md`「イシューの置き場所」）。終了コード 2 のときは、出力の理由（番号に当たるファイルが無い・PR の番号など）をユーザーに伝えて止まる。新しいイシューは、本文の後ろに「## GitHub のコメント」の節（同梱・訂正のコメント。外の人と隠されたコメントは中身を出さない・I639）が付くので、コメントも依頼の一部として読む。
 
 ### 2. コードベースを探索して自己解決できる疑問を除去する
 - 関連スキルファイル・既存コード・runbooks を読み、コードを見れば分かる疑問は除く
@@ -46,10 +46,10 @@ bash scripts/claude/issue-source.sh body $ARGUMENTS
 ### 4. ユーザーの回答をイシューに追記する
 
 書き込む先は、既存のイシューファイルの有無で分ける（どちらも、下の「設計確認メモ」「本文整合」「機械検証」「GitHub の本文の書き換え」を同じ順に行う）:
-- **既存のイシューファイルがある**（`bash scripts/claude/issue-source.sh path $ARGUMENTS` が exit 0 で、そのパスを出す）: そのファイルを Edit で直す。機械検証は `bash scripts/claude/check-memo-body-paths.sh $ARGUMENTS`。最後に `gh issue edit <GitHub#> --body-file <そのファイル>`（`<GitHub#>` は `bash scripts/claude/issue-source.sh gh-number $ARGUMENTS` の出力）
-- **既存のイシューファイルが無い**（新しいイシュー。`issue-source.sh path` が exit 1）: GitHub の本文をスクラッチパッドの下書きに書き出して直し、GitHub に書き戻す。手元のリポジトリには何も残さない
+- **既存のイシューファイルがある**（`bash scripts/claude/issue-source.sh path $ARGUMENTS` が exit 0 で、そのパスを出し、そのファイルの 3 行目が `> GitHub #<番号> の本文の写し（` で始まらない＝本文の写しでない）: そのファイルを Edit で直す。機械検証は `bash scripts/claude/check-memo-body-paths.sh $ARGUMENTS`。最後に `gh issue edit <GitHub#> --body-file <そのファイル>`（`<GitHub#>` は `bash scripts/claude/issue-source.sh gh-number $ARGUMENTS` の出力）
+- **既存のイシューファイルが無い**（新しいイシュー。`issue-source.sh path` が exit 1、またはそのファイルが本文の写し）: GitHub の本文をスクラッチパッドの下書きに書き出して直し、GitHub に書き戻す。手元のリポジトリには何も残さない（本文の写しがあっても直さない。計画を始めた後の変更は計画変更記録と写しに書く・`docs/runbooks/issue-flow.md`）
   1. `bash scripts/claude/issue-source.sh gh-number $ARGUMENTS` を単体で流し、出た番号を `<N>` とする
-  2. 手順 1 で出た本文を、Write ツールでスクラッチパッドの下書き `<スクラッチパッド>/${ARGUMENTS}_body.md`（以下 `<下書き>`。実際のパスをそのまま書く）に書き、Edit で「## 設計確認メモ（/grill-me）」の追記と本文整合を行う
+  2. `bash scripts/claude/issue-source.sh raw-body $ARGUMENTS` を単体で流し（本文だけが出る。手順 1 の出力はコメントの節が付くので使わない）、出た本文を、Write ツールでスクラッチパッドの下書き `<スクラッチパッド>/${ARGUMENTS}_body.md`（以下 `<下書き>`。実際のパスをそのまま書く）に書き、Edit で「## 設計確認メモ（/grill-me）」の追記と本文整合を行う
   3. 次を流す（`<N>`・`<下書き>` は値をそのまま書く）:
   ```bash
   bash scripts/claude/check-memo-body-paths.sh --file <下書き>
