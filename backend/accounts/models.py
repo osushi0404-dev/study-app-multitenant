@@ -175,6 +175,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
+    @property
+    def can_manage_members(self) -> bool:
+        """メンバー管理（I620）を使えるか。権限（IsOrgMemberManager）と画面（/api/auth/me/）が同じこれを読む（I636）
+
+        組織の条件は招待の引き当て（I539）と同じ OrganizationQuerySet.invitable() の 1 か所だけに書く
+        """
+        if self.role != 'admin' or self.organization_id is None:
+            return False
+        return Organization.objects.invitable().filter(pk=self.organization_id).exists()
+
     # パスワードの誤りでかけるロック（ログインとパスキーの本人確認で同じ・I619）
     LOCK_THRESHOLD = 5
     LOCK_MINUTES = 30

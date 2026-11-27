@@ -1,7 +1,8 @@
 /**
  * メンバー管理（組織の管理者・I620）
  * - 自分の組織の利用者の一覧・ユーザー ID だけでの追加・登録用リンクの発行と取り消し・パスキーの一覧と削除
- * - 本人ひとりの組織の管理者には出さない（メニューも出さず、API も 403）
+ * - メンバー管理を使えない管理者（本人ひとり・無効・共有の personal の組織）には出さない。判定は裏側の
+ *   can_manage_members（API の権限と同じ・I636）
  * - 本人確認（usePasskeyReauth）は画面に 1 つだけ置き、行どうしで印を共有する
  */
 import { useState } from 'react';
@@ -52,8 +53,8 @@ const linkLabel = (member: Member): string => {
 
 function MemberManagement() {
   const { user } = useAuth();
-  // 本人ひとりの組織の管理者には中身を描かない（一覧の API も呼ばない）
-  if (user?.organization_is_individual) {
+  // メンバー管理を使えない人には中身を描かない（一覧の API も呼ばない）
+  if (!user?.can_manage_members) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{NO_ACCESS}</Alert>
@@ -67,6 +68,8 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<{ userId: string; link: RegistrationLinkIssued } | null>(null);
+  // 追加の流れで発行している人の ID（その人の行の［登録用リンク］と［メンバーを追加］を押せなくする・I636 F8）
+  const [issuingFor, setIssuingFor] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { list, create } = useMembers(viewerId, page);
   const ownPasskeys = usePasskeys(viewerId);
@@ -77,6 +80,7 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
     const member = await create.mutateAsync(userId);
     setAdding(false);
     toast.success('メンバーを追加しました');
+    setIssuingFor(member.id);
     try {
       const link = await reauth.withReauth((token) => credentialApi(MEMBERS_BASE).issueLink(token, member.id));
       setAdded({ userId: member.user_id ?? userId, link });
@@ -84,12 +88,17 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
       queryClient.invalidateQueries({ queryKey: membersKeyRoot(viewerId) });
     } catch (error) {
       if (!(error instanceof ReauthCancelledError)) toast.error(apiErrorText(error, ISSUE_FAILED));
+    } finally {
+      setIssuingFor(null);
     }
   };
 
   const renderRow = (member: Member) => (
     <TableRow key={member.id}>
-      <TableCell>{member.user_id}</TableCell>
+      <TableCell sx={{ whiteSpace: 'normal' }}>
+        {/* 表のセルの min-width は効き方が決まっていないので、中のブロックの要素に持たせる（I636 F12） */}
+        <Box sx={{ minWidth: 120, overflowWrap: 'anywhere' }}>{member.user_id}</Box>
+      </TableCell>
       <TableCell>{member.role === 'admin' ? '管理者' : 'メンバー'}{member.is_active ? '' : '（無効）'}</TableCell>
       <TableCell>{member.passkey_count} 個</TableCell>
       <TableCell>{linkLabel(member)}</TableCell>
@@ -104,6 +113,8 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
             userId={member.user_id ?? ""}
             hasOpenLink={member.registration_link_expires_at !== null}
             withReauth={reauth.withReauth}
+            issueBusy={issuingFor === member.id}
+            wrap={false}
           />
         )}
       </TableCell>
@@ -127,18 +138,19 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
     const pages = Math.ceil(list.data.count / PAGE_SIZE);
     return (
       <>
-        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-          {/* 狭い画面では列を縮めず、表の中で横に流す（I620 test-gate No.12）。ユーザー ID の列だけ折り返す */}
+        {/* 狭い画面では列を縮めず、表の中で横に流す（I620 test-gate No.12）。ユーザー ID の列だけ折り返す。
+            横に流れる枠はキーボードでも動かせるよう、名前を付けて Tab で入れるようにする（I636 F10） */}
+        <TableContainer
+          component={Paper}
+          role="region"
+          aria-label="メンバーの一覧の表（横に動かせます）"
+          tabIndex={0}
+          sx={{ overflowX: 'auto' }}
+        >
           <Table
             size="small"
             aria-label="メンバーの一覧"
-            sx={{
-              minWidth: 720,
-              '& th, & td': { whiteSpace: 'nowrap' },
-              '& td:first-of-type': { whiteSpace: 'normal', overflowWrap: 'anywhere', minWidth: 120 },
-              // 操作のボタンは表の中では横に並べる（運営の欄では折り返す）
-              '& td:last-of-type > div': { flexWrap: 'nowrap' },
-            }}
+            sx={{ minWidth: 720, '& th, & td': { whiteSpace: 'nowrap' } }}
           >
             <TableHead>
               <TableRow>
@@ -163,7 +175,13 @@ function MemberManagementContent({ viewerId }: { viewerId: string }) {
     <Box sx={{ p: { xs: 1, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
         <Typography variant="h4" component="h1">メンバー管理</Typography>
-        <Button variant="contained" startIcon={<PersonAdd />} onClick={() => setAdding(true)} sx={{ minHeight: 44 }}>
+        <Button
+          variant="contained"
+          startIcon={<PersonAdd />}
+          onClick={() => setAdding(true)}
+          disabled={issuingFor !== null}
+          sx={{ minHeight: 44 }}
+        >
           メンバーを追加
         </Button>
       </Box>

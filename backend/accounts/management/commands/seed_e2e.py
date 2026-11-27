@@ -1,4 +1,5 @@
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 from accounts.models import Organization, OrganizationCategory
 
@@ -30,6 +31,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # E2E の利用者（既知のパスワード・運営を含む）を本番に作らない（I636 design-security-review）
+        if not settings.DEBUG:
+            raise CommandError('seed_e2e は DEBUG が真の環境（開発・E2E）でだけ流せます')
         self.e2e_password = options['password']
 
         if options['flush']:
@@ -94,12 +98,46 @@ class Command(BaseCommand):
             organization=org_b,
             role='admin',  # org_b admin として /subject-management にアクセスし、org_a データが見えないことを検証
         )
+        self._seed_verification_accounts(cat)
         from problems.models import Subject
         org_a = Organization.objects.get(slug='e2e-org-a')
         Subject.objects.get_or_create(
             name='E2E Subject A',
             organization=org_a,
             defaults={'slug': 'e2e-subject-a'},
+        )
+
+    def _seed_verification_accounts(self, cat):
+        """確かめ用の運営と本人ひとりの組織の管理者（I636。I620 の test-gate で手で作ったもの）
+
+        運営は専用の組織に置き、組織 A・B のメンバーの一覧と件数に混ぜない。運営の権限は is_staff で決まる。
+        本人ひとりの組織は固定の slug にして、何度流しても組織を増やさない
+        """
+        org_staff, _ = Organization.objects.get_or_create(
+            slug='e2e-org-staff',
+            defaults={'name': 'E2E Org Staff', 'category': cat},
+        )
+        User.objects.filter(email='e2e_staff@example.com').delete()
+        User.objects.create_user(
+            email='e2e_staff@example.com',
+            user_id='e2e_staff',
+            password=self.e2e_password,
+            organization=org_staff,
+            role='user',
+            is_staff=True,
+        )
+        org_solo, _ = Organization.objects.get_or_create(
+            slug='e2e-org-solo',
+            defaults={'name': 'e2e_soloさんの学習', 'category': cat,
+                      'type': Organization.TYPE_PERSONAL, 'is_individual': True},
+        )
+        User.objects.filter(email='e2e_solo@example.com').delete()
+        User.objects.create_user(
+            email='e2e_solo@example.com',
+            user_id='e2e_solo',
+            password=self.e2e_password,
+            organization=org_solo,
+            role='admin',
         )
 
     def _seed_quiz_session(self):

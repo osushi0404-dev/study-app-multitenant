@@ -1,6 +1,7 @@
 /**
  * 1 人分の［登録用リンク］［パスキー］［リンクを取り消す］と、その確認・表示のダイアログ（I620）
  * メンバー管理と運営の編集画面で使う。本人確認（withReauth）は画面に 1 つだけ置き、行どうしで印を共有する
+ * ボタンの並びは wrap で決める（表の中では横に並べ、運営の欄では折り返す・I636 F12）
  */
 import { useState } from 'react';
 import toast from 'react-hot-toast';
@@ -28,9 +29,14 @@ type Props = {
   userId: string;
   hasOpenLink: boolean;
   withReauth: WithReauth;
+  /** 呼ぶ側が同じ人に発行している間（追加の流れ）は［登録用リンク］を押せなくする（I636 F8） */
+  issueBusy?: boolean;
+  wrap?: boolean;
 };
 
-function MemberCredentialActions({ base, viewerId, memberId, userId, hasOpenLink, withReauth }: Props) {
+function MemberCredentialActions({
+  base, viewerId, memberId, userId, hasOpenLink, withReauth, issueBusy = false, wrap = true,
+}: Props) {
   const [confirm, setConfirm] = useState<LinkConfirmKind | null>(null);
   const [issued, setIssued] = useState<RegistrationLinkIssued | null>(null);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
@@ -81,13 +87,13 @@ function MemberCredentialActions({ base, viewerId, memberId, userId, hasOpenLink
 
   return (
     <>
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      <Box role="group" aria-label={`『${userId}』の操作`} sx={{ display: 'flex', gap: 1, flexWrap: wrap ? 'wrap' : 'nowrap' }}>
         <Button
           size="small"
           variant="outlined"
           startIcon={<LinkIcon />}
           onClick={() => setConfirm('issue')}
-          disabled={credentials.issueLink.isPending}
+          disabled={credentials.issueLink.isPending || issueBusy}
           sx={{ minHeight: 44 }}
         >
           登録用リンク

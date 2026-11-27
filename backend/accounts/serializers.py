@@ -196,10 +196,8 @@ class UserSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(
         source='organization.name', read_only=True, default=None
     )
-    # 本人ひとりの組織か（画面がメンバー管理のメニューを出し分ける・I620）
-    organization_is_individual = serializers.BooleanField(
-        source='organization.is_individual', read_only=True, default=False
-    )
+    # メンバー管理を使えるか（画面がメニューと入口を出し分ける。API の権限と同じ判定・I636）
+    can_manage_members = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -207,11 +205,11 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'user_id', 'role',
             'is_email_verified', 'is_staff', 'is_superuser',
             'last_login', 'created_at',
-            'organization_name', 'organization_is_individual',
+            'organization_name', 'can_manage_members',
         )
         read_only_fields = (
             'id', 'user_id', 'role', 'is_staff', 'is_superuser',
-            'last_login', 'created_at', 'organization_name', 'organization_is_individual',
+            'last_login', 'created_at', 'organization_name', 'can_manage_members',
         )
 
 
@@ -233,19 +231,27 @@ class MemberSerializer(serializers.ModelSerializer):
         return request is not None and obj.pk == request.user.pk
 
 
+DUPLICATE_USER_ID = 'このユーザーIDは既に使用されています'
+
+
 class MemberCreateSerializer(serializers.Serializer):
     """メンバーの作成はユーザー ID だけ（役割・組織・有効は受け取らない）"""
+    # エラー文はすべて日本語にそろえる（DRF の既定の英語を出さない・I636 F6）
     user_id = serializers.CharField(
         min_length=3, max_length=30,
-        error_messages={'blank': 'ユーザーIDを入力してください',
-                        'min_length': 'ユーザーIDは3文字以上で入力してください'},
+        error_messages={'required': 'ユーザーIDを入力してください',
+                        'null': 'ユーザーIDを入力してください',
+                        'blank': 'ユーザーIDを入力してください',
+                        'invalid': 'ユーザーIDは文字で入力してください',
+                        'min_length': 'ユーザーIDは3文字以上で入力してください',
+                        'max_length': 'ユーザーIDは30文字以内で入力してください'},
         validators=[RegexValidator(regex=r'^[a-zA-Z0-9_]+$',
                                    message='ユーザーIDは半角英数字とアンダースコアのみ使用できます',
                                    code='invalid_user_id')])
 
     def validate_user_id(self, value):
         if User.objects.filter(user_id=value).exists():
-            raise serializers.ValidationError('このユーザーIDは既に使用されています')
+            raise serializers.ValidationError(DUPLICATE_USER_ID)
         return value
 
 

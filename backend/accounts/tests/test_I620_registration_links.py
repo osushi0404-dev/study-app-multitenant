@@ -11,6 +11,7 @@ import threading
 import uuid
 from datetime import datetime, timedelta
 from io import StringIO
+from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -22,7 +23,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts import passkeys
+from accounts import passkeys, registration_links
+from accounts.serializers import MemberCreateSerializer
 from accounts.models import Organization, OrganizationCategory, Passkey, RegistrationLink, WebAuthnChallenge
 from accounts.tests.webauthn_soft_authenticator import SoftAuthenticator
 
@@ -47,6 +49,7 @@ INDIVIDUAL_TARGET = "個人利用の利用者には発行できません"
 
 VERIFY_FAILED = "パスキーを確かめられませんでした。もう一度お試しください"
 DUPLICATE = "この端末のパスキーはすでに登録されています"
+DUPLICATE_USER_ID = "このユーザーIDは既に使用されています"
 URL_PATTERN = re.compile(r"^http://localhost:3000/passkey-setup#token=([A-Za-z0-9_-]{43})$")
 
 
@@ -238,6 +241,44 @@ def test_tc02_create_member_invalid(people, user_id):
 
 
 @pytest.mark.django_db
+def test_i636_create_member_race_is_400(people, caplog):
+    """I636 TC-04（F4）: 存在の確認の後に同じ ID の行ができても、500 でなく重複の 400"""
+    org_b = people["bob"].organization
+    real = MemberCreateSerializer.validate_user_id
+
+    def racing(self, value):
+        value = real(self, value)
+        _user(value, org_b)  # 確認と作成の間に、別の組織で同じ ID が作られた
+        return value
+
+    with mock.patch.object(MemberCreateSerializer, "validate_user_id", racing), \
+            caplog.at_level(logging.INFO, logger="accounts.registration_links"):
+        response = client_for(people["admin_a"]).post(MEMBERS, {"user_id": "racer"}, format="json")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.content
+    assert sub_message(response) == DUPLICATE_USER_ID
+    assert list(User.objects.filter(user_id="racer").values_list("organization_id", flat=True)) == [org_b.pk]
+    assert "racer" not in caplog.text
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("payload,message", [
+    ({}, "ユーザーIDを入力してください"),
+    ({"user_id": None}, "ユーザーIDを入力してください"),
+    ({"user_id": ""}, "ユーザーIDを入力してください"),
+    ({"user_id": "ab"}, "ユーザーIDは3文字以上で入力してください"),
+    ({"user_id": "a" * 31}, "ユーザーIDは30文字以内で入力してください"),
+    ({"user_id": "bad-id"}, "ユーザーIDは半角英数字とアンダースコアのみ使用できます"),
+    ({"user_id": ["x"]}, "ユーザーIDは文字で入力してください"),
+    ({"user_id": "alice"}, DUPLICATE_USER_ID),
+])
+def test_i636_create_member_error_messages(people, payload, message):
+    """I636 TC-06（F6）: 作成のエラー文はすべて日本語"""
+    response = client_for(people["admin_a"]).post(MEMBERS, payload, format="json")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert sub_message(response) == message
+
+
+@pytest.mark.django_db
 def test_tc02_create_member_forbidden_and_no_detail_route(people):
     assert client_for(people["solo"]).post(MEMBERS, {"user_id": "y_y"}, format="json").status_code == 403
     detail = f"{MEMBERS}{people['alice'].id}/"
@@ -388,6 +429,74 @@ def test_tc05_options_bad_token(people, token):
     assert sub_message(response) == LINK_UNUSABLE
 
 
+# ------------------------------------------- I636 TC-02（M2）complete の側の使えないリンク ----
+UNUSABLE_KINDS = ["expired", "revoked", "inactive_user", "inactive_org"]
+
+
+def _assert_complete_rejected(response, alice):
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.content
+    assert sub_message(response) == LINK_UNUSABLE
+    assert Passkey.objects.filter(user=alice).count() == 0
+    assert RegistrationLink.objects.get(user=alice).used_at is None
+
+
+def _unusable_after_consume(kind, people, token):
+    """challenge を使った直後（1 回目の確かめと鍵つきの引き直しの間）にリンクを使えなくする"""
+    real = passkeys.consume_challenge
+
+    def consume_then_break(**kwargs):
+        result = real(**kwargs)
+        _make_unusable(kind, people, token)
+        return result
+    return mock.patch.object(passkeys, "consume_challenge", side_effect=consume_then_break)
+
+
+def _skip_locked_recheck():
+    """失敗の注入: 鍵つきの引き直し（lock=True）で、確かめずに行を返す"""
+    real = registration_links._usable_link
+
+    def usable(token, *, lock):
+        if lock:
+            return RegistrationLink.objects.select_related("user__organization").get(
+                token_hash=registration_links.hash_token(token))
+        return real(token, lock=lock)
+    return mock.patch.object(registration_links, "_usable_link", side_effect=usable)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", UNUSABLE_KINDS)
+def test_i636_complete_unusable(people, kind):
+    alice = people["alice"]
+    token = issued_token(people["admin_a"], alice)
+    options = link_options(token).json()
+    _make_unusable(kind, people, token)
+    _, response = complete(token, options=options)
+    _assert_complete_rejected(response, alice)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", UNUSABLE_KINDS)
+def test_i636_complete_unusable_after_first_check(people, kind):
+    alice = people["alice"]
+    token = issued_token(people["admin_a"], alice)
+    options = link_options(token).json()
+    with _unusable_after_consume(kind, people, token):
+        _, response = complete(token, options=options)
+    _assert_complete_rejected(response, alice)
+
+
+@pytest.mark.django_db
+def test_i636_complete_without_locked_recheck_would_pass(people):
+    """上のテストが鍵つきの引き直しを確かめていることの証拠（外すと 200 になる＝上のテストが落ちる）。
+    期限切れで確かめる（失効は「使用済みかつ失効」を禁じる DB の制約が別に止めるので、
+    引き直しの有無を見分けられない）"""
+    token = issued_token(people["admin_a"], people["alice"])
+    options = link_options(token).json()
+    with _unusable_after_consume("expired", people, token), _skip_locked_recheck():
+        _, response = complete(token, options=options)
+    assert response.status_code == status.HTTP_200_OK, response.content
+
+
 # ------------------------------------------------------ TC-06 リンクの complete ----
 @pytest.mark.django_db
 def test_tc06_complete_logs_in(people):
@@ -446,19 +555,42 @@ def test_tc06_reactivated_user(people):
 
 
 # ------------------------------------------------------------ TC-07 同時使用 ----
-@pytest.mark.django_db(transaction=True)
-def test_tc07_concurrent_complete_only_once(people):
-    token = issued_token(people["admin_a"], people["alice"])
+def _rendezvous_in_lock(broken):
+    """鍵の中の処理（パスキーの作成）の前で 2 本を待ち合わせる（2 秒で時間切れ）。
+
+    行の鍵があると 2 本目は鍵で待つので待ち合わせは時間切れになり（broken に記録）、1 本目が先に確定する。
+    鍵が無いと 2 本とも鍵の中に入って待ち合わせを通る。実行の順に頼らずに、鍵の有無で結果が決まる（I636 L）
+    """
+    real = passkeys.verify_and_create_passkey
+    rendezvous = threading.Barrier(2, timeout=2)
+
+    def wait_then_create(**kwargs):
+        try:
+            rendezvous.wait()
+        except threading.BrokenBarrierError:
+            broken.append(True)
+        return real(**kwargs)
+    return mock.patch.object(passkeys, "verify_and_create_passkey", side_effect=wait_then_create)
+
+
+def _without_row_lock():
+    """失敗の注入: 鍵つきの引き直しを鍵なしにする"""
+    real = registration_links._usable_link
+    return mock.patch.object(registration_links, "_usable_link",
+                             side_effect=lambda token, *, lock: real(token, lock=False))
+
+
+def _complete_twice_at_once(token):
     prepared = []
     for _ in range(2):
         options = link_options(token).json()
         prepared.append((options, SoftAuthenticator().registration_response(options["options"]["challenge"])))
-    barrier = threading.Barrier(2)
+    start = threading.Barrier(2)
     results = []
 
     def run(options, credential):
         try:
-            barrier.wait()
+            start.wait()
             response = client_for().post(
                 LINK_COMPLETE, {"token": token, "challenge_id": options["challenge_id"],
                                 "credential": credential}, format="json")
@@ -471,9 +603,31 @@ def test_tc07_concurrent_complete_only_once(people):
         thread.start()
     for thread in threads:
         thread.join()
-    assert sorted(results) == [200, 400]
+    return sorted(results)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_tc07_concurrent_complete_only_once(people):
+    token = issued_token(people["admin_a"], people["alice"])
+    broken = []
+    with _rendezvous_in_lock(broken):
+        results = _complete_twice_at_once(token)
+    assert results == [200, 400]
+    assert broken, "2 本目が鍵で待たず、待ち合わせが時間切れにならなかった"
     assert Passkey.objects.filter(user=people["alice"]).count() == 1
     assert RegistrationLink.objects.filter(user=people["alice"], used_at__isnull=False).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_i636_concurrent_without_row_lock_both_succeed(people):
+    """上のテストが行の鍵を確かめていることの証拠（鍵を外すと 2 本とも通る＝上のテストが落ちる）"""
+    token = issued_token(people["admin_a"], people["alice"])
+    broken = []
+    with _rendezvous_in_lock(broken), _without_row_lock():
+        results = _complete_twice_at_once(token)
+    assert results == [200, 200]
+    assert not broken
+    assert Passkey.objects.filter(user=people["alice"]).count() == 2
 
 
 # ---------------------------------------------- TC-08 管理者によるパスキーの扱い ----
@@ -498,6 +652,43 @@ def test_tc08_member_passkeys(people):
     response = client_for(admin).delete(f"{MEMBERS}{admin.id}/passkeys/{own.id}/", **reauth(admin))
     assert response.status_code == status.HTTP_400_BAD_REQUEST and sub_message(response) == CANNOT_TARGET_SELF
     assert client_for(people["solo"]).get(f"{MEMBERS}{alice.id}/passkeys/").status_code == 403
+
+
+# --------------------------------------------- I636 TC-01（M1）形の違う ID は 404 ----
+@pytest.mark.django_db
+@pytest.mark.parametrize("passkey_id,from_drf", [("-" * 36, True), ("0" * 36, True), ("g" * 36, False)])
+def test_i636_delete_passkey_malformed_id_is_404(people, passkey_id, from_drf):
+    admin, alice = people["admin_a"], people["alice"]
+    dummy_passkey(alice)
+    response = client_for(admin).delete(f"{MEMBERS}{alice.id}/passkeys/{passkey_id}/", **reauth(admin))
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    if from_drf:  # URL の形に当たらない値（g）は URL の解決で 404 になり、API のエラーの形ではない
+        assert response.json()["error"]["main_message"] == "リソースが見つかりません"
+    assert Passkey.objects.filter(user=alice).count() == 1
+
+
+@pytest.mark.django_db
+def test_i636_staff_delete_passkey_malformed_id_is_404(people):
+    staff, alice = people["staff"], people["alice"]
+    dummy_passkey(alice)
+    response = client_for(staff).delete(f"{ADMIN_USERS}{alice.id}/passkeys/{'-' * 36}/", **reauth(staff))
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert Passkey.objects.filter(user=alice).count() == 1
+
+
+@pytest.mark.django_db
+def test_i636_delete_passkey_other_org_member_is_404(people):
+    admin, bob = people["admin_a"], people["bob"]
+    passkey = dummy_passkey(bob)
+    response = client_for(admin).delete(f"{MEMBERS}{bob.id}/passkeys/{passkey.id}/", **reauth(admin))
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert Passkey.objects.filter(user=bob).count() == 1
+
+
+@pytest.mark.django_db
+def test_i636_malformed_member_id_is_404(people):
+    response = client_for(people["admin_a"]).get(f"{MEMBERS}{'-' * 36}/passkeys/")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 # -------------------------------------------------------------- TC-09 運営 ----
@@ -574,15 +765,6 @@ def test_tc11_logs_have_no_secrets(people, caplog):
         assert secret not in text
 
 
-# ------------------------------------------------- TC-12 organization_is_individual ----
-@pytest.mark.django_db
-def test_tc12_user_serializer_has_individual_flag(people):
-    assert client_for(people["solo"]).get("/api/auth/me/").json()["organization_is_individual"] is True
-    assert client_for(people["alice"]).get("/api/auth/me/").json()["organization_is_individual"] is False
-    orphan = User.objects.create_user(user_id="orphan", password=TEST_PASSWORD)
-    assert client_for(orphan).get("/api/auth/me/").json()["organization_is_individual"] is False
-
-
 # ------------------------------------------------- TC-13 リンクの土台の確かめ ----
 @pytest.mark.parametrize("base,expected", [
     ("https://app.example.com", []),
@@ -605,15 +787,20 @@ def test_tc13_empty_origins_do_not_break_settings_loading():
     import sys
     from pathlib import Path
 
-    env = {**os.environ, "WEBAUTHN_ALLOWED_ORIGINS": "", "DJANGO_SETTINGS_MODULE": "core.settings"}
+    env = {**os.environ, "WEBAUTHN_ALLOWED_ORIGINS": "", "FRONTEND_URL": "http://frontend-base.i636.test",
+           "DJANGO_SETTINGS_MODULE": "core.settings"}
     env.pop("REGISTRATION_LINK_BASE_URL", None)
-    code = ("import django; django.setup(); from django.conf import settings; "
+    # .env（コンテナでは /app/.env）から REGISTRATION_LINK_BASE_URL を読み直さないよう、子のプロセスの中だけで
+    # load_dotenv を止めてから設定を読む（I636 F9。settings.py の `from dotenv import load_dotenv` が
+    # 差し替えた関数を読む）
+    code = ("import dotenv; dotenv.load_dotenv = lambda *args, **kwargs: False; "
+            "import django; django.setup(); from django.conf import settings; "
             "print(repr(settings.WEBAUTHN_ALLOWED_ORIGINS), settings.REGISTRATION_LINK_BASE_URL)")
     result = subprocess.run(  # nosec B603（固定の引数だけ）
         [sys.executable, "-c", code], env=env, cwd=Path(__file__).resolve().parents[2],
         capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("[] ")
+    assert result.stdout.strip() == "[] http://frontend-base.i636.test"
 
 
 # ---------------------------------------- TC-05 失効した古いトークンが付いていても ----

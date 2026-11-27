@@ -157,22 +157,30 @@ const Settings: React.FC = () => {
   });
 
   useEffect(() => {
+    // 後片付けの後に届いた古い応答は捨てる（開発の StrictMode では読み込みが 2 回走り、遅れた 1 回目の応答が
+    // 入力した値をフォームの reset で保存済みの値に戻していた・I636。React の公式の「効果でのデータ取得」の形）
+    let ignore = false;
     const loadSettings = async () => {
       try {
         const userSettings = await dashboardService.getUserSettings();
+        if (ignore) return;
 
         const settingsData = toFormData(userSettings);
 
         setSettings(settingsData);
         resetSettingsForm(settingsData);
       } catch (error) {
+        if (ignore) return;
         console.error('Error loading settings:', error);
         toast.error('設定の読み込みに失敗しました');
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     };
     loadSettings();
+    return () => {
+      ignore = true;
+    };
   }, [resetSettingsForm]);
 
   const onSettingsSubmit = async (data: UserSettingsData) => {

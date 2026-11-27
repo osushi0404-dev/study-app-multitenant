@@ -186,4 +186,38 @@ describe('Settings', () => {
       expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
     }
   });
+
+  it('I636 TC-15: StrictMode で 2 回走る読み込みの、遅れて届いた古い応答が入力を戻さない', async () => {
+    // 1 回目の取得（後片付けされる方）は解決を待たせ、2 回目はすぐ 30 で返す
+    let resolveFirst: (value: { data: typeof SAVED }) => void = () => undefined;
+    let settingsCalls = 0;
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/settings/') {
+        settingsCalls += 1;
+        if (settingsCalls === 1) return new Promise((resolve) => { resolveFirst = resolve; });
+        return Promise.resolve({ data: { ...SAVED, daily_study_goal_minutes: 30 } });
+      }
+      return Promise.resolve({ data: SAVED });
+    });
+    render(
+      <React.StrictMode>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <Settings />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </React.StrictMode>
+    );
+    const goal = await screen.findByLabelText('1日の学習目標時間（分）');
+    expect(goal).toHaveValue(30);
+    expect(settingsCalls).toBe(2);
+    userEvent.clear(goal);
+    userEvent.type(goal, '45');
+    expect(goal).toHaveValue(45);
+
+    resolveFirst({ data: { ...SAVED, daily_study_goal_minutes: 50 } });
+    // 古い応答が届いても、入力した 45 のまま（50 に戻らない）
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByLabelText('1日の学習目標時間（分）')).toHaveValue(45);
+  });
 });
