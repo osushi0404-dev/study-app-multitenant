@@ -86,6 +86,7 @@
 - [retro] TC-30 のメンバーの溜まり（test-gate・ユーザーの判断で受け入れ）と、敵対的レビューの Low（`can_manage_members` の問い合わせ）→ #643 に同梱
 - [retro] 画面の更新の宛先の食い違い（TC-30 の 1 回の落ち方の原因）→ 既存の #502 にコメント（新しく起票しない）
 - [retro] 予防処置は足さない（見送りの理由は「## 振り返り」の見送りに書いた）。残余リスクの処遇は計画書の「セキュリティレビュー結果」に書いた
+- [close] develop を取り込んだ（I593 のハーネスの変更だけで、このイシューのファイルには触れない）。取り込んだ後も gate-check は OK。診断メモ（`I636_fix_diagnosis_20261127_0420.md`）も closed へ移した — 手順の glob（`_review_` を含むもの）に当たらないが、このイシューの記録のため
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: design-security-review
@@ -99,3 +100,4 @@ STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: retro
 
 STAGE_DONE: retro NEXT: close
+STAGE_DONE: close NEXT: merge
