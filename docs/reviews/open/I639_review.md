@@ -29,6 +29,7 @@
 - [implement] 自分の計画書の仕様の説明の 6 行に `（起票しない: このイシューの仕様の説明）` を付けた — 計画のステップ 5・手動 No.3
 - [implement] /simplify で直した: 計画書の探し方を `find_plan_file` にそろえた・`body`/`raw-body` の枝を 1 つに・S4 を本物の `check-memo-body-paths.sh` で確かめる・S7 の重なった実行を外す・P9 の空の引数の渡し方（テストの誤り）— 重複と食い違いを減らすため
 - [implement] /simplify で見送った: 後に回す項目の決まった節をひな形に作る案（方式と AC5 が変わる。今ある散文の計画書〔I466〕を拾えない）・写しの判定を番号の境だけにする案（I427 以上にも題名が `I###: ` の今までのイシューファイルがあり、分けられない）・`body` を本文のままにして `comments` を足す案（イシューの解決方針と違う）・python3 を 1 回にまとめる案（url と題名の検査を本文を出す前に行う順が崩れ、複雑になる。3 回 → 2 回で I221 F5 の主旨は満たす）・`raw-body` でコメントを読まない案（gh の呼び方が 2 つになるだけで得が小さい）・テストの共通部品化（既存の約 10 本も自前で持つ流儀。範囲の外）
+- [review-gate] 1 回目の code-review.sh は CI_WAIT: TIMEOUT（exit 3）。実際の CI（run 45982288136）は 10 分で終わっていて Harness Tests が失敗していた（test_i569 の TC-09: check-plan-followups.sh の `I[0-9][0-9][0-9]` が 3 桁固定の書き方に当たった）。`I[0-9]+` に直して手元で test_i569・test_i639_plan_followups が PASS。待ち側が終わった実行を未完了と読み続けた原因は未調査（retro で扱う）。手順どおり 1 回だけ実行し直す — exit 3 の決まり
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

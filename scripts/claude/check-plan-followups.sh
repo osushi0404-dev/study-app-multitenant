@@ -30,7 +30,7 @@ PLAN="$(find_plan_file "$ISSUE")"
 [ -n "$PLAN" ] || die "計画書が見つかりません: plan_${ISSUE}.md"
 
 hits="$(awk -v own_re="${ISSUE}([^0-9]|$)" -v re="$DEFER_RE" -v opt="$OPT_OUT" -v path="$PLAN" '
-  BEGIN { NUM_RE = "#[0-9]+|I[0-9][0-9][0-9]" }
+  BEGIN { NUM_RE = "#[0-9]+|I[0-9]+" }   # 桁の数は問わない（{3,} は awk の実装で効かないことがある・3 桁固定は I569 で禁止）
   /^[[:space:]]*```/ { fence = !fence; next }
   fence { next }
   $0 !~ re { next }
