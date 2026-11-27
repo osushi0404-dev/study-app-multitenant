@@ -1,11 +1,13 @@
 import secrets
+import uuid
 from datetime import timedelta
 
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from rest_framework import status, generics, permissions, viewsets
+from django.http import Http404
+from rest_framework import mixins, status, generics, permissions, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,16 +18,36 @@ from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
-from core.throttling import AppAnonRateThrottle
+from core.throttling import AppAnonRateThrottle, AppScopedRateThrottle
 
-from .models import User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization
+from django.db.models import Count, OuterRef, Subquery
+
+from . import passkeys, registration_links
+from .models import (
+    User, EmailVerification, PasswordResetToken, UserSettings, StudyStreak, Organization, Passkey,
+    RegistrationLink,
+)
+from .permissions import HasRecentReauth, IsOrgMemberManager
 from .services import get_personal_category
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
     UserSerializer,
     AdminUserSerializer,
+    PasskeySerializer,
+    PasskeyReauthSerializer,
+    ReauthTokenSerializer,
+    LoginResponseSerializer,
+    MemberCreateSerializer,
+    MemberSerializer,
+    RegistrationLinkCompleteSerializer,
+    RegistrationLinkIssuedSerializer,
+    RegistrationLinkOptionsSerializer,
+    RegistrationLinkTokenSerializer,
+    WebAuthnCredentialSerializer,
+    WebAuthnOptionsSerializer,
     UserSettingsSerializer,
     StudyStreakSerializer,
     PasswordResetRequestSerializer,
@@ -45,18 +67,248 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         user = serializer.validated_data['user']
 
-        # Update last login
-        user.last_login = timezone.now()
-        user.save(update_fields=['last_login'])
+        # 最後のログインの日時の更新と応答は、パスキーのログインと同じ処理（I619）
+        return Response(passkeys.complete_login(user=user))
 
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
 
-        return Response({
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'user': UserSerializer(user).data
-        })
+# ------------------------------------------------------------ パスキー（I619） ----
+def _options_response(challenge, options):
+    return Response(WebAuthnOptionsSerializer({'challenge_id': challenge.id, 'options': options}).data)
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyLoginOptionsView(generics.GenericAPIView):
+    """パスキーでのログインの options。ログインの前に呼ぶので AllowAny"""
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'passkey_login_options'
+    serializer_class = WebAuthnOptionsSerializer
+
+    @extend_schema(request=None, responses={200: WebAuthnOptionsSerializer})
+    def post(self, request):
+        return _options_response(*passkeys.authentication_options())
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyLoginView(generics.GenericAPIView):
+    """パスキーでのログイン。ログインの前に呼ぶので AllowAny"""
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'passkey_login'
+    serializer_class = WebAuthnCredentialSerializer
+
+    @extend_schema(request=WebAuthnCredentialSerializer, responses={200: LoginResponseSerializer})
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        passkey = passkeys.authenticate_passkey(
+            challenge_id=serializer.validated_data['challenge_id'],
+            credential=serializer.validated_data['credential'])
+        return Response(passkeys.complete_login(user=passkey.user))
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyReauthOptionsView(generics.GenericAPIView):
+    """本人確認をパスキーで行うときの options（本人のパスキーだけを許す）"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = WebAuthnOptionsSerializer
+
+    @extend_schema(request=None, responses={200: WebAuthnOptionsSerializer})
+    def post(self, request):
+        return _options_response(*passkeys.authentication_options(user=request.user))
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyReauthView(generics.GenericAPIView):
+    """本人確認（パスワードかパスキー）。通れば 5 分有効の印を返す"""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'passkey_reauth'
+    serializer_class = PasskeyReauthSerializer
+
+    @extend_schema(request=PasskeyReauthSerializer, responses={200: ReauthTokenSerializer})
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if 'password' in data:
+            passkeys.verify_password_for_reauth(user=request.user, password=data['password'])
+        else:
+            passkeys.authenticate_passkey(
+                challenge_id=data['challenge_id'], credential=data['credential'], user=request.user)
+        return Response(ReauthTokenSerializer({
+            'reauth_token': passkeys.issue_reauth_token(user=request.user),
+            'expires_in': settings.PASSKEY_REAUTH_MAX_AGE_SECONDS,
+        }).data)
+
+
+@extend_schema(tags=['passkeys'])
+class PasskeyViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, mixins.DestroyModelMixin,
+                     viewsets.GenericViewSet):
+    """本人のパスキーの一覧・名前の変更・削除・登録（他人・別の組織の物は 404）"""
+    serializer_class = PasskeySerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
+    lookup_value_regex = '[0-9a-f-]{36}'  # UUID の形だけ（login などが詳細の <pk> に当たらない）
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):  # OpenAPI を作るとき（利用者がいない）
+            return Passkey.objects.none()
+        return Passkey.objects.filter(user=self.request.user)
+
+    def get_permissions(self):
+        if self.action in ('destroy', 'register_options', 'register'):
+            return [permissions.IsAuthenticated(), HasRecentReauth()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        passkeys.rename_passkey(passkey=serializer.instance, name=serializer.validated_data['name'])
+
+    def perform_destroy(self, instance):
+        passkeys.delete_passkey(passkey=instance)
+
+    @extend_schema(request=None, responses={200: WebAuthnOptionsSerializer})
+    @action(detail=False, methods=['post'], url_path='register/options')
+    def register_options(self, request):
+        return _options_response(*passkeys.registration_options(user=request.user))
+
+    @extend_schema(request=WebAuthnCredentialSerializer, responses={201: PasskeySerializer})
+    @action(detail=False, methods=['post'])
+    def register(self, request):
+        serializer = WebAuthnCredentialSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        passkey = passkeys.register_passkey(
+            user=request.user, challenge_id=serializer.validated_data['challenge_id'],
+            credential=serializer.validated_data['credential'],
+            user_agent=request.headers.get('User-Agent', ''))
+        return Response(PasskeySerializer(passkey).data, status=status.HTTP_201_CREATED)
+
+
+# ------------------------------------------------------------ 登録用リンク（I620） ----
+@extend_schema(tags=['registration-links'])
+class RegistrationLinkOptionsView(generics.GenericAPIView):
+    """登録用リンクを開いたときの options。ログインの前に開くので AllowAny（本人はリンクの値で決める）"""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # 発行で失効した古いトークンが付いていても 401 にしない（本人はリンクの値で決める）
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'registration_link_options'
+    serializer_class = RegistrationLinkTokenSerializer
+
+    @extend_schema(request=RegistrationLinkTokenSerializer, responses={200: RegistrationLinkOptionsSerializer})
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        challenge, options, user = registration_links.link_registration_options(
+            token=serializer.validated_data['token'])
+        return Response(RegistrationLinkOptionsSerializer(
+            {'challenge_id': challenge.id, 'options': options, 'user_id': user.user_id}).data)
+
+
+@extend_schema(tags=['registration-links'])
+class RegistrationLinkCompleteView(generics.GenericAPIView):
+    """登録用リンクでパスキーを登録し、ログインした状態にする。AllowAny（同上）"""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # 同上
+    throttle_classes = [AppScopedRateThrottle]
+    throttle_scope = 'registration_link'
+    serializer_class = RegistrationLinkCompleteSerializer
+
+    @extend_schema(request=RegistrationLinkCompleteSerializer, responses={200: LoginResponseSerializer})
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        return Response(registration_links.complete_link_registration(
+            token=data['token'], challenge_id=data['challenge_id'], credential=data['credential'],
+            user_agent=request.headers.get('User-Agent', '')))
+
+
+class MemberCredentialActionsMixin:
+    """1 人分のパスキーの一覧・削除と、登録用リンクの発行・失効（メンバー管理と運営で共通・I620）
+
+    相手は get_object()（＝ get_queryset で絞った範囲）から取るので、範囲の外は 404 になる。
+    credential_scope が 'staff' のときは、運営のアカウントと本人ひとりの組織の利用者を 400 で拒む。
+    """
+    credential_scope = 'org'
+    credential_write_actions = ('delete_member_passkey', 'registration_link')
+
+    def get_permissions(self):
+        """書き込みの action だけ、各 ViewSet の permission_classes に直前の本人確認を足す"""
+        perms = super().get_permissions()
+        return perms + [HasRecentReauth()] if self.action in self.credential_write_actions else perms
+
+    def _credential_target(self, *, for_issue=False):
+        target = self.get_object()
+        registration_links.ensure_target(
+            actor=self.request.user, target=target, scope=self.credential_scope, for_issue=for_issue)
+        return target
+
+    @extend_schema(request=None, responses={200: PasskeySerializer(many=True)})
+    @action(detail=True, methods=['get'], url_path='passkeys', filter_backends=[])
+    def member_passkeys(self, request, pk=None):
+        # 組織の管理者は自分のパスキーの一覧も見てよい（相手の確かめは運営の範囲だけ）
+        target = self._credential_target() if self.credential_scope == 'staff' else self.get_object()
+        queryset = Passkey.objects.filter(user=target)
+        page = self.paginate_queryset(queryset)
+        return self.get_paginated_response(PasskeySerializer(page, many=True).data)
+
+    @extend_schema(request=None, responses={204: None})
+    @action(detail=True, methods=['delete'], url_path=r'passkeys/(?P<passkey_id>[0-9a-f-]{36})')
+    def delete_member_passkey(self, request, pk=None, passkey_id=None):
+        target = self._credential_target()
+        try:  # URL の正規表現は UUID の形までは保証しない（`-` が 36 個など）。形の誤りは 404（I636 M1）
+            passkey_uuid = uuid.UUID(passkey_id)
+        except ValueError:
+            raise Http404
+        registration_links.delete_passkey_of(target=target, passkey_id=passkey_uuid, deleted_by=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(methods=['POST'], request=None, responses={201: RegistrationLinkIssuedSerializer})
+    @extend_schema(methods=['DELETE'], request=None, responses={204: None})
+    @action(detail=True, methods=['post', 'delete'], url_path='registration-link')
+    def registration_link(self, request, pk=None):
+        if request.method == 'DELETE':
+            target = self._credential_target()
+            registration_links.revoke_link(target=target, revoked_by=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        target = self._credential_target(for_issue=True)
+        link, token = registration_links.issue_link(target=target, issued_by=request.user)
+        return Response(RegistrationLinkIssuedSerializer(
+            {'url': registration_links.link_url(token), 'expires_at': link.expires_at}).data,
+            status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=['members'])
+class MemberViewSet(MemberCredentialActionsMixin, mixins.ListModelMixin, mixins.CreateModelMixin,
+                    viewsets.GenericViewSet):
+    """組織の管理者のメンバー管理（I620）。自分の組織の利用者だけ（運営のアカウントは出さない）"""
+    serializer_class = MemberSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOrgMemberManager]
+    lookup_value_regex = '[0-9a-f-]{36}'
+    filter_backends = []  # 並びはユーザー ID 順に固定（検索・並べ替えのクエリは受けない）
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):  # OpenAPI を作るとき（利用者がいない）
+            return User.objects.none()
+        open_link = RegistrationLink.objects.filter(
+            user=OuterRef('pk'), used_at__isnull=True, revoked_at__isnull=True,
+            expires_at__gt=timezone.now()).values('expires_at')[:1]
+        return (User.objects
+                .filter(organization_id=self.request.user.organization_id, is_staff=False, is_superuser=False)
+                .annotate(passkey_count=Count('passkeys'),
+                          registration_link_expires_at=Subquery(open_link))
+                .order_by('user_id'))
+
+    @extend_schema(request=MemberCreateSerializer, responses={201: MemberSerializer})
+    def create(self, request, *args, **kwargs):
+        serializer = MemberCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = registration_links.create_member(
+            organization=request.user.organization, user_id=serializer.validated_data['user_id'])
+        # 作ったばかりの人はパスキー 0 個・開いたリンク無し（集計の問い合わせを流し直さない）
+        user.passkey_count = 0
+        user.registration_link_expires_at = None
+        return Response(MemberSerializer(user, context=self.get_serializer_context()).data,
+                        status=status.HTTP_201_CREATED)
 
 
 @method_decorator(ratelimit(key='ip', rate='10/5m', method='POST'), name='post')
@@ -421,13 +673,14 @@ def logout_view(request):
         )
 
 
-class AdminUserViewSet(viewsets.ModelViewSet):
+class AdminUserViewSet(MemberCredentialActionsMixin, viewsets.ModelViewSet):
     """
     管理者用ユーザー管理API
     """
-    queryset = User.objects.all()
+    queryset = User.objects.select_related('organization')  # organization_is_individual（I620）で N+1 にしない
     serializer_class = AdminUserSerializer
     permission_classes = [IsAdminUser]
+    credential_scope = 'staff'  # 登録用リンク・パスキー（I620）: 運営・本人ひとりの組織の人は 400
 
     def create(self, request, *args, **kwargs):
         """管理者による新規ユーザー作成"""

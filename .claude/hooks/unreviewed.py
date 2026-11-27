@@ -3,18 +3,23 @@
 
 既定はサンドボックスの中。外に出す一覧（.claude/settings.json の excludedCommands）は
 `python3 .claude/hooks/unreviewed.py run *` だけで、ここ（run）が、外で動く必要のある決まったスクリプト
-（OUTSIDE_SCRIPTS）だけを、scripts/claude/ にレビュー前の中身が 1 つも無いときに動かす。
-「レビュー前の中身」= このブランチが develop から分かれた時点（git merge-base HEAD origin/develop＝BASE）との差・
-追跡していない新規・git が無視するファイル。見張り（scripts/claude/hooks/pretooluse_guard.py）は route() で、
-単体の形の `bash scripts/claude/<一覧の名前> …` を run の形に付け替え、run の形を確かめ、test-session.sh の引数を確かめる。
+（OUTSIDE_SCRIPTS）だけを動かす。I615: 動かすのは、このブランチが develop から分かれた時点（git merge-base HEAD
+origin/develop＝BASE）の写し（作り方の正は .claude/hooks/reviewed-hook.sh の reviewed_snapshot）の入口で、作業フォルダは
+リポジトリの最上位。流す入口・その部品（入口が読み込む・呼ぶ scripts/claude/ の直下のファイル）・使うレビュー役の定義
+（.claude/agents/*.md）のどれかがブランチで変わっていれば動かさず、ユーザーに `!` で新しい版を流してもらう（75）。
+I593: 審査の入口（REVIEW_ENTRIES）は、写しに reviewer-agents-lib.sh があれば、変わっていても写しの版で流す（定義も写しの版）。
+「ブランチで変わった」= BASE との差・追跡していない新規・git が無視するファイル。見張り（scripts/claude/hooks/pretooluse_guard.py）は
+route() で、単体の形の `bash scripts/claude/<一覧の名前> …` を run の形に付け替え、run の形を確かめ、test-session.sh の引数を確かめる。
 
 置き場所が .claude/hooks/ なのは、サンドボックスから書けず（Edit は承認が要る）、scripts/claude/ の外にあるため。
 Python の標準ライブラリだけを使う。
 
 CLI:
-  python3 .claude/hooks/unreviewed.py run <名前> [引数…]   終了コード: スクリプトのもの／2=名前の誤り／3=レビュー前の中身がある・
-                                                            基準を求められない／4=サンドボックスの中で動いている
-  python3 .claude/hooks/unreviewed.py dirty                 0=レビュー前の中身なし／1=あり・求められない
+  python3 .claude/hooks/unreviewed.py run <名前> [引数…]   終了コード: スクリプトのもの／2=名前の誤り／4=サンドボックスの中で
+                                                            動いている／75=人に `!` で流してもらう（入口か部品を変えた・
+                                                            基準を求められない・写しを作れない）
+  python3 .claude/hooks/unreviewed.py dirty                 0=scripts/claude/ にレビュー前の中身なし／1=あり・求められない
+                                                            （code-review.sh のゲートが使う）
 """
 from __future__ import annotations
 
@@ -31,6 +36,14 @@ BASE_REF = "origin/develop"
 # 見張りの _GIT_SAFE_OPTS と同じ（.git/config はサンドボックスの中から書けるので、命令を動かす設定を無効にする）
 GIT_SAFE_OPTS = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "submodule.recurse=false")
 GIT_TIMEOUT = 8
+# I615: 人に `!` で流してもらうときの終了コード（入口そのものの終了コード 0〜4・124・130 と重ならない）
+NEED_HUMAN = 75
+AGENTS = ".claude/agents/"
+SNAPSHOT_SH = ".claude/hooks/reviewed-hook.sh"
+SNAPSHOT_TIMEOUT = 60
+# 部品のたどりで読まない行（注釈・表示）と行末の注釈。注釈で触れるだけの名前を部品に数えない（plan_I615.md 調査結果 8）
+NOT_CODE_RE = re.compile(r"\s*(?:#|(?:echo|printf)\b)")
+TRAILING_COMMENT_RE = re.compile(r"\s#\s.*$")
 # 外で動く必要のある入口（gh・claude -p・docker を使う。plan_I599.md 調査結果 6）。足すときはここだけ（承認が要る）
 OUTSIDE_SCRIPTS = frozenset({
     "adversarial-review.sh", "check-permission-prompt.sh", "code-review.sh", "db-backup.sh",
@@ -38,6 +51,12 @@ OUTSIDE_SCRIPTS = frozenset({
     "lint-frontend.sh", "plan-issue-review.sh", "post-review-comment.sh", "pr-base-sync.sh",
     "test-session.sh", "tui-capture.sh", "wt-ports.sh", "wt-remove.sh",
 })
+# I593: 審査の入口。写しに新しい仕組み（REVIEWER_LIB）があれば、ブランチで入口・部品・レビュー役の定義を変えていても
+# 75 にせず写しの版で流す（審査は変更前の版で動く。ブランチの変更はマージの後に効く・docs/runbooks/review-rules.md）
+REVIEW_ENTRIES = frozenset({
+    "adversarial-review.sh", "code-review.sh", "fix-diagnosis-review.sh", "issue-review.sh", "plan-issue-review.sh",
+})
+REVIEWER_LIB = "reviewer-agents-lib.sh"
 LAUNCH = "python3 .claude/hooks/unreviewed.py run"
 # 単体の形でない文字（つなぎ・置き換え・かっこ・振り向け・ワイルドカード・改行・逃がし）。あれば付け替えない（中で動く）。
 # ワイルドカード（* ? [）は外の bash が作業ツリーのファイル名に展開し、書いた引数と違うものが渡るため（I599 F23）
@@ -92,13 +111,14 @@ def _base(root: str) -> str | None:
         return None
 
 
-def _unreviewed_files(root: str, base: str) -> set[str]:
-    """レビュー前のファイル = BASE と違う・追跡していない新規・git が無視するファイル（git は 3 回）。
+def _unreviewed_files(root: str, base: str, *where: str) -> set[str]:
+    """レビュー前のファイル = BASE と違う・追跡していない新規・git が無視するファイル（git は 3 回）。where の既定は scripts/claude/。
     無視されるフォルダ（.venv・__pycache__）は --directory で 1 つにまとめて数えない（わざと避ける形として受け入れ・plan R3）。"""
-    untracked = set(_lines(_git(root, "ls-files", "-z", "--others", "--exclude-standard", "--", SCRIPTS)))
+    where = where or (SCRIPTS,)
+    untracked = set(_lines(_git(root, "ls-files", "-z", "--others", "--exclude-standard", "--", *where)))
     ignored = {x for x in _lines(_git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard",
-                                      "--directory", "--", SCRIPTS)) if not x.endswith("/")}
-    diff = _lines(_git(root, "diff", "-z", "--name-only", "--no-ext-diff", "--no-textconv", base, "--", SCRIPTS))
+                                      "--directory", "--", *where)) if not x.endswith("/")}
+    diff = _lines(_git(root, "diff", "-z", "--name-only", "--no-ext-diff", "--no-textconv", base, "--", *where))
     return set(diff) | untracked | ignored
 
 
@@ -216,8 +236,66 @@ def _root() -> str:
     return os.path.realpath(_git(os.getcwd(), "rev-parse", "--show-toplevel").strip())
 
 
+def _snapshot(root: str) -> tuple[str | None, str]:
+    """BASE の写しの最上位と、作れないときの理由（作り方と理由の文の正は reviewed-hook.sh の reviewed_snapshot。
+    GIT_ の環境変数は reviewed-hook.sh が外す）。"""
+    try:
+        r = subprocess.run(["bash", os.path.join(root, SNAPSHOT_SH), "--snapshot"],  # nosec B603 B607
+                           cwd=root, env={**os.environ, "CLAUDE_PROJECT_DIR": root}, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=SNAPSHOT_TIMEOUT, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None, "レビュー済みの写しを作る処理を起こせない"
+    snap = r.stdout.strip()
+    if r.returncode == 0 and snap and os.path.isfile(os.path.join(snap, ".complete")):
+        return snap, ""
+    return None, r.stderr.strip() or "レビュー済みの写しを作れない"
+
+
+def _code_text(path: str) -> str:
+    """部品のたどりで読む本文（注釈・表示の行と行末の注釈を除く）。読めなければ空。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return ""
+    return "\n".join(TRAILING_COMMENT_RE.sub("", x) for x in lines if not NOT_CODE_RE.match(x))
+
+
+def _word_in(word: str, text: str, after: str = r"[\w.-]") -> bool:
+    return re.search(r"(?<![\w.-])" + re.escape(word) + r"(?!" + after + r")", text) is not None
+
+
+def parts(snap: str, name: str, root: str) -> set[str]:
+    """入口 name と、その部品（リポジトリ相対の名前）。写しの入口の本文から、写しの scripts/claude/ の直下のファイル名と、
+    作業ツリーの .claude/agents/ のレビュー役の名前が語として出てくるものをたどる（plan_I615.md 4-3・調査結果 8）。"""
+    sdir = os.path.join(snap, SCRIPTS)
+    files = sorted(f for f in os.listdir(sdir) if os.path.isfile(os.path.join(sdir, f)))
+    adir = os.path.join(root, AGENTS)
+    agents = sorted(f[:-3] for f in os.listdir(adir) if f.endswith(".md")) if os.path.isdir(adir) else []
+    found: set[str] = set()
+    todo = [name]
+    while todo:
+        f = todo.pop()
+        if SCRIPTS + f in found:
+            continue
+        found.add(SCRIPTS + f)
+        text = _code_text(os.path.join(sdir, f))
+        todo += [x for x in files if SCRIPTS + x not in found and _word_in(x, text)]
+        # レビュー役は `REVIEWER_AGENT="code-reviewer"`・`code-reviewer.md` の形で書かれる（後ろの . は許す）
+        found |= {f"{AGENTS}{a}.md" for a in agents if _word_in(a, text, after=r"[\w-]")}
+    return found
+
+
+def _need_human(name: str, args: list[str], why: str) -> int:
+    cmd = " ".join([f"bash {SCRIPTS}{name}", shlex.join(args)]).strip()
+    print(f"[unreviewed run] {why}ので、レビュー済みの版では流しません。ユーザーに `! {cmd}` で流してもらい、"
+          "その結果をこの周の結果にしてください（docs/runbooks/danger-ops.md・I615）", file=sys.stderr)
+    return NEED_HUMAN
+
+
 def run(argv: list[str]) -> int:
-    """起動役（外で動く。plan_I599.md 4-2）。レビュー前の中身が無いときだけ、一覧のスクリプトを動かす。"""
+    """起動役（外で動く。plan_I615.md 4-3）。BASE の写しの入口を、作業フォルダを最上位にして動かす。
+    入口か部品・レビュー役の定義を変えたとき・写しを作れないときは動かさずに 75。"""
     if os.environ.get("SANDBOX_RUNTIME"):
         print("[unreviewed run] 起動役がサンドボックスの中で動いています（外に出す型に当たっていない）。"
               "gh・claude -p は動きません（I599）", file=sys.stderr)
@@ -230,17 +308,26 @@ def run(argv: list[str]) -> int:
     try:
         root = _root()
     except (RuntimeError, OSError, subprocess.SubprocessError):
-        root = None
-    found = dirty(root) if root else None
-    if found is None or found:
-        why = ("レビュー済みの基準（merge-base HEAD origin/develop）を求められない" if found is None
-               else "scripts/claude/ にレビュー前の中身がある（" + ", ".join(found) + "）")
-        print(f"[unreviewed run] {why}ので、外では流せません。外で流す必要があれば、ユーザーに"
-              f" `! bash scripts/claude/{name} …` で流してもらってください（docs/runbooks/danger-ops.md・I599）",
-              file=sys.stderr)
-        return 3
+        return _need_human(name, args, "リポジトリの最上位を求められない")
+    snap, why = _snapshot(root)
+    if snap is None:
+        return _need_human(name, args, why)
+    entry = os.path.join(snap, SCRIPTS, name)
+    if not os.path.isfile(entry):
+        return _need_human(name, args, "レビュー済みの版にこの入口が無い（ブランチで足した入口）")
+    try:
+        base = os.path.basename(snap)
+        hit = sorted(parts(snap, name, root) & _unreviewed_files(root, base, SCRIPTS, AGENTS))
+    except (RuntimeError, OSError, subprocess.SubprocessError, ValueError):
+        return _need_human(name, args, "入口の部品がブランチで変わったかを確かめられない")
+    if hit and name in REVIEW_ENTRIES and os.path.isfile(os.path.join(snap, SCRIPTS, REVIEWER_LIB)):
+        print("[unreviewed run] ブランチで変えた審査の仕組み（" + ", ".join(hit[:5]) + "）は使わず、変更前の版で審査します"
+              "（マージの後に効く・I593）", file=sys.stderr)
+        hit = []
+    if hit:
+        return _need_human(name, args, "この入口か部品（" + ", ".join(hit[:5]) + "）をブランチで変えている")
     os.chdir(root)
-    os.execvp("bash", ["bash", f"{SCRIPTS}{name}", *args])  # nosec B606 B607 — 一覧の名前だけ・引数の配列
+    os.execvp("bash", ["bash", entry, *args])  # nosec B606 B607 — 写しの中の一覧の入口だけ・引数の配列
     return 1  # 届かない
 
 

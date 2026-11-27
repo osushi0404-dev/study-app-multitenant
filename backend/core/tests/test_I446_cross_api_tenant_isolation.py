@@ -139,6 +139,9 @@ ROUTE_TABLE = {
     **{f"{m} api/admin/users/<pk>/": DRF_STAFF for m in ("GET", "PUT", "PATCH", "DELETE")},
     "POST api/admin/users/<pk>/reset_password/": DRF_STAFF,
     "POST api/admin/users/<pk>/toggle_active/": DRF_STAFF,
+    # I620: 運営の登録用リンク・パスキー（組織の管理者・一般の利用者は 403）
+    "GET api/admin/users/<pk>/passkeys/": DRF_STAFF,
+    **{f"{m} api/admin/users/<pk>/registration-link/": DRF_STAFF for m in ("POST", "DELETE")},
     # ---- 登録 ----
     **{f"POST {p}": [IdCheck(
         "anon", "body", "subject_ids", "subject", 400, list_param=True,
@@ -246,6 +249,23 @@ OUT_OF_SCOPE = {
     **{f"{m} api/auth/me/": "本人の情報の書き換え。組織・役割は読み取り専用で、番号を受け取らない"
        for m in ("PUT", "PATCH")},
     **{f"{m} api/settings/": "本人の設定の書き換え。番号を受け取らない" for m in ("PUT", "PATCH")},
+    # I619: パスキー。本人のパスキーだけを扱い、問題・科目・記録の番号を受け取らない。他人・別の組織の
+    # パスキーの境界は accounts/tests/test_I619_passkeys.py（TC-03〜TC-06）が確かめる
+    **{key: "本人のパスキーだけを扱う（境界は accounts/tests/test_I619_passkeys.py）" for key in (
+        "GET api/auth/passkeys/", "PATCH api/auth/passkeys/<pk>/", "DELETE api/auth/passkeys/<pk>/",
+        "POST api/auth/passkeys/register/options/", "POST api/auth/passkeys/register/",
+        "POST api/auth/passkeys/login/options/", "POST api/auth/passkeys/login/",
+        "POST api/auth/passkeys/reauth/options/", "POST api/auth/passkeys/reauth/")},
+    # I620: メンバー管理・登録用リンク。利用者の番号は利用者の組織で絞り（範囲の外は 404）、リンクの値で
+    # 本人を決める。問題・科目・記録の番号を受け取らない。境界は accounts/tests/test_I620_registration_links.py
+    **{key: "利用者の番号は組織で絞る／リンクの値で本人を決める（境界は test_I620_registration_links.py）"
+       for key in (
+           "GET api/members/", "POST api/members/", "GET api/members/<pk>/passkeys/",
+           "DELETE api/members/<pk>/passkeys/<passkey_id>/",
+           "POST api/members/<pk>/registration-link/", "DELETE api/members/<pk>/registration-link/",
+           "POST api/auth/registration-links/options/", "POST api/auth/registration-links/complete/",
+           # 運営専用。パスキーの番号を埋める仕組みがこの表に無いので、403 は I620 の TC-09 が確かめる
+           "DELETE api/admin/users/<pk>/passkeys/<passkey_id>/")},
     **{f"POST {p}": "番号を受け取らない。組織は利用者の組織に固定（SubjectViewSet.perform_create）"
        for p in ("api/subjects/", "api/organizations/subjects/")},
     **{f"GET {p}": "登録画面用。slug を知る人に科目名だけを出す仕様（#446 の設計確認メモ）"

@@ -8,8 +8,23 @@ app_name = 'accounts'
 # Router for admin endpoints
 router = routers.DefaultRouter()
 router.register(r'admin/users', views.AdminUserViewSet, basename='admin-users')
+router.register(r'auth/passkeys', views.PasskeyViewSet, basename='passkeys')
+router.register(r'members', views.MemberViewSet, basename='members')
 
 urlpatterns = [
+    # 登録用リンク（I620）。ログインの前に開く
+    path('auth/registration-links/options/', views.RegistrationLinkOptionsView.as_view(),
+         name='registration_link_options'),
+    path('auth/registration-links/complete/', views.RegistrationLinkCompleteView.as_view(),
+         name='registration_link_complete'),
+
+    # Passkeys（I619）。router の include より前に置く
+    path('auth/passkeys/login/options/', views.PasskeyLoginOptionsView.as_view(), name='passkey_login_options'),
+    path('auth/passkeys/login/', views.PasskeyLoginView.as_view(), name='passkey_login'),
+    path('auth/passkeys/reauth/options/', views.PasskeyReauthOptionsView.as_view(),
+         name='passkey_reauth_options'),
+    path('auth/passkeys/reauth/', views.PasskeyReauthView.as_view(), name='passkey_reauth'),
+
     # Authentication
     path('auth/login/', views.CustomTokenObtainPairView.as_view(), name='login'),
     path('auth/logout/', views.logout_view, name='logout'),

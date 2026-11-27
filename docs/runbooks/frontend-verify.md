@@ -33,12 +33,15 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 |---|---|---|---|
 | `e2e_user_a@example.com` | A | 管理者 | 管理者だけの画面（例: 問題管理 `/quiz-management`） |
 | `e2e_user_c@example.com` | A | 一般ユーザー | 管理者だけの画面が遮断されること |
-| `e2e_user_b@example.com` | B | — | 組織をまたいで見えないこと |
+| `e2e_user_b@example.com` | B | 管理者 | 組織をまたいで見えないこと・メンバー管理（`/members`） |
+| `e2e_staff@example.com` | 確かめ用（`e2e-org-staff`） | 運営（`is_staff`）・一般ユーザー | 運営の画面（`/admin/users`・利用者の編集画面の「パスキーと登録用リンク」）。メンバー管理は使えない |
+| `e2e_solo@example.com` | 本人ひとりの組織（`e2e-org-solo`） | 管理者 | 本人ひとりの組織ではメンバー管理が出ない・開けないこと |
 | `verify_i487@example.com` | 確かめ用（`verify-i487-org`） | 一般ユーザー | ダッシュボード・統計の数字の確かめ（「11. 確かめ用のデータ」で作り直す） |
 
 - パスワード欄には値ではなく**名前** `E2E_TEST_PASSWORD` を入力する（`--secrets` が本当の値に置き換えて入力し、出力では `<secret>E2E_TEST_PASSWORD</secret>` に伏せる）
-- ログインできないときだけ、ユーザーが `seed_e2e` を流す（E2E 用ユーザーだけを作り直す。`--flush` は使わない）
+- ログインできないときだけ、ユーザーが `seed_e2e` を流す（E2E 用ユーザーだけを作り直す。`--flush` は使わない。上の表の `e2e_` で始まる利用者は `--scenario tenant_isolation` で作られる。DEBUG が偽の環境では止まる・I636）
 - ログインは IP ごとに 5 回／5 分まで。E2E を流した直後に画面確認でログインすると制限に当たることがある（下の「8. E2E の落とし穴」）
+- パスキー（I619）を確かめるときは、`browser_run_code_unsafe` で CDP の `WebAuthn.enable`・`WebAuthn.addVirtualAuthenticator`（`protocol: 'ctap2'`・`transport: 'internal'`・`hasResidentKey`・`hasUserVerification`・`isUserVerified`・`automaticPresenceSimulation` を true）を付けてから操作する。内蔵の認証器は 1 つしか付けられないので、付け直すときは先に `WebAuthn.disable` → `WebAuthn.enable` で外す。backend の origin の既定はワークツリーの画面のポート（`http://localhost:<ポート>`）なので、MCP で開く URL と一致する。確かめ終わったら作ったパスキーを画面から消す
 - ログイン前の画面でもコンソールに `/api/settings/` の 401 が出る（ログイン前に通知設定を読みにいく既存の動き）。画面確認では既知のものとして扱い、新しいエラーと区別する
 
 ## 6. 確かめること
@@ -73,6 +76,7 @@ I187 で決めた、フロントの変更を Claude が人に頼まずに画面�
 | ワークツリーで初めて 1 ファイルだけ流すと `MODULE_NOT_FOUND`（`dotenv` など）で落ちる | e2e コンテナの node_modules はワークツリー（compose のプロジェクト）ごとの named volume で、`npm install` は既定コマンドだけが行う。ワークツリーで最初に 1 回、既定コマンド（`docker compose --profile e2e run --rm e2e`）を流してから 1 ファイル指定を使う |
 | 続けて流すとログインのレート制限（403）に当たり global-setup が落ちる | E2E を続けて流すときは、実行コマンド自体に前置する: `RATELIMIT_ENABLE=false docker compose --profile e2e run --rm e2e`（1 ファイル指定も同じ前置き。CI と同じ方法・本番の設定は変えない）。先に `RATELIMIT_ENABLE=false docker compose up -d backend` しておく方法は効かない（e2e の実行が依存先の backend を、前置きの無い今の環境で作り直して制限ありに戻すため。I187 の実装時に確認）。終わったら `docker compose up -d backend` で元に戻す。レート制限そのものを確かめる画面確認は、元に戻してから行う |
 | e2e コンテナ（`http://frontend:3000`）では安全なコンテキストにならない（`crypto.randomUUID` などが使えない） | `e2e/playwright.config.ts` で、起動オプション `--unsafely-treat-insecure-origin-as-secure` で baseURL の origin を安全なコンテキストとして扱い、通常版の chromium（`channel: 'chromium'`・新しい画面なしモード）を使う。この起動オプションは Playwright 既定の画面なし専用版（headless shell）では効かない（I187 の実装時に確認）。CI も同じ設定で動く。Playwright MCP は `localhost` で開くのでもともと問題ない |
+| パスキーの E2E（`tests/passkey.spec.ts`・I619）が e2e コンテナで「パスキーでログインできませんでした」になる | パスキーは画面の origin（`http://frontend:3000`）と RP ID（`frontend`）が backend の設定と一致しないと通らない。backend の既定は `http://localhost:<画面のポート>` なので、e2e コンテナで流すときは上書きのファイル（中身は `WEBAUTHN_RP_ID=frontend`・`WEBAUTHN_ALLOWED_ORIGINS=http://frontend:3000`・`RATELIMIT_ENABLE=false` の 3 行。置き場所はスクラッチパッド）を `docker compose --env-file .env --env-file <そのファイル> --profile e2e run --rm e2e npx playwright test tests/passkey.spec.ts --retries=0` で重ねる（前置きの環境変数の形はサンドボックスの外に出られず `.env` を読めない）。終わったら `docker compose up -d --wait backend` で元に戻す。依存を足した直後は `docker compose --profile e2e build e2e-init` も要る（e2e-init は backend と別のイメージ）。CI は `localhost:3000` で流すので上書きは要らない |
 | 型エラーのオーバーレイが画面を覆い、クリックを遮る | 画面確認・E2E の前に `docker compose exec frontend npm run typecheck` を通す。オーバーレイが出たら、その画面キャプチャを撮って原因（型エラー・実行時エラー）を直す |
 
 - E2E が失敗したときの記録: 手元は `e2e/test-results/` に画面キャプチャと trace（`npx playwright show-trace <trace.zip>` で見られる）。CI は画面キャプチャだけを Actions のアーティファクト `playwright-screenshots` に 14 日（CI では trace を作らない。trace にはログイン時に入力したパスワードが残り、公開リポジトリのアーティファクトは誰でも取れるため）

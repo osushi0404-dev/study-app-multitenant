@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext';
@@ -33,6 +32,10 @@ import UserCreate from './pages/UserCreate';
 import UserEdit from './pages/UserEdit';
 import SubjectManagement from './pages/SubjectManagement';
 import SubjectDetail from './pages/SubjectDetail';
+import MemberManagement from './pages/MemberManagement';
+import PasskeySetup from './pages/PasskeySetup';
+import { MEMBER_MANAGEMENT_PATH, PASSKEY_SETUP_PATH } from './constants/routes';
+import AppToaster from './components/AppToaster';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,16 +56,8 @@ function App() {
               <Router>
               <NavigationLogger />
               <CssBaseline />
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                  },
-                }}
-              />
+              {/* 通知の置き場所と、ほかの操作を塞がない指定は AppToaster に置く（I636） */}
+              <AppToaster />
 
               <Routes>
               {/* Public Routes - 組織別登録URLを先に配置 */}
@@ -71,6 +66,8 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/password-reset" element={<PasswordReset />} />
               <Route path="/verify-email" element={<EmailVerification />} />
+              {/* I620: 登録用リンクで開くパスキーの登録（ログイン不要） */}
+              <Route path={PASSKEY_SETUP_PATH} element={<PasskeySetup />} />
 
               {/* Protected Routes */}
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
@@ -83,6 +80,7 @@ function App() {
                 <Route path="monitoring" element={<Monitoring />} />
                 <Route path="subject-management" element={<OrgAdminRoute><SubjectManagement /></OrgAdminRoute>} />
                 <Route path="subject-management/:id" element={<OrgAdminRoute><SubjectDetail /></OrgAdminRoute>} />
+                <Route path={MEMBER_MANAGEMENT_PATH.slice(1)} element={<OrgAdminRoute><MemberManagement /></OrgAdminRoute>} />
 
                 {/* Admin Routes */}
                 <Route path="admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />

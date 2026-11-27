@@ -17,3 +17,14 @@ export type PatchedUserSettings = Schemas['PatchedUserSettings'];
 export type UserSubject = Schemas['UserSubject'];
 export type AvailableSubject = Schemas['AvailableSubject'];
 export type UserSubjectSelection = Schemas['UserSubjectSelection'];
+// パスキー（I619）。一覧の 1 行・一覧・WebAuthn の options・本人確認の印・ログインの応答
+export type Passkey = Schemas['Passkey'];
+export type PaginatedPasskeyList = Schemas['PaginatedPasskeyList'];
+export type WebAuthnOptions = Schemas['WebAuthnOptions'];
+export type ReauthToken = Schemas['ReauthToken'];
+export type LoginResponse = Schemas['LoginResponse'];
+// メンバー管理と登録用リンク（I620）
+export type Member = Schemas['Member'];
+export type PaginatedMemberList = Schemas['PaginatedMemberList'];
+export type RegistrationLinkIssued = Schemas['RegistrationLinkIssued'];
+export type RegistrationLinkOptions = Schemas['RegistrationLinkOptions'];

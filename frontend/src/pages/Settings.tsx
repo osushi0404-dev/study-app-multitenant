@@ -39,6 +39,7 @@ import dashboardService from '../services/dashboard.service';
 import { USER_SETTINGS_KEY_ROOT, userSettingsKey } from '../hooks/useDailyStudyGoal';
 import { PatchedUserSettings, UserSettings } from '../types/api';
 import LearningSubjectsCard from '../components/settings/LearningSubjectsCard';
+import PasskeysCard from '../components/settings/PasskeysCard';
 
 interface UserSettingsData {
   dailyStudyGoalMinutes: number;
@@ -156,22 +157,30 @@ const Settings: React.FC = () => {
   });
 
   useEffect(() => {
+    // 後片付けの後に届いた古い応答は捨てる（開発の StrictMode では読み込みが 2 回走り、遅れた 1 回目の応答が
+    // 入力した値をフォームの reset で保存済みの値に戻していた・I636。React の公式の「効果でのデータ取得」の形）
+    let ignore = false;
     const loadSettings = async () => {
       try {
         const userSettings = await dashboardService.getUserSettings();
+        if (ignore) return;
 
         const settingsData = toFormData(userSettings);
 
         setSettings(settingsData);
         resetSettingsForm(settingsData);
       } catch (error) {
+        if (ignore) return;
         console.error('Error loading settings:', error);
         toast.error('設定の読み込みに失敗しました');
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     };
     loadSettings();
+    return () => {
+      ignore = true;
+    };
   }, [resetSettingsForm]);
 
   const onSettingsSubmit = async (data: UserSettingsData) => {
@@ -337,6 +346,11 @@ const Settings: React.FC = () => {
                 </Box>
               </CardContent>
             </Card>
+          </Grid>
+
+          {/* パスキー（I619）。「アカウント情報」「学習設定」の行のすぐ下・「学ぶ科目」の上 */}
+          <Grid item xs={12}>
+            <PasskeysCard />
           </Grid>
 
           {/* 学ぶ科目（I494）。ダッシュボードの科目 0 件の案内から #learning-subjects で来る */}

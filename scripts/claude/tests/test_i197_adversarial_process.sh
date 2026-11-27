@@ -145,7 +145,8 @@ SRC_SCRIPT="$REPO_ROOT/scripts/claude/adversarial-review.sh"
 mk() {
   local d="$TMP/$1"
   mkdir -p "$d/repo/scripts/claude" "$d/repo/docs/issues/open" "$d/repo/docs/plans/open" "$d/repo/docs/reviews" "$d/stub" "$d/calls"
-  cp "$REPO_ROOT/scripts/claude/code-review.sh" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$d/repo/scripts/claude/"
+  cp "$REPO_ROOT/scripts/claude/code-review.sh" "$REPO_ROOT/scripts/claude/review-process-lib.sh" "$REPO_ROOT/scripts/claude/reviewer-agents-lib.sh" "$d/repo/scripts/claude/"
+  mkdir -p "$d/repo/.claude/agents"; cp "$REPO_ROOT"/.claude/agents/*.md "$d/repo/.claude/agents/"   # I593: レビュー役の定義は最上位から渡す
   cp "$SRC_SCRIPT" "$d/repo/scripts/claude/adversarial-review.sh"
   printf '# I900\n' > "$d/repo/docs/issues/open/I900.md"
   printf '%s' "${2:-$PLAN_OK}" > "$d/repo/docs/plans/open/plan_I900.md"
@@ -427,7 +428,7 @@ SCRIPTS=(scripts/claude/*.sh)
 ck "S1 全部の claude -p の呼び出しに --permission-prompts none" 0 "$(rc s1 "${SCRIPTS[@]}")"
 mkdir -p "$TMP/s1"; cp scripts/claude/*.sh "$TMP/s1/"; sed -i 's/ --permission-prompts none)/)/' "$TMP/s1/plan-issue-review.sh"
 ck "FG-S1 plan-issue-review.sh から外すと S1 不合格" 1 "$(rc s1 "$TMP"/s1/*.sh)"
-mkdir -p "$TMP/s1b"; cp scripts/claude/*.sh "$TMP/s1b/"; sed -i 's/--agent "\$agent_name" --tools "Read,Grep,Glob" --permission-prompts none)/--agent "$agent_name" --tools "Read,Grep,Glob")/' "$TMP/s1b/fix-review-lib.sh"
+mkdir -p "$TMP/s1b"; cp scripts/claude/*.sh "$TMP/s1b/"; sed -i 's/"\${REVIEWER_ARGS\[@\]}" --tools "Read,Grep,Glob" --permission-prompts none)/"${REVIEWER_ARGS[@]}" --tools "Read,Grep,Glob")/' "$TMP/s1b/fix-review-lib.sh"
 ck "FG-S1 複数行の呼び出し（fix-review-lib.sh）から外しても S1 不合格" 1 "$(rc s1 "$TMP"/s1b/*.sh)"
 
 AR=.claude/agents/adversarial-reviewer.md
@@ -447,7 +448,7 @@ ck "S4 全体設計の節・テンプレートの一覧・計画レビュー役�
 ck "S4 テンプレートの一覧は read_checklist で読める" 0 "$(REVIEW_LIB_SOURCE_ONLY=1 bash -c '. scripts/claude/adversarial-review.sh; read_checklist docs/plans/templates/plan_template.md >/dev/null 2>&1; echo $?' | tail -1 | grep -qx 2 && echo 0 || echo 1)"
 
 # S5: code-review.sh の code-reviewer の呼び出しと、失敗時の記録
-ck "S5 code-reviewer の呼び出しは run_claude_logged" yes "$(yn bash -c 'grep -A1 "^[[:space:]]*run_claude_logged" scripts/claude/code-review.sh | grep -qF -- "--agent \"\$REVIEWER_AGENT\""')"
+ck "S5 code-reviewer の呼び出しは run_claude_logged" yes "$(yn bash -c 'grep -A1 "^[[:space:]]*run_claude_logged" scripts/claude/code-review.sh | grep -qF -- "\"\${REVIEWER_ARGS[@]}\" --tools"')"
 S5=$(REVIEW_LIB_SOURCE_ONLY=1 bash -c '. scripts/claude/code-review.sh; . scripts/claude/review-process-lib.sh; reviewer_failure_record I900 124 "$1"' _ "$TMP/lib/l2")
 ck "S5 失敗の記録に最後のツール呼び出し・VERDICT: BLOCKER" yes "$(yn bash -c 'grep -qF "最後のツール呼び出し: Read" <<< "$1" && grep -qxF "VERDICT: BLOCKER" <<< "$1"' _ "$S5")"
 

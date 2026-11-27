@@ -29,6 +29,12 @@ jest.mock('react-hot-toast', () => ({
   default: { error: jest.fn(), success: jest.fn() },
 }));
 
+// 「パスキー」の欄（I619）の中身は PasskeysCard のテストで見る。ここでは置き場所だけを見る（TC-23）
+jest.mock('../../components/settings/PasskeysCard', () => ({
+  __esModule: true,
+  default: () => <section data-testid="passkeys-card">パスキー</section>,
+}));
+
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'u@example.com', role: 'user' } }),
 }));
@@ -157,6 +163,18 @@ describe('Settings', () => {
     expect(screen.getByTestId('learning-subjects-card')).toBeInTheDocument();
   });
 
+  it('I619 TC-23: 「パスキー」の欄が「学習設定」の後・「学ぶ科目」の前にある', async () => {
+    renderSettings();
+
+    const studyForm = await screen.findByRole('form', { name: '学習設定' });
+    const passkeys = screen.getByTestId('passkeys-card');
+    const subjects = screen.getByTestId('learning-subjects-card');
+    // eslint-disable-next-line no-bitwise
+    expect(studyForm.compareDocumentPosition(passkeys) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // eslint-disable-next-line no-bitwise
+    expect(passkeys.compareDocumentPosition(subjects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('TC-29b: 「学習設定」の form に名前があり、その中の「保存」だけを指せる。見出しは h1・各カード h2（I494）', async () => {
     renderSettings();
 
@@ -167,5 +185,39 @@ describe('Settings', () => {
     for (const name of ['アカウント情報', '学習設定', '学ぶ科目', '表示設定', '通知設定']) {
       expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
     }
+  });
+
+  it('I636 TC-15: StrictMode で 2 回走る読み込みの、遅れて届いた古い応答が入力を戻さない', async () => {
+    // 1 回目の取得（後片付けされる方）は解決を待たせ、2 回目はすぐ 30 で返す
+    let resolveFirst: (value: { data: typeof SAVED }) => void = () => undefined;
+    let settingsCalls = 0;
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/settings/') {
+        settingsCalls += 1;
+        if (settingsCalls === 1) return new Promise((resolve) => { resolveFirst = resolve; });
+        return Promise.resolve({ data: { ...SAVED, daily_study_goal_minutes: 30 } });
+      }
+      return Promise.resolve({ data: SAVED });
+    });
+    render(
+      <React.StrictMode>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <Settings />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </React.StrictMode>
+    );
+    const goal = await screen.findByLabelText('1日の学習目標時間（分）');
+    expect(goal).toHaveValue(30);
+    expect(settingsCalls).toBe(2);
+    userEvent.clear(goal);
+    userEvent.type(goal, '45');
+    expect(goal).toHaveValue(45);
+
+    resolveFirst({ data: { ...SAVED, daily_study_goal_minutes: 50 } });
+    // 古い応答が届いても、入力した 45 のまま（50 に戻らない）
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByLabelText('1日の学習目標時間（分）')).toHaveValue(45);
   });
 });

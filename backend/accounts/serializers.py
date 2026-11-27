@@ -3,9 +3,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import RegexValidator
-from django.utils import timezone
 from django.db import transaction
-from .models import User, UserSettings, StudyStreak
+from .models import Passkey, User, UserSettings, StudyStreak
 from .services import create_personal_organization
 
 
@@ -173,13 +172,8 @@ class UserLoginSerializer(serializers.Serializer):
                     else:
                         failed_user = User.objects.get(user_id=email_or_user_id)
 
-                    failed_user.failed_login_attempts += 1
-
-                    # Lock account after 5 failed attempts for 30 minutes
-                    if failed_user.failed_login_attempts >= 5:
-                        failed_user.account_locked_until = timezone.now() + timezone.timedelta(minutes=30)
-
-                    failed_user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+                    # Lock account after LOCK_THRESHOLD failed attempts（パスキーの本人確認と同じ規則・I619）
+                    failed_user.record_failed_login()
                     raise serializers.ValidationError("ユーザーIDまたはパスワードが正しくありません。")
 
                 if not user.is_active:
@@ -187,9 +181,7 @@ class UserLoginSerializer(serializers.Serializer):
 
                 # Reset failed login attempts on successful login
                 if user.failed_login_attempts > 0:
-                    user.failed_login_attempts = 0
-                    user.account_locked_until = None
-                    user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+                    user.unlock_account()
 
                 attrs['user'] = user
                 return attrs
@@ -204,6 +196,8 @@ class UserSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(
         source='organization.name', read_only=True, default=None
     )
+    # メンバー管理を使えるか（画面がメニューと入口を出し分ける。API の権限と同じ判定・I636）
+    can_manage_members = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -211,17 +205,83 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'user_id', 'role',
             'is_email_verified', 'is_staff', 'is_superuser',
             'last_login', 'created_at',
-            'organization_name',
+            'organization_name', 'can_manage_members',
         )
         read_only_fields = (
             'id', 'user_id', 'role', 'is_staff', 'is_superuser',
-            'last_login', 'created_at', 'organization_name',
+            'last_login', 'created_at', 'organization_name', 'can_manage_members',
         )
+
+
+# ---------------------------------------------------------------- メンバー管理（I620） ----
+class MemberSerializer(serializers.ModelSerializer):
+    """組織の管理者が見るメンバーの行。数と期限は get_queryset の注釈から読む"""
+    passkey_count = serializers.IntegerField(read_only=True)
+    registration_link_expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    is_self = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'user_id', 'role', 'is_active', 'last_login', 'created_at',
+                  'passkey_count', 'registration_link_expires_at', 'is_self')
+        read_only_fields = fields
+
+    def get_is_self(self, obj) -> bool:
+        request = self.context.get('request')
+        return request is not None and obj.pk == request.user.pk
+
+
+DUPLICATE_USER_ID = 'このユーザーIDは既に使用されています'
+
+
+class MemberCreateSerializer(serializers.Serializer):
+    """メンバーの作成はユーザー ID だけ（役割・組織・有効は受け取らない）"""
+    # エラー文はすべて日本語にそろえる（DRF の既定の英語を出さない・I636 F6）
+    user_id = serializers.CharField(
+        min_length=3, max_length=30,
+        error_messages={'required': 'ユーザーIDを入力してください',
+                        'null': 'ユーザーIDを入力してください',
+                        'blank': 'ユーザーIDを入力してください',
+                        'invalid': 'ユーザーIDは文字で入力してください',
+                        'min_length': 'ユーザーIDは3文字以上で入力してください',
+                        'max_length': 'ユーザーIDは30文字以内で入力してください'},
+        validators=[RegexValidator(regex=r'^[a-zA-Z0-9_]+$',
+                                   message='ユーザーIDは半角英数字とアンダースコアのみ使用できます',
+                                   code='invalid_user_id')])
+
+    def validate_user_id(self, value):
+        if User.objects.filter(user_id=value).exists():
+            raise serializers.ValidationError(DUPLICATE_USER_ID)
+        return value
+
+
+class RegistrationLinkIssuedSerializer(serializers.Serializer):
+    url = serializers.CharField()
+    expires_at = serializers.DateTimeField()
+
+
+class RegistrationLinkTokenSerializer(serializers.Serializer):
+    """リンクの値。形の確かめはサービスが行い、使えないリンクと同じ文にそろえる（理由を見分けさせない）"""
+    token = serializers.CharField(allow_blank=True, trim_whitespace=False)
+
+
+class RegistrationLinkOptionsSerializer(serializers.Serializer):
+    challenge_id = serializers.UUIDField()
+    options = serializers.DictField()
+    user_id = serializers.CharField()
+
+
+class RegistrationLinkCompleteSerializer(RegistrationLinkTokenSerializer):
+    challenge_id = serializers.UUIDField()
+    credential = serializers.DictField()
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
     """管理者用の詳細なユーザーシリアライザー"""
     is_admin = serializers.BooleanField(source='is_staff', required=False)
+    # 本人ひとりの組織か（運営の画面が登録用リンクの欄を出し分ける・I620）
+    organization_is_individual = serializers.BooleanField(
+        source='organization.is_individual', read_only=True, default=False)
 
     class Meta:
         model = User
@@ -229,7 +289,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
             'id', 'email', 'user_id', 'first_name', 'last_name',
             'role', 'is_active', 'is_admin', 'is_superuser',
             'is_email_verified', 'last_login', 'created_at', 'updated_at',
-            'failed_login_attempts', 'account_locked_until'
+            'failed_login_attempts', 'account_locked_until', 'organization_is_individual',
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'last_login')
 
@@ -279,6 +339,63 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         except ValidationError as e:
             raise serializers.ValidationError(list(e.messages))
         return value
+
+
+class PasskeySerializer(serializers.ModelSerializer):
+    """パスキーの一覧・名前の変更（I619）。鍵・認証器の ID・署名回数は出さない"""
+    name = serializers.CharField(max_length=64, trim_whitespace=True)
+
+    class Meta:
+        model = Passkey
+        fields = ('id', 'name', 'created_at', 'last_used_at')
+        read_only_fields = ('id', 'created_at', 'last_used_at')
+
+    def validate_name(self, value):
+        from .passkeys import clean_passkey_name  # passkeys が serializers を読むので、ここで読む
+        return clean_passkey_name(value)
+
+    def validate(self, attrs):
+        # 書ける項目は名前だけ。PATCH（partial）で名前が無い本文は入力の誤り（I619 F1）
+        if 'name' not in attrs:
+            raise serializers.ValidationError({'name': '名前を入力してください'})
+        return attrs
+
+
+class WebAuthnOptionsSerializer(serializers.Serializer):
+    """WebAuthn の options と、検証のときに送り返す challenge の番号（I619）"""
+    challenge_id = serializers.UUIDField()
+    options = serializers.DictField()
+
+
+class WebAuthnCredentialSerializer(serializers.Serializer):
+    """ブラウザの PublicKeyCredential.toJSON() の結果（中身の検証は py_webauthn に任せる・I619）"""
+    challenge_id = serializers.UUIDField()
+    credential = serializers.DictField()
+
+
+class PasskeyReauthSerializer(serializers.Serializer):
+    """本人確認: パスワードか、パスキー（challenge_id と credential）のちょうど片方（I619）"""
+    password = serializers.CharField(required=False, write_only=True, trim_whitespace=False)
+    challenge_id = serializers.UUIDField(required=False)
+    credential = serializers.DictField(required=False)
+
+    def validate(self, attrs):
+        present = attrs.keys() & {'password', 'challenge_id', 'credential'}
+        if present not in ({'password'}, {'challenge_id', 'credential'}):
+            raise serializers.ValidationError('パスワードか、パスキーのどちらか一方で確かめてください')
+        return attrs
+
+
+class ReauthTokenSerializer(serializers.Serializer):
+    reauth_token = serializers.CharField()
+    expires_in = serializers.IntegerField()
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    """ログインの応答（パスワード・パスキーで同じ形・I619）"""
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    user = UserSerializer()
 
 
 class EmailVerificationSerializer(serializers.Serializer):

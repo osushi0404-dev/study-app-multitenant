@@ -26,6 +26,7 @@ export interface User {
   created_at: string;
   last_login: string;
   organization_name?: string;
+  can_manage_members?: boolean;  // メンバー管理を使えるか（API の権限と同じ判定・I636）
 }
 
 export interface LoginRequest {

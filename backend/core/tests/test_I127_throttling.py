@@ -150,7 +150,13 @@ def test_throttle_settings_centralized():
         "core.throttling.AppAnonRateThrottle",
         "core.throttling.AppUserRateThrottle",
     ]
-    assert rest_framework["DEFAULT_THROTTLE_RATES"] == {"anon": "60/min", "user": "300/min"}
+    assert rest_framework["DEFAULT_THROTTLE_RATES"] == {
+        "anon": "60/min", "user": "300/min",
+        # I619: パスキーのログイン・本人確認（scope ごと）
+        "passkey_login_options": "20/min", "passkey_login": "10/min", "passkey_reauth": "5/min",
+        # I620: 登録用リンク（認証なしの options と complete）
+        "registration_link_options": "20/min", "registration_link": "10/min",
+    }
     assert rest_framework["NUM_PROXIES"] == 1
 
 

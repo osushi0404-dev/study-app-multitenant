@@ -17,3 +17,4 @@ openai==3.36.1
 gunicorn==22.0.0
 psutil==5.9.6
 python-magic==0.4.27
+webauthn==3.0.1

@@ -764,6 +764,45 @@ def _route(command: str):
         return None, None, None, None
     return r.new_command, r.ask_reason, r.block_reason, r.analyze_as
 
+# --- I615: 作業ツリーを書き換える git の操作を、サンドボックスの中で動く形で流すのを止める（I586 の事故） ---
+# 外に出るのは、1 回の呼び出しの命令がすべて外に出す型（.claude/settings.json の excludedCommands の git・gh・docker・
+# docker-compose）に当たるときだけ（公式。docs/runbooks/danger-ops.md「外に出すコマンドの書き方」）。中で動いた git の
+# 更新は、中から書けない場所（.claude/settings.json・.claude/hooks など）で途中で止まり、戻すのに人の `!` が要る。
+# 単独（git どうしのつなぎを含む）で流せば外で動くので、流す前に止めて案内する。脅威モデルは事故（変数・eval で組み立てた
+# git は見ない）。DANGER_OK=1 の前置きは危険操作の承認の流れなので見ない（plan_I615.md R5）。
+# ほかの判定がすべて通すとしたコマンドにだけかける（危険操作の停止・確認の判定と理由を先に返し、上書きしない）。git の命令は
+# 見張りの読み解き（_analyze の git_update。ヒアドキュメントの本文・引数の文を命令と取り違えない）から受け取る
+_GIT_UPDATE_SUBS = frozenset({"am", "apply", "checkout", "cherry-pick", "merge", "pull", "rebase", "reset",
+                              "restore", "revert", "stash", "switch"})
+_GIT_STASH_READ = ("list", "show")
+_INSIDE_OPS = ("|", "&", "|&")
+_REDIRECT_RE = re.compile(r"\d*(?:>|<|&>)")
+
+
+def _git_update_subs(toks: list) -> list:
+    """単純コマンド（読み解きで timeout・env などの包みを外したもの）が作業ツリーを書き換える git の命令なら、その名前。"""
+    f = _git_find(toks)
+    if f is None:
+        return []
+    sub, args = toks[f[1]], toks[f[1] + 1:]
+    if sub not in _GIT_UPDATE_SUBS or (sub == "stash" and args[:1] and args[0] in _GIT_STASH_READ):
+        return []
+    return [sub]
+
+
+def _git_update_inside(cmd: str, subs: list):
+    """止める理由（I615）。subs（作業ツリーを書き換える git の命令）があり、呼び出しがサンドボックスの中で動く形なら文を返す。"""
+    if not subs or re.match(r"\s*DANGER_OK=1[ \t]", cmd):
+        return None
+    segs = _segments_ops(cmd)
+    inside = "$(" in cmd or "`" in cmd or any(op in _INSIDE_OPS for _t, op in segs) or any(
+        toks[0] not in ("git", "gh", *_DOCKER_CLIS) or any(_REDIRECT_RE.match(t) for t in toks) for toks, _op in segs)
+    if not inside:
+        return None
+    return (f"作業ツリーを書き換える git の操作（{', '.join(sorted(set(subs)))}）を、ほかのコマンドとのつなぎ・振り向け・"
+            "前置きつきで流すと、サンドボックスの中で動いて途中で止まります。git を単体で（git どうしのつなぎは可）"
+            "流してください（docs/runbooks/danger-ops.md「外に出すコマンドの書き方」・I615）")
+
 # --- I174: 危険操作・外部送信・秘密情報・コンテナ内操作の判定 ---
 # 方針（plan_I174.md 0 章・0-9）:
 #   - コマンドを「単純コマンド」の列に読み解いてから判定する（付着した ; && | ( )・$(...)・`...`・
@@ -2553,12 +2592,14 @@ def _empty_net() -> dict:
 def _analyze(text: str) -> dict:
     """コマンド文字列の判定結果をまとめて返す（main から使う）。"""
     cmds = _parse(text)
-    res = {**_empty_net(), "unsure": []}
+    res = {**_empty_net(), "unsure": [], "git_update": []}
     # git を実行する場所が 1 つに決まるか（I174 0-15）。決まらなければ、場所に依存する git の判定は確認にする
     amb = _loc_ambiguous(text, cmds)
     cd = None
     for c in cmds:
         t = c["toks"]
+        if not c["ctr"]:   # I615: ホストの git の更新（コンテナの中の git は対象外）
+            res["git_update"] += _git_update_subs(t)
         d = None if c["ctr"] else _cd_target(t)
         if d is not None:
             cd = _join_dir(cd, d)
@@ -2936,6 +2977,9 @@ def main():
     # updatedInput だけを返す（permissionDecision を返さない。plan_I599.md 調査結果 6 のスパイク C）
     if unreviewed_ask:
         _ask(unreviewed_ask)
+    git_inside = _git_update_inside(raw, an["git_update"])
+    if git_inside:
+        _block(git_inside, raw)
     _pass()
 
 # --- 見張りの失敗を素通しにしない（I182 plan_I182.md 4-2） ---

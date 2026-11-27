@@ -104,6 +104,7 @@
 ## 6. API（DRF）
 
 - ビューは `ViewSet`／`GenericAPIView` を使い、薄く保つ。処理はサービス・セレクタに書く（Fat View にしない）
+- 一覧を返さない `GenericAPIView` にも全体の設定の絞り込み・並べ替え・ページ分けが効く（`?ordering=` などで 500 になりうる・I587）。使わないなら `filter_backends = []`・`pagination_class = None` にする
 - 認証の既定は `IsAuthenticated` にする（`REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"]`）。認証なしで開く API は、ビューに `AllowAny` を書いて理由をコメントに残す
 - `permission_classes` はビューごとに具体的なクラスで書く。`get_permissions()` を上書きするときは、`@action(permission_classes=...)` の指定が使われなくなることに注意し、action ごとの権限を `get_permissions()` の中で全部書く（一覧 I209 F8）
   ```python
