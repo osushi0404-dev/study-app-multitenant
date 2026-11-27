@@ -27,3 +27,4 @@
 - [plan-review] Warning 3 件（手動 No.1 の件数の固定・自分の計画書の印・写しの判定が外れたとき）を計画書とテスト文書に反映し、再レビューはしない — 方式・範囲・受け入れ条件を変えない追記のため（計画変更記録）
 
 STAGE_DONE: plan NEXT: plan-review
+STAGE_DONE: plan-review NEXT: implement
