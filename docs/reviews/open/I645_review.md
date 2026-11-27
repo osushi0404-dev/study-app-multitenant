@@ -5,17 +5,21 @@
 - 答えた後、選んだ誤答に赤い×の印と赤い文字を付け、正解・誤答の文字の色が disabled の灰色に負けないようにする
 
 ## 変更点
--
+- `frontend/src/utils/choiceLabel.ts`・`components/ChoiceLabelText.tsx`（新規）: 順番から ア・イ・ウ・エ… の記号を作り、本文と別の要素で並べる
+- `components/QuizChoices.tsx`（新規）: クイズの選択肢。正解に緑のチェック・選んだ誤答に赤い×と赤い文字（ダークモードは `error.light`）。色は自前の要素に書いて disabled の灰色に負けない。単一選択は元の id で選ぶ
+- `pages/QuizSession.tsx`: 選択肢の塊を `QuizChoices` に置き換え（約 85 行減）
+- `components/ProblemPreview.tsx`・`AIQuestionGenerator.tsx`: 「A. 」をやめ、同じ記号に
+- テスト: 部品のテスト 2 本を新規・既存のテストの選択肢の名前を「ア 選択肢1」の形に・E2E に誤答の色と印の確かめ
 
 ## 影響範囲
 - Backend/Frontend/DB/Config: Frontend だけ（計画書 3）
 
 ## テスト結果
-- 自動:
-- 手動:
+- 自動: CI（Jest・E2E を含む）がレビュー済みのコミット 0e32afa1 で成功。implement で関係するテスト 8 ファイル 45 件と E2E 5 件を手元でも流して合格。失敗の注入（×の印を外す・色の指定を外す）で TC-04・TC-06・TC-08 が落ちることを確かめた
+- 手動: 4 項目とも Claude が Playwright MCP で確かめて OK（ライト・ダークの色と明るさの比・幅 360px・プレビュー）。test-gate でレビュー済みの HEAD でも確かめ直した
 
 ## 計画との差分
-- なし
+- あり（計画書の計画変更記録）: 単一選択の id の型の食い違いの直し・ダークモードの赤を `error.light`・色を自前の要素に書く・記号の表を文字列に・複数選択の行にも `data-testid`。どれも受け入れ条件と範囲は変えない
 
 ## ロールバック
 - この PR を revert する（画面だけの変更）
