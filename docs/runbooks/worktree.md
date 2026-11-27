@@ -269,6 +269,6 @@ docker compose port backend 8000
   - 解説は Claude が書き、先頭に「（Claude 作成の解説。IPA の公式の解説ではありません）」を付ける。過去問サイト・参考書の解説は見ない・写さない。書いたら、別の点検役（Agent）に問題冊子・解答例だけを材料に全問を見てもらう。誤りに気づいたら問題管理の画面で直す（DB を `manage.py shell` で直すと問題一覧の一時保存が古いまま残る。そのときは `from core.cache_service import cache_service; cache_service.invalidate_problems_cache(<科目 ID>)` で消す）。Linux の確かめ用のブラウザでは `⇄` が別の記号で出るので使わない（`→`・`⁺`・`₁`・`¹⁶`・`ⁿ` は出る）
   - 問題の Markdown・画像・PDF はリポジトリに入れない（`.evidence/I###/` に置く。git の対象外）
 - **道具の注意**:
-  - `import_problems` は欄を 1 行だけ読み（改行は捨てられる）、難易度はファイルごと（`--difficulty`）。難易度ごとにファイルを分けて流す。ファイルは `docker compose cp <ファイル> backend:/tmp/` で渡す。画面は選択肢の記号を出さないので、選択肢の本文の先頭に記号（ア〜エ）を書く
+  - `import_problems` は欄を 1 行だけ読み（改行は捨てられる）、難易度はファイルごと（`--difficulty`）。難易度ごとにファイルを分けて流す。ファイルは `docker compose cp <ファイル> backend:/tmp/` で渡す。画面は選択肢の記号を出さないので、選択肢の本文の先頭に記号と全角のピリオド（`ア．ディメンションテーブル`・画像の選択肢は `ア．画像のア`）を書く。半角スペースで区切ると記号が本文とくっついて見える。問題文の先頭に問番号は書かない（出典の欄に出る）
   - 画像は `import_problems` では付かない。問題管理の画面の「問題用画像」で付ける
   - PDF を画像にするのは使い捨てのコンテナの `pdftoppm`（`docker run --rm -v <PDF のフォルダ>:/in:ro -v <置き場所>:/out python:3.11-slim sh -c "apt-get update -qq && apt-get install -y -qq poppler-utils && pdftoppm …"`。範囲は `-x -y -W -H`、150dpi で A4 は 1240×1754px）

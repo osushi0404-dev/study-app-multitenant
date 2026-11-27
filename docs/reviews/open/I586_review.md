@@ -44,6 +44,10 @@
 
 - [test-gate] Claude 担当の MT-01〜MT-13 は implement の中で済ませた結果をそのまま使う — レビュー済みの HEAD 以降はコードもデータの手順も変えていないため
 
+- [fix-loop] MT-14 の NG（記号と本文がくっついて見える）は、ユーザーが選んだ「データで区切る＋アプリは起票」で直した（診断メモ `docs/reviews/I586_fix_diagnosis_20261127_1436.md`・診断レビュー PASS `I586_fix_diagnosis_review_20261127_1440.md`。その前の 1437 の記録は、コマンドを後ろにつないでサンドボックスの中で動き未実施〔SKIP〕になった回）。計画の受け入れ条件・方式・範囲は変えないので計画レビューは通り直さない（計画変更記録に書いた）
+- [fix-loop] アプリの改善を #645（記号を本文と分けて出す・選んだ誤答に印）、画面に primary のエラーが重なる件を #644（自動更新の通信路のポート）に起票した — どちらも I586 の範囲（データと手順書）の外
+- [fix-loop] クイズの画面での確かめはせず、問題管理のプレビューと API の照らし合わせで確かめた — ユーザーが解いている途中のクイズの記録を壊さないため。画面の見え方は MT-14 の再テストでユーザーが見る
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
