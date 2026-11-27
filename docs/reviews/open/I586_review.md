@@ -49,3 +49,4 @@ STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
 STAGE_DONE: review-gate NEXT: test-gate
 STAGE_DONE: test-gate NEXT: human-test
+STAGE_DONE: human-test NEXT: fix-loop
