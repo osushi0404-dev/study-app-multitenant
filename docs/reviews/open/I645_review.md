@@ -37,6 +37,8 @@
 - [implement] ダークモードの「解説」の枠が明るい灰色のままで文字が読みにくいのを画面確認で見つけた — 変更前からあり、このイシューの範囲外。retro で扱う
 - [implement] 記号の表を文字列にして `charAt` で取り出す — ビルドの ESLint のセキュリティの規則に当たったため。無効化のコメントは足さない
 - [implement] 複数選択の行にも `data-testid="choice-option"` を付け、部品のテストは行を分割代入で受け取る — pre-commit の ESLint（`no-node-access`・`detect-object-injection`）に当たったため。無効化のコメントは足さない。書き換えた後も、×の印を外した版で TC-04・TC-06 が落ちることを確かめ直した
+- [review-gate] コードレビュー OK・敵対的レビューは不要（RISK: NO）。台帳の Low 2 件（F1 読み上げで答えた後の正誤が選択肢ごとに分からない・F2 プレビューの並びの確かめが記号だけ）は直さず retro へ — 止める指摘ではない（`docs/reviews/I645_code_review_20261127_2025.md`）
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
