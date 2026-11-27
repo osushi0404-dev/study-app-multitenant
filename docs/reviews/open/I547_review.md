@@ -34,6 +34,7 @@
 - [implement] bug のイシューから「画面と API の受け渡し」（#473・#488）の観点をコードレビュー役に足した — 2 回起き、どちらもマージ後に画面で見つかったため（計画変更記録）
 - [implement] /simplify の 4 観点の指摘を直した（review-rules の中の写しも (b) の 1 か所に・テストは集合で写しの無さを見る・レビュー役は節だけを Grep で読む）。節をスクリプトが入力に入れる案は #640 の範囲なので見送った — 写しと無駄を減らし、範囲は変えないため
 - [review-gate] 基本レビュー（`docs/reviews/I547_code_review_20261127_0946.md`）は HIGH（止める指摘 F1・flow）。fix-loop へ回す。AC7 の実測: 起動役が 75 を出さず「変更前の版で審査します」と出て、記録に「審査の版: 写し b4af25e8…」が出た — I593 の仕組みがマージ後に動くことを確かめた
+- [fix-loop] F1 は案 B（2 つのレビュー役は review-rules を Read し、計画レビュー役は節と (b) の 2 つの一覧で判定）で直した — 判定に要る情報を確実に読ませる形のうち一番短く、F3 も同時に消えるため。診断レビュー OK（`docs/reviews/I547_fix_diagnosis_review_20261127_0956.md`）
 
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement

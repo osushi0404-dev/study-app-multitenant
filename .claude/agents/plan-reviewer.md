@@ -29,7 +29,7 @@ model: sonnet
 2. `docs/plans/open/plan_I###.md`（なければ `docs/plans/closed/plan_I###.md`）
 3. `docs/tests/open/I###_manual_test.md`（なければ `docs/tests/closed/`）
 4. `docs/tests/open/I###_auto_test.md`（なければ `docs/tests/closed/`）
-5. `docs/runbooks/review-rules.md` の「高リスク判定の条件」の節（高リスク判定に使う。ファイル全体ではなく、Grep で見出し `## 高リスク判定の条件` から次の `## ` の見出しの前までを読む）
+5. `docs/runbooks/review-rules.md`（高リスク判定に使う。「高リスク判定の条件」の節と、その節が参照する同じファイルの (b) の 2 つの一覧）
 
 すべてのファイルを Read してからレビューを始める。
 
@@ -187,7 +187,7 @@ model: sonnet
 
 ## 高リスク判定
 
-上の「読むべきファイル」の 5 で読んだ「高リスク判定の条件」の条件に 1 つでも当たる計画を 高リスク: Yes と判定する（一覧はその節が正で、コードレビュー役と同じ一覧を使う）。
+上の「読むべきファイル」の 5 で読んだ「高リスク判定の条件」の条件（ハーネスの一覧は同じファイルの (b)）に 1 つでも当たる計画を 高リスク: Yes と判定する（一覧はそこが正で、コードレビュー役と同じ一覧を使う）。
 
 ---
 

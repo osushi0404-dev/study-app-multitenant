@@ -18,10 +18,19 @@
 | TC-02 | 高リスク判定の条件の一覧が `review-rules.md` の 1 か所だけにあり、レビュー役の定義に写しが無い（AC4・PR15・CR9） | exit 0 | exit 1（実装前は 2 つの定義にあり、review-rules に無い。失敗の注入の確認） |
 | TC-03 | `review-rules.md` に「## 高リスク判定の条件」の節がある（PR15） | exit 0 | exit 1（実装前は無い） |
 | TC-04 | 同梱 A・B・D・E・F の観点が定義にあり、E・F・H の 1 文ずつが手順書・規約にある（AC3） | exit 0 | exit 1（実装前は無い） |
+| TC-06 | 計画レビュー役が高リスク判定に要る範囲（「高リスク判定の条件」の節と (b) の 2 つの一覧）を読み、2 つのレビュー役が review-rules を節だけに絞って読まない（fix-loop・F1。この PR の確かめだけ） | exit 0 | 直す前の版（`git show` の写し）で 2 つとも exit 1 |
 | TC-05 | 古い言い方（「プレーン default」・「step 3.5」・「Read / Bash」）が定義に無い（AC2・PR5・IR1・CR1） | exit 0 | exit 1（実装前は有る） |
 
 ## 実行記録
--
+- 2026-11-27 fix-loop の後に手元で決定論ゲート 29 行を流し、29 行とも exit 0（既存のテスト 11 本・TC-02〜TC-06）
+- 2026-11-27 review-gate（`docs/reviews/I547_code_review_20261127_0946.md`）: 決定論ゲートはスクリプトが実走（記録の「決定論ゲート実行結果」）・CI は `CI_WAIT: OK`
+
+## 再発防止記録（fix-loop・2026-11-27）
+- なぜ失敗したか: /simplify で「review-rules の中の一覧を (b) の 1 か所に」と「レビュー役は節だけを読む」を同時に入れ、節が自己完結でなくなったのに読む範囲を節に絞ったので、ハーネスの一覧が計画レビュー役の読む範囲の外に出た（基本レビュー F1・`docs/reviews/I547_fix_diagnosis_20261127_1010.md`）
+- 何を変えたか: 2 つのレビュー役は `docs/runbooks/review-rules.md` を Read し、計画レビュー役は「高リスク判定の条件」の節と同じファイルの (b) の 2 つの一覧で判定する、と書いた（Grep で節だけを読む指示を消した。F3 も同時に消える）
+- セキュリティ上の考慮点: 高リスクの見落としは敵対的レビューの起動の漏れにつながる。パスの判定はスクリプトも出すので二重に守られるが、計画レビューの判定を正しく出す
+- 次回どう防ぐか: 読む範囲を絞る変更をするときは、判定に要る情報がその範囲の中にあるかを、参照の先までたどって確かめる（同じ整理で「参照にする」と「読む範囲を絞る」を同時に入れない）
+- 確かめた結果: TC-06 の 2 つを直す前の版（`git show HEAD:` の写し）で流して exit 1、直した後で exit 0。決定論ゲート全体を手元で流して合格（下の実行記録）
 
 ## FG（失敗の注入）の実行記録
 - 2026-11-27 計画時: TC-02〜TC-05 を実装前のファイルに対して流し、4 つとも exit 1（不合格）になることを確かめた（実装前の状態が失敗の注入にあたる）。計画レビューの後、ゲートを 1 語ずつの 13 行に分けて 1 行ずつ流し直し、13 行とも exit 1 を確かめた
@@ -56,4 +65,6 @@ grep -qF "部品の見直しのイシューを起票する" docs/runbooks/harnes
 ! grep -qF "プレーン default" .claude/agents/plan-reviewer.md
 ! grep -qF "step 3.5" .claude/agents/issue-reviewer.md
 ! grep -qF "Read / Bash" .claude/agents/code-reviewer.md
+grep -qF "(b) の 2 つの一覧" .claude/agents/plan-reviewer.md
+! grep -qF "Grep で見出し" .claude/agents/plan-reviewer.md .claude/agents/code-reviewer.md
 ```
