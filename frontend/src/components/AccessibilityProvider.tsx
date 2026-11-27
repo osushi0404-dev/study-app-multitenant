@@ -9,7 +9,7 @@ import {
   Keyboard as KeyboardIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
-import { ABOVE_TOASTS_Z_INDEX, BELOW_APP_BAR_TOP } from '../constants/layout';
+import { BELOW_APP_BAR_TOP } from '../constants/layout';
 
 interface AccessibilitySettings {
   fontSize: number;
@@ -218,8 +218,7 @@ const AccessibilityPanel: React.FC = () => {
         boxShadow: 3,
         borderRadius: 2,
         p: 2,
-        // 通知も上のバーのすぐ下に出るので、通知より手前にして操作を塞がれないようにする（I636）
-        zIndex: ABOVE_TOASTS_Z_INDEX,
+        zIndex: 1001,
         border: '2px solid',
         borderColor: 'primary.main'
       }}

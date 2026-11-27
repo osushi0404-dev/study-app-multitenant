@@ -1,21 +1,36 @@
-import { test, expect, Page, BrowserContext } from '@playwright/test';
+import { test, expect, Page, BrowserContext, Locator } from '@playwright/test';
 
 // I620 TC-30: 組織の管理者（e2e_user_b・org_b）がメンバーを追加して登録用リンクを発行し、
 // ログインしていない別のブラウザの文脈でリンクを開いて仮想の認証器でパスキーを登録 → ログイン → ログアウト →
 // パスキーでログインする。共有の storageState を使わない（ログアウトで共有の refresh を失効させないため）。
 // 追加するメンバーは毎回ちがうユーザー ID にする（何度流しても同じに確かめられる）。
 // I636: 表の枠は役割と名前で探す（MUI の内部のクラス名に頼らない）。360px では 3 つのボタンの行を確かめる。
-// 通知は上の中央（上のバーのすぐ下）に出るので、通知が消えるのを待たずにログアウトできる（幅 360px でも上のバーの
-// どのボタンも塞がない。上のバーから開くアクセシビリティ設定のパネルは通知より手前に出る）。
+// 通知は上の中央（上のバーのすぐ下）に出て、クリックを受け取らないので、上のバーのボタン・ユーザーメニュー・
+// アクセシビリティ設定のパネルの操作を塞がない。通知が消えるのを待たずにログアウトできる。
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const TABLE_REGION = 'メンバーの一覧の表（横に動かせます）';
 
-/** 2 つの枠が重なるか（左右・上下のどちらかが離れていれば重ならない） */
-function overlaps(a: { x: number; y: number; width: number; height: number },
-  b: { x: number; y: number; width: number; height: number }): boolean {
-  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+type Box = { x: number; y: number; width: number; height: number };
+
+/** 2 つの枠が重なる部分（重ならなければ null） */
+function overlap(a: Box, b: Box): Box | null {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
 }
+
+/** 点の一番手前の押せる要素（クリックを受け取らない要素は返らない）が target の中にあるか */
+async function topmostIsInside(target: Locator, point: { x: number; y: number }): Promise<boolean> {
+  return target.evaluate((el, p) => {
+    const hit = document.elementFromPoint(p.x, p.y);
+    return hit !== null && el.contains(hit);
+  }, point);
+}
+
+const center = (box: Box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
 
 async function addVirtualAuthenticator(context: BrowserContext, page: Page) {
   const cdp = await context.newCDPSession(page);
@@ -87,31 +102,40 @@ test('TC-30: メンバーを追加してリンクを発行し、リンクから�
     await member.getByRole('button', { name: 'パスキーを登録' }).click();
     await member.waitForURL('**/dashboard');
 
-    // 通知（パスキーを登録しました）は上のバーのすぐ下に出て、上のバーのどのボタンも塞がない（I636。個々のボタンでなく
-    // 上のバー全体と比べる）。出てくるときは上から滑り込むので、上のバーの下端より下に止まるまで待つ
-    const toast = member.getByRole('status').filter({ hasText: 'パスキーを登録しました' });
+    // 通知（パスキーを登録しました）は上のバーのすぐ下に出る（I636。個々のボタンでなく上のバー全体と比べる）。
+    // 出てくるときは上から滑り込むので、上のバーの下端より下に止まるまで待つ。メニュー・パネルを開くと、それ以外の
+    // 要素は読み上げから隠れる（aria-hidden）ので、通知は includeHidden で探す
+    const toast = member.getByRole('status', { includeHidden: true }).filter({ hasText: 'パスキーを登録しました' });
     const bannerBox = await member.getByRole('banner').boundingBox();
     expect(bannerBox).not.toBeNull();
-    const bannerBottom = bannerBox!.y + bannerBox!.height;
-    await expect.poll(async () => (await toast.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(bannerBottom);
+    await expect.poll(async () => (await toast.boundingBox())?.y ?? -1)
+      .toBeGreaterThanOrEqual(bannerBox!.y + bannerBox!.height);
 
-    // 通知が出ている間に上のバーからアクセシビリティ設定のパネルを開くと、パネルが通知より手前に出て操作を塞がれない
+    // 通知が出ている間に上のバーからアクセシビリティ設定のパネルを開いても、重なる所でパネルが押せる
     await member.getByRole('button', { name: 'アクセシビリティ設定' }).click();
     const panel = member.getByRole('dialog', { name: 'アクセシビリティ設定パネル' });
     await expect(panel).toBeVisible();
     await expect(toast).toBeVisible();  // 通知とパネルが同時に出ている状態で確かめる（通知が消えた後では確かめにならない）
-    const panelBox = await panel.boundingBox();
-    const toastBox = await toast.boundingBox();
-    expect(overlaps(panelBox!, toastBox!)).toBe(true);  // 幅 360px では同じ高さで重なる（重なっていなければ確かめにならない）
-    const topmostInPanel = await panel.evaluate((el, point) => {
-      const hit = document.elementFromPoint(point.x, point.y);
-      return hit !== null && el.contains(hit);
-    }, { x: panelBox!.x + panelBox!.width / 2, y: panelBox!.y + 10 });
-    expect(topmostInPanel).toBe(true);
+    const panelShared = overlap((await panel.boundingBox())!, (await toast.boundingBox())!);
+    expect(panelShared).not.toBeNull();  // 幅 360px では同じ高さで重なる（重なっていなければ確かめにならない）
+    expect(await topmostIsInside(panel, center(panelShared!))).toBe(true);
     await member.getByRole('button', { name: 'アクセシビリティ設定' }).click();
     await expect(panel).toBeHidden();
 
+    // 通知が出ている間にユーザーメニューを開いても、通知に重なる項目が押せる
     await member.click('[data-testid="user-menu-button"]');
+    await expect(member.locator('[data-testid="logout-button"]')).toBeVisible();
+    await expect(toast).toBeVisible();
+    const toastBox = (await toast.boundingBox())!;
+    const items = member.getByRole('menuitem');
+    let overlapped = 0;
+    for (let i = 0; i < await items.count(); i += 1) {
+      const shared = overlap(toastBox, (await items.nth(i).boundingBox())!);
+      if (!shared) continue;
+      overlapped += 1;
+      expect(await topmostIsInside(items.nth(i), center(shared))).toBe(true);
+    }
+    expect(overlapped).toBeGreaterThan(0);  // 通知に重なる項目が無ければ確かめにならない
     await member.click('[data-testid="logout-button"]');
     await expect(member).toHaveURL(/login/);
     await member.getByRole('button', { name: 'パスキーでログイン' }).click();

@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext';
@@ -36,7 +35,7 @@ import SubjectDetail from './pages/SubjectDetail';
 import MemberManagement from './pages/MemberManagement';
 import PasskeySetup from './pages/PasskeySetup';
 import { MEMBER_MANAGEMENT_PATH, PASSKEY_SETUP_PATH } from './constants/routes';
-import { BELOW_APP_BAR_TOP } from './constants/layout';
+import AppToaster from './components/AppToaster';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,19 +56,8 @@ function App() {
               <Router>
               <NavigationLogger />
               <CssBaseline />
-              {/* 上の中央の、上のバーのすぐ下に出す。上のバーと縦に分けるので、幅やボタンの数によらず、上のバーの
-                  どのボタンも塞がない（右上に出していたときは、通知がログアウトのメニューを押せなくしていた・I636） */}
-              <Toaster
-                position="top-center"
-                containerStyle={{ top: BELOW_APP_BAR_TOP }}
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                  },
-                }}
-              />
+              {/* 通知の置き場所と、ほかの操作を塞がない指定は AppToaster に置く（I636） */}
+              <AppToaster />
 
               <Routes>
               {/* Public Routes - 組織別登録URLを先に配置 */}
