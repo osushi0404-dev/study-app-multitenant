@@ -117,6 +117,8 @@
 
 - [fix-loop] CI の D3 の失敗は、一覧の注記の行を `- F` で始まらない書き方にして直した（診断メモ `I586_fix_diagnosis_20261127_1720.md`・診断レビュー PASS）。手元は D3 の判定だけを失敗注入つきで流した（`run-all.sh` はサンドボックスで依存を落とせない）
 
+- [review-gate] 差分のレビュー OK（`I586_code_review_20261127_1757.md`・CI OK）。台帳の open の行（F1・F5・F6・F8 は retro で直し済み・F2・F3・F9 は一覧）は前の振り分けのまま
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -137,3 +139,4 @@ STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
 STAGE_DONE: close NEXT: fix-loop
 STAGE_DONE: fix-loop NEXT: review-gate
+STAGE_DONE: review-gate NEXT: test-gate
