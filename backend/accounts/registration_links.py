@@ -14,13 +14,15 @@ from datetime import timedelta
 from typing import Literal
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import Http404
 from django.utils import timezone
+from rest_framework import serializers
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from . import passkeys
-from .models import Passkey, RegistrationLink, User, WebAuthnChallenge
+from .models import Organization, Passkey, RegistrationLink, User, WebAuthnChallenge
+from .serializers import DUPLICATE_USER_ID
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +150,21 @@ def complete_link_registration(*, token: str, challenge_id: uuid.UUID, credentia
         link.save(update_fields=['used_at'])
     logger.info('registration link used user_id=%s link_id=%s passkey_id=%s', user.pk, link.pk, passkey.pk)
     return passkeys.complete_login(user=user)
+
+
+# ------------------------------------------------------------ メンバーの作成 ----
+def create_member(*, organization: Organization, user_id: str) -> User:
+    """組織の一般の利用者を作る（パスワード無し）。存在の確認の後に同じ ID ができていたら重複の 400（I636 F4）
+
+    セーブポイント（atomic）の中で作るので、一意の制約の違反で外側のトランザクションを壊さない。
+    一意の制約は user_id だけ（email は None）なので、IntegrityError は ID の重複に限られる
+    """
+    try:
+        with transaction.atomic():
+            return User.objects.create_user(user_id=user_id, password=None, organization=organization, role='user')
+    except IntegrityError:
+        logger.info('member create duplicate organization_id=%s', organization.pk)
+        raise serializers.ValidationError({'user_id': [DUPLICATE_USER_ID]})
 
 
 # ------------------------------------------------------- 管理者によるパスキー ----

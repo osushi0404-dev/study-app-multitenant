@@ -3,7 +3,7 @@
  * 一覧の 4 つの状態・自分の行・キャッシュのキー・発行と取り消し・リンクの表示・追加・パスキーの削除
  */
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
@@ -25,8 +25,8 @@ jest.mock('qrcode.react', () => ({
   ),
 }));
 
-let mockUser: { id: string; role: string; organization_is_individual: boolean } = {
-  id: 'viewer-1', role: 'admin', organization_is_individual: false,
+let mockUser: { id: string; role: string; can_manage_members: boolean } = {
+  id: 'viewer-1', role: 'admin', can_manage_members: true,
 };
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
@@ -95,7 +95,7 @@ const rowOf = (userId: string) =>
 describe('MemberManagement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUser = { id: 'viewer-1', role: 'admin', organization_is_individual: false };
+    mockUser = { id: 'viewer-1', role: 'admin', can_manage_members: true };
     // CRA の resetMocks が差し替えの中身を毎回空にするので、ここで設定し直す
     (credentialApi as jest.Mock).mockReturnValue(mockApi);
     members.list.mockResolvedValue(page([SELF, HANAKO, TARO]));
@@ -149,8 +149,8 @@ describe('MemberManagement', () => {
     expect(await screen.findByText('メンバーはまだいません')).toBeInTheDocument();
   });
 
-  it('TC-20: 本人ひとりの組織の管理者には出さない', async () => {
-    mockUser = { id: 'solo', role: 'admin', organization_is_individual: true };
+  it('I636 TC-10: メンバー管理を使えない管理者（本人ひとり・無効・共有の personal の組織）には出さない', async () => {
+    mockUser = { id: 'solo', role: 'admin', can_manage_members: false };
     mountPage();
     expect(screen.getByText('このページにアクセスする権限がありません')).toBeInTheDocument();
     expect(members.list).not.toHaveBeenCalled();
@@ -270,6 +270,62 @@ describe('MemberManagement', () => {
     expect(await screen.findByRole('dialog', { name: '『zzz_member』の登録用リンク' })).toBeInTheDocument();
     expect(screen.queryByText('zzz_member', { selector: 'td' })).not.toBeInTheDocument();
     expect(mockApi.issueLink).toHaveBeenCalledWith('reauth-1', 'm-9');
+  });
+
+  // ------------------------------------------------------- I636 TC-09（F8） ----
+  it('I636 TC-09: 行の発行のダイアログは、閉じる間も中身を残し、閉じ終わったら値を捨てる', async () => {
+    mountPage();
+    userEvent.click(within(await rowOf('taro')).getByRole('button', { name: '登録用リンク' }));
+    userEvent.click(within(await screen.findByRole('dialog', { name: '登録用リンクの発行' }))
+      .getByRole('button', { name: '発行する' }));
+    await confirmWithPassword();
+    const dialog = await screen.findByRole('dialog', { name: '『taro』の登録用リンク' });
+    // fireEvent は act の中で動くので、押した後の描き直しが終わってから確かめられる（閉じるアニメーションは終わる前）
+    fireEvent.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    // 閉じるアニメーションの間（閉じ終わる前）も、見出しとリンクの欄が残る
+    expect(screen.getByText('『taro』の登録用リンク')).toBeInTheDocument();
+    expect(screen.getByDisplayValue(LINK.url)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('『taro』の登録用リンク')).not.toBeInTheDocument());
+    expect(screen.queryByDisplayValue(LINK.url)).not.toBeInTheDocument();
+  });
+
+  it('I636 TC-09: 追加の流れの発行の間は、その人の［登録用リンク］と［メンバーを追加］を押せず、発行は 1 回', async () => {
+    const NEW: Member = { ...TARO, id: 'm-9', user_id: 'zzz_member', passkey_count: 0 };
+    members.create.mockResolvedValue(NEW);
+    members.list.mockResolvedValueOnce(page([SELF, TARO])).mockResolvedValue(page([SELF, TARO, NEW]));
+    let resolveIssue: (link: typeof LINK) => void = () => undefined;
+    mockApi.issueLink.mockReturnValue(new Promise((resolve) => { resolveIssue = resolve; }));
+    mountPage();
+    userEvent.click(await screen.findByRole('button', { name: 'メンバーを追加' }));
+    const add = await screen.findByRole('dialog', { name: 'メンバーを追加' });
+    userEvent.type(within(add).getByLabelText('ユーザーID'), 'zzz_member');
+    userEvent.click(within(add).getByRole('button', { name: '追加してリンクを発行' }));
+    await confirmWithPassword();
+    await waitFor(() => expect(mockApi.issueLink).toHaveBeenCalledTimes(1));
+    const row = await rowOf('zzz_member');
+    expect(within(row).getByRole('button', { name: '登録用リンク' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'メンバーを追加' })).toBeDisabled();
+
+    resolveIssue(LINK);
+    const dialog = await screen.findByRole('dialog', { name: '『zzz_member』の登録用リンク' });
+    expect(mockApi.issueLink).toHaveBeenCalledTimes(1);
+    // ダイアログの裏（aria-hidden）にあるので hidden を付けて探す
+    await waitFor(() => expect(screen.getByRole('button', { name: 'メンバーを追加', hidden: true })).toBeEnabled());
+
+    // 閉じる間も見出しが『』にならない
+    fireEvent.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    expect(screen.getByText('『zzz_member』の登録用リンク')).toBeInTheDocument();
+    expect(screen.queryByText('『』の登録用リンク')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('『zzz_member』の登録用リンク')).not.toBeInTheDocument());
+  });
+
+  // ------------------------------------------------------ I636 TC-11（F12） ----
+  it('I636 TC-11: 表の中では操作のボタンを横に並べ、ユーザー ID の欄は最小の幅を持つ', async () => {
+    mountPage();
+    const taro = await rowOf('taro');
+    expect(within(taro).getByRole('group', { name: '『taro』の操作' })).toHaveStyle({ flexWrap: 'nowrap' });
+    expect(within(taro).getByText('taro')).toHaveStyle({ minWidth: '120px' });
+    expect(screen.getByRole('region', { name: 'メンバーの一覧の表（横に動かせます）' })).toHaveAttribute('tabindex', '0');
   });
 
   // ------------------------------------------------------------- TC-23 ----

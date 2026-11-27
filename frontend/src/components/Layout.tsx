@@ -80,8 +80,8 @@ const Layout: React.FC = () => {
       { text: '問題管理', icon: <Quiz />, path: '/quiz-management' },
       { text: '科目管理', icon: <School />, path: '/subject-management' },
     ] : []),
-    // I620: メンバー管理は、人を迎えられる組織の管理者だけ（本人ひとりの組織には出さない）
-    ...(isOrgAdmin && !user?.organization_is_individual ? [
+    // I620: メンバー管理は、人を迎えられる組織の管理者だけ。判定は裏側（API の権限と同じ can_manage_members・I636）
+    ...(user?.can_manage_members ? [
       { text: 'メンバー管理', icon: <Group />, path: MEMBER_MANAGEMENT_PATH },
     ] : []),
     { text: '学習統計', icon: <BarChart />, path: '/statistics' },

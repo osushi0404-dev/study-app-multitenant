@@ -9,6 +9,7 @@ import {
   Keyboard as KeyboardIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
+import { BELOW_APP_BAR_TOP } from '../constants/layout';
 
 interface AccessibilitySettings {
   fontSize: number;
@@ -209,7 +210,7 @@ const AccessibilityPanel: React.FC = () => {
       sx={{
         position: 'fixed',
         // 上のバーのボタンから開いたときはバーの下、浮いたボタンから開いたときはボタンの上に出す
-        ...(headerButtonMounted ? { top: 72 } : { bottom: 140 }),
+        ...(headerButtonMounted ? { top: BELOW_APP_BAR_TOP } : { bottom: 140 }),
         right: 16,
         width: 320,
         maxHeight: 500,

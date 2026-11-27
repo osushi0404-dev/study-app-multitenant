@@ -61,6 +61,11 @@ describe('StaffCredentialsCard', () => {
     expect(credentialApi).toHaveBeenCalledWith('/api/admin/users/');
   });
 
+  it('I636 TC-11: 運営の欄では操作のボタンを折り返す（既定）', () => {
+    mountCard(BASE_TARGET);
+    expect(screen.getByRole('group', { name: '『alice』の操作' })).toHaveStyle({ flexWrap: 'wrap' });
+  });
+
   it.each([
     ['運営のアカウント', { is_admin: true }],
     ['スーパーユーザー', { is_superuser: true }],

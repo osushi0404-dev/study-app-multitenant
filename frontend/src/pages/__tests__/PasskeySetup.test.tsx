@@ -116,6 +116,29 @@ describe('PasskeySetup', () => {
     expect(screen.getByText('このブラウザはパスキーに未対応です')).toBeInTheDocument();
   });
 
+  it('I636 TC-08: 押したときにリンクが使えなくなっていたら（取り直しが 400）、使えないリンクの表示に切り替える', async () => {
+    service.options.mockResolvedValueOnce(OPTIONS).mockRejectedValueOnce(axiosError(400));
+    mountAt(`#token=${TOKEN}`);
+    userEvent.click(await screen.findByRole('button', { name: 'パスキーを登録' }));
+    expect(await screen.findByText(UNUSABLE)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'パスキーを登録' })).not.toBeInTheDocument();
+    expect(screen.queryByText('ユーザーID『alice』のパスキーを登録します')).not.toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it.each([429, 500])('I636 TC-08: 押したときの取り直しが %i なら一般の失敗の文で、もう一度押せる', async (status) => {
+    service.options.mockResolvedValueOnce(OPTIONS).mockRejectedValueOnce(axiosError(status));
+    mountAt(`#token=${TOKEN}`);
+    userEvent.click(await screen.findByRole('button', { name: 'パスキーを登録' }));
+    expect(await screen.findByText('パスキーを登録できませんでした。もう一度お試しください')).toBeInTheDocument();
+    expect(screen.queryByText(UNUSABLE)).not.toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'パスキーを登録' })).toBeEnabled());
+    userEvent.click(screen.getByRole('button', { name: 'パスキーを登録' }));
+    await waitFor(() => expect(mockComplete).toHaveBeenCalled());
+    expect(service.options).toHaveBeenCalledTimes(3);
+  });
+
   it('TC-24: 取り消したら文を出し、もう一度押せる', async () => {
     mockCreate.mockRejectedValueOnce(Object.assign(new Error('cancelled'), { name: 'NotAllowedError' }));
     mountAt(`#token=${TOKEN}`);
