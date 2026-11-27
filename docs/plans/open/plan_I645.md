@@ -19,7 +19,7 @@
 1. 記号: クイズの画面は `{choice.text}` だけを出す（`frontend/src/pages/QuizSession.tsx:555`・`:599`）。問題管理のプレビュー（`frontend/src/components/ProblemPreview.tsx:118`）と AI の問題作成の画面（`frontend/src/components/AIQuestionGenerator.tsx:383`）は `String.fromCharCode(65 + index)` で「A. 」を付ける。記号の作り方が 2 か所に別々に書かれている
 2. 並び: 選択肢はいつも `Choice.Meta.ordering = ['order', 'id']`（`backend/problems/models.py:143-144`）の順で返り、backend・frontend とも並べ替える処理は無い（`shuffle`・`random` を grep・2026-11-27）。だから画面が順番から付けた記号は、問題文が指す記号と一致する。並びの入れ替えは後続の I647（#647）で、記号は表示の順に付ける決まりのまま
 3. 誤答の色: MUI 5 の `FormControlLabel` は、ラベルに `[& .MuiFormControlLabel-label]: { [&.Mui-disabled]: { color: text.disabled } }` を持つ（コンテナの `node_modules/@mui/material/FormControlLabel/FormControlLabel.js:74-77` を 2026-11-27 に読んだ）。セレクタは `.<root> .MuiFormControlLabel-label.Mui-disabled`（クラス 3 つ）で、画面の `sx` の `& .MuiFormControlLabel-label`（クラス 2 つ）より強い。答えた後は `disabled={showResult}`（単一選択は `FormControlLabel`、複数選択は `Checkbox`。`FormControlLabel` は部品の disabled を引き継ぐ・同ファイル `:116`）なので、正解の緑の文字も誤答の赤い文字も灰色に負ける。イシューの根本原因 2 の「詳しい優先の仕組みは未特定」はこれで特定した
-4. 誤答の印: 正解には `CheckCircleOutline` を出すが、誤答には何も出さない（`QuizSession.tsx:556-560`・`:600-604`）。`Cancel` は同じファイルで既に import されている（`:23`・結果の Chip に使う）
+4. 誤答の印: 正解には `CheckCircleOutline` を出すが、誤答には何も出さない（`QuizSession.tsx:556-560`・`:600-604`）。`Cancel` は同じファイルで既に import されている（`:23`・結果の `Alert` のアイコンに使う）
 5. 既存のテスト: `getByLabelText('選択肢1')`（`frontend/src/pages/__tests__/QuizSession.test.tsx:132`・`:287`、`QuizSession.source.test.tsx:85`・`:108`）・`getByLabelText('選択肢A')`（`QuizSession.review.test.tsx:81`）・`getByText('A. 正解')`（`frontend/src/components/__tests__/ProblemPreview.test.tsx:99`）が選択肢の名前を使う。E2E（`e2e/tests/quiz-session.spec.ts`・`auth.spec.ts:112`）は `data-testid="choice-option"` で探すので名前の変化に左右されない
 6. E2E の問題（`backend/accounts/management/commands/seed_e2e.py:166-175`）: 選択肢は 2 つで、1 つ目（`order=0`）が「正解の選択肢」、2 つ目（`order=1`）が「不正解の選択肢」
 7. テーマ: `frontend/src/contexts/ThemeContext.tsx` は MUI の既定の色（light の `error.main` は `#d32f2f`、`success.main` は `#2e7d32`）。白の背景との明るさの比はどちらも 4.5:1 以上（`docs/runbooks/ux-rules.md` §6）
@@ -71,7 +71,7 @@ export const choiceLabel = (index: number): string => CHOICE_LABELS[index] ?? St
 ### 4-3. `frontend/src/components/QuizChoices.tsx`（新規）と `frontend/src/pages/QuizSession.tsx`
 何を達成するか: クイズの選択肢に記号を付け、答えた後に正解・選んだ誤答を形と色で分けて出す。
 - `QuizSession.tsx:540-620` の単一選択（`RadioGroup`）と複数選択（`FormGroup`）の塊を `QuizChoices` に移す。`QuizSession.tsx` はその場所で `<QuizChoices problemType={...} choices={...} selectedChoices={...} onSelect={handleChoiceSelect} showResult={showResult} correctChoiceIds={...} />` を呼ぶ
-  - `correctChoiceIds`: `result?.correct_choices` の id の配列（今の `result?.correct_choices?.some((c: any) => c.id === choice.id)` と同じ判定を、部品の外で一度だけ作る。`any` はやめ、`QuizSession.tsx` が持つ結果の型の `correct_choices` から取る）
+  - `correctChoiceIds`: `result?.correct_choices` の id の配列（今の `result?.correct_choices?.some((c: any) => c.id === choice.id)` と同じ判定を、部品の外で一度だけ作る。`any` はやめ、`frontend/src/types/quiz.ts:65` の `QuizResult.correct_choices?: Choice[]` から取る。`QuizChoices` の props の選択肢の型も `types/quiz.ts` の `Choice` にそろえる〔`services/types.ts` の同名の型は使わない〕）
   - 単一選択の「選んだ誤答」: 選んだ選択肢で、正解の id に入っていないもの（今の `!result?.is_correct` と同じ結果。複数選択と同じ判定にそろえる）
   - 複数選択の「選んだ誤答」: 今と同じ（選んで、正解の id に入っていないもの）
 - 各選択肢の表示:
@@ -80,7 +80,7 @@ export const choiceLabel = (index: number): string => CHOICE_LABELS[index] ?? St
   - 名前: 入力（`Radio`・`Checkbox`）に `inputProps={{ 'aria-label': `${choiceLabel(i)} ${choice.text}` }}` を付ける。読み上げで記号と本文が分かれて聞こえ、テストで名前が決まった形になる（ラベルの中の要素の並びから名前を作らせると、要素の間に空白が入るかが表示の形に左右される）
   - 今の `data-testid="choice-option"`（単一選択の `Box`）は残す（E2E が使う）。複数選択の `Box` には今も付いていないので、付け方は変えない
   - `key` は今と同じ `choice.id`
-- 印のアイコンは今の正解の印と同じく飾り（読み上げない・MUI の既定）。正誤の結果は今の「正解！」「不正解」の Chip（`QuizSession.tsx:631` 付近・文字とアイコンあり）が伝える
+- 印のアイコンは今の正解の印と同じく飾り（読み上げない・MUI の既定）。正誤の結果は今の結果の `Alert`（`QuizSession.tsx:629-634`・「正解です！」「不正解です」の文字とアイコンあり）が伝える
 
 ### 4-4. `frontend/src/components/ProblemPreview.tsx`
 何を達成するか: プレビューの記号をクイズの画面とそろえ、「A. 」と本文の記号が並ばないようにする。
@@ -139,7 +139,7 @@ Claude が決めた（技術的な選択と理由）:
 - 正解の文字も緑になる（今は灰色に負けて灰色） — 理由: 今のコードが意図していた色（`success.main`）で、同じ原因の直しで戻る。AC の「今までどおり」は緑の印のことで、文字の色は意図に戻すだけ。UI の見た目の変化はあるが、もともとの意図と grill-me の「正解は今どおり緑」に沿うので、価値判断の新しい仮定ではない
 - 単一選択の「選んだ誤答」の判定を、`!result.is_correct` から「正解の id に入っていない」にそろえる — 理由: 単一選択では結果は同じで、2 つの判定を 1 つにできる。仮定で決めた・技術的
 - 入力に `aria-label`（`ア 選択肢の本文`）を付ける — 理由: 読み上げで記号を本文と分けて伝える（React 規約 §13）。名前の作られ方を表示の形に頼らない（4-3）。仮定で決めた・技術的
-- 印のアイコンは飾りのまま（読み上げの文字を足さない） — 理由: 今の正解の印と同じ扱い。正誤は結果の Chip が文字で伝える。「あなたの回答」の文字は足さないと grill-me で決めた。仮定で決めた・技術的
+- 印のアイコンは飾りのまま（読み上げの文字を足さない） — 理由: 今の正解の印と同じ扱い。正誤は結果の `Alert` が文字で伝える。「あなたの回答」の文字は足さないと grill-me で決めた。仮定で決めた・技術的
 - `AIQuestionGenerator.tsx` の `key={choiceIndex}`（添字の key・React 規約 §4 に反する）は直さない — 理由: AI が作った問題の選択肢には id が無く、並べ替えも消しもしない一覧で害が無い。直すのは #510 などの規約の移行の範囲。仮定で決めた・技術的
 - 一覧 `docs/reviews/backlog/I224.md` F9: 残す — 理由: ハーネスの話で、このイシューの画面と関係しない
 - 一覧 `docs/reviews/backlog/I223.md` B1〜B4: 残す — 理由: bot の停止中の後始末で、このイシューと関係しない
@@ -170,4 +170,7 @@ Danger Ops（有無。有りのときは 影響範囲・代替案・ロールバ
 - 直した後の確かめ: クイズの画面で記号が 1 つだけ（「ア　本文」）に見えること
 
 ## 計画変更記録
--
+- 2026-11-27 plan-review: 計画書の記載: 結果の表示を「Chip」・複数選択の行の取り方が無い・手動 No.4 の基準が主観 → 採った方法: 結果の表示を `Alert` に直し、`QuizChoices` の型を `types/quiz.ts` にそろえると明記。TC-04・TC-06 の行は名前の入力から `closest('label')` で取る・TC-07 の置き換えの式・TC-08 の失敗の注入を手元で流せないときの代わり（Playwright MCP で色を測る）・手動 No.4 の切り替え手順と色の値と明るさの比を書いた — 理由: 計画レビューの Warning 4 件・Info 2 件への対応。計画レビューのやり直し: 不要（findings への対応の追記だけ）
+
+## レビュー結果
+- [20261127_1931 判定: ✅ 完了](../../reviews/I645_plan_review_20261127_1931.md)
