@@ -113,6 +113,8 @@
 
 - [close] origin/develop を取り込んだ（パスキーの一連など。I586 の変えたファイルには触れず、gate-check OK）。記録を closed へ移し、PR #623 の説明を埋めた。修正の診断メモ（`I586_fix_diagnosis_<ts>.md`）は close の回収の対象外の名前なので `docs/reviews/` 直下に残した — 他のイシュー（I619 など）と同じ扱い
 
+- [close] 最後の確認で CI の Harness Tests が落ちた（`test_i202_ledger_cleanup.sh` の D3: 一覧の `- F` で始まる行はすべて決まった形）。retro で `docs/reviews/backlog/I586.md` に書いた注記の行「- F1・F5・F6・F8 は…」が指摘の行と見なされた。close の決まりどおり記録を open に戻して fix-loop へ
+
 STAGE_DONE: plan NEXT: plan-review
 STAGE_DONE: plan-review NEXT: implement
 STAGE_DONE: implement NEXT: review-gate
@@ -131,3 +133,4 @@ STAGE_DONE: test-gate NEXT: human-test
 STAGE_DONE: human-test NEXT: retro
 STAGE_DONE: retro NEXT: close
 STAGE_DONE: close NEXT: merge
+STAGE_DONE: close NEXT: fix-loop
