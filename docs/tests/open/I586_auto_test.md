@@ -18,6 +18,7 @@
 - 無し（上の理由）
 
 ## 実行記録
+- 2026-11-27 test-gate（2 回目）: `gate-check.sh I586` exit 0・`check-frontend-evidence.sh` exit 0・`check-manual-test-executor.sh` exit 0
 - 2026-11-24 test-gate: 決定論ゲートなし（上の理由）。`gate-check.sh I586` exit 0・`check-frontend-evidence.sh I586` exit 0（frontend/src の変更なし）・`check-manual-test-executor.sh I586` exit 0。pytest・Jest・E2E は CI（review-gate で成功を確認）
 
 ## 再発防止記録（fix-loop・2026-11-27・MT-14 の NG）
